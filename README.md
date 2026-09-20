@@ -34,7 +34,7 @@ Backend nằm tại `apps/api`. Các module nghiệp vụ, authentication, autho
 - **MySQL**
 - Prisma có thể được xem xét sau khi class diagram/mô hình quan hệ được thống nhất.
 
-Hiện chưa định nghĩa schema, migration hoặc seed data vì thiết kế cơ sở dữ liệu chưa được cung cấp và phê duyệt.
+MySQL local có thể chạy riêng bằng Docker Compose. Hiện chưa định nghĩa schema, migration hoặc seed data vì thiết kế cơ sở dữ liệu chưa được cung cấp và phê duyệt; API cũng chưa kết nối tới database.
 
 ### Monorepo tooling
 
@@ -69,6 +69,9 @@ apps/
 
 docs/
   De-Cuong-Chi-Tiet.md         # Đề cương chi tiết khoá luận
+
+compose.yaml                   # Chỉ chạy MySQL cho local development
+.env.example                   # Mẫu cấu hình MySQL local
 ```
 
 Ứng dụng mobile không nằm trong repository này. Mobile sẽ được phát triển trong repository riêng và giao tiếp với backend thông qua API.
@@ -77,8 +80,36 @@ docs/
 
 - Node.js LTS
 - pnpm
-- Docker Desktop (khi cần chạy MySQL local)
+- Docker Desktop (để chạy MySQL local)
 - Git
+
+## Local database (MySQL)
+
+Docker Compose chỉ khởi động database, không chạy `web`, `admin` hoặc `api`. Mỗi app được chạy riêng trong terminal khi cần.
+
+Tạo file `.env` từ mẫu một lần:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Khởi động và kiểm tra MySQL:
+
+```bash
+docker compose up -d mysql
+docker compose ps mysql
+```
+
+Mặc định database được mở tại `127.0.0.1:3306`; tên database và tài khoản local nằm trong `.env`. Nếu cổng `3306` đang được dùng, đổi `MYSQL_PORT` trong `.env`.
+
+Xem log hoặc dừng container:
+
+```bash
+docker compose logs -f mysql
+docker compose down
+```
+
+Named volume giữ dữ liệu sau khi chạy `docker compose down`. Các biến `MYSQL_*` dùng để khởi tạo database chỉ được áp dụng lần đầu khi volume còn trống. `docker compose down --volumes` sẽ xóa volume và toàn bộ dữ liệu local trong đó.
 
 ## Install dependencies
 
@@ -119,7 +150,6 @@ Nền tảng hiện tập trung vào việc khởi tạo và chuẩn hóa monore
 - Đăng nhập, JWT hoặc phân quyền RBAC.
 - Đặt vé, hủy vé, thanh toán và mã khuyến mãi.
 - Chat realtime, gửi hàng hóa và tích hợp payment provider.
-- MySQL Docker Compose hoặc cấu hình database local.
 - API endpoint, authentication hoặc authorization.
 - Test case nghiệp vụ, CI/CD hoặc triển khai production.
 
