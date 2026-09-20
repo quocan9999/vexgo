@@ -1,0 +1,146 @@
+[
+  {
+    "busCompanyId": "company-01",
+    "name": "Nhà xe Minh Tâm",
+    "contactInfo": "028 3822 1122 · contact@minhtam.test",
+    "operatorAdminAccountCount": 2,
+    "employeeAccountCount": 3,
+    "routeCount": 12
+  },
+  {
+    "busCompanyId": "company-02",
+    "name": "Nhà xe Phương Trang",
+    "contactInfo": "1900 6067 · hotro@phuongtrang.test",
+    "operatorAdminAccountCount": 2,
+    "employeeAccountCount": 3,
+    "routeCount": 38
+  },
+  {
+    "busCompanyId": "company-03",
+    "name": "Nhà xe Thành Bưởi",
+    "contactInfo": "1900 6079 · lienhe@thanhbuoi.test",
+    "operatorAdminAccountCount": 2,
+    "employeeAccountCount": 3,
+    "routeCount": 16
+  },
+  {
+    "busCompanyId": "company-04",
+    "name": "Nhà xe Kumho Samco",
+    "contactInfo": "028 3511 6861 · support@kumhosamco.test",
+    "operatorAdminAccountCount": 2,
+    "employeeAccountCount": 3,
+    "routeCount": 24
+  },
+  {
+    "busCompanyId": "company-05",
+    "name": "Nhà xe FUTA Hà Sơn",
+    "contactInfo": "1900 6767 · vanhanh@futahason.test",
+    "operatorAdminAccountCount": 1,
+    "employeeAccountCount": 2,
+    "routeCount": 11
+  },
+  {
+    "busCompanyId": "company-06",
+    "name": "Nhà xe Hoàng Long",
+    "contactInfo": "0225 3920 955 · info@hoanglong.test",
+    "operatorAdminAccountCount": 1,
+    "employeeAccountCount": 2,
+    "routeCount": 19
+  },
+  {
+    "busCompanyId": "company-07",
+    "name": "Nhà xe Hạnh Cafe",
+    "contactInfo": "0905 539 678 · booking@hanhcafe.test",
+    "operatorAdminAccountCount": 1,
+    "employeeAccountCount": 2,
+    "routeCount": 8
+  },
+  {
+    "busCompanyId": "company-08",
+    "name": "Nhà xe Tân Niên",
+    "contactInfo": "1900 4698 · lienhe@tannien.test",
+    "operatorAdminAccountCount": 1,
+    "employeeAccountCount": 2,
+    "routeCount": 10
+  },
+  {
+    "busCompanyId": "company-09",
+    "name": "Nhà xe An Phú Quý",
+    "contactInfo": "0258 3888 999 · admin@anphuquy.test",
+    "operatorAdminAccountCount": 1,
+    "employeeAccountCount": 2,
+    "routeCount": 7
+  },
+  {
+    "busCompanyId": "company-10",
+    "name": "Nhà xe Liên Hưng",
+    "contactInfo": "1900 2679 · contact@lienhung.test",
+    "operatorAdminAccountCount": 1,
+    "employeeAccountCount": 2,
+    "routeCount": 9
+  },
+  {
+    "busCompanyId": "company-11",
+    "name": "Nhà xe Trọng Tấn",
+    "contactInfo": "1900 6826 · hotro@trongtan.test",
+    "operatorAdminAccountCount": 1,
+    "employeeAccountCount": 2,
+    "routeCount": 15
+  },
+  {
+    "busCompanyId": "company-12",
+    "name": "Nhà xe Cúc Tùng",
+    "contactInfo": "1900 6606 · info@cuctung.test",
+    "operatorAdminAccountCount": 1,
+    "employeeAccountCount": 2,
+    "routeCount": 13
+  },
+  {
+    "busCompanyId": "company-13",
+    "name": "Nhà xe Quang Dũng",
+    "contactInfo": "1900 9442 · lienhe@quangdung.test",
+    "operatorAdminAccountCount": 1,
+    "employeeAccountCount": 2,
+    "routeCount": 14
+  },
+  {
+    "busCompanyId": "company-14",
+    "name": "Nhà xe Sao Việt",
+    "contactInfo": "1900 6746 · support@saoviet.test",
+    "operatorAdminAccountCount": 1,
+    "employeeAccountCount": 2,
+    "routeCount": 6
+  },
+  {
+    "busCompanyId": "company-15",
+    "name": "Nhà xe Văn Minh",
+    "contactInfo": "1900 6467 · contact@vanminh.test",
+    "operatorAdminAccountCount": 1,
+    "employeeAccountCount": 1,
+    "routeCount": 8
+  },
+  {
+    "busCompanyId": "company-16",
+    "name": "Nhà xe Đức Trọng",
+    "contactInfo": "1900 1446 · hotro@ductrong.test",
+    "operatorAdminAccountCount": 1,
+    "employeeAccountCount": 1,
+    "routeCount": 7
+  },
+  {
+    "busCompanyId": "company-17",
+    "name": "Nhà xe Hải Âu",
+    "contactInfo": "0225 3750 750 · info@haiau.test",
+    "operatorAdminAccountCount": 1,
+    "employeeAccountCount": 1,
+    "routeCount": 5
+  },
+  {
+    "busCompanyId": "company-18",
+    "name": "Nhà xe Hoàng Phúc",
+    "contactInfo": "1900 8888 · lienhe@hoangphuc.test",
+    "operatorAdminAccountCount": 1,
+    "employeeAccountCount": 1,
+    "routeCount": 4
+  }
+]

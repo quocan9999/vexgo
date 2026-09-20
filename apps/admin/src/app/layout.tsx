@@ -1,13 +1,14 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import '@/features/super-admin-dashboard/dashboard.css';
 import { Geist } from 'next/font/google';
 import { cn } from '@/lib/utils';
 
 const geist = Geist({ subsets: ['latin'], variable: '--font-sans' });
 
 export const metadata: Metadata = {
-  title: 'VexGo Admin',
-  description: 'Administration web application',
+  title: 'VexGo | Super Admin',
+  description: 'Tổng quan quản trị nền tảng VexGo',
 };
 
 export default function RootLayout({ children }: LayoutProps<'/'>) {
