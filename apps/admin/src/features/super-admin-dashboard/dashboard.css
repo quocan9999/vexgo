@@ -259,13 +259,6 @@ dialog:focus-visible {
   font-size: 10px;
 }
 
-.profile-menu-dots {
-  margin-left: auto;
-  color: #a6b4c9;
-  font-size: 13px;
-  letter-spacing: 2px;
-}
-
 .admin-main {
   min-height: 100vh;
   margin-left: 252px;
@@ -1647,8 +1640,7 @@ dialog:focus-visible {
   .sidebar-label,
   .sidebar-link > span:last-child,
   .platform-card > div,
-  .profile-copy,
-  .profile-menu-dots {
+  .profile-copy {
     display: none;
   }
 
@@ -1783,8 +1775,7 @@ dialog:focus-visible {
   .sidebar-label,
   .sidebar-link > span:last-child,
   .platform-card > div,
-  .profile-copy,
-  .profile-menu-dots {
+  .profile-copy {
     display: flex;
   }
 

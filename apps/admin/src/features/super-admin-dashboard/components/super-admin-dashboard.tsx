@@ -9,6 +9,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Database,
+  LogOut,
   Menu,
   RefreshCw,
   Search,
@@ -16,7 +17,9 @@ import {
   UsersRound,
   X,
 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { signOutDemoAdmin } from '@/features/admin-auth/services/demo-auth';
 import {
   getBusCompanies,
   getDashboardOverview,
@@ -239,6 +242,7 @@ function CompanyDetails({
 }
 
 export function SuperAdminDashboard() {
+  const router = useRouter();
   const [overview, setOverview] = useState<DashboardOverview | null>(null);
   const [overviewError, setOverviewError] = useState<string | null>(null);
   const [overviewLoading, setOverviewLoading] = useState(true);
@@ -370,6 +374,11 @@ export function SuperAdminDashboard() {
 
   function closeMobileNavigation() {
     setMobileNavigationOpen(false);
+  }
+
+  function logout() {
+    signOutDemoAdmin();
+    router.replace('/login');
   }
 
   function openCompany(company: BusCompany) {
@@ -504,9 +513,16 @@ export function SuperAdminDashboard() {
               <strong>Super Admin</strong>
               <small>Quản trị nền tảng</small>
             </span>
-            <span aria-hidden="true" className="profile-menu-dots">
-              •••
-            </span>
+            <button
+              aria-label="Đăng xuất tài khoản Super Admin"
+              className="sidebar-logout-button"
+              onClick={logout}
+              title="Đăng xuất"
+              type="button"
+            >
+              <LogOut aria-hidden="true" size={15} />
+              <span className="sidebar-logout-label">Đăng xuất</span>
+            </button>
           </div>
         </div>
       </aside>
