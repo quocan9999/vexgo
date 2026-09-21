@@ -1,0 +1,30 @@
+{
+  "generatedAt": "2026-09-20T02:30:00.000Z",
+  "totals": {
+    "busCompanies": 18,
+    "operatorAdminAccounts": 22,
+    "customerAccounts": 1240,
+    "accounts": 1276
+  },
+  "accountsByRole": [
+    {
+      "roleId": "role-customer",
+      "roleName": "Khách hàng",
+      "assignedAccountCount": 1240
+    },
+    {
+      "roleId": "role-operator-admin",
+      "roleName": "Quản trị nhà xe",
+      "assignedAccountCount": 22
+    },
+    {
+      "roleId": "role-operator-staff",
+      "roleName": "Nhân viên nhà xe",
+      "assignedAccountCount": 14
+    }
+  ],
+  "accountsByStatus": [
+    { "status": "ACTIVE", "label": "Đang hoạt động", "count": 1248 },
+    { "status": "INACTIVE", "label": "Không hoạt động", "count": 28 }
+  ]
+}

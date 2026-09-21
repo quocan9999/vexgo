@@ -1,0 +1,17 @@
+node_modules/
+.turbo/
+.next/
+dist/
+coverage/
+
+.env*
+!.env.example
+
+# Prisma local SQLite artifacts
+*.db
+*.db-journal
+
+# Playwright reports
+playwright-report/
+test-results/
+blob-report/
