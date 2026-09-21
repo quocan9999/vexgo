@@ -17,5 +17,16 @@ services:
       retries: 20
       start_period: 20s
 
+  phpmyadmin:
+    image: phpmyadmin:latest
+    ports:
+      - '127.0.0.1:8080:80'
+    environment:
+      PMA_HOST: mysql
+      PMA_PORT: 3306
+    depends_on:
+      mysql:
+        condition: service_healthy
+
 volumes:
   mysql_data:
