@@ -13,7 +13,9 @@
     "dev": "turbo run dev --parallel"
   },
   "devDependencies": {
+    "dotenv": "18.0.1",
     "prettier": "3.9.7",
+    "prisma": "7.10.0",
     "turbo": "^2.10.13"
   }
 }
