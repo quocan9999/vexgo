@@ -8,7 +8,7 @@ datasource db {
 }
 
 model NhaXe {
-  nhaXeId         BigInt        @id @default(autoincrement()) @db.BigInt
+  nhaXeId         Int           @id @default(autoincrement()) @db.Int
   maNhaXe         String        @unique @db.VarChar(50)
   tenNhaXe        String        @db.VarChar(150)
   thongTinLienHe  String?       @db.Text
@@ -25,7 +25,7 @@ model NhaXe {
 }
 
 model LoaiXe {
-  loaiXeId  BigInt    @id @default(autoincrement()) @db.BigInt
+  loaiXeId  Int       @id @default(autoincrement()) @db.Int
   tenLoai   String    @db.VarChar(100)
   moTa      String?   @db.VarChar(500)
   createdAt DateTime  @default(now()) @db.DateTime(0)
@@ -37,11 +37,11 @@ model LoaiXe {
 }
 
 model Xe {
-  xeId      BigInt     @id @default(autoincrement()) @db.BigInt
+  xeId      Int        @id @default(autoincrement()) @db.Int
   bienSoXe  String     @unique @db.VarChar(15)
   trangThai String     @db.VarChar(30)
-  nhaXeId   BigInt     @db.BigInt
-  loaiXeId  BigInt     @db.BigInt
+  nhaXeId   Int        @db.Int
+  loaiXeId  Int        @db.Int
   createdAt DateTime   @default(now()) @db.DateTime(0)
   updatedAt DateTime   @default(now()) @updatedAt @db.DateTime(0)
   nhaXe     NhaXe      @relation(fields: [nhaXeId], references: [nhaXeId], onDelete: Restrict, onUpdate: Restrict)
@@ -51,10 +51,10 @@ model Xe {
 }
 
 model Ghe {
-  gheId        BigInt        @id @default(autoincrement()) @db.BigInt
+  gheId        Int           @id @default(autoincrement()) @db.Int
   soGhe        String        @db.VarChar(10)
   viTri        String?       @db.VarChar(50)
-  xeId         BigInt        @db.BigInt
+  xeId         Int           @db.Int
   createdAt    DateTime      @default(now()) @db.DateTime(0)
   updatedAt    DateTime      @default(now()) @updatedAt @db.DateTime(0)
   xe           Xe            @relation(fields: [xeId], references: [xeId], onDelete: Restrict, onUpdate: Restrict)
@@ -64,12 +64,12 @@ model Ghe {
 }
 
 model TuyenXe {
-  tuyenXeId BigInt     @id @default(autoincrement()) @db.BigInt
+  tuyenXeId Int        @id @default(autoincrement()) @db.Int
   maTuyenXe String     @db.VarChar(50)
   diemDi    String     @db.VarChar(100)
   diemDen   String     @db.VarChar(100)
   trangThai String     @db.VarChar(30)
-  nhaXeId   BigInt     @db.BigInt
+  nhaXeId   Int        @db.Int
   createdAt DateTime   @default(now()) @db.DateTime(0)
   updatedAt DateTime   @default(now()) @updatedAt @db.DateTime(0)
   nhaXe     NhaXe      @relation(fields: [nhaXeId], references: [nhaXeId], onDelete: Restrict, onUpdate: Restrict)
@@ -80,13 +80,13 @@ model TuyenXe {
 }
 
 model ChuyenXe {
-  chuyenXeId    BigInt         @id @default(autoincrement()) @db.BigInt
+  chuyenXeId    Int            @id @default(autoincrement()) @db.Int
   maChuyenXe    String         @unique @db.VarChar(50)
   ngayKhoiHanh  DateTime       @db.Date
   gioKhoiHanh   DateTime       @db.Time(0)
   trangThai     String         @db.VarChar(30)
-  tuyenXeId     BigInt         @db.BigInt
-  xeId          BigInt         @db.BigInt
+  tuyenXeId     Int            @db.Int
+  xeId          Int            @db.Int
   createdAt     DateTime       @default(now()) @db.DateTime(0)
   updatedAt     DateTime       @default(now()) @updatedAt @db.DateTime(0)
   xe            Xe             @relation(fields: [xeId], references: [xeId], onDelete: Restrict, onUpdate: Restrict)
@@ -97,10 +97,10 @@ model ChuyenXe {
 }
 
 model GheChuyenXe {
-  gheChuyenXeId BigInt   @id @default(autoincrement()) @db.BigInt
+  gheChuyenXeId Int      @id @default(autoincrement()) @db.Int
   trangThai     String   @db.VarChar(30)
-  chuyenXeId    BigInt   @db.BigInt
-  gheId         BigInt   @db.BigInt
+  chuyenXeId    Int      @db.Int
+  gheId         Int      @db.Int
   createdAt     DateTime @default(now()) @db.DateTime(0)
   updatedAt     DateTime @default(now()) @updatedAt @db.DateTime(0)
   chuyenXe      ChuyenXe @relation(fields: [chuyenXeId], references: [chuyenXeId], onDelete: Restrict, onUpdate: Restrict)
@@ -111,13 +111,13 @@ model GheChuyenXe {
 }
 
 model BangGia {
-  bangGiaId  BigInt    @id @default(autoincrement()) @db.BigInt
+  bangGiaId  Int       @id @default(autoincrement()) @db.Int
   giaNiemYet Decimal   @db.Decimal(18, 2)
   tuNgay     DateTime  @db.Date
   denNgay    DateTime? @db.Date
   trangThai  String    @db.VarChar(30)
-  tuyenXeId  BigInt    @db.BigInt
-  loaiXeId   BigInt    @db.BigInt
+  tuyenXeId  Int       @db.Int
+  loaiXeId   Int       @db.Int
   createdAt  DateTime  @default(now()) @db.DateTime(0)
   updatedAt  DateTime  @default(now()) @updatedAt @db.DateTime(0)
   tuyenXe    TuyenXe   @relation(fields: [tuyenXeId], references: [tuyenXeId], onDelete: Restrict, onUpdate: Restrict)
@@ -128,7 +128,7 @@ model BangGia {
 }
 
 model TaiKhoan {
-  taiKhoanId           BigInt           @id @default(autoincrement()) @db.BigInt
+  taiKhoanId           Int              @id @default(autoincrement()) @db.Int
   hoTen                String           @db.VarChar(100)
   soDienThoai          String           @unique @db.VarChar(16)
   matKhau              String           @db.VarChar(255)
@@ -145,10 +145,10 @@ model TaiKhoan {
 }
 
 model KhachHang {
-  khachHangId        BigInt              @id @default(autoincrement()) @db.BigInt
+  khachHangId        Int                 @id @default(autoincrement()) @db.Int
   maKhachHang        String              @unique @db.VarChar(50)
   diemTichLuy        Int                 @default(0) @db.Int
-  taiKhoanId         BigInt              @unique @db.BigInt
+  taiKhoanId         Int                 @unique @db.Int
   createdAt          DateTime            @default(now()) @db.DateTime(0)
   updatedAt          DateTime            @default(now()) @updatedAt @db.DateTime(0)
   taiKhoan           TaiKhoan            @relation(fields: [taiKhoanId], references: [taiKhoanId], onDelete: Restrict, onUpdate: Restrict)
@@ -159,11 +159,11 @@ model KhachHang {
 }
 
 model NhanVien {
-  nhanVienId       BigInt   @id @default(autoincrement()) @db.BigInt
+  nhanVienId       Int      @id @default(autoincrement()) @db.Int
   maNhanVien       String   @db.VarChar(50)
   trangThaiLamViec String   @db.VarChar(30)
-  nhaXeId          BigInt   @db.BigInt
-  taiKhoanId       BigInt   @unique @db.BigInt
+  nhaXeId          Int      @db.Int
+  taiKhoanId       Int      @unique @db.Int
   createdAt        DateTime @default(now()) @db.DateTime(0)
   updatedAt        DateTime @default(now()) @updatedAt @db.DateTime(0)
   nhaXe            NhaXe    @relation(fields: [nhaXeId], references: [nhaXeId], onDelete: Restrict, onUpdate: Restrict)
@@ -173,7 +173,7 @@ model NhanVien {
 }
 
 model VaiTro {
-  vaiTroId        BigInt           @id @default(autoincrement()) @db.BigInt
+  vaiTroId        Int              @id @default(autoincrement()) @db.Int
   tenVaiTro       String           @unique @db.VarChar(50)
   moTa            String?          @db.VarChar(255)
   createdAt       DateTime         @default(now()) @db.DateTime(0)
@@ -183,7 +183,7 @@ model VaiTro {
 }
 
 model Quyen {
-  quyenId      BigInt        @id @default(autoincrement()) @db.BigInt
+  quyenId      Int           @id @default(autoincrement()) @db.Int
   tenQuyen     String        @unique @db.VarChar(100)
   moTa         String?       @db.VarChar(255)
   createdAt    DateTime      @default(now()) @db.DateTime(0)
@@ -192,8 +192,8 @@ model Quyen {
 }
 
 model TaiKhoanVaiTro {
-  taiKhoanId BigInt   @db.BigInt
-  vaiTroId   BigInt   @db.BigInt
+  taiKhoanId Int      @db.Int
+  vaiTroId   Int      @db.Int
   taiKhoan   TaiKhoan @relation(fields: [taiKhoanId], references: [taiKhoanId], onDelete: Restrict, onUpdate: Restrict)
   vaiTro     VaiTro   @relation(fields: [vaiTroId], references: [vaiTroId], onDelete: Restrict, onUpdate: Restrict)
 
@@ -201,8 +201,8 @@ model TaiKhoanVaiTro {
 }
 
 model VaiTroQuyen {
-  vaiTroId BigInt @db.BigInt
-  quyenId  BigInt @db.BigInt
+  vaiTroId Int    @db.Int
+  quyenId  Int    @db.Int
   vaiTro   VaiTro @relation(fields: [vaiTroId], references: [vaiTroId], onDelete: Restrict, onUpdate: Restrict)
   quyen    Quyen  @relation(fields: [quyenId], references: [quyenId], onDelete: Restrict, onUpdate: Restrict)
 
@@ -210,7 +210,7 @@ model VaiTroQuyen {
 }
 
 model KhuyenMai {
-  khuyenMaiId       BigInt         @id @default(autoincrement()) @db.BigInt
+  khuyenMaiId       Int            @id @default(autoincrement()) @db.Int
   tenChuongTrinh    String         @db.VarChar(150)
   maKhuyenMai       String?        @db.VarChar(50)
   phamViApDung      String         @db.VarChar(30)
@@ -223,7 +223,7 @@ model KhuyenMai {
   tuNgay            DateTime       @db.Date
   denNgay           DateTime?      @db.Date
   trangThai         String         @db.VarChar(30)
-  nhaXeId           BigInt         @db.BigInt
+  nhaXeId           Int            @db.Int
   createdAt         DateTime       @default(now()) @db.DateTime(0)
   updatedAt         DateTime       @default(now()) @updatedAt @db.DateTime(0)
   nhaXe             NhaXe          @relation(fields: [nhaXeId], references: [nhaXeId], onDelete: Restrict, onUpdate: Restrict)
@@ -234,7 +234,7 @@ model KhuyenMai {
 }
 
 model DonGiaoDich {
-  donGiaoDichId        BigInt        @id @default(autoincrement()) @db.BigInt
+  donGiaoDichId        Int           @id @default(autoincrement()) @db.Int
   maDonGiaoDich        String        @unique @db.VarChar(50)
   ngayTao              DateTime      @db.DateTime(0)
   tongTien             Decimal       @db.Decimal(18, 2)
@@ -242,8 +242,8 @@ model DonGiaoDich {
   tenKhachHang         String        @db.VarChar(100)
   soDienThoaiKhachHang String        @db.VarChar(16)
   emailKhachHang       String?       @db.VarChar(150)
-  khachHangId          BigInt        @db.BigInt
-  nhaXeId              BigInt        @db.BigInt
+  khachHangId          Int           @db.Int
+  nhaXeId              Int           @db.Int
   createdAt            DateTime      @default(now()) @db.DateTime(0)
   updatedAt            DateTime      @default(now()) @updatedAt @db.DateTime(0)
   nhaXe                NhaXe         @relation(fields: [nhaXeId], references: [nhaXeId], onDelete: Restrict, onUpdate: Restrict)
@@ -255,14 +255,14 @@ model DonGiaoDich {
 }
 
 model PhieuDatVe {
-  phieuDatVeId    BigInt      @id @default(autoincrement()) @db.BigInt
+  phieuDatVeId    Int         @id @default(autoincrement()) @db.Int
   maPhieuDatVe    String      @unique @db.VarChar(50)
   ngayDat         DateTime    @db.DateTime(0)
   soLuongVeBanDau Int         @db.Int
   tongTienBanDau  Decimal     @db.Decimal(18, 2)
   trangThai       String      @db.VarChar(30)
-  khuyenMaiId     BigInt?     @db.BigInt
-  donGiaoDichId   BigInt      @unique @db.BigInt
+  khuyenMaiId     Int?        @db.Int
+  donGiaoDichId   Int         @unique @db.Int
   createdAt       DateTime    @default(now()) @db.DateTime(0)
   updatedAt       DateTime    @default(now()) @updatedAt @db.DateTime(0)
   donGiaoDich     DonGiaoDich @relation(fields: [donGiaoDichId], references: [donGiaoDichId], onDelete: Restrict, onUpdate: Restrict)
@@ -271,15 +271,15 @@ model PhieuDatVe {
 }
 
 model Ve {
-  veId            BigInt      @id @default(autoincrement()) @db.BigInt
+  veId            Int         @id @default(autoincrement()) @db.Int
   maVe            String      @unique @db.VarChar(50)
   diemDon         String?     @db.VarChar(255)
   giaNiemYet      Decimal     @db.Decimal(18, 2)
   giaThucTe       Decimal     @db.Decimal(18, 2)
   trangThai       String      @db.VarChar(30)
-  phieuDatVeId    BigInt      @db.BigInt
-  gheChuyenXeId   BigInt      @db.BigInt
-  bangGiaApDungId BigInt      @db.BigInt
+  phieuDatVeId    Int         @db.Int
+  gheChuyenXeId   Int         @db.Int
+  bangGiaApDungId Int         @db.Int
   createdAt       DateTime    @default(now()) @db.DateTime(0)
   updatedAt       DateTime    @default(now()) @updatedAt @db.DateTime(0)
   phieuDatVe      PhieuDatVe  @relation(fields: [phieuDatVeId], references: [phieuDatVeId], onDelete: Restrict, onUpdate: Restrict)
@@ -289,7 +289,7 @@ model Ve {
 }
 
 model BuuCuc {
-  buuCucId                   BigInt            @id @default(autoincrement()) @db.BigInt
+  buuCucId                   Int               @id @default(autoincrement()) @db.Int
   maBuuCuc                   String            @db.VarChar(50)
   tenBuuCuc                  String            @db.VarChar(150)
   diaChi                     String            @db.VarChar(255)
@@ -297,7 +297,7 @@ model BuuCuc {
   quanHuyen                  String?           @db.VarChar(100)
   phuongXa                   String?           @db.VarChar(100)
   trangThai                  String            @db.VarChar(30)
-  nhaXeId                    BigInt            @db.BigInt
+  nhaXeId                    Int               @db.Int
   createdAt                  DateTime          @default(now()) @db.DateTime(0)
   updatedAt                  DateTime          @default(now()) @updatedAt @db.DateTime(0)
   nhaXe                      NhaXe             @relation(fields: [nhaXeId], references: [nhaXeId], onDelete: Restrict, onUpdate: Restrict)
@@ -310,7 +310,7 @@ model BuuCuc {
 }
 
 model BangCuocGuiHang {
-  bangCuocGuiHangId BigInt         @id @default(autoincrement()) @db.BigInt
+  bangCuocGuiHangId Int            @id @default(autoincrement()) @db.Int
   khoiLuongTu       Decimal        @db.Decimal(10, 2)
   khoiLuongDen      Decimal?       @db.Decimal(10, 2)
   hinhThucLayHang   String         @db.VarChar(30)
@@ -319,8 +319,8 @@ model BangCuocGuiHang {
   tuNgay            DateTime       @db.Date
   denNgay           DateTime?      @db.Date
   trangThai         String         @db.VarChar(30)
-  buuCucGuiId       BigInt         @db.BigInt
-  buuCucPhatId      BigInt         @db.BigInt
+  buuCucGuiId       Int            @db.Int
+  buuCucPhatId      Int            @db.Int
   createdAt         DateTime       @default(now()) @db.DateTime(0)
   updatedAt         DateTime       @default(now()) @updatedAt @db.DateTime(0)
   buuCucGui         BuuCuc         @relation("BuuCucGuiBangCuoc", fields: [buuCucGuiId], references: [buuCucId], onDelete: Restrict, onUpdate: Restrict)
@@ -329,7 +329,7 @@ model BangCuocGuiHang {
 }
 
 model PhieuGuiHang {
-  phieuGuiHangId       BigInt           @id @default(autoincrement()) @db.BigInt
+  phieuGuiHangId       Int              @id @default(autoincrement()) @db.Int
   maVanDon             String           @unique @db.VarChar(50)
   tenNguoiNhan         String           @db.VarChar(100)
   soDienThoaiNguoiNhan String           @db.VarChar(16)
@@ -345,12 +345,12 @@ model PhieuGuiHang {
   nguoiTraCuoc         String           @db.VarChar(30)
   ghiChu               String?          @db.VarChar(500)
   trangThai            String           @db.VarChar(30)
-  chuyenXeId           BigInt?          @db.BigInt
-  buuCucGuiId          BigInt?          @db.BigInt
-  buuCucPhatId         BigInt?          @db.BigInt
-  bangCuocApDungId     BigInt?          @db.BigInt
-  khuyenMaiId          BigInt?          @db.BigInt
-  donGiaoDichId        BigInt           @unique @db.BigInt
+  chuyenXeId           Int?             @db.Int
+  buuCucGuiId          Int?             @db.Int
+  buuCucPhatId         Int?             @db.Int
+  bangCuocApDungId     Int?             @db.Int
+  khuyenMaiId          Int?             @db.Int
+  donGiaoDichId        Int              @unique @db.Int
   createdAt            DateTime         @default(now()) @db.DateTime(0)
   updatedAt            DateTime         @default(now()) @updatedAt @db.DateTime(0)
   donGiaoDich          DonGiaoDich      @relation(fields: [donGiaoDichId], references: [donGiaoDichId], onDelete: Restrict, onUpdate: Restrict)
@@ -364,7 +364,7 @@ model PhieuGuiHang {
 }
 
 model LoaiHangHoa {
-  loaiHangHoaId BigInt    @id @default(autoincrement()) @db.BigInt
+  loaiHangHoaId Int       @id @default(autoincrement()) @db.Int
   tenLoai       String    @db.VarChar(100)
   moTa          String?   @db.VarChar(500)
   trangThai     String    @db.VarChar(30)
@@ -376,7 +376,7 @@ model LoaiHangHoa {
 }
 
 model HangHoa {
-  hangHoaId       BigInt           @id @default(autoincrement()) @db.BigInt
+  hangHoaId       Int              @id @default(autoincrement()) @db.Int
   tenHang         String           @db.VarChar(150)
   soLuong         Int              @db.Int
   khoiLuong       Decimal          @db.Decimal(10, 2)
@@ -385,8 +385,8 @@ model HangHoa {
   chieuCao        Decimal?         @db.Decimal(10, 2)
   giaTriKhaiBao   Decimal?         @db.Decimal(18, 2)
   moTa            String?          @db.VarChar(500)
-  phieuGuiHangId  BigInt           @db.BigInt
-  loaiHangHoaId   BigInt           @db.BigInt
+  phieuGuiHangId  Int              @db.Int
+  loaiHangHoaId   Int              @db.Int
   createdAt       DateTime         @default(now()) @db.DateTime(0)
   updatedAt       DateTime         @default(now()) @updatedAt @db.DateTime(0)
   phieuGuiHang    PhieuGuiHang     @relation(fields: [phieuGuiHangId], references: [phieuGuiHangId], onDelete: Restrict, onUpdate: Restrict)
@@ -395,24 +395,24 @@ model HangHoa {
 }
 
 model HinhAnhHangHoa {
-  hinhAnhId BigInt   @id @default(autoincrement()) @db.BigInt
+  hinhAnhId Int      @id @default(autoincrement()) @db.Int
   duongDan  String   @db.VarChar(500)
   thuTu     Int?     @db.Int
-  hangHoaId BigInt   @db.BigInt
+  hangHoaId Int      @db.Int
   createdAt DateTime @default(now()) @db.DateTime(0)
   updatedAt DateTime @default(now()) @updatedAt @db.DateTime(0)
   hangHoa   HangHoa  @relation(fields: [hangHoaId], references: [hangHoaId], onDelete: Restrict, onUpdate: Restrict)
 }
 
 model ThanhToan {
-  thanhToanId   BigInt      @id @default(autoincrement()) @db.BigInt
+  thanhToanId   Int         @id @default(autoincrement()) @db.Int
   soTien        Decimal     @db.Decimal(18, 2)
   phuongThuc    String      @db.VarChar(30)
   loaiGiaoDich  String      @db.VarChar(30)
   thoiGian      DateTime    @db.DateTime(0)
   trangThai     String      @db.VarChar(30)
-  donGiaoDichId BigInt      @db.BigInt
-  veId          BigInt?     @db.BigInt
+  donGiaoDichId Int         @db.Int
+  veId          Int?        @db.Int
   createdAt     DateTime    @default(now()) @db.DateTime(0)
   updatedAt     DateTime    @default(now()) @updatedAt @db.DateTime(0)
   donGiaoDich   DonGiaoDich @relation(fields: [donGiaoDichId], references: [donGiaoDichId], onDelete: Restrict, onUpdate: Restrict)
@@ -420,19 +420,19 @@ model ThanhToan {
 }
 
 model HoaDon {
-  hoaDonId      BigInt      @id @default(autoincrement()) @db.BigInt
+  hoaDonId      Int         @id @default(autoincrement()) @db.Int
   maHoaDon      String      @unique @db.VarChar(50)
   ngayLap       DateTime    @db.DateTime(0)
   tongTien      Decimal     @db.Decimal(18, 2)
   trangThai     String      @db.VarChar(30)
-  donGiaoDichId BigInt      @unique @db.BigInt
+  donGiaoDichId Int         @unique @db.Int
   createdAt     DateTime    @default(now()) @db.DateTime(0)
   updatedAt     DateTime    @default(now()) @updatedAt @db.DateTime(0)
   donGiaoDich   DonGiaoDich @relation(fields: [donGiaoDichId], references: [donGiaoDichId], onDelete: Restrict, onUpdate: Restrict)
 }
 
 model ThongBao {
-  thongBaoId BigInt              @id @default(autoincrement()) @db.BigInt
+  thongBaoId Int                 @id @default(autoincrement()) @db.Int
   tieuDe     String              @db.VarChar(150)
   noiDung    String              @db.Text
   thoiGian   DateTime            @db.DateTime(0)
@@ -443,11 +443,11 @@ model ThongBao {
 }
 
 model ThongBaoNguoiNhan {
-  thongBaoNguoiNhanId BigInt    @id @default(autoincrement()) @db.BigInt
+  thongBaoNguoiNhanId Int       @id @default(autoincrement()) @db.Int
   daDoc               Boolean
   thoiGianDoc         DateTime? @db.DateTime(0)
-  thongBaoId          BigInt    @db.BigInt
-  khachHangId         BigInt    @db.BigInt
+  thongBaoId          Int       @db.Int
+  khachHangId         Int       @db.Int
   createdAt           DateTime  @default(now()) @db.DateTime(0)
   updatedAt           DateTime  @default(now()) @updatedAt @db.DateTime(0)
   thongBao            ThongBao  @relation(fields: [thongBaoId], references: [thongBaoId], onDelete: Restrict, onUpdate: Restrict)
@@ -457,25 +457,25 @@ model ThongBaoNguoiNhan {
 }
 
 model TinNhanHoTro {
-  tinNhanId   BigInt    @id @default(autoincrement()) @db.BigInt
+  tinNhanId   Int       @id @default(autoincrement()) @db.Int
   noiDung     String    @db.Text
   thoiGian    DateTime  @db.DateTime(0)
   trangThai   String    @db.VarChar(30)
-  khachHangId BigInt    @db.BigInt
+  khachHangId Int       @db.Int
   createdAt   DateTime  @default(now()) @db.DateTime(0)
   updatedAt   DateTime  @default(now()) @updatedAt @db.DateTime(0)
   khachHang   KhachHang @relation(fields: [khachHangId], references: [khachHangId], onDelete: Restrict, onUpdate: Restrict)
 }
 
 model PhanHoi {
-  phanHoiId      BigInt        @id @default(autoincrement()) @db.BigInt
+  phanHoiId      Int           @id @default(autoincrement()) @db.Int
   mucDanhGia     Int           @db.Int
   noiDung        String?       @db.VarChar(1000)
   thoiGian       DateTime      @db.DateTime(0)
   trangThai      String        @db.VarChar(30)
-  khachHangId    BigInt        @db.BigInt
-  chuyenXeId     BigInt?       @db.BigInt
-  phieuGuiHangId BigInt?       @db.BigInt
+  khachHangId    Int           @db.Int
+  chuyenXeId     Int?          @db.Int
+  phieuGuiHangId Int?          @db.Int
   createdAt      DateTime      @default(now()) @db.DateTime(0)
   updatedAt      DateTime      @default(now()) @updatedAt @db.DateTime(0)
   khachHang      KhachHang     @relation(fields: [khachHangId], references: [khachHangId], onDelete: Restrict, onUpdate: Restrict)
