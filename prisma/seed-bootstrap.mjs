@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process';
 
-const pnpm = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
-const result = spawnSync(pnpm, ['--filter', '@vexgo/api', 'build'], {
+const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+const result = spawnSync(npm, ['run', 'build', '--workspace=@vexgo/api'], {
   stdio: 'inherit',
   shell: process.platform === 'win32',
 });

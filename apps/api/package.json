@@ -7,7 +7,7 @@
   "license": "UNLICENSED",
   "type": "module",
   "scripts": {
-    "prebuild": "pnpm --dir ../.. exec prisma generate",
+    "prebuild": "cd ../.. && npm exec -- prisma generate",
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\"",
     "start": "nest start",

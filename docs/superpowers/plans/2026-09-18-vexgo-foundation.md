@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Create a runnable pnpm/Turborepo foundation containing customer web, admin web, a secure NestJS API, and a local MySQL/Prisma development environment.
+**Goal:** Create a runnable npm/Turborepo foundation containing customer web, admin web, a secure NestJS API, and a local MySQL/Prisma development environment.
 
-**Architecture:** The root pnpm workspace contains three independently buildable apps and three narrowly scoped shared packages. Next.js web and admin call the versioned NestJS API over HTTP; only the API owns Prisma and MySQL. Turbo coordinates the same quality tasks at root and in each workspace.
+**Architecture:** The root npm workspace contains three independently buildable apps and three narrowly scoped shared packages. Next.js web and admin call the versioned NestJS API over HTTP; only the API owns Prisma and MySQL. Turbo coordinates the same quality tasks at root and in each workspace.
 
-**Tech Stack:** Node.js LTS, pnpm, Turborepo, Next.js App Router, TypeScript, Tailwind CSS, shadcn/ui, NestJS (Express), Prisma, MySQL 8, Jest, Playwright, ESLint, Prettier, Husky, lint-staged, GitHub Actions.
+**Tech Stack:** Node.js LTS, npm, Turborepo, Next.js App Router, TypeScript, Tailwind CSS, shadcn/ui, NestJS (Express), Prisma, MySQL 8, Jest, Playwright, ESLint, Prettier, Husky, lint-staged, GitHub Actions.
 
 **Spec:** `docs/superpowers/specs/2026-09-18-vexgo-foundation-design.md`
 
@@ -25,8 +25,8 @@
 ## Target File Structure
 
 ```text
-package.json                         Root scripts and package-manager lock
-pnpm-workspace.yaml                  Workspace membership
+package.json                         Root scripts and npm workspace membership
+package-lock.json                    Reproducible npm dependency lock
 turbo.json                           Task graph and cache inputs
 .gitignore                           Generated files and secrets
 .prettierrc.json                     Formatting policy
@@ -45,8 +45,8 @@ infra/docker/docker-compose.yml      MySQL local service
 ### Task 1: Establish the workspace and Turbo task graph
 
 **Files:**
-- Create: `package.json`, `pnpm-workspace.yaml`, `turbo.json`, `.gitignore`, `.prettierrc.json`, `.nvmrc`
-- Test: `package.json` root scripts by `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build`
+- Create: `package.json` with npm workspaces, `turbo.json`, `.gitignore`, `.prettierrc.json`, `.nvmrc`
+- Test: `package.json` root scripts by `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`
 
 **Interfaces:**
 - Produces root commands: `dev`, `build`, `lint`, `format`, `format:check`, `typecheck`, `test`.
@@ -54,13 +54,13 @@ infra/docker/docker-compose.yml      MySQL local service
 
 - [ ] **Step 1: Create the failing workspace command check.**
 
-Run: `pnpm --version`
+Run: `npm --version`
 
-Expected: pnpm is available; no root `package.json` exists yet, so `pnpm lint` fails with a missing manifest error.
+Expected: npm is available; no root `package.json` exists yet, so `npm run lint` fails with a missing manifest error.
 
 - [ ] **Step 2: Add root workspace manifests.**
 
-Create `pnpm-workspace.yaml` with:
+Add npm workspace membership to the root `package.json`:
 
 ```yaml
 packages:
@@ -88,15 +88,15 @@ Add ignores for `node_modules`, `.next`, `dist`, `coverage`, `.env*` except `.en
 
 - [ ] **Step 3: Install and validate the task graph.**
 
-Run: `pnpm install && pnpm turbo run lint --dry`
+Run: `npm install && npm exec -- turbo run lint --dry`
 
-Expected: install produces `pnpm-lock.yaml`; Turbo enumerates the root task graph without a schema error.
+Expected: install produces `package-lock.json`; Turbo enumerates the root task graph without a schema error.
 
 - [ ] **Step 4: Commit.**
 
 ```powershell
-git add package.json pnpm-workspace.yaml turbo.json .gitignore .prettierrc.json .nvmrc pnpm-lock.yaml
-git commit -m "chore: initialize pnpm turbo workspace"
+git add package.json turbo.json .gitignore .prettierrc.json .nvmrc package-lock.json
+git commit -m "chore: initialize npm turbo workspace"
 ```
 
 ### Task 2: Add shared configuration, types, and UI package contracts
@@ -132,7 +132,7 @@ it('renders its label', () => {
 
 - [ ] **Step 2: Confirm both tests fail before implementation.**
 
-Run: `pnpm --filter @vexgo/types test && pnpm --filter @vexgo/ui test`
+Run: `npm run test --workspace=@vexgo/types && npm run test --workspace=@vexgo/ui`
 
 Expected: FAIL because packages and exports do not exist.
 
@@ -142,14 +142,14 @@ Use `Role` as a string enum with exactly the three global roles. Implement `ApiS
 
 - [ ] **Step 4: Run shared package checks.**
 
-Run: `pnpm --filter @vexgo/types typecheck && pnpm --filter @vexgo/types test && pnpm --filter @vexgo/ui test`
+Run: `npm run typecheck --workspace=@vexgo/types && npm run test --workspace=@vexgo/types && npm run test --workspace=@vexgo/ui`
 
 Expected: PASS.
 
 - [ ] **Step 5: Commit.**
 
 ```powershell
-git add packages/config packages/types packages/ui package.json pnpm-lock.yaml
+git add packages/config packages/types packages/ui package.json package-lock.json
 git commit -m "chore: add shared workspace packages"
 ```
 
@@ -180,7 +180,7 @@ For admin, assert a heading named `VexGo Admin`.
 
 - [ ] **Step 2: Verify failure.**
 
-Run: `pnpm --filter @vexgo/web test && pnpm --filter @vexgo/admin test`
+Run: `npm run test --workspace=@vexgo/web && npm run test --workspace=@vexgo/admin`
 
 Expected: FAIL because the Next apps and page modules do not exist.
 
@@ -196,14 +196,14 @@ Use a Playwright `webServer` command for each Next app. Each `*.smoke.spec.ts` m
 
 - [ ] **Step 5: Run frontend verification.**
 
-Run: `pnpm --filter @vexgo/web lint && pnpm --filter @vexgo/web typecheck && pnpm --filter @vexgo/web test && pnpm --filter @vexgo/admin lint && pnpm --filter @vexgo/admin typecheck && pnpm --filter @vexgo/admin test`
+Run: `npm run lint --workspace=@vexgo/web && npm run typecheck --workspace=@vexgo/web && npm run test --workspace=@vexgo/web && npm run lint --workspace=@vexgo/admin && npm run typecheck --workspace=@vexgo/admin && npm run test --workspace=@vexgo/admin`
 
 Expected: PASS. Run the Playwright smoke tests after browser binaries are installed.
 
 - [ ] **Step 6: Commit.**
 
 ```powershell
-git add apps/web apps/admin packages/ui package.json pnpm-lock.yaml
+git add apps/web apps/admin packages/ui package.json package-lock.json
 git commit -m "feat: scaffold customer and admin applications"
 ```
 
@@ -235,7 +235,7 @@ it('returns a healthy versioned response', async () => {
 
 - [ ] **Step 2: Verify failure.**
 
-Run: `pnpm --filter @vexgo/api test -- health.controller.spec.ts`
+Run: `npm run test --workspace=@vexgo/api -- health.controller.spec.ts`
 
 Expected: FAIL because the API app and route do not exist.
 
@@ -245,14 +245,14 @@ Create NestJS with the Express adapter. Configure a global `/api/v1` prefix, `Va
 
 - [ ] **Step 4: Run API checks.**
 
-Run: `pnpm --filter @vexgo/api test -- health.controller.spec.ts && pnpm --filter @vexgo/api lint && pnpm --filter @vexgo/api typecheck`
+Run: `npm run test --workspace=@vexgo/api -- health.controller.spec.ts && npm run lint --workspace=@vexgo/api && npm run typecheck --workspace=@vexgo/api`
 
 Expected: PASS.
 
 - [ ] **Step 5: Commit.**
 
 ```powershell
-git add apps/api package.json pnpm-lock.yaml
+git add apps/api package.json package-lock.json
 git commit -m "feat: establish versioned NestJS API foundation"
 ```
 
@@ -279,7 +279,7 @@ it('connects and reads the database', async () => {
 
 - [ ] **Step 2: Confirm the test fails without a database service.**
 
-Run: `pnpm --filter @vexgo/api test -- prisma.service.spec.ts`
+Run: `npm run test --workspace=@vexgo/api -- prisma.service.spec.ts`
 
 Expected: FAIL because `PrismaService` does not exist.
 
@@ -291,14 +291,14 @@ Implement `PrismaService` with application shutdown hooks. Implement a seed scri
 
 - [ ] **Step 4: Run integration verification.**
 
-Run: `docker compose -f infra/docker/docker-compose.yml up -d && pnpm --filter @vexgo/api db:migrate && pnpm --filter @vexgo/api db:seed && pnpm --filter @vexgo/api test -- prisma.service.spec.ts`
+Run: `docker compose -f infra/docker/docker-compose.yml up -d && npm run db:migrate --workspace=@vexgo/api && npm run db:seed --workspace=@vexgo/api && npm run test --workspace=@vexgo/api -- prisma.service.spec.ts`
 
 Expected: migration succeeds, repeated seed does not duplicate role rows, and test PASSes.
 
 - [ ] **Step 5: Commit.**
 
 ```powershell
-git add infra/docker apps/api/prisma apps/api/src/database apps/api/src/app.module.ts apps/api/.env.example apps/api/package.json pnpm-lock.yaml
+git add infra/docker apps/api/prisma apps/api/src/database apps/api/src/app.module.ts apps/api/.env.example apps/api/package.json package-lock.json
 git commit -m "feat: add local MySQL and Prisma foundation"
 ```
 
@@ -334,7 +334,7 @@ it('denies a customer from an admin-only route', () => {
 
 - [ ] **Step 2: Verify failure.**
 
-Run: `pnpm --filter @vexgo/api test -- auth.controller.spec.ts roles.guard.spec.ts`
+Run: `npm run test --workspace=@vexgo/api -- auth.controller.spec.ts roles.guard.spec.ts`
 
 Expected: FAIL because the auth module and guards do not exist.
 
@@ -346,14 +346,14 @@ Add throttling for login and public API endpoints. Do not add registration, prof
 
 - [ ] **Step 4: Run security tests.**
 
-Run: `pnpm --filter @vexgo/api test -- auth.controller.spec.ts roles.guard.spec.ts && pnpm --filter @vexgo/api typecheck`
+Run: `npm run test --workspace=@vexgo/api -- auth.controller.spec.ts roles.guard.spec.ts && npm run typecheck --workspace=@vexgo/api`
 
 Expected: PASS.
 
 - [ ] **Step 5: Commit.**
 
 ```powershell
-git add apps/api package.json pnpm-lock.yaml
+git add apps/api package.json package-lock.json
 git commit -m "feat: add API auth and RBAC skeleton"
 ```
 
@@ -365,33 +365,33 @@ git commit -m "feat: add API auth and RBAC skeleton"
 - Test: root command sequence and GitHub Actions workflow syntax
 
 **Interfaces:**
-- Produces `pnpm format:check` and `pnpm prepare`.
+- Produces `npm run format:check` and `npm run prepare`.
 - Produces PR CI for install, lint, format check, typecheck, test, and build.
 
 - [ ] **Step 1: Write the failing root verification run.**
 
-Run: `pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build`
+Run: `npm run format:check && npm run lint && npm run typecheck && npm test && npm run build`
 
 Expected: initially FAIL because the root format script, hooks, and CI-related commands are incomplete.
 
 - [ ] **Step 2: Implement local quality gates.**
 
-Add Prettier check/write scripts, `prepare: husky`, and a pre-commit hook executing `pnpm exec lint-staged`. Configure lint-staged to run Prettier and ESLint only on staged source/config files. Document prerequisites (Node LTS, pnpm, Docker), local startup, database migration/seed, root quality checks, port assignments, Swagger URL, and no-secret policy in `README.md`.
+Add Prettier check/write scripts, `prepare: husky`, and a pre-commit hook executing `npm exec -- lint-staged`. Configure lint-staged to run Prettier and ESLint only on staged source/config files. Document prerequisites (Node LTS, npm, Docker), local startup, database migration/seed, root quality checks, port assignments, Swagger URL, and no-secret policy in `README.md`.
 
 - [ ] **Step 3: Implement pull-request CI.**
 
-Create a GitHub Actions workflow triggered on `pull_request` and `push` to the default branch. Use setup-node with pnpm cache, `pnpm install --frozen-lockfile`, then `pnpm format:check`, `pnpm lint`, `pnpm typecheck`, `pnpm test`, and `pnpm build`. Do not inject deployment credentials or run deploy jobs.
+Create a GitHub Actions workflow triggered on `pull_request` and `push` to the default branch. Use setup-node with npm cache, `npm ci`, then `npm run format:check`, `npm run lint`, `npm run typecheck`, `npm test`, and `npm run build`. Do not inject deployment credentials or run deploy jobs.
 
 - [ ] **Step 4: Run final evidence-based verification.**
 
-Run: `pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build`
+Run: `npm run format:check && npm run lint && npm run typecheck && npm test && npm run build`
 
-Expected: all commands PASS. Then run `docker compose -f infra/docker/docker-compose.yml up -d`, `pnpm --filter @vexgo/api db:migrate`, `pnpm --filter @vexgo/api db:seed`, start API/web/admin, and verify `GET /api/v1/health`, `http://localhost:<web-port>/`, `http://localhost:<admin-port>/`, and development Swagger UI respond successfully.
+Expected: all commands PASS. Then run `docker compose -f infra/docker/docker-compose.yml up -d`, `npm run db:migrate --workspace=@vexgo/api`, `npm run db:seed --workspace=@vexgo/api`, start API/web/admin, and verify `GET /api/v1/health`, `http://localhost:<web-port>/`, `http://localhost:<admin-port>/`, and development Swagger UI respond successfully.
 
 - [ ] **Step 5: Commit.**
 
 ```powershell
-git add README.md lint-staged.config.mjs .husky .github/workflows package.json turbo.json pnpm-lock.yaml
+git add README.md lint-staged.config.mjs .husky .github/workflows package.json turbo.json package-lock.json
 git commit -m "ci: add project quality gates"
 ```
 
