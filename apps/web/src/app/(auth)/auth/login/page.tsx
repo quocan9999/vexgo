@@ -1,0 +1,7 @@
+import Link from 'next/link';
+import { ArrowLeft, BusFront } from 'lucide-react';
+import { LoginForm } from '@/features/auth/components/login-form';
+
+export default function LoginPage() {
+  return <div className="grid min-h-[calc(100vh-4rem)] lg:grid-cols-2"><div className="hidden bg-slate-950 p-12 text-white lg:flex lg:flex-col lg:justify-between"><div><span className="grid size-12 place-items-center rounded-2xl bg-primary"><BusFront size={25} /></span><h1 className="mt-10 max-w-lg text-5xl font-black leading-tight">Mỗi chuyến đi bắt đầu từ một lựa chọn rõ ràng.</h1><p className="mt-5 max-w-md text-base leading-7 text-slate-300">Đăng nhập để quản lý vé, điểm thưởng và những hành trình sắp tới.</p></div><p className="text-sm text-slate-500">VexGo customer experience</p></div><div className="flex items-center justify-center px-4 py-12 sm:px-8"><div className="w-full max-w-md"><Link href="/" className="mb-8 inline-flex items-center gap-2 text-sm font-bold text-muted-foreground hover:text-primary"><ArrowLeft size={16} /> Về trang chủ</Link><p className="text-xs font-black uppercase tracking-[0.2em] text-accent">Chào mừng trở lại</p><h2 className="mt-3 text-3xl font-black">Đăng nhập VexGo</h2><p className="mt-3 text-sm leading-6 text-muted-foreground">Tiếp tục quản lý vé và hành trình của bạn.</p><div className="mt-8"><LoginForm /></div><p className="mt-7 text-center text-sm text-muted-foreground">Chưa có tài khoản? <Link href="/auth/register" className="font-black text-primary hover:underline">Đăng ký ngay</Link></p></div></div></div>;
+}
