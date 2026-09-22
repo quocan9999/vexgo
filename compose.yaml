@@ -3,7 +3,7 @@ services:
     image: mysql:8.4
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
-      MYSQL_DATABASE: ${MYSQL_DATABASE:-vexgo_dev}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-vexgo}
       MYSQL_USER: ${MYSQL_USER:-vexgo_app}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in .env}
     ports:
