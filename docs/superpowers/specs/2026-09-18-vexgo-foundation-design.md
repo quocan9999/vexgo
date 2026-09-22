@@ -17,7 +17,7 @@ Giai đoạn này chỉ tạo khung dự án, cấu hình phát triển, cơ s�
 
 ## 2. Kiến trúc và cấu trúc thư mục
 
-Sử dụng `pnpm workspace` để quản lý dependencies và Turborepo để điều phối, cache các tác vụ `lint`, `format`, `typecheck`, `test` và `build`.
+Sử dụng npm workspaces để quản lý dependencies và Turborepo để điều phối, cache các tác vụ `lint`, `format`, `typecheck`, `test` và `build`.
 
 ```text
 vexgo/
@@ -79,7 +79,7 @@ GitHub Actions chạy lint, format check, typecheck, test và build trên pull r
 
 ## 6. Tiêu chí hoàn thành setup nền
 
-- Có thể cài dependencies từ root bằng pnpm và chạy ba app bằng Turbo.
+- Có thể cài dependencies từ root bằng npm và chạy ba app bằng Turbo.
 - MySQL local khởi động được bằng Docker Compose; Prisma migration và seed chạy từ API.
 - Cả web và admin build, typecheck và gọi được API health endpoint qua cấu hình environment.
 - Swagger/OpenAPI khả dụng trong development; validation, error format, CORS, rate limiting và RBAC skeleton tồn tại trong API.
