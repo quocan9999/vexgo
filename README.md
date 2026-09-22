@@ -1,156 +1,199 @@
 # VexGo
 
-Hệ thống đặt vé xe khách trực tuyến, gồm giao diện dành cho khách hàng, giao diện quản trị và backend API.
+VexGo là nền tảng đặt vé xe khách trực tuyến tích hợp nhiều nhà xe.
 
-> Repository này hiện chỉ là nền tảng monorepo của hệ thống. Các chức năng nghiệp vụ sẽ được triển khai sau khi hoàn tất phân tích nghiệp vụ, class diagram và thiết kế cơ sở dữ liệu.
+## Mô tả
 
-## Tech stack
+VexGo hướng tới việc số hóa quy trình tìm kiếm chuyến xe, đặt vé và quản lý vận hành nhà xe trên một nền tảng thống nhất. Hệ thống được định hướng phục vụ hai nhóm người dùng chính:
 
-### Frontend
+- **Khách hàng:** tìm kiếm chuyến xe, đặt và quản lý vé, thanh toán và sử dụng các dịch vụ liên quan.
+- **Quản trị viên và nhà xe:** quản lý người dùng, nhà xe, xe, tuyến, chuyến, vé và theo dõi số liệu vận hành.
 
-- **Next.js** với App Router
-- **React** và **TypeScript**
-- **Tailwind CSS**
-- **shadcn/ui** cho các UI component
-- Kiểm thử unit frontend sẽ được cấu hình khi nhóm thống nhất test tooling.
+Repository hiện bao gồm customer web, admin web và backend API trong cùng một workspace.
 
-Có hai frontend độc lập:
+## Tech Stack
 
-- `apps/web`: website dành cho khách hàng.
-- `apps/admin`: website dành cho nhân viên/quản trị viên.
+| Hạng mục            | Công nghệ                                        |
+| ------------------- | ------------------------------------------------ |
+| Frontend khách hàng | Next.js 16, React 19, TypeScript                 |
+| Frontend quản trị   | Next.js 16, React 19, TypeScript                 |
+| UI và styling       | Tailwind CSS 4, shadcn/ui, Lucide React          |
+| Backend             | NestJS 12, Node.js, TypeScript, Express adapter  |
+| API                 | REST API                                         |
+| Mobile              | Flutter                                          |
+| Database            | MySQL 8.4                                        |
+| Monorepo            | npm workspaces, Turborepo                        |
+| Code quality        | ESLint, Oxlint, Prettier, TypeScript strict mode |
+| Testing             | Vitest, Supertest                                |
 
-### Backend
+## Core Features
 
-- **NestJS**
-- **Node.js**
-- **TypeScript**
-- REST API
-- NestJS mặc định sử dụng Express adapter.
+### Customer
 
-Backend nằm tại `apps/api`. Các module nghiệp vụ, authentication, authorization và API contract sẽ được bổ sung theo thiết kế được nhóm duyệt.
+- Tìm kiếm chuyến xe theo tuyến, ngày khởi hành và nhà xe; xem thông tin chuyến.
+- Chọn chỗ, đặt vé, thanh toán trực tuyến và áp dụng mã khuyến mãi.
+- Tra cứu, xem và quản lý vé; hủy vé theo điều kiện áp dụng.
+- Gửi hàng hóa và theo dõi trạng thái vận chuyển.
+- Chat realtime với bộ phận hỗ trợ.
+- Sử dụng giao diện tiếng Việt và tiếng Anh.
 
-### Database
+### Admin
 
-- **MySQL**
-- Prisma có thể được xem xét sau khi class diagram/mô hình quan hệ được thống nhất.
+- Quản lý nhà xe, xe, tuyến đường, lịch chạy, chuyến xe và sơ đồ ghế.
+- Quản lý vé, đơn đặt vé, khách hàng, nhân viên và tài khoản nhà xe.
+- Quản lý bảng giá, mã khuyến mãi và chương trình ưu đãi.
+- Quản lý đơn gửi hàng và trạng thái vận chuyển.
+- Theo dõi thanh toán, doanh thu và báo cáo theo thời gian.
+- Quản lý vai trò, quyền truy cập và yêu cầu hỗ trợ khách hàng.
 
-MySQL local có thể chạy riêng bằng Docker Compose. Hiện chưa định nghĩa schema, migration hoặc seed data vì thiết kế cơ sở dữ liệu chưa được cung cấp và phê duyệt; API cũng chưa kết nối tới database.
+### Mobile App
 
-### Monorepo tooling
+- Tìm chuyến, chọn chỗ và đặt vé ngay trên điện thoại.
+- Thanh toán, lưu vé điện tử và tra cứu lịch sử đặt vé.
+- Tạo đơn gửi hàng và theo dõi trạng thái vận chuyển.
+- Nhận thông tin chuyến đi và trao đổi với bộ phận hỗ trợ.
+- Sử dụng ứng dụng bằng tiếng Việt hoặc tiếng Anh.
 
-- **pnpm workspaces** để quản lý ba app trong monorepo
-- **Turborepo** để điều phối các task giữa các app
-- **ESLint** cho `web`/`admin`, **Oxlint** cho `api`
-- **Prettier** cho code formatting
-- **TypeScript** strict mode
+## Getting Started
 
-### Testing
-
-NestJS scaffold hiện có cấu hình **Vitest** và dependency **Supertest** cho API testing; chưa có test case. Frontend chưa có test runner. Strategy dự kiến:
-
-- **Unit test frontend:** chọn và cấu hình runner khi bắt đầu có component/utility cần kiểm thử.
-- **Unit/API test backend:** dùng Vitest/Supertest để kiểm tra module và HTTP request/response khi endpoint được xây dựng.
-- **Integration test:** thêm sau khi có schema và môi trường database được thống nhất.
-- **End-to-end test:** có thể dùng Playwright để kiểm tra luồng người dùng khi các chức năng được triển khai.
-
-Hiện chưa có test case hay test nghiệp vụ. Chạy test runner API (hiện không có test nên chỉ kiểm tra cấu hình):
-
-```bash
-pnpm --filter @vexgo/api test
-```
-
-## Repository structure
-
-```text
-apps/
-  web/                         # Customer web application
-  admin/                       # Admin web application
-  api/                         # NestJS backend API
-
-docs/
-  De-Cuong-Chi-Tiet.md         # Đề cương chi tiết khoá luận
-
-compose.yaml                   # Chỉ chạy MySQL cho local development
-.env.example                   # Mẫu cấu hình MySQL local
-```
-
-Ứng dụng mobile không nằm trong repository này. Mobile sẽ được phát triển trong repository riêng và giao tiếp với backend thông qua API.
-
-## Development prerequisites
+### Yêu cầu môi trường
 
 - Node.js LTS
-- pnpm
-- Docker Desktop (để chạy MySQL local)
+- npm
+- Docker Desktop và Docker Compose
 - Git
 
-## Local database (MySQL)
+### 1. Cài đặt project
 
-Docker Compose chỉ khởi động database, không chạy `web`, `admin` hoặc `api`. Mỗi app được chạy riêng trong terminal khi cần.
+```bash
+git clone <repository-url>
+cd vexgo
 
-Tạo file `.env` từ mẫu một lần:
+npm install
+```
+
+Tạo file biến môi trường local từ file mẫu:
+
+PowerShell:
 
 ```powershell
 Copy-Item .env.example .env
 ```
 
-Khởi động và kiểm tra MySQL:
+macOS/Linux:
 
 ```bash
-docker compose up -d mysql
-docker compose ps mysql
+cp .env.example .env
 ```
 
-Mặc định database được mở tại `127.0.0.1:3306`; tên database và tài khoản local nằm trong `.env`. Nếu cổng `3306` đang được dùng, đổi `MYSQL_PORT` trong `.env`.
+> File `.env` chỉ dùng cho môi trường local. Không sử dụng các thông tin đăng nhập mẫu cho production.
 
-Xem log hoặc dừng container:
+### 2. Khởi động Docker services
+
+Khởi động MySQL và phpMyAdmin:
+
+```bash
+docker compose up -d
+docker compose ps
+```
+
+Các địa chỉ mặc định:
+
+- MySQL: `127.0.0.1:3306`
+- phpMyAdmin: <http://localhost:8080>
+
+Khi đăng nhập phpMyAdmin, dùng `mysql` làm database host và thông tin tài khoản được cấu hình trong file `.env`.
+
+Xem log hoặc dừng services:
 
 ```bash
 docker compose logs -f mysql
 docker compose down
 ```
 
-Named volume giữ dữ liệu sau khi chạy `docker compose down`. Các biến `MYSQL_*` dùng để khởi tạo database chỉ được áp dụng lần đầu khi volume còn trống. `docker compose down --volumes` sẽ xóa volume và toàn bộ dữ liệu local trong đó.
-
-## Install dependencies
+`mysql_data` là named volume nên dữ liệu vẫn được giữ lại sau `docker compose down`. Chỉ dùng lệnh sau khi muốn xóa toàn bộ dữ liệu MySQL local:
 
 ```bash
-pnpm install
+docker compose down --volumes
 ```
 
-## Available commands
+### 3. Chạy frontend và backend
+
+Mỗi lệnh dưới đây nên được chạy trong một terminal riêng, từ thư mục gốc của repository.
+
+Customer web — <http://localhost:3000>:
 
 ```bash
-# Chạy các app ở development mode
-pnpm dev
+npm run dev --workspace=@vexgo/web
+```
 
-# Kiểm tra lint
-pnpm lint
+Admin web — <http://localhost:3001>:
+
+```bash
+npm run dev --workspace=@vexgo/admin
+```
+
+Backend API — <http://localhost:4000>:
+
+```bash
+npm run start:dev --workspace=@vexgo/api
+```
+
+Có thể chạy đồng thời hai frontend bằng:
+
+```bash
+npm run dev
+```
+
+Hiện tại backend chưa có script `dev` ở cấp workspace nên cần khởi động bằng lệnh `start:dev` riêng.
+
+### 4. Các lệnh thường dùng
+
+```bash
+# Chạy frontend ở chế độ development
+npm run dev
+
+# Kiểm tra lint toàn workspace
+npm run lint
 
 # Kiểm tra TypeScript
-pnpm typecheck
+npm run typecheck
 
-# Build các workspace package/app
-pnpm build
+# Build toàn bộ workspace
+npm run build
 
-# Kiểm tra formatting
-pnpm format:check
+# Kiểm tra format
+npm run format:check
 
-# Chạy test runner API (chưa có test case)
-pnpm --filter @vexgo/api test
+# Chạy test API
+npm run test --workspace=@vexgo/api
 ```
 
-Frontend test commands sẽ được thêm khi nhóm chọn runner; hiện chưa có test script hay test case cho web/admin.
+## Project Structure
 
-## Scope hiện tại
+Cấu trúc dưới đây phản ánh trạng thái hiện tại và sẽ được cập nhật khi các module nghiệp vụ được bổ sung:
 
-Nền tảng hiện tập trung vào việc khởi tạo và chuẩn hóa monorepo, chưa bao gồm:
+```text
+vexgo/
+├── apps/
+│   ├── web/                 # Customer web application
+│   ├── admin/               # Admin web application
+│   └── api/                 # NestJS backend API
+├── docs/                    # Tài liệu phân tích, thiết kế và kế hoạch
+├── compose.yaml             # MySQL và phpMyAdmin cho local development
+├── .env.example             # Mẫu biến môi trường
+├── package.json             # Scripts và cấu hình workspace root
+├── package-lock.json        # Khóa phiên bản dependency của npm
+├── turbo.json               # Cấu hình Turborepo
+└── README.md
+```
 
-- Thiết kế hoặc triển khai database schema.
-- Migration và seed data.
-- Đăng nhập, JWT hoặc phân quyền RBAC.
-- Đặt vé, hủy vé, thanh toán và mã khuyến mãi.
-- Chat realtime, gửi hàng hóa và tích hợp payment provider.
-- API endpoint, authentication hoặc authorization.
-- Test case nghiệp vụ, CI/CD hoặc triển khai production.
+## Contributors
 
-> Các quyết định về dữ liệu và chức năng sẽ được bổ sung sau khi nhóm hoàn thiện tài liệu phân tích, class diagram và mô hình dữ liệu.
+- Trình Quốc An
+- Lê Sony
+- Phạm Minh Tài
+
+## License
+
+Project hiện được cấu hình là **UNLICENSED** và chưa phát hành theo một giấy phép mã nguồn mở. Đây là repository phục vụ mục đích học thuật/phát triển nội bộ; việc sao chép, phân phối hoặc sử dụng lại cần có sự đồng ý của nhóm tác giả.

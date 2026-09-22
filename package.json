@@ -2,12 +2,15 @@
   "name": "vexgo",
   "version": "0.0.0",
   "private": true,
-  "packageManager": "pnpm@11.19.0",
+  "packageManager": "npm@11.14.1",
+  "workspaces": [
+    "apps/*"
+  ],
   "scripts": {
     "build": "turbo run build",
     "lint": "turbo run lint",
-    "format": "pnpm exec prettier --write .",
-    "format:check": "pnpm exec prettier --check .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "dev": "turbo run dev --parallel"
