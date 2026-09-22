@@ -4,6 +4,7 @@ node_modules/
 dist/
 coverage/
 apps/api/src/generated/prisma/
+*.tsbuildinfo
 
 .env*
 !.env.example
