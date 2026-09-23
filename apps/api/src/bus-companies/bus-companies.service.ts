@@ -84,7 +84,7 @@ export class BusCompaniesService {
     }
     if (query.createdFrom || query.createdTo) {
       const businessTimeZone =
-        this.config.get<string>('BUSINESS_TIME_ZONE') ??
+        this.config.get<string>('BUSINESS_TIME_ZONE') ||
         DEFAULT_BUSINESS_TIME_ZONE;
       where.createdAt = {
         ...(query.createdFrom

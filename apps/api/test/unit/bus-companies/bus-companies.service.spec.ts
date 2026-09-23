@@ -156,6 +156,50 @@ describe('BusCompaniesService', () => {
     );
   });
 
+  it('falls back to Asia/Ho_Chi_Minh when the business time zone is not configured', async () => {
+    getConfig.mockReturnValue(undefined);
+
+    await service.findAll(
+      Object.assign(new BusCompanyQueryDto(), {
+        page: 1,
+        pageSize: 10,
+        sortBy: 'name',
+        sortDirection: 'asc',
+        createdFrom: '2026-01-01',
+      }),
+    );
+
+    expect(nhaXe.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          createdAt: { gte: new Date('2025-12-31T17:00:00.000Z') },
+        },
+      }),
+    );
+  });
+
+  it('falls back to Asia/Ho_Chi_Minh when the business time zone is empty', async () => {
+    getConfig.mockReturnValue('');
+
+    await service.findAll(
+      Object.assign(new BusCompanyQueryDto(), {
+        page: 1,
+        pageSize: 10,
+        sortBy: 'name',
+        sortDirection: 'asc',
+        createdFrom: '2026-01-01',
+      }),
+    );
+
+    expect(nhaXe.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          createdAt: { gte: new Date('2025-12-31T17:00:00.000Z') },
+        },
+      }),
+    );
+  });
+
   it('uses the canonical paused status as an exact database value', async () => {
     await service.findAll(
       Object.assign(new BusCompanyQueryDto(), {
