@@ -106,7 +106,16 @@ Các quy tắc này áp dụng cho toàn repository và bổ sung cho hướng d
 - Admin và Customer dùng chung domain/model hiện có như `NhaXe`, `TuyenXe`, `ChuyenXe`, `Ve`, `KhuyenMai`, `ThanhToan`, `KhachHang`; khác biệt về giao diện hoặc quyền không phải lý do tạo domain/database riêng.
 - Backend code và API URL dùng tiếng Anh; MUST NOT trộn tiếng Việt và tiếng Anh trong URL. TypeScript SHOULD dùng kiểu cụ thể thay cho `any`.
 
-## 11. Definition of Done
+## 11. Test organization
+
+- Backend tests MUST nằm dưới `apps/api/test/`; MUST NOT đặt `*.spec.ts` hoặc `*.e2e-spec.ts` trong `apps/api/src/`.
+- Unit tests MUST đặt tại `apps/api/test/unit/<feature>/`; integration tests MUST đặt tại `apps/api/test/integration/<feature>/`; e2e tests MUST đặt tại `apps/api/test/e2e/`.
+- Unit và integration tests dùng tên `*.spec.ts`; e2e tests dùng tên `*.e2e-spec.ts`.
+- Test structure SHOULD mirror domain/feature tương ứng trong `apps/api/src/` khi phù hợp.
+- Unit tests SHOULD cô lập class/function đang kiểm tra và mock dependency khi phù hợp. Integration tests MAY boot Nest module/application để kiểm tra nhiều component phối hợp. E2e tests SHOULD kiểm tra flow ở mức HTTP/API gần với client thật.
+- MUST NOT tạo duplicate test chỉ vì đổi loại test; MUST NOT đặt business test trong `api-foundation` nếu test thuộc feature riêng.
+
+## 12. Definition of Done
 
 Một feature full-stack chỉ hoàn thành khi có các phần phù hợp với scope: UI/UX; frontend service gọi API thật; NestJS controller/service; DTO và validation; Prisma/MySQL; business rules được kiểm tra ở backend; loading, error, empty (nếu phù hợp) và success feedback; test cho logic quan trọng; không còn mock làm nguồn dữ liệu chính; và cập nhật tài liệu nếu API contract thay đổi.
 

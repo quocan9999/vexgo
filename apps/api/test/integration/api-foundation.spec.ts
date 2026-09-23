@@ -6,12 +6,13 @@ import {
   HttpCode,
   INestApplication,
   Logger,
+  NotFoundException,
   Query,
 } from '@nestjs/common';
-import { PrismaService } from './prisma/prisma.service.js';
-import { AppModule } from './app.module.js';
-import { configureApi } from './common/configure-api.js';
-import { PaginationQueryDto } from './common/dto/pagination-query.dto.js';
+import { PrismaService } from '../../src/prisma/prisma.service.js';
+import { AppModule } from '../../src/app.module.js';
+import { configureApi } from '../../src/common/configure-api.js';
+import { PaginationQueryDto } from '../../src/common/dto/pagination-query.dto.js';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
@@ -49,6 +50,14 @@ class ApiFoundationTestController {
     throw new BadRequestException(
       'database password must not reach the client',
     );
+  }
+
+  @Get('business-error')
+  getBusinessError(): never {
+    throw new NotFoundException({
+      error: 'TEST_RESOURCE_NOT_FOUND',
+      message: 'Không tìm thấy tài nguyên test.',
+    });
   }
 }
 
@@ -190,6 +199,18 @@ describe('API foundation', () => {
       message: 'Yêu cầu không hợp lệ.',
     });
     expect(JSON.stringify(response.body)).not.toContain('database password');
+  });
+
+  it('preserves custom business error codes and messages', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/__test/business-error')
+      .expect(404);
+
+    expect(response.body).toEqual({
+      statusCode: 404,
+      error: 'TEST_RESOURCE_NOT_FOUND',
+      message: 'Không tìm thấy tài nguyên test.',
+    });
   });
 
   it.each(['http://localhost:3000', 'http://localhost:3001'])(
