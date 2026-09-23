@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import '@/features/super-admin-dashboard/dashboard.css';
+import '@/features/bus-companies/bus-companies.css';
 import '@/features/admin-auth/admin-auth.css';
 import { Geist } from 'next/font/google';
 import { cn } from '@/lib/utils';

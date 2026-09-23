@@ -1,0 +1,19 @@
+.company-status-badge {
+  display: inline-flex;
+  min-height: 23px;
+  align-items: center;
+  padding: 0 8px;
+  border: 1px solid #e3e9f2;
+  border-radius: 999px;
+  background: #f6f8fb;
+  color: #68768b;
+  font-size: 9px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.company-status-badge.is-active {
+  border-color: #d3eadc;
+  background: #f0f8f3;
+  color: #357b53;
+}
