@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import type { DateRangeValue } from '@/components/data-filters/data-filters';
 import { getBusCompanies } from '../services/bus-company-service';
 import type {
   BusCompanySortKey,
@@ -21,6 +22,9 @@ export function useBusCompanies() {
   const [page, setPage] = useState(1);
   const [sortBy, setSortBy] = useState<BusCompanySortKey>('name');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+  const [status, setStatus] = useState('');
+  const [createdDateRange, setCreatedDateRange] =
+    useState<DateRangeValue | null>(null);
   const [refreshCount, setRefreshCount] = useState(0);
 
   useEffect(() => {
@@ -37,9 +41,20 @@ export function useBusCompanies() {
   useEffect(() => {
     const controller = new AbortController();
     let current = true;
+    const createdFrom = createdDateRange?.from;
+    const createdTo = createdDateRange?.to;
 
     getBusCompanies(
-      { search, page, pageSize: PAGE_SIZE, sortBy, sortDirection },
+      {
+        search,
+        page,
+        pageSize: PAGE_SIZE,
+        sortBy,
+        sortDirection,
+        status: status || undefined,
+        createdFrom,
+        createdTo,
+      },
       controller.signal,
     )
       .then((data) => {
@@ -62,7 +77,16 @@ export function useBusCompanies() {
       current = false;
       controller.abort();
     };
-  }, [page, refreshCount, search, sortBy, sortDirection]);
+  }, [
+    createdDateRange?.from,
+    createdDateRange?.to,
+    page,
+    refreshCount,
+    search,
+    sortBy,
+    sortDirection,
+    status,
+  ]);
 
   function updateSearch(value: string) {
     setLoading(true);
@@ -74,6 +98,20 @@ export function useBusCompanies() {
     setLoading(true);
     setError(null);
     setPage(nextPage);
+  }
+
+  function updateFilters(nextStatus: string) {
+    setLoading(true);
+    setError(null);
+    setPage(1);
+    setStatus(nextStatus);
+  }
+
+  function updateCreatedDateRange(value: DateRangeValue | null) {
+    setLoading(true);
+    setError(null);
+    setPage(1);
+    setCreatedDateRange(value);
   }
 
   function sortCompanies(key: BusCompanySortKey) {
@@ -100,11 +138,15 @@ export function useBusCompanies() {
     loading,
     page,
     searchInput,
+    status,
+    createdDateRange,
     sortBy,
     sortDirection,
     changePage,
     refresh,
     sortCompanies,
     updateSearch,
+    updateFilters,
+    updateCreatedDateRange,
   };
 }

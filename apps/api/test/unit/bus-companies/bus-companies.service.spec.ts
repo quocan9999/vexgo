@@ -104,4 +104,49 @@ describe('BusCompaniesService', () => {
       );
     },
   );
+
+  it('filters by the inclusive creation timestamp range in both queries', async () => {
+    const createdFrom = '2026-01-01T00:00:00.000Z';
+    const createdTo = '2026-01-31T23:59:59.999Z';
+
+    await service.findAll(
+      Object.assign(new BusCompanyQueryDto(), {
+        page: 1,
+        pageSize: 10,
+        sortBy: 'name',
+        sortDirection: 'asc',
+        createdFrom,
+        createdTo,
+      }),
+    );
+
+    const where = {
+      createdAt: {
+        gte: new Date(createdFrom),
+        lte: new Date(createdTo),
+      },
+    };
+    expect(nhaXe.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where }),
+    );
+    expect(nhaXe.count).toHaveBeenCalledWith({ where });
+  });
+
+  it('matches both current and legacy codes for the active status filter', async () => {
+    await service.findAll(
+      Object.assign(new BusCompanyQueryDto(), {
+        page: 1,
+        pageSize: 10,
+        sortBy: 'name',
+        sortDirection: 'asc',
+        status: 'ACTIVE',
+      }),
+    );
+
+    const where = { trangThai: { in: ['ACTIVE', 'HOAT_DONG'] } };
+    expect(nhaXe.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where }),
+    );
+    expect(nhaXe.count).toHaveBeenCalledWith({ where });
+  });
 });

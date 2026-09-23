@@ -63,6 +63,8 @@ describe('GET /api/v1/bus-companies', () => {
         sortBy: 'createdAt',
         sortDirection: 'desc',
         status: 'HOAT_DONG',
+        createdFrom: '2026-01-01T00:00:00.000Z',
+        createdTo: '2026-01-31T23:59:59.999Z',
       })
       .expect(200);
 
@@ -75,6 +77,8 @@ describe('GET /api/v1/bus-companies', () => {
         sortBy: 'createdAt',
         sortDirection: 'desc',
         status: 'HOAT_DONG',
+        createdFrom: '2026-01-01T00:00:00.000Z',
+        createdTo: '2026-01-31T23:59:59.999Z',
       }),
     );
   });
@@ -102,6 +106,29 @@ describe('GET /api/v1/bus-companies', () => {
 
     expect(response.body.details).toEqual(
       expect.arrayContaining([expect.objectContaining({ field: 'status' })]),
+    );
+  });
+
+  it('rejects a creation date range whose start is after its end', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/bus-companies')
+      .query({
+        createdFrom: '2026-02-01T00:00:00.000Z',
+        createdTo: '2026-01-31T23:59:59.999Z',
+      })
+      .expect(400);
+
+    expect(response.body).toMatchObject({
+      statusCode: 400,
+      error: 'VALIDATION_ERROR',
+    });
+    expect(response.body.details).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          field: 'createdTo',
+          message: 'Ngày kết thúc phải bằng hoặc sau ngày bắt đầu.',
+        }),
+      ]),
     );
   });
 });

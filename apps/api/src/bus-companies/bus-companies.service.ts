@@ -29,7 +29,17 @@ export class BusCompaniesService {
         { thongTinLienHe: { contains: search } },
       ];
     }
-    if (query.status) where.trangThai = query.status;
+    if (query.status === 'ACTIVE') {
+      where.trangThai = { in: ['ACTIVE', 'HOAT_DONG'] };
+    } else if (query.status) {
+      where.trangThai = query.status;
+    }
+    if (query.createdFrom || query.createdTo) {
+      where.createdAt = {
+        ...(query.createdFrom ? { gte: new Date(query.createdFrom) } : {}),
+        ...(query.createdTo ? { lte: new Date(query.createdTo) } : {}),
+      };
+    }
 
     const orderBy: Prisma.NhaXeOrderByWithRelationInput = {
       [sortFieldMap[query.sortBy]]: query.sortDirection ?? 'asc',

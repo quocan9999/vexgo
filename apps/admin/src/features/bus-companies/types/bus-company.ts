@@ -20,6 +20,8 @@ export type BusCompanyListQuery = {
   sortBy: BusCompanySortKey;
   sortDirection: SortDirection;
   status?: string;
+  createdFrom?: string;
+  createdTo?: string;
 };
 
 export type PaginatedBusCompanies = {

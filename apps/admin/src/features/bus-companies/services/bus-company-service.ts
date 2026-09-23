@@ -15,6 +15,16 @@ function getErrorMessage(body: unknown, status: number) {
   return `Không thể tải danh sách nhà xe (HTTP ${status}).`;
 }
 
+function localDateBoundary(dateValue: string, endOfDay: boolean) {
+  const [year, month, day] = dateValue.split('-').map(Number);
+  const boundary = endOfDay
+    ? new Date(year, month - 1, day + 1)
+    : new Date(year, month - 1, day);
+
+  if (endOfDay) boundary.setTime(boundary.getTime() - 1);
+  return boundary.toISOString();
+}
+
 export async function getBusCompanies(
   query: BusCompanyListQuery,
   signal?: AbortSignal,
@@ -27,6 +37,12 @@ export async function getBusCompanies(
     sortDirection: query.sortDirection,
   });
   if (query.status) searchParams.set('status', query.status);
+  if (query.createdFrom) {
+    searchParams.set('createdFrom', localDateBoundary(query.createdFrom, false));
+  }
+  if (query.createdTo) {
+    searchParams.set('createdTo', localDateBoundary(query.createdTo, true));
+  }
 
   const response = await fetch(
     `${getApiBaseUrl()}/api/v1/bus-companies?${searchParams.toString()}`,

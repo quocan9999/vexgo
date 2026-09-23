@@ -12,9 +12,22 @@ import {
   X,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import {
+  DateRangeFilter,
+  FilterToolbar,
+  SearchInput,
+  SelectFilter,
+  type FilterOption,
+} from '@/components/data-filters/data-filters';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
 import { useBusCompanies } from '../hooks/use-bus-companies';
 import type { BusCompany, BusCompanySortKey } from '../types/bus-company';
+
+const BUS_COMPANY_STATUS_FILTERS: FilterOption[] = [
+  { value: 'ACTIVE', label: 'Đang hoạt động' },
+  { value: 'TAM_NGUNG', label: 'Tạm ngưng' },
+  { value: 'INACTIVE', label: 'Ngừng hoạt động' },
+];
 
 function numberFormat(value: number) {
   return new Intl.NumberFormat('vi-VN').format(value);
@@ -191,12 +204,16 @@ export function BusCompaniesManagement() {
     error,
     loading,
     searchInput,
+    status,
+    createdDateRange,
     sortBy,
     sortDirection,
     changePage,
     refresh,
     sortCompanies,
     updateSearch,
+    updateFilters,
+    updateCreatedDateRange,
   } = useBusCompanies();
   const [selectedCompany, setSelectedCompany] = useState<BusCompany | null>(
     null,
@@ -279,33 +296,32 @@ export function BusCompaniesManagement() {
           </div>
 
           <div className="panel companies-panel">
-            <div className="table-toolbar">
-              <label className="search-box">
-                <Search aria-hidden="true" size={17} />
-                <span className="sr-only">Tìm nhà xe</span>
-                <input
-                  onChange={(event) => updateSearch(event.target.value)}
-                  placeholder="Tìm theo mã, tên hoặc thông tin liên hệ"
-                  type="search"
-                  value={searchInput}
-                />
-                {searchInput && (
-                  <button
-                    aria-label="Xóa nội dung tìm kiếm"
-                    className="search-clear"
-                    onClick={() => updateSearch('')}
-                    type="button"
-                  >
-                    <X size={15} />
-                  </button>
-                )}
-              </label>
-              <span className="search-hint">
-                {companyPage
+            <FilterToolbar
+              summary={
+                companyPage
                   ? `${numberFormat(companyPage.meta.totalItems)} kết quả`
-                  : 'Đang tải kết quả'}
-              </span>
-            </div>
+                  : 'Đang tải kết quả'
+              }
+            >
+              <SearchInput
+                label="Tìm nhà xe"
+                onChange={updateSearch}
+                placeholder="Tìm theo mã, tên hoặc thông tin liên hệ"
+                value={searchInput}
+              />
+              <SelectFilter
+                allLabel="Tất cả trạng thái"
+                label="Lọc theo trạng thái"
+                onChange={updateFilters}
+                options={BUS_COMPANY_STATUS_FILTERS}
+                value={status}
+              />
+              <DateRangeFilter
+                label="Ngày tạo"
+                onApply={updateCreatedDateRange}
+                value={createdDateRange}
+              />
+            </FilterToolbar>
 
             {error && (
               <div className="table-error" role="alert">
