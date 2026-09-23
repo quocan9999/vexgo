@@ -5,6 +5,7 @@ import type { DateRangeValue } from '@/components/data-filters/data-filters';
 import { getBusCompanies } from '../services/bus-company-service';
 import type {
   BusCompanySortKey,
+  BusCompanyStatus,
   PaginatedBusCompanies,
   SortDirection,
 } from '../types/bus-company';
@@ -22,7 +23,7 @@ export function useBusCompanies() {
   const [page, setPage] = useState(1);
   const [sortBy, setSortBy] = useState<BusCompanySortKey>('name');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
-  const [status, setStatus] = useState('');
+  const [status, setStatus] = useState<BusCompanyStatus | ''>('');
   const [createdDateRange, setCreatedDateRange] =
     useState<DateRangeValue | null>(null);
   const [refreshCount, setRefreshCount] = useState(0);
@@ -104,7 +105,11 @@ export function useBusCompanies() {
     setLoading(true);
     setError(null);
     setPage(1);
-    setStatus(nextStatus);
+    setStatus(
+      nextStatus === 'HOAT_DONG' || nextStatus === 'TAM_NGUNG'
+        ? nextStatus
+        : '',
+    );
   }
 
   function updateCreatedDateRange(value: DateRangeValue | null) {

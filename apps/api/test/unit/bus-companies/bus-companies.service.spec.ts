@@ -1,3 +1,4 @@
+import { ConfigService } from '@nestjs/config';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { BusCompaniesService } from '../../../src/bus-companies/bus-companies.service.js';
 import { BusCompanyQueryDto } from '../../../src/bus-companies/dto/bus-company-query.dto.js';
@@ -8,12 +9,15 @@ describe('BusCompaniesService', () => {
     findMany: vi.fn(),
     count: vi.fn(),
   };
+  const getConfig = vi.fn().mockReturnValue('Asia/Ho_Chi_Minh');
+  const config = { get: getConfig } as unknown as ConfigService;
   const service = new BusCompaniesService({
     nhaXe,
-  } as unknown as PrismaService);
+  } as unknown as PrismaService, config);
 
   beforeEach(() => {
     vi.clearAllMocks();
+    getConfig.mockReturnValue('Asia/Ho_Chi_Minh');
     nhaXe.findMany.mockResolvedValue([
       {
         nhaXeId: 1,
@@ -105,9 +109,9 @@ describe('BusCompaniesService', () => {
     },
   );
 
-  it('filters by the inclusive creation timestamp range in both queries', async () => {
-    const createdFrom = '2026-01-01T00:00:00.000Z';
-    const createdTo = '2026-01-31T23:59:59.999Z';
+  it('filters by business-local dates using a half-open UTC range in both queries', async () => {
+    const createdFrom = '2026-01-01';
+    const createdTo = '2026-01-31';
 
     await service.findAll(
       Object.assign(new BusCompanyQueryDto(), {
@@ -122,8 +126,8 @@ describe('BusCompaniesService', () => {
 
     const where = {
       createdAt: {
-        gte: new Date(createdFrom),
-        lte: new Date(createdTo),
+        gte: new Date('2025-12-31T17:00:00.000Z'),
+        lt: new Date('2026-01-31T17:00:00.000Z'),
       },
     };
     expect(nhaXe.findMany).toHaveBeenCalledWith(
@@ -132,21 +136,40 @@ describe('BusCompaniesService', () => {
     expect(nhaXe.count).toHaveBeenCalledWith({ where });
   });
 
-  it('matches both current and legacy codes for the active status filter', async () => {
+  it('uses the configured business time zone instead of the server time zone', async () => {
+    getConfig.mockReturnValue('America/Los_Angeles');
+
     await service.findAll(
       Object.assign(new BusCompanyQueryDto(), {
         page: 1,
         pageSize: 10,
         sortBy: 'name',
         sortDirection: 'asc',
-        status: 'ACTIVE',
+        createdFrom: '2026-01-01',
       }),
     );
 
-    const where = { trangThai: { in: ['ACTIVE', 'HOAT_DONG'] } };
     expect(nhaXe.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where }),
+      expect.objectContaining({
+        where: { createdAt: { gte: new Date('2026-01-01T08:00:00.000Z') } },
+      }),
     );
-    expect(nhaXe.count).toHaveBeenCalledWith({ where });
   });
+
+  it('uses the canonical paused status as an exact database value', async () => {
+    await service.findAll(
+      Object.assign(new BusCompanyQueryDto(), {
+        page: 1,
+        pageSize: 10,
+        sortBy: 'name',
+        sortDirection: 'asc',
+        status: 'TAM_NGUNG',
+      }),
+    );
+
+    expect(nhaXe.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { trangThai: 'TAM_NGUNG' } }),
+    );
+  });
+
 });

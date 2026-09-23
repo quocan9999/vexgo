@@ -63,8 +63,8 @@ describe('GET /api/v1/bus-companies', () => {
         sortBy: 'createdAt',
         sortDirection: 'desc',
         status: 'HOAT_DONG',
-        createdFrom: '2026-01-01T00:00:00.000Z',
-        createdTo: '2026-01-31T23:59:59.999Z',
+        createdFrom: '2026-01-01',
+        createdTo: '2026-01-31',
       })
       .expect(200);
 
@@ -77,8 +77,8 @@ describe('GET /api/v1/bus-companies', () => {
         sortBy: 'createdAt',
         sortDirection: 'desc',
         status: 'HOAT_DONG',
-        createdFrom: '2026-01-01T00:00:00.000Z',
-        createdTo: '2026-01-31T23:59:59.999Z',
+        createdFrom: '2026-01-01',
+        createdTo: '2026-01-31',
       }),
     );
   });
@@ -98,14 +98,28 @@ describe('GET /api/v1/bus-companies', () => {
     );
   });
 
-  it('rejects a status value longer than the database field can hold', async () => {
-    const response = await request(app.getHttpServer())
-      .get('/api/v1/bus-companies')
-      .query({ status: 'x'.repeat(31) })
-      .expect(400);
+  it.each(['ACTIVE', 'INACTIVE'])(
+    'rejects the non-canonical status %s',
+    async (status) => {
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/bus-companies')
+        .query({ status })
+        .expect(400);
 
-    expect(response.body.details).toEqual(
-      expect.arrayContaining([expect.objectContaining({ field: 'status' })]),
+      expect(response.body.details).toEqual(
+        expect.arrayContaining([expect.objectContaining({ field: 'status' })]),
+      );
+    },
+  );
+
+  it('accepts TAM_NGUNG as a canonical raw status value', async () => {
+    await request(app.getHttpServer())
+      .get('/api/v1/bus-companies')
+      .query({ status: 'TAM_NGUNG' })
+      .expect(200);
+
+    expect(service.findAll).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'TAM_NGUNG' }),
     );
   });
 
@@ -113,8 +127,8 @@ describe('GET /api/v1/bus-companies', () => {
     const response = await request(app.getHttpServer())
       .get('/api/v1/bus-companies')
       .query({
-        createdFrom: '2026-02-01T00:00:00.000Z',
-        createdTo: '2026-01-31T23:59:59.999Z',
+        createdFrom: '2026-02-01',
+        createdTo: '2026-01-31',
       })
       .expect(400);
 
@@ -128,6 +142,19 @@ describe('GET /api/v1/bus-companies', () => {
           field: 'createdTo',
           message: 'Ngày kết thúc phải bằng hoặc sau ngày bắt đầu.',
         }),
+      ]),
+    );
+  });
+
+  it('rejects timestamp boundaries because the API accepts business dates only', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/bus-companies')
+      .query({ createdFrom: '2026-01-01T00:00:00.000Z' })
+      .expect(400);
+
+    expect(response.body.details).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ field: 'createdFrom' }),
       ]),
     );
   });

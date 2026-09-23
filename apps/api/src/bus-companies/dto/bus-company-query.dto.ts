@@ -2,8 +2,7 @@ import {
   IsDateString,
   IsIn,
   IsOptional,
-  IsString,
-  MaxLength,
+  Matches,
   Validate,
   ValidationArguments,
   ValidatorConstraint,
@@ -19,6 +18,9 @@ export const BUS_COMPANY_SORT_FIELDS = [
 ] as const;
 
 export type BusCompanySortField = (typeof BUS_COMPANY_SORT_FIELDS)[number];
+export const BUS_COMPANY_STATUSES = ['HOAT_DONG', 'TAM_NGUNG'] as const;
+export type BusCompanyStatus = (typeof BUS_COMPANY_STATUSES)[number];
+const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 @ValidatorConstraint({ name: 'createdDateRange', async: false })
 class CreatedDateRangeConstraint implements ValidatorConstraintInterface {
@@ -37,16 +39,21 @@ export class BusCompanyQueryDto extends PaginationQueryDto {
   sortBy: BusCompanySortField = 'name';
 
   @IsOptional()
-  @IsString()
-  @MaxLength(30)
-  status?: string;
+  @IsIn(BUS_COMPANY_STATUSES)
+  status?: BusCompanyStatus;
 
   @IsOptional()
-  @IsDateString()
+  @IsDateString({ strict: true })
+  @Matches(DATE_ONLY_PATTERN, {
+    message: 'Ngày phải có định dạng YYYY-MM-DD.',
+  })
   createdFrom?: string;
 
   @IsOptional()
-  @IsDateString()
+  @IsDateString({ strict: true })
+  @Matches(DATE_ONLY_PATTERN, {
+    message: 'Ngày phải có định dạng YYYY-MM-DD.',
+  })
   @Validate(CreatedDateRangeConstraint)
   createdTo?: string;
 }

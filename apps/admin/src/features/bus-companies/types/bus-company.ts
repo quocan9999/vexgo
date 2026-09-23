@@ -1,10 +1,12 @@
+export type BusCompanyStatus = 'HOAT_DONG' | 'TAM_NGUNG';
+
 export type BusCompany = {
   busCompanyId: number;
   code: string;
   name: string;
   contactInfo: string | null;
   cancellationPolicy: string | null;
-  status: string;
+  status: BusCompanyStatus;
   createdAt: string;
   updatedAt: string;
 };
@@ -19,7 +21,7 @@ export type BusCompanyListQuery = {
   pageSize: number;
   sortBy: BusCompanySortKey;
   sortDirection: SortDirection;
-  status?: string;
+  status?: BusCompanyStatus;
   createdFrom?: string;
   createdTo?: string;
 };

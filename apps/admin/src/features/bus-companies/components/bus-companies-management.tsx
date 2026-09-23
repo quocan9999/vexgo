@@ -21,12 +21,15 @@ import {
 } from '@/components/data-filters/data-filters';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
 import { useBusCompanies } from '../hooks/use-bus-companies';
-import type { BusCompany, BusCompanySortKey } from '../types/bus-company';
+import type {
+  BusCompany,
+  BusCompanySortKey,
+  BusCompanyStatus,
+} from '../types/bus-company';
 
 const BUS_COMPANY_STATUS_FILTERS: FilterOption[] = [
-  { value: 'ACTIVE', label: 'Đang hoạt động' },
+  { value: 'HOAT_DONG', label: 'Đang hoạt động' },
   { value: 'TAM_NGUNG', label: 'Tạm ngưng' },
-  { value: 'INACTIVE', label: 'Ngừng hoạt động' },
 ];
 
 function numberFormat(value: number) {
@@ -50,11 +53,13 @@ function initials(value: string) {
     .toLocaleUpperCase('vi');
 }
 
-function statusLabel(status: string) {
-  if (status === 'HOAT_DONG' || status === 'ACTIVE') return 'Đang hoạt động';
-  if (status === 'TAM_NGUNG') return 'Tạm ngưng';
-  if (status === 'INACTIVE') return 'Ngừng hoạt động';
-  return status.replaceAll('_', ' ');
+function statusLabel(status: BusCompanyStatus) {
+  switch (status) {
+    case 'HOAT_DONG':
+      return 'Đang hoạt động';
+    case 'TAM_NGUNG':
+      return 'Tạm ngưng';
+  }
 }
 
 function CompanyMark({ name }: { name: string }) {
@@ -156,7 +161,7 @@ function CompanyDetails({
               <dt>Trạng thái</dt>
               <dd>
                 <span
-                  className={`company-status-badge${company.status === 'HOAT_DONG' || company.status === 'ACTIVE' ? ' is-active' : ''}`}
+                  className={`company-status-badge${company.status === 'HOAT_DONG' ? ' is-active' : ''}`}
                 >
                   {statusLabel(company.status)}
                 </span>
@@ -347,13 +352,6 @@ export function BusCompaniesManagement() {
                 </span>
                 <h3>Không tìm thấy nhà xe</h3>
                 <p>Thử tìm bằng mã, tên hoặc thông tin liên hệ khác.</p>
-                <button
-                  className="button button-secondary"
-                  onClick={() => updateSearch('')}
-                  type="button"
-                >
-                  Xóa tìm kiếm
-                </button>
               </div>
             )}
 
@@ -435,7 +433,7 @@ export function BusCompaniesManagement() {
                           </td>
                           <td>
                             <span
-                              className={`company-status-badge${company.status === 'HOAT_DONG' || company.status === 'ACTIVE' ? ' is-active' : ''}`}
+                              className={`company-status-badge${company.status === 'HOAT_DONG' ? ' is-active' : ''}`}
                             >
                               {statusLabel(company.status)}
                             </span>
