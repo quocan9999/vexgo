@@ -1,3 +1,4 @@
+import { NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { BusCompaniesService } from '../../../src/bus-companies/bus-companies.service.js';
@@ -8,6 +9,7 @@ describe('BusCompaniesService', () => {
   const nhaXe = {
     findMany: vi.fn(),
     count: vi.fn(),
+    findUnique: vi.fn(),
   };
   const getConfig = vi.fn().mockReturnValue('Asia/Ho_Chi_Minh');
   const config = { get: getConfig } as unknown as ConfigService;
@@ -31,6 +33,7 @@ describe('BusCompaniesService', () => {
       },
     ]);
     nhaXe.count.mockResolvedValue(11);
+    nhaXe.findUnique.mockResolvedValue(null);
   });
 
   it('maps the English response and applies search, status, pagination, and safe sorting', async () => {
@@ -84,6 +87,55 @@ describe('BusCompaniesService', () => {
         trangThai: 'HOAT_DONG',
       },
     });
+  });
+
+  it('loads and maps a detail record using its database id', async () => {
+    nhaXe.findUnique.mockResolvedValue({
+      nhaXeId: 42,
+      maNhaXe: 'NX042',
+      tenNhaXe: 'Nhà xe Chi tiết',
+      thongTinLienHe: '0900000042',
+      chinhSachDoiHuy: 'Đổi vé trước giờ khởi hành.',
+      trangThai: 'HOAT_DONG',
+      createdAt: new Date('2026-01-02T03:04:05.000Z'),
+      updatedAt: new Date('2026-02-03T04:05:06.000Z'),
+    });
+
+    await expect(service.findOne(42)).resolves.toEqual({
+      data: {
+        busCompanyId: 42,
+        code: 'NX042',
+        name: 'Nhà xe Chi tiết',
+        contactInfo: '0900000042',
+        cancellationPolicy: 'Đổi vé trước giờ khởi hành.',
+        status: 'HOAT_DONG',
+        createdAt: '2026-01-02T03:04:05.000Z',
+        updatedAt: '2026-02-03T04:05:06.000Z',
+      },
+    });
+    expect(nhaXe.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { nhaXeId: 42 } }),
+    );
+  });
+
+  it('returns the bus company not found contract when the id has no record', async () => {
+    let caught: unknown;
+    try {
+      await service.findOne(999);
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(NotFoundException);
+    if (!(caught instanceof NotFoundException)) throw caught;
+    expect(caught.getStatus()).toBe(404);
+    expect(caught.getResponse()).toEqual({
+      error: 'BUS_COMPANY_NOT_FOUND',
+      message: 'Không tìm thấy nhà xe.',
+    });
+    expect(nhaXe.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { nhaXeId: 999 } }),
+    );
   });
 
   it.each([

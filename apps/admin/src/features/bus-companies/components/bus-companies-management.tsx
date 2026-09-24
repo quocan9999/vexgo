@@ -21,6 +21,7 @@ import {
 } from '@/components/data-filters/data-filters';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
 import { useBusCompanies } from '../hooks/use-bus-companies';
+import { getBusCompanyById } from '../services/bus-company-service';
 import type {
   BusCompany,
   BusCompanySortKey,
@@ -70,19 +71,57 @@ function CompanyMark({ name }: { name: string }) {
   );
 }
 
+type CompanyDetailState =
+  | { status: 'loading' }
+  | { status: 'error'; message: string }
+  | { status: 'success'; company: BusCompany };
+
 function CompanyDetails({
-  company,
+  companyId,
   onClose,
 }: {
-  company: BusCompany;
+  companyId: number;
   onClose: () => void;
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const [detailState, setDetailState] = useState<CompanyDetailState>({
+    status: 'loading',
+  });
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
     const dialog = dialogRef.current;
     if (dialog && !dialog.open) dialog.showModal();
-  });
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    getBusCompanyById(companyId, controller.signal)
+      .then((company) => {
+        if (!controller.signal.aborted) {
+          setDetailState({ status: 'success', company });
+        }
+      })
+      .catch((requestError: unknown) => {
+        if (!controller.signal.aborted) {
+          setDetailState({
+            status: 'error',
+            message:
+              requestError instanceof Error
+                ? requestError.message
+                : 'Không thể tải thông tin nhà xe.',
+          });
+        }
+      });
+
+    return () => controller.abort();
+  }, [companyId, retryCount]);
+
+  function retry() {
+    setDetailState({ status: 'loading' });
+    setRetryCount((count) => count + 1);
+  }
 
   return (
     <dialog
@@ -113,70 +152,92 @@ function CompanyDetails({
           </form>
         </div>
 
-        <div className="detail-company-hero">
-          <CompanyMark name={company.name} />
-          <div>
-            <h3>{company.name}</h3>
-            <span className="detail-company-id">
-              Mã nhà xe · {company.code}
-            </span>
+        {detailState.status === 'loading' && (
+          <p role="status">Đang tải thông tin nhà xe…</p>
+        )}
+
+        {detailState.status === 'error' && (
+          <div role="alert">
+            <p>{detailState.message}</p>
+            <button
+              className="button button-secondary"
+              onClick={retry}
+              type="button"
+            >
+              Thử lại
+            </button>
           </div>
-        </div>
+        )}
 
-        <section
-          className="detail-section"
-          aria-labelledby="detail-contact-heading"
-        >
-          <h3 id="detail-contact-heading">Thông tin liên hệ</h3>
-          <div className="detail-field">
-            <span className="detail-field-icon" aria-hidden="true">
-              <Building2 size={17} />
-            </span>
-            <div>
-              <span className="detail-field-label">Đầu mối liên hệ</span>
-              <span className="detail-field-value">
-                {company.contactInfo || 'Chưa cập nhật'}
-              </span>
-            </div>
-          </div>
-        </section>
-
-        <section
-          className="detail-section"
-          aria-labelledby="detail-policy-heading"
-        >
-          <h3 id="detail-policy-heading">Chính sách đổi, hủy</h3>
-          <p className="detail-field-value">
-            {company.cancellationPolicy || 'Chưa cập nhật chính sách.'}
-          </p>
-        </section>
-
-        <section
-          className="detail-section"
-          aria-labelledby="detail-record-heading"
-        >
-          <h3 id="detail-record-heading">Thông tin hồ sơ</h3>
-          <dl className="detail-stats">
-            <div>
-              <dt>Trạng thái</dt>
-              <dd>
-                <span
-                  className={`company-status-badge${company.status === 'HOAT_DONG' ? ' is-active' : ''}`}
-                >
-                  {statusLabel(company.status)}
+        {detailState.status === 'success' && (
+          <>
+            <div className="detail-company-hero">
+              <CompanyMark name={detailState.company.name} />
+              <div>
+                <h3>{detailState.company.name}</h3>
+                <span className="detail-company-id">
+                  Mã nhà xe · {detailState.company.code}
                 </span>
-              </dd>
+              </div>
             </div>
-            <div>
-              <dt>Ngày tạo</dt>
-              <dd>{timestampFormat(company.createdAt)}</dd>
-            </div>
-            <div>
-              <dt>Cập nhật lần cuối</dt>
-              <dd>{timestampFormat(company.updatedAt)}</dd>
-            </div>
-          </dl>
-        </section>
+
+            <section
+              className="detail-section"
+              aria-labelledby="detail-contact-heading"
+            >
+              <h3 id="detail-contact-heading">Thông tin liên hệ</h3>
+              <div className="detail-field">
+                <span className="detail-field-icon" aria-hidden="true">
+                  <Building2 size={17} />
+                </span>
+                <div>
+                  <span className="detail-field-label">Đầu mối liên hệ</span>
+                  <span className="detail-field-value">
+                    {detailState.company.contactInfo || 'Chưa cập nhật'}
+                  </span>
+                </div>
+              </div>
+            </section>
+
+            <section
+              className="detail-section"
+              aria-labelledby="detail-policy-heading"
+            >
+              <h3 id="detail-policy-heading">Chính sách đổi, hủy</h3>
+              <p className="detail-field-value">
+                {detailState.company.cancellationPolicy ||
+                  'Chưa cập nhật chính sách.'}
+              </p>
+            </section>
+
+            <section
+              className="detail-section"
+              aria-labelledby="detail-record-heading"
+            >
+              <h3 id="detail-record-heading">Thông tin hồ sơ</h3>
+              <dl className="detail-stats">
+                <div>
+                  <dt>Trạng thái</dt>
+                  <dd>
+                    <span
+                      className={`company-status-badge${detailState.company.status === 'HOAT_DONG' ? ' is-active' : ''}`}
+                    >
+                      {statusLabel(detailState.company.status)}
+                    </span>
+                  </dd>
+                </div>
+                <div>
+                  <dt>Ngày tạo</dt>
+                  <dd>{timestampFormat(detailState.company.createdAt)}</dd>
+                </div>
+                <div>
+                  <dt>Cập nhật lần cuối</dt>
+                  <dd>{timestampFormat(detailState.company.updatedAt)}</dd>
+                </div>
+              </dl>
+            </section>
+          </>
+        )}
       </div>
     </dialog>
   );
@@ -220,7 +281,7 @@ export function BusCompaniesManagement() {
     updateFilters,
     updateCreatedDateRange,
   } = useBusCompanies();
-  const [selectedCompany, setSelectedCompany] = useState<BusCompany | null>(
+  const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(
     null,
   );
 
@@ -251,7 +312,7 @@ export function BusCompaniesManagement() {
       <button
         aria-label={`Xem thông tin ${company.name}`}
         className="company-open-button"
-        onClick={() => setSelectedCompany(company)}
+        onClick={() => setSelectedCompanyId(company.busCompanyId)}
         type="button"
       >
         Xem chi tiết <ChevronRight aria-hidden="true" size={15} />
@@ -535,11 +596,11 @@ export function BusCompaniesManagement() {
           <span>© 2026 VexGo Platform</span>
         </footer>
       </div>
-      {selectedCompany && (
+      {selectedCompanyId !== null && (
         <CompanyDetails
-          key={selectedCompany.busCompanyId}
-          company={selectedCompany}
-          onClose={() => setSelectedCompany(null)}
+          key={selectedCompanyId}
+          companyId={selectedCompanyId}
+          onClose={() => setSelectedCompanyId(null)}
         />
       )}
     </SuperAdminLayout>

@@ -1,8 +1,16 @@
-import { INestApplication } from '@nestjs/common';
+import { INestApplication, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 import { BusCompaniesModule } from '../../../src/bus-companies/bus-companies.module.js';
 import { BusCompaniesService } from '../../../src/bus-companies/bus-companies.service.js';
 import { configureApi } from '../../../src/common/configure-api.js';
@@ -25,10 +33,23 @@ describe('GET /api/v1/bus-companies', () => {
     ],
     meta: { page: 2, pageSize: 5, totalItems: 11, totalPages: 3 },
   };
-  const service = { findAll: vi.fn() };
+  const detailResponse = {
+    data: {
+      busCompanyId: 1,
+      code: 'NX001',
+      name: 'Nhà xe ABC',
+      contactInfo: '0900000000',
+      cancellationPolicy: 'Đổi vé trước giờ khởi hành.',
+      status: 'HOAT_DONG',
+      createdAt: '2026-01-02T03:04:05.000Z',
+      updatedAt: '2026-02-03T04:05:06.000Z',
+    },
+  };
+  const service = { findAll: vi.fn(), findOne: vi.fn() };
 
   beforeAll(async () => {
     service.findAll.mockResolvedValue(responseData);
+    service.findOne.mockResolvedValue(detailResponse);
     const moduleRef = await Test.createTestingModule({
       imports: [BusCompaniesModule],
       providers: [
@@ -51,6 +72,59 @@ describe('GET /api/v1/bus-companies', () => {
 
   afterAll(async () => {
     await app?.close();
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    service.findAll.mockResolvedValue(responseData);
+    service.findOne.mockResolvedValue(detailResponse);
+  });
+
+  it('returns a detail data envelope for the requested bus company id', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/bus-companies/1')
+      .expect(200);
+
+    expect(response.body).toEqual(detailResponse);
+    expect(service.findOne).toHaveBeenCalledWith(1);
+  });
+
+  it.each(['abc', '0', '-1', '2147483648'])(
+    'rejects invalid detail id %s before calling the service',
+    async (id) => {
+      const response = await request(app.getHttpServer())
+        .get(`/api/v1/bus-companies/${id}`)
+        .expect(400);
+
+      expect(response.body).toMatchObject({
+        statusCode: 400,
+        error: 'VALIDATION_ERROR',
+      });
+      expect(response.body.details).toEqual(
+        expect.arrayContaining([expect.objectContaining({ field: 'id' })]),
+      );
+      expect(service.findOne).not.toHaveBeenCalled();
+    },
+  );
+
+  it('returns the not found error contract when detail service has no record', async () => {
+    service.findOne.mockRejectedValueOnce(
+      new NotFoundException({
+        error: 'BUS_COMPANY_NOT_FOUND',
+        message: 'Không tìm thấy nhà xe.',
+      }),
+    );
+
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/bus-companies/999')
+      .expect(404);
+
+    expect(response.body).toEqual({
+      statusCode: 404,
+      error: 'BUS_COMPANY_NOT_FOUND',
+      message: 'Không tìm thấy nhà xe.',
+    });
+    expect(service.findOne).toHaveBeenCalledWith(999);
   });
 
   it('returns an English data envelope with pagination metadata', async () => {

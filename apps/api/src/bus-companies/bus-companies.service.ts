@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '../generated/prisma/client.js';
 import type { BusCompanySortField } from './dto/bus-company-query.dto.js';
@@ -61,12 +61,56 @@ const sortFieldMap = {
   keyof Prisma.NhaXeOrderByWithRelationInput
 >;
 
+const BUS_COMPANY_SELECT = {
+  nhaXeId: true,
+  maNhaXe: true,
+  tenNhaXe: true,
+  thongTinLienHe: true,
+  chinhSachDoiHuy: true,
+  trangThai: true,
+  createdAt: true,
+  updatedAt: true,
+} satisfies Prisma.NhaXeSelect;
+
+type BusCompanyRecord = Prisma.NhaXeGetPayload<{
+  select: typeof BUS_COMPANY_SELECT;
+}>;
+
+function mapBusCompany(company: BusCompanyRecord) {
+  return {
+    busCompanyId: company.nhaXeId,
+    code: company.maNhaXe,
+    name: company.tenNhaXe,
+    contactInfo: company.thongTinLienHe,
+    cancellationPolicy: company.chinhSachDoiHuy,
+    status: company.trangThai,
+    createdAt: company.createdAt.toISOString(),
+    updatedAt: company.updatedAt.toISOString(),
+  };
+}
+
 @Injectable()
 export class BusCompaniesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
   ) {}
+
+  async findOne(id: number) {
+    const company = await this.prisma.nhaXe.findUnique({
+      where: { nhaXeId: id },
+      select: BUS_COMPANY_SELECT,
+    });
+
+    if (!company) {
+      throw new NotFoundException({
+        error: 'BUS_COMPANY_NOT_FOUND',
+        message: 'Không tìm thấy nhà xe.',
+      });
+    }
+
+    return { data: mapBusCompany(company) };
+  }
 
   async findAll(query: BusCompanyQueryDto) {
     const search = query.search?.trim();
@@ -112,31 +156,13 @@ export class BusCompaniesService {
         orderBy,
         skip,
         take: query.pageSize,
-        select: {
-          nhaXeId: true,
-          maNhaXe: true,
-          tenNhaXe: true,
-          thongTinLienHe: true,
-          chinhSachDoiHuy: true,
-          trangThai: true,
-          createdAt: true,
-          updatedAt: true,
-        },
+        select: BUS_COMPANY_SELECT,
       }),
       this.prisma.nhaXe.count({ where }),
     ]);
 
     return {
-      data: companies.map((company) => ({
-        busCompanyId: company.nhaXeId,
-        code: company.maNhaXe,
-        name: company.tenNhaXe,
-        contactInfo: company.thongTinLienHe,
-        cancellationPolicy: company.chinhSachDoiHuy,
-        status: company.trangThai,
-        createdAt: company.createdAt.toISOString(),
-        updatedAt: company.updatedAt.toISOString(),
-      })),
+      data: companies.map(mapBusCompany),
       meta: {
         page: query.page,
         pageSize: query.pageSize,

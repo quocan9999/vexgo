@@ -1,4 +1,5 @@
 import type {
+  BusCompany,
   BusCompanyListQuery,
   PaginatedBusCompanies,
 } from '../types/bus-company';
@@ -8,11 +9,15 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
-function getErrorMessage(body: unknown, status: number) {
+function getErrorMessage(
+  body: unknown,
+  status: number,
+  resource = 'danh sách nhà xe',
+) {
   if (isRecord(body) && typeof body.message === 'string') {
     return body.message;
   }
-  return `Không thể tải danh sách nhà xe (HTTP ${status}).`;
+  return `Không thể tải ${resource} (HTTP ${status}).`;
 }
 
 export async function getBusCompanies(
@@ -48,4 +53,24 @@ export async function getBusCompanies(
   }
 
   return body as unknown as PaginatedBusCompanies;
+}
+
+export async function getBusCompanyById(
+  busCompanyId: number,
+  signal?: AbortSignal,
+): Promise<BusCompany> {
+  const response = await fetch(
+    `${getApiBaseUrl()}/api/v1/bus-companies/${busCompanyId}`,
+    { cache: 'no-store', signal },
+  );
+  const body: unknown = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    throw new Error(getErrorMessage(body, response.status, 'thông tin nhà xe'));
+  }
+  if (!isRecord(body) || !isRecord(body.data)) {
+    throw new Error('API trả về thông tin nhà xe không hợp lệ.');
+  }
+
+  return body.data as unknown as BusCompany;
 }
