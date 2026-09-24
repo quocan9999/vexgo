@@ -1,13 +1,13 @@
 'use client';
 
-import { Building2, Database, LogOut, Menu, UsersRound, X } from 'lucide-react';
+import { Building2, Bus, Database, LogOut, Menu, UsersRound, X } from 'lucide-react';
 import Link from 'next/link';
 import { useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { signOutDemoAdmin } from '@/features/admin-auth/services/demo-auth';
 
 type SuperAdminLayoutProps = {
-  activeSection: 'overview' | 'bus-companies';
+  activeSection: 'overview' | 'bus-companies' | 'vehicle-types';
   apiMode: boolean;
   children: ReactNode;
 };
@@ -63,6 +63,7 @@ export function SuperAdminLayout({
           <p className="sidebar-label">KHÔNG GIAN QUẢN TRỊ</p>
           <nav aria-label="Các khu vực">
             <Link
+              aria-label="Tổng quan"
               aria-current={activeSection === 'overview' ? 'page' : undefined}
               className={`sidebar-link${activeSection === 'overview' ? ' is-active' : ''}`}
               href="/"
@@ -74,6 +75,7 @@ export function SuperAdminLayout({
               <span>Tổng quan</span>
             </Link>
             <Link
+              aria-label="Tài khoản"
               className="sidebar-link"
               href={activeSection === 'overview' ? '#accounts' : '/#accounts'}
               onClick={closeMobileNavigation}
@@ -84,6 +86,7 @@ export function SuperAdminLayout({
               <span>Tài khoản</span>
             </Link>
             <Link
+              aria-label="Nhà xe"
               aria-current={
                 activeSection === 'bus-companies' ? 'page' : undefined
               }
@@ -95,6 +98,18 @@ export function SuperAdminLayout({
                 <Building2 size={18} />
               </span>
               <span>Nhà xe</span>
+            </Link>
+            <Link
+              aria-label="Loại xe"
+              aria-current={activeSection === 'vehicle-types' ? 'page' : undefined}
+              className={`sidebar-link${activeSection === 'vehicle-types' ? ' is-active' : ''}`}
+              href="/vehicle-types"
+              onClick={closeMobileNavigation}
+            >
+              <span className="sidebar-link-icon">
+                <Bus size={18} />
+              </span>
+              <span>Loại xe</span>
             </Link>
           </nav>
         </div>
@@ -129,7 +144,7 @@ export function SuperAdminLayout({
 
       <main
         className="admin-main"
-        id={activeSection === 'overview' ? 'overview' : 'bus-companies'}
+        id={activeSection}
       >
         <header className="topbar">
           <div className="topbar-left">
