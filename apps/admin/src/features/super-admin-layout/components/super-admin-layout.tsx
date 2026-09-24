@@ -1,13 +1,22 @@
 'use client';
 
-import { Building2, Bus, Database, LogOut, Menu, UsersRound, X } from 'lucide-react';
+import {
+  Building2,
+  Bus,
+  Database,
+  LogOut,
+  Menu,
+  Truck,
+  UsersRound,
+  X,
+} from 'lucide-react';
 import Link from 'next/link';
 import { useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { signOutDemoAdmin } from '@/features/admin-auth/services/demo-auth';
 
 type SuperAdminLayoutProps = {
-  activeSection: 'overview' | 'bus-companies' | 'vehicle-types';
+  activeSection: 'overview' | 'bus-companies' | 'vehicle-types' | 'vehicles';
   apiMode: boolean;
   children: ReactNode;
 };
@@ -101,7 +110,9 @@ export function SuperAdminLayout({
             </Link>
             <Link
               aria-label="Loại xe"
-              aria-current={activeSection === 'vehicle-types' ? 'page' : undefined}
+              aria-current={
+                activeSection === 'vehicle-types' ? 'page' : undefined
+              }
               className={`sidebar-link${activeSection === 'vehicle-types' ? ' is-active' : ''}`}
               href="/vehicle-types"
               onClick={closeMobileNavigation}
@@ -110,6 +121,18 @@ export function SuperAdminLayout({
                 <Bus size={18} />
               </span>
               <span>Loại xe</span>
+            </Link>
+            <Link
+              aria-label="Xe"
+              aria-current={activeSection === 'vehicles' ? 'page' : undefined}
+              className={`sidebar-link${activeSection === 'vehicles' ? ' is-active' : ''}`}
+              href="/vehicles"
+              onClick={closeMobileNavigation}
+            >
+              <span className="sidebar-link-icon">
+                <Truck size={18} />
+              </span>
+              <span>Xe</span>
             </Link>
           </nav>
         </div>
@@ -142,10 +165,7 @@ export function SuperAdminLayout({
         </div>
       </aside>
 
-      <main
-        className="admin-main"
-        id={activeSection}
-      >
+      <main className="admin-main" id={activeSection}>
         <header className="topbar">
           <div className="topbar-left">
             <button
