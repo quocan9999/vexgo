@@ -5,8 +5,10 @@ import {
   ArrowUp,
   ArrowUpDown,
   Building2,
+  CheckCircle2,
   ChevronLeft,
   ChevronRight,
+  Plus,
   RefreshCw,
   Search,
   X,
@@ -21,6 +23,7 @@ import {
 } from '@/components/data-filters/data-filters';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
 import { useBusCompanies } from '../hooks/use-bus-companies';
+import { CreateBusCompanyDialog } from './create-bus-company-dialog';
 import { getBusCompanyById } from '../services/bus-company-service';
 import type {
   BusCompany,
@@ -273,6 +276,19 @@ export function BusCompaniesManagement() {
   const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(
     null,
   );
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [createSuccess, setCreateSuccess] = useState<string | null>(null);
+
+  function openCreateDialog() {
+    setCreateSuccess(null);
+    setCreateDialogOpen(true);
+  }
+
+  function handleCompanyCreated(company: BusCompany) {
+    setCreateDialogOpen(false);
+    setCreateSuccess(`Đã thêm nhà xe ${company.name}.`);
+    refresh();
+  }
 
   function sortButton(label: string, column: BusCompanySortKey) {
     const selected = sortBy === column;
@@ -320,6 +336,14 @@ export function BusCompaniesManagement() {
           <div className="page-intro-actions">
             <button
               className="button button-primary"
+              onClick={openCreateDialog}
+              type="button"
+            >
+              <Plus aria-hidden="true" size={16} />
+              Thêm nhà xe
+            </button>
+            <button
+              className="button button-secondary"
               disabled={loading}
               onClick={refresh}
               type="button"
@@ -333,6 +357,13 @@ export function BusCompaniesManagement() {
             </button>
           </div>
         </section>
+
+        {createSuccess && (
+          <div className="company-success-notice" role="status">
+            <CheckCircle2 aria-hidden="true" size={17} />
+            <span>{createSuccess}</span>
+          </div>
+        )}
 
         <section
           aria-labelledby="companies-heading"
@@ -590,6 +621,12 @@ export function BusCompaniesManagement() {
           key={selectedCompanyId}
           companyId={selectedCompanyId}
           onClose={() => setSelectedCompanyId(null)}
+        />
+      )}
+      {createDialogOpen && (
+        <CreateBusCompanyDialog
+          onClose={() => setCreateDialogOpen(false)}
+          onCreated={handleCompanyCreated}
         />
       )}
     </SuperAdminLayout>

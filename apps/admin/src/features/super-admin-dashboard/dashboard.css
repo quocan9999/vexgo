@@ -1588,22 +1588,12 @@ dialog:focus-visible {
   border: 0;
 }
 
-.spin {
-  animation: spin 1s linear infinite;
-}
-
 @keyframes skeleton-shimmer {
   0% {
     background-position: 100% 0;
   }
   100% {
     background-position: -100% 0;
-  }
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
   }
 }
 

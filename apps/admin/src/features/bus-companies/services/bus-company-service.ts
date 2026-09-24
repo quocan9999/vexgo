@@ -5,6 +5,29 @@ import type {
 } from '../types/bus-company';
 import { getApiBaseUrl } from '@/lib/api-url';
 
+export type CreateBusCompanyInput = {
+  code: string;
+  name: string;
+  contactInfo: string | null;
+  status: BusCompany['status'];
+};
+
+export type BusCompanyApiErrorDetail = {
+  field: string;
+  message: string;
+};
+
+export class BusCompanyApiError extends Error {
+  constructor(
+    message: string,
+    readonly code?: string,
+    readonly details: BusCompanyApiErrorDetail[] = [],
+  ) {
+    super(message);
+    this.name = 'BusCompanyApiError';
+  }
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
@@ -18,6 +41,48 @@ function getErrorMessage(
     return body.message;
   }
   return `Không thể tải ${resource} (HTTP ${status}).`;
+}
+
+function getApiErrorDetails(body: unknown): BusCompanyApiErrorDetail[] {
+  if (!isRecord(body) || !Array.isArray(body.details)) return [];
+
+  return body.details.flatMap((detail) =>
+    isRecord(detail) &&
+    typeof detail.field === 'string' &&
+    typeof detail.message === 'string'
+      ? [{ field: detail.field, message: detail.message }]
+      : [],
+  );
+}
+
+export async function createBusCompany(
+  input: CreateBusCompanyInput,
+): Promise<BusCompany> {
+  const response = await fetch(`${getApiBaseUrl()}/api/v1/bus-companies`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+    cache: 'no-store',
+  });
+  const body: unknown = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    const message =
+      isRecord(body) && typeof body.message === 'string'
+        ? body.message
+        : `Không thể tạo nhà xe (HTTP ${response.status}).`;
+    const code =
+      isRecord(body) && typeof body.error === 'string'
+        ? body.error
+        : undefined;
+
+    throw new BusCompanyApiError(message, code, getApiErrorDetails(body));
+  }
+  if (!isRecord(body) || !isRecord(body.data)) {
+    throw new Error('API trả về thông tin nhà xe không hợp lệ.');
+  }
+
+  return body.data as unknown as BusCompany;
 }
 
 export async function getBusCompanies(

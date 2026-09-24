@@ -17,3 +17,167 @@
   background: #f0f8f3;
   color: #357b53;
 }
+
+.company-success-notice {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 17px;
+  padding: 12px 14px;
+  border: 1px solid #d4eadc;
+  border-radius: 9px;
+  background: #f1f9f4;
+  color: #2f714b;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.company-success-notice svg {
+  flex: 0 0 auto;
+}
+
+.create-company-panel {
+  display: flex;
+  width: min(520px, 100%);
+  height: 100%;
+  flex-direction: column;
+  margin-left: auto;
+  overflow-y: auto;
+  background: #fff;
+  box-shadow: -14px 0 38px rgb(16 31 54 / 12%);
+  animation: panel-in 200ms ease-out;
+}
+
+.create-company-heading {
+  flex: 0 0 auto;
+}
+
+.create-company-form {
+  display: grid;
+  gap: 18px;
+  padding: 22px 25px 0;
+}
+
+.create-company-intro {
+  margin: 0 0 2px;
+  color: #748197;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.create-company-form-error {
+  padding: 11px 12px;
+  border: 1px solid #f0d0ce;
+  border-radius: 8px;
+  background: #fff7f6;
+  color: #a63732;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.create-company-field {
+  display: grid;
+  gap: 7px;
+  color: #26344a;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.create-company-field label span {
+  color: #8994a6;
+  font-size: 10px;
+  font-weight: 450;
+}
+
+.create-company-field input,
+.create-company-field select {
+  width: 100%;
+  min-height: 42px;
+  box-sizing: border-box;
+  padding: 0 12px;
+  border: 1px solid #dfe5ee;
+  border-radius: 8px;
+  background: #fff;
+  color: #17243b;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 450;
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.create-company-field input::placeholder {
+  color: #9aa5b6;
+}
+
+.create-company-field input:focus,
+.create-company-field select:focus {
+  border-color: #5a7ee0;
+  box-shadow: 0 0 0 3px rgb(90 126 224 / 13%);
+  outline: none;
+}
+
+.create-company-field input[aria-invalid='true'],
+.create-company-field select[aria-invalid='true'] {
+  border-color: #c6534c;
+}
+
+.create-company-field-error {
+  color: #b63838;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+.create-company-actions {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+  margin: 2px -25px 0;
+  padding: 15px 25px;
+  border-top: 1px solid #edf0f5;
+  background: rgb(255 255 255 / 96%);
+}
+
+.create-company-spinner {
+  animation: create-company-spin 1s linear infinite;
+}
+
+@keyframes create-company-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 520px) {
+  .create-company-panel {
+    width: 100%;
+    min-height: 100%;
+    height: auto;
+  }
+
+  .create-company-form {
+    padding-right: 19px;
+    padding-left: 19px;
+  }
+
+  .create-company-actions {
+    margin-right: -19px;
+    margin-left: -19px;
+    padding-right: 19px;
+    padding-left: 19px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .create-company-panel,
+  .create-company-spinner,
+  .create-company-field input,
+  .create-company-field select {
+    animation: none;
+    transition: none;
+  }
+}

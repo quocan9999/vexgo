@@ -1,6 +1,11 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '../generated/prisma/client.js';
+import type { CreateBusCompanyDto } from './dto/create-bus-company.dto.js';
 import type { BusCompanySortField } from './dto/bus-company-query.dto.js';
 import type { BusCompanyQueryDto } from './dto/bus-company-query.dto.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -87,12 +92,86 @@ function mapBusCompany(company: BusCompanyRecord) {
   };
 }
 
+function isBusCompanyCodeUniqueViolation(error: unknown): boolean {
+  if (
+    !(error instanceof Prisma.PrismaClientKnownRequestError) ||
+    error.code !== 'P2002'
+  ) {
+    return false;
+  }
+
+  const target = error.meta?.target;
+  const isCodeTarget = (value: unknown) =>
+    value === 'maNhaXe' || value === 'NhaXe_maNhaXe_key';
+
+  if (
+    Array.isArray(target)
+      ? target.length === 1 && isCodeTarget(target[0])
+      : isCodeTarget(target)
+  ) {
+    return true;
+  }
+
+  const adapterError = error.meta?.driverAdapterError;
+  if (
+    typeof adapterError !== 'object' ||
+    adapterError === null ||
+    !('cause' in adapterError)
+  ) {
+    return false;
+  }
+
+  const cause = adapterError.cause;
+  if (
+    typeof cause !== 'object' ||
+    cause === null ||
+    !('kind' in cause) ||
+    cause.kind !== 'UniqueConstraintViolation' ||
+    !('constraint' in cause)
+  ) {
+    return false;
+  }
+
+  const constraint = cause.constraint;
+  return (
+    typeof constraint === 'object' &&
+    constraint !== null &&
+    'index' in constraint &&
+    constraint.index === 'NhaXe_maNhaXe_key'
+  );
+}
+
 @Injectable()
 export class BusCompaniesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
   ) {}
+
+  async create(input: CreateBusCompanyDto) {
+    try {
+      const company = await this.prisma.nhaXe.create({
+        data: {
+          maNhaXe: input.code,
+          tenNhaXe: input.name,
+          thongTinLienHe: input.contactInfo ?? null,
+          trangThai: input.status,
+        },
+        select: BUS_COMPANY_SELECT,
+      });
+
+      return { data: mapBusCompany(company) };
+    } catch (error) {
+      if (isBusCompanyCodeUniqueViolation(error)) {
+        throw new ConflictException({
+          error: 'BUS_COMPANY_CODE_EXISTS',
+          message: 'Mã nhà xe đã tồn tại.',
+        });
+      }
+
+      throw error;
+    }
+  }
 
   async findOne(id: number) {
     const company = await this.prisma.nhaXe.findUnique({
