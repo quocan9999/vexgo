@@ -89,7 +89,7 @@ describe('GET /api/v1/bus-companies', () => {
     expect(service.findOne).toHaveBeenCalledWith(1);
   });
 
-  it.each(['abc', '0', '-1', '2147483648'])(
+  it.each(['abc', '0', '-1', '2147483648', '1e3', '0x10'])(
     'rejects invalid detail id %s before calling the service',
     async (id) => {
       const response = await request(app.getHttpServer())
