@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
+  LoaderCircle,
   Plus,
   RefreshCw,
   Search,
@@ -25,7 +26,10 @@ import { SuperAdminLayout } from '@/features/super-admin-layout/components/super
 import { useBusCompanies } from '../hooks/use-bus-companies';
 import { CreateBusCompanyDialog } from './create-bus-company-dialog';
 import { EditBusCompanyDialog } from './edit-bus-company-dialog';
-import { getBusCompanyById } from '../services/bus-company-service';
+import {
+  getBusCompanyById,
+  updateBusCompanyStatus,
+} from '../services/bus-company-service';
 import type {
   BusCompany,
   BusCompanySortKey,
@@ -84,23 +88,35 @@ function CompanyDetails({
   companyId,
   onClose,
   onUpdated,
+  onStatusUpdated,
 }: {
   companyId: number;
   onClose: () => void;
   onUpdated: (company: BusCompany) => void;
+  onStatusUpdated: (company: BusCompany) => void;
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const statusDialogRef = useRef<HTMLDialogElement>(null);
+  const statusSubmittingRef = useRef(false);
   const [detailState, setDetailState] = useState<CompanyDetailState>({
     status: 'loading',
   });
   const [retryCount, setRetryCount] = useState(0);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [updateNotice, setUpdateNotice] = useState<string | null>(null);
+  const [statusDialogOpen, setStatusDialogOpen] = useState(false);
+  const [statusSubmitting, setStatusSubmitting] = useState(false);
+  const [statusError, setStatusError] = useState<string | null>(null);
 
   useEffect(() => {
     const dialog = dialogRef.current;
     if (dialog && !dialog.open) dialog.showModal();
   }, []);
+
+  useEffect(() => {
+    const dialog = statusDialogRef.current;
+    if (statusDialogOpen && dialog && !dialog.open) dialog.showModal();
+  }, [statusDialogOpen]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -137,6 +153,47 @@ function CompanyDetails({
     setEditDialogOpen(false);
     onUpdated(company);
   }
+
+  async function confirmStatusChange() {
+    if (detailState.status !== 'success' || statusSubmittingRef.current) return;
+
+    const targetStatus: BusCompanyStatus =
+      detailState.company.status === 'HOAT_DONG' ? 'TAM_NGUNG' : 'HOAT_DONG';
+    statusSubmittingRef.current = true;
+    setStatusSubmitting(true);
+    setStatusError(null);
+
+    try {
+      const updatedCompany = await updateBusCompanyStatus(
+        companyId,
+        targetStatus,
+      );
+      setDetailState({ status: 'success', company: updatedCompany });
+      setUpdateNotice(
+        `Đã chuyển nhà xe ${updatedCompany.name} sang trạng thái ${statusLabel(updatedCompany.status)}.`,
+      );
+      setStatusDialogOpen(false);
+      onStatusUpdated(updatedCompany);
+    } catch (requestError: unknown) {
+      setStatusError(
+        requestError instanceof TypeError
+          ? 'Không thể kết nối đến máy chủ API. Vui lòng thử lại.'
+          : requestError instanceof Error
+            ? requestError.message
+            : 'Không thể cập nhật trạng thái nhà xe.',
+      );
+    } finally {
+      statusSubmittingRef.current = false;
+      setStatusSubmitting(false);
+    }
+  }
+
+  const nextStatus: BusCompanyStatus | null =
+    detailState.status === 'success'
+      ? detailState.company.status === 'HOAT_DONG'
+        ? 'TAM_NGUNG'
+        : 'HOAT_DONG'
+      : null;
 
   return (
     <>
@@ -253,6 +310,18 @@ function CompanyDetails({
               </section>
               <div className="detail-edit-actions">
                 <button
+                  className="button button-secondary"
+                  onClick={() => {
+                    setStatusError(null);
+                    setStatusDialogOpen(true);
+                  }}
+                  type="button"
+                >
+                  {detailState.company.status === 'HOAT_DONG'
+                    ? 'Tạm ngưng nhà xe'
+                    : 'Kích hoạt lại'}
+                </button>
+                <button
                   className="button button-primary"
                   onClick={() => setEditDialogOpen(true)}
                   type="button"
@@ -270,6 +339,74 @@ function CompanyDetails({
           onClose={() => setEditDialogOpen(false)}
           onUpdated={handleCompanyUpdated}
         />
+      )}
+      {statusDialogOpen && detailState.status === 'success' && nextStatus && (
+        <dialog
+          aria-describedby="status-confirmation-description"
+          aria-busy={statusSubmitting}
+          aria-labelledby="status-confirmation-title"
+          className="company-dialog status-confirmation-dialog"
+          onCancel={(event) => {
+            if (statusSubmittingRef.current) {
+              event.preventDefault();
+              return;
+            }
+            setStatusDialogOpen(false);
+          }}
+          onClick={(event) => {
+            if (
+              event.target === event.currentTarget &&
+              !statusSubmittingRef.current
+            ) {
+              setStatusDialogOpen(false);
+            }
+          }}
+          onClose={() => setStatusDialogOpen(false)}
+          ref={statusDialogRef}
+        >
+          <div className="status-confirmation-panel">
+            <h2 id="status-confirmation-title">
+              {nextStatus === 'TAM_NGUNG'
+                ? 'Tạm ngưng nhà xe này?'
+                : 'Kích hoạt lại nhà xe này?'}
+            </h2>
+            <p id="status-confirmation-description">
+              {nextStatus === 'TAM_NGUNG'
+                ? 'Nhà xe sẽ được chuyển sang trạng thái Tạm ngưng. Thao tác này không xóa dữ liệu và có thể kích hoạt lại sau.'
+                : 'Nhà xe sẽ được chuyển sang trạng thái Đang hoạt động.'}
+            </p>
+            {statusError && <p className="status-confirmation-error" role="alert">{statusError}</p>}
+            <div className="status-confirmation-actions">
+              <button
+                className="button button-secondary"
+                disabled={statusSubmitting}
+                onClick={() => setStatusDialogOpen(false)}
+                type="button"
+              >
+                Hủy
+              </button>
+              <button
+                className="button button-primary"
+                disabled={statusSubmitting}
+                onClick={confirmStatusChange}
+                type="button"
+              >
+                {statusSubmitting && (
+                  <LoaderCircle
+                    aria-hidden="true"
+                    className="status-confirmation-spinner"
+                    size={15}
+                  />
+                )}
+                {statusSubmitting
+                  ? 'Đang cập nhật…'
+                  : nextStatus === 'TAM_NGUNG'
+                    ? 'Tạm ngưng nhà xe'
+                    : 'Kích hoạt lại'}
+              </button>
+            </div>
+          </div>
+        </dialog>
       )}
     </>
   );
@@ -332,6 +469,13 @@ export function BusCompaniesManagement() {
 
   function handleCompanyUpdated(company: BusCompany) {
     setSuccessMessage(`Đã cập nhật nhà xe ${company.name}.`);
+    refresh();
+  }
+
+  function handleCompanyStatusUpdated(company: BusCompany) {
+    setSuccessMessage(
+      `Đã chuyển nhà xe ${company.name} sang trạng thái ${statusLabel(company.status)}.`,
+    );
     refresh();
   }
 
@@ -669,6 +813,7 @@ export function BusCompaniesManagement() {
           key={selectedCompanyId}
           companyId={selectedCompanyId}
           onClose={() => setSelectedCompanyId(null)}
+          onStatusUpdated={handleCompanyStatusUpdated}
           onUpdated={handleCompanyUpdated}
         />
       )}

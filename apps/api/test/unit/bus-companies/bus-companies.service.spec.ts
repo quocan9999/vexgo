@@ -21,7 +21,7 @@ describe('BusCompaniesService', () => {
   } as unknown as PrismaService, config);
 
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     getConfig.mockReturnValue('Asia/Ho_Chi_Minh');
     nhaXe.findMany.mockResolvedValue([
       {
@@ -193,6 +193,90 @@ describe('BusCompaniesService', () => {
         createdAt: true,
         updatedAt: true,
       }),
+    });
+  });
+
+  it.each([
+    ['HOAT_DONG', 'TAM_NGUNG'],
+    ['TAM_NGUNG', 'HOAT_DONG'],
+  ] as const)(
+    'changes bus-company status from %s to %s and updates only trangThai',
+    async (_currentStatus, targetStatus) => {
+      nhaXe.update.mockResolvedValueOnce({
+        nhaXeId: 7,
+        maNhaXe: 'NX007',
+        tenNhaXe: 'Nhà xe Đã sửa',
+        thongTinLienHe: '0900000008',
+        trangThai: targetStatus,
+        createdAt: new Date('2026-03-04T05:06:07.000Z'),
+        updatedAt: new Date('2026-03-05T06:07:08.000Z'),
+      });
+
+      await expect(service.updateStatus(7, { status: targetStatus })).resolves.toEqual({
+        data: {
+          busCompanyId: 7,
+          code: 'NX007',
+          name: 'Nhà xe Đã sửa',
+          contactInfo: '0900000008',
+          status: targetStatus,
+          createdAt: '2026-03-04T05:06:07.000Z',
+          updatedAt: '2026-03-05T06:07:08.000Z',
+        },
+      });
+
+      expect(nhaXe.update).toHaveBeenCalledWith({
+        where: { nhaXeId: 7 },
+        data: { trangThai: targetStatus },
+        select: {
+          nhaXeId: true,
+          maNhaXe: true,
+          tenNhaXe: true,
+          thongTinLienHe: true,
+          trangThai: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+    },
+  );
+
+  it('returns success when the requested status already matches the stored status', async () => {
+    nhaXe.update.mockResolvedValueOnce({
+      nhaXeId: 7,
+      maNhaXe: 'NX007',
+      tenNhaXe: 'Nhà xe Đã sửa',
+      thongTinLienHe: '0900000008',
+      trangThai: 'HOAT_DONG',
+      createdAt: new Date('2026-03-04T05:06:07.000Z'),
+      updatedAt: new Date('2026-03-05T06:07:08.000Z'),
+    });
+
+    await expect(service.updateStatus(7, { status: 'HOAT_DONG' })).resolves.toMatchObject({
+      data: { busCompanyId: 7, status: 'HOAT_DONG' },
+    });
+  });
+
+  it('maps a missing bus company during status update to the not-found contract', async () => {
+    nhaXe.update.mockRejectedValueOnce(
+      new Prisma.PrismaClientKnownRequestError('record not found', {
+        code: 'P2025',
+        clientVersion: '7.10.0',
+      }),
+    );
+
+    let caught: unknown;
+    try {
+      await service.updateStatus(999, { status: 'TAM_NGUNG' });
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(NotFoundException);
+    if (!(caught instanceof NotFoundException)) throw caught;
+    expect(caught.getStatus()).toBe(404);
+    expect(caught.getResponse()).toEqual({
+      error: 'BUS_COMPANY_NOT_FOUND',
+      message: 'Không tìm thấy nhà xe.',
     });
   });
 

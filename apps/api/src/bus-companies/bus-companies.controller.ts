@@ -11,6 +11,7 @@ import { CreateBusCompanyDto } from './dto/create-bus-company.dto.js';
 import { BusCompanyIdParamsDto } from './dto/bus-company-id-params.dto.js';
 import { BusCompanyQueryDto } from './dto/bus-company-query.dto.js';
 import { UpdateBusCompanyDto } from './dto/update-bus-company.dto.js';
+import { UpdateBusCompanyStatusDto } from './dto/update-bus-company-status.dto.js';
 import { BusCompaniesService } from './bus-companies.service.js';
 
 @Controller('bus-companies')
@@ -28,6 +29,14 @@ export class BusCompaniesController {
     @Body() body: UpdateBusCompanyDto,
   ) {
     return this.busCompaniesService.update(params.id, body);
+  }
+
+  @Patch(':id/status')
+  updateStatus(
+    @Param() params: BusCompanyIdParamsDto,
+    @Body() body: UpdateBusCompanyStatusDto,
+  ) {
+    return this.busCompaniesService.updateStatus(params.id, body);
   }
 
   @Get()

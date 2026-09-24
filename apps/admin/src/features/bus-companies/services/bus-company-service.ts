@@ -121,6 +121,40 @@ export async function updateBusCompany(
   return body.data as unknown as BusCompany;
 }
 
+export async function updateBusCompanyStatus(
+  busCompanyId: number,
+  status: BusCompany['status'],
+): Promise<BusCompany> {
+  const response = await fetch(
+    `${getApiBaseUrl()}/api/v1/bus-companies/${busCompanyId}/status`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+      cache: 'no-store',
+    },
+  );
+  const body: unknown = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    const message =
+      isRecord(body) && typeof body.message === 'string'
+        ? body.message
+        : `Không thể cập nhật trạng thái nhà xe (HTTP ${response.status}).`;
+    const code =
+      isRecord(body) && typeof body.error === 'string'
+        ? body.error
+        : undefined;
+
+    throw new BusCompanyApiError(message, code, getApiErrorDetails(body));
+  }
+  if (!isRecord(body) || !isRecord(body.data)) {
+    throw new Error('API trả về thông tin nhà xe không hợp lệ.');
+  }
+
+  return body.data as unknown as BusCompany;
+}
+
 export async function getBusCompanies(
   query: BusCompanyListQuery,
   signal?: AbortSignal,

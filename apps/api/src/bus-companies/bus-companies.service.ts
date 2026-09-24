@@ -7,6 +7,7 @@ import { ConfigService } from '@nestjs/config';
 import { Prisma } from '../generated/prisma/client.js';
 import type { CreateBusCompanyDto } from './dto/create-bus-company.dto.js';
 import type { UpdateBusCompanyDto } from './dto/update-bus-company.dto.js';
+import type { UpdateBusCompanyStatusDto } from './dto/update-bus-company-status.dto.js';
 import type { BusCompanySortField } from './dto/bus-company-query.dto.js';
 import type { BusCompanyQueryDto } from './dto/bus-company-query.dto.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -195,6 +196,30 @@ export class BusCompaniesService {
         });
       }
 
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2025'
+      ) {
+        throw new NotFoundException({
+          error: 'BUS_COMPANY_NOT_FOUND',
+          message: 'Không tìm thấy nhà xe.',
+        });
+      }
+
+      throw error;
+    }
+  }
+
+  async updateStatus(id: number, input: UpdateBusCompanyStatusDto) {
+    try {
+      const company = await this.prisma.nhaXe.update({
+        where: { nhaXeId: id },
+        data: { trangThai: input.status },
+        select: BUS_COMPANY_SELECT,
+      });
+
+      return { data: mapBusCompany(company) };
+    } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === 'P2025'
