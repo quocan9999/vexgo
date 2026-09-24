@@ -13,7 +13,7 @@
 
 .vehicle-types-eyebrow {
   margin: 0 0 7px;
-  color: #71819a;
+  color: #5d6d84;
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.09em;
@@ -28,7 +28,7 @@
 
 .vehicle-types-intro > div > p:last-child {
   margin: 8px 0 0;
-  color: #71819a;
+  color: #5d6d84;
   font-size: 12px;
   line-height: 1.55;
 }
@@ -71,6 +71,10 @@
   box-shadow: 0 3px 12px rgb(25 47 78 / 3%);
 }
 
+.vehicle-types-panel > div > span {
+  color: #5d6d84;
+}
+
 .vehicle-types-loading,
 .vehicle-types-empty {
   display: grid;
@@ -79,8 +83,8 @@
   justify-items: center;
   gap: 10px;
   padding: 26px;
-  color: #71819a;
-  font-size: 12px;
+  color: #5d6d84;
+  font-size: 14px;
   text-align: center;
 }
 
@@ -121,7 +125,7 @@
   border-radius: 9px;
   background: #fff7f6;
   color: #a63732;
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .vehicle-types-error p,
@@ -143,7 +147,7 @@
   background: #fff;
   color: #294465;
   font: inherit;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   transition:
@@ -172,7 +176,7 @@
 }
 
 .vehicle-types-detail-button {
-  min-height: 32px;
+  min-height: 36px;
   padding: 0 10px;
   border-color: transparent;
   color: #174f96;
@@ -216,14 +220,14 @@
   padding: 15px 18px;
   border-bottom: 1px solid #edf0f5;
   color: #5d6d84;
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.55;
   vertical-align: middle;
 }
 
 .vehicle-types-table thead th {
-  color: #708099;
-  font-size: 10px;
+  color: #5d6d84;
+  font-size: 12px;
   font-weight: 650;
   white-space: nowrap;
 }
@@ -231,7 +235,7 @@
 .vehicle-types-table tbody th {
   min-width: 155px;
   color: #1c2e48;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 650;
 }
 
@@ -257,8 +261,8 @@
   gap: 16px;
   padding: 10px 18px;
   border-top: 1px solid #edf0f5;
-  color: #71819a;
-  font-size: 10px;
+  color: #5d6d84;
+  font-size: 12px;
 }
 
 .vehicle-types-pagination strong {
@@ -332,7 +336,7 @@
 
 .vehicle-type-dialog-description {
   margin: 11px 0 20px;
-  color: #748197;
+  color: #5d6d84;
   font-size: 12px;
   line-height: 1.6;
 }
@@ -343,8 +347,8 @@
   align-items: center;
   justify-content: center;
   gap: 10px;
-  color: #71819a;
-  font-size: 12px;
+  color: #5d6d84;
+  font-size: 14px;
 }
 
 .vehicle-type-detail-error {
@@ -353,7 +357,7 @@
   border-radius: 9px;
   background: #fff7f6;
   color: #a63732;
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .vehicle-type-detail-error .vehicle-types-button {
@@ -466,7 +470,7 @@
 
 .vehicle-type-detail-body section h4 {
   margin: 0 0 8px;
-  color: #708099;
+  color: #5d6d84;
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.06em;
@@ -476,7 +480,7 @@
 .vehicle-type-description-value {
   margin: 0;
   color: #344a65;
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.7;
   overflow-wrap: anywhere;
 }
@@ -496,14 +500,14 @@
 }
 
 .vehicle-type-timestamps dt {
-  color: #71819a;
-  font-size: 11px;
+  color: #5d6d84;
+  font-size: 13px;
 }
 
 .vehicle-type-timestamps dd {
   margin: 0;
   color: #344a65;
-  font-size: 11px;
+  font-size: 13px;
   text-align: right;
 }
 
@@ -515,7 +519,21 @@
   outline-offset: 2px;
 }
 
-@media (max-width: 700px) {
+@media (max-width: 1024px) {
+  .vehicle-types-button,
+  .vehicle-types-detail-button,
+  .vehicle-types-icon-button,
+  .vehicle-types-sort-button {
+    min-height: 44px;
+  }
+
+  .vehicle-types-icon-button {
+    width: 44px;
+    min-width: 44px;
+  }
+}
+
+@media (max-width: 800px) {
   .vehicle-types-page {
     gap: 18px;
     padding: 22px 16px 28px;
@@ -545,7 +563,7 @@
     min-width: 0;
     margin: 0;
     color: #1c2e48;
-    font-size: 13px;
+    font-size: 16px;
     overflow-wrap: anywhere;
   }
 
@@ -553,14 +571,14 @@
     min-width: 0;
     margin: 0;
     color: #64758e;
-    font-size: 11px;
+    font-size: 16px;
     line-height: 1.55;
     overflow-wrap: anywhere;
   }
 
   .vehicle-types-mobile-card > span {
-    color: #71819a;
-    font-size: 10px;
+    color: #5d6d84;
+    font-size: 13px;
   }
 
   .vehicle-types-mobile-card > span strong {
@@ -584,6 +602,10 @@
     align-self: flex-end;
   }
 
+  .vehicle-types-pagination {
+    font-size: 13px;
+  }
+
   .vehicle-types-error {
     align-items: flex-start;
     flex-direction: column;
@@ -591,6 +613,10 @@
 
   .vehicle-type-form-dialog .vehicle-type-dialog-description,
   .vehicle-type-form-dialog .vehicle-type-form-error {
+    font-size: 14px;
+  }
+
+  .vehicle-type-dialog-description {
     font-size: 14px;
   }
 
