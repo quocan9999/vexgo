@@ -234,7 +234,6 @@ async function seedOperators(db) {
         maNhaXe: definition.code,
         tenNhaXe: definition.name,
         thongTinLienHe: `Tổng đài demo ${definition.code}: +84900000${definition.code === 'FUTA' ? '001' : definition.code === 'TB' ? '002' : '003'}`,
-        chinhSachDoiHuy: 'Dữ liệu demo: hỗ trợ đổi/hủy theo chính sách nhà xe.',
         trangThai: 'HOAT_DONG',
       },
       { tenNhaXe: definition.name, trangThai: 'HOAT_DONG' },

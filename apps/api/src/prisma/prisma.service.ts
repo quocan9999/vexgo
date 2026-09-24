@@ -24,6 +24,7 @@ export class PrismaService
         user: decodeURIComponent(databaseUrl.username),
         password: decodeURIComponent(databaseUrl.password),
         database: decodeURIComponent(databaseUrl.pathname.replace(/^\/+/, '')),
+        allowPublicKeyRetrieval: true,
       }),
     });
   }

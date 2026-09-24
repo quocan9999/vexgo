@@ -1077,11 +1077,15 @@ dialog:focus-visible {
 }
 
 .company-name-cell {
+  min-width: 190px;
+  color: #293851 !important;
+}
+
+.company-name-content {
   display: flex;
   min-width: 190px;
   align-items: center;
   gap: 10px;
-  color: #293851 !important;
 }
 
 .company-mark {
@@ -1121,9 +1125,8 @@ dialog:focus-visible {
 }
 
 .table-number {
-  display: inline-flex;
   min-width: 28px;
-  justify-content: center;
+  text-align: center;
   color: #33435e;
   font-size: 11px;
   font-variant-numeric: tabular-nums;
@@ -1585,22 +1588,12 @@ dialog:focus-visible {
   border: 0;
 }
 
-.spin {
-  animation: spin 1s linear infinite;
-}
-
 @keyframes skeleton-shimmer {
   0% {
     background-position: 100% 0;
   }
   100% {
     background-position: -100% 0;
-  }
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
   }
 }
 
