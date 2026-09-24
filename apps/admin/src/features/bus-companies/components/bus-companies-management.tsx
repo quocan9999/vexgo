@@ -201,17 +201,6 @@ function CompanyDetails({
 
             <section
               className="detail-section"
-              aria-labelledby="detail-policy-heading"
-            >
-              <h3 id="detail-policy-heading">Chính sách đổi, hủy</h3>
-              <p className="detail-field-value">
-                {detailState.company.cancellationPolicy ||
-                  'Chưa cập nhật chính sách.'}
-              </p>
-            </section>
-
-            <section
-              className="detail-section"
               aria-labelledby="detail-record-heading"
             >
               <h3 id="detail-record-heading">Thông tin hồ sơ</h3>

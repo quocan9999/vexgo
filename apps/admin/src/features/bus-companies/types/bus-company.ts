@@ -5,7 +5,6 @@ export type BusCompany = {
   code: string;
   name: string;
   contactInfo: string | null;
-  cancellationPolicy: string | null;
   status: BusCompanyStatus;
   createdAt: string;
   updatedAt: string;
