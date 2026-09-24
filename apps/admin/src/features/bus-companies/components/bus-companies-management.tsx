@@ -24,6 +24,7 @@ import {
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
 import { useBusCompanies } from '../hooks/use-bus-companies';
 import { CreateBusCompanyDialog } from './create-bus-company-dialog';
+import { EditBusCompanyDialog } from './edit-bus-company-dialog';
 import { getBusCompanyById } from '../services/bus-company-service';
 import type {
   BusCompany,
@@ -82,15 +83,19 @@ type CompanyDetailState =
 function CompanyDetails({
   companyId,
   onClose,
+  onUpdated,
 }: {
   companyId: number;
   onClose: () => void;
+  onUpdated: (company: BusCompany) => void;
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [detailState, setDetailState] = useState<CompanyDetailState>({
     status: 'loading',
   });
   const [retryCount, setRetryCount] = useState(0);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [updateNotice, setUpdateNotice] = useState<string | null>(null);
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -126,112 +131,147 @@ function CompanyDetails({
     setRetryCount((count) => count + 1);
   }
 
+  function handleCompanyUpdated(company: BusCompany) {
+    setDetailState({ status: 'success', company });
+    setUpdateNotice(`Đã cập nhật nhà xe ${company.name}.`);
+    setEditDialogOpen(false);
+    onUpdated(company);
+  }
+
   return (
-    <dialog
-      aria-labelledby="company-detail-title"
-      className="company-dialog"
-      onClick={(event) => {
-        if (event.target === event.currentTarget) {
-          (event.currentTarget as HTMLDialogElement).close();
-        }
-      }}
-      onClose={onClose}
-      ref={dialogRef}
-    >
-      <div className="detail-panel">
-        <div className="detail-heading">
-          <div className="detail-heading-copy">
-            <p className="eyebrow">HỒ SƠ NHÀ XE</p>
-            <h2 id="company-detail-title">Thông tin nhà xe</h2>
-          </div>
-          <form method="dialog">
-            <button
-              aria-label="Đóng thông tin nhà xe"
-              className="icon-button"
-              type="submit"
-            >
-              <X size={19} />
-            </button>
-          </form>
-        </div>
-
-        {detailState.status === 'loading' && (
-          <p role="status">Đang tải thông tin nhà xe…</p>
-        )}
-
-        {detailState.status === 'error' && (
-          <div role="alert">
-            <p>{detailState.message}</p>
-            <button
-              className="button button-secondary"
-              onClick={retry}
-              type="button"
-            >
-              Thử lại
-            </button>
-          </div>
-        )}
-
-        {detailState.status === 'success' && (
-          <>
-            <div className="detail-company-hero">
-              <CompanyMark name={detailState.company.name} />
-              <div>
-                <h3>{detailState.company.name}</h3>
-                <span className="detail-company-id">
-                  Mã nhà xe · {detailState.company.code}
-                </span>
-              </div>
+    <>
+      <dialog
+        aria-labelledby="company-detail-title"
+        className="company-dialog"
+        onClick={(event) => {
+          if (event.target === event.currentTarget) {
+            (event.currentTarget as HTMLDialogElement).close();
+          }
+        }}
+        onClose={onClose}
+        ref={dialogRef}
+      >
+        <div className="detail-panel">
+          <div className="detail-heading">
+            <div className="detail-heading-copy">
+              <p className="eyebrow">HỒ SƠ NHÀ XE</p>
+              <h2 id="company-detail-title">Thông tin nhà xe</h2>
             </div>
+            <form method="dialog">
+              <button
+                aria-label="Đóng thông tin nhà xe"
+                className="icon-button"
+                type="submit"
+              >
+                <X size={19} />
+              </button>
+            </form>
+          </div>
 
-            <section
-              className="detail-section"
-              aria-labelledby="detail-contact-heading"
+          {updateNotice && (
+            <div
+              className="company-success-notice detail-success-notice"
+              role="status"
             >
-              <h3 id="detail-contact-heading">Thông tin liên hệ</h3>
-              <div className="detail-field">
-                <span className="detail-field-icon" aria-hidden="true">
-                  <Building2 size={17} />
-                </span>
+              <CheckCircle2 aria-hidden="true" size={17} />
+              <span>{updateNotice}</span>
+            </div>
+          )}
+
+          {detailState.status === 'loading' && (
+            <p role="status">Đang tải thông tin nhà xe…</p>
+          )}
+
+          {detailState.status === 'error' && (
+            <div role="alert">
+              <p>{detailState.message}</p>
+              <button
+                className="button button-secondary"
+                onClick={retry}
+                type="button"
+              >
+                Thử lại
+              </button>
+            </div>
+          )}
+
+          {detailState.status === 'success' && (
+            <>
+              <div className="detail-company-hero">
+                <CompanyMark name={detailState.company.name} />
                 <div>
-                  <span className="detail-field-label">Đầu mối liên hệ</span>
-                  <span className="detail-field-value">
-                    {detailState.company.contactInfo || 'Chưa cập nhật'}
+                  <h3>{detailState.company.name}</h3>
+                  <span className="detail-company-id">
+                    Mã nhà xe · {detailState.company.code}
                   </span>
                 </div>
               </div>
-            </section>
 
-            <section
-              className="detail-section"
-              aria-labelledby="detail-record-heading"
-            >
-              <h3 id="detail-record-heading">Thông tin hồ sơ</h3>
-              <dl className="detail-stats">
-                <div>
-                  <dt>Trạng thái</dt>
-                  <dd>
-                    <span
-                      className={`company-status-badge${detailState.company.status === 'HOAT_DONG' ? ' is-active' : ''}`}
-                    >
-                      {statusLabel(detailState.company.status)}
+              <section
+                className="detail-section"
+                aria-labelledby="detail-contact-heading"
+              >
+                <h3 id="detail-contact-heading">Thông tin liên hệ</h3>
+                <div className="detail-field">
+                  <span className="detail-field-icon" aria-hidden="true">
+                    <Building2 size={17} />
+                  </span>
+                  <div>
+                    <span className="detail-field-label">Đầu mối liên hệ</span>
+                    <span className="detail-field-value">
+                      {detailState.company.contactInfo || 'Chưa cập nhật'}
                     </span>
-                  </dd>
+                  </div>
                 </div>
-                <div>
-                  <dt>Ngày tạo</dt>
-                  <dd>{timestampFormat(detailState.company.createdAt)}</dd>
-                </div>
-                <div>
-                  <dt>Cập nhật lần cuối</dt>
-                  <dd>{timestampFormat(detailState.company.updatedAt)}</dd>
-                </div>
-              </dl>
-            </section>
-          </>
-        )}
-      </div>
-    </dialog>
+              </section>
+
+              <section
+                className="detail-section"
+                aria-labelledby="detail-record-heading"
+              >
+                <h3 id="detail-record-heading">Thông tin hồ sơ</h3>
+                <dl className="detail-stats">
+                  <div>
+                    <dt>Trạng thái</dt>
+                    <dd>
+                      <span
+                        className={`company-status-badge${detailState.company.status === 'HOAT_DONG' ? ' is-active' : ''}`}
+                      >
+                        {statusLabel(detailState.company.status)}
+                      </span>
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Ngày tạo</dt>
+                    <dd>{timestampFormat(detailState.company.createdAt)}</dd>
+                  </div>
+                  <div>
+                    <dt>Cập nhật lần cuối</dt>
+                    <dd>{timestampFormat(detailState.company.updatedAt)}</dd>
+                  </div>
+                </dl>
+              </section>
+              <div className="detail-edit-actions">
+                <button
+                  className="button button-primary"
+                  onClick={() => setEditDialogOpen(true)}
+                  type="button"
+                >
+                  Chỉnh sửa
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </dialog>
+      {editDialogOpen && detailState.status === 'success' && (
+        <EditBusCompanyDialog
+          company={detailState.company}
+          onClose={() => setEditDialogOpen(false)}
+          onUpdated={handleCompanyUpdated}
+        />
+      )}
+    </>
   );
 }
 
@@ -277,16 +317,21 @@ export function BusCompaniesManagement() {
     null,
   );
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [createSuccess, setCreateSuccess] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   function openCreateDialog() {
-    setCreateSuccess(null);
+    setSuccessMessage(null);
     setCreateDialogOpen(true);
   }
 
   function handleCompanyCreated(company: BusCompany) {
     setCreateDialogOpen(false);
-    setCreateSuccess(`Đã thêm nhà xe ${company.name}.`);
+    setSuccessMessage(`Đã thêm nhà xe ${company.name}.`);
+    refresh();
+  }
+
+  function handleCompanyUpdated(company: BusCompany) {
+    setSuccessMessage(`Đã cập nhật nhà xe ${company.name}.`);
     refresh();
   }
 
@@ -317,7 +362,10 @@ export function BusCompaniesManagement() {
       <button
         aria-label={`Xem thông tin ${company.name}`}
         className="company-open-button"
-        onClick={() => setSelectedCompanyId(company.busCompanyId)}
+        onClick={() => {
+          setSuccessMessage(null);
+          setSelectedCompanyId(company.busCompanyId);
+        }}
         type="button"
       >
         Xem chi tiết <ChevronRight aria-hidden="true" size={15} />
@@ -358,10 +406,10 @@ export function BusCompaniesManagement() {
           </div>
         </section>
 
-        {createSuccess && (
+        {successMessage && (
           <div className="company-success-notice" role="status">
             <CheckCircle2 aria-hidden="true" size={17} />
-            <span>{createSuccess}</span>
+            <span>{successMessage}</span>
           </div>
         )}
 
@@ -621,6 +669,7 @@ export function BusCompaniesManagement() {
           key={selectedCompanyId}
           companyId={selectedCompanyId}
           onClose={() => setSelectedCompanyId(null)}
+          onUpdated={handleCompanyUpdated}
         />
       )}
       {createDialogOpen && (

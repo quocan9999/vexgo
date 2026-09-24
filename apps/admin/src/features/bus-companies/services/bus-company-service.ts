@@ -12,6 +12,8 @@ export type CreateBusCompanyInput = {
   status: BusCompany['status'];
 };
 
+export type UpdateBusCompanyInput = Omit<CreateBusCompanyInput, 'status'>;
+
 export type BusCompanyApiErrorDetail = {
   field: string;
   message: string;
@@ -71,6 +73,40 @@ export async function createBusCompany(
       isRecord(body) && typeof body.message === 'string'
         ? body.message
         : `Không thể tạo nhà xe (HTTP ${response.status}).`;
+    const code =
+      isRecord(body) && typeof body.error === 'string'
+        ? body.error
+        : undefined;
+
+    throw new BusCompanyApiError(message, code, getApiErrorDetails(body));
+  }
+  if (!isRecord(body) || !isRecord(body.data)) {
+    throw new Error('API trả về thông tin nhà xe không hợp lệ.');
+  }
+
+  return body.data as unknown as BusCompany;
+}
+
+export async function updateBusCompany(
+  busCompanyId: number,
+  input: UpdateBusCompanyInput,
+): Promise<BusCompany> {
+  const response = await fetch(
+    `${getApiBaseUrl()}/api/v1/bus-companies/${busCompanyId}`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+      cache: 'no-store',
+    },
+  );
+  const body: unknown = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    const message =
+      isRecord(body) && typeof body.message === 'string'
+        ? body.message
+        : `Không thể cập nhật nhà xe (HTTP ${response.status}).`;
     const code =
       isRecord(body) && typeof body.error === 'string'
         ? body.error

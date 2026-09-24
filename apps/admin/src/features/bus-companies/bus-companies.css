@@ -36,7 +36,7 @@
   flex: 0 0 auto;
 }
 
-.create-company-panel {
+.bus-company-form-panel {
   display: flex;
   width: min(520px, 100%);
   height: 100%;
@@ -48,24 +48,24 @@
   animation: panel-in 200ms ease-out;
 }
 
-.create-company-heading {
+.bus-company-form-heading {
   flex: 0 0 auto;
 }
 
-.create-company-form {
+.bus-company-form {
   display: grid;
   gap: 18px;
   padding: 22px 25px 0;
 }
 
-.create-company-intro {
+.bus-company-form-intro {
   margin: 0 0 2px;
   color: #748197;
   font-size: 12px;
   line-height: 1.6;
 }
 
-.create-company-form-error {
+.bus-company-form-error {
   padding: 11px 12px;
   border: 1px solid #f0d0ce;
   border-radius: 8px;
@@ -75,7 +75,7 @@
   line-height: 1.5;
 }
 
-.create-company-field {
+.bus-company-form-field {
   display: grid;
   gap: 7px;
   color: #26344a;
@@ -83,14 +83,14 @@
   font-weight: 650;
 }
 
-.create-company-field label span {
+.bus-company-form-field label span {
   color: #8994a6;
   font-size: 10px;
   font-weight: 450;
 }
 
-.create-company-field input,
-.create-company-field select {
+.bus-company-form-field input,
+.bus-company-form-field select {
   width: 100%;
   min-height: 42px;
   box-sizing: border-box;
@@ -107,30 +107,30 @@
     box-shadow 150ms ease;
 }
 
-.create-company-field input::placeholder {
+.bus-company-form-field input::placeholder {
   color: #9aa5b6;
 }
 
-.create-company-field input:focus,
-.create-company-field select:focus {
+.bus-company-form-field input:focus,
+.bus-company-form-field select:focus {
   border-color: #5a7ee0;
   box-shadow: 0 0 0 3px rgb(90 126 224 / 13%);
   outline: none;
 }
 
-.create-company-field input[aria-invalid='true'],
-.create-company-field select[aria-invalid='true'] {
+.bus-company-form-field input[aria-invalid='true'],
+.bus-company-form-field select[aria-invalid='true'] {
   border-color: #c6534c;
 }
 
-.create-company-field-error {
+.bus-company-form-field-error {
   color: #b63838;
   font-size: 10px;
   font-weight: 500;
   line-height: 1.45;
 }
 
-.create-company-actions {
+.bus-company-form-actions {
   position: sticky;
   bottom: 0;
   display: flex;
@@ -142,29 +142,29 @@
   background: rgb(255 255 255 / 96%);
 }
 
-.create-company-spinner {
-  animation: create-company-spin 1s linear infinite;
+.bus-company-form-spinner {
+  animation: bus-company-form-spin 1s linear infinite;
 }
 
-@keyframes create-company-spin {
+@keyframes bus-company-form-spin {
   to {
     transform: rotate(360deg);
   }
 }
 
 @media (max-width: 520px) {
-  .create-company-panel {
+  .bus-company-form-panel {
     width: 100%;
     min-height: 100%;
     height: auto;
   }
 
-  .create-company-form {
+  .bus-company-form {
     padding-right: 19px;
     padding-left: 19px;
   }
 
-  .create-company-actions {
+  .bus-company-form-actions {
     margin-right: -19px;
     margin-left: -19px;
     padding-right: 19px;
@@ -173,11 +173,22 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .create-company-panel,
-  .create-company-spinner,
-  .create-company-field input,
-  .create-company-field select {
+  .bus-company-form-panel,
+  .bus-company-form-spinner,
+  .bus-company-form-field input,
+  .bus-company-form-field select {
     animation: none;
     transition: none;
   }
+}
+
+.detail-edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin: 20px 25px;
+}
+
+.detail-success-notice {
+  margin-right: 25px;
+  margin-left: 25px;
 }

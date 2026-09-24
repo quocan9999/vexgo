@@ -12,6 +12,7 @@ describe('BusCompaniesService', () => {
     count: vi.fn(),
     findUnique: vi.fn(),
     create: vi.fn(),
+    update: vi.fn(),
   };
   const getConfig = vi.fn().mockReturnValue('Asia/Ho_Chi_Minh');
   const config = { get: getConfig } as unknown as ConfigService;
@@ -43,6 +44,15 @@ describe('BusCompaniesService', () => {
       trangThai: 'HOAT_DONG',
       createdAt: new Date('2026-03-04T05:06:07.000Z'),
       updatedAt: new Date('2026-03-04T05:06:07.000Z'),
+    });
+    nhaXe.update.mockResolvedValue({
+      nhaXeId: 7,
+      maNhaXe: 'NX007',
+      tenNhaXe: 'Nhà xe Đã sửa',
+      thongTinLienHe: '0900000008',
+      trangThai: 'HOAT_DONG',
+      createdAt: new Date('2026-03-04T05:06:07.000Z'),
+      updatedAt: new Date('2026-03-05T06:07:08.000Z'),
     });
   });
 
@@ -146,6 +156,126 @@ describe('BusCompaniesService', () => {
         status: 'HOAT_DONG',
       }),
     ).rejects.toBe(unrelatedUniqueError);
+  });
+
+  it('updates editable Prisma fields and returns the shared response mapping', async () => {
+    await expect(
+      service.update(7, {
+        code: 'NX007',
+        name: 'Nhà xe Đã sửa',
+        contactInfo: '0900000008',
+      }),
+    ).resolves.toEqual({
+      data: {
+        busCompanyId: 7,
+        code: 'NX007',
+        name: 'Nhà xe Đã sửa',
+        contactInfo: '0900000008',
+        status: 'HOAT_DONG',
+        createdAt: '2026-03-04T05:06:07.000Z',
+        updatedAt: '2026-03-05T06:07:08.000Z',
+      },
+    });
+
+    expect(nhaXe.update).toHaveBeenCalledWith({
+      where: { nhaXeId: 7 },
+      data: {
+        maNhaXe: 'NX007',
+        tenNhaXe: 'Nhà xe Đã sửa',
+        thongTinLienHe: '0900000008',
+      },
+      select: expect.objectContaining({
+        nhaXeId: true,
+        maNhaXe: true,
+        tenNhaXe: true,
+        thongTinLienHe: true,
+        trangThai: true,
+        createdAt: true,
+        updatedAt: true,
+      }),
+    });
+  });
+
+  it('maps a maNhaXe P2002 from update to the duplicate-code conflict contract', async () => {
+    nhaXe.update.mockRejectedValueOnce(
+      new Prisma.PrismaClientKnownRequestError('duplicate code', {
+        code: 'P2002',
+        clientVersion: '7.10.0',
+        meta: {
+          driverAdapterError: {
+            cause: {
+              kind: 'UniqueConstraintViolation',
+              constraint: { index: 'NhaXe_maNhaXe_key' },
+            },
+          },
+        },
+      }),
+    );
+
+    let caught: unknown;
+    try {
+      await service.update(7, {
+        code: 'OTHER',
+        name: 'Nhà xe Đã sửa',
+      });
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(ConflictException);
+    if (!(caught instanceof ConflictException)) throw caught;
+    expect(caught.getStatus()).toBe(409);
+    expect(caught.getResponse()).toEqual({
+      error: 'BUS_COMPANY_CODE_EXISTS',
+      message: 'Mã nhà xe đã tồn tại.',
+    });
+  });
+
+  it('propagates unrelated P2002 constraints from update', async () => {
+    const unrelatedUniqueError = new Prisma.PrismaClientKnownRequestError(
+      'unrelated unique constraint',
+      {
+        code: 'P2002',
+        clientVersion: '7.10.0',
+        meta: {
+          driverAdapterError: {
+            cause: {
+              kind: 'UniqueConstraintViolation',
+              constraint: { index: 'NhaXe_unrelated_key' },
+            },
+          },
+        },
+      },
+    );
+    nhaXe.update.mockRejectedValueOnce(unrelatedUniqueError);
+
+    await expect(
+      service.update(7, { code: 'NX007', name: 'Nhà xe Đã sửa' }),
+    ).rejects.toBe(unrelatedUniqueError);
+  });
+
+  it('maps Prisma P2025 to the bus-company not-found contract', async () => {
+    nhaXe.update.mockRejectedValueOnce(
+      new Prisma.PrismaClientKnownRequestError('record not found', {
+        code: 'P2025',
+        clientVersion: '7.10.0',
+      }),
+    );
+
+    let caught: unknown;
+    try {
+      await service.update(999, { code: 'NX999', name: 'Không tồn tại' });
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(NotFoundException);
+    if (!(caught instanceof NotFoundException)) throw caught;
+    expect(caught.getStatus()).toBe(404);
+    expect(caught.getResponse()).toEqual({
+      error: 'BUS_COMPANY_NOT_FOUND',
+      message: 'Không tìm thấy nhà xe.',
+    });
   });
 
   it('maps the English response and applies search, status, pagination, and safe sorting', async () => {

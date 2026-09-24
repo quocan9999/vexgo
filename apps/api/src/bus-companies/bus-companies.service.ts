@@ -6,6 +6,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '../generated/prisma/client.js';
 import type { CreateBusCompanyDto } from './dto/create-bus-company.dto.js';
+import type { UpdateBusCompanyDto } from './dto/update-bus-company.dto.js';
 import type { BusCompanySortField } from './dto/bus-company-query.dto.js';
 import type { BusCompanyQueryDto } from './dto/bus-company-query.dto.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -166,6 +167,41 @@ export class BusCompaniesService {
         throw new ConflictException({
           error: 'BUS_COMPANY_CODE_EXISTS',
           message: 'Mã nhà xe đã tồn tại.',
+        });
+      }
+
+      throw error;
+    }
+  }
+
+  async update(id: number, input: UpdateBusCompanyDto) {
+    try {
+      const company = await this.prisma.nhaXe.update({
+        where: { nhaXeId: id },
+        data: {
+          maNhaXe: input.code,
+          tenNhaXe: input.name,
+          thongTinLienHe: input.contactInfo ?? null,
+        },
+        select: BUS_COMPANY_SELECT,
+      });
+
+      return { data: mapBusCompany(company) };
+    } catch (error) {
+      if (isBusCompanyCodeUniqueViolation(error)) {
+        throw new ConflictException({
+          error: 'BUS_COMPANY_CODE_EXISTS',
+          message: 'Mã nhà xe đã tồn tại.',
+        });
+      }
+
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2025'
+      ) {
+        throw new NotFoundException({
+          error: 'BUS_COMPANY_NOT_FOUND',
+          message: 'Không tìm thấy nhà xe.',
         });
       }
 

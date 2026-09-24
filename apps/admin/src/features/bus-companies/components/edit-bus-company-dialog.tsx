@@ -4,32 +4,25 @@ import { LoaderCircle, X } from 'lucide-react';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import {
   BusCompanyApiError,
-  createBusCompany,
+  updateBusCompany,
   type BusCompanyApiErrorDetail,
 } from '../services/bus-company-service';
-import type { BusCompany, BusCompanyStatus } from '../types/bus-company';
+import type { BusCompany } from '../types/bus-company';
 
-type CreateBusCompanyDialogProps = {
+type EditBusCompanyDialogProps = {
+  company: BusCompany;
   onClose: () => void;
-  onCreated: (company: BusCompany) => void;
+  onUpdated: (company: BusCompany) => void;
 };
 
 type FormValues = {
   code: string;
   name: string;
   contactInfo: string;
-  status: BusCompanyStatus;
 };
 
 type FormField = keyof FormValues;
 type FieldErrors = Partial<Record<FormField, string>>;
-
-const INITIAL_VALUES: FormValues = {
-  code: '',
-  name: '',
-  contactInfo: '',
-  status: 'HOAT_DONG',
-};
 
 function fieldErrorsFromDetails(details: BusCompanyApiErrorDetail[]) {
   const errors: FieldErrors = {};
@@ -38,8 +31,7 @@ function fieldErrorsFromDetails(details: BusCompanyApiErrorDetail[]) {
     if (
       detail.field === 'code' ||
       detail.field === 'name' ||
-      detail.field === 'contactInfo' ||
-      detail.field === 'status'
+      detail.field === 'contactInfo'
     ) {
       errors[detail.field] = detail.message;
     }
@@ -48,13 +40,18 @@ function fieldErrorsFromDetails(details: BusCompanyApiErrorDetail[]) {
   return errors;
 }
 
-export function CreateBusCompanyDialog({
+export function EditBusCompanyDialog({
+  company,
   onClose,
-  onCreated,
-}: CreateBusCompanyDialogProps) {
+  onUpdated,
+}: EditBusCompanyDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const submittingRef = useRef(false);
-  const [values, setValues] = useState<FormValues>(INITIAL_VALUES);
+  const [values, setValues] = useState<FormValues>(() => ({
+    code: company.code,
+    name: company.name,
+    contactInfo: company.contactInfo ?? '',
+  }));
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -89,10 +86,6 @@ export function CreateBusCompanyDialog({
       errors.name = 'Tên nhà xe không được vượt quá 150 ký tự.';
     }
 
-    if (values.status !== 'HOAT_DONG' && values.status !== 'TAM_NGUNG') {
-      errors.status = 'Vui lòng chọn trạng thái hợp lệ.';
-    }
-
     return errors;
   }
 
@@ -109,13 +102,12 @@ export function CreateBusCompanyDialog({
     setSubmitting(true);
 
     try {
-      const company = await createBusCompany({
+      const updatedCompany = await updateBusCompany(company.busCompanyId, {
         code: values.code.trim(),
         name: values.name.trim(),
         contactInfo: values.contactInfo.trim() || null,
-        status: values.status,
       });
-      onCreated(company);
+      onUpdated(updatedCompany);
     } catch (requestError: unknown) {
       if (requestError instanceof BusCompanyApiError) {
         if (requestError.code === 'BUS_COMPANY_CODE_EXISTS') {
@@ -123,19 +115,16 @@ export function CreateBusCompanyDialog({
           setFormError(null);
         } else {
           const serverErrors = fieldErrorsFromDetails(requestError.details);
-          const hasFieldErrors = Object.keys(serverErrors).length > 0;
           setFieldErrors(serverErrors);
-          if (requestError.code === 'VALIDATION_ERROR' && hasFieldErrors) {
-            setFormError('Vui lòng kiểm tra lại các trường được đánh dấu.');
-          } else {
-            setFormError(hasFieldErrors ? null : requestError.message);
-          }
+          setFormError(
+            Object.keys(serverErrors).length > 0 ? null : requestError.message,
+          );
         }
       } else {
         setFormError(
           requestError instanceof Error
             ? requestError.message
-            : 'Không thể tạo nhà xe. Vui lòng thử lại.',
+            : 'Không thể cập nhật nhà xe. Vui lòng thử lại.',
         );
       }
     } finally {
@@ -146,7 +135,7 @@ export function CreateBusCompanyDialog({
 
   return (
     <dialog
-      aria-labelledby="create-company-title"
+      aria-labelledby="edit-company-title"
       className="company-dialog"
       onCancel={(event) => {
         if (submittingRef.current) event.preventDefault();
@@ -160,11 +149,11 @@ export function CreateBusCompanyDialog({
       <section className="bus-company-form-panel">
         <div className="detail-heading bus-company-form-heading">
           <div className="detail-heading-copy">
-            <p className="eyebrow">ĐỐI TÁC NỀN TẢNG</p>
-            <h2 id="create-company-title">Thêm nhà xe</h2>
+            <p className="eyebrow">HỒ SƠ NHÀ XE</p>
+            <h2 id="edit-company-title">Chỉnh sửa nhà xe</h2>
           </div>
           <button
-            aria-label="Đóng biểu mẫu thêm nhà xe"
+            aria-label="Đóng biểu mẫu chỉnh sửa nhà xe"
             className="icon-button"
             disabled={submitting}
             onClick={closeDialog}
@@ -180,7 +169,7 @@ export function CreateBusCompanyDialog({
           onSubmit={handleSubmit}
         >
           <p className="bus-company-form-intro">
-            Nhập thông tin cơ bản để thêm đối tác vào hệ thống.
+            Cập nhật mã, tên và thông tin liên hệ của nhà xe.
           </p>
 
           {formError && (
@@ -190,25 +179,24 @@ export function CreateBusCompanyDialog({
           )}
 
           <div className="bus-company-form-field">
-            <label htmlFor="create-company-code">Mã nhà xe</label>
+            <label htmlFor="edit-company-code">Mã nhà xe</label>
             <input
               autoComplete="off"
-              id="create-company-code"
+              id="edit-company-code"
               maxLength={50}
               onChange={(event) => updateField('code', event.target.value)}
-              placeholder="Ví dụ: NX001"
               required
               type="text"
               value={values.code}
               aria-invalid={Boolean(fieldErrors.code)}
               aria-describedby={
-                fieldErrors.code ? 'create-company-code-error' : undefined
+                fieldErrors.code ? 'edit-company-code-error' : undefined
               }
             />
             {fieldErrors.code && (
               <span
                 className="bus-company-form-field-error"
-                id="create-company-code-error"
+                id="edit-company-code-error"
               >
                 {fieldErrors.code}
               </span>
@@ -216,25 +204,24 @@ export function CreateBusCompanyDialog({
           </div>
 
           <div className="bus-company-form-field">
-            <label htmlFor="create-company-name">Tên nhà xe</label>
+            <label htmlFor="edit-company-name">Tên nhà xe</label>
             <input
               autoComplete="organization"
-              id="create-company-name"
+              id="edit-company-name"
               maxLength={150}
               onChange={(event) => updateField('name', event.target.value)}
-              placeholder="Nhập tên nhà xe"
               required
               type="text"
               value={values.name}
               aria-invalid={Boolean(fieldErrors.name)}
               aria-describedby={
-                fieldErrors.name ? 'create-company-name-error' : undefined
+                fieldErrors.name ? 'edit-company-name-error' : undefined
               }
             />
             {fieldErrors.name && (
               <span
                 className="bus-company-form-field-error"
-                id="create-company-name-error"
+                id="edit-company-name-error"
               >
                 {fieldErrors.name}
               </span>
@@ -242,57 +229,30 @@ export function CreateBusCompanyDialog({
           </div>
 
           <div className="bus-company-form-field">
-            <label htmlFor="create-company-contact">
+            <label htmlFor="edit-company-contact">
               Thông tin liên hệ <span>(Tùy chọn)</span>
             </label>
             <input
               autoComplete="tel"
-              id="create-company-contact"
+              id="edit-company-contact"
               onChange={(event) =>
                 updateField('contactInfo', event.target.value)
               }
-              placeholder="Số điện thoại hoặc thông tin liên hệ"
               type="text"
               value={values.contactInfo}
               aria-invalid={Boolean(fieldErrors.contactInfo)}
               aria-describedby={
                 fieldErrors.contactInfo
-                  ? 'create-company-contact-error'
+                  ? 'edit-company-contact-error'
                   : undefined
               }
             />
             {fieldErrors.contactInfo && (
               <span
                 className="bus-company-form-field-error"
-                id="create-company-contact-error"
+                id="edit-company-contact-error"
               >
                 {fieldErrors.contactInfo}
-              </span>
-            )}
-          </div>
-
-          <div className="bus-company-form-field">
-            <label htmlFor="create-company-status">Trạng thái</label>
-            <select
-              id="create-company-status"
-              onChange={(event) =>
-                updateField('status', event.target.value as BusCompanyStatus)
-              }
-              value={values.status}
-              aria-invalid={Boolean(fieldErrors.status)}
-              aria-describedby={
-                fieldErrors.status ? 'create-company-status-error' : undefined
-              }
-            >
-              <option value="HOAT_DONG">Đang hoạt động</option>
-              <option value="TAM_NGUNG">Tạm ngưng</option>
-            </select>
-            {fieldErrors.status && (
-              <span
-                className="bus-company-form-field-error"
-                id="create-company-status-error"
-              >
-                {fieldErrors.status}
               </span>
             )}
           </div>
@@ -318,7 +278,7 @@ export function CreateBusCompanyDialog({
                   size={16}
                 />
               )}
-              {submitting ? 'Đang tạo…' : 'Tạo nhà xe'}
+              {submitting ? 'Đang lưu…' : 'Lưu thay đổi'}
             </button>
           </div>
         </form>
