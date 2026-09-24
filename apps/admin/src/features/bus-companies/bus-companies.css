@@ -239,6 +239,16 @@
   animation: status-confirmation-spin 1s linear infinite;
 }
 
+.bus-company-refresh-spinner {
+  animation: bus-company-refresh-spin 1s linear infinite;
+}
+
+@keyframes bus-company-refresh-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 @keyframes status-confirmation-spin {
   to {
     transform: rotate(360deg);
@@ -262,6 +272,10 @@
   }
 
   .status-confirmation-spinner {
+    animation: none;
+  }
+
+  .bus-company-refresh-spinner {
     animation: none;
   }
 }

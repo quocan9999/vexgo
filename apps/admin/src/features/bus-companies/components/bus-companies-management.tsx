@@ -542,7 +542,7 @@ export function BusCompaniesManagement() {
             >
               <RefreshCw
                 aria-hidden="true"
-                className={loading ? 'spin' : ''}
+                className={loading ? 'bus-company-refresh-spinner' : ''}
                 size={16}
               />
               Làm mới
@@ -563,6 +563,9 @@ export function BusCompaniesManagement() {
         >
           <div className="section-heading company-section-heading">
             <div>
+              <h2 className="sr-only" id="companies-heading">
+                Danh sách nhà xe
+              </h2>
             </div>
             <span className="company-count-badge">
               <Building2 size={15} />
