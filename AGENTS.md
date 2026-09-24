@@ -119,6 +119,8 @@ Các quy tắc này áp dụng cho toàn repository và bổ sung cho hướng d
 
 Một feature full-stack chỉ hoàn thành khi có các phần phù hợp với scope: UI/UX; frontend service gọi API thật; NestJS controller/service; DTO và validation; Prisma/MySQL; business rules được kiểm tra ở backend; loading, error, empty (nếu phù hợp) và success feedback; test cho logic quan trọng; không còn mock làm nguồn dữ liệu chính; và cập nhật tài liệu nếu API contract thay đổi.
 
+- PR MUST pass các GitHub Actions CI checks bắt buộc trước khi merge. MUST NOT bypass, disable hoặc weaken test/lint/typecheck/build chỉ để đạt trạng thái xanh.
+
 ## Nguyên tắc cốt lõi
 
 **ONE DATABASE · ONE BACKEND · ONE BUSINESS RULE · ONE API CONVENTION**

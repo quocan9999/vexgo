@@ -1,0 +1,129 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+    branches:
+      - develop
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  api:
+    name: API CI
+    runs-on: ubuntu-latest
+    env:
+      # Prisma generation reads these URLs but does not connect to a database.
+      DATABASE_URL: mysql://ci:ci@127.0.0.1:1/vexgo_ci
+      MIGRATION_URL: mysql://ci:ci@127.0.0.1:1/vexgo_ci_migration
+      SHADOW_DATABASE_URL: mysql://ci:ci@127.0.0.1:1/vexgo_ci_shadow
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Pin npm
+        run: npm install --global npm@11.14.1
+
+      - name: Verify Node.js and npm versions
+        run: |
+          node --version
+          npm_version="$(npm --version)"
+          printf 'npm %s\n' "$npm_version"
+          test "$npm_version" = "11.14.1"
+
+      - run: npm ci
+
+      # This also generates Prisma Client, which is needed before tests and typecheck.
+      - name: API build
+        run: npm run build --workspace=@vexgo/api
+
+      - name: API tests
+        run: npm run test --workspace=@vexgo/api
+
+      - name: API e2e tests
+        run: npm run test:e2e --workspace=@vexgo/api
+
+      - name: API typecheck
+        run: npm run typecheck --workspace=@vexgo/api
+
+      - name: API lint
+        run: npm run lint --workspace=@vexgo/api
+
+  admin:
+    name: Admin CI
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Pin npm
+        run: npm install --global npm@11.14.1
+
+      - name: Verify Node.js and npm versions
+        run: |
+          node --version
+          npm_version="$(npm --version)"
+          printf 'npm %s\n' "$npm_version"
+          test "$npm_version" = "11.14.1"
+
+      - run: npm ci
+
+      - name: Admin typecheck
+        run: npm run typecheck --workspace=@vexgo/admin
+
+      - name: Admin lint
+        run: npm run lint --workspace=@vexgo/admin
+
+      - name: Admin build
+        run: npm run build --workspace=@vexgo/admin
+
+  web:
+    name: Web CI
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Pin npm
+        run: npm install --global npm@11.14.1
+
+      - name: Verify Node.js and npm versions
+        run: |
+          node --version
+          npm_version="$(npm --version)"
+          printf 'npm %s\n' "$npm_version"
+          test "$npm_version" = "11.14.1"
+
+      - run: npm ci
+
+      - name: Web typecheck
+        run: npm run typecheck --workspace=@vexgo/web
+
+      - name: Web lint
+        run: npm run lint --workspace=@vexgo/web
+
+      - name: Web build
+        run: npm run build --workspace=@vexgo/web
