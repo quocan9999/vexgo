@@ -32,6 +32,15 @@ export type Vehicle = Omit<VehicleListItem, 'vehicleType'> & {
   vehicleType: Pick<VehicleType, 'vehicleTypeId' | 'name' | 'description'>;
 };
 
+export type CreateVehicleInput = {
+  licensePlate: string;
+  busCompanyId: number;
+  vehicleTypeId: number;
+  status: VehicleStatus;
+};
+
+export type UpdateVehicleInput = Omit<CreateVehicleInput, 'status'>;
+
 export type VehicleListQuery = {
   page: number;
   pageSize: number;

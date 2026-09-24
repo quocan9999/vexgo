@@ -9,6 +9,7 @@ import {
   ChevronRight,
   Eye,
   LoaderCircle,
+  Plus,
   RefreshCw,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -29,6 +30,7 @@ import {
   type VehicleStatus,
 } from '../types/vehicle';
 import { VehicleDetailDialog } from './vehicle-detail-dialog';
+import { CreateVehicleDialog } from './create-vehicle-dialog';
 import '../vehicles.css';
 
 const PAGE_SIZE = 10;
@@ -160,6 +162,8 @@ export function VehiclesManagement() {
   const [selectedVehicleId, setSelectedVehicleId] = useState<number | null>(
     null,
   );
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const query = {
     page,
     pageSize: PAGE_SIZE,
@@ -254,6 +258,16 @@ export function VehiclesManagement() {
           label: vehicleType.name,
         }))
       : [];
+  const busCompanies =
+    filterOptions.busCompanies.status === 'success'
+      ? filterOptions.busCompanies.data
+      : [];
+  const vehicleTypes =
+    filterOptions.vehicleTypes.status === 'success'
+      ? filterOptions.vehicleTypes.data
+      : [];
+  const filterOptionsError =
+    filterLookupErrors.length > 0 ? filterLookupErrors.join(' ') : null;
   const isFiltered = Boolean(
     search.trim() ||
     status ||
@@ -272,6 +286,17 @@ export function VehiclesManagement() {
           </div>
           <div className="vehicles-intro-actions">
             <button
+              className="vehicles-button vehicle-form-primary"
+              onClick={() => {
+                setSuccessMessage(null);
+                setCreateDialogOpen(true);
+              }}
+              type="button"
+            >
+              <Plus aria-hidden="true" size={16} />
+              Thêm xe
+            </button>
+            <button
               aria-label="Làm mới danh sách xe"
               className="vehicles-button vehicles-refresh-button"
               disabled={state.status === 'loading'}
@@ -287,6 +312,12 @@ export function VehiclesManagement() {
             </button>
           </div>
         </header>
+
+        {successMessage && (
+          <p className="vehicles-success-message" role="status">
+            {successMessage}
+          </p>
+        )}
 
         <section aria-labelledby="vehicles-list-heading">
           <h2 className="vehicles-visually-hidden" id="vehicles-list-heading">
@@ -615,8 +646,31 @@ export function VehiclesManagement() {
 
         {selectedVehicleId !== null && (
           <VehicleDetailDialog
+            busCompanies={busCompanies}
             onClose={() => setSelectedVehicleId(null)}
+            onMutationSuccess={setSuccessMessage}
+            onRefresh={refresh}
+            onRetryOptions={retryFilterOptions}
+            optionsError={filterOptionsError}
+            optionsLoading={isFilterLookupLoading}
             vehicleId={selectedVehicleId}
+            vehicleTypes={vehicleTypes}
+          />
+        )}
+        {createDialogOpen && (
+          <CreateVehicleDialog
+            busCompanies={busCompanies}
+            onClose={() => setCreateDialogOpen(false)}
+            onCreated={() => {
+              setCreateDialogOpen(false);
+              setSuccessMessage('Xe đã được tạo thành công.');
+              setPage(1);
+              refresh();
+            }}
+            onRetryOptions={retryFilterOptions}
+            optionsError={filterOptionsError}
+            optionsLoading={isFilterLookupLoading}
+            vehicleTypes={vehicleTypes}
           />
         )}
       </div>

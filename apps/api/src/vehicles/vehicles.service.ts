@@ -1,6 +1,13 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import type { CreateVehicleDto } from './dto/create-vehicle.dto.js';
+import type { UpdateVehicleDto } from './dto/update-vehicle.dto.js';
+import type { UpdateVehicleStatusDto } from './dto/update-vehicle-status.dto.js';
 import type { VehicleQueryDto } from './dto/vehicle-query.dto.js';
 import type { VehicleSortField } from './dto/vehicle-query.dto.js';
 
@@ -66,6 +73,70 @@ function mapVehicleDetail(vehicle: VehicleDetailRecord) {
   };
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function isVehicleLicensePlateUniqueViolation(error: unknown): boolean {
+  if (
+    !(error instanceof Prisma.PrismaClientKnownRequestError) ||
+    error.code !== 'P2002'
+  ) {
+    return false;
+  }
+
+  const meta = error.meta;
+  if (!meta || (meta.modelName !== undefined && meta.modelName !== 'Xe')) {
+    return false;
+  }
+
+  const isPlateTarget = (target: unknown) =>
+    target === 'bienSoXe' || target === 'Xe_bienSoXe_key';
+  const target = meta.target;
+  if (
+    Array.isArray(target)
+      ? target.length === 1 && isPlateTarget(target[0])
+      : isPlateTarget(target)
+  ) {
+    return true;
+  }
+
+  const adapterError = meta.driverAdapterError;
+  if (!isRecord(adapterError) || !isRecord(adapterError.cause)) return false;
+
+  const cause = adapterError.cause;
+  if (
+    cause.kind !== 'UniqueConstraintViolation' ||
+    (cause.table !== undefined && cause.table !== 'Xe') ||
+    !isRecord(cause.constraint)
+  ) {
+    return false;
+  }
+
+  return cause.constraint.index === 'Xe_bienSoXe_key';
+}
+
+function vehicleNotFoundException() {
+  return new NotFoundException({
+    error: 'VEHICLE_NOT_FOUND',
+    message: 'Không tìm thấy xe.',
+  });
+}
+
+function busCompanyNotFoundException() {
+  return new NotFoundException({
+    error: 'BUS_COMPANY_NOT_FOUND',
+    message: 'Không tìm thấy nhà xe.',
+  });
+}
+
+function vehicleTypeNotFoundException() {
+  return new NotFoundException({
+    error: 'VEHICLE_TYPE_NOT_FOUND',
+    message: 'Không tìm thấy loại xe.',
+  });
+}
+
 @Injectable()
 export class VehiclesService {
   constructor(private readonly prisma: PrismaService) {}
@@ -124,12 +195,112 @@ export class VehiclesService {
     });
 
     if (!vehicle) {
-      throw new NotFoundException({
-        error: 'VEHICLE_NOT_FOUND',
-        message: 'Không tìm thấy xe.',
-      });
+      throw vehicleNotFoundException();
     }
 
     return { data: mapVehicleDetail(vehicle) };
+  }
+
+  private async assertReferences(busCompanyId: number, vehicleTypeId: number) {
+    const [busCompany, vehicleType] = await Promise.all([
+      this.prisma.nhaXe.findUnique({
+        where: { nhaXeId: busCompanyId },
+        select: { nhaXeId: true },
+      }),
+      this.prisma.loaiXe.findUnique({
+        where: { loaiXeId: vehicleTypeId },
+        select: { loaiXeId: true },
+      }),
+    ]);
+
+    if (!busCompany) throw busCompanyNotFoundException();
+    if (!vehicleType) throw vehicleTypeNotFoundException();
+  }
+
+  async create(input: CreateVehicleDto) {
+    await this.assertReferences(input.busCompanyId, input.vehicleTypeId);
+
+    try {
+      const vehicle = await this.prisma.xe.create({
+        data: {
+          bienSoXe: input.licensePlate,
+          nhaXeId: input.busCompanyId,
+          loaiXeId: input.vehicleTypeId,
+          trangThai: input.status,
+        },
+        select: VEHICLE_DETAIL_SELECT,
+      });
+
+      return { data: mapVehicleDetail(vehicle) };
+    } catch (error) {
+      if (isVehicleLicensePlateUniqueViolation(error)) {
+        throw new ConflictException({
+          error: 'VEHICLE_LICENSE_PLATE_EXISTS',
+          message: 'Biển số xe đã tồn tại.',
+        });
+      }
+
+      throw error;
+    }
+  }
+
+  async update(id: number, input: UpdateVehicleDto) {
+    const existingVehicle = await this.prisma.xe.findUnique({
+      where: { xeId: id },
+      select: { xeId: true },
+    });
+    if (!existingVehicle) throw vehicleNotFoundException();
+
+    await this.assertReferences(input.busCompanyId, input.vehicleTypeId);
+
+    try {
+      const vehicle = await this.prisma.xe.update({
+        where: { xeId: id },
+        data: {
+          bienSoXe: input.licensePlate,
+          nhaXeId: input.busCompanyId,
+          loaiXeId: input.vehicleTypeId,
+        },
+        select: VEHICLE_DETAIL_SELECT,
+      });
+
+      return { data: mapVehicleDetail(vehicle) };
+    } catch (error) {
+      if (isVehicleLicensePlateUniqueViolation(error)) {
+        throw new ConflictException({
+          error: 'VEHICLE_LICENSE_PLATE_EXISTS',
+          message: 'Biển số xe đã tồn tại.',
+        });
+      }
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2025'
+      ) {
+        throw vehicleNotFoundException();
+      }
+
+      throw error;
+    }
+  }
+
+  async updateStatus(id: number, input: UpdateVehicleStatusDto) {
+    try {
+      const vehicle = await this.prisma.xe.update({
+        where: { xeId: id },
+        data: { trangThai: input.status },
+        select: VEHICLE_DETAIL_SELECT,
+      });
+
+      return { data: mapVehicleDetail(vehicle) };
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2025'
+      ) {
+        throw vehicleNotFoundException();
+      }
+
+      throw error;
+    }
   }
 }

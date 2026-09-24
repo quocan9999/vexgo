@@ -10,9 +10,12 @@ import type {
   VehicleTypeListQuery,
 } from '@/features/vehicle-types/types/vehicle-type';
 import type {
+  CreateVehicleInput,
   PaginatedVehicles,
   Vehicle,
   VehicleListQuery,
+  VehicleStatus,
+  UpdateVehicleInput,
 } from '../types/vehicle';
 
 const FILTER_OPTION_PAGE_SIZE = 100;
@@ -28,10 +31,48 @@ function getErrorMessage(body: unknown, resource: string, status: number) {
   return `Không thể tải ${resource} (HTTP ${status}).`;
 }
 
+export type VehicleApiErrorDetail = {
+  field: string;
+  message: string;
+};
+
+export class VehicleApiError extends Error {
+  constructor(
+    message: string,
+    readonly code?: string,
+    readonly details: VehicleApiErrorDetail[] = [],
+  ) {
+    super(message);
+    this.name = 'VehicleApiError';
+  }
+}
+
+function getApiErrorCode(body: unknown) {
+  return isRecord(body) && typeof body.error === 'string'
+    ? body.error
+    : undefined;
+}
+
+function getApiErrorDetails(body: unknown): VehicleApiErrorDetail[] {
+  if (!isRecord(body) || !Array.isArray(body.details)) return [];
+
+  return body.details.flatMap((detail) =>
+    isRecord(detail) &&
+    typeof detail.field === 'string' &&
+    typeof detail.message === 'string'
+      ? [{ field: detail.field, message: detail.message }]
+      : [],
+  );
+}
+
 async function readResponse(response: Response, resource: string) {
   const body: unknown = await response.json().catch(() => null);
   if (!response.ok) {
-    throw new Error(getErrorMessage(body, resource, response.status));
+    throw new VehicleApiError(
+      getErrorMessage(body, resource, response.status),
+      getApiErrorCode(body),
+      getApiErrorDetails(body),
+    );
   }
   return body;
 }
@@ -83,6 +124,60 @@ export async function getVehicleById(
   }
 
   return body.data as unknown as Vehicle;
+}
+
+async function mutateVehicle(
+  url: string,
+  method: 'POST' | 'PATCH',
+  input: CreateVehicleInput | UpdateVehicleInput | { status: VehicleStatus },
+  resource: string,
+): Promise<Vehicle> {
+  const response = await fetch(url, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+    cache: 'no-store',
+  });
+  const body = await readResponse(response, resource);
+
+  if (!isRecord(body) || !isRecord(body.data)) {
+    throw new Error('API trả về thông tin xe không hợp lệ.');
+  }
+
+  return body.data as unknown as Vehicle;
+}
+
+export function createVehicle(input: CreateVehicleInput): Promise<Vehicle> {
+  return mutateVehicle(
+    `${getApiBaseUrl()}/api/v1/vehicles`,
+    'POST',
+    input,
+    'tạo xe',
+  );
+}
+
+export function updateVehicle(
+  vehicleId: number,
+  input: UpdateVehicleInput,
+): Promise<Vehicle> {
+  return mutateVehicle(
+    `${getApiBaseUrl()}/api/v1/vehicles/${vehicleId}`,
+    'PATCH',
+    input,
+    'cập nhật xe',
+  );
+}
+
+export function updateVehicleStatus(
+  vehicleId: number,
+  status: VehicleStatus,
+): Promise<Vehicle> {
+  return mutateVehicle(
+    `${getApiBaseUrl()}/api/v1/vehicles/${vehicleId}/status`,
+    'PATCH',
+    { status },
+    'cập nhật trạng thái xe',
+  );
 }
 
 async function getAllPages<T>(

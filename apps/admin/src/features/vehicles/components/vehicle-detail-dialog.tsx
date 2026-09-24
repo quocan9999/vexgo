@@ -1,6 +1,6 @@
 'use client';
 
-import { LoaderCircle, X } from 'lucide-react';
+import { LoaderCircle, Pencil, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { getVehicleById } from '../services/vehicle-service';
 import {
@@ -8,6 +8,10 @@ import {
   type Vehicle,
   type VehicleStatus,
 } from '../types/vehicle';
+import type { BusCompany } from '@/features/bus-companies/types/bus-company';
+import type { VehicleType } from '@/features/vehicle-types/types/vehicle-type';
+import { EditVehicleDialog } from './edit-vehicle-dialog';
+import { VehicleStatusConfirmationDialog } from './vehicle-status-confirmation-dialog';
 
 type VehicleDetailState =
   | { status: 'loading' }
@@ -43,14 +47,30 @@ function requestErrorMessage(error: unknown) {
 
 export function VehicleDetailDialog({
   vehicleId,
+  busCompanies,
+  vehicleTypes,
+  optionsLoading,
+  optionsError,
+  onRetryOptions,
+  onRefresh,
+  onMutationSuccess,
   onClose,
 }: {
   vehicleId: number;
+  busCompanies: BusCompany[];
+  vehicleTypes: VehicleType[];
+  optionsLoading: boolean;
+  optionsError: string | null;
+  onRetryOptions: () => void;
+  onRefresh: () => void;
+  onMutationSuccess: (message: string) => void;
   onClose: () => void;
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [state, setState] = useState<VehicleDetailState>({ status: 'loading' });
   const [retryCount, setRetryCount] = useState(0);
+  const [editing, setEditing] = useState(false);
+  const [confirmingStatus, setConfirmingStatus] = useState(false);
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -95,7 +115,9 @@ export function VehicleDetailDialog({
       onClick={(event) => {
         if (event.target === event.currentTarget) closeDialog();
       }}
-      onClose={onClose}
+      onClose={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
       ref={dialogRef}
     >
       <div className="vehicle-detail-dialog-content">
@@ -151,6 +173,25 @@ export function VehicleDetailDialog({
               </span>
               <h3>{state.vehicle.licensePlate}</h3>
             </div>
+            <div className="vehicle-detail-actions">
+              <button
+                className="vehicles-button"
+                onClick={() => setEditing(true)}
+                type="button"
+              >
+                <Pencil aria-hidden="true" size={15} />
+                Chỉnh sửa
+              </button>
+              <button
+                className="vehicles-button vehicle-form-primary"
+                onClick={() => setConfirmingStatus(true)}
+                type="button"
+              >
+                {state.vehicle.status === 'HOAT_DONG'
+                  ? 'Chuyển sang bảo trì'
+                  : 'Đưa vào hoạt động'}
+              </button>
+            </div>
             <dl className="vehicle-detail-fields">
               <div>
                 <dt>Nhà xe</dt>
@@ -182,6 +223,35 @@ export function VehicleDetailDialog({
           </div>
         )}
       </div>
+      {state.status === 'success' && editing && (
+        <EditVehicleDialog
+          busCompanies={busCompanies}
+          onClose={() => setEditing(false)}
+          onUpdated={(vehicle) => {
+            setState({ status: 'success', vehicle });
+            setEditing(false);
+            onRefresh();
+            onMutationSuccess('Thông tin xe đã được cập nhật.');
+          }}
+          onRetryOptions={onRetryOptions}
+          optionsError={optionsError}
+          optionsLoading={optionsLoading}
+          vehicle={state.vehicle}
+          vehicleTypes={vehicleTypes}
+        />
+      )}
+      {state.status === 'success' && confirmingStatus && (
+        <VehicleStatusConfirmationDialog
+          onClose={() => setConfirmingStatus(false)}
+          onUpdated={(vehicle) => {
+            setState({ status: 'success', vehicle });
+            setConfirmingStatus(false);
+            onRefresh();
+            onMutationSuccess('Trạng thái xe đã được cập nhật.');
+          }}
+          vehicle={state.vehicle}
+        />
+      )}
     </dialog>
   );
 }
