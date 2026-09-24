@@ -1,8 +1,14 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import type { CreateVehicleTypeDto } from './dto/create-vehicle-type.dto.js';
 import type { VehicleTypeQueryDto } from './dto/vehicle-type-query.dto.js';
 import type { VehicleTypeSortField } from './dto/vehicle-type-query.dto.js';
+import type { UpdateVehicleTypeDto } from './dto/update-vehicle-type.dto.js';
 
 const VEHICLE_TYPE_SELECT = {
   loaiXeId: true,
@@ -33,6 +39,55 @@ function mapVehicleType(vehicleType: VehicleTypeRecord) {
     createdAt: vehicleType.createdAt.toISOString(),
     updatedAt: vehicleType.updatedAt.toISOString(),
   };
+}
+
+function isVehicleTypeNameUniqueViolation(error: unknown): boolean {
+  if (
+    !(error instanceof Prisma.PrismaClientKnownRequestError) ||
+    error.code !== 'P2002'
+  ) {
+    return false;
+  }
+
+  const target = error.meta?.target;
+  const isNameTarget = (value: unknown) =>
+    value === 'tenLoai' || value === 'LoaiXe_index_0';
+
+  if (
+    Array.isArray(target)
+      ? target.length === 1 && isNameTarget(target[0])
+      : isNameTarget(target)
+  ) {
+    return true;
+  }
+
+  const adapterError = error.meta?.driverAdapterError;
+  if (
+    typeof adapterError !== 'object' ||
+    adapterError === null ||
+    !('cause' in adapterError)
+  ) {
+    return false;
+  }
+
+  const cause = adapterError.cause;
+  if (
+    typeof cause !== 'object' ||
+    cause === null ||
+    !('kind' in cause) ||
+    cause.kind !== 'UniqueConstraintViolation' ||
+    !('constraint' in cause)
+  ) {
+    return false;
+  }
+
+  const constraint = cause.constraint;
+  return (
+    typeof constraint === 'object' &&
+    constraint !== null &&
+    'index' in constraint &&
+    constraint.index === 'LoaiXe_index_0'
+  );
 }
 
 @Injectable()
@@ -90,5 +145,59 @@ export class VehicleTypesService {
     }
 
     return { data: mapVehicleType(vehicleType) };
+  }
+
+  async create(input: CreateVehicleTypeDto) {
+    try {
+      const vehicleType = await this.prisma.loaiXe.create({
+        data: {
+          tenLoai: input.name,
+          moTa: input.description ?? null,
+        },
+        select: VEHICLE_TYPE_SELECT,
+      });
+
+      return { data: mapVehicleType(vehicleType) };
+    } catch (error) {
+      if (isVehicleTypeNameUniqueViolation(error)) {
+        throw new ConflictException({
+          error: 'VEHICLE_TYPE_NAME_EXISTS',
+          message: 'Tên loại xe đã tồn tại.',
+        });
+      }
+      throw error;
+    }
+  }
+
+  async update(id: number, input: UpdateVehicleTypeDto) {
+    try {
+      const vehicleType = await this.prisma.loaiXe.update({
+        where: { loaiXeId: id },
+        data: {
+          tenLoai: input.name,
+          moTa: input.description ?? null,
+        },
+        select: VEHICLE_TYPE_SELECT,
+      });
+
+      return { data: mapVehicleType(vehicleType) };
+    } catch (error) {
+      if (isVehicleTypeNameUniqueViolation(error)) {
+        throw new ConflictException({
+          error: 'VEHICLE_TYPE_NAME_EXISTS',
+          message: 'Tên loại xe đã tồn tại.',
+        });
+      }
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2025'
+      ) {
+        throw new NotFoundException({
+          error: 'VEHICLE_TYPE_NOT_FOUND',
+          message: 'Không tìm thấy loại xe.',
+        });
+      }
+      throw error;
+    }
   }
 }

@@ -9,6 +9,8 @@ import {
   ChevronRight,
   Eye,
   LoaderCircle,
+  Pencil,
+  Plus,
   RefreshCw,
   X,
 } from 'lucide-react';
@@ -20,6 +22,7 @@ import {
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
 import { useVehicleTypes } from '../hooks/use-vehicle-types';
 import { getVehicleTypeById } from '../services/vehicle-type-service';
+import { VehicleTypeFormDialog } from './vehicle-type-form-dialog';
 import type {
   SortDirection,
   VehicleType,
@@ -87,15 +90,19 @@ type VehicleTypeDetailState =
 function VehicleTypeDetails({
   vehicleTypeId,
   onClose,
+  onUpdated,
 }: {
   vehicleTypeId: number;
   onClose: () => void;
+  onUpdated: () => void;
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [detailState, setDetailState] = useState<VehicleTypeDetailState>({
     status: 'loading',
   });
   const [retryCount, setRetryCount] = useState(0);
+  const [isEditing, setIsEditing] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -131,88 +138,128 @@ function VehicleTypeDetails({
     setRetryCount((count) => count + 1);
   }
 
+  function handleUpdated(vehicleType: VehicleType) {
+    setDetailState({ status: 'success', vehicleType });
+    setIsEditing(false);
+    setSuccessMessage(`Đã cập nhật loại xe “${vehicleType.name}”.`);
+    onUpdated();
+  }
+
   return (
-    <dialog
-      aria-describedby="vehicle-type-detail-description"
-      aria-labelledby="vehicle-type-detail-title"
-      aria-modal="true"
-      className="vehicle-type-dialog"
-      onClick={(event) => {
-        if (event.target === event.currentTarget) {
-          (event.currentTarget as HTMLDialogElement).close();
-        }
-      }}
-      onClose={onClose}
-      ref={dialogRef}
-    >
-      <div className="vehicle-type-dialog-content">
-        <div className="vehicle-type-dialog-heading">
-          <div>
-            <p className="vehicle-types-eyebrow">DANH MỤC PHƯƠNG TIỆN</p>
-            <h2 id="vehicle-type-detail-title">Chi tiết loại xe</h2>
-          </div>
-          <form method="dialog">
-            <button
-              aria-label="Đóng chi tiết loại xe"
-              className="vehicle-types-icon-button"
-              type="submit"
-            >
-              <X aria-hidden="true" size={19} />
-            </button>
-          </form>
-        </div>
-        <p className="vehicle-type-dialog-description" id="vehicle-type-detail-description">
-          Thông tin loại xe được tải từ dữ liệu hiện tại của hệ thống.
-        </p>
-
-        {detailState.status === 'loading' && (
-          <div className="vehicle-type-detail-state" role="status">
-            <LoaderCircle
-              aria-hidden="true"
-              className="vehicle-types-spinner"
-              size={20}
-            />
-            Đang tải thông tin loại xe…
-          </div>
-        )}
-
-        {detailState.status === 'error' && (
-          <div className="vehicle-type-detail-error" role="alert">
-            <p>{detailState.message}</p>
-            <button className="vehicle-types-button" onClick={retry} type="button">
-              Thử lại
-            </button>
-          </div>
-        )}
-
-        {detailState.status === 'success' && (
-          <div className="vehicle-type-detail-body">
-            <div className="vehicle-type-detail-title-row">
-              <span aria-hidden="true" className="vehicle-type-detail-icon">
-                <Bus size={19} />
-              </span>
-              <h3>{detailState.vehicleType.name}</h3>
+    <>
+      <dialog
+        aria-describedby="vehicle-type-detail-description"
+        aria-labelledby="vehicle-type-detail-title"
+        aria-modal="true"
+        className="vehicle-type-dialog"
+        onClick={(event) => {
+          if (event.target === event.currentTarget) {
+            (event.currentTarget as HTMLDialogElement).close();
+          }
+        }}
+        onClose={onClose}
+        ref={dialogRef}
+      >
+        <div className="vehicle-type-dialog-content">
+          <div className="vehicle-type-dialog-heading">
+            <div>
+              <p className="vehicle-types-eyebrow">DANH MỤC PHƯƠNG TIỆN</p>
+              <h2 id="vehicle-type-detail-title">Chi tiết loại xe</h2>
             </div>
-            <section aria-labelledby="vehicle-type-description-heading">
-              <h4 id="vehicle-type-description-heading">Mô tả</h4>
-              <p className="vehicle-type-description-value">
-                {detailState.vehicleType.description || 'Chưa có mô tả'}
-              </p>
-            </section>
-            <dl className="vehicle-type-timestamps">
-              <div>
-                <dt>Ngày tạo</dt>
-                <dd>{timestampFormat(detailState.vehicleType.createdAt)}</dd>
-              </div>
-              <div>
-                <dt>Cập nhật lần cuối</dt>
-                <dd>{timestampFormat(detailState.vehicleType.updatedAt)}</dd>
-              </div>
-            </dl>
+            <form method="dialog">
+              <button
+                aria-label="Đóng chi tiết loại xe"
+                className="vehicle-types-icon-button"
+                type="submit"
+              >
+                <X aria-hidden="true" size={19} />
+              </button>
+            </form>
           </div>
-        )}
-      </div>
-    </dialog>
+          <p
+            className="vehicle-type-dialog-description"
+            id="vehicle-type-detail-description"
+          >
+            Thông tin loại xe được tải từ dữ liệu hiện tại của hệ thống.
+          </p>
+
+          {detailState.status === 'loading' && (
+            <div className="vehicle-type-detail-state" role="status">
+              <LoaderCircle
+                aria-hidden="true"
+                className="vehicle-types-spinner"
+                size={20}
+              />
+              Đang tải thông tin loại xe…
+            </div>
+          )}
+
+          {detailState.status === 'error' && (
+            <div className="vehicle-type-detail-error" role="alert">
+              <p>{detailState.message}</p>
+              <button
+                className="vehicle-types-button"
+                onClick={retry}
+                type="button"
+              >
+                Thử lại
+              </button>
+            </div>
+          )}
+
+          {detailState.status === 'success' && (
+            <div className="vehicle-type-detail-body">
+              {successMessage && (
+                <div className="vehicle-type-detail-success" role="status">
+                  {successMessage}
+                </div>
+              )}
+              <div className="vehicle-type-detail-title-row">
+                <span aria-hidden="true" className="vehicle-type-detail-icon">
+                  <Bus size={19} />
+                </span>
+                <h3>{detailState.vehicleType.name}</h3>
+              </div>
+              <button
+                className="vehicle-types-button vehicle-type-edit-button"
+                onClick={() => {
+                  setSuccessMessage(null);
+                  setIsEditing(true);
+                }}
+                type="button"
+              >
+                <Pencil aria-hidden="true" size={15} />
+                Chỉnh sửa
+              </button>
+              <section aria-labelledby="vehicle-type-description-heading">
+                <h4 id="vehicle-type-description-heading">Mô tả</h4>
+                <p className="vehicle-type-description-value">
+                  {detailState.vehicleType.description || 'Chưa có mô tả'}
+                </p>
+              </section>
+              <dl className="vehicle-type-timestamps">
+                <div>
+                  <dt>Ngày tạo</dt>
+                  <dd>{timestampFormat(detailState.vehicleType.createdAt)}</dd>
+                </div>
+                <div>
+                  <dt>Cập nhật lần cuối</dt>
+                  <dd>{timestampFormat(detailState.vehicleType.updatedAt)}</dd>
+                </div>
+              </dl>
+            </div>
+          )}
+        </div>
+      </dialog>
+      {isEditing && detailState.status === 'success' && (
+        <VehicleTypeFormDialog
+          mode="edit"
+          onClose={() => setIsEditing(false)}
+          onSaved={handleUpdated}
+          vehicleType={detailState.vehicleType}
+        />
+      )}
+    </>
   );
 }
 
@@ -223,6 +270,8 @@ export function VehicleTypesManagement() {
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [page, setPage] = useState(1);
   const [selectedVehicleTypeId, setSelectedVehicleTypeId] = useState<number | null>(null);
+  const [isCreating, setIsCreating] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const query = {
     page,
     pageSize: PAGE_SIZE,
@@ -256,6 +305,17 @@ export function VehicleTypesManagement() {
     refresh();
   }
 
+  function handleCreated(vehicleType: VehicleType) {
+    setIsCreating(false);
+    setPage(1);
+    setSuccessMessage(`Đã thêm loại xe “${vehicleType.name}”.`);
+    refresh();
+  }
+
+  function handleUpdated() {
+    refresh();
+  }
+
   const resultCount =
     state.status === 'success' ? state.result.meta.totalItems : null;
 
@@ -268,21 +328,40 @@ export function VehicleTypesManagement() {
             <h1 id="vehicle-types-heading">Loại xe</h1>
             <p>Tra cứu các loại xe đang được sử dụng trong hệ thống.</p>
           </div>
-          <button
-            aria-label="Làm mới danh sách loại xe"
-            className="vehicle-types-button vehicle-types-refresh-button"
-            disabled={state.status === 'loading'}
-            onClick={reload}
-            type="button"
-          >
-            <RefreshCw
-              aria-hidden="true"
-              className={state.status === 'loading' ? 'vehicle-types-spinner' : ''}
-              size={16}
-            />
-            Làm mới
-          </button>
+          <div className="vehicle-types-intro-actions">
+            <button
+              aria-label="Làm mới danh sách loại xe"
+              className="vehicle-types-button vehicle-types-refresh-button"
+              disabled={state.status === 'loading'}
+              onClick={reload}
+              type="button"
+            >
+              <RefreshCw
+                aria-hidden="true"
+                className={state.status === 'loading' ? 'vehicle-types-spinner' : ''}
+                size={16}
+              />
+              Làm mới
+            </button>
+            <button
+              className="vehicle-types-button vehicle-types-create-button"
+              onClick={() => {
+                setSuccessMessage(null);
+                setIsCreating(true);
+              }}
+              type="button"
+            >
+              <Plus aria-hidden="true" size={16} />
+              Thêm loại xe
+            </button>
+          </div>
         </header>
+
+        {successMessage && (
+          <div className="vehicle-types-success" role="status">
+            {successMessage} Danh sách đã được cập nhật.
+          </div>
+        )}
 
         <section aria-labelledby="vehicle-types-list-heading">
           <h2 className="vehicle-types-visually-hidden" id="vehicle-types-list-heading">
@@ -531,10 +610,18 @@ export function VehicleTypesManagement() {
           </div>
         </section>
       </div>
+      {isCreating && (
+        <VehicleTypeFormDialog
+          mode="create"
+          onClose={() => setIsCreating(false)}
+          onSaved={handleCreated}
+        />
+      )}
       {selectedVehicleTypeId !== null && (
         <VehicleTypeDetails
           key={selectedVehicleTypeId}
           onClose={() => setSelectedVehicleTypeId(null)}
+          onUpdated={handleUpdated}
           vehicleTypeId={selectedVehicleTypeId}
         />
       )}

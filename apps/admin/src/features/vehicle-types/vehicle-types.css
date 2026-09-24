@@ -33,6 +33,36 @@
   line-height: 1.55;
 }
 
+.vehicle-types-intro-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+.vehicle-types-create-button {
+  border-color: #cbdcf1;
+  background: #f7faff;
+  color: #174f96;
+}
+
+.vehicle-types-create-button:hover {
+  border-color: #b7cce6;
+  background: #eef5ff;
+}
+
+.vehicle-types-success,
+.vehicle-type-detail-success {
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid #cfe8dc;
+  border-radius: 9px;
+  background: #f2faf6;
+  color: #256b49;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
 .vehicle-types-panel {
   overflow: hidden;
   border: 1px solid #e4eaf2;
@@ -342,9 +372,96 @@
 }
 
 .vehicle-type-detail-title-row h3 {
+  min-width: 0;
   margin: 0;
   color: #1c2e48;
   font-size: 17px;
+  overflow-wrap: anywhere;
+}
+
+.vehicle-type-edit-button {
+  justify-self: start;
+}
+
+.vehicle-type-form {
+  display: grid;
+  gap: 17px;
+}
+
+.vehicle-type-form-field {
+  display: grid;
+  gap: 7px;
+}
+
+.vehicle-type-form-field label {
+  color: #344a65;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.vehicle-type-form-field input,
+.vehicle-type-form-field textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 11px;
+  border: 1px solid #dbe4ef;
+  border-radius: 8px;
+  background: #fff;
+  color: #243650;
+  font: inherit;
+  font-size: 12px;
+}
+
+.vehicle-type-form-field textarea {
+  min-height: 104px;
+  resize: vertical;
+  line-height: 1.55;
+}
+
+.vehicle-type-form-field input:focus-visible,
+.vehicle-type-form-field textarea:focus-visible {
+  border-color: #7297c7;
+  outline: 3px solid rgb(57 117 194 / 18%);
+}
+
+.vehicle-type-form-field input[aria-invalid='true'],
+.vehicle-type-form-field textarea[aria-invalid='true'] {
+  border-color: #ca6a66;
+}
+
+.vehicle-type-form-field-error {
+  color: #a63732;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.vehicle-type-form-error {
+  padding: 11px 12px;
+  border: 1px solid #f0d0ce;
+  border-radius: 8px;
+  background: #fff7f6;
+  color: #a63732;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.vehicle-type-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+  padding-top: 3px;
+}
+
+.vehicle-type-form-submit {
+  border-color: #174f96;
+  background: #174f96;
+  color: #fff;
+}
+
+.vehicle-type-form-submit:hover:not(:disabled) {
+  border-color: #123e77;
+  background: #123e77;
+  color: #fff;
 }
 
 .vehicle-type-detail-body section h4 {
@@ -416,6 +533,7 @@
 
   .vehicle-types-mobile-card {
     display: grid;
+    min-width: 0;
     gap: 9px;
     padding: 14px;
     border: 1px solid #e7edf4;
@@ -424,16 +542,20 @@
   }
 
   .vehicle-types-mobile-card h3 {
+    min-width: 0;
     margin: 0;
     color: #1c2e48;
     font-size: 13px;
+    overflow-wrap: anywhere;
   }
 
   .vehicle-types-mobile-card p {
+    min-width: 0;
     margin: 0;
     color: #64758e;
     font-size: 11px;
     line-height: 1.55;
+    overflow-wrap: anywhere;
   }
 
   .vehicle-types-mobile-card > span {
@@ -466,12 +588,45 @@
     align-items: flex-start;
     flex-direction: column;
   }
+
+  .vehicle-type-form-dialog .vehicle-type-dialog-description,
+  .vehicle-type-form-dialog .vehicle-type-form-error {
+    font-size: 14px;
+  }
+
+  .vehicle-type-form-dialog .vehicle-types-icon-button {
+    width: 44px;
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .vehicle-type-form-field label,
+  .vehicle-type-form-field-error {
+    font-size: 14px;
+  }
+
+  .vehicle-type-form-field input,
+  .vehicle-type-form-field textarea {
+    font-size: 16px;
+  }
+
+  .vehicle-type-form-actions .vehicle-types-button {
+    min-height: 44px;
+  }
 }
 
 @media (max-width: 420px) {
   .vehicle-types-intro {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .vehicle-types-intro-actions {
+    width: 100%;
+  }
+
+  .vehicle-types-intro-actions .vehicle-types-button {
+    flex: 1;
   }
 
   .vehicle-type-dialog-content {
