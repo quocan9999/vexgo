@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import '@/styles/admin-components.css';
 import '@/features/super-admin-dashboard/dashboard.css';
 import '@/features/bus-companies/bus-companies.css';
 import '@/features/admin-auth/admin-auth.css';

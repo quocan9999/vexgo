@@ -120,12 +120,9 @@ export function SuperAdminDashboard() {
   const activePercentage = totalStatusAccounts
     ? (activeAccounts / totalStatusAccounts) * 100
     : 0;
-  const apiMode =
-    process.env.NEXT_PUBLIC_ADMIN_DATA_SOURCE?.toLowerCase() === 'api';
-
   return (
-    <SuperAdminLayout activeSection="overview" apiMode={apiMode}>
-      <div className="dashboard-content">
+    <SuperAdminLayout activeSection="overview">
+      <div className="admin-page-content">
         <section aria-labelledby="page-title" className="page-intro">
           <div>
             <p className="eyebrow">TRUNG TÂM ĐIỀU HÀNH</p>
@@ -415,7 +412,7 @@ export function SuperAdminDashboard() {
           </div>
         </section>
 
-        <footer className="dashboard-footer">
+        <footer className="admin-page-footer">
           <span>© 2026 VexGo Platform</span>
           <span>
             <span className="footer-status-dot" />
