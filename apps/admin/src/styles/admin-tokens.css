@@ -1,0 +1,31 @@
+:root {
+  --admin-navy: #14233d;
+  --admin-blue: #1e40af;
+  --admin-blue-hover: #18368f;
+  --admin-blue-soft: #eff5ff;
+  --admin-ink: #17243b;
+  --admin-text-strong: #1c2e48;
+  --admin-text-muted: #5d6d84;
+  --admin-muted: #738096;
+  --admin-border: #e4e9f1;
+  --admin-canvas: #f6f8fb;
+  --admin-success: #1b9a70;
+  --admin-success-soft: #f0f8f3;
+  --admin-success-border: #d3eadc;
+  --admin-danger: #a63732;
+  --success: var(--admin-success);
+  --status-muted: #d8dee8;
+  --admin-radius-control: 8px;
+  --admin-radius-panel: 10px;
+  --admin-control-height: 37px;
+  --admin-font-size-2xs: 9px;
+  --admin-font-size-xs: 10px;
+  --admin-font-size-sm: 11px;
+  --admin-font-size-md: 12px;
+  --admin-font-size-base: 13px;
+  --admin-font-size-emphasis: 14px;
+  --admin-font-weight-regular: 450;
+  --admin-font-weight-medium: 600;
+  --admin-font-weight-semibold: 650;
+  --admin-font-weight-bold: 700;
+}

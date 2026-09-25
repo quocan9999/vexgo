@@ -6,7 +6,6 @@ import {
   ArrowUpDown,
   Building2,
   CheckCircle2,
-  ChevronLeft,
   ChevronRight,
   LoaderCircle,
   Plus,
@@ -15,6 +14,11 @@ import {
   X,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { AdminConfirmDialog } from '@/components/admin/admin-confirm-dialog';
+import { AdminDetailSheet } from '@/components/admin/admin-detail-sheet';
+import { AdminPageHeader } from '@/components/admin/admin-page-header';
+import { AdminPagination } from '@/components/admin/admin-pagination';
+import { AdminStatusBadge } from '@/components/admin/admin-status-badge';
 import {
   DateRangeFilter,
   FilterToolbar,
@@ -22,6 +26,7 @@ import {
   SelectFilter,
   type FilterOption,
 } from '@/components/data-filters/data-filters';
+import { Button } from '@/components/ui/button';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
 import { useBusCompanies } from '../hooks/use-bus-companies';
 import { CreateBusCompanyDialog } from './create-bus-company-dialog';
@@ -95,8 +100,6 @@ function CompanyDetails({
   onUpdated: (company: BusCompany) => void;
   onStatusUpdated: (company: BusCompany) => void;
 }) {
-  const dialogRef = useRef<HTMLDialogElement>(null);
-  const statusDialogRef = useRef<HTMLDialogElement>(null);
   const statusSubmittingRef = useRef(false);
   const [detailState, setDetailState] = useState<CompanyDetailState>({
     status: 'loading',
@@ -107,16 +110,6 @@ function CompanyDetails({
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [statusSubmitting, setStatusSubmitting] = useState(false);
   const [statusError, setStatusError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const dialog = dialogRef.current;
-    if (dialog && !dialog.open) dialog.showModal();
-  }, []);
-
-  useEffect(() => {
-    const dialog = statusDialogRef.current;
-    if (statusDialogOpen && dialog && !dialog.open) dialog.showModal();
-  }, [statusDialogOpen]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -197,20 +190,13 @@ function CompanyDetails({
 
   return (
     <>
-      <dialog
-        aria-labelledby="company-detail-title"
-        className="company-dialog"
-        onClick={(event) => {
-          if (event.target === event.currentTarget) {
-            (event.currentTarget as HTMLDialogElement).close();
-          }
-        }}
+      <AdminDetailSheet
+        ariaLabelledBy="company-detail-title"
         onClose={onClose}
-        ref={dialogRef}
       >
-        <div className="detail-panel">
-          <div className="detail-heading">
-            <div className="detail-heading-copy">
+        <>
+          <div className="admin-dialog-header">
+            <div className="admin-dialog-header__copy">
               <p className="eyebrow">HỒ SƠ NHÀ XE</p>
               <h2 id="company-detail-title">Thông tin nhà xe</h2>
             </div>
@@ -242,13 +228,13 @@ function CompanyDetails({
           {detailState.status === 'error' && (
             <div role="alert">
               <p>{detailState.message}</p>
-              <button
-                className="button button-secondary"
+              <Button
                 onClick={retry}
                 type="button"
+                variant="secondary"
               >
                 Thử lại
-              </button>
+              </Button>
             </div>
           )}
 
@@ -291,11 +277,15 @@ function CompanyDetails({
                   <div>
                     <dt>Trạng thái</dt>
                     <dd>
-                      <span
-                        className={`company-status-badge${detailState.company.status === 'HOAT_DONG' ? ' is-active' : ''}`}
+                      <AdminStatusBadge
+                        tone={
+                          detailState.company.status === 'HOAT_DONG'
+                            ? 'active'
+                            : 'muted'
+                        }
                       >
                         {statusLabel(detailState.company.status)}
-                      </span>
+                      </AdminStatusBadge>
                     </dd>
                   </div>
                   <div>
@@ -309,30 +299,29 @@ function CompanyDetails({
                 </dl>
               </section>
               <div className="detail-edit-actions">
-                <button
-                  className="button button-secondary"
+                <Button
                   onClick={() => {
                     setStatusError(null);
                     setStatusDialogOpen(true);
                   }}
                   type="button"
+                  variant="secondary"
                 >
                   {detailState.company.status === 'HOAT_DONG'
                     ? 'Tạm ngưng nhà xe'
                     : 'Kích hoạt lại'}
-                </button>
-                <button
-                  className="button button-primary"
+                </Button>
+                <Button
                   onClick={() => setEditDialogOpen(true)}
                   type="button"
                 >
                   Chỉnh sửa
-                </button>
+                </Button>
               </div>
             </>
           )}
-        </div>
-      </dialog>
+        </>
+      </AdminDetailSheet>
       {editDialogOpen && detailState.status === 'success' && (
         <EditBusCompanyDialog
           company={detailState.company}
@@ -341,30 +330,14 @@ function CompanyDetails({
         />
       )}
       {statusDialogOpen && detailState.status === 'success' && nextStatus && (
-        <dialog
-          aria-describedby="status-confirmation-description"
-          aria-busy={statusSubmitting}
-          aria-labelledby="status-confirmation-title"
-          className="company-dialog status-confirmation-dialog"
-          onCancel={(event) => {
-            if (statusSubmittingRef.current) {
-              event.preventDefault();
-              return;
-            }
-            setStatusDialogOpen(false);
-          }}
-          onClick={(event) => {
-            if (
-              event.target === event.currentTarget &&
-              !statusSubmittingRef.current
-            ) {
-              setStatusDialogOpen(false);
-            }
-          }}
+        <AdminConfirmDialog
+          ariaBusy={statusSubmitting}
+          ariaDescribedBy="status-confirmation-description"
+          ariaLabelledBy="status-confirmation-title"
           onClose={() => setStatusDialogOpen(false)}
-          ref={statusDialogRef}
+          preventDismiss={statusSubmitting}
         >
-          <div className="status-confirmation-panel">
+          <>
             <h2 id="status-confirmation-title">
               {nextStatus === 'TAM_NGUNG'
                 ? 'Tạm ngưng nhà xe này?'
@@ -375,18 +348,17 @@ function CompanyDetails({
                 ? 'Nhà xe sẽ được chuyển sang trạng thái Tạm ngưng. Thao tác này không xóa dữ liệu và có thể kích hoạt lại sau.'
                 : 'Nhà xe sẽ được chuyển sang trạng thái Đang hoạt động.'}
             </p>
-            {statusError && <p className="status-confirmation-error" role="alert">{statusError}</p>}
-            <div className="status-confirmation-actions">
-              <button
-                className="button button-secondary"
+            {statusError && <p className="admin-confirm-dialog__error" role="alert">{statusError}</p>}
+            <div className="admin-confirm-dialog__actions">
+              <Button
                 disabled={statusSubmitting}
                 onClick={() => setStatusDialogOpen(false)}
                 type="button"
+                variant="secondary"
               >
                 Hủy
-              </button>
-              <button
-                className="button button-primary"
+              </Button>
+              <Button
                 disabled={statusSubmitting}
                 onClick={confirmStatusChange}
                 type="button"
@@ -403,10 +375,10 @@ function CompanyDetails({
                   : nextStatus === 'TAM_NGUNG'
                     ? 'Tạm ngưng nhà xe'
                     : 'Kích hoạt lại'}
-              </button>
+              </Button>
             </div>
-          </div>
-        </dialog>
+          </>
+        </AdminConfirmDialog>
       )}
     </>
   );
@@ -519,36 +491,36 @@ export function BusCompaniesManagement() {
 
   return (
     <SuperAdminLayout activeSection="bus-companies">
-      <div className="dashboard-content">
-        <section aria-labelledby="page-title" className="page-intro">
-          <div>
-            <p className="eyebrow">ĐỐI TÁC NỀN TẢNG</p>
-            <h1 id="page-title">Quản lý nhà xe</h1>
-          </div>
-          <div className="page-intro-actions bus-company-page-actions">
-            <button
-              className="button button-primary"
+      <div className="admin-page-content">
+        <AdminPageHeader
+          actions={
+            <div className="page-intro-actions bus-company-page-actions">
+              <Button
               onClick={openCreateDialog}
               type="button"
-            >
-              <Plus aria-hidden="true" size={16} />
-              Thêm nhà xe
-            </button>
-            <button
-              className="button button-secondary"
+              >
+                <Plus aria-hidden="true" size={16} />
+                Thêm nhà xe
+              </Button>
+              <Button
               disabled={loading}
               onClick={refresh}
               type="button"
-            >
-              <RefreshCw
-                aria-hidden="true"
-                className={loading ? 'bus-company-refresh-spinner' : ''}
-                size={16}
-              />
-              Làm mới
-            </button>
-          </div>
-        </section>
+                variant="secondary"
+              >
+                <RefreshCw
+                  aria-hidden="true"
+                  className={loading ? 'bus-company-refresh-spinner' : ''}
+                  size={16}
+                />
+                Làm mới
+              </Button>
+            </div>
+          }
+          eyebrow="ĐỐI TÁC NỀN TẢNG"
+          title="Quản lý nhà xe"
+          titleId="page-title"
+        />
 
         {successMessage && (
           <div className="company-success-notice" role="status">
@@ -599,13 +571,13 @@ export function BusCompaniesManagement() {
                   <strong>Chưa tải được danh sách nhà xe</strong>
                   <p>{error}</p>
                 </div>
-                <button
-                  className="button button-secondary"
+                <Button
                   onClick={refresh}
                   type="button"
+                  variant="secondary"
                 >
                   Thử lại
-                </button>
+                </Button>
               </div>
             )}
 
@@ -701,11 +673,15 @@ export function BusCompaniesManagement() {
                             {company.contactInfo || '—'}
                           </td>
                           <td>
-                            <span
-                              className={`company-status-badge${company.status === 'HOAT_DONG' ? ' is-active' : ''}`}
+                            <AdminStatusBadge
+                              tone={
+                                company.status === 'HOAT_DONG'
+                                  ? 'active'
+                                  : 'muted'
+                              }
                             >
                               {statusLabel(company.status)}
-                            </span>
+                            </AdminStatusBadge>
                           </td>
                           <td>{timestampFormat(company.createdAt)}</td>
                           <td>{companyAction(company)}</td>
@@ -746,63 +722,21 @@ export function BusCompaniesManagement() {
                     </article>
                   ))}
                 </div>
-                <div className="table-pagination">
-                  <span className="pagination-summary">
-                    Hiển thị{' '}
-                    <strong>
-                      {(companyPage.meta.page - 1) * companyPage.meta.pageSize +
-                        1}
-                      –
-                      {Math.min(
-                        companyPage.meta.page * companyPage.meta.pageSize,
-                        companyPage.meta.totalItems,
-                      )}
-                    </strong>{' '}
-                    trong{' '}
-                    <strong>
-                      {numberFormat(companyPage.meta.totalItems)}
-                    </strong>{' '}
-                    nhà xe
-                  </span>
-                  <div
-                    className="pagination-controls"
-                    aria-label="Phân trang nhà xe"
-                  >
-                    <span>
-                      Trang <strong>{companyPage.meta.page}</strong> /{' '}
-                      {companyPage.meta.totalPages}
-                    </span>
-                    <button
-                      aria-label="Trang trước"
-                      className="pagination-button"
-                      disabled={loading || companyPage.meta.page <= 1}
-                      onClick={() =>
-                        changePage(Math.max(1, companyPage.meta.page - 1))
-                      }
-                      type="button"
-                    >
-                      <ChevronLeft size={17} />
-                    </button>
-                    <button
-                      aria-label="Trang sau"
-                      className="pagination-button"
-                      disabled={
-                        loading ||
-                        companyPage.meta.page >= companyPage.meta.totalPages
-                      }
-                      onClick={() => changePage(companyPage.meta.page + 1)}
-                      type="button"
-                    >
-                      <ChevronRight size={17} />
-                    </button>
-                  </div>
-                </div>
+                <AdminPagination
+                  currentPage={companyPage.meta.page}
+                  disabled={loading}
+                  onPageChange={changePage}
+                  pageSize={companyPage.meta.pageSize}
+                  summaryLabel="nhà xe"
+                  totalItems={companyPage.meta.totalItems}
+                  totalPages={companyPage.meta.totalPages}
+                />
               </>
             )}
           </div>
         </section>
 
-        <footer className="dashboard-footer">
+        <footer className="admin-page-footer">
           <span>© 2026 VexGo Platform</span>
         </footer>
       </div>

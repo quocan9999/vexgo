@@ -1,7 +1,9 @@
 'use client';
 
 import { LoaderCircle, X } from 'lucide-react';
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useRef, useState, type FormEvent } from 'react';
+import { AdminFormDialog } from '@/components/admin/admin-form-dialog';
+import { Button } from '@/components/ui/button';
 import {
   BusCompanyApiError,
   updateBusCompany,
@@ -55,11 +57,6 @@ export function EditBusCompanyDialog({
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-
-  useEffect(() => {
-    const dialog = dialogRef.current;
-    if (dialog && !dialog.open) dialog.showModal();
-  }, []);
 
   function closeDialog() {
     if (!submittingRef.current) dialogRef.current?.close();
@@ -134,21 +131,15 @@ export function EditBusCompanyDialog({
   }
 
   return (
-    <dialog
-      aria-labelledby="edit-company-title"
-      className="company-dialog"
-      onCancel={(event) => {
-        if (submittingRef.current) event.preventDefault();
-      }}
-      onClick={(event) => {
-        if (event.target === event.currentTarget) closeDialog();
-      }}
+    <AdminFormDialog
+      ariaLabelledBy="edit-company-title"
+      dialogRef={dialogRef}
       onClose={onClose}
-      ref={dialogRef}
+      preventDismiss={submitting}
     >
-      <section className="bus-company-form-panel">
-        <div className="detail-heading bus-company-form-heading">
-          <div className="detail-heading-copy">
+      <>
+        <div className="admin-dialog-header">
+          <div className="admin-dialog-header__copy">
             <p className="eyebrow">HỒ SƠ NHÀ XE</p>
             <h2 id="edit-company-title">Chỉnh sửa nhà xe</h2>
           </div>
@@ -258,16 +249,15 @@ export function EditBusCompanyDialog({
           </div>
 
           <div className="bus-company-form-actions">
-            <button
-              className="button button-secondary"
+            <Button
               disabled={submitting}
               onClick={closeDialog}
               type="button"
+              variant="secondary"
             >
               Hủy
-            </button>
-            <button
-              className="button button-primary"
+            </Button>
+            <Button
               disabled={submitting}
               type="submit"
             >
@@ -279,10 +269,10 @@ export function EditBusCompanyDialog({
                 />
               )}
               {submitting ? 'Đang lưu…' : 'Lưu thay đổi'}
-            </button>
+            </Button>
           </div>
         </form>
-      </section>
-    </dialog>
+      </>
+    </AdminFormDialog>
   );
 }

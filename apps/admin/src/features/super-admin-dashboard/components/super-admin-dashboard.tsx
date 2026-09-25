@@ -122,7 +122,7 @@ export function SuperAdminDashboard() {
     : 0;
   return (
     <SuperAdminLayout activeSection="overview">
-      <div className="dashboard-content">
+      <div className="admin-page-content">
         <section aria-labelledby="page-title" className="page-intro">
           <div>
             <p className="eyebrow">TRUNG TÂM ĐIỀU HÀNH</p>
@@ -412,7 +412,7 @@ export function SuperAdminDashboard() {
           </div>
         </section>
 
-        <footer className="dashboard-footer">
+        <footer className="admin-page-footer">
           <span>© 2026 VexGo Platform</span>
           <span>
             <span className="footer-status-dot" />
