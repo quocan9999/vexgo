@@ -6,6 +6,16 @@ export type VehicleType = {
   updatedAt: string;
 };
 
+export type CreateVehicleTypeInput = {
+  name: string;
+  description: string | null;
+};
+
+export type UpdateVehicleTypeInput = {
+  name: string;
+  description: string | null;
+};
+
 export type VehicleTypeSortKey = 'name' | 'createdAt' | 'updatedAt';
 
 export type SortDirection = 'asc' | 'desc';

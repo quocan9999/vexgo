@@ -1,9 +1,27 @@
 import { getApiBaseUrl } from '@/lib/api-url';
 import type {
+  CreateVehicleTypeInput,
   PaginatedVehicleTypes,
   VehicleType,
   VehicleTypeListQuery,
+  UpdateVehicleTypeInput,
 } from '../types/vehicle-type';
+
+export type VehicleTypeApiErrorDetail = {
+  field: string;
+  message: string;
+};
+
+export class VehicleTypeApiError extends Error {
+  constructor(
+    message: string,
+    readonly code?: string,
+    readonly details: VehicleTypeApiErrorDetail[] = [],
+  ) {
+    super(message);
+    this.name = 'VehicleTypeApiError';
+  }
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
@@ -41,6 +59,68 @@ function getErrorMessage(body: unknown, status: number, resource: string) {
   }
 
   return `Không thể tải ${resource} (HTTP ${status}).`;
+}
+
+function getWriteError(body: unknown, status: number, action: string) {
+  const message =
+    isRecord(body) && typeof body.message === 'string'
+      ? body.message
+      : `Không thể ${action} loại xe (HTTP ${status}).`;
+  const code =
+    isRecord(body) && typeof body.error === 'string' ? body.error : undefined;
+  const details =
+    isRecord(body) && Array.isArray(body.details)
+      ? body.details.flatMap((detail) =>
+          isRecord(detail) &&
+          typeof detail.field === 'string' &&
+          typeof detail.message === 'string'
+            ? [{ field: detail.field, message: detail.message }]
+            : [],
+        )
+      : [];
+
+  return new VehicleTypeApiError(message, code, details);
+}
+
+function parseVehicleTypeResponse(body: unknown) {
+  if (!isRecord(body) || !isVehicleType(body.data)) {
+    throw new Error('API trả về thông tin loại xe không hợp lệ.');
+  }
+  return body.data;
+}
+
+export async function createVehicleType(
+  input: CreateVehicleTypeInput,
+): Promise<VehicleType> {
+  const response = await fetch(`${getApiBaseUrl()}/api/v1/vehicle-types`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+    cache: 'no-store',
+  });
+  const body: unknown = await response.json().catch(() => null);
+
+  if (!response.ok) throw getWriteError(body, response.status, 'tạo');
+  return parseVehicleTypeResponse(body);
+}
+
+export async function updateVehicleType(
+  vehicleTypeId: number,
+  input: UpdateVehicleTypeInput,
+): Promise<VehicleType> {
+  const response = await fetch(
+    `${getApiBaseUrl()}/api/v1/vehicle-types/${vehicleTypeId}`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+      cache: 'no-store',
+    },
+  );
+  const body: unknown = await response.json().catch(() => null);
+
+  if (!response.ok) throw getWriteError(body, response.status, 'cập nhật');
+  return parseVehicleTypeResponse(body);
 }
 
 export async function getVehicleTypes(
