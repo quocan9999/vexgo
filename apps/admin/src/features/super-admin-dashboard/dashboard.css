@@ -1034,8 +1034,8 @@ dialog:focus-visible {
 .company-table thead th {
   height: 40px;
   padding: 0 12px;
-  color: #8490a2;
-  font-size: 9px;
+  color: #5d6d84;
+  font-size: 12px;
   font-weight: 650;
   white-space: nowrap;
 }
@@ -1064,8 +1064,8 @@ dialog:focus-visible {
 .company-table tbody td {
   height: 59px;
   padding: 8px 12px;
-  color: #526077;
-  font-size: 10px;
+  color: #5d6d84;
+  font-size: 13px;
 }
 
 .company-table tbody th {
@@ -1078,7 +1078,9 @@ dialog:focus-visible {
 
 .company-name-cell {
   min-width: 190px;
-  color: #293851 !important;
+  color: #1c2e48 !important;
+  font-size: 14px;
+  font-weight: 650;
 }
 
 .company-name-content {
@@ -1120,15 +1122,15 @@ dialog:focus-visible {
 .company-contact-cell {
   max-width: 265px;
   overflow: hidden;
-  color: #77849a !important;
+  color: #5d6d84 !important;
   text-overflow: ellipsis;
 }
 
 .table-number {
   min-width: 28px;
   text-align: center;
-  color: #33435e;
-  font-size: 11px;
+  color: #1c2e48;
+  font-size: 14px;
   font-variant-numeric: tabular-nums;
   font-weight: 650;
 }
@@ -1165,7 +1167,7 @@ dialog:focus-visible {
   background: transparent;
   color: #3155b6;
   cursor: pointer;
-  font-size: 9px;
+  font-size: 13px;
   font-weight: 650;
   white-space: nowrap;
 }
@@ -1414,6 +1416,7 @@ dialog:focus-visible {
   margin: 0;
   color: #1c2a43;
   font-size: 19px;
+  font-weight: 700;
   letter-spacing: -0.5px;
 }
 
@@ -1448,9 +1451,10 @@ dialog:focus-visible {
 .detail-company-id {
   display: block;
   margin-top: 6px;
-  color: #8b96a8;
-  font-size: 10px;
+  color: #5d6d84;
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
+  font-weight: 500;
 }
 
 .detail-section {
@@ -1489,8 +1493,9 @@ dialog:focus-visible {
 }
 
 .detail-field-label {
-  color: #8b96a8;
-  font-size: 9px;
+  color: #5d6d84;
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .detail-field-value {
@@ -1519,8 +1524,9 @@ dialog:focus-visible {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  color: #718098;
-  font-size: 10px;
+  color: #5d6d84;
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .detail-stats dt svg {

@@ -7,7 +7,7 @@
   border-radius: 999px;
   background: #f6f8fb;
   color: #68768b;
-  font-size: 9px;
+  font-size: 13px;
   font-weight: 650;
   white-space: nowrap;
 }
@@ -34,6 +34,12 @@
 
 .company-success-notice svg {
   flex: 0 0 auto;
+}
+
+.bus-company-page-actions > .button {
+  box-sizing: border-box;
+  width: 120px;
+  min-height: 37px;
 }
 
 .bus-company-form-panel {

@@ -525,7 +525,7 @@ export function BusCompaniesManagement() {
             <p className="eyebrow">ĐỐI TÁC NỀN TẢNG</p>
             <h1 id="page-title">Quản lý nhà xe</h1>
           </div>
-          <div className="page-intro-actions">
+          <div className="page-intro-actions bus-company-page-actions">
             <button
               className="button button-primary"
               onClick={openCreateDialog}
