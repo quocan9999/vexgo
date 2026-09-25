@@ -518,7 +518,7 @@ export function BusCompaniesManagement() {
   }
 
   return (
-    <SuperAdminLayout activeSection="bus-companies" apiMode>
+    <SuperAdminLayout activeSection="bus-companies">
       <div className="dashboard-content">
         <section aria-labelledby="page-title" className="page-intro">
           <div>

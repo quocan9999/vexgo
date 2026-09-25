@@ -107,12 +107,18 @@ dialog:focus-visible {
   letter-spacing: 1.25px;
 }
 
+.sidebar-divider {
+  width: calc(100% - 8px);
+  align-self: center;
+  margin-top: 30px;
+  border-top: 1px solid rgb(255 255 255 / 10%);
+}
+
 .sidebar-nav-group {
   margin-top: 56px;
 }
 
-.sidebar-label,
-.platform-label {
+.sidebar-label {
   margin: 0 10px 13px;
   color: #95a4bc;
   font-size: 9px;
@@ -178,18 +184,6 @@ dialog:focus-visible {
   margin-top: auto;
 }
 
-.platform-card {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 14px 12px;
-  border: 1px solid rgb(255 255 255 / 9%);
-  border-radius: 10px;
-  background: rgb(255 255 255 / 4%);
-}
-
-.platform-pulse,
-.environment-dot,
 .updated-dot,
 .footer-status-dot {
   width: 7px;
@@ -197,28 +191,6 @@ dialog:focus-visible {
   flex: 0 0 7px;
   border-radius: 50%;
   background: #51c49a;
-}
-
-.platform-pulse {
-  margin-top: 5px;
-  box-shadow: 0 0 0 4px rgb(81 196 154 / 14%);
-}
-
-.platform-card > div {
-  display: grid;
-  gap: 5px;
-}
-
-.platform-label {
-  margin: 0;
-  font-size: 8px;
-  letter-spacing: 0.85px;
-}
-
-.platform-card strong {
-  color: #f4f7fc;
-  font-size: 12px;
-  font-weight: 600;
 }
 
 .sidebar-profile {
@@ -229,8 +201,7 @@ dialog:focus-visible {
   border-top: 1px solid rgb(255 255 255 / 10%);
 }
 
-.profile-avatar,
-.topbar-avatar {
+.profile-avatar {
   display: grid;
   width: 34px;
   height: 34px;
@@ -279,7 +250,6 @@ dialog:focus-visible {
 }
 
 .topbar-left,
-.topbar-actions,
 .breadcrumb {
   display: flex;
   align-items: center;
@@ -298,44 +268,6 @@ dialog:focus-visible {
 
 .breadcrumb-slash {
   color: #bdc5d0;
-}
-
-.topbar-actions {
-  gap: 14px;
-}
-
-.environment-badge {
-  display: inline-flex;
-  min-height: 28px;
-  align-items: center;
-  gap: 7px;
-  padding: 0 10px;
-  border: 1px solid #e5ebf3;
-  border-radius: 99px;
-  background: #fafbfd;
-  color: #647187;
-  font-size: 10px;
-  font-weight: 600;
-}
-
-.environment-badge .environment-dot {
-  width: 6px;
-  height: 6px;
-  flex-basis: 6px;
-  background: #d58c29;
-}
-
-.environment-badge.is-api .environment-dot {
-  background: var(--success);
-}
-
-.topbar-avatar {
-  width: 32px;
-  height: 32px;
-  flex-basis: 32px;
-  border: 0;
-  background: #eaf0ff;
-  color: #2548a8;
 }
 
 .dashboard-content {
@@ -1616,7 +1548,6 @@ dialog:focus-visible {
   .brand-copy,
   .sidebar-label,
   .sidebar-link > span:last-child,
-  .platform-card > div,
   .profile-copy {
     display: none;
   }
@@ -1647,18 +1578,6 @@ dialog:focus-visible {
   .sidebar-bottom {
     justify-items: center;
     width: 100%;
-  }
-
-  .platform-card {
-    justify-content: center;
-    width: 43px;
-    height: 43px;
-    align-items: center;
-    padding: 0;
-  }
-
-  .platform-pulse {
-    margin: 0;
   }
 
   .sidebar-profile {
@@ -1751,7 +1670,6 @@ dialog:focus-visible {
   .brand-copy,
   .sidebar-label,
   .sidebar-link > span:last-child,
-  .platform-card > div,
   .profile-copy {
     display: flex;
   }
@@ -1782,17 +1700,6 @@ dialog:focus-visible {
   .sidebar-bottom {
     justify-items: stretch;
     width: auto;
-  }
-
-  .platform-card {
-    width: auto;
-    height: auto;
-    justify-content: flex-start;
-    padding: 14px 12px;
-  }
-
-  .platform-pulse {
-    margin-top: 5px;
   }
 
   .sidebar-profile {
@@ -1847,23 +1754,6 @@ dialog:focus-visible {
   .breadcrumb > span:first-child,
   .breadcrumb-slash {
     display: none;
-  }
-
-  .topbar-actions {
-    gap: 8px;
-  }
-
-  .environment-badge {
-    min-height: 26px;
-    padding: 0 8px;
-    font-size: 9px;
-  }
-
-  .topbar-avatar {
-    width: 29px;
-    height: 29px;
-    flex-basis: 29px;
-    font-size: 9px;
   }
 
   .dashboard-content {

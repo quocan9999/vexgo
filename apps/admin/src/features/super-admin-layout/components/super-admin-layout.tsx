@@ -1,24 +1,29 @@
 'use client';
 
-import { Building2, Database, LogOut, Menu, UsersRound, X } from 'lucide-react';
+import { Building2, Database, LogOut, Menu, X } from 'lucide-react';
 import Link from 'next/link';
 import { useState, type ReactNode } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { signOutDemoAdmin } from '@/features/admin-auth/services/demo-auth';
 
 type SuperAdminLayoutProps = {
   activeSection: 'overview' | 'bus-companies';
-  apiMode: boolean;
   children: ReactNode;
 };
 
 export function SuperAdminLayout({
   activeSection,
-  apiMode,
   children,
 }: SuperAdminLayoutProps) {
+  const pathname = usePathname();
   const router = useRouter();
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
+  const breadcrumbLabel =
+    pathname === '/'
+      ? 'Tổng quan'
+      : pathname.startsWith('/bus-companies')
+        ? 'Nhà xe'
+        : 'Quản trị nền tảng';
 
   function closeMobileNavigation() {
     setMobileNavigationOpen(false);
@@ -58,6 +63,7 @@ export function SuperAdminLayout({
             <small>SUPER ADMIN</small>
           </span>
         </Link>
+        <div aria-hidden="true" className="sidebar-divider" />
 
         <div className="sidebar-nav-group">
           <p className="sidebar-label">KHÔNG GIAN QUẢN TRỊ</p>
@@ -72,16 +78,6 @@ export function SuperAdminLayout({
                 <Database size={18} />
               </span>
               <span>Tổng quan</span>
-            </Link>
-            <Link
-              className="sidebar-link"
-              href={activeSection === 'overview' ? '#accounts' : '/#accounts'}
-              onClick={closeMobileNavigation}
-            >
-              <span className="sidebar-link-icon">
-                <UsersRound size={18} />
-              </span>
-              <span>Tài khoản</span>
             </Link>
             <Link
               aria-current={
@@ -100,13 +96,6 @@ export function SuperAdminLayout({
         </div>
 
         <div className="sidebar-bottom">
-          <div className="platform-card">
-            <span className="platform-pulse" aria-hidden="true" />
-            <div>
-              <span className="platform-label">PHẠM VI DỮ LIỆU</span>
-              <strong>Toàn hệ thống</strong>
-            </div>
-          </div>
           <div className="sidebar-profile">
             <span className="profile-avatar">SA</span>
             <span className="profile-copy">
@@ -146,17 +135,8 @@ export function SuperAdminLayout({
             <div className="breadcrumb">
               <span>VexGo</span>
               <span className="breadcrumb-slash">/</span>
-              <strong>Quản trị nền tảng</strong>
+              <strong>{breadcrumbLabel}</strong>
             </div>
-          </div>
-          <div className="topbar-actions">
-            <span className={`environment-badge${apiMode ? ' is-api' : ''}`}>
-              <span className="environment-dot" />
-              {apiMode ? 'Kết nối API' : 'Dữ liệu minh họa'}
-            </span>
-            <span aria-hidden="true" className="topbar-avatar">
-              SA
-            </span>
           </div>
         </header>
         {children}

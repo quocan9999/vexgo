@@ -120,11 +120,8 @@ export function SuperAdminDashboard() {
   const activePercentage = totalStatusAccounts
     ? (activeAccounts / totalStatusAccounts) * 100
     : 0;
-  const apiMode =
-    process.env.NEXT_PUBLIC_ADMIN_DATA_SOURCE?.toLowerCase() === 'api';
-
   return (
-    <SuperAdminLayout activeSection="overview" apiMode={apiMode}>
+    <SuperAdminLayout activeSection="overview">
       <div className="dashboard-content">
         <section aria-labelledby="page-title" className="page-intro">
           <div>
