@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { PrismaModule } from './prisma/prisma.module.js';
 import { HealthModule } from './health/health.module.js';
 import { BusCompaniesModule } from './bus-companies/bus-companies.module.js';
+import { VehicleTypesModule } from './vehicle-types/vehicle-types.module.js';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { BusCompaniesModule } from './bus-companies/bus-companies.module.js';
     PrismaModule,
     HealthModule,
     BusCompaniesModule,
+    VehicleTypesModule,
   ],
 })
 export class AppModule {}
