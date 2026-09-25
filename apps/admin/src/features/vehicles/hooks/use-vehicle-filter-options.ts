@@ -7,7 +7,7 @@ import {
 } from '../services/vehicle-service';
 import type { VehicleFilterOption } from '../types/vehicle';
 
-type OptionState =
+export type VehicleFilterOptionState =
   | { status: 'loading' }
   | { status: 'error'; message: string }
   | { status: 'success'; options: VehicleFilterOption[] };
@@ -22,10 +22,10 @@ function errorMessage(error: unknown, resource: string) {
 }
 
 export function useVehicleFilterOptions() {
-  const [busCompanies, setBusCompanies] = useState<OptionState>({
+  const [busCompanies, setBusCompanies] = useState<VehicleFilterOptionState>({
     status: 'loading',
   });
-  const [vehicleTypes, setVehicleTypes] = useState<OptionState>({
+  const [vehicleTypes, setVehicleTypes] = useState<VehicleFilterOptionState>({
     status: 'loading',
   });
   const [retryCount, setRetryCount] = useState(0);

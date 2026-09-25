@@ -11,12 +11,25 @@ import type {
 import { getApiBaseUrl } from '@/lib/api-url';
 import { VEHICLE_STATUSES } from '../types/vehicle';
 import type {
+  CreateVehicleInput,
   PaginatedVehicles,
   VehicleDetail,
   VehicleFilterOption,
   VehicleListItem,
   VehicleListQuery,
+  UpdateVehicleInput,
+  VehicleStatus,
 } from '../types/vehicle';
+
+export class VehicleApiError extends Error {
+  constructor(
+    message: string,
+    readonly code?: string,
+  ) {
+    super(message);
+    this.name = 'VehicleApiError';
+  }
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -76,6 +89,77 @@ function getErrorMessage(body: unknown, status: number, resource: string) {
   }
 
   return `Không thể tải ${resource} (HTTP ${status}).`;
+}
+
+function getWriteError(body: unknown, status: number, action: string) {
+  const message =
+    isRecord(body) && typeof body.message === 'string'
+      ? body.message
+      : `Không thể ${action} xe (HTTP ${status}).`;
+  const code =
+    isRecord(body) && typeof body.error === 'string' ? body.error : undefined;
+
+  return new VehicleApiError(message, code);
+}
+
+function parseVehicleResponse(body: unknown) {
+  if (!isRecord(body) || !isVehicleDetail(body.data)) {
+    throw new Error('API trả về thông tin xe không hợp lệ.');
+  }
+  return body.data;
+}
+
+export async function createVehicle(
+  input: CreateVehicleInput,
+): Promise<VehicleDetail> {
+  const response = await fetch(`${getApiBaseUrl()}/api/v1/vehicles`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+    cache: 'no-store',
+  });
+  const body: unknown = await response.json().catch(() => null);
+
+  if (!response.ok) throw getWriteError(body, response.status, 'tạo');
+  return parseVehicleResponse(body);
+}
+
+export async function updateVehicle(
+  vehicleId: number,
+  input: UpdateVehicleInput,
+): Promise<VehicleDetail> {
+  const response = await fetch(
+    `${getApiBaseUrl()}/api/v1/vehicles/${vehicleId}`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+      cache: 'no-store',
+    },
+  );
+  const body: unknown = await response.json().catch(() => null);
+
+  if (!response.ok) throw getWriteError(body, response.status, 'cập nhật');
+  return parseVehicleResponse(body);
+}
+
+export async function updateVehicleStatus(
+  vehicleId: number,
+  status: VehicleStatus,
+): Promise<VehicleDetail> {
+  const response = await fetch(
+    `${getApiBaseUrl()}/api/v1/vehicles/${vehicleId}/status`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+      cache: 'no-store',
+    },
+  );
+  const body: unknown = await response.json().catch(() => null);
+
+  if (!response.ok) throw getWriteError(body, response.status, 'cập nhật');
+  return parseVehicleResponse(body);
 }
 
 export async function getVehicles(

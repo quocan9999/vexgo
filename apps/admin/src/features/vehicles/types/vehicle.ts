@@ -1,6 +1,15 @@
 export const VEHICLE_STATUSES = ['HOAT_DONG', 'BAO_TRI'] as const;
 
 export type VehicleStatus = (typeof VEHICLE_STATUSES)[number];
+export type CreateVehicleInput = {
+  licensePlate: string;
+  busCompanyId: number;
+  vehicleTypeId: number;
+  status: VehicleStatus;
+};
+
+export type UpdateVehicleInput = Omit<CreateVehicleInput, 'status'>;
+
 export type VehicleSortKey =
   'licensePlate' | 'status' | 'createdAt' | 'updatedAt';
 export type SortDirection = 'asc' | 'desc';

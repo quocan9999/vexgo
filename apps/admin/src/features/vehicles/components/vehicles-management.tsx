@@ -4,13 +4,16 @@ import {
   ArrowDown,
   ArrowUp,
   ArrowUpDown,
+  CheckCircle2,
   ChevronRight,
   LoaderCircle,
+  Plus,
   RefreshCw,
   Truck,
   X,
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { AdminConfirmDialog } from '@/components/admin/admin-confirm-dialog';
 import { AdminDetailSheet } from '@/components/admin/admin-detail-sheet';
 import { AdminPageHeader } from '@/components/admin/admin-page-header';
 import { AdminPagination } from '@/components/admin/admin-pagination';
@@ -23,7 +26,10 @@ import {
 } from '@/components/data-filters/data-filters';
 import { Button } from '@/components/ui/button';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
-import { getVehicleById } from '../services/vehicle-service';
+import {
+  getVehicleById,
+  updateVehicleStatus,
+} from '../services/vehicle-service';
 import {
   VEHICLE_STATUSES,
   type VehicleDetail,
@@ -34,6 +40,7 @@ import {
 } from '../types/vehicle';
 import { useVehicleFilterOptions } from '../hooks/use-vehicle-filter-options';
 import { useVehicles } from '../hooks/use-vehicles';
+import { VehicleFormDialog } from './vehicle-form-dialog';
 import '../vehicles.css';
 
 function timestampFormat(value: string) {
@@ -48,7 +55,7 @@ function statusLabel(status: VehicleStatus) {
     case 'HOAT_DONG':
       return 'Đang hoạt động';
     case 'BAO_TRI':
-      return 'Đang bảo trì';
+      return 'Bảo trì';
   }
 }
 
@@ -80,15 +87,25 @@ type DetailState =
 
 function VehicleDetails({
   vehicleId,
+  options,
   onClose,
+  onUpdated,
 }: {
   vehicleId: number;
+  options: ReturnType<typeof useVehicleFilterOptions>;
   onClose: () => void;
+  onUpdated: (action: 'edit' | 'status', vehicle: VehicleDetail) => void;
 }) {
+  const statusSubmittingRef = useRef(false);
   const [detailState, setDetailState] = useState<DetailState>({
     status: 'loading',
   });
   const [retryCount, setRetryCount] = useState(0);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [statusDialogOpen, setStatusDialogOpen] = useState(false);
+  const [statusSubmitting, setStatusSubmitting] = useState(false);
+  const [statusError, setStatusError] = useState<string | null>(null);
+  const [updateNotice, setUpdateNotice] = useState<string | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -123,115 +140,255 @@ function VehicleDetails({
     setRetryCount((count) => count + 1);
   }
 
+  function handleVehicleSaved(vehicle: VehicleDetail) {
+    setDetailState({ status: 'success', vehicle });
+    setEditDialogOpen(false);
+    setUpdateNotice(`Đã cập nhật xe ${vehicle.licensePlate}.`);
+    onUpdated('edit', vehicle);
+  }
+
+  async function confirmStatusChange() {
+    if (
+      detailState.status !== 'success' ||
+      !nextStatus ||
+      statusSubmittingRef.current
+    ) {
+      return;
+    }
+
+    statusSubmittingRef.current = true;
+    setStatusSubmitting(true);
+    setStatusError(null);
+
+    try {
+      const updatedVehicle = await updateVehicleStatus(vehicleId, nextStatus);
+      setDetailState({ status: 'success', vehicle: updatedVehicle });
+      setUpdateNotice(
+        `Đã chuyển xe ${updatedVehicle.licensePlate} sang trạng thái ${statusLabel(updatedVehicle.status)}.`,
+      );
+      setStatusDialogOpen(false);
+      onUpdated('status', updatedVehicle);
+    } catch (requestError: unknown) {
+      setStatusError(
+        requestError instanceof TypeError
+          ? 'Không thể kết nối đến máy chủ API. Vui lòng thử lại.'
+          : requestError instanceof Error
+            ? requestError.message
+            : 'Không thể cập nhật trạng thái xe. Vui lòng thử lại.',
+      );
+    } finally {
+      statusSubmittingRef.current = false;
+      setStatusSubmitting(false);
+    }
+  }
+
+  const nextStatus: VehicleStatus | null =
+    detailState.status === 'success'
+      ? detailState.vehicle.status === 'HOAT_DONG'
+        ? 'BAO_TRI'
+        : 'HOAT_DONG'
+      : null;
+
   return (
-    <AdminDetailSheet
-      ariaBusy={detailState.status === 'loading'}
-      ariaDescribedBy="vehicle-detail-description"
-      ariaLabelledBy="vehicle-detail-title"
-      onClose={onClose}
-    >
-      <div className="admin-dialog-header">
-        <div className="admin-dialog-header__copy">
-          <p className="eyebrow">QUẢN LÝ PHƯƠNG TIỆN</p>
-          <h2 id="vehicle-detail-title">Chi tiết xe</h2>
-          <p id="vehicle-detail-description">
-            Thông tin xe và các danh mục liên kết.
-          </p>
-        </div>
-        <form method="dialog">
-          <Button
-            aria-label="Đóng chi tiết xe"
-            className="vehicle-detail-close"
-            type="submit"
-            variant="secondary"
-          >
-            <X aria-hidden="true" size={17} />
-          </Button>
-        </form>
-      </div>
-
-      {detailState.status === 'loading' && (
-        <p className="vehicles-state" role="status">
-          <LoaderCircle
-            aria-hidden="true"
-            className="vehicles-spinner"
-            size={17}
-          />
-          Đang tải thông tin xe…
-        </p>
-      )}
-
-      {detailState.status === 'error' && (
-        <div className="vehicles-state" role="alert">
-          <p>{detailState.message}</p>
-          <Button onClick={retry} type="button" variant="secondary">
-            Thử lại
-          </Button>
-        </div>
-      )}
-
-      {detailState.status === 'success' && (
-        <div className="vehicle-detail-content">
-          <div className="vehicle-detail-hero">
-            <span className="vehicle-detail-mark" aria-hidden="true">
-              <Truck size={21} />
-            </span>
-            <div>
-              <h3>{detailState.vehicle.licensePlate}</h3>
-              <p>Xe #{detailState.vehicle.vehicleId}</p>
-            </div>
-            <AdminStatusBadge tone={statusTone(detailState.vehicle.status)}>
-              {statusLabel(detailState.vehicle.status)}
-            </AdminStatusBadge>
+    <>
+      <AdminDetailSheet
+        ariaBusy={detailState.status === 'loading'}
+        ariaDescribedBy="vehicle-detail-description"
+        ariaLabelledBy="vehicle-detail-title"
+        onClose={onClose}
+      >
+        <div className="admin-dialog-header">
+          <div className="admin-dialog-header__copy">
+            <p className="eyebrow">QUẢN LÝ PHƯƠNG TIỆN</p>
+            <h2 id="vehicle-detail-title">Chi tiết xe</h2>
+            <p id="vehicle-detail-description">
+              Thông tin xe và các danh mục liên kết.
+            </p>
           </div>
-
-          <section
-            aria-labelledby="vehicle-detail-company-heading"
-            className="vehicle-detail-section"
-          >
-            <h3 id="vehicle-detail-company-heading">Đơn vị và loại xe</h3>
-            <dl className="vehicle-detail-fields">
-              <div>
-                <dt>Nhà xe</dt>
-                <dd>{detailState.vehicle.busCompany.name}</dd>
-              </div>
-              <div>
-                <dt>Mã nhà xe</dt>
-                <dd>{detailState.vehicle.busCompany.code}</dd>
-              </div>
-              <div>
-                <dt>Loại xe</dt>
-                <dd>{detailState.vehicle.vehicleType.name}</dd>
-              </div>
-              <div>
-                <dt>Mô tả loại xe</dt>
-                <dd>
-                  {detailState.vehicle.vehicleType.description ||
-                    'Chưa có mô tả'}
-                </dd>
-              </div>
-            </dl>
-          </section>
-
-          <section
-            aria-labelledby="vehicle-detail-record-heading"
-            className="vehicle-detail-section"
-          >
-            <h3 id="vehicle-detail-record-heading">Thông tin hồ sơ</h3>
-            <dl className="vehicle-detail-fields">
-              <div>
-                <dt>Ngày tạo</dt>
-                <dd>{timestampFormat(detailState.vehicle.createdAt)}</dd>
-              </div>
-              <div>
-                <dt>Cập nhật lần cuối</dt>
-                <dd>{timestampFormat(detailState.vehicle.updatedAt)}</dd>
-              </div>
-            </dl>
-          </section>
+          <form method="dialog">
+            <Button
+              aria-label="Đóng chi tiết xe"
+              className="vehicle-detail-close"
+              type="submit"
+              variant="secondary"
+            >
+              <X aria-hidden="true" size={17} />
+            </Button>
+          </form>
         </div>
+
+        {detailState.status === 'loading' && (
+          <p className="vehicles-state" role="status">
+            <LoaderCircle
+              aria-hidden="true"
+              className="vehicles-spinner"
+              size={17}
+            />
+            Đang tải thông tin xe…
+          </p>
+        )}
+
+        {detailState.status === 'error' && (
+          <div className="vehicles-state" role="alert">
+            <p>{detailState.message}</p>
+            <Button onClick={retry} type="button" variant="secondary">
+              Thử lại
+            </Button>
+          </div>
+        )}
+
+        {detailState.status === 'success' && (
+          <div className="vehicle-detail-content">
+            {updateNotice && (
+              <div className="vehicles-success-notice" role="status">
+                <CheckCircle2 aria-hidden="true" size={16} />
+                <span>{updateNotice}</span>
+              </div>
+            )}
+            <div className="vehicle-detail-hero">
+              <span className="vehicle-detail-mark" aria-hidden="true">
+                <Truck size={21} />
+              </span>
+              <div>
+                <h3>{detailState.vehicle.licensePlate}</h3>
+                <p>Xe #{detailState.vehicle.vehicleId}</p>
+              </div>
+              <AdminStatusBadge tone={statusTone(detailState.vehicle.status)}>
+                {statusLabel(detailState.vehicle.status)}
+              </AdminStatusBadge>
+            </div>
+
+            <section
+              aria-labelledby="vehicle-detail-company-heading"
+              className="vehicle-detail-section"
+            >
+              <h3 id="vehicle-detail-company-heading">Đơn vị và loại xe</h3>
+              <dl className="vehicle-detail-fields">
+                <div>
+                  <dt>Nhà xe</dt>
+                  <dd>{detailState.vehicle.busCompany.name}</dd>
+                </div>
+                <div>
+                  <dt>Mã nhà xe</dt>
+                  <dd>{detailState.vehicle.busCompany.code}</dd>
+                </div>
+                <div>
+                  <dt>Loại xe</dt>
+                  <dd>{detailState.vehicle.vehicleType.name}</dd>
+                </div>
+                <div>
+                  <dt>Mô tả loại xe</dt>
+                  <dd>
+                    {detailState.vehicle.vehicleType.description ||
+                      'Chưa có mô tả'}
+                  </dd>
+                </div>
+              </dl>
+            </section>
+
+            <section
+              aria-labelledby="vehicle-detail-record-heading"
+              className="vehicle-detail-section"
+            >
+              <h3 id="vehicle-detail-record-heading">Thông tin hồ sơ</h3>
+              <dl className="vehicle-detail-fields">
+                <div>
+                  <dt>Ngày tạo</dt>
+                  <dd>{timestampFormat(detailState.vehicle.createdAt)}</dd>
+                </div>
+                <div>
+                  <dt>Cập nhật lần cuối</dt>
+                  <dd>{timestampFormat(detailState.vehicle.updatedAt)}</dd>
+                </div>
+              </dl>
+            </section>
+
+            <div className="vehicle-detail-actions">
+              <Button
+                onClick={() => {
+                  setStatusError(null);
+                  setStatusDialogOpen(true);
+                }}
+                type="button"
+                variant="secondary"
+              >
+                {detailState.vehicle.status === 'HOAT_DONG'
+                  ? 'Chuyển sang bảo trì'
+                  : 'Đưa vào hoạt động'}
+              </Button>
+              <Button onClick={() => setEditDialogOpen(true)} type="button">
+                Chỉnh sửa
+              </Button>
+            </div>
+          </div>
+        )}
+      </AdminDetailSheet>
+      {editDialogOpen && detailState.status === 'success' && (
+        <VehicleFormDialog
+          busCompanies={options.busCompanies}
+          onClose={() => setEditDialogOpen(false)}
+          onRetryOptions={options.retry}
+          onSaved={handleVehicleSaved}
+          vehicle={detailState.vehicle}
+          vehicleTypes={options.vehicleTypes}
+        />
       )}
-    </AdminDetailSheet>
+      {statusDialogOpen && detailState.status === 'success' && nextStatus && (
+        <AdminConfirmDialog
+          ariaBusy={statusSubmitting}
+          ariaDescribedBy="vehicle-status-confirmation-description"
+          ariaLabelledBy="vehicle-status-confirmation-title"
+          onClose={() => setStatusDialogOpen(false)}
+          preventDismiss={statusSubmitting}
+        >
+          <>
+            <h2 id="vehicle-status-confirmation-title">
+              {nextStatus === 'BAO_TRI'
+                ? 'Chuyển xe sang bảo trì?'
+                : 'Đưa xe vào hoạt động?'}
+            </h2>
+            <p id="vehicle-status-confirmation-description">
+              {nextStatus === 'BAO_TRI'
+                ? 'Xe sẽ được chuyển sang trạng thái Bảo trì. Thao tác này không xóa dữ liệu và có thể đưa xe hoạt động lại sau.'
+                : 'Xe sẽ được chuyển sang trạng thái Đang hoạt động.'}
+            </p>
+            {statusError && (
+              <p className="admin-confirm-dialog__error" role="alert">
+                {statusError}
+              </p>
+            )}
+            <div className="admin-confirm-dialog__actions">
+              <Button
+                disabled={statusSubmitting}
+                onClick={() => setStatusDialogOpen(false)}
+                type="button"
+                variant="secondary"
+              >
+                Hủy
+              </Button>
+              <Button
+                disabled={statusSubmitting}
+                onClick={confirmStatusChange}
+                type="button"
+              >
+                {statusSubmitting && (
+                  <LoaderCircle
+                    aria-hidden="true"
+                    className="vehicles-spinner"
+                    size={15}
+                  />
+                )}
+                {statusSubmitting
+                  ? 'Đang cập nhật…'
+                  : nextStatus === 'BAO_TRI'
+                    ? 'Chuyển sang bảo trì'
+                    : 'Đưa vào hoạt động'}
+              </Button>
+            </div>
+          </>
+        </AdminConfirmDialog>
+      )}
+    </>
   );
 }
 
@@ -278,6 +435,8 @@ export function VehiclesManagement() {
   const [selectedVehicleId, setSelectedVehicleId] = useState<number | null>(
     null,
   );
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [successNotice, setSuccessNotice] = useState<string | null>(null);
 
   const items = vehiclePage?.data ?? [];
   const hasActiveFilters = Boolean(
@@ -324,24 +483,37 @@ export function VehiclesManagement() {
       <div className="admin-page-content vehicles-page">
         <AdminPageHeader
           actions={
-            <Button
-              disabled={loading}
-              onClick={refresh}
-              type="button"
-              variant="secondary"
-            >
-              <RefreshCw
-                aria-hidden="true"
-                className={loading ? 'vehicles-spinner' : undefined}
-                size={15}
-              />
-              Làm mới
-            </Button>
+            <div className="page-intro-actions">
+              <Button onClick={() => setCreateDialogOpen(true)} type="button">
+                <Plus aria-hidden="true" size={16} />
+                Thêm xe
+              </Button>
+              <Button
+                disabled={loading}
+                onClick={refresh}
+                type="button"
+                variant="secondary"
+              >
+                <RefreshCw
+                  aria-hidden="true"
+                  className={loading ? 'vehicles-spinner' : undefined}
+                  size={15}
+                />
+                Làm mới
+              </Button>
+            </div>
           }
           eyebrow="QUẢN LÝ PHƯƠNG TIỆN"
           title="Danh sách xe"
           titleId="vehicles-title"
         />
+
+        {successNotice && (
+          <div className="vehicles-success-notice" role="status">
+            <CheckCircle2 aria-hidden="true" size={16} />
+            <span>{successNotice}</span>
+          </div>
+        )}
 
         <section
           aria-busy={loading}
@@ -603,8 +775,30 @@ export function VehiclesManagement() {
       {selectedVehicleId !== null && (
         <VehicleDetails
           key={selectedVehicleId}
+          onUpdated={(action, vehicle) => {
+            setSuccessNotice(
+              action === 'edit'
+                ? `Đã cập nhật xe ${vehicle.licensePlate}.`
+                : `Đã chuyển xe ${vehicle.licensePlate} sang trạng thái ${statusLabel(vehicle.status)}.`,
+            );
+            refresh();
+          }}
           onClose={() => setSelectedVehicleId(null)}
+          options={options}
           vehicleId={selectedVehicleId}
+        />
+      )}
+      {createDialogOpen && (
+        <VehicleFormDialog
+          busCompanies={options.busCompanies}
+          onClose={() => setCreateDialogOpen(false)}
+          onRetryOptions={options.retry}
+          onSaved={(vehicle) => {
+            setCreateDialogOpen(false);
+            setSuccessNotice(`Đã thêm xe ${vehicle.licensePlate}.`);
+            refresh();
+          }}
+          vehicleTypes={options.vehicleTypes}
         />
       )}
     </SuperAdminLayout>
