@@ -222,7 +222,7 @@
 .vehicle-detail-hero h3 {
   margin: 0;
   color: var(--admin-text-strong);
-  font-size: var(--admin-font-size-lg);
+  font-size: var(--admin-font-size-emphasis);
   font-weight: var(--admin-font-weight-bold);
   overflow-wrap: anywhere;
 }

@@ -163,7 +163,7 @@ export function VehicleTypeFormDialog({
                 : 'Nhập tên và mô tả cho loại xe mới.'}
             </p>
           </div>
-          <button
+          <Button
             aria-label={
               editing ? 'Đóng biểu mẫu chỉnh sửa loại xe' : 'Đóng biểu mẫu thêm loại xe'
             }
@@ -171,9 +171,10 @@ export function VehicleTypeFormDialog({
             disabled={submitting}
             onClick={closeDialog}
             type="button"
+            variant="secondary"
           >
             <X aria-hidden="true" size={19} />
-          </button>
+          </Button>
         </div>
 
         <form

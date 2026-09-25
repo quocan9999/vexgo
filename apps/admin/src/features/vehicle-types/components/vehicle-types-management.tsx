@@ -284,7 +284,12 @@ export function VehicleTypesManagement() {
   function sortButton(label: string, field: VehicleTypeSortKey) {
     return (
       <button
-        aria-label={`Sắp xếp theo ${label}`}
+        aria-label={`Sắp xếp theo ${label}${
+          sortBy === field
+            ? `, ${sortDirection === 'asc' ? 'tăng dần' : 'giảm dần'}`
+            : ''
+        }`}
+        aria-pressed={sortBy === field}
         className="vehicle-type-sort"
         onClick={() => sortVehicleTypes(field)}
         type="button"
@@ -409,6 +414,18 @@ export function VehicleTypesManagement() {
                             >
                               {sortButton('Ngày tạo', 'createdAt')}
                             </th>
+                            <th
+                              aria-sort={
+                                sortBy === 'updatedAt'
+                                  ? sortDirection === 'asc'
+                                    ? 'ascending'
+                                    : 'descending'
+                                  : 'none'
+                              }
+                              scope="col"
+                            >
+                              {sortButton('Cập nhật lần cuối', 'updatedAt')}
+                            </th>
                             <th scope="col">Thao tác</th>
                           </tr>
                         </thead>
@@ -420,11 +437,22 @@ export function VehicleTypesManagement() {
                                 {vehicleType.description || 'Chưa có mô tả'}
                               </td>
                               <td>{timestampFormat(vehicleType.createdAt)}</td>
+                              <td>{timestampFormat(vehicleType.updatedAt)}</td>
                               <td>{detailButton(vehicleType)}</td>
                             </tr>
                           ))}
                         </tbody>
                       </table>
+                    </div>
+
+                    <div
+                      aria-label="Sắp xếp danh sách loại xe"
+                      className="vehicle-types-mobile-sort"
+                      role="group"
+                    >
+                      {sortButton('Tên loại xe', 'name')}
+                      {sortButton('Ngày tạo', 'createdAt')}
+                      {sortButton('Cập nhật lần cuối', 'updatedAt')}
                     </div>
 
                     <div className="vehicle-types-mobile-list">
@@ -440,7 +468,10 @@ export function VehicleTypesManagement() {
                           <p>{vehicleType.description || 'Chưa có mô tả'}</p>
                           <div className="vehicle-type-mobile-footer">
                             <span>
-                              {timestampFormat(vehicleType.createdAt)}
+                              Ngày tạo: {timestampFormat(vehicleType.createdAt)}
+                            </span>
+                            <span>
+                              Cập nhật: {timestampFormat(vehicleType.updatedAt)}
                             </span>
                             {detailButton(vehicleType)}
                           </div>

@@ -324,7 +324,7 @@ export function VehicleSeatsManagement({ vehicleId }: { vehicleId: number }) {
 
   return (
     <SuperAdminLayout activeSection="vehicles">
-      <main className="admin-page-content vehicle-seats-page">
+      <div className="admin-page-content vehicle-seats-page">
         <AdminPageHeader
           actions={
             <div className="vehicle-seats-header-actions">
@@ -454,7 +454,7 @@ export function VehicleSeatsManagement({ vehicleId }: { vehicleId: number }) {
             </section>
           </>
         )}
-      </main>
+      </div>
 
       {workspace.status === 'success' && creatingSeat && (
         <VehicleSeatFormDialog
