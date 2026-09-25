@@ -561,20 +561,9 @@ export function BusCompaniesManagement() {
           aria-labelledby="companies-heading"
           className="companies-section"
         >
-          <div className="section-heading company-section-heading">
-            <div>
-              <h2 className="sr-only" id="companies-heading">
-                Danh sách nhà xe
-              </h2>
-            </div>
-            <span className="company-count-badge">
-              <Building2 size={15} />
-              {companyPage
-                ? numberFormat(companyPage.meta.totalItems)
-                : '—'}{' '}
-              nhà xe
-            </span>
-          </div>
+          <h2 className="sr-only" id="companies-heading">
+            Danh sách nhà xe
+          </h2>
 
           <div className="panel companies-panel">
             <FilterToolbar
@@ -704,7 +693,11 @@ export function BusCompaniesManagement() {
                             </span>
                           </th>
                           <td className="table-number">{company.code}</td>
-                          <td className="company-contact-cell">
+                          <td
+                            className="company-contact-cell"
+                            tabIndex={company.contactInfo ? 0 : undefined}
+                            title={company.contactInfo || undefined}
+                          >
                             {company.contactInfo || '—'}
                           </td>
                           <td>
@@ -766,7 +759,9 @@ export function BusCompaniesManagement() {
                       )}
                     </strong>{' '}
                     trong{' '}
-                    <strong>{numberFormat(companyPage.meta.totalItems)}</strong>{' '}
+                    <strong>
+                      {numberFormat(companyPage.meta.totalItems)}
+                    </strong>{' '}
                     nhà xe
                   </span>
                   <div
