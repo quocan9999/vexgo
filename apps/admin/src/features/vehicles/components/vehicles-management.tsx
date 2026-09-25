@@ -12,6 +12,7 @@ import {
   Truck,
   X,
 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { AdminConfirmDialog } from '@/components/admin/admin-confirm-dialog';
 import { AdminDetailSheet } from '@/components/admin/admin-detail-sheet';
@@ -96,6 +97,7 @@ function VehicleDetails({
   onClose: () => void;
   onUpdated: (action: 'edit' | 'status', vehicle: VehicleDetail) => void;
 }) {
+  const router = useRouter();
   const statusSubmittingRef = useRef(false);
   const [detailState, setDetailState] = useState<DetailState>({
     status: 'loading',
@@ -304,6 +306,15 @@ function VehicleDetails({
             </section>
 
             <div className="vehicle-detail-actions">
+              <Button
+                onClick={() =>
+                  router.push(`/vehicles/${detailState.vehicle.vehicleId}/seats`)
+                }
+                type="button"
+                variant="secondary"
+              >
+                Cấu hình ghế
+              </Button>
               <Button
                 onClick={() => {
                   setStatusError(null);

@@ -62,3 +62,17 @@ export type VehicleFilterOption = {
   id: number;
   label: string;
 };
+
+export type VehicleSeat = {
+  seatId: number;
+  seatNumber: string;
+  position: string | null;
+  vehicleId: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type VehicleSeatInput = {
+  seatNumber: string;
+  position: string | null;
+};

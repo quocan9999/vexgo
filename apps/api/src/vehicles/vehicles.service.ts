@@ -12,6 +12,8 @@ import type {
 } from './dto/vehicle-query.dto.js';
 import type { UpdateVehicleDto } from './dto/update-vehicle.dto.js';
 import type { UpdateVehicleStatusDto } from './dto/update-vehicle-status.dto.js';
+import type { CreateVehicleSeatDto } from './dto/create-vehicle-seat.dto.js';
+import type { UpdateVehicleSeatDto } from './dto/update-vehicle-seat.dto.js';
 
 const VEHICLE_LIST_SELECT = {
   xeId: true,
@@ -328,4 +330,231 @@ export class VehiclesService {
       throw error;
     }
   }
+
+  async findSeats(vehicleId: number) {
+    const vehicle = await this.prisma.xe.findUnique({
+      where: { xeId: vehicleId },
+      select: { xeId: true },
+    });
+    if (!vehicle) throw vehicleNotFound();
+
+    const seats = await this.prisma.ghe.findMany({
+      where: { xeId: vehicleId },
+      orderBy: { soGhe: 'asc' },
+      select: VEHICLE_SEAT_SELECT,
+    });
+
+    return {
+      data: seats.map(mapVehicleSeat),
+      meta: { totalItems: seats.length },
+    };
+  }
+
+  async createSeat(vehicleId: number, input: CreateVehicleSeatDto) {
+    const vehicle = await this.prisma.xe.findUnique({
+      where: { xeId: vehicleId },
+      select: { xeId: true },
+    });
+    if (!vehicle) throw vehicleNotFound();
+
+    try {
+      const seat = await this.prisma.ghe.create({
+        data: {
+          xeId: vehicleId,
+          soGhe: input.seatNumber,
+          viTri: input.position?.trim() || null,
+        },
+        select: VEHICLE_SEAT_SELECT,
+      });
+      return { data: mapVehicleSeat(seat) };
+    } catch (error) {
+      if (isVehicleSeatNumberUniqueViolation(error)) {
+        throw new ConflictException({
+          error: 'VEHICLE_SEAT_NUMBER_EXISTS',
+          message: 'Số ghế đã tồn tại trên xe này.',
+        });
+      }
+      throw error;
+    }
+  }
+
+  private async requireVehicleSeat(vehicleId: number, seatId: number) {
+    const seat = await this.prisma.ghe.findFirst({
+      where: { gheId: seatId, xeId: vehicleId },
+      select: { gheId: true },
+    });
+    if (!seat) throw vehicleSeatNotFound();
+    return seat;
+  }
+
+  private async requireUnusedVehicleSeat(seatId: number) {
+    const tripSeatCount = await this.prisma.gheChuyenXe.count({
+      where: { gheId: seatId },
+    });
+    if (tripSeatCount > 0) throw vehicleSeatInUse();
+  }
+
+  async updateSeat(
+    vehicleId: number,
+    seatId: number,
+    input: UpdateVehicleSeatDto,
+  ) {
+    const vehicle = await this.prisma.xe.findUnique({
+      where: { xeId: vehicleId },
+      select: { xeId: true },
+    });
+    if (!vehicle) throw vehicleNotFound();
+
+    await this.requireVehicleSeat(vehicleId, seatId);
+    await this.requireUnusedVehicleSeat(seatId);
+
+    try {
+      const seat = await this.prisma.ghe.update({
+        where: {
+          gheId: seatId,
+          xeId: vehicleId,
+          gheChuyenXes: { none: {} },
+        },
+        data: {
+          soGhe: input.seatNumber,
+          viTri: input.position?.trim() || null,
+        },
+        select: VEHICLE_SEAT_SELECT,
+      });
+      return { data: mapVehicleSeat(seat) };
+    } catch (error) {
+      if (isVehicleSeatNumberUniqueViolation(error)) {
+        throw new ConflictException({
+          error: 'VEHICLE_SEAT_NUMBER_EXISTS',
+          message: 'Số ghế đã tồn tại trên xe này.',
+        });
+      }
+      if (isMissingRecord(error)) {
+        const stillOwned = await this.prisma.ghe.findFirst({
+          where: { gheId: seatId, xeId: vehicleId },
+          select: { gheId: true },
+        });
+        if (!stillOwned) throw vehicleSeatNotFound();
+        throw vehicleSeatInUse();
+      }
+      throw error;
+    }
+  }
+
+  async deleteSeat(vehicleId: number, seatId: number): Promise<void> {
+    const vehicle = await this.prisma.xe.findUnique({
+      where: { xeId: vehicleId },
+      select: { xeId: true },
+    });
+    if (!vehicle) throw vehicleNotFound();
+
+    await this.requireVehicleSeat(vehicleId, seatId);
+    await this.requireUnusedVehicleSeat(seatId);
+
+    try {
+      await this.prisma.ghe.delete({
+        where: { gheId: seatId, xeId: vehicleId },
+        select: { gheId: true },
+      });
+    } catch (error) {
+      if (isForeignKeyViolation(error)) throw vehicleSeatInUse();
+      if (isMissingRecord(error)) throw vehicleSeatNotFound();
+      throw error;
+    }
+  }
+}
+
+const VEHICLE_SEAT_SELECT = {
+  gheId: true,
+  soGhe: true,
+  viTri: true,
+  xeId: true,
+  createdAt: true,
+  updatedAt: true,
+} satisfies Prisma.GheSelect;
+
+type VehicleSeatRecord = Prisma.GheGetPayload<{
+  select: typeof VEHICLE_SEAT_SELECT;
+}>;
+
+function mapVehicleSeat(seat: VehicleSeatRecord) {
+  return {
+    seatId: seat.gheId,
+    seatNumber: seat.soGhe,
+    position: seat.viTri,
+    vehicleId: seat.xeId,
+    createdAt: seat.createdAt.toISOString(),
+    updatedAt: seat.updatedAt.toISOString(),
+  };
+}
+
+function isForeignKeyViolation(error: unknown): boolean {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === 'P2003'
+  );
+}
+
+function isVehicleSeatNumberUniqueViolation(error: unknown): boolean {
+  if (
+    !(error instanceof Prisma.PrismaClientKnownRequestError) ||
+    error.code !== 'P2002'
+  ) {
+    return false;
+  }
+
+  const target = error.meta?.target;
+  const isSeatTarget = (value: unknown) =>
+    value === 'Ghe_index_1' || value === 'xeId_soGhe';
+  if (
+    Array.isArray(target)
+      ? target.length === 2 &&
+        target.includes('xeId') &&
+        target.includes('soGhe')
+      : isSeatTarget(target)
+  ) {
+    return true;
+  }
+
+  const adapterError = error.meta?.driverAdapterError;
+  if (
+    typeof adapterError !== 'object' ||
+    adapterError === null ||
+    !('cause' in adapterError)
+  ) {
+    return false;
+  }
+
+  const cause = adapterError.cause;
+  if (
+    typeof cause !== 'object' ||
+    cause === null ||
+    !('kind' in cause) ||
+    cause.kind !== 'UniqueConstraintViolation' ||
+    !('constraint' in cause)
+  ) {
+    return false;
+  }
+
+  const constraint = cause.constraint;
+  return (
+    typeof constraint === 'object' &&
+    constraint !== null &&
+    'index' in constraint &&
+    constraint.index === 'Ghe_index_1'
+  );
+}
+
+function vehicleSeatNotFound() {
+  return new NotFoundException({
+    error: 'VEHICLE_SEAT_NOT_FOUND',
+    message: 'Không tìm thấy ghế của xe.',
+  });
+}
+
+function vehicleSeatInUse() {
+  return new ConflictException({
+    error: 'VEHICLE_SEAT_IN_USE',
+    message: 'Ghế đã được sử dụng trong chuyến xe và không thể thay đổi.',
+  });
 }

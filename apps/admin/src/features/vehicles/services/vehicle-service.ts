@@ -19,6 +19,8 @@ import type {
   VehicleListQuery,
   UpdateVehicleInput,
   VehicleStatus,
+  VehicleSeat,
+  VehicleSeatInput,
 } from '../types/vehicle';
 
 export class VehicleApiError extends Error {
@@ -285,4 +287,114 @@ export async function getVehicleTypeFilterOptions(
     id: vehicleType.vehicleTypeId,
     label: vehicleType.name,
   }));
+}
+
+function isVehicleSeat(value: unknown): value is VehicleSeat {
+  return (
+    isRecord(value) &&
+    Number.isSafeInteger(value.seatId) &&
+    typeof value.seatNumber === 'string' &&
+    (typeof value.position === 'string' || value.position === null) &&
+    Number.isSafeInteger(value.vehicleId) &&
+    typeof value.createdAt === 'string' &&
+    typeof value.updatedAt === 'string'
+  );
+}
+
+export async function getVehicleSeats(
+  vehicleId: number,
+  signal?: AbortSignal,
+): Promise<VehicleSeat[]> {
+  const response = await fetch(
+    `${getApiBaseUrl()}/api/v1/vehicles/${vehicleId}/seats`,
+    { cache: 'no-store', signal },
+  );
+  const body: unknown = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    throw new Error(getErrorMessage(body, response.status, 'danh sách ghế'));
+  }
+  if (
+    !isRecord(body) ||
+    !Array.isArray(body.data) ||
+    !body.data.every(isVehicleSeat) ||
+    !isRecord(body.meta) ||
+    !Number.isSafeInteger(body.meta.totalItems) ||
+    body.meta.totalItems !== body.data.length
+  ) {
+    throw new Error('API trả về danh sách ghế không hợp lệ.');
+  }
+  return body.data;
+}
+
+function getVehicleSeatWriteError(
+  body: unknown,
+  status: number,
+  action: string,
+) {
+  const message =
+    isRecord(body) && typeof body.message === 'string'
+      ? body.message
+      : `Không thể ${action} ghế (HTTP ${status}).`;
+  const code =
+    isRecord(body) && typeof body.error === 'string' ? body.error : undefined;
+  return new VehicleApiError(message, code);
+}
+
+function parseVehicleSeatResponse(body: unknown): VehicleSeat {
+  if (!isRecord(body) || !isVehicleSeat(body.data)) {
+    throw new Error('API trả về thông tin ghế không hợp lệ.');
+  }
+  return body.data;
+}
+
+export async function createVehicleSeat(
+  vehicleId: number,
+  input: VehicleSeatInput,
+): Promise<VehicleSeat> {
+  const response = await fetch(
+    `${getApiBaseUrl()}/api/v1/vehicles/${vehicleId}/seats`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+      cache: 'no-store',
+    },
+  );
+  const body: unknown = await response.json().catch(() => null);
+  if (!response.ok) throw getVehicleSeatWriteError(body, response.status, 'thêm');
+  return parseVehicleSeatResponse(body);
+}
+
+export async function updateVehicleSeat(
+  vehicleId: number,
+  seatId: number,
+  input: VehicleSeatInput,
+): Promise<VehicleSeat> {
+  const response = await fetch(
+    `${getApiBaseUrl()}/api/v1/vehicles/${vehicleId}/seats/${seatId}`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+      cache: 'no-store',
+    },
+  );
+  const body: unknown = await response.json().catch(() => null);
+  if (!response.ok) throw getVehicleSeatWriteError(body, response.status, 'sửa');
+  return parseVehicleSeatResponse(body);
+}
+
+export async function deleteVehicleSeat(
+  vehicleId: number,
+  seatId: number,
+): Promise<void> {
+  const response = await fetch(
+    `${getApiBaseUrl()}/api/v1/vehicles/${vehicleId}/seats/${seatId}`,
+    { method: 'DELETE', cache: 'no-store' },
+  );
+  if (!response.ok) {
+    const body: unknown = await response.json().catch(() => null);
+    throw getVehicleSeatWriteError(body, response.status, 'xóa');
+  }
 }

@@ -1,7 +1,10 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   Patch,
   Post,
@@ -12,6 +15,12 @@ import { VehicleIdParamsDto } from './dto/vehicle-id-params.dto.js';
 import { VehicleQueryDto } from './dto/vehicle-query.dto.js';
 import { UpdateVehicleDto } from './dto/update-vehicle.dto.js';
 import { UpdateVehicleStatusDto } from './dto/update-vehicle-status.dto.js';
+import { CreateVehicleSeatDto } from './dto/create-vehicle-seat.dto.js';
+import {
+  VehicleSeatCollectionParamsDto,
+  VehicleSeatParamsDto,
+} from './dto/vehicle-seat-params.dto.js';
+import { UpdateVehicleSeatDto } from './dto/update-vehicle-seat.dto.js';
 import { VehiclesService } from './vehicles.service.js';
 
 @Controller('vehicles')
@@ -44,5 +53,36 @@ export class VehiclesController {
   @Get(':id')
   findOne(@Param() params: VehicleIdParamsDto) {
     return this.vehiclesService.findOne(params.id);
+  }
+
+  @Get(':vehicleId/seats')
+  findSeats(@Param() params: VehicleSeatCollectionParamsDto) {
+    return this.vehiclesService.findSeats(params.vehicleId);
+  }
+
+  @Post(':vehicleId/seats')
+  createSeat(
+    @Param() params: VehicleSeatCollectionParamsDto,
+    @Body() body: CreateVehicleSeatDto,
+  ) {
+    return this.vehiclesService.createSeat(params.vehicleId, body);
+  }
+
+  @Patch(':vehicleId/seats/:seatId')
+  updateSeat(
+    @Param() params: VehicleSeatParamsDto,
+    @Body() body: UpdateVehicleSeatDto,
+  ) {
+    return this.vehiclesService.updateSeat(
+      params.vehicleId,
+      params.seatId,
+      body,
+    );
+  }
+
+  @Delete(':vehicleId/seats/:seatId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  deleteSeat(@Param() params: VehicleSeatParamsDto) {
+    return this.vehiclesService.deleteSeat(params.vehicleId, params.seatId);
   }
 }
