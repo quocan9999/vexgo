@@ -1,13 +1,13 @@
 'use client';
 
-import { Bus, Building2, Database, LogOut, Menu, X } from 'lucide-react';
+import { Bus, Building2, Database, LogOut, Menu, Truck, X } from 'lucide-react';
 import Link from 'next/link';
 import { useState, type ReactNode } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { signOutDemoAdmin } from '@/features/admin-auth/services/demo-auth';
 
 type SuperAdminLayoutProps = {
-  activeSection: 'overview' | 'bus-companies' | 'vehicle-types';
+  activeSection: 'overview' | 'bus-companies' | 'vehicle-types' | 'vehicles';
   children: ReactNode;
 };
 
@@ -25,7 +25,9 @@ export function SuperAdminLayout({
         ? 'Nhà xe'
         : pathname.startsWith('/vehicle-types')
           ? 'Loại xe'
-          : 'Quản trị nền tảng';
+          : pathname.startsWith('/vehicles')
+            ? 'Xe'
+            : 'Quản trị nền tảng';
 
   function closeMobileNavigation() {
     setMobileNavigationOpen(false);
@@ -107,6 +109,17 @@ export function SuperAdminLayout({
               </span>
               <span>Loại xe</span>
             </Link>
+            <Link
+              aria-current={activeSection === 'vehicles' ? 'page' : undefined}
+              className={`sidebar-link${activeSection === 'vehicles' ? ' is-active' : ''}`}
+              href="/vehicles"
+              onClick={closeMobileNavigation}
+            >
+              <span className="sidebar-link-icon">
+                <Truck size={18} />
+              </span>
+              <span>Xe</span>
+            </Link>
           </nav>
         </div>
 
@@ -131,10 +144,7 @@ export function SuperAdminLayout({
         </div>
       </aside>
 
-      <main
-        className="admin-main"
-        id={activeSection}
-      >
+      <main className="admin-main" id={activeSection}>
         <header className="topbar">
           <div className="topbar-left">
             <button
