@@ -79,7 +79,7 @@ describe('RoutesService read operations', () => {
   ] as const)('maps %s sorting to %s', async (sortBy, field) => {
     await service.findAll(query({ sortBy, sortDirection: 'desc' }));
     expect(prisma.tuyenXe.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      orderBy: { [field]: 'desc' },
+      orderBy: [{ [field]: 'desc' }, { tuyenXeId: 'asc' }],
     }));
   });
 

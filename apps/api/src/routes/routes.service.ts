@@ -155,7 +155,10 @@ export class RoutesService {
     const [routes, totalItems] = await Promise.all([
       this.prisma.tuyenXe.findMany({
         where,
-        orderBy: { [sortFieldMap[query.sortBy]]: query.sortDirection ?? 'asc' },
+        orderBy: [
+          { [sortFieldMap[query.sortBy]]: query.sortDirection ?? 'asc' },
+          { tuyenXeId: 'asc' },
+        ],
         skip: (query.page - 1) * query.pageSize,
         take: query.pageSize,
         select: ROUTE_SELECT,
