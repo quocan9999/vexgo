@@ -257,27 +257,6 @@
   color: #9ca7b7;
 }
 
-.company-open-button {
-  display: inline-flex;
-  min-height: 30px;
-  align-items: center;
-  gap: 3px;
-  padding: 0 5px;
-  border: 0;
-  border-radius: 5px;
-  background: transparent;
-  color: #3155b6;
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 650;
-  white-space: nowrap;
-}
-
-.company-open-button:hover {
-  background: #f0f4ff;
-  color: #1d3d98;
-}
-
 .company-mobile-list {
   display: none;
 }
@@ -287,37 +266,6 @@
   color: #929daf;
   font-size: 9px;
   line-height: 1.5;
-}
-
-.table-skeleton {
-  display: grid;
-  padding: 6px 18px;
-}
-
-.table-skeleton-row {
-  display: grid;
-  min-height: 53px;
-  grid-template-columns: 1.3fr 1.5fr repeat(3, 0.35fr);
-  align-items: center;
-  gap: 15px;
-  border-bottom: 1px solid #f0f2f6;
-}
-
-.table-skeleton-row .skeleton {
-  height: 10px;
-}
-
-.skeleton-company {
-  width: 72%;
-}
-
-.skeleton-contact {
-  width: 83%;
-}
-
-.skeleton-number {
-  width: 28px;
-  justify-self: center;
 }
 
 .empty-state {
@@ -635,9 +583,9 @@
     font-variant-numeric: tabular-nums;
   }
 
-  .company-mobile-card .company-open-button {
-    justify-self: end;
-    min-height: 28px;
+  .company-mobile-actions {
+    display: flex;
+    justify-content: flex-end;
     margin-top: -7px;
   }
 
@@ -670,12 +618,6 @@
 
 .company-success-notice svg {
   flex: 0 0 auto;
-}
-
-.bus-company-page-actions > .button {
-  box-sizing: border-box;
-  width: 120px;
-  min-height: 37px;
 }
 
 .bus-company-form {
@@ -844,16 +786,6 @@
   animation: status-confirmation-spin 1s linear infinite;
 }
 
-.bus-company-refresh-spinner {
-  animation: bus-company-refresh-spin 1s linear infinite;
-}
-
-@keyframes bus-company-refresh-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
 @keyframes status-confirmation-spin {
   to {
     transform: rotate(360deg);
@@ -866,9 +798,6 @@
     animation: none;
   }
 
-  .bus-company-refresh-spinner {
-    animation: none;
-  }
 }
 
 .detail-success-notice {

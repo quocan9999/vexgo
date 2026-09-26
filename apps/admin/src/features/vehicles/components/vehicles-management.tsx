@@ -5,20 +5,23 @@ import {
   ArrowUp,
   ArrowUpDown,
   CheckCircle2,
-  ChevronRight,
   LoaderCircle,
-  Plus,
-  RefreshCw,
   Truck,
   X,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { AdminConfirmDialog } from '@/components/admin/admin-confirm-dialog';
+import { AdminDetailAction } from '@/components/admin/admin-detail-action';
 import { AdminDetailSheet } from '@/components/admin/admin-detail-sheet';
+import {
+  AdminCreateAction,
+  AdminRefreshAction,
+} from '@/components/admin/admin-page-actions';
 import { AdminPageHeader } from '@/components/admin/admin-page-header';
 import { AdminPagination } from '@/components/admin/admin-pagination';
 import { AdminStatusBadge } from '@/components/admin/admin-status-badge';
+import { AdminTableSkeleton } from '@/components/admin/admin-table-skeleton';
 import {
   FilterToolbar,
   SearchInput,
@@ -476,42 +479,17 @@ export function VehiclesManagement() {
     );
   }
 
-  function detailButton(vehicle: VehicleListItem) {
-    return (
-      <Button
-        aria-label={`Xem chi tiết xe ${vehicle.licensePlate}`}
-        onClick={() => setSelectedVehicleId(vehicle.vehicleId)}
-        type="button"
-        variant="secondary"
-      >
-        Xem chi tiết <ChevronRight aria-hidden="true" size={15} />
-      </Button>
-    );
-  }
-
   return (
     <SuperAdminLayout activeSection="vehicles">
       <div className="admin-page-content vehicles-page">
         <AdminPageHeader
           actions={
             <div className="page-intro-actions">
-              <Button onClick={() => setCreateDialogOpen(true)} type="button">
-                <Plus aria-hidden="true" size={16} />
-                Thêm xe
-              </Button>
-              <Button
-                disabled={loading}
-                onClick={refresh}
-                type="button"
-                variant="secondary"
-              >
-                <RefreshCw
-                  aria-hidden="true"
-                  className={loading ? 'vehicles-spinner' : undefined}
-                  size={15}
-                />
-                Làm mới
-              </Button>
+              <AdminCreateAction
+                label="Thêm xe"
+                onClick={() => setCreateDialogOpen(true)}
+              />
+              <AdminRefreshAction loading={loading} onClick={refresh} />
             </div>
           }
           eyebrow="QUẢN LÝ PHƯƠNG TIỆN"
@@ -532,7 +510,7 @@ export function VehiclesManagement() {
           className="vehicles-section"
         >
           <div className="panel vehicles-panel">
-            <FilterToolbar summary="Tìm kiếm, lọc và sắp xếp xe">
+            <FilterToolbar totalItems={vehiclePage?.meta.totalItems ?? null}>
               <SearchInput
                 label="Tìm biển số, nhà xe hoặc loại xe"
                 onChange={updateSearch}
@@ -613,17 +591,8 @@ export function VehiclesManagement() {
               </div>
             )}
 
-            {loading && (
-              <p className="vehicles-loading" role="status">
-                <LoaderCircle
-                  aria-hidden="true"
-                  className="vehicles-spinner"
-                  size={15}
-                />
-                {vehiclePage
-                  ? 'Đang cập nhật danh sách xe…'
-                  : 'Đang tải danh sách xe…'}
-              </p>
+            {loading && !vehiclePage && (
+              <AdminTableSkeleton resourceLabel="xe" />
             )}
 
             {error && (
@@ -721,7 +690,12 @@ export function VehiclesManagement() {
                               <td>{vehicleStatusBadge(vehicle)}</td>
                               <td>{timestampFormat(vehicle.createdAt)}</td>
                               <td>{timestampFormat(vehicle.updatedAt)}</td>
-                              <td>{detailButton(vehicle)}</td>
+                              <td>
+                                <AdminDetailAction
+                                  onClick={() => setSelectedVehicleId(vehicle.vehicleId)}
+                                  resourceName={`xe ${vehicle.licensePlate}`}
+                                />
+                              </td>
                             </tr>
                           ))}
                         </tbody>
@@ -760,7 +734,10 @@ export function VehiclesManagement() {
                             </div>
                           </dl>
                           <div className="vehicle-mobile-actions">
-                            {detailButton(vehicle)}
+                            <AdminDetailAction
+                              onClick={() => setSelectedVehicleId(vehicle.vehicleId)}
+                              resourceName={`xe ${vehicle.licensePlate}`}
+                            />
                           </div>
                         </article>
                       ))}

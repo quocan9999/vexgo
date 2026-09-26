@@ -12,17 +12,6 @@
   padding: 0;
 }
 
-.vehicle-types-loading {
-  display: flex;
-  min-height: 42px;
-  align-items: center;
-  gap: 8px;
-  margin: 0;
-  padding: 8px 19px;
-  color: var(--admin-text-muted);
-  font-size: var(--admin-font-size-sm);
-}
-
 .vehicle-types-table-wrap {
   width: 100%;
   overflow-x: auto;
@@ -332,10 +321,6 @@
     align-items: flex-start;
   }
 
-  .vehicle-types-page .page-intro-actions {
-    gap: 8px;
-  }
-
   .vehicle-types-section {
     margin-top: 22px;
   }
@@ -425,10 +410,6 @@
     border-top: 1px solid var(--admin-border);
   }
 
-  .vehicle-type-mobile-footer .button {
-    min-height: 36px;
-  }
-
   .vehicle-types-panel .table-pagination {
     align-items: flex-start;
     flex-direction: column;
@@ -446,10 +427,6 @@
     flex-direction: column;
     align-items: stretch;
     gap: 14px;
-  }
-
-  .vehicle-types-page .page-intro-actions {
-    justify-content: flex-start;
   }
 
   .vehicle-type-form {

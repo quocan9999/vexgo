@@ -5,17 +5,20 @@ import {
   ArrowUp,
   ArrowUpDown,
   CheckCircle2,
-  Eye,
   LoaderCircle,
   Pencil,
-  Plus,
-  RefreshCw,
   X,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { AdminDetailSheet } from '@/components/admin/admin-detail-sheet';
+import { AdminDetailAction } from '@/components/admin/admin-detail-action';
+import {
+  AdminCreateAction,
+  AdminRefreshAction,
+} from '@/components/admin/admin-page-actions';
 import { AdminPageHeader } from '@/components/admin/admin-page-header';
 import { AdminPagination } from '@/components/admin/admin-pagination';
+import { AdminTableSkeleton } from '@/components/admin/admin-table-skeleton';
 import {
   FilterToolbar,
   SearchInput,
@@ -264,21 +267,9 @@ export function VehicleTypesManagement() {
     refresh();
   }
 
-  function detailButton(vehicleType: VehicleType) {
-    return (
-      <Button
-        aria-label={`Xem chi tiết loại xe ${vehicleType.name}`}
-        onClick={() => {
-          setSuccessMessage(null);
-          setSelectedVehicleTypeId(vehicleType.vehicleTypeId);
-        }}
-        type="button"
-        variant="secondary"
-      >
-        <Eye aria-hidden="true" size={15} />
-        Xem chi tiết
-      </Button>
-    );
+  function openVehicleTypeDetails(vehicleType: VehicleType) {
+    setSuccessMessage(null);
+    setSelectedVehicleTypeId(vehicleType.vehicleTypeId);
   }
 
   function sortButton(label: string, field: VehicleTypeSortKey) {
@@ -306,23 +297,8 @@ export function VehicleTypesManagement() {
         <AdminPageHeader
           actions={
             <div className="page-intro-actions">
-              <Button onClick={openCreateDialog} type="button">
-                <Plus aria-hidden="true" size={16} />
-                Thêm loại xe
-              </Button>
-              <Button
-                disabled={loading}
-                onClick={refresh}
-                type="button"
-                variant="secondary"
-              >
-                <RefreshCw
-                  aria-hidden="true"
-                  className={loading ? 'vehicle-types-spinner' : undefined}
-                  size={15}
-                />
-                Làm mới
-              </Button>
+              <AdminCreateAction label="Thêm loại xe" onClick={openCreateDialog} />
+              <AdminRefreshAction loading={loading} onClick={refresh} />
             </div>
           }
           eyebrow="DANH MỤC PHƯƠNG TIỆN"
@@ -342,7 +318,7 @@ export function VehicleTypesManagement() {
             </p>
           )}
           <div className="panel vehicle-types-panel">
-            <FilterToolbar summary="Danh mục dùng chung">
+            <FilterToolbar totalItems={vehicleTypePage?.meta.totalItems ?? null}>
               <SearchInput
                 label="Tìm theo tên loại xe hoặc mô tả"
                 onChange={updateSearch}
@@ -351,17 +327,8 @@ export function VehicleTypesManagement() {
               />
             </FilterToolbar>
 
-            {loading && (
-              <p className="vehicle-types-loading" role="status">
-                <LoaderCircle
-                  aria-hidden="true"
-                  className="vehicle-types-spinner"
-                  size={15}
-                />
-                {vehicleTypePage
-                  ? 'Đang cập nhật danh sách…'
-                  : 'Đang tải danh sách loại xe…'}
-              </p>
+            {loading && !vehicleTypePage && (
+              <AdminTableSkeleton resourceLabel="loại xe" />
             )}
 
             {error && (
@@ -438,7 +405,12 @@ export function VehicleTypesManagement() {
                               </td>
                               <td>{timestampFormat(vehicleType.createdAt)}</td>
                               <td>{timestampFormat(vehicleType.updatedAt)}</td>
-                              <td>{detailButton(vehicleType)}</td>
+                              <td>
+                                <AdminDetailAction
+                                  onClick={() => openVehicleTypeDetails(vehicleType)}
+                                  resourceName={`loại xe ${vehicleType.name}`}
+                                />
+                              </td>
                             </tr>
                           ))}
                         </tbody>
@@ -473,7 +445,10 @@ export function VehicleTypesManagement() {
                             <span>
                               Cập nhật: {timestampFormat(vehicleType.updatedAt)}
                             </span>
-                            {detailButton(vehicleType)}
+                            <AdminDetailAction
+                              onClick={() => openVehicleTypeDetails(vehicleType)}
+                              resourceName={`loại xe ${vehicleType.name}`}
+                            />
                           </div>
                         </article>
                       ))}

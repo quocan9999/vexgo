@@ -12,8 +12,7 @@
   padding: 0;
 }
 
-.vehicles-option-loading,
-.vehicles-loading {
+.vehicles-option-loading {
   display: flex;
   min-height: 42px;
   align-items: center;
@@ -781,10 +780,6 @@
     flex-direction: column;
     align-items: stretch;
     gap: 14px;
-  }
-
-  .vehicles-page .page-intro-actions {
-    justify-content: flex-start;
   }
 
   .vehicle-detail-content {

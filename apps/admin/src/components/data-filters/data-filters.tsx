@@ -4,6 +4,7 @@ import { Popover } from '@base-ui/react/popover';
 import { Select } from '@base-ui/react/select';
 import { CalendarDays, Check, ChevronDown, Search, X } from 'lucide-react';
 import { useId, useState, type ReactNode } from 'react';
+import { AdminResultSummary } from '@/components/admin/admin-result-summary';
 import styles from './data-filters.module.css';
 
 export type FilterOption = {
@@ -18,15 +19,15 @@ export type DateRangeValue = {
 
 type FilterToolbarProps = {
   children: ReactNode;
-  summary: string;
+  totalItems: number | null;
 };
 
-export function FilterToolbar({ children, summary }: FilterToolbarProps) {
+export function FilterToolbar({ children, totalItems }: FilterToolbarProps) {
   return (
     <div className={styles.toolbar}>
       <div className={styles.controls}>{children}</div>
       <span aria-live="polite" className={styles.summary}>
-        {summary}
+        <AdminResultSummary totalItems={totalItems} />
       </span>
     </div>
   );
