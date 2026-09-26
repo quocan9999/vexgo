@@ -380,6 +380,83 @@ dialog:focus-visible {
   border-color: #8da8e7;
 }
 
+.admin-resource-panel {
+  min-width: 0;
+  overflow: hidden;
+  padding: 0;
+}
+
+.admin-resource-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.admin-resource-table {
+  width: 100%;
+  min-width: 980px;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.admin-resource-table thead {
+  background: var(--admin-canvas);
+}
+
+.admin-resource-table th,
+.admin-resource-table td {
+  padding: 11px 13px;
+  border-top: 1px solid var(--admin-border);
+  color: var(--admin-text-muted);
+  font-size: var(--admin-font-size-base);
+  vertical-align: middle;
+}
+
+.admin-resource-table thead th {
+  height: 42px;
+  border-top: 0;
+  font-size: var(--admin-font-size-md);
+  font-weight: var(--admin-font-weight-semibold);
+  white-space: nowrap;
+}
+
+.admin-resource-table tbody th {
+  color: var(--admin-text-strong);
+  font-size: var(--admin-font-size-emphasis);
+  font-weight: var(--admin-font-weight-semibold);
+}
+
+.admin-resource-table tbody tr:hover {
+  background: var(--admin-blue-soft);
+}
+
+.admin-resource-table tbody td:last-child {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.admin-resource-sort-button {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+}
+
+.admin-resource-sort-button:hover {
+  color: var(--admin-blue);
+}
+
+@media (max-width: 760px) {
+  .admin-resource-table-wrap {
+    display: none;
+  }
+}
+
 .panel {
   border: 1px solid var(--admin-border);
   border-radius: 12px;
