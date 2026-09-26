@@ -1,10 +1,10 @@
 'use client';
 
-import { ArrowDown, ArrowUp, ArrowUpDown, Search, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, CheckCircle2, Search, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { AdminDetailAction } from '@/components/admin/admin-detail-action';
 import { AdminDetailSheet } from '@/components/admin/admin-detail-sheet';
-import { AdminRefreshAction } from '@/components/admin/admin-page-actions';
+import { AdminCreateAction, AdminRefreshAction } from '@/components/admin/admin-page-actions';
 import { AdminPageHeader } from '@/components/admin/admin-page-header';
 import { AdminPagination } from '@/components/admin/admin-pagination';
 import { AdminStatusBadge } from '@/components/admin/admin-status-badge';
@@ -16,6 +16,7 @@ import { getBusCompanyFilterOptions } from '@/features/vehicles/services/vehicle
 import { useRoutes } from '../hooks/use-routes';
 import { getRouteById } from '../services/route-service';
 import type { Route, RouteSortKey, RouteStatus } from '../types/route';
+import { RouteFormDialog, type RouteCompanyOptions } from './route-form-dialog';
 import '../routes.css';
 
 const STATUS_OPTIONS: FilterOption[] = [
@@ -48,9 +49,17 @@ type DetailState =
   | { status: 'error'; message: string }
   | { status: 'success'; route: Route };
 
-function RouteDetails({ routeId, onClose }: { routeId: number; onClose: () => void }) {
+function RouteDetails({ routeId, companyOptions, onClose, onRetryOptions, onUpdated }: {
+  routeId: number;
+  companyOptions: RouteCompanyOptions;
+  onClose: () => void;
+  onRetryOptions: () => void;
+  onUpdated: (route: Route) => void;
+}) {
   const [detail, setDetail] = useState<DetailState>({ status: 'loading' });
   const [retryCount, setRetryCount] = useState(0);
+  const [editOpen, setEditOpen] = useState(false);
+  const [updateNotice, setUpdateNotice] = useState<string | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -66,6 +75,7 @@ function RouteDetails({ routeId, onClose }: { routeId: number; onClose: () => vo
   }, [routeId, retryCount]);
 
   return (
+    <>
     <AdminDetailSheet ariaLabelledBy="route-detail-title" onClose={onClose}>
       <>
         <div className="admin-dialog-header">
@@ -77,6 +87,7 @@ function RouteDetails({ routeId, onClose }: { routeId: number; onClose: () => vo
             <button aria-label="Đóng thông tin tuyến xe" className="icon-button" type="submit"><X aria-hidden="true" size={19} /></button>
           </form>
         </div>
+        {updateNotice && <p className="routes-update-notice" role="status">{updateNotice}</p>}
         {detail.status === 'loading' && <p className="routes-detail-state" role="status">Đang tải thông tin tuyến xe…</p>}
         {detail.status === 'error' && (
           <div className="routes-detail-state" role="alert">
@@ -97,17 +108,28 @@ function RouteDetails({ routeId, onClose }: { routeId: number; onClose: () => vo
               <div><dt>Ngày tạo</dt><dd>{timestampFormat(detail.route.createdAt)}</dd></div>
               <div><dt>Cập nhật lần cuối</dt><dd>{timestampFormat(detail.route.updatedAt)}</dd></div>
             </dl>
+            <div className="routes-detail-actions"><Button onClick={() => setEditOpen(true)} type="button">Chỉnh sửa</Button></div>
           </div>
         )}
       </>
     </AdminDetailSheet>
+    {editOpen && detail.status === 'success' && (
+      <RouteFormDialog
+        companyOptions={companyOptions}
+        onClose={() => setEditOpen(false)}
+        onRetryOptions={onRetryOptions}
+        onSaved={(saved) => {
+          setEditOpen(false);
+          setDetail({ status: 'success', route: saved });
+          setUpdateNotice(`Đã cập nhật tuyến ${saved.code}.`);
+          onUpdated(saved);
+        }}
+        route={detail.route}
+      />
+    )}
+    </>
   );
 }
-
-type CompanyOptions =
-  | { status: 'loading' }
-  | { status: 'error'; message: string }
-  | { status: 'success'; options: FilterOption[] };
 
 export function RoutesManagement() {
   const {
@@ -115,7 +137,9 @@ export function RoutesManagement() {
     changePage, updateSearch, updateStatus, updateBusCompany, sortRoutes, refresh,
   } = useRoutes();
   const [selectedRouteId, setSelectedRouteId] = useState<number | null>(null);
-  const [companyOptions, setCompanyOptions] = useState<CompanyOptions>({ status: 'loading' });
+  const [createOpen, setCreateOpen] = useState(false);
+  const [successNotice, setSuccessNotice] = useState<string | null>(null);
+  const [companyOptions, setCompanyOptions] = useState<RouteCompanyOptions>({ status: 'loading' });
   const [optionsRetry, setOptionsRetry] = useState(0);
 
   useEffect(() => {
@@ -136,6 +160,11 @@ export function RoutesManagement() {
     return () => controller.abort();
   }, [optionsRetry]);
 
+  function retryOptions() {
+    setCompanyOptions({ status: 'loading' });
+    setOptionsRetry((count) => count + 1);
+  }
+
   function sortButton(label: string, field: RouteSortKey) {
     const selected = sortBy === field;
     return (
@@ -152,9 +181,10 @@ export function RoutesManagement() {
     <SuperAdminLayout activeSection="routes">
       <div className="admin-page-content">
         <AdminPageHeader
-          actions={<div className="page-intro-actions"><AdminRefreshAction loading={loading} onClick={refresh} /></div>}
+          actions={<div className="page-intro-actions"><AdminCreateAction label="Thêm tuyến" onClick={() => { setSuccessNotice(null); setCreateOpen(true); }} /><AdminRefreshAction loading={loading} onClick={refresh} /></div>}
           eyebrow="QUẢN LÝ VẬN HÀNH" title="Quản lý tuyến xe" titleId="routes-title"
         />
+        {successNotice && <div className="routes-update-notice" role="status"><CheckCircle2 aria-hidden="true" size={16} />{successNotice}</div>}
         <section aria-busy={loading} aria-labelledby="routes-title" className="routes-section">
           <div className="panel admin-resource-panel">
             <FilterToolbar totalItems={error ? null : routePage?.meta.totalItems ?? null}>
@@ -168,7 +198,7 @@ export function RoutesManagement() {
             {companyOptions.status === 'error' && (
               <div className="routes-option-state" role="alert">
                 <span>{companyOptions.message}</span>
-                <Button onClick={() => { setCompanyOptions({ status: 'loading' }); setOptionsRetry((count) => count + 1); }} type="button" variant="secondary">Thử tải lại bộ lọc</Button>
+                <Button onClick={retryOptions} type="button" variant="secondary">Thử tải lại bộ lọc</Button>
               </div>
             )}
             <div className="routes-mobile-sort">
@@ -235,7 +265,20 @@ export function RoutesManagement() {
         </section>
         <footer className="admin-page-footer"><span>© 2026 VexGo Platform</span></footer>
       </div>
-      {selectedRouteId !== null && <RouteDetails key={selectedRouteId} routeId={selectedRouteId} onClose={() => setSelectedRouteId(null)} />}
+      {selectedRouteId !== null && <RouteDetails
+        key={selectedRouteId}
+        companyOptions={companyOptions}
+        onClose={() => setSelectedRouteId(null)}
+        onRetryOptions={retryOptions}
+        onUpdated={(route) => { setSuccessNotice(`Đã cập nhật tuyến ${route.code}.`); refresh(); }}
+        routeId={selectedRouteId}
+      />}
+      {createOpen && <RouteFormDialog
+        companyOptions={companyOptions}
+        onClose={() => setCreateOpen(false)}
+        onRetryOptions={retryOptions}
+        onSaved={(route) => { setCreateOpen(false); setSuccessNotice(`Đã thêm tuyến ${route.code}.`); refresh(); }}
+      />}
     </SuperAdminLayout>
   );
 }

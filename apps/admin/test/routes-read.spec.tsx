@@ -18,6 +18,7 @@ vi.mock('lucide-react', () => {
     ArrowDown: icon('down'), ArrowUp: icon('up'), ArrowUpDown: icon('sort'),
     Search: icon('search'), X: icon('close'), ChevronLeft: icon('previous'),
     ChevronRight: icon('next'), Eye: icon('eye'), RefreshCw: icon('refresh'),
+    Plus: icon('plus'), CheckCircle2: icon('success'), LoaderCircle: icon('loader'),
   };
 });
 
@@ -56,7 +57,7 @@ describe('Admin routes read page', () => {
     expect(html).toContain('Đang tải danh sách tuyến xe');
     expect(html).toContain('data-result-count="loading"');
     expect(html).toContain('Làm mới');
-    expect(html).not.toContain('Thêm tuyến');
+    expect(html).toContain('Thêm tuyến');
   });
 
   it('renders backend totalItems, accessible sort state, detail action, and mobile card', () => {
