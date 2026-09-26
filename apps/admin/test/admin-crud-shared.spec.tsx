@@ -12,6 +12,31 @@ import { AdminResultSummary } from '../src/components/admin/admin-result-summary
 import { AdminTableSkeleton } from '../src/components/admin/admin-table-skeleton';
 import { FilterToolbar } from '../src/components/data-filters/data-filters';
 
+vi.mock('lucide-react', () => {
+  const icon = (name: string) =>
+    function MockIcon({ className, size, ...props }: React.SVGProps<SVGSVGElement> & { size?: number }) {
+      return (
+        <svg
+          {...props}
+          className={`lucide lucide-${name}${className ? ` ${className}` : ''}`}
+          height={size}
+          width={size}
+        />
+      );
+    };
+
+  return {
+    CalendarDays: icon('calendar-days'),
+    Check: icon('check'),
+    ChevronDown: icon('chevron-down'),
+    Eye: icon('eye'),
+    Plus: icon('plus'),
+    RefreshCw: icon('refresh-cw'),
+    Search: icon('search'),
+    X: icon('x'),
+  };
+});
+
 describe('shared Admin CRUD patterns', () => {
   it('renders a named Eye detail action with the approved color', () => {
     const markup = renderToStaticMarkup(

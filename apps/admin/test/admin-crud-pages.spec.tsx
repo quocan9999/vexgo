@@ -11,6 +11,35 @@ const state = vi.hoisted(() => ({
   vehiclePage: null as unknown,
 }));
 
+vi.mock('lucide-react', () => {
+  const icon = (name: string) =>
+    function MockIcon({ className, size, ...props }: React.SVGProps<SVGSVGElement> & { size?: number }) {
+      return (
+        <svg
+          {...props}
+          className={`lucide lucide-${name}${className ? ` ${className}` : ''}`}
+          height={size}
+          width={size}
+        />
+      );
+    };
+
+  return {
+    ArrowDown: icon('arrow-down'),
+    ArrowUp: icon('arrow-up'),
+    ArrowUpDown: icon('arrow-up-down'),
+    Building2: icon('building-2'),
+    CheckCircle2: icon('check-circle-2'),
+    ChevronLeft: icon('chevron-left'),
+    ChevronRight: icon('chevron-right'),
+    LoaderCircle: icon('loader-circle'),
+    Pencil: icon('pencil'),
+    Search: icon('search'),
+    Truck: icon('truck'),
+    X: icon('x'),
+  };
+});
+
 vi.mock('@/features/super-admin-layout/components/super-admin-layout', () => ({
   SuperAdminLayout: ({ children }: { children: React.ReactNode }) => (
     <main>{children}</main>
