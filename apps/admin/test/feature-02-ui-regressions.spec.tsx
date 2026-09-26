@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { renderToStaticMarkup } from 'react-dom/server';
 import postcss from 'postcss';
 import { describe, expect, it, vi } from 'vitest';
+import * as AdminDialogPrimitive from '../src/components/admin/admin-dialog-primitive';
 import { VehicleTypeFormDialog } from '../src/features/vehicle-types/components/vehicle-type-form-dialog';
 import { VehicleTypesManagement } from '../src/features/vehicle-types/components/vehicle-types-management';
 import { VehicleSeatsManagement } from '../src/features/vehicles/components/vehicle-seats-management';
@@ -127,5 +128,57 @@ describe('Feature 02 Admin UI regressions', () => {
       tokenDefined = true;
     });
     expect(tokenDefined).toBe(true);
+  });
+
+  it('keeps keyboard focus inside a dialog when Tab reaches its last control', () => {
+    const trapDialogTabFocus = Reflect.get(
+      AdminDialogPrimitive,
+      'trapDialogTabFocus',
+    ) as ((event: React.KeyboardEvent<HTMLDialogElement>) => void) | undefined;
+
+    expect(trapDialogTabFocus).toBeTypeOf('function');
+
+    const firstControl = {
+      focus: vi.fn(),
+      getClientRects: () => [{}],
+      matches: () => false,
+      tabIndex: 0,
+    };
+    const lastControl = {
+      focus: vi.fn(),
+      getClientRects: () => [{}],
+      matches: () => false,
+      tabIndex: 0,
+    };
+    const ownerDocument = { activeElement: lastControl };
+
+    const dialog = {
+      ownerDocument,
+      querySelectorAll: () => [firstControl, lastControl],
+    } as unknown as HTMLDialogElement;
+    const forwardEvent = {
+      currentTarget: dialog,
+      key: 'Tab',
+      preventDefault: vi.fn(),
+      shiftKey: false,
+    } as unknown as React.KeyboardEvent<HTMLDialogElement>;
+
+    trapDialogTabFocus?.(forwardEvent);
+
+    expect(forwardEvent.preventDefault).toHaveBeenCalledOnce();
+    expect(firstControl.focus).toHaveBeenCalledOnce();
+
+    ownerDocument.activeElement = firstControl;
+    const backwardEvent = {
+      currentTarget: dialog,
+      key: 'Tab',
+      preventDefault: vi.fn(),
+      shiftKey: true,
+    } as unknown as React.KeyboardEvent<HTMLDialogElement>;
+
+    trapDialogTabFocus?.(backwardEvent);
+
+    expect(backwardEvent.preventDefault).toHaveBeenCalledOnce();
+    expect(lastControl.focus).toHaveBeenCalledOnce();
   });
 });
