@@ -48,13 +48,48 @@ N/A
 
 ---
 
+## 🧾 Các commit trong PR
+
+<!-- Liệt kê các commit theo thứ tự từ cũ đến mới; cập nhật mục này khi push thêm commit. -->
+
+- `hash` Mô tả commit
+
+---
+
 ## 🧪 Cách kiểm tra
 
-<!-- Reviewer có thể kiểm tra PR này như thế nào? -->
+<!-- Ghi lệnh có thể sao chép và chạy từ root repo. Giữ workspace liên quan, xóa các lệnh không áp dụng. -->
+
+Ví dụ Admin:
+
+```bash
+npm run test --workspace=@vexgo/admin
+npm run typecheck --workspace=@vexgo/admin
+npm run lint --workspace=@vexgo/admin
+npm run build --workspace=@vexgo/admin
+```
+
+Ví dụ API:
+
+```bash
+npm run test --workspace=@vexgo/api
+npm run typecheck --workspace=@vexgo/api
+npm run lint --workspace=@vexgo/api
+npm run build --workspace=@vexgo/api
+```
+
+Ví dụ Customer Web:
+
+```bash
+npm run typecheck --workspace=@vexgo/web
+npm run lint --workspace=@vexgo/web
+npm run build --workspace=@vexgo/web
+```
+
+Thao tác kiểm tra thủ công (route, viewport, dữ liệu và kết quả mong đợi):
 
 1. 
 2. 
-3. 
 
 ### Kết quả mong đợi
 
