@@ -42,6 +42,26 @@ describe('RoutesService writes', () => {
     vi.mocked(prisma.tuyenXe.update).mockResolvedValue(record);
   });
 
+  it.each(['HOAT_DONG', 'TAM_NGUNG'] as const)('sets only target status %s and returns mapped detail', async (status) => {
+    vi.mocked(prisma.tuyenXe.update).mockResolvedValueOnce({ ...record, trangThai: status });
+    const result = await service.updateStatus(17, status);
+    expect(prisma.tuyenXe.update).toHaveBeenCalledWith({
+      where: { tuyenXeId: 17 }, data: { trangThai: status }, select: expect.any(Object),
+    });
+    expect(result.data).toMatchObject({ routeId: 17, code: record.maTuyenXe, origin: record.diemDi,
+      destination: record.diemDen, status, busCompany: { busCompanyId: 3, code: 'FUTA' } });
+  });
+
+  it('maps missing status target and propagates unrelated database errors', async () => {
+    vi.mocked(prisma.tuyenXe.update).mockRejectedValueOnce(knownError('P2025'));
+    const missing = await service.updateStatus(999, 'TAM_NGUNG').catch((caught: unknown) => caught);
+    expect(missing).toBeInstanceOf(NotFoundException);
+    expect((missing as NotFoundException).getResponse()).toMatchObject({ error: 'ROUTE_NOT_FOUND' });
+    const other = knownError('P2003');
+    vi.mocked(prisma.tuyenXe.update).mockRejectedValueOnce(other);
+    await expect(service.updateStatus(17, 'TAM_NGUNG')).rejects.toBe(other);
+  });
+
   it('verifies the company and creates only the route with explicit status', async () => {
     const result = await service.create(createInput);
     expect(prisma.nhaXe.findUnique).toHaveBeenCalledWith({

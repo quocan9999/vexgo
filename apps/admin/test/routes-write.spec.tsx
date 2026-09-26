@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RouteFormDialog } from '../src/features/routes/components/route-form-dialog';
-import { createRoute, RouteApiError, updateRoute } from '../src/features/routes/services/route-service';
+import { createRoute, RouteApiError, updateRoute, updateRouteStatus } from '../src/features/routes/services/route-service';
 import type { Route } from '../src/features/routes/types/route';
 
 vi.mock('lucide-react', () => ({
@@ -59,6 +59,15 @@ describe('Route form composition', () => {
 });
 
 describe('Route write service', () => {
+  it('PATCHes explicit target status through the status endpoint', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ data: { ...route, status: 'TAM_NGUNG' } }), { status: 200 }));
+    const result = await updateRouteStatus(17, { status: 'TAM_NGUNG' });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(new URL(url as string).pathname).toBe('/api/v1/routes/17/status');
+    expect(init?.method).toBe('PATCH');
+    expect(JSON.parse(init?.body as string)).toEqual({ status: 'TAM_NGUNG' });
+    expect(result.status).toBe('TAM_NGUNG');
+  });
   it('sends explicit create payload and returns the API route', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ data: route }), { status: 201 }));
     await expect(createRoute({

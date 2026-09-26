@@ -1,4 +1,5 @@
 export type RouteStatus = 'HOAT_DONG' | 'TAM_NGUNG';
+export const ROUTE_STATUSES: readonly RouteStatus[] = ['HOAT_DONG', 'TAM_NGUNG'];
 export type RouteSortKey = 'code' | 'origin' | 'destination' | 'status' | 'createdAt' | 'updatedAt';
 export type SortDirection = 'asc' | 'desc';
 

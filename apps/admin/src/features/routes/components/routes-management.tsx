@@ -1,7 +1,8 @@
 'use client';
 
-import { ArrowDown, ArrowUp, ArrowUpDown, CheckCircle2, Search, X } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { ArrowDown, ArrowUp, ArrowUpDown, CheckCircle2, LoaderCircle, Search, X } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { AdminConfirmDialog } from '@/components/admin/admin-confirm-dialog';
 import { AdminDetailAction } from '@/components/admin/admin-detail-action';
 import { AdminDetailSheet } from '@/components/admin/admin-detail-sheet';
 import { AdminCreateAction, AdminRefreshAction } from '@/components/admin/admin-page-actions';
@@ -14,7 +15,7 @@ import { Button } from '@/components/ui/button';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
 import { getBusCompanyFilterOptions } from '@/features/vehicles/services/vehicle-service';
 import { useRoutes } from '../hooks/use-routes';
-import { getRouteById } from '../services/route-service';
+import { getRouteById, updateRouteStatus } from '../services/route-service';
 import type { Route, RouteSortKey, RouteStatus } from '../types/route';
 import { RouteFormDialog, type RouteCompanyOptions } from './route-form-dialog';
 import '../routes.css';
@@ -59,7 +60,38 @@ function RouteDetails({ routeId, companyOptions, onClose, onRetryOptions, onUpda
   const [detail, setDetail] = useState<DetailState>({ status: 'loading' });
   const [retryCount, setRetryCount] = useState(0);
   const [editOpen, setEditOpen] = useState(false);
+  const [statusOpen, setStatusOpen] = useState(false);
+  const [statusSubmitting, setStatusSubmitting] = useState(false);
+  const [statusError, setStatusError] = useState<string | null>(null);
+  const statusSubmittingRef = useRef(false);
+  const statusDialogRef = useRef<HTMLDialogElement>(null);
   const [updateNotice, setUpdateNotice] = useState<string | null>(null);
+
+  const nextStatus = detail.status === 'success'
+    ? detail.route.status === 'HOAT_DONG' ? 'TAM_NGUNG' : 'HOAT_DONG'
+    : null;
+
+  async function confirmStatusChange() {
+    if (statusSubmittingRef.current || nextStatus === null) return;
+    statusSubmittingRef.current = true;
+    setStatusSubmitting(true);
+    setStatusError(null);
+    try {
+      const saved = await updateRouteStatus(routeId, { status: nextStatus });
+      statusDialogRef.current?.close();
+      setStatusOpen(false);
+      setDetail({ status: 'success', route: saved });
+      setUpdateNotice(`Đã ${saved.status === 'TAM_NGUNG' ? 'tạm ngưng' : 'kích hoạt'} tuyến ${saved.code}.`);
+      onUpdated(saved);
+    } catch (error: unknown) {
+      setStatusError(error instanceof TypeError
+        ? 'Không thể kết nối đến máy chủ API. Vui lòng thử lại.'
+        : error instanceof Error ? error.message : 'Không thể cập nhật trạng thái tuyến xe.');
+    } finally {
+      statusSubmittingRef.current = false;
+      setStatusSubmitting(false);
+    }
+  }
 
   useEffect(() => {
     const controller = new AbortController();
@@ -108,7 +140,12 @@ function RouteDetails({ routeId, companyOptions, onClose, onRetryOptions, onUpda
               <div><dt>Ngày tạo</dt><dd>{timestampFormat(detail.route.createdAt)}</dd></div>
               <div><dt>Cập nhật lần cuối</dt><dd>{timestampFormat(detail.route.updatedAt)}</dd></div>
             </dl>
-            <div className="routes-detail-actions"><Button onClick={() => setEditOpen(true)} type="button">Chỉnh sửa</Button></div>
+            <div className="routes-detail-actions">
+              <Button onClick={() => { setStatusError(null); setStatusOpen(true); }} type="button" variant="secondary">
+                {detail.route.status === 'HOAT_DONG' ? 'Tạm ngưng tuyến' : 'Kích hoạt tuyến'}
+              </Button>
+              <Button onClick={() => setEditOpen(true)} type="button">Chỉnh sửa</Button>
+            </div>
           </div>
         )}
       </>
@@ -126,6 +163,33 @@ function RouteDetails({ routeId, companyOptions, onClose, onRetryOptions, onUpda
         }}
         route={detail.route}
       />
+    )}
+    {statusOpen && detail.status === 'success' && nextStatus && (
+      <AdminConfirmDialog
+        ariaBusy={statusSubmitting}
+        ariaDescribedBy="route-status-confirmation-description"
+        ariaLabelledBy="route-status-confirmation-title"
+        dialogRef={statusDialogRef}
+        onClose={() => setStatusOpen(false)}
+        preventDismiss={statusSubmitting}
+      >
+        <>
+          <h2 id="route-status-confirmation-title">{nextStatus === 'TAM_NGUNG' ? 'Tạm ngưng tuyến xe?' : 'Kích hoạt tuyến xe?'}</h2>
+          <p id="route-status-confirmation-description">
+            {nextStatus === 'TAM_NGUNG'
+              ? 'Tuyến sẽ được chuyển sang trạng thái Tạm ngưng. Thao tác này không xóa dữ liệu tuyến và có thể kích hoạt lại sau.'
+              : 'Tuyến sẽ được chuyển sang trạng thái Đang hoạt động.'}
+          </p>
+          {statusError && <p className="admin-confirm-dialog__error" role="alert">{statusError}</p>}
+          <div className="admin-confirm-dialog__actions">
+            <Button disabled={statusSubmitting} onClick={() => statusDialogRef.current?.close()} type="button" variant="secondary">Hủy</Button>
+            <Button disabled={statusSubmitting} onClick={confirmStatusChange} type="button">
+              {statusSubmitting && <LoaderCircle aria-hidden="true" className="admin-crud-form-spinner" size={15} />}
+              {statusSubmitting ? 'Đang cập nhật…' : nextStatus === 'TAM_NGUNG' ? 'Tạm ngưng tuyến' : 'Kích hoạt tuyến'}
+            </Button>
+          </div>
+        </>
+      </AdminConfirmDialog>
     )}
     </>
   );

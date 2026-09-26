@@ -58,6 +58,12 @@ export function updateRoute(routeId: number, input: UpdateRouteInput): Promise<R
   return writeRoute(`/${routeId}`, 'PATCH', input);
 }
 
+export type UpdateRouteStatusInput = Pick<Route, 'status'>;
+
+export function updateRouteStatus(routeId: number, input: UpdateRouteStatusInput): Promise<Route> {
+  return writeRoute(`/${routeId}/status`, 'PATCH', input);
+}
+
 async function readResponse(response: Response, resource: string): Promise<unknown> {
   const body: unknown = await response.json().catch(() => null);
   if (!response.ok) {

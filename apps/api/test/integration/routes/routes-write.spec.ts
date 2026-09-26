@@ -56,6 +56,47 @@ describe('Route write HTTP pipeline with real service and mocked Prisma', () => 
     prisma.tuyenXe.count.mockResolvedValue(1);
   });
 
+  it.each(['TAM_NGUNG', 'HOAT_DONG', 'HOAT_DONG'] as const)(
+    'accepts explicit target status %s and reflects it in detail and filtered list', async (status) => {
+      const updated = { ...record, trangThai: status };
+      prisma.tuyenXe.update.mockResolvedValueOnce(updated);
+      prisma.tuyenXe.findUnique.mockResolvedValueOnce(updated);
+      prisma.tuyenXe.findMany.mockResolvedValueOnce([updated]);
+      const response = await request(app.getHttpServer()).patch('/api/v1/routes/17/status').send({ status }).expect(200);
+      expect(prisma.tuyenXe.update).toHaveBeenCalledWith({
+        where: { tuyenXeId: 17 }, data: { trangThai: status }, select: expect.any(Object),
+      });
+      expect(response.body.data).toMatchObject({ code: record.maTuyenXe, origin: record.diemDi,
+        destination: record.diemDen, status, busCompany: { busCompanyId: 3 } });
+      const detail = await request(app.getHttpServer()).get('/api/v1/routes/17').expect(200);
+      expect(detail.body.data.status).toBe(status);
+      const list = await request(app.getHttpServer()).get('/api/v1/routes').query({ status }).expect(200);
+      expect(list.body.data[0].status).toBe(status);
+      expect(prisma.tuyenXe.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { trangThai: status } }));
+    },
+  );
+
+  it.each([{}, { status: null }, { status: '' }, { status: 'ACTIVE' },
+    { status: 'HOAT_DONG', toggle: true }])('rejects invalid status payload %j before update', async (body) => {
+    const response = await request(app.getHttpServer()).patch('/api/v1/routes/17/status').send(body).expect(400);
+    expect(response.body.error).toBe('VALIDATION_ERROR');
+    expect(prisma.tuyenXe.update).not.toHaveBeenCalled();
+  });
+
+  it.each(['0', '-1', 'abc', '1e3', '0x10', '1.5', '2147483648'])(
+    'rejects invalid status route ID %s', async (id) => {
+      await request(app.getHttpServer()).patch(`/api/v1/routes/${id}/status`).send({ status: 'TAM_NGUNG' }).expect(400);
+      expect(prisma.tuyenXe.update).not.toHaveBeenCalled();
+    },
+  );
+
+  it('maps a missing route during status update to ROUTE_NOT_FOUND', async () => {
+    prisma.tuyenXe.update.mockRejectedValueOnce(knownError('P2025'));
+    const response = await request(app.getHttpServer()).patch('/api/v1/routes/999/status')
+      .send({ status: 'TAM_NGUNG' }).expect(404);
+    expect(response.body).toEqual({ statusCode: 404, error: 'ROUTE_NOT_FOUND', message: 'Không tìm thấy tuyến xe.' });
+  });
+
   it('trims create fields, returns 201 with English relation mapping, and reads created detail', async () => {
     const response = await request(app.getHttpServer()).post('/api/v1/routes').send({
       ...createInput, code: '  FUTA-TX-0100  ', origin: '  TP.HCM ', destination: ' Đà Lạt  ',

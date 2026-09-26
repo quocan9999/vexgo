@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import type { CreateRouteDto } from './dto/create-route.dto.js';
 import type { RouteQueryDto, RouteSortField } from './dto/route-query.dto.js';
 import type { UpdateRouteDto } from './dto/update-route.dto.js';
+import type { UpdateRouteStatusDto } from './dto/update-route-status.dto.js';
 
 const ROUTE_SELECT = {
   tuyenXeId: true,
@@ -109,6 +110,22 @@ export class RoutesService {
       const route = await this.prisma.tuyenXe.update({
         where: { tuyenXeId: id },
         data: { diemDi: input.origin, diemDen: input.destination },
+        select: ROUTE_SELECT,
+      });
+      return { data: mapRoute(route) };
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+        throw routeNotFound();
+      }
+      throw error;
+    }
+  }
+
+  async updateStatus(id: number, status: UpdateRouteStatusDto['status']) {
+    try {
+      const route = await this.prisma.tuyenXe.update({
+        where: { tuyenXeId: id },
+        data: { trangThai: status },
         select: ROUTE_SELECT,
       });
       return { data: mapRoute(route) };
