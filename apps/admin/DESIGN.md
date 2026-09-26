@@ -22,6 +22,10 @@ Các component tại `src/components/ui/` là implementation riêng của dự �
 Các pattern Admin tại `src/components/admin/`:
 
 - `AdminPageHeader`: eyebrow, tiêu đề và nhóm action.
+- `AdminCreateAction`, `AdminRefreshAction`: hai page action cùng kích thước theo mẫu `/bus-companies`.
+- `AdminDetailAction`: nút Eye + “Xem chi tiết” dùng chung cho bảng và thẻ mobile.
+- `AdminTableSkeleton`: năm hàng shimmer cho lần tải danh sách đầu tiên.
+- `AdminResultSummary`: định dạng `meta.totalItems` thành `{N} kết quả` trong `FilterToolbar`.
 - `AdminStatusBadge`: nhãn trạng thái `active` hoặc `muted`.
 - `AdminPagination`: range, trang hiện tại và điều hướng.
 - `AdminDetailSheet`, `AdminFormDialog`, `AdminConfirmDialog`: dialog pattern có ngữ nghĩa và kiểu trình bày cố định.
@@ -36,6 +40,8 @@ Shared component chỉ chứa pattern hiển thị và accessibility. Domain lab
 List/table, toolbar search/filter, detail sheet bên phải, create/edit form dialog và confirmation dialog cho status/destructive action. Dùng cho resource đơn giản như Nhà xe.
 
 Page actions theo thứ tự: `[Primary action] [Refresh]`.
+
+CRUD list MUST dùng `AdminCreateAction`, `AdminRefreshAction`, `AdminDetailAction` và `AdminTableSkeleton`. `FilterToolbar` nhận `meta.totalItems` từ response để hiển thị `{N} kết quả`; trước khi có dữ liệu hiển thị `Đang tải kết quả`. Khi tải lại, dữ liệu đã có tiếp tục hiển thị.
 
 ### Dedicated workspace
 

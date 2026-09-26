@@ -86,6 +86,9 @@ jobs:
 
       - run: npm ci
 
+      - name: Admin tests
+        run: npm run test --workspace=@vexgo/admin
+
       - name: Admin typecheck
         run: npm run typecheck --workspace=@vexgo/admin
 

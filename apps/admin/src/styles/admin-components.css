@@ -355,6 +355,31 @@ dialog:focus-visible {
   background: #f8faff;
 }
 
+.admin-page-action.button {
+  box-sizing: border-box;
+  width: 120px;
+  min-height: 37px;
+}
+
+.admin-refresh-spinner {
+  animation: admin-refresh-spin 1s linear infinite;
+}
+
+.admin-detail-action {
+  color: #3155b6;
+  white-space: nowrap;
+}
+
+.admin-detail-action:hover:not(:disabled) {
+  border-color: #b9c8de;
+  background: #f0f4ff;
+  color: #1d3d98;
+}
+
+.admin-detail-action:focus-visible {
+  border-color: #8da8e7;
+}
+
 .panel {
   border: 1px solid var(--admin-border);
   border-radius: 12px;
@@ -368,6 +393,37 @@ dialog:focus-visible {
   background: linear-gradient(90deg, #edf1f6, #f7f9fb, #edf1f6);
   background-size: 200% 100%;
   animation: skeleton-shimmer 1.5s ease-in-out infinite;
+}
+
+.admin-table-skeleton {
+  display: grid;
+  padding: 6px 18px;
+}
+
+.admin-table-skeleton-row {
+  display: grid;
+  min-height: 53px;
+  grid-template-columns: 1.3fr 1.5fr repeat(3, 0.35fr);
+  align-items: center;
+  gap: 15px;
+  border-bottom: 1px solid #f0f2f6;
+}
+
+.admin-table-skeleton-row .skeleton {
+  height: 10px;
+}
+
+.admin-table-skeleton-primary {
+  width: 72%;
+}
+
+.admin-table-skeleton-secondary {
+  width: 83%;
+}
+
+.admin-table-skeleton-number {
+  width: 28px;
+  justify-self: center;
 }
 
 .panel {
@@ -567,6 +623,12 @@ dialog:focus-visible {
   }
   100% {
     background-position: -100% 0;
+  }
+}
+
+@keyframes admin-refresh-spin {
+  to {
+    transform: rotate(360deg);
   }
 }
 

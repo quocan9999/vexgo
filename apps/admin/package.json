@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start --port 3001",
     "lint": "eslint",
+    "test": "vitest run --config vitest.config.mts",
     "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {
@@ -27,7 +28,9 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.3.5",
+    "postcss": "^8.5.12",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.1.2"
   }
 }

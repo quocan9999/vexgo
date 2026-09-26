@@ -6,19 +6,22 @@ import {
   ArrowUpDown,
   Building2,
   CheckCircle2,
-  ChevronRight,
   LoaderCircle,
-  Plus,
-  RefreshCw,
   Search,
   X,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { AdminConfirmDialog } from '@/components/admin/admin-confirm-dialog';
+import { AdminDetailAction } from '@/components/admin/admin-detail-action';
 import { AdminDetailSheet } from '@/components/admin/admin-detail-sheet';
+import {
+  AdminCreateAction,
+  AdminRefreshAction,
+} from '@/components/admin/admin-page-actions';
 import { AdminPageHeader } from '@/components/admin/admin-page-header';
 import { AdminPagination } from '@/components/admin/admin-pagination';
 import { AdminStatusBadge } from '@/components/admin/admin-status-badge';
+import { AdminTableSkeleton } from '@/components/admin/admin-table-skeleton';
 import {
   DateRangeFilter,
   FilterToolbar,
@@ -45,10 +48,6 @@ const BUS_COMPANY_STATUS_FILTERS: FilterOption[] = [
   { value: 'HOAT_DONG', label: 'Đang hoạt động' },
   { value: 'TAM_NGUNG', label: 'Tạm ngưng' },
 ];
-
-function numberFormat(value: number) {
-  return new Intl.NumberFormat('vi-VN').format(value);
-}
 
 function timestampFormat(value: string) {
   return new Intl.DateTimeFormat('vi-VN', {
@@ -384,27 +383,6 @@ function CompanyDetails({
   );
 }
 
-function LoadingRows() {
-  return (
-    <div
-      className="table-skeleton"
-      aria-label="Đang tải danh sách nhà xe"
-      role="status"
-    >
-      {Array.from({ length: 5 }, (_, index) => (
-        <div className="table-skeleton-row" key={index} aria-hidden="true">
-          <span className="skeleton skeleton-company" />
-          <span className="skeleton skeleton-contact" />
-          <span className="skeleton skeleton-number" />
-          <span className="skeleton skeleton-number" />
-          <span className="skeleton skeleton-number" />
-        </div>
-      ))}
-      <span className="sr-only">Đang tải dữ liệu nhà xe…</span>
-    </div>
-  );
-}
-
 export function BusCompaniesManagement() {
   const {
     companyPage,
@@ -473,20 +451,9 @@ export function BusCompaniesManagement() {
     );
   }
 
-  function companyAction(company: BusCompany) {
-    return (
-      <button
-        aria-label={`Xem thông tin ${company.name}`}
-        className="company-open-button"
-        onClick={() => {
-          setSuccessMessage(null);
-          setSelectedCompanyId(company.busCompanyId);
-        }}
-        type="button"
-      >
-        Xem chi tiết <ChevronRight aria-hidden="true" size={15} />
-      </button>
-    );
+  function openCompanyDetails(company: BusCompany) {
+    setSuccessMessage(null);
+    setSelectedCompanyId(company.busCompanyId);
   }
 
   return (
@@ -494,27 +461,9 @@ export function BusCompaniesManagement() {
       <div className="admin-page-content">
         <AdminPageHeader
           actions={
-            <div className="page-intro-actions bus-company-page-actions">
-              <Button
-              onClick={openCreateDialog}
-              type="button"
-              >
-                <Plus aria-hidden="true" size={16} />
-                Thêm nhà xe
-              </Button>
-              <Button
-              disabled={loading}
-              onClick={refresh}
-              type="button"
-                variant="secondary"
-              >
-                <RefreshCw
-                  aria-hidden="true"
-                  className={loading ? 'bus-company-refresh-spinner' : ''}
-                  size={16}
-                />
-                Làm mới
-              </Button>
+            <div className="page-intro-actions">
+              <AdminCreateAction label="Thêm nhà xe" onClick={openCreateDialog} />
+              <AdminRefreshAction loading={loading} onClick={refresh} />
             </div>
           }
           eyebrow="ĐỐI TÁC NỀN TẢNG"
@@ -538,13 +487,7 @@ export function BusCompaniesManagement() {
           </h2>
 
           <div className="panel companies-panel">
-            <FilterToolbar
-              summary={
-                companyPage
-                  ? `${numberFormat(companyPage.meta.totalItems)} kết quả`
-                  : 'Đang tải kết quả'
-              }
-            >
+            <FilterToolbar totalItems={companyPage?.meta.totalItems ?? null}>
               <SearchInput
                 label="Tìm nhà xe"
                 onChange={updateSearch}
@@ -581,7 +524,9 @@ export function BusCompaniesManagement() {
               </div>
             )}
 
-            {loading && !companyPage ? <LoadingRows /> : null}
+            {loading && !companyPage ? (
+              <AdminTableSkeleton resourceLabel="nhà xe" />
+            ) : null}
             {!loading && !error && companyPage?.data.length === 0 && (
               <div className="empty-state">
                 <span className="empty-state-icon">
@@ -684,7 +629,12 @@ export function BusCompaniesManagement() {
                             </AdminStatusBadge>
                           </td>
                           <td>{timestampFormat(company.createdAt)}</td>
-                          <td>{companyAction(company)}</td>
+                          <td>
+                            <AdminDetailAction
+                              onClick={() => openCompanyDetails(company)}
+                              resourceName={company.name}
+                            />
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -718,7 +668,12 @@ export function BusCompaniesManagement() {
                           <strong>{timestampFormat(company.createdAt)}</strong>
                         </span>
                       </div>
-                      {companyAction(company)}
+                      <div className="company-mobile-actions">
+                        <AdminDetailAction
+                          onClick={() => openCompanyDetails(company)}
+                          resourceName={company.name}
+                        />
+                      </div>
                     </article>
                   ))}
                 </div>
