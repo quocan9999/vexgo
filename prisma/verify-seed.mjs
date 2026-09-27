@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import bcrypt from 'bcrypt';
-import { PrismaMariaDb } from '../apps/api/node_modules/@prisma/adapter-mariadb/dist/index.js';
+import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import { PrismaClient } from '../apps/api/dist/generated/prisma/client.js';
 
 function config() {
