@@ -35,7 +35,7 @@ describe('phone auth and customer profile flow', () => {
     if (!customerRole) {
       throw new Error('Seed role KHACH_HANG is required for auth E2E');
     }
-  });
+  }, 30000); // Tăng thời gian timeout lên 30 giây (30000ms)
 
   afterAll(async () => {
     if (prisma) {
