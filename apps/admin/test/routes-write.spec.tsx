@@ -15,7 +15,7 @@ const route: Route = {
   status: 'HOAT_DONG', busCompany: { busCompanyId: 3, code: 'FUTA', name: 'Phương Trang' },
   createdAt: '2026-09-22T07:34:00.000Z', updatedAt: '2026-09-23T07:34:00.000Z',
 };
-const options = { status: 'success' as const, options: [{ value: '3', label: 'Phương Trang' }] };
+const options = { status: 'success' as const, options: [{ value: '3', label: 'Phương Trang (FUTA)' }] };
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -29,7 +29,7 @@ describe('Route form composition', () => {
       expect(html).toContain(label);
     }
     expect(html).toContain('Chọn trạng thái');
-    expect(html).toContain('Phương Trang');
+    expect(html).toContain('Phương Trang (FUTA)');
   });
 
   it('keeps code, company, and status as read-only context during edit', () => {

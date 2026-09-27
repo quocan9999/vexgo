@@ -13,7 +13,7 @@ import { AdminTableSkeleton } from '@/components/admin/admin-table-skeleton';
 import { FilterToolbar, SearchInput, SelectFilter, type FilterOption } from '@/components/data-filters/data-filters';
 import { Button } from '@/components/ui/button';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
-import { getBusCompanyFilterOptions } from '@/features/vehicles/services/vehicle-service';
+import { getBusCompanyFilterOptions } from '@/features/bus-companies/services/bus-company-service';
 import { useRoutes } from '../hooks/use-routes';
 import { getRouteById, updateRouteStatus } from '../services/route-service';
 import type { Route, RouteSortKey, RouteStatus } from '../types/route';
@@ -50,7 +50,7 @@ type DetailState =
   | { status: 'error'; message: string }
   | { status: 'success'; route: Route };
 
-function RouteDetails({ routeId, companyOptions, onClose, onRetryOptions, onUpdated }: {
+export function RouteDetails({ routeId, companyOptions, onClose, onRetryOptions, onUpdated }: {
   routeId: number;
   companyOptions: RouteCompanyOptions;
   onClose: () => void;

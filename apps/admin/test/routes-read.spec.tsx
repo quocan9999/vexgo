@@ -9,6 +9,12 @@ const state = vi.hoisted(() => ({
   error: null as string | null,
 }));
 
+const validRoute = {
+  routeId: 17, code: 'FUTA-TX-0001', origin: 'TP.HCM', destination: 'Đà Lạt', status: 'HOAT_DONG',
+  busCompany: { busCompanyId: 3, code: 'FUTA', name: 'Phương Trang' },
+  createdAt: '2026-09-22T07:34:00.000Z', updatedAt: '2026-09-23T07:34:00.000Z',
+};
+
 vi.mock('lucide-react', () => {
   const icon = (name: string) =>
     function MockIcon(props: React.SVGProps<SVGSVGElement>) {
@@ -117,11 +123,47 @@ describe('Route frontend API service', () => {
 
   it('fetches route detail by ID and propagates API errors', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response(JSON.stringify({
-      data: { routeId: 17, code: 'FUTA-TX-0001' },
+      data: {
+        routeId: 17, code: 'FUTA-TX-0001', origin: 'TP.HCM', destination: 'Đà Lạt', status: 'HOAT_DONG',
+        busCompany: { busCompanyId: 3, code: 'FUTA', name: 'Phương Trang' },
+        createdAt: '2026-09-22T07:34:00.000Z', updatedAt: '2026-09-23T07:34:00.000Z',
+      },
     }), { status: 200 }));
-    await expect(getRouteById(17)).resolves.toMatchObject({ routeId: 17 });
+    await expect(getRouteById(17)).resolves.toMatchObject({ routeId: 17, code: 'FUTA-TX-0001', status: 'HOAT_DONG' });
     expect(new URL(fetchMock.mock.calls[0][0] as string).pathname).toBe('/api/v1/routes/17');
     fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ message: 'Không tìm thấy tuyến xe.' }), { status: 404 }));
     await expect(getRouteById(999)).rejects.toThrow('Không tìm thấy tuyến xe.');
+  });
+
+  it('rejects incomplete route detail instead of accepting a partial object as Route', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response(JSON.stringify({
+      data: { routeId: 17, code: 'FUTA-TX-0001' },
+    }), { status: 200 }));
+    await expect(getRouteById(17)).rejects.toThrow('API trả về thông tin tuyến xe không hợp lệ.');
+  });
+
+  it.each([
+    { ...validRoute, routeId: 1.5 }, { ...validRoute, code: 17 },
+    { ...validRoute, origin: null }, { ...validRoute, destination: null },
+    { ...validRoute, status: 'ACTIVE' }, { ...validRoute, busCompany: null },
+    { ...validRoute, busCompany: { ...validRoute.busCompany, busCompanyId: '3' } },
+    { ...validRoute, busCompany: { ...validRoute.busCompany, code: null } },
+    { ...validRoute, busCompany: { ...validRoute.busCompany, name: null } },
+    { ...validRoute, createdAt: null }, { ...validRoute, updatedAt: null },
+  ])('rejects malformed route field values %j', async (data) => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response(JSON.stringify({ data }), { status: 200 }));
+    await expect(getRouteById(17)).rejects.toThrow('API trả về thông tin tuyến xe không hợp lệ.');
+  });
+
+  it.each([
+    { data: [{ routeId: 17, code: 'FUTA-TX-0001' }], meta: { page: 1, pageSize: 10, totalItems: 1, totalPages: 1 } },
+    { data: [], meta: { page: 0, pageSize: 10, totalItems: 0, totalPages: 0 } },
+    { data: [], meta: { page: 1, pageSize: 0, totalItems: 0, totalPages: 0 } },
+    { data: [], meta: { page: 1, pageSize: 10, totalItems: -1, totalPages: 0 } },
+    { data: [], meta: { page: 1, pageSize: 10, totalItems: 0, totalPages: 0.5 } },
+  ])('rejects malformed route page %j', async (body) => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response(JSON.stringify(body), { status: 200 }));
+    await expect(getRoutes({ page: 1, pageSize: 10, search: '', sortBy: 'code', sortDirection: 'asc' }))
+      .rejects.toThrow('API trả về danh sách tuyến xe không hợp lệ.');
   });
 });

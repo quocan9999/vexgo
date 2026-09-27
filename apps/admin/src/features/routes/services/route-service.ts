@@ -1,8 +1,45 @@
 import { getApiBaseUrl } from '@/lib/api-url';
-import type { PaginatedRoutes, Route, RouteListQuery } from '../types/route';
+import { ROUTE_STATUSES, type PaginatedRoutes, type Route, type RouteListQuery } from '../types/route';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isRouteStatus(value: unknown): value is Route['status'] {
+  return ROUTE_STATUSES.some((status) => status === value);
+}
+
+function isPositiveInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0;
+}
+
+function isNonNegativeInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+}
+
+function isRoute(value: unknown): value is Route {
+  return isRecord(value) &&
+    isPositiveInteger(value.routeId) &&
+    typeof value.code === 'string' &&
+    typeof value.origin === 'string' &&
+    typeof value.destination === 'string' &&
+    isRouteStatus(value.status) &&
+    isRecord(value.busCompany) &&
+    isPositiveInteger(value.busCompany.busCompanyId) &&
+    typeof value.busCompany.code === 'string' &&
+    typeof value.busCompany.name === 'string' &&
+    typeof value.createdAt === 'string' &&
+    typeof value.updatedAt === 'string';
+}
+
+function isPaginatedRoutes(value: unknown): value is PaginatedRoutes {
+  return isRecord(value) &&
+    Array.isArray(value.data) && value.data.every(isRoute) &&
+    isRecord(value.meta) &&
+    isPositiveInteger(value.meta.page) &&
+    isPositiveInteger(value.meta.pageSize) &&
+    isNonNegativeInteger(value.meta.totalItems) &&
+    isNonNegativeInteger(value.meta.totalPages);
 }
 
 export type RouteApiErrorDetail = { field: string; message: string };
@@ -34,10 +71,10 @@ async function writeRoute(path: string, method: 'POST' | 'PATCH', input: unknown
       details,
     );
   }
-  if (!isRecord(body) || !isRecord(body.data)) {
+  if (!isRecord(body) || !isRoute(body.data)) {
     throw new Error('API trả về thông tin tuyến xe không hợp lệ.');
   }
-  return body.data as Route;
+  return body.data;
 }
 
 export type CreateRouteInput = {
@@ -87,18 +124,18 @@ export async function getRoutes(query: RouteListQuery, signal?: AbortSignal): Pr
     `${getApiBaseUrl()}/api/v1/routes?${params.toString()}`,
     { cache: 'no-store', signal },
   ), 'danh sách tuyến xe');
-  if (!isRecord(body) || !Array.isArray(body.data) || !isRecord(body.meta)) {
+  if (!isPaginatedRoutes(body)) {
     throw new Error('API trả về danh sách tuyến xe không hợp lệ.');
   }
-  return body as PaginatedRoutes;
+  return body;
 }
 
 export async function getRouteById(routeId: number, signal?: AbortSignal): Promise<Route> {
   const body = await readResponse(await fetch(
     `${getApiBaseUrl()}/api/v1/routes/${routeId}`, { cache: 'no-store', signal },
   ), 'thông tin tuyến xe');
-  if (!isRecord(body) || !isRecord(body.data)) {
+  if (!isRecord(body) || !isRoute(body.data)) {
     throw new Error('API trả về thông tin tuyến xe không hợp lệ.');
   }
-  return body.data as Route;
+  return body.data;
 }
