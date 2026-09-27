@@ -6,7 +6,7 @@ export interface AuthPrincipal {
 
 export interface AuthUserSummary {
   taiKhoanId: number;
-  khachHangId: number;
+  khachHangId: number | null;
   hoTen: string;
   soDienThoai: string;
   roles: string[];

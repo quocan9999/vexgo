@@ -3,6 +3,7 @@ import type { JwtService } from '@nestjs/jwt';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TokenService } from '../../../src/auth/tokens/token.service.js';
 import type { Prisma } from '../../../src/generated/prisma/client.js';
+import type { PrismaService } from '../../../src/prisma/prisma.service.js';
 
 const NOW = new Date('2026-09-28T10:00:00.000Z');
 const user = {
@@ -16,6 +17,7 @@ const user = {
 describe('TokenService createSession', () => {
   const jwtService = { signAsync: vi.fn() };
   const phienDangNhap = { create: vi.fn() };
+  const prisma = { phienDangNhap };
   const service = new TokenService(
     jwtService as unknown as JwtService,
     new ConfigService({
@@ -23,6 +25,7 @@ describe('TokenService createSession', () => {
       JWT_ACCESS_TTL_SECONDS: '900',
       REFRESH_TOKEN_TTL_SECONDS: '2592000',
     }),
+    prisma as unknown as PrismaService,
   );
 
   beforeEach(() => {
@@ -69,6 +72,7 @@ describe('TokenService createSession', () => {
             NODE_ENV: 'production',
             JWT_ACCESS_SECRET: 'too-short',
           }),
+          prisma as unknown as PrismaService,
         ),
     ).toThrow('JWT_ACCESS_SECRET must contain at least 32 characters');
   });

@@ -1,6 +1,7 @@
 import {
   Injectable,
   ConflictException,
+  ForbiddenException,
   InternalServerErrorException,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -10,6 +11,9 @@ import * as bcrypt from 'bcrypt';
 import { OtpService } from './otp/otp.service.js';
 import { TokenService } from './tokens/token.service.js';
 import { Prisma } from '../generated/prisma/client.js';
+
+const DUMMY_PASSWORD_HASH =
+  '$2b$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy';
 
 @Injectable()
 export class AuthService {
@@ -102,29 +106,48 @@ export class AuthService {
   }
 
   async login(dto: LoginDto) {
-    // 1. Tìm tài khoản theo số điện thoại
-    const user = await this.prisma.taiKhoan.findUnique({
+    const account = await this.prisma.taiKhoan.findUnique({
       where: { soDienThoai: dto.soDienThoai },
+      include: {
+        khachHang: { select: { khachHangId: true } },
+        taiKhoanVaiTros: {
+          include: { vaiTro: { select: { tenVaiTro: true } } },
+        },
+      },
     });
-
-    if (!user) {
-      throw new UnauthorizedException(
-        'Số điện thoại hoặc mật khẩu không chính xác!',
-      );
+    const isPasswordValid = await bcrypt.compare(
+      dto.matKhau,
+      account?.matKhau ?? DUMMY_PASSWORD_HASH,
+    );
+    if (!account || !isPasswordValid) {
+      throw new UnauthorizedException({
+        error: 'INVALID_CREDENTIALS',
+        message: 'Số điện thoại hoặc mật khẩu không chính xác.',
+      });
+    }
+    if (account.trangThai !== 'HOAT_DONG') {
+      throw new ForbiddenException({
+        error: 'ACCOUNT_INACTIVE',
+        message: 'Tài khoản không hoạt động.',
+      });
     }
 
-    // 2. Kiểm tra mật khẩu khớp nhau không
-    const isPasswordValid = await bcrypt.compare(dto.matKhau, user.matKhau);
-    if (!isPasswordValid) {
-      throw new UnauthorizedException(
-        'Số điện thoại hoặc mật khẩu không chính xác!',
-      );
-    }
+    return this.prisma.$transaction((tx) =>
+      this.tokenService.createSession(tx, {
+        taiKhoanId: account.taiKhoanId,
+        khachHangId: account.khachHang?.khachHangId ?? null,
+        hoTen: account.hoTen,
+        soDienThoai: account.soDienThoai,
+        roles: account.taiKhoanVaiTros.map(({ vaiTro }) => vaiTro.tenVaiTro),
+      }),
+    );
+  }
 
-    const { matKhau: _matKhau, ...result } = user;
-    return {
-      message: 'Đăng nhập thành công',
-      user: result,
-    };
+  refresh(refreshToken: string) {
+    return this.tokenService.rotateRefreshToken(refreshToken);
+  }
+
+  logout(refreshToken: string) {
+    return this.tokenService.revokeRefreshToken(refreshToken);
   }
 }
