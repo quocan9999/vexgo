@@ -38,6 +38,8 @@ Model Prisma mới `YeuCauOtp` dùng naming tiếng Việt hiện có, gồm t�
 - `proofHash`, `proofHetHanLuc`, `daSuDungLuc`;
 - `createdAt`, `updatedAt`.
 
+Database giữ một current-challenge row cho mỗi cặp `(soDienThoai, mucDich)` bằng unique constraint. Khi resend hợp lệ, row được thay challenge/code/expiry; conditional update theo cooldown bảo đảm hai request đồng thời không cùng gửi OTP.
+
 Mục đích đầu tiên là `DANG_KY`; thiết kế cho phép bổ sung `QUEN_MAT_KHAU` và `CAP_NHAT_SO_DIEN_THOAI` sau này mà không tạo hệ OTP thứ hai.
 
 Việc gửi SMS nằm sau interface `SmsSender`. Local development dùng `ConsoleSmsSender`, chỉ ghi OTP vào terminal và tuyệt đối không bật trong production. Adapter SMS thật sẽ được thêm khi team cung cấp nhà cung cấp và credential; controller/service không thay đổi.
