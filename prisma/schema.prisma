@@ -182,6 +182,25 @@ model TaiKhoan {
   taiKhoanVaiTros      TaiKhoanVaiTro[]
 }
 
+model YeuCauOtp {
+  yeuCauOtpId    Int       @id @default(autoincrement()) @db.Int
+  challengeId    String    @unique @db.Char(36)
+  soDienThoai    String    @db.VarChar(16)
+  mucDich        String    @db.VarChar(30)
+  maOtpHash      String    @db.Char(64)
+  soLanThu       Int       @default(0) @db.Int
+  hetHanLuc      DateTime  @db.DateTime(3)
+  daXacThucLuc   DateTime? @db.DateTime(3)
+  proofHash      String?   @unique @db.Char(64)
+  proofHetHanLuc DateTime? @db.DateTime(3)
+  daSuDungLuc    DateTime? @db.DateTime(3)
+  createdAt      DateTime  @default(now()) @db.DateTime(3)
+  updatedAt      DateTime  @default(now()) @updatedAt @db.DateTime(3)
+
+  @@unique([soDienThoai, mucDich], map: "YeuCauOtp_soDienThoai_mucDich_key")
+  @@index([soDienThoai, mucDich, updatedAt], map: "YeuCauOtp_phone_purpose_updated_idx")
+}
+
 model KhachHang {
   khachHangId        Int                 @id @default(autoincrement()) @db.Int
   maKhachHang        String              @unique @db.VarChar(50)
