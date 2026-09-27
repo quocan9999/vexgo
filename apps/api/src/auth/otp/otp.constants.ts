@@ -1,4 +1,7 @@
 export const REGISTRATION_OTP_PURPOSE = 'DANG_KY';
 export const DEFAULT_OTP_TTL_SECONDS = 300;
 export const DEFAULT_OTP_RESEND_COOLDOWN_SECONDS = 60;
+export const DEFAULT_OTP_PROOF_TTL_SECONDS = 600;
+export const MAX_OTP_ATTEMPTS = 5;
 export const VIETNAM_E164_PHONE_PATTERN = /^\+84\d{9}$/;
+export const SIX_DIGIT_OTP_PATTERN = /^\d{6}$/;

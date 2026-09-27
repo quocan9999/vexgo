@@ -1,11 +1,18 @@
-import { ConflictException, Inject, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Inject,
+  Injectable,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import {
   DEFAULT_OTP_RESEND_COOLDOWN_SECONDS,
+  DEFAULT_OTP_PROOF_TTL_SECONDS,
   DEFAULT_OTP_TTL_SECONDS,
+  MAX_OTP_ATTEMPTS,
   REGISTRATION_OTP_PURPOSE,
 } from './otp.constants.js';
 import { OtpCryptoService } from './otp-crypto.service.js';
@@ -17,10 +24,22 @@ export interface RegistrationOtpChallenge {
   resendAfter: string;
 }
 
+export interface VerifyRegistrationOtpInput {
+  challengeId: string;
+  soDienThoai: string;
+  otp: string;
+}
+
+export interface RegistrationOtpProof {
+  otpProof: string;
+  expiresAt: string;
+}
+
 @Injectable()
 export class OtpService {
   private readonly ttlSeconds: number;
   private readonly resendCooldownSeconds: number;
+  private readonly proofTtlSeconds: number;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -36,6 +55,108 @@ export class OtpService {
       configService.get<string>('OTP_RESEND_COOLDOWN_SECONDS'),
       DEFAULT_OTP_RESEND_COOLDOWN_SECONDS,
     );
+    this.proofTtlSeconds = this.readPositiveInteger(
+      configService.get<string>('OTP_PROOF_TTL_SECONDS'),
+      DEFAULT_OTP_PROOF_TTL_SECONDS,
+    );
+  }
+
+  async verifyRegistrationOtp(
+    input: VerifyRegistrationOtpInput,
+  ): Promise<RegistrationOtpProof> {
+    const challenge = await this.prisma.yeuCauOtp.findUnique({
+      where: { challengeId: input.challengeId },
+    });
+    const now = new Date();
+
+    if (
+      !challenge ||
+      challenge.soDienThoai !== input.soDienThoai ||
+      challenge.mucDich !== REGISTRATION_OTP_PURPOSE ||
+      challenge.daXacThucLuc !== null
+    ) {
+      this.throwOtpInvalid();
+    }
+    if (challenge.hetHanLuc <= now) {
+      throw new BadRequestException({
+        error: 'OTP_EXPIRED',
+        message: 'Mã OTP đã hết hạn.',
+      });
+    }
+    if (challenge.soLanThu >= MAX_OTP_ATTEMPTS) {
+      this.throwAttemptsExceeded();
+    }
+
+    if (
+      !this.cryptoService.matchesOtp(
+        challenge.challengeId,
+        input.otp,
+        challenge.maOtpHash,
+      )
+    ) {
+      const incremented = await this.prisma.yeuCauOtp.updateMany({
+        where: {
+          yeuCauOtpId: challenge.yeuCauOtpId,
+          daXacThucLuc: null,
+          soLanThu: { lt: MAX_OTP_ATTEMPTS },
+          hetHanLuc: { gt: now },
+        },
+        data: { soLanThu: { increment: 1 } },
+      });
+      if (incremented.count !== 1) {
+        await this.throwCurrentOtpState(input.challengeId, now);
+      }
+      this.throwOtpInvalid();
+    }
+
+    const otpProof = randomBytes(32).toString('base64url');
+    const proofExpiresAt = new Date(
+      now.getTime() + this.proofTtlSeconds * 1000,
+    );
+    const verified = await this.prisma.yeuCauOtp.updateMany({
+      where: {
+        yeuCauOtpId: challenge.yeuCauOtpId,
+        daXacThucLuc: null,
+        soLanThu: { lt: MAX_OTP_ATTEMPTS },
+        hetHanLuc: { gt: now },
+      },
+      data: {
+        daXacThucLuc: now,
+        proofHash: this.hashProof(otpProof),
+        proofHetHanLuc: proofExpiresAt,
+      },
+    });
+    if (verified.count !== 1) {
+      await this.throwCurrentOtpState(input.challengeId, now);
+    }
+
+    return {
+      otpProof,
+      expiresAt: proofExpiresAt.toISOString(),
+    };
+  }
+
+  async consumeRegistrationProof(
+    tx: Prisma.TransactionClient,
+    input: { soDienThoai: string; otpProof: string; usedAt: Date },
+  ): Promise<void> {
+    const claimed = await tx.yeuCauOtp.updateMany({
+      where: {
+        soDienThoai: input.soDienThoai,
+        mucDich: REGISTRATION_OTP_PURPOSE,
+        proofHash: this.hashProof(input.otpProof),
+        daXacThucLuc: { not: null },
+        proofHetHanLuc: { gt: input.usedAt },
+        daSuDungLuc: null,
+      },
+      data: { daSuDungLuc: input.usedAt },
+    });
+    if (claimed.count !== 1) {
+      throw new BadRequestException({
+        error: 'OTP_PROOF_INVALID',
+        message: 'Bằng chứng xác thực OTP không hợp lệ hoặc đã hết hạn.',
+      });
+    }
   }
 
   async requestRegistrationOtp(
@@ -130,6 +251,43 @@ export class OtpService {
       error: 'OTP_RESEND_TOO_SOON',
       message: 'Vui lòng chờ trước khi yêu cầu gửi lại OTP.',
     });
+  }
+
+  private throwOtpInvalid(): never {
+    throw new BadRequestException({
+      error: 'OTP_INVALID',
+      message: 'Mã OTP không hợp lệ.',
+    });
+  }
+
+  private throwAttemptsExceeded(): never {
+    throw new BadRequestException({
+      error: 'OTP_ATTEMPTS_EXCEEDED',
+      message: 'Đã vượt quá số lần nhập OTP cho phép.',
+    });
+  }
+
+  private async throwCurrentOtpState(
+    challengeId: string,
+    now: Date,
+  ): Promise<never> {
+    const current = await this.prisma.yeuCauOtp.findUnique({
+      where: { challengeId },
+    });
+    if (current && current.hetHanLuc <= now) {
+      throw new BadRequestException({
+        error: 'OTP_EXPIRED',
+        message: 'Mã OTP đã hết hạn.',
+      });
+    }
+    if (current && current.soLanThu >= MAX_OTP_ATTEMPTS) {
+      this.throwAttemptsExceeded();
+    }
+    this.throwOtpInvalid();
+  }
+
+  private hashProof(proof: string): string {
+    return createHash('sha256').update(proof).digest('hex');
   }
 
   private readPositiveInteger(value: string | undefined, fallback: number) {

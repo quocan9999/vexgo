@@ -2,6 +2,7 @@ import { Controller, Post, Body } from '@nestjs/common';
 import { AuthService } from './auth.service.js';
 import { RegisterDto, LoginDto } from './dto/auth.dto.js';
 import { RequestRegisterOtpDto } from './dto/request-register-otp.dto.js';
+import { VerifyRegisterOtpDto } from './dto/verify-register-otp.dto.js';
 import { OtpService } from './otp/otp.service.js';
 
 @Controller('auth')
@@ -14,6 +15,11 @@ export class AuthController {
   @Post('register/request-otp')
   requestRegisterOtp(@Body() dto: RequestRegisterOtpDto) {
     return this.otpService.requestRegistrationOtp(dto.soDienThoai);
+  }
+
+  @Post('register/verify-otp')
+  verifyRegisterOtp(@Body() dto: VerifyRegisterOtpDto) {
+    return this.otpService.verifyRegistrationOtp(dto);
   }
 
   @Post('register')
