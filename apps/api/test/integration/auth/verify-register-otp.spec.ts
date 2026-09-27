@@ -42,7 +42,7 @@ describe('POST /api/v1/auth/register/verify-otp', () => {
           ignoreEnvFile: true,
           load: [
             () => ({
-              OTP_PROVIDER: 'console',
+              SMS_PROVIDER: 'console',
               OTP_HASH_SECRET: 'integration-test-otp-secret',
               OTP_PROOF_TTL_SECONDS: '600',
             }),

@@ -8,6 +8,12 @@ export class OtpCryptoService {
 
   constructor(configService: ConfigService) {
     this.secret = configService.getOrThrow<string>('OTP_HASH_SECRET');
+    if (
+      configService.get<string>('NODE_ENV') === 'production' &&
+      (this.secret.length < 32 || this.secret.includes('replace-with'))
+    ) {
+      throw new Error('OTP_HASH_SECRET must contain at least 32 characters');
+    }
   }
 
   generateOtp(): string {
