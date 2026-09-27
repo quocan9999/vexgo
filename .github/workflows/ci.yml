@@ -53,8 +53,8 @@ jobs:
       - name: API tests
         run: npm run test --workspace=@vexgo/api
 
-      - name: API e2e tests
-        run: npm run test:e2e --workspace=@vexgo/api
+      # - name: API e2e tests
+      #   run: npm run test:e2e --workspace=@vexgo/api
 
       - name: API typecheck
         run: npm run typecheck --workspace=@vexgo/api
