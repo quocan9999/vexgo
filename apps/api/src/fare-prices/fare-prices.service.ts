@@ -1,0 +1,206 @@
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { Prisma } from '../generated/prisma/client.js';
+import {
+  getBusinessDate,
+  resolveBusinessTimeZone,
+} from '../common/time/business-date.js';
+import { PrismaService } from '../prisma/prisma.service.js';
+import type { QueryFarePricesDto } from './dto/query-fare-prices.dto.js';
+import type { FarePriceSortField } from './dto/query-fare-prices.dto.js';
+import {
+  deriveEffectiveState,
+  type FarePriceStatus,
+} from './fare-price.domain.js';
+
+const FARE_PRICE_SELECT = {
+  bangGiaId: true,
+  giaNiemYet: true,
+  tuNgay: true,
+  denNgay: true,
+  trangThai: true,
+  tuyenXeId: true,
+  loaiXeId: true,
+  createdAt: true,
+  updatedAt: true,
+  tuyenXe: {
+    select: {
+      tuyenXeId: true,
+      maTuyenXe: true,
+      diemDi: true,
+      diemDen: true,
+    },
+  },
+  loaiXe: { select: { loaiXeId: true, tenLoai: true } },
+} satisfies Prisma.BangGiaSelect;
+
+type FarePriceRecord = Prisma.BangGiaGetPayload<{
+  select: typeof FARE_PRICE_SELECT;
+}>;
+
+const sortFieldMap = {
+  listedPrice: 'giaNiemYet',
+  validFrom: 'tuNgay',
+  validTo: 'denNgay',
+  status: 'trangThai',
+} satisfies Record<
+  FarePriceSortField,
+  keyof Prisma.BangGiaOrderByWithRelationInput
+>;
+
+function toDateOnly(value: Date): string {
+  return value.toISOString().slice(0, 10);
+}
+
+function toUtcDate(dateOnly: string): Date {
+  const [year, month, day] = dateOnly.split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, day));
+}
+
+function mapFarePrice(record: FarePriceRecord, businessDate: string) {
+  const listedPrice = record.giaNiemYet.toNumber();
+  if (!Number.isSafeInteger(listedPrice) || listedPrice <= 0) {
+    throw new Error('BangGia contains an invalid listed VND price.');
+  }
+
+  const validFrom = toDateOnly(record.tuNgay);
+  const validTo = record.denNgay === null ? null : toDateOnly(record.denNgay);
+  const status = record.trangThai as FarePriceStatus;
+
+  return {
+    farePriceId: record.bangGiaId,
+    listedPrice,
+    currency: 'VND' as const,
+    validFrom,
+    validTo,
+    status,
+    effectiveState: deriveEffectiveState(
+      record.trangThai,
+      validFrom,
+      validTo,
+      businessDate,
+    ),
+    route: {
+      routeId: record.tuyenXe.tuyenXeId,
+      code: record.tuyenXe.maTuyenXe,
+      origin: record.tuyenXe.diemDi,
+      destination: record.tuyenXe.diemDen,
+    },
+    vehicleType: {
+      vehicleTypeId: record.loaiXe.loaiXeId,
+      name: record.loaiXe.tenLoai,
+    },
+    createdAt: record.createdAt.toISOString(),
+    updatedAt: record.updatedAt.toISOString(),
+  };
+}
+
+function buildSearchConditions(search: string): Prisma.BangGiaWhereInput[] {
+  return [
+    { tuyenXe: { is: { maTuyenXe: { contains: search } } } },
+    { tuyenXe: { is: { diemDi: { contains: search } } } },
+    { tuyenXe: { is: { diemDen: { contains: search } } } },
+    { loaiXe: { is: { tenLoai: { contains: search } } } },
+  ];
+}
+
+@Injectable()
+export class FarePricesService {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly config: ConfigService,
+  ) {}
+
+  async findAll(query: QueryFarePricesDto) {
+    const businessTimeZone = resolveBusinessTimeZone(
+      this.config.get<string>('BUSINESS_TIME_ZONE'),
+    );
+    const businessDate = getBusinessDate(businessTimeZone);
+    const where: Prisma.BangGiaWhereInput = {};
+    const search = query.search?.trim();
+
+    if (search) where.OR = buildSearchConditions(search);
+    if (query.routeId !== undefined) where.tuyenXeId = query.routeId;
+    if (query.vehicleTypeId !== undefined) {
+      where.loaiXeId = query.vehicleTypeId;
+    }
+    if (query.status) where.trangThai = query.status;
+
+    if (query.effectiveState) {
+      const date = toUtcDate(businessDate);
+      const conditions: Prisma.BangGiaWhereInput[] = [];
+
+      switch (query.effectiveState) {
+        case 'TAM_NGUNG':
+          conditions.push({ trangThai: 'TAM_NGUNG' });
+          break;
+        case 'CHUA_HIEU_LUC':
+          conditions.push(
+            { trangThai: 'HOAT_DONG' },
+            { tuNgay: { gt: date } },
+          );
+          break;
+        case 'DANG_HIEU_LUC':
+          conditions.push(
+            { trangThai: 'HOAT_DONG' },
+            { tuNgay: { lte: date } },
+            { OR: [{ denNgay: null }, { denNgay: { gte: date } }] },
+          );
+          break;
+        case 'HET_HIEU_LUC':
+          conditions.push(
+            { trangThai: 'HOAT_DONG' },
+            { denNgay: { lt: date } },
+          );
+          break;
+      }
+
+      where.AND = conditions;
+    }
+
+    const sortDirection = query.sortDirection ?? 'desc';
+    const [records, totalItems] = await Promise.all([
+      this.prisma.bangGia.findMany({
+        where,
+        orderBy: [
+          { [sortFieldMap[query.sortBy]]: sortDirection },
+          { bangGiaId: 'desc' },
+        ],
+        skip: (query.page - 1) * query.pageSize,
+        take: query.pageSize,
+        select: FARE_PRICE_SELECT,
+      }),
+      this.prisma.bangGia.count({ where }),
+    ]);
+
+    return {
+      data: records.map((record) => mapFarePrice(record, businessDate)),
+      meta: {
+        page: query.page,
+        pageSize: query.pageSize,
+        totalItems,
+        totalPages: Math.ceil(totalItems / query.pageSize),
+      },
+    };
+  }
+
+  async findOne(id: number) {
+    const businessTimeZone = resolveBusinessTimeZone(
+      this.config.get<string>('BUSINESS_TIME_ZONE'),
+    );
+    const businessDate = getBusinessDate(businessTimeZone);
+    const record = await this.prisma.bangGia.findUnique({
+      where: { bangGiaId: id },
+      select: FARE_PRICE_SELECT,
+    });
+
+    if (!record) {
+      throw new NotFoundException({
+        error: 'FARE_PRICE_NOT_FOUND',
+        message: 'Không tìm thấy bảng giá.',
+      });
+    }
+
+    return { data: mapFarePrice(record, businessDate) };
+  }
+}

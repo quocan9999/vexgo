@@ -307,7 +307,7 @@
 
 .summary {
   flex: 0 0 auto;
-  color: #78869a;
+  color: var(--admin-text-muted);
   font-size: 12px;
   white-space: nowrap;
 }

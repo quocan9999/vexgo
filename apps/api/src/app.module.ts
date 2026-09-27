@@ -7,6 +7,7 @@ import { BusCompaniesModule } from './bus-companies/bus-companies.module.js';
 import { VehicleTypesModule } from './vehicle-types/vehicle-types.module.js';
 import { VehiclesModule } from './vehicles/vehicles.module.js';
 import { RoutesModule } from './routes/routes.module.js';
+import { FarePricesModule } from './fare-prices/fare-prices.module.js';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { RoutesModule } from './routes/routes.module.js';
     VehicleTypesModule,
     VehiclesModule,
     RoutesModule,
+    FarePricesModule,
   ],
 })
 export class AppModule {}
