@@ -53,6 +53,10 @@ export type CreateFarePriceRequest = {
   status: FarePriceStatus;
 };
 
+export type UpdateFarePriceRequest = Partial<
+  Pick<CreateFarePriceRequest, 'listedPrice' | 'validFrom' | 'validTo'>
+>;
+
 export type FarePriceListQuery = {
   page: number;
   pageSize: number;

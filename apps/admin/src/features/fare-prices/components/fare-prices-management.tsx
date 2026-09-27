@@ -53,6 +53,8 @@ const EFFECTIVE_STATE_LABELS: Record<FarePriceEffectiveState, string> = {
   TAM_NGUNG: 'Tạm ngưng',
 };
 
+type FarePriceNotice = { tone: 'success' | 'error'; message: string };
+
 function formatPrice(value: number) {
   return `${new Intl.NumberFormat('vi-VN').format(value)} ₫`;
 }
@@ -110,7 +112,7 @@ export function FarePricesManagement() {
   } = useFarePrices();
   const [selectedFarePriceId, setSelectedFarePriceId] = useState<number | null>(null);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [notice, setNotice] = useState<FarePriceNotice | null>(null);
   const [routeOptions, setRouteOptions] = useState<FarePriceOptionsState>({ status: 'loading' });
   const [vehicleTypeOptions, setVehicleTypeOptions] = useState<FarePriceOptionsState>({ status: 'loading' });
   const [routeOptionsRetry, setRouteOptionsRetry] = useState(0);
@@ -162,13 +164,24 @@ export function FarePricesManagement() {
   }
 
   function openCreateDialog() {
-    setSuccessMessage(null);
+    setNotice(null);
     setCreateDialogOpen(true);
   }
 
-  function handleFarePriceCreated() {
+  function handleFarePriceCreated(farePrice: FarePrice) {
     setCreateDialogOpen(false);
-    setSuccessMessage('Đã tạo bảng giá vé.');
+    setNotice({ tone: 'success', message: `Đã tạo bảng giá vé ${farePrice.route.code}.` });
+    refresh();
+  }
+
+  function handleFarePriceUpdated(farePrice: FarePrice) {
+    setNotice({ tone: 'success', message: `Đã cập nhật bảng giá vé ${farePrice.route.code}.` });
+    refresh();
+  }
+
+  function handleFarePriceNotFound() {
+    setSelectedFarePriceId(null);
+    setNotice({ tone: 'error', message: 'Bảng giá không còn tồn tại. Danh sách đã được làm mới.' });
     refresh();
   }
 
@@ -261,10 +274,13 @@ export function FarePricesManagement() {
           aria-labelledby="fare-prices-title"
           className="panel admin-resource-panel"
         >
-          {successMessage && (
-            <p className={styles.successNotice} role="status">
-              <CheckCircle2 aria-hidden="true" size={16} />
-              <span>{successMessage}</span>
+          {notice && (
+            <p
+              className={notice.tone === 'success' ? styles.successNotice : styles.errorNotice}
+              role={notice.tone === 'success' ? 'status' : 'alert'}
+            >
+              {notice.tone === 'success' && <CheckCircle2 aria-hidden="true" size={16} />}
+              <span>{notice.message}</span>
             </p>
           )}
           <FilterToolbar totalItems={error ? null : farePricePage?.meta.totalItems ?? null}>
@@ -445,7 +461,13 @@ export function FarePricesManagement() {
       {selectedFarePriceId !== null && (
         <FarePriceDetailSheet
           farePriceId={selectedFarePriceId}
+          onNotFound={handleFarePriceNotFound}
           onClose={() => setSelectedFarePriceId(null)}
+          onRetryRouteOptions={retryRouteOptions}
+          onRetryVehicleTypeOptions={retryVehicleTypeOptions}
+          onUpdated={handleFarePriceUpdated}
+          routeOptions={routeOptions}
+          vehicleTypeOptions={vehicleTypeOptions}
         />
       )}
       {createDialogOpen && (

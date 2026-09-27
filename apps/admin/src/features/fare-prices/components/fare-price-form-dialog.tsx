@@ -6,11 +6,13 @@ import { AdminFormDialog } from '@/components/admin/admin-form-dialog';
 import { Button } from '@/components/ui/button';
 import {
   createFarePrice,
+  updateFarePrice,
   FarePriceApiError,
   type FarePriceApiErrorDetail,
 } from '../services/fare-price-service';
 import type {
   CreateFarePriceRequest,
+  FarePrice,
   FarePriceOption,
   FarePriceOptionsState,
   FarePriceStatus,
@@ -18,12 +20,14 @@ import type {
 import styles from '../fare-prices.module.css';
 
 type FarePriceFormDialogProps = {
+  farePrice?: FarePrice;
   routeOptions: FarePriceOptionsState;
   vehicleTypeOptions: FarePriceOptionsState;
   onClose: () => void;
   onRetryRouteOptions: () => void;
   onRetryVehicleTypeOptions: () => void;
-  onSaved: () => void;
+  onSaved: (farePrice: FarePrice) => void;
+  onNotFound?: () => void;
 };
 
 type FormValues = {
@@ -63,16 +67,21 @@ function mapServerFieldErrors(details: FarePriceApiErrorDetail[]): FieldErrors {
   return errors;
 }
 
-function validate(values: FormValues, routeOptions: FarePriceOptionsState, vehicleTypeOptions: FarePriceOptionsState): FieldErrors {
+function validate(
+  values: FormValues,
+  routeOptions: FarePriceOptionsState,
+  vehicleTypeOptions: FarePriceOptionsState,
+  editing: boolean,
+): FieldErrors {
   const errors: FieldErrors = {};
   const routeId = Number(values.routeId);
   const vehicleTypeId = Number(values.vehicleTypeId);
   const listedPrice = Number(values.listedPrice);
 
-  if (!Number.isSafeInteger(routeId) || routeId < 1 || routeOptions.status !== 'success' || routeOptions.options.length === 0) {
+  if (!editing && (!Number.isSafeInteger(routeId) || routeId < 1 || routeOptions.status !== 'success' || routeOptions.options.length === 0)) {
     errors.routeId = 'Vui lòng chọn tuyến xe.';
   }
-  if (!Number.isSafeInteger(vehicleTypeId) || vehicleTypeId < 1 || vehicleTypeOptions.status !== 'success' || vehicleTypeOptions.options.length === 0) {
+  if (!editing && (!Number.isSafeInteger(vehicleTypeId) || vehicleTypeId < 1 || vehicleTypeOptions.status !== 'success' || vehicleTypeOptions.options.length === 0)) {
     errors.vehicleTypeId = 'Vui lòng chọn loại xe.';
   }
   if (!values.listedPrice.trim()) errors.listedPrice = 'Vui lòng nhập giá niêm yết.';
@@ -87,7 +96,7 @@ function validate(values: FormValues, routeOptions: FarePriceOptionsState, vehic
   } else if (values.validTo && isDateOnly(values.validFrom) && values.validTo < values.validFrom) {
     errors.validTo = 'Ngày kết thúc phải bằng hoặc sau ngày bắt đầu.';
   }
-  if (values.status !== 'HOAT_DONG' && values.status !== 'TAM_NGUNG') {
+  if (!editing && values.status !== 'HOAT_DONG' && values.status !== 'TAM_NGUNG') {
     errors.status = 'Vui lòng chọn trạng thái.';
   }
 
@@ -99,22 +108,26 @@ function optionRows(options: FarePriceOptionsState): FarePriceOption[] {
 }
 
 export function FarePriceFormDialog({
+  farePrice,
   routeOptions,
   vehicleTypeOptions,
   onClose,
   onRetryRouteOptions,
   onRetryVehicleTypeOptions,
   onSaved,
+  onNotFound,
 }: FarePriceFormDialogProps) {
+  const editing = farePrice !== undefined;
+  const idPrefix = editing ? `edit-fare-price-${farePrice.farePriceId}` : 'create-fare-price';
   const dialogRef = useRef<HTMLDialogElement>(null);
   const submittingRef = useRef(false);
   const [values, setValues] = useState<FormValues>({
-    routeId: '',
-    vehicleTypeId: '',
-    listedPrice: '',
-    validFrom: '',
-    validTo: '',
-    status: '',
+    routeId: farePrice ? String(farePrice.route.routeId) : '',
+    vehicleTypeId: farePrice ? String(farePrice.vehicleType.vehicleTypeId) : '',
+    listedPrice: farePrice ? String(farePrice.listedPrice) : '',
+    validFrom: farePrice?.validFrom ?? '',
+    validTo: farePrice?.validTo ?? '',
+    status: farePrice?.status ?? '',
   });
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -144,26 +157,34 @@ export function FarePriceFormDialog({
     if (submittingRef.current) return;
 
     setFormError(null);
-    const errors = validate(values, routeOptions, vehicleTypeOptions);
+    const errors = validate(values, routeOptions, vehicleTypeOptions, editing);
     setFieldErrors(errors);
     if (Object.keys(errors).length > 0) return;
 
     submittingRef.current = true;
     setSubmitting(true);
 
-    const input: CreateFarePriceRequest = {
-      routeId: Number(values.routeId),
-      vehicleTypeId: Number(values.vehicleTypeId),
-      listedPrice: Number(values.listedPrice),
-      validFrom: values.validFrom,
-      validTo: values.validTo || null,
-      status: values.status as FarePriceStatus,
-    };
-
     try {
-      await createFarePrice(input);
+      let savedFarePrice: FarePrice;
+      if (editing) {
+        savedFarePrice = await updateFarePrice(farePrice.farePriceId, {
+          listedPrice: Number(values.listedPrice),
+          validFrom: values.validFrom,
+          validTo: values.validTo || null,
+        });
+      } else {
+        const input: CreateFarePriceRequest = {
+          routeId: Number(values.routeId),
+          vehicleTypeId: Number(values.vehicleTypeId),
+          listedPrice: Number(values.listedPrice),
+          validFrom: values.validFrom,
+          validTo: values.validTo || null,
+          status: values.status as FarePriceStatus,
+        };
+        savedFarePrice = await createFarePrice(input);
+      }
       dialogRef.current?.close();
-      onSaved();
+      onSaved(savedFarePrice);
     } catch (requestError: unknown) {
       if (requestError instanceof FarePriceApiError) {
         if (requestError.code === 'FARE_PRICE_OVERLAP') {
@@ -177,7 +198,9 @@ export function FarePriceFormDialog({
           setRelationError('vehicleTypeId', 'Loại xe không còn tồn tại. Vui lòng chọn lại.');
           onRetryVehicleTypeOptions();
         } else if (requestError.code === 'FARE_PRICE_CONCURRENT_MODIFICATION') {
-          setFormError('Dữ liệu bảng giá vừa thay đổi đồng thời. Vui lòng thử lại.');
+          setFormError('Dữ liệu bảng giá vừa thay đổi đồng thời. Vui lòng tải lại và thử lại.');
+        } else if (requestError.code === 'FARE_PRICE_NOT_FOUND' && editing) {
+          onNotFound?.();
         } else {
           const serverErrors = mapServerFieldErrors(requestError.details);
           setFieldErrors(serverErrors);
@@ -188,7 +211,7 @@ export function FarePriceFormDialog({
       } else if (requestError instanceof TypeError) {
         setFormError('Không thể kết nối đến máy chủ API. Vui lòng thử lại.');
       } else {
-        setFormError('Không thể tạo bảng giá. Vui lòng thử lại.');
+        setFormError(editing ? 'Không thể cập nhật bảng giá. Vui lòng thử lại.' : 'Không thể tạo bảng giá. Vui lòng thử lại.');
       }
     } finally {
       submittingRef.current = false;
@@ -204,14 +227,14 @@ export function FarePriceFormDialog({
 
   const routeRows = optionRows(routeOptions);
   const vehicleTypeRows = optionRows(vehicleTypeOptions);
-  const routeUnavailable = routeOptions.status !== 'success' || routeRows.length === 0;
-  const vehicleTypeUnavailable = vehicleTypeOptions.status !== 'success' || vehicleTypeRows.length === 0;
+  const routeUnavailable = !editing && (routeOptions.status !== 'success' || routeRows.length === 0);
+  const vehicleTypeUnavailable = !editing && (vehicleTypeOptions.status !== 'success' || vehicleTypeRows.length === 0);
 
   return (
     <AdminFormDialog
       ariaBusy={submitting}
-      ariaDescribedBy="create-fare-price-description"
-      ariaLabelledBy="create-fare-price-title"
+      ariaDescribedBy={`${idPrefix}-description`}
+      ariaLabelledBy={`${idPrefix}-title`}
       dialogRef={dialogRef}
       onClose={onClose}
       preventDismiss={submitting}
@@ -220,13 +243,15 @@ export function FarePriceFormDialog({
         <div className="admin-dialog-header">
           <div className="admin-dialog-header__copy">
             <p className="eyebrow">BẢNG GIÁ VÉ</p>
-            <h2 id="create-fare-price-title">Thêm bảng giá</h2>
-            <p id="create-fare-price-description">
-              Thiết lập giá vé theo tuyến, loại xe và thời gian hiệu lực.
+            <h2 id={`${idPrefix}-title`}>{editing ? 'Chỉnh sửa bảng giá' : 'Thêm bảng giá'}</h2>
+            <p id={`${idPrefix}-description`}>
+              {editing
+                ? 'Cập nhật giá niêm yết và thời gian hiệu lực của bảng giá.'
+                : 'Thiết lập giá vé theo tuyến, loại xe và thời gian hiệu lực.'}
             </p>
           </div>
           <Button
-            aria-label="Đóng biểu mẫu thêm bảng giá"
+            aria-label={editing ? 'Đóng biểu mẫu chỉnh sửa bảng giá' : 'Đóng biểu mẫu thêm bảng giá'}
             className="icon-button"
             disabled={submitting}
             onClick={closeDialog}
@@ -240,13 +265,21 @@ export function FarePriceFormDialog({
         <form className="admin-crud-form" noValidate onSubmit={handleSubmit}>
           {formError && <p className="admin-crud-form-error" role="alert">{formError}</p>}
 
-          <div className="admin-crud-form-field">
-            <label htmlFor="create-fare-price-routeId">Tuyến xe *</label>
+          {editing && (
+            <div className="admin-crud-form-context">
+              <strong>{farePrice.route.code} — {farePrice.route.origin} → {farePrice.route.destination}</strong>
+              <span>Loại xe: {farePrice.vehicleType.name}</span>
+              <span>Trạng thái: {farePrice.status === 'HOAT_DONG' ? 'Hoạt động' : 'Tạm ngưng'}</span>
+            </div>
+          )}
+
+          {!editing && <div className="admin-crud-form-field">
+            <label htmlFor={`${idPrefix}-routeId`}>Tuyến xe *</label>
             <select
-              aria-describedby={fieldErrors.routeId ? 'create-fare-price-routeId-error' : undefined}
+              aria-describedby={fieldErrors.routeId ? `${idPrefix}-routeId-error` : undefined}
               aria-invalid={Boolean(fieldErrors.routeId)}
               disabled={submitting || routeUnavailable}
-              id="create-fare-price-routeId"
+              id={`${idPrefix}-routeId`}
               onChange={(event) => updateField('routeId', event.target.value)}
               required
               value={values.routeId}
@@ -256,26 +289,26 @@ export function FarePriceFormDialog({
                 <option key={option.id} value={option.id}>{option.label}</option>
               ))}
             </select>
-            {fieldError('routeId', 'create-fare-price-routeId-error')}
-          </div>
-          {routeOptions.status === 'loading' && <p role="status">Đang tải danh sách tuyến xe…</p>}
-          {routeOptions.status === 'error' && (
+            {fieldError('routeId', `${idPrefix}-routeId-error`)}
+          </div>}
+          {!editing && routeOptions.status === 'loading' && <p role="status">Đang tải danh sách tuyến xe…</p>}
+          {!editing && routeOptions.status === 'error' && (
             <div className="admin-crud-form-error" role="alert">
               <p>Không thể tải danh sách tuyến xe.</p>
               <Button onClick={onRetryRouteOptions} type="button" variant="secondary">Thử lại tuyến xe</Button>
             </div>
           )}
-          {routeOptions.status === 'success' && routeRows.length === 0 && (
+          {!editing && routeOptions.status === 'success' && routeRows.length === 0 && (
             <p className="admin-crud-form-error" role="alert">Chưa có tuyến xe để tạo bảng giá.</p>
           )}
 
-          <div className="admin-crud-form-field">
-            <label htmlFor="create-fare-price-vehicleTypeId">Loại xe *</label>
+          {!editing && <div className="admin-crud-form-field">
+            <label htmlFor={`${idPrefix}-vehicleTypeId`}>Loại xe *</label>
             <select
-              aria-describedby={fieldErrors.vehicleTypeId ? 'create-fare-price-vehicleTypeId-error' : undefined}
+              aria-describedby={fieldErrors.vehicleTypeId ? `${idPrefix}-vehicleTypeId-error` : undefined}
               aria-invalid={Boolean(fieldErrors.vehicleTypeId)}
               disabled={submitting || vehicleTypeUnavailable}
-              id="create-fare-price-vehicleTypeId"
+              id={`${idPrefix}-vehicleTypeId`}
               onChange={(event) => updateField('vehicleTypeId', event.target.value)}
               required
               value={values.vehicleTypeId}
@@ -285,27 +318,27 @@ export function FarePriceFormDialog({
                 <option key={option.id} value={option.id}>{option.label}</option>
               ))}
             </select>
-            {fieldError('vehicleTypeId', 'create-fare-price-vehicleTypeId-error')}
-          </div>
-          {vehicleTypeOptions.status === 'loading' && <p role="status">Đang tải danh sách loại xe…</p>}
-          {vehicleTypeOptions.status === 'error' && (
+            {fieldError('vehicleTypeId', `${idPrefix}-vehicleTypeId-error`)}
+          </div>}
+          {!editing && vehicleTypeOptions.status === 'loading' && <p role="status">Đang tải danh sách loại xe…</p>}
+          {!editing && vehicleTypeOptions.status === 'error' && (
             <div className="admin-crud-form-error" role="alert">
               <p>Không thể tải danh sách loại xe.</p>
               <Button onClick={onRetryVehicleTypeOptions} type="button" variant="secondary">Thử lại loại xe</Button>
             </div>
           )}
-          {vehicleTypeOptions.status === 'success' && vehicleTypeRows.length === 0 && (
+          {!editing && vehicleTypeOptions.status === 'success' && vehicleTypeRows.length === 0 && (
             <p className="admin-crud-form-error" role="alert">Chưa có loại xe để tạo bảng giá.</p>
           )}
 
           <div className="admin-crud-form-field">
-            <label htmlFor="create-fare-price-listedPrice">Giá niêm yết (VND) *</label>
+            <label htmlFor={`${idPrefix}-listedPrice`}>Giá niêm yết (VND) *</label>
             <input
-              aria-describedby={fieldErrors.listedPrice ? 'create-fare-price-listedPrice-error' : undefined}
+              aria-describedby={fieldErrors.listedPrice ? `${idPrefix}-listedPrice-error` : undefined}
               aria-invalid={Boolean(fieldErrors.listedPrice)}
               autoComplete="off"
               disabled={submitting}
-              id="create-fare-price-listedPrice"
+              id={`${idPrefix}-listedPrice`}
               inputMode="numeric"
               min="1"
               onChange={(event) => updateField('listedPrice', event.target.value)}
@@ -314,47 +347,47 @@ export function FarePriceFormDialog({
               type="number"
               value={values.listedPrice}
             />
-            {fieldError('listedPrice', 'create-fare-price-listedPrice-error')}
+            {fieldError('listedPrice', `${idPrefix}-listedPrice-error`)}
           </div>
 
           <div className="admin-crud-form-field">
-            <label htmlFor="create-fare-price-validFrom">Hiệu lực từ *</label>
+            <label htmlFor={`${idPrefix}-validFrom`}>Hiệu lực từ *</label>
             <input
-              aria-describedby={fieldErrors.validFrom ? 'create-fare-price-validFrom-error' : undefined}
+              aria-describedby={fieldErrors.validFrom ? `${idPrefix}-validFrom-error` : undefined}
               aria-invalid={Boolean(fieldErrors.validFrom)}
               disabled={submitting}
-              id="create-fare-price-validFrom"
+              id={`${idPrefix}-validFrom`}
               onChange={(event) => updateField('validFrom', event.target.value)}
               required
               type="date"
               value={values.validFrom}
             />
-            {fieldError('validFrom', 'create-fare-price-validFrom-error')}
+            {fieldError('validFrom', `${idPrefix}-validFrom-error`)}
           </div>
 
           <div className="admin-crud-form-field">
-            <label htmlFor="create-fare-price-validTo">Hiệu lực đến</label>
+            <label htmlFor={`${idPrefix}-validTo`}>Hiệu lực đến</label>
             <input
-              aria-describedby={fieldErrors.validTo ? 'create-fare-price-validTo-error' : 'create-fare-price-validTo-hint'}
+              aria-describedby={fieldErrors.validTo ? `${idPrefix}-validTo-error` : `${idPrefix}-validTo-hint`}
               aria-invalid={Boolean(fieldErrors.validTo)}
               disabled={submitting}
-              id="create-fare-price-validTo"
+              id={`${idPrefix}-validTo`}
               min={values.validFrom || undefined}
               onChange={(event) => updateField('validTo', event.target.value)}
               type="date"
               value={values.validTo}
             />
-            {fieldError('validTo', 'create-fare-price-validTo-error')}
-            {!fieldErrors.validTo && <span className={styles.fieldHint} id="create-fare-price-validTo-hint">Để trống nếu không giới hạn ngày kết thúc.</span>}
+            {fieldError('validTo', `${idPrefix}-validTo-error`)}
+            {!fieldErrors.validTo && <span className={styles.fieldHint} id={`${idPrefix}-validTo-hint`}>Để trống nếu không giới hạn ngày kết thúc.</span>}
           </div>
 
-          <div className="admin-crud-form-field">
-            <label htmlFor="create-fare-price-status">Trạng thái *</label>
+          {!editing && <div className="admin-crud-form-field">
+            <label htmlFor={`${idPrefix}-status`}>Trạng thái *</label>
             <select
-              aria-describedby={fieldErrors.status ? 'create-fare-price-status-error' : undefined}
+              aria-describedby={fieldErrors.status ? `${idPrefix}-status-error` : undefined}
               aria-invalid={Boolean(fieldErrors.status)}
               disabled={submitting}
-              id="create-fare-price-status"
+              id={`${idPrefix}-status`}
               onChange={(event) => updateField('status', event.target.value)}
               required
               value={values.status}
@@ -363,14 +396,14 @@ export function FarePriceFormDialog({
               <option value="HOAT_DONG">Hoạt động</option>
               <option value="TAM_NGUNG">Tạm ngưng</option>
             </select>
-            {fieldError('status', 'create-fare-price-status-error')}
-          </div>
+            {fieldError('status', `${idPrefix}-status-error`)}
+          </div>}
 
           <div className="admin-crud-form-actions">
             <Button disabled={submitting} onClick={closeDialog} type="button" variant="secondary">Hủy</Button>
             <Button disabled={submitting || routeUnavailable || vehicleTypeUnavailable} type="submit">
               {submitting && <LoaderCircle aria-hidden="true" className="admin-crud-form-spinner" size={16} />}
-              {submitting ? 'Đang tạo…' : 'Tạo bảng giá'}
+              {submitting ? (editing ? 'Đang lưu…' : 'Đang tạo…') : (editing ? 'Lưu thay đổi' : 'Tạo bảng giá')}
             </Button>
           </div>
         </form>

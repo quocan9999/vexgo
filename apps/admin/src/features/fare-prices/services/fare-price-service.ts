@@ -12,6 +12,7 @@ import {
   type FarePriceListQuery,
   type FarePriceOption,
   type PaginatedFarePrices,
+  type UpdateFarePriceRequest,
 } from '../types/fare-price';
 
 export type FarePriceApiErrorDetail = { field: string; message: string };
@@ -185,6 +186,24 @@ export async function createFarePrice(
   const body = await readResponse(
     await fetch(`${getApiBaseUrl()}/api/v1/fare-prices`, {
       method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    }),
+    'bảng giá',
+  );
+  if (!isRecord(body) || !isFarePrice(body.data)) {
+    throw new Error('API trả về thông tin bảng giá không hợp lệ.');
+  }
+  return body.data;
+}
+
+export async function updateFarePrice(
+  farePriceId: number,
+  input: UpdateFarePriceRequest,
+): Promise<FarePrice> {
+  const body = await readResponse(
+    await fetch(`${getApiBaseUrl()}/api/v1/fare-prices/${farePriceId}`, {
+      method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(input),
     }),

@@ -1,7 +1,12 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '../generated/prisma/client.js';
 import type { CreateFarePriceDto } from './dto/create-fare-price.dto.js';
+import type { UpdateFarePriceDto } from './dto/update-fare-price.dto.js';
 import {
   getBusinessDate,
   resolveBusinessTimeZone,
@@ -16,6 +21,7 @@ import {
 import {
   assertNoActiveFareOverlap,
   assertValidFarePeriod,
+  assertValidListedPrice,
   runFarePriceWriteTransaction,
   validateFarePriceRelations,
 } from './fare-price-integrity.js';
@@ -119,6 +125,7 @@ export class FarePricesService {
   ) {}
 
   async create(input: CreateFarePriceDto) {
+    assertValidListedPrice(input.listedPrice);
     assertValidFarePeriod(input.validFrom, input.validTo);
     const validTo = input.validTo ?? null;
 
@@ -149,6 +156,100 @@ export class FarePricesService {
             tuyenXeId: input.routeId,
             loaiXeId: input.vehicleTypeId,
           },
+          select: FARE_PRICE_SELECT,
+        });
+      },
+    );
+
+    const businessDate = getBusinessDate(
+      resolveBusinessTimeZone(this.config.get<string>('BUSINESS_TIME_ZONE')),
+    );
+    return { data: mapFarePrice(record, businessDate) };
+  }
+
+  async update(id: number, input: UpdateFarePriceDto) {
+    const hasChanges =
+      input.listedPrice !== undefined ||
+      input.validFrom !== undefined ||
+      input.validTo !== undefined;
+    if (!hasChanges) {
+      throw new BadRequestException({
+        error: 'VALIDATION_ERROR',
+        message: 'Dữ liệu yêu cầu không hợp lệ.',
+        details: [{ field: 'body', message: 'Cần cập nhật ít nhất một trường.' }],
+      });
+    }
+    if (input.listedPrice !== undefined) {
+      assertValidListedPrice(input.listedPrice);
+    }
+
+    const record = await runFarePriceWriteTransaction(
+      this.prisma,
+      async (transaction) => {
+        const current = await transaction.bangGia.findUnique({
+          where: { bangGiaId: id },
+          select: FARE_PRICE_SELECT,
+        });
+        if (!current) {
+          throw new NotFoundException({
+            error: 'FARE_PRICE_NOT_FOUND',
+            message: 'Không tìm thấy bảng giá.',
+          });
+        }
+        if (current.trangThai !== 'HOAT_DONG' && current.trangThai !== 'TAM_NGUNG') {
+          throw new Error(`BangGia contains an invalid persisted status: ${current.trangThai}`);
+        }
+
+        const currentListedPrice = current.giaNiemYet.toNumber();
+        if (
+          input.listedPrice === undefined &&
+          (!Number.isSafeInteger(currentListedPrice) || currentListedPrice <= 0)
+        ) {
+          throw new Error('BangGia contains an invalid listed VND price.');
+        }
+        const candidateListedPrice = input.listedPrice ?? currentListedPrice;
+        const currentValidFrom = toDateOnly(current.tuNgay);
+        const candidateValidFrom = input.validFrom ?? currentValidFrom;
+        const currentValidTo = current.denNgay === null ? null : toDateOnly(current.denNgay);
+        const candidateValidTo = input.validTo === undefined ? currentValidTo : input.validTo;
+
+        assertValidFarePeriod(candidateValidFrom, candidateValidTo);
+
+        if (current.trangThai === 'HOAT_DONG') {
+          await assertNoActiveFareOverlap(transaction, {
+            routeId: current.tuyenXeId,
+            vehicleTypeId: current.loaiXeId,
+            validFrom: candidateValidFrom,
+            validTo: candidateValidTo,
+            excludeFarePriceId: current.bangGiaId,
+          });
+        }
+
+        const unchanged =
+          candidateListedPrice === currentListedPrice &&
+          candidateValidFrom === currentValidFrom &&
+          candidateValidTo === currentValidTo;
+        if (unchanged) return current;
+
+        const data: Prisma.BangGiaUpdateInput = {
+          ...(input.listedPrice === undefined
+            ? {}
+            : { giaNiemYet: new Prisma.Decimal(candidateListedPrice) }),
+          ...(input.validFrom === undefined
+            ? {}
+            : { tuNgay: toUtcDate(candidateValidFrom) }),
+          ...(input.validTo === undefined
+            ? {}
+            : {
+                denNgay: candidateValidTo === null
+                  ? null
+                  : toUtcDate(candidateValidTo),
+              }),
+        };
+
+        return transaction.bangGia.update({
+          where: { bangGiaId: current.bangGiaId },
+          data,
           select: FARE_PRICE_SELECT,
         });
       },

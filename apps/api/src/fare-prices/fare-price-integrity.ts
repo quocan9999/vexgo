@@ -68,6 +68,19 @@ export function assertValidFarePeriod(
   }
 }
 
+export function assertValidListedPrice(value: number): void {
+  if (!Number.isSafeInteger(value) || value <= 0) {
+    throw new BadRequestException({
+      error: 'VALIDATION_ERROR',
+      message: 'Dữ liệu không hợp lệ.',
+      details: [{
+        field: 'listedPrice',
+        message: 'Giá niêm yết phải là số nguyên VND lớn hơn 0.',
+      }],
+    });
+  }
+}
+
 function dateOnlyToUtc(value: string): Date {
   return new Date(`${value}T00:00:00.000Z`);
 }

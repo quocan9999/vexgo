@@ -24,6 +24,19 @@
   font-weight: var(--admin-font-weight-medium);
 }
 
+.errorNotice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--admin-danger) 30%, white);
+  border-radius: var(--admin-radius-control);
+  background: color-mix(in srgb, var(--admin-danger) 5%, white);
+  color: var(--admin-danger);
+  font-size: var(--admin-font-size-xs);
+}
+
 .fieldHint {
   color: var(--admin-text-muted);
   font-size: var(--admin-font-size-xs);
@@ -133,6 +146,12 @@
   gap: 0;
   margin: 10px 0 0;
   padding: 0 25px 24px;
+}
+
+.detailActions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 12px 20px 20px;
 }
 
 .detailItem {
