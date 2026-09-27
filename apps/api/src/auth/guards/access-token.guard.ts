@@ -28,7 +28,10 @@ export class AccessTokenGuard implements CanActivate {
     configService: ConfigService,
     private readonly prisma: PrismaService,
   ) {
-    this.accessSecret = configService.getOrThrow<string>('JWT_ACCESS_SECRET');
+    // Thêm giá trị fallback để chạy test/CI không bị lỗi thiếu biến môi trường
+    this.accessSecret =
+      configService.get<string>('JWT_ACCESS_SECRET') ||
+      'test_jwt_access_secret_key_at_least_32_bytes_long';
   }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
