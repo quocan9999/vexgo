@@ -8,6 +8,7 @@ import { ConsoleSmsSender } from './sms/console-sms.sender.js';
 import { SMS_SENDER } from './sms/sms-sender.js';
 import { JwtModule } from '@nestjs/jwt';
 import { TokenService } from './tokens/token.service.js';
+import { AccessTokenGuard } from './guards/access-token.guard.js';
 
 @Module({
   imports: [PrismaModule, JwtModule.register({})],
@@ -17,9 +18,10 @@ import { TokenService } from './tokens/token.service.js';
     OtpCryptoService,
     OtpService,
     TokenService,
+    AccessTokenGuard,
     ConsoleSmsSender,
     { provide: SMS_SENDER, useExisting: ConsoleSmsSender },
   ],
-  exports: [TokenService, JwtModule],
+  exports: [TokenService, AccessTokenGuard, JwtModule],
 })
 export class AuthModule {}
