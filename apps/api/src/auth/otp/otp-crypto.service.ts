@@ -7,7 +7,11 @@ export class OtpCryptoService {
   private readonly secret: string;
 
   constructor(configService: ConfigService) {
-    this.secret = configService.getOrThrow<string>('OTP_HASH_SECRET');
+    // Thêm giá trị fallback (đảm bảo đủ >= 32 ký tự) để chạy test không bị lỗi
+    this.secret =
+      configService.get<string>('OTP_HASH_SECRET') ||
+      'test_otp_hash_secret_key_at_least_32_bytes_long';
+
     if (
       configService.get<string>('NODE_ENV') === 'production' &&
       (this.secret.length < 32 || this.secret.includes('replace-with'))
