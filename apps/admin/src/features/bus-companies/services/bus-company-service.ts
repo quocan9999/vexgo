@@ -190,6 +190,33 @@ export async function getBusCompanies(
   return body as unknown as PaginatedBusCompanies;
 }
 
+const BUS_COMPANY_FILTER_PAGE_SIZE = 100;
+
+export type BusCompanyFilterOption = { id: number; label: string };
+
+export async function getBusCompanyFilterOptions(
+  signal?: AbortSignal,
+): Promise<BusCompanyFilterOption[]> {
+  const query: BusCompanyListQuery = {
+    search: '', page: 1, pageSize: BUS_COMPANY_FILTER_PAGE_SIZE,
+    sortBy: 'name', sortDirection: 'asc',
+  };
+  const firstPage = await getBusCompanies(query, signal);
+  const { totalPages } = firstPage.meta;
+  if (!Number.isSafeInteger(totalPages) || totalPages < 0) {
+    throw new Error('API trả về thông tin phân trang bộ lọc nhà xe không hợp lệ.');
+  }
+  const remainingPages = await Promise.all(
+    Array.from({ length: Math.max(0, totalPages - 1) }, (_, index) =>
+      getBusCompanies({ ...query, page: index + 2 }, signal),
+    ),
+  );
+  return [firstPage, ...remainingPages].flatMap((page) => page.data).map((company) => ({
+    id: company.busCompanyId,
+    label: `${company.name} (${company.code})`,
+  }));
+}
+
 export async function getBusCompanyById(
   busCompanyId: number,
   signal?: AbortSignal,

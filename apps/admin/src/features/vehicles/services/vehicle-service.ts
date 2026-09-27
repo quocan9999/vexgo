@@ -1,8 +1,3 @@
-import { getBusCompanies } from '@/features/bus-companies/services/bus-company-service';
-import type {
-  BusCompanyListQuery,
-  PaginatedBusCompanies,
-} from '@/features/bus-companies/types/bus-company';
 import { getVehicleTypes } from '@/features/vehicle-types/services/vehicle-type-service';
 import type {
   PaginatedVehicleTypes,
@@ -241,16 +236,6 @@ async function collectAllPages<T>(
   return [firstPage, ...remainingPages].flatMap((page) => page.data);
 }
 
-function busCompanyQuery(page: number): BusCompanyListQuery {
-  return {
-    search: '',
-    page,
-    pageSize: FILTER_PAGE_SIZE,
-    sortBy: 'name',
-    sortDirection: 'asc',
-  };
-}
-
 function vehicleTypeQuery(page: number): VehicleTypeListQuery {
   return {
     search: '',
@@ -259,20 +244,6 @@ function vehicleTypeQuery(page: number): VehicleTypeListQuery {
     sortBy: 'name',
     sortDirection: 'asc',
   };
-}
-
-export async function getBusCompanyFilterOptions(
-  signal?: AbortSignal,
-): Promise<VehicleFilterOption[]> {
-  const firstPage = await getBusCompanies(busCompanyQuery(1), signal);
-  const companies = await collectAllPages<
-    PaginatedBusCompanies['data'][number]
-  >(firstPage, (page) => getBusCompanies(busCompanyQuery(page), signal));
-
-  return companies.map((company) => ({
-    id: company.busCompanyId,
-    label: company.name,
-  }));
 }
 
 export async function getVehicleTypeFilterOptions(

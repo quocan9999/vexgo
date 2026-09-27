@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { getBusCompanyFilterOptions } from '@/features/bus-companies/services/bus-company-service';
 import {
-  getBusCompanyFilterOptions,
   getVehicleTypeFilterOptions,
 } from '../services/vehicle-service';
 import type { VehicleFilterOption } from '../types/vehicle';

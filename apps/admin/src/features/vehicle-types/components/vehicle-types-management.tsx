@@ -393,7 +393,7 @@ export function VehicleTypesManagement() {
                             >
                               {sortButton('Cập nhật lần cuối', 'updatedAt')}
                             </th>
-                            <th scope="col">Thao tác</th>
+                            <th scope="col"></th>
                           </tr>
                         </thead>
                         <tbody>

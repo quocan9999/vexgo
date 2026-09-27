@@ -1,13 +1,13 @@
 'use client';
 
-import { Bus, Building2, Database, LogOut, Menu, Truck, X } from 'lucide-react';
+import { Bus, Building2, Database, LogOut, MapPinned, Menu, Truck, X } from 'lucide-react';
 import Link from 'next/link';
 import { useState, type ReactNode } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { signOutDemoAdmin } from '@/features/admin-auth/services/demo-auth';
 
 type SuperAdminLayoutProps = {
-  activeSection: 'overview' | 'bus-companies' | 'vehicle-types' | 'vehicles';
+  activeSection: 'overview' | 'bus-companies' | 'vehicle-types' | 'vehicles' | 'routes';
   children: ReactNode;
 };
 
@@ -27,7 +27,9 @@ export function SuperAdminLayout({
           ? 'Loại xe'
           : pathname.startsWith('/vehicles')
             ? 'Xe'
-            : 'Quản trị nền tảng';
+            : pathname.startsWith('/routes')
+              ? 'Tuyến xe'
+              : 'Quản trị nền tảng';
 
   function closeMobileNavigation() {
     setMobileNavigationOpen(false);
@@ -119,6 +121,15 @@ export function SuperAdminLayout({
                 <Truck size={18} />
               </span>
               <span>Xe</span>
+            </Link>
+            <Link
+              aria-current={activeSection === 'routes' ? 'page' : undefined}
+              className={`sidebar-link${activeSection === 'routes' ? ' is-active' : ''}`}
+              href="/routes"
+              onClick={closeMobileNavigation}
+            >
+              <span className="sidebar-link-icon"><MapPinned size={18} /></span>
+              <span>Tuyến xe</span>
             </Link>
           </nav>
         </div>
