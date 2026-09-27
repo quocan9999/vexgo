@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '../generated/prisma/client.js';
+import type { CreateFarePriceDto } from './dto/create-fare-price.dto.js';
 import {
   getBusinessDate,
   resolveBusinessTimeZone,
@@ -12,6 +13,12 @@ import {
   deriveEffectiveState,
   type FarePriceStatus,
 } from './fare-price.domain.js';
+import {
+  assertNoActiveFareOverlap,
+  assertValidFarePeriod,
+  runFarePriceWriteTransaction,
+  validateFarePriceRelations,
+} from './fare-price-integrity.js';
 
 const FARE_PRICE_SELECT = {
   bangGiaId: true,
@@ -110,6 +117,48 @@ export class FarePricesService {
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
   ) {}
+
+  async create(input: CreateFarePriceDto) {
+    assertValidFarePeriod(input.validFrom, input.validTo);
+    const validTo = input.validTo ?? null;
+
+    const record = await runFarePriceWriteTransaction(
+      this.prisma,
+      async (transaction) => {
+        await validateFarePriceRelations(
+          transaction,
+          input.routeId,
+          input.vehicleTypeId,
+        );
+
+        if (input.status === 'HOAT_DONG') {
+          await assertNoActiveFareOverlap(transaction, {
+            routeId: input.routeId,
+            vehicleTypeId: input.vehicleTypeId,
+            validFrom: input.validFrom,
+            validTo,
+          });
+        }
+
+        return transaction.bangGia.create({
+          data: {
+            giaNiemYet: new Prisma.Decimal(input.listedPrice),
+            tuNgay: toUtcDate(input.validFrom),
+            denNgay: validTo === null ? null : toUtcDate(validTo),
+            trangThai: input.status,
+            tuyenXeId: input.routeId,
+            loaiXeId: input.vehicleTypeId,
+          },
+          select: FARE_PRICE_SELECT,
+        });
+      },
+    );
+
+    const businessDate = getBusinessDate(
+      resolveBusinessTimeZone(this.config.get<string>('BUSINESS_TIME_ZONE')),
+    );
+    return { data: mapFarePrice(record, businessDate) };
+  }
 
   async findAll(query: QueryFarePricesDto) {
     const businessTimeZone = resolveBusinessTimeZone(

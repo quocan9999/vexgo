@@ -1,13 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { ArrowDown, ArrowUp, ArrowUpDown, Search } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, CheckCircle2, Search } from 'lucide-react';
 import {
   AdminDetailAction,
 } from '@/components/admin/admin-detail-action';
 import { AdminPageHeader } from '@/components/admin/admin-page-header';
 import { AdminPagination } from '@/components/admin/admin-pagination';
-import { AdminRefreshAction } from '@/components/admin/admin-page-actions';
+import { AdminCreateAction, AdminRefreshAction } from '@/components/admin/admin-page-actions';
 import { AdminStatusBadge } from '@/components/admin/admin-status-badge';
 import { AdminTableSkeleton } from '@/components/admin/admin-table-skeleton';
 import {
@@ -26,16 +26,13 @@ import type {
   FarePrice,
   FarePriceEffectiveState,
   FarePriceOption,
+  FarePriceOptionsState,
   FarePriceSortKey,
 } from '../types/fare-price';
 import { useFarePrices } from '../hooks/use-fare-prices';
 import { FarePriceDetailSheet } from './fare-price-detail-sheet';
+import { FarePriceFormDialog } from './fare-price-form-dialog';
 import styles from '../fare-prices.module.css';
-
-type OptionsState =
-  | { status: 'loading' }
-  | { status: 'success'; options: FarePriceOption[] }
-  | { status: 'error' };
 
 const STATUS_OPTIONS: FilterOption[] = [
   { value: 'HOAT_DONG', label: 'Hoạt động' },
@@ -112,8 +109,10 @@ export function FarePricesManagement() {
     refresh,
   } = useFarePrices();
   const [selectedFarePriceId, setSelectedFarePriceId] = useState<number | null>(null);
-  const [routeOptions, setRouteOptions] = useState<OptionsState>({ status: 'loading' });
-  const [vehicleTypeOptions, setVehicleTypeOptions] = useState<OptionsState>({ status: 'loading' });
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [routeOptions, setRouteOptions] = useState<FarePriceOptionsState>({ status: 'loading' });
+  const [vehicleTypeOptions, setVehicleTypeOptions] = useState<FarePriceOptionsState>({ status: 'loading' });
   const [routeOptionsRetry, setRouteOptionsRetry] = useState(0);
   const [vehicleTypeOptionsRetry, setVehicleTypeOptionsRetry] = useState(0);
 
@@ -160,6 +159,17 @@ export function FarePricesManagement() {
 
   function openDetails(farePrice: FarePrice) {
     setSelectedFarePriceId(farePrice.farePriceId);
+  }
+
+  function openCreateDialog() {
+    setSuccessMessage(null);
+    setCreateDialogOpen(true);
+  }
+
+  function handleFarePriceCreated() {
+    setCreateDialogOpen(false);
+    setSuccessMessage('Đã tạo bảng giá vé.');
+    refresh();
   }
 
   function retryRouteOptions() {
@@ -234,7 +244,8 @@ export function FarePricesManagement() {
       <div className="admin-page-content">
         <AdminPageHeader
           actions={
-            <div className="page-intro-actions">
+            <div className={`page-intro-actions ${styles.pageActions}`}>
+              <AdminCreateAction label="Thêm bảng giá" onClick={openCreateDialog} />
               <AdminRefreshAction loading={loading} onClick={refresh} />
             </div>
           }
@@ -250,6 +261,12 @@ export function FarePricesManagement() {
           aria-labelledby="fare-prices-title"
           className="panel admin-resource-panel"
         >
+          {successMessage && (
+            <p className={styles.successNotice} role="status">
+              <CheckCircle2 aria-hidden="true" size={16} />
+              <span>{successMessage}</span>
+            </p>
+          )}
           <FilterToolbar totalItems={error ? null : farePricePage?.meta.totalItems ?? null}>
             <SearchInput
               label="Tìm bảng giá"
@@ -429,6 +446,16 @@ export function FarePricesManagement() {
         <FarePriceDetailSheet
           farePriceId={selectedFarePriceId}
           onClose={() => setSelectedFarePriceId(null)}
+        />
+      )}
+      {createDialogOpen && (
+        <FarePriceFormDialog
+          onClose={() => setCreateDialogOpen(false)}
+          onRetryRouteOptions={retryRouteOptions}
+          onRetryVehicleTypeOptions={retryVehicleTypeOptions}
+          onSaved={handleFarePriceCreated}
+          routeOptions={routeOptions}
+          vehicleTypeOptions={vehicleTypeOptions}
         />
       )}
     </SuperAdminLayout>

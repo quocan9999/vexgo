@@ -20,11 +20,23 @@ jobs:
   api:
     name: API CI
     runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: ci
+          MYSQL_DATABASE: vexgo_ci
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
     env:
-      # Prisma generation reads these URLs but does not connect to a database.
-      DATABASE_URL: mysql://ci:ci@127.0.0.1:1/vexgo_ci
-      MIGRATION_URL: mysql://ci:ci@127.0.0.1:1/vexgo_ci_migration
-      SHADOW_DATABASE_URL: mysql://ci:ci@127.0.0.1:1/vexgo_ci_shadow
+      DATABASE_URL: mysql://root:ci@127.0.0.1:3306/vexgo_ci
+      MIGRATION_URL: mysql://root:ci@127.0.0.1:3306/vexgo_ci
+      SHADOW_DATABASE_URL: mysql://root:ci@127.0.0.1:3306/vexgo_ci_shadow
     steps:
       - uses: actions/checkout@v7
 
@@ -49,6 +61,9 @@ jobs:
       # This also generates Prisma Client, which is needed before tests and typecheck.
       - name: API build
         run: npm run build --workspace=@vexgo/api
+
+      - name: Deploy API migrations to MySQL
+        run: npm exec -- prisma migrate deploy
 
       - name: API tests
         run: npm run test --workspace=@vexgo/api

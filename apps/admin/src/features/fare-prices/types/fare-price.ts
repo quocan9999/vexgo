@@ -44,6 +44,15 @@ export type FarePrice = {
   updatedAt: string;
 };
 
+export type CreateFarePriceRequest = {
+  routeId: number;
+  vehicleTypeId: number;
+  listedPrice: number;
+  validFrom: string;
+  validTo: string | null;
+  status: FarePriceStatus;
+};
+
 export type FarePriceListQuery = {
   page: number;
   pageSize: number;
@@ -62,3 +71,8 @@ export type PaginatedFarePrices = {
 };
 
 export type FarePriceOption = { id: number; label: string };
+
+export type FarePriceOptionsState =
+  | { status: 'loading' }
+  | { status: 'success'; options: FarePriceOption[] }
+  | { status: 'error' };

@@ -6,6 +6,7 @@ import type { VehicleTypeListQuery } from '@/features/vehicle-types/types/vehicl
 import {
   FARE_PRICE_EFFECTIVE_STATES,
   FARE_PRICE_STATUSES,
+  type CreateFarePriceRequest,
   type FarePrice,
   type FarePriceEffectiveState,
   type FarePriceListQuery,
@@ -171,6 +172,23 @@ export async function getFarePriceById(
       signal,
     }),
     'thông tin bảng giá',
+  );
+  if (!isRecord(body) || !isFarePrice(body.data)) {
+    throw new Error('API trả về thông tin bảng giá không hợp lệ.');
+  }
+  return body.data;
+}
+
+export async function createFarePrice(
+  input: CreateFarePriceRequest,
+): Promise<FarePrice> {
+  const body = await readResponse(
+    await fetch(`${getApiBaseUrl()}/api/v1/fare-prices`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    }),
+    'bảng giá',
   );
   if (!isRecord(body) || !isFarePrice(body.data)) {
     throw new Error('API trả về thông tin bảng giá không hợp lệ.');

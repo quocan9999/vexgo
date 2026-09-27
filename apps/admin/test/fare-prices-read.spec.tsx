@@ -137,7 +137,7 @@ beforeAll(() => {
 });
 
 describe('Fare Prices list and detail behavior', () => {
-  it('renders API data, keeps create out of 04.1, and opens the shared detail sheet', async () => {
+  it('renders API data, exposes create, and opens the shared detail sheet', async () => {
     const api = installApi();
 
     render(<FarePricesManagement />);
@@ -145,7 +145,7 @@ describe('Fare Prices list and detail behavior', () => {
     expect(screen.getByRole('heading', { name: 'Quản lý bảng giá vé' })).toBeTruthy();
     expect(screen.getByText('Theo dõi giá vé theo tuyến, loại xe và thời gian hiệu lực.')).toBeTruthy();
     expect((await screen.findAllByText('Limousine')).length).toBeGreaterThan(0);
-    expect(screen.queryByRole('button', { name: 'Thêm bảng giá' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Thêm bảng giá' })).toBeTruthy();
     const mobileList = screen.getByRole('list', { name: 'Danh sách bảng giá dạng thẻ' });
     expect(mobileList.tagName).toBe('UL');
     expect(within(mobileList).getAllByRole('listitem')).toHaveLength(1);

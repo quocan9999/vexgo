@@ -1,8 +1,34 @@
 .description {
-  margin: -10px 0 18px;
+  margin: 8px 0 18px;
   color: var(--admin-text-muted);
   font-size: var(--admin-font-size-base);
   line-height: 1.5;
+}
+
+.pageActions > :global(.admin-page-action.button:first-child) {
+  width: 146px;
+  white-space: nowrap;
+}
+
+.successNotice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--admin-success-border);
+  border-radius: var(--admin-radius-control);
+  background: var(--admin-success-soft);
+  color: var(--admin-success);
+  font-size: var(--admin-font-size-xs);
+  font-weight: var(--admin-font-weight-medium);
+}
+
+.fieldHint {
+  color: var(--admin-text-muted);
+  font-size: var(--admin-font-size-xs);
+  font-weight: var(--admin-font-weight-regular);
+  line-height: 1.45;
 }
 
 .optionState {
