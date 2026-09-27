@@ -293,7 +293,7 @@ export function RoutesManagement() {
                           <th scope="col">Nhà xe</th>
                           <th aria-sort={sortBy === 'status' ? sortDirection === 'asc' ? 'ascending' : 'descending' : 'none'} scope="col">{sortButton('Trạng thái', 'status')}</th>
                           <th aria-sort={sortBy === 'createdAt' ? sortDirection === 'asc' ? 'ascending' : 'descending' : 'none'} scope="col">{sortButton('Ngày tạo', 'createdAt')}</th>
-                          <th scope="col">Thao tác</th>
+                          <th scope="col"></th>
                         </tr></thead>
                         <tbody>{items.map((route) => (
                           <tr key={route.routeId}>
