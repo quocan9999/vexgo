@@ -462,6 +462,38 @@ describe('VehiclesService writes', () => {
     expect(prisma.xe.update).not.toHaveBeenCalled();
   });
 
+  it('re-resolves company references after a foreign-key failure without reporting a trip conflict', async () => {
+    const foreignKeyError = prismaKnownError('P2003', {
+      field_name: 'Xe_nhaXeId_fkey',
+    });
+    vi.mocked(prisma.nhaXe.findUnique)
+      .mockResolvedValueOnce({ nhaXeId: 2 } as never)
+      .mockResolvedValueOnce(null);
+    vi.mocked(prisma.loaiXe.findUnique).mockResolvedValueOnce({
+      loaiXeId: 8,
+      nhaXeId: 2,
+    } as never);
+    vi.mocked(prisma.chuyenXe.count)
+      .mockResolvedValueOnce(0)
+      .mockResolvedValueOnce(0);
+    vi.mocked(prisma.xe.update).mockRejectedValueOnce(foreignKeyError);
+
+    const error = await service
+      .update(12, {
+        ...updateVehicleInput,
+        busCompanyId: 2,
+        vehicleTypeId: 8,
+      })
+      .catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(NotFoundException);
+    expect((error as NotFoundException).getResponse()).toEqual({
+      error: 'BUS_COMPANY_NOT_FOUND',
+      message: 'Không tìm thấy nhà xe.',
+    });
+    expect(prisma.chuyenXe.count).toHaveBeenCalledTimes(2);
+  });
+
   it('updates only plate and relation IDs and accepts an unchanged current plate', async () => {
     const input = { ...updateVehicleInput, licensePlate: '51B-123.45' };
     await service.update(12, input);

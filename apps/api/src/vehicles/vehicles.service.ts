@@ -340,7 +340,40 @@ export class VehiclesService {
         });
       }
       if (isCompanyChange && isForeignKeyViolation(error)) {
-        throw vehicleCompanyChangeConflict();
+        const tripCount = await this.prisma.chuyenXe.count({
+          where: { xeId: id },
+        });
+        if (tripCount > 0) throw vehicleCompanyChangeConflict();
+
+        const [currentBusCompany, currentVehicleType] = await Promise.all([
+          this.prisma.nhaXe.findUnique({
+            where: { nhaXeId: input.busCompanyId },
+            select: { nhaXeId: true },
+          }),
+          this.prisma.loaiXe.findUnique({
+            where: { loaiXeId: input.vehicleTypeId },
+            select: { loaiXeId: true, nhaXeId: true },
+          }),
+        ]);
+
+        if (!currentBusCompany) {
+          throw new NotFoundException({
+            error: 'BUS_COMPANY_NOT_FOUND',
+            message: 'Không tìm thấy nhà xe.',
+          });
+        }
+        if (!currentVehicleType) {
+          throw new NotFoundException({
+            error: 'VEHICLE_TYPE_NOT_FOUND',
+            message: 'Không tìm thấy loại xe.',
+          });
+        }
+        if (currentVehicleType.nhaXeId !== input.busCompanyId) {
+          throw new ConflictException({
+            error: 'VEHICLE_TYPE_COMPANY_MISMATCH',
+            message: 'Loại xe không thuộc nhà xe đã chọn.',
+          });
+        }
       }
       throw error;
     }

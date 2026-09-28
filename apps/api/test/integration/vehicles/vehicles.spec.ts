@@ -682,6 +682,7 @@ describe('Vehicles API request-pipeline integration', () => {
       loaiXeId: 8,
       nhaXeId: 2,
     } as never);
+    prisma.chuyenXe.count.mockResolvedValueOnce(0).mockResolvedValueOnce(1);
     prisma.xe.update.mockRejectedValueOnce(
       prismaKnownError('P2003', {
         field_name: 'ChuyenXe_nhaXeId_xeId_fkey',
