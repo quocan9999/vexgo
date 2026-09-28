@@ -43,6 +43,7 @@ describe('Fare Price target-state status HTTP and database behavior', () => {
           ? null
           : new Date(`${options.validTo ?? VALID_TO}T00:00:00.000Z`),
         trangThai: options.status ?? 'TAM_NGUNG',
+        nhaXeId: context.busCompanyId,
         tuyenXeId: context.routeId,
         loaiXeId: context.vehicleTypeId,
       },

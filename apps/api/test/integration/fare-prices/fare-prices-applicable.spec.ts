@@ -46,6 +46,7 @@ describe('Applicable Fare resolution HTTP contract with MySQL', () => {
         tuNgay: new Date(`${validFrom}T00:00:00.000Z`),
         denNgay: validTo === null ? null : new Date(`${validTo}T00:00:00.000Z`),
         trangThai: options.status ?? 'HOAT_DONG',
+        nhaXeId: context.busCompanyId,
         tuyenXeId: options.routeId ?? context.routeId,
         loaiXeId: options.vehicleTypeId ?? context.vehicleTypeId,
       },
@@ -158,7 +159,7 @@ describe('Applicable Fare resolution HTTP contract with MySQL', () => {
       select: { tuyenXeId: true },
     });
     const otherVehicleType = await context.prisma.loaiXe.create({
-      data: { tenLoai: `Test Fare Type ${suffix}` },
+      data: { nhaXeId: context.busCompanyId, tenLoai: `Test Fare Type ${suffix}` },
       select: { loaiXeId: true },
     });
 
