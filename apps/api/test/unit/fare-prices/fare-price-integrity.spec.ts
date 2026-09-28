@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import { Prisma } from '../../../src/generated/prisma/client.js';
-import { runFarePriceWriteTransaction } from '../../../src/fare-prices/fare-price-integrity.js';
+import {
+  runFarePriceWriteTransaction,
+  validateFarePriceRelations,
+} from '../../../src/fare-prices/fare-price-integrity.js';
 import type { PrismaService } from '../../../src/prisma/prisma.service.js';
 
 function serializationConflict() {
@@ -74,5 +77,25 @@ describe('Fare Price Serializable write transaction', () => {
       runFarePriceWriteTransaction(prisma, async () => undefined),
     ).rejects.toBe(databaseError);
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('fare price tenant relation invariant', () => {
+  it('rejects a route and vehicle type owned by different bus companies', async () => {
+    const transaction = {
+      tuyenXe: {
+        findUnique: vi.fn().mockResolvedValue({ tuyenXeId: 11, nhaXeId: 2 }),
+      },
+      loaiXe: {
+        findUnique: vi.fn().mockResolvedValue({ loaiXeId: 7, nhaXeId: 9 }),
+      },
+    } as never;
+
+    await expect(validateFarePriceRelations(transaction, 11, 7)).rejects.toMatchObject({
+      response: {
+        error: 'FARE_PRICE_TENANT_MISMATCH',
+        message: 'Tuyến xe và loại xe phải thuộc cùng một nhà xe.',
+      },
+    });
   });
 });

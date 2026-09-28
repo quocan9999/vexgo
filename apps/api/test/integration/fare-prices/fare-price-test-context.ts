@@ -44,7 +44,7 @@ export async function createFarePriceTestContext(): Promise<FarePriceTestContext
   });
 
   const vehicleType = await prisma.loaiXe.create({
-    data: { tenLoai: `Test Fare Type ${suffix}` },
+    data: { nhaXeId: company.nhaXeId, tenLoai: `Test Fare Type ${suffix}` },
     select: { loaiXeId: true },
   });
 

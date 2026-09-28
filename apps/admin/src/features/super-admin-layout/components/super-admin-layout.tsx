@@ -4,6 +4,7 @@ import { Bus, Building2, Database, LogOut, MapPinned, Menu, Ticket, Truck, X } f
 import Link from 'next/link';
 import { useState, type ReactNode } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
+import { useDemoAdminSession } from '@/features/admin-auth/hooks/use-demo-admin-session';
 import { signOutDemoAdmin } from '@/features/admin-auth/services/demo-auth';
 
 type SuperAdminLayoutProps = {
@@ -17,6 +18,7 @@ export function SuperAdminLayout({
 }: SuperAdminLayoutProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const tenantPreview = useDemoAdminSession() === 'tenant-preview';
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
   const breadcrumbLabel =
     pathname === '/'
@@ -59,7 +61,7 @@ export function SuperAdminLayout({
       >
         <Link
           className="brand-lockup"
-          href="/"
+          href={tenantPreview ? '/vehicle-types' : '/'}
           onClick={closeMobileNavigation}
         >
           <span className="brand-mark" aria-hidden="true">
@@ -68,99 +70,96 @@ export function SuperAdminLayout({
           <span className="brand-copy">
             <strong>VexGo</strong>
             {' '}
-            <small>SUPER ADMIN</small>
+            <small>{tenantPreview ? 'NHÀ XE · XEM TRƯỚC' : 'SUPER ADMIN'}</small>
           </span>
         </Link>
         <div aria-hidden="true" className="sidebar-divider" />
 
         <div className="sidebar-nav-group">
-          <p className="sidebar-label">KHÔNG GIAN QUẢN TRỊ</p>
-          <nav aria-label="Các khu vực">
-            <Link
-              aria-current={activeSection === 'overview' ? 'page' : undefined}
-              className={`sidebar-link${activeSection === 'overview' ? ' is-active' : ''}`}
-              href="/"
-              onClick={closeMobileNavigation}
-            >
-              <span className="sidebar-link-icon">
-                <Database size={18} />
-              </span>
-              <span>Tổng quan</span>
-            </Link>
-            <Link
-              aria-current={
-                activeSection === 'bus-companies' ? 'page' : undefined
-              }
-              className={`sidebar-link${activeSection === 'bus-companies' ? ' is-active' : ''}`}
-              href="/bus-companies"
-              onClick={closeMobileNavigation}
-            >
-              <span className="sidebar-link-icon">
-                <Building2 size={18} />
-              </span>
-              <span>Nhà xe</span>
-            </Link>
-            <Link
-              aria-current={
-                activeSection === 'vehicle-types' ? 'page' : undefined
-              }
-              className={`sidebar-link${activeSection === 'vehicle-types' ? ' is-active' : ''}`}
-              href="/vehicle-types"
-              onClick={closeMobileNavigation}
-            >
-              <span className="sidebar-link-icon">
-                <Bus size={18} />
-              </span>
-              <span>Loại xe</span>
-            </Link>
-            <Link
-              aria-current={activeSection === 'vehicles' ? 'page' : undefined}
-              className={`sidebar-link${activeSection === 'vehicles' ? ' is-active' : ''}`}
-              href="/vehicles"
-              onClick={closeMobileNavigation}
-            >
-              <span className="sidebar-link-icon">
-                <Truck size={18} />
-              </span>
-              <span>Xe</span>
-            </Link>
-            <Link
-              aria-current={activeSection === 'routes' ? 'page' : undefined}
-              className={`sidebar-link${activeSection === 'routes' ? ' is-active' : ''}`}
-              href="/routes"
-              onClick={closeMobileNavigation}
-            >
-              <span className="sidebar-link-icon"><MapPinned size={18} /></span>
-              <span>Tuyến xe</span>
-            </Link>
-            <Link
-              aria-current={activeSection === 'fare-prices' ? 'page' : undefined}
-              className={`sidebar-link${activeSection === 'fare-prices' ? ' is-active' : ''}`}
-              href="/fare-prices"
-              onClick={closeMobileNavigation}
-            >
-              <span className="sidebar-link-icon"><Ticket size={18} /></span>
-              <span>Bảng giá vé</span>
-            </Link>
+          <p className="sidebar-label">
+            {tenantPreview ? 'VẬN HÀNH' : 'QUẢN TRỊ NỀN TẢNG'}
+          </p>
+          <nav aria-label={tenantPreview ? 'Vận hành' : 'Quản trị nền tảng'}>
+            {tenantPreview ? (
+              <>
+                <Link
+                  aria-current={activeSection === 'vehicle-types' ? 'page' : undefined}
+                  className={`sidebar-link${activeSection === 'vehicle-types' ? ' is-active' : ''}`}
+                  href="/vehicle-types"
+                  onClick={closeMobileNavigation}
+                >
+                  <span className="sidebar-link-icon"><Bus size={18} /></span>
+                  <span>Loại xe</span>
+                </Link>
+                <Link
+                  aria-current={activeSection === 'vehicles' ? 'page' : undefined}
+                  className={`sidebar-link${activeSection === 'vehicles' ? ' is-active' : ''}`}
+                  href="/vehicles"
+                  onClick={closeMobileNavigation}
+                >
+                  <span className="sidebar-link-icon"><Truck size={18} /></span>
+                  <span>Xe</span>
+                </Link>
+                <Link
+                  aria-current={activeSection === 'routes' ? 'page' : undefined}
+                  className={`sidebar-link${activeSection === 'routes' ? ' is-active' : ''}`}
+                  href="/routes"
+                  onClick={closeMobileNavigation}
+                >
+                  <span className="sidebar-link-icon"><MapPinned size={18} /></span>
+                  <span>Tuyến xe</span>
+                </Link>
+                <Link
+                  aria-current={activeSection === 'fare-prices' ? 'page' : undefined}
+                  className={`sidebar-link${activeSection === 'fare-prices' ? ' is-active' : ''}`}
+                  href="/fare-prices"
+                  onClick={closeMobileNavigation}
+                >
+                  <span className="sidebar-link-icon"><Ticket size={18} /></span>
+                  <span>Bảng giá vé</span>
+                </Link>
+              </>
+            ) : (
+              <>
+                <Link
+                  aria-current={activeSection === 'overview' ? 'page' : undefined}
+                  className={`sidebar-link${activeSection === 'overview' ? ' is-active' : ''}`}
+                  href="/"
+                  onClick={closeMobileNavigation}
+                >
+                  <span className="sidebar-link-icon"><Database size={18} /></span>
+                  <span>Tổng quan</span>
+                </Link>
+                <Link
+                  aria-current={activeSection === 'bus-companies' ? 'page' : undefined}
+                  className={`sidebar-link${activeSection === 'bus-companies' ? ' is-active' : ''}`}
+                  href="/bus-companies"
+                  onClick={closeMobileNavigation}
+                >
+                  <span className="sidebar-link-icon"><Building2 size={18} /></span>
+                  <span>Nhà xe</span>
+                </Link>
+              </>
+            )}
           </nav>
         </div>
 
         <div className="sidebar-bottom">
           <div className="sidebar-profile">
-            <span className="profile-avatar">SA</span>
+            <span className="profile-avatar">{tenantPreview ? 'NV' : 'SA'}</span>
             <span className="profile-copy">
-              <strong>Super Admin</strong>
-              <small>Quản trị nền tảng</small>
+              <strong>{tenantPreview ? 'Nhà xe' : 'Super Admin'}</strong>
+              <small>{tenantPreview ? 'Giao diện xem trước' : 'Quản trị nền tảng'}</small>
             </span>
             <button
-              aria-label="Đăng xuất tài khoản Super Admin"
+              aria-label={tenantPreview ? 'Thoát xem trước nhà xe' : 'Đăng xuất tài khoản Super Admin'}
               className="sidebar-logout-button"
               onClick={logout}
-              title="Đăng xuất"
+              title={tenantPreview ? 'Thoát xem trước' : 'Đăng xuất'}
               type="button"
             >
               <LogOut aria-hidden="true" size={15} />
-              <span className="sidebar-logout-label">Đăng xuất</span>
+              <span className="sidebar-logout-label">{tenantPreview ? 'Thoát xem trước' : 'Đăng xuất'}</span>
             </button>
           </div>
         </div>

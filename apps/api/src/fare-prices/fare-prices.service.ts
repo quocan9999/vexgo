@@ -140,7 +140,7 @@ export class FarePricesService {
     const record = await runFarePriceWriteTransaction(
       this.prisma,
       async (transaction) => {
-        await validateFarePriceRelations(
+        const nhaXeId = await validateFarePriceRelations(
           transaction,
           input.routeId,
           input.vehicleTypeId,
@@ -161,6 +161,7 @@ export class FarePricesService {
             tuNgay: toUtcDate(input.validFrom),
             denNgay: validTo === null ? null : toUtcDate(validTo),
             trangThai: input.status,
+            nhaXeId,
             tuyenXeId: input.routeId,
             loaiXeId: input.vehicleTypeId,
           },

@@ -89,15 +89,15 @@ export async function validateFarePriceRelations(
   transaction: Pick<Prisma.TransactionClient, 'tuyenXe' | 'loaiXe'>,
   routeId: number,
   vehicleTypeId: number,
-): Promise<void> {
+): Promise<number> {
   const [route, vehicleType] = await Promise.all([
     transaction.tuyenXe.findUnique({
       where: { tuyenXeId: routeId },
-      select: { tuyenXeId: true },
+      select: { tuyenXeId: true, nhaXeId: true },
     }),
     transaction.loaiXe.findUnique({
       where: { loaiXeId: vehicleTypeId },
-      select: { loaiXeId: true },
+      select: { loaiXeId: true, nhaXeId: true },
     }),
   ]);
 
@@ -113,6 +113,14 @@ export async function validateFarePriceRelations(
       message: 'Không tìm thấy loại xe.',
     });
   }
+  if (route.nhaXeId !== vehicleType.nhaXeId) {
+    throw new ConflictException({
+      error: 'FARE_PRICE_TENANT_MISMATCH',
+      message: 'Tuyến xe và loại xe phải thuộc cùng một nhà xe.',
+    });
+  }
+
+  return route.nhaXeId;
 }
 
 export async function findActiveFareOverlap(

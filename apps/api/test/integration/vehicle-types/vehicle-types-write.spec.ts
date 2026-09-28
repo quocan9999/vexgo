@@ -23,7 +23,7 @@ const prisma = {
     create: vi.fn(),
     update: vi.fn(),
   },
-  nhaXe: { findMany: vi.fn(), count: vi.fn() },
+  nhaXe: { findUnique: vi.fn(), findMany: vi.fn(), count: vi.fn() },
 };
 
 function mariaDbUniqueError(index: string) {
@@ -61,6 +61,7 @@ describe('Vehicle type write API request-pipeline integration', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    prisma.nhaXe.findUnique.mockResolvedValue({ nhaXeId: 4 });
     prisma.loaiXe.create.mockResolvedValue(vehicleTypeRecord);
     prisma.loaiXe.update.mockResolvedValue(vehicleTypeRecord);
   });
@@ -71,6 +72,7 @@ describe('Vehicle type write API request-pipeline integration', () => {
       .send({
         name: '  Limousine 22 phòng  ',
         description: '  Loại xe giường phòng cao cấp  ',
+        busCompanyId: 4,
       })
       .expect(201);
 
@@ -87,6 +89,7 @@ describe('Vehicle type write API request-pipeline integration', () => {
       expect.objectContaining({
         data: {
           tenLoai: 'Limousine 22 phòng',
+          nhaXeId: 4,
           moTa: 'Loại xe giường phòng cao cấp',
         },
       }),
@@ -103,7 +106,7 @@ describe('Vehicle type write API request-pipeline integration', () => {
       ...vehicleTypeRecord,
       moTa: null,
     });
-    const body = { name: 'Limousine 22 phòng', ...(description !== undefined ? { description } : {}) };
+    const body = { name: 'Limousine 22 phòng', busCompanyId: 4, ...(description !== undefined ? { description } : {}) };
 
     const response = await request(app.getHttpServer())
       .post('/api/v1/vehicle-types')
@@ -145,12 +148,12 @@ describe('Vehicle type write API request-pipeline integration', () => {
 
   it('maps the database unique constraint to the vehicle type name conflict', async () => {
     prisma.loaiXe.create.mockRejectedValueOnce(
-      mariaDbUniqueError('LoaiXe_index_0'),
+      mariaDbUniqueError('LoaiXe_nhaXeId_tenLoai_key'),
     );
 
     const response = await request(app.getHttpServer())
       .post('/api/v1/vehicle-types')
-      .send({ name: 'Limousine 22 phòng' })
+      .send({ name: 'Limousine 22 phòng', busCompanyId: 4 })
       .expect(409);
 
     expect(response.body).toEqual({
@@ -159,7 +162,7 @@ describe('Vehicle type write API request-pipeline integration', () => {
       message: 'Tên loại xe đã tồn tại.',
     });
     expect(response.text).not.toContain('duplicate vehicle type name');
-    expect(response.text).not.toContain('LoaiXe_index_0');
+    expect(response.text).not.toContain('LoaiXe_nhaXeId_tenLoai_key');
   });
 
   it('updates and trims editable fields while preserving the mapped API contract', async () => {
@@ -271,7 +274,7 @@ describe('Vehicle type write API request-pipeline integration', () => {
 
   it('maps a duplicate update name to the vehicle type name conflict', async () => {
     prisma.loaiXe.update.mockRejectedValueOnce(
-      mariaDbUniqueError('LoaiXe_index_0'),
+      mariaDbUniqueError('LoaiXe_nhaXeId_tenLoai_key'),
     );
 
     const response = await request(app.getHttpServer())

@@ -50,6 +50,7 @@ describe('Fare Price create HTTP and database behavior', () => {
           ? null
           : new Date(`${overrides.validTo ?? VALID_TO}T00:00:00.000Z`),
         trangThai: overrides.status ?? 'HOAT_DONG',
+        nhaXeId: context.busCompanyId,
         tuyenXeId: context.routeId,
         loaiXeId: context.vehicleTypeId,
       },
@@ -299,7 +300,7 @@ describe('Fare Price create HTTP and database behavior', () => {
     }
 
     const otherType = await context.prisma.loaiXe.create({
-      data: { tenLoai: `Test Fare Other Type ${suffix}` },
+      data: { nhaXeId: context.busCompanyId, tenLoai: `Test Fare Other Type ${suffix}` },
       select: { loaiXeId: true },
     });
 
@@ -316,6 +317,40 @@ describe('Fare Price create HTTP and database behavior', () => {
       await context.prisma.loaiXe.delete({
         where: { loaiXeId: otherType.loaiXeId },
       });
+    }
+  });
+
+  it('rejects a route and vehicle type owned by different bus companies', async () => {
+    const suffix = randomUUID().replaceAll('-', '').slice(0, 10).toUpperCase();
+    const otherCompany = await context.prisma.nhaXe.create({
+      data: {
+        maNhaXe: `T04-X-${suffix}`,
+        tenNhaXe: `Test Fare Tenant ${suffix}`,
+        trangThai: 'HOAT_DONG',
+      },
+      select: { nhaXeId: true },
+    });
+    const otherType = await context.prisma.loaiXe.create({
+      data: {
+        nhaXeId: otherCompany.nhaXeId,
+        tenLoai: `Test Fare Tenant Type ${suffix}`,
+      },
+      select: { loaiXeId: true },
+    });
+
+    try {
+      const response = await request(context.app.getHttpServer())
+        .post('/api/v1/fare-prices')
+        .send(body({ vehicleTypeId: otherType.loaiXeId }))
+        .expect(409);
+
+      expect(response.body).toMatchObject({
+        error: 'FARE_PRICE_TENANT_MISMATCH',
+        message: 'Tuyến xe và loại xe phải thuộc cùng một nhà xe.',
+      });
+    } finally {
+      await context.prisma.loaiXe.delete({ where: { loaiXeId: otherType.loaiXeId } });
+      await context.prisma.nhaXe.delete({ where: { nhaXeId: otherCompany.nhaXeId } });
     }
   });
 });

@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const vehicleTypeRecord = {
   loaiXeId: 8,
+  nhaXeId: 4,
   tenLoai: 'Limousine 22 phòng',
   moTa: 'Loại xe giường phòng cao cấp',
   createdAt: new Date('2026-09-25T10:00:00.000Z'),
@@ -14,6 +15,7 @@ const vehicleTypeRecord = {
 };
 
 const prisma = {
+  nhaXe: { findUnique: vi.fn() },
   loaiXe: {
     findMany: vi.fn(),
     count: vi.fn(),
@@ -47,6 +49,7 @@ function mariaDbUniqueError(index: string) {
 describe('VehicleTypesService write operations', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(prisma.nhaXe.findUnique).mockResolvedValue({ nhaXeId: 4 } as never);
     vi.mocked(prisma.loaiXe.create).mockResolvedValue(vehicleTypeRecord);
     vi.mocked(prisma.loaiXe.update).mockResolvedValue(vehicleTypeRecord);
   });
@@ -56,6 +59,7 @@ describe('VehicleTypesService write operations', () => {
       service.create({
         name: 'Limousine 22 phòng',
         description: 'Loại xe giường phòng cao cấp',
+        busCompanyId: 4,
       }),
     ).resolves.toEqual({
       data: {
@@ -68,6 +72,7 @@ describe('VehicleTypesService write operations', () => {
     });
     expect(prisma.loaiXe.create).toHaveBeenCalledWith({
       data: {
+        nhaXeId: 4,
         tenLoai: 'Limousine 22 phòng',
         moTa: 'Loại xe giường phòng cao cấp',
       },
@@ -83,20 +88,20 @@ describe('VehicleTypesService write operations', () => {
 
   it.each([
     ['standard field target', { target: ['tenLoai'] }],
-    ['mapped index target', { target: 'LoaiXe_index_0' }],
+    ['tenant composite target', { target: ['nhaXeId', 'tenLoai'] }],
     [
       'MariaDB adapter target',
-      mariaDbUniqueError('LoaiXe_index_0').meta,
+      mariaDbUniqueError('LoaiXe_nhaXeId_tenLoai_key').meta,
     ],
   ])('maps the %s duplicate name to the domain conflict', async (_label, meta) => {
     const duplicateError =
       _label === 'MariaDB adapter target'
-        ? mariaDbUniqueError('LoaiXe_index_0')
+        ? mariaDbUniqueError('LoaiXe_nhaXeId_tenLoai_key')
         : knownRequestError('P2002', meta);
     vi.mocked(prisma.loaiXe.create).mockRejectedValueOnce(duplicateError);
 
     const error = await service
-      .create({ name: 'Limousine', description: null })
+      .create({ name: 'Limousine', description: null, busCompanyId: 4 })
       .catch((caught: unknown) => caught);
 
     expect(error).toBeInstanceOf(ConflictException);
@@ -118,7 +123,7 @@ describe('VehicleTypesService write operations', () => {
     vi.mocked(prisma.loaiXe.create).mockRejectedValueOnce(error);
 
     await expect(
-      service.create({ name: 'Limousine', description: null }),
+      service.create({ name: 'Limousine', description: null, busCompanyId: 4 }),
     ).rejects.toBe(error);
   });
 
@@ -173,7 +178,7 @@ describe('VehicleTypesService write operations', () => {
 
   it('maps a duplicate name from update to the domain conflict', async () => {
     vi.mocked(prisma.loaiXe.update).mockRejectedValueOnce(
-      mariaDbUniqueError('LoaiXe_index_0'),
+      mariaDbUniqueError('LoaiXe_nhaXeId_tenLoai_key'),
     );
 
     const error = await service

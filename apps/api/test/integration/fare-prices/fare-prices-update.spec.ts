@@ -41,6 +41,7 @@ describe('Fare Price update HTTP and database behavior', () => {
           ? null
           : new Date(`${options.validTo ?? VALID_TO}T00:00:00.000Z`),
         trangThai: options.status ?? 'HOAT_DONG',
+        nhaXeId: context.busCompanyId,
         tuyenXeId: context.routeId,
         loaiXeId: context.vehicleTypeId,
       },
@@ -313,6 +314,7 @@ describe('Fare Price update HTTP and database behavior', () => {
           ngayKhoiHanh: new Date('2099-09-01T00:00:00.000Z'),
           gioKhoiHanh: new Date('1970-01-01T08:00:00.000Z'),
           trangThai: 'CHUA_KHOI_HANH',
+          nhaXeId: context.busCompanyId,
           tuyenXeId: context.routeId,
           xeId: vehicle.xeId,
         },

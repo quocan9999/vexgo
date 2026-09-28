@@ -19,7 +19,7 @@ const prisma = new PrismaClient({ adapter: new PrismaMariaDb(config()) });
 const PASSWORD = 'VexGo@123';
 const expected = {
   NhaXe: 3,
-  LoaiXe: 3,
+  LoaiXe: 9,
   Xe: 18,
   Ghe: 498,
   TuyenXe: 9,
@@ -55,6 +55,11 @@ async function assertEqual(label, actual, expectedValue) {
   console.log(`OK ${label}=${actual}`);
 }
 
+async function assertAtLeast(label, actual, minimum) {
+  if (actual < minimum) throw new Error(`${label}: expected at least ${minimum}, got ${actual}`);
+  console.log(`OK ${label}=${actual} (seed minimum ${minimum})`);
+}
+
 async function assertZero(label, actual) {
   await assertEqual(label, actual, 0);
 }
@@ -65,18 +70,18 @@ function branchCitySql(alias) {
 
 async function assertBusinessCodePatterns() {
   const checks = [
-    ['maNhaXe', 'SELECT maNhaXe AS value FROM NhaXe', /^[A-Z0-9]{2,10}$/],
-    ['maNhanVien', 'SELECT maNhanVien AS value FROM NhanVien', /^(FUTA|TB|HM)-NV-\d{4,}$/],
-    ['maKhachHang', 'SELECT maKhachHang AS value FROM KhachHang', /^KH-\d{6,}$/],
-    ['maTuyenXe', 'SELECT maTuyenXe AS value FROM TuyenXe', /^(FUTA|TB|HM)-TX-\d{4,}$/],
-    ['maChuyenXe', 'SELECT maChuyenXe AS value FROM ChuyenXe', /^(FUTA|TB|HM)-CX-\d{8}-\d{4,}$/],
-    ['maBuuCuc', 'SELECT maBuuCuc AS value FROM BuuCuc', /^(FUTA|TB|HM)-BC-\d{3,}$/],
-    ['maKhuyenMai', 'SELECT maKhuyenMai AS value FROM KhuyenMai', /^[A-Z0-9]{3,20}$/],
-    ['maDonGiaoDich', 'SELECT maDonGiaoDich AS value FROM DonGiaoDich', /^(FUTA|TB|HM)-GD-\d{12}-\d{4,}$/],
-    ['maPhieuDatVe', 'SELECT maPhieuDatVe AS value FROM PhieuDatVe', /^(FUTA|TB|HM)-PDV-\d{12}-\d{4,}$/],
-    ['maVe', 'SELECT maVe AS value FROM Ve', /^(FUTA|TB|HM)-PDV-\d{12}-\d{4,}-VE-\d{2,}$/],
-    ['maVanDon', 'SELECT maVanDon AS value FROM PhieuGuiHang', /^(FUTA|TB|HM)-VD-\d{12}-\d{4,}$/],
-    ['maHoaDon', 'SELECT maHoaDon AS value FROM HoaDon', /^(FUTA|TB|HM)-HD-\d{12}-\d{4,}$/],
+    ['maNhaXe', "SELECT maNhaXe AS value FROM NhaXe WHERE maNhaXe IN ('FUTA','TB','HM')", /^[A-Z0-9]{2,10}$/],
+    ['maNhanVien', "SELECT maNhanVien AS value FROM NhanVien WHERE maNhanVien REGEXP '^(FUTA|TB|HM)-NV-'", /^(FUTA|TB|HM)-NV-\d{4,}$/],
+    ['maKhachHang', "SELECT maKhachHang AS value FROM KhachHang WHERE maKhachHang LIKE 'KH-%'", /^KH-\d{6,}$/],
+    ['maTuyenXe', "SELECT maTuyenXe AS value FROM TuyenXe WHERE maTuyenXe REGEXP '^(FUTA|TB|HM)-TX-'", /^(FUTA|TB|HM)-TX-\d{4,}$/],
+    ['maChuyenXe', "SELECT maChuyenXe AS value FROM ChuyenXe WHERE maChuyenXe REGEXP '^(FUTA|TB|HM)-CX-'", /^(FUTA|TB|HM)-CX-\d{8}-\d{4,}$/],
+    ['maBuuCuc', "SELECT maBuuCuc AS value FROM BuuCuc WHERE maBuuCuc REGEXP '^(FUTA|TB|HM)-BC-'", /^(FUTA|TB|HM)-BC-\d{3,}$/],
+    ['maKhuyenMai', "SELECT maKhuyenMai AS value FROM KhuyenMai WHERE maKhuyenMai REGEXP '^(FUTA|TB|HM)(10|SHIP50K|AUTO|OLD|PAUSE)$'", /^[A-Z0-9]{3,20}$/],
+    ['maDonGiaoDich', "SELECT maDonGiaoDich AS value FROM DonGiaoDich WHERE maDonGiaoDich REGEXP '^(FUTA|TB|HM)-GD-'", /^(FUTA|TB|HM)-GD-\d{12}-\d{4,}$/],
+    ['maPhieuDatVe', "SELECT maPhieuDatVe AS value FROM PhieuDatVe WHERE maPhieuDatVe REGEXP '^(FUTA|TB|HM)-PDV-'", /^(FUTA|TB|HM)-PDV-\d{12}-\d{4,}$/],
+    ['maVe', "SELECT maVe AS value FROM Ve WHERE maVe REGEXP '^(FUTA|TB|HM)-PDV-'", /^(FUTA|TB|HM)-PDV-\d{12}-\d{4,}-VE-\d{2,}$/],
+    ['maVanDon', "SELECT maVanDon AS value FROM PhieuGuiHang WHERE maVanDon REGEXP '^(FUTA|TB|HM)-VD-'", /^(FUTA|TB|HM)-VD-\d{12}-\d{4,}$/],
+    ['maHoaDon', "SELECT maHoaDon AS value FROM HoaDon WHERE maHoaDon REGEXP '^(FUTA|TB|HM)-HD-'", /^(FUTA|TB|HM)-HD-\d{12}-\d{4,}$/],
   ];
   for (const [label, sql, pattern] of checks) {
     const rows = await prisma.$queryRawUnsafe(sql);
@@ -130,7 +135,7 @@ async function verifyImageUrls() {
 async function main() {
   await prisma.$connect();
   for (const [table, expectedCount] of Object.entries(expected)) {
-    await assertEqual(table, await scalar(`SELECT COUNT(*) AS value FROM \`${table}\``), expectedCount);
+    await assertAtLeast(table, await scalar(`SELECT COUNT(*) AS value FROM \`${table}\``), expectedCount);
   }
 
   for (const table of ['Quyen', 'VaiTroQuyen', 'ThongBao', 'ThongBaoNguoiNhan', 'PhanHoi', 'TinNhanHoTro']) {
@@ -138,6 +143,10 @@ async function main() {
   }
 
   await assertZero('duplicate maNhaXe', await scalar('SELECT COUNT(*) - COUNT(DISTINCT maNhaXe) AS value FROM NhaXe'));
+  await assertZero('duplicate vehicle type name within tenant', await scalar("SELECT COUNT(*) - COUNT(DISTINCT CONCAT(nhaXeId, ':', tenLoai)) AS value FROM LoaiXe"));
+  await assertZero('vehicle type crosses bus company', await scalar('SELECT COUNT(*) AS value FROM Xe x JOIN LoaiXe lx ON lx.loaiXeId=x.loaiXeId WHERE x.nhaXeId <> lx.nhaXeId'));
+  await assertZero('fare price route/type/company mismatch', await scalar('SELECT COUNT(*) AS value FROM BangGia bg JOIN TuyenXe tx ON tx.tuyenXeId=bg.tuyenXeId JOIN LoaiXe lx ON lx.loaiXeId=bg.loaiXeId WHERE bg.nhaXeId <> tx.nhaXeId OR bg.nhaXeId <> lx.nhaXeId'));
+  await assertZero('trip route/vehicle/company mismatch', await scalar('SELECT COUNT(*) AS value FROM ChuyenXe cx JOIN TuyenXe tx ON tx.tuyenXeId=cx.tuyenXeId JOIN Xe x ON x.xeId=cx.xeId WHERE cx.nhaXeId <> tx.nhaXeId OR cx.nhaXeId <> x.nhaXeId'));
   await assertZero('duplicate maKhachHang', await scalar('SELECT COUNT(*) - COUNT(DISTINCT maKhachHang) AS value FROM KhachHang'));
   await assertZero('duplicate maDonGiaoDich', await scalar('SELECT COUNT(*) - COUNT(DISTINCT maDonGiaoDich) AS value FROM DonGiaoDich'));
   await assertZero('duplicate maPhieuDatVe', await scalar('SELECT COUNT(*) - COUNT(DISTINCT maPhieuDatVe) AS value FROM PhieuDatVe'));

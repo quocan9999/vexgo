@@ -39,6 +39,7 @@ describe('Fare Price concurrent create integrity with MySQL', () => {
         tuNgay: new Date(`${validFrom}T00:00:00.000Z`),
         denNgay: new Date(`${validTo}T00:00:00.000Z`),
         trangThai: 'HOAT_DONG',
+        nhaXeId: context.busCompanyId,
         tuyenXeId: context.routeId,
         loaiXeId: context.vehicleTypeId,
       },

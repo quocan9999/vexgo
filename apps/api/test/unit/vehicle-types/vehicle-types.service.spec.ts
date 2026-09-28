@@ -10,6 +10,7 @@ import {
 
 const vehicleTypeRecord = {
   loaiXeId: 1,
+  nhaXeId: 4,
   tenLoai: 'Limousine',
   moTa: 'Dòng xe limousine',
   createdAt: new Date('2026-09-25T10:00:00.000Z'),

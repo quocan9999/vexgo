@@ -88,6 +88,13 @@ function vehicleNotFound() {
   });
 }
 
+function vehicleCompanyChangeConflict() {
+  return new ConflictException({
+    error: 'VEHICLE_COMPANY_CHANGE_CONFLICT',
+    message: 'Không thể đổi nhà xe vì xe đã được gắn với chuyến xe.',
+  });
+}
+
 function isVehicleLicensePlateUniqueViolation(error: unknown): boolean {
   if (
     !(error instanceof Prisma.PrismaClientKnownRequestError) ||
@@ -221,7 +228,7 @@ export class VehiclesService {
       }),
       this.prisma.loaiXe.findUnique({
         where: { loaiXeId: input.vehicleTypeId },
-        select: { loaiXeId: true },
+        select: { loaiXeId: true, nhaXeId: true },
       }),
     ]);
 
@@ -235,6 +242,12 @@ export class VehiclesService {
       throw new NotFoundException({
         error: 'VEHICLE_TYPE_NOT_FOUND',
         message: 'Không tìm thấy loại xe.',
+      });
+    }
+    if (vehicleType.nhaXeId !== input.busCompanyId) {
+      throw new ConflictException({
+        error: 'VEHICLE_TYPE_COMPANY_MISMATCH',
+        message: 'Loại xe không thuộc nhà xe đã chọn.',
       });
     }
 
@@ -264,7 +277,7 @@ export class VehiclesService {
   async update(id: number, input: UpdateVehicleDto) {
     const existingVehicle = await this.prisma.xe.findUnique({
       where: { xeId: id },
-      select: { xeId: true },
+      select: { xeId: true, nhaXeId: true },
     });
 
     if (!existingVehicle) throw vehicleNotFound();
@@ -276,7 +289,7 @@ export class VehiclesService {
       }),
       this.prisma.loaiXe.findUnique({
         where: { loaiXeId: input.vehicleTypeId },
-        select: { loaiXeId: true },
+        select: { loaiXeId: true, nhaXeId: true },
       }),
     ]);
 
@@ -291,6 +304,20 @@ export class VehiclesService {
         error: 'VEHICLE_TYPE_NOT_FOUND',
         message: 'Không tìm thấy loại xe.',
       });
+    }
+    if (vehicleType.nhaXeId !== input.busCompanyId) {
+      throw new ConflictException({
+        error: 'VEHICLE_TYPE_COMPANY_MISMATCH',
+        message: 'Loại xe không thuộc nhà xe đã chọn.',
+      });
+    }
+
+    const isCompanyChange = input.busCompanyId !== existingVehicle.nhaXeId;
+    if (isCompanyChange) {
+      const tripCount = await this.prisma.chuyenXe.count({
+        where: { xeId: id },
+      });
+      if (tripCount > 0) throw vehicleCompanyChangeConflict();
     }
 
     try {
@@ -311,6 +338,42 @@ export class VehiclesService {
           error: 'VEHICLE_LICENSE_PLATE_EXISTS',
           message: 'Biển số xe đã tồn tại.',
         });
+      }
+      if (isCompanyChange && isForeignKeyViolation(error)) {
+        const tripCount = await this.prisma.chuyenXe.count({
+          where: { xeId: id },
+        });
+        if (tripCount > 0) throw vehicleCompanyChangeConflict();
+
+        const [currentBusCompany, currentVehicleType] = await Promise.all([
+          this.prisma.nhaXe.findUnique({
+            where: { nhaXeId: input.busCompanyId },
+            select: { nhaXeId: true },
+          }),
+          this.prisma.loaiXe.findUnique({
+            where: { loaiXeId: input.vehicleTypeId },
+            select: { loaiXeId: true, nhaXeId: true },
+          }),
+        ]);
+
+        if (!currentBusCompany) {
+          throw new NotFoundException({
+            error: 'BUS_COMPANY_NOT_FOUND',
+            message: 'Không tìm thấy nhà xe.',
+          });
+        }
+        if (!currentVehicleType) {
+          throw new NotFoundException({
+            error: 'VEHICLE_TYPE_NOT_FOUND',
+            message: 'Không tìm thấy loại xe.',
+          });
+        }
+        if (currentVehicleType.nhaXeId !== input.busCompanyId) {
+          throw new ConflictException({
+            error: 'VEHICLE_TYPE_COMPANY_MISMATCH',
+            message: 'Loại xe không thuộc nhà xe đã chọn.',
+          });
+        }
       }
       throw error;
     }
