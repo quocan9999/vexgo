@@ -3,6 +3,8 @@ import {
   ConflictException,
   Inject,
   Injectable,
+  Logger,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
@@ -37,6 +39,7 @@ export interface RegistrationOtpProof {
 
 @Injectable()
 export class OtpService {
+  private readonly logger = new Logger(OtpService.name);
   private readonly ttlSeconds: number;
   private readonly resendCooldownSeconds: number;
   private readonly proofTtlSeconds: number;
@@ -238,7 +241,45 @@ export class OtpService {
       throw error;
     }
 
-    await this.smsSender.sendOtp({ soDienThoai, otp });
+    try {
+      await this.smsSender.sendOtp({ soDienThoai, otp });
+    } catch {
+      try {
+        if (current) {
+          await this.prisma.yeuCauOtp.updateMany({
+            where: {
+              yeuCauOtpId: current.yeuCauOtpId,
+              challengeId,
+              daXacThucLuc: null,
+            },
+            data: {
+              challengeId: current.challengeId,
+              maOtpHash: current.maOtpHash,
+              soLanThu: current.soLanThu,
+              hetHanLuc: current.hetHanLuc,
+              daXacThucLuc: current.daXacThucLuc,
+              proofHash: current.proofHash,
+              proofHetHanLuc: current.proofHetHanLuc,
+              daSuDungLuc: current.daSuDungLuc,
+              updatedAt: current.updatedAt,
+            },
+          });
+        } else {
+          await this.prisma.yeuCauOtp.deleteMany({ where: { challengeId } });
+        }
+      } catch (cleanupError) {
+        this.logger.error(
+          'Could not roll back OTP challenge after SMS delivery failed',
+          cleanupError instanceof Error ? cleanupError.stack : undefined,
+        );
+      }
+
+      throw new ServiceUnavailableException({
+        error: 'OTP_DELIVERY_FAILED',
+        message: 'Không thể gửi mã OTP. Vui lòng thử lại.',
+      });
+    }
+
     return {
       challengeId,
       expiresAt: expiresAt.toISOString(),

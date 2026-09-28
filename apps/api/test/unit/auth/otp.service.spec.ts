@@ -1,5 +1,5 @@
 import { ConfigService } from '@nestjs/config';
-import { ConflictException } from '@nestjs/common';
+import { ConflictException, ServiceUnavailableException } from '@nestjs/common';
 import { Prisma } from '../../../src/generated/prisma/client.js';
 import { PrismaService } from '../../../src/prisma/prisma.service.js';
 import { OtpCryptoService } from '../../../src/auth/otp/otp-crypto.service.js';
@@ -17,6 +17,7 @@ const prismaMock = {
     findUnique: vi.fn(),
     create: vi.fn(),
     updateMany: vi.fn(),
+    deleteMany: vi.fn(),
   },
 };
 const prisma = prismaMock as unknown as PrismaService;
@@ -29,7 +30,7 @@ const smsSender: SmsSender = {
 };
 
 const config = new ConfigService({
-  OTP_HASH_SECRET: 'test-otp-secret-with-enough-entropy',
+  OTP_HASH_SECRET: 'test-only-otp-secret-for-vexgo-unit-tests-2026',
   OTP_TTL_SECONDS: '300',
   OTP_RESEND_COOLDOWN_SECONDS: '60',
 });
@@ -46,6 +47,12 @@ function uniqueConstraintError() {
 }
 
 describe('OtpCryptoService', () => {
+  it('fails closed when the OTP hash secret is missing or unsafe', () => {
+    expect(
+      () => new OtpCryptoService(new ConfigService({ OTP_HASH_SECRET: '' })),
+    ).toThrow('OTP_HASH_SECRET must contain at least 32 characters');
+  });
+
   it('generates a six-digit OTP and stores only a verifiable hash', () => {
     const otp = cryptoService.generateOtp();
     const hash = cryptoService.hashOtp('challenge-1', otp);
@@ -89,6 +96,79 @@ describe('OtpService requestRegistrationOtp', () => {
     });
     const createInput = prismaMock.yeuCauOtp.create.mock.calls[0][0];
     expect(createInput.data.maOtpHash).not.toBe(sentMessages[0].otp);
+  });
+
+  it('removes a newly-created challenge when SMS delivery fails', async () => {
+    vi.mocked(smsSender.sendOtp).mockRejectedValueOnce(
+      new Error('SMS provider unavailable'),
+    );
+
+    const deliveryError = await service
+      .requestRegistrationOtp('+84901234567')
+      .then(() => null, (error: unknown) => error);
+    expect(deliveryError).toBeInstanceOf(ServiceUnavailableException);
+    expect(
+      (deliveryError as ServiceUnavailableException).getResponse(),
+    ).toEqual({
+      error: 'OTP_DELIVERY_FAILED',
+      message: 'Không thể gửi mã OTP. Vui lòng thử lại.',
+    });
+
+    const created = prismaMock.yeuCauOtp.create.mock.calls[0][0];
+    expect(prismaMock.yeuCauOtp.deleteMany).toHaveBeenCalledWith({
+      where: { challengeId: created.data.challengeId },
+    });
+
+    await expect(
+      service.requestRegistrationOtp('+84901234567'),
+    ).resolves.toMatchObject({ challengeId: expect.any(String) });
+    expect(sentMessages).toHaveLength(1);
+  });
+
+  it('restores the previous challenge when a resend delivery fails', async () => {
+    const previousChallenge = {
+      yeuCauOtpId: 7,
+      challengeId: 'previous-challenge',
+      soDienThoai: '+84901234567',
+      mucDich: 'DANG_KY',
+      maOtpHash: 'previous-hash',
+      soLanThu: 1,
+      hetHanLuc: new Date('2026-09-28T00:05:00.000Z'),
+      daXacThucLuc: null,
+      proofHash: null,
+      proofHetHanLuc: null,
+      daSuDungLuc: null,
+      createdAt: new Date('2026-09-28T00:00:00.000Z'),
+      updatedAt: new Date('2026-09-27T23:58:00.000Z'),
+    };
+    prismaMock.yeuCauOtp.findUnique.mockResolvedValueOnce(previousChallenge);
+    vi.mocked(smsSender.sendOtp).mockRejectedValueOnce(
+      new Error('SMS provider unavailable'),
+    );
+
+    await expect(
+      service.requestRegistrationOtp('+84901234567'),
+    ).rejects.toBeInstanceOf(ServiceUnavailableException);
+
+    expect(prismaMock.yeuCauOtp.updateMany).toHaveBeenNthCalledWith(2, {
+      where: {
+        yeuCauOtpId: previousChallenge.yeuCauOtpId,
+        challengeId: expect.any(String),
+        daXacThucLuc: null,
+      },
+      data: {
+        challengeId: previousChallenge.challengeId,
+        maOtpHash: previousChallenge.maOtpHash,
+        soLanThu: previousChallenge.soLanThu,
+        hetHanLuc: previousChallenge.hetHanLuc,
+        daXacThucLuc: null,
+        proofHash: null,
+        proofHetHanLuc: null,
+        daSuDungLuc: null,
+        updatedAt: previousChallenge.updatedAt,
+      },
+    });
+    expect(prismaMock.yeuCauOtp.deleteMany).not.toHaveBeenCalled();
   });
 
   it('rejects a phone number that already has an account', async () => {
