@@ -88,6 +88,7 @@ export function FarePriceDetailSheet({
   const [statusSubmitting, setStatusSubmitting] = useState(false);
   const [statusError, setStatusError] = useState<string | null>(null);
   const statusSubmittingRef = useRef(false);
+  const onNotFoundRef = useRef(onNotFound);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const requestKey = `${farePriceId}:${retryCount}`;
   const requestMatches = request.key === requestKey;
@@ -100,6 +101,10 @@ export function FarePriceDetailSheet({
     requestMatches && request.status === 'success'
       ? (request.farePrice ?? null)
       : null;
+
+  useEffect(() => {
+    onNotFoundRef.current = onNotFound;
+  }, [onNotFound]);
 
   function handleFarePriceUpdated(updated: FarePrice) {
     setRequest({ key: requestKey, status: 'success', farePrice: updated });
@@ -140,6 +145,11 @@ export function FarePriceDetailSheet({
     } catch (requestError: unknown) {
       if (
         requestError instanceof FarePriceApiError &&
+        requestError.code === 'FARE_PRICE_NOT_FOUND'
+      ) {
+        onNotFound();
+      } else if (
+        requestError instanceof FarePriceApiError &&
         requestError.code === 'FARE_PRICE_OVERLAP' &&
         targetStatus === 'HOAT_DONG'
       ) {
@@ -177,10 +187,16 @@ export function FarePriceDetailSheet({
       .then((data) => {
         if (current) setRequest({ key, status: 'success', farePrice: data });
       })
-      .catch(() => {
-        if (current && !controller.signal.aborted) {
-          setRequest({ key, status: 'error' });
+      .catch((requestError: unknown) => {
+        if (!current || controller.signal.aborted) return;
+        if (
+          requestError instanceof FarePriceApiError &&
+          requestError.code === 'FARE_PRICE_NOT_FOUND'
+        ) {
+          onNotFoundRef.current();
+          return;
         }
+        setRequest({ key, status: 'error' });
       });
 
     return () => {

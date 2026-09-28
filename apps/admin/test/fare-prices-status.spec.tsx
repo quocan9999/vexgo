@@ -245,6 +245,35 @@ describe('Fare Price status lifecycle behavior', () => {
     expect(screen.getByRole('dialog', { name: 'Chi tiết bảng giá' })).toBe(detail);
   });
 
+  it('closes stale detail and refreshes the list when status mutation returns 404', async () => {
+    const api = installApi({
+      patchHandler: async () => response(
+        {
+          statusCode: 404,
+          error: 'FARE_PRICE_NOT_FOUND',
+          message: 'Không tìm thấy bảng giá.',
+        },
+        false,
+        404,
+      ),
+    });
+    render(<FarePricesManagement />);
+    const detail = await openDetail();
+    fireEvent.click(within(detail).getByRole('button', { name: 'Tạm ngưng' }));
+    const confirm = await screen.findByRole('dialog', { name: 'Tạm ngưng bảng giá?' });
+    fireEvent.click(
+      within(confirm).getByRole('button', { name: 'Tạm ngưng bảng giá' }),
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(api.getListRequests()).toBeGreaterThan(1);
+    });
+    expect(screen.getByRole('alert').textContent).toContain(
+      'Bảng giá không còn tồn tại.',
+    );
+  });
+
   it('maps concurrent modification and treats a stale same-state 200 as success', async () => {
     let api = installApi({
       initialStatus: 'TAM_NGUNG',

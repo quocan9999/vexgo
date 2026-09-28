@@ -63,15 +63,19 @@ const vehicleTypePage = {
   meta: { page: 1, pageSize: 100, totalItems: 1, totalPages: 1 },
 };
 
-function response(body: unknown, ok = true): Response {
+function response(body: unknown, ok = true, status = ok ? 200 : 500): Response {
   return {
     ok,
-    status: ok ? 200 : 500,
+    status,
     json: async () => body,
   } as Response;
 }
 
-function installApi(options: { failFirstFareList?: boolean; emptyFareList?: boolean } = {}) {
+function installApi(options: {
+  failFirstFareList?: boolean;
+  emptyFareList?: boolean;
+  missingFareDetail?: boolean;
+} = {}) {
   vi.stubEnv('NEXT_PUBLIC_API_URL', 'http://localhost:4000');
   const requests: string[] = [];
   let fareListRequests = 0;
@@ -80,6 +84,17 @@ function installApi(options: { failFirstFareList?: boolean; emptyFareList?: bool
     requests.push(`${url.pathname}${url.search}`);
 
     if (url.pathname === '/api/v1/fare-prices/15') {
+      if (options.missingFareDetail) {
+        return response(
+          {
+            statusCode: 404,
+            error: 'FARE_PRICE_NOT_FOUND',
+            message: 'Không tìm thấy bảng giá.',
+          },
+          false,
+          404,
+        );
+      }
       return response({ data: fare });
     }
     if (url.pathname === '/api/v1/fare-prices') {
@@ -182,6 +197,24 @@ describe('Fare Prices list and detail behavior', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }));
     expect((await screen.findAllByText('Limousine')).length).toBeGreaterThan(0);
     expect(api.getFareListRequests()).toBe(2);
+  });
+
+  it('closes a stale detail and refreshes the list when the detail API returns 404', async () => {
+    const api = installApi({ missingFareDetail: true });
+
+    render(<FarePricesManagement />);
+
+    fireEvent.click(
+      (await screen.findAllByRole('button', { name: 'Xem chi tiết SG-DL-01' }))[0]!,
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(api.getFareListRequests()).toBeGreaterThan(1);
+    });
+    expect(screen.getByRole('alert').textContent).toContain(
+      'Bảng giá không còn tồn tại.',
+    );
   });
 
   it('sends search to the API instead of filtering only the current page', async () => {
