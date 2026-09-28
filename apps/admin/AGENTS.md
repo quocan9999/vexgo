@@ -141,3 +141,4 @@ Không được kết luận UI READY nếu chưa kiểm tra visual ở hai view
 
 - UI/UX skills chỉ dùng để review consistency, accessibility, responsive và usability.
 - MUST NOT để UI/UX skill override `DESIGN.md`, shared component contract hoặc golden reference đã duyệt.
+- Sử dụng ui-ux-pro-max skill khi làm việc với frontend UI/UX
