@@ -51,8 +51,8 @@ describe('Auth login, refresh and logout HTTP contract', () => {
           load: [
             () => ({
               SMS_PROVIDER: 'console',
-              OTP_HASH_SECRET: 'integration-test-otp-secret',
-              JWT_ACCESS_SECRET: 'integration-test-access-secret',
+              OTP_HASH_SECRET: 'test-only-otp-secret-for-vexgo-unit-tests-2026',
+              JWT_ACCESS_SECRET: 'test-only-jwt-secret-for-vexgo-unit-tests-2026',
               JWT_ACCESS_TTL_SECONDS: '900',
               REFRESH_TOKEN_TTL_SECONDS: '2592000',
             }),
@@ -136,7 +136,7 @@ describe('Auth login, refresh and logout HTTP contract', () => {
   it('returns the token envelope for valid credentials', async () => {
     const response = await request(app.getHttpServer())
       .post('/api/v1/auth/login')
-      .send({ soDienThoai: PHONE, matKhau: 'VexGo@123' })
+      .send({ phoneNumber: PHONE, password: 'VexGo@123' })
       .expect(200);
 
     expect(response.body).toEqual({
@@ -146,10 +146,10 @@ describe('Auth login, refresh and logout HTTP contract', () => {
         tokenType: 'Bearer',
         expiresIn: 900,
         user: {
-          taiKhoanId: 42,
-          khachHangId: 12,
-          hoTen: 'Nguyễn Văn An',
-          soDienThoai: PHONE,
+          accountId: 42,
+          customerId: 12,
+          fullName: 'Nguyễn Văn An',
+          phoneNumber: PHONE,
           roles: ['KHACH_HANG'],
         },
       },
@@ -161,12 +161,12 @@ describe('Auth login, refresh and logout HTTP contract', () => {
     ['wrong password', account(), 'wrong-password'],
   ])(
     'returns the same INVALID_CREDENTIALS response for %s',
-    async (_name, stored, matKhau) => {
+    async (_name, stored, password) => {
       taiKhoan.findUnique.mockResolvedValueOnce(stored);
 
       const response = await request(app.getHttpServer())
         .post('/api/v1/auth/login')
-        .send({ soDienThoai: PHONE, matKhau })
+        .send({ phoneNumber: PHONE, password })
         .expect(401);
 
       expect(response.body).toEqual({
@@ -182,7 +182,7 @@ describe('Auth login, refresh and logout HTTP contract', () => {
 
     const response = await request(app.getHttpServer())
       .post('/api/v1/auth/login')
-      .send({ soDienThoai: PHONE, matKhau: 'VexGo@123' })
+      .send({ phoneNumber: PHONE, password: 'VexGo@123' })
       .expect(403);
 
     expect(response.body.error).toBe('ACCOUNT_INACTIVE');

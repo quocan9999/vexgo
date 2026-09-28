@@ -7,10 +7,10 @@ import type { PrismaService } from '../../../src/prisma/prisma.service.js';
 
 const NOW = new Date('2026-09-28T10:00:00.000Z');
 const user = {
-  taiKhoanId: 42,
-  khachHangId: 12,
-  hoTen: 'Nguyễn Văn An',
-  soDienThoai: '+84901234567',
+  accountId: 42,
+  customerId: 12,
+  fullName: 'Nguyễn Văn An',
+  phoneNumber: '+84901234567',
   roles: ['KHACH_HANG'],
 };
 
@@ -21,7 +21,7 @@ describe('TokenService createSession', () => {
   const service = new TokenService(
     jwtService as unknown as JwtService,
     new ConfigService({
-      JWT_ACCESS_SECRET: 'test-access-secret',
+      JWT_ACCESS_SECRET: 'test-only-jwt-secret-for-vexgo-unit-tests-2026',
       JWT_ACCESS_TTL_SECONDS: '900',
       REFRESH_TOKEN_TTL_SECONDS: '2592000',
     }),
@@ -59,7 +59,11 @@ describe('TokenService createSession', () => {
     expect(stored.refreshTokenHash).not.toBe(response.refreshToken);
     expect(jwtService.signAsync).toHaveBeenCalledWith(
       { sub: 42, sid: stored.sessionId, roles: ['KHACH_HANG'] },
-      { secret: 'test-access-secret', expiresIn: 900 },
+      {
+        secret: 'test-only-jwt-secret-for-vexgo-unit-tests-2026',
+        expiresIn: 900,
+        algorithm: 'HS256',
+      },
     );
   });
 

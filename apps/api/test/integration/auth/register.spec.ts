@@ -22,20 +22,20 @@ import { PrismaService } from '../../../src/prisma/prisma.service.js';
 const NOW = new Date('2026-09-28T10:00:00.000Z');
 const validPayload = {
   otpProof: 'verified-one-time-proof',
-  hoTen: 'Nguyễn Văn An',
-  soDienThoai: '+84901234567',
-  matKhau: 'VexGo@123',
+  fullName: 'Nguyễn Văn An',
+  phoneNumber: '+84901234567',
+  password: 'VexGo@123',
   email: 'an@example.com',
-  cccd: '079123456789',
-  ngaySinh: '2000-02-29',
+  citizenId: '079123456789',
+  dateOfBirth: '2000-02-29',
 };
 const account = {
   taiKhoanId: 42,
-  hoTen: validPayload.hoTen,
-  soDienThoai: validPayload.soDienThoai,
+  hoTen: validPayload.fullName,
+  soDienThoai: validPayload.phoneNumber,
   matKhau: '$2b$10$hashed',
   ngaySinh: new Date('2000-02-29T00:00:00.000Z'),
-  cccd: validPayload.cccd,
+  cccd: validPayload.citizenId,
   email: validPayload.email,
   daXacThucSoDienThoai: true,
   trangThai: 'HOAT_DONG',
@@ -80,8 +80,8 @@ describe('POST /api/v1/auth/register', () => {
           load: [
             () => ({
               SMS_PROVIDER: 'console',
-              OTP_HASH_SECRET: 'integration-test-otp-secret',
-              JWT_ACCESS_SECRET: 'integration-test-access-secret',
+              OTP_HASH_SECRET: 'test-only-otp-secret-for-vexgo-unit-tests-2026',
+              JWT_ACCESS_SECRET: 'test-only-jwt-secret-for-vexgo-unit-tests-2026',
               JWT_ACCESS_TTL_SECONDS: '900',
               REFRESH_TOKEN_TTL_SECONDS: '2592000',
             }),
@@ -148,15 +148,19 @@ describe('POST /api/v1/auth/register', () => {
         tokenType: 'Bearer',
         expiresIn: 900,
         user: {
-          taiKhoanId: 42,
-          khachHangId: 12,
-          hoTen: validPayload.hoTen,
-          soDienThoai: validPayload.soDienThoai,
+          accountId: 42,
+          customerId: 12,
+          fullName: validPayload.fullName,
+          phoneNumber: validPayload.phoneNumber,
           roles: ['KHACH_HANG'],
         },
       },
     });
-    expect(JSON.stringify(response.body)).not.toContain('matKhau');
+    expect(JSON.stringify(response.body)).not.toContain('password');
+    expect(response.body.data.user).not.toHaveProperty('taiKhoanId');
+    expect(response.body.data.user).not.toHaveProperty('khachHangId');
+    expect(response.body.data.user).not.toHaveProperty('hoTen');
+    expect(response.body.data.user).not.toHaveProperty('soDienThoai');
     expect(JSON.stringify(response.body)).not.toContain('refreshTokenHash');
   });
 
@@ -195,7 +199,7 @@ describe('POST /api/v1/auth/register', () => {
       .send({
         ...validPayload,
         otpProof: undefined,
-        ngaySinh: '2026-02-30',
+        dateOfBirth: '2026-02-30',
         role: 'ADMIN',
       })
       .expect(400);
@@ -205,7 +209,7 @@ describe('POST /api/v1/auth/register', () => {
       error: 'VALIDATION_ERROR',
       details: expect.arrayContaining([
         expect.objectContaining({ field: 'otpProof' }),
-        expect.objectContaining({ field: 'ngaySinh' }),
+        expect.objectContaining({ field: 'dateOfBirth' }),
         expect.objectContaining({ field: 'role' }),
       ]),
     });

@@ -15,11 +15,11 @@ export class UpdateMeDto {
   @IsString()
   @IsNotEmpty()
   @MaxLength(100)
-  hoTen?: string;
+  fullName?: string;
 
   @ValidateIf((_object, value) => value !== undefined && value !== null)
   @IsDateOnly({ message: 'Ngày sinh phải là ngày hợp lệ dạng YYYY-MM-DD.' })
-  ngaySinh?: string | null;
+  dateOfBirth?: string | null;
 
   @ValidateIf((_object, value) => value !== undefined && value !== null)
   @IsEmail({}, { message: 'Email không hợp lệ.' })
@@ -28,5 +28,5 @@ export class UpdateMeDto {
 
   @ValidateIf((_object, value) => value !== undefined && value !== null)
   @Matches(CCCD_PATTERN, { message: 'CCCD phải gồm đúng 12 chữ số.' })
-  cccd?: string | null;
+  citizenId?: string | null;
 }

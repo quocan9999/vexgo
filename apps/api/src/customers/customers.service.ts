@@ -32,16 +32,16 @@ export class CustomersService {
     const account = await this.prisma.taiKhoan.update({
       where: { taiKhoanId },
       data: {
-        ...(dto.hoTen !== undefined ? { hoTen: dto.hoTen } : {}),
-        ...(dto.ngaySinh !== undefined
+        ...(dto.fullName !== undefined ? { hoTen: dto.fullName } : {}),
+        ...(dto.dateOfBirth !== undefined
           ? {
-              ngaySinh: dto.ngaySinh
-                ? new Date(`${dto.ngaySinh}T00:00:00.000Z`)
+              ngaySinh: dto.dateOfBirth
+                ? new Date(`${dto.dateOfBirth}T00:00:00.000Z`)
                 : null,
             }
           : {}),
         ...(dto.email !== undefined ? { email: dto.email } : {}),
-        ...(dto.cccd !== undefined ? { cccd: dto.cccd } : {}),
+        ...(dto.citizenId !== undefined ? { cccd: dto.citizenId } : {}),
       },
       include: customerProfileInclude,
     });
@@ -84,17 +84,17 @@ export class CustomersService {
       });
     }
     return {
-      taiKhoanId: account.taiKhoanId,
-      khachHangId: customer.khachHangId,
-      maKhachHang: customer.maKhachHang,
-      diemTichLuy: customer.diemTichLuy,
-      hoTen: account.hoTen,
-      soDienThoai: account.soDienThoai,
-      ngaySinh: account.ngaySinh?.toISOString().slice(0, 10) ?? null,
-      cccd: account.cccd,
+      accountId: account.taiKhoanId,
+      customerId: customer.khachHangId,
+      customerCode: customer.maKhachHang,
+      loyaltyPoints: customer.diemTichLuy,
+      fullName: account.hoTen,
+      phoneNumber: account.soDienThoai,
+      dateOfBirth: account.ngaySinh?.toISOString().slice(0, 10) ?? null,
+      citizenId: account.cccd,
       email: account.email,
-      daXacThucSoDienThoai: account.daXacThucSoDienThoai,
-      trangThai: account.trangThai,
+      phoneVerified: account.daXacThucSoDienThoai,
+      status: account.trangThai,
       createdAt: account.createdAt.toISOString(),
       updatedAt: account.updatedAt.toISOString(),
     };

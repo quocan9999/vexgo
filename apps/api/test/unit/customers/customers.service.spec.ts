@@ -42,17 +42,17 @@ describe('CustomersService', () => {
 
   it('maps the authenticated customer profile without sensitive fields', async () => {
     await expect(service.getMe(42)).resolves.toEqual({
-      taiKhoanId: 42,
-      khachHangId: 12,
-      maKhachHang: 'KH00000042',
-      diemTichLuy: 25,
-      hoTen: 'Nguyễn Văn An',
-      soDienThoai: '+84901234567',
-      ngaySinh: '2000-02-29',
-      cccd: '079123456789',
+      accountId: 42,
+      customerId: 12,
+      customerCode: 'KH00000042',
+      loyaltyPoints: 25,
+      fullName: 'Nguyễn Văn An',
+      phoneNumber: '+84901234567',
+      dateOfBirth: '2000-02-29',
+      citizenId: '079123456789',
       email: 'an@example.com',
-      daXacThucSoDienThoai: true,
-      trangThai: 'HOAT_DONG',
+      phoneVerified: true,
+      status: 'HOAT_DONG',
       createdAt: '2026-09-28T10:00:00.000Z',
       updatedAt: '2026-09-28T10:05:00.000Z',
     });
@@ -94,9 +94,9 @@ describe('CustomersService', () => {
     });
 
     const result = await service.updateMe(42, {
-      hoTen: 'Nguyễn Văn Bình',
-      ngaySinh: null,
-      cccd: null,
+      fullName: 'Nguyễn Văn Bình',
+      dateOfBirth: null,
+      citizenId: null,
       email: null,
     });
 
@@ -111,10 +111,10 @@ describe('CustomersService', () => {
       include: expect.any(Object),
     });
     expect(result).toMatchObject({
-      taiKhoanId: 42,
-      hoTen: 'Nguyễn Văn Bình',
-      ngaySinh: null,
-      cccd: null,
+      accountId: 42,
+      fullName: 'Nguyễn Văn Bình',
+      dateOfBirth: null,
+      citizenId: null,
       email: null,
     });
   });
@@ -125,18 +125,18 @@ describe('UpdateMeDto', () => {
 
   it('accepts a partial profile update and null-clearing', async () => {
     const dto = plainToInstance(UpdateMeDto, {
-      hoTen: 'Nguyễn Văn Bình',
-      ngaySinh: null,
+      fullName: 'Nguyễn Văn Bình',
+      dateOfBirth: null,
       email: null,
-      cccd: null,
+      citizenId: null,
     });
     await expect(validate(dto, options)).resolves.toEqual([]);
   });
 
   it.each([
-    ['impossible date', { ngaySinh: '2026-02-30' }, 'ngaySinh'],
-    ['phone cannot change', { soDienThoai: '+84909999999' }, 'soDienThoai'],
-    ['customer id cannot change', { khachHangId: 99 }, 'khachHangId'],
+    ['impossible date', { dateOfBirth: '2026-02-30' }, 'dateOfBirth'],
+    ['phone cannot change', { phoneNumber: '+84909999999' }, 'phoneNumber'],
+    ['customer id cannot change', { customerId: 99 }, 'customerId'],
   ])('rejects %s', async (_name, payload, field) => {
     const dto = plainToInstance(UpdateMeDto, payload);
     const errors = await validate(dto, options);

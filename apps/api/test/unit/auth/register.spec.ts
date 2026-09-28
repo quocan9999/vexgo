@@ -12,20 +12,20 @@ import type { PrismaService } from '../../../src/prisma/prisma.service.js';
 const NOW = new Date('2026-09-28T10:00:00.000Z');
 const dto: RegisterDto = {
   otpProof: 'verified-one-time-proof',
-  hoTen: 'Nguyễn Văn An',
-  soDienThoai: '+84901234567',
-  matKhau: 'VexGo@123',
+  fullName: 'Nguyễn Văn An',
+  phoneNumber: '+84901234567',
+  password: 'VexGo@123',
   email: 'an@example.com',
-  cccd: '079123456789',
-  ngaySinh: '2000-02-29',
+  citizenId: '079123456789',
+  dateOfBirth: '2000-02-29',
 };
 const account = {
   taiKhoanId: 42,
-  hoTen: dto.hoTen,
-  soDienThoai: dto.soDienThoai,
+  hoTen: dto.fullName,
+  soDienThoai: dto.phoneNumber,
   matKhau: '$2b$10$hashed',
-  ngaySinh: new Date('2000-02-29T00:00:00.000Z'),
-  cccd: dto.cccd,
+  ngaySinh: new Date(`${dto.dateOfBirth}T00:00:00.000Z`),
+  cccd: dto.citizenId,
   email: dto.email,
   daXacThucSoDienThoai: true,
   trangThai: 'HOAT_DONG',
@@ -53,10 +53,10 @@ const tokenResponse = {
   tokenType: 'Bearer' as const,
   expiresIn: 900,
   user: {
-    taiKhoanId: 42,
-    khachHangId: 12,
-    hoTen: dto.hoTen,
-    soDienThoai: dto.soDienThoai,
+    accountId: 42,
+    customerId: 12,
+    fullName: dto.fullName,
+    phoneNumber: dto.phoneNumber,
     roles: ['KHACH_HANG'],
   },
 };
@@ -106,18 +106,18 @@ describe('AuthService register', () => {
     await expect(service.register(dto)).resolves.toEqual(tokenResponse);
 
     expect(otpService.consumeRegistrationProof).toHaveBeenCalledWith(tx, {
-      soDienThoai: dto.soDienThoai,
+      soDienThoai: dto.phoneNumber,
       otpProof: dto.otpProof,
       usedAt: NOW,
     });
     expect(tx.taiKhoan.create).toHaveBeenCalledWith({
       data: {
-        hoTen: dto.hoTen,
-        soDienThoai: dto.soDienThoai,
+        hoTen: dto.fullName,
+        soDienThoai: dto.phoneNumber,
         matKhau: expect.not.stringMatching(/^VexGo@123$/),
         ngaySinh: new Date('2000-02-29T00:00:00.000Z'),
         email: dto.email,
-        cccd: dto.cccd,
+        cccd: dto.citizenId,
         daXacThucSoDienThoai: true,
         trangThai: 'HOAT_DONG',
       },
@@ -133,10 +133,10 @@ describe('AuthService register', () => {
       data: { taiKhoanId: 42, vaiTroId: 7 },
     });
     expect(tokenService.createSession).toHaveBeenCalledWith(tx, {
-      taiKhoanId: 42,
-      khachHangId: 12,
-      hoTen: dto.hoTen,
-      soDienThoai: dto.soDienThoai,
+      accountId: 42,
+      customerId: 12,
+      fullName: dto.fullName,
+      phoneNumber: dto.phoneNumber,
       roles: ['KHACH_HANG'],
     });
     expect(JSON.stringify(tokenResponse)).not.toContain('matKhau');

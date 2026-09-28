@@ -24,33 +24,33 @@ export class AuthService {
   ) {}
 
   async register(dto: RegisterDto) {
-    const hashedPassword = await bcrypt.hash(dto.matKhau, 10);
+    const hashedPassword = await bcrypt.hash(dto.password, 10);
     const usedAt = new Date();
 
     try {
       return await this.prisma.$transaction(async (tx) => {
         await this.otpService.consumeRegistrationProof(tx, {
-          soDienThoai: dto.soDienThoai,
+          soDienThoai: dto.phoneNumber,
           otpProof: dto.otpProof,
           usedAt,
         });
 
         const existing = await tx.taiKhoan.findUnique({
-          where: { soDienThoai: dto.soDienThoai },
+          where: { soDienThoai: dto.phoneNumber },
           select: { taiKhoanId: true },
         });
         if (existing) this.throwPhoneAlreadyRegistered();
 
         const account = await tx.taiKhoan.create({
           data: {
-            hoTen: dto.hoTen,
-            soDienThoai: dto.soDienThoai,
+            hoTen: dto.fullName,
+            soDienThoai: dto.phoneNumber,
             matKhau: hashedPassword,
-            ngaySinh: dto.ngaySinh
-              ? new Date(`${dto.ngaySinh}T00:00:00.000Z`)
+            ngaySinh: dto.dateOfBirth
+              ? new Date(`${dto.dateOfBirth}T00:00:00.000Z`)
               : null,
             email: dto.email ?? null,
-            cccd: dto.cccd ?? null,
+            cccd: dto.citizenId ?? null,
             daXacThucSoDienThoai: true,
             trangThai: 'HOAT_DONG',
           },
@@ -79,10 +79,10 @@ export class AuthService {
         });
 
         return this.tokenService.createSession(tx, {
-          taiKhoanId: account.taiKhoanId,
-          khachHangId: customer.khachHangId,
-          hoTen: account.hoTen,
-          soDienThoai: account.soDienThoai,
+          accountId: account.taiKhoanId,
+          customerId: customer.khachHangId,
+          fullName: account.hoTen,
+          phoneNumber: account.soDienThoai,
           roles: [customerRole.tenVaiTro],
         });
       });
@@ -107,7 +107,7 @@ export class AuthService {
 
   async login(dto: LoginDto) {
     const account = await this.prisma.taiKhoan.findUnique({
-      where: { soDienThoai: dto.soDienThoai },
+      where: { soDienThoai: dto.phoneNumber },
       include: {
         khachHang: { select: { khachHangId: true } },
         taiKhoanVaiTros: {
@@ -116,7 +116,7 @@ export class AuthService {
       },
     });
     const isPasswordValid = await bcrypt.compare(
-      dto.matKhau,
+      dto.password,
       account?.matKhau ?? DUMMY_PASSWORD_HASH,
     );
     if (!account || !isPasswordValid) {
@@ -134,10 +134,10 @@ export class AuthService {
 
     return this.prisma.$transaction((tx) =>
       this.tokenService.createSession(tx, {
-        taiKhoanId: account.taiKhoanId,
-        khachHangId: account.khachHang?.khachHangId ?? null,
-        hoTen: account.hoTen,
-        soDienThoai: account.soDienThoai,
+        accountId: account.taiKhoanId,
+        customerId: account.khachHang?.khachHangId ?? null,
+        fullName: account.hoTen,
+        phoneNumber: account.soDienThoai,
         roles: account.taiKhoanVaiTros.map(({ vaiTro }) => vaiTro.tenVaiTro),
       }),
     );

@@ -43,7 +43,8 @@ describe('POST /api/v1/auth/register/verify-otp', () => {
           load: [
             () => ({
               SMS_PROVIDER: 'console',
-              OTP_HASH_SECRET: 'integration-test-otp-secret',
+              OTP_HASH_SECRET: 'test-only-otp-secret-for-vexgo-unit-tests-2026',
+              JWT_ACCESS_SECRET: 'test-only-jwt-secret-for-vexgo-unit-tests-2026',
               OTP_PROOF_TTL_SECONDS: '600',
             }),
           ],
@@ -100,7 +101,7 @@ describe('POST /api/v1/auth/register/verify-otp', () => {
   it('returns a one-time proof for a valid OTP', async () => {
     const response = await send({
       challengeId: CHALLENGE_ID,
-      soDienThoai: PHONE,
+      phoneNumber: PHONE,
       otp: OTP,
     }).expect(201);
 
@@ -116,24 +117,28 @@ describe('POST /api/v1/auth/register/verify-otp', () => {
   });
 
   it.each([
-    ['missing OTP', { challengeId: CHALLENGE_ID, soDienThoai: PHONE }],
+    ['missing OTP', { challengeId: CHALLENGE_ID, phoneNumber: PHONE }],
     [
       'invalid challenge',
-      { challengeId: 'not-a-uuid', soDienThoai: PHONE, otp: OTP },
+      { challengeId: 'not-a-uuid', phoneNumber: PHONE, otp: OTP },
     ],
     [
       'invalid phone',
-      { challengeId: CHALLENGE_ID, soDienThoai: '0901234567', otp: OTP },
+      { challengeId: CHALLENGE_ID, phoneNumber: '0901234567', otp: OTP },
+    ],
+    [
+      'legacy Vietnamese phone field',
+      { challengeId: CHALLENGE_ID, soDienThoai: PHONE, otp: OTP },
     ],
     [
       'invalid OTP format',
-      { challengeId: CHALLENGE_ID, soDienThoai: PHONE, otp: '12345' },
+      { challengeId: CHALLENGE_ID, phoneNumber: PHONE, otp: '12345' },
     ],
     [
       'unknown field',
       {
         challengeId: CHALLENGE_ID,
-        soDienThoai: PHONE,
+        phoneNumber: PHONE,
         otp: OTP,
         role: 'ADMIN',
       },
@@ -152,7 +157,7 @@ describe('POST /api/v1/auth/register/verify-otp', () => {
   it('returns OTP_INVALID and records a wrong attempt', async () => {
     const response = await send({
       challengeId: CHALLENGE_ID,
-      soDienThoai: PHONE,
+      phoneNumber: PHONE,
       otp: '999999',
     }).expect(400);
 
@@ -171,7 +176,7 @@ describe('POST /api/v1/auth/register/verify-otp', () => {
 
     const response = await send({
       challengeId: CHALLENGE_ID,
-      soDienThoai: PHONE,
+      phoneNumber: PHONE,
       otp: OTP,
     }).expect(400);
 
@@ -183,7 +188,7 @@ describe('POST /api/v1/auth/register/verify-otp', () => {
 
     const response = await send({
       challengeId: CHALLENGE_ID,
-      soDienThoai: PHONE,
+      phoneNumber: PHONE,
       otp: OTP,
     }).expect(400);
 

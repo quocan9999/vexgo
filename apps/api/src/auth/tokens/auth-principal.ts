@@ -5,10 +5,10 @@ export interface AuthPrincipal {
 }
 
 export interface AuthUserSummary {
-  taiKhoanId: number;
-  khachHangId: number | null;
-  hoTen: string;
-  soDienThoai: string;
+  accountId: number;
+  customerId: number | null;
+  fullName: string;
+  phoneNumber: string;
   roles: string[];
 }
 

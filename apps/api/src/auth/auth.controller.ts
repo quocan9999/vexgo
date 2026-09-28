@@ -15,12 +15,16 @@ export class AuthController {
 
   @Post('register/request-otp')
   requestRegisterOtp(@Body() dto: RequestRegisterOtpDto) {
-    return this.otpService.requestRegistrationOtp(dto.soDienThoai);
+    return this.otpService.requestRegistrationOtp(dto.phoneNumber);
   }
 
   @Post('register/verify-otp')
   verifyRegisterOtp(@Body() dto: VerifyRegisterOtpDto) {
-    return this.otpService.verifyRegistrationOtp(dto);
+    return this.otpService.verifyRegistrationOtp({
+      challengeId: dto.challengeId,
+      soDienThoai: dto.phoneNumber,
+      otp: dto.otp,
+    });
   }
 
   @Post('register')

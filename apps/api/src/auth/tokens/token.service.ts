@@ -8,6 +8,7 @@ import { JwtService } from '@nestjs/jwt';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import type { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
+import { requireAuthSecret } from '../auth-secret.js';
 import type { AuthTokenResponse, AuthUserSummary } from './auth-principal.js';
 
 const DEFAULT_ACCESS_TOKEN_TTL_SECONDS = 900;
@@ -24,10 +25,10 @@ export class TokenService {
     configService: ConfigService,
     private readonly prisma: PrismaService,
   ) {
-    // Thêm giá trị fallback (đảm bảo dài >= 32 ký tự) để chạy test/CI không bị lỗi
-    this.accessSecret =
-      configService.get<string>('JWT_ACCESS_SECRET') ||
-      'test_jwt_access_secret_key_at_least_32_bytes_long';
+    this.accessSecret = requireAuthSecret(
+      configService.get<string>('JWT_ACCESS_SECRET'),
+      'JWT_ACCESS_SECRET',
+    );
 
     this.accessTtlSeconds = this.readPositiveInteger(
       configService.get<string>('JWT_ACCESS_TTL_SECONDS'),
@@ -38,13 +39,6 @@ export class TokenService {
       DEFAULT_REFRESH_TOKEN_TTL_SECONDS,
     );
 
-    if (
-      configService.get<string>('NODE_ENV') === 'production' &&
-      (this.accessSecret.length < 32 ||
-        this.accessSecret.includes('replace-with'))
-    ) {
-      throw new Error('JWT_ACCESS_SECRET must contain at least 32 characters');
-    }
   }
 
   async createSession(
@@ -129,20 +123,21 @@ export class TokenService {
     const session = await tx.phienDangNhap.create({
       data: {
         sessionId,
-        taiKhoanId: user.taiKhoanId,
+        taiKhoanId: user.accountId,
         refreshTokenHash: this.hashRefreshToken(refreshToken),
         hetHanLuc: new Date(Date.now() + this.refreshTtlSeconds * 1000),
       },
     });
     const accessToken = await this.jwtService.signAsync(
       {
-        sub: user.taiKhoanId,
+        sub: user.accountId,
         sid: sessionId,
         roles: user.roles,
       },
       {
         secret: this.accessSecret,
         expiresIn: this.accessTtlSeconds,
+        algorithm: 'HS256',
       },
     );
 
@@ -170,10 +165,10 @@ export class TokenService {
     taiKhoanVaiTros: Array<{ vaiTro: { tenVaiTro: string } }>;
   }): AuthUserSummary {
     return {
-      taiKhoanId: account.taiKhoanId,
-      khachHangId: account.khachHang?.khachHangId ?? null,
-      hoTen: account.hoTen,
-      soDienThoai: account.soDienThoai,
+      accountId: account.taiKhoanId,
+      customerId: account.khachHang?.khachHangId ?? null,
+      fullName: account.hoTen,
+      phoneNumber: account.soDienThoai,
       roles: account.taiKhoanVaiTros.map(({ vaiTro }) => vaiTro.tenVaiTro),
     };
   }

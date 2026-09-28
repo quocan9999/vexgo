@@ -1,23 +1,17 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHmac, randomInt, timingSafeEqual } from 'node:crypto';
+import { requireAuthSecret } from '../auth-secret.js';
 
 @Injectable()
 export class OtpCryptoService {
   private readonly secret: string;
 
   constructor(configService: ConfigService) {
-    // Thêm giá trị fallback (đảm bảo đủ >= 32 ký tự) để chạy test không bị lỗi
-    this.secret =
-      configService.get<string>('OTP_HASH_SECRET') ||
-      'test_otp_hash_secret_key_at_least_32_bytes_long';
-
-    if (
-      configService.get<string>('NODE_ENV') === 'production' &&
-      (this.secret.length < 32 || this.secret.includes('replace-with'))
-    ) {
-      throw new Error('OTP_HASH_SECRET must contain at least 32 characters');
-    }
+    this.secret = requireAuthSecret(
+      configService.get<string>('OTP_HASH_SECRET'),
+      'OTP_HASH_SECRET',
+    );
   }
 
   generateOtp(): string {

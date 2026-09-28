@@ -32,18 +32,18 @@ export class RegisterDto {
   @IsString()
   @IsNotEmpty()
   @MaxLength(100)
-  hoTen!: string;
+  fullName!: string;
 
   @IsString()
   @Matches(VIETNAM_E164_PHONE_PATTERN, {
     message: 'Số điện thoại không hợp lệ.',
   })
-  soDienThoai!: string;
+  phoneNumber!: string;
 
   @IsString()
   @IsNotEmpty()
   @IsPasswordByteLength()
-  matKhau!: string;
+  password!: string;
 
   @IsString()
   @IsNotEmpty()
@@ -52,7 +52,7 @@ export class RegisterDto {
 
   @IsOptional()
   @IsDateOnly({ message: 'Ngày sinh phải là ngày hợp lệ dạng YYYY-MM-DD.' })
-  ngaySinh?: string;
+  dateOfBirth?: string;
 
   @IsOptional()
   @IsEmail({}, { message: 'Email không hợp lệ.' })
@@ -63,7 +63,7 @@ export class RegisterDto {
   @Matches(CCCD_PATTERN, {
     message: 'CCCD phải gồm đúng 12 chữ số.',
   })
-  cccd?: string;
+  citizenId?: string;
 }
 
 export class LoginDto {
@@ -71,9 +71,9 @@ export class LoginDto {
   @Matches(VIETNAM_E164_PHONE_PATTERN, {
     message: 'Số điện thoại không hợp lệ.',
   })
-  soDienThoai!: string;
+  phoneNumber!: string;
 
   @IsString()
   @IsNotEmpty()
-  matKhau!: string;
+  password!: string;
 }

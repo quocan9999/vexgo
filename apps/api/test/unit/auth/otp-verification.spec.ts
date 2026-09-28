@@ -25,7 +25,7 @@ const prismaMock = {
   },
 };
 const config = new ConfigService({
-  OTP_HASH_SECRET: 'test-otp-verification-secret',
+  OTP_HASH_SECRET: 'test-only-otp-secret-for-vexgo-unit-tests-2026',
   OTP_PROOF_TTL_SECONDS: '600',
 });
 const cryptoService = new OtpCryptoService(config);

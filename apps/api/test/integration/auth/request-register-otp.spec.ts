@@ -38,7 +38,8 @@ describe('POST /api/v1/auth/register/request-otp', () => {
           load: [
             () => ({
               SMS_PROVIDER: 'console',
-              OTP_HASH_SECRET: 'integration-test-otp-secret',
+              OTP_HASH_SECRET: 'test-only-otp-secret-for-vexgo-unit-tests-2026',
+              JWT_ACCESS_SECRET: 'test-only-jwt-secret-for-vexgo-unit-tests-2026',
               OTP_TTL_SECONDS: '300',
               OTP_RESEND_COOLDOWN_SECONDS: '60',
             }),
@@ -77,7 +78,7 @@ describe('POST /api/v1/auth/register/request-otp', () => {
   it('creates an OTP challenge through the public API', async () => {
     const response = await request(app.getHttpServer())
       .post('/api/v1/auth/register/request-otp')
-      .send({ soDienThoai: '+84901234567' })
+      .send({ phoneNumber: '+84901234567' })
       .expect(201);
 
     expect(response.body).toEqual({
@@ -95,9 +96,10 @@ describe('POST /api/v1/auth/register/request-otp', () => {
 
   it.each([
     ['missing phone number', {}],
-    ['local phone format', { soDienThoai: '0901234567' }],
-    ['non-string phone number', { soDienThoai: 84901234567 }],
-    ['unknown input', { soDienThoai: '+84901234567', role: 'ADMIN' }],
+    ['local phone format', { phoneNumber: '0901234567' }],
+    ['non-string phone number', { phoneNumber: 84901234567 }],
+    ['legacy Vietnamese field', { soDienThoai: '+84901234567' }],
+    ['unknown input', { phoneNumber: '+84901234567', role: 'ADMIN' }],
   ])('returns a validation envelope for %s', async (_name, payload) => {
     const response = await request(app.getHttpServer())
       .post('/api/v1/auth/register/request-otp')
@@ -118,7 +120,7 @@ describe('POST /api/v1/auth/register/request-otp', () => {
 
     const response = await request(app.getHttpServer())
       .post('/api/v1/auth/register/request-otp')
-      .send({ soDienThoai: '+84901234567' })
+      .send({ phoneNumber: '+84901234567' })
       .expect(409);
 
     expect(response.body).toEqual({

@@ -56,8 +56,8 @@ describe('GET/PATCH /api/v1/me', () => {
           load: [
             () => ({
               SMS_PROVIDER: 'console',
-              OTP_HASH_SECRET: 'integration-test-otp-secret',
-              JWT_ACCESS_SECRET: 'integration-test-access-secret',
+              OTP_HASH_SECRET: 'test-only-otp-secret-for-vexgo-unit-tests-2026',
+              JWT_ACCESS_SECRET: 'test-only-jwt-secret-for-vexgo-unit-tests-2026',
             }),
           ],
         }),
@@ -119,17 +119,17 @@ describe('GET/PATCH /api/v1/me', () => {
 
     expect(response.body).toEqual({
       data: {
-        taiKhoanId: 42,
-        khachHangId: 12,
-        maKhachHang: 'KH00000042',
-        diemTichLuy: 25,
-        hoTen: 'Nguyễn Văn An',
-        soDienThoai: '+84901234567',
-        ngaySinh: '2000-02-29',
-        cccd: '079123456789',
+        accountId: 42,
+        customerId: 12,
+        customerCode: 'KH00000042',
+        loyaltyPoints: 25,
+        fullName: 'Nguyễn Văn An',
+        phoneNumber: '+84901234567',
+        dateOfBirth: '2000-02-29',
+        citizenId: '079123456789',
         email: 'an@example.com',
-        daXacThucSoDienThoai: true,
-        trangThai: 'HOAT_DONG',
+        phoneVerified: true,
+        status: 'HOAT_DONG',
         createdAt: '2026-09-28T10:00:00.000Z',
         updatedAt: '2026-09-28T10:05:00.000Z',
       },
@@ -189,19 +189,19 @@ describe('GET/PATCH /api/v1/me', () => {
       .patch('/api/v1/me')
       .set('Authorization', 'Bearer signed-token')
       .send({
-        hoTen: 'Nguyễn Văn Bình',
-        ngaySinh: null,
+        fullName: 'Nguyễn Văn Bình',
+        dateOfBirth: null,
         email: null,
-        cccd: null,
+        citizenId: null,
       })
       .expect(200);
 
     expect(response.body.data).toMatchObject({
-      taiKhoanId: 42,
-      hoTen: 'Nguyễn Văn Bình',
-      ngaySinh: null,
+      accountId: 42,
+      fullName: 'Nguyễn Văn Bình',
+      dateOfBirth: null,
       email: null,
-      cccd: null,
+      citizenId: null,
     });
     expect(taiKhoan.update).toHaveBeenCalledWith(
       expect.objectContaining({ where: { taiKhoanId: 42 } }),
@@ -213,20 +213,20 @@ describe('GET/PATCH /api/v1/me', () => {
       .patch('/api/v1/me')
       .set('Authorization', 'Bearer signed-token')
       .send({
-        soDienThoai: '+84909999999',
-        taiKhoanId: 99,
-        khachHangId: 99,
-        ngaySinh: '2026-02-30',
+        phoneNumber: '+84909999999',
+        accountId: 99,
+        customerId: 99,
+        dateOfBirth: '2026-02-30',
       })
       .expect(400);
 
     expect(response.body.error).toBe('VALIDATION_ERROR');
     expect(response.body.details).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ field: 'soDienThoai' }),
-        expect.objectContaining({ field: 'taiKhoanId' }),
-        expect.objectContaining({ field: 'khachHangId' }),
-        expect.objectContaining({ field: 'ngaySinh' }),
+        expect.objectContaining({ field: 'phoneNumber' }),
+        expect.objectContaining({ field: 'accountId' }),
+        expect.objectContaining({ field: 'customerId' }),
+        expect.objectContaining({ field: 'dateOfBirth' }),
       ]),
     );
     expect(taiKhoan.update).not.toHaveBeenCalled();

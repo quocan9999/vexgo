@@ -32,10 +32,10 @@ const authResponse = {
   tokenType: 'Bearer' as const,
   expiresIn: 900,
   user: {
-    taiKhoanId: 42,
-    khachHangId: 12,
-    hoTen: customerAccount.hoTen,
-    soDienThoai: customerAccount.soDienThoai,
+    accountId: 42,
+    customerId: 12,
+    fullName: customerAccount.hoTen,
+    phoneNumber: customerAccount.soDienThoai,
     roles: ['KHACH_HANG'],
   },
 };
@@ -69,16 +69,16 @@ describe('AuthService login', () => {
   it('creates a persisted session for correct credentials', async () => {
     await expect(
       service.login({
-        soDienThoai: customerAccount.soDienThoai,
-        matKhau: 'VexGo@123',
+        phoneNumber: customerAccount.soDienThoai,
+        password: 'VexGo@123',
       }),
     ).resolves.toEqual(authResponse);
 
     expect(tokenService.createSession).toHaveBeenCalledWith(tx, {
-      taiKhoanId: 42,
-      khachHangId: 12,
-      hoTen: customerAccount.hoTen,
-      soDienThoai: customerAccount.soDienThoai,
+      accountId: 42,
+      customerId: 12,
+      fullName: customerAccount.hoTen,
+      phoneNumber: customerAccount.soDienThoai,
       roles: ['KHACH_HANG'],
     });
   });
@@ -99,8 +99,8 @@ describe('AuthService login', () => {
       prisma.taiKhoan.findUnique.mockResolvedValueOnce(account);
 
       const login = service.login({
-        soDienThoai: customerAccount.soDienThoai,
-        matKhau: password,
+        phoneNumber: customerAccount.soDienThoai,
+        password,
       });
       await expect(login).rejects.toBeInstanceOf(UnauthorizedException);
       await expect(login).rejects.toMatchObject({
@@ -118,8 +118,8 @@ describe('AuthService login', () => {
     });
 
     const login = service.login({
-      soDienThoai: customerAccount.soDienThoai,
-      matKhau: 'VexGo@123',
+      phoneNumber: customerAccount.soDienThoai,
+      password: 'VexGo@123',
     });
     await expect(login).rejects.toBeInstanceOf(ForbiddenException);
     await expect(login).rejects.toMatchObject({
@@ -136,14 +136,14 @@ describe('AuthService login', () => {
     });
 
     await service.login({
-      soDienThoai: customerAccount.soDienThoai,
-      matKhau: 'VexGo@123',
+      phoneNumber: customerAccount.soDienThoai,
+      password: 'VexGo@123',
     });
 
     expect(tokenService.createSession).toHaveBeenCalledWith(
       tx,
       expect.objectContaining({
-        khachHangId: null,
+        customerId: null,
         roles: ['SUPER_ADMIN'],
       }),
     );
@@ -167,7 +167,7 @@ describe('TokenService refresh rotation and logout', () => {
   const service = new TokenService(
     jwtService as unknown as JwtService,
     new ConfigService({
-      JWT_ACCESS_SECRET: 'test-access-secret',
+      JWT_ACCESS_SECRET: 'test-only-jwt-secret-for-vexgo-unit-tests-2026',
       JWT_ACCESS_TTL_SECONDS: '900',
       REFRESH_TOKEN_TTL_SECONDS: '2592000',
     }),

@@ -17,7 +17,9 @@ const jwtService = { verifyAsync: vi.fn() };
 const prisma = { phienDangNhap: { findUnique: vi.fn() } };
 const guard = new AccessTokenGuard(
   jwtService as unknown as JwtService,
-  new ConfigService({ JWT_ACCESS_SECRET: 'test-access-secret' }),
+  new ConfigService({
+    JWT_ACCESS_SECRET: 'test-only-jwt-secret-for-vexgo-unit-tests-2026',
+  }),
   prisma as unknown as PrismaService,
 );
 
@@ -42,6 +44,17 @@ function activeSession(overrides: Record<string, unknown> = {}) {
 }
 
 describe('AccessTokenGuard', () => {
+  it('fails closed when the JWT secret is missing', () => {
+    expect(
+      () =>
+        new AccessTokenGuard(
+          jwtService as unknown as JwtService,
+          new ConfigService({ JWT_ACCESS_SECRET: '' }),
+          prisma as unknown as PrismaService,
+        ),
+    ).toThrow('JWT_ACCESS_SECRET must contain at least 32 characters');
+  });
+
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(NOW);
@@ -126,6 +139,10 @@ describe('AccessTokenGuard', () => {
       taiKhoanId: 42,
       sessionId: '2bef8449-9f40-4753-a58d-911f628c4725',
       roles: ['KHACH_HANG'],
+    });
+    expect(jwtService.verifyAsync).toHaveBeenCalledWith('signed-token', {
+      secret: 'test-only-jwt-secret-for-vexgo-unit-tests-2026',
+      algorithms: ['HS256'],
     });
   });
 });

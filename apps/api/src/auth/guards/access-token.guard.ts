@@ -8,6 +8,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import type { Request } from 'express';
+import { requireAuthSecret } from '../auth-secret.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import type { AuthPrincipal } from '../tokens/auth-principal.js';
 
@@ -28,10 +29,10 @@ export class AccessTokenGuard implements CanActivate {
     configService: ConfigService,
     private readonly prisma: PrismaService,
   ) {
-    // Thêm giá trị fallback để chạy test/CI không bị lỗi thiếu biến môi trường
-    this.accessSecret =
-      configService.get<string>('JWT_ACCESS_SECRET') ||
-      'test_jwt_access_secret_key_at_least_32_bytes_long';
+    this.accessSecret = requireAuthSecret(
+      configService.get<string>('JWT_ACCESS_SECRET'),
+      'JWT_ACCESS_SECRET',
+    );
   }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -41,6 +42,7 @@ export class AccessTokenGuard implements CanActivate {
     try {
       payload = await this.jwtService.verifyAsync<AccessTokenPayload>(token, {
         secret: this.accessSecret,
+        algorithms: ['HS256'],
       });
     } catch {
       this.throwInvalidAccessToken();
