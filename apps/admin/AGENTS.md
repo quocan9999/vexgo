@@ -142,3 +142,12 @@ Không được kết luận UI READY nếu chưa kiểm tra visual ở hai view
 - UI/UX skills chỉ dùng để review consistency, accessibility, responsive và usability.
 - MUST NOT để UI/UX skill override `DESIGN.md`, shared component contract hoặc golden reference đã duyệt.
 - Sử dụng ui-ux-pro-max skill khi làm việc với frontend UI/UX
+
+### Admin tenancy / operational scope
+
+- MUST đọc `docs/ADMIN_TENANCY_AND_OPERATIONS.md` trước khi sửa Admin shell, sidebar, dashboard hoặc UI của resource thuộc nhà xe.
+- MUST phân biệt platform scope (Super Admin) và tenant scope (nhà xe).
+- MUST NOT thiết kế operational CRUD như danh sách aggregate của tất cả nhà xe.
+- MUST NOT dùng frontend filtering làm tenant security boundary.
+- MUST inspect tenant ownership và API scope trước khi thêm lookup, filter hoặc relation selector.
+- Khi chưa có backend-trusted tenant identity, tenant presentation MUST NOT tải dữ liệu operational aggregate rồi tự lọc; giữ UI ở trạng thái chờ auth/authorization thay vì trình bày dữ liệu cross-tenant.
