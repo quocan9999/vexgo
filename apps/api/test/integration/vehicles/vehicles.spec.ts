@@ -19,6 +19,7 @@ const vehicleListRecord = {
   xeId: 12,
   bienSoXe: '51B-123.45',
   trangThai: 'HOAT_DONG',
+  nhaXeId: 1,
   nhaXe: { nhaXeId: 1, maNhaXe: 'FUTA', tenNhaXe: 'Phương Trang' },
   loaiXe: { loaiXeId: 3, tenLoai: 'Limousine' },
   createdAt: new Date('2026-09-25T10:00:00.000Z'),
@@ -40,6 +41,7 @@ const prisma = {
   },
   nhaXe: { findUnique: vi.fn() },
   loaiXe: { findUnique: vi.fn() },
+  chuyenXe: { count: vi.fn() },
 };
 
 describe('Vehicles API request-pipeline integration', () => {
@@ -69,6 +71,7 @@ describe('Vehicles API request-pipeline integration', () => {
     prisma.xe.update.mockResolvedValue(vehicleDetailRecord);
     prisma.nhaXe.findUnique.mockResolvedValue({ nhaXeId: 1 });
     prisma.loaiXe.findUnique.mockResolvedValue({ loaiXeId: 3, nhaXeId: 1 } as never);
+    prisma.chuyenXe.count.mockResolvedValue(0);
   });
 
   function prismaKnownError(code: string, meta: Record<string, unknown> = {}) {
@@ -670,6 +673,34 @@ describe('Vehicles API request-pipeline integration', () => {
       statusCode: 409,
       error: 'VEHICLE_LICENSE_PLATE_EXISTS',
       message: 'Biển số xe đã tồn tại.',
+    });
+  });
+
+  it('maps a concurrent trip relation constraint to a stable company-change conflict', async () => {
+    prisma.nhaXe.findUnique.mockResolvedValueOnce({ nhaXeId: 2 });
+    prisma.loaiXe.findUnique.mockResolvedValueOnce({
+      loaiXeId: 8,
+      nhaXeId: 2,
+    } as never);
+    prisma.xe.update.mockRejectedValueOnce(
+      prismaKnownError('P2003', {
+        field_name: 'ChuyenXe_nhaXeId_xeId_fkey',
+      }),
+    );
+
+    const response = await request(app.getHttpServer())
+      .patch('/api/v1/vehicles/12')
+      .send({
+        licensePlate: '51B-999.99',
+        busCompanyId: 2,
+        vehicleTypeId: 8,
+      })
+      .expect(409);
+
+    expect(response.body).toEqual({
+      statusCode: 409,
+      error: 'VEHICLE_COMPANY_CHANGE_CONFLICT',
+      message: 'Không thể đổi nhà xe vì xe đã được gắn với chuyến xe.',
     });
   });
 

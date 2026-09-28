@@ -88,6 +88,13 @@ function vehicleNotFound() {
   });
 }
 
+function vehicleCompanyChangeConflict() {
+  return new ConflictException({
+    error: 'VEHICLE_COMPANY_CHANGE_CONFLICT',
+    message: 'Không thể đổi nhà xe vì xe đã được gắn với chuyến xe.',
+  });
+}
+
 function isVehicleLicensePlateUniqueViolation(error: unknown): boolean {
   if (
     !(error instanceof Prisma.PrismaClientKnownRequestError) ||
@@ -270,7 +277,7 @@ export class VehiclesService {
   async update(id: number, input: UpdateVehicleDto) {
     const existingVehicle = await this.prisma.xe.findUnique({
       where: { xeId: id },
-      select: { xeId: true },
+      select: { xeId: true, nhaXeId: true },
     });
 
     if (!existingVehicle) throw vehicleNotFound();
@@ -305,6 +312,14 @@ export class VehiclesService {
       });
     }
 
+    const isCompanyChange = input.busCompanyId !== existingVehicle.nhaXeId;
+    if (isCompanyChange) {
+      const tripCount = await this.prisma.chuyenXe.count({
+        where: { xeId: id },
+      });
+      if (tripCount > 0) throw vehicleCompanyChangeConflict();
+    }
+
     try {
       const vehicle = await this.prisma.xe.update({
         where: { xeId: id },
@@ -323,6 +338,9 @@ export class VehiclesService {
           error: 'VEHICLE_LICENSE_PLATE_EXISTS',
           message: 'Biển số xe đã tồn tại.',
         });
+      }
+      if (isCompanyChange && isForeignKeyViolation(error)) {
+        throw vehicleCompanyChangeConflict();
       }
       throw error;
     }

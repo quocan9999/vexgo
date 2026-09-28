@@ -33,6 +33,7 @@ const prisma = {
   },
   nhaXe: { findUnique: vi.fn() },
   loaiXe: { findUnique: vi.fn() },
+  chuyenXe: { count: vi.fn() },
 } as unknown as PrismaService;
 
 const service = new VehiclesService(prisma);
@@ -56,6 +57,7 @@ describe('VehiclesService', () => {
       loaiXeId: 3,
       nhaXeId: 1,
     } as never);
+    vi.mocked(prisma.chuyenXe.count).mockResolvedValue(0);
   });
 
   it('maps vehicle, bus company, and vehicle type fields to the English API shape', async () => {
@@ -433,6 +435,33 @@ describe('VehiclesService writes', () => {
     expect(prisma.xe.update).not.toHaveBeenCalled();
   });
 
+  it('rejects changing the owning company when the vehicle has trips', async () => {
+    vi.mocked(prisma.nhaXe.findUnique).mockResolvedValueOnce({
+      nhaXeId: 2,
+    } as never);
+    vi.mocked(prisma.loaiXe.findUnique).mockResolvedValueOnce({
+      loaiXeId: 8,
+      nhaXeId: 2,
+    } as never);
+    vi.mocked(prisma.chuyenXe.count).mockResolvedValueOnce(1);
+
+    const error = await service
+      .update(12, {
+        ...updateVehicleInput,
+        busCompanyId: 2,
+        vehicleTypeId: 8,
+      })
+      .catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(ConflictException);
+    expect((error as ConflictException).getResponse()).toEqual({
+      error: 'VEHICLE_COMPANY_CHANGE_CONFLICT',
+      message: 'Không thể đổi nhà xe vì xe đã được gắn với chuyến xe.',
+    });
+    expect(prisma.chuyenXe.count).toHaveBeenCalledWith({ where: { xeId: 12 } });
+    expect(prisma.xe.update).not.toHaveBeenCalled();
+  });
+
   it('updates only plate and relation IDs and accepts an unchanged current plate', async () => {
     const input = { ...updateVehicleInput, licensePlate: '51B-123.45' };
     await service.update(12, input);
@@ -451,6 +480,7 @@ describe('VehiclesService writes', () => {
     expect(
       vi.mocked(prisma.xe.update).mock.calls[0][0].data,
     ).not.toHaveProperty('trangThai');
+    expect(prisma.chuyenXe.count).not.toHaveBeenCalled();
   });
 
   it('maps a duplicate plate during edit to VEHICLE_LICENSE_PLATE_EXISTS', async () => {
