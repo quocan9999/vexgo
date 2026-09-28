@@ -230,4 +230,135 @@ describe('Fare Price concurrent create integrity with MySQL', () => {
     });
     expectNoActiveOverlap(activeFares);
   }, 30_000);
+
+  it('allows only one of two concurrent overlapping activations', async () => {
+    const first = await insertFare('2099-05-01', '2099-05-31', 250000);
+    const second = await insertFare('2099-05-15', '2099-06-15', 300000);
+    await context.prisma.bangGia.updateMany({
+      where: { bangGiaId: { in: [first.bangGiaId, second.bangGiaId] } },
+      data: { trangThai: 'TAM_NGUNG' },
+    });
+
+    const responses = await Promise.all([
+      request(context.app.getHttpServer())
+        .patch(`/api/v1/fare-prices/${first.bangGiaId}/status`)
+        .send({ status: 'HOAT_DONG' }),
+      request(context.app.getHttpServer())
+        .patch(`/api/v1/fare-prices/${second.bangGiaId}/status`)
+        .send({ status: 'HOAT_DONG' }),
+    ]);
+
+    expect(responses.filter((response) => response.status === 200)).toHaveLength(1);
+    expect(responses.filter((response) => response.status === 409)).toHaveLength(1);
+    expect(
+      responses.find((response) => response.status === 409)?.body.error,
+    ).toMatch(/^(FARE_PRICE_OVERLAP|FARE_PRICE_CONCURRENT_MODIFICATION)$/);
+
+    const activeFares = await context.prisma.bangGia.findMany({
+      where: {
+        tuyenXeId: context.routeId,
+        loaiXeId: context.vehicleTypeId,
+        trangThai: 'HOAT_DONG',
+      },
+    });
+    expect(activeFares).toHaveLength(1);
+    expectNoActiveOverlap(activeFares);
+  }, 30_000);
+
+  it('prevents concurrent activation and create from committing an overlap', async () => {
+    const suspended = await insertFare('2099-06-01', '2099-06-30', 250000);
+    await context.prisma.bangGia.update({
+      where: { bangGiaId: suspended.bangGiaId },
+      data: { trangThai: 'TAM_NGUNG' },
+    });
+
+    const responses = await Promise.all([
+      request(context.app.getHttpServer())
+        .patch(`/api/v1/fare-prices/${suspended.bangGiaId}/status`)
+        .send({ status: 'HOAT_DONG' }),
+      request(context.app.getHttpServer())
+        .post('/api/v1/fare-prices')
+        .send(body('2099-06-15', '2099-07-15', 300000)),
+    ]);
+
+    expect(responses.filter((response) => response.status === 200 || response.status === 201)).toHaveLength(1);
+    expect(responses.filter((response) => response.status === 409)).toHaveLength(1);
+    expect(
+      responses.find((response) => response.status === 409)?.body.error,
+    ).toMatch(/^(FARE_PRICE_OVERLAP|FARE_PRICE_CONCURRENT_MODIFICATION)$/);
+    const activeFares = await context.prisma.bangGia.findMany({
+      where: {
+        tuyenXeId: context.routeId,
+        loaiXeId: context.vehicleTypeId,
+        trangThai: 'HOAT_DONG',
+      },
+    });
+    expectNoActiveOverlap(activeFares);
+  }, 30_000);
+
+  it('prevents activation and active interval update from committing an overlap', async () => {
+    const suspended = await insertFare('2099-07-01', '2099-07-10', 250000);
+    const active = await insertFare('2099-07-20', '2099-07-31', 300000);
+    await context.prisma.bangGia.update({
+      where: { bangGiaId: suspended.bangGiaId },
+      data: { trangThai: 'TAM_NGUNG' },
+    });
+
+    const responses = await Promise.all([
+      request(context.app.getHttpServer())
+        .patch(`/api/v1/fare-prices/${suspended.bangGiaId}/status`)
+        .send({ status: 'HOAT_DONG' }),
+      request(context.app.getHttpServer())
+        .patch(`/api/v1/fare-prices/${active.bangGiaId}`)
+        .send({ validFrom: '2099-07-10' }),
+    ]);
+
+    expect(responses.filter((response) => response.status === 200)).toHaveLength(1);
+    expect(responses.filter((response) => response.status === 409)).toHaveLength(1);
+    expect(
+      responses.find((response) => response.status === 409)?.body.error,
+    ).toMatch(/^(FARE_PRICE_OVERLAP|FARE_PRICE_CONCURRENT_MODIFICATION)$/);
+    const activeFares = await context.prisma.bangGia.findMany({
+      where: {
+        tuyenXeId: context.routeId,
+        loaiXeId: context.vehicleTypeId,
+        trangThai: 'HOAT_DONG',
+      },
+      orderBy: { tuNgay: 'asc' },
+    });
+    expectNoActiveOverlap(activeFares);
+  }, 30_000);
+
+  it('prevents activation and editing the same suspended fare from bypassing overlap checks', async () => {
+    const suspended = await insertFare('2099-08-01', '2099-08-10', 250000);
+    await insertFare('2099-08-15', '2099-08-31', 300000);
+    await context.prisma.bangGia.update({
+      where: { bangGiaId: suspended.bangGiaId },
+      data: { trangThai: 'TAM_NGUNG' },
+    });
+
+    const responses = await Promise.all([
+      request(context.app.getHttpServer())
+        .patch(`/api/v1/fare-prices/${suspended.bangGiaId}/status`)
+        .send({ status: 'HOAT_DONG' }),
+      request(context.app.getHttpServer())
+        .patch(`/api/v1/fare-prices/${suspended.bangGiaId}`)
+        .send({ validTo: '2099-08-15' }),
+    ]);
+
+    expect(responses.filter((response) => response.status === 200)).toHaveLength(1);
+    expect(responses.filter((response) => response.status === 409)).toHaveLength(1);
+    expect(
+      responses.find((response) => response.status === 409)?.body.error,
+    ).toMatch(/^(FARE_PRICE_OVERLAP|FARE_PRICE_CONCURRENT_MODIFICATION)$/);
+    const activeFares = await context.prisma.bangGia.findMany({
+      where: {
+        tuyenXeId: context.routeId,
+        loaiXeId: context.vehicleTypeId,
+        trangThai: 'HOAT_DONG',
+      },
+      orderBy: { tuNgay: 'asc' },
+    });
+    expectNoActiveOverlap(activeFares);
+  }, 30_000);
 });

@@ -12,6 +12,7 @@ import {
   type FarePriceListQuery,
   type FarePriceOption,
   type PaginatedFarePrices,
+  type FarePriceStatus,
   type UpdateFarePriceRequest,
 } from '../types/fare-price';
 
@@ -208,6 +209,24 @@ export async function updateFarePrice(
       body: JSON.stringify(input),
     }),
     'bảng giá',
+  );
+  if (!isRecord(body) || !isFarePrice(body.data)) {
+    throw new Error('API trả về thông tin bảng giá không hợp lệ.');
+  }
+  return body.data;
+}
+
+export async function updateFarePriceStatus(
+  farePriceId: number,
+  status: FarePriceStatus,
+): Promise<FarePrice> {
+  const body = await readResponse(
+    await fetch(`${getApiBaseUrl()}/api/v1/fare-prices/${farePriceId}/status`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    }),
+    'trạng thái bảng giá',
   );
   if (!isRecord(body) || !isFarePrice(body.data)) {
     throw new Error('API trả về thông tin bảng giá không hợp lệ.');

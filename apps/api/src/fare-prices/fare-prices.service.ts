@@ -261,6 +261,60 @@ export class FarePricesService {
     return { data: mapFarePrice(record, businessDate) };
   }
 
+  async updateStatus(id: number, status: FarePriceStatus) {
+    const record = await runFarePriceWriteTransaction(
+      this.prisma,
+      async (transaction) => {
+        const current = await transaction.bangGia.findUnique({
+          where: { bangGiaId: id },
+          select: FARE_PRICE_SELECT,
+        });
+        if (!current) {
+          throw new NotFoundException({
+            error: 'FARE_PRICE_NOT_FOUND',
+            message: 'Không tìm thấy bảng giá.',
+          });
+        }
+        if (
+          current.trangThai !== 'HOAT_DONG' &&
+          current.trangThai !== 'TAM_NGUNG'
+        ) {
+          throw new Error(
+            `BangGia contains an invalid persisted status: ${current.trangThai}`,
+          );
+        }
+
+        if (current.trangThai === status) return current;
+
+        if (status === 'HOAT_DONG') {
+          await assertNoActiveFareOverlap(
+            transaction,
+            {
+              routeId: current.tuyenXeId,
+              vehicleTypeId: current.loaiXeId,
+              validFrom: toDateOnly(current.tuNgay),
+              validTo: current.denNgay === null
+                ? null
+                : toDateOnly(current.denNgay),
+            },
+            'Không thể kích hoạt vì khoảng hiệu lực bị trùng với một bảng giá đang hoạt động.',
+          );
+        }
+
+        return transaction.bangGia.update({
+          where: { bangGiaId: current.bangGiaId },
+          data: { trangThai: status },
+          select: FARE_PRICE_SELECT,
+        });
+      },
+    );
+
+    const businessDate = getBusinessDate(
+      resolveBusinessTimeZone(this.config.get<string>('BUSINESS_TIME_ZONE')),
+    );
+    return { data: mapFarePrice(record, businessDate) };
+  }
+
   async findAll(query: QueryFarePricesDto) {
     const businessTimeZone = resolveBusinessTimeZone(
       this.config.get<string>('BUSINESS_TIME_ZONE'),

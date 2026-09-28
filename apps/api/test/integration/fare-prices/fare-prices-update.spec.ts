@@ -290,7 +290,7 @@ describe('Fare Price update HTTP and database behavior', () => {
     });
   });
 
-  it('does not rewrite a referenced ticket fare or price snapshot', async () => {
+  it('does not rewrite a referenced ticket fare or price snapshot when price and status change', async () => {
     const current = await insertFare();
     const suffix = randomUUID().replaceAll('-', '').slice(0, 10).toUpperCase();
     const ticketGraph = await context.prisma.$transaction(async (transaction) => {
@@ -400,6 +400,17 @@ describe('Fare Price update HTTP and database behavior', () => {
         .send({ listedPrice: 300000 })
         .expect(200);
       expect(response.body.data.listedPrice).toBe(300000);
+
+      const statusResponse = await request(context.app.getHttpServer())
+        .patch(`/api/v1/fare-prices/${current.bangGiaId}/status`)
+        .send({ status: 'TAM_NGUNG' })
+        .expect(200);
+      expect(statusResponse.body.data).toMatchObject({
+        farePriceId: current.bangGiaId,
+        listedPrice: 300000,
+        status: 'TAM_NGUNG',
+        effectiveState: 'TAM_NGUNG',
+      });
 
       const ticket = await context.prisma.ve.findUniqueOrThrow({
         where: { veId: ticketGraph.ticketId },

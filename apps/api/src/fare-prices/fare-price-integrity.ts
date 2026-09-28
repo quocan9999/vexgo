@@ -151,12 +151,13 @@ export async function findActiveFareOverlap(
 export async function assertNoActiveFareOverlap(
   transaction: Prisma.TransactionClient,
   candidate: FarePriceIntervalCandidate,
+  message = 'Khoảng hiệu lực bị trùng với một bảng giá đang hoạt động.',
 ): Promise<void> {
   const overlap = await findActiveFareOverlap(transaction, candidate);
   if (overlap) {
     throw new ConflictException({
       error: 'FARE_PRICE_OVERLAP',
-      message: 'Khoảng hiệu lực bị trùng với một bảng giá đang hoạt động.',
+      message,
     });
   }
 }

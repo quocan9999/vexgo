@@ -1,12 +1,21 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { CheckCircle2, Pencil, X } from 'lucide-react';
+import { CheckCircle2, LoaderCircle, Pencil, X } from 'lucide-react';
+import { AdminConfirmDialog } from '@/components/admin/admin-confirm-dialog';
 import { AdminDetailSheet } from '@/components/admin/admin-detail-sheet';
 import { AdminStatusBadge } from '@/components/admin/admin-status-badge';
 import { Button } from '@/components/ui/button';
-import { getFarePriceById } from '../services/fare-price-service';
-import type { FarePrice, FarePriceOptionsState } from '../types/fare-price';
+import {
+  FarePriceApiError,
+  getFarePriceById,
+  updateFarePriceStatus,
+} from '../services/fare-price-service';
+import type {
+  FarePrice,
+  FarePriceOptionsState,
+  FarePriceStatus,
+} from '../types/fare-price';
 import { FarePriceFormDialog } from './fare-price-form-dialog';
 import styles from '../fare-prices.module.css';
 
@@ -75,6 +84,10 @@ export function FarePriceDetailSheet({
   const [retryCount, setRetryCount] = useState(0);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [updateNotice, setUpdateNotice] = useState<string | null>(null);
+  const [statusDialogOpen, setStatusDialogOpen] = useState(false);
+  const [statusSubmitting, setStatusSubmitting] = useState(false);
+  const [statusError, setStatusError] = useState<string | null>(null);
+  const statusSubmittingRef = useRef(false);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const requestKey = `${farePriceId}:${retryCount}`;
   const requestMatches = request.key === requestKey;
@@ -93,6 +106,66 @@ export function FarePriceDetailSheet({
     setEditDialogOpen(false);
     setUpdateNotice('Đã cập nhật bảng giá vé.');
     onUpdated(updated);
+  }
+
+  const targetStatus: FarePriceStatus | null = farePrice
+    ? farePrice.status === 'HOAT_DONG'
+      ? 'TAM_NGUNG'
+      : 'HOAT_DONG'
+    : null;
+
+  function openStatusDialog() {
+    setUpdateNotice(null);
+    setStatusError(null);
+    setStatusDialogOpen(true);
+  }
+
+  async function confirmStatusChange() {
+    if (!targetStatus || statusSubmittingRef.current) return;
+
+    statusSubmittingRef.current = true;
+    setStatusSubmitting(true);
+    setStatusError(null);
+
+    try {
+      const updated = await updateFarePriceStatus(farePriceId, targetStatus);
+      setRequest({ key: requestKey, status: 'success', farePrice: updated });
+      setStatusDialogOpen(false);
+      setUpdateNotice(
+        targetStatus === 'HOAT_DONG'
+          ? 'Đã kích hoạt bảng giá vé.'
+          : 'Đã tạm ngưng bảng giá vé.',
+      );
+      onUpdated(updated);
+    } catch (requestError: unknown) {
+      if (
+        requestError instanceof FarePriceApiError &&
+        requestError.code === 'FARE_PRICE_OVERLAP' &&
+        targetStatus === 'HOAT_DONG'
+      ) {
+        setStatusError(
+          'Không thể kích hoạt vì khoảng hiệu lực bị trùng với một bảng giá đang hoạt động của cùng tuyến và loại xe.',
+        );
+      } else if (
+        requestError instanceof FarePriceApiError &&
+        requestError.code === 'FARE_PRICE_CONCURRENT_MODIFICATION'
+      ) {
+        setStatusError(
+          'Dữ liệu bảng giá vừa thay đổi đồng thời. Vui lòng tải lại và thử lại.',
+        );
+      } else {
+        setStatusError(
+          requestError instanceof TypeError
+            ? 'Không thể kết nối đến máy chủ API. Vui lòng thử lại.'
+            : requestError instanceof Error
+              ? requestError.message
+              : 'Không thể cập nhật trạng thái bảng giá.',
+        );
+      }
+    } finally {
+      statusSubmittingRef.current = false;
+      setStatusSubmitting(false);
+    }
   }
 
   useEffect(() => {
@@ -253,6 +326,9 @@ export function FarePriceDetailSheet({
                 <Pencil aria-hidden="true" size={15} />
                 Chỉnh sửa
               </Button>
+              <Button onClick={openStatusDialog} type="button" variant="secondary">
+                {farePrice.status === 'HOAT_DONG' ? 'Tạm ngưng' : 'Kích hoạt'}
+              </Button>
             </div>
           </>
         )}
@@ -268,6 +344,63 @@ export function FarePriceDetailSheet({
           routeOptions={routeOptions}
           vehicleTypeOptions={vehicleTypeOptions}
         />
+      )}
+      {statusDialogOpen && targetStatus && (
+        <AdminConfirmDialog
+          ariaBusy={statusSubmitting}
+          ariaDescribedBy="fare-price-status-confirmation-description"
+          ariaLabelledBy="fare-price-status-confirmation-title"
+          onClose={() => {
+            if (!statusSubmittingRef.current) setStatusDialogOpen(false);
+          }}
+          preventDismiss={statusSubmitting}
+        >
+          <>
+            <h2 id="fare-price-status-confirmation-title">
+              {targetStatus === 'TAM_NGUNG'
+                ? 'Tạm ngưng bảng giá?'
+                : 'Kích hoạt bảng giá?'}
+            </h2>
+            <p id="fare-price-status-confirmation-description">
+              {targetStatus === 'TAM_NGUNG'
+                ? 'Bảng giá này sẽ không còn được dùng để xác định giá áp dụng cho các vé mới. Lịch sử vé hiện có được giữ nguyên.'
+                : 'Bảng giá sẽ được kích hoạt nếu khoảng hiệu lực không trùng với bảng giá đang hoạt động khác.'}
+            </p>
+            {statusError && (
+              <p className="admin-confirm-dialog__error" role="alert">
+                {statusError}
+              </p>
+            )}
+            <div className="admin-confirm-dialog__actions">
+              <Button
+                disabled={statusSubmitting}
+                onClick={() => setStatusDialogOpen(false)}
+                type="button"
+                variant="secondary"
+              >
+                Hủy
+              </Button>
+              <Button
+                disabled={statusSubmitting}
+                onClick={confirmStatusChange}
+                type="button"
+              >
+                {statusSubmitting && (
+                  <LoaderCircle
+                    aria-hidden="true"
+                    className="status-confirmation-spinner"
+                    size={15}
+                  />
+                )}
+                {statusSubmitting
+                  ? 'Đang cập nhật…'
+                  : targetStatus === 'TAM_NGUNG'
+                    ? 'Tạm ngưng bảng giá'
+                    : 'Kích hoạt bảng giá'}
+              </Button>
+            </div>
+          </>
+        </AdminConfirmDialog>
       )}
     </>
   );
