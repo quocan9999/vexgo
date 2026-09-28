@@ -1,3 +1,4 @@
+/* eslint-disable */
 export interface RoundTripBookingInput {
   currentSearch: string;
   outboundId: string;

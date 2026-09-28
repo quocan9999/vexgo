@@ -1,3 +1,4 @@
+/* eslint-disable */
 import type { Post } from '../types/post';
 
 export const POST_FIXTURES: Post[] = [

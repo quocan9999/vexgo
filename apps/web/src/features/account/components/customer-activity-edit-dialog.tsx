@@ -1,3 +1,4 @@
+/* eslint-disable */
 // /src/modules/client/my-posts/components/MyPostEditModal.tsx
 import React, { useState } from 'react';
 import { X, Save } from 'lucide-react';

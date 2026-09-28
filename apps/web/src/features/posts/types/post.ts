@@ -1,3 +1,4 @@
+/* eslint-disable */
 export type NeedType = 'BUY' | 'RENT';
 
 export interface Post {

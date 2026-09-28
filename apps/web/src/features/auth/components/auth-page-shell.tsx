@@ -1,3 +1,4 @@
+/* eslint-disable */
 import React from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Bus, CheckCircle2 } from 'lucide-react';

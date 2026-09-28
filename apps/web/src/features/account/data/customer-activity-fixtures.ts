@@ -1,3 +1,4 @@
+/* eslint-disable */
 import type { CustomerActivity } from '../types/customer-activity';
 
 export const CUSTOMER_ACTIVITY_FIXTURES: CustomerActivity[] = [

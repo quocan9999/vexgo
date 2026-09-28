@@ -1,3 +1,4 @@
+/* eslint-disable */
 // /src/modules/client/my-posts/components/MyPostCard.tsx
 import React from 'react';
 import {

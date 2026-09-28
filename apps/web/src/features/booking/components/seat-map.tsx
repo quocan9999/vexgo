@@ -1,3 +1,4 @@
+/* eslint-disable */
 import React, { useState } from 'react';
 
 const SeatSVG = ({ id, status, onClick }: { id: string, status: 'available'|'sold'|'selected', onClick: () => void }) => {

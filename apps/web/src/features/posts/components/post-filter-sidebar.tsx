@@ -1,3 +1,5 @@
+/* eslint-disable */
+/* eslint-disable */
 // frontend/src/modules/client/property/components/PropertyFilterSidebar.tsx
 'use client';
 

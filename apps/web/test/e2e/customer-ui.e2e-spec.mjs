@@ -102,3 +102,17 @@ for (const screen of serviceScreens) {
     assert.ok(html.toLowerCase().includes(screen.marker.toLowerCase()), `Expected to find "${screen.marker}" on ${screen.path}`);
   });
 }
+
+import { execSync } from 'child_process';
+
+test('independence check: @vexgo/web must not reference the old apps/frontend', () => {
+  try {
+    // We check for "apps/frontend" or "@vexgo/frontend" or "../../../apps/frontend"
+    // rg will exit 0 if it finds something, and 1 if it doesn't.
+    const output = execSync('grep -r -i "apps/frontend|@vexgo/frontend|\\.\\./\\.\\./\\.\\./apps/frontend" apps/web/src apps/web/package.json', { encoding: 'utf-8' });
+    assert.fail(`Found references to the old frontend app in the migrated web app:\n${output}`);
+  } catch (error) {
+    // If rg exits with 1, it means no matches found, which is what we want.
+    assert.equal(error.status, 1, 'Expected grep to return 1 (no matches found). If it returned 2, rg might be missing or there was an error.');
+  }
+});

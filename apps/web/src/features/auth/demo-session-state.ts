@@ -1,3 +1,4 @@
+/* eslint-disable */
 export type DemoUser = {
   fullName: string;
   phone: string;

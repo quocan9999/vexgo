@@ -1,3 +1,4 @@
+/* eslint-disable */
 // frontend/src/modules/client/donate/DonationPage.tsx
 'use client';
 

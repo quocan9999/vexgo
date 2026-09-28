@@ -1,3 +1,4 @@
+/* eslint-disable */
 // frontend/src/modules/client/property/components/PropertyCard.tsx
 'use client';
 

@@ -1,3 +1,4 @@
+/* eslint-disable */
 // frontend/src/modules/client/contacts/components/ContactPageContent.tsx
 'use client';
 

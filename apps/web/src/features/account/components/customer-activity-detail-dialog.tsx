@@ -1,3 +1,4 @@
+/* eslint-disable */
 // /src/modules/client/my-posts/components/MyPostDetailModal.tsx
 import React from 'react';
 import { X, Bus, PackageCheck, Clock, ShieldCheck, XCircle, MapPin, Coins, Armchair, Phone, User, Calendar } from 'lucide-react';

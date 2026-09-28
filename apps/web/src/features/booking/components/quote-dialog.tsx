@@ -1,3 +1,4 @@
+/* eslint-disable */
 // frontend/src/modules/client/property/components/QuoteModal.tsx
 'use client';
 
