@@ -4,9 +4,11 @@ import { ArrowRight, BusFront, Eye, EyeOff, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, type FormEvent } from 'react';
+import { Button } from '@/components/ui/button';
 import {
   DEMO_SUPER_ADMIN,
   signInDemoAdmin,
+  signInTenantPreview,
 } from '../services/demo-auth';
 import { useDemoAdminSession } from '../hooks/use-demo-admin-session';
 
@@ -21,6 +23,8 @@ export function AdminLoginForm() {
   useEffect(() => {
     if (sessionStatus === 'authenticated') {
       router.replace('/');
+    } else if (sessionStatus === 'tenant-preview') {
+      router.replace('/vehicle-types');
     }
   }, [router, sessionStatus]);
 
@@ -34,6 +38,11 @@ export function AdminLoginForm() {
     }
 
     setError('Email hoặc mật khẩu chưa chính xác. Vui lòng thử lại.');
+  }
+
+  function openTenantPreview() {
+    signInTenantPreview();
+    router.replace('/vehicle-types');
   }
 
   if (sessionStatus !== 'anonymous') {
@@ -156,6 +165,14 @@ export function AdminLoginForm() {
               <span>Vào trang quản trị</span>
               <ArrowRight aria-hidden="true" size={17} />
             </button>
+            <Button
+              className="login-preview-button"
+              onClick={openTenantPreview}
+              type="button"
+              variant="secondary"
+            >
+              Xem trước giao diện nhà xe
+            </Button>
           </form>
 
           <aside className="demo-account-card" aria-label="Tài khoản demo">
@@ -181,7 +198,7 @@ export function AdminLoginForm() {
           </aside>
 
           <p className="login-demo-note">
-            Đây là phiên trình diễn, chỉ lưu trong tab trình duyệt hiện tại.
+            Phiên Super Admin và giao diện xem trước chỉ dùng để trình diễn, không xác thực.
           </p>
         </div>
       </section>
