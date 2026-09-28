@@ -1,18 +1,130 @@
 'use client';
 
-import { useState } from 'react';
-import { Eye, EyeOff, LockKeyhole, LogIn, Phone } from 'lucide-react';
+import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
-import { Button } from '@/components/ui/button';
+import { Phone, Lock, Eye, EyeOff, LogIn } from 'lucide-react';
 import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 import { useDemoSession } from '@/features/auth/demo-session';
 
 export function LoginForm() {
   const router = useRouter();
   const { signIn } = useDemoSession();
+  const [phone, setPhone] = useState('0912.345.678');
+  const [password, setPassword] = useState('123456');
   const [showPassword, setShowPassword] = useState(false);
-  const [phone, setPhone] = useState('0912 345 678');
-  const submit = (event: React.FormEvent) => { event.preventDefault(); signIn({ phone }); router.push('/'); };
-  return <form className="space-y-5" onSubmit={submit}><div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm"><p className="font-black text-emerald-900">Tài khoản demo</p><p className="mt-1 text-emerald-800">Nguyễn Văn Hùng · 0912 345 678</p><button type="button" onClick={() => { signIn(); router.push('/'); }} className="mt-3 text-xs font-black text-emerald-700 underline">Vào nhanh không cần nhập</button></div><Input label="Số điện thoại" type="tel" value={phone} onChange={(event) => setPhone(event.target.value)} leftIcon={<Phone size={18} />} required /><Input label="Mật khẩu" type={showPassword ? 'text' : 'password'} defaultValue="123456" leftIcon={<LockKeyhole size={18} />} rightIcon={<button type="button" aria-label="Hiện mật khẩu" onClick={() => setShowPassword((value) => !value)} className="text-muted-foreground">{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button>} required /><div className="flex justify-end"><Link href="#" className="text-xs font-bold text-primary hover:underline">Quên mật khẩu?</Link></div><Button type="submit" variant="accent" className="w-full"><LogIn size={17} /> Đăng nhập</Button></form>;
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+
+    setTimeout(() => {
+      setIsLoading(false);
+      signIn({ phone: phone || '0912.345.678' });
+      router.push('/');
+    }, 600);
+  };
+
+  const handleQuickLogin = () => {
+    setIsLoading(true);
+    setTimeout(() => {
+      setIsLoading(false);
+      signIn();
+      router.push('/');
+    }, 400);
+  };
+
+  return (
+    <form className="space-y-5" onSubmit={handleSubmit}>
+      {/* Quick Demo Login Banner */}
+      <div className="p-3.5 bg-emerald-50 border border-emerald-200/90 rounded-2xl flex items-center justify-between gap-2 text-xs mb-2">
+        <div>
+          <span className="font-extrabold text-emerald-950 block">⚡ Tài khoản mẫu (Demo):</span>
+          <span className="text-emerald-800 font-medium">Nguyễn Văn Hùng - SĐT: 0912.345.678</span>
+        </div>
+        <button
+          type="button"
+          onClick={handleQuickLogin}
+          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-800 text-white font-bold rounded-lg cursor-pointer transition-colors shadow-xs whitespace-nowrap"
+        >
+          Vào ngay
+        </button>
+      </div>
+
+      <Input
+        label="Số điện thoại"
+        type="tel"
+        placeholder="Nhập số điện thoại..."
+        value={phone}
+        onChange={(e) => setPhone(e.target.value)}
+        leftIcon={<Phone className="w-5 h-5" />}
+      />
+
+      <div className="space-y-1">
+        <Input
+          label="Mật khẩu"
+          type={showPassword ? 'text' : 'password'}
+          placeholder="Nhập mật khẩu..."
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          leftIcon={<Lock className="w-5 h-5" />}
+          rightIcon={
+            <button
+              type="button"
+              className="p-1.5 text-slate-400 hover:text-slate-600 focus:outline-none rounded-md transition-colors"
+              onClick={() => setShowPassword(!showPassword)}
+            >
+              {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+            </button>
+          }
+        />
+        <div className="flex items-center justify-end mt-2">
+          <a href="#" className="text-sm font-semibold text-emerald-600 hover:text-emerald-900 transition-colors">
+            Quên mật khẩu?
+          </a>
+        </div>
+      </div>
+
+      <Button
+        type="submit"
+        variant="primary"
+        size="lg"
+        className="w-full mt-2 !mt-8"
+        isLoading={isLoading}
+        leftIcon={<LogIn className="w-5 h-5" />}
+      >
+        Đăng nhập
+      </Button>
+
+      <div className="mt-8 pt-2">
+        <div className="relative">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-slate-200" />
+          </div>
+          <div className="relative flex justify-center text-sm">
+            <span className="px-4 bg-white text-slate-500 font-medium">
+              Hoặc đăng nhập nhanh bằng
+            </span>
+          </div>
+        </div>
+
+        <div className="mt-6">
+          <Button
+            type="button"
+            size="lg"
+            className="w-full font-bold bg-[#0068FF] text-white hover:bg-[#005CE6] active:bg-[#0054D1] focus:ring-[#0068FF] shadow-md hover:shadow-lg shadow-[#0068FF]/20 border-none !px-4"
+            onClick={handleQuickLogin}
+            leftIcon={
+              <div className="bg-white text-[#0068FF] rounded-[4px] px-1.5 py-0.5 text-sm font-black tracking-tighter leading-none mr-1 flex items-center justify-center">
+                Zalo
+              </div>
+            }
+          >
+            Đăng nhập bằng Zalo
+          </Button>
+        </div>
+      </div>
+    </form>
+  );
 }

@@ -1,15 +1,9 @@
 'use client';
 
 import { createContext, useContext, useMemo, useState } from 'react';
+import { DemoUser, DemoSessionState, createDemoUser } from './demo-session-state';
 
-export type DemoUser = {
-  fullName: string;
-  phone: string;
-  email: string;
-};
-
-type DemoSessionContextValue = {
-  user: DemoUser | null;
+type DemoSessionContextValue = DemoSessionState & {
   signIn: (user?: Partial<DemoUser>) => void;
   signOut: () => void;
 };
@@ -17,14 +11,18 @@ type DemoSessionContextValue = {
 const DemoSessionContext = createContext<DemoSessionContextValue | null>(null);
 
 export function DemoSessionProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<DemoUser | null>(null);
+  const [state, setState] = useState<DemoSessionState>({
+    user: createDemoUser(),
+    isAuthenticated: true,
+  });
+
   const value = useMemo(
     () => ({
-      user,
-      signIn: (nextUser: Partial<DemoUser> = {}) => setUser({ fullName: 'Nguyễn Văn Hùng', phone: '0912 345 678', email: 'hung@example.com', ...nextUser }),
-      signOut: () => setUser(null),
+      ...state,
+      signIn: (nextUser: Partial<DemoUser> = {}) => setState({ user: createDemoUser(nextUser), isAuthenticated: true }),
+      signOut: () => setState({ user: null, isAuthenticated: false }),
     }),
-    [user],
+    [state],
   );
 
   return <DemoSessionContext.Provider value={value}>{children}</DemoSessionContext.Provider>;
