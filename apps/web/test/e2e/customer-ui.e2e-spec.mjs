@@ -79,3 +79,26 @@ for (const screen of postScreens) {
     assert.ok(html.toLowerCase().includes(screen.marker.toLowerCase()), `Expected to find "${screen.marker}" on ${screen.path}`);
   });
 }
+
+const serviceScreens = [
+  { path: '/tra-cuu-ve', marker: 'TRA CỨU THÔNG TIN ĐẶT VÉ' },
+  { path: '/cancel-ticket', marker: 'Hủy Vé' },
+  { path: '/invoice/123', marker: 'VÉ ĐIỆN TỬ' },
+  { path: '/payment', marker: 'Tổng thanh toán' },
+  { path: '/send-freight', marker: 'Gửi hàng theo nhà xe' },
+  { path: '/tickets/lookup', marker: 'TRA CỨU THÔNG TIN ĐẶT VÉ' },
+  { path: '/tickets/123/cancel', marker: 'Hủy Vé' },
+  { path: '/invoices/123', marker: 'VÉ ĐIỆN TỬ' },
+  { path: '/payments/bank-transfer', marker: 'Tổng thanh toán' },
+  { path: '/shipments/new', marker: 'Gửi hàng theo nhà xe' },
+];
+
+for (const screen of serviceScreens) {
+  test(`${screen.path} renders the migrated service screen`, async () => {
+    const response = await fetch(`${server.baseUrl}${screen.path}`);
+    const html = await response.text();
+
+    assert.equal(response.status, 200, `Expected 200 for ${screen.path}`);
+    assert.ok(html.toLowerCase().includes(screen.marker.toLowerCase()), `Expected to find "${screen.marker}" on ${screen.path}`);
+  });
+}
