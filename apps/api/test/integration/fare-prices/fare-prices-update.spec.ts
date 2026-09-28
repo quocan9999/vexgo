@@ -290,7 +290,7 @@ describe('Fare Price update HTTP and database behavior', () => {
     });
   });
 
-  it('does not rewrite a referenced ticket fare or price snapshot when price and status change', async () => {
+  it('preserves a referenced ticket snapshot when price, date, and status change', async () => {
     const current = await insertFare();
     const suffix = randomUUID().replaceAll('-', '').slice(0, 10).toUpperCase();
     const ticketGraph = await context.prisma.$transaction(async (transaction) => {
@@ -394,12 +394,25 @@ describe('Fare Price update HTTP and database behavior', () => {
       };
     });
 
+    async function expectTicketSnapshotUnchanged() {
+      const ticket = await context.prisma.ve.findUniqueOrThrow({
+        where: { veId: ticketGraph.ticketId },
+      });
+      expect(ticket.giaNiemYet.toString()).toBe('250000');
+      expect(ticket.giaThucTe.toString()).toBe('230000');
+      expect(ticket.bangGiaApDungId).toBe(current.bangGiaId);
+    }
+
     try {
       const response = await request(context.app.getHttpServer())
         .patch(`/api/v1/fare-prices/${current.bangGiaId}`)
-        .send({ listedPrice: 300000 })
+        .send({ listedPrice: 300000, validFrom: '2099-09-02' })
         .expect(200);
-      expect(response.body.data.listedPrice).toBe(300000);
+      expect(response.body.data).toMatchObject({
+        listedPrice: 300000,
+        validFrom: '2099-09-02',
+      });
+      await expectTicketSnapshotUnchanged();
 
       const statusResponse = await request(context.app.getHttpServer())
         .patch(`/api/v1/fare-prices/${current.bangGiaId}/status`)
@@ -408,16 +421,22 @@ describe('Fare Price update HTTP and database behavior', () => {
       expect(statusResponse.body.data).toMatchObject({
         farePriceId: current.bangGiaId,
         listedPrice: 300000,
+        validFrom: '2099-09-02',
         status: 'TAM_NGUNG',
         effectiveState: 'TAM_NGUNG',
       });
+      await expectTicketSnapshotUnchanged();
 
-      const ticket = await context.prisma.ve.findUniqueOrThrow({
-        where: { veId: ticketGraph.ticketId },
+      const activationResponse = await request(context.app.getHttpServer())
+        .patch(`/api/v1/fare-prices/${current.bangGiaId}/status`)
+        .send({ status: 'HOAT_DONG' })
+        .expect(200);
+      expect(activationResponse.body.data).toMatchObject({
+        farePriceId: current.bangGiaId,
+        listedPrice: 300000,
+        status: 'HOAT_DONG',
       });
-      expect(ticket.giaNiemYet.toString()).toBe('250000');
-      expect(ticket.giaThucTe.toString()).toBe('230000');
-      expect(ticket.bangGiaApDungId).toBe(current.bangGiaId);
+      await expectTicketSnapshotUnchanged();
     } finally {
       await context.prisma.$transaction(async (transaction) => {
         await transaction.ve.delete({ where: { veId: ticketGraph.ticketId } });
