@@ -9,6 +9,7 @@ export type VehicleType = {
 export type CreateVehicleTypeInput = {
   name: string;
   description: string | null;
+  busCompanyId: number;
 };
 
 export type UpdateVehicleTypeInput = {
