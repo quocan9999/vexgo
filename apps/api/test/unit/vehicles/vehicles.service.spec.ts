@@ -54,6 +54,7 @@ describe('VehiclesService', () => {
     } as never);
     vi.mocked(prisma.loaiXe.findUnique).mockResolvedValue({
       loaiXeId: 3,
+      nhaXeId: 1,
     } as never);
   });
 
@@ -223,8 +224,8 @@ const createVehicleInput = {
 
 const updateVehicleInput = {
   licensePlate: '51B-999.99',
-  busCompanyId: 4,
-  vehicleTypeId: 7,
+  busCompanyId: 1,
+  vehicleTypeId: 3,
 };
 
 function prismaKnownError(code: string, meta: Record<string, unknown> = {}) {
@@ -246,6 +247,7 @@ describe('VehiclesService writes', () => {
     } as never);
     vi.mocked(prisma.loaiXe.findUnique).mockResolvedValue({
       loaiXeId: 3,
+      nhaXeId: 1,
     } as never);
   });
 
@@ -305,6 +307,24 @@ describe('VehiclesService writes', () => {
     expect((error as NotFoundException).getResponse()).toEqual({
       error: 'VEHICLE_TYPE_NOT_FOUND',
       message: 'Không tìm thấy loại xe.',
+    });
+    expect(prisma.xe.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects a vehicle type owned by another bus company', async () => {
+    vi.mocked(prisma.loaiXe.findUnique).mockResolvedValueOnce({
+      loaiXeId: 3,
+      nhaXeId: 2,
+    } as never);
+
+    const error = await service
+      .create(createVehicleInput)
+      .catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(ConflictException);
+    expect((error as ConflictException).getResponse()).toEqual({
+      error: 'VEHICLE_TYPE_COMPANY_MISMATCH',
+      message: 'Loại xe không thuộc nhà xe đã chọn.',
     });
     expect(prisma.xe.create).not.toHaveBeenCalled();
   });
@@ -396,6 +416,23 @@ describe('VehiclesService writes', () => {
     expect(prisma.xe.update).not.toHaveBeenCalled();
   });
 
+  it('rejects an update that assigns a type from another bus company', async () => {
+    vi.mocked(prisma.loaiXe.findUnique).mockResolvedValueOnce({
+      loaiXeId: 3,
+      nhaXeId: 2,
+    } as never);
+
+    const error = await service
+      .update(12, updateVehicleInput)
+      .catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(ConflictException);
+    expect((error as ConflictException).getResponse()).toMatchObject({
+      error: 'VEHICLE_TYPE_COMPANY_MISMATCH',
+    });
+    expect(prisma.xe.update).not.toHaveBeenCalled();
+  });
+
   it('updates only plate and relation IDs and accepts an unchanged current plate', async () => {
     const input = { ...updateVehicleInput, licensePlate: '51B-123.45' };
     await service.update(12, input);
@@ -405,8 +442,8 @@ describe('VehiclesService writes', () => {
         where: { xeId: 12 },
         data: {
           bienSoXe: '51B-123.45',
-          nhaXeId: 4,
-          loaiXeId: 7,
+          nhaXeId: 1,
+          loaiXeId: 3,
         },
         select: expect.objectContaining({ loaiXe: expect.any(Object) }),
       }),

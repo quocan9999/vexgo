@@ -221,7 +221,7 @@ export class VehiclesService {
       }),
       this.prisma.loaiXe.findUnique({
         where: { loaiXeId: input.vehicleTypeId },
-        select: { loaiXeId: true },
+        select: { loaiXeId: true, nhaXeId: true },
       }),
     ]);
 
@@ -235,6 +235,12 @@ export class VehiclesService {
       throw new NotFoundException({
         error: 'VEHICLE_TYPE_NOT_FOUND',
         message: 'Không tìm thấy loại xe.',
+      });
+    }
+    if (vehicleType.nhaXeId !== input.busCompanyId) {
+      throw new ConflictException({
+        error: 'VEHICLE_TYPE_COMPANY_MISMATCH',
+        message: 'Loại xe không thuộc nhà xe đã chọn.',
       });
     }
 
@@ -276,7 +282,7 @@ export class VehiclesService {
       }),
       this.prisma.loaiXe.findUnique({
         where: { loaiXeId: input.vehicleTypeId },
-        select: { loaiXeId: true },
+        select: { loaiXeId: true, nhaXeId: true },
       }),
     ]);
 
@@ -290,6 +296,12 @@ export class VehiclesService {
       throw new NotFoundException({
         error: 'VEHICLE_TYPE_NOT_FOUND',
         message: 'Không tìm thấy loại xe.',
+      });
+    }
+    if (vehicleType.nhaXeId !== input.busCompanyId) {
+      throw new ConflictException({
+        error: 'VEHICLE_TYPE_COMPANY_MISMATCH',
+        message: 'Loại xe không thuộc nhà xe đã chọn.',
       });
     }
 
