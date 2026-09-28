@@ -16,6 +16,7 @@ model NhaXe {
   createdAt      DateTime      @default(now()) @db.DateTime(0)
   updatedAt      DateTime      @default(now()) @updatedAt @db.DateTime(0)
   xes            Xe[]
+  loaiXes        LoaiXe[]
   tuyenXes       TuyenXe[]
   nhanViens      NhanVien[]
   khuyenMais     KhuyenMai[]
@@ -64,14 +65,17 @@ model TepDinhKem {
 
 model LoaiXe {
   loaiXeId  Int       @id @default(autoincrement()) @db.Int
+  nhaXeId   Int       @db.Int
   tenLoai   String    @db.VarChar(100)
   moTa      String?   @db.VarChar(500)
   createdAt DateTime  @default(now()) @db.DateTime(0)
   updatedAt DateTime  @default(now()) @updatedAt @db.DateTime(0)
+  nhaXe     NhaXe     @relation(fields: [nhaXeId], references: [nhaXeId], onDelete: Restrict, onUpdate: Restrict)
   xes       Xe[]
   bangGias  BangGia[]
 
-  @@unique([tenLoai], map: "LoaiXe_index_0")
+  @@unique([nhaXeId, tenLoai], map: "LoaiXe_nhaXeId_tenLoai_key")
+  @@unique([nhaXeId, loaiXeId], map: "LoaiXe_nhaXeId_loaiXeId_key")
 }
 
 model Xe {
@@ -83,9 +87,12 @@ model Xe {
   createdAt DateTime   @default(now()) @db.DateTime(0)
   updatedAt DateTime   @default(now()) @updatedAt @db.DateTime(0)
   nhaXe     NhaXe      @relation(fields: [nhaXeId], references: [nhaXeId], onDelete: Restrict, onUpdate: Restrict)
-  loaiXe    LoaiXe     @relation(fields: [loaiXeId], references: [loaiXeId], onDelete: Restrict, onUpdate: Restrict)
+  loaiXe    LoaiXe     @relation(fields: [nhaXeId, loaiXeId], references: [nhaXeId, loaiXeId], onDelete: Restrict, onUpdate: Restrict)
   ghes      Ghe[]
   chuyenXes ChuyenXe[]
+
+  @@unique([nhaXeId, xeId], map: "Xe_nhaXeId_xeId_key")
+  @@index([nhaXeId, loaiXeId], map: "Xe_nhaXeId_loaiXeId_idx")
 }
 
 model Ghe {
@@ -115,6 +122,7 @@ model TuyenXe {
   bangGias  BangGia[]
 
   @@unique([nhaXeId, maTuyenXe], map: "TuyenXe_index_2")
+  @@unique([nhaXeId, tuyenXeId], map: "TuyenXe_nhaXeId_tuyenXeId_key")
 }
 
 model ChuyenXe {
@@ -123,12 +131,13 @@ model ChuyenXe {
   ngayKhoiHanh  DateTime       @db.Date
   gioKhoiHanh   DateTime       @db.Time(0)
   trangThai     String         @db.VarChar(30)
+  nhaXeId       Int            @db.Int
   tuyenXeId     Int            @db.Int
   xeId          Int            @db.Int
   createdAt     DateTime       @default(now()) @db.DateTime(0)
   updatedAt     DateTime       @default(now()) @updatedAt @db.DateTime(0)
-  xe            Xe             @relation(fields: [xeId], references: [xeId], onDelete: Restrict, onUpdate: Restrict)
-  tuyenXe       TuyenXe        @relation(fields: [tuyenXeId], references: [tuyenXeId], onDelete: Restrict, onUpdate: Restrict)
+  xe            Xe             @relation(fields: [nhaXeId, xeId], references: [nhaXeId, xeId], onDelete: Restrict, onUpdate: Restrict)
+  tuyenXe       TuyenXe        @relation(fields: [nhaXeId, tuyenXeId], references: [nhaXeId, tuyenXeId], onDelete: Restrict, onUpdate: Restrict)
   gheChuyenXes  GheChuyenXe[]
   phieuGuiHangs PhieuGuiHang[]
   phanHois      PhanHoi[]
@@ -154,14 +163,17 @@ model BangGia {
   tuNgay     DateTime  @db.Date
   denNgay    DateTime? @db.Date
   trangThai  String    @db.VarChar(30)
+  nhaXeId    Int       @db.Int
   tuyenXeId  Int       @db.Int
   loaiXeId   Int       @db.Int
   createdAt  DateTime  @default(now()) @db.DateTime(0)
   updatedAt  DateTime  @default(now()) @updatedAt @db.DateTime(0)
-  tuyenXe    TuyenXe   @relation(fields: [tuyenXeId], references: [tuyenXeId], onDelete: Restrict, onUpdate: Restrict)
-  loaiXe     LoaiXe    @relation(fields: [loaiXeId], references: [loaiXeId], onDelete: Restrict, onUpdate: Restrict)
+  tuyenXe    TuyenXe   @relation(fields: [nhaXeId, tuyenXeId], references: [nhaXeId, tuyenXeId], onDelete: Restrict, onUpdate: Restrict)
+  loaiXe     LoaiXe    @relation(fields: [nhaXeId, loaiXeId], references: [nhaXeId, loaiXeId], onDelete: Restrict, onUpdate: Restrict)
   ves        Ve[]
 
+  @@index([nhaXeId, tuyenXeId], map: "BangGia_nhaXeId_tuyenXeId_idx")
+  @@index([nhaXeId, loaiXeId], map: "BangGia_nhaXeId_loaiXeId_idx")
   @@index([tuyenXeId, loaiXeId], map: "BangGia_index_4")
 }
 
