@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common
 import { CreateFarePriceDto } from './dto/create-fare-price.dto.js';
 import { FarePriceIdParamsDto } from './dto/fare-price-id-params.dto.js';
 import { QueryFarePricesDto } from './dto/query-fare-prices.dto.js';
+import { ResolveApplicableFareQueryDto } from './dto/resolve-applicable-fare-query.dto.js';
 import { UpdateFarePriceDto } from './dto/update-fare-price.dto.js';
 import { UpdateFarePriceStatusDto } from './dto/update-fare-price-status.dto.js';
 import { FarePricesService } from './fare-prices.service.js';
@@ -34,6 +35,11 @@ export class FarePricesController {
   @Get()
   findAll(@Query() query: QueryFarePricesDto) {
     return this.farePricesService.findAll(query);
+  }
+
+  @Get('applicable')
+  resolveApplicableFare(@Query() query: ResolveApplicableFareQueryDto) {
+    return this.farePricesService.resolveApplicableFare(query);
   }
 
   @Get(':id')

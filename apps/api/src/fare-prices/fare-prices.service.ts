@@ -6,6 +6,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '../generated/prisma/client.js';
 import type { CreateFarePriceDto } from './dto/create-fare-price.dto.js';
+import type { ResolveApplicableFareQueryDto } from './dto/resolve-applicable-fare-query.dto.js';
 import type { UpdateFarePriceDto } from './dto/update-fare-price.dto.js';
 import {
   getBusinessDate,
@@ -45,6 +46,13 @@ const FARE_PRICE_SELECT = {
     },
   },
   loaiXe: { select: { loaiXeId: true, tenLoai: true } },
+} satisfies Prisma.BangGiaSelect;
+
+const APPLICABLE_FARE_SELECT = {
+  bangGiaId: true,
+  giaNiemYet: true,
+  tuNgay: true,
+  denNgay: true,
 } satisfies Prisma.BangGiaSelect;
 
 type FarePriceRecord = Prisma.BangGiaGetPayload<{
@@ -406,5 +414,64 @@ export class FarePricesService {
     }
 
     return { data: mapFarePrice(record, businessDate) };
+  }
+
+  async resolveApplicableFare(query: ResolveApplicableFareQueryDto) {
+    await validateFarePriceRelations(
+      this.prisma,
+      query.routeId,
+      query.vehicleTypeId,
+    );
+
+    const records = await this.prisma.bangGia.findMany({
+      where: {
+        tuyenXeId: query.routeId,
+        loaiXeId: query.vehicleTypeId,
+        trangThai: 'HOAT_DONG',
+        tuNgay: { lte: toUtcDate(query.date) },
+        OR: [
+          { denNgay: null },
+          { denNgay: { gte: toUtcDate(query.date) } },
+        ],
+      },
+      orderBy: { bangGiaId: 'asc' },
+      select: APPLICABLE_FARE_SELECT,
+      take: 2,
+    });
+
+    if (records.length === 0) {
+      throw new NotFoundException({
+        error: 'APPLICABLE_FARE_NOT_FOUND',
+        message: 'Không có bảng giá áp dụng cho tuyến, loại xe và ngày đã chọn.',
+      });
+    }
+
+    if (records.length > 1) {
+      const conflictingFareIds = records.map((record) => record.bangGiaId);
+      throw new Error(
+        `FARE_PRICE_INVARIANT_VIOLATION routeId=${query.routeId} vehicleTypeId=${query.vehicleTypeId} date=${query.date} conflictingFareIds=${conflictingFareIds.join(',')}`,
+      );
+    }
+
+    const record = records[0]!;
+    const listedPrice = record.giaNiemYet.toNumber();
+    if (!Number.isSafeInteger(listedPrice) || listedPrice <= 0) {
+      throw new Error(
+        `BangGia contains an invalid listed VND price. farePriceId=${record.bangGiaId}`,
+      );
+    }
+
+    return {
+      data: {
+        farePriceId: record.bangGiaId,
+        routeId: query.routeId,
+        vehicleTypeId: query.vehicleTypeId,
+        listedPrice,
+        currency: 'VND' as const,
+        validFrom: toDateOnly(record.tuNgay),
+        validTo: record.denNgay === null ? null : toDateOnly(record.denNgay),
+        applicableOn: query.date,
+      },
+    };
   }
 }

@@ -86,7 +86,7 @@ function dateOnlyToUtc(value: string): Date {
 }
 
 export async function validateFarePriceRelations(
-  transaction: Prisma.TransactionClient,
+  transaction: Pick<Prisma.TransactionClient, 'tuyenXe' | 'loaiXe'>,
   routeId: number,
   vehicleTypeId: number,
 ): Promise<void> {
