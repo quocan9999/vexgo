@@ -192,6 +192,43 @@ model TaiKhoan {
   khachHang            KhachHang?
   nhanVien             NhanVien?
   taiKhoanVaiTros      TaiKhoanVaiTro[]
+  phienDangNhaps       PhienDangNhap[]
+}
+
+model PhienDangNhap {
+  phienDangNhapId  Int            @id @default(autoincrement()) @db.Int
+  sessionId        String         @unique @db.Char(36)
+  refreshTokenHash String         @unique @db.Char(64)
+  hetHanLuc        DateTime       @db.DateTime(3)
+  thuHoiLuc        DateTime?      @db.DateTime(3)
+  tokenThayTheId   Int?           @unique @db.Int
+  taiKhoanId       Int            @db.Int
+  createdAt        DateTime       @default(now()) @db.DateTime(3)
+  updatedAt        DateTime       @default(now()) @updatedAt @db.DateTime(3)
+  taiKhoan         TaiKhoan       @relation(fields: [taiKhoanId], references: [taiKhoanId], onDelete: Restrict, onUpdate: Restrict)
+  tokenThayThe     PhienDangNhap? @relation("PhienDangNhapRotation", fields: [tokenThayTheId], references: [phienDangNhapId], onDelete: Restrict, onUpdate: Restrict)
+  tokenGoc         PhienDangNhap? @relation("PhienDangNhapRotation")
+
+  @@index([taiKhoanId, thuHoiLuc, hetHanLuc], map: "PhienDangNhap_account_active_idx")
+}
+
+model YeuCauOtp {
+  yeuCauOtpId    Int       @id @default(autoincrement()) @db.Int
+  challengeId    String    @unique @db.Char(36)
+  soDienThoai    String    @db.VarChar(16)
+  mucDich        String    @db.VarChar(30)
+  maOtpHash      String    @db.Char(64)
+  soLanThu       Int       @default(0) @db.Int
+  hetHanLuc      DateTime  @db.DateTime(3)
+  daXacThucLuc   DateTime? @db.DateTime(3)
+  proofHash      String?   @unique @db.Char(64)
+  proofHetHanLuc DateTime? @db.DateTime(3)
+  daSuDungLuc    DateTime? @db.DateTime(3)
+  createdAt      DateTime  @default(now()) @db.DateTime(3)
+  updatedAt      DateTime  @default(now()) @updatedAt @db.DateTime(3)
+
+  @@unique([soDienThoai, mucDich], map: "YeuCauOtp_soDienThoai_mucDich_key")
+  @@index([soDienThoai, mucDich, updatedAt], map: "YeuCauOtp_phone_purpose_updated_idx")
 }
 
 model KhachHang {

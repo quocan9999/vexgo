@@ -8,6 +8,8 @@ import { VehicleTypesModule } from './vehicle-types/vehicle-types.module.js';
 import { VehiclesModule } from './vehicles/vehicles.module.js';
 import { RoutesModule } from './routes/routes.module.js';
 import { FarePricesModule } from './fare-prices/fare-prices.module.js';
+import { AuthModule } from './auth/auth.module.js';
+import { CustomersModule } from './customers/customers.module.js';
 
 @Module({
   imports: [
@@ -25,6 +27,8 @@ import { FarePricesModule } from './fare-prices/fare-prices.module.js';
     VehiclesModule,
     RoutesModule,
     FarePricesModule,
+    AuthModule,
+    CustomersModule,
   ],
 })
 export class AppModule {}

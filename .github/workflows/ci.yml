@@ -24,19 +24,22 @@ jobs:
       mysql:
         image: mysql:8.4
         env:
-          MYSQL_ROOT_PASSWORD: ci
+          MYSQL_ROOT_PASSWORD: ci-root-password
           MYSQL_DATABASE: vexgo_ci
         ports:
           - 3306:3306
         options: >-
-          --health-cmd="mysqladmin ping --silent"
-          --health-interval=10s
+          --health-cmd="mysqladmin ping -h 127.0.0.1 --silent"
+          --health-interval=5s
           --health-timeout=5s
-          --health-retries=10
+          --health-retries=20
+          --health-start-period=20s
     env:
-      DATABASE_URL: mysql://root:ci@127.0.0.1:3306/vexgo_ci
-      MIGRATION_URL: mysql://root:ci@127.0.0.1:3306/vexgo_ci
-      SHADOW_DATABASE_URL: mysql://root:ci@127.0.0.1:3306/vexgo_ci_shadow
+      DATABASE_URL: mysql://root:ci-root-password@127.0.0.1:3306/vexgo_ci
+      MIGRATION_URL: mysql://root:ci-root-password@127.0.0.1:3306/vexgo_ci
+      SHADOW_DATABASE_URL: mysql://root:ci-root-password@127.0.0.1:3306/vexgo_ci_shadow
+      JWT_ACCESS_SECRET: vexgo-ci-only-jwt-secret-not-for-any-deployment-2026
+      OTP_HASH_SECRET: vexgo-ci-only-otp-secret-not-for-any-deployment-2026
     steps:
       - uses: actions/checkout@v7
 
@@ -62,8 +65,11 @@ jobs:
       - name: API build
         run: npm run build --workspace=@vexgo/api
 
-      - name: Deploy API migrations to MySQL
+      - name: Apply API database migrations
         run: npm exec -- prisma migrate deploy
+
+      - name: Seed the auth E2E role
+        run: node prisma/seed-auth-e2e.mjs
 
       - name: API tests
         run: npm run test --workspace=@vexgo/api
