@@ -77,7 +77,7 @@ Refresh token là chuỗi opaque ngẫu nhiên, không phải JWT. Database ch�
 - `tokenThayTheId` tùy chọn để audit rotation;
 - `createdAt`, `updatedAt`.
 
-Refresh token mặc định hiệu lực 30 ngày. Mỗi lần refresh thực hiện rotation: thu hồi token cũ và tạo token mới trong một transaction. Việc dùng lại token đã rotate làm phiên bị từ chối. Logout thu hồi phiên được chỉ ra bởi refresh token; access token hiện tại tự hết hạn sau tối đa 15 phút.
+Refresh token mặc định hiệu lực 30 ngày. Mỗi lần refresh thực hiện rotation: thu hồi token cũ và tạo token mới trong một transaction. Việc dùng lại token đã rotate làm phiên bị từ chối. Logout thu hồi phiên được chỉ ra bởi refresh token; guard tra cứu phiên DB ở mỗi request nên access token của phiên đó bị từ chối ngay.
 
 `POST /auth/login` phải kiểm tra tài khoản tồn tại, mật khẩu đúng, trạng thái `HOAT_DONG`, sau đó phát hành cặp token. Sai số điện thoại hoặc mật khẩu dùng chung lỗi `401 INVALID_CREDENTIALS` để tránh lộ tài khoản tồn tại.
 
@@ -91,10 +91,10 @@ Response đăng ký/login/refresh dùng envelope thống nhất:
     "tokenType": "Bearer",
     "expiresIn": 900,
     "user": {
-      "taiKhoanId": 1,
-      "khachHangId": 1,
-      "hoTen": "Nguyễn Văn A",
-      "soDienThoai": "+84900000000",
+      "accountId": 1,
+      "customerId": 1,
+      "fullName": "Nguyễn Văn A",
+      "phoneNumber": "+84900000000",
       "roles": ["KHACH_HANG"]
     }
   }
@@ -113,7 +113,7 @@ Module mới `customers/` sở hữu `GET /me` và `PATCH /me`.
 
 `GET /me` trả thông tin tài khoản và khách hàng hiện tại, gồm mã khách hàng, điểm tích lũy, họ tên, số điện thoại, ngày sinh, CCCD, email, trạng thái xác thực và timestamps phù hợp.
 
-`PATCH /me` giai đoạn này cho phép cập nhật `hoTen`, `ngaySinh`, `cccd`, `email`. Số điện thoại không được đổi trực tiếp vì cần OTP riêng; flow đổi số điện thoại sẽ bổ sung theo mục đích `CAP_NHAT_SO_DIEN_THOAI`. DTO dùng whitelist và từ chối field lạ.
+`PATCH /me` giai đoạn này cho phép cập nhật `fullName`, `dateOfBirth`, `citizenId`, `email`. Số điện thoại không được đổi trực tiếp vì cần OTP riêng; flow đổi số điện thoại sẽ bổ sung theo mục đích `CAP_NHAT_SO_DIEN_THOAI`. DTO dùng whitelist và từ chối field lạ. JSON công khai dùng English camelCase; service ánh xạ sang tên field Prisma tiếng Việt.
 
 ## 4. API contract
 
@@ -123,7 +123,7 @@ Module mới `customers/` sở hữu `GET /me` và `PATCH /me`.
 POST /api/v1/auth/register/request-otp
 Content-Type: application/json
 
-{ "soDienThoai": "+84900000000" }
+{ "phoneNumber": "+84900000000" }
 ```
 
 ```json
@@ -146,7 +146,7 @@ Content-Type: application/json
 
 {
   "challengeId": "uuid",
-  "soDienThoai": "+84900000000",
+  "phoneNumber": "+84900000000",
   "otp": "123456"
 }
 ```
@@ -168,12 +168,12 @@ Content-Type: application/json
 
 {
   "otpProof": "opaque-one-time-proof",
-  "hoTen": "Nguyễn Văn A",
-  "soDienThoai": "+84900000000",
-  "matKhau": "VexGo@123",
+  "fullName": "Nguyễn Văn A",
+  "phoneNumber": "+84900000000",
+  "password": "VexGo@123",
   "email": "a@example.com",
-  "cccd": "079123456789",
-  "ngaySinh": "2000-01-01"
+  "citizenId": "079123456789",
+  "dateOfBirth": "2000-01-01"
 }
 ```
 
@@ -183,7 +183,7 @@ Thành công trả cặp token và user theo contract tại mục 3.3.
 
 ```http
 POST /api/v1/auth/login
-{ "soDienThoai": "+84900000000", "matKhau": "VexGo@123" }
+{ "phoneNumber": "+84900000000", "password": "VexGo@123" }
 ```
 
 ```http
@@ -211,10 +211,10 @@ Authorization: Bearer <accessToken>
 Content-Type: application/json
 
 {
-  "hoTen": "Nguyễn Văn B",
-  "ngaySinh": "2000-01-01",
+  "fullName": "Nguyễn Văn B",
+  "dateOfBirth": "2000-01-01",
   "email": "b@example.com",
-  "cccd": "079123456789"
+  "citizenId": "079123456789"
 }
 ```
 

@@ -131,10 +131,10 @@
 - Produces: `AuthService.register(dto: RegisterDto): Promise<AuthTokenResponse>`.
 
 - [ ] **Step 1: Install exact dependency** with `npm install @nestjs/jwt@12.0.2 --workspace=@vexgo/api`.
-- [ ] **Step 2: Write failing DTO tests** for required `otpProof`, optional valid `ngaySinh`, impossible date-only values such as `2026-02-30`, Vietnamese E.164 phone, 8-byte minimum and Unicode password over 72 UTF-8 bytes.
+- [ ] **Step 2: Write failing DTO tests** for required `otpProof`, optional valid `dateOfBirth`, impossible date-only values such as `2026-02-30`, `phoneNumber` in Vietnamese E.164 format, 8-byte minimum and Unicode `password` over 72 UTF-8 bytes.
 - [ ] **Step 3: Write failing register service tests** for full transaction, proof/account/role/customer/session writes, duplicate phone, missing `KHACH_HANG` role rollback and sanitized response.
 - [ ] **Step 4: Add `PhienDangNhap` schema/migration and regenerate Prisma Client**; hash field is unique, session id is unique, account relation restricts deletion.
-- [ ] **Step 5: Implement `TokenService`** using `JwtModule.registerAsync`, Node crypto opaque refresh tokens, SHA-256 persistence and claims `{ sub, sid, roles }`; fail startup when JWT/OTP secrets are missing or unsafe in production.
+- [ ] **Step 5: Implement `TokenService`** using Node crypto opaque refresh tokens, SHA-256 persistence and claims `{ sub, sid, roles }`; fail startup in every environment when JWT/OTP secrets are missing or unsafe.
 - [ ] **Step 6: Upgrade `RegisterDto` and `AuthService.register`**; consume proof and create `TaiKhoan`, collision-safe numeric `maKhachHang`, `KhachHang`, `TaiKhoanVaiTro`, session in one transaction.
 - [ ] **Step 7: Write HTTP integration tests** asserting `201`, standard envelope/token fields, database constraint mapping and one-time proof replay rejection.
 - [ ] **Step 8: Run targeted tests, migration deploy, lint, typecheck and build.** Expect all PASS.
@@ -187,7 +187,7 @@
 - [ ] **Step 1: Write failing guard tests** for missing/malformed/expired JWT, wrong signature, revoked/missing session, locked account, and valid JWT principal attachment.
 - [ ] **Step 2: Implement `AccessTokenGuard` and `CurrentPrincipal`**; verify JWT then load account/session/roles from Prisma before allowing the request.
 - [ ] **Step 3: Write failing customer service tests** for exact profile mapping, non-customer access, account scoping, partial update, null-clearing of optional fields, invalid calendar date and unchanged phone.
-- [ ] **Step 4: Implement `UpdateMeDto` and `CustomersService`**; support `hoTen`, `ngaySinh`, `email`, `cccd`, reject phone/customer id/unknown fields, return `YYYY-MM-DD` for date-only.
+- [ ] **Step 4: Implement `UpdateMeDto` and `CustomersService`**; expose `fullName`, `dateOfBirth`, `email`, `citizenId`, reject phone/customer id/unknown fields, return `YYYY-MM-DD` for date-only.
 - [ ] **Step 5: Implement guarded controller/module routes** `GET /me` and `PATCH /me`, import `CustomersModule` in `AppModule`, require `KHACH_HANG` role.
 - [ ] **Step 6: Write HTTP integration tests** with real guard and mocked Prisma boundaries for bearer auth, customer isolation, validation/error/success envelopes.
 - [ ] **Step 7: Run targeted tests, lint, typecheck and build.** Expect PASS.
