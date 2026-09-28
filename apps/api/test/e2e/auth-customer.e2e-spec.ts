@@ -67,7 +67,7 @@ describe('phone auth and customer profile flow', () => {
   it('runs OTP, registration, profile, refresh and logout against MySQL', async () => {
     const otpRequest = await request(app.getHttpServer())
       .post('/api/v1/auth/register/request-otp')
-      .send({ soDienThoai: phone })
+      .send({ phoneNumber: phone })
       .expect(201);
     const otp = capturedOtps.get(phone);
     expect(otp).toMatch(/^\d{6}$/);
@@ -76,7 +76,7 @@ describe('phone auth and customer profile flow', () => {
       .post('/api/v1/auth/register/verify-otp')
       .send({
         challengeId: otpRequest.body.data.challengeId,
-        soDienThoai: phone,
+        phoneNumber: phone,
         otp,
       })
       .expect(201);
@@ -85,12 +85,12 @@ describe('phone auth and customer profile flow', () => {
       .post('/api/v1/auth/register')
       .send({
         otpProof: verification.body.data.otpProof,
-        hoTen: 'Khách Hàng E2E',
-        soDienThoai: phone,
-        matKhau: 'VexGo@123',
+        fullName: 'Khách Hàng E2E',
+        phoneNumber: phone,
+        password: 'VexGo@123',
         email: 'e2e@example.com',
-        cccd: '079123456789',
-        ngaySinh: '2000-02-29',
+        citizenId: '079123456789',
+        dateOfBirth: '2000-02-29',
       })
       .expect(201);
     const firstAccessToken = registration.body.data.accessToken as string;
@@ -103,19 +103,19 @@ describe('phone auth and customer profile flow', () => {
       .set('Authorization', `Bearer ${firstAccessToken}`)
       .expect(200);
     expect(profile.body.data).toMatchObject({
-      hoTen: 'Khách Hàng E2E',
-      soDienThoai: phone,
-      ngaySinh: '2000-02-29',
+      fullName: 'Khách Hàng E2E',
+      phoneNumber: phone,
+      dateOfBirth: '2000-02-29',
       email: 'e2e@example.com',
     });
 
     const updated = await request(app.getHttpServer())
       .patch('/api/v1/me')
       .set('Authorization', `Bearer ${firstAccessToken}`)
-      .send({ hoTen: 'Khách Hàng E2E Đã Sửa', email: null })
+      .send({ fullName: 'Khách Hàng E2E Đã Sửa', email: null })
       .expect(200);
     expect(updated.body.data).toMatchObject({
-      hoTen: 'Khách Hàng E2E Đã Sửa',
+      fullName: 'Khách Hàng E2E Đã Sửa',
       email: null,
     });
 
