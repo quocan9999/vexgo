@@ -671,7 +671,7 @@ export function VehiclesManagement() {
                             >
                               {sortButton('Cập nhật', 'updatedAt')}
                             </th>
-                            <th scope="col">Thao tác</th>
+                            <th scope="col"></th>
                           </tr>
                         </thead>
                         <tbody>

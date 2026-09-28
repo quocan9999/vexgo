@@ -341,6 +341,11 @@
   transform: translateY(-1px);
 }
 
+.login-preview-button {
+  width: 100%;
+  justify-content: center;
+}
+
 .demo-account-card {
   margin-top: 24px;
   padding: 15px 16px;
@@ -441,6 +446,37 @@
   color: #fff;
   font-size: 19px;
   font-weight: 800;
+}
+
+.tenant-operations-placeholder {
+  display: flex;
+  min-height: 280px;
+  flex-direction: column;
+  justify-content: center;
+  gap: 12px;
+  padding: clamp(24px, 5vw, 48px);
+}
+
+.tenant-operations-placeholder__eyebrow {
+  color: #5675ae;
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+}
+
+.tenant-operations-placeholder h1 {
+  margin: 0;
+  color: #17243b;
+  font-size: clamp(22px, 3vw, 30px);
+  letter-spacing: -0.7px;
+}
+
+.tenant-operations-placeholder p {
+  max-width: 640px;
+  margin: 0;
+  color: #66758d;
+  font-size: 14px;
+  line-height: 1.7;
 }
 
 .sidebar-profile {

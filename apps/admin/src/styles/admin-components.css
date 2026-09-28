@@ -260,7 +260,7 @@ dialog:focus-visible {
 
 .breadcrumb {
   gap: 10px;
-  color: #8a95a7;
+  color: var(--admin-text-muted);
   font-size: 12px;
 }
 
@@ -288,7 +288,7 @@ dialog:focus-visible {
 
 .eyebrow {
   margin: 0 0 8px;
-  color: #71809a;
+  color: var(--admin-text-muted);
   font-size: 9px;
   font-weight: 750;
   letter-spacing: 1.25px;
@@ -380,6 +380,83 @@ dialog:focus-visible {
   border-color: #8da8e7;
 }
 
+.admin-resource-panel {
+  min-width: 0;
+  overflow: hidden;
+  padding: 0;
+}
+
+.admin-resource-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.admin-resource-table {
+  width: 100%;
+  min-width: 980px;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.admin-resource-table thead {
+  background: var(--admin-canvas);
+}
+
+.admin-resource-table th,
+.admin-resource-table td {
+  padding: 11px 13px;
+  border-top: 1px solid var(--admin-border);
+  color: var(--admin-text-muted);
+  font-size: var(--admin-font-size-base);
+  vertical-align: middle;
+}
+
+.admin-resource-table thead th {
+  height: 42px;
+  border-top: 0;
+  font-size: var(--admin-font-size-md);
+  font-weight: var(--admin-font-weight-semibold);
+  white-space: nowrap;
+}
+
+.admin-resource-table tbody th {
+  color: var(--admin-text-strong);
+  font-size: var(--admin-font-size-emphasis);
+  font-weight: var(--admin-font-weight-semibold);
+}
+
+.admin-resource-table tbody tr:hover {
+  background: var(--admin-blue-soft);
+}
+
+.admin-resource-table tbody td:last-child {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.admin-resource-sort-button {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+}
+
+.admin-resource-sort-button:hover {
+  color: var(--admin-blue);
+}
+
+@media (max-width: 760px) {
+  .admin-resource-table-wrap {
+    display: none;
+  }
+}
+
 .panel {
   border: 1px solid var(--admin-border);
   border-radius: 12px;
@@ -442,12 +519,12 @@ dialog:focus-visible {
 }
 
 .pagination-summary {
-  color: #8792a4;
+  color: var(--admin-text-muted);
   font-size: 9px;
 }
 
 .pagination-controls {
-  color: #8792a4;
+  color: var(--admin-text-muted);
   font-size: 9px;
 }
 
@@ -753,10 +830,18 @@ dialog:focus-visible {
     align-items: stretch;
     padding: 22px 17px 17px;
     transform: translateX(-100%);
+    visibility: hidden;
+    transition:
+      transform 180ms ease,
+      visibility 180ms step-end;
   }
 
   .admin-sidebar.is-open {
     transform: translateX(0);
+    visibility: visible;
+    transition:
+      transform 180ms ease,
+      visibility 0s;
   }
 
   .brand-lockup {
@@ -927,8 +1012,10 @@ dialog:focus-visible {
 
   .admin-detail-sheet__panel {
     width: 100%;
-    min-height: 100%;
-    height: auto;
+    height: 100%;
+    min-height: 0;
+    max-height: 100%;
+    overflow-y: auto;
   }
 }
 
@@ -995,11 +1082,111 @@ dialog:focus-visible {
   animation: panel-in 200ms ease-out;
 }
 
+.admin-crud-form {
+  display: grid;
+  gap: 18px;
+  padding: 22px 25px 0;
+}
+
+.admin-crud-form-field {
+  display: grid;
+  gap: 7px;
+  color: var(--admin-text-strong);
+  font-size: var(--admin-font-size-xs);
+  font-weight: var(--admin-font-weight-semibold);
+}
+
+.admin-crud-form-field input,
+.admin-crud-form-field select {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 42px;
+  padding: 9px 12px;
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius-control);
+  background: var(--background);
+  color: var(--admin-text-strong);
+  font: inherit;
+  font-size: var(--admin-font-size-base);
+  font-weight: var(--admin-font-weight-regular);
+}
+
+.admin-crud-form-field input:focus-visible,
+.admin-crud-form-field select:focus-visible {
+  border-color: var(--admin-blue);
+  outline: 3px solid color-mix(in srgb, var(--admin-blue) 22%, transparent);
+  outline-offset: 1px;
+}
+
+.admin-crud-form-field input[aria-invalid='true'],
+.admin-crud-form-field select[aria-invalid='true'] {
+  border-color: #c6534c;
+}
+
+.admin-crud-form-field-error,
+.admin-crud-form-error {
+  color: var(--admin-danger);
+  font-size: var(--admin-font-size-xs);
+  line-height: 1.45;
+}
+
+.admin-crud-form-error {
+  margin: 0;
+}
+
+.admin-crud-form-error p { margin: 0 0 8px; }
+
+.admin-crud-form-context {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius-control);
+  background: var(--admin-canvas);
+  color: var(--admin-text-strong);
+  font-size: var(--admin-font-size-base);
+}
+
+.admin-crud-form-context span {
+  color: var(--admin-text-muted);
+  font-size: var(--admin-font-size-xs);
+}
+
+.admin-crud-form-actions {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+  margin: 2px -25px 0;
+  padding: 15px 25px;
+  border-top: 1px solid var(--admin-border);
+  background: color-mix(in srgb, var(--background) 96%, transparent);
+}
+
+.admin-crud-form-spinner {
+  animation: admin-refresh-spin 900ms linear infinite;
+}
+
 @media (max-width: 520px) {
   .admin-form-dialog__panel {
     width: 100%;
-    min-height: 100%;
-    height: auto;
+    height: 100%;
+    min-height: 0;
+    max-height: 100%;
+    overflow-y: auto;
+  }
+
+  .admin-crud-form {
+    padding-right: 19px;
+    padding-left: 19px;
+  }
+
+  .admin-crud-form-actions {
+    margin-right: -19px;
+    margin-left: -19px;
+    padding-right: 19px;
+    padding-left: 19px;
   }
 }
 

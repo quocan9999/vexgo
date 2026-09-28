@@ -33,6 +33,7 @@ const prisma = {
   },
   nhaXe: { findUnique: vi.fn() },
   loaiXe: { findUnique: vi.fn() },
+  chuyenXe: { count: vi.fn() },
 } as unknown as PrismaService;
 
 const service = new VehiclesService(prisma);
@@ -54,7 +55,9 @@ describe('VehiclesService', () => {
     } as never);
     vi.mocked(prisma.loaiXe.findUnique).mockResolvedValue({
       loaiXeId: 3,
+      nhaXeId: 1,
     } as never);
+    vi.mocked(prisma.chuyenXe.count).mockResolvedValue(0);
   });
 
   it('maps vehicle, bus company, and vehicle type fields to the English API shape', async () => {
@@ -223,8 +226,8 @@ const createVehicleInput = {
 
 const updateVehicleInput = {
   licensePlate: '51B-999.99',
-  busCompanyId: 4,
-  vehicleTypeId: 7,
+  busCompanyId: 1,
+  vehicleTypeId: 3,
 };
 
 function prismaKnownError(code: string, meta: Record<string, unknown> = {}) {
@@ -246,6 +249,7 @@ describe('VehiclesService writes', () => {
     } as never);
     vi.mocked(prisma.loaiXe.findUnique).mockResolvedValue({
       loaiXeId: 3,
+      nhaXeId: 1,
     } as never);
   });
 
@@ -305,6 +309,24 @@ describe('VehiclesService writes', () => {
     expect((error as NotFoundException).getResponse()).toEqual({
       error: 'VEHICLE_TYPE_NOT_FOUND',
       message: 'Không tìm thấy loại xe.',
+    });
+    expect(prisma.xe.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects a vehicle type owned by another bus company', async () => {
+    vi.mocked(prisma.loaiXe.findUnique).mockResolvedValueOnce({
+      loaiXeId: 3,
+      nhaXeId: 2,
+    } as never);
+
+    const error = await service
+      .create(createVehicleInput)
+      .catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(ConflictException);
+    expect((error as ConflictException).getResponse()).toEqual({
+      error: 'VEHICLE_TYPE_COMPANY_MISMATCH',
+      message: 'Loại xe không thuộc nhà xe đã chọn.',
     });
     expect(prisma.xe.create).not.toHaveBeenCalled();
   });
@@ -396,6 +418,82 @@ describe('VehiclesService writes', () => {
     expect(prisma.xe.update).not.toHaveBeenCalled();
   });
 
+  it('rejects an update that assigns a type from another bus company', async () => {
+    vi.mocked(prisma.loaiXe.findUnique).mockResolvedValueOnce({
+      loaiXeId: 3,
+      nhaXeId: 2,
+    } as never);
+
+    const error = await service
+      .update(12, updateVehicleInput)
+      .catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(ConflictException);
+    expect((error as ConflictException).getResponse()).toMatchObject({
+      error: 'VEHICLE_TYPE_COMPANY_MISMATCH',
+    });
+    expect(prisma.xe.update).not.toHaveBeenCalled();
+  });
+
+  it('rejects changing the owning company when the vehicle has trips', async () => {
+    vi.mocked(prisma.nhaXe.findUnique).mockResolvedValueOnce({
+      nhaXeId: 2,
+    } as never);
+    vi.mocked(prisma.loaiXe.findUnique).mockResolvedValueOnce({
+      loaiXeId: 8,
+      nhaXeId: 2,
+    } as never);
+    vi.mocked(prisma.chuyenXe.count).mockResolvedValueOnce(1);
+
+    const error = await service
+      .update(12, {
+        ...updateVehicleInput,
+        busCompanyId: 2,
+        vehicleTypeId: 8,
+      })
+      .catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(ConflictException);
+    expect((error as ConflictException).getResponse()).toEqual({
+      error: 'VEHICLE_COMPANY_CHANGE_CONFLICT',
+      message: 'Không thể đổi nhà xe vì xe đã được gắn với chuyến xe.',
+    });
+    expect(prisma.chuyenXe.count).toHaveBeenCalledWith({ where: { xeId: 12 } });
+    expect(prisma.xe.update).not.toHaveBeenCalled();
+  });
+
+  it('re-resolves company references after a foreign-key failure without reporting a trip conflict', async () => {
+    const foreignKeyError = prismaKnownError('P2003', {
+      field_name: 'Xe_nhaXeId_fkey',
+    });
+    vi.mocked(prisma.nhaXe.findUnique)
+      .mockResolvedValueOnce({ nhaXeId: 2 } as never)
+      .mockResolvedValueOnce(null);
+    vi.mocked(prisma.loaiXe.findUnique).mockResolvedValueOnce({
+      loaiXeId: 8,
+      nhaXeId: 2,
+    } as never);
+    vi.mocked(prisma.chuyenXe.count)
+      .mockResolvedValueOnce(0)
+      .mockResolvedValueOnce(0);
+    vi.mocked(prisma.xe.update).mockRejectedValueOnce(foreignKeyError);
+
+    const error = await service
+      .update(12, {
+        ...updateVehicleInput,
+        busCompanyId: 2,
+        vehicleTypeId: 8,
+      })
+      .catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(NotFoundException);
+    expect((error as NotFoundException).getResponse()).toEqual({
+      error: 'BUS_COMPANY_NOT_FOUND',
+      message: 'Không tìm thấy nhà xe.',
+    });
+    expect(prisma.chuyenXe.count).toHaveBeenCalledTimes(2);
+  });
+
   it('updates only plate and relation IDs and accepts an unchanged current plate', async () => {
     const input = { ...updateVehicleInput, licensePlate: '51B-123.45' };
     await service.update(12, input);
@@ -405,8 +503,8 @@ describe('VehiclesService writes', () => {
         where: { xeId: 12 },
         data: {
           bienSoXe: '51B-123.45',
-          nhaXeId: 4,
-          loaiXeId: 7,
+          nhaXeId: 1,
+          loaiXeId: 3,
         },
         select: expect.objectContaining({ loaiXe: expect.any(Object) }),
       }),
@@ -414,6 +512,7 @@ describe('VehiclesService writes', () => {
     expect(
       vi.mocked(prisma.xe.update).mock.calls[0][0].data,
     ).not.toHaveProperty('trangThai');
+    expect(prisma.chuyenXe.count).not.toHaveBeenCalled();
   });
 
   it('maps a duplicate plate during edit to VEHICLE_LICENSE_PLATE_EXISTS', async () => {

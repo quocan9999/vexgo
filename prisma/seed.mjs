@@ -242,16 +242,20 @@ async function seedOperators(db) {
   return result;
 }
 
-async function seedVehicleTypes(db) {
+async function seedVehicleTypes(db, operators) {
   const result = {};
-  for (const [name, description] of vehicleTypeDefs) {
-    result[name] = await upsertBy(
-      db,
-      'LoaiXe',
-      { tenLoai: name },
-      { tenLoai: name, moTa: description },
-      { moTa: description },
-    );
+  for (const definition of operatorDefs) {
+    const nhaXeId = operators[definition.code].nhaXeId;
+    result[definition.code] = {};
+    for (const [name, description] of vehicleTypeDefs) {
+      result[definition.code][name] = await upsertBy(
+        db,
+        'LoaiXe',
+        { nhaXeId_tenLoai: { nhaXeId, tenLoai: name } },
+        { nhaXeId, tenLoai: name, moTa: description },
+        { moTa: description },
+      );
+    }
   }
   return result;
 }
@@ -410,8 +414,8 @@ async function seedVehiclesAndRoutes(db, operators, vehicleTypes) {
         db,
         'Xe',
         { bienSoXe: plate },
-        { bienSoXe: plate, trangThai: config.status, nhaXeId: operator.nhaXeId, loaiXeId: vehicleTypes[config.type].loaiXeId },
-        { trangThai: config.status, nhaXeId: operator.nhaXeId, loaiXeId: vehicleTypes[config.type].loaiXeId },
+        { bienSoXe: plate, trangThai: config.status, nhaXeId: operator.nhaXeId, loaiXeId: vehicleTypes[definition.code][config.type].loaiXeId },
+        { trangThai: config.status, nhaXeId: operator.nhaXeId, loaiXeId: vehicleTypes[definition.code][config.type].loaiXeId },
       );
       const seats = [];
       for (let seatIndex = 0; seatIndex < config.seats; seatIndex += 1) {
@@ -457,8 +461,8 @@ async function seedVehiclesAndRoutes(db, operators, vehicleTypes) {
             db,
             'ChuyenXe',
             { maChuyenXe: code },
-            { maChuyenXe: code, ngayKhoiHanh: dateOnly(2026, 9, day), gioKhoiHanh: timeOnly(hour), trangThai: 'MO_BAN', tuyenXeId: route.tuyenXeId, xeId: vehicle.xeId },
-            { ngayKhoiHanh: dateOnly(2026, 9, day), gioKhoiHanh: timeOnly(hour), trangThai: 'MO_BAN', tuyenXeId: route.tuyenXeId, xeId: vehicle.xeId },
+            { maChuyenXe: code, ngayKhoiHanh: dateOnly(2026, 9, day), gioKhoiHanh: timeOnly(hour), trangThai: 'MO_BAN', nhaXeId: operator.nhaXeId, tuyenXeId: route.tuyenXeId, xeId: vehicle.xeId },
+            { ngayKhoiHanh: dateOnly(2026, 9, day), gioKhoiHanh: timeOnly(hour), trangThai: 'MO_BAN', nhaXeId: operator.nhaXeId, tuyenXeId: route.tuyenXeId, xeId: vehicle.xeId },
           );
           const tripSeats = [];
           for (const seat of vehicle.seats) {
@@ -479,20 +483,20 @@ async function seedVehiclesAndRoutes(db, operators, vehicleTypes) {
   return { vehicles, routes, trips };
 }
 
-async function seedPrices(db, routes, vehicleTypes) {
+async function seedPrices(db, operators, routes, vehicleTypes) {
   const prices = new Map();
   const typeDelta = { 'GHẾ NGỒI': 0, 'GIƯỜNG NẰM': 70000, LIMOUSINE: 140000 };
   for (const definition of operatorDefs) {
     for (let routeIndex = 0; routeIndex < routes[definition.code].length; routeIndex += 1) {
       const route = routes[definition.code][routeIndex];
-      for (const [typeName, type] of Object.entries(vehicleTypes)) {
+      for (const [typeName, type] of Object.entries(vehicleTypes[definition.code])) {
         const amount = 180000 + routeIndex * 20000 + typeDelta[typeName];
         const price = await findOrCreate(
           db,
           'BangGia',
           { tuyenXeId: route.tuyenXeId, loaiXeId: type.loaiXeId, tuNgay: dateOnly(2026, 9, 1), denNgay: null },
-          { giaNiemYet: decimal(amount), tuNgay: dateOnly(2026, 9, 1), denNgay: null, trangThai: 'DANG_AP_DUNG', tuyenXeId: route.tuyenXeId, loaiXeId: type.loaiXeId },
-          { giaNiemYet: decimal(amount), trangThai: 'DANG_AP_DUNG' },
+          { giaNiemYet: decimal(amount), tuNgay: dateOnly(2026, 9, 1), denNgay: null, trangThai: 'HOAT_DONG', nhaXeId: operators[definition.code].nhaXeId, tuyenXeId: route.tuyenXeId, loaiXeId: type.loaiXeId },
+          { giaNiemYet: decimal(amount), trangThai: 'HOAT_DONG' },
         );
         prices.set(`${route.tuyenXeId}:${type.loaiXeId}`, price);
       }
@@ -949,11 +953,11 @@ function printSummary(transactionCodes) {
 async function main() {
   await prisma.$connect();
   const operators = await seedOperators(prisma);
-  const vehicleTypes = await seedVehicleTypes(prisma);
+  const vehicleTypes = await seedVehicleTypes(prisma, operators);
   const roles = await seedRoles(prisma);
   const accounts = await seedAccounts(prisma, operators, roles);
   const fleet = await seedVehiclesAndRoutes(prisma, operators, vehicleTypes);
-  const prices = await seedPrices(prisma, fleet.routes, vehicleTypes);
+  const prices = await seedPrices(prisma, operators, fleet.routes, vehicleTypes);
   const cargoAndLogistics = await seedBranchesRatesCargo(prisma, operators, {});
   const promotions = await seedPromotions(prisma, operators);
   void promotions;

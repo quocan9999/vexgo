@@ -19,6 +19,7 @@ const vehicleListRecord = {
   xeId: 12,
   bienSoXe: '51B-123.45',
   trangThai: 'HOAT_DONG',
+  nhaXeId: 1,
   nhaXe: { nhaXeId: 1, maNhaXe: 'FUTA', tenNhaXe: 'Phương Trang' },
   loaiXe: { loaiXeId: 3, tenLoai: 'Limousine' },
   createdAt: new Date('2026-09-25T10:00:00.000Z'),
@@ -40,6 +41,7 @@ const prisma = {
   },
   nhaXe: { findUnique: vi.fn() },
   loaiXe: { findUnique: vi.fn() },
+  chuyenXe: { count: vi.fn() },
 };
 
 describe('Vehicles API request-pipeline integration', () => {
@@ -68,7 +70,8 @@ describe('Vehicles API request-pipeline integration', () => {
     prisma.xe.create.mockResolvedValue(vehicleDetailRecord);
     prisma.xe.update.mockResolvedValue(vehicleDetailRecord);
     prisma.nhaXe.findUnique.mockResolvedValue({ nhaXeId: 1 });
-    prisma.loaiXe.findUnique.mockResolvedValue({ loaiXeId: 3 });
+    prisma.loaiXe.findUnique.mockResolvedValue({ loaiXeId: 3, nhaXeId: 1 } as never);
+    prisma.chuyenXe.count.mockResolvedValue(0);
   });
 
   function prismaKnownError(code: string, meta: Record<string, unknown> = {}) {
@@ -459,6 +462,30 @@ describe('Vehicles API request-pipeline integration', () => {
     expect(prisma.xe.create).not.toHaveBeenCalled();
   });
 
+  it('rejects a vehicle type from another bus company through the HTTP contract', async () => {
+    prisma.loaiXe.findUnique.mockResolvedValueOnce({
+      loaiXeId: 3,
+      nhaXeId: 2,
+    } as never);
+
+    const response = await request(app.getHttpServer())
+      .post('/api/v1/vehicles')
+      .send({
+        licensePlate: '51B-123.45',
+        busCompanyId: 1,
+        vehicleTypeId: 3,
+        status: 'HOAT_DONG',
+      })
+      .expect(409);
+
+    expect(response.body).toEqual({
+      statusCode: 409,
+      error: 'VEHICLE_TYPE_COMPANY_MISMATCH',
+      message: 'Loại xe không thuộc nhà xe đã chọn.',
+    });
+    expect(prisma.xe.create).not.toHaveBeenCalled();
+  });
+
   it('returns the exact 409 contract for a duplicate plate during create', async () => {
     prisma.xe.create.mockRejectedValueOnce(
       prismaKnownError('P2002', { target: ['bienSoXe'] }),
@@ -482,6 +509,11 @@ describe('Vehicles API request-pipeline integration', () => {
   });
 
   it('updates the full editable field set and excludes status', async () => {
+    prisma.loaiXe.findUnique.mockResolvedValueOnce({
+      loaiXeId: 7,
+      nhaXeId: 4,
+    } as never);
+
     const response = await request(app.getHttpServer())
       .patch('/api/v1/vehicles/12')
       .send({
@@ -641,6 +673,35 @@ describe('Vehicles API request-pipeline integration', () => {
       statusCode: 409,
       error: 'VEHICLE_LICENSE_PLATE_EXISTS',
       message: 'Biển số xe đã tồn tại.',
+    });
+  });
+
+  it('maps a concurrent trip relation constraint to a stable company-change conflict', async () => {
+    prisma.nhaXe.findUnique.mockResolvedValueOnce({ nhaXeId: 2 });
+    prisma.loaiXe.findUnique.mockResolvedValueOnce({
+      loaiXeId: 8,
+      nhaXeId: 2,
+    } as never);
+    prisma.chuyenXe.count.mockResolvedValueOnce(0).mockResolvedValueOnce(1);
+    prisma.xe.update.mockRejectedValueOnce(
+      prismaKnownError('P2003', {
+        field_name: 'ChuyenXe_nhaXeId_xeId_fkey',
+      }),
+    );
+
+    const response = await request(app.getHttpServer())
+      .patch('/api/v1/vehicles/12')
+      .send({
+        licensePlate: '51B-999.99',
+        busCompanyId: 2,
+        vehicleTypeId: 8,
+      })
+      .expect(409);
+
+    expect(response.body).toEqual({
+      statusCode: 409,
+      error: 'VEHICLE_COMPANY_CHANGE_CONFLICT',
+      message: 'Không thể đổi nhà xe vì xe đã được gắn với chuyến xe.',
     });
   });
 

@@ -41,12 +41,15 @@ function isVehicleTypeNameUniqueViolation(error: unknown): boolean {
   }
 
   const isNameTarget = (value: unknown) =>
-    value === 'tenLoai' || value === 'LoaiXe_index_0';
+    value === 'tenLoai' ||
+    value === 'LoaiXe_nhaXeId_tenLoai_key' ||
+    value === 'LoaiXe_index_0';
   const target = error.meta?.target;
 
   if (
     Array.isArray(target)
-      ? target.length === 1 && isNameTarget(target[0])
+      ? target.includes('tenLoai') &&
+        (target.length === 1 || target.includes('nhaXeId'))
       : isNameTarget(target)
   ) {
     return true;
@@ -77,7 +80,8 @@ function isVehicleTypeNameUniqueViolation(error: unknown): boolean {
     typeof constraint === 'object' &&
     constraint !== null &&
     'index' in constraint &&
-    constraint.index === 'LoaiXe_index_0'
+    (constraint.index === 'LoaiXe_nhaXeId_tenLoai_key' ||
+      constraint.index === 'LoaiXe_index_0')
   );
 }
 
@@ -99,9 +103,21 @@ export class VehicleTypesService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(input: CreateVehicleTypeDto) {
+    const busCompany = await this.prisma.nhaXe.findUnique({
+      where: { nhaXeId: input.busCompanyId },
+      select: { nhaXeId: true },
+    });
+    if (!busCompany) {
+      throw new NotFoundException({
+        error: 'BUS_COMPANY_NOT_FOUND',
+        message: 'Không tìm thấy nhà xe.',
+      });
+    }
+
     try {
       const vehicleType = await this.prisma.loaiXe.create({
         data: {
+          nhaXeId: input.busCompanyId,
           tenLoai: input.name,
           moTa: input.description ?? null,
         },
