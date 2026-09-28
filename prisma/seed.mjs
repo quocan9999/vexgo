@@ -491,8 +491,8 @@ async function seedPrices(db, routes, vehicleTypes) {
           db,
           'BangGia',
           { tuyenXeId: route.tuyenXeId, loaiXeId: type.loaiXeId, tuNgay: dateOnly(2026, 9, 1), denNgay: null },
-          { giaNiemYet: decimal(amount), tuNgay: dateOnly(2026, 9, 1), denNgay: null, trangThai: 'DANG_AP_DUNG', tuyenXeId: route.tuyenXeId, loaiXeId: type.loaiXeId },
-          { giaNiemYet: decimal(amount), trangThai: 'DANG_AP_DUNG' },
+          { giaNiemYet: decimal(amount), tuNgay: dateOnly(2026, 9, 1), denNgay: null, trangThai: 'HOAT_DONG', tuyenXeId: route.tuyenXeId, loaiXeId: type.loaiXeId },
+          { giaNiemYet: decimal(amount), trangThai: 'HOAT_DONG' },
         );
         prices.set(`${route.tuyenXeId}:${type.loaiXeId}`, price);
       }

@@ -1,13 +1,13 @@
 'use client';
 
-import { Bus, Building2, Database, LogOut, MapPinned, Menu, Truck, X } from 'lucide-react';
+import { Bus, Building2, Database, LogOut, MapPinned, Menu, Ticket, Truck, X } from 'lucide-react';
 import Link from 'next/link';
 import { useState, type ReactNode } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { signOutDemoAdmin } from '@/features/admin-auth/services/demo-auth';
 
 type SuperAdminLayoutProps = {
-  activeSection: 'overview' | 'bus-companies' | 'vehicle-types' | 'vehicles' | 'routes';
+  activeSection: 'overview' | 'bus-companies' | 'vehicle-types' | 'vehicles' | 'routes' | 'fare-prices';
   children: ReactNode;
 };
 
@@ -29,6 +29,8 @@ export function SuperAdminLayout({
             ? 'Xe'
             : pathname.startsWith('/routes')
               ? 'Tuyến xe'
+              : pathname.startsWith('/fare-prices')
+                ? 'Bảng giá vé'
               : 'Quản trị nền tảng';
 
   function closeMobileNavigation() {
@@ -56,7 +58,6 @@ export function SuperAdminLayout({
         id="admin-navigation"
       >
         <Link
-          aria-label="VexGo Super Admin, về tổng quan"
           className="brand-lockup"
           href="/"
           onClick={closeMobileNavigation}
@@ -66,6 +67,7 @@ export function SuperAdminLayout({
           </span>
           <span className="brand-copy">
             <strong>VexGo</strong>
+            {' '}
             <small>SUPER ADMIN</small>
           </span>
         </Link>
@@ -130,6 +132,15 @@ export function SuperAdminLayout({
             >
               <span className="sidebar-link-icon"><MapPinned size={18} /></span>
               <span>Tuyến xe</span>
+            </Link>
+            <Link
+              aria-current={activeSection === 'fare-prices' ? 'page' : undefined}
+              className={`sidebar-link${activeSection === 'fare-prices' ? ' is-active' : ''}`}
+              href="/fare-prices"
+              onClick={closeMobileNavigation}
+            >
+              <span className="sidebar-link-icon"><Ticket size={18} /></span>
+              <span>Bảng giá vé</span>
             </Link>
           </nav>
         </div>

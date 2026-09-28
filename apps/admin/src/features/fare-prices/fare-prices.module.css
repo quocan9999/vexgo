@@ -1,0 +1,265 @@
+.description {
+  margin: 8px 0 18px;
+  color: var(--admin-text-muted);
+  font-size: var(--admin-font-size-base);
+  line-height: 1.5;
+}
+
+.pageActions > :global(.admin-page-action.button:first-child) {
+  width: 146px;
+  white-space: nowrap;
+}
+
+.successNotice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--admin-success-border);
+  border-radius: var(--admin-radius-control);
+  background: var(--admin-success-soft);
+  color: var(--admin-success);
+  font-size: var(--admin-font-size-xs);
+  font-weight: var(--admin-font-weight-medium);
+}
+
+.errorNotice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--admin-danger) 30%, white);
+  border-radius: var(--admin-radius-control);
+  background: color-mix(in srgb, var(--admin-danger) 5%, white);
+  color: var(--admin-danger);
+  font-size: var(--admin-font-size-xs);
+}
+
+.fieldHint {
+  color: var(--admin-text-muted);
+  font-size: var(--admin-font-size-xs);
+  font-weight: var(--admin-font-weight-regular);
+  line-height: 1.45;
+}
+
+.optionState {
+  margin: 0 18px 12px;
+  color: var(--admin-text-muted);
+  font-size: var(--admin-font-size-xs);
+}
+
+.optionError,
+.listError {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0 18px 14px;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--admin-danger) 30%, white);
+  border-radius: var(--admin-radius-control);
+  background: color-mix(in srgb, var(--admin-danger) 5%, white);
+  color: var(--admin-danger);
+  font-size: var(--admin-font-size-base);
+}
+
+.listError p {
+  margin: 0;
+}
+
+.emptyState {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  padding: 48px 20px;
+  color: var(--admin-text-muted);
+  text-align: center;
+}
+
+.emptyState h2 {
+  margin: 0;
+  color: var(--admin-text-strong);
+  font-size: var(--admin-font-size-md);
+  font-weight: var(--admin-font-weight-semibold);
+}
+
+.emptyIcon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--admin-canvas);
+  color: var(--admin-text-muted);
+}
+
+.routeEndpoints {
+  display: block;
+  color: var(--admin-text-strong);
+}
+
+.routeCode {
+  display: block;
+  margin-top: 4px;
+  color: var(--admin-text-muted);
+  font-size: var(--admin-font-size-xs);
+  font-weight: var(--admin-font-weight-regular);
+}
+
+.mobileCards {
+  display: none;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.detailDescription {
+  margin: 14px 25px 0;
+  color: var(--admin-text-muted);
+  font-size: var(--admin-font-size-base);
+  line-height: 1.5;
+}
+
+.detailState,
+.detailError {
+  margin: 20px 25px;
+  color: var(--admin-text-muted);
+  font-size: var(--admin-font-size-base);
+}
+
+.detailError {
+  display: grid;
+  justify-items: start;
+  gap: 10px;
+  color: var(--admin-danger);
+}
+
+.detailError p {
+  margin: 0;
+}
+
+.detailList {
+  display: grid;
+  gap: 0;
+  margin: 10px 0 0;
+  padding: 0 25px 24px;
+}
+
+.detailActions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 12px 20px 20px;
+}
+
+.detailItem {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.8fr) minmax(0, 1.2fr);
+  gap: 12px;
+  padding: 13px 0;
+  border-bottom: 1px solid var(--admin-border);
+}
+
+.detailItem dt {
+  color: var(--admin-text-muted);
+  font-size: var(--admin-font-size-xs);
+}
+
+.detailItem dd {
+  margin: 0;
+  color: var(--admin-text-strong);
+  font-size: var(--admin-font-size-base);
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 760px) {
+  .description {
+    margin-top: 8px;
+  }
+
+  .mobileCards {
+    display: grid;
+    gap: 10px;
+    padding: 11px 12px;
+  }
+
+  .mobileCard {
+    display: grid;
+    min-width: 0;
+    gap: 13px;
+    padding: 15px;
+    border: 1px solid var(--admin-border);
+    border-radius: 10px;
+    background: #fff;
+  }
+
+  .mobileCardHeader {
+    display: flex;
+    min-width: 0;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .mobileCardHeader h2 {
+    margin: 0;
+    color: var(--admin-text-strong);
+    font-size: var(--admin-font-size-emphasis);
+    font-weight: var(--admin-font-weight-semibold);
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+  }
+
+  .mobileCardHeader > strong {
+    flex: 0 0 auto;
+    color: var(--admin-text-strong);
+    font-size: var(--admin-font-size-emphasis);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .mobileCardDetails {
+    display: grid;
+    gap: 9px;
+    margin: 0;
+  }
+
+  .mobileCardDetails > div {
+    display: grid;
+    grid-template-columns: minmax(102px, 0.8fr) minmax(0, 1.2fr);
+    gap: 8px;
+  }
+
+  .mobileCardDetails dt {
+    color: var(--admin-text-muted);
+    font-size: var(--admin-font-size-xs);
+  }
+
+  .mobileCardDetails dd {
+    min-width: 0;
+    margin: 0;
+    color: var(--admin-text-strong);
+    font-size: var(--admin-font-size-base);
+    overflow-wrap: anywhere;
+  }
+
+  .mobileCard > :last-child {
+    justify-self: start;
+  }
+
+  .detailDescription {
+    margin-right: 20px;
+    margin-left: 20px;
+  }
+
+  .detailList {
+    padding-right: 20px;
+    padding-left: 20px;
+  }
+
+  .detailItem {
+    grid-template-columns: minmax(105px, 0.8fr) minmax(0, 1.2fr);
+  }
+}

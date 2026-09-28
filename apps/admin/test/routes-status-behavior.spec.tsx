@@ -53,7 +53,7 @@ describe('Route status interaction', () => {
     vi.mocked(updateRouteStatus).mockImplementation(() => new Promise(() => {}));
     renderDetails();
     const detail = await screen.findByRole('dialog', { name: 'Thông tin tuyến xe' });
-    fireEvent.click(within(detail).getByRole('button', { name: 'Tạm ngưng tuyến' }));
+    fireEvent.click(await within(detail).findByRole('button', { name: 'Tạm ngưng tuyến' }));
     const confirm = await screen.findByRole('dialog', { name: 'Tạm ngưng tuyến xe?' });
     const confirmButton = within(confirm).getByRole('button', { name: 'Tạm ngưng tuyến' });
     await act(async () => {
@@ -70,7 +70,7 @@ describe('Route status interaction', () => {
     vi.mocked(updateRouteStatus).mockRejectedValue(new Error('Máy chủ từ chối cập nhật.'));
     renderDetails();
     const detail = await screen.findByRole('dialog', { name: 'Thông tin tuyến xe' });
-    fireEvent.click(within(detail).getByRole('button', { name: 'Tạm ngưng tuyến' }));
+    fireEvent.click(await within(detail).findByRole('button', { name: 'Tạm ngưng tuyến' }));
     const confirm = await screen.findByRole('dialog', { name: 'Tạm ngưng tuyến xe?' });
     fireEvent.click(within(confirm).getByRole('button', { name: 'Tạm ngưng tuyến' }));
     expect(await within(confirm).findByRole('alert')).toHaveProperty('textContent', 'Máy chủ từ chối cập nhật.');
@@ -82,7 +82,7 @@ describe('Route status interaction', () => {
     vi.mocked(updateRouteStatus).mockResolvedValue({ ...activeRoute, status: 'TAM_NGUNG' });
     const { onUpdated } = renderDetails();
     const detail = await screen.findByRole('dialog', { name: 'Thông tin tuyến xe' });
-    fireEvent.click(within(detail).getByRole('button', { name: 'Tạm ngưng tuyến' }));
+    fireEvent.click(await within(detail).findByRole('button', { name: 'Tạm ngưng tuyến' }));
     const confirm = await screen.findByRole('dialog', { name: 'Tạm ngưng tuyến xe?' });
     fireEvent.click(within(confirm).getByRole('button', { name: 'Tạm ngưng tuyến' }));
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Tạm ngưng tuyến xe?' })).toBeNull());
@@ -94,7 +94,7 @@ describe('Route status interaction', () => {
   it('keeps status read-only in the edit form', async () => {
     renderDetails();
     const detail = await screen.findByRole('dialog', { name: 'Thông tin tuyến xe' });
-    fireEvent.click(within(detail).getByRole('button', { name: 'Chỉnh sửa' }));
+    fireEvent.click(await within(detail).findByRole('button', { name: 'Chỉnh sửa' }));
     const editDialog = await screen.findByRole('dialog', { name: 'Chỉnh sửa tuyến xe' });
     expect(within(editDialog).queryByLabelText(/Trạng thái/)).toBeNull();
     expect(within(editDialog).getByLabelText('Điểm đi *')).toHaveProperty('value', 'TP.HCM');
