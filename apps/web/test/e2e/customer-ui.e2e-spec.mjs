@@ -61,3 +61,21 @@ test('the customer application keeps VexGo metadata', async () => {
   assert.match(html, /<title>[^<]*VexGo[^<]*<\/title>/i);
   assert.doesNotMatch(html, /<title>[^<]*BusWay[^<]*<\/title>/i);
 });
+
+const postScreens = [
+  { path: '/posts', marker: 'Tìm chuyến' },
+  { path: '/posts/1', marker: 'Giá vé lượt đi' },
+  { path: '/post-property/create', marker: 'Tìm chuyến' },
+  { path: '/trips', marker: 'Tìm chuyến' },
+  { path: '/trips/1', marker: 'Giá vé lượt đi' },
+];
+
+for (const screen of postScreens) {
+  test(`${screen.path} renders the migrated post/trip screen`, async () => {
+    const response = await fetch(`${server.baseUrl}${screen.path}`);
+    const html = await response.text();
+
+    assert.equal(response.status, 200, `Expected 200 for ${screen.path}`);
+    assert.ok(html.toLowerCase().includes(screen.marker.toLowerCase()), `Expected to find "${screen.marker}" on ${screen.path}`);
+  });
+}

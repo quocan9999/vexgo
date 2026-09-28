@@ -1,6 +1,6 @@
-import type { PropertyDemand } from '../types/post';
+import type { Post } from '../types/post';
 
-export const POST_FIXTURES: PropertyDemand[] = [
+export const POST_FIXTURES: Post[] = [
   {
     id: '1',
     title: 'TP. Hồ Chí Minh đi Đà Lạt - Limousine 22 phòng',

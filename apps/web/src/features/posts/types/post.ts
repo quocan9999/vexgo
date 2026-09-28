@@ -1,6 +1,6 @@
 export type NeedType = 'BUY' | 'RENT';
 
-export interface PropertyDemand {
+export interface Post {
   id: string;
   title: string;
   needType: NeedType;
@@ -25,7 +25,7 @@ export interface PropertyDemand {
   isVerified?: boolean;
 }
 
-export interface PropertyFilterState {
+export interface PostFilterState {
   keyword: string;
   needType: 'ALL' | 'BUY' | 'RENT';
   propertyType: string;
@@ -38,7 +38,7 @@ export interface PropertyFilterState {
   sortBy: 'NEWEST' | 'PRICE_ASC' | 'PRICE_DESC' | 'AREA_DESC';
 }
 
-export const INITIAL_FILTER_STATE: PropertyFilterState = {
+export const INITIAL_POST_FILTER_STATE: PostFilterState = {
   keyword: '',
   needType: 'ALL',
   propertyType: '',
