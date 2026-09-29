@@ -10,6 +10,7 @@ import { SMS_SENDER } from './sms/sms-sender.js';
 import { JwtModule } from '@nestjs/jwt';
 import { TokenService } from './tokens/token.service.js';
 import { AccessTokenGuard } from './guards/access-token.guard.js';
+import { AuthorizationGuard } from './guards/authorization.guard.js';
 
 @Module({
   imports: [PrismaModule, JwtModule.register({})],
@@ -22,9 +23,11 @@ import { AccessTokenGuard } from './guards/access-token.guard.js';
     Reflector,
     AccessTokenGuard,
     { provide: APP_GUARD, useExisting: AccessTokenGuard },
+    AuthorizationGuard,
+    { provide: APP_GUARD, useExisting: AuthorizationGuard },
     ConsoleSmsSender,
     { provide: SMS_SENDER, useExisting: ConsoleSmsSender },
   ],
-  exports: [TokenService, AccessTokenGuard, JwtModule],
+  exports: [TokenService, AccessTokenGuard, AuthorizationGuard, JwtModule],
 })
 export class AuthModule {}
