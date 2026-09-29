@@ -12,8 +12,9 @@ import {
   X,
 } from 'lucide-react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useState, type ReactNode } from 'react';
+import { AdminDialogPrimitive } from '@/components/admin/admin-dialog-primitive';
 import { useAdminSession } from '@/features/admin-auth/hooks/use-admin-session';
 import {
   getAdminAuthErrorMessage,
@@ -32,38 +33,49 @@ type SuperAdminLayoutProps = {
   children: ReactNode;
 };
 
+const ADMIN_ROLE_LABELS: Record<string, string> = {
+  SUPER_ADMIN: 'SUPER ADMIN',
+  NHA_XE_ADMIN: 'QUẢN TRỊ NHÀ XE',
+  NHAN_VIEN_BAN_VE: 'NHÂN VIÊN BÁN VÉ',
+  NHAN_VIEN_CSKH: 'NHÂN VIÊN CSKH',
+  NHAN_VIEN_PHU_XE: 'NHÂN VIÊN PHỤ XE',
+  NHAN_VIEN_KINH_DOANH: 'NHÂN VIÊN KINH DOANH',
+};
+
+function formatAdminRoleLabels(roles: string[]) {
+  const labels = roles.map(
+    (role) => ADMIN_ROLE_LABELS[role] ?? role.replaceAll('_', ' '),
+  );
+  return labels.length > 0
+    ? labels.join(' · ').toLocaleUpperCase('vi-VN')
+    : 'TÀI KHOẢN ADMIN';
+}
+
 export function SuperAdminLayout({
   activeSection,
   children,
 }: SuperAdminLayoutProps) {
-  const pathname = usePathname();
   const router = useRouter();
   const authState = useAdminSession();
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
-
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   if (authState.status !== 'authenticated') return null;
 
   const session = authState.session;
   const scope = getAdminAccessScope(session);
   const tenantScope = scope === 'tenant';
   const platformScope = scope === 'platform';
-  const sectionLabel =
-    pathname === '/'
-      ? 'Tổng quan'
-      : pathname.startsWith('/bus-companies')
-        ? 'Nhà xe'
-        : pathname.startsWith('/vehicle-types')
-          ? 'Loại xe'
-          : pathname.startsWith('/vehicles')
-            ? 'Xe'
-            : pathname.startsWith('/routes')
-              ? 'Tuyến xe'
-              : pathname.startsWith('/fare-prices')
-                ? 'Bảng giá vé'
-                : 'Quản trị';
-
+  const roleLabel = formatAdminRoleLabels(session.roles);
+  const tenantBusCompanyName =
+    session.employee?.busCompanyName?.trim() || 'NHÀ XE';
+  const brandContextLines = platformScope
+    ? ['SUPER ADMIN', 'NHÀ XE: NONE']
+    : [
+        tenantBusCompanyName.toLocaleUpperCase('vi-VN'),
+        roleLabel,
+      ];
   function closeMobileNavigation() {
     setMobileNavigationOpen(false);
   }
@@ -103,11 +115,9 @@ export function SuperAdminLayout({
           <span className="brand-mark" aria-hidden="true">V</span>
           <span className="brand-copy">
             <strong>VexGo</strong>{' '}
-            <small>
-              {tenantScope
-                ? session.employee?.busCompanyName ?? 'NHÀ XE'
-                : 'SUPER ADMIN'}
-            </small>
+            {brandContextLines.map((line, index) => (
+              <small key={`${line}-${index}`}>{line}</small>
+            ))}
           </span>
         </Link>
         <div aria-hidden="true" className="sidebar-divider" />
@@ -180,38 +190,6 @@ export function SuperAdminLayout({
             ) : null}
           </nav>
         </div>
-
-        <div className="sidebar-bottom">
-          {logoutError && (
-            <p className="login-error" role="alert">{logoutError}</p>
-          )}
-          <div className="sidebar-profile">
-            <span className="profile-avatar" aria-hidden="true">
-              {tenantScope ? 'NX' : 'SA'}
-            </span>
-            <span className="profile-copy">
-              <strong>{session.fullName}</strong>
-              <small>
-                {tenantScope
-                  ? session.employee?.busCompanyName ?? 'Nhà xe'
-                  : 'Quản trị nền tảng'}
-              </small>
-            </span>
-            <button
-              aria-label="Đăng xuất"
-              className="sidebar-logout-button"
-              disabled={signingOut}
-              onClick={() => void logout()}
-              title="Đăng xuất"
-              type="button"
-            >
-              <LogOut aria-hidden="true" size={15} />
-              <span className="sidebar-logout-label">
-                {signingOut ? 'Đang đăng xuất…' : 'Đăng xuất'}
-              </span>
-            </button>
-          </div>
-        </div>
       </aside>
 
       <main className="admin-main" id={activeSection}>
@@ -227,13 +205,67 @@ export function SuperAdminLayout({
             >
               {mobileNavigationOpen ? <X size={20} /> : <Menu size={20} />}
             </button>
-            <div className="breadcrumb">
-              <span>VexGo</span>
-              <span className="breadcrumb-slash">/</span>
-              <strong>{sectionLabel}</strong>
-            </div>
+          </div>
+          <div className="topbar-account">
+            <span
+              aria-label={`Tài khoản ${session.fullName}`}
+              className="topbar-profile-avatar"
+              role="img"
+            >
+              {session.fullName.trim().charAt(0).toLocaleUpperCase('vi-VN') ||
+                'V'}
+            </span>
+            <button
+              aria-label="Đăng xuất"
+              className="topbar-profile-logout"
+              onClick={() => setLogoutConfirmOpen(true)}
+              title={signingOut ? 'Đang đăng xuất…' : 'Đăng xuất'}
+              type="button"
+            >
+              <LogOut aria-hidden="true" size={18} />
+            </button>
+            {logoutError && (
+              <p className="topbar-profile-error" role="alert">
+                {logoutError}
+              </p>
+            )}
           </div>
         </header>
+        {logoutConfirmOpen && (
+          <AdminDialogPrimitive
+            ariaLabelledBy="logout-confirm-title"
+            className="admin-dialog logout-confirm-dialog"
+            contentClassName="logout-confirm-dialog__panel"
+            onClose={() => setLogoutConfirmOpen(false)}
+            preventDismiss={signingOut}
+          >
+            <div className="logout-confirm-dialog__content">
+              <span aria-hidden="true" className="logout-confirm-dialog__icon">
+                <LogOut size={20} />
+              </span>
+              <h2 id="logout-confirm-title">Xác nhận đăng xuất</h2>
+              <p>Bạn có chắc chắn muốn đăng xuất khỏi tài khoản này không?</p>
+              <div className="logout-confirm-dialog__actions">
+                <button
+                  className="logout-confirm-dialog__cancel"
+                  disabled={signingOut}
+                  onClick={() => setLogoutConfirmOpen(false)}
+                  type="button"
+                >
+                  Hủy
+                </button>
+                <button
+                  className="logout-confirm-dialog__confirm"
+                  disabled={signingOut}
+                  onClick={() => void logout()}
+                  type="button"
+                >
+                  {signingOut ? 'Đang đăng xuất…' : 'Đăng xuất'}
+                </button>
+              </div>
+            </div>
+          </AdminDialogPrimitive>
+        )}
         {children}
       </main>
     </div>

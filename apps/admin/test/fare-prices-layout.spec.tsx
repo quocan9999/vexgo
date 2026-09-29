@@ -17,7 +17,7 @@ vi.mock('next/link', () => ({
 }));
 
 describe('Super Admin navigation for fare prices', () => {
-  it('shows the current fare-price section in navigation and breadcrumb', () => {
+  it('shows the active fare-price link and header account control', () => {
     setAdminTestSession({
       status: 'authenticated',
       session: {
@@ -45,7 +45,10 @@ describe('Super Admin navigation for fare prices', () => {
     const link = screen.getByRole('link', { name: 'Bảng giá vé' });
     expect(link.getAttribute('href')).toBe('/fare-prices');
     expect(link.getAttribute('aria-current')).toBe('page');
-    expect(screen.getByRole('link', { name: 'VexGo FUTA' })).toBeTruthy();
-    expect(screen.getByText('Bảng giá vé', { selector: 'strong' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: /VexGo/ })).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: 'Hồ sơ tài khoản Quản lý FUTA' }),
+    ).toBeTruthy();
+    expect(document.querySelector('.breadcrumb')).toBeNull();
   });
 });

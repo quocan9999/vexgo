@@ -1,5 +1,11 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import type { AnchorHTMLAttributes } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -116,6 +122,33 @@ describe('admin tenant presentation mode', () => {
     expect(
       screen.getByRole('link', { name: 'Bảng giá vé' }).getAttribute('href'),
     ).toBe('/fare-prices');
+  });
+
+  it('shows tenant name and uppercase role in the sidebar brand with a header logout action', () => {
+    setTenantSession(['NHA_XE_ADMIN', 'NHAN_VIEN_CSKH']);
+
+    render(
+      <SuperAdminLayout activeSection="routes">
+        <h1>Tenant page</h1>
+      </SuperAdminLayout>,
+    );
+
+    const brand = screen.getByRole('link', { name: /VexGo/ });
+    expect(brand.textContent).toContain('FUTA');
+    expect(brand.textContent).toContain('NHÂN VIÊN CSKH');
+    expect(screen.getByRole('button', { name: 'Đăng xuất' })).toBeTruthy();
+  });
+
+  it('shows Super Admin and no tenant in the sidebar brand', () => {
+    render(
+      <SuperAdminLayout activeSection="overview">
+        <h1>Platform page</h1>
+      </SuperAdminLayout>,
+    );
+
+    const brand = screen.getByRole('link', { name: /VexGo/ });
+    expect(brand.textContent).toContain('SUPER ADMIN');
+    expect(brand.textContent).toContain('NHÀ XE: NONE');
   });
 
   it('allows an authenticated tenant account to open its operational route', () => {

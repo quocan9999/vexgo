@@ -395,48 +395,6 @@
   line-height: 1.7;
 }
 
-.sidebar-profile {
-  min-width: 0;
-}
-
-.profile-copy {
-  flex: 1;
-}
-
-.sidebar-logout-button {
-  display: flex;
-  min-height: 34px;
-  align-items: center;
-  gap: 7px;
-  padding: 0 7px;
-  border: 1px solid rgb(255 255 255 / 12%);
-  border-radius: 7px;
-  background: rgb(255 255 255 / 4%);
-  color: #c0cce0;
-  cursor: pointer;
-  font-size: 9px;
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.sidebar-logout-button:hover {
-  border-color: rgb(255 255 255 / 22%);
-  background: rgb(255 255 255 / 10%);
-  color: #fff;
-}
-
-@media (max-width: 1180px) {
-  .sidebar-logout-label {
-    display: none;
-  }
-
-  .sidebar-logout-button {
-    width: 34px;
-    justify-content: center;
-    padding: 0;
-  }
-}
-
 @media (max-width: 900px) {
   .login-layout {
     width: min(620px, calc(100% - 40px));
