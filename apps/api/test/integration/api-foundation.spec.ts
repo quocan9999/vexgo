@@ -390,6 +390,50 @@ describe('API foundation', () => {
     expect(routesService.create).not.toHaveBeenCalled();
   });
 
+  it('rejects an employee role without an employee tenant assignment', async () => {
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['NHAN_VIEN_KINH_DOANH'], false),
+    );
+
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/__test/protected')
+      .set('Authorization', 'Bearer signed-token')
+      .expect(403);
+
+    expect(response.body.error).toBe('TENANT_SCOPE_REQUIRED');
+  });
+
+  it('allows an employee role with a valid employee tenant assignment', async () => {
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['NHAN_VIEN_KINH_DOANH'], true),
+    );
+
+    await request(app.getHttpServer())
+      .get('/api/v1/__test/protected')
+      .set('Authorization', 'Bearer signed-token')
+      .expect(200);
+  });
+
+  it.each([
+    {
+      label: 'a customer role',
+      roles: ['NHAN_VIEN_CSKH', 'KHACH_HANG'],
+    },
+    {
+      label: 'a platform role',
+      roles: ['NHAN_VIEN_PHU_XE', 'SUPER_ADMIN'],
+    },
+  ])('rejects an employee role combined with $label', async ({ roles }) => {
+    sessionFindUnique.mockResolvedValueOnce(sessionWithRoles(roles, false));
+
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/__test/protected')
+      .set('Authorization', 'Bearer signed-token')
+      .expect(403);
+
+    expect(response.body.error).toBe('ROLE_SCOPE_CONFLICT');
+  });
+
   it('passes the trusted tenant principal to route creation', async () => {
     sessionFindUnique.mockResolvedValueOnce(
       sessionWithRoles(['NHA_XE_ADMIN', 'NHAN_VIEN_BAN_VE']),

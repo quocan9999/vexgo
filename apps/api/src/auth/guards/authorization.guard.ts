@@ -48,12 +48,14 @@ function assertPrincipalScope(principal: AuthPrincipal): void {
     return;
   }
 
-  if (!roles.has('NHA_XE_ADMIN')) {
+  const hasTenantRole =
+    roles.has('NHA_XE_ADMIN') ||
+    [...roles].some((role) => TENANT_EMPLOYEE_ROLES.has(role));
+
+  if (!hasTenantRole) {
     if (
       roles.has('KHACH_HANG') &&
-      ([...roles].some((role) => TENANT_EMPLOYEE_ROLES.has(role)) ||
-        principal.nhanVienId !== null ||
-        principal.nhaXeId !== null)
+      (principal.nhanVienId !== null || principal.nhaXeId !== null)
     ) {
       throw new ForbiddenException({
         error: 'ROLE_SCOPE_CONFLICT',
@@ -63,17 +65,17 @@ function assertPrincipalScope(principal: AuthPrincipal): void {
     return;
   }
 
-  if (
-    !hasValidTenantIdentity(principal) ||
-    [...roles].some((role) => !TENANT_ADMIN_ROLES.has(role))
-  ) {
+  if ([...roles].some((role) => !TENANT_ADMIN_ROLES.has(role))) {
     throw new ForbiddenException({
-      error: hasValidTenantIdentity(principal)
-        ? 'ROLE_SCOPE_CONFLICT'
-        : 'TENANT_SCOPE_REQUIRED',
-      message: hasValidTenantIdentity(principal)
-        ? 'Tài khoản có phạm vi quản trị không hợp lệ.'
-        : 'Tài khoản chưa được gán nhà xe hợp lệ.',
+      error: 'ROLE_SCOPE_CONFLICT',
+      message: 'Tài khoản có phạm vi quản trị không hợp lệ.',
+    });
+  }
+
+  if (!hasValidTenantIdentity(principal)) {
+    throw new ForbiddenException({
+      error: 'TENANT_SCOPE_REQUIRED',
+      message: 'Tài khoản chưa được gán nhà xe hợp lệ.',
     });
   }
 }
