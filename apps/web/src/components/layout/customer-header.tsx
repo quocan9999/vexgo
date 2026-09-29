@@ -7,7 +7,7 @@ import { usePathname, useSearchParams, useRouter } from 'next/navigation';
 import { User, Bus, Menu, X, ChevronDown, FileText, Settings, LogOut, Award, Globe } from 'lucide-react';
 import { useDemoSession } from '@/features/auth/demo-session';
 import { ConfirmModal } from '@/components/ui/confirm-modal';
-import { RESET_PASSWORD_PATH } from '@/components/layout/customer-navigation';
+import { getMobileMenuLabel, RESET_PASSWORD_PATH } from '@/components/layout/customer-navigation';
 
 interface NavLinksNavProps {
   onItemClick?: () => void;
@@ -216,7 +216,9 @@ export const CustomerHeader: React.FC = () => {
             type="button"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             className="lg:hidden p-1.5 sm:p-2 rounded-lg text-slate-300 hover:text-white hover:bg-white/10 cursor-pointer"
-            aria-label="Mở menu"
+            aria-label={getMobileMenuLabel(mobileMenuOpen)}
+            aria-expanded={mobileMenuOpen}
+            aria-controls="customer-mobile-menu"
           >
             {mobileMenuOpen ? <X className="w-5 h-5 sm:w-6 sm:h-6" /> : <Menu className="w-5 h-5 sm:w-6 sm:h-6" />}
           </button>
@@ -225,7 +227,7 @@ export const CustomerHeader: React.FC = () => {
 
       {/* Mobile Drawer */}
       {mobileMenuOpen && (
-        <div className="lg:hidden bg-[#0e2a20] border-t border-emerald-900/60 px-4 py-4 space-y-3">
+        <div id="customer-mobile-menu" className="lg:hidden bg-[#0e2a20] border-t border-emerald-900/60 px-4 py-4 space-y-3">
           <Suspense fallback={null}>
             <NavLinksList isMobile onItemClick={() => setMobileMenuOpen(false)} />
           </Suspense>

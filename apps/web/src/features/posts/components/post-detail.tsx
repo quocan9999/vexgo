@@ -296,7 +296,7 @@ export const PostDetail: React.FC<PostDetailProps> = ({ post }) => {
                   onChange={(e) => setIsAcceptedTerms(e.target.checked)}
                 />
                 <span className="text-[13px] md:text-sm text-slate-800">
-                  <span className="text-accent font-bold underline underline-offset-2">Chấp nhận điều khoản</span> đặt vé & chính sách bảo mật thông tin của BusWay
+                  <span className="text-accent font-bold underline underline-offset-2">Chấp nhận điều khoản</span> đặt vé & chính sách bảo mật thông tin của VexGo
                 </span>
               </label>
             </div>
@@ -304,7 +304,7 @@ export const PostDetail: React.FC<PostDetailProps> = ({ post }) => {
             <div className="p-4 md:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="inline-flex px-2 py-1 rounded-md bg-brand text-white text-[10px] font-black">BUSWAY</span>
+                  <span className="inline-flex px-2 py-1 rounded-md bg-brand text-white text-[10px] font-black">VEXGO</span>
                   <span className="text-xs font-bold text-slate-500">Tổng tiền</span>
                 </div>
                 <p className="text-2xl font-black text-red-600">{totalFareText}đ</p>
@@ -481,5 +481,4 @@ export const PostDetail: React.FC<PostDetailProps> = ({ post }) => {
     </div>
   );
 };
-
 

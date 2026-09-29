@@ -24,6 +24,7 @@ import type { Post } from '@/features/posts/types/post';
 import { LuggageStep } from './luggage/luggage-step';
 import { LuggageSummary } from './luggage/luggage-summary';
 import type { ILuggageItem } from './luggage/luggage-item';
+import { canPayForOneWayBooking } from '../utils/one-way-booking';
 
 export interface OneWayBookingProps {
   post: Post;
@@ -67,6 +68,7 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({ post }) => {
   const baseFareNumber = Number(baseFare.replace(/[^\d]/g, '')) || 0;
   const totalFare = baseFareNumber * selectedSeats.length + luggageFee;
   const totalFareText = totalFare.toLocaleString('vi-VN');
+  const canPay = canPayForOneWayBooking(selectedSeats, isAcceptedTerms);
 
   const toggleSeat = (seat: string) => {
     if (bookedSeats.has(seat)) return;
@@ -76,7 +78,7 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({ post }) => {
   };
 
   const SeatIcon = ({ className = "w-[34px] h-[42px]" }: { className?: string }) => (
-    <svg viewBox="0 0 40 48" className={className} xmlns="http://www.w3.org/2000/svg">
+    <svg viewBox="0 0 40 48" className={className} xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
       <g strokeWidth="2.5">
         <rect x="1" y="14" width="10" height="20" rx="3" />
         <rect x="29" y="14" width="10" height="20" rx="3" />
@@ -105,13 +107,17 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({ post }) => {
     }
 
     return (
-      <div 
-        className={`group relative inline-flex flex-col items-center justify-center ${isBooked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:scale-105 active:scale-95'} transition-transform`}
-        onClick={() => !isBooked && toggleSeat(seat)}
+      <button
+        type="button"
+        disabled={isBooked}
+        aria-label={`${seat}${isBooked ? ' đã bán' : isSelected ? ' đang chọn' : ' còn trống'}`}
+        aria-pressed={isSelected}
+        className="group relative min-h-11 min-w-11 inline-flex flex-col items-center justify-center rounded-md disabled:cursor-not-allowed disabled:opacity-60 hover:scale-105 active:scale-95 disabled:hover:scale-100 disabled:active:scale-100 transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+        onClick={() => toggleSeat(seat)}
       >
         <SeatIcon className={`w-[36px] h-[44px] ${seatClass}`} />
         <span className={`absolute top-[10px] text-[10px] font-bold ${textClass}`}>{seat}</span>
-      </div>
+      </button>
     );
   };
 
@@ -296,7 +302,7 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({ post }) => {
                   onChange={(e) => setIsAcceptedTerms(e.target.checked)}
                 />
                 <span className="text-[13px] md:text-sm text-slate-800">
-                  <span className="text-accent font-bold underline underline-offset-2">Chấp nhận điều khoản</span> đặt vé & chính sách bảo mật thông tin của BusWay
+                  <span className="text-accent font-bold underline underline-offset-2">Chấp nhận điều khoản</span> đặt vé & chính sách bảo mật thông tin của VexGo
                 </span>
               </label>
             </div>
@@ -304,7 +310,7 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({ post }) => {
             <div className="p-4 md:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="inline-flex px-2 py-1 rounded-md bg-brand text-white text-[10px] font-black">BUSWAY</span>
+                  <span className="inline-flex px-2 py-1 rounded-md bg-brand text-white text-[10px] font-black">VEXGO</span>
                   <span className="text-xs font-bold text-slate-500">Tổng tiền</span>
                 </div>
                 <p className="text-2xl font-black text-red-600">{totalFareText}đ</p>
@@ -315,7 +321,12 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({ post }) => {
                 </button>
                 <button 
                   type="button" 
+                  disabled={!canPay}
                   onClick={() => {
+                    if (selectedSeats.length === 0) {
+                      alert('Vui lòng chọn ít nhất một ghế để tiếp tục.');
+                      return;
+                    }
                     if (!isAcceptedTerms) {
                       alert('Vui lòng chấp nhận điều khoản đặt vé & chính sách bảo mật để tiếp tục.');
                       return;
@@ -340,7 +351,7 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({ post }) => {
                     });
                     router.push(`/payment?${query.toString()}`);
                   }}
-                  className="h-11 px-8 rounded-full bg-accent hover:bg-accent-hover text-white text-sm font-black transition-colors"
+                  className="h-11 px-8 rounded-full bg-accent hover:bg-accent-hover text-white text-sm font-black transition-colors disabled:cursor-not-allowed disabled:opacity-45"
                 >
                   Thanh toán
                 </button>
@@ -481,5 +492,4 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({ post }) => {
     </div>
   );
 };
-
 

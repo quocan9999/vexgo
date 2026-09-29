@@ -112,7 +112,7 @@ Yêu cầu nghiệp vụ:
 - Sau thanh toán, hệ thống tạo mã vận đơn để khách và người nhận tra cứu trạng thái.`,
     timeAgo: 'Nhận trong ngày',
     createdAt: '16/09/2026',
-    authorName: 'Quầy vận đơn BusWay',
+    authorName: 'Quầy vận đơn VexGo',
     authorCode: 'BW-CARGO',
     authorPhone: '1900.6789',
     isVerified: true,

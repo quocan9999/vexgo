@@ -22,6 +22,15 @@ test('seat selector shows both floors without the floor filter controls', async 
   assert.ok(html.includes('>Tầng trên<'), 'Should contain >Tầng trên<');
 });
 
+test('one-way seats expose button semantics and selection state to keyboard users', async () => {
+  const response = await fetch(`${server.baseUrl}/trips/1?needType=BUY&tripType=one-way`);
+  assert.equal(response.status, 200);
+
+  const html = await response.text();
+  assert.match(html, /<button[^>]*aria-label="A12 còn trống"[^>]*aria-pressed="false"[^>]*>/i);
+  assert.match(html, /<button[^>]*disabled=""[^>]*aria-label="A01 đã bán"[^>]*>/i);
+});
+
 test('round-trip seats use the reference gray, blue, and orange state colors', async () => {
   const response = await fetch(
     `${server.baseUrl}/trips/1?needType=BUY&tripType=round-trip&price=2026-09-27&returnDate=2026-09-30&outboundId=1&returnId=6`,

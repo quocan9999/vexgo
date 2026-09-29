@@ -24,7 +24,7 @@ export default function LoyaltyPage() {
         <div className="flex items-center gap-2 text-sm text-slate-500 mb-6">
           <Link href="/" className="hover:text-brand transition-colors">Trang chủ</Link>
           <ChevronRight className="w-4 h-4" />
-          <span className="font-semibold text-slate-800">Thành viên BusWay</span>
+          <span className="font-semibold text-slate-800">Thành viên VexGo</span>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

@@ -69,7 +69,7 @@ function SendFreightContent() {
             <h1 className="text-2xl md:text-3xl font-black text-slate-900 flex items-center gap-3">
               📦 Gửi hàng theo nhà xe
             </h1>
-            <p className="text-sm text-slate-500 mt-2">BusWay kết nối khách hàng với các nhà xe có hỗ trợ nhận và vận chuyển hàng hóa.</p>
+            <p className="text-sm text-slate-500 mt-2">VexGo kết nối khách hàng với các nhà xe có hỗ trợ nhận và vận chuyển hàng hóa.</p>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

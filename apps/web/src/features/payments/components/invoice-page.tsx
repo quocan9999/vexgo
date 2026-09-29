@@ -58,7 +58,7 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
               <div className="flex justify-between items-start mb-10">
                 <div>
                   <h1 className="text-[32px] font-black text-[#1D2939] mb-2 leading-tight">VÉ ĐIỆN TỬ (E-<br/>TICKET)</h1>
-                  <p className="text-[#1D4ED8] font-bold text-xl">BusWay Transport</p>
+                  <p className="text-[#1D4ED8] font-bold text-xl">VexGo Transport</p>
                 </div>
                 <div className="flex items-start gap-1.5 text-[#059669] bg-[#ECFDF5] px-4 py-2.5 rounded-xl text-[15px] font-bold border border-[#D1FAE5] leading-tight">
                   <CheckCircle2 className="w-5 h-5 mt-0.5 shrink-0" />

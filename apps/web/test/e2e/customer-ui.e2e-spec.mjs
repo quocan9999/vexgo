@@ -57,12 +57,70 @@ for (const screen of authScreens) {
   });
 }
 
+for (const accountRoute of ['/account/profile', '/account/tickets', '/account/profile/password']) {
+  test(`${accountRoute} marks its canonical sidebar link as the current page`, async () => {
+    const response = await fetch(`${server.baseUrl}${accountRoute}`);
+    const html = await response.text();
+    const linkTag = html.match(new RegExp(`<a[^>]*href="${accountRoute.replaceAll('/', '\\/')}"[^>]*>`, 'i'))?.[0];
+
+    assert.equal(response.status, 200);
+    assert.ok(linkTag, `Expected sidebar link for ${accountRoute}`);
+    assert.match(linkTag, /aria-current="page"/i);
+  });
+}
+
+for (const [legacyRoute, canonicalRoute] of [
+  ['/profile', '/account/profile'],
+  ['/my-posts', '/account/tickets'],
+  ['/profile/password', '/account/profile/password'],
+]) {
+  test(`${legacyRoute} keeps the matching canonical sidebar link active`, async () => {
+    const response = await fetch(`${server.baseUrl}${legacyRoute}`);
+    const html = await response.text();
+    const linkTag = html.match(new RegExp(`<a[^>]*href="${canonicalRoute.replaceAll('/', '\\/')}"[^>]*>`, 'i'))?.[0];
+
+    assert.equal(response.status, 200);
+    assert.ok(linkTag, `Expected sidebar link for ${canonicalRoute}`);
+    assert.match(linkTag, /aria-current="page"/i);
+  });
+}
+
 test('the customer application keeps VexGo metadata', async () => {
   const response = await fetch(server.baseUrl);
   const html = await response.text();
 
   assert.match(html, /<title>[^<]*VexGo[^<]*<\/title>/i);
   assert.doesNotMatch(html, /<title>[^<]*BusWay[^<]*<\/title>/i);
+});
+
+test('mobile menu trigger exposes its closed state and controlled drawer', async () => {
+  const response = await fetch(server.baseUrl);
+  const html = await response.text();
+
+  assert.equal(response.status, 200);
+  assert.match(
+    html,
+    /<button[^>]*aria-label="Mở menu"[^>]*aria-expanded="false"[^>]*aria-controls="customer-mobile-menu"[^>]*>/i,
+  );
+});
+
+test('customer-facing source does not regress to the retired BusWay brand', () => {
+  const sourceRoot = path.resolve(import.meta.dirname, '../../src');
+  const matches = [];
+
+  function scan(target) {
+    for (const entry of readdirSync(target, { withFileTypes: true })) {
+      const entryPath = path.join(target, entry.name);
+      if (entry.isDirectory()) {
+        scan(entryPath);
+      } else if (/\.(?:ts|tsx)$/.test(entry.name) && /busway/i.test(readFileSync(entryPath, 'utf8'))) {
+        matches.push(entryPath);
+      }
+    }
+  }
+
+  scan(sourceRoot);
+  assert.deepEqual(matches, [], `Found retired BusWay branding:\n${matches.join('\n')}`);
 });
 
 const postScreens = [

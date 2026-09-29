@@ -4,9 +4,10 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { UserCircle, Wallet, History, Lock, LogOut } from 'lucide-react';
+import { UserCircle, History, Lock, LogOut } from 'lucide-react';
 import { useDemoSession } from '@/features/auth/demo-session';
 import { ConfirmModal } from '@/components/ui/confirm-modal';
+import { ACCOUNT_NAVIGATION_ITEMS, isAccountNavigationItemActive } from '@/components/layout/customer-navigation';
 
 export const ProfileSidebar: React.FC = () => {
   const pathname = usePathname();
@@ -14,43 +15,23 @@ export const ProfileSidebar: React.FC = () => {
   const { signOut } = useDemoSession();
   const [logoutModalOpen, setLogoutModalOpen] = useState(false);
 
-  const menuItems = [
-    {
-      id: 'profile',
-      label: 'Thông tin tài khoản',
-      icon: <UserCircle className="w-5 h-5" />,
-      href: '/profile',
-      iconColor: 'text-slate-500',
-      active: pathname === '/profile',
-    },
-    {
-      id: 'history',
-      label: 'Lịch sử mua vé',
-      icon: <History className="w-5 h-5" />,
-      href: '/my-posts',
-      iconColor: 'text-slate-500',
-      active: pathname === '/my-posts',
-    },
-    {
-      id: 'security',
-      label: 'Đặt lại mật khẩu',
-      icon: <Lock className="w-5 h-5" />,
-      href: '/profile/password',
-      iconColor: 'text-slate-500',
-      active: pathname === '/profile/password',
-    }
-  ];
+  const menuIcons = {
+    profile: <UserCircle className="w-5 h-5" />,
+    history: <History className="w-5 h-5" />,
+    security: <Lock className="w-5 h-5" />,
+  };
 
   return (
     <>
       <div className="w-full bg-slate-50/80 rounded-xl shadow-sm border border-slate-200/60 p-3">
         <nav className="flex flex-col space-y-1">
-          {menuItems.map((item) => {
-            const isActive = item.active;
+          {ACCOUNT_NAVIGATION_ITEMS.map((item) => {
+            const isActive = isAccountNavigationItemActive(item, pathname);
             return (
               <Link
                 key={item.id}
                 href={item.href}
+                aria-current={isActive ? 'page' : undefined}
                 className={`flex items-center gap-3 px-4 py-3.5 rounded-lg text-sm font-semibold transition-all ${
                   isActive
                     ? 'bg-white text-accent shadow-sm ring-1 ring-slate-200'
@@ -58,7 +39,7 @@ export const ProfileSidebar: React.FC = () => {
                 }`}
               >
                 <div className={`${isActive ? 'text-accent' : 'text-slate-400'}`}>
-                  {item.icon}
+                  {menuIcons[item.id]}
                 </div>
                 <span>{item.label}</span>
               </Link>

@@ -246,7 +246,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                   className="mt-0.5 w-4 h-4 accent-brand"
                 />
                 <span className="text-xs font-semibold text-slate-600 group-hover:text-slate-900 leading-relaxed">
-                  <span className="text-accent underline underline-offset-2">Chấp nhận điều khoản</span> đặt vé & chính sách bảo mật thông tin của BusWay
+                  <span className="text-accent underline underline-offset-2">Chấp nhận điều khoản</span> đặt vé & chính sách bảo mật thông tin của VexGo
                 </span>
               </label>
             </div>
@@ -326,7 +326,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
             <div className="p-4 md:p-5 border-t border-slate-200 bg-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="inline-flex px-2 py-1 rounded-md bg-brand text-white text-[10px] font-black">BUSWAY</span>
+                  <span className="inline-flex px-2 py-1 rounded-md bg-brand text-white text-[10px] font-black">VEXGO</span>
                   <span className="text-xs font-bold text-slate-500">Tổng tiền</span>
                 </div>
                 <span className="text-2xl font-black text-red-600">{totalFare.toLocaleString('vi-VN')}đ</span>
