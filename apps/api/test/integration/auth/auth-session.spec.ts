@@ -52,7 +52,8 @@ describe('Auth login, refresh and logout HTTP contract', () => {
             () => ({
               SMS_PROVIDER: 'console',
               OTP_HASH_SECRET: 'test-only-otp-secret-for-vexgo-unit-tests-2026',
-              JWT_ACCESS_SECRET: 'test-only-jwt-secret-for-vexgo-unit-tests-2026',
+              JWT_ACCESS_SECRET:
+                'test-only-jwt-secret-for-vexgo-unit-tests-2026',
               JWT_ACCESS_TTL_SECONDS: '900',
               REFRESH_TOKEN_TTL_SECONDS: '2592000',
             }),
@@ -178,7 +179,9 @@ describe('Auth login, refresh and logout HTTP contract', () => {
   );
 
   it('returns ACCOUNT_INACTIVE for a locked account', async () => {
-    taiKhoan.findUnique.mockResolvedValueOnce(account({ trangThai: 'KHOA' }));
+    taiKhoan.findUnique.mockResolvedValueOnce(
+      account({ trangThai: 'TAM_KHOA' }),
+    );
 
     const response = await request(app.getHttpServer())
       .post('/api/v1/auth/login')

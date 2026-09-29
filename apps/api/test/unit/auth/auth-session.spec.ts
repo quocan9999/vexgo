@@ -114,7 +114,7 @@ describe('AuthService login', () => {
     prisma.taiKhoan.findUnique.mockResolvedValueOnce({
       ...customerAccount,
       matKhau: passwordHash,
-      trangThai: 'KHOA',
+      trangThai: 'TAM_KHOA',
     });
 
     const login = service.login({
@@ -249,6 +249,24 @@ describe('TokenService refresh rotation and logout', () => {
       expect(tx.phienDangNhap.create).not.toHaveBeenCalled();
     },
   );
+
+  it('rejects refresh for a locked account without issuing another session', async () => {
+    tx.phienDangNhap.findUnique.mockResolvedValueOnce({
+      ...activeSession,
+      taiKhoan: {
+        ...activeSession.taiKhoan,
+        trangThai: 'TAM_KHOA',
+      },
+    });
+
+    await expect(
+      service.rotateRefreshToken('old-refresh-token'),
+    ).rejects.toMatchObject({
+      response: { error: 'ACCOUNT_INACTIVE' },
+    });
+    expect(tx.phienDangNhap.updateMany).not.toHaveBeenCalled();
+    expect(tx.phienDangNhap.create).not.toHaveBeenCalled();
+  });
 
   it('rejects replay after another request already claimed the old token', async () => {
     tx.phienDangNhap.updateMany.mockResolvedValueOnce({ count: 0 });

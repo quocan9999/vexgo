@@ -149,7 +149,7 @@ describe('AccessTokenGuard', () => {
       activeSession({
         taiKhoan: {
           taiKhoanId: 42,
-          trangThai: 'KHOA',
+          trangThai: 'TAM_KHOA',
           nhanVien: null,
           taiKhoanVaiTros: [
             { vaiTro: { tenVaiTro: 'KHACH_HANG', vaiTroQuyens: [] } },
