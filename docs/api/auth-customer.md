@@ -28,13 +28,52 @@ REFRESH_TOKEN_TTL_SECONDS=2592000
 
 `JWT_ACCESS_SECRET` và `OTP_HASH_SECRET` là bắt buộc. Hãy tự tạo hai giá trị ngẫu nhiên riêng biệt, mỗi giá trị dài ít nhất 32 ký tự. API dừng khởi động nếu một secret bị thiếu, quá ngắn hoặc còn chứa `replace-with`; mã hiện tại không tự kiểm tra hai secret có trùng nhau hay không. Các giá trị minh họa bên trên là placeholder bị từ chối, không dùng nguyên văn.
 
-## Giới hạn xác thực và phân quyền trên nhánh PR #14
+## Hiện trạng xác thực và phân quyền
 
-Đăng ký công khai tạo tài khoản khách hàng. Endpoint đăng nhập bằng số điện thoại/mật khẩu xác thực tài khoản `TaiKhoan` đang hoạt động (không chỉ Customer) và tạo phiên lưu DB. Admin và Customer Web chưa tích hợp flow này: cả hai còn UI demo; Admin hiện nhập email trong khi endpoint backend nhận số điện thoại. Cần thống nhất UX/API cho đăng nhập Admin ở Feature 16. Chỉ `/api/v1/me` được bảo vệ bằng `AccessTokenGuard`; các API nghiệp vụ khác, ví dụ `GET/POST /api/v1/vehicles`, chưa có chính sách bảo vệ mặc định. Chưa có permission guard/decorator, runtime authorization từ `VaiTroQuyen`, hoặc tenant scope đáng tin cậy trong principal.
+Backend đăng ký Customer qua OTP, xác thực đăng nhập bằng số điện thoại/mật
+khẩu, phát JWT access token HS256, và lưu refresh session trong DB với refresh
+token được hash. `AccessTokenGuard` và `AuthorizationGuard` được đăng ký toàn
+cục: endpoint cần đăng nhập mặc định được bảo vệ; endpoint public/optional phải
+được đánh dấu rõ.
 
-Schema trên nhánh này vẫn có `LoaiXe` dùng chung, chưa có migration `20260928120000_tenant_scope_operations`. Vì vậy, trước khi làm Feature 15/16 cần đồng bộ/rebase lên baseline tenant-model đã được nhóm chốt; không được dùng `busCompanyId` từ body, query hoặc header làm căn cứ phân quyền. Tenant scope phải suy ra từ identity đã xác thực và quan hệ tài khoản → nhân viên → nhà xe. Seed hiện cũng chưa có vai trò `NHAN_VIEN_DIEU_HANH` riêng; cần chốt role đó và quyết định tích hợp đăng nhập Admin bằng email hay số điện thoại trước khi triển khai, không tự ánh xạ sang role khác.
+Trên branch `feature/admin-auth-authorization`, các API tenant `routes`,
+`vehicle-types`, `vehicles/seats`, `fare-prices` yêu cầu `NHA_XE_ADMIN` và lấy
+tenant từ principal được backend dựng từ DB. API Super Admin quản lý riêng tài
+khoản `NHA_XE_ADMIN` theo contract sau:
 
-`SMS_PROVIDER=console` chỉ dùng local. Khi gọi API gửi OTP, mã sáu chữ số xuất hiện trong terminal đang chạy NestJS dưới dòng `[LOCAL OTP]`. OTP và các hash không được trả trong response. Customer Web và Admin hiện vẫn dùng UI đăng nhập demo; các endpoint backend dưới đây chưa được nối vào hai client.
+| Method | Endpoint | Quyền | Mục đích |
+|---|---|---|---|
+| GET | `/api/v1/admin-accounts` | `SUPER_ADMIN` | Danh sách, filter `busCompanyId`/`status`, pagination/search/sort |
+| GET | `/api/v1/admin-accounts/:id` | `SUPER_ADMIN` | Chi tiết tài khoản admin nhà xe |
+| POST | `/api/v1/admin-accounts` | `SUPER_ADMIN` | Tạo account + employee + role trong transaction |
+| PATCH | `/api/v1/admin-accounts/:id` | `SUPER_ADMIN` | Sửa tên/ngày sinh/email/CCCD |
+| PATCH | `/api/v1/admin-accounts/:id/status` | `SUPER_ADMIN` | Khóa `TAM_KHOA` hoặc mở `HOAT_DONG` |
+
+Tài khoản được tạo với role cố định `NHA_XE_ADMIN`; không nhận role/status/
+permission từ client. Tenant được lưu qua `TaiKhoan → NhanVien → NhaXe`, không
+đặt trong JWT. Khóa thu hồi session đang hoạt động; mở khóa không tạo session.
+Endpoint không hard-delete và không cho đổi tenant, mã nhân viên, phone hoặc
+password qua profile PATCH. Danh sách này chưa có nghĩa tất cả module nghiệp vụ
+đã được audit hoặc permission matrix đã hoàn tất.
+
+`POST /api/v1/admin-accounts` nhận `fullName`, `phoneNumber`, `password`,
+`busCompanyId`, `employeeCode` và các field tùy chọn `dateOfBirth`, `email`,
+`citizenId`. Mật khẩu dài 8–72 byte UTF-8; ba field tùy chọn cuối nhận `null`
+để xóa. Profile PATCH chỉ nhận `fullName`, `dateOfBirth`, `email`, `citizenId`;
+status PATCH chỉ nhận `{ "status": "HOAT_DONG" | "TAM_KHOA" }`. Email/CCCD
+không có unique constraint hiện tại.
+
+Admin Web và Customer Web vẫn dùng UI demo, chưa gọi API auth thật. Admin login
+hiện nhập email trong khi backend login nhận số điện thoại. `VaiTroQuyen` chưa
+được dùng để authorize permission runtime; role guard kiểm tra role đã gán.
+Việc đăng nhập Admin trên UI, permission matrix và bảo vệ các module còn lại cần
+tiếp tục theo Feature 15–16. Không dùng `busCompanyId` từ body/query/header để
+làm tenant identity; tenant phải suy ra từ quan hệ tài khoản → nhân viên → nhà
+xe trong DB.
+
+`SMS_PROVIDER=console` chỉ dùng local. Khi gọi API gửi OTP, mã sáu chữ số xuất
+hiện trong terminal NestJS dưới dòng `[LOCAL OTP]`. OTP và các hash không được
+trả trong response.
 
 ## Thiết lập Postman
 
