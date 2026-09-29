@@ -1,14 +1,34 @@
 'use client';
 
-import { Bus, Building2, Database, LogOut, MapPinned, Menu, Ticket, Truck, X } from 'lucide-react';
+import {
+  Bus,
+  Building2,
+  Database,
+  LogOut,
+  MapPinned,
+  Menu,
+  Ticket,
+  Truck,
+  X,
+} from 'lucide-react';
 import Link from 'next/link';
-import { useState, type ReactNode } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { useDemoAdminSession } from '@/features/admin-auth/hooks/use-demo-admin-session';
-import { signOutDemoAdmin } from '@/features/admin-auth/services/demo-auth';
+import { useState, type ReactNode } from 'react';
+import { useAdminSession } from '@/features/admin-auth/hooks/use-admin-session';
+import {
+  getAdminAuthErrorMessage,
+  signOutAdmin,
+} from '@/features/admin-auth/services/admin-auth';
+import { getAdminAccessScope } from '@/features/admin-auth/services/admin-scope';
 
 type SuperAdminLayoutProps = {
-  activeSection: 'overview' | 'bus-companies' | 'vehicle-types' | 'vehicles' | 'routes' | 'fare-prices';
+  activeSection:
+    | 'overview'
+    | 'bus-companies'
+    | 'vehicle-types'
+    | 'vehicles'
+    | 'routes'
+    | 'fare-prices';
   children: ReactNode;
 };
 
@@ -18,9 +38,18 @@ export function SuperAdminLayout({
 }: SuperAdminLayoutProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const tenantPreview = useDemoAdminSession() === 'tenant-preview';
+  const authState = useAdminSession();
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
-  const breadcrumbLabel =
+  const [signingOut, setSigningOut] = useState(false);
+  const [logoutError, setLogoutError] = useState<string | null>(null);
+
+  if (authState.status !== 'authenticated') return null;
+
+  const session = authState.session;
+  const scope = getAdminAccessScope(session);
+  const tenantScope = scope === 'tenant';
+  const platformScope = scope === 'platform';
+  const sectionLabel =
     pathname === '/'
       ? 'Tổng quan'
       : pathname.startsWith('/bus-companies')
@@ -33,15 +62,22 @@ export function SuperAdminLayout({
               ? 'Tuyến xe'
               : pathname.startsWith('/fare-prices')
                 ? 'Bảng giá vé'
-              : 'Quản trị nền tảng';
+                : 'Quản trị';
 
   function closeMobileNavigation() {
     setMobileNavigationOpen(false);
   }
 
-  function logout() {
-    signOutDemoAdmin();
-    router.replace('/login');
+  async function logout() {
+    setSigningOut(true);
+    setLogoutError(null);
+    try {
+      await signOutAdmin();
+      router.replace('/login');
+    } catch (error) {
+      setLogoutError(getAdminAuthErrorMessage(error));
+      setSigningOut(false);
+    }
   }
 
   return (
@@ -61,26 +97,27 @@ export function SuperAdminLayout({
       >
         <Link
           className="brand-lockup"
-          href={tenantPreview ? '/vehicle-types' : '/'}
+          href={tenantScope ? '/vehicle-types' : '/'}
           onClick={closeMobileNavigation}
         >
-          <span className="brand-mark" aria-hidden="true">
-            V
-          </span>
+          <span className="brand-mark" aria-hidden="true">V</span>
           <span className="brand-copy">
-            <strong>VexGo</strong>
-            {' '}
-            <small>{tenantPreview ? 'NHÀ XE · XEM TRƯỚC' : 'SUPER ADMIN'}</small>
+            <strong>VexGo</strong>{' '}
+            <small>
+              {tenantScope
+                ? session.employee?.busCompanyName ?? 'NHÀ XE'
+                : 'SUPER ADMIN'}
+            </small>
           </span>
         </Link>
         <div aria-hidden="true" className="sidebar-divider" />
 
         <div className="sidebar-nav-group">
           <p className="sidebar-label">
-            {tenantPreview ? 'VẬN HÀNH' : 'QUẢN TRỊ NỀN TẢNG'}
+            {tenantScope ? 'VẬN HÀNH' : 'QUẢN TRỊ NỀN TẢNG'}
           </p>
-          <nav aria-label={tenantPreview ? 'Vận hành' : 'Quản trị nền tảng'}>
-            {tenantPreview ? (
+          <nav aria-label={tenantScope ? 'Vận hành' : 'Quản trị nền tảng'}>
+            {tenantScope ? (
               <>
                 <Link
                   aria-current={activeSection === 'vehicle-types' ? 'page' : undefined}
@@ -119,7 +156,7 @@ export function SuperAdminLayout({
                   <span>Bảng giá vé</span>
                 </Link>
               </>
-            ) : (
+            ) : platformScope ? (
               <>
                 <Link
                   aria-current={activeSection === 'overview' ? 'page' : undefined}
@@ -140,26 +177,38 @@ export function SuperAdminLayout({
                   <span>Nhà xe</span>
                 </Link>
               </>
-            )}
+            ) : null}
           </nav>
         </div>
 
         <div className="sidebar-bottom">
+          {logoutError && (
+            <p className="login-error" role="alert">{logoutError}</p>
+          )}
           <div className="sidebar-profile">
-            <span className="profile-avatar">{tenantPreview ? 'NV' : 'SA'}</span>
+            <span className="profile-avatar" aria-hidden="true">
+              {tenantScope ? 'NX' : 'SA'}
+            </span>
             <span className="profile-copy">
-              <strong>{tenantPreview ? 'Nhà xe' : 'Super Admin'}</strong>
-              <small>{tenantPreview ? 'Giao diện xem trước' : 'Quản trị nền tảng'}</small>
+              <strong>{session.fullName}</strong>
+              <small>
+                {tenantScope
+                  ? session.employee?.busCompanyName ?? 'Nhà xe'
+                  : 'Quản trị nền tảng'}
+              </small>
             </span>
             <button
-              aria-label={tenantPreview ? 'Thoát xem trước nhà xe' : 'Đăng xuất tài khoản Super Admin'}
+              aria-label="Đăng xuất"
               className="sidebar-logout-button"
-              onClick={logout}
-              title={tenantPreview ? 'Thoát xem trước' : 'Đăng xuất'}
+              disabled={signingOut}
+              onClick={() => void logout()}
+              title="Đăng xuất"
               type="button"
             >
               <LogOut aria-hidden="true" size={15} />
-              <span className="sidebar-logout-label">{tenantPreview ? 'Thoát xem trước' : 'Đăng xuất'}</span>
+              <span className="sidebar-logout-label">
+                {signingOut ? 'Đang đăng xuất…' : 'Đăng xuất'}
+              </span>
             </button>
           </div>
         </div>
@@ -181,7 +230,7 @@ export function SuperAdminLayout({
             <div className="breadcrumb">
               <span>VexGo</span>
               <span className="breadcrumb-slash">/</span>
-              <strong>{breadcrumbLabel}</strong>
+              <strong>{sectionLabel}</strong>
             </div>
           </div>
         </header>
