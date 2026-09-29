@@ -9,8 +9,12 @@ export function TripSearchBanner() {
   const router = useRouter();
 
   const [activeSearchTab, setActiveSearchTab] = useState<'BUY' | 'RENT'>('BUY');
-  const [selectedProvince, setSelectedProvince] = useState(searchParams.get('origin') || searchParams.get('from') || '');
-  const [selectedDistrict, setSelectedDistrict] = useState(searchParams.get('destination') || searchParams.get('to') || '');
+  const [selectedProvince, setSelectedProvince] = useState(
+    searchParams.get('from') || searchParams.get('origin') || '',
+  );
+  const [selectedDistrict, setSelectedDistrict] = useState(
+    searchParams.get('to') || searchParams.get('destination') || '',
+  );
   const [selectedType, setSelectedType] = useState('');
   const [selectedPrice, setSelectedPrice] = useState('');
 
@@ -19,8 +23,12 @@ export function TripSearchBanner() {
     let active = true;
     queueMicrotask(() => {
       if (!active) return;
-      setSelectedProvince(searchParams.get('origin') || searchParams.get('from') || '');
-      setSelectedDistrict(searchParams.get('destination') || searchParams.get('to') || '');
+      setSelectedProvince(
+        searchParams.get('from') || searchParams.get('origin') || '',
+      );
+      setSelectedDistrict(
+        searchParams.get('to') || searchParams.get('destination') || '',
+      );
     });
     return () => {
       active = false;
@@ -41,9 +49,10 @@ export function TripSearchBanner() {
       setSelectedPrice={setSelectedPrice}
       onSearch={({ tripType, departureDate, returnDate }) => {
         const query = new URLSearchParams({
-          origin: selectedProvince,
-          destination: selectedDistrict,
-          date: departureDate || '',
+          from: selectedProvince,
+          to: selectedDistrict,
+          departureDate: departureDate || '',
+          tripType,
         });
         if (returnDate) query.set('returnDate', returnDate);
         router.push(`/trips?${query.toString()}`);

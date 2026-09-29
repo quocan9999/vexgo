@@ -20,11 +20,12 @@ export type UpdateProfileDto = {
   citizenId?: string | null;
 };
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
 
 export const customerApi = {
   async getMe(accessToken: string): Promise<{ data: CustomerProfile }> {
-    const res = await fetch(`${API_BASE_URL}/customers/me`, {
+    const res = await fetch(`${API_BASE_URL}/me`, {
       headers: {
         Authorization: `Bearer ${accessToken}`,
       },
@@ -38,8 +39,11 @@ export const customerApi = {
     return res.json();
   },
 
-  async updateMe(accessToken: string, dto: UpdateProfileDto): Promise<{ data: CustomerProfile }> {
-    const res = await fetch(`${API_BASE_URL}/customers/me`, {
+  async updateMe(
+    accessToken: string,
+    dto: UpdateProfileDto,
+  ): Promise<{ data: CustomerProfile }> {
+    const res = await fetch(`${API_BASE_URL}/me`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',

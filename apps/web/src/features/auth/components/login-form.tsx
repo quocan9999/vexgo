@@ -22,14 +22,14 @@ export function LoginForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     // Clear old errors
     setErrorMsg('');
     setPhoneError('');
     setPasswordError('');
 
     let hasError = false;
-    
+
     const cleanedPhone = phone.replace(/\D/g, '');
     const isVietnamesePhone = /^(0|84)(3|5|7|8|9)\d{8}$/.test(cleanedPhone);
 
@@ -50,24 +50,8 @@ export function LoginForm() {
     setIsLoading(true);
 
     try {
-      // Giữ luồng Demo: Nếu nhập đúng sđt Demo thì dùng luôn Demo Session (không gọi API)
-      if (phone === '0912.345.678' && password === '123456') {
-        setTimeout(() => {
-          setIsLoading(false);
-          signIn({
-            user: { fullName: 'Nguyễn Văn Hùng', phoneNumber: phone, accountId: 0, customerId: 0, roles: ['KHACH_HANG'] },
-            accessToken: 'demo_token',
-            refreshToken: 'demo_refresh'
-          });
-          router.push('/');
-        }, 600);
-        return;
-      }
-
-      // Gọi API thật với dữ liệu người dùng nhập
       const response = await authApi.login(phone, password);
-      
-      // Lưu toàn bộ thông tin đăng nhập vào Auth Context
+
       signIn(response.data);
       router.push('/');
     } catch (error) {
@@ -81,11 +65,8 @@ export function LoginForm() {
     }
   };
 
-
-
   return (
     <form className="space-y-5" onSubmit={handleSubmit}>
-
       {errorMsg && (
         <div className="p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg">
           {errorMsg}
@@ -125,12 +106,19 @@ export function LoginForm() {
               className="p-1.5 text-slate-400 hover:text-slate-600 focus:outline-none rounded-md transition-colors"
               onClick={() => setShowPassword(!showPassword)}
             >
-              {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+              {showPassword ? (
+                <EyeOff className="w-5 h-5" />
+              ) : (
+                <Eye className="w-5 h-5" />
+              )}
             </button>
           }
         />
         <div className="flex items-center justify-end mt-2">
-          <a href="#" className="text-sm font-semibold text-emerald-600 hover:text-emerald-900 transition-colors">
+          <a
+            href="#"
+            className="text-sm font-semibold text-emerald-600 hover:text-emerald-900 transition-colors"
+          >
             Quên mật khẩu?
           </a>
         </div>
@@ -146,8 +134,6 @@ export function LoginForm() {
       >
         Đăng nhập
       </Button>
-
-
     </form>
   );
 }

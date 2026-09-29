@@ -3,7 +3,16 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { ArrowRightLeft, Bus, CalendarDays, MapPin, PackageCheck, Search, Users } from 'lucide-react';
+import {
+  ArrowRightLeft,
+  Bus,
+  CalendarDays,
+  MapPin,
+  PackageCheck,
+  Search,
+  Users,
+} from 'lucide-react';
+import { routesApi } from '@/features/routes/services/routes.api';
 
 export interface HeroSectionProps {
   activeSearchTab: 'BUY' | 'RENT';
@@ -44,23 +53,23 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
   useEffect(() => {
     async function fetchRoutes() {
       try {
-        const res = await fetch("http://localhost:4000/api/v1/routes");
-        if (!res.ok) return;
-        const json = await res.json();
-        const routes = json.data || [];
-        
+        const { data: routes } = await routesApi.listRoutes({
+          pageSize: 100,
+          status: 'HOAT_DONG',
+        });
+
         const origins = new Set<string>();
         const destinations = new Set<string>();
-        
-        routes.forEach((route: any) => {
+
+        routes.forEach((route) => {
           if (route.origin) origins.add(route.origin);
           if (route.destination) destinations.add(route.destination);
         });
-        
+
         setOriginOptions(Array.from(origins));
         setDestinationOptions(Array.from(destinations));
       } catch (err) {
-        console.error("Failed to fetch routes", err);
+        console.error('Failed to fetch routes', err);
       }
     }
     fetchRoutes();
@@ -81,9 +90,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
     <section className="relative w-full bg-[#F5F5F5] flex flex-col items-center pb-12">
       {/* Banner Background */}
       <div className="w-full h-[380px] md:h-[480px] relative">
-        <div 
-          className="absolute inset-0 bg-[url('/images/promo2.jpg')] bg-cover bg-center"
-        />
+        <div className="absolute inset-0 bg-[url('/images/promo2.jpg')] bg-cover bg-center" />
         <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/20 to-transparent" />
         <div className="absolute top-0 left-0 w-full h-full flex flex-col items-center justify-center pt-8 px-4 text-center">
           <h1 className="text-3xl md:text-5xl lg:text-6xl font-black text-white uppercase tracking-wider drop-shadow-lg shadow-black">
@@ -171,7 +178,9 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                       className="h-12 w-full bg-white border border-slate-300 rounded-lg px-3 text-sm font-bold text-slate-900 outline-none focus:border-brand"
                     />
                     <datalist id="origin-options">
-                      {originOptions.length > 0 ? originOptions.map(o => <option key={o} value={o} />) : (
+                      {originOptions.length > 0 ? (
+                        originOptions.map((o) => <option key={o} value={o} />)
+                      ) : (
                         <>
                           <option value="TP.HCM" />
                           <option value="Hà Nội" />
@@ -180,7 +189,8 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                           <option value="Vũng Tàu" />
                         </>
                       )}
-                    </datalist>                  </div>
+                    </datalist>{' '}
+                  </div>
 
                   <div className="hidden md:flex items-end pb-1 lg:shrink-0">
                     <button
@@ -207,7 +217,11 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                       className="h-12 w-full bg-white border border-slate-300 rounded-lg px-3 text-sm font-bold text-slate-900 outline-none focus:border-brand"
                     />
                     <datalist id="destination-options">
-                      {destinationOptions.length > 0 ? destinationOptions.map(o => <option key={o} value={o} />) : (
+                      {destinationOptions.length > 0 ? (
+                        destinationOptions.map((o) => (
+                          <option key={o} value={o} />
+                        ))
+                      ) : (
                         <>
                           <option value="Đà Lạt" />
                           <option value="Nha Trang" />
@@ -217,7 +231,8 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                           <option value="Vũng Tàu" />
                         </>
                       )}
-                    </datalist>                  </div>
+                    </datalist>{' '}
+                  </div>
                 </div>
 
                 {/* Vùng Ngày & Số vé */}
@@ -260,7 +275,9 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                       min={1}
                       max={20}
                       value={ticketCount}
-                      onChange={(e) => setTicketCount(Math.max(1, Number(e.target.value) || 1))}
+                      onChange={(e) =>
+                        setTicketCount(Math.max(1, Number(e.target.value) || 1))
+                      }
                       className="h-12 w-full bg-white border border-slate-300 rounded-lg px-3 text-sm font-bold text-slate-900 outline-none focus:border-brand"
                     />
                   </div>
@@ -268,18 +285,23 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
               </div>
 
               <div className="mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <Link href="#" className="text-sm font-bold text-amber-500 hover:text-amber-600 hover:underline">
+                <Link
+                  href="#"
+                  className="text-sm font-bold text-amber-500 hover:text-amber-600 hover:underline"
+                >
                   Hướng dẫn đặt vé
                 </Link>
                 <div className="flex flex-col sm:flex-row gap-3">
                   {onSearch ? (
                     <button
                       type="button"
-                      onClick={() => onSearch({
-                        tripType,
-                        departureDate: selectedPrice,
-                        returnDate,
-                      })}
+                      onClick={() =>
+                        onSearch({
+                          tripType,
+                          departureDate: selectedPrice,
+                          returnDate,
+                        })
+                      }
                       className="w-full sm:w-[170px] h-12 px-7 rounded-lg bg-accent hover:bg-accent-hover text-white font-black text-sm flex items-center justify-center gap-2 shadow-sm cursor-pointer"
                     >
                       <Search className="w-4 h-4 shrink-0" />
@@ -314,17 +336,20 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                     list="origin-options"
                     className="h-12 w-full bg-white border border-slate-300 rounded-lg px-3 text-sm font-bold text-slate-900 outline-none focus:border-brand"
                   />
-                    <datalist id="origin-options">
-                      {originOptions.length > 0 ? originOptions.map(o => <option key={o} value={o} />) : (
-                        <>
-                          <option value="TP.HCM" />
-                          <option value="Hà Nội" />
-                          <option value="Đà Nẵng" />
-                          <option value="Cần Thơ" />
-                          <option value="Vũng Tàu" />
-                        </>
-                      )}
-                    </datalist>                </div>
+                  <datalist id="origin-options">
+                    {originOptions.length > 0 ? (
+                      originOptions.map((o) => <option key={o} value={o} />)
+                    ) : (
+                      <>
+                        <option value="TP.HCM" />
+                        <option value="Hà Nội" />
+                        <option value="Đà Nẵng" />
+                        <option value="Cần Thơ" />
+                        <option value="Vũng Tàu" />
+                      </>
+                    )}
+                  </datalist>{' '}
+                </div>
 
                 <div className="hidden md:flex items-end pb-1 lg:shrink-0">
                   <button
@@ -350,18 +375,23 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                     list="destination-options"
                     className="h-12 w-full bg-white border border-slate-300 rounded-lg px-3 text-sm font-bold text-slate-900 outline-none focus:border-brand"
                   />
-                    <datalist id="destination-options">
-                      {destinationOptions.length > 0 ? destinationOptions.map(o => <option key={o} value={o} />) : (
-                        <>
-                          <option value="Đà Lạt" />
-                          <option value="Nha Trang" />
-                          <option value="Đà Nẵng" />
-                          <option value="Huế" />
-                          <option value="Cần Thơ" />
-                          <option value="Vũng Tàu" />
-                        </>
-                      )}
-                    </datalist>                </div>
+                  <datalist id="destination-options">
+                    {destinationOptions.length > 0 ? (
+                      destinationOptions.map((o) => (
+                        <option key={o} value={o} />
+                      ))
+                    ) : (
+                      <>
+                        <option value="Đà Lạt" />
+                        <option value="Nha Trang" />
+                        <option value="Đà Nẵng" />
+                        <option value="Huế" />
+                        <option value="Cần Thơ" />
+                        <option value="Vũng Tàu" />
+                      </>
+                    )}
+                  </datalist>{' '}
+                </div>
                 <div className="flex-1 space-y-1.5">
                   <label className="text-[11px] font-extrabold text-slate-500 uppercase flex items-center gap-1.5">
                     <CalendarDays className="w-3.5 h-3.5 text-brand" />
@@ -392,7 +422,10 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
               </div>
 
               <div className="mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <Link href="#" className="text-sm font-bold text-amber-500 hover:text-amber-600 hover:underline">
+                <Link
+                  href="#"
+                  className="text-sm font-bold text-amber-500 hover:text-amber-600 hover:underline"
+                >
                   Hướng dẫn gửi hàng
                 </Link>
                 <div>

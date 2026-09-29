@@ -9,7 +9,11 @@ interface TripCardProps {
   onSelect?: (trip: Trip) => void;
 }
 
-export function TripCard({ trip, isSelected = false, onSelect }: TripCardProps) {
+export function TripCard({
+  trip,
+  isSelected = false,
+  onSelect,
+}: TripCardProps) {
   return (
     <div
       onClick={() => onSelect?.(trip)}
@@ -24,8 +28,12 @@ export function TripCard({ trip, isSelected = false, onSelect }: TripCardProps) 
         <div className="flex items-start justify-between gap-4">
           {/* Left: departure time + origin */}
           <div className="w-14 shrink-0">
-            <span className="text-xl font-bold text-slate-800">{trip.departureTime}</span>
-            <p className="text-[12px] font-bold text-slate-700 mt-0.5">{trip.origin}</p>
+            <span className="text-xl font-bold text-slate-800">
+              {trip.departureTime}
+            </span>
+            <p className="text-[12px] font-bold text-slate-700 mt-0.5">
+              {trip.origin}
+            </p>
           </div>
 
           {/* Center: Timeline + Route info */}
@@ -34,18 +42,30 @@ export function TripCard({ trip, isSelected = false, onSelect }: TripCardProps) 
             <div className="flex items-center gap-1.5 w-full">
               <div className="w-3 h-3 rounded-full border-[3px] border-[#00b14f] bg-white shrink-0"></div>
               <div className="flex-1 border-t-2 border-dotted border-slate-300"></div>
-              <MapPin size={14} className="text-[#f05123] shrink-0" fill="#f05123" />
+              <MapPin
+                size={14}
+                className="text-[#f05123] shrink-0"
+                fill="#f05123"
+              />
             </div>
             <div className="text-center">
-              <p className="text-[12px] font-semibold text-slate-600 whitespace-nowrap">{trip.duration} - 170Km</p>
-              <p className="text-[10px] text-slate-400 italic">(Asian/Ho Chi Minh)</p>
+              <p className="text-[12px] font-semibold text-slate-600 whitespace-nowrap">
+                {trip.duration}
+              </p>
+              <p className="text-[10px] text-slate-400 italic">
+                (Asian/Ho Chi Minh)
+              </p>
             </div>
           </div>
 
           {/* Arrival time + destination */}
           <div className="w-14 shrink-0 text-center">
-            <span className="text-xl font-bold text-slate-800">{trip.arrivalTime}</span>
-            <p className="text-[12px] font-bold text-slate-700 mt-0.5">{trip.destination}</p>
+            <span className="text-xl font-bold text-slate-800">
+              {trip.arrivalTime}
+            </span>
+            <p className="text-[12px] font-bold text-slate-700 mt-0.5">
+              {trip.destination}
+            </p>
           </div>
 
           {/* Right: vehicle + seats + price */}
@@ -54,27 +74,44 @@ export function TripCard({ trip, isSelected = false, onSelect }: TripCardProps) 
               <div className="w-1.5 h-1.5 rounded-full bg-slate-300"></div>
               <span className="font-medium">{trip.vehicleType}</span>
               <div className="w-1.5 h-1.5 rounded-full bg-slate-300"></div>
-              <span className="font-bold text-[#00b14f]">{trip.availableSeats} ghế trống</span>
+              <span className="font-bold text-[#00b14f]">
+                {trip.availableSeats} ghế trống
+              </span>
             </div>
             <div className="text-xl font-bold text-[#f05123]">
-              {new Intl.NumberFormat('vi-VN').format(trip.price)}đ
+              {Number.isFinite(trip.price)
+                ? `${new Intl.NumberFormat('vi-VN').format(trip.price)}đ`
+                : 'Liên hệ'}
             </div>
           </div>
         </div>
 
         {/* Note */}
         <p className="text-[12px] text-slate-500 mt-3 leading-relaxed">
-          <span className="font-bold text-[#f05123]">Lưu ý:</span>{' '}
-          Quý Khách đang chọn xe đi lộ trình cao tốc Mỹ Thuận Trung Lương - Bot 23 , không nhận đón ...{' '}
-          <button className="text-blue-600 font-medium hover:underline">xem thêm</button>
+          <span className="font-bold text-[#f05123]">Lưu ý:</span> Quý Khách
+          đang chọn xe đi lộ trình cao tốc Mỹ Thuận Trung Lương - Bot 23 , không
+          nhận đón ...{' '}
+          <button className="text-blue-600 font-medium hover:underline">
+            xem thêm
+          </button>
         </p>
       </div>
 
       {/* Bottom actions */}
       <div className="flex justify-between items-center px-5 py-3 border-t border-slate-100">
         <div className="flex items-center gap-5 text-[13px] font-bold text-slate-600">
-          <button onClick={(e) => e.stopPropagation()} className="hover:text-blue-600 transition-colors">Chọn ghế</button>
-          <button onClick={(e) => e.stopPropagation()} className="hover:text-blue-600 transition-colors">Chính sách</button>
+          <button
+            onClick={(e) => e.stopPropagation()}
+            className="hover:text-blue-600 transition-colors"
+          >
+            Chọn ghế
+          </button>
+          <button
+            onClick={(e) => e.stopPropagation()}
+            className="hover:text-blue-600 transition-colors"
+          >
+            Chính sách
+          </button>
         </div>
         <button
           onClick={(e) => {

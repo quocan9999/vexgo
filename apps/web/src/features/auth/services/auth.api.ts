@@ -1,9 +1,15 @@
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
+export const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
 
 export class ApiError extends Error {
-  constructor(public status: number, public error: string, message: string) {
+  status: number;
+  error: string;
+
+  constructor(status: number, error: string, message: string) {
     super(message);
     this.name = 'ApiError';
+    this.status = status;
+    this.error = error;
   }
 }
 
@@ -31,7 +37,7 @@ export const authApi = {
       throw new ApiError(
         response.status,
         errorData.error || 'UNKNOWN_ERROR',
-        errorData.message || 'Đã có lỗi xảy ra khi đăng nhập'
+        errorData.message || 'Đã có lỗi xảy ra khi đăng nhập',
       );
     }
 
@@ -51,7 +57,7 @@ export const authApi = {
       throw new ApiError(
         response.status,
         errorData.error || 'UNKNOWN_ERROR',
-        errorData.message || 'Đã có lỗi xảy ra khi yêu cầu OTP'
+        errorData.message || 'Đã có lỗi xảy ra khi yêu cầu OTP',
       );
     }
 
@@ -71,14 +77,19 @@ export const authApi = {
       throw new ApiError(
         response.status,
         errorData.error || 'UNKNOWN_ERROR',
-        errorData.message || 'Mã OTP không hợp lệ'
+        errorData.message || 'Mã OTP không hợp lệ',
       );
     }
 
     return response.json();
   },
 
-  async register(data: { phoneNumber: string; password: string; fullName: string; otpProof: string }) {
+  async register(data: {
+    phoneNumber: string;
+    password: string;
+    fullName: string;
+    otpProof: string;
+  }) {
     const payload = { ...data, phoneNumber: formatPhone(data.phoneNumber) };
     const response = await fetch(`${API_BASE_URL}/auth/register`, {
       method: 'POST',
@@ -91,10 +102,10 @@ export const authApi = {
       throw new ApiError(
         response.status,
         errorData.error || 'UNKNOWN_ERROR',
-        errorData.message || 'Đã có lỗi xảy ra khi đăng ký'
+        errorData.message || 'Đã có lỗi xảy ra khi đăng ký',
       );
     }
 
     return response.json();
-  }
+  },
 };

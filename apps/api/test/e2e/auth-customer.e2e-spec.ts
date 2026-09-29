@@ -99,7 +99,7 @@ describe('phone auth and customer profile flow', () => {
     expect(firstRefreshToken).toBeTruthy();
 
     const profile = await request(app.getHttpServer())
-      .get('/api/v1/customers/me')
+      .get('/api/v1/me')
       .set('Authorization', `Bearer ${firstAccessToken}`)
       .expect(200);
     expect(profile.body.data).toMatchObject({
@@ -110,7 +110,7 @@ describe('phone auth and customer profile flow', () => {
     });
 
     const updated = await request(app.getHttpServer())
-      .patch('/api/v1/customers/me')
+      .patch('/api/v1/me')
       .set('Authorization', `Bearer ${firstAccessToken}`)
       .send({ fullName: 'Khách Hàng E2E Đã Sửa', email: null })
       .expect(200);
@@ -139,7 +139,7 @@ describe('phone auth and customer profile flow', () => {
       .expect(204);
 
     const revokedAccess = await request(app.getHttpServer())
-      .get('/api/v1/customers/me')
+      .get('/api/v1/me')
       .set('Authorization', `Bearer ${secondAccessToken}`)
       .expect(401);
     expect(revokedAccess.body.error).toBe('ACCESS_TOKEN_INVALID');

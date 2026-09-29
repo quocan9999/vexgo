@@ -41,7 +41,7 @@ const account = {
   taiKhoanVaiTros: [{ vaiTro: { tenVaiTro: 'KHACH_HANG' } }],
 };
 
-describe('GET/PATCH /api/v1/customers/me', () => {
+describe('GET/PATCH /api/v1/me', () => {
   let app: INestApplication;
   const jwtService = { verifyAsync: vi.fn() };
   const phienDangNhap = { findUnique: vi.fn() };
@@ -57,7 +57,8 @@ describe('GET/PATCH /api/v1/customers/me', () => {
             () => ({
               SMS_PROVIDER: 'console',
               OTP_HASH_SECRET: 'test-only-otp-secret-for-vexgo-unit-tests-2026',
-              JWT_ACCESS_SECRET: 'test-only-jwt-secret-for-vexgo-unit-tests-2026',
+              JWT_ACCESS_SECRET:
+                'test-only-jwt-secret-for-vexgo-unit-tests-2026',
             }),
           ],
         }),
@@ -113,7 +114,7 @@ describe('GET/PATCH /api/v1/customers/me', () => {
 
   it('returns the authenticated customer profile', async () => {
     const response = await request(app.getHttpServer())
-      .get('/api/v1/customers/me')
+      .get('/api/v1/me')
       .set('Authorization', 'Bearer signed-token')
       .expect(200);
 
@@ -143,7 +144,7 @@ describe('GET/PATCH /api/v1/customers/me', () => {
     ['missing bearer token', undefined],
     ['malformed bearer token', 'Basic abc'],
   ])('rejects %s', async (_name, authorization) => {
-    const call = request(app.getHttpServer()).get('/api/v1/customers/me');
+    const call = request(app.getHttpServer()).get('/api/v1/me');
     if (authorization) call.set('Authorization', authorization);
     const response = await call.expect(401);
     expect(response.body.error).toBe('ACCESS_TOKEN_INVALID');
@@ -156,7 +157,7 @@ describe('GET/PATCH /api/v1/customers/me', () => {
     });
 
     const response = await request(app.getHttpServer())
-      .get('/api/v1/customers/me')
+      .get('/api/v1/me')
       .set('Authorization', 'Bearer signed-token')
       .expect(401);
     expect(response.body.error).toBe('ACCESS_TOKEN_INVALID');
@@ -170,7 +171,7 @@ describe('GET/PATCH /api/v1/customers/me', () => {
     });
 
     const response = await request(app.getHttpServer())
-      .get('/api/v1/customers/me')
+      .get('/api/v1/me')
       .set('Authorization', 'Bearer signed-token')
       .expect(403);
     expect(response.body.error).toBe('CUSTOMER_ROLE_REQUIRED');
@@ -186,7 +187,7 @@ describe('GET/PATCH /api/v1/customers/me', () => {
     });
 
     const response = await request(app.getHttpServer())
-      .patch('/api/v1/customers/me')
+      .patch('/api/v1/me')
       .set('Authorization', 'Bearer signed-token')
       .send({
         fullName: 'Nguyễn Văn Bình',
@@ -210,7 +211,7 @@ describe('GET/PATCH /api/v1/customers/me', () => {
 
   it('rejects phone/id changes, unknown fields and invalid dates', async () => {
     const response = await request(app.getHttpServer())
-      .patch('/api/v1/customers/me')
+      .patch('/api/v1/me')
       .set('Authorization', 'Bearer signed-token')
       .send({
         phoneNumber: '+84909999999',

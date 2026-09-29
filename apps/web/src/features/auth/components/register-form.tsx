@@ -3,7 +3,15 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Phone, Lock, Eye, EyeOff, UserPlus, KeyRound, User } from 'lucide-react';
+import {
+  Phone,
+  Lock,
+  Eye,
+  EyeOff,
+  UserPlus,
+  KeyRound,
+  User,
+} from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useAuthSession } from '../auth-session';
@@ -12,34 +20,34 @@ import { authApi, ApiError } from '../services/auth.api';
 export function RegisterForm() {
   const router = useRouter();
   const { signIn } = useAuthSession();
-  
+
   // Form state
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [otp, setOtp] = useState('');
-  
+
   // UI state
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
-  
+
   // Field errors
   const [fullNameError, setFullNameError] = useState('');
   const [phoneError, setPhoneError] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [confirmPasswordError, setConfirmPasswordError] = useState('');
   const [otpError, setOtpError] = useState('');
-  
+
   // Flow state
   const [step, setStep] = useState<1 | 2>(1); // 1: Input details, 2: Input OTP
   const [challengeId, setChallengeId] = useState('');
 
   const handleRequestOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     // Clear old errors
     setErrorMsg('');
     setFullNameError('');
@@ -86,17 +94,8 @@ export function RegisterForm() {
     setIsLoading(true);
 
     try {
-      // Demo bypass
-      if (phone === '0912.345.678') {
-        setTimeout(() => {
-          setIsLoading(false);
-          setStep(2);
-        }, 500);
-        return;
-      }
-
       const res = await authApi.requestOtp(phone);
-      setChallengeId(res.challengeId);
+      setChallengeId(res.data.challengeId);
       setStep(2);
     } catch (error) {
       if (error instanceof ApiError) {
@@ -111,10 +110,10 @@ export function RegisterForm() {
 
   const handleVerifyOtpAndRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     setOtpError('');
     setErrorMsg('');
-    
+
     if (!otp.trim() || otp.length !== 6) {
       setOtpError('Mã OTP phải bao gồm 6 chữ số');
       return;
@@ -123,31 +122,13 @@ export function RegisterForm() {
     setIsLoading(true);
 
     try {
-      // Demo bypass
-      if (phone === '0912.345.678' && otp === '123456') {
-        setTimeout(() => {
-          setIsLoading(false);
-          signIn({
-            user: { fullName: fullName || 'Nguyễn Văn Hùng', phoneNumber: phone, accountId: 0, customerId: 0, roles: ['KHACH_HANG'] },
-            accessToken: 'demo_token',
-            refreshToken: 'demo_refresh'
-          });
-          router.push('/');
-        }, 600);
-        return;
-      } else if (phone === '0912.345.678') {
-        throw new Error('Mã OTP demo là 123456');
-      }
-
-      // 1. Verify OTP
       const verifyRes = await authApi.verifyOtp(phone, challengeId, otp);
-      
-      // 2. Register
+
       const registerRes = await authApi.register({
         fullName,
         phoneNumber: phone,
         password,
-        otpProof: verifyRes.otpProof
+        otpProof: verifyRes.data.otpProof,
       });
 
       signIn(registerRes.data);
@@ -165,14 +146,11 @@ export function RegisterForm() {
     }
   };
 
-
-
   if (step === 2) {
     return (
       <form className="space-y-4" onSubmit={handleVerifyOtpAndRegister}>
         <div className="text-sm text-slate-600 mb-4 text-center">
-          Mã xác thực (OTP) đã được gửi đến số điện thoại <b>{phone}</b>.<br/>
-          (Nếu dùng số demo 0912.345.678, mã OTP là <b>123456</b>)
+          Mã xác thực (OTP) đã được gửi đến số điện thoại <b>{phone}</b>.<br />
         </div>
 
         {errorMsg && (
@@ -273,7 +251,11 @@ export function RegisterForm() {
             className="p-1.5 text-slate-400 hover:text-slate-600 focus:outline-none rounded-md transition-colors"
             onClick={() => setShowPassword(!showPassword)}
           >
-            {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+            {showPassword ? (
+              <EyeOff className="w-5 h-5" />
+            ) : (
+              <Eye className="w-5 h-5" />
+            )}
           </button>
         }
       />
@@ -296,7 +278,11 @@ export function RegisterForm() {
             className="p-1.5 text-slate-400 hover:text-slate-600 focus:outline-none rounded-md transition-colors"
             onClick={() => setShowConfirmPassword(!showConfirmPassword)}
           >
-            {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+            {showConfirmPassword ? (
+              <EyeOff className="w-5 h-5" />
+            ) : (
+              <Eye className="w-5 h-5" />
+            )}
           </button>
         }
       />
@@ -313,8 +299,6 @@ export function RegisterForm() {
           Tiếp tục
         </Button>
       </div>
-
-
     </form>
   );
 }

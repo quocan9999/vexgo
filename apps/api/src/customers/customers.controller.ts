@@ -5,17 +5,17 @@ import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
 import { CustomersService } from './customers.service.js';
 import { UpdateMeDto } from './dto/update-me.dto.js';
 
-@Controller('customers')
+@Controller('me')
 @UseGuards(AccessTokenGuard)
 export class CustomersController {
   constructor(private readonly customersService: CustomersService) {}
 
-  @Get('me')
+  @Get()
   getMe(@CurrentPrincipal() principal: AuthPrincipal) {
     return this.customersService.getMe(principal.taiKhoanId);
   }
 
-  @Patch('me')
+  @Patch()
   updateMe(
     @CurrentPrincipal() principal: AuthPrincipal,
     @Body() dto: UpdateMeDto,
