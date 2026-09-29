@@ -1,12 +1,15 @@
 {
   "name": "@vexgo/web",
   "version": "0.1.0",
+  "type": "module",
   "private": true,
   "scripts": {
     "dev": "next dev --port 3000",
     "build": "next build",
     "start": "next start --port 3000",
     "lint": "eslint",
+    "test": "node --test test/unit/**/*.spec.mjs",
+    "test:e2e": "node --test test/e2e/*.e2e-spec.mjs",
     "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {

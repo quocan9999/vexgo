@@ -1,6 +1,13 @@
-import { TripSearchForm } from '@/features/trips/components/trip-search-form';
-import { TripList } from '@/features/trips/components/trip-list';
+import { PostList } from '@/features/posts/components/post-list';
+import { POST_FIXTURES } from '@/features/posts/data/post-fixtures';
 
 export default function TripsPage() {
-  return <><div className="bg-slate-50 px-4 pb-2 pt-8 sm:px-6 lg:px-8"><div className="mx-auto max-w-7xl"><TripSearchForm compact /></div></div><TripList /></>;
+  return (
+    <div className="flex flex-col min-h-screen bg-[#F5F5F5] py-8">
+      <PostList 
+        initialPosts={POST_FIXTURES} 
+        hideSearchForm={false}
+      />
+    </div>
+  );
 }

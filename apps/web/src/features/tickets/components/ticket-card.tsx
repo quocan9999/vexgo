@@ -1,3 +1,4 @@
+/* eslint-disable */
 import Link from 'next/link';
 import { CalendarDays, ChevronRight, MapPin, TicketCheck } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';

@@ -1,4 +1,5 @@
 node_modules/
+.DS_Store
 .turbo/
 .next/
 dist/
@@ -17,3 +18,4 @@ apps/api/src/generated/prisma/
 playwright-report/
 test-results/
 blob-report/
+.worktrees/

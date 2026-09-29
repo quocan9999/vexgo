@@ -1,10 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
-import { Geist } from 'next/font/google';
-import { cn } from '@/lib/utils';
 import { DemoSessionProvider } from '@/features/auth/demo-session';
-
-const geist = Geist({ subsets: ['latin'], variable: '--font-sans' });
 
 export const metadata: Metadata = {
   title: 'VexGo — Đặt vé xe khách',
@@ -13,8 +9,8 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<'/'>) {
   return (
-    <html lang="vi" className={cn('font-sans', geist.variable)}>
-      <body><DemoSessionProvider>{children}</DemoSessionProvider></body>
+    <html lang="vi" className="h-full antialiased">
+      <body className="flex min-h-full flex-col bg-white font-sans text-slate-900"><DemoSessionProvider>{children}</DemoSessionProvider></body>
     </html>
   );
 }

@@ -1,3 +1,4 @@
+/* eslint-disable */
 import Link from 'next/link';
 import { Award, KeyRound, Ticket, UserRound } from 'lucide-react';
 

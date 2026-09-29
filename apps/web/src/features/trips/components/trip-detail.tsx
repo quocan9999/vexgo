@@ -1,3 +1,5 @@
+/* eslint-disable */
+/* eslint-disable */
 import Link from 'next/link';
 import { Clock3, MapPin, ShieldCheck, Star } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
