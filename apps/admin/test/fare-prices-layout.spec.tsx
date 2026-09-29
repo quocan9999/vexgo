@@ -47,8 +47,9 @@ describe('Super Admin navigation for fare prices', () => {
     expect(link.getAttribute('aria-current')).toBe('page');
     expect(screen.getByRole('link', { name: /VexGo/ })).toBeTruthy();
     expect(
-      screen.getByRole('button', { name: 'Hồ sơ tài khoản Quản lý FUTA' }),
+      screen.getByRole('img', { name: 'Tài khoản Quản lý FUTA' }),
     ).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Đăng xuất' })).toBeTruthy();
     expect(document.querySelector('.breadcrumb')).toBeNull();
   });
 });
