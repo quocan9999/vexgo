@@ -1,15 +1,13 @@
 import { Test } from '@nestjs/testing';
 import type { INestApplication } from '@nestjs/common';
 import { AppModule } from '../../../src/app.module.js';
-import { Public } from '../../../src/auth/decorators/public.decorator.js';
+import { AccessTokenGuard } from '../../../src/auth/guards/access-token.guard.js';
+import type { AuthPrincipal } from '../../../src/auth/tokens/auth-principal.js';
 import { configureApi } from '../../../src/common/configure-api.js';
 import { PrismaService } from '../../../src/prisma/prisma.service.js';
 import { Prisma } from '../../../src/generated/prisma/client.js';
 import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { FarePricesController } from '../../../src/fare-prices/fare-prices.controller.js';
-
-Public()(FarePricesController);
 
 const fare = {
   bangGiaId: 15,
@@ -34,7 +32,25 @@ const prisma = {
   bangGia: {
     findMany: vi.fn(),
     count: vi.fn(),
-    findUnique: vi.fn(),
+    findFirst: vi.fn(),
+  },
+  tuyenXe: { findFirst: vi.fn() },
+  loaiXe: { findFirst: vi.fn() },
+};
+
+let testPrincipal: AuthPrincipal = {
+  taiKhoanId: 7,
+  sessionId: 'fare-price-read-session',
+  roles: ['NHA_XE_ADMIN'],
+  permissions: [],
+  nhanVienId: 9,
+  nhaXeId: 41,
+};
+
+const testAccessTokenGuard = {
+  canActivate(context: import('@nestjs/common').ExecutionContext) {
+    context.switchToHttp().getRequest<{ user?: AuthPrincipal }>().user = testPrincipal;
+    return true;
   },
 };
 
@@ -45,6 +61,8 @@ describe('Fare Price read HTTP contract', () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(PrismaService)
       .useValue(prisma)
+      .overrideProvider(AccessTokenGuard)
+      .useValue(testAccessTokenGuard)
       .compile();
 
     app = moduleRef.createNestApplication();
@@ -58,9 +76,19 @@ describe('Fare Price read HTTP contract', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    testPrincipal = {
+      taiKhoanId: 7,
+      sessionId: 'fare-price-read-session',
+      roles: ['NHA_XE_ADMIN'],
+      permissions: [],
+      nhanVienId: 9,
+      nhaXeId: 41,
+    };
     prisma.bangGia.findMany.mockResolvedValue([fare]);
     prisma.bangGia.count.mockResolvedValue(1);
-    prisma.bangGia.findUnique.mockResolvedValue(fare);
+    prisma.bangGia.findFirst.mockResolvedValue(fare);
+    prisma.tuyenXe.findFirst.mockResolvedValue({ tuyenXeId: 3, nhaXeId: 41 });
+    prisma.loaiXe.findFirst.mockResolvedValue({ loaiXeId: 2, nhaXeId: 41 });
   });
 
   it('returns the paginated English resource contract and derived future state', async () => {
@@ -90,6 +118,12 @@ describe('Fare Price read HTTP contract', () => {
         },
       ],
       meta: { page: 1, pageSize: 10, totalItems: 1, totalPages: 1 },
+    });
+    expect(prisma.bangGia.findMany.mock.calls[0]?.[0]).toMatchObject({
+      where: { nhaXeId: 41 },
+    });
+    expect(prisma.bangGia.count.mock.calls[0]?.[0]).toMatchObject({
+      where: { nhaXeId: 41 },
     });
   });
 
@@ -153,6 +187,7 @@ describe('Fare Price read HTTP contract', () => {
     expect(query.skip).toBe(5);
     expect(query.take).toBe(5);
     expect(query.where).toMatchObject({
+      nhaXeId: 41,
       tuyenXeId: 3,
       loaiXeId: 2,
       trangThai: 'HOAT_DONG',
@@ -251,12 +286,12 @@ describe('Fare Price read HTTP contract', () => {
         .expect(400);
 
       expect(response.body.error).toBe('VALIDATION_ERROR');
-      expect(prisma.bangGia.findUnique).not.toHaveBeenCalled();
+      expect(prisma.bangGia.findFirst).not.toHaveBeenCalled();
     },
   );
 
   it('returns FARE_PRICE_NOT_FOUND for a missing fare', async () => {
-    prisma.bangGia.findUnique.mockResolvedValueOnce(null);
+    prisma.bangGia.findFirst.mockResolvedValueOnce(null);
 
     const response = await request(app.getHttpServer())
       .get('/api/v1/fare-prices/999')
@@ -267,5 +302,58 @@ describe('Fare Price read HTTP contract', () => {
       error: 'FARE_PRICE_NOT_FOUND',
       message: 'Không tìm thấy bảng giá.',
     });
+    expect(prisma.bangGia.findFirst).toHaveBeenCalledWith({
+      where: { bangGiaId: 999, nhaXeId: 41 },
+      select: expect.any(Object),
+    });
+  });
+
+  it('does not access fare data for a Super Admin principal', async () => {
+    testPrincipal = { ...testPrincipal, roles: ['SUPER_ADMIN'], nhaXeId: null };
+
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/fare-prices')
+      .expect(403);
+
+    expect(response.body.error).toBe('ROLE_FORBIDDEN');
+    expect(prisma.bangGia.findMany).not.toHaveBeenCalled();
+    expect(prisma.bangGia.count).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when the authenticated tenant has no valid bus-company scope', async () => {
+    testPrincipal = { ...testPrincipal, nhaXeId: null };
+
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/fare-prices')
+      .expect(403);
+
+    expect(response.body.error).toBe('TENANT_SCOPE_REQUIRED');
+    expect(prisma.bangGia.findMany).not.toHaveBeenCalled();
+    expect(prisma.bangGia.count).not.toHaveBeenCalled();
+  });
+
+  it('scopes applicable-fare relation and price queries to the authenticated tenant', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/fare-prices/applicable')
+      .query({ routeId: 3, vehicleTypeId: 2, date: '2099-09-10' })
+      .expect(200);
+
+    expect(response.body.data.farePriceId).toBe(15);
+    expect(prisma.tuyenXe.findFirst).toHaveBeenCalledWith({
+      where: { tuyenXeId: 3, nhaXeId: 41 },
+      select: { tuyenXeId: true, nhaXeId: true },
+    });
+    expect(prisma.loaiXe.findFirst).toHaveBeenCalledWith({
+      where: { loaiXeId: 2, nhaXeId: 41 },
+      select: { loaiXeId: true, nhaXeId: true },
+    });
+    expect(prisma.bangGia.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        nhaXeId: 41,
+        tuyenXeId: 3,
+        loaiXeId: 2,
+      }),
+      take: 2,
+    }));
   });
 });
