@@ -5,28 +5,12 @@ import {
   IsString,
   Matches,
   MaxLength,
-  ValidateBy,
 } from 'class-validator';
 import { IsDateOnly } from '../../common/validators/is-date-only.validator.js';
 import { VIETNAM_E164_PHONE_PATTERN } from '../otp/otp.constants.js';
+import { IsPasswordByteLength } from '../validators/is-password-byte-length.validator.js';
 
 const CCCD_PATTERN = /^[0-9]{12}$/;
-const PASSWORD_MIN_BYTES = 8;
-const PASSWORD_MAX_BYTES = 72;
-
-function IsPasswordByteLength() {
-  return ValidateBy({
-    name: 'isPasswordByteLength',
-    validator: {
-      validate: (value: unknown) =>
-        typeof value === 'string' &&
-        Buffer.byteLength(value, 'utf8') >= PASSWORD_MIN_BYTES &&
-        Buffer.byteLength(value, 'utf8') <= PASSWORD_MAX_BYTES,
-      defaultMessage: () =>
-        `Mật khẩu phải dài từ ${PASSWORD_MIN_BYTES} đến ${PASSWORD_MAX_BYTES} byte UTF-8.`,
-    },
-  });
-}
 
 export class RegisterDto {
   @IsString()
