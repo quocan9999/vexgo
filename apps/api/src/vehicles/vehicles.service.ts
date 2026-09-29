@@ -14,6 +14,11 @@ import type { UpdateVehicleDto } from './dto/update-vehicle.dto.js';
 import type { UpdateVehicleStatusDto } from './dto/update-vehicle-status.dto.js';
 import type { CreateVehicleSeatDto } from './dto/create-vehicle-seat.dto.js';
 import type { UpdateVehicleSeatDto } from './dto/update-vehicle-seat.dto.js';
+import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
+import {
+  assertTenantScope,
+  requireNhaXeAdminTenant,
+} from '../auth/tenant-scope.js';
 
 const VEHICLE_LIST_SELECT = {
   xeId: true,
@@ -88,13 +93,6 @@ function vehicleNotFound() {
   });
 }
 
-function vehicleCompanyChangeConflict() {
-  return new ConflictException({
-    error: 'VEHICLE_COMPANY_CHANGE_CONFLICT',
-    message: 'Không thể đổi nhà xe vì xe đã được gắn với chuyến xe.',
-  });
-}
-
 function isVehicleLicensePlateUniqueViolation(error: unknown): boolean {
   if (
     !(error instanceof Prisma.PrismaClientKnownRequestError) ||
@@ -155,8 +153,12 @@ function isMissingRecord(error: unknown): boolean {
 export class VehiclesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(query: VehicleQueryDto) {
-    const where: Prisma.XeWhereInput = {};
+  async findAll(query: VehicleQueryDto, principal: AuthPrincipal) {
+    const nhaXeId = requireNhaXeAdminTenant(principal);
+    if (query.busCompanyId !== undefined) {
+      assertTenantScope(query.busCompanyId, nhaXeId);
+    }
+    const where: Prisma.XeWhereInput = { nhaXeId };
     const search = query.search?.trim();
 
     if (search) {
@@ -177,7 +179,6 @@ export class VehiclesService {
     }
 
     if (query.status) where.trangThai = query.status;
-    if (query.busCompanyId !== undefined) where.nhaXeId = query.busCompanyId;
     if (query.vehicleTypeId !== undefined) where.loaiXeId = query.vehicleTypeId;
 
     const orderBy: Prisma.XeOrderByWithRelationInput = {
@@ -207,9 +208,10 @@ export class VehiclesService {
     };
   }
 
-  async findOne(id: number) {
-    const vehicle = await this.prisma.xe.findUnique({
-      where: { xeId: id },
+  async findOne(id: number, principal: AuthPrincipal) {
+    const nhaXeId = requireNhaXeAdminTenant(principal);
+    const vehicle = await this.prisma.xe.findFirst({
+      where: { xeId: id, nhaXeId },
       select: VEHICLE_DETAIL_SELECT,
     });
 
@@ -220,14 +222,16 @@ export class VehiclesService {
     return { data: mapVehicleDetail(vehicle) };
   }
 
-  async create(input: CreateVehicleDto) {
+  async create(input: CreateVehicleDto, principal: AuthPrincipal) {
+    const nhaXeId = requireNhaXeAdminTenant(principal);
+    assertTenantScope(input.busCompanyId, nhaXeId);
     const [busCompany, vehicleType] = await Promise.all([
       this.prisma.nhaXe.findUnique({
-        where: { nhaXeId: input.busCompanyId },
+        where: { nhaXeId },
         select: { nhaXeId: true },
       }),
-      this.prisma.loaiXe.findUnique({
-        where: { loaiXeId: input.vehicleTypeId },
+      this.prisma.loaiXe.findFirst({
+        where: { loaiXeId: input.vehicleTypeId, nhaXeId },
         select: { loaiXeId: true, nhaXeId: true },
       }),
     ]);
@@ -244,18 +248,11 @@ export class VehiclesService {
         message: 'Không tìm thấy loại xe.',
       });
     }
-    if (vehicleType.nhaXeId !== input.busCompanyId) {
-      throw new ConflictException({
-        error: 'VEHICLE_TYPE_COMPANY_MISMATCH',
-        message: 'Loại xe không thuộc nhà xe đã chọn.',
-      });
-    }
-
     try {
       const vehicle = await this.prisma.xe.create({
         data: {
           bienSoXe: input.licensePlate,
-          nhaXeId: input.busCompanyId,
+          nhaXeId,
           loaiXeId: input.vehicleTypeId,
           trangThai: input.status,
         },
@@ -274,21 +271,27 @@ export class VehiclesService {
     }
   }
 
-  async update(id: number, input: UpdateVehicleDto) {
-    const existingVehicle = await this.prisma.xe.findUnique({
-      where: { xeId: id },
-      select: { xeId: true, nhaXeId: true },
+  async update(
+    id: number,
+    input: UpdateVehicleDto,
+    principal: AuthPrincipal,
+  ) {
+    const nhaXeId = requireNhaXeAdminTenant(principal);
+    assertTenantScope(input.busCompanyId, nhaXeId);
+    const existingVehicle = await this.prisma.xe.findFirst({
+      where: { xeId: id, nhaXeId },
+      select: { xeId: true },
     });
 
     if (!existingVehicle) throw vehicleNotFound();
 
     const [busCompany, vehicleType] = await Promise.all([
       this.prisma.nhaXe.findUnique({
-        where: { nhaXeId: input.busCompanyId },
+        where: { nhaXeId },
         select: { nhaXeId: true },
       }),
-      this.prisma.loaiXe.findUnique({
-        where: { loaiXeId: input.vehicleTypeId },
+      this.prisma.loaiXe.findFirst({
+        where: { loaiXeId: input.vehicleTypeId, nhaXeId },
         select: { loaiXeId: true, nhaXeId: true },
       }),
     ]);
@@ -305,31 +308,22 @@ export class VehiclesService {
         message: 'Không tìm thấy loại xe.',
       });
     }
-    if (vehicleType.nhaXeId !== input.busCompanyId) {
-      throw new ConflictException({
-        error: 'VEHICLE_TYPE_COMPANY_MISMATCH',
-        message: 'Loại xe không thuộc nhà xe đã chọn.',
-      });
-    }
-
-    const isCompanyChange = input.busCompanyId !== existingVehicle.nhaXeId;
-    if (isCompanyChange) {
-      const tripCount = await this.prisma.chuyenXe.count({
-        where: { xeId: id },
-      });
-      if (tripCount > 0) throw vehicleCompanyChangeConflict();
-    }
-
     try {
-      const vehicle = await this.prisma.xe.update({
-        where: { xeId: id },
+      const result = await this.prisma.xe.updateMany({
+        where: { xeId: id, nhaXeId },
         data: {
           bienSoXe: input.licensePlate,
-          nhaXeId: input.busCompanyId,
+          nhaXeId,
           loaiXeId: input.vehicleTypeId,
         },
+      });
+
+      if (result.count === 0) throw vehicleNotFound();
+      const vehicle = await this.prisma.xe.findFirst({
+        where: { xeId: id, nhaXeId },
         select: VEHICLE_DETAIL_SELECT,
       });
+      if (!vehicle) throw vehicleNotFound();
 
       return { data: mapVehicleDetail(vehicle) };
     } catch (error) {
@@ -339,53 +333,28 @@ export class VehiclesService {
           message: 'Biển số xe đã tồn tại.',
         });
       }
-      if (isCompanyChange && isForeignKeyViolation(error)) {
-        const tripCount = await this.prisma.chuyenXe.count({
-          where: { xeId: id },
-        });
-        if (tripCount > 0) throw vehicleCompanyChangeConflict();
-
-        const [currentBusCompany, currentVehicleType] = await Promise.all([
-          this.prisma.nhaXe.findUnique({
-            where: { nhaXeId: input.busCompanyId },
-            select: { nhaXeId: true },
-          }),
-          this.prisma.loaiXe.findUnique({
-            where: { loaiXeId: input.vehicleTypeId },
-            select: { loaiXeId: true, nhaXeId: true },
-          }),
-        ]);
-
-        if (!currentBusCompany) {
-          throw new NotFoundException({
-            error: 'BUS_COMPANY_NOT_FOUND',
-            message: 'Không tìm thấy nhà xe.',
-          });
-        }
-        if (!currentVehicleType) {
-          throw new NotFoundException({
-            error: 'VEHICLE_TYPE_NOT_FOUND',
-            message: 'Không tìm thấy loại xe.',
-          });
-        }
-        if (currentVehicleType.nhaXeId !== input.busCompanyId) {
-          throw new ConflictException({
-            error: 'VEHICLE_TYPE_COMPANY_MISMATCH',
-            message: 'Loại xe không thuộc nhà xe đã chọn.',
-          });
-        }
-      }
       throw error;
     }
   }
 
-  async updateStatus(id: number, input: UpdateVehicleStatusDto) {
+  async updateStatus(
+    id: number,
+    input: UpdateVehicleStatusDto,
+    principal: AuthPrincipal,
+  ) {
+    const nhaXeId = requireNhaXeAdminTenant(principal);
     try {
-      const vehicle = await this.prisma.xe.update({
-        where: { xeId: id },
+      const result = await this.prisma.xe.updateMany({
+        where: { xeId: id, nhaXeId },
         data: { trangThai: input.status },
+      });
+
+      if (result.count === 0) throw vehicleNotFound();
+      const vehicle = await this.prisma.xe.findFirst({
+        where: { xeId: id, nhaXeId },
         select: VEHICLE_DETAIL_SELECT,
       });
+      if (!vehicle) throw vehicleNotFound();
 
       return { data: mapVehicleDetail(vehicle) };
     } catch (error) {
@@ -394,9 +363,10 @@ export class VehiclesService {
     }
   }
 
-  async findSeats(vehicleId: number) {
-    const vehicle = await this.prisma.xe.findUnique({
-      where: { xeId: vehicleId },
+  async findSeats(vehicleId: number, principal: AuthPrincipal) {
+    const nhaXeId = requireNhaXeAdminTenant(principal);
+    const vehicle = await this.prisma.xe.findFirst({
+      where: { xeId: vehicleId, nhaXeId },
       select: { xeId: true },
     });
     if (!vehicle) throw vehicleNotFound();
@@ -413,9 +383,14 @@ export class VehiclesService {
     };
   }
 
-  async createSeat(vehicleId: number, input: CreateVehicleSeatDto) {
-    const vehicle = await this.prisma.xe.findUnique({
-      where: { xeId: vehicleId },
+  async createSeat(
+    vehicleId: number,
+    input: CreateVehicleSeatDto,
+    principal: AuthPrincipal,
+  ) {
+    const nhaXeId = requireNhaXeAdminTenant(principal);
+    const vehicle = await this.prisma.xe.findFirst({
+      where: { xeId: vehicleId, nhaXeId },
       select: { xeId: true },
     });
     if (!vehicle) throw vehicleNotFound();
@@ -461,9 +436,11 @@ export class VehiclesService {
     vehicleId: number,
     seatId: number,
     input: UpdateVehicleSeatDto,
+    principal: AuthPrincipal,
   ) {
-    const vehicle = await this.prisma.xe.findUnique({
-      where: { xeId: vehicleId },
+    const nhaXeId = requireNhaXeAdminTenant(principal);
+    const vehicle = await this.prisma.xe.findFirst({
+      where: { xeId: vehicleId, nhaXeId },
       select: { xeId: true },
     });
     if (!vehicle) throw vehicleNotFound();
@@ -504,9 +481,14 @@ export class VehiclesService {
     }
   }
 
-  async deleteSeat(vehicleId: number, seatId: number): Promise<void> {
-    const vehicle = await this.prisma.xe.findUnique({
-      where: { xeId: vehicleId },
+  async deleteSeat(
+    vehicleId: number,
+    seatId: number,
+    principal: AuthPrincipal,
+  ): Promise<void> {
+    const nhaXeId = requireNhaXeAdminTenant(principal);
+    const vehicle = await this.prisma.xe.findFirst({
+      where: { xeId: vehicleId, nhaXeId },
       select: { xeId: true },
     });
     if (!vehicle) throw vehicleNotFound();

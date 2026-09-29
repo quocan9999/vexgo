@@ -1,4 +1,4 @@
-import type { INestApplication } from '@nestjs/common';
+import type { ExecutionContext, INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import {
@@ -11,13 +11,25 @@ import {
   vi,
 } from 'vitest';
 import { AppModule } from '../../../src/app.module.js';
-import { Public } from '../../../src/auth/decorators/public.decorator.js';
+import { AccessTokenGuard } from '../../../src/auth/guards/access-token.guard.js';
+import type { AuthPrincipal } from '../../../src/auth/tokens/auth-principal.js';
 import { configureApi } from '../../../src/common/configure-api.js';
 import { Prisma } from '../../../src/generated/prisma/client.js';
 import { PrismaService } from '../../../src/prisma/prisma.service.js';
-import { VehiclesController } from '../../../src/vehicles/vehicles.controller.js';
-
-Public()(VehiclesController);
+let testPrincipal: AuthPrincipal = {
+  taiKhoanId: 7,
+  sessionId: 'tenant-session',
+  roles: ['NHA_XE_ADMIN'],
+  permissions: [],
+  nhanVienId: 9,
+  nhaXeId: 1,
+};
+const testAccessTokenGuard = {
+  canActivate(context: ExecutionContext) {
+    context.switchToHttp().getRequest<{ user?: AuthPrincipal }>().user = testPrincipal;
+    return true;
+  },
+};
 
 const vehicleListRecord = {
   xeId: 12,
@@ -39,12 +51,12 @@ const prisma = {
   xe: {
     findMany: vi.fn(),
     count: vi.fn(),
-    findUnique: vi.fn(),
+    findFirst: vi.fn(),
     create: vi.fn(),
-    update: vi.fn(),
+    updateMany: vi.fn(),
   },
   nhaXe: { findUnique: vi.fn() },
-  loaiXe: { findUnique: vi.fn() },
+  loaiXe: { findFirst: vi.fn() },
   chuyenXe: { count: vi.fn() },
 };
 
@@ -55,6 +67,8 @@ describe('Vehicles API request-pipeline integration', () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(PrismaService)
       .useValue(prisma)
+      .overrideProvider(AccessTokenGuard)
+      .useValue(testAccessTokenGuard)
       .compile();
 
     app = moduleRef.createNestApplication();
@@ -67,15 +81,34 @@ describe('Vehicles API request-pipeline integration', () => {
   });
 
   beforeEach(() => {
+    testPrincipal = {
+      taiKhoanId: 7,
+      sessionId: 'tenant-session',
+      roles: ['NHA_XE_ADMIN'],
+      permissions: [],
+      nhanVienId: 9,
+      nhaXeId: 1,
+    };
     vi.resetAllMocks();
     prisma.xe.findMany.mockResolvedValue([vehicleListRecord]);
     prisma.xe.count.mockResolvedValue(1);
-    prisma.xe.findUnique.mockResolvedValue(vehicleDetailRecord);
+    prisma.xe.findFirst.mockResolvedValue(vehicleDetailRecord);
     prisma.xe.create.mockResolvedValue(vehicleDetailRecord);
-    prisma.xe.update.mockResolvedValue(vehicleDetailRecord);
+    prisma.xe.updateMany.mockResolvedValue({ count: 1 });
     prisma.nhaXe.findUnique.mockResolvedValue({ nhaXeId: 1 });
-    prisma.loaiXe.findUnique.mockResolvedValue({ loaiXeId: 3, nhaXeId: 1 } as never);
+    prisma.loaiXe.findFirst.mockResolvedValue({ loaiXeId: 3, nhaXeId: 1 } as never);
     prisma.chuyenXe.count.mockResolvedValue(0);
+  });
+
+  it('denies operational reads to a platform-only account', async () => {
+    testPrincipal = { ...testPrincipal, roles: ['SUPER_ADMIN'], nhaXeId: null };
+
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/vehicles')
+      .expect(403);
+
+    expect(response.body.error).toBe('ROLE_FORBIDDEN');
+    expect(prisma.xe.findMany).not.toHaveBeenCalled();
   });
 
   function prismaKnownError(code: string, meta: Record<string, unknown> = {}) {
@@ -111,13 +144,13 @@ describe('Vehicles API request-pipeline integration', () => {
     });
     expect(prisma.xe.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: {},
+        where: { nhaXeId: 1 },
         orderBy: { bienSoXe: 'asc' },
         skip: 0,
         take: 10,
       }),
     );
-    expect(prisma.xe.count).toHaveBeenCalledWith({ where: {} });
+    expect(prisma.xe.count).toHaveBeenCalledWith({ where: { nhaXeId: 1 } });
   });
 
   it('trims search and composes status, ID filters, sort, and pagination', async () => {
@@ -128,8 +161,8 @@ describe('Vehicles API request-pipeline integration', () => {
         pageSize: '5',
         search: '  FUTA  ',
         status: 'BAO_TRI',
-        busCompanyId: '4',
-        vehicleTypeId: '7',
+        busCompanyId: '1',
+        vehicleTypeId: '3',
         sortBy: 'updatedAt',
         sortDirection: 'desc',
       })
@@ -153,8 +186,8 @@ describe('Vehicles API request-pipeline integration', () => {
             { loaiXe: { is: { tenLoai: { contains: 'FUTA' } } } },
           ],
           trangThai: 'BAO_TRI',
-          nhaXeId: 4,
-          loaiXeId: 7,
+          nhaXeId: 1,
+          loaiXeId: 3,
         },
         orderBy: { updatedAt: 'desc' },
         skip: 5,
@@ -163,7 +196,7 @@ describe('Vehicles API request-pipeline integration', () => {
     );
     expect(prisma.xe.count).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({ loaiXeId: 7 }),
+        where: expect.objectContaining({ nhaXeId: 1, loaiXeId: 3 }),
       }),
     );
   });
@@ -174,7 +207,7 @@ describe('Vehicles API request-pipeline integration', () => {
 
     const response = await request(app.getHttpServer())
       .get('/api/v1/vehicles')
-      .query({ busCompanyId: '999999' })
+      .query({ search: 'missing' })
       .expect(200);
 
     expect(response.body).toEqual({
@@ -260,13 +293,13 @@ describe('Vehicles API request-pipeline integration', () => {
         updatedAt: '2026-09-25T11:00:00.000Z',
       },
     });
-    expect(prisma.xe.findUnique).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { xeId: 12 } }),
+    expect(prisma.xe.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { xeId: 12, nhaXeId: 1 } }),
     );
   });
 
   it('returns the exact not-found API contract for missing detail', async () => {
-    prisma.xe.findUnique.mockResolvedValueOnce(null);
+    prisma.xe.findFirst.mockResolvedValueOnce(null);
 
     const response = await request(app.getHttpServer())
       .get('/api/v1/vehicles/999999')
@@ -286,7 +319,7 @@ describe('Vehicles API request-pipeline integration', () => {
         .get(`/api/v1/vehicles/${id}`)
         .expect(400);
 
-      expect(prisma.xe.findUnique).not.toHaveBeenCalled();
+      expect(prisma.xe.findFirst).not.toHaveBeenCalled();
     },
   );
 
@@ -431,7 +464,7 @@ describe('Vehicles API request-pipeline integration', () => {
       .post('/api/v1/vehicles')
       .send({
         licensePlate: '51B-123.45',
-        busCompanyId: 99,
+        busCompanyId: 1,
         vehicleTypeId: 3,
         status: 'HOAT_DONG',
       })
@@ -446,7 +479,7 @@ describe('Vehicles API request-pipeline integration', () => {
   });
 
   it('returns the exact missing vehicle type contract during create', async () => {
-    prisma.loaiXe.findUnique.mockResolvedValueOnce(null);
+    prisma.loaiXe.findFirst.mockResolvedValueOnce(null);
 
     const response = await request(app.getHttpServer())
       .post('/api/v1/vehicles')
@@ -466,11 +499,8 @@ describe('Vehicles API request-pipeline integration', () => {
     expect(prisma.xe.create).not.toHaveBeenCalled();
   });
 
-  it('rejects a vehicle type from another bus company through the HTTP contract', async () => {
-    prisma.loaiXe.findUnique.mockResolvedValueOnce({
-      loaiXeId: 3,
-      nhaXeId: 2,
-    } as never);
+  it('hides a vehicle type from another bus company through the HTTP contract', async () => {
+    prisma.loaiXe.findFirst.mockResolvedValueOnce(null);
 
     const response = await request(app.getHttpServer())
       .post('/api/v1/vehicles')
@@ -480,12 +510,12 @@ describe('Vehicles API request-pipeline integration', () => {
         vehicleTypeId: 3,
         status: 'HOAT_DONG',
       })
-      .expect(409);
+      .expect(404);
 
     expect(response.body).toEqual({
-      statusCode: 409,
-      error: 'VEHICLE_TYPE_COMPANY_MISMATCH',
-      message: 'Loại xe không thuộc nhà xe đã chọn.',
+      statusCode: 404,
+      error: 'VEHICLE_TYPE_NOT_FOUND',
+      message: 'Không tìm thấy loại xe.',
     });
     expect(prisma.xe.create).not.toHaveBeenCalled();
   });
@@ -513,16 +543,16 @@ describe('Vehicles API request-pipeline integration', () => {
   });
 
   it('updates the full editable field set and excludes status', async () => {
-    prisma.loaiXe.findUnique.mockResolvedValueOnce({
+    prisma.loaiXe.findFirst.mockResolvedValueOnce({
       loaiXeId: 7,
-      nhaXeId: 4,
+      nhaXeId: 1,
     } as never);
 
     const response = await request(app.getHttpServer())
       .patch('/api/v1/vehicles/12')
       .send({
         licensePlate: ' 51B-999.99 ',
-        busCompanyId: 4,
+        busCompanyId: 1,
         vehicleTypeId: 7,
       })
       .expect(200);
@@ -533,17 +563,17 @@ describe('Vehicles API request-pipeline integration', () => {
       busCompany: { busCompanyId: 1 },
       vehicleType: { vehicleTypeId: 3, description: 'Xe giường phòng cao cấp' },
     });
-    expect(prisma.xe.update).toHaveBeenCalledWith(
+    expect(prisma.xe.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { xeId: 12 },
+        where: { xeId: 12, nhaXeId: 1 },
         data: {
           bienSoXe: '51B-999.99',
-          nhaXeId: 4,
+          nhaXeId: 1,
           loaiXeId: 7,
         },
       }),
     );
-    expect(prisma.xe.update.mock.calls[0][0].data).not.toHaveProperty(
+    expect(prisma.xe.updateMany.mock.calls[0][0].data).not.toHaveProperty(
       'trangThai',
     );
   });
@@ -558,7 +588,7 @@ describe('Vehicles API request-pipeline integration', () => {
       .send(fields)
       .expect(400);
 
-    expect(prisma.xe.update).not.toHaveBeenCalled();
+    expect(prisma.xe.updateMany).not.toHaveBeenCalled();
   });
 
   it('rejects status and other unknown properties on the edit endpoint', async () => {
@@ -573,7 +603,7 @@ describe('Vehicles API request-pipeline integration', () => {
       .expect(400);
 
     expect(response.body.error).toBe('VALIDATION_ERROR');
-    expect(prisma.xe.update).not.toHaveBeenCalled();
+    expect(prisma.xe.updateMany).not.toHaveBeenCalled();
   });
 
   it.each(['0', '-1', 'abc', '1e3', '0x10'])(
@@ -588,13 +618,13 @@ describe('Vehicles API request-pipeline integration', () => {
         })
         .expect(400);
 
-      expect(prisma.xe.findUnique).not.toHaveBeenCalled();
-      expect(prisma.xe.update).not.toHaveBeenCalled();
+      expect(prisma.xe.findFirst).not.toHaveBeenCalled();
+      expect(prisma.xe.updateMany).not.toHaveBeenCalled();
     },
   );
 
   it('returns the exact missing vehicle contract during edit', async () => {
-    prisma.xe.findUnique.mockResolvedValueOnce(null);
+    prisma.xe.findFirst.mockResolvedValueOnce(null);
 
     const response = await request(app.getHttpServer())
       .patch('/api/v1/vehicles/999')
@@ -611,24 +641,22 @@ describe('Vehicles API request-pipeline integration', () => {
       message: 'Không tìm thấy xe.',
     });
     expect(prisma.nhaXe.findUnique).not.toHaveBeenCalled();
-    expect(prisma.xe.update).not.toHaveBeenCalled();
+    expect(prisma.xe.updateMany).not.toHaveBeenCalled();
   });
 
-  it('returns the exact missing reference contracts during edit', async () => {
-    prisma.nhaXe.findUnique.mockResolvedValueOnce(null);
+  it('rejects cross-tenant references and returns not-found for a missing vehicle type', async () => {
     const missingCompany = await request(app.getHttpServer())
       .patch('/api/v1/vehicles/12')
       .send({
         licensePlate: '51B-123.45',
-        busCompanyId: 99,
+        busCompanyId: 2,
         vehicleTypeId: 3,
       })
-      .expect(404);
+      .expect(403);
 
-    expect(missingCompany.body.error).toBe('BUS_COMPANY_NOT_FOUND');
+    expect(missingCompany.body.error).toBe('TENANT_SCOPE_VIOLATION');
 
-    prisma.nhaXe.findUnique.mockResolvedValueOnce({ nhaXeId: 1 });
-    prisma.loaiXe.findUnique.mockResolvedValueOnce(null);
+    prisma.loaiXe.findFirst.mockResolvedValueOnce(null);
     const missingType = await request(app.getHttpServer())
       .patch('/api/v1/vehicles/12')
       .send({
@@ -639,7 +667,7 @@ describe('Vehicles API request-pipeline integration', () => {
       .expect(404);
 
     expect(missingType.body.error).toBe('VEHICLE_TYPE_NOT_FOUND');
-    expect(prisma.xe.update).not.toHaveBeenCalled();
+    expect(prisma.xe.updateMany).not.toHaveBeenCalled();
   });
 
   it('allows keeping the current plate on edit', async () => {
@@ -652,7 +680,7 @@ describe('Vehicles API request-pipeline integration', () => {
       })
       .expect(200);
 
-    expect(prisma.xe.update.mock.calls[0][0].data).toEqual({
+    expect(prisma.xe.updateMany.mock.calls[0][0].data).toEqual({
       bienSoXe: '51B-123.45',
       nhaXeId: 1,
       loaiXeId: 3,
@@ -660,7 +688,7 @@ describe('Vehicles API request-pipeline integration', () => {
   });
 
   it('returns the exact 409 contract for a duplicate plate during edit', async () => {
-    prisma.xe.update.mockRejectedValueOnce(
+    prisma.xe.updateMany.mockRejectedValueOnce(
       prismaKnownError('P2002', { target: 'Xe_bienSoXe_key' }),
     );
 
@@ -680,19 +708,7 @@ describe('Vehicles API request-pipeline integration', () => {
     });
   });
 
-  it('maps a concurrent trip relation constraint to a stable company-change conflict', async () => {
-    prisma.nhaXe.findUnique.mockResolvedValueOnce({ nhaXeId: 2 });
-    prisma.loaiXe.findUnique.mockResolvedValueOnce({
-      loaiXeId: 8,
-      nhaXeId: 2,
-    } as never);
-    prisma.chuyenXe.count.mockResolvedValueOnce(0).mockResolvedValueOnce(1);
-    prisma.xe.update.mockRejectedValueOnce(
-      prismaKnownError('P2003', {
-        field_name: 'ChuyenXe_nhaXeId_xeId_fkey',
-      }),
-    );
-
+  it('rejects a tenant transfer before checking trips or mutating the vehicle', async () => {
     const response = await request(app.getHttpServer())
       .patch('/api/v1/vehicles/12')
       .send({
@@ -700,19 +716,18 @@ describe('Vehicles API request-pipeline integration', () => {
         busCompanyId: 2,
         vehicleTypeId: 8,
       })
-      .expect(409);
+      .expect(403);
 
-    expect(response.body).toEqual({
-      statusCode: 409,
-      error: 'VEHICLE_COMPANY_CHANGE_CONFLICT',
-      message: 'Không thể đổi nhà xe vì xe đã được gắn với chuyến xe.',
-    });
+    expect(response.body.error).toBe('TENANT_SCOPE_VIOLATION');
+    expect(prisma.chuyenXe.count).not.toHaveBeenCalled();
+    expect(prisma.xe.updateMany).not.toHaveBeenCalled();
   });
 
   it.each(['BAO_TRI', 'HOAT_DONG', 'HOAT_DONG'] as const)(
     'accepts explicit target status %s and updates only trangThai',
     async (status) => {
-      prisma.xe.update.mockResolvedValueOnce({
+      prisma.xe.updateMany.mockResolvedValueOnce({ count: 1 });
+      prisma.xe.findFirst.mockResolvedValueOnce({
         ...vehicleDetailRecord,
         trangThai: status,
       });
@@ -723,13 +738,13 @@ describe('Vehicles API request-pipeline integration', () => {
         .expect(200);
 
       expect(response.body.data.status).toBe(status);
-      expect(prisma.xe.update).toHaveBeenCalledWith(
+      expect(prisma.xe.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { xeId: 12 },
+          where: { xeId: 12, nhaXeId: 1 },
           data: { trangThai: status },
         }),
       );
-      expect(prisma.xe.update.mock.calls[0][0].data).toEqual({
+      expect(prisma.xe.updateMany.mock.calls[0][0].data).toEqual({
         trangThai: status,
       });
     },
@@ -753,7 +768,7 @@ describe('Vehicles API request-pipeline integration', () => {
       .send({ status: 'BAO_TRI', toggle: true })
       .expect(400);
     expect(unknown.body.error).toBe('VALIDATION_ERROR');
-    expect(prisma.xe.update).not.toHaveBeenCalled();
+    expect(prisma.xe.updateMany).not.toHaveBeenCalled();
   });
 
   it.each(['0', '-1', 'abc', '1e3', '0x10'])(
@@ -764,12 +779,12 @@ describe('Vehicles API request-pipeline integration', () => {
         .send({ status: 'BAO_TRI' })
         .expect(400);
 
-      expect(prisma.xe.update).not.toHaveBeenCalled();
+      expect(prisma.xe.updateMany).not.toHaveBeenCalled();
     },
   );
 
   it('returns the exact missing vehicle contract when status update matches no row', async () => {
-    prisma.xe.update.mockRejectedValueOnce(prismaKnownError('P2025'));
+    prisma.xe.updateMany.mockResolvedValueOnce({ count: 0 });
 
     const response = await request(app.getHttpServer())
       .patch('/api/v1/vehicles/999/status')

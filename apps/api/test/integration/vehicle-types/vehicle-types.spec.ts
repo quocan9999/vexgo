@@ -1,4 +1,4 @@
-import type { INestApplication } from '@nestjs/common';
+import type { ExecutionContext, INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import {
@@ -11,12 +11,24 @@ import {
   vi,
 } from 'vitest';
 import { AppModule } from '../../../src/app.module.js';
-import { Public } from '../../../src/auth/decorators/public.decorator.js';
+import { AccessTokenGuard } from '../../../src/auth/guards/access-token.guard.js';
+import type { AuthPrincipal } from '../../../src/auth/tokens/auth-principal.js';
 import { configureApi } from '../../../src/common/configure-api.js';
 import { PrismaService } from '../../../src/prisma/prisma.service.js';
-import { VehicleTypesController } from '../../../src/vehicle-types/vehicle-types.controller.js';
-
-Public()(VehicleTypesController);
+let testPrincipal: AuthPrincipal = {
+  taiKhoanId: 7,
+  sessionId: 'tenant-session',
+  roles: ['NHA_XE_ADMIN'],
+  permissions: [],
+  nhanVienId: 9,
+  nhaXeId: 1,
+};
+const testAccessTokenGuard = {
+  canActivate(context: ExecutionContext) {
+    context.switchToHttp().getRequest<{ user?: AuthPrincipal }>().user = testPrincipal;
+    return true;
+  },
+};
 
 const vehicleTypeRecord = {
   loaiXeId: 1,
@@ -41,6 +53,7 @@ const prisma = {
     findMany: vi.fn(),
     count: vi.fn(),
     findUnique: vi.fn(),
+    findFirst: vi.fn(),
   },
   nhaXe: {
     findMany: vi.fn(),
@@ -55,6 +68,8 @@ describe('Vehicle types API integration', () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(PrismaService)
       .useValue(prisma)
+      .overrideProvider(AccessTokenGuard)
+      .useValue(testAccessTokenGuard)
       .compile();
 
     app = moduleRef.createNestApplication();
@@ -67,12 +82,31 @@ describe('Vehicle types API integration', () => {
   });
 
   beforeEach(() => {
+    testPrincipal = {
+      taiKhoanId: 7,
+      sessionId: 'tenant-session',
+      roles: ['NHA_XE_ADMIN'],
+      permissions: [],
+      nhanVienId: 9,
+      nhaXeId: 1,
+    };
     vi.clearAllMocks();
     prisma.loaiXe.findMany.mockResolvedValue([vehicleTypeRecord]);
     prisma.loaiXe.count.mockResolvedValue(1);
-    prisma.loaiXe.findUnique.mockResolvedValue(vehicleTypeRecord);
+    prisma.loaiXe.findFirst.mockResolvedValue(vehicleTypeRecord);
     prisma.nhaXe.findMany.mockResolvedValue([busCompanyRecord]);
     prisma.nhaXe.count.mockResolvedValue(1);
+  });
+
+  it('denies tenant vehicle-type reads to a platform-only account', async () => {
+    testPrincipal = { ...testPrincipal, roles: ['SUPER_ADMIN'], nhaXeId: null };
+
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/vehicle-types')
+      .expect(403);
+
+    expect(response.body.error).toBe('ROLE_FORBIDDEN');
+    expect(prisma.loaiXe.findMany).not.toHaveBeenCalled();
   });
 
   it('returns mapped types and default pagination from the shared API module', async () => {
@@ -94,13 +128,13 @@ describe('Vehicle types API integration', () => {
     });
     expect(prisma.loaiXe.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: {},
+        where: { nhaXeId: 1 },
         orderBy: { tenLoai: 'asc' },
         skip: 0,
         take: 10,
       }),
     );
-    expect(prisma.loaiXe.count).toHaveBeenCalledWith({ where: {} });
+    expect(prisma.loaiXe.count).toHaveBeenCalledWith({ where: { nhaXeId: 1 } });
   });
 
   it('trims search and maps supported sort and pagination parameters', async () => {
@@ -124,6 +158,7 @@ describe('Vehicle types API integration', () => {
     expect(prisma.loaiXe.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
+          nhaXeId: 1,
           OR: [
             { tenLoai: { contains: 'Limousine' } },
             { moTa: { contains: 'Limousine' } },
@@ -144,7 +179,7 @@ describe('Vehicle types API integration', () => {
 
     expect(prisma.loaiXe.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: {},
+        where: { nhaXeId: 1 },
         orderBy: { createdAt: 'asc' },
         skip: 0,
         take: 10,
@@ -197,13 +232,13 @@ describe('Vehicle types API integration', () => {
       createdAt: '2026-09-25T10:00:00.000Z',
       updatedAt: '2026-09-25T11:00:00.000Z',
     });
-    expect(prisma.loaiXe.findUnique).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { loaiXeId: 1 } }),
+    expect(prisma.loaiXe.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { loaiXeId: 1, nhaXeId: 1 } }),
     );
   });
 
   it('returns the vehicle type not found contract for a missing record', async () => {
-    prisma.loaiXe.findUnique.mockResolvedValueOnce(null);
+    prisma.loaiXe.findFirst.mockResolvedValueOnce(null);
 
     const response = await request(app.getHttpServer())
       .get('/api/v1/vehicle-types/999999')
@@ -227,7 +262,7 @@ describe('Vehicle types API integration', () => {
         statusCode: 400,
         error: 'VALIDATION_ERROR',
       });
-      expect(prisma.loaiXe.findUnique).not.toHaveBeenCalled();
+      expect(prisma.loaiXe.findFirst).not.toHaveBeenCalled();
     },
   );
 

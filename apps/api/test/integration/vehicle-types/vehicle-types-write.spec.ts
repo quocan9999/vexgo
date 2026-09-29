@@ -1,15 +1,27 @@
-import type { INestApplication } from '@nestjs/common';
+import type { ExecutionContext, INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Prisma } from '../../../src/generated/prisma/client.js';
 import { AppModule } from '../../../src/app.module.js';
-import { Public } from '../../../src/auth/decorators/public.decorator.js';
+import { AccessTokenGuard } from '../../../src/auth/guards/access-token.guard.js';
+import type { AuthPrincipal } from '../../../src/auth/tokens/auth-principal.js';
 import { configureApi } from '../../../src/common/configure-api.js';
 import { PrismaService } from '../../../src/prisma/prisma.service.js';
-import { VehicleTypesController } from '../../../src/vehicle-types/vehicle-types.controller.js';
-
-Public()(VehicleTypesController);
+let testPrincipal: AuthPrincipal = {
+  taiKhoanId: 7,
+  sessionId: 'tenant-session',
+  roles: ['NHA_XE_ADMIN'],
+  permissions: [],
+  nhanVienId: 9,
+  nhaXeId: 4,
+};
+const testAccessTokenGuard = {
+  canActivate(context: ExecutionContext) {
+    context.switchToHttp().getRequest<{ user?: AuthPrincipal }>().user = testPrincipal;
+    return true;
+  },
+};
 
 const vehicleTypeRecord = {
   loaiXeId: 8,
@@ -23,9 +35,9 @@ const prisma = {
   loaiXe: {
     findMany: vi.fn(),
     count: vi.fn(),
-    findUnique: vi.fn(),
+    findFirst: vi.fn(),
     create: vi.fn(),
-    update: vi.fn(),
+    updateMany: vi.fn(),
   },
   nhaXe: { findUnique: vi.fn(), findMany: vi.fn(), count: vi.fn() },
 };
@@ -52,6 +64,8 @@ describe('Vehicle type write API request-pipeline integration', () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(PrismaService)
       .useValue(prisma)
+      .overrideProvider(AccessTokenGuard)
+      .useValue(testAccessTokenGuard)
       .compile();
 
     app = moduleRef.createNestApplication();
@@ -64,10 +78,19 @@ describe('Vehicle type write API request-pipeline integration', () => {
   });
 
   beforeEach(() => {
-    vi.clearAllMocks();
+    testPrincipal = {
+      taiKhoanId: 7,
+      sessionId: 'tenant-session',
+      roles: ['NHA_XE_ADMIN'],
+      permissions: [],
+      nhanVienId: 9,
+      nhaXeId: 4,
+    };
+    vi.resetAllMocks();
     prisma.nhaXe.findUnique.mockResolvedValue({ nhaXeId: 4 });
     prisma.loaiXe.create.mockResolvedValue(vehicleTypeRecord);
-    prisma.loaiXe.update.mockResolvedValue(vehicleTypeRecord);
+    prisma.loaiXe.updateMany.mockResolvedValue({ count: 1 });
+    prisma.loaiXe.findFirst.mockResolvedValue(vehicleTypeRecord);
   });
 
   it('creates a vehicle type, trims fields, and returns the mapped envelope', async () => {
@@ -169,8 +192,19 @@ describe('Vehicle type write API request-pipeline integration', () => {
     expect(response.text).not.toContain('LoaiXe_nhaXeId_tenLoai_key');
   });
 
+  it('rejects a body busCompanyId that differs from the authenticated tenant', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/api/v1/vehicle-types')
+      .send({ name: 'Loại xe ngoài tenant', busCompanyId: 5 })
+      .expect(403);
+
+    expect(response.body.error).toBe('TENANT_SCOPE_VIOLATION');
+    expect(prisma.nhaXe.findUnique).not.toHaveBeenCalled();
+    expect(prisma.loaiXe.create).not.toHaveBeenCalled();
+  });
+
   it('updates and trims editable fields while preserving the mapped API contract', async () => {
-    prisma.loaiXe.update.mockResolvedValueOnce({
+    prisma.loaiXe.findFirst.mockResolvedValueOnce({
       ...vehicleTypeRecord,
       tenLoai: 'Limousine 24 phòng',
       moTa: 'Phiên bản 24 phòng',
@@ -186,9 +220,9 @@ describe('Vehicle type write API request-pipeline integration', () => {
       name: 'Limousine 24 phòng',
       description: 'Phiên bản 24 phòng',
     });
-    expect(prisma.loaiXe.update).toHaveBeenCalledWith(
+    expect(prisma.loaiXe.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { loaiXeId: 8 },
+        where: { loaiXeId: 8, nhaXeId: 4 },
         data: {
           tenLoai: 'Limousine 24 phòng',
           moTa: 'Phiên bản 24 phòng',
@@ -203,14 +237,14 @@ describe('Vehicle type write API request-pipeline integration', () => {
       { name: 'Limousine 22 phòng', description: '' },
       { name: 'Limousine 22 phòng', description: '   ' },
     ]) {
-      prisma.loaiXe.update.mockResolvedValueOnce({ ...vehicleTypeRecord, moTa: null });
+      prisma.loaiXe.findFirst.mockResolvedValueOnce({ ...vehicleTypeRecord, moTa: null });
       const response = await request(app.getHttpServer())
         .patch('/api/v1/vehicle-types/8')
         .send(body)
         .expect(200);
 
       expect(response.body.data.description).toBeNull();
-      expect(prisma.loaiXe.update).toHaveBeenLastCalledWith(
+      expect(prisma.loaiXe.updateMany).toHaveBeenLastCalledWith(
         expect.objectContaining({ data: { tenLoai: 'Limousine 22 phòng', moTa: null } }),
       );
     }
@@ -236,7 +270,7 @@ describe('Vehicle type write API request-pipeline integration', () => {
       expect(response.body.details).toEqual(
         expect.arrayContaining([expect.objectContaining({ field })]),
       );
-      expect(prisma.loaiXe.update).not.toHaveBeenCalled();
+      expect(prisma.loaiXe.updateMany).not.toHaveBeenCalled();
     },
   );
 
@@ -252,17 +286,13 @@ describe('Vehicle type write API request-pipeline integration', () => {
       expect(response.body.details).toEqual(
         expect.arrayContaining([expect.objectContaining({ field: 'id' })]),
       );
-      expect(prisma.loaiXe.update).not.toHaveBeenCalled();
+      expect(prisma.loaiXe.updateMany).not.toHaveBeenCalled();
     },
   );
 
   it('maps Prisma P2025 to the vehicle type not-found response', async () => {
-    prisma.loaiXe.update.mockRejectedValueOnce(
-      new Prisma.PrismaClientKnownRequestError('record not found', {
-        code: 'P2025',
-        clientVersion: '7.10.0',
-      }),
-    );
+    prisma.loaiXe.updateMany.mockResolvedValueOnce({ count: 0 });
+    prisma.loaiXe.findFirst.mockResolvedValueOnce(null);
 
     const response = await request(app.getHttpServer())
       .patch('/api/v1/vehicle-types/999')
@@ -277,7 +307,7 @@ describe('Vehicle type write API request-pipeline integration', () => {
   });
 
   it('maps a duplicate update name to the vehicle type name conflict', async () => {
-    prisma.loaiXe.update.mockRejectedValueOnce(
+    prisma.loaiXe.updateMany.mockRejectedValueOnce(
       mariaDbUniqueError('LoaiXe_nhaXeId_tenLoai_key'),
     );
 
@@ -299,9 +329,9 @@ describe('Vehicle type write API request-pipeline integration', () => {
       .send({ name: 'Limousine 22 phòng', description: 'Mô tả mới' })
       .expect(200);
 
-    expect(prisma.loaiXe.update).toHaveBeenCalledWith(
+    expect(prisma.loaiXe.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { loaiXeId: 8 },
+        where: { loaiXeId: 8, nhaXeId: 4 },
         data: {
           tenLoai: 'Limousine 22 phòng',
           moTa: 'Mô tả mới',

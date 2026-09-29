@@ -1,6 +1,7 @@
 import 'reflect-metadata';
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { AuthPrincipal } from '../../../src/auth/tokens/auth-principal.js';
 import { Prisma } from '../../../src/generated/prisma/client.js';
 import { PrismaService } from '../../../src/prisma/prisma.service.js';
 import { CreateVehicleSeatDto } from '../../../src/vehicles/dto/create-vehicle-seat.dto.js';
@@ -17,7 +18,7 @@ const seatRecord = {
 };
 
 const prisma = {
-  xe: { findUnique: vi.fn() },
+  xe: { findUnique: vi.fn(), findFirst: vi.fn() },
   ghe: {
     findMany: vi.fn(),
     create: vi.fn(),
@@ -28,7 +29,32 @@ const prisma = {
   gheChuyenXe: { count: vi.fn() },
 } as unknown as PrismaService;
 
-const service = new VehiclesService(prisma);
+const tenantAdmin: AuthPrincipal = {
+  taiKhoanId: 7,
+  sessionId: 'tenant-session',
+  roles: ['NHA_XE_ADMIN'],
+  permissions: [],
+  nhanVienId: 9,
+  nhaXeId: 1,
+};
+const rawService = new VehiclesService(prisma);
+const service = {
+  findSeats: (vehicleId: number, principal = tenantAdmin) =>
+    rawService.findSeats(vehicleId, principal),
+  createSeat: (
+    vehicleId: number,
+    input: CreateVehicleSeatDto,
+    principal = tenantAdmin,
+  ) => rawService.createSeat(vehicleId, input, principal),
+  updateSeat: (
+    vehicleId: number,
+    seatId: number,
+    input: UpdateVehicleSeatDto,
+    principal = tenantAdmin,
+  ) => rawService.updateSeat(vehicleId, seatId, input, principal),
+  deleteSeat: (vehicleId: number, seatId: number, principal = tenantAdmin) =>
+    rawService.deleteSeat(vehicleId, seatId, principal),
+};
 
 function prismaKnownError(code: string, meta: Record<string, unknown> = {}) {
   return new Prisma.PrismaClientKnownRequestError('Prisma request failed', {
@@ -57,7 +83,7 @@ function updateInput(overrides: Partial<UpdateVehicleSeatDto> = {}) {
 describe('VehiclesService vehicle seats', () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    vi.mocked(prisma.xe.findUnique).mockResolvedValue({ xeId: 12 } as never);
+    vi.mocked(prisma.xe.findFirst).mockResolvedValue({ xeId: 12 } as never);
     vi.mocked(prisma.ghe.findMany).mockResolvedValue([seatRecord] as never);
     vi.mocked(prisma.ghe.create).mockResolvedValue(seatRecord as never);
     vi.mocked(prisma.ghe.findFirst).mockResolvedValue({ gheId: 101 } as never);
@@ -73,8 +99,8 @@ describe('VehiclesService vehicle seats', () => {
   it('checks vehicle existence before listing and returns stable seat order with mapped fields', async () => {
     const result = await service.findSeats(12);
 
-    expect(prisma.xe.findUnique).toHaveBeenCalledWith({
-      where: { xeId: 12 },
+    expect(prisma.xe.findFirst).toHaveBeenCalledWith({
+      where: { xeId: 12, nhaXeId: 1 },
       select: { xeId: true },
     });
     expect(prisma.ghe.findMany).toHaveBeenCalledWith({
@@ -107,7 +133,7 @@ describe('VehiclesService vehicle seats', () => {
   });
 
   it('returns VEHICLE_NOT_FOUND before listing seats for a missing vehicle', async () => {
-    vi.mocked(prisma.xe.findUnique).mockResolvedValueOnce(null);
+    vi.mocked(prisma.xe.findFirst).mockResolvedValueOnce(null);
 
     const error = await service.findSeats(999).catch((caught: unknown) => caught);
 
@@ -140,7 +166,7 @@ describe('VehiclesService vehicle seats', () => {
   });
 
   it('returns VEHICLE_NOT_FOUND before creating a seat', async () => {
-    vi.mocked(prisma.xe.findUnique).mockResolvedValueOnce(null);
+    vi.mocked(prisma.xe.findFirst).mockResolvedValueOnce(null);
 
     await expect(service.createSeat(999, createInput())).rejects.toMatchObject({
       response: { error: 'VEHICLE_NOT_FOUND' },
@@ -205,7 +231,7 @@ describe('VehiclesService vehicle seats', () => {
   });
 
   it('returns VEHICLE_NOT_FOUND first when updating under a missing vehicle', async () => {
-    vi.mocked(prisma.xe.findUnique).mockResolvedValueOnce(null);
+    vi.mocked(prisma.xe.findFirst).mockResolvedValueOnce(null);
 
     await expect(service.updateSeat(999, 101, updateInput())).rejects.toMatchObject({
       response: { error: 'VEHICLE_NOT_FOUND' },
