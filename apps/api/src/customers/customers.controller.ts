@@ -5,7 +5,7 @@ import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
 import { CustomersService } from './customers.service.js';
 import { UpdateMeDto } from './dto/update-me.dto.js';
 
-@Controller()
+@Controller('customers')
 @UseGuards(AccessTokenGuard)
 export class CustomersController {
   constructor(private readonly customersService: CustomersService) {}

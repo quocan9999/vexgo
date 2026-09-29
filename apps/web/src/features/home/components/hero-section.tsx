@@ -1,7 +1,7 @@
 /* eslint-disable */
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { ArrowRightLeft, Bus, CalendarDays, MapPin, PackageCheck, Search, Users } from 'lucide-react';
 
@@ -38,6 +38,33 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
   const [tripType, setTripType] = useState<'one-way' | 'round-trip'>('one-way');
   const [returnDate, setReturnDate] = useState('');
   const [ticketCount, setTicketCount] = useState(1);
+  const [originOptions, setOriginOptions] = useState<string[]>([]);
+  const [destinationOptions, setDestinationOptions] = useState<string[]>([]);
+
+  useEffect(() => {
+    async function fetchRoutes() {
+      try {
+        const res = await fetch("http://localhost:4000/api/v1/routes");
+        if (!res.ok) return;
+        const json = await res.json();
+        const routes = json.data || [];
+        
+        const origins = new Set<string>();
+        const destinations = new Set<string>();
+        
+        routes.forEach((route: any) => {
+          if (route.origin) origins.add(route.origin);
+          if (route.destination) destinations.add(route.destination);
+        });
+        
+        setOriginOptions(Array.from(origins));
+        setDestinationOptions(Array.from(destinations));
+      } catch (err) {
+        console.error("Failed to fetch routes", err);
+      }
+    }
+    fetchRoutes();
+  }, []);
 
   // Freight states
   const [freightDate, setFreightDate] = useState('');
@@ -144,14 +171,16 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                       className="h-12 w-full bg-white border border-slate-300 rounded-lg px-3 text-sm font-bold text-slate-900 outline-none focus:border-brand"
                     />
                     <datalist id="origin-options">
-                      <option value="TP. Hồ Chí Minh" />
-                      <option value="Hà Nội" />
-                      <option value="Đà Nẵng" />
-                      <option value="Cần Thơ" />
-                      <option value="Lâm Đồng" />
-                      <option value="Vũng Tàu" />
-                    </datalist>
-                  </div>
+                      {originOptions.length > 0 ? originOptions.map(o => <option key={o} value={o} />) : (
+                        <>
+                          <option value="TP.HCM" />
+                          <option value="Hà Nội" />
+                          <option value="Đà Nẵng" />
+                          <option value="Cần Thơ" />
+                          <option value="Vũng Tàu" />
+                        </>
+                      )}
+                    </datalist>                  </div>
 
                   <div className="hidden md:flex items-end pb-1 lg:shrink-0">
                     <button
@@ -178,14 +207,17 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                       className="h-12 w-full bg-white border border-slate-300 rounded-lg px-3 text-sm font-bold text-slate-900 outline-none focus:border-brand"
                     />
                     <datalist id="destination-options">
-                      <option value="Đà Lạt" />
-                      <option value="Nha Trang" />
-                      <option value="Đà Nẵng" />
-                      <option value="Huế" />
-                      <option value="Cần Thơ" />
-                      <option value="Vũng Tàu" />
-                    </datalist>
-                  </div>
+                      {destinationOptions.length > 0 ? destinationOptions.map(o => <option key={o} value={o} />) : (
+                        <>
+                          <option value="Đà Lạt" />
+                          <option value="Nha Trang" />
+                          <option value="Đà Nẵng" />
+                          <option value="Huế" />
+                          <option value="Cần Thơ" />
+                          <option value="Vũng Tàu" />
+                        </>
+                      )}
+                    </datalist>                  </div>
                 </div>
 
                 {/* Vùng Ngày & Số vé */}
@@ -282,15 +314,17 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                     list="origin-options"
                     className="h-12 w-full bg-white border border-slate-300 rounded-lg px-3 text-sm font-bold text-slate-900 outline-none focus:border-brand"
                   />
-                  <datalist id="origin-options">
-                    <option value="TP. Hồ Chí Minh" />
-                    <option value="Hà Nội" />
-                    <option value="Đà Nẵng" />
-                    <option value="Cần Thơ" />
-                    <option value="Lâm Đồng" />
-                    <option value="Vũng Tàu" />
-                  </datalist>
-                </div>
+                    <datalist id="origin-options">
+                      {originOptions.length > 0 ? originOptions.map(o => <option key={o} value={o} />) : (
+                        <>
+                          <option value="TP.HCM" />
+                          <option value="Hà Nội" />
+                          <option value="Đà Nẵng" />
+                          <option value="Cần Thơ" />
+                          <option value="Vũng Tàu" />
+                        </>
+                      )}
+                    </datalist>                </div>
 
                 <div className="hidden md:flex items-end pb-1 lg:shrink-0">
                   <button
@@ -316,15 +350,18 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                     list="destination-options"
                     className="h-12 w-full bg-white border border-slate-300 rounded-lg px-3 text-sm font-bold text-slate-900 outline-none focus:border-brand"
                   />
-                  <datalist id="destination-options">
-                    <option value="Đà Lạt" />
-                    <option value="Nha Trang" />
-                    <option value="Đà Nẵng" />
-                    <option value="Huế" />
-                    <option value="Cần Thơ" />
-                    <option value="Vũng Tàu" />
-                  </datalist>
-                </div>
+                    <datalist id="destination-options">
+                      {destinationOptions.length > 0 ? destinationOptions.map(o => <option key={o} value={o} />) : (
+                        <>
+                          <option value="Đà Lạt" />
+                          <option value="Nha Trang" />
+                          <option value="Đà Nẵng" />
+                          <option value="Huế" />
+                          <option value="Cần Thơ" />
+                          <option value="Vũng Tàu" />
+                        </>
+                      )}
+                    </datalist>                </div>
                 <div className="flex-1 space-y-1.5">
                   <label className="text-[11px] font-extrabold text-slate-500 uppercase flex items-center gap-1.5">
                     <CalendarDays className="w-3.5 h-3.5 text-brand" />
