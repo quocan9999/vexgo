@@ -19,6 +19,7 @@ import { configureApi } from '../../src/common/configure-api.js';
 import { PaginationQueryDto } from '../../src/common/dto/pagination-query.dto.js';
 import { Public } from '../../src/auth/decorators/public.decorator.js';
 import { RequireRoles } from '../../src/auth/decorators/require-roles.decorator.js';
+import { AllowRoleScopeConflict } from '../../src/auth/decorators/allow-role-scope-conflict.decorator.js';
 import request from 'supertest';
 import {
   afterAll,
@@ -83,6 +84,12 @@ class ApiFoundationTestController {
   @Get('protected')
   getProtected() {
     return { status: 'protected' };
+  }
+
+  @Get('scope-session')
+  @AllowRoleScopeConflict()
+  getScopeSession() {
+    return { status: 'scope-session' };
   }
 
   @Get('super-admin')
@@ -172,7 +179,10 @@ describe('API foundation', () => {
     sessionFindUnique.mockResolvedValue(sessionWithRoles(['NHA_XE_ADMIN']));
   });
 
-  function sessionWithRoles(roles: string[]) {
+  function sessionWithRoles(
+    roles: string[],
+    withEmployee = roles.includes('NHA_XE_ADMIN'),
+  ) {
     return {
       sessionId: 'integration-session',
       taiKhoanId: 42,
@@ -181,7 +191,7 @@ describe('API foundation', () => {
       taiKhoan: {
         taiKhoanId: 42,
         trangThai: 'HOAT_DONG',
-        nhanVien: { nhanVienId: 77, nhaXeId: 901 },
+        nhanVien: withEmployee ? { nhanVienId: 77, nhaXeId: 901 } : null,
         taiKhoanVaiTros: [
           ...roles.map((tenVaiTro) => ({
             vaiTro: { tenVaiTro, vaiTroQuyens: [] },
@@ -298,7 +308,92 @@ describe('API foundation', () => {
       .expect(200);
   });
 
+  it('rejects platform and tenant roles assigned to the same principal', async () => {
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['SUPER_ADMIN', 'NHA_XE_ADMIN']),
+    );
+
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/__test/super-admin')
+      .set('Authorization', 'Bearer signed-token')
+      .expect(403);
+
+    expect(response.body.error).toBe('ROLE_SCOPE_CONFLICT');
+  });
+
+  it('fails closed for mixed tenant/customer roles on protected endpoints without role decorators', async () => {
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['NHA_XE_ADMIN', 'KHACH_HANG']),
+    );
+
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/__test/protected')
+      .set('Authorization', 'Bearer signed-token')
+      .expect(403);
+
+    expect(response.body.error).toBe('ROLE_SCOPE_CONFLICT');
+  });
+
+  it('keeps customer-only sessions working on authenticated endpoints without role decorators', async () => {
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['KHACH_HANG'], false),
+    );
+
+    await request(app.getHttpServer())
+      .get('/api/v1/__test/protected')
+      .set('Authorization', 'Bearer signed-token')
+      .expect(200);
+  });
+
+  it('lets the session-recovery endpoint expose a conflicted identity for logout', async () => {
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['NHA_XE_ADMIN', 'KHACH_HANG']),
+    );
+
+    await request(app.getHttpServer())
+      .get('/api/v1/__test/scope-session')
+      .set('Authorization', 'Bearer signed-token')
+      .expect(200);
+  });
+
+  it('rejects a Super Admin role linked to an employee tenant identity', async () => {
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['SUPER_ADMIN'], true),
+    );
+
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/__test/super-admin')
+      .set('Authorization', 'Bearer signed-token')
+      .expect(403);
+
+    expect(response.body.error).toBe('ROLE_SCOPE_CONFLICT');
+  });
+
+  it('rejects a tenant-admin role without an employee tenant assignment', async () => {
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['NHA_XE_ADMIN'], false),
+    );
+
+    const response = await request(app.getHttpServer())
+      .post('/api/v1/routes')
+      .set('Authorization', 'Bearer signed-token')
+      .send({
+        code: 'FUTA-TX-0001',
+        origin: 'TP.HCM',
+        destination: 'Đà Lạt',
+        busCompanyId: 901,
+        status: 'HOAT_DONG',
+      })
+      .expect(403);
+
+    expect(response.body.error).toBe('TENANT_SCOPE_REQUIRED');
+    expect(routesService.create).not.toHaveBeenCalled();
+  });
+
   it('passes the trusted tenant principal to route creation', async () => {
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['NHA_XE_ADMIN', 'NHAN_VIEN_BAN_VE']),
+    );
     routesService.create.mockResolvedValue({ data: { routeId: 17 } });
     const body = {
       code: 'FUTA-TX-0001',
@@ -315,16 +410,16 @@ describe('API foundation', () => {
       .expect(201);
 
     expect(routesService.create).toHaveBeenCalledWith(
-      body,
+      expect.objectContaining(body),
       expect.objectContaining({
-        roles: ['NHA_XE_ADMIN'],
+        roles: ['NHA_XE_ADMIN', 'NHAN_VIEN_BAN_VE'],
         nhaXeId: 901,
       }),
     );
   });
 
   it('blocks route writes for principals without the tenant-admin role', async () => {
-    sessionFindUnique.mockResolvedValueOnce(sessionWithRoles(['CUSTOMER']));
+    sessionFindUnique.mockResolvedValueOnce(sessionWithRoles(['KHACH_HANG']));
 
     await request(app.getHttpServer())
       .post('/api/v1/routes')

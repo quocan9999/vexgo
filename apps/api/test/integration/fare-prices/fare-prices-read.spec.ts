@@ -309,7 +309,12 @@ describe('Fare Price read HTTP contract', () => {
   });
 
   it('does not access fare data for a Super Admin principal', async () => {
-    testPrincipal = { ...testPrincipal, roles: ['SUPER_ADMIN'], nhaXeId: null };
+    testPrincipal = {
+      ...testPrincipal,
+      roles: ['SUPER_ADMIN'],
+      nhanVienId: null,
+      nhaXeId: null,
+    };
 
     const response = await request(app.getHttpServer())
       .get('/api/v1/fare-prices')

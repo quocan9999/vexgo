@@ -101,7 +101,12 @@ describe('Vehicles API request-pipeline integration', () => {
   });
 
   it('denies operational reads to a platform-only account', async () => {
-    testPrincipal = { ...testPrincipal, roles: ['SUPER_ADMIN'], nhaXeId: null };
+    testPrincipal = {
+      ...testPrincipal,
+      roles: ['SUPER_ADMIN'],
+      nhanVienId: null,
+      nhaXeId: null,
+    };
 
     const response = await request(app.getHttpServer())
       .get('/api/v1/vehicles')

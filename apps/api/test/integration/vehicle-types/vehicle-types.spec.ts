@@ -99,7 +99,12 @@ describe('Vehicle types API integration', () => {
   });
 
   it('denies tenant vehicle-type reads to a platform-only account', async () => {
-    testPrincipal = { ...testPrincipal, roles: ['SUPER_ADMIN'], nhaXeId: null };
+    testPrincipal = {
+      ...testPrincipal,
+      roles: ['SUPER_ADMIN'],
+      nhanVienId: null,
+      nhaXeId: null,
+    };
 
     const response = await request(app.getHttpServer())
       .get('/api/v1/vehicle-types')
