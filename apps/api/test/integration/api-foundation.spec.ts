@@ -1,4 +1,5 @@
 import { Test } from '@nestjs/testing';
+import { JwtService } from '@nestjs/jwt';
 import {
   BadRequestException,
   Controller,
@@ -11,14 +12,19 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../src/prisma/prisma.service.js';
 import { AppModule } from '../../src/app.module.js';
+import { AccessTokenGuard } from '../../src/auth/guards/access-token.guard.js';
+import { BusCompaniesService } from '../../src/bus-companies/bus-companies.service.js';
+import { RoutesService } from '../../src/routes/routes.service.js';
 import { configureApi } from '../../src/common/configure-api.js';
 import { PaginationQueryDto } from '../../src/common/dto/pagination-query.dto.js';
+import { Public } from '../../src/auth/decorators/public.decorator.js';
 import request from 'supertest';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 @Controller('__test')
 class ApiFoundationTestController {
   @Get('pagination')
+  @Public()
   getPagination(@Query() query: PaginationQueryDto) {
     return {
       page: query.page,
@@ -30,22 +36,26 @@ class ApiFoundationTestController {
   }
 
   @Get('already-wrapped')
+  @Public()
   getAlreadyWrapped() {
     return { data: { value: 'already wrapped' } };
   }
 
   @Get('no-content')
+  @Public()
   @HttpCode(204)
   getNoContent() {
     return undefined;
   }
 
   @Get('unexpected')
+  @Public()
   getUnexpectedError(): never {
     throw new Error('database password must not reach the client');
   }
 
   @Get('unstructured-http-error')
+  @Public()
   getUnstructuredHttpError(): never {
     throw new BadRequestException(
       'database password must not reach the client',
@@ -53,17 +63,33 @@ class ApiFoundationTestController {
   }
 
   @Get('business-error')
+  @Public()
   getBusinessError(): never {
     throw new NotFoundException({
       error: 'TEST_RESOURCE_NOT_FOUND',
       message: 'Không tìm thấy tài nguyên test.',
     });
   }
+
+  @Get('protected')
+  getProtected() {
+    return { status: 'protected' };
+  }
 }
 
 describe('API foundation', () => {
   let app: INestApplication;
   let originalCorsOrigins: string | undefined;
+  const jwtVerify = vi.fn();
+  const sessionFindUnique = vi.fn();
+  const routesService = {
+    findAll: vi.fn(),
+    findOne: vi.fn(),
+  };
+  const busCompaniesService = {
+    findAll: vi.fn(),
+    findOne: vi.fn(),
+  };
 
   beforeAll(async () => {
     originalCorsOrigins = process.env.CORS_ALLOWED_ORIGINS;
@@ -75,7 +101,13 @@ describe('API foundation', () => {
       controllers: [ApiFoundationTestController],
     })
       .overrideProvider(PrismaService)
-      .useValue({})
+      .useValue({ phienDangNhap: { findUnique: sessionFindUnique } })
+      .overrideProvider(JwtService)
+      .useValue({ verifyAsync: jwtVerify })
+      .overrideProvider(RoutesService)
+      .useValue(routesService)
+      .overrideProvider(BusCompaniesService)
+      .useValue(busCompaniesService)
       .compile();
 
     app = moduleRef.createNestApplication();
@@ -99,6 +131,122 @@ describe('API foundation', () => {
 
     expect(response.body).toEqual({ data: { status: 'ok' } });
     await request(app.getHttpServer()).get('/health').expect(404);
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    routesService.findAll.mockResolvedValue({
+      data: [],
+      meta: { page: 1, pageSize: 10, totalItems: 0, totalPages: 0 },
+    });
+    busCompaniesService.findAll.mockResolvedValue({
+      data: [],
+      meta: { page: 1, pageSize: 10, totalItems: 0, totalPages: 0 },
+    });
+    jwtVerify.mockResolvedValue({
+      sub: 42,
+      sid: 'integration-session',
+      roles: ['STALE_ROLE'],
+    });
+    sessionFindUnique.mockResolvedValue({
+      sessionId: 'integration-session',
+      taiKhoanId: 42,
+      thuHoiLuc: null,
+      hetHanLuc: new Date(Date.now() + 60_000),
+      taiKhoan: {
+        taiKhoanId: 42,
+        trangThai: 'HOAT_DONG',
+        nhanVien: { nhanVienId: 77, nhaXeId: 901 },
+        taiKhoanVaiTros: [
+          { vaiTro: { tenVaiTro: 'NHA_XE_ADMIN', vaiTroQuyens: [] } },
+        ],
+      },
+    });
+  });
+
+  it('requires a valid access token by default for non-public endpoints', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/__test/protected')
+      .expect(401);
+
+    expect(response.body.error).toBe('ACCESS_TOKEN_INVALID');
+  });
+
+  it('allows anonymous requests on the production public routes endpoint without querying auth state', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/routes')
+      .expect(200);
+
+    expect(response.body).toEqual({
+      data: [],
+      meta: { page: 1, pageSize: 10, totalItems: 0, totalPages: 0 },
+    });
+    expect(jwtVerify).not.toHaveBeenCalled();
+    expect(sessionFindUnique).not.toHaveBeenCalled();
+    expect(routesService.findAll).toHaveBeenCalled();
+  });
+
+  it('authenticates an optional bearer token on the production public routes endpoint and keeps its tenant principal', async () => {
+    let observedPrincipal: unknown;
+    const guard = app.get(AccessTokenGuard);
+    const originalCanActivate = guard.canActivate.bind(guard);
+    const guardSpy = vi
+      .spyOn(guard, 'canActivate')
+      .mockImplementation(async (context) => {
+        const allowed = await originalCanActivate(context);
+        observedPrincipal = context
+          .switchToHttp()
+          .getRequest<{ user?: unknown }>().user;
+        return allowed;
+      });
+
+    try {
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/routes')
+        .set('Authorization', 'Bearer signed-token')
+        .expect(200);
+
+      expect(response.body).toEqual({
+        data: [],
+        meta: { page: 1, pageSize: 10, totalItems: 0, totalPages: 0 },
+      });
+      expect(jwtVerify).toHaveBeenCalledWith('signed-token', {
+        secret: expect.any(String),
+        algorithms: ['HS256'],
+      });
+      expect(sessionFindUnique).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { sessionId: 'integration-session' },
+        }),
+      );
+      expect(observedPrincipal).toMatchObject({
+        taiKhoanId: 42,
+        roles: ['NHA_XE_ADMIN'],
+        nhanVienId: 77,
+        nhaXeId: 901,
+      });
+      expect(routesService.findAll).toHaveBeenCalled();
+    } finally {
+      guardSpy.mockRestore();
+    }
+  });
+
+  it('passes the database-derived principal into the production public bus-company controller', async () => {
+    await request(app.getHttpServer())
+      .get('/api/v1/bus-companies')
+      .set('Authorization', 'Bearer signed-token')
+      .query({ status: 'TAM_NGUNG' })
+      .expect(200);
+
+    expect(busCompaniesService.findAll).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'TAM_NGUNG' }),
+      expect.objectContaining({
+        taiKhoanId: 42,
+        roles: ['NHA_XE_ADMIN'],
+        nhanVienId: 77,
+        nhaXeId: 901,
+      }),
+    );
   });
 
   it('transforms valid pagination query strings into numbers', async () => {

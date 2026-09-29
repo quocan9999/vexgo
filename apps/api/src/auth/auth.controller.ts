@@ -5,8 +5,10 @@ import { RequestRegisterOtpDto } from './dto/request-register-otp.dto.js';
 import { VerifyRegisterOtpDto } from './dto/verify-register-otp.dto.js';
 import { OtpService } from './otp/otp.service.js';
 import { RefreshTokenDto } from './dto/refresh-token.dto.js';
+import { Public } from './decorators/public.decorator.js';
 
 @Controller('auth')
+@Public()
 export class AuthController {
   constructor(
     private readonly authService: AuthService,

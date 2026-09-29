@@ -5,6 +5,7 @@ import { RouteQueryDto } from './dto/route-query.dto.js';
 import { UpdateRouteDto } from './dto/update-route.dto.js';
 import { UpdateRouteStatusDto } from './dto/update-route-status.dto.js';
 import { RoutesService } from './routes.service.js';
+import { OptionalAuth } from '../auth/decorators/public.decorator.js';
 
 @Controller('routes')
 export class RoutesController {
@@ -26,11 +27,13 @@ export class RoutesController {
   }
 
   @Get()
+  @OptionalAuth()
   findAll(@Query() query: RouteQueryDto) {
     return this.routesService.findAll(query);
   }
 
   @Get(':id')
+  @OptionalAuth()
   findOne(@Param() params: RouteIdParamsDto) {
     return this.routesService.findOne(params.id);
   }

@@ -4,8 +4,12 @@ import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Prisma } from '../../../src/generated/prisma/client.js';
 import { AppModule } from '../../../src/app.module.js';
+import { Public } from '../../../src/auth/decorators/public.decorator.js';
 import { configureApi } from '../../../src/common/configure-api.js';
 import { PrismaService } from '../../../src/prisma/prisma.service.js';
+import { VehicleTypesController } from '../../../src/vehicle-types/vehicle-types.controller.js';
+
+Public()(VehicleTypesController);
 
 const vehicleTypeRecord = {
   loaiXeId: 8,

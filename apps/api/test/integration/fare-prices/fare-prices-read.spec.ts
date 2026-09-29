@@ -1,11 +1,15 @@
 import { Test } from '@nestjs/testing';
 import type { INestApplication } from '@nestjs/common';
 import { AppModule } from '../../../src/app.module.js';
+import { Public } from '../../../src/auth/decorators/public.decorator.js';
 import { configureApi } from '../../../src/common/configure-api.js';
 import { PrismaService } from '../../../src/prisma/prisma.service.js';
 import { Prisma } from '../../../src/generated/prisma/client.js';
 import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { FarePricesController } from '../../../src/fare-prices/fare-prices.controller.js';
+
+Public()(FarePricesController);
 
 const fare = {
   bangGiaId: 15,

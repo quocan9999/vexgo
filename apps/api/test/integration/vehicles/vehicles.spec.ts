@@ -11,9 +11,13 @@ import {
   vi,
 } from 'vitest';
 import { AppModule } from '../../../src/app.module.js';
+import { Public } from '../../../src/auth/decorators/public.decorator.js';
 import { configureApi } from '../../../src/common/configure-api.js';
 import { Prisma } from '../../../src/generated/prisma/client.js';
 import { PrismaService } from '../../../src/prisma/prisma.service.js';
+import { VehiclesController } from '../../../src/vehicles/vehicles.controller.js';
+
+Public()(VehiclesController);
 
 const vehicleListRecord = {
   xeId: 12,

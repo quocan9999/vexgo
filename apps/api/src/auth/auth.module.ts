@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD, Reflector } from '@nestjs/core';
 import { AuthService } from './auth.service.js';
 import { AuthController } from './auth.controller.js';
 import { PrismaModule } from '../prisma/prisma.module.js';
@@ -18,7 +19,9 @@ import { AccessTokenGuard } from './guards/access-token.guard.js';
     OtpCryptoService,
     OtpService,
     TokenService,
+    Reflector,
     AccessTokenGuard,
+    { provide: APP_GUARD, useExisting: AccessTokenGuard },
     ConsoleSmsSender,
     { provide: SMS_SENDER, useExisting: ConsoleSmsSender },
   ],

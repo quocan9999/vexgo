@@ -2,8 +2,12 @@ import { randomUUID } from 'node:crypto';
 import { Test } from '@nestjs/testing';
 import type { INestApplication } from '@nestjs/common';
 import { AppModule } from '../../../src/app.module.js';
+import { Public } from '../../../src/auth/decorators/public.decorator.js';
 import { configureApi } from '../../../src/common/configure-api.js';
+import { FarePricesController } from '../../../src/fare-prices/fare-prices.controller.js';
 import { PrismaService } from '../../../src/prisma/prisma.service.js';
+
+Public()(FarePricesController);
 
 export type FarePriceTestContext = {
   app: INestApplication;
@@ -16,7 +20,8 @@ export type FarePriceTestContext = {
 };
 
 export async function createFarePriceTestContext(): Promise<FarePriceTestContext> {
-  const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+  const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
+    .compile();
   const app = moduleRef.createNestApplication();
   configureApi(app);
   await app.init();
