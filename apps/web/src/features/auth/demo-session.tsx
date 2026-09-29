@@ -1,8 +1,8 @@
 /* eslint-disable */
 'use client';
 
-import { createContext, useContext, useMemo, useState } from 'react';
-import { DemoUser, DemoSessionState, createDemoUser } from './demo-session-state';
+import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { DemoUser, DemoSessionState, createDemoSessionStore } from './demo-session-state';
 
 type DemoSessionContextValue = DemoSessionState & {
   signIn: (user?: Partial<DemoUser>) => void;
@@ -12,16 +12,25 @@ type DemoSessionContextValue = DemoSessionState & {
 const DemoSessionContext = createContext<DemoSessionContextValue | null>(null);
 
 export function DemoSessionProvider({ children }: { children: React.ReactNode }) {
-  const [state, setState] = useState<DemoSessionState>({
-    user: createDemoUser(),
-    isAuthenticated: true,
-  });
+  const [state, setState] = useState<DemoSessionState>(() => createDemoSessionStore().getState());
+
+  useEffect(() => {
+    setState(createDemoSessionStore(window.localStorage).getState());
+  }, []);
 
   const value = useMemo(
     () => ({
       ...state,
-      signIn: (nextUser: Partial<DemoUser> = {}) => setState({ user: createDemoUser(nextUser), isAuthenticated: true }),
-      signOut: () => setState({ user: null, isAuthenticated: false }),
+      signIn: (nextUser: Partial<DemoUser> = {}) => {
+        const store = createDemoSessionStore(window.localStorage);
+        store.signIn(nextUser);
+        setState(store.getState());
+      },
+      signOut: () => {
+        const store = createDemoSessionStore(window.localStorage);
+        store.signOut();
+        setState(store.getState());
+      },
     }),
     [state],
   );

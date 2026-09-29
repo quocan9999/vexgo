@@ -7,6 +7,7 @@ import { usePathname, useSearchParams, useRouter } from 'next/navigation';
 import { User, Bus, Menu, X, ChevronDown, FileText, Settings, LogOut, Award, Globe } from 'lucide-react';
 import { useDemoSession } from '@/features/auth/demo-session';
 import { ConfirmModal } from '@/components/ui/confirm-modal';
+import { RESET_PASSWORD_PATH } from '@/components/layout/customer-navigation';
 
 interface NavLinksNavProps {
   onItemClick?: () => void;
@@ -173,7 +174,7 @@ export const CustomerHeader: React.FC = () => {
                     </Link>
 
                     <Link
-                      href="/account/profile"
+                      href={RESET_PASSWORD_PATH}
                       className="flex items-center gap-3 px-4 py-2.5 hover:bg-slate-50 transition-colors group"
                     >
                       <div className="w-9 h-9 rounded-full bg-orange-400 flex items-center justify-center shrink-0">

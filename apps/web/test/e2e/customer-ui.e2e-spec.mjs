@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
+import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { startNextProductionServer } from '../helpers/next-production-server.mjs';
 
 let server;
@@ -103,16 +106,54 @@ for (const screen of serviceScreens) {
   });
 }
 
-import { execSync } from 'child_process';
+const forbiddenFrontendReference = /apps[\\/]frontend|@vexgo[\\/]frontend|(?:\.\.[\\/]){3}apps[\\/]frontend/i;
+
+function findForbiddenFrontendReferences(targets) {
+  const matches = [];
+
+  function scan(target) {
+    const entries = readdirSync(target, { withFileTypes: true });
+    for (const entry of entries) {
+      const entryPath = path.join(target, entry.name);
+      if (entry.isDirectory()) {
+        scan(entryPath);
+        continue;
+      }
+
+      const content = readFileSync(entryPath, 'utf8');
+      if (forbiddenFrontendReference.test(content)) matches.push(entryPath);
+    }
+  }
+
+  for (const target of targets) {
+    if (target.endsWith('package.json')) {
+      if (forbiddenFrontendReference.test(readFileSync(target, 'utf8'))) matches.push(target);
+    } else {
+      scan(target);
+    }
+  }
+
+  return matches;
+}
+
+test('independence scanner detects a forbidden apps/frontend reference', () => {
+  const fixtureRoot = mkdtempSync(path.join(tmpdir(), 'vexgo-web-independence-'));
+  const fixtureFile = path.join(fixtureRoot, 'forbidden-reference.ts');
+
+  try {
+    writeFileSync(fixtureFile, "export const sourceApp = '../../../apps/frontend';\n");
+    assert.deepEqual(findForbiddenFrontendReferences([fixtureRoot]), [fixtureFile]);
+  } finally {
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+});
 
 test('independence check: @vexgo/web must not reference the old apps/frontend', () => {
-  try {
-    // We check for "apps/frontend" or "@vexgo/frontend" or "../../../apps/frontend"
-    // rg will exit 0 if it finds something, and 1 if it doesn't.
-    const output = execSync('grep -r -i "apps/frontend|@vexgo/frontend|\\.\\./\\.\\./\\.\\./apps/frontend" apps/web/src apps/web/package.json', { encoding: 'utf-8' });
-    assert.fail(`Found references to the old frontend app in the migrated web app:\n${output}`);
-  } catch (error) {
-    // If rg exits with 1, it means no matches found, which is what we want.
-    assert.equal(error.status, 1, 'Expected grep to return 1 (no matches found). If it returned 2, rg might be missing or there was an error.');
-  }
+  const webRoot = path.resolve(import.meta.dirname, '../..');
+  const matches = findForbiddenFrontendReferences([
+    path.join(webRoot, 'src'),
+    path.join(webRoot, 'package.json'),
+  ]);
+
+  assert.deepEqual(matches, [], `Found references to the old frontend app:\n${matches.join('\n')}`);
 });
