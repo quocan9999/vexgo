@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { EcosystemSection } from './ecosystem-section';
 import { HeroSection } from './hero-section';
 import { NewsSection } from './news-section';
@@ -10,7 +10,7 @@ import { PopularRoutesSection } from './popular-routes-section';
 import { PromotionsSection } from './promotions-section';
 import { TripList } from '@/features/trips/components/trip-list';
 
-export function HomePage() {
+export function HomePage({ initialHasSearched = false }: { initialHasSearched?: boolean }) {
   const router = useRouter();
   const [activeSearchTab, setActiveSearchTab] = useState<'BUY' | 'RENT'>('BUY');
   const [selectedProvince, setSelectedProvince] = useState('');
@@ -18,8 +18,7 @@ export function HomePage() {
   const [selectedType, setSelectedType] = useState('');
   const [selectedPrice, setSelectedPrice] = useState('');
   
-  const searchParams = useSearchParams();
-  const [hasSearched, setHasSearched] = useState(!!searchParams.get('origin') || !!searchParams.get('destination') || !!searchParams.get('date'));
+  const [hasSearched, setHasSearched] = useState(initialHasSearched);
   const [searchCriteria, setSearchCriteria] = useState<{tripType?: 'one-way' | 'round-trip'; departureDate?: string; returnDate?: string}>({});
 
   return (

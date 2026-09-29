@@ -6,7 +6,18 @@ import { useSearchParams } from 'next/navigation';
 import { TripCard } from '@/features/trips/components/trip-card';
 import type { Trip } from '@/types/customer';
 
-function mapApiToTrip(item: any): Trip {
+type ApiTrip = {
+  id: number;
+  departureTime: string;
+  arrivalTime: string;
+  price: number;
+  availableSeats: number;
+  route: { origin: string; destination: string; durationMinutes: number };
+  busCompany: { name: string; rating: number; logo: string | null };
+  vehicle: { type: string; capacity: number; amenities?: string[] };
+};
+
+function mapApiToTrip(item: ApiTrip): Trip {
   const depDate = new Date(item.departureTime);
   const arrDate = new Date(item.arrivalTime);
   const hrs = Math.floor(item.route.durationMinutes / 60);
@@ -39,6 +50,53 @@ async function fetchTripsByRoute(origin: string, destination: string, date: stri
   return (json.data || []).map(mapApiToTrip);
 }
 
+function TripSlot({
+  num,
+  trip,
+  label,
+  origin,
+  destination,
+}: {
+  num: number;
+  trip: Trip | null;
+  label: string;
+  origin: string;
+  destination: string;
+}) {
+  return (
+    <div className={`flex gap-3 p-3 rounded-lg ${trip ? 'bg-orange-50' : 'bg-slate-50'}`}>
+      <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-white font-bold text-sm ${trip ? 'bg-[#f05123]' : 'bg-slate-300'}`}>
+        {num}
+      </div>
+      <div className="flex-1 min-w-0">
+        {trip ? (
+          <>
+            <p className="text-[11px] text-slate-500 font-medium">{label}</p>
+            <p className="text-[12px] font-bold text-slate-800 truncate">{trip.origin} - {trip.destination}</p>
+            <div className="flex items-center gap-1.5 mt-1.5 text-[11px] text-slate-600">
+              <span className="font-bold">{trip.departureTime}</span>
+              <div className="w-1.5 h-1.5 rounded-full border border-[#00b14f]"></div>
+              <div className="flex-1 border-t border-dotted border-slate-300"></div>
+              <MapPin size={10} className="text-[#f05123]" fill="#f05123" />
+              <span className="font-bold">{trip.arrivalTime}</span>
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="text-[11px] text-slate-400">Ngày đi chưa chọn</p>
+            <p className="text-[12px] font-medium text-slate-500">{origin || '—'} - {destination || '—'}</p>
+            <div className="flex items-center gap-1 mt-1.5 text-[11px] text-slate-400">
+              <span>--:--</span>
+              <div className="flex-1 border-t border-dotted border-slate-200"></div>
+              <span>--:--</span>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function TripList() {
   const searchParams = useSearchParams();
   const [outboundTrips, setOutboundTrips] = useState<Trip[]>([]);
@@ -66,21 +124,33 @@ export function TripList() {
 
   // Fetch outbound trips
   useEffect(() => {
-    setLoadingOutbound(true);
-    fetchTripsByRoute(origin, destination, date)
-      .then(setOutboundTrips)
-      .catch(console.error)
-      .finally(() => setLoadingOutbound(false));
+    const fetchOutboundTrips = async () => {
+      setLoadingOutbound(true);
+      try {
+        setOutboundTrips(await fetchTripsByRoute(origin, destination, date));
+      } catch (error) {
+        console.error(error);
+      } finally {
+        setLoadingOutbound(false);
+      }
+    };
+    void fetchOutboundTrips();
   }, [origin, destination, date]);
 
   // Fetch return trips if round-trip
   useEffect(() => {
     if (!isRoundTrip) return;
-    setLoadingReturn(true);
-    fetchTripsByRoute(destination, origin, returnDate)
-      .then(setReturnTrips)
-      .catch(console.error)
-      .finally(() => setLoadingReturn(false));
+    const fetchReturnTrips = async () => {
+      setLoadingReturn(true);
+      try {
+        setReturnTrips(await fetchTripsByRoute(destination, origin, returnDate));
+      } catch (error) {
+        console.error(error);
+      } finally {
+        setLoadingReturn(false);
+      }
+    };
+    void fetchReturnTrips();
   }, [destination, origin, returnDate, isRoundTrip]);
 
   const activeTrips = activeTab === 'outbound' ? outboundTrips : returnTrips;
@@ -108,42 +178,6 @@ export function TripList() {
 
   const handleSelect = activeTab === 'outbound' ? handleSelectOutbound : handleSelectReturn;
   const selectedForTab = activeTab === 'outbound' ? selectedOutbound : selectedReturn;
-
-  // Mini trip summary for sidebar
-  function TripSlot({ num, trip, label }: { num: number; trip: Trip | null; label: string }) {
-    return (
-      <div className={`flex gap-3 p-3 rounded-lg ${trip ? 'bg-orange-50' : 'bg-slate-50'}`}>
-        <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-white font-bold text-sm ${trip ? 'bg-[#f05123]' : 'bg-slate-300'}`}>
-          {num}
-        </div>
-        <div className="flex-1 min-w-0">
-          {trip ? (
-            <>
-              <p className="text-[11px] text-slate-500 font-medium">{label}</p>
-              <p className="text-[12px] font-bold text-slate-800 truncate">{trip.origin} - {trip.destination}</p>
-              <div className="flex items-center gap-1.5 mt-1.5 text-[11px] text-slate-600">
-                <span className="font-bold">{trip.departureTime}</span>
-                <div className="w-1.5 h-1.5 rounded-full border border-[#00b14f]"></div>
-                <div className="flex-1 border-t border-dotted border-slate-300"></div>
-                <MapPin size={10} className="text-[#f05123]" fill="#f05123" />
-                <span className="font-bold">{trip.arrivalTime}</span>
-              </div>
-            </>
-          ) : (
-            <>
-              <p className="text-[11px] text-slate-400">Ngày đi chưa chọn</p>
-              <p className="text-[12px] font-medium text-slate-500">{origin || '—'} - {destination || '—'}</p>
-              <div className="flex items-center gap-1 mt-1.5 text-[11px] text-slate-400">
-                <span>--:--</span>
-                <div className="flex-1 border-t border-dotted border-slate-200"></div>
-                <span>--:--</span>
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="bg-[#F5F5F5] min-h-screen pb-12 pt-6">
@@ -193,7 +227,7 @@ export function TripList() {
                 <div className="p-3 space-y-2">
                   {selectedOutbound && (
                     <div className="relative">
-                      <TripSlot num={1} trip={selectedOutbound} label="Chuyến đi" />
+                      <TripSlot num={1} trip={selectedOutbound} label="Chuyến đi" origin={origin} destination={destination} />
                       <button
                         onClick={() => setSelectedOutbound(null)}
                         className="absolute top-2 right-2 w-5 h-5 rounded-full bg-slate-200 hover:bg-red-100 hover:text-red-500 text-slate-400 text-[10px] flex items-center justify-center transition-colors"
@@ -203,7 +237,7 @@ export function TripList() {
                   )}
                   {isRoundTrip && selectedReturn && (
                     <div className="relative">
-                      <TripSlot num={2} trip={selectedReturn} label="Chuyến về" />
+                      <TripSlot num={2} trip={selectedReturn} label="Chuyến về" origin={destination} destination={origin} />
                       <button
                         onClick={() => setSelectedReturn(null)}
                         className="absolute top-2 right-2 w-5 h-5 rounded-full bg-slate-200 hover:bg-red-100 hover:text-red-500 text-slate-400 text-[10px] flex items-center justify-center transition-colors"

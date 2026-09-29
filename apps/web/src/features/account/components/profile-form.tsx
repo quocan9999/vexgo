@@ -66,10 +66,10 @@ export const ProfileForm: React.FC = () => {
         variant: 'success'
       });
       setModalOpen(true);
-    } catch (error: any) {
+    } catch (error: unknown) {
       setModalConfig({
         title: 'Có lỗi xảy ra',
-        message: error.message || 'Không thể cập nhật thông tin lúc này.',
+        message: error instanceof Error ? error.message : 'Không thể cập nhật thông tin lúc này.',
         variant: 'error'
       });
       setModalOpen(true);

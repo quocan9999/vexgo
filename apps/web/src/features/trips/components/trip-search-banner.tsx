@@ -16,8 +16,15 @@ export function TripSearchBanner() {
 
   // Sync state if URL changes
   useEffect(() => {
-    setSelectedProvince(searchParams.get('origin') || searchParams.get('from') || '');
-    setSelectedDistrict(searchParams.get('destination') || searchParams.get('to') || '');
+    let active = true;
+    queueMicrotask(() => {
+      if (!active) return;
+      setSelectedProvince(searchParams.get('origin') || searchParams.get('from') || '');
+      setSelectedDistrict(searchParams.get('destination') || searchParams.get('to') || '');
+    });
+    return () => {
+      active = false;
+    };
   }, [searchParams]);
 
   return (

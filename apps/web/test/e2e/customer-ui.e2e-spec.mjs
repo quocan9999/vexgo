@@ -33,10 +33,10 @@ for (const screen of publicScreens) {
 }
 
 const authScreens = [
-  { path: '/login', marker: 'Tài khoản mẫu (Demo)' },
-  { path: '/auth/login', marker: 'Tài khoản mẫu (Demo)' },
-  { path: '/register', marker: 'Tạo tài khoản mới' },
-  { path: '/auth/register', marker: 'Tạo tài khoản mới' },
+  { path: '/login', marker: 'Đăng nhập tài khoản' },
+  { path: '/auth/login', marker: 'Đăng nhập tài khoản' },
+  { path: '/register', marker: 'Đăng ký tài khoản' },
+  { path: '/auth/register', marker: 'Đăng ký tài khoản' },
   { path: '/profile', marker: 'Thông tin tài khoản' },
   { path: '/account/profile', marker: 'Thông tin tài khoản' },
   { path: '/profile/password', marker: 'Đặt lại mật khẩu' },
