@@ -74,7 +74,7 @@ describe('AdminAccountsService', () => {
     busCompanyId: 12,
     employeeCode: 'FUTA-NV-0001',
     dateOfBirth: '1990-02-28',
-    email: 'admin@example.com',
+    email: '  ADMIN@EXAMPLE.COM ',
     citizenId: '079123456789',
   };
 
@@ -106,6 +106,9 @@ describe('AdminAccountsService', () => {
       true,
     );
     expect(storedPassword).not.toBe(createInput.password);
+    expect(tx.taiKhoan.create.mock.calls[0][0].data.email).toBe(
+      'admin@example.com',
+    );
     expect(tx.nhanVien.create).toHaveBeenCalledWith({
       data: {
         maNhanVien: createInput.employeeCode,
@@ -147,6 +150,23 @@ describe('AdminAccountsService', () => {
       response: { error: 'PHONE_ALREADY_REGISTERED' },
     });
     expect(tx.nhanVien.create).not.toHaveBeenCalled();
+  });
+
+  it('maps duplicate account email on create and update to stable conflicts', async () => {
+    tx.taiKhoan.create.mockRejectedValueOnce(knownError('P2002', ['email']));
+    await expect(service.create(createInput)).rejects.toMatchObject({
+      response: { error: 'EMAIL_ALREADY_REGISTERED' },
+    });
+    expect(tx.nhanVien.create).not.toHaveBeenCalled();
+
+    prisma.taiKhoan.updateMany.mockRejectedValueOnce(
+      knownError('P2002', ['email']),
+    );
+    await expect(
+      service.update(101, { email: 'used@example.com' }),
+    ).rejects.toMatchObject({
+      response: { error: 'EMAIL_ALREADY_REGISTERED' },
+    });
   });
 
   it('maps a duplicate employee code to a stable conflict and rolls back account creation', async () => {

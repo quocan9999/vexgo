@@ -83,6 +83,29 @@ describe('AuthService login', () => {
     });
   });
 
+  it('finds an account by a normalized email identifier', async () => {
+    prisma.taiKhoan.findUnique.mockResolvedValueOnce({
+      ...customerAccount,
+      email: 'admin@example.com',
+      matKhau: passwordHash,
+      khachHang: null,
+      taiKhoanVaiTros: [{ vaiTro: { tenVaiTro: 'NHA_XE_ADMIN' } }],
+    });
+
+    await service.login({
+      identifier: '  ADMIN@EXAMPLE.COM ',
+      password: 'VexGo@123',
+    });
+
+    expect(prisma.taiKhoan.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { email: 'admin@example.com' } }),
+    );
+    expect(tokenService.createSession).toHaveBeenCalledWith(
+      tx,
+      expect.objectContaining({ roles: ['NHA_XE_ADMIN'], customerId: null }),
+    );
+  });
+
   it.each([
     ['unknown phone', null, 'VexGo@123'],
     [

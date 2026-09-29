@@ -7,6 +7,7 @@ import {
 import * as bcrypt from 'bcrypt';
 import { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { normalizeEmail } from '../common/normalize-email.js';
 import type { AdminAccountQueryDto } from './dto/admin-account-query.dto.js';
 import type { CreateAdminAccountDto } from './dto/create-admin-account.dto.js';
 import type { UpdateAdminAccountDto } from './dto/update-admin-account.dto.js';
@@ -92,6 +93,13 @@ function phoneAlreadyRegistered(): ConflictException {
   });
 }
 
+function emailAlreadyRegistered(): ConflictException {
+  return new ConflictException({
+    error: 'EMAIL_ALREADY_REGISTERED',
+    message: 'Email đã được đăng ký.',
+  });
+}
+
 function employeeCodeExists(): ConflictException {
   return new ConflictException({
     error: 'EMPLOYEE_CODE_EXISTS',
@@ -106,10 +114,19 @@ function busCompanyNotFound(): NotFoundException {
   });
 }
 
-function isUniqueConstraintError(error: unknown): boolean {
+function isUniqueConstraintError(
+  error: unknown,
+): error is Prisma.PrismaClientKnownRequestError {
   return (
     error instanceof Prisma.PrismaClientKnownRequestError &&
     error.code === 'P2002'
+  );
+}
+
+function isUniqueConstraintOn(error: unknown, field: string): boolean {
+  return (
+    isUniqueConstraintError(error) &&
+    JSON.stringify(error.meta?.target ?? '').includes(field)
   );
 }
 
@@ -258,7 +275,7 @@ export class AdminAccountsService {
             soDienThoai: input.phoneNumber,
             matKhau: passwordHash,
             ngaySinh: toDateOnly(input.dateOfBirth),
-            email: input.email ?? null,
+            email: normalizeEmail(input.email),
             cccd: input.citizenId ?? null,
             daXacThucSoDienThoai: true,
             trangThai: 'HOAT_DONG',
@@ -267,6 +284,12 @@ export class AdminAccountsService {
         });
         accountId = account.taiKhoanId;
       } catch (error) {
+        if (isUniqueConstraintOn(error, 'email')) {
+          throw emailAlreadyRegistered();
+        }
+        if (isUniqueConstraintOn(error, 'soDienThoai')) {
+          throw phoneAlreadyRegistered();
+        }
         if (isUniqueConstraintError(error)) throw phoneAlreadyRegistered();
         throw error;
       }
@@ -332,11 +355,23 @@ export class AdminAccountsService {
       return { data: mapAdminAccount(existing) };
     }
 
-    const result = await this.prisma.taiKhoan.updateMany({
-      where: managedAdminAccountWhere(taiKhoanId),
-      data,
-    });
-    if (result.count !== 1) throw accountNotFound();
+    try {
+      const result = await this.prisma.taiKhoan.updateMany({
+        where: managedAdminAccountWhere(taiKhoanId),
+        data: {
+          ...data,
+          ...(input.email !== undefined
+            ? { email: normalizeEmail(input.email) }
+            : {}),
+        },
+      });
+      if (result.count !== 1) throw accountNotFound();
+    } catch (error) {
+      if (isUniqueConstraintOn(error, 'email')) {
+        throw emailAlreadyRegistered();
+      }
+      throw error;
+    }
 
     return this.findOne(taiKhoanId);
   }

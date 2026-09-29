@@ -11,6 +11,7 @@ import * as bcrypt from 'bcrypt';
 import { OtpService } from './otp/otp.service.js';
 import { TokenService } from './tokens/token.service.js';
 import { Prisma } from '../generated/prisma/client.js';
+import { normalizeEmail } from '../common/normalize-email.js';
 
 const DUMMY_PASSWORD_HASH =
   '$2b$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy';
@@ -49,7 +50,7 @@ export class AuthService {
             ngaySinh: dto.dateOfBirth
               ? new Date(`${dto.dateOfBirth}T00:00:00.000Z`)
               : null,
-            email: dto.email ?? null,
+            email: normalizeEmail(dto.email),
             cccd: dto.citizenId ?? null,
             daXacThucSoDienThoai: true,
             trangThai: 'HOAT_DONG',
@@ -94,6 +95,13 @@ export class AuthService {
       ) {
         this.throwPhoneAlreadyRegistered();
       }
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002' &&
+        JSON.stringify(error.meta?.target ?? '').includes('email')
+      ) {
+        this.throwEmailAlreadyRegistered();
+      }
       throw error;
     }
   }
@@ -105,9 +113,21 @@ export class AuthService {
     });
   }
 
+  private throwEmailAlreadyRegistered(): never {
+    throw new ConflictException({
+      error: 'EMAIL_ALREADY_REGISTERED',
+      message: 'Email đã được đăng ký.',
+    });
+  }
+
   async login(dto: LoginDto) {
+    const identifier = (dto.identifier ?? dto.phoneNumber ?? '').trim();
+    const isPhoneNumber = /^\+84\d{9}$/.test(identifier);
+    const where = isPhoneNumber
+      ? { soDienThoai: identifier }
+      : { email: identifier.toLowerCase() };
     const account = await this.prisma.taiKhoan.findUnique({
-      where: { soDienThoai: dto.phoneNumber },
+      where,
       include: {
         khachHang: { select: { khachHangId: true } },
         taiKhoanVaiTros: {
@@ -122,7 +142,7 @@ export class AuthService {
     if (!account || !isPasswordValid) {
       throw new UnauthorizedException({
         error: 'INVALID_CREDENTIALS',
-        message: 'Số điện thoại hoặc mật khẩu không chính xác.',
+        message: 'Thông tin đăng nhập không chính xác.',
       });
     }
     if (account.trangThai !== 'HOAT_DONG') {
@@ -141,6 +161,80 @@ export class AuthService {
         roles: account.taiKhoanVaiTros.map(({ vaiTro }) => vaiTro.tenVaiTro),
       }),
     );
+  }
+
+  async getCurrentSession(accountId: number) {
+    const account = await this.prisma.taiKhoan.findUnique({
+      where: { taiKhoanId: accountId },
+      select: {
+        taiKhoanId: true,
+        hoTen: true,
+        soDienThoai: true,
+        email: true,
+        trangThai: true,
+        taiKhoanVaiTros: {
+          select: {
+            vaiTro: {
+              select: {
+                tenVaiTro: true,
+                vaiTroQuyens: {
+                  select: { quyen: { select: { tenQuyen: true } } },
+                },
+              },
+            },
+          },
+        },
+        nhanVien: {
+          select: {
+            nhanVienId: true,
+            nhaXeId: true,
+            nhaXe: {
+              select: { maNhaXe: true, tenNhaXe: true },
+            },
+          },
+        },
+      },
+    });
+    if (!account) {
+      throw new UnauthorizedException({
+        error: 'ACCESS_TOKEN_INVALID',
+        message: 'Phiên đăng nhập không còn hợp lệ.',
+      });
+    }
+    if (account.trangThai !== 'HOAT_DONG') {
+      throw new ForbiddenException({
+        error: 'ACCOUNT_INACTIVE',
+        message: 'Tài khoản không hoạt động.',
+      });
+    }
+
+    const roles = account.taiKhoanVaiTros.map(
+      ({ vaiTro }) => vaiTro.tenVaiTro,
+    );
+    const employee = account.nhanVien;
+    return {
+      accountId: account.taiKhoanId,
+      fullName: account.hoTen,
+      phoneNumber: account.soDienThoai,
+      email: account.email,
+      roles,
+      permissions: [
+        ...new Set(
+          account.taiKhoanVaiTros.flatMap(({ vaiTro }) =>
+            vaiTro.vaiTroQuyens.map(({ quyen }) => quyen.tenQuyen),
+          ),
+        ),
+      ],
+      employee: employee
+        ? {
+            employeeId: employee.nhanVienId,
+            busCompanyId: employee.nhaXeId,
+            busCompanyCode: employee.nhaXe.maNhaXe,
+            busCompanyName: employee.nhaXe.tenNhaXe,
+          }
+        : null,
+      busCompanyId: employee?.nhaXeId ?? null,
+    };
   }
 
   refresh(refreshToken: string) {
