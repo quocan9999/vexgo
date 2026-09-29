@@ -79,6 +79,18 @@ describe('Admin account management API', () => {
     await app.init();
     prisma = app.get(PrismaService);
 
+    for (const [name, description] of [
+      ['NHA_XE_ADMIN', 'Quản trị nhà xe'],
+      ['NHAN_VIEN_BAN_VE', 'Nhân viên bán vé'],
+      ['SUPER_ADMIN', 'Quản trị hệ thống'],
+    ]) {
+      await prisma.vaiTro.upsert({
+        where: { tenVaiTro: name },
+        create: { tenVaiTro: name, moTa: description },
+        update: {},
+      });
+    }
+
     const suffix = randomUUID().replaceAll('-', '').slice(0, 12).toUpperCase();
     const firstCompany = await prisma.nhaXe.create({
       data: {
