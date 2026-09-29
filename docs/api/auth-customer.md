@@ -30,11 +30,14 @@ REFRESH_TOKEN_TTL_SECONDS=2592000
 
 ## Hiện trạng xác thực và phân quyền
 
-Backend đăng ký Customer qua OTP, xác thực đăng nhập bằng số điện thoại/mật
-khẩu, phát JWT access token HS256, và lưu refresh session trong DB với refresh
-token được hash. `AccessTokenGuard` và `AuthorizationGuard` được đăng ký toàn
-cục: endpoint cần đăng nhập mặc định được bảo vệ; endpoint public/optional phải
-được đánh dấu rõ.
+Backend đăng ký Customer qua OTP; endpoint đăng nhập chung chấp nhận payload
+Customer hiện hữu `{ phoneNumber, password }` hoặc `{ identifier, password }`
+với `identifier` là số điện thoại E.164 Việt Nam hoặc email. Email được trim,
+đưa về chữ thường và có unique constraint để một email không thể xác định nhiều
+tài khoản. Đăng nhập phát JWT access token HS256 và refresh token ngẫu nhiên;
+refresh session được lưu trong DB với refresh token đã hash. `AccessTokenGuard`
+và `AuthorizationGuard` được đăng ký toàn cục: endpoint cần đăng nhập mặc định
+được bảo vệ; endpoint public/optional phải được đánh dấu rõ.
 
 Trên branch `feature/admin-auth-authorization`, các API tenant `routes`,
 `vehicle-types`, `vehicles/seats`, `fare-prices` yêu cầu `NHA_XE_ADMIN` và lấy
@@ -60,16 +63,46 @@ password qua profile PATCH. Danh sách này chưa có nghĩa tất cả module n
 `busCompanyId`, `employeeCode` và các field tùy chọn `dateOfBirth`, `email`,
 `citizenId`. Mật khẩu dài 8–72 byte UTF-8; ba field tùy chọn cuối nhận `null`
 để xóa. Profile PATCH chỉ nhận `fullName`, `dateOfBirth`, `email`, `citizenId`;
-status PATCH chỉ nhận `{ "status": "HOAT_DONG" | "TAM_KHOA" }`. Email/CCCD
-không có unique constraint hiện tại.
+status PATCH chỉ nhận `{ "status": "HOAT_DONG" | "TAM_KHOA" }`. Email có
+unique constraint sau migration đăng nhập bằng email; trước khi deploy migration
+cần kiểm tra email hiện có không trùng sau `LOWER(TRIM(email))`. CCCD không có
+unique constraint.
 
-Admin Web và Customer Web vẫn dùng UI demo, chưa gọi API auth thật. Admin login
-hiện nhập email trong khi backend login nhận số điện thoại. `VaiTroQuyen` chưa
-được dùng để authorize permission runtime; role guard kiểm tra role đã gán.
-Việc đăng nhập Admin trên UI, permission matrix và bảo vệ các module còn lại cần
-tiếp tục theo Feature 15–16. Không dùng `busCompanyId` từ body/query/header để
-làm tenant identity; tenant phải suy ra từ quan hệ tài khoản → nhân viên → nhà
-xe trong DB.
+Admin Web đăng nhập thật bằng `{ identifier, password }`, trong đó identifier
+là email hoặc số điện thoại; Customer/Mobile tiếp tục dùng payload hiện hữu
+`{ phoneNumber, password }`. Với Admin, frontend gửi header
+`X-Refresh-Token-Transport: cookie`, credentials và `Origin` hợp lệ. API trả
+access token trong response, đặt refresh token vào cookie `HttpOnly; SameSite=Lax`
+có `Path=/api/v1/auth`, không đưa refresh token vào JavaScript/response body.
+Access token chỉ được giữ trong bộ nhớ của tab; tải lại trang dùng refresh
+cookie để khôi phục session qua `GET /api/v1/auth/session`. CORS bật credentials
+chỉ cho các origin trong `CORS_ALLOWED_ORIGINS`, không chấp nhận wildcard khi
+dùng cookie. Cookie transport còn kiểm tra allowlist độc lập
+`ADMIN_AUTH_COOKIE_ALLOWED_ORIGINS` (mặc định development:
+`http://localhost:3001`; production phải cấu hình rõ), vì CORS cũng có thể cho
+phép Customer Web gọi API nhưng Customer origin không được dùng Admin cookie.
+
+Access token JWT HS256 mặc định sống 15 phút; refresh token ngẫu nhiên mặc định
+sống 30 ngày, được hash SHA-256 trong session DB và được xoay mỗi lần refresh.
+Logout thu hồi session; guard kiểm tra session DB nên access token thuộc session
+đó cũng mất hiệu lực ngay. Khóa tài khoản cũng thu hồi các session. Login mặc
+định bị giới hạn 20 lần/IP trong 15 phút trên mỗi instance API; có thể cấu hình
+bằng `AUTH_LOGIN_RATE_LIMIT` và `AUTH_LOGIN_RATE_TTL_MS`. Limiter hiện lưu bộ đếm
+trong tiến trình, nên nhiều instance cần dùng shared store hoặc gateway limiter.
+Customer/Mobile giữ body-token flow tương thích.
+
+Admin menu được dựng theo session do API trả: `SUPER_ADMIN` chỉ thấy Tổng quan
+và Nhà xe; `NHA_XE_ADMIN` chỉ thấy nhóm Vận hành; tài khoản có thêm role nhân
+viên vẫn ở tenant scope nếu nhân viên được gắn với đúng nhà xe. Nhân viên không
+có role Admin không vào được khu vực quản trị. Backend từ chối tài khoản có
+`SUPER_ADMIN` đi kèm role khác hoặc liên kết nhân viên/nhà xe; `NHA_XE_ADMIN`
+cũng cần liên kết nhân viên và nhà xe hợp lệ. Phiên vẫn có thể đọc để UI giải
+thích cấu hình xung đột và cho phép đăng xuất. Đây là presentation; backend
+`RequireRoles` và service mới là ranh giới bảo vệ dữ liệu. API tenant lấy nhà xe
+từ quan hệ tài khoản → nhân viên → nhà xe trong DB, không lấy `busCompanyId` từ body/query/header.
+`VaiTroQuyen` chưa được dùng để authorize từng permission runtime; cần tiếp tục
+hoàn thiện permission matrix và audit các module còn lại theo Feature 15–16.
+Customer Web chưa đổi giao diện auth.
 
 `SMS_PROVIDER=console` chỉ dùng local. Khi gọi API gửi OTP, mã sáu chữ số xuất
 hiện trong terminal NestJS dưới dòng `[LOCAL OTP]`. OTP và các hash không được
