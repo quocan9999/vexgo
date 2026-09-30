@@ -53,6 +53,21 @@ export type PlatformAdminPermission =
 export type AdminOperationSection =
   (typeof ADMIN_OPERATION_SECTIONS)[number]['section'];
 
+export function canManagePlatformRbac(
+  session: AdminSession | null,
+): boolean {
+  return (
+    session !== null &&
+    session.roles.length === 1 &&
+    session.roles[0] === 'SUPER_ADMIN' &&
+    getAdminAccessScope(session) === 'platform'
+  );
+}
+
+export function isPlatformRbacPath(pathname: string): boolean {
+  return matchesPath(pathname, '/rbac');
+}
+
 export function hasPlatformAdminPermission(
   session: AdminSession | null,
   permission: PlatformAdminPermission,

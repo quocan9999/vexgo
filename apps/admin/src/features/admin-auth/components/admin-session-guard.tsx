@@ -9,11 +9,13 @@ import {
   signOutAdmin,
 } from '../services/admin-auth';
 import {
+  canManagePlatformRbac,
   getFirstAccessibleAdminPath,
   getRequiredAdminPermissions,
   getRequiredPlatformAdminPermissions,
   hasAllAdminPermissions,
   hasAllPlatformAdminPermissions,
+  isPlatformRbacPath,
 } from '../services/admin-access';
 import { getAdminAccessScope } from '../services/admin-scope';
 
@@ -86,6 +88,8 @@ export function AdminSessionGuard({ children }: { children: ReactNode }) {
   const scope = session ? getAdminAccessScope(session) : null;
   const requiredPlatformPermissions =
     getRequiredPlatformAdminPermissions(pathname);
+  const platformRbacNeedsRedirect =
+    isPlatformRbacPath(pathname) && !canManagePlatformRbac(session);
   const tenantNeedsRedirect = scope === 'tenant' && (
     requiredPermissions === null ||
     !hasAllAdminPermissions(session, requiredPermissions)
@@ -93,7 +97,11 @@ export function AdminSessionGuard({ children }: { children: ReactNode }) {
   const tenantLandingPath = session
     ? getFirstAccessibleAdminPath(session)
     : null;
-  const redirectPath = tenantNeedsRedirect
+  const redirectPath = platformRbacNeedsRedirect
+    ? scope === 'tenant'
+      ? tenantLandingPath
+      : '/'
+    : tenantNeedsRedirect
     ? tenantLandingPath
     : scope === 'platform' && requiredPermissions !== null
       ? '/'

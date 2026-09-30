@@ -184,6 +184,18 @@ describe('admin tenant presentation mode', () => {
     expect(brand.textContent).toContain('NHÀ XE: NONE');
   });
 
+  it('keeps platform RBAC navigation available without any platform permissions', () => {
+    render(
+      <SuperAdminLayout activeSection="overview">
+        <h1>Platform page</h1>
+      </SuperAdminLayout>,
+    );
+
+    expect(screen.getByRole('link', { name: 'Phân quyền' }).getAttribute('href'))
+      .toBe('/rbac');
+    expect(screen.queryByRole('link', { name: 'Nhà xe' })).toBeNull();
+  });
+
   it('hides the Nhà xe link when Super Admin lacks bus-company:read', () => {
     render(
       <SuperAdminLayout activeSection="overview">
@@ -328,6 +340,7 @@ describe('admin tenant presentation mode', () => {
 
     expect(screen.getByText('VẬN HÀNH')).toBeTruthy();
     expect(screen.queryByRole('link', { name: 'Nhà xe' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Phân quyền' })).toBeNull();
     expect(screen.getByRole('link', { name: 'Tuyến xe' })).toBeTruthy();
   });
 
@@ -362,6 +375,70 @@ describe('admin tenant presentation mode', () => {
     expect(SensitiveManagement).not.toHaveBeenCalled();
     expect(screen.queryByText('All bus companies')).toBeNull();
     await waitFor(() => expect(replace).toHaveBeenCalledWith('/vehicle-types'));
+  });
+
+  it('does not mount the platform RBAC route for a tenant admin', async () => {
+    setTenantSession(['NHAN_VIEN_CSKH'], ['route:read']);
+    state.pathname = '/rbac';
+    const SensitiveRbac = vi.fn(() => <div>Platform permissions</div>);
+
+    render(
+      <AdminSessionGuard>
+        <SensitiveRbac />
+      </AdminSessionGuard>,
+    );
+
+    expect(SensitiveRbac).not.toHaveBeenCalled();
+    expect(screen.queryByText('Platform permissions')).toBeNull();
+    await waitFor(() => expect(replace).toHaveBeenCalledWith('/routes'));
+  });
+
+  it('does not mount the platform RBAC route for a mixed platform and tenant identity', () => {
+    setAdminTestSession({
+      status: 'authenticated',
+      session: {
+        accountId: 2,
+        fullName: 'Tài khoản sai phạm vi',
+        phoneNumber: '+84900000002',
+        email: 'mixed@vexgo.test',
+        roles: ['SUPER_ADMIN', 'NHA_XE_ADMIN'],
+        permissions: [],
+        employee: {
+          employeeId: 2,
+          busCompanyId: 10,
+          busCompanyCode: 'FUTA',
+          busCompanyName: 'FUTA',
+        },
+        busCompanyId: 10,
+      },
+    });
+    state.pathname = '/rbac';
+    const SensitiveRbac = vi.fn(() => <div>Platform permissions</div>);
+
+    render(
+      <AdminSessionGuard>
+        <SensitiveRbac />
+      </AdminSessionGuard>,
+    );
+
+    expect(SensitiveRbac).not.toHaveBeenCalled();
+    expect(screen.queryByText('Platform permissions')).toBeNull();
+    expect(screen.getByText(/phạm vi vai trò của tài khoản chưa hợp lệ/i)).toBeTruthy();
+  });
+
+  it('mounts the platform RBAC route for exact SUPER_ADMIN with no permissions', () => {
+    state.pathname = '/rbac';
+    const PlatformRbac = vi.fn(() => <div>Platform permissions</div>);
+
+    render(
+      <AdminSessionGuard>
+        <PlatformRbac />
+      </AdminSessionGuard>,
+    );
+
+    expect(screen.getByText('Platform permissions')).toBeTruthy();
+    expect(PlatformRbac).toHaveBeenCalled();
+    expect(replace).not.toHaveBeenCalled();
   });
 
   it('does not mount the Nhà xe page for Super Admin without bus-company:read', async () => {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  canManagePlatformRbac,
   getFirstAccessibleAdminPath,
   getRequiredAdminPermissions,
   getRequiredPlatformAdminPermissions,
@@ -7,6 +8,7 @@ import {
   hasAllAdminPermissions,
   hasAdminPermission,
   hasPlatformAdminPermission,
+  isPlatformRbacPath,
 } from '@/features/admin-auth/services/admin-access';
 import { getAdminAccessScope } from '@/features/admin-auth/services/admin-scope';
 import type { AdminSession } from '@/features/admin-auth/services/admin-auth';
@@ -77,6 +79,35 @@ describe('admin access scope and permissions', () => {
       'bus-company:read',
     ]);
     expect(getRequiredPlatformAdminPermissions('/bus-companies-extra')).toBeNull();
+  });
+
+  it('allows only the exact SUPER_ADMIN principal to manage platform RBAC', () => {
+    expect(canManagePlatformRbac(makePlatformSession())).toBe(true);
+    expect(canManagePlatformRbac(null)).toBe(false);
+    expect(
+      canManagePlatformRbac(
+        makeTenantSession(['NHAN_VIEN_CSKH'], ['rbac:manage']),
+      ),
+    ).toBe(false);
+    expect(
+      canManagePlatformRbac({
+        ...makePlatformSession(),
+        roles: ['SUPER_ADMIN', 'NHA_XE_ADMIN'],
+        employee: {
+          employeeId: 5,
+          busCompanyId: 12,
+          busCompanyCode: 'THANHBUOI',
+          busCompanyName: 'Thành Bưởi',
+        },
+        busCompanyId: 12,
+      }),
+    ).toBe(false);
+  });
+
+  it('matches only the platform RBAC route and its descendants', () => {
+    expect(isPlatformRbacPath('/rbac')).toBe(true);
+    expect(isPlatformRbacPath('/rbac/roles')).toBe(true);
+    expect(isPlatformRbacPath('/rbac-extra')).toBe(false);
   });
 
   it('resolves platform permissions only for a valid platform principal', () => {

@@ -7,6 +7,7 @@ import {
   LogOut,
   MapPinned,
   Menu,
+  ShieldCheck,
   Ticket,
   Truck,
   X,
@@ -20,6 +21,7 @@ import {
   ADMIN_OPERATION_SECTIONS,
   getFirstAccessibleAdminPath,
   hasAdminPermission,
+  canManagePlatformRbac,
   hasPlatformAdminPermission,
   type AdminOperationSection,
 } from '@/features/admin-auth/services/admin-access';
@@ -36,7 +38,8 @@ type SuperAdminLayoutProps = {
     | 'vehicle-types'
     | 'vehicles'
     | 'routes'
-    | 'fare-prices';
+    | 'fare-prices'
+    | 'rbac';
   children: ReactNode;
 };
 
@@ -84,6 +87,7 @@ export function SuperAdminLayout({
   const scope = getAdminAccessScope(session);
   const tenantScope = scope === 'tenant';
   const platformScope = scope === 'platform';
+  const canManageRbac = canManagePlatformRbac(session);
   const canReadBusCompanies = hasPlatformAdminPermission(
     session,
     'bus-company:read',
@@ -190,6 +194,17 @@ export function SuperAdminLayout({
                         >
                           <span className="sidebar-link-icon"><Building2 size={18} /></span>
                           <span>Nhà xe</span>
+                        </Link>
+                      )}
+                      {canManageRbac && (
+                        <Link
+                          aria-current={activeSection === 'rbac' ? 'page' : undefined}
+                          className={`sidebar-link${activeSection === 'rbac' ? ' is-active' : ''}`}
+                          href="/rbac"
+                          onClick={closeMobileNavigation}
+                        >
+                          <span className="sidebar-link-icon"><ShieldCheck size={18} /></span>
+                          <span>Phân quyền</span>
                         </Link>
                       )}
                     </>
