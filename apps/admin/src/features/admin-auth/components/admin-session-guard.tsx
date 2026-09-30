@@ -8,17 +8,12 @@ import {
   initializeAdminSession,
   signOutAdmin,
 } from '../services/admin-auth';
+import {
+  getFirstAccessibleAdminPath,
+  getRequiredAdminPermissions,
+  hasAllAdminPermissions,
+} from '../services/admin-access';
 import { getAdminAccessScope } from '../services/admin-scope';
-
-type OperationsSection = 'vehicle-types' | 'vehicles' | 'routes' | 'fare-prices';
-
-function getOperationsSection(pathname: string): OperationsSection | null {
-  if (pathname.startsWith('/vehicle-types')) return 'vehicle-types';
-  if (pathname.startsWith('/vehicles')) return 'vehicles';
-  if (pathname.startsWith('/routes')) return 'routes';
-  if (pathname.startsWith('/fare-prices')) return 'fare-prices';
-  return null;
-}
 
 function LoadingStatus({ message }: { message: string }) {
   return (
@@ -77,15 +72,29 @@ export function AdminSessionGuard({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const authState = useAdminSession();
-  const operationsSection = getOperationsSection(pathname);
+  const session = authState.status === 'authenticated'
+    ? authState.session
+    : null;
+  const requiredPermissions = getRequiredAdminPermissions(pathname);
 
   useEffect(() => {
     void initializeAdminSession().catch(() => undefined);
   }, []);
 
-  const scope = authState.status === 'authenticated'
-    ? getAdminAccessScope(authState.session)
+  const scope = session ? getAdminAccessScope(session) : null;
+  const tenantNeedsRedirect = scope === 'tenant' && (
+    requiredPermissions === null ||
+    !hasAllAdminPermissions(session, requiredPermissions)
+  );
+  const tenantLandingPath = session
+    ? getFirstAccessibleAdminPath(session)
     : null;
+  const redirectPath = tenantNeedsRedirect
+    ? tenantLandingPath
+    : scope === 'platform' && requiredPermissions !== null
+      ? '/'
+      : null;
+  const tenantHasNoAccessiblePage = tenantNeedsRedirect && !tenantLandingPath;
 
   useEffect(() => {
     if (authState.status === 'anonymous') {
@@ -94,12 +103,10 @@ export function AdminSessionGuard({ children }: { children: ReactNode }) {
     }
     if (authState.status !== 'authenticated') return;
 
-    if (scope === 'tenant' && !operationsSection) {
-      router.replace('/vehicle-types');
-    } else if (scope === 'platform' && operationsSection) {
-      router.replace('/');
+    if (redirectPath && redirectPath !== pathname) {
+      router.replace(redirectPath);
     }
-  }, [authState.status, operationsSection, router, scope]);
+  }, [authState.status, pathname, redirectPath, router]);
 
   if (authState.status === 'checking') {
     return <LoadingStatus message="Đang kiểm tra phiên quản trị…" />;
@@ -125,14 +132,15 @@ export function AdminSessionGuard({ children }: { children: ReactNode }) {
     return <LoadingStatus message="Đang chuyển đến đăng nhập…" />;
   }
 
-  if (scope === 'conflict' || scope === 'restricted') {
+  if (
+    scope === 'conflict' ||
+    scope === 'restricted' ||
+    tenantHasNoAccessiblePage
+  ) {
     return <RestrictedAccount conflict={scope === 'conflict'} />;
   }
 
-  if (
-    (scope === 'tenant' && !operationsSection) ||
-    (scope === 'platform' && operationsSection)
-  ) {
+  if (redirectPath) {
     return <LoadingStatus message="Đang mở khu vực phù hợp với tài khoản…" />;
   }
 

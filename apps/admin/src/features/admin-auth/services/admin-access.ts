@@ -1,0 +1,99 @@
+import type { AdminSession } from './admin-auth';
+import { getAdminAccessScope } from './admin-scope';
+
+export const ADMIN_OPERATION_SECTIONS = [
+  {
+    section: 'vehicle-types',
+    href: '/vehicle-types',
+    readPermission: 'vehicle-type:read',
+  },
+  {
+    section: 'vehicles',
+    href: '/vehicles',
+    readPermission: 'vehicle:read',
+  },
+  {
+    section: 'routes',
+    href: '/routes',
+    readPermission: 'route:read',
+  },
+  {
+    section: 'fare-prices',
+    href: '/fare-prices',
+    readPermission: 'fare-price:read',
+  },
+] as const;
+
+export type AdminPermission =
+  | 'vehicle-type:read'
+  | 'vehicle-type:create'
+  | 'vehicle-type:update'
+  | 'vehicle:read'
+  | 'vehicle:create'
+  | 'vehicle:update'
+  | 'seat:read'
+  | 'seat:create'
+  | 'seat:update'
+  | 'seat:delete'
+  | 'route:read'
+  | 'route:create'
+  | 'route:update'
+  | 'fare-price:read'
+  | 'fare-price:create'
+  | 'fare-price:update';
+
+export type AdminOperationSection =
+  (typeof ADMIN_OPERATION_SECTIONS)[number]['section'];
+
+export function hasAdminPermission(
+  session: AdminSession | null,
+  permission: AdminPermission,
+): boolean {
+  return (
+    session !== null &&
+    getAdminAccessScope(session) === 'tenant' &&
+    session.permissions.includes(permission)
+  );
+}
+
+export function hasAllAdminPermissions(
+  session: AdminSession | null,
+  permissions: readonly AdminPermission[],
+): boolean {
+  if (session === null || getAdminAccessScope(session) !== 'tenant') {
+    return false;
+  }
+
+  return permissions.every((permission) =>
+    session.permissions.includes(permission),
+  );
+}
+
+function matchesPath(pathname: string, basePath: string): boolean {
+  return pathname === basePath || pathname.startsWith(`${basePath}/`);
+}
+
+export function getRequiredAdminPermissions(
+  pathname: string,
+): readonly AdminPermission[] | null {
+  if (/^\/vehicles\/[^/]+\/seats(?:\/|$)/.test(pathname)) {
+    return ['vehicle:read', 'seat:read'];
+  }
+  if (matchesPath(pathname, '/vehicle-types')) return ['vehicle-type:read'];
+  if (matchesPath(pathname, '/vehicles')) return ['vehicle:read'];
+  if (matchesPath(pathname, '/routes')) return ['route:read'];
+  if (matchesPath(pathname, '/fare-prices')) return ['fare-price:read'];
+  return null;
+}
+
+export function getFirstAccessibleAdminPath(
+  session: AdminSession,
+): string | null {
+  if (getAdminAccessScope(session) !== 'tenant') return null;
+
+  return (
+    ADMIN_OPERATION_SECTIONS.find((item) =>
+      hasAdminPermission(session, item.readPermission),
+    )?.href ?? null
+  );
+}

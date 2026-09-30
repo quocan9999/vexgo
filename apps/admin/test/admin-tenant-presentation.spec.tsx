@@ -50,7 +50,27 @@ vi.mock('@/features/admin-auth/services/admin-auth', async (importOriginal) => {
   };
 });
 
-function setTenantSession(roles = ['NHA_XE_ADMIN']) {
+function setTenantSession(
+  roles = ['NHA_XE_ADMIN'],
+  permissions = [
+    'vehicle-type:read',
+    'vehicle-type:create',
+    'vehicle-type:update',
+    'vehicle:read',
+    'vehicle:create',
+    'vehicle:update',
+    'seat:read',
+    'seat:create',
+    'seat:update',
+    'seat:delete',
+    'route:read',
+    'route:create',
+    'route:update',
+    'fare-price:read',
+    'fare-price:create',
+    'fare-price:update',
+  ],
+) {
   setAdminTestSession({
     status: 'authenticated',
     session: {
@@ -59,7 +79,7 @@ function setTenantSession(roles = ['NHA_XE_ADMIN']) {
       phoneNumber: '+84900000002',
       email: 'futa@vexgo.test',
       roles,
-      permissions: [],
+      permissions,
       employee: {
         employeeId: 1,
         busCompanyId: 10,
@@ -162,6 +182,74 @@ describe('admin tenant presentation mode', () => {
 
     expect(screen.getByText('Tenant data list')).toBeTruthy();
     expect(SensitiveManagement).toHaveBeenCalled();
+  });
+
+  it('allows an employee-only tenant account with valid identity to open a permitted page', () => {
+    setTenantSession(['NHAN_VIEN_CSKH'], ['route:read']);
+    state.pathname = '/routes';
+    const TenantRoutes = vi.fn(() => <div>Tenant routes</div>);
+
+    render(
+      <AdminSessionGuard>
+        <TenantRoutes />
+      </AdminSessionGuard>,
+    );
+
+    expect(screen.getByText('Tenant routes')).toBeTruthy();
+    expect(TenantRoutes).toHaveBeenCalled();
+  });
+
+  it('does not mount a direct URL without its read permission and redirects to the first allowed page', async () => {
+    setTenantSession(['NHAN_VIEN_CSKH'], ['route:read']);
+    state.pathname = '/vehicle-types';
+    const SensitiveVehicleTypes = vi.fn(() => <div>Vehicle types data</div>);
+
+    render(
+      <AdminSessionGuard>
+        <SensitiveVehicleTypes />
+      </AdminSessionGuard>,
+    );
+
+    expect(SensitiveVehicleTypes).not.toHaveBeenCalled();
+    expect(screen.queryByText('Vehicle types data')).toBeNull();
+    await waitFor(() => expect(replace).toHaveBeenCalledWith('/routes'));
+  });
+
+  it('shows a restricted state when the tenant has no operational read permission', () => {
+    setTenantSession(['NHAN_VIEN_CSKH'], []);
+    state.pathname = '/routes';
+    const SensitiveRoutes = vi.fn(() => <div>Restricted routes data</div>);
+
+    render(
+      <AdminSessionGuard>
+        <SensitiveRoutes />
+      </AdminSessionGuard>,
+    );
+
+    expect(SensitiveRoutes).not.toHaveBeenCalled();
+    expect(screen.queryByText('Restricted routes data')).toBeNull();
+    expect(
+      screen.getByText(/chưa được cấp chức năng trong Admin Web/i),
+    ).toBeTruthy();
+    expect(replace).not.toHaveBeenCalled();
+  });
+
+  it('requires vehicle and seat read permissions before mounting the seat workspace', () => {
+    setTenantSession(['NHAN_VIEN_CSKH'], ['seat:read']);
+    state.pathname = '/vehicles/42/seats';
+    const SensitiveSeats = vi.fn(() => <div>Seat configuration</div>);
+
+    render(
+      <AdminSessionGuard>
+        <SensitiveSeats />
+      </AdminSessionGuard>,
+    );
+
+    expect(SensitiveSeats).not.toHaveBeenCalled();
+    expect(screen.queryByText('Seat configuration')).toBeNull();
+    expect(
+      screen.getByText(/chưa được cấp chức năng trong Admin Web/i),
+    ).toBeTruthy();
   });
 
   it('keeps tenant navigation for an admin who also has an employee role', () => {
