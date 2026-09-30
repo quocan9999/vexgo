@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { state, replace, reloadAdminSession, service } = vi.hoisted(() => ({
@@ -173,6 +173,21 @@ describe('platform role permission management', () => {
     expect(screen.getByText('Vai trò hệ thống · Được bảo vệ')).toBeTruthy();
     expect(
       screen.getByText(/Thay đổi áp dụng cho các tài khoản mang vai trò này/),
+    ).toBeTruthy();
+  });
+
+  it('keeps save and undo actions inside the selected role permission panel', async () => {
+    renderManagement();
+
+    const permissionPanel = await screen.findByRole('region', {
+      name: 'Quyền của SUPER_ADMIN',
+    });
+
+    expect(
+      within(permissionPanel).getByRole('button', { name: 'Hoàn tác' }),
+    ).toBeTruthy();
+    expect(
+      within(permissionPanel).getByRole('button', { name: 'Lưu thay đổi' }),
     ).toBeTruthy();
   });
 

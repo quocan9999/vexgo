@@ -7,10 +7,12 @@ import {
   RotateCcw,
   ShieldCheck,
 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AdminConfirmDialog } from '@/components/admin/admin-confirm-dialog';
 import { AdminPageHeader } from '@/components/admin/admin-page-header';
 import { AdminRefreshAction } from '@/components/admin/admin-page-actions';
+import { AdminRbacPermissionMatrix } from '@/components/admin/rbac/admin-rbac-permission-matrix';
+import { AdminRbacRoleSelector } from '@/components/admin/rbac/admin-rbac-role-selector';
 import { Button } from '@/components/ui/button';
 import { reloadAdminSession } from '@/features/admin-auth/services/admin-auth';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
@@ -19,7 +21,6 @@ import {
   replaceDefaultRolePermissions,
 } from '../services/platform-rbac-service';
 import type {
-  AdminRbacPermission,
   AdminRbacRoleName,
   DefaultAdminRbacConfig,
 } from '../types/platform-rbac';
@@ -27,23 +28,6 @@ import styles from './platform-rbac-management.module.css';
 
 type RoleDrafts = Partial<Record<AdminRbacRoleName, string[]>>;
 type Feedback = { type: 'success' | 'warning'; message: string };
-
-const RESOURCE_LABELS: Record<string, string> = {
-  'admin-account': 'Tài khoản quản trị',
-  'bus-company': 'Nhà xe',
-  'fare-price': 'Bảng giá vé',
-  route: 'Tuyến xe',
-  seat: 'Ghế',
-  vehicle: 'Xe',
-  'vehicle-type': 'Loại xe',
-};
-
-const ACTION_LABELS: Record<string, string> = {
-  create: 'Tạo',
-  delete: 'Xóa',
-  read: 'Xem',
-  update: 'Cập nhật',
-};
 
 function getErrorMessage(error: unknown, fallback: string): string {
   return error instanceof Error && error.message ? error.message : fallback;
@@ -54,27 +38,6 @@ function hasSameKeys(left: readonly string[], right: readonly string[]): boolean
     left.length === right.length &&
     left.every((key) => right.includes(key))
   );
-}
-
-function getPermissionGroups(permissions: AdminRbacPermission[]) {
-  const groups = new Map<string, AdminRbacPermission[]>();
-  for (const permission of permissions) {
-    const [resource] = permission.key.split(':');
-    const group = groups.get(resource) ?? [];
-    group.push(permission);
-    groups.set(resource, group);
-  }
-
-  return [...groups].map(([resource, items]) => ({
-    resource,
-    label: RESOURCE_LABELS[resource] ?? resource,
-    permissions: items,
-  }));
-}
-
-function getPermissionActionLabel(permissionKey: string): string {
-  const action = permissionKey.split(':')[1];
-  return ACTION_LABELS[action] ?? action ?? permissionKey;
 }
 
 export function PlatformRbacManagement() {
@@ -136,15 +99,6 @@ export function PlatformRbacManagement() {
   const isDirty = selectedRole
     ? !hasSameKeys(selectedRole.permissionKeys, selectedDraft)
     : false;
-
-  const permissionGroups = useMemo(() => {
-    if (!config || !selectedRole) return [];
-    return getPermissionGroups(
-      config.permissions.filter(
-        (permission) => permission.scope === selectedRole.scope,
-      ),
-    );
-  }, [config, selectedRole]);
 
   function changePermission(permissionKey: string, checked: boolean) {
     if (!selectedRole) return;
@@ -301,126 +255,52 @@ export function PlatformRbacManagement() {
 
         {!loading && !loadError && config && (
           <>
-            <section aria-labelledby="rbac-roles-title" className={styles.roleSection}>
-              <h2 id="rbac-roles-title">Chọn vai trò cần cấu hình</h2>
-              <div className={styles.roleGrid} role="radiogroup" aria-labelledby="rbac-roles-title">
-                {config.roles.map((role) => (
-                  <label
-                    className={`${styles.roleOption}${selectedRoleName === role.roleName ? ` ${styles.roleOptionSelected}` : ''}`}
-                    key={role.roleName}
-                  >
-                    <input
-                      checked={selectedRoleName === role.roleName}
-                      name="platform-rbac-role"
-                      onChange={() => setSelectedRoleName(role.roleName)}
-                      type="radio"
-                      value={role.roleName}
-                    />
-                    <span className={styles.roleCopy}>
-                      <strong>{role.roleName}</strong>
-                      <small>{role.description ?? 'Chưa có mô tả vai trò.'}</small>
-                    </span>
-                    <span className={styles.roleBadges}>
-                      <span className={styles.scopeBadge}>
-                        {role.scope === 'platform' ? 'Platform' : 'Nhà xe'}
-                      </span>
-                      {role.isProtected && (
-                        <span className={styles.protectedBadge}>
-                          Vai trò hệ thống · Được bảo vệ
-                        </span>
-                      )}
-                      {roleDraftsDirty.has(role.roleName) && (
-                        <span className={styles.dirtyBadge}>Chưa lưu</span>
-                      )}
-                    </span>
-                  </label>
-                ))}
-              </div>
-            </section>
+            <AdminRbacRoleSelector
+              dirtyRoleNames={roleDraftsDirty}
+              onSelect={setSelectedRoleName}
+              radioName="platform-rbac-role"
+              roles={config.roles}
+              selectedRoleName={selectedRoleName}
+              title="Chọn vai trò cần cấu hình"
+              titleId="rbac-roles-title"
+            />
 
             {selectedRole && (
-              <section aria-labelledby="rbac-permissions-title" className={styles.permissionSection}>
-                <div className={styles.permissionHeader}>
-                  <div>
-                    <p className="eyebrow">{selectedRole.scope === 'platform' ? 'PLATFORM' : 'TENANT'}</p>
-                    <h2 id="rbac-permissions-title">Quyền của {selectedRole.roleName}</h2>
-                  </div>
-                  {selectedRole.isProtected && (
-                    <span className={styles.protectedSummary}>
-                      <ShieldCheck aria-hidden="true" size={16} />
-                      Vai trò hệ thống được bảo vệ
-                    </span>
-                  )}
-                </div>
-
-                {selectedRole.isProtected && (
-                  <p className={styles.protectedNotice}>
-                    Không thể xóa, đổi tên, vô hiệu hóa hoặc gỡ bảo vệ vai trò này.
-                    Ma trận bên dưới chỉ cấu hình quyền mặc định của vai trò.
-                  </p>
-                )}
-
-                {permissionGroups.length === 0 ? (
-                  <p className={styles.emptyState}>Danh mục chưa có quyền thuộc scope này.</p>
-                ) : (
-                  <div className={styles.permissionGrid}>
-                    {permissionGroups.map((group) => (
-                      <section
-                        aria-labelledby={`rbac-group-${group.resource}`}
-                        className={styles.permissionGroup}
-                        key={group.resource}
+              <AdminRbacPermissionMatrix
+                actions={(
+                  <div className={styles.formActions}>
+                    <p aria-live="polite" className={styles.draftStatus}>
+                      {isDirty ? 'Có thay đổi chưa lưu cho vai trò này.' : 'Cấu hình đã đồng bộ.'}
+                    </p>
+                    <div>
+                      <Button
+                        disabled={!isDirty || saving}
+                        onClick={resetSelectedRole}
+                        variant="secondary"
                       >
-                        <h3 id={`rbac-group-${group.resource}`}>{group.label}</h3>
-                        <div className={styles.permissionList}>
-                          {group.permissions.map((permission) => (
-                            <label className={styles.permissionOption} key={permission.key}>
-                              <input
-                                aria-label={`Gán quyền ${permission.key} cho ${selectedRole.roleName}`}
-                                checked={selectedDraft.includes(permission.key)}
-                                disabled={saving}
-                                onChange={(event) =>
-                                  changePermission(permission.key, event.currentTarget.checked)
-                                }
-                                type="checkbox"
-                              />
-                              <span className={styles.permissionCopy}>
-                                <strong>{getPermissionActionLabel(permission.key)}</strong>
-                                <code>{permission.key}</code>
-                                <small>{permission.description}</small>
-                              </span>
-                            </label>
-                          ))}
-                        </div>
-                      </section>
-                    ))}
+                        <RotateCcw aria-hidden="true" size={16} />
+                        Hoàn tác
+                      </Button>
+                      <Button
+                        disabled={!isDirty || saving}
+                        onClick={() => {
+                          setSaveError(null);
+                          setConfirmOpen(true);
+                        }}
+                      >
+                        Lưu thay đổi
+                      </Button>
+                    </div>
                   </div>
                 )}
-
-                <div className={styles.formActions}>
-                  <p aria-live="polite" className={styles.draftStatus}>
-                    {isDirty ? 'Có thay đổi chưa lưu cho vai trò này.' : 'Cấu hình đã đồng bộ.'}
-                  </p>
-                  <div>
-                    <Button
-                      disabled={!isDirty || saving}
-                      onClick={resetSelectedRole}
-                      variant="secondary"
-                    >
-                      <RotateCcw aria-hidden="true" size={16} />
-                      Hoàn tác
-                    </Button>
-                    <Button
-                      disabled={!isDirty || saving}
-                      onClick={() => {
-                        setSaveError(null);
-                        setConfirmOpen(true);
-                      }}
-                    >
-                      Lưu thay đổi
-                    </Button>
-                  </div>
-                </div>
-              </section>
+                disabled={saving}
+                isProtected={selectedRole.isProtected}
+                onPermissionChange={changePermission}
+                permissions={config.permissions}
+                roleName={selectedRole.roleName}
+                scope={selectedRole.scope}
+                selectedKeys={selectedDraft}
+              />
             )}
           </>
         )}
