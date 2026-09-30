@@ -9,7 +9,7 @@ import {
 const permissionKeys = ADMIN_PERMISSION_CATALOG.map(({ key }) => key);
 
 describe('Admin permission defaults', () => {
-  it('keeps every current operational capability for NHA_XE_ADMIN', async () => {
+  it('keeps operational and RBAC-management capabilities for NHA_XE_ADMIN', () => {
     expect(ADMIN_ROLE_DEFAULT_PERMISSION_KEYS.NHA_XE_ADMIN).toEqual([
       'vehicle-type:read',
       'vehicle-type:create',
@@ -27,6 +27,8 @@ describe('Admin permission defaults', () => {
       'fare-price:read',
       'fare-price:create',
       'fare-price:update',
+      'role:read',
+      'permission:assign',
     ]);
   });
 
@@ -48,6 +50,8 @@ describe('Admin permission defaults', () => {
       'fare-price:read',
       'fare-price:create',
       'fare-price:update',
+      'role:read',
+      'permission:assign',
       'bus-company:read',
       'bus-company:create',
       'bus-company:update',
@@ -76,6 +80,8 @@ describe('Admin permission defaults', () => {
       'fare-price:read',
       'fare-price:create',
       'fare-price:update',
+      'role:read',
+      'permission:assign',
     ];
     const platformPermissionKeys = [
       'bus-company:read',
@@ -151,6 +157,14 @@ describe('Admin permission defaults', () => {
     expect(isPermissionAllowedForRole('NHA_XE_ADMIN', 'vehicle:read')).toBe(
       true,
     );
+    expect(isPermissionAllowedForRole('NHA_XE_ADMIN', 'role:read')).toBe(true);
+    expect(
+      isPermissionAllowedForRole('NHA_XE_ADMIN', 'permission:assign'),
+    ).toBe(true);
+    expect(isPermissionAllowedForRole('SUPER_ADMIN', 'role:read')).toBe(false);
+    expect(
+      isPermissionAllowedForRole('NHAN_VIEN_CSKH', 'permission:assign'),
+    ).toBe(true);
     expect(
       isPermissionAllowedForRole('NHAN_VIEN_CSKH', 'admin-account:read'),
     ).toBe(false);

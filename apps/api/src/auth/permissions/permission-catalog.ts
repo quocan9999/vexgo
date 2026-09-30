@@ -83,6 +83,16 @@ export const ADMIN_PERMISSION_CATALOG = [
       'Cập nhật bảng giá vé và trạng thái bảng giá trong phạm vi nhà xe.',
   },
   {
+    key: 'role:read',
+    scope: 'tenant',
+    description: 'Xem cấu hình quyền vai trò trong phạm vi nhà xe.',
+  },
+  {
+    key: 'permission:assign',
+    scope: 'tenant',
+    description: 'Gán quyền cho vai trò trong phạm vi nhà xe.',
+  },
+  {
     key: 'bus-company:read',
     scope: 'platform',
     description: 'Xem danh sách và chi tiết nhà xe trên nền tảng.',
@@ -150,6 +160,8 @@ export const ADMIN_ROLE_DEFAULT_PERMISSION_KEYS = {
     'fare-price:read',
     'fare-price:create',
     'fare-price:update',
+    'role:read',
+    'permission:assign',
   ],
   NHAN_VIEN_BAN_VE: [],
   NHAN_VIEN_CSKH: [],
