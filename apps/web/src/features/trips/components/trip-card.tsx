@@ -26,6 +26,13 @@ export function TripCard({
       }`}
     >
       <div className="p-5">
+        {/* Operator Name */}
+        <div className="mb-4 flex items-center gap-2">
+          <h3 className="text-lg font-black text-[#0060c4] uppercase tracking-wide drop-shadow-sm">
+            Nhà xe {trip.operator}
+          </h3>
+        </div>
+
         {/* Row 1: Times + Route info + Price */}
         <div className="flex items-start justify-between gap-4">
           {/* Left: departure time + origin */}
@@ -73,8 +80,7 @@ export function TripCard({
           {/* Right: vehicle + seats + price */}
           <div className="shrink-0 text-right ml-4">
             <div className="flex items-center justify-end gap-2 text-[12px] text-slate-500 mb-1">
-              <div className="w-1.5 h-1.5 rounded-full bg-slate-300"></div>
-              <span className="font-medium">{trip.vehicleType}</span>
+              <span className="font-medium uppercase">{trip.vehicleType}</span>
               <div className="w-1.5 h-1.5 rounded-full bg-slate-300"></div>
               <span className="font-bold text-[#00b14f]">
                 {trip.availableSeats} ghế trống
