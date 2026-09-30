@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useAuthSession } from '@/features/auth/auth-session';
-import { customerApi, CustomerProfile } from '../services/customer.api';
+import { customerApi, CustomerProfile, ApiError, authApi } from '../services/customer.api';
 import {
   User,
   Mail,
@@ -17,7 +17,7 @@ import { useRouter } from 'next/navigation';
 
 export const ProfileForm: React.FC = () => {
   const router = useRouter();
-  const { accessToken, isHydrated, signOut } = useAuthSession();
+  const { accessToken, refreshToken, isHydrated, signOut, signIn, user } = useAuthSession();
   const [profile, setProfile] = useState<CustomerProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -53,12 +53,26 @@ export const ProfileForm: React.FC = () => {
         setDateOfBirth(data.dateOfBirth || '');
         setCitizenId(data.citizenId || '');
       } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : '';
-        if (message.toLowerCase().includes('hết hạn') || message.toLowerCase().includes('không hợp lệ')) {
+        if (error instanceof ApiError && error.status === 401 && refreshToken && user) {
+          try {
+            const { data } = await authApi.refresh(refreshToken);
+            signIn({
+              user,
+              accessToken: data.accessToken,
+              refreshToken: data.refreshToken
+            });
+            // Reload the page to retry the profile fetch with the new token
+            // In a more complex app, we would retry the fetch in-place or use an interceptor
+            window.location.reload();
+            return;
+          } catch {
+            signOut();
+            router.replace('/auth/login?next=/account/profile');
+          }
+        } else if (error instanceof ApiError && error.status === 401) {
           signOut();
           router.replace('/auth/login?next=/account/profile');
         } else {
-          // just log warn to avoid blocking the UI with next.js dev overlay
           console.warn('Fetch profile error:', error);
         }
       } finally {
@@ -67,7 +81,7 @@ export const ProfileForm: React.FC = () => {
     };
 
     fetchProfile();
-  }, [accessToken, isHydrated, router, signOut]);
+  }, [accessToken, isHydrated, router, signOut, signIn, refreshToken, user]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -88,14 +102,22 @@ export const ProfileForm: React.FC = () => {
       });
       setModalOpen(true);
     } catch (error: unknown) {
-      setModalConfig({
-        title: 'Có lỗi xảy ra',
-        message:
-          error instanceof Error
-            ? error.message
-            : 'Không thể cập nhật thông tin lúc này.',
-        variant: 'error',
-      });
+      if (error instanceof ApiError && error.status === 401) {
+        setModalConfig({
+          title: 'Phiên đăng nhập hết hạn',
+          message: 'Vui lòng tải lại trang hoặc đăng nhập lại.',
+          variant: 'error',
+        });
+      } else {
+        setModalConfig({
+          title: 'Có lỗi xảy ra',
+          message:
+            error instanceof Error
+              ? error.message
+              : 'Không thể cập nhật thông tin lúc này.',
+          variant: 'error',
+        });
+      }
       setModalOpen(true);
     } finally {
       setIsSaving(false);

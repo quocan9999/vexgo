@@ -48,6 +48,14 @@ N/A
 
 ---
 
+## 🧾 Các commit trong PR
+
+<!-- Liệt kê các commit theo thứ tự từ cũ đến mới; cập nhật mục này khi push thêm commit. -->
+
+- `hash` Mô tả commit
+
+---
+
 ## 🧪 Cách kiểm tra
 
 <!-- Ghi lệnh có thể sao chép và chạy từ root repo. Giữ workspace liên quan, xóa các lệnh không áp dụng. -->

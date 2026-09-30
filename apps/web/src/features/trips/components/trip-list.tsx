@@ -179,7 +179,7 @@ export function TripList() {
   const isRoundTrip = tripType === 'round-trip' || !!returnDate;
 
   // Route key: changes when from/to/date change → used to auto-reset selections
-  const routeKey = `${origin}|${destination}|${date}`;
+  const routeKey = `${origin}|${destination}|${date}|${returnDate || ''}|${tripType || 'one-way'}`;
 
   // Selected trips keyed by routeKey (auto-resets when search criteria change)
   const [selectedOutboundKeyed, setSelectedOutboundKeyed] = useState<{

@@ -9,6 +9,7 @@ export type AuthUser = {
 export type AuthState = {
   user: AuthUser | null;
   accessToken: string | null;
+  refreshToken: string | null;
   isAuthenticated: boolean;
   isHydrated: boolean;
 };
@@ -26,6 +27,7 @@ export const AUTH_STORAGE_KEY = 'vexgo:auth';
 const UNAUTHENTICATED_STATE: AuthState = {
   user: null,
   accessToken: null,
+  refreshToken: null,
   isAuthenticated: false,
   isHydrated: true,
 };
@@ -45,6 +47,7 @@ export function readStoredAuth(storage?: AuthStorage): AuthState {
     return {
       user: parsed.user,
       accessToken: parsed.accessToken,
+      refreshToken: typeof parsed.refreshToken === 'string' ? parsed.refreshToken : null,
       isAuthenticated: true,
       isHydrated: true,
     };

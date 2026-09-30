@@ -30,6 +30,7 @@ export function AuthSessionProvider({
   const [state, setState] = useState<AuthState>({
     user: null,
     accessToken: null,
+    refreshToken: null,
     isAuthenticated: false,
     isHydrated: false,
   });
@@ -55,6 +56,7 @@ export function AuthSessionProvider({
         const nextState = {
           user: data.user,
           accessToken: data.accessToken,
+          refreshToken: data.refreshToken,
           isAuthenticated: true,
           isHydrated: true,
         };
@@ -65,9 +67,11 @@ export function AuthSessionProvider({
       },
       signOut: () => {
         const currentToken = state.accessToken;
+        const currentRefreshToken = state.refreshToken;
         const nextState = {
           user: null,
           accessToken: null,
+          refreshToken: null,
           isAuthenticated: false,
           isHydrated: true,
         };
@@ -79,8 +83,12 @@ export function AuthSessionProvider({
               {
                 method: 'POST',
                 headers: currentToken
-                  ? { Authorization: `Bearer ${currentToken}` }
-                  : {},
+                  ? {
+                      Authorization: `Bearer ${currentToken}`,
+                      'Content-Type': 'application/json',
+                    }
+                  : { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ refreshToken: currentRefreshToken }),
               },
             );
           } catch {

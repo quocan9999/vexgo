@@ -20,6 +20,13 @@ export type UpdateProfileDto = {
   citizenId?: string | null;
 };
 
+export class ApiError extends Error {
+  constructor(message: string, public status: number) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
 
@@ -33,7 +40,7 @@ export const customerApi = {
 
     if (!res.ok) {
       const error = await res.json().catch(() => ({}));
-      throw new Error(error.message || 'Lấy thông tin thất bại');
+      throw new ApiError(error.message || 'Lấy thông tin thất bại', res.status);
     }
 
     return res.json();
@@ -54,9 +61,23 @@ export const customerApi = {
 
     if (!res.ok) {
       const error = await res.json().catch(() => ({}));
-      throw new Error(error.message || 'Cập nhật thất bại');
+      throw new ApiError(error.message || 'Cập nhật thất bại', res.status);
     }
 
     return res.json();
   },
+};
+
+export const authApi = {
+  async refresh(refreshToken: string): Promise<{ data: { accessToken: string; refreshToken: string; } }> {
+    const res = await fetch(`${API_BASE_URL}/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken }),
+    });
+    if (!res.ok) {
+      throw new ApiError('Phiên đăng nhập hết hạn', 401);
+    }
+    return res.json();
+  }
 };
