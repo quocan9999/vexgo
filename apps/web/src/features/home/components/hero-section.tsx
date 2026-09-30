@@ -76,7 +76,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
   }, []);
 
   // Freight states
-  const [freightDate, setFreightDate] = useState(new Date().toISOString().split('T')[0]);
+  const [freightDate, setFreightDate] = useState(new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date()));
   const [freightType, setFreightType] = useState('Hàng thường');
   const freightWeight = 'Dưới 5kg';
 
@@ -244,7 +244,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                     </label>
                     <input
                       type="date"
-                      min={new Date().toISOString().split('T')[0]}
+                      min={new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date())}
                       value={selectedPrice}
                       onChange={(e) => setSelectedPrice(e.target.value)}
                       className="h-12 w-full border border-slate-300 rounded-lg px-3 text-sm font-bold text-slate-900 outline-none focus:border-brand"
@@ -259,7 +259,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                       </label>
                       <input
                         type="date"
-                        min={selectedPrice || new Date().toISOString().split('T')[0]}
+                        min={selectedPrice || new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date())}
                         value={returnDate}
                         onChange={(e) => setReturnDate(e.target.value)}
                         className="h-12 w-full border border-slate-300 rounded-lg px-3 text-sm font-bold text-slate-900 outline-none focus:border-brand"

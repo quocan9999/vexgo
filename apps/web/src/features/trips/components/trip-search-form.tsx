@@ -13,7 +13,7 @@ export function TripSearchForm({ compact = false }: { compact?: boolean }) {
   const [service, setService] = useState<'trip' | 'shipment'>('trip');
   const [origin, setOrigin] = useState('');
   const [destination, setDestination] = useState('');
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState(new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date()));
   const [returnDate, setReturnDate] = useState('');
   const [passengers, setPassengers] = useState(1);
   const [roundTrip, setRoundTrip] = useState(false);
@@ -42,7 +42,7 @@ export function TripSearchForm({ compact = false }: { compact?: boolean }) {
     router.push(`/trips?${params.toString()}`);
   };
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date());
 
   return <form onSubmit={submit} className={`rounded-lg border border-slate-200 bg-white p-4 text-slate-900 shadow-xl md:p-5 ${compact ? 'shadow-sm' : ''}`}>
     <div className="flex flex-col justify-between gap-3 border-b border-slate-200 pb-4 md:flex-row md:items-center"><div className="inline-flex w-fit rounded-lg bg-slate-100 p-1"><button type="button" onClick={() => setService('trip')} className={`inline-flex h-10 items-center gap-2 rounded-md px-4 text-sm font-extrabold transition ${service === 'trip' ? 'bg-brand text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}><Bus className="size-4" /> Đặt vé</button><button type="button" onClick={() => setService('shipment')} className={`inline-flex h-10 items-center gap-2 rounded-md px-4 text-sm font-extrabold transition ${service === 'shipment' ? 'bg-brand text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}><PackageCheck className="size-4" /> Gửi hàng</button></div><div className="flex items-center gap-6 pr-2 text-xs font-bold text-slate-500 md:pr-4"><label className="inline-flex items-center gap-2"><input type="radio" name="tripType" checked={!roundTrip} onChange={() => setRoundTrip(false)} className="size-4 accent-brand" /> Một chiều</label><label className="inline-flex items-center gap-2"><input type="radio" name="tripType" checked={roundTrip} onChange={() => setRoundTrip(true)} className="size-4 accent-brand" /> Khứ hồi</label></div></div>
