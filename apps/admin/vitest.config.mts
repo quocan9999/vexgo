@@ -16,6 +16,7 @@ export default defineConfig({
     css: false,
     environment: 'node',
     include: ['test/**/*.spec.tsx'],
+    setupFiles: ['test/admin-auth-test-session.ts'],
     server: { deps: { inline: ['react', 'react-dom', '@testing-library/react'] } },
   },
 });

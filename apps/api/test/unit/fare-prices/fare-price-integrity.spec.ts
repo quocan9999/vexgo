@@ -81,21 +81,52 @@ describe('Fare Price Serializable write transaction', () => {
 });
 
 describe('fare price tenant relation invariant', () => {
-  it('rejects a route and vehicle type owned by different bus companies', async () => {
+  it('resolves route and type only within the trusted tenant', async () => {
     const transaction = {
       tuyenXe: {
-        findUnique: vi.fn().mockResolvedValue({ tuyenXeId: 11, nhaXeId: 2 }),
+        findFirst: vi.fn().mockResolvedValue({ tuyenXeId: 11, nhaXeId: 2 }),
       },
       loaiXe: {
-        findUnique: vi.fn().mockResolvedValue({ loaiXeId: 7, nhaXeId: 9 }),
+        findFirst: vi.fn().mockResolvedValue({ loaiXeId: 7, nhaXeId: 2 }),
       },
-    } as never;
+    };
 
-    await expect(validateFarePriceRelations(transaction, 11, 7)).rejects.toMatchObject({
-      response: {
-        error: 'FARE_PRICE_TENANT_MISMATCH',
-        message: 'Tuyến xe và loại xe phải thuộc cùng một nhà xe.',
-      },
+    await expect(validateFarePriceRelations(transaction as never, 11, 7, 2)).resolves.toBe(2);
+    expect(transaction.tuyenXe.findFirst).toHaveBeenCalledWith({
+      where: { tuyenXeId: 11, nhaXeId: 2 },
+      select: { tuyenXeId: true, nhaXeId: true },
     });
+    expect(transaction.loaiXe.findFirst).toHaveBeenCalledWith({
+      where: { loaiXeId: 7, nhaXeId: 2 },
+      select: { loaiXeId: true, nhaXeId: true },
+    });
+  });
+
+  it('reports a foreign route as missing without resolving it globally', async () => {
+    const transaction = {
+      tuyenXe: { findFirst: vi.fn().mockResolvedValue(null) },
+      loaiXe: { findFirst: vi.fn().mockResolvedValue({ loaiXeId: 7, nhaXeId: 2 }) },
+    };
+
+    await expect(validateFarePriceRelations(transaction as never, 11, 7, 2)).rejects.toMatchObject({
+      response: { error: 'ROUTE_NOT_FOUND' },
+    });
+    expect(transaction.tuyenXe.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { tuyenXeId: 11, nhaXeId: 2 } }),
+    );
+  });
+
+  it('reports a foreign vehicle type as missing without resolving it globally', async () => {
+    const transaction = {
+      tuyenXe: { findFirst: vi.fn().mockResolvedValue({ tuyenXeId: 11, nhaXeId: 2 }) },
+      loaiXe: { findFirst: vi.fn().mockResolvedValue(null) },
+    };
+
+    await expect(validateFarePriceRelations(transaction as never, 11, 7, 2)).rejects.toMatchObject({
+      response: { error: 'VEHICLE_TYPE_NOT_FOUND' },
+    });
+    expect(transaction.loaiXe.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { loaiXeId: 7, nhaXeId: 2 } }),
+    );
   });
 });

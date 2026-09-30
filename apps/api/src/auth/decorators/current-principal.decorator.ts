@@ -6,3 +6,8 @@ export const CurrentPrincipal = createParamDecorator(
   (_data: unknown, context: ExecutionContext): AuthPrincipal =>
     context.switchToHttp().getRequest<Request & { user: AuthPrincipal }>().user,
 );
+
+export const OptionalPrincipal = createParamDecorator(
+  (_data: unknown, context: ExecutionContext): AuthPrincipal | undefined =>
+    context.switchToHttp().getRequest<Request & { user?: AuthPrincipal }>().user,
+);

@@ -1,7 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { Test } from '@nestjs/testing';
-import type { INestApplication } from '@nestjs/common';
+import type { ExecutionContext, INestApplication } from '@nestjs/common';
 import { AppModule } from '../../../src/app.module.js';
+import { AccessTokenGuard } from '../../../src/auth/guards/access-token.guard.js';
+import type { AuthPrincipal } from '../../../src/auth/tokens/auth-principal.js';
 import { configureApi } from '../../../src/common/configure-api.js';
 import { PrismaService } from '../../../src/prisma/prisma.service.js';
 
@@ -12,11 +14,30 @@ export type FarePriceTestContext = {
   vehicleTypeId: number;
   busCompanyId: number;
   clearFares: () => Promise<void>;
+  setPrincipal: (principal: AuthPrincipal) => void;
   close: () => Promise<void>;
 };
 
 export async function createFarePriceTestContext(): Promise<FarePriceTestContext> {
-  const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+  let principal: AuthPrincipal = {
+    taiKhoanId: 700,
+    sessionId: 'fare-price-integration-session',
+    roles: ['NHA_XE_ADMIN'],
+    permissions: [],
+    nhanVienId: 900,
+    nhaXeId: null,
+  };
+  const accessTokenGuard = {
+    canActivate(context: ExecutionContext) {
+      context.switchToHttp().getRequest<{ user?: AuthPrincipal }>().user = principal;
+      return true;
+    },
+  };
+
+  const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
+    .overrideProvider(AccessTokenGuard)
+    .useValue(accessTokenGuard)
+    .compile();
   const app = moduleRef.createNestApplication();
   configureApi(app);
   await app.init();
@@ -47,6 +68,7 @@ export async function createFarePriceTestContext(): Promise<FarePriceTestContext
     data: { nhaXeId: company.nhaXeId, tenLoai: `Test Fare Type ${suffix}` },
     select: { loaiXeId: true },
   });
+  principal = { ...principal, nhaXeId: company.nhaXeId };
 
   async function clearFares() {
     await prisma.bangGia.deleteMany({
@@ -72,6 +94,9 @@ export async function createFarePriceTestContext(): Promise<FarePriceTestContext
     vehicleTypeId: vehicleType.loaiXeId,
     busCompanyId: company.nhaXeId,
     clearFares,
+    setPrincipal(value) {
+      principal = value;
+    },
     close,
   };
 }

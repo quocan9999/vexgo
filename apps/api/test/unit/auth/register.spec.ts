@@ -3,6 +3,7 @@ import {
   InternalServerErrorException,
 } from '@nestjs/common';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { Prisma } from '../../../src/generated/prisma/client.js';
 import { AuthService } from '../../../src/auth/auth.service.js';
 import type { RegisterDto } from '../../../src/auth/dto/auth.dto.js';
 import type { OtpService } from '../../../src/auth/otp/otp.service.js';
@@ -149,6 +150,31 @@ describe('AuthService register', () => {
     await expect(registration).rejects.toBeInstanceOf(ConflictException);
     await expect(registration).rejects.toMatchObject({
       response: { error: 'PHONE_ALREADY_REGISTERED' },
+    });
+    expect(tokenService.createSession).not.toHaveBeenCalled();
+  });
+
+  it('normalizes registration email before persisting it', async () => {
+    const response = await service.register({ ...dto, email: '  AN@EXAMPLE.COM ' });
+    expect(tx.taiKhoan.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ email: 'an@example.com' }),
+      }),
+    );
+    expect(response).toEqual(tokenResponse);
+  });
+
+  it('maps duplicate registration email to a stable conflict', async () => {
+    tx.taiKhoan.create.mockRejectedValueOnce(
+      new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+        code: 'P2002',
+        clientVersion: 'test',
+        meta: { target: ['email'] },
+      }),
+    );
+
+    await expect(service.register(dto)).rejects.toMatchObject({
+      response: { error: 'EMAIL_ALREADY_REGISTERED' },
     });
     expect(tokenService.createSession).not.toHaveBeenCalled();
   });

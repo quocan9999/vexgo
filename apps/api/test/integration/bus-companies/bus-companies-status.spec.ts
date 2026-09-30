@@ -123,7 +123,7 @@ describe('PATCH /api/v1/bus-companies/:id/status', () => {
     },
   );
 
-  it('keeps same-status requests successful and updates detail and status-filtered list', async () => {
+  it('keeps same-status requests successful and hides a paused company from public reads', async () => {
     await request(app.getHttpServer())
       .patch('/api/v1/bus-companies/7/status')
       .send({ status: 'HOAT_DONG' })
@@ -141,18 +141,19 @@ describe('PATCH /api/v1/bus-companies/:id/status', () => {
 
     const updatedDetail = await request(app.getHttpServer())
       .get('/api/v1/bus-companies/7')
-      .expect(200);
-    expect(updatedDetail.body.data.status).toBe('TAM_NGUNG');
+      .expect(404);
+    expect(updatedDetail.body).toMatchObject({
+      error: 'BUS_COMPANY_NOT_FOUND',
+      message: 'Không tìm thấy nhà xe.',
+    });
 
     const filteredList = await request(app.getHttpServer())
       .get('/api/v1/bus-companies')
       .query({ status: 'TAM_NGUNG' })
       .expect(200);
-    expect(filteredList.body.data).toEqual([
-      expect.objectContaining({ busCompanyId: 7, status: 'TAM_NGUNG' }),
-    ]);
+    expect(filteredList.body.data).toEqual([]);
     expect(nhaXe.findMany).toHaveBeenLastCalledWith(
-      expect.objectContaining({ where: { trangThai: 'TAM_NGUNG' } }),
+      expect.objectContaining({ where: { trangThai: 'HOAT_DONG' } }),
     );
   });
 

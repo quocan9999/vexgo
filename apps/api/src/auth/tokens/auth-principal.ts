@@ -2,6 +2,9 @@ export interface AuthPrincipal {
   taiKhoanId: number;
   sessionId: string;
   roles: string[];
+  permissions: string[];
+  nhanVienId: number | null;
+  nhaXeId: number | null;
 }
 
 export interface AuthUserSummary {

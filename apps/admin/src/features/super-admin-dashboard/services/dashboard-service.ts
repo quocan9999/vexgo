@@ -1,3 +1,4 @@
+import { adminApiFetch } from '@/lib/admin-api-client';
 import overviewFixture from '../data/overview.json';
 import { getApiBaseUrl } from '@/lib/api-url';
 import type { DashboardOverview } from '../types/dashboard';
@@ -14,7 +15,7 @@ async function readApiResponse<T>(
   url: string,
   signal?: AbortSignal,
 ): Promise<T> {
-  const response = await fetch(url, { cache: 'no-store', signal });
+  const response = await adminApiFetch(url, { cache: 'no-store', signal });
   const body = (await response.json().catch(() => null)) as
     | { data?: T; payload?: T; message?: string; error?: { message?: string } }
     | T

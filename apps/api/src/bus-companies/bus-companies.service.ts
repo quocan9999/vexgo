@@ -1,5 +1,6 @@
 import {
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -15,6 +16,26 @@ import type { UpdateBusCompanyStatusDto } from './dto/update-bus-company-status.
 import type { BusCompanySortField } from './dto/bus-company-query.dto.js';
 import type { BusCompanyQueryDto } from './dto/bus-company-query.dto.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
+
+interface BusCompanyReadScope {
+  platformWide: boolean;
+  tenantId: number | null;
+}
+
+function resolveReadScope(principal?: AuthPrincipal): BusCompanyReadScope {
+  const platformWide = principal?.roles.includes('SUPER_ADMIN') ?? false;
+  const tenantId = platformWide ? null : (principal?.nhaXeId ?? null);
+
+  if (principal?.roles.includes('NHA_XE_ADMIN') && tenantId === null) {
+    throw new ForbiddenException({
+      error: 'TENANT_SCOPE_REQUIRED',
+      message: 'Tài khoản nhà xe chưa được gắn phạm vi nhà xe.',
+    });
+  }
+
+  return { platformWide, tenantId };
+}
 
 function addDays(dateOnly: string, days: number) {
   const [year, month, day] = dateOnly.split('-').map(Number);
@@ -198,13 +219,24 @@ export class BusCompaniesService {
     }
   }
 
-  async findOne(id: number) {
+  async findOne(id: number, principal?: AuthPrincipal) {
+    const { platformWide, tenantId } = resolveReadScope(principal);
+    if (tenantId !== null && tenantId !== id) {
+      throw new NotFoundException({
+        error: 'BUS_COMPANY_NOT_FOUND',
+        message: 'Không tìm thấy nhà xe.',
+      });
+    }
+
     const company = await this.prisma.nhaXe.findUnique({
       where: { nhaXeId: id },
       select: BUS_COMPANY_SELECT,
     });
 
-    if (!company) {
+    if (
+      !company ||
+      (!platformWide && tenantId === null && company.trangThai !== 'HOAT_DONG')
+    ) {
       throw new NotFoundException({
         error: 'BUS_COMPANY_NOT_FOUND',
         message: 'Không tìm thấy nhà xe.',
@@ -214,9 +246,14 @@ export class BusCompaniesService {
     return { data: mapBusCompany(company) };
   }
 
-  async findAll(query: BusCompanyQueryDto) {
+  async findAll(query: BusCompanyQueryDto, principal?: AuthPrincipal) {
+    const { platformWide, tenantId } = resolveReadScope(principal);
     const search = query.search?.trim();
     const where: Prisma.NhaXeWhereInput = {};
+
+    if (tenantId !== null) {
+      where.nhaXeId = tenantId;
+    }
 
     if (search) {
       where.OR = [
@@ -225,8 +262,12 @@ export class BusCompaniesService {
         { thongTinLienHe: { contains: search } },
       ];
     }
-    if (query.status) {
-      where.trangThai = query.status;
+    if (platformWide || tenantId !== null) {
+      if (query.status) where.trangThai = query.status;
+    } else {
+      // The endpoint is also used for public discovery; never let a client
+      // widen it to paused companies with a query parameter.
+      where.trangThai = 'HOAT_DONG';
     }
     if (query.createdFrom || query.createdTo) {
       const businessTimeZone = resolveBusinessTimeZone(

@@ -1,7 +1,8 @@
 import 'reflect-metadata';
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '../../../src/generated/prisma/client.js';
 import { PrismaService } from '../../../src/prisma/prisma.service.js';
+import type { AuthPrincipal } from '../../../src/auth/tokens/auth-principal.js';
 import { VehicleTypesService } from '../../../src/vehicle-types/vehicle-types.service.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -20,12 +21,22 @@ const prisma = {
     findMany: vi.fn(),
     count: vi.fn(),
     findUnique: vi.fn(),
+    findFirst: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
+    updateMany: vi.fn(),
   },
 } as unknown as PrismaService;
 
 const service = new VehicleTypesService(prisma);
+const tenantAdmin: AuthPrincipal = {
+  taiKhoanId: 7,
+  sessionId: 'tenant-session',
+  roles: ['NHA_XE_ADMIN'],
+  permissions: [],
+  nhanVienId: 9,
+  nhaXeId: 4,
+};
 
 function knownRequestError(code: string, meta?: Record<string, unknown>) {
   return new Prisma.PrismaClientKnownRequestError('database constraint error', {
@@ -52,6 +63,8 @@ describe('VehicleTypesService write operations', () => {
     vi.mocked(prisma.nhaXe.findUnique).mockResolvedValue({ nhaXeId: 4 } as never);
     vi.mocked(prisma.loaiXe.create).mockResolvedValue(vehicleTypeRecord);
     vi.mocked(prisma.loaiXe.update).mockResolvedValue(vehicleTypeRecord);
+    vi.mocked(prisma.loaiXe.updateMany).mockResolvedValue({ count: 1 } as never);
+    vi.mocked(prisma.loaiXe.findFirst).mockResolvedValue(vehicleTypeRecord);
   });
 
   it('creates a vehicle type through the shared Prisma mapper', async () => {
@@ -60,7 +73,7 @@ describe('VehicleTypesService write operations', () => {
         name: 'Limousine 22 phòng',
         description: 'Loại xe giường phòng cao cấp',
         busCompanyId: 4,
-      }),
+      }, tenantAdmin),
     ).resolves.toEqual({
       data: {
         vehicleTypeId: 8,
@@ -101,7 +114,7 @@ describe('VehicleTypesService write operations', () => {
     vi.mocked(prisma.loaiXe.create).mockRejectedValueOnce(duplicateError);
 
     const error = await service
-      .create({ name: 'Limousine', description: null, busCompanyId: 4 })
+      .create({ name: 'Limousine', description: null, busCompanyId: 4 }, tenantAdmin)
       .catch((caught: unknown) => caught);
 
     expect(error).toBeInstanceOf(ConflictException);
@@ -123,7 +136,7 @@ describe('VehicleTypesService write operations', () => {
     vi.mocked(prisma.loaiXe.create).mockRejectedValueOnce(error);
 
     await expect(
-      service.create({ name: 'Limousine', description: null, busCompanyId: 4 }),
+      service.create({ name: 'Limousine', description: null, busCompanyId: 4 }, tenantAdmin),
     ).rejects.toBe(error);
   });
 
@@ -132,7 +145,7 @@ describe('VehicleTypesService write operations', () => {
       service.update(8, {
         name: 'Limousine 24 phòng',
         description: 'Phiên bản 24 phòng',
-      }),
+      }, tenantAdmin),
     ).resolves.toEqual({
       data: {
         vehicleTypeId: 8,
@@ -142,19 +155,12 @@ describe('VehicleTypesService write operations', () => {
         updatedAt: '2026-09-25T11:00:00.000Z',
       },
     });
-    expect(prisma.loaiXe.update).toHaveBeenCalledWith({
-      where: { loaiXeId: 8 },
+    expect(prisma.loaiXe.updateMany).toHaveBeenCalledWith({
+      where: { loaiXeId: 8, nhaXeId: 4 },
       data: {
         tenLoai: 'Limousine 24 phòng',
         moTa: 'Phiên bản 24 phòng',
       },
-      select: expect.objectContaining({
-        loaiXeId: true,
-        tenLoai: true,
-        moTa: true,
-        createdAt: true,
-        updatedAt: true,
-      }),
     });
   });
 
@@ -163,11 +169,11 @@ describe('VehicleTypesService write operations', () => {
       service.update(8, {
         name: 'Limousine 22 phòng',
         description: 'Mô tả đã cập nhật',
-      }),
+      }, tenantAdmin),
     ).resolves.toMatchObject({ data: { vehicleTypeId: 8 } });
-    expect(prisma.loaiXe.update).toHaveBeenCalledWith(
+    expect(prisma.loaiXe.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { loaiXeId: 8 },
+      where: { loaiXeId: 8, nhaXeId: 4 },
         data: {
           tenLoai: 'Limousine 22 phòng',
           moTa: 'Mô tả đã cập nhật',
@@ -177,12 +183,12 @@ describe('VehicleTypesService write operations', () => {
   });
 
   it('maps a duplicate name from update to the domain conflict', async () => {
-    vi.mocked(prisma.loaiXe.update).mockRejectedValueOnce(
+    vi.mocked(prisma.loaiXe.updateMany).mockRejectedValueOnce(
       mariaDbUniqueError('LoaiXe_nhaXeId_tenLoai_key'),
     );
 
     const error = await service
-      .update(8, { name: 'Khác', description: null })
+      .update(8, { name: 'Khác', description: null }, tenantAdmin)
       .catch((caught: unknown) => caught);
 
     expect(error).toBeInstanceOf(ConflictException);
@@ -198,20 +204,18 @@ describe('VehicleTypesService write operations', () => {
 
   it('propagates unrelated P2002 errors from update', async () => {
     const error = knownRequestError('P2002', { target: ['otherField'] });
-    vi.mocked(prisma.loaiXe.update).mockRejectedValueOnce(error);
+    vi.mocked(prisma.loaiXe.updateMany).mockRejectedValueOnce(error);
 
     await expect(
-      service.update(8, { name: 'Khác', description: null }),
+      service.update(8, { name: 'Khác', description: null }, tenantAdmin),
     ).rejects.toBe(error);
   });
 
   it('maps Prisma P2025 from update to the vehicle type not-found contract', async () => {
-    vi.mocked(prisma.loaiXe.update).mockRejectedValueOnce(
-      knownRequestError('P2025'),
-    );
+    vi.mocked(prisma.loaiXe.updateMany).mockResolvedValueOnce({ count: 0 } as never);
 
     const error = await service
-      .update(999, { name: 'Khác', description: null })
+      .update(999, { name: 'Khác', description: null }, tenantAdmin)
       .catch((caught: unknown) => caught);
 
     expect(error).toBeInstanceOf(NotFoundException);
@@ -223,5 +227,18 @@ describe('VehicleTypesService write operations', () => {
       error: 'VEHICLE_TYPE_NOT_FOUND',
       message: 'Không tìm thấy loại xe.',
     });
+  });
+
+  it('rejects a create request that names a different tenant before querying or writing it', async () => {
+    const error = await service
+      .create({ name: 'Limousine', description: null, busCompanyId: 8 }, tenantAdmin)
+      .catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(ForbiddenException);
+    expect((error as ForbiddenException).getResponse()).toMatchObject({
+      error: 'TENANT_SCOPE_VIOLATION',
+    });
+    expect(prisma.nhaXe.findUnique).not.toHaveBeenCalled();
+    expect(prisma.loaiXe.create).not.toHaveBeenCalled();
   });
 });

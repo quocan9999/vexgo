@@ -1,6 +1,7 @@
 import 'reflect-metadata';
-import { NotFoundException } from '@nestjs/common';
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { AuthPrincipal } from '../../../src/auth/tokens/auth-principal.js';
 import { PrismaService } from '../../../src/prisma/prisma.service.js';
 import { VehicleTypeQueryDto } from '../../../src/vehicle-types/dto/vehicle-type-query.dto.js';
 import {
@@ -22,10 +23,19 @@ const prisma = {
     findMany: vi.fn(),
     count: vi.fn(),
     findUnique: vi.fn(),
+    findFirst: vi.fn(),
   },
 } as unknown as PrismaService;
 
 const service = new VehicleTypesService(prisma);
+const tenantAdmin: AuthPrincipal = {
+  taiKhoanId: 7,
+  sessionId: 'tenant-session',
+  roles: ['NHA_XE_ADMIN'],
+  permissions: [],
+  nhanVienId: 9,
+  nhaXeId: 4,
+};
 
 function createQuery(overrides: Partial<VehicleTypeQueryDto> = {}) {
   return Object.assign(new VehicleTypeQueryDto(), overrides);
@@ -36,7 +46,7 @@ describe('VehicleTypesService', () => {
     vi.clearAllMocks();
     vi.mocked(prisma.loaiXe.findMany).mockResolvedValue([vehicleTypeRecord]);
     vi.mocked(prisma.loaiXe.count).mockResolvedValue(1);
-    vi.mocked(prisma.loaiXe.findUnique).mockResolvedValue(vehicleTypeRecord);
+    vi.mocked(prisma.loaiXe.findFirst).mockResolvedValue(vehicleTypeRecord);
   });
 
   it('maps Prisma field names and dates to the English API shape', () => {
@@ -52,11 +62,12 @@ describe('VehicleTypesService', () => {
   });
 
   it('trims search and searches both vehicle type name and description', async () => {
-    await service.findAll(createQuery({ search: '  Limousine  ' }));
+    await service.findAll(createQuery({ search: '  Limousine  ' }), tenantAdmin);
 
     expect(prisma.loaiXe.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
+          nhaXeId: 4,
           OR: [
             { tenLoai: { contains: 'Limousine' } },
             { moTa: { contains: 'Limousine' } },
@@ -67,12 +78,12 @@ describe('VehicleTypesService', () => {
   });
 
   it('does not add a search condition for whitespace-only input', async () => {
-    await service.findAll(createQuery({ search: '  \t ' }));
+    await service.findAll(createQuery({ search: '  \t ' }), tenantAdmin);
 
     expect(prisma.loaiXe.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: {} }),
+      expect.objectContaining({ where: { nhaXeId: 4 } }),
     );
-    expect(prisma.loaiXe.count).toHaveBeenCalledWith({ where: {} });
+    expect(prisma.loaiXe.count).toHaveBeenCalledWith({ where: { nhaXeId: 4 } });
   });
 
   it.each([
@@ -80,7 +91,7 @@ describe('VehicleTypesService', () => {
     ['createdAt', 'createdAt'],
     ['updatedAt', 'updatedAt'],
   ] as const)('maps %s sorting to Prisma %s', async (sortBy, prismaField) => {
-    await service.findAll(createQuery({ sortBy, sortDirection: 'desc' }));
+    await service.findAll(createQuery({ sortBy, sortDirection: 'desc' }), tenantAdmin);
 
     expect(prisma.loaiXe.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ orderBy: { [prismaField]: 'desc' } }),
@@ -90,6 +101,7 @@ describe('VehicleTypesService', () => {
   it('uses the shared page and page size to calculate Prisma offset and limit', async () => {
     const result = await service.findAll(
       createQuery({ page: 3, pageSize: 7 }),
+      tenantAdmin,
     );
 
     expect(prisma.loaiXe.findMany).toHaveBeenCalledWith(
@@ -104,7 +116,7 @@ describe('VehicleTypesService', () => {
   });
 
   it('returns mapped detail data for the requested id', async () => {
-    await expect(service.findOne(1)).resolves.toEqual({
+    await expect(service.findOne(1, tenantAdmin)).resolves.toEqual({
       data: {
         vehicleTypeId: 1,
         name: 'Limousine',
@@ -113,15 +125,15 @@ describe('VehicleTypesService', () => {
         updatedAt: '2026-09-25T11:00:00.000Z',
       },
     });
-    expect(prisma.loaiXe.findUnique).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { loaiXeId: 1 } }),
+    expect(prisma.loaiXe.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { loaiXeId: 1, nhaXeId: 4 } }),
     );
   });
 
   it('returns a domain not found error when the detail record is missing', async () => {
-    vi.mocked(prisma.loaiXe.findUnique).mockResolvedValueOnce(null);
+    vi.mocked(prisma.loaiXe.findFirst).mockResolvedValueOnce(null);
 
-    const error = await service.findOne(999999).catch((caught: unknown) => caught);
+    const error = await service.findOne(999999, tenantAdmin).catch((caught: unknown) => caught);
 
     expect(error).toBeInstanceOf(NotFoundException);
     if (!(error instanceof NotFoundException)) {
@@ -133,5 +145,18 @@ describe('VehicleTypesService', () => {
       error: 'VEHICLE_TYPE_NOT_FOUND',
       message: 'Không tìm thấy loại xe.',
     });
+  });
+
+  it('does not allow a platform-only principal to read tenant vehicle types', async () => {
+    const platformAdmin = { ...tenantAdmin, roles: ['SUPER_ADMIN'] };
+    const error = await service
+      .findAll(createQuery(), platformAdmin)
+      .catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(ForbiddenException);
+    expect((error as ForbiddenException).getResponse()).toMatchObject({
+      error: 'ROLE_FORBIDDEN',
+    });
+    expect(prisma.loaiXe.findMany).not.toHaveBeenCalled();
   });
 });

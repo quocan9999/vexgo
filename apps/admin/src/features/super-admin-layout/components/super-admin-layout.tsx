@@ -1,47 +1,95 @@
 'use client';
 
-import { Bus, Building2, Database, LogOut, MapPinned, Menu, Ticket, Truck, X } from 'lucide-react';
+import {
+  Bus,
+  Building2,
+  Database,
+  LogOut,
+  MapPinned,
+  Menu,
+  Ticket,
+  Truck,
+  X,
+} from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useState, type ReactNode } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
-import { useDemoAdminSession } from '@/features/admin-auth/hooks/use-demo-admin-session';
-import { signOutDemoAdmin } from '@/features/admin-auth/services/demo-auth';
+import { AdminDialogPrimitive } from '@/components/admin/admin-dialog-primitive';
+import { useAdminSession } from '@/features/admin-auth/hooks/use-admin-session';
+import {
+  getAdminAuthErrorMessage,
+  signOutAdmin,
+} from '@/features/admin-auth/services/admin-auth';
+import { getAdminAccessScope } from '@/features/admin-auth/services/admin-scope';
 
 type SuperAdminLayoutProps = {
-  activeSection: 'overview' | 'bus-companies' | 'vehicle-types' | 'vehicles' | 'routes' | 'fare-prices';
+  activeSection:
+    | 'overview'
+    | 'bus-companies'
+    | 'vehicle-types'
+    | 'vehicles'
+    | 'routes'
+    | 'fare-prices';
   children: ReactNode;
 };
+
+const ADMIN_ROLE_LABELS: Record<string, string> = {
+  SUPER_ADMIN: 'SUPER ADMIN',
+  NHA_XE_ADMIN: 'QUẢN TRỊ NHÀ XE',
+  NHAN_VIEN_BAN_VE: 'NHÂN VIÊN BÁN VÉ',
+  NHAN_VIEN_CSKH: 'NHÂN VIÊN CSKH',
+  NHAN_VIEN_PHU_XE: 'NHÂN VIÊN PHỤ XE',
+  NHAN_VIEN_KINH_DOANH: 'NHÂN VIÊN KINH DOANH',
+};
+
+function formatAdminRoleLabels(roles: string[]) {
+  const labels = roles.map(
+    (role) => ADMIN_ROLE_LABELS[role] ?? role.replaceAll('_', ' '),
+  );
+  return labels.length > 0
+    ? labels.join(' · ').toLocaleUpperCase('vi-VN')
+    : 'TÀI KHOẢN ADMIN';
+}
 
 export function SuperAdminLayout({
   activeSection,
   children,
 }: SuperAdminLayoutProps) {
-  const pathname = usePathname();
   const router = useRouter();
-  const tenantPreview = useDemoAdminSession() === 'tenant-preview';
+  const authState = useAdminSession();
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
-  const breadcrumbLabel =
-    pathname === '/'
-      ? 'Tổng quan'
-      : pathname.startsWith('/bus-companies')
-        ? 'Nhà xe'
-        : pathname.startsWith('/vehicle-types')
-          ? 'Loại xe'
-          : pathname.startsWith('/vehicles')
-            ? 'Xe'
-            : pathname.startsWith('/routes')
-              ? 'Tuyến xe'
-              : pathname.startsWith('/fare-prices')
-                ? 'Bảng giá vé'
-              : 'Quản trị nền tảng';
+  const [signingOut, setSigningOut] = useState(false);
+  const [logoutError, setLogoutError] = useState<string | null>(null);
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
+  if (authState.status !== 'authenticated') return null;
 
+  const session = authState.session;
+  const scope = getAdminAccessScope(session);
+  const tenantScope = scope === 'tenant';
+  const platformScope = scope === 'platform';
+  const roleLabel = formatAdminRoleLabels(session.roles);
+  const tenantBusCompanyName =
+    session.employee?.busCompanyName?.trim() || 'NHÀ XE';
+  const brandContextLines = platformScope
+    ? ['SUPER ADMIN', 'NHÀ XE: NONE']
+    : [
+        tenantBusCompanyName.toLocaleUpperCase('vi-VN'),
+        roleLabel,
+      ];
   function closeMobileNavigation() {
     setMobileNavigationOpen(false);
   }
 
-  function logout() {
-    signOutDemoAdmin();
-    router.replace('/login');
+  async function logout() {
+    setSigningOut(true);
+    setLogoutError(null);
+    try {
+      await signOutAdmin();
+      router.replace('/login');
+    } catch (error) {
+      setLogoutError(getAdminAuthErrorMessage(error));
+      setSigningOut(false);
+    }
   }
 
   return (
@@ -61,26 +109,25 @@ export function SuperAdminLayout({
       >
         <Link
           className="brand-lockup"
-          href={tenantPreview ? '/vehicle-types' : '/'}
+          href={tenantScope ? '/vehicle-types' : '/'}
           onClick={closeMobileNavigation}
         >
-          <span className="brand-mark" aria-hidden="true">
-            V
-          </span>
+          <span className="brand-mark" aria-hidden="true">V</span>
           <span className="brand-copy">
-            <strong>VexGo</strong>
-            {' '}
-            <small>{tenantPreview ? 'NHÀ XE · XEM TRƯỚC' : 'SUPER ADMIN'}</small>
+            <strong>VexGo</strong>{' '}
+            {brandContextLines.map((line, index) => (
+              <small key={`${line}-${index}`}>{line}</small>
+            ))}
           </span>
         </Link>
         <div aria-hidden="true" className="sidebar-divider" />
 
         <div className="sidebar-nav-group">
           <p className="sidebar-label">
-            {tenantPreview ? 'VẬN HÀNH' : 'QUẢN TRỊ NỀN TẢNG'}
+            {tenantScope ? 'VẬN HÀNH' : 'QUẢN TRỊ NỀN TẢNG'}
           </p>
-          <nav aria-label={tenantPreview ? 'Vận hành' : 'Quản trị nền tảng'}>
-            {tenantPreview ? (
+          <nav aria-label={tenantScope ? 'Vận hành' : 'Quản trị nền tảng'}>
+            {tenantScope ? (
               <>
                 <Link
                   aria-current={activeSection === 'vehicle-types' ? 'page' : undefined}
@@ -119,7 +166,7 @@ export function SuperAdminLayout({
                   <span>Bảng giá vé</span>
                 </Link>
               </>
-            ) : (
+            ) : platformScope ? (
               <>
                 <Link
                   aria-current={activeSection === 'overview' ? 'page' : undefined}
@@ -140,28 +187,8 @@ export function SuperAdminLayout({
                   <span>Nhà xe</span>
                 </Link>
               </>
-            )}
+            ) : null}
           </nav>
-        </div>
-
-        <div className="sidebar-bottom">
-          <div className="sidebar-profile">
-            <span className="profile-avatar">{tenantPreview ? 'NV' : 'SA'}</span>
-            <span className="profile-copy">
-              <strong>{tenantPreview ? 'Nhà xe' : 'Super Admin'}</strong>
-              <small>{tenantPreview ? 'Giao diện xem trước' : 'Quản trị nền tảng'}</small>
-            </span>
-            <button
-              aria-label={tenantPreview ? 'Thoát xem trước nhà xe' : 'Đăng xuất tài khoản Super Admin'}
-              className="sidebar-logout-button"
-              onClick={logout}
-              title={tenantPreview ? 'Thoát xem trước' : 'Đăng xuất'}
-              type="button"
-            >
-              <LogOut aria-hidden="true" size={15} />
-              <span className="sidebar-logout-label">{tenantPreview ? 'Thoát xem trước' : 'Đăng xuất'}</span>
-            </button>
-          </div>
         </div>
       </aside>
 
@@ -178,13 +205,67 @@ export function SuperAdminLayout({
             >
               {mobileNavigationOpen ? <X size={20} /> : <Menu size={20} />}
             </button>
-            <div className="breadcrumb">
-              <span>VexGo</span>
-              <span className="breadcrumb-slash">/</span>
-              <strong>{breadcrumbLabel}</strong>
-            </div>
+          </div>
+          <div className="topbar-account">
+            <span
+              aria-label={`Tài khoản ${session.fullName}`}
+              className="topbar-profile-avatar"
+              role="img"
+            >
+              {session.fullName.trim().charAt(0).toLocaleUpperCase('vi-VN') ||
+                'V'}
+            </span>
+            <button
+              aria-label="Đăng xuất"
+              className="topbar-profile-logout"
+              onClick={() => setLogoutConfirmOpen(true)}
+              title={signingOut ? 'Đang đăng xuất…' : 'Đăng xuất'}
+              type="button"
+            >
+              <LogOut aria-hidden="true" size={18} />
+            </button>
+            {logoutError && (
+              <p className="topbar-profile-error" role="alert">
+                {logoutError}
+              </p>
+            )}
           </div>
         </header>
+        {logoutConfirmOpen && (
+          <AdminDialogPrimitive
+            ariaLabelledBy="logout-confirm-title"
+            className="admin-dialog logout-confirm-dialog"
+            contentClassName="logout-confirm-dialog__panel"
+            onClose={() => setLogoutConfirmOpen(false)}
+            preventDismiss={signingOut}
+          >
+            <div className="logout-confirm-dialog__content">
+              <span aria-hidden="true" className="logout-confirm-dialog__icon">
+                <LogOut size={20} />
+              </span>
+              <h2 id="logout-confirm-title">Xác nhận đăng xuất</h2>
+              <p>Bạn có chắc chắn muốn đăng xuất khỏi tài khoản này không?</p>
+              <div className="logout-confirm-dialog__actions">
+                <button
+                  className="logout-confirm-dialog__cancel"
+                  disabled={signingOut}
+                  onClick={() => setLogoutConfirmOpen(false)}
+                  type="button"
+                >
+                  Hủy
+                </button>
+                <button
+                  className="logout-confirm-dialog__confirm"
+                  disabled={signingOut}
+                  onClick={() => void logout()}
+                  type="button"
+                >
+                  {signingOut ? 'Đang đăng xuất…' : 'Đăng xuất'}
+                </button>
+              </div>
+            </div>
+          </AdminDialogPrimitive>
+        )}
         {children}
       </main>
     </div>

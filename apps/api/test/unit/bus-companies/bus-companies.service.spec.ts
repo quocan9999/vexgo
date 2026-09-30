@@ -1,9 +1,14 @@
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Prisma } from '../../../src/generated/prisma/client.js';
 import { BusCompaniesService } from '../../../src/bus-companies/bus-companies.service.js';
 import { BusCompanyQueryDto } from '../../../src/bus-companies/dto/bus-company-query.dto.js';
+import type { AuthPrincipal } from '../../../src/auth/tokens/auth-principal.js';
 import { PrismaService } from '../../../src/prisma/prisma.service.js';
 
 describe('BusCompaniesService', () => {
@@ -504,6 +509,7 @@ describe('BusCompaniesService', () => {
         gte: new Date('2025-12-31T17:00:00.000Z'),
         lt: new Date('2026-01-31T17:00:00.000Z'),
       },
+      trangThai: 'HOAT_DONG',
     };
     expect(nhaXe.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where }),
@@ -526,7 +532,10 @@ describe('BusCompaniesService', () => {
 
     expect(nhaXe.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { createdAt: { gte: new Date('2026-01-01T08:00:00.000Z') } },
+        where: {
+          createdAt: { gte: new Date('2026-01-01T08:00:00.000Z') },
+          trangThai: 'HOAT_DONG',
+        },
       }),
     );
   });
@@ -548,6 +557,7 @@ describe('BusCompaniesService', () => {
       expect.objectContaining({
         where: {
           createdAt: { gte: new Date('2025-12-31T17:00:00.000Z') },
+          trangThai: 'HOAT_DONG',
         },
       }),
     );
@@ -570,12 +580,13 @@ describe('BusCompaniesService', () => {
       expect.objectContaining({
         where: {
           createdAt: { gte: new Date('2025-12-31T17:00:00.000Z') },
+          trangThai: 'HOAT_DONG',
         },
       }),
     );
   });
 
-  it('uses the canonical paused status as an exact database value', async () => {
+  it('keeps public company discovery active-only even when the client requests paused companies', async () => {
     await service.findAll(
       Object.assign(new BusCompanyQueryDto(), {
         page: 1,
@@ -587,8 +598,136 @@ describe('BusCompaniesService', () => {
     );
 
     expect(nhaXe.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { trangThai: 'HOAT_DONG' } }),
+    );
+  });
+
+  it('lets super admins filter inactive companies across all tenants', async () => {
+    const principal: AuthPrincipal = {
+      taiKhoanId: 1,
+      sessionId: 'super-admin-session',
+      roles: ['SUPER_ADMIN'],
+      permissions: [],
+      nhanVienId: null,
+      nhaXeId: null,
+    };
+
+    await service.findAll(
+      Object.assign(new BusCompanyQueryDto(), {
+        page: 1,
+        pageSize: 10,
+        sortBy: 'name',
+        sortDirection: 'asc',
+        status: 'TAM_NGUNG',
+      }),
+      principal,
+    );
+
+    expect(nhaXe.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { trangThai: 'TAM_NGUNG' } }),
     );
+    expect(nhaXe.count).toHaveBeenCalledWith({ where: { trangThai: 'TAM_NGUNG' } });
+  });
+
+  it('scopes a tenant principal to the trusted bus-company ID', async () => {
+    const principal: AuthPrincipal = {
+      taiKhoanId: 2,
+      sessionId: 'tenant-session',
+      roles: ['NHA_XE_ADMIN'],
+      permissions: [],
+      nhanVienId: 22,
+      nhaXeId: 901,
+    };
+
+    await service.findAll(
+      Object.assign(new BusCompanyQueryDto(), {
+        page: 1,
+        pageSize: 10,
+        sortBy: 'name',
+        sortDirection: 'asc',
+      }),
+      principal,
+    );
+
+    expect(nhaXe.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { nhaXeId: 901 } }),
+    );
+    expect(nhaXe.count).toHaveBeenCalledWith({ where: { nhaXeId: 901 } });
+  });
+
+  it('does not expose paused company details to anonymous callers', async () => {
+    nhaXe.findUnique.mockResolvedValueOnce({
+      nhaXeId: 42,
+      maNhaXe: 'NX042',
+      tenNhaXe: 'Nhà xe Chi tiết',
+      thongTinLienHe: '0900000042',
+      trangThai: 'TAM_NGUNG',
+      createdAt: new Date('2026-01-02T03:04:05.000Z'),
+      updatedAt: new Date('2026-02-03T04:05:06.000Z'),
+    });
+
+    await expect(service.findOne(42)).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('hides another tenant company when a tenant principal requests its detail', async () => {
+    const principal: AuthPrincipal = {
+      taiKhoanId: 2,
+      sessionId: 'tenant-session',
+      roles: ['NHA_XE_ADMIN'],
+      permissions: [],
+      nhanVienId: 22,
+      nhaXeId: 901,
+    };
+
+    await expect(service.findOne(902, principal)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    expect(nhaXe.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('allows the owning tenant to inspect its own paused company', async () => {
+    const principal: AuthPrincipal = {
+      taiKhoanId: 2,
+      sessionId: 'tenant-session',
+      roles: ['NHA_XE_ADMIN'],
+      permissions: [],
+      nhanVienId: 22,
+      nhaXeId: 901,
+    };
+    nhaXe.findUnique.mockResolvedValueOnce({
+      nhaXeId: 901,
+      maNhaXe: 'NX901',
+      tenNhaXe: 'Nhà xe Tạm ngưng',
+      thongTinLienHe: null,
+      trangThai: 'TAM_NGUNG',
+      createdAt: new Date('2026-01-02T03:04:05.000Z'),
+      updatedAt: new Date('2026-02-03T04:05:06.000Z'),
+    });
+
+    await expect(service.findOne(901, principal)).resolves.toMatchObject({
+      data: { busCompanyId: 901, status: 'TAM_NGUNG' },
+    });
+  });
+
+  it('rejects tenant-admin company reads when the trusted principal has no tenant scope', async () => {
+    const principal: AuthPrincipal = {
+      taiKhoanId: 2,
+      sessionId: 'tenant-session',
+      roles: ['NHA_XE_ADMIN'],
+      permissions: [],
+      nhanVienId: 22,
+      nhaXeId: null,
+    };
+
+    await expect(service.findAll(
+      Object.assign(new BusCompanyQueryDto(), {
+        page: 1,
+        pageSize: 10,
+        sortBy: 'name',
+        sortDirection: 'asc',
+      }),
+      principal,
+    )).rejects.toBeInstanceOf(ForbiddenException);
   });
 
 });

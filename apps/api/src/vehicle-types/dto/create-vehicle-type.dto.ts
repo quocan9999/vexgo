@@ -3,7 +3,7 @@ import { Type } from 'class-transformer';
 import { IsInt, Min } from 'class-validator';
 
 export class CreateVehicleTypeDto extends VehicleTypeWriteFieldsDto {
-  // Resource ownership assignment for platform CRUD; this is not an authenticated tenant identity.
+  // Compatibility field; tenant authorization is derived from the authenticated principal.
   @Type(() => Number)
   @IsInt()
   @Min(1)

@@ -1,10 +1,14 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
-import { useEffect, type ReactNode } from 'react';
-import { usePathname } from 'next/navigation';
-import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
-import { useDemoAdminSession } from '../hooks/use-demo-admin-session';
+import { useRouter, usePathname } from 'next/navigation';
+import { useEffect, useState, type ReactNode } from 'react';
+import { useAdminSession } from '../hooks/use-admin-session';
+import {
+  getAdminAuthErrorMessage,
+  initializeAdminSession,
+  signOutAdmin,
+} from '../services/admin-auth';
+import { getAdminAccessScope } from '../services/admin-scope';
 
 type OperationsSection = 'vehicle-types' | 'vehicles' | 'routes' | 'fare-prices';
 
@@ -16,49 +20,120 @@ function getOperationsSection(pathname: string): OperationsSection | null {
   return null;
 }
 
+function LoadingStatus({ message }: { message: string }) {
+  return (
+    <div className="auth-loading" role="status" aria-live="polite">
+      <span className="auth-loading-mark" aria-hidden="true">V</span>
+      <span>{message}</span>
+    </div>
+  );
+}
+
+function RestrictedAccount({ conflict }: { conflict: boolean }) {
+  const router = useRouter();
+  const sessionState = useAdminSession();
+  const [signingOut, setSigningOut] = useState(false);
+  const [logoutError, setLogoutError] = useState<string | null>(null);
+  const session = sessionState.status === 'authenticated'
+    ? sessionState.session
+    : null;
+
+  async function logout() {
+    setSigningOut(true);
+    setLogoutError(null);
+    try {
+      await signOutAdmin();
+      router.replace('/login');
+    } catch (error) {
+      setLogoutError(getAdminAuthErrorMessage(error));
+      setSigningOut(false);
+    }
+  }
+
+  return (
+    <main className="admin-page-content panel" aria-labelledby="admin-access-title">
+      <p className="login-eyebrow">VEXGO · TÀI KHOẢN QUẢN TRỊ</p>
+      <h1 id="admin-access-title">Tài khoản chưa có chức năng quản trị khả dụng</h1>
+      <p>
+        {conflict
+          ? 'Phạm vi vai trò của tài khoản chưa hợp lệ. Hãy liên hệ Super Admin để kiểm tra cấu hình.'
+          : 'Tài khoản đã đăng nhập nhưng hiện chưa được cấp chức năng trong Admin Web.'}
+      </p>
+      {session && <p>Đang đăng nhập: {session.fullName}</p>}
+      {logoutError && <p className="login-error" role="alert">{logoutError}</p>}
+      <button
+        className="login-submit-button"
+        disabled={signingOut}
+        onClick={logout}
+        type="button"
+      >
+        {signingOut ? 'Đang đăng xuất…' : 'Đăng xuất'}
+      </button>
+    </main>
+  );
+}
+
 export function AdminSessionGuard({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const sessionStatus = useDemoAdminSession();
+  const authState = useAdminSession();
   const operationsSection = getOperationsSection(pathname);
 
   useEffect(() => {
-    if (sessionStatus === 'anonymous') {
-      router.replace('/login');
-    } else if (sessionStatus === 'tenant-preview' && !operationsSection) {
-      router.replace('/vehicle-types');
-    }
-  }, [operationsSection, router, sessionStatus]);
+    void initializeAdminSession().catch(() => undefined);
+  }, []);
 
-  if (sessionStatus === 'tenant-preview' && operationsSection) {
+  const scope = authState.status === 'authenticated'
+    ? getAdminAccessScope(authState.session)
+    : null;
+
+  useEffect(() => {
+    if (authState.status === 'anonymous') {
+      router.replace('/login');
+      return;
+    }
+    if (authState.status !== 'authenticated') return;
+
+    if (scope === 'tenant' && !operationsSection) {
+      router.replace('/vehicle-types');
+    } else if (scope === 'platform' && operationsSection) {
+      router.replace('/');
+    }
+  }, [authState.status, operationsSection, router, scope]);
+
+  if (authState.status === 'checking') {
+    return <LoadingStatus message="Đang kiểm tra phiên quản trị…" />;
+  }
+
+  if (authState.status === 'error') {
     return (
-      <SuperAdminLayout activeSection={operationsSection}>
-        <section
-          aria-labelledby="tenant-operations-preview-title"
-          className="admin-page-content panel tenant-operations-placeholder"
-          role="status"
+      <main className="admin-page-content panel" aria-labelledby="session-error-title">
+        <h1 id="session-error-title">Không thể kiểm tra phiên đăng nhập</h1>
+        <p className="login-error" role="alert">{authState.message}</p>
+        <button
+          className="login-submit-button"
+          onClick={() => void initializeAdminSession().catch(() => undefined)}
+          type="button"
         >
-          <span className="tenant-operations-placeholder__eyebrow">
-            GIAO DIỆN XEM TRƯỚC · CHƯA CÓ PHÂN QUYỀN
-          </span>
-          <h1 id="tenant-operations-preview-title">Vận hành nhà xe</h1>
-          <p>
-            Dữ liệu vận hành theo nhà xe sẽ được kết nối sau khi hoàn thiện xác thực và phân quyền ở Feature 15–16.
-          </p>
-        </section>
-      </SuperAdminLayout>
+          Thử lại
+        </button>
+      </main>
     );
   }
 
-  if (sessionStatus !== 'authenticated') {
-    return (
-      <div className="auth-loading" role="status">
-        <span className="auth-loading-mark" aria-hidden="true">
-          V
-        </span>
-        <span>Đang kiểm tra phiên quản trị…</span>
-      </div>
-    );
+  if (authState.status === 'anonymous') {
+    return <LoadingStatus message="Đang chuyển đến đăng nhập…" />;
+  }
+
+  if (scope === 'conflict' || scope === 'restricted') {
+    return <RestrictedAccount conflict={scope === 'conflict'} />;
+  }
+
+  if (
+    (scope === 'tenant' && !operationsSection) ||
+    (scope === 'platform' && operationsSection)
+  ) {
+    return <LoadingStatus message="Đang mở khu vực phù hợp với tài khoản…" />;
   }
 
   return children;
