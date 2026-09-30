@@ -17,6 +17,7 @@ import {
   type FilterOption,
 } from '@/components/data-filters/data-filters';
 import { Button } from '@/components/ui/button';
+import { useAdminPermissions } from '@/features/admin-auth/hooks/use-admin-permissions';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
 import {
   getFarePriceRouteOptions,
@@ -89,6 +90,8 @@ function optionFilters(options: FarePriceOption[]): FilterOption[] {
 }
 
 export function FarePricesManagement() {
+  const { can } = useAdminPermissions();
+  const canCreate = can('fare-price:create');
   const {
     farePricePage,
     error,
@@ -258,7 +261,7 @@ export function FarePricesManagement() {
         <AdminPageHeader
           actions={
             <div className={`page-intro-actions ${styles.pageActions}`}>
-              <AdminCreateAction label="Thêm bảng giá" onClick={openCreateDialog} />
+              {canCreate && <AdminCreateAction label="Thêm bảng giá" onClick={openCreateDialog} />}
               <AdminRefreshAction loading={loading} onClick={refresh} />
             </div>
           }
@@ -470,7 +473,7 @@ export function FarePricesManagement() {
           vehicleTypeOptions={vehicleTypeOptions}
         />
       )}
-      {createDialogOpen && (
+      {createDialogOpen && canCreate && (
         <FarePriceFormDialog
           onClose={() => setCreateDialogOpen(false)}
           onRetryRouteOptions={retryRouteOptions}

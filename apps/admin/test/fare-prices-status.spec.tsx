@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import type { AnchorHTMLAttributes } from 'react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { FarePricesManagement } from '@/features/fare-prices/components/fare-prices-management';
+import { setEmployeeAdminTestSession } from './admin-auth-test-session';
 
 vi.mock('next/navigation', () => ({
   usePathname: () => '/fare-prices',
@@ -69,6 +70,12 @@ type ApiOptions = {
 };
 
 function installApi(options: ApiOptions = {}) {
+  setEmployeeAdminTestSession([
+    'fare-price:read',
+    'fare-price:update',
+    'route:read',
+    'vehicle-type:read',
+  ]);
   vi.stubEnv('NEXT_PUBLIC_API_URL', 'http://localhost:4000');
   let currentFare = {
     ...baseFare,
