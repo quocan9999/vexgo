@@ -36,6 +36,13 @@ const tenantAdmin: AuthPrincipal = {
   nhanVienId: 9,
   nhaXeId: 4,
 };
+const tenantEmployee: AuthPrincipal = {
+  ...tenantAdmin,
+  taiKhoanId: 8,
+  sessionId: 'employee-session',
+  roles: ['NHAN_VIEN_CSKH'],
+  nhanVienId: 10,
+};
 
 function createQuery(overrides: Partial<VehicleTypeQueryDto> = {}) {
   return Object.assign(new VehicleTypeQueryDto(), overrides);
@@ -79,6 +86,15 @@ describe('VehicleTypesService', () => {
 
   it('does not add a search condition for whitespace-only input', async () => {
     await service.findAll(createQuery({ search: '  \t ' }), tenantAdmin);
+
+    expect(prisma.loaiXe.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { nhaXeId: 4 } }),
+    );
+    expect(prisma.loaiXe.count).toHaveBeenCalledWith({ where: { nhaXeId: 4 } });
+  });
+
+  it('filters vehicle type reads by an employee principal tenant', async () => {
+    await service.findAll(createQuery(), tenantEmployee);
 
     expect(prisma.loaiXe.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { nhaXeId: 4 } }),
@@ -148,7 +164,12 @@ describe('VehicleTypesService', () => {
   });
 
   it('does not allow a platform-only principal to read tenant vehicle types', async () => {
-    const platformAdmin = { ...tenantAdmin, roles: ['SUPER_ADMIN'] };
+    const platformAdmin = {
+      ...tenantAdmin,
+      roles: ['SUPER_ADMIN'],
+      nhanVienId: null,
+      nhaXeId: null,
+    };
     const error = await service
       .findAll(createQuery(), platformAdmin)
       .catch((caught: unknown) => caught);

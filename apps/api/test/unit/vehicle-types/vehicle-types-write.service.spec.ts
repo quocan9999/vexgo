@@ -37,6 +37,13 @@ const tenantAdmin: AuthPrincipal = {
   nhanVienId: 9,
   nhaXeId: 4,
 };
+const tenantEmployee: AuthPrincipal = {
+  ...tenantAdmin,
+  taiKhoanId: 8,
+  sessionId: 'employee-session',
+  roles: ['NHAN_VIEN_KINH_DOANH'],
+  nhanVienId: 10,
+};
 
 function knownRequestError(code: string, meta?: Record<string, unknown>) {
   return new Prisma.PrismaClientKnownRequestError('database constraint error', {
@@ -97,6 +104,27 @@ describe('VehicleTypesService write operations', () => {
         updatedAt: true,
       }),
     });
+  });
+
+  it('creates a vehicle type within an employee principal tenant', async () => {
+    await service.create(
+      { name: 'Limousine 22 phòng', description: null, busCompanyId: 4 },
+      tenantEmployee,
+    );
+
+    expect(prisma.nhaXe.findUnique).toHaveBeenCalledWith({
+      where: { nhaXeId: 4 },
+      select: { nhaXeId: true },
+    });
+    expect(prisma.loaiXe.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: {
+          nhaXeId: 4,
+          tenLoai: 'Limousine 22 phòng',
+          moTa: null,
+        },
+      }),
+    );
   });
 
   it.each([
