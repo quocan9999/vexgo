@@ -15,6 +15,7 @@ import { AppModule } from '../../src/app.module.js';
 import { AccessTokenGuard } from '../../src/auth/guards/access-token.guard.js';
 import { BusCompaniesService } from '../../src/bus-companies/bus-companies.service.js';
 import { RoutesService } from '../../src/routes/routes.service.js';
+import { VehicleTypesService } from '../../src/vehicle-types/vehicle-types.service.js';
 import { configureApi } from '../../src/common/configure-api.js';
 import { PaginationQueryDto } from '../../src/common/dto/pagination-query.dto.js';
 import {
@@ -160,6 +161,12 @@ describe('API foundation', () => {
     findAll: vi.fn(),
     findOne: vi.fn(),
   };
+  const vehicleTypesService = {
+    create: vi.fn(),
+    update: vi.fn(),
+    findAll: vi.fn(),
+    findOne: vi.fn(),
+  };
 
   beforeAll(async () => {
     originalCorsOrigins = process.env.CORS_ALLOWED_ORIGINS;
@@ -176,6 +183,8 @@ describe('API foundation', () => {
       .useValue({ verifyAsync: jwtVerify })
       .overrideProvider(RoutesService)
       .useValue(routesService)
+      .overrideProvider(VehicleTypesService)
+      .useValue(vehicleTypesService)
       .overrideProvider(BusCompaniesService)
       .useValue(busCompaniesService)
       .compile();
@@ -212,6 +221,19 @@ describe('API foundation', () => {
     busCompaniesService.findAll.mockResolvedValue({
       data: [],
       meta: { page: 1, pageSize: 10, totalItems: 0, totalPages: 0 },
+    });
+    vehicleTypesService.findAll.mockResolvedValue({
+      data: [],
+      meta: { page: 1, pageSize: 10, totalItems: 0, totalPages: 0 },
+    });
+    vehicleTypesService.findOne.mockResolvedValue({
+      data: { vehicleTypeId: 17 },
+    });
+    vehicleTypesService.create.mockResolvedValue({
+      data: { vehicleTypeId: 17 },
+    });
+    vehicleTypesService.update.mockResolvedValue({
+      data: { vehicleTypeId: 17 },
     });
     jwtVerify.mockResolvedValue({
       sub: 42,
@@ -350,6 +372,145 @@ describe('API foundation', () => {
         nhaXeId: 901,
       }),
     );
+  });
+
+  it('allows an employee to read vehicle types with vehicle-type:read', async () => {
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['NHAN_VIEN_CSKH'], true, {
+        NHAN_VIEN_CSKH: ['vehicle-type:read'],
+      }),
+    );
+
+    await request(app.getHttpServer())
+      .get('/api/v1/vehicle-types')
+      .set('Authorization', 'Bearer signed-token')
+      .expect(200);
+
+    expect(vehicleTypesService.findAll).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({ roles: ['NHAN_VIEN_CSKH'], nhaXeId: 901 }),
+    );
+  });
+
+  it('keeps NHA_XE_ADMIN access when the database has its default vehicle-type permissions', async () => {
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['NHA_XE_ADMIN'], true, {
+        NHA_XE_ADMIN: [
+          'vehicle-type:read',
+          'vehicle-type:create',
+          'vehicle-type:update',
+        ],
+      }),
+    );
+
+    await request(app.getHttpServer())
+      .get('/api/v1/vehicle-types')
+      .set('Authorization', 'Bearer signed-token')
+      .expect(200);
+
+    expect(vehicleTypesService.findAll).toHaveBeenCalled();
+  });
+
+  it('requires vehicle-type:read for vehicle-type detail before calling the service', async () => {
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['NHAN_VIEN_CSKH'], true),
+    );
+
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/vehicle-types/17')
+      .set('Authorization', 'Bearer signed-token')
+      .expect(403);
+
+    expect(response.body.error).toBe('PERMISSION_FORBIDDEN');
+    expect(vehicleTypesService.findOne).not.toHaveBeenCalled();
+  });
+
+  it('allows an employee to create a vehicle type with vehicle-type:create', async () => {
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['NHAN_VIEN_CSKH'], true, {
+        NHAN_VIEN_CSKH: ['vehicle-type:create'],
+      }),
+    );
+
+    await request(app.getHttpServer())
+      .post('/api/v1/vehicle-types')
+      .set('Authorization', 'Bearer signed-token')
+      .send({ name: 'Ghế giường nằm', busCompanyId: 901 })
+      .expect(201);
+
+    expect(vehicleTypesService.create).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'Ghế giường nằm', busCompanyId: 901 }),
+      expect.objectContaining({ roles: ['NHAN_VIEN_CSKH'], nhaXeId: 901 }),
+    );
+  });
+
+  it('denies vehicle-type creation when an employee only has the read permission', async () => {
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['NHAN_VIEN_CSKH'], true, {
+        NHAN_VIEN_CSKH: ['vehicle-type:read'],
+      }),
+    );
+
+    const response = await request(app.getHttpServer())
+      .post('/api/v1/vehicle-types')
+      .set('Authorization', 'Bearer signed-token')
+      .send({ name: 'Ghế giường nằm', busCompanyId: 901 })
+      .expect(403);
+
+    expect(response.body.error).toBe('PERMISSION_FORBIDDEN');
+    expect(vehicleTypesService.create).not.toHaveBeenCalled();
+  });
+
+  it('allows an employee to update a vehicle type with vehicle-type:update', async () => {
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['NHAN_VIEN_CSKH'], true, {
+        NHAN_VIEN_CSKH: ['vehicle-type:update'],
+      }),
+    );
+
+    await request(app.getHttpServer())
+      .patch('/api/v1/vehicle-types/17')
+      .set('Authorization', 'Bearer signed-token')
+      .send({ name: 'Ghế limousine' })
+      .expect(200);
+
+    expect(vehicleTypesService.update).toHaveBeenCalledWith(
+      17,
+      expect.objectContaining({ name: 'Ghế limousine' }),
+      expect.objectContaining({ roles: ['NHAN_VIEN_CSKH'], nhaXeId: 901 }),
+    );
+  });
+
+  it('denies vehicle-type updates when an employee only has vehicle-type:create', async () => {
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['NHAN_VIEN_CSKH'], true, {
+        NHAN_VIEN_CSKH: ['vehicle-type:create'],
+      }),
+    );
+
+    const response = await request(app.getHttpServer())
+      .patch('/api/v1/vehicle-types/17')
+      .set('Authorization', 'Bearer signed-token')
+      .send({ name: 'Ghế limousine' })
+      .expect(403);
+
+    expect(response.body.error).toBe('PERMISSION_FORBIDDEN');
+    expect(vehicleTypesService.update).not.toHaveBeenCalled();
+  });
+
+  it('rejects Super Admin vehicle-type access even if the account has a tenant permission', async () => {
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['SUPER_ADMIN'], false, {
+        SUPER_ADMIN: ['vehicle-type:read'],
+      }),
+    );
+
+    await request(app.getHttpServer())
+      .get('/api/v1/vehicle-types')
+      .set('Authorization', 'Bearer signed-token')
+      .expect(403);
+
+    expect(vehicleTypesService.findAll).not.toHaveBeenCalled();
   });
 
   it('requires route:read for authenticated tenant principals on route list and detail reads', async () => {

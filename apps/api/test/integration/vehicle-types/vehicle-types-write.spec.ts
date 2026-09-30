@@ -5,6 +5,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { Prisma } from '../../../src/generated/prisma/client.js';
 import { AppModule } from '../../../src/app.module.js';
 import { AccessTokenGuard } from '../../../src/auth/guards/access-token.guard.js';
+import { ADMIN_ROLE_DEFAULT_PERMISSION_KEYS } from '../../../src/auth/permissions/permission-catalog.js';
 import type { AuthPrincipal } from '../../../src/auth/tokens/auth-principal.js';
 import { configureApi } from '../../../src/common/configure-api.js';
 import { PrismaService } from '../../../src/prisma/prisma.service.js';
@@ -12,7 +13,7 @@ let testPrincipal: AuthPrincipal = {
   taiKhoanId: 7,
   sessionId: 'tenant-session',
   roles: ['NHA_XE_ADMIN'],
-  permissions: [],
+  permissions: [...ADMIN_ROLE_DEFAULT_PERMISSION_KEYS.NHA_XE_ADMIN],
   nhanVienId: 9,
   nhaXeId: 4,
 };
@@ -82,7 +83,7 @@ describe('Vehicle type write API request-pipeline integration', () => {
       taiKhoanId: 7,
       sessionId: 'tenant-session',
       roles: ['NHA_XE_ADMIN'],
-      permissions: [],
+      permissions: [...ADMIN_ROLE_DEFAULT_PERMISSION_KEYS.NHA_XE_ADMIN],
       nhanVienId: 9,
       nhaXeId: 4,
     };
