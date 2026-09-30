@@ -19,21 +19,41 @@ const platformSession = {
 
 const mockAdminSession = vi.hoisted(() => ({
   state: null as TestSessionState | null,
+  listeners: new Set<() => void>(),
 }));
 
-vi.mock('@/features/admin-auth/hooks/use-admin-session', () => ({
-  useAdminSession: () => mockAdminSession.state,
-}));
+vi.mock('@/features/admin-auth/hooks/use-admin-session', async () => {
+  const { useSyncExternalStore } = await vi.importActual<typeof import('react')>(
+    'react',
+  );
+
+  return {
+    useAdminSession: () =>
+      useSyncExternalStore(
+        (listener) => {
+          mockAdminSession.listeners.add(listener);
+          return () => mockAdminSession.listeners.delete(listener);
+        },
+        () => mockAdminSession.state,
+        () => mockAdminSession.state,
+      ),
+  };
+});
+
+function publishAdminTestSession(state: TestSessionState) {
+  mockAdminSession.state = state;
+  mockAdminSession.listeners.forEach((listener) => listener());
+}
 
 export function resetAdminTestSession() {
-  mockAdminSession.state = {
+  publishAdminTestSession({
     status: 'authenticated',
     session: platformSession,
-  };
+  });
 }
 
 export function setAdminTestSession(state: TestSessionState) {
-  mockAdminSession.state = state;
+  publishAdminTestSession(state);
 }
 
 export function setEmployeeAdminTestSession(permissions: string[]) {

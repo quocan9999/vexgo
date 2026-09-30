@@ -221,6 +221,70 @@ describe('admin tenant presentation mode', () => {
     expect(SensitiveManagement).toHaveBeenCalled();
   });
 
+  it('allows a scoped tenant admin with role:read to mount tenant RBAC', () => {
+    setTenantSession(['NHA_XE_ADMIN'], ['role:read']);
+    state.pathname = '/tenant-rbac';
+    const TenantRbac = vi.fn(() => <div>Tenant role permissions</div>);
+
+    render(
+      <AdminSessionGuard>
+        <TenantRbac />
+      </AdminSessionGuard>,
+    );
+
+    expect(screen.getByText('Tenant role permissions')).toBeTruthy();
+    expect(TenantRbac).toHaveBeenCalled();
+    expect(replace).not.toHaveBeenCalled();
+  });
+
+  it('does not mount tenant RBAC for an employee-only account with RBAC permissions', () => {
+    setTenantSession(['NHAN_VIEN_CSKH'], ['role:read', 'permission:assign']);
+    state.pathname = '/tenant-rbac';
+    const TenantRbac = vi.fn(() => <div>Tenant role permissions</div>);
+
+    render(
+      <AdminSessionGuard>
+        <TenantRbac />
+      </AdminSessionGuard>,
+    );
+
+    expect(TenantRbac).not.toHaveBeenCalled();
+    expect(screen.queryByText('Tenant role permissions')).toBeNull();
+    expect(screen.getByText(/chưa được cấp chức năng trong Admin Web/i)).toBeTruthy();
+    expect(replace).not.toHaveBeenCalled();
+  });
+
+  it('does not mount tenant RBAC for Super Admin and redirects to platform overview', async () => {
+    state.pathname = '/tenant-rbac';
+    const TenantRbac = vi.fn(() => <div>Tenant role permissions</div>);
+
+    render(
+      <AdminSessionGuard>
+        <TenantRbac />
+      </AdminSessionGuard>,
+    );
+
+    expect(TenantRbac).not.toHaveBeenCalled();
+    expect(screen.queryByText('Tenant role permissions')).toBeNull();
+    await waitFor(() => expect(replace).toHaveBeenCalledWith('/'));
+  });
+
+  it('does not mount tenant RBAC without role:read and redirects an admin to an allowed page', async () => {
+    setTenantSession(['NHA_XE_ADMIN'], ['vehicle-type:read']);
+    state.pathname = '/tenant-rbac';
+    const TenantRbac = vi.fn(() => <div>Tenant role permissions</div>);
+
+    render(
+      <AdminSessionGuard>
+        <TenantRbac />
+      </AdminSessionGuard>,
+    );
+
+    expect(TenantRbac).not.toHaveBeenCalled();
+    expect(screen.queryByText('Tenant role permissions')).toBeNull();
+    await waitFor(() => expect(replace).toHaveBeenCalledWith('/vehicle-types'));
+  });
+
   it('shows exactly the tenant navigation items granted by read permission', () => {
     setTenantSession(
       ['NHAN_VIEN_CSKH'],
@@ -243,6 +307,49 @@ describe('admin tenant presentation mode', () => {
     expect(screen.queryByRole('link', { name: 'Nhà xe' })).toBeNull();
     expect(screen.getByRole('link', { name: /VexGo/ }).getAttribute('href'))
       .toBe('/routes');
+  });
+
+  it('shows tenant RBAC separately for a tenant admin with role:read', () => {
+    setTenantSession(['NHA_XE_ADMIN'], ['vehicle-type:read', 'role:read']);
+
+    render(
+      <SuperAdminLayout activeSection="tenant-rbac">
+        <h1>Tenant RBAC</h1>
+      </SuperAdminLayout>,
+    );
+
+    const link = screen.getByRole('link', { name: 'Phân quyền' });
+    expect(link.getAttribute('href')).toBe('/tenant-rbac');
+    expect(link.getAttribute('aria-current')).toBe('page');
+    expect(screen.getAllByText('QUẢN TRỊ NHÀ XE')).toHaveLength(2);
+    expect(screen.getByText('VẬN HÀNH')).toBeTruthy();
+  });
+
+  it('does not show tenant RBAC to employee-only accounts, even with RBAC keys', () => {
+    setTenantSession(['NHAN_VIEN_CSKH'], ['route:read', 'role:read', 'permission:assign']);
+
+    render(
+      <SuperAdminLayout activeSection="routes">
+        <h1>Tenant page</h1>
+      </SuperAdminLayout>,
+    );
+
+    expect(screen.queryByText('QUẢN TRỊ NHÀ XE')).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Phân quyền' })).toBeNull();
+  });
+
+  it('hides tenant RBAC from a tenant admin without role:read', () => {
+    setTenantSession(['NHA_XE_ADMIN'], ['vehicle-type:read']);
+
+    render(
+      <SuperAdminLayout activeSection="vehicle-types">
+        <h1>Tenant operations</h1>
+      </SuperAdminLayout>,
+    );
+
+    expect(screen.getByText('VẬN HÀNH')).toBeTruthy();
+    expect(screen.getAllByText('QUẢN TRỊ NHÀ XE')).toHaveLength(1);
+    expect(screen.queryByRole('link', { name: 'Phân quyền' })).toBeNull();
   });
 
   it('does not render an empty tenant operations group without read permissions', () => {

@@ -19,6 +19,7 @@ import { AdminDialogPrimitive } from '@/components/admin/admin-dialog-primitive'
 import { useAdminSession } from '@/features/admin-auth/hooks/use-admin-session';
 import {
   ADMIN_OPERATION_SECTIONS,
+  canReadTenantRbac,
   getFirstAccessibleAdminPath,
   hasAdminPermission,
   canManagePlatformRbac,
@@ -39,7 +40,8 @@ type SuperAdminLayoutProps = {
     | 'vehicles'
     | 'routes'
     | 'fare-prices'
-    | 'rbac';
+    | 'rbac'
+    | 'tenant-rbac';
   children: ReactNode;
 };
 
@@ -88,6 +90,7 @@ export function SuperAdminLayout({
   const tenantScope = scope === 'tenant';
   const platformScope = scope === 'platform';
   const canManageRbac = canManagePlatformRbac(session);
+  const canReadTenantRolePermissions = canReadTenantRbac(session);
   const canReadBusCompanies = hasPlatformAdminPermission(
     session,
     'bus-company:read',
@@ -212,6 +215,22 @@ export function SuperAdminLayout({
             </nav>
           </div>
         )}
+        {tenantScope && canReadTenantRolePermissions && (
+        <div className="sidebar-nav-group">
+          <p className="sidebar-label">QUẢN TRỊ NHÀ XE</p>
+          <nav aria-label="Quản trị nhà xe">
+            <Link
+              aria-current={activeSection === 'tenant-rbac' ? 'page' : undefined}
+              className={`sidebar-link${activeSection === 'tenant-rbac' ? ' is-active' : ''}`}
+              href="/tenant-rbac"
+              onClick={closeMobileNavigation}
+            >
+              <span className="sidebar-link-icon"><ShieldCheck size={18} /></span>
+              <span>Phân quyền</span>
+            </Link>
+          </nav>
+        </div>
+      )}
       </aside>
 
       <main className="admin-main" id={activeSection}>

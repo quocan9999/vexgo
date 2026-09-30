@@ -40,7 +40,9 @@ export type AdminPermission =
   | 'route:update'
   | 'fare-price:read'
   | 'fare-price:create'
-  | 'fare-price:update';
+  | 'fare-price:update'
+  | 'role:read'
+  | 'permission:assign';
 
 export type PlatformAdminPermission =
   | 'bus-company:read'
@@ -66,6 +68,31 @@ export function canManagePlatformRbac(
 
 export function isPlatformRbacPath(pathname: string): boolean {
   return matchesPath(pathname, '/rbac');
+}
+
+export function isTenantRbacPath(pathname: string): boolean {
+  return matchesPath(pathname, '/tenant-rbac');
+}
+
+export function canReadTenantRbac(
+  session: AdminSession | null,
+): boolean {
+  return (
+    session !== null &&
+    getAdminAccessScope(session) === 'tenant' &&
+    session.roles.includes('NHA_XE_ADMIN') &&
+    session.permissions.includes('role:read')
+  );
+}
+
+export function canWriteTenantRbac(
+  session: AdminSession | null,
+): boolean {
+  return (
+    session !== null &&
+    canReadTenantRbac(session) &&
+    session.permissions.includes('permission:assign')
+  );
 }
 
 export function hasPlatformAdminPermission(
@@ -148,6 +175,6 @@ export function getFirstAccessibleAdminPath(
   return (
     ADMIN_OPERATION_SECTIONS.find((item) =>
       hasAdminPermission(session, item.readPermission),
-    )?.href ?? null
+    )?.href ?? (canReadTenantRbac(session) ? '/tenant-rbac' : null)
   );
 }

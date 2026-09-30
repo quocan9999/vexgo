@@ -16,6 +16,8 @@ import {
   hasAllAdminPermissions,
   hasAllPlatformAdminPermissions,
   isPlatformRbacPath,
+  isTenantRbacPath,
+  canReadTenantRbac,
 } from '../services/admin-access';
 import { getAdminAccessScope } from '../services/admin-scope';
 
@@ -90,7 +92,9 @@ export function AdminSessionGuard({ children }: { children: ReactNode }) {
     getRequiredPlatformAdminPermissions(pathname);
   const platformRbacNeedsRedirect =
     isPlatformRbacPath(pathname) && !canManagePlatformRbac(session);
-  const tenantNeedsRedirect = scope === 'tenant' && (
+  const tenantRbacNeedsRedirect =
+    isTenantRbacPath(pathname) && !canReadTenantRbac(session);
+  const tenantNeedsRedirect = scope === 'tenant' && !isTenantRbacPath(pathname) && (
     requiredPermissions === null ||
     !hasAllAdminPermissions(session, requiredPermissions)
   );
@@ -101,6 +105,10 @@ export function AdminSessionGuard({ children }: { children: ReactNode }) {
     ? scope === 'tenant'
       ? tenantLandingPath
       : '/'
+    : tenantRbacNeedsRedirect
+      ? scope === 'tenant'
+        ? tenantLandingPath
+        : '/'
     : tenantNeedsRedirect
     ? tenantLandingPath
     : scope === 'platform' && requiredPermissions !== null
@@ -110,7 +118,8 @@ export function AdminSessionGuard({ children }: { children: ReactNode }) {
           !hasAllPlatformAdminPermissions(session, requiredPlatformPermissions)
         ? '/'
         : null;
-  const tenantHasNoAccessiblePage = tenantNeedsRedirect && !tenantLandingPath;
+  const tenantHasNoAccessiblePage =
+    (tenantNeedsRedirect || tenantRbacNeedsRedirect) && !tenantLandingPath;
 
   useEffect(() => {
     if (authState.status === 'anonymous') {

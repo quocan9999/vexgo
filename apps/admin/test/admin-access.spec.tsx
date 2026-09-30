@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   canManagePlatformRbac,
+  canReadTenantRbac,
+  canWriteTenantRbac,
   getFirstAccessibleAdminPath,
   getRequiredAdminPermissions,
   getRequiredPlatformAdminPermissions,
@@ -9,6 +11,7 @@ import {
   hasAdminPermission,
   hasPlatformAdminPermission,
   isPlatformRbacPath,
+  isTenantRbacPath,
 } from '@/features/admin-auth/services/admin-access';
 import { getAdminAccessScope } from '@/features/admin-auth/services/admin-scope';
 import type { AdminSession } from '@/features/admin-auth/services/admin-auth';
@@ -110,6 +113,41 @@ describe('admin access scope and permissions', () => {
     expect(isPlatformRbacPath('/rbac-extra')).toBe(false);
   });
 
+  it('allows tenant RBAC access only to a scoped NHA_XE_ADMIN with role:read', () => {
+    const tenantAdmin = makeTenantSession(
+      ['NHA_XE_ADMIN'],
+      ['role:read', 'permission:assign'],
+    );
+
+    expect(canReadTenantRbac(tenantAdmin)).toBe(true);
+    expect(canWriteTenantRbac(tenantAdmin)).toBe(true);
+    expect(
+      canReadTenantRbac(
+        makeTenantSession(['NHA_XE_ADMIN'], ['permission:assign']),
+      ),
+    ).toBe(false);
+    expect(
+      canReadTenantRbac(
+        makeTenantSession(
+          ['NHAN_VIEN_CSKH'],
+          ['role:read', 'permission:assign'],
+        ),
+      ),
+    ).toBe(false);
+    expect(
+      canReadTenantRbac({
+        ...tenantAdmin,
+        roles: ['SUPER_ADMIN', 'NHA_XE_ADMIN'],
+      }),
+    ).toBe(false);
+  });
+
+  it('matches only the tenant RBAC route and its descendants', () => {
+    expect(isTenantRbacPath('/tenant-rbac')).toBe(true);
+    expect(isTenantRbacPath('/tenant-rbac/child')).toBe(true);
+    expect(isTenantRbacPath('/tenant-rbac-extra')).toBe(false);
+  });
+
   it('resolves platform permissions only for a valid platform principal', () => {
     const platform = makePlatformSession([
       'bus-company:read',
@@ -141,6 +179,22 @@ describe('admin access scope and permissions', () => {
     expect(getFirstAccessibleAdminPath(session)).toBe('/routes');
     expect(hasAdminPermission(session, 'fare-price:read')).toBe(true);
     expect(hasAdminPermission(session, 'vehicle:read')).toBe(false);
+  });
+
+  it('uses tenant RBAC as a fallback only for an authorized tenant admin', () => {
+    const tenantAdmin = makeTenantSession(['NHA_XE_ADMIN'], ['role:read']);
+    const employeeWithSameKeys = makeTenantSession(
+      ['NHAN_VIEN_CSKH'],
+      ['role:read', 'permission:assign'],
+    );
+
+    expect(getFirstAccessibleAdminPath(tenantAdmin)).toBe('/tenant-rbac');
+    expect(getFirstAccessibleAdminPath(employeeWithSameKeys)).toBeNull();
+    expect(
+      getFirstAccessibleAdminPath(
+        makeTenantSession(['NHA_XE_ADMIN'], ['permission:assign']),
+      ),
+    ).toBeNull();
   });
 
   it('fails closed for empty permission checks without an authenticated tenant session', () => {
