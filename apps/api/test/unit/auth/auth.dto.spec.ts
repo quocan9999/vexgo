@@ -18,6 +18,47 @@ describe('Auth DTO validation', () => {
     await expect(validate(dto, validationOptions)).resolves.toEqual([]);
   });
 
+  it.each(['admin@vexgo.vn', '+84900000000'])(
+    'accepts Admin identifier login using %s',
+    async (identifier) => {
+      const dto = plainToInstance(LoginDto, {
+        identifier,
+        password: 'VexGo@123',
+      });
+
+      await expect(validate(dto, validationOptions)).resolves.toEqual([]);
+    },
+  );
+
+  it('trims the Admin login identifier before validation', async () => {
+    const dto = plainToInstance(LoginDto, {
+      identifier: '  ADMIN@VEXGO.VN  ',
+      password: 'VexGo@123',
+    });
+
+    await expect(validate(dto, validationOptions)).resolves.toEqual([]);
+    expect(dto.identifier).toBe('ADMIN@VEXGO.VN');
+  });
+
+  it.each([
+    ['missing identifier', {}],
+    [
+      'both legacy phone and identifier',
+      { phoneNumber: '+84900000000', identifier: 'admin@vexgo.vn' },
+    ],
+    ['malformed email', { identifier: 'not-an-email' }],
+    ['malformed identifier phone', { identifier: '0900000000' }],
+    ['empty password', { identifier: 'admin@vexgo.vn', password: '' }],
+    [
+      'password exceeding bcrypt byte limit',
+      { identifier: 'admin@vexgo.vn', password: 'a'.repeat(73) },
+    ],
+  ])('rejects login payload with %s', async (_name, fields) => {
+    const dto = plainToInstance(LoginDto, fields);
+    const errors = await validate(dto, validationOptions);
+    expect(errors.length).toBeGreaterThan(0);
+  });
+
   it('accepts a valid registration payload with public field names', async () => {
     const dto = plainToInstance(RegisterDto, {
       fullName: 'Nguyễn Văn An',

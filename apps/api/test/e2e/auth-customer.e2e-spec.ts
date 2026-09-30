@@ -121,6 +121,7 @@ describe('phone auth and customer profile flow', () => {
 
     const refresh = await request(app.getHttpServer())
       .post('/api/v1/auth/refresh')
+      .set('Authorization', 'Bearer expired-access-token')
       .send({ refreshToken: firstRefreshToken })
       .expect(200);
     const secondAccessToken = refresh.body.data.accessToken as string;

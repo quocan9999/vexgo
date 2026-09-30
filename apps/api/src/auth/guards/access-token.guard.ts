@@ -6,11 +6,16 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import type { Request } from 'express';
 import { requireAuthSecret } from '../auth-secret.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import type { AuthPrincipal } from '../tokens/auth-principal.js';
+import {
+  AUTH_MODE_KEY,
+  type EndpointAuthMode,
+} from '../decorators/public.decorator.js';
 
 interface AccessTokenPayload {
   sub: number;
@@ -28,6 +33,7 @@ export class AccessTokenGuard implements CanActivate {
     private readonly jwtService: JwtService,
     configService: ConfigService,
     private readonly prisma: PrismaService,
+    private readonly reflector: Reflector,
   ) {
     this.accessSecret = requireAuthSecret(
       configService.get<string>('JWT_ACCESS_SECRET'),
@@ -36,7 +42,17 @@ export class AccessTokenGuard implements CanActivate {
   }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
+    const authMode = this.reflector.getAllAndOverride<EndpointAuthMode>(
+      AUTH_MODE_KEY,
+      [context.getHandler(), context.getClass()],
+    );
+    if (authMode === 'public') return true;
+
     const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
+    if (authMode === 'optional' && request.headers.authorization === undefined) {
+      return true;
+    }
+
     const token = this.readBearerToken(request.headers.authorization);
     let payload: AccessTokenPayload;
     try {
@@ -64,8 +80,23 @@ export class AccessTokenGuard implements CanActivate {
           select: {
             taiKhoanId: true,
             trangThai: true,
+            nhanVien: {
+              select: {
+                nhanVienId: true,
+                nhaXeId: true,
+              },
+            },
             taiKhoanVaiTros: {
-              include: { vaiTro: { select: { tenVaiTro: true } } },
+              include: {
+                vaiTro: {
+                  select: {
+                    tenVaiTro: true,
+                    vaiTroQuyens: {
+                      select: { quyen: { select: { tenQuyen: true } } },
+                    },
+                  },
+                },
+              },
             },
           },
         },
@@ -86,12 +117,20 @@ export class AccessTokenGuard implements CanActivate {
       });
     }
 
+    const roleAssignments = session.taiKhoan.taiKhoanVaiTros;
     request.user = {
       taiKhoanId: session.taiKhoan.taiKhoanId,
       sessionId: session.sessionId,
-      roles: session.taiKhoan.taiKhoanVaiTros.map(
-        ({ vaiTro }) => vaiTro.tenVaiTro,
-      ),
+      roles: roleAssignments.map(({ vaiTro }) => vaiTro.tenVaiTro),
+      permissions: [
+        ...new Set(
+          roleAssignments.flatMap(({ vaiTro }) =>
+            vaiTro.vaiTroQuyens.map(({ quyen }) => quyen.tenQuyen),
+          ),
+        ),
+      ],
+      nhanVienId: session.taiKhoan.nhanVien?.nhanVienId ?? null,
+      nhaXeId: session.taiKhoan.nhanVien?.nhaXeId ?? null,
     };
     return true;
   }

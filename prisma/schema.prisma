@@ -184,7 +184,7 @@ model TaiKhoan {
   matKhau              String           @db.VarChar(255)
   ngaySinh             DateTime?        @db.Date
   cccd                 String?          @db.Char(12)
-  email                String?          @db.VarChar(150)
+  email                String?          @unique(map: "TaiKhoan_email_key") @db.VarChar(150)
   daXacThucSoDienThoai Boolean
   trangThai            String           @db.VarChar(30)
   createdAt            DateTime         @default(now()) @db.DateTime(0)

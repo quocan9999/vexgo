@@ -1,3 +1,4 @@
+import { adminApiFetch } from '@/lib/admin-api-client';
 import { getApiBaseUrl } from '@/lib/api-url';
 import { ROUTE_STATUSES, type PaginatedRoutes, type Route, type RouteListQuery } from '../types/route';
 
@@ -52,7 +53,7 @@ export class RouteApiError extends Error {
 }
 
 async function writeRoute(path: string, method: 'POST' | 'PATCH', input: unknown): Promise<Route> {
-  const response = await fetch(`${getApiBaseUrl()}/api/v1/routes${path}`, {
+  const response = await adminApiFetch(`${getApiBaseUrl()}/api/v1/routes${path}`, {
     method,
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
@@ -120,7 +121,7 @@ export async function getRoutes(query: RouteListQuery, signal?: AbortSignal): Pr
   });
   if (query.status) params.set('status', query.status);
   if (query.busCompanyId) params.set('busCompanyId', String(query.busCompanyId));
-  const body = await readResponse(await fetch(
+  const body = await readResponse(await adminApiFetch(
     `${getApiBaseUrl()}/api/v1/routes?${params.toString()}`,
     { cache: 'no-store', signal },
   ), 'danh sách tuyến xe');
@@ -131,7 +132,7 @@ export async function getRoutes(query: RouteListQuery, signal?: AbortSignal): Pr
 }
 
 export async function getRouteById(routeId: number, signal?: AbortSignal): Promise<Route> {
-  const body = await readResponse(await fetch(
+  const body = await readResponse(await adminApiFetch(
     `${getApiBaseUrl()}/api/v1/routes/${routeId}`, { cache: 'no-store', signal },
   ), 'thông tin tuyến xe');
   if (!isRecord(body) || !isRoute(body.data)) {

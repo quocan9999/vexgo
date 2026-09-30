@@ -84,7 +84,7 @@ describe('GET /api/v1/bus-companies', () => {
       .expect(200);
 
     expect(response.body).toEqual(detailResponse);
-    expect(service.findOne).toHaveBeenCalledWith(1);
+    expect(service.findOne).toHaveBeenCalledWith(1, undefined);
   });
 
   it.each(['abc', '0', '-1', '2147483648', '1e3', '0x10'])(
@@ -122,7 +122,7 @@ describe('GET /api/v1/bus-companies', () => {
       error: 'BUS_COMPANY_NOT_FOUND',
       message: 'Không tìm thấy nhà xe.',
     });
-    expect(service.findOne).toHaveBeenCalledWith(999);
+    expect(service.findOne).toHaveBeenCalledWith(999, undefined);
   });
 
   it('returns an English data envelope with pagination metadata', async () => {
@@ -152,6 +152,7 @@ describe('GET /api/v1/bus-companies', () => {
         createdFrom: '2026-01-01',
         createdTo: '2026-01-31',
       }),
+      undefined,
     );
   });
 
@@ -192,6 +193,7 @@ describe('GET /api/v1/bus-companies', () => {
 
     expect(service.findAll).toHaveBeenCalledWith(
       expect.objectContaining({ status: 'TAM_NGUNG' }),
+      undefined,
     );
   });
 

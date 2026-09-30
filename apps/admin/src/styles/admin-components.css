@@ -94,12 +94,6 @@ dialog:focus-visible {
   flex-direction: column;
 }
 
-.profile-copy {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-}
-
 .brand-copy strong {
   font-size: 17px;
   font-weight: 750;
@@ -108,11 +102,19 @@ dialog:focus-visible {
 }
 
 .brand-copy small {
+  overflow: hidden;
   margin-top: 5px;
   color: #aebbd0;
   font-size: 9px;
   font-weight: 700;
   letter-spacing: 1.25px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.brand-copy small + small {
+  margin-top: 2px;
+  letter-spacing: 0.8px;
 }
 
 .sidebar-divider {
@@ -186,49 +188,6 @@ dialog:focus-visible {
   color: #8eafff;
 }
 
-.sidebar-bottom {
-  display: grid;
-  gap: 17px;
-  margin-top: auto;
-}
-
-.sidebar-profile {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 5px 0;
-  border-top: 1px solid rgb(255 255 255 / 10%);
-}
-
-.profile-avatar {
-  display: grid;
-  width: 34px;
-  height: 34px;
-  flex: 0 0 34px;
-  place-items: center;
-  border: 1px solid rgb(255 255 255 / 18%);
-  border-radius: 50%;
-  background: #2c4366;
-  color: #e7efff;
-  font-size: 10px;
-  font-weight: 750;
-}
-
-.profile-copy strong {
-  overflow: hidden;
-  color: #f5f7fb;
-  font-size: 11px;
-  font-weight: 650;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.profile-copy small {
-  margin-top: 4px;
-  color: #a6b4c9;
-  font-size: 10px;
-}
-
 .admin-main {
   min-height: 100vh;
   margin-left: 252px;
@@ -236,7 +195,7 @@ dialog:focus-visible {
 
 .topbar {
   position: sticky;
-  z-index: 20;
+  z-index: 40;
   top: 0;
   display: flex;
   height: 64px;
@@ -253,24 +212,169 @@ dialog:focus-visible {
   align-items: center;
 }
 
-.breadcrumb {
+.topbar-account {
   display: flex;
   align-items: center;
-}
-
-.breadcrumb {
   gap: 10px;
+  margin-left: auto;
+}
+
+.topbar-profile-avatar {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  place-items: center;
+  border: 1px solid rgb(255 255 255 / 20%);
+  border-radius: 50%;
+  background: #0c172a;
+  color: #f2f6ff;
+  font-size: 15px;
+  font-weight: 750;
+}
+
+.topbar-profile-logout {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #dc3545;
+  cursor: pointer;
+  transition: background-color 140ms ease, color 140ms ease;
+}
+
+.topbar-profile-logout:hover:not(:disabled) {
+  background: #fff0f1;
+  color: #b42332;
+}
+
+.topbar-profile-logout:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.topbar-profile-error {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 50;
+  width: max-content;
+  max-width: min(320px, calc(100vw - 32px));
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid #f1c6cb;
+  border-radius: 8px;
+  background: #fff;
+  color: var(--admin-danger);
+  font-size: 11px;
+  line-height: 1.45;
+  box-shadow: 0 8px 22px rgb(16 31 54 / 12%);
+}
+
+.logout-confirm-dialog {
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+}
+
+.logout-confirm-dialog__panel {
+  width: min(100%, 420px);
+  border: 1px solid #e5eaf1;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 24px 70px rgb(16 31 54 / 24%);
+  animation: logout-confirm-in 180ms ease-out;
+}
+
+.logout-confirm-dialog__content {
+  display: grid;
+  justify-items: center;
+  padding: 28px;
+  text-align: center;
+}
+
+.logout-confirm-dialog__icon {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  border-radius: 50%;
+  background: #fff0f1;
+  color: #c92a3a;
+}
+
+.logout-confirm-dialog__content h2 {
+  margin: 16px 0 0;
+  color: #1c2a43;
+  font-size: 19px;
+  font-weight: 700;
+}
+
+.logout-confirm-dialog__content p {
+  margin: 8px 0 0;
   color: var(--admin-text-muted);
-  font-size: 12px;
+  font-size: 13px;
+  line-height: 1.55;
 }
 
-.breadcrumb strong {
+.logout-confirm-dialog__actions {
+  display: flex;
+  width: 100%;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 24px;
+}
+
+.logout-confirm-dialog__actions button {
+  min-height: 44px;
+  padding: 0 18px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  transition: background-color 140ms ease, border-color 140ms ease;
+}
+
+.logout-confirm-dialog__actions button:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.logout-confirm-dialog__cancel {
+  border-color: #dce3ec !important;
+  background: #fff;
   color: #394760;
-  font-weight: 600;
 }
 
-.breadcrumb-slash {
-  color: #bdc5d0;
+.logout-confirm-dialog__cancel:hover:not(:disabled) {
+  background: #f6f8fb;
+}
+
+.logout-confirm-dialog__confirm {
+  background: #c92a3a;
+  color: #fff;
+}
+
+.logout-confirm-dialog__confirm:hover:not(:disabled) {
+  background: #a91f2d;
+}
+
+@keyframes logout-confirm-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .admin-page-content {
@@ -753,10 +857,6 @@ dialog:focus-visible {
     display: none;
   }
 
-  .profile-copy {
-    display: none;
-  }
-
   .sidebar-nav-group {
     width: 100%;
     margin-top: 48px;
@@ -778,17 +878,6 @@ dialog:focus-visible {
 
   .sidebar-link-icon {
     width: 22px;
-  }
-
-  .sidebar-bottom {
-    justify-items: center;
-    width: 100%;
-  }
-
-  .sidebar-profile {
-    width: 100%;
-    justify-content: center;
-    padding: 13px 0 0;
   }
 
   .admin-main {
@@ -860,10 +949,6 @@ dialog:focus-visible {
     display: flex;
   }
 
-  .profile-copy {
-    display: flex;
-  }
-
   .sidebar-label {
     display: block;
   }
@@ -885,17 +970,6 @@ dialog:focus-visible {
 
   .sidebar-link.is-active::before {
     left: -17px;
-  }
-
-  .sidebar-bottom {
-    justify-items: stretch;
-    width: auto;
-  }
-
-  .sidebar-profile {
-    width: auto;
-    justify-content: flex-start;
-    padding: 12px 5px 0;
   }
 
   .admin-main {
@@ -932,21 +1006,6 @@ dialog:focus-visible {
     width: 31px;
     height: 31px;
     flex-basis: 31px;
-  }
-
-  .breadcrumb {
-    gap: 7px;
-    overflow: hidden;
-    font-size: 10px;
-    white-space: nowrap;
-  }
-
-  .breadcrumb > span:first-child {
-    display: none;
-  }
-
-  .breadcrumb-slash {
-    display: none;
   }
 
   .admin-page-content {

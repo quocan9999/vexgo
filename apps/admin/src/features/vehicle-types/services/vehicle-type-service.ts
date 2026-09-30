@@ -1,3 +1,4 @@
+import { adminApiFetch } from '@/lib/admin-api-client';
 import { getApiBaseUrl } from '@/lib/api-url';
 import type {
   CreateVehicleTypeInput,
@@ -92,7 +93,7 @@ function parseVehicleTypeResponse(body: unknown) {
 export async function createVehicleType(
   input: CreateVehicleTypeInput,
 ): Promise<VehicleType> {
-  const response = await fetch(`${getApiBaseUrl()}/api/v1/vehicle-types`, {
+  const response = await adminApiFetch(`${getApiBaseUrl()}/api/v1/vehicle-types`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
@@ -108,7 +109,7 @@ export async function updateVehicleType(
   vehicleTypeId: number,
   input: UpdateVehicleTypeInput,
 ): Promise<VehicleType> {
-  const response = await fetch(
+  const response = await adminApiFetch(
     `${getApiBaseUrl()}/api/v1/vehicle-types/${vehicleTypeId}`,
     {
       method: 'PATCH',
@@ -134,7 +135,7 @@ export async function getVehicleTypes(
     sortBy: query.sortBy,
     sortDirection: query.sortDirection,
   });
-  const response = await fetch(
+  const response = await adminApiFetch(
     `${getApiBaseUrl()}/api/v1/vehicle-types?${searchParams.toString()}`,
     { cache: 'no-store', signal },
   );
@@ -154,7 +155,7 @@ export async function getVehicleTypeById(
   vehicleTypeId: number,
   signal?: AbortSignal,
 ): Promise<VehicleType> {
-  const response = await fetch(
+  const response = await adminApiFetch(
     `${getApiBaseUrl()}/api/v1/vehicle-types/${vehicleTypeId}`,
     { cache: 'no-store', signal },
   );

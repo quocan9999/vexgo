@@ -4,6 +4,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { requireNhaXeAdminTenant } from '../auth/tenant-scope.js';
+import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
 import { Prisma } from '../generated/prisma/client.js';
 import type { CreateFarePriceDto } from './dto/create-fare-price.dto.js';
 import type { ResolveApplicableFareQueryDto } from './dto/resolve-applicable-fare-query.dto.js';
@@ -132,7 +134,8 @@ export class FarePricesService {
     private readonly config: ConfigService,
   ) {}
 
-  async create(input: CreateFarePriceDto) {
+  async create(input: CreateFarePriceDto, principal: AuthPrincipal) {
+    const nhaXeId = requireNhaXeAdminTenant(principal);
     assertValidListedPrice(input.listedPrice);
     assertValidFarePeriod(input.validFrom, input.validTo);
     const validTo = input.validTo ?? null;
@@ -140,10 +143,11 @@ export class FarePricesService {
     const record = await runFarePriceWriteTransaction(
       this.prisma,
       async (transaction) => {
-        const nhaXeId = await validateFarePriceRelations(
+        await validateFarePriceRelations(
           transaction,
           input.routeId,
           input.vehicleTypeId,
+          nhaXeId,
         );
 
         if (input.status === 'HOAT_DONG') {
@@ -176,7 +180,12 @@ export class FarePricesService {
     return { data: mapFarePrice(record, businessDate) };
   }
 
-  async update(id: number, input: UpdateFarePriceDto) {
+  async update(
+    id: number,
+    input: UpdateFarePriceDto,
+    principal: AuthPrincipal,
+  ) {
+    const nhaXeId = requireNhaXeAdminTenant(principal);
     const hasChanges =
       input.listedPrice !== undefined ||
       input.validFrom !== undefined ||
@@ -195,8 +204,8 @@ export class FarePricesService {
     const record = await runFarePriceWriteTransaction(
       this.prisma,
       async (transaction) => {
-        const current = await transaction.bangGia.findUnique({
-          where: { bangGiaId: id },
+        const current = await transaction.bangGia.findFirst({
+          where: { bangGiaId: id, nhaXeId },
           select: FARE_PRICE_SELECT,
         });
         if (!current) {
@@ -240,7 +249,7 @@ export class FarePricesService {
           candidateValidTo === currentValidTo;
         if (unchanged) return current;
 
-        const data: Prisma.BangGiaUpdateInput = {
+        const data: Prisma.BangGiaUpdateManyMutationInput = {
           ...(input.listedPrice === undefined
             ? {}
             : { giaNiemYet: new Prisma.Decimal(candidateListedPrice) }),
@@ -256,11 +265,28 @@ export class FarePricesService {
               }),
         };
 
-        return transaction.bangGia.update({
-          where: { bangGiaId: current.bangGiaId },
+        const updateResult = await transaction.bangGia.updateMany({
+          where: { bangGiaId: current.bangGiaId, nhaXeId },
           data,
+        });
+        if (updateResult.count !== 1) {
+          throw new NotFoundException({
+            error: 'FARE_PRICE_NOT_FOUND',
+            message: 'Không tìm thấy bảng giá.',
+          });
+        }
+
+        const updated = await transaction.bangGia.findFirst({
+          where: { bangGiaId: current.bangGiaId, nhaXeId },
           select: FARE_PRICE_SELECT,
         });
+        if (!updated) {
+          throw new NotFoundException({
+            error: 'FARE_PRICE_NOT_FOUND',
+            message: 'Không tìm thấy bảng giá.',
+          });
+        }
+        return updated;
       },
     );
 
@@ -270,12 +296,17 @@ export class FarePricesService {
     return { data: mapFarePrice(record, businessDate) };
   }
 
-  async updateStatus(id: number, status: FarePriceStatus) {
+  async updateStatus(
+    id: number,
+    status: FarePriceStatus,
+    principal: AuthPrincipal,
+  ) {
+    const nhaXeId = requireNhaXeAdminTenant(principal);
     const record = await runFarePriceWriteTransaction(
       this.prisma,
       async (transaction) => {
-        const current = await transaction.bangGia.findUnique({
-          where: { bangGiaId: id },
+        const current = await transaction.bangGia.findFirst({
+          where: { bangGiaId: id, nhaXeId },
           select: FARE_PRICE_SELECT,
         });
         if (!current) {
@@ -310,11 +341,28 @@ export class FarePricesService {
           );
         }
 
-        return transaction.bangGia.update({
-          where: { bangGiaId: current.bangGiaId },
+        const updateResult = await transaction.bangGia.updateMany({
+          where: { bangGiaId: current.bangGiaId, nhaXeId },
           data: { trangThai: status },
+        });
+        if (updateResult.count !== 1) {
+          throw new NotFoundException({
+            error: 'FARE_PRICE_NOT_FOUND',
+            message: 'Không tìm thấy bảng giá.',
+          });
+        }
+
+        const updated = await transaction.bangGia.findFirst({
+          where: { bangGiaId: current.bangGiaId, nhaXeId },
           select: FARE_PRICE_SELECT,
         });
+        if (!updated) {
+          throw new NotFoundException({
+            error: 'FARE_PRICE_NOT_FOUND',
+            message: 'Không tìm thấy bảng giá.',
+          });
+        }
+        return updated;
       },
     );
 
@@ -324,12 +372,13 @@ export class FarePricesService {
     return { data: mapFarePrice(record, businessDate) };
   }
 
-  async findAll(query: QueryFarePricesDto) {
+  async findAll(query: QueryFarePricesDto, principal: AuthPrincipal) {
+    const nhaXeId = requireNhaXeAdminTenant(principal);
     const businessTimeZone = resolveBusinessTimeZone(
       this.config.get<string>('BUSINESS_TIME_ZONE'),
     );
     const businessDate = getBusinessDate(businessTimeZone);
-    const where: Prisma.BangGiaWhereInput = {};
+    const where: Prisma.BangGiaWhereInput = { nhaXeId };
     const search = query.search?.trim();
 
     if (search) where.OR = buildSearchConditions(search);
@@ -397,13 +446,14 @@ export class FarePricesService {
     };
   }
 
-  async findOne(id: number) {
+  async findOne(id: number, principal: AuthPrincipal) {
+    const nhaXeId = requireNhaXeAdminTenant(principal);
     const businessTimeZone = resolveBusinessTimeZone(
       this.config.get<string>('BUSINESS_TIME_ZONE'),
     );
     const businessDate = getBusinessDate(businessTimeZone);
-    const record = await this.prisma.bangGia.findUnique({
-      where: { bangGiaId: id },
+    const record = await this.prisma.bangGia.findFirst({
+      where: { bangGiaId: id, nhaXeId },
       select: FARE_PRICE_SELECT,
     });
 
@@ -417,15 +467,21 @@ export class FarePricesService {
     return { data: mapFarePrice(record, businessDate) };
   }
 
-  async resolveApplicableFare(query: ResolveApplicableFareQueryDto) {
+  async resolveApplicableFare(
+    query: ResolveApplicableFareQueryDto,
+    principal: AuthPrincipal,
+  ) {
+    const nhaXeId = requireNhaXeAdminTenant(principal);
     await validateFarePriceRelations(
       this.prisma,
       query.routeId,
       query.vehicleTypeId,
+      nhaXeId,
     );
 
     const records = await this.prisma.bangGia.findMany({
       where: {
+        nhaXeId,
         tuyenXeId: query.routeId,
         loaiXeId: query.vehicleTypeId,
         trangThai: 'HOAT_DONG',

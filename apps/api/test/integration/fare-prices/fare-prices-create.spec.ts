@@ -91,6 +91,7 @@ describe('Fare Price create HTTP and database behavior', () => {
     });
     expect(saved.giaNiemYet.toString()).toBe('250000');
     expect(saved.trangThai).toBe('HOAT_DONG');
+    expect(saved.nhaXeId).toBe(context.busCompanyId);
   });
 
   it.each([
@@ -320,7 +321,7 @@ describe('Fare Price create HTTP and database behavior', () => {
     }
   });
 
-  it('rejects a route and vehicle type owned by different bus companies', async () => {
+  it('hides cross-tenant route and vehicle type IDs as missing', async () => {
     const suffix = randomUUID().replaceAll('-', '').slice(0, 10).toUpperCase();
     const otherCompany = await context.prisma.nhaXe.create({
       data: {
@@ -337,18 +338,36 @@ describe('Fare Price create HTTP and database behavior', () => {
       },
       select: { loaiXeId: true },
     });
+    const otherRoute = await context.prisma.tuyenXe.create({
+      data: {
+        maTuyenXe: `T04-X-${suffix}`,
+        diemDi: 'Điểm thử tenant khác',
+        diemDen: 'Điểm đích tenant khác',
+        trangThai: 'HOAT_DONG',
+        nhaXeId: otherCompany.nhaXeId,
+      },
+      select: { tuyenXeId: true },
+    });
 
     try {
-      const response = await request(context.app.getHttpServer())
+      const foreignType = await request(context.app.getHttpServer())
         .post('/api/v1/fare-prices')
         .send(body({ vehicleTypeId: otherType.loaiXeId }))
-        .expect(409);
+        .expect(404);
 
-      expect(response.body).toMatchObject({
-        error: 'FARE_PRICE_TENANT_MISMATCH',
-        message: 'Tuyến xe và loại xe phải thuộc cùng một nhà xe.',
-      });
+      expect(foreignType.body.error).toBe('VEHICLE_TYPE_NOT_FOUND');
+
+      const foreignRoute = await request(context.app.getHttpServer())
+        .post('/api/v1/fare-prices')
+        .send(body({ routeId: otherRoute.tuyenXeId }))
+        .expect(404);
+
+      expect(foreignRoute.body.error).toBe('ROUTE_NOT_FOUND');
+      expect(await context.prisma.bangGia.count({
+        where: { nhaXeId: context.busCompanyId },
+      })).toBe(0);
     } finally {
+      await context.prisma.tuyenXe.delete({ where: { tuyenXeId: otherRoute.tuyenXeId } });
       await context.prisma.loaiXe.delete({ where: { loaiXeId: otherType.loaiXeId } });
       await context.prisma.nhaXe.delete({ where: { nhaXeId: otherCompany.nhaXeId } });
     }

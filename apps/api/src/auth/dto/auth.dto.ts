@@ -1,31 +1,56 @@
 import {
+  ValidationArguments,
+  ValidatorConstraint,
+  ValidatorConstraintInterface,
+  Validate,
   IsEmail,
   IsNotEmpty,
   IsOptional,
   IsString,
-  Matches,
   MaxLength,
-  ValidateBy,
+  Matches,
+  isEmail,
 } from 'class-validator';
+import { Transform } from 'class-transformer';
 import { IsDateOnly } from '../../common/validators/is-date-only.validator.js';
 import { VIETNAM_E164_PHONE_PATTERN } from '../otp/otp.constants.js';
+import { IsPasswordByteLength } from '../validators/is-password-byte-length.validator.js';
 
 const CCCD_PATTERN = /^[0-9]{12}$/;
-const PASSWORD_MIN_BYTES = 8;
-const PASSWORD_MAX_BYTES = 72;
+const EMAIL_MAX_LENGTH = 150;
+const LOGIN_PHONE_PATTERN = VIETNAM_E164_PHONE_PATTERN;
 
-function IsPasswordByteLength() {
-  return ValidateBy({
-    name: 'isPasswordByteLength',
-    validator: {
-      validate: (value: unknown) =>
-        typeof value === 'string' &&
-        Buffer.byteLength(value, 'utf8') >= PASSWORD_MIN_BYTES &&
-        Buffer.byteLength(value, 'utf8') <= PASSWORD_MAX_BYTES,
-      defaultMessage: () =>
-        `Mật khẩu phải dài từ ${PASSWORD_MIN_BYTES} đến ${PASSWORD_MAX_BYTES} byte UTF-8.`,
-    },
-  });
+@ValidatorConstraint({ name: 'exactlyOneLoginIdentifier', async: false })
+class ExactlyOneLoginIdentifierConstraint
+  implements ValidatorConstraintInterface
+{
+  validate(_value: unknown, args: ValidationArguments): boolean {
+    const dto = args.object as LoginDto;
+    const identifiers = [dto.identifier, dto.phoneNumber].filter(
+      (value) => typeof value === 'string' && value.trim().length > 0,
+    );
+    return identifiers.length === 1;
+  }
+
+  defaultMessage(): string {
+    return 'Cần cung cấp đúng một số điện thoại hoặc email đăng nhập.';
+  }
+}
+
+@ValidatorConstraint({ name: 'loginIdentifierFormat', async: false })
+class LoginIdentifierFormatConstraint
+  implements ValidatorConstraintInterface
+{
+  validate(value: unknown): boolean {
+    return (
+      typeof value === 'string' &&
+      (LOGIN_PHONE_PATTERN.test(value) || isEmail(value))
+    );
+  }
+
+  defaultMessage(): string {
+    return 'Email hoặc số điện thoại không hợp lệ.';
+  }
 }
 
 export class RegisterDto {
@@ -56,7 +81,7 @@ export class RegisterDto {
 
   @IsOptional()
   @IsEmail({}, { message: 'Email không hợp lệ.' })
-  @MaxLength(150)
+  @MaxLength(EMAIL_MAX_LENGTH)
   email?: string;
 
   @IsOptional()
@@ -67,13 +92,24 @@ export class RegisterDto {
 }
 
 export class LoginDto {
+  @IsOptional()
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
+  @MaxLength(EMAIL_MAX_LENGTH)
+  @Validate(LoginIdentifierFormatConstraint)
+  identifier?: string;
+
+  @IsOptional()
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsString()
   @Matches(VIETNAM_E164_PHONE_PATTERN, {
     message: 'Số điện thoại không hợp lệ.',
   })
-  phoneNumber!: string;
+  phoneNumber?: string;
 
   @IsString()
   @IsNotEmpty()
+  @Validate(ExactlyOneLoginIdentifierConstraint)
+  @IsPasswordByteLength()
   password!: string;
 }

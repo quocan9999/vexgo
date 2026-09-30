@@ -1,4 +1,4 @@
-import type { INestApplication } from '@nestjs/common';
+import type { ExecutionContext, INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import {
@@ -11,9 +11,25 @@ import {
   vi,
 } from 'vitest';
 import { AppModule } from '../../../src/app.module.js';
+import { AccessTokenGuard } from '../../../src/auth/guards/access-token.guard.js';
+import type { AuthPrincipal } from '../../../src/auth/tokens/auth-principal.js';
 import { configureApi } from '../../../src/common/configure-api.js';
 import { Prisma } from '../../../src/generated/prisma/client.js';
 import { PrismaService } from '../../../src/prisma/prisma.service.js';
+const testPrincipal: AuthPrincipal = {
+  taiKhoanId: 7,
+  sessionId: 'tenant-session',
+  roles: ['NHA_XE_ADMIN'],
+  permissions: [],
+  nhanVienId: 9,
+  nhaXeId: 1,
+};
+const testAccessTokenGuard = {
+  canActivate(context: ExecutionContext) {
+    context.switchToHttp().getRequest<{ user?: AuthPrincipal }>().user = testPrincipal;
+    return true;
+  },
+};
 
 const seatRecord = {
   gheId: 101,
@@ -25,7 +41,7 @@ const seatRecord = {
 };
 
 const prisma = {
-  xe: { findUnique: vi.fn() },
+  xe: { findFirst: vi.fn() },
   ghe: {
     findMany: vi.fn(),
     create: vi.fn(),
@@ -43,6 +59,8 @@ describe('Vehicles seat API request-pipeline integration', () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(PrismaService)
       .useValue(prisma)
+      .overrideProvider(AccessTokenGuard)
+      .useValue(testAccessTokenGuard)
       .compile();
 
     app = moduleRef.createNestApplication();
@@ -56,7 +74,7 @@ describe('Vehicles seat API request-pipeline integration', () => {
 
   beforeEach(() => {
     vi.resetAllMocks();
-    prisma.xe.findUnique.mockResolvedValue({ xeId: 12 });
+    prisma.xe.findFirst.mockResolvedValue({ xeId: 12, nhaXeId: 1 });
     prisma.ghe.findMany.mockResolvedValue([seatRecord]);
     prisma.ghe.create.mockResolvedValue(seatRecord);
     prisma.ghe.findFirst.mockResolvedValue({ gheId: 101 });
@@ -95,6 +113,9 @@ describe('Vehicles seat API request-pipeline integration', () => {
       ],
       meta: { totalItems: 1 },
     });
+    expect(prisma.xe.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { xeId: 12, nhaXeId: 1 } }),
+    );
     expect(prisma.ghe.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { xeId: 12 }, orderBy: { soGhe: 'asc' } }),
     );
@@ -111,7 +132,7 @@ describe('Vehicles seat API request-pipeline integration', () => {
   });
 
   it('returns exact vehicle not-found for list and create', async () => {
-    prisma.xe.findUnique.mockResolvedValue(null);
+    prisma.xe.findFirst.mockResolvedValue(null);
     const listResponse = await request(app.getHttpServer())
       .get('/api/v1/vehicles/999/seats')
       .expect(404);
@@ -135,7 +156,7 @@ describe('Vehicles seat API request-pipeline integration', () => {
       await request(app.getHttpServer())
         .get(`/api/v1/vehicles/${vehicleId}/seats`)
         .expect(400);
-      expect(prisma.xe.findUnique).not.toHaveBeenCalled();
+      expect(prisma.xe.findFirst).not.toHaveBeenCalled();
     },
   );
 
@@ -157,7 +178,7 @@ describe('Vehicles seat API request-pipeline integration', () => {
         .delete(`/api/v1/vehicles/12/seats/${id}`)
         .expect(400);
 
-      expect(prisma.xe.findUnique).not.toHaveBeenCalled();
+      expect(prisma.xe.findFirst).not.toHaveBeenCalled();
       expect(prisma.ghe.findFirst).not.toHaveBeenCalled();
       expect(prisma.ghe.create).not.toHaveBeenCalled();
       expect(prisma.ghe.update).not.toHaveBeenCalled();
@@ -230,7 +251,7 @@ describe('Vehicles seat API request-pipeline integration', () => {
       message: 'Số ghế đã tồn tại trên xe này.',
     });
 
-    prisma.xe.findUnique.mockResolvedValueOnce({ xeId: 13 });
+    prisma.xe.findFirst.mockResolvedValueOnce({ xeId: 13, nhaXeId: 1 });
     await request(app.getHttpServer())
       .post('/api/v1/vehicles/13/seats')
       .send({ seatNumber: 'A01' })

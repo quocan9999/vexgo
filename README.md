@@ -86,6 +86,18 @@ macOS/Linux:
 cp .env.example .env
 ```
 
+Trước khi khởi động API, hãy thay hai giá trị mẫu `OTP_HASH_SECRET` và
+`JWT_ACCESS_SECRET` trong `.env` bằng hai secret ngẫu nhiên riêng biệt, mỗi
+secret dài ít nhất 32 ký tự. Tạo từng giá trị bằng lệnh sau và chạy lệnh hai
+lần:
+
+```bash
+node --input-type=commonjs -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
+```
+
+Chỉ lưu các giá trị này trong `.env`; không dùng chung một secret và không
+commit file `.env`.
+
 > File `.env` chỉ dùng cho môi trường local. Không sử dụng các thông tin đăng nhập mẫu cho production.
 
 ### 2. Khởi động Docker services

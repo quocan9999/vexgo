@@ -104,7 +104,10 @@ describe('GET/PATCH /api/v1/me', () => {
       taiKhoan: {
         taiKhoanId: 42,
         trangThai: 'HOAT_DONG',
-        taiKhoanVaiTros: [{ vaiTro: { tenVaiTro: 'KHACH_HANG' } }],
+        nhanVien: null,
+        taiKhoanVaiTros: [
+          { vaiTro: { tenVaiTro: 'KHACH_HANG', vaiTroQuyens: [] } },
+        ],
       },
     });
     taiKhoan.findUnique.mockResolvedValue(account);

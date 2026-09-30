@@ -1,10 +1,12 @@
 import {
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { normalizeEmail } from '../common/normalize-email.js';
 import type { UpdateMeDto } from './dto/update-me.dto.js';
 
 const customerProfileInclude = {
@@ -29,22 +31,39 @@ export class CustomersService {
 
   async updateMe(taiKhoanId: number, dto: UpdateMeDto) {
     await this.findCustomerAccount(taiKhoanId);
-    const account = await this.prisma.taiKhoan.update({
-      where: { taiKhoanId },
-      data: {
-        ...(dto.fullName !== undefined ? { hoTen: dto.fullName } : {}),
-        ...(dto.dateOfBirth !== undefined
-          ? {
-              ngaySinh: dto.dateOfBirth
-                ? new Date(`${dto.dateOfBirth}T00:00:00.000Z`)
-                : null,
-            }
-          : {}),
-        ...(dto.email !== undefined ? { email: dto.email } : {}),
-        ...(dto.citizenId !== undefined ? { cccd: dto.citizenId } : {}),
-      },
-      include: customerProfileInclude,
-    });
+    let account: CustomerAccount;
+    try {
+      account = await this.prisma.taiKhoan.update({
+        where: { taiKhoanId },
+        data: {
+          ...(dto.fullName !== undefined ? { hoTen: dto.fullName } : {}),
+          ...(dto.dateOfBirth !== undefined
+            ? {
+                ngaySinh: dto.dateOfBirth
+                  ? new Date(`${dto.dateOfBirth}T00:00:00.000Z`)
+                  : null,
+              }
+            : {}),
+          ...(dto.email !== undefined
+            ? { email: normalizeEmail(dto.email) }
+            : {}),
+          ...(dto.citizenId !== undefined ? { cccd: dto.citizenId } : {}),
+        },
+        include: customerProfileInclude,
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002' &&
+        JSON.stringify(error.meta?.target ?? '').includes('email')
+      ) {
+        throw new ConflictException({
+          error: 'EMAIL_ALREADY_REGISTERED',
+          message: 'Email đã được đăng ký.',
+        });
+      }
+      throw error;
+    }
     return this.mapProfile(account);
   }
 
