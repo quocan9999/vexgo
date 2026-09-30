@@ -244,6 +244,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                     </label>
                     <input
                       type="date"
+                      min={new Date().toISOString().split('T')[0]}
                       value={selectedPrice}
                       onChange={(e) => setSelectedPrice(e.target.value)}
                       className="h-12 w-full border border-slate-300 rounded-lg px-3 text-sm font-bold text-slate-900 outline-none focus:border-brand"
@@ -258,6 +259,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                       </label>
                       <input
                         type="date"
+                        min={selectedPrice || new Date().toISOString().split('T')[0]}
                         value={returnDate}
                         onChange={(e) => setReturnDate(e.target.value)}
                         className="h-12 w-full border border-slate-300 rounded-lg px-3 text-sm font-bold text-slate-900 outline-none focus:border-brand"
