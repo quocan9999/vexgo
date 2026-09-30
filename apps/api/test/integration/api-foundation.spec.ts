@@ -17,9 +17,13 @@ import { BusCompaniesService } from '../../src/bus-companies/bus-companies.servi
 import { RoutesService } from '../../src/routes/routes.service.js';
 import { configureApi } from '../../src/common/configure-api.js';
 import { PaginationQueryDto } from '../../src/common/dto/pagination-query.dto.js';
-import { Public } from '../../src/auth/decorators/public.decorator.js';
+import {
+  OptionalAuth,
+  Public,
+} from '../../src/auth/decorators/public.decorator.js';
 import { RequireRoles } from '../../src/auth/decorators/require-roles.decorator.js';
 import { RequirePermissions } from '../../src/auth/decorators/require-permissions.decorator.js';
+import { RequireTenantPermissionsIfAuthenticated } from '../../src/auth/decorators/require-tenant-permissions-if-authenticated.decorator.js';
 import { AllowRoleScopeConflict } from '../../src/auth/decorators/allow-role-scope-conflict.decorator.js';
 import request from 'supertest';
 import {
@@ -31,6 +35,10 @@ import {
   it,
   vi,
 } from 'vitest';
+
+const optionalTenantPermissionHandler = vi.fn(() => ({
+  status: 'optional-tenant-permission',
+}));
 
 @Controller('__test')
 class ApiFoundationTestController {
@@ -123,6 +131,13 @@ class ApiFoundationTestController {
   @RequirePermissions('route:read')
   getPublicPermissionRequired() {
     return { status: 'public-permission-required' };
+  }
+
+  @Get('tenant-permission-if-authenticated')
+  @OptionalAuth()
+  @RequireTenantPermissionsIfAuthenticated('route:read')
+  getTenantPermissionIfAuthenticated() {
+    return optionalTenantPermissionHandler();
   }
 }
 
@@ -506,6 +521,75 @@ describe('API foundation', () => {
       .expect(401);
 
     expect(response.body.error).toBe('ACCESS_TOKEN_INVALID');
+  });
+
+  it('requires the tenant permission on optional-auth requests from a tenant principal', async () => {
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['NHAN_VIEN_CSKH'], true),
+    );
+
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/__test/tenant-permission-if-authenticated')
+      .set('Authorization', 'Bearer signed-token')
+      .expect(403);
+
+    expect(response.body.error).toBe('PERMISSION_FORBIDDEN');
+    expect(optionalTenantPermissionHandler).not.toHaveBeenCalled();
+  });
+
+  it('allows the tenant permission on optional-auth requests when assigned in the database', async () => {
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['NHAN_VIEN_CSKH'], true, {
+        NHAN_VIEN_CSKH: ['route:read'],
+      }),
+    );
+
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/__test/tenant-permission-if-authenticated')
+      .set('Authorization', 'Bearer signed-token')
+      .expect(200);
+
+    expect(response.body.data).toEqual({ status: 'optional-tenant-permission' });
+    expect(optionalTenantPermissionHandler).toHaveBeenCalledOnce();
+  });
+
+  it('keeps optional public access for anonymous and non-tenant principals', async () => {
+    const anonymous = await request(app.getHttpServer())
+      .get('/api/v1/__test/tenant-permission-if-authenticated')
+      .expect(200);
+
+    expect(anonymous.body.data).toEqual({
+      status: 'optional-tenant-permission',
+    });
+    expect(jwtVerify).not.toHaveBeenCalled();
+
+    sessionFindUnique.mockResolvedValueOnce(sessionWithRoles(['KHACH_HANG'], false));
+    await request(app.getHttpServer())
+      .get('/api/v1/__test/tenant-permission-if-authenticated')
+      .set('Authorization', 'Bearer signed-token')
+      .expect(200);
+
+    sessionFindUnique.mockResolvedValueOnce(sessionWithRoles(['SUPER_ADMIN'], false));
+    await request(app.getHttpServer())
+      .get('/api/v1/__test/tenant-permission-if-authenticated')
+      .set('Authorization', 'Bearer signed-token')
+      .expect(200);
+
+    expect(optionalTenantPermissionHandler).toHaveBeenCalledTimes(3);
+  });
+
+  it('validates principal scope before the optional tenant permission', async () => {
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['NHAN_VIEN_CSKH', 'KHACH_HANG'], true),
+    );
+
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/__test/tenant-permission-if-authenticated')
+      .set('Authorization', 'Bearer signed-token')
+      .expect(403);
+
+    expect(response.body.error).toBe('ROLE_SCOPE_CONFLICT');
+    expect(optionalTenantPermissionHandler).not.toHaveBeenCalled();
   });
 
   it('rejects platform and tenant roles assigned to the same principal', async () => {
