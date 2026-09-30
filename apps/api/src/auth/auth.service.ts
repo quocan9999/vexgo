@@ -10,6 +10,7 @@ import { RegisterDto, LoginDto } from './dto/auth.dto.js';
 import * as bcrypt from 'bcrypt';
 import { OtpService } from './otp/otp.service.js';
 import { TokenService } from './tokens/token.service.js';
+import { PermissionResolverService } from './permissions/permission-resolver.service.js';
 import { Prisma } from '../generated/prisma/client.js';
 import { normalizeEmail } from '../common/normalize-email.js';
 
@@ -22,6 +23,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly otpService: OtpService,
     private readonly tokenService: TokenService,
+    private readonly permissionResolver: PermissionResolverService,
   ) {}
 
   async register(dto: RegisterDto) {
@@ -218,13 +220,16 @@ export class AuthService {
       phoneNumber: account.soDienThoai,
       email: account.email,
       roles,
-      permissions: [
-        ...new Set(
-          account.taiKhoanVaiTros.flatMap(({ vaiTro }) =>
-            vaiTro.vaiTroQuyens.map(({ quyen }) => quyen.tenQuyen),
-          ),
-        ),
-      ],
+      permissions: this.permissionResolver.resolve(
+        account.taiKhoanVaiTros.map(({ vaiTro }) => ({
+          roleName: vaiTro.tenVaiTro,
+          permissions: vaiTro.vaiTroQuyens.map(({ quyen }) => quyen.tenQuyen),
+        })),
+        {
+          nhanVienId: employee?.nhanVienId ?? null,
+          nhaXeId: employee?.nhaXeId ?? null,
+        },
+      ),
       employee: employee
         ? {
             employeeId: employee.nhanVienId,

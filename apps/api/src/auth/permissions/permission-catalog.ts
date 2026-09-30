@@ -1,97 +1,128 @@
+export type AdminPermissionScope = 'platform' | 'tenant';
+
 export const ADMIN_PERMISSION_CATALOG = [
   {
     key: 'vehicle-type:read',
+    scope: 'tenant',
     description: 'Xem danh sách và chi tiết loại xe trong phạm vi nhà xe.',
   },
   {
     key: 'vehicle-type:create',
+    scope: 'tenant',
     description: 'Tạo loại xe trong phạm vi nhà xe.',
   },
   {
     key: 'vehicle-type:update',
+    scope: 'tenant',
     description: 'Cập nhật loại xe trong phạm vi nhà xe.',
   },
   {
     key: 'vehicle:read',
+    scope: 'tenant',
     description: 'Xem danh sách và chi tiết xe trong phạm vi nhà xe.',
   },
   {
     key: 'vehicle:create',
+    scope: 'tenant',
     description: 'Tạo xe trong phạm vi nhà xe.',
   },
   {
     key: 'vehicle:update',
+    scope: 'tenant',
     description: 'Cập nhật xe và trạng thái xe trong phạm vi nhà xe.',
   },
   {
     key: 'seat:read',
+    scope: 'tenant',
     description: 'Xem cấu hình ghế của xe trong phạm vi nhà xe.',
   },
   {
     key: 'seat:create',
+    scope: 'tenant',
     description: 'Thêm ghế vào xe trong phạm vi nhà xe.',
   },
   {
     key: 'seat:update',
+    scope: 'tenant',
     description: 'Cập nhật ghế của xe trong phạm vi nhà xe.',
   },
   {
     key: 'seat:delete',
+    scope: 'tenant',
     description: 'Xóa ghế khỏi xe trong phạm vi nhà xe.',
   },
   {
     key: 'route:read',
+    scope: 'tenant',
     description: 'Xem danh sách và chi tiết tuyến xe trong phạm vi nhà xe.',
   },
   {
     key: 'route:create',
+    scope: 'tenant',
     description: 'Tạo tuyến xe trong phạm vi nhà xe.',
   },
   {
     key: 'route:update',
+    scope: 'tenant',
     description: 'Cập nhật tuyến xe và trạng thái tuyến trong phạm vi nhà xe.',
   },
   {
     key: 'fare-price:read',
+    scope: 'tenant',
     description: 'Xem và tra cứu bảng giá vé trong phạm vi nhà xe.',
   },
   {
     key: 'fare-price:create',
+    scope: 'tenant',
     description: 'Tạo bảng giá vé trong phạm vi nhà xe.',
   },
   {
     key: 'fare-price:update',
+    scope: 'tenant',
     description:
       'Cập nhật bảng giá vé và trạng thái bảng giá trong phạm vi nhà xe.',
   },
   {
     key: 'bus-company:read',
+    scope: 'platform',
     description: 'Xem danh sách và chi tiết nhà xe trên nền tảng.',
   },
   {
     key: 'bus-company:create',
+    scope: 'platform',
     description: 'Tạo nhà xe trên nền tảng.',
   },
   {
     key: 'bus-company:update',
+    scope: 'platform',
     description: 'Cập nhật nhà xe và trạng thái nhà xe trên nền tảng.',
   },
   {
     key: 'admin-account:read',
+    scope: 'platform',
     description: 'Xem danh sách và chi tiết tài khoản quản trị trên nền tảng.',
   },
   {
     key: 'admin-account:create',
+    scope: 'platform',
     description: 'Tạo tài khoản quản trị nhà xe trên nền tảng.',
   },
   {
     key: 'admin-account:update',
+    scope: 'platform',
     description: 'Cập nhật và thay đổi trạng thái tài khoản quản trị nhà xe.',
   },
 ] as const;
 
 export type AdminPermissionKey =
   (typeof ADMIN_PERMISSION_CATALOG)[number]['key'];
+
+export const ADMIN_PERMISSION_SCOPE_BY_KEY: ReadonlyMap<
+  string,
+  AdminPermissionScope
+> = new Map(
+  ADMIN_PERMISSION_CATALOG.map(({ key, scope }) => [key, scope] as const),
+);
 
 export const ADMIN_ROLE_DEFAULT_PERMISSION_KEYS = {
   SUPER_ADMIN: [

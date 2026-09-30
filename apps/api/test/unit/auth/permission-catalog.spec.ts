@@ -56,6 +56,51 @@ describe('Admin permission defaults', () => {
     expect(new Set(permissionKeys).size).toBe(permissionKeys.length);
   });
 
+  it('labels each permission with exactly one authorization scope', () => {
+    const tenantPermissionKeys = [
+      'vehicle-type:read',
+      'vehicle-type:create',
+      'vehicle-type:update',
+      'vehicle:read',
+      'vehicle:create',
+      'vehicle:update',
+      'seat:read',
+      'seat:create',
+      'seat:update',
+      'seat:delete',
+      'route:read',
+      'route:create',
+      'route:update',
+      'fare-price:read',
+      'fare-price:create',
+      'fare-price:update',
+    ];
+    const platformPermissionKeys = [
+      'bus-company:read',
+      'bus-company:create',
+      'bus-company:update',
+      'admin-account:read',
+      'admin-account:create',
+      'admin-account:update',
+    ];
+
+    expect(
+      ADMIN_PERMISSION_CATALOG.filter(({ scope }) => scope === 'tenant').map(
+        ({ key }) => key,
+      ),
+    ).toEqual(tenantPermissionKeys);
+    expect(
+      ADMIN_PERMISSION_CATALOG.filter(({ scope }) => scope === 'platform').map(
+        ({ key }) => key,
+      ),
+    ).toEqual(platformPermissionKeys);
+    expect(
+      ADMIN_PERMISSION_CATALOG.every(
+        ({ scope }) => scope === 'platform' || scope === 'tenant',
+      ),
+    ).toBe(true);
+  });
+
   it('assigns SUPER_ADMIN only current platform capabilities', () => {
     expect(ADMIN_ROLE_DEFAULT_PERMISSION_KEYS.SUPER_ADMIN).toEqual([
       'bus-company:read',

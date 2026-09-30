@@ -4,6 +4,7 @@ import type { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthService } from '../../../src/auth/auth.service.js';
+import { PermissionResolverService } from '../../../src/auth/permissions/permission-resolver.service.js';
 import type { OtpService } from '../../../src/auth/otp/otp.service.js';
 import { TokenService } from '../../../src/auth/tokens/token.service.js';
 import type { PrismaService } from '../../../src/prisma/prisma.service.js';
@@ -51,6 +52,7 @@ describe('AuthService login', () => {
     prisma as unknown as PrismaService,
     {} as OtpService,
     tokenService as unknown as TokenService,
+    new PermissionResolverService(),
   );
 
   beforeAll(async () => {
@@ -170,6 +172,72 @@ describe('AuthService login', () => {
         roles: ['SUPER_ADMIN'],
       }),
     );
+  });
+
+  it('returns only platform permissions for a SUPER_ADMIN current session', async () => {
+    prisma.taiKhoan.findUnique.mockResolvedValueOnce({
+      taiKhoanId: 1,
+      hoTen: 'Quản trị viên',
+      soDienThoai: '+84900000000',
+      email: 'root@example.com',
+      trangThai: 'HOAT_DONG',
+      taiKhoanVaiTros: [
+        {
+          vaiTro: {
+            tenVaiTro: 'SUPER_ADMIN',
+            vaiTroQuyens: [
+              { quyen: { tenQuyen: 'admin-account:read' } },
+              { quyen: { tenQuyen: 'vehicle:read' } },
+            ],
+          },
+        },
+      ],
+      nhanVien: null,
+    });
+
+    await expect(service.getCurrentSession(1)).resolves.toMatchObject({
+      roles: ['SUPER_ADMIN'],
+      permissions: ['admin-account:read'],
+      employee: null,
+      busCompanyId: null,
+    });
+  });
+
+  it('returns only tenant permissions for an employee current session', async () => {
+    prisma.taiKhoan.findUnique.mockResolvedValueOnce({
+      taiKhoanId: 2,
+      hoTen: 'Nhân viên CSKH',
+      soDienThoai: '+84900000001',
+      email: null,
+      trangThai: 'HOAT_DONG',
+      taiKhoanVaiTros: [
+        {
+          vaiTro: {
+            tenVaiTro: 'NHAN_VIEN_CSKH',
+            vaiTroQuyens: [
+              { quyen: { tenQuyen: 'route:read' } },
+              { quyen: { tenQuyen: 'admin-account:update' } },
+            ],
+          },
+        },
+      ],
+      nhanVien: {
+        nhanVienId: 77,
+        nhaXeId: 901,
+        nhaXe: { maNhaXe: 'FUTA', tenNhaXe: 'Phương Trang' },
+      },
+    });
+
+    await expect(service.getCurrentSession(2)).resolves.toMatchObject({
+      roles: ['NHAN_VIEN_CSKH'],
+      permissions: ['route:read'],
+      employee: {
+        employeeId: 77,
+        busCompanyId: 901,
+        busCompanyCode: 'FUTA',
+      },
+      busCompanyId: 901,
+    });
   });
 });
 

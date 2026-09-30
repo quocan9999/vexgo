@@ -5,6 +5,7 @@ import {
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Prisma } from '../../../src/generated/prisma/client.js';
 import { AuthService } from '../../../src/auth/auth.service.js';
+import { PermissionResolverService } from '../../../src/auth/permissions/permission-resolver.service.js';
 import type { RegisterDto } from '../../../src/auth/dto/auth.dto.js';
 import type { OtpService } from '../../../src/auth/otp/otp.service.js';
 import type { TokenService } from '../../../src/auth/tokens/token.service.js';
@@ -83,6 +84,7 @@ const service = new AuthService(
   prismaMock as unknown as PrismaService,
   otpService as unknown as OtpService,
   tokenService as unknown as TokenService,
+  new PermissionResolverService(),
 );
 
 describe('AuthService register', () => {
