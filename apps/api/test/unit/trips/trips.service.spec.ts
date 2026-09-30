@@ -57,6 +57,36 @@ afterEach(() => {
 });
 
 describe('TripsService search', () => {
+  it('applies keyword and vehicle filters before pagination', async () => {
+    const { prisma, service } = createService();
+    prisma.chuyenXe.findMany.mockResolvedValue([]);
+
+    await service.search({
+      search: 'Nhà xe A',
+      vehicleType: 'Giường',
+      page: 1,
+      pageSize: 10,
+      sortBy: 'departureTime',
+      sortDirection: 'asc',
+    } as never);
+
+    expect(prisma.chuyenXe.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          AND: expect.arrayContaining([
+            {
+              OR: expect.arrayContaining([
+                { tuyenXe: { nhaXe: { tenNhaXe: { contains: 'Nhà xe A' } } } },
+                { xe: { loaiXe: { tenLoai: { contains: 'Nhà xe A' } } } },
+              ]),
+            },
+            { xe: { loaiXe: { tenLoai: { contains: 'Giường' } } } },
+          ]),
+        }),
+      }),
+    );
+  });
+
   it('returns real database fields, applicable fares and pagination without fabricated display data', async () => {
     const { prisma, service } = createService();
     prisma.chuyenXe.findMany.mockResolvedValue([firstTrip, secondTrip]);

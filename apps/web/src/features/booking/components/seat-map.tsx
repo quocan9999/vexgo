@@ -1,5 +1,6 @@
 /* eslint-disable */
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { tripsApi, type ApiTripSeat } from '@/features/trips/services/trips.api';
 
 const SeatSVG = ({ id, status, onClick }: { id: string, status: 'available'|'sold'|'selected', onClick: () => void }) => {
   const colors = {
@@ -19,9 +20,23 @@ const SeatSVG = ({ id, status, onClick }: { id: string, status: 'available'|'sol
   );
 }
 
-export const SeatMap = () => {
+export const SeatMap = ({ tripId }: { tripId?: number }) => {
   const [selectedSeats, setSelectedSeats] = useState<string[]>([]);
-  const soldSeats = ['A01', 'A02', 'A03', 'A04', 'A05', 'A06', 'A08', 'B01', 'B02'];
+  const [seats, setSeats] = useState<ApiTripSeat[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!tripId) return;
+    setLoading(true);
+    tripsApi.getTripSeats(tripId)
+      .then(data => setSeats(data))
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, [tripId]);
+
+  const soldSeats = tripId 
+    ? seats.filter(s => s.trangThai !== 'TRONG').map(s => s.soGhe)
+    : ['A01', 'A02', 'A03', 'A04', 'A05', 'A06', 'A08', 'B01', 'B02']; // fallback
 
   const lowerFloor = [
     ['A01', null, 'A02'],
@@ -76,6 +91,14 @@ export const SeatMap = () => {
       </div>
     </div>
   );
+
+  if (loading) {
+    return (
+      <div className="mt-4 pt-4 border-t border-slate-100 flex justify-center pb-4 text-sm text-slate-500">
+        Đang tải sơ đồ ghế...
+      </div>
+    );
+  }
 
   return (
     <div className="mt-4 pt-4 border-t border-slate-100 flex flex-col items-center pb-4">

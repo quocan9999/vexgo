@@ -1,19 +1,32 @@
 import { OneWayBooking } from '@/features/booking/components/one-way-booking';
 import { RoundTripBooking } from '@/features/booking/components/round-trip-booking';
 import { mapTripToBookingPost } from '@/features/trips/services/trip-booking-adapter';
-import type { ApiTrip } from '@/features/trips/services/trips.api';
+import type { ApiTrip, ApiTripSeat } from '@/features/trips/services/trips.api';
 
-async function getTrip(tripId: number): Promise<ApiTrip | null> {
-  const apiBaseUrl =
+function getApiBaseUrl() {
+  return (
     process.env.VEXGO_API_URL ||
     process.env.NEXT_PUBLIC_API_URL ||
-    'http://localhost:4000/api/v1';
-  const response = await fetch(`${apiBaseUrl}/trips/${tripId}`, {
+    'http://localhost:4000/api/v1'
+  );
+}
+
+async function getTrip(tripId: number): Promise<ApiTrip | null> {
+  const response = await fetch(`${getApiBaseUrl()}/trips/${tripId}`, {
     cache: 'no-store',
   });
   if (response.status === 404) return null;
   if (!response.ok) throw new Error('Không thể tải chi tiết chuyến xe.');
   const body: { data: ApiTrip } = await response.json();
+  return body.data;
+}
+
+async function getTripSeats(tripId: number): Promise<ApiTripSeat[]> {
+  const response = await fetch(`${getApiBaseUrl()}/trips/${tripId}/seats`, {
+    cache: 'no-store',
+  });
+  if (!response.ok) throw new Error('Không thể tải sơ đồ ghế.');
+  const body: { data: ApiTripSeat[] } = await response.json();
   return body.data;
 }
 
@@ -52,12 +65,19 @@ export default async function TripDetailPage({
 
   let outboundTrip: ApiTrip | null = null;
   let inboundTrip: ApiTrip | null = null;
+  let outboundSeats: ApiTripSeat[] = [];
+  let inboundSeats: ApiTripSeat[] = [];
   let loadError: string | null = null;
   try {
-    [outboundTrip, inboundTrip] = await Promise.all([
-      getTrip(outboundId),
-      tripType === 'round-trip' ? getTrip(returnId) : Promise.resolve(null),
-    ]);
+    [outboundTrip, inboundTrip, outboundSeats, inboundSeats] =
+      await Promise.all([
+        getTrip(outboundId),
+        tripType === 'round-trip' ? getTrip(returnId) : Promise.resolve(null),
+        getTripSeats(outboundId),
+        tripType === 'round-trip'
+          ? getTripSeats(returnId)
+          : Promise.resolve([]),
+      ]);
   } catch (error) {
     loadError =
       error instanceof Error
@@ -87,6 +107,8 @@ export default async function TripDetailPage({
       <RoundTripBooking
         outboundPost={outboundPost}
         returnPost={mapTripToBookingPost(inboundTrip)}
+        outboundTripSeats={outboundSeats}
+        returnTripSeats={inboundSeats}
         departureDate={
           typeof sp?.departureDate === 'string' ? sp.departureDate : ''
         }
@@ -94,5 +116,5 @@ export default async function TripDetailPage({
       />
     );
   }
-  return <OneWayBooking post={outboundPost} />;
+  return <OneWayBooking post={outboundPost} tripSeats={outboundSeats} />;
 }

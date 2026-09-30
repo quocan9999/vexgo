@@ -8,17 +8,23 @@ export function buildTripListSearchParams({
   date,
   page,
   sort,
+  search = '',
+  vehicleType = 'all',
 }: {
   origin: string;
   destination: string;
   date: string;
   page: number;
   sort: string;
+  search?: string;
+  vehicleType?: string;
 }): SearchTripsParams {
   return {
     from: origin,
     to: destination,
     departureDate: date || undefined,
+    ...(search.trim() ? { search: search.trim() } : {}),
+    ...(vehicleType !== 'all' ? { vehicleType } : {}),
     page,
     pageSize: TRIPS_PAGE_SIZE,
     sortBy: sort === 'price' ? 'price' : 'departureTime',

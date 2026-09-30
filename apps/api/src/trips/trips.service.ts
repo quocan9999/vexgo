@@ -133,6 +133,24 @@ export class TripsService {
       where.xe = { loaiXeId: dto.vehicleTypeId };
     }
 
+    const additionalFilters: Prisma.ChuyenXeWhereInput[] = [];
+    if (dto.search) {
+      additionalFilters.push({
+        OR: [
+          { tuyenXe: { diemDi: { contains: dto.search } } },
+          { tuyenXe: { diemDen: { contains: dto.search } } },
+          { tuyenXe: { nhaXe: { tenNhaXe: { contains: dto.search } } } },
+          { xe: { loaiXe: { tenLoai: { contains: dto.search } } } },
+        ],
+      });
+    }
+    if (dto.vehicleType) {
+      additionalFilters.push({
+        xe: { loaiXe: { tenLoai: { contains: dto.vehicleType } } },
+      });
+    }
+    if (additionalFilters.length > 0) where.AND = additionalFilters;
+
     if (dto.departureDate) {
       where.ngayKhoiHanh = new Date(`${dto.departureDate}T00:00:00.000Z`);
     } else {

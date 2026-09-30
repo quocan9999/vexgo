@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Filter, ChevronDown, MapPin } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Pagination } from '@/components/ui/pagination';
@@ -72,10 +72,20 @@ async function fetchTripsByRoute(
   date: string,
   page: number,
   sort: string,
+  search: string,
+  vehicleType: string,
 ): Promise<TripPage> {
   if (!origin && !destination) return { trips: [], meta: EMPTY_META };
   const response = await tripsApi.searchTrips(
-    buildTripListSearchParams({ origin, destination, date, page, sort }),
+    buildTripListSearchParams({
+      origin,
+      destination,
+      date,
+      page,
+      sort,
+      search,
+      vehicleType,
+    }),
   );
   return { trips: response.data.map(mapApiToTrip), meta: response.meta };
 }
@@ -174,8 +184,8 @@ export function TripList() {
   const tripType = searchParams.get('tripType') || '';
   // Round-trip nếu tripType=round-trip HOẶC có returnDate
   const isRoundTrip = tripType === 'round-trip' || !!returnDate;
-  const outboundSearchKey = `${origin}\u0000${destination}\u0000${date}`;
-  const returnSearchKey = `${destination}\u0000${origin}\u0000${returnDate}`;
+  const outboundSearchKey = `${origin}\u0000${destination}\u0000${date}\u0000${query}\u0000${vehicleType}`;
+  const returnSearchKey = `${destination}\u0000${origin}\u0000${returnDate}\u0000${query}\u0000${vehicleType}`;
   const outboundPage =
     outboundPageState.searchKey === outboundSearchKey
       ? outboundPageState.page
@@ -196,6 +206,8 @@ export function TripList() {
           date,
           outboundPage,
           sort,
+          query,
+          vehicleType,
         );
         if (ignore) return;
         setOutboundTrips(response.trips);
@@ -215,7 +227,7 @@ export function TripList() {
     return () => {
       ignore = true;
     };
-  }, [origin, destination, date, outboundPage, sort]);
+  }, [origin, destination, date, outboundPage, sort, query, vehicleType]);
 
   // Fetch return trips if round-trip
   useEffect(() => {
@@ -231,6 +243,8 @@ export function TripList() {
           returnDate,
           returnPage,
           sort,
+          query,
+          vehicleType,
         );
         if (ignore) return;
         setReturnTrips(response.trips);
@@ -250,7 +264,16 @@ export function TripList() {
     return () => {
       ignore = true;
     };
-  }, [destination, origin, returnDate, isRoundTrip, returnPage, sort]);
+  }, [
+    destination,
+    origin,
+    returnDate,
+    isRoundTrip,
+    returnPage,
+    sort,
+    query,
+    vehicleType,
+  ]);
 
   const effectiveActiveTab = isRoundTrip ? activeTab : 'outbound';
   const activeTrips =
@@ -263,17 +286,7 @@ export function TripList() {
   const currentPage =
     effectiveActiveTab === 'outbound' ? outboundPage : returnPage;
 
-  const filteredTrips = useMemo(() => {
-    return activeTrips.filter((trip) => {
-      const matchesQuery = `${trip.origin} ${trip.destination} ${trip.operator}`
-        .toLowerCase()
-        .includes(query.toLowerCase());
-      return (
-        matchesQuery &&
-        (vehicleType === 'all' || trip.vehicleType.includes(vehicleType))
-      );
-    });
-  }, [activeTrips, query, vehicleType]);
+  const filteredTrips = activeTrips;
 
   const totalResults = activeMeta.totalItems;
 
@@ -606,9 +619,7 @@ export function TripList() {
             <div className="flex justify-between items-center bg-white p-3 px-4 rounded-xl shadow-sm border border-slate-100">
               <p className="text-[13px] font-medium text-slate-600">
                 Tìm thấy{' '}
-                <span className="font-bold text-blue-600">
-                  {filteredTrips.length}
-                </span>{' '}
+                <span className="font-bold text-blue-600">{totalResults}</span>{' '}
                 chuyến xe phù hợp
               </p>
               <div className="flex items-center gap-2">

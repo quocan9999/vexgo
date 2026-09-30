@@ -34,9 +34,18 @@ export type ApiTrip = {
   availableSeats: number;
 };
 
+export type ApiTripSeat = {
+  gheChuyenXeId: number;
+  soGhe: string;
+  viTri: string | null;
+  trangThai: string;
+};
+
 export type SearchTripsParams = {
   from?: string;
   to?: string;
+  search?: string;
+  vehicleType?: string;
   departureDate?: string;
   busCompanyId?: number;
   vehicleTypeId?: number;
@@ -90,11 +99,11 @@ export const tripsApi = {
     return body.data;
   },
 
-  async getTripSeats(tripId: number) {
+  async getTripSeats(tripId: number): Promise<ApiTripSeat[]> {
     const response = await fetch(`${API_BASE_URL}/trips/${tripId}/seats`);
     if (!response.ok)
       throw await parseError(response, 'Không thể tải sơ đồ ghế');
-    const body = await response.json();
+    const body: { data: ApiTripSeat[] } = await response.json();
     return body.data;
   },
 };

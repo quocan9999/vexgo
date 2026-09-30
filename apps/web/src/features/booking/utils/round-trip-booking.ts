@@ -5,6 +5,22 @@ export interface RoundTripBookingInput {
   returnId: string;
 }
 
+export function calculateRoundTripFare({
+  outboundUnitFare,
+  outboundSeatCount,
+  returnUnitFare,
+  returnSeatCount,
+}: {
+  outboundUnitFare: number;
+  outboundSeatCount: number;
+  returnUnitFare: number;
+  returnSeatCount: number;
+}): number {
+  return (
+    outboundUnitFare * outboundSeatCount + returnUnitFare * returnSeatCount
+  );
+}
+
 export function buildRoundTripBookingHref({
   currentSearch,
   outboundId,

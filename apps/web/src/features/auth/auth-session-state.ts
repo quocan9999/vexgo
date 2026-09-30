@@ -10,6 +10,7 @@ export type AuthState = {
   user: AuthUser | null;
   accessToken: string | null;
   isAuthenticated: boolean;
+  isHydrated: boolean;
 };
 
 type AuthStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
@@ -26,6 +27,7 @@ const UNAUTHENTICATED_STATE: AuthState = {
   user: null,
   accessToken: null,
   isAuthenticated: false,
+  isHydrated: true,
 };
 
 export function readStoredAuth(storage?: AuthStorage): AuthState {
@@ -44,6 +46,7 @@ export function readStoredAuth(storage?: AuthStorage): AuthState {
       user: parsed.user,
       accessToken: parsed.accessToken,
       isAuthenticated: true,
+      isHydrated: true,
     };
   } catch {
     return UNAUTHENTICATED_STATE;

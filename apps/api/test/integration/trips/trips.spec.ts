@@ -1,5 +1,7 @@
 import { type INestApplication, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { APP_GUARD, Reflector } from '@nestjs/core';
+import { JwtService } from '@nestjs/jwt';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import {
@@ -15,6 +17,7 @@ import { configureApi } from '../../../src/common/configure-api.js';
 import { PrismaService } from '../../../src/prisma/prisma.service.js';
 import { TripsModule } from '../../../src/trips/trips.module.js';
 import { TripsService } from '../../../src/trips/trips.service.js';
+import { AccessTokenGuard } from '../../../src/auth/guards/access-token.guard.js';
 
 describe('Trips HTTP contract (mocked service)', () => {
   let app: INestApplication;
@@ -56,7 +59,19 @@ describe('Trips HTTP contract (mocked service)', () => {
     const moduleRef = await Test.createTestingModule({
       imports: [TripsModule],
       providers: [
-        { provide: ConfigService, useValue: { get: () => undefined } },
+        {
+          provide: ConfigService,
+          useValue: {
+            get: (key: string) =>
+              key === 'JWT_ACCESS_SECRET'
+                ? 'test-access-secret-with-at-least-32-characters'
+                : undefined,
+          },
+        },
+        JwtService,
+        Reflector,
+        AccessTokenGuard,
+        { provide: APP_GUARD, useExisting: AccessTokenGuard },
       ],
     })
       .overrideProvider(TripsService)

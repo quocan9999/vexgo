@@ -48,6 +48,30 @@ async function waitUntilReady(baseUrl, child, output) {
 
 async function startMockApi() {
   const server = createServer((request, response) => {
+    const seatsMatch = request.url?.match(/^\/api\/v1\/trips\/(\d+)\/seats$/);
+    if (seatsMatch) {
+      response.writeHead(200, { 'Content-Type': 'application/json' });
+      response.end(
+        JSON.stringify({
+          data: [
+            {
+              gheChuyenXeId: 901,
+              soGhe: 'Z99',
+              viTri: 'Tầng dưới',
+              trangThai: 'TRONG',
+            },
+            {
+              gheChuyenXeId: 902,
+              soGhe: 'Z98',
+              viTri: 'Tầng dưới',
+              trangThai: 'DA_DAT',
+            },
+          ],
+        }),
+      );
+      return;
+    }
+
     const match = request.url?.match(/^\/api\/v1\/trips\/(\d+)$/);
     if (!match) {
       response.writeHead(404, { 'Content-Type': 'application/json' });

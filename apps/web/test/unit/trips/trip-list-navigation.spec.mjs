@@ -48,3 +48,28 @@ test('trip list query sends the requested page and server-side sort', () => {
     },
   );
 });
+
+test('trip list sends keyword and vehicle filters before server pagination', () => {
+  assert.deepEqual(
+    buildTripListSearchParams({
+      origin: 'TP.HCM',
+      destination: 'Đà Lạt',
+      date: '2026-10-15',
+      page: 1,
+      sort: 'departure',
+      search: 'Nhà xe A',
+      vehicleType: 'Giường',
+    }),
+    {
+      from: 'TP.HCM',
+      to: 'Đà Lạt',
+      departureDate: '2026-10-15',
+      search: 'Nhà xe A',
+      vehicleType: 'Giường',
+      page: 1,
+      pageSize: 10,
+      sortBy: 'departureTime',
+      sortDirection: 'asc',
+    },
+  );
+});

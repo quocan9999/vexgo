@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
-import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { startNextProductionServer } from '../helpers/next-production-server.mjs';
@@ -28,7 +34,10 @@ for (const screen of publicScreens) {
     const html = await response.text();
 
     assert.equal(response.status, 200, `Expected 200 for ${screen.path}`);
-    assert.ok(html.toLowerCase().includes(screen.marker.toLowerCase()), `Expected to find "${screen.marker}" on ${screen.path}`);
+    assert.ok(
+      html.toLowerCase().includes(screen.marker.toLowerCase()),
+      `Expected to find "${screen.marker}" on ${screen.path}`,
+    );
   });
 }
 
@@ -53,15 +62,27 @@ for (const screen of authScreens) {
     const html = await response.text();
 
     assert.equal(response.status, 200, `Expected 200 for ${screen.path}`);
-    assert.ok(html.toLowerCase().includes(screen.marker.toLowerCase()), `Expected to find "${screen.marker}" on ${screen.path}`);
+    assert.ok(
+      html.toLowerCase().includes(screen.marker.toLowerCase()),
+      `Expected to find "${screen.marker}" on ${screen.path}`,
+    );
   });
 }
 
-for (const accountRoute of ['/account/profile', '/account/tickets', '/account/profile/password']) {
+for (const accountRoute of [
+  '/account/profile',
+  '/account/tickets',
+  '/account/profile/password',
+]) {
   test(`${accountRoute} marks its canonical sidebar link as the current page`, async () => {
     const response = await fetch(`${server.baseUrl}${accountRoute}`);
     const html = await response.text();
-    const linkTag = html.match(new RegExp(`<a[^>]*href="${accountRoute.replaceAll('/', '\\/')}"[^>]*>`, 'i'))?.[0];
+    const linkTag = html.match(
+      new RegExp(
+        `<a[^>]*href="${accountRoute.replaceAll('/', '\\/')}"[^>]*>`,
+        'i',
+      ),
+    )?.[0];
 
     assert.equal(response.status, 200);
     assert.ok(linkTag, `Expected sidebar link for ${accountRoute}`);
@@ -77,7 +98,12 @@ for (const [legacyRoute, canonicalRoute] of [
   test(`${legacyRoute} keeps the matching canonical sidebar link active`, async () => {
     const response = await fetch(`${server.baseUrl}${legacyRoute}`);
     const html = await response.text();
-    const linkTag = html.match(new RegExp(`<a[^>]*href="${canonicalRoute.replaceAll('/', '\\/')}"[^>]*>`, 'i'))?.[0];
+    const linkTag = html.match(
+      new RegExp(
+        `<a[^>]*href="${canonicalRoute.replaceAll('/', '\\/')}"[^>]*>`,
+        'i',
+      ),
+    )?.[0];
 
     assert.equal(response.status, 200);
     assert.ok(linkTag, `Expected sidebar link for ${canonicalRoute}`);
@@ -113,14 +139,21 @@ test('customer-facing source does not regress to the retired BusWay brand', () =
       const entryPath = path.join(target, entry.name);
       if (entry.isDirectory()) {
         scan(entryPath);
-      } else if (/\.(?:ts|tsx)$/.test(entry.name) && /busway/i.test(readFileSync(entryPath, 'utf8'))) {
+      } else if (
+        /\.(?:ts|tsx)$/.test(entry.name) &&
+        /busway/i.test(readFileSync(entryPath, 'utf8'))
+      ) {
         matches.push(entryPath);
       }
     }
   }
 
   scan(sourceRoot);
-  assert.deepEqual(matches, [], `Found retired BusWay branding:\n${matches.join('\n')}`);
+  assert.deepEqual(
+    matches,
+    [],
+    `Found retired BusWay branding:\n${matches.join('\n')}`,
+  );
 });
 
 const postScreens = [
@@ -137,9 +170,22 @@ for (const screen of postScreens) {
     const html = await response.text();
 
     assert.equal(response.status, 200, `Expected 200 for ${screen.path}`);
-    assert.ok(html.toLowerCase().includes(screen.marker.toLowerCase()), `Expected to find "${screen.marker}" on ${screen.path}`);
+    assert.ok(
+      html.toLowerCase().includes(screen.marker.toLowerCase()),
+      `Expected to find "${screen.marker}" on ${screen.path}`,
+    );
   });
 }
+
+test('trip booking renders the real seat map returned for that trip', async () => {
+  const response = await fetch(`${server.baseUrl}/trips/1`);
+  const html = await response.text();
+
+  assert.equal(response.status, 200);
+  assert.match(html, /Z99 còn trống/i);
+  assert.match(html, /Z98 đã bán/i);
+  assert.doesNotMatch(html, /B04 đang chọn/i);
+});
 
 const serviceScreens = [
   { path: '/tra-cuu-ve', marker: 'TRA CỨU THÔNG TIN ĐẶT VÉ' },
@@ -160,11 +206,15 @@ for (const screen of serviceScreens) {
     const html = await response.text();
 
     assert.equal(response.status, 200, `Expected 200 for ${screen.path}`);
-    assert.ok(html.toLowerCase().includes(screen.marker.toLowerCase()), `Expected to find "${screen.marker}" on ${screen.path}`);
+    assert.ok(
+      html.toLowerCase().includes(screen.marker.toLowerCase()),
+      `Expected to find "${screen.marker}" on ${screen.path}`,
+    );
   });
 }
 
-const forbiddenFrontendReference = /apps[\\/]frontend|@vexgo[\\/]frontend|(?:\.\.[\\/]){3}apps[\\/]frontend/i;
+const forbiddenFrontendReference =
+  /apps[\\/]frontend|@vexgo[\\/]frontend|(?:\.\.[\\/]){3}apps[\\/]frontend/i;
 
 function findForbiddenFrontendReferences(targets) {
   const matches = [];
@@ -185,7 +235,8 @@ function findForbiddenFrontendReferences(targets) {
 
   for (const target of targets) {
     if (target.endsWith('package.json')) {
-      if (forbiddenFrontendReference.test(readFileSync(target, 'utf8'))) matches.push(target);
+      if (forbiddenFrontendReference.test(readFileSync(target, 'utf8')))
+        matches.push(target);
     } else {
       scan(target);
     }
@@ -195,12 +246,19 @@ function findForbiddenFrontendReferences(targets) {
 }
 
 test('independence scanner detects a forbidden apps/frontend reference', () => {
-  const fixtureRoot = mkdtempSync(path.join(tmpdir(), 'vexgo-web-independence-'));
+  const fixtureRoot = mkdtempSync(
+    path.join(tmpdir(), 'vexgo-web-independence-'),
+  );
   const fixtureFile = path.join(fixtureRoot, 'forbidden-reference.ts');
 
   try {
-    writeFileSync(fixtureFile, "export const sourceApp = '../../../apps/frontend';\n");
-    assert.deepEqual(findForbiddenFrontendReferences([fixtureRoot]), [fixtureFile]);
+    writeFileSync(
+      fixtureFile,
+      "export const sourceApp = '../../../apps/frontend';\n",
+    );
+    assert.deepEqual(findForbiddenFrontendReferences([fixtureRoot]), [
+      fixtureFile,
+    ]);
   } finally {
     rmSync(fixtureRoot, { recursive: true, force: true });
   }
@@ -213,5 +271,9 @@ test('independence check: @vexgo/web must not reference the old apps/frontend', 
     path.join(webRoot, 'package.json'),
   ]);
 
-  assert.deepEqual(matches, [], `Found references to the old frontend app:\n${matches.join('\n')}`);
+  assert.deepEqual(
+    matches,
+    [],
+    `Found references to the old frontend app:\n${matches.join('\n')}`,
+  );
 });

@@ -30,6 +30,7 @@ test('auth state starts unauthenticated when storage is unavailable', () => {
     user: null,
     accessToken: null,
     isAuthenticated: false,
+    isHydrated: true,
   });
 });
 
@@ -46,6 +47,7 @@ test('writeStoredAuth persists tokens and readStoredAuth restores the session', 
     user,
     accessToken: 'access-token',
     isAuthenticated: true,
+    isHydrated: true,
   });
 });
 
@@ -57,6 +59,7 @@ test('invalid stored auth is treated as unauthenticated', () => {
     user: null,
     accessToken: null,
     isAuthenticated: false,
+    isHydrated: true,
   });
 });
 
@@ -74,5 +77,6 @@ test('clearStoredAuth keeps sign-out effective after a refresh', () => {
     user: null,
     accessToken: null,
     isAuthenticated: false,
+    isHydrated: true,
   });
 });
