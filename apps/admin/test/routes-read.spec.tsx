@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { RoutesManagement } from '../src/features/routes/components/routes-management';
 import { getRoutes, getRouteById } from '../src/features/routes/services/route-service';
+import { setEmployeeAdminTestSession } from './admin-auth-test-session';
 
 const state = vi.hoisted(() => ({
   loading: true,
@@ -51,6 +52,7 @@ vi.mock('@/features/routes/hooks/use-routes', () => ({
 }));
 
 beforeEach(() => {
+  setEmployeeAdminTestSession(['route:read']);
   state.loading = true;
   state.routePage = null;
   state.error = null;
@@ -63,7 +65,7 @@ describe('Admin routes read page', () => {
     expect(html).toContain('Đang tải danh sách tuyến xe');
     expect(html).toContain('data-result-count="loading"');
     expect(html).toContain('Làm mới');
-    expect(html).toContain('Thêm tuyến');
+    expect(html).not.toContain('Thêm tuyến');
   });
 
   it('renders backend totalItems, accessible sort state, detail action, and mobile card', () => {

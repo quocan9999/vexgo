@@ -12,6 +12,7 @@ import { AdminStatusBadge } from '@/components/admin/admin-status-badge';
 import { AdminTableSkeleton } from '@/components/admin/admin-table-skeleton';
 import { FilterToolbar, SearchInput, SelectFilter, type FilterOption } from '@/components/data-filters/data-filters';
 import { Button } from '@/components/ui/button';
+import { useAdminPermissions } from '@/features/admin-auth/hooks/use-admin-permissions';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
 import { getBusCompanyFilterOptions } from '@/features/bus-companies/services/bus-company-service';
 import { useRoutes } from '../hooks/use-routes';
@@ -57,6 +58,8 @@ export function RouteDetails({ routeId, companyOptions, onClose, onRetryOptions,
   onRetryOptions: () => void;
   onUpdated: (route: Route) => void;
 }) {
+  const { can } = useAdminPermissions();
+  const canUpdate = can('route:update');
   const [detail, setDetail] = useState<DetailState>({ status: 'loading' });
   const [retryCount, setRetryCount] = useState(0);
   const [editOpen, setEditOpen] = useState(false);
@@ -72,7 +75,7 @@ export function RouteDetails({ routeId, companyOptions, onClose, onRetryOptions,
     : null;
 
   async function confirmStatusChange() {
-    if (statusSubmittingRef.current || nextStatus === null) return;
+    if (!canUpdate || statusSubmittingRef.current || nextStatus === null) return;
     statusSubmittingRef.current = true;
     setStatusSubmitting(true);
     setStatusError(null);
@@ -141,16 +144,20 @@ export function RouteDetails({ routeId, companyOptions, onClose, onRetryOptions,
               <div><dt>Cập nhật lần cuối</dt><dd>{timestampFormat(detail.route.updatedAt)}</dd></div>
             </dl>
             <div className="routes-detail-actions">
-              <Button onClick={() => { setStatusError(null); setStatusOpen(true); }} type="button" variant="secondary">
-                {detail.route.status === 'HOAT_DONG' ? 'Tạm ngưng tuyến' : 'Kích hoạt tuyến'}
-              </Button>
-              <Button onClick={() => setEditOpen(true)} type="button">Chỉnh sửa</Button>
+              {canUpdate && (
+                <>
+                  <Button onClick={() => { setStatusError(null); setStatusOpen(true); }} type="button" variant="secondary">
+                    {detail.route.status === 'HOAT_DONG' ? 'Tạm ngưng tuyến' : 'Kích hoạt tuyến'}
+                  </Button>
+                  <Button onClick={() => setEditOpen(true)} type="button">Chỉnh sửa</Button>
+                </>
+              )}
             </div>
           </div>
         )}
       </>
     </AdminDetailSheet>
-    {editOpen && detail.status === 'success' && (
+    {editOpen && canUpdate && detail.status === 'success' && (
       <RouteFormDialog
         companyOptions={companyOptions}
         onClose={() => setEditOpen(false)}
@@ -164,7 +171,7 @@ export function RouteDetails({ routeId, companyOptions, onClose, onRetryOptions,
         route={detail.route}
       />
     )}
-    {statusOpen && detail.status === 'success' && nextStatus && (
+    {statusOpen && canUpdate && detail.status === 'success' && nextStatus && (
       <AdminConfirmDialog
         ariaBusy={statusSubmitting}
         ariaDescribedBy="route-status-confirmation-description"
@@ -196,6 +203,8 @@ export function RouteDetails({ routeId, companyOptions, onClose, onRetryOptions,
 }
 
 export function RoutesManagement() {
+  const { can } = useAdminPermissions();
+  const canCreate = can('route:create');
   const {
     routePage, error, loading, searchInput, status, busCompanyId, sortBy, sortDirection,
     changePage, updateSearch, updateStatus, updateBusCompany, sortRoutes, refresh,
@@ -245,7 +254,7 @@ export function RoutesManagement() {
     <SuperAdminLayout activeSection="routes">
       <div className="admin-page-content">
         <AdminPageHeader
-          actions={<div className="page-intro-actions"><AdminCreateAction label="Thêm tuyến" onClick={() => { setSuccessNotice(null); setCreateOpen(true); }} /><AdminRefreshAction loading={loading} onClick={refresh} /></div>}
+          actions={<div className="page-intro-actions">{canCreate && <AdminCreateAction label="Thêm tuyến" onClick={() => { setSuccessNotice(null); setCreateOpen(true); }} />}<AdminRefreshAction loading={loading} onClick={refresh} /></div>}
           eyebrow="QUẢN LÝ VẬN HÀNH" title="Quản lý tuyến xe" titleId="routes-title"
         />
         {successNotice && <div className="routes-update-notice" role="status"><CheckCircle2 aria-hidden="true" size={16} />{successNotice}</div>}
@@ -337,7 +346,7 @@ export function RoutesManagement() {
         onUpdated={(route) => { setSuccessNotice(`Đã cập nhật tuyến ${route.code}.`); refresh(); }}
         routeId={selectedRouteId}
       />}
-      {createOpen && <RouteFormDialog
+      {createOpen && canCreate && <RouteFormDialog
         companyOptions={companyOptions}
         onClose={() => setCreateOpen(false)}
         onRetryOptions={retryOptions}
