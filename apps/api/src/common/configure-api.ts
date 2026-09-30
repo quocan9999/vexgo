@@ -46,6 +46,17 @@ function getAllowedOrigins(config: ConfigService): string[] {
 export function configureApi(app: INestApplication): void {
   const config = app.get(ConfigService);
 
+  // Incoming HTTP Request Logger for debugging mobile/web calls
+  app.use((req: any, res: any, next: () => void) => {
+    const start = Date.now();
+    res.on('finish', () => {
+      const duration = Date.now() - start;
+      const bodyStr = req.body && Object.keys(req.body).length > 0 ? ` | Body: ${JSON.stringify(req.body)}` : '';
+      console.log(`\x1b[36m[API REQUEST]\x1b[0m ${req.method} ${req.originalUrl}${bodyStr} -> \x1b[32m${res.statusCode}\x1b[0m (${duration}ms)`);
+    });
+    next();
+  });
+
   app.setGlobalPrefix('api/v1');
   app.enableCors({ origin: getAllowedOrigins(config) });
   app.useGlobalPipes(
