@@ -27,8 +27,8 @@ test('one-way seats expose button semantics and selection state to keyboard user
   assert.equal(response.status, 200);
 
   const html = await response.text();
-  assert.match(html, /<button[^>]*aria-label="A12 còn trống"[^>]*aria-pressed="false"[^>]*>/i);
-  assert.match(html, /<button[^>]*disabled=""[^>]*aria-label="A01 đã bán"[^>]*>/i);
+  assert.match(html, /<button[^>]*aria-label="Z99 còn trống"[^>]*aria-pressed="false"[^>]*>/i);
+  assert.match(html, /<button[^>]*disabled=""[^>]*aria-label="Z98 đã bán"[^>]*>/i);
 });
 
 test('round-trip seats use the reference gray, blue, and orange state colors', async () => {

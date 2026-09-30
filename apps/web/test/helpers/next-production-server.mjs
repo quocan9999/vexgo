@@ -66,6 +66,12 @@ async function startMockApi() {
               viTri: 'Tầng dưới',
               trangThai: 'DA_DAT',
             },
+            {
+              gheChuyenXeId: 903,
+              soGhe: 'B04',
+              viTri: 'Tầng trên',
+              trangThai: 'TRONG',
+            },
           ],
         }),
       );
