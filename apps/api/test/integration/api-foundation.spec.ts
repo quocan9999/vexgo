@@ -1106,7 +1106,7 @@ describe('API foundation', () => {
     expect(routesService.create).not.toHaveBeenCalled();
   });
 
-  it('restricts bus-company mutations to Super Admin', async () => {
+  it('requires Super Admin role and bus-company:update for bus-company status changes', async () => {
     await request(app.getHttpServer())
       .patch('/api/v1/bus-companies/901/status')
       .set('Authorization', 'Bearer signed-token')
@@ -1114,7 +1114,11 @@ describe('API foundation', () => {
       .expect(403);
     expect(busCompaniesService.updateStatus).not.toHaveBeenCalled();
 
-    sessionFindUnique.mockResolvedValueOnce(sessionWithRoles(['SUPER_ADMIN']));
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['SUPER_ADMIN'], false, {
+        SUPER_ADMIN: ['bus-company:update'],
+      }),
+    );
     busCompaniesService.updateStatus.mockResolvedValue({
       data: { busCompanyId: 901 },
     });

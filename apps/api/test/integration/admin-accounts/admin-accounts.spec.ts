@@ -47,7 +47,14 @@ describe('Admin account management API', () => {
           taiKhoanId: 1,
           sessionId: 'test-super-admin-session',
           roles: ['SUPER_ADMIN'],
-          permissions: [],
+          permissions: [
+            'bus-company:read',
+            'bus-company:create',
+            'bus-company:update',
+            'admin-account:read',
+            'admin-account:create',
+            'admin-account:update',
+          ],
           nhanVienId: null,
           nhaXeId: null,
         };
@@ -228,7 +235,7 @@ describe('Admin account management API', () => {
     return account.taiKhoanId;
   }
 
-  it('requires authentication and restricts these endpoints to SUPER_ADMIN', async () => {
+  it('requires Super Admin role and admin-account:read permission for these endpoints', async () => {
     const anonymous = await request(app.getHttpServer())
       .get('/api/v1/admin-accounts')
       .expect(401);
