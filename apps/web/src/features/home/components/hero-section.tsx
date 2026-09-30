@@ -76,7 +76,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
   }, []);
 
   // Freight states
-  const [freightDate, setFreightDate] = useState('');
+  const [freightDate, setFreightDate] = useState(new Date().toISOString().split('T')[0]);
   const [freightType, setFreightType] = useState('Hàng thường');
   const freightWeight = 'Dưới 5kg';
 

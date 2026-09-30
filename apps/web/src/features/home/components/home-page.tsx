@@ -16,7 +16,7 @@ export function HomePage({ initialHasSearched = false }: { initialHasSearched?: 
   const [selectedProvince, setSelectedProvince] = useState('');
   const [selectedDistrict, setSelectedDistrict] = useState('');
   const [selectedType, setSelectedType] = useState('');
-  const [selectedPrice, setSelectedPrice] = useState('');
+  const [selectedPrice, setSelectedPrice] = useState(new Date().toISOString().split('T')[0]);
   
   const [hasSearched, setHasSearched] = useState(initialHasSearched);
   const [searchCriteria, setSearchCriteria] = useState<{tripType?: 'one-way' | 'round-trip'; departureDate?: string; returnDate?: string}>({});
