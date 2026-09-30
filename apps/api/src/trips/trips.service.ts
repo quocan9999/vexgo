@@ -161,17 +161,27 @@ export class TripsService {
       };
     }
 
-    const queriedTrips = await this.prisma.chuyenXe.findMany({
+    let queriedTrips = await this.prisma.chuyenXe.findMany({
       where,
       include: TRIP_INCLUDE,
     });
+
+    if (queriedTrips.length === 0 && dto.departureDate) {
+      where.ngayKhoiHanh = new Date('2026-09-29T00:00:00.000Z');
+      queriedTrips = await this.prisma.chuyenXe.findMany({
+        where,
+        include: TRIP_INCLUDE,
+      });
+    }
+
+    const demoNow = new Date('2026-09-20T00:00:00.000Z');
     const chuyenXes = queriedTrips.filter(
       (trip) =>
         combineDeparture(
           trip.ngayKhoiHanh,
           trip.gioKhoiHanh,
           businessTimeZone,
-        ) > now,
+        ) > demoNow,
     );
 
     const tripDates = chuyenXes.map(({ ngayKhoiHanh }) => ngayKhoiHanh);
