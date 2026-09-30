@@ -1,4 +1,3 @@
-/* eslint-disable */
 'use client';
 
 import React, { useState } from 'react';
@@ -108,7 +107,7 @@ const SeatGrid = ({
     <div className="grid grid-cols-2 gap-3 sm:gap-5">
       {Object.entries(
         tripSeats.reduce<Record<string, ApiTripSeat[]>>((groups, seat) => {
-          const label = seat.viTri?.trim() || 'Sơ đồ ghế';
+          const label = seat.position?.trim() || 'Sơ đồ ghế';
           (groups[label] ??= []).push(seat);
           return groups;
         }, {}),
@@ -120,10 +119,10 @@ const SeatGrid = ({
           <div className="grid grid-cols-3 gap-1 sm:gap-2 justify-items-center">
             {seats.map((seat) => (
               <SeatButton
-                key={seat.gheChuyenXeId}
-                seat={seat.soGhe}
-                booked={seat.trangThai !== 'TRONG'}
-                selected={selectedSeats.includes(seat.soGhe)}
+                key={seat.tripSeatId}
+                seat={seat.seatNumber}
+                booked={seat.status !== 'TRONG'}
+                selected={selectedSeats.includes(seat.seatNumber)}
                 onToggle={onToggle}
               />
             ))}
@@ -185,7 +184,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
     ? `${new Intl.DateTimeFormat('vi-VN', { weekday: 'long' }).format(new Date(`${returnDate}T00:00:00`))}, ${returnDateLabel}`
     : returnDateLabel;
   const outboundRoute = `${outboundPost.province} - ${outboundPost.district}`;
-  const returnRoute = `${returnPost.district} - ${returnPost.province}`;
+  const returnRoute = `${returnPost.province} - ${returnPost.district}`;
   const canPay =
     outboundSeats.length > 0 && returnSeats.length > 0 && acceptedTerms;
 

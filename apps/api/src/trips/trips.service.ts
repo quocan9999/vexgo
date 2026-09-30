@@ -242,6 +242,11 @@ export class TripsService {
   }
 
   async getDetails(id: number) {
+    const businessTimeZone = resolveBusinessTimeZone(
+      this.config.get<string>('BUSINESS_TIME_ZONE'),
+    );
+    const now = new Date();
+
     const cx = await this.prisma.chuyenXe.findUnique({
       where: { chuyenXeId: id },
       include: TRIP_INCLUDE,
@@ -251,6 +256,25 @@ export class TripsService {
       throw new NotFoundException({
         error: 'TRIP_NOT_FOUND',
         message: 'Không tìm thấy chuyến xe.',
+      });
+    }
+
+    if (cx.trangThai !== 'MO_BAN') {
+      throw new NotFoundException({
+        error: 'TRIP_NOT_AVAILABLE',
+        message: 'Chuyến xe này hiện không mở bán.',
+      });
+    }
+
+    const departureAt = combineDeparture(
+      cx.ngayKhoiHanh,
+      cx.gioKhoiHanh,
+      businessTimeZone,
+    );
+    if (departureAt <= now) {
+      throw new NotFoundException({
+        error: 'TRIP_ALREADY_DEPARTED',
+        message: 'Chuyến xe này đã khởi hành.',
       });
     }
 
@@ -265,11 +289,9 @@ export class TripsService {
       },
     });
 
-    const businessTimeZone = resolveBusinessTimeZone(
-      this.config.get<string>('BUSINESS_TIME_ZONE'),
-    );
     return mapTrip(cx, businessTimeZone, bangGia ?? undefined);
   }
+
 
   async getSeats(id: number) {
     const gheChuyenXes = await this.prisma.gheChuyenXe.findMany({
@@ -286,10 +308,10 @@ export class TripsService {
     }
 
     return gheChuyenXes.map((gx) => ({
-      gheChuyenXeId: gx.gheChuyenXeId,
-      soGhe: gx.ghe.soGhe,
-      viTri: gx.ghe.viTri,
-      trangThai: gx.trangThai,
+      tripSeatId: gx.gheChuyenXeId,
+      seatNumber: gx.ghe.soGhe,
+      position: gx.ghe.viTri,
+      status: gx.trangThai,
     }));
   }
 }

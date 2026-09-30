@@ -64,12 +64,31 @@ export function AuthSessionProvider({
         } catch {}
       },
       signOut: () => {
-        setState({
+        const currentToken = state.accessToken;
+        const nextState = {
           user: null,
           accessToken: null,
           isAuthenticated: false,
           isHydrated: true,
-        });
+        };
+        // Call the logout API endpoint; clear local state regardless of outcome
+        const doLogout = async () => {
+          try {
+            await fetch(
+              `${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1'}/auth/logout`,
+              {
+                method: 'POST',
+                headers: currentToken
+                  ? { Authorization: `Bearer ${currentToken}` }
+                  : {},
+              },
+            );
+          } catch {
+            // ignore network errors – local session must still be cleared
+          }
+        };
+        void doLogout();
+        setState(nextState);
         try {
           clearStoredAuth(window.localStorage);
         } catch {}

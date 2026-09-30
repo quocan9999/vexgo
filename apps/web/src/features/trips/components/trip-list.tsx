@@ -168,13 +168,6 @@ export function TripList() {
   const [vehicleType, setVehicleType] = useState('all');
   const [sort, setSort] = useState('departure');
 
-  // Selected trips
-  const [selectedOutbound, setSelectedOutbound] = useState<Trip | null>(null);
-  const [selectedReturn, setSelectedReturn] = useState<Trip | null>(null);
-
-  // Active tab: 'outbound' | 'return'
-  const [activeTab, setActiveTab] = useState<'outbound' | 'return'>('outbound');
-
   const origin = searchParams.get('from') || searchParams.get('origin') || '';
   const destination =
     searchParams.get('to') || searchParams.get('destination') || '';
@@ -184,6 +177,44 @@ export function TripList() {
   const tripType = searchParams.get('tripType') || '';
   // Round-trip nếu tripType=round-trip HOẶC có returnDate
   const isRoundTrip = tripType === 'round-trip' || !!returnDate;
+
+  // Route key: changes when from/to/date change → used to auto-reset selections
+  const routeKey = `${origin}|${destination}|${date}`;
+
+  // Selected trips keyed by routeKey (auto-resets when search criteria change)
+  const [selectedOutboundKeyed, setSelectedOutboundKeyed] = useState<{
+    key: string;
+    trip: Trip | null;
+  }>({ key: routeKey, trip: null });
+  const [selectedReturnKeyed, setSelectedReturnKeyed] = useState<{
+    key: string;
+    trip: Trip | null;
+  }>({ key: routeKey, trip: null });
+
+  // Active tab keyed by routeKey (auto-resets to 'outbound' when search criteria change)
+  const [activeTabKeyed, setActiveTabKeyed] = useState<{
+    key: string;
+    tab: 'outbound' | 'return';
+  }>({ key: routeKey, tab: 'outbound' });
+
+  // Derive effective values — null/reset when routeKey has changed
+  const selectedOutbound =
+    selectedOutboundKeyed.key === routeKey ? selectedOutboundKeyed.trip : null;
+  const selectedReturn =
+    selectedReturnKeyed.key === routeKey ? selectedReturnKeyed.trip : null;
+  const activeTab =
+    activeTabKeyed.key === routeKey ? activeTabKeyed.tab : 'outbound';
+
+  function setSelectedOutbound(trip: Trip | null) {
+    setSelectedOutboundKeyed({ key: routeKey, trip });
+  }
+  function setSelectedReturn(trip: Trip | null) {
+    setSelectedReturnKeyed({ key: routeKey, trip });
+  }
+  function setActiveTab(tab: 'outbound' | 'return') {
+    setActiveTabKeyed({ key: routeKey, tab });
+  }
+
   const outboundSearchKey = `${origin}\u0000${destination}\u0000${date}\u0000${query}\u0000${vehicleType}`;
   const returnSearchKey = `${destination}\u0000${origin}\u0000${returnDate}\u0000${query}\u0000${vehicleType}`;
   const outboundPage =
@@ -274,6 +305,7 @@ export function TripList() {
     query,
     vehicleType,
   ]);
+
 
   const effectiveActiveTab = isRoundTrip ? activeTab : 'outbound';
   const activeTrips =

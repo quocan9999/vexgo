@@ -52,8 +52,9 @@ export const ProfileForm: React.FC = () => {
         setEmail(data.email || '');
         setDateOfBirth(data.dateOfBirth || '');
         setCitizenId(data.citizenId || '');
-      } catch (error: any) {
-        if (error?.message?.toLowerCase().includes('hết hạn') || error?.message?.toLowerCase().includes('không hợp lệ')) {
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : '';
+        if (message.toLowerCase().includes('hết hạn') || message.toLowerCase().includes('không hợp lệ')) {
           signOut();
           router.replace('/auth/login?next=/account/profile');
         } else {

@@ -93,34 +93,10 @@ export function TripCard({
             </div>
           </div>
         </div>
-
-        {/* Note */}
-        <p className="text-[12px] text-slate-500 mt-3 leading-relaxed">
-          <span className="font-bold text-[#f05123]">Lưu ý:</span> Quý Khách
-          đang chọn xe đi lộ trình cao tốc Mỹ Thuận Trung Lương - Bot 23 , không
-          nhận đón ...{' '}
-          <button className="text-blue-600 font-medium hover:underline">
-            xem thêm
-          </button>
-        </p>
       </div>
 
       {/* Bottom actions */}
-      <div className="flex justify-between items-center px-5 py-3 border-t border-slate-100">
-        <div className="flex items-center gap-5 text-[13px] font-bold text-slate-600">
-          <button
-            onClick={(e) => e.stopPropagation()}
-            className="hover:text-blue-600 transition-colors"
-          >
-            Chọn ghế
-          </button>
-          <button
-            onClick={(e) => e.stopPropagation()}
-            className="hover:text-blue-600 transition-colors"
-          >
-            Chính sách
-          </button>
-        </div>
+      <div className="flex justify-end items-center px-5 py-3 border-t border-slate-100">
         <button
           onClick={(e) => {
             e.stopPropagation();

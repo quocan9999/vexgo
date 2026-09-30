@@ -35,10 +35,10 @@ export type ApiTrip = {
 };
 
 export type ApiTripSeat = {
-  gheChuyenXeId: number;
-  soGhe: string;
-  viTri: string | null;
-  trangThai: string;
+  tripSeatId: number;
+  seatNumber: string;
+  position: string | null;
+  status: string;
 };
 
 export type SearchTripsParams = {
