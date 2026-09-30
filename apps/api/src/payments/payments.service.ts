@@ -101,4 +101,58 @@ export class PaymentsService {
       paidAt: new Date().toISOString(),
     };
   }
+
+  async getPaymentById(paymentId: number) {
+    const payment = await this.prisma.thanhToan.findUnique({
+      where: { thanhToanId: Number(paymentId) },
+      include: {
+        donGiaoDich: {
+          include: {
+            phieuDatVe: true,
+          },
+        },
+      },
+    });
+
+    if (!payment) {
+      throw new NotFoundException(`Giao dịch thanh toán #${paymentId} không tồn tại.`);
+    }
+
+    return {
+      paymentId: payment.thanhToanId,
+      bookingId: payment.donGiaoDich?.phieuDatVe?.phieuDatVeId ?? 0,
+      provider: payment.phuongThuc,
+      amount: Number(payment.soTien),
+      status: payment.trangThai,
+      createdAt: payment.createdAt.toISOString(),
+      updatedAt: payment.updatedAt.toISOString(),
+    };
+  }
+
+  async handleMomoWebhook(body: any) {
+    this.logger.log(`Received MoMo Webhook: ${JSON.stringify(body)}`);
+    const paymentId = Number(body.orderId || body.paymentId || body.extraData);
+    if (paymentId) {
+      return this.getPaymentStatus(paymentId);
+    }
+    return { resultCode: 0, message: 'Received' };
+  }
+
+  async handleVnpayWebhook(queryOrBody: any) {
+    this.logger.log(`Received VNPay Webhook: ${JSON.stringify(queryOrBody)}`);
+    const paymentId = Number(queryOrBody.vnp_TxnRef || queryOrBody.paymentId);
+    if (paymentId) {
+      return this.getPaymentStatus(paymentId);
+    }
+    return { RspCode: '00', Message: 'Confirm Success' };
+  }
+
+  async handleZaloPayWebhook(body: any) {
+    this.logger.log(`Received ZaloPay Webhook: ${JSON.stringify(body)}`);
+    const paymentId = Number(body.app_trans_id || body.paymentId);
+    if (paymentId) {
+      return this.getPaymentStatus(paymentId);
+    }
+    return { return_code: 1, return_message: 'success' };
+  }
 }

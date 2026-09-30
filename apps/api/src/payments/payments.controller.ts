@@ -28,4 +28,26 @@ export class PaymentsController {
   ) {
     return this.paymentsService.getPaymentStatus(paymentId);
   }
+
+  @Get(':paymentId')
+  async getPaymentById(
+    @Param('paymentId', ParseIntPipe) paymentId: number,
+  ) {
+    return this.paymentsService.getPaymentById(paymentId);
+  }
+
+  @Post('momo/webhook')
+  async momoWebhook(@Body() body: any) {
+    return this.paymentsService.handleMomoWebhook(body);
+  }
+
+  @Post('vnpay/webhook')
+  async vnpayWebhook(@Body() body: any) {
+    return this.paymentsService.handleVnpayWebhook(body);
+  }
+
+  @Post('zalopay/webhook')
+  async zalopayWebhook(@Body() body: any) {
+    return this.paymentsService.handleZaloPayWebhook(body);
+  }
 }
