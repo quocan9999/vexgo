@@ -2,6 +2,10 @@ import 'dotenv/config';
 import bcrypt from 'bcrypt';
 import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import { PrismaClient } from '../apps/api/dist/generated/prisma/client.js';
+import {
+  ADMIN_PERMISSION_CATALOG,
+  ADMIN_ROLE_DEFAULT_PERMISSION_KEYS,
+} from '../apps/api/dist/auth/permissions/permission-catalog.js';
 
 const TZ = 'Asia/Ho_Chi_Minh';
 const PASSWORD = 'VexGo@123';
@@ -272,6 +276,39 @@ async function seedRoles(db) {
     );
   }
   return result;
+}
+
+async function seedPermissionCatalog(db) {
+  const result = new Map();
+  for (const definition of ADMIN_PERMISSION_CATALOG) {
+    result.set(definition.key, await upsertBy(
+      db,
+      'Quyen',
+      { tenQuyen: definition.key },
+      { tenQuyen: definition.key, moTa: definition.description },
+      { moTa: definition.description },
+    ));
+  }
+  return result;
+}
+
+async function seedDefaultRolePermissions(db, roles, permissions) {
+  for (const [roleName, permissionKeys] of Object.entries(ADMIN_ROLE_DEFAULT_PERMISSION_KEYS)) {
+    const role = roles[roleName];
+    if (!role) throw new Error(`Missing role definition for ${roleName}`);
+
+    for (const permissionKey of permissionKeys) {
+      const permission = permissions.get(permissionKey);
+      if (!permission) throw new Error(`Missing permission definition for ${permissionKey}`);
+
+      await db.VaiTroQuyen.upsert({
+        where: { vaiTroId_quyenId: { vaiTroId: role.vaiTroId, quyenId: permission.quyenId } },
+        create: { vaiTroId: role.vaiTroId, quyenId: permission.quyenId },
+        update: {},
+      });
+      count('VaiTroQuyen', 'upsert');
+    }
+  }
 }
 
 async function seedAccounts(db, operators, roles) {
@@ -955,6 +992,8 @@ async function main() {
   const operators = await seedOperators(prisma);
   const vehicleTypes = await seedVehicleTypes(prisma, operators);
   const roles = await seedRoles(prisma);
+  const permissions = await seedPermissionCatalog(prisma);
+  await seedDefaultRolePermissions(prisma, roles, permissions);
   const accounts = await seedAccounts(prisma, operators, roles);
   const fleet = await seedVehiclesAndRoutes(prisma, operators, vehicleTypes);
   const prices = await seedPrices(prisma, operators, fleet.routes, vehicleTypes);
