@@ -1,3 +1,4 @@
+import { adminApiFetch } from '@/lib/admin-api-client';
 import { getApiBaseUrl } from '@/lib/api-url';
 import { getRoutes } from '@/features/routes/services/route-service';
 import type { RouteListQuery } from '@/features/routes/types/route';
@@ -152,7 +153,7 @@ export async function getFarePrices(
   if (query.effectiveState) params.set('effectiveState', query.effectiveState);
 
   const body = await readResponse(
-    await fetch(`${getApiBaseUrl()}/api/v1/fare-prices?${params.toString()}`, {
+    await adminApiFetch(`${getApiBaseUrl()}/api/v1/fare-prices?${params.toString()}`, {
       cache: 'no-store',
       signal,
     }),
@@ -169,7 +170,7 @@ export async function getFarePriceById(
   signal?: AbortSignal,
 ): Promise<FarePrice> {
   const body = await readResponse(
-    await fetch(`${getApiBaseUrl()}/api/v1/fare-prices/${farePriceId}`, {
+    await adminApiFetch(`${getApiBaseUrl()}/api/v1/fare-prices/${farePriceId}`, {
       cache: 'no-store',
       signal,
     }),
@@ -185,7 +186,7 @@ export async function createFarePrice(
   input: CreateFarePriceRequest,
 ): Promise<FarePrice> {
   const body = await readResponse(
-    await fetch(`${getApiBaseUrl()}/api/v1/fare-prices`, {
+    await adminApiFetch(`${getApiBaseUrl()}/api/v1/fare-prices`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(input),
@@ -203,7 +204,7 @@ export async function updateFarePrice(
   input: UpdateFarePriceRequest,
 ): Promise<FarePrice> {
   const body = await readResponse(
-    await fetch(`${getApiBaseUrl()}/api/v1/fare-prices/${farePriceId}`, {
+    await adminApiFetch(`${getApiBaseUrl()}/api/v1/fare-prices/${farePriceId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(input),
@@ -221,7 +222,7 @@ export async function updateFarePriceStatus(
   status: FarePriceStatus,
 ): Promise<FarePrice> {
   const body = await readResponse(
-    await fetch(`${getApiBaseUrl()}/api/v1/fare-prices/${farePriceId}/status`, {
+    await adminApiFetch(`${getApiBaseUrl()}/api/v1/fare-prices/${farePriceId}/status`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status }),

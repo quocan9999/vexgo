@@ -4,80 +4,91 @@ import { ArrowRight, BusFront, Eye, EyeOff, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, type FormEvent } from 'react';
-import { Button } from '@/components/ui/button';
+import { useAdminSession } from '../hooks/use-admin-session';
 import {
-  DEMO_SUPER_ADMIN,
-  signInDemoAdmin,
-  signInTenantPreview,
-} from '../services/demo-auth';
-import { useDemoAdminSession } from '../hooks/use-demo-admin-session';
+  AdminAuthError,
+  getAdminAuthErrorMessage,
+  initializeAdminSession,
+  signInAdmin,
+} from '../services/admin-auth';
+import { getAdminAccessScope } from '../services/admin-scope';
 
 export function AdminLoginForm() {
   const router = useRouter();
-  const [email, setEmail] = useState<string>(DEMO_SUPER_ADMIN.email);
-  const [password, setPassword] = useState<string>(DEMO_SUPER_ADMIN.password);
+  const authState = useAdminSession();
+  const [identifier, setIdentifier] = useState('');
+  const [password, setPassword] = useState('');
   const [passwordVisible, setPasswordVisible] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const sessionStatus = useDemoAdminSession();
+  const [validationDetails, setValidationDetails] = useState<
+    Array<{ field: string; message: string }>
+  >([]);
+  const hasFieldError = (field: string) =>
+    validationDetails.some((detail) => detail.field === field);
 
   useEffect(() => {
-    if (sessionStatus === 'authenticated') {
-      router.replace('/');
-    } else if (sessionStatus === 'tenant-preview') {
-      router.replace('/vehicle-types');
-    }
-  }, [router, sessionStatus]);
+    void initializeAdminSession().catch(() => undefined);
+  }, []);
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  useEffect(() => {
+    if (authState.status !== 'authenticated') return;
+    const scope = getAdminAccessScope(authState.session);
+    router.replace(scope === 'tenant' ? '/vehicle-types' : '/');
+  }, [authState, router]);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
+    setValidationDetails([]);
 
-    if (signInDemoAdmin(email, password)) {
-      router.replace('/');
+    const normalizedIdentifier = identifier.trim();
+    if (!normalizedIdentifier || !password) {
+      setError('Nhập email hoặc số điện thoại cùng mật khẩu.');
       return;
     }
 
-    setError('Email hoặc mật khẩu chưa chính xác. Vui lòng thử lại.');
+    setSubmitting(true);
+    try {
+      const session = await signInAdmin(normalizedIdentifier, password);
+      const scope = getAdminAccessScope(session);
+      router.replace(scope === 'tenant' ? '/vehicle-types' : '/');
+    } catch (caught) {
+      setError(getAdminAuthErrorMessage(caught));
+      if (caught instanceof AdminAuthError) {
+        setValidationDetails(caught.details);
+      }
+    } finally {
+      setSubmitting(false);
+    }
   }
 
-  function openTenantPreview() {
-    signInTenantPreview();
-    router.replace('/vehicle-types');
-  }
-
-  if (sessionStatus !== 'anonymous') {
+  if (authState.status === 'checking') {
     return (
-      <div className="auth-loading" role="status">
-        <span className="auth-loading-mark" aria-hidden="true">
-          V
-        </span>
-        <span>Đang mở cổng quản trị…</span>
+      <div className="auth-loading" role="status" aria-live="polite">
+        <span className="auth-loading-mark" aria-hidden="true">V</span>
+        <span>Đang kiểm tra phiên quản trị…</span>
       </div>
     );
   }
 
   return (
     <main className="login-layout">
-      <section className="login-showcase" aria-label="VexGo Super Admin">
-        <Link aria-label="VexGo Super Admin" className="login-brand" href="/login">
-          <span className="login-brand-mark" aria-hidden="true">
-            V
-          </span>
+      <section className="login-showcase" aria-label="VexGo Admin">
+        <Link aria-label="VexGo Admin" className="login-brand" href="/login">
+          <span className="login-brand-mark" aria-hidden="true">V</span>
           <span>
             <strong>VexGo</strong>
-            <small>SUPER ADMIN</small>
+            <small>ADMIN</small>
           </span>
         </Link>
 
         <div className="login-showcase-copy">
           <span className="login-kicker">
-            <ShieldCheck size={15} aria-hidden="true" /> QUẢN TRỊ NỀN TẢNG
+            <ShieldCheck size={15} aria-hidden="true" /> QUẢN TRỊ VEXGO
           </span>
-          <h1>Một điểm đến cho toàn hệ thống nhà xe.</h1>
-          <p>
-            Đăng nhập để theo dõi quy mô và quản lý các đối tác trên nền tảng
-            VexGo.
-          </p>
+          <h1>Một cổng đăng nhập cho nền tảng và nhà xe.</h1>
+          <p>Tài khoản sẽ mở đúng khu vực theo vai trò được cấp.</p>
         </div>
 
         <div className="login-route-visual" aria-hidden="true">
@@ -92,49 +103,67 @@ export function AdminLoginForm() {
         </div>
 
         <div className="login-showcase-footer">
-          <span>Quản trị thống nhất</span>
+          <span>Đăng nhập bảo mật</span>
           <span className="showcase-footer-dot" />
-          <span>Toàn nền tảng</span>
+          <span>Phạm vi theo tài khoản</span>
         </div>
       </section>
 
       <section className="login-panel" aria-labelledby="login-title">
         <div className="login-panel-inner">
           <div className="login-heading">
-            <p className="login-eyebrow">CHÀO MỪNG TRỞ LẠI</p>
-            <h2 id="login-title">Đăng nhập quản trị</h2>
-            <p>Nhập thông tin tài khoản Super Admin để tiếp tục.</p>
+            <p className="login-eyebrow">CHÀO MỪNG BẠN</p>
+            <h2 id="login-title">Đăng nhập Admin</h2>
+            <p>Dùng email hoặc số điện thoại và mật khẩu được cấp.</p>
           </div>
 
-          <form className="login-form" onSubmit={handleSubmit}>
-            <label className="login-field">
-              <span>Email quản trị</span>
+          <form
+            aria-busy={submitting}
+            className="login-form"
+            onSubmit={handleSubmit}
+          >
+            {authState.status === 'error' && (
+              <p className="login-error" role="status">
+                Chưa kiểm tra được phiên trước đó. Bạn có thể thử đăng nhập lại.
+              </p>
+            )}
+            <label className="login-field" htmlFor="admin-identifier">
+              <span>Email hoặc số điện thoại</span>
               <input
                 autoComplete="username"
                 autoCapitalize="none"
-                id="admin-email"
-                name="email"
+                autoCorrect="off"
+                id="admin-identifier"
+                aria-describedby={hasFieldError('identifier') ? 'admin-login-error' : undefined}
+                aria-invalid={hasFieldError('identifier') || undefined}
+                maxLength={150}
+                name="identifier"
                 onChange={(event) => {
-                  setEmail(event.target.value);
+                  setIdentifier(event.target.value);
                   setError(null);
+                  setValidationDetails([]);
                 }}
-                placeholder="admin@vexgo.vn"
+                placeholder="admin@vexgo.vn hoặc +84901234567"
                 required
-                type="email"
-                value={email}
+                type="text"
+                value={identifier}
               />
             </label>
 
-            <label className="login-field">
+            <label className="login-field" htmlFor="admin-password">
               <span>Mật khẩu</span>
               <span className="password-input-wrap">
                 <input
                   autoComplete="current-password"
                   id="admin-password"
+                  aria-describedby={hasFieldError('password') ? 'admin-login-error' : undefined}
+                  aria-invalid={hasFieldError('password') || undefined}
+                  maxLength={72}
                   name="password"
                   onChange={(event) => {
                     setPassword(event.target.value);
                     setError(null);
+                    setValidationDetails([]);
                   }}
                   required
                   type={passwordVisible ? 'text' : 'password'}
@@ -142,6 +171,7 @@ export function AdminLoginForm() {
                 />
                 <button
                   aria-label={passwordVisible ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                  aria-pressed={passwordVisible}
                   className="password-visibility-button"
                   onClick={() => setPasswordVisible((visible) => !visible)}
                   type="button"
@@ -156,50 +186,29 @@ export function AdminLoginForm() {
             </label>
 
             {error && (
-              <p className="login-error" role="alert">
-                {error}
-              </p>
+              <div className="login-error" id="admin-login-error" role="alert">
+                <p>{error}</p>
+                {validationDetails.length > 0 && (
+                  <ul>
+                    {validationDetails.map((detail, index) => (
+                      <li key={`${detail.field}-${index}`}>
+                        {detail.field}: {detail.message}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             )}
 
-            <button className="login-submit-button" type="submit">
-              <span>Vào trang quản trị</span>
+            <button
+              className="login-submit-button"
+              disabled={submitting}
+              type="submit"
+            >
+              <span>{submitting ? 'Đang xác thực…' : 'Đăng nhập'}</span>
               <ArrowRight aria-hidden="true" size={17} />
             </button>
-            <Button
-              className="login-preview-button"
-              onClick={openTenantPreview}
-              type="button"
-              variant="secondary"
-            >
-              Xem trước giao diện nhà xe
-            </Button>
           </form>
-
-          <aside className="demo-account-card" aria-label="Tài khoản demo">
-            <div className="demo-account-heading">
-              <span className="demo-account-icon" aria-hidden="true">
-                <ShieldCheck size={16} />
-              </span>
-              <div>
-                <strong>Tài khoản dùng thử</strong>
-                <span>Thông tin mẫu đã được điền sẵn</span>
-              </div>
-            </div>
-            <dl>
-              <div>
-                <dt>Email</dt>
-                <dd>{DEMO_SUPER_ADMIN.email}</dd>
-              </div>
-              <div>
-                <dt>Mật khẩu</dt>
-                <dd>{DEMO_SUPER_ADMIN.password}</dd>
-              </div>
-            </dl>
-          </aside>
-
-          <p className="login-demo-note">
-            Phiên Super Admin và giao diện xem trước chỉ dùng để trình diễn, không xác thực.
-          </p>
         </div>
       </section>
     </main>

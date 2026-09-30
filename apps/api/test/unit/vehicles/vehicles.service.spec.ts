@@ -1,6 +1,7 @@
 import 'reflect-metadata';
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { AuthPrincipal } from '../../../src/auth/tokens/auth-principal.js';
 import { Prisma } from '../../../src/generated/prisma/client.js';
 import { PrismaService } from '../../../src/prisma/prisma.service.js';
 import { VehicleQueryDto } from '../../../src/vehicles/dto/vehicle-query.dto.js';
@@ -28,15 +29,45 @@ const prisma = {
     findMany: vi.fn(),
     count: vi.fn(),
     findUnique: vi.fn(),
+    findFirst: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
+    updateMany: vi.fn(),
   },
   nhaXe: { findUnique: vi.fn() },
-  loaiXe: { findUnique: vi.fn() },
+  loaiXe: { findUnique: vi.fn(), findFirst: vi.fn() },
   chuyenXe: { count: vi.fn() },
 } as unknown as PrismaService;
 
-const service = new VehiclesService(prisma);
+const tenantAdmin: AuthPrincipal = {
+  taiKhoanId: 7,
+  sessionId: 'tenant-session',
+  roles: ['NHA_XE_ADMIN'],
+  permissions: [],
+  nhanVienId: 9,
+  nhaXeId: 1,
+};
+const rawService = new VehiclesService(prisma);
+const service = {
+  findAll: (query: VehicleQueryDto, principal = tenantAdmin) =>
+    rawService.findAll(query, principal),
+  findOne: (id: number, principal = tenantAdmin) =>
+    rawService.findOne(id, principal),
+  create: (
+    input: Parameters<VehiclesService['create']>[0],
+    principal = tenantAdmin,
+  ) => rawService.create(input, principal),
+  update: (
+    id: number,
+    input: Parameters<VehiclesService['update']>[1],
+    principal = tenantAdmin,
+  ) => rawService.update(id, input, principal),
+  updateStatus: (
+    id: number,
+    input: Parameters<VehiclesService['updateStatus']>[1],
+    principal = tenantAdmin,
+  ) => rawService.updateStatus(id, input, principal),
+};
 
 function createQuery(overrides: Partial<VehicleQueryDto> = {}) {
   return Object.assign(new VehicleQueryDto(), overrides);
@@ -48,20 +79,35 @@ describe('VehiclesService', () => {
     vi.mocked(prisma.xe.findMany).mockResolvedValue([vehicleListRecord]);
     vi.mocked(prisma.xe.count).mockResolvedValue(1);
     vi.mocked(prisma.xe.findUnique).mockResolvedValue(vehicleDetailRecord);
+    vi.mocked(prisma.xe.findFirst).mockResolvedValue(vehicleDetailRecord);
     vi.mocked(prisma.xe.create).mockResolvedValue(vehicleDetailRecord);
     vi.mocked(prisma.xe.update).mockResolvedValue(vehicleDetailRecord);
+    vi.mocked(prisma.xe.updateMany).mockResolvedValue({ count: 1 } as never);
     vi.mocked(prisma.nhaXe.findUnique).mockResolvedValue({
       nhaXeId: 1,
     } as never);
-    vi.mocked(prisma.loaiXe.findUnique).mockResolvedValue({
+    vi.mocked(prisma.loaiXe.findFirst).mockResolvedValue({
       loaiXeId: 3,
       nhaXeId: 1,
     } as never);
     vi.mocked(prisma.chuyenXe.count).mockResolvedValue(0);
   });
 
+  it('requires a trusted tenant before querying vehicle records', async () => {
+    const error = await service
+      .findAll(createQuery(), { ...tenantAdmin, nhaXeId: null })
+      .catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(ForbiddenException);
+    expect((error as ForbiddenException).getResponse()).toMatchObject({
+      error: 'TENANT_SCOPE_REQUIRED',
+    });
+    expect(prisma.xe.findMany).not.toHaveBeenCalled();
+    expect(prisma.xe.count).not.toHaveBeenCalled();
+  });
+
   it('maps vehicle, bus company, and vehicle type fields to the English API shape', async () => {
-    const result = await service.findAll(createQuery());
+    const result = await service.findAll(createQuery(), tenantAdmin);
 
     expect(result.data).toEqual([
       {
@@ -81,11 +127,12 @@ describe('VehiclesService', () => {
   });
 
   it('trims search and filters plate, bus company code/name, and vehicle type name', async () => {
-    await service.findAll(createQuery({ search: '  Limousine  ' }));
+    await service.findAll(createQuery({ search: '  Limousine  ' }), tenantAdmin);
 
     expect(prisma.xe.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
+          nhaXeId: 1,
           OR: [
             { bienSoXe: { contains: 'Limousine' } },
             {
@@ -106,28 +153,41 @@ describe('VehiclesService', () => {
   });
 
   it('does not add a search condition for whitespace-only input', async () => {
-    await service.findAll(createQuery({ search: '  \t ' }));
+    await service.findAll(createQuery({ search: '  \t ' }), tenantAdmin);
 
     expect(prisma.xe.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: {} }),
+      expect.objectContaining({ where: { nhaXeId: 1 } }),
     );
-    expect(prisma.xe.count).toHaveBeenCalledWith({ where: {} });
+    expect(prisma.xe.count).toHaveBeenCalledWith({ where: { nhaXeId: 1 } });
   });
 
   it('maps status and relation ID filters to the Xe foreign key fields', async () => {
     await service.findAll(
       createQuery({
         status: 'BAO_TRI',
-        busCompanyId: 4,
-        vehicleTypeId: 7,
+        busCompanyId: 1,
+        vehicleTypeId: 3,
       }),
     );
 
     expect(prisma.xe.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { trangThai: 'BAO_TRI', nhaXeId: 4, loaiXeId: 7 },
+        where: { nhaXeId: 1, trangThai: 'BAO_TRI', loaiXeId: 3 },
       }),
     );
+  });
+
+  it('rejects a list filter for another tenant before running list or count queries', async () => {
+    const error = await service
+      .findAll(createQuery({ busCompanyId: 2 }), tenantAdmin)
+      .catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(ForbiddenException);
+    expect((error as ForbiddenException).getResponse()).toMatchObject({
+      error: 'TENANT_SCOPE_VIOLATION',
+    });
+    expect(prisma.xe.findMany).not.toHaveBeenCalled();
+    expect(prisma.xe.count).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -136,7 +196,7 @@ describe('VehiclesService', () => {
     ['createdAt', 'createdAt'],
     ['updatedAt', 'updatedAt'],
   ] as const)('maps %s sorting to Prisma %s', async (sortBy, prismaField) => {
-    await service.findAll(createQuery({ sortBy, sortDirection: 'desc' }));
+    await service.findAll(createQuery({ sortBy, sortDirection: 'desc' }), tenantAdmin);
 
     expect(prisma.xe.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ orderBy: { [prismaField]: 'desc' } }),
@@ -144,7 +204,7 @@ describe('VehiclesService', () => {
   });
 
   it('uses shared pagination metadata and performs one relation-selecting list query', async () => {
-    const result = await service.findAll(createQuery({ page: 3, pageSize: 7 }));
+    const result = await service.findAll(createQuery({ page: 3, pageSize: 7 }), tenantAdmin);
 
     expect(prisma.xe.findMany).toHaveBeenCalledTimes(1);
     expect(prisma.xe.findMany).toHaveBeenCalledWith(
@@ -166,7 +226,7 @@ describe('VehiclesService', () => {
   });
 
   it('maps detail relations and includes the vehicle type description', async () => {
-    await expect(service.findOne(12)).resolves.toEqual({
+    await expect(service.findOne(12, tenantAdmin)).resolves.toEqual({
       data: {
         vehicleId: 12,
         licensePlate: '51B-123.45',
@@ -185,9 +245,9 @@ describe('VehiclesService', () => {
         updatedAt: '2026-09-25T11:00:00.000Z',
       },
     });
-    expect(prisma.xe.findUnique).toHaveBeenCalledWith(
+    expect(prisma.xe.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { xeId: 12 },
+        where: { xeId: 12, nhaXeId: 1 },
         select: expect.objectContaining({
           nhaXe: { select: { nhaXeId: true, maNhaXe: true, tenNhaXe: true } },
           loaiXe: {
@@ -199,10 +259,10 @@ describe('VehiclesService', () => {
   });
 
   it('returns VEHICLE_NOT_FOUND when detail does not exist', async () => {
-    vi.mocked(prisma.xe.findUnique).mockResolvedValueOnce(null);
+    vi.mocked(prisma.xe.findFirst).mockResolvedValueOnce(null);
 
     const error = await service
-      .findOne(999999)
+      .findOne(999999, tenantAdmin)
       .catch((caught: unknown) => caught);
 
     expect(error).toBeInstanceOf(NotFoundException);
@@ -242,19 +302,21 @@ describe('VehiclesService writes', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(prisma.xe.findUnique).mockResolvedValue(vehicleDetailRecord);
+    vi.mocked(prisma.xe.findFirst).mockResolvedValue(vehicleDetailRecord);
     vi.mocked(prisma.xe.create).mockResolvedValue(vehicleDetailRecord);
     vi.mocked(prisma.xe.update).mockResolvedValue(vehicleDetailRecord);
+    vi.mocked(prisma.xe.updateMany).mockResolvedValue({ count: 1 } as never);
     vi.mocked(prisma.nhaXe.findUnique).mockResolvedValue({
       nhaXeId: 1,
     } as never);
-    vi.mocked(prisma.loaiXe.findUnique).mockResolvedValue({
+    vi.mocked(prisma.loaiXe.findFirst).mockResolvedValue({
       loaiXeId: 3,
       nhaXeId: 1,
     } as never);
   });
 
   it('creates a vehicle with only its four editable fields and maps the shared response', async () => {
-    const result = await service.create(createVehicleInput);
+    const result = await service.create(createVehicleInput, tenantAdmin);
 
     expect(prisma.xe.create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -287,7 +349,7 @@ describe('VehiclesService writes', () => {
     vi.mocked(prisma.nhaXe.findUnique).mockResolvedValueOnce(null);
 
     const error = await service
-      .create(createVehicleInput)
+      .create(createVehicleInput, tenantAdmin)
       .catch((caught: unknown) => caught);
 
     expect(error).toBeInstanceOf(NotFoundException);
@@ -299,10 +361,10 @@ describe('VehiclesService writes', () => {
   });
 
   it('returns VEHICLE_TYPE_NOT_FOUND before creating when the type is missing', async () => {
-    vi.mocked(prisma.loaiXe.findUnique).mockResolvedValueOnce(null);
+    vi.mocked(prisma.loaiXe.findFirst).mockResolvedValueOnce(null);
 
     const error = await service
-      .create(createVehicleInput)
+      .create(createVehicleInput, tenantAdmin)
       .catch((caught: unknown) => caught);
 
     expect(error).toBeInstanceOf(NotFoundException);
@@ -313,20 +375,31 @@ describe('VehiclesService writes', () => {
     expect(prisma.xe.create).not.toHaveBeenCalled();
   });
 
-  it('rejects a vehicle type owned by another bus company', async () => {
-    vi.mocked(prisma.loaiXe.findUnique).mockResolvedValueOnce({
-      loaiXeId: 3,
-      nhaXeId: 2,
-    } as never);
-
+  it('rejects a create request naming another company before querying tenant data', async () => {
     const error = await service
-      .create(createVehicleInput)
+      .create({ ...createVehicleInput, busCompanyId: 2 }, tenantAdmin)
       .catch((caught: unknown) => caught);
 
-    expect(error).toBeInstanceOf(ConflictException);
-    expect((error as ConflictException).getResponse()).toEqual({
-      error: 'VEHICLE_TYPE_COMPANY_MISMATCH',
-      message: 'Loại xe không thuộc nhà xe đã chọn.',
+    expect(error).toBeInstanceOf(ForbiddenException);
+    expect((error as ForbiddenException).getResponse()).toMatchObject({
+      error: 'TENANT_SCOPE_VIOLATION',
+    });
+    expect(prisma.nhaXe.findUnique).not.toHaveBeenCalled();
+    expect(prisma.loaiXe.findFirst).not.toHaveBeenCalled();
+    expect(prisma.xe.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects a vehicle type owned by another bus company', async () => {
+    vi.mocked(prisma.loaiXe.findFirst).mockResolvedValueOnce(null);
+
+    const error = await service
+      .create(createVehicleInput, tenantAdmin)
+      .catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(NotFoundException);
+    expect((error as NotFoundException).getResponse()).toEqual({
+      error: 'VEHICLE_TYPE_NOT_FOUND',
+      message: 'Không tìm thấy loại xe.',
     });
     expect(prisma.xe.create).not.toHaveBeenCalled();
   });
@@ -337,7 +410,7 @@ describe('VehiclesService writes', () => {
     );
 
     const error = await service
-      .create(createVehicleInput)
+      .create(createVehicleInput, tenantAdmin)
       .catch((caught: unknown) => caught);
 
     expect(error).toBeInstanceOf(ConflictException);
@@ -360,7 +433,7 @@ describe('VehiclesService writes', () => {
     );
 
     const error = await service
-      .create(createVehicleInput)
+      .create(createVehicleInput, tenantAdmin)
       .catch((caught: unknown) => caught);
 
     expect(error).toBeInstanceOf(ConflictException);
@@ -371,14 +444,14 @@ describe('VehiclesService writes', () => {
     const prismaError = prismaKnownError('P2002', { target: ['otherField'] });
     vi.mocked(prisma.xe.create).mockRejectedValueOnce(prismaError);
 
-    await expect(service.create(createVehicleInput)).rejects.toBe(prismaError);
+    await expect(service.create(createVehicleInput, tenantAdmin)).rejects.toBe(prismaError);
   });
 
   it('returns VEHICLE_NOT_FOUND before checking edit references for a missing vehicle', async () => {
-    vi.mocked(prisma.xe.findUnique).mockResolvedValueOnce(null);
+    vi.mocked(prisma.xe.findFirst).mockResolvedValueOnce(null);
 
     const error = await service
-      .update(999, updateVehicleInput)
+      .update(999, updateVehicleInput, tenantAdmin)
       .catch((caught: unknown) => caught);
 
     expect(error).toBeInstanceOf(NotFoundException);
@@ -387,141 +460,110 @@ describe('VehiclesService writes', () => {
       message: 'Không tìm thấy xe.',
     });
     expect(prisma.nhaXe.findUnique).not.toHaveBeenCalled();
-    expect(prisma.xe.update).not.toHaveBeenCalled();
+    expect(prisma.xe.updateMany).not.toHaveBeenCalled();
   });
 
   it('returns BUS_COMPANY_NOT_FOUND when the edit company reference is missing', async () => {
     vi.mocked(prisma.nhaXe.findUnique).mockResolvedValueOnce(null);
 
     const error = await service
-      .update(12, updateVehicleInput)
+      .update(12, updateVehicleInput, tenantAdmin)
       .catch((caught: unknown) => caught);
 
     expect(error).toBeInstanceOf(NotFoundException);
     expect((error as NotFoundException).getResponse()).toMatchObject({
       error: 'BUS_COMPANY_NOT_FOUND',
     });
-    expect(prisma.xe.update).not.toHaveBeenCalled();
+    expect(prisma.xe.updateMany).not.toHaveBeenCalled();
   });
 
   it('returns VEHICLE_TYPE_NOT_FOUND when the edit vehicle type is missing', async () => {
-    vi.mocked(prisma.loaiXe.findUnique).mockResolvedValueOnce(null);
+    vi.mocked(prisma.loaiXe.findFirst).mockResolvedValueOnce(null);
 
     const error = await service
-      .update(12, updateVehicleInput)
+      .update(12, updateVehicleInput, tenantAdmin)
       .catch((caught: unknown) => caught);
 
     expect(error).toBeInstanceOf(NotFoundException);
     expect((error as NotFoundException).getResponse()).toMatchObject({
       error: 'VEHICLE_TYPE_NOT_FOUND',
     });
-    expect(prisma.xe.update).not.toHaveBeenCalled();
+    expect(prisma.xe.updateMany).not.toHaveBeenCalled();
   });
 
   it('rejects an update that assigns a type from another bus company', async () => {
-    vi.mocked(prisma.loaiXe.findUnique).mockResolvedValueOnce({
-      loaiXeId: 3,
-      nhaXeId: 2,
-    } as never);
+    vi.mocked(prisma.loaiXe.findFirst).mockResolvedValueOnce(null);
 
     const error = await service
-      .update(12, updateVehicleInput)
-      .catch((caught: unknown) => caught);
-
-    expect(error).toBeInstanceOf(ConflictException);
-    expect((error as ConflictException).getResponse()).toMatchObject({
-      error: 'VEHICLE_TYPE_COMPANY_MISMATCH',
-    });
-    expect(prisma.xe.update).not.toHaveBeenCalled();
-  });
-
-  it('rejects changing the owning company when the vehicle has trips', async () => {
-    vi.mocked(prisma.nhaXe.findUnique).mockResolvedValueOnce({
-      nhaXeId: 2,
-    } as never);
-    vi.mocked(prisma.loaiXe.findUnique).mockResolvedValueOnce({
-      loaiXeId: 8,
-      nhaXeId: 2,
-    } as never);
-    vi.mocked(prisma.chuyenXe.count).mockResolvedValueOnce(1);
-
-    const error = await service
-      .update(12, {
-        ...updateVehicleInput,
-        busCompanyId: 2,
-        vehicleTypeId: 8,
-      })
-      .catch((caught: unknown) => caught);
-
-    expect(error).toBeInstanceOf(ConflictException);
-    expect((error as ConflictException).getResponse()).toEqual({
-      error: 'VEHICLE_COMPANY_CHANGE_CONFLICT',
-      message: 'Không thể đổi nhà xe vì xe đã được gắn với chuyến xe.',
-    });
-    expect(prisma.chuyenXe.count).toHaveBeenCalledWith({ where: { xeId: 12 } });
-    expect(prisma.xe.update).not.toHaveBeenCalled();
-  });
-
-  it('re-resolves company references after a foreign-key failure without reporting a trip conflict', async () => {
-    const foreignKeyError = prismaKnownError('P2003', {
-      field_name: 'Xe_nhaXeId_fkey',
-    });
-    vi.mocked(prisma.nhaXe.findUnique)
-      .mockResolvedValueOnce({ nhaXeId: 2 } as never)
-      .mockResolvedValueOnce(null);
-    vi.mocked(prisma.loaiXe.findUnique).mockResolvedValueOnce({
-      loaiXeId: 8,
-      nhaXeId: 2,
-    } as never);
-    vi.mocked(prisma.chuyenXe.count)
-      .mockResolvedValueOnce(0)
-      .mockResolvedValueOnce(0);
-    vi.mocked(prisma.xe.update).mockRejectedValueOnce(foreignKeyError);
-
-    const error = await service
-      .update(12, {
-        ...updateVehicleInput,
-        busCompanyId: 2,
-        vehicleTypeId: 8,
-      })
+      .update(12, updateVehicleInput, tenantAdmin)
       .catch((caught: unknown) => caught);
 
     expect(error).toBeInstanceOf(NotFoundException);
-    expect((error as NotFoundException).getResponse()).toEqual({
-      error: 'BUS_COMPANY_NOT_FOUND',
-      message: 'Không tìm thấy nhà xe.',
+    expect((error as NotFoundException).getResponse()).toMatchObject({
+      error: 'VEHICLE_TYPE_NOT_FOUND',
     });
-    expect(prisma.chuyenXe.count).toHaveBeenCalledTimes(2);
+    expect(prisma.xe.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('rejects changing the owning company when the vehicle has trips', async () => {
+    const error = await service
+      .update(12, {
+        ...updateVehicleInput,
+        busCompanyId: 2,
+        vehicleTypeId: 8,
+      }, tenantAdmin)
+      .catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(ForbiddenException);
+    expect((error as ForbiddenException).getResponse()).toMatchObject({
+      error: 'TENANT_SCOPE_VIOLATION',
+    });
+    expect(prisma.chuyenXe.count).not.toHaveBeenCalled();
+    expect(prisma.xe.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('rejects an update to another tenant before reference checks or writes', async () => {
+    const error = await service
+      .update(12, {
+        ...updateVehicleInput,
+        busCompanyId: 2,
+        vehicleTypeId: 8,
+      }, tenantAdmin)
+      .catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(ForbiddenException);
+    expect((error as ForbiddenException).getResponse()).toMatchObject({
+      error: 'TENANT_SCOPE_VIOLATION',
+    });
+    expect(prisma.chuyenXe.count).not.toHaveBeenCalled();
+    expect(prisma.xe.updateMany).not.toHaveBeenCalled();
   });
 
   it('updates only plate and relation IDs and accepts an unchanged current plate', async () => {
     const input = { ...updateVehicleInput, licensePlate: '51B-123.45' };
-    await service.update(12, input);
+    await service.update(12, input, tenantAdmin);
 
-    expect(prisma.xe.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { xeId: 12 },
+    expect(prisma.xe.updateMany).toHaveBeenCalledWith({
+        where: { xeId: 12, nhaXeId: 1 },
         data: {
           bienSoXe: '51B-123.45',
           nhaXeId: 1,
           loaiXeId: 3,
         },
-        select: expect.objectContaining({ loaiXe: expect.any(Object) }),
-      }),
-    );
+    });
     expect(
-      vi.mocked(prisma.xe.update).mock.calls[0][0].data,
+      vi.mocked(prisma.xe.updateMany).mock.calls[0][0].data,
     ).not.toHaveProperty('trangThai');
     expect(prisma.chuyenXe.count).not.toHaveBeenCalled();
   });
 
   it('maps a duplicate plate during edit to VEHICLE_LICENSE_PLATE_EXISTS', async () => {
-    vi.mocked(prisma.xe.update).mockRejectedValueOnce(
+    vi.mocked(prisma.xe.updateMany).mockRejectedValueOnce(
       prismaKnownError('P2002', { target: 'Xe_bienSoXe_key' }),
     );
 
     const error = await service
-      .update(12, updateVehicleInput)
+      .update(12, updateVehicleInput, tenantAdmin)
       .catch((caught: unknown) => caught);
 
     expect(error).toBeInstanceOf(ConflictException);
@@ -535,31 +577,25 @@ describe('VehiclesService writes', () => {
   ] as const)(
     'sets an explicit status target %s → %s',
     async (_current, status) => {
-      await service.updateStatus(12, { status });
+      await service.updateStatus(12, { status }, tenantAdmin);
 
-      expect(prisma.xe.update).toHaveBeenCalledWith(
+      expect(prisma.xe.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { xeId: 12 },
+          where: { xeId: 12, nhaXeId: 1 },
           data: { trangThai: status },
-          select: expect.objectContaining({
-            nhaXe: expect.any(Object),
-            loaiXe: expect.any(Object),
-          }),
         }),
       );
-      expect(vi.mocked(prisma.xe.update).mock.calls[0][0].data).toEqual({
+      expect(vi.mocked(prisma.xe.updateMany).mock.calls[0][0].data).toEqual({
         trangThai: status,
       });
     },
   );
 
   it('maps status update P2025 to VEHICLE_NOT_FOUND', async () => {
-    vi.mocked(prisma.xe.update).mockRejectedValueOnce(
-      prismaKnownError('P2025'),
-    );
+    vi.mocked(prisma.xe.updateMany).mockResolvedValueOnce({ count: 0 } as never);
 
     const error = await service
-      .updateStatus(999, { status: 'BAO_TRI' })
+      .updateStatus(999, { status: 'BAO_TRI' }, tenantAdmin)
       .catch((caught: unknown) => caught);
 
     expect(error).toBeInstanceOf(NotFoundException);

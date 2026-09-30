@@ -1,7 +1,8 @@
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { Prisma } from '../../../src/generated/prisma/client.js';
 import { CustomersService } from '../../../src/customers/customers.service.js';
 import { UpdateMeDto } from '../../../src/customers/dto/update-me.dto.js';
 import type { PrismaService } from '../../../src/prisma/prisma.service.js';
@@ -116,6 +117,28 @@ describe('CustomersService', () => {
       dateOfBirth: null,
       citizenId: null,
       email: null,
+    });
+  });
+
+  it('normalizes profile email and returns a conflict for duplicate email', async () => {
+    await service.updateMe(42, { email: '  NEW@EXAMPLE.COM ' });
+    expect(prisma.taiKhoan.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ email: 'new@example.com' }),
+      }),
+    );
+
+    prisma.taiKhoan.update.mockRejectedValueOnce(
+      new Prisma.PrismaClientKnownRequestError('duplicate', {
+        code: 'P2002',
+        clientVersion: 'test',
+        meta: { target: ['email'] },
+      }),
+    );
+    const duplicate = service.updateMe(42, { email: 'used@example.com' });
+    await expect(duplicate).rejects.toBeInstanceOf(ConflictException);
+    await expect(duplicate).rejects.toMatchObject({
+      response: { error: 'EMAIL_ALREADY_REGISTERED' },
     });
   });
 });

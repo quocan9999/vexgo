@@ -9,6 +9,11 @@ import type { CreateVehicleTypeDto } from './dto/create-vehicle-type.dto.js';
 import type { VehicleTypeQueryDto } from './dto/vehicle-type-query.dto.js';
 import type { VehicleTypeSortField } from './dto/vehicle-type-query.dto.js';
 import type { UpdateVehicleTypeDto } from './dto/update-vehicle-type.dto.js';
+import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
+import {
+  assertTenantScope,
+  requireNhaXeAdminTenant,
+} from '../auth/tenant-scope.js';
 
 const VEHICLE_TYPE_SELECT = {
   loaiXeId: true,
@@ -102,9 +107,11 @@ const sortFieldMap = {
 export class VehicleTypesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(input: CreateVehicleTypeDto) {
+  async create(input: CreateVehicleTypeDto, principal: AuthPrincipal) {
+    const nhaXeId = requireNhaXeAdminTenant(principal);
+    assertTenantScope(input.busCompanyId, nhaXeId);
     const busCompany = await this.prisma.nhaXe.findUnique({
-      where: { nhaXeId: input.busCompanyId },
+      where: { nhaXeId },
       select: { nhaXeId: true },
     });
     if (!busCompany) {
@@ -117,7 +124,7 @@ export class VehicleTypesService {
     try {
       const vehicleType = await this.prisma.loaiXe.create({
         data: {
-          nhaXeId: input.busCompanyId,
+          nhaXeId,
           tenLoai: input.name,
           moTa: input.description ?? null,
         },
@@ -133,16 +140,39 @@ export class VehicleTypesService {
     }
   }
 
-  async update(id: number, input: UpdateVehicleTypeDto) {
+  async update(
+    id: number,
+    input: UpdateVehicleTypeDto,
+    principal: AuthPrincipal,
+  ) {
+    const nhaXeId = requireNhaXeAdminTenant(principal);
+    const where = { loaiXeId: id, nhaXeId };
     try {
-      const vehicleType = await this.prisma.loaiXe.update({
-        where: { loaiXeId: id },
+      const result = await this.prisma.loaiXe.updateMany({
+        where,
         data: {
           tenLoai: input.name,
           moTa: input.description ?? null,
         },
+      });
+
+      if (result.count === 0) {
+        throw new NotFoundException({
+          error: 'VEHICLE_TYPE_NOT_FOUND',
+          message: 'Không tìm thấy loại xe.',
+        });
+      }
+
+      const vehicleType = await this.prisma.loaiXe.findFirst({
+        where,
         select: VEHICLE_TYPE_SELECT,
       });
+      if (!vehicleType) {
+        throw new NotFoundException({
+          error: 'VEHICLE_TYPE_NOT_FOUND',
+          message: 'Không tìm thấy loại xe.',
+        });
+      }
 
       return { data: mapVehicleType(vehicleType) };
     } catch (error) {
@@ -164,9 +194,10 @@ export class VehicleTypesService {
     }
   }
 
-  async findAll(query: VehicleTypeQueryDto) {
+  async findAll(query: VehicleTypeQueryDto, principal: AuthPrincipal) {
+    const nhaXeId = requireNhaXeAdminTenant(principal);
     const search = query.search?.trim();
-    const where: Prisma.LoaiXeWhereInput = {};
+    const where: Prisma.LoaiXeWhereInput = { nhaXeId };
 
     if (search) {
       where.OR = [
@@ -202,9 +233,10 @@ export class VehicleTypesService {
     };
   }
 
-  async findOne(id: number) {
-    const vehicleType = await this.prisma.loaiXe.findUnique({
-      where: { loaiXeId: id },
+  async findOne(id: number, principal: AuthPrincipal) {
+    const nhaXeId = requireNhaXeAdminTenant(principal);
+    const vehicleType = await this.prisma.loaiXe.findFirst({
+      where: { loaiXeId: id, nhaXeId },
       select: VEHICLE_TYPE_SELECT,
     });
 

@@ -1,4 +1,5 @@
 import { Test } from '@nestjs/testing';
+import { JwtService } from '@nestjs/jwt';
 import {
   BadRequestException,
   Controller,
@@ -11,14 +12,29 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../src/prisma/prisma.service.js';
 import { AppModule } from '../../src/app.module.js';
+import { AccessTokenGuard } from '../../src/auth/guards/access-token.guard.js';
+import { BusCompaniesService } from '../../src/bus-companies/bus-companies.service.js';
+import { RoutesService } from '../../src/routes/routes.service.js';
 import { configureApi } from '../../src/common/configure-api.js';
 import { PaginationQueryDto } from '../../src/common/dto/pagination-query.dto.js';
+import { Public } from '../../src/auth/decorators/public.decorator.js';
+import { RequireRoles } from '../../src/auth/decorators/require-roles.decorator.js';
+import { AllowRoleScopeConflict } from '../../src/auth/decorators/allow-role-scope-conflict.decorator.js';
 import request from 'supertest';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 
 @Controller('__test')
 class ApiFoundationTestController {
   @Get('pagination')
+  @Public()
   getPagination(@Query() query: PaginationQueryDto) {
     return {
       page: query.page,
@@ -30,22 +46,26 @@ class ApiFoundationTestController {
   }
 
   @Get('already-wrapped')
+  @Public()
   getAlreadyWrapped() {
     return { data: { value: 'already wrapped' } };
   }
 
   @Get('no-content')
+  @Public()
   @HttpCode(204)
   getNoContent() {
     return undefined;
   }
 
   @Get('unexpected')
+  @Public()
   getUnexpectedError(): never {
     throw new Error('database password must not reach the client');
   }
 
   @Get('unstructured-http-error')
+  @Public()
   getUnstructuredHttpError(): never {
     throw new BadRequestException(
       'database password must not reach the client',
@@ -53,17 +73,51 @@ class ApiFoundationTestController {
   }
 
   @Get('business-error')
+  @Public()
   getBusinessError(): never {
     throw new NotFoundException({
       error: 'TEST_RESOURCE_NOT_FOUND',
       message: 'Không tìm thấy tài nguyên test.',
     });
   }
+
+  @Get('protected')
+  getProtected() {
+    return { status: 'protected' };
+  }
+
+  @Get('scope-session')
+  @AllowRoleScopeConflict()
+  getScopeSession() {
+    return { status: 'scope-session' };
+  }
+
+  @Get('super-admin')
+  @RequireRoles('SUPER_ADMIN')
+  getSuperAdmin() {
+    return { status: 'super-admin' };
+  }
 }
 
 describe('API foundation', () => {
   let app: INestApplication;
   let originalCorsOrigins: string | undefined;
+  const jwtVerify = vi.fn();
+  const sessionFindUnique = vi.fn();
+  const routesService = {
+    create: vi.fn(),
+    update: vi.fn(),
+    updateStatus: vi.fn(),
+    findAll: vi.fn(),
+    findOne: vi.fn(),
+  };
+  const busCompaniesService = {
+    create: vi.fn(),
+    update: vi.fn(),
+    updateStatus: vi.fn(),
+    findAll: vi.fn(),
+    findOne: vi.fn(),
+  };
 
   beforeAll(async () => {
     originalCorsOrigins = process.env.CORS_ALLOWED_ORIGINS;
@@ -75,7 +129,13 @@ describe('API foundation', () => {
       controllers: [ApiFoundationTestController],
     })
       .overrideProvider(PrismaService)
-      .useValue({})
+      .useValue({ phienDangNhap: { findUnique: sessionFindUnique } })
+      .overrideProvider(JwtService)
+      .useValue({ verifyAsync: jwtVerify })
+      .overrideProvider(RoutesService)
+      .useValue(routesService)
+      .overrideProvider(BusCompaniesService)
+      .useValue(busCompaniesService)
       .compile();
 
     app = moduleRef.createNestApplication();
@@ -99,6 +159,363 @@ describe('API foundation', () => {
 
     expect(response.body).toEqual({ data: { status: 'ok' } });
     await request(app.getHttpServer()).get('/health').expect(404);
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    routesService.findAll.mockResolvedValue({
+      data: [],
+      meta: { page: 1, pageSize: 10, totalItems: 0, totalPages: 0 },
+    });
+    busCompaniesService.findAll.mockResolvedValue({
+      data: [],
+      meta: { page: 1, pageSize: 10, totalItems: 0, totalPages: 0 },
+    });
+    jwtVerify.mockResolvedValue({
+      sub: 42,
+      sid: 'integration-session',
+      roles: ['STALE_ROLE'],
+    });
+    sessionFindUnique.mockResolvedValue(sessionWithRoles(['NHA_XE_ADMIN']));
+  });
+
+  function sessionWithRoles(
+    roles: string[],
+    withEmployee = roles.includes('NHA_XE_ADMIN'),
+  ) {
+    return {
+      sessionId: 'integration-session',
+      taiKhoanId: 42,
+      thuHoiLuc: null,
+      hetHanLuc: new Date(Date.now() + 60_000),
+      taiKhoan: {
+        taiKhoanId: 42,
+        trangThai: 'HOAT_DONG',
+        nhanVien: withEmployee ? { nhanVienId: 77, nhaXeId: 901 } : null,
+        taiKhoanVaiTros: [
+          ...roles.map((tenVaiTro) => ({
+            vaiTro: { tenVaiTro, vaiTroQuyens: [] },
+          })),
+        ],
+      },
+    };
+  }
+
+  it('requires a valid access token by default for non-public endpoints', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/__test/protected')
+      .expect(401);
+
+    expect(response.body.error).toBe('ACCESS_TOKEN_INVALID');
+  });
+
+  it('allows anonymous requests on the production public routes endpoint without querying auth state', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/routes')
+      .expect(200);
+
+    expect(response.body).toEqual({
+      data: [],
+      meta: { page: 1, pageSize: 10, totalItems: 0, totalPages: 0 },
+    });
+    expect(jwtVerify).not.toHaveBeenCalled();
+    expect(sessionFindUnique).not.toHaveBeenCalled();
+    expect(routesService.findAll).toHaveBeenCalledWith(
+      expect.any(Object),
+      undefined,
+    );
+  });
+
+  it('authenticates an optional bearer token on the production public routes endpoint and keeps its tenant principal', async () => {
+    let observedPrincipal: unknown;
+    const guard = app.get(AccessTokenGuard);
+    const originalCanActivate = guard.canActivate.bind(guard);
+    const guardSpy = vi
+      .spyOn(guard, 'canActivate')
+      .mockImplementation(async (context) => {
+        const allowed = await originalCanActivate(context);
+        observedPrincipal = context
+          .switchToHttp()
+          .getRequest<{ user?: unknown }>().user;
+        return allowed;
+      });
+
+    try {
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/routes')
+        .set('Authorization', 'Bearer signed-token')
+        .expect(200);
+
+      expect(response.body).toEqual({
+        data: [],
+        meta: { page: 1, pageSize: 10, totalItems: 0, totalPages: 0 },
+      });
+      expect(jwtVerify).toHaveBeenCalledWith('signed-token', {
+        secret: expect.any(String),
+        algorithms: ['HS256'],
+      });
+      expect(sessionFindUnique).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { sessionId: 'integration-session' },
+        }),
+      );
+      expect(observedPrincipal).toMatchObject({
+        taiKhoanId: 42,
+        roles: ['NHA_XE_ADMIN'],
+        nhanVienId: 77,
+        nhaXeId: 901,
+      });
+      expect(routesService.findAll).toHaveBeenCalledWith(
+        expect.any(Object),
+        expect.objectContaining({
+          roles: ['NHA_XE_ADMIN'],
+          nhaXeId: 901,
+        }),
+      );
+    } finally {
+      guardSpy.mockRestore();
+    }
+  });
+
+  it('passes the database-derived principal into the production public bus-company controller', async () => {
+    await request(app.getHttpServer())
+      .get('/api/v1/bus-companies')
+      .set('Authorization', 'Bearer signed-token')
+      .query({ status: 'TAM_NGUNG' })
+      .expect(200);
+
+    expect(busCompaniesService.findAll).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'TAM_NGUNG' }),
+      expect.objectContaining({
+        taiKhoanId: 42,
+        roles: ['NHA_XE_ADMIN'],
+        nhanVienId: 77,
+        nhaXeId: 901,
+      }),
+    );
+  });
+
+  it('authorizes by database roles rather than stale JWT role claims', async () => {
+    await request(app.getHttpServer())
+      .get('/api/v1/__test/super-admin')
+      .set('Authorization', 'Bearer signed-token')
+      .expect(403);
+
+    sessionFindUnique.mockResolvedValueOnce(sessionWithRoles(['SUPER_ADMIN']));
+    await request(app.getHttpServer())
+      .get('/api/v1/__test/super-admin')
+      .set('Authorization', 'Bearer signed-token')
+      .expect(200);
+  });
+
+  it('rejects platform and tenant roles assigned to the same principal', async () => {
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['SUPER_ADMIN', 'NHA_XE_ADMIN']),
+    );
+
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/__test/super-admin')
+      .set('Authorization', 'Bearer signed-token')
+      .expect(403);
+
+    expect(response.body.error).toBe('ROLE_SCOPE_CONFLICT');
+  });
+
+  it('fails closed for mixed tenant/customer roles on protected endpoints without role decorators', async () => {
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['NHA_XE_ADMIN', 'KHACH_HANG']),
+    );
+
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/__test/protected')
+      .set('Authorization', 'Bearer signed-token')
+      .expect(403);
+
+    expect(response.body.error).toBe('ROLE_SCOPE_CONFLICT');
+  });
+
+  it('keeps customer-only sessions working on authenticated endpoints without role decorators', async () => {
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['KHACH_HANG'], false),
+    );
+
+    await request(app.getHttpServer())
+      .get('/api/v1/__test/protected')
+      .set('Authorization', 'Bearer signed-token')
+      .expect(200);
+  });
+
+  it('lets the session-recovery endpoint expose a conflicted identity for logout', async () => {
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['NHA_XE_ADMIN', 'KHACH_HANG']),
+    );
+
+    await request(app.getHttpServer())
+      .get('/api/v1/__test/scope-session')
+      .set('Authorization', 'Bearer signed-token')
+      .expect(200);
+  });
+
+  it('rejects a Super Admin role linked to an employee tenant identity', async () => {
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['SUPER_ADMIN'], true),
+    );
+
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/__test/super-admin')
+      .set('Authorization', 'Bearer signed-token')
+      .expect(403);
+
+    expect(response.body.error).toBe('ROLE_SCOPE_CONFLICT');
+  });
+
+  it('rejects a tenant-admin role without an employee tenant assignment', async () => {
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['NHA_XE_ADMIN'], false),
+    );
+
+    const response = await request(app.getHttpServer())
+      .post('/api/v1/routes')
+      .set('Authorization', 'Bearer signed-token')
+      .send({
+        code: 'FUTA-TX-0001',
+        origin: 'TP.HCM',
+        destination: 'Đà Lạt',
+        busCompanyId: 901,
+        status: 'HOAT_DONG',
+      })
+      .expect(403);
+
+    expect(response.body.error).toBe('TENANT_SCOPE_REQUIRED');
+    expect(routesService.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects an employee role without an employee tenant assignment', async () => {
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['NHAN_VIEN_KINH_DOANH'], false),
+    );
+
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/__test/protected')
+      .set('Authorization', 'Bearer signed-token')
+      .expect(403);
+
+    expect(response.body.error).toBe('TENANT_SCOPE_REQUIRED');
+  });
+
+  it('allows an employee role with a valid employee tenant assignment', async () => {
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['NHAN_VIEN_KINH_DOANH'], true),
+    );
+
+    await request(app.getHttpServer())
+      .get('/api/v1/__test/protected')
+      .set('Authorization', 'Bearer signed-token')
+      .expect(200);
+  });
+
+  it.each([
+    {
+      label: 'a customer role',
+      roles: ['NHAN_VIEN_CSKH', 'KHACH_HANG'],
+    },
+    {
+      label: 'a platform role',
+      roles: ['NHAN_VIEN_PHU_XE', 'SUPER_ADMIN'],
+    },
+  ])('rejects an employee role combined with $label', async ({ roles }) => {
+    sessionFindUnique.mockResolvedValueOnce(sessionWithRoles(roles, false));
+
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/__test/protected')
+      .set('Authorization', 'Bearer signed-token')
+      .expect(403);
+
+    expect(response.body.error).toBe('ROLE_SCOPE_CONFLICT');
+  });
+
+  it('passes the trusted tenant principal to route creation', async () => {
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['NHA_XE_ADMIN', 'NHAN_VIEN_BAN_VE']),
+    );
+    routesService.create.mockResolvedValue({ data: { routeId: 17 } });
+    const body = {
+      code: 'FUTA-TX-0001',
+      origin: 'TP.HCM',
+      destination: 'Đà Lạt',
+      busCompanyId: 901,
+      status: 'HOAT_DONG',
+    };
+
+    await request(app.getHttpServer())
+      .post('/api/v1/routes')
+      .set('Authorization', 'Bearer signed-token')
+      .send(body)
+      .expect(201);
+
+    expect(routesService.create).toHaveBeenCalledWith(
+      expect.objectContaining(body),
+      expect.objectContaining({
+        roles: ['NHA_XE_ADMIN', 'NHAN_VIEN_BAN_VE'],
+        nhaXeId: 901,
+      }),
+    );
+  });
+
+  it('blocks route writes for principals without the tenant-admin role', async () => {
+    sessionFindUnique.mockResolvedValueOnce(sessionWithRoles(['KHACH_HANG']));
+
+    await request(app.getHttpServer())
+      .post('/api/v1/routes')
+      .set('Authorization', 'Bearer signed-token')
+      .send({
+        code: 'FUTA-TX-0001',
+        origin: 'TP.HCM',
+        destination: 'Đà Lạt',
+        busCompanyId: 901,
+        status: 'HOAT_DONG',
+      })
+      .expect(403);
+
+    expect(routesService.create).not.toHaveBeenCalled();
+  });
+
+  it('does not grant Super Admin aggregate route writes', async () => {
+    sessionFindUnique.mockResolvedValueOnce(sessionWithRoles(['SUPER_ADMIN']));
+
+    await request(app.getHttpServer())
+      .post('/api/v1/routes')
+      .set('Authorization', 'Bearer signed-token')
+      .send({
+        code: 'FUTA-TX-0001',
+        origin: 'TP.HCM',
+        destination: 'Đà Lạt',
+        busCompanyId: 901,
+        status: 'HOAT_DONG',
+      })
+      .expect(403);
+
+    expect(routesService.create).not.toHaveBeenCalled();
+  });
+
+  it('restricts bus-company mutations to Super Admin', async () => {
+    await request(app.getHttpServer())
+      .patch('/api/v1/bus-companies/901/status')
+      .set('Authorization', 'Bearer signed-token')
+      .send({ status: 'TAM_NGUNG' })
+      .expect(403);
+    expect(busCompaniesService.updateStatus).not.toHaveBeenCalled();
+
+    sessionFindUnique.mockResolvedValueOnce(sessionWithRoles(['SUPER_ADMIN']));
+    busCompaniesService.updateStatus.mockResolvedValue({
+      data: { busCompanyId: 901 },
+    });
+    await request(app.getHttpServer())
+      .patch('/api/v1/bus-companies/901/status')
+      .set('Authorization', 'Bearer signed-token')
+      .send({ status: 'TAM_NGUNG' })
+      .expect(200);
+    expect(busCompaniesService.updateStatus).toHaveBeenCalled();
   });
 
   it('transforms valid pagination query strings into numbers', async () => {

@@ -28,7 +28,7 @@ function flattenValidationErrors(
   });
 }
 
-function getAllowedOrigins(config: ConfigService): string[] {
+export function getAllowedOrigins(config: ConfigService): string[] {
   const configuredOrigins = config.get<string>('CORS_ALLOWED_ORIGINS');
 
   if (configuredOrigins !== undefined) {
@@ -45,9 +45,15 @@ function getAllowedOrigins(config: ConfigService): string[] {
 
 export function configureApi(app: INestApplication): void {
   const config = app.get(ConfigService);
+  const allowedOrigins = getAllowedOrigins(config);
+  if (allowedOrigins.includes('*')) {
+    throw new Error(
+      'CORS_ALLOWED_ORIGINS must list exact origins when credentialed auth is enabled.',
+    );
+  }
 
   app.setGlobalPrefix('api/v1');
-  app.enableCors({ origin: getAllowedOrigins(config) });
+  app.enableCors({ origin: allowedOrigins, credentials: true });
   app.useGlobalPipes(
     new ValidationPipe({
       transform: true,

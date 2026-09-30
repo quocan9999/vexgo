@@ -1,12 +1,10 @@
-import { Body, Controller, Get, Patch, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Patch } from '@nestjs/common';
 import { CurrentPrincipal } from '../auth/decorators/current-principal.decorator.js';
-import { AccessTokenGuard } from '../auth/guards/access-token.guard.js';
 import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
 import { CustomersService } from './customers.service.js';
 import { UpdateMeDto } from './dto/update-me.dto.js';
 
 @Controller()
-@UseGuards(AccessTokenGuard)
 export class CustomersController {
   constructor(private readonly customersService: CustomersService) {}
 

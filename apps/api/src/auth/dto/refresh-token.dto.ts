@@ -1,8 +1,8 @@
-import { IsNotEmpty, IsString, MaxLength } from 'class-validator';
+import { IsOptional, IsString, MaxLength } from 'class-validator';
 
 export class RefreshTokenDto {
-  @IsString({ message: 'refreshToken must be a string' })
-  @IsNotEmpty({ message: 'refreshToken should not be empty' })
-  @MaxLength(512, { message: 'refreshToken is too long' })
-  refreshToken!: string;
+  @IsOptional()
+  @IsString({ message: 'Refresh token phải là chuỗi.' })
+  @MaxLength(128, { message: 'Refresh token quá dài.' })
+  refreshToken?: string;
 }

@@ -10,6 +10,7 @@ import { RoutesModule } from './routes/routes.module.js';
 import { FarePricesModule } from './fare-prices/fare-prices.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { CustomersModule } from './customers/customers.module.js';
+import { AdminAccountsModule } from './admin-accounts/admin-accounts.module.js';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { CustomersModule } from './customers/customers.module.js';
     FarePricesModule,
     AuthModule,
     CustomersModule,
+    AdminAccountsModule,
   ],
 })
 export class AppModule {}

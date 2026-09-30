@@ -39,7 +39,7 @@ describe('Auth login, refresh and logout HTTP contract', () => {
     phienDangNhap: directSessions,
     $transaction: vi.fn(async (callback) => callback(tx)),
   };
-  const jwtService = { signAsync: vi.fn() };
+  const jwtService = { signAsync: vi.fn(), verifyAsync: vi.fn() };
 
   beforeAll(async () => {
     passwordHash = await bcrypt.hash('VexGo@123', 4);
@@ -52,9 +52,13 @@ describe('Auth login, refresh and logout HTTP contract', () => {
             () => ({
               SMS_PROVIDER: 'console',
               OTP_HASH_SECRET: 'test-only-otp-secret-for-vexgo-unit-tests-2026',
-              JWT_ACCESS_SECRET: 'test-only-jwt-secret-for-vexgo-unit-tests-2026',
+              JWT_ACCESS_SECRET:
+                'test-only-jwt-secret-for-vexgo-unit-tests-2026',
               JWT_ACCESS_TTL_SECONDS: '900',
               REFRESH_TOKEN_TTL_SECONDS: '2592000',
+              CORS_ALLOWED_ORIGINS:
+                'http://localhost:3000,http://localhost:3001',
+              ADMIN_AUTH_COOKIE_ALLOWED_ORIGINS: 'http://localhost:3001',
             }),
           ],
         }),
@@ -131,6 +135,11 @@ describe('Auth login, refresh and logout HTTP contract', () => {
     directSessions.findUnique.mockResolvedValue(session());
     directSessions.updateMany.mockResolvedValue({ count: 1 });
     jwtService.signAsync.mockResolvedValue('signed-access-token');
+    jwtService.verifyAsync.mockResolvedValue({
+      sub: 42,
+      sid: '2bef8449-9f40-4753-a58d-911f628c4725',
+      roles: ['NHA_XE_ADMIN'],
+    });
   });
 
   it('returns the token envelope for valid credentials', async () => {
@@ -172,13 +181,211 @@ describe('Auth login, refresh and logout HTTP contract', () => {
       expect(response.body).toEqual({
         statusCode: 401,
         error: 'INVALID_CREDENTIALS',
-        message: 'Số điện thoại hoặc mật khẩu không chính xác.',
+        message: 'Thông tin đăng nhập không chính xác.',
       });
     },
   );
 
+  it('logs in through a normalized email identifier without changing the token contract', async () => {
+    taiKhoan.findUnique.mockResolvedValueOnce(
+      account({
+        email: 'admin@example.com',
+        khachHang: null,
+        taiKhoanVaiTros: [{ vaiTro: { tenVaiTro: 'NHA_XE_ADMIN' } }],
+      }),
+    );
+
+    const response = await request(app.getHttpServer())
+      .post('/api/v1/auth/login')
+      .send({ identifier: '  ADMIN@EXAMPLE.COM ', password: 'VexGo@123' })
+      .expect(200);
+
+    expect(taiKhoan.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { email: 'admin@example.com' } }),
+    );
+    expect(response.body.data.user.roles).toEqual(['NHA_XE_ADMIN']);
+    expect(response.body.data.refreshToken).toEqual(expect.any(String));
+  });
+
+  it('stores Admin refresh token in an HttpOnly cookie and omits it from JSON', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/api/v1/auth/login')
+      .set('Origin', 'http://localhost:3001')
+      .set('X-Refresh-Token-Transport', 'cookie')
+      .send({ identifier: 'admin@example.com', password: 'VexGo@123' })
+      .expect(200);
+
+    expect(response.body.data).toMatchObject({
+      accessToken: 'signed-access-token',
+      tokenType: 'Bearer',
+      expiresIn: 900,
+    });
+    expect(response.body.data).not.toHaveProperty('refreshToken');
+    const cookie = response.headers['set-cookie']?.[0] ?? '';
+    expect(cookie).toContain('vexgo_admin_refresh=');
+    expect(cookie).toContain('HttpOnly');
+    expect(cookie).toContain('Path=/api/v1/auth');
+    expect(cookie).toContain('SameSite=Lax');
+    expect(cookie).not.toContain('Domain=');
+  });
+
+  it('rejects cookie transport from missing, unlisted, or non-Admin allowed CORS origins', async () => {
+    const callsBefore = taiKhoan.findUnique.mock.calls.length;
+    await request(app.getHttpServer())
+      .post('/api/v1/auth/login')
+      .set('X-Refresh-Token-Transport', 'cookie')
+      .send({ identifier: 'admin@example.com', password: 'VexGo@123' })
+      .expect(403);
+    await request(app.getHttpServer())
+      .post('/api/v1/auth/refresh')
+      .set('Origin', 'https://evil.example')
+      .set('X-Refresh-Token-Transport', 'cookie')
+      .send({})
+      .expect(403);
+    await request(app.getHttpServer())
+      .post('/api/v1/auth/login')
+      .set('Origin', 'http://localhost:3000')
+      .set('X-Refresh-Token-Transport', 'cookie')
+      .send({ identifier: 'admin@example.com', password: 'VexGo@123' })
+      .expect(403);
+    expect(taiKhoan.findUnique).toHaveBeenCalledTimes(callsBefore);
+  });
+
+  it('rotates refresh cookie, rejects mixed transport, and clears it on logout', async () => {
+    const cookieToken = 'old-refresh-token';
+    const rotated = await request(app.getHttpServer())
+      .post('/api/v1/auth/refresh')
+      .set('Origin', 'http://localhost:3001')
+      .set('X-Refresh-Token-Transport', 'cookie')
+      .set('Cookie', `vexgo_admin_refresh=${cookieToken}`)
+      .send({})
+      .expect(200);
+    expect(rotated.body.data).not.toHaveProperty('refreshToken');
+    expect(rotated.headers['set-cookie']?.[0]).toContain(
+      'vexgo_admin_refresh=',
+    );
+    expect(txSessions.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { refreshTokenHash: expect.any(String) },
+      }),
+    );
+
+    await request(app.getHttpServer())
+      .post('/api/v1/auth/refresh')
+      .set('Origin', 'http://localhost:3001')
+      .set('X-Refresh-Token-Transport', 'cookie')
+      .set('Cookie', `vexgo_admin_refresh=${cookieToken}`)
+      .send({ refreshToken: cookieToken })
+      .expect(400);
+
+    directSessions.findUnique.mockResolvedValueOnce(session());
+    const logout = await request(app.getHttpServer())
+      .post('/api/v1/auth/logout')
+      .set('Origin', 'http://localhost:3001')
+      .set('X-Refresh-Token-Transport', 'cookie')
+      .set('Cookie', `vexgo_admin_refresh=${cookieToken}`)
+      .send({})
+      .expect(204);
+    expect(directSessions.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { phienDangNhapId: 5, thuHoiLuc: null },
+      }),
+    );
+    expect(logout.headers['set-cookie']?.[0]).toContain(
+      'vexgo_admin_refresh=;',
+    );
+  });
+
+  it('returns trusted session identity and tenant scope from the account record', async () => {
+    const operatorAccount = account({
+      email: 'futa-admin@example.com',
+      khachHang: null,
+      nhanVien: {
+        nhanVienId: 8,
+        nhaXeId: 21,
+        nhaXe: { maNhaXe: 'FUTA', tenNhaXe: 'FUTA' },
+      },
+      taiKhoanVaiTros: [
+        { vaiTro: { tenVaiTro: 'NHA_XE_ADMIN', vaiTroQuyens: [] } },
+      ],
+    });
+    directSessions.findUnique.mockResolvedValueOnce(
+      session({ taiKhoan: operatorAccount }),
+    );
+    taiKhoan.findUnique.mockResolvedValueOnce(operatorAccount);
+
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/auth/session')
+      .set('Authorization', 'Bearer signed-access-token')
+      .expect(200);
+
+    expect(response.body.data).toMatchObject({
+      accountId: 42,
+      email: 'futa-admin@example.com',
+      roles: ['NHA_XE_ADMIN'],
+      busCompanyId: 21,
+      employee: {
+        employeeId: 8,
+        busCompanyId: 21,
+        busCompanyCode: 'FUTA',
+      },
+    });
+    expect(response.body.data).not.toHaveProperty('matKhau');
+  });
+
+  it('requires an access token to read the current session', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/auth/session')
+      .expect(401);
+    expect(response.body.error).toBe('ACCESS_TOKEN_INVALID');
+  });
+
+  it('does not clear the refresh cookie when logout cannot reach persistence', async () => {
+    directSessions.findUnique.mockRejectedValueOnce(
+      new Error('database offline'),
+    );
+
+    const response = await request(app.getHttpServer())
+      .post('/api/v1/auth/logout')
+      .set('Origin', 'http://localhost:3001')
+      .set('X-Refresh-Token-Transport', 'cookie')
+      .set('Cookie', 'vexgo_admin_refresh=old-refresh-token')
+      .send({})
+      .expect(500);
+
+    expect(response.headers['set-cookie']).toBeUndefined();
+  });
+
+  it.each([
+    ['no identifier', { password: 'VexGo@123' }],
+    [
+      'both identifier fields',
+      {
+        phoneNumber: PHONE,
+        identifier: 'admin@example.com',
+        password: 'VexGo@123',
+      },
+    ],
+    ['bad email', { identifier: 'not-an-email', password: 'VexGo@123' }],
+    ['password too long', { identifier: PHONE, password: 'x'.repeat(73) }],
+  ])(
+    'rejects login request with %s before querying accounts',
+    async (_case, body) => {
+      const callsBefore = taiKhoan.findUnique.mock.calls.length;
+      const response = await request(app.getHttpServer())
+        .post('/api/v1/auth/login')
+        .send(body)
+        .expect(400);
+
+      expect(response.body.error).toBe('VALIDATION_ERROR');
+      expect(taiKhoan.findUnique).toHaveBeenCalledTimes(callsBefore);
+    },
+  );
+
   it('returns ACCOUNT_INACTIVE for a locked account', async () => {
-    taiKhoan.findUnique.mockResolvedValueOnce(account({ trangThai: 'KHOA' }));
+    taiKhoan.findUnique.mockResolvedValueOnce(
+      account({ trangThai: 'TAM_KHOA' }),
+    );
 
     const response = await request(app.getHttpServer())
       .post('/api/v1/auth/login')
@@ -210,6 +417,21 @@ describe('Auth login, refresh and logout HTTP contract', () => {
       .send({ refreshToken: OLD_REFRESH_TOKEN })
       .expect(401);
     expect(replay.body.error).toBe('REFRESH_TOKEN_INVALID');
+  });
+
+  it('does not clear the winning rotated cookie when another tab replays the old refresh token', async () => {
+    txSessions.findUnique.mockResolvedValueOnce(session({ thuHoiLuc: NOW }));
+
+    const replay = await request(app.getHttpServer())
+      .post('/api/v1/auth/refresh')
+      .set('Origin', 'http://localhost:3001')
+      .set('X-Refresh-Token-Transport', 'cookie')
+      .set('Cookie', `vexgo_admin_refresh=${OLD_REFRESH_TOKEN}`)
+      .send({})
+      .expect(401);
+
+    expect(replay.body.error).toBe('REFRESH_TOKEN_INVALID');
+    expect(replay.headers['set-cookie']).toBeUndefined();
   });
 
   it('returns 204 for first and repeated logout of a known token', async () => {

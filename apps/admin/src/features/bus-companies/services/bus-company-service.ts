@@ -1,3 +1,4 @@
+import { adminApiFetch } from '@/lib/admin-api-client';
 import type {
   BusCompany,
   BusCompanyListQuery,
@@ -60,7 +61,7 @@ function getApiErrorDetails(body: unknown): BusCompanyApiErrorDetail[] {
 export async function createBusCompany(
   input: CreateBusCompanyInput,
 ): Promise<BusCompany> {
-  const response = await fetch(`${getApiBaseUrl()}/api/v1/bus-companies`, {
+  const response = await adminApiFetch(`${getApiBaseUrl()}/api/v1/bus-companies`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
@@ -91,7 +92,7 @@ export async function updateBusCompany(
   busCompanyId: number,
   input: UpdateBusCompanyInput,
 ): Promise<BusCompany> {
-  const response = await fetch(
+  const response = await adminApiFetch(
     `${getApiBaseUrl()}/api/v1/bus-companies/${busCompanyId}`,
     {
       method: 'PATCH',
@@ -125,7 +126,7 @@ export async function updateBusCompanyStatus(
   busCompanyId: number,
   status: BusCompany['status'],
 ): Promise<BusCompany> {
-  const response = await fetch(
+  const response = await adminApiFetch(
     `${getApiBaseUrl()}/api/v1/bus-companies/${busCompanyId}/status`,
     {
       method: 'PATCH',
@@ -174,7 +175,7 @@ export async function getBusCompanies(
     searchParams.set('createdTo', query.createdTo);
   }
 
-  const response = await fetch(
+  const response = await adminApiFetch(
     `${getApiBaseUrl()}/api/v1/bus-companies?${searchParams.toString()}`,
     { cache: 'no-store', signal },
   );
@@ -221,7 +222,7 @@ export async function getBusCompanyById(
   busCompanyId: number,
   signal?: AbortSignal,
 ): Promise<BusCompany> {
-  const response = await fetch(
+  const response = await adminApiFetch(
     `${getApiBaseUrl()}/api/v1/bus-companies/${busCompanyId}`,
     { cache: 'no-store', signal },
   );
