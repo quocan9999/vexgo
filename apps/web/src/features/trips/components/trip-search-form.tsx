@@ -1,15 +1,15 @@
 /* eslint-disable */
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ArrowRightLeft, Bus, CalendarDays, MapPin, PackageCheck, Search, Users } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-
-const locations = ['TP. Hồ Chí Minh', 'Hà Nội', 'Đà Lạt', 'Cần Thơ', 'Đà Nẵng', 'Nha Trang', 'Vũng Tàu'];
+import { routesApi } from '@/features/routes/services/routes.api';
 
 export function TripSearchForm({ compact = false }: { compact?: boolean }) {
   const router = useRouter();
+  const [locations, setLocations] = useState<string[]>(['TP.HCM', 'Đà Lạt', 'Nha Trang', 'Vũng Tàu']); // Fallbacks while loading
   const [service, setService] = useState<'trip' | 'shipment'>('trip');
   const [origin, setOrigin] = useState('');
   const [destination, setDestination] = useState('');
@@ -17,6 +17,19 @@ export function TripSearchForm({ compact = false }: { compact?: boolean }) {
   const [returnDate, setReturnDate] = useState('');
   const [passengers, setPassengers] = useState(1);
   const [roundTrip, setRoundTrip] = useState(false);
+
+  useEffect(() => {
+    routesApi.listRoutes({ pageSize: 100 }).then(res => {
+      const uniqueLocs = new Set<string>();
+      res.data.forEach(r => {
+        if (r.origin) uniqueLocs.add(r.origin);
+        if (r.destination) uniqueLocs.add(r.destination);
+      });
+      if (uniqueLocs.size > 0) {
+        setLocations(Array.from(uniqueLocs));
+      }
+    }).catch(console.warn);
+  }, []);
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
