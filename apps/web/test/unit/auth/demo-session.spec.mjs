@@ -29,6 +29,7 @@ test('auth state starts unauthenticated when storage is unavailable', () => {
   assert.deepEqual(readStoredAuth(), {
     user: null,
     accessToken: null,
+    refreshToken: null,
     isAuthenticated: false,
     isHydrated: true,
   });
@@ -41,11 +42,13 @@ test('writeStoredAuth persists tokens and readStoredAuth restores the session', 
     user,
     accessToken: 'access-token',
     refreshToken: 'refresh-token',
+    refreshToken: 'refresh-token',
   });
 
   assert.deepEqual(readStoredAuth(storage), {
     user,
     accessToken: 'access-token',
+    refreshToken: 'refresh-token',
     isAuthenticated: true,
     isHydrated: true,
   });
@@ -58,6 +61,7 @@ test('invalid stored auth is treated as unauthenticated', () => {
   assert.deepEqual(readStoredAuth(storage), {
     user: null,
     accessToken: null,
+    refreshToken: null,
     isAuthenticated: false,
     isHydrated: true,
   });
@@ -69,6 +73,7 @@ test('clearStoredAuth keeps sign-out effective after a refresh', () => {
     user,
     accessToken: 'access-token',
     refreshToken: 'refresh-token',
+    refreshToken: 'refresh-token',
   });
 
   clearStoredAuth(storage);
@@ -76,6 +81,7 @@ test('clearStoredAuth keeps sign-out effective after a refresh', () => {
   assert.deepEqual(readStoredAuth(storage), {
     user: null,
     accessToken: null,
+    refreshToken: null,
     isAuthenticated: false,
     isHydrated: true,
   });
