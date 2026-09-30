@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   ADMIN_PERMISSION_CATALOG,
+  ADMIN_ROLE_PERMISSION_SCOPE_BY_NAME,
   ADMIN_ROLE_DEFAULT_PERMISSION_KEYS,
+  isPermissionAllowedForRole,
 } from '../../../src/auth/permissions/permission-catalog.js';
 
 const permissionKeys = ADMIN_PERMISSION_CATALOG.map(({ key }) => key);
@@ -129,5 +131,37 @@ describe('Admin permission defaults', () => {
       .filter((key) => !permissionKeySet.has(key));
 
     expect(missingPermissionKeys).toEqual([]);
+  });
+
+  it('allows only permissions matching each managed role scope', () => {
+    expect(ADMIN_ROLE_PERMISSION_SCOPE_BY_NAME).toEqual({
+      SUPER_ADMIN: 'platform',
+      NHA_XE_ADMIN: 'tenant',
+      NHAN_VIEN_BAN_VE: 'tenant',
+      NHAN_VIEN_CSKH: 'tenant',
+      NHAN_VIEN_PHU_XE: 'tenant',
+      NHAN_VIEN_KINH_DOANH: 'tenant',
+    });
+    expect(isPermissionAllowedForRole('SUPER_ADMIN', 'bus-company:read')).toBe(
+      true,
+    );
+    expect(isPermissionAllowedForRole('SUPER_ADMIN', 'vehicle:read')).toBe(
+      false,
+    );
+    expect(isPermissionAllowedForRole('NHA_XE_ADMIN', 'vehicle:read')).toBe(
+      true,
+    );
+    expect(
+      isPermissionAllowedForRole('NHAN_VIEN_CSKH', 'admin-account:read'),
+    ).toBe(false);
+    expect(isPermissionAllowedForRole('KHACH_HANG', 'vehicle:read')).toBe(
+      false,
+    );
+    expect(isPermissionAllowedForRole('UNKNOWN_ROLE', 'vehicle:read')).toBe(
+      false,
+    );
+    expect(isPermissionAllowedForRole('NHA_XE_ADMIN', 'unknown:read')).toBe(
+      false,
+    );
   });
 });

@@ -157,3 +157,27 @@ export const ADMIN_ROLE_DEFAULT_PERMISSION_KEYS = {
   NHAN_VIEN_KINH_DOANH: [],
   KHACH_HANG: [],
 } as const satisfies Record<string, readonly AdminPermissionKey[]>;
+
+export const ADMIN_ROLE_PERMISSION_SCOPE_BY_NAME = {
+  SUPER_ADMIN: 'platform',
+  NHA_XE_ADMIN: 'tenant',
+  NHAN_VIEN_BAN_VE: 'tenant',
+  NHAN_VIEN_CSKH: 'tenant',
+  NHAN_VIEN_PHU_XE: 'tenant',
+  NHAN_VIEN_KINH_DOANH: 'tenant',
+} as const satisfies Record<string, AdminPermissionScope>;
+
+export type AdminManagedRoleName =
+  keyof typeof ADMIN_ROLE_PERMISSION_SCOPE_BY_NAME;
+
+export function isPermissionAllowedForRole(
+  roleName: string,
+  permissionKey: string,
+): boolean {
+  const roleScope =
+    ADMIN_ROLE_PERMISSION_SCOPE_BY_NAME[roleName as AdminManagedRoleName];
+  return (
+    roleScope !== undefined &&
+    ADMIN_PERMISSION_SCOPE_BY_KEY.get(permissionKey) === roleScope
+  );
+}

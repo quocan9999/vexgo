@@ -4,7 +4,8 @@ import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import { PrismaClient } from '../apps/api/dist/generated/prisma/client.js';
 import {
   ADMIN_PERMISSION_CATALOG,
-  ADMIN_ROLE_DEFAULT_PERMISSION_KEYS,
+  ADMIN_ROLE_PERMISSION_SCOPE_BY_NAME,
+  isPermissionAllowedForRole,
 } from '../apps/api/dist/auth/permissions/permission-catalog.js';
 
 function config() {
@@ -76,15 +77,29 @@ async function verifyPermissionCatalogAndDefaults() {
   }
   console.log(`OK RBAC permission catalog (${ADMIN_PERMISSION_CATALOG.length} keys)`);
 
-  const assignmentRows = await prisma.$queryRawUnsafe('SELECT vt.tenVaiTro AS roleName, q.tenQuyen AS permissionKey FROM VaiTroQuyen vtq JOIN VaiTro vt ON vt.vaiTroId = vtq.vaiTroId JOIN Quyen q ON q.quyenId = vtq.quyenId');
-  for (const [roleName, expectedPermissions] of Object.entries(ADMIN_ROLE_DEFAULT_PERMISSION_KEYS)) {
-    const actualPermissions = assignmentRows.filter((row) => row.roleName === roleName).map((row) => row.permissionKey).sort();
-    const expected = [...expectedPermissions].sort();
-    if (JSON.stringify(actualPermissions) !== JSON.stringify(expected)) {
-      throw new Error(`Invalid default permissions for ${roleName}: expected ${JSON.stringify(expected)}, got ${JSON.stringify(actualPermissions)}`);
-    }
-    console.log(`OK RBAC defaults ${roleName}=${actualPermissions.length}`);
+  const roleRows = await prisma.$queryRawUnsafe('SELECT tenVaiTro AS roleName FROM VaiTro');
+  const availableRoles = new Set(roleRows.map((row) => row.roleName));
+  const requiredRoles = [...Object.keys(ADMIN_ROLE_PERMISSION_SCOPE_BY_NAME), 'KHACH_HANG'];
+  for (const roleName of requiredRoles) {
+    if (!availableRoles.has(roleName)) throw new Error(`Missing canonical role ${roleName}`);
   }
+
+  const assignmentRows = await prisma.$queryRawUnsafe('SELECT vt.tenVaiTro AS roleName, q.tenQuyen AS permissionKey FROM VaiTroQuyen vtq JOIN VaiTro vt ON vt.vaiTroId = vtq.vaiTroId JOIN Quyen q ON q.quyenId = vtq.quyenId');
+  for (const { roleName, permissionKey } of assignmentRows) {
+    if (roleName === 'KHACH_HANG') {
+      throw new Error(`Customer role must not have Admin permission ${permissionKey}`);
+    }
+    if (!Object.hasOwn(ADMIN_ROLE_PERMISSION_SCOPE_BY_NAME, roleName)) {
+      throw new Error(`Unsupported role has Admin permission assignment: ${roleName}`);
+    }
+    if (!availablePermissions.has(permissionKey)) {
+      throw new Error(`Unknown permission assignment ${roleName} -> ${permissionKey}`);
+    }
+    if (!isPermissionAllowedForRole(roleName, permissionKey)) {
+      throw new Error(`Permission scope mismatch for ${roleName} -> ${permissionKey}`);
+    }
+  }
+  console.log(`OK RBAC role-permission assignments (${assignmentRows.length} valid mappings)`);
 }
 
 function branchCitySql(alias) {
