@@ -172,6 +172,12 @@ describe('platform role permission management', () => {
     expect(screen.getAllByRole('main')).toHaveLength(1);
     expect(screen.getByText('Vai trò hệ thống · Được bảo vệ')).toBeTruthy();
     expect(
+      screen.getByRole('link', { name: /Mặc định toàn hệ thống/ }).getAttribute('aria-current'),
+    ).toBe('page');
+    expect(
+      screen.getByRole('link', { name: /Theo nhà xe/ }).getAttribute('href'),
+    ).toBe('/rbac/tenants');
+    expect(
       screen.getByText(/Thay đổi áp dụng cho các tài khoản mang vai trò này/),
     ).toBeTruthy();
   });

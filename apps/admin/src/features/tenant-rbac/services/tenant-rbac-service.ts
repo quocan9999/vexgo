@@ -11,6 +11,16 @@ function getTenantRolePermissionsUrl(): string {
   return `${getApiBaseUrl()}/api/v1/admin-rbac/tenant-role-permissions`;
 }
 
+function getPlatformTenantRolePermissionsUrl(nhaXeId: number): string {
+  if (!Number.isSafeInteger(nhaXeId) || nhaXeId <= 0) {
+    throw new AdminTenantRbacApiError(
+      'Mã nhà xe không hợp lệ.',
+      'INVALID_TENANT_ID',
+    );
+  }
+  return `${getApiBaseUrl()}/api/v1/admin-rbac/tenants/${nhaXeId}/role-permissions`;
+}
+
 export class AdminTenantRbacApiError extends Error {
   constructor(
     message: string,
@@ -195,6 +205,17 @@ export async function getTenantRolePermissions(
   return parseConfig(await readResponse(response));
 }
 
+export async function getPlatformTenantRolePermissions(
+  nhaXeId: number,
+  signal?: AbortSignal,
+): Promise<TenantRbacConfig> {
+  const response = await adminApiFetch(
+    getPlatformTenantRolePermissionsUrl(nhaXeId),
+    { cache: 'no-store', signal },
+  );
+  return parseConfig(await readResponse(response));
+}
+
 export async function replaceTenantRolePermissions(
   role: TenantRbacRole,
   permissionKeys: readonly string[],
@@ -225,6 +246,38 @@ export async function replaceTenantRolePermissions(
   return parseUpdatedRole(await readResponse(response), role, permissions);
 }
 
+export async function replacePlatformTenantRolePermissions(
+  nhaXeId: number,
+  role: TenantRbacRole,
+  permissionKeys: readonly string[],
+  permissions: readonly TenantRbacPermission[],
+): Promise<TenantRbacRole> {
+  const url = getPlatformTenantRolePermissionsUrl(nhaXeId);
+  const catalog = new Map(permissions.map((permission) => [permission.key, permission]));
+  if (
+    role.scope !== 'tenant' ||
+    role.isProtected ||
+    new Set(permissionKeys).size !== permissionKeys.length ||
+    permissionKeys.some((key) => !catalog.has(key))
+  ) {
+    throw new AdminTenantRbacApiError(
+      'Danh sách quyền không hợp lệ với vai trò đã chọn.',
+      'INVALID_PERMISSION_LIST',
+    );
+  }
+
+  const response = await adminApiFetch(
+    `${url}/${encodeURIComponent(role.roleName)}`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ permissionKeys: [...permissionKeys] }),
+      cache: 'no-store',
+    },
+  );
+  return parseUpdatedRole(await readResponse(response), role, permissions);
+}
+
 export async function resetTenantRolePermissions(
   role: TenantRbacRole,
   permissions: readonly TenantRbacPermission[],
@@ -238,6 +291,26 @@ export async function resetTenantRolePermissions(
 
   const response = await adminApiFetch(
     `${getTenantRolePermissionsUrl()}/${encodeURIComponent(role.roleName)}`,
+    { method: 'DELETE', cache: 'no-store' },
+  );
+  return parseUpdatedRole(await readResponse(response), role, permissions);
+}
+
+export async function resetPlatformTenantRolePermissions(
+  nhaXeId: number,
+  role: TenantRbacRole,
+  permissions: readonly TenantRbacPermission[],
+): Promise<TenantRbacRole> {
+  const url = getPlatformTenantRolePermissionsUrl(nhaXeId);
+  if (role.scope !== 'tenant' || role.isProtected) {
+    throw new AdminTenantRbacApiError(
+      'Không thể khôi phục cấu hình cho vai trò này.',
+      'ROLE_NOT_MANAGEABLE',
+    );
+  }
+
+  const response = await adminApiFetch(
+    `${url}/${encodeURIComponent(role.roleName)}`,
     { method: 'DELETE', cache: 'no-store' },
   );
   return parseUpdatedRole(await readResponse(response), role, permissions);

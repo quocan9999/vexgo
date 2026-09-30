@@ -2,8 +2,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   getTenantRolePermissions,
+  getPlatformTenantRolePermissions,
   replaceTenantRolePermissions,
+  replacePlatformTenantRolePermissions,
   resetTenantRolePermissions,
+  resetPlatformTenantRolePermissions,
 } from '@/features/tenant-rbac/services/tenant-rbac-service';
 import type {
   TenantRbacConfig,
@@ -193,5 +196,63 @@ describe('tenant RBAC API service', () => {
       code: 'PERMISSION_FORBIDDEN',
       message: 'Không đủ quyền.',
     });
+  });
+
+  it('loads a selected tenant through the platform target endpoint', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse({ data: config }));
+
+    await expect(getPlatformTenantRolePermissions(42)).resolves.toEqual(config);
+
+    const [url, init] = vi.mocked(fetch).mock.calls[0];
+    expect(url).toBe(
+      'http://localhost:4000/api/v1/admin-rbac/tenants/42/role-permissions',
+    );
+    expect(init?.credentials).toBe('include');
+    expect(init?.cache).toBe('no-store');
+    expect(init?.method).toBeUndefined();
+  });
+
+  it('rejects invalid target ids before making a request', async () => {
+    for (const invalidId of [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+      await expect(
+        getPlatformTenantRolePermissions(invalidId),
+      ).rejects.toMatchObject({ code: 'INVALID_TENANT_ID' });
+    }
+
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('replaces and resets a selected tenant role using tenant-scoped endpoints', async () => {
+    const role = config.roles[2];
+    const savedRole: TenantRbacRole = {
+      ...role,
+      overridePermissionKeys: ['route:read'],
+      effectivePermissionKeys: ['route:read'],
+      source: 'override',
+    };
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse({ data: savedRole }))
+      .mockResolvedValueOnce(jsonResponse({ data: role }));
+
+    await expect(
+      replacePlatformTenantRolePermissions(42, role, ['route:read'], permissions),
+    ).resolves.toEqual(savedRole);
+    await expect(
+      resetPlatformTenantRolePermissions(42, role, permissions),
+    ).resolves.toEqual(role);
+
+    const [putUrl, putInit] = vi.mocked(fetch).mock.calls[0];
+    expect(putUrl).toBe(
+      'http://localhost:4000/api/v1/admin-rbac/tenants/42/role-permissions/NHAN_VIEN_CSKH',
+    );
+    expect(putInit?.method).toBe('PUT');
+    expect(JSON.parse(String(putInit?.body))).toEqual({
+      permissionKeys: ['route:read'],
+    });
+
+    const [deleteUrl, deleteInit] = vi.mocked(fetch).mock.calls[1];
+    expect(deleteUrl).toBe(putUrl);
+    expect(deleteInit?.method).toBe('DELETE');
+    expect(deleteInit?.body).toBeUndefined();
   });
 });

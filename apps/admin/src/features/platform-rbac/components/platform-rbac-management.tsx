@@ -16,6 +16,7 @@ import { AdminRbacRoleSelector } from '@/components/admin/rbac/admin-rbac-role-s
 import { Button } from '@/components/ui/button';
 import { reloadAdminSession } from '@/features/admin-auth/services/admin-auth';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
+import { PlatformRbacScopeNavigation } from './platform-rbac-scope-navigation';
 import {
   getDefaultRolePermissions,
   replaceDefaultRolePermissions,
@@ -211,6 +212,8 @@ export function PlatformRbacManagement() {
             />
           }
         />
+
+        <PlatformRbacScopeNavigation activeScope="platform" />
 
         <section aria-label="Phạm vi cấu hình quyền" className={styles.scopeNotice}>
           <ShieldCheck aria-hidden="true" size={20} />
