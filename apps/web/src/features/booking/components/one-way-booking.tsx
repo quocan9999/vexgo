@@ -55,15 +55,15 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
   );
   const seatGroups = Object.entries(
     tripSeats.reduce<Record<string, string[]>>((groups, seat) => {
-      const label = seat.viTri?.trim() || 'Sơ đồ ghế';
-      (groups[label] ??= []).push(seat.soGhe);
+      const label = seat.position?.trim() || 'Sơ đồ ghế';
+      (groups[label] ??= []).push(seat.seatNumber);
       return groups;
     }, {}),
   );
   const bookedSeats = new Set(
     tripSeats
-      .filter((seat) => seat.trangThai !== 'TRONG')
-      .map((seat) => seat.soGhe),
+      .filter((seat) => seat.status !== 'TRONG')
+      .map((seat) => seat.seatNumber),
   );
   const [luggageFee, setLuggageFee] = useState(0);
   const [luggageWeight, setLuggageWeight] = useState(0);

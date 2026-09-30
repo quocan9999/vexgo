@@ -35,7 +35,7 @@ export const SeatMap = ({ tripId }: { tripId?: number }) => {
   }, [tripId]);
 
   const soldSeats = tripId 
-    ? seats.filter(s => s.trangThai !== 'TRONG').map(s => s.soGhe)
+    ? seats.filter(s => s.status !== 'TRONG').map(s => s.seatNumber)
     : ['A01', 'A02', 'A03', 'A04', 'A05', 'A06', 'A08', 'B01', 'B02']; // fallback
 
   const lowerFloor = [
