@@ -275,6 +275,11 @@ describe('API foundation', () => {
   });
 
   it('authenticates an optional bearer token on the production public routes endpoint and keeps its tenant principal', async () => {
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['NHA_XE_ADMIN'], true, {
+        NHA_XE_ADMIN: ['route:read'],
+      }),
+    );
     let observedPrincipal: unknown;
     const guard = app.get(AccessTokenGuard);
     const originalCanActivate = guard.canActivate.bind(guard);
@@ -327,7 +332,9 @@ describe('API foundation', () => {
 
   it('authenticates an employee on the production optional-auth routes endpoint', async () => {
     sessionFindUnique.mockResolvedValueOnce(
-      sessionWithRoles(['NHAN_VIEN_CSKH'], true),
+      sessionWithRoles(['NHAN_VIEN_CSKH'], true, {
+        NHAN_VIEN_CSKH: ['route:read'],
+      }),
     );
 
     await request(app.getHttpServer())
@@ -343,6 +350,54 @@ describe('API foundation', () => {
         nhaXeId: 901,
       }),
     );
+  });
+
+  it('requires route:read for authenticated tenant principals on route list and detail reads', async () => {
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['NHAN_VIEN_CSKH'], true),
+    );
+
+    const listResponse = await request(app.getHttpServer())
+      .get('/api/v1/routes')
+      .set('Authorization', 'Bearer signed-token')
+      .expect(403);
+
+    expect(listResponse.body.error).toBe('PERMISSION_FORBIDDEN');
+    expect(routesService.findAll).not.toHaveBeenCalled();
+
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['NHAN_VIEN_CSKH'], true),
+    );
+
+    const detailResponse = await request(app.getHttpServer())
+      .get('/api/v1/routes/17')
+      .set('Authorization', 'Bearer signed-token')
+      .expect(403);
+
+    expect(detailResponse.body.error).toBe('PERMISSION_FORBIDDEN');
+    expect(routesService.findOne).not.toHaveBeenCalled();
+  });
+
+  it('preserves public route discovery for anonymous, customer, and Super Admin requests', async () => {
+    await request(app.getHttpServer()).get('/api/v1/routes').expect(200);
+
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['KHACH_HANG'], false),
+    );
+    await request(app.getHttpServer())
+      .get('/api/v1/routes')
+      .set('Authorization', 'Bearer signed-token')
+      .expect(200);
+
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['SUPER_ADMIN'], false),
+    );
+    await request(app.getHttpServer())
+      .get('/api/v1/routes')
+      .set('Authorization', 'Bearer signed-token')
+      .expect(200);
+
+    expect(routesService.findAll).toHaveBeenCalledTimes(3);
   });
 
   it('passes the database-derived principal into the production public bus-company controller', async () => {
@@ -431,9 +486,7 @@ describe('API foundation', () => {
   });
 
   it('requires both the declared role and permission', async () => {
-    sessionFindUnique.mockResolvedValueOnce(
-      sessionWithRoles(['NHA_XE_ADMIN']),
-    );
+    sessionFindUnique.mockResolvedValueOnce(sessionWithRoles(['NHA_XE_ADMIN']));
     const missingPermission = await request(app.getHttpServer())
       .get('/api/v1/__test/role-and-permission-required')
       .set('Authorization', 'Bearer signed-token')
@@ -549,7 +602,9 @@ describe('API foundation', () => {
       .set('Authorization', 'Bearer signed-token')
       .expect(200);
 
-    expect(response.body.data).toEqual({ status: 'optional-tenant-permission' });
+    expect(response.body.data).toEqual({
+      status: 'optional-tenant-permission',
+    });
     expect(optionalTenantPermissionHandler).toHaveBeenCalledOnce();
   });
 
@@ -563,13 +618,17 @@ describe('API foundation', () => {
     });
     expect(jwtVerify).not.toHaveBeenCalled();
 
-    sessionFindUnique.mockResolvedValueOnce(sessionWithRoles(['KHACH_HANG'], false));
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['KHACH_HANG'], false),
+    );
     await request(app.getHttpServer())
       .get('/api/v1/__test/tenant-permission-if-authenticated')
       .set('Authorization', 'Bearer signed-token')
       .expect(200);
 
-    sessionFindUnique.mockResolvedValueOnce(sessionWithRoles(['SUPER_ADMIN'], false));
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['SUPER_ADMIN'], false),
+    );
     await request(app.getHttpServer())
       .get('/api/v1/__test/tenant-permission-if-authenticated')
       .set('Authorization', 'Bearer signed-token')
@@ -720,7 +779,9 @@ describe('API foundation', () => {
 
   it('passes the trusted tenant principal to route creation', async () => {
     sessionFindUnique.mockResolvedValueOnce(
-      sessionWithRoles(['NHA_XE_ADMIN', 'NHAN_VIEN_BAN_VE']),
+      sessionWithRoles(['NHA_XE_ADMIN', 'NHAN_VIEN_BAN_VE'], true, {
+        NHA_XE_ADMIN: ['route:create'],
+      }),
     );
     routesService.create.mockResolvedValue({ data: { routeId: 17 } });
     const body = {
@@ -764,9 +825,37 @@ describe('API foundation', () => {
     expect(routesService.create).not.toHaveBeenCalled();
   });
 
-  it('keeps employee-only route writes blocked while tenant helpers are migrated', async () => {
+  it('allows an employee with route:create permission to create a tenant route', async () => {
     sessionFindUnique.mockResolvedValueOnce(
-      sessionWithRoles(['NHAN_VIEN_CSKH'], true),
+      sessionWithRoles(['NHAN_VIEN_CSKH'], true, {
+        NHAN_VIEN_CSKH: ['route:create'],
+      }),
+    );
+    routesService.create.mockResolvedValue({ data: { routeId: 17 } });
+
+    await request(app.getHttpServer())
+      .post('/api/v1/routes')
+      .set('Authorization', 'Bearer signed-token')
+      .send({
+        code: 'FUTA-TX-0001',
+        origin: 'TP.HCM',
+        destination: 'Đà Lạt',
+        busCompanyId: 901,
+        status: 'HOAT_DONG',
+      })
+      .expect(201);
+
+    expect(routesService.create).toHaveBeenCalledWith(
+      expect.objectContaining({ busCompanyId: 901 }),
+      expect.objectContaining({ roles: ['NHAN_VIEN_CSKH'], nhaXeId: 901 }),
+    );
+  });
+
+  it('denies employee route creation without route:create permission', async () => {
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['NHAN_VIEN_CSKH'], true, {
+        NHAN_VIEN_CSKH: ['route:update'],
+      }),
     );
 
     await request(app.getHttpServer())
@@ -782,6 +871,60 @@ describe('API foundation', () => {
       .expect(403);
 
     expect(routesService.create).not.toHaveBeenCalled();
+  });
+
+  it('requires route:update for route detail and status mutations', async () => {
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['NHAN_VIEN_CSKH'], true, {
+        NHAN_VIEN_CSKH: ['route:update'],
+      }),
+    );
+    routesService.update.mockResolvedValue({ data: { routeId: 17 } });
+
+    await request(app.getHttpServer())
+      .patch('/api/v1/routes/17')
+      .set('Authorization', 'Bearer signed-token')
+      .send({ origin: 'TP.HCM', destination: 'Đà Lạt' })
+      .expect(200);
+
+    expect(routesService.update).toHaveBeenCalledWith(
+      17,
+      expect.objectContaining({ origin: 'TP.HCM', destination: 'Đà Lạt' }),
+      expect.objectContaining({ nhaXeId: 901 }),
+    );
+
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['NHAN_VIEN_CSKH'], true, {
+        NHAN_VIEN_CSKH: ['route:create'],
+      }),
+    );
+
+    await request(app.getHttpServer())
+      .patch('/api/v1/routes/17/status')
+      .set('Authorization', 'Bearer signed-token')
+      .send({ status: 'TAM_NGUNG' })
+      .expect(403);
+
+    expect(routesService.updateStatus).not.toHaveBeenCalled();
+
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['NHAN_VIEN_CSKH'], true, {
+        NHAN_VIEN_CSKH: ['route:update'],
+      }),
+    );
+    routesService.updateStatus.mockResolvedValue({ data: { routeId: 17 } });
+
+    await request(app.getHttpServer())
+      .patch('/api/v1/routes/17/status')
+      .set('Authorization', 'Bearer signed-token')
+      .send({ status: 'TAM_NGUNG' })
+      .expect(200);
+
+    expect(routesService.updateStatus).toHaveBeenCalledWith(
+      17,
+      'TAM_NGUNG',
+      expect.objectContaining({ nhaXeId: 901 }),
+    );
   });
 
   it('does not grant Super Admin aggregate route writes', async () => {

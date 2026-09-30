@@ -19,6 +19,9 @@ import {
   OptionalPrincipal,
 } from '../auth/decorators/current-principal.decorator.js';
 import { RequireRoles } from '../auth/decorators/require-roles.decorator.js';
+import { RequirePermissions } from '../auth/decorators/require-permissions.decorator.js';
+import { RequireTenantPermissionsIfAuthenticated } from '../auth/decorators/require-tenant-permissions-if-authenticated.decorator.js';
+import { TENANT_PRINCIPAL_ROLES } from '../auth/principal-scope.js';
 import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
 
 @Controller('routes')
@@ -26,7 +29,8 @@ export class RoutesController {
   constructor(private readonly routesService: RoutesService) {}
 
   @Post()
-  @RequireRoles('NHA_XE_ADMIN')
+  @RequireRoles(...TENANT_PRINCIPAL_ROLES)
+  @RequirePermissions('route:create')
   create(
     @Body() body: CreateRouteDto,
     @CurrentPrincipal() principal: AuthPrincipal,
@@ -35,7 +39,8 @@ export class RoutesController {
   }
 
   @Patch(':id')
-  @RequireRoles('NHA_XE_ADMIN')
+  @RequireRoles(...TENANT_PRINCIPAL_ROLES)
+  @RequirePermissions('route:update')
   update(
     @Param() params: RouteIdParamsDto,
     @Body() body: UpdateRouteDto,
@@ -45,7 +50,8 @@ export class RoutesController {
   }
 
   @Patch(':id/status')
-  @RequireRoles('NHA_XE_ADMIN')
+  @RequireRoles(...TENANT_PRINCIPAL_ROLES)
+  @RequirePermissions('route:update')
   updateStatus(
     @Param() params: RouteIdParamsDto,
     @Body() body: UpdateRouteStatusDto,
@@ -56,6 +62,7 @@ export class RoutesController {
 
   @Get()
   @OptionalAuth()
+  @RequireTenantPermissionsIfAuthenticated('route:read')
   findAll(
     @Query() query: RouteQueryDto,
     @OptionalPrincipal() principal: AuthPrincipal | undefined,
@@ -65,6 +72,7 @@ export class RoutesController {
 
   @Get(':id')
   @OptionalAuth()
+  @RequireTenantPermissionsIfAuthenticated('route:read')
   findOne(
     @Param() params: RouteIdParamsDto,
     @OptionalPrincipal() principal: AuthPrincipal | undefined,
