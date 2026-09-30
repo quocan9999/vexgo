@@ -69,7 +69,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
         setOriginOptions(Array.from(origins));
         setDestinationOptions(Array.from(destinations));
       } catch (err) {
-        console.error('Failed to fetch routes', err);
+        console.warn('Failed to fetch routes', err);
       }
     }
     fetchRoutes();

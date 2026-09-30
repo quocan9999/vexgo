@@ -17,7 +17,7 @@ import { useRouter } from 'next/navigation';
 
 export const ProfileForm: React.FC = () => {
   const router = useRouter();
-  const { accessToken, isHydrated } = useAuthSession();
+  const { accessToken, isHydrated, signOut } = useAuthSession();
   const [profile, setProfile] = useState<CustomerProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -52,15 +52,21 @@ export const ProfileForm: React.FC = () => {
         setEmail(data.email || '');
         setDateOfBirth(data.dateOfBirth || '');
         setCitizenId(data.citizenId || '');
-      } catch (error) {
-        console.error('Fetch profile error:', error);
+      } catch (error: any) {
+        if (error?.message?.toLowerCase().includes('hết hạn') || error?.message?.toLowerCase().includes('không hợp lệ')) {
+          signOut();
+          router.replace('/auth/login?next=/account/profile');
+        } else {
+          // just log warn to avoid blocking the UI with next.js dev overlay
+          console.warn('Fetch profile error:', error);
+        }
       } finally {
         setIsLoading(false);
       }
     };
 
     fetchProfile();
-  }, [accessToken, isHydrated, router]);
+  }, [accessToken, isHydrated, router, signOut]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

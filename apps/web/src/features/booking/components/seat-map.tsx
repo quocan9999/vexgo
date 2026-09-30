@@ -30,7 +30,7 @@ export const SeatMap = ({ tripId }: { tripId?: number }) => {
     setLoading(true);
     tripsApi.getTripSeats(tripId)
       .then(data => setSeats(data))
-      .catch(console.error)
+      .catch(err => console.warn('Failed to load seats', err))
       .finally(() => setLoading(false));
   }, [tripId]);
 
