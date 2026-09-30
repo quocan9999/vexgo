@@ -147,6 +147,21 @@ describe('API foundation', () => {
   let originalCorsOrigins: string | undefined;
   const jwtVerify = vi.fn();
   const sessionFindUnique = vi.fn();
+  const rolePermissionFindMany = vi.fn();
+  const tenantRolePermissionFindMany = vi.fn();
+  let currentRolePermissions: Array<{
+    vaiTroId: number;
+    quyen: { tenQuyen: string };
+  }> = [];
+  const roleIds: Record<string, number> = {
+    SUPER_ADMIN: 1,
+    NHA_XE_ADMIN: 2,
+    NHAN_VIEN_BAN_VE: 3,
+    NHAN_VIEN_CSKH: 4,
+    NHAN_VIEN_PHU_XE: 5,
+    NHAN_VIEN_KINH_DOANH: 6,
+    KHACH_HANG: 7,
+  };
   const routesService = {
     create: vi.fn(),
     update: vi.fn(),
@@ -178,7 +193,13 @@ describe('API foundation', () => {
       controllers: [ApiFoundationTestController],
     })
       .overrideProvider(PrismaService)
-      .useValue({ phienDangNhap: { findUnique: sessionFindUnique } })
+      .useValue({
+        phienDangNhap: { findUnique: sessionFindUnique },
+        vaiTroQuyen: { findMany: rolePermissionFindMany },
+        cauHinhQuyenVaiTroNhaXe: {
+          findMany: tenantRolePermissionFindMany,
+        },
+      })
       .overrideProvider(JwtService)
       .useValue({ verifyAsync: jwtVerify })
       .overrideProvider(RoutesService)
@@ -214,6 +235,11 @@ describe('API foundation', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    currentRolePermissions = [];
+    rolePermissionFindMany
+      .mockReset()
+      .mockImplementation(async () => currentRolePermissions);
+    tenantRolePermissionFindMany.mockReset().mockResolvedValue([]);
     routesService.findAll.mockResolvedValue({
       data: [],
       meta: { page: 1, pageSize: 10, totalItems: 0, totalPages: 0 },
@@ -248,6 +274,13 @@ describe('API foundation', () => {
     withEmployee = roles.includes('NHA_XE_ADMIN'),
     permissionsByRole: Record<string, string[]> = {},
   ) {
+    currentRolePermissions = Object.entries(permissionsByRole).flatMap(
+      ([roleName, permissions]) =>
+        permissions.map((tenQuyen) => ({
+          vaiTroId: roleIds[roleName],
+          quyen: { tenQuyen },
+        })),
+    );
     return {
       sessionId: 'integration-session',
       taiKhoanId: 42,
@@ -260,10 +293,8 @@ describe('API foundation', () => {
         taiKhoanVaiTros: [
           ...roles.map((tenVaiTro) => ({
             vaiTro: {
+              vaiTroId: roleIds[tenVaiTro],
               tenVaiTro,
-              vaiTroQuyens: (permissionsByRole[tenVaiTro] ?? []).map(
-                (tenQuyen) => ({ quyen: { tenQuyen } }),
-              ),
             },
           })),
         ],

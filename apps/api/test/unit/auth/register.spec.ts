@@ -5,6 +5,7 @@ import {
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Prisma } from '../../../src/generated/prisma/client.js';
 import { AuthService } from '../../../src/auth/auth.service.js';
+import type { EffectiveRolePermissionLoaderService } from '../../../src/auth/permissions/effective-role-permission-loader.service.js';
 import { PermissionResolverService } from '../../../src/auth/permissions/permission-resolver.service.js';
 import type { RegisterDto } from '../../../src/auth/dto/auth.dto.js';
 import type { OtpService } from '../../../src/auth/otp/otp.service.js';
@@ -85,6 +86,7 @@ const service = new AuthService(
   otpService as unknown as OtpService,
   tokenService as unknown as TokenService,
   new PermissionResolverService(),
+  {} as EffectiveRolePermissionLoaderService,
 );
 
 describe('AuthService register', () => {
@@ -157,7 +159,10 @@ describe('AuthService register', () => {
   });
 
   it('normalizes registration email before persisting it', async () => {
-    const response = await service.register({ ...dto, email: '  AN@EXAMPLE.COM ' });
+    const response = await service.register({
+      ...dto,
+      email: '  AN@EXAMPLE.COM ',
+    });
     expect(tx.taiKhoan.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ email: 'an@example.com' }),

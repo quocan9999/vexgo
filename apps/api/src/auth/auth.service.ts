@@ -10,6 +10,7 @@ import { RegisterDto, LoginDto } from './dto/auth.dto.js';
 import * as bcrypt from 'bcrypt';
 import { OtpService } from './otp/otp.service.js';
 import { TokenService } from './tokens/token.service.js';
+import { EffectiveRolePermissionLoaderService } from './permissions/effective-role-permission-loader.service.js';
 import { PermissionResolverService } from './permissions/permission-resolver.service.js';
 import { Prisma } from '../generated/prisma/client.js';
 import { normalizeEmail } from '../common/normalize-email.js';
@@ -24,6 +25,7 @@ export class AuthService {
     private readonly otpService: OtpService,
     private readonly tokenService: TokenService,
     private readonly permissionResolver: PermissionResolverService,
+    private readonly permissionLoader: EffectiveRolePermissionLoaderService,
   ) {}
 
   async register(dto: RegisterDto) {
@@ -178,10 +180,8 @@ export class AuthService {
           select: {
             vaiTro: {
               select: {
+                vaiTroId: true,
                 tenVaiTro: true,
-                vaiTroQuyens: {
-                  select: { quyen: { select: { tenQuyen: true } } },
-                },
               },
             },
           },
@@ -210,26 +210,25 @@ export class AuthService {
       });
     }
 
-    const roles = account.taiKhoanVaiTros.map(
-      ({ vaiTro }) => vaiTro.tenVaiTro,
-    );
+    const roles = account.taiKhoanVaiTros.map(({ vaiTro }) => vaiTro.tenVaiTro);
     const employee = account.nhanVien;
+    const effectiveAssignments = await this.permissionLoader.load(
+      account.taiKhoanVaiTros.map(({ vaiTro }) => ({
+        roleId: vaiTro.vaiTroId,
+        roleName: vaiTro.tenVaiTro,
+      })),
+      employee?.nhaXeId ?? null,
+    );
     return {
       accountId: account.taiKhoanId,
       fullName: account.hoTen,
       phoneNumber: account.soDienThoai,
       email: account.email,
       roles,
-      permissions: this.permissionResolver.resolve(
-        account.taiKhoanVaiTros.map(({ vaiTro }) => ({
-          roleName: vaiTro.tenVaiTro,
-          permissions: vaiTro.vaiTroQuyens.map(({ quyen }) => quyen.tenQuyen),
-        })),
-        {
-          nhanVienId: employee?.nhanVienId ?? null,
-          nhaXeId: employee?.nhaXeId ?? null,
-        },
-      ),
+      permissions: this.permissionResolver.resolve(effectiveAssignments, {
+        nhanVienId: employee?.nhanVienId ?? null,
+        nhaXeId: employee?.nhaXeId ?? null,
+      }),
       employee: employee
         ? {
             employeeId: employee.nhanVienId,

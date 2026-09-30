@@ -12,6 +12,7 @@ import type { Request } from 'express';
 import { requireAuthSecret } from '../auth-secret.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import type { AuthPrincipal } from '../tokens/auth-principal.js';
+import { EffectiveRolePermissionLoaderService } from '../permissions/effective-role-permission-loader.service.js';
 import { PermissionResolverService } from '../permissions/permission-resolver.service.js';
 import {
   AUTH_MODE_KEY,
@@ -36,6 +37,7 @@ export class AccessTokenGuard implements CanActivate {
     private readonly prisma: PrismaService,
     private readonly reflector: Reflector,
     private readonly permissionResolver: PermissionResolverService,
+    private readonly permissionLoader: EffectiveRolePermissionLoaderService,
   ) {
     this.accessSecret = requireAuthSecret(
       configService.get<string>('JWT_ACCESS_SECRET'),
@@ -51,7 +53,10 @@ export class AccessTokenGuard implements CanActivate {
     if (authMode === 'public') return true;
 
     const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
-    if (authMode === 'optional' && request.headers.authorization === undefined) {
+    if (
+      authMode === 'optional' &&
+      request.headers.authorization === undefined
+    ) {
       return true;
     }
 
@@ -92,10 +97,8 @@ export class AccessTokenGuard implements CanActivate {
               include: {
                 vaiTro: {
                   select: {
+                    vaiTroId: true,
                     tenVaiTro: true,
-                    vaiTroQuyens: {
-                      select: { quyen: { select: { tenQuyen: true } } },
-                    },
                   },
                 },
               },
@@ -123,17 +126,21 @@ export class AccessTokenGuard implements CanActivate {
     const roles = roleAssignments.map(({ vaiTro }) => vaiTro.tenVaiTro);
     const nhanVienId = session.taiKhoan.nhanVien?.nhanVienId ?? null;
     const nhaXeId = session.taiKhoan.nhanVien?.nhaXeId ?? null;
+    const effectiveAssignments = await this.permissionLoader.load(
+      roleAssignments.map(({ vaiTro }) => ({
+        roleId: vaiTro.vaiTroId,
+        roleName: vaiTro.tenVaiTro,
+      })),
+      nhaXeId,
+    );
     request.user = {
       taiKhoanId: session.taiKhoan.taiKhoanId,
       sessionId: session.sessionId,
       roles,
-      permissions: this.permissionResolver.resolve(
-        roleAssignments.map(({ vaiTro }) => ({
-          roleName: vaiTro.tenVaiTro,
-          permissions: vaiTro.vaiTroQuyens.map(({ quyen }) => quyen.tenQuyen),
-        })),
-        { nhanVienId, nhaXeId },
-      ),
+      permissions: this.permissionResolver.resolve(effectiveAssignments, {
+        nhanVienId,
+        nhaXeId,
+      }),
       nhanVienId,
       nhaXeId,
     };

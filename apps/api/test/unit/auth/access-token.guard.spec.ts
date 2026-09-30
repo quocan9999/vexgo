@@ -5,6 +5,7 @@ import type { ExecutionContext } from '@nestjs/common';
 import type { JwtService } from '@nestjs/jwt';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AccessTokenGuard } from '../../../src/auth/guards/access-token.guard.js';
+import type { EffectiveRolePermissionLoaderService } from '../../../src/auth/permissions/effective-role-permission-loader.service.js';
 import { PermissionResolverService } from '../../../src/auth/permissions/permission-resolver.service.js';
 import {
   OptionalAuth,
@@ -44,6 +45,7 @@ const publicContext = {
 } as ExecutionContext;
 const jwtService = { verifyAsync: vi.fn() };
 const prisma = { phienDangNhap: { findUnique: vi.fn() } };
+const permissionLoader = { load: vi.fn() };
 const guard = new AccessTokenGuard(
   jwtService as unknown as JwtService,
   new ConfigService({
@@ -52,6 +54,7 @@ const guard = new AccessTokenGuard(
   prisma as unknown as PrismaService,
   new Reflector(),
   new PermissionResolverService(),
+  permissionLoader as unknown as EffectiveRolePermissionLoaderService,
 );
 
 function activeSession(overrides: Record<string, unknown> = {}) {
@@ -70,7 +73,7 @@ function activeSession(overrides: Record<string, unknown> = {}) {
       trangThai: 'HOAT_DONG',
       nhanVien: null,
       taiKhoanVaiTros: [
-        { vaiTro: { tenVaiTro: 'KHACH_HANG', vaiTroQuyens: [] } },
+        { vaiTro: { vaiTroId: 4, tenVaiTro: 'KHACH_HANG', vaiTroQuyens: [] } },
       ],
     },
     ...overrides,
@@ -87,6 +90,7 @@ describe('AccessTokenGuard', () => {
           prisma as unknown as PrismaService,
           new Reflector(),
           new PermissionResolverService(),
+          permissionLoader as unknown as EffectiveRolePermissionLoaderService,
         ),
     ).toThrow('JWT_ACCESS_SECRET must contain at least 32 characters');
   });
@@ -105,6 +109,9 @@ describe('AccessTokenGuard', () => {
     prisma.phienDangNhap.findUnique
       .mockReset()
       .mockResolvedValue(activeSession());
+    permissionLoader.load
+      .mockReset()
+      .mockResolvedValue([{ roleName: 'KHACH_HANG', permissions: [] }]);
   });
 
   it.each([
@@ -155,7 +162,13 @@ describe('AccessTokenGuard', () => {
           trangThai: 'TAM_KHOA',
           nhanVien: null,
           taiKhoanVaiTros: [
-            { vaiTro: { tenVaiTro: 'KHACH_HANG', vaiTroQuyens: [] } },
+            {
+              vaiTro: {
+                vaiTroId: 4,
+                tenVaiTro: 'KHACH_HANG',
+                vaiTroQuyens: [],
+              },
+            },
           ],
         },
       }),
@@ -252,6 +265,7 @@ describe('AccessTokenGuard', () => {
           taiKhoanVaiTros: [
             {
               vaiTro: {
+                vaiTroId: 2,
                 tenVaiTro: 'NHA_XE_ADMIN',
                 vaiTroQuyens: [
                   { quyen: { tenQuyen: 'vehicle:read' } },
@@ -264,6 +278,12 @@ describe('AccessTokenGuard', () => {
         },
       }),
     );
+    permissionLoader.load.mockResolvedValueOnce([
+      {
+        roleName: 'NHA_XE_ADMIN',
+        permissions: ['vehicle:read', 'route:read', 'admin-account:update'],
+      },
+    ]);
     jwtService.verifyAsync.mockResolvedValueOnce({
       sub: 42,
       sid: '2bef8449-9f40-4753-a58d-911f628c4725',
@@ -282,5 +302,9 @@ describe('AccessTokenGuard', () => {
       nhanVienId: 77,
       nhaXeId: 901,
     });
+    expect(permissionLoader.load).toHaveBeenCalledWith(
+      [{ roleId: 2, roleName: 'NHA_XE_ADMIN' }],
+      901,
+    );
   });
 });

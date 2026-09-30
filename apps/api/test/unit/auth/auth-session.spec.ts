@@ -4,6 +4,7 @@ import type { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthService } from '../../../src/auth/auth.service.js';
+import type { EffectiveRolePermissionLoaderService } from '../../../src/auth/permissions/effective-role-permission-loader.service.js';
 import { PermissionResolverService } from '../../../src/auth/permissions/permission-resolver.service.js';
 import type { OtpService } from '../../../src/auth/otp/otp.service.js';
 import { TokenService } from '../../../src/auth/tokens/token.service.js';
@@ -48,11 +49,13 @@ describe('AuthService login', () => {
     $transaction: vi.fn(async (callback) => callback(tx)),
   };
   const tokenService = { createSession: vi.fn() };
+  const permissionLoader = { load: vi.fn() };
   const service = new AuthService(
     prisma as unknown as PrismaService,
     {} as OtpService,
     tokenService as unknown as TokenService,
     new PermissionResolverService(),
+    permissionLoader as unknown as EffectiveRolePermissionLoaderService,
   );
 
   beforeAll(async () => {
@@ -184,6 +187,7 @@ describe('AuthService login', () => {
       taiKhoanVaiTros: [
         {
           vaiTro: {
+            vaiTroId: 1,
             tenVaiTro: 'SUPER_ADMIN',
             vaiTroQuyens: [
               { quyen: { tenQuyen: 'admin-account:read' } },
@@ -194,6 +198,12 @@ describe('AuthService login', () => {
       ],
       nhanVien: null,
     });
+    permissionLoader.load.mockResolvedValueOnce([
+      {
+        roleName: 'SUPER_ADMIN',
+        permissions: ['admin-account:read', 'vehicle:read'],
+      },
+    ]);
 
     await expect(service.getCurrentSession(1)).resolves.toMatchObject({
       roles: ['SUPER_ADMIN'],
@@ -201,6 +211,10 @@ describe('AuthService login', () => {
       employee: null,
       busCompanyId: null,
     });
+    expect(permissionLoader.load).toHaveBeenCalledWith(
+      [{ roleId: 1, roleName: 'SUPER_ADMIN' }],
+      null,
+    );
   });
 
   it('returns only tenant permissions for an employee current session', async () => {
@@ -213,6 +227,7 @@ describe('AuthService login', () => {
       taiKhoanVaiTros: [
         {
           vaiTro: {
+            vaiTroId: 5,
             tenVaiTro: 'NHAN_VIEN_CSKH',
             vaiTroQuyens: [
               { quyen: { tenQuyen: 'route:read' } },
@@ -227,6 +242,12 @@ describe('AuthService login', () => {
         nhaXe: { maNhaXe: 'FUTA', tenNhaXe: 'Phương Trang' },
       },
     });
+    permissionLoader.load.mockResolvedValueOnce([
+      {
+        roleName: 'NHAN_VIEN_CSKH',
+        permissions: ['route:read', 'admin-account:update'],
+      },
+    ]);
 
     await expect(service.getCurrentSession(2)).resolves.toMatchObject({
       roles: ['NHAN_VIEN_CSKH'],
@@ -238,6 +259,10 @@ describe('AuthService login', () => {
       },
       busCompanyId: 901,
     });
+    expect(permissionLoader.load).toHaveBeenCalledWith(
+      [{ roleId: 5, roleName: 'NHAN_VIEN_CSKH' }],
+      901,
+    );
   });
 });
 
