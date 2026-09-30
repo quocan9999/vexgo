@@ -103,6 +103,20 @@ describe('admin tenant presentation mode', () => {
   });
 
   it('keeps platform navigation focused on platform scope', () => {
+    setAdminTestSession({
+      status: 'authenticated',
+      session: {
+        accountId: 1,
+        fullName: 'Super Admin',
+        phoneNumber: '+84900000001',
+        email: 'admin@vexgo.test',
+        roles: ['SUPER_ADMIN'],
+        permissions: ['route:read', 'fare-price:read'],
+        employee: null,
+        busCompanyId: null,
+      },
+    });
+
     render(
       <SuperAdminLayout activeSection="vehicle-types">
         <h1>Platform page</h1>
@@ -182,6 +196,46 @@ describe('admin tenant presentation mode', () => {
 
     expect(screen.getByText('Tenant data list')).toBeTruthy();
     expect(SensitiveManagement).toHaveBeenCalled();
+  });
+
+  it('shows exactly the tenant navigation items granted by read permission', () => {
+    setTenantSession(
+      ['NHAN_VIEN_CSKH'],
+      ['route:read', 'fare-price:read'],
+    );
+
+    render(
+      <SuperAdminLayout activeSection="routes">
+        <h1>Tenant page</h1>
+      </SuperAdminLayout>,
+    );
+
+    expect(screen.getByText('VẬN HÀNH')).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Tuyến xe' }).getAttribute('href'))
+      .toBe('/routes');
+    expect(screen.getByRole('link', { name: 'Bảng giá vé' }).getAttribute('href'))
+      .toBe('/fare-prices');
+    expect(screen.queryByRole('link', { name: 'Loại xe' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Xe' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Nhà xe' })).toBeNull();
+    expect(screen.getByRole('link', { name: /VexGo/ }).getAttribute('href'))
+      .toBe('/routes');
+  });
+
+  it('does not render an empty tenant operations group without read permissions', () => {
+    setTenantSession(['NHAN_VIEN_CSKH'], []);
+
+    render(
+      <SuperAdminLayout activeSection="routes">
+        <h1>Restricted page</h1>
+      </SuperAdminLayout>,
+    );
+
+    expect(screen.queryByText('VẬN HÀNH')).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Loại xe' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Xe' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Tuyến xe' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Bảng giá vé' })).toBeNull();
   });
 
   it('allows an employee-only tenant account with valid identity to open a permitted page', () => {
