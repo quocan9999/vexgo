@@ -39,31 +39,6 @@ export function tenantIdForOptionalRead(
   return undefined;
 }
 
-export function requireNhaXeAdminTenant(
-  principal: AuthPrincipal | undefined,
-): number {
-  if (!principal?.roles.includes('NHA_XE_ADMIN')) {
-    throw new ForbiddenException({
-      error: 'ROLE_FORBIDDEN',
-      message: 'Chỉ quản trị viên nhà xe được quản lý dữ liệu vận hành.',
-    });
-  }
-
-  const nhaXeId = principal.nhaXeId;
-  if (
-    typeof nhaXeId !== 'number' ||
-    !Number.isInteger(nhaXeId) ||
-    nhaXeId <= 0
-  ) {
-    throw new ForbiddenException({
-      error: 'TENANT_SCOPE_REQUIRED',
-      message: 'Tài khoản chưa được gán nhà xe hợp lệ.',
-    });
-  }
-
-  return nhaXeId;
-}
-
 export function assertTenantScope(
   requestedNhaXeId: number,
   trustedNhaXeId: number,

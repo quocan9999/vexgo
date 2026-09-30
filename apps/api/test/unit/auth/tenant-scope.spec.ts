@@ -1,7 +1,6 @@
 import { ForbiddenException } from '@nestjs/common';
 import { describe, expect, it } from 'vitest';
 import {
-  requireNhaXeAdminTenant,
   requireTenantPrincipal,
   tenantIdForOptionalRead,
 } from '../../../src/auth/tenant-scope.js';
@@ -135,16 +134,5 @@ describe('tenant principal scope helpers', () => {
         }),
       ),
     ).toBeUndefined();
-  });
-
-  it('keeps the legacy helper strict until each service is migrated', () => {
-    expect(requireNhaXeAdminTenant(principal())).toBe(7);
-    expectForbiddenCode(
-      () =>
-        requireNhaXeAdminTenant(
-          principal({ roles: ['NHAN_VIEN_CSKH'] }),
-        ),
-      'ROLE_FORBIDDEN',
-    );
   });
 });
