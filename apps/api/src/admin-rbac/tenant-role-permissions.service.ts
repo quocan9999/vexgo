@@ -1,8 +1,10 @@
 import {
+  BadRequestException,
   Injectable,
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
+import type { Prisma } from '../generated/prisma/client.js';
 import {
   ADMIN_PERMISSION_CATALOG,
   ADMIN_ROLE_PERMISSION_SCOPE_BY_NAME,
@@ -21,18 +23,105 @@ export class TenantRolePermissionsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getPlatformTenantConfiguration(nhaXeId: number) {
-    const busCompany = await this.prisma.nhaXe.findUnique({
-      where: { nhaXeId },
-      select: { nhaXeId: true },
-    });
-    if (!busCompany) {
-      throw new NotFoundException({
-        error: 'BUS_COMPANY_NOT_FOUND',
-        message: 'Không tìm thấy nhà xe.',
-      });
-    }
+    return this.getConfiguration(await this.requireExistingTenantId(nhaXeId));
+  }
 
-    return this.getConfiguration(busCompany.nhaXeId);
+  async replaceOverride(
+    nhaXeId: number,
+    roleName: string,
+    permissionKeys: readonly string[],
+  ) {
+    this.validateTenantRoleAndPermissions(roleName, permissionKeys);
+
+    await this.prisma.$transaction(async (tx) => {
+      const lockedTenants = await tx.$queryRaw<Array<{ nhaXeId: number }>>`
+        SELECT nhaXeId
+        FROM NhaXe
+        WHERE nhaXeId = ${nhaXeId}
+        FOR UPDATE
+      `;
+      if (lockedTenants.length !== 1) {
+        throw new NotFoundException({
+          error: 'BUS_COMPANY_NOT_FOUND',
+          message: 'Không tìm thấy nhà xe.',
+        });
+      }
+
+      const { role, permissions: canonicalPermissionRows } =
+        await this.requireCanonicalTenantConfiguration(tx, roleName);
+      const permissionRows = canonicalPermissionRows.filter(({ tenQuyen }) =>
+        permissionKeys.includes(tenQuyen),
+      );
+      if (permissionRows.length !== permissionKeys.length) {
+        this.throwConfigurationIncomplete();
+      }
+
+      await tx.cauHinhQuyenVaiTroNhaXe.upsert({
+        where: {
+          nhaXeId_vaiTroId: { nhaXeId, vaiTroId: role.vaiTroId },
+        },
+        create: { nhaXeId, vaiTroId: role.vaiTroId },
+        update: {},
+      });
+      await tx.cauHinhQuyenVaiTroNhaXeChiTiet.deleteMany({
+        where: { nhaXeId, vaiTroId: role.vaiTroId },
+      });
+      if (permissionRows.length > 0) {
+        await tx.cauHinhQuyenVaiTroNhaXeChiTiet.createMany({
+          data: permissionRows.map(({ quyenId }) => ({
+            nhaXeId,
+            vaiTroId: role.vaiTroId,
+            quyenId,
+          })),
+        });
+      }
+    });
+
+    return this.getRoleConfiguration(nhaXeId, roleName);
+  }
+
+  async replacePlatformTenantOverride(
+    nhaXeId: number,
+    roleName: string,
+    permissionKeys: readonly string[],
+  ) {
+    const tenantId = await this.requireExistingTenantId(nhaXeId);
+    return this.replaceOverride(tenantId, roleName, permissionKeys);
+  }
+
+  async resetOverride(nhaXeId: number, roleName: string) {
+    this.validateTenantRoleAndPermissions(roleName, []);
+
+    await this.prisma.$transaction(async (tx) => {
+      const lockedTenants = await tx.$queryRaw<Array<{ nhaXeId: number }>>`
+        SELECT nhaXeId
+        FROM NhaXe
+        WHERE nhaXeId = ${nhaXeId}
+        FOR UPDATE
+      `;
+      if (lockedTenants.length !== 1) {
+        throw new NotFoundException({
+          error: 'BUS_COMPANY_NOT_FOUND',
+          message: 'Không tìm thấy nhà xe.',
+        });
+      }
+
+      const { role } = await this.requireCanonicalTenantConfiguration(
+        tx,
+        roleName,
+      );
+
+      await tx.cauHinhQuyenVaiTroNhaXe.deleteMany({
+        where: { nhaXeId, vaiTroId: role.vaiTroId },
+      });
+    });
+
+    return this.getRoleConfiguration(nhaXeId, roleName);
+  }
+
+  async resetPlatformTenantOverride(nhaXeId: number, roleName: string) {
+    const tenantId = await this.requireExistingTenantId(nhaXeId);
+    return this.resetOverride(tenantId, roleName);
   }
 
   async getConfiguration(nhaXeId: number) {
@@ -129,5 +218,85 @@ export class TenantRolePermissionsService {
       message:
         'Danh mục vai trò hoặc quyền chưa được khởi tạo đầy đủ. Hãy triển khai migration Admin RBAC.',
     });
+  }
+
+  private async getRoleConfiguration(nhaXeId: number, roleName: string) {
+    const configuration = await this.getConfiguration(nhaXeId);
+    const role = configuration.roles.find((item) => item.roleName === roleName);
+    if (!role) this.throwConfigurationIncomplete();
+    return role;
+  }
+
+  private async requireCanonicalTenantConfiguration(
+    tx: Prisma.TransactionClient,
+    roleName: string,
+  ) {
+    const [roles, permissions] = await Promise.all([
+      tx.vaiTro.findMany({
+        where: { tenVaiTro: { in: [...TENANT_RBAC_ROLE_NAMES] } },
+        select: { vaiTroId: true, tenVaiTro: true },
+      }),
+      tx.quyen.findMany({
+        where: { tenQuyen: { in: TENANT_PERMISSION_KEYS } },
+        select: { quyenId: true, tenQuyen: true },
+      }),
+    ]);
+
+    if (
+      roles.length !== TENANT_RBAC_ROLE_NAMES.length ||
+      permissions.length !== TENANT_PERMISSION_KEYS.length
+    ) {
+      this.throwConfigurationIncomplete();
+    }
+
+    const role = roles.find((item) => item.tenVaiTro === roleName);
+    if (!role) this.throwConfigurationIncomplete();
+
+    return { role, permissions };
+  }
+
+  private validateTenantRoleAndPermissions(
+    roleName: string,
+    permissionKeys: readonly string[],
+  ): void {
+    if (!TENANT_RBAC_ROLE_NAMES.includes(roleName as never)) {
+      throw new BadRequestException({
+        error: 'ROLE_NOT_MANAGEABLE',
+        message: 'Vai trò này không thuộc phạm vi cấu hình RBAC nhà xe.',
+      });
+    }
+
+    if (new Set(permissionKeys).size !== permissionKeys.length) {
+      throw new BadRequestException({
+        error: 'DUPLICATE_PERMISSION',
+        message: 'Danh sách quyền không được chứa phần tử trùng lặp.',
+      });
+    }
+
+    for (const permissionKey of permissionKeys) {
+      const isTenantPermission = TENANT_PERMISSION_CATALOG.some(
+        ({ key }) => key === permissionKey,
+      );
+      if (!isTenantPermission) {
+        throw new BadRequestException({
+          error: 'PERMISSION_SCOPE_MISMATCH',
+          message: 'Quyền không thuộc phạm vi nhà xe.',
+        });
+      }
+    }
+  }
+
+  private async requireExistingTenantId(nhaXeId: number): Promise<number> {
+    const busCompany = await this.prisma.nhaXe.findUnique({
+      where: { nhaXeId },
+      select: { nhaXeId: true },
+    });
+    if (!busCompany) {
+      throw new NotFoundException({
+        error: 'BUS_COMPANY_NOT_FOUND',
+        message: 'Không tìm thấy nhà xe.',
+      });
+    }
+    return busCompany.nhaXeId;
   }
 }
