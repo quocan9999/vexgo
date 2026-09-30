@@ -310,6 +310,26 @@ describe('API foundation', () => {
     }
   });
 
+  it('authenticates an employee on the production optional-auth routes endpoint', async () => {
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['NHAN_VIEN_CSKH'], true),
+    );
+
+    await request(app.getHttpServer())
+      .get('/api/v1/routes')
+      .set('Authorization', 'Bearer signed-token')
+      .expect(200);
+
+    expect(routesService.findAll).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({
+        roles: ['NHAN_VIEN_CSKH'],
+        nhanVienId: 77,
+        nhaXeId: 901,
+      }),
+    );
+  });
+
   it('passes the database-derived principal into the production public bus-company controller', async () => {
     await request(app.getHttpServer())
       .get('/api/v1/bus-companies')
@@ -644,6 +664,26 @@ describe('API foundation', () => {
 
   it('blocks route writes for principals without the tenant-admin role', async () => {
     sessionFindUnique.mockResolvedValueOnce(sessionWithRoles(['KHACH_HANG']));
+
+    await request(app.getHttpServer())
+      .post('/api/v1/routes')
+      .set('Authorization', 'Bearer signed-token')
+      .send({
+        code: 'FUTA-TX-0001',
+        origin: 'TP.HCM',
+        destination: 'Đà Lạt',
+        busCompanyId: 901,
+        status: 'HOAT_DONG',
+      })
+      .expect(403);
+
+    expect(routesService.create).not.toHaveBeenCalled();
+  });
+
+  it('keeps employee-only route writes blocked while tenant helpers are migrated', async () => {
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['NHAN_VIEN_CSKH'], true),
+    );
 
     await request(app.getHttpServer())
       .post('/api/v1/routes')

@@ -6,6 +6,10 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import {
+  requireTenantPrincipal,
+  tenantIdForOptionalRead,
+} from '../auth/tenant-scope.js';
 import type { CreateRouteDto } from './dto/create-route.dto.js';
 import type { RouteQueryDto, RouteSortField } from './dto/route-query.dto.js';
 import type { UpdateRouteDto } from './dto/update-route.dto.js';
@@ -68,35 +72,6 @@ function busCompanyNotFound() {
   });
 }
 
-function requireTenantId(principal: AuthPrincipal | undefined): number {
-  if (!principal?.roles.includes('NHA_XE_ADMIN')) {
-    throw new ForbiddenException({
-      error: 'ROLE_FORBIDDEN',
-      message: 'Chỉ quản trị viên nhà xe được quản lý tuyến xe.',
-    });
-  }
-  const nhaXeId = principal.nhaXeId;
-  if (
-    typeof nhaXeId !== 'number' ||
-    !Number.isInteger(nhaXeId) ||
-    nhaXeId <= 0
-  ) {
-    throw new ForbiddenException({
-      error: 'TENANT_SCOPE_REQUIRED',
-      message: 'Tài khoản chưa được gán nhà xe hợp lệ.',
-    });
-  }
-  return nhaXeId;
-}
-
-function tenantIdForRead(
-  principal: AuthPrincipal | undefined,
-): number | undefined {
-  return principal?.roles.includes('NHA_XE_ADMIN')
-    ? requireTenantId(principal)
-    : undefined;
-}
-
 function isRouteCodeUniqueViolation(error: unknown): boolean {
   if (
     !(error instanceof Prisma.PrismaClientKnownRequestError) ||
@@ -143,7 +118,7 @@ export class RoutesService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(input: CreateRouteDto, principal?: AuthPrincipal) {
-    const nhaXeId = requireTenantId(principal);
+    const nhaXeId = requireTenantPrincipal(principal);
     if (input.busCompanyId !== nhaXeId) {
       throw new ForbiddenException({
         error: 'TENANT_SCOPE_VIOLATION',
@@ -186,7 +161,7 @@ export class RoutesService {
   }
 
   async update(id: number, input: UpdateRouteDto, principal?: AuthPrincipal) {
-    const nhaXeId = requireTenantId(principal);
+    const nhaXeId = requireTenantPrincipal(principal);
     const result = await this.prisma.tuyenXe.updateMany({
       where: { tuyenXeId: id, nhaXeId },
       data: { diemDi: input.origin, diemDen: input.destination },
@@ -206,7 +181,7 @@ export class RoutesService {
     status: UpdateRouteStatusDto['status'],
     principal?: AuthPrincipal,
   ) {
-    const nhaXeId = requireTenantId(principal);
+    const nhaXeId = requireTenantPrincipal(principal);
     const result = await this.prisma.tuyenXe.updateMany({
       where: { tuyenXeId: id, nhaXeId },
       data: { trangThai: status },
@@ -222,7 +197,7 @@ export class RoutesService {
   }
 
   async findAll(query: RouteQueryDto, principal?: AuthPrincipal) {
-    const nhaXeId = tenantIdForRead(principal);
+    const nhaXeId = tenantIdForOptionalRead(principal);
     if (
       nhaXeId !== undefined &&
       query.busCompanyId !== undefined &&
@@ -275,7 +250,7 @@ export class RoutesService {
   }
 
   async findOne(id: number, principal?: AuthPrincipal) {
-    const nhaXeId = tenantIdForRead(principal);
+    const nhaXeId = tenantIdForOptionalRead(principal);
     const route =
       nhaXeId === undefined
         ? await this.prisma.tuyenXe.findUnique({
