@@ -19,6 +19,7 @@ import { configureApi } from '../../src/common/configure-api.js';
 import { PaginationQueryDto } from '../../src/common/dto/pagination-query.dto.js';
 import { Public } from '../../src/auth/decorators/public.decorator.js';
 import { RequireRoles } from '../../src/auth/decorators/require-roles.decorator.js';
+import { RequirePermissions } from '../../src/auth/decorators/require-permissions.decorator.js';
 import { AllowRoleScopeConflict } from '../../src/auth/decorators/allow-role-scope-conflict.decorator.js';
 import request from 'supertest';
 import {
@@ -96,6 +97,32 @@ class ApiFoundationTestController {
   @RequireRoles('SUPER_ADMIN')
   getSuperAdmin() {
     return { status: 'super-admin' };
+  }
+
+  @Get('permission-required')
+  @RequirePermissions('route:read')
+  getPermissionRequired() {
+    return { status: 'permission-required' };
+  }
+
+  @Get('multiple-permissions-required')
+  @RequirePermissions('route:read', 'fare-price:read')
+  getMultiplePermissionsRequired() {
+    return { status: 'multiple-permissions-required' };
+  }
+
+  @Get('role-and-permission-required')
+  @RequireRoles('NHA_XE_ADMIN')
+  @RequirePermissions('vehicle-type:read')
+  getRoleAndPermissionRequired() {
+    return { status: 'role-and-permission-required' };
+  }
+
+  @Get('public-permission-required')
+  @Public()
+  @RequirePermissions('route:read')
+  getPublicPermissionRequired() {
+    return { status: 'public-permission-required' };
   }
 }
 
@@ -182,6 +209,7 @@ describe('API foundation', () => {
   function sessionWithRoles(
     roles: string[],
     withEmployee = roles.includes('NHA_XE_ADMIN'),
+    permissionsByRole: Record<string, string[]> = {},
   ) {
     return {
       sessionId: 'integration-session',
@@ -194,7 +222,12 @@ describe('API foundation', () => {
         nhanVien: withEmployee ? { nhanVienId: 77, nhaXeId: 901 } : null,
         taiKhoanVaiTros: [
           ...roles.map((tenVaiTro) => ({
-            vaiTro: { tenVaiTro, vaiTroQuyens: [] },
+            vaiTro: {
+              tenVaiTro,
+              vaiTroQuyens: (permissionsByRole[tenVaiTro] ?? []).map(
+                (tenQuyen) => ({ quyen: { tenQuyen } }),
+              ),
+            },
           })),
         ],
       },
@@ -306,6 +339,153 @@ describe('API foundation', () => {
       .get('/api/v1/__test/super-admin')
       .set('Authorization', 'Bearer signed-token')
       .expect(200);
+  });
+
+  it('rejects an authenticated principal without the required permission', async () => {
+    sessionFindUnique.mockResolvedValueOnce(sessionWithRoles(['NHA_XE_ADMIN']));
+
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/__test/permission-required')
+      .set('Authorization', 'Bearer signed-token')
+      .expect(403);
+
+    expect(response.body.error).toBe('PERMISSION_FORBIDDEN');
+  });
+
+  it('allows an authenticated principal with the required database permission', async () => {
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['NHA_XE_ADMIN'], true, {
+        NHA_XE_ADMIN: ['route:read'],
+      }),
+    );
+
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/__test/permission-required')
+      .set('Authorization', 'Bearer signed-token')
+      .expect(200);
+
+    expect(response.body.data).toEqual({ status: 'permission-required' });
+  });
+
+  it('requires every permission declared by a permission decorator', async () => {
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['NHA_XE_ADMIN'], true, {
+        NHA_XE_ADMIN: ['route:read'],
+      }),
+    );
+    const incomplete = await request(app.getHttpServer())
+      .get('/api/v1/__test/multiple-permissions-required')
+      .set('Authorization', 'Bearer signed-token')
+      .expect(403);
+
+    expect(incomplete.body.error).toBe('PERMISSION_FORBIDDEN');
+
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['NHA_XE_ADMIN'], true, {
+        NHA_XE_ADMIN: ['route:read', 'fare-price:read'],
+      }),
+    );
+    const complete = await request(app.getHttpServer())
+      .get('/api/v1/__test/multiple-permissions-required')
+      .set('Authorization', 'Bearer signed-token')
+      .expect(200);
+
+    expect(complete.body.data).toEqual({
+      status: 'multiple-permissions-required',
+    });
+  });
+
+  it('requires both the declared role and permission', async () => {
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['NHA_XE_ADMIN']),
+    );
+    const missingPermission = await request(app.getHttpServer())
+      .get('/api/v1/__test/role-and-permission-required')
+      .set('Authorization', 'Bearer signed-token')
+      .expect(403);
+
+    expect(missingPermission.body.error).toBe('PERMISSION_FORBIDDEN');
+
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['NHAN_VIEN_CSKH'], true, {
+        NHAN_VIEN_CSKH: ['vehicle-type:read'],
+      }),
+    );
+    const missingRole = await request(app.getHttpServer())
+      .get('/api/v1/__test/role-and-permission-required')
+      .set('Authorization', 'Bearer signed-token')
+      .expect(403);
+
+    expect(missingRole.body.error).toBe('ROLE_FORBIDDEN');
+
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['NHA_XE_ADMIN'], true, {
+        NHA_XE_ADMIN: ['vehicle-type:read'],
+      }),
+    );
+    await request(app.getHttpServer())
+      .get('/api/v1/__test/role-and-permission-required')
+      .set('Authorization', 'Bearer signed-token')
+      .expect(200);
+  });
+
+  it('validates principal scope before required permissions', async () => {
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['NHA_XE_ADMIN', 'KHACH_HANG'], true, {
+        NHA_XE_ADMIN: ['route:read'],
+      }),
+    );
+
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/__test/permission-required')
+      .set('Authorization', 'Bearer signed-token')
+      .expect(403);
+
+    expect(response.body.error).toBe('ROLE_SCOPE_CONFLICT');
+  });
+
+  it('does not trust a permission claim supplied in the access token', async () => {
+    jwtVerify.mockResolvedValueOnce({
+      sub: 42,
+      sid: 'integration-session',
+      roles: ['NHA_XE_ADMIN'],
+      permissions: ['route:read'],
+    });
+    sessionFindUnique.mockResolvedValueOnce(sessionWithRoles(['NHA_XE_ADMIN']));
+
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/__test/permission-required')
+      .set('Authorization', 'Bearer signed-token')
+      .expect(403);
+
+    expect(response.body.error).toBe('PERMISSION_FORBIDDEN');
+  });
+
+  it('uses database permission assignments even when JWT has a different permission claim', async () => {
+    jwtVerify.mockResolvedValueOnce({
+      sub: 42,
+      sid: 'integration-session',
+      roles: ['STALE_ROLE'],
+      permissions: ['fare-price:read'],
+    });
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['NHA_XE_ADMIN'], true, {
+        NHA_XE_ADMIN: ['route:read'],
+      }),
+    );
+
+    await request(app.getHttpServer())
+      .get('/api/v1/__test/permission-required')
+      .set('Authorization', 'Bearer signed-token')
+      .expect(200);
+  });
+
+  it('requires authentication even when a test endpoint is marked public and permission-protected', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/__test/public-permission-required')
+      .expect(401);
+
+    expect(response.body.error).toBe('ACCESS_TOKEN_INVALID');
   });
 
   it('rejects platform and tenant roles assigned to the same principal', async () => {
