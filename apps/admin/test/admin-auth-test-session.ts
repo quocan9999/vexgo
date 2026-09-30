@@ -36,4 +36,25 @@ export function setAdminTestSession(state: TestSessionState) {
   mockAdminSession.state = state;
 }
 
+export function setEmployeeAdminTestSession(permissions: string[]) {
+  setAdminTestSession({
+    status: 'authenticated',
+    session: {
+      accountId: 2,
+      fullName: 'Nhân viên CSKH',
+      phoneNumber: '+84900000002',
+      email: 'cskh@vexgo.test',
+      roles: ['NHAN_VIEN_CSKH'],
+      permissions,
+      employee: {
+        employeeId: 2,
+        busCompanyId: 10,
+        busCompanyCode: 'FUTA',
+        busCompanyName: 'Phương Trang',
+      },
+      busCompanyId: 10,
+    },
+  });
+}
+
 beforeEach(resetAdminTestSession);

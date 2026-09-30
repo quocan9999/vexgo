@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { BusCompaniesManagement } from '../src/features/bus-companies/components/bus-companies-management';
 import { VehicleTypesManagement } from '../src/features/vehicle-types/components/vehicle-types-management';
 import { VehiclesManagement } from '../src/features/vehicles/components/vehicles-management';
+import { setEmployeeAdminTestSession } from './admin-auth-test-session';
 
 const state = vi.hoisted(() => ({
   loading: true,
@@ -146,6 +147,14 @@ vi.mock('@/features/vehicles/hooks/use-vehicle-filter-options', () => ({
 }));
 
 beforeEach(() => {
+  setEmployeeAdminTestSession([
+    'vehicle-type:read',
+    'vehicle-type:create',
+    'vehicle-type:update',
+    'vehicle:read',
+    'vehicle:create',
+    'vehicle:update',
+  ]);
   state.loading = true;
   state.companyPage = null;
   state.vehicleTypePage = null;

@@ -24,6 +24,7 @@ import {
   SearchInput,
 } from '@/components/data-filters/data-filters';
 import { Button } from '@/components/ui/button';
+import { useAdminPermissions } from '@/features/admin-auth/hooks/use-admin-permissions';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
 import { getVehicleTypeById } from '../services/vehicle-type-service';
 import type { VehicleType, VehicleTypeSortKey } from '../types/vehicle-type';
@@ -52,6 +53,8 @@ function VehicleTypeDetails({
   onClose: () => void;
   onUpdated: (vehicleType: VehicleType) => void;
 }) {
+  const { can } = useAdminPermissions();
+  const canUpdate = can('vehicle-type:update');
   const [detailState, setDetailState] = useState<DetailState>({
     status: 'loading',
   });
@@ -187,7 +190,7 @@ function VehicleTypeDetails({
                 <dd>{timestampFormat(detailState.vehicleType.updatedAt)}</dd>
               </div>
             </dl>
-            <div className="vehicle-type-detail-actions">
+            {canUpdate && <div className="vehicle-type-detail-actions">
               <Button
                 onClick={() => {
                   setUpdateNotice(null);
@@ -198,11 +201,11 @@ function VehicleTypeDetails({
                 <Pencil aria-hidden="true" size={15} />
                 Chỉnh sửa
               </Button>
-            </div>
+            </div>}
           </div>
         )}
       </AdminDetailSheet>
-      {editDialogOpen && detailState.status === 'success' && (
+      {editDialogOpen && canUpdate && detailState.status === 'success' && (
         <VehicleTypeFormDialog
           key={vehicleTypeId}
           onClose={() => setEditDialogOpen(false)}
@@ -229,6 +232,8 @@ function sortLabel(
 }
 
 export function VehicleTypesManagement() {
+  const { can } = useAdminPermissions();
+  const canCreate = can('vehicle-type:create');
   const {
     vehicleTypePage,
     error,
@@ -297,7 +302,7 @@ export function VehicleTypesManagement() {
         <AdminPageHeader
           actions={
             <div className="page-intro-actions">
-              <AdminCreateAction label="Thêm loại xe" onClick={openCreateDialog} />
+              {canCreate && <AdminCreateAction label="Thêm loại xe" onClick={openCreateDialog} />}
               <AdminRefreshAction loading={loading} onClick={refresh} />
             </div>
           }
@@ -479,7 +484,7 @@ export function VehicleTypesManagement() {
           vehicleTypeId={selectedVehicleTypeId}
         />
       )}
-      {createDialogOpen && (
+      {createDialogOpen && canCreate && (
         <VehicleTypeFormDialog
           onClose={() => setCreateDialogOpen(false)}
           onSaved={handleVehicleTypeCreated}
