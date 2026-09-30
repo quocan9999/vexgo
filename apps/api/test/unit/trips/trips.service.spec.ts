@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { PrismaService } from '../../../src/prisma/prisma.service.js';
 import { TripsService } from '../../../src/trips/trips.service.js';
 
@@ -43,9 +43,18 @@ function createService() {
   };
   return {
     prisma,
-    service: new TripsService(prisma as unknown as PrismaService),
+    service: new TripsService(
+      prisma as unknown as PrismaService,
+      {
+        get: vi.fn().mockReturnValue('Asia/Ho_Chi_Minh'),
+      } as never,
+    ),
   };
 }
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe('TripsService search', () => {
   it('returns real database fields, applicable fares and pagination without fabricated display data', async () => {
@@ -58,6 +67,8 @@ describe('TripsService search', () => {
         tuyenXeId: 8,
         loaiXeId: 2,
         giaNiemYet: 300000,
+        tuNgay: new Date('2026-10-01T00:00:00.000Z'),
+        denNgay: null,
       },
     ]);
 
@@ -92,7 +103,7 @@ describe('TripsService search', () => {
             distance: null,
             durationMinutes: null,
           },
-          departureTime: '2026-10-15T20:00:00.000Z',
+          departureTime: '2026-10-15T13:00:00.000Z',
           arrivalTime: null,
           vehicle: {
             id: 4,
@@ -127,6 +138,77 @@ describe('TripsService search', () => {
       data: [],
       meta: { page: 1, pageSize: 10, totalItems: 0, totalPages: 0 },
     });
+  });
+
+  it('excludes an already departed trip even when its status is still MO_BAN', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-15T14:00:00.000Z'));
+    const { prisma, service } = createService();
+    prisma.chuyenXe.findMany.mockResolvedValue([
+      secondTrip,
+      {
+        ...firstTrip,
+        chuyenXeId: 23,
+        maChuyenXe: 'CX-23',
+        gioKhoiHanh: new Date('1970-01-01T22:30:00.000Z'),
+      },
+    ]);
+    prisma.bangGia.findMany.mockResolvedValue([]);
+
+    const result = await service.search({
+      page: 1,
+      pageSize: 10,
+      sortBy: 'departureTime',
+      sortDirection: 'asc',
+    });
+
+    expect(result.data.map((trip) => trip.id)).toEqual([23]);
+    expect(result.meta.totalItems).toBe(1);
+  });
+
+  it('resolves each trip fare from the price period covering that trip date', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-01T00:00:00.000Z'));
+    const { prisma, service } = createService();
+    const novemberTrip = {
+      ...secondTrip,
+      chuyenXeId: 24,
+      maChuyenXe: 'CX-24',
+      ngayKhoiHanh: new Date('2026-11-15T00:00:00.000Z'),
+    };
+    prisma.chuyenXe.findMany.mockResolvedValue([firstTrip, novemberTrip]);
+    prisma.bangGia.findMany.mockResolvedValue([
+      {
+        bangGiaId: 10,
+        nhaXeId: 3,
+        tuyenXeId: 8,
+        loaiXeId: 2,
+        giaNiemYet: 300000,
+        tuNgay: new Date('2026-10-01T00:00:00.000Z'),
+        denNgay: new Date('2026-10-31T00:00:00.000Z'),
+      },
+      {
+        bangGiaId: 11,
+        nhaXeId: 3,
+        tuyenXeId: 8,
+        loaiXeId: 2,
+        giaNiemYet: 350000,
+        tuNgay: new Date('2026-11-01T00:00:00.000Z'),
+        denNgay: null,
+      },
+    ]);
+
+    const result = await service.search({
+      page: 1,
+      pageSize: 10,
+      sortBy: 'departureTime',
+      sortDirection: 'asc',
+    });
+
+    expect(result.data.map(({ id, price }) => ({ id, price }))).toEqual([
+      { id: 21, price: 300000 },
+      { id: 24, price: 350000 },
+    ]);
   });
 });
 

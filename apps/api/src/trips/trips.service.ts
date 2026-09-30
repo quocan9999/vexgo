@@ -1,4 +1,10 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import {
+  businessDateStartUtc,
+  getBusinessDate,
+  resolveBusinessTimeZone,
+} from '../common/time/business-date.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { SearchTripsDto } from './dto/search-trips.dto.js';
 import { Prisma } from '../generated/prisma/client.js';
@@ -17,17 +23,22 @@ type FareRecord = {
   tuyenXeId: number;
   loaiXeId: number;
   giaNiemYet: Prisma.Decimal | number;
+  tuNgay: Date;
+  denNgay: Date | null;
 };
 
-function combineDeparture(date: Date, time: Date): Date {
-  const departure = new Date(date);
-  departure.setUTCHours(
-    time.getUTCHours(),
-    time.getUTCMinutes(),
-    time.getUTCSeconds(),
-    0,
-  );
-  return departure;
+function combineDeparture(
+  date: Date,
+  time: Date,
+  businessTimeZone: string,
+): Date {
+  const businessDate = date.toISOString().slice(0, 10);
+  const businessDayStart = businessDateStartUtc(businessDate, businessTimeZone);
+  const elapsedSinceMidnight =
+    ((time.getUTCHours() * 60 + time.getUTCMinutes()) * 60 +
+      time.getUTCSeconds()) *
+    1000;
+  return new Date(businessDayStart.getTime() + elapsedSinceMidnight);
 }
 
 function findFare(
@@ -38,11 +49,17 @@ function findFare(
     (fare) =>
       fare.nhaXeId === trip.nhaXeId &&
       fare.tuyenXeId === trip.tuyenXeId &&
-      fare.loaiXeId === trip.xe.loaiXeId,
+      fare.loaiXeId === trip.xe.loaiXeId &&
+      fare.tuNgay <= trip.ngayKhoiHanh &&
+      (fare.denNgay === null || fare.denNgay >= trip.ngayKhoiHanh),
   );
 }
 
-function mapTrip(trip: TripRecord, fare?: FareRecord) {
+function mapTrip(
+  trip: TripRecord,
+  businessTimeZone: string,
+  fare?: FareRecord,
+) {
   return {
     id: trip.chuyenXeId,
     code: trip.maChuyenXe,
@@ -65,6 +82,7 @@ function mapTrip(trip: TripRecord, fare?: FareRecord) {
     departureTime: combineDeparture(
       trip.ngayKhoiHanh,
       trip.gioKhoiHanh,
+      businessTimeZone,
     ).toISOString(),
     arrivalTime: null,
     vehicle: {
@@ -84,9 +102,16 @@ function mapTrip(trip: TripRecord, fare?: FareRecord) {
 
 @Injectable()
 export class TripsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly config: ConfigService,
+  ) {}
 
   async search(dto: SearchTripsDto) {
+    const businessTimeZone = resolveBusinessTimeZone(
+      this.config.get<string>('BUSINESS_TIME_ZONE'),
+    );
+    const now = new Date();
     const where: Prisma.ChuyenXeWhereInput = {
       trangThai: 'MO_BAN',
     };
@@ -110,34 +135,57 @@ export class TripsService {
 
     if (dto.departureDate) {
       where.ngayKhoiHanh = new Date(`${dto.departureDate}T00:00:00.000Z`);
+    } else {
+      where.ngayKhoiHanh = {
+        gte: new Date(
+          `${getBusinessDate(businessTimeZone, now)}T00:00:00.000Z`,
+        ),
+      };
     }
 
-    const chuyenXes = await this.prisma.chuyenXe.findMany({
+    const queriedTrips = await this.prisma.chuyenXe.findMany({
       where,
       include: TRIP_INCLUDE,
     });
+    const chuyenXes = queriedTrips.filter(
+      (trip) =>
+        combineDeparture(
+          trip.ngayKhoiHanh,
+          trip.gioKhoiHanh,
+          businessTimeZone,
+        ) > now,
+    );
 
-    const fareDate = dto.departureDate
-      ? new Date(`${dto.departureDate}T00:00:00.000Z`)
-      : new Date();
-    const prices = await this.prisma.bangGia.findMany({
-      where: {
-        trangThai: 'HOAT_DONG',
-        tuNgay: { lte: fareDate },
-        OR: [{ denNgay: null }, { denNgay: { gte: fareDate } }],
-      },
-      select: {
-        bangGiaId: true,
-        nhaXeId: true,
-        tuyenXeId: true,
-        loaiXeId: true,
-        giaNiemYet: true,
-      },
-    });
+    const tripDates = chuyenXes.map(({ ngayKhoiHanh }) => ngayKhoiHanh);
+    const earliestTripDate = new Date(
+      Math.min(...tripDates.map((date) => date.getTime())),
+    );
+    const latestTripDate = new Date(
+      Math.max(...tripDates.map((date) => date.getTime())),
+    );
+    const prices =
+      chuyenXes.length === 0
+        ? []
+        : await this.prisma.bangGia.findMany({
+            where: {
+              trangThai: 'HOAT_DONG',
+              tuNgay: { lte: latestTripDate },
+              OR: [{ denNgay: null }, { denNgay: { gte: earliestTripDate } }],
+            },
+            select: {
+              bangGiaId: true,
+              nhaXeId: true,
+              tuyenXeId: true,
+              loaiXeId: true,
+              giaNiemYet: true,
+              tuNgay: true,
+              denNgay: true,
+            },
+          });
 
     const direction = dto.sortDirection === 'desc' ? -1 : 1;
     const mapped = chuyenXes
-      .map((trip) => mapTrip(trip, findFare(trip, prices)))
+      .map((trip) => mapTrip(trip, businessTimeZone, findFare(trip, prices)))
       .filter(
         (trip) =>
           dto.minPrice === undefined ||
@@ -199,7 +247,10 @@ export class TripsService {
       },
     });
 
-    return mapTrip(cx, bangGia ?? undefined);
+    const businessTimeZone = resolveBusinessTimeZone(
+      this.config.get<string>('BUSINESS_TIME_ZONE'),
+    );
+    return mapTrip(cx, businessTimeZone, bangGia ?? undefined);
   }
 
   async getSeats(id: number) {

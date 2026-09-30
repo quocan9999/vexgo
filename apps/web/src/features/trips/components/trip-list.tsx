@@ -2,10 +2,32 @@
 
 import { useMemo, useState, useEffect } from 'react';
 import { Filter, ChevronDown, MapPin } from 'lucide-react';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Pagination } from '@/components/ui/pagination';
 import { TripCard } from '@/features/trips/components/trip-card';
 import type { Trip } from '@/types/customer';
 import { tripsApi, type ApiTrip } from '@/features/trips/services/trips.api';
+import {
+  buildTripBookingHref,
+  buildTripListSearchParams,
+} from '@/features/trips/services/trip-list-state';
+
+type TripPage = {
+  trips: Trip[];
+  meta: {
+    page: number;
+    pageSize: number;
+    totalItems: number;
+    totalPages: number;
+  };
+};
+
+const EMPTY_META = {
+  page: 1,
+  pageSize: 10,
+  totalItems: 0,
+  totalPages: 0,
+};
 
 function mapApiToTrip(item: ApiTrip): Trip {
   const depDate = new Date(item.departureTime);
@@ -48,18 +70,14 @@ async function fetchTripsByRoute(
   origin: string,
   destination: string,
   date: string,
-): Promise<Trip[]> {
-  if (!origin && !destination) return [];
-  const response = await tripsApi.searchTrips({
-    from: origin,
-    to: destination,
-    departureDate: date || undefined,
-    page: 1,
-    pageSize: 100,
-    sortBy: 'departureTime',
-    sortDirection: 'asc',
-  });
-  return response.data.map(mapApiToTrip);
+  page: number,
+  sort: string,
+): Promise<TripPage> {
+  if (!origin && !destination) return { trips: [], meta: EMPTY_META };
+  const response = await tripsApi.searchTrips(
+    buildTripListSearchParams({ origin, destination, date, page, sort }),
+  );
+  return { trips: response.data.map(mapApiToTrip), meta: response.meta };
 }
 
 function TripSlot({
@@ -118,9 +136,20 @@ function TripSlot({
 }
 
 export function TripList() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const [outboundTrips, setOutboundTrips] = useState<Trip[]>([]);
   const [returnTrips, setReturnTrips] = useState<Trip[]>([]);
+  const [outboundMeta, setOutboundMeta] = useState(EMPTY_META);
+  const [returnMeta, setReturnMeta] = useState(EMPTY_META);
+  const [outboundPageState, setOutboundPageState] = useState({
+    searchKey: '',
+    page: 1,
+  });
+  const [returnPageState, setReturnPageState] = useState({
+    searchKey: '',
+    page: 1,
+  });
   const [loadingOutbound, setLoadingOutbound] = useState(true);
   const [loadingReturn, setLoadingReturn] = useState(false);
   const [errorOutbound, setErrorOutbound] = useState('');
@@ -145,74 +174,108 @@ export function TripList() {
   const tripType = searchParams.get('tripType') || '';
   // Round-trip nếu tripType=round-trip HOẶC có returnDate
   const isRoundTrip = tripType === 'round-trip' || !!returnDate;
+  const outboundSearchKey = `${origin}\u0000${destination}\u0000${date}`;
+  const returnSearchKey = `${destination}\u0000${origin}\u0000${returnDate}`;
+  const outboundPage =
+    outboundPageState.searchKey === outboundSearchKey
+      ? outboundPageState.page
+      : 1;
+  const returnPage =
+    returnPageState.searchKey === returnSearchKey ? returnPageState.page : 1;
 
   // Fetch outbound trips
   useEffect(() => {
+    let ignore = false;
     const fetchOutboundTrips = async () => {
       setLoadingOutbound(true);
       setErrorOutbound('');
       try {
-        setOutboundTrips(await fetchTripsByRoute(origin, destination, date));
+        const response = await fetchTripsByRoute(
+          origin,
+          destination,
+          date,
+          outboundPage,
+          sort,
+        );
+        if (ignore) return;
+        setOutboundTrips(response.trips);
+        setOutboundMeta(response.meta);
       } catch (error) {
+        if (ignore) return;
         setOutboundTrips([]);
+        setOutboundMeta(EMPTY_META);
         setErrorOutbound(
           error instanceof Error ? error.message : 'Không thể tải chuyến xe',
         );
       } finally {
-        setLoadingOutbound(false);
+        if (!ignore) setLoadingOutbound(false);
       }
     };
     void fetchOutboundTrips();
-  }, [origin, destination, date]);
+    return () => {
+      ignore = true;
+    };
+  }, [origin, destination, date, outboundPage, sort]);
 
   // Fetch return trips if round-trip
   useEffect(() => {
     if (!isRoundTrip) return;
+    let ignore = false;
     const fetchReturnTrips = async () => {
       setLoadingReturn(true);
       setErrorReturn('');
       try {
-        setReturnTrips(
-          await fetchTripsByRoute(destination, origin, returnDate),
+        const response = await fetchTripsByRoute(
+          destination,
+          origin,
+          returnDate,
+          returnPage,
+          sort,
         );
+        if (ignore) return;
+        setReturnTrips(response.trips);
+        setReturnMeta(response.meta);
       } catch (error) {
+        if (ignore) return;
         setReturnTrips([]);
+        setReturnMeta(EMPTY_META);
         setErrorReturn(
           error instanceof Error ? error.message : 'Không thể tải chuyến xe',
         );
       } finally {
-        setLoadingReturn(false);
+        if (!ignore) setLoadingReturn(false);
       }
     };
     void fetchReturnTrips();
-  }, [destination, origin, returnDate, isRoundTrip]);
+    return () => {
+      ignore = true;
+    };
+  }, [destination, origin, returnDate, isRoundTrip, returnPage, sort]);
 
-  const activeTrips = activeTab === 'outbound' ? outboundTrips : returnTrips;
-  const loading = activeTab === 'outbound' ? loadingOutbound : loadingReturn;
-  const error = activeTab === 'outbound' ? errorOutbound : errorReturn;
+  const effectiveActiveTab = isRoundTrip ? activeTab : 'outbound';
+  const activeTrips =
+    effectiveActiveTab === 'outbound' ? outboundTrips : returnTrips;
+  const loading =
+    effectiveActiveTab === 'outbound' ? loadingOutbound : loadingReturn;
+  const error = effectiveActiveTab === 'outbound' ? errorOutbound : errorReturn;
+  const activeMeta =
+    effectiveActiveTab === 'outbound' ? outboundMeta : returnMeta;
+  const currentPage =
+    effectiveActiveTab === 'outbound' ? outboundPage : returnPage;
 
   const filteredTrips = useMemo(() => {
-    return activeTrips
-      .filter((trip) => {
-        const matchesQuery =
-          `${trip.origin} ${trip.destination} ${trip.operator}`
-            .toLowerCase()
-            .includes(query.toLowerCase());
-        return (
-          matchesQuery &&
-          (vehicleType === 'all' || trip.vehicleType.includes(vehicleType))
-        );
-      })
-      .sort((a, b) =>
-        sort === 'price'
-          ? (Number.isFinite(a.price) ? a.price : Number.POSITIVE_INFINITY) -
-            (Number.isFinite(b.price) ? b.price : Number.POSITIVE_INFINITY)
-          : a.departureTime.localeCompare(b.departureTime),
+    return activeTrips.filter((trip) => {
+      const matchesQuery = `${trip.origin} ${trip.destination} ${trip.operator}`
+        .toLowerCase()
+        .includes(query.toLowerCase());
+      return (
+        matchesQuery &&
+        (vehicleType === 'all' || trip.vehicleType.includes(vehicleType))
       );
-  }, [activeTrips, query, sort, vehicleType]);
+    });
+  }, [activeTrips, query, vehicleType]);
 
-  const totalResults =
-    activeTab === 'outbound' ? outboundTrips.length : returnTrips.length;
+  const totalResults = activeMeta.totalItems;
 
   function handleSelectOutbound(trip: Trip) {
     setSelectedOutbound(trip);
@@ -223,9 +286,49 @@ export function TripList() {
   }
 
   const handleSelect =
-    activeTab === 'outbound' ? handleSelectOutbound : handleSelectReturn;
+    effectiveActiveTab === 'outbound'
+      ? handleSelectOutbound
+      : handleSelectReturn;
   const selectedForTab =
-    activeTab === 'outbound' ? selectedOutbound : selectedReturn;
+    effectiveActiveTab === 'outbound' ? selectedOutbound : selectedReturn;
+
+  function handleChoose(trip: Trip) {
+    if (!isRoundTrip) {
+      router.push(
+        buildTripBookingHref({
+          currentSearch: searchParams.toString(),
+          outboundId: trip.id,
+        }),
+      );
+      return;
+    }
+
+    if (effectiveActiveTab === 'outbound') {
+      setSelectedOutbound(trip);
+      setActiveTab('return');
+      return;
+    }
+    setSelectedReturn(trip);
+  }
+
+  function continueRoundTrip() {
+    if (!selectedOutbound || !selectedReturn) return;
+    router.push(
+      buildTripBookingHref({
+        currentSearch: searchParams.toString(),
+        outboundId: selectedOutbound.id,
+        returnId: selectedReturn.id,
+      }),
+    );
+  }
+
+  function handlePageChange(page: number) {
+    if (effectiveActiveTab === 'outbound') {
+      setOutboundPageState({ searchKey: outboundSearchKey, page });
+    } else {
+      setReturnPageState({ searchKey: returnSearchKey, page });
+    }
+  }
 
   return (
     <div className="bg-[#F5F5F5] min-h-screen pb-12 pt-6">
@@ -331,6 +434,15 @@ export function TripList() {
                         Chọn chuyến về →
                       </button>
                     </div>
+                  )}
+                  {isRoundTrip && selectedOutbound && selectedReturn && (
+                    <button
+                      type="button"
+                      onClick={continueRoundTrip}
+                      className="w-full rounded-lg bg-[#f05123] px-4 py-2.5 text-[13px] font-bold text-white shadow-sm transition-colors hover:bg-[#d8441a]"
+                    >
+                      Tiếp tục đặt vé khứ hồi
+                    </button>
                   )}
                 </div>
               )}
@@ -503,7 +615,14 @@ export function TripList() {
                 <span className="text-[13px] text-slate-500">⇅ Sắp xếp:</span>
                 <select
                   value={sort}
-                  onChange={(e) => setSort(e.target.value)}
+                  onChange={(e) => {
+                    setSort(e.target.value);
+                    setOutboundPageState({
+                      searchKey: outboundSearchKey,
+                      page: 1,
+                    });
+                    setReturnPageState({ searchKey: returnSearchKey, page: 1 });
+                  }}
                   className="text-[13px] font-medium text-slate-700 border border-slate-200 rounded-md px-3 py-1.5 outline-none bg-white"
                 >
                   <option value="departure">Mới cập nhật</option>
@@ -535,6 +654,7 @@ export function TripList() {
                     trip={trip}
                     isSelected={selectedForTab?.id === trip.id}
                     onSelect={handleSelect}
+                    onChoose={handleChoose}
                   />
                 ))
               ) : (
@@ -551,19 +671,13 @@ export function TripList() {
             </div>
 
             {/* Pagination */}
-            {filteredTrips.length > 0 && (
+            {activeMeta.totalPages > 1 && (
               <div className="flex justify-center mt-4">
-                <div className="flex items-center gap-2">
-                  <button className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-100">
-                    &lt;
-                  </button>
-                  <button className="w-8 h-8 rounded-lg flex items-center justify-center bg-blue-600 text-white font-medium text-sm">
-                    1
-                  </button>
-                  <button className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-100">
-                    &gt;
-                  </button>
-                </div>
+                <Pagination
+                  currentPage={currentPage}
+                  totalPages={activeMeta.totalPages}
+                  onPageChange={handlePageChange}
+                />
               </div>
             )}
           </div>

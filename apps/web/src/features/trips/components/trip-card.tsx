@@ -7,12 +7,14 @@ interface TripCardProps {
   trip: Trip;
   isSelected?: boolean;
   onSelect?: (trip: Trip) => void;
+  onChoose?: (trip: Trip) => void;
 }
 
 export function TripCard({
   trip,
   isSelected = false,
   onSelect,
+  onChoose,
 }: TripCardProps) {
   return (
     <div
@@ -116,7 +118,7 @@ export function TripCard({
         <button
           onClick={(e) => {
             e.stopPropagation();
-            window.location.href = `/trips/${trip.id}`;
+            onChoose?.(trip);
           }}
           className="bg-[#f05123] hover:bg-[#d8441a] text-white px-6 py-2 rounded-lg text-[13px] font-bold transition-colors shadow-sm"
         >
