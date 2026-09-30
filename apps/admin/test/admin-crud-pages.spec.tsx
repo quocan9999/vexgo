@@ -3,7 +3,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { BusCompaniesManagement } from '../src/features/bus-companies/components/bus-companies-management';
 import { VehicleTypesManagement } from '../src/features/vehicle-types/components/vehicle-types-management';
 import { VehiclesManagement } from '../src/features/vehicles/components/vehicles-management';
-import { setEmployeeAdminTestSession } from './admin-auth-test-session';
+import {
+  setAdminTestSession,
+  setEmployeeAdminTestSession,
+} from './admin-auth-test-session';
 
 const state = vi.hoisted(() => ({
   loading: true,
@@ -161,10 +164,37 @@ beforeEach(() => {
   state.vehiclePage = null;
 });
 
+function setPlatformPermissions(permissions: string[]) {
+  setAdminTestSession({
+    status: 'authenticated',
+    session: {
+      accountId: 1,
+      fullName: 'Super Admin',
+      phoneNumber: '+84900000001',
+      email: 'admin@vexgo.test',
+      roles: ['SUPER_ADMIN'],
+      permissions,
+      employee: null,
+      busCompanyId: null,
+    },
+  });
+}
+
 describe('Admin CRUD page composition', () => {
   it('uses the same page actions and skeleton on each initial list load', () => {
+    setPlatformPermissions(['bus-company:read', 'bus-company:create']);
+    const busCompanyMarkup = renderToStaticMarkup(<BusCompaniesManagement />);
+
+    setEmployeeAdminTestSession([
+      'vehicle-type:read',
+      'vehicle-type:create',
+      'vehicle-type:update',
+      'vehicle:read',
+      'vehicle:create',
+      'vehicle:update',
+    ]);
     const pages = [
-      ['nhà xe', renderToStaticMarkup(<BusCompaniesManagement />)],
+      ['nhà xe', busCompanyMarkup],
       ['loại xe', renderToStaticMarkup(<VehicleTypesManagement />)],
       ['xe', renderToStaticMarkup(<VehiclesManagement />)],
     ] as const;
@@ -214,8 +244,18 @@ describe('Admin CRUD page composition', () => {
       meta: { page: 1, pageSize: 10, totalItems: 12, totalPages: 2 },
     };
 
+    setPlatformPermissions(['bus-company:read']);
+    const busCompanyMarkup = renderToStaticMarkup(<BusCompaniesManagement />);
+    setEmployeeAdminTestSession([
+      'vehicle-type:read',
+      'vehicle-type:create',
+      'vehicle-type:update',
+      'vehicle:read',
+      'vehicle:create',
+      'vehicle:update',
+    ]);
     const cases = [
-      [renderToStaticMarkup(<BusCompaniesManagement />), 42, 'Nhà xe An Bình'],
+      [busCompanyMarkup, 42, 'Nhà xe An Bình'],
       [renderToStaticMarkup(<VehicleTypesManagement />), 24, 'loại xe Limousine'],
       [renderToStaticMarkup(<VehiclesManagement />), 12, 'xe 29A-123.45'],
     ] as const;

@@ -42,8 +42,40 @@ export type AdminPermission =
   | 'fare-price:create'
   | 'fare-price:update';
 
+export type PlatformAdminPermission =
+  | 'bus-company:read'
+  | 'bus-company:create'
+  | 'bus-company:update'
+  | 'admin-account:read'
+  | 'admin-account:create'
+  | 'admin-account:update';
+
 export type AdminOperationSection =
   (typeof ADMIN_OPERATION_SECTIONS)[number]['section'];
+
+export function hasPlatformAdminPermission(
+  session: AdminSession | null,
+  permission: PlatformAdminPermission,
+): boolean {
+  return (
+    session !== null &&
+    getAdminAccessScope(session) === 'platform' &&
+    session.permissions.includes(permission)
+  );
+}
+
+export function hasAllPlatformAdminPermissions(
+  session: AdminSession | null,
+  permissions: readonly PlatformAdminPermission[],
+): boolean {
+  if (session === null || getAdminAccessScope(session) !== 'platform') {
+    return false;
+  }
+
+  return permissions.every((permission) =>
+    session.permissions.includes(permission),
+  );
+}
 
 export function hasAdminPermission(
   session: AdminSession | null,
@@ -71,6 +103,13 @@ export function hasAllAdminPermissions(
 
 function matchesPath(pathname: string, basePath: string): boolean {
   return pathname === basePath || pathname.startsWith(`${basePath}/`);
+}
+
+export function getRequiredPlatformAdminPermissions(
+  pathname: string,
+): readonly PlatformAdminPermission[] | null {
+  if (matchesPath(pathname, '/bus-companies')) return ['bus-company:read'];
+  return null;
 }
 
 export function getRequiredAdminPermissions(

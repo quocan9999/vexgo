@@ -11,7 +11,9 @@ import {
 import {
   getFirstAccessibleAdminPath,
   getRequiredAdminPermissions,
+  getRequiredPlatformAdminPermissions,
   hasAllAdminPermissions,
+  hasAllPlatformAdminPermissions,
 } from '../services/admin-access';
 import { getAdminAccessScope } from '../services/admin-scope';
 
@@ -82,6 +84,8 @@ export function AdminSessionGuard({ children }: { children: ReactNode }) {
   }, []);
 
   const scope = session ? getAdminAccessScope(session) : null;
+  const requiredPlatformPermissions =
+    getRequiredPlatformAdminPermissions(pathname);
   const tenantNeedsRedirect = scope === 'tenant' && (
     requiredPermissions === null ||
     !hasAllAdminPermissions(session, requiredPermissions)
@@ -93,7 +97,11 @@ export function AdminSessionGuard({ children }: { children: ReactNode }) {
     ? tenantLandingPath
     : scope === 'platform' && requiredPermissions !== null
       ? '/'
-      : null;
+      : scope === 'platform' &&
+          requiredPlatformPermissions !== null &&
+          !hasAllPlatformAdminPermissions(session, requiredPlatformPermissions)
+        ? '/'
+        : null;
   const tenantHasNoAccessiblePage = tenantNeedsRedirect && !tenantLandingPath;
 
   useEffect(() => {

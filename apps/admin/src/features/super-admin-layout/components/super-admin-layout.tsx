@@ -20,6 +20,7 @@ import {
   ADMIN_OPERATION_SECTIONS,
   getFirstAccessibleAdminPath,
   hasAdminPermission,
+  hasPlatformAdminPermission,
   type AdminOperationSection,
 } from '@/features/admin-auth/services/admin-access';
 import {
@@ -83,6 +84,10 @@ export function SuperAdminLayout({
   const scope = getAdminAccessScope(session);
   const tenantScope = scope === 'tenant';
   const platformScope = scope === 'platform';
+  const canReadBusCompanies = hasPlatformAdminPermission(
+    session,
+    'bus-company:read',
+  );
   const accessibleOperationSections = ADMIN_OPERATION_SECTIONS.filter((item) =>
     hasAdminPermission(session, item.readPermission),
   );
@@ -176,15 +181,17 @@ export function SuperAdminLayout({
                         <span className="sidebar-link-icon"><Database size={18} /></span>
                         <span>Tổng quan</span>
                       </Link>
-                      <Link
-                        aria-current={activeSection === 'bus-companies' ? 'page' : undefined}
-                        className={`sidebar-link${activeSection === 'bus-companies' ? ' is-active' : ''}`}
-                        href="/bus-companies"
-                        onClick={closeMobileNavigation}
-                      >
-                        <span className="sidebar-link-icon"><Building2 size={18} /></span>
-                        <span>Nhà xe</span>
-                      </Link>
+                      {canReadBusCompanies && (
+                        <Link
+                          aria-current={activeSection === 'bus-companies' ? 'page' : undefined}
+                          className={`sidebar-link${activeSection === 'bus-companies' ? ' is-active' : ''}`}
+                          href="/bus-companies"
+                          onClick={closeMobileNavigation}
+                        >
+                          <span className="sidebar-link-icon"><Building2 size={18} /></span>
+                          <span>Nhà xe</span>
+                        </Link>
+                      )}
                     </>
                   )}
             </nav>

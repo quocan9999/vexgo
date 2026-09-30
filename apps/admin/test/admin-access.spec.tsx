@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   getFirstAccessibleAdminPath,
   getRequiredAdminPermissions,
+  getRequiredPlatformAdminPermissions,
+  hasAllPlatformAdminPermissions,
   hasAllAdminPermissions,
   hasAdminPermission,
+  hasPlatformAdminPermission,
 } from '@/features/admin-auth/services/admin-access';
 import { getAdminAccessScope } from '@/features/admin-auth/services/admin-scope';
 import type { AdminSession } from '@/features/admin-auth/services/admin-auth';
@@ -29,6 +32,19 @@ function makeTenantSession(
   };
 }
 
+function makePlatformSession(permissions: string[] = []): AdminSession {
+  return {
+    accountId: 1,
+    fullName: 'Super Admin',
+    phoneNumber: '+84900000001',
+    email: 'admin@vexgo.test',
+    roles: ['SUPER_ADMIN'],
+    permissions,
+    employee: null,
+    busCompanyId: null,
+  };
+}
+
 describe('admin access scope and permissions', () => {
   it('accepts an employee-only account with matching tenant identity', () => {
     expect(
@@ -51,6 +67,38 @@ describe('admin access scope and permissions', () => {
     expect(getRequiredAdminPermissions('/vehicles')).toEqual(['vehicle:read']);
     expect(getRequiredAdminPermissions('/routes/123')).toEqual(['route:read']);
     expect(getRequiredAdminPermissions('/vehicle-types-extra')).toBeNull();
+  });
+
+  it('maps platform company routes to the platform read permission', () => {
+    expect(getRequiredPlatformAdminPermissions('/bus-companies')).toEqual([
+      'bus-company:read',
+    ]);
+    expect(getRequiredPlatformAdminPermissions('/bus-companies/42')).toEqual([
+      'bus-company:read',
+    ]);
+    expect(getRequiredPlatformAdminPermissions('/bus-companies-extra')).toBeNull();
+  });
+
+  it('resolves platform permissions only for a valid platform principal', () => {
+    const platform = makePlatformSession([
+      'bus-company:read',
+      'bus-company:create',
+      'bus-company:update',
+    ]);
+    const tenant = makeTenantSession(['NHAN_VIEN_CSKH'], [
+      'bus-company:read',
+      'bus-company:create',
+      'bus-company:update',
+    ]);
+
+    expect(hasPlatformAdminPermission(platform, 'bus-company:read')).toBe(true);
+    expect(hasPlatformAdminPermission(platform, 'bus-company:create')).toBe(true);
+    expect(hasPlatformAdminPermission(platform, 'bus-company:update')).toBe(true);
+    expect(hasAllPlatformAdminPermissions(platform, ['bus-company:read'])).toBe(true);
+    expect(hasPlatformAdminPermission(tenant, 'bus-company:read')).toBe(false);
+    expect(hasAllPlatformAdminPermissions(tenant, ['bus-company:read'])).toBe(false);
+    expect(hasPlatformAdminPermission(makePlatformSession(), 'bus-company:read')).toBe(false);
+    expect(hasPlatformAdminPermission(null, 'bus-company:read')).toBe(false);
   });
 
   it('selects the first tenant page the session can read', () => {

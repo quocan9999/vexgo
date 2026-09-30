@@ -111,7 +111,7 @@ describe('admin tenant presentation mode', () => {
         phoneNumber: '+84900000001',
         email: 'admin@vexgo.test',
         roles: ['SUPER_ADMIN'],
-        permissions: ['route:read', 'fare-price:read'],
+        permissions: ['route:read', 'fare-price:read', 'bus-company:read'],
         employee: null,
         busCompanyId: null,
       },
@@ -182,6 +182,17 @@ describe('admin tenant presentation mode', () => {
     const brand = screen.getByRole('link', { name: /VexGo/ });
     expect(brand.textContent).toContain('SUPER ADMIN');
     expect(brand.textContent).toContain('NHÀ XE: NONE');
+  });
+
+  it('hides the Nhà xe link when Super Admin lacks bus-company:read', () => {
+    render(
+      <SuperAdminLayout activeSection="overview">
+        <h1>Platform page</h1>
+      </SuperAdminLayout>,
+    );
+
+    expect(screen.getByRole('link', { name: 'Tổng quan' })).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'Nhà xe' })).toBeNull();
   });
 
   it('allows an authenticated tenant account to open its operational route', () => {
@@ -351,6 +362,49 @@ describe('admin tenant presentation mode', () => {
     expect(SensitiveManagement).not.toHaveBeenCalled();
     expect(screen.queryByText('All bus companies')).toBeNull();
     await waitFor(() => expect(replace).toHaveBeenCalledWith('/vehicle-types'));
+  });
+
+  it('does not mount the Nhà xe page for Super Admin without bus-company:read', async () => {
+    state.pathname = '/bus-companies';
+    const SensitiveManagement = vi.fn(() => <div>All bus companies</div>);
+
+    render(
+      <AdminSessionGuard>
+        <SensitiveManagement />
+      </AdminSessionGuard>,
+    );
+
+    expect(SensitiveManagement).not.toHaveBeenCalled();
+    expect(screen.queryByText('All bus companies')).toBeNull();
+    await waitFor(() => expect(replace).toHaveBeenCalledWith('/'));
+  });
+
+  it('mounts the Nhà xe page for Super Admin with bus-company:read', () => {
+    setAdminTestSession({
+      status: 'authenticated',
+      session: {
+        accountId: 1,
+        fullName: 'Super Admin',
+        phoneNumber: '+84900000001',
+        email: 'admin@vexgo.test',
+        roles: ['SUPER_ADMIN'],
+        permissions: ['bus-company:read'],
+        employee: null,
+        busCompanyId: null,
+      },
+    });
+    state.pathname = '/bus-companies';
+    const CompanyManagement = vi.fn(() => <div>Company management</div>);
+
+    render(
+      <AdminSessionGuard>
+        <CompanyManagement />
+      </AdminSessionGuard>,
+    );
+
+    expect(screen.getByText('Company management')).toBeTruthy();
+    expect(CompanyManagement).toHaveBeenCalled();
+    expect(replace).not.toHaveBeenCalled();
   });
 
   it('does not mount operational pages for Super Admin and redirects to platform overview', async () => {
