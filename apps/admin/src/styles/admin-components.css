@@ -739,14 +739,45 @@ dialog:focus-visible {
   animation: backdrop-in 180ms ease-out;
 }
 
+.admin-dialog.admin-detail-sheet {
+  display: flex;
+  align-items: stretch;
+  justify-content: flex-end;
+}
+
 .admin-detail-sheet__panel {
+  box-sizing: border-box;
+  flex: 0 1 480px;
   width: min(480px, 100%);
-  height: 100%;
+  height: auto;
+  min-height: 0;
+  max-height: 100dvh;
   margin-left: auto;
   overflow-y: auto;
+  overscroll-behavior-y: contain;
   background: #fff;
   box-shadow: -14px 0 38px rgb(16 31 54 / 12%);
   animation: panel-in 200ms ease-out;
+}
+
+.detail-section {
+  padding: 23px 25px;
+  border-bottom: 1px solid #edf0f5;
+}
+
+.detail-section h3 {
+  margin: 0 0 17px;
+  color: #33425b;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.detail-edit-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+  margin: 20px 25px;
 }
 
 .admin-dialog-header {
@@ -1069,11 +1100,16 @@ dialog:focus-visible {
     overflow: auto;
   }
 
+  .admin-dialog.admin-detail-sheet {
+    overflow: hidden;
+  }
+
   .admin-detail-sheet__panel {
+    flex-basis: 100%;
     width: 100%;
-    height: 100%;
+    height: auto;
     min-height: 0;
-    max-height: 100%;
+    max-height: 100dvh;
     overflow-y: auto;
   }
 }

@@ -1,5 +1,9 @@
 import {
+  ArrayNotEmpty,
+  ArrayUnique,
+  IsArray,
   IsEmail,
+  IsIn,
   IsNotEmpty,
   IsString,
   Matches,
@@ -13,6 +17,9 @@ import { Transform } from 'class-transformer';
 import { IsDateOnly } from '../../common/validators/is-date-only.validator.js';
 import { VIETNAM_E164_PHONE_PATTERN } from '../../auth/otp/otp.constants.js';
 import { IsPasswordByteLength } from '../../auth/validators/is-password-byte-length.validator.js';
+import { TENANT_PRINCIPAL_ROLES } from '../../auth/principal-scope.js';
+
+type TenantPrincipalRole = (typeof TENANT_PRINCIPAL_ROLES)[number];
 
 const CCCD_PATTERN = /^\d{12}$/;
 
@@ -49,6 +56,14 @@ export class CreateAdminAccountDto {
   @IsNotEmpty()
   @MaxLength(50)
   employeeCode!: string;
+
+  @ValidateIf((_object, value) => value !== undefined)
+  @IsArray()
+  @ArrayNotEmpty()
+  @ArrayUnique()
+  @IsString({ each: true })
+  @IsIn([...TENANT_PRINCIPAL_ROLES], { each: true })
+  roleNames?: TenantPrincipalRole[];
 
   @ValidateIf((_object, value) => value !== undefined && value !== null)
   @IsDateOnly({ message: 'Ngày sinh phải là ngày hợp lệ dạng YYYY-MM-DD.' })
