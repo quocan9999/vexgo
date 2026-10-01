@@ -10,6 +10,10 @@ import {
   calculateRoundTripFare,
   getReturnTripLocations,
 } from '../utils/round-trip-booking';
+import { formatTripDateTime } from '../utils/one-way-booking';
+import { validatePassengerInfo } from '../utils/passenger-validation';
+import { createPaymentDraft } from '../services/payment-draft';
+import { FeaturePlaceholderModal } from './feature-placeholder-modal';
 import { useAuthSession } from '@/features/auth/auth-session';
 
 export interface RoundTripBookingProps {
@@ -83,6 +87,7 @@ interface SeatGridProps {
   tripSeats: ApiTripSeat[];
   selectedSeats: string[];
   onToggle: (seat: string) => void;
+  onVehicleInfoClick?: () => void;
 }
 
 const SeatGrid = ({
@@ -91,6 +96,7 @@ const SeatGrid = ({
   tripSeats,
   selectedSeats,
   onToggle,
+  onVehicleInfoClick,
 }: SeatGridProps) => (
   <div className="min-w-0 flex-1 p-4 md:p-5">
     <div className="flex items-start justify-between gap-3 mb-5">
@@ -102,7 +108,8 @@ const SeatGrid = ({
       </div>
       <button
         type="button"
-        className="min-h-11 px-2 text-xs font-bold text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand rounded-md"
+        onClick={onVehicleInfoClick}
+        className="min-h-11 px-2 text-xs font-bold text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand rounded-md cursor-pointer"
       >
         Thông tin xe
       </button>
@@ -153,13 +160,32 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
   const [outboundSeats, setOutboundSeats] = useState<string[]>([]);
   const [returnSeats, setReturnSeats] = useState<string[]>([]);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [validationAttempted, setValidationAttempted] = useState(false);
+  const [showVehicleInfoModal, setShowVehicleInfoModal] = useState(false);
+  const [showTripDetailModal, setShowTripDetailModal] = useState(false);
 
   const customerName =
     userNameOverride !== null ? userNameOverride : user?.fullName || '';
   const customerPhone =
     userPhoneOverride !== null ? userPhoneOverride : user?.phoneNumber || '';
 
+  const passengerValidation = validatePassengerInfo({
+    fullName: customerName,
+    phoneNumber: customerPhone,
+    email: customerEmail,
+  });
+  const passengerErrors = validationAttempted ? passengerValidation.errors : {};
+
   const returnLocations = getReturnTripLocations(returnPost);
+
+  const outboundDepartureTimeText = formatTripDateTime(
+    outboundPost.createdAt,
+    outboundPost.timeAgo || (departureDate ? `${departureDate}` : 'Chưa cập nhật'),
+  );
+  const returnDepartureTimeText = formatTripDateTime(
+    returnPost.createdAt,
+    returnPost.timeAgo || (returnDate ? `${returnDate}` : 'Chưa cập nhật'),
+  );
 
   const toggleOutboundSeat = (seat: string) => {
     setOutboundSeats((current) =>
@@ -230,6 +256,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                 tripSeats={outboundTripSeats}
                 selectedSeats={outboundSeats}
                 onToggle={toggleOutboundSeat}
+                onVehicleInfoClick={() => setShowVehicleInfoModal(true)}
               />
               <SeatGrid
                 title="Chuyến về"
@@ -237,6 +264,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                 tripSeats={returnTripSeats}
                 selectedSeats={returnSeats}
                 onToggle={toggleReturnSeat}
+                onVehicleInfoClick={() => setShowVehicleInfoModal(true)}
               />
             </div>
 
@@ -270,12 +298,21 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                     <div className="mt-1.5 relative">
                       <User className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                       <input
-                        className="h-11 w-full rounded-lg border border-slate-300 pl-9 pr-3 text-sm font-semibold outline-none focus:border-brand"
+                        className={`h-11 w-full rounded-lg border pl-9 pr-3 text-sm font-semibold outline-none focus:border-brand ${
+                          passengerErrors.fullName
+                            ? 'border-red-500'
+                            : 'border-slate-300'
+                        }`}
                         value={customerName}
                         onChange={(e) => setUserNameOverride(e.target.value)}
                         placeholder="Nhập họ và tên"
                       />
                     </div>
+                    {passengerErrors.fullName && (
+                      <p className="mt-1 text-xs text-red-500 font-medium">
+                        {passengerErrors.fullName}
+                      </p>
+                    )}
                   </label>
                   <label className="block">
                     <span className="text-xs font-bold text-slate-700">
@@ -284,12 +321,21 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                     <div className="mt-1.5 relative">
                       <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                       <input
-                        className="h-11 w-full rounded-lg border border-slate-300 pl-9 pr-3 text-sm font-semibold outline-none focus:border-brand"
+                        className={`h-11 w-full rounded-lg border pl-9 pr-3 text-sm font-semibold outline-none focus:border-brand ${
+                          passengerErrors.phoneNumber
+                            ? 'border-red-500'
+                            : 'border-slate-300'
+                        }`}
                         value={customerPhone}
                         onChange={(e) => setUserPhoneOverride(e.target.value)}
                         placeholder="Nhập số điện thoại"
                       />
                     </div>
+                    {passengerErrors.phoneNumber && (
+                      <p className="mt-1 text-xs text-red-500 font-medium">
+                        {passengerErrors.phoneNumber}
+                      </p>
+                    )}
                   </label>
                   <label className="block">
                     <span className="text-xs font-bold text-slate-700">
@@ -299,12 +345,21 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                       <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                       <input
                         type="email"
-                        className="h-11 w-full rounded-lg border border-slate-300 pl-9 pr-3 text-sm font-semibold outline-none focus:border-brand"
+                        className={`h-11 w-full rounded-lg border pl-9 pr-3 text-sm font-semibold outline-none focus:border-brand ${
+                          passengerErrors.email
+                            ? 'border-red-500'
+                            : 'border-slate-300'
+                        }`}
                         value={customerEmail}
                         onChange={(e) => setCustomerEmail(e.target.value)}
                         placeholder="Nhập email"
                       />
                     </div>
+                    {passengerErrors.email && (
+                      <p className="mt-1 text-xs text-red-500 font-medium">
+                        {passengerErrors.email}
+                      </p>
+                    )}
                   </label>
                 </div>
               </div>
@@ -392,8 +447,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                     <p className="text-[11px] font-semibold text-slate-600 mt-2">
                       Quý khách vui lòng có mặt tại điểm đón{' '}
                       <strong className="text-accent">
-                        trước {outboundPost.direction || '20:00'} ngày{' '}
-                        {departureDateLabel}
+                        trước giờ khởi hành ({outboundDepartureTimeText})
                       </strong>{' '}
                       để kiểm tra thông tin trước khi lên xe.
                     </p>
@@ -467,8 +521,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                     <p className="text-[11px] font-semibold text-slate-600 mt-2">
                       Quý khách vui lòng có mặt tại điểm đón{' '}
                       <strong className="text-accent">
-                        trước {returnPost.direction || '00:45'} ngày{' '}
-                        {returnDateLabel}
+                        trước giờ khởi hành ({returnDepartureTimeText})
                       </strong>{' '}
                       để kiểm tra thông tin trước khi lên xe.
                     </p>
@@ -532,18 +585,59 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                   type="button"
                   disabled={!canPay}
                   onClick={() => {
-                    const paymentParams = new URLSearchParams({
+                    setValidationAttempted(true);
+                    if (!passengerValidation.isValid) {
+                      return;
+                    }
+                    if (
+                      outboundSeats.length === 0 ||
+                      returnSeats.length === 0
+                    ) {
+                      alert(
+                        'Vui lòng chọn ghế cho cả lượt đi và lượt về để tiếp tục.',
+                      );
+                      return;
+                    }
+                    if (!acceptedTerms) {
+                      alert(
+                        'Vui lòng chấp nhận điều khoản đặt vé & chính sách bảo mật để tiếp tục.',
+                      );
+                      return;
+                    }
+                    const draft = createPaymentDraft({
                       tripType: 'round-trip',
-                      totalFare: totalFare.toString(),
-                      outboundSeats: outboundSeats.join(','),
-                      returnSeats: returnSeats.join(','),
-                      outboundRoute,
-                      returnRoute,
-                      customerName: customerName.trim(),
-                      customerPhone: customerPhone.trim(),
-                      customerEmail: customerEmail.trim(),
+                      passenger: {
+                        fullName: customerName.trim(),
+                        phoneNumber: customerPhone.trim(),
+                        email: customerEmail.trim(),
+                      },
+                      legs: [
+                        {
+                          tripId: outboundPost.id,
+                          route: outboundRoute,
+                          departureTime: outboundDepartureTimeText,
+                          seats: outboundSeats,
+                          pickup: outboundPost.province,
+                          dropoff: outboundPost.district,
+                          unitFare: outboundUnitFare,
+                          subtotal: outboundFare,
+                        },
+                        {
+                          tripId: returnPost.id,
+                          route: returnRoute,
+                          departureTime: returnDepartureTimeText,
+                          seats: returnSeats,
+                          pickup: returnLocations.pickup,
+                          dropoff: returnLocations.dropoff,
+                          unitFare: returnUnitFare,
+                          subtotal: returnFare,
+                        },
+                      ],
+                      totalFare,
                     });
-                    router.push(`/payment?${paymentParams.toString()}`);
+                    router.push(
+                      `/payment?draftId=${encodeURIComponent(draft.id)}`,
+                    );
                   }}
                   className="min-h-11 px-6 rounded-lg bg-accent text-white font-bold text-sm hover:bg-accent-hover shadow-sm disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
                 >
@@ -562,7 +656,8 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                 </h3>
                 <button
                   type="button"
-                  className="min-h-11 px-2 text-xs font-bold text-accent hover:underline"
+                  onClick={() => setShowTripDetailModal(true)}
+                  className="min-h-11 px-2 text-xs font-bold text-accent hover:underline cursor-pointer"
                 >
                   Chi tiết
                 </button>
@@ -577,7 +672,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                 <div className="flex justify-between gap-3">
                   <span className="text-slate-500">Thời gian xuất bến</span>
                   <span className="text-emerald-600 font-black text-right">
-                    {outboundPost.direction || '20:00'} {departureDateLabel}
+                    {outboundDepartureTimeText}
                   </span>
                 </div>
                 <div className="flex justify-between">
@@ -610,7 +705,8 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                 </h3>
                 <button
                   type="button"
-                  className="min-h-11 px-2 text-xs font-bold text-accent hover:underline"
+                  onClick={() => setShowTripDetailModal(true)}
+                  className="min-h-11 px-2 text-xs font-bold text-accent hover:underline cursor-pointer"
                 >
                   Chi tiết
                 </button>
@@ -625,7 +721,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                 <div className="flex justify-between gap-3">
                   <span className="text-slate-500">Thời gian xuất bến</span>
                   <span className="text-emerald-600 font-black text-right">
-                    {returnPost.direction || '00:45'} {returnDateLabel}
+                    {returnDepartureTimeText}
                   </span>
                 </div>
                 <div className="flex justify-between">
@@ -681,6 +777,20 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
           </aside>
         </div>
       </main>
+
+      <FeaturePlaceholderModal
+        isOpen={showVehicleInfoModal}
+        onClose={() => setShowVehicleInfoModal(false)}
+        title="Tính năng sắp có"
+        message="Thông tin xe sẽ được bổ sung ở phiên bản sau."
+      />
+
+      <FeaturePlaceholderModal
+        isOpen={showTripDetailModal}
+        onClose={() => setShowTripDetailModal(false)}
+        title="Tính năng sắp có"
+        message="Chi tiết chuyến đi sẽ được bổ sung ở phiên bản sau."
+      />
     </div>
   );
 };

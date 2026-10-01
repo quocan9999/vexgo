@@ -1,9 +1,25 @@
 /* eslint-disable */
+import { validatePassengerInfo, type PassengerInfo } from './passenger-validation.ts';
+
 export interface RoundTripBookingInput {
   currentSearch: string;
   outboundId: string;
   returnId: string;
 }
+
+export function canPayForRoundTripBooking(
+  outboundSeats: readonly string[],
+  returnSeats: readonly string[],
+  acceptedTerms: boolean,
+  passengerInfo?: PassengerInfo,
+) {
+  if (outboundSeats.length === 0 || returnSeats.length === 0 || !acceptedTerms) {
+    return false;
+  }
+  if (!passengerInfo) return true;
+  return validatePassengerInfo(passengerInfo).isValid;
+}
+
 
 export function calculateRoundTripFare({
   outboundUnitFare,

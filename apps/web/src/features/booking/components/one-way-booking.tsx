@@ -29,6 +29,9 @@ import {
   formatTripDateTime,
   buildOneWayPaymentQuery,
 } from '../utils/one-way-booking';
+import { validatePassengerInfo } from '../utils/passenger-validation';
+import { createPaymentDraft } from '../services/payment-draft';
+import { FeaturePlaceholderModal } from './feature-placeholder-modal';
 import { useAuthSession } from '@/features/auth/auth-session';
 import type { ApiTripSeat } from '@/features/trips/services/trips.api';
 
@@ -56,6 +59,16 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
     userPhoneOverride !== null ? userPhoneOverride : user?.phoneNumber || '';
   const pickup = pickupOverride !== null ? pickupOverride : post.province;
   const dropoff = dropoffOverride !== null ? dropoffOverride : post.district;
+
+  const [validationAttempted, setValidationAttempted] = useState(false);
+  const [showVehicleInfoModal, setShowVehicleInfoModal] = useState(false);
+
+  const passengerValidation = validatePassengerInfo({
+    fullName: customerName,
+    phoneNumber: customerPhone,
+    email: customerEmail,
+  });
+  const passengerErrors = validationAttempted ? passengerValidation.errors : {};
 
   const departureDateTimeText = formatTripDateTime(
     post.createdAt,
@@ -203,7 +216,8 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
                     </h2>
                     <button
                       type="button"
-                      className="text-xs font-bold text-accent hover:underline"
+                      onClick={() => setShowVehicleInfoModal(true)}
+                      className="text-xs font-bold text-accent hover:underline cursor-pointer"
                     >
                       Thông tin xe
                     </button>
@@ -255,12 +269,21 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
                     <div className="mt-1.5 relative">
                       <User className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                       <input
-                        className="h-11 w-full rounded-lg border border-slate-300 pl-9 pr-3 text-sm font-semibold outline-none focus:border-accent"
+                        className={`h-11 w-full rounded-lg border pl-9 pr-3 text-sm font-semibold outline-none focus:border-accent ${
+                          passengerErrors.fullName
+                            ? 'border-red-500'
+                            : 'border-slate-300'
+                        }`}
                         value={customerName}
                         onChange={(e) => setUserNameOverride(e.target.value)}
                         placeholder="Nhập họ và tên"
                       />
                     </div>
+                    {passengerErrors.fullName && (
+                      <p className="mt-1 text-xs text-red-500 font-medium">
+                        {passengerErrors.fullName}
+                      </p>
+                    )}
                   </label>
                   <label className="block">
                     <span className="text-xs font-bold text-slate-700">
@@ -269,12 +292,21 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
                     <div className="mt-1.5 relative">
                       <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                       <input
-                        className="h-11 w-full rounded-lg border border-slate-300 pl-9 pr-3 text-sm font-semibold outline-none focus:border-accent"
+                        className={`h-11 w-full rounded-lg border pl-9 pr-3 text-sm font-semibold outline-none focus:border-accent ${
+                          passengerErrors.phoneNumber
+                            ? 'border-red-500'
+                            : 'border-slate-300'
+                        }`}
                         value={customerPhone}
                         onChange={(e) => setUserPhoneOverride(e.target.value)}
                         placeholder="Nhập số điện thoại"
                       />
                     </div>
+                    {passengerErrors.phoneNumber && (
+                      <p className="mt-1 text-xs text-red-500 font-medium">
+                        {passengerErrors.phoneNumber}
+                      </p>
+                    )}
                   </label>
                   <label className="block">
                     <span className="text-xs font-bold text-slate-700">
@@ -284,12 +316,21 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
                       <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                       <input
                         type="email"
-                        className="h-11 w-full rounded-lg border border-slate-300 pl-9 pr-3 text-sm font-semibold outline-none focus:border-accent"
+                        className={`h-11 w-full rounded-lg border pl-9 pr-3 text-sm font-semibold outline-none focus:border-accent ${
+                          passengerErrors.email
+                            ? 'border-red-500'
+                            : 'border-slate-300'
+                        }`}
                         value={customerEmail}
                         onChange={(e) => setCustomerEmail(e.target.value)}
                         placeholder="Nhập email"
                       />
                     </div>
+                    {passengerErrors.email && (
+                      <p className="mt-1 text-xs text-red-500 font-medium">
+                        {passengerErrors.email}
+                      </p>
+                    )}
                   </label>
                 </div>
               </div>
@@ -474,6 +515,10 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
                   type="button"
                   disabled={!canPay}
                   onClick={() => {
+                    setValidationAttempted(true);
+                    if (!passengerValidation.isValid) {
+                      return;
+                    }
                     if (selectedSeats.length === 0) {
                       alert('Vui lòng chọn ít nhất một ghế để tiếp tục.');
                       return;
@@ -484,29 +529,48 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
                       );
                       return;
                     }
-                    const query = buildOneWayPaymentQuery({
-                      post,
-                      selectedSeats,
-                      baseFare: baseFareNumber,
-                      totalFare,
-                      customerName: customerName.trim(),
-                      customerPhone: customerPhone.trim(),
-                      customerEmail: customerEmail.trim(),
-                      pickup: pickup || post.province,
-                      dropoff: dropoff || post.district,
-                      luggageFee,
-                      luggageWeight,
-                      luggageInfo:
-                        luggageItems.length > 0
-                          ? JSON.stringify({
-                              count: luggageItems.length,
-                              weight: luggageWeight,
+                    const draft = createPaymentDraft({
+                      tripType: 'one-way',
+                      passenger: {
+                        fullName: customerName.trim(),
+                        phoneNumber: customerPhone.trim(),
+                        email: customerEmail.trim(),
+                      },
+                      legs: [
+                        {
+                          tripId: post.id,
+                          route:
+                            post.title || `${post.province} - ${post.district}`,
+                          departureTime: departureDateTimeText,
+                          seats: selectedSeats,
+                          pickup: pickup || post.province,
+                          dropoff: dropoff || post.district,
+                          unitFare: baseFareNumber,
+                          subtotal: baseFareNumber * selectedSeats.length,
+                        },
+                      ],
+                      luggage:
+                        luggageFee > 0 || luggageWeight > 0
+                          ? {
                               fee: luggageFee,
-                              category: luggageItems[0]?.category || 'normal',
-                            })
-                          : null,
+                              weight: luggageWeight,
+                              info:
+                                luggageItems.length > 0
+                                  ? {
+                                      count: luggageItems.length,
+                                      weight: luggageWeight,
+                                      fee: luggageFee,
+                                      category:
+                                        luggageItems[0]?.category || 'normal',
+                                    }
+                                  : undefined,
+                            }
+                          : undefined,
+                      totalFare,
                     });
-                    router.push(`/payment?${query.toString()}`);
+                    router.push(
+                      `/payment?draftId=${encodeURIComponent(draft.id)}`,
+                    );
                   }}
                   className="h-11 px-8 rounded-full bg-accent hover:bg-accent-hover text-white text-sm font-black transition-colors disabled:cursor-not-allowed disabled:opacity-45"
                 >
@@ -668,6 +732,13 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
           </section>
         </div>
       )}
+
+      <FeaturePlaceholderModal
+        isOpen={showVehicleInfoModal}
+        onClose={() => setShowVehicleInfoModal(false)}
+        title="Tính năng sắp có"
+        message="Thông tin xe sẽ được bổ sung ở phiên bản sau."
+      />
     </div>
   );
 };

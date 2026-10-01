@@ -1,7 +1,5 @@
 import { type INestApplication, NotFoundException } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { APP_GUARD, Reflector } from '@nestjs/core';
-import { JwtService } from '@nestjs/jwt';
+import { ConfigModule } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import {
@@ -17,7 +15,7 @@ import { configureApi } from '../../../src/common/configure-api.js';
 import { PrismaService } from '../../../src/prisma/prisma.service.js';
 import { TripsModule } from '../../../src/trips/trips.module.js';
 import { TripsService } from '../../../src/trips/trips.service.js';
-import { AccessTokenGuard } from '../../../src/auth/guards/access-token.guard.js';
+import { AuthModule } from '../../../src/auth/auth.module.js';
 
 describe('Trips HTTP contract (mocked service)', () => {
   let app: INestApplication;
@@ -57,27 +55,31 @@ describe('Trips HTTP contract (mocked service)', () => {
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
-      imports: [TripsModule],
-      providers: [
-        {
-          provide: ConfigService,
-          useValue: {
-            get: (key: string) =>
-              key === 'JWT_ACCESS_SECRET'
-                ? 'test-access-secret-with-at-least-32-characters'
-                : undefined,
-          },
-        },
-        JwtService,
-        Reflector,
-        AccessTokenGuard,
-        { provide: APP_GUARD, useExisting: AccessTokenGuard },
+      imports: [
+        ConfigModule.forRoot({
+          isGlobal: true,
+          ignoreEnvFile: true,
+          load: [
+            () => ({
+              SMS_PROVIDER: 'console',
+              OTP_HASH_SECRET: 'test-only-otp-secret-for-vexgo-unit-tests-2026',
+              JWT_ACCESS_SECRET:
+                'test-access-secret-with-at-least-32-characters',
+            }),
+          ],
+        }),
+        AuthModule,
+        TripsModule,
       ],
     })
       .overrideProvider(TripsService)
       .useValue(service)
       .overrideProvider(PrismaService)
-      .useValue({})
+      .useValue({
+        phienDangNhap: { findUnique: vi.fn() },
+        vaiTroQuyen: { findMany: vi.fn().mockResolvedValue([]) },
+        cauHinhQuyenVaiTroNhaXe: { findMany: vi.fn().mockResolvedValue([]) },
+      })
       .compile();
 
     app = moduleRef.createNestApplication();
@@ -181,5 +183,20 @@ describe('Trips HTTP contract (mocked service)', () => {
       error: 'TRIP_NOT_FOUND',
       message: 'Không tìm thấy chuyến xe.',
     });
+  });
+
+  it('allows unauthenticated requests without Authorization header due to @OptionalAuth()', async () => {
+    await request(app.getHttpServer())
+      .get('/api/v1/trips/21')
+      .expect(200);
+  });
+
+  it('rejects with 401 when invalid Authorization header is provided to @OptionalAuth()', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/trips/21')
+      .set('Authorization', 'Bearer invalid-token')
+      .expect(401);
+
+    expect(response.body.statusCode).toBe(401);
   });
 });

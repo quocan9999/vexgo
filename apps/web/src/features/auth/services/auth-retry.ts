@@ -10,6 +10,15 @@ export type AuthRetryOptions = {
   refreshFn: (refreshToken: string) => Promise<{ data: TokenPair }>;
 };
 
+function is401Error(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'status' in error &&
+    (error as { status: number }).status === 401
+  );
+}
+
 export async function runWithAuthRetry<T>(
   action: (token: string) => Promise<T>,
   options: AuthRetryOptions,
@@ -20,30 +29,39 @@ export async function runWithAuthRetry<T>(
     throw new Error('Chưa đăng nhập');
   }
 
+  // Phase 1: Initial call
   try {
     return await action(accessToken);
   } catch (error: unknown) {
-    const isUnauthorized =
-      typeof error === 'object' &&
-      error !== null &&
-      'status' in error &&
-      (error as { status: number }).status === 401;
-
-    if (isUnauthorized && refreshToken) {
-      try {
-        const res = await options.refreshFn(refreshToken);
-        const newTokens = res.data;
-        options.onRefresh(newTokens);
-        return await action(newTokens.accessToken);
-      } catch (refreshErr) {
-        options.onAuthFailed();
-        throw refreshErr;
-      }
+    if (!is401Error(error)) {
+      throw error;
     }
 
-    if (isUnauthorized) {
+    if (!refreshToken) {
       options.onAuthFailed();
+      throw error;
     }
-    throw error;
+
+    // Phase 2: Refresh token
+    let newTokens: TokenPair;
+    try {
+      const res = await options.refreshFn(refreshToken);
+      newTokens = res.data;
+      options.onRefresh(newTokens);
+    } catch (refreshErr) {
+      options.onAuthFailed();
+      throw refreshErr;
+    }
+
+    // Phase 3: Retry with new access token
+    try {
+      return await action(newTokens.accessToken);
+    } catch (retryErr: unknown) {
+      if (is401Error(retryErr)) {
+        options.onAuthFailed();
+      }
+      throw retryErr;
+    }
   }
 }
+
