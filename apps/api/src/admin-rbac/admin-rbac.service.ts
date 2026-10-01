@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   ServiceUnavailableException,
 } from '@nestjs/common';
@@ -76,6 +77,13 @@ export class AdminRbacService {
     roleName: string,
     permissionKeys: readonly string[],
   ) {
+    if (roleName === 'SUPER_ADMIN') {
+      throw new ForbiddenException({
+        error: 'SUPER_ADMIN_PERMISSION_IMMUTABLE',
+        message: 'Không thể thay đổi quyền của vai trò SUPER_ADMIN.',
+      });
+    }
+
     const scope = this.getManagedRoleScope(roleName);
     this.validatePermissionKeys(roleName, permissionKeys);
 

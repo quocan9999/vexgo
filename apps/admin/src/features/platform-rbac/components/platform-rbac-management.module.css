@@ -1,5 +1,4 @@
 .successMessage,
-.warningMessage,
 .loading,
 .formActions,
 .confirmActions {
@@ -7,8 +6,7 @@
   align-items: center;
 }
 
-.successMessage,
-.warningMessage {
+.successMessage {
   gap: 9px;
   margin: 14px 0 0;
   padding: 11px 13px;
@@ -23,14 +21,7 @@
   color: #17633a;
 }
 
-.warningMessage {
-  border: 1px solid #f1d49d;
-  background: #fff8e8;
-  color: #815207;
-}
-
 .successMessage svg,
-.warningMessage svg,
 .loading svg {
   flex: 0 0 auto;
 }

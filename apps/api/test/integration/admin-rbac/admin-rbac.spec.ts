@@ -279,18 +279,25 @@ describe('Admin default role-permission API', () => {
     expect(txMock.vaiTroQuyen.createMany).not.toHaveBeenCalled();
   });
 
-  it('rejects cross-scope assignments before opening a transaction', async () => {
-    const platformRoleWithTenantKey = await asSuperAdmin(
-      request(app.getHttpServer()).put(
-        '/api/v1/admin-rbac/default-role-permissions/SUPER_ADMIN',
-      ),
-    )
-      .send({ permissionKeys: ['vehicle:read'] })
-      .expect(400);
-    expect(platformRoleWithTenantKey.body.error).toBe(
-      'PERMISSION_SCOPE_MISMATCH',
-    );
+  it('rejects every SUPER_ADMIN permission replacement before opening a transaction', async () => {
+    for (const permissionKeys of [['bus-company:read'], []]) {
+      const response = await asSuperAdmin(
+        request(app.getHttpServer()).put(
+          '/api/v1/admin-rbac/default-role-permissions/SUPER_ADMIN',
+        ),
+      )
+        .send({ permissionKeys })
+        .expect(403);
 
+      expect(response.body.error).toBe('SUPER_ADMIN_PERMISSION_IMMUTABLE');
+    }
+
+    expect(prismaMockImpl.$transaction).not.toHaveBeenCalled();
+    expect(txMock.vaiTroQuyen.deleteMany).not.toHaveBeenCalled();
+    expect(txMock.vaiTroQuyen.createMany).not.toHaveBeenCalled();
+  });
+
+  it('rejects cross-scope assignments before opening a transaction', async () => {
     const tenantRoleWithPlatformKey = await asSuperAdmin(
       request(app.getHttpServer()).put(
         '/api/v1/admin-rbac/default-role-permissions/NHA_XE_ADMIN',

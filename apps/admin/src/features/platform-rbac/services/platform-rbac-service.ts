@@ -168,10 +168,16 @@ export async function replaceDefaultRolePermissions(
   permissionKeys: readonly string[],
   catalog: readonly AdminRbacPermission[],
 ): Promise<AdminRbacRole> {
+  if (role.roleName === 'SUPER_ADMIN' || role.isProtected) {
+    throw new AdminRbacApiError(
+      'Không thể thay đổi quyền của vai trò SUPER_ADMIN.',
+      'SUPER_ADMIN_PERMISSION_IMMUTABLE',
+    );
+  }
+
   const permissionsByKey = new Map(catalog.map((item) => [item.key, item]));
   if (
     role.scope !== ADMIN_RBAC_ROLE_SCOPES[role.roleName] ||
-    (role.isProtected !== (role.roleName === 'SUPER_ADMIN')) ||
     new Set(permissionKeys).size !== permissionKeys.length ||
     permissionKeys.some((key) => permissionsByKey.get(key)?.scope !== role.scope)
   ) {
