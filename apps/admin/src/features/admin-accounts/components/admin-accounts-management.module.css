@@ -171,6 +171,39 @@
   grid-column: 1 / -1;
 }
 
+.roleOptions {
+  display: grid;
+  gap: 9px;
+  min-width: 0;
+  margin: 0;
+  border: 1px solid var(--border-subtle, #e3e8f0);
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.roleOptions legend {
+  padding: 0 5px;
+  color: var(--text-primary, #14233d);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.roleOption {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  color: var(--text-primary, #14233d);
+  font-size: 13px;
+}
+
+.roleOption input {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  margin: 1px 0 0;
+  accent-color: #2857d9;
+}
+
 @media (max-width: 900px) {
   .accountCard {
     grid-template-columns: minmax(0, 1fr) auto;

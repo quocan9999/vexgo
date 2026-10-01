@@ -4,21 +4,27 @@ import { Search, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { AdminDetailAction } from '@/components/admin/admin-detail-action';
 import { AdminDetailSheet } from '@/components/admin/admin-detail-sheet';
-import { AdminRefreshAction } from '@/components/admin/admin-page-actions';
+import {
+  AdminCreateAction,
+  AdminRefreshAction,
+} from '@/components/admin/admin-page-actions';
 import { AdminPageHeader } from '@/components/admin/admin-page-header';
 import { AdminPagination } from '@/components/admin/admin-pagination';
 import { AdminStatusBadge } from '@/components/admin/admin-status-badge';
 import { AdminTableSkeleton } from '@/components/admin/admin-table-skeleton';
+import { Button } from '@/components/ui/button';
 import {
   FilterToolbar,
   SearchInput,
   SelectFilter,
 } from '@/components/data-filters/data-filters';
-import { Button } from '@/components/ui/button';
+import { useAdminSession } from '@/features/admin-auth/hooks/use-admin-session';
+import { hasPlatformAdminPermission } from '@/features/admin-auth/services/admin-access';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
 import { getAdminAccountById } from '../services/admin-account-service';
 import { useAdminAccounts } from '../hooks/use-admin-accounts';
 import type { AdminAccount, AdminAccountStatus } from '../types/admin-account';
+import { AdminAccountFormDialog } from './admin-account-form-dialog';
 import styles from './admin-accounts-management.module.css';
 
 const STATUS_OPTIONS = [
@@ -65,15 +71,20 @@ type AccountDetailState =
 
 function AccountDetailSheet({
   accountId,
+  canUpdate,
   onClose,
+  onAccountUpdated,
 }: {
   accountId: number;
+  canUpdate: boolean;
   onClose: () => void;
+  onAccountUpdated: (account: AdminAccount) => void;
 }) {
   const [detail, setDetail] = useState<AccountDetailState>({
     status: 'loading',
   });
   const [retryCount, setRetryCount] = useState(0);
+  const [editOpen, setEditOpen] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -103,16 +114,26 @@ function AccountDetailSheet({
   }
 
   return (
-    <AdminDetailSheet
-      ariaLabelledBy="admin-account-detail-title"
-      onClose={onClose}
-    >
-      <>
+    <>
+      <AdminDetailSheet
+        ariaLabelledBy="admin-account-detail-title"
+        onClose={onClose}
+      >
         <div className="admin-dialog-header">
           <div className="admin-dialog-header__copy">
             <p className="eyebrow">HỒ SƠ TÀI KHOẢN</p>
             <h2 id="admin-account-detail-title">Thông tin tài khoản</h2>
           </div>
+          {canUpdate && detail.status === 'success' && (
+            <Button
+              aria-label="Chỉnh sửa thông tin tài khoản"
+              onClick={() => setEditOpen(true)}
+              type="button"
+              variant="secondary"
+            >
+              Chỉnh sửa
+            </Button>
+          )}
           <form method="dialog">
             <button
               aria-label="Đóng thông tin tài khoản"
@@ -246,8 +267,19 @@ function AccountDetailSheet({
             </section>
           </>
         )}
-      </>
-    </AdminDetailSheet>
+      </AdminDetailSheet>
+      {editOpen && detail.status === 'success' && (
+        <AdminAccountFormDialog
+          account={detail.account}
+          onClose={() => setEditOpen(false)}
+          onSaved={(updatedAccount) => {
+            setDetail({ status: 'success', account: updatedAccount });
+            setEditOpen(false);
+            onAccountUpdated(updatedAccount);
+          }}
+        />
+      )}
+    </>
   );
 }
 
@@ -264,6 +296,12 @@ export function AdminAccountsManagement() {
     updateSearch,
     updateStatus,
   } = useAdminAccounts();
+  const authState = useAdminSession();
+  const session =
+    authState.status === 'authenticated' ? authState.session : null;
+  const canCreate = hasPlatformAdminPermission(session, 'admin-account:create');
+  const canUpdate = hasPlatformAdminPermission(session, 'admin-account:update');
+  const [createOpen, setCreateOpen] = useState(false);
   const [selectedAccountId, setSelectedAccountId] = useState<number | null>(
     null,
   );
@@ -272,7 +310,17 @@ export function AdminAccountsManagement() {
     <SuperAdminLayout activeSection="admin-accounts">
       <div className={`admin-page-content ${styles.page}`}>
         <AdminPageHeader
-          actions={<AdminRefreshAction loading={loading} onClick={refresh} />}
+          actions={
+            <>
+              {canCreate && (
+                <AdminCreateAction
+                  label="Thêm tài khoản Admin"
+                  onClick={() => setCreateOpen(true)}
+                />
+              )}
+              <AdminRefreshAction loading={loading} onClick={refresh} />
+            </>
+          }
           eyebrow="QUẢN TRỊ NỀN TẢNG"
           title="Quản lý tài khoản Admin"
           titleId="page-title"
@@ -409,8 +457,16 @@ export function AdminAccountsManagement() {
       {selectedAccountId !== null && (
         <AccountDetailSheet
           accountId={selectedAccountId}
+          canUpdate={canUpdate}
           key={selectedAccountId}
           onClose={() => setSelectedAccountId(null)}
+          onAccountUpdated={() => refresh()}
+        />
+      )}
+      {createOpen && (
+        <AdminAccountFormDialog
+          onClose={() => setCreateOpen(false)}
+          onSaved={() => refresh()}
         />
       )}
     </SuperAdminLayout>
