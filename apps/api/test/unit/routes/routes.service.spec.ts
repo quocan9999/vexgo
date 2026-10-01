@@ -39,6 +39,32 @@ function tenantAdmin(nhaXeId: number | null): AuthPrincipal {
   };
 }
 
+function tenantEmployee(
+  nhaXeId: number | null,
+  roles = ['NHAN_VIEN_CSKH'],
+  nhanVienId: number | null = 88,
+): AuthPrincipal {
+  return {
+    taiKhoanId: 43,
+    sessionId: 'employee-test-session',
+    roles,
+    permissions: [],
+    nhanVienId,
+    nhaXeId,
+  };
+}
+
+function publicPrincipal(role: 'KHACH_HANG' | 'SUPER_ADMIN'): AuthPrincipal {
+  return {
+    taiKhoanId: role === 'SUPER_ADMIN' ? 1 : 50,
+    sessionId: `${role.toLowerCase()}-test-session`,
+    roles: [role],
+    permissions: [],
+    nhanVienId: null,
+    nhaXeId: null,
+  };
+}
+
 function query(overrides: Partial<RouteQueryDto> = {}) {
   return Object.assign(new RouteQueryDto(), overrides);
 }
@@ -112,9 +138,33 @@ describe('RoutesService read operations', () => {
     });
   });
 
+  it('adds the trusted tenant ID to list and count queries for an employee', async () => {
+    await service.findAll(query(), tenantEmployee(9));
+
+    expect(prisma.tuyenXe.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { nhaXeId: 9 } }),
+    );
+    expect(prisma.tuyenXe.count).toHaveBeenCalledWith({
+      where: { nhaXeId: 9 },
+    });
+  });
+
   it('rejects a tenant admin filter that attempts to select another company', async () => {
     const error = await service
       .findAll(query({ busCompanyId: 4 }), tenantAdmin(3))
+      .catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(ForbiddenException);
+    expect((error as ForbiddenException).getResponse()).toMatchObject({
+      error: 'TENANT_SCOPE_VIOLATION',
+    });
+    expect(prisma.tuyenXe.findMany).not.toHaveBeenCalled();
+    expect(prisma.tuyenXe.count).not.toHaveBeenCalled();
+  });
+
+  it('rejects an employee filter for another company before querying', async () => {
+    const error = await service
+      .findAll(query({ busCompanyId: 4 }), tenantEmployee(3))
       .catch((caught: unknown) => caught);
 
     expect(error).toBeInstanceOf(ForbiddenException);
@@ -142,6 +192,16 @@ describe('RoutesService read operations', () => {
     });
   });
 
+  it('scopes route detail to an employee tenant', async () => {
+    await service.findOne(17, tenantEmployee(9));
+
+    expect(prisma.tuyenXe.findFirst).toHaveBeenCalledWith({
+      where: { tuyenXeId: 17, nhaXeId: 9 },
+      select: expect.any(Object),
+    });
+    expect(prisma.tuyenXe.findUnique).not.toHaveBeenCalled();
+  });
+
   it('fails closed when a tenant admin principal has no tenant identity', async () => {
     const error = await service
       .findAll(query(), tenantAdmin(null))
@@ -153,6 +213,31 @@ describe('RoutesService read operations', () => {
     });
     expect(prisma.tuyenXe.findMany).not.toHaveBeenCalled();
   });
+
+  it('fails closed for a malformed tenant employee before querying', async () => {
+    const error = await service
+      .findAll(query(), tenantEmployee(3, ['NHAN_VIEN_CSKH', 'KHACH_HANG']))
+      .catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(ForbiddenException);
+    expect((error as ForbiddenException).getResponse()).toMatchObject({
+      error: 'ROLE_SCOPE_CONFLICT',
+    });
+    expect(prisma.tuyenXe.findMany).not.toHaveBeenCalled();
+    expect(prisma.tuyenXe.count).not.toHaveBeenCalled();
+  });
+
+  it.each(['KHACH_HANG', 'SUPER_ADMIN'] as const)(
+    'preserves global public route listing for %s',
+    async (role) => {
+      await service.findAll(query(), publicPrincipal(role));
+
+      expect(prisma.tuyenXe.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: {} }),
+      );
+      expect(prisma.tuyenXe.count).toHaveBeenCalledWith({ where: {} });
+    },
+  );
 
   it.each([
     ['code', 'maTuyenXe'],

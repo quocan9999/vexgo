@@ -26,7 +26,7 @@ describe('Super Admin navigation for fare prices', () => {
         phoneNumber: '+84900000002',
         email: 'futa@vexgo.test',
         roles: ['NHA_XE_ADMIN'],
-        permissions: [],
+        permissions: ['fare-price:read'],
         employee: {
           employeeId: 1,
           busCompanyId: 10,

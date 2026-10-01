@@ -4,7 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { requireNhaXeAdminTenant } from '../auth/tenant-scope.js';
+import { requireTenantPrincipal } from '../auth/tenant-scope.js';
 import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
 import { Prisma } from '../generated/prisma/client.js';
 import type { CreateFarePriceDto } from './dto/create-fare-price.dto.js';
@@ -135,7 +135,7 @@ export class FarePricesService {
   ) {}
 
   async create(input: CreateFarePriceDto, principal: AuthPrincipal) {
-    const nhaXeId = requireNhaXeAdminTenant(principal);
+    const nhaXeId = requireTenantPrincipal(principal);
     assertValidListedPrice(input.listedPrice);
     assertValidFarePeriod(input.validFrom, input.validTo);
     const validTo = input.validTo ?? null;
@@ -185,7 +185,7 @@ export class FarePricesService {
     input: UpdateFarePriceDto,
     principal: AuthPrincipal,
   ) {
-    const nhaXeId = requireNhaXeAdminTenant(principal);
+    const nhaXeId = requireTenantPrincipal(principal);
     const hasChanges =
       input.listedPrice !== undefined ||
       input.validFrom !== undefined ||
@@ -301,7 +301,7 @@ export class FarePricesService {
     status: FarePriceStatus,
     principal: AuthPrincipal,
   ) {
-    const nhaXeId = requireNhaXeAdminTenant(principal);
+    const nhaXeId = requireTenantPrincipal(principal);
     const record = await runFarePriceWriteTransaction(
       this.prisma,
       async (transaction) => {
@@ -373,7 +373,7 @@ export class FarePricesService {
   }
 
   async findAll(query: QueryFarePricesDto, principal: AuthPrincipal) {
-    const nhaXeId = requireNhaXeAdminTenant(principal);
+    const nhaXeId = requireTenantPrincipal(principal);
     const businessTimeZone = resolveBusinessTimeZone(
       this.config.get<string>('BUSINESS_TIME_ZONE'),
     );
@@ -447,7 +447,7 @@ export class FarePricesService {
   }
 
   async findOne(id: number, principal: AuthPrincipal) {
-    const nhaXeId = requireNhaXeAdminTenant(principal);
+    const nhaXeId = requireTenantPrincipal(principal);
     const businessTimeZone = resolveBusinessTimeZone(
       this.config.get<string>('BUSINESS_TIME_ZONE'),
     );
@@ -471,7 +471,7 @@ export class FarePricesService {
     query: ResolveApplicableFareQueryDto,
     principal: AuthPrincipal,
   ) {
-    const nhaXeId = requireNhaXeAdminTenant(principal);
+    const nhaXeId = requireTenantPrincipal(principal);
     await validateFarePriceRelations(
       this.prisma,
       query.routeId,

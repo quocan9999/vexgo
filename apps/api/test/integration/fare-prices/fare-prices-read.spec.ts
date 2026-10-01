@@ -2,6 +2,7 @@ import { Test } from '@nestjs/testing';
 import type { INestApplication } from '@nestjs/common';
 import { AppModule } from '../../../src/app.module.js';
 import { AccessTokenGuard } from '../../../src/auth/guards/access-token.guard.js';
+import { ADMIN_ROLE_DEFAULT_PERMISSION_KEYS } from '../../../src/auth/permissions/permission-catalog.js';
 import type { AuthPrincipal } from '../../../src/auth/tokens/auth-principal.js';
 import { configureApi } from '../../../src/common/configure-api.js';
 import { PrismaService } from '../../../src/prisma/prisma.service.js';
@@ -42,7 +43,7 @@ let testPrincipal: AuthPrincipal = {
   taiKhoanId: 7,
   sessionId: 'fare-price-read-session',
   roles: ['NHA_XE_ADMIN'],
-  permissions: [],
+  permissions: [...ADMIN_ROLE_DEFAULT_PERMISSION_KEYS.NHA_XE_ADMIN],
   nhanVienId: 9,
   nhaXeId: 41,
 };
@@ -80,7 +81,7 @@ describe('Fare Price read HTTP contract', () => {
       taiKhoanId: 7,
       sessionId: 'fare-price-read-session',
       roles: ['NHA_XE_ADMIN'],
-      permissions: [],
+      permissions: [...ADMIN_ROLE_DEFAULT_PERMISSION_KEYS.NHA_XE_ADMIN],
       nhanVienId: 9,
       nhaXeId: 41,
     };

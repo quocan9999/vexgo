@@ -15,10 +15,16 @@ import { AppModule } from '../../src/app.module.js';
 import { AccessTokenGuard } from '../../src/auth/guards/access-token.guard.js';
 import { BusCompaniesService } from '../../src/bus-companies/bus-companies.service.js';
 import { RoutesService } from '../../src/routes/routes.service.js';
+import { VehicleTypesService } from '../../src/vehicle-types/vehicle-types.service.js';
 import { configureApi } from '../../src/common/configure-api.js';
 import { PaginationQueryDto } from '../../src/common/dto/pagination-query.dto.js';
-import { Public } from '../../src/auth/decorators/public.decorator.js';
+import {
+  OptionalAuth,
+  Public,
+} from '../../src/auth/decorators/public.decorator.js';
 import { RequireRoles } from '../../src/auth/decorators/require-roles.decorator.js';
+import { RequirePermissions } from '../../src/auth/decorators/require-permissions.decorator.js';
+import { RequireTenantPermissionsIfAuthenticated } from '../../src/auth/decorators/require-tenant-permissions-if-authenticated.decorator.js';
 import { AllowRoleScopeConflict } from '../../src/auth/decorators/allow-role-scope-conflict.decorator.js';
 import request from 'supertest';
 import {
@@ -30,6 +36,10 @@ import {
   it,
   vi,
 } from 'vitest';
+
+const optionalTenantPermissionHandler = vi.fn(() => ({
+  status: 'optional-tenant-permission',
+}));
 
 @Controller('__test')
 class ApiFoundationTestController {
@@ -97,6 +107,39 @@ class ApiFoundationTestController {
   getSuperAdmin() {
     return { status: 'super-admin' };
   }
+
+  @Get('permission-required')
+  @RequirePermissions('route:read')
+  getPermissionRequired() {
+    return { status: 'permission-required' };
+  }
+
+  @Get('multiple-permissions-required')
+  @RequirePermissions('route:read', 'fare-price:read')
+  getMultiplePermissionsRequired() {
+    return { status: 'multiple-permissions-required' };
+  }
+
+  @Get('role-and-permission-required')
+  @RequireRoles('NHA_XE_ADMIN')
+  @RequirePermissions('vehicle-type:read')
+  getRoleAndPermissionRequired() {
+    return { status: 'role-and-permission-required' };
+  }
+
+  @Get('public-permission-required')
+  @Public()
+  @RequirePermissions('route:read')
+  getPublicPermissionRequired() {
+    return { status: 'public-permission-required' };
+  }
+
+  @Get('tenant-permission-if-authenticated')
+  @OptionalAuth()
+  @RequireTenantPermissionsIfAuthenticated('route:read')
+  getTenantPermissionIfAuthenticated() {
+    return optionalTenantPermissionHandler();
+  }
 }
 
 describe('API foundation', () => {
@@ -104,6 +147,21 @@ describe('API foundation', () => {
   let originalCorsOrigins: string | undefined;
   const jwtVerify = vi.fn();
   const sessionFindUnique = vi.fn();
+  const rolePermissionFindMany = vi.fn();
+  const tenantRolePermissionFindMany = vi.fn();
+  let currentRolePermissions: Array<{
+    vaiTroId: number;
+    quyen: { tenQuyen: string };
+  }> = [];
+  const roleIds: Record<string, number> = {
+    SUPER_ADMIN: 1,
+    NHA_XE_ADMIN: 2,
+    NHAN_VIEN_BAN_VE: 3,
+    NHAN_VIEN_CSKH: 4,
+    NHAN_VIEN_PHU_XE: 5,
+    NHAN_VIEN_KINH_DOANH: 6,
+    KHACH_HANG: 7,
+  };
   const routesService = {
     create: vi.fn(),
     update: vi.fn(),
@@ -118,6 +176,12 @@ describe('API foundation', () => {
     findAll: vi.fn(),
     findOne: vi.fn(),
   };
+  const vehicleTypesService = {
+    create: vi.fn(),
+    update: vi.fn(),
+    findAll: vi.fn(),
+    findOne: vi.fn(),
+  };
 
   beforeAll(async () => {
     originalCorsOrigins = process.env.CORS_ALLOWED_ORIGINS;
@@ -129,11 +193,19 @@ describe('API foundation', () => {
       controllers: [ApiFoundationTestController],
     })
       .overrideProvider(PrismaService)
-      .useValue({ phienDangNhap: { findUnique: sessionFindUnique } })
+      .useValue({
+        phienDangNhap: { findUnique: sessionFindUnique },
+        vaiTroQuyen: { findMany: rolePermissionFindMany },
+        cauHinhQuyenVaiTroNhaXe: {
+          findMany: tenantRolePermissionFindMany,
+        },
+      })
       .overrideProvider(JwtService)
       .useValue({ verifyAsync: jwtVerify })
       .overrideProvider(RoutesService)
       .useValue(routesService)
+      .overrideProvider(VehicleTypesService)
+      .useValue(vehicleTypesService)
       .overrideProvider(BusCompaniesService)
       .useValue(busCompaniesService)
       .compile();
@@ -163,6 +235,11 @@ describe('API foundation', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    currentRolePermissions = [];
+    rolePermissionFindMany
+      .mockReset()
+      .mockImplementation(async () => currentRolePermissions);
+    tenantRolePermissionFindMany.mockReset().mockResolvedValue([]);
     routesService.findAll.mockResolvedValue({
       data: [],
       meta: { page: 1, pageSize: 10, totalItems: 0, totalPages: 0 },
@@ -170,6 +247,19 @@ describe('API foundation', () => {
     busCompaniesService.findAll.mockResolvedValue({
       data: [],
       meta: { page: 1, pageSize: 10, totalItems: 0, totalPages: 0 },
+    });
+    vehicleTypesService.findAll.mockResolvedValue({
+      data: [],
+      meta: { page: 1, pageSize: 10, totalItems: 0, totalPages: 0 },
+    });
+    vehicleTypesService.findOne.mockResolvedValue({
+      data: { vehicleTypeId: 17 },
+    });
+    vehicleTypesService.create.mockResolvedValue({
+      data: { vehicleTypeId: 17 },
+    });
+    vehicleTypesService.update.mockResolvedValue({
+      data: { vehicleTypeId: 17 },
     });
     jwtVerify.mockResolvedValue({
       sub: 42,
@@ -182,7 +272,15 @@ describe('API foundation', () => {
   function sessionWithRoles(
     roles: string[],
     withEmployee = roles.includes('NHA_XE_ADMIN'),
+    permissionsByRole: Record<string, string[]> = {},
   ) {
+    currentRolePermissions = Object.entries(permissionsByRole).flatMap(
+      ([roleName, permissions]) =>
+        permissions.map((tenQuyen) => ({
+          vaiTroId: roleIds[roleName],
+          quyen: { tenQuyen },
+        })),
+    );
     return {
       sessionId: 'integration-session',
       taiKhoanId: 42,
@@ -194,7 +292,10 @@ describe('API foundation', () => {
         nhanVien: withEmployee ? { nhanVienId: 77, nhaXeId: 901 } : null,
         taiKhoanVaiTros: [
           ...roles.map((tenVaiTro) => ({
-            vaiTro: { tenVaiTro, vaiTroQuyens: [] },
+            vaiTro: {
+              vaiTroId: roleIds[tenVaiTro],
+              tenVaiTro,
+            },
           })),
         ],
       },
@@ -227,6 +328,11 @@ describe('API foundation', () => {
   });
 
   it('authenticates an optional bearer token on the production public routes endpoint and keeps its tenant principal', async () => {
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['NHA_XE_ADMIN'], true, {
+        NHA_XE_ADMIN: ['route:read'],
+      }),
+    );
     let observedPrincipal: unknown;
     const guard = app.get(AccessTokenGuard);
     const originalCanActivate = guard.canActivate.bind(guard);
@@ -277,6 +383,215 @@ describe('API foundation', () => {
     }
   });
 
+  it('authenticates an employee on the production optional-auth routes endpoint', async () => {
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['NHAN_VIEN_CSKH'], true, {
+        NHAN_VIEN_CSKH: ['route:read'],
+      }),
+    );
+
+    await request(app.getHttpServer())
+      .get('/api/v1/routes')
+      .set('Authorization', 'Bearer signed-token')
+      .expect(200);
+
+    expect(routesService.findAll).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({
+        roles: ['NHAN_VIEN_CSKH'],
+        nhanVienId: 77,
+        nhaXeId: 901,
+      }),
+    );
+  });
+
+  it('allows an employee to read vehicle types with vehicle-type:read', async () => {
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['NHAN_VIEN_CSKH'], true, {
+        NHAN_VIEN_CSKH: ['vehicle-type:read'],
+      }),
+    );
+
+    await request(app.getHttpServer())
+      .get('/api/v1/vehicle-types')
+      .set('Authorization', 'Bearer signed-token')
+      .expect(200);
+
+    expect(vehicleTypesService.findAll).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({ roles: ['NHAN_VIEN_CSKH'], nhaXeId: 901 }),
+    );
+  });
+
+  it('keeps NHA_XE_ADMIN access when the database has its default vehicle-type permissions', async () => {
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['NHA_XE_ADMIN'], true, {
+        NHA_XE_ADMIN: [
+          'vehicle-type:read',
+          'vehicle-type:create',
+          'vehicle-type:update',
+        ],
+      }),
+    );
+
+    await request(app.getHttpServer())
+      .get('/api/v1/vehicle-types')
+      .set('Authorization', 'Bearer signed-token')
+      .expect(200);
+
+    expect(vehicleTypesService.findAll).toHaveBeenCalled();
+  });
+
+  it('requires vehicle-type:read for vehicle-type detail before calling the service', async () => {
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['NHAN_VIEN_CSKH'], true),
+    );
+
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/vehicle-types/17')
+      .set('Authorization', 'Bearer signed-token')
+      .expect(403);
+
+    expect(response.body.error).toBe('PERMISSION_FORBIDDEN');
+    expect(vehicleTypesService.findOne).not.toHaveBeenCalled();
+  });
+
+  it('allows an employee to create a vehicle type with vehicle-type:create', async () => {
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['NHAN_VIEN_CSKH'], true, {
+        NHAN_VIEN_CSKH: ['vehicle-type:create'],
+      }),
+    );
+
+    await request(app.getHttpServer())
+      .post('/api/v1/vehicle-types')
+      .set('Authorization', 'Bearer signed-token')
+      .send({ name: 'Ghế giường nằm', busCompanyId: 901 })
+      .expect(201);
+
+    expect(vehicleTypesService.create).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'Ghế giường nằm', busCompanyId: 901 }),
+      expect.objectContaining({ roles: ['NHAN_VIEN_CSKH'], nhaXeId: 901 }),
+    );
+  });
+
+  it('denies vehicle-type creation when an employee only has the read permission', async () => {
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['NHAN_VIEN_CSKH'], true, {
+        NHAN_VIEN_CSKH: ['vehicle-type:read'],
+      }),
+    );
+
+    const response = await request(app.getHttpServer())
+      .post('/api/v1/vehicle-types')
+      .set('Authorization', 'Bearer signed-token')
+      .send({ name: 'Ghế giường nằm', busCompanyId: 901 })
+      .expect(403);
+
+    expect(response.body.error).toBe('PERMISSION_FORBIDDEN');
+    expect(vehicleTypesService.create).not.toHaveBeenCalled();
+  });
+
+  it('allows an employee to update a vehicle type with vehicle-type:update', async () => {
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['NHAN_VIEN_CSKH'], true, {
+        NHAN_VIEN_CSKH: ['vehicle-type:update'],
+      }),
+    );
+
+    await request(app.getHttpServer())
+      .patch('/api/v1/vehicle-types/17')
+      .set('Authorization', 'Bearer signed-token')
+      .send({ name: 'Ghế limousine' })
+      .expect(200);
+
+    expect(vehicleTypesService.update).toHaveBeenCalledWith(
+      17,
+      expect.objectContaining({ name: 'Ghế limousine' }),
+      expect.objectContaining({ roles: ['NHAN_VIEN_CSKH'], nhaXeId: 901 }),
+    );
+  });
+
+  it('denies vehicle-type updates when an employee only has vehicle-type:create', async () => {
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['NHAN_VIEN_CSKH'], true, {
+        NHAN_VIEN_CSKH: ['vehicle-type:create'],
+      }),
+    );
+
+    const response = await request(app.getHttpServer())
+      .patch('/api/v1/vehicle-types/17')
+      .set('Authorization', 'Bearer signed-token')
+      .send({ name: 'Ghế limousine' })
+      .expect(403);
+
+    expect(response.body.error).toBe('PERMISSION_FORBIDDEN');
+    expect(vehicleTypesService.update).not.toHaveBeenCalled();
+  });
+
+  it('rejects Super Admin vehicle-type access even if the account has a tenant permission', async () => {
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['SUPER_ADMIN'], false, {
+        SUPER_ADMIN: ['vehicle-type:read'],
+      }),
+    );
+
+    await request(app.getHttpServer())
+      .get('/api/v1/vehicle-types')
+      .set('Authorization', 'Bearer signed-token')
+      .expect(403);
+
+    expect(vehicleTypesService.findAll).not.toHaveBeenCalled();
+  });
+
+  it('requires route:read for authenticated tenant principals on route list and detail reads', async () => {
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['NHAN_VIEN_CSKH'], true),
+    );
+
+    const listResponse = await request(app.getHttpServer())
+      .get('/api/v1/routes')
+      .set('Authorization', 'Bearer signed-token')
+      .expect(403);
+
+    expect(listResponse.body.error).toBe('PERMISSION_FORBIDDEN');
+    expect(routesService.findAll).not.toHaveBeenCalled();
+
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['NHAN_VIEN_CSKH'], true),
+    );
+
+    const detailResponse = await request(app.getHttpServer())
+      .get('/api/v1/routes/17')
+      .set('Authorization', 'Bearer signed-token')
+      .expect(403);
+
+    expect(detailResponse.body.error).toBe('PERMISSION_FORBIDDEN');
+    expect(routesService.findOne).not.toHaveBeenCalled();
+  });
+
+  it('preserves public route discovery for anonymous, customer, and Super Admin requests', async () => {
+    await request(app.getHttpServer()).get('/api/v1/routes').expect(200);
+
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['KHACH_HANG'], false),
+    );
+    await request(app.getHttpServer())
+      .get('/api/v1/routes')
+      .set('Authorization', 'Bearer signed-token')
+      .expect(200);
+
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['SUPER_ADMIN'], false),
+    );
+    await request(app.getHttpServer())
+      .get('/api/v1/routes')
+      .set('Authorization', 'Bearer signed-token')
+      .expect(200);
+
+    expect(routesService.findAll).toHaveBeenCalledTimes(3);
+  });
+
   it('passes the database-derived principal into the production public bus-company controller', async () => {
     await request(app.getHttpServer())
       .get('/api/v1/bus-companies')
@@ -306,6 +621,226 @@ describe('API foundation', () => {
       .get('/api/v1/__test/super-admin')
       .set('Authorization', 'Bearer signed-token')
       .expect(200);
+  });
+
+  it('rejects an authenticated principal without the required permission', async () => {
+    sessionFindUnique.mockResolvedValueOnce(sessionWithRoles(['NHA_XE_ADMIN']));
+
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/__test/permission-required')
+      .set('Authorization', 'Bearer signed-token')
+      .expect(403);
+
+    expect(response.body.error).toBe('PERMISSION_FORBIDDEN');
+  });
+
+  it('allows an authenticated principal with the required database permission', async () => {
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['NHA_XE_ADMIN'], true, {
+        NHA_XE_ADMIN: ['route:read'],
+      }),
+    );
+
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/__test/permission-required')
+      .set('Authorization', 'Bearer signed-token')
+      .expect(200);
+
+    expect(response.body.data).toEqual({ status: 'permission-required' });
+  });
+
+  it('requires every permission declared by a permission decorator', async () => {
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['NHA_XE_ADMIN'], true, {
+        NHA_XE_ADMIN: ['route:read'],
+      }),
+    );
+    const incomplete = await request(app.getHttpServer())
+      .get('/api/v1/__test/multiple-permissions-required')
+      .set('Authorization', 'Bearer signed-token')
+      .expect(403);
+
+    expect(incomplete.body.error).toBe('PERMISSION_FORBIDDEN');
+
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['NHA_XE_ADMIN'], true, {
+        NHA_XE_ADMIN: ['route:read', 'fare-price:read'],
+      }),
+    );
+    const complete = await request(app.getHttpServer())
+      .get('/api/v1/__test/multiple-permissions-required')
+      .set('Authorization', 'Bearer signed-token')
+      .expect(200);
+
+    expect(complete.body.data).toEqual({
+      status: 'multiple-permissions-required',
+    });
+  });
+
+  it('requires both the declared role and permission', async () => {
+    sessionFindUnique.mockResolvedValueOnce(sessionWithRoles(['NHA_XE_ADMIN']));
+    const missingPermission = await request(app.getHttpServer())
+      .get('/api/v1/__test/role-and-permission-required')
+      .set('Authorization', 'Bearer signed-token')
+      .expect(403);
+
+    expect(missingPermission.body.error).toBe('PERMISSION_FORBIDDEN');
+
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['NHAN_VIEN_CSKH'], true, {
+        NHAN_VIEN_CSKH: ['vehicle-type:read'],
+      }),
+    );
+    const missingRole = await request(app.getHttpServer())
+      .get('/api/v1/__test/role-and-permission-required')
+      .set('Authorization', 'Bearer signed-token')
+      .expect(403);
+
+    expect(missingRole.body.error).toBe('ROLE_FORBIDDEN');
+
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['NHA_XE_ADMIN'], true, {
+        NHA_XE_ADMIN: ['vehicle-type:read'],
+      }),
+    );
+    await request(app.getHttpServer())
+      .get('/api/v1/__test/role-and-permission-required')
+      .set('Authorization', 'Bearer signed-token')
+      .expect(200);
+  });
+
+  it('validates principal scope before required permissions', async () => {
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['NHA_XE_ADMIN', 'KHACH_HANG'], true, {
+        NHA_XE_ADMIN: ['route:read'],
+      }),
+    );
+
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/__test/permission-required')
+      .set('Authorization', 'Bearer signed-token')
+      .expect(403);
+
+    expect(response.body.error).toBe('ROLE_SCOPE_CONFLICT');
+  });
+
+  it('does not trust a permission claim supplied in the access token', async () => {
+    jwtVerify.mockResolvedValueOnce({
+      sub: 42,
+      sid: 'integration-session',
+      roles: ['NHA_XE_ADMIN'],
+      permissions: ['route:read'],
+    });
+    sessionFindUnique.mockResolvedValueOnce(sessionWithRoles(['NHA_XE_ADMIN']));
+
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/__test/permission-required')
+      .set('Authorization', 'Bearer signed-token')
+      .expect(403);
+
+    expect(response.body.error).toBe('PERMISSION_FORBIDDEN');
+  });
+
+  it('uses database permission assignments even when JWT has a different permission claim', async () => {
+    jwtVerify.mockResolvedValueOnce({
+      sub: 42,
+      sid: 'integration-session',
+      roles: ['STALE_ROLE'],
+      permissions: ['fare-price:read'],
+    });
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['NHA_XE_ADMIN'], true, {
+        NHA_XE_ADMIN: ['route:read'],
+      }),
+    );
+
+    await request(app.getHttpServer())
+      .get('/api/v1/__test/permission-required')
+      .set('Authorization', 'Bearer signed-token')
+      .expect(200);
+  });
+
+  it('requires authentication even when a test endpoint is marked public and permission-protected', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/__test/public-permission-required')
+      .expect(401);
+
+    expect(response.body.error).toBe('ACCESS_TOKEN_INVALID');
+  });
+
+  it('requires the tenant permission on optional-auth requests from a tenant principal', async () => {
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['NHAN_VIEN_CSKH'], true),
+    );
+
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/__test/tenant-permission-if-authenticated')
+      .set('Authorization', 'Bearer signed-token')
+      .expect(403);
+
+    expect(response.body.error).toBe('PERMISSION_FORBIDDEN');
+    expect(optionalTenantPermissionHandler).not.toHaveBeenCalled();
+  });
+
+  it('allows the tenant permission on optional-auth requests when assigned in the database', async () => {
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['NHAN_VIEN_CSKH'], true, {
+        NHAN_VIEN_CSKH: ['route:read'],
+      }),
+    );
+
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/__test/tenant-permission-if-authenticated')
+      .set('Authorization', 'Bearer signed-token')
+      .expect(200);
+
+    expect(response.body.data).toEqual({
+      status: 'optional-tenant-permission',
+    });
+    expect(optionalTenantPermissionHandler).toHaveBeenCalledOnce();
+  });
+
+  it('keeps optional public access for anonymous and non-tenant principals', async () => {
+    const anonymous = await request(app.getHttpServer())
+      .get('/api/v1/__test/tenant-permission-if-authenticated')
+      .expect(200);
+
+    expect(anonymous.body.data).toEqual({
+      status: 'optional-tenant-permission',
+    });
+    expect(jwtVerify).not.toHaveBeenCalled();
+
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['KHACH_HANG'], false),
+    );
+    await request(app.getHttpServer())
+      .get('/api/v1/__test/tenant-permission-if-authenticated')
+      .set('Authorization', 'Bearer signed-token')
+      .expect(200);
+
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['SUPER_ADMIN'], false),
+    );
+    await request(app.getHttpServer())
+      .get('/api/v1/__test/tenant-permission-if-authenticated')
+      .set('Authorization', 'Bearer signed-token')
+      .expect(200);
+
+    expect(optionalTenantPermissionHandler).toHaveBeenCalledTimes(3);
+  });
+
+  it('validates principal scope before the optional tenant permission', async () => {
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['NHAN_VIEN_CSKH', 'KHACH_HANG'], true),
+    );
+
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/__test/tenant-permission-if-authenticated')
+      .set('Authorization', 'Bearer signed-token')
+      .expect(403);
+
+    expect(response.body.error).toBe('ROLE_SCOPE_CONFLICT');
+    expect(optionalTenantPermissionHandler).not.toHaveBeenCalled();
   });
 
   it('rejects platform and tenant roles assigned to the same principal', async () => {
@@ -436,7 +971,9 @@ describe('API foundation', () => {
 
   it('passes the trusted tenant principal to route creation', async () => {
     sessionFindUnique.mockResolvedValueOnce(
-      sessionWithRoles(['NHA_XE_ADMIN', 'NHAN_VIEN_BAN_VE']),
+      sessionWithRoles(['NHA_XE_ADMIN', 'NHAN_VIEN_BAN_VE'], true, {
+        NHA_XE_ADMIN: ['route:create'],
+      }),
     );
     routesService.create.mockResolvedValue({ data: { routeId: 17 } });
     const body = {
@@ -480,6 +1017,108 @@ describe('API foundation', () => {
     expect(routesService.create).not.toHaveBeenCalled();
   });
 
+  it('allows an employee with route:create permission to create a tenant route', async () => {
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['NHAN_VIEN_CSKH'], true, {
+        NHAN_VIEN_CSKH: ['route:create'],
+      }),
+    );
+    routesService.create.mockResolvedValue({ data: { routeId: 17 } });
+
+    await request(app.getHttpServer())
+      .post('/api/v1/routes')
+      .set('Authorization', 'Bearer signed-token')
+      .send({
+        code: 'FUTA-TX-0001',
+        origin: 'TP.HCM',
+        destination: 'Đà Lạt',
+        busCompanyId: 901,
+        status: 'HOAT_DONG',
+      })
+      .expect(201);
+
+    expect(routesService.create).toHaveBeenCalledWith(
+      expect.objectContaining({ busCompanyId: 901 }),
+      expect.objectContaining({ roles: ['NHAN_VIEN_CSKH'], nhaXeId: 901 }),
+    );
+  });
+
+  it('denies employee route creation without route:create permission', async () => {
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['NHAN_VIEN_CSKH'], true, {
+        NHAN_VIEN_CSKH: ['route:update'],
+      }),
+    );
+
+    await request(app.getHttpServer())
+      .post('/api/v1/routes')
+      .set('Authorization', 'Bearer signed-token')
+      .send({
+        code: 'FUTA-TX-0001',
+        origin: 'TP.HCM',
+        destination: 'Đà Lạt',
+        busCompanyId: 901,
+        status: 'HOAT_DONG',
+      })
+      .expect(403);
+
+    expect(routesService.create).not.toHaveBeenCalled();
+  });
+
+  it('requires route:update for route detail and status mutations', async () => {
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['NHAN_VIEN_CSKH'], true, {
+        NHAN_VIEN_CSKH: ['route:update'],
+      }),
+    );
+    routesService.update.mockResolvedValue({ data: { routeId: 17 } });
+
+    await request(app.getHttpServer())
+      .patch('/api/v1/routes/17')
+      .set('Authorization', 'Bearer signed-token')
+      .send({ origin: 'TP.HCM', destination: 'Đà Lạt' })
+      .expect(200);
+
+    expect(routesService.update).toHaveBeenCalledWith(
+      17,
+      expect.objectContaining({ origin: 'TP.HCM', destination: 'Đà Lạt' }),
+      expect.objectContaining({ nhaXeId: 901 }),
+    );
+
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['NHAN_VIEN_CSKH'], true, {
+        NHAN_VIEN_CSKH: ['route:create'],
+      }),
+    );
+
+    await request(app.getHttpServer())
+      .patch('/api/v1/routes/17/status')
+      .set('Authorization', 'Bearer signed-token')
+      .send({ status: 'TAM_NGUNG' })
+      .expect(403);
+
+    expect(routesService.updateStatus).not.toHaveBeenCalled();
+
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['NHAN_VIEN_CSKH'], true, {
+        NHAN_VIEN_CSKH: ['route:update'],
+      }),
+    );
+    routesService.updateStatus.mockResolvedValue({ data: { routeId: 17 } });
+
+    await request(app.getHttpServer())
+      .patch('/api/v1/routes/17/status')
+      .set('Authorization', 'Bearer signed-token')
+      .send({ status: 'TAM_NGUNG' })
+      .expect(200);
+
+    expect(routesService.updateStatus).toHaveBeenCalledWith(
+      17,
+      'TAM_NGUNG',
+      expect.objectContaining({ nhaXeId: 901 }),
+    );
+  });
+
   it('does not grant Super Admin aggregate route writes', async () => {
     sessionFindUnique.mockResolvedValueOnce(sessionWithRoles(['SUPER_ADMIN']));
 
@@ -498,7 +1137,7 @@ describe('API foundation', () => {
     expect(routesService.create).not.toHaveBeenCalled();
   });
 
-  it('restricts bus-company mutations to Super Admin', async () => {
+  it('requires Super Admin role and bus-company:update for bus-company status changes', async () => {
     await request(app.getHttpServer())
       .patch('/api/v1/bus-companies/901/status')
       .set('Authorization', 'Bearer signed-token')
@@ -506,7 +1145,11 @@ describe('API foundation', () => {
       .expect(403);
     expect(busCompaniesService.updateStatus).not.toHaveBeenCalled();
 
-    sessionFindUnique.mockResolvedValueOnce(sessionWithRoles(['SUPER_ADMIN']));
+    sessionFindUnique.mockResolvedValueOnce(
+      sessionWithRoles(['SUPER_ADMIN'], false, {
+        SUPER_ADMIN: ['bus-company:update'],
+      }),
+    );
     busCompaniesService.updateStatus.mockResolvedValue({
       data: { busCompanyId: 901 },
     });

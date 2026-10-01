@@ -17,7 +17,7 @@ import type { UpdateVehicleSeatDto } from './dto/update-vehicle-seat.dto.js';
 import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
 import {
   assertTenantScope,
-  requireNhaXeAdminTenant,
+  requireTenantPrincipal,
 } from '../auth/tenant-scope.js';
 
 const VEHICLE_LIST_SELECT = {
@@ -154,7 +154,7 @@ export class VehiclesService {
   constructor(private readonly prisma: PrismaService) {}
 
   async findAll(query: VehicleQueryDto, principal: AuthPrincipal) {
-    const nhaXeId = requireNhaXeAdminTenant(principal);
+    const nhaXeId = requireTenantPrincipal(principal);
     if (query.busCompanyId !== undefined) {
       assertTenantScope(query.busCompanyId, nhaXeId);
     }
@@ -209,7 +209,7 @@ export class VehiclesService {
   }
 
   async findOne(id: number, principal: AuthPrincipal) {
-    const nhaXeId = requireNhaXeAdminTenant(principal);
+    const nhaXeId = requireTenantPrincipal(principal);
     const vehicle = await this.prisma.xe.findFirst({
       where: { xeId: id, nhaXeId },
       select: VEHICLE_DETAIL_SELECT,
@@ -223,7 +223,7 @@ export class VehiclesService {
   }
 
   async create(input: CreateVehicleDto, principal: AuthPrincipal) {
-    const nhaXeId = requireNhaXeAdminTenant(principal);
+    const nhaXeId = requireTenantPrincipal(principal);
     assertTenantScope(input.busCompanyId, nhaXeId);
     const [busCompany, vehicleType] = await Promise.all([
       this.prisma.nhaXe.findUnique({
@@ -276,7 +276,7 @@ export class VehiclesService {
     input: UpdateVehicleDto,
     principal: AuthPrincipal,
   ) {
-    const nhaXeId = requireNhaXeAdminTenant(principal);
+    const nhaXeId = requireTenantPrincipal(principal);
     assertTenantScope(input.busCompanyId, nhaXeId);
     const existingVehicle = await this.prisma.xe.findFirst({
       where: { xeId: id, nhaXeId },
@@ -342,7 +342,7 @@ export class VehiclesService {
     input: UpdateVehicleStatusDto,
     principal: AuthPrincipal,
   ) {
-    const nhaXeId = requireNhaXeAdminTenant(principal);
+    const nhaXeId = requireTenantPrincipal(principal);
     try {
       const result = await this.prisma.xe.updateMany({
         where: { xeId: id, nhaXeId },
@@ -364,7 +364,7 @@ export class VehiclesService {
   }
 
   async findSeats(vehicleId: number, principal: AuthPrincipal) {
-    const nhaXeId = requireNhaXeAdminTenant(principal);
+    const nhaXeId = requireTenantPrincipal(principal);
     const vehicle = await this.prisma.xe.findFirst({
       where: { xeId: vehicleId, nhaXeId },
       select: { xeId: true },
@@ -388,7 +388,7 @@ export class VehiclesService {
     input: CreateVehicleSeatDto,
     principal: AuthPrincipal,
   ) {
-    const nhaXeId = requireNhaXeAdminTenant(principal);
+    const nhaXeId = requireTenantPrincipal(principal);
     const vehicle = await this.prisma.xe.findFirst({
       where: { xeId: vehicleId, nhaXeId },
       select: { xeId: true },
@@ -438,7 +438,7 @@ export class VehiclesService {
     input: UpdateVehicleSeatDto,
     principal: AuthPrincipal,
   ) {
-    const nhaXeId = requireNhaXeAdminTenant(principal);
+    const nhaXeId = requireTenantPrincipal(principal);
     const vehicle = await this.prisma.xe.findFirst({
       where: { xeId: vehicleId, nhaXeId },
       select: { xeId: true },
@@ -486,7 +486,7 @@ export class VehiclesService {
     seatId: number,
     principal: AuthPrincipal,
   ): Promise<void> {
-    const nhaXeId = requireNhaXeAdminTenant(principal);
+    const nhaXeId = requireTenantPrincipal(principal);
     const vehicle = await this.prisma.xe.findFirst({
       where: { xeId: vehicleId, nhaXeId },
       select: { xeId: true },

@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import type { AnchorHTMLAttributes } from 'react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { FarePricesManagement } from '@/features/fare-prices/components/fare-prices-management';
+import { setEmployeeAdminTestSession } from './admin-auth-test-session';
 
 vi.mock('next/navigation', () => ({
   usePathname: () => '/fare-prices',
@@ -76,6 +77,11 @@ function installApi(options: {
   emptyFareList?: boolean;
   missingFareDetail?: boolean;
 } = {}) {
+  setEmployeeAdminTestSession([
+    'fare-price:read',
+    'route:read',
+    'vehicle-type:read',
+  ]);
   vi.stubEnv('NEXT_PUBLIC_API_URL', 'http://localhost:4000');
   const requests: string[] = [];
   let fareListRequests = 0;
@@ -152,7 +158,7 @@ beforeAll(() => {
 });
 
 describe('Fare Prices list and detail behavior', () => {
-  it('renders API data, exposes create, and opens the shared detail sheet', async () => {
+  it('renders API data without write actions and opens the shared detail sheet', async () => {
     const api = installApi();
 
     render(<FarePricesManagement />);
@@ -160,7 +166,7 @@ describe('Fare Prices list and detail behavior', () => {
     expect(screen.getByRole('heading', { name: 'Quản lý bảng giá vé' })).toBeTruthy();
     expect(screen.getByText('Theo dõi giá vé theo tuyến, loại xe và thời gian hiệu lực.')).toBeTruthy();
     expect((await screen.findAllByText('Limousine')).length).toBeGreaterThan(0);
-    expect(screen.getByRole('button', { name: 'Thêm bảng giá' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Thêm bảng giá' })).toBeNull();
     const mobileList = screen.getByRole('list', { name: 'Danh sách bảng giá dạng thẻ' });
     expect(mobileList.tagName).toBe('UL');
     expect(within(mobileList).getAllByRole('listitem')).toHaveLength(1);

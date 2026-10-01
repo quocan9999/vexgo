@@ -11,7 +11,7 @@ import {
   initializeAdminSession,
   signInAdmin,
 } from '../services/admin-auth';
-import { getAdminAccessScope } from '../services/admin-scope';
+import { getFirstAccessibleAdminPath } from '../services/admin-access';
 
 export function AdminLoginForm() {
   const router = useRouter();
@@ -33,8 +33,7 @@ export function AdminLoginForm() {
 
   useEffect(() => {
     if (authState.status !== 'authenticated') return;
-    const scope = getAdminAccessScope(authState.session);
-    router.replace(scope === 'tenant' ? '/vehicle-types' : '/');
+    router.replace(getFirstAccessibleAdminPath(authState.session) ?? '/');
   }, [authState, router]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -51,8 +50,7 @@ export function AdminLoginForm() {
     setSubmitting(true);
     try {
       const session = await signInAdmin(normalizedIdentifier, password);
-      const scope = getAdminAccessScope(session);
-      router.replace(scope === 'tenant' ? '/vehicle-types' : '/');
+      router.replace(getFirstAccessibleAdminPath(session) ?? '/');
     } catch (caught) {
       setError(getAdminAuthErrorMessage(caught));
       if (caught instanceof AdminAuthError) {
