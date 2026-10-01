@@ -182,11 +182,12 @@ describe('platform role permission management', () => {
     ).toBeNull();
   });
 
-  it('keeps save and undo actions inside the selected role permission panel', async () => {
+  it('shows save and undo actions for an editable role only', async () => {
     renderManagement();
+    fireEvent.click(await screen.findByRole('radio', { name: /Quản trị nhà xe/ }));
 
     const permissionPanel = await screen.findByRole('region', {
-      name: 'Quyền của SUPER_ADMIN',
+      name: 'Quyền của NHA_XE_ADMIN',
     });
 
     expect(
@@ -210,27 +211,35 @@ describe('platform role permission management', () => {
 
   it('keeps a separate draft per role and can reset the selected role', async () => {
     renderManagement();
-    const createPermission = await screen.findByRole('checkbox', {
-      name: /bus-company:create/,
+    fireEvent.click(await screen.findByRole('radio', { name: /Quản trị nhà xe/ }));
+    const vehicleRead = await screen.findByRole('checkbox', {
+      name: /vehicle:read/,
     });
-    fireEvent.click(createPermission);
+    fireEvent.click(vehicleRead);
+    expect(vehicleRead).toHaveProperty('checked', false);
     expect(screen.getByText('Chưa lưu')).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('radio', { name: /Quản trị nhà xe/ }));
-    expect(screen.getByText('Chưa lưu')).toBeTruthy();
-    fireEvent.click(screen.getByRole('radio', { name: /SUPER_ADMIN/ }));
-    expect(screen.getByRole('checkbox', { name: /bus-company:create/ })).toBeTruthy();
+    fireEvent.click(await screen.findByRole('radio', { name: /SUPER_ADMIN/ }));
+    const protectedPermission = await screen.findByRole('checkbox', {
+      name: /bus-company:read/,
+    });
+    expect(protectedPermission).toHaveProperty('disabled', true);
+    expect(screen.queryByRole('button', { name: 'Hoàn tác' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Lưu thay đổi' })).toBeNull();
+    fireEvent.click(protectedPermission);
+    expect(protectedPermission).toHaveProperty('checked', true);
+    expect(service.replaceDefaultRolePermissions).not.toHaveBeenCalled();
 
+    fireEvent.click(await screen.findByRole('radio', { name: /Quản trị nhà xe/ }));
+    expect(screen.getByRole('checkbox', { name: /vehicle:read/ })).toHaveProperty('checked', false);
     fireEvent.click(screen.getByRole('button', { name: 'Hoàn tác' }));
-    expect(screen.getByRole('checkbox', { name: /bus-company:create/ })).toHaveProperty(
-      'checked',
-      false,
-    );
+    expect(screen.getByRole('checkbox', { name: /vehicle:read/ })).toHaveProperty('checked', true);
   });
 
   it('asks for confirmation that save replaces the global role mapping', async () => {
     renderManagement();
-    fireEvent.click(await screen.findByRole('checkbox', { name: /bus-company:create/ }));
+    fireEvent.click(await screen.findByRole('radio', { name: /Quản trị nhà xe/ }));
+    fireEvent.click(await screen.findByRole('checkbox', { name: /vehicle:read/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Lưu thay đổi' }));
 
     expect(await screen.findByRole('dialog')).toBeTruthy();
@@ -240,23 +249,16 @@ describe('platform role permission management', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
-  it('saves an empty mapping and reloads the trusted SUPER_ADMIN session', async () => {
-    setPlatformSession(['bus-company:read']);
+  it('keeps SUPER_ADMIN permissions read-only and never attempts a save', async () => {
     renderManagement();
     fireEvent.click(await screen.findByRole('checkbox', { name: /bus-company:read/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'Lưu thay đổi' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Xác nhận lưu' }));
-
-    await waitFor(() =>
-      expect(service.replaceDefaultRolePermissions).toHaveBeenCalledWith(
-        roleData[0],
-        [],
-        catalog,
-      ),
-    );
-    await waitFor(() => expect(reloadAdminSession).toHaveBeenCalledTimes(1));
-    expect((await screen.findByRole('status')).textContent).toMatch(/đã được lưu/);
-    expect(screen.getByRole('link', { name: 'Phân quyền' })).toBeTruthy();
+    expect(screen.getByRole('checkbox', { name: /bus-company:read/ })).toHaveProperty('checked', true);
+    expect(screen.getByText(/Không thể chỉnh sửa quyền của vai trò hệ thống này/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Hoàn tác' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Lưu thay đổi' })).toBeNull();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(service.replaceDefaultRolePermissions).not.toHaveBeenCalled();
+    expect(reloadAdminSession).not.toHaveBeenCalled();
   });
 
   it('keeps the draft and reports an API rejection without claiming success', async () => {
@@ -264,25 +266,27 @@ describe('platform role permission management', () => {
       new Error('Không đủ quyền.'),
     );
     renderManagement();
-    const permission = await screen.findByRole('checkbox', { name: /bus-company:create/ });
+    fireEvent.click(await screen.findByRole('radio', { name: /Quản trị nhà xe/ }));
+    const permission = await screen.findByRole('checkbox', { name: /vehicle:read/ });
     fireEvent.click(permission);
     fireEvent.click(screen.getByRole('button', { name: 'Lưu thay đổi' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Xác nhận lưu' }));
 
     expect((await screen.findByRole('alert')).textContent).toContain('Không đủ quyền.');
-    expect(permission).toHaveProperty('checked', true);
+    expect(permission).toHaveProperty('checked', false);
     expect(reloadAdminSession).not.toHaveBeenCalled();
   });
 
-  it('distinguishes a successful save from a failed session refresh', async () => {
-    reloadAdminSession.mockRejectedValueOnce(new Error('Không đọc được phiên.'));
+  it('saves an editable role without refreshing the Super Admin session', async () => {
     renderManagement();
-    fireEvent.click(await screen.findByRole('checkbox', { name: /bus-company:create/ }));
+    fireEvent.click(await screen.findByRole('radio', { name: /Quản trị nhà xe/ }));
+    fireEvent.click(await screen.findByRole('checkbox', { name: /vehicle:read/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Lưu thay đổi' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Xác nhận lưu' }));
 
-    expect((await screen.findByRole('alert')).textContent).toMatch(/đã lưu nhưng phiên chưa được làm mới/);
-    expect(service.replaceDefaultRolePermissions).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(service.replaceDefaultRolePermissions).toHaveBeenCalledWith(roleData[1], [], catalog));
+    expect(await screen.findByText(/đã được lưu/)).toBeTruthy();
+    expect(reloadAdminSession).not.toHaveBeenCalled();
   });
 
   it('offers retry when the role catalog cannot be loaded', async () => {

@@ -87,46 +87,43 @@ describe('platform RBAC API service', () => {
     expect(init?.cache).toBe('no-store');
   });
 
-  it('sends one complete replacement payload without tenant identifiers', async () => {
+  it('sends one complete replacement payload for an editable role without tenant identifiers', async () => {
     const responseRole: AdminRbacRole = {
-      ...roles[0],
-      permissionKeys: ['bus-company:create'],
+      ...roles[1],
+      permissionKeys: [],
     };
     vi.mocked(fetch).mockResolvedValueOnce(jsonResponse({ data: responseRole }));
 
     await expect(
-      replaceDefaultRolePermissions(roles[0], ['bus-company:create'], permissions),
+      replaceDefaultRolePermissions(roles[1], [], permissions),
     ).resolves.toEqual(responseRole);
 
     const [url, init] = vi.mocked(fetch).mock.calls[0];
     expect(url).toBe(
-      'http://localhost:4000/api/v1/admin-rbac/default-role-permissions/SUPER_ADMIN',
+      'http://localhost:4000/api/v1/admin-rbac/default-role-permissions/NHA_XE_ADMIN',
     );
     expect(init?.method).toBe('PUT');
     expect(JSON.parse(String(init?.body))).toEqual({
-      permissionKeys: ['bus-company:create'],
+      permissionKeys: [],
     });
     expect(String(init?.body)).not.toContain('nhaXeId');
   });
 
-  it('allows an empty full replacement', async () => {
-    const responseRole: AdminRbacRole = { ...roles[0], permissionKeys: [] };
-    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse({ data: responseRole }));
-
-    await expect(
-      replaceDefaultRolePermissions(roles[0], [], permissions),
-    ).resolves.toEqual(responseRole);
-    expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body))).toEqual({
-      permissionKeys: [],
-    });
+  it('rejects protected role replacements before sending a request', async () => {
+    for (const permissionKeys of [[], ['bus-company:read']]) {
+      await expect(
+        replaceDefaultRolePermissions(roles[0], permissionKeys, permissions),
+      ).rejects.toMatchObject({ code: 'SUPER_ADMIN_PERMISSION_IMMUTABLE' });
+    }
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it('rejects unknown or cross-scope keys before sending a request', async () => {
     await expect(
-      replaceDefaultRolePermissions(roles[0], ['vehicle:read'], permissions),
+      replaceDefaultRolePermissions(roles[1], ['bus-company:read'], permissions),
     ).rejects.toMatchObject({ code: 'INVALID_PERMISSION_LIST' });
     await expect(
-      replaceDefaultRolePermissions(roles[0], ['unknown:delete'], permissions),
+      replaceDefaultRolePermissions(roles[1], ['unknown:delete'], permissions),
     ).rejects.toMatchObject({ code: 'INVALID_PERMISSION_LIST' });
     expect(fetch).not.toHaveBeenCalled();
   });

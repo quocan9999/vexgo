@@ -94,8 +94,7 @@ export function AdminRbacPermissionMatrix({
 
       {isProtected && (
         <p className={styles.protectedNotice}>
-          Không thể xóa, đổi tên, vô hiệu hóa hoặc gỡ bảo vệ vai trò này.
-          Ma trận bên dưới chỉ cấu hình quyền mặc định của vai trò.
+          Không thể chỉnh sửa quyền của vai trò hệ thống này.
         </p>
       )}
 
@@ -119,7 +118,7 @@ export function AdminRbacPermissionMatrix({
                     <input
                       aria-label={`Gán quyền ${permission.key} cho ${roleName}`}
                       checked={selectedKeys.includes(permission.key)}
-                      disabled={disabled}
+                      disabled={disabled || isProtected}
                       onChange={(event) =>
                         onPermissionChange(
                           permission.key,

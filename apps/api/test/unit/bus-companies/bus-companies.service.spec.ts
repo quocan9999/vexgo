@@ -607,7 +607,7 @@ describe('BusCompaniesService', () => {
       taiKhoanId: 1,
       sessionId: 'super-admin-session',
       roles: ['SUPER_ADMIN'],
-      permissions: [],
+      permissions: ['bus-company:read'],
       nhanVienId: null,
       nhaXeId: null,
     };
@@ -627,6 +627,34 @@ describe('BusCompaniesService', () => {
       expect.objectContaining({ where: { trangThai: 'TAM_NGUNG' } }),
     );
     expect(nhaXe.count).toHaveBeenCalledWith({ where: { trangThai: 'TAM_NGUNG' } });
+  });
+
+  it('keeps a Super Admin without bus-company:read on public active-only list scope', async () => {
+    const principal: AuthPrincipal = {
+      taiKhoanId: 1,
+      sessionId: 'super-admin-session',
+      roles: ['SUPER_ADMIN'],
+      permissions: [],
+      nhanVienId: null,
+      nhaXeId: 901,
+    };
+
+    await service.findAll(
+      Object.assign(new BusCompanyQueryDto(), {
+        page: 1,
+        pageSize: 10,
+        sortBy: 'name',
+        sortDirection: 'asc',
+        status: 'TAM_NGUNG',
+      }),
+      principal,
+    );
+
+    const publicWhere = { trangThai: 'HOAT_DONG' };
+    expect(nhaXe.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: publicWhere }),
+    );
+    expect(nhaXe.count).toHaveBeenCalledWith({ where: publicWhere });
   });
 
   it('scopes a tenant principal to the trusted bus-company ID', async () => {
@@ -667,6 +695,54 @@ describe('BusCompaniesService', () => {
     });
 
     await expect(service.findOne(42)).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('does not expose paused company details to a Super Admin without bus-company:read', async () => {
+    const principal: AuthPrincipal = {
+      taiKhoanId: 1,
+      sessionId: 'super-admin-session',
+      roles: ['SUPER_ADMIN'],
+      permissions: [],
+      nhanVienId: null,
+      nhaXeId: 901,
+    };
+    nhaXe.findUnique.mockResolvedValueOnce({
+      nhaXeId: 42,
+      maNhaXe: 'NX042',
+      tenNhaXe: 'Nhà xe Tạm ngưng',
+      thongTinLienHe: null,
+      trangThai: 'TAM_NGUNG',
+      createdAt: new Date('2026-01-02T03:04:05.000Z'),
+      updatedAt: new Date('2026-02-03T04:05:06.000Z'),
+    });
+
+    await expect(service.findOne(42, principal)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+  });
+
+  it('allows a Super Admin with bus-company:read to inspect a paused company', async () => {
+    const principal: AuthPrincipal = {
+      taiKhoanId: 1,
+      sessionId: 'super-admin-session',
+      roles: ['SUPER_ADMIN'],
+      permissions: ['bus-company:read'],
+      nhanVienId: null,
+      nhaXeId: null,
+    };
+    nhaXe.findUnique.mockResolvedValueOnce({
+      nhaXeId: 42,
+      maNhaXe: 'NX042',
+      tenNhaXe: 'Nhà xe Tạm ngưng',
+      thongTinLienHe: null,
+      trangThai: 'TAM_NGUNG',
+      createdAt: new Date('2026-01-02T03:04:05.000Z'),
+      updatedAt: new Date('2026-02-03T04:05:06.000Z'),
+    });
+
+    await expect(service.findOne(42, principal)).resolves.toMatchObject({
+      data: { busCompanyId: 42, status: 'TAM_NGUNG' },
+    });
   });
 
   it('hides another tenant company when a tenant principal requests its detail', async () => {

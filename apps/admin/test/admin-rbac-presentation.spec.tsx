@@ -94,19 +94,25 @@ describe('Admin RBAC shared presentation', () => {
   });
 
   it('keeps protected-role guidance visible in the shared matrix', () => {
+    const protectedPermissions = [{
+      key: 'bus-company:read',
+      scope: 'platform' as const,
+      description: 'Xem danh sách nhà xe',
+    }];
     render(
       <AdminRbacPermissionMatrix
         disabled={false}
         isProtected
         onPermissionChange={vi.fn()}
-        permissions={[]}
+        permissions={protectedPermissions}
         roleName="SUPER_ADMIN"
         scope="platform"
-        selectedKeys={[]}
+        selectedKeys={['bus-company:read']}
       />,
     );
 
     expect(screen.getByText(/Vai trò hệ thống được bảo vệ/)).toBeTruthy();
-    expect(screen.getByText(/Không thể xóa, đổi tên, vô hiệu hóa/)).toBeTruthy();
+    expect(screen.getByText(/Không thể chỉnh sửa quyền của vai trò hệ thống này/)).toBeTruthy();
+    expect(screen.getByRole('checkbox', { name: /bus-company:read/ })).toHaveProperty('disabled', true);
   });
 });

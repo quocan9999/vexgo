@@ -13,7 +13,6 @@ import { AdminRefreshAction } from '@/components/admin/admin-page-actions';
 import { AdminRbacPermissionMatrix } from '@/components/admin/rbac/admin-rbac-permission-matrix';
 import { AdminRbacRoleSelector } from '@/components/admin/rbac/admin-rbac-role-selector';
 import { Button } from '@/components/ui/button';
-import { reloadAdminSession } from '@/features/admin-auth/services/admin-auth';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
 import { PlatformRbacScopeNavigation } from './platform-rbac-scope-navigation';
 import {
@@ -27,7 +26,7 @@ import type {
 import styles from './platform-rbac-management.module.css';
 
 type RoleDrafts = Partial<Record<AdminRbacRoleName, string[]>>;
-type Feedback = { type: 'success' | 'warning'; message: string };
+type Feedback = { type: 'success'; message: string };
 
 function getErrorMessage(error: unknown, fallback: string): string {
   return error instanceof Error && error.message ? error.message : fallback;
@@ -96,12 +95,12 @@ export function PlatformRbacManagement() {
   const selectedDraft = selectedRole
     ? drafts[selectedRole.roleName] ?? selectedRole.permissionKeys
     : [];
-  const isDirty = selectedRole
+  const isDirty = selectedRole && !selectedRole.isProtected
     ? !hasSameKeys(selectedRole.permissionKeys, selectedDraft)
     : false;
 
   function changePermission(permissionKey: string, checked: boolean) {
-    if (!selectedRole) return;
+    if (!selectedRole || selectedRole.isProtected) return;
     setFeedback(null);
     setDrafts((current) => {
       const currentKeys = new Set(
@@ -123,7 +122,7 @@ export function PlatformRbacManagement() {
   }
 
   function resetSelectedRole() {
-    if (!selectedRole) return;
+    if (!selectedRole || selectedRole.isProtected) return;
     setDrafts((current) => ({
       ...current,
       [selectedRole.roleName]: [...selectedRole.permissionKeys],
@@ -133,7 +132,13 @@ export function PlatformRbacManagement() {
   }
 
   async function saveSelectedRole() {
-    if (!selectedRole || !config || !isDirty || saving) return;
+    if (
+      !selectedRole ||
+      selectedRole.isProtected ||
+      !config ||
+      !isDirty ||
+      saving
+    ) return;
     setSaving(true);
     setSaveError(null);
 
@@ -171,17 +176,6 @@ export function PlatformRbacManagement() {
         message: `Quyền mặc định của ${savedRole.roleName} đã được lưu.`,
       });
 
-      if (savedRole.roleName === 'SUPER_ADMIN') {
-        try {
-          await reloadAdminSession();
-        } catch {
-          setFeedback({
-            type: 'warning',
-            message:
-              'Quyền đã lưu nhưng phiên chưa được làm mới. Hãy tải lại trang để đồng bộ quyền mới.',
-          });
-        }
-      }
     } catch (error) {
       setSaveError(getErrorMessage(error, 'Không thể lưu cấu hình quyền.'));
     } finally {
@@ -192,6 +186,7 @@ export function PlatformRbacManagement() {
   const roleDraftsDirty = new Set(
     config?.roles
       .filter((role) =>
+        !role.isProtected &&
         !hasSameKeys(role.permissionKeys, drafts[role.roleName] ?? role.permissionKeys),
       )
       .map(({ roleName }) => roleName) ?? [],
@@ -220,13 +215,6 @@ export function PlatformRbacManagement() {
             {feedback.message}
           </p>
         )}
-        {feedback?.type === 'warning' && (
-          <p className={styles.warningMessage} role="alert">
-            <AlertTriangle aria-hidden="true" size={17} />
-            {feedback.message}
-          </p>
-        )}
-
         {loading && (
           <div aria-live="polite" className={styles.loading} role="status">
             <LoaderCircle aria-hidden="true" className={styles.spinner} size={20} />
@@ -261,7 +249,7 @@ export function PlatformRbacManagement() {
 
             {selectedRole && (
               <AdminRbacPermissionMatrix
-                actions={(
+                actions={!selectedRole.isProtected && (
                   <div className={styles.formActions}>
                     <p aria-live="polite" className={styles.draftStatus}>
                       {isDirty ? 'Có thay đổi chưa lưu cho vai trò này.' : 'Cấu hình đã đồng bộ.'}
@@ -287,7 +275,7 @@ export function PlatformRbacManagement() {
                     </div>
                   </div>
                 )}
-                disabled={saving}
+                disabled={saving || selectedRole.isProtected}
                 isProtected={selectedRole.isProtected}
                 onPermissionChange={changePermission}
                 permissions={config.permissions}
