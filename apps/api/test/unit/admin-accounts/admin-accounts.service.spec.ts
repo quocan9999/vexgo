@@ -330,6 +330,27 @@ describe('AdminAccountsService', () => {
     expect(JSON.stringify(queryUsed.select)).not.toContain('matKhau');
   });
 
+  it('includes email when searching managed admin accounts', async () => {
+    const query: AdminAccountQueryDto = {
+      page: 1,
+      pageSize: 10,
+      sortBy: 'createdAt',
+      sortDirection: 'desc',
+      search: 'admin@example.com',
+    };
+
+    await service.findAll(query);
+
+    const queryUsed = prisma.taiKhoan.findMany.mock.calls[0][0];
+    expect(queryUsed.where.AND).toContainEqual(
+      expect.objectContaining({
+        OR: expect.arrayContaining([
+          { email: { contains: 'admin@example.com' } },
+        ]),
+      }),
+    );
+  });
+
   it('returns not found for IDs outside the managed admin-account collection', async () => {
     prisma.taiKhoan.findFirst.mockResolvedValueOnce(null);
 

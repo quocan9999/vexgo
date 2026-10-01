@@ -268,6 +268,7 @@ export class AdminAccountsService {
         OR: [
           { hoTen: { contains: search } },
           { soDienThoai: { contains: search } },
+          { email: { contains: search } },
           { nhanVien: { is: { maNhanVien: { contains: search } } } },
           {
             nhanVien: {
