@@ -4,24 +4,121 @@
 
 .panel {
   min-width: 0;
-  padding: 20px;
+  overflow: hidden;
+  padding: 0;
 }
 
-.accountList {
-  display: grid;
-  gap: 12px;
-  margin-top: 8px;
+.tableScroll {
+  width: 100%;
+  overflow-x: auto;
+  transition: opacity 150ms ease;
 }
 
-.accountCard {
-  display: grid;
-  grid-template-columns: minmax(210px, 1.1fr) minmax(0, 2fr) auto;
+.isLoading {
+  opacity: 0.55;
+}
+
+.table {
+  width: 100%;
+  min-width: 930px;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.table thead {
+  background: var(--admin-canvas);
+}
+
+.table thead th {
+  height: 40px;
+  padding: 0 12px;
+  color: var(--admin-text-muted);
+  font-size: var(--admin-font-size-md);
+  font-weight: var(--admin-font-weight-semibold);
+  white-space: nowrap;
+}
+
+.table thead th:first-child,
+.table tbody th:first-child {
+  padding-left: 19px;
+}
+
+.table thead th:last-child,
+.table tbody td:last-child {
+  padding-right: 17px;
+  text-align: right;
+}
+
+.table tbody tr {
+  border-top: 1px solid var(--admin-border);
+  transition: background-color 120ms ease;
+}
+
+.table tbody tr:hover {
+  background: var(--admin-canvas);
+}
+
+.table tbody th,
+.table tbody td {
+  height: 59px;
+  padding: 8px 12px;
+  color: var(--admin-text-muted);
+  font-size: var(--admin-font-size-base);
+}
+
+.table tbody th {
+  font-weight: var(--admin-font-weight-semibold);
+}
+
+.table tbody td {
+  white-space: nowrap;
+}
+
+.identityCell {
+  min-width: 190px;
+  color: var(--admin-text-strong) !important;
+  font-size: var(--admin-font-size-emphasis) !important;
+}
+
+.contactCell {
+  min-width: 165px;
+}
+
+.contactCell span,
+.contactCell small,
+.identityCopy small {
+  display: block;
+}
+
+.contactCell small,
+.identityCopy small {
+  margin-top: 4px;
+  color: var(--admin-text-muted);
+  font-size: var(--admin-font-size-xs);
+  font-weight: var(--admin-font-weight-regular);
+}
+
+.sortButton {
+  display: inline-flex;
   align-items: center;
-  gap: 20px;
-  padding: 16px;
-  border: 1px solid var(--border-subtle, #e3e8f0);
-  border-radius: 14px;
-  background: var(--surface-primary, #fff);
+  gap: 5px;
+  padding: 5px 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+}
+
+.sortButton:hover,
+.sortButton:focus-visible {
+  color: var(--admin-blue);
+}
+
+.sortButton:focus-visible {
+  border-radius: var(--admin-radius-control);
+  outline: 2px solid var(--admin-blue);
+  outline-offset: 3px;
 }
 
 .accountIdentity {
@@ -38,28 +135,29 @@
   flex: 0 0 auto;
   place-items: center;
   border-radius: 50%;
-  background: #e8efff;
-  color: #1f4ed8;
-  font-weight: 700;
+  background: var(--admin-blue-soft);
+  color: var(--admin-blue);
+  font-weight: var(--admin-font-weight-bold);
 }
 
 .identityCopy {
   min-width: 0;
 }
 
+.identityCopy > span,
 .identityCopy h3,
 .detailHero h3 {
   overflow-wrap: anywhere;
   margin: 0;
-  color: var(--text-primary, #14233d);
-  font-size: 15px;
+  color: var(--admin-text-strong);
+  font-size: var(--admin-font-size-emphasis);
 }
 
 .identityCopy p {
   overflow-wrap: anywhere;
   margin: 4px 0 0;
-  color: var(--text-muted, #68778d);
-  font-size: 13px;
+  color: var(--admin-text-muted);
+  font-size: var(--admin-font-size-base);
 }
 
 .accountMeta {
@@ -78,8 +176,8 @@
 .accountMeta dt,
 .detailGrid dt {
   margin-bottom: 5px;
-  color: var(--text-muted, #68778d);
-  font-size: 12px;
+  color: var(--admin-text-muted);
+  font-size: var(--admin-font-size-md);
 }
 
 .accountMeta dd,
@@ -90,24 +188,35 @@
   gap: 6px;
   overflow-wrap: anywhere;
   margin: 0;
-  color: var(--text-primary, #14233d);
-  font-size: 13px;
-  font-weight: 600;
+  color: var(--admin-text-strong);
+  font-size: var(--admin-font-size-base);
+  font-weight: var(--admin-font-weight-medium);
 }
 
-.roleTag {
-  display: inline-flex;
-  max-width: 100%;
-  border-radius: 999px;
-  padding: 4px 8px;
-  background: #eff3f9;
-  color: #35506f;
-  font-size: 11px;
-  font-weight: 600;
+.roleList {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
 }
 
 .cardActions {
   justify-self: end;
+}
+
+.mobileList {
+  display: none;
+}
+
+.accountCard {
+  display: grid;
+  grid-template-columns: minmax(210px, 1.1fr) minmax(0, 2fr) auto;
+  align-items: center;
+  gap: 20px;
+  padding: 16px;
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius-panel);
+  background: var(--background);
 }
 
 .emptyState {
@@ -120,14 +229,14 @@
 
 .emptyState h3 {
   margin: 8px 0 0;
-  color: var(--text-primary, #14233d);
-  font-size: 17px;
+  color: var(--admin-text-strong);
+  font-size: var(--admin-font-size-emphasis);
 }
 
 .emptyState p {
   margin: 0;
-  color: var(--text-muted, #68778d);
-  font-size: 14px;
+  color: var(--admin-text-muted);
+  font-size: var(--admin-font-size-base);
 }
 
 .emptyIcon {
@@ -136,8 +245,8 @@
   height: 46px;
   place-items: center;
   border-radius: 50%;
-  background: #f1f5fa;
-  color: #49617f;
+  background: var(--admin-canvas);
+  color: var(--admin-text-muted);
 }
 
 .detailHero {
@@ -155,8 +264,8 @@
 .detailHero span:not(.avatar) {
   display: block;
   margin-top: 4px;
-  color: var(--text-muted, #68778d);
-  font-size: 13px;
+  color: var(--admin-text-muted);
+  font-size: var(--admin-font-size-base);
   overflow-wrap: anywhere;
 }
 
@@ -176,24 +285,24 @@
   gap: 9px;
   min-width: 0;
   margin: 0;
-  border: 1px solid var(--border-subtle, #e3e8f0);
-  border-radius: 12px;
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius-panel);
   padding: 12px;
 }
 
 .roleOptions legend {
   padding: 0 5px;
-  color: var(--text-primary, #14233d);
-  font-size: 13px;
-  font-weight: 600;
+  color: var(--admin-text-strong);
+  font-size: var(--admin-font-size-base);
+  font-weight: var(--admin-font-weight-semibold);
 }
 
 .roleOption {
   display: flex;
   align-items: flex-start;
   gap: 9px;
-  color: var(--text-primary, #14233d);
-  font-size: 13px;
+  color: var(--admin-text-strong);
+  font-size: var(--admin-font-size-base);
 }
 
 .roleOption input {
@@ -201,7 +310,12 @@
   height: 16px;
   flex: 0 0 auto;
   margin: 1px 0 0;
-  accent-color: #2857d9;
+  accent-color: var(--admin-blue);
+}
+
+.roleOption input:focus-visible {
+  outline: 2px solid var(--admin-blue);
+  outline-offset: 2px;
 }
 
 @media (max-width: 900px) {
@@ -220,9 +334,15 @@
   }
 }
 
-@media (max-width: 600px) {
-  .panel {
-    padding: 14px;
+@media (max-width: 700px) {
+  .tableScroll {
+    display: none;
+  }
+
+  .mobileList {
+    display: grid;
+    gap: 12px;
+    padding: 12px;
   }
 
   .accountCard {

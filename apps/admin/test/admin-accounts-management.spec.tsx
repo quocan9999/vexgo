@@ -267,6 +267,54 @@ describe('Admin accounts management page', () => {
     ).toBeTruthy();
   });
 
+  it('uses a sortable desktop table for the account list', () => {
+    state.hook = {
+      ...state.hook,
+      accountPage: {
+        data: [account],
+        meta: { page: 1, pageSize: 10, totalItems: 1, totalPages: 1 },
+      },
+      loading: false,
+    };
+
+    render(<AdminAccountsManagement />);
+
+    const table = screen.getByRole('table');
+    const nameHeader = within(table).getByRole('columnheader', {
+      name: 'Họ và tên',
+    });
+    expect(nameHeader.getAttribute('aria-sort')).toBe('none');
+
+    fireEvent.click(
+      within(nameHeader).getByRole('button', { name: 'Họ và tên' }),
+    );
+
+    expect(state.hook.sortAccounts).toHaveBeenCalledWith('fullName');
+    expect(
+      within(table).getByRole('row', { name: /Nguyễn Minh Anh/ }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole('article', { name: 'Tài khoản Nguyễn Minh Anh' }),
+    ).toBeTruthy();
+  });
+
+  it('groups create and refresh actions in the shared CRUD header layout', () => {
+    setAdminPermissions(['admin-account:read', 'admin-account:create']);
+
+    render(<AdminAccountsManagement />);
+
+    const actions = document.querySelector('.page-intro-actions');
+    expect(actions).toBeTruthy();
+    expect(
+      within(actions as HTMLElement).getByRole('button', {
+        name: /thêm mới/i,
+      }),
+    ).toBeTruthy();
+    expect(
+      within(actions as HTMLElement).getByRole('button', { name: 'Làm mới' }),
+    ).toBeTruthy();
+  });
+
   it('shows account identity and opens a detail sheet with tenant and role', async () => {
     state.hook = {
       ...state.hook,
@@ -279,13 +327,15 @@ describe('Admin accounts management page', () => {
 
     render(<AdminAccountsManagement />);
 
-    expect(screen.getByText('Nguyễn Minh Anh')).toBeTruthy();
-    expect(screen.getByText('+84912345678')).toBeTruthy();
-    expect(screen.getByText('Phương Trang')).toBeTruthy();
-    expect(screen.getByText('Quản trị nhà xe')).toBeTruthy();
+    const table = screen.getByRole('table');
+    const row = within(table).getByRole('row', { name: /Nguyễn Minh Anh/ });
+    expect(within(row).getByText('Nguyễn Minh Anh')).toBeTruthy();
+    expect(within(row).getByText('+84912345678')).toBeTruthy();
+    expect(within(row).getByText('Phương Trang')).toBeTruthy();
+    expect(within(row).getByText('Quản trị nhà xe')).toBeTruthy();
 
     fireEvent.click(
-      screen.getByRole('button', {
+      within(table).getByRole('button', {
         name: 'Xem chi tiết tài khoản Nguyễn Minh Anh',
       }),
     );
@@ -347,9 +397,7 @@ describe('Admin accounts management page', () => {
 
     render(<AdminAccountsManagement />);
 
-    expect(
-      screen.getByRole('button', { name: 'Thêm tài khoản Admin' }),
-    ).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Thêm mới' })).toBeTruthy();
   });
 
   it('creates an account with the selected tenant role and never offers a platform role', async () => {
@@ -364,9 +412,7 @@ describe('Admin accounts management page', () => {
     };
 
     render(<AdminAccountsManagement />);
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Thêm tài khoản Admin' }),
-    );
+    fireEvent.click(screen.getByRole('button', { name: 'Thêm mới' }));
 
     const dialog = await screen.findByRole('dialog', {
       name: 'Thêm tài khoản Admin',
@@ -428,9 +474,7 @@ describe('Admin accounts management page', () => {
   it('rejects invalid phone, password and an empty role set before sending create', async () => {
     setAdminPermissions(['admin-account:read', 'admin-account:create']);
     render(<AdminAccountsManagement />);
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Thêm tài khoản Admin' }),
-    );
+    fireEvent.click(screen.getByRole('button', { name: 'Thêm mới' }));
 
     const dialog = await screen.findByRole('dialog', {
       name: 'Thêm tài khoản Admin',
@@ -479,9 +523,7 @@ describe('Admin accounts management page', () => {
     );
 
     render(<AdminAccountsManagement />);
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Thêm tài khoản Admin' }),
-    );
+    fireEvent.click(screen.getByRole('button', { name: 'Thêm mới' }));
     const dialog = await screen.findByRole('dialog', {
       name: 'Thêm tài khoản Admin',
     });
@@ -512,9 +554,7 @@ describe('Admin accounts management page', () => {
     );
 
     render(<AdminAccountsManagement />);
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Thêm tài khoản Admin' }),
-    );
+    fireEvent.click(screen.getByRole('button', { name: 'Thêm mới' }));
     const dialog = await screen.findByRole('dialog', {
       name: 'Thêm tài khoản Admin',
     });
@@ -544,7 +584,7 @@ describe('Admin accounts management page', () => {
 
     render(<AdminAccountsManagement />);
     fireEvent.click(
-      screen.getByRole('button', {
+      within(screen.getByRole('table')).getByRole('button', {
         name: 'Xem chi tiết tài khoản Nguyễn Minh Anh',
       }),
     );
@@ -597,7 +637,7 @@ describe('Admin accounts management page', () => {
 
     render(<AdminAccountsManagement />);
     fireEvent.click(
-      screen.getByRole('button', {
+      within(screen.getByRole('table')).getByRole('button', {
         name: 'Xem chi tiết tài khoản Nguyễn Minh Anh',
       }),
     );

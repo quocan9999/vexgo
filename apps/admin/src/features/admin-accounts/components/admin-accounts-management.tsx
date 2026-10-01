@@ -1,6 +1,6 @@
 'use client';
 
-import { Search, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, Search, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { AdminDetailAction } from '@/components/admin/admin-detail-action';
 import { AdminDetailSheet } from '@/components/admin/admin-detail-sheet';
@@ -23,7 +23,11 @@ import { hasPlatformAdminPermission } from '@/features/admin-auth/services/admin
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
 import { getAdminAccountById } from '../services/admin-account-service';
 import { useAdminAccounts } from '../hooks/use-admin-accounts';
-import type { AdminAccount, AdminAccountStatus } from '../types/admin-account';
+import type {
+  AdminAccount,
+  AdminAccountSortKey,
+  AdminAccountStatus,
+} from '../types/admin-account';
 import { AdminAccountFormDialog } from './admin-account-form-dialog';
 import styles from './admin-accounts-management.module.css';
 
@@ -240,9 +244,9 @@ function AccountDetailSheet({
                   <dd>
                     {detail.account.roles.length > 0
                       ? detail.account.roles.map((role) => (
-                          <span className={styles.roleTag} key={role}>
+                          <AdminStatusBadge key={role} tone="muted">
                             {roleLabel(role)}
-                          </span>
+                          </AdminStatusBadge>
                         ))
                       : 'Chưa được gán vai trò'}
                   </dd>
@@ -290,9 +294,12 @@ export function AdminAccountsManagement() {
     loading,
     page,
     searchInput,
+    sortBy,
+    sortDirection,
     status,
     changePage,
     refresh,
+    sortAccounts,
     updateSearch,
     updateStatus,
   } = useAdminAccounts();
@@ -306,20 +313,53 @@ export function AdminAccountsManagement() {
     null,
   );
 
+  function sortableHeader(label: string, key: AdminAccountSortKey) {
+    const selected = sortBy === key;
+    return (
+      <th
+        aria-sort={
+          selected
+            ? sortDirection === 'asc'
+              ? 'ascending'
+              : 'descending'
+            : 'none'
+        }
+        scope="col"
+      >
+        <button
+          className={styles.sortButton}
+          onClick={() => sortAccounts(key)}
+          type="button"
+        >
+          {label}
+          {selected ? (
+            sortDirection === 'asc' ? (
+              <ArrowUp aria-hidden="true" size={14} />
+            ) : (
+              <ArrowDown aria-hidden="true" size={14} />
+            )
+          ) : (
+            <ArrowUpDown aria-hidden="true" size={14} />
+          )}
+        </button>
+      </th>
+    );
+  }
+
   return (
     <SuperAdminLayout activeSection="admin-accounts">
       <div className={`admin-page-content ${styles.page}`}>
         <AdminPageHeader
           actions={
-            <>
+            <div className="page-intro-actions">
               {canCreate && (
                 <AdminCreateAction
-                  label="Thêm tài khoản Admin"
+                  label="Thêm mới"
                   onClick={() => setCreateOpen(true)}
                 />
               )}
               <AdminRefreshAction loading={loading} onClick={refresh} />
-            </>
+            </div>
           }
           eyebrow="QUẢN TRỊ NỀN TẢNG"
           title="Quản lý tài khoản Admin"
@@ -379,7 +419,83 @@ export function AdminAccountsManagement() {
 
           {accountPage && accountPage.data.length > 0 && (
             <>
-              <div aria-busy={loading} className={styles.accountList}>
+              <div
+                aria-busy={loading}
+                className={`${styles.tableScroll}${loading ? ` ${styles.isLoading}` : ''}`}
+              >
+                <table className={styles.table}>
+                  <thead>
+                    <tr>
+                      {sortableHeader('Họ và tên', 'fullName')}
+                      {sortableHeader('Số điện thoại', 'phoneNumber')}
+                      <th scope="col">Nhà xe</th>
+                      <th scope="col">Vai trò</th>
+                      {sortableHeader('Trạng thái', 'status')}
+                      {sortableHeader('Ngày tạo', 'createdAt')}
+                      <th scope="col">
+                        <span className="sr-only">Thao tác</span>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {accountPage.data.map((account) => (
+                      <tr key={account.accountId}>
+                        <th className={styles.identityCell} scope="row">
+                          <span className={styles.accountIdentity}>
+                            <span aria-hidden="true" className={styles.avatar}>
+                              {account.fullName
+                                .trim()
+                                .charAt(0)
+                                .toLocaleUpperCase('vi-VN') || 'A'}
+                            </span>
+                            <span className={styles.identityCopy}>
+                              <span>{account.fullName}</span>
+                              <small>{account.employee.employeeCode}</small>
+                            </span>
+                          </span>
+                        </th>
+                        <td className={styles.contactCell}>
+                          <span>{account.phoneNumber}</span>
+                          {account.email && <small>{account.email}</small>}
+                        </td>
+                        <td>{account.busCompany.name}</td>
+                        <td>
+                          <div className={styles.roleList}>
+                            {account.roles.length > 0
+                              ? account.roles.map((role) => (
+                                  <AdminStatusBadge key={role} tone="muted">
+                                    {roleLabel(role)}
+                                  </AdminStatusBadge>
+                                ))
+                              : 'Chưa được gán vai trò'}
+                          </div>
+                        </td>
+                        <td>
+                          <AdminStatusBadge
+                            tone={
+                              account.status === 'HOAT_DONG'
+                                ? 'active'
+                                : 'muted'
+                            }
+                          >
+                            {statusLabel(account.status)}
+                          </AdminStatusBadge>
+                        </td>
+                        <td>{formatTimestamp(account.createdAt)}</td>
+                        <td>
+                          <AdminDetailAction
+                            onClick={() =>
+                              setSelectedAccountId(account.accountId)
+                            }
+                            resourceName={`tài khoản ${account.fullName}`}
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div aria-busy={loading} className={styles.mobileList}>
                 {accountPage.data.map((account) => (
                   <article
                     aria-label={`Tài khoản ${account.fullName}`}
@@ -409,9 +525,9 @@ export function AdminAccountsManagement() {
                         <dd>
                           {account.roles.length > 0
                             ? account.roles.map((role) => (
-                                <span className={styles.roleTag} key={role}>
+                                <AdminStatusBadge key={role} tone="muted">
                                   {roleLabel(role)}
-                                </span>
+                                </AdminStatusBadge>
                               ))
                             : 'Chưa được gán vai trò'}
                         </dd>
