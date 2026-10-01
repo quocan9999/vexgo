@@ -1,8 +1,8 @@
 /* eslint-disable */
 'use client';
 
-import { useState, Suspense } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, Suspense, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { EcosystemSection } from './ecosystem-section';
 import { HeroSection } from './hero-section';
 import { NewsSection } from './news-section';
@@ -12,16 +12,36 @@ import { TripList } from '@/features/trips/components/trip-list';
 
 export function HomePage({ initialHasSearched = false }: { initialHasSearched?: boolean }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const urlOrigin = searchParams.get('from') || searchParams.get('origin') || '';
+  const urlDestination = searchParams.get('to') || searchParams.get('destination') || '';
+  const urlDate = searchParams.get('departureDate') || searchParams.get('date') || '';
+
   const [activeSearchTab, setActiveSearchTab] = useState<'BUY' | 'RENT'>('BUY');
-  const [selectedProvince, setSelectedProvince] = useState('');
-  const [selectedDistrict, setSelectedDistrict] = useState('');
+  const [selectedProvince, setSelectedProvince] = useState(urlOrigin);
+  const [selectedDistrict, setSelectedDistrict] = useState(urlDestination);
   const [selectedType, setSelectedType] = useState('');
   const [selectedPrice, setSelectedPrice] = useState(
-    new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date()),
+    urlDate || new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date()),
   );
   
-  const [hasSearched, setHasSearched] = useState(initialHasSearched);
+  const [hasSearched, setHasSearched] = useState(
+    initialHasSearched || Boolean(urlOrigin || urlDestination || urlDate),
+  );
   const [searchCriteria, setSearchCriteria] = useState<{tripType?: 'one-way' | 'round-trip'; departureDate?: string; returnDate?: string}>({});
+
+  useEffect(() => {
+    if (urlOrigin || urlDestination || urlDate) {
+      setSelectedProvince(urlOrigin);
+      setSelectedDistrict(urlDestination);
+      if (urlDate) setSelectedPrice(urlDate);
+      setHasSearched(true);
+      setTimeout(() => {
+        window.scrollTo({ top: 450, behavior: 'smooth' });
+      }, 150);
+    }
+  }, [urlOrigin, urlDestination, urlDate]);
 
   return (
     <div className="flex min-h-screen flex-col bg-[#F5F5F5]">
