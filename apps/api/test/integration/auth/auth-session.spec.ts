@@ -26,6 +26,8 @@ let passwordHash: string;
 describe('Auth login, refresh and logout HTTP contract', () => {
   let app: INestApplication;
   const taiKhoan = { findUnique: vi.fn() };
+  const vaiTroQuyen = { findMany: vi.fn() };
+  const cauHinhQuyenVaiTroNhaXe = { findMany: vi.fn() };
   const directSessions = { findUnique: vi.fn(), updateMany: vi.fn() };
   const txSessions = {
     findUnique: vi.fn(),
@@ -36,6 +38,8 @@ describe('Auth login, refresh and logout HTTP contract', () => {
   const tx = { phienDangNhap: txSessions };
   const prisma = {
     taiKhoan,
+    vaiTroQuyen,
+    cauHinhQuyenVaiTroNhaXe,
     phienDangNhap: directSessions,
     $transaction: vi.fn(async (callback) => callback(tx)),
   };
@@ -97,7 +101,7 @@ describe('Auth login, refresh and logout HTTP contract', () => {
       createdAt: NOW,
       updatedAt: NOW,
       khachHang: { khachHangId: 12 },
-      taiKhoanVaiTros: [{ vaiTro: { tenVaiTro: 'KHACH_HANG' } }],
+      taiKhoanVaiTros: [{ vaiTro: { vaiTroId: 4, tenVaiTro: 'KHACH_HANG' } }],
       ...overrides,
     };
   }
@@ -123,6 +127,8 @@ describe('Auth login, refresh and logout HTTP contract', () => {
     vi.setSystemTime(NOW);
     vi.clearAllMocks();
     taiKhoan.findUnique.mockResolvedValue(account());
+    vaiTroQuyen.findMany.mockResolvedValue([]);
+    cauHinhQuyenVaiTroNhaXe.findMany.mockResolvedValue([]);
     txSessions.findUnique.mockResolvedValue(session());
     txSessions.updateMany.mockResolvedValue({ count: 1 });
     txSessions.create.mockResolvedValue(
@@ -191,7 +197,9 @@ describe('Auth login, refresh and logout HTTP contract', () => {
       account({
         email: 'admin@example.com',
         khachHang: null,
-        taiKhoanVaiTros: [{ vaiTro: { tenVaiTro: 'NHA_XE_ADMIN' } }],
+        taiKhoanVaiTros: [
+          { vaiTro: { vaiTroId: 2, tenVaiTro: 'NHA_XE_ADMIN' } },
+        ],
       }),
     );
 
@@ -306,9 +314,25 @@ describe('Auth login, refresh and logout HTTP contract', () => {
         nhaXe: { maNhaXe: 'FUTA', tenNhaXe: 'FUTA' },
       },
       taiKhoanVaiTros: [
-        { vaiTro: { tenVaiTro: 'NHA_XE_ADMIN', vaiTroQuyens: [] } },
+        {
+          vaiTro: {
+            vaiTroId: 2,
+            tenVaiTro: 'NHA_XE_ADMIN',
+            vaiTroQuyens: [],
+          },
+        },
       ],
     });
+    vaiTroQuyen.findMany.mockResolvedValue([
+      { vaiTroId: 2, quyen: { tenQuyen: 'vehicle:read' } },
+      { vaiTroId: 2, quyen: { tenQuyen: 'route:read' } },
+    ]);
+    cauHinhQuyenVaiTroNhaXe.findMany.mockResolvedValue([
+      {
+        vaiTroId: 2,
+        chiTiets: [{ quyen: { tenQuyen: 'route:read' } }],
+      },
+    ]);
     directSessions.findUnique.mockResolvedValueOnce(
       session({ taiKhoan: operatorAccount }),
     );
@@ -323,6 +347,7 @@ describe('Auth login, refresh and logout HTTP contract', () => {
       accountId: 42,
       email: 'futa-admin@example.com',
       roles: ['NHA_XE_ADMIN'],
+      permissions: ['route:read'],
       busCompanyId: 21,
       employee: {
         employeeId: 8,
@@ -330,6 +355,13 @@ describe('Auth login, refresh and logout HTTP contract', () => {
         busCompanyCode: 'FUTA',
       },
     });
+    expect(vaiTroQuyen.findMany).toHaveBeenCalledTimes(2);
+    expect(cauHinhQuyenVaiTroNhaXe.findMany).toHaveBeenCalledTimes(2);
+    expect(cauHinhQuyenVaiTroNhaXe.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { nhaXeId: 21, vaiTroId: { in: [2] } },
+      }),
+    );
     expect(response.body.data).not.toHaveProperty('matKhau');
   });
 

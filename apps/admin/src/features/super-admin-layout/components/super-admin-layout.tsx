@@ -7,6 +7,7 @@ import {
   LogOut,
   MapPinned,
   Menu,
+  ShieldCheck,
   Ticket,
   Truck,
   X,
@@ -16,6 +17,15 @@ import { useRouter } from 'next/navigation';
 import { useState, type ReactNode } from 'react';
 import { AdminDialogPrimitive } from '@/components/admin/admin-dialog-primitive';
 import { useAdminSession } from '@/features/admin-auth/hooks/use-admin-session';
+import {
+  ADMIN_OPERATION_SECTIONS,
+  canReadTenantRbac,
+  getFirstAccessibleAdminPath,
+  hasAdminPermission,
+  canManagePlatformRbac,
+  hasPlatformAdminPermission,
+  type AdminOperationSection,
+} from '@/features/admin-auth/services/admin-access';
 import {
   getAdminAuthErrorMessage,
   signOutAdmin,
@@ -29,7 +39,9 @@ type SuperAdminLayoutProps = {
     | 'vehicle-types'
     | 'vehicles'
     | 'routes'
-    | 'fare-prices';
+    | 'fare-prices'
+    | 'rbac'
+    | 'tenant-rbac';
   children: ReactNode;
 };
 
@@ -51,6 +63,16 @@ function formatAdminRoleLabels(roles: string[]) {
     : 'TÀI KHOẢN ADMIN';
 }
 
+const OPERATION_NAVIGATION_DETAILS: Record<
+  AdminOperationSection,
+  { label: string; icon: () => ReactNode }
+> = {
+  'vehicle-types': { label: 'Loại xe', icon: () => <Bus size={18} /> },
+  vehicles: { label: 'Xe', icon: () => <Truck size={18} /> },
+  routes: { label: 'Tuyến xe', icon: () => <MapPinned size={18} /> },
+  'fare-prices': { label: 'Bảng giá vé', icon: () => <Ticket size={18} /> },
+};
+
 export function SuperAdminLayout({
   activeSection,
   children,
@@ -67,6 +89,16 @@ export function SuperAdminLayout({
   const scope = getAdminAccessScope(session);
   const tenantScope = scope === 'tenant';
   const platformScope = scope === 'platform';
+  const canManageRbac = canManagePlatformRbac(session);
+  const canReadTenantRolePermissions = canReadTenantRbac(session);
+  const canReadBusCompanies = hasPlatformAdminPermission(
+    session,
+    'bus-company:read',
+  );
+  const accessibleOperationSections = ADMIN_OPERATION_SECTIONS.filter((item) =>
+    hasAdminPermission(session, item.readPermission),
+  );
+  const firstAccessibleTenantPath = getFirstAccessibleAdminPath(session);
   const roleLabel = formatAdminRoleLabels(session.roles);
   const tenantBusCompanyName =
     session.employee?.busCompanyName?.trim() || 'NHÀ XE';
@@ -109,7 +141,7 @@ export function SuperAdminLayout({
       >
         <Link
           className="brand-lockup"
-          href={tenantScope ? '/vehicle-types' : '/'}
+          href={tenantScope ? firstAccessibleTenantPath ?? '/' : '/'}
           onClick={closeMobileNavigation}
         >
           <span className="brand-mark" aria-hidden="true">V</span>
@@ -122,74 +154,83 @@ export function SuperAdminLayout({
         </Link>
         <div aria-hidden="true" className="sidebar-divider" />
 
+        {(platformScope || (tenantScope && accessibleOperationSections.length > 0)) && (
+          <div className="sidebar-nav-group">
+            <p className="sidebar-label">
+              {tenantScope ? 'VẬN HÀNH' : 'QUẢN TRỊ NỀN TẢNG'}
+            </p>
+            <nav aria-label={tenantScope ? 'Vận hành' : 'Quản trị nền tảng'}>
+              {tenantScope
+                  ? accessibleOperationSections.map((item) => {
+                    const { icon, label } =
+                      OPERATION_NAVIGATION_DETAILS[item.section];
+                    return (
+                      <Link
+                        aria-current={activeSection === item.section ? 'page' : undefined}
+                        className={`sidebar-link${activeSection === item.section ? ' is-active' : ''}`}
+                        href={item.href}
+                        key={item.section}
+                        onClick={closeMobileNavigation}
+                      >
+                        <span className="sidebar-link-icon">{icon()}</span>
+                        <span>{label}</span>
+                      </Link>
+                    );
+                  })
+                : platformScope && (
+                    <>
+                      <Link
+                        aria-current={activeSection === 'overview' ? 'page' : undefined}
+                        className={`sidebar-link${activeSection === 'overview' ? ' is-active' : ''}`}
+                        href="/"
+                        onClick={closeMobileNavigation}
+                      >
+                        <span className="sidebar-link-icon"><Database size={18} /></span>
+                        <span>Tổng quan</span>
+                      </Link>
+                      {canReadBusCompanies && (
+                        <Link
+                          aria-current={activeSection === 'bus-companies' ? 'page' : undefined}
+                          className={`sidebar-link${activeSection === 'bus-companies' ? ' is-active' : ''}`}
+                          href="/bus-companies"
+                          onClick={closeMobileNavigation}
+                        >
+                          <span className="sidebar-link-icon"><Building2 size={18} /></span>
+                          <span>Nhà xe</span>
+                        </Link>
+                      )}
+                      {canManageRbac && (
+                        <Link
+                          aria-current={activeSection === 'rbac' ? 'page' : undefined}
+                          className={`sidebar-link${activeSection === 'rbac' ? ' is-active' : ''}`}
+                          href="/rbac"
+                          onClick={closeMobileNavigation}
+                        >
+                          <span className="sidebar-link-icon"><ShieldCheck size={18} /></span>
+                          <span>Phân quyền</span>
+                        </Link>
+                      )}
+                    </>
+                  )}
+            </nav>
+          </div>
+        )}
+        {tenantScope && canReadTenantRolePermissions && (
         <div className="sidebar-nav-group">
-          <p className="sidebar-label">
-            {tenantScope ? 'VẬN HÀNH' : 'QUẢN TRỊ NỀN TẢNG'}
-          </p>
-          <nav aria-label={tenantScope ? 'Vận hành' : 'Quản trị nền tảng'}>
-            {tenantScope ? (
-              <>
-                <Link
-                  aria-current={activeSection === 'vehicle-types' ? 'page' : undefined}
-                  className={`sidebar-link${activeSection === 'vehicle-types' ? ' is-active' : ''}`}
-                  href="/vehicle-types"
-                  onClick={closeMobileNavigation}
-                >
-                  <span className="sidebar-link-icon"><Bus size={18} /></span>
-                  <span>Loại xe</span>
-                </Link>
-                <Link
-                  aria-current={activeSection === 'vehicles' ? 'page' : undefined}
-                  className={`sidebar-link${activeSection === 'vehicles' ? ' is-active' : ''}`}
-                  href="/vehicles"
-                  onClick={closeMobileNavigation}
-                >
-                  <span className="sidebar-link-icon"><Truck size={18} /></span>
-                  <span>Xe</span>
-                </Link>
-                <Link
-                  aria-current={activeSection === 'routes' ? 'page' : undefined}
-                  className={`sidebar-link${activeSection === 'routes' ? ' is-active' : ''}`}
-                  href="/routes"
-                  onClick={closeMobileNavigation}
-                >
-                  <span className="sidebar-link-icon"><MapPinned size={18} /></span>
-                  <span>Tuyến xe</span>
-                </Link>
-                <Link
-                  aria-current={activeSection === 'fare-prices' ? 'page' : undefined}
-                  className={`sidebar-link${activeSection === 'fare-prices' ? ' is-active' : ''}`}
-                  href="/fare-prices"
-                  onClick={closeMobileNavigation}
-                >
-                  <span className="sidebar-link-icon"><Ticket size={18} /></span>
-                  <span>Bảng giá vé</span>
-                </Link>
-              </>
-            ) : platformScope ? (
-              <>
-                <Link
-                  aria-current={activeSection === 'overview' ? 'page' : undefined}
-                  className={`sidebar-link${activeSection === 'overview' ? ' is-active' : ''}`}
-                  href="/"
-                  onClick={closeMobileNavigation}
-                >
-                  <span className="sidebar-link-icon"><Database size={18} /></span>
-                  <span>Tổng quan</span>
-                </Link>
-                <Link
-                  aria-current={activeSection === 'bus-companies' ? 'page' : undefined}
-                  className={`sidebar-link${activeSection === 'bus-companies' ? ' is-active' : ''}`}
-                  href="/bus-companies"
-                  onClick={closeMobileNavigation}
-                >
-                  <span className="sidebar-link-icon"><Building2 size={18} /></span>
-                  <span>Nhà xe</span>
-                </Link>
-              </>
-            ) : null}
+          <p className="sidebar-label">QUẢN TRỊ NHÀ XE</p>
+          <nav aria-label="Quản trị nhà xe">
+            <Link
+              aria-current={activeSection === 'tenant-rbac' ? 'page' : undefined}
+              className={`sidebar-link${activeSection === 'tenant-rbac' ? ' is-active' : ''}`}
+              href="/tenant-rbac"
+              onClick={closeMobileNavigation}
+            >
+              <span className="sidebar-link-icon"><ShieldCheck size={18} /></span>
+              <span>Phân quyền</span>
+            </Link>
           </nav>
         </div>
+      )}
       </aside>
 
       <main className="admin-main" id={activeSection}>

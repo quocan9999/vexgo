@@ -17,6 +17,7 @@ import { OptionalAuth } from '../auth/decorators/public.decorator.js';
 import { OptionalPrincipal } from '../auth/decorators/current-principal.decorator.js';
 import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
 import { RequireRoles } from '../auth/decorators/require-roles.decorator.js';
+import { RequirePermissions } from '../auth/decorators/require-permissions.decorator.js';
 
 @Controller('bus-companies')
 export class BusCompaniesController {
@@ -24,12 +25,14 @@ export class BusCompaniesController {
 
   @Post()
   @RequireRoles('SUPER_ADMIN')
+  @RequirePermissions('bus-company:create')
   create(@Body() body: CreateBusCompanyDto) {
     return this.busCompaniesService.create(body);
   }
 
   @Patch(':id')
   @RequireRoles('SUPER_ADMIN')
+  @RequirePermissions('bus-company:update')
   update(
     @Param() params: BusCompanyIdParamsDto,
     @Body() body: UpdateBusCompanyDto,
@@ -39,6 +42,7 @@ export class BusCompaniesController {
 
   @Patch(':id/status')
   @RequireRoles('SUPER_ADMIN')
+  @RequirePermissions('bus-company:update')
   updateStatus(
     @Param() params: BusCompanyIdParamsDto,
     @Body() body: UpdateBusCompanyStatusDto,

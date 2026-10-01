@@ -10,6 +10,7 @@ import {
   AdminAuthError,
 } from '@/features/admin-auth/services/admin-auth';
 import { adminApiFetch } from '@/lib/admin-api-client';
+import type { AdminSession } from '@/features/admin-auth/services/admin-auth';
 
 const tenantSession = {
   accountId: 20,
@@ -49,7 +50,7 @@ function authResponse(accessToken: string) {
   return jsonResponse({ data: { accessToken } });
 }
 
-function sessionResponse(session: typeof tenantSession | typeof platformSession) {
+function sessionResponse(session: AdminSession) {
   return jsonResponse({ data: session });
 }
 
@@ -172,6 +173,84 @@ describe('Admin cookie session and API client', () => {
     );
     expect(new Headers(apiCalls[0][1]?.headers).get('Authorization')).toBe('Bearer old-access');
     expect(new Headers(apiCalls[1][1]?.headers).get('Authorization')).toBe('Bearer new-access');
+  });
+
+  it('reloads the trusted session after a SUPER_ADMIN mapping changes', async () => {
+    const beforeUpdate = { ...platformSession, permissions: ['bus-company:read'] };
+    const afterUpdate = { ...platformSession, permissions: [] };
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(authResponse('platform-access'))
+      .mockResolvedValueOnce(sessionResponse(beforeUpdate))
+      .mockResolvedValueOnce(sessionResponse(afterUpdate));
+    await signInAdmin('admin@vexgo.test', 'password-123');
+
+    const auth = await import('@/features/admin-auth/services/admin-auth');
+    const reloadAdminSession = Reflect.get(auth, 'reloadAdminSession') as
+      | (() => Promise<{ permissions: string[] }>)
+      | undefined;
+    expect(reloadAdminSession).toBeTypeOf('function');
+    if (!reloadAdminSession) return;
+
+    await expect(reloadAdminSession()).resolves.toMatchObject({ permissions: [] });
+    expect(getAdminAuthSnapshot()).toMatchObject({
+      status: 'authenticated',
+      session: { roles: ['SUPER_ADMIN'], permissions: [] },
+    });
+    expect(fetch).toHaveBeenCalledTimes(3);
+    const [sessionUrl, sessionInit] = vi.mocked(fetch).mock.calls[2];
+    expect(sessionUrl).toBe('http://localhost:4000/api/v1/auth/session');
+    expect(new Headers(sessionInit?.headers).get('Authorization')).toBe(
+      'Bearer platform-access',
+    );
+  });
+
+  it('refreshes an expired access token before loading the updated role mapping', async () => {
+    const oldSession = { ...platformSession, permissions: ['bus-company:read'] };
+    const updatedSession = { ...platformSession, permissions: [] };
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(authResponse('expired-access'))
+      .mockResolvedValueOnce(sessionResponse(oldSession))
+      .mockResolvedValueOnce(new Response(null, { status: 401 }))
+      .mockResolvedValueOnce(authResponse('refreshed-access'))
+      .mockResolvedValueOnce(sessionResponse(updatedSession));
+    await signInAdmin('admin@vexgo.test', 'password-123');
+
+    const auth = await import('@/features/admin-auth/services/admin-auth');
+    const reloadAdminSession = Reflect.get(auth, 'reloadAdminSession') as
+      | (() => Promise<{ permissions: string[] }>)
+      | undefined;
+    expect(reloadAdminSession).toBeTypeOf('function');
+    if (!reloadAdminSession) return;
+
+    await expect(reloadAdminSession()).resolves.toMatchObject({ permissions: [] });
+    expect(getAdminAccessToken()).toBe('refreshed-access');
+    expect(getAdminAuthSnapshot()).toMatchObject({
+      status: 'authenticated',
+      session: { permissions: [] },
+    });
+    expect(fetch).toHaveBeenCalledTimes(5);
+  });
+
+  it('keeps the known session if fetching the refreshed identity fails', async () => {
+    const oldSession = { ...platformSession, permissions: ['bus-company:read'] };
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(authResponse('platform-access'))
+      .mockResolvedValueOnce(sessionResponse(oldSession))
+      .mockResolvedValueOnce(jsonResponse({ message: 'API offline' }, 503));
+    await signInAdmin('admin@vexgo.test', 'password-123');
+
+    const auth = await import('@/features/admin-auth/services/admin-auth');
+    const reloadAdminSession = Reflect.get(auth, 'reloadAdminSession') as
+      | (() => Promise<unknown>)
+      | undefined;
+    expect(reloadAdminSession).toBeTypeOf('function');
+    if (!reloadAdminSession) return;
+
+    await expect(reloadAdminSession()).rejects.toMatchObject({ status: 503 });
+    expect(getAdminAuthSnapshot()).toMatchObject({
+      status: 'authenticated',
+      session: { permissions: ['bus-company:read'] },
+    });
   });
 
   it('xóa phiên phía Admin khi request được retry vẫn trả 401', async () => {

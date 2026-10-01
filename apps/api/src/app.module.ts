@@ -12,6 +12,7 @@ import { AuthModule } from './auth/auth.module.js';
 import { CustomersModule } from './customers/customers.module.js';
 import { TripsModule } from './trips/trips.module.js';
 import { AdminAccountsModule } from './admin-accounts/admin-accounts.module.js';
+import { AdminRbacModule } from './admin-rbac/admin-rbac.module.js';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { AdminAccountsModule } from './admin-accounts/admin-accounts.module.js';
     CustomersModule,
     TripsModule,
     AdminAccountsModule,
+    AdminRbacModule,
   ],
 })
 export class AppModule {}

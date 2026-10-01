@@ -2,6 +2,11 @@ import 'dotenv/config';
 import bcrypt from 'bcrypt';
 import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import { PrismaClient } from '../apps/api/dist/generated/prisma/client.js';
+import {
+  ADMIN_PERMISSION_CATALOG,
+  ADMIN_ROLE_PERMISSION_SCOPE_BY_NAME,
+  isPermissionAllowedForRole,
+} from '../apps/api/dist/auth/permissions/permission-catalog.js';
 
 function config() {
   const url = new URL(process.env.DATABASE_URL ?? process.env.MIGRATION_URL);
@@ -62,6 +67,39 @@ async function assertAtLeast(label, actual, minimum) {
 
 async function assertZero(label, actual) {
   await assertEqual(label, actual, 0);
+}
+
+async function verifyPermissionCatalogAndDefaults() {
+  const permissionRows = await prisma.$queryRawUnsafe('SELECT tenQuyen AS permissionKey FROM Quyen');
+  const availablePermissions = new Set(permissionRows.map((row) => row.permissionKey));
+  for (const definition of ADMIN_PERMISSION_CATALOG) {
+    if (!availablePermissions.has(definition.key)) throw new Error(`Missing seeded permission ${definition.key}`);
+  }
+  console.log(`OK RBAC permission catalog (${ADMIN_PERMISSION_CATALOG.length} keys)`);
+
+  const roleRows = await prisma.$queryRawUnsafe('SELECT tenVaiTro AS roleName FROM VaiTro');
+  const availableRoles = new Set(roleRows.map((row) => row.roleName));
+  const requiredRoles = [...Object.keys(ADMIN_ROLE_PERMISSION_SCOPE_BY_NAME), 'KHACH_HANG'];
+  for (const roleName of requiredRoles) {
+    if (!availableRoles.has(roleName)) throw new Error(`Missing canonical role ${roleName}`);
+  }
+
+  const assignmentRows = await prisma.$queryRawUnsafe('SELECT vt.tenVaiTro AS roleName, q.tenQuyen AS permissionKey FROM VaiTroQuyen vtq JOIN VaiTro vt ON vt.vaiTroId = vtq.vaiTroId JOIN Quyen q ON q.quyenId = vtq.quyenId');
+  for (const { roleName, permissionKey } of assignmentRows) {
+    if (roleName === 'KHACH_HANG') {
+      throw new Error(`Customer role must not have Admin permission ${permissionKey}`);
+    }
+    if (!Object.hasOwn(ADMIN_ROLE_PERMISSION_SCOPE_BY_NAME, roleName)) {
+      throw new Error(`Unsupported role has Admin permission assignment: ${roleName}`);
+    }
+    if (!availablePermissions.has(permissionKey)) {
+      throw new Error(`Unknown permission assignment ${roleName} -> ${permissionKey}`);
+    }
+    if (!isPermissionAllowedForRole(roleName, permissionKey)) {
+      throw new Error(`Permission scope mismatch for ${roleName} -> ${permissionKey}`);
+    }
+  }
+  console.log(`OK RBAC role-permission assignments (${assignmentRows.length} valid mappings)`);
 }
 
 function branchCitySql(alias) {
@@ -138,7 +176,9 @@ async function main() {
     await assertAtLeast(table, await scalar(`SELECT COUNT(*) AS value FROM \`${table}\``), expectedCount);
   }
 
-  for (const table of ['Quyen', 'VaiTroQuyen', 'ThongBao', 'ThongBaoNguoiNhan', 'PhanHoi', 'TinNhanHoTro']) {
+  await verifyPermissionCatalogAndDefaults();
+
+  for (const table of ['ThongBao', 'ThongBaoNguoiNhan', 'PhanHoi', 'TinNhanHoTro']) {
     await assertZero(`${table} omitted`, await scalar(`SELECT COUNT(*) AS value FROM \`${table}\``));
   }
 

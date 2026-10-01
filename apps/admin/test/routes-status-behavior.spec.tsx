@@ -4,6 +4,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { RouteDetails } from '../src/features/routes/components/routes-management';
 import { getRouteById, updateRouteStatus } from '../src/features/routes/services/route-service';
 import type { Route } from '../src/features/routes/types/route';
+import { setEmployeeAdminTestSession } from './admin-auth-test-session';
 
 vi.mock('lucide-react', () => ({
   ArrowDown: () => null, ArrowUp: () => null, ArrowUpDown: () => null,
@@ -33,6 +34,7 @@ beforeAll(() => {
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 function renderDetails(route: Route = activeRoute) {
+  setEmployeeAdminTestSession(['route:read', 'route:update']);
   vi.mocked(getRouteById).mockResolvedValue(route);
   const onUpdated = vi.fn();
   const rendered = render(<RouteDetails routeId={route.routeId} companyOptions={companyOptions}

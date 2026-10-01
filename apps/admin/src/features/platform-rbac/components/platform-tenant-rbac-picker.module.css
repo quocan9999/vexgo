@@ -1,0 +1,169 @@
+.section {
+  margin-top: 20px;
+  padding: 22px;
+  border: 1px solid var(--admin-border);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 3px 14px rgb(20 35 61 / 4%);
+}
+
+.sectionHeading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 17px;
+}
+
+.sectionHeading .eyebrow {
+  margin: 0 0 5px;
+}
+
+.sectionHeading h2 {
+  margin: 0;
+  color: var(--admin-text-strong);
+  font-size: 18px;
+}
+
+.count {
+  color: var(--admin-text-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.searchField {
+  display: flex;
+  min-height: 46px;
+  align-items: center;
+  gap: 10px;
+  padding: 0 13px;
+  border: 1px solid var(--admin-border);
+  border-radius: 8px;
+  color: var(--admin-text-muted);
+}
+
+.searchField:focus-within {
+  border-color: var(--admin-blue);
+  box-shadow: 0 0 0 3px rgb(50 94 235 / 12%);
+}
+
+.searchField input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--admin-text-strong);
+  font: inherit;
+  font-size: 14px;
+}
+
+.companyGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
+  gap: 11px;
+  margin: 18px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.companyLink {
+  display: flex;
+  min-height: 64px;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 13px;
+  border: 1px solid var(--admin-border);
+  border-radius: 9px;
+  color: var(--admin-text-strong);
+  text-decoration: none;
+  transition: border-color 150ms ease, background-color 150ms ease, transform 150ms ease;
+}
+
+.companyLink:hover {
+  transform: translateY(-1px);
+  border-color: #b9c8e5;
+  background: #f8faff;
+}
+
+.companyLink:focus-visible {
+  outline: 3px solid rgb(50 94 235 / 32%);
+  outline-offset: 2px;
+}
+
+.companyIcon {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 9px;
+  background: #edf2ff;
+  color: var(--admin-blue);
+}
+
+.companyName {
+  min-width: 0;
+  flex: 1;
+  font-size: 14px;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.arrow {
+  color: var(--admin-text-muted);
+  font-size: 23px;
+  line-height: 1;
+}
+
+.state,
+.errorState {
+  display: flex;
+  min-height: 105px;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 16px 0 0;
+  color: var(--admin-text-muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+.errorState {
+  flex-direction: column;
+  color: #a91f2d;
+}
+
+.errorState p {
+  margin: 0;
+}
+
+.errorState button {
+  min-height: 44px;
+}
+
+.spinner {
+  animation: spin 900ms linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 600px) {
+  .section {
+    padding: 16px;
+  }
+
+  .companyGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .companyLink,
+  .spinner {
+    animation: none;
+    transition: none;
+  }
+}

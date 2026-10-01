@@ -59,7 +59,7 @@ describe('Admin login form', () => {
       phoneNumber: '+84900000002',
       email: 'futa@vexgo.test',
       roles: ['NHA_XE_ADMIN'],
-      permissions: [],
+      permissions: ['vehicle-type:read'],
       employee: {
         employeeId: 1,
         busCompanyId: 10,
@@ -80,6 +80,36 @@ describe('Admin login form', () => {
 
     await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/vehicle-types'));
     expect(mockSignIn).toHaveBeenCalledWith('futa@vexgo.test', 'password-123');
+  });
+
+  it('routes an employee-only account to its first page with read permission', async () => {
+    setAnonymousSession();
+    mockSignIn.mockResolvedValueOnce({
+      accountId: 3,
+      fullName: 'Nhân viên CSKH',
+      phoneNumber: '+84900000003',
+      email: 'cskh@vexgo.test',
+      roles: ['NHAN_VIEN_CSKH'],
+      permissions: ['fare-price:read'],
+      employee: {
+        employeeId: 3,
+        busCompanyId: 12,
+        busCompanyCode: 'THANHBUOI',
+        busCompanyName: 'Thành Bưởi',
+      },
+      busCompanyId: 12,
+    });
+    render(<AdminLoginForm />);
+
+    fireEvent.change(screen.getByLabelText('Email hoặc số điện thoại'), {
+      target: { value: 'cskh@vexgo.test' },
+    });
+    fireEvent.change(screen.getByLabelText('Mật khẩu'), {
+      target: { value: 'password-123' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Đăng nhập' }));
+
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/fare-prices'));
   });
 
   it('announces API validation errors on the matching fields', async () => {

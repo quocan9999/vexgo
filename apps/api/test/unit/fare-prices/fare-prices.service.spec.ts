@@ -14,6 +14,11 @@ const principal: AuthPrincipal = {
   nhaXeId: 41,
 };
 
+const employeePrincipal: AuthPrincipal = {
+  ...principal,
+  roles: ['NHAN_VIEN_CSKH'],
+};
+
 const currentFare = {
   bangGiaId: 15,
   giaNiemYet: new Prisma.Decimal(250000),
@@ -35,6 +40,7 @@ const currentFare = {
 
 function createService(transaction: Record<string, unknown>) {
   const prisma = {
+    ...transaction,
     $transaction: vi.fn(async (operation: (tx: unknown) => Promise<unknown>) =>
       operation(transaction),
     ),
@@ -44,6 +50,84 @@ function createService(transaction: Record<string, unknown>) {
 }
 
 describe('FarePricesService tenant-safe writes', () => {
+  it('filters fare-price lists by the employee principal tenant', async () => {
+    const transaction = {
+      bangGia: {
+        findMany: vi.fn().mockResolvedValue([currentFare]),
+        count: vi.fn().mockResolvedValue(1),
+      },
+    };
+    const { service } = createService(transaction);
+
+    const result = await service.findAll({
+      page: 1,
+      pageSize: 10,
+      sortBy: 'validFrom',
+      sortDirection: 'desc',
+    }, employeePrincipal);
+
+    expect(result.meta.totalItems).toBe(1);
+    expect(transaction.bangGia.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { nhaXeId: 41 },
+    }));
+    expect(transaction.bangGia.count).toHaveBeenCalledWith({ where: { nhaXeId: 41 } });
+  });
+
+  it('scopes employee fare-price detail reads to the trusted tenant', async () => {
+    const transaction = {
+      bangGia: { findFirst: vi.fn().mockResolvedValue(currentFare) },
+    };
+    const { service } = createService(transaction);
+
+    const result = await service.findOne(15, employeePrincipal);
+
+    expect(result.data.farePriceId).toBe(15);
+    expect(transaction.bangGia.findFirst).toHaveBeenCalledWith({
+      where: { bangGiaId: 15, nhaXeId: 41 },
+      select: expect.any(Object),
+    });
+  });
+
+  it('creates employee fare prices with the trusted tenant and same-tenant relations', async () => {
+    const transaction = {
+      tuyenXe: {
+        findFirst: vi.fn().mockResolvedValue({ tuyenXeId: 3, nhaXeId: 41 }),
+      },
+      loaiXe: {
+        findFirst: vi.fn().mockResolvedValue({ loaiXeId: 2, nhaXeId: 41 }),
+      },
+      bangGia: { create: vi.fn().mockResolvedValue(currentFare) },
+    };
+    const { service } = createService(transaction);
+
+    const result = await service.create({
+      listedPrice: 250000,
+      validFrom: '2099-09-01',
+      validTo: '2099-09-30',
+      status: 'TAM_NGUNG',
+      routeId: 3,
+      vehicleTypeId: 2,
+    }, employeePrincipal);
+
+    expect(result.data.farePriceId).toBe(15);
+    expect(transaction.tuyenXe.findFirst).toHaveBeenCalledWith({
+      where: { tuyenXeId: 3, nhaXeId: 41 },
+      select: { tuyenXeId: true, nhaXeId: true },
+    });
+    expect(transaction.loaiXe.findFirst).toHaveBeenCalledWith({
+      where: { loaiXeId: 2, nhaXeId: 41 },
+      select: { loaiXeId: true, nhaXeId: true },
+    });
+    expect(transaction.bangGia.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        nhaXeId: 41,
+        tuyenXeId: 3,
+        loaiXeId: 2,
+      }),
+      select: expect.any(Object),
+    }));
+  });
+
   it('keeps both fare ID and trusted tenant in the final update predicate', async () => {
     const updatedFare = {
       ...currentFare,
@@ -92,6 +176,85 @@ describe('FarePricesService tenant-safe writes', () => {
       where: { bangGiaId: 15, nhaXeId: 41 },
       data: { trangThai: 'TAM_NGUNG' },
     });
+  });
+
+  it('updates an employee fare only through the trusted tenant predicate', async () => {
+    const updatedFare = {
+      ...currentFare,
+      giaNiemYet: new Prisma.Decimal(275000),
+    };
+    const transaction = {
+      bangGia: {
+        findFirst: vi.fn()
+          .mockResolvedValueOnce(currentFare)
+          .mockResolvedValueOnce(updatedFare),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+      },
+    };
+    const { service } = createService(transaction);
+
+    const result = await service.update(15, { listedPrice: 275000 }, employeePrincipal);
+
+    expect(result.data.listedPrice).toBe(275000);
+    expect(transaction.bangGia.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { bangGiaId: 15, nhaXeId: 41 },
+    }));
+  });
+
+  it('updates employee fare status only through the trusted tenant predicate', async () => {
+    const activeFare = { ...currentFare, trangThai: 'HOAT_DONG' };
+    const suspendedFare = { ...currentFare, trangThai: 'TAM_NGUNG' };
+    const transaction = {
+      bangGia: {
+        findFirst: vi.fn()
+          .mockResolvedValueOnce(activeFare)
+          .mockResolvedValueOnce(suspendedFare),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+      },
+    };
+    const { service } = createService(transaction);
+
+    const result = await service.updateStatus(15, 'TAM_NGUNG', employeePrincipal);
+
+    expect(result.data.status).toBe('TAM_NGUNG');
+    expect(transaction.bangGia.updateMany).toHaveBeenCalledWith({
+      where: { bangGiaId: 15, nhaXeId: 41 },
+      data: { trangThai: 'TAM_NGUNG' },
+    });
+  });
+
+  it('resolves applicable employee fares only for tenant-owned route and type', async () => {
+    const applicableFare = {
+      bangGiaId: 15,
+      giaNiemYet: new Prisma.Decimal(250000),
+      tuNgay: new Date('2099-09-01T00:00:00.000Z'),
+      denNgay: new Date('2099-09-30T00:00:00.000Z'),
+    };
+    const transaction = {
+      tuyenXe: {
+        findFirst: vi.fn().mockResolvedValue({ tuyenXeId: 3, nhaXeId: 41 }),
+      },
+      loaiXe: {
+        findFirst: vi.fn().mockResolvedValue({ loaiXeId: 2, nhaXeId: 41 }),
+      },
+      bangGia: { findMany: vi.fn().mockResolvedValue([applicableFare]) },
+    };
+    const { service } = createService(transaction);
+
+    const result = await service.resolveApplicableFare({
+      routeId: 3,
+      vehicleTypeId: 2,
+      date: '2099-09-15',
+    }, employeePrincipal);
+
+    expect(result.data.listedPrice).toBe(250000);
+    expect(transaction.bangGia.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        nhaXeId: 41,
+        tuyenXeId: 3,
+        loaiXeId: 2,
+      }),
+    }));
   });
 
   it('fails before opening a database transaction if trusted tenant scope is absent', async () => {

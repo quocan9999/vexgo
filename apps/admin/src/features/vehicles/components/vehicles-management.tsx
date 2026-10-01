@@ -29,6 +29,7 @@ import {
   type FilterOption,
 } from '@/components/data-filters/data-filters';
 import { Button } from '@/components/ui/button';
+import { useAdminPermissions } from '@/features/admin-auth/hooks/use-admin-permissions';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
 import {
   getVehicleById,
@@ -100,6 +101,9 @@ function VehicleDetails({
   onClose: () => void;
   onUpdated: (action: 'edit' | 'status', vehicle: VehicleDetail) => void;
 }) {
+  const { can, canAll } = useAdminPermissions();
+  const canUpdate = can('vehicle:update');
+  const canConfigureSeats = canAll(['vehicle:read', 'seat:read']);
   const router = useRouter();
   const statusSubmittingRef = useRef(false);
   const [detailState, setDetailState] = useState<DetailState>({
@@ -309,7 +313,7 @@ function VehicleDetails({
             </section>
 
             <div className="vehicle-detail-actions">
-              <Button
+              {canConfigureSeats && <Button
                 onClick={() =>
                   router.push(`/vehicles/${detailState.vehicle.vehicleId}/seats`)
                 }
@@ -317,8 +321,8 @@ function VehicleDetails({
                 variant="secondary"
               >
                 Cấu hình ghế
-              </Button>
-              <Button
+              </Button>}
+              {canUpdate && <Button
                 onClick={() => {
                   setStatusError(null);
                   setStatusDialogOpen(true);
@@ -329,15 +333,15 @@ function VehicleDetails({
                 {detailState.vehicle.status === 'HOAT_DONG'
                   ? 'Chuyển sang bảo trì'
                   : 'Đưa vào hoạt động'}
-              </Button>
-              <Button onClick={() => setEditDialogOpen(true)} type="button">
+              </Button>}
+              {canUpdate && <Button onClick={() => setEditDialogOpen(true)} type="button">
                 Chỉnh sửa
-              </Button>
+              </Button>}
             </div>
           </div>
         )}
       </AdminDetailSheet>
-      {editDialogOpen && detailState.status === 'success' && (
+      {editDialogOpen && canUpdate && detailState.status === 'success' && (
         <VehicleFormDialog
           busCompanies={options.busCompanies}
           onClose={() => setEditDialogOpen(false)}
@@ -347,7 +351,7 @@ function VehicleDetails({
           vehicleTypes={options.vehicleTypes}
         />
       )}
-      {statusDialogOpen && detailState.status === 'success' && nextStatus && (
+      {statusDialogOpen && canUpdate && detailState.status === 'success' && nextStatus && (
         <AdminConfirmDialog
           ariaBusy={statusSubmitting}
           ariaDescribedBy="vehicle-status-confirmation-description"
@@ -429,6 +433,8 @@ function vehicleStatusBadge(vehicle: VehicleListItem) {
 }
 
 export function VehiclesManagement() {
+  const { can } = useAdminPermissions();
+  const canCreate = can('vehicle:create');
   const {
     vehiclePage,
     error,
@@ -485,10 +491,10 @@ export function VehiclesManagement() {
         <AdminPageHeader
           actions={
             <div className="page-intro-actions">
-              <AdminCreateAction
+              {canCreate && <AdminCreateAction
                 label="Thêm xe"
                 onClick={() => setCreateDialogOpen(true)}
-              />
+              />}
               <AdminRefreshAction loading={loading} onClick={refresh} />
             </div>
           }
@@ -776,7 +782,7 @@ export function VehiclesManagement() {
           vehicleId={selectedVehicleId}
         />
       )}
-      {createDialogOpen && (
+      {createDialogOpen && canCreate && (
         <VehicleFormDialog
           busCompanies={options.busCompanies}
           onClose={() => setCreateDialogOpen(false)}

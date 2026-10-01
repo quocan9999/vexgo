@@ -1,19 +1,30 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { CreateVehicleTypeDto } from './dto/create-vehicle-type.dto.js';
 import { VehicleTypeIdParamsDto } from './dto/vehicle-type-id-params.dto.js';
 import { VehicleTypeQueryDto } from './dto/vehicle-type-query.dto.js';
 import { UpdateVehicleTypeDto } from './dto/update-vehicle-type.dto.js';
 import { VehicleTypesService } from './vehicle-types.service.js';
 import { CurrentPrincipal } from '../auth/decorators/current-principal.decorator.js';
+import { RequirePermissions } from '../auth/decorators/require-permissions.decorator.js';
 import { RequireRoles } from '../auth/decorators/require-roles.decorator.js';
+import { TENANT_PRINCIPAL_ROLES } from '../auth/principal-scope.js';
 import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
 
 @Controller('vehicle-types')
-@RequireRoles('NHA_XE_ADMIN')
+@RequireRoles(...TENANT_PRINCIPAL_ROLES)
 export class VehicleTypesController {
   constructor(private readonly vehicleTypesService: VehicleTypesService) {}
 
   @Get()
+  @RequirePermissions('vehicle-type:read')
   findAll(
     @Query() query: VehicleTypeQueryDto,
     @CurrentPrincipal() principal: AuthPrincipal,
@@ -22,6 +33,7 @@ export class VehicleTypesController {
   }
 
   @Get(':id')
+  @RequirePermissions('vehicle-type:read')
   findOne(
     @Param() params: VehicleTypeIdParamsDto,
     @CurrentPrincipal() principal: AuthPrincipal,
@@ -30,6 +42,7 @@ export class VehicleTypesController {
   }
 
   @Post()
+  @RequirePermissions('vehicle-type:create')
   create(
     @Body() body: CreateVehicleTypeDto,
     @CurrentPrincipal() principal: AuthPrincipal,
@@ -38,6 +51,7 @@ export class VehicleTypesController {
   }
 
   @Patch(':id')
+  @RequirePermissions('vehicle-type:update')
   update(
     @Param() params: VehicleTypeIdParamsDto,
     @Body() body: UpdateVehicleTypeDto,

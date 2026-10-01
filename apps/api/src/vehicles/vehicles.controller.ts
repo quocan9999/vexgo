@@ -23,15 +23,18 @@ import {
 import { UpdateVehicleSeatDto } from './dto/update-vehicle-seat.dto.js';
 import { VehiclesService } from './vehicles.service.js';
 import { CurrentPrincipal } from '../auth/decorators/current-principal.decorator.js';
+import { RequirePermissions } from '../auth/decorators/require-permissions.decorator.js';
 import { RequireRoles } from '../auth/decorators/require-roles.decorator.js';
+import { TENANT_PRINCIPAL_ROLES } from '../auth/principal-scope.js';
 import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
 
 @Controller('vehicles')
-@RequireRoles('NHA_XE_ADMIN')
+@RequireRoles(...TENANT_PRINCIPAL_ROLES)
 export class VehiclesController {
   constructor(private readonly vehiclesService: VehiclesService) {}
 
   @Post()
+  @RequirePermissions('vehicle:create')
   create(
     @Body() body: CreateVehicleDto,
     @CurrentPrincipal() principal: AuthPrincipal,
@@ -40,6 +43,7 @@ export class VehiclesController {
   }
 
   @Patch(':id')
+  @RequirePermissions('vehicle:update')
   update(
     @Param() params: VehicleIdParamsDto,
     @Body() body: UpdateVehicleDto,
@@ -49,6 +53,7 @@ export class VehiclesController {
   }
 
   @Patch(':id/status')
+  @RequirePermissions('vehicle:update')
   updateStatus(
     @Param() params: VehicleIdParamsDto,
     @Body() body: UpdateVehicleStatusDto,
@@ -58,6 +63,7 @@ export class VehiclesController {
   }
 
   @Get()
+  @RequirePermissions('vehicle:read')
   findAll(
     @Query() query: VehicleQueryDto,
     @CurrentPrincipal() principal: AuthPrincipal,
@@ -66,6 +72,7 @@ export class VehiclesController {
   }
 
   @Get(':id')
+  @RequirePermissions('vehicle:read')
   findOne(
     @Param() params: VehicleIdParamsDto,
     @CurrentPrincipal() principal: AuthPrincipal,
@@ -74,6 +81,7 @@ export class VehiclesController {
   }
 
   @Get(':vehicleId/seats')
+  @RequirePermissions('seat:read')
   findSeats(
     @Param() params: VehicleSeatCollectionParamsDto,
     @CurrentPrincipal() principal: AuthPrincipal,
@@ -82,6 +90,7 @@ export class VehiclesController {
   }
 
   @Post(':vehicleId/seats')
+  @RequirePermissions('seat:create')
   createSeat(
     @Param() params: VehicleSeatCollectionParamsDto,
     @Body() body: CreateVehicleSeatDto,
@@ -91,6 +100,7 @@ export class VehiclesController {
   }
 
   @Patch(':vehicleId/seats/:seatId')
+  @RequirePermissions('seat:update')
   updateSeat(
     @Param() params: VehicleSeatParamsDto,
     @Body() body: UpdateVehicleSeatDto,
@@ -106,6 +116,7 @@ export class VehiclesController {
 
   @Delete(':vehicleId/seats/:seatId')
   @HttpCode(HttpStatus.NO_CONTENT)
+  @RequirePermissions('seat:delete')
   deleteSeat(
     @Param() params: VehicleSeatParamsDto,
     @CurrentPrincipal() principal: AuthPrincipal,

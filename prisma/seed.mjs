@@ -2,6 +2,9 @@ import 'dotenv/config';
 import bcrypt from 'bcrypt';
 import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import { PrismaClient } from '../apps/api/dist/generated/prisma/client.js';
+import {
+  ADMIN_PERMISSION_CATALOG,
+} from '../apps/api/dist/auth/permissions/permission-catalog.js';
 
 const TZ = 'Asia/Ho_Chi_Minh';
 const PASSWORD = 'VexGo@123';
@@ -272,6 +275,18 @@ async function seedRoles(db) {
     );
   }
   return result;
+}
+
+async function seedPermissionCatalog(db) {
+  for (const definition of ADMIN_PERMISSION_CATALOG) {
+    await upsertBy(
+      db,
+      'Quyen',
+      { tenQuyen: definition.key },
+      { tenQuyen: definition.key, moTa: definition.description },
+      { moTa: definition.description },
+    );
+  }
 }
 
 async function seedAccounts(db, operators, roles) {
@@ -955,6 +970,7 @@ async function main() {
   const operators = await seedOperators(prisma);
   const vehicleTypes = await seedVehicleTypes(prisma, operators);
   const roles = await seedRoles(prisma);
+  await seedPermissionCatalog(prisma);
   const accounts = await seedAccounts(prisma, operators, roles);
   const fleet = await seedVehiclesAndRoutes(prisma, operators, vehicleTypes);
   const prices = await seedPrices(prisma, operators, fleet.routes, vehicleTypes);

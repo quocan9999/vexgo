@@ -37,6 +37,13 @@ const tenantAdmin: AuthPrincipal = {
   nhanVienId: 9,
   nhaXeId: 1,
 };
+const tenantEmployee: AuthPrincipal = {
+  ...tenantAdmin,
+  taiKhoanId: 8,
+  sessionId: 'employee-session',
+  roles: ['NHAN_VIEN_PHU_XE'],
+  nhanVienId: 10,
+};
 const rawService = new VehiclesService(prisma);
 const service = {
   findSeats: (vehicleId: number, principal = tenantAdmin) =>
@@ -123,6 +130,18 @@ describe('VehiclesService vehicle seats', () => {
     });
   });
 
+  it('scopes employee seat reads to the employee principal tenant', async () => {
+    await service.findSeats(12, tenantEmployee);
+
+    expect(prisma.xe.findFirst).toHaveBeenCalledWith({
+      where: { xeId: 12, nhaXeId: 1 },
+      select: { xeId: true },
+    });
+    expect(prisma.ghe.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { xeId: 12 } }),
+    );
+  });
+
   it('returns an empty list for an existing vehicle without querying a count', async () => {
     vi.mocked(prisma.ghe.findMany).mockResolvedValueOnce([] as never);
 
@@ -153,6 +172,18 @@ describe('VehiclesService vehicle seats', () => {
       select: expect.any(Object),
     });
     expect(result.data).toMatchObject({ seatId: 101, vehicleId: 12 });
+  });
+
+  it('validates employee seat writes against the trusted tenant vehicle', async () => {
+    await service.createSeat(12, createInput(), tenantEmployee);
+
+    expect(prisma.xe.findFirst).toHaveBeenCalledWith({
+      where: { xeId: 12, nhaXeId: 1 },
+      select: { xeId: true },
+    });
+    expect(prisma.ghe.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { xeId: 12, soGhe: 'A01', viTri: 'Tầng dưới' } }),
+    );
   });
 
   it('stores blank position as null', async () => {
