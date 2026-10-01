@@ -44,7 +44,7 @@ function knownError(code: string, target: string[]) {
 describe('AdminAccountsService', () => {
   const tx = {
     nhaXe: { findUnique: vi.fn() },
-    vaiTro: { findUnique: vi.fn() },
+    vaiTro: { findMany: vi.fn() },
     taiKhoan: {
       findUnique: vi.fn(),
       findFirst: vi.fn(),
@@ -81,10 +81,9 @@ describe('AdminAccountsService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     tx.nhaXe.findUnique.mockResolvedValue({ nhaXeId: 12 });
-    tx.vaiTro.findUnique.mockResolvedValue({
-      vaiTroId: 4,
-      tenVaiTro: 'NHA_XE_ADMIN',
-    });
+    tx.vaiTro.findMany.mockResolvedValue([
+      { vaiTroId: 4, tenVaiTro: 'NHA_XE_ADMIN' },
+    ]);
     tx.taiKhoan.findUnique.mockResolvedValue(null);
     tx.taiKhoan.create.mockResolvedValue({ taiKhoanId: 101 });
     tx.nhanVien.create.mockResolvedValue({ nhanVienId: 201 });
@@ -98,7 +97,7 @@ describe('AdminAccountsService', () => {
     prisma.taiKhoan.updateMany.mockResolvedValue({ count: 1 });
   });
 
-  it('creates account, employee, and fixed role atomically with a password hash', async () => {
+  it('defaults omitted roleNames to NHA_XE_ADMIN and hashes the password', async () => {
     const response = await service.create(createInput);
     const storedPassword = tx.taiKhoan.create.mock.calls[0][0].data.matKhau;
 
@@ -117,6 +116,10 @@ describe('AdminAccountsService', () => {
         taiKhoanId: 101,
       },
     });
+    expect(tx.vaiTro.findMany).toHaveBeenCalledWith({
+      where: { tenVaiTro: { in: ['NHA_XE_ADMIN'] } },
+      select: { vaiTroId: true, tenVaiTro: true },
+    });
     expect(tx.taiKhoanVaiTro.create).toHaveBeenCalledWith({
       data: { taiKhoanId: 101, vaiTroId: 4 },
     });
@@ -128,6 +131,66 @@ describe('AdminAccountsService', () => {
     });
     expect(JSON.stringify(response)).not.toContain('matKhau');
     expect(JSON.stringify(response)).not.toContain('refreshTokenHash');
+  });
+
+  it('resolves and assigns every explicitly requested tenant role in the transaction', async () => {
+    tx.vaiTro.findMany.mockResolvedValueOnce([
+      { vaiTroId: 7, tenVaiTro: 'NHAN_VIEN_CSKH' },
+      { vaiTroId: 8, tenVaiTro: 'NHAN_VIEN_KINH_DOANH' },
+    ]);
+    tx.taiKhoan.findFirst.mockResolvedValueOnce({
+      ...adminRecord,
+      taiKhoanVaiTros: [
+        { vaiTro: { tenVaiTro: 'NHAN_VIEN_CSKH' } },
+        { vaiTro: { tenVaiTro: 'NHAN_VIEN_KINH_DOANH' } },
+      ],
+    });
+
+    const response = await service.create({
+      ...createInput,
+      roleNames: ['NHAN_VIEN_CSKH', 'NHAN_VIEN_KINH_DOANH'],
+    });
+
+    expect(tx.vaiTro.findMany).toHaveBeenCalledWith({
+      where: {
+        tenVaiTro: { in: ['NHAN_VIEN_CSKH', 'NHAN_VIEN_KINH_DOANH'] },
+      },
+      select: { vaiTroId: true, tenVaiTro: true },
+    });
+    expect(tx.taiKhoanVaiTro.create).toHaveBeenNthCalledWith(1, {
+      data: { taiKhoanId: 101, vaiTroId: 7 },
+    });
+    expect(tx.taiKhoanVaiTro.create).toHaveBeenNthCalledWith(2, {
+      data: { taiKhoanId: 101, vaiTroId: 8 },
+    });
+    expect(response.data.roles).toEqual([
+      'NHAN_VIEN_CSKH',
+      'NHAN_VIEN_KINH_DOANH',
+    ]);
+  });
+
+  it('rejects invalid requested roles even when called outside the DTO pipe', async () => {
+    const invalidRoleLists: unknown[] = [
+      [],
+      null,
+      ['SUPER_ADMIN'],
+      ['KHACH_HANG'],
+      ['NHA_XE_ADMIN', 'NHA_XE_ADMIN'],
+    ];
+
+    for (const roleNames of invalidRoleLists) {
+      await expect(
+        service.create({
+          ...createInput,
+          roleNames,
+        } as unknown as CreateAdminAccountDto),
+      ).rejects.toMatchObject({
+        response: { error: 'VALIDATION_ERROR' },
+      });
+    }
+
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(tx.taiKhoan.create).not.toHaveBeenCalled();
   });
 
   it('does not write when the phone number is already registered', async () => {
@@ -180,7 +243,7 @@ describe('AdminAccountsService', () => {
     expect(tx.taiKhoanVaiTro.create).not.toHaveBeenCalled();
   });
 
-  it('requires an existing carrier and configured NHA_XE_ADMIN seed role', async () => {
+  it('requires an existing carrier and every selected role to be configured', async () => {
     tx.nhaXe.findUnique.mockResolvedValueOnce(null);
     await expect(service.create(createInput)).rejects.toBeInstanceOf(
       NotFoundException,
@@ -188,7 +251,7 @@ describe('AdminAccountsService', () => {
     expect(tx.taiKhoan.create).not.toHaveBeenCalled();
 
     tx.nhaXe.findUnique.mockResolvedValueOnce({ nhaXeId: 12 });
-    tx.vaiTro.findUnique.mockResolvedValueOnce(null);
+    tx.vaiTro.findMany.mockResolvedValueOnce([]);
     await expect(service.create(createInput)).rejects.toMatchObject({
       response: { error: 'AUTH_ROLE_NOT_CONFIGURED' },
     });

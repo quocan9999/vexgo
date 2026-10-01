@@ -32,6 +32,34 @@ describe('Admin account DTO validation', () => {
     expect(dto.busCompanyId).toBe(12);
   });
 
+  it('accepts one or more explicit tenant roles when creating an account', async () => {
+    const dto = plainToInstance(CreateAdminAccountDto, {
+      ...validCreateInput,
+      roleNames: ['NHAN_VIEN_BAN_VE', 'NHAN_VIEN_CSKH'],
+    });
+
+    await expect(validate(dto, validationOptions)).resolves.toEqual([]);
+  });
+
+  it.each([
+    ['empty list', []],
+    ['null', null],
+    ['non-array', 'NHAN_VIEN_BAN_VE'],
+    ['platform role', ['SUPER_ADMIN']],
+    ['customer role', ['KHACH_HANG']],
+    ['unknown role', ['NOT_A_ROLE']],
+    ['duplicate roles', ['NHA_XE_ADMIN', 'NHA_XE_ADMIN']],
+    ['mixed tenant and customer roles', ['NHA_XE_ADMIN', 'KHACH_HANG']],
+  ])('rejects %s for create roleNames', async (_name, roleNames) => {
+    const dto = plainToInstance(CreateAdminAccountDto, {
+      ...validCreateInput,
+      roleNames,
+    });
+    const errors = await validate(dto, validationOptions);
+
+    expect(errors.map(({ property }) => property)).toContain('roleNames');
+  });
+
   it.each([
     'role',
     'roles',

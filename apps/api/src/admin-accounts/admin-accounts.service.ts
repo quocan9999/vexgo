@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   InternalServerErrorException,
@@ -15,6 +16,7 @@ import type { UpdateAdminAccountDto } from './dto/update-admin-account.dto.js';
 import type { UpdateAdminAccountStatusDto } from './dto/update-admin-account-status.dto.js';
 
 const ADMIN_ACCOUNT_ROLE = 'NHA_XE_ADMIN';
+const TENANT_PRINCIPAL_ROLE_SET = new Set<string>(TENANT_PRINCIPAL_ROLES);
 
 const ADMIN_ACCOUNT_SELECT = {
   taiKhoanId: true,
@@ -104,6 +106,29 @@ function employeeCodeExists(): ConflictException {
     error: 'EMPLOYEE_CODE_EXISTS',
     message: 'Mã nhân viên đã tồn tại trong nhà xe.',
   });
+}
+
+function createRoleNames(input: CreateAdminAccountDto): string[] {
+  const requestedRoleNames: unknown = input.roleNames;
+  if (requestedRoleNames === undefined) return [ADMIN_ACCOUNT_ROLE];
+
+  if (
+    !Array.isArray(requestedRoleNames) ||
+    requestedRoleNames.length === 0 ||
+    new Set(requestedRoleNames).size !== requestedRoleNames.length ||
+    requestedRoleNames.some(
+      (roleName) =>
+        typeof roleName !== 'string' ||
+        !TENANT_PRINCIPAL_ROLE_SET.has(roleName),
+    )
+  ) {
+    throw new BadRequestException({
+      error: 'VALIDATION_ERROR',
+      message: 'Danh sách vai trò nhà xe không hợp lệ.',
+    });
+  }
+
+  return requestedRoleNames;
 }
 
 function busCompanyNotFound(): NotFoundException {
@@ -239,17 +264,18 @@ export class AdminAccountsService {
   }
 
   async create(input: CreateAdminAccountDto) {
+    const roleNames = createRoleNames(input);
     const passwordHash = await bcrypt.hash(input.password, 10);
 
     return this.prisma.$transaction(async (tx) => {
-      const [busCompany, role, existingPhone] = await Promise.all([
+      const [busCompany, roles, existingPhone] = await Promise.all([
         tx.nhaXe.findUnique({
           where: { nhaXeId: input.busCompanyId },
           select: { nhaXeId: true },
         }),
-        tx.vaiTro.findUnique({
-          where: { tenVaiTro: ADMIN_ACCOUNT_ROLE },
-          select: { vaiTroId: true },
+        tx.vaiTro.findMany({
+          where: { tenVaiTro: { in: roleNames } },
+          select: { vaiTroId: true, tenVaiTro: true },
         }),
         tx.taiKhoan.findUnique({
           where: { soDienThoai: input.phoneNumber },
@@ -258,10 +284,10 @@ export class AdminAccountsService {
       ]);
 
       if (!busCompany) throw busCompanyNotFound();
-      if (!role) {
+      if (roles.length !== roleNames.length) {
         throw new InternalServerErrorException({
           error: 'AUTH_ROLE_NOT_CONFIGURED',
-          message: 'Vai trò quản trị nhà xe chưa được cấu hình.',
+          message: 'Một hoặc nhiều vai trò nhà xe chưa được cấu hình.',
         });
       }
       if (existingPhone) throw phoneAlreadyRegistered();
@@ -316,9 +342,11 @@ export class AdminAccountsService {
         throw error;
       }
 
-      await tx.taiKhoanVaiTro.create({
-        data: { taiKhoanId: accountId, vaiTroId: role.vaiTroId },
-      });
+      for (const role of roles) {
+        await tx.taiKhoanVaiTro.create({
+          data: { taiKhoanId: accountId, vaiTroId: role.vaiTroId },
+        });
+      }
       const created = await tx.taiKhoan.findFirst({
         where: managedAdminAccountWhere(accountId),
         select: ADMIN_ACCOUNT_SELECT,

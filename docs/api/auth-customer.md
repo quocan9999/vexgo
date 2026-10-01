@@ -41,32 +41,39 @@ và `AuthorizationGuard` được đăng ký toàn cục: endpoint cần đăng 
 
 Trên branch `feature/admin-auth-authorization`, các API tenant `routes`,
 `vehicle-types`, `vehicles/seats`, `fare-prices` yêu cầu `NHA_XE_ADMIN` và lấy
-tenant từ principal được backend dựng từ DB. API Super Admin quản lý riêng tài
-khoản `NHA_XE_ADMIN` theo contract sau:
+tenant từ principal được backend dựng từ DB. API quản lý tài khoản Admin chỉ
+cho `SUPER_ADMIN`, đồng thời kiểm tra permission platform tương ứng:
 
 | Method | Endpoint | Quyền | Mục đích |
 |---|---|---|---|
-| GET | `/api/v1/admin-accounts` | `SUPER_ADMIN` | Danh sách, filter `busCompanyId`/`status`, pagination/search/sort |
-| GET | `/api/v1/admin-accounts/:id` | `SUPER_ADMIN` | Chi tiết tài khoản admin nhà xe |
-| POST | `/api/v1/admin-accounts` | `SUPER_ADMIN` | Tạo account + employee + role trong transaction |
-| PATCH | `/api/v1/admin-accounts/:id` | `SUPER_ADMIN` | Sửa tên/ngày sinh/email/CCCD |
-| PATCH | `/api/v1/admin-accounts/:id/status` | `SUPER_ADMIN` | Khóa `TAM_KHOA` hoặc mở `HOAT_DONG` |
+| GET | `/api/v1/admin-accounts` | `SUPER_ADMIN` + `admin-account:read` | Danh sách, filter `busCompanyId`/`status`, pagination/search/sort |
+| GET | `/api/v1/admin-accounts/:id` | `SUPER_ADMIN` + `admin-account:read` | Chi tiết tài khoản tenant gắn nhân viên |
+| POST | `/api/v1/admin-accounts` | `SUPER_ADMIN` + `admin-account:create` | Tạo account + employee + tenant roles trong transaction |
+| PATCH | `/api/v1/admin-accounts/:id` | `SUPER_ADMIN` + `admin-account:update` | Sửa tên/ngày sinh/email/CCCD |
+| PATCH | `/api/v1/admin-accounts/:id/status` | `SUPER_ADMIN` + `admin-account:update` | Khóa `TAM_KHOA` hoặc mở `HOAT_DONG` |
 
-Tài khoản được tạo với role cố định `NHA_XE_ADMIN`; không nhận role/status/
-permission từ client. Tenant được lưu qua `TaiKhoan → NhanVien → NhaXe`, không
-đặt trong JWT. Khóa thu hồi session đang hoạt động; mở khóa không tạo session.
-Endpoint không hard-delete và không cho đổi tenant, mã nhân viên, phone hoặc
-password qua profile PATCH. Danh sách này chưa có nghĩa tất cả module nghiệp vụ
-đã được audit hoặc permission matrix đã hoàn tất.
+Resource gồm tài khoản tenant có liên kết `NhanVien`; account không có role vẫn
+được quản lý để có thể cấp role sau. Mọi role hiện tại phải thuộc tenant role
+catalog; account `SUPER_ADMIN`, customer, mixed-scope hoặc không có employee
+identity không thuộc resource này. Tenant được lưu qua
+`TaiKhoan → NhanVien → NhaXe`, không đặt trong JWT. Khóa thu hồi session đang
+hoạt động; mở khóa không tạo session. Endpoint không hard-delete và không cho
+đổi tenant, mã nhân viên, phone hoặc password qua profile PATCH. Danh sách này
+chưa có nghĩa tất cả module nghiệp vụ đã được audit hoặc permission matrix đã
+hoàn tất.
 
 `POST /api/v1/admin-accounts` nhận `fullName`, `phoneNumber`, `password`,
-`busCompanyId`, `employeeCode` và các field tùy chọn `dateOfBirth`, `email`,
-`citizenId`. Mật khẩu dài 8–72 byte UTF-8; ba field tùy chọn cuối nhận `null`
-để xóa. Profile PATCH chỉ nhận `fullName`, `dateOfBirth`, `email`, `citizenId`;
-status PATCH chỉ nhận `{ "status": "HOAT_DONG" | "TAM_KHOA" }`. Email có
-unique constraint sau migration đăng nhập bằng email; trước khi deploy migration
-cần kiểm tra email hiện có không trùng sau `LOWER(TRIM(email))`. CCCD không có
-unique constraint.
+`busCompanyId`, `employeeCode`, các field tùy chọn `dateOfBirth`, `email`,
+`citizenId` và `roleNames`. `roleNames` nếu bỏ qua sẽ giữ tương thích bằng cách
+gán `NHA_XE_ADMIN`; nếu truyền phải là danh sách không rỗng, không trùng, chỉ
+chứa role tenant hợp lệ. Backend resolve role từ catalog và không nhận
+`vaiTroId`; không chấp nhận role platform, customer, không tồn tại hoặc `null`.
+Tạo tài khoản, nhân viên và các role assignment là một transaction. Mật khẩu
+dài 8–72 byte UTF-8; ba field tùy chọn hồ sơ nhận `null` để xóa. Profile PATCH
+chỉ nhận `fullName`, `dateOfBirth`, `email`, `citizenId`; status PATCH chỉ nhận
+`{ "status": "HOAT_DONG" | "TAM_KHOA" }`. Email có unique constraint sau
+migration đăng nhập bằng email; trước khi deploy migration cần kiểm tra email
+hiện có không trùng sau `LOWER(TRIM(email))`. CCCD không có unique constraint.
 
 Admin Web đăng nhập thật bằng `{ identifier, password }`, trong đó identifier
 là email hoặc số điện thoại; Customer/Mobile tiếp tục dùng payload hiện hữu

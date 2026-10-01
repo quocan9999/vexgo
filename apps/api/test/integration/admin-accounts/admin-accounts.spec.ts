@@ -251,7 +251,7 @@ describe('Admin account management API', () => {
     ).expect(200);
   });
 
-  it('creates the account, employee, and fixed tenant-admin role without returning secrets', async () => {
+  it('creates the account with the legacy default NHA_XE_ADMIN role without returning secrets', async () => {
     const created = await createAdminAccount();
     const stored = await prisma.taiKhoan.findUniqueOrThrow({
       where: { taiKhoanId: created.accountId },
@@ -288,6 +288,24 @@ describe('Admin account management API', () => {
     expect(JSON.stringify(detail.body)).not.toContain('refreshTokenHash');
   });
 
+  it('creates an employee account with explicitly selected tenant roles', async () => {
+    const created = await createAdminAccount(firstCompanyId, {
+      roleNames: ['NHAN_VIEN_BAN_VE', 'NHAN_VIEN_CSKH'],
+    });
+    const stored = await prisma.taiKhoan.findUniqueOrThrow({
+      where: { taiKhoanId: created.accountId },
+      include: { taiKhoanVaiTros: { include: { vaiTro: true } } },
+    });
+
+    expect(created.roles).toEqual(
+      expect.arrayContaining(['NHAN_VIEN_BAN_VE', 'NHAN_VIEN_CSKH']),
+    );
+    expect(stored.taiKhoanVaiTros.map(({ vaiTro }) => vaiTro.tenVaiTro)).toEqual(
+      expect.arrayContaining(['NHAN_VIEN_BAN_VE', 'NHAN_VIEN_CSKH']),
+    );
+    expect(stored.taiKhoanVaiTros).toHaveLength(2);
+  });
+
   it('rejects role injection and invalid creation fields before writing', async () => {
     const identity = uniqueIdentity();
     const response = await asSuperAdmin(
@@ -310,6 +328,36 @@ describe('Admin account management API', () => {
       }),
     ).toBeNull();
   });
+
+  it.each([
+    { roleNames: [] as string[] },
+    { roleNames: ['SUPER_ADMIN'] },
+  ])(
+    'rejects invalid roleNames $roleNames before creating an account',
+    async ({ roleNames }) => {
+      const identity = uniqueIdentity();
+      const response = await asSuperAdmin(
+        request(app.getHttpServer()).post('/api/v1/admin-accounts'),
+      )
+        .send({
+          fullName: 'Nguyễn Minh Anh',
+          phoneNumber: identity.phoneNumber,
+          password: 'VexGo@123',
+          busCompanyId: firstCompanyId,
+          employeeCode: identity.employeeCode,
+          roleNames,
+        })
+        .expect(400);
+
+      expect(response.body.error).toBe('VALIDATION_ERROR');
+      expect(
+        await prisma.taiKhoan.findUnique({
+          where: { soDienThoai: identity.phoneNumber },
+          select: { taiKhoanId: true },
+        }),
+      ).toBeNull();
+    },
+  );
 
   it('lists tenant employee accounts without admitting platform or customer scope', async () => {
     const first = await createAdminAccount(firstCompanyId);
