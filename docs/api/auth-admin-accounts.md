@@ -101,12 +101,15 @@ Response `201`:
 ## Danh sách và chi tiết
 
 ```http
-GET /api/v1/admin-accounts?page=1&pageSize=10&search=FUTA&busCompanyId=12&status=HOAT_DONG&sortBy=createdAt&sortDirection=desc
+GET /api/v1/admin-accounts?page=1&pageSize=10&search=FUTA&busCompanyId=12&roleName=NHAN_VIEN_BAN_VE&status=HOAT_DONG&createdFrom=2026-09-01&createdTo=2026-09-30&sortBy=createdAt&sortDirection=desc
 GET /api/v1/admin-accounts/:id
 ```
 
 Danh sách hỗ trợ `page`, `pageSize`, `search`, `sortBy`, `sortDirection`, cùng
-các filter `busCompanyId` và `status`. Các giá trị `sortBy` được chấp nhận:
+các filter `busCompanyId`, `roleName`, `status`, `createdFrom` và `createdTo`.
+`roleName` chỉ nhận vai trò tenant trong catalog; khoảng ngày dùng định dạng
+`YYYY-MM-DD`, tính cả ngày bắt đầu và kết thúc theo `BUSINESS_TIME_ZONE` (mặc
+định `Asia/Ho_Chi_Minh`). `createdTo` phải bằng hoặc sau `createdFrom`. Các giá trị `sortBy` được chấp nhận:
 `fullName`, `phoneNumber`, `status`, `createdAt`, `updatedAt`. `busCompanyId` là
 filter platform do Super Admin yêu cầu, không làm thay đổi quyền của request.
 

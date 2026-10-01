@@ -191,18 +191,36 @@ describe('Admin account DTO validation', () => {
       pageSize: '20',
       busCompanyId: '12',
       status: 'TAM_KHOA',
+      roleName: 'NHAN_VIEN_CSKH',
+      createdFrom: '2026-09-01',
+      createdTo: '2026-09-30',
       sortBy: 'fullName',
       sortDirection: 'desc',
     });
 
     await expect(validate(dto, validationOptions)).resolves.toEqual([]);
     expect(dto.busCompanyId).toBe(12);
+    expect(dto.roleName).toBe('NHAN_VIEN_CSKH');
 
     const invalid = plainToInstance(AdminAccountQueryDto, {
       busCompanyId: '1.2',
     });
     const errors = await validate(invalid, validationOptions);
     expect(errors.map(({ property }) => property)).toContain('busCompanyId');
+  });
+
+  it.each([
+    ['unknown role', { roleName: 'SUPER_ADMIN' }],
+    ['invalid creation date', { createdFrom: '2026-02-30' }],
+    [
+      'reversed creation range',
+      { createdFrom: '2026-09-30', createdTo: '2026-09-01' },
+    ],
+  ])('rejects an invalid account-list filter: %s', async (_label, filter) => {
+    const dto = plainToInstance(AdminAccountQueryDto, filter);
+
+    const errors = await validate(dto, validationOptions);
+    expect(errors.length).toBeGreaterThan(0);
   });
 
   it('transforms only positive integer account IDs', async () => {

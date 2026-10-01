@@ -67,7 +67,10 @@ describe('AdminAccountsService', () => {
       updateMany: vi.fn(),
     },
   };
-  const service = new AdminAccountsService(prisma as unknown as PrismaService);
+  const service = new AdminAccountsService(
+    prisma as unknown as PrismaService,
+    { get: () => 'Asia/Ho_Chi_Minh' } as never,
+  );
   const createInput: CreateAdminAccountDto = {
     fullName: 'Nguyễn Minh Anh',
     phoneNumber: '+84912345678',
@@ -270,6 +273,9 @@ describe('AdminAccountsService', () => {
       search: 'FUTA',
       busCompanyId: 12,
       status: 'HOAT_DONG',
+      roleName: 'NHAN_VIEN_BAN_VE',
+      createdFrom: '2026-09-30',
+      createdTo: '2026-10-02',
     };
 
     await expect(service.findAll(query)).resolves.toMatchObject({
@@ -286,6 +292,19 @@ describe('AdminAccountsService', () => {
           }),
           { trangThai: 'HOAT_DONG' },
           { nhanVien: { is: { nhaXeId: 12 } } },
+          {
+            taiKhoanVaiTros: {
+              some: {
+                vaiTro: { is: { tenVaiTro: 'NHAN_VIEN_BAN_VE' } },
+              },
+            },
+          },
+          {
+            createdAt: {
+              gte: new Date('2026-09-29T17:00:00.000Z'),
+              lt: new Date('2026-10-02T17:00:00.000Z'),
+            },
+          },
         ]),
       }),
     );

@@ -6,9 +6,14 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
+import { ConfigService } from '@nestjs/config';
 import { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { normalizeEmail } from '../common/normalize-email.js';
+import {
+  businessDateStartUtc,
+  resolveBusinessTimeZone,
+} from '../common/time/business-date.js';
 import { TENANT_PRINCIPAL_ROLES } from '../auth/principal-scope.js';
 import type { AdminAccountQueryDto } from './dto/admin-account-query.dto.js';
 import type { CreateAdminAccountDto } from './dto/create-admin-account.dto.js';
@@ -17,6 +22,13 @@ import type { UpdateAdminAccountStatusDto } from './dto/update-admin-account-sta
 
 const ADMIN_ACCOUNT_ROLE = 'NHA_XE_ADMIN';
 const TENANT_PRINCIPAL_ROLE_SET = new Set<string>(TENANT_PRINCIPAL_ROLES);
+
+function addCalendarDays(dateOnly: string, days: number): string {
+  const [year, month, day] = dateOnly.split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, day + days))
+    .toISOString()
+    .slice(0, 10);
+}
 
 const ADMIN_ACCOUNT_SELECT = {
   taiKhoanId: true,
@@ -209,7 +221,10 @@ function mapAdminAccount(account: AdminAccountRecord) {
 
 @Injectable()
 export class AdminAccountsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly config: ConfigService,
+  ) {}
 
   async findAll(query: AdminAccountQueryDto) {
     const conditions: Prisma.TaiKhoanWhereInput[] = [
@@ -220,6 +235,33 @@ export class AdminAccountsService {
     if (query.status) conditions.push({ trangThai: query.status });
     if (query.busCompanyId !== undefined) {
       conditions.push({ nhanVien: { is: { nhaXeId: query.busCompanyId } } });
+    }
+    if (query.roleName) {
+      conditions.push({
+        taiKhoanVaiTros: {
+          some: { vaiTro: { is: { tenVaiTro: query.roleName } } },
+        },
+      });
+    }
+    if (query.createdFrom || query.createdTo) {
+      const businessTimeZone = resolveBusinessTimeZone(
+        this.config.get<string>('BUSINESS_TIME_ZONE'),
+      );
+      conditions.push({
+        createdAt: {
+          ...(query.createdFrom
+            ? { gte: businessDateStartUtc(query.createdFrom, businessTimeZone) }
+            : {}),
+          ...(query.createdTo
+            ? {
+                lt: businessDateStartUtc(
+                  addCalendarDays(query.createdTo, 1),
+                  businessTimeZone,
+                ),
+              }
+            : {}),
+        },
+      });
     }
     if (search) {
       conditions.push({

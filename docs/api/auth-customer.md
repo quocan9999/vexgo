@@ -46,7 +46,7 @@ cho `SUPER_ADMIN`, đồng thời kiểm tra permission platform tương ứng:
 
 | Method | Endpoint | Quyền | Mục đích |
 |---|---|---|---|
-| GET | `/api/v1/admin-accounts` | `SUPER_ADMIN` + `admin-account:read` | Danh sách, filter `busCompanyId`/`status`, pagination/search/sort |
+| GET | `/api/v1/admin-accounts` | `SUPER_ADMIN` + `admin-account:read` | Danh sách, filter nhà xe/vai trò/trạng thái/ngày tạo, pagination/search/sort |
 | GET | `/api/v1/admin-accounts/:id` | `SUPER_ADMIN` + `admin-account:read` | Chi tiết tài khoản tenant gắn nhân viên |
 | POST | `/api/v1/admin-accounts` | `SUPER_ADMIN` + `admin-account:create` | Tạo account + employee + tenant roles trong transaction |
 | PATCH | `/api/v1/admin-accounts/:id` | `SUPER_ADMIN` + `admin-account:update` | Sửa tên/ngày sinh/email/CCCD |
