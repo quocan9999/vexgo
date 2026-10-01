@@ -5,7 +5,6 @@ import {
   Check,
   LoaderCircle,
   RotateCcw,
-  ShieldCheck,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { AdminConfirmDialog } from '@/components/admin/admin-confirm-dialog';
@@ -328,15 +327,6 @@ export function TenantRbacManagement() {
             />
           )}
         />
-
-        <section aria-label="Phạm vi cấu hình quyền" className={styles.scopeNotice}>
-          <ShieldCheck aria-hidden="true" size={20} />
-          <p>
-            Cấu hình này chỉ áp dụng cho nhà xe{' '}
-            <strong>{session?.employee?.busCompanyName || 'đang đăng nhập'}</strong>.
-            Quyền mặc định toàn hệ thống không bị thay đổi.
-          </p>
-        </section>
 
         {!canEdit && canRead && (
           <p className={styles.readOnlyNotice} role="status">

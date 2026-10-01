@@ -1,4 +1,3 @@
-.scopeNotice,
 .successMessage,
 .warningMessage,
 .readOnlyNotice,
@@ -8,28 +7,6 @@
 .confirmActions {
   display: flex;
   align-items: center;
-}
-
-.scopeNotice {
-  gap: 12px;
-  margin-top: 22px;
-  padding: 14px 16px;
-  border: 1px solid var(--admin-border);
-  border-left: 3px solid var(--admin-blue);
-  border-radius: 10px;
-  background: #fff;
-  color: var(--admin-text-strong);
-}
-
-.scopeNotice svg {
-  flex: 0 0 auto;
-  color: var(--admin-blue);
-}
-
-.scopeNotice p {
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.55;
 }
 
 .readOnlyNotice,
@@ -263,7 +240,6 @@
 }
 
 @media (max-width: 680px) {
-  .scopeNotice,
   .errorPanel,
   .configurationSummary {
     padding: 14px;

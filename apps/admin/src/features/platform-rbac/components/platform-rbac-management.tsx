@@ -5,7 +5,6 @@ import {
   Check,
   LoaderCircle,
   RotateCcw,
-  ShieldCheck,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { AdminConfirmDialog } from '@/components/admin/admin-confirm-dialog';
@@ -214,14 +213,6 @@ export function PlatformRbacManagement() {
         />
 
         <PlatformRbacScopeNavigation activeScope="platform" />
-
-        <section aria-label="Phạm vi cấu hình quyền" className={styles.scopeNotice}>
-          <ShieldCheck aria-hidden="true" size={20} />
-          <p>
-            Đây là quyền mặc định toàn hệ thống của vai trò. Thay đổi áp dụng cho
-            các tài khoản mang vai trò này; không phải cấu hình riêng cho một nhà xe.
-          </p>
-        </section>
 
         {feedback?.type === 'success' && (
           <p className={styles.successMessage} role="status">
