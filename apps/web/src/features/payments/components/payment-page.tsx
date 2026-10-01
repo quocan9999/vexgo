@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState, useEffect, useSyncExternalStore, Suspense } from 'react';
+import React, { useState, useEffect, useMemo, useSyncExternalStore, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Info, ScanLine } from 'lucide-react';
 import {
-  getPaymentDraft,
+  PAYMENT_DRAFT_STORAGE_PREFIX,
+  validatePaymentDraft,
   type PaymentDraft,
 } from '@/features/booking/services/payment-draft';
 import { FeaturePlaceholderModal } from '@/features/booking/components/feature-placeholder-modal';
@@ -19,10 +20,13 @@ function useIsClient(): boolean {
   );
 }
 
-function usePaymentDraft(draftId: string | null): PaymentDraft | null {
+function useRawPaymentDraft(draftId: string | null): string | null {
   return useSyncExternalStore(
     emptySubscribe,
-    () => (draftId ? getPaymentDraft(draftId) : null),
+    () => {
+      if (!draftId || typeof window === 'undefined') return null;
+      return sessionStorage.getItem(`${PAYMENT_DRAFT_STORAGE_PREFIX}${draftId}`);
+    },
     () => null,
   );
 }
@@ -33,7 +37,16 @@ function PaymentContent() {
   const draftId = searchParams.get('draftId');
 
   const isClient = useIsClient();
-  const draft = usePaymentDraft(draftId);
+  const rawDraft = useRawPaymentDraft(draftId);
+
+  const draft = useMemo<PaymentDraft | null>(() => {
+    if (!rawDraft) return null;
+    try {
+      return validatePaymentDraft(JSON.parse(rawDraft));
+    } catch {
+      return null;
+    }
+  }, [rawDraft]);
 
   const [selectedMethod, setSelectedMethod] = useState('momo');
   const [isProcessing, setIsProcessing] = useState(false);

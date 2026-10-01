@@ -66,6 +66,91 @@ test('getPaymentDraft returns null for nonexistent or invalid draftId', () => {
   assert.equal(getPaymentDraft('missing-fields'), null);
 });
 
+test('getPaymentDraft thoroughly rejects malformed drafts with invalid fares, legs, or passenger', () => {
+  const baseValid = {
+    id: 'test-draft-1',
+    tripType: 'one-way',
+    passenger: {
+      fullName: 'Nguyễn Văn A',
+      phoneNumber: '0901234567',
+      email: 'a@example.com',
+    },
+    legs: [
+      {
+        tripId: 1,
+        route: 'Sài Gòn - Đà Lạt',
+        departureTime: '20:00 01/10/2026',
+        seats: ['A01'],
+        pickup: 'Bến xe',
+        dropoff: 'Bến xe',
+        unitFare: 200000,
+        subtotal: 200000,
+      },
+    ],
+    totalFare: 200000,
+  };
+
+  // Malformed passenger
+  sessionStorage.setItem(
+    `${PAYMENT_DRAFT_STORAGE_PREFIX}empty-name`,
+    JSON.stringify({ ...baseValid, passenger: { ...baseValid.passenger, fullName: '   ' } }),
+  );
+  assert.equal(getPaymentDraft('empty-name'), null);
+
+  sessionStorage.setItem(
+    `${PAYMENT_DRAFT_STORAGE_PREFIX}missing-email`,
+    JSON.stringify({ ...baseValid, passenger: { fullName: 'A', phoneNumber: '0901234567' } }),
+  );
+  assert.equal(getPaymentDraft('missing-email'), null);
+
+  // Malformed fares
+  sessionStorage.setItem(
+    `${PAYMENT_DRAFT_STORAGE_PREFIX}nan-totalFare`,
+    JSON.stringify({ ...baseValid, totalFare: 'not-a-number' }),
+  );
+  assert.equal(getPaymentDraft('nan-totalFare'), null);
+
+  sessionStorage.setItem(
+    `${PAYMENT_DRAFT_STORAGE_PREFIX}negative-totalFare`,
+    JSON.stringify({ ...baseValid, totalFare: -50000 }),
+  );
+  assert.equal(getPaymentDraft('negative-totalFare'), null);
+
+  // Leg mismatch: one-way with 2 legs
+  sessionStorage.setItem(
+    `${PAYMENT_DRAFT_STORAGE_PREFIX}one-way-2-legs`,
+    JSON.stringify({ ...baseValid, legs: [baseValid.legs[0], baseValid.legs[0]] }),
+  );
+  assert.equal(getPaymentDraft('one-way-2-legs'), null);
+
+  // Leg mismatch: round-trip with 1 leg
+  sessionStorage.setItem(
+    `${PAYMENT_DRAFT_STORAGE_PREFIX}round-trip-1-leg`,
+    JSON.stringify({ ...baseValid, tripType: 'round-trip' }),
+  );
+  assert.equal(getPaymentDraft('round-trip-1-leg'), null);
+
+  // Malformed leg data: empty seats
+  sessionStorage.setItem(
+    `${PAYMENT_DRAFT_STORAGE_PREFIX}empty-seats`,
+    JSON.stringify({
+      ...baseValid,
+      legs: [{ ...baseValid.legs[0], seats: [] }],
+    }),
+  );
+  assert.equal(getPaymentDraft('empty-seats'), null);
+
+  // Malformed leg data: missing subtotal
+  sessionStorage.setItem(
+    `${PAYMENT_DRAFT_STORAGE_PREFIX}nan-subtotal`,
+    JSON.stringify({
+      ...baseValid,
+      legs: [{ ...baseValid.legs[0], subtotal: null }],
+    }),
+  );
+  assert.equal(getPaymentDraft('nan-subtotal'), null);
+});
+
 test('round-trip payment draft contains 2 distinct legs with independent routes and times', () => {
   const draft = createPaymentDraft({
     tripType: 'round-trip',

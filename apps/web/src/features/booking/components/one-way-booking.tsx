@@ -27,7 +27,6 @@ import type { ILuggageItem } from './luggage/luggage-item';
 import {
   canPayForOneWayBooking,
   formatTripDateTime,
-  buildOneWayPaymentQuery,
 } from '../utils/one-way-booking';
 import { validatePassengerInfo } from '../utils/passenger-validation';
 import { createPaymentDraft } from '../services/payment-draft';
@@ -507,6 +506,7 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
               <div className="flex items-center gap-3">
                 <button
                   type="button"
+                  onClick={() => router.back()}
                   className="h-11 px-8 rounded-full border border-slate-300 text-slate-700 text-sm font-bold hover:bg-slate-50 transition-colors"
                 >
                   Hủy
