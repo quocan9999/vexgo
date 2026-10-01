@@ -311,14 +311,16 @@ describe('Admin account management API', () => {
     ).toBeNull();
   });
 
-  it('lists only NHA_XE_ADMIN accounts and applies company and status filters', async () => {
+  it('lists tenant employee accounts without admitting platform or customer scope', async () => {
     const first = await createAdminAccount(firstCompanyId);
     const secondCompanyAdmin = await createAdminAccount(secondCompanyId);
     const employeeId = await createNonAdminEmployee(['NHAN_VIEN_BAN_VE']);
+    const noRoleEmployeeId = await createNonAdminEmployee([]);
     const mixedSuperAdminId = await createNonAdminEmployee([
       'NHA_XE_ADMIN',
       'SUPER_ADMIN',
     ]);
+    const customerEmployeeId = await createNonAdminEmployee(['KHACH_HANG']);
 
     const response = await asSuperAdmin(
       request(app.getHttpServer())
@@ -330,24 +332,52 @@ describe('Admin account management API', () => {
     );
 
     expect(listedIds).toContain(first.accountId);
+    expect(listedIds).toContain(employeeId);
+    expect(listedIds).toContain(noRoleEmployeeId);
     expect(listedIds).not.toContain(secondCompanyAdmin.accountId);
-    expect(listedIds).not.toContain(employeeId);
     expect(listedIds).not.toContain(mixedSuperAdminId);
+    expect(listedIds).not.toContain(customerEmployeeId);
     expect(response.body.meta).toMatchObject({ page: 1, pageSize: 10 });
   });
 
-  it('hides employee and mixed Super Admin IDs outside its managed collection', async () => {
+  it('allows tenant employee and no-role account detail but hides conflicting scopes', async () => {
     const employeeId = await createNonAdminEmployee(['NHAN_VIEN_BAN_VE']);
+    const noRoleEmployeeId = await createNonAdminEmployee([]);
     const mixedSuperAdminId = await createNonAdminEmployee([
       'NHA_XE_ADMIN',
       'SUPER_ADMIN',
     ]);
+    const customerEmployeeId = await createNonAdminEmployee(['KHACH_HANG']);
 
-    for (const id of [employeeId, mixedSuperAdminId]) {
+    const employee = await asSuperAdmin(
+      request(app.getHttpServer()).get(`/api/v1/admin-accounts/${employeeId}`),
+    ).expect(200);
+    expect(employee.body.data.roles).toEqual(['NHAN_VIEN_BAN_VE']);
+
+    const noRoleEmployee = await asSuperAdmin(
+      request(app.getHttpServer()).get(
+        `/api/v1/admin-accounts/${noRoleEmployeeId}`,
+      ),
+    ).expect(200);
+    expect(noRoleEmployee.body.data.roles).toEqual([]);
+
+    for (const id of [mixedSuperAdminId, customerEmployeeId]) {
       const response = await asSuperAdmin(
         request(app.getHttpServer()).get(`/api/v1/admin-accounts/${id}`),
       ).expect(404);
       expect(response.body.error).toBe('ADMIN_ACCOUNT_NOT_FOUND');
+
+      await asSuperAdmin(
+        request(app.getHttpServer())
+          .patch(`/api/v1/admin-accounts/${id}`)
+          .send({ fullName: 'Không được cập nhật' }),
+      ).expect(404);
+
+      await asSuperAdmin(
+        request(app.getHttpServer())
+          .patch(`/api/v1/admin-accounts/${id}/status`)
+          .send({ status: 'TAM_KHOA' }),
+      ).expect(404);
     }
   });
 

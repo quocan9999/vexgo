@@ -8,13 +8,13 @@ import * as bcrypt from 'bcrypt';
 import { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { normalizeEmail } from '../common/normalize-email.js';
+import { TENANT_PRINCIPAL_ROLES } from '../auth/principal-scope.js';
 import type { AdminAccountQueryDto } from './dto/admin-account-query.dto.js';
 import type { CreateAdminAccountDto } from './dto/create-admin-account.dto.js';
 import type { UpdateAdminAccountDto } from './dto/update-admin-account.dto.js';
 import type { UpdateAdminAccountStatusDto } from './dto/update-admin-account-status.dto.js';
 
 const ADMIN_ACCOUNT_ROLE = 'NHA_XE_ADMIN';
-const SUPER_ADMIN_ROLE = 'SUPER_ADMIN';
 
 const ADMIN_ACCOUNT_SELECT = {
   taiKhoanId: true,
@@ -69,11 +69,10 @@ function managedAdminAccountWhere(
     ...(taiKhoanId === undefined ? {} : { taiKhoanId }),
     nhanVien: { isNot: null },
     taiKhoanVaiTros: {
-      some: { vaiTro: { is: { tenVaiTro: ADMIN_ACCOUNT_ROLE } } },
-    },
-    NOT: {
-      taiKhoanVaiTros: {
-        some: { vaiTro: { is: { tenVaiTro: SUPER_ADMIN_ROLE } } },
+      every: {
+        vaiTro: {
+          is: { tenVaiTro: { in: [...TENANT_PRINCIPAL_ROLES] } },
+        },
       },
     },
   };

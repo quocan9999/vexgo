@@ -223,6 +223,25 @@ describe('AdminAccountsService', () => {
         ]),
       }),
     );
+    expect(queryUsed.where.AND[0]).toMatchObject({
+      taiKhoanVaiTros: {
+        every: {
+          vaiTro: {
+            is: {
+              tenVaiTro: {
+                in: [
+                  'NHA_XE_ADMIN',
+                  'NHAN_VIEN_BAN_VE',
+                  'NHAN_VIEN_CSKH',
+                  'NHAN_VIEN_PHU_XE',
+                  'NHAN_VIEN_KINH_DOANH',
+                ],
+              },
+            },
+          },
+        },
+      },
+    });
     expect(JSON.stringify(queryUsed.select)).not.toContain('matKhau');
   });
 
