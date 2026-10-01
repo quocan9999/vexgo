@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
-import { DemoSessionProvider } from '@/features/auth/demo-session';
+import { AuthSessionProvider } from '@/features/auth/auth-session';
 
 export const metadata: Metadata = {
   title: 'VexGo — Đặt vé xe khách',
@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: LayoutProps<'/'>) {
   return (
     <html lang="vi" className="h-full antialiased">
-      <body className="flex min-h-full flex-col bg-white font-sans text-slate-900"><DemoSessionProvider>{children}</DemoSessionProvider></body>
+      <body className="flex min-h-full flex-col bg-white font-sans text-slate-900"><AuthSessionProvider>{children}</AuthSessionProvider></body>
     </html>
   );
 }

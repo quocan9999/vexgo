@@ -1,25 +1,26 @@
 /* eslint-disable */
 'use client';
 
-import { useState } from 'react';
+import { useState, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
 import { EcosystemSection } from './ecosystem-section';
 import { HeroSection } from './hero-section';
 import { NewsSection } from './news-section';
 import { PopularRoutesSection } from './popular-routes-section';
 import { PromotionsSection } from './promotions-section';
-import { PostList } from '@/features/posts/components/post-list';
-import { POST_FIXTURES } from '@/features/posts/data/post-fixtures';
+import { TripList } from '@/features/trips/components/trip-list';
 
-export function HomePage() {
+export function HomePage({ initialHasSearched = false }: { initialHasSearched?: boolean }) {
   const router = useRouter();
   const [activeSearchTab, setActiveSearchTab] = useState<'BUY' | 'RENT'>('BUY');
   const [selectedProvince, setSelectedProvince] = useState('');
   const [selectedDistrict, setSelectedDistrict] = useState('');
   const [selectedType, setSelectedType] = useState('');
-  const [selectedPrice, setSelectedPrice] = useState('');
+  const [selectedPrice, setSelectedPrice] = useState(
+    new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date()),
+  );
   
-  const [hasSearched, setHasSearched] = useState(false);
+  const [hasSearched, setHasSearched] = useState(initialHasSearched);
   const [searchCriteria, setSearchCriteria] = useState<{tripType?: 'one-way' | 'round-trip'; departureDate?: string; returnDate?: string}>({});
 
   return (
@@ -40,7 +41,7 @@ export function HomePage() {
             tripType,
             origin: selectedProvince,
             destination: selectedDistrict,
-            departureDate,
+            date: departureDate || '',
           });
           if (returnDate) query.set('returnDate', returnDate);
           router.push(`/?${query.toString()}`, { scroll: false });
@@ -55,11 +56,9 @@ export function HomePage() {
       />
       {hasSearched ? (
         <div className="py-4">
-          <PostList 
-            initialPosts={POST_FIXTURES} 
-            searchCriteria={searchCriteria}
-            hideSearchForm={true} 
-          />
+          <Suspense fallback={<div className="p-8 text-center text-slate-500">Đang tải chuyến xe...</div>}>
+            <TripList />
+          </Suspense>
         </div>
       ) : (
         <>

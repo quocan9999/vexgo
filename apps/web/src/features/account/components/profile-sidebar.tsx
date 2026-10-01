@@ -5,14 +5,14 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { UserCircle, History, Lock, LogOut } from 'lucide-react';
-import { useDemoSession } from '@/features/auth/demo-session';
+import { useAuthSession } from '@/features/auth/auth-session';
 import { ConfirmModal } from '@/components/ui/confirm-modal';
 import { ACCOUNT_NAVIGATION_ITEMS, isAccountNavigationItemActive } from '@/components/layout/customer-navigation';
 
 export const ProfileSidebar: React.FC = () => {
   const pathname = usePathname();
   const router = useRouter();
-  const { signOut } = useDemoSession();
+  const { signOut } = useAuthSession();
   const [logoutModalOpen, setLogoutModalOpen] = useState(false);
 
   const menuIcons = {

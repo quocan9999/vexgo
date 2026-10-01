@@ -1,13 +1,16 @@
-import { PostList } from '@/features/posts/components/post-list';
-import { POST_FIXTURES } from '@/features/posts/data/post-fixtures';
+import { TripSearchBanner } from '@/features/trips/components/trip-search-banner';
+import { TripList } from '@/features/trips/components/trip-list';
+import { Suspense } from 'react';
 
 export default function TripsPage() {
   return (
-    <div className="flex flex-col min-h-screen bg-[#F5F5F5] py-8">
-      <PostList 
-        initialPosts={POST_FIXTURES} 
-        hideSearchForm={false}
-      />
-    </div>
+    <>
+      <Suspense fallback={<div className="h-[480px] bg-slate-900 w-full" />}>
+        <TripSearchBanner />
+      </Suspense>
+      <Suspense fallback={<div className="p-12 text-center text-slate-500 font-medium">Đang tải dữ liệu chuyến xe...</div>}>
+        <TripList />
+      </Suspense>
+    </>
   );
 }

@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildRoundTripBookingHref } from '../../../src/features/booking/utils/round-trip-booking.ts';
+import {
+  buildRoundTripBookingHref,
+  getReturnTripLocations,
+} from '../../../src/features/booking/utils/round-trip-booking.ts';
 
 test('keeps both selected trip IDs in a round-trip booking URL', () => {
   const href = buildRoundTripBookingHref({
@@ -49,4 +52,16 @@ test('replaces stale selected trip IDs while preserving unrelated filters', () =
     href,
     '/posts/new?tripType=round-trip&outboundId=new&returnId=back&promo=SAVE',
   );
+});
+
+test('getReturnTripLocations correctly maps origin to pickup and destination to dropoff', () => {
+  const returnPost = {
+    province: 'Đà Lạt',
+    district: 'TP.HCM',
+  };
+
+  const locations = getReturnTripLocations(returnPost);
+
+  assert.equal(locations.pickup, 'Đà Lạt', 'Pickup must be return trip origin');
+  assert.equal(locations.dropoff, 'TP.HCM', 'Dropoff must be return trip destination');
 });

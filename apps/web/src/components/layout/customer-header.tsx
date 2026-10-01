@@ -5,7 +5,7 @@ import React, { useState, Suspense } from 'react';
 import Link from 'next/link';
 import { usePathname, useSearchParams, useRouter } from 'next/navigation';
 import { User, Bus, Menu, X, ChevronDown, FileText, Settings, LogOut, Award, Globe } from 'lucide-react';
-import { useDemoSession } from '@/features/auth/demo-session';
+import { useAuthSession } from '@/features/auth/auth-session';
 import { ConfirmModal } from '@/components/ui/confirm-modal';
 import { getMobileMenuLabel, RESET_PASSWORD_PATH } from '@/components/layout/customer-navigation';
 
@@ -89,7 +89,7 @@ export const CustomerHeader: React.FC = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const [logoutModalOpen, setLogoutModalOpen] = useState(false);
-  const { user, signOut } = useDemoSession();
+  const { user, signOut } = useAuthSession();
 
   return (
     <header className="sticky top-0 z-50 bg-red-600 text-white border-b border-red-700 shadow-md font-sans">

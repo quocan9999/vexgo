@@ -1,17 +1,112 @@
-/* eslint-disable */
-import { Armchair, Clock3, MapPin, ShieldCheck, Star } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
-import { ButtonLink } from '@/components/ui/button';
-import { formatCompactCurrency } from '@/lib/format';
+'use client';
+
+import { MapPin } from 'lucide-react';
 import type { Trip } from '@/types/customer';
 
-export function TripCard({ trip }: { trip: Trip }) {
-  return <article className="rounded-2xl border border-border bg-background p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg sm:p-5">
-    <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
-      <div className="flex min-w-0 flex-1 items-start gap-4"><div className="grid size-12 shrink-0 place-items-center rounded-2xl bg-primary/10 text-primary"><span className="text-xs font-black">VEX</span></div><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h3 className="font-black text-foreground">{trip.operator}</h3><Badge tone={trip.status === 'nearly-full' ? 'amber' : 'green'}>{trip.status === 'nearly-full' ? 'Sắp đầy' : 'Còn chỗ'}</Badge></div><p className="mt-1 text-sm text-muted-foreground">{trip.vehicleType} · <Star size={13} className="mb-0.5 inline fill-amber-400 text-amber-400" /> {trip.rating}</p></div></div>
-      <div className="grid flex-[1.3] grid-cols-[1fr_auto_1fr] items-center gap-3"><div><p className="text-2xl font-black text-foreground">{trip.departureTime}</p><p className="mt-1 text-xs font-semibold text-muted-foreground">{trip.origin}</p></div><div className="flex flex-col items-center text-muted-foreground"><span className="text-[11px] font-bold">{trip.duration}</span><span className="my-1 h-px w-16 bg-border" /><MapPin size={14} /></div><div className="text-right"><p className="text-2xl font-black text-foreground">{trip.arrivalTime}</p><p className="mt-1 text-xs font-semibold text-muted-foreground">{trip.destination}</p></div></div>
-      <div className="flex items-center justify-between gap-4 border-t border-border pt-4 lg:block lg:min-w-36 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0 lg:text-right"><div><p className="text-lg font-black text-primary">{formatCompactCurrency(trip.price)}</p><p className="mt-1 flex items-center gap-1 text-xs font-semibold text-muted-foreground lg:justify-end"><Armchair size={13} /> còn {trip.availableSeats} ghế</p></div><ButtonLink href={`/trips/${trip.id}`} className="mt-3 w-full" variant="accent">Chọn chuyến</ButtonLink></div>
+interface TripCardProps {
+  trip: Trip;
+  isSelected?: boolean;
+  onSelect?: (trip: Trip) => void;
+  onChoose?: (trip: Trip) => void;
+}
+
+export function TripCard({
+  trip,
+  isSelected = false,
+  onSelect,
+  onChoose,
+}: TripCardProps) {
+  return (
+    <div
+      onClick={() => onSelect?.(trip)}
+      className={`bg-white rounded-xl transition cursor-pointer select-none ${
+        isSelected
+          ? 'border-[3px] border-[#f05123] shadow-[0_0_0_4px_rgba(240,81,35,0.15)] shadow-lg'
+          : 'border border-slate-100 hover:border-[#f05123]/50 hover:shadow-md'
+      }`}
+    >
+      <div className="p-5">
+        {/* Operator Name */}
+        <div className="mb-4 flex items-center gap-2">
+          <h3 className="text-lg font-black text-[#0060c4] uppercase tracking-wide drop-shadow-sm">
+            Nhà xe {trip.operator}
+          </h3>
+        </div>
+
+        {/* Row 1: Times + Route info + Price */}
+        <div className="flex items-start justify-between gap-4">
+          {/* Left: departure time + origin */}
+          <div className="w-14 shrink-0">
+            <span className="text-xl font-bold text-slate-800">
+              {trip.departureTime}
+            </span>
+            <p className="text-[12px] font-bold text-slate-700 mt-0.5">
+              {trip.origin}
+            </p>
+          </div>
+
+          {/* Center: Timeline + Route info */}
+          <div className="flex flex-col items-center gap-1 flex-1 min-w-0">
+            {/* Horizontal timeline: ○ ········ 📍 */}
+            <div className="flex items-center gap-1.5 w-full">
+              <div className="w-3 h-3 rounded-full border-[3px] border-[#00b14f] bg-white shrink-0"></div>
+              <div className="flex-1 border-t-2 border-dotted border-slate-300"></div>
+              <MapPin
+                size={14}
+                className="text-[#f05123] shrink-0"
+                fill="#f05123"
+              />
+            </div>
+            <div className="text-center">
+              <p className="text-[12px] font-semibold text-slate-600 whitespace-nowrap">
+                {trip.duration}
+              </p>
+              <p className="text-[10px] text-slate-400 italic">
+                (Asian/Ho Chi Minh)
+              </p>
+            </div>
+          </div>
+
+          {/* Arrival time + destination */}
+          <div className="w-14 shrink-0 text-center">
+            <span className="text-xl font-bold text-slate-800">
+              {trip.arrivalTime}
+            </span>
+            <p className="text-[12px] font-bold text-slate-700 mt-0.5">
+              {trip.destination}
+            </p>
+          </div>
+
+          {/* Right: vehicle + seats + price */}
+          <div className="shrink-0 text-right ml-4">
+            <div className="flex items-center justify-end gap-2 text-[12px] text-slate-500 mb-1">
+              <span className="font-medium uppercase">{trip.vehicleType}</span>
+              <div className="w-1.5 h-1.5 rounded-full bg-slate-300"></div>
+              <span className="font-bold text-[#00b14f]">
+                {trip.availableSeats} ghế trống
+              </span>
+            </div>
+            <div className="text-xl font-bold text-[#f05123]">
+              {Number.isFinite(trip.price)
+                ? `${new Intl.NumberFormat('vi-VN').format(trip.price)}đ`
+                : 'Liên hệ'}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Bottom actions */}
+      <div className="flex justify-end items-center px-5 py-3 border-t border-slate-100">
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onChoose?.(trip);
+          }}
+          className="bg-[#f05123] hover:bg-[#d8441a] text-white px-6 py-2 rounded-lg text-[13px] font-bold transition-colors shadow-sm"
+        >
+          Chọn chuyến
+        </button>
+      </div>
     </div>
-    <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-border pt-3 text-xs font-semibold text-muted-foreground"><span className="flex items-center gap-1"><Clock3 size={13} /> Khởi hành đúng giờ</span><span className="flex items-center gap-1"><ShieldCheck size={13} /> Đặt vé an tâm</span>{trip.amenities.map((amenity) => <span key={amenity}>{amenity}</span>)}</div>
-  </article>;
+  );
 }
