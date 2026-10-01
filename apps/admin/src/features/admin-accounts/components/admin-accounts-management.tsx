@@ -1,7 +1,15 @@
 'use client';
 
-import { ArrowDown, ArrowUp, ArrowUpDown, Search, X } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  LoaderCircle,
+  Search,
+  X,
+} from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { AdminConfirmDialog } from '@/components/admin/admin-confirm-dialog';
 import { AdminDetailAction } from '@/components/admin/admin-detail-action';
 import { AdminDetailSheet } from '@/components/admin/admin-detail-sheet';
 import {
@@ -23,7 +31,10 @@ import {
 import { useAdminSession } from '@/features/admin-auth/hooks/use-admin-session';
 import { hasPlatformAdminPermission } from '@/features/admin-auth/services/admin-access';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
-import { getAdminAccountById } from '../services/admin-account-service';
+import {
+  getAdminAccountById,
+  updateAdminAccountStatus,
+} from '../services/admin-account-service';
 import { useAdminAccounts } from '../hooks/use-admin-accounts';
 import { getBusCompanyFilterOptions } from '@/features/bus-companies/services/bus-company-service';
 import { getDefaultRolePermissions } from '@/features/platform-rbac/services/platform-rbac-service';
@@ -102,6 +113,10 @@ function AccountDetailSheet({
   });
   const [retryCount, setRetryCount] = useState(0);
   const [editOpen, setEditOpen] = useState(false);
+  const [statusDialogOpen, setStatusDialogOpen] = useState(false);
+  const [statusSubmitting, setStatusSubmitting] = useState(false);
+  const [statusError, setStatusError] = useState<string | null>(null);
+  const statusSubmittingRef = useRef(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -130,6 +145,37 @@ function AccountDetailSheet({
     setRetryCount((count) => count + 1);
   }
 
+  async function confirmStatusChange() {
+    if (statusSubmittingRef.current || detail.status !== 'success') return;
+
+    const nextStatus =
+      detail.account.status === 'HOAT_DONG' ? 'TAM_KHOA' : 'HOAT_DONG';
+    statusSubmittingRef.current = true;
+    setStatusSubmitting(true);
+    setStatusError(null);
+
+    try {
+      const updatedAccount = await updateAdminAccountStatus(
+        detail.account.accountId,
+        nextStatus,
+      );
+      setDetail({ status: 'success', account: updatedAccount });
+      setStatusDialogOpen(false);
+      onAccountUpdated(updatedAccount);
+    } catch (requestError: unknown) {
+      setStatusError(
+        requestError instanceof TypeError
+          ? 'Không thể kết nối đến máy chủ API. Vui lòng thử lại.'
+          : requestError instanceof Error
+            ? requestError.message
+            : 'Không thể cập nhật trạng thái tài khoản.',
+      );
+    } finally {
+      statusSubmittingRef.current = false;
+      setStatusSubmitting(false);
+    }
+  }
+
   return (
     <>
       <AdminDetailSheet
@@ -142,14 +188,28 @@ function AccountDetailSheet({
             <h2 id="admin-account-detail-title">Thông tin tài khoản</h2>
           </div>
           {canUpdate && detail.status === 'success' && (
-            <Button
-              aria-label="Chỉnh sửa thông tin tài khoản"
-              onClick={() => setEditOpen(true)}
-              type="button"
-              variant="secondary"
-            >
-              Chỉnh sửa
-            </Button>
+            <div className={styles.detailActions}>
+              <Button
+                aria-label="Chỉnh sửa thông tin tài khoản"
+                onClick={() => setEditOpen(true)}
+                type="button"
+                variant="secondary"
+              >
+                Chỉnh sửa
+              </Button>
+              <Button
+                onClick={() => {
+                  setStatusError(null);
+                  setStatusDialogOpen(true);
+                }}
+                type="button"
+                variant="secondary"
+              >
+                {detail.account.status === 'HOAT_DONG'
+                  ? 'Khóa tài khoản'
+                  : 'Mở khóa tài khoản'}
+              </Button>
+            </div>
           )}
           <form method="dialog">
             <button
@@ -295,6 +355,63 @@ function AccountDetailSheet({
             onAccountUpdated(updatedAccount);
           }}
         />
+      )}
+      {canUpdate && statusDialogOpen && detail.status === 'success' && (
+        <AdminConfirmDialog
+          ariaBusy={statusSubmitting}
+          ariaDescribedBy="admin-account-status-confirmation-description"
+          ariaLabelledBy="admin-account-status-confirmation-title"
+          onClose={() => {
+            if (!statusSubmittingRef.current) setStatusDialogOpen(false);
+          }}
+          preventDismiss={statusSubmitting}
+        >
+          <>
+            <h2 id="admin-account-status-confirmation-title">
+              {detail.account.status === 'HOAT_DONG'
+                ? 'Khóa tài khoản này?'
+                : 'Mở khóa tài khoản này?'}
+            </h2>
+            <p id="admin-account-status-confirmation-description">
+              {detail.account.status === 'HOAT_DONG'
+                ? 'Tài khoản sẽ chuyển sang trạng thái Đang khóa và các phiên đăng nhập đang hoạt động sẽ bị thu hồi.'
+                : 'Tài khoản sẽ được mở khóa. Thao tác này không tạo phiên đăng nhập mới.'}
+            </p>
+            {statusError && (
+              <p className="admin-confirm-dialog__error" role="alert">
+                {statusError}
+              </p>
+            )}
+            <div className="admin-confirm-dialog__actions">
+              <Button
+                disabled={statusSubmitting}
+                onClick={() => setStatusDialogOpen(false)}
+                type="button"
+                variant="secondary"
+              >
+                Hủy
+              </Button>
+              <Button
+                disabled={statusSubmitting}
+                onClick={() => void confirmStatusChange()}
+                type="button"
+              >
+                {statusSubmitting && (
+                  <LoaderCircle
+                    aria-hidden="true"
+                    className="status-confirmation-spinner"
+                    size={15}
+                  />
+                )}
+                {statusSubmitting
+                  ? 'Đang cập nhật…'
+                  : detail.account.status === 'HOAT_DONG'
+                    ? 'Khóa tài khoản'
+                    : 'Mở khóa tài khoản'}
+              </Button>
+            </div>
+          </>
+        </AdminConfirmDialog>
       )}
     </>
   );

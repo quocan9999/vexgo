@@ -33,6 +33,11 @@ const account = {
   createdAt: '2026-09-20T10:00:00.000Z',
   updatedAt: '2026-09-21T10:00:00.000Z',
 };
+const lockedAccount = {
+  ...account,
+  status: 'TAM_KHOA' as const,
+  updatedAt: '2026-09-22T10:00:00.000Z',
+};
 
 const state = vi.hoisted(() => {
   class MockAdminAccountApiError extends Error {
@@ -73,6 +78,7 @@ const state = vi.hoisted(() => {
     getAdminAccountById: vi.fn(),
     createAdminAccount: vi.fn(),
     updateAdminAccount: vi.fn(),
+    updateAdminAccountStatus: vi.fn(),
     getBusCompanyFilterOptions: vi.fn(),
     getDefaultRolePermissions: vi.fn(),
   };
@@ -204,6 +210,7 @@ vi.mock('@/features/admin-accounts/services/admin-account-service', () => ({
   getAdminAccountById: state.getAdminAccountById,
   createAdminAccount: state.createAdminAccount,
   updateAdminAccount: state.updateAdminAccount,
+  updateAdminAccountStatus: state.updateAdminAccountStatus,
 }));
 
 vi.mock('@/features/admin-auth/hooks/use-admin-session', () => ({
@@ -247,6 +254,7 @@ describe('Admin accounts management page', () => {
     state.getAdminAccountById.mockReset().mockResolvedValue(account);
     state.createAdminAccount.mockReset().mockResolvedValue(account);
     state.updateAdminAccount.mockReset().mockResolvedValue(account);
+    state.updateAdminAccountStatus.mockReset().mockResolvedValue(account);
     state.getBusCompanyFilterOptions
       .mockReset()
       .mockResolvedValue([{ id: 7, label: 'Phương Trang (FUTA)' }]);
@@ -687,6 +695,237 @@ describe('Admin accounts management page', () => {
     expect(state.hook.refresh).toHaveBeenCalledOnce();
   });
 
+  it('shows the lock action only to a platform account with update permission', async () => {
+    setAdminPermissions(['admin-account:read', 'admin-account:update']);
+    state.hook = {
+      ...state.hook,
+      accountPage: {
+        data: [account],
+        meta: { page: 1, pageSize: 10, totalItems: 1, totalPages: 1 },
+      },
+      loading: false,
+    };
+
+    render(<AdminAccountsManagement />);
+    fireEvent.click(
+      within(screen.getByRole('table')).getByRole('button', {
+        name: 'Xem chi tiết tài khoản Nguyễn Minh Anh',
+      }),
+    );
+
+    const detailSheet = await screen.findByRole('dialog', {
+      name: 'Thông tin tài khoản',
+    });
+    expect(
+      within(detailSheet).getByRole('button', { name: 'Khóa tài khoản' }),
+    ).toBeTruthy();
+  });
+
+  it('requires confirmation and warns that locking revokes active sessions', async () => {
+    setAdminPermissions(['admin-account:read', 'admin-account:update']);
+    state.hook = {
+      ...state.hook,
+      accountPage: {
+        data: [account],
+        meta: { page: 1, pageSize: 10, totalItems: 1, totalPages: 1 },
+      },
+      loading: false,
+    };
+
+    render(<AdminAccountsManagement />);
+    fireEvent.click(
+      within(screen.getByRole('table')).getByRole('button', {
+        name: 'Xem chi tiết tài khoản Nguyễn Minh Anh',
+      }),
+    );
+    const detailSheet = await screen.findByRole('dialog', {
+      name: 'Thông tin tài khoản',
+    });
+    fireEvent.click(
+      within(detailSheet).getByRole('button', { name: 'Khóa tài khoản' }),
+    );
+
+    const confirmation = await screen.findByRole('dialog', {
+      name: 'Khóa tài khoản này?',
+    });
+    expect(confirmation.textContent).toContain(
+      'các phiên đăng nhập đang hoạt động sẽ bị thu hồi',
+    );
+  });
+
+  it('locks an account after confirmation and refreshes the account list', async () => {
+    setAdminPermissions(['admin-account:read', 'admin-account:update']);
+    state.updateAdminAccountStatus.mockResolvedValue(lockedAccount);
+    state.hook = {
+      ...state.hook,
+      accountPage: {
+        data: [account],
+        meta: { page: 1, pageSize: 10, totalItems: 1, totalPages: 1 },
+      },
+      loading: false,
+    };
+
+    render(<AdminAccountsManagement />);
+    fireEvent.click(
+      within(screen.getByRole('table')).getByRole('button', {
+        name: 'Xem chi tiết tài khoản Nguyễn Minh Anh',
+      }),
+    );
+    const detailSheet = await screen.findByRole('dialog', {
+      name: 'Thông tin tài khoản',
+    });
+    fireEvent.click(
+      within(detailSheet).getByRole('button', { name: 'Khóa tài khoản' }),
+    );
+    const confirmation = await screen.findByRole('dialog', {
+      name: 'Khóa tài khoản này?',
+    });
+    fireEvent.click(
+      within(confirmation).getByRole('button', { name: 'Khóa tài khoản' }),
+    );
+
+    await waitFor(() =>
+      expect(state.updateAdminAccountStatus).toHaveBeenCalledWith(
+        41,
+        'TAM_KHOA',
+      ),
+    );
+    expect(within(detailSheet).getByText('Đang khóa')).toBeTruthy();
+    expect(state.hook.refresh).toHaveBeenCalledOnce();
+  });
+
+  it('unlocks a locked account without creating a new session', async () => {
+    setAdminPermissions(['admin-account:read', 'admin-account:update']);
+    state.getAdminAccountById.mockResolvedValue(lockedAccount);
+    state.updateAdminAccountStatus.mockResolvedValue(account);
+    state.hook = {
+      ...state.hook,
+      accountPage: {
+        data: [lockedAccount],
+        meta: { page: 1, pageSize: 10, totalItems: 1, totalPages: 1 },
+      },
+      loading: false,
+    };
+
+    render(<AdminAccountsManagement />);
+    fireEvent.click(
+      within(screen.getByRole('table')).getByRole('button', {
+        name: 'Xem chi tiết tài khoản Nguyễn Minh Anh',
+      }),
+    );
+    const detailSheet = await screen.findByRole('dialog', {
+      name: 'Thông tin tài khoản',
+    });
+    fireEvent.click(
+      await within(detailSheet).findByRole('button', {
+        name: 'Mở khóa tài khoản',
+      }),
+    );
+    const confirmation = await screen.findByRole('dialog', {
+      name: 'Mở khóa tài khoản này?',
+    });
+    expect(confirmation.textContent).toContain(
+      'không tạo phiên đăng nhập mới',
+    );
+    fireEvent.click(
+      within(confirmation).getByRole('button', { name: 'Mở khóa tài khoản' }),
+    );
+
+    await waitFor(() =>
+      expect(state.updateAdminAccountStatus).toHaveBeenCalledWith(
+        41,
+        'HOAT_DONG',
+      ),
+    );
+    expect(within(detailSheet).getByText('Đang hoạt động')).toBeTruthy();
+    expect(state.hook.refresh).toHaveBeenCalledOnce();
+  });
+
+  it('keeps the status confirmation open when the API request fails', async () => {
+    setAdminPermissions(['admin-account:read', 'admin-account:update']);
+    state.updateAdminAccountStatus.mockRejectedValue(
+      new Error('Không thể khóa tài khoản lúc này.'),
+    );
+    state.hook = {
+      ...state.hook,
+      accountPage: {
+        data: [account],
+        meta: { page: 1, pageSize: 10, totalItems: 1, totalPages: 1 },
+      },
+      loading: false,
+    };
+
+    render(<AdminAccountsManagement />);
+    fireEvent.click(
+      within(screen.getByRole('table')).getByRole('button', {
+        name: 'Xem chi tiết tài khoản Nguyễn Minh Anh',
+      }),
+    );
+    const detailSheet = await screen.findByRole('dialog', {
+      name: 'Thông tin tài khoản',
+    });
+    fireEvent.click(
+      within(detailSheet).getByRole('button', { name: 'Khóa tài khoản' }),
+    );
+    const confirmation = await screen.findByRole('dialog', {
+      name: 'Khóa tài khoản này?',
+    });
+    fireEvent.click(
+      within(confirmation).getByRole('button', { name: 'Khóa tài khoản' }),
+    );
+
+    expect(await within(confirmation).findByRole('alert')).toBeTruthy();
+    expect(
+      within(confirmation).getByText('Không thể khóa tài khoản lúc này.'),
+    ).toBeTruthy();
+    expect(within(detailSheet).getByText('Đang hoạt động')).toBeTruthy();
+    expect(state.hook.refresh).not.toHaveBeenCalled();
+  });
+
+  it('submits a pending status change only once', async () => {
+    setAdminPermissions(['admin-account:read', 'admin-account:update']);
+    let resolveStatusChange!: (updatedAccount: typeof lockedAccount) => void;
+    state.updateAdminAccountStatus.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveStatusChange = resolve;
+        }),
+    );
+    state.hook = {
+      ...state.hook,
+      accountPage: {
+        data: [account],
+        meta: { page: 1, pageSize: 10, totalItems: 1, totalPages: 1 },
+      },
+      loading: false,
+    };
+
+    render(<AdminAccountsManagement />);
+    fireEvent.click(
+      within(screen.getByRole('table')).getByRole('button', {
+        name: 'Xem chi tiết tài khoản Nguyễn Minh Anh',
+      }),
+    );
+    const detailSheet = await screen.findByRole('dialog', {
+      name: 'Thông tin tài khoản',
+    });
+    fireEvent.click(
+      within(detailSheet).getByRole('button', { name: 'Khóa tài khoản' }),
+    );
+    const confirmation = await screen.findByRole('dialog', {
+      name: 'Khóa tài khoản này?',
+    });
+    const submit = within(confirmation).getByRole('button', {
+      name: 'Khóa tài khoản',
+    });
+    fireEvent.click(submit);
+    fireEvent.click(submit);
+
+    expect(state.updateAdminAccountStatus).toHaveBeenCalledOnce();
+    resolveStatusChange(lockedAccount);
+    await waitFor(() => expect(state.hook.refresh).toHaveBeenCalledOnce());
+  });
+
   it('does not expose profile editing to a read-only platform account', async () => {
     state.hook = {
       ...state.hook,
@@ -711,6 +950,9 @@ describe('Admin accounts management page', () => {
       within(detailSheet).queryByRole('button', {
         name: 'Chỉnh sửa thông tin tài khoản',
       }),
+    ).toBeNull();
+    expect(
+      within(detailSheet).queryByRole('button', { name: 'Khóa tài khoản' }),
     ).toBeNull();
   });
 });
