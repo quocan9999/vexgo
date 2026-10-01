@@ -1,0 +1,411 @@
+.page {
+  min-width: 0;
+}
+
+.accountsSection {
+  min-width: 0;
+  margin-top: 35px;
+}
+
+.panel {
+  min-width: 0;
+  overflow: hidden;
+  padding: 0;
+}
+
+.filterOptionsMessage,
+.filterOptionsError {
+  margin: 0;
+  padding: 12px 18px;
+  color: var(--admin-text-muted);
+  font-size: var(--admin-font-size-base);
+}
+
+.filterOptionsError {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--admin-danger);
+}
+
+.tableScroll {
+  width: 100%;
+  overflow-x: auto;
+  transition: opacity 150ms ease;
+}
+
+.isLoading {
+  opacity: 0.55;
+}
+
+.table {
+  width: 100%;
+  min-width: 930px;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.table thead {
+  background: var(--admin-canvas);
+}
+
+.table thead th {
+  height: 40px;
+  padding: 0 12px;
+  color: var(--admin-text-muted);
+  font-size: var(--admin-font-size-md);
+  font-weight: var(--admin-font-weight-semibold);
+  white-space: nowrap;
+}
+
+.table thead th:first-child,
+.table tbody th:first-child {
+  padding-left: 19px;
+}
+
+.table thead th:last-child,
+.table tbody td:last-child {
+  padding-right: 17px;
+  text-align: right;
+}
+
+.table tbody tr {
+  border-top: 1px solid var(--admin-border);
+  transition: background-color 120ms ease;
+}
+
+.table tbody tr:hover {
+  background: var(--admin-canvas);
+}
+
+.table tbody th,
+.table tbody td {
+  height: 59px;
+  padding: 8px 12px;
+  color: var(--admin-text-muted);
+  font-size: var(--admin-font-size-base);
+}
+
+.table tbody th {
+  font-weight: var(--admin-font-weight-semibold);
+}
+
+.table tbody td {
+  white-space: nowrap;
+}
+
+.identityCell {
+  min-width: 190px;
+  color: var(--admin-text-strong) !important;
+  font-size: var(--admin-font-size-emphasis) !important;
+}
+
+.contactCell {
+  min-width: 165px;
+}
+
+.contactCell span,
+.contactCell small,
+.identityCopy small {
+  display: block;
+}
+
+.contactCell small,
+.identityCopy small {
+  margin-top: 4px;
+  color: var(--admin-text-muted);
+  font-size: var(--admin-font-size-xs);
+  font-weight: var(--admin-font-weight-regular);
+}
+
+.sortButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+}
+
+.sortButton:hover,
+.sortButton:focus-visible {
+  color: var(--admin-blue);
+}
+
+.sortButton:focus-visible {
+  border-radius: var(--admin-radius-control);
+  outline: 2px solid var(--admin-blue);
+  outline-offset: 3px;
+}
+
+.accountIdentity {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+}
+
+.avatar {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--admin-blue-soft);
+  color: var(--admin-blue);
+  font-weight: var(--admin-font-weight-bold);
+}
+
+.identityCopy {
+  min-width: 0;
+}
+
+.identityCopy > span,
+.identityCopy h3,
+.detailHero h3 {
+  overflow-wrap: anywhere;
+  margin: 0;
+  color: var(--admin-text-strong);
+  font-size: var(--admin-font-size-emphasis);
+}
+
+.identityCopy p {
+  overflow-wrap: anywhere;
+  margin: 4px 0 0;
+  color: var(--admin-text-muted);
+  font-size: var(--admin-font-size-base);
+}
+
+.accountMeta {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+}
+
+.accountMeta div,
+.detailGrid div {
+  min-width: 0;
+}
+
+.accountMeta dt,
+.detailGrid dt {
+  margin-bottom: 5px;
+  color: var(--admin-text-muted);
+  font-size: var(--admin-font-size-md);
+}
+
+.accountMeta dd,
+.detailGrid dd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  overflow-wrap: anywhere;
+  margin: 0;
+  color: var(--admin-text-strong);
+  font-size: var(--admin-font-size-base);
+  font-weight: var(--admin-font-weight-medium);
+}
+
+.roleList {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+}
+
+.cardActions {
+  justify-self: end;
+}
+
+.mobileList {
+  display: none;
+}
+
+.accountCard {
+  display: grid;
+  grid-template-columns: minmax(210px, 1.1fr) minmax(0, 2fr) auto;
+  align-items: center;
+  gap: 20px;
+  padding: 16px;
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius-panel);
+  background: var(--background);
+}
+
+.emptyState {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 52px 18px;
+  text-align: center;
+}
+
+.emptyState h3 {
+  margin: 8px 0 0;
+  color: var(--admin-text-strong);
+  font-size: var(--admin-font-size-emphasis);
+}
+
+.emptyState p {
+  margin: 0;
+  color: var(--admin-text-muted);
+  font-size: var(--admin-font-size-base);
+}
+
+.emptyIcon {
+  display: grid;
+  width: 46px;
+  height: 46px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--admin-canvas);
+  color: var(--admin-text-muted);
+}
+
+.detailHero {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 25px;
+  border-bottom: 1px solid #edf0f5;
+}
+
+.detailHero .avatar {
+  width: 48px;
+  height: 48px;
+}
+
+.detailHero span:not(.avatar) {
+  display: block;
+  margin-top: 4px;
+  color: var(--admin-text-muted);
+  font-size: var(--admin-font-size-base);
+  overflow-wrap: anywhere;
+}
+
+.detailGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px 14px;
+  margin: 0;
+}
+
+.detailWide {
+  grid-column: 1 / -1;
+}
+
+.roleOptions {
+  display: grid;
+  gap: 9px;
+  min-width: 0;
+  margin: 0;
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius-panel);
+  padding: 12px;
+}
+
+.roleOptions legend {
+  padding: 0 5px;
+  color: var(--admin-text-strong);
+  font-size: var(--admin-font-size-base);
+  font-weight: var(--admin-font-weight-semibold);
+}
+
+.roleOption {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 44px;
+  color: var(--admin-text-strong);
+  font-size: var(--admin-font-size-base);
+}
+
+.roleOption input {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  margin: 0;
+  accent-color: var(--admin-blue);
+}
+
+.roleDialogClose {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+.roleDialogActions > button {
+  min-height: 44px;
+}
+
+.roleOption input:focus-visible {
+  outline: 2px solid var(--admin-blue);
+  outline-offset: 2px;
+}
+
+@media (max-width: 900px) {
+  .accountCard {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .accountMeta {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .cardActions {
+    grid-column: 2;
+    grid-row: 1;
+  }
+}
+
+@media (max-width: 700px) {
+  .accountsSection {
+    margin-top: 29px;
+  }
+
+  .tableScroll {
+    display: none;
+  }
+
+  .mobileList {
+    display: grid;
+    gap: 12px;
+    padding: 12px;
+  }
+
+  .accountCard {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+    padding: 14px;
+  }
+
+  .accountMeta {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .cardActions {
+    grid-column: 1;
+    grid-row: auto;
+    justify-self: stretch;
+  }
+
+  .cardActions :global(button) {
+    width: 100%;
+  }
+
+  .detailGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .detailWide {
+    grid-column: auto;
+  }
+}

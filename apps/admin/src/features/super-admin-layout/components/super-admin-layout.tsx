@@ -10,6 +10,7 @@ import {
   ShieldCheck,
   Ticket,
   Truck,
+  UsersRound,
   X,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -40,6 +41,7 @@ type SuperAdminLayoutProps = {
     | 'vehicles'
     | 'routes'
     | 'fare-prices'
+    | 'admin-accounts'
     | 'rbac'
     | 'tenant-rbac';
   children: ReactNode;
@@ -94,6 +96,10 @@ export function SuperAdminLayout({
   const canReadBusCompanies = hasPlatformAdminPermission(
     session,
     'bus-company:read',
+  );
+  const canReadAdminAccounts = hasPlatformAdminPermission(
+    session,
+    'admin-account:read',
   );
   const accessibleOperationSections = ADMIN_OPERATION_SECTIONS.filter((item) =>
     hasAdminPermission(session, item.readPermission),
@@ -197,6 +203,17 @@ export function SuperAdminLayout({
                         >
                           <span className="sidebar-link-icon"><Building2 size={18} /></span>
                           <span>Nhà xe</span>
+                        </Link>
+                      )}
+                      {canReadAdminAccounts && (
+                        <Link
+                          aria-current={activeSection === 'admin-accounts' ? 'page' : undefined}
+                          className={`sidebar-link${activeSection === 'admin-accounts' ? ' is-active' : ''}`}
+                          href="/admin-accounts"
+                          onClick={closeMobileNavigation}
+                        >
+                          <span className="sidebar-link-icon"><UsersRound size={18} /></span>
+                          <span>Tài khoản Admin</span>
                         </Link>
                       )}
                       {canManageRbac && (

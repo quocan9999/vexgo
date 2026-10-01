@@ -84,6 +84,16 @@ describe('admin access scope and permissions', () => {
     expect(getRequiredPlatformAdminPermissions('/bus-companies-extra')).toBeNull();
   });
 
+  it('maps admin account routes to the platform account read permission', () => {
+    expect(getRequiredPlatformAdminPermissions('/admin-accounts')).toEqual([
+      'admin-account:read',
+    ]);
+    expect(getRequiredPlatformAdminPermissions('/admin-accounts/42')).toEqual([
+      'admin-account:read',
+    ]);
+    expect(getRequiredPlatformAdminPermissions('/admin-accounts-extra')).toBeNull();
+  });
+
   it('allows only the exact SUPER_ADMIN principal to manage platform RBAC', () => {
     expect(canManagePlatformRbac(makePlatformSession())).toBe(true);
     expect(canManagePlatformRbac(null)).toBe(false);

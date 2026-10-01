@@ -19,6 +19,7 @@ export type AdminDialogPrimitiveProps = {
   contentClassName: string;
   contentElement?: 'div' | 'section';
   dialogRef?: RefObject<HTMLDialogElement | null>;
+  lockPageScroll?: boolean;
   onClose: () => void;
   preventDismiss?: boolean;
 };
@@ -33,6 +34,49 @@ const DIALOG_FOCUSABLE_SELECTOR = [
   '[contenteditable="true"]',
   '[tabindex]:not([tabindex="-1"])',
 ].join(',');
+
+type DocumentScrollLockState = {
+  count: number;
+  originalDocumentOverflow: string;
+  originalBodyOverflow: string;
+};
+
+const documentScrollLocks = new WeakMap<Document, DocumentScrollLockState>();
+
+function lockDocumentScroll(document: Document) {
+  let state = documentScrollLocks.get(document);
+
+  if (!state) {
+    state = {
+      count: 0,
+      originalDocumentOverflow: document.documentElement.style.overflow,
+      originalBodyOverflow: document.body.style.overflow,
+    };
+    documentScrollLocks.set(document, state);
+  }
+
+  state.count += 1;
+  document.documentElement.style.overflow = 'hidden';
+  document.body.style.overflow = 'hidden';
+
+  return () => {
+    const currentState = documentScrollLocks.get(document);
+    if (currentState !== state) return;
+
+    currentState.count -= 1;
+    if (currentState.count > 0) return;
+
+    if (document.documentElement.style.overflow === 'hidden') {
+      document.documentElement.style.overflow =
+        currentState.originalDocumentOverflow;
+    }
+    if (document.body.style.overflow === 'hidden') {
+      document.body.style.overflow = currentState.originalBodyOverflow;
+    }
+
+    documentScrollLocks.delete(document);
+  };
+}
 
 export function trapDialogTabFocus(event: KeyboardEvent<HTMLDialogElement>) {
   if (event.key !== 'Tab') return;
@@ -72,6 +116,7 @@ export function AdminDialogPrimitive({
   contentClassName,
   contentElement: Content = 'div',
   dialogRef: suppliedDialogRef,
+  lockPageScroll = false,
   onClose,
   preventDismiss = false,
 }: AdminDialogPrimitiveProps) {
@@ -80,8 +125,12 @@ export function AdminDialogPrimitive({
 
   useEffect(() => {
     const dialog = dialogRef.current;
-    if (dialog && !dialog.open) dialog.showModal();
-  }, [dialogRef]);
+
+    if (!dialog) return;
+    if (!dialog.open) dialog.showModal();
+
+    if (lockPageScroll) return lockDocumentScroll(dialog.ownerDocument);
+  }, [dialogRef, lockPageScroll]);
 
   function handleCancel(event: SyntheticEvent<HTMLDialogElement>) {
     if (preventDismiss) event.preventDefault();

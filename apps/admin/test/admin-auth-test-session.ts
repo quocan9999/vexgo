@@ -1,3 +1,4 @@
+import { useSyncExternalStore } from 'react';
 import { beforeEach, vi } from 'vitest';
 
 type TestSessionState =
@@ -22,11 +23,7 @@ const mockAdminSession = vi.hoisted(() => ({
   listeners: new Set<() => void>(),
 }));
 
-vi.mock('@/features/admin-auth/hooks/use-admin-session', async () => {
-  const { useSyncExternalStore } = await vi.importActual<typeof import('react')>(
-    'react',
-  );
-
+vi.mock('@/features/admin-auth/hooks/use-admin-session', () => {
   return {
     useAdminSession: () =>
       useSyncExternalStore(

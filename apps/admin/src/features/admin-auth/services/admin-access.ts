@@ -151,6 +151,7 @@ export function getRequiredPlatformAdminPermissions(
   pathname: string,
 ): readonly PlatformAdminPermission[] | null {
   if (matchesPath(pathname, '/bus-companies')) return ['bus-company:read'];
+  if (matchesPath(pathname, '/admin-accounts')) return ['admin-account:read'];
   return null;
 }
 

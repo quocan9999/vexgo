@@ -5,6 +5,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
 } from '@nestjs/common';
 import { RequireRoles } from '../auth/decorators/require-roles.decorator.js';
@@ -15,6 +16,7 @@ import { AdminAccountQueryDto } from './dto/admin-account-query.dto.js';
 import { CreateAdminAccountDto } from './dto/create-admin-account.dto.js';
 import { UpdateAdminAccountDto } from './dto/update-admin-account.dto.js';
 import { UpdateAdminAccountStatusDto } from './dto/update-admin-account-status.dto.js';
+import { UpdateAdminAccountRolesDto } from './dto/update-admin-account-roles.dto.js';
 
 @Controller('admin-accounts')
 @RequireRoles('SUPER_ADMIN')
@@ -55,5 +57,14 @@ export class AdminAccountsController {
     @Body() body: UpdateAdminAccountStatusDto,
   ) {
     return this.adminAccountsService.updateStatus(params.id, body);
+  }
+
+  @Put(':id/roles')
+  @RequirePermissions('admin-account:update')
+  replaceRoles(
+    @Param() params: AdminAccountIdParamsDto,
+    @Body() body: UpdateAdminAccountRolesDto,
+  ) {
+    return this.adminAccountsService.replaceRoles(params.id, body.roleNames);
   }
 }
