@@ -15,6 +15,7 @@ import { CustomersService } from './customers.service.js';
 import { AdminCustomerQueryDto } from './dto/admin-customer-query.dto.js';
 import { AdminCustomerTransactionsQueryDto } from './dto/admin-customer-transactions-query.dto.js';
 import { AdminCustomerTicketsQueryDto } from './dto/admin-customer-tickets-query.dto.js';
+import { AdminCustomerShipmentsQueryDto } from './dto/admin-customer-shipments-query.dto.js';
 
 @Controller('customers')
 @RequireRoles(...TENANT_PRINCIPAL_ROLES)
@@ -76,6 +77,25 @@ export class AdminCustomersController {
       });
     }
     return this.customersService.listAdminCustomerTickets(
+      principal,
+      id,
+      query,
+    );
+  }
+
+  @Get(':id/shipments')
+  getShipments(
+    @CurrentPrincipal() principal: AuthPrincipal,
+    @Param('id', ParseIntPipe) id: number,
+    @Query() query: AdminCustomerShipmentsQueryDto,
+  ) {
+    if (id <= 0) {
+      throw new BadRequestException({
+        error: 'INVALID_CUSTOMER_ID',
+        message: 'Mã khách hàng không hợp lệ.',
+      });
+    }
+    return this.customersService.listAdminCustomerShipments(
       principal,
       id,
       query,

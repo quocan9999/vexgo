@@ -49,6 +49,10 @@ const mockPrisma = {
     findMany: vi.fn(),
     count: vi.fn(),
   },
+  phieuGuiHang: {
+    findMany: vi.fn(),
+    count: vi.fn(),
+  },
 };
 
 let testPrincipal: AuthPrincipal | null = {
@@ -821,6 +825,251 @@ describe('Admin Customers API (Feature 06.1)', () => {
                     khachHangId: 101,
                     nhaXeId: 1, // Strictly tenant 1, never any other tenant
                   },
+                },
+              },
+            ],
+          },
+        }),
+      );
+    });
+  });
+
+  describe('GET /api/v1/customers/:id/shipments (Feature 06.4)', () => {
+    const mockShipment = {
+      phieuGuiHangId: 301,
+      maVanDon: 'VD000301',
+      tenNguoiNhan: 'Trần Văn B',
+      soDienThoaiNguoiNhan: '0912345678',
+      diaChiNguoiNhan: '123 Lê Lợi, P.1, Đà Lạt',
+      hinhThucLayHang: 'TAI_BUU_CUC',
+      hinhThucGiaoHang: 'GIAO_TAN_NOI',
+      diaChiLayHang: '456 Mai Chí Thọ, Q.2, TP.HCM',
+      ngayGui: NOW,
+      cuocChinh: new Prisma.Decimal('80000'),
+      phiDichVu: new Prisma.Decimal('10000'),
+      soTienGiam: new Prisma.Decimal('5000'),
+      tongPhi: new Prisma.Decimal('85000'),
+      nguoiTraCuoc: 'NGUOI_GUI',
+      ghiChu: 'Hàng dễ vỡ',
+      trangThai: 'DANG_VAN_CHUYEN',
+      chuyenXeId: 101,
+      buuCucGuiId: 1,
+      buuCucPhatId: 2,
+      bangCuocApDungId: 10,
+      khuyenMaiId: null,
+      donGiaoDichId: 502,
+      createdAt: NOW,
+      updatedAt: NOW,
+      chuyenXe: {
+        chuyenXeId: 101,
+        maChuyenXe: 'FUTA-CX-0001',
+      },
+      buuCucGui: {
+        buuCucId: 1,
+        maBuuCuc: 'FUTA-BC-001',
+        tenBuuCuc: 'Bưu cục Miền Đông',
+      },
+      buuCucPhat: {
+        buuCucId: 2,
+        maBuuCuc: 'FUTA-BC-002',
+        tenBuuCuc: 'Bưu cục Đà Lạt',
+      },
+    };
+
+    it('returns paginated shipments for tenant-visible customer with mapped relations', async () => {
+      mockPrisma.khachHang.findFirst.mockResolvedValue({ khachHangId: 101 });
+      mockPrisma.phieuGuiHang.count.mockResolvedValue(1);
+      mockPrisma.phieuGuiHang.findMany.mockResolvedValue([mockShipment]);
+
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/customers/101/shipments?page=1&pageSize=10')
+        .expect(200);
+
+      expect(response.body).toEqual({
+        data: [
+          {
+            shipmentId: 301,
+            waybillCode: 'VD000301',
+            sentAt: NOW.toISOString(),
+            status: 'DANG_VAN_CHUYEN',
+            receiver: {
+              fullName: 'Trần Văn B',
+              phoneNumber: '0912345678',
+              address: '123 Lê Lợi, P.1, Đà Lạt',
+            },
+            pickupMethod: 'TAI_BUU_CUC',
+            deliveryMethod: 'GIAO_TAN_NOI',
+            pickupAddress: '456 Mai Chí Thọ, Q.2, TP.HCM',
+            mainFee: 80000,
+            serviceFee: 10000,
+            discountAmount: 5000,
+            totalFee: 85000,
+            freightPayer: 'NGUOI_GUI',
+            trip: {
+              tripId: 101,
+              code: 'FUTA-CX-0001',
+            },
+            originBranch: {
+              branchId: 1,
+              code: 'FUTA-BC-001',
+              name: 'Bưu cục Miền Đông',
+            },
+            destinationBranch: {
+              branchId: 2,
+              code: 'FUTA-BC-002',
+              name: 'Bưu cục Đà Lạt',
+            },
+          },
+        ],
+        meta: {
+          page: 1,
+          pageSize: 10,
+          totalItems: 1,
+          totalPages: 1,
+        },
+      });
+
+      expect(mockPrisma.phieuGuiHang.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            AND: [
+              {
+                donGiaoDich: {
+                  khachHangId: 101,
+                  nhaXeId: 1,
+                },
+              },
+            ],
+          },
+        }),
+      );
+    });
+
+    it('supports search by waybill code, receiver name, and phone number', async () => {
+      mockPrisma.khachHang.findFirst.mockResolvedValue({ khachHangId: 101 });
+      mockPrisma.phieuGuiHang.count.mockResolvedValue(0);
+      mockPrisma.phieuGuiHang.findMany.mockResolvedValue([]);
+
+      await request(app.getHttpServer())
+        .get('/api/v1/customers/101/shipments?search=Trần')
+        .expect(200);
+
+      expect(mockPrisma.phieuGuiHang.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            AND: [
+              {
+                donGiaoDich: {
+                  khachHangId: 101,
+                  nhaXeId: 1,
+                },
+              },
+              {
+                OR: [
+                  { maVanDon: { contains: 'Trần' } },
+                  { tenNguoiNhan: { contains: 'Trần' } },
+                  { soDienThoaiNguoiNhan: { contains: 'Trần' } },
+                ],
+              },
+            ],
+          },
+        }),
+      );
+    });
+
+    it('handles null optional relations safely', async () => {
+      const minimalShipment = {
+        ...mockShipment,
+        chuyenXe: null,
+        buuCucGui: null,
+        buuCucPhat: null,
+        diaChiNguoiNhan: null,
+        diaChiLayHang: null,
+      };
+
+      mockPrisma.khachHang.findFirst.mockResolvedValue({ khachHangId: 101 });
+      mockPrisma.phieuGuiHang.count.mockResolvedValue(1);
+      mockPrisma.phieuGuiHang.findMany.mockResolvedValue([minimalShipment]);
+
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/customers/101/shipments')
+        .expect(200);
+
+      expect(response.body.data[0].trip).toBeNull();
+      expect(response.body.data[0].originBranch).toBeNull();
+      expect(response.body.data[0].destinationBranch).toBeNull();
+      expect(response.body.data[0].receiver.address).toBeNull();
+      expect(response.body.data[0].pickupAddress).toBeNull();
+    });
+
+    it('returns 404 CUSTOMER_NOT_FOUND if customer is not visible to tenant', async () => {
+      mockPrisma.khachHang.findFirst.mockResolvedValue(null);
+
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/customers/999/shipments')
+        .expect(404);
+
+      expect(response.body).toEqual({
+        statusCode: 404,
+        error: 'CUSTOMER_NOT_FOUND',
+        message: 'Không tìm thấy khách hàng.',
+      });
+
+      expect(mockPrisma.phieuGuiHang.findMany).not.toHaveBeenCalled();
+    });
+
+    it('rejects invalid or non-positive ID with 400', async () => {
+      await request(app.getHttpServer())
+        .get('/api/v1/customers/invalid/shipments')
+        .expect(400);
+
+      const responseZero = await request(app.getHttpServer())
+        .get('/api/v1/customers/0/shipments')
+        .expect(400);
+
+      expect(responseZero.body.error).toBe('INVALID_CUSTOMER_ID');
+    });
+
+    it('rejects unauthenticated request with 401', async () => {
+      testPrincipal = null;
+
+      await request(app.getHttpServer())
+        .get('/api/v1/customers/101/shipments')
+        .expect(401);
+    });
+
+    it('rejects unauthorized request without customer:read with 403', async () => {
+      testPrincipal = {
+        taiKhoanId: 2,
+        sessionId: 'session-no-perm',
+        roles: ['NHA_XE_ADMIN'],
+        permissions: ['route:read'],
+        nhanVienId: 10,
+        nhaXeId: 1,
+      };
+
+      await request(app.getHttpServer())
+        .get('/api/v1/customers/101/shipments')
+        .expect(403);
+    });
+
+    it('enforces tenant isolation: tenant A cannot query shipments belonging to tenant B', async () => {
+      mockPrisma.khachHang.findFirst.mockResolvedValue({ khachHangId: 101 });
+      mockPrisma.phieuGuiHang.count.mockResolvedValue(0);
+      mockPrisma.phieuGuiHang.findMany.mockResolvedValue([]);
+
+      await request(app.getHttpServer())
+        .get('/api/v1/customers/101/shipments')
+        .expect(200);
+
+      expect(mockPrisma.phieuGuiHang.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            AND: [
+              {
+                donGiaoDich: {
+                  khachHangId: 101,
+                  nhaXeId: 1, // Strictly tenant 1, never tenant B
                 },
               },
             ],

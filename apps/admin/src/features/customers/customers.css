@@ -229,3 +229,8 @@
   font-size: var(--admin-font-size-xs, 12px);
   color: var(--admin-text-muted);
 }
+
+.customer-shipments-container {
+  display: grid;
+  gap: 16px;
+}

@@ -157,3 +157,56 @@ export interface CustomerTicketsResponse {
     totalPages: number;
   };
 }
+
+export interface CustomerShipmentReceiver {
+  fullName: string;
+  phoneNumber: string;
+  address: string | null;
+}
+
+export interface CustomerShipmentTripSummary {
+  tripId: number;
+  code: string;
+}
+
+export interface CustomerShipmentBranchSummary {
+  branchId: number;
+  code: string;
+  name: string;
+}
+
+export interface CustomerShipment {
+  shipmentId: number;
+  waybillCode: string;
+  sentAt: string;
+  status: string;
+  receiver: CustomerShipmentReceiver;
+  pickupMethod: string;
+  deliveryMethod: string;
+  pickupAddress: string | null;
+  mainFee: number;
+  serviceFee: number;
+  discountAmount: number;
+  totalFee: number;
+  freightPayer: string;
+  trip: CustomerShipmentTripSummary | null;
+  originBranch: CustomerShipmentBranchSummary | null;
+  destinationBranch: CustomerShipmentBranchSummary | null;
+}
+
+export interface CustomerShipmentsQuery {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  sortDirection?: 'asc' | 'desc';
+}
+
+export interface CustomerShipmentsResponse {
+  data: CustomerShipment[];
+  meta: {
+    page: number;
+    pageSize: number;
+    totalItems: number;
+    totalPages: number;
+  };
+}

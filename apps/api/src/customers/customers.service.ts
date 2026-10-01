@@ -12,6 +12,7 @@ import type { UpdateMeDto } from './dto/update-me.dto.js';
 import type { AdminCustomerQueryDto } from './dto/admin-customer-query.dto.js';
 import type { AdminCustomerTransactionsQueryDto } from './dto/admin-customer-transactions-query.dto.js';
 import type { AdminCustomerTicketsQueryDto } from './dto/admin-customer-tickets-query.dto.js';
+import type { AdminCustomerShipmentsQueryDto } from './dto/admin-customer-shipments-query.dto.js';
 
 const customerProfileInclude = {
   khachHang: true,
@@ -558,6 +559,151 @@ export class CustomersService {
           code: t.gheChuyenXe.ghe.soGhe,
           position: t.gheChuyenXe.ghe.viTri ?? null,
         },
+      })),
+      meta: {
+        page,
+        pageSize,
+        totalItems,
+        totalPages,
+      },
+    };
+  }
+
+  async listAdminCustomerShipments(
+    principal: AuthPrincipal,
+    customerId: number,
+    query: AdminCustomerShipmentsQueryDto,
+  ) {
+    const nhaXeId = this.requireTenantId(principal);
+
+    // Verify tenant visibility: customer must have at least one transaction with this tenant
+    const customer = await this.prisma.khachHang.findFirst({
+      where: {
+        khachHangId: customerId,
+        donGiaoDichs: {
+          some: {
+            nhaXeId,
+          },
+        },
+      },
+      select: {
+        khachHangId: true,
+      },
+    });
+
+    if (!customer) {
+      throw new NotFoundException({
+        error: 'CUSTOMER_NOT_FOUND',
+        message: 'Không tìm thấy khách hàng.',
+      });
+    }
+
+    const page = query.page ?? 1;
+    const pageSize = query.pageSize ?? 10;
+    const sortDirection = query.sortDirection ?? 'desc';
+
+    const andConditions: Prisma.PhieuGuiHangWhereInput[] = [
+      {
+        donGiaoDich: {
+          khachHangId: customerId,
+          nhaXeId,
+        },
+      },
+    ];
+
+    if (query.search?.trim()) {
+      const search = query.search.trim();
+      andConditions.push({
+        OR: [
+          { maVanDon: { contains: search } },
+          { tenNguoiNhan: { contains: search } },
+          { soDienThoaiNguoiNhan: { contains: search } },
+        ],
+      });
+    }
+
+    const where: Prisma.PhieuGuiHangWhereInput = {
+      AND: andConditions,
+    };
+
+    const orderBy: Prisma.PhieuGuiHangOrderByWithRelationInput[] = [
+      { ngayGui: sortDirection },
+      { phieuGuiHangId: sortDirection },
+    ];
+
+    const [totalItems, items] = await Promise.all([
+      this.prisma.phieuGuiHang.count({ where }),
+      this.prisma.phieuGuiHang.findMany({
+        where,
+        orderBy,
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        include: {
+          chuyenXe: {
+            select: {
+              chuyenXeId: true,
+              maChuyenXe: true,
+            },
+          },
+          buuCucGui: {
+            select: {
+              buuCucId: true,
+              maBuuCuc: true,
+              tenBuuCuc: true,
+            },
+          },
+          buuCucPhat: {
+            select: {
+              buuCucId: true,
+              maBuuCuc: true,
+              tenBuuCuc: true,
+            },
+          },
+        },
+      }),
+    ]);
+
+    const totalPages = Math.ceil(totalItems / pageSize) || 1;
+
+    return {
+      data: items.map((p) => ({
+        shipmentId: p.phieuGuiHangId,
+        waybillCode: p.maVanDon,
+        sentAt: p.ngayGui.toISOString(),
+        status: p.trangThai,
+        receiver: {
+          fullName: p.tenNguoiNhan,
+          phoneNumber: p.soDienThoaiNguoiNhan,
+          address: p.diaChiNguoiNhan ?? null,
+        },
+        pickupMethod: p.hinhThucLayHang,
+        deliveryMethod: p.hinhThucGiaoHang,
+        pickupAddress: p.diaChiLayHang ?? null,
+        mainFee: Number(p.cuocChinh),
+        serviceFee: Number(p.phiDichVu),
+        discountAmount: Number(p.soTienGiam),
+        totalFee: Number(p.tongPhi),
+        freightPayer: p.nguoiTraCuoc,
+        trip: p.chuyenXe
+          ? {
+              tripId: p.chuyenXe.chuyenXeId,
+              code: p.chuyenXe.maChuyenXe,
+            }
+          : null,
+        originBranch: p.buuCucGui
+          ? {
+              branchId: p.buuCucGui.buuCucId,
+              code: p.buuCucGui.maBuuCuc,
+              name: p.buuCucGui.tenBuuCuc,
+            }
+          : null,
+        destinationBranch: p.buuCucPhat
+          ? {
+              branchId: p.buuCucPhat.buuCucId,
+              code: p.buuCucPhat.maBuuCuc,
+              name: p.buuCucPhat.tenBuuCuc,
+            }
+          : null,
       })),
       meta: {
         page,

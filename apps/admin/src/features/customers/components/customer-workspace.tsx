@@ -11,9 +11,10 @@ import { getCustomerById } from '../services/customer-service';
 import type { CustomerDetail } from '../types/customer';
 import { CustomerTransactionsTab } from './customer-transactions-tab';
 import { CustomerTicketsTab } from './customer-tickets-tab';
+import { CustomerShipmentsTab } from './customer-shipments-tab';
 import '../customers.css';
 
-type WorkspaceTab = 'overview' | 'transactions' | 'tickets';
+type WorkspaceTab = 'overview' | 'transactions' | 'tickets' | 'shipments';
 
 function formatDateTime(value?: string | null) {
   if (!value) return '—';
@@ -197,6 +198,17 @@ export function CustomerWorkspace({ customerId }: { customerId: number }) {
             >
               Vé
             </button>
+            <button
+              aria-controls="panel-shipments"
+              aria-selected={activeTab === 'shipments'}
+              className={`button ${activeTab === 'shipments' ? 'button-primary' : 'button-secondary'}`}
+              id="tab-shipments"
+              onClick={() => setActiveTab('shipments')}
+              role="tab"
+              type="button"
+            >
+              Gửi hàng
+            </button>
           </nav>
 
           <div className="customer-workspace-panels">
@@ -271,6 +283,18 @@ export function CustomerWorkspace({ customerId }: { customerId: number }) {
               >
                 <h3 className="sr-only">Lịch sử vé</h3>
                 <CustomerTicketsTab customerId={customerId} />
+              </section>
+            )}
+
+            {activeTab === 'shipments' && (
+              <section
+                aria-labelledby="tab-shipments"
+                className="customer-workspace-panel"
+                id="panel-shipments"
+                role="tabpanel"
+              >
+                <h3 className="sr-only">Lịch sử gửi hàng</h3>
+                <CustomerShipmentsTab customerId={customerId} />
               </section>
             )}
           </div>

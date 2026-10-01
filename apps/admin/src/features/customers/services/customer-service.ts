@@ -9,6 +9,8 @@ import type {
   CustomerTransactionsResponse,
   CustomerTicketsQuery,
   CustomerTicketsResponse,
+  CustomerShipmentsQuery,
+  CustomerShipmentsResponse,
 } from '../types/customer';
 
 export class CustomerApiError extends Error {
@@ -158,4 +160,35 @@ export async function getCustomerTickets(
   );
 
   return body as CustomerTicketsResponse;
+}
+
+export async function getCustomerShipments(
+  customerId: number,
+  query: CustomerShipmentsQuery = {},
+  signal?: AbortSignal,
+): Promise<CustomerShipmentsResponse> {
+  const params = new URLSearchParams({
+    page: String(query.page ?? 1),
+    pageSize: String(query.pageSize ?? 10),
+  });
+
+  if (query.search?.trim()) {
+    params.set('search', query.search.trim());
+  }
+  if (query.sortDirection) {
+    params.set('sortDirection', query.sortDirection);
+  }
+
+  const body = await readResponse(
+    await adminApiFetch(
+      `${getApiBaseUrl()}/api/v1/customers/${customerId}/shipments?${params.toString()}`,
+      {
+        cache: 'no-store',
+        signal,
+      },
+    ),
+    'lịch sử gửi hàng của khách hàng',
+  );
+
+  return body as CustomerShipmentsResponse;
 }
