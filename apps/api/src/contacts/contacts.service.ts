@@ -22,7 +22,7 @@ export interface ContactResponse {
 export class ContactsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(dto: CreateContactDto): Promise<ContactResponse> {
+  async create(dto: CreateContactDto): Promise<{ data: ContactResponse }> {
     const contact = await this.prisma.lienHe.create({
       data: {
         hoTen: dto.fullName,
@@ -34,7 +34,7 @@ export class ContactsService {
       },
     });
 
-    return this.mapContact(contact);
+    return { data: this.mapContact(contact) };
   }
 
   async findAll(query: ContactQueryDto) {
@@ -79,7 +79,7 @@ export class ContactsService {
     };
   }
 
-  async findOne(id: number): Promise<ContactResponse> {
+  async findOne(id: number): Promise<{ data: ContactResponse }> {
     const contact = await this.prisma.lienHe.findUnique({
       where: { lienHeId: id },
     });
@@ -91,10 +91,10 @@ export class ContactsService {
       });
     }
 
-    return this.mapContact(contact);
+    return { data: this.mapContact(contact) };
   }
 
-  async updateStatus(id: number, status: ContactStatus): Promise<ContactResponse> {
+  async updateStatus(id: number, status: ContactStatus): Promise<{ data: ContactResponse }> {
     await this.findOne(id);
 
     const updated = await this.prisma.lienHe.update({
@@ -102,7 +102,7 @@ export class ContactsService {
       data: { trangThai: status },
     });
 
-    return this.mapContact(updated);
+    return { data: this.mapContact(updated) };
   }
 
   private mapContact(contact: LienHeRecord): ContactResponse {

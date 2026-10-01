@@ -123,6 +123,62 @@ describe('TicketsService', () => {
       expect(ticket.price).toBe(250000);
       expect(result.meta.totalItems).toBe(1);
     });
+
+    it('orders by createdAt desc and veId desc by default', async () => {
+      prisma.khachHang.findUnique.mockResolvedValue(mockCustomer);
+      prisma.ve.count.mockResolvedValue(1);
+      prisma.ve.findMany.mockResolvedValue([sampleTicket]);
+
+      await service.findCustomerTickets(1, { page: 1, pageSize: 10 });
+
+      expect(prisma.ve.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          orderBy: [{ createdAt: 'desc' }, { veId: 'desc' }],
+        }),
+      );
+    });
+
+    it('orders by price and direction when requested', async () => {
+      prisma.khachHang.findUnique.mockResolvedValue(mockCustomer);
+      prisma.ve.count.mockResolvedValue(1);
+      prisma.ve.findMany.mockResolvedValue([sampleTicket]);
+
+      await service.findCustomerTickets(1, {
+        page: 1,
+        pageSize: 10,
+        sortBy: 'price',
+        sortDirection: 'asc',
+      });
+
+      expect(prisma.ve.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          orderBy: [{ giaThucTe: 'asc' }, { veId: 'asc' }],
+        }),
+      );
+    });
+
+    it('orders by departureTime and direction when requested', async () => {
+      prisma.khachHang.findUnique.mockResolvedValue(mockCustomer);
+      prisma.ve.count.mockResolvedValue(1);
+      prisma.ve.findMany.mockResolvedValue([sampleTicket]);
+
+      await service.findCustomerTickets(1, {
+        page: 1,
+        pageSize: 10,
+        sortBy: 'departureTime',
+        sortDirection: 'desc',
+      });
+
+      expect(prisma.ve.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          orderBy: [
+            { gheChuyenXe: { chuyenXe: { ngayKhoiHanh: 'desc' } } },
+            { gheChuyenXe: { chuyenXe: { gioKhoiHanh: 'desc' } } },
+            { veId: 'desc' },
+          ],
+        }),
+      );
+    });
   });
 
   describe('findCustomerTicketById', () => {
@@ -151,13 +207,13 @@ describe('TicketsService', () => {
       ).rejects.toThrow(ForbiddenException);
     });
 
-    it('returns ticket detail when authorized', async () => {
+    it('returns ticket detail wrapped in data envelope when authorized', async () => {
       prisma.ve.findUnique.mockResolvedValue(sampleTicket);
 
       const result = await service.findCustomerTicketById(1, 1);
-      expect(result.ticketId).toBe(1);
-      expect(result.seatNumber).toBe('A01');
-      expect(result.passengerName).toBe('Nguyễn Văn A');
+      expect(result.data.ticketId).toBe(1);
+      expect(result.data.seatNumber).toBe('A01');
+      expect(result.data.passengerName).toBe('Nguyễn Văn A');
     });
   });
 
@@ -184,7 +240,7 @@ describe('TicketsService', () => {
       ).rejects.toThrow(NotFoundException);
     });
 
-    it('returns ticket when ticket code and phone match', async () => {
+    it('returns ticket wrapped in data envelope when ticket code and phone match', async () => {
       prisma.ve.findUnique.mockResolvedValue(sampleTicket);
 
       const result = await service.lookupTicket({
@@ -192,9 +248,9 @@ describe('TicketsService', () => {
         phoneNumber: '+84901234567',
       });
 
-      expect(result.ticketId).toBe(1);
-      expect(result.ticketCode).toBe('VE-001');
-      expect(result.route).toBe('TP.HCM - Đà Lạt');
+      expect(result.data.ticketId).toBe(1);
+      expect(result.data.ticketCode).toBe('VE-001');
+      expect(result.data.route).toBe('TP.HCM - Đà Lạt');
     });
   });
 });

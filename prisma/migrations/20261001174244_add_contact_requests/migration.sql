@@ -1,15 +1,3 @@
--- DropIndex
-DROP INDEX `BangGia_loaiXeId_fkey` ON `BangGia`;
-
--- DropIndex
-DROP INDEX `ChuyenXe_tuyenXeId_fkey` ON `ChuyenXe`;
-
--- DropIndex
-DROP INDEX `ChuyenXe_xeId_fkey` ON `ChuyenXe`;
-
--- DropIndex
-DROP INDEX `Xe_loaiXeId_fkey` ON `Xe`;
-
 -- CreateTable
 CREATE TABLE `LienHe` (
     `lienHeId` INTEGER NOT NULL AUTO_INCREMENT,

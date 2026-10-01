@@ -48,7 +48,7 @@ export type BookingQuery = {
   route?: string;
   departureDate?: string;
   status?: string;
-  sortBy?: 'createdAt' | 'departureTime' | 'totalAmount';
+  sortBy?: 'createdAt' | 'totalAmount';
   sortDirection?: 'asc' | 'desc';
 };
 

@@ -10,7 +10,8 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import { Public, OptionalAuth } from '../auth/decorators/public.decorator.js';
+import { Public } from '../auth/decorators/public.decorator.js';
+import { RequireRoles } from '../auth/decorators/require-roles.decorator.js';
 import { ContactsService } from './contacts.service.js';
 import { CreateContactDto } from './dto/create-contact.dto.js';
 import { ContactQueryDto } from './dto/contact-query.dto.js';
@@ -28,19 +29,19 @@ export class ContactsController {
   }
 
   @Get()
-  @OptionalAuth()
+  @RequireRoles('SUPER_ADMIN')
   findAll(@Query() query: ContactQueryDto) {
     return this.contactsService.findAll(query);
   }
 
   @Get(':id')
-  @OptionalAuth()
+  @RequireRoles('SUPER_ADMIN')
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.contactsService.findOne(id);
   }
 
   @Patch(':id/status')
-  @OptionalAuth()
+  @RequireRoles('SUPER_ADMIN')
   updateStatus(
     @Param('id', ParseIntPipe) id: number,
     @Body() body: UpdateContactStatusDto,

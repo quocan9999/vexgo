@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer';
 import { IsIn, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsDateOnly } from '../../common/validators/is-date-only.validator.js';
 
 export class BookingQueryDto {
   @Type(() => Number)
@@ -26,7 +27,7 @@ export class BookingQueryDto {
   route?: string;
 
   @IsOptional()
-  @IsString()
+  @IsDateOnly({ message: 'Ngày khởi hành không hợp lệ.' })
   departureDate?: string;
 
   @IsOptional()
@@ -34,8 +35,8 @@ export class BookingQueryDto {
   status?: string;
 
   @IsOptional()
-  @IsIn(['createdAt', 'departureTime', 'totalAmount'])
-  sortBy?: 'createdAt' | 'departureTime' | 'totalAmount';
+  @IsIn(['createdAt', 'totalAmount'])
+  sortBy?: 'createdAt' | 'totalAmount';
 
   @IsOptional()
   @IsIn(['asc', 'desc'])

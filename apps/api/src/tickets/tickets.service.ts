@@ -180,14 +180,26 @@ export class TicketsService {
     const pageSize = query.pageSize ?? 10;
     const totalPages = Math.ceil(totalItems / pageSize);
 
+    const direction = query.sortDirection ?? 'desc';
+    let orderBy: Prisma.VeOrderByWithRelationInput[];
+    if (query.sortBy === 'price') {
+      orderBy = [{ giaThucTe: direction }, { veId: direction }];
+    } else if (query.sortBy === 'departureTime') {
+      orderBy = [
+        { gheChuyenXe: { chuyenXe: { ngayKhoiHanh: direction } } },
+        { gheChuyenXe: { chuyenXe: { gioKhoiHanh: direction } } },
+        { veId: direction },
+      ];
+    } else {
+      orderBy = [{ createdAt: direction }, { veId: direction }];
+    }
+
     const tickets = await this.prisma.ve.findMany({
       where,
       include: TICKET_INCLUDE,
       skip: (page - 1) * pageSize,
       take: pageSize,
-      orderBy: {
-        createdAt: query.sortDirection ?? 'desc',
-      },
+      orderBy,
     });
 
     const data = tickets.map((t) => this.mapTicket(t));
@@ -223,7 +235,7 @@ export class TicketsService {
       });
     }
 
-    return this.mapTicket(ticket);
+    return { data: this.mapTicket(ticket) };
   }
 
   async lookupTicket(query: TicketLookupQueryDto) {
@@ -248,7 +260,7 @@ export class TicketsService {
       });
     }
 
-    return this.mapTicket(ticket);
+    return { data: this.mapTicket(ticket) };
   }
 
   private mapTicket(ticket: any) {

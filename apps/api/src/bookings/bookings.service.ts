@@ -158,6 +158,12 @@ export class BookingsService {
     const pageSize = query.pageSize ?? 10;
     const totalPages = Math.ceil(totalItems / pageSize);
 
+    const direction = query.sortDirection ?? 'desc';
+    const orderBy: Prisma.PhieuDatVeOrderByWithRelationInput[] =
+      query.sortBy === 'totalAmount'
+        ? [{ tongTienBanDau: direction }, { phieuDatVeId: direction }]
+        : [{ createdAt: direction }, { phieuDatVeId: direction }];
+
     const bookings = await this.prisma.phieuDatVe.findMany({
       where,
       include: {
@@ -185,9 +191,7 @@ export class BookingsService {
       },
       skip: (page - 1) * pageSize,
       take: pageSize,
-      orderBy: {
-        createdAt: query.sortDirection ?? 'desc',
-      },
+      orderBy,
     });
 
     const data = bookings.map((booking) => this.mapBooking(booking));
@@ -246,7 +250,7 @@ export class BookingsService {
       });
     }
 
-    return this.mapBooking(booking);
+    return { data: this.mapBooking(booking) };
   }
 
   private mapBooking(booking: any) {

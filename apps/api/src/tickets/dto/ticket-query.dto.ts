@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer';
 import { IsIn, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsDateOnly } from '../../common/validators/is-date-only.validator.js';
 
 export class TicketQueryDto {
   @Type(() => Number)
@@ -26,7 +27,7 @@ export class TicketQueryDto {
   route?: string;
 
   @IsOptional()
-  @IsString()
+  @IsDateOnly({ message: 'Ngày khởi hành không hợp lệ.' })
   departureDate?: string;
 
   @IsOptional()

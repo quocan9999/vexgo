@@ -163,6 +163,39 @@ describe('BookingsService', () => {
         totalPages: 1,
       });
     });
+
+    it('orders by createdAt desc and phieuDatVeId desc by default', async () => {
+      prisma.khachHang.findUnique.mockResolvedValue(mockCustomer);
+      prisma.phieuDatVe.count.mockResolvedValue(1);
+      prisma.phieuDatVe.findMany.mockResolvedValue([sampleBooking]);
+
+      await service.findCustomerBookings(1, { page: 1, pageSize: 10 });
+
+      expect(prisma.phieuDatVe.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          orderBy: [{ createdAt: 'desc' }, { phieuDatVeId: 'desc' }],
+        }),
+      );
+    });
+
+    it('orders by totalAmount and direction when requested', async () => {
+      prisma.khachHang.findUnique.mockResolvedValue(mockCustomer);
+      prisma.phieuDatVe.count.mockResolvedValue(1);
+      prisma.phieuDatVe.findMany.mockResolvedValue([sampleBooking]);
+
+      await service.findCustomerBookings(1, {
+        page: 1,
+        pageSize: 10,
+        sortBy: 'totalAmount',
+        sortDirection: 'asc',
+      });
+
+      expect(prisma.phieuDatVe.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          orderBy: [{ tongTienBanDau: 'asc' }, { phieuDatVeId: 'asc' }],
+        }),
+      );
+    });
   });
 
   describe('findCustomerBookingById', () => {
@@ -188,13 +221,13 @@ describe('BookingsService', () => {
       ).rejects.toThrow(ForbiddenException);
     });
 
-    it('returns booking detail when authorized', async () => {
+    it('returns booking detail wrapped in data envelope when authorized', async () => {
       prisma.phieuDatVe.findUnique.mockResolvedValue(sampleBooking);
 
       const result = await service.findCustomerBookingById(1, 101);
-      expect(result.bookingId).toBe(101);
-      expect(result.tickets).toHaveLength(2);
-      expect(result.tickets[0].seatNumber).toBe('A01');
+      expect(result.data.bookingId).toBe(101);
+      expect(result.data.tickets).toHaveLength(2);
+      expect(result.data.tickets[0].seatNumber).toBe('A01');
     });
   });
 });

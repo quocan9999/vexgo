@@ -56,15 +56,17 @@ describe('ContactsService', () => {
       });
 
       expect(result).toEqual({
-        contactId: 1,
-        fullName: 'Nguyễn Văn A',
-        phoneNumber: '0912345678',
-        email: 'a@example.com',
-        subject: 'Hỗ trợ hủy vé',
-        message: 'Tôi muốn được hỗ trợ hủy vé cho chuyến ngày mai.',
-        status: 'CHO_XU_LY',
-        createdAt: '2026-10-02T08:00:00.000Z',
-        updatedAt: '2026-10-02T08:00:00.000Z',
+        data: {
+          contactId: 1,
+          fullName: 'Nguyễn Văn A',
+          phoneNumber: '0912345678',
+          email: 'a@example.com',
+          subject: 'Hỗ trợ hủy vé',
+          message: 'Tôi muốn được hỗ trợ hủy vé cho chuyến ngày mai.',
+          status: 'CHO_XU_LY',
+          createdAt: '2026-10-02T08:00:00.000Z',
+          updatedAt: '2026-10-02T08:00:00.000Z',
+        },
       });
     });
   });
@@ -74,8 +76,8 @@ describe('ContactsService', () => {
       prisma.lienHe.findUnique.mockResolvedValue(mockContactRecord);
 
       const result = await service.findOne(1);
-      expect(result.contactId).toBe(1);
-      expect(result.fullName).toBe('Nguyễn Văn A');
+      expect(result.data.contactId).toBe(1);
+      expect(result.data.fullName).toBe('Nguyễn Văn A');
     });
 
     it('throws NotFoundException when contact does not exist', async () => {
@@ -94,7 +96,7 @@ describe('ContactsService', () => {
       });
 
       const result = await service.updateStatus(1, 'DA_XU_LY');
-      expect(result.status).toBe('DA_XU_LY');
+      expect(result.data.status).toBe('DA_XU_LY');
       expect(prisma.lienHe.update).toHaveBeenCalledWith({
         where: { lienHeId: 1 },
         data: { trangThai: 'DA_XU_LY' },
