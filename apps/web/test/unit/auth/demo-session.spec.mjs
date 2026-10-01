@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { createDemoSessionStore } from '../../../src/features/auth/demo-session-state.ts';
+import {
+  AUTH_STORAGE_KEY,
+  clearStoredAuth,
+  readStoredAuth,
+  writeStoredAuth,
+} from '../../../src/features/auth/auth-session-state.ts';
 
 function createMemoryStorage() {
   const values = new Map();
@@ -12,48 +17,72 @@ function createMemoryStorage() {
   };
 }
 
-test('the pure session state starts with the source demo user', () => {
-  const store = createDemoSessionStore();
-  const state = store.getState();
-  
-  assert.equal(state.user.fullName, 'Nguyễn Văn Hùng');
-  assert.equal(state.user.phone, '0912.345.678');
-  assert.equal(state.isAuthenticated, true);
-});
+const user = {
+  accountId: 42,
+  customerId: 12,
+  fullName: 'Nguyễn Văn An',
+  phoneNumber: '+84901234567',
+  roles: ['KHACH_HANG'],
+};
 
-test('signIn updates customer identity', () => {
-  const store = createDemoSessionStore();
-  
-  store.signIn({
-    fullName: 'Lê Văn Khách',
-    phone: '0988.777.666'
-  });
-  
-  const state = store.getState();
-  assert.equal(state.user.fullName, 'Lê Văn Khách');
-  assert.equal(state.user.phone, '0988.777.666');
-  assert.equal(state.isAuthenticated, true);
-});
-
-test('signOut clears customer identity', () => {
-  const store = createDemoSessionStore();
-  
-  store.signOut();
-  
-  const state = store.getState();
-  assert.equal(state.user, null);
-  assert.equal(state.isAuthenticated, false);
-});
-
-test('signOut remains effective when the demo session is recreated after a refresh', () => {
-  const storage = createMemoryStorage();
-  const currentSession = createDemoSessionStore(storage);
-
-  currentSession.signOut();
-
-  const refreshedSession = createDemoSessionStore(storage);
-  assert.deepEqual(refreshedSession.getState(), {
+test('auth state starts unauthenticated when storage is unavailable', () => {
+  assert.deepEqual(readStoredAuth(), {
     user: null,
+    accessToken: null,
+    refreshToken: null,
     isAuthenticated: false,
+    isHydrated: true,
+  });
+});
+
+test('writeStoredAuth persists tokens and readStoredAuth restores the session', () => {
+  const storage = createMemoryStorage();
+
+  writeStoredAuth(storage, {
+    user,
+    accessToken: 'access-token',
+    refreshToken: 'refresh-token',
+    refreshToken: 'refresh-token',
+  });
+
+  assert.deepEqual(readStoredAuth(storage), {
+    user,
+    accessToken: 'access-token',
+    refreshToken: 'refresh-token',
+    isAuthenticated: true,
+    isHydrated: true,
+  });
+});
+
+test('invalid stored auth is treated as unauthenticated', () => {
+  const storage = createMemoryStorage();
+  storage.setItem(AUTH_STORAGE_KEY, JSON.stringify({ user }));
+
+  assert.deepEqual(readStoredAuth(storage), {
+    user: null,
+    accessToken: null,
+    refreshToken: null,
+    isAuthenticated: false,
+    isHydrated: true,
+  });
+});
+
+test('clearStoredAuth keeps sign-out effective after a refresh', () => {
+  const storage = createMemoryStorage();
+  writeStoredAuth(storage, {
+    user,
+    accessToken: 'access-token',
+    refreshToken: 'refresh-token',
+    refreshToken: 'refresh-token',
+  });
+
+  clearStoredAuth(storage);
+
+  assert.deepEqual(readStoredAuth(storage), {
+    user: null,
+    accessToken: null,
+    refreshToken: null,
+    isAuthenticated: false,
+    isHydrated: true,
   });
 });
