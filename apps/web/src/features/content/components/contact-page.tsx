@@ -2,23 +2,82 @@
 // frontend/src/modules/client/contacts/components/ContactPageContent.tsx
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { MapPin, Phone, Mail, Send, CheckCircle2 } from 'lucide-react';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
+import { contactApi } from '../services/contact.api';
+import { useAuthSession } from '@/features/auth/auth-session';
+import { customerApi } from '@/features/account/services/customer.api';
 
 export const ContactPageContent: React.FC = () => {
+  const { user, executeWithAuth, isAuthenticated } = useAuthSession();
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
   const [isSent, setIsSent] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    let active = true;
+
+    if (user?.fullName) {
+      setFullName((curr) => curr || user.fullName);
+    }
+    if (user?.phoneNumber) {
+      setPhone((curr) => curr || user.phoneNumber);
+    }
+
+    executeWithAuth((token) => customerApi.getMe(token))
+      .then((res) => {
+        if (!active || !res?.data) return;
+        if (res.data.fullName) {
+          setFullName((curr) => curr || res.data.fullName);
+        }
+        if (res.data.phoneNumber) {
+          setPhone((curr) => curr || res.data.phoneNumber);
+        }
+        if (res.data.email) {
+          setEmail((curr) => curr || res.data.email || '');
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      active = false;
+    };
+  }, [isAuthenticated, executeWithAuth, user]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSent(true);
+    setIsSubmitting(true);
+    setErrorMessage('');
+    try {
+      await contactApi.submitContact({
+        fullName: fullName.trim(),
+        phoneNumber: phone.trim(),
+        email: email.trim() || undefined,
+        subject: subject.trim(),
+        message: message.trim(),
+      });
+      setIsSent(true);
+      setFullName('');
+      setPhone('');
+      setEmail('');
+      setSubject('');
+      setMessage('');
+    } catch (err) {
+      setErrorMessage(
+        err instanceof Error ? err.message : 'Gửi yêu cầu thất bại.',
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -133,9 +192,21 @@ export const ContactPageContent: React.FC = () => {
                 />
               </div>
 
-              <Button type="submit" variant="primary" size="lg" className="w-full">
+              {errorMessage && (
+                <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs text-red-600 font-semibold">
+                  {errorMessage}
+                </div>
+              )}
+
+              <Button
+                type="submit"
+                variant="primary"
+                size="lg"
+                className="w-full"
+                disabled={isSubmitting}
+              >
                 <Send className="w-4 h-4 mr-1.5" />
-                <span>GỬI YÊU CẦU LIÊN HỆ</span>
+                <span>{isSubmitting ? 'ĐANG GỬI...' : 'GỬI YÊU CẦU LIÊN HỆ'}</span>
               </Button>
             </form>
           )}

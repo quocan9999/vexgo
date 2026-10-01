@@ -1,0 +1,200 @@
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { TicketsService } from '../../../src/tickets/tickets.service.js';
+import type { PrismaService } from '../../../src/prisma/prisma.service.js';
+import type { ConfigService } from '@nestjs/config';
+
+describe('TicketsService', () => {
+  const mockCustomer = {
+    khachHangId: 10,
+    taiKhoanId: 1,
+  };
+
+  const sampleTicket = {
+    veId: 1,
+    maVe: 'VE-001',
+    giaNiemYet: '250000',
+    giaThucTe: '250000',
+    trangThai: 'DA_DAT',
+    diemDon: 'Bến xe Miền Đông',
+    phieuDatVeId: 101,
+    gheChuyenXeId: 11,
+    bangGiaApDungId: 2,
+    createdAt: new Date('2026-09-20T10:00:00.000Z'),
+    updatedAt: new Date('2026-09-20T10:05:00.000Z'),
+    phieuDatVe: {
+      phieuDatVeId: 101,
+      maPhieuDatVe: 'PDV-101',
+      trangThai: 'DA_THANH_TOAN',
+      donGiaoDich: {
+        donGiaoDichId: 201,
+        trangThai: 'DA_THANH_TOAN',
+        tenKhachHang: 'Nguyễn Văn A',
+        soDienThoaiKhachHang: '0901234567',
+        khachHangId: 10,
+        khachHang: {
+          khachHangId: 10,
+          taiKhoanId: 1,
+        },
+        nhaXe: {
+          nhaXeId: 1,
+          tenNhaXe: 'Phương Trang',
+        },
+        thanhToans: [
+          {
+            thanhToanId: 301,
+            soTien: '250000',
+            phuongThuc: 'MOMO',
+            trangThai: 'THANH_CONG',
+          },
+        ],
+      },
+    },
+    gheChuyenXe: {
+      gheChuyenXeId: 11,
+      ghe: { soGhe: 'A01', viTri: 'Tầng dưới' },
+      chuyenXe: {
+        chuyenXeId: 50,
+        maChuyenXe: 'CX-50',
+        ngayKhoiHanh: new Date('2026-09-25T00:00:00.000Z'),
+        gioKhoiHanh: new Date('1970-01-01T08:00:00.000Z'),
+        tuyenXe: {
+          diemDi: 'TP.HCM',
+          diemDen: 'Đà Lạt',
+          nhaXe: { tenNhaXe: 'Phương Trang' },
+        },
+        xe: {
+          loaiXe: { tenLoai: 'GIƯỜNG NẰM' },
+        },
+      },
+    },
+  };
+
+  const prisma = {
+    khachHang: {
+      findUnique: vi.fn(),
+    },
+    ve: {
+      count: vi.fn(),
+      findMany: vi.fn(),
+      findUnique: vi.fn(),
+    },
+  };
+
+  const config = {
+    get: vi.fn().mockReturnValue('Asia/Ho_Chi_Minh'),
+  };
+
+  const service = new TicketsService(
+    prisma as unknown as PrismaService,
+    config as unknown as ConfigService,
+  );
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  describe('findCustomerTickets', () => {
+    it('throws NotFoundException when customer profile does not exist', async () => {
+      prisma.khachHang.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.findCustomerTickets(999, { page: 1, pageSize: 10 }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('returns paginated tickets for authenticated customer', async () => {
+      prisma.khachHang.findUnique.mockResolvedValue(mockCustomer);
+      prisma.ve.count.mockResolvedValue(1);
+      prisma.ve.findMany.mockResolvedValue([sampleTicket]);
+
+      const result = await service.findCustomerTickets(1, {
+        page: 1,
+        pageSize: 10,
+      });
+
+      expect(result.data).toHaveLength(1);
+      const ticket = result.data[0];
+      expect(ticket.ticketId).toBe(1);
+      expect(ticket.ticketCode).toBe('VE-001');
+      expect(ticket.seatNumber).toBe('A01');
+      expect(ticket.route).toBe('TP.HCM - Đà Lạt');
+      expect(ticket.busCompanyName).toBe('Phương Trang');
+      expect(ticket.price).toBe(250000);
+      expect(result.meta.totalItems).toBe(1);
+    });
+  });
+
+  describe('findCustomerTicketById', () => {
+    it('throws NotFoundException when ticket does not exist', async () => {
+      prisma.ve.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.findCustomerTicketById(1, 999),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('throws ForbiddenException when ticket belongs to another customer', async () => {
+      prisma.ve.findUnique.mockResolvedValue({
+        ...sampleTicket,
+        phieuDatVe: {
+          ...sampleTicket.phieuDatVe,
+          donGiaoDich: {
+            ...sampleTicket.phieuDatVe.donGiaoDich,
+            khachHang: { taiKhoanId: 888 },
+          },
+        },
+      });
+
+      await expect(
+        service.findCustomerTicketById(1, 1),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('returns ticket detail when authorized', async () => {
+      prisma.ve.findUnique.mockResolvedValue(sampleTicket);
+
+      const result = await service.findCustomerTicketById(1, 1);
+      expect(result.ticketId).toBe(1);
+      expect(result.seatNumber).toBe('A01');
+      expect(result.passengerName).toBe('Nguyễn Văn A');
+    });
+  });
+
+  describe('lookupTicket', () => {
+    it('throws NotFoundException when ticket code does not exist', async () => {
+      prisma.ve.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.lookupTicket({
+          ticketCode: 'INVALID',
+          phoneNumber: '0901234567',
+        }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('throws NotFoundException when phone number does not match', async () => {
+      prisma.ve.findUnique.mockResolvedValue(sampleTicket);
+
+      await expect(
+        service.lookupTicket({
+          ticketCode: 'VE-001',
+          phoneNumber: '0999999999',
+        }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('returns ticket when ticket code and phone match', async () => {
+      prisma.ve.findUnique.mockResolvedValue(sampleTicket);
+
+      const result = await service.lookupTicket({
+        ticketCode: 'VE-001',
+        phoneNumber: '+84901234567',
+      });
+
+      expect(result.ticketId).toBe(1);
+      expect(result.ticketCode).toBe('VE-001');
+      expect(result.route).toBe('TP.HCM - Đà Lạt');
+    });
+  });
+});

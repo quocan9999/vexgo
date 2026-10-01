@@ -1,7 +1,7 @@
 /* eslint-disable */
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -32,6 +32,7 @@ import { validatePassengerInfo } from '../utils/passenger-validation';
 import { createPaymentDraft } from '../services/payment-draft';
 import { FeaturePlaceholderModal } from './feature-placeholder-modal';
 import { useAuthSession } from '@/features/auth/auth-session';
+import { customerApi } from '@/features/account/services/customer.api';
 import type { ApiTripSeat } from '@/features/trips/services/trips.api';
 
 export interface OneWayBookingProps {
@@ -44,13 +45,29 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
   tripSeats,
 }) => {
   const router = useRouter();
-  const { user } = useAuthSession();
+  const { user, executeWithAuth, isAuthenticated } = useAuthSession();
   const isTicket = post.needType === 'BUY';
   const [userNameOverride, setUserNameOverride] = useState<string | null>(null);
   const [userPhoneOverride, setUserPhoneOverride] = useState<string | null>(null);
   const [customerEmail, setCustomerEmail] = useState('');
   const [pickupOverride, setPickupOverride] = useState<string | null>(null);
   const [dropoffOverride, setDropoffOverride] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    let active = true;
+    executeWithAuth((token) => customerApi.getMe(token))
+      .then((res) => {
+        if (!active) return;
+        if (res?.data?.email) {
+          setCustomerEmail((curr) => curr || res.data.email || '');
+        }
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [isAuthenticated, executeWithAuth]);
 
   const customerName =
     userNameOverride !== null ? userNameOverride : user?.fullName || '';

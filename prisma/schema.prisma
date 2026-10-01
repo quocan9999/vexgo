@@ -594,3 +594,15 @@ model PhanHoi {
   chuyenXe       ChuyenXe?     @relation(fields: [chuyenXeId], references: [chuyenXeId], onDelete: Restrict, onUpdate: Restrict)
   phieuGuiHang   PhieuGuiHang? @relation(fields: [phieuGuiHangId], references: [phieuGuiHangId], onDelete: Restrict, onUpdate: Restrict)
 }
+
+model LienHe {
+  lienHeId    Int      @id @default(autoincrement()) @db.Int
+  hoTen       String   @db.VarChar(100)
+  soDienThoai String   @db.VarChar(20)
+  email       String?  @db.VarChar(150)
+  tieuDe      String   @db.VarChar(200)
+  noiDung     String   @db.Text
+  trangThai   String   @default("CHO_XU_LY") @db.VarChar(30)
+  createdAt   DateTime @default(now()) @db.DateTime(0)
+  updatedAt   DateTime @default(now()) @updatedAt @db.DateTime(0)
+}
