@@ -158,7 +158,7 @@ describe('platform role permission management', () => {
     cleanup();
   });
 
-  it('shows loading, then the protected role and global mapping notice', async () => {
+  it('shows loading, then the protected role without a scope notice', async () => {
     let resolveConfig!: (value: typeof config) => void;
     service.getDefaultRolePermissions.mockImplementationOnce(
       () => new Promise((resolve) => { resolveConfig = resolve; }),
@@ -178,8 +178,8 @@ describe('platform role permission management', () => {
       screen.getByRole('link', { name: /Theo nhà xe/ }).getAttribute('href'),
     ).toBe('/rbac/tenants');
     expect(
-      screen.getByText(/Thay đổi áp dụng cho các tài khoản mang vai trò này/),
-    ).toBeTruthy();
+      screen.queryByRole('region', { name: 'Phạm vi cấu hình quyền' }),
+    ).toBeNull();
   });
 
   it('keeps save and undo actions inside the selected role permission panel', async () => {
