@@ -37,7 +37,8 @@ const DIALOG_FOCUSABLE_SELECTOR = [
 
 type DocumentScrollLockState = {
   count: number;
-  originalOverflow: string;
+  originalDocumentOverflow: string;
+  originalBodyOverflow: string;
 };
 
 const documentScrollLocks = new WeakMap<Document, DocumentScrollLockState>();
@@ -48,13 +49,15 @@ function lockDocumentScroll(document: Document) {
   if (!state) {
     state = {
       count: 0,
-      originalOverflow: document.documentElement.style.overflow,
+      originalDocumentOverflow: document.documentElement.style.overflow,
+      originalBodyOverflow: document.body.style.overflow,
     };
     documentScrollLocks.set(document, state);
   }
 
   state.count += 1;
   document.documentElement.style.overflow = 'hidden';
+  document.body.style.overflow = 'hidden';
 
   return () => {
     const currentState = documentScrollLocks.get(document);
@@ -64,7 +67,11 @@ function lockDocumentScroll(document: Document) {
     if (currentState.count > 0) return;
 
     if (document.documentElement.style.overflow === 'hidden') {
-      document.documentElement.style.overflow = currentState.originalOverflow;
+      document.documentElement.style.overflow =
+        currentState.originalDocumentOverflow;
+    }
+    if (document.body.style.overflow === 'hidden') {
+      document.body.style.overflow = currentState.originalBodyOverflow;
     }
 
     documentScrollLocks.delete(document);
