@@ -7,6 +7,7 @@ import { AdminAccountQueryDto } from '../../../src/admin-accounts/dto/admin-acco
 import { CreateAdminAccountDto } from '../../../src/admin-accounts/dto/create-admin-account.dto.js';
 import { UpdateAdminAccountDto } from '../../../src/admin-accounts/dto/update-admin-account.dto.js';
 import { UpdateAdminAccountStatusDto } from '../../../src/admin-accounts/dto/update-admin-account-status.dto.js';
+import { UpdateAdminAccountRolesDto } from '../../../src/admin-accounts/dto/update-admin-account-roles.dto.js';
 
 const validationOptions = {
   whitelist: true,
@@ -142,6 +143,47 @@ describe('Admin account DTO validation', () => {
 
     expect(errors.map(({ property }) => property)).toContain('status');
   });
+
+  it('requires an explicit tenant-role list for role replacement, including an empty list', async () => {
+    const valid = plainToInstance(UpdateAdminAccountRolesDto, {
+      roleNames: ['NHA_XE_ADMIN', 'NHAN_VIEN_BAN_VE'],
+    });
+    await expect(validate(valid, validationOptions)).resolves.toEqual([]);
+
+    const revokeAll = plainToInstance(UpdateAdminAccountRolesDto, {
+      roleNames: [],
+    });
+    await expect(validate(revokeAll, validationOptions)).resolves.toEqual([]);
+  });
+
+  it.each([
+    ['missing', {}],
+    ['null', { roleNames: null }],
+    ['non-array', { roleNames: 'NHA_XE_ADMIN' }],
+    ['platform role', { roleNames: ['SUPER_ADMIN'] }],
+    ['customer role', { roleNames: ['KHACH_HANG'] }],
+    ['unknown role', { roleNames: ['NOT_A_ROLE'] }],
+    ['duplicate role', { roleNames: ['NHA_XE_ADMIN', 'NHA_XE_ADMIN'] }],
+    ['non-string entry', { roleNames: ['NHA_XE_ADMIN', 42] }],
+  ])('rejects %s in role replacement', async (_name, body) => {
+    const dto = plainToInstance(UpdateAdminAccountRolesDto, body);
+    const errors = await validate(dto, validationOptions);
+
+    expect(errors.map(({ property }) => property)).toContain('roleNames');
+  });
+
+  it.each(['vaiTroId', 'roles', 'permissions', 'busCompanyId'])(
+    'rejects client-controlled field %s in role replacement',
+    async (field) => {
+      const dto = plainToInstance(UpdateAdminAccountRolesDto, {
+        roleNames: ['NHA_XE_ADMIN'],
+        [field]: field === 'vaiTroId' ? 1 : 'SUPER_ADMIN',
+      });
+      const errors = await validate(dto, validationOptions);
+
+      expect(errors.map(({ property }) => property)).toContain(field);
+    },
+  );
 
   it('transforms list filters and rejects malformed company IDs', async () => {
     const dto = plainToInstance(AdminAccountQueryDto, {

@@ -51,6 +51,7 @@ cho `SUPER_ADMIN`, đồng thời kiểm tra permission platform tương ứng:
 | POST | `/api/v1/admin-accounts` | `SUPER_ADMIN` + `admin-account:create` | Tạo account + employee + tenant roles trong transaction |
 | PATCH | `/api/v1/admin-accounts/:id` | `SUPER_ADMIN` + `admin-account:update` | Sửa tên/ngày sinh/email/CCCD |
 | PATCH | `/api/v1/admin-accounts/:id/status` | `SUPER_ADMIN` + `admin-account:update` | Khóa `TAM_KHOA` hoặc mở `HOAT_DONG` |
+| PUT | `/api/v1/admin-accounts/:id/roles` | `SUPER_ADMIN` + `admin-account:update` | Thay thế tenant roles; `roleNames: []` thu hồi tất cả |
 
 Resource gồm tài khoản tenant có liên kết `NhanVien`; account không có role vẫn
 được quản lý để có thể cấp role sau. Mọi role hiện tại phải thuộc tenant role
@@ -74,6 +75,11 @@ chỉ nhận `fullName`, `dateOfBirth`, `email`, `citizenId`; status PATCH chỉ
 `{ "status": "HOAT_DONG" | "TAM_KHOA" }`. Email có unique constraint sau
 migration đăng nhập bằng email; trước khi deploy migration cần kiểm tra email
 hiện có không trùng sau `LOWER(TRIM(email))`. CCCD không có unique constraint.
+`PUT /api/v1/admin-accounts/:id/roles` yêu cầu `roleNames` tường minh và thay
+thế toàn bộ tập tenant roles; danh sách rỗng thu hồi toàn bộ role. Chỉ role tenant
+trong catalog được nhận; backend resolve role ID từ DB. Target ngoài managed
+tenant-account scope trả `404 ADMIN_ACCOUNT_NOT_FOUND`; xem
+`docs/api/auth-admin-accounts.md` để biết contract chi tiết.
 
 Admin Web đăng nhập thật bằng `{ identifier, password }`, trong đó identifier
 là email hoặc số điện thoại; Customer/Mobile tiếp tục dùng payload hiện hữu

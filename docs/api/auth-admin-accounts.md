@@ -135,6 +135,41 @@ nullable, gửi `null` để xóa giá trị hiện tại. Không thể đổi `
 `password`, `busCompanyId`, `employeeCode`, role, permission hoặc trạng thái qua
 endpoint này. Field ngoài hợp đồng trả `400 VALIDATION_ERROR`.
 
+## Thay thế vai trò tài khoản
+
+```http
+PUT /api/v1/admin-accounts/:id/roles
+Content-Type: application/json
+```
+
+```json
+{
+  "roleNames": ["NHAN_VIEN_BAN_VE", "NHAN_VIEN_CSKH"]
+}
+```
+
+Endpoint yêu cầu `SUPER_ADMIN` và permission `admin-account:update`. Đây là
+thao tác thay thế toàn bộ tập vai trò tenant của tài khoản, không phải thêm một
+vai trò đơn lẻ. `roleNames` bắt buộc; danh sách có thể rỗng để thu hồi toàn bộ
+vai trò tenant. Danh sách không được trùng và chỉ nhận các role trong tenant
+catalog; backend resolve role ID từ database, không nhận `vaiTroId` từ client.
+
+Endpoint chỉ nhận tài khoản nhân viên trong managed collection. Tài khoản
+`SUPER_ADMIN`, tài khoản có vai trò customer/platform hoặc scope trộn, và tài
+khoản không có liên kết `NhanVien` đều trả `404 ADMIN_ACCOUNT_NOT_FOUND` để
+không làm lộ loại tài khoản ngoài collection. Thay đổi được khóa theo account
+row và thực hiện trong một transaction; nếu role catalog thiếu role được chọn,
+không có assignment nào bị xóa.
+
+Các request tiếp theo resolve role và permission từ quan hệ hiện tại trong DB,
+nên access token/session đang còn hiệu lực không giữ lại quyền cũ sau khi đổi
+vai trò. Gửi `roleNames: []` không khóa account hoặc xóa liên kết nhân viên; nó
+chỉ khiến account không còn tenant role/permission cho tới khi được gán role
+mới.
+
+Thành công trả `200` với envelope `{ "data": <account> }` giống endpoint chi
+tiết; `roles` là tập role tenant sau khi cập nhật.
+
 ## Khóa và mở khóa tài khoản
 
 ```http
@@ -160,17 +195,18 @@ Mở khóa chỉ đổi trạng thái; người dùng phải đăng nhập lại
 
 ## Lỗi nghiệp vụ chính
 
-| HTTP | Mã lỗi | Trường hợp |
-|---|---|---|
-| 401 | `ACCESS_TOKEN_INVALID` | Thiếu hoặc access token không hợp lệ |
-| 403 | `ROLE_FORBIDDEN` | Người gọi không phải `SUPER_ADMIN` |
-| 403 | `PERMISSION_FORBIDDEN` | Người gọi thiếu permission của endpoint |
-| 404 | `ADMIN_ACCOUNT_NOT_FOUND` | ID không thuộc tập tài khoản nhân viên tenant được quản lý |
-| 404 | `BUS_COMPANY_NOT_FOUND` | Nhà xe được chọn không tồn tại |
-| 409 | `PHONE_ALREADY_REGISTERED` | Số điện thoại đã được dùng |
-| 409 | `EMAIL_ALREADY_REGISTERED` | Email đã được dùng |
-| 409 | `EMPLOYEE_CODE_EXISTS` | Mã nhân viên đã được dùng trong cùng nhà xe |
-| 500 | `AUTH_ROLE_NOT_CONFIGURED` | Một role tenant được chọn chưa có trong seed/catalog |
+| HTTP | Mã lỗi                     | Trường hợp                                                            |
+| ---- | -------------------------- | --------------------------------------------------------------------- |
+| 400  | `VALIDATION_ERROR`         | Dữ liệu sai định dạng, role không hợp lệ hoặc có field ngoài hợp đồng |
+| 401  | `ACCESS_TOKEN_INVALID`     | Thiếu hoặc access token không hợp lệ                                  |
+| 403  | `ROLE_FORBIDDEN`           | Người gọi không phải `SUPER_ADMIN`                                    |
+| 403  | `PERMISSION_FORBIDDEN`     | Người gọi thiếu permission của endpoint                               |
+| 404  | `ADMIN_ACCOUNT_NOT_FOUND`  | ID không thuộc tập tài khoản nhân viên tenant được quản lý            |
+| 404  | `BUS_COMPANY_NOT_FOUND`    | Nhà xe được chọn không tồn tại                                        |
+| 409  | `PHONE_ALREADY_REGISTERED` | Số điện thoại đã được dùng                                            |
+| 409  | `EMAIL_ALREADY_REGISTERED` | Email đã được dùng                                                    |
+| 409  | `EMPLOYEE_CODE_EXISTS`     | Mã nhân viên đã được dùng trong cùng nhà xe                           |
+| 500  | `AUTH_ROLE_NOT_CONFIGURED` | Một role tenant được chọn chưa có trong seed/catalog                  |
 
 Email có unique constraint; CCCD không có unique constraint hiện tại nên API
 không tự đặt thêm quy tắc duy nhất cho CCCD.

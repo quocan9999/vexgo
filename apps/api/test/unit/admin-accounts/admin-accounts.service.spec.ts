@@ -43,6 +43,7 @@ function knownError(code: string, target: string[]) {
 
 describe('AdminAccountsService', () => {
   const tx = {
+    $queryRaw: vi.fn(),
     nhaXe: { findUnique: vi.fn() },
     vaiTro: { findMany: vi.fn() },
     taiKhoan: {
@@ -52,7 +53,7 @@ describe('AdminAccountsService', () => {
       updateMany: vi.fn(),
     },
     nhanVien: { create: vi.fn() },
-    taiKhoanVaiTro: { create: vi.fn() },
+    taiKhoanVaiTro: { create: vi.fn(), deleteMany: vi.fn() },
     phienDangNhap: { updateMany: vi.fn() },
   };
   const prisma = {
@@ -88,6 +89,8 @@ describe('AdminAccountsService', () => {
     tx.taiKhoan.create.mockResolvedValue({ taiKhoanId: 101 });
     tx.nhanVien.create.mockResolvedValue({ nhanVienId: 201 });
     tx.taiKhoanVaiTro.create.mockResolvedValue({});
+    tx.taiKhoanVaiTro.deleteMany.mockResolvedValue({ count: 1 });
+    tx.$queryRaw.mockResolvedValue([{ taiKhoanId: 101 }]);
     tx.taiKhoan.findFirst.mockResolvedValue(adminRecord);
     tx.taiKhoan.updateMany.mockResolvedValue({ count: 1 });
     tx.phienDangNhap.updateMany.mockResolvedValue({ count: 1 });
@@ -317,6 +320,117 @@ describe('AdminAccountsService', () => {
     const where = prisma.taiKhoan.findFirst.mock.calls[0][0].where;
     expect(where.taiKhoanVaiTros).toBeDefined();
     expect(where.nhanVien).toEqual({ isNot: null });
+  });
+
+  it('replaces only a managed account tenant-role set atomically', async () => {
+    const updatedAccount = {
+      ...adminRecord,
+      taiKhoanVaiTros: [
+        { vaiTro: { tenVaiTro: 'NHAN_VIEN_BAN_VE' } },
+        { vaiTro: { tenVaiTro: 'NHAN_VIEN_CSKH' } },
+      ],
+    };
+    tx.vaiTro.findMany.mockResolvedValueOnce([
+      { vaiTroId: 5, tenVaiTro: 'NHAN_VIEN_BAN_VE' },
+      { vaiTroId: 6, tenVaiTro: 'NHAN_VIEN_CSKH' },
+    ]);
+    tx.taiKhoan.findFirst
+      .mockResolvedValueOnce(adminRecord)
+      .mockResolvedValueOnce(updatedAccount);
+
+    const response = await service.replaceRoles(101, [
+      'NHAN_VIEN_BAN_VE',
+      'NHAN_VIEN_CSKH',
+    ]);
+
+    expect(prisma.$transaction).toHaveBeenCalledOnce();
+    expect(tx.$queryRaw).toHaveBeenCalledOnce();
+    expect(tx.taiKhoan.findFirst).toHaveBeenCalledTimes(2);
+    expect(tx.taiKhoanVaiTro.deleteMany).toHaveBeenCalledWith({
+      where: {
+        taiKhoanId: 101,
+        vaiTro: {
+          is: {
+            tenVaiTro: {
+              in: [
+                'NHA_XE_ADMIN',
+                'NHAN_VIEN_BAN_VE',
+                'NHAN_VIEN_CSKH',
+                'NHAN_VIEN_PHU_XE',
+                'NHAN_VIEN_KINH_DOANH',
+              ],
+            },
+          },
+        },
+      },
+    });
+    expect(tx.taiKhoanVaiTro.create).toHaveBeenNthCalledWith(1, {
+      data: { taiKhoanId: 101, vaiTroId: 5 },
+    });
+    expect(tx.taiKhoanVaiTro.create).toHaveBeenNthCalledWith(2, {
+      data: { taiKhoanId: 101, vaiTroId: 6 },
+    });
+    expect(response.data.roles).toEqual(['NHAN_VIEN_BAN_VE', 'NHAN_VIEN_CSKH']);
+  });
+
+  it('allows an explicit empty role set to revoke every tenant role', async () => {
+    tx.vaiTro.findMany.mockResolvedValueOnce([]);
+    tx.taiKhoan.findFirst
+      .mockResolvedValueOnce(adminRecord)
+      .mockResolvedValueOnce({ ...adminRecord, taiKhoanVaiTros: [] });
+
+    const response = await service.replaceRoles(101, []);
+
+    expect(tx.taiKhoanVaiTro.deleteMany).toHaveBeenCalledOnce();
+    expect(tx.taiKhoanVaiTro.create).not.toHaveBeenCalled();
+    expect(response.data.roles).toEqual([]);
+  });
+
+  it('rejects invalid role replacement before opening a transaction', async () => {
+    for (const roleNames of [
+      undefined,
+      null,
+      'NHA_XE_ADMIN',
+      ['SUPER_ADMIN'],
+      ['KHACH_HANG'],
+      ['NOT_A_ROLE'],
+      ['NHA_XE_ADMIN', 'NHA_XE_ADMIN'],
+    ]) {
+      await expect(
+        service.replaceRoles(101, roleNames as string[]),
+      ).rejects.toMatchObject({
+        response: { error: 'VALIDATION_ERROR' },
+      });
+    }
+
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(tx.taiKhoanVaiTro.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('does not touch role assignments when the target is outside managed scope', async () => {
+    tx.taiKhoan.findFirst.mockResolvedValueOnce(null);
+
+    await expect(
+      service.replaceRoles(101, ['NHAN_VIEN_BAN_VE']),
+    ).rejects.toMatchObject({
+      response: { error: 'ADMIN_ACCOUNT_NOT_FOUND' },
+    });
+
+    expect(tx.taiKhoanVaiTro.deleteMany).not.toHaveBeenCalled();
+    expect(tx.taiKhoanVaiTro.create).not.toHaveBeenCalled();
+  });
+
+  it('does not clear existing roles when a selected tenant role is missing from the catalog', async () => {
+    tx.vaiTro.findMany.mockResolvedValueOnce([]);
+    tx.taiKhoan.findFirst.mockResolvedValueOnce(adminRecord);
+
+    await expect(
+      service.replaceRoles(101, ['NHAN_VIEN_BAN_VE']),
+    ).rejects.toMatchObject({
+      response: { error: 'AUTH_ROLE_NOT_CONFIGURED' },
+    });
+
+    expect(tx.taiKhoanVaiTro.deleteMany).not.toHaveBeenCalled();
   });
 
   it('locks account and revokes active sessions in the same transaction', async () => {

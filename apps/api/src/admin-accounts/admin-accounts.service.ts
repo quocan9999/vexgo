@@ -131,6 +131,25 @@ function createRoleNames(input: CreateAdminAccountDto): string[] {
   return requestedRoleNames;
 }
 
+function replacementRoleNames(input: unknown): string[] {
+  if (
+    !Array.isArray(input) ||
+    new Set(input).size !== input.length ||
+    input.some(
+      (roleName) =>
+        typeof roleName !== 'string' ||
+        !TENANT_PRINCIPAL_ROLE_SET.has(roleName),
+    )
+  ) {
+    throw new BadRequestException({
+      error: 'VALIDATION_ERROR',
+      message: 'Danh sách vai trò nhà xe không hợp lệ.',
+    });
+  }
+
+  return input;
+}
+
 function busCompanyNotFound(): NotFoundException {
   return new NotFoundException({
     error: 'BUS_COMPANY_NOT_FOUND',
@@ -438,6 +457,61 @@ export class AdminAccountsService {
       if (!account) throw accountNotFound();
 
       return { data: mapAdminAccount(account) };
+    });
+  }
+
+  async replaceRoles(taiKhoanId: number, roleNames: unknown) {
+    const requestedRoleNames = replacementRoleNames(roleNames);
+
+    return this.prisma.$transaction(async (tx) => {
+      const lockedAccounts = await tx.$queryRaw<Array<{ taiKhoanId: number }>>`
+        SELECT taiKhoanId
+        FROM TaiKhoan
+        WHERE taiKhoanId = ${taiKhoanId}
+        FOR UPDATE
+      `;
+      if (lockedAccounts.length === 0) throw accountNotFound();
+
+      const managedAccount = await tx.taiKhoan.findFirst({
+        where: managedAdminAccountWhere(taiKhoanId),
+        select: { taiKhoanId: true },
+      });
+      if (!managedAccount) throw accountNotFound();
+
+      const roles = requestedRoleNames.length
+        ? await tx.vaiTro.findMany({
+            where: { tenVaiTro: { in: requestedRoleNames } },
+            select: { vaiTroId: true, tenVaiTro: true },
+          })
+        : [];
+      if (roles.length !== requestedRoleNames.length) {
+        throw new InternalServerErrorException({
+          error: 'AUTH_ROLE_NOT_CONFIGURED',
+          message: 'Một hoặc nhiều vai trò nhà xe chưa được cấu hình.',
+        });
+      }
+
+      await tx.taiKhoanVaiTro.deleteMany({
+        where: {
+          taiKhoanId,
+          vaiTro: {
+            is: { tenVaiTro: { in: [...TENANT_PRINCIPAL_ROLES] } },
+          },
+        },
+      });
+      for (const role of roles) {
+        await tx.taiKhoanVaiTro.create({
+          data: { taiKhoanId, vaiTroId: role.vaiTroId },
+        });
+      }
+
+      const updated = await tx.taiKhoan.findFirst({
+        where: managedAdminAccountWhere(taiKhoanId),
+        select: ADMIN_ACCOUNT_SELECT,
+      });
+      if (!updated) throw accountNotFound();
+
+      return { data: mapAdminAccount(updated) };
     });
   }
 }
