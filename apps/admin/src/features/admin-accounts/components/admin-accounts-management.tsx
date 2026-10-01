@@ -189,37 +189,6 @@ function AccountDetailSheet({
             <p className="eyebrow">HỒ SƠ TÀI KHOẢN</p>
             <h2 id="admin-account-detail-title">Thông tin tài khoản</h2>
           </div>
-          {canUpdate && detail.status === 'success' && (
-            <div className={styles.detailActions}>
-              <Button
-                aria-label="Chỉnh sửa thông tin tài khoản"
-                onClick={() => setEditOpen(true)}
-                type="button"
-                variant="secondary"
-              >
-                Chỉnh sửa
-              </Button>
-              <Button
-                onClick={() => setRoleDialogOpen(true)}
-                type="button"
-                variant="secondary"
-              >
-                Gán vai trò
-              </Button>
-              <Button
-                onClick={() => {
-                  setStatusError(null);
-                  setStatusDialogOpen(true);
-                }}
-                type="button"
-                variant="secondary"
-              >
-                {detail.account.status === 'HOAT_DONG'
-                  ? 'Khóa tài khoản'
-                  : 'Mở khóa tài khoản'}
-              </Button>
-            </div>
-          )}
           <form method="dialog">
             <button
               aria-label="Đóng thông tin tài khoản"
@@ -351,6 +320,36 @@ function AccountDetailSheet({
                 </div>
               </dl>
             </section>
+            {canUpdate && (
+              <div className="detail-edit-actions">
+                <Button
+                  onClick={() => setRoleDialogOpen(true)}
+                  type="button"
+                  variant="secondary"
+                >
+                  Gán vai trò
+                </Button>
+                <Button
+                  onClick={() => {
+                    setStatusError(null);
+                    setStatusDialogOpen(true);
+                  }}
+                  type="button"
+                  variant="secondary"
+                >
+                  {detail.account.status === 'HOAT_DONG'
+                    ? 'Khóa tài khoản'
+                    : 'Mở khóa tài khoản'}
+                </Button>
+                <Button
+                  aria-label="Chỉnh sửa thông tin tài khoản"
+                  onClick={() => setEditOpen(true)}
+                  type="button"
+                >
+                  Chỉnh sửa
+                </Button>
+              </div>
+            )}
           </>
         )}
       </AdminDetailSheet>
