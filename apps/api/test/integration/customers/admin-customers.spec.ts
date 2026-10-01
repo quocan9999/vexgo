@@ -45,6 +45,10 @@ const mockPrisma = {
     findMany: vi.fn(),
     count: vi.fn(),
   },
+  ve: {
+    findMany: vi.fn(),
+    count: vi.fn(),
+  },
 };
 
 let testPrincipal: AuthPrincipal | null = {
@@ -581,6 +585,248 @@ describe('Admin Customers API (Feature 06.1)', () => {
       await request(app.getHttpServer())
         .get('/api/v1/customers/101/transactions')
         .expect(403);
+    });
+  });
+
+  describe('GET /api/v1/customers/:id/tickets (Feature 06.3)', () => {
+    const mockTicket = {
+      veId: 901,
+      maVe: 'VE000901',
+      diemDon: 'Bến xe Miền Đông',
+      giaNiemYet: new Prisma.Decimal('320000'),
+      giaThucTe: new Prisma.Decimal('290000'),
+      trangThai: 'DA_XUAT',
+      phieuDatVeId: 80,
+      gheChuyenXeId: 701,
+      bangGiaApDungId: 601,
+      createdAt: NOW,
+      updatedAt: NOW,
+      phieuDatVe: {
+        phieuDatVeId: 80,
+        maPhieuDatVe: 'PDV000080',
+        ngayDat: NOW,
+        trangThai: 'HOAN_TAT',
+      },
+      gheChuyenXe: {
+        gheChuyenXeId: 701,
+        trangThai: 'DA_DAT',
+        chuyenXeId: 101,
+        gheId: 501,
+        ghe: {
+          gheId: 501,
+          soGhe: 'A01',
+          viTri: 'Tầng dưới',
+        },
+        chuyenXe: {
+          chuyenXeId: 101,
+          maChuyenXe: 'FUTA-CX-0001',
+          ngayKhoiHanh: new Date('2026-09-25T00:00:00.000Z'),
+          gioKhoiHanh: new Date('1970-01-01T07:00:00.000Z'),
+          trangThai: 'SAP_KHOI_HANH',
+          tuyenXe: {
+            tuyenXeId: 12,
+            maTuyenXe: 'FUTA-TX-0001',
+            diemDi: 'TP.HCM',
+            diemDen: 'Đà Lạt',
+          },
+          xe: {
+            xeId: 8,
+            bienSoXe: '30F-123.45',
+          },
+        },
+      },
+    };
+
+    it('returns paginated tickets belonging to current tenant and customer', async () => {
+      mockPrisma.khachHang.findFirst.mockResolvedValue({ khachHangId: 101 });
+      mockPrisma.ve.count.mockResolvedValue(1);
+      mockPrisma.ve.findMany.mockResolvedValue([mockTicket]);
+
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/customers/101/tickets?page=1&pageSize=10')
+        .expect(200);
+
+      expect(response.body).toEqual({
+        data: [
+          {
+            ticketId: 901,
+            ticketCode: 'VE000901',
+            status: 'DA_XUAT',
+            pickupPoint: 'Bến xe Miền Đông',
+            listedPrice: 320000,
+            actualPrice: 290000,
+            booking: {
+              bookingId: 80,
+              code: 'PDV000080',
+              bookedAt: NOW.toISOString(),
+              status: 'HOAN_TAT',
+            },
+            trip: {
+              tripId: 101,
+              code: 'FUTA-CX-0001',
+              departureDate: '2026-09-25',
+              departureTime: '07:00:00',
+              status: 'SAP_KHOI_HANH',
+              route: {
+                routeId: 12,
+                code: 'FUTA-TX-0001',
+                origin: 'TP.HCM',
+                destination: 'Đà Lạt',
+              },
+              vehicle: {
+                vehicleId: 8,
+                licensePlate: '30F-123.45',
+              },
+            },
+            seat: {
+              seatId: 501,
+              code: 'A01',
+              position: 'Tầng dưới',
+            },
+          },
+        ],
+        meta: {
+          page: 1,
+          pageSize: 10,
+          totalItems: 1,
+          totalPages: 1,
+        },
+      });
+
+      expect(mockPrisma.ve.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            AND: [
+              {
+                phieuDatVe: {
+                  donGiaoDich: {
+                    khachHangId: 101,
+                    nhaXeId: 1,
+                  },
+                },
+              },
+            ],
+          },
+        }),
+      );
+    });
+
+    it('supports search across ticket code, booking code, and trip code', async () => {
+      mockPrisma.khachHang.findFirst.mockResolvedValue({ khachHangId: 101 });
+      mockPrisma.ve.count.mockResolvedValue(0);
+      mockPrisma.ve.findMany.mockResolvedValue([]);
+
+      await request(app.getHttpServer())
+        .get('/api/v1/customers/101/tickets?search=CX-0001')
+        .expect(200);
+
+      expect(mockPrisma.ve.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            AND: [
+              {
+                phieuDatVe: {
+                  donGiaoDich: {
+                    khachHangId: 101,
+                    nhaXeId: 1,
+                  },
+                },
+              },
+              {
+                OR: [
+                  { maVe: { contains: 'CX-0001' } },
+                  { phieuDatVe: { maPhieuDatVe: { contains: 'CX-0001' } } },
+                  {
+                    gheChuyenXe: {
+                      chuyenXe: {
+                        maChuyenXe: { contains: 'CX-0001' },
+                      },
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+        }),
+      );
+    });
+
+    it('returns 404 CUSTOMER_NOT_FOUND if customer is not visible to tenant', async () => {
+      mockPrisma.khachHang.findFirst.mockResolvedValue(null);
+
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/customers/999/tickets')
+        .expect(404);
+
+      expect(response.body).toEqual({
+        statusCode: 404,
+        error: 'CUSTOMER_NOT_FOUND',
+        message: 'Không tìm thấy khách hàng.',
+      });
+
+      expect(mockPrisma.ve.findMany).not.toHaveBeenCalled();
+    });
+
+    it('rejects invalid or non-positive ID with 400', async () => {
+      await request(app.getHttpServer())
+        .get('/api/v1/customers/invalid/tickets')
+        .expect(400);
+
+      const responseZero = await request(app.getHttpServer())
+        .get('/api/v1/customers/0/tickets')
+        .expect(400);
+
+      expect(responseZero.body.error).toBe('INVALID_CUSTOMER_ID');
+    });
+
+    it('rejects unauthenticated request with 401', async () => {
+      testPrincipal = null;
+
+      await request(app.getHttpServer())
+        .get('/api/v1/customers/101/tickets')
+        .expect(401);
+    });
+
+    it('rejects unauthorized request without customer:read with 403', async () => {
+      testPrincipal = {
+        taiKhoanId: 2,
+        sessionId: 'session-no-perm',
+        roles: ['NHA_XE_ADMIN'],
+        permissions: ['route:read'],
+        nhanVienId: 10,
+        nhaXeId: 1,
+      };
+
+      await request(app.getHttpServer())
+        .get('/api/v1/customers/101/tickets')
+        .expect(403);
+    });
+
+    it('enforces tenant isolation: tenant A cannot query tickets belonging to tenant B', async () => {
+      mockPrisma.khachHang.findFirst.mockResolvedValue({ khachHangId: 101 });
+      mockPrisma.ve.count.mockResolvedValue(0);
+      mockPrisma.ve.findMany.mockResolvedValue([]);
+
+      await request(app.getHttpServer())
+        .get('/api/v1/customers/101/tickets')
+        .expect(200);
+
+      expect(mockPrisma.ve.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            AND: [
+              {
+                phieuDatVe: {
+                  donGiaoDich: {
+                    khachHangId: 101,
+                    nhaXeId: 1, // Strictly tenant 1, never any other tenant
+                  },
+                },
+              },
+            ],
+          },
+        }),
+      );
     });
   });
 });

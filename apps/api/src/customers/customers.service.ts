@@ -11,6 +11,7 @@ import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
 import type { UpdateMeDto } from './dto/update-me.dto.js';
 import type { AdminCustomerQueryDto } from './dto/admin-customer-query.dto.js';
 import type { AdminCustomerTransactionsQueryDto } from './dto/admin-customer-transactions-query.dto.js';
+import type { AdminCustomerTicketsQueryDto } from './dto/admin-customer-tickets-query.dto.js';
 
 const customerProfileInclude = {
   khachHang: true,
@@ -22,6 +23,35 @@ const customerProfileInclude = {
 type CustomerAccount = Prisma.TaiKhoanGetPayload<{
   include: typeof customerProfileInclude;
 }>;
+
+function formatSqlDate(date: Date | string | null | undefined): string {
+  if (!date) return '';
+  if (typeof date === 'string') {
+    return date.slice(0, 10);
+  }
+  try {
+    return date.toISOString().slice(0, 10);
+  } catch {
+    return String(date);
+  }
+}
+
+function formatSqlTime(time: Date | string | null | undefined): string {
+  if (!time) return '';
+  if (typeof time === 'string') {
+    if (time.length === 8 && time.includes(':')) return time;
+    try {
+      return new Date(time).toISOString().slice(11, 19);
+    } catch {
+      return time;
+    }
+  }
+  try {
+    return time.toISOString().slice(11, 19);
+  } catch {
+    return String(time);
+  }
+}
 
 @Injectable()
 export class CustomersService {
@@ -386,6 +416,148 @@ export class CustomersService {
           : null,
         createdAt: item.createdAt.toISOString(),
         updatedAt: item.updatedAt.toISOString(),
+      })),
+      meta: {
+        page,
+        pageSize,
+        totalItems,
+        totalPages,
+      },
+    };
+  }
+
+  async listAdminCustomerTickets(
+    principal: AuthPrincipal,
+    customerId: number,
+    query: AdminCustomerTicketsQueryDto,
+  ) {
+    const nhaXeId = this.requireTenantId(principal);
+
+    // Verify tenant visibility: customer must have at least one transaction with this tenant
+    const customer = await this.prisma.khachHang.findFirst({
+      where: {
+        khachHangId: customerId,
+        donGiaoDichs: {
+          some: {
+            nhaXeId,
+          },
+        },
+      },
+      select: {
+        khachHangId: true,
+      },
+    });
+
+    if (!customer) {
+      throw new NotFoundException({
+        error: 'CUSTOMER_NOT_FOUND',
+        message: 'Không tìm thấy khách hàng.',
+      });
+    }
+
+    const page = query.page ?? 1;
+    const pageSize = query.pageSize ?? 10;
+    const sortDirection = query.sortDirection ?? 'desc';
+
+    const andConditions: Prisma.VeWhereInput[] = [
+      {
+        phieuDatVe: {
+          donGiaoDich: {
+            khachHangId: customerId,
+            nhaXeId,
+          },
+        },
+      },
+    ];
+
+    if (query.search?.trim()) {
+      const search = query.search.trim();
+      andConditions.push({
+        OR: [
+          { maVe: { contains: search } },
+          { phieuDatVe: { maPhieuDatVe: { contains: search } } },
+          {
+            gheChuyenXe: {
+              chuyenXe: {
+                maChuyenXe: { contains: search },
+              },
+            },
+          },
+        ],
+      });
+    }
+
+    const where: Prisma.VeWhereInput = {
+      AND: andConditions,
+    };
+
+    const orderBy: Prisma.VeOrderByWithRelationInput[] = [
+      { phieuDatVe: { ngayDat: sortDirection } },
+      { veId: sortDirection },
+    ];
+
+    const [totalItems, items] = await Promise.all([
+      this.prisma.ve.count({ where }),
+      this.prisma.ve.findMany({
+        where,
+        orderBy,
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        include: {
+          phieuDatVe: true,
+          gheChuyenXe: {
+            include: {
+              ghe: true,
+              chuyenXe: {
+                include: {
+                  tuyenXe: true,
+                  xe: true,
+                },
+              },
+            },
+          },
+        },
+      }),
+    ]);
+
+    const totalPages = Math.ceil(totalItems / pageSize) || 1;
+
+    return {
+      data: items.map((t) => ({
+        ticketId: t.veId,
+        ticketCode: t.maVe,
+        status: t.trangThai,
+        pickupPoint: t.diemDon ?? null,
+        listedPrice: Number(t.giaNiemYet),
+        actualPrice: Number(t.giaThucTe),
+        booking: {
+          bookingId: t.phieuDatVe.phieuDatVeId,
+          code: t.phieuDatVe.maPhieuDatVe,
+          bookedAt: t.phieuDatVe.ngayDat.toISOString(),
+          status: t.phieuDatVe.trangThai,
+        },
+        trip: {
+          tripId: t.gheChuyenXe.chuyenXe.chuyenXeId,
+          code: t.gheChuyenXe.chuyenXe.maChuyenXe,
+          departureDate: formatSqlDate(t.gheChuyenXe.chuyenXe.ngayKhoiHanh),
+          departureTime: formatSqlTime(t.gheChuyenXe.chuyenXe.gioKhoiHanh),
+          status: t.gheChuyenXe.chuyenXe.trangThai,
+          route: {
+            routeId: t.gheChuyenXe.chuyenXe.tuyenXe.tuyenXeId,
+            code: t.gheChuyenXe.chuyenXe.tuyenXe.maTuyenXe,
+            origin: t.gheChuyenXe.chuyenXe.tuyenXe.diemDi,
+            destination: t.gheChuyenXe.chuyenXe.tuyenXe.diemDen,
+          },
+          vehicle: {
+            vehicleId: t.gheChuyenXe.chuyenXe.xe.xeId,
+            licensePlate: t.gheChuyenXe.chuyenXe.xe.bienSoXe,
+          },
+        },
+        seat: {
+          seatId: t.gheChuyenXe.ghe.gheId,
+          code: t.gheChuyenXe.ghe.soGhe,
+          position: t.gheChuyenXe.ghe.viTri ?? null,
+        },
       })),
       meta: {
         page,

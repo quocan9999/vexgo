@@ -103,3 +103,57 @@ export interface CustomerTransactionsResponse {
     totalPages: number;
   };
 }
+
+export interface CustomerTicket {
+  ticketId: number;
+  ticketCode: string;
+  status: string;
+  pickupPoint: string | null;
+  listedPrice: number;
+  actualPrice: number;
+  booking: {
+    bookingId: number;
+    code: string;
+    bookedAt: string;
+    status: string;
+  };
+  trip: {
+    tripId: number;
+    code: string;
+    departureDate: string;
+    departureTime: string;
+    status: string;
+    route: {
+      routeId: number;
+      code: string;
+      origin: string;
+      destination: string;
+    };
+    vehicle: {
+      vehicleId: number;
+      licensePlate: string;
+    };
+  };
+  seat: {
+    seatId: number;
+    code: string;
+    position: string | null;
+  };
+}
+
+export interface CustomerTicketsQuery {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  sortDirection?: 'asc' | 'desc';
+}
+
+export interface CustomerTicketsResponse {
+  data: CustomerTicket[];
+  meta: {
+    page: number;
+    pageSize: number;
+    totalItems: number;
+    totalPages: number;
+  };
+}

@@ -10,9 +10,10 @@ import { SuperAdminLayout } from '@/features/super-admin-layout/components/super
 import { getCustomerById } from '../services/customer-service';
 import type { CustomerDetail } from '../types/customer';
 import { CustomerTransactionsTab } from './customer-transactions-tab';
+import { CustomerTicketsTab } from './customer-tickets-tab';
 import '../customers.css';
 
-type WorkspaceTab = 'overview' | 'transactions';
+type WorkspaceTab = 'overview' | 'transactions' | 'tickets';
 
 function formatDateTime(value?: string | null) {
   if (!value) return '—';
@@ -185,6 +186,17 @@ export function CustomerWorkspace({ customerId }: { customerId: number }) {
             >
               Lịch sử giao dịch
             </button>
+            <button
+              aria-controls="panel-tickets"
+              aria-selected={activeTab === 'tickets'}
+              className={`button ${activeTab === 'tickets' ? 'button-primary' : 'button-secondary'}`}
+              id="tab-tickets"
+              onClick={() => setActiveTab('tickets')}
+              role="tab"
+              type="button"
+            >
+              Vé
+            </button>
           </nav>
 
           <div className="customer-workspace-panels">
@@ -247,6 +259,18 @@ export function CustomerWorkspace({ customerId }: { customerId: number }) {
               >
                 <h3 className="sr-only">Lịch sử giao dịch</h3>
                 <CustomerTransactionsTab customerId={customerId} />
+              </section>
+            )}
+
+            {activeTab === 'tickets' && (
+              <section
+                aria-labelledby="tab-tickets"
+                className="customer-workspace-panel"
+                id="panel-tickets"
+                role="tabpanel"
+              >
+                <h3 className="sr-only">Lịch sử vé</h3>
+                <CustomerTicketsTab customerId={customerId} />
               </section>
             )}
           </div>

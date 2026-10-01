@@ -213,3 +213,19 @@
   display: grid;
   gap: 16px;
 }
+
+.customer-tickets-container {
+  display: grid;
+  gap: 16px;
+}
+
+.ticket-route-text {
+  font-weight: 500;
+  color: var(--admin-text-strong);
+  overflow-wrap: anywhere;
+}
+
+.ticket-seat-pos {
+  font-size: var(--admin-font-size-xs, 12px);
+  color: var(--admin-text-muted);
+}
