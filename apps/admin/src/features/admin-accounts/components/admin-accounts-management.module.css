@@ -327,8 +327,9 @@
 
 .roleOption {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 9px;
+  min-height: 44px;
   color: var(--admin-text-strong);
   font-size: var(--admin-font-size-base);
 }
@@ -337,8 +338,17 @@
   width: 16px;
   height: 16px;
   flex: 0 0 auto;
-  margin: 1px 0 0;
+  margin: 0;
   accent-color: var(--admin-blue);
+}
+
+.roleDialogClose {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+.roleDialogActions > button {
+  min-height: 44px;
 }
 
 .roleOption input:focus-visible {

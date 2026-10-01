@@ -79,6 +79,7 @@ const state = vi.hoisted(() => {
     createAdminAccount: vi.fn(),
     updateAdminAccount: vi.fn(),
     updateAdminAccountStatus: vi.fn(),
+    replaceAdminAccountRoles: vi.fn(),
     getBusCompanyFilterOptions: vi.fn(),
     getDefaultRolePermissions: vi.fn(),
   };
@@ -118,6 +119,13 @@ const roleCatalog = {
       scope: 'tenant',
       isProtected: false,
       permissionKeys: ['vehicle:read'],
+    },
+    {
+      roleName: 'KHACH_HANG',
+      description: 'Khách hàng',
+      scope: 'customer',
+      isProtected: false,
+      permissionKeys: [],
     },
   ],
 };
@@ -211,6 +219,7 @@ vi.mock('@/features/admin-accounts/services/admin-account-service', () => ({
   createAdminAccount: state.createAdminAccount,
   updateAdminAccount: state.updateAdminAccount,
   updateAdminAccountStatus: state.updateAdminAccountStatus,
+  replaceAdminAccountRoles: state.replaceAdminAccountRoles,
 }));
 
 vi.mock('@/features/admin-auth/hooks/use-admin-session', () => ({
@@ -255,6 +264,7 @@ describe('Admin accounts management page', () => {
     state.createAdminAccount.mockReset().mockResolvedValue(account);
     state.updateAdminAccount.mockReset().mockResolvedValue(account);
     state.updateAdminAccountStatus.mockReset().mockResolvedValue(account);
+    state.replaceAdminAccountRoles.mockReset().mockResolvedValue(account);
     state.getBusCompanyFilterOptions
       .mockReset()
       .mockResolvedValue([{ id: 7, label: 'Phương Trang (FUTA)' }]);
@@ -824,9 +834,7 @@ describe('Admin accounts management page', () => {
     const confirmation = await screen.findByRole('dialog', {
       name: 'Mở khóa tài khoản này?',
     });
-    expect(confirmation.textContent).toContain(
-      'không tạo phiên đăng nhập mới',
-    );
+    expect(confirmation.textContent).toContain('không tạo phiên đăng nhập mới');
     fireEvent.click(
       within(confirmation).getByRole('button', { name: 'Mở khóa tài khoản' }),
     );
@@ -953,6 +961,317 @@ describe('Admin accounts management page', () => {
     ).toBeNull();
     expect(
       within(detailSheet).queryByRole('button', { name: 'Khóa tài khoản' }),
+    ).toBeNull();
+    expect(
+      within(detailSheet).queryByRole('button', {
+        name: 'Gán vai trò',
+      }),
+    ).toBeNull();
+  });
+
+  it('replaces roles only with tenant catalog entries and refreshes the account', async () => {
+    setAdminPermissions(['admin-account:read', 'admin-account:update']);
+    const updatedAccount = {
+      ...account,
+      roles: ['NHA_XE_ADMIN', 'NHAN_VIEN_BAN_VE'] as const,
+    };
+    state.replaceAdminAccountRoles.mockResolvedValue(updatedAccount);
+    state.hook = {
+      ...state.hook,
+      accountPage: {
+        data: [account],
+        meta: { page: 1, pageSize: 10, totalItems: 1, totalPages: 1 },
+      },
+      loading: false,
+    };
+
+    render(<AdminAccountsManagement />);
+    fireEvent.click(
+      within(screen.getByRole('table')).getByRole('button', {
+        name: 'Xem chi tiết tài khoản Nguyễn Minh Anh',
+      }),
+    );
+    const detailSheet = await screen.findByRole('dialog', {
+      name: 'Thông tin tài khoản',
+    });
+    fireEvent.click(
+      await within(detailSheet).findByRole('button', {
+        name: 'Gán vai trò',
+      }),
+    );
+
+    const roleDialog = await screen.findByRole('dialog', {
+      name: 'Gán vai trò tài khoản',
+    });
+    expect(
+      (
+        within(roleDialog).getByRole('checkbox', {
+          name: 'Quản trị nhà xe',
+        }) as HTMLInputElement
+      ).checked,
+    ).toBe(true);
+    expect(
+      (
+        within(roleDialog).getByRole('checkbox', {
+          name: 'Nhân viên bán vé',
+        }) as HTMLInputElement
+      ).checked,
+    ).toBe(false);
+    expect(
+      within(roleDialog).queryByRole('checkbox', { name: 'Super Admin' }),
+    ).toBeNull();
+    expect(
+      within(roleDialog).queryByRole('checkbox', { name: 'Khách hàng' }),
+    ).toBeNull();
+
+    fireEvent.click(
+      within(roleDialog).getByRole('checkbox', { name: 'Nhân viên bán vé' }),
+    );
+    fireEvent.click(
+      within(roleDialog).getByRole('button', { name: 'Lưu vai trò' }),
+    );
+
+    await waitFor(() =>
+      expect(state.replaceAdminAccountRoles).toHaveBeenCalledWith(41, [
+        'NHA_XE_ADMIN',
+        'NHAN_VIEN_BAN_VE',
+      ]),
+    );
+    expect(within(detailSheet).getByText('Nhân viên bán vé')).toBeTruthy();
+    expect(state.hook.refresh).toHaveBeenCalledOnce();
+  });
+
+  it('requires explicit confirmation before revoking every role', async () => {
+    setAdminPermissions(['admin-account:read', 'admin-account:update']);
+    const noRoleAccount = { ...account, roles: [] as const };
+    state.replaceAdminAccountRoles.mockResolvedValue(noRoleAccount);
+    state.hook = {
+      ...state.hook,
+      accountPage: {
+        data: [account],
+        meta: { page: 1, pageSize: 10, totalItems: 1, totalPages: 1 },
+      },
+      loading: false,
+    };
+
+    render(<AdminAccountsManagement />);
+    fireEvent.click(
+      within(screen.getByRole('table')).getByRole('button', {
+        name: 'Xem chi tiết tài khoản Nguyễn Minh Anh',
+      }),
+    );
+    const detailSheet = await screen.findByRole('dialog', {
+      name: 'Thông tin tài khoản',
+    });
+    fireEvent.click(
+      await within(detailSheet).findByRole('button', {
+        name: 'Gán vai trò',
+      }),
+    );
+    const roleDialog = await screen.findByRole('dialog', {
+      name: 'Gán vai trò tài khoản',
+    });
+    fireEvent.click(
+      within(roleDialog).getByRole('checkbox', { name: 'Quản trị nhà xe' }),
+    );
+    fireEvent.click(
+      within(roleDialog).getByRole('button', { name: 'Lưu vai trò' }),
+    );
+
+    const confirmation = await screen.findByRole('dialog', {
+      name: 'Thu hồi toàn bộ vai trò?',
+    });
+    expect(confirmation.textContent).toContain(
+      'tài khoản sẽ không còn quyền quản trị',
+    );
+    expect(state.replaceAdminAccountRoles).not.toHaveBeenCalled();
+    fireEvent.click(within(confirmation).getByRole('button', { name: 'Hủy' }));
+    expect(
+      screen.queryByRole('dialog', { name: 'Thu hồi toàn bộ vai trò?' }),
+    ).toBeNull();
+    expect(
+      screen.getByRole('dialog', { name: 'Gán vai trò tài khoản' }),
+    ).toBeTruthy();
+    expect(state.replaceAdminAccountRoles).not.toHaveBeenCalled();
+
+    fireEvent.click(
+      within(roleDialog).getByRole('button', { name: 'Lưu vai trò' }),
+    );
+    const secondConfirmation = await screen.findByRole('dialog', {
+      name: 'Thu hồi toàn bộ vai trò?',
+    });
+    fireEvent.click(
+      within(secondConfirmation).getByRole('button', {
+        name: 'Thu hồi vai trò',
+      }),
+    );
+
+    await waitFor(() =>
+      expect(state.replaceAdminAccountRoles).toHaveBeenCalledWith(41, []),
+    );
+    expect(within(detailSheet).getByText('Chưa được gán vai trò')).toBeTruthy();
+    expect(state.hook.refresh).toHaveBeenCalledOnce();
+  });
+
+  it('keeps role assignment open and reports API errors', async () => {
+    setAdminPermissions(['admin-account:read', 'admin-account:update']);
+    state.replaceAdminAccountRoles.mockRejectedValue(
+      new Error('Không thể cập nhật vai trò lúc này.'),
+    );
+    state.hook = {
+      ...state.hook,
+      accountPage: {
+        data: [account],
+        meta: { page: 1, pageSize: 10, totalItems: 1, totalPages: 1 },
+      },
+      loading: false,
+    };
+
+    render(<AdminAccountsManagement />);
+    fireEvent.click(
+      within(screen.getByRole('table')).getByRole('button', {
+        name: 'Xem chi tiết tài khoản Nguyễn Minh Anh',
+      }),
+    );
+    const detailSheet = await screen.findByRole('dialog', {
+      name: 'Thông tin tài khoản',
+    });
+    fireEvent.click(
+      await within(detailSheet).findByRole('button', {
+        name: 'Gán vai trò',
+      }),
+    );
+    const roleDialog = await screen.findByRole('dialog', {
+      name: 'Gán vai trò tài khoản',
+    });
+    fireEvent.click(
+      within(roleDialog).getByRole('checkbox', { name: 'Nhân viên bán vé' }),
+    );
+    fireEvent.click(
+      within(roleDialog).getByRole('button', { name: 'Lưu vai trò' }),
+    );
+
+    expect(await within(roleDialog).findByRole('alert')).toBeTruthy();
+    expect(
+      within(roleDialog).getByText('Không thể cập nhật vai trò lúc này.'),
+    ).toBeTruthy();
+    expect(state.hook.refresh).not.toHaveBeenCalled();
+  });
+
+  it('submits a pending role replacement only once', async () => {
+    setAdminPermissions(['admin-account:read', 'admin-account:update']);
+    const updatedAccount = {
+      ...account,
+      roles: ['NHA_XE_ADMIN', 'NHAN_VIEN_BAN_VE'] as const,
+    };
+    let resolveRoleChange!: (value: typeof updatedAccount) => void;
+    state.replaceAdminAccountRoles.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveRoleChange = resolve;
+        }),
+    );
+    state.hook = {
+      ...state.hook,
+      accountPage: {
+        data: [account],
+        meta: { page: 1, pageSize: 10, totalItems: 1, totalPages: 1 },
+      },
+      loading: false,
+    };
+
+    render(<AdminAccountsManagement />);
+    fireEvent.click(
+      within(screen.getByRole('table')).getByRole('button', {
+        name: 'Xem chi tiết tài khoản Nguyễn Minh Anh',
+      }),
+    );
+    const detailSheet = await screen.findByRole('dialog', {
+      name: 'Thông tin tài khoản',
+    });
+    fireEvent.click(
+      await within(detailSheet).findByRole('button', { name: 'Gán vai trò' }),
+    );
+    const roleDialog = await screen.findByRole('dialog', {
+      name: 'Gán vai trò tài khoản',
+    });
+    fireEvent.click(
+      within(roleDialog).getByRole('checkbox', { name: 'Nhân viên bán vé' }),
+    );
+    const submit = within(roleDialog).getByRole('button', {
+      name: 'Lưu vai trò',
+    });
+    fireEvent.click(submit);
+    fireEvent.click(submit);
+
+    expect(state.replaceAdminAccountRoles).toHaveBeenCalledOnce();
+    expect(state.replaceAdminAccountRoles).toHaveBeenCalledWith(41, [
+      'NHA_XE_ADMIN',
+      'NHAN_VIEN_BAN_VE',
+    ]);
+    expect((submit as HTMLButtonElement).disabled).toBe(true);
+
+    resolveRoleChange(updatedAccount);
+    await waitFor(() => expect(state.hook.refresh).toHaveBeenCalledOnce());
+  });
+
+  it('shows catalog errors and allows retry without enabling an unsafe save', async () => {
+    setAdminPermissions(['admin-account:read', 'admin-account:update']);
+    state.getDefaultRolePermissions.mockResolvedValue(roleCatalog);
+    state.hook = {
+      ...state.hook,
+      accountPage: {
+        data: [account],
+        meta: { page: 1, pageSize: 10, totalItems: 1, totalPages: 1 },
+      },
+      loading: false,
+    };
+
+    render(<AdminAccountsManagement />);
+    await waitFor(() =>
+      expect(state.getDefaultRolePermissions).toHaveBeenCalledOnce(),
+    );
+    state.getDefaultRolePermissions.mockRejectedValueOnce(
+      new Error('Danh mục vai trò hiện không khả dụng.'),
+    );
+    fireEvent.click(
+      within(screen.getByRole('table')).getByRole('button', {
+        name: 'Xem chi tiết tài khoản Nguyễn Minh Anh',
+      }),
+    );
+    const detailSheet = await screen.findByRole('dialog', {
+      name: 'Thông tin tài khoản',
+    });
+    fireEvent.click(
+      await within(detailSheet).findByRole('button', { name: 'Gán vai trò' }),
+    );
+
+    const roleDialog = await screen.findByRole('dialog', {
+      name: 'Gán vai trò tài khoản',
+    });
+    expect(
+      await within(roleDialog).findByText(
+        'Danh mục vai trò hiện không khả dụng.',
+      ),
+    ).toBeTruthy();
+    expect(
+      (
+        within(roleDialog).getByRole('button', {
+          name: 'Lưu vai trò',
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(true);
+
+    fireEvent.click(
+      within(roleDialog).getByRole('button', { name: 'Tải lại danh mục' }),
+    );
+    expect(
+      await within(roleDialog).findByRole('checkbox', {
+        name: 'Quản trị nhà xe',
+      }),
+    ).toBeTruthy();
+    expect(
+      within(roleDialog).queryByRole('checkbox', { name: 'Super Admin' }),
     ).toBeNull();
   });
 });

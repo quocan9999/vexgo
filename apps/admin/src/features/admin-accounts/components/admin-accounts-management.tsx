@@ -48,6 +48,7 @@ import type {
   AdminAccountStatus,
 } from '../types/admin-account';
 import { AdminAccountFormDialog } from './admin-account-form-dialog';
+import { AdminAccountRolesDialog } from './admin-account-roles-dialog';
 import styles from './admin-accounts-management.module.css';
 
 const STATUS_OPTIONS = [
@@ -113,6 +114,7 @@ function AccountDetailSheet({
   });
   const [retryCount, setRetryCount] = useState(0);
   const [editOpen, setEditOpen] = useState(false);
+  const [roleDialogOpen, setRoleDialogOpen] = useState(false);
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [statusSubmitting, setStatusSubmitting] = useState(false);
   const [statusError, setStatusError] = useState<string | null>(null);
@@ -196,6 +198,13 @@ function AccountDetailSheet({
                 variant="secondary"
               >
                 Chỉnh sửa
+              </Button>
+              <Button
+                onClick={() => setRoleDialogOpen(true)}
+                type="button"
+                variant="secondary"
+              >
+                Gán vai trò
               </Button>
               <Button
                 onClick={() => {
@@ -352,6 +361,17 @@ function AccountDetailSheet({
           onSaved={(updatedAccount) => {
             setDetail({ status: 'success', account: updatedAccount });
             setEditOpen(false);
+            onAccountUpdated(updatedAccount);
+          }}
+        />
+      )}
+      {canUpdate && roleDialogOpen && detail.status === 'success' && (
+        <AdminAccountRolesDialog
+          account={detail.account}
+          onClose={() => setRoleDialogOpen(false)}
+          onSaved={(updatedAccount) => {
+            setDetail({ status: 'success', account: updatedAccount });
+            setRoleDialogOpen(false);
             onAccountUpdated(updatedAccount);
           }}
         />
