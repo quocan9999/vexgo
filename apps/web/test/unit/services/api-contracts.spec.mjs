@@ -127,3 +127,43 @@ test('route options are loaded through the shared API service', async () => {
   );
   assert.equal(response.data[0].origin, 'TP.HCM');
 });
+
+test('authApi.refresh sends refreshToken in request body and returns rotated tokens', async () => {
+  const calls = [];
+  globalThis.fetch = async (url, init) => {
+    calls.push({ url: String(url), init });
+    return jsonResponse({
+      data: {
+        accessToken: 'new-access-token',
+        refreshToken: 'new-refresh-token',
+      },
+    });
+  };
+
+  const response = await authApi.refresh('valid-refresh-token');
+
+  assert.equal(calls[0].url, 'http://localhost:4000/api/v1/auth/refresh');
+  assert.equal(calls[0].init.method, 'POST');
+  assert.deepEqual(JSON.parse(calls[0].init.body), {
+    refreshToken: 'valid-refresh-token',
+  });
+  assert.equal(response.data.accessToken, 'new-access-token');
+  assert.equal(response.data.refreshToken, 'new-refresh-token');
+});
+
+test('authApi.logout sends refreshToken in request body and access token in auth header', async () => {
+  const calls = [];
+  globalThis.fetch = async (url, init) => {
+    calls.push({ url: String(url), init });
+    return new Response(null, { status: 204 });
+  };
+
+  await authApi.logout('current-refresh-token', 'current-access-token');
+
+  assert.equal(calls[0].url, 'http://localhost:4000/api/v1/auth/logout');
+  assert.equal(calls[0].init.method, 'POST');
+  assert.deepEqual(JSON.parse(calls[0].init.body), {
+    refreshToken: 'current-refresh-token',
+  });
+  assert.equal(calls[0].init.headers.Authorization, 'Bearer current-access-token');
+});

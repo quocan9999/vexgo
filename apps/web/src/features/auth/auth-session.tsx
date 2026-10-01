@@ -1,6 +1,13 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, useMemo } from 'react';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  useMemo,
+  useCallback,
+} from 'react';
 import {
   clearStoredAuth,
   readStoredAuth,
@@ -8,6 +15,8 @@ import {
   type AuthState,
   type AuthUser,
 } from './auth-session-state';
+import { authApi } from './services/auth.api';
+import { runWithAuthRetry, type TokenPair } from './services/auth-retry';
 
 export type { AuthState, AuthUser } from './auth-session-state';
 
@@ -18,6 +27,8 @@ type AuthSessionContextValue = AuthState & {
     refreshToken: string;
   }) => void;
   signOut: () => void;
+  refreshSession: () => Promise<string | null>;
+  executeWithAuth: <T>(action: (token: string) => Promise<T>) => Promise<T>;
 };
 
 const AuthSessionContext = createContext<AuthSessionContextValue | null>(null);
@@ -45,64 +56,119 @@ export function AuthSessionProvider({
     };
   }, []);
 
-  const value = useMemo(
-    () => ({
-      ...state,
-      signIn: (data: {
-        user: AuthUser;
-        accessToken: string;
-        refreshToken: string;
-      }) => {
+  const signIn = useCallback(
+    (data: { user: AuthUser; accessToken: string; refreshToken: string }) => {
+      const nextState = {
+        user: data.user,
+        accessToken: data.accessToken,
+        refreshToken: data.refreshToken,
+        isAuthenticated: true,
+        isHydrated: true,
+      };
+      setState(nextState);
+      try {
+        writeStoredAuth(window.localStorage, data);
+      } catch {}
+    },
+    [],
+  );
+
+  const signOut = useCallback(() => {
+    const currentToken = state.accessToken;
+    const currentRefreshToken = state.refreshToken;
+    const nextState = {
+      user: null,
+      accessToken: null,
+      refreshToken: null,
+      isAuthenticated: false,
+      isHydrated: true,
+    };
+    void authApi.logout(currentRefreshToken, currentToken);
+    setState(nextState);
+    try {
+      clearStoredAuth(window.localStorage);
+    } catch {}
+  }, [state.accessToken, state.refreshToken]);
+
+  const refreshSession = useCallback(async (): Promise<string | null> => {
+    const currentRefreshToken = state.refreshToken;
+    if (!currentRefreshToken) {
+      signOut();
+      return null;
+    }
+    try {
+      const res = await authApi.refresh(currentRefreshToken);
+      const newTokens = res.data;
+      if (state.user) {
         const nextState = {
-          user: data.user,
-          accessToken: data.accessToken,
-          refreshToken: data.refreshToken,
+          user: state.user,
+          accessToken: newTokens.accessToken,
+          refreshToken: newTokens.refreshToken,
           isAuthenticated: true,
           isHydrated: true,
         };
         setState(nextState);
         try {
-          writeStoredAuth(window.localStorage, data);
+          writeStoredAuth(window.localStorage, {
+            user: state.user,
+            accessToken: newTokens.accessToken,
+            refreshToken: newTokens.refreshToken,
+          });
         } catch {}
-      },
-      signOut: () => {
-        const currentToken = state.accessToken;
-        const currentRefreshToken = state.refreshToken;
-        const nextState = {
-          user: null,
-          accessToken: null,
-          refreshToken: null,
-          isAuthenticated: false,
-          isHydrated: true,
-        };
-        // Call the logout API endpoint; clear local state regardless of outcome
-        const doLogout = async () => {
-          try {
-            await fetch(
-              `${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1'}/auth/logout`,
-              {
-                method: 'POST',
-                headers: currentToken
-                  ? {
-                      Authorization: `Bearer ${currentToken}`,
-                      'Content-Type': 'application/json',
-                    }
-                  : { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ refreshToken: currentRefreshToken }),
-              },
-            );
-          } catch {
-            // ignore network errors – local session must still be cleared
+        return newTokens.accessToken;
+      }
+      signOut();
+      return null;
+    } catch {
+      signOut();
+      return null;
+    }
+  }, [state.refreshToken, state.user, signOut]);
+
+  const executeWithAuth = useCallback(
+    async <T,>(action: (token: string) => Promise<T>): Promise<T> => {
+      return runWithAuthRetry(action, {
+        getTokens: () => ({
+          accessToken: state.accessToken,
+          refreshToken: state.refreshToken,
+        }),
+        onRefresh: (newTokens: TokenPair) => {
+          if (state.user) {
+            const nextState = {
+              user: state.user,
+              accessToken: newTokens.accessToken,
+              refreshToken: newTokens.refreshToken,
+              isAuthenticated: true,
+              isHydrated: true,
+            };
+            setState(nextState);
+            try {
+              writeStoredAuth(window.localStorage, {
+                user: state.user,
+                accessToken: newTokens.accessToken,
+                refreshToken: newTokens.refreshToken,
+              });
+            } catch {}
           }
-        };
-        void doLogout();
-        setState(nextState);
-        try {
-          clearStoredAuth(window.localStorage);
-        } catch {}
-      },
+        },
+        onAuthFailed: () => {
+          signOut();
+        },
+        refreshFn: (rt) => authApi.refresh(rt),
+      });
+    },
+    [state.accessToken, state.refreshToken, state.user, signOut],
+  );
+
+  const value = useMemo(
+    () => ({
+      ...state,
+      signIn,
+      signOut,
+      refreshSession,
+      executeWithAuth,
     }),
-    [state],
+    [state, signIn, signOut, refreshSession, executeWithAuth],
   );
 
   return (

@@ -20,9 +20,17 @@ function PaymentContent() {
   const seats = searchParams.get('seats') || 'A01, A02';
   const count = searchParams.get('count') || '2';
   const routeName = searchParams.get('route') || 'TP. Hồ Chí Minh - Đà Lạt';
-  const departureTime = searchParams.get('departureTime') || '22:30 17/09/2026';
-  const pickup = searchParams.get('pickup') || 'Bến xe Miền Đông mới';
-  const dropoff = searchParams.get('dropoff') || 'Bến xe trung tâm Đà Lạt';
+  const departureTime = searchParams.get('departureTime') || '22:30';
+  const pickup = searchParams.get('pickup') || 'Bến xe';
+  const dropoff = searchParams.get('dropoff') || 'Bến xe';
+  const customerName =
+    searchParams.get('customerName') ||
+    searchParams.get('passenger') ||
+    'Khách hàng';
+  const customerPhone =
+    searchParams.get('customerPhone') || searchParams.get('phone') || '';
+  const customerEmail =
+    searchParams.get('customerEmail') || searchParams.get('email') || '';
   
   const luggageFeeParam = searchParams.get('luggageFee') || '0';
   const luggageFee = parseInt(luggageFeeParam, 10) || 0;
@@ -165,15 +173,19 @@ function PaymentContent() {
               <div className="space-y-2.5 text-sm">
                 <div className="flex justify-between">
                   <span className="text-slate-500">Họ và tên</span>
-                  <span className="font-bold text-slate-800">Nguyễn Văn Hùng</span>
+                  <span className="font-bold text-slate-800">{customerName}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-500">Số điện thoại</span>
-                  <span className="font-bold text-slate-800">0912345678</span>
+                  <span className="font-bold text-slate-800">
+                    {customerPhone || 'Chưa cung cấp'}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-500">Email</span>
-                  <span className="font-bold text-slate-800">nguyenhung@gmail.com</span>
+                  <span className="font-bold text-slate-800">
+                    {customerEmail || 'Chưa cung cấp'}
+                  </span>
                 </div>
               </div>
             </div>
@@ -211,12 +223,11 @@ function PaymentContent() {
                     <span className="text-slate-500">Điểm lên xe</span>
                     <span className="font-bold text-slate-800 text-right">{pickup}</span>
                   </div>
-                  <p className="text-[11px] text-slate-500 text-right mt-1">Đường Hoàng Hữu Nam, TP Thủ Đức, TP.HCM</p>
                 </div>
 
                 <div className="flex justify-between">
                   <span className="text-slate-500">Thời gian tới điểm lên xe</span>
-                  <span className="font-bold text-rose-500 text-right">Trước 22:00<br/>17/09/2026</span>
+                  <span className="font-bold text-rose-500 text-right">Trước giờ khởi hành<br/>{departureTime}</span>
                 </div>
                 
                 <div className="pt-2 border-b border-slate-100 pb-3">
@@ -224,7 +235,6 @@ function PaymentContent() {
                     <span className="text-slate-500">Điểm trả khách</span>
                     <span className="font-bold text-slate-800 text-right">{dropoff}</span>
                   </div>
-                  <p className="text-[11px] text-slate-500 text-right mt-1">01 Tô Hiến Thành, Phường 3, Đà Lạt</p>
                 </div>
 
                 <div className="flex justify-between pt-1">

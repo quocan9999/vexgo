@@ -6,7 +6,11 @@ import { useRouter } from 'next/navigation';
 import { ChevronRight, Info, Mail, Phone, User } from 'lucide-react';
 import type { Post } from '@/features/posts/types/post';
 import type { ApiTripSeat } from '@/features/trips/services/trips.api';
-import { calculateRoundTripFare } from '../utils/round-trip-booking';
+import {
+  calculateRoundTripFare,
+  getReturnTripLocations,
+} from '../utils/round-trip-booking';
+import { useAuthSession } from '@/features/auth/auth-session';
 
 export interface RoundTripBookingProps {
   outboundPost: Post;
@@ -142,9 +146,20 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
   returnTripSeats,
 }) => {
   const router = useRouter();
+  const { user } = useAuthSession();
+  const [userNameOverride, setUserNameOverride] = useState<string | null>(null);
+  const [userPhoneOverride, setUserPhoneOverride] = useState<string | null>(null);
+  const [customerEmail, setCustomerEmail] = useState('');
   const [outboundSeats, setOutboundSeats] = useState<string[]>([]);
   const [returnSeats, setReturnSeats] = useState<string[]>([]);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
+
+  const customerName =
+    userNameOverride !== null ? userNameOverride : user?.fullName || '';
+  const customerPhone =
+    userPhoneOverride !== null ? userPhoneOverride : user?.phoneNumber || '';
+
+  const returnLocations = getReturnTripLocations(returnPost);
 
   const toggleOutboundSeat = (seat: string) => {
     setOutboundSeats((current) =>
@@ -256,7 +271,9 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                       <User className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                       <input
                         className="h-11 w-full rounded-lg border border-slate-300 pl-9 pr-3 text-sm font-semibold outline-none focus:border-brand"
-                        defaultValue="Nguyễn Văn Hùng"
+                        value={customerName}
+                        onChange={(e) => setUserNameOverride(e.target.value)}
+                        placeholder="Nhập họ và tên"
                       />
                     </div>
                   </label>
@@ -268,7 +285,9 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                       <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                       <input
                         className="h-11 w-full rounded-lg border border-slate-300 pl-9 pr-3 text-sm font-semibold outline-none focus:border-brand"
-                        defaultValue="0912345678"
+                        value={customerPhone}
+                        onChange={(e) => setUserPhoneOverride(e.target.value)}
+                        placeholder="Nhập số điện thoại"
                       />
                     </div>
                   </label>
@@ -279,8 +298,11 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                     <div className="mt-1.5 relative">
                       <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                       <input
+                        type="email"
                         className="h-11 w-full rounded-lg border border-slate-300 pl-9 pr-3 text-sm font-semibold outline-none focus:border-brand"
-                        defaultValue="hungnguyen@gmail.com"
+                        value={customerEmail}
+                        onChange={(e) => setCustomerEmail(e.target.value)}
+                        placeholder="Nhập email"
                       />
                     </div>
                   </label>
@@ -440,7 +462,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                       </label>
                     </div>
                     <select className="w-full h-10 px-3 rounded-lg border border-slate-300 text-sm font-semibold outline-none focus:border-brand">
-                      <option>{returnPost.district}</option>
+                      <option>{returnLocations.pickup}</option>
                     </select>
                     <p className="text-[11px] font-semibold text-slate-600 mt-2">
                       Quý khách vui lòng có mặt tại điểm đón{' '}
@@ -476,7 +498,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                       </label>
                     </div>
                     <select className="w-full h-10 px-3 rounded-lg border border-slate-300 text-sm font-semibold outline-none focus:border-brand">
-                      <option>{returnPost.province}</option>
+                      <option>{returnLocations.dropoff}</option>
                     </select>
                   </div>
                 </div>
@@ -517,6 +539,9 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                       returnSeats: returnSeats.join(','),
                       outboundRoute,
                       returnRoute,
+                      customerName: customerName.trim(),
+                      customerPhone: customerPhone.trim(),
+                      customerEmail: customerEmail.trim(),
                     });
                     router.push(`/payment?${paymentParams.toString()}`);
                   }}

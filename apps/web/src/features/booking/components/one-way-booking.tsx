@@ -24,7 +24,12 @@ import type { Post } from '@/features/posts/types/post';
 import { LuggageStep } from './luggage/luggage-step';
 import { LuggageSummary } from './luggage/luggage-summary';
 import type { ILuggageItem } from './luggage/luggage-item';
-import { canPayForOneWayBooking } from '../utils/one-way-booking';
+import {
+  canPayForOneWayBooking,
+  formatTripDateTime,
+  buildOneWayPaymentQuery,
+} from '../utils/one-way-booking';
+import { useAuthSession } from '@/features/auth/auth-session';
 import type { ApiTripSeat } from '@/features/trips/services/trips.api';
 
 export interface OneWayBookingProps {
@@ -37,7 +42,26 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
   tripSeats,
 }) => {
   const router = useRouter();
+  const { user } = useAuthSession();
   const isTicket = post.needType === 'BUY';
+  const [userNameOverride, setUserNameOverride] = useState<string | null>(null);
+  const [userPhoneOverride, setUserPhoneOverride] = useState<string | null>(null);
+  const [customerEmail, setCustomerEmail] = useState('');
+  const [pickupOverride, setPickupOverride] = useState<string | null>(null);
+  const [dropoffOverride, setDropoffOverride] = useState<string | null>(null);
+
+  const customerName =
+    userNameOverride !== null ? userNameOverride : user?.fullName || '';
+  const customerPhone =
+    userPhoneOverride !== null ? userPhoneOverride : user?.phoneNumber || '';
+  const pickup = pickupOverride !== null ? pickupOverride : post.province;
+  const dropoff = dropoffOverride !== null ? dropoffOverride : post.district;
+
+  const departureDateTimeText = formatTripDateTime(
+    post.createdAt,
+    post.timeAgo,
+  );
+
   const [selectedSeats, setSelectedSeats] = useState<string[]>([]);
   const [showTripInfoModal, setShowTripInfoModal] = useState(false);
   const [isAcceptedTerms, setIsAcceptedTerms] = useState(false);
@@ -232,7 +256,9 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
                       <User className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                       <input
                         className="h-11 w-full rounded-lg border border-slate-300 pl-9 pr-3 text-sm font-semibold outline-none focus:border-accent"
-                        defaultValue="Nguyễn Văn Hùng"
+                        value={customerName}
+                        onChange={(e) => setUserNameOverride(e.target.value)}
+                        placeholder="Nhập họ và tên"
                       />
                     </div>
                   </label>
@@ -244,7 +270,9 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
                       <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                       <input
                         className="h-11 w-full rounded-lg border border-slate-300 pl-9 pr-3 text-sm font-semibold outline-none focus:border-accent"
-                        defaultValue="0912.345.678"
+                        value={customerPhone}
+                        onChange={(e) => setUserPhoneOverride(e.target.value)}
+                        placeholder="Nhập số điện thoại"
                       />
                     </div>
                   </label>
@@ -255,8 +283,11 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
                     <div className="mt-1.5 relative">
                       <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                       <input
+                        type="email"
                         className="h-11 w-full rounded-lg border border-slate-300 pl-9 pr-3 text-sm font-semibold outline-none focus:border-accent"
-                        defaultValue="nguyenvanhung@gmail.com"
+                        value={customerEmail}
+                        onChange={(e) => setCustomerEmail(e.target.value)}
+                        placeholder="Nhập email"
                       />
                     </div>
                   </label>
@@ -318,10 +349,15 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
                       Trung chuyển
                     </label>
                   </div>
-                  <select className="h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-bold text-slate-900 outline-none focus:border-accent">
-                    <option>{post.province}</option>
-                    <option>Bến xe Miền Tây</option>
-                    <option>Bến xe Miền Đông mới</option>
+                  <select
+                    value={pickup}
+                    onChange={(e) => setPickupOverride(e.target.value)}
+                    className="h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-bold text-slate-900 outline-none focus:border-accent"
+                  >
+                    <option value={post.province}>{post.province}</option>
+                    <option value={`Bến xe ${post.province}`}>
+                      Bến xe {post.province}
+                    </option>
                   </select>
                   <p className="text-xs text-slate-600 leading-relaxed">
                     Quý khách vui lòng có mặt tại điểm đón trước giờ khởi hành
@@ -352,10 +388,15 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
                       Trung chuyển
                     </label>
                   </div>
-                  <select className="h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-bold text-slate-900 outline-none focus:border-accent">
-                    <option>{post.district}</option>
-                    <option>Trung tâm thành phố</option>
-                    <option>Bến xe gần nhất</option>
+                  <select
+                    value={dropoff}
+                    onChange={(e) => setDropoffOverride(e.target.value)}
+                    className="h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-bold text-slate-900 outline-none focus:border-accent"
+                  >
+                    <option value={post.district}>{post.district}</option>
+                    <option value={`Bến xe ${post.district}`}>
+                      Bến xe {post.district}
+                    </option>
                   </select>
                   <p className="text-xs text-slate-600 leading-relaxed">
                     Điểm trả cụ thể sẽ được xác nhận lại trong vé điện tử sau
@@ -367,9 +408,9 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
 
             <LuggageStep
               route={`${post.province} - ${post.district}`}
-              time={`${post.direction || '21:00'} 17/09/2026`}
+              time={departureDateTimeText}
               seat={selectedSeatText}
-              passenger="Nguyễn Văn Hùng"
+              passenger={customerName || 'Khách hàng'}
               onFeeChange={handleLuggageChange}
             />
 
@@ -443,27 +484,27 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
                       );
                       return;
                     }
-                    const query = new URLSearchParams({
-                      totalFare: totalFare.toString(),
-                      baseFare: baseFareNumber.toString(),
-                      seats: selectedSeatText,
-                      count: selectedSeats.length.toString(),
-                      route: post.title || 'TP. Hồ Chí Minh - Đà Lạt',
-                      departureTime: '22:30 17/09/2026',
-                      pickup: 'Bến xe Miền Đông mới',
-                      dropoff: 'Bến xe trung tâm Đà Lạt',
-                      luggageFee: luggageFee.toString(),
-                      luggageWeight: luggageWeight.toString(),
-                      luggageInfo: JSON.stringify(
+                    const query = buildOneWayPaymentQuery({
+                      post,
+                      selectedSeats,
+                      baseFare: baseFareNumber,
+                      totalFare,
+                      customerName: customerName.trim(),
+                      customerPhone: customerPhone.trim(),
+                      customerEmail: customerEmail.trim(),
+                      pickup: pickup || post.province,
+                      dropoff: dropoff || post.district,
+                      luggageFee,
+                      luggageWeight,
+                      luggageInfo:
                         luggageItems.length > 0
-                          ? {
+                          ? JSON.stringify({
                               count: luggageItems.length,
                               weight: luggageWeight,
                               fee: luggageFee,
                               category: luggageItems[0]?.category || 'normal',
-                            }
+                            })
                           : null,
-                      ),
                     });
                     router.push(`/payment?${query.toString()}`);
                   }}
@@ -501,7 +542,7 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
                     Thời gian xuất bến
                   </span>
                   <strong className="text-emerald-600">
-                    {post.direction || '21:00'} 17/09/2026
+                    {departureDateTimeText}
                   </strong>
                 </div>
                 <div className="flex justify-between gap-3">
@@ -598,7 +639,7 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
                 <div className="flex justify-between gap-2">
                   <span className="font-bold text-slate-500">Xuất bến</span>
                   <strong className="text-right text-emerald-600">
-                    {post.direction || '21:00'} 17/09/2026
+                    {departureDateTimeText}
                   </strong>
                 </div>
 

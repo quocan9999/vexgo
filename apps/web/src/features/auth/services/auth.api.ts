@@ -108,4 +108,43 @@ export const authApi = {
 
     return response.json();
   },
+
+  async refresh(
+    refreshToken: string,
+  ): Promise<{ data: { accessToken: string; refreshToken: string } }> {
+    const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new ApiError(
+        response.status,
+        errorData.error || 'REFRESH_TOKEN_INVALID',
+        errorData.message || 'Phiên đăng nhập đã hết hạn',
+      );
+    }
+
+    return response.json();
+  },
+
+  async logout(
+    refreshToken?: string | null,
+    accessToken?: string | null,
+  ): Promise<void> {
+    try {
+      await fetch(`${API_BASE_URL}/auth/logout`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
+        body: JSON.stringify({ refreshToken: refreshToken || undefined }),
+      });
+    } catch {
+      // ignore network errors - local session will still be cleared
+    }
+  },
 };

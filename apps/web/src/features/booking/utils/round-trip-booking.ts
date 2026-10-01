@@ -33,3 +33,13 @@ export function buildRoundTripBookingHref({
 
   return `/posts/${encodeURIComponent(outboundId)}?${params.toString()}`;
 }
+
+export function getReturnTripLocations(returnPost: {
+  province: string;
+  district: string;
+}): { pickup: string; dropoff: string } {
+  return {
+    pickup: returnPost.province,
+    dropoff: returnPost.district,
+  };
+}

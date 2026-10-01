@@ -71,16 +71,4 @@ export const customerApi = {
   },
 };
 
-export const authApi = {
-  async refresh(refreshToken: string): Promise<{ data: { accessToken: string; refreshToken: string; } }> {
-    const res = await fetch(`${API_BASE_URL}/auth/refresh`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refreshToken }),
-    });
-    if (!res.ok) {
-      throw new ApiError('Phiên đăng nhập hết hạn', 401);
-    }
-    return res.json();
-  }
-};
+
