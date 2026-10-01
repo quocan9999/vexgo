@@ -13,6 +13,7 @@ import { TENANT_PRINCIPAL_ROLES } from '../auth/principal-scope.js';
 import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
 import { CustomersService } from './customers.service.js';
 import { AdminCustomerQueryDto } from './dto/admin-customer-query.dto.js';
+import { AdminCustomerTransactionsQueryDto } from './dto/admin-customer-transactions-query.dto.js';
 
 @Controller('customers')
 @RequireRoles(...TENANT_PRINCIPAL_ROLES)
@@ -40,5 +41,24 @@ export class AdminCustomersController {
       });
     }
     return this.customersService.getAdminCustomerById(principal, id);
+  }
+
+  @Get(':id/transactions')
+  getTransactions(
+    @CurrentPrincipal() principal: AuthPrincipal,
+    @Param('id', ParseIntPipe) id: number,
+    @Query() query: AdminCustomerTransactionsQueryDto,
+  ) {
+    if (id <= 0) {
+      throw new BadRequestException({
+        error: 'INVALID_CUSTOMER_ID',
+        message: 'Mã khách hàng không hợp lệ.',
+      });
+    }
+    return this.customersService.listAdminCustomerTransactions(
+      principal,
+      id,
+      query,
+    );
   }
 }

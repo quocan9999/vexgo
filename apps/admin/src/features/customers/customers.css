@@ -111,3 +111,105 @@
   display: inline-flex;
   color: var(--admin-text-muted);
 }
+
+.customers-detail-footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--admin-border);
+  display: flex;
+  justify-content: flex-end;
+}
+
+.customer-workspace-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.customers-error-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.customer-workspace-body {
+  margin-top: 20px;
+  display: grid;
+  gap: 24px;
+}
+
+.customer-workspace-hero {
+  background: var(--admin-card-bg, #ffffff);
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius-lg, 12px);
+  padding: 20px 24px;
+  display: grid;
+  gap: 16px;
+}
+
+.customer-hero-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--admin-border);
+}
+
+.customer-hero-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin: 0;
+}
+
+.customer-hero-stats dt {
+  font-size: var(--admin-font-size-xs, 12px);
+  color: var(--admin-text-muted);
+  margin-bottom: 4px;
+}
+
+.customer-hero-stats dd {
+  margin: 0;
+  font-size: var(--admin-font-size-base, 14px);
+  color: var(--admin-text-strong);
+}
+
+.customer-workspace-tabs {
+  display: flex;
+  gap: 8px;
+  border-bottom: 1px solid var(--admin-border);
+  padding-bottom: 12px;
+}
+
+.customer-workspace-tabs button {
+  border-radius: var(--admin-radius-md, 8px);
+}
+
+.customer-workspace-panels {
+  min-height: 300px;
+}
+
+.customer-overview-card {
+  background: var(--admin-card-bg, #ffffff);
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius-lg, 12px);
+  padding: 20px 24px;
+  margin-bottom: 16px;
+}
+
+.customer-overview-card h4 {
+  margin: 0 0 16px;
+  font-size: var(--admin-font-size-sm, 13px);
+  font-weight: 600;
+  color: var(--admin-text-strong);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.customer-transactions-container {
+  display: grid;
+  gap: 16px;
+}

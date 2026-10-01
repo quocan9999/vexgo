@@ -10,6 +10,7 @@ import { normalizeEmail } from '../common/normalize-email.js';
 import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
 import type { UpdateMeDto } from './dto/update-me.dto.js';
 import type { AdminCustomerQueryDto } from './dto/admin-customer-query.dto.js';
+import type { AdminCustomerTransactionsQueryDto } from './dto/admin-customer-transactions-query.dto.js';
 
 const customerProfileInclude = {
   khachHang: true,
@@ -270,6 +271,127 @@ export class CustomersService {
         },
         createdAt: customer.createdAt.toISOString(),
         updatedAt: customer.updatedAt.toISOString(),
+      },
+    };
+  }
+
+  async listAdminCustomerTransactions(
+    principal: AuthPrincipal,
+    customerId: number,
+    query: AdminCustomerTransactionsQueryDto,
+  ) {
+    const nhaXeId = this.requireTenantId(principal);
+
+    // Verify tenant visibility
+    const customer = await this.prisma.khachHang.findFirst({
+      where: {
+        khachHangId: customerId,
+        donGiaoDichs: {
+          some: {
+            nhaXeId,
+          },
+        },
+      },
+      select: {
+        khachHangId: true,
+      },
+    });
+
+    if (!customer) {
+      throw new NotFoundException({
+        error: 'CUSTOMER_NOT_FOUND',
+        message: 'Không tìm thấy khách hàng.',
+      });
+    }
+
+    const page = query.page ?? 1;
+    const pageSize = query.pageSize ?? 10;
+    const sortDirection = query.sortDirection ?? 'desc';
+
+    const where: Prisma.DonGiaoDichWhereInput = {
+      khachHangId: customerId,
+      nhaXeId,
+    };
+
+    if (query.search?.trim()) {
+      where.maDonGiaoDich = {
+        contains: query.search.trim(),
+      };
+    }
+
+    const orderBy: Prisma.DonGiaoDichOrderByWithRelationInput[] =
+      query.sortBy === 'totalAmount'
+        ? [
+            { tongTien: sortDirection },
+            { donGiaoDichId: sortDirection },
+          ]
+        : [
+            { ngayTao: sortDirection },
+            { donGiaoDichId: sortDirection },
+          ];
+
+    const [totalItems, items] = await Promise.all([
+      this.prisma.donGiaoDich.count({ where }),
+      this.prisma.donGiaoDich.findMany({
+        where,
+        orderBy,
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        include: {
+          phieuDatVe: {
+            select: {
+              phieuDatVeId: true,
+              maPhieuDatVe: true,
+              trangThai: true,
+            },
+          },
+          phieuGuiHang: {
+            select: {
+              phieuGuiHangId: true,
+              maPhieuGuiHang: true,
+              trangThai: true,
+            },
+          },
+        },
+      }),
+    ]);
+
+    const totalPages = Math.ceil(totalItems / pageSize) || 1;
+
+    return {
+      data: items.map((item) => ({
+        transactionId: item.donGiaoDichId,
+        code: item.maDonGiaoDich,
+        createdDate: item.ngayTao.toISOString(),
+        totalAmount: Number(item.tongTien),
+        status: item.trangThai,
+        customerSnapshot: {
+          fullName: item.tenKhachHang,
+          phoneNumber: item.soDienThoaiKhachHang,
+          email: item.emailKhachHang,
+        },
+        booking: item.phieuDatVe
+          ? {
+              bookingId: item.phieuDatVe.phieuDatVeId,
+              code: item.phieuDatVe.maPhieuDatVe,
+              status: item.phieuDatVe.trangThai,
+            }
+          : null,
+        shipment: item.phieuGuiHang
+          ? {
+              shipmentId: item.phieuGuiHang.phieuGuiHangId,
+              code: item.phieuGuiHang.maPhieuGuiHang,
+              status: item.phieuGuiHang.trangThai,
+            }
+          : null,
+        createdAt: item.createdAt.toISOString(),
+        updatedAt: item.updatedAt.toISOString(),
+      })),
+      meta: {
+        page,
+        pageSize,
+        totalItems,
+        totalPages,
       },
     };
   }

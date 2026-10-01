@@ -56,3 +56,50 @@ export interface CustomerPageResponse {
 export interface CustomerDetailResponse {
   data: CustomerDetail;
 }
+
+export type CustomerTransactionBookingSummary = {
+  bookingId: number;
+  code: string;
+  status: string;
+};
+
+export type CustomerTransactionShipmentSummary = {
+  shipmentId: number;
+  code: string;
+  status: string;
+};
+
+export interface CustomerTransaction {
+  transactionId: number;
+  code: string;
+  createdDate: string;
+  totalAmount: number;
+  status: string;
+  customerSnapshot: {
+    fullName: string;
+    phoneNumber: string;
+    email: string | null;
+  };
+  booking: CustomerTransactionBookingSummary | null;
+  shipment: CustomerTransactionShipmentSummary | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CustomerTransactionsQuery {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  sortBy?: 'createdDate' | 'totalAmount';
+  sortDirection?: 'asc' | 'desc';
+}
+
+export interface CustomerTransactionsResponse {
+  data: CustomerTransaction[];
+  meta: {
+    page: number;
+    pageSize: number;
+    totalItems: number;
+    totalPages: number;
+  };
+}

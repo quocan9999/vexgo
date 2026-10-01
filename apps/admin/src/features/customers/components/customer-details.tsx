@@ -1,6 +1,7 @@
 'use client';
 
 import { X } from 'lucide-react';
+import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { AdminDetailSheet } from '@/components/admin/admin-detail-sheet';
 import { AdminStatusBadge } from '@/components/admin/admin-status-badge';
@@ -206,6 +207,15 @@ export function CustomerDetails({ customerId, onClose }: CustomerDetailsProps) {
               </div>
             </dl>
           </section>
+
+          <div className="customers-detail-footer">
+            <Link
+              className="button button-primary"
+              href={`/customers/${detail.customer.customerId}`}
+            >
+              Xem lịch sử hoạt động
+            </Link>
+          </div>
         </div>
       )}
     </AdminDetailSheet>
