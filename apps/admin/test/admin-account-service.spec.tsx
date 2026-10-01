@@ -74,6 +74,9 @@ describe('Admin account API service', () => {
         sortDirection: 'asc',
         status: 'HOAT_DONG',
         busCompanyId: 5,
+        roleName: 'NHAN_VIEN_BAN_VE',
+        createdFrom: '2026-09-01',
+        createdTo: '2026-09-30',
       }),
     ).resolves.toEqual({
       data: [account],
@@ -82,7 +85,7 @@ describe('Admin account API service', () => {
 
     const [url, init] = vi.mocked(fetch).mock.calls[0];
     expect(String(url)).toBe(
-      'http://localhost:4000/api/v1/admin-accounts?page=2&pageSize=10&search=FUTA+%26+nh%C3%A2n+vi%C3%AAn&sortBy=fullName&sortDirection=asc&status=HOAT_DONG&busCompanyId=5',
+      'http://localhost:4000/api/v1/admin-accounts?page=2&pageSize=10&search=FUTA+%26+nh%C3%A2n+vi%C3%AAn&sortBy=fullName&sortDirection=asc&status=HOAT_DONG&busCompanyId=5&roleName=NHAN_VIEN_BAN_VE&createdFrom=2026-09-01&createdTo=2026-09-30',
     );
     expect(init?.credentials).toBe('include');
     expect(init?.cache).toBe('no-store');

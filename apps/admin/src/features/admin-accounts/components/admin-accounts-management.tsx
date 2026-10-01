@@ -14,15 +14,23 @@ import { AdminStatusBadge } from '@/components/admin/admin-status-badge';
 import { AdminTableSkeleton } from '@/components/admin/admin-table-skeleton';
 import { Button } from '@/components/ui/button';
 import {
+  DateRangeFilter,
   FilterToolbar,
   SearchInput,
   SelectFilter,
+  type FilterOption,
 } from '@/components/data-filters/data-filters';
 import { useAdminSession } from '@/features/admin-auth/hooks/use-admin-session';
 import { hasPlatformAdminPermission } from '@/features/admin-auth/services/admin-access';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
 import { getAdminAccountById } from '../services/admin-account-service';
 import { useAdminAccounts } from '../hooks/use-admin-accounts';
+import { getBusCompanyFilterOptions } from '@/features/bus-companies/services/bus-company-service';
+import { getDefaultRolePermissions } from '@/features/platform-rbac/services/platform-rbac-service';
+import {
+  TENANT_RBAC_ROLE_NAMES,
+  type TenantRbacRoleName,
+} from '@/features/tenant-rbac/types/tenant-rbac';
 import type {
   AdminAccount,
   AdminAccountSortKey,
@@ -35,6 +43,11 @@ const STATUS_OPTIONS = [
   { value: 'HOAT_DONG', label: 'Đang hoạt động' },
   { value: 'TAM_KHOA', label: 'Đang khóa' },
 ];
+
+type FilterOptionsState =
+  | { status: 'loading' }
+  | { status: 'error'; message: string }
+  | { status: 'success'; companies: FilterOption[]; roles: FilterOption[] };
 
 const ROLE_LABELS: Record<string, string> = {
   NHA_XE_ADMIN: 'Quản trị nhà xe',
@@ -290,9 +303,12 @@ function AccountDetailSheet({
 export function AdminAccountsManagement() {
   const {
     accountPage,
+    busCompanyId,
+    createdDateRange,
     error,
     loading,
     page,
+    roleName,
     searchInput,
     sortBy,
     sortDirection,
@@ -300,6 +316,9 @@ export function AdminAccountsManagement() {
     changePage,
     refresh,
     sortAccounts,
+    updateBusCompany,
+    updateCreatedDateRange,
+    updateRole,
     updateSearch,
     updateStatus,
   } = useAdminAccounts();
@@ -309,9 +328,55 @@ export function AdminAccountsManagement() {
   const canCreate = hasPlatformAdminPermission(session, 'admin-account:create');
   const canUpdate = hasPlatformAdminPermission(session, 'admin-account:update');
   const [createOpen, setCreateOpen] = useState(false);
+  const [filterOptions, setFilterOptions] = useState<FilterOptionsState>({
+    status: 'loading',
+  });
+  const [filterOptionsRetry, setFilterOptionsRetry] = useState(0);
   const [selectedAccountId, setSelectedAccountId] = useState<number | null>(
     null,
   );
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    Promise.all([
+      getBusCompanyFilterOptions(controller.signal),
+      getDefaultRolePermissions(controller.signal),
+    ])
+      .then(([companies, catalog]) => {
+        if (controller.signal.aborted) return;
+        setFilterOptions({
+          status: 'success',
+          companies: companies.map((company) => ({
+            value: String(company.id),
+            label: company.label,
+          })),
+          roles: catalog.roles.flatMap((role) =>
+            role.scope === 'tenant' &&
+            TENANT_RBAC_ROLE_NAMES.includes(role.roleName as TenantRbacRoleName)
+              ? [
+                  {
+                    value: role.roleName,
+                    label: roleLabel(role.roleName),
+                  },
+                ]
+              : [],
+          ),
+        });
+      })
+      .catch((requestError: unknown) => {
+        if (controller.signal.aborted) return;
+        setFilterOptions({
+          status: 'error',
+          message:
+            requestError instanceof Error
+              ? requestError.message
+              : 'Không thể tải bộ lọc nhà xe và vai trò.',
+        });
+      });
+
+    return () => controller.abort();
+  }, [filterOptionsRetry]);
 
   function sortableHeader(label: string, key: AdminAccountSortKey) {
     const selected = sortBy === key;
@@ -368,7 +433,8 @@ export function AdminAccountsManagement() {
 
         <section
           aria-labelledby="admin-accounts-heading"
-          className={`panel ${styles.panel}`}
+          className={`panel ${styles.panel} ${styles.accountsSection}`}
+          data-testid="admin-accounts-spacing"
         >
           <h2 className="sr-only" id="admin-accounts-heading">
             Danh sách tài khoản Admin
@@ -389,7 +455,56 @@ export function AdminAccountsManagement() {
               options={STATUS_OPTIONS}
               value={status}
             />
+            <SelectFilter
+              allLabel="Tất cả nhà xe"
+              label="Lọc theo nhà xe"
+              onChange={updateBusCompany}
+              options={
+                filterOptions.status === 'success'
+                  ? filterOptions.companies
+                  : []
+              }
+              value={busCompanyId === undefined ? '' : String(busCompanyId)}
+            />
+            <SelectFilter
+              allLabel="Tất cả vai trò"
+              label="Lọc theo vai trò"
+              onChange={updateRole}
+              options={
+                filterOptions.status === 'success' ? filterOptions.roles : []
+              }
+              value={roleName}
+            />
+            <DateRangeFilter
+              label="Ngày tạo"
+              onApply={updateCreatedDateRange}
+              value={createdDateRange}
+            />
           </FilterToolbar>
+
+          {filterOptions.status === 'loading' && (
+            <p className={styles.filterOptionsMessage} role="status">
+              Đang tải tùy chọn bộ lọc…
+            </p>
+          )}
+          {filterOptions.status === 'error' && (
+            <div className={styles.filterOptionsError} role="alert">
+              <span>
+                Không tải được danh sách nhà xe và vai trò lọc:{' '}
+                {filterOptions.message}
+              </span>
+              <Button
+                onClick={() => {
+                  setFilterOptions({ status: 'loading' });
+                  setFilterOptionsRetry((count) => count + 1);
+                }}
+                type="button"
+                variant="secondary"
+              >
+                Tải lại bộ lọc
+              </Button>
+            </div>
+          )}
 
           {error && (
             <div className="table-error" role="alert">

@@ -56,6 +56,9 @@ const state = vi.hoisted(() => {
       page: 1,
       searchInput: '',
       status: '' as string,
+      busCompanyId: undefined as number | undefined,
+      roleName: '' as string,
+      createdDateRange: null as { from: string; to: string } | null,
       sortBy: 'createdAt' as string,
       sortDirection: 'desc' as string,
       changePage: vi.fn(),
@@ -63,6 +66,9 @@ const state = vi.hoisted(() => {
       sortAccounts: vi.fn(),
       updateSearch: vi.fn(),
       updateStatus: vi.fn(),
+      updateBusCompany: vi.fn(),
+      updateRole: vi.fn(),
+      updateCreatedDateRange: vi.fn(),
     },
     getAdminAccountById: vi.fn(),
     createAdminAccount: vi.fn(),
@@ -169,6 +175,7 @@ vi.mock('lucide-react', () => {
     ArrowDown: icon('arrow-down'),
     ArrowUp: icon('arrow-up'),
     ArrowUpDown: icon('arrow-up-down'),
+    CalendarDays: icon('calendar-days'),
     Check: icon('check'),
     ChevronDown: icon('chevron-down'),
     ChevronLeft: icon('chevron-left'),
@@ -223,6 +230,9 @@ describe('Admin accounts management page', () => {
       page: 1,
       searchInput: '',
       status: '',
+      busCompanyId: undefined,
+      roleName: '',
+      createdDateRange: null,
       sortBy: 'createdAt',
       sortDirection: 'desc',
       changePage: vi.fn(),
@@ -230,6 +240,9 @@ describe('Admin accounts management page', () => {
       sortAccounts: vi.fn(),
       updateSearch: vi.fn(),
       updateStatus: vi.fn(),
+      updateBusCompany: vi.fn(),
+      updateRole: vi.fn(),
+      updateCreatedDateRange: vi.fn(),
     };
     state.getAdminAccountById.mockReset().mockResolvedValue(account);
     state.createAdminAccount.mockReset().mockResolvedValue(account);
@@ -313,6 +326,55 @@ describe('Admin accounts management page', () => {
     expect(
       within(actions as HTMLElement).getByRole('button', { name: 'Làm mới' }),
     ).toBeTruthy();
+  });
+
+  it('matches CRUD section spacing and offers company, role and creation-date filters', async () => {
+    render(<AdminAccountsManagement />);
+
+    const section = document.querySelector(
+      '[data-testid="admin-accounts-spacing"]',
+    );
+    expect(section?.className).toContain('accountsSection');
+    expect(
+      await screen.findByRole('combobox', { name: 'Lọc theo nhà xe' }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole('combobox', { name: 'Lọc theo vai trò' }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: 'Lọc theo ngày tạo' }),
+    ).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('combobox', { name: 'Lọc theo nhà xe' }));
+    const companyOption = await screen.findByRole('option', {
+      name: 'Phương Trang (FUTA)',
+    });
+    fireEvent.pointerDown(companyOption, { button: 0, pointerType: 'mouse' });
+    fireEvent.pointerUp(companyOption, { button: 0, pointerType: 'mouse' });
+    fireEvent.click(companyOption);
+    expect(state.hook.updateBusCompany).toHaveBeenCalledWith('7');
+
+    fireEvent.click(screen.getByRole('combobox', { name: 'Lọc theo vai trò' }));
+    const roleOption = await screen.findByRole('option', {
+      name: 'Nhân viên bán vé',
+    });
+    fireEvent.pointerDown(roleOption, { button: 0, pointerType: 'mouse' });
+    fireEvent.pointerUp(roleOption, { button: 0, pointerType: 'mouse' });
+    fireEvent.click(roleOption);
+    expect(state.hook.updateRole).toHaveBeenCalledWith('NHAN_VIEN_BAN_VE');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Lọc theo ngày tạo' }));
+    fireEvent.change(screen.getByLabelText('Từ ngày'), {
+      target: { value: '2026-09-01' },
+    });
+    fireEvent.change(screen.getByLabelText('Đến ngày'), {
+      target: { value: '2026-09-30' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Áp dụng' }));
+    expect(state.hook.updateCreatedDateRange).toHaveBeenCalledWith({
+      from: '2026-09-01',
+      to: '2026-09-30',
+    });
   });
 
   it('shows account identity and opens a detail sheet with tenant and role', async () => {

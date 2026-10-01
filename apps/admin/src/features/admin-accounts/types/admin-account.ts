@@ -46,6 +46,9 @@ export type AdminAccountListQuery = {
   sortDirection: AdminAccountSortDirection;
   status?: AdminAccountStatus;
   busCompanyId?: number;
+  roleName?: TenantRbacRoleName;
+  createdFrom?: string;
+  createdTo?: string;
 };
 
 export type PaginatedAdminAccounts = {

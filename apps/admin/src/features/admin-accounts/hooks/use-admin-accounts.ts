@@ -10,6 +10,11 @@ import {
   type PaginatedAdminAccounts,
 } from '../types/admin-account';
 import { getAdminAccounts } from '../services/admin-account-service';
+import type { DateRangeValue } from '@/components/data-filters/data-filters';
+import {
+  TENANT_RBAC_ROLE_NAMES,
+  type TenantRbacRoleName,
+} from '@/features/tenant-rbac/types/tenant-rbac';
 
 const PAGE_SIZE = 10;
 
@@ -27,6 +32,9 @@ export function useAdminAccounts() {
     useState<AdminAccountSortDirection>('desc');
   const [status, setStatus] = useState<AdminAccountStatus | ''>('');
   const [busCompanyId, setBusCompanyId] = useState<number | undefined>();
+  const [roleName, setRoleName] = useState<TenantRbacRoleName | ''>('');
+  const [createdDateRange, setCreatedDateRange] =
+    useState<DateRangeValue | null>(null);
   const [refreshCount, setRefreshCount] = useState(0);
 
   useEffect(() => {
@@ -51,6 +59,13 @@ export function useAdminAccounts() {
       sortDirection,
       ...(status ? { status } : {}),
       ...(busCompanyId !== undefined ? { busCompanyId } : {}),
+      ...(roleName ? { roleName } : {}),
+      ...(createdDateRange
+        ? {
+            createdFrom: createdDateRange.from,
+            createdTo: createdDateRange.to,
+          }
+        : {}),
     };
 
     getAdminAccounts(query, controller.signal)
@@ -74,7 +89,17 @@ export function useAdminAccounts() {
       current = false;
       controller.abort();
     };
-  }, [busCompanyId, page, refreshCount, search, sortBy, sortDirection, status]);
+  }, [
+    busCompanyId,
+    createdDateRange,
+    page,
+    refreshCount,
+    roleName,
+    search,
+    sortBy,
+    sortDirection,
+    status,
+  ]);
 
   function updateSearch(value: string) {
     setLoading(true);
@@ -114,6 +139,24 @@ export function useAdminAccounts() {
     );
   }
 
+  function updateRole(value: string) {
+    setLoading(true);
+    setError(null);
+    setPage(1);
+    setRoleName(
+      TENANT_RBAC_ROLE_NAMES.includes(value as TenantRbacRoleName)
+        ? (value as TenantRbacRoleName)
+        : '',
+    );
+  }
+
+  function updateCreatedDateRange(value: DateRangeValue | null) {
+    setLoading(true);
+    setError(null);
+    setPage(1);
+    setCreatedDateRange(value);
+  }
+
   function sortAccounts(key: AdminAccountSortKey) {
     setLoading(true);
     setError(null);
@@ -135,9 +178,11 @@ export function useAdminAccounts() {
   return {
     accountPage,
     busCompanyId,
+    createdDateRange,
     error,
     loading,
     page,
+    roleName,
     searchInput,
     sortBy,
     sortDirection,
@@ -146,6 +191,8 @@ export function useAdminAccounts() {
     refresh,
     sortAccounts,
     updateBusCompany,
+    updateCreatedDateRange,
+    updateRole,
     updateSearch,
     updateStatus,
   };

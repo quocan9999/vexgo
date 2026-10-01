@@ -200,6 +200,9 @@ export async function getAdminAccounts(
   if (query.busCompanyId !== undefined) {
     searchParams.set('busCompanyId', String(query.busCompanyId));
   }
+  if (query.roleName) searchParams.set('roleName', query.roleName);
+  if (query.createdFrom) searchParams.set('createdFrom', query.createdFrom);
+  if (query.createdTo) searchParams.set('createdTo', query.createdTo);
 
   const response = await adminApiFetch(
     `${getAdminAccountsUrl()}?${searchParams.toString()}`,
