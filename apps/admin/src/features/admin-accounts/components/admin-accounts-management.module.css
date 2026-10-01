@@ -1,0 +1,222 @@
+.page {
+  min-width: 0;
+}
+
+.panel {
+  min-width: 0;
+  padding: 20px;
+}
+
+.accountList {
+  display: grid;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.accountCard {
+  display: grid;
+  grid-template-columns: minmax(210px, 1.1fr) minmax(0, 2fr) auto;
+  align-items: center;
+  gap: 20px;
+  padding: 16px;
+  border: 1px solid var(--border-subtle, #e3e8f0);
+  border-radius: 14px;
+  background: var(--surface-primary, #fff);
+}
+
+.accountIdentity {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+}
+
+.avatar {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 50%;
+  background: #e8efff;
+  color: #1f4ed8;
+  font-weight: 700;
+}
+
+.identityCopy {
+  min-width: 0;
+}
+
+.identityCopy h3,
+.detailHero h3 {
+  overflow-wrap: anywhere;
+  margin: 0;
+  color: var(--text-primary, #14233d);
+  font-size: 15px;
+}
+
+.identityCopy p {
+  overflow-wrap: anywhere;
+  margin: 4px 0 0;
+  color: var(--text-muted, #68778d);
+  font-size: 13px;
+}
+
+.accountMeta {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+}
+
+.accountMeta div,
+.detailGrid div {
+  min-width: 0;
+}
+
+.accountMeta dt,
+.detailGrid dt {
+  margin-bottom: 5px;
+  color: var(--text-muted, #68778d);
+  font-size: 12px;
+}
+
+.accountMeta dd,
+.detailGrid dd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  overflow-wrap: anywhere;
+  margin: 0;
+  color: var(--text-primary, #14233d);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.roleTag {
+  display: inline-flex;
+  max-width: 100%;
+  border-radius: 999px;
+  padding: 4px 8px;
+  background: #eff3f9;
+  color: #35506f;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.cardActions {
+  justify-self: end;
+}
+
+.emptyState {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 52px 18px;
+  text-align: center;
+}
+
+.emptyState h3 {
+  margin: 8px 0 0;
+  color: var(--text-primary, #14233d);
+  font-size: 17px;
+}
+
+.emptyState p {
+  margin: 0;
+  color: var(--text-muted, #68778d);
+  font-size: 14px;
+}
+
+.emptyIcon {
+  display: grid;
+  width: 46px;
+  height: 46px;
+  place-items: center;
+  border-radius: 50%;
+  background: #f1f5fa;
+  color: #49617f;
+}
+
+.detailHero {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.detailHero .avatar {
+  width: 52px;
+  height: 52px;
+}
+
+.detailHero span:not(.avatar) {
+  display: block;
+  margin-top: 4px;
+  color: var(--text-muted, #68778d);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.detailGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px 14px;
+  margin: 0;
+}
+
+.detailWide {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 900px) {
+  .accountCard {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .accountMeta {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .cardActions {
+    grid-column: 2;
+    grid-row: 1;
+  }
+}
+
+@media (max-width: 600px) {
+  .panel {
+    padding: 14px;
+  }
+
+  .accountCard {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+    padding: 14px;
+  }
+
+  .accountMeta {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .cardActions {
+    grid-column: 1;
+    grid-row: auto;
+    justify-self: stretch;
+  }
+
+  .cardActions :global(button) {
+    width: 100%;
+  }
+
+  .detailGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .detailWide {
+    grid-column: auto;
+  }
+}
