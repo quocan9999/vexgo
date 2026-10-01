@@ -7,7 +7,9 @@ import {
 import { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { normalizeEmail } from '../common/normalize-email.js';
+import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
 import type { UpdateMeDto } from './dto/update-me.dto.js';
+import type { AdminCustomerQueryDto } from './dto/admin-customer-query.dto.js';
 
 const customerProfileInclude = {
   khachHang: true,
@@ -117,5 +119,169 @@ export class CustomersService {
       createdAt: account.createdAt.toISOString(),
       updatedAt: account.updatedAt.toISOString(),
     };
+  }
+
+  async listAdminCustomers(
+    principal: AuthPrincipal,
+    query: AdminCustomerQueryDto,
+  ) {
+    const nhaXeId = this.requireTenantId(principal);
+    const page = query.page ?? 1;
+    const pageSize = query.pageSize ?? 10;
+    const sortDirection = query.sortDirection ?? 'asc';
+    const sortBy = query.sortBy ?? 'customerCode';
+
+    const andConditions: Prisma.KhachHangWhereInput[] = [
+      {
+        donGiaoDichs: {
+          some: {
+            nhaXeId,
+          },
+        },
+      },
+    ];
+
+    const trimmedSearch = query.search?.trim();
+    if (trimmedSearch) {
+      andConditions.push({
+        OR: [
+          { maKhachHang: { contains: trimmedSearch } },
+          { taiKhoan: { hoTen: { contains: trimmedSearch } } },
+          { taiKhoan: { soDienThoai: { contains: trimmedSearch } } },
+          { taiKhoan: { email: { contains: trimmedSearch } } },
+        ],
+      });
+    }
+
+    if (query.accountStatus) {
+      andConditions.push({
+        taiKhoan: {
+          trangThai: query.accountStatus,
+        },
+      });
+    }
+
+    const where: Prisma.KhachHangWhereInput = {
+      AND: andConditions,
+    };
+
+    let orderBy: Prisma.KhachHangOrderByWithRelationInput[];
+    switch (sortBy) {
+      case 'customerCode':
+        orderBy = [{ maKhachHang: sortDirection }, { khachHangId: 'asc' }];
+        break;
+      case 'fullName':
+        orderBy = [
+          { taiKhoan: { hoTen: sortDirection } },
+          { khachHangId: 'asc' },
+        ];
+        break;
+      case 'loyaltyPoints':
+        orderBy = [{ diemTichLuy: sortDirection }, { khachHangId: 'asc' }];
+        break;
+      case 'createdAt':
+        orderBy = [{ createdAt: sortDirection }, { khachHangId: 'asc' }];
+        break;
+      case 'updatedAt':
+        orderBy = [{ updatedAt: sortDirection }, { khachHangId: 'asc' }];
+        break;
+      default:
+        orderBy = [{ maKhachHang: 'asc' }, { khachHangId: 'asc' }];
+    }
+
+    const [totalItems, items] = await Promise.all([
+      this.prisma.khachHang.count({ where }),
+      this.prisma.khachHang.findMany({
+        where,
+        include: {
+          taiKhoan: true,
+        },
+        orderBy,
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+    ]);
+
+    const totalPages = Math.ceil(totalItems / pageSize) || 1;
+
+    return {
+      data: items.map((item) => ({
+        customerId: item.khachHangId,
+        customerCode: item.maKhachHang,
+        fullName: item.taiKhoan.hoTen,
+        phoneNumber: item.taiKhoan.soDienThoai,
+        email: item.taiKhoan.email,
+        loyaltyPoints: item.diemTichLuy,
+        account: {
+          accountId: item.taiKhoan.taiKhoanId,
+          status: item.taiKhoan.trangThai,
+          phoneVerified: item.taiKhoan.daXacThucSoDienThoai,
+        },
+        createdAt: item.createdAt.toISOString(),
+        updatedAt: item.updatedAt.toISOString(),
+      })),
+      meta: {
+        page,
+        pageSize,
+        totalItems,
+        totalPages,
+      },
+    };
+  }
+
+  async getAdminCustomerById(principal: AuthPrincipal, customerId: number) {
+    const nhaXeId = this.requireTenantId(principal);
+
+    const customer = await this.prisma.khachHang.findFirst({
+      where: {
+        khachHangId: customerId,
+        donGiaoDichs: {
+          some: {
+            nhaXeId,
+          },
+        },
+      },
+      include: {
+        taiKhoan: true,
+      },
+    });
+
+    if (!customer) {
+      throw new NotFoundException({
+        error: 'CUSTOMER_NOT_FOUND',
+        message: 'Không tìm thấy khách hàng.',
+      });
+    }
+
+    return {
+      data: {
+        customerId: customer.khachHangId,
+        customerCode: customer.maKhachHang,
+        fullName: customer.taiKhoan.hoTen,
+        phoneNumber: customer.taiKhoan.soDienThoai,
+        email: customer.taiKhoan.email,
+        loyaltyPoints: customer.diemTichLuy,
+        account: {
+          accountId: customer.taiKhoan.taiKhoanId,
+          status: customer.taiKhoan.trangThai,
+          phoneVerified: customer.taiKhoan.daXacThucSoDienThoai,
+          createdAt: customer.taiKhoan.createdAt.toISOString(),
+          updatedAt: customer.taiKhoan.updatedAt.toISOString(),
+        },
+        createdAt: customer.createdAt.toISOString(),
+        updatedAt: customer.updatedAt.toISOString(),
+      },
+    };
+  }
+
+  private requireTenantId(principal: AuthPrincipal): number {
+    const nhaXeId = principal.nhaXeId;
+    if (!Number.isSafeInteger(nhaXeId) || (nhaXeId ?? 0) <= 0) {
+      throw new ForbiddenException({
+        error: 'TENANT_SCOPE_REQUIRED',
+        message: 'Yêu cầu quyền truy cập trong phạm vi nhà xe.',
+      });
+    }
+    return nhaXeId as number;
   }
 }

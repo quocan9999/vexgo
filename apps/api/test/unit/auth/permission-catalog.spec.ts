@@ -29,6 +29,7 @@ describe('Admin permission defaults', () => {
       'fare-price:update',
       'role:read',
       'permission:assign',
+      'customer:read',
     ]);
   });
 
@@ -52,6 +53,7 @@ describe('Admin permission defaults', () => {
       'fare-price:update',
       'role:read',
       'permission:assign',
+      'customer:read',
       'bus-company:read',
       'bus-company:create',
       'bus-company:update',
@@ -82,6 +84,7 @@ describe('Admin permission defaults', () => {
       'fare-price:update',
       'role:read',
       'permission:assign',
+      'customer:read',
     ];
     const platformPermissionKeys = [
       'bus-company:read',

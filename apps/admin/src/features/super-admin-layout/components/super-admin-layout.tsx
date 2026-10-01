@@ -41,6 +41,7 @@ type SuperAdminLayoutProps = {
     | 'vehicles'
     | 'routes'
     | 'fare-prices'
+    | 'customers'
     | 'admin-accounts'
     | 'rbac'
     | 'tenant-rbac';
@@ -73,6 +74,7 @@ const OPERATION_NAVIGATION_DETAILS: Record<
   vehicles: { label: 'Xe', icon: () => <Truck size={18} /> },
   routes: { label: 'Tuyến xe', icon: () => <MapPinned size={18} /> },
   'fare-prices': { label: 'Bảng giá vé', icon: () => <Ticket size={18} /> },
+  customers: { label: 'Khách hàng', icon: () => <UsersRound size={18} /> },
 };
 
 export function SuperAdminLayout({

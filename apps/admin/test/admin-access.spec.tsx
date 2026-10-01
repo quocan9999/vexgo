@@ -71,6 +71,7 @@ describe('admin access scope and permissions', () => {
     ]);
     expect(getRequiredAdminPermissions('/vehicles')).toEqual(['vehicle:read']);
     expect(getRequiredAdminPermissions('/routes/123')).toEqual(['route:read']);
+    expect(getRequiredAdminPermissions('/customers')).toEqual(['customer:read']);
     expect(getRequiredAdminPermissions('/vehicle-types-extra')).toBeNull();
   });
 

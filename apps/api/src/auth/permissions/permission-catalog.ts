@@ -93,6 +93,12 @@ export const ADMIN_PERMISSION_CATALOG = [
     description: 'Gán quyền cho vai trò trong phạm vi nhà xe.',
   },
   {
+    key: 'customer:read',
+    scope: 'tenant',
+    description:
+      'Xem danh sách, chi tiết và lịch sử khách hàng có giao dịch trong phạm vi nhà xe.',
+  },
+  {
     key: 'bus-company:read',
     scope: 'platform',
     description: 'Xem danh sách và chi tiết nhà xe trên nền tảng.',
@@ -162,6 +168,7 @@ export const ADMIN_ROLE_DEFAULT_PERMISSION_KEYS = {
     'fare-price:update',
     'role:read',
     'permission:assign',
+    'customer:read',
   ],
   NHAN_VIEN_BAN_VE: [],
   NHAN_VIEN_CSKH: [],
