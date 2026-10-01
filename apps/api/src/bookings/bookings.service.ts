@@ -185,7 +185,10 @@ export class BookingsService {
         donGiaoDich: {
           include: {
             nhaXe: true,
-            thanhToans: true,
+            thanhToans: {
+              orderBy: [{ thoiGian: 'desc' }, { thanhToanId: 'desc' }],
+              take: 1,
+            },
           },
         },
       },
@@ -230,7 +233,10 @@ export class BookingsService {
           include: {
             khachHang: true,
             nhaXe: true,
-            thanhToans: true,
+            thanhToans: {
+              orderBy: [{ thoiGian: 'desc' }, { thanhToanId: 'desc' }],
+              take: 1,
+            },
           },
         },
       },

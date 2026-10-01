@@ -134,6 +134,20 @@ describe('TicketsService', () => {
       expect(prisma.ve.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           orderBy: [{ createdAt: 'desc' }, { veId: 'desc' }],
+          include: expect.objectContaining({
+            phieuDatVe: expect.objectContaining({
+              include: expect.objectContaining({
+                donGiaoDich: expect.objectContaining({
+                  include: expect.objectContaining({
+                    thanhToans: {
+                      orderBy: [{ thoiGian: 'desc' }, { thanhToanId: 'desc' }],
+                      take: 1,
+                    },
+                  }),
+                }),
+              }),
+            }),
+          }),
         }),
       );
     });
@@ -185,9 +199,9 @@ describe('TicketsService', () => {
     it('throws NotFoundException when ticket does not exist', async () => {
       prisma.ve.findUnique.mockResolvedValue(null);
 
-      await expect(
-        service.findCustomerTicketById(1, 999),
-      ).rejects.toThrow(NotFoundException);
+      await expect(service.findCustomerTicketById(1, 999)).rejects.toThrow(
+        NotFoundException,
+      );
     });
 
     it('throws ForbiddenException when ticket belongs to another customer', async () => {
@@ -202,9 +216,9 @@ describe('TicketsService', () => {
         },
       });
 
-      await expect(
-        service.findCustomerTicketById(1, 1),
-      ).rejects.toThrow(ForbiddenException);
+      await expect(service.findCustomerTicketById(1, 1)).rejects.toThrow(
+        ForbiddenException,
+      );
     });
 
     it('returns ticket detail wrapped in data envelope when authorized', async () => {
@@ -226,7 +240,12 @@ describe('TicketsService', () => {
           ticketCode: 'INVALID',
           phoneNumber: '0901234567',
         }),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toMatchObject({
+        response: {
+          error: 'TICKET_NOT_FOUND',
+          message: 'Không tìm thấy vé hoặc thông tin xác minh không khớp.',
+        },
+      });
     });
 
     it('throws NotFoundException when phone number does not match', async () => {
@@ -237,7 +256,12 @@ describe('TicketsService', () => {
           ticketCode: 'VE-001',
           phoneNumber: '0999999999',
         }),
-      ).rejects.toThrow(NotFoundException);
+      ).rejects.toMatchObject({
+        response: {
+          error: 'TICKET_NOT_FOUND',
+          message: 'Không tìm thấy vé hoặc thông tin xác minh không khớp.',
+        },
+      });
     });
 
     it('returns ticket wrapped in data envelope when ticket code and phone match', async () => {

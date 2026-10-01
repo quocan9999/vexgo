@@ -10,6 +10,7 @@ import {
   type BookingItem,
   type PaginationMeta,
 } from '@/features/account/services/bookings.api';
+import { resolveCustomerActivityViewState } from '@/features/account/services/customer-activity-view-state';
 
 function formatDeparture(isoString: string | null): string {
   if (!isoString) return '--:-- --/--/----';
@@ -74,6 +75,8 @@ export default function CustomerActivityPage() {
     totalPages: 1,
   });
   const [isLoading, setIsLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [retryKey, setRetryKey] = useState(0);
 
   // Filter states
   const [codeFilter, setCodeFilter] = useState('');
@@ -100,6 +103,7 @@ export default function CustomerActivityPage() {
     }
 
     const fetchBookings = async () => {
+      setErrorMessage('');
       try {
         const res = await executeWithAuth((token) =>
           bookingsApi.getBookings(token, {
@@ -114,9 +118,17 @@ export default function CustomerActivityPage() {
         if (!ignore && res) {
           setBookings(res.data);
           setMeta(res.meta);
+          setErrorMessage('');
         }
       } catch (err) {
         console.error('Lỗi khi tải lịch sử đặt vé:', err);
+        if (!ignore) {
+          setErrorMessage(
+            err instanceof Error
+              ? err.message
+              : 'Không thể tải lịch sử đặt vé. Vui lòng thử lại.',
+          );
+        }
       } finally {
         if (!ignore) {
           setIsLoading(false);
@@ -139,7 +151,20 @@ export default function CustomerActivityPage() {
     activeQuery.date,
     activeQuery.route,
     activeQuery.status,
+    retryKey,
   ]);
+
+  const viewState = resolveCustomerActivityViewState(
+    isLoading,
+    errorMessage,
+    bookings.length,
+  );
+
+  const handleRetry = () => {
+    setIsLoading(true);
+    setErrorMessage('');
+    setRetryKey((current) => current + 1);
+  };
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -286,7 +311,7 @@ export default function CustomerActivityPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {isLoading ? (
+                    {viewState === 'loading' ? (
                       <tr>
                         <td
                           colSpan={6}
@@ -295,7 +320,22 @@ export default function CustomerActivityPage() {
                           Đang tải lịch sử đặt vé...
                         </td>
                       </tr>
-                    ) : bookings.length === 0 ? (
+                    ) : viewState === 'error' ? (
+                      <tr>
+                        <td colSpan={6} className="px-4 py-8 text-center">
+                          <p className="font-medium text-red-600">
+                            {errorMessage}
+                          </p>
+                          <button
+                            type="button"
+                            onClick={handleRetry}
+                            className="mt-3 rounded-full border border-red-200 px-5 py-2 text-sm font-bold text-red-700 transition-colors hover:bg-red-50"
+                          >
+                            Thử lại
+                          </button>
+                        </td>
+                      </tr>
+                    ) : viewState === 'empty' ? (
                       <tr>
                         <td
                           colSpan={6}
@@ -308,7 +348,9 @@ export default function CustomerActivityPage() {
                       bookings.map((row, idx) => (
                         <tr
                           key={row.bookingId}
-                          className={idx % 2 === 0 ? 'bg-white' : 'bg-[#FFFBEB]'}
+                          className={
+                            idx % 2 === 0 ? 'bg-white' : 'bg-[#FFFBEB]'
+                          }
                         >
                           <td className="px-3 sm:px-4 py-3 sm:py-3.5 font-bold text-accent whitespace-nowrap">
                             {row.bookingCode}

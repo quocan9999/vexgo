@@ -174,6 +174,16 @@ describe('BookingsService', () => {
       expect(prisma.phieuDatVe.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           orderBy: [{ createdAt: 'desc' }, { phieuDatVeId: 'desc' }],
+          include: expect.objectContaining({
+            donGiaoDich: expect.objectContaining({
+              include: expect.objectContaining({
+                thanhToans: {
+                  orderBy: [{ thoiGian: 'desc' }, { thanhToanId: 'desc' }],
+                  take: 1,
+                },
+              }),
+            }),
+          }),
         }),
       );
     });
@@ -202,9 +212,9 @@ describe('BookingsService', () => {
     it('throws NotFoundException when booking does not exist', async () => {
       prisma.phieuDatVe.findUnique.mockResolvedValue(null);
 
-      await expect(
-        service.findCustomerBookingById(1, 999),
-      ).rejects.toThrow(NotFoundException);
+      await expect(service.findCustomerBookingById(1, 999)).rejects.toThrow(
+        NotFoundException,
+      );
     });
 
     it('throws ForbiddenException when booking belongs to another customer', async () => {
@@ -216,9 +226,9 @@ describe('BookingsService', () => {
         },
       });
 
-      await expect(
-        service.findCustomerBookingById(1, 101),
-      ).rejects.toThrow(ForbiddenException);
+      await expect(service.findCustomerBookingById(1, 101)).rejects.toThrow(
+        ForbiddenException,
+      );
     });
 
     it('returns booking detail wrapped in data envelope when authorized', async () => {

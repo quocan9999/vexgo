@@ -39,7 +39,10 @@ function phonesMatch(phone1: string, phone2: string): boolean {
   const d1 = normalizePhone(phone1);
   const d2 = normalizePhone(phone2);
   if (!d1 || !d2) return false;
-  return d1 === d2 || (d1.length >= 9 && d2.length >= 9 && d1.slice(-9) === d2.slice(-9));
+  return (
+    d1 === d2 ||
+    (d1.length >= 9 && d2.length >= 9 && d1.slice(-9) === d2.slice(-9))
+  );
 }
 
 const TICKET_INCLUDE = {
@@ -49,7 +52,10 @@ const TICKET_INCLUDE = {
         include: {
           khachHang: true,
           nhaXe: true,
-          thanhToans: true,
+          thanhToans: {
+            orderBy: [{ thoiGian: 'desc' }, { thanhToanId: 'desc' }],
+            take: 1,
+          },
         },
       },
     },
