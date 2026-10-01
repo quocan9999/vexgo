@@ -598,7 +598,7 @@ describe('Admin account management API', () => {
     const response = await asSuperAdmin(
       request(app.getHttpServer())
         .get('/api/v1/admin-accounts')
-        .query({ busCompanyId: firstCompanyId, status: 'HOAT_DONG' }),
+        .query({ busCompanyId: firstCompanyId, status: 'HOAT_DONG', pageSize: 50 }),
     ).expect(200);
     const listedIds = response.body.data.map(
       (account: { accountId: number }) => account.accountId,
@@ -610,7 +610,7 @@ describe('Admin account management API', () => {
     expect(listedIds).not.toContain(secondCompanyAdmin.accountId);
     expect(listedIds).not.toContain(mixedSuperAdminId);
     expect(listedIds).not.toContain(customerEmployeeId);
-    expect(response.body.meta).toMatchObject({ page: 1, pageSize: 10 });
+    expect(response.body.meta).toMatchObject({ page: 1, pageSize: 50 });
   });
 
   it('allows tenant employee and no-role account detail but hides conflicting scopes', async () => {
