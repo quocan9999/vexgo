@@ -7,7 +7,7 @@ const firstTrip = {
   maChuyenXe: 'CX-21',
   ngayKhoiHanh: new Date('2026-10-15T00:00:00.000Z'),
   gioKhoiHanh: new Date('1970-01-01T22:00:00.000Z'),
-  trangThai: 'MO_BAN',
+  trangThai: 'CHUA_KHOI_HANH',
   nhaXeId: 3,
   tuyenXeId: 8,
   xeId: 4,
@@ -21,9 +21,12 @@ const firstTrip = {
   xe: {
     xeId: 4,
     bienSoXe: '51B-12345',
+    trangThai: 'HOAT_DONG',
     loaiXeId: 2,
     loaiXe: { loaiXeId: 2, tenLoai: 'Giường nằm' },
   },
+  createdAt: new Date('2026-10-01T10:00:00.000Z'),
+  updatedAt: new Date('2026-10-01T10:00:00.000Z'),
   gheChuyenXes: [{ trangThai: 'TRONG' }, { trangThai: 'DA_DAT' }],
 };
 
@@ -37,7 +40,12 @@ const secondTrip = {
 
 function createService() {
   const prisma = {
-    chuyenXe: { findMany: vi.fn(), findUnique: vi.fn() },
+    chuyenXe: {
+      findMany: vi.fn(),
+      findUnique: vi.fn(),
+      findFirst: vi.fn(),
+      count: vi.fn(),
+    },
     bangGia: { findMany: vi.fn(), findFirst: vi.fn() },
     gheChuyenXe: { findMany: vi.fn() },
   };
@@ -117,7 +125,7 @@ describe('TripsService search', () => {
         {
           id: 22,
           code: 'CX-22',
-          status: 'MO_BAN',
+          status: 'CHUA_KHOI_HANH',
           busCompany: {
             id: 3,
             name: 'Nhà xe A',
@@ -170,7 +178,7 @@ describe('TripsService search', () => {
     });
   });
 
-  it('excludes an already departed trip even when its status is still MO_BAN', async () => {
+  it('excludes an already departed trip even when its status is still CHUA_KHOI_HANH', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-10-15T14:00:00.000Z'));
     const { prisma, service } = createService();
@@ -256,6 +264,158 @@ describe('TripsService detail', () => {
       vehicle: { capacity: 2, amenities: [] },
       price: null,
       availableSeats: 1,
+    });
+  });
+});
+
+const tenantPrincipal = {
+  accountId: 2,
+  nhanVienId: 10,
+  nhaXeId: 3,
+  khachHangId: null,
+  roles: ['NHA_XE_ADMIN'],
+  permissions: ['trip:read'],
+  hoTen: 'Admin FUTA',
+  soDienThoai: '0901234567',
+  email: 'admin@futa.vn',
+  trangThai: 'HOAT_DONG',
+};
+
+describe('TripsService findAll (Feature 05)', () => {
+  it('scopes trips to authenticated tenant and maps them to canonical format', async () => {
+    const { prisma, service } = createService();
+    prisma.chuyenXe.findMany.mockResolvedValue([firstTrip]);
+    prisma.chuyenXe.count = vi.fn().mockResolvedValue(1);
+
+    const result = await service.findAll(
+      { page: 1, pageSize: 10, sortBy: 'departureDate', sortDirection: 'asc' },
+      tenantPrincipal as never,
+    );
+
+    expect(prisma.chuyenXe.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ nhaXeId: 3 }),
+        skip: 0,
+        take: 10,
+      }),
+    );
+    expect(result).toEqual({
+      data: [
+        {
+          tripId: 21,
+          code: 'CX-21',
+          departureDate: '2026-10-15',
+          departureTime: '22:00:00',
+          status: 'CHUA_KHOI_HANH',
+          route: {
+            routeId: 8,
+            code: 'SG-DL',
+            origin: 'TP.HCM',
+            destination: 'Đà Lạt',
+          },
+          vehicle: {
+            vehicleId: 4,
+            licensePlate: '51B-12345',
+            status: 'HOAT_DONG',
+            vehicleType: {
+              vehicleTypeId: 2,
+              name: 'Giường nằm',
+            },
+          },
+          createdAt: expect.any(String),
+          updatedAt: expect.any(String),
+        },
+      ],
+      meta: {
+        page: 1,
+        pageSize: 10,
+        totalItems: 1,
+        totalPages: 1,
+      },
+    });
+  });
+
+  it('filters by status, route, vehicle and departure date', async () => {
+    const { prisma, service } = createService();
+    prisma.chuyenXe.findMany.mockResolvedValue([]);
+    prisma.chuyenXe.count = vi.fn().mockResolvedValue(0);
+
+    await service.findAll(
+      {
+        page: 1,
+        pageSize: 10,
+        sortBy: 'departureDate',
+        sortDirection: 'asc',
+        status: 'CHUA_KHOI_HANH',
+        routeId: 8,
+        vehicleId: 4,
+        departureDate: '2026-10-15',
+        search: 'CX-21',
+      },
+      tenantPrincipal as never,
+    );
+
+    expect(prisma.chuyenXe.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          nhaXeId: 3,
+          trangThai: 'CHUA_KHOI_HANH',
+          tuyenXeId: 8,
+          xeId: 4,
+          ngayKhoiHanh: new Date('2026-10-15T00:00:00.000Z'),
+          OR: expect.arrayContaining([
+            { maChuyenXe: { contains: 'CX-21' } },
+            { tuyenXe: { is: { maTuyenXe: { contains: 'CX-21' } } } },
+            { tuyenXe: { is: { diemDi: { contains: 'CX-21' } } } },
+            { tuyenXe: { is: { diemDen: { contains: 'CX-21' } } } },
+            { xe: { is: { bienSoXe: { contains: 'CX-21' } } } },
+          ]),
+        }),
+      }),
+    );
+  });
+});
+
+describe('TripsService findOne (Feature 05)', () => {
+  it('returns trip details and aggregates seat summary', async () => {
+    const { prisma, service } = createService();
+    prisma.chuyenXe.findFirst = vi.fn().mockResolvedValue({
+      ...firstTrip,
+      gheChuyenXes: [
+        { trangThai: 'TRONG' },
+        { trangThai: 'TRONG' },
+        { trangThai: 'DANG_GIU' },
+        { trangThai: 'DA_DAT' },
+      ],
+    });
+
+    const result = await service.findOne(21, tenantPrincipal as never);
+
+    expect(prisma.chuyenXe.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { chuyenXeId: 21, nhaXeId: 3 },
+      }),
+    );
+    expect(result.data.seatSummary).toEqual({
+      total: 4,
+      available: 2,
+      held: 1,
+      booked: 1,
+    });
+  });
+
+  it('throws 404 when trip is not found or belongs to another tenant', async () => {
+    const { prisma, service } = createService();
+    prisma.chuyenXe.findFirst = vi.fn().mockResolvedValue(null);
+
+    await expect(
+      service.findOne(999, tenantPrincipal as never),
+    ).rejects.toMatchObject({
+      status: 404,
+      response: {
+        error: 'TRIP_NOT_FOUND',
+        message: 'Không tìm thấy chuyến xe.',
+      },
     });
   });
 });

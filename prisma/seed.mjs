@@ -68,6 +68,7 @@ const branchDefsByOperator = {
 const roleDefs = [
   ['SUPER_ADMIN', 'Quản trị hệ thống'],
   ['NHA_XE_ADMIN', 'Quản trị nhà xe'],
+  ['NHAN_VIEN_DIEU_HANH', 'Nhân viên điều hành'],
   ['NHAN_VIEN_BAN_VE', 'Nhân viên bán vé'],
   ['NHAN_VIEN_CSKH', 'Nhân viên chăm sóc khách hàng'],
   ['NHAN_VIEN_PHU_XE', 'Nhân viên phụ xe'],
@@ -476,8 +477,8 @@ async function seedVehiclesAndRoutes(db, operators, vehicleTypes) {
             db,
             'ChuyenXe',
             { maChuyenXe: code },
-            { maChuyenXe: code, ngayKhoiHanh: dateOnly(2026, 9, day), gioKhoiHanh: timeOnly(hour), trangThai: 'MO_BAN', nhaXeId: operator.nhaXeId, tuyenXeId: route.tuyenXeId, xeId: vehicle.xeId },
-            { ngayKhoiHanh: dateOnly(2026, 9, day), gioKhoiHanh: timeOnly(hour), trangThai: 'MO_BAN', nhaXeId: operator.nhaXeId, tuyenXeId: route.tuyenXeId, xeId: vehicle.xeId },
+            { maChuyenXe: code, ngayKhoiHanh: dateOnly(2026, 9, day), gioKhoiHanh: timeOnly(hour), trangThai: 'CHUA_KHOI_HANH', nhaXeId: operator.nhaXeId, tuyenXeId: route.tuyenXeId, xeId: vehicle.xeId },
+            { ngayKhoiHanh: dateOnly(2026, 9, day), gioKhoiHanh: timeOnly(hour), trangThai: 'CHUA_KHOI_HANH', nhaXeId: operator.nhaXeId, tuyenXeId: route.tuyenXeId, xeId: vehicle.xeId },
           );
           const tripSeats = [];
           for (const seat of vehicle.seats) {

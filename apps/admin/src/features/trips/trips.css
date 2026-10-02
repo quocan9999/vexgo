@@ -1,0 +1,238 @@
+.trips-section {
+  margin-top: 30px;
+}
+
+.trips-route-code,
+.trips-vehicle-type {
+  display: block;
+  margin-top: 3px;
+  color: var(--admin-text-muted);
+  font-size: var(--admin-font-size-xs);
+}
+
+.trips-list-state,
+.trips-detail-state {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  margin: 0;
+  padding: 32px 20px;
+  color: var(--admin-text-muted);
+  font-size: var(--admin-font-size-base);
+  text-align: center;
+}
+
+.trips-list-state p,
+.trips-detail-state p {
+  margin: 0;
+}
+
+.trips-detail-content {
+  padding: 23px 25px;
+}
+
+.trips-detail-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.trips-detail-title-row h3 {
+  margin: 0;
+  color: var(--admin-text-strong);
+  font-size: var(--admin-font-size-emphasis);
+  overflow-wrap: anywhere;
+}
+
+.trips-detail-section {
+  margin-bottom: 24px;
+}
+
+.trips-detail-section-title {
+  margin: 0 0 12px;
+  font-size: var(--admin-font-size-sm);
+  font-weight: 700;
+  color: var(--admin-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.trips-detail-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+  margin: 0;
+}
+
+.trips-detail-fields > div {
+  display: grid;
+  gap: 4px;
+}
+
+.trips-detail-fields dt,
+.trips-mobile-fields dt {
+  color: var(--admin-text-muted);
+  font-size: var(--admin-font-size-xs);
+}
+
+.trips-detail-fields dd,
+.trips-mobile-fields dd {
+  margin: 0;
+  color: var(--admin-text-strong);
+  font-size: var(--admin-font-size-base);
+  overflow-wrap: anywhere;
+}
+
+.trips-seat-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 640px) {
+  .trips-seat-summary-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.trips-seat-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 8px;
+  border-radius: var(--admin-radius-card);
+  border: 1px solid var(--admin-border);
+  background: var(--admin-surface);
+  text-align: center;
+}
+
+.trips-seat-card__count {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--admin-text-strong);
+}
+
+.trips-seat-card__label {
+  font-size: var(--admin-font-size-xs);
+  color: var(--admin-text-muted);
+  margin-top: 4px;
+}
+
+.trips-seat-card--available .trips-seat-card__count {
+  color: #10b981;
+}
+
+.trips-seat-card--held .trips-seat-card__count {
+  color: #f59e0b;
+}
+
+.trips-seat-card--booked .trips-seat-card__count {
+  color: #ef4444;
+}
+
+.trips-mobile-list {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .admin-resource-table-wrap {
+    display: none;
+  }
+
+  .trips-mobile-list {
+    display: grid;
+    gap: 12px;
+    padding: 14px;
+  }
+}
+
+.trips-mobile-card {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius-card);
+  background: var(--admin-surface);
+}
+
+.trips-mobile-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.trips-mobile-card-header h2 {
+  margin: 0;
+  font-size: var(--admin-font-size-base);
+  font-weight: 700;
+  color: var(--admin-text-strong);
+}
+
+.trips-mobile-journey {
+  margin: 0;
+  font-size: var(--admin-font-size-sm);
+  color: var(--admin-text-strong);
+  font-weight: 600;
+}
+
+.trips-mobile-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 0;
+}
+
+.trips-mobile-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 8px;
+  border-top: 1px solid var(--admin-border);
+}
+
+.trips-mobile-sort {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .trips-mobile-sort {
+    display: flex;
+    align-items: flex-end;
+    gap: 10px;
+    padding: 0 14px 14px;
+  }
+
+  .trips-mobile-sort > :first-child {
+    flex: 1;
+  }
+}
+
+.trips-date-filter-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.trips-date-filter-label {
+  font-size: var(--admin-font-size-xs);
+  font-weight: 600;
+  color: var(--admin-text-muted);
+}
+
+.trips-date-filter-input {
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius-control);
+  background: var(--admin-surface);
+  color: var(--admin-text-strong);
+  font-size: var(--admin-font-size-sm);
+}
+
+.trips-date-filter-input:focus {
+  outline: none;
+  border-color: var(--admin-primary);
+}

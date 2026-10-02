@@ -7,6 +7,9 @@ import {
 } from '../common/time/business-date.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { SearchTripsDto } from './dto/search-trips.dto.js';
+import type { TripQueryDto, TripSortField } from './dto/trip-query.dto.js';
+import { requireTenantPrincipal } from '../auth/tenant-scope.js';
+import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
 import { Prisma } from '../generated/prisma/client.js';
 
 const TRIP_INCLUDE = {
@@ -100,6 +103,64 @@ function mapTrip(
   };
 }
 
+function formatTripDate(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+function formatTripTime(d: Date): string {
+  return d.toISOString().slice(11, 19);
+}
+
+function mapTripItem(trip: {
+  chuyenXeId: number;
+  maChuyenXe: string;
+  ngayKhoiHanh: Date;
+  gioKhoiHanh: Date;
+  trangThai: string;
+  createdAt: Date;
+  updatedAt: Date;
+  tuyenXe: {
+    tuyenXeId: number;
+    maTuyenXe: string;
+    diemDi: string;
+    diemDen: string;
+  };
+  xe: {
+    xeId: number;
+    bienSoXe: string;
+    trangThai: string;
+    loaiXe: {
+      loaiXeId: number;
+      tenLoai: string;
+    };
+  };
+}) {
+  return {
+    tripId: trip.chuyenXeId,
+    code: trip.maChuyenXe,
+    departureDate: formatTripDate(trip.ngayKhoiHanh),
+    departureTime: formatTripTime(trip.gioKhoiHanh),
+    status: trip.trangThai,
+    route: {
+      routeId: trip.tuyenXe.tuyenXeId,
+      code: trip.tuyenXe.maTuyenXe,
+      origin: trip.tuyenXe.diemDi,
+      destination: trip.tuyenXe.diemDen,
+    },
+    vehicle: {
+      vehicleId: trip.xe.xeId,
+      licensePlate: trip.xe.bienSoXe,
+      status: trip.xe.trangThai,
+      vehicleType: {
+        vehicleTypeId: trip.xe.loaiXe.loaiXeId,
+        name: trip.xe.loaiXe.tenLoai,
+      },
+    },
+    createdAt: trip.createdAt.toISOString(),
+    updatedAt: trip.updatedAt.toISOString(),
+  };
+}
+
 @Injectable()
 export class TripsService {
   constructor(
@@ -113,7 +174,7 @@ export class TripsService {
     );
     const now = new Date();
     const where: Prisma.ChuyenXeWhereInput = {
-      trangThai: 'MO_BAN',
+      trangThai: 'CHUA_KHOI_HANH',
     };
 
     if (dto.from || dto.to || dto.busCompanyId) {
@@ -259,7 +320,7 @@ export class TripsService {
       });
     }
 
-    if (cx.trangThai !== 'MO_BAN') {
+    if (cx.trangThai !== 'CHUA_KHOI_HANH') {
       throw new NotFoundException({
         error: 'TRIP_NOT_AVAILABLE',
         message: 'Chuyến xe này hiện không mở bán.',
@@ -313,5 +374,124 @@ export class TripsService {
       position: gx.ghe.viTri,
       status: gx.trangThai,
     }));
+  }
+
+  async findAll(query: TripQueryDto, principal: AuthPrincipal) {
+    const nhaXeId = requireTenantPrincipal(principal);
+    const where: Prisma.ChuyenXeWhereInput = {
+      nhaXeId,
+    };
+
+    if (query.status) {
+      where.trangThai = query.status;
+    }
+
+    if (query.routeId) {
+      where.tuyenXeId = query.routeId;
+    }
+
+    if (query.vehicleId) {
+      where.xeId = query.vehicleId;
+    }
+
+    if (query.departureDate) {
+      where.ngayKhoiHanh = new Date(`${query.departureDate}T00:00:00.000Z`);
+    }
+
+    if (query.search?.trim()) {
+      const term = query.search.trim();
+      where.OR = [
+        { maChuyenXe: { contains: term } },
+        { tuyenXe: { is: { maTuyenXe: { contains: term } } } },
+        { tuyenXe: { is: { diemDi: { contains: term } } } },
+        { tuyenXe: { is: { diemDen: { contains: term } } } },
+        { xe: { is: { bienSoXe: { contains: term } } } },
+      ];
+    }
+
+    const direction = query.sortDirection ?? 'asc';
+    const sortFieldMap: Record<
+      TripSortField,
+      Prisma.ChuyenXeOrderByWithRelationInput
+    > = {
+      code: { maChuyenXe: direction },
+      departureDate: { ngayKhoiHanh: direction },
+      departureTime: { gioKhoiHanh: direction },
+      status: { trangThai: direction },
+      createdAt: { createdAt: direction },
+      updatedAt: { updatedAt: direction },
+    };
+
+    const sortBy = query.sortBy ?? 'departureDate';
+    const orderBy: Prisma.ChuyenXeOrderByWithRelationInput[] = [
+      sortFieldMap[sortBy],
+      { chuyenXeId: 'asc' },
+    ];
+
+    const [trips, totalItems] = await Promise.all([
+      this.prisma.chuyenXe.findMany({
+        where,
+        include: {
+          tuyenXe: true,
+          xe: { include: { loaiXe: true } },
+        },
+        orderBy,
+        skip: (query.page - 1) * query.pageSize,
+        take: query.pageSize,
+      }),
+      this.prisma.chuyenXe.count({ where }),
+    ]);
+
+    return {
+      data: trips.map(mapTripItem),
+      meta: {
+        page: query.page,
+        pageSize: query.pageSize,
+        totalItems,
+        totalPages: Math.ceil(totalItems / query.pageSize),
+      },
+    };
+  }
+
+  async findOne(id: number, principal: AuthPrincipal) {
+    const nhaXeId = requireTenantPrincipal(principal);
+    const trip = await this.prisma.chuyenXe.findFirst({
+      where: { chuyenXeId: id, nhaXeId },
+      include: {
+        tuyenXe: true,
+        xe: { include: { loaiXe: true } },
+        gheChuyenXes: { select: { trangThai: true } },
+      },
+    });
+
+    if (!trip) {
+      throw new NotFoundException({
+        error: 'TRIP_NOT_FOUND',
+        message: 'Không tìm thấy chuyến xe.',
+      });
+    }
+
+    const total = trip.gheChuyenXes.length;
+    const available = trip.gheChuyenXes.filter(
+      (g) => g.trangThai === 'TRONG',
+    ).length;
+    const held = trip.gheChuyenXes.filter(
+      (g) => g.trangThai === 'DANG_GIU',
+    ).length;
+    const booked = trip.gheChuyenXes.filter(
+      (g) => g.trangThai === 'DA_DAT',
+    ).length;
+
+    return {
+      data: {
+        ...mapTripItem(trip),
+        seatSummary: {
+          total,
+          available,
+          held,
+          booked,
+        },
+      },
+    };
   }
 }

@@ -3,6 +3,7 @@
 import {
   Bus,
   Building2,
+  CalendarDays,
   Database,
   LogOut,
   MapPinned,
@@ -41,6 +42,7 @@ type SuperAdminLayoutProps = {
     | 'vehicles'
     | 'routes'
     | 'fare-prices'
+    | 'trips'
     | 'customers'
     | 'admin-accounts'
     | 'rbac'
@@ -55,6 +57,7 @@ const ADMIN_ROLE_LABELS: Record<string, string> = {
   NHAN_VIEN_CSKH: 'NHÂN VIÊN CSKH',
   NHAN_VIEN_PHU_XE: 'NHÂN VIÊN PHỤ XE',
   NHAN_VIEN_KINH_DOANH: 'NHÂN VIÊN KINH DOANH',
+  NHAN_VIEN_DIEU_HANH: 'NHÂN VIÊN ĐIỀU HÀNH',
 };
 
 function formatAdminRoleLabels(roles: string[]) {
@@ -74,7 +77,11 @@ const OPERATION_NAVIGATION_DETAILS: Record<
   vehicles: { label: 'Xe', icon: () => <Truck size={18} /> },
   routes: { label: 'Tuyến xe', icon: () => <MapPinned size={18} /> },
   'fare-prices': { label: 'Bảng giá vé', icon: () => <Ticket size={18} /> },
+<<<<<<< HEAD
   customers: { label: 'Khách hàng', icon: () => <UsersRound size={18} /> },
+=======
+  trips: { label: 'Chuyến xe', icon: () => <CalendarDays size={18} /> },
+>>>>>>> d71bf93 (feat(trips): danh sách và chi tiết chuyến xe theo phạm vi nhà xe (05.1))
 };
 
 export function SuperAdminLayout({

@@ -23,6 +23,11 @@ export const ADMIN_OPERATION_SECTIONS = [
     readPermission: 'fare-price:read',
   },
   {
+    section: 'trips',
+    href: '/trips',
+    readPermission: 'trip:read',
+  },
+  {
     section: 'customers',
     href: '/customers',
     readPermission: 'customer:read',
@@ -46,6 +51,10 @@ export type AdminPermission =
   | 'fare-price:read'
   | 'fare-price:create'
   | 'fare-price:update'
+  | 'trip:read'
+  | 'trip:create'
+  | 'trip:update'
+  | 'trip:cancel'
   | 'customer:read'
   | 'role:read'
   | 'permission:assign';
@@ -171,6 +180,7 @@ export function getRequiredAdminPermissions(
   if (matchesPath(pathname, '/vehicles')) return ['vehicle:read'];
   if (matchesPath(pathname, '/routes')) return ['route:read'];
   if (matchesPath(pathname, '/fare-prices')) return ['fare-price:read'];
+  if (matchesPath(pathname, '/trips')) return ['trip:read'];
   if (matchesPath(pathname, '/customers')) return ['customer:read'];
   return null;
 }

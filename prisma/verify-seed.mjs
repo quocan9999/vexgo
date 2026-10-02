@@ -34,7 +34,7 @@ const expected = {
   TaiKhoan: 42,
   KhachHang: 20,
   NhanVien: 21,
-  VaiTro: 7,
+  VaiTro: 8,
   TaiKhoanVaiTro: 42,
   KhuyenMai: 15,
   BuuCuc: 15,

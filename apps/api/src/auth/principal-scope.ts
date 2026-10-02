@@ -2,6 +2,7 @@ import { ForbiddenException } from '@nestjs/common';
 import type { AuthPrincipal } from './tokens/auth-principal.js';
 
 export const TENANT_EMPLOYEE_ROLES = [
+  'NHAN_VIEN_DIEU_HANH',
   'NHAN_VIEN_BAN_VE',
   'NHAN_VIEN_CSKH',
   'NHAN_VIEN_PHU_XE',
