@@ -13,7 +13,7 @@
     "format:check": "npx prettier --check .",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
-    "dev": "turbo run dev --parallel"
+    "dev": "turbo run dev --ui=stream"
   },
   "devDependencies": {
     "@types/bcrypt": "^6.0.0",
