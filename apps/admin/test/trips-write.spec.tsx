@@ -391,7 +391,7 @@ describe('Trip lifecycle & cancellation action gates in detail sheet', () => {
     expect(html).not.toContain('Hoàn thành chuyến');
   });
 
-  it('renders "Chỉnh sửa" and "Hoàn thành chuyến" for DANG_CHAY with trip:update', () => {
+  it('renders "Hoàn thành chuyến" and hides "Chỉnh sửa" for DANG_CHAY with trip:update', () => {
     setEmployeeAdminTestSession(['trip:read', 'trip:update', 'trip:cancel']);
     const html = renderToStaticMarkup(
       <TripDetailSheet
@@ -400,7 +400,7 @@ describe('Trip lifecycle & cancellation action gates in detail sheet', () => {
         tripId={101}
       />,
     );
-    expect(html).toContain('Chỉnh sửa');
+    expect(html).not.toContain('Chỉnh sửa');
     expect(html).toContain('Hoàn thành chuyến');
     expect(html).not.toContain('Bắt đầu chạy');
     expect(html).not.toContain('Hủy chuyến');

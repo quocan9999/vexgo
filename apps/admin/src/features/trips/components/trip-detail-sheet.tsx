@@ -394,17 +394,15 @@ export function TripDetailSheet({
                     Xem ghế chuyến
                   </Link>
                 )}
-                {canUpdate &&
-                  (detail.trip.status === 'CHUA_KHOI_HANH' ||
-                    detail.trip.status === 'DANG_CHAY') && (
-                    <Button
-                      onClick={() => setEditOpen(true)}
-                      type="button"
-                      variant="secondary"
-                    >
-                      Chỉnh sửa
-                    </Button>
-                  )}
+                {canUpdate && detail.trip.status === 'CHUA_KHOI_HANH' && (
+                  <Button
+                    onClick={() => setEditOpen(true)}
+                    type="button"
+                    variant="secondary"
+                  >
+                    Chỉnh sửa
+                  </Button>
+                )}
                 {canUpdate && detail.trip.status === 'CHUA_KHOI_HANH' && (
                   <Button
                     onClick={() => openStatusDialog('DANG_CHAY')}
