@@ -373,6 +373,108 @@ describe('Trip write service API contracts', () => {
       { id: 8, label: '30F-123.45 (GIƯỜNG NẰM)' },
     ]);
   });
+
+  it('getTripRouteOptions fetches all pages when totalPages > 1 and combines options', async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            data: [
+              {
+                routeId: 1,
+                code: 'TX-01',
+                origin: 'TP.HCM',
+                destination: 'Đà Lạt',
+                status: 'HOAT_DONG',
+                busCompany: { busCompanyId: 3, code: 'FUTA', name: 'Phương Trang' },
+                createdAt: '2026-09-22T07:34:00.000Z',
+                updatedAt: '2026-09-23T07:34:00.000Z',
+              },
+            ],
+            meta: { page: 1, pageSize: 100, totalItems: 2, totalPages: 2 },
+          }),
+          { status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            data: [
+              {
+                routeId: 2,
+                code: 'TX-02',
+                origin: 'TP.HCM',
+                destination: 'Cần Thơ',
+                status: 'HOAT_DONG',
+                busCompany: { busCompanyId: 3, code: 'FUTA', name: 'Phương Trang' },
+                createdAt: '2026-09-22T07:34:00.000Z',
+                updatedAt: '2026-09-23T07:34:00.000Z',
+              },
+            ],
+            meta: { page: 2, pageSize: 100, totalItems: 2, totalPages: 2 },
+          }),
+          { status: 200 },
+        ),
+      );
+
+    const options = await getTripRouteOptions();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(options).toEqual([
+      { id: 1, label: 'TX-01 — TP.HCM → Đà Lạt' },
+      { id: 2, label: 'TX-02 — TP.HCM → Cần Thơ' },
+    ]);
+  });
+
+  it('getTripVehicleOptions fetches all pages when totalPages > 1 and combines options', async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            data: [
+              {
+                vehicleId: 8,
+                licensePlate: '30F-123.45',
+                status: 'HOAT_DONG',
+                busCompany: { busCompanyId: 3, code: 'FUTA', name: 'Phương Trang' },
+                vehicleType: { vehicleTypeId: 2, name: 'GIƯỜNG NẰM' },
+                createdAt: '2026-09-22T07:34:00.000Z',
+                updatedAt: '2026-09-23T07:34:00.000Z',
+              },
+            ],
+            meta: { page: 1, pageSize: 100, totalItems: 2, totalPages: 2 },
+          }),
+          { status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            data: [
+              {
+                vehicleId: 9,
+                licensePlate: '51B-999.99',
+                status: 'HOAT_DONG',
+                busCompany: { busCompanyId: 3, code: 'FUTA', name: 'Phương Trang' },
+                vehicleType: { vehicleTypeId: 2, name: 'LIMOUSINE' },
+                createdAt: '2026-09-22T07:34:00.000Z',
+                updatedAt: '2026-09-23T07:34:00.000Z',
+              },
+            ],
+            meta: { page: 2, pageSize: 100, totalItems: 2, totalPages: 2 },
+          }),
+          { status: 200 },
+        ),
+      );
+
+    const options = await getTripVehicleOptions();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(options).toEqual([
+      { id: 8, label: '30F-123.45 (GIƯỜNG NẰM)' },
+      { id: 9, label: '51B-999.99 (LIMOUSINE)' },
+    ]);
+  });
 });
 
 describe('Trip lifecycle & cancellation action gates in detail sheet', () => {

@@ -245,7 +245,7 @@ export function cancelTrip(tripId: number): Promise<Trip> {
 export async function getTripRouteOptions(
   signal?: AbortSignal,
 ): Promise<TripLookupOption[]> {
-  const page = await getRoutes(
+  const firstPage = await getRoutes(
     {
       page: 1,
       pageSize: 100,
@@ -256,7 +256,30 @@ export async function getTripRouteOptions(
     },
     signal,
   );
-  return page.data.map((route) => ({
+
+  const allRoutes = [...firstPage.data];
+  if (firstPage.meta.totalPages > 1) {
+    const remainingPages = await Promise.all(
+      Array.from({ length: firstPage.meta.totalPages - 1 }, (_, index) =>
+        getRoutes(
+          {
+            page: index + 2,
+            pageSize: 100,
+            search: '',
+            sortBy: 'code',
+            sortDirection: 'asc',
+            status: 'HOAT_DONG',
+          },
+          signal,
+        ),
+      ),
+    );
+    for (const page of remainingPages) {
+      allRoutes.push(...page.data);
+    }
+  }
+
+  return allRoutes.map((route) => ({
     id: route.routeId,
     label: `${route.code} — ${route.origin} → ${route.destination}`,
   }));
@@ -265,7 +288,7 @@ export async function getTripRouteOptions(
 export async function getTripVehicleOptions(
   signal?: AbortSignal,
 ): Promise<TripLookupOption[]> {
-  const page = await getVehicles(
+  const firstPage = await getVehicles(
     {
       page: 1,
       pageSize: 100,
@@ -276,7 +299,30 @@ export async function getTripVehicleOptions(
     },
     signal,
   );
-  return page.data.map((vehicle) => ({
+
+  const allVehicles = [...firstPage.data];
+  if (firstPage.meta.totalPages > 1) {
+    const remainingPages = await Promise.all(
+      Array.from({ length: firstPage.meta.totalPages - 1 }, (_, index) =>
+        getVehicles(
+          {
+            page: index + 2,
+            pageSize: 100,
+            search: '',
+            sortBy: 'licensePlate',
+            sortDirection: 'asc',
+            status: 'HOAT_DONG',
+          },
+          signal,
+        ),
+      ),
+    );
+    for (const page of remainingPages) {
+      allVehicles.push(...page.data);
+    }
+  }
+
+  return allVehicles.map((vehicle) => ({
     id: vehicle.vehicleId,
     label: `${vehicle.licensePlate} (${vehicle.vehicleType.name})`,
   }));
