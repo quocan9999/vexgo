@@ -265,3 +265,184 @@
   flex: 0 0 auto;
   margin-top: 2px;
 }
+
+/* ==================== TRIP SEAT INVENTORY WORKSPACE ==================== */
+.trip-seats-page {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.trip-seats-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.trip-seats-context {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  padding: 16px 20px;
+  background: var(--admin-surface);
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius-card);
+}
+
+.trip-seats-context__item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.trip-seats-context__label {
+  font-size: var(--admin-font-size-xs);
+  color: var(--admin-text-muted);
+}
+
+.trip-seats-context__value {
+  font-size: var(--admin-font-size-sm);
+  font-weight: 600;
+  color: var(--admin-text-strong);
+  overflow-wrap: anywhere;
+}
+
+.trip-seats-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 24px;
+  background: var(--admin-surface);
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius-card);
+}
+
+.trip-seats-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.trip-seats-panel-header h2 {
+  margin: 0;
+  font-size: var(--admin-font-size-lg);
+  color: var(--admin-text-strong);
+}
+
+.trip-seats-panel-desc {
+  margin: 4px 0 0;
+  font-size: var(--admin-font-size-sm);
+  color: var(--admin-text-muted);
+}
+
+.trip-seats-legend {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.trip-seats-legend__item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--admin-font-size-xs);
+  color: var(--admin-text-muted);
+}
+
+.trip-seats-filter-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.trip-seat-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.trip-seat-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.trip-seat-group__title {
+  margin: 0;
+  font-size: var(--admin-font-size-sm);
+  font-weight: 700;
+  color: var(--admin-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.trip-seat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 12px;
+}
+
+.trip-seat-token {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 14px 10px;
+  background: var(--admin-surface-muted, #f8fafc);
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius-card);
+  text-align: center;
+}
+
+.trip-seat-token__code {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--admin-text-strong);
+}
+
+.trip-seat-badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-weight: 600;
+}
+
+.trip-seat-badge--available {
+  background: #ecfdf5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+}
+
+.trip-seat-badge--held {
+  background: #fffbeb;
+  color: #92400e;
+  border: 1px solid #fde68a;
+}
+
+.trip-seat-badge--booked {
+  background: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}
+
+.trip-seats-empty {
+  padding: 32px 16px;
+  text-align: center;
+  color: var(--admin-text-muted);
+  font-size: var(--admin-font-size-base);
+}
+
+@media (max-width: 640px) {
+  .trip-seats-context {
+    grid-template-columns: 1fr;
+  }
+  .trip-seat-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

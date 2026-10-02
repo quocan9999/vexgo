@@ -102,3 +102,30 @@ export type TripLookupOptionsState =
   | { status: 'loading' }
   | { status: 'error'; message: string }
   | { status: 'success'; options: TripLookupOption[] };
+
+export type TripSeatStatus = 'TRONG' | 'DANG_GIU' | 'DA_DAT';
+
+export type TripSeat = {
+  tripSeatId: number;
+  status: TripSeatStatus;
+  seat: {
+    seatId: number;
+    code: string;
+    position: string | null;
+  };
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type TripSeatsMeta = {
+  tripId: number;
+  total: number;
+  available: number;
+  held: number;
+  booked: number;
+};
+
+export type TripSeatsResponse = {
+  data: TripSeat[];
+  meta: TripSeatsMeta;
+};

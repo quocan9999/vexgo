@@ -903,3 +903,107 @@ describe('TripsService.cancel', () => {
     });
   });
 });
+
+describe('TripsService.getSeats', () => {
+  const mockSeats = [
+    {
+      gheChuyenXeId: 102,
+      chuyenXeId: 21,
+      gheId: 52,
+      trangThai: 'DANG_GIU',
+      createdAt: new Date('2026-10-01T10:00:00.000Z'),
+      updatedAt: new Date('2026-10-01T10:00:00.000Z'),
+      ghe: {
+        gheId: 52,
+        soGhe: 'A02',
+        viTri: 'Tầng dưới',
+      },
+    },
+    {
+      gheChuyenXeId: 101,
+      chuyenXeId: 21,
+      gheId: 51,
+      trangThai: 'TRONG',
+      createdAt: new Date('2026-10-01T10:00:00.000Z'),
+      updatedAt: new Date('2026-10-01T10:00:00.000Z'),
+      ghe: {
+        gheId: 51,
+        soGhe: 'A01',
+        viTri: 'Tầng dưới',
+      },
+    },
+    {
+      gheChuyenXeId: 103,
+      chuyenXeId: 21,
+      gheId: 53,
+      trangThai: 'DA_DAT',
+      createdAt: new Date('2026-10-01T10:00:00.000Z'),
+      updatedAt: new Date('2026-10-01T10:00:00.000Z'),
+      ghe: {
+        gheId: 53,
+        soGhe: 'B01',
+        viTri: 'Tầng trên',
+      },
+    },
+  ];
+
+  it('returns sorted seats with exact meta counts when query is empty', async () => {
+    const { prisma, service } = createService();
+    prisma.chuyenXe.findFirst.mockResolvedValue({ chuyenXeId: 21 });
+    prisma.gheChuyenXe.findMany.mockResolvedValue([...mockSeats]);
+
+    const result = await service.getSeats(21, {}, tenantPrincipal as never);
+
+    expect(prisma.chuyenXe.findFirst).toHaveBeenCalledWith({
+      where: { chuyenXeId: 21, nhaXeId: 3 },
+      select: { chuyenXeId: true },
+    });
+    expect(result.meta).toEqual({
+      tripId: 21,
+      total: 3,
+      available: 1,
+      held: 1,
+      booked: 1,
+    });
+    expect(result.data).toHaveLength(3);
+    expect(result.data[0].seat.code).toBe('A01');
+    expect(result.data[0].status).toBe('TRONG');
+    expect(result.data[0].seat.position).toBe('Tầng dưới');
+    expect(result.data[1].seat.code).toBe('A02');
+    expect(result.data[2].seat.code).toBe('B01');
+  });
+
+  it('filters data by status while keeping accurate total meta counts', async () => {
+    const { prisma, service } = createService();
+    prisma.chuyenXe.findFirst.mockResolvedValue({ chuyenXeId: 21 });
+    prisma.gheChuyenXe.findMany.mockResolvedValue([...mockSeats]);
+
+    const result = await service.getSeats(21, { status: 'TRONG' }, tenantPrincipal as never);
+
+    expect(result.data).toHaveLength(1);
+    expect(result.data[0].seat.code).toBe('A01');
+    expect(result.data[0].status).toBe('TRONG');
+    expect(result.meta).toEqual({
+      tripId: 21,
+      total: 3,
+      available: 1,
+      held: 1,
+      booked: 1,
+    });
+  });
+
+  it('throws 404 TRIP_NOT_FOUND when trip is outside tenant scope', async () => {
+    const { prisma, service } = createService();
+    prisma.chuyenXe.findFirst.mockResolvedValue(null);
+
+    await expect(
+      service.getSeats(999, {}, tenantPrincipal as never),
+    ).rejects.toMatchObject({
+      status: 404,
+      response: {
+        error: 'TRIP_NOT_FOUND',
+        message: 'Không tìm thấy chuyến xe.',
+      },
+    });
+  });
+});

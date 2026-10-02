@@ -3,7 +3,6 @@ import {
   Controller,
   Get,
   Param,
-  ParseIntPipe,
   Patch,
   Post,
   Query,
@@ -15,6 +14,7 @@ import { TripQueryDto } from './dto/trip-query.dto.js';
 import { TripIdParamsDto } from './dto/trip-id-params.dto.js';
 import { UpdateTripDto } from './dto/update-trip.dto.js';
 import { UpdateTripStatusDto } from './dto/update-trip-status.dto.js';
+import { TripSeatsQueryDto } from './dto/trip-seats-query.dto.js';
 import { OptionalAuth } from '../auth/decorators/public.decorator.js';
 import { CurrentPrincipal } from '../auth/decorators/current-principal.decorator.js';
 import { RequirePermissions } from '../auth/decorators/require-permissions.decorator.js';
@@ -95,8 +95,13 @@ export class TripsController {
   }
 
   @Get(':id/seats')
-  @OptionalAuth()
-  getSeats(@Param('id', ParseIntPipe) id: number) {
-    return this.tripsService.getSeats(id);
+  @RequireRoles(...TENANT_PRINCIPAL_ROLES)
+  @RequirePermissions('trip:read')
+  getSeats(
+    @Param() params: TripIdParamsDto,
+    @Query() query: TripSeatsQueryDto,
+    @CurrentPrincipal() principal: AuthPrincipal,
+  ) {
+    return this.tripsService.getSeats(params.id, query, principal);
   }
 }

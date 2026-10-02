@@ -46,6 +46,9 @@ const prisma = {
     count: vi.fn(),
     findFirst: vi.fn(),
   },
+  gheChuyenXe: {
+    findMany: vi.fn(),
+  },
   phienDangNhap: { findUnique: vi.fn() },
   vaiTroQuyen: { findMany: vi.fn().mockResolvedValue([]) },
   cauHinhQuyenVaiTroNhaXe: { findMany: vi.fn().mockResolvedValue([]) },
@@ -348,4 +351,170 @@ describe('Trips read HTTP contract and authorization', () => {
       expect(prisma.chuyenXe.findFirst).not.toHaveBeenCalled();
     },
   );
+
+  describe('GET /api/v1/trips/:id/seats', () => {
+  const mockSeats = [
+    {
+      gheChuyenXeId: 1002,
+      chuyenXeId: 101,
+      gheId: 502,
+      trangThai: 'DANG_GIU',
+      createdAt: new Date('2026-10-01T10:00:00.000Z'),
+      updatedAt: new Date('2026-10-01T10:00:00.000Z'),
+      ghe: {
+        gheId: 502,
+        soGhe: 'A02',
+        viTri: 'Tầng dưới',
+      },
+    },
+    {
+      gheChuyenXeId: 1001,
+      chuyenXeId: 101,
+      gheId: 501,
+      trangThai: 'TRONG',
+      createdAt: new Date('2026-10-01T10:00:00.000Z'),
+      updatedAt: new Date('2026-10-01T10:00:00.000Z'),
+      ghe: {
+        gheId: 501,
+        soGhe: 'A01',
+        viTri: 'Tầng dưới',
+      },
+    },
+    {
+      gheChuyenXeId: 1003,
+      chuyenXeId: 101,
+      gheId: 503,
+      trangThai: 'DA_DAT',
+      createdAt: new Date('2026-10-01T10:00:00.000Z'),
+      updatedAt: new Date('2026-10-01T10:00:00.000Z'),
+      ghe: {
+        gheId: 503,
+        soGhe: 'B01',
+        viTri: 'Tầng trên',
+      },
+    },
+  ];
+
+  it('rejects unauthenticated requests with 401', async () => {
+    currentPrincipal = null;
+
+    const res = await request(app.getHttpServer())
+      .get('/api/v1/trips/101/seats')
+      .expect(401);
+
+    expect(res.body.statusCode).toBe(401);
+  });
+
+  it('rejects principal without trip:read with 403 PERMISSION_FORBIDDEN', async () => {
+    currentPrincipal = {
+      taiKhoanId: 11,
+      sessionId: 'test-session-no-read',
+      roles: ['NHAN_VIEN_CSKH'],
+      permissions: ['seat:read'],
+      nhanVienId: 101,
+      nhaXeId: 5,
+    };
+
+    const res = await request(app.getHttpServer())
+      .get('/api/v1/trips/101/seats')
+      .expect(403);
+
+    expect(res.body.error).toBe('PERMISSION_FORBIDDEN');
+  });
+
+  it('returns 404 TRIP_NOT_FOUND when trip is outside tenant scope', async () => {
+    currentPrincipal = {
+      taiKhoanId: 10,
+      sessionId: 'test-session',
+      roles: ['NHA_XE_ADMIN'],
+      permissions: [...ADMIN_ROLE_DEFAULT_PERMISSION_KEYS.NHA_XE_ADMIN],
+      nhanVienId: 100,
+      nhaXeId: 5,
+    };
+    prisma.chuyenXe.findFirst.mockResolvedValue(null);
+
+    const res = await request(app.getHttpServer())
+      .get('/api/v1/trips/999/seats')
+      .expect(404);
+
+    expect(res.body.error).toBe('TRIP_NOT_FOUND');
+  });
+
+  it('returns seat inventory with stable order and accurate meta summary counts', async () => {
+    currentPrincipal = {
+      taiKhoanId: 12,
+      sessionId: 'test-session-dieu-hanh',
+      roles: ['NHAN_VIEN_DIEU_HANH'],
+      permissions: [...ADMIN_ROLE_DEFAULT_PERMISSION_KEYS.NHAN_VIEN_DIEU_HANH],
+      nhanVienId: 102,
+      nhaXeId: 5,
+    };
+    prisma.chuyenXe.findFirst.mockResolvedValue({ chuyenXeId: 101 });
+    prisma.gheChuyenXe.findMany.mockResolvedValue([...mockSeats]);
+
+    const res = await request(app.getHttpServer())
+      .get('/api/v1/trips/101/seats')
+      .expect(200);
+
+    expect(res.body.meta).toEqual({
+      tripId: 101,
+      total: 3,
+      available: 1,
+      held: 1,
+      booked: 1,
+    });
+    expect(res.body.data).toHaveLength(3);
+    expect(res.body.data[0].seat.code).toBe('A01');
+    expect(res.body.data[0].status).toBe('TRONG');
+    expect(res.body.data[0].seat.position).toBe('Tầng dưới');
+    expect(res.body.data[1].seat.code).toBe('A02');
+    expect(res.body.data[2].seat.code).toBe('B01');
+  });
+
+  it('filters data by status while keeping accurate total meta counts', async () => {
+    currentPrincipal = {
+      taiKhoanId: 10,
+      sessionId: 'test-session',
+      roles: ['NHA_XE_ADMIN'],
+      permissions: [...ADMIN_ROLE_DEFAULT_PERMISSION_KEYS.NHA_XE_ADMIN],
+      nhanVienId: 100,
+      nhaXeId: 5,
+    };
+    prisma.chuyenXe.findFirst.mockResolvedValue({ chuyenXeId: 101 });
+    prisma.gheChuyenXe.findMany.mockResolvedValue([...mockSeats]);
+
+    const res = await request(app.getHttpServer())
+      .get('/api/v1/trips/101/seats')
+      .query({ status: 'TRONG' })
+      .expect(200);
+
+    expect(res.body.data).toHaveLength(1);
+    expect(res.body.data[0].seat.code).toBe('A01');
+    expect(res.body.meta).toEqual({
+      tripId: 101,
+      total: 3,
+      available: 1,
+      held: 1,
+      booked: 1,
+    });
+  });
+
+  it('rejects invalid status filter with 400 VALIDATION_ERROR', async () => {
+    currentPrincipal = {
+      taiKhoanId: 10,
+      sessionId: 'test-session',
+      roles: ['NHA_XE_ADMIN'],
+      permissions: [...ADMIN_ROLE_DEFAULT_PERMISSION_KEYS.NHA_XE_ADMIN],
+      nhanVienId: 100,
+      nhaXeId: 5,
+    };
+
+    const res = await request(app.getHttpServer())
+      .get('/api/v1/trips/101/seats')
+      .query({ status: 'INVALID_STATUS' })
+      .expect(400);
+
+    expect(res.body.error).toBe('VALIDATION_ERROR');
+  });
+});
 });

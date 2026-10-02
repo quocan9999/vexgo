@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { CheckCircle2, LoaderCircle, X } from 'lucide-react';
 import { AdminConfirmDialog } from '@/components/admin/admin-confirm-dialog';
 import { AdminDetailSheet } from '@/components/admin/admin-detail-sheet';
@@ -88,6 +89,7 @@ export function TripDetailSheet({
   onUpdated?: (trip: Trip) => void;
 }) {
   const { can } = useAdminPermissions();
+  const canRead = can('trip:read');
   const canUpdate = can('trip:update');
   const canCancel = can('trip:cancel');
   const [detail, setDetail] = useState<DetailState>(
@@ -384,6 +386,14 @@ export function TripDetailSheet({
 
             {detail.status === 'success' && (
               <div className="trips-detail-actions">
+                {canRead && (
+                  <Link
+                    className="button button-secondary"
+                    href={`/trips/${detail.trip.tripId}/seats`}
+                  >
+                    Xem ghế chuyến
+                  </Link>
+                )}
                 {canUpdate &&
                   (detail.trip.status === 'CHUA_KHOI_HANH' ||
                     detail.trip.status === 'DANG_CHAY') && (

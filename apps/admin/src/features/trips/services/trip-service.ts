@@ -9,6 +9,8 @@ import {
   type Trip,
   type TripListQuery,
   type TripLookupOption,
+  type TripSeat,
+  type TripSeatsResponse,
   type TripStatus,
   type UpdateTripInput,
 } from '../types/trip';
@@ -278,4 +280,74 @@ export async function getTripVehicleOptions(
     id: vehicle.vehicleId,
     label: `${vehicle.licensePlate} (${vehicle.vehicleType.name})`,
   }));
+}
+
+function isTripSeat(value: unknown): value is TripSeat {
+  if (!isRecord(value)) return false;
+  if (typeof value.tripSeatId !== 'number') return false;
+  if (
+    value.status !== 'TRONG' &&
+    value.status !== 'DANG_GIU' &&
+    value.status !== 'DA_DAT'
+  ) {
+    return false;
+  }
+  if (!isRecord(value.seat)) return false;
+  if (typeof value.seat.seatId !== 'number') return false;
+  if (typeof value.seat.code !== 'string') return false;
+  if (
+    value.seat.position !== null &&
+    typeof value.seat.position !== 'string' &&
+    value.seat.position !== undefined
+  ) {
+    return false;
+  }
+  return true;
+}
+
+function isTripSeatsResponse(value: unknown): value is TripSeatsResponse {
+  if (!isRecord(value)) return false;
+  if (!Array.isArray(value.data) || !value.data.every(isTripSeat)) return false;
+  if (!isRecord(value.meta)) return false;
+  if (typeof value.meta.tripId !== 'number') return false;
+  if (typeof value.meta.total !== 'number') return false;
+  if (typeof value.meta.available !== 'number') return false;
+  if (typeof value.meta.held !== 'number') return false;
+  if (typeof value.meta.booked !== 'number') return false;
+  return true;
+}
+
+export async function getTripSeats(
+  tripId: number,
+  query?: { status?: string },
+  signal?: AbortSignal,
+): Promise<TripSeatsResponse> {
+  const url = new URL(`${getApiBaseUrl()}/api/v1/trips/${tripId}/seats`);
+  if (query?.status) {
+    url.searchParams.set('status', query.status);
+  }
+  const response = await adminApiFetch(url.toString(), {
+    method: 'GET',
+    headers: {
+      Accept: 'application/json',
+    },
+    signal,
+  });
+
+  const body = (await response.json().catch(() => null)) as unknown;
+
+  if (!response.ok) {
+    throw new TripApiError(
+      isRecord(body) && typeof body.message === 'string'
+        ? body.message
+        : `Không thể tải danh sách ghế chuyến (HTTP ${response.status}).`,
+      isRecord(body) && typeof body.error === 'string' ? body.error : undefined,
+    );
+  }
+
+  if (!isTripSeatsResponse(body)) {
+    throw new Error('API trả về danh sách ghế chuyến không hợp lệ.');
+  }
+
+  return body;
 }

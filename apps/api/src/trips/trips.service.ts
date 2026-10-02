@@ -15,6 +15,7 @@ import { SearchTripsDto } from './dto/search-trips.dto.js';
 import type { TripQueryDto, TripSortField } from './dto/trip-query.dto.js';
 import { UpdateTripDto } from './dto/update-trip.dto.js';
 import { UpdateTripStatusDto } from './dto/update-trip-status.dto.js';
+import { TripSeatsQueryDto } from './dto/trip-seats-query.dto.js';
 import { requireTenantPrincipal } from '../auth/tenant-scope.js';
 import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
 import { Prisma } from '../generated/prisma/client.js';
@@ -361,26 +362,89 @@ export class TripsService {
   }
 
 
-  async getSeats(id: number) {
-    const gheChuyenXes = await this.prisma.gheChuyenXe.findMany({
-      where: { chuyenXeId: id },
-      include: { ghe: true },
-      orderBy: { ghe: { soGhe: 'asc' } },
+  async getSeats(
+    id: number,
+    query: TripSeatsQueryDto,
+    principal: AuthPrincipal,
+  ) {
+    const nhaXeId = requireTenantPrincipal(principal);
+
+    const trip = await this.prisma.chuyenXe.findFirst({
+      where: {
+        chuyenXeId: id,
+        nhaXeId,
+      },
+      select: {
+        chuyenXeId: true,
+      },
     });
 
-    if (gheChuyenXes.length === 0) {
+    if (!trip) {
       throw new NotFoundException({
-        error: 'TRIP_SEATS_NOT_FOUND',
-        message: 'Không tìm thấy sơ đồ ghế cho chuyến xe này.',
+        error: 'TRIP_NOT_FOUND',
+        message: 'Không tìm thấy chuyến xe.',
       });
     }
 
-    return gheChuyenXes.map((gx) => ({
-      tripSeatId: gx.gheChuyenXeId,
-      seatNumber: gx.ghe.soGhe,
-      position: gx.ghe.viTri,
-      status: gx.trangThai,
+    const allSeats = await this.prisma.gheChuyenXe.findMany({
+      where: { chuyenXeId: id },
+      include: {
+        ghe: {
+          select: {
+            gheId: true,
+            soGhe: true,
+            viTri: true,
+          },
+        },
+      },
+    });
+
+    allSeats.sort((a, b) => {
+      const codeCompare = a.ghe.soGhe.localeCompare(b.ghe.soGhe, undefined, {
+        numeric: true,
+        sensitivity: 'base',
+      });
+      if (codeCompare !== 0) return codeCompare;
+      return a.gheId - b.gheId;
+    });
+
+    const total = allSeats.length;
+    let available = 0;
+    let held = 0;
+    let booked = 0;
+
+    for (const seat of allSeats) {
+      if (seat.trangThai === 'TRONG') available++;
+      else if (seat.trangThai === 'DANG_GIU') held++;
+      else if (seat.trangThai === 'DA_DAT') booked++;
+    }
+
+    const filtered = query.status
+      ? allSeats.filter((seat) => seat.trangThai === query.status)
+      : allSeats;
+
+    const data = filtered.map((item) => ({
+      tripSeatId: item.gheChuyenXeId,
+      status: item.trangThai,
+      seat: {
+        seatId: item.ghe.gheId,
+        code: item.ghe.soGhe,
+        position: item.ghe.viTri,
+      },
+      createdAt: item.createdAt.toISOString(),
+      updatedAt: item.updatedAt.toISOString(),
     }));
+
+    return {
+      data,
+      meta: {
+        tripId: id,
+        total,
+        available,
+        held,
+        booked,
+      },
+    };
   }
 
   async findAll(query: TripQueryDto, principal: AuthPrincipal) {
