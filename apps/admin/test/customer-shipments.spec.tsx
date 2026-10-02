@@ -116,7 +116,7 @@ function installApi(
             page: 1,
             pageSize: 10,
             totalItems: shipments.length,
-            totalPages: 1,
+            totalPages: shipments.length === 0 ? 0 : 1,
           },
         });
       }
@@ -128,7 +128,7 @@ function installApi(
             page: 1,
             pageSize: 10,
             totalItems: 0,
-            totalPages: 1,
+            totalPages: 0,
           },
         });
       }

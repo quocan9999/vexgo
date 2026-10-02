@@ -119,7 +119,7 @@ function installApi(
             page: 1,
             pageSize: 10,
             totalItems: tickets.length,
-            totalPages: 1,
+            totalPages: tickets.length === 0 ? 0 : 1,
           },
         });
       }
@@ -131,7 +131,7 @@ function installApi(
             page: 1,
             pageSize: 10,
             totalItems: 0,
-            totalPages: 1,
+            totalPages: 0,
           },
         });
       }

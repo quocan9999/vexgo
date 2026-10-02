@@ -91,7 +91,9 @@ function installApi(options: {
           page: 1,
           pageSize: 10,
           totalItems: options.totalItems ?? customers.length,
-          totalPages: options.totalPages ?? 1,
+          totalPages:
+            options.totalPages ??
+            ((options.totalItems ?? customers.length) === 0 ? 0 : 1),
         },
       });
     }

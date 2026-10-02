@@ -119,7 +119,7 @@ export function useCustomerTransactions(customerId: number) {
         page: 1,
         pageSize: PAGE_SIZE,
         totalItems: 0,
-        totalPages: 1,
+        totalPages: 0,
       },
     loading,
     refreshing,

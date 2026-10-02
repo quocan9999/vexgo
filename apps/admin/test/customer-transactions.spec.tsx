@@ -111,7 +111,7 @@ function installApi(options: {
           page: 1,
           pageSize: 10,
           totalItems: txs.length,
-          totalPages: 1,
+          totalPages: txs.length === 0 ? 0 : 1,
         },
       });
     }

@@ -269,6 +269,25 @@ describe('Admin Customers API (Feature 06.1)', () => {
       expect(item.sessionId).toBeUndefined();
     });
 
+    it('returns empty list with totalPages: 0 and totalItems: 0 when no customers exist', async () => {
+      mockPrisma.khachHang.count.mockResolvedValue(0);
+      mockPrisma.khachHang.findMany.mockResolvedValue([]);
+
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/customers?page=1&pageSize=10')
+        .expect(200);
+
+      expect(response.body).toEqual({
+        data: [],
+        meta: {
+          page: 1,
+          pageSize: 10,
+          totalItems: 0,
+          totalPages: 0,
+        },
+      });
+    });
+
     it('applies search filters across customer code, full name, phone number, and email', async () => {
       mockPrisma.khachHang.count.mockResolvedValue(0);
       mockPrisma.khachHang.findMany.mockResolvedValue([]);
@@ -516,6 +535,26 @@ describe('Admin Customers API (Feature 06.1)', () => {
       });
     });
 
+    it('returns empty list with totalPages: 0 and totalItems: 0 when customer has no transactions', async () => {
+      mockPrisma.khachHang.findFirst.mockResolvedValue({ khachHangId: 101 });
+      mockPrisma.donGiaoDich.count.mockResolvedValue(0);
+      mockPrisma.donGiaoDich.findMany.mockResolvedValue([]);
+
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/customers/101/transactions?page=1&pageSize=10')
+        .expect(200);
+
+      expect(response.body).toEqual({
+        data: [],
+        meta: {
+          page: 1,
+          pageSize: 10,
+          totalItems: 0,
+          totalPages: 0,
+        },
+      });
+    });
+
     it('supports search by transaction code and custom sorting', async () => {
       mockPrisma.khachHang.findFirst.mockResolvedValue({ khachHangId: 101 });
       mockPrisma.donGiaoDich.count.mockResolvedValue(0);
@@ -713,6 +752,26 @@ describe('Admin Customers API (Feature 06.1)', () => {
           },
         }),
       );
+    });
+
+    it('returns empty list with totalPages: 0 and totalItems: 0 when customer has no tickets', async () => {
+      mockPrisma.khachHang.findFirst.mockResolvedValue({ khachHangId: 101 });
+      mockPrisma.ve.count.mockResolvedValue(0);
+      mockPrisma.ve.findMany.mockResolvedValue([]);
+
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/customers/101/tickets?page=1&pageSize=10')
+        .expect(200);
+
+      expect(response.body).toEqual({
+        data: [],
+        meta: {
+          page: 1,
+          pageSize: 10,
+          totalItems: 0,
+          totalPages: 0,
+        },
+      });
     });
 
     it('supports search across ticket code, booking code, and trip code', async () => {
@@ -943,6 +1002,26 @@ describe('Admin Customers API (Feature 06.1)', () => {
           },
         }),
       );
+    });
+
+    it('returns empty list with totalPages: 0 and totalItems: 0 when customer has no shipments', async () => {
+      mockPrisma.khachHang.findFirst.mockResolvedValue({ khachHangId: 101 });
+      mockPrisma.phieuGuiHang.count.mockResolvedValue(0);
+      mockPrisma.phieuGuiHang.findMany.mockResolvedValue([]);
+
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/customers/101/shipments?page=1&pageSize=10')
+        .expect(200);
+
+      expect(response.body).toEqual({
+        data: [],
+        meta: {
+          page: 1,
+          pageSize: 10,
+          totalItems: 0,
+          totalPages: 0,
+        },
+      });
     });
 
     it('supports search by waybill code, receiver name, and phone number', async () => {

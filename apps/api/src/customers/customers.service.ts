@@ -234,7 +234,8 @@ export class CustomersService {
       }),
     ]);
 
-    const totalPages = Math.ceil(totalItems / pageSize) || 1;
+    const totalPages =
+      totalItems === 0 ? 0 : Math.ceil(totalItems / pageSize);
 
     return {
       data: items.map((item) => ({
@@ -387,7 +388,8 @@ export class CustomersService {
       }),
     ]);
 
-    const totalPages = Math.ceil(totalItems / pageSize) || 1;
+    const totalPages =
+      totalItems === 0 ? 0 : Math.ceil(totalItems / pageSize);
 
     return {
       data: items.map((item) => ({
@@ -521,7 +523,8 @@ export class CustomersService {
       }),
     ]);
 
-    const totalPages = Math.ceil(totalItems / pageSize) || 1;
+    const totalPages =
+      totalItems === 0 ? 0 : Math.ceil(totalItems / pageSize);
 
     return {
       data: items.map((t) => ({
@@ -663,7 +666,8 @@ export class CustomersService {
       }),
     ]);
 
-    const totalPages = Math.ceil(totalItems / pageSize) || 1;
+    const totalPages =
+      totalItems === 0 ? 0 : Math.ceil(totalItems / pageSize);
 
     return {
       data: items.map((p) => ({
