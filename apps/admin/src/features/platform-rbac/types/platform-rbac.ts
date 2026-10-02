@@ -3,6 +3,7 @@ export type AdminRbacScope = 'platform' | 'tenant';
 export const ADMIN_RBAC_ROLE_SCOPES = {
   SUPER_ADMIN: 'platform',
   NHA_XE_ADMIN: 'tenant',
+  NHAN_VIEN_DIEU_HANH: 'tenant',
   NHAN_VIEN_BAN_VE: 'tenant',
   NHAN_VIEN_CSKH: 'tenant',
   NHAN_VIEN_PHU_XE: 'tenant',

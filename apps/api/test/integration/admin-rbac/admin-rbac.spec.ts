@@ -50,6 +50,7 @@ const roleRows = [
     })),
   },
   ...[
+    ['NHAN_VIEN_DIEU_HANH', 'Nhân viên điều hành'],
     ['NHAN_VIEN_BAN_VE', 'Nhân viên bán vé'],
     ['NHAN_VIEN_CSKH', 'Nhân viên chăm sóc khách hàng'],
     ['NHAN_VIEN_PHU_XE', 'Nhân viên phụ xe'],
@@ -209,7 +210,7 @@ describe('Admin default role-permission API', () => {
     expect(platform.body.data.permissions).toHaveLength(
       ADMIN_PERMISSION_CATALOG.length,
     );
-    expect(platform.body.data.roles).toHaveLength(6);
+    expect(platform.body.data.roles).toHaveLength(7);
     expect(platform.body.data.roles[0]).toMatchObject({
       roleName: 'SUPER_ADMIN',
       scope: 'platform',

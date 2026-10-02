@@ -34,7 +34,7 @@ const expected = {
   TaiKhoan: 42,
   KhachHang: 20,
   NhanVien: 21,
-  VaiTro: 7,
+  VaiTro: 8,
   TaiKhoanVaiTro: 42,
   KhuyenMai: 15,
   BuuCuc: 15,
@@ -198,6 +198,8 @@ async function main() {
   await assertZero('booking tickets span multiple trips', await scalar('SELECT COUNT(*) AS value FROM (SELECT v.phieuDatVeId FROM Ve v JOIN GheChuyenXe gc ON gc.gheChuyenXeId=v.gheChuyenXeId GROUP BY v.phieuDatVeId HAVING COUNT(DISTINCT gc.chuyenXeId) > 1) invalid'));
   await assertZero('ticket price list route or vehicle mismatch', await scalar('SELECT COUNT(*) AS value FROM Ve v JOIN GheChuyenXe gc ON gc.gheChuyenXeId=v.gheChuyenXeId JOIN ChuyenXe c ON c.chuyenXeId=gc.chuyenXeId JOIN Xe x ON x.xeId=c.xeId LEFT JOIN BangGia bg ON bg.bangGiaId=v.bangGiaApDungId WHERE bg.bangGiaId IS NULL OR bg.tuyenXeId <> c.tuyenXeId OR bg.loaiXeId <> x.loaiXeId'));
   await assertZero('invalid fare price status', await scalar("SELECT COUNT(*) AS value FROM BangGia WHERE trangThai NOT IN ('HOAT_DONG', 'TAM_NGUNG')"));
+  await assertZero('legacy MO_BAN trip status', await scalar("SELECT COUNT(*) AS value FROM ChuyenXe WHERE trangThai = 'MO_BAN'"));
+  await assertZero('invalid trip status', await scalar("SELECT COUNT(*) AS value FROM ChuyenXe WHERE trangThai NOT IN ('CHUA_KHOI_HANH', 'DANG_CHAY', 'HOAN_THANH', 'DA_HUY')"));
   await assertZero('ticket price snapshot mismatch', await scalar('SELECT COUNT(*) AS value FROM Ve WHERE giaNiemYet <> giaThucTe'));
   await assertZero('booking total mismatch', await scalar('SELECT COUNT(*) AS value FROM PhieuDatVe p LEFT JOIN (SELECT phieuDatVeId, SUM(giaThucTe) total FROM Ve GROUP BY phieuDatVeId) v ON v.phieuDatVeId=p.phieuDatVeId WHERE p.tongTienBanDau <> COALESCE(v.total,0)'));
   await assertZero('shipping total mismatch', await scalar('SELECT COUNT(*) AS value FROM PhieuGuiHang WHERE tongPhi <> cuocChinh + phiDichVu - soTienGiam'));
