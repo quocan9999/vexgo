@@ -4,6 +4,7 @@ import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import { PrismaClient } from '../apps/api/dist/generated/prisma/client.js';
 import {
   ADMIN_PERMISSION_CATALOG,
+  ADMIN_ROLE_DEFAULT_PERMISSION_KEYS,
 } from '../apps/api/dist/auth/permissions/permission-catalog.js';
 
 const TZ = 'Asia/Ho_Chi_Minh';
@@ -287,6 +288,23 @@ async function seedPermissionCatalog(db) {
       { tenQuyen: definition.key, moTa: definition.description },
       { moTa: definition.description },
     );
+  }
+}
+
+async function seedDefaultRolePermissions(db, roles) {
+  for (const [roleName, permissionKeys] of Object.entries(ADMIN_ROLE_DEFAULT_PERMISSION_KEYS)) {
+    const role = roles[roleName];
+    if (!role || permissionKeys.length === 0) continue;
+    for (const key of permissionKeys) {
+      const permission = await db.Quyen.findUnique({ where: { tenQuyen: key } });
+      if (permission) {
+        await db.VaiTroQuyen.upsert({
+          where: { vaiTroId_quyenId: { vaiTroId: role.vaiTroId, quyenId: permission.quyenId } },
+          create: { vaiTroId: role.vaiTroId, quyenId: permission.quyenId },
+          update: {},
+        });
+      }
+    }
   }
 }
 
@@ -972,6 +990,7 @@ async function main() {
   const vehicleTypes = await seedVehicleTypes(prisma, operators);
   const roles = await seedRoles(prisma);
   await seedPermissionCatalog(prisma);
+  await seedDefaultRolePermissions(prisma, roles);
   const accounts = await seedAccounts(prisma, operators, roles);
   const fleet = await seedVehiclesAndRoutes(prisma, operators, vehicleTypes);
   const prices = await seedPrices(prisma, operators, fleet.routes, vehicleTypes);
