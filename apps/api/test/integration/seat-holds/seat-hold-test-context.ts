@@ -1,11 +1,17 @@
 import { randomUUID } from 'node:crypto';
 import { Test } from '@nestjs/testing';
 import type { ExecutionContext, INestApplication } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { AppModule } from '../../../src/app.module.js';
 import { AccessTokenGuard } from '../../../src/auth/guards/access-token.guard.js';
 import type { AuthPrincipal } from '../../../src/auth/tokens/auth-principal.js';
 import { configureApi } from '../../../src/common/configure-api.js';
 import { PrismaService } from '../../../src/prisma/prisma.service.js';
+import { Prisma } from '../../../src/generated/prisma/client.js';
+import {
+  getBusinessDate,
+  resolveBusinessTimeZone,
+} from '../../../src/common/time/business-date.js';
 
 export type SeatHoldTestContext = {
   app: INestApplication;
@@ -17,6 +23,8 @@ export type SeatHoldTestContext = {
   accountId: number;
   otherAccountId: number;
   customerId: number;
+  farePriceId: number;
+  promotionCode: string;
   sessionId: string;
   otherSessionId: string;
   setPrincipal: (value: AuthPrincipal | null) => void;
@@ -71,6 +79,7 @@ async function cleanupPriorTestData(prisma: PrismaService) {
       where: { donGiaoDichId: { in: orderIds } },
     });
   }
+  await prisma.khuyenMai.deleteMany({ where: { nhaXeId: { in: companyIds } } });
   if (customerIds.length > 0) {
     await prisma.khachHang.deleteMany({
       where: { khachHangId: { in: customerIds } },
@@ -153,6 +162,10 @@ export async function createSeatHoldTestContext(): Promise<SeatHoldTestContext> 
   await app.init();
 
   const prisma = app.get(PrismaService);
+  const config = app.get(ConfigService);
+  const businessDate = getBusinessDate(
+    resolveBusinessTimeZone(config.get<string>('BUSINESS_TIME_ZONE')),
+  );
   await cleanupPriorTestData(prisma);
   const company = await prisma.nhaXe.create({
     data: {
@@ -241,6 +254,36 @@ export async function createSeatHoldTestContext(): Promise<SeatHoldTestContext> 
     },
     select: { gheChuyenXeId: true },
   });
+  const fare = await prisma.bangGia.create({
+    data: {
+      giaNiemYet: new Prisma.Decimal('100000.00'),
+      tuNgay: new Date(`${departureDate}T00:00:00.000Z`),
+      denNgay: null,
+      trangThai: 'HOAT_DONG',
+      nhaXeId: company.nhaXeId,
+      tuyenXeId: route.tuyenXeId,
+      loaiXeId: vehicleType.loaiXeId,
+    },
+    select: { bangGiaId: true },
+  });
+  const promotionCode = `HOLD${suffix.slice(0, 8)}`;
+  await prisma.khuyenMai.create({
+    data: {
+      tenChuongTrinh: `Seat Hold Promo ${suffix}`,
+      maKhuyenMai: promotionCode,
+      phamViApDung: 'DAT_VE',
+      hinhThucApDung: 'NHAP_MA',
+      loaiGiamGia: 'PHAN_TRAM',
+      giaTriGiam: new Prisma.Decimal('10.00'),
+      giamToiDa: new Prisma.Decimal('20000.00'),
+      giaTriDonToiThieu: new Prisma.Decimal('150000.00'),
+      dieuKienApDung: null,
+      tuNgay: new Date(`${businessDate}T00:00:00.000Z`),
+      denNgay: null,
+      trangThai: 'DANG_HOAT_DONG',
+      nhaXeId: company.nhaXeId,
+    },
+  });
   const account = await prisma.taiKhoan.create({
     data: {
       hoTen: `Seat Hold Customer ${suffix}`,
@@ -316,6 +359,9 @@ export async function createSeatHoldTestContext(): Promise<SeatHoldTestContext> 
       await prisma.bangGia.deleteMany({
         where: { tuyenXeId: route.tuyenXeId },
       });
+      await prisma.khuyenMai.deleteMany({
+        where: { nhaXeId: company.nhaXeId },
+      });
       await prisma.giuCho.deleteMany({
         where: { chuyenXeId: { in: [trip.chuyenXeId, otherTrip.chuyenXeId] } },
       });
@@ -363,6 +409,8 @@ export async function createSeatHoldTestContext(): Promise<SeatHoldTestContext> 
     accountId: account.taiKhoanId,
     otherAccountId: otherAccount.taiKhoanId,
     customerId: customer.khachHangId,
+    farePriceId: fare.bangGiaId,
+    promotionCode,
     sessionId,
     otherSessionId,
     setPrincipal(value) {

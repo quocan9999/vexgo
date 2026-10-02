@@ -16,6 +16,15 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateSeatHoldDto } from './dto/create-seat-hold.dto.js';
 
 const SEAT_HOLD_TTL_MS = 5 * 60 * 1000;
+type SeatHoldClient = Pick<Prisma.TransactionClient, 'giuCho'>;
+
+export type AssertSeatHoldInput = {
+  token: string;
+  principal: AuthPrincipal;
+  tripId: number;
+  tripSeatIds: number[];
+  now?: Date;
+};
 
 function hashToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
@@ -194,6 +203,55 @@ export class SeatHoldsService {
         expiresAt: expiresAt.toISOString(),
       },
     };
+  }
+
+  async assertValidHold(
+    input: AssertSeatHoldInput,
+    client: SeatHoldClient = this.prisma,
+  ) {
+    const now = input.now ?? new Date();
+    const hold = await client.giuCho.findUnique({
+      where: { tokenHash: hashToken(input.token) },
+      select: {
+        giuChoId: true,
+        chuyenXeId: true,
+        taiKhoanId: true,
+        sessionId: true,
+        hetHanLuc: true,
+        gheChuyenXes: { select: { gheChuyenXeId: true } },
+      },
+    });
+    if (
+      !hold ||
+      hold.taiKhoanId !== input.principal.taiKhoanId ||
+      hold.sessionId !== input.principal.sessionId ||
+      hold.hetHanLuc <= now
+    ) {
+      throw new NotFoundException({
+        error: 'SEAT_HOLD_NOT_FOUND',
+        message: 'Không tìm thấy lượt giữ ghế hợp lệ.',
+      });
+    }
+
+    const storedSeatIds = hold.gheChuyenXes
+      .map(({ gheChuyenXeId }) => gheChuyenXeId)
+      .sort((left, right) => left - right);
+    const requestedSeatIds = [...input.tripSeatIds].sort(
+      (left, right) => left - right,
+    );
+    if (
+      hold.chuyenXeId !== input.tripId ||
+      new Set(requestedSeatIds).size !== requestedSeatIds.length ||
+      storedSeatIds.length !== requestedSeatIds.length ||
+      storedSeatIds.some((seatId, index) => seatId !== requestedSeatIds[index])
+    ) {
+      throw new ConflictException({
+        error: 'SEAT_HOLD_MISMATCH',
+        message: 'Lượt giữ ghế không khớp chuyến và tập ghế đã chọn.',
+      });
+    }
+
+    return { giuChoId: hold.giuChoId };
   }
 
   async release(token: string, principal: AuthPrincipal) {

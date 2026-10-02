@@ -3,6 +3,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { BookingsService } from '../../../src/bookings/bookings.service.js';
 import type { PrismaService } from '../../../src/prisma/prisma.service.js';
 import type { ConfigService } from '@nestjs/config';
+import type { FarePricesService } from '../../../src/fare-prices/fare-prices.service.js';
+import type { PromotionsService } from '../../../src/promotions/promotions.service.js';
+import type { SeatHoldsService } from '../../../src/seat-holds/seat-holds.service.js';
 
 describe('BookingsService', () => {
   const mockCustomer = {
@@ -117,10 +120,16 @@ describe('BookingsService', () => {
   const config = {
     get: vi.fn().mockReturnValue('Asia/Ho_Chi_Minh'),
   };
+  const farePrices = { resolveForTrip: vi.fn() };
+  const promotions = { resolveBookingPromotion: vi.fn() };
+  const seatHolds = { assertValidHold: vi.fn() };
 
   const service = new BookingsService(
     prisma as unknown as PrismaService,
     config as unknown as ConfigService,
+    farePrices as unknown as FarePricesService,
+    promotions as unknown as PromotionsService,
+    seatHolds as unknown as SeatHoldsService,
   );
 
   beforeEach(() => {
@@ -202,9 +211,34 @@ describe('BookingsService', () => {
 
       expect(prisma.phieuDatVe.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          orderBy: [{ tongTienBanDau: 'asc' }, { phieuDatVeId: 'asc' }],
+          orderBy: [
+            { donGiaoDich: { tongTien: 'asc' } },
+            { phieuDatVeId: 'asc' },
+          ],
         }),
       );
+    });
+
+    it('reports the discounted transaction total when a booking has a promotion', async () => {
+      prisma.khachHang.findUnique.mockResolvedValue(mockCustomer);
+      prisma.phieuDatVe.count.mockResolvedValue(1);
+      prisma.phieuDatVe.findMany.mockResolvedValue([
+        {
+          ...sampleBooking,
+          tongTienBanDau: '500000.00',
+          donGiaoDich: {
+            ...sampleBooking.donGiaoDich,
+            tongTien: '450000.00',
+          },
+        },
+      ]);
+
+      const result = await service.findCustomerBookings(1, {
+        page: 1,
+        pageSize: 10,
+      });
+
+      expect(result.data[0]?.totalAmount).toBe(450000);
     });
   });
 

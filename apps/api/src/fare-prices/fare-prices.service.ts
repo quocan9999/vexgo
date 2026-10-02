@@ -60,6 +60,7 @@ const APPLICABLE_FARE_SELECT = {
 type FarePriceRecord = Prisma.BangGiaGetPayload<{
   select: typeof FARE_PRICE_SELECT;
 }>;
+type FarePriceClient = Pick<Prisma.TransactionClient, 'bangGia'>;
 
 const sortFieldMap = {
   listedPrice: 'giaNiemYet',
@@ -529,6 +530,57 @@ export class FarePricesService {
         validTo: record.denNgay === null ? null : toDateOnly(record.denNgay),
         applicableOn: query.date,
       },
+    };
+  }
+
+  async resolveForTrip(
+    input: {
+      nhaXeId: number;
+      routeId: number;
+      vehicleTypeId: number;
+      date: string;
+    },
+    client: FarePriceClient = this.prisma,
+  ) {
+    const date = toUtcDate(input.date);
+    const records = await client.bangGia.findMany({
+      where: {
+        nhaXeId: input.nhaXeId,
+        tuyenXeId: input.routeId,
+        loaiXeId: input.vehicleTypeId,
+        trangThai: 'HOAT_DONG',
+        tuNgay: { lte: date },
+        OR: [{ denNgay: null }, { denNgay: { gte: date } }],
+      },
+      orderBy: { bangGiaId: 'asc' },
+      select: APPLICABLE_FARE_SELECT,
+      take: 2,
+    });
+
+    if (records.length === 0) {
+      throw new NotFoundException({
+        error: 'APPLICABLE_FARE_NOT_FOUND',
+        message: 'Không có bảng giá áp dụng cho chuyến xe đã chọn.',
+      });
+    }
+    if (records.length > 1) {
+      throw new Error(
+        `FARE_PRICE_INVARIANT_VIOLATION tripIdContext=${input.nhaXeId}/${input.routeId}/${input.vehicleTypeId}/${input.date} conflictingFareIds=${records.map(({ bangGiaId }) => bangGiaId).join(',')}`,
+      );
+    }
+
+    const record = records[0]!;
+    if (!record.giaNiemYet.greaterThan(0)) {
+      throw new Error(
+        `BangGia contains an invalid listed price. farePriceId=${record.bangGiaId}`,
+      );
+    }
+
+    return {
+      farePriceId: record.bangGiaId,
+      listedPrice: record.giaNiemYet,
+      validFrom: toDateOnly(record.tuNgay),
+      validTo: record.denNgay === null ? null : toDateOnly(record.denNgay),
     };
   }
 }
