@@ -1,6 +1,8 @@
 import { Body, Controller, Delete, Param, Post } from '@nestjs/common';
 import { SeatHoldsService } from './seat-holds.service.js';
+import { Public } from '../auth/decorators/public.decorator.js';
 
+@Public()
 @Controller('seat-holds')
 export class SeatHoldsController {
   constructor(private readonly seatHoldsService: SeatHoldsService) {}

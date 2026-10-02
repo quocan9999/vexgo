@@ -356,7 +356,11 @@ export class TripsService {
     const trip = await this.prisma.chuyenXe.findUnique({
       where: { chuyenXeId: Number(tripId) },
       include: {
-        xe: true,
+        xe: {
+          include: {
+            loaiXe: true,
+          },
+        },
         gheChuyenXes: {
           include: {
             ghe: true,
@@ -382,14 +386,61 @@ export class TripsService {
     });
 
     const price = fare ? Number(fare.giaNiemYet) : 250000;
+    const isSleeper =
+      trip.xe.loaiXe?.tenLoai?.toUpperCase().includes('GIƯỜNG') ?? false;
 
-    return trip.gheChuyenXes.map((gcx) => {
+    // Stable sort by seat code
+    const sortedGcx = [...trip.gheChuyenXes].sort((a, b) => {
+      const codeA = a.ghe.soGhe;
+      const codeB = b.ghe.soGhe;
+      return codeA.localeCompare(codeB, undefined, { numeric: true });
+    });
+
+    let lowerIndex = 0;
+    let upperIndex = 0;
+
+    return sortedGcx.map((gcx) => {
       const code = gcx.ghe.soGhe;
-      // Derive floor and row/col from seat code (e.g. A01 -> floor 1, B01 -> floor 2)
-      const isUpper = code.startsWith('B');
-      const numPart = parseInt(code.replace(/\D/g, '') || '1', 10);
-      const row = Math.ceil(numPart / 2);
-      const col = numPart % 2 === 1 ? 1 : 2;
+      const viTri = gcx.ghe.viTri ?? '';
+
+      // Determine floor according to vehicle type & viTri in database
+      let floor = 1;
+      if (isSleeper) {
+        if (
+          viTri.toLowerCase().includes('trên') ||
+          (!viTri.toLowerCase().includes('dưới') && code.startsWith('B'))
+        ) {
+          floor = 2;
+        } else {
+          floor = 1;
+        }
+      } else {
+        // Single floor bus (GHẾ NGỒI, LIMOUSINE, etc.)
+        floor = 1;
+      }
+
+      let row = 1;
+      let col = 1;
+
+      if (floor === 2) {
+        // Sleeper upper floor: 2 seats per row
+        row = Math.floor(upperIndex / 2) + 1;
+        col = (upperIndex % 2) + 1;
+        upperIndex++;
+      } else {
+        if (isSleeper) {
+          // Sleeper lower floor: 2 seats per row
+          row = Math.floor(lowerIndex / 2) + 1;
+          col = (lowerIndex % 2) + 1;
+        } else {
+          // Seater / Limousine
+          const totalSeats = sortedGcx.length;
+          const colsPerRow = totalSeats >= 24 ? 4 : totalSeats <= 10 ? 2 : 3;
+          row = Math.floor(lowerIndex / colsPerRow) + 1;
+          col = (lowerIndex % colsPerRow) + 1;
+        }
+        lowerIndex++;
+      }
 
       return {
         seatId: gcx.ghe.gheId,
@@ -397,7 +448,7 @@ export class TripsService {
         gheChuyenXeId: gcx.gheChuyenXeId,
         seatCode: code,
         name: code,
-        floor: isUpper ? 2 : 1,
+        floor,
         row,
         col,
         status: gcx.trangThai, // 'TRONG', 'DANG_GIU', 'DA_DAT'

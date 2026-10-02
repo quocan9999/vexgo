@@ -8,11 +8,13 @@ import {
   Query,
 } from '@nestjs/common';
 import { BookingsService } from './bookings.service.js';
+import { Public } from '../auth/decorators/public.decorator.js';
 
 @Controller('bookings')
 export class BookingsController {
   constructor(private readonly bookingsService: BookingsService) {}
 
+  @Public()
   @Post('quote')
   async getBookingQuote(
     @Body()
@@ -29,6 +31,7 @@ export class BookingsController {
     );
   }
 
+  @Public()
   @Post()
   async createBooking(
     @Body()
@@ -53,6 +56,7 @@ export class BookingsController {
     });
   }
 
+  @Public()
   @Get(':bookingId')
   async getBookingById(@Param('bookingId', ParseIntPipe) bookingId: number) {
     return this.bookingsService.getBookingById(bookingId);

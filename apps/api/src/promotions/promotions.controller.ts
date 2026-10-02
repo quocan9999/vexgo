@@ -1,6 +1,8 @@
 import { Body, Controller, Post } from '@nestjs/common';
 import { PromotionsService } from './promotions.service.js';
+import { Public } from '../auth/decorators/public.decorator.js';
 
+@Public()
 @Controller('promotions')
 export class PromotionsController {
   constructor(private readonly promotionsService: PromotionsService) {}

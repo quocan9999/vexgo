@@ -7,7 +7,9 @@ import {
   Post,
 } from '@nestjs/common';
 import { PaymentsService } from './payments.service.js';
+import { Public } from '../auth/decorators/public.decorator.js';
 
+@Public()
 @Controller('payments')
 export class PaymentsController {
   constructor(private readonly paymentsService: PaymentsService) {}
