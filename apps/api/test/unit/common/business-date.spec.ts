@@ -4,6 +4,11 @@ import * as businessDateModule from '../../../src/common/time/business-date.js';
 const businessDate = businessDateModule as unknown as {
   getBusinessDate?: (timeZone: string, now: Date) => string;
   businessDateStartUtc?: (dateOnly: string, timeZone: string) => Date;
+  combineBusinessDateAndTime?: (
+    date: Date,
+    time: Date,
+    timeZone: string,
+  ) => Date;
   resolveBusinessTimeZone?: (configuredTimeZone: string | undefined) => string;
 };
 
@@ -31,9 +36,19 @@ describe('business date helpers', () => {
     ).toBe('2026-08-31T17:00:00.000Z');
   });
 
+  it('combines a stored business date and SQL time using the configured timezone', () => {
+    expect(
+      businessDate
+        .combineBusinessDateAndTime?.(
+          new Date('2026-09-01T00:00:00.000Z'),
+          new Date('1970-01-01T23:30:00.000Z'),
+          'Asia/Ho_Chi_Minh',
+        )
+        .toISOString(),
+    ).toBe('2026-09-01T16:30:00.000Z');
+  });
+
   it('uses the established Ho Chi Minh timezone fallback for an empty setting', () => {
-    expect(businessDate.resolveBusinessTimeZone?.('')).toBe(
-      'Asia/Ho_Chi_Minh',
-    );
+    expect(businessDate.resolveBusinessTimeZone?.('')).toBe('Asia/Ho_Chi_Minh');
   });
 });

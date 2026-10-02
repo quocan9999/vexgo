@@ -18,7 +18,8 @@ export function getBusinessDate(
   }).formatToParts(now);
   const partValue = (type: Intl.DateTimeFormatPartTypes) => {
     const value = parts.find((part) => part.type === type)?.value;
-    if (!value) throw new Error(`Missing ${type} while resolving business date.`);
+    if (!value)
+      throw new Error(`Missing ${type} while resolving business date.`);
     return value;
   };
 
@@ -44,7 +45,8 @@ export function businessDateStartUtc(dateOnly: string, timeZone: string): Date {
     const parts = formatter.formatToParts(new Date(candidateUtc));
     const partValue = (type: Intl.DateTimeFormatPartTypes) => {
       const value = parts.find((part) => part.type === type)?.value;
-      if (!value) throw new Error(`Missing ${type} while resolving business date.`);
+      if (!value)
+        throw new Error(`Missing ${type} while resolving business date.`);
       return Number(value);
     };
     const representedAsUtc = Date.UTC(
@@ -61,4 +63,18 @@ export function businessDateStartUtc(dateOnly: string, timeZone: string): Date {
   }
 
   return new Date(candidateUtc);
+}
+
+export function combineBusinessDateAndTime(
+  date: Date,
+  time: Date,
+  timeZone: string,
+): Date {
+  const businessDate = date.toISOString().slice(0, 10);
+  const businessDayStart = businessDateStartUtc(businessDate, timeZone);
+  const elapsedSinceMidnight =
+    ((time.getUTCHours() * 60 + time.getUTCMinutes()) * 60 +
+      time.getUTCSeconds()) *
+    1000;
+  return new Date(businessDayStart.getTime() + elapsedSinceMidnight);
 }

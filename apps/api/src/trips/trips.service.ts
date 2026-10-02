@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
-  businessDateStartUtc,
+  combineBusinessDateAndTime,
   getBusinessDate,
   resolveBusinessTimeZone,
 } from '../common/time/business-date.js';
@@ -12,7 +12,14 @@ import { Prisma } from '../generated/prisma/client.js';
 const TRIP_INCLUDE = {
   tuyenXe: { include: { nhaXe: true } },
   xe: { include: { loaiXe: true } },
-  gheChuyenXes: { select: { trangThai: true } },
+  gheChuyenXes: {
+    select: {
+      trangThai: true,
+      giuChoGhe: {
+        select: { giuCho: { select: { hetHanLuc: true } } },
+      },
+    },
+  },
 } satisfies Prisma.ChuyenXeInclude;
 
 type TripRecord = Prisma.ChuyenXeGetPayload<{ include: typeof TRIP_INCLUDE }>;
@@ -26,20 +33,6 @@ type FareRecord = {
   tuNgay: Date;
   denNgay: Date | null;
 };
-
-function combineDeparture(
-  date: Date,
-  time: Date,
-  businessTimeZone: string,
-): Date {
-  const businessDate = date.toISOString().slice(0, 10);
-  const businessDayStart = businessDateStartUtc(businessDate, businessTimeZone);
-  const elapsedSinceMidnight =
-    ((time.getUTCHours() * 60 + time.getUTCMinutes()) * 60 +
-      time.getUTCSeconds()) *
-    1000;
-  return new Date(businessDayStart.getTime() + elapsedSinceMidnight);
-}
 
 function findFare(
   trip: TripRecord,
@@ -59,6 +52,7 @@ function mapTrip(
   trip: TripRecord,
   businessTimeZone: string,
   fare?: FareRecord,
+  now = new Date(),
 ) {
   return {
     id: trip.chuyenXeId,
@@ -79,7 +73,7 @@ function mapTrip(
       distance: null,
       durationMinutes: null,
     },
-    departureTime: combineDeparture(
+    departureTime: combineBusinessDateAndTime(
       trip.ngayKhoiHanh,
       trip.gioKhoiHanh,
       businessTimeZone,
@@ -95,7 +89,9 @@ function mapTrip(
     },
     price: fare ? Number(fare.giaNiemYet) : null,
     availableSeats: trip.gheChuyenXes.filter(
-      ({ trangThai }) => trangThai === 'TRONG',
+      ({ trangThai, giuChoGhe }) =>
+        trangThai === 'TRONG' &&
+        (!giuChoGhe || giuChoGhe.giuCho.hetHanLuc <= now),
     ).length,
   };
 }
@@ -167,7 +163,7 @@ export class TripsService {
     });
     const chuyenXes = queriedTrips.filter(
       (trip) =>
-        combineDeparture(
+        combineBusinessDateAndTime(
           trip.ngayKhoiHanh,
           trip.gioKhoiHanh,
           businessTimeZone,
@@ -203,7 +199,9 @@ export class TripsService {
 
     const direction = dto.sortDirection === 'desc' ? -1 : 1;
     const mapped = chuyenXes
-      .map((trip) => mapTrip(trip, businessTimeZone, findFare(trip, prices)))
+      .map((trip) =>
+        mapTrip(trip, businessTimeZone, findFare(trip, prices), now),
+      )
       .filter(
         (trip) =>
           dto.minPrice === undefined ||
@@ -266,7 +264,7 @@ export class TripsService {
       });
     }
 
-    const departureAt = combineDeparture(
+    const departureAt = combineBusinessDateAndTime(
       cx.ngayKhoiHanh,
       cx.gioKhoiHanh,
       businessTimeZone,
@@ -289,14 +287,14 @@ export class TripsService {
       },
     });
 
-    return mapTrip(cx, businessTimeZone, bangGia ?? undefined);
+    return mapTrip(cx, businessTimeZone, bangGia ?? undefined, now);
   }
-
 
   async getSeats(id: number) {
     const businessTimeZone = resolveBusinessTimeZone(
       this.config.get<string>('BUSINESS_TIME_ZONE'),
     );
+    const now = new Date();
     const trip = await this.prisma.chuyenXe.findUnique({
       where: { chuyenXeId: id },
       select: {
@@ -321,11 +319,11 @@ export class TripsService {
     }
 
     if (
-      combineDeparture(
+      combineBusinessDateAndTime(
         trip.ngayKhoiHanh,
         trip.gioKhoiHanh,
         businessTimeZone,
-      ) <= new Date()
+      ) <= now
     ) {
       throw new NotFoundException({
         error: 'TRIP_ALREADY_DEPARTED',
@@ -335,7 +333,12 @@ export class TripsService {
 
     const gheChuyenXes = await this.prisma.gheChuyenXe.findMany({
       where: { chuyenXeId: id },
-      include: { ghe: true },
+      include: {
+        ghe: true,
+        giuChoGhe: {
+          include: { giuCho: { select: { hetHanLuc: true } } },
+        },
+      },
       orderBy: { ghe: { soGhe: 'asc' } },
     });
 
@@ -350,7 +353,12 @@ export class TripsService {
       tripSeatId: gx.gheChuyenXeId,
       seatNumber: gx.ghe.soGhe,
       position: gx.ghe.viTri,
-      status: gx.trangThai,
+      status:
+        gx.trangThai === 'TRONG' &&
+        gx.giuChoGhe &&
+        gx.giuChoGhe.giuCho.hetHanLuc > now
+          ? 'DANG_GIU'
+          : gx.trangThai,
     }));
   }
 }

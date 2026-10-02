@@ -7,24 +7,10 @@ import { ConfigService } from '@nestjs/config';
 import { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import {
-  businessDateStartUtc,
+  combineBusinessDateAndTime,
   resolveBusinessTimeZone,
 } from '../common/time/business-date.js';
 import type { BookingQueryDto } from './dto/booking-query.dto.js';
-
-function combineDeparture(
-  date: Date,
-  time: Date,
-  businessTimeZone: string,
-): Date {
-  const businessDate = date.toISOString().slice(0, 10);
-  const businessDayStart = businessDateStartUtc(businessDate, businessTimeZone);
-  const elapsedSinceMidnight =
-    ((time.getUTCHours() * 60 + time.getUTCMinutes()) * 60 +
-      time.getUTCSeconds()) *
-    1000;
-  return new Date(businessDayStart.getTime() + elapsedSinceMidnight);
-}
 
 @Injectable()
 export class BookingsService {
@@ -268,7 +254,7 @@ export class BookingsService {
 
     let departureTime: string | null = null;
     if (chuyenXe?.ngayKhoiHanh && chuyenXe?.gioKhoiHanh) {
-      departureTime = combineDeparture(
+      departureTime = combineBusinessDateAndTime(
         chuyenXe.ngayKhoiHanh,
         chuyenXe.gioKhoiHanh,
         this.businessTimeZone,
