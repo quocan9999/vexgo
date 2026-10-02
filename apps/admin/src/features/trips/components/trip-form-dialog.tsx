@@ -197,6 +197,16 @@ export function TripFormDialog({
             ...curr,
             code: 'Mã chuyến xe đã tồn tại trong hệ thống.',
           }));
+        } else if (error.code === 'ROUTE_NOT_ACTIVE') {
+          setFieldErrors((curr) => ({
+            ...curr,
+            routeId: error.message,
+          }));
+        } else if (error.code === 'VEHICLE_NOT_ACTIVE') {
+          setFieldErrors((curr) => ({
+            ...curr,
+            vehicleId: error.message,
+          }));
         } else if (error.code === 'VEHICLE_HAS_NO_SEATS') {
           setFieldErrors((curr) => ({
             ...curr,

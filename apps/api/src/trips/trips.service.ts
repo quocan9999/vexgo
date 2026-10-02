@@ -579,6 +579,13 @@ export class TripsService {
       });
     }
 
+    if (route.trangThai !== 'HOAT_DONG') {
+      throw new ConflictException({
+        error: 'ROUTE_NOT_ACTIVE',
+        message: 'Tuyến xe đang tạm ngưng hoạt động, không thể lập chuyến.',
+      });
+    }
+
     const vehicle = await this.prisma.xe.findFirst({
       where: { xeId: dto.vehicleId, nhaXeId },
       include: { ghes: true },
@@ -587,6 +594,13 @@ export class TripsService {
       throw new NotFoundException({
         error: 'VEHICLE_NOT_FOUND',
         message: 'Không tìm thấy xe trong nhà xe.',
+      });
+    }
+
+    if (vehicle.trangThai !== 'HOAT_DONG') {
+      throw new ConflictException({
+        error: 'VEHICLE_NOT_ACTIVE',
+        message: 'Xe đang không hoạt động, không thể phân công vào chuyến.',
       });
     }
 
@@ -731,22 +745,43 @@ export class TripsService {
       });
     }
 
-    if (
-      existing.trangThai === 'HOAN_THANH' ||
-      existing.trangThai === 'DA_HUY'
-    ) {
+    if (existing.trangThai !== 'CHUA_KHOI_HANH') {
       throw new ConflictException({
         error: 'TRIP_STATUS_TRANSITION_NOT_ALLOWED',
-        message: 'Không thể cập nhật chuyến xe đã hoàn thành hoặc đã hủy.',
+        message: 'Chỉ có thể cập nhật chuyến xe khi chưa khởi hành.',
       });
     }
 
-    const updated = await this.prisma.chuyenXe.update({
-      where: { chuyenXeId: id },
+    const result = await this.prisma.chuyenXe.updateMany({
+      where: {
+        chuyenXeId: id,
+        nhaXeId,
+        trangThai: 'CHUA_KHOI_HANH',
+      },
       data: {
         ngayKhoiHanh: new Date(`${dto.departureDate}T00:00:00.000Z`),
         gioKhoiHanh: new Date(`1970-01-01T${dto.departureTime}.000Z`),
       },
+    });
+
+    if (result.count === 0) {
+      const reRead = await this.prisma.chuyenXe.findFirst({
+        where: { chuyenXeId: id, nhaXeId },
+      });
+      if (!reRead) {
+        throw new NotFoundException({
+          error: 'TRIP_NOT_FOUND',
+          message: 'Không tìm thấy chuyến xe.',
+        });
+      }
+      throw new ConflictException({
+        error: 'TRIP_STATUS_TRANSITION_NOT_ALLOWED',
+        message: 'Chỉ có thể cập nhật chuyến xe khi chưa khởi hành.',
+      });
+    }
+
+    const updated = await this.prisma.chuyenXe.findFirstOrThrow({
+      where: { chuyenXeId: id, nhaXeId },
       include: {
         tuyenXe: true,
         xe: { include: { loaiXe: true } },
@@ -868,6 +903,24 @@ export class TripsService {
       throw new ConflictException({
         error: 'TRIP_STATUS_TRANSITION_NOT_ALLOWED',
         message: 'Không thể hủy chuyến xe đang chạy hoặc đã hoàn thành.',
+      });
+    }
+
+    const activeBooking = await this.prisma.gheChuyenXe.findFirst({
+      where: {
+        chuyenXeId: id,
+        OR: [
+          { trangThai: { in: ['DANG_GIU', 'DA_DAT'] } },
+          { ves: { some: { trangThai: { not: 'HUY' } } } },
+        ],
+      },
+      select: { gheChuyenXeId: true },
+    });
+
+    if (activeBooking) {
+      throw new ConflictException({
+        error: 'TRIP_HAS_ACTIVE_BOOKINGS',
+        message: 'Không thể hủy chuyến xe đã có vé hoặc đang có khách giữ chỗ.',
       });
     }
 
