@@ -366,18 +366,20 @@ export function TripSeatsManagement({
                 </div>
               ) : (
                 <div className="trip-seat-groups">
-                  {[...seatGroups.entries()].map(([groupName, seats]) => (
-                    <section
-                      aria-labelledby={`group-${groupName}`}
-                      className="trip-seat-group"
-                      key={groupName}
-                    >
-                      <h3
-                        className="trip-seat-group__title"
-                        id={`group-${groupName}`}
+                  {[...seatGroups.entries()].map(([groupName, seats], groupIndex) => {
+                    const groupId = `trip-seat-group-${groupIndex}`;
+                    return (
+                      <section
+                        aria-labelledby={groupId}
+                        className="trip-seat-group"
+                        key={groupName}
                       >
-                        {groupName} ({seats.length})
-                      </h3>
+                        <h3
+                          className="trip-seat-group__title"
+                          id={groupId}
+                        >
+                          {groupName} ({seats.length})
+                        </h3>
                       <div className="trip-seat-grid">
                         {seats.map((seat) => (
                           <div
@@ -394,8 +396,9 @@ export function TripSeatsManagement({
                         ))}
                       </div>
                     </section>
-                  ))}
-                </div>
+                  );
+                })}
+              </div>
               )}
             </section>
           </>

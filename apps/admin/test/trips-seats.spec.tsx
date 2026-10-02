@@ -178,6 +178,13 @@ describe('TripSeatsManagement Workspace', () => {
     // Position groups
     expect(html).toContain('Tầng dưới (2)');
     expect(html).toContain('Tầng trên (1)');
+    // A11y: deterministic, HTML-safe IDs without whitespace in aria-labelledby
+    expect(html).toContain('aria-labelledby="trip-seat-group-0"');
+    expect(html).toContain('id="trip-seat-group-0"');
+    expect(html).toContain('aria-labelledby="trip-seat-group-1"');
+    expect(html).toContain('id="trip-seat-group-1"');
+    expect(html).not.toContain('group-Tầng dưới');
+    expect(html).not.toContain('group-Tầng trên');
     // Tokens
     expect(html).toContain('data-seat-code="A01"');
     expect(html).toContain('data-seat-code="A02"');
