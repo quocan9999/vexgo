@@ -567,6 +567,34 @@ describe('TripsService create (05.2)', () => {
     });
   });
 
+  it('throws 409 TRIP_VEHICLE_SCHEDULE_CONFLICT when vehicle has schedule conflict in create', async () => {
+    const { prisma, service } = createService();
+    prisma.tuyenXe.findFirst.mockResolvedValue({
+      tuyenXeId: 8,
+      nhaXeId: 3,
+      trangThai: 'HOAT_DONG',
+    });
+    prisma.xe.findFirst.mockResolvedValue({
+      xeId: 4,
+      nhaXeId: 3,
+      trangThai: 'HOAT_DONG',
+      ghes: [{ gheId: 1 }, { gheId: 2 }],
+    });
+    prisma.chuyenXe.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ chuyenXeId: 88 });
+
+    await expect(
+      service.create(createDto, tenantPrincipal as never),
+    ).rejects.toMatchObject({
+      status: 409,
+      response: {
+        error: 'TRIP_VEHICLE_SCHEDULE_CONFLICT',
+        message: 'Xe đã được phân công cho một chuyến xe khác trong cùng khung giờ.',
+      },
+    });
+  });
+
   it('creates trip and GheChuyenXe snapshot initialized to TRONG atomically', async () => {
     const { prisma, service } = createService();
     prisma.tuyenXe.findFirst.mockResolvedValue({
@@ -644,7 +672,9 @@ describe('TripsService update (05.2)', () => {
 
   it('updates departureDate and departureTime and returns updated trip with seatSummary', async () => {
     const { prisma, service } = createService();
-    prisma.chuyenXe.findFirst.mockResolvedValue(firstTrip);
+    prisma.chuyenXe.findFirst
+      .mockResolvedValueOnce(firstTrip)
+      .mockResolvedValueOnce(null);
 
     const updatedTrip = {
       ...firstTrip,
@@ -716,6 +746,23 @@ describe('TripsService update (05.2)', () => {
     });
   });
 
+  it('throws 409 TRIP_VEHICLE_SCHEDULE_CONFLICT when update creates slot conflict for same vehicle', async () => {
+    const { prisma, service } = createService();
+    prisma.chuyenXe.findFirst
+      .mockResolvedValueOnce(firstTrip) // existing trip
+      .mockResolvedValueOnce({ chuyenXeId: 99 }); // conflicting active trip
+
+    await expect(
+      service.update(21, updateDto, tenantPrincipal as never),
+    ).rejects.toMatchObject({
+      status: 409,
+      response: {
+        error: 'TRIP_VEHICLE_SCHEDULE_CONFLICT',
+        message: 'Xe đã được phân công cho một chuyến xe khác trong cùng khung giờ.',
+      },
+    });
+  });
+
   it('handles race condition during update when state changes concurrently', async () => {
     const { prisma, service } = createService();
     prisma.chuyenXe.findFirst
@@ -723,6 +770,7 @@ describe('TripsService update (05.2)', () => {
         ...firstTrip,
         trangThai: 'CHUA_KHOI_HANH',
       })
+      .mockResolvedValueOnce(null)
       .mockResolvedValueOnce({
         ...firstTrip,
         trangThai: 'DANG_CHAY',

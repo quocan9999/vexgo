@@ -651,6 +651,9 @@ export class TripsService {
       });
     }
 
+    const departureDate = new Date(`${dto.departureDate}T00:00:00.000Z`);
+    const departureTime = new Date(`1970-01-01T${dto.departureTime}.000Z`);
+
     const existingCode = await this.prisma.chuyenXe.findFirst({
       where: { maChuyenXe: dto.code },
     });
@@ -663,11 +666,28 @@ export class TripsService {
 
     try {
       const trip = await this.prisma.$transaction(async (tx) => {
+        const scheduleConflict = await tx.chuyenXe.findFirst({
+          where: {
+            xeId: dto.vehicleId,
+            ngayKhoiHanh: departureDate,
+            gioKhoiHanh: departureTime,
+            trangThai: { not: 'DA_HUY' },
+          },
+          select: { chuyenXeId: true },
+        });
+        if (scheduleConflict) {
+          throw new ConflictException({
+            error: 'TRIP_VEHICLE_SCHEDULE_CONFLICT',
+            message:
+              'Xe đã được phân công cho một chuyến xe khác trong cùng khung giờ.',
+          });
+        }
+
         return tx.chuyenXe.create({
           data: {
             maChuyenXe: dto.code,
-            ngayKhoiHanh: new Date(`${dto.departureDate}T00:00:00.000Z`),
-            gioKhoiHanh: new Date(`1970-01-01T${dto.departureTime}.000Z`),
+            ngayKhoiHanh: departureDate,
+            gioKhoiHanh: departureTime,
             trangThai: 'CHUA_KHOI_HANH',
             nhaXeId,
             tuyenXeId: dto.routeId,
@@ -792,44 +812,67 @@ export class TripsService {
       });
     }
 
-    const result = await this.prisma.chuyenXe.updateMany({
-      where: {
-        chuyenXeId: id,
-        nhaXeId,
-        trangThai: 'CHUA_KHOI_HANH',
-      },
-      data: {
-        ngayKhoiHanh: new Date(`${dto.departureDate}T00:00:00.000Z`),
-        gioKhoiHanh: new Date(`1970-01-01T${dto.departureTime}.000Z`),
-      },
-    });
+    const departureDate = new Date(`${dto.departureDate}T00:00:00.000Z`);
+    const departureTime = new Date(`1970-01-01T${dto.departureTime}.000Z`);
 
-    if (result.count === 0) {
-      const reRead = await this.prisma.chuyenXe.findFirst({
-        where: { chuyenXeId: id, nhaXeId },
+    const trip = await this.prisma.$transaction(async (tx) => {
+      const scheduleConflict = await tx.chuyenXe.findFirst({
+        where: {
+          xeId: existing.xeId,
+          ngayKhoiHanh: departureDate,
+          gioKhoiHanh: departureTime,
+          trangThai: { not: 'DA_HUY' },
+          chuyenXeId: { not: id },
+        },
+        select: { chuyenXeId: true },
       });
-      if (!reRead) {
-        throw new NotFoundException({
-          error: 'TRIP_NOT_FOUND',
-          message: 'Không tìm thấy chuyến xe.',
+      if (scheduleConflict) {
+        throw new ConflictException({
+          error: 'TRIP_VEHICLE_SCHEDULE_CONFLICT',
+          message:
+            'Xe đã được phân công cho một chuyến xe khác trong cùng khung giờ.',
         });
       }
-      throw new ConflictException({
-        error: 'TRIP_STATUS_TRANSITION_NOT_ALLOWED',
-        message: 'Chỉ có thể cập nhật chuyến xe khi chưa khởi hành.',
-      });
-    }
 
-    const updated = await this.prisma.chuyenXe.findFirstOrThrow({
-      where: { chuyenXeId: id, nhaXeId },
-      include: {
-        tuyenXe: true,
-        xe: { include: { loaiXe: true } },
-        gheChuyenXes: { select: { trangThai: true } },
-      },
+      const result = await tx.chuyenXe.updateMany({
+        where: {
+          chuyenXeId: id,
+          nhaXeId,
+          trangThai: 'CHUA_KHOI_HANH',
+        },
+        data: {
+          ngayKhoiHanh: departureDate,
+          gioKhoiHanh: departureTime,
+        },
+      });
+
+      if (result.count === 0) {
+        const reRead = await tx.chuyenXe.findFirst({
+          where: { chuyenXeId: id, nhaXeId },
+        });
+        if (!reRead) {
+          throw new NotFoundException({
+            error: 'TRIP_NOT_FOUND',
+            message: 'Không tìm thấy chuyến xe.',
+          });
+        }
+        throw new ConflictException({
+          error: 'TRIP_STATUS_TRANSITION_NOT_ALLOWED',
+          message: 'Chỉ có thể cập nhật chuyến xe khi chưa khởi hành.',
+        });
+      }
+
+      return tx.chuyenXe.findFirstOrThrow({
+        where: { chuyenXeId: id, nhaXeId },
+        include: {
+          tuyenXe: true,
+          xe: { include: { loaiXe: true } },
+          gheChuyenXes: { select: { trangThai: true } },
+        },
+      });
     });
 
-    return this.formatTripWithSummary(updated);
+    return this.formatTripWithSummary(trip);
   }
 
   async updateStatus(

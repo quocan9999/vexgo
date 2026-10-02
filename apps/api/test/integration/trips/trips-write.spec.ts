@@ -355,6 +355,43 @@ describe('Trips write HTTP contract (05.2)', () => {
       });
     });
 
+    it('rejects with 409 TRIP_VEHICLE_SCHEDULE_CONFLICT when same vehicle already assigned to another active trip on same date and time', async () => {
+      prisma.tuyenXe.findFirst.mockResolvedValue(mockRoute);
+      prisma.xe.findFirst.mockResolvedValue(mockVehicle);
+      prisma.chuyenXe.findFirst
+        .mockResolvedValueOnce(null) // code check -> ok
+        .mockResolvedValueOnce({ chuyenXeId: 99 }); // schedule conflict -> exists
+
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/trips')
+        .send(validBody)
+        .expect(409);
+
+      expect(res.body).toEqual({
+        statusCode: 409,
+        error: 'TRIP_VEHICLE_SCHEDULE_CONFLICT',
+        message:
+          'Xe đã được phân công cho một chuyến xe khác trong cùng khung giờ.',
+      });
+      expect(prisma.chuyenXe.create).not.toHaveBeenCalled();
+    });
+
+    it('allows create when vehicle has a cancelled (DA_HUY) trip at the same date and time', async () => {
+      prisma.tuyenXe.findFirst.mockResolvedValue(mockRoute);
+      prisma.xe.findFirst.mockResolvedValue(mockVehicle);
+      prisma.chuyenXe.findFirst
+        .mockResolvedValueOnce(null) // code check -> ok
+        .mockResolvedValueOnce(null); // schedule conflict query ignores DA_HUY, returns null
+      prisma.chuyenXe.create.mockResolvedValue(mockTripCreated);
+
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/trips')
+        .send(validBody)
+        .expect(201);
+
+      expect(res.body.data.code).toBe('FUTA-CX-001');
+    });
+
     it('handles unique constraint race condition P2002 with 409 TRIP_CODE_EXISTS', async () => {
       const p2002 = new Prisma.PrismaClientKnownRequestError(
         'Unique constraint failed',
@@ -434,7 +471,9 @@ describe('Trips write HTTP contract (05.2)', () => {
     });
 
     it('updates departureDate and departureTime', async () => {
-      prisma.chuyenXe.findFirst.mockResolvedValue(mockTripCreated);
+      prisma.chuyenXe.findFirst
+        .mockResolvedValueOnce(mockTripCreated)
+        .mockResolvedValueOnce(null);
       const updatedTrip = {
         ...mockTripCreated,
         ngayKhoiHanh: new Date('2026-10-15T00:00:00.000Z'),
@@ -458,6 +497,45 @@ describe('Trips write HTTP contract (05.2)', () => {
 
       expect(res.body.data.departureDate).toBe('2026-10-15');
       expect(res.body.data.departureTime).toBe('09:00:00');
+    });
+
+    it('rejects with 409 TRIP_VEHICLE_SCHEDULE_CONFLICT when update moves trip into slot of another trip for same vehicle', async () => {
+      prisma.chuyenXe.findFirst
+        .mockResolvedValueOnce(mockTripCreated) // existing trip
+        .mockResolvedValueOnce({ chuyenXeId: 99 }); // conflicting active trip
+
+      const res = await request(app.getHttpServer())
+        .patch('/api/v1/trips/101')
+        .send(validPatchBody)
+        .expect(409);
+
+      expect(res.body).toEqual({
+        statusCode: 409,
+        error: 'TRIP_VEHICLE_SCHEDULE_CONFLICT',
+        message:
+          'Xe đã được phân công cho một chuyến xe khác trong cùng khung giờ.',
+      });
+      expect(prisma.chuyenXe.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('allows update when another trip on same date and time is DA_HUY', async () => {
+      prisma.chuyenXe.findFirst
+        .mockResolvedValueOnce(mockTripCreated)
+        .mockResolvedValueOnce(null); // schedule check ignores DA_HUY
+      const updatedTrip = {
+        ...mockTripCreated,
+        ngayKhoiHanh: new Date('2026-10-15T00:00:00.000Z'),
+        gioKhoiHanh: new Date('1970-01-01T09:00:00.000Z'),
+      };
+      prisma.chuyenXe.updateMany.mockResolvedValue({ count: 1 });
+      prisma.chuyenXe.findFirstOrThrow.mockResolvedValue(updatedTrip);
+
+      const res = await request(app.getHttpServer())
+        .patch('/api/v1/trips/101')
+        .send(validPatchBody)
+        .expect(200);
+
+      expect(res.body.data.departureDate).toBe('2026-10-15');
     });
 
     it('rejects with 404 TRIP_NOT_FOUND when trip does not belong to tenant', async () => {
