@@ -16,7 +16,13 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<'/'>) {
   return (
-    <html lang="vi" className={cn('font-sans', geist.variable)}>
+    // Browser extensions may add classes (e.g. mdl-js) before hydration.
+    // Limit suppression to html attributes; descendants still report mismatches.
+    <html
+      lang="vi"
+      className={cn('font-sans', geist.variable)}
+      suppressHydrationWarning
+    >
       <body>{children}</body>
     </html>
   );
