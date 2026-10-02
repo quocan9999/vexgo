@@ -157,7 +157,7 @@ export async function getTripById(
 ): Promise<Trip> {
   const body = await readResponse(
     await adminApiFetch(
-      `${getApiBaseUrl()}/api/v1/trips/${tripId}`,
+      `${getApiBaseUrl()}/api/v1/trips/${tripId}/operational-detail`,
       { cache: 'no-store', signal },
     ),
     'thông tin chuyến xe',
@@ -322,7 +322,7 @@ export async function getTripSeats(
   query?: { status?: string },
   signal?: AbortSignal,
 ): Promise<TripSeatsResponse> {
-  const url = new URL(`${getApiBaseUrl()}/api/v1/trips/${tripId}/seats`);
+  const url = new URL(`${getApiBaseUrl()}/api/v1/trips/${tripId}/seat-inventory`);
   if (query?.status) {
     url.searchParams.set('status', query.status);
   }

@@ -52,7 +52,7 @@ export class TripsController {
     return this.tripsService.findAll(query, principal);
   }
 
-  @Get(':id')
+  @Get(':id/operational-detail')
   @RequireRoles(...TENANT_PRINCIPAL_ROLES)
   @RequirePermissions('trip:read')
   findOne(
@@ -60,6 +60,29 @@ export class TripsController {
     @CurrentPrincipal() principal: AuthPrincipal,
   ) {
     return this.tripsService.findOne(params.id, principal);
+  }
+
+  @Get(':id/seat-inventory')
+  @RequireRoles(...TENANT_PRINCIPAL_ROLES)
+  @RequirePermissions('trip:read')
+  getSeatInventory(
+    @Param() params: TripIdParamsDto,
+    @Query() query: TripSeatsQueryDto,
+    @CurrentPrincipal() principal: AuthPrincipal,
+  ) {
+    return this.tripsService.getSeats(params.id, query, principal);
+  }
+
+  @Get(':id/seats')
+  @OptionalAuth()
+  getCustomerSeats(@Param() params: TripIdParamsDto) {
+    return this.tripsService.getCustomerSeats(params.id);
+  }
+
+  @Get(':id')
+  @OptionalAuth()
+  getDetails(@Param() params: TripIdParamsDto) {
+    return this.tripsService.getDetails(params.id);
   }
 
   @Patch(':id')
@@ -92,16 +115,5 @@ export class TripsController {
     @CurrentPrincipal() principal: AuthPrincipal,
   ) {
     return this.tripsService.cancel(params.id, principal);
-  }
-
-  @Get(':id/seats')
-  @RequireRoles(...TENANT_PRINCIPAL_ROLES)
-  @RequirePermissions('trip:read')
-  getSeats(
-    @Param() params: TripIdParamsDto,
-    @Query() query: TripSeatsQueryDto,
-    @CurrentPrincipal() principal: AuthPrincipal,
-  ) {
-    return this.tripsService.getSeats(params.id, query, principal);
   }
 }

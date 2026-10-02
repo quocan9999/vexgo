@@ -285,7 +285,7 @@ describe('TripDetailSheet "Xem ghế chuyến" integration', () => {
 });
 
 describe('getTripSeats API Service Contract', () => {
-  it('queries GET /api/v1/trips/:id/seats without query when no filter applied', async () => {
+  it('queries GET /api/v1/trips/:id/seat-inventory without query when no filter applied', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(JSON.stringify(mockSeatsResponse), { status: 200 }),
     );
@@ -294,14 +294,14 @@ describe('getTripSeats API Service Contract', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = fetchMock.mock.calls[0];
-    expect(new URL(url as string).pathname).toBe('/api/v1/trips/101/seats');
+    expect(new URL(url as string).pathname).toBe('/api/v1/trips/101/seat-inventory');
     expect(new URL(url as string).search).toBe('');
     expect(init?.method).toBe('GET');
     expect(result.data).toHaveLength(3);
     expect(result.meta.total).toBe(3);
   });
 
-  it('queries GET /api/v1/trips/:id/seats?status=TRONG when status filter provided', async () => {
+  it('queries GET /api/v1/trips/:id/seat-inventory?status=TRONG when status filter provided', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(
         JSON.stringify({
@@ -316,7 +316,7 @@ describe('getTripSeats API Service Contract', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url] = fetchMock.mock.calls[0];
-    expect(new URL(url as string).pathname).toBe('/api/v1/trips/101/seats');
+    expect(new URL(url as string).pathname).toBe('/api/v1/trips/101/seat-inventory');
     expect(new URL(url as string).searchParams.get('status')).toBe('TRONG');
     expect(result.data).toHaveLength(1);
     expect(result.data[0].seat.code).toBe('A01');

@@ -361,6 +361,46 @@ export class TripsService {
     return mapTrip(cx, businessTimeZone, bangGia ?? undefined);
   }
 
+  async getCustomerSeats(id: number) {
+    const trip = await this.prisma.chuyenXe.findUnique({
+      where: { chuyenXeId: id },
+      select: { chuyenXeId: true, trangThai: true },
+    });
+
+    if (!trip) {
+      throw new NotFoundException({
+        error: 'TRIP_NOT_FOUND',
+        message: 'Không tìm thấy chuyến xe.',
+      });
+    }
+
+    if (trip.trangThai !== 'CHUA_KHOI_HANH') {
+      throw new NotFoundException({
+        error: 'TRIP_NOT_AVAILABLE',
+        message: 'Chuyến xe này hiện không mở bán.',
+      });
+    }
+
+    const gheChuyenXes = await this.prisma.gheChuyenXe.findMany({
+      where: { chuyenXeId: id },
+      include: { ghe: true },
+      orderBy: { ghe: { soGhe: 'asc' } },
+    });
+
+    if (gheChuyenXes.length === 0) {
+      throw new NotFoundException({
+        error: 'TRIP_SEATS_NOT_FOUND',
+        message: 'Không tìm thấy sơ đồ ghế cho chuyến xe này.',
+      });
+    }
+
+    return gheChuyenXes.map((gx) => ({
+      tripSeatId: gx.gheChuyenXeId,
+      seatNumber: gx.ghe.soGhe,
+      position: gx.ghe.viTri,
+      status: gx.trangThai,
+    }));
+  }
 
   async getSeats(
     id: number,

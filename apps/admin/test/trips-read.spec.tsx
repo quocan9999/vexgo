@@ -229,6 +229,10 @@ describe('Trip service API contract validation', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     const result = await getTripById(101);
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://localhost:4002/api/v1/trips/101/operational-detail',
+      expect.objectContaining({ cache: 'no-store' }),
+    );
     expect(result.code).toBe('FUTA-CX-001');
     expect(result.seatSummary?.total).toBe(34);
     expect(result.seatSummary?.available).toBe(30);
