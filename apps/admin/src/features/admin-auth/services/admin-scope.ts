@@ -5,6 +5,7 @@ export type AdminAccessScope =
 
 const TENANT_PRINCIPAL_ROLES = new Set([
   'NHA_XE_ADMIN',
+  'NHAN_VIEN_DIEU_HANH',
   'NHAN_VIEN_BAN_VE',
   'NHAN_VIEN_CSKH',
   'NHAN_VIEN_PHU_XE',

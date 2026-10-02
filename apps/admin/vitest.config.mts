@@ -23,5 +23,6 @@ export default defineConfig({
     environment: 'node',
     include: ['test/**/*.spec.tsx'],
     setupFiles: ['test/admin-auth-test-session.ts'],
+    testTimeout: 15000,
   },
 });

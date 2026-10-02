@@ -83,7 +83,7 @@ const roleData = [
     isProtected: false,
     permissionKeys: ['vehicle:read'],
   },
-  ...(['NHAN_VIEN_BAN_VE', 'NHAN_VIEN_CSKH', 'NHAN_VIEN_PHU_XE', 'NHAN_VIEN_KINH_DOANH'] as const).map(
+  ...(['NHAN_VIEN_DIEU_HANH', 'NHAN_VIEN_BAN_VE', 'NHAN_VIEN_CSKH', 'NHAN_VIEN_PHU_XE', 'NHAN_VIEN_KINH_DOANH'] as const).map(
     (roleName) => ({
       roleName,
       description: null,
