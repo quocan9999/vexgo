@@ -14,6 +14,7 @@ import { RequireRoles } from '../auth/decorators/require-roles.decorator.js';
 import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
 import { BookingsService } from './bookings.service.js';
 import { BookingQueryDto } from './dto/booking-query.dto.js';
+import { CreateBookingDto } from './dto/create-booking.dto.js';
 import { QuoteBookingDto } from './dto/quote-booking.dto.js';
 
 @Controller('bookings')
@@ -30,6 +31,14 @@ export class BookingsController {
     return this.bookingsService.quote(dto, principal);
   }
 
+  @Post()
+  @HttpCode(HttpStatus.CREATED)
+  create(
+    @Body() dto: CreateBookingDto,
+    @CurrentPrincipal() principal: AuthPrincipal,
+  ) {
+    return this.bookingsService.create(dto, principal);
+  }
 
   @Get()
   findCustomerBookings(
