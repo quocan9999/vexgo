@@ -1,5 +1,5 @@
 import { renderToStaticMarkup } from 'react-dom/server';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TripFormDialog } from '../src/features/trips/components/trip-form-dialog';
 import {
   TripDetailSheet,
@@ -10,13 +10,11 @@ import {
   createTrip,
   getTripRouteOptions,
   getTripVehicleOptions,
-  TripApiError,
   updateTrip,
   updateTripStatus,
 } from '../src/features/trips/services/trip-service';
 import type {
   Trip,
-  TripLookupOption,
   TripLookupOptionsState,
 } from '../src/features/trips/types/trip';
 import { setEmployeeAdminTestSession } from './admin-auth-test-session';

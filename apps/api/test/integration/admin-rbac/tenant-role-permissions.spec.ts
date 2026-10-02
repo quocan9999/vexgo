@@ -141,6 +141,21 @@ const roleRows = [
     moTa: 'Nhân viên kinh doanh',
     vaiTroQuyens: [],
   },
+  {
+    vaiTroId: 6,
+    tenVaiTro: 'NHAN_VIEN_DIEU_HANH',
+    moTa: 'Nhân viên điều hành',
+    vaiTroQuyens: [
+      'trip:read',
+      'trip:create',
+      'trip:update',
+      'trip:cancel',
+      'route:read',
+      'vehicle:read',
+      'vehicle-type:read',
+      'fare-price:read',
+    ].map((tenQuyen) => ({ quyen: { tenQuyen } })),
+  },
 ];
 
 const initialTenantOverrideRows = [
@@ -451,7 +466,7 @@ describe('Tenant role-permission API', () => {
       effectivePermissionKeys: [],
       source: 'global',
     });
-    expect(response.body.data.roles).toHaveLength(5);
+    expect(response.body.data.roles).toHaveLength(6);
     expect(
       prismaMockImpl.cauHinhQuyenVaiTroNhaXe.findMany,
     ).toHaveBeenCalledWith(

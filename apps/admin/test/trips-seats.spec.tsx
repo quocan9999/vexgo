@@ -5,7 +5,7 @@ import {
   TripSeatStatusBadge,
 } from '../src/features/trips/components/trip-seats-management';
 import { TripDetailSheet } from '../src/features/trips/components/trip-detail-sheet';
-import { getTripSeats, TripApiError } from '../src/features/trips/services/trip-service';
+import { getTripSeats } from '../src/features/trips/services/trip-service';
 import type {
   Trip,
   TripSeat,

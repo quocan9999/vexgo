@@ -27,7 +27,7 @@ import { useAdminPermissions } from '@/features/admin-auth/hooks/use-admin-permi
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
 import { useTripLookupOptions } from '../hooks/use-trip-lookup-options';
 import { useTrips } from '../hooks/use-trips';
-import type { Trip, TripSortKey, TripStatus } from '../types/trip';
+import type { TripSortKey } from '../types/trip';
 import { TripDetailSheet, TripStatusBadge } from './trip-detail-sheet';
 import { TripFormDialog } from './trip-form-dialog';
 import '../trips.css';

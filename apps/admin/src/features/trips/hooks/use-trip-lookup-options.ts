@@ -29,7 +29,6 @@ export function useTripLookupOptions() {
   useEffect(() => {
     const controller = new AbortController();
     let current = true;
-    setRouteOptions({ status: 'loading' });
 
     getTripRouteOptions(controller.signal)
       .then((options) => {
@@ -53,7 +52,6 @@ export function useTripLookupOptions() {
   useEffect(() => {
     const controller = new AbortController();
     let current = true;
-    setVehicleOptions({ status: 'loading' });
 
     getTripVehicleOptions(controller.signal)
       .then((options) => {
@@ -75,16 +73,18 @@ export function useTripLookupOptions() {
   }, [retryVehiclesCount]);
 
   function retryRoutes() {
+    setRouteOptions({ status: 'loading' });
     setRetryRoutesCount((c) => c + 1);
   }
 
   function retryVehicles() {
+    setVehicleOptions({ status: 'loading' });
     setRetryVehiclesCount((c) => c + 1);
   }
 
   function retryAll() {
-    setRetryRoutesCount((c) => c + 1);
-    setRetryVehiclesCount((c) => c + 1);
+    retryRoutes();
+    retryVehicles();
   }
 
   return {

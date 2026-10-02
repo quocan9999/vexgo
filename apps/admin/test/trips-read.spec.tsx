@@ -2,7 +2,6 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TripsManagement } from '../src/features/trips/components/trips-management';
 import {
-  TripDetailSheet,
   tripStatusLabel,
   TripStatusBadge,
 } from '../src/features/trips/components/trip-detail-sheet';

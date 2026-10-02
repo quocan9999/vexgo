@@ -69,13 +69,21 @@ export function TripSeatsManagement({
   const canRead = can('trip:read');
   const validTripId = Number.isSafeInteger(tripId) && tripId > 0;
 
-  const [workspace, setWorkspace] = useState<WorkspaceState>(
-    initialTrip && initialSeats
-      ? { status: 'success', trip: initialTrip, seatsData: initialSeats }
-      : { status: 'loading' },
-  );
+  const [workspace, setWorkspace] = useState<WorkspaceState>(() => {
+    if (!validTripId) {
+      return { status: 'error', message: 'Mã chuyến xe không hợp lệ.' };
+    }
+    if (initialTrip && initialSeats) {
+      return { status: 'success', trip: initialTrip, seatsData: initialSeats };
+    }
+    return { status: 'loading' };
+  });
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [refreshCount, setRefreshCount] = useState(0);
+
+  const currentWorkspace: WorkspaceState = !validTripId
+    ? { status: 'error', message: 'Mã chuyến xe không hợp lệ.' }
+    : workspace;
 
   function refresh() {
     setWorkspace({ status: 'loading' });
@@ -84,9 +92,6 @@ export function TripSeatsManagement({
 
   useEffect(() => {
     if (!validTripId || !canRead) {
-      if (!validTripId) {
-        setWorkspace({ status: 'error', message: 'Mã chuyến xe không hợp lệ.' });
-      }
       return;
     }
 
@@ -142,8 +147,8 @@ export function TripSeatsManagement({
   }
 
   const seatGroups =
-    workspace.status === 'success'
-      ? workspace.seatsData.data.reduce<Map<string, TripSeat[]>>(
+    currentWorkspace.status === 'success'
+      ? currentWorkspace.seatsData.data.reduce<Map<string, TripSeat[]>>(
           (groups, seat) => {
             const groupName =
               seat.seat.position?.trim() || 'Chưa xác định vị trí';
@@ -166,7 +171,7 @@ export function TripSeatsManagement({
                 Quay lại danh sách chuyến
               </Link>
               <Button
-                disabled={workspace.status === 'loading'}
+                disabled={currentWorkspace.status === 'loading'}
                 onClick={refresh}
                 type="button"
                 variant="secondary"
@@ -178,14 +183,14 @@ export function TripSeatsManagement({
           }
           eyebrow="QUẢN LÝ VẬN HÀNH"
           title={
-            workspace.status === 'success'
-              ? `Ghế chuyến ${workspace.trip.code}`
+            currentWorkspace.status === 'success'
+              ? `Ghế chuyến ${currentWorkspace.trip.code}`
               : 'Ghế chuyến xe'
           }
           titleId="trip-seats-title"
         />
 
-        {workspace.status === 'loading' && (
+        {currentWorkspace.status === 'loading' && (
           <section
             aria-busy="true"
             className="trips-list-state"
@@ -200,14 +205,14 @@ export function TripSeatsManagement({
           </section>
         )}
 
-        {workspace.status === 'error' && (
+        {currentWorkspace.status === 'error' && (
           <section className="trips-list-state" role="alert">
             <p>
-              {workspace.isNotFound
+              {currentWorkspace.isNotFound
                 ? 'Không tìm thấy chuyến xe hoặc bạn không có quyền truy cập.'
-                : workspace.message}
+                : currentWorkspace.message}
             </p>
-            {workspace.isNotFound ? (
+            {currentWorkspace.isNotFound ? (
               <Link className="button button-secondary" href="/trips">
                 Quay lại danh sách chuyến
               </Link>
@@ -220,7 +225,7 @@ export function TripSeatsManagement({
           </section>
         )}
 
-        {workspace.status === 'success' && (
+        {currentWorkspace.status === 'success' && (
           <>
             <section
               aria-label="Thông tin chuyến xe"
@@ -229,28 +234,28 @@ export function TripSeatsManagement({
               <div className="trip-seats-context__item">
                 <span className="trip-seats-context__label">Tuyến xe</span>
                 <strong className="trip-seats-context__value">
-                  {workspace.trip.route.code} ({workspace.trip.route.origin} →{' '}
-                  {workspace.trip.route.destination})
+                  {currentWorkspace.trip.route.code} ({currentWorkspace.trip.route.origin} →{' '}
+                  {currentWorkspace.trip.route.destination})
                 </strong>
               </div>
               <div className="trip-seats-context__item">
                 <span className="trip-seats-context__label">Thời gian</span>
                 <strong className="trip-seats-context__value">
-                  {formatTime(workspace.trip.departureTime)} -{' '}
-                  {formatDate(workspace.trip.departureDate)}
+                  {formatTime(currentWorkspace.trip.departureTime)} -{' '}
+                  {formatDate(currentWorkspace.trip.departureDate)}
                 </strong>
               </div>
               <div className="trip-seats-context__item">
                 <span className="trip-seats-context__label">Xe phục vụ</span>
                 <strong className="trip-seats-context__value">
-                  {workspace.trip.vehicle.licensePlate} (
-                  {workspace.trip.vehicle.vehicleType.name})
+                  {currentWorkspace.trip.vehicle.licensePlate} (
+                  {currentWorkspace.trip.vehicle.vehicleType.name})
                 </strong>
               </div>
               <div className="trip-seats-context__item">
                 <span className="trip-seats-context__label">Trạng thái chuyến</span>
                 <div className="trip-seats-context__value">
-                  <TripStatusBadge status={workspace.trip.status} />
+                  <TripStatusBadge status={currentWorkspace.trip.status} />
                 </div>
               </div>
             </section>
@@ -261,25 +266,25 @@ export function TripSeatsManagement({
             >
               <div className="trips-seat-card">
                 <span className="trips-seat-card__count">
-                  {workspace.seatsData.meta.total}
+                  {currentWorkspace.seatsData.meta.total}
                 </span>
                 <span className="trips-seat-card__label">Tổng số ghế</span>
               </div>
               <div className="trips-seat-card trips-seat-card--available">
                 <span className="trips-seat-card__count">
-                  {workspace.seatsData.meta.available}
+                  {currentWorkspace.seatsData.meta.available}
                 </span>
                 <span className="trips-seat-card__label">Ghế trống</span>
               </div>
               <div className="trips-seat-card trips-seat-card--held">
                 <span className="trips-seat-card__count">
-                  {workspace.seatsData.meta.held}
+                  {currentWorkspace.seatsData.meta.held}
                 </span>
                 <span className="trips-seat-card__label">Đang giữ</span>
               </div>
               <div className="trips-seat-card trips-seat-card--booked">
                 <span className="trips-seat-card__count">
-                  {workspace.seatsData.meta.booked}
+                  {currentWorkspace.seatsData.meta.booked}
                 </span>
                 <span className="trips-seat-card__label">Đã đặt</span>
               </div>
@@ -323,7 +328,7 @@ export function TripSeatsManagement({
                   type="button"
                   variant={statusFilter === '' ? 'primary' : 'secondary'}
                 >
-                  Tất cả ({workspace.seatsData.meta.total})
+                  Tất cả ({currentWorkspace.seatsData.meta.total})
                 </Button>
                 <Button
                   aria-pressed={statusFilter === 'TRONG'}
@@ -331,7 +336,7 @@ export function TripSeatsManagement({
                   type="button"
                   variant={statusFilter === 'TRONG' ? 'primary' : 'secondary'}
                 >
-                  Trống ({workspace.seatsData.meta.available})
+                  Trống ({currentWorkspace.seatsData.meta.available})
                 </Button>
                 <Button
                   aria-pressed={statusFilter === 'DANG_GIU'}
@@ -339,7 +344,7 @@ export function TripSeatsManagement({
                   type="button"
                   variant={statusFilter === 'DANG_GIU' ? 'primary' : 'secondary'}
                 >
-                  Đang giữ ({workspace.seatsData.meta.held})
+                  Đang giữ ({currentWorkspace.seatsData.meta.held})
                 </Button>
                 <Button
                   aria-pressed={statusFilter === 'DA_DAT'}
@@ -347,11 +352,11 @@ export function TripSeatsManagement({
                   type="button"
                   variant={statusFilter === 'DA_DAT' ? 'primary' : 'secondary'}
                 >
-                  Đã đặt ({workspace.seatsData.meta.booked})
+                  Đã đặt ({currentWorkspace.seatsData.meta.booked})
                 </Button>
               </div>
 
-              {workspace.seatsData.data.length === 0 ? (
+              {currentWorkspace.seatsData.data.length === 0 ? (
                 <div className="trip-seats-empty" role="status">
                   <p>
                     {statusFilter
