@@ -1007,6 +1007,21 @@ export class TripsService {
       });
     }
 
+    const activeShipment = await this.prisma.phieuGuiHang.findFirst({
+      where: {
+        chuyenXeId: id,
+        trangThai: { notIn: ['DA_GIAO', 'DA_HUY'] },
+      },
+      select: { phieuGuiHangId: true },
+    });
+
+    if (activeShipment) {
+      throw new ConflictException({
+        error: 'TRIP_HAS_ACTIVE_SHIPMENTS',
+        message: 'Không thể hủy chuyến xe đang có vận đơn được điều phối.',
+      });
+    }
+
     const result = await this.prisma.chuyenXe.updateMany({
       where: {
         chuyenXeId: id,

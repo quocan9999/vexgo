@@ -52,6 +52,7 @@ function createService() {
     },
     bangGia: { findMany: vi.fn(), findFirst: vi.fn() },
     gheChuyenXe: { findMany: vi.fn(), findFirst: vi.fn() },
+    phieuGuiHang: { findFirst: vi.fn() },
     tuyenXe: { findFirst: vi.fn() },
     xe: { findFirst: vi.fn() },
     $transaction: vi.fn(),
@@ -979,6 +980,7 @@ describe('TripsService.cancel', () => {
       trangThai: 'CHUA_KHOI_HANH',
     });
     prisma.gheChuyenXe.findFirst.mockResolvedValue(null);
+    prisma.phieuGuiHang.findFirst.mockResolvedValue(null);
     prisma.chuyenXe.updateMany.mockResolvedValue({ count: 1 });
     prisma.chuyenXe.findFirstOrThrow.mockResolvedValue({
       ...firstTrip,
@@ -1012,6 +1014,46 @@ describe('TripsService.cancel', () => {
       },
     });
     expect(prisma.chuyenXe.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('throws 409 TRIP_HAS_ACTIVE_SHIPMENTS when trip has active shipment dispatched to it', async () => {
+    const { prisma, service } = createService();
+    prisma.chuyenXe.findFirst.mockResolvedValue({
+      ...firstTrip,
+      trangThai: 'CHUA_KHOI_HANH',
+    });
+    prisma.gheChuyenXe.findFirst.mockResolvedValue(null);
+    prisma.phieuGuiHang.findFirst.mockResolvedValue({ phieuGuiHangId: 301 });
+
+    await expect(
+      service.cancel(21, tenantPrincipal as never),
+    ).rejects.toMatchObject({
+      status: 409,
+      response: {
+        error: 'TRIP_HAS_ACTIVE_SHIPMENTS',
+        message: 'Không thể hủy chuyến xe đang có vận đơn được điều phối.',
+      },
+    });
+    expect(prisma.chuyenXe.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('allows cancellation when shipments attached to trip are terminal (e.g. DA_GIAO or DA_HUY)', async () => {
+    const { prisma, service } = createService();
+    prisma.chuyenXe.findFirst.mockResolvedValue({
+      ...firstTrip,
+      trangThai: 'CHUA_KHOI_HANH',
+    });
+    prisma.gheChuyenXe.findFirst.mockResolvedValue(null);
+    prisma.phieuGuiHang.findFirst.mockResolvedValue(null);
+    prisma.chuyenXe.updateMany.mockResolvedValue({ count: 1 });
+    prisma.chuyenXe.findFirstOrThrow.mockResolvedValue({
+      ...firstTrip,
+      trangThai: 'DA_HUY',
+    });
+
+    const result = await service.cancel(21, tenantPrincipal as never);
+    expect(prisma.chuyenXe.updateMany).toHaveBeenCalled();
+    expect(result.data.status).toBe('DA_HUY');
   });
 
   it('rejects cancellation of running or completed trips with 409', async () => {

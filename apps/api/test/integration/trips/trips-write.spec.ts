@@ -64,6 +64,9 @@ const prisma = {
     findMany: vi.fn(),
     findFirst: vi.fn(),
   },
+  phieuGuiHang: {
+    findFirst: vi.fn(),
+  },
   tuyenXe: { findFirst: vi.fn() },
   xe: { findFirst: vi.fn() },
   phienDangNhap: { findUnique: vi.fn() },
@@ -791,6 +794,8 @@ describe('Trips write HTTP contract (05.2)', () => {
         ...mockTripCreated,
         trangThai: 'CHUA_KHOI_HANH',
       });
+      prisma.gheChuyenXe.findFirst.mockResolvedValue(null);
+      prisma.phieuGuiHang.findFirst.mockResolvedValue(null);
       prisma.chuyenXe.updateMany.mockResolvedValue({ count: 1 });
       prisma.chuyenXe.findFirstOrThrow.mockResolvedValue({
         ...mockTripCreated,
@@ -839,6 +844,47 @@ describe('Trips write HTTP contract (05.2)', () => {
         message: 'Không thể hủy chuyến xe đã có vé hoặc đang có khách giữ chỗ.',
       });
       expect(prisma.chuyenXe.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('rejects cancellation with 409 TRIP_HAS_ACTIVE_SHIPMENTS when trip has active shipments', async () => {
+      prisma.chuyenXe.findFirst.mockResolvedValue({
+        ...mockTripCreated,
+        trangThai: 'CHUA_KHOI_HANH',
+      });
+      prisma.gheChuyenXe.findFirst.mockResolvedValue(null);
+      prisma.phieuGuiHang.findFirst.mockResolvedValue({ phieuGuiHangId: 301 });
+
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/trips/101/cancel')
+        .expect(409);
+
+      expect(res.body).toEqual({
+        statusCode: 409,
+        error: 'TRIP_HAS_ACTIVE_SHIPMENTS',
+        message: 'Không thể hủy chuyến xe đang có vận đơn được điều phối.',
+      });
+      expect(prisma.chuyenXe.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('allows cancellation when trip shipments are terminal (DA_GIAO or DA_HUY)', async () => {
+      prisma.chuyenXe.findFirst.mockResolvedValue({
+        ...mockTripCreated,
+        trangThai: 'CHUA_KHOI_HANH',
+      });
+      prisma.gheChuyenXe.findFirst.mockResolvedValue(null);
+      prisma.phieuGuiHang.findFirst.mockResolvedValue(null);
+      prisma.chuyenXe.updateMany.mockResolvedValue({ count: 1 });
+      prisma.chuyenXe.findFirstOrThrow.mockResolvedValue({
+        ...mockTripCreated,
+        trangThai: 'DA_HUY',
+      });
+
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/trips/101/cancel')
+        .expect(201);
+
+      expect(prisma.chuyenXe.updateMany).toHaveBeenCalled();
+      expect(res.body.data.status).toBe('DA_HUY');
     });
 
     it('rejects cancellation of running or completed trips with 409', async () => {
