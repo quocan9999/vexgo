@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ChevronRight, Info, Mail, Phone, User } from 'lucide-react';
@@ -15,6 +15,7 @@ import { validatePassengerInfo } from '../utils/passenger-validation';
 import { createPaymentDraft } from '../services/payment-draft';
 import { FeaturePlaceholderModal } from './feature-placeholder-modal';
 import { useAuthSession } from '@/features/auth/auth-session';
+import { customerApi } from '@/features/account/services/customer.api';
 
 export interface RoundTripBookingProps {
   outboundPost: Post;
@@ -153,7 +154,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
   returnTripSeats,
 }) => {
   const router = useRouter();
-  const { user } = useAuthSession();
+  const { user, executeWithAuth, isAuthenticated } = useAuthSession();
   const [userNameOverride, setUserNameOverride] = useState<string | null>(null);
   const [userPhoneOverride, setUserPhoneOverride] = useState<string | null>(null);
   const [customerEmail, setCustomerEmail] = useState('');
@@ -163,6 +164,22 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
   const [validationAttempted, setValidationAttempted] = useState(false);
   const [showVehicleInfoModal, setShowVehicleInfoModal] = useState(false);
   const [showTripDetailModal, setShowTripDetailModal] = useState(false);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    let active = true;
+    executeWithAuth((token) => customerApi.getMe(token))
+      .then((res) => {
+        if (!active) return;
+        if (res?.data?.email) {
+          setCustomerEmail((curr) => curr || res.data.email || '');
+        }
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [isAuthenticated, executeWithAuth]);
 
   const customerName =
     userNameOverride !== null ? userNameOverride : user?.fullName || '';

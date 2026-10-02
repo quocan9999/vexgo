@@ -4,6 +4,9 @@ import { authApi } from '../../../src/features/auth/services/auth.api.ts';
 import { customerApi } from '../../../src/features/account/services/customer.api.ts';
 import { routesApi } from '../../../src/features/routes/services/routes.api.ts';
 import { tripsApi } from '../../../src/features/trips/services/trips.api.ts';
+import { bookingsApi } from '../../../src/features/account/services/bookings.api.ts';
+import { ticketsApi } from '../../../src/features/account/services/tickets.api.ts';
+import { contactApi } from '../../../src/features/content/services/contact.api.ts';
 
 const originalFetch = globalThis.fetch;
 
@@ -166,4 +169,67 @@ test('authApi.logout sends refreshToken in request body and access token in auth
     refreshToken: 'current-refresh-token',
   });
   assert.equal(calls[0].init.headers.Authorization, 'Bearer current-access-token');
+});
+
+test('bookingsApi.getBookingDetail returns response with data envelope', async () => {
+  const calls = [];
+  globalThis.fetch = async (url, init) => {
+    calls.push({ url: String(url), init });
+    return jsonResponse({ data: { bookingId: 101, bookingCode: 'PDV-101' } });
+  };
+
+  const response = await bookingsApi.getBookingDetail('token', 101);
+
+  assert.equal(calls[0].url, 'http://localhost:4000/api/v1/bookings/101');
+  assert.equal(calls[0].init.headers.Authorization, 'Bearer token');
+  assert.equal(response.data.bookingId, 101);
+});
+
+test('ticketsApi.getTicketDetail returns response with data envelope', async () => {
+  const calls = [];
+  globalThis.fetch = async (url, init) => {
+    calls.push({ url: String(url), init });
+    return jsonResponse({ data: { ticketId: 1, ticketCode: 'VE-001' } });
+  };
+
+  const response = await ticketsApi.getTicketDetail('token', 1);
+
+  assert.equal(calls[0].url, 'http://localhost:4000/api/v1/tickets/1');
+  assert.equal(calls[0].init.headers.Authorization, 'Bearer token');
+  assert.equal(response.data.ticketId, 1);
+});
+
+test('ticketsApi.lookupTicket returns response with data envelope', async () => {
+  let requestedUrl = '';
+  globalThis.fetch = async (url) => {
+    requestedUrl = String(url);
+    return jsonResponse({ data: { ticketId: 1, ticketCode: 'VE-001' } });
+  };
+
+  const response = await ticketsApi.lookupTicket('VE-001', '0901234567');
+
+  assert.equal(
+    requestedUrl,
+    'http://localhost:4000/api/v1/tickets/lookup?ticketCode=VE-001&phoneNumber=0901234567',
+  );
+  assert.equal(response.data.ticketId, 1);
+});
+
+test('contactApi.submitContact returns response with data envelope', async () => {
+  const calls = [];
+  globalThis.fetch = async (url, init) => {
+    calls.push({ url: String(url), init });
+    return jsonResponse({ data: { contactId: 1, fullName: 'Nguyễn Văn A' } });
+  };
+
+  const response = await contactApi.submitContact({
+    fullName: 'Nguyễn Văn A',
+    phoneNumber: '0912345678',
+    subject: 'Hỗ trợ',
+    message: 'Nội dung',
+  });
+
+  assert.equal(calls[0].url, 'http://localhost:4000/api/v1/contacts');
+  assert.equal(calls[0].init.method, 'POST');
+  assert.equal(response.data.contactId, 1);
 });

@@ -1,4 +1,3 @@
-/* eslint-disable */
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -25,6 +24,10 @@ export interface HeroSectionProps {
   setSelectedType: (val: string) => void;
   selectedPrice: string;
   setSelectedPrice: (val: string) => void;
+  tripType?: 'one-way' | 'round-trip';
+  setTripType?: (tripType: 'one-way' | 'round-trip') => void;
+  returnDate?: string;
+  setReturnDate?: (returnDate: string) => void;
   onSearch?: (criteria: {
     tripType: 'one-way' | 'round-trip';
     departureDate: string;
@@ -42,10 +45,20 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
   selectedType,
   selectedPrice,
   setSelectedPrice,
+  tripType: controlledTripType,
+  setTripType: setControlledTripType,
+  returnDate: controlledReturnDate,
+  setReturnDate: setControlledReturnDate,
   onSearch,
 }) => {
-  const [tripType, setTripType] = useState<'one-way' | 'round-trip'>('one-way');
-  const [returnDate, setReturnDate] = useState('');
+  const [internalTripType, setInternalTripType] = useState<
+    'one-way' | 'round-trip'
+  >('one-way');
+  const [internalReturnDate, setInternalReturnDate] = useState('');
+  const tripType = controlledTripType ?? internalTripType;
+  const setTripType = setControlledTripType ?? setInternalTripType;
+  const returnDate = controlledReturnDate ?? internalReturnDate;
+  const setReturnDate = setControlledReturnDate ?? setInternalReturnDate;
   const [ticketCount, setTicketCount] = useState(1);
   const [originOptions, setOriginOptions] = useState<string[]>([]);
   const [destinationOptions, setDestinationOptions] = useState<string[]>([]);
@@ -76,7 +89,11 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
   }, []);
 
   // Freight states
-  const [freightDate, setFreightDate] = useState(new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date()));
+  const [freightDate, setFreightDate] = useState(
+    new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(
+      new Date(),
+    ),
+  );
   const [freightType, setFreightType] = useState('Hàng thường');
   const freightWeight = 'Dưới 5kg';
 
@@ -140,7 +157,10 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                     type="radio"
                     name="tripTypeSearch"
                     checked={tripType === 'one-way'}
-                    onChange={() => setTripType('one-way')}
+                    onChange={() => {
+                      setTripType('one-way');
+                      setReturnDate('');
+                    }}
                     className="accent-brand w-4 h-4 cursor-pointer"
                   />
                   Một chiều
@@ -244,7 +264,9 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                     </label>
                     <input
                       type="date"
-                      min={new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date())}
+                      min={new Intl.DateTimeFormat('en-CA', {
+                        timeZone: 'Asia/Ho_Chi_Minh',
+                      }).format(new Date())}
                       value={selectedPrice}
                       onChange={(e) => setSelectedPrice(e.target.value)}
                       className="h-12 w-full border border-slate-300 rounded-lg px-3 text-sm font-bold text-slate-900 outline-none focus:border-brand"
@@ -259,7 +281,12 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                       </label>
                       <input
                         type="date"
-                        min={selectedPrice || new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date())}
+                        min={
+                          selectedPrice ||
+                          new Intl.DateTimeFormat('en-CA', {
+                            timeZone: 'Asia/Ho_Chi_Minh',
+                          }).format(new Date())
+                        }
                         value={returnDate}
                         onChange={(e) => setReturnDate(e.target.value)}
                         className="h-12 w-full border border-slate-300 rounded-lg px-3 text-sm font-bold text-slate-900 outline-none focus:border-brand"
