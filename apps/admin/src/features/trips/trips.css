@@ -236,3 +236,22 @@
   outline: none;
   border-color: var(--admin-primary);
 }
+
+.trips-success-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 16px 0 -12px;
+  padding: 11px 13px;
+  border: 1px solid var(--admin-success-border);
+  border-radius: var(--admin-radius-control);
+  background: var(--admin-success-soft);
+  color: var(--admin-success);
+  font-size: var(--admin-font-size-sm);
+  line-height: 1.45;
+}
+
+.trips-success-notice svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}

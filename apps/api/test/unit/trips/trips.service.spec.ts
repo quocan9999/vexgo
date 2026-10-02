@@ -45,10 +45,16 @@ function createService() {
       findUnique: vi.fn(),
       findFirst: vi.fn(),
       count: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
     },
     bangGia: { findMany: vi.fn(), findFirst: vi.fn() },
     gheChuyenXe: { findMany: vi.fn() },
+    tuyenXe: { findFirst: vi.fn() },
+    xe: { findFirst: vi.fn() },
+    $transaction: vi.fn(),
   };
+  prisma.$transaction.mockImplementation(async (callback: (tx: typeof prisma) => Promise<unknown>) => callback(prisma));
   return {
     prisma,
     service: new TripsService(
@@ -417,5 +423,186 @@ describe('TripsService findOne (Feature 05)', () => {
         message: 'Không tìm thấy chuyến xe.',
       },
     });
+  });
+});
+
+describe('TripsService create (05.2)', () => {
+  const createDto = {
+    code: 'FUTA-CX-99',
+    routeId: 8,
+    vehicleId: 4,
+    departureDate: '2026-10-20',
+    departureTime: '08:00:00',
+  };
+
+  it('throws 404 ROUTE_NOT_FOUND when route does not belong to tenant', async () => {
+    const { prisma, service } = createService();
+    prisma.tuyenXe.findFirst.mockResolvedValue(null);
+
+    await expect(
+      service.create(createDto, tenantPrincipal as never),
+    ).rejects.toMatchObject({
+      status: 404,
+      response: {
+        error: 'ROUTE_NOT_FOUND',
+        message: 'Không tìm thấy tuyến xe trong nhà xe.',
+      },
+    });
+  });
+
+  it('throws 404 VEHICLE_NOT_FOUND when vehicle does not belong to tenant', async () => {
+    const { prisma, service } = createService();
+    prisma.tuyenXe.findFirst.mockResolvedValue({ tuyenXeId: 8, nhaXeId: 3 });
+    prisma.xe.findFirst.mockResolvedValue(null);
+
+    await expect(
+      service.create(createDto, tenantPrincipal as never),
+    ).rejects.toMatchObject({
+      status: 404,
+      response: {
+        error: 'VEHICLE_NOT_FOUND',
+        message: 'Không tìm thấy xe trong nhà xe.',
+      },
+    });
+  });
+
+  it('throws 409 VEHICLE_HAS_NO_SEATS when vehicle has no configured seats', async () => {
+    const { prisma, service } = createService();
+    prisma.tuyenXe.findFirst.mockResolvedValue({ tuyenXeId: 8, nhaXeId: 3 });
+    prisma.xe.findFirst.mockResolvedValue({
+      xeId: 4,
+      nhaXeId: 3,
+      ghes: [],
+    });
+
+    await expect(
+      service.create(createDto, tenantPrincipal as never),
+    ).rejects.toMatchObject({
+      status: 409,
+      response: {
+        error: 'VEHICLE_HAS_NO_SEATS',
+        message: 'Xe chưa được cấu hình ghế nên chưa thể lập chuyến.',
+      },
+    });
+  });
+
+  it('throws 409 TRIP_CODE_EXISTS when trip code already exists', async () => {
+    const { prisma, service } = createService();
+    prisma.tuyenXe.findFirst.mockResolvedValue({ tuyenXeId: 8, nhaXeId: 3 });
+    prisma.xe.findFirst.mockResolvedValue({
+      xeId: 4,
+      nhaXeId: 3,
+      ghes: [{ gheId: 1 }, { gheId: 2 }],
+    });
+    prisma.chuyenXe.findFirst.mockResolvedValue({ chuyenXeId: 10 });
+
+    await expect(
+      service.create(createDto, tenantPrincipal as never),
+    ).rejects.toMatchObject({
+      status: 409,
+      response: {
+        error: 'TRIP_CODE_EXISTS',
+        message: 'Mã chuyến xe đã tồn tại.',
+      },
+    });
+  });
+
+  it('creates trip and GheChuyenXe snapshot initialized to TRONG atomically', async () => {
+    const { prisma, service } = createService();
+    prisma.tuyenXe.findFirst.mockResolvedValue({ tuyenXeId: 8, nhaXeId: 3 });
+    prisma.xe.findFirst.mockResolvedValue({
+      xeId: 4,
+      nhaXeId: 3,
+      ghes: [{ gheId: 1 }, { gheId: 2 }],
+    });
+    prisma.chuyenXe.findFirst.mockResolvedValue(null);
+
+    const createdTrip = {
+      ...firstTrip,
+      chuyenXeId: 99,
+      maChuyenXe: 'FUTA-CX-99',
+      gheChuyenXes: [{ trangThai: 'TRONG' }, { trangThai: 'TRONG' }],
+    };
+    prisma.chuyenXe.create.mockResolvedValue(createdTrip);
+
+    const result = await service.create(createDto, tenantPrincipal as never);
+
+    expect(prisma.$transaction).toHaveBeenCalled();
+    expect(prisma.chuyenXe.create).toHaveBeenCalledWith({
+      data: {
+        maChuyenXe: 'FUTA-CX-99',
+        ngayKhoiHanh: new Date('2026-10-20T00:00:00.000Z'),
+        gioKhoiHanh: new Date('1970-01-01T08:00:00.000Z'),
+        trangThai: 'CHUA_KHOI_HANH',
+        nhaXeId: 3,
+        tuyenXeId: 8,
+        xeId: 4,
+        gheChuyenXes: {
+          create: [{ gheId: 1, trangThai: 'TRONG' }, { gheId: 2, trangThai: 'TRONG' }],
+        },
+      },
+      include: {
+        tuyenXe: true,
+        xe: { include: { loaiXe: true } },
+        gheChuyenXes: { select: { trangThai: true } },
+      },
+    });
+    expect(result.data.seatSummary).toEqual({
+      total: 2,
+      available: 2,
+      held: 0,
+      booked: 0,
+    });
+  });
+});
+
+describe('TripsService update (05.2)', () => {
+  const updateDto = {
+    departureDate: '2026-10-21',
+    departureTime: '09:30:00',
+  };
+
+  it('throws 404 TRIP_NOT_FOUND when trip does not belong to tenant', async () => {
+    const { prisma, service } = createService();
+    prisma.chuyenXe.findFirst.mockResolvedValue(null);
+
+    await expect(
+      service.update(999, updateDto, tenantPrincipal as never),
+    ).rejects.toMatchObject({
+      status: 404,
+      response: {
+        error: 'TRIP_NOT_FOUND',
+        message: 'Không tìm thấy chuyến xe.',
+      },
+    });
+  });
+
+  it('updates departureDate and departureTime and returns updated trip with seatSummary', async () => {
+    const { prisma, service } = createService();
+    prisma.chuyenXe.findFirst.mockResolvedValue(firstTrip);
+
+    const updatedTrip = {
+      ...firstTrip,
+      ngayKhoiHanh: new Date('2026-10-21T00:00:00.000Z'),
+      gioKhoiHanh: new Date('1970-01-01T09:30:00.000Z'),
+    };
+    prisma.chuyenXe.update.mockResolvedValue(updatedTrip);
+
+    const result = await service.update(21, updateDto, tenantPrincipal as never);
+
+    expect(prisma.chuyenXe.update).toHaveBeenCalledWith({
+      where: { chuyenXeId: 21 },
+      data: {
+        ngayKhoiHanh: new Date('2026-10-21T00:00:00.000Z'),
+        gioKhoiHanh: new Date('1970-01-01T09:30:00.000Z'),
+      },
+      include: {
+        tuyenXe: true,
+        xe: { include: { loaiXe: true } },
+        gheChuyenXes: { select: { trangThai: true } },
+      },
+    });
+    expect(result.data.departureDate).toBe('2026-10-21');
+    expect(result.data.departureTime).toBe('09:30:00');
   });
 });

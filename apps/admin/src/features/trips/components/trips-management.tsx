@@ -4,11 +4,15 @@ import {
   ArrowDown,
   ArrowUp,
   ArrowUpDown,
+  CheckCircle2,
   Search,
 } from 'lucide-react';
 import { useState } from 'react';
 import { AdminDetailAction } from '@/components/admin/admin-detail-action';
-import { AdminRefreshAction } from '@/components/admin/admin-page-actions';
+import {
+  AdminCreateAction,
+  AdminRefreshAction,
+} from '@/components/admin/admin-page-actions';
 import { AdminPageHeader } from '@/components/admin/admin-page-header';
 import { AdminPagination } from '@/components/admin/admin-pagination';
 import { AdminTableSkeleton } from '@/components/admin/admin-table-skeleton';
@@ -19,10 +23,13 @@ import {
   type FilterOption,
 } from '@/components/data-filters/data-filters';
 import { Button } from '@/components/ui/button';
+import { useAdminPermissions } from '@/features/admin-auth/hooks/use-admin-permissions';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
+import { useTripLookupOptions } from '../hooks/use-trip-lookup-options';
 import { useTrips } from '../hooks/use-trips';
-import type { TripSortKey, TripStatus } from '../types/trip';
+import type { Trip, TripSortKey, TripStatus } from '../types/trip';
 import { TripDetailSheet, TripStatusBadge } from './trip-detail-sheet';
+import { TripFormDialog } from './trip-form-dialog';
 import '../trips.css';
 
 const STATUS_OPTIONS: FilterOption[] = [
@@ -75,7 +82,14 @@ export function TripsManagement() {
     refresh,
   } = useTrips();
 
+  const { can } = useAdminPermissions();
+  const canCreate = can('trip:create');
+  const { routeOptions, vehicleOptions, retryRoutes, retryVehicles } =
+    useTripLookupOptions();
+
   const [selectedTripId, setSelectedTripId] = useState<number | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [successNotice, setSuccessNotice] = useState<string | null>(null);
 
   function sortButton(label: string, field: TripSortKey) {
     const selected = sortBy === field;
@@ -109,6 +123,15 @@ export function TripsManagement() {
         <AdminPageHeader
           actions={
             <div className="page-intro-actions">
+              {canCreate && (
+                <AdminCreateAction
+                  label="Thêm chuyến"
+                  onClick={() => {
+                    setSuccessNotice(null);
+                    setCreateOpen(true);
+                  }}
+                />
+              )}
               <AdminRefreshAction loading={loading} onClick={refresh} />
             </div>
           }
@@ -116,6 +139,13 @@ export function TripsManagement() {
           title="Quản lý chuyến xe"
           titleId="trips-title"
         />
+
+        {successNotice && (
+          <div className="trips-success-notice" role="status">
+            <CheckCircle2 aria-hidden="true" size={16} />
+            <span>{successNotice}</span>
+          </div>
+        )}
 
         <section
           aria-busy={loading}
@@ -372,7 +402,30 @@ export function TripsManagement() {
             setSelectedTripId(null);
             refresh();
           }}
+          onRetryRouteOptions={retryRoutes}
+          onRetryVehicleOptions={retryVehicles}
+          onUpdated={(updated) => {
+            setSuccessNotice(`Đã cập nhật chuyến ${updated.code}.`);
+            refresh();
+          }}
+          routeOptions={routeOptions}
           tripId={selectedTripId}
+          vehicleOptions={vehicleOptions}
+        />
+      )}
+
+      {createOpen && (
+        <TripFormDialog
+          onClose={() => setCreateOpen(false)}
+          onRetryRouteOptions={retryRoutes}
+          onRetryVehicleOptions={retryVehicles}
+          onSaved={(created) => {
+            setCreateOpen(false);
+            setSuccessNotice(`Đã tạo chuyến ${created.code}.`);
+            refresh();
+          }}
+          routeOptions={routeOptions}
+          vehicleOptions={vehicleOptions}
         />
       )}
     </SuperAdminLayout>

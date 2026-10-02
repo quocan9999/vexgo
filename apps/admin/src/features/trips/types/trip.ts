@@ -79,3 +79,26 @@ export type PaginatedTrips = {
     totalPages: number;
   };
 };
+
+export type CreateTripInput = {
+  code: string;
+  routeId: number;
+  vehicleId: number;
+  departureDate: string;
+  departureTime: string;
+};
+
+export type UpdateTripInput = {
+  departureDate: string;
+  departureTime: string;
+};
+
+export type TripLookupOption = {
+  id: number;
+  label: string;
+};
+
+export type TripLookupOptionsState =
+  | { status: 'loading' }
+  | { status: 'error'; message: string }
+  | { status: 'success'; options: TripLookupOption[] };

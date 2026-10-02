@@ -1,11 +1,16 @@
 import { adminApiFetch } from '@/lib/admin-api-client';
+import { getRoutes } from '@/features/routes/services/route-service';
+import { getVehicles } from '@/features/vehicles/services/vehicle-service';
 import { getApiBaseUrl } from '@/lib/api-url';
 import {
   TRIP_STATUSES,
+  type CreateTripInput,
   type PaginatedTrips,
   type Trip,
   type TripListQuery,
+  type TripLookupOption,
   type TripStatus,
+  type UpdateTripInput,
 } from '../types/trip';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -161,4 +166,105 @@ export async function getTripById(
   }
 
   return body.data;
+}
+
+export type TripApiErrorDetail = { field: string; message: string };
+
+export class TripApiError extends Error {
+  constructor(
+    message: string,
+    readonly code?: string,
+    readonly details: TripApiErrorDetail[] = [],
+  ) {
+    super(message);
+    this.name = 'TripApiError';
+  }
+}
+
+async function writeTrip(
+  path: string,
+  method: 'POST' | 'PATCH',
+  input: unknown,
+): Promise<Trip> {
+  const response = await adminApiFetch(`${getApiBaseUrl()}/api/v1/trips${path}`, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+    cache: 'no-store',
+  });
+  const body: unknown = await response.json().catch(() => null);
+  if (!response.ok) {
+    const details =
+      isRecord(body) && Array.isArray(body.details)
+        ? body.details.flatMap((detail): TripApiErrorDetail[] =>
+            isRecord(detail) &&
+            typeof detail.field === 'string' &&
+            typeof detail.message === 'string'
+              ? [{ field: detail.field, message: detail.message }]
+              : [],
+          )
+        : [];
+    throw new TripApiError(
+      isRecord(body) && typeof body.message === 'string'
+        ? body.message
+        : `Không thể lưu chuyến xe (HTTP ${response.status}).`,
+      isRecord(body) && typeof body.error === 'string' ? body.error : undefined,
+      details,
+    );
+  }
+  if (!isRecord(body) || !isTrip(body.data)) {
+    throw new Error('API trả về thông tin chuyến xe không hợp lệ.');
+  }
+  return body.data;
+}
+
+export function createTrip(input: CreateTripInput): Promise<Trip> {
+  return writeTrip('', 'POST', input);
+}
+
+export function updateTrip(
+  tripId: number,
+  input: UpdateTripInput,
+): Promise<Trip> {
+  return writeTrip(`/${tripId}`, 'PATCH', input);
+}
+
+export async function getTripRouteOptions(
+  signal?: AbortSignal,
+): Promise<TripLookupOption[]> {
+  const page = await getRoutes(
+    {
+      page: 1,
+      pageSize: 100,
+      search: '',
+      sortBy: 'code',
+      sortDirection: 'asc',
+      status: 'HOAT_DONG',
+    },
+    signal,
+  );
+  return page.data.map((route) => ({
+    id: route.routeId,
+    label: `${route.code} — ${route.origin} → ${route.destination}`,
+  }));
+}
+
+export async function getTripVehicleOptions(
+  signal?: AbortSignal,
+): Promise<TripLookupOption[]> {
+  const page = await getVehicles(
+    {
+      page: 1,
+      pageSize: 100,
+      search: '',
+      sortBy: 'licensePlate',
+      sortDirection: 'asc',
+      status: 'HOAT_DONG',
+    },
+    signal,
+  );
+  return page.data.map((vehicle) => ({
+    id: vehicle.vehicleId,
+    label: `${vehicle.licensePlate} (${vehicle.vehicleType.name})`,
+  }));
 }

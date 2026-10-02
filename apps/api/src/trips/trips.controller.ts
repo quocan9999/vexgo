@@ -1,8 +1,19 @@
-import { Controller, Get, Param, ParseIntPipe, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseIntPipe,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { TripsService } from './trips.service.js';
+import { CreateTripDto } from './dto/create-trip.dto.js';
 import { SearchTripsDto } from './dto/search-trips.dto.js';
 import { TripQueryDto } from './dto/trip-query.dto.js';
 import { TripIdParamsDto } from './dto/trip-id-params.dto.js';
+import { UpdateTripDto } from './dto/update-trip.dto.js';
 import { OptionalAuth } from '../auth/decorators/public.decorator.js';
 import { CurrentPrincipal } from '../auth/decorators/current-principal.decorator.js';
 import { RequirePermissions } from '../auth/decorators/require-permissions.decorator.js';
@@ -18,6 +29,16 @@ export class TripsController {
   @OptionalAuth()
   search(@Query() query: SearchTripsDto) {
     return this.tripsService.search(query);
+  }
+
+  @Post()
+  @RequireRoles(...TENANT_PRINCIPAL_ROLES)
+  @RequirePermissions('trip:create')
+  create(
+    @Body() body: CreateTripDto,
+    @CurrentPrincipal() principal: AuthPrincipal,
+  ) {
+    return this.tripsService.create(body, principal);
   }
 
   @Get()
@@ -38,6 +59,17 @@ export class TripsController {
     @CurrentPrincipal() principal: AuthPrincipal,
   ) {
     return this.tripsService.findOne(params.id, principal);
+  }
+
+  @Patch(':id')
+  @RequireRoles(...TENANT_PRINCIPAL_ROLES)
+  @RequirePermissions('trip:update')
+  update(
+    @Param() params: TripIdParamsDto,
+    @Body() body: UpdateTripDto,
+    @CurrentPrincipal() principal: AuthPrincipal,
+  ) {
+    return this.tripsService.update(params.id, body, principal);
   }
 
   @Get(':id/seats')

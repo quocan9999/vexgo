@@ -6,7 +6,9 @@ import { AdminDetailSheet } from '@/components/admin/admin-detail-sheet';
 import { AdminStatusBadge } from '@/components/admin/admin-status-badge';
 import { Button } from '@/components/ui/button';
 import { getTripById } from '../services/trip-service';
-import type { Trip, TripStatus } from '../types/trip';
+import { useAdminPermissions } from '@/features/admin-auth/hooks/use-admin-permissions';
+import { TripFormDialog } from './trip-form-dialog';
+import type { Trip, TripLookupOptionsState, TripStatus } from '../types/trip';
 import '../trips.css';
 
 export function tripStatusLabel(status: TripStatus) {
@@ -60,15 +62,29 @@ type DetailState =
 
 export function TripDetailSheet({
   tripId,
+  routeOptions,
+  vehicleOptions,
+  onRetryRouteOptions,
+  onRetryVehicleOptions,
   onClose,
   onNotFound,
+  onUpdated,
 }: {
   tripId: number;
+  routeOptions?: TripLookupOptionsState;
+  vehicleOptions?: TripLookupOptionsState;
+  onRetryRouteOptions?: () => void;
+  onRetryVehicleOptions?: () => void;
   onClose: () => void;
   onNotFound?: () => void;
+  onUpdated?: (trip: Trip) => void;
 }) {
+  const { can } = useAdminPermissions();
+  const canUpdate = can('trip:update');
   const [detail, setDetail] = useState<DetailState>({ status: 'loading' });
   const [retryCount, setRetryCount] = useState(0);
+  const [editOpen, setEditOpen] = useState(false);
+  const [updateNotice, setUpdateNotice] = useState<string | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -101,8 +117,8 @@ export function TripDetailSheet({
   }, [tripId, retryCount, onNotFound]);
 
   return (
-    <AdminDetailSheet ariaLabelledBy="trip-detail-title" onClose={onClose}>
-      <>
+    <>
+      <AdminDetailSheet ariaLabelledBy="trip-detail-title" onClose={onClose}>
         <div className="admin-dialog-header">
           <div className="admin-dialog-header__copy">
             <p className="eyebrow">HỒ SƠ CHUYẾN XE</p>
@@ -253,9 +269,34 @@ export function TripDetailSheet({
                 </div>
               </dl>
             </section>
+
+            {canUpdate && (
+              <div className="routes-detail-actions">
+                <Button onClick={() => setEditOpen(true)} type="button">
+                  Chỉnh sửa
+                </Button>
+              </div>
+            )}
           </div>
         )}
-      </>
-    </AdminDetailSheet>
+      </AdminDetailSheet>
+
+    {editOpen && canUpdate && detail.status === 'success' && (
+      <TripFormDialog
+        onClose={() => setEditOpen(false)}
+        onRetryRouteOptions={onRetryRouteOptions ?? (() => {})}
+        onRetryVehicleOptions={onRetryVehicleOptions ?? (() => {})}
+        onSaved={(saved) => {
+          setEditOpen(false);
+          setDetail({ status: 'success', trip: saved });
+          setUpdateNotice(`Đã cập nhật chuyến ${saved.code}.`);
+          onUpdated?.(saved);
+        }}
+        routeOptions={routeOptions ?? { status: 'success', options: [] }}
+        trip={detail.trip}
+        vehicleOptions={vehicleOptions ?? { status: 'success', options: [] }}
+      />
+    )}
+    </>
   );
 }

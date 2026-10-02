@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   businessDateStartUtc,
@@ -6,8 +10,10 @@ import {
   resolveBusinessTimeZone,
 } from '../common/time/business-date.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { CreateTripDto } from './dto/create-trip.dto.js';
 import { SearchTripsDto } from './dto/search-trips.dto.js';
 import type { TripQueryDto, TripSortField } from './dto/trip-query.dto.js';
+import { UpdateTripDto } from './dto/update-trip.dto.js';
 import { requireTenantPrincipal } from '../auth/tenant-scope.js';
 import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
 import { Prisma } from '../generated/prisma/client.js';
@@ -485,6 +491,159 @@ export class TripsService {
     return {
       data: {
         ...mapTripItem(trip),
+        seatSummary: {
+          total,
+          available,
+          held,
+          booked,
+        },
+      },
+    };
+  }
+
+  async create(dto: CreateTripDto, principal: AuthPrincipal) {
+    const nhaXeId = requireTenantPrincipal(principal);
+
+    const route = await this.prisma.tuyenXe.findFirst({
+      where: { tuyenXeId: dto.routeId, nhaXeId },
+    });
+    if (!route) {
+      throw new NotFoundException({
+        error: 'ROUTE_NOT_FOUND',
+        message: 'Không tìm thấy tuyến xe trong nhà xe.',
+      });
+    }
+
+    const vehicle = await this.prisma.xe.findFirst({
+      where: { xeId: dto.vehicleId, nhaXeId },
+      include: { ghes: true },
+    });
+    if (!vehicle) {
+      throw new NotFoundException({
+        error: 'VEHICLE_NOT_FOUND',
+        message: 'Không tìm thấy xe trong nhà xe.',
+      });
+    }
+
+    if (vehicle.ghes.length === 0) {
+      throw new ConflictException({
+        error: 'VEHICLE_HAS_NO_SEATS',
+        message: 'Xe chưa được cấu hình ghế nên chưa thể lập chuyến.',
+      });
+    }
+
+    const existingCode = await this.prisma.chuyenXe.findFirst({
+      where: { maChuyenXe: dto.code },
+    });
+    if (existingCode) {
+      throw new ConflictException({
+        error: 'TRIP_CODE_EXISTS',
+        message: 'Mã chuyến xe đã tồn tại.',
+      });
+    }
+
+    try {
+      const trip = await this.prisma.$transaction(async (tx) => {
+        return tx.chuyenXe.create({
+          data: {
+            maChuyenXe: dto.code,
+            ngayKhoiHanh: new Date(`${dto.departureDate}T00:00:00.000Z`),
+            gioKhoiHanh: new Date(`1970-01-01T${dto.departureTime}.000Z`),
+            trangThai: 'CHUA_KHOI_HANH',
+            nhaXeId,
+            tuyenXeId: dto.routeId,
+            xeId: dto.vehicleId,
+            gheChuyenXes: {
+              create: vehicle.ghes.map((ghe) => ({
+                gheId: ghe.gheId,
+                trangThai: 'TRONG',
+              })),
+            },
+          },
+          include: {
+            tuyenXe: true,
+            xe: { include: { loaiXe: true } },
+            gheChuyenXes: { select: { trangThai: true } },
+          },
+        });
+      });
+
+      const total = trip.gheChuyenXes.length;
+      const available = trip.gheChuyenXes.filter(
+        (g) => g.trangThai === 'TRONG',
+      ).length;
+      const held = trip.gheChuyenXes.filter(
+        (g) => g.trangThai === 'DANG_GIU',
+      ).length;
+      const booked = trip.gheChuyenXes.filter(
+        (g) => g.trangThai === 'DA_DAT',
+      ).length;
+
+      return {
+        data: {
+          ...mapTripItem(trip),
+          seatSummary: {
+            total,
+            available,
+            held,
+            booked,
+          },
+        },
+      };
+    } catch (err: unknown) {
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2002'
+      ) {
+        throw new ConflictException({
+          error: 'TRIP_CODE_EXISTS',
+          message: 'Mã chuyến xe đã tồn tại.',
+        });
+      }
+      throw err;
+    }
+  }
+
+  async update(id: number, dto: UpdateTripDto, principal: AuthPrincipal) {
+    const nhaXeId = requireTenantPrincipal(principal);
+
+    const existing = await this.prisma.chuyenXe.findFirst({
+      where: { chuyenXeId: id, nhaXeId },
+    });
+    if (!existing) {
+      throw new NotFoundException({
+        error: 'TRIP_NOT_FOUND',
+        message: 'Không tìm thấy chuyến xe.',
+      });
+    }
+
+    const updated = await this.prisma.chuyenXe.update({
+      where: { chuyenXeId: id },
+      data: {
+        ngayKhoiHanh: new Date(`${dto.departureDate}T00:00:00.000Z`),
+        gioKhoiHanh: new Date(`1970-01-01T${dto.departureTime}.000Z`),
+      },
+      include: {
+        tuyenXe: true,
+        xe: { include: { loaiXe: true } },
+        gheChuyenXes: { select: { trangThai: true } },
+      },
+    });
+
+    const total = updated.gheChuyenXes.length;
+    const available = updated.gheChuyenXes.filter(
+      (g) => g.trangThai === 'TRONG',
+    ).length;
+    const held = updated.gheChuyenXes.filter(
+      (g) => g.trangThai === 'DANG_GIU',
+    ).length;
+    const booked = updated.gheChuyenXes.filter(
+      (g) => g.trangThai === 'DA_DAT',
+    ).length;
+
+    return {
+      data: {
+        ...mapTripItem(updated),
         seatSummary: {
           total,
           available,
