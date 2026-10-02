@@ -113,7 +113,7 @@ export class TripsService {
     );
     const now = new Date();
     const where: Prisma.ChuyenXeWhereInput = {
-      trangThai: 'MO_BAN',
+      trangThai: 'CHUA_KHOI_HANH',
     };
 
     if (dto.from || dto.to || dto.busCompanyId) {
@@ -259,7 +259,7 @@ export class TripsService {
       });
     }
 
-    if (cx.trangThai !== 'MO_BAN') {
+    if (cx.trangThai !== 'CHUA_KHOI_HANH') {
       throw new NotFoundException({
         error: 'TRIP_NOT_AVAILABLE',
         message: 'Chuyến xe này hiện không mở bán.',
@@ -294,6 +294,45 @@ export class TripsService {
 
 
   async getSeats(id: number) {
+    const businessTimeZone = resolveBusinessTimeZone(
+      this.config.get<string>('BUSINESS_TIME_ZONE'),
+    );
+    const trip = await this.prisma.chuyenXe.findUnique({
+      where: { chuyenXeId: id },
+      select: {
+        trangThai: true,
+        ngayKhoiHanh: true,
+        gioKhoiHanh: true,
+      },
+    });
+
+    if (!trip) {
+      throw new NotFoundException({
+        error: 'TRIP_NOT_FOUND',
+        message: 'Không tìm thấy chuyến xe.',
+      });
+    }
+
+    if (trip.trangThai !== 'CHUA_KHOI_HANH') {
+      throw new NotFoundException({
+        error: 'TRIP_NOT_AVAILABLE',
+        message: 'Chuyến xe này hiện không mở bán.',
+      });
+    }
+
+    if (
+      combineDeparture(
+        trip.ngayKhoiHanh,
+        trip.gioKhoiHanh,
+        businessTimeZone,
+      ) <= new Date()
+    ) {
+      throw new NotFoundException({
+        error: 'TRIP_ALREADY_DEPARTED',
+        message: 'Chuyến xe này đã khởi hành.',
+      });
+    }
+
     const gheChuyenXes = await this.prisma.gheChuyenXe.findMany({
       where: { chuyenXeId: id },
       include: { ghe: true },

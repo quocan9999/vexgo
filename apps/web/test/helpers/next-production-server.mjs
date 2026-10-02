@@ -98,7 +98,7 @@ async function startMockApi() {
         data: {
           id,
           code: `CX-${id}`,
-          status: 'MO_BAN',
+          status: 'CHUA_KHOI_HANH',
           busCompany: {
             id: 3,
             name: 'Nhà xe kiểm thử',

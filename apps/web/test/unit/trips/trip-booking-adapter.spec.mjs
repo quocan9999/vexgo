@@ -6,7 +6,7 @@ test('maps real trip fields into the existing booking UI model without fixture d
   const post = mapTripToBookingPost({
     id: 21,
     code: 'CX-21',
-    status: 'MO_BAN',
+    status: 'CHUA_KHOI_HANH',
     busCompany: {
       id: 3,
       name: 'Nhà xe A',
@@ -62,7 +62,7 @@ test('shows unavailable fare honestly instead of inventing a fallback amount', (
   const post = mapTripToBookingPost({
     id: 22,
     code: 'CX-22',
-    status: 'MO_BAN',
+    status: 'CHUA_KHOI_HANH',
     busCompany: {
       id: 3,
       name: 'Nhà xe A',

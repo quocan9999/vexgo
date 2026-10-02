@@ -7,7 +7,7 @@ const firstTrip = {
   maChuyenXe: 'CX-21',
   ngayKhoiHanh: new Date('2026-10-15T00:00:00.000Z'),
   gioKhoiHanh: new Date('1970-01-01T22:00:00.000Z'),
-  trangThai: 'MO_BAN',
+  trangThai: 'CHUA_KHOI_HANH',
   nhaXeId: 3,
   tuyenXeId: 8,
   xeId: 4,
@@ -73,6 +73,7 @@ describe('TripsService search', () => {
     expect(prisma.chuyenXe.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
+          trangThai: 'CHUA_KHOI_HANH',
           AND: expect.arrayContaining([
             {
               OR: expect.arrayContaining([
@@ -117,7 +118,7 @@ describe('TripsService search', () => {
         {
           id: 22,
           code: 'CX-22',
-          status: 'MO_BAN',
+          status: 'CHUA_KHOI_HANH',
           busCompany: {
             id: 3,
             name: 'Nhà xe A',
@@ -170,7 +171,7 @@ describe('TripsService search', () => {
     });
   });
 
-  it('excludes an already departed trip even when its status is still MO_BAN', async () => {
+  it('excludes an already departed trip while keeping future trips with canonical status', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-10-15T14:00:00.000Z'));
     const { prisma, service } = createService();
@@ -257,5 +258,69 @@ describe('TripsService detail', () => {
       price: null,
       availableSeats: 1,
     });
+  });
+});
+
+describe('TripsService seats', () => {
+  it('returns the trip-specific seat identifiers for a future bookable trip', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-15T14:00:00.000Z'));
+    const { prisma, service } = createService();
+    prisma.chuyenXe.findUnique.mockResolvedValue(firstTrip);
+    prisma.gheChuyenXe.findMany.mockResolvedValue([
+      {
+        gheChuyenXeId: 501,
+        trangThai: 'TRONG',
+        ghe: { soGhe: 'A1', viTri: '1A' },
+      },
+    ]);
+
+    await expect(service.getSeats(21)).resolves.toEqual([
+      { tripSeatId: 501, seatNumber: 'A1', position: '1A', status: 'TRONG' },
+    ]);
+    expect(prisma.chuyenXe.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { chuyenXeId: 21 } }),
+    );
+    expect(prisma.gheChuyenXe.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { chuyenXeId: 21 } }),
+    );
+  });
+
+  it('returns TRIP_NOT_FOUND before querying seats when the trip does not exist', async () => {
+    const { prisma, service } = createService();
+    prisma.chuyenXe.findUnique.mockResolvedValue(null);
+
+    await expect(service.getSeats(999)).rejects.toMatchObject({
+      response: { error: 'TRIP_NOT_FOUND' },
+    });
+    expect(prisma.gheChuyenXe.findMany).not.toHaveBeenCalled();
+  });
+
+  it.each(['DANG_CHAY', 'HOAN_THANH', 'DA_HUY'])(
+    'does not expose seats for a trip in state %s',
+    async (status) => {
+      const { prisma, service } = createService();
+      prisma.chuyenXe.findUnique.mockResolvedValue({
+        ...firstTrip,
+        trangThai: status,
+      });
+
+      await expect(service.getSeats(21)).rejects.toMatchObject({
+        response: { error: 'TRIP_NOT_AVAILABLE' },
+      });
+      expect(prisma.gheChuyenXe.findMany).not.toHaveBeenCalled();
+    },
+  );
+
+  it('does not expose seats after the scheduled departure time', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-15T16:00:00.000Z'));
+    const { prisma, service } = createService();
+    prisma.chuyenXe.findUnique.mockResolvedValue(firstTrip);
+
+    await expect(service.getSeats(21)).rejects.toMatchObject({
+      response: { error: 'TRIP_ALREADY_DEPARTED' },
+    });
+    expect(prisma.gheChuyenXe.findMany).not.toHaveBeenCalled();
   });
 });

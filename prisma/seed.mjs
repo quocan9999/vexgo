@@ -476,8 +476,8 @@ async function seedVehiclesAndRoutes(db, operators, vehicleTypes) {
             db,
             'ChuyenXe',
             { maChuyenXe: code },
-            { maChuyenXe: code, ngayKhoiHanh: dateOnly(2026, 9, day), gioKhoiHanh: timeOnly(hour), trangThai: 'MO_BAN', nhaXeId: operator.nhaXeId, tuyenXeId: route.tuyenXeId, xeId: vehicle.xeId },
-            { ngayKhoiHanh: dateOnly(2026, 9, day), gioKhoiHanh: timeOnly(hour), trangThai: 'MO_BAN', nhaXeId: operator.nhaXeId, tuyenXeId: route.tuyenXeId, xeId: vehicle.xeId },
+            { maChuyenXe: code, ngayKhoiHanh: dateOnly(2026, 9, day), gioKhoiHanh: timeOnly(hour), trangThai: 'CHUA_KHOI_HANH', nhaXeId: operator.nhaXeId, tuyenXeId: route.tuyenXeId, xeId: vehicle.xeId },
+            { ngayKhoiHanh: dateOnly(2026, 9, day), gioKhoiHanh: timeOnly(hour), trangThai: 'CHUA_KHOI_HANH', nhaXeId: operator.nhaXeId, tuyenXeId: route.tuyenXeId, xeId: vehicle.xeId },
           );
           const tripSeats = [];
           for (const seat of vehicle.seats) {

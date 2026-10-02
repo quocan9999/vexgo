@@ -23,7 +23,7 @@ describe('Trips HTTP contract (mocked service)', () => {
   const trip = {
     id: 21,
     code: 'CX-21',
-    status: 'MO_BAN',
+    status: 'CHUA_KHOI_HANH',
     busCompany: {
       id: 3,
       name: 'Nhà xe A',
@@ -97,6 +97,9 @@ describe('Trips HTTP contract (mocked service)', () => {
       meta: { page: 2, pageSize: 5, totalItems: 6, totalPages: 2 },
     });
     service.getDetails.mockResolvedValue(trip);
+    service.getSeats.mockResolvedValue([
+      { tripSeatId: 501, seatNumber: 'A1', position: '1A', status: 'TRONG' },
+    ]);
   });
 
   it('passes the documented search query with transformed numeric fields', async () => {
@@ -185,6 +188,38 @@ describe('Trips HTTP contract (mocked service)', () => {
     });
   });
 
+  it('returns trip-specific seats through the common data envelope to public callers', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/trips/21/seats')
+      .expect(200);
+
+    expect(response.body).toEqual({
+      data: [
+        { tripSeatId: 501, seatNumber: 'A1', position: '1A', status: 'TRONG' },
+      ],
+    });
+    expect(service.getSeats).toHaveBeenCalledWith(21);
+  });
+
+  it('keeps the trip-not-available error contract for seats', async () => {
+    service.getSeats.mockRejectedValueOnce(
+      new NotFoundException({
+        error: 'TRIP_NOT_AVAILABLE',
+        message: 'Chuyến xe này hiện không mở bán.',
+      }),
+    );
+
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/trips/21/seats')
+      .expect(404);
+
+    expect(response.body).toEqual({
+      statusCode: 404,
+      error: 'TRIP_NOT_AVAILABLE',
+      message: 'Chuyến xe này hiện không mở bán.',
+    });
+  });
+
   it('allows unauthenticated requests without Authorization header due to @OptionalAuth()', async () => {
     await request(app.getHttpServer())
       .get('/api/v1/trips/21')
@@ -198,5 +233,15 @@ describe('Trips HTTP contract (mocked service)', () => {
       .expect(401);
 
     expect(response.body.statusCode).toBe(401);
+  });
+
+  it('rejects an invalid Authorization header for public seat reads', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/trips/21/seats')
+      .set('Authorization', 'Bearer invalid-token')
+      .expect(401);
+
+    expect(response.body.statusCode).toBe(401);
+    expect(service.getSeats).not.toHaveBeenCalled();
   });
 });
