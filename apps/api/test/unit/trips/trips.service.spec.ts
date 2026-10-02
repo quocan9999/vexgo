@@ -55,6 +55,7 @@ function createService() {
     phieuGuiHang: { findFirst: vi.fn() },
     tuyenXe: { findFirst: vi.fn() },
     xe: { findFirst: vi.fn() },
+    $queryRaw: vi.fn().mockResolvedValue([{ xeId: 1 }]),
     $transaction: vi.fn(),
   };
   prisma.$transaction.mockImplementation(async (callback: (tx: typeof prisma) => Promise<unknown>) => callback(prisma));
@@ -622,6 +623,7 @@ describe('TripsService create (05.2)', () => {
     const result = await service.create(createDto, tenantPrincipal as never);
 
     expect(prisma.$transaction).toHaveBeenCalled();
+    expect(prisma.$queryRaw).toHaveBeenCalled();
     expect(prisma.chuyenXe.create).toHaveBeenCalledWith({
       data: {
         maChuyenXe: 'FUTA-CX-99',
@@ -687,6 +689,7 @@ describe('TripsService update (05.2)', () => {
 
     const result = await service.update(21, updateDto, tenantPrincipal as never);
 
+    expect(prisma.$queryRaw).toHaveBeenCalled();
     expect(prisma.chuyenXe.updateMany).toHaveBeenCalledWith({
       where: { chuyenXeId: 21, nhaXeId: 3, trangThai: 'CHUA_KHOI_HANH' },
       data: {

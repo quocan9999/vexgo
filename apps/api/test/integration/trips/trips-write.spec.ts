@@ -72,6 +72,7 @@ const prisma = {
   phienDangNhap: { findUnique: vi.fn() },
   vaiTroQuyen: { findMany: vi.fn().mockResolvedValue([]) },
   cauHinhQuyenVaiTroNhaXe: { findMany: vi.fn().mockResolvedValue([]) },
+  $queryRaw: vi.fn().mockResolvedValue([{ xeId: 8 }]),
   $transaction: vi.fn(),
 };
 
