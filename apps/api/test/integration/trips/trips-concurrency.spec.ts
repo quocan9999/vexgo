@@ -286,6 +286,38 @@ describe('Trips concurrent schedule conflict integrity with MySQL', () => {
     expect(targetTrips).toHaveLength(1);
   }, 30_000);
 
+  function isVehicleLockQuery(args: unknown[], targetVehicleId: number): boolean {
+    if (!args || args.length === 0) return false;
+    const first = args[0];
+    let text = '';
+    const values: unknown[] = args.slice(1);
+
+    if (typeof first === 'string') {
+      text = first;
+    } else if (Array.isArray(first)) {
+      text = first.join(' ');
+    } else if (first && typeof first === 'object') {
+      const rawObj = first as Record<string, unknown>;
+      if (Array.isArray(rawObj.strings)) {
+        text = rawObj.strings.join(' ');
+      } else if (typeof rawObj.text === 'string') {
+        text = rawObj.text;
+      } else if (typeof rawObj.sql === 'string') {
+        text = rawObj.sql;
+      }
+      if (Array.isArray(rawObj.values)) {
+        values.push(...rawObj.values);
+      }
+    }
+
+    const normalized = text.replaceAll(/\s+/g, ' ').toUpperCase();
+    const hasTableAndLock =
+      normalized.includes('XE') && normalized.includes('FOR UPDATE');
+    if (!hasTableAndLock) return false;
+
+    return values.some((val) => Number(val) === targetVehicleId);
+  }
+
   it('deterministically blocks and rejects concurrent create when vehicle row lock is held and slot is occupied before release', async () => {
     const targetDate = '2099-06-01';
     const targetTime = '10:00:00';
@@ -302,9 +334,48 @@ describe('Trips concurrent schedule conflict integrity with MySQL', () => {
       continueTransaction = resolve;
     });
 
+    let notifyWaitingForVehicleLock!: () => void;
+    const waitingForVehicleLockPromise = new Promise<void>((resolve) => {
+      notifyWaitingForVehicleLock = resolve;
+    });
+
+    // Test-only transaction client wrapper to observe the production request's SELECT ... FOR UPDATE waiter
+    const originalTransaction = prisma.$transaction.bind(prisma);
+    let interceptProductionTransaction = false;
+
+    (prisma as any).$transaction = async (arg1: any, arg2: any) => {
+      if (typeof arg1 === 'function' && interceptProductionTransaction) {
+        return originalTransaction(async (tx: any) => {
+          const originalQueryRaw = tx.$queryRaw.bind(tx);
+          tx.$queryRaw = async (...args: any[]) => {
+            if (isVehicleLockQuery(args, vehicleId1)) {
+              let queryCompleted = false;
+              const queryPromise = originalQueryRaw(...args).finally(() => {
+                queryCompleted = true;
+              });
+
+              // Yield execution to the Node.js event loop to flush the query socket write to MySQL
+              await new Promise((resolve) => setImmediate(resolve));
+
+              // Verify the query is in-flight and actively blocked waiting on MySQL's row lock
+              expect(queryCompleted).toBe(false);
+
+              // Signal the test barrier that the request is genuinely waiting for the vehicle lock
+              notifyWaitingForVehicleLock();
+
+              return await queryPromise;
+            }
+            return await originalQueryRaw(...args);
+          };
+          return await arg1(tx);
+        }, arg2);
+      }
+      return await originalTransaction(arg1, arg2);
+    };
+
     const txPromise = prisma.$transaction(
       async (tx) => {
-        // Step 2: Actively lock the vehicle row with SELECT ... FOR UPDATE
+        // Step 1: Actively lock the vehicle row with SELECT ... FOR UPDATE
         await tx.$queryRaw`
           SELECT xeId
           FROM Xe
@@ -318,7 +389,7 @@ describe('Trips concurrent schedule conflict integrity with MySQL', () => {
         // Hold the lock until test instructs us to proceed
         await releaseLockPromise;
 
-        // Step 5: Within the lock-holding transaction, occupy the target slot
+        // Step 3: Within the lock-holding transaction, occupy the target slot
         await tx.chuyenXe.create({
           data: {
             maChuyenXe: blockerCode,
@@ -341,30 +412,37 @@ describe('Trips concurrent schedule conflict integrity with MySQL', () => {
       // Wait until the test transaction has confirmed holding the row lock
       await lockAcquiredPromise;
 
-      // Step 3: Start the HTTP create request targeting the exact same vehicle & slot
-      let requestSettled = false;
+      // Enable transaction wrapper interception for the incoming production HTTP request
+      interceptProductionTransaction = true;
+
+      // Start the HTTP create request targeting the exact same vehicle & slot
       const requestPromise = request(app.getHttpServer())
         .post('/api/v1/trips')
-        .send(createTripPayload(requestCode, vehicleId1, targetDate, targetTime))
-        .then((res) => {
-          requestSettled = true;
-          return res;
-        });
+        .send(createTripPayload(requestCode, vehicleId1, targetDate, targetTime));
 
-      // Step 4: Prove request cannot complete while the vehicle row lock is held
-      await new Promise((resolve) => setTimeout(resolve, 150));
-      expect(requestSettled).toBe(false);
+      // Deterministic barrier: wait until the production request is actively blocked waiting on SELECT ... FOR UPDATE.
+      // If the production implementation omits FOR UPDATE or finishes prematurely without locking,
+      // requestPromise settles first and causes this barrier check to fail.
+      const barrier = await Promise.race([
+        waitingForVehicleLockPromise.then(() => 'WAITING_FOR_LOCK' as const),
+        requestPromise.then((res) => ({
+          type: 'REQUEST_FINISHED_PREMATURELY' as const,
+          statusCode: res.status,
+          body: res.body,
+        })),
+      ]);
+      expect(barrier).toBe('WAITING_FOR_LOCK');
 
-      // Step 6: Occupy the slot and commit the transaction to release the lock
+      // Now that the waiter is confirmed, create the conflicting slot occupant and commit the transaction
       continueTransaction();
       await txPromise;
 
-      // Step 7 & 8: Request resumes, sees the committed slot occupancy under ReadCommitted, and returns 409
+      // Request resumes after lock release, sees the committed conflict under ReadCommitted, and returns 409
       const response = await requestPromise;
       expect(response.status).toBe(409);
       expect(response.body.error).toBe('TRIP_VEHICLE_SCHEDULE_CONFLICT');
 
-      // Step 9: Query DB: exactly 1 non-cancelled trip exists at target slot
+      // Final DB assertion: exactly 1 non-cancelled trip exists at target slot
       const existingTrips = await prisma.chuyenXe.findMany({
         where: {
           xeId: vehicleId1,
@@ -376,6 +454,7 @@ describe('Trips concurrent schedule conflict integrity with MySQL', () => {
       expect(existingTrips).toHaveLength(1);
       expect(existingTrips[0].maChuyenXe).toBe(blockerCode);
     } finally {
+      (prisma as any).$transaction = originalTransaction;
       continueTransaction?.();
       await txPromise.catch(() => {});
     }
