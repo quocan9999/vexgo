@@ -24,10 +24,18 @@ function renderLinkedDoc(tx: {
   shipment: { code: string } | null;
 }) {
   if (tx.booking) {
-    return <span>Đặt vé: <strong>{tx.booking.code}</strong></span>;
+    return (
+      <span>
+        Đặt vé: <strong>{tx.booking.code}</strong>
+      </span>
+    );
   }
   if (tx.shipment) {
-    return <span>Gửi hàng: <strong>{tx.shipment.code}</strong></span>;
+    return (
+      <span>
+        Gửi hàng: <strong>{tx.shipment.code}</strong>
+      </span>
+    );
   }
   return '—';
 }
@@ -52,7 +60,11 @@ function formatStatus(status: string): string {
   }
 }
 
-export function CustomerTransactionsTab({ customerId }: { customerId: number }) {
+export function CustomerTransactionsTab({
+  customerId,
+}: {
+  customerId: number;
+}) {
   const {
     transactions,
     meta,
@@ -70,9 +82,15 @@ export function CustomerTransactionsTab({ customerId }: { customerId: number }) 
   } = useCustomerTransactions(customerId);
 
   return (
-    <div className="customer-transactions-container">
+    <div className="panel admin-resource-panel">
       <FilterToolbar
-        totalItems={error ? null : loading && transactions.length === 0 ? null : meta.totalItems}
+        totalItems={
+          error
+            ? null
+            : loading && transactions.length === 0
+              ? null
+              : meta.totalItems
+        }
       >
         <SearchInput
           label="Tìm kiếm giao dịch"
@@ -83,7 +101,7 @@ export function CustomerTransactionsTab({ customerId }: { customerId: number }) 
       </FilterToolbar>
 
       {error && (
-        <div className="admin-error-panel" role="alert">
+        <div className="customers-state-panel" role="alert">
           <p>{error}</p>
           <Button onClick={refresh} type="button" variant="secondary">
             Thử lại
@@ -99,11 +117,12 @@ export function CustomerTransactionsTab({ customerId }: { customerId: number }) 
         </div>
       ) : (
         <>
-          <div className="admin-resource-table-wrap">
-            <table
-              className="admin-resource-table"
-              aria-busy={loading || refreshing}
-            >
+          <div
+            className="admin-resource-table-wrap"
+            aria-busy={loading || refreshing}
+          >
+            <table className="admin-resource-table">
+              <caption className="sr-only">Lịch sử giao dịch</caption>
               <thead>
                 <tr>
                   <th scope="col">Mã giao dịch</th>
@@ -118,12 +137,12 @@ export function CustomerTransactionsTab({ customerId }: { customerId: number }) 
                     scope="col"
                   >
                     <button
-                      className="sort-header-button"
+                      className="admin-resource-sort-button"
                       onClick={() => handleSort('createdDate')}
                       type="button"
                     >
-                      Ngày tạo
-                      <span className="sort-header-icon" aria-hidden="true">
+                      <span>Ngày tạo</span>
+                      <span aria-hidden="true">
                         {sortBy === 'createdDate' ? (
                           sortDirection === 'asc' ? (
                             <ArrowUp size={14} />
@@ -147,12 +166,12 @@ export function CustomerTransactionsTab({ customerId }: { customerId: number }) 
                     scope="col"
                   >
                     <button
-                      className="sort-header-button"
+                      className="admin-resource-sort-button"
                       onClick={() => handleSort('totalAmount')}
                       type="button"
                     >
-                      Tổng tiền
-                      <span className="sort-header-icon" aria-hidden="true">
+                      <span>Tổng tiền</span>
+                      <span aria-hidden="true">
                         {sortBy === 'totalAmount' ? (
                           sortDirection === 'asc' ? (
                             <ArrowUp size={14} />
@@ -193,17 +212,17 @@ export function CustomerTransactionsTab({ customerId }: { customerId: number }) 
             </table>
           </div>
 
-          <ul
-            className="admin-mobile-cards"
+          <div
+            className="customers-mobile-list"
             aria-label="Danh sách giao dịch dạng thẻ"
             aria-busy={loading || refreshing}
           >
             {transactions.map((tx) => (
-              <li key={tx.transactionId} className="admin-mobile-card">
-                <div className="admin-mobile-card-header">
+              <article key={tx.transactionId} className="customers-mobile-card">
+                <div className="customers-mobile-card-header">
                   <div>
                     <span className="customer-code">{tx.code}</span>
-                    <h3 className="admin-mobile-card-title">
+                    <h3 className="customers-mobile-card-title">
                       {tx.totalAmount.toLocaleString('vi-VN')} đ
                     </h3>
                   </div>
@@ -211,7 +230,7 @@ export function CustomerTransactionsTab({ customerId }: { customerId: number }) 
                     {formatStatus(tx.status)}
                   </AdminStatusBadge>
                 </div>
-                <dl className="admin-mobile-card-details">
+                <dl className="customers-mobile-fields">
                   <div>
                     <dt>Ngày tạo</dt>
                     <dd>{formatDateTime(tx.createdDate)}</dd>
@@ -221,9 +240,9 @@ export function CustomerTransactionsTab({ customerId }: { customerId: number }) 
                     <dd>{renderLinkedDoc(tx)}</dd>
                   </div>
                 </dl>
-              </li>
+              </article>
             ))}
-          </ul>
+          </div>
 
           {meta.totalPages > 1 && (
             <AdminPagination

@@ -70,9 +70,15 @@ export function CustomerTicketsTab({ customerId }: { customerId: number }) {
   } = useCustomerTickets(customerId);
 
   return (
-    <div className="customer-tickets-container">
+    <div className="panel admin-resource-panel">
       <FilterToolbar
-        totalItems={error ? null : loading && tickets.length === 0 ? null : meta.totalItems}
+        totalItems={
+          error
+            ? null
+            : loading && tickets.length === 0
+              ? null
+              : meta.totalItems
+        }
       >
         <SearchInput
           label="Tìm kiếm vé"
@@ -83,7 +89,7 @@ export function CustomerTicketsTab({ customerId }: { customerId: number }) {
       </FilterToolbar>
 
       {error && (
-        <div className="admin-error-panel" role="alert">
+        <div className="customers-state-panel" role="alert">
           <p>{error}</p>
           <Button onClick={refresh} type="button" variant="secondary">
             Thử lại
@@ -99,11 +105,12 @@ export function CustomerTicketsTab({ customerId }: { customerId: number }) {
         </div>
       ) : (
         <>
-          <div className="admin-resource-table-wrap">
-            <table
-              className="admin-resource-table"
-              aria-busy={loading || refreshing}
-            >
+          <div
+            className="admin-resource-table-wrap"
+            aria-busy={loading || refreshing}
+          >
+            <table className="admin-resource-table">
+              <caption className="sr-only">Lịch sử vé của khách hàng</caption>
               <thead>
                 <tr>
                   <th scope="col">Mã vé</th>
@@ -117,7 +124,7 @@ export function CustomerTicketsTab({ customerId }: { customerId: number }) {
                     scope="col"
                   >
                     <button
-                      className="sort-header-button"
+                      className="admin-resource-sort-button"
                       onClick={() =>
                         setSortDirection(
                           sortDirection === 'asc' ? 'desc' : 'asc',
@@ -125,8 +132,8 @@ export function CustomerTicketsTab({ customerId }: { customerId: number }) {
                       }
                       type="button"
                     >
-                      Khởi hành
-                      <span className="sort-header-icon" aria-hidden="true">
+                      <span>Khởi hành</span>
+                      <span aria-hidden="true">
                         {sortDirection === 'asc' ? (
                           <ArrowUp size={14} />
                         ) : (
@@ -188,17 +195,17 @@ export function CustomerTicketsTab({ customerId }: { customerId: number }) {
             </table>
           </div>
 
-          <ul
-            className="admin-mobile-cards"
+          <div
+            className="customers-mobile-list"
             aria-label="Danh sách vé dạng thẻ"
             aria-busy={loading || refreshing}
           >
             {tickets.map((ticket) => (
-              <li key={ticket.ticketId} className="admin-mobile-card">
-                <div className="admin-mobile-card-header">
+              <article key={ticket.ticketId} className="customers-mobile-card">
+                <div className="customers-mobile-card-header">
                   <div>
                     <span className="customer-code">{ticket.ticketCode}</span>
-                    <h3 className="admin-mobile-card-title">
+                    <h3 className="customers-mobile-card-title">
                       {ticket.actualPrice.toLocaleString('vi-VN')} đ
                     </h3>
                   </div>
@@ -206,7 +213,7 @@ export function CustomerTicketsTab({ customerId }: { customerId: number }) {
                     {formatTicketStatus(ticket.status)}
                   </AdminStatusBadge>
                 </div>
-                <dl className="admin-mobile-card-details">
+                <dl className="customers-mobile-fields">
                   <div>
                     <dt>Tuyến đường</dt>
                     <dd>
@@ -229,7 +236,7 @@ export function CustomerTicketsTab({ customerId }: { customerId: number }) {
                     </dd>
                   </div>
                   <div>
-                    <dt>Ghế</dt>
+                    <dt>Ghế ngồi</dt>
                     <dd>
                       {ticket.seat.code}
                       {ticket.seat.position ? ` (${ticket.seat.position})` : ''}
@@ -239,10 +246,14 @@ export function CustomerTicketsTab({ customerId }: { customerId: number }) {
                     <dt>Mã đặt vé</dt>
                     <dd>{ticket.booking.code}</dd>
                   </div>
+                  <div>
+                    <dt>Giá niêm yết</dt>
+                    <dd>{ticket.listedPrice.toLocaleString('vi-VN')} đ</dd>
+                  </div>
                 </dl>
-              </li>
+              </article>
             ))}
-          </ul>
+          </div>
 
           {meta.totalPages > 1 && (
             <AdminPagination

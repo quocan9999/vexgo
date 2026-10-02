@@ -508,7 +508,7 @@ describe('Admin Customers API (Feature 06.1)', () => {
           phieuGuiHang: {
             select: {
               phieuGuiHangId: true,
-              maPhieuGuiHang: true,
+              maVanDon: true,
               trangThai: true,
             },
           },

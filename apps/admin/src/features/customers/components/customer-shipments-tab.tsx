@@ -87,9 +87,15 @@ export function CustomerShipmentsTab({ customerId }: { customerId: number }) {
   } = useCustomerShipments(customerId);
 
   return (
-    <div className="customer-shipments-container">
+    <div className="panel admin-resource-panel">
       <FilterToolbar
-        totalItems={error ? null : loading && shipments.length === 0 ? null : meta.totalItems}
+        totalItems={
+          error
+            ? null
+            : loading && shipments.length === 0
+              ? null
+              : meta.totalItems
+        }
       >
         <SearchInput
           label="Tìm kiếm đơn gửi hàng"
@@ -100,7 +106,7 @@ export function CustomerShipmentsTab({ customerId }: { customerId: number }) {
       </FilterToolbar>
 
       {error && (
-        <div className="admin-error-panel" role="alert">
+        <div className="customers-state-panel" role="alert">
           <p>{error}</p>
           <Button onClick={refresh} type="button" variant="secondary">
             Thử lại
@@ -116,11 +122,12 @@ export function CustomerShipmentsTab({ customerId }: { customerId: number }) {
         </div>
       ) : (
         <>
-          <div className="admin-resource-table-wrap">
-            <table
-              className="admin-resource-table"
-              aria-busy={loading || refreshing}
-            >
+          <div
+            className="admin-resource-table-wrap"
+            aria-busy={loading || refreshing}
+          >
+            <table className="admin-resource-table">
+              <caption className="sr-only">Lịch sử gửi hàng của khách hàng</caption>
               <thead>
                 <tr>
                   <th scope="col">Mã vận đơn</th>
@@ -131,7 +138,7 @@ export function CustomerShipmentsTab({ customerId }: { customerId: number }) {
                     scope="col"
                   >
                     <button
-                      className="sort-header-button"
+                      className="admin-resource-sort-button"
                       onClick={() =>
                         setSortDirection(
                           sortDirection === 'asc' ? 'desc' : 'asc',
@@ -139,8 +146,8 @@ export function CustomerShipmentsTab({ customerId }: { customerId: number }) {
                       }
                       type="button"
                     >
-                      Ngày gửi
-                      <span className="sort-header-icon" aria-hidden="true">
+                      <span>Ngày gửi</span>
+                      <span aria-hidden="true">
                         {sortDirection === 'asc' ? (
                           <ArrowUp size={14} />
                         ) : (
@@ -203,17 +210,17 @@ export function CustomerShipmentsTab({ customerId }: { customerId: number }) {
             </table>
           </div>
 
-          <ul
-            className="admin-mobile-cards"
+          <div
+            className="customers-mobile-list"
             aria-label="Danh sách đơn gửi hàng dạng thẻ"
             aria-busy={loading || refreshing}
           >
             {shipments.map((s) => (
-              <li key={s.shipmentId} className="admin-mobile-card">
-                <div className="admin-mobile-card-header">
+              <article key={s.shipmentId} className="customers-mobile-card">
+                <div className="customers-mobile-card-header">
                   <div>
                     <span className="customer-code">{s.waybillCode}</span>
-                    <h3 className="admin-mobile-card-title">
+                    <h3 className="customers-mobile-card-title">
                       {s.totalFee.toLocaleString('vi-VN')} đ
                     </h3>
                   </div>
@@ -221,16 +228,16 @@ export function CustomerShipmentsTab({ customerId }: { customerId: number }) {
                     {formatShipmentStatus(s.status)}
                   </AdminStatusBadge>
                 </div>
-                <dl className="admin-mobile-card-details">
-                  <div>
-                    <dt>Ngày gửi</dt>
-                    <dd>{formatDateTime(s.sentAt)}</dd>
-                  </div>
+                <dl className="customers-mobile-fields">
                   <div>
                     <dt>Người nhận</dt>
                     <dd>
                       {s.receiver.fullName} ({s.receiver.phoneNumber})
                     </dd>
+                  </div>
+                  <div>
+                    <dt>Ngày gửi</dt>
+                    <dd>{formatDateTime(s.sentAt)}</dd>
                   </div>
                   <div>
                     <dt>Hình thức</dt>
@@ -239,24 +246,26 @@ export function CustomerShipmentsTab({ customerId }: { customerId: number }) {
                       {formatMethod(s.deliveryMethod)}
                     </dd>
                   </div>
-                  {s.receiver.address && (
-                    <div>
-                      <dt>Địa chỉ nhận</dt>
-                      <dd>{s.receiver.address}</dd>
-                    </div>
-                  )}
-                  {s.originBranch && s.destinationBranch && (
-                    <div>
-                      <dt>Tuyến bưu cục</dt>
-                      <dd>
-                        {s.originBranch.name} → {s.destinationBranch.name}
-                      </dd>
-                    </div>
-                  )}
+                  <div>
+                    <dt>Chi nhánh</dt>
+                    <dd>
+                      {s.originBranch && s.destinationBranch
+                        ? `${s.originBranch.name} → ${s.destinationBranch.name}`
+                        : '—'}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Người thanh toán</dt>
+                    <dd>
+                      {s.freightPayer === 'NGUOI_GUI'
+                        ? 'Người gửi thanh toán'
+                        : 'Người nhận thanh toán'}
+                    </dd>
+                  </div>
                 </dl>
-              </li>
+              </article>
             ))}
-          </ul>
+          </div>
 
           {meta.totalPages > 1 && (
             <AdminPagination

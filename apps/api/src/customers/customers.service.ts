@@ -379,7 +379,7 @@ export class CustomersService {
           phieuGuiHang: {
             select: {
               phieuGuiHangId: true,
-              maPhieuGuiHang: true,
+              maVanDon: true,
               trangThai: true,
             },
           },
@@ -411,7 +411,7 @@ export class CustomersService {
         shipment: item.phieuGuiHang
           ? {
               shipmentId: item.phieuGuiHang.phieuGuiHangId,
-              code: item.phieuGuiHang.maPhieuGuiHang,
+              code: item.phieuGuiHang.maVanDon,
               status: item.phieuGuiHang.trangThai,
             }
           : null,

@@ -53,13 +53,13 @@ export function CustomersManagement() {
   function renderSortIcon(key: CustomerSortKey) {
     if (sortBy !== key) {
       return (
-        <span className="sort-header-icon" aria-hidden="true">
+        <span aria-hidden="true">
           <ArrowUpDown size={14} />
         </span>
       );
     }
     return (
-      <span className="sort-header-icon" aria-hidden="true">
+      <span aria-hidden="true">
         {sortDirection === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />}
       </span>
     );
@@ -74,131 +74,179 @@ export function CustomersManagement() {
 
   return (
     <SuperAdminLayout activeSection="customers">
-      <AdminPageHeader
-        actions={<AdminRefreshAction loading={refreshing} onClick={refresh} />}
-        eyebrow="QUẢN LÝ KHÁCH HÀNG"
-        title="Quản lý khách hàng"
-        titleId="customers-page-title"
-      />
+      <div className="admin-page-content">
+        <AdminPageHeader
+          actions={<AdminRefreshAction loading={refreshing} onClick={refresh} />}
+          eyebrow="QUẢN LÝ KHÁCH HÀNG"
+          title="Quản lý khách hàng"
+          titleId="customers-page-title"
+        />
 
-      <section
-        className="customers-section"
-        aria-labelledby="customers-table-heading"
-      >
-        <h2 id="customers-table-heading" className="sr-only">
-          Danh sách khách hàng
-        </h2>
-
-        <FilterToolbar
-          totalItems={error ? null : loading ? null : meta.totalItems}
+        <section
+          className="customers-section"
+          aria-labelledby="customers-table-heading"
         >
-          <SearchInput
-            label="Tìm kiếm khách hàng"
-            onChange={setSearchInput}
-            placeholder="Tìm theo mã, tên, SĐT, email..."
-            value={searchInput}
-          />
-          <SelectFilter
-            allLabel="Tất cả trạng thái"
-            label="Trạng thái tài khoản"
-            onChange={(val) =>
-              setAccountStatus(val as CustomerAccountStatus | '')
-            }
-            options={STATUS_OPTIONS}
-            value={accountStatus}
-          />
-        </FilterToolbar>
+          <h2 id="customers-table-heading" className="sr-only">
+            Danh sách khách hàng
+          </h2>
 
-        {error && (
-          <div className="admin-error-panel" role="alert">
-            <p>{error}</p>
-            <Button onClick={refresh} type="button" variant="secondary">
-              Thử lại
-            </Button>
-          </div>
-        )}
+          <div className="panel admin-resource-panel">
+            <FilterToolbar
+              totalItems={error ? null : loading ? null : meta.totalItems}
+            >
+              <SearchInput
+                label="Tìm kiếm khách hàng"
+                onChange={setSearchInput}
+                placeholder="Tìm theo mã, tên, SĐT, email..."
+                value={searchInput}
+              />
+              <SelectFilter
+                allLabel="Tất cả trạng thái"
+                label="Trạng thái tài khoản"
+                onChange={(val) =>
+                  setAccountStatus(val as CustomerAccountStatus | '')
+                }
+                options={STATUS_OPTIONS}
+                value={accountStatus}
+              />
+            </FilterToolbar>
 
-        {loading && customers.length === 0 ? (
-          <AdminTableSkeleton resourceLabel="khách hàng" />
-        ) : customers.length === 0 ? (
-          <div className="customers-state-panel">
-            <p>
-              {isFiltered
-                ? 'Không tìm thấy khách hàng phù hợp với bộ lọc.'
-                : 'Chưa có khách hàng nào trong hệ thống nhà xe.'}
-            </p>
-            {isFiltered && (
-              <Button onClick={resetFilters} type="button" variant="secondary">
-                Đặt lại bộ lọc
-              </Button>
+            {error && (
+              <div className="customers-state-panel" role="alert">
+                <p>{error}</p>
+                <Button onClick={refresh} type="button" variant="secondary">
+                  Thử lại
+                </Button>
+              </div>
             )}
-          </div>
-        ) : (
-          <>
-            <div className="admin-table-container">
-              <table
-                className="admin-table"
-                aria-busy={loading || refreshing}
-              >
-                <thead>
-                  <tr>
-                    <th scope="col" aria-sort={getAriaSort('customerCode')}>
-                      <button
-                        type="button"
-                        className="sort-header-button"
-                        onClick={() => handleSort('customerCode')}
-                      >
-                        <span>Mã KH</span>
-                        {renderSortIcon('customerCode')}
-                      </button>
-                    </th>
-                    <th scope="col" aria-sort={getAriaSort('fullName')}>
-                      <button
-                        type="button"
-                        className="sort-header-button"
-                        onClick={() => handleSort('fullName')}
-                      >
-                        <span>Họ tên</span>
-                        {renderSortIcon('fullName')}
-                      </button>
-                    </th>
-                    <th scope="col">Số điện thoại</th>
-                    <th scope="col">Email</th>
-                    <th scope="col" aria-sort={getAriaSort('loyaltyPoints')}>
-                      <button
-                        type="button"
-                        className="sort-header-button"
-                        onClick={() => handleSort('loyaltyPoints')}
-                      >
-                        <span>Điểm tích lũy</span>
-                        {renderSortIcon('loyaltyPoints')}
-                      </button>
-                    </th>
-                    <th scope="col">Trạng thái tài khoản</th>
-                    <th scope="col" className="text-right">
-                      Thao tác
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
+
+            {loading && customers.length === 0 ? (
+              <AdminTableSkeleton resourceLabel="khách hàng" />
+            ) : customers.length === 0 ? (
+              <div className="customers-state-panel">
+                <p>
+                  {isFiltered
+                    ? 'Không tìm thấy khách hàng phù hợp với bộ lọc.'
+                    : 'Chưa có khách hàng nào trong hệ thống nhà xe.'}
+                </p>
+                {isFiltered && (
+                  <Button onClick={resetFilters} type="button" variant="secondary">
+                    Đặt lại bộ lọc
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <>
+                <div
+                  className="admin-resource-table-wrap"
+                  aria-busy={loading || refreshing}
+                >
+                  <table className="admin-resource-table">
+                    <caption className="sr-only">Danh sách khách hàng</caption>
+                    <thead>
+                      <tr>
+                        <th scope="col" aria-sort={getAriaSort('customerCode')}>
+                          <button
+                            type="button"
+                            className="admin-resource-sort-button"
+                            onClick={() => handleSort('customerCode')}
+                          >
+                            <span>Mã KH</span>
+                            {renderSortIcon('customerCode')}
+                          </button>
+                        </th>
+                        <th scope="col" aria-sort={getAriaSort('fullName')}>
+                          <button
+                            type="button"
+                            className="admin-resource-sort-button"
+                            onClick={() => handleSort('fullName')}
+                          >
+                            <span>Họ tên</span>
+                            {renderSortIcon('fullName')}
+                          </button>
+                        </th>
+                        <th scope="col">Số điện thoại</th>
+                        <th scope="col">Email</th>
+                        <th scope="col" aria-sort={getAriaSort('loyaltyPoints')}>
+                          <button
+                            type="button"
+                            className="admin-resource-sort-button"
+                            onClick={() => handleSort('loyaltyPoints')}
+                          >
+                            <span>Điểm tích lũy</span>
+                            {renderSortIcon('loyaltyPoints')}
+                          </button>
+                        </th>
+                        <th scope="col">Trạng thái tài khoản</th>
+                        <th scope="col">
+                          <span className="sr-only">Thao tác</span>
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {customers.map((customer) => (
+                        <tr key={customer.customerId}>
+                          <td>
+                            <span className="customer-code">
+                              {customer.customerCode}
+                            </span>
+                          </td>
+                          <th scope="row">
+                            <span>{customer.fullName}</span>
+                          </th>
+                          <td>{customer.phoneNumber}</td>
+                          <td>{customer.email || '—'}</td>
+                          <td>
+                            <strong>
+                              {customer.loyaltyPoints.toLocaleString('vi-VN')}
+                            </strong>
+                          </td>
+                          <td>
+                            <AdminStatusBadge
+                              tone={
+                                customer.account.status === 'HOAT_DONG'
+                                  ? 'active'
+                                  : 'muted'
+                              }
+                            >
+                              {customer.account.status === 'HOAT_DONG'
+                                ? 'Đang hoạt động'
+                                : 'Tạm khóa'}
+                            </AdminStatusBadge>
+                          </td>
+                          <td>
+                            <AdminDetailAction
+                              resourceName={`khách hàng ${customer.customerCode}`}
+                              onClick={() =>
+                                setSelectedCustomerId(customer.customerId)
+                              }
+                            />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div
+                  className="customers-mobile-list"
+                  aria-label="Danh sách khách hàng dạng thẻ"
+                  aria-busy={loading || refreshing}
+                >
                   {customers.map((customer) => (
-                    <tr key={customer.customerId}>
-                      <td>
-                        <span className="customer-code">
-                          {customer.customerCode}
-                        </span>
-                      </td>
-                      <td>
-                        <strong>{customer.fullName}</strong>
-                      </td>
-                      <td>{customer.phoneNumber}</td>
-                      <td>{customer.email || '—'}</td>
-                      <td>
-                        <strong>
-                          {customer.loyaltyPoints.toLocaleString('vi-VN')}
-                        </strong>
-                      </td>
-                      <td>
+                    <article
+                      key={customer.customerId}
+                      className="customers-mobile-card"
+                    >
+                      <div className="customers-mobile-card-header">
+                        <div>
+                          <span className="customer-code">
+                            {customer.customerCode}
+                          </span>
+                          <h3 className="customers-mobile-card-title">
+                            {customer.fullName}
+                          </h3>
+                        </div>
                         <AdminStatusBadge
                           tone={
                             customer.account.status === 'HOAT_DONG'
@@ -210,89 +258,55 @@ export function CustomersManagement() {
                             ? 'Đang hoạt động'
                             : 'Tạm khóa'}
                         </AdminStatusBadge>
-                      </td>
-                      <td className="text-right">
+                      </div>
+                      <dl className="customers-mobile-fields">
+                        <div>
+                          <dt>Số điện thoại</dt>
+                          <dd>{customer.phoneNumber}</dd>
+                        </div>
+                        <div>
+                          <dt>Email</dt>
+                          <dd>{customer.email || '—'}</dd>
+                        </div>
+                        <div>
+                          <dt>Điểm tích lũy</dt>
+                          <dd>
+                            {customer.loyaltyPoints.toLocaleString('vi-VN')} điểm
+                          </dd>
+                        </div>
+                      </dl>
+                      <div className="customers-mobile-actions">
                         <AdminDetailAction
                           resourceName={`khách hàng ${customer.customerCode}`}
                           onClick={() =>
                             setSelectedCustomerId(customer.customerId)
                           }
                         />
-                      </td>
-                    </tr>
+                      </div>
+                    </article>
                   ))}
-                </tbody>
-              </table>
-            </div>
+                </div>
 
-            <ul
-              className="admin-mobile-cards"
-              aria-label="Danh sách khách hàng dạng thẻ"
-              aria-busy={loading || refreshing}
-            >
-              {customers.map((customer) => (
-                <li key={customer.customerId} className="admin-mobile-card">
-                  <div className="admin-mobile-card-header">
-                    <div>
-                      <span className="customer-code">
-                        {customer.customerCode}
-                      </span>
-                      <h3 className="admin-mobile-card-title">
-                        {customer.fullName}
-                      </h3>
-                    </div>
-                    <AdminStatusBadge
-                      tone={
-                        customer.account.status === 'HOAT_DONG'
-                          ? 'active'
-                          : 'muted'
-                      }
-                    >
-                      {customer.account.status === 'HOAT_DONG'
-                        ? 'Đang hoạt động'
-                        : 'Tạm khóa'}
-                    </AdminStatusBadge>
-                  </div>
-                  <dl className="admin-mobile-card-details">
-                    <div>
-                      <dt>Số điện thoại</dt>
-                      <dd>{customer.phoneNumber}</dd>
-                    </div>
-                    <div>
-                      <dt>Email</dt>
-                      <dd>{customer.email || '—'}</dd>
-                    </div>
-                    <div>
-                      <dt>Điểm tích lũy</dt>
-                      <dd>
-                        {customer.loyaltyPoints.toLocaleString('vi-VN')} điểm
-                      </dd>
-                    </div>
-                  </dl>
-                  <div className="admin-mobile-card-actions">
-                    <AdminDetailAction
-                      resourceName={`khách hàng ${customer.customerCode}`}
-                      onClick={() => setSelectedCustomerId(customer.customerId)}
-                    />
-                  </div>
-                </li>
-              ))}
-            </ul>
-
-            {meta.totalPages > 1 && (
-              <AdminPagination
-                currentPage={page}
-                disabled={loading}
-                onPageChange={setPage}
-                pageSize={meta.pageSize}
-                summaryLabel="khách hàng"
-                totalItems={meta.totalItems}
-                totalPages={meta.totalPages}
-              />
+                {meta.totalPages > 1 && (
+                  <AdminPagination
+                    currentPage={page}
+                    disabled={loading}
+                    onPageChange={setPage}
+                    pageSize={meta.pageSize}
+                    summaryLabel="khách hàng"
+                    totalItems={meta.totalItems}
+                    totalPages={meta.totalPages}
+                  />
+                )}
+              </>
             )}
-          </>
-        )}
-      </section>
+          </div>
+        </section>
+
+        <footer className="admin-page-footer">
+          <span>© 2026 VexGo Platform</span>
+        </footer>
+      </div>
 
       {selectedCustomerId !== null && (
         <CustomerDetails
