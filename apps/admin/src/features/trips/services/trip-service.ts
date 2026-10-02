@@ -99,14 +99,43 @@ function isPaginatedTrips(value: unknown): value is PaginatedTrips {
   );
 }
 
+export type TripApiErrorDetail = { field: string; message: string };
+
+export class TripApiError extends Error {
+  constructor(
+    message: string,
+    readonly code?: string,
+    readonly details: TripApiErrorDetail[] = [],
+  ) {
+    super(message);
+    this.name = 'TripApiError';
+  }
+}
+
 async function readResponse(response: Response, resource: string): Promise<unknown> {
   const body: unknown = await response.json().catch(() => null);
   if (!response.ok) {
-    throw new Error(
+    const message =
       isRecord(body) && typeof body.message === 'string'
         ? body.message
-        : `Không thể tải ${resource} (HTTP ${response.status}).`,
-    );
+        : `Không thể tải ${resource} (HTTP ${response.status}).`;
+    const code =
+      isRecord(body) && typeof body.error === 'string'
+        ? body.error
+        : response.status === 404
+          ? 'TRIP_NOT_FOUND'
+          : undefined;
+    const details =
+      isRecord(body) && Array.isArray(body.details)
+        ? body.details.flatMap((detail): TripApiErrorDetail[] =>
+            isRecord(detail) &&
+            typeof detail.field === 'string' &&
+            typeof detail.message === 'string'
+              ? [{ field: detail.field, message: detail.message }]
+              : [],
+          )
+        : [];
+    throw new TripApiError(message, code, details);
   }
   return body;
 }
@@ -168,19 +197,6 @@ export async function getTripById(
   }
 
   return body.data;
-}
-
-export type TripApiErrorDetail = { field: string; message: string };
-
-export class TripApiError extends Error {
-  constructor(
-    message: string,
-    readonly code?: string,
-    readonly details: TripApiErrorDetail[] = [],
-  ) {
-    super(message);
-    this.name = 'TripApiError';
-  }
 }
 
 async function writeTrip(

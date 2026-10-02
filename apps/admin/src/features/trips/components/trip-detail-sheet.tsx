@@ -199,16 +199,13 @@ export function TripDetailSheet({
       })
       .catch((error: unknown) => {
         if (!controller.signal.aborted) {
+          if (error instanceof TripApiError && error.code === 'TRIP_NOT_FOUND') {
+            onNotFound?.();
+          }
           const message =
             error instanceof Error
               ? error.message
               : 'Không thể tải thông tin chuyến xe.';
-          if (
-            message.includes('404') ||
-            message.toLowerCase().includes('không tìm thấy')
-          ) {
-            onNotFound?.();
-          }
           setDetail({
             status: 'error',
             message,

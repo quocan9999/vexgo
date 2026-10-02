@@ -5,7 +5,7 @@ import {
   tripStatusLabel,
   TripStatusBadge,
 } from '../src/features/trips/components/trip-detail-sheet';
-import { getTrips, getTripById } from '../src/features/trips/services/trip-service';
+import { getTrips, getTripById, TripApiError } from '../src/features/trips/services/trip-service';
 import type { Trip } from '../src/features/trips/types/trip';
 import { setEmployeeAdminTestSession } from './admin-auth-test-session';
 
@@ -251,5 +251,35 @@ describe('Trip service API contract validation', () => {
     await expect(getTripById(101)).rejects.toThrow(
       'API trả về thông tin chuyến xe không hợp lệ.',
     );
+  });
+
+  it('throws TripApiError with code TRIP_NOT_FOUND when backend returns 404', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 404,
+      json: async () => ({
+        statusCode: 404,
+        error: 'TRIP_NOT_FOUND',
+        message: 'Không tìm thấy chuyến xe.',
+      }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(getTripById(999)).rejects.toMatchObject({
+      name: 'TripApiError',
+      code: 'TRIP_NOT_FOUND',
+      message: 'Không tìm thấy chuyến xe.',
+    });
+  });
+
+  it('distinguishes TRIP_NOT_FOUND from other errors by machine-readable error code without text parsing', () => {
+    const notFoundError = new TripApiError('Không tìm thấy chuyến xe.', 'TRIP_NOT_FOUND');
+    expect(notFoundError instanceof TripApiError && notFoundError.code === 'TRIP_NOT_FOUND').toBe(true);
+
+    const otherErrorWithMessage = new TripApiError('Lỗi dịch vụ: không tìm thấy 404', 'INTERNAL_SERVER_ERROR');
+    expect(otherErrorWithMessage instanceof TripApiError && otherErrorWithMessage.code === 'TRIP_NOT_FOUND').toBe(false);
+
+    const genericError = new Error('404 không tìm thấy');
+    expect(genericError instanceof TripApiError).toBe(false);
   });
 });
