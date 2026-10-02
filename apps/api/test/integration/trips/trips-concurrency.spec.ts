@@ -8,6 +8,7 @@ import { AccessTokenGuard } from '../../../src/auth/guards/access-token.guard.js
 import { ADMIN_ROLE_DEFAULT_PERMISSION_KEYS } from '../../../src/auth/permissions/permission-catalog.js';
 import type { AuthPrincipal } from '../../../src/auth/tokens/auth-principal.js';
 import { configureApi } from '../../../src/common/configure-api.js';
+import { Prisma } from '../../../src/generated/prisma/client.js';
 import { PrismaService } from '../../../src/prisma/prisma.service.js';
 
 describe('Trips concurrent schedule conflict integrity with MySQL', () => {
@@ -273,5 +274,110 @@ describe('Trips concurrent schedule conflict integrity with MySQL', () => {
 
     const conflictRes = [update1, update2].find((r) => r.status === 409);
     expect(conflictRes?.body.error).toBe('TRIP_VEHICLE_SCHEDULE_CONFLICT');
+
+    const targetTrips = await prisma.chuyenXe.findMany({
+      where: {
+        xeId: vehicleId1,
+        ngayKhoiHanh: new Date('2099-05-18T00:00:00.000Z'),
+        gioKhoiHanh: new Date('1970-01-01T12:00:00.000Z'),
+        trangThai: { not: 'DA_HUY' },
+      },
+    });
+    expect(targetTrips).toHaveLength(1);
+  }, 30_000);
+
+  it('deterministically blocks and rejects concurrent create when vehicle row lock is held and slot is occupied before release', async () => {
+    const targetDate = '2099-06-01';
+    const targetTime = '10:00:00';
+    const blockerCode = `CX-BLK-${randomUUID().slice(0, 6).toUpperCase()}`;
+    const requestCode = `CX-REQ-${randomUUID().slice(0, 6).toUpperCase()}`;
+
+    let notifyLockAcquired!: () => void;
+    const lockAcquiredPromise = new Promise<void>((resolve) => {
+      notifyLockAcquired = resolve;
+    });
+
+    let continueTransaction!: () => void;
+    const releaseLockPromise = new Promise<void>((resolve) => {
+      continueTransaction = resolve;
+    });
+
+    const txPromise = prisma.$transaction(
+      async (tx) => {
+        // Step 2: Actively lock the vehicle row with SELECT ... FOR UPDATE
+        await tx.$queryRaw`
+          SELECT xeId
+          FROM Xe
+          WHERE xeId = ${vehicleId1}
+          FOR UPDATE
+        `;
+
+        // Signal that the vehicle lock is actively held
+        notifyLockAcquired();
+
+        // Hold the lock until test instructs us to proceed
+        await releaseLockPromise;
+
+        // Step 5: Within the lock-holding transaction, occupy the target slot
+        await tx.chuyenXe.create({
+          data: {
+            maChuyenXe: blockerCode,
+            ngayKhoiHanh: new Date(`${targetDate}T00:00:00.000Z`),
+            gioKhoiHanh: new Date(`1970-01-01T${targetTime}.000Z`),
+            trangThai: 'CHUA_KHOI_HANH',
+            nhaXeId: busCompanyId,
+            tuyenXeId: routeId,
+            xeId: vehicleId1,
+          },
+        });
+      },
+      {
+        isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted,
+        timeout: 30_000,
+      },
+    );
+
+    try {
+      // Wait until the test transaction has confirmed holding the row lock
+      await lockAcquiredPromise;
+
+      // Step 3: Start the HTTP create request targeting the exact same vehicle & slot
+      let requestSettled = false;
+      const requestPromise = request(app.getHttpServer())
+        .post('/api/v1/trips')
+        .send(createTripPayload(requestCode, vehicleId1, targetDate, targetTime))
+        .then((res) => {
+          requestSettled = true;
+          return res;
+        });
+
+      // Step 4: Prove request cannot complete while the vehicle row lock is held
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      expect(requestSettled).toBe(false);
+
+      // Step 6: Occupy the slot and commit the transaction to release the lock
+      continueTransaction();
+      await txPromise;
+
+      // Step 7 & 8: Request resumes, sees the committed slot occupancy under ReadCommitted, and returns 409
+      const response = await requestPromise;
+      expect(response.status).toBe(409);
+      expect(response.body.error).toBe('TRIP_VEHICLE_SCHEDULE_CONFLICT');
+
+      // Step 9: Query DB: exactly 1 non-cancelled trip exists at target slot
+      const existingTrips = await prisma.chuyenXe.findMany({
+        where: {
+          xeId: vehicleId1,
+          ngayKhoiHanh: new Date(`${targetDate}T00:00:00.000Z`),
+          gioKhoiHanh: new Date(`1970-01-01T${targetTime}.000Z`),
+          trangThai: { not: 'DA_HUY' },
+        },
+      });
+      expect(existingTrips).toHaveLength(1);
+      expect(existingTrips[0].maChuyenXe).toBe(blockerCode);
+    } finally {
+      continueTransaction?.();
+      await txPromise.catch(() => {});
+    }
   }, 30_000);
 });

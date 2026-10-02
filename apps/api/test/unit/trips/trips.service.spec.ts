@@ -1026,7 +1026,11 @@ describe('TripsService.cancel', () => {
       trangThai: 'CHUA_KHOI_HANH',
     });
     prisma.gheChuyenXe.findFirst.mockResolvedValue(null);
-    prisma.phieuGuiHang.findFirst.mockResolvedValue({ phieuGuiHangId: 301 });
+    prisma.phieuGuiHang.findFirst.mockImplementation(async ({ where }) => {
+      const notIn = where?.trangThai?.notIn ?? [];
+      const shipmentsInDb = [{ phieuGuiHangId: 301, trangThai: 'CHO_DIEU_PHOI' }];
+      return shipmentsInDb.find((s) => !notIn.includes(s.trangThai)) ?? null;
+    });
 
     await expect(
       service.cancel(21, tenantPrincipal as never),
@@ -1037,17 +1041,34 @@ describe('TripsService.cancel', () => {
         message: 'Không thể hủy chuyến xe đang có vận đơn được điều phối.',
       },
     });
+    expect(prisma.phieuGuiHang.findFirst).toHaveBeenCalledWith({
+      where: {
+        chuyenXeId: 21,
+        trangThai: { notIn: ['DA_GIAO', 'DA_HUY'] },
+      },
+      select: { phieuGuiHangId: true },
+    });
     expect(prisma.chuyenXe.updateMany).not.toHaveBeenCalled();
   });
 
-  it('allows cancellation when shipments attached to trip are terminal (e.g. DA_GIAO or DA_HUY)', async () => {
+  it('allows cancellation when shipments attached to trip are terminal (DA_GIAO or DA_HUY)', async () => {
     const { prisma, service } = createService();
     prisma.chuyenXe.findFirst.mockResolvedValue({
       ...firstTrip,
       trangThai: 'CHUA_KHOI_HANH',
     });
     prisma.gheChuyenXe.findFirst.mockResolvedValue(null);
-    prisma.phieuGuiHang.findFirst.mockResolvedValue(null);
+    // Simulates terminal shipments existing in database.
+    // If TripsService query fails to filter out DA_GIAO and DA_HUY (or queries all shipments by chuyenXeId),
+    // this mock will return a record and the cancellation will incorrectly fail with 409.
+    prisma.phieuGuiHang.findFirst.mockImplementation(async ({ where }) => {
+      const notIn = where?.trangThai?.notIn ?? [];
+      const terminalShipments = [
+        { phieuGuiHangId: 301, trangThai: 'DA_GIAO' },
+        { phieuGuiHangId: 302, trangThai: 'DA_HUY' },
+      ];
+      return terminalShipments.find((s) => !notIn.includes(s.trangThai)) ?? null;
+    });
     prisma.chuyenXe.updateMany.mockResolvedValue({ count: 1 });
     prisma.chuyenXe.findFirstOrThrow.mockResolvedValue({
       ...firstTrip,
@@ -1055,6 +1076,13 @@ describe('TripsService.cancel', () => {
     });
 
     const result = await service.cancel(21, tenantPrincipal as never);
+    expect(prisma.phieuGuiHang.findFirst).toHaveBeenCalledWith({
+      where: {
+        chuyenXeId: 21,
+        trangThai: { notIn: ['DA_GIAO', 'DA_HUY'] },
+      },
+      select: { phieuGuiHangId: true },
+    });
     expect(prisma.chuyenXe.updateMany).toHaveBeenCalled();
     expect(result.data.status).toBe('DA_HUY');
   });

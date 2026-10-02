@@ -5,7 +5,7 @@ import {
   tripStatusLabel,
   TripStatusBadge,
 } from '../src/features/trips/components/trip-detail-sheet';
-import { getTrips, getTripById, TripApiError } from '../src/features/trips/services/trip-service';
+import { getTrips, getTripById, isTripNotFoundError, TripApiError } from '../src/features/trips/services/trip-service';
 import type { Trip } from '../src/features/trips/types/trip';
 import { setEmployeeAdminTestSession } from './admin-auth-test-session';
 
@@ -272,14 +272,50 @@ describe('Trip service API contract validation', () => {
     });
   });
 
-  it('distinguishes TRIP_NOT_FOUND from other errors by machine-readable error code without text parsing', () => {
-    const notFoundError = new TripApiError('Không tìm thấy chuyến xe.', 'TRIP_NOT_FOUND');
-    expect(notFoundError instanceof TripApiError && notFoundError.code === 'TRIP_NOT_FOUND').toBe(true);
+  describe('isTripNotFoundError boundary detection', () => {
+    it('returns true when error is TripApiError with code TRIP_NOT_FOUND regardless of message text', () => {
+      // Case A: code = TRIP_NOT_FOUND, arbitrary message
+      const notFoundWithCustomMessage = new TripApiError(
+        'Resource is unavailable',
+        'TRIP_NOT_FOUND',
+      );
+      expect(isTripNotFoundError(notFoundWithCustomMessage)).toBe(true);
 
-    const otherErrorWithMessage = new TripApiError('Lỗi dịch vụ: không tìm thấy 404', 'INTERNAL_SERVER_ERROR');
-    expect(otherErrorWithMessage instanceof TripApiError && otherErrorWithMessage.code === 'TRIP_NOT_FOUND').toBe(false);
+      const standardNotFound = new TripApiError(
+        'Không tìm thấy chuyến xe.',
+        'TRIP_NOT_FOUND',
+      );
+      expect(isTripNotFoundError(standardNotFound)).toBe(true);
+    });
 
-    const genericError = new Error('404 không tìm thấy');
-    expect(genericError instanceof TripApiError).toBe(false);
+    it('returns false when error has non-404 code even if message contains 404 or không tìm thấy', () => {
+      // Case B: code = INTERNAL_SERVER_ERROR, message has "404 không tìm thấy chuyến"
+      const serverErrorWithMessage = new TripApiError(
+        '404 không tìm thấy chuyến',
+        'INTERNAL_SERVER_ERROR',
+      );
+      expect(isTripNotFoundError(serverErrorWithMessage)).toBe(false);
+
+      const conflictWithMessage = new TripApiError(
+        'Không tìm thấy dữ liệu phù hợp (404)',
+        'TRIP_VEHICLE_SCHEDULE_CONFLICT',
+      );
+      expect(isTripNotFoundError(conflictWithMessage)).toBe(false);
+    });
+
+    it('returns false for generic Error or non-error objects even if message contains 404 or không tìm thấy', () => {
+      // Case C: generic Error
+      const genericError = new Error('404 không tìm thấy');
+      expect(isTripNotFoundError(genericError)).toBe(false);
+
+      const typeError = new TypeError('404 không tìm thấy chuyến xe');
+      expect(isTripNotFoundError(typeError)).toBe(false);
+
+      // Case D: primitives / non-objects
+      expect(isTripNotFoundError('TRIP_NOT_FOUND')).toBe(false);
+      expect(isTripNotFoundError({ code: 'TRIP_NOT_FOUND' })).toBe(false);
+      expect(isTripNotFoundError(null)).toBe(false);
+      expect(isTripNotFoundError(undefined)).toBe(false);
+    });
   });
 });

@@ -112,6 +112,10 @@ export class TripApiError extends Error {
   }
 }
 
+export function isTripNotFoundError(error: unknown): boolean {
+  return error instanceof TripApiError && error.code === 'TRIP_NOT_FOUND';
+}
+
 async function readResponse(response: Response, resource: string): Promise<unknown> {
   const body: unknown = await response.json().catch(() => null);
   if (!response.ok) {

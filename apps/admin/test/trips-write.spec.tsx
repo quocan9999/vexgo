@@ -285,7 +285,7 @@ describe('Trip write service API contracts', () => {
     expect(result.departureDate).toBe('2026-10-15');
   });
 
-  it('maps TRIP_CODE_EXISTS and VEHICLE_HAS_NO_SEATS conflict into TripApiError', async () => {
+  it('maps TRIP_CODE_EXISTS into TripApiError', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
       new Response(
         JSON.stringify({
@@ -306,8 +306,36 @@ describe('Trip write service API contracts', () => {
         departureTime: '07:30',
       }),
     ).rejects.toMatchObject({
+      name: 'TripApiError',
       code: 'TRIP_CODE_EXISTS',
       message: 'Mã chuyến xe đã tồn tại.',
+    });
+  });
+
+  it('maps VEHICLE_HAS_NO_SEATS into TripApiError', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          statusCode: 409,
+          error: 'VEHICLE_HAS_NO_SEATS',
+          message: 'Xe chưa được cấu hình ghế nên chưa thể lập chuyến.',
+        }),
+        { status: 409 },
+      ),
+    );
+
+    await expect(
+      createTrip({
+        code: 'FUTA-CX-001',
+        routeId: 1,
+        vehicleId: 8,
+        departureDate: '2026-10-10',
+        departureTime: '07:30',
+      }),
+    ).rejects.toMatchObject({
+      name: 'TripApiError',
+      code: 'VEHICLE_HAS_NO_SEATS',
+      message: 'Xe chưa được cấu hình ghế nên chưa thể lập chuyến.',
     });
   });
 

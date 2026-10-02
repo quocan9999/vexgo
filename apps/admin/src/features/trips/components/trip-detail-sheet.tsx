@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import {
   cancelTrip,
   getTripById,
+  isTripNotFoundError,
   TripApiError,
   updateTripStatus,
 } from '../services/trip-service';
@@ -199,7 +200,7 @@ export function TripDetailSheet({
       })
       .catch((error: unknown) => {
         if (!controller.signal.aborted) {
-          if (error instanceof TripApiError && error.code === 'TRIP_NOT_FOUND') {
+          if (isTripNotFoundError(error)) {
             onNotFound?.();
           }
           const message =

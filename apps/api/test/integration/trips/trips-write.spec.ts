@@ -853,7 +853,11 @@ describe('Trips write HTTP contract (05.2)', () => {
         trangThai: 'CHUA_KHOI_HANH',
       });
       prisma.gheChuyenXe.findFirst.mockResolvedValue(null);
-      prisma.phieuGuiHang.findFirst.mockResolvedValue({ phieuGuiHangId: 301 });
+      prisma.phieuGuiHang.findFirst.mockImplementation(async ({ where }) => {
+        const notIn = where?.trangThai?.notIn ?? [];
+        const shipmentsInDb = [{ phieuGuiHangId: 301, trangThai: 'CHO_DIEU_PHOI' }];
+        return shipmentsInDb.find((s) => !notIn.includes(s.trangThai)) ?? null;
+      });
 
       const res = await request(app.getHttpServer())
         .post('/api/v1/trips/101/cancel')
@@ -864,6 +868,13 @@ describe('Trips write HTTP contract (05.2)', () => {
         error: 'TRIP_HAS_ACTIVE_SHIPMENTS',
         message: 'Không thể hủy chuyến xe đang có vận đơn được điều phối.',
       });
+      expect(prisma.phieuGuiHang.findFirst).toHaveBeenCalledWith({
+        where: {
+          chuyenXeId: 101,
+          trangThai: { notIn: ['DA_GIAO', 'DA_HUY'] },
+        },
+        select: { phieuGuiHangId: true },
+      });
       expect(prisma.chuyenXe.updateMany).not.toHaveBeenCalled();
     });
 
@@ -873,7 +884,16 @@ describe('Trips write HTTP contract (05.2)', () => {
         trangThai: 'CHUA_KHOI_HANH',
       });
       prisma.gheChuyenXe.findFirst.mockResolvedValue(null);
-      prisma.phieuGuiHang.findFirst.mockResolvedValue(null);
+      // Realistic simulation: trip has terminal shipments in DB.
+      // If query does not filter out DA_GIAO and DA_HUY, mock returns a shipment and cancellation fails with 409.
+      prisma.phieuGuiHang.findFirst.mockImplementation(async ({ where }) => {
+        const notIn = where?.trangThai?.notIn ?? [];
+        const shipmentsInDb = [
+          { phieuGuiHangId: 501, trangThai: 'DA_GIAO' },
+          { phieuGuiHangId: 502, trangThai: 'DA_HUY' },
+        ];
+        return shipmentsInDb.find((s) => !notIn.includes(s.trangThai)) ?? null;
+      });
       prisma.chuyenXe.updateMany.mockResolvedValue({ count: 1 });
       prisma.chuyenXe.findFirstOrThrow.mockResolvedValue({
         ...mockTripCreated,
@@ -884,6 +904,13 @@ describe('Trips write HTTP contract (05.2)', () => {
         .post('/api/v1/trips/101/cancel')
         .expect(200);
 
+      expect(prisma.phieuGuiHang.findFirst).toHaveBeenCalledWith({
+        where: {
+          chuyenXeId: 101,
+          trangThai: { notIn: ['DA_GIAO', 'DA_HUY'] },
+        },
+        select: { phieuGuiHangId: true },
+      });
       expect(prisma.chuyenXe.updateMany).toHaveBeenCalled();
       expect(res.body.data.status).toBe('DA_HUY');
     });
