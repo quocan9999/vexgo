@@ -229,6 +229,17 @@ export function updateTrip(
   return writeTrip(`/${tripId}`, 'PATCH', input);
 }
 
+export function updateTripStatus(
+  tripId: number,
+  status: 'CHUA_KHOI_HANH' | 'DANG_CHAY' | 'HOAN_THANH',
+): Promise<Trip> {
+  return writeTrip(`/${tripId}/status`, 'PATCH', { status });
+}
+
+export function cancelTrip(tripId: number): Promise<Trip> {
+  return writeTrip(`/${tripId}/cancel`, 'POST', {});
+}
+
 export async function getTripRouteOptions(
   signal?: AbortSignal,
 ): Promise<TripLookupOption[]> {

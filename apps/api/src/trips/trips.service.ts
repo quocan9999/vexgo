@@ -14,6 +14,7 @@ import { CreateTripDto } from './dto/create-trip.dto.js';
 import { SearchTripsDto } from './dto/search-trips.dto.js';
 import type { TripQueryDto, TripSortField } from './dto/trip-query.dto.js';
 import { UpdateTripDto } from './dto/update-trip.dto.js';
+import { UpdateTripStatusDto } from './dto/update-trip-status.dto.js';
 import { requireTenantPrincipal } from '../auth/tenant-scope.js';
 import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
 import { Prisma } from '../generated/prisma/client.js';
@@ -604,6 +605,55 @@ export class TripsService {
     }
   }
 
+  private formatTripWithSummary(trip: {
+    chuyenXeId: number;
+    maChuyenXe: string;
+    ngayKhoiHanh: Date;
+    gioKhoiHanh: Date;
+    trangThai: string;
+    createdAt: Date;
+    updatedAt: Date;
+    tuyenXe: {
+      tuyenXeId: number;
+      maTuyenXe: string;
+      diemDi: string;
+      diemDen: string;
+    };
+    xe: {
+      xeId: number;
+      bienSoXe: string;
+      trangThai: string;
+      loaiXe: {
+        loaiXeId: number;
+        tenLoai: string;
+      };
+    };
+    gheChuyenXes: Array<{ trangThai: string }>;
+  }) {
+    const total = trip.gheChuyenXes.length;
+    const available = trip.gheChuyenXes.filter(
+      (g) => g.trangThai === 'TRONG',
+    ).length;
+    const held = trip.gheChuyenXes.filter(
+      (g) => g.trangThai === 'DANG_GIU',
+    ).length;
+    const booked = trip.gheChuyenXes.filter(
+      (g) => g.trangThai === 'DA_DAT',
+    ).length;
+
+    return {
+      data: {
+        ...mapTripItem(trip),
+        seatSummary: {
+          total,
+          available,
+          held,
+          booked,
+        },
+      },
+    };
+  }
+
   async update(id: number, dto: UpdateTripDto, principal: AuthPrincipal) {
     const nhaXeId = requireTenantPrincipal(principal);
 
@@ -614,6 +664,16 @@ export class TripsService {
       throw new NotFoundException({
         error: 'TRIP_NOT_FOUND',
         message: 'Không tìm thấy chuyến xe.',
+      });
+    }
+
+    if (
+      existing.trangThai === 'HOAN_THANH' ||
+      existing.trangThai === 'DA_HUY'
+    ) {
+      throw new ConflictException({
+        error: 'TRIP_STATUS_TRANSITION_NOT_ALLOWED',
+        message: 'Không thể cập nhật chuyến xe đã hoàn thành hoặc đã hủy.',
       });
     }
 
@@ -630,27 +690,167 @@ export class TripsService {
       },
     });
 
-    const total = updated.gheChuyenXes.length;
-    const available = updated.gheChuyenXes.filter(
-      (g) => g.trangThai === 'TRONG',
-    ).length;
-    const held = updated.gheChuyenXes.filter(
-      (g) => g.trangThai === 'DANG_GIU',
-    ).length;
-    const booked = updated.gheChuyenXes.filter(
-      (g) => g.trangThai === 'DA_DAT',
-    ).length;
+    return this.formatTripWithSummary(updated);
+  }
 
-    return {
-      data: {
-        ...mapTripItem(updated),
-        seatSummary: {
-          total,
-          available,
-          held,
-          booked,
-        },
+  async updateStatus(
+    id: number,
+    dto: UpdateTripStatusDto,
+    principal: AuthPrincipal,
+  ) {
+    const nhaXeId = requireTenantPrincipal(principal);
+
+    const existing = await this.prisma.chuyenXe.findFirst({
+      where: { chuyenXeId: id, nhaXeId },
+      include: {
+        tuyenXe: true,
+        xe: { include: { loaiXe: true } },
+        gheChuyenXes: { select: { trangThai: true } },
       },
-    };
+    });
+    if (!existing) {
+      throw new NotFoundException({
+        error: 'TRIP_NOT_FOUND',
+        message: 'Không tìm thấy chuyến xe.',
+      });
+    }
+
+    if (existing.trangThai === dto.status) {
+      return this.formatTripWithSummary(existing);
+    }
+
+    const isValidTransition =
+      (existing.trangThai === 'CHUA_KHOI_HANH' &&
+        dto.status === 'DANG_CHAY') ||
+      (existing.trangThai === 'DANG_CHAY' && dto.status === 'HOAN_THANH');
+
+    if (!isValidTransition) {
+      throw new ConflictException({
+        error: 'TRIP_STATUS_TRANSITION_NOT_ALLOWED',
+        message: 'Không thể chuyển chuyến xe sang trạng thái yêu cầu.',
+      });
+    }
+
+    const result = await this.prisma.chuyenXe.updateMany({
+      where: {
+        chuyenXeId: id,
+        nhaXeId,
+        trangThai: existing.trangThai,
+      },
+      data: {
+        trangThai: dto.status,
+      },
+    });
+
+    if (result.count === 0) {
+      const reRead = await this.prisma.chuyenXe.findFirst({
+        where: { chuyenXeId: id, nhaXeId },
+        include: {
+          tuyenXe: true,
+          xe: { include: { loaiXe: true } },
+          gheChuyenXes: { select: { trangThai: true } },
+        },
+      });
+      if (!reRead) {
+        throw new NotFoundException({
+          error: 'TRIP_NOT_FOUND',
+          message: 'Không tìm thấy chuyến xe.',
+        });
+      }
+      if (reRead.trangThai === dto.status) {
+        return this.formatTripWithSummary(reRead);
+      }
+      throw new ConflictException({
+        error: 'TRIP_STATUS_TRANSITION_NOT_ALLOWED',
+        message: 'Không thể chuyển chuyến xe sang trạng thái yêu cầu.',
+      });
+    }
+
+    const updated = await this.prisma.chuyenXe.findFirstOrThrow({
+      where: { chuyenXeId: id, nhaXeId },
+      include: {
+        tuyenXe: true,
+        xe: { include: { loaiXe: true } },
+        gheChuyenXes: { select: { trangThai: true } },
+      },
+    });
+
+    return this.formatTripWithSummary(updated);
+  }
+
+  async cancel(id: number, principal: AuthPrincipal) {
+    const nhaXeId = requireTenantPrincipal(principal);
+
+    const existing = await this.prisma.chuyenXe.findFirst({
+      where: { chuyenXeId: id, nhaXeId },
+      include: {
+        tuyenXe: true,
+        xe: { include: { loaiXe: true } },
+        gheChuyenXes: { select: { trangThai: true } },
+      },
+    });
+    if (!existing) {
+      throw new NotFoundException({
+        error: 'TRIP_NOT_FOUND',
+        message: 'Không tìm thấy chuyến xe.',
+      });
+    }
+
+    if (existing.trangThai === 'DA_HUY') {
+      return this.formatTripWithSummary(existing);
+    }
+
+    if (existing.trangThai !== 'CHUA_KHOI_HANH') {
+      throw new ConflictException({
+        error: 'TRIP_STATUS_TRANSITION_NOT_ALLOWED',
+        message: 'Không thể hủy chuyến xe đang chạy hoặc đã hoàn thành.',
+      });
+    }
+
+    const result = await this.prisma.chuyenXe.updateMany({
+      where: {
+        chuyenXeId: id,
+        nhaXeId,
+        trangThai: 'CHUA_KHOI_HANH',
+      },
+      data: {
+        trangThai: 'DA_HUY',
+      },
+    });
+
+    if (result.count === 0) {
+      const reRead = await this.prisma.chuyenXe.findFirst({
+        where: { chuyenXeId: id, nhaXeId },
+        include: {
+          tuyenXe: true,
+          xe: { include: { loaiXe: true } },
+          gheChuyenXes: { select: { trangThai: true } },
+        },
+      });
+      if (!reRead) {
+        throw new NotFoundException({
+          error: 'TRIP_NOT_FOUND',
+          message: 'Không tìm thấy chuyến xe.',
+        });
+      }
+      if (reRead.trangThai === 'DA_HUY') {
+        return this.formatTripWithSummary(reRead);
+      }
+      throw new ConflictException({
+        error: 'TRIP_STATUS_TRANSITION_NOT_ALLOWED',
+        message: 'Không thể hủy chuyến xe đang chạy hoặc đã hoàn thành.',
+      });
+    }
+
+    const updated = await this.prisma.chuyenXe.findFirstOrThrow({
+      where: { chuyenXeId: id, nhaXeId },
+      include: {
+        tuyenXe: true,
+        xe: { include: { loaiXe: true } },
+        gheChuyenXes: { select: { trangThai: true } },
+      },
+    });
+
+    return this.formatTripWithSummary(updated);
   }
 }

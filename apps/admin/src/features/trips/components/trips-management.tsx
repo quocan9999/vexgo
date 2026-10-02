@@ -396,6 +396,7 @@ export function TripsManagement() {
 
       {selectedTripId !== null && (
         <TripDetailSheet
+          initialTrip={items.find((t) => t.tripId === selectedTripId)}
           key={selectedTripId}
           onClose={() => setSelectedTripId(null)}
           onNotFound={() => {

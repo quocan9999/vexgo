@@ -6,11 +6,13 @@ import {
 } from '../src/features/trips/components/trip-detail-sheet';
 import { TripsManagement } from '../src/features/trips/components/trips-management';
 import {
+  cancelTrip,
   createTrip,
   getTripRouteOptions,
   getTripVehicleOptions,
   TripApiError,
   updateTrip,
+  updateTripStatus,
 } from '../src/features/trips/services/trip-service';
 import type {
   Trip,
@@ -372,5 +374,153 @@ describe('Trip write service API contracts', () => {
     expect(options).toEqual([
       { id: 8, label: '30F-123.45 (GIƯỜNG NẰM)' },
     ]);
+  });
+});
+
+describe('Trip lifecycle & cancellation action gates in detail sheet', () => {
+  it('renders "Chỉnh sửa", "Bắt đầu chạy", and "Hủy chuyến" for CHUA_KHOI_HANH with full write permissions', () => {
+    setEmployeeAdminTestSession(['trip:read', 'trip:update', 'trip:cancel']);
+    const html = renderToStaticMarkup(
+      <TripDetailSheet
+        initialTrip={{ ...mockTrip, status: 'CHUA_KHOI_HANH' }}
+        onClose={vi.fn()}
+        tripId={101}
+      />,
+    );
+    expect(html).toContain('Chỉnh sửa');
+    expect(html).toContain('Bắt đầu chạy');
+    expect(html).toContain('Hủy chuyến');
+    expect(html).not.toContain('Hoàn thành chuyến');
+  });
+
+  it('renders "Chỉnh sửa" and "Hoàn thành chuyến" for DANG_CHAY with trip:update', () => {
+    setEmployeeAdminTestSession(['trip:read', 'trip:update', 'trip:cancel']);
+    const html = renderToStaticMarkup(
+      <TripDetailSheet
+        initialTrip={{ ...mockTrip, status: 'DANG_CHAY' }}
+        onClose={vi.fn()}
+        tripId={101}
+      />,
+    );
+    expect(html).toContain('Chỉnh sửa');
+    expect(html).toContain('Hoàn thành chuyến');
+    expect(html).not.toContain('Bắt đầu chạy');
+    expect(html).not.toContain('Hủy chuyến');
+  });
+
+  it('hides edit and all lifecycle actions for terminal statuses HOAN_THANH and DA_HUY', () => {
+    setEmployeeAdminTestSession(['trip:read', 'trip:update', 'trip:cancel']);
+    const htmlCompleted = renderToStaticMarkup(
+      <TripDetailSheet
+        initialTrip={{ ...mockTrip, status: 'HOAN_THANH' }}
+        onClose={vi.fn()}
+        tripId={101}
+      />,
+    );
+    expect(htmlCompleted).not.toContain('Chỉnh sửa');
+    expect(htmlCompleted).not.toContain('Bắt đầu chạy');
+    expect(htmlCompleted).not.toContain('Hoàn thành chuyến');
+    expect(htmlCompleted).not.toContain('Hủy chuyến');
+
+    const htmlCancelled = renderToStaticMarkup(
+      <TripDetailSheet
+        initialTrip={{ ...mockTrip, status: 'DA_HUY' }}
+        onClose={vi.fn()}
+        tripId={101}
+      />,
+    );
+    expect(htmlCancelled).not.toContain('Chỉnh sửa');
+    expect(htmlCancelled).not.toContain('Bắt đầu chạy');
+    expect(htmlCancelled).not.toContain('Hoàn thành chuyến');
+    expect(htmlCancelled).not.toContain('Hủy chuyến');
+  });
+
+  it('respects granular permissions: hides status and edit without trip:update, hides cancel without trip:cancel', () => {
+    setEmployeeAdminTestSession(['trip:read']);
+    const readOnlyHtml = renderToStaticMarkup(
+      <TripDetailSheet
+        initialTrip={{ ...mockTrip, status: 'CHUA_KHOI_HANH' }}
+        onClose={vi.fn()}
+        tripId={101}
+      />,
+    );
+    expect(readOnlyHtml).not.toContain('Chỉnh sửa');
+    expect(readOnlyHtml).not.toContain('Bắt đầu chạy');
+    expect(readOnlyHtml).not.toContain('Hủy chuyến');
+
+    setEmployeeAdminTestSession(['trip:read', 'trip:update']);
+    const updateOnlyHtml = renderToStaticMarkup(
+      <TripDetailSheet
+        initialTrip={{ ...mockTrip, status: 'CHUA_KHOI_HANH' }}
+        onClose={vi.fn()}
+        tripId={101}
+      />,
+    );
+    expect(updateOnlyHtml).toContain('Chỉnh sửa');
+    expect(updateOnlyHtml).toContain('Bắt đầu chạy');
+    expect(updateOnlyHtml).not.toContain('Hủy chuyến');
+
+    setEmployeeAdminTestSession(['trip:read', 'trip:cancel']);
+    const cancelOnlyHtml = renderToStaticMarkup(
+      <TripDetailSheet
+        initialTrip={{ ...mockTrip, status: 'CHUA_KHOI_HANH' }}
+        onClose={vi.fn()}
+        tripId={101}
+      />,
+    );
+    expect(cancelOnlyHtml).not.toContain('Chỉnh sửa');
+    expect(cancelOnlyHtml).not.toContain('Bắt đầu chạy');
+    expect(cancelOnlyHtml).toContain('Hủy chuyến');
+  });
+});
+
+describe('Trip status update and cancellation service API contracts', () => {
+  it('updateTripStatus sends PATCH /api/v1/trips/:id/status with target status', async () => {
+    const updatedMock = { ...mockTrip, status: 'DANG_CHAY' as const };
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ data: updatedMock }), { status: 200 }),
+    );
+
+    const result = await updateTripStatus(101, 'DANG_CHAY');
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(new URL(url as string).pathname).toBe('/api/v1/trips/101/status');
+    expect(init?.method).toBe('PATCH');
+    expect(JSON.parse(init?.body as string)).toEqual({ status: 'DANG_CHAY' });
+    expect(result.status).toBe('DANG_CHAY');
+  });
+
+  it('cancelTrip sends POST /api/v1/trips/:id/cancel', async () => {
+    const cancelledMock = { ...mockTrip, status: 'DA_HUY' as const };
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ data: cancelledMock }), { status: 200 }),
+    );
+
+    const result = await cancelTrip(101);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(new URL(url as string).pathname).toBe('/api/v1/trips/101/cancel');
+    expect(init?.method).toBe('POST');
+    expect(result.status).toBe('DA_HUY');
+  });
+
+  it('maps TRIP_STATUS_TRANSITION_NOT_ALLOWED conflict error properly', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          statusCode: 409,
+          error: 'TRIP_STATUS_TRANSITION_NOT_ALLOWED',
+          message: 'Không thể chuyển đổi trạng thái chuyến xe.',
+        }),
+        { status: 409 },
+      ),
+    );
+
+    await expect(updateTripStatus(101, 'HOAN_THANH')).rejects.toMatchObject({
+      code: 'TRIP_STATUS_TRANSITION_NOT_ALLOWED',
+      message: 'Không thể chuyển đổi trạng thái chuyến xe.',
+    });
   });
 });

@@ -56,6 +56,8 @@ const prisma = {
     findFirst: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
+    updateMany: vi.fn(),
+    findFirstOrThrow: vi.fn(),
   },
   tuyenXe: { findFirst: vi.fn() },
   xe: { findFirst: vi.fn() },
@@ -446,6 +448,278 @@ describe('Trips write HTTP contract (05.2)', () => {
         .expect(400);
 
       expect(res.body.error).toBe('VALIDATION_ERROR');
+    });
+
+    it('rejects with 409 TRIP_STATUS_TRANSITION_NOT_ALLOWED when editing terminal trip', async () => {
+      prisma.chuyenXe.findFirst.mockResolvedValue({
+        ...mockTripCreated,
+        trangThai: 'HOAN_THANH',
+      });
+
+      const res = await request(app.getHttpServer())
+        .patch('/api/v1/trips/101')
+        .send(validPatchBody)
+        .expect(409);
+
+      expect(res.body).toEqual({
+        statusCode: 409,
+        error: 'TRIP_STATUS_TRANSITION_NOT_ALLOWED',
+        message: 'Không thể cập nhật chuyến xe đã hoàn thành hoặc đã hủy.',
+      });
+    });
+  });
+
+  describe('PATCH /api/v1/trips/:id/status (05.3)', () => {
+    it('rejects unauthenticated request with 401', async () => {
+      currentPrincipal = null;
+      const res = await request(app.getHttpServer())
+        .patch('/api/v1/trips/101/status')
+        .send({ status: 'DANG_CHAY' })
+        .expect(401);
+
+      expect(res.body.error).toBe('UNAUTHORIZED');
+    });
+
+    it('rejects with 403 when principal lacks trip:update permission', async () => {
+      currentPrincipal = {
+        ...currentPrincipal!,
+        permissions: ['trip:read'],
+      };
+
+      const res = await request(app.getHttpServer())
+        .patch('/api/v1/trips/101/status')
+        .send({ status: 'DANG_CHAY' })
+        .expect(403);
+
+      expect(res.body.error).toBe('PERMISSION_FORBIDDEN');
+    });
+
+    it('rejects invalid or prohibited status in body with 400', async () => {
+      const res1 = await request(app.getHttpServer())
+        .patch('/api/v1/trips/101/status')
+        .send({ status: 'DA_HUY' })
+        .expect(400);
+
+      expect(res1.body.error).toBe('VALIDATION_ERROR');
+
+      const res2 = await request(app.getHttpServer())
+        .patch('/api/v1/trips/101/status')
+        .send({ status: 'MO_BAN' })
+        .expect(400);
+
+      expect(res2.body.error).toBe('VALIDATION_ERROR');
+    });
+
+    it('rejects with 404 when trip is not found in tenant scope', async () => {
+      prisma.chuyenXe.findFirst.mockResolvedValue(null);
+
+      const res = await request(app.getHttpServer())
+        .patch('/api/v1/trips/999/status')
+        .send({ status: 'DANG_CHAY' })
+        .expect(404);
+
+      expect(res.body.error).toBe('TRIP_NOT_FOUND');
+    });
+
+    it('successfully transitions from CHUA_KHOI_HANH to DANG_CHAY', async () => {
+      prisma.chuyenXe.findFirst.mockResolvedValue({
+        ...mockTripCreated,
+        trangThai: 'CHUA_KHOI_HANH',
+      });
+      prisma.chuyenXe.updateMany.mockResolvedValue({ count: 1 });
+      prisma.chuyenXe.findFirstOrThrow.mockResolvedValue({
+        ...mockTripCreated,
+        trangThai: 'DANG_CHAY',
+      });
+
+      const res = await request(app.getHttpServer())
+        .patch('/api/v1/trips/101/status')
+        .send({ status: 'DANG_CHAY' })
+        .expect(200);
+
+      expect(prisma.chuyenXe.updateMany).toHaveBeenCalledWith({
+        where: { chuyenXeId: 101, nhaXeId: 5, trangThai: 'CHUA_KHOI_HANH' },
+        data: { trangThai: 'DANG_CHAY' },
+      });
+      expect(res.body.data.status).toBe('DANG_CHAY');
+    });
+
+    it('successfully transitions from DANG_CHAY to HOAN_THANH', async () => {
+      prisma.chuyenXe.findFirst.mockResolvedValue({
+        ...mockTripCreated,
+        trangThai: 'DANG_CHAY',
+      });
+      prisma.chuyenXe.updateMany.mockResolvedValue({ count: 1 });
+      prisma.chuyenXe.findFirstOrThrow.mockResolvedValue({
+        ...mockTripCreated,
+        trangThai: 'HOAN_THANH',
+      });
+
+      const res = await request(app.getHttpServer())
+        .patch('/api/v1/trips/101/status')
+        .send({ status: 'HOAN_THANH' })
+        .expect(200);
+
+      expect(res.body.data.status).toBe('HOAN_THANH');
+    });
+
+    it('handles idempotent same-state update without database write', async () => {
+      prisma.chuyenXe.findFirst.mockResolvedValue({
+        ...mockTripCreated,
+        trangThai: 'DANG_CHAY',
+      });
+
+      const res = await request(app.getHttpServer())
+        .patch('/api/v1/trips/101/status')
+        .send({ status: 'DANG_CHAY' })
+        .expect(200);
+
+      expect(prisma.chuyenXe.updateMany).not.toHaveBeenCalled();
+      expect(res.body.data.status).toBe('DANG_CHAY');
+    });
+
+    it('rejects invalid state transition with 409', async () => {
+      prisma.chuyenXe.findFirst.mockResolvedValue({
+        ...mockTripCreated,
+        trangThai: 'CHUA_KHOI_HANH',
+      });
+
+      const res = await request(app.getHttpServer())
+        .patch('/api/v1/trips/101/status')
+        .send({ status: 'HOAN_THANH' })
+        .expect(409);
+
+      expect(res.body).toEqual({
+        statusCode: 409,
+        error: 'TRIP_STATUS_TRANSITION_NOT_ALLOWED',
+        message: 'Không thể chuyển chuyến xe sang trạng thái yêu cầu.',
+      });
+    });
+
+    it('handles race condition when state changes concurrently during updateStatus', async () => {
+      prisma.chuyenXe.findFirst
+        .mockResolvedValueOnce({
+          ...mockTripCreated,
+          trangThai: 'CHUA_KHOI_HANH',
+        })
+        .mockResolvedValueOnce({
+          ...mockTripCreated,
+          trangThai: 'DA_HUY',
+        });
+      prisma.chuyenXe.updateMany.mockResolvedValue({ count: 0 });
+
+      const res = await request(app.getHttpServer())
+        .patch('/api/v1/trips/101/status')
+        .send({ status: 'DANG_CHAY' })
+        .expect(409);
+
+      expect(res.body.error).toBe('TRIP_STATUS_TRANSITION_NOT_ALLOWED');
+    });
+  });
+
+  describe('POST /api/v1/trips/:id/cancel (05.3)', () => {
+    it('rejects unauthenticated request with 401', async () => {
+      currentPrincipal = null;
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/trips/101/cancel')
+        .expect(401);
+
+      expect(res.body.error).toBe('UNAUTHORIZED');
+    });
+
+    it('rejects with 403 when principal lacks trip:cancel permission', async () => {
+      currentPrincipal = {
+        ...currentPrincipal!,
+        permissions: ['trip:read', 'trip:update'],
+      };
+
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/trips/101/cancel')
+        .expect(403);
+
+      expect(res.body.error).toBe('PERMISSION_FORBIDDEN');
+    });
+
+    it('rejects with 404 when trip is not found in tenant scope', async () => {
+      prisma.chuyenXe.findFirst.mockResolvedValue(null);
+
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/trips/999/cancel')
+        .expect(404);
+
+      expect(res.body.error).toBe('TRIP_NOT_FOUND');
+    });
+
+    it('successfully cancels trip in CHUA_KHOI_HANH state', async () => {
+      prisma.chuyenXe.findFirst.mockResolvedValue({
+        ...mockTripCreated,
+        trangThai: 'CHUA_KHOI_HANH',
+      });
+      prisma.chuyenXe.updateMany.mockResolvedValue({ count: 1 });
+      prisma.chuyenXe.findFirstOrThrow.mockResolvedValue({
+        ...mockTripCreated,
+        trangThai: 'DA_HUY',
+      });
+
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/trips/101/cancel')
+        .expect(201);
+
+      expect(prisma.chuyenXe.updateMany).toHaveBeenCalledWith({
+        where: { chuyenXeId: 101, nhaXeId: 5, trangThai: 'CHUA_KHOI_HANH' },
+        data: { trangThai: 'DA_HUY' },
+      });
+      expect(res.body.data.status).toBe('DA_HUY');
+    });
+
+    it('handles idempotent same-state cancellation when already DA_HUY', async () => {
+      prisma.chuyenXe.findFirst.mockResolvedValue({
+        ...mockTripCreated,
+        trangThai: 'DA_HUY',
+      });
+
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/trips/101/cancel')
+        .expect(201);
+
+      expect(prisma.chuyenXe.updateMany).not.toHaveBeenCalled();
+      expect(res.body.data.status).toBe('DA_HUY');
+    });
+
+    it('rejects cancellation of running or completed trips with 409', async () => {
+      prisma.chuyenXe.findFirst.mockResolvedValue({
+        ...mockTripCreated,
+        trangThai: 'DANG_CHAY',
+      });
+
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/trips/101/cancel')
+        .expect(409);
+
+      expect(res.body).toEqual({
+        statusCode: 409,
+        error: 'TRIP_STATUS_TRANSITION_NOT_ALLOWED',
+        message: 'Không thể hủy chuyến xe đang chạy hoặc đã hoàn thành.',
+      });
+    });
+
+    it('handles race condition when state changes concurrently during cancel', async () => {
+      prisma.chuyenXe.findFirst
+        .mockResolvedValueOnce({
+          ...mockTripCreated,
+          trangThai: 'CHUA_KHOI_HANH',
+        })
+        .mockResolvedValueOnce({
+          ...mockTripCreated,
+          trangThai: 'DANG_CHAY',
+        });
+      prisma.chuyenXe.updateMany.mockResolvedValue({ count: 0 });
+
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/trips/101/cancel')
+        .expect(409);
+
+      expect(res.body.error).toBe('TRIP_STATUS_TRANSITION_NOT_ALLOWED');
     });
   });
 });

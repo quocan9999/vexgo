@@ -47,6 +47,8 @@ function createService() {
       count: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
+      findFirstOrThrow: vi.fn(),
     },
     bangGia: { findMany: vi.fn(), findFirst: vi.fn() },
     gheChuyenXe: { findMany: vi.fn() },
@@ -604,5 +606,300 @@ describe('TripsService update (05.2)', () => {
     });
     expect(result.data.departureDate).toBe('2026-10-21');
     expect(result.data.departureTime).toBe('09:30:00');
+  });
+
+  it('throws 409 TRIP_STATUS_TRANSITION_NOT_ALLOWED when updating terminal status trip', async () => {
+    const { prisma, service } = createService();
+    prisma.chuyenXe.findFirst.mockResolvedValue({
+      ...firstTrip,
+      trangThai: 'HOAN_THANH',
+    });
+
+    await expect(
+      service.update(21, updateDto, tenantPrincipal as never),
+    ).rejects.toMatchObject({
+      status: 409,
+      response: {
+        error: 'TRIP_STATUS_TRANSITION_NOT_ALLOWED',
+        message: 'Không thể cập nhật chuyến xe đã hoàn thành hoặc đã hủy.',
+      },
+    });
+
+    prisma.chuyenXe.findFirst.mockResolvedValue({
+      ...firstTrip,
+      trangThai: 'DA_HUY',
+    });
+
+    await expect(
+      service.update(21, updateDto, tenantPrincipal as never),
+    ).rejects.toMatchObject({
+      status: 409,
+      response: {
+        error: 'TRIP_STATUS_TRANSITION_NOT_ALLOWED',
+        message: 'Không thể cập nhật chuyến xe đã hoàn thành hoặc đã hủy.',
+      },
+    });
+  });
+});
+
+describe('TripsService.updateStatus', () => {
+  it('throws 404 TRIP_NOT_FOUND when trip is not in tenant scope', async () => {
+    const { prisma, service } = createService();
+    prisma.chuyenXe.findFirst.mockResolvedValue(null);
+
+    await expect(
+      service.updateStatus(999, { status: 'DANG_CHAY' }, tenantPrincipal as never),
+    ).rejects.toMatchObject({
+      status: 404,
+      response: {
+        error: 'TRIP_NOT_FOUND',
+        message: 'Không tìm thấy chuyến xe.',
+      },
+    });
+  });
+
+  it('handles idempotent same-state update without querying updateMany', async () => {
+    const { prisma, service } = createService();
+    prisma.chuyenXe.findFirst.mockResolvedValue({
+      ...firstTrip,
+      trangThai: 'DANG_CHAY',
+    });
+
+    const result = await service.updateStatus(
+      21,
+      { status: 'DANG_CHAY' },
+      tenantPrincipal as never,
+    );
+
+    expect(prisma.chuyenXe.updateMany).not.toHaveBeenCalled();
+    expect(result.data.status).toBe('DANG_CHAY');
+  });
+
+  it('allows valid transition CHUA_KHOI_HANH -> DANG_CHAY', async () => {
+    const { prisma, service } = createService();
+    prisma.chuyenXe.findFirst.mockResolvedValue({
+      ...firstTrip,
+      trangThai: 'CHUA_KHOI_HANH',
+    });
+    prisma.chuyenXe.updateMany.mockResolvedValue({ count: 1 });
+    prisma.chuyenXe.findFirstOrThrow.mockResolvedValue({
+      ...firstTrip,
+      trangThai: 'DANG_CHAY',
+    });
+
+    const result = await service.updateStatus(
+      21,
+      { status: 'DANG_CHAY' },
+      tenantPrincipal as never,
+    );
+
+    expect(prisma.chuyenXe.updateMany).toHaveBeenCalledWith({
+      where: { chuyenXeId: 21, nhaXeId: 3, trangThai: 'CHUA_KHOI_HANH' },
+      data: { trangThai: 'DANG_CHAY' },
+    });
+    expect(result.data.status).toBe('DANG_CHAY');
+  });
+
+  it('allows valid transition DANG_CHAY -> HOAN_THANH', async () => {
+    const { prisma, service } = createService();
+    prisma.chuyenXe.findFirst.mockResolvedValue({
+      ...firstTrip,
+      trangThai: 'DANG_CHAY',
+    });
+    prisma.chuyenXe.updateMany.mockResolvedValue({ count: 1 });
+    prisma.chuyenXe.findFirstOrThrow.mockResolvedValue({
+      ...firstTrip,
+      trangThai: 'HOAN_THANH',
+    });
+
+    const result = await service.updateStatus(
+      21,
+      { status: 'HOAN_THANH' },
+      tenantPrincipal as never,
+    );
+
+    expect(prisma.chuyenXe.updateMany).toHaveBeenCalledWith({
+      where: { chuyenXeId: 21, nhaXeId: 3, trangThai: 'DANG_CHAY' },
+      data: { trangThai: 'HOAN_THANH' },
+    });
+    expect(result.data.status).toBe('HOAN_THANH');
+  });
+
+  it('rejects invalid backward or skipped transitions with 409', async () => {
+    const { prisma, service } = createService();
+
+    // CHUA_KHOI_HANH -> HOAN_THANH (skip)
+    prisma.chuyenXe.findFirst.mockResolvedValue({
+      ...firstTrip,
+      trangThai: 'CHUA_KHOI_HANH',
+    });
+    await expect(
+      service.updateStatus(21, { status: 'HOAN_THANH' }, tenantPrincipal as never),
+    ).rejects.toMatchObject({
+      status: 409,
+      response: {
+        error: 'TRIP_STATUS_TRANSITION_NOT_ALLOWED',
+        message: 'Không thể chuyển chuyến xe sang trạng thái yêu cầu.',
+      },
+    });
+
+    // DANG_CHAY -> CHUA_KHOI_HANH (backward)
+    prisma.chuyenXe.findFirst.mockResolvedValue({
+      ...firstTrip,
+      trangThai: 'DANG_CHAY',
+    });
+    await expect(
+      service.updateStatus(21, { status: 'CHUA_KHOI_HANH' }, tenantPrincipal as never),
+    ).rejects.toMatchObject({
+      status: 409,
+      response: {
+        error: 'TRIP_STATUS_TRANSITION_NOT_ALLOWED',
+      },
+    });
+
+    // HOAN_THANH -> DANG_CHAY (terminal)
+    prisma.chuyenXe.findFirst.mockResolvedValue({
+      ...firstTrip,
+      trangThai: 'HOAN_THANH',
+    });
+    await expect(
+      service.updateStatus(21, { status: 'DANG_CHAY' }, tenantPrincipal as never),
+    ).rejects.toMatchObject({
+      status: 409,
+      response: {
+        error: 'TRIP_STATUS_TRANSITION_NOT_ALLOWED',
+      },
+    });
+  });
+
+  it('handles race condition when updateMany count is 0', async () => {
+    const { prisma, service } = createService();
+    prisma.chuyenXe.findFirst
+      .mockResolvedValueOnce({
+        ...firstTrip,
+        trangThai: 'CHUA_KHOI_HANH',
+      })
+      .mockResolvedValueOnce({
+        ...firstTrip,
+        trangThai: 'DA_HUY',
+      });
+    prisma.chuyenXe.updateMany.mockResolvedValue({ count: 0 });
+
+    await expect(
+      service.updateStatus(21, { status: 'DANG_CHAY' }, tenantPrincipal as never),
+    ).rejects.toMatchObject({
+      status: 409,
+      response: {
+        error: 'TRIP_STATUS_TRANSITION_NOT_ALLOWED',
+      },
+    });
+  });
+});
+
+describe('TripsService.cancel', () => {
+  it('throws 404 TRIP_NOT_FOUND when trip is not in tenant scope', async () => {
+    const { prisma, service } = createService();
+    prisma.chuyenXe.findFirst.mockResolvedValue(null);
+
+    await expect(
+      service.cancel(999, tenantPrincipal as never),
+    ).rejects.toMatchObject({
+      status: 404,
+      response: {
+        error: 'TRIP_NOT_FOUND',
+        message: 'Không tìm thấy chuyến xe.',
+      },
+    });
+  });
+
+  it('handles idempotent same-state cancellation when already DA_HUY', async () => {
+    const { prisma, service } = createService();
+    prisma.chuyenXe.findFirst.mockResolvedValue({
+      ...firstTrip,
+      trangThai: 'DA_HUY',
+    });
+
+    const result = await service.cancel(21, tenantPrincipal as never);
+
+    expect(prisma.chuyenXe.updateMany).not.toHaveBeenCalled();
+    expect(result.data.status).toBe('DA_HUY');
+  });
+
+  it('successfully cancels trip in CHUA_KHOI_HANH state', async () => {
+    const { prisma, service } = createService();
+    prisma.chuyenXe.findFirst.mockResolvedValue({
+      ...firstTrip,
+      trangThai: 'CHUA_KHOI_HANH',
+    });
+    prisma.chuyenXe.updateMany.mockResolvedValue({ count: 1 });
+    prisma.chuyenXe.findFirstOrThrow.mockResolvedValue({
+      ...firstTrip,
+      trangThai: 'DA_HUY',
+    });
+
+    const result = await service.cancel(21, tenantPrincipal as never);
+
+    expect(prisma.chuyenXe.updateMany).toHaveBeenCalledWith({
+      where: { chuyenXeId: 21, nhaXeId: 3, trangThai: 'CHUA_KHOI_HANH' },
+      data: { trangThai: 'DA_HUY' },
+    });
+    expect(result.data.status).toBe('DA_HUY');
+  });
+
+  it('rejects cancellation of running or completed trips with 409', async () => {
+    const { prisma, service } = createService();
+
+    // DANG_CHAY
+    prisma.chuyenXe.findFirst.mockResolvedValue({
+      ...firstTrip,
+      trangThai: 'DANG_CHAY',
+    });
+    await expect(
+      service.cancel(21, tenantPrincipal as never),
+    ).rejects.toMatchObject({
+      status: 409,
+      response: {
+        error: 'TRIP_STATUS_TRANSITION_NOT_ALLOWED',
+        message: 'Không thể hủy chuyến xe đang chạy hoặc đã hoàn thành.',
+      },
+    });
+
+    // HOAN_THANH
+    prisma.chuyenXe.findFirst.mockResolvedValue({
+      ...firstTrip,
+      trangThai: 'HOAN_THANH',
+    });
+    await expect(
+      service.cancel(21, tenantPrincipal as never),
+    ).rejects.toMatchObject({
+      status: 409,
+      response: {
+        error: 'TRIP_STATUS_TRANSITION_NOT_ALLOWED',
+        message: 'Không thể hủy chuyến xe đang chạy hoặc đã hoàn thành.',
+      },
+    });
+  });
+
+  it('handles race condition during cancel when state changes concurrently', async () => {
+    const { prisma, service } = createService();
+    prisma.chuyenXe.findFirst
+      .mockResolvedValueOnce({
+        ...firstTrip,
+        trangThai: 'CHUA_KHOI_HANH',
+      })
+      .mockResolvedValueOnce({
+        ...firstTrip,
+        trangThai: 'DANG_CHAY',
+      });
+    prisma.chuyenXe.updateMany.mockResolvedValue({ count: 0 });
+
+    await expect(
+      service.cancel(21, tenantPrincipal as never),
+    ).rejects.toMatchObject({
+      status: 409,
+      response: {
+        error: 'TRIP_STATUS_TRANSITION_NOT_ALLOWED',
+      },
+    });
   });
 });

@@ -59,6 +59,16 @@
   letter-spacing: 0.05em;
 }
 
+.trips-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 24px;
+  padding-top: 18px;
+  border-top: 1px solid var(--admin-border);
+}
+
 .trips-detail-fields {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
