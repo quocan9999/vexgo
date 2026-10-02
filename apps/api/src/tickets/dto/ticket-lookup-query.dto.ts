@@ -1,7 +1,5 @@
 import { IsNotEmpty, IsString, Matches } from 'class-validator';
-
-const VIETNAM_PHONE_NUMBER =
-  /^(?:\+84|0)(?:3[2-9]|5[689]|7[06-9]|8[1-9]|9\d)\d{7}$/;
+import { VIETNAM_PHONE_NUMBER_REGEX } from '../../common/validation/vietnamese-phone.js';
 
 export class TicketLookupQueryDto {
   @IsString()
@@ -10,7 +8,7 @@ export class TicketLookupQueryDto {
 
   @IsString()
   @IsNotEmpty()
-  @Matches(VIETNAM_PHONE_NUMBER, {
+  @Matches(VIETNAM_PHONE_NUMBER_REGEX, {
     message: 'Số điện thoại không hợp lệ.',
   })
   phoneNumber!: string;
