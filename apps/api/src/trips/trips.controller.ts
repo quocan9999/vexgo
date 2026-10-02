@@ -2,6 +2,8 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   Patch,
   Post,
@@ -108,6 +110,7 @@ export class TripsController {
   }
 
   @Post(':id/cancel')
+  @HttpCode(HttpStatus.OK)
   @RequireRoles(...TENANT_PRINCIPAL_ROLES)
   @RequirePermissions('trip:cancel')
   cancel(

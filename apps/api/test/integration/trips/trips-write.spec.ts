@@ -804,7 +804,7 @@ describe('Trips write HTTP contract (05.2)', () => {
 
       const res = await request(app.getHttpServer())
         .post('/api/v1/trips/101/cancel')
-        .expect(201);
+        .expect(200);
 
       expect(prisma.chuyenXe.updateMany).toHaveBeenCalledWith({
         where: { chuyenXeId: 101, nhaXeId: 5, trangThai: 'CHUA_KHOI_HANH' },
@@ -821,7 +821,7 @@ describe('Trips write HTTP contract (05.2)', () => {
 
       const res = await request(app.getHttpServer())
         .post('/api/v1/trips/101/cancel')
-        .expect(201);
+        .expect(200);
 
       expect(prisma.chuyenXe.updateMany).not.toHaveBeenCalled();
       expect(res.body.data.status).toBe('DA_HUY');
@@ -881,7 +881,7 @@ describe('Trips write HTTP contract (05.2)', () => {
 
       const res = await request(app.getHttpServer())
         .post('/api/v1/trips/101/cancel')
-        .expect(201);
+        .expect(200);
 
       expect(prisma.chuyenXe.updateMany).toHaveBeenCalled();
       expect(res.body.data.status).toBe('DA_HUY');
