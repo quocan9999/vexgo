@@ -136,7 +136,7 @@
   color: #182742;
   font-size: var(--admin-type-metric-size);
   font-weight: var(--admin-type-metric-weight);
-  letter-spacing: -0.9px;
+  letter-spacing: -0.02em;
   line-height: var(--admin-type-metric-line-height);
 }
 
@@ -178,7 +178,7 @@
 }
 
 .analytics-section {
-  margin-top: var(--admin-space-9);
+  margin-top: var(--admin-space-section-gap);
 }
 
 .section-heading {
@@ -195,7 +195,6 @@
   font-size: var(--admin-type-section-heading-size);
   font-weight: var(--admin-type-section-heading-weight);
   line-height: var(--admin-type-section-heading-line-height);
-  letter-spacing: -0.4px;
 }
 
 .section-meta {
@@ -250,7 +249,7 @@
 .role-chart {
   display: grid;
   gap: var(--admin-space-component-gap);
-  margin-top: var(--admin-space-7);
+  margin-top: var(--admin-space-section-gap);
 }
 
 .role-row {
@@ -351,7 +350,7 @@
   align-items: center;
   justify-content: center;
   gap: clamp(24px, 5vw, 52px);
-  padding-top: 13px;
+  padding-top: var(--admin-space-3);
 }
 
 .status-donut {
@@ -379,7 +378,7 @@
   font-size: var(--admin-type-metric-compact-size);
   font-weight: var(--admin-type-metric-compact-weight);
   line-height: var(--admin-type-metric-compact-line-height);
-  letter-spacing: -0.8px;
+  letter-spacing: -0.02em;
 }
 
 .status-donut small {
@@ -459,7 +458,7 @@
 }
 
 .compact-data-table th {
-  font-weight: 600;
+  font-weight: var(--admin-type-table-header-weight);
 }
 
 .compact-data-table td {
@@ -470,13 +469,13 @@
 .chart-skeleton {
   display: grid;
   gap: var(--admin-space-card-padding);
-  margin-top: var(--admin-space-9);
+  margin-top: var(--admin-space-section-gap);
 }
 
 .status-skeleton {
   display: grid;
   gap: var(--admin-space-card-padding);
-  margin-top: var(--admin-space-9);
+  margin-top: var(--admin-space-section-gap);
 }
 
 .chart-skeleton span {
@@ -502,7 +501,7 @@
 .status-skeleton {
   grid-template-columns: 126px 1fr;
   align-items: center;
-  margin-top: 45px;
+  margin-top: var(--admin-space-section-gap);
 }
 
 .status-skeleton span:first-child {
@@ -516,7 +515,7 @@
 }
 
 .panel-empty {
-  margin: var(--admin-space-9) 0;
+  margin: var(--admin-space-section-gap) 0;
   color: #8793a6;
   font-size: var(--admin-type-secondary-body-size);
   line-height: var(--admin-type-secondary-body-line-height);
@@ -644,7 +643,7 @@
   }
 
   .analytics-section {
-    margin-top: var(--admin-space-7);
+    margin-top: var(--admin-space-section-gap);
   }
 
   .role-row {
@@ -659,7 +658,7 @@
   .status-chart-row {
     min-height: 147px;
     justify-content: space-around;
-    gap: 18px;
+    gap: var(--admin-space-component-gap);
   }
 
   .status-donut {
@@ -706,7 +705,7 @@
   }
 
   .status-chart-row {
-    gap: 11px;
+    gap: var(--admin-space-field-gap);
   }
 
   .status-donut {

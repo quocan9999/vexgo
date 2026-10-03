@@ -130,10 +130,10 @@
 .customers-detail-section-title {
   margin: 0 0 var(--admin-space-component-gap);
   font-size: var(--admin-type-component-title-size);
-  font-weight: 600;
+  font-weight: var(--admin-type-component-title-weight);
   color: var(--admin-text-strong);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.08em;
   line-height: var(--admin-type-component-title-line-height);
 }
 
@@ -260,10 +260,10 @@
 .customer-overview-card h4 {
   margin: 0 0 var(--admin-space-component-gap);
   font-size: var(--admin-type-component-title-size);
-  font-weight: 600;
+  font-weight: var(--admin-type-component-title-weight);
   color: var(--admin-text-strong);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.08em;
   line-height: var(--admin-type-component-title-line-height);
 }
 
@@ -275,7 +275,7 @@
 }
 
 .ticket-route-text {
-  font-weight: 500;
+  font-weight: var(--admin-weight-medium);
   color: var(--admin-text-strong);
   overflow-wrap: anywhere;
 }

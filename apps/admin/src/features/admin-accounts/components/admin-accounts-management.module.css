@@ -128,7 +128,7 @@
   display: inline-flex;
   align-items: center;
   gap: var(--admin-space-action-gap);
-  padding: 5px 0;
+  padding: var(--admin-space-1) 0;
   border: 0;
   background: transparent;
   color: inherit;
@@ -325,7 +325,7 @@
 }
 
 .roleOptions legend {
-  padding: 0 5px;
+  padding: 0 var(--admin-space-1);
   color: var(--admin-text-strong);
   font-size: var(--admin-type-label-size);
   font-weight: var(--admin-weight-semibold);

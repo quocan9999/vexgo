@@ -24,86 +24,80 @@
   --admin-surface-muted: #f8fafc;
   --admin-control-height: 37px;
 
-  /* Geist is the Admin font family. Weight primitives feed semantic type roles. */
+  /* Inter is the Admin font family. Weight primitives feed semantic type roles. */
   --admin-weight-regular: 400;
   --admin-weight-medium: 500;
   --admin-weight-semibold: 600;
   --admin-weight-bold: 700;
 
-  /* Semantic typography: fixed rem line heights keep vertical rhythm predictable. */
-  --admin-type-display-size: 2.6875rem;
-  --admin-type-display-line-height: 3.25rem;
+  /* Semantic typography: line heights use the Admin role ratios. */
+  --admin-type-display-size: 2rem;
+  --admin-type-display-line-height: 1.2;
   --admin-type-display-weight: var(--admin-weight-bold);
   --admin-type-page-title-size: 1.75rem;
-  --admin-type-page-title-line-height: 2.125rem;
+  --admin-type-page-title-line-height: 1.2;
   --admin-type-page-title-weight: var(--admin-weight-bold);
   --admin-type-section-heading-size: 1.25rem;
-  --admin-type-section-heading-line-height: 1.625rem;
+  --admin-type-section-heading-line-height: 1.3;
   --admin-type-section-heading-weight: var(--admin-weight-semibold);
   --admin-type-component-title-size: 1rem;
-  --admin-type-component-title-line-height: 1.375rem;
+  --admin-type-component-title-line-height: 1.35;
   --admin-type-component-title-weight: var(--admin-weight-semibold);
   --admin-type-body-size: 0.875rem;
-  --admin-type-body-line-height: 1.375rem;
+  --admin-type-body-line-height: 1.5;
   --admin-type-body-weight: var(--admin-weight-regular);
   --admin-type-secondary-body-size: 0.8125rem;
-  --admin-type-secondary-body-line-height: 1.25rem;
+  --admin-type-secondary-body-line-height: 1.45;
   --admin-type-secondary-body-weight: var(--admin-weight-regular);
   --admin-type-label-size: 0.8125rem;
-  --admin-type-label-line-height: 1.25rem;
+  --admin-type-label-line-height: 1.35;
   --admin-type-label-weight: var(--admin-weight-semibold);
   --admin-type-helper-size: 0.75rem;
-  --admin-type-helper-line-height: 1.125rem;
+  --admin-type-helper-line-height: 1.4;
   --admin-type-helper-weight: var(--admin-weight-regular);
   --admin-type-error-size: 0.75rem;
-  --admin-type-error-line-height: 1.125rem;
+  --admin-type-error-line-height: 1.4;
   --admin-type-error-weight: var(--admin-weight-medium);
   --admin-type-table-header-size: 0.75rem;
-  --admin-type-table-header-line-height: 1.125rem;
+  --admin-type-table-header-line-height: 1.35;
   --admin-type-table-header-weight: var(--admin-weight-semibold);
-  --admin-type-table-body-size: 0.875rem;
-  --admin-type-table-body-line-height: 1.375rem;
+  --admin-type-table-body-size: 0.8125rem;
+  --admin-type-table-body-line-height: 1.45;
   --admin-type-table-body-weight: var(--admin-weight-regular);
   --admin-type-button-size: 0.875rem;
-  --admin-type-button-line-height: 1.25rem;
+  --admin-type-button-line-height: 1.2;
   --admin-type-button-weight: var(--admin-weight-semibold);
   --admin-type-badge-size: 0.75rem;
-  --admin-type-badge-line-height: 1rem;
+  --admin-type-badge-line-height: 1.35;
   --admin-type-badge-weight: var(--admin-weight-semibold);
   --admin-type-caption-size: 0.75rem;
-  --admin-type-caption-line-height: 1.125rem;
-  --admin-type-caption-weight: var(--admin-weight-regular);
-  --admin-type-eyebrow-size: 0.625rem;
-  --admin-type-eyebrow-line-height: 1rem;
+  --admin-type-caption-line-height: 1.35;
+  --admin-type-caption-weight: var(--admin-weight-medium);
+  --admin-type-eyebrow-size: 0.75rem;
+  --admin-type-eyebrow-line-height: 1.35;
   --admin-type-eyebrow-weight: var(--admin-weight-semibold);
-  --admin-type-metric-size: 1.75rem;
-  --admin-type-metric-line-height: 2.25rem;
+  --admin-type-metric-size: 2rem;
+  --admin-type-metric-line-height: 1.2;
   --admin-type-metric-weight: var(--admin-weight-bold);
   --admin-type-metric-compact-size: 1.5rem;
-  --admin-type-metric-compact-line-height: 2rem;
-  --admin-type-metric-compact-weight: var(--admin-weight-bold);
+  --admin-type-metric-compact-line-height: 1.2;
+  --admin-type-metric-compact-weight: var(--admin-weight-semibold);
 
-  /* 4px base spacing scale: 1–16 map to 4px–64px in rem. */
+  /* 4px spacing scale: 4, 8, 12, 16, 20, 24, 32, 40, 48, and 64px. */
   --admin-space-1: 0.25rem;
   --admin-space-2: 0.5rem;
   --admin-space-3: 0.75rem;
   --admin-space-4: 1rem;
   --admin-space-5: 1.25rem;
   --admin-space-6: 1.5rem;
-  --admin-space-7: 1.75rem;
-  --admin-space-8: 2rem;
-  --admin-space-9: 2.25rem;
-  --admin-space-10: 2.5rem;
-  --admin-space-11: 2.75rem;
-  --admin-space-12: 3rem;
-  --admin-space-13: 3.25rem;
-  --admin-space-14: 3.5rem;
-  --admin-space-15: 3.75rem;
-  --admin-space-16: 4rem;
+  --admin-space-7: 2rem;
+  --admin-space-8: 2.5rem;
+  --admin-space-9: 3rem;
+  --admin-space-10: 4rem;
 
-  /* Semantic spacing aliases. Keep geometry, icons, charts, and sheet widths separate. */
-  --admin-space-page-inline: var(--admin-space-8);
-  --admin-space-page-block: var(--admin-space-8);
+  /* Semantic spacing aliases. Workspace geometry remains feature-specific. */
+  --admin-space-page-inline: var(--admin-space-7);
+  --admin-space-page-block: var(--admin-space-7);
   --admin-space-section-gap: var(--admin-space-6);
   --admin-space-component-gap: var(--admin-space-4);
   --admin-space-toolbar-gap: var(--admin-space-3);
@@ -117,7 +111,7 @@
   --admin-space-card-gap: var(--admin-space-4);
   --admin-space-card-padding: var(--admin-space-5);
   --admin-space-summary-card-padding: var(--admin-space-3);
-  --admin-space-state-padding: var(--admin-space-8) var(--admin-space-5);
+  --admin-space-state-padding: var(--admin-space-7) var(--admin-space-5);
   --admin-space-notice-padding: var(--admin-space-3) var(--admin-space-4);
   --admin-space-control-padding: var(--admin-space-2) var(--admin-space-3);
   --admin-space-dialog-padding: var(--admin-space-6);
@@ -127,8 +121,8 @@
   --admin-space-table-cell-y: var(--admin-space-3);
   --admin-space-sidebar-inline: var(--admin-space-4);
   --admin-space-sidebar-top: var(--admin-space-6);
-  --admin-space-sidebar-section-gap: var(--admin-space-8);
-  --admin-space-sidebar-nav-offset: var(--admin-space-14);
+  --admin-space-sidebar-section-gap: var(--admin-space-7);
+  --admin-space-sidebar-nav-offset: var(--admin-space-10);
   --admin-space-sidebar-link-gap: var(--admin-space-3);
   --admin-space-sidebar-label-inline: var(--admin-space-2);
   --admin-space-sidebar-label-bottom: var(--admin-space-3);
@@ -138,29 +132,25 @@
 
 @media (max-width: 900px) {
   :root {
-    --admin-type-display-size: 2rem;
-    --admin-type-display-line-height: 2.5rem;
+    --admin-type-display-size: 1.75rem;
+    --admin-type-display-line-height: 1.2;
   }
 }
 
 @media (max-width: 700px) {
   :root {
-    --admin-type-display-size: 1.75rem;
-    --admin-type-display-line-height: 2.125rem;
+    --admin-type-display-size: 1.5rem;
+    --admin-type-display-line-height: 1.2;
     --admin-type-page-title-size: 1.5rem;
-    --admin-type-page-title-line-height: 1.875rem;
+    --admin-type-page-title-line-height: 1.2;
     --admin-space-page-inline: var(--admin-space-4);
     --admin-space-page-block: var(--admin-space-6);
+    --admin-space-section-gap: var(--admin-space-5);
+    --admin-space-toolbar-gap: var(--admin-space-2);
     --admin-space-card-padding: var(--admin-space-4);
     --admin-space-dialog-padding: var(--admin-space-4);
     --admin-space-sheet-padding: var(--admin-space-4);
     --admin-space-sheet-inline: var(--admin-space-4);
     --admin-space-form-inline: var(--admin-space-4);
-  }
-}
-
-@media (max-width: 389px) {
-  :root {
-    --admin-space-page-inline: var(--admin-space-3);
   }
 }

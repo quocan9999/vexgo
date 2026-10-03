@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import RootLayout from '../src/app/layout';
 
 vi.mock('next/font/google', () => ({
-  Geist: () => ({ variable: 'geist-test-variable' }),
+  Inter: () => ({ variable: 'inter-test-variable' }),
 }));
 
 describe('Admin root layout hydration', () => {
@@ -29,7 +29,7 @@ describe('Admin root layout hydration', () => {
     await act(async () => { root = hydrateRoot(document, layout); });
 
     expect(errors.mock.calls.flat().join(' ')).not.toMatch(/hydration|hydrated|didn't match/i);
-    expect(document.documentElement.classList.contains('geist-test-variable')).toBe(true);
+    expect(document.documentElement.classList.contains('inter-test-variable')).toBe(true);
     expect(document.querySelector('main')?.textContent).toBe('Admin');
   });
 

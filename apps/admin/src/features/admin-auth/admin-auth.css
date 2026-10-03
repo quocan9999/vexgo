@@ -17,7 +17,7 @@
   min-height: 630px;
   flex-direction: column;
   overflow: hidden;
-  padding: var(--admin-space-9) var(--admin-space-10) var(--admin-space-7);
+  padding: var(--admin-space-8) var(--admin-space-8) var(--admin-space-7);
   background:
     radial-gradient(ellipse at 5% 100%, rgb(56 91 151 / 40%), transparent 52%),
     #14233d;
@@ -60,7 +60,7 @@
   display: inline-flex;
   width: fit-content;
   align-items: center;
-  gap: 11px;
+  gap: var(--admin-space-field-gap);
   color: inherit;
   text-decoration: none;
 }
@@ -74,30 +74,28 @@
   background: #2e5ee8;
   color: #fff;
   font-size: 23px;
-  font-weight: 800;
-  letter-spacing: -1px;
+  font-weight: var(--admin-weight-bold);
 }
 
 .login-brand > span:last-child {
   display: grid;
-  gap: 4px;
+  gap: var(--admin-space-1);
 }
 
 .login-brand strong {
   font-size: 17px;
-  letter-spacing: -0.3px;
 }
 
 .login-brand small {
   color: #aebbd0;
   font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 1.2px;
+  font-weight: var(--admin-weight-bold);
+  letter-spacing: 0.08em;
 }
 
 .login-showcase-copy {
   max-width: 385px;
-  margin-top: calc(var(--admin-space-16) + var(--admin-space-8));
+  margin-top: calc(var(--admin-space-10) + var(--admin-space-7));
 }
 
 .login-kicker {
@@ -108,14 +106,14 @@
   font-size: var(--admin-type-eyebrow-size);
   font-weight: var(--admin-type-eyebrow-weight);
   line-height: var(--admin-type-eyebrow-line-height);
-  letter-spacing: 1.05px;
+  letter-spacing: 0.08em;
 }
 
 .login-showcase-copy h1 {
   margin: var(--admin-space-5) 0 var(--admin-space-3);
   font-size: var(--admin-type-display-size);
   font-weight: var(--admin-type-display-weight);
-  letter-spacing: -1.75px;
+  letter-spacing: -0.02em;
   line-height: var(--admin-type-display-line-height);
 }
 
@@ -183,7 +181,7 @@
   font-size: var(--admin-type-caption-size);
   font-weight: var(--admin-type-caption-weight);
   line-height: var(--admin-type-caption-line-height);
-  letter-spacing: 1px;
+  letter-spacing: 0.08em;
 }
 
 .route-label-start {
@@ -197,7 +195,7 @@
 .login-showcase-footer {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--admin-space-control-gap);
   color: #92a3bd;
   font-size: var(--admin-type-caption-size);
   line-height: var(--admin-type-caption-line-height);
@@ -213,7 +211,7 @@
 .login-panel {
   display: grid;
   align-items: center;
-  padding: var(--admin-space-16) clamp(var(--admin-space-8), 6vw, 5rem);
+  padding: var(--admin-space-10) clamp(var(--admin-space-7), 6vw, var(--admin-space-10));
 }
 
 .login-panel-inner {
@@ -227,7 +225,7 @@
   font-size: var(--admin-type-eyebrow-size);
   font-weight: var(--admin-type-eyebrow-weight);
   line-height: var(--admin-type-eyebrow-line-height);
-  letter-spacing: 1.1px;
+  letter-spacing: 0.08em;
 }
 
 .login-heading h2 {
@@ -236,7 +234,7 @@
   font-size: var(--admin-type-page-title-size);
   font-weight: var(--admin-type-page-title-weight);
   line-height: var(--admin-type-page-title-line-height);
-  letter-spacing: -0.8px;
+  letter-spacing: -0.02em;
 }
 
 .login-heading > p:last-child {
@@ -249,7 +247,7 @@
 .login-form {
   display: grid;
   gap: var(--admin-space-form-gap);
-  margin-top: var(--admin-space-8);
+  margin-top: var(--admin-space-7);
 }
 
 .login-field {
@@ -294,13 +292,13 @@
 }
 
 .password-input-wrap input {
-  padding-right: 46px;
+  padding-right: var(--admin-space-9);
 }
 
 .password-visibility-button {
   position: absolute;
   top: 50%;
-  right: 7px;
+  right: var(--admin-space-2);
   display: grid;
   width: 32px;
   height: 32px;
@@ -319,7 +317,7 @@
 }
 
 .login-error {
-  margin: -7px 0 0;
+  margin: calc(-1 * var(--admin-space-2)) 0 0;
   color: #b63838;
   font-size: var(--admin-type-error-size);
   font-weight: var(--admin-type-error-weight);
@@ -371,7 +369,7 @@
   background: #1e40af;
   color: #fff;
   font-size: 19px;
-  font-weight: 800;
+  font-weight: var(--admin-weight-bold);
 }
 
 .tenant-operations-placeholder {
@@ -380,7 +378,7 @@
   flex-direction: column;
   justify-content: center;
   gap: var(--admin-space-field-gap);
-  padding: clamp(var(--admin-space-6), 5vw, var(--admin-space-12));
+  padding: clamp(var(--admin-space-6), 5vw, var(--admin-space-9));
 }
 
 .tenant-operations-placeholder__eyebrow {
@@ -397,7 +395,7 @@
   font-size: var(--admin-type-page-title-size);
   font-weight: var(--admin-type-page-title-weight);
   line-height: var(--admin-type-page-title-line-height);
-  letter-spacing: -0.7px;
+  letter-spacing: -0.02em;
 }
 
 .tenant-operations-placeholder p {
@@ -418,12 +416,12 @@
 
   .login-showcase {
     min-height: 310px;
-    padding: var(--admin-space-7) var(--admin-space-8) var(--admin-space-5);
+    padding: var(--admin-space-7) var(--admin-space-7) var(--admin-space-5);
   }
 
   .login-showcase-copy {
     max-width: 420px;
-    margin-top: var(--admin-space-10);
+    margin-top: var(--admin-space-8);
   }
 
   .login-showcase-copy h1 {
@@ -448,7 +446,7 @@
   }
 
   .login-panel {
-    padding: var(--admin-space-10) var(--admin-space-8) var(--admin-space-9);
+    padding: var(--admin-space-8) var(--admin-space-7) var(--admin-space-8);
   }
 }
 
@@ -478,7 +476,7 @@
 
   .login-showcase-copy h1 {
     max-width: 320px;
-    letter-spacing: -1px;
+    letter-spacing: -0.02em;
   }
 
   .login-showcase-copy p {
@@ -502,7 +500,7 @@
 
   .login-panel {
     align-items: start;
-    padding: var(--admin-space-9) var(--admin-space-6) var(--admin-space-8);
+    padding: var(--admin-space-7) var(--admin-space-6) var(--admin-space-7);
   }
 
   .login-heading h2 {

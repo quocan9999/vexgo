@@ -118,7 +118,7 @@
 .arrow {
   color: var(--admin-text-muted);
   font-size: 23px;
-  line-height: 1.5rem;
+  line-height: 1.2;
 }
 
 .state,

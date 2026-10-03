@@ -1,7 +1,7 @@
 
 
 .companies-section {
-  margin-top: var(--admin-space-9);
+  margin-top: var(--admin-space-section-gap);
 }
 
 .companies-panel {
@@ -196,8 +196,7 @@
   background: #f1f5ff;
   color: #4261ad;
   font-size: 9px;
-  font-weight: 750;
-  letter-spacing: 0.1px;
+  font-weight: var(--admin-weight-bold);
 }
 
 .company-table tbody tr:nth-child(3n + 2) .company-mark {
@@ -351,7 +350,9 @@
   height: 48px;
   flex-basis: 48px;
   border-radius: 12px;
-  font-size: 12px;
+  font-size: var(--admin-type-badge-size);
+  font-weight: var(--admin-type-badge-weight);
+  line-height: var(--admin-type-badge-line-height);
 }
 
 .detail-company-hero h3 {
@@ -369,7 +370,7 @@
   font-size: var(--admin-type-helper-size);
   line-height: var(--admin-type-helper-line-height);
   font-variant-numeric: tabular-nums;
-  font-weight: 500;
+  font-weight: var(--admin-weight-medium);
 }
 
 .detail-field {
@@ -444,7 +445,7 @@
   font-size: var(--admin-type-table-body-size);
   line-height: var(--admin-type-table-body-line-height);
   font-variant-numeric: tabular-nums;
-  font-weight: 700;
+  font-weight: var(--admin-weight-bold);
 }
 
 .detail-footnote {
@@ -486,7 +487,7 @@
 @media (max-width: 700px) {
 
   .companies-section {
-    margin-top: var(--admin-space-9);
+    margin-top: var(--admin-space-section-gap);
   }
 
   .table-toolbar {
@@ -597,7 +598,7 @@
   .company-mobile-actions {
     display: flex;
     justify-content: flex-end;
-    margin-top: -7px;
+    margin-top: calc(-1 * var(--admin-space-2));
   }
 
   .table-error {

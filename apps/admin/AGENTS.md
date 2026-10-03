@@ -13,10 +13,10 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 ### Source of truth
 
 - MUST đọc `DESIGN.md` trước khi sửa Admin UI.
-- Typography, line-height và spacing MUST theo semantic roles/aliases trong `DESIGN.md` và `src/styles/admin-tokens.css`; table body mặc định 14px.
-- Numeric line-height MUST dùng giá trị rem cố định hoặc semantic line-height token; MUST NOT dùng unitless line-height.
-- UI migration MUST đi theo thứ tự token → shared primitive → shared component → feature styles; MUST NOT bulk-replace pixel values không liên quan.
-- MUST giữ geometry, icon dimensions, chart geometry và dialog/sheet widths ngoài spacing scale.
+- Typography, line-height và spacing MUST theo semantic roles/aliases trong `DESIGN.md` và `src/styles/admin-tokens.css`; table body mặc định 13px.
+- Line-height MUST theo các role ratios trong `DESIGN.md`; các mức chính là 1.2, 1.35 và 1.5.
+- UI migration MUST đi theo thứ tự token → shared primitive → shared component → feature styles.
+- Feature-specific spacing exception MUST được ghi trong `DESIGN.md` và chỉ dùng cho data visualization hoặc workflow có layout đặc thù.
 - Chỉ map undefined custom property khi xác định được intended existing value.
 - MUST inspect `src/components/admin/`, `src/components/ui/`, `src/components/data-filters/` và `src/styles/admin-components.css` trước khi tạo hoặc sửa UI pattern dùng lại được.
 - Thứ tự ưu tiên khi quyết định UI:

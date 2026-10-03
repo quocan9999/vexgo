@@ -78,7 +78,7 @@
   display: grid;
   justify-items: center;
   gap: var(--admin-space-field-gap);
-  padding: var(--admin-space-12) var(--admin-space-card-padding);
+  padding: var(--admin-space-state-padding);
   color: var(--admin-text-muted);
   text-align: center;
 }

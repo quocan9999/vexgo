@@ -70,7 +70,7 @@ dialog:focus-visible {
   min-height: 45px;
   align-items: center;
   gap: var(--admin-space-sidebar-link-gap);
-  padding: 0 5px;
+  padding: 0 var(--admin-space-1);
   color: inherit;
   text-decoration: none;
 }
@@ -85,8 +85,7 @@ dialog:focus-visible {
   background: #2e5ee8;
   color: #fff;
   font-size: 22px;
-  font-weight: 800;
-  letter-spacing: -1px;
+  font-weight: var(--admin-weight-bold);
 }
 
 .brand-copy {
@@ -97,25 +96,24 @@ dialog:focus-visible {
 
 .brand-copy strong {
   font-size: 17px;
-  font-weight: 750;
-  letter-spacing: -0.35px;
-  line-height: 1.125rem;
+  font-weight: var(--admin-weight-bold);
+  line-height: 1.2;
 }
 
 .brand-copy small {
   overflow: hidden;
-  margin-top: 5px;
+  margin-top: var(--admin-space-1);
   color: #aebbd0;
   font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 1.25px;
+  font-weight: var(--admin-weight-bold);
+  letter-spacing: 0.08em;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .brand-copy small + small {
-  margin-top: 2px;
-  letter-spacing: 0.8px;
+  margin-top: var(--admin-space-1);
+  letter-spacing: 0.08em;
 }
 
 .sidebar-divider {
@@ -135,7 +133,7 @@ dialog:focus-visible {
   font-size: var(--admin-type-eyebrow-size);
   font-weight: var(--admin-type-eyebrow-weight);
   line-height: var(--admin-type-eyebrow-line-height);
-  letter-spacing: 1.1px;
+  letter-spacing: 0.08em;
 }
 
 .sidebar-nav-group nav {
@@ -401,7 +399,7 @@ dialog:focus-visible {
   font-size: var(--admin-type-eyebrow-size);
   font-weight: var(--admin-type-eyebrow-weight);
   line-height: var(--admin-type-eyebrow-line-height);
-  letter-spacing: 1.25px;
+  letter-spacing: 0.08em;
 }
 
 .page-intro h1 {
@@ -409,7 +407,7 @@ dialog:focus-visible {
   color: #14233d;
   font-size: var(--admin-type-page-title-size);
   font-weight: var(--admin-type-page-title-weight);
-  letter-spacing: -0.9px;
+  letter-spacing: -0.02em;
   line-height: var(--admin-type-page-title-line-height);
 }
 
@@ -817,7 +815,7 @@ dialog:focus-visible {
   font-size: var(--admin-type-section-heading-size);
   font-weight: var(--admin-type-section-heading-weight);
   line-height: var(--admin-type-section-heading-line-height);
-  letter-spacing: -0.5px;
+  letter-spacing: -0.02em;
 }
 
 .admin-dialog-header .icon-button {
@@ -985,7 +983,7 @@ dialog:focus-visible {
   }
 
   .brand-lockup {
-    padding: 0 5px;
+    padding: 0 var(--admin-space-1);
   }
 
   .brand-copy {
@@ -1327,7 +1325,7 @@ dialog:focus-visible {
   font-size: var(--admin-type-section-heading-size);
   font-weight: var(--admin-type-section-heading-weight);
   line-height: var(--admin-type-section-heading-line-height);
-  letter-spacing: -0.3px;
+  letter-spacing: -0.02em;
 }
 
 .admin-confirm-dialog__panel > p {

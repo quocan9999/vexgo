@@ -279,7 +279,7 @@ export function TripFormDialog({
           {editing ? (
             <div className="admin-crud-form-field">
               <label>Thông tin chuyến hiện tại</label>
-              <div className="trips-detail-fields" style={{ background: 'var(--admin-surface)', padding: '12px', borderRadius: 'var(--admin-radius-card)', border: '1px solid var(--admin-border)' }}>
+              <div className="trips-detail-fields" style={{ background: 'var(--admin-surface)', padding: 'var(--admin-space-field-gap)', borderRadius: 'var(--admin-radius-card)', border: '1px solid var(--admin-border)' }}>
                 <div>
                   <dt>Mã chuyến</dt>
                   <dd><strong>{trip.code}</strong></dd>

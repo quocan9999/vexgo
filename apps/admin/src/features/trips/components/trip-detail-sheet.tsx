@@ -240,7 +240,7 @@ export function TripDetailSheet({
           <div
             className="trips-success-notice"
             role="status"
-            style={{ margin: '12px 25px 0' }}
+            style={{ margin: 'var(--admin-space-field-gap) var(--admin-space-sheet-inline) 0' }}
           >
             <CheckCircle2 aria-hidden="true" size={16} />
             <span>{updateNotice}</span>

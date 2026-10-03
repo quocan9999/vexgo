@@ -45,6 +45,7 @@
   margin: 0;
   color: var(--admin-text-strong);
   font-size: var(--admin-type-component-title-size);
+  font-weight: var(--admin-type-component-title-weight);
   overflow-wrap: anywhere;
   line-height: var(--admin-type-component-title-line-height);
 }
@@ -56,10 +57,10 @@
 .trips-detail-section-title {
   margin: 0 0 var(--admin-space-component-gap);
   font-size: var(--admin-type-component-title-size);
-  font-weight: 700;
+  font-weight: var(--admin-type-component-title-weight);
   color: var(--admin-text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.08em;
   line-height: var(--admin-type-component-title-line-height);
 }
 
@@ -127,7 +128,7 @@
 
 .trips-seat-card__count {
   font-size: var(--admin-type-metric-compact-size);
-  font-weight: 700;
+  font-weight: var(--admin-type-metric-compact-weight);
   color: var(--admin-text-strong);
   line-height: var(--admin-type-metric-compact-line-height);
 }
@@ -186,7 +187,7 @@
 .trips-mobile-card-header h2 {
   margin: 0;
   font-size: var(--admin-type-component-title-size);
-  font-weight: 700;
+  font-weight: var(--admin-type-component-title-weight);
   color: var(--admin-text-strong);
   line-height: var(--admin-type-component-title-line-height);
 }
@@ -195,7 +196,7 @@
   margin: 0;
   font-size: var(--admin-type-secondary-body-size);
   color: var(--admin-text-strong);
-  font-weight: 600;
+  font-weight: var(--admin-type-secondary-body-weight);
   line-height: var(--admin-type-secondary-body-line-height);
 }
 
@@ -287,7 +288,7 @@
 
 .trip-seats-context__value {
   font-size: var(--admin-type-secondary-body-size);
-  font-weight: 600;
+  font-weight: var(--admin-weight-semibold);
   color: var(--admin-text-strong);
   overflow-wrap: anywhere;
   line-height: var(--admin-type-secondary-body-line-height);
@@ -314,6 +315,7 @@
 .trip-seats-panel-header h2 {
   margin: 0;
   font-size: var(--admin-type-section-heading-size);
+  font-weight: var(--admin-type-section-heading-weight);
   color: var(--admin-text-strong);
   line-height: var(--admin-type-section-heading-line-height);
 }
@@ -351,29 +353,29 @@
 .trip-seat-groups {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: var(--admin-space-section-gap);
 }
 
 .trip-seat-group {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--admin-space-field-gap);
 }
 
 .trip-seat-group__title {
   margin: 0;
   font-size: var(--admin-type-component-title-size);
-  font-weight: 700;
+  font-weight: var(--admin-type-component-title-weight);
   color: var(--admin-text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.08em;
   line-height: var(--admin-type-component-title-line-height);
 }
 
 .trip-seat-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-  gap: 12px;
+  gap: var(--admin-space-field-gap);
 }
 
 .trip-seat-token {
@@ -381,8 +383,8 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 14px 10px;
+  gap: var(--admin-space-control-gap);
+  padding: var(--admin-space-field-gap) var(--admin-space-control-gap);
   background: var(--admin-surface-muted);
   border: 1px solid var(--admin-border);
   border-radius: var(--admin-radius-card);
@@ -391,16 +393,16 @@
 
 .trip-seat-token__code {
   font-size: var(--admin-type-component-title-size);
-  font-weight: 700;
+  font-weight: var(--admin-type-component-title-weight);
   color: var(--admin-text-strong);
   line-height: var(--admin-type-component-title-line-height);
 }
 
 .trip-seat-badge {
   font-size: var(--admin-type-badge-size);
-  padding: 2px 8px;
+  padding: var(--admin-space-1) var(--admin-space-2);
   border-radius: 9999px;
-  font-weight: 600;
+  font-weight: var(--admin-type-badge-weight);
   line-height: var(--admin-type-badge-line-height);
 }
 

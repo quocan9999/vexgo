@@ -229,7 +229,7 @@
   margin: 0;
   color: var(--admin-text-strong);
   font-size: var(--admin-type-component-title-size);
-  font-weight: var(--admin-weight-bold);
+  font-weight: var(--admin-type-component-title-weight);
   overflow-wrap: anywhere;
   line-height: var(--admin-type-component-title-line-height);
 }
@@ -259,7 +259,7 @@
   margin: 0 0 var(--admin-space-component-gap);
   color: var(--admin-text-strong);
   font-size: var(--admin-type-component-title-size);
-  font-weight: var(--admin-weight-semibold);
+  font-weight: var(--admin-type-component-title-weight);
   line-height: var(--admin-type-component-title-line-height);
 }
 
@@ -325,7 +325,7 @@
   gap: var(--admin-space-label-control-gap);
   color: var(--admin-text-strong);
   font-size: var(--admin-type-body-size);
-  font-weight: var(--admin-weight-semibold);
+  font-weight: var(--admin-type-component-title-weight);
   line-height: var(--admin-type-body-line-height);
 }
 
@@ -399,7 +399,7 @@
   margin: 0;
   color: var(--admin-text-strong);
   font-size: var(--admin-type-component-title-size);
-  font-weight: var(--admin-weight-semibold);
+  font-weight: var(--admin-type-component-title-weight);
   overflow-wrap: anywhere;
   line-height: var(--admin-type-component-title-line-height);
 }
@@ -408,8 +408,8 @@
   display: block;
   margin-top: var(--admin-space-title-copy-gap);
   color: var(--admin-text-muted);
-  font-size: var(--admin-type-component-title-size);
-  line-height: var(--admin-type-component-title-line-height);
+  font-size: var(--admin-type-secondary-body-size);
+  line-height: var(--admin-type-secondary-body-line-height);
 }
 
 .vehicle-mobile-fields {
@@ -538,7 +538,7 @@
   margin: 0;
   color: var(--admin-text-strong);
   font-size: var(--admin-type-component-title-size);
-  font-weight: var(--admin-weight-semibold);
+  font-weight: var(--admin-type-component-title-weight);
   line-height: var(--admin-type-component-title-line-height);
 }
 
@@ -557,7 +557,7 @@
 .vehicle-seat-list,
 .vehicle-seat-groups {
   display: grid;
-  gap: 9px;
+  gap: var(--admin-space-card-gap);
 }
 
 .vehicle-seat-row {
@@ -565,8 +565,8 @@
   min-width: 0;
   align-items: center;
   justify-content: space-between;
-  gap: 15px;
-  padding: 12px 14px;
+  gap: var(--admin-space-component-gap);
+  padding: var(--admin-space-field-gap) var(--admin-space-component-gap);
   border: 1px solid var(--admin-border);
   border-radius: var(--admin-radius-control);
 }
@@ -597,12 +597,12 @@
 }
 
 .vehicle-seat-groups {
-  gap: 15px;
+  gap: var(--admin-space-card-gap);
 }
 
 .vehicle-seat-group {
   min-width: 0;
-  padding: 15px;
+  padding: var(--admin-space-component-gap);
   border: 1px solid var(--admin-border);
   border-radius: var(--admin-radius-control);
   background: var(--admin-canvas);
@@ -611,16 +611,16 @@
 .vehicle-seat-tiles {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(185px, 1fr));
-  gap: 10px;
-  margin-top: 12px;
+  gap: var(--admin-space-field-gap);
+  margin-top: var(--admin-space-field-gap);
 }
 
 .vehicle-seat-tile {
   display: grid;
   justify-items: start;
-  gap: 11px;
+  gap: var(--admin-space-field-gap);
   min-width: 0;
-  padding: 12px;
+  padding: var(--admin-space-field-gap);
   border: 1px solid var(--admin-border);
   border-radius: var(--admin-radius-control);
   background: var(--background);
@@ -651,9 +651,9 @@
   display: grid;
   gap: var(--admin-space-label-control-gap);
   color: var(--admin-text-strong);
-  font-size: var(--admin-type-body-size);
-  font-weight: var(--admin-weight-semibold);
-  line-height: var(--admin-type-body-line-height);
+  font-size: var(--admin-type-label-size);
+  font-weight: var(--admin-type-label-weight);
+  line-height: var(--admin-type-label-line-height);
 }
 
 .vehicle-seat-field input {
