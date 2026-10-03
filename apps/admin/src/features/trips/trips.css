@@ -220,33 +220,6 @@
   }
 }
 
-.trips-date-filter-wrap {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.trips-date-filter-label {
-  font-size: var(--admin-font-size-xs);
-  font-weight: 600;
-  color: var(--admin-text-muted);
-}
-
-.trips-date-filter-input {
-  height: 38px;
-  padding: 0 12px;
-  border: 1px solid var(--admin-border);
-  border-radius: var(--admin-radius-control);
-  background: var(--admin-surface);
-  color: var(--admin-text-strong);
-  font-size: var(--admin-font-size-sm);
-}
-
-.trips-date-filter-input:focus {
-  outline: none;
-  border-color: var(--admin-primary);
-}
-
 .trips-success-notice {
   display: flex;
   align-items: flex-start;

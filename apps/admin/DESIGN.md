@@ -71,6 +71,7 @@ Dùng dialog có title, mô tả tác động, hành động hủy và xác nh�
 - Filter toolbar gồm search trước, filter sau; số kết quả chỉ hiện một nơi.
 - Pagination luôn hiển thị range, total, page và nút trước/sau có `aria-label`.
 - Status badge dùng `AdminStatusBadge`; status domain tự map label trong feature/backend contract.
+- Bộ lọc ngày đơn dùng `SingleDateFilter`: label nằm trong control khi chưa chọn, chọn một ngày để lọc ngay. Bộ lọc khoảng ngày dùng `DateRangeFilter` với ngày bắt đầu/kết thúc và hành động áp dụng riêng.
 - Detail CRUD đơn giản mở từ phải; form ngắn/trung bình dùng dialog; workflow phức tạp có thể dùng page riêng.
 - Loading dùng status rõ ràng, empty state giải thích ngắn, success dùng `role="status"`, spinner là `aria-hidden` và tôn trọng `prefers-reduced-motion`.
 

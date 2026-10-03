@@ -92,6 +92,7 @@ vi.mock('@/components/data-filters/data-filters', () => ({
   ),
   SearchInput: () => null,
   SelectFilter: () => null,
+  SingleDateFilter: () => null,
 }));
 
 vi.mock('@/features/trips/hooks/use-trips', () => ({

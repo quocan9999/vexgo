@@ -20,6 +20,7 @@ import {
   FilterToolbar,
   SearchInput,
   SelectFilter,
+  SingleDateFilter,
   type FilterOption,
 } from '@/components/data-filters/data-filters';
 import { Button } from '@/components/ui/button';
@@ -169,21 +170,11 @@ export function TripsManagement() {
                 options={STATUS_OPTIONS}
                 value={status}
               />
-              <div className="trips-date-filter-wrap">
-                <label
-                  className="trips-date-filter-label"
-                  htmlFor="trip-departure-date-filter"
-                >
-                  Ngày khởi hành
-                </label>
-                <input
-                  className="trips-date-filter-input"
-                  id="trip-departure-date-filter"
-                  onChange={(e) => updateDepartureDate(e.target.value)}
-                  type="date"
-                  value={departureDate}
-                />
-              </div>
+              <SingleDateFilter
+                label="Ngày khởi hành"
+                onChange={updateDepartureDate}
+                value={departureDate}
+              />
             </FilterToolbar>
 
             <div className="trips-mobile-sort">

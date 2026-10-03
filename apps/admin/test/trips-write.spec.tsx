@@ -54,6 +54,7 @@ vi.mock('@/components/data-filters/data-filters', () => ({
   FilterToolbar: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   SearchInput: () => null,
   SelectFilter: () => null,
+  SingleDateFilter: () => null,
 }));
 
 vi.mock('../src/features/trips/hooks/use-trips', () => ({

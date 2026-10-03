@@ -94,7 +94,9 @@ export function TripDetailSheet({
   const canUpdate = can('trip:update');
   const canCancel = can('trip:cancel');
   const [detail, setDetail] = useState<DetailState>(
-    initialTrip ? { status: 'success', trip: initialTrip } : { status: 'loading' },
+    initialTrip
+      ? { status: 'success', trip: initialTrip }
+      : { status: 'loading' },
   );
   const [retryCount, setRetryCount] = useState(0);
   const [editOpen, setEditOpen] = useState(false);
@@ -180,9 +182,7 @@ export function TripDetailSheet({
           .catch(() => {});
       } else {
         setCancelError(
-          err instanceof Error
-            ? err.message
-            : 'Không thể hủy chuyến xe.',
+          err instanceof Error ? err.message : 'Không thể hủy chuyến xe.',
         );
       }
     } finally {
@@ -271,11 +271,6 @@ export function TripDetailSheet({
 
         {detail.status === 'success' && (
           <div className="trips-detail-content">
-            <div className="trips-detail-title-row">
-              <h3>{detail.trip.code}</h3>
-              <TripStatusBadge status={detail.trip.status} />
-            </div>
-
             <section className="trips-detail-section">
               <h4 className="trips-detail-section-title">Thông tin chuyến</h4>
               <dl className="trips-detail-fields">
@@ -331,7 +326,21 @@ export function TripDetailSheet({
                 </div>
                 <div>
                   <dt>Trạng thái xe</dt>
-                  <dd>{detail.trip.vehicle.status}</dd>
+                  <dd>
+                    <AdminStatusBadge
+                      tone={
+                        detail.trip.vehicle.status === 'HOAT_DONG'
+                          ? 'active'
+                          : 'muted'
+                      }
+                    >
+                      {detail.trip.vehicle.status === 'HOAT_DONG'
+                        ? 'Hoạt động'
+                        : detail.trip.vehicle.status === 'BAO_TRI'
+                          ? 'Bảo trì'
+                          : 'Không xác định'}
+                    </AdminStatusBadge>
+                  </dd>
                 </div>
               </dl>
             </section>
@@ -544,8 +553,9 @@ export function TripDetailSheet({
                   {formatTime(detail.trip.departureTime)} -{' '}
                   {formatDate(detail.trip.departureDate)}
                 </strong>{' '}
-                (tuyến {detail.trip.route.origin} → {detail.trip.route.destination}) sẽ
-                được chuyển sang trạng thái <strong>Đã hủy</strong>.
+                (tuyến {detail.trip.route.origin} →{' '}
+                {detail.trip.route.destination}) sẽ được chuyển sang trạng thái{' '}
+                <strong>Đã hủy</strong>.
               </p>
               <p>Thao tác này không xóa dữ liệu chuyến xe và ghế chuyến.</p>
             </div>

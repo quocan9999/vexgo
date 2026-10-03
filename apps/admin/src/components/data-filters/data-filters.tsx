@@ -7,6 +7,8 @@ import { useId, useState, type ReactNode } from 'react';
 import { AdminResultSummary } from '@/components/admin/admin-result-summary';
 import styles from './data-filters.module.css';
 
+export { SingleDateFilter } from './single-date-filter';
+
 export type FilterOption = {
   value: string;
   label: string;
