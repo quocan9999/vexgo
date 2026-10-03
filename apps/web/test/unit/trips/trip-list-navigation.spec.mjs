@@ -4,6 +4,32 @@ import {
   buildTripBookingHref,
   buildTripListSearchParams,
 } from '../../../src/features/trips/services/trip-list-state.ts';
+import * as tripListState from '../../../src/features/trips/services/trip-list-state.ts';
+
+test('only the active trip leg summary card is highlighted', () => {
+  assert.deepEqual(tripListState.getTripSummaryCardStates?.('outbound'), {
+    outbound: 'active',
+    return: 'muted',
+  });
+  assert.deepEqual(tripListState.getTripSummaryCardStates?.('return'), {
+    outbound: 'muted',
+    return: 'active',
+  });
+});
+
+test('choosing the return trip after an outbound trip opens round-trip booking', () => {
+  assert.equal(
+    tripListState.buildRoundTripBookingHrefAfterSelection?.({
+      currentSearch:
+        'from=TP.HCM&to=%C4%90%C3%A0+L%E1%BA%A1t&departureDate=2026-10-15&returnDate=2026-10-18&tripType=round-trip',
+      activeLeg: 'return',
+      chosenTripId: '35',
+      selectedOutboundId: '21',
+      selectedReturnId: null,
+    }),
+    '/trips/21?from=TP.HCM&to=%C4%90%C3%A0+L%E1%BA%A1t&departureDate=2026-10-15&returnDate=2026-10-18&tripType=round-trip&outboundId=21&returnId=35',
+  );
+});
 
 test('round-trip booking navigation keeps both trip IDs and travel dates', () => {
   const href = buildTripBookingHref({

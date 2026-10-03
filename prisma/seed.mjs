@@ -25,19 +25,19 @@ const operatorDefs = [
 
 const routeDefsByOperator = {
   FUTA: [
-    ['TP.HCM', 'Đà Lạt', 'HOAT_DONG'],
-    ['Đà Lạt', 'TP.HCM', 'HOAT_DONG'],
-    ['TP.HCM', 'Nha Trang', 'TAM_NGUNG'],
+    ['TP.HCM', 'Đà Lạt', 'HOAT_DONG', 420],
+    ['Đà Lạt', 'TP.HCM', 'HOAT_DONG', 420],
+    ['TP.HCM', 'Nha Trang', 'TAM_NGUNG', 540],
   ],
   TB: [
-    ['Đà Lạt', 'TP.HCM', 'HOAT_DONG'],
-    ['TP.HCM', 'Đà Lạt', 'HOAT_DONG'],
-    ['Đà Lạt', 'Nha Trang', 'TAM_NGUNG'],
+    ['Đà Lạt', 'TP.HCM', 'HOAT_DONG', 420],
+    ['TP.HCM', 'Đà Lạt', 'HOAT_DONG', 420],
+    ['Đà Lạt', 'Nha Trang', 'TAM_NGUNG', 240],
   ],
   HM: [
-    ['Vũng Tàu', 'TP.HCM', 'HOAT_DONG'],
-    ['TP.HCM', 'Vũng Tàu', 'HOAT_DONG'],
-    ['Vũng Tàu', 'Đà Lạt', 'TAM_NGUNG'],
+    ['Vũng Tàu', 'TP.HCM', 'HOAT_DONG', 150],
+    ['TP.HCM', 'Vũng Tàu', 'HOAT_DONG', 150],
+    ['Vũng Tàu', 'Đà Lạt', 'TAM_NGUNG', 360],
   ],
 };
 
@@ -433,14 +433,26 @@ async function seedVehiclesAndRoutes(db, operators, vehicleTypes) {
         { trangThai: config.status, nhaXeId: operator.nhaXeId, loaiXeId: vehicleTypes[definition.code][config.type].loaiXeId },
       );
       const seats = [];
+      const halfSeats = Math.ceil(config.seats / 2);
       for (let seatIndex = 0; seatIndex < config.seats; seatIndex += 1) {
-        const code = seatCode(seatIndex);
+        let code;
+        let viTri;
+        if (config.type === 'GIƯỜNG NẰM') {
+          const isUpper = seatIndex >= halfSeats;
+          const section = isUpper ? 'B' : 'A';
+          const seatNum = isUpper ? seatIndex - halfSeats + 1 : seatIndex + 1;
+          code = `${section}${pad(seatNum, 2)}`;
+          viTri = isUpper ? 'Tầng trên' : 'Tầng dưới';
+        } else {
+          code = `A${pad(seatIndex + 1, 2)}`;
+          viTri = seatIndex % 4 < 2 ? 'Dãy trái' : 'Dãy phải';
+        }
         const seat = await findOrCreate(
           db,
           'Ghe',
           { xeId: vehicle.xeId, soGhe: code },
-          { soGhe: code, viTri: config.type === 'GIƯỜNG NẰM' ? (seatIndex < config.seats / 2 ? 'Tầng dưới' : 'Tầng trên') : seatIndex % 2 === 0 ? 'Dãy trái' : 'Dãy phải', xeId: vehicle.xeId },
-          { viTri: config.type === 'GIƯỜNG NẰM' ? (seatIndex < config.seats / 2 ? 'Tầng dưới' : 'Tầng trên') : seatIndex % 2 === 0 ? 'Dãy trái' : 'Dãy phải' },
+          { soGhe: code, viTri, xeId: vehicle.xeId },
+          { viTri },
         );
         seats.push(seat);
       }
@@ -450,14 +462,14 @@ async function seedVehiclesAndRoutes(db, operators, vehicleTypes) {
     const routeDefs = routeDefsByOperator[definition.code];
     routes[definition.code] = [];
     for (let routeIndex = 0; routeIndex < routeDefs.length; routeIndex += 1) {
-      const [from, to, status] = routeDefs[routeIndex];
+      const [from, to, status, durationMinutes] = routeDefs[routeIndex];
       const code = `${definition.code}-TX-${pad(routeIndex + 1, 4)}`;
       const route = await findOrCreate(
         db,
         'TuyenXe',
         { nhaXeId: operator.nhaXeId, maTuyenXe: code },
-        { maTuyenXe: code, diemDi: from, diemDen: to, trangThai: status, nhaXeId: operator.nhaXeId },
-        { diemDi: from, diemDen: to, trangThai: status },
+        { maTuyenXe: code, diemDi: from, diemDen: to, thoiGianChayPhut: durationMinutes ?? null, trangThai: status, nhaXeId: operator.nhaXeId },
+        { diemDi: from, diemDen: to, thoiGianChayPhut: durationMinutes ?? null, trangThai: status },
       );
       routes[definition.code].push(route);
     }
@@ -470,14 +482,17 @@ async function seedVehiclesAndRoutes(db, operators, vehicleTypes) {
         for (const hour of [7, 13]) {
           const vehicle = vehicles[definition.code][(dayOffset + routeIndex + (hour === 13 ? 1 : 0)) % 5];
           const route = routes[definition.code][routeIndex];
+          const duration = route.thoiGianChayPhut ?? 420;
+          const arrHour = (hour + Math.floor(duration / 60)) % 24;
+          const arrMin = duration % 60;
           const code = `${definition.code}-CX-${pad(day, 2)}092026-${pad(sequence, 4)}`;
           sequence += 1;
           const trip = await upsertBy(
             db,
             'ChuyenXe',
             { maChuyenXe: code },
-            { maChuyenXe: code, ngayKhoiHanh: dateOnly(2026, 9, day), gioKhoiHanh: timeOnly(hour), trangThai: 'MO_BAN', nhaXeId: operator.nhaXeId, tuyenXeId: route.tuyenXeId, xeId: vehicle.xeId },
-            { ngayKhoiHanh: dateOnly(2026, 9, day), gioKhoiHanh: timeOnly(hour), trangThai: 'MO_BAN', nhaXeId: operator.nhaXeId, tuyenXeId: route.tuyenXeId, xeId: vehicle.xeId },
+            { maChuyenXe: code, ngayKhoiHanh: dateOnly(2026, 9, day), gioKhoiHanh: timeOnly(hour), gioDen: timeOnly(arrHour, arrMin), trangThai: 'MO_BAN', nhaXeId: operator.nhaXeId, tuyenXeId: route.tuyenXeId, xeId: vehicle.xeId },
+            { ngayKhoiHanh: dateOnly(2026, 9, day), gioKhoiHanh: timeOnly(hour), gioDen: timeOnly(arrHour, arrMin), trangThai: 'MO_BAN', nhaXeId: operator.nhaXeId, tuyenXeId: route.tuyenXeId, xeId: vehicle.xeId },
           );
           const tripSeats = [];
           for (const seat of vehicle.seats) {
@@ -965,6 +980,146 @@ function printSummary(transactionCodes) {
   for (const [key, value] of [...counts.entries()].sort()) console.log(`  ${key}=${value}`);
 }
 
+async function seedOctoberTrips(db, operators, vehicles, vehicleTypes, routes) {
+  const hmOutbound = await findOrCreate(
+    db,
+    'TuyenXe',
+    { nhaXeId: operators.HM.nhaXeId, maTuyenXe: 'HM-TX-0004' },
+    {
+      maTuyenXe: 'HM-TX-0004',
+      diemDi: 'TP.HCM',
+      diemDen: 'Đà Lạt',
+      thoiGianChayPhut: 420,
+      trangThai: 'HOAT_DONG',
+      nhaXeId: operators.HM.nhaXeId,
+    },
+    { diemDi: 'TP.HCM', diemDen: 'Đà Lạt', thoiGianChayPhut: 420, trangThai: 'HOAT_DONG' },
+  );
+
+  const hmInbound = await findOrCreate(
+    db,
+    'TuyenXe',
+    { nhaXeId: operators.HM.nhaXeId, maTuyenXe: 'HM-TX-0005' },
+    {
+      maTuyenXe: 'HM-TX-0005',
+      diemDi: 'Đà Lạt',
+      diemDen: 'TP.HCM',
+      thoiGianChayPhut: 420,
+      trangThai: 'HOAT_DONG',
+      nhaXeId: operators.HM.nhaXeId,
+    },
+    { diemDi: 'Đà Lạt', diemDen: 'TP.HCM', thoiGianChayPhut: 420, trangThai: 'HOAT_DONG' },
+  );
+
+  const hmPrices = [
+    { route: hmOutbound, typeName: 'GHẾ NGỒI', price: 190000 },
+    { route: hmOutbound, typeName: 'GIƯỜNG NẰM', price: 260000 },
+    { route: hmOutbound, typeName: 'LIMOUSINE', price: 330000 },
+    { route: hmInbound, typeName: 'GHẾ NGỒI', price: 190000 },
+    { route: hmInbound, typeName: 'GIƯỜNG NẰM', price: 260000 },
+    { route: hmInbound, typeName: 'LIMOUSINE', price: 330000 },
+  ];
+
+  for (const { route, typeName, price } of hmPrices) {
+    const loaiXe = vehicleTypes.HM[typeName];
+    if (!loaiXe) continue;
+    await findOrCreate(
+      db,
+      'BangGia',
+      {
+        tuyenXeId: route.tuyenXeId,
+        loaiXeId: loaiXe.loaiXeId,
+        tuNgay: dateOnly(2026, 9, 1),
+        denNgay: null,
+      },
+      {
+        giaNiemYet: decimal(price),
+        tuNgay: dateOnly(2026, 9, 1),
+        denNgay: null,
+        trangThai: 'HOAT_DONG',
+        nhaXeId: operators.HM.nhaXeId,
+        tuyenXeId: route.tuyenXeId,
+        loaiXeId: loaiXe.loaiXeId,
+      },
+      { giaNiemYet: decimal(price), trangThai: 'HOAT_DONG' },
+    );
+  }
+
+  const futaOutbound = routes.FUTA[0];
+  const futaInbound = routes.FUTA[1];
+  const tbOutbound = routes.TB[1];
+  const tbInbound = routes.TB[0];
+  const tripDate = dateOnly(2026, 10, 7);
+
+  const pickVehicle = (operatorCode, typeName, seatCount) => {
+    return vehicles[operatorCode].find(
+      (v) => v.type === typeName && (seatCount ? v.seats.length === seatCount : true),
+    );
+  };
+
+  const tripsDef = [
+    { op: 'FUTA', code: 'FUTA-CX-07102026-0001', route: futaOutbound, hour: 8, min: 0, arrHour: 15, arrMin: 0, type: 'GIƯỜNG NẰM', seats: 22 },
+    { op: 'TB', code: 'TB-CX-07102026-0001', route: tbOutbound, hour: 8, min: 0, arrHour: 15, arrMin: 0, type: 'GHẾ NGỒI', seats: 29 },
+    { op: 'HM', code: 'HM-CX-07102026-0001', route: hmOutbound, hour: 8, min: 0, arrHour: 15, arrMin: 0, type: 'GIƯỜNG NẰM', seats: 22 },
+
+    { op: 'FUTA', code: 'FUTA-CX-07102026-0002', route: futaOutbound, hour: 14, min: 0, arrHour: 21, arrMin: 0, type: 'GHẾ NGỒI', seats: 29 },
+    { op: 'TB', code: 'TB-CX-07102026-0002', route: tbOutbound, hour: 14, min: 0, arrHour: 21, arrMin: 0, type: 'GIƯỜNG NẰM', seats: 22 },
+    { op: 'HM', code: 'HM-CX-07102026-0002', route: hmOutbound, hour: 14, min: 0, arrHour: 21, arrMin: 0, type: 'GHẾ NGỒI', seats: 29 },
+
+    { op: 'FUTA', code: 'FUTA-CX-07102026-0003', route: futaOutbound, hour: 20, min: 0, arrHour: 3, arrMin: 0, type: 'GIƯỜNG NẰM', seats: 34 },
+    { op: 'TB', code: 'TB-CX-07102026-0003', route: tbOutbound, hour: 20, min: 0, arrHour: 3, arrMin: 0, type: 'GHẾ NGỒI', seats: 45 },
+    { op: 'HM', code: 'HM-CX-07102026-0003', route: hmOutbound, hour: 20, min: 0, arrHour: 3, arrMin: 0, type: 'LIMOUSINE', seats: 16 },
+
+    { op: 'FUTA', code: 'FUTA-CX-07102026-0004', route: futaInbound, hour: 9, min: 0, arrHour: 16, arrMin: 0, type: 'GHẾ NGỒI', seats: 45 },
+    { op: 'TB', code: 'TB-CX-07102026-0004', route: tbInbound, hour: 9, min: 0, arrHour: 16, arrMin: 0, type: 'GIƯỜNG NẰM', seats: 34 },
+    { op: 'HM', code: 'HM-CX-07102026-0004', route: hmInbound, hour: 9, min: 0, arrHour: 16, arrMin: 0, type: 'GIƯỜNG NẰM', seats: 34 },
+
+    { op: 'FUTA', code: 'FUTA-CX-07102026-0005', route: futaInbound, hour: 15, min: 0, arrHour: 22, arrMin: 0, type: 'GIƯỜNG NẰM', seats: 22 },
+    { op: 'TB', code: 'TB-CX-07102026-0005', route: tbInbound, hour: 15, min: 0, arrHour: 22, arrMin: 0, type: 'GHẾ NGỒI', seats: 29 },
+    { op: 'HM', code: 'HM-CX-07102026-0005', route: hmInbound, hour: 15, min: 0, arrHour: 22, arrMin: 0, type: 'GHẾ NGỒI', seats: 29 },
+  ];
+
+  for (const def of tripsDef) {
+    const vehicle = pickVehicle(def.op, def.type, def.seats);
+    if (!vehicle) continue;
+    const operator = operators[def.op];
+    const trip = await upsertBy(
+      db,
+      'ChuyenXe',
+      { maChuyenXe: def.code },
+      {
+        maChuyenXe: def.code,
+        ngayKhoiHanh: tripDate,
+        gioKhoiHanh: timeOnly(def.hour, def.min),
+        gioDen: timeOnly(def.arrHour, def.arrMin),
+        trangThai: 'MO_BAN',
+        nhaXeId: operator.nhaXeId,
+        tuyenXeId: def.route.tuyenXeId,
+        xeId: vehicle.xeId,
+      },
+      {
+        ngayKhoiHanh: tripDate,
+        gioKhoiHanh: timeOnly(def.hour, def.min),
+        gioDen: timeOnly(def.arrHour, def.arrMin),
+        trangThai: 'MO_BAN',
+        nhaXeId: operator.nhaXeId,
+        tuyenXeId: def.route.tuyenXeId,
+        xeId: vehicle.xeId,
+      },
+    );
+
+    for (const seat of vehicle.seats) {
+      await upsertBy(
+        db,
+        'GheChuyenXe',
+        { chuyenXeId_gheId: { chuyenXeId: trip.chuyenXeId, gheId: seat.gheId } },
+        { trangThai: 'TRONG', chuyenXeId: trip.chuyenXeId, gheId: seat.gheId },
+        { trangThai: 'TRONG' },
+      );
+    }
+  }
+}
+
 async function main() {
   await prisma.$connect();
   const operators = await seedOperators(prisma);
@@ -979,6 +1134,7 @@ async function main() {
   void promotions;
   const transactions = await seedTransactions(prisma, operators, accounts, fleet, prices, cargoAndLogistics);
   await applyCustomerSnapshotChange(prisma, accounts);
+  await seedOctoberTrips(prisma, operators, fleet.vehicles, vehicleTypes, fleet.routes);
   printSummary(transactions);
 }
 

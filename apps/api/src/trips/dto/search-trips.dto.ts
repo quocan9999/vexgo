@@ -38,6 +38,14 @@ export class SearchTripsDto extends PaginationQueryDto {
   vehicleType?: string;
 
   @IsOptional()
+  @IsString()
+  operator?: string;
+
+  @IsOptional()
+  @IsString()
+  timeRange?: string;
+
+  @IsOptional()
   @IsDateString()
   @Matches(/^\d{4}-\d{2}-\d{2}$/)
   departureDate?: string;

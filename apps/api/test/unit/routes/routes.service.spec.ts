@@ -12,6 +12,7 @@ const routeRecord = {
   maTuyenXe: 'FUTA-TX-0001',
   diemDi: 'TP.HCM',
   diemDen: 'Đà Lạt',
+  thoiGianChayPhut: null,
   trangThai: 'HOAT_DONG',
   createdAt: new Date('2026-09-22T07:34:00.000Z'),
   updatedAt: new Date('2026-09-23T07:34:00.000Z'),

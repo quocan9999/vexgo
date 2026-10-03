@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { AuthPageShell } from '@/features/auth/components/auth-page-shell';
 import { LoginForm } from '@/features/auth/components/login-form';
 import { Bus } from 'lucide-react';
@@ -20,7 +21,9 @@ export default function LoginPage() {
         <p className="text-slate-500 text-sm mt-2 text-center">Chào mừng bạn quay trở lại Vex Go</p>
       </div>
 
-      <LoginForm />
+      <Suspense fallback={<div className="p-8 text-center text-slate-400">Đang tải...</div>}>
+        <LoginForm />
+      </Suspense>
       <p className="mt-10 text-center text-sm text-slate-600">
         Chưa có tài khoản?{' '}
         <Link href="/register" className="font-semibold text-[#E50012] hover:text-red-800 transition-colors underline underline-offset-4 decoration-2 decoration-red-200 hover:decoration-[#E50012]">

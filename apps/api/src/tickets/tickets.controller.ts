@@ -1,8 +1,10 @@
 import {
+  Body,
   Controller,
   Get,
   Param,
   ParseIntPipe,
+  Post,
   Query,
   UseGuards,
 } from '@nestjs/common';
@@ -13,6 +15,7 @@ import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
 import { TicketsService } from './tickets.service.js';
 import { TicketQueryDto } from './dto/ticket-query.dto.js';
 import { TicketLookupQueryDto } from './dto/ticket-lookup-query.dto.js';
+import { CancelTicketDto } from './dto/cancel-ticket.dto.js';
 import {
   PUBLIC_RATE_LIMIT_TTL_MS,
   PUBLIC_TICKET_LOOKUP_RATE_LIMIT,
@@ -41,6 +44,19 @@ export class TicketsController {
   })
   lookupTicket(@Query() query: TicketLookupQueryDto) {
     return this.ticketsService.lookupTicket(query);
+  }
+
+  @Public()
+  @Post('cancel')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({
+    default: {
+      limit: PUBLIC_TICKET_LOOKUP_RATE_LIMIT,
+      ttl: PUBLIC_RATE_LIMIT_TTL_MS,
+    },
+  })
+  cancelTicket(@Body() dto: CancelTicketDto) {
+    return this.ticketsService.cancelTicket(dto);
   }
 
   @Get(':ticketId')

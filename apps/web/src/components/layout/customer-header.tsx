@@ -23,7 +23,7 @@ const NavLinksList: React.FC<NavLinksNavProps> = ({ onItemClick, isMobile }) => 
     { href: '/', label: 'Trang chủ' },
     { href: '/shipments/new', label: 'Gửi hàng' },
     { href: '/tickets/lookup', label: 'Tra cứu vé' },
-    { href: '/tickets/ticket-001/cancel', label: 'Hủy vé' },
+    { href: '/cancel-ticket', label: 'Hủy vé' },
     { href: '/about', label: 'Giới thiệu' },
     { href: '/contact', label: 'Liên hệ' },
   ];
@@ -31,6 +31,9 @@ const NavLinksList: React.FC<NavLinksNavProps> = ({ onItemClick, isMobile }) => 
   const checkIsActive = (href: string) => {
     if (href === '/') {
       return pathname === '/';
+    }
+    if (href === '/cancel-ticket') {
+      return pathname === '/cancel-ticket' || pathname.endsWith('/cancel');
     }
     if (href === '/posts?needType=RENT') {
       return pathname === '/posts' && needType === 'RENT';
@@ -86,10 +89,20 @@ const NavLinksList: React.FC<NavLinksNavProps> = ({ onItemClick, isMobile }) => 
 
 export const CustomerHeader: React.FC = () => {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const [logoutModalOpen, setLogoutModalOpen] = useState(false);
   const { user, signOut } = useAuthSession();
+
+  const currentPath =
+    pathname && !pathname.startsWith('/auth')
+      ? `${pathname}${searchParams?.toString() ? `?${searchParams.toString()}` : ''}`
+      : '';
+  const loginHref = currentPath
+    ? `/auth/login?next=${encodeURIComponent(currentPath)}`
+    : '/auth/login';
 
   return (
     <header className="sticky top-0 z-50 bg-red-600 text-white border-b border-red-700 shadow-md font-sans">
@@ -203,7 +216,7 @@ export const CustomerHeader: React.FC = () => {
             </div>
           ) : (
             <Link
-              href="/auth/login"
+              href={loginHref}
               className="hidden sm:flex items-center gap-1.5 text-sm font-medium text-slate-200 hover:text-white transition-colors"
             >
               <User className="w-4 h-4" />
@@ -257,7 +270,7 @@ export const CustomerHeader: React.FC = () => {
               </>
             ) : (
               <Link
-                href="/auth/login"
+                href={loginHref}
                 onClick={() => setMobileMenuOpen(false)}
                 className="flex items-center gap-2 px-3 py-2 text-sm text-slate-200 hover:text-white"
               >

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   ArrowRightLeft,
   Bus,
@@ -12,6 +13,11 @@ import {
   Users,
 } from 'lucide-react';
 import { routesApi } from '@/features/routes/services/routes.api';
+import { AlertModal } from '@/components/ui/alert-modal';
+import { LocationCombobox } from './location-combobox';
+
+const DEFAULT_ORIGINS = ['TP.HCM', 'Hà Nội', 'Đà Nẵng', 'Cần Thơ', 'Vũng Tàu', 'Đà Lạt'];
+const DEFAULT_DESTINATIONS = ['Đà Lạt', 'Nha Trang', 'Đà Nẵng', 'Huế', 'Cần Thơ', 'Vũng Tàu', 'TP.HCM'];
 
 export interface HeroSectionProps {
   activeSearchTab: 'BUY' | 'RENT';
@@ -62,6 +68,60 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
   const [ticketCount, setTicketCount] = useState(1);
   const [originOptions, setOriginOptions] = useState<string[]>([]);
   const [destinationOptions, setDestinationOptions] = useState<string[]>([]);
+  const router = useRouter();
+  const [returnDateAlert, setReturnDateAlert] = useState<{
+    isOpen: boolean;
+    title: string;
+  }>({ isOpen: false, title: '' });
+
+  const handleDepartureDateChange = (newDate: string) => {
+    setSelectedPrice(newDate);
+    if (tripType === 'round-trip' && returnDate && newDate > returnDate) {
+      setReturnDate(newDate);
+    }
+  };
+
+  const handleReturnDateChange = (newDate: string) => {
+    if (selectedPrice && newDate && selectedPrice > newDate) {
+      setReturnDateAlert({
+        isOpen: true,
+        title: 'Ngày đi không được lớn hơn ngày về',
+      });
+      setReturnDate(selectedPrice);
+      return;
+    }
+    setReturnDate(newDate);
+  };
+
+  const handleSearchSubmit = (e?: React.MouseEvent) => {
+    if (tripType === 'round-trip') {
+      if (!returnDate) {
+        if (e) e.preventDefault();
+        setReturnDateAlert({ isOpen: true, title: 'Vui lòng chọn ngày về' });
+        return;
+      }
+      if (selectedPrice && returnDate && selectedPrice > returnDate) {
+        if (e) e.preventDefault();
+        setReturnDateAlert({
+          isOpen: true,
+          title: 'Ngày đi không được lớn hơn ngày về',
+        });
+        return;
+      }
+    }
+
+    if (onSearch) {
+      onSearch({
+        tripType,
+        departureDate: selectedPrice,
+        returnDate,
+      });
+    } else {
+      router.push(
+        `/trips?needType=${activeSearchTab}&tripType=${tripType}&province=${selectedProvince}&district=${selectedDistrict}&type=${selectedType}&price=${selectedPrice}&returnDate=${returnDate}&tickets=${ticketCount}`,
+      );
+    }
+  };
 
   useEffect(() => {
     async function fetchRoutes() {
@@ -102,6 +162,9 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
     setSelectedProvince(selectedDistrict);
     setSelectedDistrict(currentProvince);
   };
+
+  const effectiveOrigins = originOptions.length > 0 ? originOptions : DEFAULT_ORIGINS;
+  const effectiveDestinations = destinationOptions.length > 0 ? destinationOptions : DEFAULT_DESTINATIONS;
 
   return (
     <section className="relative w-full bg-[#F5F5F5] flex flex-col items-center pb-12">
@@ -189,27 +252,12 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                       <MapPin className="w-3.5 h-3.5 text-brand" />
                       Điểm đi
                     </label>
-                    <input
-                      type="text"
+                    <LocationCombobox
                       value={selectedProvince}
-                      onChange={(e) => setSelectedProvince(e.target.value)}
-                      placeholder="Nhập điểm đi"
-                      list="origin-options"
-                      className="h-12 w-full bg-white border border-slate-300 rounded-lg px-3 text-sm font-bold text-slate-900 outline-none focus:border-brand"
+                      onChange={setSelectedProvince}
+                      options={effectiveOrigins}
+                      placeholder="Chọn điểm đi"
                     />
-                    <datalist id="origin-options">
-                      {originOptions.length > 0 ? (
-                        originOptions.map((o) => <option key={o} value={o} />)
-                      ) : (
-                        <>
-                          <option value="TP.HCM" />
-                          <option value="Hà Nội" />
-                          <option value="Đà Nẵng" />
-                          <option value="Cần Thơ" />
-                          <option value="Vũng Tàu" />
-                        </>
-                      )}
-                    </datalist>{' '}
                   </div>
 
                   <div className="hidden md:flex items-end pb-1 lg:shrink-0">
@@ -228,30 +276,12 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                       <MapPin className="w-3.5 h-3.5 text-rose-500" />
                       Điểm đến
                     </label>
-                    <input
-                      type="text"
+                    <LocationCombobox
                       value={selectedDistrict}
-                      onChange={(e) => setSelectedDistrict(e.target.value)}
-                      placeholder="Nhập điểm đến"
-                      list="destination-options"
-                      className="h-12 w-full bg-white border border-slate-300 rounded-lg px-3 text-sm font-bold text-slate-900 outline-none focus:border-brand"
+                      onChange={setSelectedDistrict}
+                      options={effectiveDestinations}
+                      placeholder="Chọn điểm đến"
                     />
-                    <datalist id="destination-options">
-                      {destinationOptions.length > 0 ? (
-                        destinationOptions.map((o) => (
-                          <option key={o} value={o} />
-                        ))
-                      ) : (
-                        <>
-                          <option value="Đà Lạt" />
-                          <option value="Nha Trang" />
-                          <option value="Đà Nẵng" />
-                          <option value="Huế" />
-                          <option value="Cần Thơ" />
-                          <option value="Vũng Tàu" />
-                        </>
-                      )}
-                    </datalist>{' '}
                   </div>
                 </div>
 
@@ -268,7 +298,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                         timeZone: 'Asia/Ho_Chi_Minh',
                       }).format(new Date())}
                       value={selectedPrice}
-                      onChange={(e) => setSelectedPrice(e.target.value)}
+                      onChange={(e) => handleDepartureDateChange(e.target.value)}
                       className="h-12 w-full border border-slate-300 rounded-lg px-3 text-sm font-bold text-slate-900 outline-none focus:border-brand"
                     />
                   </div>
@@ -288,7 +318,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                           }).format(new Date())
                         }
                         value={returnDate}
-                        onChange={(e) => setReturnDate(e.target.value)}
+                        onChange={(e) => handleReturnDateChange(e.target.value)}
                         className="h-12 w-full border border-slate-300 rounded-lg px-3 text-sm font-bold text-slate-900 outline-none focus:border-brand"
                       />
                     </div>
@@ -321,30 +351,14 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                   Hướng dẫn đặt vé
                 </Link>
                 <div className="flex flex-col sm:flex-row gap-3">
-                  {onSearch ? (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        onSearch({
-                          tripType,
-                          departureDate: selectedPrice,
-                          returnDate,
-                        })
-                      }
-                      className="w-full sm:w-[170px] h-12 px-7 rounded-lg bg-accent hover:bg-accent-hover text-white font-black text-sm flex items-center justify-center gap-2 shadow-sm cursor-pointer"
-                    >
-                      <Search className="w-4 h-4 shrink-0" />
-                      Tìm chuyến
-                    </button>
-                  ) : (
-                    <Link
-                      href={`/trips?needType=${activeSearchTab}&tripType=${tripType}&province=${selectedProvince}&district=${selectedDistrict}&type=${selectedType}&price=${selectedPrice}&returnDate=${returnDate}&tickets=${ticketCount}`}
-                      className="flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-accent px-7 text-sm font-black text-white shadow-sm hover:bg-accent-hover sm:w-[170px]"
-                    >
-                      <Search className="w-4 h-4 shrink-0" />
-                      Tìm chuyến
-                    </Link>
-                  )}
+                  <button
+                    type="button"
+                    onClick={handleSearchSubmit}
+                    className="w-full sm:w-[170px] h-12 px-7 rounded-lg bg-accent hover:bg-accent-hover text-white font-black text-sm flex items-center justify-center gap-2 shadow-sm cursor-pointer"
+                  >
+                    <Search className="w-4 h-4 shrink-0" />
+                    Tìm chuyến
+                  </button>
                 </div>
               </div>
             </>
@@ -357,27 +371,12 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                     <MapPin className="w-3.5 h-3.5 text-brand" />
                     Nơi gửi
                   </label>
-                  <input
-                    type="text"
+                  <LocationCombobox
                     value={selectedProvince}
-                    onChange={(e) => setSelectedProvince(e.target.value)}
-                    placeholder="Nhập điểm đi"
-                    list="origin-options"
-                    className="h-12 w-full bg-white border border-slate-300 rounded-lg px-3 text-sm font-bold text-slate-900 outline-none focus:border-brand"
+                    onChange={setSelectedProvince}
+                    options={effectiveOrigins}
+                    placeholder="Chọn nơi gửi"
                   />
-                  <datalist id="origin-options">
-                    {originOptions.length > 0 ? (
-                      originOptions.map((o) => <option key={o} value={o} />)
-                    ) : (
-                      <>
-                        <option value="TP.HCM" />
-                        <option value="Hà Nội" />
-                        <option value="Đà Nẵng" />
-                        <option value="Cần Thơ" />
-                        <option value="Vũng Tàu" />
-                      </>
-                    )}
-                  </datalist>{' '}
                 </div>
 
                 <div className="hidden md:flex items-end pb-1 lg:shrink-0">
@@ -396,30 +395,12 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                     <MapPin className="w-3.5 h-3.5 text-rose-500" />
                     Nơi nhận
                   </label>
-                  <input
-                    type="text"
+                  <LocationCombobox
                     value={selectedDistrict}
-                    onChange={(e) => setSelectedDistrict(e.target.value)}
-                    placeholder="Nhập điểm đến"
-                    list="destination-options"
-                    className="h-12 w-full bg-white border border-slate-300 rounded-lg px-3 text-sm font-bold text-slate-900 outline-none focus:border-brand"
+                    onChange={setSelectedDistrict}
+                    options={effectiveDestinations}
+                    placeholder="Chọn nơi nhận"
                   />
-                  <datalist id="destination-options">
-                    {destinationOptions.length > 0 ? (
-                      destinationOptions.map((o) => (
-                        <option key={o} value={o} />
-                      ))
-                    ) : (
-                      <>
-                        <option value="Đà Lạt" />
-                        <option value="Nha Trang" />
-                        <option value="Đà Nẵng" />
-                        <option value="Huế" />
-                        <option value="Cần Thơ" />
-                        <option value="Vũng Tàu" />
-                      </>
-                    )}
-                  </datalist>{' '}
                 </div>
                 <div className="flex-1 space-y-1.5">
                   <label className="text-[11px] font-extrabold text-slate-500 uppercase flex items-center gap-1.5">
@@ -471,6 +452,14 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
           )}
         </div>
       </div>
+
+      <AlertModal
+        isOpen={returnDateAlert.isOpen}
+        title={returnDateAlert.title}
+        variant="warning"
+        confirmText="Đã hiểu"
+        onClose={() => setReturnDateAlert({ isOpen: false, title: '' })}
+      />
     </section>
   );
 };
