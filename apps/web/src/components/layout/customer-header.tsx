@@ -1,13 +1,17 @@
 // frontend/src/modules/client/common/components/CustomerHeader.tsx
 'use client';
 
-import React, { useState, Suspense } from 'react';
+import React, { useState, useSyncExternalStore } from 'react';
 import Link from 'next/link';
-import { usePathname, useSearchParams, useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { User, Bus, Menu, X, ChevronDown, FileText, Settings, LogOut, Award, Globe } from 'lucide-react';
 import { useAuthSession } from '@/features/auth/auth-session';
 import { ConfirmModal } from '@/components/ui/confirm-modal';
 import { getMobileMenuLabel, RESET_PASSWORD_PATH } from '@/components/layout/customer-navigation';
+
+const emptySubscribe = () => () => {};
+const getClientSearch = () => (typeof window !== 'undefined' ? window.location.search : '');
+const getServerSearch = () => '';
 
 interface NavLinksNavProps {
   onItemClick?: () => void;
@@ -16,8 +20,6 @@ interface NavLinksNavProps {
 
 const NavLinksList: React.FC<NavLinksNavProps> = ({ onItemClick, isMobile }) => {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const needType = searchParams?.get('needType');
 
   const navLinks = [
     { href: '/', label: 'Trang chủ' },
@@ -34,9 +36,6 @@ const NavLinksList: React.FC<NavLinksNavProps> = ({ onItemClick, isMobile }) => 
     }
     if (href === '/cancel-ticket') {
       return pathname === '/cancel-ticket' || pathname.endsWith('/cancel');
-    }
-    if (href === '/posts?needType=RENT') {
-      return pathname === '/posts' && needType === 'RENT';
     }
     return pathname.startsWith(href);
   };
@@ -90,15 +89,15 @@ const NavLinksList: React.FC<NavLinksNavProps> = ({ onItemClick, isMobile }) => 
 export const CustomerHeader: React.FC = () => {
   const router = useRouter();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const [logoutModalOpen, setLogoutModalOpen] = useState(false);
+  const searchQuery = useSyncExternalStore(emptySubscribe, getClientSearch, getServerSearch);
   const { user, signOut } = useAuthSession();
 
   const currentPath =
     pathname && !pathname.startsWith('/auth')
-      ? `${pathname}${searchParams?.toString() ? `?${searchParams.toString()}` : ''}`
+      ? `${pathname}${searchQuery}`
       : '';
   const loginHref = currentPath
     ? `/auth/login?next=${encodeURIComponent(currentPath)}`
@@ -119,9 +118,7 @@ export const CustomerHeader: React.FC = () => {
         </Link>
 
         {/* Menu giữa PC */}
-        <Suspense fallback={<div className="hidden lg:flex gap-6 text-sm text-slate-300">Đang tải...</div>}>
-          <NavLinksList />
-        </Suspense>
+        <NavLinksList />
 
         {/* Nút bên phải */}
         <div className="flex items-center gap-2 sm:gap-4 shrink-0">
@@ -241,9 +238,7 @@ export const CustomerHeader: React.FC = () => {
       {/* Mobile Drawer */}
       {mobileMenuOpen && (
         <div id="customer-mobile-menu" className="lg:hidden bg-[#0e2a20] border-t border-emerald-900/60 px-4 py-4 space-y-3">
-          <Suspense fallback={null}>
-            <NavLinksList isMobile onItemClick={() => setMobileMenuOpen(false)} />
-          </Suspense>
+          <NavLinksList isMobile onItemClick={() => setMobileMenuOpen(false)} />
           <div className="pt-2 border-t border-emerald-900/60 space-y-2">
             {user ? (
               <>
