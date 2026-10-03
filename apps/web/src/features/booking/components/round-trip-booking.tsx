@@ -137,8 +137,8 @@ const SeatGrid = ({
     return a.localeCompare(b);
   });
 
-  let leftSeats: ApiTripSeat[] = [];
-  let rightSeats: ApiTripSeat[] = [];
+  const leftSeats: ApiTripSeat[] = [];
+  const rightSeats: ApiTripSeat[] = [];
   if (!isSleeper) {
     const unassigned: ApiTripSeat[] = [];
     tripSeats.forEach((seat) => {

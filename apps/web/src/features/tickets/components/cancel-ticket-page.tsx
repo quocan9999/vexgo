@@ -5,10 +5,8 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import {
   AlertCircle,
-  Calendar,
   CheckCircle2,
   Clock,
-  CreditCard,
   HelpCircle,
   Loader2,
   MapPin,
@@ -25,7 +23,10 @@ import {
   type TicketItem,
   type CancelTicketResult,
 } from '@/features/account/services/tickets.api';
-import { checkTicketCancelEligibility } from '@/features/tickets/services/cancel-eligibility';
+import {
+  checkTicketCancelEligibility,
+  type CancelEligibilityResult,
+} from '@/features/tickets/services/cancel-eligibility';
 
 function formatCurrency(amount: number | string | null | undefined): string {
   if (amount == null || amount === '') return '0 đ';
@@ -92,10 +93,20 @@ const VIETNAM_PHONE_REGEX = /^(?:\+84|0)(?:3[2-9]|5[689]|7[06-9]|8[1-9]|9\d)\d{7
 function CancelTicketContent() {
   const searchParams = useSearchParams();
   const [step, setStep] = useState<1 | 2 | 3>(1);
-  const [ticketCode, setTicketCode] = useState('');
-  const [phone, setPhone] = useState('');
+  const [ticketCode, setTicketCode] = useState(
+    () => searchParams.get('code') || searchParams.get('ticketCode') || '',
+  );
+  const [phone, setPhone] = useState(
+    () => searchParams.get('phone') || searchParams.get('phoneNumber') || '',
+  );
   const [ticket, setTicket] = useState<TicketItem | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [eligibility, setEligibility] = useState<CancelEligibilityResult | null>(null);
+  const [isLoading, setIsLoading] = useState(() => {
+    return Boolean(
+      (searchParams.get('code') || searchParams.get('ticketCode')) &&
+      (searchParams.get('phone') || searchParams.get('phoneNumber')),
+    );
+  });
   const [isCancelling, setIsCancelling] = useState(false);
   const [phoneError, setPhoneError] = useState<string | null>(null);
   const [ticketCodeError, setTicketCodeError] = useState<string | null>(null);
@@ -148,25 +159,27 @@ function CancelTicketContent() {
     try {
       const response = await ticketsApi.lookupTicket(cleanCode, cleanPhone);
       const ticketData = response.data;
-      const eligibility = checkTicketCancelEligibility(ticketData);
-      if (!eligibility.eligible) {
+      const result = checkTicketCancelEligibility(ticketData);
+      setEligibility(result);
+      if (!result.eligible) {
         setIneligibleModal({
           isOpen: true,
-          title: eligibility.title,
-          message: eligibility.message,
+          title: result.title,
+          message: result.message,
           variant: 'warning',
         });
         return;
       }
       setTicket(ticketData);
       setStep(2);
-    } catch (err: any) {
-      if (err?.status === 404) {
+    } catch (err: unknown) {
+      const apiError = err as { status?: number; message?: string };
+      if (apiError?.status === 404) {
         setGeneralError('Không tìm thấy thông tin vé hoặc số điện thoại xác minh không khớp.');
-      } else if (err?.status === 429) {
+      } else if (apiError?.status === 429) {
         setGeneralError('Bạn đã tra cứu quá nhiều lần. Vui lòng thử lại sau giây lát.');
       } else {
-        setGeneralError(err?.message || 'Không thể tra cứu thông tin vé. Vui lòng thử lại.');
+        setGeneralError(apiError?.message || 'Không thể tra cứu thông tin vé. Vui lòng thử lại.');
       }
     } finally {
       setIsLoading(false);
@@ -177,49 +190,56 @@ function CancelTicketContent() {
     const initialCode = searchParams.get('code') || searchParams.get('ticketCode');
     const initialPhone = searchParams.get('phone') || searchParams.get('phoneNumber');
 
-    if (initialCode) setTicketCode(initialCode);
-    if (initialPhone) setPhone(initialPhone);
+    if (!initialCode || !initialPhone) return;
 
-    if (initialCode && initialPhone) {
-      setIsLoading(true);
-      setGeneralError(null);
-      ticketsApi
-        .lookupTicket(initialCode.trim(), initialPhone.trim())
-        .then((res) => {
-          const ticketData = res.data;
-          const eligibility = checkTicketCancelEligibility(ticketData);
-          if (!eligibility.eligible) {
-            setIneligibleModal({
-              isOpen: true,
-              title: eligibility.title,
-              message: eligibility.message,
-              variant: 'warning',
-            });
-            return;
-          }
-          setTicket(ticketData);
-          setStep(2);
-        })
-        .catch((err: any) => {
-          if (err?.status === 404) {
-            setGeneralError('Không tìm thấy thông tin vé hoặc số điện thoại xác minh không khớp.');
-          } else {
-            setGeneralError(err?.message || 'Không thể tra cứu thông tin vé.');
-          }
-        })
-        .finally(() => setIsLoading(false));
-    }
+    let isMounted = true;
+    ticketsApi
+      .lookupTicket(initialCode.trim(), initialPhone.trim())
+      .then((res) => {
+        if (!isMounted) return;
+        const ticketData = res.data;
+        const result = checkTicketCancelEligibility(ticketData);
+        setEligibility(result);
+        if (!result.eligible) {
+          setIneligibleModal({
+            isOpen: true,
+            title: result.title,
+            message: result.message,
+            variant: 'warning',
+          });
+          return;
+        }
+        setTicket(ticketData);
+        setStep(2);
+      })
+      .catch((err: unknown) => {
+        if (!isMounted) return;
+        const apiError = err as { status?: number; message?: string };
+        if (apiError?.status === 404) {
+          setGeneralError('Không tìm thấy thông tin vé hoặc số điện thoại xác minh không khớp.');
+        } else {
+          setGeneralError(apiError?.message || 'Không thể tra cứu thông tin vé.');
+        }
+      })
+      .finally(() => {
+        if (isMounted) setIsLoading(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
   }, [searchParams]);
 
   const handleConfirmCancel = async () => {
     if (!ticket) return;
 
-    const eligibility = checkTicketCancelEligibility(ticket);
-    if (!eligibility.eligible) {
+    const currentEligibility = checkTicketCancelEligibility(ticket);
+    setEligibility(currentEligibility);
+    if (!currentEligibility.eligible) {
       setIneligibleModal({
         isOpen: true,
-        title: eligibility.title,
-        message: eligibility.message,
+        title: currentEligibility.title,
+        message: currentEligibility.message,
         variant: 'warning',
       });
       return;
@@ -232,8 +252,9 @@ function CancelTicketContent() {
       const res = await ticketsApi.cancelTicket(ticket.ticketCode, phone || ticket.passengerPhone || '');
       setCancelResult(res.data);
       setStep(3);
-    } catch (err: any) {
-      const errorMsg = err?.message || 'Hủy vé không thành công. Vui lòng liên hệ nhà xe để được hỗ trợ.';
+    } catch (err: unknown) {
+      const apiError = err as { message?: string };
+      const errorMsg = apiError?.message || 'Hủy vé không thành công. Vui lòng liên hệ nhà xe để được hỗ trợ.';
       setCancelError(errorMsg);
       setIneligibleModal({
         isOpen: true,
@@ -249,10 +270,8 @@ function CancelTicketContent() {
   const isCancelled = (ticket?.status || '').toUpperCase() === 'HUY' || (ticket?.status || '').toUpperCase() === 'CANCELLED';
   const departureInfo = formatTimeAndDate(ticket?.departureTime);
 
-  const departureMs = ticket?.departureTime ? new Date(ticket.departureTime).getTime() : 0;
-  const isPastDeparture = departureMs ? departureMs <= Date.now() : false;
-  const diffHours = departureMs ? (departureMs - Date.now()) / (1000 * 60 * 60) : 999;
-  const isNearDeparture = !isPastDeparture && diffHours < 12;
+  const isPastDeparture = eligibility?.reason === 'ALREADY_DEPARTED';
+  const isNearDeparture = eligibility?.reason === 'LESS_THAN_12_HOURS';
 
   const price = ticket?.price || 0;
   const cancelFee = Math.round(price * 0.1);

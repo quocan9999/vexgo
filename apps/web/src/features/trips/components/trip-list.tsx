@@ -356,10 +356,6 @@ export function TripList() {
   useEffect(() => {
     if (!isRoundTrip) return;
     if (date && returnDate && date > returnDate) {
-      setErrorReturn('Ngày đi không được lớn hơn ngày về');
-      setReturnTrips([]);
-      setReturnMeta(EMPTY_META);
-      setLoadingReturn(false);
       return;
     }
     let ignore = false;
@@ -397,6 +393,7 @@ export function TripList() {
       ignore = true;
     };
   }, [
+    date,
     destination,
     origin,
     returnDate,
@@ -410,11 +407,26 @@ export function TripList() {
   ]);
 
   const effectiveActiveTab = isRoundTrip ? activeTab : 'outbound';
+  const isDateOrderInvalid =
+    isRoundTrip && Boolean(date && returnDate && date > returnDate);
   const activeTrips =
-    effectiveActiveTab === 'outbound' ? outboundTrips : returnTrips;
+    effectiveActiveTab === 'outbound'
+      ? outboundTrips
+      : isDateOrderInvalid
+        ? []
+        : returnTrips;
   const loading =
-    effectiveActiveTab === 'outbound' ? loadingOutbound : loadingReturn;
-  const error = effectiveActiveTab === 'outbound' ? errorOutbound : errorReturn;
+    effectiveActiveTab === 'outbound'
+      ? loadingOutbound
+      : isDateOrderInvalid
+        ? false
+        : loadingReturn;
+  const error =
+    effectiveActiveTab === 'outbound'
+      ? errorOutbound
+      : isDateOrderInvalid
+        ? 'Ngày đi không được lớn hơn ngày về'
+        : errorReturn;
   const activeMeta =
     effectiveActiveTab === 'outbound' ? outboundMeta : returnMeta;
   const currentPage =
