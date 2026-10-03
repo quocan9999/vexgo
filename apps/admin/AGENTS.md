@@ -13,14 +13,17 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 ### Source of truth
 
 - MUST đọc `DESIGN.md` trước khi sửa Admin UI.
+- Typography, line-height và spacing MUST theo semantic roles/aliases trong `DESIGN.md` và `src/styles/admin-tokens.css`; table body mặc định 14px.
+- Numeric line-height MUST dùng giá trị rem cố định hoặc semantic line-height token; MUST NOT dùng unitless line-height.
+- UI migration MUST đi theo thứ tự token → shared primitive → shared component → feature styles; MUST NOT bulk-replace pixel values không liên quan.
+- MUST giữ geometry, icon dimensions, chart geometry và dialog/sheet widths ngoài spacing scale.
+- Chỉ map undefined custom property khi xác định được intended existing value.
 - MUST inspect `src/components/admin/`, `src/components/ui/`, `src/components/data-filters/` và `src/styles/admin-components.css` trước khi tạo hoặc sửa UI pattern dùng lại được.
-- Với CRUD management, Feature 01 `/bus-companies` là golden reference về visual/interaction khi use case tương đương.
 - Thứ tự ưu tiên khi quyết định UI:
   1. `DESIGN.md`
   2. Shared Admin components / shared UI primitives
-  3. CRUD golden reference đã duyệt
-  4. Feature-specific UI khi interaction model thực sự khác
-  5. UI/UX skills chỉ dùng để review consistency/accessibility/responsive
+  3. Feature-specific UI khi interaction model thực sự khác
+  4. UI/UX skills dùng để review consistency/accessibility/responsive
 
 ### Mandatory shared-first workflow
 
@@ -80,7 +83,7 @@ Với CRUD management có interaction tương đương, MUST dùng cùng shared 
 
 Không được để `/bus-companies`, `/vehicle-types`, `/vehicles` hoặc các CRUD feature tương lai có visual khác nhau chỉ vì nằm ở feature khác.
 
-Nếu một pattern đã được approve ở golden reference và cần dùng lại ở từ hai nơi trở lên, SHOULD extract thành shared component thay vì copy JSX/CSS.
+Nếu một pattern đã được approve trong design system và cần dùng lại ở từ hai nơi trở lên, SHOULD extract thành shared component thay vì copy JSX/CSS.
 
 Domain callback, label resource, API call, validation và business state vẫn nằm trong feature. Shared component chỉ sở hữu visual, interaction chung và accessibility contract.
 
@@ -140,7 +143,7 @@ Không được kết luận UI READY nếu chưa kiểm tra visual ở hai view
 ### UI/UX skills
 
 - UI/UX skills chỉ dùng để review consistency, accessibility, responsive và usability.
-- MUST NOT để UI/UX skill override `DESIGN.md`, shared component contract hoặc golden reference đã duyệt.
+- MUST NOT để UI/UX skill override `DESIGN.md` hoặc shared component contract.
 - Sử dụng ui-ux-pro-max skill khi làm việc với frontend UI/UX
 
 ### Admin tenancy / operational scope

@@ -4,7 +4,7 @@
   min-height: min(720px, calc(100vh - 64px));
   grid-template-columns: minmax(0, 0.92fr) minmax(440px, 1.08fr);
   overflow: hidden;
-  margin: 32px auto;
+  margin: var(--admin-space-page-block) auto;
   border: 1px solid #e4e9f1;
   border-radius: 22px;
   background: #fff;
@@ -17,7 +17,7 @@
   min-height: 630px;
   flex-direction: column;
   overflow: hidden;
-  padding: 36px 42px 27px;
+  padding: var(--admin-space-9) var(--admin-space-10) var(--admin-space-7);
   background:
     radial-gradient(ellipse at 5% 100%, rgb(56 91 151 / 40%), transparent 52%),
     #14233d;
@@ -97,33 +97,34 @@
 
 .login-showcase-copy {
   max-width: 385px;
-  margin-top: 94px;
+  margin-top: calc(var(--admin-space-16) + var(--admin-space-8));
 }
 
 .login-kicker {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--admin-space-control-gap);
   color: #b9cbeb;
-  font-size: 10px;
-  font-weight: 750;
+  font-size: var(--admin-type-eyebrow-size);
+  font-weight: var(--admin-type-eyebrow-weight);
+  line-height: var(--admin-type-eyebrow-line-height);
   letter-spacing: 1.05px;
 }
 
 .login-showcase-copy h1 {
-  margin: 19px 0 13px;
-  font-size: clamp(30px, 3.6vw, 43px);
-  font-weight: 650;
+  margin: var(--admin-space-5) 0 var(--admin-space-3);
+  font-size: var(--admin-type-display-size);
+  font-weight: var(--admin-type-display-weight);
   letter-spacing: -1.75px;
-  line-height: 1.14;
+  line-height: var(--admin-type-display-line-height);
 }
 
 .login-showcase-copy p {
   max-width: 340px;
   margin: 0;
   color: #b2bfd2;
-  font-size: 14px;
-  line-height: 1.75;
+  font-size: var(--admin-type-body-size);
+  line-height: var(--admin-type-body-line-height);
 }
 
 .login-route-visual {
@@ -179,8 +180,9 @@
   position: absolute;
   bottom: 23px;
   color: #91a4c1;
-  font-size: 8px;
-  font-weight: 750;
+  font-size: var(--admin-type-caption-size);
+  font-weight: var(--admin-type-caption-weight);
+  line-height: var(--admin-type-caption-line-height);
   letter-spacing: 1px;
 }
 
@@ -197,7 +199,8 @@
   align-items: center;
   gap: 10px;
   color: #92a3bd;
-  font-size: 10px;
+  font-size: var(--admin-type-caption-size);
+  line-height: var(--admin-type-caption-line-height);
 }
 
 .showcase-footer-dot {
@@ -210,7 +213,7 @@
 .login-panel {
   display: grid;
   align-items: center;
-  padding: 64px clamp(35px, 6vw, 82px);
+  padding: var(--admin-space-16) clamp(var(--admin-space-8), 6vw, 5rem);
 }
 
 .login-panel-inner {
@@ -219,53 +222,57 @@
 }
 
 .login-eyebrow {
-  margin: 0 0 9px;
+  margin: 0 0 var(--admin-space-2);
   color: #5675ae;
-  font-size: 9px;
-  font-weight: 750;
+  font-size: var(--admin-type-eyebrow-size);
+  font-weight: var(--admin-type-eyebrow-weight);
+  line-height: var(--admin-type-eyebrow-line-height);
   letter-spacing: 1.1px;
 }
 
 .login-heading h2 {
   margin: 0;
   color: #17243b;
-  font-size: 27px;
-  font-weight: 700;
+  font-size: var(--admin-type-page-title-size);
+  font-weight: var(--admin-type-page-title-weight);
+  line-height: var(--admin-type-page-title-line-height);
   letter-spacing: -0.8px;
 }
 
 .login-heading > p:last-child {
-  margin: 9px 0 0;
+  margin: var(--admin-space-2) 0 0;
   color: #748197;
-  font-size: 13px;
-  line-height: 1.6;
+  font-size: var(--admin-type-secondary-body-size);
+  line-height: var(--admin-type-secondary-body-line-height);
 }
 
 .login-form {
   display: grid;
-  gap: 19px;
-  margin-top: 31px;
+  gap: var(--admin-space-form-gap);
+  margin-top: var(--admin-space-8);
 }
 
 .login-field {
   display: grid;
-  gap: 8px;
+  gap: var(--admin-space-label-control-gap);
   color: #26344a;
-  font-size: 11px;
-  font-weight: 650;
+  font-size: var(--admin-type-label-size);
+  font-weight: var(--admin-type-label-weight);
+  line-height: var(--admin-type-label-line-height);
 }
 
 .login-field input {
   width: 100%;
   height: 46px;
   box-sizing: border-box;
-  padding: 0 13px;
+  padding: 0 var(--admin-space-3);
   border: 1px solid #dfe5ee;
   border-radius: 8px;
   background: #fff;
   color: #17243b;
-  font-size: 12px;
-  font-weight: 450;
+  font-size: var(--admin-type-body-size);
+  font-weight: var(--admin-type-body-weight);
+  line-height: var(--admin-type-body-line-height);
   transition:
     border-color 150ms ease,
     box-shadow 150ms ease;
@@ -314,8 +321,9 @@
 .login-error {
   margin: -7px 0 0;
   color: #b63838;
-  font-size: 11px;
-  line-height: 1.5;
+  font-size: var(--admin-type-error-size);
+  font-weight: var(--admin-type-error-weight);
+  line-height: var(--admin-type-error-line-height);
 }
 
 .login-submit-button {
@@ -323,14 +331,15 @@
   min-height: 46px;
   align-items: center;
   justify-content: space-between;
-  padding: 0 15px 0 17px;
+  padding: 0 var(--admin-space-4);
   border: 0;
   border-radius: 8px;
   background: #1e40af;
   color: #fff;
   cursor: pointer;
-  font-size: 12px;
-  font-weight: 650;
+  font-size: var(--admin-type-button-size);
+  font-weight: var(--admin-type-button-weight);
+  line-height: var(--admin-type-button-line-height);
   transition:
     background-color 150ms ease,
     transform 150ms ease;
@@ -346,10 +355,11 @@
   min-height: 100vh;
   align-content: center;
   justify-items: center;
-  gap: 12px;
+  gap: var(--admin-space-field-gap);
   background: #f6f8fb;
   color: #738096;
-  font-size: 12px;
+  font-size: var(--admin-type-helper-size);
+  line-height: var(--admin-type-helper-line-height);
 }
 
 .auth-loading-mark {
@@ -369,21 +379,24 @@
   min-height: 280px;
   flex-direction: column;
   justify-content: center;
-  gap: 12px;
-  padding: clamp(24px, 5vw, 48px);
+  gap: var(--admin-space-field-gap);
+  padding: clamp(var(--admin-space-6), 5vw, var(--admin-space-12));
 }
 
 .tenant-operations-placeholder__eyebrow {
   color: #5675ae;
-  font-size: 10px;
-  font-weight: 750;
+  font-size: var(--admin-type-eyebrow-size);
+  font-weight: var(--admin-type-eyebrow-weight);
+  line-height: var(--admin-type-eyebrow-line-height);
   letter-spacing: 0.08em;
 }
 
 .tenant-operations-placeholder h1 {
   margin: 0;
   color: #17243b;
-  font-size: clamp(22px, 3vw, 30px);
+  font-size: var(--admin-type-page-title-size);
+  font-weight: var(--admin-type-page-title-weight);
+  line-height: var(--admin-type-page-title-line-height);
   letter-spacing: -0.7px;
 }
 
@@ -391,8 +404,8 @@
   max-width: 640px;
   margin: 0;
   color: #66758d;
-  font-size: 14px;
-  line-height: 1.7;
+  font-size: var(--admin-type-body-size);
+  line-height: var(--admin-type-body-line-height);
 }
 
 @media (max-width: 900px) {
@@ -400,28 +413,26 @@
     width: min(620px, calc(100% - 40px));
     min-height: auto;
     grid-template-columns: 1fr;
-    margin: 20px auto;
+    margin: var(--admin-space-5) auto;
   }
 
   .login-showcase {
     min-height: 310px;
-    padding: 27px 30px 20px;
+    padding: var(--admin-space-7) var(--admin-space-8) var(--admin-space-5);
   }
 
   .login-showcase-copy {
     max-width: 420px;
-    margin-top: 42px;
+    margin-top: var(--admin-space-10);
   }
 
   .login-showcase-copy h1 {
     max-width: 400px;
-    margin-top: 13px;
-    font-size: 31px;
+    margin-top: var(--admin-space-3);
   }
 
   .login-showcase-copy p {
     max-width: 410px;
-    font-size: 12px;
   }
 
   .login-route-visual {
@@ -433,11 +444,11 @@
   }
 
   .login-showcase-footer {
-    margin-top: 23px;
+    margin-top: var(--admin-space-section-gap);
   }
 
   .login-panel {
-    padding: 42px 30px 37px;
+    padding: var(--admin-space-10) var(--admin-space-8) var(--admin-space-9);
   }
 }
 
@@ -453,7 +464,7 @@
 
   .login-showcase {
     min-height: 250px;
-    padding: 22px 22px 17px;
+    padding: var(--admin-space-6) var(--admin-space-6) var(--admin-space-4);
   }
 
   .login-brand-mark {
@@ -462,22 +473,20 @@
   }
 
   .login-showcase-copy {
-    margin-top: 29px;
+    margin-top: var(--admin-space-7);
   }
 
   .login-showcase-copy h1 {
     max-width: 320px;
-    font-size: 27px;
     letter-spacing: -1px;
   }
 
   .login-showcase-copy p {
     max-width: 305px;
-    font-size: 11px;
   }
 
   .login-kicker {
-    font-size: 8px;
+    font-size: var(--admin-type-eyebrow-size);
   }
 
   .login-route-visual {
@@ -487,17 +496,17 @@
   }
 
   .login-showcase-footer {
-    gap: 7px;
-    font-size: 8px;
+    gap: var(--admin-space-2);
+    font-size: var(--admin-type-caption-size);
   }
 
   .login-panel {
     align-items: start;
-    padding: 34px 22px 30px;
+    padding: var(--admin-space-9) var(--admin-space-6) var(--admin-space-8);
   }
 
   .login-heading h2 {
-    font-size: 24px;
+    font-size: var(--admin-type-page-title-size);
   }
 }
 

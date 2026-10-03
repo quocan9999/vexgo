@@ -1,9 +1,9 @@
 .navigation {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 18px;
-  padding: 5px;
+  gap: var(--admin-space-control-gap);
+  margin-top: var(--admin-space-5);
+  padding: var(--admin-space-1);
   border: 1px solid var(--admin-border);
   border-radius: 10px;
   background: #f3f6fb;
@@ -14,12 +14,13 @@
   min-height: 42px;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 0 14px;
+  gap: var(--admin-space-control-gap);
+  padding: 0 var(--admin-space-3);
   border-radius: 7px;
   color: var(--admin-text-muted);
-  font-size: 13px;
-  font-weight: 650;
+  font-size: var(--admin-type-button-size);
+  font-weight: var(--admin-type-button-weight);
+  line-height: var(--admin-type-button-line-height);
   text-decoration: none;
   transition: background-color 150ms ease, color 150ms ease;
 }

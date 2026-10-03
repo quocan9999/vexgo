@@ -1,7 +1,7 @@
 .roleSection,
 .permissionSection {
-  margin-top: 20px;
-  padding: 20px;
+  margin-top: var(--admin-space-card-padding);
+  padding: var(--admin-space-card-padding);
   border: 1px solid var(--admin-border);
   border-radius: 12px;
   background: #fff;
@@ -12,16 +12,16 @@
 .permissionHeader h2 {
   margin: 0;
   color: var(--admin-text-strong);
-  font-size: 16px;
-  font-weight: 700;
-  line-height: 1.35;
+  font-size: var(--admin-type-component-title-size);
+  font-weight: var(--admin-type-component-title-weight);
+  line-height: var(--admin-type-component-title-line-height);
 }
 
 .roleGrid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 11px;
-  margin-top: 15px;
+  gap: var(--admin-space-field-gap);
+  margin-top: var(--admin-space-component-gap);
 }
 
 .roleOption {
@@ -30,9 +30,9 @@
   min-height: 88px;
   grid-template-columns: 17px minmax(0, 1fr);
   align-content: start;
-  column-gap: 10px;
-  row-gap: 7px;
-  padding: 13px;
+  column-gap: var(--admin-space-control-gap);
+  row-gap: var(--admin-space-control-gap);
+  padding: var(--admin-space-field-gap);
   border: 1px solid var(--admin-border);
   border-radius: 9px;
   background: #fff;
@@ -69,20 +69,21 @@
   display: grid;
   min-width: 0;
   grid-column: 2;
-  gap: 4px;
+  gap: var(--admin-space-1);
 }
 
 .roleCopy strong {
   overflow-wrap: anywhere;
   color: var(--admin-text-strong);
-  font-size: 12px;
-  font-weight: 700;
+  font-size: var(--admin-type-label-size);
+  font-weight: var(--admin-type-label-weight);
+  line-height: var(--admin-type-label-line-height);
 }
 
 .roleCopy small {
   color: var(--admin-text-muted);
-  font-size: 11px;
-  line-height: 1.4;
+  font-size: var(--admin-type-helper-size);
+  line-height: var(--admin-type-helper-line-height);
 }
 
 .roleBadges {
@@ -90,7 +91,7 @@
   min-width: 0;
   grid-column: 2;
   flex-wrap: wrap;
-  gap: 5px;
+  gap: var(--admin-space-1);
   margin-left: 0;
 }
 
@@ -101,25 +102,25 @@
   display: inline-flex;
   align-items: center;
   border-radius: 999px;
-  font-size: 10px;
-  font-weight: 650;
-  line-height: 1.35;
+  font-size: var(--admin-type-badge-size);
+  font-weight: var(--admin-type-badge-weight);
+  line-height: var(--admin-type-badge-line-height);
 }
 
 .scopeBadge {
-  padding: 3px 7px;
+  padding: var(--admin-space-1) var(--admin-space-2);
   background: #edf2f8;
   color: #3b536f;
 }
 
 .protectedBadge {
-  padding: 3px 7px;
+  padding: var(--admin-space-1) var(--admin-space-2);
   background: #f1edff;
   color: #5634a1;
 }
 
 .dirtyBadge {
-  padding: 3px 7px;
+  padding: var(--admin-space-1) var(--admin-space-2);
   background: #fff3d9;
   color: #8c5a00;
 }
@@ -132,65 +133,66 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 18px;
+  gap: var(--admin-space-component-gap);
 }
 
 .permissionHeader .eyebrow {
-  margin-bottom: 5px;
+  margin-bottom: var(--admin-space-1);
 }
 
 .protectedSummary {
   flex: 0 0 auto;
-  gap: 6px;
-  padding: 6px 9px;
+  gap: var(--admin-space-control-gap);
+  padding: var(--admin-space-2);
   background: #f1edff;
   color: #5634a1;
 }
 
 .protectedNotice {
-  margin: 14px 0 0;
-  padding: 11px 13px;
+  margin: var(--admin-space-component-gap) 0 0;
+  padding: var(--admin-space-table-cell-y) var(--admin-space-table-cell-x);
   border: 1px solid #ded5fb;
   border-radius: 8px;
   background: #faf8ff;
   color: #4f3a81;
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: var(--admin-type-helper-size);
+  line-height: var(--admin-type-helper-line-height);
 }
 
 .permissionGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 13px;
-  margin-top: 17px;
+  gap: var(--admin-space-component-gap);
+  margin-top: var(--admin-space-component-gap);
 }
 
 .permissionGroup {
   min-width: 0;
-  padding: 14px;
+  padding: var(--admin-space-component-gap);
   border: 1px solid var(--admin-border);
   border-radius: 9px;
   background: #fff;
 }
 
 .permissionGroup h3 {
-  margin: 0 0 9px;
+  margin: 0 0 var(--admin-space-control-gap);
   color: var(--admin-text-strong);
-  font-size: 13px;
-  font-weight: 700;
+  font-size: var(--admin-type-label-size);
+  font-weight: var(--admin-type-label-weight);
+  line-height: var(--admin-type-label-line-height);
 }
 
 .permissionList {
   display: grid;
-  gap: 2px;
+  gap: var(--admin-space-1);
 }
 
 .permissionOption {
   display: flex;
   min-width: 0;
   align-items: flex-start;
-  gap: 10px;
-  padding: 10px 7px;
+  gap: var(--admin-space-control-gap);
+  padding: var(--admin-space-2);
   border-radius: 7px;
   cursor: pointer;
 }
@@ -212,33 +214,36 @@
   min-width: 0;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: baseline;
-  column-gap: 8px;
-  row-gap: 3px;
+  column-gap: var(--admin-space-control-gap);
+  row-gap: var(--admin-space-1);
 }
 
 .permissionCopy strong {
   color: var(--admin-text-strong);
-  font-size: 12px;
-  font-weight: 650;
+  font-size: var(--admin-type-label-size);
+  font-weight: var(--admin-type-label-weight);
+  line-height: var(--admin-type-label-line-height);
 }
 
 .permissionCopy code {
   overflow-wrap: anywhere;
   color: #516581;
-  font-size: 10px;
+  font-size: var(--admin-type-caption-size);
+  line-height: var(--admin-type-caption-line-height);
 }
 
 .permissionCopy small {
   grid-column: 1 / -1;
   color: var(--admin-text-muted);
-  font-size: 11px;
-  line-height: 1.4;
+  font-size: var(--admin-type-helper-size);
+  line-height: var(--admin-type-helper-line-height);
 }
 
 .emptyState {
-  margin: 16px 0;
+  margin: var(--admin-space-component-gap) 0;
   color: var(--admin-text-muted);
-  font-size: 13px;
+  font-size: var(--admin-type-secondary-body-size);
+  line-height: var(--admin-type-secondary-body-line-height);
 }
 
 @media (max-width: 1100px) {
@@ -250,7 +255,7 @@
 @media (max-width: 680px) {
   .roleSection,
   .permissionSection {
-    padding: 14px;
+    padding: var(--admin-space-card-padding);
   }
 
   .roleGrid,

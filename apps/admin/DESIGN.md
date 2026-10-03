@@ -1,86 +1,96 @@
-# Admin Design Language
+# VexGo Admin Design System
 
-Feature 01 – Quản lý nhà xe là chuẩn tham chiếu cho CRUD quản trị đơn giản. Tài liệu này mô tả design language chung; nó không ép mọi feature Admin dùng cùng một bố cục.
+DESIGN.md is the source of truth for Admin typography, spacing, shared UI patterns, and responsive behavior. No feature route serves as a golden reference. Features may have different layouts when their workflows require them, while using the same tokens and shared component contracts.
 
-## Tokens
+## Typography
 
-- Font: `var(--font-sans)`, với fallback `Segoe UI, Arial, sans-serif`.
-- Cỡ chữ: 9px metadata, 10px helper, 11px label/button, 12px form/table header, 13px control và dữ liệu thường, 14px dữ liệu cần nhấn mạnh.
-- Trọng số: 450 regular, 600 medium, 650 semibold, 700 bold.
-- Màu: `--admin-navy` cho vùng điều hướng; `--admin-blue` cho hành động chính; `--admin-text-strong` cho dữ liệu chính; `--admin-text-muted` cho dữ liệu phụ; `--admin-border` cho đường viền; `--admin-canvas` cho nền; `--admin-success-*` cho trạng thái hoạt động.
-- Khoảng cách, bo góc và chiều cao control dùng token `--admin-*`. Control chuẩn cao 37px, radius control 8px và panel 10px.
+- Font family: Geist Sans through --font-sans, configured in the Admin root layout.
+- Use the semantic roles below. Table body text defaults to 14px.
+- Line heights are fixed rem values. Use the role's line-height token or an explicit rem value; do not use unitless line-height.
+- Use weight primitives 400, 500, 600, and 700. Prefer the role weight token when applying a semantic type role.
 
-Không hard-code token theo tên feature. Thêm token vào `src/styles/admin-tokens.css` khi nó mô tả một giá trị dùng chung, đã có trong UI duyệt.
+| Role | Size | Fixed line height | Weight |
+| --- | ---: | ---: | ---: |
+| Display | 43px desktop; 32px at ≤900px; 28px at ≤700px | 52px / 40px / 34px | 700 |
+| Page title | 28px desktop; 24px at ≤700px | 34px / 30px | 700 |
+| Section heading | 20px | 26px | 600 |
+| Component title | 16px | 22px | 600 |
+| Body | 14px | 22px | 400 |
+| Table body | 14px | 22px | 400 |
+| Secondary body | 13px | 20px | 400 |
+| Form label | 13px | 20px | 600 |
+| Helper and error | 12px | 18px | 400 / 500 |
+| Table header | 12px | 18px | 600 |
+| Button | 14px | 20px | 600 |
+| Badge | 12px | 16px | 600 |
+| Caption | 12px | 18px | 400 |
+| Eyebrow | 10px | 16px | 600 |
+| Metric | 28px | 36px | 700 |
+| Compact metric | 24px | 32px | 700 |
 
-## Shared components và CSS ownership
+Semantic typography variables live in src/styles/admin-tokens.css with the --admin-type-<role>-size, -line-height, and -weight pattern. Branding marks and glyphs may retain a deliberate feature-specific size where the value describes a logo or icon rather than interface copy.
 
-Các component tại `src/components/ui/` là implementation riêng của dự án, dùng API/convention nhất quán; chúng không phải bộ shadcn primitives hoàn chỉnh. Style của Admin shell và shared component nằm trong `src/styles/admin-components.css`; `dashboard.css` chỉ chứa style Tổng quan, còn `bus-companies.css` chỉ chứa style Quản lý nhà xe.
+## Spacing
 
-- `Button`: `primary` và `secondary`.
-- `Badge`: nền cho nhãn trạng thái.
+The primitive scale is a 4px grid in rem units:
 
-Các pattern Admin tại `src/components/admin/`:
+| Token | Value | Token | Value |
+| --- | ---: | --- | ---: |
+| --admin-space-1 | 4px | --admin-space-9 | 36px |
+| --admin-space-2 | 8px | --admin-space-10 | 40px |
+| --admin-space-3 | 12px | --admin-space-11 | 44px |
+| --admin-space-4 | 16px | --admin-space-12 | 48px |
+| --admin-space-5 | 20px | --admin-space-13 | 52px |
+| --admin-space-6 | 24px | --admin-space-14 | 56px |
+| --admin-space-7 | 28px | --admin-space-15 | 60px |
+| --admin-space-8 | 32px | --admin-space-16 | 64px |
 
-- `AdminPageHeader`: eyebrow, tiêu đề và nhóm action.
-- `AdminCreateAction`, `AdminRefreshAction`: hai page action cùng kích thước theo mẫu `/bus-companies`.
-- `AdminDetailAction`: nút Eye + “Xem chi tiết” dùng chung cho bảng và thẻ mobile.
-- `AdminTableSkeleton`: năm hàng shimmer cho lần tải danh sách đầu tiên.
-- `AdminResultSummary`: định dạng `meta.totalItems` thành `{N} kết quả` trong `FilterToolbar`.
-- `AdminStatusBadge`: nhãn trạng thái `active` hoặc `muted`.
-- `AdminPagination`: range, trang hiện tại và điều hướng.
-- `AdminDetailSheet`, `AdminFormDialog`, `AdminConfirmDialog`: dialog pattern có ngữ nghĩa và kiểu trình bày cố định.
-- `AdminDialogPrimitive`: primitive native dialog nội bộ; view dùng các wrapper theo pattern thay vì tự chọn class hoặc kiểu dialog.
+Use semantic spacing aliases first: page insets, section and component gaps, toolbar and control gaps, form/field/label gaps, action/card gaps, card/state/notice/control padding, dialog/sheet padding, table cell insets, and sidebar insets. These aliases are defined in admin-tokens.css and include mobile adjustments.
 
-Shared component chỉ chứa pattern hiển thị và accessibility. Domain label, API call, validation và state nghiệp vụ nằm trong feature.
+Spacing describes gaps and padding. It does not define dimensions. Keep intentional geometry such as icon sizes, control heights, chart axes and plot geometry, seat-map cells, panel/sheet widths, and other fixed workspace dimensions separate from the spacing scale. Do not change those values just to make every number a spacing token.
 
-## Interaction patterns
+## Token and component ownership
 
-### CRUD management
+Implement design changes in this order:
 
-List/table, toolbar search/filter, detail sheet bên phải, create/edit form dialog và confirmation dialog cho status/destructive action. Dùng cho resource đơn giản như Nhà xe.
+1. Define or adjust primitive tokens and semantic aliases in src/styles/admin-tokens.css.
+2. Apply those aliases to shared UI primitives.
+3. Apply shared patterns in src/styles/admin-components.css or the colocated shared component stylesheet.
+4. Migrate feature styles to the shared tokens and component contracts.
 
-Page actions theo thứ tự: `[Primary action] [Refresh]`.
+Do not bulk-replace arbitrary pixel values. Choose a semantic alias from the element's role; use a primitive token when no semantic alias fits. Preserve deliberate geometry and document a local exception when it is needed for a feature workspace.
 
-CRUD list MUST dùng `AdminCreateAction`, `AdminRefreshAction`, `AdminDetailAction` và `AdminTableSkeleton`. `FilterToolbar` nhận `meta.totalItems` từ response để hiển thị `{N} kết quả`; trước khi có dữ liệu hiển thị `Đang tải kết quả`. Khi tải lại, dữ liệu đã có tiếp tục hiển thị.
+Undefined custom properties may be mapped only when the existing intended value is identifiable. Current compatibility mappings preserve their prior rendering:
 
-### Dedicated workspace
+- --admin-radius-card maps to the existing --admin-radius-panel value (10px).
+- --admin-surface maps to the existing app --background value.
+- --admin-surface-muted maps to the existing #f8fafc fallback used by the seat workspace.
+- The former --admin-font-size-lg use is now the semantic section-heading role; no legacy size alias remains.
 
-Dùng cho workflow dài, nhiều tab hoặc subresource cần không gian lớn. Không ép vào table/detail sheet, nhưng vẫn dùng token và primitive chung.
+Color, radius, and control geometry were outside this typography/spacing refresh. Their existing values are retained.
 
-### Dashboard/report
+Shared shell and component styles belong in src/styles/admin-components.css or the owning shared component stylesheet. Feature stylesheets own domain layout and workspace details only; they must not become dependencies of shared components.
 
-Dùng cards, chart và filter theo thời gian. Giữ typography, màu, spacing, loading/error/success language chung.
+## Shared Admin patterns
 
-### Spatial/configuration UI
+Shared components under src/components/admin/, src/components/ui/, and src/components/data-filters/ own reusable visual and accessibility behavior. Reuse the shared page header/actions, detail action, table skeleton, result summary, status badge, pagination, filter controls, detail sheet, form dialog, and confirmation dialog when the use case matches.
 
-Dùng cho sơ đồ ghế hay cấu hình không gian. Chọn canvas/workspace theo nghiệp vụ; không biến thành CRUD table khi làm giảm khả năng thao tác.
+- Domain labels, API calls, validation, and business state remain with the feature.
+- Extend a shared component when the same use case needs a missing option.
+- A feature may use a dedicated workspace for a distinct workflow such as a seat map, dashboard, or editor; keep its typography and spacing on the shared system.
+- No route or feature is a visual authority for the rest of Admin.
 
-### Content/editor
+## Interaction and accessibility
 
-Dùng editor, preview và history khi nội dung có versioning. Reuse token và control chung.
+- CRUD lists use a desktop table with a mobile card fallback where a table no longer reads well.
+- Search and filters precede the result count; display the count in one location.
+- Pagination communicates range, total, and current page. Navigation controls have accessible names.
+- Status labels use the shared badge pattern and map domain state in the feature.
+- Forms have associated labels, invalid state, linked error descriptions, and clear submit feedback.
+- Dialogs and sheets have an accessible title, contain focus while open, and support the shared Escape/backdrop behavior.
+- Icon-only buttons have an accessible name. Loading, success, and error states use appropriate live-region semantics.
+- Nonessential animation respects prefers-reduced-motion.
 
-### Confirmation/destructive action
+## Responsive review
 
-Dùng dialog có title, mô tả tác động, hành động hủy và xác nhận. Khóa dismiss/double submit khi request đang chạy.
-
-## Component conventions
-
-- Button chính dùng `Button`; button phụ dùng `Button variant="secondary"`.
-- Form control giữ label rõ ràng, state `aria-invalid`, mô tả lỗi liên kết bằng `aria-describedby` và lỗi chung dùng `role="alert"`.
-- Table desktop có header/sort rõ ràng; mobile có card fallback khi table không còn dễ đọc.
-- Filter toolbar gồm search trước, filter sau; số kết quả chỉ hiện một nơi.
-- Pagination luôn hiển thị range, total, page và nút trước/sau có `aria-label`.
-- Status badge dùng `AdminStatusBadge`; status domain tự map label trong feature/backend contract.
-- Bộ lọc ngày đơn dùng `SingleDateFilter`: label nằm trong control khi chưa chọn, chọn một ngày để lọc ngay. Bộ lọc khoảng ngày dùng `DateRangeFilter` với ngày bắt đầu/kết thúc và hành động áp dụng riêng.
-- Detail CRUD đơn giản mở từ phải; form ngắn/trung bình dùng dialog; workflow phức tạp có thể dùng page riêng.
-- Loading dùng status rõ ràng, empty state giải thích ngắn, success dùng `role="status"`, spinner là `aria-hidden` và tôn trọng `prefers-reduced-motion`.
-
-## Responsive và accessibility
-
-Kiểm tra tối thiểu ở 1440×900 và 375×667. Không được có overflow không chủ ý, action phải chạm được, dialog/sheet không tràn viewport, và table phải có fallback phù hợp.
-
-Dialog/sheet phải có title và description khi có mô tả. Icon button cần `aria-label`; focus visible, Esc và backdrop phải hoạt động khi không submit; reduced motion phải tắt animation không thiết yếu.
-
-## Khi tạo component mới
-
-Tạo shared component khi pattern có từ hai điểm dùng trở lên hoặc được DESIGN.md xác định là primitive chung. Không tạo abstraction cho một layout/domain đơn lẻ. Nếu shared component chưa phù hợp, mở rộng API của nó khi use case tương đương; feature-specific workspace được phép tồn tại khi interaction model khác, nhưng không được tự tạo design language mới.
+Review affected routes at 1440×900 and 375×667. Check header hierarchy, actions, filters, result count, loading/error/empty/success states, table/card text, detail sheets, dialogs, overflow, and touchable controls. Evaluate each route against this document and the shared component contract; do not compare it to a feature reference page.

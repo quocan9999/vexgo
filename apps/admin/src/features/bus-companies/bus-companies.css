@@ -1,7 +1,7 @@
 
 
 .companies-section {
-  margin-top: 35px;
+  margin-top: var(--admin-space-9);
 }
 
 .companies-panel {
@@ -14,8 +14,8 @@
   min-height: 68px;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  padding: 13px 18px;
+  gap: var(--admin-space-component-gap);
+  padding: var(--admin-space-table-cell-y) var(--admin-space-table-cell-x);
   border-bottom: 1px solid #edf0f5;
 }
 
@@ -24,8 +24,8 @@
   width: min(100%, 390px);
   min-height: 37px;
   align-items: center;
-  gap: 9px;
-  padding: 0 11px;
+  gap: var(--admin-space-control-gap);
+  padding: 0 var(--admin-space-3);
   border: 1px solid #e3e8f0;
   border-radius: 8px;
   background: #fff;
@@ -48,7 +48,8 @@
   outline: 0;
   background: transparent;
   color: #2b3951;
-  font-size: 10px;
+  font-size: var(--admin-type-body-size);
+  line-height: var(--admin-type-body-line-height);
 }
 
 .search-box input::placeholder {
@@ -83,7 +84,8 @@
 
 .search-hint {
   color: #8a95a7;
-  font-size: 10px;
+  font-size: var(--admin-type-helper-size);
+  line-height: var(--admin-type-helper-line-height);
   white-space: nowrap;
 }
 
@@ -110,28 +112,29 @@
 
 .company-table thead th {
   height: 40px;
-  padding: 0 12px;
+  padding: 0 var(--admin-space-table-cell-x);
   color: #5d6d84;
-  font-size: 12px;
-  font-weight: 650;
+  font-size: var(--admin-type-table-header-size);
+  font-weight: var(--admin-type-table-header-weight);
+  line-height: var(--admin-type-table-header-line-height);
   white-space: nowrap;
 }
 
 .company-table thead th:first-child {
-  padding-left: 19px;
+  padding-left: var(--admin-space-table-cell-x);
 }
 
 .company-table tbody th:first-child {
-  padding-left: 19px;
+  padding-left: var(--admin-space-table-cell-x);
 }
 
 .company-table thead th:last-child {
-  padding-right: 17px;
+  padding-right: var(--admin-space-table-cell-x);
   text-align: right;
 }
 
 .company-table tbody td:last-child {
-  padding-right: 17px;
+  padding-right: var(--admin-space-table-cell-x);
   text-align: right;
 }
 
@@ -146,20 +149,22 @@
 
 .company-table tbody th {
   height: 59px;
-  padding: 8px 12px;
+  padding: var(--admin-space-table-cell-y) var(--admin-space-table-cell-x);
   color: #5d6d84;
-  font-size: 13px;
+  font-size: var(--admin-type-table-body-size);
+  line-height: var(--admin-type-table-body-line-height);
 }
 
 .company-table tbody td {
   height: 59px;
-  padding: 8px 12px;
+  padding: var(--admin-space-table-cell-y) var(--admin-space-table-cell-x);
   color: #5d6d84;
-  font-size: 13px;
+  font-size: var(--admin-type-table-body-size);
+  line-height: var(--admin-type-table-body-line-height);
 }
 
 .company-table tbody th {
-  font-weight: 650;
+  font-weight: var(--admin-type-table-header-weight);
 }
 
 .company-table tbody td {
@@ -169,15 +174,15 @@
 .company-name-cell {
   min-width: 190px;
   color: #1c2e48 !important;
-  font-size: 14px;
-  font-weight: 650;
+  font-size: var(--admin-type-table-body-size);
+  font-weight: var(--admin-type-table-header-weight);
 }
 
 .company-name-content {
   display: flex;
   min-width: 190px;
   align-items: center;
-  gap: 10px;
+  gap: var(--admin-space-control-gap);
 }
 
 .company-mark {
@@ -231,16 +236,17 @@
   min-width: 28px;
   text-align: center;
   color: #1c2e48;
-  font-size: 14px;
+  font-size: var(--admin-type-table-body-size);
+  line-height: var(--admin-type-table-body-line-height);
   font-variant-numeric: tabular-nums;
-  font-weight: 650;
+  font-weight: var(--admin-type-table-header-weight);
 }
 
 .sort-button {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 5px 0;
+  gap: var(--admin-space-1);
+  padding: var(--admin-space-1) 0;
   border: 0;
   background: transparent;
   color: inherit;
@@ -262,10 +268,10 @@
 }
 
 .table-footnote {
-  margin: 11px 19px 0;
+  margin: var(--admin-space-3) var(--admin-space-table-cell-x) 0;
   color: #929daf;
-  font-size: 9px;
-  line-height: 1.5;
+  font-size: var(--admin-type-caption-size);
+  line-height: var(--admin-type-caption-line-height);
 }
 
 .empty-state {
@@ -274,7 +280,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 24px;
+  padding: var(--admin-space-card-padding);
   text-align: center;
 }
 
@@ -289,23 +295,26 @@
 }
 
 .empty-state h3 {
-  margin: 13px 0 0;
+  margin: var(--admin-space-component-gap) 0 0;
   color: #34435b;
-  font-size: 13px;
+  font-size: var(--admin-type-component-title-size);
+  font-weight: var(--admin-type-component-title-weight);
+  line-height: var(--admin-type-component-title-line-height);
 }
 
 .empty-state p {
-  margin: 7px 0 15px;
+  margin: var(--admin-space-control-gap) 0 var(--admin-space-4);
   color: #8a95a7;
-  font-size: 10px;
+  font-size: var(--admin-type-helper-size);
+  line-height: var(--admin-type-helper-line-height);
 }
 
 .table-error {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 15px;
-  padding: 13px 16px;
+  gap: var(--admin-space-component-gap);
+  padding: var(--admin-space-table-cell-y) var(--admin-space-table-cell-x);
   border: 1px solid #f0d5d0;
   border-radius: 10px;
   background: #fff8f6;
@@ -313,25 +322,27 @@
 }
 
 .table-error strong {
-  font-size: 11px;
+  font-size: var(--admin-type-label-size);
+  font-weight: var(--admin-type-label-weight);
+  line-height: var(--admin-type-label-line-height);
 }
 
 .table-error p {
-  margin: 4px 0 0;
+  margin: var(--admin-space-1) 0 0;
   color: #98665e;
-  font-size: 10px;
-  line-height: 1.45;
+  font-size: var(--admin-type-helper-size);
+  line-height: var(--admin-type-helper-line-height);
 }
 
 .table-error {
-  margin: 14px 17px;
+  margin: var(--admin-space-4) var(--admin-space-table-cell-x);
 }
 
 .detail-company-hero {
   display: flex;
   align-items: center;
-  gap: 13px;
-  padding: 25px;
+  gap: var(--admin-space-control-gap);
+  padding: var(--admin-space-sheet-padding);
   border-bottom: 1px solid #edf0f5;
 }
 
@@ -346,15 +357,17 @@
 .detail-company-hero h3 {
   margin: 0;
   color: #21314c;
-  font-size: 15px;
-  font-weight: 700;
+  font-size: var(--admin-type-component-title-size);
+  font-weight: var(--admin-type-component-title-weight);
+  line-height: var(--admin-type-component-title-line-height);
 }
 
 .detail-company-id {
   display: block;
-  margin-top: 6px;
+  margin-top: var(--admin-space-2);
   color: #5d6d84;
-  font-size: 12px;
+  font-size: var(--admin-type-helper-size);
+  line-height: var(--admin-type-helper-line-height);
   font-variant-numeric: tabular-nums;
   font-weight: 500;
 }
@@ -362,7 +375,7 @@
 .detail-field {
   display: flex;
   align-items: flex-start;
-  gap: 11px;
+  gap: var(--admin-space-control-gap);
 }
 
 .detail-field-icon {
@@ -378,21 +391,22 @@
 
 .detail-field > div {
   display: grid;
-  gap: 5px;
+  gap: var(--admin-space-1);
   padding-top: 1px;
 }
 
 .detail-field-label {
   color: #5d6d84;
-  font-size: 11px;
-  font-weight: 600;
+  font-size: var(--admin-type-label-size);
+  font-weight: var(--admin-type-label-weight);
+  line-height: var(--admin-type-label-line-height);
 }
 
 .detail-field-value {
   overflow-wrap: anywhere;
   color: #40506a;
-  font-size: 11px;
-  line-height: 1.5;
+  font-size: var(--admin-type-body-size);
+  line-height: var(--admin-type-body-line-height);
 }
 
 .detail-stats {
@@ -406,17 +420,18 @@
   min-height: 49px;
   align-items: center;
   justify-content: space-between;
-  gap: 15px;
+  gap: var(--admin-space-component-gap);
   border-top: 1px solid #f0f2f6;
 }
 
 .detail-stats dt {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--admin-space-control-gap);
   color: #5d6d84;
-  font-size: 11px;
-  font-weight: 600;
+  font-size: var(--admin-type-label-size);
+  font-weight: var(--admin-type-label-weight);
+  line-height: var(--admin-type-label-line-height);
 }
 
 .detail-stats dt svg {
@@ -426,24 +441,25 @@
 .detail-stats dd {
   margin: 0;
   color: #293a56;
-  font-size: 12px;
+  font-size: var(--admin-type-table-body-size);
+  line-height: var(--admin-type-table-body-line-height);
   font-variant-numeric: tabular-nums;
   font-weight: 700;
 }
 
 .detail-footnote {
-  margin: 11px 0 0;
+  margin: var(--admin-space-3) 0 0;
   color: #929daf;
-  font-size: 9px;
-  line-height: 1.5;
+  font-size: var(--admin-type-caption-size);
+  line-height: var(--admin-type-caption-line-height);
 }
 
 .detail-footer {
   display: flex;
   align-items: flex-start;
-  gap: 9px;
-  margin: 21px 25px;
-  padding: 12px;
+  gap: var(--admin-space-control-gap);
+  margin: var(--admin-space-section-gap) var(--admin-space-sheet-padding);
+  padding: var(--admin-space-field-gap);
   border: 1px solid #dceee6;
   border-radius: 9px;
   background: #f4faf7;
@@ -461,32 +477,33 @@
 }
 
 .detail-footer p {
-  margin: 2px 0 0;
+  margin: var(--admin-space-title-copy-gap) 0 0;
   color: #638473;
-  font-size: 9px;
-  line-height: 1.5;
+  font-size: var(--admin-type-caption-size);
+  line-height: var(--admin-type-caption-line-height);
 }
 
 @media (max-width: 700px) {
 
   .companies-section {
-    margin-top: 29px;
+    margin-top: var(--admin-space-9);
   }
 
   .table-toolbar {
     min-height: 62px;
-    gap: 8px;
-    padding: 11px 12px;
+    gap: var(--admin-space-control-gap);
+    padding: var(--admin-space-table-cell-y) var(--admin-space-table-cell-x);
   }
 
   .search-box {
     min-height: 36px;
-    gap: 7px;
-    padding: 0 9px;
+    gap: var(--admin-space-control-gap);
+    padding: 0 var(--admin-space-2);
   }
 
   .search-box input {
-    font-size: 9px;
+    font-size: var(--admin-type-body-size);
+    line-height: var(--admin-type-body-line-height);
   }
 
   .search-hint {
@@ -496,7 +513,8 @@
   .search-hint::after {
     color: #8490a2;
     content: 'Kết quả';
-    font-size: 9px;
+    font-size: var(--admin-type-helper-size);
+    line-height: var(--admin-type-helper-line-height);
   }
 
   .company-table-scroll {
@@ -508,13 +526,13 @@
   }
 
   .table-footnote {
-    margin: 10px 15px 0;
+    margin: var(--admin-space-2) var(--admin-space-table-cell-x) 0;
   }
 
   .company-mobile-card {
     display: grid;
-    gap: 12px;
-    padding: 14px 15px 12px;
+    gap: var(--admin-space-card-gap);
+    padding: var(--admin-space-card-padding);
     border-bottom: 1px solid #edf0f5;
   }
 
@@ -522,7 +540,7 @@
     display: flex;
     min-width: 0;
     align-items: center;
-    gap: 10px;
+    gap: var(--admin-space-control-gap);
   }
 
   .company-mobile-head > div {
@@ -533,17 +551,19 @@
     overflow: hidden;
     margin: 0;
     color: #2d3c55;
-    font-size: 11px;
-    font-weight: 680;
+    font-size: var(--admin-type-component-title-size);
+    font-weight: var(--admin-type-component-title-weight);
+    line-height: var(--admin-type-component-title-line-height);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   .company-mobile-head p {
     overflow: hidden;
-    margin: 5px 0 0;
+    margin: var(--admin-space-1) 0 0;
     color: #8692a4;
-    font-size: 9px;
+    font-size: var(--admin-type-helper-size);
+    line-height: var(--admin-type-helper-line-height);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -551,8 +571,8 @@
   .company-mobile-stats {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 6px;
-    padding: 9px 0;
+    gap: var(--admin-space-2);
+    padding: var(--admin-space-table-cell-y) 0;
     border-top: 1px solid #f0f2f6;
     border-bottom: 1px solid #f0f2f6;
   }
@@ -560,14 +580,17 @@
   .company-mobile-stats span {
     display: flex;
     justify-content: space-between;
-    gap: 3px;
+    gap: var(--admin-space-1);
     color: #8994a5;
-    font-size: 8px;
+    font-size: var(--admin-type-helper-size);
+    line-height: var(--admin-type-helper-line-height);
   }
 
   .company-mobile-stats strong {
     color: #43526a;
-    font-size: 9px;
+    font-size: var(--admin-type-label-size);
+    font-weight: var(--admin-type-label-weight);
+    line-height: var(--admin-type-label-line-height);
     font-variant-numeric: tabular-nums;
   }
 
@@ -593,15 +616,15 @@
 .company-success-notice {
   display: flex;
   align-items: center;
-  gap: 9px;
-  margin-top: 17px;
-  padding: 12px 14px;
+  gap: var(--admin-space-control-gap);
+  margin-top: var(--admin-space-component-gap);
+  padding: var(--admin-space-table-cell-y) var(--admin-space-table-cell-x);
   border: 1px solid #d4eadc;
   border-radius: 9px;
   background: #f1f9f4;
   color: #2f714b;
-  font-size: 11px;
-  line-height: 1.45;
+  font-size: var(--admin-type-body-size);
+  line-height: var(--admin-type-body-line-height);
 }
 
 .company-success-notice svg {
@@ -610,53 +633,57 @@
 
 .bus-company-form {
   display: grid;
-  gap: 18px;
-  padding: 22px 25px 0;
+  gap: var(--admin-space-form-gap);
+  padding: var(--admin-space-dialog-padding) var(--admin-space-form-inline) 0;
 }
 
 .bus-company-form-intro {
-  margin: 0 0 2px;
+  margin: 0 0 var(--admin-space-1);
   color: #748197;
-  font-size: 12px;
-  line-height: 1.6;
+  font-size: var(--admin-type-secondary-body-size);
+  line-height: var(--admin-type-secondary-body-line-height);
 }
 
 .bus-company-form-error {
-  padding: 11px 12px;
+  padding: var(--admin-space-table-cell-y) var(--admin-space-table-cell-x);
   border: 1px solid #f0d0ce;
   border-radius: 8px;
   background: #fff7f6;
   color: #a63732;
-  font-size: 11px;
-  line-height: 1.5;
+  font-size: var(--admin-type-error-size);
+  font-weight: var(--admin-type-error-weight);
+  line-height: var(--admin-type-error-line-height);
 }
 
 .bus-company-form-field {
   display: grid;
-  gap: 7px;
+  gap: var(--admin-space-label-control-gap);
   color: #26344a;
-  font-size: 11px;
-  font-weight: 650;
+  font-size: var(--admin-type-label-size);
+  font-weight: var(--admin-type-label-weight);
+  line-height: var(--admin-type-label-line-height);
 }
 
 .bus-company-form-field label span {
   color: #8994a6;
-  font-size: 10px;
-  font-weight: 450;
+  font-size: var(--admin-type-helper-size);
+  font-weight: var(--admin-type-helper-weight);
+  line-height: var(--admin-type-helper-line-height);
 }
 
 .bus-company-form-field input {
   width: 100%;
   min-height: 42px;
   box-sizing: border-box;
-  padding: 0 12px;
+  padding: 0 var(--admin-space-3);
   border: 1px solid #dfe5ee;
   border-radius: 8px;
   background: #fff;
   color: #17243b;
   font: inherit;
-  font-size: 12px;
-  font-weight: 450;
+  font-size: var(--admin-type-body-size);
+  font-weight: var(--admin-type-body-weight);
+  line-height: var(--admin-type-body-line-height);
   transition:
     border-color 150ms ease,
     box-shadow 150ms ease;
@@ -666,14 +693,15 @@
   width: 100%;
   min-height: 42px;
   box-sizing: border-box;
-  padding: 0 12px;
+  padding: 0 var(--admin-space-3);
   border: 1px solid #dfe5ee;
   border-radius: 8px;
   background: #fff;
   color: #17243b;
   font: inherit;
-  font-size: 12px;
-  font-weight: 450;
+  font-size: var(--admin-type-body-size);
+  font-weight: var(--admin-type-body-weight);
+  line-height: var(--admin-type-body-line-height);
   transition:
     border-color 150ms ease,
     box-shadow 150ms ease;
@@ -705,9 +733,9 @@
 
 .bus-company-form-field-error {
   color: #b63838;
-  font-size: 10px;
-  font-weight: 500;
-  line-height: 1.45;
+  font-size: var(--admin-type-error-size);
+  font-weight: var(--admin-type-error-weight);
+  line-height: var(--admin-type-error-line-height);
 }
 
 .bus-company-form-actions {
@@ -715,9 +743,9 @@
   bottom: 0;
   display: flex;
   justify-content: flex-end;
-  gap: 9px;
-  margin: 2px -25px 0;
-  padding: 15px 25px;
+  gap: var(--admin-space-action-gap);
+  margin: var(--admin-space-1) calc(-1 * var(--admin-space-form-inline)) 0;
+  padding: var(--admin-space-4) var(--admin-space-form-inline);
   border-top: 1px solid #edf0f5;
   background: rgb(255 255 255 / 96%);
 }
@@ -735,15 +763,15 @@
 @media (max-width: 520px) {
 
   .bus-company-form {
-    padding-right: 19px;
-    padding-left: 19px;
+    padding-right: var(--admin-space-form-inline);
+    padding-left: var(--admin-space-form-inline);
   }
 
   .bus-company-form-actions {
-    margin-right: -19px;
-    margin-left: -19px;
-    padding-right: 19px;
-    padding-left: 19px;
+    margin-right: calc(-1 * var(--admin-space-form-inline));
+    margin-left: calc(-1 * var(--admin-space-form-inline));
+    padding-right: var(--admin-space-form-inline);
+    padding-left: var(--admin-space-form-inline);
   }
 }
 
@@ -781,6 +809,6 @@
 }
 
 .detail-success-notice {
-  margin-right: 25px;
-  margin-left: 25px;
+  margin-right: var(--admin-space-sheet-inline);
+  margin-left: var(--admin-space-sheet-inline);
 }

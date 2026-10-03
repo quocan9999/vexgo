@@ -1,6 +1,6 @@
 .section {
-  margin-top: 20px;
-  padding: 22px;
+  margin-top: var(--admin-space-card-padding);
+  padding: var(--admin-space-card-padding);
   border: 1px solid var(--admin-border);
   border-radius: 12px;
   background: #fff;
@@ -11,23 +11,26 @@
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 17px;
+  gap: var(--admin-space-component-gap);
+  margin-bottom: var(--admin-space-component-gap);
 }
 
 .sectionHeading .eyebrow {
-  margin: 0 0 5px;
+  margin: 0 0 var(--admin-space-1);
 }
 
 .sectionHeading h2 {
   margin: 0;
   color: var(--admin-text-strong);
-  font-size: 18px;
+  font-size: var(--admin-type-component-title-size);
+  font-weight: var(--admin-type-component-title-weight);
+  line-height: var(--admin-type-component-title-line-height);
 }
 
 .count {
   color: var(--admin-text-muted);
-  font-size: 12px;
+  font-size: var(--admin-type-helper-size);
+  line-height: var(--admin-type-helper-line-height);
   white-space: nowrap;
 }
 
@@ -35,8 +38,8 @@
   display: flex;
   min-height: 46px;
   align-items: center;
-  gap: 10px;
-  padding: 0 13px;
+  gap: var(--admin-space-control-gap);
+  padding: 0 var(--admin-space-3);
   border: 1px solid var(--admin-border);
   border-radius: 8px;
   color: var(--admin-text-muted);
@@ -55,14 +58,15 @@
   background: transparent;
   color: var(--admin-text-strong);
   font: inherit;
-  font-size: 14px;
+  font-size: var(--admin-type-body-size);
+  line-height: var(--admin-type-body-line-height);
 }
 
 .companyGrid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
-  gap: 11px;
-  margin: 18px 0 0;
+  gap: var(--admin-space-field-gap);
+  margin: var(--admin-space-component-gap) 0 0;
   padding: 0;
   list-style: none;
 }
@@ -71,8 +75,8 @@
   display: flex;
   min-height: 64px;
   align-items: center;
-  gap: 12px;
-  padding: 11px 13px;
+  gap: var(--admin-space-field-gap);
+  padding: var(--admin-space-table-cell-y) var(--admin-space-table-cell-x);
   border: 1px solid var(--admin-border);
   border-radius: 9px;
   color: var(--admin-text-strong);
@@ -105,15 +109,16 @@
 .companyName {
   min-width: 0;
   flex: 1;
-  font-size: 14px;
-  font-weight: 650;
+  font-size: var(--admin-type-table-body-size);
+  font-weight: var(--admin-type-table-header-weight);
+  line-height: var(--admin-type-table-body-line-height);
   overflow-wrap: anywhere;
 }
 
 .arrow {
   color: var(--admin-text-muted);
   font-size: 23px;
-  line-height: 1;
+  line-height: 1.5rem;
 }
 
 .state,
@@ -122,10 +127,11 @@
   min-height: 105px;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  margin: 16px 0 0;
+  gap: var(--admin-space-control-gap);
+  margin: var(--admin-space-component-gap) 0 0;
   color: var(--admin-text-muted);
-  font-size: 13px;
+  font-size: var(--admin-type-secondary-body-size);
+  line-height: var(--admin-type-secondary-body-line-height);
   text-align: center;
 }
 
@@ -152,7 +158,7 @@
 
 @media (max-width: 600px) {
   .section {
-    padding: 16px;
+    padding: var(--admin-space-card-padding);
   }
 
   .companyGrid {

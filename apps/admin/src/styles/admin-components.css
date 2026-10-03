@@ -9,7 +9,8 @@ body {
   background: var(--admin-canvas);
   color: var(--admin-ink);
   font-family: var(--font-sans), 'Segoe UI', Arial, sans-serif;
-  font-size: 14px;
+  font-size: var(--admin-type-body-size);
+  line-height: var(--admin-type-body-line-height);
   -webkit-font-smoothing: antialiased;
 }
 
@@ -56,7 +57,7 @@ dialog:focus-visible {
   display: flex;
   width: 252px;
   flex-direction: column;
-  padding: 25px 17px 18px;
+  padding: var(--admin-space-sidebar-top) var(--admin-space-sidebar-inline) var(--admin-space-4);
   background: var(--admin-navy);
   color: #fff;
   transition:
@@ -68,7 +69,7 @@ dialog:focus-visible {
   display: flex;
   min-height: 45px;
   align-items: center;
-  gap: 11px;
+  gap: var(--admin-space-sidebar-link-gap);
   padding: 0 5px;
   color: inherit;
   text-decoration: none;
@@ -98,7 +99,7 @@ dialog:focus-visible {
   font-size: 17px;
   font-weight: 750;
   letter-spacing: -0.35px;
-  line-height: 1.05;
+  line-height: 1.125rem;
 }
 
 .brand-copy small {
@@ -120,25 +121,26 @@ dialog:focus-visible {
 .sidebar-divider {
   width: calc(100% - 8px);
   align-self: center;
-  margin-top: 30px;
+  margin-top: var(--admin-space-sidebar-section-gap);
   border-top: 1px solid rgb(255 255 255 / 10%);
 }
 
 .sidebar-nav-group {
-  margin-top: 56px;
+  margin-top: var(--admin-space-sidebar-nav-offset);
 }
 
 .sidebar-label {
-  margin: 0 10px 13px;
+  margin: 0 var(--admin-space-sidebar-label-inline) var(--admin-space-sidebar-label-bottom);
   color: #95a4bc;
-  font-size: 9px;
-  font-weight: 700;
+  font-size: var(--admin-type-eyebrow-size);
+  font-weight: var(--admin-type-eyebrow-weight);
+  line-height: var(--admin-type-eyebrow-line-height);
   letter-spacing: 1.1px;
 }
 
 .sidebar-nav-group nav {
   display: grid;
-  gap: 5px;
+  gap: var(--admin-space-1);
 }
 
 .sidebar-link {
@@ -146,12 +148,13 @@ dialog:focus-visible {
   display: flex;
   min-height: 44px;
   align-items: center;
-  gap: 12px;
-  padding: 0 11px;
+  gap: var(--admin-space-sidebar-link-gap);
+  padding: 0 var(--admin-space-sidebar-link-inline);
   border-radius: 9px;
   color: #bcc8d9;
-  font-size: 13px;
-  font-weight: 550;
+  font-size: var(--admin-type-secondary-body-size);
+  font-weight: var(--admin-weight-medium);
+  line-height: var(--admin-type-secondary-body-line-height);
   text-decoration: none;
   transition:
     background-color 160ms ease,
@@ -201,7 +204,7 @@ dialog:focus-visible {
   height: 64px;
   align-items: center;
   justify-content: space-between;
-  padding: 0 38px;
+  padding: 0 var(--admin-space-page-inline);
   border-bottom: 1px solid #e9edf3;
   background: rgb(255 255 255 / 96%);
   backdrop-filter: blur(10px);
@@ -215,7 +218,7 @@ dialog:focus-visible {
 .topbar-account {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--admin-space-action-gap);
   margin-left: auto;
 }
 
@@ -229,8 +232,8 @@ dialog:focus-visible {
   border-radius: 50%;
   background: #0c172a;
   color: #f2f6ff;
-  font-size: 15px;
-  font-weight: 750;
+  font-size: var(--admin-type-body-size);
+  font-weight: var(--admin-type-component-title-weight);
 }
 
 .topbar-profile-logout {
@@ -265,13 +268,13 @@ dialog:focus-visible {
   width: max-content;
   max-width: min(320px, calc(100vw - 32px));
   margin: 0;
-  padding: 8px 10px;
+  padding: var(--admin-space-2) var(--admin-space-3);
   border: 1px solid #f1c6cb;
   border-radius: 8px;
   background: #fff;
   color: var(--admin-danger);
-  font-size: 11px;
-  line-height: 1.45;
+  font-size: var(--admin-type-error-size);
+  line-height: var(--admin-type-error-line-height);
   box-shadow: 0 8px 22px rgb(16 31 54 / 12%);
 }
 
@@ -279,7 +282,7 @@ dialog:focus-visible {
   z-index: 100;
   display: grid;
   place-items: center;
-  padding: 20px;
+  padding: var(--admin-space-5);
 }
 
 .logout-confirm-dialog__panel {
@@ -294,7 +297,7 @@ dialog:focus-visible {
 .logout-confirm-dialog__content {
   display: grid;
   justify-items: center;
-  padding: 28px;
+  padding: var(--admin-space-dialog-padding);
   text-align: center;
 }
 
@@ -309,36 +312,38 @@ dialog:focus-visible {
 }
 
 .logout-confirm-dialog__content h2 {
-  margin: 16px 0 0;
+  margin: var(--admin-space-4) 0 0;
   color: #1c2a43;
-  font-size: 19px;
-  font-weight: 700;
+  font-size: var(--admin-type-section-heading-size);
+  font-weight: var(--admin-type-section-heading-weight);
+  line-height: var(--admin-type-section-heading-line-height);
 }
 
 .logout-confirm-dialog__content p {
-  margin: 8px 0 0;
+  margin: var(--admin-space-2) 0 0;
   color: var(--admin-text-muted);
-  font-size: 13px;
-  line-height: 1.55;
+  font-size: var(--admin-type-secondary-body-size);
+  line-height: var(--admin-type-secondary-body-line-height);
 }
 
 .logout-confirm-dialog__actions {
   display: flex;
   width: 100%;
   justify-content: center;
-  gap: 10px;
-  margin-top: 24px;
+  gap: var(--admin-space-action-gap);
+  margin-top: var(--admin-space-section-gap);
 }
 
 .logout-confirm-dialog__actions button {
   min-height: 44px;
-  padding: 0 18px;
+  padding: 0 var(--admin-space-4);
   border: 1px solid transparent;
   border-radius: 8px;
   cursor: pointer;
   font: inherit;
-  font-size: 13px;
-  font-weight: 650;
+  font-size: var(--admin-type-button-size);
+  font-weight: var(--admin-type-button-weight);
+  line-height: var(--admin-type-button-line-height);
   transition: background-color 140ms ease, border-color 140ms ease;
 }
 
@@ -380,31 +385,32 @@ dialog:focus-visible {
 .admin-page-content {
   width: min(100%, 1510px);
   margin: 0 auto;
-  padding: 34px 38px 22px;
+  padding: var(--admin-space-page-block) var(--admin-space-page-inline);
 }
 
 .page-intro {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  gap: 24px;
+  gap: var(--admin-space-section-gap);
 }
 
 .eyebrow {
-  margin: 0 0 8px;
+  margin: 0 0 var(--admin-space-control-gap);
   color: var(--admin-text-muted);
-  font-size: 9px;
-  font-weight: 750;
+  font-size: var(--admin-type-eyebrow-size);
+  font-weight: var(--admin-type-eyebrow-weight);
+  line-height: var(--admin-type-eyebrow-line-height);
   letter-spacing: 1.25px;
 }
 
 .page-intro h1 {
   margin: 0;
   color: #14233d;
-  font-size: clamp(25px, 2.5vw, 30px);
-  font-weight: 720;
+  font-size: var(--admin-type-page-title-size);
+  font-weight: var(--admin-type-page-title-weight);
   letter-spacing: -0.9px;
-  line-height: 1.2;
+  line-height: var(--admin-type-page-title-line-height);
 }
 
 .page-intro-actions {
@@ -412,7 +418,7 @@ dialog:focus-visible {
   flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
-  gap: 15px;
+  gap: var(--admin-space-toolbar-gap);
 }
 
 .button {
@@ -420,13 +426,14 @@ dialog:focus-visible {
   min-height: var(--admin-control-height);
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 0 13px;
+  gap: var(--admin-space-control-gap);
+  padding: 0 var(--admin-space-3);
   border: 1px solid transparent;
   border-radius: var(--admin-radius-control);
   cursor: pointer;
-  font-size: var(--admin-font-size-sm);
-  font-weight: var(--admin-font-weight-semibold);
+  font-size: var(--admin-type-button-size);
+  font-weight: var(--admin-type-button-weight);
+  line-height: var(--admin-type-button-line-height);
   transition:
     background-color 150ms ease,
     border-color 150ms ease,
@@ -513,25 +520,28 @@ dialog:focus-visible {
 
 .admin-resource-table th,
 .admin-resource-table td {
-  padding: 11px 13px;
+  padding: var(--admin-space-table-cell-y) var(--admin-space-table-cell-x);
   border-top: 1px solid var(--admin-border);
   color: var(--admin-text-muted);
-  font-size: var(--admin-font-size-base);
+  font-size: var(--admin-type-table-body-size);
+  font-weight: var(--admin-type-table-body-weight);
+  line-height: var(--admin-type-table-body-line-height);
   vertical-align: middle;
 }
 
 .admin-resource-table thead th {
   height: 42px;
   border-top: 0;
-  font-size: var(--admin-font-size-md);
-  font-weight: var(--admin-font-weight-semibold);
+  font-size: var(--admin-type-table-header-size);
+  font-weight: var(--admin-type-table-header-weight);
+  line-height: var(--admin-type-table-header-line-height);
   white-space: nowrap;
 }
 
 .admin-resource-table tbody th {
   color: var(--admin-text-strong);
-  font-size: var(--admin-font-size-emphasis);
-  font-weight: var(--admin-font-weight-semibold);
+  font-size: var(--admin-type-table-body-size);
+  font-weight: var(--admin-type-table-header-weight);
 }
 
 .admin-resource-table tbody tr:hover {
@@ -547,7 +557,7 @@ dialog:focus-visible {
   display: inline-flex;
   min-height: 30px;
   align-items: center;
-  gap: 6px;
+  gap: var(--admin-space-control-gap);
   padding: 0;
   border: 0;
   background: transparent;
@@ -583,7 +593,7 @@ dialog:focus-visible {
 
 .admin-table-skeleton {
   display: grid;
-  padding: 6px 18px;
+  padding: var(--admin-space-2) var(--admin-space-table-cell-x);
 }
 
 .admin-table-skeleton-row {
@@ -591,7 +601,7 @@ dialog:focus-visible {
   min-height: 53px;
   grid-template-columns: 1.3fr 1.5fr repeat(3, 0.35fr);
   align-items: center;
-  gap: 15px;
+  gap: var(--admin-space-component-gap);
   border-bottom: 1px solid #f0f2f6;
 }
 
@@ -614,7 +624,7 @@ dialog:focus-visible {
 
 .panel {
   min-width: 0;
-  padding: 19px 20px;
+  padding: var(--admin-space-card-padding);
 }
 
 .table-pagination {
@@ -622,39 +632,41 @@ dialog:focus-visible {
   min-height: 58px;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
-  padding: 9px 17px 9px 19px;
+  gap: var(--admin-space-toolbar-gap);
+  padding: var(--admin-space-table-cell-y) var(--admin-space-table-cell-x);
   border-top: 1px solid #edf0f5;
 }
 
 .pagination-summary {
   color: var(--admin-text-muted);
-  font-size: 9px;
+  font-size: var(--admin-type-helper-size);
+  line-height: var(--admin-type-helper-line-height);
 }
 
 .pagination-controls {
   color: var(--admin-text-muted);
-  font-size: 9px;
+  font-size: var(--admin-type-helper-size);
+  line-height: var(--admin-type-helper-line-height);
 }
 
 .pagination-summary strong {
   color: #44536b;
-  font-weight: 650;
+  font-weight: var(--admin-type-label-weight);
 }
 
 .pagination-controls strong {
   color: #44536b;
-  font-weight: 650;
+  font-weight: var(--admin-type-label-weight);
 }
 
 .pagination-controls {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: var(--admin-space-control-gap);
 }
 
 .pagination-controls > span {
-  margin-right: 5px;
+  margin-right: var(--admin-space-control-gap);
 }
 
 .pagination-button {
@@ -712,16 +724,17 @@ dialog:focus-visible {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 20px 2px 0;
+  gap: var(--admin-space-toolbar-gap);
+  padding: var(--admin-space-card-padding) var(--admin-space-1) 0;
   color: #929daf;
-  font-size: 9px;
+  font-size: var(--admin-type-caption-size);
+  line-height: var(--admin-type-caption-line-height);
 }
 
 .admin-page-footer > span:last-child {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: var(--admin-space-control-gap);
 }
 
 .admin-dialog {
@@ -766,42 +779,44 @@ dialog:focus-visible {
 }
 
 .detail-section {
-  padding: 23px 25px;
+  padding: var(--admin-space-sheet-padding);
   border-bottom: 1px solid #edf0f5;
 }
 
 .detail-section h3 {
-  margin: 0 0 17px;
+  margin: 0 0 var(--admin-space-component-gap);
   color: #33425b;
-  font-size: 11px;
-  font-weight: 700;
+  font-size: var(--admin-type-component-title-size);
+  font-weight: var(--admin-type-component-title-weight);
+  line-height: var(--admin-type-component-title-line-height);
 }
 
 .detail-edit-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: var(--admin-space-action-gap);
   justify-content: flex-end;
-  margin: 20px 25px;
+  margin: var(--admin-space-card-padding) var(--admin-space-sheet-padding);
 }
 
 .admin-dialog-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  padding: 27px 25px 20px;
+  padding: var(--admin-space-dialog-padding);
   border-bottom: 1px solid #edf0f5;
 }
 
 .admin-dialog-header .eyebrow {
-  margin-bottom: 6px;
+  margin-bottom: var(--admin-space-control-gap);
 }
 
 .admin-dialog-header h2 {
   margin: 0;
   color: #1c2a43;
-  font-size: 19px;
-  font-weight: 700;
+  font-size: var(--admin-type-section-heading-size);
+  font-weight: var(--admin-type-section-heading-weight);
+  line-height: var(--admin-type-section-heading-line-height);
   letter-spacing: -0.5px;
 }
 
@@ -873,8 +888,8 @@ dialog:focus-visible {
   .admin-sidebar {
     width: 76px;
     align-items: center;
-    padding-right: 10px;
-    padding-left: 10px;
+    padding-right: var(--admin-space-sidebar-mobile-inline);
+    padding-left: var(--admin-space-sidebar-mobile-inline);
   }
 
   .brand-lockup {
@@ -895,7 +910,7 @@ dialog:focus-visible {
 
   .sidebar-nav-group {
     width: 100%;
-    margin-top: 48px;
+    margin-top: var(--admin-space-sidebar-nav-offset);
   }
 
   .sidebar-nav-group nav {
@@ -921,13 +936,13 @@ dialog:focus-visible {
   }
 
   .admin-page-content {
-    padding-right: 26px;
-    padding-left: 26px;
+    padding-right: var(--admin-space-page-inline);
+    padding-left: var(--admin-space-page-inline);
   }
 
   .topbar {
-    padding-right: 26px;
-    padding-left: 26px;
+    padding-right: var(--admin-space-page-inline);
+    padding-left: var(--admin-space-page-inline);
   }
 }
 
@@ -940,7 +955,7 @@ dialog:focus-visible {
   .page-intro-actions {
     flex-direction: column-reverse;
     align-items: flex-end;
-    gap: 9px;
+    gap: var(--admin-space-control-gap);
   }
 }
 
@@ -953,7 +968,7 @@ dialog:focus-visible {
     z-index: 50;
     width: 264px;
     align-items: stretch;
-    padding: 22px 17px 17px;
+    padding: var(--admin-space-sidebar-top) var(--admin-space-sidebar-inline) var(--admin-space-4);
     transform: translateX(-100%);
     visibility: hidden;
     transition:
@@ -991,7 +1006,7 @@ dialog:focus-visible {
 
   .sidebar-nav-group {
     width: auto;
-    margin-top: 45px;
+    margin-top: var(--admin-space-sidebar-nav-offset);
   }
 
   .sidebar-nav-group nav {
@@ -1001,7 +1016,7 @@ dialog:focus-visible {
   .sidebar-link {
     width: auto;
     justify-content: flex-start;
-    padding: 0 11px;
+    padding: 0 var(--admin-space-sidebar-link-inline);
   }
 
   .sidebar-link.is-active::before {
@@ -1029,13 +1044,13 @@ dialog:focus-visible {
 
   .topbar {
     height: 58px;
-    gap: 10px;
-    padding: 0 15px;
+    gap: var(--admin-space-control-gap);
+    padding: 0 var(--admin-space-page-inline);
   }
 
   .topbar-left {
     min-width: 0;
-    gap: 10px;
+    gap: var(--admin-space-control-gap);
   }
 
   .topbar-left .icon-button {
@@ -1045,16 +1060,12 @@ dialog:focus-visible {
   }
 
   .admin-page-content {
-    padding: 25px 17px 18px;
+    padding: var(--admin-space-page-block) var(--admin-space-page-inline);
   }
 
   .page-intro {
     flex-direction: column;
-    gap: 17px;
-  }
-
-  .page-intro h1 {
-    font-size: 25px;
+    gap: var(--admin-space-component-gap);
   }
 
   .page-intro-actions {
@@ -1065,28 +1076,25 @@ dialog:focus-visible {
   }
 
   .panel {
-    padding: 16px;
+    padding: var(--admin-space-card-padding);
   }
 
   .table-pagination {
     min-height: 60px;
-    gap: 8px;
-    padding: 8px 11px;
+    gap: var(--admin-space-control-gap);
+    padding: var(--admin-space-table-cell-y) var(--admin-space-table-cell-x);
   }
 
   .pagination-summary {
     max-width: 56%;
-    font-size: 8px;
-    line-height: 1.55;
   }
 
   .pagination-controls {
-    gap: 5px;
-    font-size: 8px;
+    gap: var(--admin-space-1);
   }
 
   .pagination-controls > span {
-    margin-right: 1px;
+    margin-right: var(--admin-space-1);
     white-space: nowrap;
   }
 
@@ -1098,7 +1106,6 @@ dialog:focus-visible {
 
   .admin-page-footer {
     align-items: flex-start;
-    font-size: 8px;
   }
 
   .admin-dialog {
@@ -1120,14 +1127,6 @@ dialog:focus-visible {
 }
 
 @media (max-width: 390px) {
-  .admin-page-content {
-    padding-right: 13px;
-    padding-left: 13px;
-  }
-
-  .panel {
-    padding: 14px 12px;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1154,13 +1153,14 @@ dialog:focus-visible {
   display: inline-flex;
   min-height: 23px;
   align-items: center;
-  padding: 0 8px;
+  padding: 0 var(--admin-space-2);
   border: 1px solid #e3e9f2;
   border-radius: 999px;
   background: var(--admin-canvas);
   color: #68768b;
-  font-size: var(--admin-font-size-base);
-  font-weight: var(--admin-font-weight-semibold);
+  font-size: var(--admin-type-badge-size);
+  font-weight: var(--admin-type-badge-weight);
+  line-height: var(--admin-type-badge-line-height);
   white-space: nowrap;
 }
 
@@ -1184,16 +1184,17 @@ dialog:focus-visible {
 
 .admin-crud-form {
   display: grid;
-  gap: 18px;
-  padding: 22px 25px 0;
+  gap: var(--admin-space-form-gap);
+  padding: var(--admin-space-dialog-padding) var(--admin-space-form-inline) 0;
 }
 
 .admin-crud-form-field {
   display: grid;
-  gap: 7px;
+  gap: var(--admin-space-label-control-gap);
   color: var(--admin-text-strong);
-  font-size: var(--admin-font-size-xs);
-  font-weight: var(--admin-font-weight-semibold);
+  font-size: var(--admin-type-label-size);
+  font-weight: var(--admin-type-label-weight);
+  line-height: var(--admin-type-label-line-height);
 }
 
 .admin-crud-form-field input,
@@ -1201,14 +1202,15 @@ dialog:focus-visible {
   box-sizing: border-box;
   width: 100%;
   min-height: 42px;
-  padding: 9px 12px;
+  padding: var(--admin-space-2) var(--admin-space-3);
   border: 1px solid var(--admin-border);
   border-radius: var(--admin-radius-control);
   background: var(--background);
   color: var(--admin-text-strong);
   font: inherit;
-  font-size: var(--admin-font-size-base);
-  font-weight: var(--admin-font-weight-regular);
+  font-size: var(--admin-type-body-size);
+  font-weight: var(--admin-type-body-weight);
+  line-height: var(--admin-type-body-line-height);
 }
 
 .admin-crud-form-field input:focus-visible,
@@ -1226,30 +1228,33 @@ dialog:focus-visible {
 .admin-crud-form-field-error,
 .admin-crud-form-error {
   color: var(--admin-danger);
-  font-size: var(--admin-font-size-xs);
-  line-height: 1.45;
+  font-size: var(--admin-type-error-size);
+  font-weight: var(--admin-type-error-weight);
+  line-height: var(--admin-type-error-line-height);
 }
 
 .admin-crud-form-error {
   margin: 0;
 }
 
-.admin-crud-form-error p { margin: 0 0 8px; }
+.admin-crud-form-error p { margin: 0 0 var(--admin-space-control-gap); }
 
 .admin-crud-form-context {
   display: grid;
-  gap: 4px;
-  padding: 12px 14px;
+  gap: var(--admin-space-1);
+  padding: var(--admin-space-3) var(--admin-space-4);
   border: 1px solid var(--admin-border);
   border-radius: var(--admin-radius-control);
   background: var(--admin-canvas);
   color: var(--admin-text-strong);
-  font-size: var(--admin-font-size-base);
+  font-size: var(--admin-type-body-size);
+  line-height: var(--admin-type-body-line-height);
 }
 
 .admin-crud-form-context span {
   color: var(--admin-text-muted);
-  font-size: var(--admin-font-size-xs);
+  font-size: var(--admin-type-helper-size);
+  line-height: var(--admin-type-helper-line-height);
 }
 
 .admin-crud-form-actions {
@@ -1257,9 +1262,9 @@ dialog:focus-visible {
   bottom: 0;
   display: flex;
   justify-content: flex-end;
-  gap: 9px;
-  margin: 2px -25px 0;
-  padding: 15px 25px;
+  gap: var(--admin-space-action-gap);
+  margin: var(--admin-space-1) calc(-1 * var(--admin-space-form-inline)) 0;
+  padding: var(--admin-space-4) var(--admin-space-form-inline);
   border-top: 1px solid var(--admin-border);
   background: color-mix(in srgb, var(--background) 96%, transparent);
 }
@@ -1278,15 +1283,15 @@ dialog:focus-visible {
   }
 
   .admin-crud-form {
-    padding-right: 19px;
-    padding-left: 19px;
+    padding-right: var(--admin-space-form-inline);
+    padding-left: var(--admin-space-form-inline);
   }
 
   .admin-crud-form-actions {
-    margin-right: -19px;
-    margin-left: -19px;
-    padding-right: 19px;
-    padding-left: 19px;
+    margin-right: calc(-1 * var(--admin-space-form-inline));
+    margin-left: calc(-1 * var(--admin-space-form-inline));
+    padding-right: var(--admin-space-form-inline);
+    padding-left: var(--admin-space-form-inline);
   }
 }
 
@@ -1301,14 +1306,14 @@ dialog:focus-visible {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 16px;
+  padding: var(--admin-space-4);
 }
 
 .admin-confirm-dialog__panel {
   width: min(440px, 100%);
   max-height: 100%;
   overflow-y: auto;
-  padding: 26px;
+  padding: var(--admin-space-dialog-padding);
   border: 1px solid #e7ebf2;
   border-radius: 15px;
   background: #fff;
@@ -1319,15 +1324,17 @@ dialog:focus-visible {
 .admin-confirm-dialog__panel h2 {
   margin: 0;
   color: #1c2a43;
-  font-size: 18px;
+  font-size: var(--admin-type-section-heading-size);
+  font-weight: var(--admin-type-section-heading-weight);
+  line-height: var(--admin-type-section-heading-line-height);
   letter-spacing: -0.3px;
 }
 
 .admin-confirm-dialog__panel > p {
-  margin: 12px 0 0;
+  margin: var(--admin-space-3) 0 0;
   color: #69778e;
-  font-size: 13px;
-  line-height: 1.6;
+  font-size: var(--admin-type-secondary-body-size);
+  line-height: var(--admin-type-secondary-body-line-height);
 }
 
 .admin-confirm-dialog__panel .admin-confirm-dialog__error {
@@ -1338,13 +1345,13 @@ dialog:focus-visible {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 9px;
-  margin-top: 24px;
+  gap: var(--admin-space-action-gap);
+  margin-top: var(--admin-space-section-gap);
 }
 
 @media (max-width: 420px) {
   .admin-confirm-dialog__panel {
-    padding: 22px 18px;
+    padding: var(--admin-space-dialog-padding);
   }
 
   .admin-confirm-dialog__actions {

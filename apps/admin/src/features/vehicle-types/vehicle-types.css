@@ -3,7 +3,7 @@
 }
 
 .vehicle-types-section {
-  margin-top: 30px;
+  margin-top: var(--admin-space-section-gap);
 }
 
 .vehicle-types-panel {
@@ -30,26 +30,29 @@
 
 .vehicle-types-table th,
 .vehicle-types-table td {
-  padding: 12px 15px;
+  padding: var(--admin-space-table-cell-y) var(--admin-space-table-cell-x);
   border-top: 1px solid var(--admin-border);
   color: var(--admin-text-muted);
-  font-size: var(--admin-font-size-base);
+  font-size: var(--admin-type-table-body-size);
+  line-height: var(--admin-type-table-body-line-height);
 }
 
 .vehicle-types-table thead th {
   height: 42px;
   border-top: 0;
   color: var(--admin-text-muted);
-  font-size: var(--admin-font-size-md);
-  font-weight: var(--admin-font-weight-semibold);
+  font-size: var(--admin-type-table-header-size);
+  font-weight: var(--admin-weight-semibold);
   white-space: nowrap;
+  line-height: var(--admin-type-table-header-line-height);
 }
 
 .vehicle-types-table tbody th {
   width: 24%;
   color: var(--admin-text-strong);
-  font-size: var(--admin-font-size-emphasis);
-  font-weight: var(--admin-font-weight-semibold);
+  font-size: var(--admin-type-table-body-size);
+  font-weight: var(--admin-weight-semibold);
+  line-height: var(--admin-type-table-body-line-height);
 }
 
 .vehicle-types-table tbody td:nth-child(2) {
@@ -76,7 +79,7 @@
   display: inline-flex;
   min-height: 30px;
   align-items: center;
-  gap: 6px;
+  gap: var(--admin-space-action-gap);
   padding: 0;
   border: 0;
   background: transparent;
@@ -104,12 +107,13 @@
   min-height: 190px;
   align-content: center;
   justify-items: center;
-  gap: 12px;
+  gap: var(--admin-space-component-gap);
   margin: 0;
-  padding: 28px 20px;
+  padding: var(--admin-space-state-padding);
   color: var(--admin-text-muted);
-  font-size: var(--admin-font-size-base);
+  font-size: var(--admin-type-body-size);
   text-align: center;
+  line-height: var(--admin-type-body-line-height);
 }
 
 .vehicle-types-state p {
@@ -135,14 +139,14 @@
 }
 
 .vehicle-type-detail-content {
-  padding: 23px 25px 28px;
+  padding: var(--admin-space-sheet-padding);
 }
 
 .vehicle-type-detail-hero {
   display: flex;
   align-items: center;
-  gap: 13px;
-  padding-bottom: 22px;
+  gap: var(--admin-space-component-gap);
+  padding-bottom: var(--admin-space-component-gap);
   border-bottom: 1px solid var(--admin-border);
 }
 
@@ -157,59 +161,63 @@
   background: var(--admin-blue-soft);
   color: var(--admin-blue);
   font-size: 18px;
-  font-weight: var(--admin-font-weight-bold);
+  font-weight: var(--admin-weight-bold);
 }
 
 .vehicle-type-detail-hero h3 {
   margin: 0;
   color: var(--admin-text-strong);
-  font-size: 17px;
-  font-weight: var(--admin-font-weight-bold);
+  font-size: var(--admin-type-section-heading-size);
+  font-weight: var(--admin-weight-bold);
+  line-height: var(--admin-type-section-heading-line-height);
 }
 
 .vehicle-type-detail-hero p {
-  margin: 5px 0 0;
+  margin: var(--admin-space-title-copy-gap) 0 0;
   color: var(--admin-text-muted);
-  font-size: var(--admin-font-size-xs);
+  font-size: var(--admin-type-helper-size);
+  line-height: var(--admin-type-helper-line-height);
 }
 
 .vehicle-type-detail-fields {
   display: grid;
-  gap: 20px;
+  gap: var(--admin-space-field-gap);
   margin: 0;
-  padding-top: 23px;
+  padding-top: var(--admin-space-component-gap);
 }
 
 .vehicle-type-detail-fields div {
   display: grid;
-  gap: 7px;
+  gap: var(--admin-space-label-control-gap);
 }
 
 .vehicle-type-detail-fields dt {
   color: var(--admin-text-muted);
-  font-size: var(--admin-font-size-xs);
-  font-weight: var(--admin-font-weight-medium);
+  font-size: var(--admin-type-label-size);
+  font-weight: var(--admin-weight-medium);
+  line-height: var(--admin-type-label-line-height);
 }
 
 .vehicle-type-detail-fields dd {
   margin: 0;
   color: var(--admin-text-strong);
-  font-size: var(--admin-font-size-base);
+  font-size: var(--admin-type-body-size);
   overflow-wrap: anywhere;
+  line-height: var(--admin-type-body-line-height);
 }
 
 .vehicle-types-success {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
-  margin: 0 0 14px;
-  padding: 10px 13px;
+  gap: var(--admin-space-control-gap);
+  margin: 0 0 var(--admin-space-component-gap);
+  padding: var(--admin-space-notice-padding);
   border: 1px solid var(--admin-success-border);
   border-radius: var(--admin-radius-control);
   background: var(--admin-success-soft);
   color: #357b53;
-  font-size: var(--admin-font-size-sm);
-  line-height: 1.5;
+  font-size: var(--admin-type-secondary-body-size);
+  line-height: var(--admin-type-secondary-body-line-height);
 }
 
 .vehicle-types-success svg {
@@ -218,37 +226,38 @@
 }
 
 .vehicle-type-detail-success {
-  margin: 0 25px 18px;
+  margin: 0 var(--admin-space-sheet-inline) var(--admin-space-component-gap);
 }
 
 .vehicle-type-detail-actions {
   display: flex;
   justify-content: flex-end;
-  margin-top: 22px;
+  margin-top: var(--admin-space-component-gap);
 }
 
 .vehicle-type-form {
   display: grid;
-  gap: 18px;
-  padding: 22px 25px 0;
+  gap: var(--admin-space-form-gap);
+  padding: var(--admin-space-dialog-padding) var(--admin-space-form-inline) 0;
 }
 
 .vehicle-type-form-error {
-  padding: 11px 12px;
+  padding: var(--admin-space-notice-padding);
   border: 1px solid #f0d0ce;
   border-radius: var(--admin-radius-control);
   background: #fff7f6;
   color: #a63732;
-  font-size: var(--admin-font-size-xs);
-  line-height: 1.5;
+  font-size: var(--admin-type-error-size);
+  line-height: var(--admin-type-error-line-height);
 }
 
 .vehicle-type-form-field {
   display: grid;
-  gap: 7px;
+  gap: var(--admin-space-label-control-gap);
   color: var(--admin-text-strong);
-  font-size: var(--admin-font-size-xs);
-  font-weight: var(--admin-font-weight-semibold);
+  font-size: var(--admin-type-helper-size);
+  font-weight: var(--admin-weight-semibold);
+  line-height: var(--admin-type-helper-line-height);
 }
 
 .vehicle-type-form-field input,
@@ -257,14 +266,15 @@
   box-sizing: border-box;
   width: 100%;
   min-height: 42px;
-  padding: 9px 12px;
+  padding: var(--admin-space-control-padding);
   border: 1px solid var(--admin-border);
   border-radius: var(--admin-radius-control);
   background: var(--background);
   color: var(--admin-text-strong);
   font: inherit;
-  font-size: var(--admin-font-size-base);
-  font-weight: var(--admin-font-weight-regular);
+  font-size: var(--admin-type-helper-size);
+  font-weight: var(--admin-weight-regular);
+  line-height: var(--admin-type-helper-line-height);
 }
 
 .vehicle-type-form-field textarea {
@@ -288,9 +298,9 @@
 
 .vehicle-type-form-field-error {
   color: #b63838;
-  font-size: var(--admin-font-size-xs);
-  font-weight: var(--admin-font-weight-medium);
-  line-height: 1.45;
+  font-size: var(--admin-type-error-size);
+  font-weight: var(--admin-weight-medium);
+  line-height: var(--admin-type-error-line-height);
 }
 
 .vehicle-type-form-actions {
@@ -298,9 +308,9 @@
   bottom: 0;
   display: flex;
   justify-content: flex-end;
-  gap: 9px;
-  margin: 2px -25px 0;
-  padding: 15px 25px;
+  gap: var(--admin-space-action-gap);
+  margin: var(--admin-space-1) calc(-1 * var(--admin-space-form-inline)) 0;
+  padding: var(--admin-space-table-cell-y) var(--admin-space-form-inline);
   border-top: 1px solid var(--admin-border);
   background: color-mix(in srgb, var(--background) 96%, transparent);
 }
@@ -317,7 +327,7 @@
 
 @media (max-width: 760px) {
   .vehicle-types-page.admin-page-content {
-    padding: 26px 15px 20px;
+    padding: var(--admin-space-page-block) var(--admin-space-page-inline);
   }
 
   .vehicle-types-page .page-intro {
@@ -325,7 +335,7 @@
   }
 
   .vehicle-types-section {
-    margin-top: 22px;
+    margin-top: var(--admin-space-section-gap);
   }
 
   .vehicle-types-table-wrap {
@@ -334,15 +344,15 @@
 
   .vehicle-types-mobile-list {
     display: grid;
-    gap: 10px;
-    padding: 12px;
+    gap: var(--admin-space-card-gap);
+    padding: var(--admin-space-3);
   }
 
   .vehicle-types-mobile-sort {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 8px;
-    padding: 12px 12px 0;
+    gap: var(--admin-space-action-gap);
+    padding: var(--admin-space-3) var(--admin-space-3) 0;
   }
 
   .vehicle-types-mobile-sort .vehicle-type-sort {
@@ -350,13 +360,14 @@
     min-width: 0;
     min-height: 36px;
     justify-content: center;
-    padding: 6px 8px;
+    padding: var(--admin-space-3) var(--admin-space-3) 0;
     border: 1px solid var(--admin-border);
     border-radius: var(--admin-radius-control);
     background: var(--background);
-    font-size: var(--admin-font-size-sm);
+    font-size: var(--admin-type-helper-size);
     text-align: center;
     overflow-wrap: anywhere;
+    line-height: var(--admin-type-helper-line-height);
   }
 
   .vehicle-types-mobile-sort .vehicle-type-sort[aria-pressed='true'] {
@@ -367,7 +378,7 @@
 
   .vehicle-type-mobile-card {
     min-width: 0;
-    padding: 14px;
+    padding: var(--admin-space-card-padding);
     border: 1px solid var(--admin-border);
     border-radius: var(--admin-radius-panel);
     background: var(--background);
@@ -377,30 +388,33 @@
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
-    gap: 12px;
+    gap: var(--admin-space-component-gap);
   }
 
   .vehicle-type-mobile-heading h2 {
     min-width: 0;
     margin: 0;
     color: var(--admin-text-strong);
-    font-size: var(--admin-font-size-emphasis);
-    font-weight: var(--admin-font-weight-semibold);
+    font-size: var(--admin-type-helper-size);
+    font-weight: var(--admin-weight-semibold);
     overflow-wrap: anywhere;
+    line-height: var(--admin-type-helper-line-height);
   }
 
   .vehicle-type-mobile-heading > span,
   .vehicle-type-mobile-footer > span {
     flex: 0 0 auto;
     color: var(--admin-text-muted);
-    font-size: var(--admin-font-size-xs);
+    font-size: var(--admin-type-helper-size);
+    line-height: var(--admin-type-helper-line-height);
   }
 
   .vehicle-type-mobile-card > p {
-    margin: 9px 0 14px;
+    margin: var(--admin-space-title-copy-gap) 0 var(--admin-space-component-gap);
     color: var(--admin-text-muted);
-    font-size: var(--admin-font-size-base);
+    font-size: var(--admin-type-helper-size);
     overflow-wrap: anywhere;
+    line-height: var(--admin-type-helper-line-height);
   }
 
   .vehicle-type-mobile-footer {
@@ -408,15 +422,15 @@
     flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
-    gap: 9px;
-    padding-top: 11px;
+    gap: var(--admin-space-action-gap);
+    padding-top: var(--admin-space-table-cell-y);
     border-top: 1px solid var(--admin-border);
   }
 
   .vehicle-types-panel .table-pagination {
     align-items: flex-start;
     flex-direction: column;
-    padding: 13px;
+    padding: var(--admin-space-table-cell-y) var(--admin-space-table-cell-x);
   }
 
   .vehicle-types-panel .pagination-controls {
@@ -429,19 +443,19 @@
   .vehicle-types-page .page-intro {
     flex-direction: column;
     align-items: stretch;
-    gap: 14px;
+    gap: var(--admin-space-action-gap);
   }
 
   .vehicle-type-form {
-    padding-right: 19px;
-    padding-left: 19px;
+    padding-right: var(--admin-space-form-inline);
+    padding-left: var(--admin-space-form-inline);
   }
 
   .vehicle-type-form-actions {
-    margin-right: -19px;
-    margin-left: -19px;
-    padding-right: 19px;
-    padding-left: 19px;
+    margin-right: calc(-1 * var(--admin-space-form-inline));
+    margin-left: calc(-1 * var(--admin-space-form-inline));
+    padding-right: var(--admin-space-form-inline);
+    padding-left: var(--admin-space-form-inline);
   }
 
 }

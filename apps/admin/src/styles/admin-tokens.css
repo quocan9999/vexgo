@@ -15,17 +15,152 @@
   --admin-danger: #a63732;
   --success: var(--admin-success);
   --status-muted: #d8dee8;
+
+  /* Existing geometry and color references stay outside the type/space refresh. */
   --admin-radius-control: 8px;
   --admin-radius-panel: 10px;
+  --admin-radius-card: var(--admin-radius-panel);
+  --admin-surface: var(--background);
+  --admin-surface-muted: #f8fafc;
   --admin-control-height: 37px;
-  --admin-font-size-2xs: 9px;
-  --admin-font-size-xs: 10px;
-  --admin-font-size-sm: 11px;
-  --admin-font-size-md: 12px;
-  --admin-font-size-base: 13px;
-  --admin-font-size-emphasis: 14px;
-  --admin-font-weight-regular: 450;
-  --admin-font-weight-medium: 600;
-  --admin-font-weight-semibold: 650;
-  --admin-font-weight-bold: 700;
+
+  /* Geist is the Admin font family. Weight primitives feed semantic type roles. */
+  --admin-weight-regular: 400;
+  --admin-weight-medium: 500;
+  --admin-weight-semibold: 600;
+  --admin-weight-bold: 700;
+
+  /* Semantic typography: fixed rem line heights keep vertical rhythm predictable. */
+  --admin-type-display-size: 2.6875rem;
+  --admin-type-display-line-height: 3.25rem;
+  --admin-type-display-weight: var(--admin-weight-bold);
+  --admin-type-page-title-size: 1.75rem;
+  --admin-type-page-title-line-height: 2.125rem;
+  --admin-type-page-title-weight: var(--admin-weight-bold);
+  --admin-type-section-heading-size: 1.25rem;
+  --admin-type-section-heading-line-height: 1.625rem;
+  --admin-type-section-heading-weight: var(--admin-weight-semibold);
+  --admin-type-component-title-size: 1rem;
+  --admin-type-component-title-line-height: 1.375rem;
+  --admin-type-component-title-weight: var(--admin-weight-semibold);
+  --admin-type-body-size: 0.875rem;
+  --admin-type-body-line-height: 1.375rem;
+  --admin-type-body-weight: var(--admin-weight-regular);
+  --admin-type-secondary-body-size: 0.8125rem;
+  --admin-type-secondary-body-line-height: 1.25rem;
+  --admin-type-secondary-body-weight: var(--admin-weight-regular);
+  --admin-type-label-size: 0.8125rem;
+  --admin-type-label-line-height: 1.25rem;
+  --admin-type-label-weight: var(--admin-weight-semibold);
+  --admin-type-helper-size: 0.75rem;
+  --admin-type-helper-line-height: 1.125rem;
+  --admin-type-helper-weight: var(--admin-weight-regular);
+  --admin-type-error-size: 0.75rem;
+  --admin-type-error-line-height: 1.125rem;
+  --admin-type-error-weight: var(--admin-weight-medium);
+  --admin-type-table-header-size: 0.75rem;
+  --admin-type-table-header-line-height: 1.125rem;
+  --admin-type-table-header-weight: var(--admin-weight-semibold);
+  --admin-type-table-body-size: 0.875rem;
+  --admin-type-table-body-line-height: 1.375rem;
+  --admin-type-table-body-weight: var(--admin-weight-regular);
+  --admin-type-button-size: 0.875rem;
+  --admin-type-button-line-height: 1.25rem;
+  --admin-type-button-weight: var(--admin-weight-semibold);
+  --admin-type-badge-size: 0.75rem;
+  --admin-type-badge-line-height: 1rem;
+  --admin-type-badge-weight: var(--admin-weight-semibold);
+  --admin-type-caption-size: 0.75rem;
+  --admin-type-caption-line-height: 1.125rem;
+  --admin-type-caption-weight: var(--admin-weight-regular);
+  --admin-type-eyebrow-size: 0.625rem;
+  --admin-type-eyebrow-line-height: 1rem;
+  --admin-type-eyebrow-weight: var(--admin-weight-semibold);
+  --admin-type-metric-size: 1.75rem;
+  --admin-type-metric-line-height: 2.25rem;
+  --admin-type-metric-weight: var(--admin-weight-bold);
+  --admin-type-metric-compact-size: 1.5rem;
+  --admin-type-metric-compact-line-height: 2rem;
+  --admin-type-metric-compact-weight: var(--admin-weight-bold);
+
+  /* 4px base spacing scale: 1–16 map to 4px–64px in rem. */
+  --admin-space-1: 0.25rem;
+  --admin-space-2: 0.5rem;
+  --admin-space-3: 0.75rem;
+  --admin-space-4: 1rem;
+  --admin-space-5: 1.25rem;
+  --admin-space-6: 1.5rem;
+  --admin-space-7: 1.75rem;
+  --admin-space-8: 2rem;
+  --admin-space-9: 2.25rem;
+  --admin-space-10: 2.5rem;
+  --admin-space-11: 2.75rem;
+  --admin-space-12: 3rem;
+  --admin-space-13: 3.25rem;
+  --admin-space-14: 3.5rem;
+  --admin-space-15: 3.75rem;
+  --admin-space-16: 4rem;
+
+  /* Semantic spacing aliases. Keep geometry, icons, charts, and sheet widths separate. */
+  --admin-space-page-inline: var(--admin-space-8);
+  --admin-space-page-block: var(--admin-space-8);
+  --admin-space-section-gap: var(--admin-space-6);
+  --admin-space-component-gap: var(--admin-space-4);
+  --admin-space-toolbar-gap: var(--admin-space-3);
+  --admin-space-form-gap: var(--admin-space-4);
+  --admin-space-form-inline: var(--admin-space-6);
+  --admin-space-field-gap: var(--admin-space-3);
+  --admin-space-control-gap: var(--admin-space-2);
+  --admin-space-label-control-gap: var(--admin-space-2);
+  --admin-space-title-copy-gap: var(--admin-space-1);
+  --admin-space-action-gap: var(--admin-space-2);
+  --admin-space-card-gap: var(--admin-space-4);
+  --admin-space-card-padding: var(--admin-space-5);
+  --admin-space-summary-card-padding: var(--admin-space-3);
+  --admin-space-state-padding: var(--admin-space-8) var(--admin-space-5);
+  --admin-space-notice-padding: var(--admin-space-3) var(--admin-space-4);
+  --admin-space-control-padding: var(--admin-space-2) var(--admin-space-3);
+  --admin-space-dialog-padding: var(--admin-space-6);
+  --admin-space-sheet-padding: var(--admin-space-6);
+  --admin-space-sheet-inline: var(--admin-space-6);
+  --admin-space-table-cell-x: var(--admin-space-4);
+  --admin-space-table-cell-y: var(--admin-space-3);
+  --admin-space-sidebar-inline: var(--admin-space-4);
+  --admin-space-sidebar-top: var(--admin-space-6);
+  --admin-space-sidebar-section-gap: var(--admin-space-8);
+  --admin-space-sidebar-nav-offset: var(--admin-space-14);
+  --admin-space-sidebar-link-gap: var(--admin-space-3);
+  --admin-space-sidebar-label-inline: var(--admin-space-2);
+  --admin-space-sidebar-label-bottom: var(--admin-space-3);
+  --admin-space-sidebar-link-inline: var(--admin-space-3);
+  --admin-space-sidebar-mobile-inline: var(--admin-space-3);
+}
+
+@media (max-width: 900px) {
+  :root {
+    --admin-type-display-size: 2rem;
+    --admin-type-display-line-height: 2.5rem;
+  }
+}
+
+@media (max-width: 700px) {
+  :root {
+    --admin-type-display-size: 1.75rem;
+    --admin-type-display-line-height: 2.125rem;
+    --admin-type-page-title-size: 1.5rem;
+    --admin-type-page-title-line-height: 1.875rem;
+    --admin-space-page-inline: var(--admin-space-4);
+    --admin-space-page-block: var(--admin-space-6);
+    --admin-space-card-padding: var(--admin-space-4);
+    --admin-space-dialog-padding: var(--admin-space-4);
+    --admin-space-sheet-padding: var(--admin-space-4);
+    --admin-space-sheet-inline: var(--admin-space-4);
+    --admin-space-form-inline: var(--admin-space-4);
+  }
+}
+
+@media (max-width: 389px) {
+  :root {
+    --admin-space-page-inline: var(--admin-space-3);
+  }
 }
