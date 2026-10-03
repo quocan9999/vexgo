@@ -46,6 +46,8 @@ export type SearchTripsParams = {
   to?: string;
   search?: string;
   vehicleType?: string;
+  operator?: string;
+  timeRange?: string;
   departureDate?: string;
   busCompanyId?: number;
   vehicleTypeId?: number;
@@ -105,5 +107,27 @@ export const tripsApi = {
       throw await parseError(response, 'Không thể tải sơ đồ ghế');
     const body: { data: ApiTripSeat[] } = await response.json();
     return body.data;
+  },
+};
+
+export type ApiBusCompany = {
+  busCompanyId: number;
+  code: string;
+  name: string;
+  status: string;
+};
+
+export const busCompaniesApi = {
+  async getBusCompanies(): Promise<ApiBusCompany[]> {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/bus-companies?pageSize=100&status=HOAT_DONG`,
+      );
+      if (!response.ok) return [];
+      const body: { data?: ApiBusCompany[] } = await response.json();
+      return body.data ?? [];
+    } catch {
+      return [];
+    }
   },
 };

@@ -21,8 +21,8 @@ export function TripCard({
       onClick={() => onSelect?.(trip)}
       className={`bg-white rounded-xl transition cursor-pointer select-none ${
         isSelected
-          ? 'border-[3px] border-[#f05123] shadow-[0_0_0_4px_rgba(240,81,35,0.15)] shadow-lg'
-          : 'border border-slate-100 hover:border-[#f05123]/50 hover:shadow-md'
+          ? 'border-[3px] border-[#ea4a18] shadow-[0_0_0_4px_rgba(240,81,35,0.2)] shadow-lg'
+          : 'border-2 border-slate-300 shadow-sm hover:border-[#f05123] hover:shadow-md'
       }`}
     >
       <div className="p-5">
@@ -96,7 +96,7 @@ export function TripCard({
       </div>
 
       {/* Bottom actions */}
-      <div className="flex justify-end items-center px-5 py-3 border-t border-slate-100">
+      <div className="flex justify-end items-center px-5 py-3 border-t border-slate-200">
         <button
           onClick={(e) => {
             e.stopPropagation();

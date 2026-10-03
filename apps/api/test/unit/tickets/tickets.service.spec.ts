@@ -1,4 +1,8 @@
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TicketsService } from '../../../src/tickets/tickets.service.js';
 import type { PrismaService } from '../../../src/prisma/prisma.service.js';
@@ -78,7 +82,18 @@ describe('TicketsService', () => {
       count: vi.fn(),
       findMany: vi.fn(),
       findUnique: vi.fn(),
+      update: vi.fn(),
     },
+    gheChuyenXe: {
+      update: vi.fn(),
+    },
+    phieuDatVe: {
+      update: vi.fn(),
+    },
+    donGiaoDich: {
+      update: vi.fn(),
+    },
+    $transaction: vi.fn(async (cb: (tx: any) => Promise<any>) => cb(prisma)),
   };
 
   const config = {
@@ -275,6 +290,66 @@ describe('TicketsService', () => {
       expect(result.data.ticketId).toBe(1);
       expect(result.data.ticketCode).toBe('VE-001');
       expect(result.data.route).toBe('TP.HCM - Đà Lạt');
+    });
+  });
+
+  describe('cancelTicket', () => {
+    it('throws NotFoundException when ticket does not exist', async () => {
+      prisma.ve.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.cancelTicket({
+          ticketCode: 'INVALID',
+          phoneNumber: '0901234567',
+        }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('throws BadRequestException when ticket is already cancelled', async () => {
+      prisma.ve.findUnique.mockResolvedValue({
+        ...sampleTicket,
+        trangThai: 'HUY',
+      });
+
+      await expect(
+        service.cancelTicket({
+          ticketCode: 'VE-001',
+          phoneNumber: '0901234567',
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('cancels ticket, frees seat, and returns refund info on success', async () => {
+      const futureTicket = {
+        ...sampleTicket,
+        gheChuyenXe: {
+          ...sampleTicket.gheChuyenXe,
+          chuyenXe: {
+            ...sampleTicket.gheChuyenXe.chuyenXe,
+            ngayKhoiHanh: new Date('2029-01-01T00:00:00.000Z'),
+            gioKhoiHanh: new Date('1970-01-01T08:00:00.000Z'),
+          },
+        },
+      };
+      prisma.ve.findUnique.mockResolvedValue(futureTicket);
+      prisma.ve.count.mockResolvedValue(0);
+
+      const result = await service.cancelTicket({
+        ticketCode: 'VE-001',
+        phoneNumber: '0901234567',
+      });
+
+      expect(prisma.ve.update).toHaveBeenCalledWith({
+        where: { veId: 1 },
+        data: { trangThai: 'HUY' },
+      });
+      expect(prisma.gheChuyenXe.update).toHaveBeenCalledWith({
+        where: { gheChuyenXeId: 11 },
+        data: { trangThai: 'TRONG' },
+      });
+      expect(result.data.status).toBe('HUY');
+      expect(result.data.cancelFee).toBe(25000);
+      expect(result.data.refundAmount).toBe(225000);
     });
   });
 });

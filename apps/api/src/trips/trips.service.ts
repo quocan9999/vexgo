@@ -52,6 +52,48 @@ function combineDeparture(
   return new Date(businessDayStart.getTime() + elapsedSinceMidnight);
 }
 
+function combineArrival(
+  departureDate: Date,
+  departureTime: Date,
+  arrivalTime: Date | null,
+  businessTimeZone: string,
+): string | null {
+  if (!arrivalTime) return null;
+  const depTime = combineDeparture(departureDate, departureTime, businessTimeZone);
+  let arrTime = combineDeparture(departureDate, arrivalTime, businessTimeZone);
+  if (arrTime < depTime) {
+    arrTime = new Date(arrTime.getTime() + 24 * 60 * 60 * 1000);
+  }
+  return arrTime.toISOString();
+}
+
+function matchesTimeRange(time: Date, timeRange?: string): boolean {
+  if (!timeRange || timeRange === 'all') return true;
+  const hour = time.getUTCHours();
+  const minute = time.getUTCMinutes();
+  const totalMinutes = hour * 60 + minute;
+
+  switch (timeRange) {
+    case 'early-morning':
+      return totalMinutes >= 0 && totalMinutes < 360; // 00:00 - 06:00
+    case 'morning':
+      return totalMinutes >= 360 && totalMinutes < 720; // 06:00 - 12:00
+    case 'afternoon':
+      return totalMinutes >= 720 && totalMinutes < 1080; // 12:00 - 18:00
+    case 'evening':
+      return totalMinutes >= 1080 && totalMinutes < 1440; // 18:00 - 24:00
+    default: {
+      const match = timeRange.match(/^(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})$/);
+      if (match) {
+        const start = parseInt(match[1], 10) * 60 + parseInt(match[2], 10);
+        const end = parseInt(match[3], 10) * 60 + parseInt(match[4], 10);
+        return totalMinutes >= start && totalMinutes < end;
+      }
+      return true;
+    }
+  }
+}
+
 function findFare(
   trip: TripRecord,
   fares: FareRecord[],
@@ -88,14 +130,19 @@ function mapTrip(
       origin: trip.tuyenXe.diemDi,
       destination: trip.tuyenXe.diemDen,
       distance: null,
-      durationMinutes: null,
+      durationMinutes: trip.tuyenXe.thoiGianChayPhut ?? null,
     },
     departureTime: combineDeparture(
       trip.ngayKhoiHanh,
       trip.gioKhoiHanh,
       businessTimeZone,
     ).toISOString(),
-    arrivalTime: null,
+    arrivalTime: combineArrival(
+      trip.ngayKhoiHanh,
+      trip.gioKhoiHanh,
+      trip.gioDen,
+      businessTimeZone,
+    ),
     vehicle: {
       id: trip.xe.xeId,
       typeId: trip.xe.loaiXeId,
@@ -185,7 +232,7 @@ export class TripsService {
       trangThai: 'CHUA_KHOI_HANH',
     };
 
-    if (dto.from || dto.to || dto.busCompanyId) {
+    if (dto.from || dto.to || dto.busCompanyId || dto.operator) {
       where.tuyenXe = {};
       if (dto.from) {
         where.tuyenXe.diemDi = { contains: dto.from };
@@ -195,6 +242,9 @@ export class TripsService {
       }
       if (dto.busCompanyId) {
         where.tuyenXe.nhaXeId = dto.busCompanyId;
+      }
+      if (dto.operator) {
+        where.tuyenXe.nhaXe = { tenNhaXe: { contains: dto.operator } };
       }
     }
 
@@ -240,7 +290,7 @@ export class TripsService {
           trip.ngayKhoiHanh,
           trip.gioKhoiHanh,
           businessTimeZone,
-        ) > now,
+        ) > now && matchesTimeRange(trip.gioKhoiHanh, dto.timeRange),
     );
 
     const tripDates = chuyenXes.map(({ ngayKhoiHanh }) => ngayKhoiHanh);

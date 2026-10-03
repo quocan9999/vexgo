@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -12,6 +13,7 @@ import {
 } from '../common/time/business-date.js';
 import type { TicketQueryDto } from './dto/ticket-query.dto.js';
 import type { TicketLookupQueryDto } from './dto/ticket-lookup-query.dto.js';
+import type { CancelTicketDto } from './dto/cancel-ticket.dto.js';
 
 function combineDeparture(
   date: Date,
@@ -25,6 +27,21 @@ function combineDeparture(
       time.getUTCSeconds()) *
     1000;
   return new Date(businessDayStart.getTime() + elapsedSinceMidnight);
+}
+
+function combineArrival(
+  departureDate: Date,
+  departureTime: Date,
+  arrivalTime: Date | null,
+  businessTimeZone: string,
+): string | null {
+  if (!arrivalTime) return null;
+  const depTime = combineDeparture(departureDate, departureTime, businessTimeZone);
+  let arrTime = combineDeparture(departureDate, arrivalTime, businessTimeZone);
+  if (arrTime < depTime) {
+    arrTime = new Date(arrTime.getTime() + 24 * 60 * 60 * 1000);
+  }
+  return arrTime.toISOString();
 }
 
 function normalizePhone(phone: string): string {
@@ -269,6 +286,96 @@ export class TicketsService {
     return { data: this.mapTicket(ticket) };
   }
 
+  async cancelTicket(dto: CancelTicketDto) {
+    const ticket = await this.prisma.ve.findUnique({
+      where: { maVe: dto.ticketCode.trim() },
+      include: TICKET_INCLUDE,
+    });
+
+    if (!ticket) {
+      throw new NotFoundException({
+        error: 'TICKET_NOT_FOUND',
+        message: 'Không tìm thấy vé hoặc thông tin xác minh không khớp.',
+      });
+    }
+
+    const customerPhone =
+      ticket.phieuDatVe.donGiaoDich.soDienThoaiKhachHang || '';
+    if (!phonesMatch(customerPhone, dto.phoneNumber)) {
+      throw new NotFoundException({
+        error: 'TICKET_NOT_FOUND',
+        message: 'Không tìm thấy vé hoặc thông tin xác minh không khớp.',
+      });
+    }
+
+    if (ticket.trangThai === 'HUY') {
+      throw new BadRequestException({
+        error: 'TICKET_ALREADY_CANCELLED',
+        message: 'Vé này đã được hủy trước đó.',
+      });
+    }
+
+    const chuyenXe = ticket.gheChuyenXe?.chuyenXe;
+    if (chuyenXe?.ngayKhoiHanh && chuyenXe?.gioKhoiHanh) {
+      const departureDateTime = combineDeparture(
+        chuyenXe.ngayKhoiHanh,
+        chuyenXe.gioKhoiHanh,
+        this.businessTimeZone,
+      );
+      if (new Date() >= departureDateTime) {
+        throw new BadRequestException({
+          error: 'TRIP_ALREADY_DEPARTED',
+          message: 'Không thể hủy vé sau khi chuyến xe đã khởi hành.',
+        });
+      }
+    }
+
+    const price = Number(ticket.giaThucTe);
+    const cancelFee = Math.round(price * 0.1);
+    const refundAmount = price - cancelFee;
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.ve.update({
+        where: { veId: ticket.veId },
+        data: { trangThai: 'HUY' },
+      });
+
+      await tx.gheChuyenXe.update({
+        where: { gheChuyenXeId: ticket.gheChuyenXeId },
+        data: { trangThai: 'TRONG' },
+      });
+
+      const remainingActiveTickets = await tx.ve.count({
+        where: {
+          phieuDatVeId: ticket.phieuDatVeId,
+          trangThai: { not: 'HUY' },
+        },
+      });
+
+      if (remainingActiveTickets === 0) {
+        await tx.phieuDatVe.update({
+          where: { phieuDatVeId: ticket.phieuDatVeId },
+          data: { trangThai: 'DA_HUY' },
+        });
+        await tx.donGiaoDich.update({
+          where: { donGiaoDichId: ticket.phieuDatVe.donGiaoDichId },
+          data: { trangThai: 'DA_HUY' },
+        });
+      }
+    });
+
+    return {
+      data: {
+        ticketId: ticket.veId,
+        ticketCode: ticket.maVe,
+        status: 'HUY',
+        cancelFee,
+        refundAmount,
+        message: 'Hủy vé thành công.',
+      },
+    };
+  }
+
   private mapTicket(ticket: any) {
     const chuyenXe = ticket.gheChuyenXe?.chuyenXe;
     const tuyenXe = chuyenXe?.tuyenXe;
@@ -276,12 +383,22 @@ export class TicketsService {
     const loaiXe = chuyenXe?.xe?.loaiXe;
 
     let departureTime: string | null = null;
+    let arrivalTime: string | null = null;
     if (chuyenXe?.ngayKhoiHanh && chuyenXe?.gioKhoiHanh) {
       departureTime = combineDeparture(
         chuyenXe.ngayKhoiHanh,
         chuyenXe.gioKhoiHanh,
         this.businessTimeZone,
       ).toISOString();
+
+      if (chuyenXe?.gioDen) {
+        arrivalTime = combineArrival(
+          chuyenXe.ngayKhoiHanh,
+          chuyenXe.gioKhoiHanh,
+          chuyenXe.gioDen,
+          this.businessTimeZone,
+        );
+      }
     }
 
     const route =
@@ -303,6 +420,7 @@ export class TicketsService {
       busCompanyName: nhaXe?.tenNhaXe ?? null,
       vehicleType: loaiXe?.tenLoai ?? null,
       departureTime,
+      arrivalTime,
       seatNumber: ticket.gheChuyenXe?.ghe?.soGhe ?? null,
       seatPosition: ticket.gheChuyenXe?.ghe?.viTri ?? null,
       price: Number(ticket.giaThucTe ?? ticket.giaNiemYet ?? 0),

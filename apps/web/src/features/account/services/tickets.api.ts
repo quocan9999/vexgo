@@ -9,6 +9,7 @@ export type TicketItem = {
   busCompanyName: string | null;
   vehicleType: string | null;
   departureTime: string | null;
+  arrivalTime?: string | null;
   seatNumber: string | null;
   seatPosition: string | null;
   price: number;
@@ -123,8 +124,8 @@ export const ticketsApi = {
     phoneNumber: string,
   ): Promise<{ data: TicketItem }> {
     const params = new URLSearchParams({
-      ticketCode,
-      phoneNumber,
+      ticketCode: ticketCode.trim(),
+      phoneNumber: phoneNumber.trim(),
     });
 
     const res = await fetch(`${API_BASE_URL}/tickets/lookup?${params.toString()}`);
@@ -139,4 +140,42 @@ export const ticketsApi = {
 
     return res.json();
   },
+
+  async cancelTicket(
+    ticketCode: string,
+    phoneNumber: string,
+    reason?: string,
+  ): Promise<{ data: CancelTicketResult }> {
+    const res = await fetch(`${API_BASE_URL}/tickets/cancel`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        ticketCode: ticketCode.trim(),
+        phoneNumber: phoneNumber.trim(),
+        reason,
+      }),
+    });
+
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      throw new ApiError(
+        error.message || 'Hủy vé thất bại',
+        res.status,
+      );
+    }
+
+    return res.json();
+  },
 };
+
+export interface CancelTicketResult {
+  ticketId: number;
+  ticketCode: string;
+  status: string;
+  cancelFee: number;
+  refundAmount: number;
+  message: string;
+}
+

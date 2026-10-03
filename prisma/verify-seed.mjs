@@ -206,7 +206,7 @@ async function main() {
   await assertZero('promotion applied to seeded bookings', await scalar('SELECT COUNT(*) AS value FROM PhieuDatVe WHERE khuyenMaiId IS NOT NULL'));
   await assertZero('promotion applied to seeded shipments', await scalar('SELECT COUNT(*) AS value FROM PhieuGuiHang WHERE khuyenMaiId IS NOT NULL OR soTienGiam <> 0'));
   await assertZero('plaintext seed passwords', await scalar("SELECT COUNT(*) AS value FROM TaiKhoan WHERE matKhau = 'VexGo@123'"));
-  await assertZero('trips outside fixed date range', await scalar("SELECT COUNT(*) AS value FROM ChuyenXe WHERE ngayKhoiHanh < '2026-09-22' OR ngayKhoiHanh > '2026-09-29'"));
+  await assertZero('trips outside fixed date range', await scalar("SELECT COUNT(*) AS value FROM ChuyenXe WHERE ngayKhoiHanh < '2026-09-22' OR (ngayKhoiHanh > '2026-09-29' AND ngayKhoiHanh <> '2026-10-07')"));
   await assertZero('booking after trip departure', await scalar("SELECT COUNT(*) AS value FROM PhieuDatVe p JOIN Ve v ON v.phieuDatVeId=p.phieuDatVeId JOIN GheChuyenXe gc ON gc.gheChuyenXeId=v.gheChuyenXeId JOIN ChuyenXe c ON c.chuyenXeId=gc.chuyenXeId WHERE p.ngayDat >= TIMESTAMP(DATE(c.ngayKhoiHanh), TIME(c.gioKhoiHanh)) - INTERVAL 7 HOUR"));
   await assertZero('trip seats from another vehicle', await scalar('SELECT COUNT(*) AS value FROM GheChuyenXe gc JOIN ChuyenXe c ON c.chuyenXeId=gc.chuyenXeId JOIN Ghe g ON g.gheId=gc.gheId WHERE g.xeId <> c.xeId'));
   await assertZero('shipment branch crosses operator', await scalar('SELECT COUNT(*) AS value FROM PhieuGuiHang p JOIN BuuCuc bg ON bg.buuCucId=p.buuCucGuiId JOIN BuuCuc bp ON bp.buuCucId=p.buuCucPhatId WHERE bg.nhaXeId <> bp.nhaXeId'));

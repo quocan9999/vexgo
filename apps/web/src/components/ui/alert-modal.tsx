@@ -7,7 +7,7 @@ import { CheckCircle2, XCircle, AlertCircle, Info, X } from 'lucide-react';
 export interface AlertModalProps {
   isOpen: boolean;
   title: string;
-  message: string;
+  message?: string;
   confirmText?: string;
   variant?: 'success' | 'error' | 'warning' | 'info';
   onClose: () => void;
@@ -28,27 +28,27 @@ export const AlertModal: React.FC<AlertModalProps> = ({
     switch (variant) {
       case 'success':
         return (
-          <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center flex-shrink-0">
-            <CheckCircle2 className="w-6 h-6" />
+          <div className="w-14 h-14 rounded-2xl bg-emerald-50 border border-emerald-200/60 text-emerald-600 flex items-center justify-center flex-shrink-0 shadow-xs">
+            <CheckCircle2 className="w-7 h-7 stroke-[2.2]" />
           </div>
         );
       case 'error':
         return (
-          <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center flex-shrink-0">
-            <XCircle className="w-6 h-6" />
+          <div className="w-14 h-14 rounded-2xl bg-rose-50 border border-rose-200/60 text-rose-600 flex items-center justify-center flex-shrink-0 shadow-xs">
+            <XCircle className="w-7 h-7 stroke-[2.2]" />
           </div>
         );
       case 'warning':
         return (
-          <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center flex-shrink-0">
-            <AlertCircle className="w-6 h-6" />
+          <div className="w-14 h-14 rounded-2xl bg-amber-50 border border-amber-200/60 text-amber-500 flex items-center justify-center flex-shrink-0 shadow-xs">
+            <AlertCircle className="w-7 h-7 stroke-[2.2]" />
           </div>
         );
       case 'info':
       default:
         return (
-          <div className="w-12 h-12 rounded-2xl bg-sky-100 text-sky-600 flex items-center justify-center flex-shrink-0">
-            <Info className="w-6 h-6" />
+          <div className="w-14 h-14 rounded-2xl bg-sky-50 border border-sky-200/60 text-sky-600 flex items-center justify-center flex-shrink-0 shadow-xs">
+            <Info className="w-7 h-7 stroke-[2.2]" />
           </div>
         );
     }
@@ -57,14 +57,14 @@ export const AlertModal: React.FC<AlertModalProps> = ({
   const getButtonClass = () => {
     switch (variant) {
       case 'success':
-        return 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/20';
+        return 'bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white shadow-emerald-600/20';
       case 'error':
-        return 'bg-rose-600 hover:bg-rose-700 text-white shadow-rose-600/20';
+        return 'bg-rose-600 hover:bg-rose-700 active:scale-[0.99] text-white shadow-rose-600/20';
       case 'warning':
-        return 'bg-amber-500 hover:bg-amber-600 text-white shadow-amber-500/20';
+        return 'bg-amber-500 hover:bg-amber-600 active:scale-[0.99] text-white shadow-amber-500/20';
       case 'info':
       default:
-        return 'bg-sky-600 hover:bg-sky-700 text-white shadow-sky-600/20';
+        return 'bg-sky-600 hover:bg-sky-700 active:scale-[0.99] text-white shadow-sky-600/20';
     }
   };
 
@@ -74,14 +74,20 @@ export const AlertModal: React.FC<AlertModalProps> = ({
         role="alertdialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="relative w-full max-w-[360px] bg-white rounded-3xl p-6 shadow-2xl border border-slate-100 space-y-5 animate-in zoom-in-95 duration-200"
+        className="relative w-full max-w-[420px] bg-white rounded-3xl p-6 sm:p-7 shadow-2xl border border-slate-100 space-y-5 animate-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex flex-col items-center text-center gap-4">
+        <div className="flex flex-col items-center text-center gap-3.5">
           {renderIcon()}
-          <div className="space-y-1.5">
-            <h3 id={titleId} className="text-lg font-black text-slate-900 tracking-tight">{title}</h3>
-            <p className="text-sm text-slate-500 font-medium px-2">{message}</p>
+          <div className="space-y-2.5 w-full">
+            <h3 id={titleId} className="text-xl font-bold text-slate-900 tracking-tight leading-snug">
+              {title}
+            </h3>
+            {message && (
+              <div className="text-[14px] text-slate-600 leading-relaxed font-normal whitespace-pre-line px-1 sm:px-2">
+                {message}
+              </div>
+            )}
           </div>
         </div>
 
