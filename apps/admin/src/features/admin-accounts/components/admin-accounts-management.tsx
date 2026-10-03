@@ -63,6 +63,7 @@ type FilterOptionsState =
 
 const ROLE_LABELS: Record<string, string> = {
   NHA_XE_ADMIN: 'Quản trị nhà xe',
+  NHAN_VIEN_DIEU_HANH: 'Nhân viên điều hành',
   NHAN_VIEN_BAN_VE: 'Nhân viên bán vé',
   NHAN_VIEN_CSKH: 'Nhân viên CSKH',
   NHAN_VIEN_PHU_XE: 'Nhân viên phụ xe',

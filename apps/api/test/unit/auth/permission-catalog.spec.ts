@@ -27,9 +27,38 @@ describe('Admin permission defaults', () => {
       'fare-price:read',
       'fare-price:create',
       'fare-price:update',
+      'trip:read',
+      'trip:create',
+      'trip:update',
+      'trip:cancel',
       'role:read',
       'permission:assign',
       'customer:read',
+    ]);
+  });
+
+  it('assigns operational capabilities to NHAN_VIEN_DIEU_HANH by default', () => {
+    expect(ADMIN_ROLE_DEFAULT_PERMISSION_KEYS.NHAN_VIEN_DIEU_HANH).toEqual([
+      'vehicle-type:read',
+      'vehicle-type:create',
+      'vehicle-type:update',
+      'vehicle:read',
+      'vehicle:create',
+      'vehicle:update',
+      'seat:read',
+      'seat:create',
+      'seat:update',
+      'seat:delete',
+      'route:read',
+      'route:create',
+      'route:update',
+      'fare-price:read',
+      'fare-price:create',
+      'fare-price:update',
+      'trip:read',
+      'trip:create',
+      'trip:update',
+      'trip:cancel',
     ]);
   });
 
@@ -51,6 +80,10 @@ describe('Admin permission defaults', () => {
       'fare-price:read',
       'fare-price:create',
       'fare-price:update',
+      'trip:read',
+      'trip:create',
+      'trip:update',
+      'trip:cancel',
       'role:read',
       'permission:assign',
       'customer:read',
@@ -82,6 +115,10 @@ describe('Admin permission defaults', () => {
       'fare-price:read',
       'fare-price:create',
       'fare-price:update',
+      'trip:read',
+      'trip:create',
+      'trip:update',
+      'trip:cancel',
       'role:read',
       'permission:assign',
       'customer:read',
@@ -146,6 +183,7 @@ describe('Admin permission defaults', () => {
     expect(ADMIN_ROLE_PERMISSION_SCOPE_BY_NAME).toEqual({
       SUPER_ADMIN: 'platform',
       NHA_XE_ADMIN: 'tenant',
+      NHAN_VIEN_DIEU_HANH: 'tenant',
       NHAN_VIEN_BAN_VE: 'tenant',
       NHAN_VIEN_CSKH: 'tenant',
       NHAN_VIEN_PHU_XE: 'tenant',

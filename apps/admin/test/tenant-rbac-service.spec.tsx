@@ -26,6 +26,7 @@ const permissions: TenantRbacPermission[] = [
 
 const tenantRoles = [
   'NHA_XE_ADMIN',
+  'NHAN_VIEN_DIEU_HANH',
   'NHAN_VIEN_BAN_VE',
   'NHAN_VIEN_CSKH',
   'NHAN_VIEN_PHU_XE',
@@ -223,7 +224,7 @@ describe('tenant RBAC API service', () => {
   });
 
   it('replaces and resets a selected tenant role using tenant-scoped endpoints', async () => {
-    const role = config.roles[2];
+    const role = config.roles.find((item) => item.roleName === 'NHAN_VIEN_CSKH')!;
     const savedRole: TenantRbacRole = {
       ...role,
       overridePermissionKeys: ['route:read'],

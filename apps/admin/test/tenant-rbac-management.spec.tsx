@@ -67,6 +67,7 @@ const permissions: TenantRbacPermission[] = [
 
 const roleNames: readonly TenantRbacRoleName[] = [
   'NHA_XE_ADMIN',
+  'NHAN_VIEN_DIEU_HANH',
   'NHAN_VIEN_BAN_VE',
   'NHAN_VIEN_CSKH',
   'NHAN_VIEN_PHU_XE',
@@ -312,8 +313,9 @@ describe('tenant RBAC management', () => {
   });
 
   it('uses DELETE to restore inheritance and never conflates it with undo', async () => {
+    const targetRole = config.roles.find((role) => role.roleName === 'NHAN_VIEN_CSKH')!;
     const overriddenRole = {
-      ...config.roles[2],
+      ...targetRole,
       overridePermissionKeys: [],
       effectivePermissionKeys: [],
       source: 'override',
@@ -343,8 +345,7 @@ describe('tenant RBAC management', () => {
   it('keeps the draft and shows the API error when save fails', async () => {
     service.replaceTenantRolePermissions.mockRejectedValueOnce(new Error('Máy chủ từ chối.'));
     renderManagement();
-    await screen.findByRole('heading', { name: 'Phân quyền vai trò' });
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Gán quyền route:read cho NHA_XE_ADMIN' }));
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'Gán quyền route:read cho NHA_XE_ADMIN' }));
     fireEvent.click(screen.getByRole('button', { name: 'Lưu thay đổi' }));
     fireEvent.click(screen.getByRole('button', { name: 'Xác nhận lưu' }));
 
