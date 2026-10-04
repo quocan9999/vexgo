@@ -2,12 +2,22 @@ import type { TicketItem } from '@/features/account/services/tickets.api';
 
 export interface CancelEligibilityResult {
   eligible: boolean;
-  reason?: 'ALREADY_CANCELLED' | 'ALREADY_DEPARTED' | 'LESS_THAN_12_HOURS';
+  reason?:
+    | 'ALREADY_CANCELLED'
+    | 'ALREADY_DEPARTED'
+    | 'LESS_THAN_12_HOURS'
+    | 'DEPARTURE_TIME_UNAVAILABLE';
   title: string;
   message: string;
+  cancelFeeRate?: number;
+  cancelFee?: number;
+  refundAmount?: number;
 }
 
-export function formatTimeAndDate(isoString: string | null | undefined): { time: string; date: string } {
+export function formatTimeAndDate(isoString: string | null | undefined): {
+  time: string;
+  date: string;
+} {
   if (!isoString) return { time: '--:--', date: 'Chưa cập nhật' };
   try {
     const d = new Date(isoString);
@@ -27,7 +37,10 @@ export function formatTimeAndDate(isoString: string | null | undefined): { time:
 }
 
 export function checkTicketCancelEligibility(
-  ticket: Pick<TicketItem, 'status' | 'departureTime'> | null | undefined,
+  ticket:
+    | Pick<TicketItem, 'status' | 'departureTime' | 'cancellation'>
+    | null
+    | undefined,
   nowMs = Date.now(),
 ): CancelEligibilityResult {
   if (!ticket) {
@@ -36,6 +49,55 @@ export function checkTicketCancelEligibility(
       title: 'Không tìm thấy thông tin vé',
       message: 'Vui lòng kiểm tra lại mã vé và số điện thoại.',
     };
+  }
+
+  if (ticket.cancellation) {
+    const quote = ticket.cancellation;
+    if (quote.eligible) {
+      return {
+        eligible: true,
+        title: '',
+        message: '',
+        cancelFeeRate: quote.cancelFeeRate,
+        cancelFee: quote.cancelFee,
+        refundAmount: quote.refundAmount,
+      };
+    }
+
+    switch (quote.reason) {
+      case 'ALREADY_CANCELLED':
+        return {
+          eligible: false,
+          reason: quote.reason,
+          title: 'Vé đã được hủy',
+          message:
+            'Vé này đã hoàn tất thủ tục hủy trước đó và không còn hiệu lực.',
+        };
+      case 'ALREADY_DEPARTED':
+        return {
+          eligible: false,
+          reason: quote.reason,
+          title: 'Chuyến xe đã khởi hành',
+          message:
+            'Vé không còn giá trị hủy hoặc hoàn tiền sau khi xe đã xuất bến.',
+        };
+      case 'LESS_THAN_12_HOURS':
+        return {
+          eligible: false,
+          reason: quote.reason,
+          title: 'Vé không đủ điều kiện hủy',
+          message:
+            'Vé chỉ được hỗ trợ hủy trước giờ khởi hành tối thiểu 12 tiếng.',
+        };
+      case 'DEPARTURE_TIME_UNAVAILABLE':
+        return {
+          eligible: false,
+          reason: quote.reason,
+          title: 'Chưa thể xác định điều kiện hủy',
+          message:
+            'Thông tin giờ khởi hành chưa đầy đủ. Vui lòng liên hệ nhà xe để được hỗ trợ.',
+        };
+    }
   }
 
   const statusUpper = (ticket.status || '').toUpperCase();

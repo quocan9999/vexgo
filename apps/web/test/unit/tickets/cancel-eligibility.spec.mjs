@@ -69,6 +69,41 @@ test('checkTicketCancelEligibility approves ticket departing in >= 12 hours', ()
   assert.equal(result.title, '');
 });
 
+test('checkTicketCancelEligibility uses the authoritative quote returned by the API', () => {
+  const result = checkTicketCancelEligibility({
+    status: 'DA_THANH_TOAN',
+    departureTime: '2026-10-06T10:00:00.000Z',
+    cancellation: {
+      eligible: true,
+      cancelFeeRate: 0.2,
+      cancelFee: 50000,
+      refundAmount: 200000,
+    },
+  });
+
+  assert.equal(result.eligible, true);
+  assert.equal(result.cancelFeeRate, 0.2);
+  assert.equal(result.cancelFee, 50000);
+  assert.equal(result.refundAmount, 200000);
+});
+
+test('checkTicketCancelEligibility honors an authoritative rejection from the API', () => {
+  const result = checkTicketCancelEligibility({
+    status: 'DA_THANH_TOAN',
+    departureTime: '2029-10-06T10:00:00.000Z',
+    cancellation: {
+      eligible: false,
+      reason: 'LESS_THAN_12_HOURS',
+      cancelFeeRate: 0,
+      cancelFee: 0,
+      refundAmount: 0,
+    },
+  });
+
+  assert.equal(result.eligible, false);
+  assert.equal(result.reason, 'LESS_THAN_12_HOURS');
+});
+
 test('formatTimeAndDate formats valid date correctly', () => {
   const info = formatTimeAndDate('2026-10-07T08:30:00.000Z');
   assert.ok(info.date.includes('2026'));

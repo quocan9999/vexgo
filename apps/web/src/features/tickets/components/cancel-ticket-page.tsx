@@ -273,9 +273,9 @@ function CancelTicketContent() {
   const isPastDeparture = eligibility?.reason === 'ALREADY_DEPARTED';
   const isNearDeparture = eligibility?.reason === 'LESS_THAN_12_HOURS';
 
-  const price = ticket?.price || 0;
-  const cancelFee = Math.round(price * 0.1);
-  const refundAmount = cancelResult?.refundAmount ?? (price - cancelFee);
+  const cancelFeeRate = eligibility?.cancelFeeRate ?? 0;
+  const cancelFee = cancelResult?.cancelFee ?? eligibility?.cancelFee ?? 0;
+  const refundAmount = cancelResult?.refundAmount ?? eligibility?.refundAmount ?? 0;
 
   return (
     <div className="min-h-screen bg-[#F8FAF9] py-8 font-sans">
@@ -509,7 +509,9 @@ function CancelTicketContent() {
                   <h3 className="font-bold text-slate-900 text-[15px]">Chính sách phí hủy vé</h3>
                   <div className="space-y-3 text-[15px]">
                     <div className="flex justify-between items-center">
-                      <span className="text-slate-600">Phí hủy quy định (10%):</span>
+                      <span className="text-slate-600">
+                        Phí hủy quy định ({Math.round(cancelFeeRate * 100)}%):
+                      </span>
                       <span className="font-bold text-rose-600">-{formatCurrency(cancelFee)}</span>
                     </div>
                     <div className="flex justify-between items-center text-base pt-3 border-t border-slate-200">

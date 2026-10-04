@@ -17,6 +17,14 @@ export const TRIP_SORT_FIELDS = [
   'availableSeats',
 ] as const;
 export type TripSortField = (typeof TRIP_SORT_FIELDS)[number];
+export const TRIP_TIME_RANGES = [
+  'all',
+  'early-morning',
+  'morning',
+  'afternoon',
+  'evening',
+] as const;
+export type TripTimeRange = (typeof TRIP_TIME_RANGES)[number];
 
 function optionalInteger(value: unknown): number {
   return typeof value === 'string' && /^\d+$/.test(value)
@@ -42,8 +50,8 @@ export class SearchTripsDto extends PaginationQueryDto {
   operator?: string;
 
   @IsOptional()
-  @IsString()
-  timeRange?: string;
+  @IsIn(TRIP_TIME_RANGES)
+  timeRange?: TripTimeRange;
 
   @IsOptional()
   @IsDateString()

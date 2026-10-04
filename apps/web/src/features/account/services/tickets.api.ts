@@ -23,6 +23,19 @@ export type TicketItem = {
   passengerPhone: string | null;
   createdAt: string;
   updatedAt: string;
+  cancellation?: TicketCancellationQuote;
+};
+
+export type TicketCancellationQuote = {
+  eligible: boolean;
+  reason?:
+    | 'ALREADY_CANCELLED'
+    | 'ALREADY_DEPARTED'
+    | 'LESS_THAN_12_HOURS'
+    | 'DEPARTURE_TIME_UNAVAILABLE';
+  cancelFeeRate: number;
+  cancelFee: number;
+  refundAmount: number;
 };
 
 export type PaginationMeta = {
@@ -128,7 +141,9 @@ export const ticketsApi = {
       phoneNumber: phoneNumber.trim(),
     });
 
-    const res = await fetch(`${API_BASE_URL}/tickets/lookup?${params.toString()}`);
+    const res = await fetch(
+      `${API_BASE_URL}/tickets/lookup?${params.toString()}`,
+    );
 
     if (!res.ok) {
       const error = await res.json().catch(() => ({}));
@@ -160,10 +175,7 @@ export const ticketsApi = {
 
     if (!res.ok) {
       const error = await res.json().catch(() => ({}));
-      throw new ApiError(
-        error.message || 'Hủy vé thất bại',
-        res.status,
-      );
+      throw new ApiError(error.message || 'Hủy vé thất bại', res.status);
     }
 
     return res.json();
@@ -178,4 +190,3 @@ export interface CancelTicketResult {
   refundAmount: number;
   message: string;
 }
-

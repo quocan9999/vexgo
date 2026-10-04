@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -36,7 +37,11 @@ function combineArrival(
   businessTimeZone: string,
 ): string | null {
   if (!arrivalTime) return null;
-  const depTime = combineDeparture(departureDate, departureTime, businessTimeZone);
+  const depTime = combineDeparture(
+    departureDate,
+    departureTime,
+    businessTimeZone,
+  );
   let arrTime = combineDeparture(departureDate, arrivalTime, businessTimeZone);
   if (arrTime < depTime) {
     arrTime = new Date(arrTime.getTime() + 24 * 60 * 60 * 1000);
@@ -70,6 +75,10 @@ const TICKET_INCLUDE = {
           khachHang: true,
           nhaXe: true,
           thanhToans: {
+            where: {
+              loaiGiaoDich: 'THANH_TOAN',
+              trangThai: 'THANH_CONG',
+            },
             orderBy: [{ thoiGian: 'desc' }, { thanhToanId: 'desc' }],
             take: 1,
           },
@@ -89,6 +98,100 @@ const TICKET_INCLUDE = {
     },
   },
 } satisfies Prisma.VeInclude;
+
+type TicketRecord = Prisma.VeGetPayload<{ include: typeof TICKET_INCLUDE }>;
+
+type CancellationReason =
+  | 'ALREADY_CANCELLED'
+  | 'ALREADY_DEPARTED'
+  | 'LESS_THAN_12_HOURS'
+  | 'DEPARTURE_TIME_UNAVAILABLE';
+
+type CancellationQuote = {
+  eligible: boolean;
+  reason?: CancellationReason;
+  cancelFeeRate: number;
+  cancelFee: Prisma.Decimal;
+  refundAmount: Prisma.Decimal;
+};
+
+function getCancellationQuote(
+  ticket: TicketRecord,
+  businessTimeZone: string,
+  now = new Date(),
+): CancellationQuote {
+  const price = new Prisma.Decimal(ticket.giaThucTe ?? ticket.giaNiemYet ?? 0);
+  const zero = new Prisma.Decimal(0);
+
+  if (ticket.trangThai === 'HUY') {
+    return {
+      eligible: false,
+      reason: 'ALREADY_CANCELLED',
+      cancelFeeRate: 0,
+      cancelFee: zero,
+      refundAmount: zero,
+    };
+  }
+
+  const trip = ticket.gheChuyenXe?.chuyenXe;
+  if (!trip?.ngayKhoiHanh || !trip?.gioKhoiHanh) {
+    return {
+      eligible: false,
+      reason: 'DEPARTURE_TIME_UNAVAILABLE',
+      cancelFeeRate: 0,
+      cancelFee: zero,
+      refundAmount: zero,
+    };
+  }
+
+  const departure = combineDeparture(
+    trip.ngayKhoiHanh,
+    trip.gioKhoiHanh,
+    businessTimeZone,
+  );
+  const hoursUntilDeparture =
+    (departure.getTime() - now.getTime()) / (60 * 60 * 1000);
+
+  if (hoursUntilDeparture <= 0) {
+    return {
+      eligible: false,
+      reason: 'ALREADY_DEPARTED',
+      cancelFeeRate: 0,
+      cancelFee: zero,
+      refundAmount: zero,
+    };
+  }
+
+  if (hoursUntilDeparture < 12) {
+    return {
+      eligible: false,
+      reason: 'LESS_THAN_12_HOURS',
+      cancelFeeRate: 0,
+      cancelFee: zero,
+      refundAmount: zero,
+    };
+  }
+
+  const cancelFeeRate = hoursUntilDeparture <= 24 ? 0.2 : 0.1;
+  const cancelFee = price.mul(cancelFeeRate.toString()).toDecimalPlaces(0);
+
+  return {
+    eligible: true,
+    cancelFeeRate,
+    cancelFee,
+    refundAmount: price.minus(cancelFee),
+  };
+}
+
+function serializeCancellationQuote(quote: CancellationQuote) {
+  return {
+    eligible: quote.eligible,
+    reason: quote.reason,
+    cancelFeeRate: quote.cancelFeeRate,
+    cancelFee: Number(quote.cancelFee.toString()),
+    refundAmount: Number(quote.refundAmount.toString()),
+  };
+}
 
 @Injectable()
 export class TicketsService {
@@ -287,96 +390,148 @@ export class TicketsService {
   }
 
   async cancelTicket(dto: CancelTicketDto) {
-    const ticket = await this.prisma.ve.findUnique({
-      where: { maVe: dto.ticketCode.trim() },
-      include: TICKET_INCLUDE,
-    });
+    try {
+      return await this.prisma.$transaction(
+        async (tx) => {
+          const ticket = await tx.ve.findUnique({
+            where: { maVe: dto.ticketCode.trim() },
+            include: TICKET_INCLUDE,
+          });
 
-    if (!ticket) {
-      throw new NotFoundException({
-        error: 'TICKET_NOT_FOUND',
-        message: 'Không tìm thấy vé hoặc thông tin xác minh không khớp.',
-      });
-    }
+          if (!ticket) {
+            throw new NotFoundException({
+              error: 'TICKET_NOT_FOUND',
+              message: 'Không tìm thấy vé hoặc thông tin xác minh không khớp.',
+            });
+          }
 
-    const customerPhone =
-      ticket.phieuDatVe.donGiaoDich.soDienThoaiKhachHang || '';
-    if (!phonesMatch(customerPhone, dto.phoneNumber)) {
-      throw new NotFoundException({
-        error: 'TICKET_NOT_FOUND',
-        message: 'Không tìm thấy vé hoặc thông tin xác minh không khớp.',
-      });
-    }
+          const customerPhone =
+            ticket.phieuDatVe.donGiaoDich.soDienThoaiKhachHang || '';
+          if (!phonesMatch(customerPhone, dto.phoneNumber)) {
+            throw new NotFoundException({
+              error: 'TICKET_NOT_FOUND',
+              message: 'Không tìm thấy vé hoặc thông tin xác minh không khớp.',
+            });
+          }
 
-    if (ticket.trangThai === 'HUY') {
-      throw new BadRequestException({
-        error: 'TICKET_ALREADY_CANCELLED',
-        message: 'Vé này đã được hủy trước đó.',
-      });
-    }
+          const quote = getCancellationQuote(
+            ticket,
+            this.businessTimeZone,
+            new Date(),
+          );
+          if (!quote.eligible) {
+            const errors: Record<
+              CancellationReason,
+              { error: string; message: string }
+            > = {
+              ALREADY_CANCELLED: {
+                error: 'TICKET_ALREADY_CANCELLED',
+                message: 'Vé này đã được hủy trước đó.',
+              },
+              ALREADY_DEPARTED: {
+                error: 'TRIP_ALREADY_DEPARTED',
+                message: 'Không thể hủy vé sau khi chuyến xe đã khởi hành.',
+              },
+              LESS_THAN_12_HOURS: {
+                error: 'CANCELLATION_CUTOFF_PASSED',
+                message:
+                  'Chỉ có thể hủy vé trước giờ khởi hành ít nhất 12 tiếng.',
+              },
+              DEPARTURE_TIME_UNAVAILABLE: {
+                error: 'DEPARTURE_TIME_UNAVAILABLE',
+                message: 'Không thể xác định giờ khởi hành để hủy vé.',
+              },
+            };
+            throw new BadRequestException(errors[quote.reason!]);
+          }
 
-    const chuyenXe = ticket.gheChuyenXe?.chuyenXe;
-    if (chuyenXe?.ngayKhoiHanh && chuyenXe?.gioKhoiHanh) {
-      const departureDateTime = combineDeparture(
-        chuyenXe.ngayKhoiHanh,
-        chuyenXe.gioKhoiHanh,
-        this.businessTimeZone,
-      );
-      if (new Date() >= departureDateTime) {
-        throw new BadRequestException({
-          error: 'TRIP_ALREADY_DEPARTED',
-          message: 'Không thể hủy vé sau khi chuyến xe đã khởi hành.',
-        });
-      }
-    }
+          const originalPayment = ticket.phieuDatVe.donGiaoDich.thanhToans[0];
+          if (!originalPayment) {
+            throw new BadRequestException({
+              error: 'REFUND_SOURCE_NOT_FOUND',
+              message:
+                'Không tìm thấy giao dịch thanh toán thành công để hoàn tiền.',
+            });
+          }
 
-    const price = Number(ticket.giaThucTe);
-    const cancelFee = Math.round(price * 0.1);
-    const refundAmount = price - cancelFee;
+          const updateResult = await tx.ve.updateMany({
+            where: { veId: ticket.veId, trangThai: { not: 'HUY' } },
+            data: { trangThai: 'HUY' },
+          });
+          if (updateResult.count !== 1) {
+            throw new ConflictException({
+              error: 'TICKET_ALREADY_CANCELLED',
+              message: 'Vé đã được hủy bởi một yêu cầu khác.',
+            });
+          }
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.ve.update({
-        where: { veId: ticket.veId },
-        data: { trangThai: 'HUY' },
-      });
+          await tx.gheChuyenXe.update({
+            where: { gheChuyenXeId: ticket.gheChuyenXeId },
+            data: { trangThai: 'TRONG' },
+          });
 
-      await tx.gheChuyenXe.update({
-        where: { gheChuyenXeId: ticket.gheChuyenXeId },
-        data: { trangThai: 'TRONG' },
-      });
+          const remainingActiveTickets = await tx.ve.count({
+            where: {
+              phieuDatVeId: ticket.phieuDatVeId,
+              trangThai: { not: 'HUY' },
+            },
+          });
 
-      const remainingActiveTickets = await tx.ve.count({
-        where: {
-          phieuDatVeId: ticket.phieuDatVeId,
-          trangThai: { not: 'HUY' },
+          if (remainingActiveTickets === 0) {
+            await tx.phieuDatVe.update({
+              where: { phieuDatVeId: ticket.phieuDatVeId },
+              data: { trangThai: 'DA_HUY' },
+            });
+            await tx.donGiaoDich.update({
+              where: { donGiaoDichId: ticket.phieuDatVe.donGiaoDichId },
+              data: { trangThai: 'DA_HUY' },
+            });
+          }
+
+          await tx.thanhToan.create({
+            data: {
+              soTien: quote.refundAmount,
+              phuongThuc: originalPayment.phuongThuc,
+              loaiGiaoDich: 'HOAN_TIEN',
+              thoiGian: new Date(),
+              trangThai: 'DANG_XU_LY',
+              donGiaoDichId: ticket.phieuDatVe.donGiaoDichId,
+              veId: ticket.veId,
+            },
+          });
+
+          const serializedQuote = serializeCancellationQuote(quote);
+          return {
+            data: {
+              ticketId: ticket.veId,
+              ticketCode: ticket.maVe,
+              status: 'HUY',
+              cancelFee: serializedQuote.cancelFee,
+              refundAmount: serializedQuote.refundAmount,
+              message: 'Hủy vé thành công. Yêu cầu hoàn tiền đang được xử lý.',
+            },
+          };
         },
-      });
-
-      if (remainingActiveTickets === 0) {
-        await tx.phieuDatVe.update({
-          where: { phieuDatVeId: ticket.phieuDatVeId },
-          data: { trangThai: 'DA_HUY' },
-        });
-        await tx.donGiaoDich.update({
-          where: { donGiaoDichId: ticket.phieuDatVe.donGiaoDichId },
-          data: { trangThai: 'DA_HUY' },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
+    } catch (error) {
+      if (
+        typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        error.code === 'P2034'
+      ) {
+        throw new ConflictException({
+          error: 'TICKET_CANCELLATION_CONFLICT',
+          message:
+            'Vé đang được xử lý bởi một yêu cầu khác. Vui lòng kiểm tra lại.',
         });
       }
-    });
-
-    return {
-      data: {
-        ticketId: ticket.veId,
-        ticketCode: ticket.maVe,
-        status: 'HUY',
-        cancelFee,
-        refundAmount,
-        message: 'Hủy vé thành công.',
-      },
-    };
+      throw error;
+    }
   }
 
-  private mapTicket(ticket: any) {
+  private mapTicket(ticket: TicketRecord) {
     const chuyenXe = ticket.gheChuyenXe?.chuyenXe;
     const tuyenXe = chuyenXe?.tuyenXe;
     const nhaXe = ticket.phieuDatVe?.donGiaoDich?.nhaXe ?? tuyenXe?.nhaXe;
@@ -434,6 +589,9 @@ export class TicketsService {
       passengerPhone: order?.soDienThoaiKhachHang ?? null,
       createdAt: ticket.createdAt.toISOString(),
       updatedAt: ticket.updatedAt.toISOString(),
+      cancellation: serializeCancellationQuote(
+        getCancellationQuote(ticket, this.businessTimeZone),
+      ),
     };
   }
 }

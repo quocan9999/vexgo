@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useAuthSession } from '../auth-session';
 import { authApi, ApiError } from '../services/auth.api';
+import { sanitizeLoginRedirect } from '../services/login-redirect';
 
 export function LoginForm() {
   const router = useRouter();
@@ -54,8 +55,9 @@ export function LoginForm() {
       const response = await authApi.login(phone, password);
 
       signIn(response.data);
-      const nextUrl =
-        searchParams.get('next') || searchParams.get('redirect') || '/';
+      const nextUrl = sanitizeLoginRedirect(
+        searchParams.get('next') || searchParams.get('redirect'),
+      );
       router.push(nextUrl);
     } catch (error) {
       if (error instanceof ApiError) {

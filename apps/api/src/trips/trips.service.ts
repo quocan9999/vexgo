@@ -59,7 +59,11 @@ function combineArrival(
   businessTimeZone: string,
 ): string | null {
   if (!arrivalTime) return null;
-  const depTime = combineDeparture(departureDate, departureTime, businessTimeZone);
+  const depTime = combineDeparture(
+    departureDate,
+    departureTime,
+    businessTimeZone,
+  );
   let arrTime = combineDeparture(departureDate, arrivalTime, businessTimeZone);
   if (arrTime < depTime) {
     arrTime = new Date(arrTime.getTime() + 24 * 60 * 60 * 1000);
@@ -82,15 +86,8 @@ function matchesTimeRange(time: Date, timeRange?: string): boolean {
       return totalMinutes >= 720 && totalMinutes < 1080; // 12:00 - 18:00
     case 'evening':
       return totalMinutes >= 1080 && totalMinutes < 1440; // 18:00 - 24:00
-    default: {
-      const match = timeRange.match(/^(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})$/);
-      if (match) {
-        const start = parseInt(match[1], 10) * 60 + parseInt(match[2], 10);
-        const end = parseInt(match[3], 10) * 60 + parseInt(match[4], 10);
-        return totalMinutes >= start && totalMinutes < end;
-      }
-      return true;
-    }
+    default:
+      return false;
   }
 }
 
@@ -988,8 +985,7 @@ export class TripsService {
     }
 
     const isValidTransition =
-      (existing.trangThai === 'CHUA_KHOI_HANH' &&
-        dto.status === 'DANG_CHAY') ||
+      (existing.trangThai === 'CHUA_KHOI_HANH' && dto.status === 'DANG_CHAY') ||
       (existing.trangThai === 'DANG_CHAY' && dto.status === 'HOAN_THANH');
 
     if (!isValidTransition) {

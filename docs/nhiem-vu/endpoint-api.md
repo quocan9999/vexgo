@@ -416,10 +416,20 @@ Hai người có thể code song song nếu thống nhất response của `GET /
 GET  /tickets
 GET  /tickets/:id
 GET  /tickets/lookup
-POST /tickets/:id/cancel
+POST /tickets/cancel
 POST /tickets/:id/exchange/quote   (LOW)
 POST /tickets/:id/exchange         (LOW)
 ```
+
+`GET /tickets/lookup` trả thêm `data.cancellation` gồm `eligible`, `reason`,
+`cancelFeeRate`, `cancelFee` và `refundAmount`. Backend tính báo giá theo thời
+điểm hiện tại: dưới 12 tiếng không được hủy; từ 12 đến hết 24 tiếng phí 20%;
+trên 24 tiếng phí 10%.
+
+`POST /tickets/cancel` nhận `ticketCode` và `phoneNumber`. Khi thành công,
+backend hủy vé và giải phóng ghế trong transaction, đồng thời tạo giao dịch
+`HOAN_TIEN` ở trạng thái `DANG_XU_LY`; response chỉ xác nhận yêu cầu hoàn tiền
+đã được ghi nhận, không khẳng định tiền đã hoàn tất.
 
 ## Flow 3 — Tra cứu hóa đơn (MEDIUM)
 
