@@ -34,6 +34,9 @@ const record = {
 };
 const prisma = {
   nhaXe: { findUnique: vi.fn() },
+  $transaction: vi.fn((operation: (transaction: Prisma.TransactionClient) => Promise<unknown>) =>
+    operation(prisma as unknown as Prisma.TransactionClient),
+  ),
   tuyenXe: {
     create: vi.fn(),
     update: vi.fn(),
@@ -103,7 +106,13 @@ describe('Route write HTTP pipeline with real service and mocked Prisma', () => 
     prisma.tuyenXe.update.mockResolvedValue(record);
     prisma.tuyenXe.updateMany.mockResolvedValue({ count: 1 });
     prisma.tuyenXe.findUnique.mockResolvedValue(record);
-    prisma.tuyenXe.findFirst.mockResolvedValue(record);
+    prisma.tuyenXe.findFirst.mockImplementation(((args?: Prisma.TuyenXeFindFirstArgs) => {
+      const where = args?.where;
+      if (where?.diemDi !== undefined || where?.tuyenXeId === 999) {
+        return Promise.resolve(null);
+      }
+      return Promise.resolve(record);
+    }) as never);
     prisma.tuyenXe.findMany.mockResolvedValue([record]);
     prisma.tuyenXe.count.mockResolvedValue(1);
   });
@@ -307,7 +316,9 @@ describe('Route write HTTP pipeline with real service and mocked Prisma', () => 
   it('updates only endpoints and reflects the update in detail and list', async () => {
     const updated = { ...record, diemDi: 'Đà Lạt', diemDen: 'Nha Trang' };
     prisma.tuyenXe.updateMany.mockResolvedValueOnce({ count: 1 });
-    prisma.tuyenXe.findFirst.mockResolvedValue(updated);
+    prisma.tuyenXe.findFirst.mockImplementation(((args?: Prisma.TuyenXeFindFirstArgs) =>
+      Promise.resolve(args?.where?.diemDi !== undefined ? null : updated)) as never,
+    );
     prisma.tuyenXe.findMany.mockResolvedValueOnce([updated]);
     const response = await request(app.getHttpServer())
       .patch('/api/v1/routes/17')

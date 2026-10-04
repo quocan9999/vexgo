@@ -156,8 +156,8 @@ describe('TripSeatsManagement Workspace', () => {
     expect(html).toContain('Quay lại danh sách chuyến');
     expect(html).toContain('href="/trips"');
     // Context
-    expect(html).toContain('FUTA-TX-0001 (TP.HCM → Đà Lạt)');
-    expect(html).toContain('30F-123.45 (GIƯỜNG NẰM)');
+    expect(html).toContain('admin-data-mono">FUTA-TX-0001</span> (TP.HCM → Đà Lạt)');
+    expect(html).toContain('admin-data-mono">30F-123.45</span> (GIƯỜNG NẰM)');
     expect(html).toContain('Chưa khởi hành');
     // Summary
     expect(html).toContain('Tổng số ghế');

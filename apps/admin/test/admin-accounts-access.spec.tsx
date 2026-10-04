@@ -49,6 +49,8 @@ vi.mock('lucide-react', () => {
     LogOut: icon('log-out'),
     MapPinned: icon('map-pinned'),
     Menu: icon('menu'),
+    PanelLeftClose: icon('panel-left-close'),
+    PanelLeftOpen: icon('panel-left-open'),
     ShieldCheck: icon('shield-check'),
     Ticket: icon('ticket'),
     Truck: icon('truck'),

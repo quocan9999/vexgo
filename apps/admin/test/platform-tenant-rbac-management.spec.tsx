@@ -172,7 +172,8 @@ describe('Super Admin tenant RBAC editor', () => {
     render(await pageFor('12'));
 
     expect(await screen.findByRole('heading', { name: 'Phân quyền vai trò' })).toBeTruthy();
-    expect(screen.getByText('Nhà xe #12')).toBeTruthy();
+    expect(screen.getByRole('region', { name: 'Phạm vi cấu hình quyền' }).textContent)
+      .toContain('Nhà xe (12)');
     expect(tenantRbac.getPlatformTenantRolePermissions.mock.calls[0][0]).toBe(12);
     expect(tenantRbac.getTenantRolePermissions).not.toHaveBeenCalled();
     expect(busCompanies.getBusCompanyById).toHaveBeenCalledWith(12, expect.any(AbortSignal));

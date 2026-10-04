@@ -150,6 +150,22 @@ describe('RoutesService writes', () => {
     });
   });
 
+  it('rejects a second route with the same ordered endpoints even when its code differs', async () => {
+    vi.mocked(prisma.tuyenXe.findFirst).mockResolvedValueOnce({ ...record, tuyenXeId: 16 });
+
+    const error = await service.create(
+      { ...createInput, code: 'FUTA-TX-0101' },
+      tenantAdmin(3),
+    ).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(ConflictException);
+    expect((error as ConflictException).getResponse()).toEqual({
+      error: 'ROUTE_DUPLICATE_ENDPOINTS',
+      message: 'Đã có tuyến xe cùng điểm đi và điểm đến trong nhà xe này.',
+    });
+    expect(prisma.tuyenXe.create).not.toHaveBeenCalled();
+  });
+
   it('returns BUS_COMPANY_NOT_FOUND without writing for a missing company', async () => {
     vi.mocked(prisma.nhaXe.findUnique).mockResolvedValueOnce(null);
     const error = await service
