@@ -13,12 +13,12 @@ import { AdminTableSkeleton } from '@/components/admin/admin-table-skeleton';
 import { FilterToolbar, SearchInput, SelectFilter, type FilterOption } from '@/components/data-filters/data-filters';
 import { Button } from '@/components/ui/button';
 import { useAdminPermissions } from '@/features/admin-auth/hooks/use-admin-permissions';
+import { useAdminSession } from '@/features/admin-auth/hooks/use-admin-session';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
-import { getBusCompanyFilterOptions } from '@/features/bus-companies/services/bus-company-service';
 import { useRoutes } from '../hooks/use-routes';
 import { getRouteById, updateRouteStatus } from '../services/route-service';
 import type { Route, RouteSortKey, RouteStatus } from '../types/route';
-import { RouteFormDialog, type RouteCompanyOptions } from './route-form-dialog';
+import { RouteFormDialog } from './route-form-dialog';
 import '../routes.css';
 
 const STATUS_OPTIONS: FilterOption[] = [
@@ -51,11 +51,9 @@ type DetailState =
   | { status: 'error'; message: string }
   | { status: 'success'; route: Route };
 
-export function RouteDetails({ routeId, companyOptions, onClose, onRetryOptions, onUpdated }: {
+export function RouteDetails({ routeId, onClose, onUpdated }: {
   routeId: number;
-  companyOptions: RouteCompanyOptions;
   onClose: () => void;
-  onRetryOptions: () => void;
   onUpdated: (route: Route) => void;
 }) {
   const { can } = useAdminPermissions();
@@ -159,9 +157,7 @@ export function RouteDetails({ routeId, companyOptions, onClose, onRetryOptions,
     </AdminDetailSheet>
     {editOpen && canUpdate && detail.status === 'success' && (
       <RouteFormDialog
-        companyOptions={companyOptions}
         onClose={() => setEditOpen(false)}
-        onRetryOptions={onRetryOptions}
         onSaved={(saved) => {
           setEditOpen(false);
           setDetail({ status: 'success', route: saved });
@@ -204,40 +200,18 @@ export function RouteDetails({ routeId, companyOptions, onClose, onRetryOptions,
 
 export function RoutesManagement() {
   const { can } = useAdminPermissions();
-  const canCreate = can('route:create');
+  const authState = useAdminSession();
+  const tenantBusCompanyId = authState.status === 'authenticated'
+    ? authState.session.busCompanyId
+    : null;
+  const canCreate = can('route:create') && tenantBusCompanyId !== null;
   const {
-    routePage, error, loading, searchInput, status, busCompanyId, sortBy, sortDirection,
-    changePage, updateSearch, updateStatus, updateBusCompany, sortRoutes, refresh,
+    routePage, error, loading, searchInput, status, sortBy, sortDirection,
+    changePage, updateSearch, updateStatus, sortRoutes, refresh,
   } = useRoutes();
   const [selectedRouteId, setSelectedRouteId] = useState<number | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [successNotice, setSuccessNotice] = useState<string | null>(null);
-  const [companyOptions, setCompanyOptions] = useState<RouteCompanyOptions>({ status: 'loading' });
-  const [optionsRetry, setOptionsRetry] = useState(0);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    getBusCompanyFilterOptions(controller.signal)
-      .then((options) => {
-        if (!controller.signal.aborted) setCompanyOptions({
-          status: 'success',
-          options: options.map((option) => ({ value: String(option.id), label: option.label })),
-        });
-      })
-      .catch((requestError: unknown) => {
-        if (!controller.signal.aborted) setCompanyOptions({
-          status: 'error',
-          message: requestError instanceof Error ? requestError.message : 'Không thể tải bộ lọc nhà xe.',
-        });
-      });
-    return () => controller.abort();
-  }, [optionsRetry]);
-
-  function retryOptions() {
-    setCompanyOptions({ status: 'loading' });
-    setOptionsRetry((count) => count + 1);
-  }
-
   function sortButton(label: string, field: RouteSortKey) {
     const selected = sortBy === field;
     return (
@@ -248,7 +222,7 @@ export function RoutesManagement() {
     );
   }
 
-  const hasFilters = Boolean(searchInput.trim() || status || busCompanyId);
+  const hasFilters = Boolean(searchInput.trim() || status);
   const items = routePage?.data ?? [];
   return (
     <SuperAdminLayout activeSection="routes">
@@ -261,19 +235,9 @@ export function RoutesManagement() {
         <section aria-busy={loading} aria-labelledby="routes-title" className="routes-section">
           <div className="panel admin-resource-panel">
             <FilterToolbar totalItems={error ? null : routePage?.meta.totalItems ?? null}>
-              <SearchInput label="Tìm tuyến xe" onChange={updateSearch} placeholder="Tìm mã tuyến, điểm đi, điểm đến, nhà xe..." value={searchInput} />
-              {companyOptions.status === 'success' && (
-                <SelectFilter allLabel="Tất cả nhà xe" label="Lọc theo nhà xe" onChange={updateBusCompany} options={companyOptions.options} value={busCompanyId} />
-              )}
+              <SearchInput label="Tìm tuyến xe" onChange={updateSearch} placeholder="Tìm mã tuyến, điểm đi, điểm đến..." value={searchInput} />
               <SelectFilter allLabel="Tất cả trạng thái" label="Lọc theo trạng thái" onChange={updateStatus} options={STATUS_OPTIONS} value={status} />
             </FilterToolbar>
-            {companyOptions.status === 'loading' && <p className="routes-option-state" role="status">Đang tải bộ lọc nhà xe…</p>}
-            {companyOptions.status === 'error' && (
-              <div className="routes-option-state" role="alert">
-                <span>{companyOptions.message}</span>
-                <Button onClick={retryOptions} type="button" variant="secondary">Thử tải lại bộ lọc</Button>
-              </div>
-            )}
             <div className="routes-mobile-sort">
               <SelectFilter allLabel="Mã tuyến (mặc định)" label="Sắp xếp tuyến theo" onChange={(value) => sortRoutes((value || 'code') as RouteSortKey)} options={SORT_OPTIONS} value={sortBy === 'code' ? '' : sortBy} />
               <Button aria-label={`Đổi thứ tự sắp xếp, hiện tại ${sortDirection === 'asc' ? 'tăng dần' : 'giảm dần'}`} onClick={() => sortRoutes(sortBy)} type="button" variant="secondary">
@@ -340,16 +304,13 @@ export function RoutesManagement() {
       </div>
       {selectedRouteId !== null && <RouteDetails
         key={selectedRouteId}
-        companyOptions={companyOptions}
         onClose={() => setSelectedRouteId(null)}
-        onRetryOptions={retryOptions}
         onUpdated={(route) => { setSuccessNotice(`Đã cập nhật tuyến ${route.code}.`); refresh(); }}
         routeId={selectedRouteId}
       />}
-      {createOpen && canCreate && <RouteFormDialog
-        companyOptions={companyOptions}
+      {createOpen && canCreate && tenantBusCompanyId !== null && <RouteFormDialog
+        tenantBusCompanyId={tenantBusCompanyId}
         onClose={() => setCreateOpen(false)}
-        onRetryOptions={retryOptions}
         onSaved={(route) => { setCreateOpen(false); setSuccessNotice(`Đã thêm tuyến ${route.code}.`); refresh(); }}
       />}
     </SuperAdminLayout>

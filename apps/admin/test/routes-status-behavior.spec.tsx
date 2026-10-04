@@ -22,8 +22,6 @@ const activeRoute: Route = {
   status: 'HOAT_DONG', busCompany: { busCompanyId: 3, code: 'FUTA', name: 'Phương Trang' },
   createdAt: '2026-09-22T07:34:00.000Z', updatedAt: '2026-09-23T07:34:00.000Z',
 };
-const companyOptions = { status: 'success' as const, options: [{ value: '3', label: 'Phương Trang (FUTA)' }] };
-
 beforeAll(() => {
   HTMLDialogElement.prototype.showModal = function showModal() { this.setAttribute('open', ''); };
   HTMLDialogElement.prototype.close = function close() {
@@ -37,8 +35,8 @@ function renderDetails(route: Route = activeRoute) {
   setEmployeeAdminTestSession(['route:read', 'route:update']);
   vi.mocked(getRouteById).mockResolvedValue(route);
   const onUpdated = vi.fn();
-  const rendered = render(<RouteDetails routeId={route.routeId} companyOptions={companyOptions}
-    onClose={vi.fn()} onRetryOptions={vi.fn()} onUpdated={onUpdated} />);
+  const rendered = render(<RouteDetails routeId={route.routeId}
+    onClose={vi.fn()} onUpdated={onUpdated} />);
   return { onUpdated, ...rendered };
 }
 

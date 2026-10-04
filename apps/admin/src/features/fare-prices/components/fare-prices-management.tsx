@@ -89,13 +89,6 @@ function optionFilters(options: FarePriceOption[]): FilterOption[] {
   }));
 }
 
-function routeOptionFilters(options: FarePriceOption[]): FilterOption[] {
-  return options.map((option) => ({
-    value: String(option.id),
-    label: option.routeLabel ?? option.label,
-  }));
-}
-
 export function FarePricesManagement() {
   const { can } = useAdminPermissions();
   const canCreate = can('fare-price:create');
@@ -308,7 +301,7 @@ export function FarePricesManagement() {
                 allLabel="Tất cả tuyến xe"
                 label="Lọc theo tuyến xe"
                 onChange={updateRoute}
-                options={routeOptionFilters(routeOptions.options)}
+                options={optionFilters(routeOptions.options)}
                 value={routeId}
               />
             )}

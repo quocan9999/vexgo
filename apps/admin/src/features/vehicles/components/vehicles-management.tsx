@@ -466,7 +466,7 @@ export function VehiclesManagement() {
 
   const items = vehiclePage?.data ?? [];
   const hasActiveFilters = Boolean(
-    filters.busCompanyId || filters.vehicleTypeId || filters.status,
+    filters.vehicleTypeId || filters.status,
   );
   const optionErrors = [
     options.busCompanies.status === 'error'
@@ -524,20 +524,11 @@ export function VehiclesManagement() {
           <div className="panel vehicles-panel">
             <FilterToolbar totalItems={vehiclePage?.meta.totalItems ?? null}>
               <SearchInput
-                label="Tìm biển số, nhà xe hoặc loại xe"
+                label="Tìm biển số hoặc loại xe"
                 onChange={updateSearch}
-                placeholder="Tìm biển số, nhà xe, loại xe..."
+                placeholder="Tìm biển số hoặc loại xe..."
                 value={searchInput}
               />
-              {options.busCompanies.status === 'success' && (
-                <SelectFilter
-                  allLabel="Tất cả nhà xe"
-                  label="Nhà xe"
-                  onChange={(value) => updateFilters({ busCompanyId: value })}
-                  options={filterOptions(options.busCompanies.options)}
-                  value={filters.busCompanyId}
-                />
-              )}
               {options.vehicleTypes.status === 'success' && (
                 <SelectFilter
                   allLabel="Tất cả loại xe"

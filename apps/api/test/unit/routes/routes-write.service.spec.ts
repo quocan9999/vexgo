@@ -32,6 +32,9 @@ const company = {
 };
 const prisma = {
   nhaXe: { findUnique: vi.fn() },
+  $transaction: vi.fn((operation: (transaction: Prisma.TransactionClient) => Promise<unknown>) =>
+    operation(prisma as unknown as Prisma.TransactionClient),
+  ),
   tuyenXe: {
     create: vi.fn(),
     update: vi.fn(),
@@ -74,7 +77,9 @@ describe('RoutesService writes', () => {
     vi.mocked(prisma.tuyenXe.create).mockResolvedValue(record);
     vi.mocked(prisma.tuyenXe.update).mockResolvedValue(record);
     vi.mocked(prisma.tuyenXe.updateMany).mockResolvedValue({ count: 1 });
-    vi.mocked(prisma.tuyenXe.findFirst).mockResolvedValue(record);
+    vi.mocked(prisma.tuyenXe.findFirst).mockImplementation(((args?: Prisma.TuyenXeFindFirstArgs) =>
+      Promise.resolve(args?.where?.diemDi !== undefined ? null : record)) as never,
+    );
   });
 
   it.each(['HOAT_DONG', 'TAM_NGUNG'] as const)(
