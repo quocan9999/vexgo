@@ -225,6 +225,7 @@ export function VehicleFormDialog({
               }
               aria-invalid={Boolean(fieldErrors.licensePlate)}
               autoComplete="off"
+              className="admin-data-mono"
               disabled={submitting}
               id={`${idPrefix}-license-plate`}
               maxLength={15}

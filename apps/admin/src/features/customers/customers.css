@@ -3,7 +3,9 @@
 }
 
 .customer-code {
-  font-family: var(--font-mono, monospace);
+  font-family:
+    var(--admin-font-mono), ui-monospace, SFMono-Regular, Menlo, Consolas,
+    monospace;
   font-size: var(--admin-type-helper-size);
   color: var(--admin-text-muted);
   line-height: var(--admin-type-helper-line-height);

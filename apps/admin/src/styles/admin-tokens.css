@@ -24,7 +24,8 @@
   --admin-surface-muted: #f8fafc;
   --admin-control-height: 37px;
 
-  /* Inter is the Admin font family. Weight primitives feed semantic type roles. */
+  /* Inter is for reading; JetBrains Mono is for exact, copyable identifiers. */
+  --admin-font-mono: var(--font-jetbrains-mono);
   --admin-weight-regular: 400;
   --admin-weight-medium: 500;
   --admin-weight-semibold: 600;

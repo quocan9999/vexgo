@@ -233,7 +233,10 @@ export function TripSeatsManagement({
               <div className="trip-seats-context__item">
                 <span className="trip-seats-context__label">Tuyến xe</span>
                 <strong className="trip-seats-context__value">
-                  {currentWorkspace.trip.route.code} ({currentWorkspace.trip.route.origin} →{' '}
+                  <span className="admin-data-mono">
+                    {currentWorkspace.trip.route.code}
+                  </span>{' '}
+                  ({currentWorkspace.trip.route.origin} →{' '}
                   {currentWorkspace.trip.route.destination})
                 </strong>
               </div>
@@ -247,7 +250,10 @@ export function TripSeatsManagement({
               <div className="trip-seats-context__item">
                 <span className="trip-seats-context__label">Xe phục vụ</span>
                 <strong className="trip-seats-context__value">
-                  {currentWorkspace.trip.vehicle.licensePlate} (
+                  <span className="admin-data-mono">
+                    {currentWorkspace.trip.vehicle.licensePlate}
+                  </span>{' '}
+                  (
                   {currentWorkspace.trip.vehicle.vehicleType.name})
                 </strong>
               </div>
@@ -387,7 +393,7 @@ export function TripSeatsManagement({
                             data-status={seat.status}
                             key={seat.tripSeatId}
                           >
-                            <span className="trip-seat-token__code">
+                            <span className="trip-seat-token__code admin-data-mono">
                               {seat.seat.code}
                             </span>
                             <TripSeatStatusBadge status={seat.status} />

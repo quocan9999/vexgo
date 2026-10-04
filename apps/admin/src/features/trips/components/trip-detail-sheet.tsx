@@ -276,7 +276,7 @@ export function TripDetailSheet({
               <dl className="trips-detail-fields">
                 <div>
                   <dt>Mã chuyến</dt>
-                  <dd>{detail.trip.code}</dd>
+                  <dd className="admin-data-mono">{detail.trip.code}</dd>
                 </div>
                 <div>
                   <dt>Ngày khởi hành</dt>
@@ -300,7 +300,7 @@ export function TripDetailSheet({
               <dl className="trips-detail-fields">
                 <div>
                   <dt>Mã tuyến</dt>
-                  <dd>{detail.trip.route.code}</dd>
+                  <dd className="admin-data-mono">{detail.trip.route.code}</dd>
                 </div>
                 <div>
                   <dt>Điểm đi</dt>
@@ -318,7 +318,9 @@ export function TripDetailSheet({
               <dl className="trips-detail-fields">
                 <div>
                   <dt>Biển số xe</dt>
-                  <dd>{detail.trip.vehicle.licensePlate}</dd>
+                  <dd className="admin-data-mono">
+                    {detail.trip.vehicle.licensePlate}
+                  </dd>
                 </div>
                 <div>
                   <dt>Loại xe</dt>
@@ -539,7 +541,8 @@ export function TripDetailSheet({
               <div className="admin-dialog-header__copy">
                 <p className="eyebrow">XÁC NHẬN HỦY CHUYẾN</p>
                 <h3 id="trip-cancel-confirm-title">
-                  Hủy chuyến xe {detail.trip.code}?
+                  Hủy chuyến xe{' '}
+                  <span className="admin-data-mono">{detail.trip.code}</span>?
                 </h3>
               </div>
             </div>
@@ -548,7 +551,9 @@ export function TripDetailSheet({
               id="trip-cancel-confirm-desc"
             >
               <p>
-                Chuyến xe <strong>{detail.trip.code}</strong> khởi hành vào lúc{' '}
+                Chuyến xe{' '}
+                <strong className="admin-data-mono">{detail.trip.code}</strong>{' '}
+                khởi hành vào lúc{' '}
                 <strong>
                   {formatTime(detail.trip.departureTime)} -{' '}
                   {formatDate(detail.trip.departureDate)}

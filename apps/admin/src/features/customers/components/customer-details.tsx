@@ -101,7 +101,10 @@ export function CustomerDetails({ customerId, onClose }: CustomerDetailsProps) {
           <div className="customers-detail-hero">
             <h3>{detail.customer.fullName}</h3>
             <span className="customer-code">
-              Mã khách hàng · {detail.customer.customerCode}
+              Mã khách hàng ·{' '}
+              <span className="admin-data-mono">
+                {detail.customer.customerCode}
+              </span>
             </span>
           </div>
 
@@ -149,7 +152,9 @@ export function CustomerDetails({ customerId, onClose }: CustomerDetailsProps) {
             <dl className="customers-detail-dl">
               <div className="customers-detail-row">
                 <dt>Mã tài khoản</dt>
-                <dd>#{detail.customer.account.accountId}</dd>
+                <dd className="admin-data-mono">
+                  #{detail.customer.account.accountId}
+                </dd>
               </div>
               <div className="customers-detail-row">
                 <dt>Trạng thái tài khoản</dt>

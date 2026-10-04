@@ -22,6 +22,14 @@ input {
   font: inherit;
 }
 
+.admin-data-mono,
+code {
+  font-family:
+    var(--admin-font-mono), ui-monospace, SFMono-Regular, Menlo, Consolas,
+    monospace;
+  font-variant-numeric: tabular-nums;
+}
+
 button {
   color: inherit;
 }

@@ -5,6 +5,10 @@
 ## Typography
 
 - Font family: Inter through `--font-sans`, configured in the Admin root layout.
+- Use JetBrains Mono through `--admin-font-mono` for visible, exact identifiers users copy or compare:
+  - resource codes and visible IDs, including employee/customer/account IDs, vehicle type IDs, and citizen ID numbers;
+  - ticket/booking/waybill references, vehicle plates, seat codes, and permission keys.
+- Keep names, contact details, labels, dates, amounts, and explanatory text in Inter.
 - Apply the semantic roles below across Admin. Table body text defaults to 13px.
 - Primary line-height ratios are `1.2`, `1.35`, and `1.5`; role-specific ratios in the table keep section, helper, and compact table text aligned with the proposal.
 - Use weight primitives 400, 500, 600, and 700. Prefer the role weight token when applying a semantic type role.

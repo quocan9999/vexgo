@@ -142,6 +142,7 @@ export function RouteFormDialog({ companyOptions, onClose, onRetryOptions, onSav
           aria-describedby={fieldErrors[field] ? `${idPrefix}-${field}-error` : undefined}
           aria-invalid={Boolean(fieldErrors[field])}
           autoComplete="off"
+          className={field === 'code' ? 'admin-data-mono' : undefined}
           disabled={submitting}
           id={`${idPrefix}-${field}`}
           maxLength={maxLength}
@@ -175,7 +176,7 @@ export function RouteFormDialog({ companyOptions, onClose, onRetryOptions, onSav
         </div>
         <form className="admin-crud-form" noValidate onSubmit={handleSubmit}>
           {formError && <p className="admin-crud-form-error" role="alert">{formError}</p>}
-          {editing && <div className="admin-crud-form-context"><strong>{route.code}</strong><span>{route.busCompany.name} · {route.status === 'HOAT_DONG' ? 'Đang hoạt động' : 'Tạm ngưng'}</span></div>}
+          {editing && <div className="admin-crud-form-context"><strong className="admin-data-mono">{route.code}</strong><span>{route.busCompany.name} · {route.status === 'HOAT_DONG' ? 'Đang hoạt động' : 'Tạm ngưng'}</span></div>}
           {!editing && textField('code', 'Mã tuyến', 50)}
           {textField('origin', 'Điểm đi', 100)}
           {textField('destination', 'Điểm đến', 100)}

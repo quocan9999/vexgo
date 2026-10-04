@@ -132,13 +132,13 @@ export function RouteDetails({ routeId, companyOptions, onClose, onRetryOptions,
         )}
         {detail.status === 'success' && (
           <div className="routes-detail-content">
-            <h3>{detail.route.code}</h3>
+            <h3 className="admin-data-mono">{detail.route.code}</h3>
             <p>{detail.route.origin} → {detail.route.destination}</p>
             <dl className="routes-detail-fields">
-              <div><dt>Mã tuyến</dt><dd>{detail.route.code}</dd></div>
+              <div><dt>Mã tuyến</dt><dd className="admin-data-mono">{detail.route.code}</dd></div>
               <div><dt>Điểm đi</dt><dd>{detail.route.origin}</dd></div>
               <div><dt>Điểm đến</dt><dd>{detail.route.destination}</dd></div>
-              <div><dt>Nhà xe</dt><dd>{detail.route.busCompany.name} ({detail.route.busCompany.code})</dd></div>
+              <div><dt>Nhà xe</dt><dd>{detail.route.busCompany.name} (<span className="admin-data-mono">{detail.route.busCompany.code}</span>)</dd></div>
               <div><dt>Trạng thái</dt><dd><RouteBadge status={detail.route.status} /></dd></div>
               <div><dt>Ngày tạo</dt><dd>{timestampFormat(detail.route.createdAt)}</dd></div>
               <div><dt>Cập nhật lần cuối</dt><dd>{timestampFormat(detail.route.updatedAt)}</dd></div>
@@ -306,9 +306,9 @@ export function RoutesManagement() {
                         </tr></thead>
                         <tbody>{items.map((route) => (
                           <tr key={route.routeId}>
-                            <th scope="row">{route.code}</th>
+                            <th className="admin-data-mono" scope="row">{route.code}</th>
                             <td>{route.origin}</td><td>{route.destination}</td>
-                            <td>{route.busCompany.name}<span className="routes-company-code">{route.busCompany.code}</span></td>
+                            <td>{route.busCompany.name}<span className="routes-company-code admin-data-mono">{route.busCompany.code}</span></td>
                             <td><RouteBadge status={route.status} /></td>
                             <td>{timestampFormat(route.createdAt)}</td>
                             <td><AdminDetailAction onClick={() => setSelectedRouteId(route.routeId)} resourceName={`tuyến ${route.code}`} /></td>
@@ -319,7 +319,7 @@ export function RoutesManagement() {
                     <div className="routes-mobile-list">
                       {items.map((route) => (
                         <article className="routes-mobile-card" key={route.routeId}>
-                          <div className="routes-mobile-card-header"><h2>{route.code}</h2><RouteBadge status={route.status} /></div>
+                          <div className="routes-mobile-card-header"><h2 className="admin-data-mono">{route.code}</h2><RouteBadge status={route.status} /></div>
                           <p className="routes-mobile-journey">{route.origin} → {route.destination}</p>
                           <dl className="routes-mobile-fields">
                             <div><dt>Nhà xe</dt><dd>{route.busCompany.name}</dd></div>

@@ -171,7 +171,12 @@ function VehicleTypeDetails({
               </span>
               <div>
                 <h3>{detailState.vehicleType.name}</h3>
-                <p>Loại xe #{detailState.vehicleType.vehicleTypeId}</p>
+                <p>
+                  Loại xe #
+                  <span className="admin-data-mono">
+                    {detailState.vehicleType.vehicleTypeId}
+                  </span>
+                </p>
               </div>
             </div>
             <dl className="vehicle-type-detail-fields">
@@ -440,7 +445,12 @@ export function VehicleTypesManagement() {
                         >
                           <div className="vehicle-type-mobile-heading">
                             <h2>{vehicleType.name}</h2>
-                            <span>#{vehicleType.vehicleTypeId}</span>
+                            <span>
+                              #
+                              <span className="admin-data-mono">
+                                {vehicleType.vehicleTypeId}
+                              </span>
+                            </span>
                           </div>
                           <p>{vehicleType.description || 'Chưa có mô tả'}</p>
                           <div className="vehicle-type-mobile-footer">

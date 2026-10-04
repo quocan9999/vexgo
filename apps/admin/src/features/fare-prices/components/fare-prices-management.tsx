@@ -406,7 +406,9 @@ export function FarePricesManagement() {
                           <span className={styles.routeEndpoints}>
                             {farePrice.route.origin} → {farePrice.route.destination}
                           </span>
-                          <small className={styles.routeCode}>{farePrice.route.code}</small>
+                          <small className={`${styles.routeCode} admin-data-mono`}>
+                            {farePrice.route.code}
+                          </small>
                         </th>
                         <td>{farePrice.vehicleType.name}</td>
                         <td>{formatPrice(farePrice.listedPrice)}</td>
@@ -431,7 +433,9 @@ export function FarePricesManagement() {
                     <div className={styles.mobileCardHeader}>
                       <div>
                         <h2>{farePrice.route.origin} → {farePrice.route.destination}</h2>
-                        <span className={styles.routeCode}>{farePrice.route.code}</span>
+                        <span className={`${styles.routeCode} admin-data-mono`}>
+                          {farePrice.route.code}
+                        </span>
                       </div>
                       <strong>{formatPrice(farePrice.listedPrice)}</strong>
                     </div>

@@ -7,6 +7,7 @@ import RootLayout from '../src/app/layout';
 
 vi.mock('next/font/google', () => ({
   Inter: () => ({ variable: 'inter-test-variable' }),
+  JetBrains_Mono: () => ({ variable: 'mono-test-variable' }),
 }));
 
 describe('Admin root layout hydration', () => {
@@ -30,6 +31,7 @@ describe('Admin root layout hydration', () => {
 
     expect(errors.mock.calls.flat().join(' ')).not.toMatch(/hydration|hydrated|didn't match/i);
     expect(document.documentElement.classList.contains('inter-test-variable')).toBe(true);
+    expect(document.documentElement.classList.contains('mono-test-variable')).toBe(true);
     expect(document.querySelector('main')?.textContent).toBe('Admin');
   });
 

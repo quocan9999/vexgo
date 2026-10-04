@@ -282,7 +282,7 @@ export function TripFormDialog({
               <div className="trips-detail-fields" style={{ background: 'var(--admin-surface)', padding: 'var(--admin-space-field-gap)', borderRadius: 'var(--admin-radius-card)', border: '1px solid var(--admin-border)' }}>
                 <div>
                   <dt>Mã chuyến</dt>
-                  <dd><strong>{trip.code}</strong></dd>
+                  <dd><strong className="admin-data-mono">{trip.code}</strong></dd>
                 </div>
                 <div>
                   <dt>Tuyến</dt>
@@ -290,7 +290,12 @@ export function TripFormDialog({
                 </div>
                 <div>
                   <dt>Xe</dt>
-                  <dd>{trip.vehicle.licensePlate} ({trip.vehicle.vehicleType.name})</dd>
+                  <dd>
+                    <span className="admin-data-mono">
+                      {trip.vehicle.licensePlate}
+                    </span>{' '}
+                    ({trip.vehicle.vehicleType.name})
+                  </dd>
                 </div>
               </div>
             </div>
@@ -307,6 +312,7 @@ export function TripFormDialog({
                   aria-invalid={Boolean(fieldErrors.code)}
                   aria-required="true"
                   autoComplete="off"
+                  className="admin-data-mono"
                   disabled={submitting}
                   id={`${idPrefix}-code`}
                   maxLength={50}

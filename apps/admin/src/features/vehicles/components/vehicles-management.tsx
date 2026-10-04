@@ -259,8 +259,12 @@ function VehicleDetails({
                 <Truck size={21} />
               </span>
               <div>
-                <h3>{detailState.vehicle.licensePlate}</h3>
-                <p>Xe #{detailState.vehicle.vehicleId}</p>
+                <h3 className="admin-data-mono">
+                  {detailState.vehicle.licensePlate}
+                </h3>
+                <p>
+                  Xe #<span className="admin-data-mono">{detailState.vehicle.vehicleId}</span>
+                </p>
               </div>
               <AdminStatusBadge tone={statusTone(detailState.vehicle.status)}>
                 {statusLabel(detailState.vehicle.status)}
@@ -279,7 +283,9 @@ function VehicleDetails({
                 </div>
                 <div>
                   <dt>Mã nhà xe</dt>
-                  <dd>{detailState.vehicle.busCompany.code}</dd>
+                  <dd className="admin-data-mono">
+                    {detailState.vehicle.busCompany.code}
+                  </dd>
                 </div>
                 <div>
                   <dt>Loại xe</dt>
@@ -683,12 +689,14 @@ export function VehiclesManagement() {
                         <tbody>
                           {items.map((vehicle) => (
                             <tr key={vehicle.vehicleId}>
-                              <th scope="row">{vehicle.licensePlate}</th>
+                              <th className="admin-data-mono" scope="row">
+                                {vehicle.licensePlate}
+                              </th>
                               <td>
                                 <span className="vehicle-company-name">
                                   {vehicle.busCompany.name}
                                 </span>
-                                <span className="vehicle-company-code">
+                                <span className="vehicle-company-code admin-data-mono">
                                   {vehicle.busCompany.code}
                                 </span>
                               </td>
@@ -716,8 +724,12 @@ export function VehiclesManagement() {
                         >
                           <div className="vehicle-mobile-heading">
                             <div>
-                              <h2>{vehicle.licensePlate}</h2>
-                              <span>Xe #{vehicle.vehicleId}</span>
+                              <h2 className="admin-data-mono">
+                                {vehicle.licensePlate}
+                              </h2>
+                              <span>
+                                Xe #<span className="admin-data-mono">{vehicle.vehicleId}</span>
+                              </span>
                             </div>
                             {vehicleStatusBadge(vehicle)}
                           </div>

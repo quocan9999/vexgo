@@ -187,7 +187,7 @@ export function CustomersManagement() {
                       {customers.map((customer) => (
                         <tr key={customer.customerId}>
                           <td>
-                            <span className="customer-code">
+                            <span className="customer-code admin-data-mono">
                               {customer.customerCode}
                             </span>
                           </td>
@@ -240,7 +240,7 @@ export function CustomersManagement() {
                     >
                       <div className="customers-mobile-card-header">
                         <div>
-                          <span className="customer-code">
+                          <span className="customer-code admin-data-mono">
                             {customer.customerCode}
                           </span>
                           <h3 className="customers-mobile-card-title">

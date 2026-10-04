@@ -387,7 +387,9 @@ export function VehicleSeatsManagement({ vehicleId }: { vehicleId: number }) {
             <section aria-label="Thông tin xe" className="vehicle-seats-context">
               <div>
                 <span>Biển số xe</span>
-                <strong>{workspace.vehicle.licensePlate}</strong>
+                <strong className="admin-data-mono">
+                  {workspace.vehicle.licensePlate}
+                </strong>
               </div>
               <div>
                 <span>Loại xe</span>
@@ -438,7 +440,7 @@ export function VehicleSeatsManagement({ vehicleId }: { vehicleId: number }) {
                   {workspace.seats.map((seat) => (
                     <article className="vehicle-seat-row" key={seat.seatId}>
                       <div className="vehicle-seat-row-info">
-                        <h3>{seat.seatNumber}</h3>
+                        <h3 className="admin-data-mono">{seat.seatNumber}</h3>
                         <p>{seat.position?.trim() || 'Chưa xác định vị trí'}</p>
                       </div>
                       {renderSeatActions(seat)}

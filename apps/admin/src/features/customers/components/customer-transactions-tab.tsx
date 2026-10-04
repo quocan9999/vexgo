@@ -26,14 +26,14 @@ function renderLinkedDoc(tx: {
   if (tx.booking) {
     return (
       <span>
-        Đặt vé: <strong>{tx.booking.code}</strong>
+        Đặt vé: <strong className="admin-data-mono">{tx.booking.code}</strong>
       </span>
     );
   }
   if (tx.shipment) {
     return (
       <span>
-        Gửi hàng: <strong>{tx.shipment.code}</strong>
+        Gửi hàng: <strong className="admin-data-mono">{tx.shipment.code}</strong>
       </span>
     );
   }
@@ -192,7 +192,9 @@ export function CustomerTransactionsTab({
                 {transactions.map((tx) => (
                   <tr key={tx.transactionId}>
                     <td>
-                      <span className="customer-code">{tx.code}</span>
+                      <span className="customer-code admin-data-mono">
+                        {tx.code}
+                      </span>
                     </td>
                     <td>{formatDateTime(tx.createdDate)}</td>
                     <td>
@@ -221,7 +223,9 @@ export function CustomerTransactionsTab({
               <article key={tx.transactionId} className="customers-mobile-card">
                 <div className="customers-mobile-card-header">
                   <div>
-                    <span className="customer-code">{tx.code}</span>
+                      <span className="customer-code admin-data-mono">
+                        {tx.code}
+                      </span>
                     <h3 className="customers-mobile-card-title">
                       {tx.totalAmount.toLocaleString('vi-VN')} đ
                     </h3>
