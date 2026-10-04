@@ -143,6 +143,11 @@
 | HIGH | GET | `/api/v1/routes` | Public | Filter tối thiểu: `from`, `to`, `busCompanyId`, `status`; phân trang nếu dữ liệu lớn. |
 | MEDIUM | GET | `/api/v1/routes/:routeId` | Public | Chi tiết tuyến. |
 
+Route write/read contract dùng `durationMinutes` là số phút nguyên dương. Backend
+lưu vào `TuyenXe.thoiGianChayPhut`; khi tạo hoặc cập nhật chuyến, `gioDen` được
+suy ra từ `departureTime + durationMinutes`. Migration chỉ backfill `gioDen` cho
+những tuyến hiện hữu đã có thời lượng đáng tin cậy.
+
 ### Chuyến xe
 
 | Priority | Method | Endpoint | Auth | Mục đích / dữ liệu chính |
@@ -430,6 +435,12 @@ trên 24 tiếng phí 10%.
 backend hủy vé và giải phóng ghế trong transaction, đồng thời tạo giao dịch
 `HOAN_TIEN` ở trạng thái `DANG_XU_LY`; response chỉ xác nhận yêu cầu hoàn tiền
 đã được ghi nhận, không khẳng định tiền đã hoàn tất.
+
+Sau khi transaction commit, refund processor gửi yêu cầu tới
+`REFUND_PROVIDER_URL` với idempotency key ổn định theo `thanhToanId`. Record
+`DANG_XU_LY` là hàng đợi bền vững và được quét lại định kỳ; request thành công
+chuyển sang `THANH_CONG`, lỗi mạng/provider được trả lại `DANG_XU_LY` để retry.
+Không cấu hình provider thì API giữ refund ở trạng thái pending và ghi cảnh báo.
 
 ## Flow 3 — Tra cứu hóa đơn (MEDIUM)
 

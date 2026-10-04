@@ -104,15 +104,18 @@ describe('TicketsService', () => {
   const config = {
     get: vi.fn().mockReturnValue('Asia/Ho_Chi_Minh'),
   };
+  const refundProcessor = { enqueueRefund: vi.fn() };
 
   const service = new TicketsService(
     prisma as unknown as PrismaService,
     config as unknown as ConfigService,
+    refundProcessor as never,
   );
 
   beforeEach(() => {
     vi.clearAllMocks();
     prisma.ve.updateMany.mockResolvedValue({ count: 1 });
+    prisma.thanhToan.create.mockResolvedValue({ thanhToanId: 77 });
   });
 
   afterEach(() => {
@@ -436,6 +439,7 @@ describe('TicketsService', () => {
       expect(
         prisma.thanhToan.create.mock.calls[0][0].data.soTien.toString(),
       ).toBe('225000');
+      expect(refundProcessor.enqueueRefund).toHaveBeenCalledWith(77);
     });
 
     it('returns conflict when another request has already cancelled the ticket', async () => {

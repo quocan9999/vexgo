@@ -163,6 +163,26 @@ function formatTripTime(d: Date): string {
   return d.toISOString().slice(11, 19);
 }
 
+function addMinutesToTime(
+  time: Date,
+  durationMinutes: number | null,
+): Date | null {
+  if (durationMinutes == null) return null;
+  const minutesSinceMidnight =
+    time.getUTCHours() * 60 + time.getUTCMinutes() + durationMinutes;
+  const normalizedMinutes = minutesSinceMidnight % (24 * 60);
+  return new Date(
+    Date.UTC(
+      1970,
+      0,
+      1,
+      Math.floor(normalizedMinutes / 60),
+      normalizedMinutes % 60,
+      time.getUTCSeconds(),
+    ),
+  );
+}
+
 function mapTripItem(trip: {
   chuyenXeId: number;
   maChuyenXe: string;
@@ -700,6 +720,7 @@ export class TripsService {
 
     const departureDate = new Date(`${dto.departureDate}T00:00:00.000Z`);
     const departureTime = new Date(`1970-01-01T${dto.departureTime}.000Z`);
+    const arrivalTime = addMinutesToTime(departureTime, route.thoiGianChayPhut);
 
     const existingCode = await this.prisma.chuyenXe.findFirst({
       where: { maChuyenXe: dto.code },
@@ -749,6 +770,7 @@ export class TripsService {
               maChuyenXe: dto.code,
               ngayKhoiHanh: departureDate,
               gioKhoiHanh: departureTime,
+              gioDen: arrivalTime,
               trangThai: 'CHUA_KHOI_HANH',
               nhaXeId,
               tuyenXeId: dto.routeId,
@@ -862,6 +884,7 @@ export class TripsService {
 
     const existing = await this.prisma.chuyenXe.findFirst({
       where: { chuyenXeId: id, nhaXeId },
+      include: { tuyenXe: { select: { thoiGianChayPhut: true } } },
     });
     if (!existing) {
       throw new NotFoundException({
@@ -879,6 +902,10 @@ export class TripsService {
 
     const departureDate = new Date(`${dto.departureDate}T00:00:00.000Z`);
     const departureTime = new Date(`1970-01-01T${dto.departureTime}.000Z`);
+    const arrivalTime = addMinutesToTime(
+      departureTime,
+      existing.tuyenXe.thoiGianChayPhut,
+    );
 
     const trip = await this.prisma.$transaction(
       async (tx) => {
@@ -922,6 +949,7 @@ export class TripsService {
           data: {
             ngayKhoiHanh: departureDate,
             gioKhoiHanh: departureTime,
+            gioDen: arrivalTime,
           },
         });
 

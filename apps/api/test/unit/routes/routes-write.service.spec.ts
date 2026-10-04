@@ -16,7 +16,7 @@ const record = {
   maTuyenXe: 'FUTA-TX-0100',
   diemDi: 'TP.HCM',
   diemDen: 'Đà Lạt',
-  thoiGianChayPhut: null,
+  thoiGianChayPhut: 420,
   trangThai: 'HOAT_DONG',
   createdAt: new Date('2026-09-22T07:34:00.000Z'),
   updatedAt: new Date('2026-09-23T07:34:00.000Z'),
@@ -45,6 +45,7 @@ const createInput = {
   code: 'FUTA-TX-0100',
   origin: 'TP.HCM',
   destination: 'Đà Lạt',
+  durationMinutes: 420,
   busCompanyId: 3,
   status: 'HOAT_DONG' as const,
 };
@@ -122,7 +123,7 @@ describe('RoutesService writes', () => {
     ).rejects.toBe(other);
   });
 
-  it('verifies the company and creates only the route with explicit status', async () => {
+  it('verifies the company and creates the route with explicit status and duration', async () => {
     const result = await service.create(createInput, tenantAdmin(3));
     expect(prisma.nhaXe.findUnique).toHaveBeenCalledWith({
       where: { nhaXeId: 3 },
@@ -134,6 +135,7 @@ describe('RoutesService writes', () => {
           maTuyenXe: 'FUTA-TX-0100',
           diemDi: 'TP.HCM',
           diemDen: 'Đà Lạt',
+          thoiGianChayPhut: 420,
           nhaXeId: 3,
           trangThai: 'HOAT_DONG',
         },
@@ -255,16 +257,16 @@ describe('RoutesService writes', () => {
     });
   });
 
-  it('updates only origin and destination and returns the full route contract', async () => {
+  it('updates origin, destination and duration and returns the full route contract', async () => {
     const result = await service.update(
       17,
-      { origin: 'Đà Lạt', destination: 'Nha Trang' },
+      { origin: 'Đà Lạt', destination: 'Nha Trang', durationMinutes: 360 },
       tenantAdmin(3),
     );
     expect(prisma.tuyenXe.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { tuyenXeId: 17, nhaXeId: 3 },
-        data: { diemDi: 'Đà Lạt', diemDen: 'Nha Trang' },
+        data: { diemDi: 'Đà Lạt', diemDen: 'Nha Trang', thoiGianChayPhut: 360 },
       }),
     );
     expect(result.data).toMatchObject({
@@ -277,7 +279,7 @@ describe('RoutesService writes', () => {
   it('returns ROUTE_NOT_FOUND on a missing update record', async () => {
     vi.mocked(prisma.tuyenXe.updateMany).mockResolvedValueOnce({ count: 0 });
     const error = await service
-      .update(999, { origin: 'A', destination: 'B' }, tenantAdmin(3))
+      .update(999, { origin: 'A', destination: 'B', durationMinutes: 60 }, tenantAdmin(3))
       .catch((caught: unknown) => caught);
     expect(error).toBeInstanceOf(NotFoundException);
     expect((error as NotFoundException).getResponse()).toEqual({

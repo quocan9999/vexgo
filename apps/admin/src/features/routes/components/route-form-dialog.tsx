@@ -9,6 +9,7 @@ import {
   type RouteApiErrorDetail,
 } from '../services/route-service';
 import type { Route, RouteStatus } from '../types/route';
+import { parseRouteDuration } from '../utils/route-duration';
 
 export type RouteCompanyOptions =
   | { status: 'loading' }
@@ -27,6 +28,7 @@ type Values = {
   code: string;
   origin: string;
   destination: string;
+  durationMinutes: string;
   busCompanyId: string;
   status: RouteStatus | '';
 };
@@ -36,7 +38,7 @@ type FieldErrors = Partial<Record<Field, string>>;
 function mappedErrors(details: RouteApiErrorDetail[]): FieldErrors {
   const errors: FieldErrors = {};
   for (const detail of details) {
-    if (detail.field === 'code' || detail.field === 'origin' || detail.field === 'destination' ||
+    if (detail.field === 'code' || detail.field === 'origin' || detail.field === 'destination' || detail.field === 'durationMinutes' ||
         detail.field === 'busCompanyId' || detail.field === 'status') {
       errors[detail.field] = detail.message;
     }
@@ -53,6 +55,7 @@ export function RouteFormDialog({ companyOptions, onClose, onRetryOptions, onSav
     code: route?.code ?? '',
     origin: route?.origin ?? '',
     destination: route?.destination ?? '',
+    durationMinutes: route?.durationMinutes == null ? '' : String(route.durationMinutes),
     busCompanyId: '',
     status: '',
   }));
@@ -87,6 +90,8 @@ export function RouteFormDialog({ companyOptions, onClose, onRetryOptions, onSav
     else if (values.origin.trim().length > 100) errors.origin = 'Điểm đi không được vượt quá 100 ký tự.';
     if (!values.destination.trim()) errors.destination = 'Vui lòng nhập điểm đến.';
     else if (values.destination.trim().length > 100) errors.destination = 'Điểm đến không được vượt quá 100 ký tự.';
+    const duration = parseRouteDuration(values.durationMinutes);
+    if ('error' in duration) errors.durationMinutes = duration.error;
     return errors;
   }
 
@@ -97,11 +102,14 @@ export function RouteFormDialog({ companyOptions, onClose, onRetryOptions, onSav
     const errors = validate();
     setFieldErrors(errors);
     if (Object.keys(errors).length > 0) return;
+    const parsedDuration = parseRouteDuration(values.durationMinutes);
+    if ('error' in parsedDuration) return;
+    const durationMinutes = parsedDuration.value;
 
     submittingRef.current = true;
     setSubmitting(true);
     try {
-      const input = { origin: values.origin.trim(), destination: values.destination.trim() };
+      const input = { origin: values.origin.trim(), destination: values.destination.trim(), durationMinutes };
       const saved = editing
         ? await updateRoute(route.routeId, input)
         : await createRoute({
@@ -169,7 +177,7 @@ export function RouteFormDialog({ companyOptions, onClose, onRetryOptions, onSav
           <div className="admin-dialog-header__copy">
             <p className="eyebrow">QUẢN LÝ VẬN HÀNH</p>
             <h2 id={`${idPrefix}-title`}>{editing ? 'Chỉnh sửa tuyến xe' : 'Thêm tuyến xe'}</h2>
-            <p id={`${idPrefix}-description`}>{editing ? 'Cập nhật điểm đi và điểm đến của tuyến.' : 'Nhập thông tin tuyến và chọn nhà xe quản lý.'}</p>
+            <p id={`${idPrefix}-description`}>{editing ? 'Cập nhật điểm đi, điểm đến và thời gian chạy của tuyến.' : 'Nhập thông tin tuyến và chọn nhà xe quản lý.'}</p>
           </div>
           <Button aria-label={editing ? 'Đóng biểu mẫu chỉnh sửa tuyến xe' : 'Đóng biểu mẫu thêm tuyến xe'} className="icon-button" disabled={submitting} onClick={closeDialog} type="button" variant="secondary"><X aria-hidden="true" size={19} /></Button>
         </div>
@@ -179,6 +187,23 @@ export function RouteFormDialog({ companyOptions, onClose, onRetryOptions, onSav
           {!editing && textField('code', 'Mã tuyến', 50)}
           {textField('origin', 'Điểm đi', 100)}
           {textField('destination', 'Điểm đến', 100)}
+          <div className="admin-crud-form-field">
+            <label htmlFor={`${idPrefix}-durationMinutes`}>Thời gian chạy (phút) *</label>
+            <input
+              aria-describedby={fieldErrors.durationMinutes ? `${idPrefix}-durationMinutes-error` : undefined}
+              aria-invalid={Boolean(fieldErrors.durationMinutes)}
+              disabled={submitting}
+              id={`${idPrefix}-durationMinutes`}
+              inputMode="numeric"
+              min={1}
+              onChange={(event) => updateField('durationMinutes', event.target.value)}
+              required
+              step={1}
+              type="number"
+              value={values.durationMinutes}
+            />
+            {fieldErrors.durationMinutes && <span className="admin-crud-form-field-error" id={`${idPrefix}-durationMinutes-error`}>{fieldErrors.durationMinutes}</span>}
+          </div>
           {!editing && (
             <>
               <div className="admin-crud-form-field">

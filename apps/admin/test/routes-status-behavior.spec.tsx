@@ -18,7 +18,7 @@ vi.mock('../src/features/routes/services/route-service', async (importOriginal) 
 }));
 
 const activeRoute: Route = {
-  routeId: 17, code: 'FUTA-TX-0100', origin: 'TP.HCM', destination: 'Đà Lạt',
+  routeId: 17, code: 'FUTA-TX-0100', origin: 'TP.HCM', destination: 'Đà Lạt', durationMinutes: 420,
   status: 'HOAT_DONG', busCompany: { busCompanyId: 3, code: 'FUTA', name: 'Phương Trang' },
   createdAt: '2026-09-22T07:34:00.000Z', updatedAt: '2026-09-23T07:34:00.000Z',
 };

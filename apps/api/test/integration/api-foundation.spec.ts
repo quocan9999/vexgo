@@ -916,6 +916,7 @@ describe('API foundation', () => {
         code: 'FUTA-TX-0001',
         origin: 'TP.HCM',
         destination: 'Đà Lạt',
+        durationMinutes: 420,
         busCompanyId: 901,
         status: 'HOAT_DONG',
       })
@@ -980,6 +981,7 @@ describe('API foundation', () => {
       code: 'FUTA-TX-0001',
       origin: 'TP.HCM',
       destination: 'Đà Lạt',
+      durationMinutes: 420,
       busCompanyId: 901,
       status: 'HOAT_DONG',
     };
@@ -1009,6 +1011,7 @@ describe('API foundation', () => {
         code: 'FUTA-TX-0001',
         origin: 'TP.HCM',
         destination: 'Đà Lạt',
+        durationMinutes: 420,
         busCompanyId: 901,
         status: 'HOAT_DONG',
       })
@@ -1032,6 +1035,7 @@ describe('API foundation', () => {
         code: 'FUTA-TX-0001',
         origin: 'TP.HCM',
         destination: 'Đà Lạt',
+        durationMinutes: 420,
         busCompanyId: 901,
         status: 'HOAT_DONG',
       })
@@ -1057,6 +1061,7 @@ describe('API foundation', () => {
         code: 'FUTA-TX-0001',
         origin: 'TP.HCM',
         destination: 'Đà Lạt',
+        durationMinutes: 420,
         busCompanyId: 901,
         status: 'HOAT_DONG',
       })
@@ -1076,7 +1081,7 @@ describe('API foundation', () => {
     await request(app.getHttpServer())
       .patch('/api/v1/routes/17')
       .set('Authorization', 'Bearer signed-token')
-      .send({ origin: 'TP.HCM', destination: 'Đà Lạt' })
+      .send({ origin: 'TP.HCM', destination: 'Đà Lạt', durationMinutes: 420 })
       .expect(200);
 
     expect(routesService.update).toHaveBeenCalledWith(

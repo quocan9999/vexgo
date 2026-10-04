@@ -16,6 +16,7 @@ import { createPaymentDraft } from '../services/payment-draft';
 import { FeaturePlaceholderModal } from './feature-placeholder-modal';
 import { useAuthSession } from '@/features/auth/auth-session';
 import { customerApi } from '@/features/account/services/customer.api';
+import { hydrateUntouchedProfileField } from '../utils/profile-hydration';
 
 export interface RoundTripBookingProps {
   outboundPost: Post;
@@ -342,11 +343,11 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
         if (res.data.email) {
           setCustomerEmail((curr) => curr || res.data.email || '');
         }
-        if (res.data.fullName && userNameOverride === null) {
-          setUserNameOverride(res.data.fullName);
+        if (res.data.fullName) {
+          setUserNameOverride((current) => hydrateUntouchedProfileField(current, res.data.fullName));
         }
-        if (res.data.phoneNumber && userPhoneOverride === null) {
-          setUserPhoneOverride(formatDisplayPhone(res.data.phoneNumber));
+        if (res.data.phoneNumber) {
+          setUserPhoneOverride((current) => hydrateUntouchedProfileField(current, formatDisplayPhone(res.data.phoneNumber)));
         }
       })
       .catch(() => {});

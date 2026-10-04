@@ -27,6 +27,7 @@ const record = {
   maTuyenXe: 'FUTA-TX-0100',
   diemDi: 'TP.HCM',
   diemDen: 'Đà Lạt',
+  thoiGianChayPhut: 420,
   trangThai: 'HOAT_DONG',
   createdAt: new Date('2026-09-22T07:34:00.000Z'),
   updatedAt: new Date('2026-09-23T07:34:00.000Z'),
@@ -48,6 +49,7 @@ const createInput = {
   code: 'FUTA-TX-0100',
   origin: 'TP.HCM',
   destination: 'Đà Lạt',
+  durationMinutes: 420,
   busCompanyId: 3,
   status: 'HOAT_DONG',
 };
@@ -200,6 +202,7 @@ describe('Route write HTTP pipeline with real service and mocked Prisma', () => 
           maTuyenXe: 'FUTA-TX-0100',
           diemDi: 'TP.HCM',
           diemDen: 'Đà Lạt',
+          thoiGianChayPhut: 420,
           nhaXeId: 3,
           trangThai: 'HOAT_DONG',
         },
@@ -211,6 +214,7 @@ describe('Route write HTTP pipeline with real service and mocked Prisma', () => 
         code: 'FUTA-TX-0100',
         origin: 'TP.HCM',
         destination: 'Đà Lạt',
+        durationMinutes: 420,
         status: 'HOAT_DONG',
         busCompany: { busCompanyId: 3, code: 'FUTA', name: 'Phương Trang' },
         createdAt: '2026-09-22T07:34:00.000Z',
@@ -226,7 +230,7 @@ describe('Route write HTTP pipeline with real service and mocked Prisma', () => 
   it.each([
     [
       'missing code',
-      { origin: 'A', destination: 'B', busCompanyId: 3, status: 'HOAT_DONG' },
+      { origin: 'A', destination: 'B', durationMinutes: 420, busCompanyId: 3, status: 'HOAT_DONG' },
     ],
     ['blank code', { ...createInput, code: '   ' }],
     ['long code', { ...createInput, code: 'X'.repeat(51) }],
@@ -236,9 +240,12 @@ describe('Route write HTTP pipeline with real service and mocked Prisma', () => 
     ['long origin', { ...createInput, origin: 'X'.repeat(101) }],
     ['long destination', { ...createInput, destination: 'X'.repeat(101) }],
     ['nonstring origin', { ...createInput, origin: 42 }],
+    ['missing duration', { code: 'A', origin: 'A', destination: 'B', busCompanyId: 3, status: 'HOAT_DONG' }],
+    ['zero duration', { ...createInput, durationMinutes: 0 }],
+    ['fractional duration', { ...createInput, durationMinutes: 1.5 }],
     [
       'missing status',
-      { code: 'A', origin: 'A', destination: 'B', busCompanyId: 3 },
+      { code: 'A', origin: 'A', destination: 'B', durationMinutes: 420, busCompanyId: 3 },
     ],
     ['invalid status', { ...createInput, status: 'ACTIVE' }],
     ['unknown field', { ...createInput, extra: true }],
@@ -305,7 +312,7 @@ describe('Route write HTTP pipeline with real service and mocked Prisma', () => 
   });
 
   it('updates only endpoints and reflects the update in detail and list', async () => {
-    const updated = { ...record, diemDi: 'Đà Lạt', diemDen: 'Nha Trang' };
+    const updated = { ...record, diemDi: 'Đà Lạt', diemDen: 'Nha Trang', thoiGianChayPhut: 360 };
     prisma.tuyenXe.updateMany.mockResolvedValueOnce({ count: 1 });
     prisma.tuyenXe.findFirst.mockResolvedValue(updated);
     prisma.tuyenXe.findMany.mockResolvedValueOnce([updated]);
@@ -314,18 +321,20 @@ describe('Route write HTTP pipeline with real service and mocked Prisma', () => 
       .send({
         origin: ' Đà Lạt ',
         destination: ' Nha Trang ',
+        durationMinutes: 360,
       })
       .expect(200);
     expect(prisma.tuyenXe.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { tuyenXeId: 17, nhaXeId: 3 },
-        data: { diemDi: 'Đà Lạt', diemDen: 'Nha Trang' },
+        data: { diemDi: 'Đà Lạt', diemDen: 'Nha Trang', thoiGianChayPhut: 360 },
       }),
     );
     expect(response.body.data).toMatchObject({
       code: createInput.code,
       origin: 'Đà Lạt',
       destination: 'Nha Trang',
+      durationMinutes: 360,
       status: 'HOAT_DONG',
     });
     const detail = await request(app.getHttpServer())
@@ -334,6 +343,7 @@ describe('Route write HTTP pipeline with real service and mocked Prisma', () => 
     expect(detail.body.data).toMatchObject({
       origin: 'Đà Lạt',
       destination: 'Nha Trang',
+      durationMinutes: 360,
     });
     const list = await request(app.getHttpServer())
       .get('/api/v1/routes')
@@ -342,22 +352,24 @@ describe('Route write HTTP pipeline with real service and mocked Prisma', () => 
     expect(list.body.data[0]).toMatchObject({
       origin: 'Đà Lạt',
       destination: 'Nha Trang',
+      durationMinutes: 360,
     });
   });
 
   it.each([
-    ['missing origin', { destination: 'B' }],
-    ['missing destination', { origin: 'A' }],
-    ['blank origin', { origin: '  ', destination: 'B' }],
-    ['blank destination', { origin: 'A', destination: '  ' }],
-    ['long origin', { origin: 'X'.repeat(101), destination: 'B' }],
-    ['long destination', { origin: 'A', destination: 'X'.repeat(101) }],
-    ['nonstring origin', { origin: 42, destination: 'B' }],
-    ['immutable code', { origin: 'A', destination: 'B', code: 'NEW' }],
-    ['immutable company', { origin: 'A', destination: 'B', busCompanyId: 4 }],
+    ['missing origin', { destination: 'B', durationMinutes: 60 }],
+    ['missing destination', { origin: 'A', durationMinutes: 60 }],
+    ['blank origin', { origin: '  ', destination: 'B', durationMinutes: 60 }],
+    ['blank destination', { origin: 'A', destination: '  ', durationMinutes: 60 }],
+    ['long origin', { origin: 'X'.repeat(101), destination: 'B', durationMinutes: 60 }],
+    ['long destination', { origin: 'A', destination: 'X'.repeat(101), durationMinutes: 60 }],
+    ['nonstring origin', { origin: 42, destination: 'B', durationMinutes: 60 }],
+    ['zero duration', { origin: 'A', destination: 'B', durationMinutes: 0 }],
+    ['immutable code', { origin: 'A', destination: 'B', durationMinutes: 60, code: 'NEW' }],
+    ['immutable company', { origin: 'A', destination: 'B', durationMinutes: 60, busCompanyId: 4 }],
     [
       'immutable status',
-      { origin: 'A', destination: 'B', status: 'TAM_NGUNG' },
+      { origin: 'A', destination: 'B', durationMinutes: 60, status: 'TAM_NGUNG' },
     ],
   ])('rejects PATCH with %s', async (_name, body) => {
     const response = await request(app.getHttpServer())
@@ -376,7 +388,7 @@ describe('Route write HTTP pipeline with real service and mocked Prisma', () => 
     async (id) => {
       await request(app.getHttpServer())
         .patch(`/api/v1/routes/${id}`)
-        .send({ origin: 'A', destination: 'B' })
+        .send({ origin: 'A', destination: 'B', durationMinutes: 60 })
         .expect(400);
       expect(prisma.tuyenXe.updateMany).not.toHaveBeenCalled();
     },
@@ -386,7 +398,7 @@ describe('Route write HTTP pipeline with real service and mocked Prisma', () => 
     prisma.tuyenXe.updateMany.mockResolvedValueOnce({ count: 0 });
     const response = await request(app.getHttpServer())
       .patch('/api/v1/routes/999')
-      .send({ origin: 'A', destination: 'B' })
+      .send({ origin: 'A', destination: 'B', durationMinutes: 60 })
       .expect(404);
     expect(response.body).toEqual({
       statusCode: 404,

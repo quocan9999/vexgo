@@ -87,6 +87,7 @@ describe('RoutesService read operations', () => {
         code: 'FUTA-TX-0001',
         origin: 'TP.HCM',
         destination: 'Đà Lạt',
+        durationMinutes: null,
         status: 'HOAT_DONG',
         busCompany: { busCompanyId: 3, code: 'FUTA', name: 'Phương Trang' },
         createdAt: '2026-09-22T07:34:00.000Z',

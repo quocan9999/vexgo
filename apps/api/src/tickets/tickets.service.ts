@@ -8,6 +8,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { RefundProcessorService } from '../payments/refund-processor.service.js';
 import {
   businessDateStartUtc,
   resolveBusinessTimeZone,
@@ -200,6 +201,7 @@ export class TicketsService {
   constructor(
     private readonly prisma: PrismaService,
     config: ConfigService,
+    private readonly refundProcessor: RefundProcessorService,
   ) {
     this.businessTimeZone = resolveBusinessTimeZone(
       config.get<string>('BUSINESS_TIME_ZONE'),
@@ -391,7 +393,7 @@ export class TicketsService {
 
   async cancelTicket(dto: CancelTicketDto) {
     try {
-      return await this.prisma.$transaction(
+      const result = await this.prisma.$transaction(
         async (tx) => {
           const ticket = await tx.ve.findUnique({
             where: { maVe: dto.ticketCode.trim() },
@@ -488,7 +490,7 @@ export class TicketsService {
             });
           }
 
-          await tx.thanhToan.create({
+          const refund = await tx.thanhToan.create({
             data: {
               soTien: quote.refundAmount,
               phuongThuc: originalPayment.phuongThuc,
@@ -502,18 +504,24 @@ export class TicketsService {
 
           const serializedQuote = serializeCancellationQuote(quote);
           return {
-            data: {
-              ticketId: ticket.veId,
-              ticketCode: ticket.maVe,
-              status: 'HUY',
-              cancelFee: serializedQuote.cancelFee,
-              refundAmount: serializedQuote.refundAmount,
-              message: 'Hủy vé thành công. Yêu cầu hoàn tiền đang được xử lý.',
+            refundId: refund.thanhToanId,
+            response: {
+              data: {
+                ticketId: ticket.veId,
+                ticketCode: ticket.maVe,
+                status: 'HUY',
+                cancelFee: serializedQuote.cancelFee,
+                refundAmount: serializedQuote.refundAmount,
+                message:
+                  'Hủy vé thành công. Yêu cầu hoàn tiền đang được xử lý.',
+              },
             },
           };
         },
         { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
       );
+      this.refundProcessor.enqueueRefund(result.refundId);
+      return result.response;
     } catch (error) {
       if (
         typeof error === 'object' &&
