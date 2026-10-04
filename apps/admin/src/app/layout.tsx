@@ -7,7 +7,10 @@ import '@/features/admin-auth/admin-auth.css';
 import { Inter, JetBrains_Mono } from 'next/font/google';
 import { cn } from '@/lib/utils';
 
-const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
+const inter = Inter({
+  subsets: ['latin', 'vietnamese'],
+  variable: '--font-sans',
+});
 const jetBrainsMono = JetBrains_Mono({
   subsets: ['latin'],
   variable: '--font-jetbrains-mono',

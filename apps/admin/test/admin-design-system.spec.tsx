@@ -8,6 +8,9 @@ const adminSourceDirectory = fileURLToPath(new URL('../src', import.meta.url));
 const tokenFile = fileURLToPath(
   new URL('../src/styles/admin-tokens.css', import.meta.url),
 );
+const componentFile = fileURLToPath(
+  new URL('../src/styles/admin-components.css', import.meta.url),
+);
 
 function collectCssFiles(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
@@ -36,6 +39,27 @@ function rootTokens(): Map<string, string> {
 }
 
 describe('Admin design system tokens', () => {
+  it('keeps the sidebar collapse control comfortably operable', () => {
+    const stylesheet = postcss.parse(readFileSync(componentFile, 'utf8'));
+    const rule = stylesheet.nodes
+      ?.filter((node): node is postcss.Rule => node.type === 'rule')
+      .find(
+        (node) => node.selector === '.admin-sidebar .sidebar-collapse-button',
+      );
+    const declarations = new Map<string, string>();
+
+    rule?.walkDecls((declaration) => {
+      declarations.set(declaration.prop, declaration.value);
+    });
+
+    expect(
+      Number.parseFloat(declarations.get('width') ?? '0'),
+    ).toBeGreaterThanOrEqual(44);
+    expect(
+      Number.parseFloat(declarations.get('height') ?? '0'),
+    ).toBeGreaterThanOrEqual(44);
+  });
+
   it('defines a 4px spacing scale and semantic aliases', () => {
     const tokens = rootTokens();
     const scale = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3, 4];

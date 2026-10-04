@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useState, useSyncExternalStore, type ReactNode } from 'react';
 import { AdminDialogPrimitive } from '@/components/admin/admin-dialog-primitive';
 import { useAdminSession } from '@/features/admin-auth/hooks/use-admin-session';
 import {
@@ -63,6 +63,78 @@ const ADMIN_ROLE_LABELS: Record<string, string> = {
 };
 
 const ADMIN_SIDEBAR_COLLAPSED_STORAGE_KEY = 'vexgo-admin-sidebar-collapsed';
+const ADMIN_SIDEBAR_COLLAPSED_CHANGE_EVENT =
+  'vexgo-admin-sidebar-collapsed-change';
+let sidebarCollapsedFallback = false;
+let sidebarCollapsedStorageUnavailable = false;
+
+function getSidebarCollapsedSnapshot() {
+  if (sidebarCollapsedStorageUnavailable) return sidebarCollapsedFallback;
+
+  try {
+    return (
+      window.localStorage.getItem(ADMIN_SIDEBAR_COLLAPSED_STORAGE_KEY) ===
+      'true'
+    );
+  } catch {
+    sidebarCollapsedStorageUnavailable = true;
+    return sidebarCollapsedFallback;
+  }
+}
+
+function getServerSidebarCollapsedSnapshot() {
+  return false;
+}
+
+function subscribeToSidebarCollapsed(onStoreChange: () => void) {
+  function handleStorageChange(event: StorageEvent) {
+    if (
+      event.key !== null &&
+      event.key !== ADMIN_SIDEBAR_COLLAPSED_STORAGE_KEY
+    ) {
+      return;
+    }
+
+    try {
+      sidebarCollapsedFallback =
+        window.localStorage.getItem(ADMIN_SIDEBAR_COLLAPSED_STORAGE_KEY) ===
+        'true';
+      sidebarCollapsedStorageUnavailable = false;
+    } catch {
+      sidebarCollapsedStorageUnavailable = true;
+    }
+    onStoreChange();
+  }
+
+  window.addEventListener('storage', handleStorageChange);
+  window.addEventListener(
+    ADMIN_SIDEBAR_COLLAPSED_CHANGE_EVENT,
+    onStoreChange,
+  );
+
+  return () => {
+    window.removeEventListener('storage', handleStorageChange);
+    window.removeEventListener(
+      ADMIN_SIDEBAR_COLLAPSED_CHANGE_EVENT,
+      onStoreChange,
+    );
+  };
+}
+
+function setSidebarCollapsedPreference(collapsed: boolean) {
+  sidebarCollapsedFallback = collapsed;
+  try {
+    window.localStorage.setItem(
+      ADMIN_SIDEBAR_COLLAPSED_STORAGE_KEY,
+      String(collapsed),
+    );
+    sidebarCollapsedStorageUnavailable = false;
+  } catch {
+    sidebarCollapsedStorageUnavailable = true;
+  }
+
+  window.dispatchEvent(new Event(ADMIN_SIDEBAR_COLLAPSED_CHANGE_EVENT));
+}
 
 function formatAdminRoleLabels(roles: string[]) {
   const labels = roles.map(
@@ -91,22 +163,15 @@ export function SuperAdminLayout({
 }: SuperAdminLayoutProps) {
   const router = useRouter();
   const authState = useAdminSession();
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const sidebarCollapsed = useSyncExternalStore(
+    subscribeToSidebarCollapsed,
+    getSidebarCollapsedSnapshot,
+    getServerSidebarCollapsedSnapshot,
+  );
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
-
-  useEffect(() => {
-    try {
-      setSidebarCollapsed(
-        window.localStorage.getItem(ADMIN_SIDEBAR_COLLAPSED_STORAGE_KEY) ===
-          'true',
-      );
-    } catch {
-      // The collapse control still works for this session when storage is unavailable.
-    }
-  }, []);
 
   if (authState.status !== 'authenticated') return null;
 
@@ -143,15 +208,7 @@ export function SuperAdminLayout({
 
   function toggleSidebar() {
     const nextCollapsed = !sidebarCollapsed;
-    setSidebarCollapsed(nextCollapsed);
-    try {
-      window.localStorage.setItem(
-        ADMIN_SIDEBAR_COLLAPSED_STORAGE_KEY,
-        String(nextCollapsed),
-      );
-    } catch {
-      // The collapse control still works for this session when storage is unavailable.
-    }
+    setSidebarCollapsedPreference(nextCollapsed);
   }
 
   async function logout() {

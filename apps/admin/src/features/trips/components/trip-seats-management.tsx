@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useAdminPermissions } from '@/features/admin-auth/hooks/use-admin-permissions';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
-import { getTripById, getTripSeats, isTripNotFoundError, TripApiError } from '../services/trip-service';
+import { getTripById, getTripSeats, isTripNotFoundError } from '../services/trip-service';
 import { TripStatusBadge } from './trip-detail-sheet';
 import type {
   Trip,

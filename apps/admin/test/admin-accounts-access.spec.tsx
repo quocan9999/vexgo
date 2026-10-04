@@ -1,5 +1,11 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { state, replace } = vi.hoisted(() => ({
@@ -101,6 +107,7 @@ describe('Admin account management access', () => {
     resetAdminTestSession();
     state.pathname = '/admin-accounts';
     replace.mockReset();
+    window.localStorage.clear();
   });
 
   afterEach(cleanup);
@@ -134,6 +141,31 @@ describe('Admin account management access', () => {
       </SuperAdminLayout>,
     );
     expect(screen.queryByRole('link', { name: 'Tài khoản Admin' })).toBeNull();
+  });
+
+  it('restores and persists the sidebar collapse preference', () => {
+    window.localStorage.setItem('vexgo-admin-sidebar-collapsed', 'true');
+    setPlatformPermissions([]);
+
+    const { container } = render(
+      <SuperAdminLayout activeSection="admin-accounts">
+        <p>Nội dung tài khoản</p>
+      </SuperAdminLayout>,
+    );
+
+    expect(
+      container
+        .querySelector('.admin-shell')
+        ?.classList.contains('is-sidebar-collapsed'),
+    ).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Mở rộng thanh điều hướng' }));
+
+    expect(
+      container
+        .querySelector('.admin-shell')
+        ?.classList.contains('is-sidebar-collapsed'),
+    ).toBe(false);
+    expect(window.localStorage.getItem('vexgo-admin-sidebar-collapsed')).toBe('false');
   });
 
   it('blocks direct account-page access without platform read permission', async () => {
