@@ -57,11 +57,12 @@ Semantic aliases map common Admin spacing to the scale:
 | Field gap | 12px | 12px |
 | Label–control gap | 8px | 8px |
 | Toolbar / control gap | 12px | 8px |
+| Page action padding | 8px / 16px | 8px / 16px |
 | Card padding | 20px | 16px |
 | Dialog padding | 24px | 16px |
 | Table cell X / Y | 16px / 12px | Card fallback, 16px padding |
 
-Aliases also cover summary, state, notice, control, sheet, form, and sidebar spacing. Use these aliases instead of adding new per-feature spacing values. Page-specific spacing exceptions are reserved for data visualization or a workspace with a distinct layout. The dashboard status chart keeps its responsive donut-to-legend composition gap; seat assignment keeps seat dimensions and grid geometry specific to that workflow.
+Aliases also cover summary, state, notice, control, sheet, form, and sidebar spacing. Use these aliases instead of adding new per-feature spacing values. Shared page action buttons use 8px vertical and 16px horizontal padding with content-sized width. Page-specific spacing exceptions are reserved for data visualization or a workspace with a distinct layout. The dashboard status chart keeps its responsive donut-to-legend composition gap; seat assignment keeps seat dimensions and grid geometry specific to that workflow.
 
 Tiny local offsets may remain for optical alignment of inline icons and native controls. They do not define reusable layout spacing and should not be reused as gaps or padding.
 

@@ -115,6 +115,7 @@
   --admin-space-state-padding: var(--admin-space-7) var(--admin-space-5);
   --admin-space-notice-padding: var(--admin-space-3) var(--admin-space-4);
   --admin-space-control-padding: var(--admin-space-2) var(--admin-space-3);
+  --admin-space-page-action-padding: var(--admin-space-2) var(--admin-space-4);
   --admin-space-dialog-padding: var(--admin-space-6);
   --admin-space-sheet-padding: var(--admin-space-6);
   --admin-space-sheet-inline: var(--admin-space-6);

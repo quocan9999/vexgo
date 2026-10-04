@@ -260,7 +260,7 @@ export function FarePricesManagement() {
       <div className="admin-page-content">
         <AdminPageHeader
           actions={
-            <div className={`page-intro-actions ${styles.pageActions}`}>
+            <div className="page-intro-actions">
               {canCreate && <AdminCreateAction label="Thêm bảng giá" onClick={openCreateDialog} />}
               <AdminRefreshAction loading={loading} onClick={refresh} />
             </div>

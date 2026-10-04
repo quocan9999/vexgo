@@ -5,11 +5,6 @@
   line-height: var(--admin-type-secondary-body-line-height);
 }
 
-.pageActions > :global(.admin-page-action.button:first-child) {
-  width: 146px;
-  white-space: nowrap;
-}
-
 .successNotice {
   display: flex;
   align-items: center;

@@ -557,8 +557,9 @@ dialog:focus-visible {
 
 .admin-page-action.button {
   box-sizing: border-box;
-  width: 120px;
+  min-width: 120px;
   min-height: 37px;
+  padding: var(--admin-space-page-action-padding);
   white-space: nowrap;
 }
 
