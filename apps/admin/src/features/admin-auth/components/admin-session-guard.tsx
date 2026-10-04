@@ -2,7 +2,7 @@
 
 import { useRouter, usePathname } from 'next/navigation';
 import { useEffect, useState, type ReactNode } from 'react';
-import { WifiOff } from 'lucide-react';
+import { CircleAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAdminSession } from '../hooks/use-admin-session';
 import {
@@ -147,24 +147,25 @@ export function AdminSessionGuard({ children }: { children: ReactNode }) {
           aria-labelledby="session-error-title"
         >
           <span className="session-error-card__icon" aria-hidden="true">
-            <WifiOff size={22} strokeWidth={1.75} />
+            <CircleAlert size={22} strokeWidth={1.75} />
           </span>
           <p className="session-error-card__eyebrow">
-            Kết nối tạm gián đoạn
+            Yêu cầu xác minh chưa hoàn tất
           </p>
           <h1 id="session-error-title">
             Chưa thể xác minh phiên đăng nhập
           </h1>
           <p className="session-error-card__message" role="alert">
-            Admin chưa kết nối được với máy chủ VexGo. Kiểm tra API và kết nối
-            mạng, sau đó thử lại.
+            Admin chưa thể xác minh phiên đăng nhập hiện tại. Hãy thử lại; nếu
+            lỗi vẫn tiếp diễn, kiểm tra chi tiết kỹ thuật hoặc liên hệ quản trị
+            viên.
           </p>
           <Button
             className="session-error-card__retry"
             onClick={() => void initializeAdminSession().catch(() => undefined)}
             type="button"
           >
-            Thử kết nối lại
+            Thử lại
           </Button>
           <details className="session-error-card__details">
             <summary>Chi tiết kỹ thuật</summary>
