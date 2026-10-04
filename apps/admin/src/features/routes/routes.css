@@ -85,8 +85,6 @@
 }
 
 .routes-detail-actions {
-  display: flex;
-  justify-content: flex-end;
   margin-top: var(--admin-space-component-gap);
   padding-top: var(--admin-space-table-cell-y);
   border-top: 1px solid var(--admin-border);

@@ -21,13 +21,20 @@ export type DateRangeValue = {
 
 type FilterToolbarProps = {
   children: ReactNode;
+  density?: 'compact' | 'default';
   totalItems: number | null;
 };
 
-export function FilterToolbar({ children, totalItems }: FilterToolbarProps) {
+export function FilterToolbar({
+  children,
+  density = 'default',
+  totalItems,
+}: FilterToolbarProps) {
   return (
     <div className={styles.toolbar}>
-      <div className={styles.controls}>{children}</div>
+      <div className={styles.controls} data-density={density}>
+        {children}
+      </div>
       <span aria-live="polite" className={styles.summary}>
         <AdminResultSummary totalItems={totalItems} />
       </span>
@@ -103,7 +110,7 @@ export function SelectFilter({
         value={value || ALL_VALUE}
       >
         <Select.Trigger aria-label={label} className={styles.selectTrigger}>
-          <Select.Value>
+          <Select.Value className={styles.selectValue}>
             {value
               ? options.find((option) => option.value === value)?.label ??
                 'Không xác định'

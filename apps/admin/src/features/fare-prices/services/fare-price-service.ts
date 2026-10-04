@@ -279,6 +279,7 @@ export async function getFarePriceRouteOptions(
   return routes.map((route) => ({
     id: route.routeId,
     label: `${route.code} — ${route.origin} → ${route.destination}`,
+    routeLabel: `${route.origin} → ${route.destination}`,
   }));
 }
 

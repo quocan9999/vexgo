@@ -90,6 +90,7 @@ Color and radius remain outside the typography and spacing system, except for th
 
 Shared components under `src/components/admin/`, `src/components/ui/`, and `src/components/data-filters/` own reusable visual and accessibility behavior. Reuse the shared page header/actions, detail action, table skeleton, result summary, status badge, pagination, filter controls, detail sheet, form dialog, and confirmation dialog when the use case matches.
 
+- Detail sheet action groups align to the end, wrap when needed, and use the shared action gap. Filter searches stop growing at their defined maximum, while select and date triggers keep a stable width as values and result counts change. Toolbars with many controls may use the compact density variant on desktop and wrap on narrower screens.
 - Domain labels, API calls, validation, and business state remain with the feature.
 - Extend a shared component when the same use case needs a missing option.
 - A feature may use a dedicated workspace for a distinct workflow such as a seat map, dashboard, or editor; keep its typography and normal spacing on the shared system.

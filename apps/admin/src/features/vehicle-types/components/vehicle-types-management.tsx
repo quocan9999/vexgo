@@ -195,7 +195,7 @@ function VehicleTypeDetails({
                 <dd>{timestampFormat(detailState.vehicleType.updatedAt)}</dd>
               </div>
             </dl>
-            {canUpdate && <div className="vehicle-type-detail-actions">
+            {canUpdate && <div className="vehicle-type-detail-actions admin-detail-sheet__actions">
               <Button
                 onClick={() => {
                   setUpdateNotice(null);

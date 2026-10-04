@@ -394,7 +394,7 @@ export function TripDetailSheet({
             </section>
 
             {detail.status === 'success' && (
-              <div className="trips-detail-actions">
+              <div className="trips-detail-actions admin-detail-sheet__actions">
                 {canRead && (
                   <Link
                     className="button button-secondary"

@@ -36,6 +36,7 @@
   display: flex;
   width: min(100%, 420px);
   min-width: min(100%, 220px);
+  max-width: 420px;
   flex: 1 1 320px;
   align-items: center;
   gap: var(--admin-space-control-gap);
@@ -96,15 +97,37 @@
 }
 
 .selectFilter {
+  box-sizing: border-box;
   width: 180px;
-  min-width: 150px;
-  flex: 0 1 180px;
+  min-width: 0;
+  flex: 0 0 180px;
+}
+
+.controls[data-density='compact'] .search {
+  flex-basis: 200px;
+  min-width: min(100%, 180px);
+  max-width: 240px;
+}
+
+.controls[data-density='compact'] .selectFilter {
+  width: 176px;
+  flex-basis: 176px;
+}
+
+.selectValue {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .selectTrigger,
 .dateTrigger {
   display: flex;
+  box-sizing: border-box;
   width: 100%;
+  min-width: 0;
   align-items: center;
   justify-content: space-between;
   gap: var(--admin-space-control-gap);
@@ -177,15 +200,16 @@
 }
 
 .dateFilter {
+  box-sizing: border-box;
   width: 240px;
-  min-width: 200px;
-  flex: 0 1 240px;
+  min-width: 0;
+  flex: 0 0 240px;
 }
 
 .singleDateFilter {
   width: 180px;
-  min-width: 150px;
-  flex-basis: 180px;
+  min-width: 0;
+  flex: 0 0 180px;
 }
 
 .dateTrigger {
@@ -349,6 +373,12 @@
     max-width: none;
     flex-basis: 100%;
   }
+
+  .controls[data-density='compact'] .search {
+    flex-basis: 100%;
+    min-width: 0;
+    max-width: none;
+  }
 }
 
 @media (max-width: 640px) {
@@ -375,6 +405,15 @@
   .dateFilter {
     width: 100%;
     min-width: 0;
+  }
+
+  .controls[data-density='compact'] .search {
+    width: 100%;
+  }
+
+  .controls[data-density='compact'] .selectFilter {
+    width: 100%;
+    flex-basis: auto;
   }
 
   .summary {

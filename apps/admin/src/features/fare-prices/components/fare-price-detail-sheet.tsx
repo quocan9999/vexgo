@@ -335,7 +335,7 @@ export function FarePriceDetailSheet({
               </div>
             </dl>
             {canUpdate && (
-              <div className={styles.detailActions}>
+              <div className={`${styles.detailActions} admin-detail-sheet__actions`}>
                 <Button
                   onClick={() => {
                     setUpdateNotice(null);

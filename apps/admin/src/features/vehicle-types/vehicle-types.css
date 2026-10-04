@@ -230,8 +230,6 @@
 }
 
 .vehicle-type-detail-actions {
-  display: flex;
-  justify-content: flex-end;
   margin-top: var(--admin-space-component-gap);
 }
 

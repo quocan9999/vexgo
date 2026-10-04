@@ -143,7 +143,7 @@ export function RouteDetails({ routeId, companyOptions, onClose, onRetryOptions,
               <div><dt>Ngày tạo</dt><dd>{timestampFormat(detail.route.createdAt)}</dd></div>
               <div><dt>Cập nhật lần cuối</dt><dd>{timestampFormat(detail.route.updatedAt)}</dd></div>
             </dl>
-            <div className="routes-detail-actions">
+            <div className="routes-detail-actions admin-detail-sheet__actions">
               {canUpdate && (
                 <>
                   <Button onClick={() => { setStatusError(null); setStatusOpen(true); }} type="button" variant="secondary">

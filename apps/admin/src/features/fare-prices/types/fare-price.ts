@@ -74,7 +74,7 @@ export type PaginatedFarePrices = {
   meta: { page: number; pageSize: number; totalItems: number; totalPages: number };
 };
 
-export type FarePriceOption = { id: number; label: string };
+export type FarePriceOption = { id: number; label: string; routeLabel?: string };
 
 export type FarePriceOptionsState =
   | { status: 'loading' }

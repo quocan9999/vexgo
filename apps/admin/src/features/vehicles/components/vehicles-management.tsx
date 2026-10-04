@@ -318,7 +318,7 @@ function VehicleDetails({
               </dl>
             </section>
 
-            <div className="vehicle-detail-actions">
+            <div className="vehicle-detail-actions admin-detail-sheet__actions">
               {canConfigureSeats && <Button
                 onClick={() =>
                   router.push(`/vehicles/${detailState.vehicle.vehicleId}/seats`)
@@ -531,6 +531,7 @@ export function VehiclesManagement() {
               />
               {options.busCompanies.status === 'success' && (
                 <SelectFilter
+                  allLabel="Tất cả nhà xe"
                   label="Nhà xe"
                   onChange={(value) => updateFilters({ busCompanyId: value })}
                   options={filterOptions(options.busCompanies.options)}
@@ -539,6 +540,7 @@ export function VehiclesManagement() {
               )}
               {options.vehicleTypes.status === 'success' && (
                 <SelectFilter
+                  allLabel="Tất cả loại xe"
                   label="Loại xe"
                   onChange={(value) => updateFilters({ vehicleTypeId: value })}
                   options={filterOptions(options.vehicleTypes.options)}
@@ -546,6 +548,7 @@ export function VehiclesManagement() {
                 />
               )}
               <SelectFilter
+                allLabel="Tất cả trạng thái xe"
                 label="Trạng thái xe"
                 onChange={(value) =>
                   updateFilters({ status: value as VehicleStatus | '' })

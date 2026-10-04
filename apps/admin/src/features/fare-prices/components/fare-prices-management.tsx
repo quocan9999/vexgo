@@ -89,6 +89,13 @@ function optionFilters(options: FarePriceOption[]): FilterOption[] {
   }));
 }
 
+function routeOptionFilters(options: FarePriceOption[]): FilterOption[] {
+  return options.map((option) => ({
+    value: String(option.id),
+    label: option.routeLabel ?? option.label,
+  }));
+}
+
 export function FarePricesManagement() {
   const { can } = useAdminPermissions();
   const canCreate = can('fare-price:create');
@@ -286,7 +293,10 @@ export function FarePricesManagement() {
               <span>{notice.message}</span>
             </p>
           )}
-          <FilterToolbar totalItems={error ? null : farePricePage?.meta.totalItems ?? null}>
+          <FilterToolbar
+            density="compact"
+            totalItems={error ? null : farePricePage?.meta.totalItems ?? null}
+          >
             <SearchInput
               label="Tìm bảng giá"
               onChange={updateSearch}
@@ -298,7 +308,7 @@ export function FarePricesManagement() {
                 allLabel="Tất cả tuyến xe"
                 label="Lọc theo tuyến xe"
                 onChange={updateRoute}
-                options={optionFilters(routeOptions.options)}
+                options={routeOptionFilters(routeOptions.options)}
                 value={routeId}
               />
             )}

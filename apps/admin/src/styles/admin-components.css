@@ -868,6 +868,14 @@ dialog:focus-visible {
   animation: panel-in 200ms ease-out;
 }
 
+.admin-detail-sheet__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--admin-space-action-gap);
+}
+
 .detail-section {
   padding: var(--admin-space-sheet-padding);
   border-bottom: 1px solid #edf0f5;
