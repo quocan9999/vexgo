@@ -8,6 +8,8 @@ import {
   LogOut,
   MapPinned,
   Menu,
+  PanelLeftClose,
+  PanelLeftOpen,
   ShieldCheck,
   Ticket,
   Truck,
@@ -16,7 +18,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { AdminDialogPrimitive } from '@/components/admin/admin-dialog-primitive';
 import { useAdminSession } from '@/features/admin-auth/hooks/use-admin-session';
 import {
@@ -60,6 +62,8 @@ const ADMIN_ROLE_LABELS: Record<string, string> = {
   NHAN_VIEN_DIEU_HANH: 'NHÂN VIÊN ĐIỀU HÀNH',
 };
 
+const ADMIN_SIDEBAR_COLLAPSED_STORAGE_KEY = 'vexgo-admin-sidebar-collapsed';
+
 function formatAdminRoleLabels(roles: string[]) {
   const labels = roles.map(
     (role) => ADMIN_ROLE_LABELS[role] ?? role.replaceAll('_', ' '),
@@ -87,10 +91,23 @@ export function SuperAdminLayout({
 }: SuperAdminLayoutProps) {
   const router = useRouter();
   const authState = useAdminSession();
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
+
+  useEffect(() => {
+    try {
+      setSidebarCollapsed(
+        window.localStorage.getItem(ADMIN_SIDEBAR_COLLAPSED_STORAGE_KEY) ===
+          'true',
+      );
+    } catch {
+      // The collapse control still works for this session when storage is unavailable.
+    }
+  }, []);
+
   if (authState.status !== 'authenticated') return null;
 
   const session = authState.session;
@@ -124,6 +141,19 @@ export function SuperAdminLayout({
     setMobileNavigationOpen(false);
   }
 
+  function toggleSidebar() {
+    const nextCollapsed = !sidebarCollapsed;
+    setSidebarCollapsed(nextCollapsed);
+    try {
+      window.localStorage.setItem(
+        ADMIN_SIDEBAR_COLLAPSED_STORAGE_KEY,
+        String(nextCollapsed),
+      );
+    } catch {
+      // The collapse control still works for this session when storage is unavailable.
+    }
+  }
+
   async function logout() {
     setSigningOut(true);
     setLogoutError(null);
@@ -137,7 +167,7 @@ export function SuperAdminLayout({
   }
 
   return (
-    <div className="admin-shell">
+    <div className={`admin-shell${sidebarCollapsed ? ' is-sidebar-collapsed' : ''}`}>
       {mobileNavigationOpen && (
         <button
           aria-label="Đóng điều hướng"
@@ -148,22 +178,40 @@ export function SuperAdminLayout({
       )}
       <aside
         aria-label="Điều hướng quản trị"
-        className={`admin-sidebar${mobileNavigationOpen ? ' is-open' : ''}`}
+        className={`admin-sidebar${sidebarCollapsed ? ' is-collapsed' : ''}${mobileNavigationOpen ? ' is-open' : ''}`}
         id="admin-navigation"
       >
-        <Link
-          className="brand-lockup"
-          href={tenantScope ? firstAccessibleTenantPath ?? '/' : '/'}
-          onClick={closeMobileNavigation}
-        >
-          <span className="brand-mark" aria-hidden="true">V</span>
-          <span className="brand-copy">
-            <strong>VexGo</strong>{' '}
-            {brandContextLines.map((line, index) => (
-              <small key={`${line}-${index}`}>{line}</small>
-            ))}
-          </span>
-        </Link>
+        <div className="sidebar-header">
+          <Link
+            aria-label={`VexGo ${brandContextLines.join(' ')}`}
+            className="brand-lockup"
+            href={tenantScope ? firstAccessibleTenantPath ?? '/' : '/'}
+            onClick={closeMobileNavigation}
+          >
+            <span className="brand-mark" aria-hidden="true">V</span>
+            <span className="brand-copy">
+              <strong>VexGo</strong>{' '}
+              {brandContextLines.map((line, index) => (
+                <small key={`${line}-${index}`}>{line}</small>
+              ))}
+            </span>
+          </Link>
+          <button
+            aria-controls="admin-navigation"
+            aria-expanded={!sidebarCollapsed}
+            aria-label={sidebarCollapsed ? 'Mở rộng thanh điều hướng' : 'Thu gọn thanh điều hướng'}
+            className="icon-button sidebar-collapse-button"
+            onClick={toggleSidebar}
+            title={sidebarCollapsed ? 'Mở rộng thanh điều hướng' : 'Thu gọn thanh điều hướng'}
+            type="button"
+          >
+            {sidebarCollapsed ? (
+              <PanelLeftOpen aria-hidden="true" size={18} />
+            ) : (
+              <PanelLeftClose aria-hidden="true" size={18} />
+            )}
+          </button>
+        </div>
         <div aria-hidden="true" className="sidebar-divider" />
 
         {(platformScope || (tenantScope && accessibleOperationSections.length > 0)) && (
@@ -178,11 +226,13 @@ export function SuperAdminLayout({
                       OPERATION_NAVIGATION_DETAILS[item.section];
                     return (
                       <Link
+                        aria-label={label}
                         aria-current={activeSection === item.section ? 'page' : undefined}
                         className={`sidebar-link${activeSection === item.section ? ' is-active' : ''}`}
                         href={item.href}
                         key={item.section}
                         onClick={closeMobileNavigation}
+                        title={label}
                       >
                         <span className="sidebar-link-icon">{icon()}</span>
                         <span>{label}</span>
@@ -192,20 +242,24 @@ export function SuperAdminLayout({
                 : platformScope && (
                     <>
                       <Link
+                        aria-label="Tổng quan"
                         aria-current={activeSection === 'overview' ? 'page' : undefined}
                         className={`sidebar-link${activeSection === 'overview' ? ' is-active' : ''}`}
                         href="/"
                         onClick={closeMobileNavigation}
+                        title="Tổng quan"
                       >
                         <span className="sidebar-link-icon"><Database size={18} /></span>
                         <span>Tổng quan</span>
                       </Link>
                       {canReadBusCompanies && (
                         <Link
+                          aria-label="Nhà xe"
                           aria-current={activeSection === 'bus-companies' ? 'page' : undefined}
                           className={`sidebar-link${activeSection === 'bus-companies' ? ' is-active' : ''}`}
                           href="/bus-companies"
                           onClick={closeMobileNavigation}
+                          title="Nhà xe"
                         >
                           <span className="sidebar-link-icon"><Building2 size={18} /></span>
                           <span>Nhà xe</span>
@@ -213,10 +267,12 @@ export function SuperAdminLayout({
                       )}
                       {canReadAdminAccounts && (
                         <Link
+                          aria-label="Tài khoản Admin"
                           aria-current={activeSection === 'admin-accounts' ? 'page' : undefined}
                           className={`sidebar-link${activeSection === 'admin-accounts' ? ' is-active' : ''}`}
                           href="/admin-accounts"
                           onClick={closeMobileNavigation}
+                          title="Tài khoản Admin"
                         >
                           <span className="sidebar-link-icon"><UsersRound size={18} /></span>
                           <span>Tài khoản Admin</span>
@@ -224,10 +280,12 @@ export function SuperAdminLayout({
                       )}
                       {canManageRbac && (
                         <Link
+                          aria-label="Phân quyền"
                           aria-current={activeSection === 'rbac' ? 'page' : undefined}
                           className={`sidebar-link${activeSection === 'rbac' ? ' is-active' : ''}`}
                           href="/rbac"
                           onClick={closeMobileNavigation}
+                          title="Phân quyền"
                         >
                           <span className="sidebar-link-icon"><ShieldCheck size={18} /></span>
                           <span>Phân quyền</span>
@@ -243,10 +301,12 @@ export function SuperAdminLayout({
           <p className="sidebar-label">QUẢN TRỊ NHÀ XE</p>
           <nav aria-label="Quản trị nhà xe">
             <Link
+              aria-label="Phân quyền"
               aria-current={activeSection === 'tenant-rbac' ? 'page' : undefined}
               className={`sidebar-link${activeSection === 'tenant-rbac' ? ' is-active' : ''}`}
               href="/tenant-rbac"
               onClick={closeMobileNavigation}
+              title="Phân quyền"
             >
               <span className="sidebar-link-icon"><ShieldCheck size={18} /></span>
               <span>Phân quyền</span>

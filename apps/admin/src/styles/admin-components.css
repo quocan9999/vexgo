@@ -73,14 +73,44 @@ dialog:focus-visible {
     transform 180ms ease;
 }
 
+.sidebar-header {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--admin-space-2);
+}
+
 .brand-lockup {
   display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
   min-height: 45px;
   align-items: center;
   gap: var(--admin-space-sidebar-link-gap);
   padding: 0 var(--admin-space-1);
   color: inherit;
   text-decoration: none;
+}
+
+.admin-sidebar .sidebar-collapse-button {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  place-items: center;
+  padding: 0;
+  border-color: rgb(255 255 255 / 16%);
+  background: transparent;
+  color: #bcc8d9;
+}
+
+.admin-sidebar .sidebar-collapse-button:hover {
+  border-color: rgb(255 255 255 / 24%);
+  background: rgb(255 255 255 / 9%);
+  color: #fff;
 }
 
 .brand-mark {
@@ -197,9 +227,62 @@ dialog:focus-visible {
   color: #8eafff;
 }
 
+.admin-shell.is-sidebar-collapsed .admin-sidebar {
+  width: 76px;
+  align-items: center;
+  padding-right: var(--admin-space-sidebar-mobile-inline);
+  padding-left: var(--admin-space-sidebar-mobile-inline);
+}
+
+.admin-shell.is-sidebar-collapsed .sidebar-header {
+  align-items: center;
+  flex-direction: column;
+  gap: var(--admin-space-2);
+}
+
+.admin-shell.is-sidebar-collapsed .brand-lockup {
+  width: 100%;
+  flex: 0 0 auto;
+  justify-content: center;
+  padding: 0;
+}
+
+.admin-shell.is-sidebar-collapsed .brand-copy,
+.admin-shell.is-sidebar-collapsed .sidebar-label,
+.admin-shell.is-sidebar-collapsed .sidebar-link > span:last-child {
+  display: none;
+}
+
+.admin-shell.is-sidebar-collapsed .sidebar-nav-group {
+  width: 100%;
+}
+
+.admin-shell.is-sidebar-collapsed .sidebar-nav-group nav {
+  justify-items: center;
+}
+
+.admin-shell.is-sidebar-collapsed .sidebar-link {
+  width: 46px;
+  justify-content: center;
+  padding: 0;
+}
+
+.admin-shell.is-sidebar-collapsed .sidebar-link.is-active::before {
+  left: -10px;
+}
+
+.admin-shell.is-sidebar-collapsed .sidebar-link-icon {
+  width: 22px;
+}
+
 .admin-main {
   min-height: 100vh;
   margin-left: 252px;
+  transition: margin-left 180ms ease;
+}
+
+.admin-shell.is-sidebar-collapsed .admin-main {
+  margin-left: 76px;
 }
 
 .topbar {
@@ -899,7 +982,13 @@ dialog:focus-visible {
   }
 
   .brand-lockup {
+    width: 100%;
+    justify-content: center;
     padding: 0;
+  }
+
+  .sidebar-collapse-button {
+    display: none;
   }
 
   .brand-copy {
@@ -990,6 +1079,24 @@ dialog:focus-visible {
       visibility 0s;
   }
 
+  .admin-shell.is-sidebar-collapsed .admin-sidebar {
+    width: 264px;
+    align-items: stretch;
+    padding: var(--admin-space-sidebar-top) var(--admin-space-sidebar-inline) var(--admin-space-4);
+  }
+
+  .admin-shell.is-sidebar-collapsed .sidebar-header {
+    align-items: center;
+    flex-direction: row;
+    justify-content: flex-start;
+  }
+
+  .admin-shell.is-sidebar-collapsed .brand-lockup {
+    width: auto;
+    justify-content: flex-start;
+    padding: 0 var(--admin-space-1);
+  }
+
   .brand-lockup {
     padding: 0 var(--admin-space-1);
   }
@@ -998,11 +1105,19 @@ dialog:focus-visible {
     display: flex;
   }
 
+  .admin-shell.is-sidebar-collapsed .brand-copy {
+    display: flex;
+  }
+
   .sidebar-label {
     display: flex;
   }
 
   .sidebar-link > span:last-child {
+    display: flex;
+  }
+
+  .admin-shell.is-sidebar-collapsed .sidebar-link > span:last-child {
     display: flex;
   }
 
@@ -1015,7 +1130,15 @@ dialog:focus-visible {
     margin-top: var(--admin-space-sidebar-nav-offset);
   }
 
+  .admin-shell.is-sidebar-collapsed .sidebar-nav-group {
+    width: auto;
+  }
+
   .sidebar-nav-group nav {
+    justify-items: stretch;
+  }
+
+  .admin-shell.is-sidebar-collapsed .sidebar-nav-group nav {
     justify-items: stretch;
   }
 
@@ -1025,11 +1148,25 @@ dialog:focus-visible {
     padding: 0 var(--admin-space-sidebar-link-inline);
   }
 
+  .admin-shell.is-sidebar-collapsed .sidebar-link {
+    width: auto;
+    justify-content: flex-start;
+    padding: 0 var(--admin-space-sidebar-link-inline);
+  }
+
   .sidebar-link.is-active::before {
     left: -17px;
   }
 
+  .admin-shell.is-sidebar-collapsed .sidebar-link.is-active::before {
+    left: -17px;
+  }
+
   .admin-main {
+    margin-left: 0;
+  }
+
+  .admin-shell.is-sidebar-collapsed .admin-main {
     margin-left: 0;
   }
 

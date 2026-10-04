@@ -99,6 +99,7 @@ Shared components under `src/components/admin/`, `src/components/ui/`, and `src/
 - CRUD lists use a desktop table with a mobile card fallback where a table no longer reads well.
 - Search and filters precede the result count; display the count in one location.
 - Pagination communicates range, total, and current page. Navigation controls have accessible names.
+- The desktop sidebar can collapse to a centered icon rail; preserve its preference across routes and keep compact navigation labels available to assistive technology. Tablet stays compact, and mobile uses the navigation drawer.
 - Status labels use the shared badge pattern and map domain state in the feature.
 - Forms have associated labels, invalid state, linked error descriptions, and clear submit feedback.
 - Dialogs and sheets have an accessible title, contain focus while open, and support the shared Escape/backdrop behavior.
