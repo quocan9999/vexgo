@@ -372,6 +372,103 @@
   font-weight: var(--admin-weight-bold);
 }
 
+.session-error-page {
+  box-sizing: border-box;
+  display: grid;
+  min-height: 100vh;
+  min-height: 100dvh;
+  place-items: center;
+  padding: var(--admin-space-page-block) var(--admin-space-page-inline);
+  background: var(--admin-canvas);
+}
+
+.session-error-card {
+  display: grid;
+  width: min(100%, 480px);
+  justify-items: center;
+  gap: var(--admin-space-component-gap);
+  padding: var(--admin-space-7);
+  text-align: center;
+}
+
+.session-error-card__icon {
+  display: grid;
+  width: 52px;
+  height: 52px;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--admin-blue) 20%, #fff);
+  border-radius: 50%;
+  background: var(--admin-blue-soft);
+  color: var(--admin-blue);
+}
+
+.session-error-card__eyebrow {
+  margin: 0;
+  color: var(--admin-text-muted);
+  font-size: var(--admin-type-eyebrow-size);
+  font-weight: var(--admin-type-eyebrow-weight);
+  line-height: var(--admin-type-eyebrow-line-height);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.session-error-card h1 {
+  max-width: 380px;
+  margin: 0;
+  color: var(--admin-ink);
+  font-size: var(--admin-type-page-title-size);
+  font-weight: var(--admin-type-page-title-weight);
+  line-height: var(--admin-type-page-title-line-height);
+  letter-spacing: -0.02em;
+}
+
+.session-error-card__message {
+  max-width: 380px;
+  margin: 0;
+  color: var(--admin-text-muted);
+  font-size: var(--admin-type-body-size);
+  line-height: var(--admin-type-body-line-height);
+}
+
+.session-error-card__retry {
+  margin-top: var(--admin-space-1);
+}
+
+.session-error-card__details {
+  width: 100%;
+  margin-top: var(--admin-space-2);
+  padding-top: var(--admin-space-4);
+  border-top: 1px solid var(--admin-border);
+  color: var(--admin-text-muted);
+  text-align: left;
+}
+
+.session-error-card__details summary {
+  width: fit-content;
+  cursor: pointer;
+  font-size: var(--admin-type-helper-size);
+  line-height: var(--admin-type-helper-line-height);
+}
+
+.session-error-card__details summary:focus-visible {
+  border-radius: var(--admin-radius-control);
+  outline: 3px solid color-mix(in srgb, var(--admin-blue) 22%, transparent);
+  outline-offset: 3px;
+}
+
+.session-error-card__details p {
+  margin: var(--admin-space-2) 0 0;
+  font-size: var(--admin-type-helper-size);
+  line-height: var(--admin-type-helper-line-height);
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 700px) {
+  .session-error-card {
+    padding: var(--admin-space-6) var(--admin-space-4);
+  }
+}
+
 .tenant-operations-placeholder {
   display: flex;
   min-height: 280px;

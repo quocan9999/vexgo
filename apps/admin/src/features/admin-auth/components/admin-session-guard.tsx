@@ -2,6 +2,8 @@
 
 import { useRouter, usePathname } from 'next/navigation';
 import { useEffect, useState, type ReactNode } from 'react';
+import { WifiOff } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { useAdminSession } from '../hooks/use-admin-session';
 import {
   getAdminAuthErrorMessage,
@@ -139,16 +141,36 @@ export function AdminSessionGuard({ children }: { children: ReactNode }) {
 
   if (authState.status === 'error') {
     return (
-      <main className="admin-page-content panel" aria-labelledby="session-error-title">
-        <h1 id="session-error-title">Không thể kiểm tra phiên đăng nhập</h1>
-        <p className="login-error" role="alert">{authState.message}</p>
-        <button
-          className="login-submit-button"
-          onClick={() => void initializeAdminSession().catch(() => undefined)}
-          type="button"
+      <main className="session-error-page">
+        <section
+          className="session-error-card panel"
+          aria-labelledby="session-error-title"
         >
-          Thử lại
-        </button>
+          <span className="session-error-card__icon" aria-hidden="true">
+            <WifiOff size={22} strokeWidth={1.75} />
+          </span>
+          <p className="session-error-card__eyebrow">
+            Kết nối tạm gián đoạn
+          </p>
+          <h1 id="session-error-title">
+            Chưa thể xác minh phiên đăng nhập
+          </h1>
+          <p className="session-error-card__message" role="alert">
+            Admin chưa kết nối được với máy chủ VexGo. Kiểm tra API và kết nối
+            mạng, sau đó thử lại.
+          </p>
+          <Button
+            className="session-error-card__retry"
+            onClick={() => void initializeAdminSession().catch(() => undefined)}
+            type="button"
+          >
+            Thử kết nối lại
+          </Button>
+          <details className="session-error-card__details">
+            <summary>Chi tiết kỹ thuật</summary>
+            <p>{authState.message}</p>
+          </details>
+        </section>
       </main>
     );
   }
