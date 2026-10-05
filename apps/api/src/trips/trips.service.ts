@@ -5,7 +5,9 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
-  businessDateStartUtc,
+  calculateClockTime,
+  combineDeparture,
+  computeArrival,
   getBusinessDate,
   resolveBusinessTimeZone,
 } from '../common/time/business-date.js';
@@ -37,39 +39,6 @@ type FareRecord = {
   tuNgay: Date;
   denNgay: Date | null;
 };
-
-function combineDeparture(
-  date: Date,
-  time: Date,
-  businessTimeZone: string,
-): Date {
-  const businessDate = date.toISOString().slice(0, 10);
-  const businessDayStart = businessDateStartUtc(businessDate, businessTimeZone);
-  const elapsedSinceMidnight =
-    ((time.getUTCHours() * 60 + time.getUTCMinutes()) * 60 +
-      time.getUTCSeconds()) *
-    1000;
-  return new Date(businessDayStart.getTime() + elapsedSinceMidnight);
-}
-
-function combineArrival(
-  departureDate: Date,
-  departureTime: Date,
-  arrivalTime: Date | null,
-  businessTimeZone: string,
-): string | null {
-  if (!arrivalTime) return null;
-  const depTime = combineDeparture(
-    departureDate,
-    departureTime,
-    businessTimeZone,
-  );
-  let arrTime = combineDeparture(departureDate, arrivalTime, businessTimeZone);
-  if (arrTime < depTime) {
-    arrTime = new Date(arrTime.getTime() + 24 * 60 * 60 * 1000);
-  }
-  return arrTime.toISOString();
-}
 
 function matchesTimeRange(time: Date, timeRange?: string): boolean {
   if (!timeRange || timeRange === 'all') return true;
@@ -134,9 +103,10 @@ function mapTrip(
       trip.gioKhoiHanh,
       businessTimeZone,
     ).toISOString(),
-    arrivalTime: combineArrival(
+    arrivalTime: computeArrival(
       trip.ngayKhoiHanh,
       trip.gioKhoiHanh,
+      trip.tuyenXe.thoiGianChayPhut,
       trip.gioDen,
       businessTimeZone,
     ),
@@ -161,26 +131,6 @@ function formatTripDate(d: Date): string {
 
 function formatTripTime(d: Date): string {
   return d.toISOString().slice(11, 19);
-}
-
-function addMinutesToTime(
-  time: Date,
-  durationMinutes: number | null,
-): Date | null {
-  if (durationMinutes == null) return null;
-  const minutesSinceMidnight =
-    time.getUTCHours() * 60 + time.getUTCMinutes() + durationMinutes;
-  const normalizedMinutes = minutesSinceMidnight % (24 * 60);
-  return new Date(
-    Date.UTC(
-      1970,
-      0,
-      1,
-      Math.floor(normalizedMinutes / 60),
-      normalizedMinutes % 60,
-      time.getUTCSeconds(),
-    ),
-  );
 }
 
 function mapTripItem(trip: {
@@ -720,7 +670,7 @@ export class TripsService {
 
     const departureDate = new Date(`${dto.departureDate}T00:00:00.000Z`);
     const departureTime = new Date(`1970-01-01T${dto.departureTime}.000Z`);
-    const arrivalTime = addMinutesToTime(departureTime, route.thoiGianChayPhut);
+    const arrivalTime = calculateClockTime(departureTime, route.thoiGianChayPhut);
 
     const existingCode = await this.prisma.chuyenXe.findFirst({
       where: { maChuyenXe: dto.code },
@@ -902,7 +852,7 @@ export class TripsService {
 
     const departureDate = new Date(`${dto.departureDate}T00:00:00.000Z`);
     const departureTime = new Date(`1970-01-01T${dto.departureTime}.000Z`);
-    const arrivalTime = addMinutesToTime(
+    const arrivalTime = calculateClockTime(
       departureTime,
       existing.tuyenXe.thoiGianChayPhut,
     );

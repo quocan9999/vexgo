@@ -10,45 +10,13 @@ import { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { RefundProcessorService } from '../payments/refund-processor.service.js';
 import {
-  businessDateStartUtc,
+  combineDeparture,
+  computeArrival,
   resolveBusinessTimeZone,
 } from '../common/time/business-date.js';
 import type { TicketQueryDto } from './dto/ticket-query.dto.js';
 import type { TicketLookupQueryDto } from './dto/ticket-lookup-query.dto.js';
 import type { CancelTicketDto } from './dto/cancel-ticket.dto.js';
-
-function combineDeparture(
-  date: Date,
-  time: Date,
-  businessTimeZone: string,
-): Date {
-  const businessDate = date.toISOString().slice(0, 10);
-  const businessDayStart = businessDateStartUtc(businessDate, businessTimeZone);
-  const elapsedSinceMidnight =
-    ((time.getUTCHours() * 60 + time.getUTCMinutes()) * 60 +
-      time.getUTCSeconds()) *
-    1000;
-  return new Date(businessDayStart.getTime() + elapsedSinceMidnight);
-}
-
-function combineArrival(
-  departureDate: Date,
-  departureTime: Date,
-  arrivalTime: Date | null,
-  businessTimeZone: string,
-): string | null {
-  if (!arrivalTime) return null;
-  const depTime = combineDeparture(
-    departureDate,
-    departureTime,
-    businessTimeZone,
-  );
-  let arrTime = combineDeparture(departureDate, arrivalTime, businessTimeZone);
-  if (arrTime < depTime) {
-    arrTime = new Date(arrTime.getTime() + 24 * 60 * 60 * 1000);
-  }
-  return arrTime.toISOString();
-}
 
 function normalizePhone(phone: string): string {
   const digits = phone.replace(/\D/g, '');
@@ -554,14 +522,13 @@ export class TicketsService {
         this.businessTimeZone,
       ).toISOString();
 
-      if (chuyenXe?.gioDen) {
-        arrivalTime = combineArrival(
-          chuyenXe.ngayKhoiHanh,
-          chuyenXe.gioKhoiHanh,
-          chuyenXe.gioDen,
-          this.businessTimeZone,
-        );
-      }
+      arrivalTime = computeArrival(
+        chuyenXe.ngayKhoiHanh,
+        chuyenXe.gioKhoiHanh,
+        tuyenXe?.thoiGianChayPhut,
+        chuyenXe.gioDen,
+        this.businessTimeZone,
+      );
     }
 
     const route =

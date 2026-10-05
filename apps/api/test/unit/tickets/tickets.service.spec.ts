@@ -336,6 +336,33 @@ describe('TicketsService', () => {
         expect(result.data.cancellation.cancelFeeRate).toBe(rate);
       },
     );
+
+    it('derives arrivalTime accurately from route durationMinutes in lookupTicket', async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-09-24T00:00:00.000Z'));
+      const ticketWithDuration = {
+        ...sampleTicket,
+        gheChuyenXe: {
+          ...sampleTicket.gheChuyenXe,
+          chuyenXe: {
+            ...sampleTicket.gheChuyenXe.chuyenXe,
+            tuyenXe: {
+              ...sampleTicket.gheChuyenXe.chuyenXe.tuyenXe,
+              thoiGianChayPhut: 480,
+            },
+          },
+        },
+      };
+      prisma.ve.findUnique.mockResolvedValue(ticketWithDuration);
+
+      const result = await service.lookupTicket({
+        ticketCode: 'VE-001',
+        phoneNumber: '0901234567',
+      });
+
+      expect(result.data.departureTime).toBe('2026-09-25T01:00:00.000Z');
+      expect(result.data.arrivalTime).toBe('2026-09-25T09:00:00.000Z');
+    });
   });
 
   describe('cancelTicket', () => {

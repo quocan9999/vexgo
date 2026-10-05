@@ -39,6 +39,10 @@ const prisma = {
     updateMany: vi.fn(),
     findFirst: vi.fn(),
   },
+  chuyenXe: {
+    findMany: vi.fn(),
+    update: vi.fn(),
+  },
 } as unknown as PrismaService;
 const service = new RoutesService(prisma);
 const createInput = {
@@ -77,6 +81,8 @@ describe('RoutesService writes', () => {
     vi.mocked(prisma.tuyenXe.update).mockResolvedValue(record);
     vi.mocked(prisma.tuyenXe.updateMany).mockResolvedValue({ count: 1 });
     vi.mocked(prisma.tuyenXe.findFirst).mockResolvedValue(record);
+    vi.mocked(prisma.chuyenXe.findMany).mockResolvedValue([]);
+    vi.mocked(prisma.chuyenXe.update).mockResolvedValue({} as any);
   });
 
   it.each(['HOAT_DONG', 'TAM_NGUNG'] as const)(
@@ -287,4 +293,33 @@ describe('RoutesService writes', () => {
       message: 'Không tìm thấy tuyến xe.',
     });
   });
+
+  it('synchronizes gioDen for future un-departed trips when route duration changes', async () => {
+    vi.mocked(prisma.chuyenXe.findMany).mockResolvedValueOnce([
+      { chuyenXeId: 101, gioKhoiHanh: new Date('1970-01-01T08:00:00.000Z') },
+      { chuyenXeId: 102, gioKhoiHanh: new Date('1970-01-01T13:00:00.000Z') },
+    ] as any);
+
+    await service.update(
+      17,
+      { origin: 'Đà Lạt', destination: 'Nha Trang', durationMinutes: 480 },
+      tenantAdmin(3),
+    );
+
+    expect(prisma.chuyenXe.findMany).toHaveBeenCalledWith({
+      where: { tuyenXeId: 17, nhaXeId: 3, trangThai: 'CHUA_KHOI_HANH' },
+      select: { chuyenXeId: true, gioKhoiHanh: true },
+    });
+    // 08:00 + 480m = 16:00
+    expect(prisma.chuyenXe.update).toHaveBeenCalledWith({
+      where: { chuyenXeId: 101 },
+      data: { gioDen: new Date('1970-01-01T16:00:00.000Z') },
+    });
+    // 13:00 + 480m = 21:00
+    expect(prisma.chuyenXe.update).toHaveBeenCalledWith({
+      where: { chuyenXeId: 102 },
+      data: { gioDen: new Date('1970-01-01T21:00:00.000Z') },
+    });
+  });
 });
+

@@ -10,6 +10,7 @@ import {
   requireTenantPrincipal,
   tenantIdForOptionalRead,
 } from '../auth/tenant-scope.js';
+import { calculateClockTime } from '../common/time/business-date.js';
 import type { CreateRouteDto } from './dto/create-route.dto.js';
 import type { RouteQueryDto, RouteSortField } from './dto/route-query.dto.js';
 import type { UpdateRouteDto } from './dto/update-route.dto.js';
@@ -174,6 +175,23 @@ export class RoutesService {
       },
     });
     if (result.count === 0) throw routeNotFound();
+
+    if (this.prisma.chuyenXe?.findMany && this.prisma.chuyenXe?.update) {
+      const futureTrips = await this.prisma.chuyenXe.findMany({
+        where: { tuyenXeId: id, nhaXeId, trangThai: 'CHUA_KHOI_HANH' },
+        select: { chuyenXeId: true, gioKhoiHanh: true },
+      });
+      for (const trip of futureTrips) {
+        const newGioDen = calculateClockTime(
+          trip.gioKhoiHanh,
+          input.durationMinutes,
+        );
+        await this.prisma.chuyenXe.update({
+          where: { chuyenXeId: trip.chuyenXeId },
+          data: { gioDen: newGioDen },
+        });
+      }
+    }
 
     const route = await this.prisma.tuyenXe.findFirst({
       where: { tuyenXeId: id, nhaXeId },

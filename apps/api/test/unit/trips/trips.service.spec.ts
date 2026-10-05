@@ -278,6 +278,49 @@ describe('TripsService detail', () => {
       availableSeats: 1,
     });
   });
+
+  it('derives arrivalTime accurately from route durationMinutes', async () => {
+    const { prisma, service } = createService();
+    const tripWithDuration = {
+      ...firstTrip,
+      tuyenXe: {
+        ...firstTrip.tuyenXe,
+        thoiGianChayPhut: 480, // 8 hours
+      },
+    };
+    prisma.chuyenXe.findUnique.mockResolvedValue(tripWithDuration);
+    prisma.bangGia.findFirst.mockResolvedValue(null);
+
+    const details = await service.getDetails(21);
+    expect(details.route.durationMinutes).toBe(480);
+    // departure: 2026-10-15T15:00:00.000Z (VN 22:00)
+    // arrival: +8h = 2026-10-15T23:00:00.000Z (VN 06:00 next day)
+    expect(details.departureTime).toBe('2026-10-15T15:00:00.000Z');
+    expect(details.arrivalTime).toBe('2026-10-15T23:00:00.000Z');
+  });
+
+  it('preserves multi-day journeys for 24h and 36h duration without modulo loss', async () => {
+    const { prisma, service } = createService();
+    // 24h duration
+    prisma.chuyenXe.findUnique.mockResolvedValue({
+      ...firstTrip,
+      tuyenXe: { ...firstTrip.tuyenXe, thoiGianChayPhut: 1440 },
+    });
+    prisma.bangGia.findFirst.mockResolvedValue(null);
+
+    const details24h = await service.getDetails(21);
+    expect(details24h.departureTime).toBe('2026-10-15T15:00:00.000Z');
+    expect(details24h.arrivalTime).toBe('2026-10-16T15:00:00.000Z'); // Exact next day!
+
+    // 36h duration
+    prisma.chuyenXe.findUnique.mockResolvedValue({
+      ...firstTrip,
+      tuyenXe: { ...firstTrip.tuyenXe, thoiGianChayPhut: 2160 },
+    });
+    const details36h = await service.getDetails(21);
+    expect(details36h.departureTime).toBe('2026-10-15T15:00:00.000Z');
+    expect(details36h.arrivalTime).toBe('2026-10-17T03:00:00.000Z'); // Next day + 12h!
+  });
 });
 
 const tenantPrincipal = {
