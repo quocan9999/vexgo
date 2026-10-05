@@ -415,10 +415,7 @@ export class TicketsService {
             throw new BadRequestException(errors[quote.reason!]);
           }
 
-          if (
-            dto.expectedCancelFeeRate !== undefined &&
-            quote.cancelFeeRate !== dto.expectedCancelFeeRate
-          ) {
+          if (quote.cancelFeeRate !== dto.expectedCancelFeeRate) {
             throw new ConflictException({
               error: 'CANCELLATION_QUOTE_EXPIRED',
               message: `Mức phí hủy vé đã thay đổi (từ ${Math.round(dto.expectedCancelFeeRate * 100)}% thành ${Math.round(quote.cancelFeeRate * 100)}%) do thời gian đến lúc khởi hành đã thay đổi. Vui lòng xác nhận lại mức hoàn tiền mới.`,

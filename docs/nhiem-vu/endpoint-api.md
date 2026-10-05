@@ -249,7 +249,7 @@ Client chỉ gửi các lựa chọn cần thiết, ví dụ:
 |---|---|---|---|---|
 | MEDIUM | GET | `/api/v1/tickets` | Customer | Danh sách vé của chính khách hàng. |
 | MEDIUM | GET | `/api/v1/tickets/:ticketId` | Owner | Chi tiết vé. |
-| MEDIUM | GET | `/api/v1/tickets/lookup` | Public | Tra cứu bằng `ticketCode` + thông tin xác minh như phone; không lộ vé của người khác. |
+| MEDIUM | POST | `/api/v1/tickets/lookup` | Public | Tra cứu bằng `ticketCode` + thông tin xác minh như phone trong JSON body; không đưa credential/PII vào URL. |
 | MEDIUM | POST | `/api/v1/tickets/:ticketId/cancel` | Owner | Hủy một vé khi booking có nhiều vé và rule cho phép. |
 | LOW | POST | `/api/v1/tickets/:ticketId/exchange/quote` | Owner | Tính chênh lệch/điều kiện đổi vé sang chuyến/ghế mới. |
 | LOW | POST | `/api/v1/tickets/:ticketId/exchange` | Owner | Đổi vé; transaction cập nhật ghế/vé/payment chênh lệch nếu có. |
@@ -420,13 +420,13 @@ Hai người có thể code song song nếu thống nhất response của `GET /
 ```text
 GET  /tickets
 GET  /tickets/:id
-GET  /tickets/lookup
+POST /tickets/lookup
 POST /tickets/cancel
 POST /tickets/:id/exchange/quote   (LOW)
 POST /tickets/:id/exchange         (LOW)
 ```
 
-`GET /tickets/lookup` trả thêm `data.cancellation` gồm `eligible`, `reason`,
+`POST /tickets/lookup` nhận `ticketCode` và `phoneNumber` trong JSON body, đồng thời trả thêm `data.cancellation` gồm `eligible`, `reason`,
 `cancelFeeRate`, `cancelFee` và `refundAmount`. Backend tính báo giá theo thời
 điểm hiện tại: dưới 12 tiếng không được hủy; từ 12 đến hết 24 tiếng phí 20%;
 trên 24 tiếng phí 10%.

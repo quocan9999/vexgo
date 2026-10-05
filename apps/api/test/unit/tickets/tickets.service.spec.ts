@@ -373,6 +373,7 @@ describe('TicketsService', () => {
         service.cancelTicket({
           ticketCode: 'INVALID',
           phoneNumber: '0901234567',
+          expectedCancelFeeRate: 0.1,
         }),
       ).rejects.toThrow(NotFoundException);
     });
@@ -387,6 +388,7 @@ describe('TicketsService', () => {
         service.cancelTicket({
           ticketCode: 'VE-001',
           phoneNumber: '0901234567',
+          expectedCancelFeeRate: 0.1,
         }),
       ).rejects.toThrow(BadRequestException);
     });
@@ -400,6 +402,7 @@ describe('TicketsService', () => {
         service.cancelTicket({
           ticketCode: 'VE-001',
           phoneNumber: '0901234567',
+          expectedCancelFeeRate: 0.2,
         }),
       ).rejects.toMatchObject({
         response: expect.objectContaining({
@@ -417,6 +420,7 @@ describe('TicketsService', () => {
       const result = await service.cancelTicket({
         ticketCode: 'VE-001',
         phoneNumber: '0901234567',
+        expectedCancelFeeRate: 0.2,
       });
 
       expect(result.data.cancelFee).toBe(50000);
@@ -441,6 +445,7 @@ describe('TicketsService', () => {
       const result = await service.cancelTicket({
         ticketCode: 'VE-001',
         phoneNumber: '0901234567',
+        expectedCancelFeeRate: 0.1,
       });
 
       expect(prisma.ve.updateMany).toHaveBeenCalledWith({
@@ -487,6 +492,7 @@ describe('TicketsService', () => {
         service.cancelTicket({
           ticketCode: 'VE-001',
           phoneNumber: '0901234567',
+          expectedCancelFeeRate: 0.1,
         }),
       ).rejects.toThrow(ConflictException);
 
@@ -568,6 +574,7 @@ describe('TicketsService', () => {
         service.cancelTicket({
           ticketCode: 'VE-001',
           phoneNumber: '0901234567',
+          expectedCancelFeeRate: 0.2,
         }),
       ).rejects.toThrow(BadRequestException);
 

@@ -19,8 +19,10 @@ import {
 import { AlertModal } from '@/components/ui/alert-modal';
 import {
   ticketsApi,
+  isCancellationQuoteExpiredError,
   type TicketItem,
   type CancelTicketResult,
+  type TicketCancellationQuote,
 } from '@/features/account/services/tickets.api';
 import {
   checkTicketCancelEligibility,
@@ -92,6 +94,17 @@ function formatPhoneDisplay(phoneStr: string | null): string {
 }
 
 const VIETNAM_PHONE_REGEX = /^(?:\+84|0)(?:3[2-9]|5[689]|7[06-9]|8[1-9]|9\d)\d{7}$/;
+
+function isCancellationQuote(value: unknown): value is TicketCancellationQuote {
+  if (typeof value !== 'object' || value === null) return false;
+  const quote = value as Partial<TicketCancellationQuote>;
+  return (
+    typeof quote.eligible === 'boolean' &&
+    typeof quote.cancelFeeRate === 'number' &&
+    typeof quote.cancelFee === 'number' &&
+    typeof quote.refundAmount === 'number'
+  );
+}
 
 function CancelTicketContent() {
   const [initialSession] = useState(() => getCancelSession());
@@ -304,6 +317,19 @@ function CancelTicketContent() {
       return;
     }
 
+    if (currentEligibility.cancelFeeRate === undefined) {
+      const message =
+        'Chưa thể xác định mức phí hủy vé. Vui lòng tra cứu lại vé.';
+      setCancelError(message);
+      setIneligibleModal({
+        isOpen: true,
+        title: 'Chưa thể xác nhận mức hoàn tiền',
+        message,
+        variant: 'error',
+      });
+      return;
+    }
+
     if (
       confirmedFeeRate !== null &&
       currentEligibility.cancelFeeRate !== undefined &&
@@ -335,18 +361,49 @@ function CancelTicketContent() {
       setCancelResult(res.data);
       setStep(3);
     } catch (err: unknown) {
-      const apiError = err as {
-        status?: number;
-        error?: string;
-        message?: string;
-      };
-      if (
-        apiError?.status === 409 ||
-        apiError?.error === 'CANCELLATION_QUOTE_EXPIRED'
-      ) {
-        const fresh = checkTicketCancelEligibility(ticket, Date.now());
+      if (isCancellationQuoteExpiredError(err)) {
+        let refreshedTicket: TicketItem | null = null;
+        try {
+          refreshedTicket = (
+            await ticketsApi.lookupTicket(
+              ticket.ticketCode,
+              phone || ticket.passengerPhone || '',
+            )
+          ).data;
+        } catch {
+          const currentQuote = err.details?.currentQuote;
+          if (isCancellationQuote(currentQuote)) {
+            refreshedTicket = { ...ticket, cancellation: currentQuote };
+          }
+        }
+
+        if (!refreshedTicket) {
+          const message =
+            'Mức phí hủy vé đã thay đổi nhưng chưa thể tải lại báo giá. Vui lòng tra cứu lại vé.';
+          setCancelError(message);
+          setIneligibleModal({
+            isOpen: true,
+            title: 'Chưa thể cập nhật mức hoàn tiền',
+            message,
+            variant: 'error',
+          });
+          return;
+        }
+
+        const fresh = checkTicketCancelEligibility(refreshedTicket, Date.now());
+        setTicket(refreshedTicket);
         setEligibility(fresh);
         setConfirmedFeeRate(fresh.cancelFeeRate ?? null);
+        if (!fresh.eligible) {
+          setFeeRateChangedWarning(null);
+          setIneligibleModal({
+            isOpen: true,
+            title: fresh.title,
+            message: fresh.message,
+            variant: 'warning',
+          });
+          return;
+        }
         setFeeRateChangedWarning(
           `Mức phí hủy vé đã thay đổi do thời gian đến lúc khởi hành. Vui lòng kiểm tra lại số tiền hoàn trước khi bấm xác nhận lại.`,
         );
@@ -354,7 +411,7 @@ function CancelTicketContent() {
           isOpen: true,
           title: 'Mức phí hủy vé đã thay đổi',
           message:
-            apiError.message ||
+            err.message ||
             'Mức phí hủy vé đã thay đổi do thời gian đến lúc khởi hành. Vui lòng xác nhận lại mức hoàn tiền mới.',
           variant: 'info',
         });
@@ -362,7 +419,7 @@ function CancelTicketContent() {
       }
 
       const errorMsg =
-        apiError?.message ||
+        (err instanceof Error ? err.message : null) ||
         'Hủy vé không thành công. Vui lòng liên hệ nhà xe để được hỗ trợ.';
       setCancelError(errorMsg);
       setIneligibleModal({

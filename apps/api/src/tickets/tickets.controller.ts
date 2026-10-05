@@ -2,6 +2,8 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   ParseIntPipe,
   Post,
@@ -34,7 +36,8 @@ export class TicketsController {
   }
 
   @Public()
-  @Get('lookup')
+  @Post('lookup')
+  @HttpCode(HttpStatus.OK)
   @UseGuards(ThrottlerGuard)
   @Throttle({
     default: {
@@ -42,8 +45,8 @@ export class TicketsController {
       ttl: PUBLIC_RATE_LIMIT_TTL_MS,
     },
   })
-  lookupTicket(@Query() query: TicketLookupQueryDto) {
-    return this.ticketsService.lookupTicket(query);
+  lookupTicket(@Body() dto: TicketLookupQueryDto) {
+    return this.ticketsService.lookupTicket(dto);
   }
 
   @Public()

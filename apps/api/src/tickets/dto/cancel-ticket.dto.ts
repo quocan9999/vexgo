@@ -1,4 +1,5 @@
 import {
+  IsDefined,
   IsNotEmpty,
   IsNumber,
   IsOptional,
@@ -25,9 +26,9 @@ export class CancelTicketDto {
   @IsString()
   reason?: string;
 
-  @IsOptional()
+  @IsDefined()
   @IsNumber()
   @Min(0)
   @Max(1)
-  expectedCancelFeeRate?: number;
+  expectedCancelFeeRate!: number;
 }
