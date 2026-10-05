@@ -493,15 +493,85 @@ describe('TicketsService', () => {
       expect(prisma.thanhToan.create).not.toHaveBeenCalled();
     });
 
-    it('maps a serialization conflict to a clear cancellation conflict', async () => {
-      prisma.$transaction.mockRejectedValueOnce({ code: 'P2034' });
+    it('rejects with ConflictException when expectedCancelFeeRate does not match current quote rate', async () => {
+      // 20 hours away -> fee rate is 0.2 (20%)
+      const twentyHoursFromNow = new Date(Date.now() + 20 * 60 * 60 * 1000);
+      const ticket20h = {
+        ...sampleTicket,
+        gheChuyenXe: {
+          ...sampleTicket.gheChuyenXe,
+          chuyenXe: {
+            ...sampleTicket.gheChuyenXe.chuyenXe,
+            ngayKhoiHanh: twentyHoursFromNow,
+            gioKhoiHanh: twentyHoursFromNow,
+          },
+        },
+      };
+      prisma.ve.findUnique.mockResolvedValue(ticket20h);
+
+      await expect(
+        service.cancelTicket({
+          ticketCode: 'VE-001',
+          phoneNumber: '0901234567',
+          expectedCancelFeeRate: 0.1, // user thought fee was 10%
+        }),
+      ).rejects.toThrow(ConflictException);
+
+      expect(prisma.ve.updateMany).not.toHaveBeenCalled();
+      expect(prisma.thanhToan.create).not.toHaveBeenCalled();
+    });
+
+    it('proceeds when expectedCancelFeeRate matches current quote rate', async () => {
+      const twentyHoursFromNow = new Date(Date.now() + 20 * 60 * 60 * 1000);
+      const ticket20h = {
+        ...sampleTicket,
+        gheChuyenXe: {
+          ...sampleTicket.gheChuyenXe,
+          chuyenXe: {
+            ...sampleTicket.gheChuyenXe.chuyenXe,
+            ngayKhoiHanh: twentyHoursFromNow,
+            gioKhoiHanh: twentyHoursFromNow,
+          },
+        },
+      };
+      prisma.ve.findUnique.mockResolvedValue(ticket20h);
+      prisma.ve.updateMany.mockResolvedValue({ count: 1 });
+      prisma.ve.count.mockResolvedValue(0);
+      prisma.thanhToan.create.mockResolvedValue({ thanhToanId: 88 });
+
+      const result = await service.cancelTicket({
+        ticketCode: 'VE-001',
+        phoneNumber: '0901234567',
+        expectedCancelFeeRate: 0.2, // matches 20%
+      });
+
+      expect(result.data.cancelFeeRate).toBe(0.2);
+      expect(result.data.status).toBe('HUY');
+    });
+
+    it('rejects with BadRequestException when departure is less than 12 hours away', async () => {
+      const tenHoursFromNow = new Date(Date.now() + 10 * 60 * 60 * 1000);
+      const ticket10h = {
+        ...sampleTicket,
+        gheChuyenXe: {
+          ...sampleTicket.gheChuyenXe,
+          chuyenXe: {
+            ...sampleTicket.gheChuyenXe.chuyenXe,
+            ngayKhoiHanh: tenHoursFromNow,
+            gioKhoiHanh: tenHoursFromNow,
+          },
+        },
+      };
+      prisma.ve.findUnique.mockResolvedValue(ticket10h);
 
       await expect(
         service.cancelTicket({
           ticketCode: 'VE-001',
           phoneNumber: '0901234567',
         }),
-      ).rejects.toThrow(ConflictException);
+      ).rejects.toThrow(BadRequestException);
+
+      expect(prisma.ve.updateMany).not.toHaveBeenCalled();
     });
   });
 });

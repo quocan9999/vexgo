@@ -2,7 +2,6 @@
 
 import React, { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
 import {
   AlertCircle,
   CheckCircle2,
@@ -27,6 +26,10 @@ import {
   checkTicketCancelEligibility,
   type CancelEligibilityResult,
 } from '@/features/tickets/services/cancel-eligibility';
+import {
+  getCancelSession,
+  clearCancelSession,
+} from '@/features/tickets/services/cancel-session';
 
 function formatCurrency(amount: number | string | null | undefined): string {
   if (amount == null || amount === '') return '0 đ';
@@ -91,22 +94,39 @@ function formatPhoneDisplay(phoneStr: string | null): string {
 const VIETNAM_PHONE_REGEX = /^(?:\+84|0)(?:3[2-9]|5[689]|7[06-9]|8[1-9]|9\d)\d{7}$/;
 
 function CancelTicketContent() {
-  const searchParams = useSearchParams();
-  const [step, setStep] = useState<1 | 2 | 3>(1);
-  const [ticketCode, setTicketCode] = useState(
-    () => searchParams.get('code') || searchParams.get('ticketCode') || '',
-  );
-  const [phone, setPhone] = useState(
-    () => searchParams.get('phone') || searchParams.get('phoneNumber') || '',
-  );
-  const [ticket, setTicket] = useState<TicketItem | null>(null);
-  const [eligibility, setEligibility] = useState<CancelEligibilityResult | null>(null);
-  const [isLoading, setIsLoading] = useState(() => {
-    return Boolean(
-      (searchParams.get('code') || searchParams.get('ticketCode')) &&
-      (searchParams.get('phone') || searchParams.get('phoneNumber')),
-    );
+  const [initialSession] = useState(() => getCancelSession());
+  const [step, setStep] = useState<1 | 2 | 3>(() => {
+    if (initialSession?.ticket) {
+      const res = checkTicketCancelEligibility(initialSession.ticket, Date.now());
+      return res.eligible ? 2 : 1;
+    }
+    return 1;
   });
+  const [ticketCode, setTicketCode] = useState(() => initialSession?.ticketCode || '');
+  const [phone, setPhone] = useState(() => initialSession?.phoneNumber || '');
+  const [ticket, setTicket] = useState<TicketItem | null>(() => initialSession?.ticket || null);
+  const [eligibility, setEligibility] = useState<CancelEligibilityResult | null>(() => {
+    if (initialSession?.ticket) {
+      return checkTicketCancelEligibility(initialSession.ticket, Date.now());
+    }
+    return null;
+  });
+  const [confirmedFeeRate, setConfirmedFeeRate] = useState<number | null>(() => {
+    if (initialSession?.ticket) {
+      const res = checkTicketCancelEligibility(initialSession.ticket, Date.now());
+      return res.cancelFeeRate ?? null;
+    }
+    return null;
+  });
+  const [feeRateChangedWarning, setFeeRateChangedWarning] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(() =>
+    Boolean(
+      initialSession &&
+        !initialSession.ticket &&
+        initialSession.ticketCode &&
+        initialSession.phoneNumber,
+    ),
+  );
   const [isCancelling, setIsCancelling] = useState(false);
   const [phoneError, setPhoneError] = useState<string | null>(null);
   const [ticketCodeError, setTicketCodeError] = useState<string | null>(null);
@@ -120,11 +140,24 @@ function CancelTicketContent() {
     title: string;
     message: string;
     variant: 'warning' | 'error' | 'info';
-  }>({
-    isOpen: false,
-    title: '',
-    message: '',
-    variant: 'warning',
+  }>(() => {
+    if (initialSession?.ticket) {
+      const res = checkTicketCancelEligibility(initialSession.ticket, Date.now());
+      if (!res.eligible) {
+        return {
+          isOpen: true,
+          title: res.title,
+          message: res.message,
+          variant: 'warning',
+        };
+      }
+    }
+    return {
+      isOpen: false,
+      title: '',
+      message: '',
+      variant: 'warning',
+    };
   });
 
   const handleLookup = async (e?: React.FormEvent) => {
@@ -159,8 +192,10 @@ function CancelTicketContent() {
     try {
       const response = await ticketsApi.lookupTicket(cleanCode, cleanPhone);
       const ticketData = response.data;
-      const result = checkTicketCancelEligibility(ticketData);
+      const result = checkTicketCancelEligibility(ticketData, Date.now());
       setEligibility(result);
+      setConfirmedFeeRate(result.cancelFeeRate ?? null);
+      setFeeRateChangedWarning(null);
       if (!result.eligible) {
         setIneligibleModal({
           isOpen: true,
@@ -187,53 +222,77 @@ function CancelTicketContent() {
   };
 
   useEffect(() => {
-    const initialCode = searchParams.get('code') || searchParams.get('ticketCode');
-    const initialPhone = searchParams.get('phone') || searchParams.get('phoneNumber');
+    if (!initialSession) return;
 
-    if (!initialCode || !initialPhone) return;
+    if (initialSession.ticket) {
+      clearCancelSession();
+    } else if (initialSession.ticketCode && initialSession.phoneNumber) {
+      let isMounted = true;
+      ticketsApi
+        .lookupTicket(initialSession.ticketCode.trim(), initialSession.phoneNumber.trim())
+        .then((res) => {
+          if (!isMounted) return;
+          const ticketData = res.data;
+          const result = checkTicketCancelEligibility(ticketData, Date.now());
+          setEligibility(result);
+          setConfirmedFeeRate(result.cancelFeeRate ?? null);
+          setFeeRateChangedWarning(null);
+          if (!result.eligible) {
+            setIneligibleModal({
+              isOpen: true,
+              title: result.title,
+              message: result.message,
+              variant: 'warning',
+            });
+            return;
+          }
+          setTicket(ticketData);
+          setStep(2);
+        })
+        .catch((err: unknown) => {
+          if (!isMounted) return;
+          const apiError = err as { status?: number; message?: string };
+          if (apiError?.status === 404) {
+            setGeneralError('Không tìm thấy thông tin vé hoặc số điện thoại xác minh không khớp.');
+          } else {
+            setGeneralError(apiError?.message || 'Không thể tra cứu thông tin vé.');
+          }
+        })
+        .finally(() => {
+          if (isMounted) setIsLoading(false);
+          clearCancelSession();
+        });
 
-    let isMounted = true;
-    ticketsApi
-      .lookupTicket(initialCode.trim(), initialPhone.trim())
-      .then((res) => {
-        if (!isMounted) return;
-        const ticketData = res.data;
-        const result = checkTicketCancelEligibility(ticketData);
-        setEligibility(result);
-        if (!result.eligible) {
-          setIneligibleModal({
-            isOpen: true,
-            title: result.title,
-            message: result.message,
-            variant: 'warning',
-          });
-          return;
-        }
-        setTicket(ticketData);
-        setStep(2);
-      })
-      .catch((err: unknown) => {
-        if (!isMounted) return;
-        const apiError = err as { status?: number; message?: string };
-        if (apiError?.status === 404) {
-          setGeneralError('Không tìm thấy thông tin vé hoặc số điện thoại xác minh không khớp.');
-        } else {
-          setGeneralError(apiError?.message || 'Không thể tra cứu thông tin vé.');
-        }
-      })
-      .finally(() => {
-        if (isMounted) setIsLoading(false);
-      });
+      return () => {
+        isMounted = false;
+      };
+    }
+  }, [initialSession]);
 
-    return () => {
-      isMounted = false;
-    };
-  }, [searchParams]);
+  useEffect(() => {
+    if (step !== 2 || !ticket) return;
+
+    const interval = setInterval(() => {
+      const fresh = checkTicketCancelEligibility(ticket, Date.now());
+      setEligibility(fresh);
+      if (
+        confirmedFeeRate !== null &&
+        fresh.cancelFeeRate !== undefined &&
+        fresh.cancelFeeRate !== confirmedFeeRate
+      ) {
+        setFeeRateChangedWarning(
+          `Mức phí hủy vé đã thay đổi từ ${Math.round((confirmedFeeRate ?? 0) * 100)}% thành ${Math.round((fresh.cancelFeeRate ?? 0) * 100)}% do thời gian đến lúc khởi hành đã bước qua mốc quy định mới. Vui lòng kiểm tra lại số tiền hoàn trước khi xác nhận.`,
+        );
+      }
+    }, 10000);
+
+    return () => clearInterval(interval);
+  }, [step, ticket, confirmedFeeRate]);
 
   const handleConfirmCancel = async () => {
     if (!ticket) return;
 
-    const currentEligibility = checkTicketCancelEligibility(ticket);
+    const currentEligibility = checkTicketCancelEligibility(ticket, Date.now());
     setEligibility(currentEligibility);
     if (!currentEligibility.eligible) {
       setIneligibleModal({
@@ -245,16 +304,66 @@ function CancelTicketContent() {
       return;
     }
 
+    if (
+      confirmedFeeRate !== null &&
+      currentEligibility.cancelFeeRate !== undefined &&
+      currentEligibility.cancelFeeRate !== confirmedFeeRate
+    ) {
+      setConfirmedFeeRate(currentEligibility.cancelFeeRate);
+      setFeeRateChangedWarning(
+        `Mức phí hủy vé đã thay đổi từ ${Math.round((confirmedFeeRate ?? 0) * 100)}% thành ${Math.round((currentEligibility.cancelFeeRate ?? 0) * 100)}% do thời gian đến lúc khởi hành đã bước qua mốc quy định mới. Vui lòng kiểm tra lại số tiền hoàn trước khi xác nhận.`,
+      );
+      setIneligibleModal({
+        isOpen: true,
+        title: 'Mức phí hủy vé đã thay đổi',
+        message: `Thời gian đến giờ khởi hành đã bước qua mốc quy định mới. Mức phí hủy vé đã thay đổi từ ${Math.round((confirmedFeeRate ?? 0) * 100)}% thành ${Math.round((currentEligibility.cancelFeeRate ?? 0) * 100)}%. Vui lòng kiểm tra lại số tiền hoàn và bấm xác nhận lại.`,
+        variant: 'info',
+      });
+      return;
+    }
+
     setIsCancelling(true);
     setCancelError(null);
 
     try {
-      const res = await ticketsApi.cancelTicket(ticket.ticketCode, phone || ticket.passengerPhone || '');
+      const res = await ticketsApi.cancelTicket(
+        ticket.ticketCode,
+        phone || ticket.passengerPhone || '',
+        undefined,
+        currentEligibility.cancelFeeRate,
+      );
       setCancelResult(res.data);
       setStep(3);
     } catch (err: unknown) {
-      const apiError = err as { message?: string };
-      const errorMsg = apiError?.message || 'Hủy vé không thành công. Vui lòng liên hệ nhà xe để được hỗ trợ.';
+      const apiError = err as {
+        status?: number;
+        error?: string;
+        message?: string;
+      };
+      if (
+        apiError?.status === 409 ||
+        apiError?.error === 'CANCELLATION_QUOTE_EXPIRED'
+      ) {
+        const fresh = checkTicketCancelEligibility(ticket, Date.now());
+        setEligibility(fresh);
+        setConfirmedFeeRate(fresh.cancelFeeRate ?? null);
+        setFeeRateChangedWarning(
+          `Mức phí hủy vé đã thay đổi do thời gian đến lúc khởi hành. Vui lòng kiểm tra lại số tiền hoàn trước khi bấm xác nhận lại.`,
+        );
+        setIneligibleModal({
+          isOpen: true,
+          title: 'Mức phí hủy vé đã thay đổi',
+          message:
+            apiError.message ||
+            'Mức phí hủy vé đã thay đổi do thời gian đến lúc khởi hành. Vui lòng xác nhận lại mức hoàn tiền mới.',
+          variant: 'info',
+        });
+        return;
+      }
+
+      const errorMsg =
+        apiError?.message ||
+        'Hủy vé không thành công. Vui lòng liên hệ nhà xe để được hỗ trợ.';
       setCancelError(errorMsg);
       setIneligibleModal({
         isOpen: true,
@@ -443,6 +552,20 @@ function CancelTicketContent() {
                       <h3 className="font-bold text-[#065F46] text-[15px]">Vé đủ điều kiện hủy</h3>
                       <p className="text-[14px] text-[#065F46]/80 mt-1">
                         Chuyến xe khởi hành lúc {departureInfo.time} ngày {departureInfo.date}. Bạn đủ điều kiện hủy vé có hoàn tiền.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {feeRateChangedWarning && (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 flex gap-3 items-start">
+                    <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                    <div>
+                      <h4 className="font-bold text-amber-800 text-[14px]">
+                        Thông báo cập nhật mức phí
+                      </h4>
+                      <p className="text-[13px] text-amber-700 mt-0.5">
+                        {feeRateChangedWarning}
                       </p>
                     </div>
                   </div>

@@ -160,6 +160,7 @@ export const ticketsApi = {
     ticketCode: string,
     phoneNumber: string,
     reason?: string,
+    expectedCancelFeeRate?: number,
   ): Promise<{ data: CancelTicketResult }> {
     const res = await fetch(`${API_BASE_URL}/tickets/cancel`, {
       method: 'POST',
@@ -170,6 +171,7 @@ export const ticketsApi = {
         ticketCode: ticketCode.trim(),
         phoneNumber: phoneNumber.trim(),
         reason,
+        expectedCancelFeeRate,
       }),
     });
 

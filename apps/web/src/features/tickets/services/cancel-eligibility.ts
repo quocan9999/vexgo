@@ -38,7 +38,9 @@ export function formatTimeAndDate(isoString: string | null | undefined): {
 
 export function checkTicketCancelEligibility(
   ticket:
-    | Pick<TicketItem, 'status' | 'departureTime' | 'cancellation'>
+    | (Pick<TicketItem, 'status' | 'departureTime' | 'cancellation'> & {
+        price?: number;
+      })
     | null
     | undefined,
   nowMs = Date.now(),
@@ -51,72 +53,138 @@ export function checkTicketCancelEligibility(
     };
   }
 
-  if (ticket.cancellation) {
-    const quote = ticket.cancellation;
-    if (quote.eligible) {
-      return {
-        eligible: true,
-        title: '',
-        message: '',
-        cancelFeeRate: quote.cancelFeeRate,
-        cancelFee: quote.cancelFee,
-        refundAmount: quote.refundAmount,
-      };
-    }
-
-    switch (quote.reason) {
+  if (ticket.cancellation && !ticket.cancellation.eligible) {
+    switch (ticket.cancellation.reason) {
       case 'ALREADY_CANCELLED':
         return {
           eligible: false,
-          reason: quote.reason,
+          reason: 'ALREADY_CANCELLED',
           title: 'Vé đã được hủy',
           message:
             'Vé này đã hoàn tất thủ tục hủy trước đó và không còn hiệu lực.',
+          cancelFeeRate: 0,
+          cancelFee: 0,
+          refundAmount: 0,
         };
       case 'ALREADY_DEPARTED':
         return {
           eligible: false,
-          reason: quote.reason,
+          reason: 'ALREADY_DEPARTED',
           title: 'Chuyến xe đã khởi hành',
           message:
             'Vé không còn giá trị hủy hoặc hoàn tiền sau khi xe đã xuất bến.',
+          cancelFeeRate: 0,
+          cancelFee: 0,
+          refundAmount: 0,
         };
       case 'LESS_THAN_12_HOURS':
         return {
           eligible: false,
-          reason: quote.reason,
+          reason: 'LESS_THAN_12_HOURS',
           title: 'Vé không đủ điều kiện hủy',
           message:
             'Vé chỉ được hỗ trợ hủy trước giờ khởi hành tối thiểu 12 tiếng.',
+          cancelFeeRate: 0,
+          cancelFee: 0,
+          refundAmount: 0,
         };
       case 'DEPARTURE_TIME_UNAVAILABLE':
         return {
           eligible: false,
-          reason: quote.reason,
+          reason: 'DEPARTURE_TIME_UNAVAILABLE',
           title: 'Chưa thể xác định điều kiện hủy',
           message:
             'Thông tin giờ khởi hành chưa đầy đủ. Vui lòng liên hệ nhà xe để được hỗ trợ.',
+          cancelFeeRate: 0,
+          cancelFee: 0,
+          refundAmount: 0,
+        };
+      default:
+        return {
+          eligible: false,
+          title: 'Vé không đủ điều kiện hủy',
+          message: 'Vé không đủ điều kiện để thực hiện hủy theo quy định.',
+          cancelFeeRate: 0,
+          cancelFee: 0,
+          refundAmount: 0,
         };
     }
   }
 
   const statusUpper = (ticket.status || '').toUpperCase();
-  if (statusUpper === 'HUY' || statusUpper === 'CANCELLED') {
+  if (
+    statusUpper === 'HUY' ||
+    statusUpper === 'CANCELLED' ||
+    ticket.cancellation?.reason === 'ALREADY_CANCELLED'
+  ) {
     return {
       eligible: false,
       reason: 'ALREADY_CANCELLED',
       title: 'Vé đã được hủy',
       message: 'Vé này đã hoàn tất thủ tục hủy trước đó và không còn hiệu lực.',
+      cancelFeeRate: 0,
+      cancelFee: 0,
+      refundAmount: 0,
     };
   }
 
   if (!ticket.departureTime) {
-    return { eligible: true, title: '', message: '' };
+    if (ticket.cancellation?.reason === 'DEPARTURE_TIME_UNAVAILABLE') {
+      return {
+        eligible: false,
+        reason: 'DEPARTURE_TIME_UNAVAILABLE',
+        title: 'Chưa thể xác định điều kiện hủy',
+        message:
+          'Thông tin giờ khởi hành chưa đầy đủ. Vui lòng liên hệ nhà xe để được hỗ trợ.',
+        cancelFeeRate: 0,
+        cancelFee: 0,
+        refundAmount: 0,
+      };
+    }
+    if (ticket.cancellation?.eligible) {
+      return {
+        eligible: true,
+        title: '',
+        message: '',
+        cancelFeeRate: ticket.cancellation.cancelFeeRate,
+        cancelFee: ticket.cancellation.cancelFee,
+        refundAmount: ticket.cancellation.refundAmount,
+      };
+    }
+    return {
+      eligible: false,
+      reason: 'DEPARTURE_TIME_UNAVAILABLE',
+      title: 'Chưa thể xác định điều kiện hủy',
+      message:
+        'Thông tin giờ khởi hành chưa đầy đủ. Vui lòng liên hệ nhà xe để được hỗ trợ.',
+      cancelFeeRate: 0,
+      cancelFee: 0,
+      refundAmount: 0,
+    };
   }
 
   const departureDate = new Date(ticket.departureTime);
   if (isNaN(departureDate.getTime())) {
-    return { eligible: true, title: '', message: '' };
+    if (ticket.cancellation?.eligible) {
+      return {
+        eligible: true,
+        title: '',
+        message: '',
+        cancelFeeRate: ticket.cancellation.cancelFeeRate,
+        cancelFee: ticket.cancellation.cancelFee,
+        refundAmount: ticket.cancellation.refundAmount,
+      };
+    }
+    return {
+      eligible: false,
+      reason: 'DEPARTURE_TIME_UNAVAILABLE',
+      title: 'Chưa thể xác định điều kiện hủy',
+      message:
+        'Thông tin giờ khởi hành chưa đầy đủ. Vui lòng liên hệ nhà xe để được hỗ trợ.',
+      cancelFeeRate: 0,
+      cancelFee: 0,
+      refundAmount: 0,
+    };
   }
 
   const departureMs = departureDate.getTime();
@@ -132,6 +200,9 @@ export function checkTicketCancelEligibility(
       reason: 'ALREADY_DEPARTED',
       title: 'Chuyến xe đã khởi hành',
       message: `Chuyến xe đã khởi hành vào lúc ${timeStr}.\n\nTheo quy định của nhà xe, vé không còn giá trị hủy hoặc hoàn tiền sau khi xe đã xuất bến.`,
+      cancelFeeRate: 0,
+      cancelFee: 0,
+      refundAmount: 0,
     };
   }
 
@@ -141,8 +212,39 @@ export function checkTicketCancelEligibility(
       reason: 'LESS_THAN_12_HOURS',
       title: 'Vé không đủ điều kiện hủy',
       message: `Chuyến xe khởi hành vào lúc ${timeStr} (còn dưới 12 tiếng).\n\nTheo quy định của nhà xe, vé chỉ được hỗ trợ hủy trước giờ khởi hành tối thiểu 12 tiếng.\n\nVui lòng liên hệ tổng đài để được hỗ trợ.`,
+      cancelFeeRate: 0,
+      cancelFee: 0,
+      refundAmount: 0,
     };
   }
 
-  return { eligible: true, title: '', message: '' };
+  const cancelFeeRate = diffHours <= 24 ? 0.2 : 0.1;
+  const price =
+    ('price' in ticket && typeof ticket.price === 'number'
+      ? ticket.price
+      : null) ??
+    (ticket.cancellation
+      ? (ticket.cancellation.cancelFee || 0) +
+        (ticket.cancellation.refundAmount || 0)
+      : 0);
+
+  let cancelFee = Math.round(price * cancelFeeRate);
+  let refundAmount = Math.max(0, price - cancelFee);
+
+  if (
+    ticket.cancellation?.eligible &&
+    ticket.cancellation.cancelFeeRate === cancelFeeRate
+  ) {
+    cancelFee = ticket.cancellation.cancelFee;
+    refundAmount = ticket.cancellation.refundAmount;
+  }
+
+  return {
+    eligible: true,
+    title: '',
+    message: '',
+    cancelFeeRate,
+    cancelFee,
+    refundAmount,
+  };
 }

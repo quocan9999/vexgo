@@ -30,6 +30,7 @@ import { formatCurrency } from '@/lib/format';
 import { AlertModal } from '@/components/ui/alert-modal';
 import { ticketsApi, type TicketItem } from '@/features/account/services/tickets.api';
 import { checkTicketCancelEligibility } from '@/features/tickets/services/cancel-eligibility';
+import { saveCancelSession } from '@/features/tickets/services/cancel-session';
 
 const VIETNAM_PHONE_REGEX = /^(?:\+84|0)(?:3[2-9]|5[689]|7[06-9]|8[1-9]|9\d)\d{7}$/;
 
@@ -160,9 +161,12 @@ function TicketSearchForm() {
       });
       return;
     }
-    router.push(
-      `/cancel-ticket?code=${encodeURIComponent(ticket.ticketCode)}&phone=${encodeURIComponent(ticket.passengerPhone || phone)}`,
-    );
+    saveCancelSession({
+      ticketCode: ticket.ticketCode,
+      phoneNumber: ticket.passengerPhone || phone,
+      ticket,
+    });
+    router.push('/cancel-ticket');
   };
 
   const handleCopyCode = (code: string) => {
