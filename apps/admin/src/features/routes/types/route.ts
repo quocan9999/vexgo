@@ -8,6 +8,7 @@ export type Route = {
   code: string;
   origin: string;
   destination: string;
+  durationMinutes: number | null;
   status: RouteStatus;
   busCompany: { busCompanyId: number; code: string; name: string };
   createdAt: string;

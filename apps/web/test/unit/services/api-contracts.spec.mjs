@@ -200,18 +200,20 @@ test('ticketsApi.getTicketDetail returns response with data envelope', async () 
 });
 
 test('ticketsApi.lookupTicket returns response with data envelope', async () => {
-  let requestedUrl = '';
-  globalThis.fetch = async (url) => {
-    requestedUrl = String(url);
+  const calls = [];
+  globalThis.fetch = async (url, init) => {
+    calls.push({ url: String(url), init });
     return jsonResponse({ data: { ticketId: 1, ticketCode: 'VE-001' } });
   };
 
   const response = await ticketsApi.lookupTicket('VE-001', '0901234567');
 
-  assert.equal(
-    requestedUrl,
-    'http://localhost:4000/api/v1/tickets/lookup?ticketCode=VE-001&phoneNumber=0901234567',
-  );
+  assert.equal(calls[0].url, 'http://localhost:4000/api/v1/tickets/lookup');
+  assert.equal(calls[0].init.method, 'POST');
+  assert.deepEqual(JSON.parse(calls[0].init.body), {
+    ticketCode: 'VE-001',
+    phoneNumber: '0901234567',
+  });
   assert.equal(response.data.ticketId, 1);
 });
 

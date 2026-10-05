@@ -143,6 +143,11 @@
 | HIGH | GET | `/api/v1/routes` | Public | Filter tối thiểu: `from`, `to`, `busCompanyId`, `status`; phân trang nếu dữ liệu lớn. |
 | MEDIUM | GET | `/api/v1/routes/:routeId` | Public | Chi tiết tuyến. |
 
+Route write/read contract dùng `durationMinutes` là số phút nguyên dương. Backend
+lưu vào `TuyenXe.thoiGianChayPhut`; khi tạo hoặc cập nhật chuyến, `gioDen` được
+suy ra từ `departureTime + durationMinutes`. Migration chỉ backfill `gioDen` cho
+những tuyến hiện hữu đã có thời lượng đáng tin cậy.
+
 ### Chuyến xe
 
 | Priority | Method | Endpoint | Auth | Mục đích / dữ liệu chính |
@@ -244,7 +249,7 @@ Client chỉ gửi các lựa chọn cần thiết, ví dụ:
 |---|---|---|---|---|
 | MEDIUM | GET | `/api/v1/tickets` | Customer | Danh sách vé của chính khách hàng. |
 | MEDIUM | GET | `/api/v1/tickets/:ticketId` | Owner | Chi tiết vé. |
-| MEDIUM | GET | `/api/v1/tickets/lookup` | Public | Tra cứu bằng `ticketCode` + thông tin xác minh như phone; không lộ vé của người khác. |
+| MEDIUM | POST | `/api/v1/tickets/lookup` | Public | Tra cứu bằng `ticketCode` + thông tin xác minh như phone trong JSON body; không đưa credential/PII vào URL. |
 | MEDIUM | POST | `/api/v1/tickets/:ticketId/cancel` | Owner | Hủy một vé khi booking có nhiều vé và rule cho phép. |
 | LOW | POST | `/api/v1/tickets/:ticketId/exchange/quote` | Owner | Tính chênh lệch/điều kiện đổi vé sang chuyến/ghế mới. |
 | LOW | POST | `/api/v1/tickets/:ticketId/exchange` | Owner | Đổi vé; transaction cập nhật ghế/vé/payment chênh lệch nếu có. |
@@ -415,11 +420,32 @@ Hai người có thể code song song nếu thống nhất response của `GET /
 ```text
 GET  /tickets
 GET  /tickets/:id
-GET  /tickets/lookup
-POST /tickets/:id/cancel
+POST /tickets/lookup
+POST /tickets/cancel
 POST /tickets/:id/exchange/quote   (LOW)
 POST /tickets/:id/exchange         (LOW)
 ```
+
+`POST /tickets/lookup` nhận `ticketCode` và `phoneNumber` trong JSON body, đồng thời trả thêm `data.cancellation` gồm `eligible`, `reason`,
+`cancelFeeRate`, `cancelFee` và `refundAmount`. Backend tính báo giá theo thời
+điểm hiện tại: dưới 12 tiếng không được hủy; từ 12 đến hết 24 tiếng phí 20%;
+trên 24 tiếng phí 10%.
+
+`POST /tickets/cancel` nhận `ticketCode`, `phoneNumber` và
+`expectedCancelFeeRate` bắt buộc. Khi quote hiện tại khác mức phí khách đã xác
+nhận, API trả `409 CANCELLATION_QUOTE_EXPIRED`; `details.previousRate` chứa mức
+phí cũ và `details.currentQuote` chứa quote mới đã được filter kiểm tra schema.
+Frontend phải hiển thị quote mới từ server và yêu cầu khách xác nhận lại, không
+được tự ghi đè quote bằng clock của thiết bị. Khi thành công, backend hủy vé và
+giải phóng ghế trong transaction, đồng thời tạo giao dịch `HOAN_TIEN` ở trạng
+thái `DANG_XU_LY`; response chỉ xác nhận yêu cầu hoàn tiền đã được ghi nhận,
+không khẳng định tiền đã hoàn tất.
+
+Sau khi transaction commit, refund processor gửi yêu cầu tới
+`REFUND_PROVIDER_URL` với idempotency key ổn định theo `thanhToanId`. Record
+`DANG_XU_LY` là hàng đợi bền vững và được quét lại định kỳ; request thành công
+chuyển sang `THANH_CONG`, lỗi mạng/provider được trả lại `DANG_XU_LY` để retry.
+Không cấu hình provider thì API giữ refund ở trạng thái pending và ghi cảnh báo.
 
 ## Flow 3 — Tra cứu hóa đơn (MEDIUM)
 

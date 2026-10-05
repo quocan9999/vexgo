@@ -3,7 +3,19 @@ import test from 'node:test';
 import {
   buildRoundTripBookingHref,
   getReturnTripLocations,
+  resolveRoundTripDepartureDate,
 } from '../../../src/features/booking/utils/round-trip-booking.ts';
+
+test('uses legacy date query aliases when departureDate is missing', () => {
+  assert.equal(
+    resolveRoundTripDepartureDate({ date: '2026-10-07' }),
+    '2026-10-07',
+  );
+  assert.equal(
+    resolveRoundTripDepartureDate({ price: '2026-10-07' }),
+    '2026-10-07',
+  );
+});
 
 test('keeps both selected trip IDs in a round-trip booking URL', () => {
   const href = buildRoundTripBookingHref({

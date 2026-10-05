@@ -5,7 +5,15 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import request from 'supertest';
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 import { AppModule } from '../../../src/app.module.js';
 import { AccessTokenGuard } from '../../../src/auth/guards/access-token.guard.js';
 import { ADMIN_ROLE_DEFAULT_PERMISSION_KEYS } from '../../../src/auth/permissions/permission-catalog.js';
@@ -19,6 +27,7 @@ const mockRoute = {
   maTuyenXe: 'FUTA-TX-0001',
   diemDi: 'TP.HCM',
   diemDen: 'Đà Lạt',
+  thoiGianChayPhut: 420,
   trangThai: 'HOAT_DONG',
   nhaXeId: 5,
 };
@@ -43,6 +52,7 @@ const mockTripCreated = {
   maChuyenXe: 'FUTA-CX-001',
   ngayKhoiHanh: new Date('2026-10-10T00:00:00.000Z'),
   gioKhoiHanh: new Date('1970-01-01T07:30:00.000Z'),
+  gioDen: new Date('1970-01-01T14:30:00.000Z'),
   trangThai: 'CHUA_KHOI_HANH',
   createdAt: new Date('2026-10-01T10:00:00.000Z'),
   updatedAt: new Date('2026-10-01T10:00:00.000Z'),
@@ -208,6 +218,7 @@ describe('Trips write HTTP contract (05.2)', () => {
           maChuyenXe: 'FUTA-CX-001',
           ngayKhoiHanh: new Date('2026-10-10T00:00:00.000Z'),
           gioKhoiHanh: new Date('1970-01-01T07:30:00.000Z'),
+          gioDen: new Date('1970-01-01T14:30:00.000Z'),
           trangThai: 'CHUA_KHOI_HANH',
           nhaXeId: 5,
           tuyenXeId: 1,
@@ -496,6 +507,7 @@ describe('Trips write HTTP contract (05.2)', () => {
         data: {
           ngayKhoiHanh: new Date('2026-10-15T00:00:00.000Z'),
           gioKhoiHanh: new Date('1970-01-01T09:00:00.000Z'),
+          gioDen: new Date('1970-01-01T16:00:00.000Z'),
         },
       });
 
@@ -855,7 +867,9 @@ describe('Trips write HTTP contract (05.2)', () => {
       prisma.gheChuyenXe.findFirst.mockResolvedValue(null);
       prisma.phieuGuiHang.findFirst.mockImplementation(async ({ where }) => {
         const notIn = where?.trangThai?.notIn ?? [];
-        const shipmentsInDb = [{ phieuGuiHangId: 301, trangThai: 'CHO_DIEU_PHOI' }];
+        const shipmentsInDb = [
+          { phieuGuiHangId: 301, trangThai: 'CHO_DIEU_PHOI' },
+        ];
         return shipmentsInDb.find((s) => !notIn.includes(s.trangThai)) ?? null;
       });
 

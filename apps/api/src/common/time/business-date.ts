@@ -62,3 +62,54 @@ export function businessDateStartUtc(dateOnly: string, timeZone: string): Date {
 
   return new Date(candidateUtc);
 }
+
+export function combineDeparture(
+  date: Date,
+  time: Date,
+  businessTimeZone: string,
+): Date {
+  const businessDate = date.toISOString().slice(0, 10);
+  const businessDayStart = businessDateStartUtc(businessDate, businessTimeZone);
+  const elapsedSinceMidnight =
+    ((time.getUTCHours() * 60 + time.getUTCMinutes()) * 60 +
+      time.getUTCSeconds()) *
+    1000;
+  return new Date(businessDayStart.getTime() + elapsedSinceMidnight);
+}
+
+export function computeArrival(
+  departureDate: Date,
+  departureTime: Date,
+  durationMinutes: number | null | undefined,
+  fallbackGioDen: Date | null | undefined,
+  businessTimeZone: string,
+): string | null {
+  const depTime = combineDeparture(departureDate, departureTime, businessTimeZone);
+  if (durationMinutes != null && Number.isFinite(durationMinutes) && durationMinutes > 0) {
+    return new Date(depTime.getTime() + durationMinutes * 60 * 1000).toISOString();
+  }
+  if (!fallbackGioDen) return null;
+  let arrTime = combineDeparture(departureDate, fallbackGioDen, businessTimeZone);
+  if (arrTime < depTime) {
+    arrTime = new Date(arrTime.getTime() + 24 * 60 * 60 * 1000);
+  }
+  return arrTime.toISOString();
+}
+
+export function calculateClockTime(
+  baseTime: Date,
+  durationMinutes: number | null | undefined,
+): Date | null {
+  if (durationMinutes == null || !Number.isFinite(durationMinutes)) return null;
+  const totalSeconds =
+    baseTime.getUTCHours() * 3600 +
+    baseTime.getUTCMinutes() * 60 +
+    baseTime.getUTCSeconds() +
+    Math.round(durationMinutes * 60);
+  const normalizedSeconds = ((totalSeconds % 86400) + 86400) % 86400;
+  const hours = Math.floor(normalizedSeconds / 3600);
+  const minutes = Math.floor((normalizedSeconds % 3600) / 60);
+  const seconds = normalizedSeconds % 60;
+  return new Date(Date.UTC(1970, 0, 1, hours, minutes, seconds));
+}
+

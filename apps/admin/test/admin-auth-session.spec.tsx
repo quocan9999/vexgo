@@ -87,8 +87,8 @@ describe('Admin cookie session and API client', () => {
     });
     expect(init?.credentials).toBe('include');
     expect(new Headers(init?.headers).get('x-refresh-token-transport')).toBe('cookie');
-    expect(window.localStorage.length).toBe(0);
-    expect(window.sessionStorage.length).toBe(0);
+    expect(window.localStorage?.length ?? 0).toBe(0);
+    expect(window.sessionStorage?.length ?? 0).toBe(0);
   });
 
   it('khôi phục session sau khi tải lại trang bằng refresh cookie', async () => {
@@ -108,8 +108,8 @@ describe('Admin cookie session and API client', () => {
     expect(JSON.parse(String(refreshInit?.body))).toEqual({});
     const [, sessionInit] = vi.mocked(fetch).mock.calls[1];
     expect(new Headers(sessionInit?.headers).get('Authorization')).toBe('Bearer restored-access');
-    expect(window.localStorage.length).toBe(0);
-    expect(window.sessionStorage.length).toBe(0);
+    expect(window.localStorage?.length ?? 0).toBe(0);
+    expect(window.sessionStorage?.length ?? 0).toBe(0);
   });
 
   it('hiển thị đúng lỗi validate từ API mà không biến lỗi thành đăng nhập thành công', async () => {

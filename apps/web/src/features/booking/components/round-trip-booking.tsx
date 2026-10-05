@@ -16,6 +16,7 @@ import { createPaymentDraft } from '../services/payment-draft';
 import { FeaturePlaceholderModal } from './feature-placeholder-modal';
 import { useAuthSession } from '@/features/auth/auth-session';
 import { customerApi } from '@/features/account/services/customer.api';
+import { hydrateUntouchedProfileField } from '../utils/profile-hydration';
 
 export interface RoundTripBookingProps {
   outboundPost: Post;
@@ -26,11 +27,7 @@ export interface RoundTripBookingProps {
   returnTripSeats: ApiTripSeat[];
 }
 
-const SeatIcon = ({
-  className = 'w-[30px] h-[38px]',
-}: {
-  className?: string;
-}) => (
+const ChairIcon = ({ className = 'w-7 h-9' }: { className?: string }) => (
   <svg
     viewBox="0 0 40 48"
     className={className}
@@ -38,13 +35,15 @@ const SeatIcon = ({
     aria-hidden="true"
   >
     <g strokeWidth="2.5">
-      <rect x="1" y="14" width="10" height="20" rx="3" />
-      <rect x="29" y="14" width="10" height="20" rx="3" />
-      <rect x="10" y="34" width="20" height="12" rx="3" />
-      <rect x="6" y="2" width="28" height="38" rx="5" />
+      <rect x="1" y="14" width="8" height="20" rx="3" />
+      <rect x="31" y="14" width="8" height="20" rx="3" />
+      <rect x="9" y="34" width="22" height="12" rx="3" />
+      <rect x="7" y="2" width="26" height="38" rx="5" />
     </g>
   </svg>
 );
+
+const SeatIcon = ChairIcon;
 
 interface SeatButtonProps {
   seat: string;
@@ -53,7 +52,12 @@ interface SeatButtonProps {
   onToggle: (seat: string) => void;
 }
 
-const SeatButton = ({ seat, booked, selected, onToggle }: SeatButtonProps) => {
+const SeatButton = ({
+  seat,
+  booked,
+  selected,
+  onToggle,
+}: SeatButtonProps) => {
   const seatClass = booked
     ? 'fill-slate-200 stroke-slate-300'
     : selected
@@ -74,8 +78,10 @@ const SeatButton = ({ seat, booked, selected, onToggle }: SeatButtonProps) => {
       onClick={() => onToggle(seat)}
       className="group relative min-h-11 min-w-11 inline-flex items-center justify-center rounded-md disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
     >
-      <SeatIcon className={`w-7 h-9 transition-colors ${seatClass}`} />
-      <span className={`absolute text-[9px] font-bold ${textClass}`}>
+      <ChairIcon className={`w-7 h-9 transition-colors ${seatClass}`} />
+      <span
+        className={`absolute top-[8px] text-[9px] font-bold ${textClass}`}
+      >
         {seat}
       </span>
     </button>
@@ -85,6 +91,7 @@ const SeatButton = ({ seat, booked, selected, onToggle }: SeatButtonProps) => {
 interface SeatGridProps {
   title: string;
   date: string;
+  vehicleType?: string;
   tripSeats: ApiTripSeat[];
   selectedSeats: string[];
   onToggle: (seat: string) => void;
@@ -94,56 +101,218 @@ interface SeatGridProps {
 const SeatGrid = ({
   title,
   date,
+  vehicleType,
   tripSeats,
   selectedSeats,
   onToggle,
   onVehicleInfoClick,
-}: SeatGridProps) => (
-  <div className="min-w-0 flex-1 p-4 md:p-5">
-    <div className="flex items-start justify-between gap-3 mb-5">
-      <div>
-        <h2 className="text-lg font-black text-slate-950">Chọn ghế</h2>
-        <p className="text-xs font-bold text-slate-500 mt-1">
-          {title} - {date}
-        </p>
-      </div>
-      <button
-        type="button"
-        onClick={onVehicleInfoClick}
-        className="min-h-11 px-2 text-xs font-bold text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand rounded-md cursor-pointer"
-      >
-        Thông tin xe
-      </button>
-    </div>
+}: SeatGridProps) => {
+  const isSleeper =
+    vehicleType?.toUpperCase().includes('GIƯỜNG') ||
+    tripSeats.some((s) => s.position?.includes('Tầng'));
 
-    <div className="grid grid-cols-2 gap-3 sm:gap-5">
-      {Object.entries(
-        tripSeats.reduce<Record<string, ApiTripSeat[]>>((groups, seat) => {
-          const label = seat.position?.trim() || 'Sơ đồ ghế';
-          (groups[label] ??= []).push(seat);
-          return groups;
-        }, {}),
-      ).map(([label, seats]) => (
-        <div key={label} className="min-w-0">
-          <h3 className="text-[11px] font-black text-slate-700 text-center mb-3 uppercase">
-            {label}
-          </h3>
-          <div className="grid grid-cols-3 gap-1 sm:gap-2 justify-items-center">
-            {seats.map((seat) => (
-              <SeatButton
-                key={seat.tripSeatId}
-                seat={seat.seatNumber}
-                booked={seat.status !== 'TRONG'}
-                selected={selectedSeats.includes(seat.seatNumber)}
-                onToggle={onToggle}
-              />
-            ))}
+  const seatGroups = Object.entries(
+    tripSeats.reduce<Record<string, ApiTripSeat[]>>((groups, seat) => {
+      let label = seat.position?.trim() || 'Sơ đồ ghế';
+      if (isSleeper) {
+        if (
+          seat.seatNumber?.toUpperCase().startsWith('B') ||
+          seat.position?.toLowerCase().includes('trên')
+        ) {
+          label = 'Tầng trên';
+        } else {
+          label = 'Tầng dưới';
+        }
+      }
+      (groups[label] ??= []).push(seat);
+      return groups;
+    }, {}),
+  );
+
+  seatGroups.forEach(([, seats]) => {
+    seats.sort((a, b) => a.seatNumber.localeCompare(b.seatNumber, undefined, { numeric: true }));
+  });
+  seatGroups.sort(([a], [b]) => {
+    if (a.toLowerCase().includes('dưới')) return -1;
+    if (b.toLowerCase().includes('dưới')) return 1;
+    return a.localeCompare(b);
+  });
+
+  const leftSeats: ApiTripSeat[] = [];
+  const rightSeats: ApiTripSeat[] = [];
+  if (!isSleeper) {
+    const unassigned: ApiTripSeat[] = [];
+    tripSeats.forEach((seat) => {
+      const pos = seat.position?.toLowerCase() || '';
+      if (pos.includes('trái')) {
+        leftSeats.push(seat);
+      } else if (pos.includes('phải')) {
+        rightSeats.push(seat);
+      } else {
+        unassigned.push(seat);
+      }
+    });
+
+    if (leftSeats.length === 0 && rightSeats.length === 0) {
+      const sorted = [...tripSeats].sort((a, b) =>
+        a.seatNumber.localeCompare(b.seatNumber, undefined, { numeric: true }),
+      );
+      for (let i = 0; i < sorted.length; i += 4) {
+        if (i < sorted.length) leftSeats.push(sorted[i]);
+        if (i + 1 < sorted.length) leftSeats.push(sorted[i + 1]);
+        if (i + 2 < sorted.length) rightSeats.push(sorted[i + 2]);
+        if (i + 3 < sorted.length) rightSeats.push(sorted[i + 3]);
+      }
+    } else if (unassigned.length > 0) {
+      unassigned.forEach((seat) => {
+        if (leftSeats.length <= rightSeats.length) {
+          leftSeats.push(seat);
+        } else {
+          rightSeats.push(seat);
+        }
+      });
+    }
+    leftSeats.sort((a, b) => a.seatNumber.localeCompare(b.seatNumber, undefined, { numeric: true }));
+    rightSeats.sort((a, b) => a.seatNumber.localeCompare(b.seatNumber, undefined, { numeric: true }));
+  }
+
+  return (
+    <div className="min-w-0 flex-1 p-4 md:p-5">
+      <div className="flex items-start justify-between gap-3 mb-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <h2 className="text-lg font-black text-slate-950">Chọn ghế</h2>
+            <span className="text-xs font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
+              {tripSeats.length} chỗ
+            </span>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded border bg-amber-50 text-amber-700 border-amber-200">
+              {isSleeper ? 'Giường nằm' : 'Ghế ngồi'}
+            </span>
+          </div>
+          <p className="text-xs font-bold text-slate-500 mt-1">
+            {title} - {date}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onVehicleInfoClick}
+          className="min-h-11 px-2 text-xs font-bold text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand rounded-md cursor-pointer"
+        >
+          Thông tin xe
+        </button>
+      </div>
+
+      {isSleeper ? (
+        /* XE GIƯỜNG NẰM: 2 TẦNG */
+        <div className="grid grid-cols-2 gap-3 sm:gap-4">
+          {seatGroups.map(([label, seats]) => (
+            <div
+              key={label}
+              className="bg-slate-50/80 border border-slate-200 rounded-xl p-3 flex flex-col items-center"
+            >
+              <div className="w-full flex items-center justify-between pb-2 mb-3 border-b border-dashed border-slate-200 px-1">
+                <span className="text-[10px] font-bold text-slate-400">Tài xế</span>
+                <h3 className="text-[11px] font-black text-[#0060c4] uppercase">
+                  {label}
+                </h3>
+                <span className="text-[9px] font-bold text-slate-400 bg-white px-1.5 py-0.5 rounded border border-slate-200">
+                  Cửa lên
+                </span>
+              </div>
+              <div className="grid grid-cols-3 gap-1 sm:gap-2 justify-items-center">
+                {seats.map((seat) => (
+                  <SeatButton
+                    key={seat.tripSeatId}
+                    seat={seat.seatNumber}
+                    booked={seat.status !== 'TRONG'}
+                    selected={selectedSeats.includes(seat.seatNumber)}
+                    onToggle={onToggle}
+                  />
+                ))}
+              </div>
+              <div className="w-full text-center pt-2 mt-3 border-t border-dashed border-slate-200 text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+                Cuối xe
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        /* XE GHẾ NGỒI: 1 TẦNG VỚI LỐI ĐI Ở GIỮA */
+        <div className="bg-slate-50/80 border border-slate-200 rounded-xl p-3.5 max-w-[420px] mx-auto">
+          {/* Đầu xe */}
+          <div className="flex items-center justify-between pb-2 mb-3 border-b border-dashed border-slate-200 px-1">
+            <span className="text-[10px] font-bold text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200">
+              Tài xế
+            </span>
+            <span className="text-[10px] font-bold text-slate-400 uppercase">
+              Đầu xe
+            </span>
+            <span className="text-[10px] font-bold text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200">
+              Cửa lên
+            </span>
+          </div>
+
+          {/* Dãy trái | Lối đi | Dãy phải */}
+          <div className="grid grid-cols-[1fr_36px_1fr] gap-1.5 items-start">
+            <div>
+              <p className="text-[10px] font-black text-center text-slate-600 uppercase mb-2">
+                Dãy trái
+              </p>
+              <div className="grid grid-cols-2 gap-1.5 justify-items-center">
+                {leftSeats.map((seat) => (
+                  <SeatButton
+                    key={seat.tripSeatId}
+                    seat={seat.seatNumber}
+                    booked={seat.status !== 'TRONG'}
+                    selected={selectedSeats.includes(seat.seatNumber)}
+                    onToggle={onToggle}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* Lối đi */}
+            <div className="h-full min-h-[140px] flex flex-col items-center justify-center py-2 border-x border-dashed border-slate-200 bg-slate-100/50 rounded">
+              <span className="text-[8px] font-black uppercase text-slate-400 tracking-widest [writing-mode:vertical-lr] my-auto">
+                Lối đi
+              </span>
+            </div>
+
+            <div>
+              <p className="text-[10px] font-black text-center text-slate-600 uppercase mb-2">
+                Dãy phải
+              </p>
+              <div className="grid grid-cols-2 gap-1.5 justify-items-center">
+                {rightSeats.map((seat) => (
+                  <SeatButton
+                    key={seat.tripSeatId}
+                    seat={seat.seatNumber}
+                    booked={seat.status !== 'TRONG'}
+                    selected={selectedSeats.includes(seat.seatNumber)}
+                    onToggle={onToggle}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Cuối xe */}
+          <div className="text-center pt-2 mt-3 border-t border-dashed border-slate-200 text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+            Cuối xe
           </div>
         </div>
-      ))}
+      )}
     </div>
-  </div>
-);
+  );
+};
+
+function formatDisplayPhone(phone?: string | null): string {
+  if (!phone) return '';
+  const trimmed = phone.trim();
+  if (trimmed.startsWith('+84')) return '0' + trimmed.slice(3);
+  if (trimmed.startsWith('84') && trimmed.length === 11) return '0' + trimmed.slice(2);
+  return trimmed;
+}
 
 export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
   outboundPost,
@@ -170,9 +339,15 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
     let active = true;
     executeWithAuth((token) => customerApi.getMe(token))
       .then((res) => {
-        if (!active) return;
-        if (res?.data?.email) {
+        if (!active || !res?.data) return;
+        if (res.data.email) {
           setCustomerEmail((curr) => curr || res.data.email || '');
+        }
+        if (res.data.fullName) {
+          setUserNameOverride((current) => hydrateUntouchedProfileField(current, res.data.fullName));
+        }
+        if (res.data.phoneNumber) {
+          setUserPhoneOverride((current) => hydrateUntouchedProfileField(current, formatDisplayPhone(res.data.phoneNumber)));
         }
       })
       .catch(() => {});
@@ -184,7 +359,23 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
   const customerName =
     userNameOverride !== null ? userNameOverride : user?.fullName || '';
   const customerPhone =
-    userPhoneOverride !== null ? userPhoneOverride : user?.phoneNumber || '';
+    userPhoneOverride !== null
+      ? userPhoneOverride
+      : formatDisplayPhone(user?.phoneNumber) || '';
+
+  const handleReloadUserInfo = () => {
+    if (user?.fullName) setUserNameOverride(user.fullName);
+    if (user?.phoneNumber) setUserPhoneOverride(formatDisplayPhone(user.phoneNumber));
+    executeWithAuth((token) => customerApi.getMe(token))
+      .then((res) => {
+        if (res?.data) {
+          if (res.data.fullName) setUserNameOverride(res.data.fullName);
+          if (res.data.phoneNumber) setUserPhoneOverride(formatDisplayPhone(res.data.phoneNumber));
+          if (res.data.email) setCustomerEmail(res.data.email);
+        }
+      })
+      .catch(() => {});
+  };
 
   const passengerValidation = validatePassengerInfo({
     fullName: customerName,
@@ -270,6 +461,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
               <SeatGrid
                 title="Chuyến đi"
                 date={departureLabel}
+                vehicleType={outboundPost.propertyType}
                 tripSeats={outboundTripSeats}
                 selectedSeats={outboundSeats}
                 onToggle={toggleOutboundSeat}
@@ -278,6 +470,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
               <SeatGrid
                 title="Chuyến về"
                 date={returnLabel}
+                vehicleType={returnPost.propertyType}
                 tripSeats={returnTripSeats}
                 selectedSeats={returnSeats}
                 onToggle={toggleReturnSeat}
@@ -692,6 +885,12 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                     {outboundDepartureTimeText}
                   </span>
                 </div>
+                <div className="flex justify-between gap-3">
+                  <span className="text-slate-500">Loại ghế</span>
+                  <span className="text-slate-900 font-bold">
+                    {outboundPost.propertyType?.toUpperCase().includes('GIƯỜNG') || outboundTripSeats.some((s) => s.position?.includes('Tầng')) ? 'Giường nằm' : 'Ghế ngồi'}
+                  </span>
+                </div>
                 <div className="flex justify-between">
                   <span className="text-slate-500">Số lượng ghế</span>
                   <span className="text-slate-900">
@@ -739,6 +938,12 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                   <span className="text-slate-500">Thời gian xuất bến</span>
                   <span className="text-emerald-600 font-black text-right">
                     {returnDepartureTimeText}
+                  </span>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <span className="text-slate-500">Loại ghế</span>
+                  <span className="text-slate-900 font-bold">
+                    {returnPost.propertyType?.toUpperCase().includes('GIƯỜNG') || returnTripSeats.some((s) => s.position?.includes('Tầng')) ? 'Giường nằm' : 'Ghế ngồi'}
                   </span>
                 </div>
                 <div className="flex justify-between">

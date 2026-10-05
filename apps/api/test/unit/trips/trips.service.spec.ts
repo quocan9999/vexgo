@@ -7,6 +7,7 @@ const firstTrip = {
   maChuyenXe: 'CX-21',
   ngayKhoiHanh: new Date('2026-10-15T00:00:00.000Z'),
   gioKhoiHanh: new Date('1970-01-01T22:00:00.000Z'),
+  gioDen: null,
   trangThai: 'CHUA_KHOI_HANH',
   nhaXeId: 3,
   tuyenXeId: 8,
@@ -16,6 +17,7 @@ const firstTrip = {
     maTuyenXe: 'SG-DL',
     diemDi: 'TP.HCM',
     diemDen: 'Đà Lạt',
+    thoiGianChayPhut: null,
     nhaXe: { nhaXeId: 3, tenNhaXe: 'Nhà xe A' },
   },
   xe: {
@@ -275,6 +277,49 @@ describe('TripsService detail', () => {
       price: null,
       availableSeats: 1,
     });
+  });
+
+  it('derives arrivalTime accurately from route durationMinutes', async () => {
+    const { prisma, service } = createService();
+    const tripWithDuration = {
+      ...firstTrip,
+      tuyenXe: {
+        ...firstTrip.tuyenXe,
+        thoiGianChayPhut: 480, // 8 hours
+      },
+    };
+    prisma.chuyenXe.findUnique.mockResolvedValue(tripWithDuration);
+    prisma.bangGia.findFirst.mockResolvedValue(null);
+
+    const details = await service.getDetails(21);
+    expect(details.route.durationMinutes).toBe(480);
+    // departure: 2026-10-15T15:00:00.000Z (VN 22:00)
+    // arrival: +8h = 2026-10-15T23:00:00.000Z (VN 06:00 next day)
+    expect(details.departureTime).toBe('2026-10-15T15:00:00.000Z');
+    expect(details.arrivalTime).toBe('2026-10-15T23:00:00.000Z');
+  });
+
+  it('preserves multi-day journeys for 24h and 36h duration without modulo loss', async () => {
+    const { prisma, service } = createService();
+    // 24h duration
+    prisma.chuyenXe.findUnique.mockResolvedValue({
+      ...firstTrip,
+      tuyenXe: { ...firstTrip.tuyenXe, thoiGianChayPhut: 1440 },
+    });
+    prisma.bangGia.findFirst.mockResolvedValue(null);
+
+    const details24h = await service.getDetails(21);
+    expect(details24h.departureTime).toBe('2026-10-15T15:00:00.000Z');
+    expect(details24h.arrivalTime).toBe('2026-10-16T15:00:00.000Z'); // Exact next day!
+
+    // 36h duration
+    prisma.chuyenXe.findUnique.mockResolvedValue({
+      ...firstTrip,
+      tuyenXe: { ...firstTrip.tuyenXe, thoiGianChayPhut: 2160 },
+    });
+    const details36h = await service.getDetails(21);
+    expect(details36h.departureTime).toBe('2026-10-15T15:00:00.000Z');
+    expect(details36h.arrivalTime).toBe('2026-10-17T03:00:00.000Z'); // Next day + 12h!
   });
 });
 
@@ -597,12 +642,13 @@ describe('TripsService create (05.2)', () => {
     });
   });
 
-  it('creates trip and GheChuyenXe snapshot initialized to TRONG atomically', async () => {
+  it('creates trip with derived arrival time and GheChuyenXe snapshot initialized to TRONG atomically', async () => {
     const { prisma, service } = createService();
     prisma.tuyenXe.findFirst.mockResolvedValue({
       tuyenXeId: 8,
       nhaXeId: 3,
       trangThai: 'HOAT_DONG',
+      thoiGianChayPhut: 1260,
     });
     prisma.xe.findFirst.mockResolvedValue({
       xeId: 4,
@@ -616,6 +662,7 @@ describe('TripsService create (05.2)', () => {
       ...firstTrip,
       chuyenXeId: 99,
       maChuyenXe: 'FUTA-CX-99',
+      gioDen: new Date('1970-01-01T05:00:00.000Z'),
       gheChuyenXes: [{ trangThai: 'TRONG' }, { trangThai: 'TRONG' }],
     };
     prisma.chuyenXe.create.mockResolvedValue(createdTrip);
@@ -629,6 +676,7 @@ describe('TripsService create (05.2)', () => {
         maChuyenXe: 'FUTA-CX-99',
         ngayKhoiHanh: new Date('2026-10-20T00:00:00.000Z'),
         gioKhoiHanh: new Date('1970-01-01T08:00:00.000Z'),
+        gioDen: new Date('1970-01-01T05:00:00.000Z'),
         trangThai: 'CHUA_KHOI_HANH',
         nhaXeId: 3,
         tuyenXeId: 8,
@@ -673,16 +721,20 @@ describe('TripsService update (05.2)', () => {
     });
   });
 
-  it('updates departureDate and departureTime and returns updated trip with seatSummary', async () => {
+  it('updates departure and derived arrival time and returns updated trip with seatSummary', async () => {
     const { prisma, service } = createService();
     prisma.chuyenXe.findFirst
-      .mockResolvedValueOnce(firstTrip)
+      .mockResolvedValueOnce({
+        ...firstTrip,
+        tuyenXe: { ...firstTrip.tuyenXe, thoiGianChayPhut: 420 },
+      })
       .mockResolvedValueOnce(null);
 
     const updatedTrip = {
       ...firstTrip,
       ngayKhoiHanh: new Date('2026-10-21T00:00:00.000Z'),
       gioKhoiHanh: new Date('1970-01-01T09:30:00.000Z'),
+      gioDen: new Date('1970-01-01T16:30:00.000Z'),
     };
     prisma.chuyenXe.updateMany.mockResolvedValue({ count: 1 });
     prisma.chuyenXe.findFirstOrThrow.mockResolvedValue(updatedTrip);
@@ -695,6 +747,7 @@ describe('TripsService update (05.2)', () => {
       data: {
         ngayKhoiHanh: new Date('2026-10-21T00:00:00.000Z'),
         gioKhoiHanh: new Date('1970-01-01T09:30:00.000Z'),
+        gioDen: new Date('1970-01-01T16:30:00.000Z'),
       },
     });
     expect(result.data.departureDate).toBe('2026-10-21');

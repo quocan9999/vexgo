@@ -1,5 +1,6 @@
 import { OneWayBooking } from '@/features/booking/components/one-way-booking';
 import { RoundTripBooking } from '@/features/booking/components/round-trip-booking';
+import { resolveRoundTripDepartureDate } from '@/features/booking/utils/round-trip-booking';
 import { mapTripToBookingPost } from '@/features/trips/services/trip-booking-adapter';
 import type { ApiTrip, ApiTripSeat } from '@/features/trips/services/trips.api';
 
@@ -109,9 +110,7 @@ export default async function TripDetailPage({
         returnPost={mapTripToBookingPost(inboundTrip)}
         outboundTripSeats={outboundSeats}
         returnTripSeats={inboundSeats}
-        departureDate={
-          typeof sp?.departureDate === 'string' ? sp.departureDate : ''
-        }
+        departureDate={resolveRoundTripDepartureDate(sp)}
         returnDate={typeof sp?.returnDate === 'string' ? sp.returnDate : ''}
       />
     );

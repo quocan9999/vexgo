@@ -2,15 +2,17 @@
 'use client';
 
 import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Phone, Lock, Eye, EyeOff, LogIn } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useAuthSession } from '../auth-session';
 import { authApi, ApiError } from '../services/auth.api';
+import { sanitizeLoginRedirect } from '../services/login-redirect';
 
 export function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { signIn } = useAuthSession();
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
@@ -53,7 +55,10 @@ export function LoginForm() {
       const response = await authApi.login(phone, password);
 
       signIn(response.data);
-      router.push('/');
+      const nextUrl = sanitizeLoginRedirect(
+        searchParams.get('next') || searchParams.get('redirect'),
+      );
+      router.push(nextUrl);
     } catch (error) {
       if (error instanceof ApiError) {
         setErrorMsg(error.message);

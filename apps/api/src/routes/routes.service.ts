@@ -10,6 +10,7 @@ import {
   requireTenantPrincipal,
   tenantIdForOptionalRead,
 } from '../auth/tenant-scope.js';
+import { calculateClockTime } from '../common/time/business-date.js';
 import type { CreateRouteDto } from './dto/create-route.dto.js';
 import type { RouteQueryDto, RouteSortField } from './dto/route-query.dto.js';
 import type { UpdateRouteDto } from './dto/update-route.dto.js';
@@ -21,6 +22,7 @@ const ROUTE_SELECT = {
   maTuyenXe: true,
   diemDi: true,
   diemDen: true,
+  thoiGianChayPhut: true,
   trangThai: true,
   createdAt: true,
   updatedAt: true,
@@ -47,6 +49,7 @@ function mapRoute(route: RouteRecord) {
     code: route.maTuyenXe,
     origin: route.diemDi,
     destination: route.diemDen,
+    durationMinutes: route.thoiGianChayPhut,
     status: route.trangThai,
     busCompany: {
       busCompanyId: route.nhaXe.nhaXeId,
@@ -137,6 +140,7 @@ export class RoutesService {
           maTuyenXe: input.code,
           diemDi: input.origin,
           diemDen: input.destination,
+          thoiGianChayPhut: input.durationMinutes,
           nhaXeId,
           trangThai: input.status,
         },
@@ -164,9 +168,30 @@ export class RoutesService {
     const nhaXeId = requireTenantPrincipal(principal);
     const result = await this.prisma.tuyenXe.updateMany({
       where: { tuyenXeId: id, nhaXeId },
-      data: { diemDi: input.origin, diemDen: input.destination },
+      data: {
+        diemDi: input.origin,
+        diemDen: input.destination,
+        thoiGianChayPhut: input.durationMinutes,
+      },
     });
     if (result.count === 0) throw routeNotFound();
+
+    if (this.prisma.chuyenXe?.findMany && this.prisma.chuyenXe?.update) {
+      const futureTrips = await this.prisma.chuyenXe.findMany({
+        where: { tuyenXeId: id, nhaXeId, trangThai: 'CHUA_KHOI_HANH' },
+        select: { chuyenXeId: true, gioKhoiHanh: true },
+      });
+      for (const trip of futureTrips) {
+        const newGioDen = calculateClockTime(
+          trip.gioKhoiHanh,
+          input.durationMinutes,
+        );
+        await this.prisma.chuyenXe.update({
+          where: { chuyenXeId: trip.chuyenXeId },
+          data: { gioDen: newGioDen },
+        });
+      }
+    }
 
     const route = await this.prisma.tuyenXe.findFirst({
       where: { tuyenXeId: id, nhaXeId },
