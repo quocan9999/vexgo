@@ -19,6 +19,7 @@ import {
 import { AlertModal } from '@/components/ui/alert-modal';
 import {
   ticketsApi,
+  isCancellationCutoffPassedError,
   isCancellationQuoteExpiredError,
   type TicketItem,
   type CancelTicketResult,
@@ -26,6 +27,7 @@ import {
 } from '@/features/account/services/tickets.api';
 import {
   checkTicketCancelEligibility,
+  startCancellationQuoteRefresh,
   type CancelEligibilityResult,
 } from '@/features/tickets/services/cancel-eligibility';
 import {
@@ -282,25 +284,57 @@ function CancelTicketContent() {
     }
   }, [initialSession]);
 
+  const activeTicketCode = ticket?.ticketCode ?? '';
+  const activePhone = phone || ticket?.passengerPhone || '';
+
   useEffect(() => {
-    if (step !== 2 || !ticket) return;
+    if (
+      step !== 2 ||
+      !activeTicketCode ||
+      !activePhone ||
+      eligibility?.eligible === false
+    ) {
+      return;
+    }
 
-    const interval = setInterval(() => {
-      const fresh = checkTicketCancelEligibility(ticket, Date.now());
-      setEligibility(fresh);
-      if (
-        confirmedFeeRate !== null &&
-        fresh.cancelFeeRate !== undefined &&
-        fresh.cancelFeeRate !== confirmedFeeRate
-      ) {
-        setFeeRateChangedWarning(
-          `Mức phí hủy vé đã thay đổi từ ${Math.round((confirmedFeeRate ?? 0) * 100)}% thành ${Math.round((fresh.cancelFeeRate ?? 0) * 100)}% do thời gian đến lúc khởi hành đã bước qua mốc quy định mới. Vui lòng kiểm tra lại số tiền hoàn trước khi xác nhận.`,
-        );
-      }
-    }, 10000);
+    return startCancellationQuoteRefresh({
+      ticketCode: activeTicketCode,
+      phoneNumber: activePhone,
+      lookupTicket: ticketsApi.lookupTicket,
+      onRefresh: (refreshedTicket, fresh) => {
+        setTicket(refreshedTicket);
+        setEligibility(fresh);
 
-    return () => clearInterval(interval);
-  }, [step, ticket, confirmedFeeRate]);
+        if (!fresh.eligible) {
+          setIsConfirmed(false);
+          setFeeRateChangedWarning(null);
+          setIneligibleModal({
+            isOpen: true,
+            title: fresh.title,
+            message: fresh.message,
+            variant: 'warning',
+          });
+          return;
+        }
+
+        if (
+          confirmedFeeRate !== null &&
+          fresh.cancelFeeRate !== undefined &&
+          fresh.cancelFeeRate !== confirmedFeeRate
+        ) {
+          setFeeRateChangedWarning(
+            `Mức phí hủy vé đã thay đổi từ ${Math.round(confirmedFeeRate * 100)}% thành ${Math.round(fresh.cancelFeeRate * 100)}% do thời gian đến lúc khởi hành đã bước qua mốc quy định mới. Vui lòng kiểm tra lại số tiền hoàn trước khi xác nhận.`,
+          );
+        }
+      },
+    });
+  }, [
+    activePhone,
+    activeTicketCode,
+    confirmedFeeRate,
+    eligibility?.eligible,
+    step,
+  ]);
 
   const handleConfirmCancel = async () => {
     if (!ticket) return;
@@ -361,6 +395,32 @@ function CancelTicketContent() {
       setCancelResult(res.data);
       setStep(3);
     } catch (err: unknown) {
+      if (isCancellationCutoffPassedError(err)) {
+        const cutoffTicket: TicketItem = {
+          ...ticket,
+          cancellation: {
+            eligible: false,
+            reason: 'LESS_THAN_12_HOURS',
+            cancelFeeRate: 0,
+            cancelFee: 0,
+            refundAmount: 0,
+          },
+        };
+        const cutoffEligibility = checkTicketCancelEligibility(cutoffTicket);
+        setTicket(cutoffTicket);
+        setEligibility(cutoffEligibility);
+        setIsConfirmed(false);
+        setFeeRateChangedWarning(null);
+        setCancelError(null);
+        setIneligibleModal({
+          isOpen: true,
+          title: cutoffEligibility.title,
+          message: cutoffEligibility.message,
+          variant: 'warning',
+        });
+        return;
+      }
+
       if (isCancellationQuoteExpiredError(err)) {
         let refreshedTicket: TicketItem | null = null;
         try {

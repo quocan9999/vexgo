@@ -14,6 +14,20 @@ export interface CancelEligibilityResult {
   refundAmount?: number;
 }
 
+type LookupTicket = (
+  ticketCode: string,
+  phoneNumber: string,
+) => Promise<{ data: TicketItem }>;
+
+type CancellationQuoteRefreshOptions = {
+  ticketCode: string;
+  phoneNumber: string;
+  lookupTicket: LookupTicket;
+  onRefresh: (ticket: TicketItem, eligibility: CancelEligibilityResult) => void;
+  onError?: (error: unknown) => void;
+  intervalMs?: number;
+};
+
 export function formatTimeAndDate(isoString: string | null | undefined): {
   time: string;
   date: string;
@@ -217,5 +231,45 @@ export function checkTicketCancelEligibility(
     cancelFeeRate,
     cancelFee,
     refundAmount,
+  };
+}
+
+export function startCancellationQuoteRefresh({
+  ticketCode,
+  phoneNumber,
+  lookupTicket,
+  onRefresh,
+  onError,
+  intervalMs = 10000,
+}: CancellationQuoteRefreshOptions): () => void {
+  let stopped = false;
+  let refreshInFlight = false;
+
+  const refresh = async () => {
+    if (stopped || refreshInFlight) return;
+    refreshInFlight = true;
+
+    try {
+      const response = await lookupTicket(ticketCode, phoneNumber);
+      if (!stopped) {
+        onRefresh(
+          response.data,
+          checkTicketCancelEligibility(response.data, Date.now()),
+        );
+      }
+    } catch (error) {
+      if (!stopped) onError?.(error);
+    } finally {
+      refreshInFlight = false;
+    }
+  };
+
+  const interval = setInterval(() => {
+    void refresh();
+  }, intervalMs);
+
+  return () => {
+    stopped = true;
+    clearInterval(interval);
   };
 }

@@ -5,6 +5,7 @@ import {
   isCancellationQuoteExpiredError,
   ticketsApi,
 } from '../../../src/features/account/services/tickets.api.ts';
+import * as ticketApiModule from '../../../src/features/account/services/tickets.api.ts';
 
 const originalFetch = globalThis.fetch;
 
@@ -45,7 +46,10 @@ test('ticketsApi.lookupTicket sends trimmed parameters and returns data envelope
     });
   };
 
-  const response = await ticketsApi.lookupTicket('  FUTA-PDV-001  ', ' 0901234567 ');
+  const response = await ticketsApi.lookupTicket(
+    '  FUTA-PDV-001  ',
+    ' 0901234567 ',
+  );
 
   assert.equal(requestedUrl, 'http://localhost:4000/api/v1/tickets/lookup');
   assert.equal(requestedOptions.method, 'POST');
@@ -222,6 +226,29 @@ test('only the quote-expired error enters the re-quote branch', () => {
   assert.equal(
     isCancellationQuoteExpiredError(
       new ApiError('Xung đột hủy vé.', 409, 'TICKET_CANCELLATION_CONFLICT'),
+    ),
+    false,
+  );
+});
+
+test('recognizes the cancellation cutoff error that must make the UI ineligible', () => {
+  assert.equal(
+    typeof ticketApiModule.isCancellationCutoffPassedError,
+    'function',
+  );
+  assert.equal(
+    ticketApiModule.isCancellationCutoffPassedError(
+      new ApiError(
+        'Đã qua thời hạn hủy vé.',
+        400,
+        'CANCELLATION_CUTOFF_PASSED',
+      ),
+    ),
+    true,
+  );
+  assert.equal(
+    ticketApiModule.isCancellationCutoffPassedError(
+      new ApiError('Dữ liệu không hợp lệ.', 400, 'VALIDATION_ERROR'),
     ),
     false,
   );

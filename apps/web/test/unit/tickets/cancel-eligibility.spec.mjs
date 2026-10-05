@@ -4,6 +4,7 @@ import {
   checkTicketCancelEligibility,
   formatTimeAndDate,
 } from '../../../src/features/tickets/services/cancel-eligibility.ts';
+import * as cancelEligibilityModule from '../../../src/features/tickets/services/cancel-eligibility.ts';
 
 test('checkTicketCancelEligibility rejects already cancelled ticket', () => {
   const result = checkTicketCancelEligibility({
@@ -223,6 +224,63 @@ test('checkTicketCancelEligibility keeps the server quote until a refreshed serv
   );
   assert.equal(rechecked12h.eligible, false);
   assert.equal(rechecked12h.reason, 'LESS_THAN_12_HOURS');
+});
+
+test('cancellation quote polling replaces a stale eligible snapshot after the server cutoff', async () => {
+  assert.equal(
+    typeof cancelEligibilityModule.startCancellationQuoteRefresh,
+    'function',
+  );
+
+  const staleTicket = {
+    ticketCode: 'VE-001',
+    status: 'DA_THANH_TOAN',
+    departureTime: '2026-10-06T12:00:00.000Z',
+    cancellation: {
+      eligible: true,
+      cancelFeeRate: 0.2,
+      cancelFee: 50000,
+      refundAmount: 200000,
+    },
+  };
+  const cutoffTicket = {
+    ...staleTicket,
+    cancellation: {
+      eligible: false,
+      reason: 'LESS_THAN_12_HOURS',
+      cancelFeeRate: 0,
+      cancelFee: 0,
+      refundAmount: 0,
+    },
+  };
+
+  let stopPolling = () => {};
+  const refreshed = new Promise((resolve, reject) => {
+    const timeout = setTimeout(
+      () =>
+        reject(new Error('Timed out waiting for cancellation quote refresh')),
+      250,
+    );
+    stopPolling = cancelEligibilityModule.startCancellationQuoteRefresh({
+      ticketCode: 'VE-001',
+      phoneNumber: '0901234567',
+      intervalMs: 1,
+      lookupTicket: async () => ({ data: cutoffTicket }),
+      onRefresh: (ticket, eligibility) => {
+        clearTimeout(timeout);
+        resolve({ ticket, eligibility });
+      },
+    });
+  });
+
+  try {
+    const result = await refreshed;
+    assert.equal(result.ticket.cancellation.eligible, false);
+    assert.equal(result.eligibility.eligible, false);
+    assert.equal(result.eligibility.reason, 'LESS_THAN_12_HOURS');
+  } finally {
+    stopPolling();
+  }
 });
 
 test('formatTimeAndDate formats valid date correctly', () => {

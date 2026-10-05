@@ -85,8 +85,15 @@ export function isCancellationQuoteExpiredError(
   error: unknown,
 ): error is ApiError {
   return (
-    error instanceof ApiError &&
-    error.error === 'CANCELLATION_QUOTE_EXPIRED'
+    error instanceof ApiError && error.error === 'CANCELLATION_QUOTE_EXPIRED'
+  );
+}
+
+export function isCancellationCutoffPassedError(
+  error: unknown,
+): error is ApiError {
+  return (
+    error instanceof ApiError && error.error === 'CANCELLATION_CUTOFF_PASSED'
   );
 }
 
