@@ -70,16 +70,20 @@ test('checkTicketCancelEligibility approves ticket departing in >= 12 hours', ()
 });
 
 test('checkTicketCancelEligibility uses the authoritative quote returned by the API', () => {
-  const result = checkTicketCancelEligibility({
-    status: 'DA_THANH_TOAN',
-    departureTime: '2026-10-06T10:00:00.000Z',
-    cancellation: {
-      eligible: true,
-      cancelFeeRate: 0.2,
-      cancelFee: 50000,
-      refundAmount: 200000,
+  const clientNow = new Date('2026-10-05T09:55:00.000Z').getTime();
+  const result = checkTicketCancelEligibility(
+    {
+      status: 'DA_THANH_TOAN',
+      departureTime: '2026-10-06T10:00:00.000Z',
+      cancellation: {
+        eligible: true,
+        cancelFeeRate: 0.2,
+        cancelFee: 50000,
+        refundAmount: 200000,
+      },
     },
-  });
+    clientNow,
+  );
 
   assert.equal(result.eligible, true);
   assert.equal(result.cancelFeeRate, 0.2);
@@ -157,7 +161,7 @@ test('checkTicketCancelEligibility calculates 20% fee when departure is <= 24 ho
   assert.equal(res12.refundAmount, 160000);
 });
 
-test('checkTicketCancelEligibility does not lock into stale snapshot across 24h and 12h boundaries', () => {
+test('checkTicketCancelEligibility keeps the server quote until a refreshed server quote arrives', () => {
   const lookupTime = new Date('2026-10-05T10:00:00.000Z').getTime();
   const departureTime = '2026-10-06T10:30:00.000Z'; // 24h 30m away at lookup
 
@@ -179,17 +183,44 @@ test('checkTicketCancelEligibility does not lock into stale snapshot across 24h 
   assert.equal(initial.cancelFeeRate, 0.1);
   assert.equal(initial.refundAmount, 270000);
 
-  // User stays on page 1 hour later (now 23h 30m away, <= 24h): MUST recalculate to 20%
+  // The client clock may cross 24h, but it must not overwrite the server quote.
   const oneHourLater = lookupTime + 60 * 60 * 1000;
   const rechecked24h = checkTicketCancelEligibility(ticket, oneHourLater);
   assert.equal(rechecked24h.eligible, true);
-  assert.equal(rechecked24h.cancelFeeRate, 0.2);
-  assert.equal(rechecked24h.cancelFee, 60000);
-  assert.equal(rechecked24h.refundAmount, 240000);
+  assert.equal(rechecked24h.cancelFeeRate, 0.1);
+  assert.equal(rechecked24h.cancelFee, 30000);
+  assert.equal(rechecked24h.refundAmount, 270000);
 
-  // User confirms 13 hours later (now 11h 30m away, < 12h): MUST become ineligible
+  const refreshedTicket = {
+    ...ticket,
+    cancellation: {
+      eligible: true,
+      cancelFeeRate: 0.2,
+      cancelFee: 60000,
+      refundAmount: 240000,
+    },
+  };
+  const refreshed = checkTicketCancelEligibility(refreshedTicket, oneHourLater);
+  assert.equal(refreshed.cancelFeeRate, 0.2);
+  assert.equal(refreshed.cancelFee, 60000);
+  assert.equal(refreshed.refundAmount, 240000);
+
+  // An authoritative server rejection also wins over the client clock.
   const thirteenHoursLater = lookupTime + 13 * 60 * 60 * 1000;
-  const rechecked12h = checkTicketCancelEligibility(ticket, thirteenHoursLater);
+  const cutoffTicket = {
+    ...ticket,
+    cancellation: {
+      eligible: false,
+      reason: 'LESS_THAN_12_HOURS',
+      cancelFeeRate: 0,
+      cancelFee: 0,
+      refundAmount: 0,
+    },
+  };
+  const rechecked12h = checkTicketCancelEligibility(
+    cutoffTicket,
+    thirteenHoursLater,
+  );
   assert.equal(rechecked12h.eligible, false);
   assert.equal(rechecked12h.reason, 'LESS_THAN_12_HOURS');
 });
@@ -199,4 +230,3 @@ test('formatTimeAndDate formats valid date correctly', () => {
   assert.ok(info.date.includes('2026'));
   assert.ok(info.time.length === 5);
 });
-

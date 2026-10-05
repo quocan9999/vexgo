@@ -9,11 +9,26 @@ import {
 import type { Response } from 'express';
 
 type ApiErrorDetail = { field: string; message: string };
+type CancellationReason =
+  | 'ALREADY_CANCELLED'
+  | 'ALREADY_DEPARTED'
+  | 'LESS_THAN_12_HOURS'
+  | 'DEPARTURE_TIME_UNAVAILABLE';
+type CancellationQuoteExpiredDetails = {
+  previousRate: number;
+  currentQuote: {
+    eligible: boolean;
+    reason?: CancellationReason;
+    cancelFeeRate: number;
+    cancelFee: number;
+    refundAmount: number;
+  };
+};
 type ApiErrorBody = {
   statusCode: number;
   error: string;
   message: string;
-  details?: ApiErrorDetail[];
+  details?: ApiErrorDetail[] | CancellationQuoteExpiredDetails;
 };
 
 const ERROR_CODES: Record<number, string> = {
@@ -56,6 +71,63 @@ function isErrorDetails(value: unknown): value is ApiErrorDetail[] {
         typeof detail.message === 'string',
     )
   );
+}
+
+const CANCELLATION_REASONS = new Set<CancellationReason>([
+  'ALREADY_CANCELLED',
+  'ALREADY_DEPARTED',
+  'LESS_THAN_12_HOURS',
+  'DEPARTURE_TIME_UNAVAILABLE',
+]);
+
+function isRate(value: unknown): value is number {
+  return (
+    typeof value === 'number' &&
+    Number.isFinite(value) &&
+    value >= 0 &&
+    value <= 1
+  );
+}
+
+function isNonNegativeAmount(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0;
+}
+
+function parseCancellationQuoteExpiredDetails(
+  value: unknown,
+): CancellationQuoteExpiredDetails | null {
+  if (!isRecord(value) || !isRate(value.previousRate)) return null;
+
+  const currentQuote = value.currentQuote;
+  if (
+    !isRecord(currentQuote) ||
+    typeof currentQuote.eligible !== 'boolean' ||
+    !isRate(currentQuote.cancelFeeRate) ||
+    !isNonNegativeAmount(currentQuote.cancelFee) ||
+    !isNonNegativeAmount(currentQuote.refundAmount)
+  ) {
+    return null;
+  }
+
+  const reason = currentQuote.reason;
+  if (
+    reason !== undefined &&
+    (typeof reason !== 'string' ||
+      !CANCELLATION_REASONS.has(reason as CancellationReason))
+  ) {
+    return null;
+  }
+
+  return {
+    previousRate: value.previousRate,
+    currentQuote: {
+      eligible: currentQuote.eligible,
+      ...(reason === undefined ? {} : { reason: reason as CancellationReason }),
+      cancelFeeRate: currentQuote.cancelFeeRate,
+      cancelFee: currentQuote.cancelFee,
+      refundAmount: currentQuote.refundAmount,
+    },
+  };
 }
 
 function defaultErrorCode(statusCode: number): string {
@@ -118,12 +190,15 @@ export class ApiExceptionFilter implements ExceptionFilter {
           : responseMessage,
     };
 
-    if (
-      !isServerError &&
-      customErrorCode &&
-      isErrorDetails(responseObject?.details)
-    ) {
-      body.details = responseObject.details;
+    if (!isServerError && customErrorCode) {
+      if (isErrorDetails(responseObject?.details)) {
+        body.details = responseObject.details;
+      } else if (customErrorCode === 'CANCELLATION_QUOTE_EXPIRED') {
+        const details = parseCancellationQuoteExpiredDetails(
+          responseObject?.details,
+        );
+        if (details) body.details = details;
+      }
     }
 
     response.status(statusCode).json(body);

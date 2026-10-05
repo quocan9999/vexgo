@@ -128,29 +128,18 @@ export function checkTicketCancelEligibility(
     };
   }
 
+  if (ticket.cancellation?.eligible) {
+    return {
+      eligible: true,
+      title: '',
+      message: '',
+      cancelFeeRate: ticket.cancellation.cancelFeeRate,
+      cancelFee: ticket.cancellation.cancelFee,
+      refundAmount: ticket.cancellation.refundAmount,
+    };
+  }
+
   if (!ticket.departureTime) {
-    if (ticket.cancellation?.reason === 'DEPARTURE_TIME_UNAVAILABLE') {
-      return {
-        eligible: false,
-        reason: 'DEPARTURE_TIME_UNAVAILABLE',
-        title: 'Chưa thể xác định điều kiện hủy',
-        message:
-          'Thông tin giờ khởi hành chưa đầy đủ. Vui lòng liên hệ nhà xe để được hỗ trợ.',
-        cancelFeeRate: 0,
-        cancelFee: 0,
-        refundAmount: 0,
-      };
-    }
-    if (ticket.cancellation?.eligible) {
-      return {
-        eligible: true,
-        title: '',
-        message: '',
-        cancelFeeRate: ticket.cancellation.cancelFeeRate,
-        cancelFee: ticket.cancellation.cancelFee,
-        refundAmount: ticket.cancellation.refundAmount,
-      };
-    }
     return {
       eligible: false,
       reason: 'DEPARTURE_TIME_UNAVAILABLE',
@@ -165,16 +154,6 @@ export function checkTicketCancelEligibility(
 
   const departureDate = new Date(ticket.departureTime);
   if (isNaN(departureDate.getTime())) {
-    if (ticket.cancellation?.eligible) {
-      return {
-        eligible: true,
-        title: '',
-        message: '',
-        cancelFeeRate: ticket.cancellation.cancelFeeRate,
-        cancelFee: ticket.cancellation.cancelFee,
-        refundAmount: ticket.cancellation.refundAmount,
-      };
-    }
     return {
       eligible: false,
       reason: 'DEPARTURE_TIME_UNAVAILABLE',
@@ -228,16 +207,8 @@ export function checkTicketCancelEligibility(
         (ticket.cancellation.refundAmount || 0)
       : 0);
 
-  let cancelFee = Math.round(price * cancelFeeRate);
-  let refundAmount = Math.max(0, price - cancelFee);
-
-  if (
-    ticket.cancellation?.eligible &&
-    ticket.cancellation.cancelFeeRate === cancelFeeRate
-  ) {
-    cancelFee = ticket.cancellation.cancelFee;
-    refundAmount = ticket.cancellation.refundAmount;
-  }
+  const cancelFee = Math.round(price * cancelFeeRate);
+  const refundAmount = Math.max(0, price - cancelFee);
 
   return {
     eligible: true,

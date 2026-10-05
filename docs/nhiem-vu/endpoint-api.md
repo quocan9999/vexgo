@@ -431,10 +431,15 @@ POST /tickets/:id/exchange         (LOW)
 điểm hiện tại: dưới 12 tiếng không được hủy; từ 12 đến hết 24 tiếng phí 20%;
 trên 24 tiếng phí 10%.
 
-`POST /tickets/cancel` nhận `ticketCode` và `phoneNumber`. Khi thành công,
-backend hủy vé và giải phóng ghế trong transaction, đồng thời tạo giao dịch
-`HOAN_TIEN` ở trạng thái `DANG_XU_LY`; response chỉ xác nhận yêu cầu hoàn tiền
-đã được ghi nhận, không khẳng định tiền đã hoàn tất.
+`POST /tickets/cancel` nhận `ticketCode`, `phoneNumber` và
+`expectedCancelFeeRate` bắt buộc. Khi quote hiện tại khác mức phí khách đã xác
+nhận, API trả `409 CANCELLATION_QUOTE_EXPIRED`; `details.previousRate` chứa mức
+phí cũ và `details.currentQuote` chứa quote mới đã được filter kiểm tra schema.
+Frontend phải hiển thị quote mới từ server và yêu cầu khách xác nhận lại, không
+được tự ghi đè quote bằng clock của thiết bị. Khi thành công, backend hủy vé và
+giải phóng ghế trong transaction, đồng thời tạo giao dịch `HOAN_TIEN` ở trạng
+thái `DANG_XU_LY`; response chỉ xác nhận yêu cầu hoàn tiền đã được ghi nhận,
+không khẳng định tiền đã hoàn tất.
 
 Sau khi transaction commit, refund processor gửi yêu cầu tới
 `REFUND_PROVIDER_URL` với idempotency key ổn định theo `thanhToanId`. Record
