@@ -317,6 +317,9 @@ describe('Fare Price update HTTP and database behavior', () => {
           nhaXeId: context.busCompanyId,
           tuyenXeId: context.routeId,
           xeId: vehicle.xeId,
+          sucChuaXeMay: 0,
+          sucChuaHangCongKenh: 0,
+          sucChuaHangNhe: 0,
         },
         select: { chuyenXeId: true },
       });

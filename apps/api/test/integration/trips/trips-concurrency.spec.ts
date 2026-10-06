@@ -399,6 +399,9 @@ describe('Trips concurrent schedule conflict integrity with MySQL', () => {
             nhaXeId: busCompanyId,
             tuyenXeId: routeId,
             xeId: vehicleId1,
+            sucChuaXeMay: 0,
+            sucChuaHangCongKenh: 0,
+            sucChuaHangNhe: 0,
           },
         });
       },

@@ -618,7 +618,7 @@ async function seedBranchesRatesCargo(db, operators, routes) {
       const point = await findOrCreate(
         db,
         'DiemGiaoNhanHang',
-        { nhaXeId_maDiem: { nhaXeId: operator.nhaXeId, maDiem: code } },
+        { nhaXeId: operator.nhaXeId, maDiem: code },
         pointData,
         pointData,
       );
@@ -637,7 +637,7 @@ async function seedBranchesRatesCargo(db, operators, routes) {
       await findOrCreate(
         db,
         'DiemGiaoNhanTuyenXe',
-        { tuyenXeId_diemGiaoNhanHangId: { tuyenXeId: route.tuyenXeId, diemGiaoNhanHangId: point.diemGiaoNhanHangId } },
+        { tuyenXeId: route.tuyenXeId, diemGiaoNhanHangId: point.diemGiaoNhanHangId },
         { tuyenXeId: route.tuyenXeId, diemGiaoNhanHangId: point.diemGiaoNhanHangId, vaiTro: role },
         { vaiTro: role },
       );

@@ -2,7 +2,7 @@
 
 > Tài liệu bàn giao trạng thái **đã triển khai**, dành cho thành viên và agent tiếp tục công việc. Đây là báo cáo kết quả thực tế, không phải yêu cầu tự động chạy lại migration hay chỉnh sửa production.
 
-**Ngày cập nhật:** 06/10/2026
+**Ngày cập nhật:** 07/10/2026
 
 **Nhánh:** `refactor/database-schema-and-class-diagram`
 
@@ -16,7 +16,8 @@
 - Migration chính giữ 24 phiếu gửi, 15 điểm giao nhận và tạo 126 dòng cước hoạt động. Các FK bắt buộc của phiếu gửi đã được backfill trước khi đổi sang `NOT NULL`.
 - Hai bảng archive từng được tạo tạm thời để giữ dữ liệu cũ trong lúc chuyển đổi đã bị xóa ở migration kế tiếp theo quyết định của chủ dự án. **24 snapshot phiếu và 72 snapshot cước cũ không còn trong database.**
 - Prisma schema đã bỏ hai model archive. Kiểm tra introspection sau migration cho thấy 43 model và không có hai bảng archive.
-- Phạm vi của đợt này là database/Prisma migration. API và frontend chưa được cập nhật; một số mã API vẫn tham chiếu tên `BuuCuc` và cần xử lý ở công việc tiếp theo.
+- Sau khi phát hiện CI compile lỗi với Prisma Client mới, branch có thêm hai sửa đổi API tương thích tối thiểu: lịch sử gửi hàng đọc quan hệ `diemGui`/`diemNhan`; tạo chuyến chụp ba mức sức chứa mặc định từ `LoaiXe`. Các UI chưa được sửa và chưa có module API shipment đầy đủ.
+- Seed demo đã được chạy thành công trên MySQL cô lập mới sau 20 migrations; verifier cũng đạt các kiểm tra mã, FK, trạng thái, sức chứa và kịch bản demo.
 
 ## 2. Nguồn thiết kế và phạm vi
 
@@ -184,13 +185,18 @@ Migration cleanup chạy sau đó với `finished_at` có giá trị, `rolled_ba
 - Introspection MySQL sau cleanup: 43 model, 0 model/bảng archive.
 - SQL consistency checks sau migration 002: 24 phiếu có đủ chuyến/điểm/cước; không có điểm gửi/nhận sai nhà xe; loại hàng chính khớp dòng cước; mã địa giới đúng định dạng; `maDiem` duy nhất đúng phạm vi.
 - Số lượng đối chiếu: 15 điểm giao nhận, 24 phiếu gửi, 126 dòng cước, 7 loại hàng (đều `HANG_NHE`), 6 cấu hình điểm/tuyến, 0 dòng lịch sử giả.
-- Không chạy unit/e2e test trong đợt chỉ thay đổi database này. API và frontend cũng không được sửa.
+- Trên một MySQL 8.4 cô lập mới: `prisma migrate deploy` áp dụng đủ 20 migrations; `prisma generate`, `prisma db seed` và `node prisma/verify-seed.mjs` chạy thành công. Không dùng database dev tại `127.0.0.1:3306` cho đợt kiểm tra này.
+- API: build thành công; toàn bộ test unit/integration hiện hành đạt 80 file / 1.320 test; E2E đạt 1 test; typecheck và lint đều thành công.
+- CI của PR cần được kiểm tra lại sau khi push commit sửa lỗi; chỉ kết luận xanh khi GitHub Actions báo thành công.
 
 ## 8. Điểm cần agent tiếp theo biết
 
 ### Việc chưa làm trong phạm vi database
 
-- API còn một số tham chiếu tên bảng/cột `BuuCuc` cũ. Trước khi bật lại luồng shipment trong ứng dụng, cần rà module `apps/api` và cập nhật query, DTO, service, seed/fixture và kiểm tra liên quan theo Prisma schema mới. Không xem migration DB là hoàn thành luồng full-stack.
+- `CustomersService.listAdminCustomerShipments` hiện truy vấn `diemGui`/`diemNhan` và ánh xạ vào response hiện hữu để giữ tương thích với Admin. Hình thức lấy/giao được trả là `TAI_BUU_CUC`; địa chỉ được lấy từ điểm giao nhận. API này chưa đổi contract UI thành model điểm giao nhận mới.
+- `TripsService.create` hiện ghi ba snapshot sức chứa từ giá trị mặc định của loại xe. Cấu hình sức chứa của loại xe vẫn mặc định 0; DTO/form Admin chưa có lựa chọn `nhanGuiHang` hoặc ba sức chứa theo chuyến, nên đây mới là tương thích schema/CI chứ chưa hoàn thiện nghiệp vụ sức chứa.
+- API shipment đầy đủ vẫn chưa có module riêng: còn thiếu API tra cứu điểm/cước, tạo vận đơn, kiểm tra cùng nhà xe/tuyến/loại hàng, tính phí/sức chứa và cập nhật trạng thái kèm lịch sử.
+- Admin Web và Customer Web chưa được sửa trong lượt này. Customer Web vẫn dùng fixture/hard-code; Admin cần được rà để trình bày rõ điểm gửi/nhận thay cho địa chỉ/hình thức lấy-giao cũ. Không xem các sửa API tối thiểu là hoàn thành luồng full-stack.
 - Service phải xác thực hai điểm thuộc cùng nhà xe, cặp điểm được tuyến hỗ trợ, và dòng cước khớp điểm + loại hàng. Cần xác định trạng thái giữ/nhả sức chứa và xử lý concurrency/transaction khi nhận đơn; database hiện không lưu số sức chứa còn lại.
 - Các cấu hình sức chứa demo hiện bằng 0 và toàn bộ loại hàng đang ở `HANG_NHE`; dữ liệu này chưa đủ để demo luồng nhận xe máy/hàng cồng kềnh.
 
@@ -207,3 +213,21 @@ Không tự chạy `migrate reset`, xóa bảng, hoặc `migrate resolve` cho mi
 - Migration xóa archive: `prisma/migrations/20261006220000_drop_shipment_legacy_archive_tables/migration.sql`
 - Class Diagram cuối: `docs/class-diagram/002-20261006202600_add_shipment_capacity_and_capacity_group.mdl`
 - Class Diagram giai đoạn trước: `docs/class-diagram/001-20261006_sua_loi_cau_hinh_bang_cuoc_theo_cap_diem_gui_nhan.mdl`
+
+## 10. Cập nhật database local sau khi lấy `develop`
+
+Chạy sau khi PR này đã được merge vào `develop`. Các lệnh chạy từ thư mục gốc repository. Database cần dùng MySQL local đang chạy và các URL trong `.env` phải trỏ đúng database dev của người chạy lệnh.
+
+```bash
+git switch develop
+git pull --ff-only origin develop
+npm ci
+npm exec -- prisma migrate deploy
+npm exec -- prisma generate
+npm exec -- prisma db seed
+node prisma/verify-seed.mjs
+```
+
+`.env` cần có `DATABASE_URL`, `MIGRATION_URL` và `SHADOW_DATABASE_URL`. `SHADOW_DATABASE_URL` phải trỏ tới database shadow riêng, không được dùng chung database runtime hay database migration. `prisma db seed` chạy `prisma/seed-bootstrap.mjs`, build API trước rồi chạy seed demo; `verify-seed.mjs` là bước kiểm tra tùy chọn sau seed.
+
+> **Lưu ý dữ liệu:** migration `20261006220000_drop_shipment_legacy_archive_tables` xóa vĩnh viễn hai bảng archive cũ. Chỉ chạy trên database dev theo quyết định dữ liệu demo đã được xác nhận; hãy sao lưu hoặc dùng database dev mới nếu cần giữ dữ liệu khác.

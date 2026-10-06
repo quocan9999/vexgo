@@ -648,18 +648,20 @@ export class CustomersService {
               maChuyenXe: true,
             },
           },
-          buuCucGui: {
+          diemGui: {
             select: {
-              buuCucId: true,
-              maBuuCuc: true,
-              tenBuuCuc: true,
+              diemGiaoNhanHangId: true,
+              maDiem: true,
+              tenDiem: true,
+              diaChi: true,
             },
           },
-          buuCucPhat: {
+          diemNhan: {
             select: {
-              buuCucId: true,
-              maBuuCuc: true,
-              tenBuuCuc: true,
+              diemGiaoNhanHangId: true,
+              maDiem: true,
+              tenDiem: true,
+              diaChi: true,
             },
           },
         },
@@ -678,11 +680,11 @@ export class CustomersService {
         receiver: {
           fullName: p.tenNguoiNhan,
           phoneNumber: p.soDienThoaiNguoiNhan,
-          address: p.diaChiNguoiNhan ?? null,
+          address: p.diemNhan?.diaChi ?? null,
         },
-        pickupMethod: p.hinhThucLayHang,
-        deliveryMethod: p.hinhThucGiaoHang,
-        pickupAddress: p.diaChiLayHang ?? null,
+        pickupMethod: 'TAI_BUU_CUC',
+        deliveryMethod: 'TAI_BUU_CUC',
+        pickupAddress: p.diemGui?.diaChi ?? null,
         mainFee: Number(p.cuocChinh),
         serviceFee: Number(p.phiDichVu),
         discountAmount: Number(p.soTienGiam),
@@ -694,18 +696,18 @@ export class CustomersService {
               code: p.chuyenXe.maChuyenXe,
             }
           : null,
-        originBranch: p.buuCucGui
+        originBranch: p.diemGui
           ? {
-              branchId: p.buuCucGui.buuCucId,
-              code: p.buuCucGui.maBuuCuc,
-              name: p.buuCucGui.tenBuuCuc,
+              branchId: p.diemGui.diemGiaoNhanHangId,
+              code: p.diemGui.maDiem,
+              name: p.diemGui.tenDiem,
             }
           : null,
-        destinationBranch: p.buuCucPhat
+        destinationBranch: p.diemNhan
           ? {
-              branchId: p.buuCucPhat.buuCucId,
-              code: p.buuCucPhat.maBuuCuc,
-              name: p.buuCucPhat.tenBuuCuc,
+              branchId: p.diemNhan.diemGiaoNhanHangId,
+              code: p.diemNhan.maDiem,
+              name: p.diemNhan.tenDiem,
             }
           : null,
       })),

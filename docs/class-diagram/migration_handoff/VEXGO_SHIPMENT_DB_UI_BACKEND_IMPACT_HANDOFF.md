@@ -1,8 +1,8 @@
 # VexGo — Handoff ảnh hưởng UI và backend sau migration shipment 002
 
-> Tài liệu này là bản đồ các phần ứng dụng cần được rà soát/cập nhật sau khi database shipment chuyển sang Class Diagram 002. Bản rà soát ban đầu chưa sửa ứng dụng. Cập nhật ngày 06/10/2026: seed và seed verifier đã được chuyển sang schema 002; API và UI vẫn đang chờ xử lý riêng.
+> Tài liệu này là bản đồ các phần ứng dụng cần được rà soát/cập nhật sau khi database shipment chuyển sang Class Diagram 002. Cập nhật ngày 07/10/2026: seed/verifier và hai điểm tương thích API cần thiết cho CI đã được sửa; Admin UI và Customer UI vẫn chưa được cập nhật.
 
-**Ngày rà soát:** 06/10/2026
+**Ngày rà soát:** 07/10/2026
 
 **Nhánh được rà soát:** `refactor/database-schema-and-class-diagram`
 
@@ -12,14 +12,14 @@
 
 ## 1. Kết luận nhanh
 
-Migration đã đưa Prisma/MySQL sang mô hình 002, nhưng các luồng ứng dụng chưa được chuyển theo. Những phần cần ưu tiên:
+Migration đã đưa Prisma/MySQL sang mô hình 002. Branch đã thêm sửa tương thích API tối thiểu để build và test với Prisma Client mới; các chức năng UI và API shipment đầy đủ vẫn cần triển khai. Những phần cần ưu tiên:
 
-1. **API lấy lịch sử gửi hàng của khách hàng đang dùng quan hệ và cột cũ.** `CustomersService.listAdminCustomerShipments` còn include `buuCucGui`/`buuCucPhat` và đọc các cột hình thức, địa chỉ đã bị bỏ. Endpoint này cần được sửa trước khi chạy lại luồng hoặc build với Prisma Client mới.
-2. **API tạo chuyến chưa ghi ba trường sức chứa bắt buộc mới của `ChuyenXe`.** Form Admin và DTO hiện cũng không có các giá trị đó. Tạo chuyến mới vì vậy chưa tương thích schema 002; cần thống nhất cách lấy snapshot từ sức chứa mặc định của loại xe và giá trị `nhanGuiHang`.
-3. **Seed và trình xác minh seed — đã cập nhật source.** Seed hiện tạo điểm, mapping điểm/tuyến, cước theo loại hàng, nhóm sức chứa, chuyến có snapshot sức chứa và phiếu gửi có đủ FK bắt buộc theo schema 002. Verifier đã đổi sang kiểm tra các invariant mới. Cần chạy seed và verifier trên database dev để xác nhận dữ liệu thực tế.
-4. **Admin vẫn trình bày khái niệm cũ.** Tab lịch sử hiển thị hình thức lấy/giao, bưu cục và địa chỉ người nhận; schema mới chỉ lưu điểm gửi/nhận, không còn hình thức lấy/giao hoặc địa chỉ giao tận nơi.
-5. **Customer Web chưa chạy bằng database.** Trang gửi hàng đang dùng dữ liệu, nhà xe, chuyến, sức chứa và cách tính phí hard-code; không gọi API shipment. Đây là chức năng chưa được nối theo mô hình 002, không phải bằng chứng rằng trang đang query sai database.
-6. **Quản lý loại xe hiện còn tạo/cập nhật được nhờ default bằng 0, nhưng chưa cho cấu hình ba loại sức chứa.** Do đó cấu hình hiện tại không đủ để cung cấp sức chứa có ý nghĩa cho chuyến.
+1. **API lịch sử gửi hàng đã được sửa cho Prisma Client mới.** `CustomersService.listAdminCustomerShipments` truy vấn `diemGui`/`diemNhan`, dùng địa chỉ hai điểm và giữ response shape tương thích với Admin; hai hình thức hiển thị hiện trả `TAI_BUU_CUC`. UI chưa đổi nhãn/kiểu dữ liệu sang mô hình điểm mới.
+2. **Tạo chuyến đã ghi ba snapshot sức chứa.** `TripsService.create` lấy mặc định từ `LoaiXe`. DTO và Form Admin chưa có cấu hình sức chứa hoặc lựa chọn `nhanGuiHang`; cờ này hiện theo default database `false`. Đây là tương thích schema, chưa phải cấu hình nghiệp vụ hoàn chỉnh.
+3. **Seed và verifier đã chạy thành công trên MySQL cô lập mới.** Seed tạo điểm, mapping tuyến/điểm, cước, nhóm hàng, snapshot sức chứa và phiếu gửi theo schema 002. Verifier cũng đạt kiểm tra mã và quan hệ; bộ kiểm chứng so sánh trạng thái bằng binary để tránh lỗi collation giữa bảng lịch sử và phiếu gửi.
+4. **Admin UI chưa cập nhật.** Tab lịch sử hiện vẫn dùng response shape cũ để hiển thị; cần đổi cách diễn đạt/hiển thị thành điểm gửi và điểm nhận, bỏ thông tin địa chỉ giao tận nơi và hình thức pickup/delivery cũ.
+5. **Customer Web chưa chạy bằng database.** Trang gửi hàng vẫn dùng dữ liệu, nhà xe, chuyến, sức chứa và cách tính phí hard-code; không gọi API shipment. Đây là chức năng chưa được nối theo mô hình 002, không phải bằng chứng rằng trang đang query sai database.
+6. **Quản lý loại xe chưa cho cấu hình ba loại sức chứa.** Giá trị mặc định hiện là 0, nên snapshot chuyến lấy từ đó cũng có thể bằng 0; cần thêm API và form khi triển khai phần quản lý năng lực.
 
 ## 2. Schema mới mà ứng dụng phải tuân theo
 
@@ -39,36 +39,32 @@ Các model và trường trên được xác nhận trong [`prisma/schema.prisma
 
 ## 3. Mức độ ảnh hưởng theo khu vực
 
-### P0 — API lịch sử gửi hàng của khách trong Admin bị lệch schema
+### API — Truy vấn lịch sử gửi hàng đã tương thích schema; Admin vẫn cần cập nhật cách hiển thị
 
 **Endpoint:** `GET /api/v1/customers/:id/shipments`
 
 **Luồng:** Customer Workspace → tab Gửi hàng → `getCustomerShipments` → `AdminCustomersController.getShipments` → `CustomersService.listAdminCustomerShipments` → Prisma.
 
-Các vị trí cần cập nhật:
+Thay đổi đã có trong branch:
 
-- [`apps/api/src/customers/customers.service.ts`](../../../apps/api/src/customers/customers.service.ts), đoạn `listAdminCustomerShipments` khoảng dòng 575–718:
-  - Include quan hệ cũ `buuCucGui` và `buuCucPhat`.
-  - Đọc `diaChiNguoiNhan`, `hinhThucLayHang`, `hinhThucGiaoHang`, `diaChiLayHang`.
-  - Trả `originBranch`/`destinationBranch` dựa trên ID và mã bưu cục cũ.
+- [`apps/api/src/customers/customers.service.ts`](../../../apps/api/src/customers/customers.service.ts): include `diemGui`/`diemNhan`; ánh xạ mã, tên, địa chỉ và ID điểm vào response shape hiện tại.
+- API trả `pickupMethod` và `deliveryMethod` là `TAI_BUU_CUC`, do schema mới không có lựa chọn lấy/giao tận nơi.
 - [`apps/api/src/customers/admin-customers.controller.ts`](../../../apps/api/src/customers/admin-customers.controller.ts), route vẫn được gọi từ UI; contract URL/phân trang hiện có thể giữ nếu nhóm muốn tương thích endpoint.
 - [`apps/admin/src/features/customers/services/customer-service.ts`](../../../apps/admin/src/features/customers/services/customer-service.ts) gọi endpoint trên.
 - [`apps/admin/src/features/customers/types/customer.ts`](../../../apps/admin/src/features/customers/types/customer.ts) khai báo shape cũ của `CustomerShipment`.
 
-Schema 002 không có các quan hệ/cột nêu trên. Khi Prisma Client được sinh từ schema mới, các tham chiếu này cần được thay để qua typecheck; nếu chạy truy vấn với client cũ trên database mới, Prisma/MySQL sẽ không tìm thấy các cột/quan hệ tương ứng.
+Schema 002 không có quan hệ/cột bưu cục và địa chỉ nhận tận nhà cũ. API giờ lấy địa chỉ từ hai điểm giao nhận; Admin UI vẫn cần cập nhật nhãn để người vận hành hiểu đây là địa chỉ điểm gửi/nhận, không phải địa chỉ nhà người nhận.
 
-**Hướng chuyển đổi contract:** đọc `diemGui` và `diemNhan`, trả tên/mã điểm mới; bỏ cách biểu diễn lấy/giao tận nơi. Schema không có địa chỉ người nhận nên không thể tiếp tục lấy `receiver.address` từ `PhieuGuiHang`. Nếu muốn hiển thị địa chỉ điểm, API cần chủ động trả địa chỉ của hai điểm và UI phải ghi nhãn đúng là điểm gửi/điểm nhận.
-
-### P0 — Tạo chuyến xe chưa ghi sức chứa snapshot bắt buộc
+### API — Tạo chuyến đã snapshot sức chứa; cấu hình nghiệp vụ ở UI còn thiếu
 
 **Luồng:** Admin tạo chuyến → `TripsController` → `TripsService.create` → Prisma `ChuyenXe.create`.
 
-- [`apps/api/src/trips/trips.service.ts`](../../../apps/api/src/trips/trips.service.ts), `create` khoảng dòng 626–781, tạo chuyến với mã, lịch, trạng thái, nhà xe, tuyến, xe và các ghế; chưa ghi `sucChuaXeMay`, `sucChuaHangCongKenh`, `sucChuaHangNhe`.
-- Ba cột snapshot ở [`prisma/schema.prisma`](../../../prisma/schema.prisma) là `NOT NULL`, không có default. Vì vậy thao tác tạo chuyến hiện thiếu dữ liệu bắt buộc ở database; Prisma Client mới cũng sẽ báo kiểu dữ liệu create thiếu trường.
-- [`apps/api/src/trips/dto/create-trip.dto.ts`](../../../apps/api/src/trips/dto/create-trip.dto.ts) và [`apps/admin/src/features/trips/components/trip-form-dialog.tsx`](../../../apps/admin/src/features/trips/components/trip-form-dialog.tsx) không nhận/nhập sức chứa hàng hoặc lựa chọn nhận gửi hàng.
+- [`apps/api/src/trips/trips.service.ts`](../../../apps/api/src/trips/trips.service.ts): `create` đọc ba giá trị mặc định từ `LoaiXe` và ghi `sucChuaXeMay`, `sucChuaHangCongKenh`, `sucChuaHangNhe` vào snapshot chuyến.
+- Các cột snapshot ở [`prisma/schema.prisma`](../../../prisma/schema.prisma) là `NOT NULL`; API đã truyền đủ dữ liệu khi tạo chuyến.
+- [`apps/api/src/trips/dto/create-trip.dto.ts`](../../../apps/api/src/trips/dto/create-trip.dto.ts) và [`apps/admin/src/features/trips/components/trip-form-dialog.tsx`](../../../apps/admin/src/features/trips/components/trip-form-dialog.tsx) chưa nhận/nhập sức chứa hàng hoặc lựa chọn nhận gửi hàng.
 - `UpdateTripDto`/form hiện chỉ sửa thời gian. Nếu nghiệp vụ cho phép chỉnh sức chứa snapshot sau khi tạo chuyến, đó cũng là contract cần quyết định riêng; schema không tự quy định quyền sửa.
 
-**Cần quyết định khi sửa:** có thể khởi tạo snapshot từ ba giá trị mặc định của `LoaiXe` tại thời điểm tạo chuyến; đồng thời xác định và lưu `nhanGuiHang` (mặc định hiện tại là `false`). Nếu Admin cần tùy chỉnh sức chứa theo chuyến, bổ sung DTO/form/validation phù hợp. API trả chuyến hiện chưa expose những giá trị mới cho client.
+**Còn cần làm:** cấu hình ba mặc định trong CRUD loại xe; quyết định API/UI có cho bật `nhanGuiHang` và tùy chỉnh snapshot theo chuyến không; sau đó expose các giá trị cần thiết cho client. Hiện snapshot khởi tạo theo `LoaiXe`, còn `nhanGuiHang` theo default database (`false`).
 
 ### P1 — Admin quản lý loại xe chưa cấu hình sức chứa hàng
 
@@ -105,48 +101,51 @@ Không có module shipment chuyên biệt trong `apps/api/src/`. Các khái ni�
 - [`prisma/seed.mjs`](../../../prisma/seed.mjs): tạo `DiemGiaoNhanHang`, `DiemGiaoNhanTuyenXe`, 126 dòng cước theo 7 loại hàng và 6 khoảng cân nặng; gán nhóm `HANG_NHE`; ghi ba snapshot sức chứa trên mọi chuyến; tạo phiếu gửi với đủ điểm gửi/nhận, cước, chuyến và lịch sử trạng thái. Các mã điểm giữ convention demo `FUTA-BC-001` dạng tương tự.
 - [`prisma/verify-seed.mjs`](../../../prisma/verify-seed.mjs): kỳ vọng 15 điểm, 6 mapping điểm/tuyến, 126 dòng cước và 60 bản ghi lịch sử; kiểm tra mã hành chính, nhà xe/tuyến/điểm/cước, trạng thái hiện hành, snapshot sức chứa và tải hàng theo nhóm.
 
-Việc này chỉ cập nhật file seed và verifier; database dev chưa được chạy lại trong lượt cập nhật này. Seed dùng giá cước demo theo cân nặng và không thêm phí dịch vụ tại nhà vì schema 002 chỉ còn luồng gửi/nhận tại các điểm.
+Đã chạy `prisma db seed` và `node prisma/verify-seed.mjs` trên MySQL 8.4 cô lập mới sau khi áp dụng đủ 20 migrations. Seed tạo đủ dữ liệu demo và verifier đạt toàn bộ kiểm tra. `findOrCreate` tra cứu điểm và mapping bằng điều kiện field thường; verifier so sánh trạng thái history bằng `BINARY` để không phụ thuộc collation của hai bảng. Database dev của thành viên không bị dùng trong kiểm tra này. Seed dùng giá cước demo theo cân nặng và không thêm phí lấy/giao tận nơi vì schema 002 chỉ còn luồng giao/nhận tại điểm.
 
 ### P1 — Test fixture và assertion còn lưu contract cũ
 
-- [`apps/api/test/integration/customers/admin-customers.spec.ts`](../../../apps/api/test/integration/customers/admin-customers.spec.ts): fixture và expectation còn `buuCucGui`, `buuCucPhat`, `buuCucGuiId`, `buuCucPhatId`, `diaChiNguoiNhan`, hình thức lấy/giao và `pickupAddress`.
+- [`apps/api/test/integration/customers/admin-customers.spec.ts`](../../../apps/api/test/integration/customers/admin-customers.spec.ts): fixture và expectation đã chuyển sang `diemGui`/`diemNhan`, địa chỉ điểm và `TAI_BUU_CUC`.
 - [`apps/admin/test/customer-shipments.spec.tsx`](../../../apps/admin/test/customer-shipments.spec.tsx): mock response còn địa chỉ người nhận, hình thức cũ và `originBranch`/`destinationBranch`.
-- [`apps/api/test/unit/trips/trips.service.spec.ts`](../../../apps/api/test/unit/trips/trips.service.spec.ts) và [`apps/api/test/integration/trips/trips-write.spec.ts`](../../../apps/api/test/integration/trips/trips-write.spec.ts): shipment fixture còn trạng thái `CHO_DIEU_PHOI`, đã bị loại khỏi enum; trạng thái tương ứng sau migration được chuyển thành `MOI_TAO`.
-- Cần bổ sung/điều chỉnh test cho snapshot sức chứa khi tạo chuyến, `nhanGuiHang`, và luồng phân bổ sức chứa; không coi việc chỉ đổi fixture để test pass là đủ nếu business rule chưa được xác định.
+- [`apps/api/test/unit/trips/trips.service.spec.ts`](../../../apps/api/test/unit/trips/trips.service.spec.ts): xác minh truy vấn mặc định từ loại xe và ghi ba giá trị snapshot vào chuyến.
+- Các fixture trực tiếp tạo chuyến trong integration tests đã bổ sung ba cột bắt buộc; fixture loại xe cũng có ba giá trị mặc định.
+- Chưa có test/feature nghiệp vụ cho việc bật `nhanGuiHang`, điều chỉnh snapshot theo chuyến hoặc cấp phát sức chứa đồng thời; cần xác định rule trước khi mở rộng API/UI.
 
 ## 4. Phần ít hoặc chưa bị tác động trực tiếp
 
-- **Đặt vé và bảng giá vé:** `BangGia`, `PhieuDatVe`, `Ve` không thuộc phần thay đổi shipment này. Tuy nhiên, thao tác lập chuyến dùng chung bị chặn do thiếu ba trường sức chứa mới; cần phân biệt lỗi tạo chuyến với logic chọn/giữ chỗ vé.
+- **Đặt vé và bảng giá vé:** `BangGia`, `PhieuDatVe`, `Ve` không thuộc phần thay đổi shipment này. Tạo chuyến backend hiện ghi snapshot từ loại xe nên đã qua yêu cầu schema; cần tiếp tục giữ các kiểm tra hiện có cho luồng chọn/giữ chỗ vé.
 - **CRUD tên/mô tả loại xe:** có thể chạy do default sức chứa mới bằng `0`, nhưng chưa đủ cho nghiệp vụ shipment.
 - **Trang gửi hàng customer hiện tại:** do đang là giao diện demo tĩnh nên chưa query các cột DB đã đổi; tích hợp API thật mới là bước bị ảnh hưởng trực tiếp bởi contract 002.
 - **Hủy chuyến:** `TripsService.cancel` có truy vấn phiếu gửi và chặn chuyến có shipment đang hoạt động. Cần giữ lại hành vi bảo vệ này; kiểm tra lại trạng thái giữ chuyến theo enum 002 và bổ sung xử lý sức chứa khi thiết kế luồng shipment. `DA_GIAO`/`DA_HUY` vẫn là trạng thái hợp lệ trong enum mới.
 
 ## 5. Thứ tự đề xuất để agent tiếp tục
 
-1. Sinh Prisma Client từ schema hiện tại và sửa các lỗi tham chiếu cũ trong API; bắt đầu với lịch sử gửi hàng Admin và tạo chuyến.
-2. Chốt contract shipment backend: API danh mục điểm/tuyến/cước, tạo vận đơn, chuyển trạng thái và ghi lịch sử; thống nhất DTO/response trước khi nối UI.
-3. Bổ sung ba sức chứa mặc định vào API và màn hình quản lý loại xe; tạo chuyến thì snapshot sang ba cột `ChuyenXe` và lưu `nhanGuiHang` theo lựa chọn nghiệp vụ.
-4. **Hoàn tất phần seed/verify-seed.** Chạy lại seed và verifier trên database dev khi sẵn sàng kiểm tra dữ liệu demo.
-5. Cập nhật Admin Customer Workspace và test của nó theo shape điểm gửi/nhận mới; bỏ trường hình thức/địa chỉ không còn tồn tại.
-6. Thay UI gửi hàng tĩnh bằng service/API thật; backend là nguồn xác thực cuối cùng cho cước, điều kiện tuyến và sức chứa.
-7. Chạy typecheck/build và test mục tiêu sau khi cập nhật. Những việc này chưa chạy trong lượt lập handoff.
+1. Chốt contract shipment backend: API danh mục điểm/tuyến/cước, tạo vận đơn, chuyển trạng thái và ghi lịch sử; thống nhất DTO/response trước khi nối UI.
+2. Bổ sung ba sức chứa mặc định vào API và màn hình quản lý loại xe; quyết định cách chọn `nhanGuiHang` và cho phép thay đổi snapshot theo chuyến hay không.
+3. Cập nhật Admin Customer Workspace để trình bày đúng điểm gửi/nhận; bỏ ý nghĩa địa chỉ người nhận tận nhà và hình thức pickup/delivery khỏi UI.
+4. Thay UI gửi hàng tĩnh bằng service/API thật; backend là nguồn xác thực cuối cùng cho cước, điều kiện tuyến và sức chứa.
+5. Xác định rule giữ/nhả sức chứa và concurrency trước khi triển khai thao tác tạo/cập nhật phiếu gửi.
+6. Seed/verifier đã chạy thành công trên DB cô lập. Khi kiểm tra DB cá nhân, dùng các lệnh trong handoff migration và xác nhận URL `.env` trước khi seed.
+7. Build, lint, typecheck, API tests và E2E đã chạy thành công trên branch; chạy lại CI trên commit sau cùng trước khi merge.
 
 ## 6. Checklist khi hoàn tất phần ứng dụng
 
 - [ ] Prisma Client đã được generate từ `prisma/schema.prisma` hiện hành.
-- [ ] Typecheck API không còn tham chiếu model/cột shipment cũ.
-- [ ] Tạo chuyến ghi ba snapshot sức chứa bắt buộc và giá trị `nhanGuiHang` có chủ đích.
+- [x] Typecheck API không còn tham chiếu các model/cột shipment cũ trong các luồng ảnh hưởng CI đã sửa.
+- [x] Tạo chuyến ghi ba snapshot sức chứa mặc định.
+- [ ] Xác định và expose giá trị `nhanGuiHang` qua API/UI.
 - [ ] API shipment đảm bảo bốn FK bắt buộc và xác minh điểm/cước/chuyến cùng nhà xe, tuyến phù hợp.
 - [ ] Thay đổi trạng thái phiếu gửi ghi một dòng lịch sử trong cùng thao tác ghi cần all-or-nothing.
 - [ ] Sức chứa được tính theo nhóm hàng, số lượng, trạng thái giữ chỗ và có xử lý cạnh tranh ở backend.
 - [ ] Admin hiển thị điểm gửi/nhận, không yêu cầu hình thức lấy/giao hoặc địa chỉ người nhận đã bị loại khỏi schema.
 - [ ] Customer Web tải dữ liệu và phí từ API thay vì dữ liệu/giá hard-code.
-- [x] Seed và seed verifier khớp enum/cột mới. Integration fixtures và UI mocks vẫn cần rà soát.
-- [ ] Kiểm tra luồng vé vẫn hoạt động sau khi sửa tạo chuyến.
+- [x] Seed và seed verifier khớp enum/cột mới; integration fixtures liên quan API đã cập nhật.
+- [ ] Cập nhật UI Admin và Customer theo hợp đồng điểm gửi/nhận mới.
+- [ ] Kiểm tra lại luồng vé sau các thay đổi tạo chuyến trong CI trên commit mới nhất.
 
 ## 7. Cách rà soát và giới hạn
 
 - Đối chiếu `prisma/schema.prisma`, source trong `apps/api`, `apps/admin`, `apps/web`, `prisma/seed.mjs`, `prisma/verify-seed.mjs` và các test/fixture liên quan.
 - GitNexus xác nhận một số liên kết component/endpoint, nhưng index đang chậm **30 commit** so với HEAD. Vì vậy kết luận trong tài liệu được kiểm chứng bằng source hiện tại và không dùng kết quả graph cũ làm bằng chứng duy nhất.
-- Bản rà soát ban đầu không sửa code/database. Cập nhật sau đó chỉ sửa seed và seed verifier, không chạy seed/verifier hoặc test lên database. Các mục P0 là kết luận từ schema/source mismatch; cần xác nhận lần cuối bằng Prisma generate + typecheck khi agent sửa backend.
+- Bản rà soát ban đầu không sửa code/database. Cập nhật ngày 07/10 đã sửa API tương thích tối thiểu, fixtures, seed và seed verifier; migration, Admin UI và Customer UI không bị sửa trong lượt CI này. Migrate, seed và verifier được xác nhận trên MySQL cô lập mới; full API suite, E2E, build, lint và typecheck cũng đạt.
 - Database local đã xóa hai bảng archive theo migration cleanup trước đó; tài liệu này không yêu cầu khôi phục hay tạo lại dữ liệu archive.
