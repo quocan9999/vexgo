@@ -707,14 +707,14 @@ const shippingPlans = [
 ];
 
 const cargoKindsByShipment = [
-  ['ĐIỆN TỬ', 'BƯU PHẨM'],
+  ['ĐIỆN TỬ', 'ĐIỆN TỬ'],
   ['THỰC PHẨM'],
-  ['THƯ TÍN', 'QUẦN ÁO'],
+  ['THƯ TÍN', 'THƯ TÍN'],
   ['HẢI SẢN'],
-  ['HÀNG GIA DỤNG', 'BƯU PHẨM'],
+  ['HÀNG GIA DỤNG', 'HÀNG GIA DỤNG'],
   ['ĐIỆN TỬ'],
-  ['QUẦN ÁO', 'HÀNG GIA DỤNG'],
-  ['THỰC PHẨM', 'HẢI SẢN', 'BƯU PHẨM'],
+  ['QUẦN ÁO', 'QUẦN ÁO'],
+  ['THỰC PHẨM', 'THỰC PHẨM', 'THỰC PHẨM'],
 ];
 
 const weightRanges = [
@@ -748,14 +748,12 @@ function weightIndexForTotal(totalWeight) {
   return index;
 }
 
-function mainCargoType(cargoKinds, cargoTypes) {
-  return cargoKinds
-    .map((name, itemIndex) => ({
-      name,
-      weight: cargoWeightForIndex(itemIndex) * (itemIndex + 1),
-      loaiHangHoaId: cargoTypes[name].loaiHangHoaId,
-    }))
-    .sort((left, right) => right.weight - left.weight || left.loaiHangHoaId - right.loaiHangHoaId)[0].name;
+function singleCargoType(cargoKinds) {
+  const cargoType = cargoKinds[0];
+  if (!cargoType || cargoKinds.some((kind) => kind !== cargoType)) {
+    throw new Error('Each shipment must contain one cargo type because it applies one shipping rate.');
+  }
+  return cargoType;
 }
 
 function shipmentHistoryFor(status, sentAt, trip) {
@@ -855,6 +853,25 @@ async function ensureCargo(db, shipment, cargoType, itemIndex, operatorCode) {
   return item;
 }
 
+async function removeObsoleteShipmentCargo(db, shipmentId, retainedCargoIds) {
+  const obsolete = await db.hangHoa.findMany({
+    where: { phieuGuiHangId: shipmentId, hangHoaId: { notIn: retainedCargoIds } },
+    select: { hangHoaId: true },
+  });
+  if (obsolete.length === 0) return;
+
+  const obsoleteIds = obsolete.map((item) => item.hangHoaId);
+  const deleted = await db.$transaction(async (tx) => {
+    const images = await tx.hinhAnhHangHoa.deleteMany({ where: { hangHoaId: { in: obsoleteIds } } });
+    const items = await tx.hangHoa.deleteMany({
+      where: { phieuGuiHangId: shipmentId, hangHoaId: { in: obsoleteIds } },
+    });
+    return { images: images.count, items: items.count };
+  });
+  if (deleted.images > 0) count('HinhAnhHangHoa', 'delete');
+  if (deleted.items > 0) count('HangHoa', 'delete');
+}
+
 async function seedTransactions(db, operators, accounts, fleet, prices, logistics) {
   const ticketSizes = [1, 2, 1, 5, 2, 3, 1];
   const allTransactionCodes = [];
@@ -875,6 +892,8 @@ async function seedTransactions(db, operators, accounts, fleet, prices, logistic
       const hasTicket = txIndex <= 6 || txIndex >= 13;
       const hasShipping = txIndex >= 7;
       const isCombined = txIndex >= 13;
+      const shippingOrdinal = txIndex - 7;
+      const shipPlan = hasShipping ? shippingPlans[shippingOrdinal] : null;
       const customerIndex = txIndex === 13 ? opIndex * 5 + 4 : opIndex * 5 + txIndex;
       const customer = operatorCustomers[customerIndex % operatorCustomers.length];
       const day = 22 + Math.floor(txIndex / 5);
@@ -887,14 +906,18 @@ async function seedTransactions(db, operators, accounts, fleet, prices, logistic
         const staleTransaction = await db.donGiaoDich.findUnique({ where: { maDonGiaoDich: transactionCode } });
         if (staleTransaction) await db.thanhToan.deleteMany({ where: { donGiaoDichId: staleTransaction.donGiaoDichId, loaiGiaoDich: { in: ['THU_CHENH_LECH', 'HOAN_TIEN'] } } });
       }
+      const oldExchangeTrip = txIndex === 13 ? exchangeOldByOperator.get(definition.code)?.trip : null;
+      const combinedTrip = isCombined && shipPlan
+        ? selectTripAfter(outboundTrips, shipPlan.trip, transactionTime, oldExchangeTrip?.chuyenXeId ?? null, true)
+        : null;
+      if (isCombined && !combinedTrip) throw new Error(`No shared booking/shipment trip for ${transactionCode}`);
       const ticketPlan = [];
       let ticketSubtotal = 0;
       let chargeTicketSubtotal = 0;
       if (hasTicket) {
         const size = txIndex <= 6 ? ticketSizes[txIndex] : txIndex === 13 ? 2 : 1;
-        const oldExchangeTrip = txIndex === 13 ? exchangeOldByOperator.get(definition.code)?.trip : null;
         const preferredTripIndex = txIndex === 4 ? 9 : txIndex === 13 ? 26 : txIndex * 2;
-        const trip = selectTripAfter(activeTrips, preferredTripIndex, transactionTime, oldExchangeTrip?.chuyenXeId);
+        const trip = combinedTrip ?? selectTripAfter(activeTrips, preferredTripIndex, transactionTime, oldExchangeTrip?.chuyenXeId);
         if (!trip) throw new Error(`No departure after booking time for ${transactionCode}`);
         const typeId = trip.vehicle.loaiXeId;
         const price = prices.get(`${trip.route.tuyenXeId}:${typeId}`);
@@ -917,19 +940,16 @@ async function seedTransactions(db, operators, accounts, fleet, prices, logistic
         }
       }
 
-      const shippingOrdinal = txIndex - 7;
-      const shipPlan = hasShipping ? shippingPlans[shippingOrdinal] : null;
       let shippingData = null;
       let shippingTotal = 0;
       if (shipPlan) {
         const cargoKinds = cargoKindsFor(shippingOrdinal);
         const totalCargoWeight = cargoWeightForKinds(cargoKinds);
         const weightIndex = weightIndexForTotal(totalCargoWeight);
-        const mainKind = mainCargoType(cargoKinds, logistics.cargo);
-        const mainCargo = logistics.cargo[mainKind];
-        const rate = logistics.rates.get(shippingRateKey(definition.code, weightIndex, mainCargo.loaiHangHoaId));
+        const cargoType = singleCargoType(cargoKinds);
+        const rate = logistics.rates.get(shippingRateKey(definition.code, weightIndex, logistics.cargo[cargoType].loaiHangHoaId));
         if (!rate) throw new Error(`Missing BangCuocGuiHang for ${transactionCode}`);
-        const trip = selectTripAfter(outboundTrips, shipPlan.trip, transactionTime, null, true);
+        const trip = combinedTrip ?? selectTripAfter(outboundTrips, shipPlan.trip, transactionTime, null, true);
         if (!trip) throw new Error(`No shipment-enabled departure after creation for ${transactionCode}`);
         const pointSend = logistics.points[definition.code][0];
         const pointReceive = logistics.points[definition.code][1];
@@ -1019,9 +1039,12 @@ async function seedTransactions(db, operators, accounts, fleet, prices, logistic
         await replaceShipmentHistory(db, shipment, shipmentHistoryFor(shippingData.shipPlan.status, transactionTime, shippingData.trip));
         const cargoKinds = shippingData.cargoKinds;
         const cargoShipment = { ...shipment, cargoTypes: logistics.cargo };
+        const retainedCargoIds = [];
         for (let itemIndex = 0; itemIndex < cargoKinds.length; itemIndex += 1) {
-          await ensureCargo(db, cargoShipment, cargoKinds[itemIndex], itemIndex, definition.code);
+          const item = await ensureCargo(db, cargoShipment, cargoKinds[itemIndex], itemIndex, definition.code);
+          retainedCargoIds.push(item.hangHoaId);
         }
+        await removeObsoleteShipmentCargo(db, shipment.phieuGuiHangId, retainedCargoIds);
       }
 
       if (paymentState === 'FAILED' || paymentState === 'PENDING') {
