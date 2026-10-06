@@ -559,9 +559,16 @@ model LuuTruBangCuocGuiHangCu {
   bangCuocGuiHangId Int      @id @db.Int
   buuCucGuiIdCu     Int      @db.Int
   buuCucPhatIdCu    Int      @db.Int
+  khoiLuongTu       Decimal  @db.Decimal(10, 2)
+  khoiLuongDen      Decimal? @db.Decimal(10, 2)
+  mucCuoc           Decimal  @db.Decimal(18, 2)
+  tuNgay            DateTime @db.Date
+  denNgay           DateTime? @db.Date
   hinhThucLayHang   String   @db.VarChar(30)
   hinhThucGiaoHang  String   @db.VarChar(30)
   trangThaiCu       String   @db.VarChar(30)
+  createdAtCu       DateTime @db.DateTime(0)
+  updatedAtCu       DateTime @db.DateTime(0)
   archivedAt        DateTime @default(now()) @db.DateTime(0)
 }
 
