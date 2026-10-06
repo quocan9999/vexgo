@@ -452,7 +452,7 @@ ALTER TABLE `BangCuocGuiHang`
     MODIFY COLUMN `trangThai` ENUM('HOAT_DONG', 'TAM_NGUNG', 'HET_HIEU_LUC') NOT NULL,
     MODIFY COLUMN `loaiHangHoaId` INTEGER NOT NULL;
 
--- Backfill snapshot suc chua tu loai xe cua xe dang gan cho tung chuyen.
+-- Backfill snapshot tu default loai xe, nhung khong de shipment dang hoat dong vuot suc chua.
 ALTER TABLE `LoaiXe`
     ADD COLUMN `sucChuaXeMayMacDinh` INTEGER NOT NULL DEFAULT 0,
     ADD COLUMN `sucChuaHangCongKenhMacDinh` INTEGER NOT NULL DEFAULT 0,
@@ -468,9 +468,20 @@ UPDATE `ChuyenXe` AS `trip`
 INNER JOIN `Xe` AS `vehicle` ON `vehicle`.`xeId` = `trip`.`xeId` AND `vehicle`.`nhaXeId` = `trip`.`nhaXeId`
 INNER JOIN `LoaiXe` AS `vehicleType`
   ON `vehicleType`.`loaiXeId` = `vehicle`.`loaiXeId` AND `vehicleType`.`nhaXeId` = `vehicle`.`nhaXeId`
-SET `trip`.`sucChuaXeMay` = `vehicleType`.`sucChuaXeMayMacDinh`,
-    `trip`.`sucChuaHangCongKenh` = `vehicleType`.`sucChuaHangCongKenhMacDinh`,
-    `trip`.`sucChuaHangNhe` = `vehicleType`.`sucChuaHangNheMacDinh`;
+LEFT JOIN (
+    SELECT `shipment`.`chuyenXeId`,
+           SUM(CASE WHEN `cargoType`.`nhomSucChua` = 'XE_MAY' THEN `item`.`soLuong` ELSE 0 END) AS `xeMay`,
+           SUM(CASE WHEN `cargoType`.`nhomSucChua` = 'HANG_CONG_KENH' THEN `item`.`soLuong` ELSE 0 END) AS `hangCongKenh`,
+           SUM(CASE WHEN `cargoType`.`nhomSucChua` = 'HANG_NHE' THEN `item`.`soLuong` ELSE 0 END) AS `hangNhe`
+    FROM `PhieuGuiHang` AS `shipment`
+    INNER JOIN `HangHoa` AS `item` ON `item`.`phieuGuiHangId` = `shipment`.`phieuGuiHangId`
+    INNER JOIN `LoaiHangHoa` AS `cargoType` ON `cargoType`.`loaiHangHoaId` = `item`.`loaiHangHoaId`
+    WHERE `shipment`.`trangThai` NOT IN ('DA_GIAO', 'DA_HUY')
+    GROUP BY `shipment`.`chuyenXeId`
+) AS `activeShipmentLoad` ON `activeShipmentLoad`.`chuyenXeId` = `trip`.`chuyenXeId`
+SET `trip`.`sucChuaXeMay` = GREATEST(`vehicleType`.`sucChuaXeMayMacDinh`, COALESCE(`activeShipmentLoad`.`xeMay`, 0)),
+    `trip`.`sucChuaHangCongKenh` = GREATEST(`vehicleType`.`sucChuaHangCongKenhMacDinh`, COALESCE(`activeShipmentLoad`.`hangCongKenh`, 0)),
+    `trip`.`sucChuaHangNhe` = GREATEST(`vehicleType`.`sucChuaHangNheMacDinh`, COALESCE(`activeShipmentLoad`.`hangNhe`, 0));
 
 ALTER TABLE `ChuyenXe`
     MODIFY COLUMN `sucChuaXeMay` INTEGER NOT NULL,

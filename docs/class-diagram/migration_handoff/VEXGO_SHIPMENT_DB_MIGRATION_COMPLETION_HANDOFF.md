@@ -97,7 +97,7 @@ Thêm `LichSuTrangThaiPhieuGuiHang` với trạng thái, thời điểm, ghi ch�
 - `LoaiHangHoa.nhomSucChua` là enum bắt buộc: `XE_MAY`, `HANG_CONG_KENH`, `HANG_NHE`.
 - `LoaiXe` có `sucChuaXeMayMacDinh`, `sucChuaHangCongKenhMacDinh`, `sucChuaHangNheMacDinh`; cả ba mặc định **0** và có CHECK không âm.
 - `ChuyenXe` có ba cột snapshot `sucChuaXeMay`, `sucChuaHangCongKenh`, `sucChuaHangNhe`, NOT NULL và CHECK không âm; có thêm `nhanGuiHang`.
-- Migration sao chép sức chứa mặc định từ loại xe của xe được gán cho chuyến. Do schema cũ không có dữ liệu cấu hình năng lực, các giá trị mặc định được backfill là 0. 18 chuyến có phiếu gửi được đánh dấu `nhanGuiHang = true`.
+- Default trên `LoaiXe` được backfill là 0 vì schema cũ không lưu cấu hình năng lực. Snapshot mỗi `ChuyenXe` được backfill theo giá trị lớn hơn giữa default loại xe và tổng số lượng hàng còn hiệu lực theo từng `nhomSucChua`, để `migrate deploy` tự giữ các chuyến hiện có trong trạng thái hợp lệ mà không cần seed. 18 chuyến có phiếu gửi được đánh dấu `nhanGuiHang = true`.
 
 Database không lưu sức chứa còn lại. Service cần tính từ snapshot của chuyến trừ số lượng hàng thuộc nhóm tương ứng trên các phiếu còn hiệu lực, và phải xác định rõ trạng thái nào tiếp tục giữ chỗ; `DA_HUY` không được chiếm sức chứa.
 
@@ -193,10 +193,10 @@ Migration cleanup chạy sau đó với `finished_at` có giá trị, `rolled_ba
 
 ### Việc chưa làm trong phạm vi database
 
-- `CustomersService.listAdminCustomerShipments` hiện truy vấn `diemGui`/`diemNhan` và ánh xạ vào response hiện hữu để giữ tương thích với Admin. Hai field legacy `pickupMethod`/`deliveryMethod` vẫn có trong response nhưng trả `null`, vì schema 002 không còn khái niệm hình thức lấy/giao. Địa chỉ được lấy từ điểm giao nhận; Admin hiển thị dấu `—` cho hình thức chưa được schema xác định.
-- `TripsService.create` hiện ghi ba snapshot sức chứa từ giá trị mặc định của loại xe. Cấu hình sức chứa của loại xe vẫn mặc định 0; DTO/form Admin chưa có lựa chọn `nhanGuiHang` hoặc ba sức chứa theo chuyến, nên đây mới là tương thích schema/CI chứ chưa hoàn thiện nghiệp vụ sức chứa.
+- `CustomersService.listAdminCustomerShipments` hiện truy vấn `diemGui`/`diemNhan` và ánh xạ điểm vào response chuyển tiếp. `receiver.address` trả `null` để không nhầm địa chỉ điểm nhận với địa chỉ nhà; địa chỉ điểm được expose riêng trên `originBranch.address`/`destinationBranch.address` và Admin hiển thị dưới tên điểm. Hai field legacy `pickupMethod`/`deliveryMethod` trả `null` vì schema 002 không còn khái niệm hình thức lấy/giao; formatter trạng thái Admin đã map `MOI_TAO` và `DA_TIEP_NHAN`.
+- `TripsService.create` hiện ghi ba snapshot sức chứa từ default `LoaiXe` cho chuyến mới. Cấu hình sức chứa của loại xe vẫn mặc định 0; DTO/form Admin chưa có lựa chọn `nhanGuiHang` hoặc ba sức chứa theo chuyến, nên đây mới là tương thích schema/CI chứ chưa hoàn thiện nghiệp vụ sức chứa. Snapshot các chuyến cũ sau migration được backfill đủ với tải hàng đang hiệu lực.
 - API shipment đầy đủ vẫn chưa có module riêng: còn thiếu API tra cứu điểm/cước, tạo vận đơn, kiểm tra cùng nhà xe/tuyến/loại hàng, tính phí/sức chứa và cập nhật trạng thái kèm lịch sử.
-- Admin chỉ được chỉnh type/hiển thị cho hai field hình thức legacy nullable trong tab lịch sử; bố cục và cách trình bày điểm gửi/nhận chưa được làm lại. Customer Web vẫn dùng fixture/hard-code. Không xem các sửa tương thích nhỏ này là hoàn thành luồng full-stack.
+- Admin tab lịch sử đã chỉnh type/hiển thị cho hai field hình thức legacy nullable, map nhãn trạng thái 002 và hiển thị địa chỉ riêng của điểm gửi/nhận. Bố cục tab và contract tổng thể chưa được làm lại; Customer Web vẫn dùng fixture/hard-code. Không xem các sửa tương thích nhỏ này là hoàn thành luồng full-stack.
 - Service phải xác thực hai điểm thuộc cùng nhà xe, cặp điểm được tuyến hỗ trợ, và dòng cước khớp điểm + loại hàng. Cần xác định trạng thái giữ/nhả sức chứa và xử lý concurrency/transaction khi nhận đơn; database hiện không lưu số sức chứa còn lại.
 - Các cấu hình sức chứa demo hiện bằng 0 và toàn bộ loại hàng đang ở `HANG_NHE`; dữ liệu này chưa đủ để demo luồng nhận xe máy/hàng cồng kềnh.
 

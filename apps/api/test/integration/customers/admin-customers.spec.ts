@@ -952,7 +952,7 @@ describe('Admin Customers API (Feature 06.1)', () => {
             receiver: {
               fullName: 'Trần Văn B',
               phoneNumber: '0912345678',
-              address: '123 Lê Lợi, Đà Lạt',
+              address: null,
             },
             pickupMethod: null,
             deliveryMethod: null,
@@ -970,11 +970,13 @@ describe('Admin Customers API (Feature 06.1)', () => {
               branchId: 1,
               code: 'FUTA-BC-001',
               name: 'Điểm gửi Miền Đông',
+              address: '456 Mai Chí Thọ, TP.HCM',
             },
             destinationBranch: {
               branchId: 2,
               code: 'FUTA-BC-002',
               name: 'Điểm nhận Đà Lạt',
+              address: '123 Lê Lợi, Đà Lạt',
             },
           },
         ],

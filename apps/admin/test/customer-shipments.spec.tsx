@@ -48,7 +48,7 @@ const mockShipment = {
   receiver: {
     fullName: 'Trần Văn B',
     phoneNumber: '0912345678',
-    address: '123 Lê Lợi, P.1, Đà Lạt',
+    address: null,
   },
   pickupMethod: null,
   deliveryMethod: null,
@@ -66,11 +66,13 @@ const mockShipment = {
     branchId: 1,
     code: 'FUTA-BC-001',
     name: 'Bưu cục Miền Đông',
+    address: '456 Mai Chí Thọ, Q.2, TP.HCM',
   },
   destinationBranch: {
     branchId: 2,
     code: 'FUTA-BC-002',
     name: 'Bưu cục Đà Lạt',
+    address: '123 Lê Lợi, P.1, Đà Lạt',
   },
 };
 
@@ -191,8 +193,38 @@ describe('Customer Shipment History Tab (Feature 06.4)', () => {
     expect((await screen.findAllByText('VD000301')).length).toBeGreaterThan(0);
     expect(screen.getAllByText('Trần Văn B').length).toBeGreaterThan(0);
     expect(screen.getAllByText('0912345678').length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText(
+        '456 Mai Chí Thọ, Q.2, TP.HCM → 123 Lê Lợi, P.1, Đà Lạt',
+      ).length,
+    ).toBeGreaterThan(0);
     expect(screen.getAllByText('85.000 đ').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Đang vận chuyển').length).toBeGreaterThan(0);
+  });
+
+  it('maps current shipment statuses to labels and badge tones', async () => {
+    installApi({
+      shipments: [
+        { ...mockShipment, shipmentId: 302, status: 'MOI_TAO' },
+        { ...mockShipment, shipmentId: 303, status: 'DA_TIEP_NHAN' },
+      ],
+    });
+    render(<CustomerWorkspace customerId={101} />);
+
+    const shipmentsTab = await screen.findByRole('tab', { name: 'Gửi hàng' });
+    fireEvent.click(shipmentsTab);
+
+    const createdBadges = await screen.findAllByText('Mới tạo');
+    const acceptedBadges = await screen.findAllByText('Đã tiếp nhận');
+
+    expect(createdBadges.length).toBe(2);
+    expect(acceptedBadges.length).toBe(2);
+    for (const badge of createdBadges) {
+      expect(badge.className).not.toContain('is-active');
+    }
+    for (const badge of acceptedBadges) {
+      expect(badge.className).toContain('is-active');
+    }
   });
 
   it('shows empty state when customer has no shipments with current tenant', async () => {

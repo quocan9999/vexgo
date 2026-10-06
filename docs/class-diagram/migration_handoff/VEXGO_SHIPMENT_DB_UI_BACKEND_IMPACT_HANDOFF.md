@@ -1,6 +1,6 @@
 # VexGo — Handoff ảnh hưởng UI và backend sau migration shipment 002
 
-> Tài liệu này là bản đồ các phần ứng dụng cần được rà soát/cập nhật sau khi database shipment chuyển sang Class Diagram 002. Cập nhật ngày 07/10/2026: seed/verifier và hai điểm tương thích API cần thiết cho CI đã được sửa; Admin UI và Customer UI vẫn chưa được cập nhật.
+> Tài liệu này là bản đồ các phần ứng dụng cần được rà soát/cập nhật sau khi database shipment chuyển sang Class Diagram 002. Cập nhật ngày 07/10/2026: seed/verifier, API history và một số hiển thị tương thích trong Admin đã được cập nhật; các luồng shipment đầy đủ ở Admin/Customer vẫn chưa được triển khai.
 
 **Ngày rà soát:** 07/10/2026
 
@@ -14,10 +14,10 @@
 
 Migration đã đưa Prisma/MySQL sang mô hình 002. Branch đã thêm sửa tương thích API tối thiểu để build và test với Prisma Client mới; các chức năng UI và API shipment đầy đủ vẫn cần triển khai. Những phần cần ưu tiên:
 
-1. **API lịch sử gửi hàng đã được sửa cho Prisma Client mới.** `CustomersService.listAdminCustomerShipments` truy vấn `diemGui`/`diemNhan`, dùng địa chỉ hai điểm và giữ response shape tương thích với Admin; hai field legacy `pickupMethod`/`deliveryMethod` trả `null` vì schema 002 không có khái niệm hình thức lấy/giao. Admin hiển thị `—` cho các giá trị này. UI chưa đổi nhãn/kiểu dữ liệu sang mô hình điểm mới.
+1. **API lịch sử gửi hàng theo schema 002.** `CustomersService.listAdminCustomerShipments` truy vấn `diemGui`/`diemNhan`, giữ response shape chuyển tiếp; `receiver.address` trả `null`, còn địa chỉ điểm nằm riêng trên `originBranch.address`/`destinationBranch.address`. Hai field legacy `pickupMethod`/`deliveryMethod` trả `null`; Admin hiển thị `—`, tên + địa chỉ điểm và nhãn trạng thái 002.
 2. **Tạo chuyến đã ghi ba snapshot sức chứa.** `TripsService.create` lấy mặc định từ `LoaiXe`. DTO và Form Admin chưa có cấu hình sức chứa hoặc lựa chọn `nhanGuiHang`; cờ này hiện theo default database `false`. Đây là tương thích schema, chưa phải cấu hình nghiệp vụ hoàn chỉnh.
 3. **Seed và verifier đã chạy thành công trên MySQL cô lập mới.** Seed tạo điểm, mapping tuyến/điểm, cước, nhóm hàng, snapshot sức chứa và phiếu gửi theo schema 002. Verifier cũng đạt kiểm tra mã và quan hệ; bộ kiểm chứng so sánh trạng thái bằng binary để tránh lỗi collation giữa bảng lịch sử và phiếu gửi.
-4. **Admin UI mới chỉ có chỉnh tương thích nhỏ.** Type cho phép hai field hình thức legacy là `null`, và tab hiển thị `—` thay vì dựng hình thức không có trong schema. Tab vẫn dùng response shape cũ; cần đổi cách diễn đạt/hiển thị rõ điểm gửi và điểm nhận, rà lại địa chỉ đang trình bày dưới người nhận và bỏ các khái niệm pickup/delivery cũ.
+4. **Admin UI mới chỉ có chỉnh tương thích nhỏ.** Type cho phép hai field hình thức legacy là `null`; tab map `MOI_TAO`/`DA_TIEP_NHAN` và hiển thị địa chỉ điểm dưới tên điểm gửi/nhận, không hiển thị địa chỉ điểm dưới người nhận. Tab vẫn giữ cột `Lấy / Giao` chuyển tiếp và response shape cũ; đợt UI sau nên bỏ hẳn khái niệm pickup/delivery khỏi màn hình.
 5. **Customer Web chưa chạy bằng database.** Trang gửi hàng vẫn dùng dữ liệu, nhà xe, chuyến, sức chứa và cách tính phí hard-code; không gọi API shipment. Đây là chức năng chưa được nối theo mô hình 002, không phải bằng chứng rằng trang đang query sai database.
 6. **Quản lý loại xe chưa cho cấu hình ba loại sức chứa.** Giá trị mặc định hiện là 0, nên snapshot chuyến lấy từ đó cũng có thể bằng 0; cần thêm API và form khi triển khai phần quản lý năng lực.
 
@@ -48,12 +48,12 @@ Các model và trường trên được xác nhận trong [`prisma/schema.prisma
 Thay đổi đã có trong branch:
 
 - [`apps/api/src/customers/customers.service.ts`](../../../apps/api/src/customers/customers.service.ts): include `diemGui`/`diemNhan`; ánh xạ mã, tên, địa chỉ và ID điểm vào response shape hiện tại.
-- API giữ `pickupMethod` và `deliveryMethod` để tương thích response nhưng trả `null`; schema mới không lưu hình thức lấy/giao. UI hiển thị `—` thay vì tự suy diễn một hình thức.
+- API giữ `pickupMethod` và `deliveryMethod` để tương thích response nhưng trả `null`; schema mới không lưu hình thức lấy/giao. API trả `receiver.address = null`, địa chỉ điểm nằm trong summary riêng; Admin hiển thị `—` cho method và địa chỉ trong cột điểm gửi/nhận.
 - [`apps/api/src/customers/admin-customers.controller.ts`](../../../apps/api/src/customers/admin-customers.controller.ts), route vẫn được gọi từ UI; contract URL/phân trang hiện có thể giữ nếu nhóm muốn tương thích endpoint.
 - [`apps/admin/src/features/customers/services/customer-service.ts`](../../../apps/admin/src/features/customers/services/customer-service.ts) gọi endpoint trên.
-- [`apps/admin/src/features/customers/types/customer.ts`](../../../apps/admin/src/features/customers/types/customer.ts) giữ các field legacy trong `CustomerShipment` ở dạng nullable để tương thích trong giai đoạn chuyển tiếp.
+- [`apps/admin/src/features/customers/types/customer.ts`](../../../apps/admin/src/features/customers/types/customer.ts) giữ các field method legacy nullable và thêm địa chỉ cho summary điểm gửi/nhận.
 
-Schema 002 không có quan hệ/cột bưu cục và địa chỉ nhận tận nhà cũ. API giờ lấy địa chỉ từ hai điểm giao nhận; Admin UI vẫn cần cập nhật nhãn để người vận hành hiểu đây là địa chỉ điểm gửi/nhận, không phải địa chỉ nhà người nhận.
+Schema 002 không có quan hệ/cột bưu cục và địa chỉ nhận tận nhà cũ. API không gán địa chỉ điểm vào `receiver.address`; địa chỉ được expose ở summary riêng của điểm. Admin hiện hiển thị cặp tên và địa chỉ điểm, nhưng vẫn cần bỏ cột hình thức lấy/giao legacy trong đợt UI tiếp theo.
 
 ### API — Tạo chuyến đã snapshot sức chứa; cấu hình nghiệp vụ ở UI còn thiếu
 
@@ -106,7 +106,7 @@ Không có module shipment chuyên biệt trong `apps/api/src/`. Các khái ni�
 ### Test contract hiện hành và khoảng trống nghiệp vụ cần bổ sung sau
 
 - [`apps/api/test/integration/customers/admin-customers.spec.ts`](../../../apps/api/test/integration/customers/admin-customers.spec.ts): fixture và expectation đã chuyển sang `diemGui`/`diemNhan`, địa chỉ điểm và hai field hình thức lấy/giao nullable.
-- [`apps/admin/test/customer-shipments.spec.tsx`](../../../apps/admin/test/customer-shipments.spec.tsx): mock response dùng hai field hình thức nullable; dữ liệu địa chỉ và `originBranch`/`destinationBranch` vẫn theo shape chuyển tiếp.
+- [`apps/admin/test/customer-shipments.spec.tsx`](../../../apps/admin/test/customer-shipments.spec.tsx): mock response dùng method/address người nhận nullable, địa chỉ điểm riêng; có assertion cho nhãn/tone `MOI_TAO` và `DA_TIEP_NHAN`.
 - [`apps/api/test/unit/trips/trips.service.spec.ts`](../../../apps/api/test/unit/trips/trips.service.spec.ts): xác minh truy vấn mặc định từ loại xe và ghi ba giá trị snapshot vào chuyến.
 - Các fixture trực tiếp tạo chuyến trong integration tests đã bổ sung ba cột bắt buộc; fixture loại xe cũng có ba giá trị mặc định.
 - Chưa có test/feature nghiệp vụ cho việc bật `nhanGuiHang`, điều chỉnh snapshot theo chuyến hoặc cấp phát sức chứa đồng thời; cần xác định rule trước khi mở rộng API/UI.
@@ -122,7 +122,7 @@ Không có module shipment chuyên biệt trong `apps/api/src/`. Các khái ni�
 
 1. Chốt contract shipment backend: API danh mục điểm/tuyến/cước, tạo vận đơn, chuyển trạng thái và ghi lịch sử; thống nhất DTO/response trước khi nối UI.
 2. Bổ sung ba sức chứa mặc định vào API và màn hình quản lý loại xe; quyết định cách chọn `nhanGuiHang` và cho phép thay đổi snapshot theo chuyến hay không.
-3. Cập nhật Admin Customer Workspace để trình bày đúng điểm gửi/nhận; bỏ ý nghĩa địa chỉ người nhận tận nhà và hình thức pickup/delivery khỏi UI.
+3. Hoàn thiện Admin Customer Workspace: tab history đã hiển thị tên/địa chỉ hai điểm và map trạng thái; đợt sau bỏ cột `Lấy / Giao` legacy, làm rõ các nhãn/response còn lại theo contract điểm.
 4. Thay UI gửi hàng tĩnh bằng service/API thật; backend là nguồn xác thực cuối cùng cho cước, điều kiện tuyến và sức chứa.
 5. Xác định rule giữ/nhả sức chứa và concurrency trước khi triển khai thao tác tạo/cập nhật phiếu gửi.
 6. Seed/verifier đã chạy thành công trên DB cô lập. Khi kiểm tra DB cá nhân, dùng các lệnh trong handoff migration và xác nhận URL `.env` trước khi seed.

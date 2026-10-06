@@ -680,7 +680,7 @@ export class CustomersService {
         receiver: {
           fullName: p.tenNguoiNhan,
           phoneNumber: p.soDienThoaiNguoiNhan,
-          address: p.diemNhan?.diaChi ?? null,
+          address: null,
         },
         pickupMethod: null,
         deliveryMethod: null,
@@ -701,6 +701,7 @@ export class CustomersService {
               branchId: p.diemGui.diemGiaoNhanHangId,
               code: p.diemGui.maDiem,
               name: p.diemGui.tenDiem,
+              address: p.diemGui.diaChi,
             }
           : null,
         destinationBranch: p.diemNhan
@@ -708,6 +709,7 @@ export class CustomersService {
               branchId: p.diemNhan.diemGiaoNhanHangId,
               code: p.diemNhan.maDiem,
               name: p.diemNhan.tenDiem,
+              address: p.diemNhan.diaChi,
             }
           : null,
       })),

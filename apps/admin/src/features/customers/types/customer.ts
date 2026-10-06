@@ -173,6 +173,7 @@ export interface CustomerShipmentBranchSummary {
   branchId: number;
   code: string;
   name: string;
+  address: string;
 }
 
 export interface CustomerShipment {
