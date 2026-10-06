@@ -193,10 +193,10 @@ Migration cleanup chạy sau đó với `finished_at` có giá trị, `rolled_ba
 
 ### Việc chưa làm trong phạm vi database
 
-- `CustomersService.listAdminCustomerShipments` hiện truy vấn `diemGui`/`diemNhan` và ánh xạ vào response hiện hữu để giữ tương thích với Admin. Hình thức lấy/giao được trả là `TAI_BUU_CUC`; địa chỉ được lấy từ điểm giao nhận. API này chưa đổi contract UI thành model điểm giao nhận mới.
+- `CustomersService.listAdminCustomerShipments` hiện truy vấn `diemGui`/`diemNhan` và ánh xạ vào response hiện hữu để giữ tương thích với Admin. Hai field legacy `pickupMethod`/`deliveryMethod` vẫn có trong response nhưng trả `null`, vì schema 002 không còn khái niệm hình thức lấy/giao. Địa chỉ được lấy từ điểm giao nhận; Admin hiển thị dấu `—` cho hình thức chưa được schema xác định.
 - `TripsService.create` hiện ghi ba snapshot sức chứa từ giá trị mặc định của loại xe. Cấu hình sức chứa của loại xe vẫn mặc định 0; DTO/form Admin chưa có lựa chọn `nhanGuiHang` hoặc ba sức chứa theo chuyến, nên đây mới là tương thích schema/CI chứ chưa hoàn thiện nghiệp vụ sức chứa.
 - API shipment đầy đủ vẫn chưa có module riêng: còn thiếu API tra cứu điểm/cước, tạo vận đơn, kiểm tra cùng nhà xe/tuyến/loại hàng, tính phí/sức chứa và cập nhật trạng thái kèm lịch sử.
-- Admin Web và Customer Web chưa được sửa trong lượt này. Customer Web vẫn dùng fixture/hard-code; Admin cần được rà để trình bày rõ điểm gửi/nhận thay cho địa chỉ/hình thức lấy-giao cũ. Không xem các sửa API tối thiểu là hoàn thành luồng full-stack.
+- Admin chỉ được chỉnh type/hiển thị cho hai field hình thức legacy nullable trong tab lịch sử; bố cục và cách trình bày điểm gửi/nhận chưa được làm lại. Customer Web vẫn dùng fixture/hard-code. Không xem các sửa tương thích nhỏ này là hoàn thành luồng full-stack.
 - Service phải xác thực hai điểm thuộc cùng nhà xe, cặp điểm được tuyến hỗ trợ, và dòng cước khớp điểm + loại hàng. Cần xác định trạng thái giữ/nhả sức chứa và xử lý concurrency/transaction khi nhận đơn; database hiện không lưu số sức chứa còn lại.
 - Các cấu hình sức chứa demo hiện bằng 0 và toàn bộ loại hàng đang ở `HANG_NHE`; dữ liệu này chưa đủ để demo luồng nhận xe máy/hàng cồng kềnh.
 

@@ -58,7 +58,9 @@ function formatShipmentStatus(status: string): string {
   }
 }
 
-function formatMethod(method: string): string {
+function formatMethod(method: string | null): string {
+  if (!method) return '—';
+
   switch (method) {
     case 'TAI_BUU_CUC':
       return 'Tại bưu cục';

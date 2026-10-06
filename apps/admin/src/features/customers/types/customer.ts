@@ -181,8 +181,8 @@ export interface CustomerShipment {
   sentAt: string;
   status: string;
   receiver: CustomerShipmentReceiver;
-  pickupMethod: string;
-  deliveryMethod: string;
+  pickupMethod: string | null;
+  deliveryMethod: string | null;
   pickupAddress: string | null;
   mainFee: number;
   serviceFee: number;

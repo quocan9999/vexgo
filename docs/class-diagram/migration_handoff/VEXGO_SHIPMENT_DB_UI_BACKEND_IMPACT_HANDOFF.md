@@ -14,10 +14,10 @@
 
 Migration đã đưa Prisma/MySQL sang mô hình 002. Branch đã thêm sửa tương thích API tối thiểu để build và test với Prisma Client mới; các chức năng UI và API shipment đầy đủ vẫn cần triển khai. Những phần cần ưu tiên:
 
-1. **API lịch sử gửi hàng đã được sửa cho Prisma Client mới.** `CustomersService.listAdminCustomerShipments` truy vấn `diemGui`/`diemNhan`, dùng địa chỉ hai điểm và giữ response shape tương thích với Admin; hai hình thức hiển thị hiện trả `TAI_BUU_CUC`. UI chưa đổi nhãn/kiểu dữ liệu sang mô hình điểm mới.
+1. **API lịch sử gửi hàng đã được sửa cho Prisma Client mới.** `CustomersService.listAdminCustomerShipments` truy vấn `diemGui`/`diemNhan`, dùng địa chỉ hai điểm và giữ response shape tương thích với Admin; hai field legacy `pickupMethod`/`deliveryMethod` trả `null` vì schema 002 không có khái niệm hình thức lấy/giao. Admin hiển thị `—` cho các giá trị này. UI chưa đổi nhãn/kiểu dữ liệu sang mô hình điểm mới.
 2. **Tạo chuyến đã ghi ba snapshot sức chứa.** `TripsService.create` lấy mặc định từ `LoaiXe`. DTO và Form Admin chưa có cấu hình sức chứa hoặc lựa chọn `nhanGuiHang`; cờ này hiện theo default database `false`. Đây là tương thích schema, chưa phải cấu hình nghiệp vụ hoàn chỉnh.
 3. **Seed và verifier đã chạy thành công trên MySQL cô lập mới.** Seed tạo điểm, mapping tuyến/điểm, cước, nhóm hàng, snapshot sức chứa và phiếu gửi theo schema 002. Verifier cũng đạt kiểm tra mã và quan hệ; bộ kiểm chứng so sánh trạng thái bằng binary để tránh lỗi collation giữa bảng lịch sử và phiếu gửi.
-4. **Admin UI chưa cập nhật.** Tab lịch sử hiện vẫn dùng response shape cũ để hiển thị; cần đổi cách diễn đạt/hiển thị thành điểm gửi và điểm nhận, bỏ thông tin địa chỉ giao tận nơi và hình thức pickup/delivery cũ.
+4. **Admin UI mới chỉ có chỉnh tương thích nhỏ.** Type cho phép hai field hình thức legacy là `null`, và tab hiển thị `—` thay vì dựng hình thức không có trong schema. Tab vẫn dùng response shape cũ; cần đổi cách diễn đạt/hiển thị rõ điểm gửi và điểm nhận, rà lại địa chỉ đang trình bày dưới người nhận và bỏ các khái niệm pickup/delivery cũ.
 5. **Customer Web chưa chạy bằng database.** Trang gửi hàng vẫn dùng dữ liệu, nhà xe, chuyến, sức chứa và cách tính phí hard-code; không gọi API shipment. Đây là chức năng chưa được nối theo mô hình 002, không phải bằng chứng rằng trang đang query sai database.
 6. **Quản lý loại xe chưa cho cấu hình ba loại sức chứa.** Giá trị mặc định hiện là 0, nên snapshot chuyến lấy từ đó cũng có thể bằng 0; cần thêm API và form khi triển khai phần quản lý năng lực.
 
@@ -48,10 +48,10 @@ Các model và trường trên được xác nhận trong [`prisma/schema.prisma
 Thay đổi đã có trong branch:
 
 - [`apps/api/src/customers/customers.service.ts`](../../../apps/api/src/customers/customers.service.ts): include `diemGui`/`diemNhan`; ánh xạ mã, tên, địa chỉ và ID điểm vào response shape hiện tại.
-- API trả `pickupMethod` và `deliveryMethod` là `TAI_BUU_CUC`, do schema mới không có lựa chọn lấy/giao tận nơi.
+- API giữ `pickupMethod` và `deliveryMethod` để tương thích response nhưng trả `null`; schema mới không lưu hình thức lấy/giao. UI hiển thị `—` thay vì tự suy diễn một hình thức.
 - [`apps/api/src/customers/admin-customers.controller.ts`](../../../apps/api/src/customers/admin-customers.controller.ts), route vẫn được gọi từ UI; contract URL/phân trang hiện có thể giữ nếu nhóm muốn tương thích endpoint.
 - [`apps/admin/src/features/customers/services/customer-service.ts`](../../../apps/admin/src/features/customers/services/customer-service.ts) gọi endpoint trên.
-- [`apps/admin/src/features/customers/types/customer.ts`](../../../apps/admin/src/features/customers/types/customer.ts) khai báo shape cũ của `CustomerShipment`.
+- [`apps/admin/src/features/customers/types/customer.ts`](../../../apps/admin/src/features/customers/types/customer.ts) giữ các field legacy trong `CustomerShipment` ở dạng nullable để tương thích trong giai đoạn chuyển tiếp.
 
 Schema 002 không có quan hệ/cột bưu cục và địa chỉ nhận tận nhà cũ. API giờ lấy địa chỉ từ hai điểm giao nhận; Admin UI vẫn cần cập nhật nhãn để người vận hành hiểu đây là địa chỉ điểm gửi/nhận, không phải địa chỉ nhà người nhận.
 
@@ -103,10 +103,10 @@ Không có module shipment chuyên biệt trong `apps/api/src/`. Các khái ni�
 
 Đã chạy `prisma db seed` và `node prisma/verify-seed.mjs` trên MySQL 8.4 cô lập mới sau khi áp dụng đủ 20 migrations. Seed tạo đủ dữ liệu demo và verifier đạt toàn bộ kiểm tra. `findOrCreate` tra cứu điểm và mapping bằng điều kiện field thường; verifier so sánh trạng thái history bằng `BINARY` để không phụ thuộc collation của hai bảng. Database dev của thành viên không bị dùng trong kiểm tra này. Seed dùng giá cước demo theo cân nặng và không thêm phí lấy/giao tận nơi vì schema 002 chỉ còn luồng giao/nhận tại điểm.
 
-### P1 — Test fixture và assertion còn lưu contract cũ
+### Test contract hiện hành và khoảng trống nghiệp vụ cần bổ sung sau
 
-- [`apps/api/test/integration/customers/admin-customers.spec.ts`](../../../apps/api/test/integration/customers/admin-customers.spec.ts): fixture và expectation đã chuyển sang `diemGui`/`diemNhan`, địa chỉ điểm và `TAI_BUU_CUC`.
-- [`apps/admin/test/customer-shipments.spec.tsx`](../../../apps/admin/test/customer-shipments.spec.tsx): mock response còn địa chỉ người nhận, hình thức cũ và `originBranch`/`destinationBranch`.
+- [`apps/api/test/integration/customers/admin-customers.spec.ts`](../../../apps/api/test/integration/customers/admin-customers.spec.ts): fixture và expectation đã chuyển sang `diemGui`/`diemNhan`, địa chỉ điểm và hai field hình thức lấy/giao nullable.
+- [`apps/admin/test/customer-shipments.spec.tsx`](../../../apps/admin/test/customer-shipments.spec.tsx): mock response dùng hai field hình thức nullable; dữ liệu địa chỉ và `originBranch`/`destinationBranch` vẫn theo shape chuyển tiếp.
 - [`apps/api/test/unit/trips/trips.service.spec.ts`](../../../apps/api/test/unit/trips/trips.service.spec.ts): xác minh truy vấn mặc định từ loại xe và ghi ba giá trị snapshot vào chuyến.
 - Các fixture trực tiếp tạo chuyến trong integration tests đã bổ sung ba cột bắt buộc; fixture loại xe cũng có ba giá trị mặc định.
 - Chưa có test/feature nghiệp vụ cho việc bật `nhanGuiHang`, điều chỉnh snapshot theo chuyến hoặc cấp phát sức chứa đồng thời; cần xác định rule trước khi mở rộng API/UI.
