@@ -1,5 +1,6 @@
 import { Body, Controller, Post } from '@nestjs/common';
 import { PromotionsService } from './promotions.service.js';
+import { ValidatePromotionDto } from './dto/validate-promotion.dto.js';
 import { Public } from '../auth/decorators/public.decorator.js';
 
 @Public()
@@ -8,20 +9,13 @@ export class PromotionsController {
   constructor(private readonly promotionsService: PromotionsService) {}
 
   @Post('validate')
-  async validatePromotion(
-    @Body()
-    body: {
-      code: string;
-      tripId?: number | string;
-      seatCount?: number | string;
-      totalAmount?: number | string;
-    },
-  ) {
+  async validatePromotion(@Body() dto: ValidatePromotionDto) {
     return this.promotionsService.validatePromotion({
-      code: body.code,
-      tripId: body.tripId ? Number(body.tripId) : undefined,
-      seatCount: body.seatCount ? Number(body.seatCount) : undefined,
-      totalAmount: body.totalAmount ? Number(body.totalAmount) : undefined,
+      code: dto.code,
+      tripId: dto.tripId,
+      nhaXeId: dto.nhaXeId,
+      seatCount: dto.seatCount,
+      totalAmount: dto.totalAmount,
     });
   }
 }

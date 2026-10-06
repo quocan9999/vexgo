@@ -8,6 +8,7 @@ export class PromotionsService {
   async validatePromotion(params: {
     code: string;
     tripId?: number;
+    nhaXeId?: number;
     seatCount?: number;
     totalAmount?: number;
   }) {
@@ -21,30 +22,33 @@ export class PromotionsService {
       };
     }
 
+    let nhaXeId = params.nhaXeId;
+    if (!nhaXeId && params.tripId) {
+      const trip = await this.prisma.chuyenXe.findUnique({
+        where: { chuyenXeId: params.tripId },
+        select: { nhaXeId: true },
+      });
+      if (trip) {
+        nhaXeId = trip.nhaXeId;
+      }
+    }
+
     const promo = await this.prisma.khuyenMai.findFirst({
       where: {
         maKhuyenMai: cleanCode,
+        ...(nhaXeId ? { nhaXeId } : {}),
+        trangThai: 'HOAT_DONG',
       },
     });
 
     if (!promo) {
-      // Check if it matches demo vouchers like VEXGO50 or SUMMER26
-      if (cleanCode === 'VEXGO50' || cleanCode === 'SUMMER26') {
-        const discount = Math.min(50000, Number(params.totalAmount || 0));
-        return {
-          code: cleanCode,
-          isValid: true,
-          discountAmount: discount,
-          description: 'Khuyến mãi hè VexGo - Giảm 50.000đ',
-          minOrderAmount: 0,
-        };
-      }
-
       return {
         code: cleanCode,
         isValid: false,
         discountAmount: 0,
-        message: 'Mã khuyến mãi không tồn tại trong hệ thống.',
+        message: nhaXeId
+          ? 'Mã khuyến mãi không tồn tại hoặc không áp dụng cho nhà xe này.'
+          : 'Mã khuyến mãi không tồn tại trong hệ thống.',
       };
     }
 

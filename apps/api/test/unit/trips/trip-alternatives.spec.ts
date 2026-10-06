@@ -13,7 +13,7 @@ describe('TripsService - getTripAlternatives', () => {
     gioKhoiHanh: baseDate,
     nhaXeId: 1,
     tuyenXeId: 5,
-    trangThai: 'DANG_BAN',
+    trangThai: 'CHUA_KHOI_HANH',
     tuyenXe: {
       tuyenXeId: 5,
       diemDi: 'TP.HCM',
@@ -39,7 +39,7 @@ describe('TripsService - getTripAlternatives', () => {
     gioKhoiHanh: new Date(baseDate.getTime() + 30 * 60 * 1000), // +30 mins
     nhaXeId: 1, // Cùng nhà xe
     tuyenXeId: 5,
-    trangThai: 'DANG_BAN',
+    trangThai: 'CHUA_KHOI_HANH',
     tuyenXe: mockOriginalTrip.tuyenXe,
     xe: mockOriginalTrip.xe,
     gheChuyenXes: Array.from({ length: 10 }, (_, i) => ({
@@ -57,7 +57,7 @@ describe('TripsService - getTripAlternatives', () => {
     gioKhoiHanh: new Date(baseDate.getTime() + 5 * 60 * 60 * 1000), // +5 hours
     nhaXeId: 2, // Khác nhà xe
     tuyenXeId: 5,
-    trangThai: 'DANG_BAN',
+    trangThai: 'CHUA_KHOI_HANH',
     tuyenXe: mockOriginalTrip.tuyenXe,
     xe: {
       nhaXeId: 2,
@@ -80,7 +80,7 @@ describe('TripsService - getTripAlternatives', () => {
     gioKhoiHanh: new Date(baseDate.getTime() + 15 * 60 * 1000),
     nhaXeId: 1,
     tuyenXeId: 5,
-    trangThai: 'DANG_BAN',
+    trangThai: 'CHUA_KHOI_HANH',
     tuyenXe: mockOriginalTrip.tuyenXe,
     xe: mockOriginalTrip.xe,
     gheChuyenXes: [

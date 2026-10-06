@@ -4,12 +4,26 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service.js';
+import {
+  combineDeparture,
+  resolveBusinessTimeZone,
+} from '../common/time/business-date.js';
 import type { CreateReviewDto } from './dto/create-review.dto.js';
 
 @Injectable()
 export class ReviewsService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly businessTimeZone: string;
+
+  constructor(
+    private readonly prisma: PrismaService,
+    config?: ConfigService,
+  ) {
+    this.businessTimeZone = resolveBusinessTimeZone(
+      config?.get<string>('BUSINESS_TIME_ZONE'),
+    );
+  }
 
   private async resolveCustomer(taiKhoanId: number) {
     const customer = await this.prisma.khachHang.findUnique({
@@ -30,41 +44,59 @@ export class ReviewsService {
     // 1. Kiểm tra chuyến xe tồn tại
     const trip = await this.prisma.chuyenXe.findUnique({
       where: { chuyenXeId: dto.tripId },
-      select: { chuyenXeId: true, thoiDiemDi: true },
+      select: {
+        chuyenXeId: true,
+        ngayKhoiHanh: true,
+        gioKhoiHanh: true,
+        trangThai: true,
+      },
     });
 
     if (!trip) {
       throw new NotFoundException('Chuyến xe không tồn tại.');
     }
 
-    // 2. Kiểm tra điều kiện: Khách hàng phải có vé/phiếu đặt vé hợp lệ cho chuyến xe này
-    const eligibleBooking = await this.prisma.phieuDatVe.findFirst({
+    // 2. Kiểm tra điều kiện: Khách hàng phải có vé hợp lệ cho chuyến xe này
+    const eligibleTicket = await this.prisma.ve.findFirst({
       where: {
-        chuyenXeId: dto.tripId,
-        khachHangId: customer.khachHangId,
-        trangThai: { in: ['DA_THANH_TOAN', 'HOAN_TAT', 'DA_XAC_NHAN'] },
+        gheChuyenXe: {
+          chuyenXeId: dto.tripId,
+        },
+        phieuDatVe: {
+          donGiaoDich: {
+            khachHangId: customer.khachHangId,
+          },
+        },
+        trangThai: {
+          in: ['DA_DAT', 'DA_XUAT', 'HOAN_TAT', 'DA_SU_DUNG', 'DA_THANH_TOAN'],
+        },
       },
     });
 
-    const eligibleTicket = !eligibleBooking
-      ? await this.prisma.ve.findFirst({
-          where: {
-            chuyenXeId: dto.tripId,
-            khachHangId: customer.khachHangId,
-            trangThai: {
-              in: ['DA_XUAT', 'HOAN_TAT', 'DA_SU_DUNG', 'DA_THANH_TOAN'],
-            },
-          },
-        })
-      : null;
-
-    if (!eligibleBooking && !eligibleTicket) {
+    if (!eligibleTicket) {
       throw new ForbiddenException(
         'Bạn chỉ có thể đánh giá chuyến xe mà bạn đã đặt vé và thanh toán thành công.',
       );
     }
 
-    // 3. Chống đánh giá trùng lặp
+    // 3. Kiểm tra điều kiện hoàn tất hoặc đã khởi hành
+    const hasDepartedOrCompleted =
+      trip.trangThai === 'HOAN_THANH' ||
+      (trip.ngayKhoiHanh && trip.gioKhoiHanh
+        ? combineDeparture(
+            trip.ngayKhoiHanh,
+            trip.gioKhoiHanh,
+            this.businessTimeZone,
+          ) <= new Date()
+        : true);
+
+    if (!hasDepartedOrCompleted) {
+      throw new ConflictException(
+        'Bạn chỉ có thể đánh giá chuyến xe sau khi chuyến xe đã khởi hành hoặc hoàn tất.',
+      );
+    }
+
+    // 4. Chống đánh giá trùng lặp
     const existingReview = await this.prisma.phanHoi.findFirst({
       where: {
         khachHangId: customer.khachHangId,
@@ -78,7 +110,7 @@ export class ReviewsService {
       );
     }
 
-    // 4. Tạo bản ghi đánh giá
+    // 5. Tạo bản ghi đánh giá
     const review = await this.prisma.phanHoi.create({
       data: {
         mucDanhGia: dto.rating,

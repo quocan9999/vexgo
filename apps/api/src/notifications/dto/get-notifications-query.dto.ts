@@ -1,4 +1,4 @@
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import { IsBoolean, IsInt, IsOptional, Max, Min } from 'class-validator';
 
 export class GetNotificationsQueryDto {
@@ -16,7 +16,11 @@ export class GetNotificationsQueryDto {
   pageSize?: number = 10;
 
   @IsOptional()
-  @Type(() => Boolean)
+  @Transform(({ value }) => {
+    if (value === 'true' || value === true) return true;
+    if (value === 'false' || value === false) return false;
+    return value;
+  })
   @IsBoolean()
   unreadOnly?: boolean = false;
 }

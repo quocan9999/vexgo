@@ -1171,19 +1171,25 @@ export class TripsService {
       });
     }
 
+    const businessTimeZone = resolveBusinessTimeZone(
+      this.config.get<string>('BUSINESS_TIME_ZONE'),
+    );
+
     // Giá vé niêm yết của chuyến gốc
     const origFare = await this.prisma.bangGia.findFirst({
       where: {
         nhaXeId: originalTrip.nhaXeId,
         tuyenXeId: originalTrip.tuyenXeId,
         loaiXeId: originalTrip.xe.loaiXeId,
-        trangThai: 'DANG_AP_DUNG',
+        trangThai: 'HOAT_DONG',
+        tuNgay: { lte: originalTrip.ngayKhoiHanh },
+        OR: [{ denNgay: null }, { denNgay: { gte: originalTrip.ngayKhoiHanh } }],
       },
       orderBy: {
-        bangGiaId: 'desc',
+        tuNgay: 'desc',
       },
     });
-    const originalPrice = origFare ? Number(origFare.giaNiemYet) : 250000;
+    const originalPrice = origFare ? Number(origFare.giaNiemYet) : 0;
 
     const getTripDateTime = (t: { ngayKhoiHanh?: Date | null; gioKhoiHanh?: Date | null }) => {
       const d = t.ngayKhoiHanh ? new Date(t.ngayKhoiHanh) : new Date();
@@ -1201,15 +1207,11 @@ export class TripsService {
 
     const origTime = getTripDateTime(originalTrip);
 
-    // Khoảng thời gian cho phép: trong vòng ± 24 giờ
-    const minTime = new Date(origTime.getTime() - 24 * 60 * 60 * 1000);
-    const maxTime = new Date(origTime.getTime() + 24 * 60 * 60 * 1000);
-
-    // Tiêu chí 1 & 2: Cùng tuyến hoặc cùng điểm đi & điểm đến (bắt buộc)
+    // Tiêu chí 1 & 2: Cùng tuyến hoặc cùng điểm đi & điểm đến (bắt buộc), trạng thái CHUA_KHOI_HANH
     const candidates = await this.prisma.chuyenXe.findMany({
       where: {
         chuyenXeId: { not: originalTrip.chuyenXeId },
-        trangThai: { not: 'DA_HUY' },
+        trangThai: 'CHUA_KHOI_HANH',
         OR: [
           { tuyenXeId: originalTrip.tuyenXeId },
           {
@@ -1237,6 +1239,7 @@ export class TripsService {
             ghe: true,
           },
         },
+        phanHois: true,
       },
     });
 
@@ -1250,20 +1253,6 @@ export class TripsService {
           return null; // Bỏ qua chuyến đã hết chỗ
         }
 
-        // Lấy giá vé của chuyến thay thế
-        const fare = await this.prisma.bangGia.findFirst({
-          where: {
-            nhaXeId: trip.nhaXeId,
-            tuyenXeId: trip.tuyenXeId,
-            loaiXeId: trip.xe.loaiXeId,
-            trangThai: 'DANG_AP_DUNG',
-          },
-          orderBy: {
-            bangGiaId: 'desc',
-          },
-        });
-        const price = fare ? Number(fare.giaNiemYet) : 250000;
-
         const candTime = getTripDateTime(trip);
 
         // Tiêu chí 3: Cùng ngày hoặc trong khoảng ± 24 giờ
@@ -1275,6 +1264,25 @@ export class TripsService {
         if (deltaMinutes > 24 * 60) {
           return null;
         }
+
+        // Lấy giá vé của chuyến thay thế từ bảng giá đang hoạt động
+        const fare = await this.prisma.bangGia.findFirst({
+          where: {
+            nhaXeId: trip.nhaXeId,
+            tuyenXeId: trip.tuyenXeId,
+            loaiXeId: trip.xe.loaiXeId,
+            trangThai: 'HOAT_DONG',
+            tuNgay: { lte: trip.ngayKhoiHanh },
+            OR: [{ denNgay: null }, { denNgay: { gte: trip.ngayKhoiHanh } }],
+          },
+          orderBy: {
+            tuNgay: 'desc',
+          },
+        });
+        if (!fare) {
+          return null; // Bỏ qua nếu không có bảng giá hợp lệ
+        }
+        const price = Number(fare.giaNiemYet);
 
         // Thuật toán tính điểm ưu tiên (Scoring Engine)
         let score = 1000;
@@ -1340,8 +1348,43 @@ export class TripsService {
             })
           : '08:00';
 
+        const computedArrivalIso = computeArrival(
+          trip.ngayKhoiHanh,
+          trip.gioKhoiHanh,
+          trip.tuyenXe.thoiGianChayPhut,
+          trip.gioDen,
+          businessTimeZone,
+        );
+        const arrivalTime = computedArrivalIso
+          ? new Date(computedArrivalIso).toLocaleTimeString('vi-VN', {
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: false,
+            })
+          : trip.gioDen
+            ? new Date(trip.gioDen).toLocaleTimeString('vi-VN', {
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false,
+              })
+            : '';
+
+        const durationMinutes = trip.tuyenXe.thoiGianChayPhut;
+        let duration = '';
+        if (durationMinutes && durationMinutes > 0) {
+          const hours = Math.floor(durationMinutes / 60);
+          const mins = durationMinutes % 60;
+          duration = mins > 0 ? `${hours} giờ ${mins} phút` : `${hours} giờ`;
+        }
+
         const operatorName = trip.xe.nhaXe.tenNhaXe;
         const vehicleTypeName = trip.xe.loaiXe.tenLoai;
+
+        const reviews = trip.phanHois || [];
+        const reviewCount = reviews.length;
+        const rating = reviewCount > 0
+          ? Math.round((reviews.reduce((sum, r) => sum + r.mucDanhGia, 0) / reviewCount) * 10) / 10
+          : null;
 
         return {
           score,
@@ -1360,16 +1403,16 @@ export class TripsService {
             toCityId: cityToCode(trip.tuyenXe.diemDen),
             toCityName: trip.tuyenXe.diemDen,
             departureTime: depTime,
-            arrivalTime: '14:30',
-            duration: '6 giờ',
+            arrivalTime,
+            duration,
             price,
             originalPrice: price,
             discountPrice: price,
             availableSeats,
             totalSeats: trip.gheChuyenXes.length,
             seatLayoutType: vehicleTypeName,
-            rating: 4.8,
-            reviewCount: 124,
+            rating,
+            reviewCount,
             pickupPoint: `Bến xe ${trip.tuyenXe.diemDi}`,
             pickupAddress: `Văn phòng ${operatorName}, ${trip.tuyenXe.diemDi}`,
             dropoffPoint: `Bến xe ${trip.tuyenXe.diemDen}`,

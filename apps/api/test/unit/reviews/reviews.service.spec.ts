@@ -11,13 +11,14 @@ describe('ReviewsService', () => {
   const customer = { khachHangId: 10 };
   const mockTrip = {
     chuyenXeId: 101,
-    thoiDiemDi: new Date('2026-10-05T08:00:00.000Z'),
+    ngayKhoiHanh: new Date('2026-10-05T00:00:00.000Z'),
+    gioKhoiHanh: new Date('1970-01-01T08:00:00.000Z'),
+    trangThai: 'HOAN_THANH',
   };
 
   const prisma = {
     khachHang: { findUnique: vi.fn() },
     chuyenXe: { findUnique: vi.fn() },
-    phieuDatVe: { findFirst: vi.fn() },
     ve: { findFirst: vi.fn() },
     phanHoi: { findFirst: vi.fn(), create: vi.fn() },
   };
@@ -37,8 +38,7 @@ describe('ReviewsService', () => {
     ).rejects.toThrow(NotFoundException);
   });
 
-  it('throws ForbiddenException if customer has no booking or ticket for this trip', async () => {
-    prisma.phieuDatVe.findFirst.mockResolvedValue(null);
+  it('throws ForbiddenException if customer has no ticket for this trip', async () => {
     prisma.ve.findFirst.mockResolvedValue(null);
 
     await expect(
@@ -47,7 +47,7 @@ describe('ReviewsService', () => {
   });
 
   it('throws ConflictException if customer already reviewed this trip', async () => {
-    prisma.phieuDatVe.findFirst.mockResolvedValue({ phieuDatVeId: 1 });
+    prisma.ve.findFirst.mockResolvedValue({ veId: 1 });
     prisma.phanHoi.findFirst.mockResolvedValue({ phanHoiId: 50 });
 
     await expect(
@@ -56,7 +56,7 @@ describe('ReviewsService', () => {
   });
 
   it('creates review successfully when eligible', async () => {
-    prisma.phieuDatVe.findFirst.mockResolvedValue({ phieuDatVeId: 1 });
+    prisma.ve.findFirst.mockResolvedValue({ veId: 1 });
     prisma.phanHoi.findFirst.mockResolvedValue(null);
     prisma.phanHoi.create.mockResolvedValue({
       phanHoiId: 1,

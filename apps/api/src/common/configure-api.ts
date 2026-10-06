@@ -57,8 +57,7 @@ export function configureApi(app: INestApplication): void {
     const start = Date.now();
     res.on('finish', () => {
       const duration = Date.now() - start;
-      const bodyStr = req.body && Object.keys(req.body).length > 0 ? ` | Body: ${JSON.stringify(req.body)}` : '';
-      console.log(`\x1b[36m[API REQUEST]\x1b[0m ${req.method} ${req.originalUrl}${bodyStr} -> \x1b[32m${res.statusCode}\x1b[0m (${duration}ms)`);
+      console.log(`\x1b[36m[API REQUEST]\x1b[0m ${req.method} ${req.originalUrl} -> \x1b[32m${res.statusCode}\x1b[0m (${duration}ms)`);
     });
     next();
   });

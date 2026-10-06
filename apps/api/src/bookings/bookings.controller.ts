@@ -9,6 +9,8 @@ import {
 } from '@nestjs/common';
 import { BookingsService } from './bookings.service.js';
 import { BookingQueryDto } from './dto/booking-query.dto.js';
+import { BookingQuoteDto } from './dto/booking-quote.dto.js';
+import { CreateBookingDto } from './dto/create-booking.dto.js';
 import { CurrentPrincipal } from '../auth/decorators/current-principal.decorator.js';
 import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
 import { Public } from '../auth/decorators/public.decorator.js';
@@ -19,44 +21,20 @@ export class BookingsController {
 
   @Public()
   @Post('quote')
-  async getBookingQuote(
-    @Body()
-    body: {
-      tripId: number | string;
-      seatIds: Array<number | string>;
-      promotionCode?: string;
-    },
-  ) {
+  async getBookingQuote(@Body() dto: BookingQuoteDto) {
     return this.bookingsService.getBookingQuote(
-      Number(body.tripId),
-      (body.seatIds || []).map(Number),
-      body.promotionCode,
+      dto.tripId,
+      dto.seatIds,
+      dto.promotionCode,
     );
   }
 
-  @Public()
   @Post()
   async createBooking(
-    @Body()
-    body: {
-      tripId: number | string;
-      seatIds: Array<number | string>;
-      pickupPoint: string;
-      dropoffPoint: string;
-      contact: { fullName: string; phone: string; email?: string };
-      promotionCode?: string;
-      holdToken?: string;
-    },
+    @CurrentPrincipal() principal: AuthPrincipal,
+    @Body() dto: CreateBookingDto,
   ) {
-    return this.bookingsService.createBooking({
-      tripId: Number(body.tripId),
-      seatIds: (body.seatIds || []).map(Number),
-      pickupPoint: body.pickupPoint,
-      dropoffPoint: body.dropoffPoint,
-      contact: body.contact,
-      promotionCode: body.promotionCode,
-      holdToken: body.holdToken,
-    });
+    return this.bookingsService.createBooking(principal, dto);
   }
 
   @Get()
