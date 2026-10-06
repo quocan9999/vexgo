@@ -56,7 +56,7 @@ export class ReviewsService {
       throw new NotFoundException('Chuyến xe không tồn tại.');
     }
 
-    // 2. Kiểm tra điều kiện: Khách hàng phải có vé hợp lệ cho chuyến xe này
+    // 2. Kiểm tra điều kiện: Khách hàng phải có vé hợp lệ và đã thanh toán thành công
     const eligibleTicket = await this.prisma.ve.findFirst({
       where: {
         gheChuyenXe: {
@@ -65,6 +65,10 @@ export class ReviewsService {
         phieuDatVe: {
           donGiaoDich: {
             khachHangId: customer.khachHangId,
+            trangThai: 'DA_THANH_TOAN',
+          },
+          trangThai: {
+            in: ['DA_THANH_TOAN', 'HOAN_TAT'],
           },
         },
         trangThai: {

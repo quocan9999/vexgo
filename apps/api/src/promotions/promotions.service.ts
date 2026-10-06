@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 
 @Injectable()
@@ -33,10 +33,19 @@ export class PromotionsService {
       }
     }
 
+    // Bắt buộc xác định tenant (nhà xe) - không cho phép tìm kiếm toàn cục
+    if (!nhaXeId) {
+      throw new BadRequestException({
+        error: 'TENANT_SCOPE_REQUIRED',
+        message:
+          'Vui lòng cung cấp nhaXeId hoặc tripId để xác định nhà xe áp dụng mã khuyến mãi.',
+      });
+    }
+
     const promo = await this.prisma.khuyenMai.findFirst({
       where: {
         maKhuyenMai: cleanCode,
-        ...(nhaXeId ? { nhaXeId } : {}),
+        nhaXeId,
         trangThai: 'HOAT_DONG',
       },
     });
@@ -46,9 +55,7 @@ export class PromotionsService {
         code: cleanCode,
         isValid: false,
         discountAmount: 0,
-        message: nhaXeId
-          ? 'Mã khuyến mãi không tồn tại hoặc không áp dụng cho nhà xe này.'
-          : 'Mã khuyến mãi không tồn tại trong hệ thống.',
+        message: 'Mã khuyến mãi không tồn tại hoặc không áp dụng cho nhà xe này.',
       };
     }
 
@@ -71,37 +78,39 @@ export class PromotionsService {
       };
     }
 
-    const minAmount = promo.giaTriDonToiThieu ? Number(promo.giaTriDonToiThieu) : 0;
-    const currentTotal = Number(params.totalAmount || 0);
-
-    if (minAmount > 0 && currentTotal < minAmount) {
+    const originalTotal = Number(params.totalAmount || 0);
+    if (
+      promo.giaTriDonToiThieu &&
+      originalTotal < Number(promo.giaTriDonToiThieu)
+    ) {
       return {
         code: cleanCode,
         isValid: false,
         discountAmount: 0,
-        message: `Đơn hàng tối thiểu ${minAmount.toLocaleString('vi-VN')}đ để áp dụng mã này.`,
+        message: `Đơn hàng tối thiểu ${Number(promo.giaTriDonToiThieu).toLocaleString('vi-VN')}đ để sử dụng mã này.`,
       };
     }
 
-    let discount = 0;
-    const val = Number(promo.giaTriGiam);
+    let discountAmount = 0;
     if (promo.loaiGiamGia === 'PHAN_TRAM') {
-      discount = (currentTotal * val) / 100;
-      if (promo.giamToiDa) {
-        discount = Math.min(discount, Number(promo.giamToiDa));
+      const percentage = Number(promo.giaTriGiam);
+      discountAmount = Math.round((originalTotal * percentage) / 100);
+      if (
+        promo.giamToiDa &&
+        discountAmount > Number(promo.giamToiDa)
+      ) {
+        discountAmount = Number(promo.giamToiDa);
       }
     } else {
-      discount = val;
+      discountAmount = Number(promo.giaTriGiam);
     }
-
-    discount = Math.min(discount, currentTotal);
 
     return {
       code: cleanCode,
       isValid: true,
-      discountAmount: Math.round(discount),
-      description: promo.tenChuongTrinh,
-      minOrderAmount: minAmount,
+      discountAmount: Math.min(originalTotal, discountAmount),
+      promotionId: promo.khuyenMaiId,
+      message: 'Áp dụng mã khuyến mãi thành công.',
     };
   }
 }

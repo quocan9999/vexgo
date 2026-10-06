@@ -1,5 +1,16 @@
-import { Injectable, NotFoundException, Logger } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
+import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
+import type {
+  MomoWebhookDto,
+  VnpayWebhookDto,
+  ZaloPayWebhookDto,
+} from './dto/webhook.dto.js';
 
 @Injectable()
 export class PaymentsService {
@@ -7,17 +18,51 @@ export class PaymentsService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  async createPayment(bookingId: number, provider: string) {
+  private async verifyCustomerOwnership(
+    principal: AuthPrincipal | undefined,
+    khachHangId?: number | null,
+    errorMessage = 'Bạn không có quyền truy cập thông tin thanh toán này.',
+  ) {
+    if (!principal) return;
+    if (
+      principal.roles?.includes('ADMIN') ||
+      principal.roles?.includes('OPERATOR')
+    ) {
+      return;
+    }
+    const customer = await this.prisma.khachHang.findUnique({
+      where: { taiKhoanId: principal.taiKhoanId },
+    });
+    if (!customer || customer.khachHangId !== khachHangId) {
+      throw new ForbiddenException(errorMessage);
+    }
+  }
+
+  async createPayment(
+    bookingId: number,
+    provider: string,
+    principal?: AuthPrincipal,
+  ) {
     const booking = await this.prisma.phieuDatVe.findUnique({
       where: { phieuDatVeId: Number(bookingId) },
       include: {
-        donGiaoDich: true,
+        donGiaoDich: {
+          include: {
+            khachHang: true,
+          },
+        },
       },
     });
 
     if (!booking) {
       throw new NotFoundException(`Đơn đặt vé #${bookingId} không tồn tại.`);
     }
+
+    await this.verifyCustomerOwnership(
+      principal,
+      booking.donGiaoDich?.khachHangId,
+      'Bạn không có quyền thanh toán cho đơn đặt vé này.',
+    );
 
     const cleanProvider = (provider || 'MOMO').toUpperCase();
 
@@ -37,7 +82,9 @@ export class PaymentsService {
     const paymentUrl = `https://sandbox.${cleanProvider.toLowerCase()}.vn/pay?id=${payment.thanhToanId}&amount=${amount}`;
     const deeplink = `${cleanProvider.toLowerCase()}://app?id=${payment.thanhToanId}`;
 
-    this.logger.log(`Created payment #${payment.thanhToanId} via ${cleanProvider} for booking #${bookingId}, amount: ${amount}đ`);
+    this.logger.log(
+      `Created payment #${payment.thanhToanId} via ${cleanProvider} for booking #${bookingId}, amount: ${amount}đ`,
+    );
 
     return {
       paymentId: payment.thanhToanId,
@@ -51,72 +98,68 @@ export class PaymentsService {
     };
   }
 
-  async getPaymentStatus(paymentId: number) {
+  async getPaymentStatus(paymentId: number, principal?: AuthPrincipal) {
     const payment = await this.prisma.thanhToan.findUnique({
       where: { thanhToanId: Number(paymentId) },
       include: {
         donGiaoDich: {
           include: {
             phieuDatVe: true,
+            khachHang: true,
           },
         },
       },
     });
 
     if (!payment) {
-      throw new NotFoundException(`Giao dịch thanh toán #${paymentId} không tồn tại.`);
+      throw new NotFoundException(
+        `Giao dịch thanh toán #${paymentId} không tồn tại.`,
+      );
     }
 
-    // In dev demo mode, mark as SUCCESS when checked
-    const updatedPayment = await this.prisma.thanhToan.update({
-      where: { thanhToanId: payment.thanhToanId },
-      data: {
-        trangThai: 'THANH_CONG',
-      },
-    });
+    await this.verifyCustomerOwnership(
+      principal,
+      payment.donGiaoDich?.khachHangId,
+    );
 
-    // Also update PhieuDatVe and DonGiaoDich to DA_THANH_TOAN
-    if (payment.donGiaoDich) {
-      await this.prisma.donGiaoDich.update({
-        where: { donGiaoDichId: payment.donGiaoDichId },
-        data: { trangThai: 'DA_THANH_TOAN' },
-      });
-
-      if (payment.donGiaoDich.phieuDatVe) {
-        await this.prisma.phieuDatVe.update({
-          where: { phieuDatVeId: payment.donGiaoDich.phieuDatVe.phieuDatVeId },
-          data: { trangThai: 'DA_THANH_TOAN' },
-        });
-      }
-    }
-
-    this.logger.log(`Payment #${paymentId} confirmed SUCCESS in MySQL.`);
+    // Purely READ-ONLY: do NOT mutate database!
+    const isSuccess = payment.trangThai === 'THANH_CONG';
+    const isFailed = payment.trangThai === 'THAT_BAI';
+    const status = isSuccess ? 'SUCCESS' : isFailed ? 'FAILED' : 'PENDING';
 
     return {
       paymentId: payment.thanhToanId,
       bookingId: payment.donGiaoDich?.phieuDatVe?.phieuDatVeId ?? 0,
       provider: payment.phuongThuc,
       amount: Number(payment.soTien),
-      status: 'SUCCESS',
-      paidAt: new Date().toISOString(),
+      status,
+      paidAt: isSuccess ? payment.updatedAt.toISOString() : undefined,
     };
   }
 
-  async getPaymentById(paymentId: number) {
+  async getPaymentById(paymentId: number, principal?: AuthPrincipal) {
     const payment = await this.prisma.thanhToan.findUnique({
       where: { thanhToanId: Number(paymentId) },
       include: {
         donGiaoDich: {
           include: {
             phieuDatVe: true,
+            khachHang: true,
           },
         },
       },
     });
 
     if (!payment) {
-      throw new NotFoundException(`Giao dịch thanh toán #${paymentId} không tồn tại.`);
+      throw new NotFoundException(
+        `Giao dịch thanh toán #${paymentId} không tồn tại.`,
+      );
     }
+
+    await this.verifyCustomerOwnership(
+      principal,
+      payment.donGiaoDich?.khachHangId,
+    );
 
     return {
       paymentId: payment.thanhToanId,
@@ -129,29 +172,83 @@ export class PaymentsService {
     };
   }
 
-  async handleMomoWebhook(body: any) {
+  async confirmPaymentSuccess(paymentId: number) {
+    const payment = await this.prisma.thanhToan.findUnique({
+      where: { thanhToanId: Number(paymentId) },
+      include: {
+        donGiaoDich: {
+          include: {
+            phieuDatVe: true,
+          },
+        },
+      },
+    });
+
+    if (!payment) {
+      throw new NotFoundException(
+        `Giao dịch thanh toán #${paymentId} không tồn tại.`,
+      );
+    }
+
+    if (payment.trangThai === 'THANH_CONG') {
+      return { success: true, message: 'Giao dịch đã được xác nhận trước đó.' };
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.thanhToan.update({
+        where: { thanhToanId: payment.thanhToanId },
+        data: {
+          trangThai: 'THANH_CONG',
+        },
+      });
+
+      if (payment.donGiaoDich) {
+        await tx.donGiaoDich.update({
+          where: { donGiaoDichId: payment.donGiaoDichId },
+          data: { trangThai: 'DA_THANH_TOAN' },
+        });
+
+        if (payment.donGiaoDich.phieuDatVe) {
+          await tx.phieuDatVe.update({
+            where: { phieuDatVeId: payment.donGiaoDich.phieuDatVe.phieuDatVeId },
+            data: { trangThai: 'DA_THANH_TOAN' },
+          });
+        }
+      }
+    });
+
+    this.logger.log(
+      `Payment #${paymentId} confirmed SUCCESS via verified webhook.`,
+    );
+    return { success: true };
+  }
+
+  async handleMomoWebhook(body: MomoWebhookDto) {
     this.logger.log(`Received MoMo Webhook: ${JSON.stringify(body)}`);
     const paymentId = Number(body.orderId || body.paymentId || body.extraData);
-    if (paymentId) {
-      return this.getPaymentStatus(paymentId);
+    if (paymentId && (body.resultCode === 0 || body.resultCode === undefined)) {
+      await this.confirmPaymentSuccess(paymentId);
     }
     return { resultCode: 0, message: 'Received' };
   }
 
-  async handleVnpayWebhook(queryOrBody: any) {
+  async handleVnpayWebhook(queryOrBody: VnpayWebhookDto) {
     this.logger.log(`Received VNPay Webhook: ${JSON.stringify(queryOrBody)}`);
     const paymentId = Number(queryOrBody.vnp_TxnRef || queryOrBody.paymentId);
-    if (paymentId) {
-      return this.getPaymentStatus(paymentId);
+    if (
+      paymentId &&
+      (queryOrBody.vnp_ResponseCode === '00' || !queryOrBody.vnp_ResponseCode)
+    ) {
+      await this.confirmPaymentSuccess(paymentId);
     }
     return { RspCode: '00', Message: 'Confirm Success' };
   }
 
-  async handleZaloPayWebhook(body: any) {
+  async handleZaloPayWebhook(body: ZaloPayWebhookDto) {
     this.logger.log(`Received ZaloPay Webhook: ${JSON.stringify(body)}`);
     const paymentId = Number(body.app_trans_id || body.paymentId);
     if (paymentId) {
-      return this.getPaymentStatus(paymentId);
+      await this.confirmPaymentSuccess(paymentId);
     }
     return { return_code: 1, return_message: 'success' };
   }

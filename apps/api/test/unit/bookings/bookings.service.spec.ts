@@ -242,4 +242,131 @@ describe('BookingsService', () => {
       expect(result.data.tickets[0].seatNumber).toBe('A01');
     });
   });
+
+  describe('createBooking - Financial Consistency & Remainder Allocation', () => {
+    it('distributes remainder deterministically so sum(Ve.giaThucTe) strictly equals finalTotal', async () => {
+      const mockSeatHolds = {
+        verifyHold: vi.fn(),
+        consumeHold: vi.fn(),
+      };
+      const mockPromotions = {
+        validatePromotion: vi.fn().mockResolvedValue({ isValid: false, discountAmount: 0 }),
+      };
+
+      const futureDate = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      const trip = {
+        chuyenXeId: 50,
+        trangThai: 'CHUA_KHOI_HANH',
+        ngayKhoiHanh: futureDate,
+        gioKhoiHanh: new Date('1970-01-01T08:00:00Z'),
+        nhaXeId: 1,
+        tuyenXeId: 2,
+        xe: { loaiXeId: 3 },
+      };
+
+      const tripSeats = [
+        { gheChuyenXeId: 101, chuyenXeId: 50, trangThai: 'TRONG', ghe: { soGhe: 'A1' } },
+        { gheChuyenXeId: 102, chuyenXeId: 50, trangThai: 'TRONG', ghe: { soGhe: 'A2' } },
+        { gheChuyenXeId: 103, chuyenXeId: 50, trangThai: 'TRONG', ghe: { soGhe: 'A3' } },
+      ];
+
+      const createdTickets: any[] = [];
+      const testPrisma: any = {
+        khachHang: {
+          findUnique: vi.fn().mockResolvedValue({ khachHangId: 10, taiKhoanId: 1 }),
+        },
+        chuyenXe: {
+          findUnique: vi.fn().mockResolvedValue(trip),
+        },
+        gheChuyenXe: {
+          findMany: vi.fn().mockResolvedValue(tripSeats),
+        },
+        bangGia: {
+          findFirst: vi.fn().mockResolvedValue({ bangGiaId: 9, giaNiemYet: '33333.33' }),
+        },
+        khuyenMai: {
+          findFirst: vi.fn().mockResolvedValue(null),
+        },
+        $transaction: vi.fn(async (cb) => {
+          const tx = {
+            donGiaoDich: {
+              create: vi.fn().mockResolvedValue({ donGiaoDichId: 201 }),
+            },
+            phieuDatVe: {
+              create: vi.fn().mockResolvedValue({
+                phieuDatVeId: 301,
+                maPhieuDatVe: 'PDV-301',
+                createdAt: new Date(),
+              }),
+            },
+            ve: {
+              create: vi.fn().mockImplementation(async ({ data }: any) => {
+                createdTickets.push(data);
+                return data;
+              }),
+            },
+            gheChuyenXe: {
+              updateMany: vi.fn().mockResolvedValue({ count: 3 }),
+            },
+          };
+          return cb(tx);
+        }),
+      };
+
+      const bookingService = new BookingsService(
+        testPrisma as unknown as PrismaService,
+        config as unknown as ConfigService,
+        mockSeatHolds as any,
+        mockPromotions as any,
+      );
+
+      // Giả lập tính giá: 100,000 VND chia cho 3 ghế (không chia hết)
+      vi.spyOn(bookingService, 'getBookingQuote').mockResolvedValue({
+        unitPrice: 33333.33,
+        seatCount: 3,
+        originalTotal: 100000,
+        discountAmount: 0,
+        finalTotal: 100000,
+        currency: 'VND',
+        appliedPromotionCode: null,
+      });
+
+      const principal: any = { taiKhoanId: 1, roles: ['CUSTOMER'] };
+      const dto: any = {
+        tripId: 50,
+        seatIds: [101, 102, 103],
+        holdToken: 'hold_test_token',
+        pickupPoint: 'Bến xe',
+        contact: { fullName: 'Test', phone: '0901234567' },
+      };
+
+      const result = await bookingService.createBooking(principal, dto);
+
+      expect(result).toBeDefined();
+      expect(createdTickets).toHaveLength(3);
+
+      // Giá từng vé: 100000 / 3 = 33333 dư 1 -> Vé 1: 33334, Vé 2: 33333, Vé 3: 33333
+      expect(createdTickets[0].giaThucTe).toBe(33334);
+      expect(createdTickets[1].giaThucTe).toBe(33333);
+      expect(createdTickets[2].giaThucTe).toBe(33333);
+
+      // Tổng tiền từng vé phải khớp tuyệt đối 100% với finalTotal
+      const totalTicketPrices = createdTickets.reduce((sum, t) => sum + t.giaThucTe, 0);
+      expect(totalTicketPrices).toBe(100000);
+
+      // Kiểm tra holdToken được verify với customerId và consume
+      expect(mockSeatHolds.verifyHold).toHaveBeenCalledWith(
+        'hold_test_token',
+        50,
+        [101, 102, 103],
+        10,
+      );
+      expect(mockSeatHolds.consumeHold).toHaveBeenCalledWith(
+        'hold_test_token',
+        50,
+        [101, 102, 103],
+        10,
+      );
+    });
+  });
 });

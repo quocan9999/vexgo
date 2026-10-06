@@ -1255,6 +1255,11 @@ export class TripsService {
 
         const candTime = getTripDateTime(trip);
 
+        // Loại bỏ chuyến đã qua thời điểm khởi hành (departureAt <= now)
+        if (candTime.getTime() <= Date.now()) {
+          return null;
+        }
+
         // Tiêu chí 3: Cùng ngày hoặc trong khoảng ± 24 giờ
         const deltaMs = Math.abs(candTime.getTime() - origTime.getTime());
         const deltaMinutes = Math.floor(deltaMs / (60 * 1000));
@@ -1414,10 +1419,10 @@ export class TripsService {
             rating,
             reviewCount,
             pickupPoint: `Bến xe ${trip.tuyenXe.diemDi}`,
-            pickupAddress: `Văn phòng ${operatorName}, ${trip.tuyenXe.diemDi}`,
+            pickupAddress: null,
             dropoffPoint: `Bến xe ${trip.tuyenXe.diemDen}`,
-            dropoffAddress: `Văn phòng ${operatorName}, ${trip.tuyenXe.diemDen}`,
-            amenities: ['Wifi', 'Nước uống', 'Khăn lạnh', 'Cổng sạc USB'],
+            dropoffAddress: null,
+            amenities: [],
             recommendationReason,
             matchScore: score,
           },

@@ -3,28 +3,42 @@ import {
   ConflictException,
   NotFoundException,
   Logger,
+  type OnModuleInit,
+  type OnModuleDestroy,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { randomUUID } from 'node:crypto';
+import { createHmac, randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service.js';
 import {
   combineDeparture,
   resolveBusinessTimeZone,
 } from '../common/time/business-date.js';
+import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
 
 export interface ActiveHold {
   holdToken: string;
   tripId: number;
   seatIds: number[];
   expiresAt: Date;
+  customerId?: number | null;
   timer?: NodeJS.Timeout;
 }
 
+interface HoldTokenPayload {
+  tripId: number;
+  seats: number[];
+  customerId?: number | null;
+  exp: number;
+  nonce: string;
+}
+
 @Injectable()
-export class SeatHoldsService {
+export class SeatHoldsService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(SeatHoldsService.name);
   private readonly holds = new Map<string, ActiveHold>();
   private readonly businessTimeZone: string;
+  private readonly holdSecret: string;
+  private cleanupTimer?: NodeJS.Timeout;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -33,9 +47,89 @@ export class SeatHoldsService {
     this.businessTimeZone = resolveBusinessTimeZone(
       config?.get<string>('BUSINESS_TIME_ZONE'),
     );
+    this.holdSecret =
+      config?.get<string>('JWT_ACCESS_SECRET') ||
+      'vexgo_seat_hold_resilience_secret_2026';
   }
 
-  async createSeatHold(tripId: number, seatIds: number[]) {
+  onModuleInit() {
+    this.cleanupTimer = setInterval(() => {
+      this.releaseStaleHolds().catch((err) => {
+        this.logger.error('Error during scheduled stale hold cleanup:', err);
+      });
+    }, 60 * 1000);
+  }
+
+  onModuleDestroy() {
+    if (this.cleanupTimer) {
+      clearInterval(this.cleanupTimer);
+    }
+  }
+
+  /**
+   * Tự động giải phóng các ghế bị giữ quá thời gian TTL (10 phút) trong DB
+   * Đảm bảo tính bền vững (Durability) chống kẹt ghế khi restart server hoặc multi-instance.
+   */
+  async releaseStaleHolds(): Promise<number> {
+    const staleThreshold = new Date(Date.now() - 10 * 60 * 1000);
+    const result = await this.prisma.gheChuyenXe.updateMany({
+      where: {
+        trangThai: 'DANG_GIU',
+        updatedAt: { lt: staleThreshold },
+      },
+      data: {
+        trangThai: 'TRONG',
+      },
+    });
+
+    if (result.count > 0) {
+      this.logger.log(
+        `Released ${result.count} stale held seats back to TRONG in MySQL.`,
+      );
+    }
+    return result.count;
+  }
+
+  private signHoldToken(payload: HoldTokenPayload): string {
+    const raw = JSON.stringify(payload);
+    const b64 = Buffer.from(raw).toString('base64url');
+    const sig = createHmac('sha256', this.holdSecret)
+      .update(raw)
+      .digest('base64url');
+    return `hold_${b64}.${sig}`;
+  }
+
+  private parseSignedHoldToken(token: string): HoldTokenPayload | null {
+    if (!token.startsWith('hold_')) return null;
+    const rest = token.slice(5);
+    const dotIdx = rest.indexOf('.');
+    if (dotIdx === -1) return null;
+
+    const b64 = rest.slice(0, dotIdx);
+    const sig = rest.slice(dotIdx + 1);
+
+    try {
+      const raw = Buffer.from(b64, 'base64url').toString('utf8');
+      const expectedSig = createHmac('sha256', this.holdSecret)
+        .update(raw)
+        .digest('base64url');
+      if (sig !== expectedSig) return null;
+
+      const payload = JSON.parse(raw) as HoldTokenPayload;
+      return payload;
+    } catch {
+      return null;
+    }
+  }
+
+  async createSeatHold(
+    tripId: number,
+    seatIds: number[],
+    principal?: AuthPrincipal,
+  ) {
+    // 0. Dọn dẹp ghế kẹt hết hạn trước khi kiểm tra
+    await this.releaseStaleHolds();
+
     const validTripId = Number(tripId);
     if (!validTripId || isNaN(validTripId) || validTripId <= 0) {
       throw new NotFoundException('Mã chuyến xe không hợp lệ.');
@@ -80,16 +174,31 @@ export class SeatHoldsService {
       });
     }
 
-    // 2. Tìm chính xác các ghế thuộc chuyến xe (KHÔNG fallback, KHÔNG silent substitution)
-    const tripSeats = await this.prisma.gheChuyenXe.findMany({
+    // 2. Khớp chính xác identifier: Hỗ trợ gheChuyenXeId (tripSeatId theo contract) và fallback gheId
+    let tripSeats = await this.prisma.gheChuyenXe.findMany({
       where: {
         chuyenXeId: validTripId,
-        gheId: { in: numericIds },
+        gheChuyenXeId: { in: numericIds },
       },
       include: {
         ghe: true,
       },
     });
+
+    if (tripSeats.length !== numericIds.length) {
+      const byGheId = await this.prisma.gheChuyenXe.findMany({
+        where: {
+          chuyenXeId: validTripId,
+          gheId: { in: numericIds },
+        },
+        include: {
+          ghe: true,
+        },
+      });
+      if (byGheId.length === numericIds.length) {
+        tripSeats = byGheId;
+      }
+    }
 
     if (tripSeats.length !== numericIds.length) {
       throw new ConflictException({
@@ -98,14 +207,15 @@ export class SeatHoldsService {
       });
     }
 
-    // 3. Khắc phục Race condition: Thực hiện so sánh và cập nhật nguyên tử (Compare-and-Set) trong transaction
-    const resolvedSeatIds = numericIds;
+    // Toàn bộ quy trình dùng gheChuyenXeId xuyên suốt
+    const resolvedTripSeatIds = tripSeats.map((s) => s.gheChuyenXeId);
+
+    // 3. Khắc phục Race condition: CAS trong transaction
     await this.prisma.$transaction(async (tx) => {
-      // Kiểm tra xem có ghế nào không ở trạng thái TRONG
       const occupiedSeat = await tx.gheChuyenXe.findFirst({
         where: {
           chuyenXeId: validTripId,
-          gheId: { in: resolvedSeatIds },
+          gheChuyenXeId: { in: resolvedTripSeatIds },
           trangThai: { not: 'TRONG' },
         },
         include: { ghe: true },
@@ -121,7 +231,7 @@ export class SeatHoldsService {
       const updateResult = await tx.gheChuyenXe.updateMany({
         where: {
           chuyenXeId: validTripId,
-          gheId: { in: resolvedSeatIds },
+          gheChuyenXeId: { in: resolvedTripSeatIds },
           trangThai: 'TRONG',
         },
         data: {
@@ -129,7 +239,7 @@ export class SeatHoldsService {
         },
       });
 
-      if (updateResult.count !== resolvedSeatIds.length) {
+      if (updateResult.count !== resolvedTripSeatIds.length) {
         throw new ConflictException({
           error: 'SEAT_UNAVAILABLE',
           message: 'Một hoặc nhiều ghế đã được giữ bởi người khác.',
@@ -137,9 +247,25 @@ export class SeatHoldsService {
       }
     });
 
-    // 4. Tạo hold token & thiết lập TTL 10 phút
-    const holdToken = `hold_${randomUUID().replace(/-/g, '')}`;
+    // 4. Lấy customerId nếu có principal
+    let customerId: number | null = null;
+    if (principal?.taiKhoanId) {
+      const cust = await this.prisma.khachHang.findUnique({
+        where: { taiKhoanId: principal.taiKhoanId },
+        select: { khachHangId: true },
+      });
+      if (cust) customerId = cust.khachHangId;
+    }
+
+    // 5. Tạo signed hold token & thiết lập TTL 10 phút
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 phút
+    const holdToken = this.signHoldToken({
+      tripId: validTripId,
+      seats: resolvedTripSeatIds,
+      customerId,
+      exp: expiresAt.getTime(),
+      nonce: randomUUID(),
+    });
 
     const timer = setTimeout(() => {
       this.releaseSeatHold(holdToken).catch((err) => {
@@ -150,53 +276,68 @@ export class SeatHoldsService {
     this.holds.set(holdToken, {
       holdToken,
       tripId: validTripId,
-      seatIds: resolvedSeatIds,
+      seatIds: resolvedTripSeatIds,
       expiresAt,
+      customerId,
       timer,
     });
 
     this.logger.log(
-      `Created seat hold ${holdToken} for trip ${validTripId}, seats [${resolvedSeatIds.join(', ')}] until ${expiresAt.toISOString()}`,
+      `Created seat hold ${holdToken} for trip ${validTripId}, seats [${resolvedTripSeatIds.join(', ')}] until ${expiresAt.toISOString()}`,
     );
 
     return {
       holdToken,
       tripId: validTripId,
-      seatIds: resolvedSeatIds,
+      seatIds: resolvedTripSeatIds,
       expiresAt: expiresAt.toISOString(),
     };
   }
 
   async releaseSeatHold(holdToken: string) {
     const hold = this.holds.get(holdToken);
-    if (!hold) {
-      return { success: true };
+    let tripId = hold?.tripId;
+    let seatIds = hold?.seatIds;
+
+    if (hold) {
+      if (hold.timer) {
+        clearTimeout(hold.timer);
+      }
+      this.holds.delete(holdToken);
+    } else {
+      // Thử parse signed token nếu map mất do server restart
+      const payload = this.parseSignedHoldToken(holdToken);
+      if (payload) {
+        tripId = payload.tripId;
+        seatIds = payload.seats;
+      }
     }
 
-    if (hold.timer) {
-      clearTimeout(hold.timer);
+    if (tripId && seatIds && seatIds.length > 0) {
+      await this.prisma.gheChuyenXe.updateMany({
+        where: {
+          chuyenXeId: tripId,
+          gheChuyenXeId: { in: seatIds },
+          trangThai: 'DANG_GIU',
+        },
+        data: {
+          trangThai: 'TRONG',
+        },
+      });
+      this.logger.log(
+        `Released seat hold ${holdToken} for trip ${tripId}, seats [${seatIds.join(', ')}]`,
+      );
     }
-    this.holds.delete(holdToken);
 
-    // Cập nhật trạng thái MySQL về TRONG (chỉ khi vẫn là DANG_GIU, không đè DA_DAT)
-    await this.prisma.gheChuyenXe.updateMany({
-      where: {
-        chuyenXeId: hold.tripId,
-        gheId: { in: hold.seatIds },
-        trangThai: 'DANG_GIU',
-      },
-      data: {
-        trangThai: 'TRONG',
-      },
-    });
-
-    this.logger.log(
-      `Released seat hold ${holdToken} for trip ${hold.tripId}, seats [${hold.seatIds.join(', ')}]`,
-    );
     return { success: true };
   }
 
-  verifyHold(holdToken: string, tripId: number, seatIds: number[]): void {
+  verifyHold(
+    holdToken: string,
+    tripId: number,
+    seatIds: number[],
+    expectedCustomerId?: number | null,
+  ): void {
     if (!holdToken) {
       throw new ConflictException({
         error: 'HOLD_REQUIRED',
@@ -204,7 +345,25 @@ export class SeatHoldsService {
       });
     }
 
-    const hold = this.holds.get(holdToken);
+    let hold = this.holds.get(holdToken);
+
+    // Phục hồi từ signed token nếu in-memory map bị mất do restart server
+    if (!hold) {
+      const payload = this.parseSignedHoldToken(holdToken);
+      if (payload) {
+        if (payload.exp > Date.now()) {
+          hold = {
+            holdToken,
+            tripId: payload.tripId,
+            seatIds: payload.seats,
+            expiresAt: new Date(payload.exp),
+            customerId: payload.customerId,
+          };
+          this.holds.set(holdToken, hold);
+        }
+      }
+    }
+
     if (!hold) {
       throw new ConflictException({
         error: 'HOLD_EXPIRED',
@@ -230,6 +389,17 @@ export class SeatHoldsService {
       });
     }
 
+    if (
+      hold.customerId &&
+      expectedCustomerId &&
+      hold.customerId !== expectedCustomerId
+    ) {
+      throw new ConflictException({
+        error: 'HOLD_OWNERSHIP_MISMATCH',
+        message: 'Mã giữ chỗ không thuộc về tài khoản khách hàng hiện tại.',
+      });
+    }
+
     if (hold.expiresAt <= new Date()) {
       throw new ConflictException({
         error: 'HOLD_EXPIRED',
@@ -238,13 +408,26 @@ export class SeatHoldsService {
     }
   }
 
-  consumeHold(holdToken?: string, _tripId?: number, _seatIds?: number[]) {
-    if (!holdToken) return;
+  consumeHold(
+    holdToken?: string,
+    tripId?: number,
+    seatIds?: number[],
+    expectedCustomerId?: number | null,
+  ): boolean {
+    if (!holdToken) return false;
+    this.verifyHold(
+      holdToken,
+      tripId ?? 0,
+      seatIds ?? [],
+      expectedCustomerId,
+    );
     const hold = this.holds.get(holdToken);
     if (hold) {
       if (hold.timer) clearTimeout(hold.timer);
       this.holds.delete(holdToken);
       this.logger.log(`Consumed seat hold ${holdToken} for confirmed booking`);
+      return true;
     }
+    return false;
   }
 }

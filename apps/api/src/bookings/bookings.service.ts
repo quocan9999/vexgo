@@ -198,16 +198,31 @@ export class BookingsService {
 
     const effectiveTripId = trip.chuyenXeId;
 
-    // 3. Khớp chính xác danh sách ghế (KHÔNG fallback, KHÔNG silent substitution)
-    const tripSeats = await this.prisma.gheChuyenXe.findMany({
+    // 3. Khớp chính xác danh sách ghế: hỗ trợ gheChuyenXeId (tripSeatId) và fallback gheId
+    let tripSeats = await this.prisma.gheChuyenXe.findMany({
       where: {
         chuyenXeId: effectiveTripId,
-        gheId: { in: numericIds },
+        gheChuyenXeId: { in: numericIds },
       },
       include: {
         ghe: true,
       },
     });
+
+    if (tripSeats.length !== numericIds.length) {
+      const byGheId = await this.prisma.gheChuyenXe.findMany({
+        where: {
+          chuyenXeId: effectiveTripId,
+          gheId: { in: numericIds },
+        },
+        include: {
+          ghe: true,
+        },
+      });
+      if (byGheId.length === numericIds.length) {
+        tripSeats = byGheId;
+      }
+    }
 
     if (tripSeats.length !== numericIds.length) {
       throw new ConflictException({
@@ -216,7 +231,7 @@ export class BookingsService {
       });
     }
 
-    const resolvedSeatIds = numericIds;
+    const resolvedSeatIds = tripSeats.map((s) => s.gheChuyenXeId);
 
     for (const seat of tripSeats) {
       if (seat.trangThai === 'DA_DAT') {
@@ -232,6 +247,7 @@ export class BookingsService {
       params.holdToken,
       effectiveTripId,
       resolvedSeatIds,
+      customer.khachHangId,
     );
 
     // 5. Tính giá và kiểm tra bảng giá chính xác
@@ -304,25 +320,43 @@ export class BookingsService {
         },
       });
 
-      const unitFinalPrice = Math.round(quote.finalTotal / (resolvedSeatIds.length || 1));
-      for (const seat of tripSeats) {
+      const seatCount = resolvedSeatIds.length || 1;
+      const baseTicketPrice = Math.floor(quote.finalTotal / seatCount);
+      const remainder = quote.finalTotal % seatCount;
+
+      for (let i = 0; i < tripSeats.length; i++) {
+        const seat = tripSeats[i];
         const ticketCode = `${bookingCode}-${seat.ghe.soGhe}`;
+        const actualTicketPrice = baseTicketPrice + (i < remainder ? 1 : 0);
+
         await tx.ve.create({
           data: {
             maVe: ticketCode,
             diemDon: params.pickupPoint,
             giaNiemYet: quote.unitPrice,
-            giaThucTe: unitFinalPrice,
+            giaThucTe: actualTicketPrice,
             trangThai: 'DA_DAT',
             phieuDatVeId: phieuDatVe.phieuDatVeId,
             gheChuyenXeId: seat.gheChuyenXeId,
             bangGiaApDungId: bangGiaId,
           },
         });
+      }
 
-        await tx.gheChuyenXe.update({
-          where: { gheChuyenXeId: seat.gheChuyenXeId },
-          data: { trangThai: 'DA_DAT' },
+      // CAS update trong transaction: Chuyển ghế từ DANG_GIU sang DA_DAT
+      const updatedSeats = await tx.gheChuyenXe.updateMany({
+        where: {
+          chuyenXeId: effectiveTripId,
+          gheChuyenXeId: { in: resolvedSeatIds },
+          trangThai: 'DANG_GIU',
+        },
+        data: { trangThai: 'DA_DAT' },
+      });
+
+      if (updatedSeats.count !== resolvedSeatIds.length) {
+        throw new ConflictException({
+          error: 'SEAT_UNAVAILABLE',
+          message: 'Một hoặc nhiều ghế đã không còn ở trạng thái giữ chỗ hợp lệ.',
         });
       }
 
@@ -334,6 +368,7 @@ export class BookingsService {
       params.holdToken,
       effectiveTripId,
       resolvedSeatIds,
+      customer.khachHangId,
     );
 
     const seatNames = tripSeats.map((s) => s.ghe.soGhe);

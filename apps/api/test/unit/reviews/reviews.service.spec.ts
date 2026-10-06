@@ -38,12 +38,28 @@ describe('ReviewsService', () => {
     ).rejects.toThrow(NotFoundException);
   });
 
-  it('throws ForbiddenException if customer has no ticket for this trip', async () => {
+  it('throws ForbiddenException if customer has no ticket or booking is unpaid', async () => {
     prisma.ve.findFirst.mockResolvedValue(null);
 
     await expect(
       service.createReview(42, { tripId: 101, rating: 5 }),
     ).rejects.toThrow(ForbiddenException);
+
+    expect(prisma.ve.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          phieuDatVe: {
+            donGiaoDich: {
+              khachHangId: 10,
+              trangThai: 'DA_THANH_TOAN',
+            },
+            trangThai: {
+              in: ['DA_THANH_TOAN', 'HOAN_TAT'],
+            },
+          },
+        }),
+      }),
+    );
   });
 
   it('throws ConflictException if customer already reviewed this trip', async () => {

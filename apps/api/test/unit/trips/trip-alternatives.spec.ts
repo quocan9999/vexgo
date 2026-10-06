@@ -138,5 +138,39 @@ describe('TripsService - getTripAlternatives', () => {
     // candidate2 is present
     expect(alternatives[1].tripId).toBe(103);
     expect(alternatives[1].recommendationReason).toContain('tiết kiệm');
+
+    // Fixture cleanup assertions: no hardcoded fake strings
+    expect(alternatives[0].pickupAddress).toBeNull();
+    expect(alternatives[0].dropoffAddress).toBeNull();
+    expect(alternatives[0].amenities).toEqual([]);
+  });
+
+  it('filters out past trips whose departure time has already passed', async () => {
+    const pastDate = new Date(Date.now() - 2 * 60 * 60 * 1000); // 2 hours ago
+    const candidatePast = {
+      chuyenXeId: 105,
+      maChuyenXe: 'CX-105',
+      ngayKhoiHanh: pastDate,
+      gioKhoiHanh: pastDate,
+      nhaXeId: 1,
+      tuyenXeId: 5,
+      trangThai: 'CHUA_KHOI_HANH',
+      tuyenXe: mockOriginalTrip.tuyenXe,
+      xe: mockOriginalTrip.xe,
+      gheChuyenXes: Array.from({ length: 10 }, (_, i) => ({
+        gheChuyenXeId: 50 + i,
+        trangThai: 'TRONG',
+        ghe: { gheId: 50 + i },
+      })),
+    };
+
+    prisma.chuyenXe.findMany.mockResolvedValue([candidatePast, candidate1]);
+
+    const alternatives = await service.getTripAlternatives(101, 5);
+
+    // candidatePast (id: 105) must be excluded because departure time has passed
+    expect(alternatives.map((a) => a.tripId)).not.toContain(105);
+    expect(alternatives).toHaveLength(1);
+    expect(alternatives[0].tripId).toBe(102);
   });
 });
