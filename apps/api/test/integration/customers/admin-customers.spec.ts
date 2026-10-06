@@ -910,7 +910,6 @@ describe('Admin Customers API (Feature 06.1)', () => {
       chuyenXeId: 101,
       diemGuiId: 1,
       diemNhanId: 2,
-      bangCuocApDungId: 10,
       khuyenMaiId: null,
       donGiaoDichId: 502,
       createdAt: NOW,

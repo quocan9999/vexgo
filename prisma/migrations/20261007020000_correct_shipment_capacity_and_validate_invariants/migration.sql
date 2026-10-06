@@ -35,38 +35,6 @@ SELECT
 
 DROP TEMPORARY TABLE `_Shipment002ForwardPreflight`;
 
--- Schema 002 has one applied fare on each shipment. For the existing demo data,
--- make that fare's cargo type the source of truth for every item on the shipment.
-UPDATE `HangHoa` AS `item`
-INNER JOIN `PhieuGuiHang` AS `shipment`
-  ON `shipment`.`phieuGuiHangId` = `item`.`phieuGuiHangId`
-INNER JOIN `BangCuocGuiHang` AS `appliedFare`
-  ON `appliedFare`.`bangCuocGuiHangId` = `shipment`.`bangCuocApDungId`
-SET `item`.`loaiHangHoaId` = `appliedFare`.`loaiHangHoaId`
-WHERE `item`.`loaiHangHoaId` <> `appliedFare`.`loaiHangHoaId`;
-
-CREATE TEMPORARY TABLE `_Shipment002CargoInvariantPreflight` (
-    `cargoMatchesSingleAppliedFare` TINYINT NOT NULL,
-    CONSTRAINT `_Shipment002CargoInvariantPreflight_check`
-      CHECK (`cargoMatchesSingleAppliedFare` = 1)
-);
-
-INSERT INTO `_Shipment002CargoInvariantPreflight` (`cargoMatchesSingleAppliedFare`)
-SELECT CASE WHEN NOT EXISTS (
-    SELECT 1
-    FROM `PhieuGuiHang` AS `shipment`
-    INNER JOIN `BangCuocGuiHang` AS `appliedFare`
-      ON `appliedFare`.`bangCuocGuiHangId` = `shipment`.`bangCuocApDungId`
-    LEFT JOIN `HangHoa` AS `item`
-      ON `item`.`phieuGuiHangId` = `shipment`.`phieuGuiHangId`
-    GROUP BY `shipment`.`phieuGuiHangId`, `appliedFare`.`loaiHangHoaId`
-    HAVING COUNT(`item`.`hangHoaId`) = 0
-        OR COUNT(DISTINCT `item`.`loaiHangHoaId`) <> 1
-        OR MIN(`item`.`loaiHangHoaId`) <> `appliedFare`.`loaiHangHoaId`
-) THEN 1 ELSE 0 END;
-
-DROP TEMPORARY TABLE `_Shipment002CargoInvariantPreflight`;
-
 -- Preserve existing trip overrides, raising only snapshots that cannot cover active load.
 UPDATE `ChuyenXe` AS `trip`
 LEFT JOIN (

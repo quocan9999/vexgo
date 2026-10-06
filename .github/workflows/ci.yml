@@ -65,6 +65,9 @@ jobs:
       - name: API build
         run: npm run build --workspace=@vexgo/api
 
+      - name: Shipment migration regression harness
+        run: node prisma/tests/shipment-migration-upgrade.mjs
+
       - name: Apply API database migrations
         run: npm exec -- prisma migrate deploy
 

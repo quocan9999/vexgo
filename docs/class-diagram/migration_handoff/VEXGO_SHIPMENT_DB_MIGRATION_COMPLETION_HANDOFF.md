@@ -6,19 +6,19 @@
 
 **Nhánh:** `refactor/database-schema-and-class-diagram`
 
-**Database đã áp dụng:** `vexgo` tại `127.0.0.1:3306` (MySQL 8.4.11)
+**Database local:** `vexgo` tại `127.0.0.1:3306` là dữ liệu dev/demo. Bản migration corrective cũ đã từng được áp dụng tại đây; mã migration corrective trong branch hiện đã được sửa trước khi merge nên checksum không còn khớp. Dùng database dev mới hoặc reset/reseed database demo trước khi áp dụng bản migration đã sửa.
 
 **Class Diagram đích:** `002-20261006202600_add_shipment_capacity_and_capacity_group.mdl`
 
 ## 1. Tóm tắt cho người nhận bàn giao
 
-- Database shipment đã được chuyển sang Class Diagram 002, gồm hai phần: tinh gọn mô hình gửi hàng theo điểm giao/nhận và bổ sung sức chứa theo nhóm hàng.
+- Database shipment đã được chuyển sang Class Diagram 002, gồm tinh gọn mô hình gửi hàng theo điểm giao/nhận, sức chứa theo nhóm hàng và cước tính riêng theo từng loại hàng trong một phiếu.
 - Migration chính giữ 24 phiếu gửi, 15 điểm giao nhận và tạo 126 dòng cước hoạt động. Các FK bắt buộc của phiếu gửi đã được backfill trước khi đổi sang `NOT NULL`.
 - Hai bảng archive từng được tạo tạm thời để giữ dữ liệu cũ trong lúc chuyển đổi đã bị xóa ở migration kế tiếp theo quyết định của chủ dự án. **24 snapshot phiếu và 72 snapshot cước cũ không còn trong database.**
 - Prisma schema đã bỏ hai model archive. Kiểm tra introspection sau migration cho thấy 43 model và không có hai bảng archive.
-- Sau khi phát hiện CI compile lỗi với Prisma Client mới, branch có thêm hai sửa đổi API tương thích tối thiểu: lịch sử gửi hàng đọc quan hệ `diemGui`/`diemNhan`; tạo chuyến chụp ba mức sức chứa mặc định từ `LoaiXe`. Các UI chưa được sửa và chưa có module API shipment đầy đủ.
-- Migration corrective mới giữ nguyên checksum của migration 002, backfill snapshot chuyến theo tải đang hoạt động và kiểm tra các invariant giao dịch/chuyến + một loại hàng trên mỗi phiếu.
-- Seed demo đã được chạy thành công trên MySQL cô lập mới sau 21 migrations; verifier cũng đạt các kiểm tra mã, FK, trạng thái, sức chứa và các invariant mới.
+- Branch trước đó có các sửa tương thích API cho schema 002 và cập nhật Admin tab lịch sử; Customer Web vẫn chưa có luồng shipment hoàn chỉnh. Đợt sửa theo finding hiện tại chỉ thay đổi database, seed/verifier, harness, diagram và tài liệu.
+- Migration `20261007020000_correct_shipment_capacity_and_validate_invariants` không còn sửa `HangHoa.loaiHangHoaId`. Migration `20261007100000_add_shipment_cargo_type_fees` tạo `ChiTietCuocGuiHang`, backfill cước theo loại hàng, rồi bỏ `PhieuGuiHang.bangCuocApDungId`.
+- Regression harness chạy trên database MySQL scratch riêng và bao gồm trường hợp hợp lệ cùng 4 trường hợp phải dừng an toàn. Không dùng database `vexgo` local làm harness target.
 
 ## 2. Nguồn thiết kế và phạm vi
 
@@ -31,7 +31,7 @@ Các quyết định trọng tâm của phiên bản cuối:
 
 1. Dùng `DiemGiaoNhanHang` thay `BuuCuc`; người gửi và người nhận tự giao/nhận tại điểm, bỏ lấy/giao tận nơi.
 2. Bảng cước được cấu hình theo cặp điểm gửi → điểm nhận và loại hàng, không còn gắn trực tiếp với tuyến hay hình thức lấy/giao.
-3. `PhieuGuiHang` phải tham chiếu chuyến, điểm gửi, điểm nhận và dòng cước áp dụng.
+3. `PhieuGuiHang` tham chiếu chuyến, điểm gửi, điểm nhận và giao dịch; cước của từng loại hàng được lưu trong `ChiTietCuocGuiHang`.
 4. Sức chứa mặc định thuộc `LoaiXe`; sức chứa của `ChuyenXe` là snapshot riêng tại thời điểm tạo/chỉnh chuyến.
 5. `LoaiHangHoa.nhomSucChua` phân loại hàng vào `XE_MAY`, `HANG_CONG_KENH` hoặc `HANG_NHE`.
 
@@ -41,9 +41,10 @@ Các quyết định trọng tâm của phiên bản cuối:
 |---|---|---|
 | `20261006210000_migrate_shipment_schema_to_class_diagram_002` | Đổi schema, backfill dữ liệu, tạo quan hệ mới, dọn bảng staging. | Đã chạy thành công sau khi xử lý lỗi collation. |
 | `20261006220000_drop_shipment_legacy_archive_tables` | Xóa `LuuTruBangCuocGuiHangCu` và `LuuTruPhieuGuiHangCu`. | Đã chạy thành công; hai bảng không còn trong MySQL. |
-| `20261007020000_correct_shipment_capacity_and_validate_invariants` | Forward correction cho database đã chạy 002: giữ snapshot capacity đủ tải, kiểm tra giao dịch vé/gửi cùng chuyến và chuẩn hóa loại hàng demo theo cước đã áp dụng. | Migration mới trong PR; đã kiểm tra trên MySQL 8.4 cô lập. |
+| `20261007020000_correct_shipment_capacity_and_validate_invariants` | Forward correction: giữ snapshot capacity đủ tải, kiểm tra giao dịch vé/gửi cùng chuyến; không ép các dòng hàng về cùng một loại. | Migration được chỉnh trong PR chưa merge; bản đã từng áp dụng trên DB local có checksum cũ. |
+| `20261007100000_add_shipment_cargo_type_fees` | Preflight cước lịch sử/tổng tiền; tạo `ChiTietCuocGuiHang`; backfill theo `(phiếu, loại hàng)`; bỏ cột cước đơn trên phiếu. | Migration forward mới trong PR; regression harness kiểm tra trên MySQL scratch. |
 
-Migration đầu từng tạo archive trước khi thay đổi bảng nghiệp vụ. Migration thứ hai là thay đổi có chủ đích sau đó: dữ liệu demo nên không cần lưu snapshot cũ. Không sửa migration lịch sử 002 đã chạy; thay đổi sức chứa/invariant được đưa vào migration forward mới để không đổi checksum ở database đã áp dụng 002. Database mới replay cả ba migration theo thứ tự.
+Migration đầu từng tạo archive trước khi thay đổi bảng nghiệp vụ. Migration thứ hai là thay đổi có chủ đích sau đó: dữ liệu demo nên không cần lưu snapshot cũ. Không sửa migration lịch sử 002 đã chạy; invariant chuyến/sức chứa nằm ở migration forward. Migration corrective chưa merge được cập nhật để xóa bước ghi đè loại hàng; database local đã áp dụng bản cũ cần tạo lại vì checksum thay đổi. Migration #22 là migration forward riêng cho cước từng loại.
 
 Các bảng staging chỉ tồn tại trong lúc chạy migration 002 và đã được drop ở cuối migration:
 
@@ -86,7 +87,7 @@ Thêm `DiemGiaoNhanTuyenXe`, gồm tuyến, điểm và vai trò `GUI_HANG`, `NH
 
 ### 4.4. Phiếu gửi và lịch sử trạng thái
 
-`PhieuGuiHang` có FK bắt buộc tới chuyến, điểm gửi, điểm nhận, cước áp dụng và đơn giao dịch. Khuyến mãi vẫn optional. Đã bỏ địa chỉ giao tận nơi (`diaChiNguoiNhan`, `diaChiLayHang`) và hai cột hình thức lấy/giao.
+`PhieuGuiHang` có FK bắt buộc tới chuyến, điểm gửi, điểm nhận và đơn giao dịch. Khuyến mãi vẫn optional. Cột/FK `bangCuocApDungId` được bỏ; cước nằm ở các dòng `ChiTietCuocGuiHang`. Đã bỏ địa chỉ giao tận nơi (`diaChiNguoiNhan`, `diaChiLayHang`) và hai cột hình thức lấy/giao.
 
 Trạng thái `CHO_DIEU_PHOI` được chuyển thành `MOI_TAO`; enum hiện gồm `MOI_TAO`, `DA_TIEP_NHAN`, `DANG_VAN_CHUYEN`, `DA_GIAO`, `DA_HUY`. Các snapshot tiền trên phiếu (`cuocChinh`, `phiDichVu`, `soTienGiam`, `tongPhi`) được giữ nguyên.
 
@@ -124,13 +125,23 @@ Database không lưu sức chứa còn lại. Service cần tính từ snapshot 
 | 21 | 73 | Hai chuyến cùng tuyến/ngày (73, 74), lấy ID nhỏ hơn |
 | 24 | 81 | Vé cùng giao dịch |
 
-Điểm gửi/nhận nào đang `NULL` được lấy từ hai điểm trong dòng cước cũ mà phiếu đang tham chiếu. Sau backfill, 24/24 phiếu có chuyến, hai điểm và cước hợp lệ; nhà xe của hai điểm khớp với nhà xe chuyến.
+Điểm gửi/nhận nào đang `NULL` được lấy từ hai điểm trong dòng cước cũ mà phiếu đang tham chiếu. Sau backfill, 24/24 phiếu có chuyến, hai điểm; migration #22 gắn một snapshot cước cho mỗi loại hàng và kiểm tra nhà xe của hai điểm khớp với nhà xe chuyến.
 
 ### 5.2. Loại hàng và cước áp dụng
 
-Mỗi phiếu gửi chỉ có **một `LoaiHangHoa`** vì `PhieuGuiHang` chỉ lưu một `bangCuocApDungId`, và một dòng cước chỉ áp dụng cho một loại hàng. Một phiếu có thể có nhiều dòng `HangHoa`, nhưng mọi dòng phải cùng `loaiHangHoaId` và loại này phải khớp `BangCuocGuiHang.loaiHangHoaId`.
+Một `PhieuGuiHang` được phép có nhiều `HangHoa` thuộc nhiều `LoaiHangHoa`. Migration không cập nhật hoặc ép lại `HangHoa.loaiHangHoaId`.
 
-Migration 002 đã chạy trước đó và có bước chọn dòng cước chuyển tiếp cho dữ liệu demo. Migration corrective không sửa checksum đó; thay vào đó, nó dùng loại hàng trên cước đã áp dụng làm nguồn thống nhất để cập nhật các dòng `HangHoa` demo của phiếu. Đây là chuẩn hóa dữ liệu mẫu, không phải quy tắc “loại hàng chính” theo cân nặng cho nghiệp vụ tương lai. Seed chỉ tạo các dòng hàng cùng loại trên một phiếu; verifier và migration từ chối phiếu không có hàng hoặc có loại hàng không khớp cước.
+`ChiTietCuocGuiHang` lưu đúng một dòng cho mỗi `(phieuGuiHangId, loaiHangHoaId)`:
+
+- `khoiLuongTinhCuoc = SUM(HangHoa.khoiLuong * HangHoa.soLuong)` của đúng phiếu và loại hàng.
+- Tìm đúng một `BangCuocGuiHang` theo cặp điểm, loại hàng, ngày gửi và khoảng cân nặng inclusive; nếu không có hoặc có nhiều dòng cước cùng match thì migration dừng ở preflight.
+- `soTienCuoc` là snapshot mức cước đã chọn. Sau khi xác nhận, thay đổi `BangCuocGuiHang` về sau không tính lại snapshot này.
+- `BangCuocGuiHang` có unique `(bangCuocGuiHangId, loaiHangHoaId)` để làm đích composite FK. `ChiTietCuocGuiHang` tham chiếu cặp cột đó; unique `(phieuGuiHangId, loaiHangHoaId)` chặn hai dòng cước cho cùng loại trên một phiếu.
+- `PhieuGuiHang.cuocChinh = SUM(ChiTietCuocGuiHang.soTienCuoc)`.
+
+Khi tạo phiếu mới, rate phải `HOAT_DONG` và ngày gửi nằm trong `tuNgay..denNgay`. Khi backfill lịch sử, rate được chấp nhận nếu trạng thái là `HOAT_DONG` hoặc `HET_HIEU_LUC` và ngày gửi nằm trong khoảng hiệu lực; trạng thái hiện tại không được dùng để loại nhầm một rate lịch sử đúng.
+
+Hai đầu khoảng cân nặng đều inclusive. Vì vậy `0–5kg` và `5–10kg` overlap tại `5kg`; cấu hình có thể làm một trọng lượng match nhiều rate phải bị preflight/verifier từ chối. Migration chỉ ghi snapshot chi tiết khi tổng cước mới bằng `PhieuGuiHang.cuocChinh` cũ và công thức `tongPhi` còn khớp. Nó không cập nhật `DonGiaoDich.tongTien`, `HoaDon.tongTien` hay `ThanhToan`; mismatch bị từ chối thay vì điều chỉnh/fabricate lịch sử tài chính.
 
 ### 5.3. Dòng cước
 
@@ -173,14 +184,14 @@ Migration cleanup chạy sau đó với `finished_at` có giá trị, `rolled_ba
 
 ## 7. Kiểm chứng đã thực hiện
 
-- `prisma validate --schema prisma/schema.prisma`: hợp lệ.
-- `prisma migrate deploy --schema prisma/schema.prisma`: migration 002 và migration cleanup áp dụng thành công trên database dev nêu đầu tài liệu.
-- Introspection MySQL sau cleanup: 43 model, 0 model/bảng archive.
-- SQL consistency checks sau migration: 24 phiếu có đủ chuyến/điểm/cước; không có shipment lệch chuyến với vé cùng giao dịch; mỗi phiếu có hàng cùng một loại khớp cước; snapshot đủ tải hoạt động; mã địa giới đúng định dạng; `maDiem` duy nhất đúng phạm vi.
-- Số lượng đối chiếu: 15 điểm giao nhận, 24 phiếu gửi, 126 dòng cước, 7 loại hàng (đều `HANG_NHE`), 6 cấu hình điểm/tuyến, 0 dòng lịch sử giả.
-- Trên một MySQL 8.4 cô lập mới: `prisma migrate deploy` áp dụng đủ 21 migrations; `prisma generate`, `prisma db seed` và `node prisma/verify-seed.mjs` chạy thành công. Không dùng database dev tại `127.0.0.1:3306` cho đợt kiểm tra này.
-- API: build thành công; toàn bộ test unit/integration hiện hành đạt 80 file / 1.320 test; E2E đạt 1 test; typecheck và lint đều thành công.
-- CI của PR cần được kiểm tra lại sau khi push commit sửa lỗi; chỉ kết luận xanh khi GitHub Actions báo thành công.
+- `npm exec -- prisma validate --schema prisma/schema.prisma`: hợp lệ; `npm run build --workspace=@vexgo/api`: thành công và tạo Prisma Client cho schema mới.
+- Regression harness `node prisma/tests/shipment-migration-upgrade.mjs` chạy trên MySQL 8.4 scratch, kiểm tra 5 ca: backfill mixed cargo hợp lệ (kể cả rate lịch sử `HET_HIEU_LUC` đúng ngày), lệch chuyến trong transaction, thiếu rate, overlap inclusive tại biên, và cước mới không khớp snapshot tài chính.
+- Ca hợp lệ xác minh hai loại hàng được giữ nguyên, có hai dòng cước riêng với khối lượng/tiền đúng, snapshot capacity được backfill, cột cước đơn bị drop, và `DonGiaoDich`, `HoaDon`, `ThanhToan` giữ nguyên tổng cũ.
+- Các ca preflight lỗi xác minh migration thất bại trước khi tạo bảng chi tiết/drop cột và không thay đổi loại hàng, snapshot tiền, lịch sử giao dịch hoặc capacity.
+- Seed tạo fixture có nhiều loại hàng trong cùng phiếu, nhóm hàng cùng loại bằng `SUM(khoiLuong * soLuong)`, chọn đúng một rate mỗi nhóm, và dừng nếu có dải cước inclusive chồng lấn. `verify-seed.mjs` kiểm tra mỗi nhóm có đúng một detail, composite type/rate đúng, tổng `cuocChinh` và các snapshot tiền/cân nặng khớp.
+- Full-flow scratch MySQL đã áp dụng đủ 22 migrations, chạy `prisma generate`, seed 45 giao dịch / 24 phiếu gửi / 42 món hàng / 36 snapshot cước, và `node prisma/verify-seed.mjs` kết thúc với `Seed verification passed.`
+- Harness và full-flow chỉ tạo/xóa các database scratch mang tên riêng; không dùng database dev `vexgo` tại `127.0.0.1:3306` làm target kiểm thử.
+- GitHub Actions cần chạy bước harness mới sau khi push. Chỉ kết luận CI xanh khi các check của PR hoàn thành thành công.
 
 ## 8. Điểm cần agent tiếp theo biết
 
@@ -190,42 +201,45 @@ Migration cleanup chạy sau đó với `finished_at` có giá trị, `rolled_ba
 - `TripsService.create` hiện ghi ba snapshot sức chứa từ default `LoaiXe` cho chuyến mới. Cấu hình sức chứa của loại xe vẫn mặc định 0; DTO/form Admin chưa có lựa chọn `nhanGuiHang` hoặc ba sức chứa theo chuyến, nên đây mới là tương thích schema/CI chứ chưa hoàn thiện nghiệp vụ sức chứa. Snapshot các chuyến cũ sau migration được backfill đủ với tải hàng đang hiệu lực.
 - API shipment đầy đủ vẫn chưa có module riêng: còn thiếu API tra cứu điểm/cước, tạo vận đơn, kiểm tra cùng nhà xe/tuyến/loại hàng, tính phí/sức chứa và cập nhật trạng thái kèm lịch sử.
 - Admin tab lịch sử đã chỉnh type/hiển thị cho hai field hình thức legacy nullable, map nhãn trạng thái 002 và hiển thị địa chỉ riêng của điểm gửi/nhận. Bố cục tab và contract tổng thể chưa được làm lại; Customer Web vẫn dùng fixture/hard-code. Không xem các sửa tương thích nhỏ này là hoàn thành luồng full-stack.
-- Service tương lai phải xác thực hai điểm thuộc cùng nhà xe, cặp điểm được tuyến hỗ trợ, phiếu chỉ chứa một loại hàng khớp cước, và vé/phiếu gửi trong cùng giao dịch cùng chuyến. Cần xác định trạng thái giữ/nhả sức chứa và xử lý concurrency/transaction khi nhận đơn; database hiện không lưu số sức chứa còn lại.
+- Service tạo shipment tương lai phải nhóm hàng theo `LoaiHangHoa`, tính `SUM(khoiLuong * soLuong)` riêng từng nhóm, tìm đúng một rate active/effective duy nhất, ghi snapshot `ChiTietCuocGuiHang` và đặt `cuocChinh` bằng tổng detail trong cùng transaction. Nếu nhiều rate match thì trả lỗi/preflight; không tự chọn một dòng. Cần giữ snapshot đã xác nhận bất biến trước thay đổi rate. Service cũng phải xác thực hai điểm cùng nhà xe, cặp điểm được tuyến hỗ trợ, vé/phiếu gửi trong một giao dịch cùng chuyến, và trạng thái giữ/nhả sức chứa; database hiện không lưu số sức chứa còn lại.
 - Các cấu hình sức chứa demo hiện bằng 0 và toàn bộ loại hàng đang ở `HANG_NHE`; dữ liệu này chưa đủ để demo luồng nhận xe máy/hàng cồng kềnh.
 
 ### Sai khác lịch sử migration của database local
 
-Trong `prisma migrate status`, database local có bản ghi migration `20261002220000_persistent_seat_holds` nhưng file migration đó không có trong checkout hiện tại. Đây là sai khác lịch sử có trước phần shipment; migration deploy cleanup vẫn chạy thành công. Diff schema cũng từng phát hiện các bảng local `GiuCho` và `GiuChoGhe` không được model trong Prisma schema.
+Trong `prisma migrate status`, database local từng có bản ghi migration `20261002220000_persistent_seat_holds` nhưng file migration đó không có trong checkout hiện tại. Đây là sai khác lịch sử có trước phần shipment; schema local cũng từng có các bảng `GiuCho` và `GiuChoGhe` không được model trong Prisma schema.
 
-Không tự chạy `migrate reset`, xóa bảng, hoặc `migrate resolve` cho migration này khi chưa đối chiếu nhánh/nguồn migration tương ứng. Cần xác nhận với nhóm xem migration thuộc nhánh khác hay file chưa được mang sang.
+Ngoài ra, database demo local đã từng áp dụng bản cũ của migration `20261007020000_correct_shipment_capacity_and_validate_invariants`. Vì file đó được sửa trong PR để ngừng ghi đè loại hàng, checksum hiện tại khác với bản local đã áp dụng. Dùng database dev mới hoặc reset/reseed dữ liệu demo trước khi kiểm tra migration mới; không dùng `migrate resolve` để bỏ qua checksum/preflight. Không chạy reset trên database có dữ liệu cần giữ.
 
 ## 9. Đường dẫn artifact chính
 
 - Prisma schema: `prisma/schema.prisma`
 - Migration chuyển sang diagram 002: `prisma/migrations/20261006210000_migrate_shipment_schema_to_class_diagram_002/migration.sql`
 - Migration xóa archive: `prisma/migrations/20261006220000_drop_shipment_legacy_archive_tables/migration.sql`
+- Migration sửa invariant chuyến/sức chứa: `prisma/migrations/20261007020000_correct_shipment_capacity_and_validate_invariants/migration.sql`
+- Migration tạo snapshot cước từng loại: `prisma/migrations/20261007100000_add_shipment_cargo_type_fees/migration.sql`
+- Harness nâng cấp schema: `prisma/tests/shipment-migration-upgrade.mjs`
+- Seed demo: `prisma/seed.mjs`
+- Seed verifier: `prisma/verify-seed.mjs`
 - Class Diagram cuối: `docs/class-diagram/002-20261006202600_add_shipment_capacity_and_capacity_group.mdl`
 - Class Diagram giai đoạn trước: `docs/class-diagram/001-20261006_sua_loi_cau_hinh_bang_cuoc_theo_cap_diem_gui_nhan.mdl`
 
 ## 10. Cập nhật database local sau khi lấy `develop`
 
-Chạy sau khi PR này đã được merge vào `develop`. Các lệnh chạy từ thư mục gốc repository. Database cần dùng MySQL local đang chạy và các URL trong `.env` phải trỏ đúng database dev của người chạy lệnh.
+Chạy sau khi PR này đã được merge vào `develop`. Các lệnh chạy từ thư mục gốc repository. `DATABASE_URL`, `MIGRATION_URL` và `SHADOW_DATABASE_URL` trong `.env` phải trỏ đúng các database dev của người chạy lệnh; shadow database phải riêng biệt.
 
-Nếu database đã áp dụng migrations 002 + archive cleanup và đang có seed cũ, chạy seed mới trước migration corrective để seed đồng bộ các giao dịch ghép chuyến và loại hàng demo. Preflight sẽ dừng migration nếu giao dịch vé/gửi vẫn khác chuyến.
+Với database mới hoặc database dev/demo đã được tạo lại rỗng:
 
 ```bash
 git switch develop
 git pull --ff-only origin develop
 npm ci
-npm exec -- prisma generate
-npm exec -- prisma db seed
+npm run build --workspace=@vexgo/api
 npm exec -- prisma migrate deploy
 npm exec -- prisma generate
+npm exec -- prisma db seed
 node prisma/verify-seed.mjs
 ```
 
-Với database hoàn toàn mới, chưa có schema nào, chạy theo thứ tự thông thường: `npm exec -- prisma migrate deploy`, `npm exec -- prisma generate`, `npm exec -- prisma db seed`, rồi `node prisma/verify-seed.mjs`.
-
-`.env` cần có `DATABASE_URL`, `MIGRATION_URL` và `SHADOW_DATABASE_URL`. `SHADOW_DATABASE_URL` phải trỏ tới database shadow riêng, không được dùng chung database runtime hay database migration. `prisma db seed` chạy `prisma/seed-bootstrap.mjs`, build API trước rồi chạy seed demo; `verify-seed.mjs` là bước kiểm tra tùy chọn sau seed.
+Lệnh build API tạo Prisma Client để bootstrap seed có thể chạy. Sau đó `migrate deploy` áp dụng toàn bộ 22 migrations; `generate`, `db seed` và verifier chạy trên schema cuối. Seed hiện dừng nếu có dải cước inclusive chồng lấn hoặc không tìm được duy nhất một rate phù hợp cho nhóm hàng.
 
 > **Lưu ý dữ liệu:** migration `20261006220000_drop_shipment_legacy_archive_tables` xóa vĩnh viễn hai bảng archive cũ. Chỉ chạy trên database dev theo quyết định dữ liệu demo đã được xác nhận; hãy sao lưu hoặc dùng database dev mới nếu cần giữ dữ liệu khác. Nếu preflight báo giao dịch ghép khác chuyến, không resolve migration là applied; sửa/reseed dữ liệu demo rồi chạy lại `migrate deploy`.

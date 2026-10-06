@@ -666,6 +666,7 @@ async function seedBranchesRatesCargo(db, operators, routes) {
       }
     }
   }
+  await assertNoOverlappingShipmentRates(db);
   return { points, rates, cargo };
 }
 
@@ -707,13 +708,13 @@ const shippingPlans = [
 ];
 
 const cargoKindsByShipment = [
-  ['ĐIỆN TỬ', 'ĐIỆN TỬ'],
+  ['ĐIỆN TỬ', 'THỰC PHẨM'],
   ['THỰC PHẨM'],
-  ['THƯ TÍN', 'THƯ TÍN'],
+  ['THƯ TÍN', 'ĐIỆN TỬ'],
   ['HẢI SẢN'],
-  ['HÀNG GIA DỤNG', 'HÀNG GIA DỤNG'],
+  ['HÀNG GIA DỤNG', 'QUẦN ÁO'],
   ['ĐIỆN TỬ'],
-  ['QUẦN ÁO', 'QUẦN ÁO'],
+  ['QUẦN ÁO', 'BƯU PHẨM'],
   ['THỰC PHẨM', 'THỰC PHẨM', 'THỰC PHẨM'],
 ];
 
@@ -738,8 +739,24 @@ function cargoWeightForIndex(itemIndex) {
   return 0.5 + itemIndex * 0.75;
 }
 
-function cargoWeightForKinds(cargoKinds) {
-  return cargoKinds.reduce((total, _kind, itemIndex) => total + cargoWeightForIndex(itemIndex) * (itemIndex + 1), 0);
+function cargoGroupsForKinds(cargoKinds, cargoTypes) {
+  const groups = new Map();
+  cargoKinds.forEach((cargoTypeName, itemIndex) => {
+    const cargoType = cargoTypes[cargoTypeName];
+    if (!cargoType) throw new Error(`Unknown LoaiHangHoa in shipment seed: ${cargoTypeName}`);
+
+    const group = groups.get(cargoTypeName) ?? {
+      cargoTypeName,
+      loaiHangHoaId: cargoType.loaiHangHoaId,
+      khoiLuongTinhCuoc: 0,
+    };
+    group.khoiLuongTinhCuoc += cargoWeightForIndex(itemIndex) * (itemIndex + 1);
+    groups.set(cargoTypeName, group);
+  });
+  return [...groups.values()].map((group) => ({
+    ...group,
+    khoiLuongTinhCuoc: Number(group.khoiLuongTinhCuoc.toFixed(2)),
+  }));
 }
 
 function weightIndexForTotal(totalWeight) {
@@ -748,12 +765,45 @@ function weightIndexForTotal(totalWeight) {
   return index;
 }
 
-function singleCargoType(cargoKinds) {
-  const cargoType = cargoKinds[0];
-  if (!cargoType || cargoKinds.some((kind) => kind !== cargoType)) {
-    throw new Error('Each shipment must contain one cargo type because it applies one shipping rate.');
+async function findUniqueShipmentRate(db, { pointSendId, pointReceiveId, cargoGroup, sendDate }) {
+  const matchingRates = await db.bangCuocGuiHang.findMany({
+    where: {
+      diemGuiId: pointSendId,
+      diemNhanId: pointReceiveId,
+      loaiHangHoaId: cargoGroup.loaiHangHoaId,
+      trangThai: 'HOAT_DONG',
+      khoiLuongTu: { lte: cargoGroup.khoiLuongTinhCuoc },
+      tuNgay: { lte: sendDate },
+      AND: [
+        { OR: [{ khoiLuongDen: null }, { khoiLuongDen: { gte: cargoGroup.khoiLuongTinhCuoc } }] },
+        { OR: [{ denNgay: null }, { denNgay: { gte: sendDate } }] },
+      ],
+    },
+    select: { bangCuocGuiHangId: true, mucCuoc: true },
+  });
+  if (matchingRates.length !== 1) {
+    throw new Error(`Expected exactly one active BangCuocGuiHang for ${pointSendId}->${pointReceiveId}, type ${cargoGroup.loaiHangHoaId}, ${cargoGroup.khoiLuongTinhCuoc}kg on ${sendDate.toISOString().slice(0, 10)}; found ${matchingRates.length}.`);
   }
-  return cargoType;
+  return matchingRates[0];
+}
+
+async function assertNoOverlappingShipmentRates(db) {
+  const conflicts = await db.$queryRaw`
+    SELECT COUNT(*) AS value
+    FROM BangCuocGuiHang a
+    JOIN BangCuocGuiHang b
+      ON a.bangCuocGuiHangId < b.bangCuocGuiHangId
+     AND a.diemGuiId = b.diemGuiId
+     AND a.diemNhanId = b.diemNhanId
+     AND a.loaiHangHoaId = b.loaiHangHoaId
+     AND a.tuNgay <= COALESCE(b.denNgay, DATE('9999-12-31'))
+     AND b.tuNgay <= COALESCE(a.denNgay, DATE('9999-12-31'))
+     AND a.khoiLuongTu <= COALESCE(b.khoiLuongDen, CAST(99999999.99 AS DECIMAL(10, 2)))
+     AND b.khoiLuongTu <= COALESCE(a.khoiLuongDen, CAST(99999999.99 AS DECIMAL(10, 2)))
+  `;
+  if (Number(conflicts[0]?.value ?? 0) !== 0) {
+    throw new Error(`Shipment rate preflight found ${conflicts[0].value} overlapping inclusive weight/effective-date bands.`);
+  }
 }
 
 function shipmentHistoryFor(status, sentAt, trip) {
@@ -784,6 +834,23 @@ async function replaceShipmentHistory(db, shipment, history) {
     });
   });
   count('LichSuTrangThaiPhieuGuiHang', 'replace');
+}
+
+async function replaceShipmentFeeDetails(db, shipment, feeDetails) {
+  if (feeDetails.length === 0) throw new Error(`Shipment ${shipment.maVanDon} has no fee details.`);
+  await db.$transaction(async (tx) => {
+    await tx.chiTietCuocGuiHang.deleteMany({ where: { phieuGuiHangId: shipment.phieuGuiHangId } });
+    await tx.chiTietCuocGuiHang.createMany({
+      data: feeDetails.map((detail) => ({
+        phieuGuiHangId: shipment.phieuGuiHangId,
+        loaiHangHoaId: detail.loaiHangHoaId,
+        bangCuocGuiHangId: detail.rate.bangCuocGuiHangId,
+        khoiLuongTinhCuoc: decimal(detail.khoiLuongTinhCuoc),
+        soTienCuoc: decimal(detail.soTienCuoc),
+      })),
+    });
+  });
+  count('ChiTietCuocGuiHang', 'replace');
 }
 
 function customerSnapshot(customer) {
@@ -944,21 +1011,37 @@ async function seedTransactions(db, operators, accounts, fleet, prices, logistic
       let shippingTotal = 0;
       if (shipPlan) {
         const cargoKinds = cargoKindsFor(shippingOrdinal);
-        const totalCargoWeight = cargoWeightForKinds(cargoKinds);
-        const weightIndex = weightIndexForTotal(totalCargoWeight);
-        const cargoType = singleCargoType(cargoKinds);
-        const rate = logistics.rates.get(shippingRateKey(definition.code, weightIndex, logistics.cargo[cargoType].loaiHangHoaId));
-        if (!rate) throw new Error(`Missing BangCuocGuiHang for ${transactionCode}`);
-        const trip = combinedTrip ?? selectTripAfter(outboundTrips, shipPlan.trip, transactionTime, null, true);
-        if (!trip) throw new Error(`No shipment-enabled departure after creation for ${transactionCode}`);
+        const cargoGroups = cargoGroupsForKinds(cargoKinds, logistics.cargo);
         const pointSend = logistics.points[definition.code][0];
         const pointReceive = logistics.points[definition.code][1];
+        const sendDate = dateOnly(2026, 9, day);
+        const feeDetails = await Promise.all(cargoGroups.map(async (group) => {
+          const weightIndex = weightIndexForTotal(group.khoiLuongTinhCuoc);
+          const configuredRate = logistics.rates.get(shippingRateKey(definition.code, weightIndex, group.loaiHangHoaId));
+          if (!configuredRate) throw new Error(`Missing BangCuocGuiHang for ${transactionCode} / ${group.cargoTypeName}`);
+          const rate = await findUniqueShipmentRate(db, {
+            pointSendId: pointSend.diemGiaoNhanHangId,
+            pointReceiveId: pointReceive.diemGiaoNhanHangId,
+            cargoGroup: group,
+            sendDate,
+          });
+          if (rate.bangCuocGuiHangId !== configuredRate.bangCuocGuiHangId) {
+            throw new Error(`Shipment rate preflight selected unexpected BangCuocGuiHang ${rate.bangCuocGuiHangId} for ${transactionCode} / ${group.cargoTypeName}.`);
+          }
+          return {
+            ...group,
+            rate,
+            soTienCuoc: Number(rate.mucCuoc),
+          };
+        }));
+        const trip = combinedTrip ?? selectTripAfter(outboundTrips, shipPlan.trip, transactionTime, null, true);
+        if (!trip) throw new Error(`No shipment-enabled departure after creation for ${transactionCode}`);
         const serviceFee = 0;
-        shippingTotal = Number(rate.mucCuoc);
+        shippingTotal = feeDetails.reduce((total, detail) => total + detail.soTienCuoc, 0);
         shippingData = {
           shipPlan,
-          rate,
           serviceFee,
+          feeDetails,
           trip,
           pointSend,
           pointReceive,
@@ -1021,7 +1104,7 @@ async function seedTransactions(db, operators, accounts, fleet, prices, logistic
           tenNguoiNhan: `Người nhận ${definition.code}-${shippingOrdinal + 1}`,
           soDienThoaiNguoiNhan: `+8493${pad(opIndex * 10 + shippingOrdinal + 1, 7)}`,
           ngayGui: transactionTime,
-          cuocChinh: decimal(Number(shippingData.rate.mucCuoc)),
+          cuocChinh: decimal(shippingTotal),
           phiDichVu: decimal(shippingData.serviceFee),
           soTienGiam: decimal(0),
           tongPhi: decimal(shippingTotal),
@@ -1031,7 +1114,6 @@ async function seedTransactions(db, operators, accounts, fleet, prices, logistic
           chuyenXeId: shippingData.trip.chuyenXeId,
           diemGuiId: shippingData.pointSend.diemGiaoNhanHangId,
           diemNhanId: shippingData.pointReceive.diemGiaoNhanHangId,
-          bangCuocApDungId: shippingData.rate.bangCuocGuiHangId,
           khuyenMaiId: null,
           donGiaoDichId: transaction.donGiaoDichId,
         };
@@ -1045,6 +1127,7 @@ async function seedTransactions(db, operators, accounts, fleet, prices, logistic
           retainedCargoIds.push(item.hangHoaId);
         }
         await removeObsoleteShipmentCargo(db, shipment.phieuGuiHangId, retainedCargoIds);
+        await replaceShipmentFeeDetails(db, shipment, shippingData.feeDetails);
       }
 
       if (paymentState === 'FAILED' || paymentState === 'PENDING') {
