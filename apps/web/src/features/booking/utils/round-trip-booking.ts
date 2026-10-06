@@ -7,6 +7,22 @@ export interface RoundTripBookingInput {
   returnId: string;
 }
 
+export function resolveRoundTripDepartureDate(searchParams: {
+  departureDate?: string | string[];
+  date?: string | string[];
+  price?: string | string[];
+}): string {
+  if (typeof searchParams.departureDate === 'string') {
+    return searchParams.departureDate;
+  }
+
+  if (typeof searchParams.date === 'string') {
+    return searchParams.date;
+  }
+
+  return typeof searchParams.price === 'string' ? searchParams.price : '';
+}
+
 export function canPayForRoundTripBooking(
   outboundSeats: readonly string[],
   returnSeats: readonly string[],

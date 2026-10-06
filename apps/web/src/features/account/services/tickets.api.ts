@@ -9,6 +9,7 @@ export type TicketItem = {
   busCompanyName: string | null;
   vehicleType: string | null;
   departureTime: string | null;
+  arrivalTime?: string | null;
   seatNumber: string | null;
   seatPosition: string | null;
   price: number;
@@ -22,6 +23,19 @@ export type TicketItem = {
   passengerPhone: string | null;
   createdAt: string;
   updatedAt: string;
+  cancellation?: TicketCancellationQuote;
+};
+
+export type TicketCancellationQuote = {
+  eligible: boolean;
+  reason?:
+    | 'ALREADY_CANCELLED'
+    | 'ALREADY_DEPARTED'
+    | 'LESS_THAN_12_HOURS'
+    | 'DEPARTURE_TIME_UNAVAILABLE';
+  cancelFeeRate: number;
+  cancelFee: number;
+  refundAmount: number;
 };
 
 export type PaginationMeta = {
@@ -50,12 +64,37 @@ export type TicketQuery = {
 
 export class ApiError extends Error {
   status: number;
+  error?: string;
+  details?: Record<string, unknown>;
 
-  constructor(message: string, status: number) {
+  constructor(
+    message: string,
+    status: number,
+    error?: string,
+    details?: Record<string, unknown>,
+  ) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
+    this.error = error;
+    this.details = details;
   }
+}
+
+export function isCancellationQuoteExpiredError(
+  error: unknown,
+): error is ApiError {
+  return (
+    error instanceof ApiError && error.error === 'CANCELLATION_QUOTE_EXPIRED'
+  );
+}
+
+export function isCancellationCutoffPassedError(
+  error: unknown,
+): error is ApiError {
+  return (
+    error instanceof ApiError && error.error === 'CANCELLATION_CUTOFF_PASSED'
+  );
 }
 
 const API_BASE_URL =
@@ -91,6 +130,8 @@ export const ticketsApi = {
       throw new ApiError(
         error.message || 'Lấy danh sách vé thất bại',
         res.status,
+        error.error,
+        error.details,
       );
     }
 
@@ -112,6 +153,8 @@ export const ticketsApi = {
       throw new ApiError(
         error.message || 'Lấy chi tiết vé thất bại',
         res.status,
+        error.error,
+        error.details,
       );
     }
 
@@ -122,21 +165,66 @@ export const ticketsApi = {
     ticketCode: string,
     phoneNumber: string,
   ): Promise<{ data: TicketItem }> {
-    const params = new URLSearchParams({
-      ticketCode,
-      phoneNumber,
+    const res = await fetch(`${API_BASE_URL}/tickets/lookup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ticketCode: ticketCode.trim(),
+        phoneNumber: phoneNumber.trim(),
+      }),
     });
-
-    const res = await fetch(`${API_BASE_URL}/tickets/lookup?${params.toString()}`);
 
     if (!res.ok) {
       const error = await res.json().catch(() => ({}));
       throw new ApiError(
         error.message || 'Không tìm thấy vé hoặc thông tin không khớp',
         res.status,
+        error.error,
+        error.details,
+      );
+    }
+
+    return res.json();
+  },
+
+  async cancelTicket(
+    ticketCode: string,
+    phoneNumber: string,
+    reason: string | undefined,
+    expectedCancelFeeRate: number,
+  ): Promise<{ data: CancelTicketResult }> {
+    const res = await fetch(`${API_BASE_URL}/tickets/cancel`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        ticketCode: ticketCode.trim(),
+        phoneNumber: phoneNumber.trim(),
+        reason,
+        expectedCancelFeeRate,
+      }),
+    });
+
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      throw new ApiError(
+        error.message || 'Hủy vé thất bại',
+        res.status,
+        error.error,
+        error.details,
       );
     }
 
     return res.json();
   },
 };
+
+export interface CancelTicketResult {
+  ticketId: number;
+  ticketCode: string;
+  status: string;
+  cancelFee: number;
+  refundAmount: number;
+  message: string;
+}

@@ -33,12 +33,21 @@ import { createPaymentDraft } from '../services/payment-draft';
 import { FeaturePlaceholderModal } from './feature-placeholder-modal';
 import { useAuthSession } from '@/features/auth/auth-session';
 import { customerApi } from '@/features/account/services/customer.api';
+import { hydrateUntouchedProfileField } from '../utils/profile-hydration';
 import type { ApiTripSeat } from '@/features/trips/services/trips.api';
 
 export interface OneWayBookingProps {
   post: Post;
   tripSeats: ApiTripSeat[];
 }
+
+const formatDisplayPhone = (phone?: string | null): string => {
+  if (!phone) return '';
+  if (phone.startsWith('+84')) {
+    return '0' + phone.slice(3);
+  }
+  return phone;
+};
 
 export const OneWayBooking: React.FC<OneWayBookingProps> = ({
   post,
@@ -58,9 +67,15 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
     let active = true;
     executeWithAuth((token) => customerApi.getMe(token))
       .then((res) => {
-        if (!active) return;
-        if (res?.data?.email) {
+        if (!active || !res?.data) return;
+        if (res.data.email) {
           setCustomerEmail((curr) => curr || res.data.email || '');
+        }
+        if (res.data.fullName) {
+          setUserNameOverride((current) => hydrateUntouchedProfileField(current, res.data.fullName));
+        }
+        if (res.data.phoneNumber) {
+          setUserPhoneOverride((current) => hydrateUntouchedProfileField(current, formatDisplayPhone(res.data.phoneNumber)));
         }
       })
       .catch(() => {});
@@ -72,7 +87,23 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
   const customerName =
     userNameOverride !== null ? userNameOverride : user?.fullName || '';
   const customerPhone =
-    userPhoneOverride !== null ? userPhoneOverride : user?.phoneNumber || '';
+    userPhoneOverride !== null
+      ? userPhoneOverride
+      : formatDisplayPhone(user?.phoneNumber) || '';
+
+  const handleReloadUserInfo = () => {
+    if (user?.fullName) setUserNameOverride(user.fullName);
+    if (user?.phoneNumber) setUserPhoneOverride(formatDisplayPhone(user.phoneNumber));
+    executeWithAuth((token) => customerApi.getMe(token))
+      .then((res) => {
+        if (res?.data) {
+          if (res.data.fullName) setUserNameOverride(res.data.fullName);
+          if (res.data.phoneNumber) setUserPhoneOverride(formatDisplayPhone(res.data.phoneNumber));
+          if (res.data.email) setCustomerEmail(res.data.email);
+        }
+      })
+      .catch(() => {});
+  };
   const pickup = pickupOverride !== null ? pickupOverride : post.province;
   const dropoff = dropoffOverride !== null ? dropoffOverride : post.district;
 
@@ -106,13 +137,37 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
       !line.startsWith('-') &&
       !line.toLowerCase().includes('yêu cầu nghiệp vụ'),
   );
+  const isSleeper =
+    post.propertyType?.toUpperCase().includes('GIƯỜNG') ||
+    tripSeats.some((s) => s.position?.includes('Tầng'));
+
   const seatGroups = Object.entries(
     tripSeats.reduce<Record<string, string[]>>((groups, seat) => {
-      const label = seat.position?.trim() || 'Sơ đồ ghế';
+      let label = seat.position?.trim() || 'Sơ đồ ghế';
+      if (isSleeper) {
+        if (
+          seat.seatNumber?.toUpperCase().startsWith('B') ||
+          seat.position?.toLowerCase().includes('trên')
+        ) {
+          label = 'Tầng trên';
+        } else {
+          label = 'Tầng dưới';
+        }
+      }
       (groups[label] ??= []).push(seat.seatNumber);
       return groups;
     }, {}),
   );
+
+  seatGroups.forEach(([, seats]) => {
+    seats.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  });
+  seatGroups.sort(([a], [b]) => {
+    if (a.toLowerCase().includes('dưới')) return -1;
+    if (b.toLowerCase().includes('dưới')) return 1;
+    return a.localeCompare(b);
+  });
+
   const bookedSeats = new Set(
     tripSeats
       .filter((seat) => seat.status !== 'TRONG')
@@ -147,8 +202,9 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
     );
   };
 
-  const SeatIcon = ({
-    className = 'w-[34px] h-[42px]',
+
+  const ChairIcon = ({
+    className = 'w-[36px] h-[44px]',
   }: {
     className?: string;
   }) => (
@@ -159,13 +215,74 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
       aria-hidden="true"
     >
       <g strokeWidth="2.5">
-        <rect x="1" y="14" width="10" height="20" rx="3" />
-        <rect x="29" y="14" width="10" height="20" rx="3" />
-        <rect x="10" y="34" width="20" height="12" rx="3" />
-        <rect x="6" y="2" width="28" height="38" rx="5" />
+        <rect x="1" y="14" width="8" height="20" rx="3" />
+        <rect x="31" y="14" width="8" height="20" rx="3" />
+        <rect x="9" y="34" width="22" height="12" rx="3" />
+        <rect x="7" y="2" width="26" height="38" rx="5" />
       </g>
     </svg>
   );
+
+  const SteeringWheelIcon = ({
+    className = 'w-4 h-4',
+  }: {
+    className?: string;
+  }) => (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="12" cy="12" r="10" />
+      <circle cx="12" cy="12" r="3" />
+      <line x1="12" y1="2" x2="12" y2="9" />
+      <line x1="4.93" y1="19.07" x2="9.88" y2="14.12" />
+      <line x1="19.07" y1="19.07" x2="14.12" y2="14.12" />
+    </svg>
+  );
+
+  const SeatIcon = ChairIcon;
+
+  let leftSeats: string[] = [];
+  let rightSeats: string[] = [];
+  if (!isSleeper) {
+    const unassigned: string[] = [];
+    tripSeats.forEach((seat) => {
+      const pos = seat.position?.toLowerCase() || '';
+      if (pos.includes('trái')) {
+        leftSeats.push(seat.seatNumber);
+      } else if (pos.includes('phải')) {
+        rightSeats.push(seat.seatNumber);
+      } else {
+        unassigned.push(seat.seatNumber);
+      }
+    });
+
+    if (leftSeats.length === 0 && rightSeats.length === 0) {
+      const all = tripSeats.map((s) => s.seatNumber);
+      all.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+      for (let i = 0; i < all.length; i += 4) {
+        if (i < all.length) leftSeats.push(all[i]);
+        if (i + 1 < all.length) leftSeats.push(all[i + 1]);
+        if (i + 2 < all.length) rightSeats.push(all[i + 2]);
+        if (i + 3 < all.length) rightSeats.push(all[i + 3]);
+      }
+    } else if (unassigned.length > 0) {
+      unassigned.forEach((seat) => {
+        if (leftSeats.length <= rightSeats.length) {
+          leftSeats.push(seat);
+        } else {
+          rightSeats.push(seat);
+        }
+      });
+    }
+    leftSeats.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    rightSeats.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  }
 
   const SeatButton = ({ seat }: { seat: string }) => {
     const isBooked = bookedSeats.has(seat);
@@ -226,14 +343,20 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
             <div className="p-4 md:p-5 border-b border-slate-200">
               <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
                 <div>
-                  <div className="flex items-center gap-6">
+                  <div className="flex items-center gap-2 sm:gap-3">
                     <h2 className="text-xl font-black text-slate-950">
                       Chọn ghế
                     </h2>
+                    <span className="text-xs font-bold text-slate-600 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200">
+                      {tripSeats.length} chỗ
+                    </span>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded border bg-amber-50 text-amber-700 border-amber-200">
+                      {isSleeper ? 'Giường nằm' : 'Ghế ngồi'}
+                    </span>
                     <button
                       type="button"
                       onClick={() => setShowVehicleInfoModal(true)}
-                      className="text-xs font-bold text-accent hover:underline cursor-pointer"
+                      className="text-xs font-bold text-accent hover:underline cursor-pointer ml-2"
                     >
                       Thông tin xe
                     </button>
@@ -256,20 +379,101 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
                 </div>
               </div>
 
-              <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-6">
-                {seatGroups.map(([label, seats]) => (
-                  <div key={label}>
-                    <h3 className="text-xs font-black text-slate-700 text-center mb-3">
-                      {label}
-                    </h3>
-                    <div className="grid grid-cols-3 gap-2 max-w-[230px] mx-auto">
-                      {seats.map((seat) => (
-                        <SeatButton key={seat} seat={seat} />
-                      ))}
+              {/* Sơ đồ ghế phân biệt: Xe giường nằm vs Xe ghế ngồi */}
+              {isSleeper ? (
+                /* === XE GIƯỜNG NẰM: 2 TẦNG (TẦNG DƯỚI & TẦNG TRÊN) === */
+                <div className="mt-5">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {seatGroups.map(([label, seats]) => (
+                      <div
+                        key={label}
+                        className="bg-slate-50/80 border border-slate-200 rounded-xl p-4 flex flex-col items-center"
+                      >
+                        <div className="w-full flex items-center justify-between pb-3 mb-3 border-b border-dashed border-slate-200 px-2">
+                          <div className="flex items-center gap-1 text-[11px] font-bold text-slate-500">
+                            <SteeringWheelIcon className="w-4 h-4 text-slate-400" />
+                            Tài xế
+                          </div>
+                          <span className="text-xs font-black uppercase text-[#0060c4] tracking-wide">
+                            {label}
+                          </span>
+                          <span className="text-[10px] font-bold text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200">
+                            Cửa lên 🚪
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-3 justify-items-center">
+                          {seats.map((seat) => (
+                            <SeatButton key={seat} seat={seat} />
+                          ))}
+                        </div>
+
+                        <div className="w-full text-center pt-3 mt-4 border-t border-dashed border-slate-200 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                          Cuối xe
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                /* === XE GHẾ NGỒI: 1 TẦNG VỚI LỐI ĐI Ở GIỮA === */
+                <div className="mt-5 max-w-[540px] mx-auto">
+                  <div className="bg-slate-50/80 border border-slate-200 rounded-xl p-4 sm:p-5">
+                    {/* Đầu xe */}
+                    <div className="flex items-center justify-between pb-3 mb-4 border-b border-dashed border-slate-200 px-2">
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-slate-600 bg-white px-3 py-1 rounded-md border border-slate-200 shadow-2xs">
+                        <SteeringWheelIcon className="w-4 h-4 text-slate-500" />
+                        Tài xế
+                      </div>
+                      <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                        Đầu xe
+                      </span>
+                      <div className="text-xs font-bold text-slate-600 bg-white px-3 py-1 rounded-md border border-slate-200 shadow-2xs">
+                        Cửa lên 🚪
+                      </div>
+                    </div>
+
+                    {/* Thân xe: Dãy trái | LỐI ĐI | Dãy phải */}
+                    <div className="grid grid-cols-[1fr_48px_1fr] gap-2 items-start">
+                      {/* Dãy trái */}
+                      <div>
+                        <p className="text-[11px] font-black text-center text-slate-600 uppercase mb-3">
+                          Dãy trái
+                        </p>
+                        <div className="grid grid-cols-2 gap-2 justify-items-center">
+                          {leftSeats.map((seat) => (
+                            <SeatButton key={seat} seat={seat} />
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Lối đi dọc thân xe */}
+                      <div className="h-full min-h-[180px] flex flex-col items-center justify-center py-4 border-x border-dashed border-slate-200 bg-slate-100/50 rounded">
+                        <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest [writing-mode:vertical-lr] my-auto">
+                          Lối đi
+                        </span>
+                      </div>
+
+                      {/* Dãy phải */}
+                      <div>
+                        <p className="text-[11px] font-black text-center text-slate-600 uppercase mb-3">
+                          Dãy phải
+                        </p>
+                        <div className="grid grid-cols-2 gap-2 justify-items-center">
+                          {rightSeats.map((seat) => (
+                            <SeatButton key={seat} seat={seat} />
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Đuôi xe */}
+                    <div className="text-center pt-3 mt-4 border-t border-dashed border-slate-200 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                      Cuối xe
                     </div>
                   </div>
-                ))}
-              </div>
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 border-b border-slate-200">
@@ -624,6 +828,12 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
                   </span>
                   <strong className="text-emerald-600">
                     {departureDateTimeText}
+                  </strong>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <span className="text-slate-500 font-semibold">Loại ghế</span>
+                  <strong className="text-slate-950">
+                    {isSleeper ? 'Giường nằm' : 'Ghế ngồi'}
                   </strong>
                 </div>
                 <div className="flex justify-between gap-3">

@@ -24,6 +24,7 @@ function isRoute(value: unknown): value is Route {
     typeof value.code === 'string' &&
     typeof value.origin === 'string' &&
     typeof value.destination === 'string' &&
+    (value.durationMinutes == null || isPositiveInteger(value.durationMinutes)) &&
     isRouteStatus(value.status) &&
     isRecord(value.busCompany) &&
     isPositiveInteger(value.busCompany.busCompanyId) &&
@@ -82,11 +83,16 @@ export type CreateRouteInput = {
   code: string;
   origin: string;
   destination: string;
+  durationMinutes: number;
   busCompanyId: number;
   status: Route['status'];
 };
 
-export type UpdateRouteInput = Pick<Route, 'origin' | 'destination'>;
+export type UpdateRouteInput = {
+  origin: string;
+  destination: string;
+  durationMinutes: number;
+};
 
 export function createRoute(input: CreateRouteInput): Promise<Route> {
   return writeRoute('', 'POST', input);

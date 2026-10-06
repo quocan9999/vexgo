@@ -1,0 +1,290 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import {
+  checkTicketCancelEligibility,
+  formatTimeAndDate,
+} from '../../../src/features/tickets/services/cancel-eligibility.ts';
+import * as cancelEligibilityModule from '../../../src/features/tickets/services/cancel-eligibility.ts';
+
+test('checkTicketCancelEligibility rejects already cancelled ticket', () => {
+  const result = checkTicketCancelEligibility({
+    status: 'HUY',
+    departureTime: '2026-10-15T08:00:00.000Z',
+  });
+
+  assert.equal(result.eligible, false);
+  assert.equal(result.reason, 'ALREADY_CANCELLED');
+  assert.equal(result.title, 'Vé đã được hủy');
+  assert.match(result.message, /đã hoàn tất thủ tục hủy/);
+});
+
+test('checkTicketCancelEligibility rejects trip that has already departed', () => {
+  const now = new Date('2026-10-05T10:00:00.000Z').getTime();
+  const pastDeparture = '2026-10-05T08:00:00.000Z';
+
+  const result = checkTicketCancelEligibility(
+    {
+      status: 'DA_THANH_TOAN',
+      departureTime: pastDeparture,
+    },
+    now,
+  );
+
+  assert.equal(result.eligible, false);
+  assert.equal(result.reason, 'ALREADY_DEPARTED');
+  assert.equal(result.title, 'Chuyến xe đã khởi hành');
+  assert.match(result.message, /vé không còn giá trị hủy hoặc hoàn tiền/);
+});
+
+test('checkTicketCancelEligibility rejects trip departing in less than 12 hours', () => {
+  const now = new Date('2026-10-05T10:00:00.000Z').getTime();
+  const nearDeparture = '2026-10-05T18:00:00.000Z'; // 8 hours later
+
+  const result = checkTicketCancelEligibility(
+    {
+      status: 'DA_THANH_TOAN',
+      departureTime: nearDeparture,
+    },
+    now,
+  );
+
+  assert.equal(result.eligible, false);
+  assert.equal(result.reason, 'LESS_THAN_12_HOURS');
+  assert.equal(result.title, 'Vé không đủ điều kiện hủy');
+  assert.match(result.message, /dưới 12 tiếng/);
+});
+
+test('checkTicketCancelEligibility approves ticket departing in >= 12 hours', () => {
+  const now = new Date('2026-10-05T10:00:00.000Z').getTime();
+  const validDeparture = '2026-10-06T10:00:00.000Z'; // 24 hours later
+
+  const result = checkTicketCancelEligibility(
+    {
+      status: 'DA_THANH_TOAN',
+      departureTime: validDeparture,
+    },
+    now,
+  );
+
+  assert.equal(result.eligible, true);
+  assert.equal(result.title, '');
+});
+
+test('checkTicketCancelEligibility uses the authoritative quote returned by the API', () => {
+  const clientNow = new Date('2026-10-05T09:55:00.000Z').getTime();
+  const result = checkTicketCancelEligibility(
+    {
+      status: 'DA_THANH_TOAN',
+      departureTime: '2026-10-06T10:00:00.000Z',
+      cancellation: {
+        eligible: true,
+        cancelFeeRate: 0.2,
+        cancelFee: 50000,
+        refundAmount: 200000,
+      },
+    },
+    clientNow,
+  );
+
+  assert.equal(result.eligible, true);
+  assert.equal(result.cancelFeeRate, 0.2);
+  assert.equal(result.cancelFee, 50000);
+  assert.equal(result.refundAmount, 200000);
+});
+
+test('checkTicketCancelEligibility honors an authoritative rejection from the API', () => {
+  const result = checkTicketCancelEligibility({
+    status: 'DA_THANH_TOAN',
+    departureTime: '2029-10-06T10:00:00.000Z',
+    cancellation: {
+      eligible: false,
+      reason: 'LESS_THAN_12_HOURS',
+      cancelFeeRate: 0,
+      cancelFee: 0,
+      refundAmount: 0,
+    },
+  });
+
+  assert.equal(result.eligible, false);
+  assert.equal(result.reason, 'LESS_THAN_12_HOURS');
+});
+
+test('checkTicketCancelEligibility calculates 10% fee when departure is > 24 hours away', () => {
+  const now = new Date('2026-10-05T10:00:00.000Z').getTime();
+  const departure = '2026-10-06T11:00:00.000Z'; // 25 hours later
+
+  const result = checkTicketCancelEligibility(
+    {
+      status: 'DA_THANH_TOAN',
+      price: 200000,
+      departureTime: departure,
+    },
+    now,
+  );
+
+  assert.equal(result.eligible, true);
+  assert.equal(result.cancelFeeRate, 0.1);
+  assert.equal(result.cancelFee, 20000);
+  assert.equal(result.refundAmount, 180000);
+});
+
+test('checkTicketCancelEligibility calculates 20% fee when departure is <= 24 hours and >= 12 hours away', () => {
+  const now = new Date('2026-10-05T10:00:00.000Z').getTime();
+  const departure24h = '2026-10-06T10:00:00.000Z'; // exactly 24 hours later
+  const departure18h = '2026-10-06T04:00:00.000Z'; // 18 hours later
+  const departure12h = '2026-10-05T22:00:00.000Z'; // exactly 12 hours later
+
+  const res24 = checkTicketCancelEligibility(
+    { status: 'DA_THANH_TOAN', price: 200000, departureTime: departure24h },
+    now,
+  );
+  assert.equal(res24.eligible, true);
+  assert.equal(res24.cancelFeeRate, 0.2);
+  assert.equal(res24.cancelFee, 40000);
+  assert.equal(res24.refundAmount, 160000);
+
+  const res18 = checkTicketCancelEligibility(
+    { status: 'DA_THANH_TOAN', price: 200000, departureTime: departure18h },
+    now,
+  );
+  assert.equal(res18.eligible, true);
+  assert.equal(res18.cancelFeeRate, 0.2);
+  assert.equal(res18.cancelFee, 40000);
+  assert.equal(res18.refundAmount, 160000);
+
+  const res12 = checkTicketCancelEligibility(
+    { status: 'DA_THANH_TOAN', price: 200000, departureTime: departure12h },
+    now,
+  );
+  assert.equal(res12.eligible, true);
+  assert.equal(res12.cancelFeeRate, 0.2);
+  assert.equal(res12.cancelFee, 40000);
+  assert.equal(res12.refundAmount, 160000);
+});
+
+test('checkTicketCancelEligibility keeps the server quote until a refreshed server quote arrives', () => {
+  const lookupTime = new Date('2026-10-05T10:00:00.000Z').getTime();
+  const departureTime = '2026-10-06T10:30:00.000Z'; // 24h 30m away at lookup
+
+  const ticket = {
+    status: 'DA_THANH_TOAN',
+    price: 300000,
+    departureTime,
+    cancellation: {
+      eligible: true,
+      cancelFeeRate: 0.1,
+      cancelFee: 30000,
+      refundAmount: 270000,
+    },
+  };
+
+  // At lookup time (>24h): 10%
+  const initial = checkTicketCancelEligibility(ticket, lookupTime);
+  assert.equal(initial.eligible, true);
+  assert.equal(initial.cancelFeeRate, 0.1);
+  assert.equal(initial.refundAmount, 270000);
+
+  // The client clock may cross 24h, but it must not overwrite the server quote.
+  const oneHourLater = lookupTime + 60 * 60 * 1000;
+  const rechecked24h = checkTicketCancelEligibility(ticket, oneHourLater);
+  assert.equal(rechecked24h.eligible, true);
+  assert.equal(rechecked24h.cancelFeeRate, 0.1);
+  assert.equal(rechecked24h.cancelFee, 30000);
+  assert.equal(rechecked24h.refundAmount, 270000);
+
+  const refreshedTicket = {
+    ...ticket,
+    cancellation: {
+      eligible: true,
+      cancelFeeRate: 0.2,
+      cancelFee: 60000,
+      refundAmount: 240000,
+    },
+  };
+  const refreshed = checkTicketCancelEligibility(refreshedTicket, oneHourLater);
+  assert.equal(refreshed.cancelFeeRate, 0.2);
+  assert.equal(refreshed.cancelFee, 60000);
+  assert.equal(refreshed.refundAmount, 240000);
+
+  // An authoritative server rejection also wins over the client clock.
+  const thirteenHoursLater = lookupTime + 13 * 60 * 60 * 1000;
+  const cutoffTicket = {
+    ...ticket,
+    cancellation: {
+      eligible: false,
+      reason: 'LESS_THAN_12_HOURS',
+      cancelFeeRate: 0,
+      cancelFee: 0,
+      refundAmount: 0,
+    },
+  };
+  const rechecked12h = checkTicketCancelEligibility(
+    cutoffTicket,
+    thirteenHoursLater,
+  );
+  assert.equal(rechecked12h.eligible, false);
+  assert.equal(rechecked12h.reason, 'LESS_THAN_12_HOURS');
+});
+
+test('cancellation quote polling replaces a stale eligible snapshot after the server cutoff', async () => {
+  assert.equal(
+    typeof cancelEligibilityModule.startCancellationQuoteRefresh,
+    'function',
+  );
+
+  const staleTicket = {
+    ticketCode: 'VE-001',
+    status: 'DA_THANH_TOAN',
+    departureTime: '2026-10-06T12:00:00.000Z',
+    cancellation: {
+      eligible: true,
+      cancelFeeRate: 0.2,
+      cancelFee: 50000,
+      refundAmount: 200000,
+    },
+  };
+  const cutoffTicket = {
+    ...staleTicket,
+    cancellation: {
+      eligible: false,
+      reason: 'LESS_THAN_12_HOURS',
+      cancelFeeRate: 0,
+      cancelFee: 0,
+      refundAmount: 0,
+    },
+  };
+
+  let stopPolling = () => {};
+  const refreshed = new Promise((resolve, reject) => {
+    const timeout = setTimeout(
+      () =>
+        reject(new Error('Timed out waiting for cancellation quote refresh')),
+      250,
+    );
+    stopPolling = cancelEligibilityModule.startCancellationQuoteRefresh({
+      ticketCode: 'VE-001',
+      phoneNumber: '0901234567',
+      intervalMs: 1,
+      lookupTicket: async () => ({ data: cutoffTicket }),
+      onRefresh: (ticket, eligibility) => {
+        clearTimeout(timeout);
+        resolve({ ticket, eligibility });
+      },
+    });
+  });
+
+  try {
+    const result = await refreshed;
+    assert.equal(result.ticket.cancellation.eligible, false);
+    assert.equal(result.eligibility.eligible, false);
+    assert.equal(result.eligibility.reason, 'LESS_THAN_12_HOURS');
+  } finally {
+    stopPolling();
+  }
+});
+
+test('formatTimeAndDate formats valid date correctly', () => {
+  const info = formatTimeAndDate('2026-10-07T08:30:00.000Z');
+  assert.ok(info.date.includes('2026'));
+  assert.ok(info.time.length === 5);
+});

@@ -110,17 +110,18 @@ model Ghe {
 }
 
 model TuyenXe {
-  tuyenXeId Int        @id @default(autoincrement()) @db.Int
-  maTuyenXe String     @db.VarChar(50)
-  diemDi    String     @db.VarChar(100)
-  diemDen   String     @db.VarChar(100)
-  trangThai String     @db.VarChar(30)
-  nhaXeId   Int        @db.Int
-  createdAt DateTime   @default(now()) @db.DateTime(0)
-  updatedAt DateTime   @default(now()) @updatedAt @db.DateTime(0)
-  nhaXe     NhaXe      @relation(fields: [nhaXeId], references: [nhaXeId], onDelete: Restrict, onUpdate: Restrict)
-  chuyenXes ChuyenXe[]
-  bangGias  BangGia[]
+  tuyenXeId        Int        @id @default(autoincrement()) @db.Int
+  maTuyenXe        String     @db.VarChar(50)
+  diemDi           String     @db.VarChar(100)
+  diemDen          String     @db.VarChar(100)
+  thoiGianChayPhut Int?       @db.Int
+  trangThai        String     @db.VarChar(30)
+  nhaXeId          Int        @db.Int
+  createdAt        DateTime   @default(now()) @db.DateTime(0)
+  updatedAt        DateTime   @default(now()) @updatedAt @db.DateTime(0)
+  nhaXe            NhaXe      @relation(fields: [nhaXeId], references: [nhaXeId], onDelete: Restrict, onUpdate: Restrict)
+  chuyenXes        ChuyenXe[]
+  bangGias         BangGia[]
 
   @@unique([nhaXeId, maTuyenXe], map: "TuyenXe_index_2")
   @@unique([nhaXeId, tuyenXeId], map: "TuyenXe_nhaXeId_tuyenXeId_key")
@@ -131,6 +132,7 @@ model ChuyenXe {
   maChuyenXe    String         @unique @db.VarChar(50)
   ngayKhoiHanh  DateTime       @db.Date
   gioKhoiHanh   DateTime       @db.Time(0)
+  gioDen        DateTime?      @db.Time(0)
   trangThai     String         @db.VarChar(30)
   nhaXeId       Int            @db.Int
   tuyenXeId     Int            @db.Int

@@ -2,6 +2,7 @@ import { Test } from '@nestjs/testing';
 import { JwtService } from '@nestjs/jwt';
 import {
   BadRequestException,
+  ConflictException,
   Controller,
   Get,
   HttpCode,
@@ -88,6 +89,26 @@ class ApiFoundationTestController {
     throw new NotFoundException({
       error: 'TEST_RESOURCE_NOT_FOUND',
       message: 'Không tìm thấy tài nguyên test.',
+    });
+  }
+
+  @Get('cancellation-quote-expired')
+  @Public()
+  getCancellationQuoteExpired(): never {
+    throw new ConflictException({
+      error: 'CANCELLATION_QUOTE_EXPIRED',
+      message: 'Mức phí hủy vé đã thay đổi.',
+      details: {
+        previousRate: 0.1,
+        internalNote: 'must not reach the client',
+        currentQuote: {
+          eligible: true,
+          cancelFeeRate: 0.2,
+          cancelFee: 40_000,
+          refundAmount: 160_000,
+          providerToken: 'must not reach the client',
+        },
+      },
     });
   }
 
@@ -916,6 +937,7 @@ describe('API foundation', () => {
         code: 'FUTA-TX-0001',
         origin: 'TP.HCM',
         destination: 'Đà Lạt',
+        durationMinutes: 420,
         busCompanyId: 901,
         status: 'HOAT_DONG',
       })
@@ -980,6 +1002,7 @@ describe('API foundation', () => {
       code: 'FUTA-TX-0001',
       origin: 'TP.HCM',
       destination: 'Đà Lạt',
+      durationMinutes: 420,
       busCompanyId: 901,
       status: 'HOAT_DONG',
     };
@@ -1009,6 +1032,7 @@ describe('API foundation', () => {
         code: 'FUTA-TX-0001',
         origin: 'TP.HCM',
         destination: 'Đà Lạt',
+        durationMinutes: 420,
         busCompanyId: 901,
         status: 'HOAT_DONG',
       })
@@ -1032,6 +1056,7 @@ describe('API foundation', () => {
         code: 'FUTA-TX-0001',
         origin: 'TP.HCM',
         destination: 'Đà Lạt',
+        durationMinutes: 420,
         busCompanyId: 901,
         status: 'HOAT_DONG',
       })
@@ -1057,6 +1082,7 @@ describe('API foundation', () => {
         code: 'FUTA-TX-0001',
         origin: 'TP.HCM',
         destination: 'Đà Lạt',
+        durationMinutes: 420,
         busCompanyId: 901,
         status: 'HOAT_DONG',
       })
@@ -1076,7 +1102,7 @@ describe('API foundation', () => {
     await request(app.getHttpServer())
       .patch('/api/v1/routes/17')
       .set('Authorization', 'Bearer signed-token')
-      .send({ origin: 'TP.HCM', destination: 'Đà Lạt' })
+      .send({ origin: 'TP.HCM', destination: 'Đà Lạt', durationMinutes: 420 })
       .expect(200);
 
     expect(routesService.update).toHaveBeenCalledWith(
@@ -1271,6 +1297,30 @@ describe('API foundation', () => {
       error: 'TEST_RESOURCE_NOT_FOUND',
       message: 'Không tìm thấy tài nguyên test.',
     });
+  });
+
+  it('preserves the validated cancellation quote in a 409 response', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/__test/cancellation-quote-expired')
+      .expect(409);
+
+    expect(response.body).toEqual({
+      statusCode: 409,
+      error: 'CANCELLATION_QUOTE_EXPIRED',
+      message: 'Mức phí hủy vé đã thay đổi.',
+      details: {
+        previousRate: 0.1,
+        currentQuote: {
+          eligible: true,
+          cancelFeeRate: 0.2,
+          cancelFee: 40_000,
+          refundAmount: 160_000,
+        },
+      },
+    });
+    expect(JSON.stringify(response.body)).not.toContain(
+      'must not reach the client',
+    );
   });
 
   it.each(['http://localhost:3000', 'http://localhost:3001'])(

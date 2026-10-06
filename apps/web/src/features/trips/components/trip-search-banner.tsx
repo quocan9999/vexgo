@@ -16,7 +16,17 @@ export function TripSearchBanner() {
     searchParams.get('to') || searchParams.get('destination') || '',
   );
   const [selectedType, setSelectedType] = useState('');
-  const [selectedPrice, setSelectedPrice] = useState('');
+  const [selectedPrice, setSelectedPrice] = useState(
+    searchParams.get('departureDate') || searchParams.get('date') || '',
+  );
+  const [tripType, setTripType] = useState<'one-way' | 'round-trip'>(
+    searchParams.get('tripType') === 'round-trip' || !!searchParams.get('returnDate')
+      ? 'round-trip'
+      : 'one-way',
+  );
+  const [returnDate, setReturnDate] = useState(
+    searchParams.get('returnDate') || '',
+  );
 
   // Sync state if URL changes
   useEffect(() => {
@@ -29,6 +39,15 @@ export function TripSearchBanner() {
       setSelectedDistrict(
         searchParams.get('to') || searchParams.get('destination') || '',
       );
+      setSelectedPrice(
+        searchParams.get('departureDate') || searchParams.get('date') || '',
+      );
+      setTripType(
+        searchParams.get('tripType') === 'round-trip' || !!searchParams.get('returnDate')
+          ? 'round-trip'
+          : 'one-way',
+      );
+      setReturnDate(searchParams.get('returnDate') || '');
     });
     return () => {
       active = false;
@@ -47,6 +66,10 @@ export function TripSearchBanner() {
       setSelectedType={setSelectedType}
       selectedPrice={selectedPrice}
       setSelectedPrice={setSelectedPrice}
+      tripType={tripType}
+      setTripType={setTripType}
+      returnDate={returnDate}
+      setReturnDate={setReturnDate}
       onSearch={({ tripType, departureDate, returnDate }) => {
         const query = new URLSearchParams({
           from: selectedProvince,

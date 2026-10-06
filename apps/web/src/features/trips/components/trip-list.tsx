@@ -1,15 +1,21 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Filter, ChevronDown, MapPin } from 'lucide-react';
+import { Filter, ChevronDown, MapPin, X } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Pagination } from '@/components/ui/pagination';
 import { TripCard } from '@/features/trips/components/trip-card';
 import type { Trip } from '@/types/customer';
-import { tripsApi, type ApiTrip } from '@/features/trips/services/trips.api';
+import {
+  tripsApi,
+  busCompaniesApi,
+  type ApiTrip,
+} from '@/features/trips/services/trips.api';
 import {
   buildTripBookingHref,
   buildTripListSearchParams,
+  buildRoundTripBookingHrefAfterSelection,
+  getTripSummaryCardStates,
 } from '@/features/trips/services/trip-list-state';
 
 type TripPage = {
@@ -74,6 +80,8 @@ async function fetchTripsByRoute(
   sort: string,
   search: string,
   vehicleType: string,
+  timeRange: string,
+  operator: string,
 ): Promise<TripPage> {
   if (!origin && !destination) return { trips: [], meta: EMPTY_META };
   const response = await tripsApi.searchTrips(
@@ -85,9 +93,27 @@ async function fetchTripsByRoute(
       sort,
       search,
       vehicleType,
+      timeRange,
+      operator,
     }),
   );
   return { trips: response.data.map(mapApiToTrip), meta: response.meta };
+}
+
+function formatDateLabel(dateStr: string): string {
+  if (!dateStr) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    const [year, month, day] = dateStr.split('-');
+    return `${day}/${month}/${year}`;
+  }
+  const d = new Date(dateStr);
+  if (!isNaN(d.getTime())) {
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    return `${day}/${month}/${year}`;
+  }
+  return dateStr;
 }
 
 function TripSlot({
@@ -96,27 +122,44 @@ function TripSlot({
   label,
   origin,
   destination,
+  active,
+  onActivate,
 }: {
   num: number;
   trip: Trip | null;
   label: string;
   origin: string;
   destination: string;
+  active: boolean;
+  onActivate: () => void;
 }) {
   return (
-    <div
-      className={`flex gap-3 p-3 rounded-lg ${trip ? 'bg-orange-50' : 'bg-slate-50'}`}
+    <button
+      type="button"
+      onClick={onActivate}
+      aria-pressed={active}
+      className={`flex w-full gap-3 rounded-lg border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f05123] focus-visible:ring-offset-2 ${
+        active
+          ? 'border-[#f05123] bg-orange-50/80 shadow-sm ring-1 ring-[#f05123]/15'
+          : 'border-slate-200 bg-slate-100 text-slate-500 hover:border-slate-300'
+      }`}
     >
       <div
-        className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-white font-bold text-sm ${trip ? 'bg-[#f05123]' : 'bg-slate-300'}`}
+        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm font-bold text-white ${active ? 'bg-[#f05123]' : 'bg-slate-400'}`}
       >
         {num}
       </div>
       <div className="flex-1 min-w-0">
         {trip ? (
           <>
-            <p className="text-[11px] text-slate-500 font-medium">{label}</p>
-            <p className="text-[12px] font-bold text-slate-800 truncate">
+            <p
+              className={`text-[11px] font-medium ${active ? 'text-slate-600' : 'text-slate-500'}`}
+            >
+              {label}
+            </p>
+            <p
+              className={`truncate text-[12px] font-bold ${active ? 'text-slate-800' : 'text-slate-600'}`}
+            >
               {trip.origin} - {trip.destination}
             </p>
             <div className="flex items-center gap-1.5 mt-1.5 text-[11px] text-slate-600">
@@ -129,7 +172,9 @@ function TripSlot({
           </>
         ) : (
           <>
-            <p className="text-[11px] text-slate-400">Ngày đi chưa chọn</p>
+            <p className="text-[11px] text-slate-400">
+              {label ? `${label} (chưa chọn)` : 'Chưa chọn'}
+            </p>
             <p className="text-[12px] font-medium text-slate-500">
               {origin || '—'} - {destination || '—'}
             </p>
@@ -141,7 +186,7 @@ function TripSlot({
           </>
         )}
       </div>
-    </div>
+    </button>
   );
 }
 
@@ -166,7 +211,32 @@ export function TripList() {
   const [errorReturn, setErrorReturn] = useState('');
   const [query, setQuery] = useState('');
   const [vehicleType, setVehicleType] = useState('all');
+  const [timeRange, setTimeRange] = useState('all');
+  const [operator, setOperator] = useState('all');
+  const [busCompanies, setBusCompanies] = useState<string[]>([]);
   const [sort, setSort] = useState('departure');
+
+  useEffect(() => {
+    let ignore = false;
+    busCompaniesApi.getBusCompanies().then((companies) => {
+      if (ignore) return;
+      const valid = companies
+        .filter((c) => !c.code.startsWith('RBAC') && !c.code.startsWith('T04'))
+        .map((c) => c.name);
+      setBusCompanies(valid);
+    });
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
+  const allOperators = Array.from(
+    new Set([
+      ...busCompanies,
+      ...outboundTrips.map((t) => t.operator),
+      ...returnTrips.map((t) => t.operator),
+    ]),
+  ).filter(Boolean);
 
   const origin = searchParams.get('from') || searchParams.get('origin') || '';
   const destination =
@@ -177,6 +247,16 @@ export function TripList() {
   const tripType = searchParams.get('tripType') || '';
   // Round-trip nếu tripType=round-trip HOẶC có returnDate
   const isRoundTrip = tripType === 'round-trip' || !!returnDate;
+
+  const outboundDateFormatted = formatDateLabel(date);
+  const outboundLabel = outboundDateFormatted
+    ? `Ngày đi: ${outboundDateFormatted}`
+    : 'Ngày đi';
+
+  const returnDateFormatted = formatDateLabel(returnDate);
+  const returnLabel = returnDateFormatted
+    ? `Ngày về: ${returnDateFormatted}`
+    : 'Ngày về';
 
   // Route key: changes when from/to/date change → used to auto-reset selections
   const routeKey = `${origin}|${destination}|${date}|${returnDate || ''}|${tripType || 'one-way'}`;
@@ -215,8 +295,8 @@ export function TripList() {
     setActiveTabKeyed({ key: routeKey, tab });
   }
 
-  const outboundSearchKey = `${origin}\u0000${destination}\u0000${date}\u0000${query}\u0000${vehicleType}`;
-  const returnSearchKey = `${destination}\u0000${origin}\u0000${returnDate}\u0000${query}\u0000${vehicleType}`;
+  const outboundSearchKey = `${origin}\u0000${destination}\u0000${date}\u0000${query}\u0000${vehicleType}\u0000${timeRange}\u0000${operator}`;
+  const returnSearchKey = `${destination}\u0000${origin}\u0000${returnDate}\u0000${query}\u0000${vehicleType}\u0000${timeRange}\u0000${operator}`;
   const outboundPage =
     outboundPageState.searchKey === outboundSearchKey
       ? outboundPageState.page
@@ -239,6 +319,8 @@ export function TripList() {
           sort,
           query,
           vehicleType,
+          timeRange,
+          operator,
         );
         if (ignore) return;
         setOutboundTrips(response.trips);
@@ -258,11 +340,24 @@ export function TripList() {
     return () => {
       ignore = true;
     };
-  }, [origin, destination, date, outboundPage, sort, query, vehicleType]);
+  }, [
+    origin,
+    destination,
+    date,
+    outboundPage,
+    sort,
+    query,
+    vehicleType,
+    timeRange,
+    operator,
+  ]);
 
   // Fetch return trips if round-trip
   useEffect(() => {
     if (!isRoundTrip) return;
+    if (date && returnDate && date > returnDate) {
+      return;
+    }
     let ignore = false;
     const fetchReturnTrips = async () => {
       setLoadingReturn(true);
@@ -276,6 +371,8 @@ export function TripList() {
           sort,
           query,
           vehicleType,
+          timeRange,
+          operator,
         );
         if (ignore) return;
         setReturnTrips(response.trips);
@@ -296,6 +393,7 @@ export function TripList() {
       ignore = true;
     };
   }, [
+    date,
     destination,
     origin,
     returnDate,
@@ -304,15 +402,31 @@ export function TripList() {
     sort,
     query,
     vehicleType,
+    timeRange,
+    operator,
   ]);
 
-
   const effectiveActiveTab = isRoundTrip ? activeTab : 'outbound';
+  const isDateOrderInvalid =
+    isRoundTrip && Boolean(date && returnDate && date > returnDate);
   const activeTrips =
-    effectiveActiveTab === 'outbound' ? outboundTrips : returnTrips;
+    effectiveActiveTab === 'outbound'
+      ? outboundTrips
+      : isDateOrderInvalid
+        ? []
+        : returnTrips;
   const loading =
-    effectiveActiveTab === 'outbound' ? loadingOutbound : loadingReturn;
-  const error = effectiveActiveTab === 'outbound' ? errorOutbound : errorReturn;
+    effectiveActiveTab === 'outbound'
+      ? loadingOutbound
+      : isDateOrderInvalid
+        ? false
+        : loadingReturn;
+  const error =
+    effectiveActiveTab === 'outbound'
+      ? errorOutbound
+      : isDateOrderInvalid
+        ? 'Ngày đi không được lớn hơn ngày về'
+        : errorReturn;
   const activeMeta =
     effectiveActiveTab === 'outbound' ? outboundMeta : returnMeta;
   const currentPage =
@@ -321,6 +435,7 @@ export function TripList() {
   const filteredTrips = activeTrips;
 
   const totalResults = activeMeta.totalItems;
+  const summaryCardStates = getTripSummaryCardStates(effectiveActiveTab);
 
   function handleSelectOutbound(trip: Trip) {
     setSelectedOutbound(trip);
@@ -348,23 +463,18 @@ export function TripList() {
       return;
     }
 
-    if (effectiveActiveTab === 'outbound') {
-      setSelectedOutbound(trip);
-      setActiveTab('return');
-      return;
-    }
-    setSelectedReturn(trip);
-  }
+    const bookingHref = buildRoundTripBookingHrefAfterSelection({
+      currentSearch: searchParams.toString(),
+      activeLeg: effectiveActiveTab,
+      chosenTripId: trip.id,
+      selectedOutboundId: selectedOutbound?.id ?? null,
+      selectedReturnId: selectedReturn?.id ?? null,
+    });
 
-  function continueRoundTrip() {
-    if (!selectedOutbound || !selectedReturn) return;
-    router.push(
-      buildTripBookingHref({
-        currentSearch: searchParams.toString(),
-        outboundId: selectedOutbound.id,
-        returnId: selectedReturn.id,
-      }),
-    );
+    if (effectiveActiveTab === 'outbound') setSelectedOutbound(trip);
+    else setSelectedReturn(trip);
+
+    if (bookingHref) router.push(bookingHref);
   }
 
   function handlePageChange(page: number) {
@@ -409,92 +519,63 @@ export function TripList() {
           {/* ===== LEFT SIDEBAR ===== */}
           <div className="space-y-4">
             {/* CHUYẾN ĐI CỦA BẠN */}
-            <div className="bg-white rounded-xl shadow-sm overflow-hidden border border-slate-100">
-              <div className="px-4 py-3 border-b border-slate-100">
+            <div className="bg-white rounded-xl shadow-sm overflow-hidden border-2 border-slate-200">
+              <div className="px-4 py-3 border-b border-slate-200">
                 <h2 className="font-bold text-slate-800 text-[13px] uppercase tracking-wide">
                   CHUYẾN ĐI CỦA BẠN
                 </h2>
               </div>
 
-              {!selectedOutbound && !selectedReturn ? (
-                /* Chưa chọn gì */
-                <div className="p-5 text-center">
-                  <div className="text-3xl mb-2">🚌</div>
-                  <p className="text-[12px] text-slate-500">
-                    Chưa chọn chuyến đi
-                  </p>
-                  <p className="text-[11px] text-slate-400 mt-1">
-                    Nhấn vào chuyến xe để thêm
-                  </p>
-                </div>
-              ) : (
-                /* Đã có ít nhất 1 chuyến được chọn */
-                <div className="p-3 space-y-2">
+              <div className="space-y-2 p-3">
+                <div className="relative">
+                  <TripSlot
+                    num={1}
+                    trip={selectedOutbound}
+                    label={outboundLabel}
+                    origin={origin}
+                    destination={destination}
+                    active={summaryCardStates.outbound === 'active'}
+                    onActivate={() => setActiveTab('outbound')}
+                  />
                   {selectedOutbound && (
-                    <div className="relative">
-                      <TripSlot
-                        num={1}
-                        trip={selectedOutbound}
-                        label="Chuyến đi"
-                        origin={origin}
-                        destination={destination}
-                      />
-                      <button
-                        onClick={() => setSelectedOutbound(null)}
-                        className="absolute top-2 right-2 w-5 h-5 rounded-full bg-slate-200 hover:bg-red-100 hover:text-red-500 text-slate-400 text-[10px] flex items-center justify-center transition-colors"
-                        title="Bỏ chọn"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  )}
-                  {isRoundTrip && selectedReturn && (
-                    <div className="relative">
-                      <TripSlot
-                        num={2}
-                        trip={selectedReturn}
-                        label="Chuyến về"
-                        origin={destination}
-                        destination={origin}
-                      />
-                      <button
-                        onClick={() => setSelectedReturn(null)}
-                        className="absolute top-2 right-2 w-5 h-5 rounded-full bg-slate-200 hover:bg-red-100 hover:text-red-500 text-slate-400 text-[10px] flex items-center justify-center transition-colors"
-                        title="Bỏ chọn"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  )}
-                  {/* Slot 2 chưa chọn (khứ hồi) */}
-                  {isRoundTrip && selectedOutbound && !selectedReturn && (
-                    <div className="bg-slate-50 border border-dashed border-slate-200 rounded-lg p-3 text-center">
-                      <p className="text-[11px] text-slate-400">
-                        Chưa chọn chuyến về
-                      </p>
-                      <button
-                        onClick={() => setActiveTab('return')}
-                        className="mt-1 text-[11px] text-[#f05123] font-medium hover:underline"
-                      >
-                        Chọn chuyến về →
-                      </button>
-                    </div>
-                  )}
-                  {isRoundTrip && selectedOutbound && selectedReturn && (
                     <button
                       type="button"
-                      onClick={continueRoundTrip}
-                      className="w-full rounded-lg bg-[#f05123] px-4 py-2.5 text-[13px] font-bold text-white shadow-sm transition-colors hover:bg-[#d8441a]"
+                      onClick={() => setSelectedOutbound(null)}
+                      className="absolute right-2 top-2 flex size-7 items-center justify-center rounded-full bg-white/80 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+                      aria-label="Bỏ chọn chuyến đi"
                     >
-                      Tiếp tục đặt vé khứ hồi
+                      <X size={14} aria-hidden="true" />
                     </button>
                   )}
                 </div>
-              )}
+                {isRoundTrip && (
+                  <div className="relative">
+                    <TripSlot
+                      num={2}
+                      trip={selectedReturn}
+                      label={returnLabel}
+                      origin={destination}
+                      destination={origin}
+                      active={summaryCardStates.return === 'active'}
+                      onActivate={() => setActiveTab('return')}
+                    />
+                    {selectedReturn && (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedReturn(null)}
+                        className="absolute right-2 top-2 flex size-7 items-center justify-center rounded-full bg-white/80 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+                        aria-label="Bỏ chọn chuyến về"
+                      >
+                        <X size={14} aria-hidden="true" />
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* LỌC CHUYẾN */}
-            <div className="bg-white rounded-xl shadow-sm p-5 border border-slate-100">
+            <div className="bg-white rounded-xl shadow-sm p-5 border border-slate-200">
               <div className="flex justify-between items-center mb-5 pb-4 border-b border-slate-100">
                 <h2 className="font-bold text-slate-800 flex items-center gap-2 text-[13px] uppercase">
                   <Filter size={16} className="text-blue-600" />
@@ -504,6 +585,8 @@ export function TripList() {
                   onClick={() => {
                     setQuery('');
                     setVehicleType('all');
+                    setTimeRange('all');
+                    setOperator('all');
                   }}
                   className="text-[11px] font-medium text-slate-500 hover:text-[#f05123] transition-colors"
                 >
@@ -537,6 +620,57 @@ export function TripList() {
                       <option value="Limousine">Limousine</option>
                       <option value="Giường">Giường nằm</option>
                       <option value="Ghế">Ghế ngồi</option>
+                    </select>
+                    <ChevronDown
+                      size={16}
+                      className="absolute right-3 top-3 text-slate-400 pointer-events-none"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 block mb-2">
+                    Khung giờ khởi hành
+                  </label>
+                  <div className="relative">
+                    <select
+                      value={timeRange}
+                      onChange={(e) => setTimeRange(e.target.value)}
+                      className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2.5 outline-none focus:border-[#f05123] appearance-none bg-white"
+                    >
+                      <option value="all">Tất cả khung giờ</option>
+                      <option value="early-morning">
+                        Sáng sớm (00:00 - 06:00)
+                      </option>
+                      <option value="morning">Buổi sáng (06:00 - 12:00)</option>
+                      <option value="afternoon">
+                        Buổi chiều (12:00 - 18:00)
+                      </option>
+                      <option value="evening">Buổi tối (18:00 - 24:00)</option>
+                    </select>
+                    <ChevronDown
+                      size={16}
+                      className="absolute right-3 top-3 text-slate-400 pointer-events-none"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 block mb-2">
+                    Nhà xe
+                  </label>
+                  <div className="relative">
+                    <select
+                      value={operator}
+                      onChange={(e) => setOperator(e.target.value)}
+                      className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2.5 outline-none focus:border-[#f05123] appearance-none bg-white"
+                    >
+                      <option value="all">Tất cả nhà xe</option>
+                      {allOperators.map((op) => (
+                        <option key={op} value={op}>
+                          Nhà xe {op}
+                        </option>
+                      ))}
                     </select>
                     <ChevronDown
                       size={16}

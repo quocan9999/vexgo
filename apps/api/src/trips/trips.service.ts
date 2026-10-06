@@ -5,7 +5,9 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
-  businessDateStartUtc,
+  calculateClockTime,
+  combineDeparture,
+  computeArrival,
   getBusinessDate,
   resolveBusinessTimeZone,
 } from '../common/time/business-date.js';
@@ -38,18 +40,24 @@ type FareRecord = {
   denNgay: Date | null;
 };
 
-function combineDeparture(
-  date: Date,
-  time: Date,
-  businessTimeZone: string,
-): Date {
-  const businessDate = date.toISOString().slice(0, 10);
-  const businessDayStart = businessDateStartUtc(businessDate, businessTimeZone);
-  const elapsedSinceMidnight =
-    ((time.getUTCHours() * 60 + time.getUTCMinutes()) * 60 +
-      time.getUTCSeconds()) *
-    1000;
-  return new Date(businessDayStart.getTime() + elapsedSinceMidnight);
+function matchesTimeRange(time: Date, timeRange?: string): boolean {
+  if (!timeRange || timeRange === 'all') return true;
+  const hour = time.getUTCHours();
+  const minute = time.getUTCMinutes();
+  const totalMinutes = hour * 60 + minute;
+
+  switch (timeRange) {
+    case 'early-morning':
+      return totalMinutes >= 0 && totalMinutes < 360; // 00:00 - 06:00
+    case 'morning':
+      return totalMinutes >= 360 && totalMinutes < 720; // 06:00 - 12:00
+    case 'afternoon':
+      return totalMinutes >= 720 && totalMinutes < 1080; // 12:00 - 18:00
+    case 'evening':
+      return totalMinutes >= 1080 && totalMinutes < 1440; // 18:00 - 24:00
+    default:
+      return false;
+  }
 }
 
 function findFare(
@@ -88,14 +96,20 @@ function mapTrip(
       origin: trip.tuyenXe.diemDi,
       destination: trip.tuyenXe.diemDen,
       distance: null,
-      durationMinutes: null,
+      durationMinutes: trip.tuyenXe.thoiGianChayPhut ?? null,
     },
     departureTime: combineDeparture(
       trip.ngayKhoiHanh,
       trip.gioKhoiHanh,
       businessTimeZone,
     ).toISOString(),
-    arrivalTime: null,
+    arrivalTime: computeArrival(
+      trip.ngayKhoiHanh,
+      trip.gioKhoiHanh,
+      trip.tuyenXe.thoiGianChayPhut,
+      trip.gioDen,
+      businessTimeZone,
+    ),
     vehicle: {
       id: trip.xe.xeId,
       typeId: trip.xe.loaiXeId,
@@ -185,7 +199,7 @@ export class TripsService {
       trangThai: 'CHUA_KHOI_HANH',
     };
 
-    if (dto.from || dto.to || dto.busCompanyId) {
+    if (dto.from || dto.to || dto.busCompanyId || dto.operator) {
       where.tuyenXe = {};
       if (dto.from) {
         where.tuyenXe.diemDi = { contains: dto.from };
@@ -195,6 +209,9 @@ export class TripsService {
       }
       if (dto.busCompanyId) {
         where.tuyenXe.nhaXeId = dto.busCompanyId;
+      }
+      if (dto.operator) {
+        where.tuyenXe.nhaXe = { tenNhaXe: { contains: dto.operator } };
       }
     }
 
@@ -240,7 +257,7 @@ export class TripsService {
           trip.ngayKhoiHanh,
           trip.gioKhoiHanh,
           businessTimeZone,
-        ) > now,
+        ) > now && matchesTimeRange(trip.gioKhoiHanh, dto.timeRange),
     );
 
     const tripDates = chuyenXes.map(({ ngayKhoiHanh }) => ngayKhoiHanh);
@@ -653,6 +670,7 @@ export class TripsService {
 
     const departureDate = new Date(`${dto.departureDate}T00:00:00.000Z`);
     const departureTime = new Date(`1970-01-01T${dto.departureTime}.000Z`);
+    const arrivalTime = calculateClockTime(departureTime, route.thoiGianChayPhut);
 
     const existingCode = await this.prisma.chuyenXe.findFirst({
       where: { maChuyenXe: dto.code },
@@ -702,6 +720,7 @@ export class TripsService {
               maChuyenXe: dto.code,
               ngayKhoiHanh: departureDate,
               gioKhoiHanh: departureTime,
+              gioDen: arrivalTime,
               trangThai: 'CHUA_KHOI_HANH',
               nhaXeId,
               tuyenXeId: dto.routeId,
@@ -815,6 +834,7 @@ export class TripsService {
 
     const existing = await this.prisma.chuyenXe.findFirst({
       where: { chuyenXeId: id, nhaXeId },
+      include: { tuyenXe: { select: { thoiGianChayPhut: true } } },
     });
     if (!existing) {
       throw new NotFoundException({
@@ -832,6 +852,10 @@ export class TripsService {
 
     const departureDate = new Date(`${dto.departureDate}T00:00:00.000Z`);
     const departureTime = new Date(`1970-01-01T${dto.departureTime}.000Z`);
+    const arrivalTime = calculateClockTime(
+      departureTime,
+      existing.tuyenXe.thoiGianChayPhut,
+    );
 
     const trip = await this.prisma.$transaction(
       async (tx) => {
@@ -875,6 +899,7 @@ export class TripsService {
           data: {
             ngayKhoiHanh: departureDate,
             gioKhoiHanh: departureTime,
+            gioDen: arrivalTime,
           },
         });
 
@@ -938,8 +963,7 @@ export class TripsService {
     }
 
     const isValidTransition =
-      (existing.trangThai === 'CHUA_KHOI_HANH' &&
-        dto.status === 'DANG_CHAY') ||
+      (existing.trangThai === 'CHUA_KHOI_HANH' && dto.status === 'DANG_CHAY') ||
       (existing.trangThai === 'DANG_CHAY' && dto.status === 'HOAN_THANH');
 
     if (!isValidTransition) {
