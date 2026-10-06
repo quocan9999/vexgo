@@ -20,6 +20,7 @@ import {
   FilterToolbar,
   SearchInput,
   SelectFilter,
+  SingleDateFilter,
   type FilterOption,
 } from '@/components/data-filters/data-filters';
 import { Button } from '@/components/ui/button';
@@ -169,21 +170,11 @@ export function TripsManagement() {
                 options={STATUS_OPTIONS}
                 value={status}
               />
-              <div className="trips-date-filter-wrap">
-                <label
-                  className="trips-date-filter-label"
-                  htmlFor="trip-departure-date-filter"
-                >
-                  Ngày khởi hành
-                </label>
-                <input
-                  className="trips-date-filter-input"
-                  id="trip-departure-date-filter"
-                  onChange={(e) => updateDepartureDate(e.target.value)}
-                  type="date"
-                  value={departureDate}
-                />
-              </div>
+              <SingleDateFilter
+                label="Ngày khởi hành"
+                onChange={updateDepartureDate}
+                value={departureDate}
+              />
             </FilterToolbar>
 
             <div className="trips-mobile-sort">
@@ -305,17 +296,19 @@ export function TripsManagement() {
                         <tbody>
                           {items.map((trip) => (
                             <tr key={trip.tripId}>
-                              <th scope="row">{trip.code}</th>
+                              <th className="admin-data-mono" scope="row">{trip.code}</th>
                               <td>{formatDate(trip.departureDate)}</td>
                               <td>{formatTime(trip.departureTime)}</td>
                               <td>
                                 {trip.route.origin} → {trip.route.destination}
-                                <span className="trips-route-code">
+                                <span className="trips-route-code admin-data-mono">
                                   {trip.route.code}
                                 </span>
                               </td>
                               <td>
-                                {trip.vehicle.licensePlate}
+                                <span className="admin-data-mono">
+                                  {trip.vehicle.licensePlate}
+                                </span>
                                 <span className="trips-vehicle-type">
                                   {trip.vehicle.vehicleType.name}
                                 </span>
@@ -342,7 +335,7 @@ export function TripsManagement() {
                           key={trip.tripId}
                         >
                           <div className="trips-mobile-card-header">
-                            <h2>{trip.code}</h2>
+                            <h2 className="admin-data-mono">{trip.code}</h2>
                             <TripStatusBadge status={trip.status} />
                           </div>
                           <p className="trips-mobile-journey">
@@ -359,8 +352,10 @@ export function TripsManagement() {
                             <div>
                               <dt>Xe</dt>
                               <dd>
-                                {trip.vehicle.licensePlate} (
-                                {trip.vehicle.vehicleType.name})
+                                <span className="admin-data-mono">
+                                  {trip.vehicle.licensePlate}
+                                </span>{' '}
+                                ({trip.vehicle.vehicleType.name})
                               </dd>
                             </div>
                           </dl>

@@ -260,7 +260,7 @@ export function FarePricesManagement() {
       <div className="admin-page-content">
         <AdminPageHeader
           actions={
-            <div className={`page-intro-actions ${styles.pageActions}`}>
+            <div className="page-intro-actions">
               {canCreate && <AdminCreateAction label="Thêm bảng giá" onClick={openCreateDialog} />}
               <AdminRefreshAction loading={loading} onClick={refresh} />
             </div>
@@ -286,7 +286,10 @@ export function FarePricesManagement() {
               <span>{notice.message}</span>
             </p>
           )}
-          <FilterToolbar totalItems={error ? null : farePricePage?.meta.totalItems ?? null}>
+          <FilterToolbar
+            density="compact"
+            totalItems={error ? null : farePricePage?.meta.totalItems ?? null}
+          >
             <SearchInput
               label="Tìm bảng giá"
               onChange={updateSearch}
@@ -406,7 +409,9 @@ export function FarePricesManagement() {
                           <span className={styles.routeEndpoints}>
                             {farePrice.route.origin} → {farePrice.route.destination}
                           </span>
-                          <small className={styles.routeCode}>{farePrice.route.code}</small>
+                          <small className={`${styles.routeCode} admin-data-mono`}>
+                            {farePrice.route.code}
+                          </small>
                         </th>
                         <td>{farePrice.vehicleType.name}</td>
                         <td>{formatPrice(farePrice.listedPrice)}</td>
@@ -431,7 +436,9 @@ export function FarePricesManagement() {
                     <div className={styles.mobileCardHeader}>
                       <div>
                         <h2>{farePrice.route.origin} → {farePrice.route.destination}</h2>
-                        <span className={styles.routeCode}>{farePrice.route.code}</span>
+                        <span className={`${styles.routeCode} admin-data-mono`}>
+                          {farePrice.route.code}
+                        </span>
                       </div>
                       <strong>{formatPrice(farePrice.listedPrice)}</strong>
                     </div>

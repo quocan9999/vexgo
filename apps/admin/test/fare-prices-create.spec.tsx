@@ -178,7 +178,7 @@ describe('Fare Price create dialog behavior', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Thêm bảng giá' });
 
     expect(await within(dialog).findByRole('option', {
-      name: 'SG-DL-01 — TP.HCM → Đà Lạt',
+      name: 'TP.HCM → Đà Lạt',
     })).toBeTruthy();
     expect(await within(dialog).findByRole('option', { name: 'Limousine' })).toBeTruthy();
     expect(within(dialog).getByLabelText(/Hiệu lực đến/)).toHaveProperty('value', '');
@@ -280,7 +280,7 @@ describe('Fare Price create dialog behavior', () => {
     expect((await within(dialog).findByRole('alert')).textContent).toMatch(/không thể tải danh sách tuyến/i);
     fireEvent.click(within(dialog).getByRole('button', { name: /thử lại tuyến xe/i }));
     expect(await within(dialog).findByRole('option', {
-      name: 'SG-DL-01 — TP.HCM → Đà Lạt',
+      name: 'TP.HCM → Đà Lạt',
     })).toBeTruthy();
   });
 

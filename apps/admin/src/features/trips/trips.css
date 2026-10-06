@@ -1,25 +1,27 @@
 .trips-section {
-  margin-top: 30px;
+  margin-top: var(--admin-space-section-gap);
 }
 
 .trips-route-code,
 .trips-vehicle-type {
   display: block;
-  margin-top: 3px;
+  margin-top: var(--admin-space-title-copy-gap);
   color: var(--admin-text-muted);
-  font-size: var(--admin-font-size-xs);
+  font-size: var(--admin-type-helper-size);
+  line-height: var(--admin-type-helper-line-height);
 }
 
 .trips-list-state,
 .trips-detail-state {
   display: grid;
   justify-items: center;
-  gap: 12px;
+  gap: var(--admin-space-component-gap);
   margin: 0;
-  padding: 32px 20px;
+  padding: var(--admin-space-state-padding);
   color: var(--admin-text-muted);
-  font-size: var(--admin-font-size-base);
+  font-size: var(--admin-type-body-size);
   text-align: center;
+  line-height: var(--admin-type-body-line-height);
 }
 
 .trips-list-state p,
@@ -28,77 +30,78 @@
 }
 
 .trips-detail-content {
-  padding: 23px 25px;
+  padding: var(--admin-space-sheet-padding);
 }
 
 .trips-detail-title-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 20px;
+  gap: var(--admin-space-component-gap);
+  margin-bottom: var(--admin-space-component-gap);
 }
 
 .trips-detail-title-row h3 {
   margin: 0;
   color: var(--admin-text-strong);
-  font-size: var(--admin-font-size-emphasis);
+  font-size: var(--admin-type-component-title-size);
+  font-weight: var(--admin-type-component-title-weight);
   overflow-wrap: anywhere;
+  line-height: var(--admin-type-component-title-line-height);
 }
 
 .trips-detail-section {
-  margin-bottom: 24px;
+  margin-bottom: var(--admin-space-section-gap);
 }
 
 .trips-detail-section-title {
-  margin: 0 0 12px;
-  font-size: var(--admin-font-size-sm);
-  font-weight: 700;
+  margin: 0 0 var(--admin-space-component-gap);
+  font-size: var(--admin-type-component-title-size);
+  font-weight: var(--admin-type-component-title-weight);
   color: var(--admin-text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.08em;
+  line-height: var(--admin-type-component-title-line-height);
 }
 
 .trips-detail-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-  margin-top: 24px;
-  padding-top: 18px;
+  margin-top: var(--admin-space-component-gap);
+  padding-top: var(--admin-space-table-cell-y);
   border-top: 1px solid var(--admin-border);
 }
 
 .trips-detail-fields {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 16px;
+  gap: var(--admin-space-field-gap);
   margin: 0;
 }
 
 .trips-detail-fields > div {
   display: grid;
-  gap: 4px;
+  gap: var(--admin-space-label-control-gap);
 }
 
 .trips-detail-fields dt,
 .trips-mobile-fields dt {
   color: var(--admin-text-muted);
-  font-size: var(--admin-font-size-xs);
+  font-size: var(--admin-type-label-size);
+  line-height: var(--admin-type-label-line-height);
 }
 
 .trips-detail-fields dd,
 .trips-mobile-fields dd {
   margin: 0;
   color: var(--admin-text-strong);
-  font-size: var(--admin-font-size-base);
+  font-size: var(--admin-type-body-size);
   overflow-wrap: anywhere;
+  line-height: var(--admin-type-body-line-height);
 }
 
 .trips-seat-summary-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
+  gap: var(--admin-space-component-gap);
 }
 
 @media (max-width: 640px) {
@@ -112,7 +115,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 12px 8px;
+  padding: var(--admin-space-summary-card-padding);
   border-radius: var(--admin-radius-card);
   border: 1px solid var(--admin-border);
   background: var(--admin-surface);
@@ -120,15 +123,17 @@
 }
 
 .trips-seat-card__count {
-  font-size: 1.25rem;
-  font-weight: 700;
+  font-size: var(--admin-type-metric-compact-size);
+  font-weight: var(--admin-type-metric-compact-weight);
   color: var(--admin-text-strong);
+  line-height: var(--admin-type-metric-compact-line-height);
 }
 
 .trips-seat-card__label {
-  font-size: var(--admin-font-size-xs);
+  font-size: var(--admin-type-helper-size);
   color: var(--admin-text-muted);
-  margin-top: 4px;
+  margin-top: var(--admin-space-title-copy-gap);
+  line-height: var(--admin-type-helper-line-height);
 }
 
 .trips-seat-card--available .trips-seat-card__count {
@@ -154,15 +159,15 @@
 
   .trips-mobile-list {
     display: grid;
-    gap: 12px;
-    padding: 14px;
+    gap: var(--admin-space-card-gap);
+    padding: var(--admin-space-3);
   }
 }
 
 .trips-mobile-card {
   display: grid;
-  gap: 12px;
-  padding: 16px;
+  gap: var(--admin-space-card-gap);
+  padding: var(--admin-space-card-padding);
   border: 1px solid var(--admin-border);
   border-radius: var(--admin-radius-card);
   background: var(--admin-surface);
@@ -172,34 +177,36 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: var(--admin-space-component-gap);
 }
 
 .trips-mobile-card-header h2 {
   margin: 0;
-  font-size: var(--admin-font-size-base);
-  font-weight: 700;
+  font-size: var(--admin-type-component-title-size);
+  font-weight: var(--admin-type-component-title-weight);
   color: var(--admin-text-strong);
+  line-height: var(--admin-type-component-title-line-height);
 }
 
 .trips-mobile-journey {
   margin: 0;
-  font-size: var(--admin-font-size-sm);
+  font-size: var(--admin-type-secondary-body-size);
   color: var(--admin-text-strong);
-  font-weight: 600;
+  font-weight: var(--admin-type-secondary-body-weight);
+  line-height: var(--admin-type-secondary-body-line-height);
 }
 
 .trips-mobile-fields {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 8px;
+  gap: var(--admin-space-field-gap);
   margin: 0;
 }
 
 .trips-mobile-actions {
   display: flex;
   justify-content: flex-end;
-  padding-top: 8px;
+  padding-top: var(--admin-space-control-gap);
   border-top: 1px solid var(--admin-border);
 }
 
@@ -211,8 +218,8 @@
   .trips-mobile-sort {
     display: flex;
     align-items: flex-end;
-    gap: 10px;
-    padding: 0 14px 14px;
+    gap: var(--admin-space-action-gap);
+    padding: 0 var(--admin-space-3) var(--admin-space-3);
   }
 
   .trips-mobile-sort > :first-child {
@@ -220,45 +227,18 @@
   }
 }
 
-.trips-date-filter-wrap {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.trips-date-filter-label {
-  font-size: var(--admin-font-size-xs);
-  font-weight: 600;
-  color: var(--admin-text-muted);
-}
-
-.trips-date-filter-input {
-  height: 38px;
-  padding: 0 12px;
-  border: 1px solid var(--admin-border);
-  border-radius: var(--admin-radius-control);
-  background: var(--admin-surface);
-  color: var(--admin-text-strong);
-  font-size: var(--admin-font-size-sm);
-}
-
-.trips-date-filter-input:focus {
-  outline: none;
-  border-color: var(--admin-primary);
-}
-
 .trips-success-notice {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
-  margin: 16px 0 -12px;
-  padding: 11px 13px;
+  gap: var(--admin-space-control-gap);
+  margin: var(--admin-space-component-gap) 0 calc(-1 * var(--admin-space-3));
+  padding: var(--admin-space-notice-padding);
   border: 1px solid var(--admin-success-border);
   border-radius: var(--admin-radius-control);
   background: var(--admin-success-soft);
   color: var(--admin-success);
-  font-size: var(--admin-font-size-sm);
-  line-height: 1.45;
+  font-size: var(--admin-type-secondary-body-size);
+  line-height: var(--admin-type-secondary-body-line-height);
 }
 
 .trips-success-notice svg {
@@ -270,21 +250,21 @@
 .trip-seats-page {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: var(--admin-space-section-gap);
 }
 
 .trip-seats-header-actions {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--admin-space-action-gap);
   flex-wrap: wrap;
 }
 
 .trip-seats-context {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 16px;
-  padding: 16px 20px;
+  gap: var(--admin-space-component-gap);
+  padding: var(--admin-space-card-padding);
   background: var(--admin-surface);
   border: 1px solid var(--admin-border);
   border-radius: var(--admin-radius-card);
@@ -293,26 +273,28 @@
 .trip-seats-context__item {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--admin-space-title-copy-gap);
 }
 
 .trip-seats-context__label {
-  font-size: var(--admin-font-size-xs);
+  font-size: var(--admin-type-helper-size);
   color: var(--admin-text-muted);
+  line-height: var(--admin-type-helper-line-height);
 }
 
 .trip-seats-context__value {
-  font-size: var(--admin-font-size-sm);
-  font-weight: 600;
+  font-size: var(--admin-type-secondary-body-size);
+  font-weight: var(--admin-weight-semibold);
   color: var(--admin-text-strong);
   overflow-wrap: anywhere;
+  line-height: var(--admin-type-secondary-body-line-height);
 }
 
 .trip-seats-panel {
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  padding: 24px;
+  gap: var(--admin-space-section-gap);
+  padding: var(--admin-space-card-padding);
   background: var(--admin-surface);
   border: 1px solid var(--admin-border);
   border-radius: var(--admin-radius-card);
@@ -322,69 +304,74 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
+  gap: var(--admin-space-component-gap);
   flex-wrap: wrap;
 }
 
 .trip-seats-panel-header h2 {
   margin: 0;
-  font-size: var(--admin-font-size-lg);
+  font-size: var(--admin-type-section-heading-size);
+  font-weight: var(--admin-type-section-heading-weight);
   color: var(--admin-text-strong);
+  line-height: var(--admin-type-section-heading-line-height);
 }
 
 .trip-seats-panel-desc {
-  margin: 4px 0 0;
-  font-size: var(--admin-font-size-sm);
+  margin: var(--admin-space-title-copy-gap) 0 0;
+  font-size: var(--admin-type-body-size);
   color: var(--admin-text-muted);
+  line-height: var(--admin-type-body-line-height);
 }
 
 .trip-seats-legend {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: var(--admin-space-component-gap);
   flex-wrap: wrap;
 }
 
 .trip-seats-legend__item {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: var(--admin-font-size-xs);
+  gap: var(--admin-space-control-gap);
+  font-size: var(--admin-type-body-size);
   color: var(--admin-text-muted);
+  line-height: var(--admin-type-body-line-height);
 }
 
 .trip-seats-filter-group {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--admin-space-control-gap);
   flex-wrap: wrap;
 }
 
 .trip-seat-groups {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: var(--admin-space-section-gap);
 }
 
 .trip-seat-group {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--admin-space-field-gap);
 }
 
 .trip-seat-group__title {
   margin: 0;
-  font-size: var(--admin-font-size-sm);
-  font-weight: 700;
+  font-size: var(--admin-type-component-title-size);
+  font-weight: var(--admin-type-component-title-weight);
   color: var(--admin-text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.08em;
+  line-height: var(--admin-type-component-title-line-height);
 }
 
 .trip-seat-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-  gap: 12px;
+  gap: var(--admin-space-field-gap);
 }
 
 .trip-seat-token {
@@ -392,25 +379,27 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 14px 10px;
-  background: var(--admin-surface-muted, #f8fafc);
+  gap: var(--admin-space-control-gap);
+  padding: var(--admin-space-field-gap) var(--admin-space-control-gap);
+  background: var(--admin-surface-muted);
   border: 1px solid var(--admin-border);
   border-radius: var(--admin-radius-card);
   text-align: center;
 }
 
 .trip-seat-token__code {
-  font-size: 1.1rem;
-  font-weight: 700;
+  font-size: var(--admin-type-component-title-size);
+  font-weight: var(--admin-type-component-title-weight);
   color: var(--admin-text-strong);
+  line-height: var(--admin-type-component-title-line-height);
 }
 
 .trip-seat-badge {
-  font-size: 11px;
-  padding: 2px 8px;
+  font-size: var(--admin-type-badge-size);
+  padding: var(--admin-space-1) var(--admin-space-2);
   border-radius: 9999px;
-  font-weight: 600;
+  font-weight: var(--admin-type-badge-weight);
+  line-height: var(--admin-type-badge-line-height);
 }
 
 .trip-seat-badge--available {
@@ -432,10 +421,11 @@
 }
 
 .trip-seats-empty {
-  padding: 32px 16px;
+  padding: var(--admin-space-state-padding);
   text-align: center;
   color: var(--admin-text-muted);
-  font-size: var(--admin-font-size-base);
+  font-size: var(--admin-type-table-body-size);
+  line-height: var(--admin-type-table-body-line-height);
 }
 
 @media (max-width: 640px) {

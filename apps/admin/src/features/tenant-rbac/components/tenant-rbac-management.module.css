@@ -12,12 +12,12 @@
 .readOnlyNotice,
 .successMessage,
 .warningMessage {
-  gap: 9px;
-  margin: 14px 0 0;
-  padding: 11px 13px;
+  gap: var(--admin-space-control-gap);
+  margin: var(--admin-space-component-gap) 0 0;
+  padding: var(--admin-space-table-cell-y) var(--admin-space-table-cell-x);
   border-radius: 8px;
-  font-size: 13px;
-  line-height: 1.45;
+  font-size: var(--admin-type-secondary-body-size);
+  line-height: var(--admin-type-secondary-body-line-height);
 }
 
 .readOnlyNotice {
@@ -47,7 +47,7 @@
 .loading {
   min-height: 140px;
   justify-content: center;
-  gap: 10px;
+  gap: var(--admin-space-control-gap);
   color: var(--admin-text-muted);
 }
 
@@ -57,8 +57,8 @@
 
 .errorPanel,
 .configurationSummary {
-  margin-top: 20px;
-  padding: 20px;
+  margin-top: var(--admin-space-card-padding);
+  padding: var(--admin-space-card-padding);
   border: 1px solid var(--admin-border);
   border-radius: 12px;
   background: #fff;
@@ -68,39 +68,43 @@
 .errorPanel h2 {
   margin: 0;
   color: var(--admin-text-strong);
-  font-size: 16px;
-  font-weight: 700;
-  line-height: 1.35;
+  font-size: var(--admin-type-component-title-size);
+  font-weight: var(--admin-type-component-title-weight);
+  line-height: var(--admin-type-component-title-line-height);
 }
 
 .errorPanel p {
-  margin: 9px 0 15px;
+  margin: var(--admin-space-control-gap) 0 var(--admin-space-4);
   color: #a91f2d;
-  font-size: 13px;
+  font-size: var(--admin-type-secondary-body-size);
+  line-height: var(--admin-type-secondary-body-line-height);
 }
 
 .summaryHeader {
   justify-content: space-between;
-  gap: 16px;
+  gap: var(--admin-space-component-gap);
 }
 
 .summaryHeader .eyebrow {
-  margin-bottom: 5px;
+  margin-bottom: var(--admin-space-title-copy-gap);
 }
 
 .summaryHeader h2 {
   margin: 0;
   color: var(--admin-text-strong);
-  font-size: 15px;
+  font-size: var(--admin-type-component-title-size);
+  font-weight: var(--admin-type-component-title-weight);
+  line-height: var(--admin-type-component-title-line-height);
 }
 
 .inheritedBadge,
 .overrideBadge {
   flex: 0 0 auto;
-  padding: 6px 9px;
+  padding: var(--admin-space-2);
   border-radius: 999px;
-  font-size: 11px;
-  font-weight: 700;
+  font-size: var(--admin-type-badge-size);
+  font-weight: var(--admin-type-badge-weight);
+  line-height: var(--admin-type-badge-line-height);
 }
 
 .inheritedBadge {
@@ -116,49 +120,52 @@
 .summaryGrid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-  margin-top: 16px;
+  gap: var(--admin-space-field-gap);
+  margin-top: var(--admin-space-component-gap);
 }
 
 .summaryGrid > section {
   min-width: 0;
-  padding: 13px;
+  padding: var(--admin-space-card-padding);
   border: 1px solid var(--admin-border);
   border-radius: 9px;
   background: #fbfcfe;
 }
 
 .summaryGrid h3 {
-  margin: 0 0 8px;
+  margin: 0 0 var(--admin-space-control-gap);
   color: var(--admin-text-strong);
-  font-size: 12px;
+  font-size: var(--admin-type-label-size);
+  font-weight: var(--admin-type-label-weight);
+  line-height: var(--admin-type-label-line-height);
 }
 
 .summaryGrid p {
   margin: 0;
   color: var(--admin-text-muted);
-  font-size: 12px;
-  line-height: 1.45;
+  font-size: var(--admin-type-helper-size);
+  line-height: var(--admin-type-helper-line-height);
 }
 
 .summaryGrid ul {
   display: grid;
-  gap: 5px;
+  gap: var(--admin-space-1);
   margin: 0;
-  padding-left: 18px;
+  padding-left: var(--admin-space-5);
 }
 
 .summaryGrid code {
   overflow-wrap: anywhere;
   color: #516581;
-  font-size: 10px;
+  font-size: var(--admin-type-caption-size);
+  line-height: var(--admin-type-caption-line-height);
 }
 
 .formActions {
   justify-content: space-between;
-  gap: 18px;
-  margin: 15px -20px 0;
-  padding: 13px 20px;
+  gap: var(--admin-space-component-gap);
+  margin: var(--admin-space-4) calc(-1 * var(--admin-space-card-padding)) 0;
+  padding: var(--admin-space-table-cell-y) var(--admin-space-card-padding);
   border-top: 1px solid var(--admin-border);
   background: #fbfcfe;
 }
@@ -168,17 +175,18 @@
   flex: 0 0 auto;
   flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 9px;
+  gap: var(--admin-space-action-gap);
 }
 
 .draftStatus {
   margin: 0;
   color: var(--admin-text-muted);
-  font-size: 12px;
+  font-size: var(--admin-type-helper-size);
+  line-height: var(--admin-type-helper-line-height);
 }
 
 .confirmContent {
-  padding: 24px;
+  padding: var(--admin-space-dialog-padding);
 }
 
 .confirmIcon {
@@ -192,23 +200,25 @@
 }
 
 .confirmContent h2 {
-  margin: 14px 0 7px;
+  margin: var(--admin-space-field-gap) 0 var(--admin-space-control-gap);
   color: var(--admin-text-strong);
-  font-size: 17px;
+  font-size: var(--admin-type-section-heading-size);
+  font-weight: var(--admin-type-section-heading-weight);
+  line-height: var(--admin-type-section-heading-line-height);
 }
 
 .confirmContent > p {
   margin: 0;
   color: var(--admin-text-muted);
-  font-size: 13px;
-  line-height: 1.55;
+  font-size: var(--admin-type-secondary-body-size);
+  line-height: var(--admin-type-secondary-body-line-height);
 }
 
 .confirmContent > .emptyReplacementWarning,
 .confirmContent > .selfLockoutWarning,
 .confirmContent > .dialogError {
-  margin-top: 12px;
-  padding: 10px 12px;
+  margin-top: var(--admin-space-table-cell-y);
+  padding: var(--admin-space-2) var(--admin-space-3);
   border-radius: 7px;
 }
 
@@ -225,8 +235,8 @@
 
 .confirmActions {
   justify-content: flex-end;
-  gap: 9px;
-  margin-top: 19px;
+  gap: var(--admin-space-action-gap);
+  margin-top: var(--admin-space-component-gap);
 }
 
 @keyframes spin {
@@ -242,7 +252,7 @@
 @media (max-width: 680px) {
   .errorPanel,
   .configurationSummary {
-    padding: 14px;
+    padding: var(--admin-space-card-padding);
   }
 
   .summaryHeader {
@@ -257,10 +267,10 @@
   .formActions {
     align-items: stretch;
     flex-direction: column;
-    margin-right: -14px;
-    margin-left: -14px;
-    padding-right: 14px;
-    padding-left: 14px;
+    margin-right: calc(-1 * var(--admin-space-card-padding));
+    margin-left: calc(-1 * var(--admin-space-card-padding));
+    padding-right: var(--admin-space-card-padding);
+    padding-left: var(--admin-space-card-padding);
   }
 
   .formActions > div {
@@ -273,7 +283,7 @@
   }
 
   .confirmContent {
-    padding: 20px;
+    padding: var(--admin-space-dialog-padding);
   }
 
   .confirmActions {

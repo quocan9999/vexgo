@@ -271,7 +271,7 @@ export function FarePriceDetailSheet({
               </div>
               <div className={styles.detailItem}>
                 <dt>Mã tuyến</dt>
-                <dd>{farePrice.route.code}</dd>
+                <dd className="admin-data-mono">{farePrice.route.code}</dd>
               </div>
               <div className={styles.detailItem}>
                 <dt>Điểm đi</dt>
@@ -335,7 +335,7 @@ export function FarePriceDetailSheet({
               </div>
             </dl>
             {canUpdate && (
-              <div className={styles.detailActions}>
+              <div className={`${styles.detailActions} admin-detail-sheet__actions`}>
                 <Button
                   onClick={() => {
                     setUpdateNotice(null);

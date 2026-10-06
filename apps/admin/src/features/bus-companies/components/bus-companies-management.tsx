@@ -248,7 +248,10 @@ function CompanyDetails({
                 <div>
                   <h3>{detailState.company.name}</h3>
                   <span className="detail-company-id">
-                    Mã nhà xe · {detailState.company.code}
+                    Mã nhà xe ·{' '}
+                    <span className="admin-data-mono">
+                      {detailState.company.code}
+                    </span>
                   </span>
                 </div>
               </div>
@@ -626,7 +629,9 @@ export function BusCompaniesManagement() {
                               <span>{company.name}</span>
                             </span>
                           </th>
-                          <td className="table-number">{company.code}</td>
+                          <td className="table-number admin-data-mono">
+                            {company.code}
+                          </td>
                           <td
                             className="company-contact-cell"
                             tabIndex={company.contactInfo ? 0 : undefined}
@@ -674,7 +679,7 @@ export function BusCompaniesManagement() {
                       </div>
                       <div className="company-mobile-stats">
                         <span>
-                          Mã <strong>{company.code}</strong>
+                          Mã <strong className="admin-data-mono">{company.code}</strong>
                         </span>
                         <span>
                           Trạng thái{' '}

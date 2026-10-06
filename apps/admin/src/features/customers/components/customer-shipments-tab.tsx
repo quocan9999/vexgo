@@ -167,7 +167,9 @@ export function CustomerShipmentsTab({ customerId }: { customerId: number }) {
                 {shipments.map((s) => (
                   <tr key={s.shipmentId}>
                     <td>
-                      <span className="customer-code">{s.waybillCode}</span>
+                      <span className="customer-code admin-data-mono">
+                        {s.waybillCode}
+                      </span>
                     </td>
                     <td>{formatDateTime(s.sentAt)}</td>
                     <td>
@@ -219,7 +221,9 @@ export function CustomerShipmentsTab({ customerId }: { customerId: number }) {
               <article key={s.shipmentId} className="customers-mobile-card">
                 <div className="customers-mobile-card-header">
                   <div>
-                    <span className="customer-code">{s.waybillCode}</span>
+                    <span className="customer-code admin-data-mono">
+                      {s.waybillCode}
+                    </span>
                     <h3 className="customers-mobile-card-title">
                       {s.totalFee.toLocaleString('vi-VN')} đ
                     </h3>

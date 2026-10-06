@@ -16,9 +16,8 @@ export function useRoutes() {
   const [sortBy, setSortBy] = useState<RouteSortKey>('code');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [status, setStatus] = useState<RouteStatus | ''>('');
-  const [busCompanyId, setBusCompanyId] = useState('');
   const [refreshCount, setRefreshCount] = useState(0);
-  const requestKey = JSON.stringify([page, search, sortBy, sortDirection, status, busCompanyId]);
+  const requestKey = JSON.stringify([page, search, sortBy, sortDirection, status]);
   const routePage = result?.key === requestKey ? result.page : null;
 
   useEffect(() => {
@@ -32,11 +31,10 @@ export function useRoutes() {
   useEffect(() => {
     const controller = new AbortController();
     let current = true;
-    const key = JSON.stringify([page, search, sortBy, sortDirection, status, busCompanyId]);
+    const key = JSON.stringify([page, search, sortBy, sortDirection, status]);
     getRoutes({
       page, pageSize: PAGE_SIZE, search, sortBy, sortDirection,
       status: status || undefined,
-      busCompanyId: busCompanyId ? Number(busCompanyId) : undefined,
     }, controller.signal)
       .then((data) => {
         if (current) setResult({ key, page: data });
@@ -48,7 +46,7 @@ export function useRoutes() {
       })
       .finally(() => { if (current) setLoading(false); });
     return () => { current = false; controller.abort(); };
-  }, [page, search, sortBy, sortDirection, status, busCompanyId, refreshCount]);
+  }, [page, search, sortBy, sortDirection, status, refreshCount]);
 
   function updateSearch(value: string) {
     setLoading(value.trim() !== search);
@@ -63,10 +61,6 @@ export function useRoutes() {
     setLoading(true); setError(null); setPage(1);
     setStatus(value === 'HOAT_DONG' || value === 'TAM_NGUNG' ? value : '');
   }
-  function updateBusCompany(value: string) {
-    if (value === busCompanyId) return;
-    setLoading(true); setError(null); setPage(1); setBusCompanyId(value);
-  }
   function sortRoutes(key: RouteSortKey) {
     setLoading(true); setError(null); setPage(1);
     if (sortBy === key) setSortDirection((direction) => direction === 'asc' ? 'desc' : 'asc');
@@ -77,7 +71,7 @@ export function useRoutes() {
   }
 
   return {
-    routePage, error, loading, searchInput, status, busCompanyId, sortBy, sortDirection,
-    changePage, updateSearch, updateStatus, updateBusCompany, sortRoutes, refresh,
+    routePage, error, loading, searchInput, status, sortBy, sortDirection,
+    changePage, updateSearch, updateStatus, sortRoutes, refresh,
   };
 }

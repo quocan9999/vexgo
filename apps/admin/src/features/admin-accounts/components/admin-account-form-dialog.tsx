@@ -329,6 +329,11 @@ export function AdminAccountFormDialog({
           aria-describedby={fieldErrors[field] ? `${fieldId}-error` : undefined}
           aria-invalid={Boolean(fieldErrors[field])}
           autoComplete={field === 'password' ? 'new-password' : 'off'}
+          className={
+            field === 'employeeCode' || field === 'citizenId'
+              ? 'admin-data-mono'
+              : undefined
+          }
           disabled={submitting}
           id={fieldId}
           maxLength={

@@ -73,7 +73,10 @@ export function PlatformTenantRbacManagement({
 }) {
   const nhaXeId = parseTenantId(nhaXeIdParam);
   const [tenantName, setTenantName] = useState(
-    nhaXeId ? `Nhà xe #${nhaXeId}` : 'Nhà xe không hợp lệ',
+    nhaXeId ? 'Nhà xe' : 'Nhà xe không hợp lệ',
+  );
+  const [tenantCode, setTenantCode] = useState(
+    nhaXeId === null ? '' : String(nhaXeId),
   );
   const [config, setConfig] = useState<TenantRbacConfig | null>(null);
   const [drafts, setDrafts] = useState<RoleDrafts>({});
@@ -127,7 +130,8 @@ export function PlatformTenantRbacManagement({
     void getBusCompanyById(nhaXeId, controller.signal)
       .then((company) => {
         if (!controller.signal.aborted) {
-          setTenantName(`${company.name} (${company.code})`);
+          setTenantName(company.name);
+          setTenantCode(company.code);
         }
       })
       .catch(() => undefined);
@@ -290,7 +294,13 @@ export function PlatformTenantRbacManagement({
         <section aria-label="Phạm vi cấu hình quyền" className={styles.scopeNotice}>
           <ShieldCheck aria-hidden="true" size={20} />
           <p>
-            Cấu hình chỉ áp dụng cho <strong>{tenantName}</strong>. Quyền mặc định
+            Cấu hình chỉ áp dụng cho{' '}
+            <strong>
+              {tenantName}
+              {tenantCode && (
+                <> (<span className="admin-data-mono">{tenantCode}</span>)</>
+              )}
+            </strong>. Quyền mặc định
             toàn hệ thống và cấu hình nhà xe khác không bị thay đổi.
           </p>
         </section>
@@ -454,8 +464,33 @@ export function PlatformTenantRbacManagement({
               </h2>
               <p id="platform-tenant-rbac-confirm-description">
                 {confirmation === 'save'
-                  ? <>Bạn sắp thay thế toàn bộ quyền của vai trò <strong>{selectedRole.roleName}</strong> trong <strong>{tenantName}</strong>. Thay đổi không ảnh hưởng nhà xe khác hoặc quyền mặc định toàn hệ thống.</>
-                  : <>Cấu hình riêng của vai trò <strong>{selectedRole.roleName}</strong> trong <strong>{tenantName}</strong> sẽ bị xóa để vai trò này kế thừa quyền mặc định toàn hệ thống.</>}
+                  ? (
+                    <>
+                      Bạn sắp thay thế toàn bộ quyền của vai trò{' '}
+                      <strong>{selectedRole.roleName}</strong> trong{' '}
+                      <strong>
+                        {tenantName}
+                        {tenantCode && (
+                          <> (<span className="admin-data-mono">{tenantCode}</span>)</>
+                        )}
+                      </strong>. Thay đổi không ảnh hưởng nhà xe khác hoặc quyền
+                      mặc định toàn hệ thống.
+                    </>
+                  )
+                  : (
+                    <>
+                      Cấu hình riêng của vai trò{' '}
+                      <strong>{selectedRole.roleName}</strong> trong{' '}
+                      <strong>
+                        {tenantName}
+                        {tenantCode && (
+                          <> (<span className="admin-data-mono">{tenantCode}</span>)</>
+                        )}
+                      </strong>{' '}
+                      sẽ bị xóa để vai trò này kế thừa quyền mặc định toàn hệ
+                      thống.
+                    </>
+                  )}
               </p>
               {confirmation === 'save' && selectedDraft.length === 0 && (
                 <p className={styles.emptyReplacementWarning}>

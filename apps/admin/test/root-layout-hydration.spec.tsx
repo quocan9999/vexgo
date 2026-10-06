@@ -5,8 +5,16 @@ import { renderToString } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import RootLayout from '../src/app/layout';
 
+const fontConfig = vi.hoisted(() => ({
+  inter: undefined as { subsets?: string[] } | undefined,
+}));
+
 vi.mock('next/font/google', () => ({
-  Geist: () => ({ variable: 'geist-test-variable' }),
+  Inter: (options: { subsets?: string[] }) => {
+    fontConfig.inter = options;
+    return { variable: 'inter-test-variable' };
+  },
+  JetBrains_Mono: () => ({ variable: 'mono-test-variable' }),
 }));
 
 describe('Admin root layout hydration', () => {
@@ -16,6 +24,10 @@ describe('Admin root layout hydration', () => {
     if (root) await act(async () => root?.unmount());
     root = undefined;
     vi.restoreAllMocks();
+  });
+
+  it('loads the Vietnamese subset for the Admin Inter font', () => {
+    expect(fontConfig.inter?.subsets).toContain('vietnamese');
   });
 
   it('tolerates an extension class on html before hydration', async () => {
@@ -29,7 +41,8 @@ describe('Admin root layout hydration', () => {
     await act(async () => { root = hydrateRoot(document, layout); });
 
     expect(errors.mock.calls.flat().join(' ')).not.toMatch(/hydration|hydrated|didn't match/i);
-    expect(document.documentElement.classList.contains('geist-test-variable')).toBe(true);
+    expect(document.documentElement.classList.contains('inter-test-variable')).toBe(true);
+    expect(document.documentElement.classList.contains('mono-test-variable')).toBe(true);
     expect(document.querySelector('main')?.textContent).toBe('Admin');
   });
 

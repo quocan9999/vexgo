@@ -123,7 +123,10 @@ export function CustomerWorkspace({ customerId }: { customerId: number }) {
               <div className="customer-hero-meta">
                 <div>
                   <span className="customer-code">
-                    Mã khách hàng: <strong>{customer.customerCode}</strong>
+                    Mã khách hàng:{' '}
+                    <strong className="admin-data-mono">
+                      {customer.customerCode}
+                    </strong>
                   </span>
                   <h2 className="customer-hero-name">{customer.fullName}</h2>
                 </div>
@@ -215,7 +218,9 @@ export function CustomerWorkspace({ customerId }: { customerId: number }) {
                   <dl className="customers-detail-dl">
                     <div className="customers-detail-row">
                       <dt>Mã tài khoản</dt>
-                      <dd>#{customer.account.accountId}</dd>
+                      <dd className="admin-data-mono">
+                        #{customer.account.accountId}
+                      </dd>
                     </div>
                     <div className="customers-detail-row">
                       <dt>Trạng thái tài khoản</dt>

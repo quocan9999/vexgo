@@ -33,6 +33,9 @@ const company = {
 };
 const prisma = {
   nhaXe: { findUnique: vi.fn() },
+  $transaction: vi.fn((operation: (transaction: Prisma.TransactionClient) => Promise<unknown>) =>
+    operation(prisma as unknown as Prisma.TransactionClient),
+  ),
   tuyenXe: {
     create: vi.fn(),
     update: vi.fn(),
@@ -80,7 +83,9 @@ describe('RoutesService writes', () => {
     vi.mocked(prisma.tuyenXe.create).mockResolvedValue(record);
     vi.mocked(prisma.tuyenXe.update).mockResolvedValue(record);
     vi.mocked(prisma.tuyenXe.updateMany).mockResolvedValue({ count: 1 });
-    vi.mocked(prisma.tuyenXe.findFirst).mockResolvedValue(record);
+    vi.mocked(prisma.tuyenXe.findFirst).mockImplementation(((args?: Prisma.TuyenXeFindFirstArgs) =>
+      Promise.resolve(args?.where?.diemDi !== undefined ? null : record)) as never,
+    );
     vi.mocked(prisma.chuyenXe.findMany).mockResolvedValue([]);
     vi.mocked(prisma.chuyenXe.update).mockResolvedValue({} as any);
   });
@@ -152,6 +157,22 @@ describe('RoutesService writes', () => {
       code: 'FUTA-TX-0100',
       busCompany: { busCompanyId: 3, code: 'FUTA', name: 'Phương Trang' },
     });
+  });
+
+  it('rejects a second route with the same ordered endpoints even when its code differs', async () => {
+    vi.mocked(prisma.tuyenXe.findFirst).mockResolvedValueOnce({ ...record, tuyenXeId: 16 });
+
+    const error = await service.create(
+      { ...createInput, code: 'FUTA-TX-0101' },
+      tenantAdmin(3),
+    ).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(ConflictException);
+    expect((error as ConflictException).getResponse()).toEqual({
+      error: 'ROUTE_DUPLICATE_ENDPOINTS',
+      message: 'Đã có tuyến xe cùng điểm đi và điểm đến trong nhà xe này.',
+    });
+    expect(prisma.tuyenXe.create).not.toHaveBeenCalled();
   });
 
   it('returns BUS_COMPANY_NOT_FOUND without writing for a missing company', async () => {

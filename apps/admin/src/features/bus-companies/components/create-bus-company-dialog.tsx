@@ -184,6 +184,7 @@ export function CreateBusCompanyDialog({
             <label htmlFor="create-company-code">Mã nhà xe</label>
             <input
               autoComplete="off"
+              className="admin-data-mono"
               id="create-company-code"
               maxLength={50}
               onChange={(event) => updateField('code', event.target.value)}

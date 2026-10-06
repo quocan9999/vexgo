@@ -8,7 +8,6 @@ const state = vi.hoisted(() => ({
   routePage: null as unknown,
   getRouteById: vi.fn(),
   updateRouteStatus: vi.fn(),
-  getBusCompanyFilterOptions: vi.fn(),
 }));
 
 const route = {
@@ -57,13 +56,11 @@ vi.mock('@/features/routes/hooks/use-routes', () => ({
     loading: false,
     searchInput: '',
     status: '',
-    busCompanyId: '',
     sortBy: 'code',
     sortDirection: 'asc',
     changePage: vi.fn(),
     updateSearch: vi.fn(),
     updateStatus: vi.fn(),
-    updateBusCompany: vi.fn(),
     sortRoutes: vi.fn(),
     refresh: vi.fn(),
   }),
@@ -73,11 +70,6 @@ vi.mock('@/features/routes/services/route-service', async (importOriginal) => ({
   ...await importOriginal<typeof import('@/features/routes/services/route-service')>(),
   getRouteById: state.getRouteById,
   updateRouteStatus: state.updateRouteStatus,
-}));
-
-vi.mock('@/features/bus-companies/services/bus-company-service', async (importOriginal) => ({
-  ...await importOriginal<typeof import('@/features/bus-companies/services/bus-company-service')>(),
-  getBusCompanyFilterOptions: state.getBusCompanyFilterOptions,
 }));
 
 beforeAll(() => {
@@ -101,9 +93,6 @@ beforeEach(() => {
   };
   state.getRouteById.mockResolvedValue(route);
   state.updateRouteStatus.mockResolvedValue({ ...route, status: 'TAM_NGUNG' });
-  state.getBusCompanyFilterOptions.mockResolvedValue([
-    { id: 3, label: 'Phương Trang (FUTA)' },
-  ]);
 });
 
 afterEach(() => cleanup());
@@ -111,9 +100,7 @@ afterEach(() => cleanup());
 function renderRouteDetails() {
   return render(<RouteDetails
     routeId={route.routeId}
-    companyOptions={{ status: 'success', options: [{ value: '3', label: 'Phương Trang (FUTA)' }] }}
     onClose={vi.fn()}
-    onRetryOptions={vi.fn()}
     onUpdated={vi.fn()}
   />);
 }
@@ -158,9 +145,7 @@ describe('Admin route action permissions', () => {
     setEmployeeAdminTestSession(['route:read']);
     rerender(<RouteDetails
       routeId={route.routeId}
-      companyOptions={{ status: 'success', options: [{ value: '3', label: 'Phương Trang (FUTA)' }] }}
       onClose={vi.fn()}
-      onRetryOptions={vi.fn()}
       onUpdated={vi.fn()}
     />);
     await waitFor(() => {
@@ -180,9 +165,7 @@ describe('Admin route action permissions', () => {
     setEmployeeAdminTestSession(['route:read']);
     rerender(<RouteDetails
       routeId={route.routeId}
-      companyOptions={{ status: 'success', options: [{ value: '3', label: 'Phương Trang (FUTA)' }] }}
       onClose={vi.fn()}
-      onRetryOptions={vi.fn()}
       onUpdated={vi.fn()}
     />);
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Tạm ngưng tuyến xe?' })).toBeNull());

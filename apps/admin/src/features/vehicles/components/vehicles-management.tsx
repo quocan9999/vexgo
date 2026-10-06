@@ -259,8 +259,12 @@ function VehicleDetails({
                 <Truck size={21} />
               </span>
               <div>
-                <h3>{detailState.vehicle.licensePlate}</h3>
-                <p>Xe #{detailState.vehicle.vehicleId}</p>
+                <h3 className="admin-data-mono">
+                  {detailState.vehicle.licensePlate}
+                </h3>
+                <p>
+                  Xe #<span className="admin-data-mono">{detailState.vehicle.vehicleId}</span>
+                </p>
               </div>
               <AdminStatusBadge tone={statusTone(detailState.vehicle.status)}>
                 {statusLabel(detailState.vehicle.status)}
@@ -279,7 +283,9 @@ function VehicleDetails({
                 </div>
                 <div>
                   <dt>Mã nhà xe</dt>
-                  <dd>{detailState.vehicle.busCompany.code}</dd>
+                  <dd className="admin-data-mono">
+                    {detailState.vehicle.busCompany.code}
+                  </dd>
                 </div>
                 <div>
                   <dt>Loại xe</dt>
@@ -312,7 +318,7 @@ function VehicleDetails({
               </dl>
             </section>
 
-            <div className="vehicle-detail-actions">
+            <div className="vehicle-detail-actions admin-detail-sheet__actions">
               {canConfigureSeats && <Button
                 onClick={() =>
                   router.push(`/vehicles/${detailState.vehicle.vehicleId}/seats`)
@@ -460,7 +466,7 @@ export function VehiclesManagement() {
 
   const items = vehiclePage?.data ?? [];
   const hasActiveFilters = Boolean(
-    filters.busCompanyId || filters.vehicleTypeId || filters.status,
+    filters.vehicleTypeId || filters.status,
   );
   const optionErrors = [
     options.busCompanies.status === 'error'
@@ -518,21 +524,14 @@ export function VehiclesManagement() {
           <div className="panel vehicles-panel">
             <FilterToolbar totalItems={vehiclePage?.meta.totalItems ?? null}>
               <SearchInput
-                label="Tìm biển số, nhà xe hoặc loại xe"
+                label="Tìm biển số hoặc loại xe"
                 onChange={updateSearch}
-                placeholder="Tìm biển số, nhà xe, loại xe..."
+                placeholder="Tìm biển số hoặc loại xe..."
                 value={searchInput}
               />
-              {options.busCompanies.status === 'success' && (
-                <SelectFilter
-                  label="Nhà xe"
-                  onChange={(value) => updateFilters({ busCompanyId: value })}
-                  options={filterOptions(options.busCompanies.options)}
-                  value={filters.busCompanyId}
-                />
-              )}
               {options.vehicleTypes.status === 'success' && (
                 <SelectFilter
+                  allLabel="Tất cả loại xe"
                   label="Loại xe"
                   onChange={(value) => updateFilters({ vehicleTypeId: value })}
                   options={filterOptions(options.vehicleTypes.options)}
@@ -540,6 +539,7 @@ export function VehiclesManagement() {
                 />
               )}
               <SelectFilter
+                allLabel="Tất cả trạng thái xe"
                 label="Trạng thái xe"
                 onChange={(value) =>
                   updateFilters({ status: value as VehicleStatus | '' })
@@ -683,12 +683,14 @@ export function VehiclesManagement() {
                         <tbody>
                           {items.map((vehicle) => (
                             <tr key={vehicle.vehicleId}>
-                              <th scope="row">{vehicle.licensePlate}</th>
+                              <th className="admin-data-mono" scope="row">
+                                {vehicle.licensePlate}
+                              </th>
                               <td>
                                 <span className="vehicle-company-name">
                                   {vehicle.busCompany.name}
                                 </span>
-                                <span className="vehicle-company-code">
+                                <span className="vehicle-company-code admin-data-mono">
                                   {vehicle.busCompany.code}
                                 </span>
                               </td>
@@ -716,8 +718,12 @@ export function VehiclesManagement() {
                         >
                           <div className="vehicle-mobile-heading">
                             <div>
-                              <h2>{vehicle.licensePlate}</h2>
-                              <span>Xe #{vehicle.vehicleId}</span>
+                              <h2 className="admin-data-mono">
+                                {vehicle.licensePlate}
+                              </h2>
+                              <span>
+                                Xe #<span className="admin-data-mono">{vehicle.vehicleId}</span>
+                              </span>
                             </div>
                             {vehicleStatusBadge(vehicle)}
                           </div>

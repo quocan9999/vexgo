@@ -251,11 +251,21 @@ function AccountDetailSheet({
                 </div>
                 <div>
                   <dt>CCCD</dt>
-                  <dd>{detail.account.citizenId ?? 'Chưa cập nhật'}</dd>
+                  <dd>
+                    {detail.account.citizenId ? (
+                      <span className="admin-data-mono">
+                        {detail.account.citizenId}
+                      </span>
+                    ) : (
+                      'Chưa cập nhật'
+                    )}
+                  </dd>
                 </div>
                 <div>
                   <dt>Mã nhân viên</dt>
-                  <dd>{detail.account.employee.employeeCode}</dd>
+                  <dd className="admin-data-mono">
+                    {detail.account.employee.employeeCode}
+                  </dd>
                 </div>
                 <div>
                   <dt>Trạng thái nhân viên</dt>
@@ -274,7 +284,9 @@ function AccountDetailSheet({
                   <dt>Nhà xe</dt>
                   <dd>
                     {detail.account.busCompany.name} ·{' '}
-                    {detail.account.busCompany.code}
+                    <span className="admin-data-mono">
+                      {detail.account.busCompany.code}
+                    </span>
                   </dd>
                 </div>
                 <div>
@@ -702,7 +714,9 @@ export function AdminAccountsManagement() {
                             </span>
                             <span className={styles.identityCopy}>
                               <span>{account.fullName}</span>
-                              <small>{account.employee.employeeCode}</small>
+                              <small className="admin-data-mono">
+                                {account.employee.employeeCode}
+                              </small>
                             </span>
                           </span>
                         </th>

@@ -4,8 +4,8 @@
   min-height: 68px;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  padding: 12px 18px;
+  gap: var(--admin-space-component-gap);
+  padding: var(--admin-space-table-cell-y) var(--admin-space-table-cell-x);
   border-bottom: 1px solid #edf0f5;
 }
 
@@ -15,7 +15,7 @@
   flex: 1 1 auto;
   flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
+  gap: var(--admin-space-action-gap);
 }
 
 .search,
@@ -36,10 +36,11 @@
   display: flex;
   width: min(100%, 420px);
   min-width: min(100%, 220px);
+  max-width: 420px;
   flex: 1 1 320px;
   align-items: center;
-  gap: 10px;
-  padding: 0 12px;
+  gap: var(--admin-space-control-gap);
+  padding: 0 var(--admin-space-3);
 }
 
 .search:focus-within,
@@ -65,7 +66,8 @@
   background: transparent;
   color: var(--foreground);
   font: inherit;
-  font-size: 13px;
+  font-size: var(--admin-type-body-size);
+  line-height: var(--admin-type-body-line-height);
 }
 
 .search input::placeholder {
@@ -95,21 +97,44 @@
 }
 
 .selectFilter {
+  box-sizing: border-box;
   width: 180px;
-  min-width: 150px;
-  flex: 0 1 180px;
+  min-width: 0;
+  flex: 0 0 180px;
+}
+
+.controls[data-density='compact'] .search {
+  flex-basis: 200px;
+  min-width: min(100%, 180px);
+  max-width: 240px;
+}
+
+.controls[data-density='compact'] .selectFilter {
+  width: 176px;
+  flex-basis: 176px;
+}
+
+.selectValue {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .selectTrigger,
 .dateTrigger {
   display: flex;
+  box-sizing: border-box;
   width: 100%;
+  min-width: 0;
   align-items: center;
   justify-content: space-between;
-  gap: 9px;
-  padding: 0 12px;
+  gap: var(--admin-space-control-gap);
+  padding: 0 var(--admin-space-3);
   font: inherit;
-  font-size: 13px;
+  font-size: var(--admin-type-body-size);
+  line-height: var(--admin-type-body-line-height);
   text-align: left;
   cursor: pointer;
 }
@@ -137,7 +162,7 @@
   max-width: calc(100vw - 20px);
   max-height: min(300px, calc(100dvh - 24px));
   overflow: auto;
-  padding: 5px;
+  padding: var(--admin-space-1);
   border: 1px solid var(--border);
   border-radius: 12px;
   background: var(--popover);
@@ -150,11 +175,12 @@
   min-height: 40px;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  padding: 0 10px;
+  gap: var(--admin-space-component-gap);
+  padding: 0 var(--admin-space-2);
   border-radius: 8px;
   color: var(--foreground);
-  font-size: 13px;
+  font-size: var(--admin-type-body-size);
+  line-height: var(--admin-type-body-line-height);
   cursor: pointer;
   outline: none;
 }
@@ -165,7 +191,7 @@
 }
 
 .selectItem[data-selected] {
-  font-weight: 600;
+  font-weight: var(--admin-type-label-weight);
 }
 
 .selectItem :global([data-slot='select-item-indicator']) {
@@ -174,9 +200,16 @@
 }
 
 .dateFilter {
+  box-sizing: border-box;
   width: 240px;
-  min-width: 200px;
-  flex: 0 1 240px;
+  min-width: 0;
+  flex: 0 0 240px;
+}
+
+.singleDateFilter {
+  width: 180px;
+  min-width: 0;
+  flex: 0 0 180px;
 }
 
 .dateTrigger {
@@ -210,7 +243,7 @@
   width: min(350px, calc(100vw - 24px));
   max-height: calc(100dvh - 24px);
   overflow: auto;
-  padding: 18px;
+  padding: var(--admin-space-card-padding);
   border: 1px solid var(--border);
   border-radius: 14px;
   background: var(--popover);
@@ -221,65 +254,69 @@
 .dateTitle {
   margin: 0;
   color: var(--foreground);
-  font-size: 15px;
-  font-weight: 650;
-  letter-spacing: -0.01em;
+  font-size: var(--admin-type-component-title-size);
+  font-weight: var(--admin-type-component-title-weight);
+  line-height: var(--admin-type-component-title-line-height);
+  letter-spacing: -0.02em;
 }
 
 .dateDescription {
-  margin: 5px 0 16px;
+  margin: var(--admin-space-1) 0 var(--admin-space-component-gap);
   color: var(--muted-foreground);
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: var(--admin-type-helper-size);
+  line-height: var(--admin-type-helper-line-height);
 }
 
 .dateFields {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  gap: var(--admin-space-field-gap);
 }
 
 .dateField {
   display: grid;
   min-width: 0;
-  gap: 7px;
+  gap: var(--admin-space-label-control-gap);
   color: #55647a;
-  font-size: 12px;
-  font-weight: 550;
+  font-size: var(--admin-type-label-size);
+  font-weight: var(--admin-type-label-weight);
+  line-height: var(--admin-type-label-line-height);
 }
 
 .dateField input {
   width: 100%;
   min-width: 0;
   min-height: 42px;
-  padding: 0 9px;
+  padding: 0 var(--admin-space-2);
   border: 1px solid var(--border);
   border-radius: 9px;
   background: var(--background);
   color: var(--foreground);
   font: inherit;
-  font-size: 12px;
+  font-size: var(--admin-type-body-size);
+  line-height: var(--admin-type-body-line-height);
 }
 
 .dateActions {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  margin-top: 18px;
-  padding-top: 13px;
+  gap: var(--admin-space-toolbar-gap);
+  margin-top: var(--admin-space-section-gap);
+  padding-top: var(--admin-space-table-cell-y);
   border-top: 1px solid #edf0f5;
 }
 
 .clearDateButton,
 .applyDateButton {
   min-height: 42px;
-  padding: 0 13px;
+  padding: 0 var(--admin-space-3);
   border: 1px solid var(--border);
   border-radius: 9px;
   font: inherit;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: var(--admin-type-button-size);
+  font-weight: var(--admin-type-button-weight);
+  line-height: var(--admin-type-button-line-height);
   cursor: pointer;
 }
 
@@ -308,7 +345,8 @@
 .summary {
   flex: 0 0 auto;
   color: var(--admin-text-muted);
-  font-size: 12px;
+  font-size: var(--admin-type-helper-size);
+  line-height: var(--admin-type-helper-line-height);
   white-space: nowrap;
 }
 
@@ -328,12 +366,18 @@
   }
 
   .controls {
-    gap: 8px;
+    gap: var(--admin-space-control-gap);
   }
 
   .search {
     max-width: none;
     flex-basis: 100%;
+  }
+
+  .controls[data-density='compact'] .search {
+    flex-basis: 100%;
+    min-width: 0;
+    max-width: none;
   }
 }
 
@@ -341,14 +385,14 @@
   .toolbar {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    gap: 12px;
-    padding: 14px;
+    gap: var(--admin-space-toolbar-gap);
+    padding: var(--admin-space-4);
   }
 
   .controls {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
-    gap: 9px;
+    gap: var(--admin-space-control-gap);
     width: 100%;
   }
 
@@ -363,6 +407,15 @@
     min-width: 0;
   }
 
+  .controls[data-density='compact'] .search {
+    width: 100%;
+  }
+
+  .controls[data-density='compact'] .selectFilter {
+    width: 100%;
+    flex-basis: auto;
+  }
+
   .summary {
     justify-self: end;
   }
@@ -370,8 +423,8 @@
 
 @media (max-width: 380px) {
   .toolbar {
-    gap: 10px;
-    padding: 12px;
+    gap: var(--admin-space-control-gap);
+    padding: var(--admin-space-3);
   }
 
   .controls {

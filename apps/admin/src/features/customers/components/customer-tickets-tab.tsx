@@ -151,10 +151,14 @@ export function CustomerTicketsTab({ customerId }: { customerId: number }) {
                 {tickets.map((ticket) => (
                   <tr key={ticket.ticketId}>
                     <td>
-                      <span className="customer-code">{ticket.ticketCode}</span>
+                      <span className="customer-code admin-data-mono">
+                        {ticket.ticketCode}
+                      </span>
                     </td>
                     <td>
-                      <strong>{ticket.booking.code}</strong>
+                      <strong className="admin-data-mono">
+                        {ticket.booking.code}
+                      </strong>
                     </td>
                     <td>
                       <span className="ticket-route-text">
@@ -162,7 +166,9 @@ export function CustomerTicketsTab({ customerId }: { customerId: number }) {
                       </span>
                     </td>
                     <td>
-                      <span className="customer-code">{ticket.trip.code}</span>
+                      <span className="customer-code admin-data-mono">
+                        {ticket.trip.code}
+                      </span>
                     </td>
                     <td>
                       {formatDeparture(
@@ -171,7 +177,9 @@ export function CustomerTicketsTab({ customerId }: { customerId: number }) {
                       )}
                     </td>
                     <td>
-                      <strong>{ticket.seat.code}</strong>
+                      <strong className="admin-data-mono">
+                        {ticket.seat.code}
+                      </strong>
                       {ticket.seat.position && (
                         <span className="ticket-seat-pos">
                           {' '}
@@ -204,7 +212,9 @@ export function CustomerTicketsTab({ customerId }: { customerId: number }) {
               <article key={ticket.ticketId} className="customers-mobile-card">
                 <div className="customers-mobile-card-header">
                   <div>
-                    <span className="customer-code">{ticket.ticketCode}</span>
+                    <span className="customer-code admin-data-mono">
+                      {ticket.ticketCode}
+                    </span>
                     <h3 className="customers-mobile-card-title">
                       {ticket.actualPrice.toLocaleString('vi-VN')} đ
                     </h3>
@@ -223,7 +233,10 @@ export function CustomerTicketsTab({ customerId }: { customerId: number }) {
                   <div>
                     <dt>Chuyến / Xe</dt>
                     <dd>
-                      {ticket.trip.code} ({ticket.trip.vehicle.licensePlate})
+                      <span className="admin-data-mono">{ticket.trip.code}</span>{' '}
+                      (<span className="admin-data-mono">
+                        {ticket.trip.vehicle.licensePlate}
+                      </span>)
                     </dd>
                   </div>
                   <div>
@@ -238,13 +251,13 @@ export function CustomerTicketsTab({ customerId }: { customerId: number }) {
                   <div>
                     <dt>Ghế ngồi</dt>
                     <dd>
-                      {ticket.seat.code}
+                      <span className="admin-data-mono">{ticket.seat.code}</span>
                       {ticket.seat.position ? ` (${ticket.seat.position})` : ''}
                     </dd>
                   </div>
                   <div>
                     <dt>Mã đặt vé</dt>
-                    <dd>{ticket.booking.code}</dd>
+                    <dd className="admin-data-mono">{ticket.booking.code}</dd>
                   </div>
                   <div>
                     <dt>Giá niêm yết</dt>

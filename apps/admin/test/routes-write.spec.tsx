@@ -15,26 +15,24 @@ const route: Route = {
   status: 'HOAT_DONG', busCompany: { busCompanyId: 3, code: 'FUTA', name: 'Phương Trang' },
   createdAt: '2026-09-22T07:34:00.000Z', updatedAt: '2026-09-23T07:34:00.000Z',
 };
-const options = { status: 'success' as const, options: [{ value: '3', label: 'Phương Trang (FUTA)' }] };
-
 afterEach(() => vi.restoreAllMocks());
 
 describe('Route form composition', () => {
   it('uses shared form dialog and includes explicit create fields', () => {
     const html = renderToStaticMarkup(<RouteFormDialog
-      companyOptions={options} onClose={vi.fn()} onRetryOptions={vi.fn()} onSaved={vi.fn()}
+      tenantBusCompanyId={3} onClose={vi.fn()} onSaved={vi.fn()}
     />);
     expect(html).toContain('admin-form-dialog');
-    for (const label of ['Mã tuyến *', 'Điểm đi *', 'Điểm đến *', 'Thời gian chạy (phút) *', 'Nhà xe *', 'Trạng thái *']) {
+    for (const label of ['Mã tuyến *', 'Điểm đi *', 'Điểm đến *', 'Thời gian chạy (phút) *', 'Trạng thái *']) {
       expect(html).toContain(label);
     }
     expect(html).toContain('Chọn trạng thái');
-    expect(html).toContain('Phương Trang (FUTA)');
+    expect(html).not.toContain('Chọn nhà xe');
   });
 
   it('keeps code, company, and status as read-only context during edit', () => {
     const html = renderToStaticMarkup(<RouteFormDialog
-      companyOptions={options} onClose={vi.fn()} onRetryOptions={vi.fn()} onSaved={vi.fn()} route={route}
+      onClose={vi.fn()} onSaved={vi.fn()} route={route}
     />);
     expect(html).toContain('admin-form-dialog');
     expect(html).toContain('FUTA-TX-0100');
@@ -48,14 +46,12 @@ describe('Route form composition', () => {
     expect(html).not.toContain('name="code"');
   });
 
-  it('disables create submission and offers retry while company options fail', () => {
+  it('does not require a company selector to submit a tenant route', () => {
     const html = renderToStaticMarkup(<RouteFormDialog
-      companyOptions={{ status: 'error', message: 'Không thể tải nhà xe.' }}
-      onClose={vi.fn()} onRetryOptions={vi.fn()} onSaved={vi.fn()}
+      tenantBusCompanyId={3} onClose={vi.fn()} onSaved={vi.fn()}
     />);
-    expect(html).toContain('Không thể tải nhà xe.');
-    expect(html).toContain('Thử tải lại nhà xe');
-    expect(html).toMatch(/<button[^>]*type="submit"[^>]*disabled=""/);
+    expect(html).not.toContain('Chọn nhà xe');
+    expect(html).not.toMatch(/<button[^>]*type="submit"[^>]*disabled=""/);
   });
 });
 
