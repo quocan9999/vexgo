@@ -35,4 +35,15 @@ export class TripsController {
   async getTripSeats(@Param('tripId', ParseIntPipe) tripId: number) {
     return this.tripsService.getTripSeats(tripId);
   }
+
+  @Get(':tripId/alternatives')
+  async getTripAlternatives(
+    @Param('tripId', ParseIntPipe) tripId: number,
+    @Query('limit') limit?: string,
+  ) {
+    return this.tripsService.getTripAlternatives(
+      tripId,
+      limit ? Number(limit) : 5,
+    );
+  }
 }

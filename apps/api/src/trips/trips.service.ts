@@ -457,4 +457,254 @@ export class TripsService {
       };
     });
   }
+
+  async getTripAlternatives(tripId: number, limit: number = 5) {
+    const originalTrip = await this.prisma.chuyenXe.findUnique({
+      where: { chuyenXeId: Number(tripId) },
+      include: {
+        tuyenXe: {
+          include: {
+            nhaXe: true,
+          },
+        },
+        xe: {
+          include: {
+            nhaXe: true,
+            loaiXe: true,
+          },
+        },
+        gheChuyenXes: {
+          include: {
+            ghe: true,
+          },
+        },
+      },
+    });
+
+    if (!originalTrip) {
+      throw new NotFoundException(`Chuyến xe #${tripId} không tồn tại.`);
+    }
+
+    // Giá vé niêm yết của chuyến gốc
+    const origFare = await this.prisma.bangGia.findFirst({
+      where: {
+        nhaXeId: originalTrip.nhaXeId,
+        tuyenXeId: originalTrip.tuyenXeId,
+        loaiXeId: originalTrip.xe.loaiXeId,
+        trangThai: 'DANG_AP_DUNG',
+      },
+      orderBy: {
+        bangGiaId: 'desc',
+      },
+    });
+    const originalPrice = origFare ? Number(origFare.giaNiemYet) : 250000;
+
+    const getTripDateTime = (t: { ngayKhoiHanh?: Date | null; gioKhoiHanh?: Date | null }) => {
+      const d = t.ngayKhoiHanh ? new Date(t.ngayKhoiHanh) : new Date();
+      if (!t.gioKhoiHanh) return d;
+      const gh = new Date(t.gioKhoiHanh);
+      return new Date(
+        d.getFullYear(),
+        d.getMonth(),
+        d.getDate(),
+        gh.getHours(),
+        gh.getMinutes(),
+        gh.getSeconds(),
+      );
+    };
+
+    const origTime = getTripDateTime(originalTrip);
+
+    // Khoảng thời gian cho phép: trong vòng ± 24 giờ
+    const minTime = new Date(origTime.getTime() - 24 * 60 * 60 * 1000);
+    const maxTime = new Date(origTime.getTime() + 24 * 60 * 60 * 1000);
+
+    // Tiêu chí 1: Cùng tuyến hoặc cùng điểm đi & điểm đến (bắt buộc)
+    const candidates = await this.prisma.chuyenXe.findMany({
+      where: {
+        chuyenXeId: { not: originalTrip.chuyenXeId },
+        trangThai: { not: 'HUY' },
+        OR: [
+          { tuyenXeId: originalTrip.tuyenXeId },
+          {
+            tuyenXe: {
+              diemDi: originalTrip.tuyenXe.diemDi,
+              diemDen: originalTrip.tuyenXe.diemDen,
+            },
+          },
+        ],
+      },
+      include: {
+        tuyenXe: {
+          include: {
+            nhaXe: true,
+          },
+        },
+        xe: {
+          include: {
+            nhaXe: true,
+            loaiXe: true,
+          },
+        },
+        gheChuyenXes: {
+          include: {
+            ghe: true,
+          },
+        },
+      },
+    });
+
+    const scoredCandidates = await Promise.all(
+      candidates.map(async (trip) => {
+        // Tiêu chí 4: Phải còn vé (bắt buộc)
+        const availableSeats = trip.gheChuyenXes.filter(
+          (g) => g.trangThai === 'TRONG',
+        ).length;
+        if (availableSeats <= 0) {
+          return null; // Bỏ qua chuyến đã hết chỗ
+        }
+
+        // Lấy giá vé của chuyến thay thế
+        const fare = await this.prisma.bangGia.findFirst({
+          where: {
+            nhaXeId: trip.nhaXeId,
+            tuyenXeId: trip.tuyenXeId,
+            loaiXeId: trip.xe.loaiXeId,
+            trangThai: 'DANG_AP_DUNG',
+          },
+          orderBy: {
+            bangGiaId: 'desc',
+          },
+        });
+        const price = fare ? Number(fare.giaNiemYet) : 250000;
+
+        const candTime = getTripDateTime(trip);
+
+        // Tiêu chí 3: Cùng ngày hoặc trong khoảng ± 24 giờ
+        const deltaMs = Math.abs(candTime.getTime() - origTime.getTime());
+        const deltaMinutes = Math.floor(deltaMs / (60 * 1000));
+        const deltaHours = deltaMinutes / 60;
+
+        // Tiêu chí 5: Không đề xuất chuyến quá lệch giờ (vượt quá 24 giờ)
+        if (deltaMinutes > 24 * 60) {
+          return null;
+        }
+
+        // Thuật toán tính điểm ưu tiên (Scoring Engine)
+        let score = 1000;
+
+        // 1. Phạt độ lệch giờ (RẤT QUAN TRỌNG): Mỗi 15 phút lệch trừ 1 điểm
+        score -= Math.floor(deltaMinutes / 15);
+
+        // 2. Ưu tiên giá tương đương hoặc thấp hơn (QUAN TRỌNG)
+        const priceDiff = price - originalPrice;
+        if (price <= originalPrice) {
+          score += 50;
+          if (price <= originalPrice * 0.9) {
+            score += 30; // Rẻ hơn >= 10%
+          }
+        } else {
+          score -= Math.min(60, Math.floor(priceDiff / 10000));
+        }
+
+        // 3. Ưu tiên cùng nhà xe (TÙY CHỌN)
+        const isSameOperator = trip.nhaXeId === originalTrip.nhaXeId;
+        if (isSameOperator) {
+          score += 30;
+        }
+
+        // 4. Ưu tiên chuyến còn nhiều ghế trống
+        score += Math.min(20, availableSeats);
+
+        // Sinh recommendationReason bằng tiếng Việt thân thiện
+        const reasons: string[] = [];
+        if (isSameOperator) {
+          reasons.push('Cùng nhà xe');
+        }
+        if (deltaHours === 0) {
+          reasons.push('Cùng giờ khởi hành');
+        } else {
+          const isEarlier = candTime.getTime() < origTime.getTime();
+          const hStr =
+            deltaHours < 1
+              ? `${deltaMinutes} phút`
+              : Number.isInteger(deltaHours)
+                ? `${deltaHours} giờ`
+                : `${deltaHours.toFixed(1)} giờ`;
+          reasons.push(
+            isEarlier ? `Khởi hành sớm hơn ${hStr}` : `Khởi hành sau ${hStr}`,
+          );
+        }
+
+        if (price < originalPrice) {
+          const saved = (originalPrice - price).toLocaleString('vi-VN');
+          reasons.push(`Giá tiết kiệm hơn ${saved}đ`);
+        } else if (price === originalPrice) {
+          reasons.push('Giá tương đương');
+        }
+
+        reasons.push(`còn ${availableSeats} chỗ`);
+        const recommendationReason = reasons.join(', ');
+
+        const depTime = trip.gioKhoiHanh
+          ? new Date(trip.gioKhoiHanh).toLocaleTimeString('vi-VN', {
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: false,
+            })
+          : '08:00';
+
+        const operatorName = trip.xe.nhaXe.tenNhaXe;
+        const vehicleTypeName = trip.xe.loaiXe.tenLoai;
+
+        return {
+          score,
+          data: {
+            tripId: trip.chuyenXeId,
+            id: trip.chuyenXeId.toString(),
+            routeId: trip.tuyenXeId.toString(),
+            busCompanyId: trip.nhaXeId,
+            operatorId: trip.nhaXeId.toString(),
+            busCompanyName: operatorName,
+            operatorName,
+            vehicleTypeName,
+            vehicleType: vehicleTypeName,
+            fromCityId: cityToCode(trip.tuyenXe.diemDi),
+            fromCityName: trip.tuyenXe.diemDi,
+            toCityId: cityToCode(trip.tuyenXe.diemDen),
+            toCityName: trip.tuyenXe.diemDen,
+            departureTime: depTime,
+            arrivalTime: '14:30',
+            duration: '6 giờ',
+            price,
+            originalPrice: price,
+            discountPrice: price,
+            availableSeats,
+            totalSeats: trip.gheChuyenXes.length,
+            seatLayoutType: vehicleTypeName,
+            rating: 4.8,
+            reviewCount: 124,
+            pickupPoint: `Bến xe ${trip.tuyenXe.diemDi}`,
+            pickupAddress: `Văn phòng ${operatorName}, ${trip.tuyenXe.diemDi}`,
+            dropoffPoint: `Bến xe ${trip.tuyenXe.diemDen}`,
+            dropoffAddress: `Văn phòng ${operatorName}, ${trip.tuyenXe.diemDen}`,
+            amenities: ['Wifi', 'Nước uống', 'Khăn lạnh', 'Cổng sạc USB'],
+            recommendationReason,
+            matchScore: score,
+          },
+        };
+      }),
+    );
+
+    const valid = scoredCandidates.filter(
+      (item): item is NonNullable<typeof item> => item !== null,
+    );
+
+    // Sắp xếp giảm dần theo điểm số
+    valid.sort((a, b) => b.score - a.score);
+
+    const top = valid.slice(0, Math.max(1, limit)).map((item) => item.data);
+    return top;
+  }
 }
+

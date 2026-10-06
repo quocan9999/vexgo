@@ -16,6 +16,8 @@ import { SeatHoldsModule } from './seat-holds/seat-holds.module.js';
 import { PromotionsModule } from './promotions/promotions.module.js';
 import { BookingsModule } from './bookings/bookings.module.js';
 import { PaymentsModule } from './payments/payments.module.js';
+import { NotificationsModule } from './notifications/notifications.module.js';
+import { ReviewsModule } from './reviews/reviews.module.js';
 
 @Module({
   imports: [
@@ -41,6 +43,8 @@ import { PaymentsModule } from './payments/payments.module.js';
     PromotionsModule,
     BookingsModule,
     PaymentsModule,
+    NotificationsModule,
+    ReviewsModule,
   ],
 })
 export class AppModule {}
