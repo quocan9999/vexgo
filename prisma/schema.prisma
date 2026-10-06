@@ -539,39 +539,6 @@ model LoaiHangHoa {
   @@unique([tenLoai], map: "LoaiHangHoa_index_8")
 }
 
-model LuuTruPhieuGuiHangCu {
-  phieuGuiHangId       Int      @id @db.Int
-  tenNguoiNhan         String   @db.VarChar(100)
-  soDienThoaiNguoiNhan String   @db.VarChar(16)
-  diaChiNguoiNhan      String?  @db.VarChar(255)
-  hinhThucLayHang      String   @db.VarChar(30)
-  hinhThucGiaoHang     String   @db.VarChar(30)
-  diaChiLayHang        String?  @db.VarChar(255)
-  chuyenXeIdCu         Int?     @db.Int
-  buuCucGuiIdCu        Int?     @db.Int
-  buuCucPhatIdCu       Int?     @db.Int
-  bangCuocApDungIdCu   Int?     @db.Int
-  trangThaiCu          String   @db.VarChar(30)
-  archivedAt           DateTime @default(now()) @db.DateTime(0)
-}
-
-model LuuTruBangCuocGuiHangCu {
-  bangCuocGuiHangId Int      @id @db.Int
-  buuCucGuiIdCu     Int      @db.Int
-  buuCucPhatIdCu    Int      @db.Int
-  khoiLuongTu       Decimal  @db.Decimal(10, 2)
-  khoiLuongDen      Decimal? @db.Decimal(10, 2)
-  mucCuoc           Decimal  @db.Decimal(18, 2)
-  tuNgay            DateTime @db.Date
-  denNgay           DateTime? @db.Date
-  hinhThucLayHang   String   @db.VarChar(30)
-  hinhThucGiaoHang  String   @db.VarChar(30)
-  trangThaiCu       String   @db.VarChar(30)
-  createdAtCu       DateTime @db.DateTime(0)
-  updatedAtCu       DateTime @db.DateTime(0)
-  archivedAt        DateTime @default(now()) @db.DateTime(0)
-}
-
 model HangHoa {
   hangHoaId       Int              @id @default(autoincrement()) @db.Int
   tenHang         String           @db.VarChar(150)
