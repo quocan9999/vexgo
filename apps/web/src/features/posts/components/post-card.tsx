@@ -134,7 +134,7 @@ export const PostCard: React.FC<PropertyCardProps> = ({
       </div>
       
       {activeTab === 'seats' && (
-        <SeatMap />
+        <SeatMap tripId={Number(post.id)} />
       )}
     </div>
   );

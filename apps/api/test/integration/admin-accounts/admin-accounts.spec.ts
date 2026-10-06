@@ -14,6 +14,7 @@ import { configureApi } from '../../../src/common/configure-api.js';
 import { PrismaService } from '../../../src/prisma/prisma.service.js';
 
 const SUPER_ADMIN_TOKEN = 'Bearer test-super-admin';
+const SUPER_ADMIN_READ_ONLY_TOKEN = 'Bearer test-super-admin-read-only';
 const CARRIER_ADMIN_TOKEN = 'Bearer test-carrier-admin';
 const ACCESS_TOKEN_ERROR = {
   error: 'ACCESS_TOKEN_INVALID',
@@ -47,7 +48,25 @@ describe('Admin account management API', () => {
           taiKhoanId: 1,
           sessionId: 'test-super-admin-session',
           roles: ['SUPER_ADMIN'],
-          permissions: [],
+          permissions: [
+            'bus-company:read',
+            'bus-company:create',
+            'bus-company:update',
+            'admin-account:read',
+            'admin-account:create',
+            'admin-account:update',
+          ],
+          nhanVienId: null,
+          nhaXeId: null,
+        };
+        return true;
+      }
+      if (authorization === SUPER_ADMIN_READ_ONLY_TOKEN) {
+        request.user = {
+          taiKhoanId: 4,
+          sessionId: 'test-super-admin-read-only-session',
+          roles: ['SUPER_ADMIN'],
+          permissions: ['admin-account:read'],
           nhanVienId: null,
           nhaXeId: null,
         };
@@ -82,7 +101,11 @@ describe('Admin account management API', () => {
     for (const [name, description] of [
       ['NHA_XE_ADMIN', 'Quản trị nhà xe'],
       ['NHAN_VIEN_BAN_VE', 'Nhân viên bán vé'],
+      ['NHAN_VIEN_CSKH', 'Nhân viên chăm sóc khách hàng'],
+      ['NHAN_VIEN_PHU_XE', 'Nhân viên phụ xe'],
+      ['NHAN_VIEN_KINH_DOANH', 'Nhân viên kinh doanh'],
       ['SUPER_ADMIN', 'Quản trị hệ thống'],
+      ['KHACH_HANG', 'Khách hàng'],
     ]) {
       await prisma.vaiTro.upsert({
         where: { tenVaiTro: name },
@@ -169,6 +192,10 @@ describe('Admin account management API', () => {
     return call.set('Authorization', CARRIER_ADMIN_TOKEN);
   }
 
+  function asSuperAdminReadOnly(call: SupertestRequest) {
+    return call.set('Authorization', SUPER_ADMIN_READ_ONLY_TOKEN);
+  }
+
   async function createAdminAccount(
     companyId = firstCompanyId,
     overrides: Record<string, unknown> = {},
@@ -228,7 +255,48 @@ describe('Admin account management API', () => {
     return account.taiKhoanId;
   }
 
-  it('requires authentication and restricts these endpoints to SUPER_ADMIN', async () => {
+  async function createPlatformAccount(roleName = 'SUPER_ADMIN') {
+    const { phoneNumber } = uniqueIdentity();
+    const account = await prisma.taiKhoan.create({
+      data: {
+        hoTen: 'Tài khoản nền tảng kiểm thử',
+        soDienThoai: phoneNumber,
+        matKhau: 'not-a-real-login-hash',
+        daXacThucSoDienThoai: true,
+        trangThai: 'HOAT_DONG',
+      },
+      select: { taiKhoanId: true },
+    });
+    const role = await prisma.vaiTro.findUniqueOrThrow({
+      where: { tenVaiTro: roleName },
+      select: { vaiTroId: true },
+    });
+    await prisma.taiKhoanVaiTro.create({
+      data: { taiKhoanId: account.taiKhoanId, vaiTroId: role.vaiTroId },
+    });
+    return account.taiKhoanId;
+  }
+
+  async function roleNamesForAccount(accountId: number) {
+    const assignments = await prisma.taiKhoanVaiTro.findMany({
+      where: { taiKhoanId: accountId },
+      include: { vaiTro: { select: { tenVaiTro: true } } },
+      orderBy: { vaiTroId: 'asc' },
+    });
+    return assignments.map(({ vaiTro }) => vaiTro.tenVaiTro);
+  }
+
+  async function activeSuperAdminCount() {
+    const assignments = await prisma.taiKhoanVaiTro.findMany({
+      where: { vaiTro: { is: { tenVaiTro: 'SUPER_ADMIN' } } },
+      select: { taiKhoan: { select: { trangThai: true } } },
+    });
+    return assignments.filter(
+      ({ taiKhoan }) => taiKhoan.trangThai === 'HOAT_DONG',
+    ).length;
+  }
+
+  it('requires Super Admin role and admin-account:read permission for these endpoints', async () => {
     const anonymous = await request(app.getHttpServer())
       .get('/api/v1/admin-accounts')
       .expect(401);
@@ -244,7 +312,174 @@ describe('Admin account management API', () => {
     ).expect(200);
   });
 
-  it('creates the account, employee, and fixed tenant-admin role without returning secrets', async () => {
+  it('requires Super Admin role and admin-account:update permission for role replacement', async () => {
+    const created = await createAdminAccount();
+    const anonymous = await request(app.getHttpServer())
+      .put(`/api/v1/admin-accounts/${created.accountId}/roles`)
+      .send({ roleNames: [] })
+      .expect(401);
+    expect(anonymous.body.error).toBe('ACCESS_TOKEN_INVALID');
+
+    const tenant = await asCarrierAdmin(
+      request(app.getHttpServer()).put(
+        `/api/v1/admin-accounts/${created.accountId}/roles`,
+      ),
+    )
+      .send({ roleNames: [] })
+      .expect(403);
+    expect(tenant.body.error).toBe('ROLE_FORBIDDEN');
+
+    const missingPermission = await asSuperAdminReadOnly(
+      request(app.getHttpServer()).put(
+        `/api/v1/admin-accounts/${created.accountId}/roles`,
+      ),
+    )
+      .send({ roleNames: [] })
+      .expect(403);
+    expect(missingPermission.body.error).toBe('PERMISSION_FORBIDDEN');
+    expect(await roleNamesForAccount(created.accountId)).toEqual([
+      'NHA_XE_ADMIN',
+    ]);
+  });
+
+  it('replaces only the selected account role assignments', async () => {
+    const target = await createAdminAccount(firstCompanyId);
+    const other = await createAdminAccount(secondCompanyId);
+    const otherRolesBefore = await roleNamesForAccount(other.accountId);
+
+    const response = await asSuperAdmin(
+      request(app.getHttpServer()).put(
+        `/api/v1/admin-accounts/${target.accountId}/roles`,
+      ),
+    )
+      .send({ roleNames: ['NHAN_VIEN_BAN_VE', 'NHAN_VIEN_CSKH'] })
+      .expect(200);
+
+    expect(response.body.data.roles).toEqual(
+      expect.arrayContaining(['NHAN_VIEN_BAN_VE', 'NHAN_VIEN_CSKH']),
+    );
+    expect(await roleNamesForAccount(target.accountId)).toEqual(
+      expect.arrayContaining(['NHAN_VIEN_BAN_VE', 'NHAN_VIEN_CSKH']),
+    );
+    expect(await roleNamesForAccount(target.accountId)).toHaveLength(2);
+    expect(await roleNamesForAccount(other.accountId)).toEqual(
+      otherRolesBefore,
+    );
+  });
+
+  it('allows explicit empty roles and keeps the employee-only account manageable', async () => {
+    const target = await createAdminAccount();
+
+    const response = await asSuperAdmin(
+      request(app.getHttpServer()).put(
+        `/api/v1/admin-accounts/${target.accountId}/roles`,
+      ),
+    )
+      .send({ roleNames: [] })
+      .expect(200);
+
+    expect(response.body.data.roles).toEqual([]);
+    expect(await roleNamesForAccount(target.accountId)).toEqual([]);
+    const detail = await asSuperAdmin(
+      request(app.getHttpServer()).get(
+        `/api/v1/admin-accounts/${target.accountId}`,
+      ),
+    ).expect(200);
+    expect(detail.body.data.roles).toEqual([]);
+  });
+
+  it.each([
+    ['missing list', {}],
+    ['null list', { roleNames: null }],
+    ['non-array list', { roleNames: 'NHA_XE_ADMIN' }],
+    ['platform role', { roleNames: ['SUPER_ADMIN'] }],
+    ['customer role', { roleNames: ['KHACH_HANG'] }],
+    ['unknown role', { roleNames: ['NOT_A_ROLE'] }],
+    ['duplicate role', { roleNames: ['NHA_XE_ADMIN', 'NHA_XE_ADMIN'] }],
+    ['client-selected role IDs', { roleNames: ['NHA_XE_ADMIN'], vaiTroId: 3 }],
+  ])('rejects %s without changing assignments', async (_name, body) => {
+    const target = await createAdminAccount();
+    const rolesBefore = await roleNamesForAccount(target.accountId);
+
+    const response = await asSuperAdmin(
+      request(app.getHttpServer()).put(
+        `/api/v1/admin-accounts/${target.accountId}/roles`,
+      ),
+    )
+      .send(body)
+      .expect(400);
+
+    expect(response.body.error).toBe('VALIDATION_ERROR');
+    expect(await roleNamesForAccount(target.accountId)).toEqual(rolesBefore);
+  });
+
+  it('cannot edit, re-role, or lock protected platform, mixed-scope, or tenantless accounts', async () => {
+    const protectedSuperAdminId = await createPlatformAccount();
+    const mixedScopeId = await createNonAdminEmployee([
+      'NHA_XE_ADMIN',
+      'SUPER_ADMIN',
+    ]);
+    const tenantlessPlatformId = await createPlatformAccount('NHA_XE_ADMIN');
+    const protectedRolesBefore = await roleNamesForAccount(
+      protectedSuperAdminId,
+    );
+    const activeSuperAdminCountBefore = await activeSuperAdminCount();
+    const mixedRolesBefore = await roleNamesForAccount(mixedScopeId);
+    const platformRolesBefore = await roleNamesForAccount(tenantlessPlatformId);
+    const superAdminAssignmentsBefore = await prisma.taiKhoanVaiTro.findMany({
+      where: { vaiTro: { is: { tenVaiTro: 'SUPER_ADMIN' } } },
+      select: { taiKhoanId: true },
+      orderBy: { taiKhoanId: 'asc' },
+    });
+
+    const protectedStatus = await asSuperAdmin(
+      request(app.getHttpServer()).patch(
+        `/api/v1/admin-accounts/${protectedSuperAdminId}/status`,
+      ),
+    )
+      .send({ status: 'TAM_KHOA' })
+      .expect(404);
+    expect(protectedStatus.body.error).toBe('ADMIN_ACCOUNT_NOT_FOUND');
+
+    for (const accountId of [
+      protectedSuperAdminId,
+      mixedScopeId,
+      tenantlessPlatformId,
+    ]) {
+      const response = await asSuperAdmin(
+        request(app.getHttpServer()).put(
+          `/api/v1/admin-accounts/${accountId}/roles`,
+        ),
+      )
+        .send({ roleNames: [] })
+        .expect(404);
+      expect(response.body.error).toBe('ADMIN_ACCOUNT_NOT_FOUND');
+    }
+
+    expect(await roleNamesForAccount(protectedSuperAdminId)).toEqual(
+      protectedRolesBefore,
+    );
+    expect(await roleNamesForAccount(mixedScopeId)).toEqual(mixedRolesBefore);
+    expect(await roleNamesForAccount(tenantlessPlatformId)).toEqual(
+      platformRolesBefore,
+    );
+    expect(
+      await prisma.taiKhoanVaiTro.findMany({
+        where: { vaiTro: { is: { tenVaiTro: 'SUPER_ADMIN' } } },
+        select: { taiKhoanId: true },
+        orderBy: { taiKhoanId: 'asc' },
+      }),
+    ).toEqual(superAdminAssignmentsBefore);
+    expect(await activeSuperAdminCount()).toBe(activeSuperAdminCountBefore);
+    expect(
+      await prisma.taiKhoan.findUniqueOrThrow({
+        where: { taiKhoanId: protectedSuperAdminId },
+        select: { trangThai: true },
+      }),
+    ).toEqual({ trangThai: 'HOAT_DONG' });
+  });
+
+  it('creates the account with the legacy default NHA_XE_ADMIN role without returning secrets', async () => {
     const created = await createAdminAccount();
     const stored = await prisma.taiKhoan.findUniqueOrThrow({
       where: { taiKhoanId: created.accountId },
@@ -281,6 +516,24 @@ describe('Admin account management API', () => {
     expect(JSON.stringify(detail.body)).not.toContain('refreshTokenHash');
   });
 
+  it('creates an employee account with explicitly selected tenant roles', async () => {
+    const created = await createAdminAccount(firstCompanyId, {
+      roleNames: ['NHAN_VIEN_BAN_VE', 'NHAN_VIEN_CSKH'],
+    });
+    const stored = await prisma.taiKhoan.findUniqueOrThrow({
+      where: { taiKhoanId: created.accountId },
+      include: { taiKhoanVaiTros: { include: { vaiTro: true } } },
+    });
+
+    expect(created.roles).toEqual(
+      expect.arrayContaining(['NHAN_VIEN_BAN_VE', 'NHAN_VIEN_CSKH']),
+    );
+    expect(
+      stored.taiKhoanVaiTros.map(({ vaiTro }) => vaiTro.tenVaiTro),
+    ).toEqual(expect.arrayContaining(['NHAN_VIEN_BAN_VE', 'NHAN_VIEN_CSKH']));
+    expect(stored.taiKhoanVaiTros).toHaveLength(2);
+  });
+
   it('rejects role injection and invalid creation fields before writing', async () => {
     const identity = uniqueIdentity();
     const response = await asSuperAdmin(
@@ -304,43 +557,100 @@ describe('Admin account management API', () => {
     ).toBeNull();
   });
 
-  it('lists only NHA_XE_ADMIN accounts and applies company and status filters', async () => {
+  it.each([{ roleNames: [] as string[] }, { roleNames: ['SUPER_ADMIN'] }])(
+    'rejects invalid roleNames $roleNames before creating an account',
+    async ({ roleNames }) => {
+      const identity = uniqueIdentity();
+      const response = await asSuperAdmin(
+        request(app.getHttpServer()).post('/api/v1/admin-accounts'),
+      )
+        .send({
+          fullName: 'Nguyễn Minh Anh',
+          phoneNumber: identity.phoneNumber,
+          password: 'VexGo@123',
+          busCompanyId: firstCompanyId,
+          employeeCode: identity.employeeCode,
+          roleNames,
+        })
+        .expect(400);
+
+      expect(response.body.error).toBe('VALIDATION_ERROR');
+      expect(
+        await prisma.taiKhoan.findUnique({
+          where: { soDienThoai: identity.phoneNumber },
+          select: { taiKhoanId: true },
+        }),
+      ).toBeNull();
+    },
+  );
+
+  it('lists tenant employee accounts without admitting platform or customer scope', async () => {
     const first = await createAdminAccount(firstCompanyId);
     const secondCompanyAdmin = await createAdminAccount(secondCompanyId);
     const employeeId = await createNonAdminEmployee(['NHAN_VIEN_BAN_VE']);
+    const noRoleEmployeeId = await createNonAdminEmployee([]);
     const mixedSuperAdminId = await createNonAdminEmployee([
       'NHA_XE_ADMIN',
       'SUPER_ADMIN',
     ]);
+    const customerEmployeeId = await createNonAdminEmployee(['KHACH_HANG']);
 
     const response = await asSuperAdmin(
       request(app.getHttpServer())
         .get('/api/v1/admin-accounts')
-        .query({ busCompanyId: firstCompanyId, status: 'HOAT_DONG' }),
+        .query({ busCompanyId: firstCompanyId, status: 'HOAT_DONG', pageSize: 50 }),
     ).expect(200);
     const listedIds = response.body.data.map(
       (account: { accountId: number }) => account.accountId,
     );
 
     expect(listedIds).toContain(first.accountId);
+    expect(listedIds).toContain(employeeId);
+    expect(listedIds).toContain(noRoleEmployeeId);
     expect(listedIds).not.toContain(secondCompanyAdmin.accountId);
-    expect(listedIds).not.toContain(employeeId);
     expect(listedIds).not.toContain(mixedSuperAdminId);
-    expect(response.body.meta).toMatchObject({ page: 1, pageSize: 10 });
+    expect(listedIds).not.toContain(customerEmployeeId);
+    expect(response.body.meta).toMatchObject({ page: 1, pageSize: 50 });
   });
 
-  it('hides employee and mixed Super Admin IDs outside its managed collection', async () => {
+  it('allows tenant employee and no-role account detail but hides conflicting scopes', async () => {
     const employeeId = await createNonAdminEmployee(['NHAN_VIEN_BAN_VE']);
+    const noRoleEmployeeId = await createNonAdminEmployee([]);
     const mixedSuperAdminId = await createNonAdminEmployee([
       'NHA_XE_ADMIN',
       'SUPER_ADMIN',
     ]);
+    const customerEmployeeId = await createNonAdminEmployee(['KHACH_HANG']);
 
-    for (const id of [employeeId, mixedSuperAdminId]) {
+    const employee = await asSuperAdmin(
+      request(app.getHttpServer()).get(`/api/v1/admin-accounts/${employeeId}`),
+    ).expect(200);
+    expect(employee.body.data.roles).toEqual(['NHAN_VIEN_BAN_VE']);
+
+    const noRoleEmployee = await asSuperAdmin(
+      request(app.getHttpServer()).get(
+        `/api/v1/admin-accounts/${noRoleEmployeeId}`,
+      ),
+    ).expect(200);
+    expect(noRoleEmployee.body.data.roles).toEqual([]);
+
+    for (const id of [mixedSuperAdminId, customerEmployeeId]) {
       const response = await asSuperAdmin(
         request(app.getHttpServer()).get(`/api/v1/admin-accounts/${id}`),
       ).expect(404);
       expect(response.body.error).toBe('ADMIN_ACCOUNT_NOT_FOUND');
+
+      await asSuperAdmin(
+        request(app.getHttpServer())
+          .patch(`/api/v1/admin-accounts/${id}`)
+          .send({ fullName: 'Không được cập nhật' }),
+      ).expect(404);
+
+      await asSuperAdmin(
+        request(app.getHttpServer())
+          .patch(`/api/v1/admin-accounts/${id}/status`)
+          .send({ status: 'TAM_KHOA' }),
+      ).expect(404);
     }
   });
 

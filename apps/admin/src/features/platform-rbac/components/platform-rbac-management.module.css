@@ -1,0 +1,183 @@
+.successMessage,
+.loading,
+.formActions,
+.confirmActions {
+  display: flex;
+  align-items: center;
+}
+
+.successMessage {
+  gap: var(--admin-space-control-gap);
+  margin: var(--admin-space-component-gap) 0 0;
+  padding: var(--admin-space-table-cell-y) var(--admin-space-table-cell-x);
+  border-radius: 8px;
+  font-size: var(--admin-type-secondary-body-size);
+  line-height: var(--admin-type-secondary-body-line-height);
+}
+
+.successMessage {
+  border: 1px solid #b9e2c7;
+  background: #effaf2;
+  color: #17633a;
+}
+
+.successMessage svg,
+.loading svg {
+  flex: 0 0 auto;
+}
+
+.loading {
+  min-height: 140px;
+  justify-content: center;
+  gap: var(--admin-space-control-gap);
+  color: var(--admin-text-muted);
+}
+
+.spinner {
+  animation: spin 900ms linear infinite;
+}
+
+.errorPanel {
+  margin-top: var(--admin-space-card-padding);
+  padding: var(--admin-space-card-padding);
+  border: 1px solid var(--admin-border);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 3px 14px rgb(20 35 61 / 4%);
+}
+
+.errorPanel h2 {
+  margin: 0;
+  color: var(--admin-text-strong);
+  font-size: var(--admin-type-component-title-size);
+  font-weight: var(--admin-type-component-title-weight);
+  line-height: var(--admin-type-component-title-line-height);
+}
+
+.errorPanel p {
+  margin: var(--admin-space-control-gap) 0 var(--admin-space-4);
+  color: #a91f2d;
+  font-size: var(--admin-type-secondary-body-size);
+  line-height: var(--admin-type-secondary-body-line-height);
+}
+
+.formActions {
+  justify-content: space-between;
+  gap: var(--admin-space-component-gap);
+  margin: var(--admin-space-4) calc(-1 * var(--admin-space-card-padding)) 0;
+  padding: var(--admin-space-table-cell-y) var(--admin-space-card-padding);
+  border-top: 1px solid var(--admin-border);
+  background: #fbfcfe;
+}
+
+.formActions > div {
+  display: flex;
+  flex: 0 0 auto;
+  gap: var(--admin-space-action-gap);
+}
+
+.draftStatus {
+  margin: 0;
+  color: var(--admin-text-muted);
+  font-size: var(--admin-type-helper-size);
+  line-height: var(--admin-type-helper-line-height);
+}
+
+.confirmContent {
+  padding: var(--admin-space-dialog-padding);
+}
+
+.confirmIcon {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border-radius: 50%;
+  background: #fff3d9;
+  color: #8c5a00;
+}
+
+.confirmContent h2 {
+  margin: var(--admin-space-field-gap) 0 var(--admin-space-control-gap);
+  color: var(--admin-text-strong);
+  font-size: var(--admin-type-section-heading-size);
+  font-weight: var(--admin-type-section-heading-weight);
+  line-height: var(--admin-type-section-heading-line-height);
+}
+
+.confirmContent > p {
+  margin: 0;
+  color: var(--admin-text-muted);
+  font-size: var(--admin-type-secondary-body-size);
+  line-height: var(--admin-type-secondary-body-line-height);
+}
+
+.confirmContent > .emptyReplacementWarning,
+.confirmContent > .dialogError {
+  margin-top: var(--admin-space-table-cell-y);
+  padding: var(--admin-space-2) var(--admin-space-3);
+  border-radius: 7px;
+}
+
+.emptyReplacementWarning {
+  background: #fff8e8;
+  color: #815207 !important;
+}
+
+.dialogError {
+  background: #fff0f1;
+  color: #a91f2d !important;
+}
+
+.confirmActions {
+  justify-content: flex-end;
+  gap: var(--admin-space-action-gap);
+  margin-top: var(--admin-space-component-gap);
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 680px) {
+  .errorPanel {
+    padding: var(--admin-space-card-padding);
+  }
+
+  .formActions {
+    align-items: stretch;
+    flex-direction: column;
+    margin-right: calc(-1 * var(--admin-space-card-padding));
+    margin-left: calc(-1 * var(--admin-space-card-padding));
+    padding-right: var(--admin-space-card-padding);
+    padding-left: var(--admin-space-card-padding);
+  }
+
+  .formActions > div {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .formActions > div button {
+    min-height: 44px;
+  }
+
+  .confirmContent {
+    padding: var(--admin-space-dialog-padding);
+  }
+
+  .confirmActions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .confirmActions button {
+    min-height: 44px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: none;
+  }
+}

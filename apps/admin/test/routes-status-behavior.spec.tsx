@@ -4,6 +4,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { RouteDetails } from '../src/features/routes/components/routes-management';
 import { getRouteById, updateRouteStatus } from '../src/features/routes/services/route-service';
 import type { Route } from '../src/features/routes/types/route';
+import { setEmployeeAdminTestSession } from './admin-auth-test-session';
 
 vi.mock('lucide-react', () => ({
   ArrowDown: () => null, ArrowUp: () => null, ArrowUpDown: () => null,
@@ -17,12 +18,10 @@ vi.mock('../src/features/routes/services/route-service', async (importOriginal) 
 }));
 
 const activeRoute: Route = {
-  routeId: 17, code: 'FUTA-TX-0100', origin: 'TP.HCM', destination: 'Đà Lạt',
+  routeId: 17, code: 'FUTA-TX-0100', origin: 'TP.HCM', destination: 'Đà Lạt', durationMinutes: 420,
   status: 'HOAT_DONG', busCompany: { busCompanyId: 3, code: 'FUTA', name: 'Phương Trang' },
   createdAt: '2026-09-22T07:34:00.000Z', updatedAt: '2026-09-23T07:34:00.000Z',
 };
-const companyOptions = { status: 'success' as const, options: [{ value: '3', label: 'Phương Trang (FUTA)' }] };
-
 beforeAll(() => {
   HTMLDialogElement.prototype.showModal = function showModal() { this.setAttribute('open', ''); };
   HTMLDialogElement.prototype.close = function close() {
@@ -33,10 +32,11 @@ beforeAll(() => {
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 function renderDetails(route: Route = activeRoute) {
+  setEmployeeAdminTestSession(['route:read', 'route:update']);
   vi.mocked(getRouteById).mockResolvedValue(route);
   const onUpdated = vi.fn();
-  const rendered = render(<RouteDetails routeId={route.routeId} companyOptions={companyOptions}
-    onClose={vi.fn()} onRetryOptions={vi.fn()} onUpdated={onUpdated} />);
+  const rendered = render(<RouteDetails routeId={route.routeId}
+    onClose={vi.fn()} onUpdated={onUpdated} />);
   return { onUpdated, ...rendered };
 }
 

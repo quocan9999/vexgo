@@ -267,7 +267,10 @@ export function FarePriceFormDialog({
 
           {editing && (
             <div className="admin-crud-form-context">
-              <strong>{farePrice.route.code} — {farePrice.route.origin} → {farePrice.route.destination}</strong>
+              <strong>
+                <span className="admin-data-mono">{farePrice.route.code}</span>{' '}
+                — {farePrice.route.origin} → {farePrice.route.destination}
+              </strong>
               <span>Loại xe: {farePrice.vehicleType.name}</span>
               <span>Trạng thái: {farePrice.status === 'HOAT_DONG' ? 'Hoạt động' : 'Tạm ngưng'}</span>
             </div>

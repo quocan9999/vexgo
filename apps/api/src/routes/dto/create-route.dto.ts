@@ -38,6 +38,13 @@ export class CreateRouteDto {
   @IsInt()
   @Min(1)
   @Max(2_147_483_647)
+  durationMinutes!: number;
+
+  @Transform(({ value }) => strictPositiveInteger(value))
+  @IsDefined()
+  @IsInt()
+  @Min(1)
+  @Max(2_147_483_647)
   busCompanyId!: number;
 
   @IsDefined()

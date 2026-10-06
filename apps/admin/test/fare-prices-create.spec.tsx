@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import type { AnchorHTMLAttributes } from 'react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { FarePricesManagement } from '@/features/fare-prices/components/fare-prices-management';
+import { setEmployeeAdminTestSession } from './admin-auth-test-session';
 
 vi.mock('next/navigation', () => ({
   usePathname: () => '/fare-prices',
@@ -70,6 +71,12 @@ type ApiOptions = {
 };
 
 function installApi(options: ApiOptions = {}) {
+  setEmployeeAdminTestSession([
+    'fare-price:read',
+    'fare-price:create',
+    'route:read',
+    'vehicle-type:read',
+  ]);
   vi.stubEnv('NEXT_PUBLIC_API_URL', 'http://localhost:4000');
   const requests: Array<{ path: string; method: string; body?: Record<string, unknown> }> = [];
   let fareListRequests = 0;
@@ -171,7 +178,7 @@ describe('Fare Price create dialog behavior', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Thêm bảng giá' });
 
     expect(await within(dialog).findByRole('option', {
-      name: 'SG-DL-01 — TP.HCM → Đà Lạt',
+      name: 'TP.HCM → Đà Lạt',
     })).toBeTruthy();
     expect(await within(dialog).findByRole('option', { name: 'Limousine' })).toBeTruthy();
     expect(within(dialog).getByLabelText(/Hiệu lực đến/)).toHaveProperty('value', '');
@@ -273,7 +280,7 @@ describe('Fare Price create dialog behavior', () => {
     expect((await within(dialog).findByRole('alert')).textContent).toMatch(/không thể tải danh sách tuyến/i);
     fireEvent.click(within(dialog).getByRole('button', { name: /thử lại tuyến xe/i }));
     expect(await within(dialog).findByRole('option', {
-      name: 'SG-DL-01 — TP.HCM → Đà Lạt',
+      name: 'TP.HCM → Đà Lạt',
     })).toBeTruthy();
   });
 

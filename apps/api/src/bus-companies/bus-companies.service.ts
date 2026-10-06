@@ -24,8 +24,11 @@ interface BusCompanyReadScope {
 }
 
 function resolveReadScope(principal?: AuthPrincipal): BusCompanyReadScope {
-  const platformWide = principal?.roles.includes('SUPER_ADMIN') ?? false;
-  const tenantId = platformWide ? null : (principal?.nhaXeId ?? null);
+  const isSuperAdmin = principal?.roles.includes('SUPER_ADMIN') ?? false;
+  const platformWide =
+    isSuperAdmin &&
+    (principal?.permissions.includes('bus-company:read') ?? false);
+  const tenantId = isSuperAdmin ? null : (principal?.nhaXeId ?? null);
 
   if (principal?.roles.includes('NHA_XE_ADMIN') && tenantId === null) {
     throw new ForbiddenException({

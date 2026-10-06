@@ -173,6 +173,7 @@ export function EditBusCompanyDialog({
             <label htmlFor="edit-company-code">Mã nhà xe</label>
             <input
               autoComplete="off"
+              className="admin-data-mono"
               id="edit-company-code"
               maxLength={50}
               onChange={(event) => updateField('code', event.target.value)}

@@ -1,20 +1,34 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
+import { ConfigService } from '@nestjs/config';
 import { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { normalizeEmail } from '../common/normalize-email.js';
+import {
+  businessDateStartUtc,
+  resolveBusinessTimeZone,
+} from '../common/time/business-date.js';
+import { TENANT_PRINCIPAL_ROLES } from '../auth/principal-scope.js';
 import type { AdminAccountQueryDto } from './dto/admin-account-query.dto.js';
 import type { CreateAdminAccountDto } from './dto/create-admin-account.dto.js';
 import type { UpdateAdminAccountDto } from './dto/update-admin-account.dto.js';
 import type { UpdateAdminAccountStatusDto } from './dto/update-admin-account-status.dto.js';
 
 const ADMIN_ACCOUNT_ROLE = 'NHA_XE_ADMIN';
-const SUPER_ADMIN_ROLE = 'SUPER_ADMIN';
+const TENANT_PRINCIPAL_ROLE_SET = new Set<string>(TENANT_PRINCIPAL_ROLES);
+
+function addCalendarDays(dateOnly: string, days: number): string {
+  const [year, month, day] = dateOnly.split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, day + days))
+    .toISOString()
+    .slice(0, 10);
+}
 
 const ADMIN_ACCOUNT_SELECT = {
   taiKhoanId: true,
@@ -69,11 +83,10 @@ function managedAdminAccountWhere(
     ...(taiKhoanId === undefined ? {} : { taiKhoanId }),
     nhanVien: { isNot: null },
     taiKhoanVaiTros: {
-      some: { vaiTro: { is: { tenVaiTro: ADMIN_ACCOUNT_ROLE } } },
-    },
-    NOT: {
-      taiKhoanVaiTros: {
-        some: { vaiTro: { is: { tenVaiTro: SUPER_ADMIN_ROLE } } },
+      every: {
+        vaiTro: {
+          is: { tenVaiTro: { in: [...TENANT_PRINCIPAL_ROLES] } },
+        },
       },
     },
   };
@@ -105,6 +118,48 @@ function employeeCodeExists(): ConflictException {
     error: 'EMPLOYEE_CODE_EXISTS',
     message: 'Mã nhân viên đã tồn tại trong nhà xe.',
   });
+}
+
+function createRoleNames(input: CreateAdminAccountDto): string[] {
+  const requestedRoleNames: unknown = input.roleNames;
+  if (requestedRoleNames === undefined) return [ADMIN_ACCOUNT_ROLE];
+
+  if (
+    !Array.isArray(requestedRoleNames) ||
+    requestedRoleNames.length === 0 ||
+    new Set(requestedRoleNames).size !== requestedRoleNames.length ||
+    requestedRoleNames.some(
+      (roleName) =>
+        typeof roleName !== 'string' ||
+        !TENANT_PRINCIPAL_ROLE_SET.has(roleName),
+    )
+  ) {
+    throw new BadRequestException({
+      error: 'VALIDATION_ERROR',
+      message: 'Danh sách vai trò nhà xe không hợp lệ.',
+    });
+  }
+
+  return requestedRoleNames;
+}
+
+function replacementRoleNames(input: unknown): string[] {
+  if (
+    !Array.isArray(input) ||
+    new Set(input).size !== input.length ||
+    input.some(
+      (roleName) =>
+        typeof roleName !== 'string' ||
+        !TENANT_PRINCIPAL_ROLE_SET.has(roleName),
+    )
+  ) {
+    throw new BadRequestException({
+      error: 'VALIDATION_ERROR',
+      message: 'Danh sách vai trò nhà xe không hợp lệ.',
+    });
+  }
+
+  return input;
 }
 
 function busCompanyNotFound(): NotFoundException {
@@ -166,7 +221,10 @@ function mapAdminAccount(account: AdminAccountRecord) {
 
 @Injectable()
 export class AdminAccountsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly config: ConfigService,
+  ) {}
 
   async findAll(query: AdminAccountQueryDto) {
     const conditions: Prisma.TaiKhoanWhereInput[] = [
@@ -178,11 +236,39 @@ export class AdminAccountsService {
     if (query.busCompanyId !== undefined) {
       conditions.push({ nhanVien: { is: { nhaXeId: query.busCompanyId } } });
     }
+    if (query.roleName) {
+      conditions.push({
+        taiKhoanVaiTros: {
+          some: { vaiTro: { is: { tenVaiTro: query.roleName } } },
+        },
+      });
+    }
+    if (query.createdFrom || query.createdTo) {
+      const businessTimeZone = resolveBusinessTimeZone(
+        this.config.get<string>('BUSINESS_TIME_ZONE'),
+      );
+      conditions.push({
+        createdAt: {
+          ...(query.createdFrom
+            ? { gte: businessDateStartUtc(query.createdFrom, businessTimeZone) }
+            : {}),
+          ...(query.createdTo
+            ? {
+                lt: businessDateStartUtc(
+                  addCalendarDays(query.createdTo, 1),
+                  businessTimeZone,
+                ),
+              }
+            : {}),
+        },
+      });
+    }
     if (search) {
       conditions.push({
         OR: [
           { hoTen: { contains: search } },
           { soDienThoai: { contains: search } },
+          { email: { contains: search } },
           { nhanVien: { is: { maNhanVien: { contains: search } } } },
           {
             nhanVien: {
@@ -240,17 +326,18 @@ export class AdminAccountsService {
   }
 
   async create(input: CreateAdminAccountDto) {
+    const roleNames = createRoleNames(input);
     const passwordHash = await bcrypt.hash(input.password, 10);
 
     return this.prisma.$transaction(async (tx) => {
-      const [busCompany, role, existingPhone] = await Promise.all([
+      const [busCompany, roles, existingPhone] = await Promise.all([
         tx.nhaXe.findUnique({
           where: { nhaXeId: input.busCompanyId },
           select: { nhaXeId: true },
         }),
-        tx.vaiTro.findUnique({
-          where: { tenVaiTro: ADMIN_ACCOUNT_ROLE },
-          select: { vaiTroId: true },
+        tx.vaiTro.findMany({
+          where: { tenVaiTro: { in: roleNames } },
+          select: { vaiTroId: true, tenVaiTro: true },
         }),
         tx.taiKhoan.findUnique({
           where: { soDienThoai: input.phoneNumber },
@@ -259,10 +346,10 @@ export class AdminAccountsService {
       ]);
 
       if (!busCompany) throw busCompanyNotFound();
-      if (!role) {
+      if (roles.length !== roleNames.length) {
         throw new InternalServerErrorException({
           error: 'AUTH_ROLE_NOT_CONFIGURED',
-          message: 'Vai trò quản trị nhà xe chưa được cấu hình.',
+          message: 'Một hoặc nhiều vai trò nhà xe chưa được cấu hình.',
         });
       }
       if (existingPhone) throw phoneAlreadyRegistered();
@@ -317,9 +404,11 @@ export class AdminAccountsService {
         throw error;
       }
 
-      await tx.taiKhoanVaiTro.create({
-        data: { taiKhoanId: accountId, vaiTroId: role.vaiTroId },
-      });
+      for (const role of roles) {
+        await tx.taiKhoanVaiTro.create({
+          data: { taiKhoanId: accountId, vaiTroId: role.vaiTroId },
+        });
+      }
       const created = await tx.taiKhoan.findFirst({
         where: managedAdminAccountWhere(accountId),
         select: ADMIN_ACCOUNT_SELECT,
@@ -411,6 +500,61 @@ export class AdminAccountsService {
       if (!account) throw accountNotFound();
 
       return { data: mapAdminAccount(account) };
+    });
+  }
+
+  async replaceRoles(taiKhoanId: number, roleNames: unknown) {
+    const requestedRoleNames = replacementRoleNames(roleNames);
+
+    return this.prisma.$transaction(async (tx) => {
+      const lockedAccounts = await tx.$queryRaw<Array<{ taiKhoanId: number }>>`
+        SELECT taiKhoanId
+        FROM TaiKhoan
+        WHERE taiKhoanId = ${taiKhoanId}
+        FOR UPDATE
+      `;
+      if (lockedAccounts.length === 0) throw accountNotFound();
+
+      const managedAccount = await tx.taiKhoan.findFirst({
+        where: managedAdminAccountWhere(taiKhoanId),
+        select: { taiKhoanId: true },
+      });
+      if (!managedAccount) throw accountNotFound();
+
+      const roles = requestedRoleNames.length
+        ? await tx.vaiTro.findMany({
+            where: { tenVaiTro: { in: requestedRoleNames } },
+            select: { vaiTroId: true, tenVaiTro: true },
+          })
+        : [];
+      if (roles.length !== requestedRoleNames.length) {
+        throw new InternalServerErrorException({
+          error: 'AUTH_ROLE_NOT_CONFIGURED',
+          message: 'Một hoặc nhiều vai trò nhà xe chưa được cấu hình.',
+        });
+      }
+
+      await tx.taiKhoanVaiTro.deleteMany({
+        where: {
+          taiKhoanId,
+          vaiTro: {
+            is: { tenVaiTro: { in: [...TENANT_PRINCIPAL_ROLES] } },
+          },
+        },
+      });
+      for (const role of roles) {
+        await tx.taiKhoanVaiTro.create({
+          data: { taiKhoanId, vaiTroId: role.vaiTroId },
+        });
+      }
+
+      const updated = await tx.taiKhoan.findFirst({
+        where: managedAdminAccountWhere(taiKhoanId),
+        select: ADMIN_ACCOUNT_SELECT,
+      });
+      if (!updated) throw accountNotFound();
+
+      return { data: mapAdminAccount(updated) };
     });
   }
 }

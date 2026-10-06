@@ -6,6 +6,7 @@ import { AdminConfirmDialog } from '@/components/admin/admin-confirm-dialog';
 import { AdminDetailSheet } from '@/components/admin/admin-detail-sheet';
 import { AdminStatusBadge } from '@/components/admin/admin-status-badge';
 import { Button } from '@/components/ui/button';
+import { useAdminPermissions } from '@/features/admin-auth/hooks/use-admin-permissions';
 import {
   FarePriceApiError,
   getFarePriceById,
@@ -76,6 +77,8 @@ export function FarePriceDetailSheet({
   onRetryRouteOptions: () => void;
   onRetryVehicleTypeOptions: () => void;
 }) {
+  const { can } = useAdminPermissions();
+  const canUpdate = can('fare-price:update');
   const [request, setRequest] = useState<{
     key: string;
     status: 'loading' | 'success' | 'error';
@@ -126,7 +129,7 @@ export function FarePriceDetailSheet({
   }
 
   async function confirmStatusChange() {
-    if (!targetStatus || statusSubmittingRef.current) return;
+    if (!canUpdate || !targetStatus || statusSubmittingRef.current) return;
 
     statusSubmittingRef.current = true;
     setStatusSubmitting(true);
@@ -268,7 +271,7 @@ export function FarePriceDetailSheet({
               </div>
               <div className={styles.detailItem}>
                 <dt>Mã tuyến</dt>
-                <dd>{farePrice.route.code}</dd>
+                <dd className="admin-data-mono">{farePrice.route.code}</dd>
               </div>
               <div className={styles.detailItem}>
                 <dt>Điểm đi</dt>
@@ -331,25 +334,27 @@ export function FarePriceDetailSheet({
                 <dd>{formatTimestamp(farePrice.updatedAt)}</dd>
               </div>
             </dl>
-            <div className={styles.detailActions}>
-              <Button
-                onClick={() => {
-                  setUpdateNotice(null);
-                  setEditDialogOpen(true);
-                }}
-                type="button"
-              >
-                <Pencil aria-hidden="true" size={15} />
-                Chỉnh sửa
-              </Button>
-              <Button onClick={openStatusDialog} type="button" variant="secondary">
-                {farePrice.status === 'HOAT_DONG' ? 'Tạm ngưng' : 'Kích hoạt'}
-              </Button>
-            </div>
+            {canUpdate && (
+              <div className={`${styles.detailActions} admin-detail-sheet__actions`}>
+                <Button
+                  onClick={() => {
+                    setUpdateNotice(null);
+                    setEditDialogOpen(true);
+                  }}
+                  type="button"
+                >
+                  <Pencil aria-hidden="true" size={15} />
+                  Chỉnh sửa
+                </Button>
+                <Button onClick={openStatusDialog} type="button" variant="secondary">
+                  {farePrice.status === 'HOAT_DONG' ? 'Tạm ngưng' : 'Kích hoạt'}
+                </Button>
+              </div>
+            )}
           </>
         )}
       </AdminDetailSheet>
-      {editDialogOpen && farePrice && (
+      {editDialogOpen && canUpdate && farePrice && (
         <FarePriceFormDialog
           farePrice={farePrice}
           onClose={() => setEditDialogOpen(false)}
@@ -361,7 +366,7 @@ export function FarePriceDetailSheet({
           vehicleTypeOptions={vehicleTypeOptions}
         />
       )}
-      {statusDialogOpen && targetStatus && (
+      {statusDialogOpen && canUpdate && targetStatus && (
         <AdminConfirmDialog
           ariaBusy={statusSubmitting}
           ariaDescribedBy="fare-price-status-confirmation-description"

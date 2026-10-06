@@ -1,0 +1,3 @@
+export const PUBLIC_RATE_LIMIT_TTL_MS = 60_000;
+export const PUBLIC_CONTACT_RATE_LIMIT = 5;
+export const PUBLIC_TICKET_LOOKUP_RATE_LIMIT = 10;

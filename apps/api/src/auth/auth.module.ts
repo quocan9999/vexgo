@@ -13,6 +13,8 @@ import { AccessTokenGuard } from './guards/access-token.guard.js';
 import { AuthorizationGuard } from './guards/authorization.guard.js';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { PermissionResolverService } from './permissions/permission-resolver.service.js';
+import { EffectiveRolePermissionLoaderService } from './permissions/effective-role-permission-loader.service.js';
 
 const DEFAULT_LOGIN_RATE_LIMIT = 20;
 const DEFAULT_LOGIN_RATE_TTL_MS = 15 * 60 * 1000;
@@ -53,6 +55,8 @@ function readPositiveInteger(
   controllers: [AuthController],
   providers: [
     AuthService,
+    PermissionResolverService,
+    EffectiveRolePermissionLoaderService,
     OtpCryptoService,
     OtpService,
     TokenService,

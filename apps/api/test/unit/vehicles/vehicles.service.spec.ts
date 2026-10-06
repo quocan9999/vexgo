@@ -47,6 +47,13 @@ const tenantAdmin: AuthPrincipal = {
   nhanVienId: 9,
   nhaXeId: 1,
 };
+const tenantEmployee: AuthPrincipal = {
+  ...tenantAdmin,
+  taiKhoanId: 8,
+  sessionId: 'employee-session',
+  roles: ['NHAN_VIEN_BAN_VE'],
+  nhanVienId: 10,
+};
 const rawService = new VehiclesService(prisma);
 const service = {
   findAll: (query: VehicleQueryDto, principal = tenantAdmin) =>
@@ -104,6 +111,28 @@ describe('VehiclesService', () => {
     });
     expect(prisma.xe.findMany).not.toHaveBeenCalled();
     expect(prisma.xe.count).not.toHaveBeenCalled();
+  });
+
+  it('requires a valid employee identity before querying vehicle records', async () => {
+    const error = await service
+      .findAll(createQuery(), { ...tenantEmployee, nhanVienId: null })
+      .catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(ForbiddenException);
+    expect((error as ForbiddenException).getResponse()).toMatchObject({
+      error: 'TENANT_SCOPE_REQUIRED',
+    });
+    expect(prisma.xe.findMany).not.toHaveBeenCalled();
+    expect(prisma.xe.count).not.toHaveBeenCalled();
+  });
+
+  it('filters vehicle reads by an employee principal tenant', async () => {
+    await service.findAll(createQuery(), tenantEmployee);
+
+    expect(prisma.xe.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { nhaXeId: 1 } }),
+    );
+    expect(prisma.xe.count).toHaveBeenCalledWith({ where: { nhaXeId: 1 } });
   });
 
   it('maps vehicle, bus company, and vehicle type fields to the English API shape', async () => {
@@ -345,6 +374,20 @@ describe('VehiclesService writes', () => {
     });
   });
 
+  it('creates a vehicle for the trusted employee tenant and validates its vehicle type in that tenant', async () => {
+    await service.create(createVehicleInput, tenantEmployee);
+
+    expect(prisma.nhaXe.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { nhaXeId: 1 } }),
+    );
+    expect(prisma.loaiXe.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { loaiXeId: 3, nhaXeId: 1 } }),
+    );
+    expect(prisma.xe.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ nhaXeId: 1 }) }),
+    );
+  });
+
   it('returns BUS_COMPANY_NOT_FOUND before creating when the company is missing', async () => {
     vi.mocked(prisma.nhaXe.findUnique).mockResolvedValueOnce(null);
 
@@ -378,6 +421,20 @@ describe('VehiclesService writes', () => {
   it('rejects a create request naming another company before querying tenant data', async () => {
     const error = await service
       .create({ ...createVehicleInput, busCompanyId: 2 }, tenantAdmin)
+      .catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(ForbiddenException);
+    expect((error as ForbiddenException).getResponse()).toMatchObject({
+      error: 'TENANT_SCOPE_VIOLATION',
+    });
+    expect(prisma.nhaXe.findUnique).not.toHaveBeenCalled();
+    expect(prisma.loaiXe.findFirst).not.toHaveBeenCalled();
+    expect(prisma.xe.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects an employee create request naming another company before querying', async () => {
+    const error = await service
+      .create({ ...createVehicleInput, busCompanyId: 2 }, tenantEmployee)
       .catch((caught: unknown) => caught);
 
     expect(error).toBeInstanceOf(ForbiddenException);

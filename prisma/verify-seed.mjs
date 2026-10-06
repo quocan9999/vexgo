@@ -2,6 +2,11 @@ import 'dotenv/config';
 import bcrypt from 'bcrypt';
 import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import { PrismaClient } from '../apps/api/dist/generated/prisma/client.js';
+import {
+  ADMIN_PERMISSION_CATALOG,
+  ADMIN_ROLE_PERMISSION_SCOPE_BY_NAME,
+  isPermissionAllowedForRole,
+} from '../apps/api/dist/auth/permissions/permission-catalog.js';
 
 function config() {
   const url = new URL(process.env.DATABASE_URL ?? process.env.MIGRATION_URL);
@@ -29,7 +34,7 @@ const expected = {
   TaiKhoan: 42,
   KhachHang: 20,
   NhanVien: 21,
-  VaiTro: 7,
+  VaiTro: 8,
   TaiKhoanVaiTro: 42,
   KhuyenMai: 15,
   BuuCuc: 15,
@@ -62,6 +67,39 @@ async function assertAtLeast(label, actual, minimum) {
 
 async function assertZero(label, actual) {
   await assertEqual(label, actual, 0);
+}
+
+async function verifyPermissionCatalogAndDefaults() {
+  const permissionRows = await prisma.$queryRawUnsafe('SELECT tenQuyen AS permissionKey FROM Quyen');
+  const availablePermissions = new Set(permissionRows.map((row) => row.permissionKey));
+  for (const definition of ADMIN_PERMISSION_CATALOG) {
+    if (!availablePermissions.has(definition.key)) throw new Error(`Missing seeded permission ${definition.key}`);
+  }
+  console.log(`OK RBAC permission catalog (${ADMIN_PERMISSION_CATALOG.length} keys)`);
+
+  const roleRows = await prisma.$queryRawUnsafe('SELECT tenVaiTro AS roleName FROM VaiTro');
+  const availableRoles = new Set(roleRows.map((row) => row.roleName));
+  const requiredRoles = [...Object.keys(ADMIN_ROLE_PERMISSION_SCOPE_BY_NAME), 'KHACH_HANG'];
+  for (const roleName of requiredRoles) {
+    if (!availableRoles.has(roleName)) throw new Error(`Missing canonical role ${roleName}`);
+  }
+
+  const assignmentRows = await prisma.$queryRawUnsafe('SELECT vt.tenVaiTro AS roleName, q.tenQuyen AS permissionKey FROM VaiTroQuyen vtq JOIN VaiTro vt ON vt.vaiTroId = vtq.vaiTroId JOIN Quyen q ON q.quyenId = vtq.quyenId');
+  for (const { roleName, permissionKey } of assignmentRows) {
+    if (roleName === 'KHACH_HANG') {
+      throw new Error(`Customer role must not have Admin permission ${permissionKey}`);
+    }
+    if (!Object.hasOwn(ADMIN_ROLE_PERMISSION_SCOPE_BY_NAME, roleName)) {
+      throw new Error(`Unsupported role has Admin permission assignment: ${roleName}`);
+    }
+    if (!availablePermissions.has(permissionKey)) {
+      throw new Error(`Unknown permission assignment ${roleName} -> ${permissionKey}`);
+    }
+    if (!isPermissionAllowedForRole(roleName, permissionKey)) {
+      throw new Error(`Permission scope mismatch for ${roleName} -> ${permissionKey}`);
+    }
+  }
+  console.log(`OK RBAC role-permission assignments (${assignmentRows.length} valid mappings)`);
 }
 
 function branchCitySql(alias) {
@@ -138,7 +176,9 @@ async function main() {
     await assertAtLeast(table, await scalar(`SELECT COUNT(*) AS value FROM \`${table}\``), expectedCount);
   }
 
-  for (const table of ['Quyen', 'VaiTroQuyen', 'ThongBao', 'ThongBaoNguoiNhan', 'PhanHoi', 'TinNhanHoTro']) {
+  await verifyPermissionCatalogAndDefaults();
+
+  for (const table of ['ThongBao', 'ThongBaoNguoiNhan', 'PhanHoi', 'TinNhanHoTro']) {
     await assertZero(`${table} omitted`, await scalar(`SELECT COUNT(*) AS value FROM \`${table}\``));
   }
 
@@ -158,13 +198,15 @@ async function main() {
   await assertZero('booking tickets span multiple trips', await scalar('SELECT COUNT(*) AS value FROM (SELECT v.phieuDatVeId FROM Ve v JOIN GheChuyenXe gc ON gc.gheChuyenXeId=v.gheChuyenXeId GROUP BY v.phieuDatVeId HAVING COUNT(DISTINCT gc.chuyenXeId) > 1) invalid'));
   await assertZero('ticket price list route or vehicle mismatch', await scalar('SELECT COUNT(*) AS value FROM Ve v JOIN GheChuyenXe gc ON gc.gheChuyenXeId=v.gheChuyenXeId JOIN ChuyenXe c ON c.chuyenXeId=gc.chuyenXeId JOIN Xe x ON x.xeId=c.xeId LEFT JOIN BangGia bg ON bg.bangGiaId=v.bangGiaApDungId WHERE bg.bangGiaId IS NULL OR bg.tuyenXeId <> c.tuyenXeId OR bg.loaiXeId <> x.loaiXeId'));
   await assertZero('invalid fare price status', await scalar("SELECT COUNT(*) AS value FROM BangGia WHERE trangThai NOT IN ('HOAT_DONG', 'TAM_NGUNG')"));
+  await assertZero('legacy MO_BAN trip status', await scalar("SELECT COUNT(*) AS value FROM ChuyenXe WHERE trangThai = 'MO_BAN'"));
+  await assertZero('invalid trip status', await scalar("SELECT COUNT(*) AS value FROM ChuyenXe WHERE trangThai NOT IN ('CHUA_KHOI_HANH', 'DANG_CHAY', 'HOAN_THANH', 'DA_HUY')"));
   await assertZero('ticket price snapshot mismatch', await scalar('SELECT COUNT(*) AS value FROM Ve WHERE giaNiemYet <> giaThucTe'));
   await assertZero('booking total mismatch', await scalar('SELECT COUNT(*) AS value FROM PhieuDatVe p LEFT JOIN (SELECT phieuDatVeId, SUM(giaThucTe) total FROM Ve GROUP BY phieuDatVeId) v ON v.phieuDatVeId=p.phieuDatVeId WHERE p.tongTienBanDau <> COALESCE(v.total,0)'));
   await assertZero('shipping total mismatch', await scalar('SELECT COUNT(*) AS value FROM PhieuGuiHang WHERE tongPhi <> cuocChinh + phiDichVu - soTienGiam'));
   await assertZero('promotion applied to seeded bookings', await scalar('SELECT COUNT(*) AS value FROM PhieuDatVe WHERE khuyenMaiId IS NOT NULL'));
   await assertZero('promotion applied to seeded shipments', await scalar('SELECT COUNT(*) AS value FROM PhieuGuiHang WHERE khuyenMaiId IS NOT NULL OR soTienGiam <> 0'));
   await assertZero('plaintext seed passwords', await scalar("SELECT COUNT(*) AS value FROM TaiKhoan WHERE matKhau = 'VexGo@123'"));
-  await assertZero('trips outside fixed date range', await scalar("SELECT COUNT(*) AS value FROM ChuyenXe WHERE ngayKhoiHanh < '2026-09-22' OR ngayKhoiHanh > '2026-09-29'"));
+  await assertZero('trips outside fixed date range', await scalar("SELECT COUNT(*) AS value FROM ChuyenXe WHERE ngayKhoiHanh < '2026-09-22' OR (ngayKhoiHanh > '2026-09-29' AND ngayKhoiHanh <> '2026-10-07')"));
   await assertZero('booking after trip departure', await scalar("SELECT COUNT(*) AS value FROM PhieuDatVe p JOIN Ve v ON v.phieuDatVeId=p.phieuDatVeId JOIN GheChuyenXe gc ON gc.gheChuyenXeId=v.gheChuyenXeId JOIN ChuyenXe c ON c.chuyenXeId=gc.chuyenXeId WHERE p.ngayDat >= TIMESTAMP(DATE(c.ngayKhoiHanh), TIME(c.gioKhoiHanh)) - INTERVAL 7 HOUR"));
   await assertZero('trip seats from another vehicle', await scalar('SELECT COUNT(*) AS value FROM GheChuyenXe gc JOIN ChuyenXe c ON c.chuyenXeId=gc.chuyenXeId JOIN Ghe g ON g.gheId=gc.gheId WHERE g.xeId <> c.xeId'));
   await assertZero('shipment branch crosses operator', await scalar('SELECT COUNT(*) AS value FROM PhieuGuiHang p JOIN BuuCuc bg ON bg.buuCucId=p.buuCucGuiId JOIN BuuCuc bp ON bp.buuCucId=p.buuCucPhatId WHERE bg.nhaXeId <> bp.nhaXeId'));

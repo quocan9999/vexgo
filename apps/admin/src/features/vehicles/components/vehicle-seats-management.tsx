@@ -7,6 +7,7 @@ import { AdminConfirmDialog } from '@/components/admin/admin-confirm-dialog';
 import { AdminFormDialog } from '@/components/admin/admin-form-dialog';
 import { AdminPageHeader } from '@/components/admin/admin-page-header';
 import { Button } from '@/components/ui/button';
+import { useAdminPermissions } from '@/features/admin-auth/hooks/use-admin-permissions';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
 import {
   createVehicleSeat,
@@ -200,34 +201,42 @@ function SeatActions({
   seat,
   onEdit,
   onDelete,
+  canEdit,
+  canDelete,
 }: {
   seat: VehicleSeat;
   onEdit: (seat: VehicleSeat) => void;
   onDelete: (seat: VehicleSeat) => void;
+  canEdit: boolean;
+  canDelete: boolean;
 }) {
   return (
     <div className="vehicle-seat-actions">
-      <Button
+      {canEdit && <Button
         aria-label={`Chỉnh sửa ghế ${seat.seatNumber}`}
         onClick={() => onEdit(seat)}
         type="button"
         variant="secondary"
       >
         Chỉnh sửa
-      </Button>
-      <Button
+      </Button>}
+      {canDelete && <Button
         aria-label={`Xóa ghế ${seat.seatNumber}`}
         onClick={() => onDelete(seat)}
         type="button"
         variant="secondary"
       >
         Xóa
-      </Button>
+      </Button>}
     </div>
   );
 }
 
 export function VehicleSeatsManagement({ vehicleId }: { vehicleId: number }) {
+  const { can } = useAdminPermissions();
+  const canCreate = can('seat:create');
+  const canUpdate = can('seat:update');
+  const canDelete = can('seat:delete');
   const validVehicleId = Number.isSafeInteger(vehicleId) && vehicleId > 0;
   const [workspace, setWorkspace] = useState<WorkspaceState>({ status: 'loading' });
   const [retryCount, setRetryCount] = useState(0);
@@ -280,7 +289,7 @@ export function VehicleSeatsManagement({ vehicleId }: { vehicleId: number }) {
   }
 
   async function confirmDelete() {
-    if (!deletingSeat || deleteSubmittingRef.current) return;
+    if (!canDelete || !deletingSeat || deleteSubmittingRef.current) return;
     deleteSubmittingRef.current = true;
     setDeleteSubmitting(true);
     setDeleteError(null);
@@ -312,6 +321,8 @@ export function VehicleSeatsManagement({ vehicleId }: { vehicleId: number }) {
   function renderSeatActions(seat: VehicleSeat) {
     return (
       <SeatActions
+        canDelete={canDelete}
+        canEdit={canUpdate}
         onDelete={(selectedSeat) => {
           setDeleteError(null);
           setDeletingSeat(selectedSeat);
@@ -331,14 +342,14 @@ export function VehicleSeatsManagement({ vehicleId }: { vehicleId: number }) {
               <Link className="button button-secondary" href="/vehicles">
                 Quay lại danh sách xe
               </Link>
-              <Button
+              {canCreate && <Button
                 disabled={workspace.status !== 'success'}
                 onClick={() => setCreatingSeat(true)}
                 type="button"
               >
                 <Plus aria-hidden="true" size={16} />
                 Thêm ghế
-              </Button>
+              </Button>}
             </div>
           }
           eyebrow="QUẢN LÝ PHƯƠNG TIỆN"
@@ -376,7 +387,9 @@ export function VehicleSeatsManagement({ vehicleId }: { vehicleId: number }) {
             <section aria-label="Thông tin xe" className="vehicle-seats-context">
               <div>
                 <span>Biển số xe</span>
-                <strong>{workspace.vehicle.licensePlate}</strong>
+                <strong className="admin-data-mono">
+                  {workspace.vehicle.licensePlate}
+                </strong>
               </div>
               <div>
                 <span>Loại xe</span>
@@ -417,17 +430,17 @@ export function VehicleSeatsManagement({ vehicleId }: { vehicleId: number }) {
               {workspace.seats.length === 0 ? (
                 <div className="vehicle-seats-empty">
                   <p>Xe này chưa được cấu hình ghế.</p>
-                  <Button onClick={() => setCreatingSeat(true)} type="button">
+                  {canCreate && <Button onClick={() => setCreatingSeat(true)} type="button">
                     <Plus aria-hidden="true" size={16} />
                     Thêm ghế đầu tiên
-                  </Button>
+                  </Button>}
                 </div>
               ) : view === 'list' ? (
                 <div className="vehicle-seat-list">
                   {workspace.seats.map((seat) => (
                     <article className="vehicle-seat-row" key={seat.seatId}>
                       <div className="vehicle-seat-row-info">
-                        <h3>{seat.seatNumber}</h3>
+                        <h3 className="admin-data-mono">{seat.seatNumber}</h3>
                         <p>{seat.position?.trim() || 'Chưa xác định vị trí'}</p>
                       </div>
                       {renderSeatActions(seat)}
@@ -456,14 +469,14 @@ export function VehicleSeatsManagement({ vehicleId }: { vehicleId: number }) {
         )}
       </div>
 
-      {workspace.status === 'success' && creatingSeat && (
+      {workspace.status === 'success' && creatingSeat && canCreate && (
         <VehicleSeatFormDialog
           onClose={() => setCreatingSeat(false)}
           onSaved={handleSeatSaved}
           vehicleId={vehicleId}
         />
       )}
-      {workspace.status === 'success' && editingSeat && (
+      {workspace.status === 'success' && editingSeat && canUpdate && (
         <VehicleSeatFormDialog
           onClose={() => setEditingSeat(null)}
           onSaved={handleSeatSaved}
@@ -471,7 +484,7 @@ export function VehicleSeatsManagement({ vehicleId }: { vehicleId: number }) {
           vehicleId={vehicleId}
         />
       )}
-      {deletingSeat && (
+      {deletingSeat && canDelete && (
         <AdminConfirmDialog
           ariaBusy={deleteSubmitting}
           ariaDescribedBy="vehicle-seat-delete-description"

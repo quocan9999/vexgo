@@ -16,6 +16,7 @@ const record = {
   maTuyenXe: 'FUTA-TX-0100',
   diemDi: 'TP.HCM',
   diemDen: 'Đà Lạt',
+  thoiGianChayPhut: 420,
   trangThai: 'HOAT_DONG',
   createdAt: new Date('2026-09-22T07:34:00.000Z'),
   updatedAt: new Date('2026-09-23T07:34:00.000Z'),
@@ -32,11 +33,18 @@ const company = {
 };
 const prisma = {
   nhaXe: { findUnique: vi.fn() },
+  $transaction: vi.fn((operation: (transaction: Prisma.TransactionClient) => Promise<unknown>) =>
+    operation(prisma as unknown as Prisma.TransactionClient),
+  ),
   tuyenXe: {
     create: vi.fn(),
     update: vi.fn(),
     updateMany: vi.fn(),
     findFirst: vi.fn(),
+  },
+  chuyenXe: {
+    findMany: vi.fn(),
+    update: vi.fn(),
   },
 } as unknown as PrismaService;
 const service = new RoutesService(prisma);
@@ -44,6 +52,7 @@ const createInput = {
   code: 'FUTA-TX-0100',
   origin: 'TP.HCM',
   destination: 'Đà Lạt',
+  durationMinutes: 420,
   busCompanyId: 3,
   status: 'HOAT_DONG' as const,
 };
@@ -74,7 +83,11 @@ describe('RoutesService writes', () => {
     vi.mocked(prisma.tuyenXe.create).mockResolvedValue(record);
     vi.mocked(prisma.tuyenXe.update).mockResolvedValue(record);
     vi.mocked(prisma.tuyenXe.updateMany).mockResolvedValue({ count: 1 });
-    vi.mocked(prisma.tuyenXe.findFirst).mockResolvedValue(record);
+    vi.mocked(prisma.tuyenXe.findFirst).mockImplementation(((args?: Prisma.TuyenXeFindFirstArgs) =>
+      Promise.resolve(args?.where?.diemDi !== undefined ? null : record)) as never,
+    );
+    vi.mocked(prisma.chuyenXe.findMany).mockResolvedValue([]);
+    vi.mocked(prisma.chuyenXe.update).mockResolvedValue({} as any);
   });
 
   it.each(['HOAT_DONG', 'TAM_NGUNG'] as const)(
@@ -121,7 +134,7 @@ describe('RoutesService writes', () => {
     ).rejects.toBe(other);
   });
 
-  it('verifies the company and creates only the route with explicit status', async () => {
+  it('verifies the company and creates the route with explicit status and duration', async () => {
     const result = await service.create(createInput, tenantAdmin(3));
     expect(prisma.nhaXe.findUnique).toHaveBeenCalledWith({
       where: { nhaXeId: 3 },
@@ -133,6 +146,7 @@ describe('RoutesService writes', () => {
           maTuyenXe: 'FUTA-TX-0100',
           diemDi: 'TP.HCM',
           diemDen: 'Đà Lạt',
+          thoiGianChayPhut: 420,
           nhaXeId: 3,
           trangThai: 'HOAT_DONG',
         },
@@ -143,6 +157,22 @@ describe('RoutesService writes', () => {
       code: 'FUTA-TX-0100',
       busCompany: { busCompanyId: 3, code: 'FUTA', name: 'Phương Trang' },
     });
+  });
+
+  it('rejects a second route with the same ordered endpoints even when its code differs', async () => {
+    vi.mocked(prisma.tuyenXe.findFirst).mockResolvedValueOnce({ ...record, tuyenXeId: 16 });
+
+    const error = await service.create(
+      { ...createInput, code: 'FUTA-TX-0101' },
+      tenantAdmin(3),
+    ).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(ConflictException);
+    expect((error as ConflictException).getResponse()).toEqual({
+      error: 'ROUTE_DUPLICATE_ENDPOINTS',
+      message: 'Đã có tuyến xe cùng điểm đi và điểm đến trong nhà xe này.',
+    });
+    expect(prisma.tuyenXe.create).not.toHaveBeenCalled();
   });
 
   it('returns BUS_COMPANY_NOT_FOUND without writing for a missing company', async () => {
@@ -254,16 +284,16 @@ describe('RoutesService writes', () => {
     });
   });
 
-  it('updates only origin and destination and returns the full route contract', async () => {
+  it('updates origin, destination and duration and returns the full route contract', async () => {
     const result = await service.update(
       17,
-      { origin: 'Đà Lạt', destination: 'Nha Trang' },
+      { origin: 'Đà Lạt', destination: 'Nha Trang', durationMinutes: 360 },
       tenantAdmin(3),
     );
     expect(prisma.tuyenXe.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { tuyenXeId: 17, nhaXeId: 3 },
-        data: { diemDi: 'Đà Lạt', diemDen: 'Nha Trang' },
+        data: { diemDi: 'Đà Lạt', diemDen: 'Nha Trang', thoiGianChayPhut: 360 },
       }),
     );
     expect(result.data).toMatchObject({
@@ -276,7 +306,7 @@ describe('RoutesService writes', () => {
   it('returns ROUTE_NOT_FOUND on a missing update record', async () => {
     vi.mocked(prisma.tuyenXe.updateMany).mockResolvedValueOnce({ count: 0 });
     const error = await service
-      .update(999, { origin: 'A', destination: 'B' }, tenantAdmin(3))
+      .update(999, { origin: 'A', destination: 'B', durationMinutes: 60 }, tenantAdmin(3))
       .catch((caught: unknown) => caught);
     expect(error).toBeInstanceOf(NotFoundException);
     expect((error as NotFoundException).getResponse()).toEqual({
@@ -284,4 +314,33 @@ describe('RoutesService writes', () => {
       message: 'Không tìm thấy tuyến xe.',
     });
   });
+
+  it('synchronizes gioDen for future un-departed trips when route duration changes', async () => {
+    vi.mocked(prisma.chuyenXe.findMany).mockResolvedValueOnce([
+      { chuyenXeId: 101, gioKhoiHanh: new Date('1970-01-01T08:00:00.000Z') },
+      { chuyenXeId: 102, gioKhoiHanh: new Date('1970-01-01T13:00:00.000Z') },
+    ] as any);
+
+    await service.update(
+      17,
+      { origin: 'Đà Lạt', destination: 'Nha Trang', durationMinutes: 480 },
+      tenantAdmin(3),
+    );
+
+    expect(prisma.chuyenXe.findMany).toHaveBeenCalledWith({
+      where: { tuyenXeId: 17, nhaXeId: 3, trangThai: 'CHUA_KHOI_HANH' },
+      select: { chuyenXeId: true, gioKhoiHanh: true },
+    });
+    // 08:00 + 480m = 16:00
+    expect(prisma.chuyenXe.update).toHaveBeenCalledWith({
+      where: { chuyenXeId: 101 },
+      data: { gioDen: new Date('1970-01-01T16:00:00.000Z') },
+    });
+    // 13:00 + 480m = 21:00
+    expect(prisma.chuyenXe.update).toHaveBeenCalledWith({
+      where: { chuyenXeId: 102 },
+      data: { gioDen: new Date('1970-01-01T21:00:00.000Z') },
+    });
+  });
 });
+

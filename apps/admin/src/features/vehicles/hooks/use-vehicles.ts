@@ -13,7 +13,6 @@ import type {
 const PAGE_SIZE = 10;
 
 type VehicleFilters = {
-  busCompanyId: string;
   vehicleTypeId: string;
   status: VehicleStatus | '';
 };
@@ -34,7 +33,6 @@ export function useVehicles() {
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState<VehicleFilters>({
-    busCompanyId: '',
     vehicleTypeId: '',
     status: '',
   });
@@ -64,9 +62,6 @@ export function useVehicles() {
       sortBy,
       sortDirection,
       ...(filters.status ? { status: filters.status } : {}),
-      ...(filters.busCompanyId
-        ? { busCompanyId: Number(filters.busCompanyId) }
-        : {}),
       ...(filters.vehicleTypeId
         ? { vehicleTypeId: Number(filters.vehicleTypeId) }
         : {}),

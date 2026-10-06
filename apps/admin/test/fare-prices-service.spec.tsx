@@ -142,7 +142,7 @@ describe('Fare Price API service', () => {
     );
   });
 
-  it('loads all route/type lookup pages and labels routes with code and endpoints', async () => {
+  it('loads all route/type lookup pages and labels routes with endpoints only', async () => {
     expect(service.getFarePriceRouteOptions).toBeTypeOf('function');
     expect(service.getFarePriceVehicleTypeOptions).toBeTypeOf('function');
     if (!service.getFarePriceRouteOptions || !service.getFarePriceVehicleTypeOptions) return;
@@ -176,8 +176,8 @@ describe('Fare Price API service', () => {
     ]);
 
     expect(routes).toEqual([
-      { id: 3, label: 'SG-DL-01 — TP.HCM → Đà Lạt' },
-      { id: 4, label: 'SG-NT-02 — TP.HCM → Nha Trang' },
+      { id: 3, label: 'TP.HCM → Đà Lạt' },
+      { id: 4, label: 'TP.HCM → Nha Trang' },
     ]);
     expect(vehicleTypes).toEqual([{ id: 2, label: 'Limousine' }]);
     expect(requests.some((url) => url.startsWith('/api/v1/routes?page=2'))).toBe(true);

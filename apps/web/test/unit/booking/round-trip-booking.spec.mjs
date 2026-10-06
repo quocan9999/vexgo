@@ -1,6 +1,21 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildRoundTripBookingHref } from '../../../src/features/booking/utils/round-trip-booking.ts';
+import {
+  buildRoundTripBookingHref,
+  getReturnTripLocations,
+  resolveRoundTripDepartureDate,
+} from '../../../src/features/booking/utils/round-trip-booking.ts';
+
+test('uses legacy date query aliases when departureDate is missing', () => {
+  assert.equal(
+    resolveRoundTripDepartureDate({ date: '2026-10-07' }),
+    '2026-10-07',
+  );
+  assert.equal(
+    resolveRoundTripDepartureDate({ price: '2026-10-07' }),
+    '2026-10-07',
+  );
+});
 
 test('keeps both selected trip IDs in a round-trip booking URL', () => {
   const href = buildRoundTripBookingHref({
@@ -49,4 +64,16 @@ test('replaces stale selected trip IDs while preserving unrelated filters', () =
     href,
     '/posts/new?tripType=round-trip&outboundId=new&returnId=back&promo=SAVE',
   );
+});
+
+test('getReturnTripLocations correctly maps origin to pickup and destination to dropoff', () => {
+  const returnPost = {
+    province: 'Đà Lạt',
+    district: 'TP.HCM',
+  };
+
+  const locations = getReturnTripLocations(returnPost);
+
+  assert.equal(locations.pickup, 'Đà Lạt', 'Pickup must be return trip origin');
+  assert.equal(locations.dropoff, 'TP.HCM', 'Dropoff must be return trip destination');
 });

@@ -93,7 +93,10 @@ describe('TripsService - getTripAlternatives', () => {
     bangGia: { findFirst: vi.fn() },
   };
 
-  const service = new TripsService(prisma as unknown as PrismaService);
+  const service = new TripsService(
+    prisma as unknown as PrismaService,
+    { get: vi.fn().mockReturnValue('Asia/Ho_Chi_Minh') } as unknown as any,
+  );
 
   beforeEach(() => {
     vi.clearAllMocks();

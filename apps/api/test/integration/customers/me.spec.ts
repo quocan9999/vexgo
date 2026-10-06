@@ -57,7 +57,8 @@ describe('GET/PATCH /api/v1/me', () => {
             () => ({
               SMS_PROVIDER: 'console',
               OTP_HASH_SECRET: 'test-only-otp-secret-for-vexgo-unit-tests-2026',
-              JWT_ACCESS_SECRET: 'test-only-jwt-secret-for-vexgo-unit-tests-2026',
+              JWT_ACCESS_SECRET:
+                'test-only-jwt-secret-for-vexgo-unit-tests-2026',
             }),
           ],
         }),

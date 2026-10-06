@@ -7,7 +7,7 @@ import {
 
 type AdminDetailSheetProps = Omit<
   AdminDialogPrimitiveProps,
-  'className' | 'contentClassName' | 'contentElement'
+  'className' | 'contentClassName' | 'contentElement' | 'lockPageScroll'
 >;
 
 export function AdminDetailSheet(props: AdminDetailSheetProps) {
@@ -16,6 +16,7 @@ export function AdminDetailSheet(props: AdminDetailSheetProps) {
       {...props}
       className="admin-dialog admin-detail-sheet"
       contentClassName="admin-detail-sheet__panel"
+      lockPageScroll
     />
   );
 }

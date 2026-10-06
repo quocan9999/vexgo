@@ -3,6 +3,7 @@ import { Test } from '@nestjs/testing';
 import type { ExecutionContext, INestApplication } from '@nestjs/common';
 import { AppModule } from '../../../src/app.module.js';
 import { AccessTokenGuard } from '../../../src/auth/guards/access-token.guard.js';
+import { ADMIN_ROLE_DEFAULT_PERMISSION_KEYS } from '../../../src/auth/permissions/permission-catalog.js';
 import type { AuthPrincipal } from '../../../src/auth/tokens/auth-principal.js';
 import { configureApi } from '../../../src/common/configure-api.js';
 import { PrismaService } from '../../../src/prisma/prisma.service.js';
@@ -23,7 +24,7 @@ export async function createFarePriceTestContext(): Promise<FarePriceTestContext
     taiKhoanId: 700,
     sessionId: 'fare-price-integration-session',
     roles: ['NHA_XE_ADMIN'],
-    permissions: [],
+    permissions: [...ADMIN_ROLE_DEFAULT_PERMISSION_KEYS.NHA_XE_ADMIN],
     nhanVienId: 900,
     nhaXeId: null,
   };

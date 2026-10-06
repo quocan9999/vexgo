@@ -1,0 +1,175 @@
+.section {
+  margin-top: var(--admin-space-card-padding);
+  padding: var(--admin-space-card-padding);
+  border: 1px solid var(--admin-border);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 3px 14px rgb(20 35 61 / 4%);
+}
+
+.sectionHeading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--admin-space-component-gap);
+  margin-bottom: var(--admin-space-component-gap);
+}
+
+.sectionHeading .eyebrow {
+  margin: 0 0 var(--admin-space-1);
+}
+
+.sectionHeading h2 {
+  margin: 0;
+  color: var(--admin-text-strong);
+  font-size: var(--admin-type-component-title-size);
+  font-weight: var(--admin-type-component-title-weight);
+  line-height: var(--admin-type-component-title-line-height);
+}
+
+.count {
+  color: var(--admin-text-muted);
+  font-size: var(--admin-type-helper-size);
+  line-height: var(--admin-type-helper-line-height);
+  white-space: nowrap;
+}
+
+.searchField {
+  display: flex;
+  min-height: 46px;
+  align-items: center;
+  gap: var(--admin-space-control-gap);
+  padding: 0 var(--admin-space-3);
+  border: 1px solid var(--admin-border);
+  border-radius: 8px;
+  color: var(--admin-text-muted);
+}
+
+.searchField:focus-within {
+  border-color: var(--admin-blue);
+  box-shadow: 0 0 0 3px rgb(50 94 235 / 12%);
+}
+
+.searchField input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--admin-text-strong);
+  font: inherit;
+  font-size: var(--admin-type-body-size);
+  line-height: var(--admin-type-body-line-height);
+}
+
+.companyGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
+  gap: var(--admin-space-field-gap);
+  margin: var(--admin-space-component-gap) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.companyLink {
+  display: flex;
+  min-height: 64px;
+  align-items: center;
+  gap: var(--admin-space-field-gap);
+  padding: var(--admin-space-table-cell-y) var(--admin-space-table-cell-x);
+  border: 1px solid var(--admin-border);
+  border-radius: 9px;
+  color: var(--admin-text-strong);
+  text-decoration: none;
+  transition: border-color 150ms ease, background-color 150ms ease, transform 150ms ease;
+}
+
+.companyLink:hover {
+  transform: translateY(-1px);
+  border-color: #b9c8e5;
+  background: #f8faff;
+}
+
+.companyLink:focus-visible {
+  outline: 3px solid rgb(50 94 235 / 32%);
+  outline-offset: 2px;
+}
+
+.companyIcon {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 9px;
+  background: #edf2ff;
+  color: var(--admin-blue);
+}
+
+.companyName {
+  min-width: 0;
+  flex: 1;
+  font-size: var(--admin-type-table-body-size);
+  font-weight: var(--admin-type-table-header-weight);
+  line-height: var(--admin-type-table-body-line-height);
+  overflow-wrap: anywhere;
+}
+
+.arrow {
+  color: var(--admin-text-muted);
+  font-size: 23px;
+  line-height: 1.2;
+}
+
+.state,
+.errorState {
+  display: flex;
+  min-height: 105px;
+  align-items: center;
+  justify-content: center;
+  gap: var(--admin-space-control-gap);
+  margin: var(--admin-space-component-gap) 0 0;
+  color: var(--admin-text-muted);
+  font-size: var(--admin-type-secondary-body-size);
+  line-height: var(--admin-type-secondary-body-line-height);
+  text-align: center;
+}
+
+.errorState {
+  flex-direction: column;
+  color: #a91f2d;
+}
+
+.errorState p {
+  margin: 0;
+}
+
+.errorState button {
+  min-height: 44px;
+}
+
+.spinner {
+  animation: spin 900ms linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 600px) {
+  .section {
+    padding: var(--admin-space-card-padding);
+  }
+
+  .companyGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .companyLink,
+  .spinner {
+    animation: none;
+    transition: none;
+  }
+}

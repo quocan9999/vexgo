@@ -3,15 +3,9 @@ import type { AdminSession } from './admin-auth';
 export type AdminAccessScope =
   'platform' | 'tenant' | 'restricted' | 'conflict';
 
-const TENANT_ADMIN_ROLES = new Set([
+const TENANT_PRINCIPAL_ROLES = new Set([
   'NHA_XE_ADMIN',
-  'NHAN_VIEN_BAN_VE',
-  'NHAN_VIEN_CSKH',
-  'NHAN_VIEN_PHU_XE',
-  'NHAN_VIEN_KINH_DOANH',
-]);
-
-const EMPLOYEE_ROLES = new Set([
+  'NHAN_VIEN_DIEU_HANH',
   'NHAN_VIEN_BAN_VE',
   'NHAN_VIEN_CSKH',
   'NHAN_VIEN_PHU_XE',
@@ -29,8 +23,8 @@ export function getAdminAccessScope(session: AdminSession): AdminAccessScope {
       : 'conflict';
   }
 
-  if (roles.has('NHA_XE_ADMIN')) {
-    return [...roles].every((role) => TENANT_ADMIN_ROLES.has(role)) &&
+  if ([...roles].some((role) => TENANT_PRINCIPAL_ROLES.has(role))) {
+    return [...roles].every((role) => TENANT_PRINCIPAL_ROLES.has(role)) &&
       session.employee !== null &&
       Number.isSafeInteger(session.employee.employeeId) &&
       session.employee.employeeId > 0 &&
@@ -44,7 +38,7 @@ export function getAdminAccessScope(session: AdminSession): AdminAccessScope {
 
   if (
     roles.has('KHACH_HANG') &&
-    ([...roles].some((role) => EMPLOYEE_ROLES.has(role)) ||
+    ([...roles].some((role) => TENANT_PRINCIPAL_ROLES.has(role)) ||
       session.employee !== null ||
       session.busCompanyId !== null)
   ) {

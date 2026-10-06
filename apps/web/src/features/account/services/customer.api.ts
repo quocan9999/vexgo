@@ -1,0 +1,74 @@
+export type CustomerProfile = {
+  accountId: number;
+  customerId: number;
+  customerCode: string;
+  loyaltyPoints: number;
+  fullName: string;
+  phoneNumber: string;
+  dateOfBirth: string | null;
+  citizenId: string | null;
+  email: string | null;
+  phoneVerified: boolean;
+  status: string;
+  createdAt: string;
+};
+
+export type UpdateProfileDto = {
+  fullName?: string;
+  dateOfBirth?: string | null;
+  email?: string | null;
+  citizenId?: string | null;
+};
+
+export class ApiError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+  }
+}
+
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
+
+export const customerApi = {
+  async getMe(accessToken: string): Promise<{ data: CustomerProfile }> {
+    const res = await fetch(`${API_BASE_URL}/me`, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      throw new ApiError(error.message || 'Lấy thông tin thất bại', res.status);
+    }
+
+    return res.json();
+  },
+
+  async updateMe(
+    accessToken: string,
+    dto: UpdateProfileDto,
+  ): Promise<{ data: CustomerProfile }> {
+    const res = await fetch(`${API_BASE_URL}/me`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify(dto),
+    });
+
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      throw new ApiError(error.message || 'Cập nhật thất bại', res.status);
+    }
+
+    return res.json();
+  },
+};
+
+

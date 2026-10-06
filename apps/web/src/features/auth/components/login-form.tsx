@@ -2,63 +2,93 @@
 'use client';
 
 import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Phone, Lock, Eye, EyeOff, LogIn } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { useDemoSession } from '@/features/auth/demo-session';
+import { useAuthSession } from '../auth-session';
+import { authApi, ApiError } from '../services/auth.api';
+import { sanitizeLoginRedirect } from '../services/login-redirect';
 
 export function LoginForm() {
   const router = useRouter();
-  const { signIn } = useDemoSession();
-  const [phone, setPhone] = useState('0912.345.678');
-  const [password, setPassword] = useState('123456');
+  const searchParams = useSearchParams();
+  const { signIn } = useAuthSession();
+  const [phone, setPhone] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+  const [phoneError, setPhoneError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Clear old errors
+    setErrorMsg('');
+    setPhoneError('');
+    setPasswordError('');
+
+    let hasError = false;
+
+    const cleanedPhone = phone.replace(/\D/g, '');
+    const isVietnamesePhone = /^(0|84)(3|5|7|8|9)\d{8}$/.test(cleanedPhone);
+
+    if (!phone.trim()) {
+      setPhoneError('Vui lòng nhập số điện thoại');
+      hasError = true;
+    } else if (!isVietnamesePhone) {
+      setPhoneError('Số điện thoại không hợp lệ');
+      hasError = true;
+    }
+
+    if (!password.trim()) {
+      setPasswordError('Vui lòng nhập mật khẩu');
+      hasError = true;
+    }
+    if (hasError) return;
+
     setIsLoading(true);
 
-    setTimeout(() => {
-      setIsLoading(false);
-      signIn({ phone: phone || '0912.345.678' });
-      router.push('/');
-    }, 600);
-  };
+    try {
+      const response = await authApi.login(phone, password);
 
-  const handleQuickLogin = () => {
-    setIsLoading(true);
-    setTimeout(() => {
+      signIn(response.data);
+      const nextUrl = sanitizeLoginRedirect(
+        searchParams.get('next') || searchParams.get('redirect'),
+      );
+      router.push(nextUrl);
+    } catch (error) {
+      if (error instanceof ApiError) {
+        setErrorMsg(error.message);
+      } else {
+        setErrorMsg('Không thể kết nối đến máy chủ. Vui lòng thử lại sau.');
+      }
+    } finally {
       setIsLoading(false);
-      signIn();
-      router.push('/');
-    }, 400);
+    }
   };
 
   return (
     <form className="space-y-5" onSubmit={handleSubmit}>
-      {/* Quick Demo Login Banner */}
-      <div className="p-3.5 bg-emerald-50 border border-emerald-200/90 rounded-2xl flex items-center justify-between gap-2 text-xs mb-2">
-        <div>
-          <span className="font-extrabold text-emerald-950 block">⚡ Tài khoản mẫu (Demo):</span>
-          <span className="text-emerald-800 font-medium">Nguyễn Văn Hùng - SĐT: 0912.345.678</span>
+      {errorMsg && (
+        <div className="p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg">
+          {errorMsg}
         </div>
-        <button
-          type="button"
-          onClick={handleQuickLogin}
-          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-800 text-white font-bold rounded-lg cursor-pointer transition-colors shadow-xs whitespace-nowrap"
-        >
-          Vào ngay
-        </button>
-      </div>
+      )}
 
       <Input
         label="Số điện thoại"
         type="tel"
         placeholder="Nhập số điện thoại..."
         value={phone}
-        onChange={(e) => setPhone(e.target.value)}
+        error={phoneError}
+        onChange={(e) => {
+          setPhone(e.target.value);
+          setErrorMsg('');
+          setPhoneError('');
+        }}
         leftIcon={<Phone className="w-5 h-5" />}
       />
 
@@ -68,7 +98,12 @@ export function LoginForm() {
           type={showPassword ? 'text' : 'password'}
           placeholder="Nhập mật khẩu..."
           value={password}
-          onChange={(e) => setPassword(e.target.value)}
+          error={passwordError}
+          onChange={(e) => {
+            setPassword(e.target.value);
+            setErrorMsg('');
+            setPasswordError('');
+          }}
           leftIcon={<Lock className="w-5 h-5" />}
           rightIcon={
             <button
@@ -76,12 +111,19 @@ export function LoginForm() {
               className="p-1.5 text-slate-400 hover:text-slate-600 focus:outline-none rounded-md transition-colors"
               onClick={() => setShowPassword(!showPassword)}
             >
-              {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+              {showPassword ? (
+                <EyeOff className="w-5 h-5" />
+              ) : (
+                <Eye className="w-5 h-5" />
+              )}
             </button>
           }
         />
         <div className="flex items-center justify-end mt-2">
-          <a href="#" className="text-sm font-semibold text-emerald-600 hover:text-emerald-900 transition-colors">
+          <a
+            href="#"
+            className="text-sm font-semibold text-emerald-600 hover:text-emerald-900 transition-colors"
+          >
             Quên mật khẩu?
           </a>
         </div>
@@ -97,35 +139,6 @@ export function LoginForm() {
       >
         Đăng nhập
       </Button>
-
-      <div className="mt-8 pt-2">
-        <div className="relative">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-slate-200" />
-          </div>
-          <div className="relative flex justify-center text-sm">
-            <span className="px-4 bg-white text-slate-500 font-medium">
-              Hoặc đăng nhập nhanh bằng
-            </span>
-          </div>
-        </div>
-
-        <div className="mt-6">
-          <Button
-            type="button"
-            size="lg"
-            className="w-full font-bold bg-[#0068FF] text-white hover:bg-[#005CE6] active:bg-[#0054D1] focus:ring-[#0068FF] shadow-md hover:shadow-lg shadow-[#0068FF]/20 border-none !px-4"
-            onClick={handleQuickLogin}
-            leftIcon={
-              <div className="bg-white text-[#0068FF] rounded-[4px] px-1.5 py-0.5 text-sm font-black tracking-tighter leading-none mr-1 flex items-center justify-center">
-                Zalo
-              </div>
-            }
-          >
-            Đăng nhập bằng Zalo
-          </Button>
-        </div>
-      </div>
     </form>
   );
 }

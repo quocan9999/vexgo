@@ -30,6 +30,8 @@ import {
   type FilterOption,
 } from '@/components/data-filters/data-filters';
 import { Button } from '@/components/ui/button';
+import { useAdminSession } from '@/features/admin-auth/hooks/use-admin-session';
+import { hasPlatformAdminPermission } from '@/features/admin-auth/services/admin-access';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
 import { useBusCompanies } from '../hooks/use-bus-companies';
 import { CreateBusCompanyDialog } from './create-bus-company-dialog';
@@ -93,11 +95,13 @@ function CompanyDetails({
   onClose,
   onUpdated,
   onStatusUpdated,
+  canUpdate,
 }: {
   companyId: number;
   onClose: () => void;
   onUpdated: (company: BusCompany) => void;
   onStatusUpdated: (company: BusCompany) => void;
+  canUpdate: boolean;
 }) {
   const statusSubmittingRef = useRef(false);
   const [detailState, setDetailState] = useState<CompanyDetailState>({
@@ -147,7 +151,7 @@ function CompanyDetails({
   }
 
   async function confirmStatusChange() {
-    if (detailState.status !== 'success' || statusSubmittingRef.current) return;
+    if (!canUpdate || detailState.status !== 'success' || statusSubmittingRef.current) return;
 
     const targetStatus: BusCompanyStatus =
       detailState.company.status === 'HOAT_DONG' ? 'TAM_NGUNG' : 'HOAT_DONG';
@@ -244,7 +248,10 @@ function CompanyDetails({
                 <div>
                   <h3>{detailState.company.name}</h3>
                   <span className="detail-company-id">
-                    Mã nhà xe · {detailState.company.code}
+                    Mã nhà xe ·{' '}
+                    <span className="admin-data-mono">
+                      {detailState.company.code}
+                    </span>
                   </span>
                 </div>
               </div>
@@ -297,7 +304,7 @@ function CompanyDetails({
                   </div>
                 </dl>
               </section>
-              <div className="detail-edit-actions">
+              {canUpdate && <div className="detail-edit-actions">
                 <Button
                   onClick={() => {
                     setStatusError(null);
@@ -316,19 +323,19 @@ function CompanyDetails({
                 >
                   Chỉnh sửa
                 </Button>
-              </div>
+              </div>}
             </>
           )}
         </>
       </AdminDetailSheet>
-      {editDialogOpen && detailState.status === 'success' && (
+      {canUpdate && editDialogOpen && detailState.status === 'success' && (
         <EditBusCompanyDialog
           company={detailState.company}
           onClose={() => setEditDialogOpen(false)}
           onUpdated={handleCompanyUpdated}
         />
       )}
-      {statusDialogOpen && detailState.status === 'success' && nextStatus && (
+      {canUpdate && statusDialogOpen && detailState.status === 'success' && nextStatus && (
         <AdminConfirmDialog
           ariaBusy={statusSubmitting}
           ariaDescribedBy="status-confirmation-description"
@@ -384,6 +391,16 @@ function CompanyDetails({
 }
 
 export function BusCompaniesManagement() {
+  const authState = useAdminSession();
+  const session = authState.status === 'authenticated' ? authState.session : null;
+  const canCreateCompany = hasPlatformAdminPermission(
+    session,
+    'bus-company:create',
+  );
+  const canUpdateCompanies = hasPlatformAdminPermission(
+    session,
+    'bus-company:update',
+  );
   const {
     companyPage,
     error,
@@ -407,6 +424,7 @@ export function BusCompaniesManagement() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   function openCreateDialog() {
+    if (!canCreateCompany) return;
     setSuccessMessage(null);
     setCreateDialogOpen(true);
   }
@@ -462,7 +480,9 @@ export function BusCompaniesManagement() {
         <AdminPageHeader
           actions={
             <div className="page-intro-actions">
-              <AdminCreateAction label="Thêm nhà xe" onClick={openCreateDialog} />
+              {canCreateCompany && (
+                <AdminCreateAction label="Thêm nhà xe" onClick={openCreateDialog} />
+              )}
               <AdminRefreshAction loading={loading} onClick={refresh} />
             </div>
           }
@@ -609,7 +629,9 @@ export function BusCompaniesManagement() {
                               <span>{company.name}</span>
                             </span>
                           </th>
-                          <td className="table-number">{company.code}</td>
+                          <td className="table-number admin-data-mono">
+                            {company.code}
+                          </td>
                           <td
                             className="company-contact-cell"
                             tabIndex={company.contactInfo ? 0 : undefined}
@@ -657,7 +679,7 @@ export function BusCompaniesManagement() {
                       </div>
                       <div className="company-mobile-stats">
                         <span>
-                          Mã <strong>{company.code}</strong>
+                          Mã <strong className="admin-data-mono">{company.code}</strong>
                         </span>
                         <span>
                           Trạng thái{' '}
@@ -699,12 +721,13 @@ export function BusCompaniesManagement() {
         <CompanyDetails
           key={selectedCompanyId}
           companyId={selectedCompanyId}
+          canUpdate={canUpdateCompanies}
           onClose={() => setSelectedCompanyId(null)}
           onStatusUpdated={handleCompanyStatusUpdated}
           onUpdated={handleCompanyUpdated}
         />
       )}
-      {createDialogOpen && (
+      {canCreateCompany && createDialogOpen && (
         <CreateBusCompanyDialog
           onClose={() => setCreateDialogOpen(false)}
           onCreated={handleCompanyCreated}

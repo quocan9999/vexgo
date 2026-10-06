@@ -49,6 +49,7 @@ const CHECKING_STATE: AdminAuthState = Object.freeze({ status: 'checking' });
 let currentState: AdminAuthState = CHECKING_STATE;
 let currentAccessToken: string | null = null;
 let initialization: Promise<AdminSession | null> | null = null;
+let sessionReloadInFlight: Promise<AdminSession> | null = null;
 let refreshInFlight: Promise<string | null> | null = null;
 const listeners = new Set<() => void>();
 let broadcastChannel: BroadcastChannel | null = null;
@@ -406,6 +407,52 @@ export async function initializeAdminSession(): Promise<AdminSession | null> {
     initialization = null;
   });
   return initialization;
+}
+
+export function reloadAdminSession(): Promise<AdminSession> {
+  if (sessionReloadInFlight) return sessionReloadInFlight;
+
+  sessionReloadInFlight = (async () => {
+    const accessTokenAtStart = currentAccessToken;
+    const accessToken =
+      accessTokenAtStart ?? (await refreshAdminAccessToken());
+    if (!accessToken) {
+      throw new AdminAuthError('Phiên đăng nhập không còn hợp lệ.', 401);
+    }
+
+    if (!accessTokenAtStart) {
+      const refreshedState = getAdminAuthSnapshot();
+      if (
+        currentAccessToken === accessToken &&
+        refreshedState.status === 'authenticated'
+      ) {
+        return refreshedState.session;
+      }
+    }
+
+    const resolved = await fetchCurrentSessionWithRefresh(accessToken);
+    if (
+      accessTokenAtStart &&
+      currentAccessToken !== accessTokenAtStart &&
+      currentAccessToken !== resolved.accessToken
+    ) {
+      const latestState = getAdminAuthSnapshot();
+      if (latestState.status === 'authenticated') return latestState.session;
+      throw new AdminAuthError(
+        'Phiên đăng nhập đã thay đổi trong khi làm mới thông tin.',
+        401,
+      );
+    }
+
+    currentAccessToken = resolved.accessToken;
+    setState({ status: 'authenticated', session: resolved.session });
+    broadcastToken(resolved.accessToken);
+    return resolved.session;
+  })().finally(() => {
+    sessionReloadInFlight = null;
+  });
+
+  return sessionReloadInFlight;
 }
 
 export async function signInAdmin(

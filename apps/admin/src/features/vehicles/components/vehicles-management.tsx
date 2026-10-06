@@ -29,6 +29,7 @@ import {
   type FilterOption,
 } from '@/components/data-filters/data-filters';
 import { Button } from '@/components/ui/button';
+import { useAdminPermissions } from '@/features/admin-auth/hooks/use-admin-permissions';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
 import {
   getVehicleById,
@@ -100,6 +101,9 @@ function VehicleDetails({
   onClose: () => void;
   onUpdated: (action: 'edit' | 'status', vehicle: VehicleDetail) => void;
 }) {
+  const { can, canAll } = useAdminPermissions();
+  const canUpdate = can('vehicle:update');
+  const canConfigureSeats = canAll(['vehicle:read', 'seat:read']);
   const router = useRouter();
   const statusSubmittingRef = useRef(false);
   const [detailState, setDetailState] = useState<DetailState>({
@@ -255,8 +259,12 @@ function VehicleDetails({
                 <Truck size={21} />
               </span>
               <div>
-                <h3>{detailState.vehicle.licensePlate}</h3>
-                <p>Xe #{detailState.vehicle.vehicleId}</p>
+                <h3 className="admin-data-mono">
+                  {detailState.vehicle.licensePlate}
+                </h3>
+                <p>
+                  Xe #<span className="admin-data-mono">{detailState.vehicle.vehicleId}</span>
+                </p>
               </div>
               <AdminStatusBadge tone={statusTone(detailState.vehicle.status)}>
                 {statusLabel(detailState.vehicle.status)}
@@ -275,7 +283,9 @@ function VehicleDetails({
                 </div>
                 <div>
                   <dt>Mã nhà xe</dt>
-                  <dd>{detailState.vehicle.busCompany.code}</dd>
+                  <dd className="admin-data-mono">
+                    {detailState.vehicle.busCompany.code}
+                  </dd>
                 </div>
                 <div>
                   <dt>Loại xe</dt>
@@ -308,8 +318,8 @@ function VehicleDetails({
               </dl>
             </section>
 
-            <div className="vehicle-detail-actions">
-              <Button
+            <div className="vehicle-detail-actions admin-detail-sheet__actions">
+              {canConfigureSeats && <Button
                 onClick={() =>
                   router.push(`/vehicles/${detailState.vehicle.vehicleId}/seats`)
                 }
@@ -317,8 +327,8 @@ function VehicleDetails({
                 variant="secondary"
               >
                 Cấu hình ghế
-              </Button>
-              <Button
+              </Button>}
+              {canUpdate && <Button
                 onClick={() => {
                   setStatusError(null);
                   setStatusDialogOpen(true);
@@ -329,15 +339,15 @@ function VehicleDetails({
                 {detailState.vehicle.status === 'HOAT_DONG'
                   ? 'Chuyển sang bảo trì'
                   : 'Đưa vào hoạt động'}
-              </Button>
-              <Button onClick={() => setEditDialogOpen(true)} type="button">
+              </Button>}
+              {canUpdate && <Button onClick={() => setEditDialogOpen(true)} type="button">
                 Chỉnh sửa
-              </Button>
+              </Button>}
             </div>
           </div>
         )}
       </AdminDetailSheet>
-      {editDialogOpen && detailState.status === 'success' && (
+      {editDialogOpen && canUpdate && detailState.status === 'success' && (
         <VehicleFormDialog
           busCompanies={options.busCompanies}
           onClose={() => setEditDialogOpen(false)}
@@ -347,7 +357,7 @@ function VehicleDetails({
           vehicleTypes={options.vehicleTypes}
         />
       )}
-      {statusDialogOpen && detailState.status === 'success' && nextStatus && (
+      {statusDialogOpen && canUpdate && detailState.status === 'success' && nextStatus && (
         <AdminConfirmDialog
           ariaBusy={statusSubmitting}
           ariaDescribedBy="vehicle-status-confirmation-description"
@@ -429,6 +439,8 @@ function vehicleStatusBadge(vehicle: VehicleListItem) {
 }
 
 export function VehiclesManagement() {
+  const { can } = useAdminPermissions();
+  const canCreate = can('vehicle:create');
   const {
     vehiclePage,
     error,
@@ -454,7 +466,7 @@ export function VehiclesManagement() {
 
   const items = vehiclePage?.data ?? [];
   const hasActiveFilters = Boolean(
-    filters.busCompanyId || filters.vehicleTypeId || filters.status,
+    filters.vehicleTypeId || filters.status,
   );
   const optionErrors = [
     options.busCompanies.status === 'error'
@@ -485,10 +497,10 @@ export function VehiclesManagement() {
         <AdminPageHeader
           actions={
             <div className="page-intro-actions">
-              <AdminCreateAction
+              {canCreate && <AdminCreateAction
                 label="Thêm xe"
                 onClick={() => setCreateDialogOpen(true)}
-              />
+              />}
               <AdminRefreshAction loading={loading} onClick={refresh} />
             </div>
           }
@@ -512,21 +524,14 @@ export function VehiclesManagement() {
           <div className="panel vehicles-panel">
             <FilterToolbar totalItems={vehiclePage?.meta.totalItems ?? null}>
               <SearchInput
-                label="Tìm biển số, nhà xe hoặc loại xe"
+                label="Tìm biển số hoặc loại xe"
                 onChange={updateSearch}
-                placeholder="Tìm biển số, nhà xe, loại xe..."
+                placeholder="Tìm biển số hoặc loại xe..."
                 value={searchInput}
               />
-              {options.busCompanies.status === 'success' && (
-                <SelectFilter
-                  label="Nhà xe"
-                  onChange={(value) => updateFilters({ busCompanyId: value })}
-                  options={filterOptions(options.busCompanies.options)}
-                  value={filters.busCompanyId}
-                />
-              )}
               {options.vehicleTypes.status === 'success' && (
                 <SelectFilter
+                  allLabel="Tất cả loại xe"
                   label="Loại xe"
                   onChange={(value) => updateFilters({ vehicleTypeId: value })}
                   options={filterOptions(options.vehicleTypes.options)}
@@ -534,6 +539,7 @@ export function VehiclesManagement() {
                 />
               )}
               <SelectFilter
+                allLabel="Tất cả trạng thái xe"
                 label="Trạng thái xe"
                 onChange={(value) =>
                   updateFilters({ status: value as VehicleStatus | '' })
@@ -677,12 +683,14 @@ export function VehiclesManagement() {
                         <tbody>
                           {items.map((vehicle) => (
                             <tr key={vehicle.vehicleId}>
-                              <th scope="row">{vehicle.licensePlate}</th>
+                              <th className="admin-data-mono" scope="row">
+                                {vehicle.licensePlate}
+                              </th>
                               <td>
                                 <span className="vehicle-company-name">
                                   {vehicle.busCompany.name}
                                 </span>
-                                <span className="vehicle-company-code">
+                                <span className="vehicle-company-code admin-data-mono">
                                   {vehicle.busCompany.code}
                                 </span>
                               </td>
@@ -710,8 +718,12 @@ export function VehiclesManagement() {
                         >
                           <div className="vehicle-mobile-heading">
                             <div>
-                              <h2>{vehicle.licensePlate}</h2>
-                              <span>Xe #{vehicle.vehicleId}</span>
+                              <h2 className="admin-data-mono">
+                                {vehicle.licensePlate}
+                              </h2>
+                              <span>
+                                Xe #<span className="admin-data-mono">{vehicle.vehicleId}</span>
+                              </span>
                             </div>
                             {vehicleStatusBadge(vehicle)}
                           </div>
@@ -776,7 +788,7 @@ export function VehiclesManagement() {
           vehicleId={selectedVehicleId}
         />
       )}
-      {createDialogOpen && (
+      {createDialogOpen && canCreate && (
         <VehicleFormDialog
           busCompanies={options.busCompanies}
           onClose={() => setCreateDialogOpen(false)}

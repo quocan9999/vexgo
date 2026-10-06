@@ -6,6 +6,11 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import {
+  requireTenantPrincipal,
+  tenantIdForOptionalRead,
+} from '../auth/tenant-scope.js';
+import { calculateClockTime } from '../common/time/business-date.js';
 import type { CreateRouteDto } from './dto/create-route.dto.js';
 import type { RouteQueryDto, RouteSortField } from './dto/route-query.dto.js';
 import type { UpdateRouteDto } from './dto/update-route.dto.js';
@@ -17,6 +22,7 @@ const ROUTE_SELECT = {
   maTuyenXe: true,
   diemDi: true,
   diemDen: true,
+  thoiGianChayPhut: true,
   trangThai: true,
   createdAt: true,
   updatedAt: true,
@@ -24,6 +30,69 @@ const ROUTE_SELECT = {
 } satisfies Prisma.TuyenXeSelect;
 
 type RouteRecord = Prisma.TuyenXeGetPayload<{ select: typeof ROUTE_SELECT }>;
+
+const MAX_ROUTE_TRANSACTION_ATTEMPTS = 3;
+
+function isSerializationConflict(error: unknown): boolean {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === 'P2034'
+  );
+}
+
+function concurrentRouteModificationError(): ConflictException {
+  return new ConflictException({
+    error: 'ROUTE_CONCURRENT_MODIFICATION',
+    message: 'Dữ liệu tuyến xe vừa thay đổi đồng thời. Vui lòng thử lại.',
+  });
+}
+
+async function runRouteWriteTransaction<T>(
+  prisma: Pick<PrismaService, '$transaction'>,
+  operation: (transaction: Prisma.TransactionClient) => Promise<T>,
+): Promise<T> {
+  for (let attempt = 1; attempt <= MAX_ROUTE_TRANSACTION_ATTEMPTS; attempt += 1) {
+    try {
+      return await prisma.$transaction(operation, {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      });
+    } catch (error) {
+      if (!isSerializationConflict(error)) throw error;
+      if (attempt === MAX_ROUTE_TRANSACTION_ATTEMPTS) {
+        throw concurrentRouteModificationError();
+      }
+    }
+  }
+
+  throw concurrentRouteModificationError();
+}
+
+async function assertRouteEndpointsAvailable(
+  transaction: Pick<Prisma.TransactionClient, 'tuyenXe'>,
+  nhaXeId: number,
+  origin: string,
+  destination: string,
+  excludeRouteId?: number,
+): Promise<void> {
+  const duplicate = await transaction.tuyenXe.findFirst({
+    where: {
+      nhaXeId,
+      diemDi: origin,
+      diemDen: destination,
+      ...(excludeRouteId === undefined
+        ? {}
+        : { tuyenXeId: { not: excludeRouteId } }),
+    },
+    select: { tuyenXeId: true },
+  });
+
+  if (duplicate) {
+    throw new ConflictException({
+      error: 'ROUTE_DUPLICATE_ENDPOINTS',
+      message: 'Đã có tuyến xe cùng điểm đi và điểm đến trong nhà xe này.',
+    });
+  }
+}
 
 const sortFieldMap = {
   code: 'maTuyenXe',
@@ -43,6 +112,7 @@ function mapRoute(route: RouteRecord) {
     code: route.maTuyenXe,
     origin: route.diemDi,
     destination: route.diemDen,
+    durationMinutes: route.thoiGianChayPhut,
     status: route.trangThai,
     busCompany: {
       busCompanyId: route.nhaXe.nhaXeId,
@@ -66,35 +136,6 @@ function busCompanyNotFound() {
     error: 'BUS_COMPANY_NOT_FOUND',
     message: 'Không tìm thấy nhà xe.',
   });
-}
-
-function requireTenantId(principal: AuthPrincipal | undefined): number {
-  if (!principal?.roles.includes('NHA_XE_ADMIN')) {
-    throw new ForbiddenException({
-      error: 'ROLE_FORBIDDEN',
-      message: 'Chỉ quản trị viên nhà xe được quản lý tuyến xe.',
-    });
-  }
-  const nhaXeId = principal.nhaXeId;
-  if (
-    typeof nhaXeId !== 'number' ||
-    !Number.isInteger(nhaXeId) ||
-    nhaXeId <= 0
-  ) {
-    throw new ForbiddenException({
-      error: 'TENANT_SCOPE_REQUIRED',
-      message: 'Tài khoản chưa được gán nhà xe hợp lệ.',
-    });
-  }
-  return nhaXeId;
-}
-
-function tenantIdForRead(
-  principal: AuthPrincipal | undefined,
-): number | undefined {
-  return principal?.roles.includes('NHA_XE_ADMIN')
-    ? requireTenantId(principal)
-    : undefined;
 }
 
 function isRouteCodeUniqueViolation(error: unknown): boolean {
@@ -143,7 +184,7 @@ export class RoutesService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(input: CreateRouteDto, principal?: AuthPrincipal) {
-    const nhaXeId = requireTenantId(principal);
+    const nhaXeId = requireTenantPrincipal(principal);
     if (input.busCompanyId !== nhaXeId) {
       throw new ForbiddenException({
         error: 'TENANT_SCOPE_VIOLATION',
@@ -157,17 +198,26 @@ export class RoutesService {
     if (!company) throw busCompanyNotFound();
 
     try {
-      const route = await this.prisma.tuyenXe.create({
-        data: {
-          maTuyenXe: input.code,
-          diemDi: input.origin,
-          diemDen: input.destination,
+      return await runRouteWriteTransaction(this.prisma, async (transaction) => {
+        await assertRouteEndpointsAvailable(
+          transaction,
           nhaXeId,
-          trangThai: input.status,
-        },
-        select: ROUTE_SELECT,
+          input.origin,
+          input.destination,
+        );
+        const route = await transaction.tuyenXe.create({
+          data: {
+            maTuyenXe: input.code,
+            diemDi: input.origin,
+            diemDen: input.destination,
+            thoiGianChayPhut: input.durationMinutes,
+            nhaXeId,
+            trangThai: input.status,
+          },
+          select: ROUTE_SELECT,
+        });
+        return { data: mapRoute(route) };
       });
-      return { data: mapRoute(route) };
     } catch (error) {
       if (isRouteCodeUniqueViolation(error)) {
         throw new ConflictException({
@@ -186,19 +236,54 @@ export class RoutesService {
   }
 
   async update(id: number, input: UpdateRouteDto, principal?: AuthPrincipal) {
-    const nhaXeId = requireTenantId(principal);
-    const result = await this.prisma.tuyenXe.updateMany({
-      where: { tuyenXeId: id, nhaXeId },
-      data: { diemDi: input.origin, diemDen: input.destination },
-    });
-    if (result.count === 0) throw routeNotFound();
+    const nhaXeId = requireTenantPrincipal(principal);
+    return runRouteWriteTransaction(this.prisma, async (transaction) => {
+      const existing = await transaction.tuyenXe.findFirst({
+        where: { tuyenXeId: id, nhaXeId },
+        select: { tuyenXeId: true },
+      });
+      if (!existing) throw routeNotFound();
 
-    const route = await this.prisma.tuyenXe.findFirst({
-      where: { tuyenXeId: id, nhaXeId },
-      select: ROUTE_SELECT,
+      await assertRouteEndpointsAvailable(
+        transaction,
+        nhaXeId,
+        input.origin,
+        input.destination,
+        id,
+      );
+
+      const result = await transaction.tuyenXe.updateMany({
+        where: { tuyenXeId: id, nhaXeId },
+        data: {
+          diemDi: input.origin,
+          diemDen: input.destination,
+          thoiGianChayPhut: input.durationMinutes,
+        },
+      });
+      if (result.count === 0) throw routeNotFound();
+
+      const futureTrips = await transaction.chuyenXe.findMany({
+        where: { tuyenXeId: id, nhaXeId, trangThai: 'CHUA_KHOI_HANH' },
+        select: { chuyenXeId: true, gioKhoiHanh: true },
+      });
+      for (const trip of futureTrips) {
+        const newGioDen = calculateClockTime(
+          trip.gioKhoiHanh,
+          input.durationMinutes,
+        );
+        await transaction.chuyenXe.update({
+          where: { chuyenXeId: trip.chuyenXeId },
+          data: { gioDen: newGioDen },
+        });
+      }
+
+      const route = await transaction.tuyenXe.findFirst({
+        where: { tuyenXeId: id, nhaXeId },
+        select: ROUTE_SELECT,
+      });
+      if (!route) throw routeNotFound();
+      return { data: mapRoute(route) };
     });
-    if (!route) throw routeNotFound();
-    return { data: mapRoute(route) };
   }
 
   async updateStatus(
@@ -206,7 +291,7 @@ export class RoutesService {
     status: UpdateRouteStatusDto['status'],
     principal?: AuthPrincipal,
   ) {
-    const nhaXeId = requireTenantId(principal);
+    const nhaXeId = requireTenantPrincipal(principal);
     const result = await this.prisma.tuyenXe.updateMany({
       where: { tuyenXeId: id, nhaXeId },
       data: { trangThai: status },
@@ -222,7 +307,7 @@ export class RoutesService {
   }
 
   async findAll(query: RouteQueryDto, principal?: AuthPrincipal) {
-    const nhaXeId = tenantIdForRead(principal);
+    const nhaXeId = tenantIdForOptionalRead(principal);
     if (
       nhaXeId !== undefined &&
       query.busCompanyId !== undefined &&
@@ -275,7 +360,7 @@ export class RoutesService {
   }
 
   async findOne(id: number, principal?: AuthPrincipal) {
-    const nhaXeId = tenantIdForRead(principal);
+    const nhaXeId = tenantIdForOptionalRead(principal);
     const route =
       nhaXeId === undefined
         ? await this.prisma.tuyenXe.findUnique({

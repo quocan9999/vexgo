@@ -8,6 +8,9 @@ import {
   Query,
 } from '@nestjs/common';
 import { BookingsService } from './bookings.service.js';
+import { BookingQueryDto } from './dto/booking-query.dto.js';
+import { CurrentPrincipal } from '../auth/decorators/current-principal.decorator.js';
+import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
 import { Public } from '../auth/decorators/public.decorator.js';
 
 @Controller('bookings')
@@ -56,20 +59,25 @@ export class BookingsController {
     });
   }
 
-  @Public()
-  @Get(':bookingId')
-  async getBookingById(@Param('bookingId', ParseIntPipe) bookingId: number) {
-    return this.bookingsService.getBookingById(bookingId);
+  @Get()
+  findCustomerBookings(
+    @CurrentPrincipal() principal: AuthPrincipal,
+    @Query() query: BookingQueryDto,
+  ) {
+    return this.bookingsService.findCustomerBookings(
+      principal.taiKhoanId,
+      query,
+    );
   }
 
-  @Get()
-  async getMyBookings(
-    @Query('page') page?: string,
-    @Query('pageSize') pageSize?: string,
+  @Get(':bookingId')
+  findCustomerBookingById(
+    @CurrentPrincipal() principal: AuthPrincipal,
+    @Param('bookingId', ParseIntPipe) bookingId: number,
   ) {
-    return this.bookingsService.getMyBookings({
-      page: page ? Number(page) : 1,
-      pageSize: pageSize ? Number(pageSize) : 10,
-    });
+    return this.bookingsService.findCustomerBookingById(
+      principal.taiKhoanId,
+      bookingId,
+    );
   }
 }
