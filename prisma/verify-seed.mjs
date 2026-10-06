@@ -37,13 +37,15 @@ const expected = {
   VaiTro: 8,
   TaiKhoanVaiTro: 42,
   KhuyenMai: 15,
-  BuuCuc: 15,
-  BangCuocGuiHang: 72,
+  DiemGiaoNhanHang: 15,
+  DiemGiaoNhanTuyenXe: 6,
+  BangCuocGuiHang: 126,
   LoaiHangHoa: 7,
   DonGiaoDich: 45,
   PhieuDatVe: 27,
   Ve: 54,
   PhieuGuiHang: 24,
+  LichSuTrangThaiPhieuGuiHang: 60,
   HangHoa: 42,
   HinhAnhHangHoa: 57,
   ThanhToan: 51,
@@ -102,8 +104,8 @@ async function verifyPermissionCatalogAndDefaults() {
   console.log(`OK RBAC role-permission assignments (${assignmentRows.length} valid mappings)`);
 }
 
-function branchCitySql(alias) {
-  return `(CASE WHEN ${alias}.quanHuyen IN ('Đà Lạt', 'Vũng Tàu') THEN ${alias}.quanHuyen ELSE ${alias}.tinhThanh END)`;
+function pointCitySql(alias) {
+  return `(CASE WHEN ${alias}.maPhuongXa IN ('24781', '24778') OR ${alias}.maTinhThanh = '68' THEN 'Đà Lạt' WHEN ${alias}.maPhuongXa = '26506' THEN 'Vũng Tàu' ELSE 'TP.HCM' END)`;
 }
 
 async function assertBusinessCodePatterns() {
@@ -113,7 +115,7 @@ async function assertBusinessCodePatterns() {
     ['maKhachHang', "SELECT maKhachHang AS value FROM KhachHang WHERE maKhachHang LIKE 'KH-%'", /^KH-\d{6,}$/],
     ['maTuyenXe', "SELECT maTuyenXe AS value FROM TuyenXe WHERE maTuyenXe REGEXP '^(FUTA|TB|HM)-TX-'", /^(FUTA|TB|HM)-TX-\d{4,}$/],
     ['maChuyenXe', "SELECT maChuyenXe AS value FROM ChuyenXe WHERE maChuyenXe REGEXP '^(FUTA|TB|HM)-CX-'", /^(FUTA|TB|HM)-CX-\d{8}-\d{4,}$/],
-    ['maBuuCuc', "SELECT maBuuCuc AS value FROM BuuCuc WHERE maBuuCuc REGEXP '^(FUTA|TB|HM)-BC-'", /^(FUTA|TB|HM)-BC-\d{3,}$/],
+    ['maDiem', "SELECT maDiem AS value FROM DiemGiaoNhanHang WHERE maDiem REGEXP '^(FUTA|TB|HM)-BC-'", /^(FUTA|TB|HM)-BC-\d{3,}$/],
     ['maKhuyenMai', "SELECT maKhuyenMai AS value FROM KhuyenMai WHERE maKhuyenMai REGEXP '^(FUTA|TB|HM)(10|SHIP50K|AUTO|OLD|PAUSE)$'", /^[A-Z0-9]{3,20}$/],
     ['maDonGiaoDich', "SELECT maDonGiaoDich AS value FROM DonGiaoDich WHERE maDonGiaoDich REGEXP '^(FUTA|TB|HM)-GD-'", /^(FUTA|TB|HM)-GD-\d{12}-\d{4,}$/],
     ['maPhieuDatVe', "SELECT maPhieuDatVe AS value FROM PhieuDatVe WHERE maPhieuDatVe REGEXP '^(FUTA|TB|HM)-PDV-'", /^(FUTA|TB|HM)-PDV-\d{12}-\d{4,}$/],
@@ -209,19 +211,21 @@ async function main() {
   await assertZero('trips outside fixed date range', await scalar("SELECT COUNT(*) AS value FROM ChuyenXe WHERE ngayKhoiHanh < '2026-09-22' OR (ngayKhoiHanh > '2026-09-29' AND ngayKhoiHanh <> '2026-10-07')"));
   await assertZero('booking after trip departure', await scalar("SELECT COUNT(*) AS value FROM PhieuDatVe p JOIN Ve v ON v.phieuDatVeId=p.phieuDatVeId JOIN GheChuyenXe gc ON gc.gheChuyenXeId=v.gheChuyenXeId JOIN ChuyenXe c ON c.chuyenXeId=gc.chuyenXeId WHERE p.ngayDat >= TIMESTAMP(DATE(c.ngayKhoiHanh), TIME(c.gioKhoiHanh)) - INTERVAL 7 HOUR"));
   await assertZero('trip seats from another vehicle', await scalar('SELECT COUNT(*) AS value FROM GheChuyenXe gc JOIN ChuyenXe c ON c.chuyenXeId=gc.chuyenXeId JOIN Ghe g ON g.gheId=gc.gheId WHERE g.xeId <> c.xeId'));
-  await assertZero('shipment branch crosses operator', await scalar('SELECT COUNT(*) AS value FROM PhieuGuiHang p JOIN BuuCuc bg ON bg.buuCucId=p.buuCucGuiId JOIN BuuCuc bp ON bp.buuCucId=p.buuCucPhatId WHERE bg.nhaXeId <> bp.nhaXeId'));
+  await assertZero('shipment point crosses operator', await scalar('SELECT COUNT(*) AS value FROM PhieuGuiHang p JOIN DiemGiaoNhanHang ps ON ps.diemGiaoNhanHangId=p.diemGuiId JOIN DiemGiaoNhanHang pr ON pr.diemGiaoNhanHangId=p.diemNhanId JOIN DonGiaoDich d ON d.donGiaoDichId=p.donGiaoDichId WHERE ps.nhaXeId <> pr.nhaXeId OR ps.nhaXeId <> d.nhaXeId'));
   await assertZero('shipment trip crosses operator', await scalar('SELECT COUNT(*) AS value FROM PhieuGuiHang p JOIN ChuyenXe c ON c.chuyenXeId=p.chuyenXeId JOIN Xe x ON x.xeId=c.xeId JOIN DonGiaoDich d ON d.donGiaoDichId=p.donGiaoDichId WHERE x.nhaXeId <> d.nhaXeId'));
+  await assertZero('shipment has missing required references', await scalar('SELECT COUNT(*) AS value FROM PhieuGuiHang WHERE chuyenXeId IS NULL OR diemGuiId IS NULL OR diemNhanId IS NULL OR bangCuocApDungId IS NULL OR donGiaoDichId IS NULL'));
   await assertZero('shipment assigned before send time', await scalar("SELECT COUNT(*) AS value FROM PhieuGuiHang p JOIN ChuyenXe c ON c.chuyenXeId=p.chuyenXeId WHERE p.ngayGui >= TIMESTAMP(DATE(c.ngayKhoiHanh), TIME(c.gioKhoiHanh)) - INTERVAL 7 HOUR"));
-  await assertZero('shipping rate weight mismatch', await scalar('SELECT COUNT(*) AS value FROM (SELECT p.phieuGuiHangId, SUM(h.khoiLuong) AS totalWeight, r.khoiLuongTu, r.khoiLuongDen FROM PhieuGuiHang p JOIN HangHoa h ON h.phieuGuiHangId=p.phieuGuiHangId JOIN BangCuocGuiHang r ON r.bangCuocGuiHangId=p.bangCuocApDungId GROUP BY p.phieuGuiHangId, r.khoiLuongTu, r.khoiLuongDen HAVING totalWeight < r.khoiLuongTu OR (r.khoiLuongDen IS NOT NULL AND totalWeight > r.khoiLuongDen)) invalid'));
-  await assertZero('shipment pickup branch differs from rate', await scalar("SELECT COUNT(*) AS value FROM PhieuGuiHang p JOIN BangCuocGuiHang r ON r.bangCuocGuiHangId=p.bangCuocApDungId WHERE p.hinhThucLayHang='GUI_TAI_BUU_CUC' AND (p.buuCucGuiId IS NULL OR p.buuCucGuiId <> r.buuCucGuiId)"));
-  await assertZero('shipment delivery branch differs from rate', await scalar("SELECT COUNT(*) AS value FROM PhieuGuiHang p JOIN BangCuocGuiHang r ON r.bangCuocGuiHangId=p.bangCuocApDungId WHERE p.hinhThucGiaoHang='GIAO_TAI_BUU_CUC' AND (p.buuCucPhatId IS NULL OR p.buuCucPhatId <> r.buuCucPhatId)"));
-  await assertZero('shipment pickup branch direction mismatch', await scalar(`SELECT COUNT(*) AS value FROM PhieuGuiHang p JOIN BangCuocGuiHang r ON r.bangCuocGuiHangId=p.bangCuocApDungId JOIN ChuyenXe c ON c.chuyenXeId=p.chuyenXeId JOIN TuyenXe t ON t.tuyenXeId=c.tuyenXeId JOIN BuuCuc bg ON bg.buuCucId=r.buuCucGuiId JOIN BuuCuc bp ON bp.buuCucId=r.buuCucPhatId WHERE t.diemDi <> ${branchCitySql('bg')} OR t.diemDen <> ${branchCitySql('bp')}`));
-  await assertZero('shipment pickup address differs from branch', await scalar("SELECT COUNT(*) AS value FROM PhieuGuiHang p JOIN BuuCuc b ON b.buuCucId=p.buuCucGuiId WHERE p.hinhThucLayHang='GUI_TAI_BUU_CUC' AND p.diaChiLayHang <> b.diaChi"));
-  await assertZero('shipment delivery address differs from branch', await scalar("SELECT COUNT(*) AS value FROM PhieuGuiHang p JOIN BuuCuc b ON b.buuCucId=p.buuCucPhatId WHERE p.hinhThucGiaoHang='GIAO_TAI_BUU_CUC' AND p.diaChiNguoiNhan <> b.diaChi"));
-  await assertZero('unassigned shipment pickup address direction mismatch', await scalar(`SELECT COUNT(*) AS value FROM PhieuGuiHang p JOIN BangCuocGuiHang r ON r.bangCuocGuiHangId=p.bangCuocApDungId JOIN BuuCuc bg ON bg.buuCucId=r.buuCucGuiId WHERE p.chuyenXeId IS NULL AND p.hinhThucLayHang='NHAN_TAN_NOI' AND p.diaChiLayHang NOT LIKE CONCAT('%', ${branchCitySql('bg')}, '%')`));
-  await assertZero('unassigned shipment delivery address direction mismatch', await scalar(`SELECT COUNT(*) AS value FROM PhieuGuiHang p JOIN BangCuocGuiHang r ON r.bangCuocGuiHangId=p.bangCuocApDungId JOIN BuuCuc bp ON bp.buuCucId=r.buuCucPhatId WHERE p.chuyenXeId IS NULL AND p.hinhThucGiaoHang='GIAO_TAN_NOI' AND p.diaChiNguoiNhan NOT LIKE CONCAT('%', ${branchCitySql('bp')}, '%')`));
-  await assertZero('shipment with both home endpoints assigned to trip', await scalar("SELECT COUNT(*) AS value FROM PhieuGuiHang WHERE chuyenXeId IS NOT NULL AND hinhThucLayHang='NHAN_TAN_NOI' AND hinhThucGiaoHang='GIAO_TAN_NOI'"));
-  await assertZero('placeholder demo addresses', await scalar("SELECT COUNT(*) AS value FROM BuuCuc WHERE diaChi LIKE '%Đường Demo%'"));
+  await assertZero('shipment trip not enabled for shipping', await scalar("SELECT COUNT(*) AS value FROM PhieuGuiHang p JOIN ChuyenXe c ON c.chuyenXeId=p.chuyenXeId WHERE c.nhanGuiHang=0"));
+  await assertZero('shipping rate endpoints or cargo type mismatch', await scalar('SELECT COUNT(*) AS value FROM PhieuGuiHang p JOIN BangCuocGuiHang r ON r.bangCuocGuiHangId=p.bangCuocApDungId WHERE p.diemGuiId <> r.diemGuiId OR p.diemNhanId <> r.diemNhanId OR r.loaiHangHoaId <> (SELECT h.loaiHangHoaId FROM HangHoa h WHERE h.phieuGuiHangId=p.phieuGuiHangId ORDER BY h.khoiLuong*h.soLuong DESC, h.loaiHangHoaId ASC LIMIT 1)'));
+  await assertZero('shipping rate weight mismatch', await scalar('SELECT COUNT(*) AS value FROM (SELECT p.phieuGuiHangId, SUM(h.khoiLuong*h.soLuong) AS totalWeight, r.khoiLuongTu, r.khoiLuongDen FROM PhieuGuiHang p JOIN HangHoa h ON h.phieuGuiHangId=p.phieuGuiHangId JOIN BangCuocGuiHang r ON r.bangCuocGuiHangId=p.bangCuocApDungId GROUP BY p.phieuGuiHangId, r.khoiLuongTu, r.khoiLuongDen HAVING totalWeight < r.khoiLuongTu OR (r.khoiLuongDen IS NOT NULL AND totalWeight > r.khoiLuongDen)) invalid'));
+  await assertZero('shipment points do not match route direction', await scalar(`SELECT COUNT(*) AS value FROM PhieuGuiHang p JOIN ChuyenXe c ON c.chuyenXeId=p.chuyenXeId JOIN TuyenXe t ON t.tuyenXeId=c.tuyenXeId JOIN DiemGiaoNhanHang ps ON ps.diemGiaoNhanHangId=p.diemGuiId JOIN DiemGiaoNhanHang pr ON pr.diemGiaoNhanHangId=p.diemNhanId WHERE t.diemDi <> ${pointCitySql('ps')} OR t.diemDen <> ${pointCitySql('pr')}`));
+  await assertZero('shipment points are not mapped to route with correct roles', await scalar("SELECT COUNT(*) AS value FROM PhieuGuiHang p JOIN ChuyenXe c ON c.chuyenXeId=p.chuyenXeId WHERE NOT EXISTS (SELECT 1 FROM DiemGiaoNhanTuyenXe m WHERE m.tuyenXeId=c.tuyenXeId AND m.diemGiaoNhanHangId=p.diemGuiId AND m.vaiTro IN ('GUI_HANG','CA_HAI')) OR NOT EXISTS (SELECT 1 FROM DiemGiaoNhanTuyenXe m WHERE m.tuyenXeId=c.tuyenXeId AND m.diemGiaoNhanHangId=p.diemNhanId AND m.vaiTro IN ('NHAN_HANG','CA_HAI'))"));
+  await assertZero('invalid administrative location code format', await scalar("SELECT COUNT(*) AS value FROM DiemGiaoNhanHang WHERE maTinhThanh IS NULL OR maPhuongXa IS NULL OR maTinhThanh NOT REGEXP '^[0-9]{2}$' OR maPhuongXa NOT REGEXP '^[0-9]{5}$'"));
+  await assertZero('invalid shipment status', await scalar("SELECT COUNT(*) AS value FROM PhieuGuiHang WHERE trangThai NOT IN ('MOI_TAO','DA_TIEP_NHAN','DANG_VAN_CHUYEN','DA_GIAO','DA_HUY')"));
+  await assertZero('trip capacity snapshot differs from vehicle type defaults', await scalar('SELECT COUNT(*) AS value FROM ChuyenXe c JOIN Xe x ON x.xeId=c.xeId JOIN LoaiXe lx ON lx.loaiXeId=x.loaiXeId WHERE c.sucChuaXeMay <> lx.sucChuaXeMayMacDinh OR c.sucChuaHangCongKenh <> lx.sucChuaHangCongKenhMacDinh OR c.sucChuaHangNhe <> lx.sucChuaHangNheMacDinh'));
+  await assertZero('active shipment load exceeds trip capacity', await scalar("SELECT COUNT(*) AS value FROM (SELECT p.chuyenXeId, SUM(CASE WHEN l.nhomSucChua='XE_MAY' THEN h.khoiLuong*h.soLuong ELSE 0 END) AS xeMay, SUM(CASE WHEN l.nhomSucChua='HANG_CONG_KENH' THEN h.khoiLuong*h.soLuong ELSE 0 END) AS hangCongKenh, SUM(CASE WHEN l.nhomSucChua='HANG_NHE' THEN h.khoiLuong*h.soLuong ELSE 0 END) AS hangNhe FROM PhieuGuiHang p JOIN HangHoa h ON h.phieuGuiHangId=p.phieuGuiHangId JOIN LoaiHangHoa l ON l.loaiHangHoaId=h.loaiHangHoaId WHERE p.trangThai NOT IN ('DA_HUY','DA_GIAO') GROUP BY p.chuyenXeId) shipment_load JOIN ChuyenXe c ON c.chuyenXeId=shipment_load.chuyenXeId WHERE shipment_load.xeMay > c.sucChuaXeMay OR shipment_load.hangCongKenh > c.sucChuaHangCongKenh OR shipment_load.hangNhe > c.sucChuaHangNhe"));
+  await assertZero('shipment history latest status mismatch', await scalar("SELECT COUNT(*) AS value FROM PhieuGuiHang p WHERE NOT EXISTS (SELECT 1 FROM LichSuTrangThaiPhieuGuiHang h WHERE h.phieuGuiHangId=p.phieuGuiHangId AND h.trangThai=p.trangThai AND h.thoiGian=(SELECT MAX(h2.thoiGian) FROM LichSuTrangThaiPhieuGuiHang h2 WHERE h2.phieuGuiHangId=p.phieuGuiHangId))"));
+  await assertZero('placeholder demo addresses', await scalar("SELECT COUNT(*) AS value FROM DiemGiaoNhanHang WHERE diaChi LIKE '%Đường Demo%'"));
   const snapshotCustomer = await prisma.khachHang.findUnique({ where: { maKhachHang: 'KH-000001' } });
   if (!snapshotCustomer) throw new Error('KH-000001 was not found by business key');
   await assertZero('snapshot mismatch absent', await scalar(`SELECT COUNT(*) AS value FROM DonGiaoDich d JOIN KhachHang k ON k.khachHangId=d.khachHangId JOIN TaiKhoan a ON a.taiKhoanId=k.taiKhoanId WHERE d.khachHangId=${snapshotCustomer.khachHangId} AND d.tenKhachHang=a.hoTen AND d.soDienThoaiKhachHang=a.soDienThoai`));
@@ -229,8 +233,11 @@ async function main() {
   await assertZero('invoice on unpaid transaction', await scalar("SELECT COUNT(*) AS value FROM DonGiaoDich d JOIN HoaDon h ON h.donGiaoDichId=d.donGiaoDichId WHERE d.trangThai <> 'DA_THANH_TOAN'"));
   await assertZero('invalid image URLs', await scalar("SELECT COUNT(*) AS value FROM HinhAnhHangHoa WHERE duongDan NOT LIKE 'https://%'") );
   await assertEqual('canceled ticket scenario', await scalar("SELECT COUNT(*) AS value FROM Ve WHERE trangThai='HUY'"), 6);
-  await assertEqual('shipping pending dispatch scenario', await scalar("SELECT COUNT(*) AS value FROM PhieuGuiHang WHERE chuyenXeId IS NULL"), 12);
+  await assertEqual('new shipment scenario', await scalar("SELECT COUNT(*) AS value FROM PhieuGuiHang WHERE trangThai='MOI_TAO'"), 6);
+  await assertEqual('accepted shipment scenario', await scalar("SELECT COUNT(*) AS value FROM PhieuGuiHang WHERE trangThai='DA_TIEP_NHAN'"), 3);
+  await assertEqual('in-transit shipment scenario', await scalar("SELECT COUNT(*) AS value FROM PhieuGuiHang WHERE trangThai='DANG_VAN_CHUYEN'"), 6);
   await assertEqual('delivered shipment scenario', await scalar("SELECT COUNT(*) AS value FROM PhieuGuiHang WHERE trangThai='DA_GIAO'"), 6);
+  await assertEqual('canceled shipment scenario', await scalar("SELECT COUNT(*) AS value FROM PhieuGuiHang WHERE trangThai='DA_HUY'"), 3);
   await assertEqual('failed payment scenario', await scalar("SELECT COUNT(*) AS value FROM ThanhToan WHERE trangThai='THAT_BAI'"), 3);
   await assertEqual('pending payment scenario', await scalar("SELECT COUNT(*) AS value FROM ThanhToan WHERE trangThai='DANG_XU_LY'"), 3);
   await assertEqual('refund scenario', await scalar("SELECT COUNT(*) AS value FROM ThanhToan tt JOIN Ve v ON v.veId=tt.veId WHERE tt.loaiGiaoDich='HOAN_TIEN' AND v.trangThai='HUY'"), 3);

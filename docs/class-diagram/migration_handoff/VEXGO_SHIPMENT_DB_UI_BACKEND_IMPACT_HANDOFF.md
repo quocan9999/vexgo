@@ -1,6 +1,6 @@
 # VexGo — Handoff ảnh hưởng UI và backend sau migration shipment 002
 
-> Tài liệu này là bản đồ các phần ứng dụng cần được rà soát/cập nhật sau khi database shipment chuyển sang Class Diagram 002. Đây là kết quả đối chiếu source hiện tại với schema mới; chưa sửa API, UI, seed hoặc test trong công việc lập handoff này.
+> Tài liệu này là bản đồ các phần ứng dụng cần được rà soát/cập nhật sau khi database shipment chuyển sang Class Diagram 002. Bản rà soát ban đầu chưa sửa ứng dụng. Cập nhật ngày 06/10/2026: seed và seed verifier đã được chuyển sang schema 002; API và UI vẫn đang chờ xử lý riêng.
 
 **Ngày rà soát:** 06/10/2026
 
@@ -16,7 +16,7 @@ Migration đã đưa Prisma/MySQL sang mô hình 002, nhưng các luồng ứng 
 
 1. **API lấy lịch sử gửi hàng của khách hàng đang dùng quan hệ và cột cũ.** `CustomersService.listAdminCustomerShipments` còn include `buuCucGui`/`buuCucPhat` và đọc các cột hình thức, địa chỉ đã bị bỏ. Endpoint này cần được sửa trước khi chạy lại luồng hoặc build với Prisma Client mới.
 2. **API tạo chuyến chưa ghi ba trường sức chứa bắt buộc mới của `ChuyenXe`.** Form Admin và DTO hiện cũng không có các giá trị đó. Tạo chuyến mới vì vậy chưa tương thích schema 002; cần thống nhất cách lấy snapshot từ sức chứa mặc định của loại xe và giá trị `nhanGuiHang`.
-3. **Seed và trình xác minh seed vẫn viết/đọc schema cũ.** Seed còn tạo `BuuCuc`, cước theo hình thức lấy/giao, trạng thái `CHO_DIEU_PHOI`, phiếu gửi không có đủ FK bắt buộc và loại hàng không có `nhomSucChua`.
+3. **Seed và trình xác minh seed — đã cập nhật source.** Seed hiện tạo điểm, mapping điểm/tuyến, cước theo loại hàng, nhóm sức chứa, chuyến có snapshot sức chứa và phiếu gửi có đủ FK bắt buộc theo schema 002. Verifier đã đổi sang kiểm tra các invariant mới. Cần chạy seed và verifier trên database dev để xác nhận dữ liệu thực tế.
 4. **Admin vẫn trình bày khái niệm cũ.** Tab lịch sử hiển thị hình thức lấy/giao, bưu cục và địa chỉ người nhận; schema mới chỉ lưu điểm gửi/nhận, không còn hình thức lấy/giao hoặc địa chỉ giao tận nơi.
 5. **Customer Web chưa chạy bằng database.** Trang gửi hàng đang dùng dữ liệu, nhà xe, chuyến, sức chứa và cách tính phí hard-code; không gọi API shipment. Đây là chức năng chưa được nối theo mô hình 002, không phải bằng chứng rằng trang đang query sai database.
 6. **Quản lý loại xe hiện còn tạo/cập nhật được nhờ default bằng 0, nhưng chưa cho cấu hình ba loại sức chứa.** Do đó cấu hình hiện tại không đủ để cung cấp sức chứa có ý nghĩa cho chuyến.
@@ -100,12 +100,12 @@ Không có module shipment chuyên biệt trong `apps/api/src/`. Các khái ni�
 
 Đây là phạm vi backend cần agent triển khai theo module riêng, không nên tiếp tục nhúng toàn bộ truy vấn shipment vào UI hoặc controller khách hàng.
 
-### P1 — Seed và xác minh seed không còn khớp schema
+### P1 — Seed và xác minh seed đã khớp schema 002
 
-- [`prisma/seed.mjs`](../../../prisma/seed.mjs): vẫn thao tác model `BuuCuc`, mã `maBuuCuc`, cước theo `buuCucGuiId`/`buuCucPhatId` và hai hình thức lấy/giao; shipment demo để một số FK nullable và ghi cột địa chỉ/hình thức đã bị xóa. Phần seed `LoaiHangHoa` cũng không gán `nhomSucChua` bắt buộc.
-- [`prisma/verify-seed.mjs`](../../../prisma/verify-seed.mjs): còn kỳ vọng 15 `BuuCuc`, 72 dòng cước và các truy vấn SQL join/cột cũ.
+- [`prisma/seed.mjs`](../../../prisma/seed.mjs): tạo `DiemGiaoNhanHang`, `DiemGiaoNhanTuyenXe`, 126 dòng cước theo 7 loại hàng và 6 khoảng cân nặng; gán nhóm `HANG_NHE`; ghi ba snapshot sức chứa trên mọi chuyến; tạo phiếu gửi với đủ điểm gửi/nhận, cước, chuyến và lịch sử trạng thái. Các mã điểm giữ convention demo `FUTA-BC-001` dạng tương tự.
+- [`prisma/verify-seed.mjs`](../../../prisma/verify-seed.mjs): kỳ vọng 15 điểm, 6 mapping điểm/tuyến, 126 dòng cước và 60 bản ghi lịch sử; kiểm tra mã hành chính, nhà xe/tuyến/điểm/cước, trạng thái hiện hành, snapshot sức chứa và tải hàng theo nhóm.
 
-Seed hiện cần được chuyển sang `DiemGiaoNhanHang`, `DiemGiaoNhanTuyenXe`, cước theo loại hàng, nhóm sức chứa, trạng thái mới và phiếu gửi có đủ các FK `NOT NULL`. Trình xác minh phải kiểm tra invariant mới: mã điểm; nhà xe/tuyến của điểm; cặp điểm + loại hàng của cước; FK bắt buộc của phiếu; nhóm sức chứa; tổng sử dụng không vượt snapshot chuyến.
+Việc này chỉ cập nhật file seed và verifier; database dev chưa được chạy lại trong lượt cập nhật này. Seed dùng giá cước demo theo cân nặng và không thêm phí dịch vụ tại nhà vì schema 002 chỉ còn luồng gửi/nhận tại các điểm.
 
 ### P1 — Test fixture và assertion còn lưu contract cũ
 
@@ -126,7 +126,7 @@ Seed hiện cần được chuyển sang `DiemGiaoNhanHang`, `DiemGiaoNhanTuyenX
 1. Sinh Prisma Client từ schema hiện tại và sửa các lỗi tham chiếu cũ trong API; bắt đầu với lịch sử gửi hàng Admin và tạo chuyến.
 2. Chốt contract shipment backend: API danh mục điểm/tuyến/cước, tạo vận đơn, chuyển trạng thái và ghi lịch sử; thống nhất DTO/response trước khi nối UI.
 3. Bổ sung ba sức chứa mặc định vào API và màn hình quản lý loại xe; tạo chuyến thì snapshot sang ba cột `ChuyenXe` và lưu `nhanGuiHang` theo lựa chọn nghiệp vụ.
-4. Chuyển seed/verify-seed sang schema mới; dùng mã điểm theo convention đã có và gán `nhomSucChua` cho từng loại hàng.
+4. **Hoàn tất phần seed/verify-seed.** Chạy lại seed và verifier trên database dev khi sẵn sàng kiểm tra dữ liệu demo.
 5. Cập nhật Admin Customer Workspace và test của nó theo shape điểm gửi/nhận mới; bỏ trường hình thức/địa chỉ không còn tồn tại.
 6. Thay UI gửi hàng tĩnh bằng service/API thật; backend là nguồn xác thực cuối cùng cho cước, điều kiện tuyến và sức chứa.
 7. Chạy typecheck/build và test mục tiêu sau khi cập nhật. Những việc này chưa chạy trong lượt lập handoff.
@@ -141,12 +141,12 @@ Seed hiện cần được chuyển sang `DiemGiaoNhanHang`, `DiemGiaoNhanTuyenX
 - [ ] Sức chứa được tính theo nhóm hàng, số lượng, trạng thái giữ chỗ và có xử lý cạnh tranh ở backend.
 - [ ] Admin hiển thị điểm gửi/nhận, không yêu cầu hình thức lấy/giao hoặc địa chỉ người nhận đã bị loại khỏi schema.
 - [ ] Customer Web tải dữ liệu và phí từ API thay vì dữ liệu/giá hard-code.
-- [ ] Seed, seed verifier, integration fixtures và UI mocks khớp enum/cột mới.
+- [x] Seed và seed verifier khớp enum/cột mới. Integration fixtures và UI mocks vẫn cần rà soát.
 - [ ] Kiểm tra luồng vé vẫn hoạt động sau khi sửa tạo chuyến.
 
 ## 7. Cách rà soát và giới hạn
 
 - Đối chiếu `prisma/schema.prisma`, source trong `apps/api`, `apps/admin`, `apps/web`, `prisma/seed.mjs`, `prisma/verify-seed.mjs` và các test/fixture liên quan.
 - GitNexus xác nhận một số liên kết component/endpoint, nhưng index đang chậm **30 commit** so với HEAD. Vì vậy kết luận trong tài liệu được kiểm chứng bằng source hiện tại và không dùng kết quả graph cũ làm bằng chứng duy nhất.
-- Không sửa code/database và không chạy test trong lượt tạo tài liệu này. Các mục P0 là kết luận từ schema/source mismatch; cần xác nhận lần cuối bằng Prisma generate + typecheck khi agent bắt đầu sửa.
+- Bản rà soát ban đầu không sửa code/database. Cập nhật sau đó chỉ sửa seed và seed verifier, không chạy seed/verifier hoặc test lên database. Các mục P0 là kết luận từ schema/source mismatch; cần xác nhận lần cuối bằng Prisma generate + typecheck khi agent sửa backend.
 - Database local đã xóa hai bảng archive theo migration cleanup trước đó; tài liệu này không yêu cầu khôi phục hay tạo lại dữ liệu archive.

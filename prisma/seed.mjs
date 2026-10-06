@@ -44,25 +44,25 @@ const routeDefsByOperator = {
 
 const branchDefsByOperator = {
   FUTA: [
-    { diaChi: '12 Đường Nguyễn Huệ, Phường Bến Nghé, Quận 1, TP.HCM', tinhThanh: 'TP.HCM', quanHuyen: 'Quận 1', phuongXa: 'Phường Bến Nghé' },
-    { diaChi: '45 Đường Trần Phú, Phường 4, Đà Lạt, Lâm Đồng', tinhThanh: 'Lâm Đồng', quanHuyen: 'Đà Lạt', phuongXa: 'Phường 4' },
-    { diaChi: '128 Đường Điện Biên Phủ, Phường 17, Bình Thạnh, TP.HCM', tinhThanh: 'TP.HCM', quanHuyen: 'Bình Thạnh', phuongXa: 'Phường 17' },
-    { diaChi: '18 Đường Phan Đình Phùng, Phường 2, Đà Lạt, Lâm Đồng', tinhThanh: 'Lâm Đồng', quanHuyen: 'Đà Lạt', phuongXa: 'Phường 2' },
-    { diaChi: '77 Đường Lê Lợi, Phường 1, Vũng Tàu, Bà Rịa - Vũng Tàu', tinhThanh: 'Bà Rịa - Vũng Tàu', quanHuyen: 'Vũng Tàu', phuongXa: 'Phường 1' },
+    { diaChi: '12 Đường Nguyễn Huệ, Phường Sài Gòn, TP.HCM', tinhThanh: 'TP.HCM', quanHuyen: null, phuongXa: 'Phường Sài Gòn', maTinhThanh: '79', maPhuongXa: '26740', routeCity: 'TP.HCM' },
+    { diaChi: '45 Đường Trần Phú, Phường Xuân Hương - Đà Lạt, Lâm Đồng', tinhThanh: 'Lâm Đồng', quanHuyen: null, phuongXa: 'Phường Xuân Hương - Đà Lạt', maTinhThanh: '68', maPhuongXa: '24781', routeCity: 'Đà Lạt' },
+    { diaChi: '128 Đường Điện Biên Phủ, Phường Gia Định, TP.HCM', tinhThanh: 'TP.HCM', quanHuyen: null, phuongXa: 'Phường Gia Định', maTinhThanh: '79', maPhuongXa: '26944', routeCity: 'TP.HCM' },
+    { diaChi: '18 Đường Phan Đình Phùng, Phường Xuân Hương - Đà Lạt, Lâm Đồng', tinhThanh: 'Lâm Đồng', quanHuyen: null, phuongXa: 'Phường Xuân Hương - Đà Lạt', maTinhThanh: '68', maPhuongXa: '24781', routeCity: 'Đà Lạt' },
+    { diaChi: '77 Đường Lê Lợi, Phường Vũng Tàu, TP.HCM', tinhThanh: 'TP.HCM', quanHuyen: null, phuongXa: 'Phường Vũng Tàu', maTinhThanh: '79', maPhuongXa: '26506', routeCity: 'Vũng Tàu' },
   ],
   TB: [
-    { diaChi: '45 Đường Trần Phú, Phường 4, Đà Lạt, Lâm Đồng', tinhThanh: 'Lâm Đồng', quanHuyen: 'Đà Lạt', phuongXa: 'Phường 4' },
-    { diaChi: '91 Đường Võ Văn Tần, Phường 6, Quận 3, TP.HCM', tinhThanh: 'TP.HCM', quanHuyen: 'Quận 3', phuongXa: 'Phường 6' },
-    { diaChi: '31 Đường Phan Đình Phùng, Phường 2, Đà Lạt, Lâm Đồng', tinhThanh: 'Lâm Đồng', quanHuyen: 'Đà Lạt', phuongXa: 'Phường 2' },
-    { diaChi: '128 Đường Điện Biên Phủ, Phường 17, Bình Thạnh, TP.HCM', tinhThanh: 'TP.HCM', quanHuyen: 'Bình Thạnh', phuongXa: 'Phường 17' },
-    { diaChi: '16 Đường Thái Phiên, Phường 12, Đà Lạt, Lâm Đồng', tinhThanh: 'Lâm Đồng', quanHuyen: 'Đà Lạt', phuongXa: 'Phường 12' },
+    { diaChi: '45 Đường Trần Phú, Phường Xuân Hương - Đà Lạt, Lâm Đồng', tinhThanh: 'Lâm Đồng', quanHuyen: null, phuongXa: 'Phường Xuân Hương - Đà Lạt', maTinhThanh: '68', maPhuongXa: '24781', routeCity: 'Đà Lạt' },
+    { diaChi: '91 Đường Võ Văn Tần, Phường Xuân Hòa, TP.HCM', tinhThanh: 'TP.HCM', quanHuyen: null, phuongXa: 'Phường Xuân Hòa', maTinhThanh: '79', maPhuongXa: '27139', routeCity: 'TP.HCM' },
+    { diaChi: '31 Đường Phan Đình Phùng, Phường Xuân Hương - Đà Lạt, Lâm Đồng', tinhThanh: 'Lâm Đồng', quanHuyen: null, phuongXa: 'Phường Xuân Hương - Đà Lạt', maTinhThanh: '68', maPhuongXa: '24781', routeCity: 'Đà Lạt' },
+    { diaChi: '128 Đường Điện Biên Phủ, Phường Gia Định, TP.HCM', tinhThanh: 'TP.HCM', quanHuyen: null, phuongXa: 'Phường Gia Định', maTinhThanh: '79', maPhuongXa: '26944', routeCity: 'TP.HCM' },
+    { diaChi: '16 Đường Thái Phiên, Phường Lâm Viên - Đà Lạt, Lâm Đồng', tinhThanh: 'Lâm Đồng', quanHuyen: null, phuongXa: 'Phường Lâm Viên - Đà Lạt', maTinhThanh: '68', maPhuongXa: '24778', routeCity: 'Đà Lạt' },
   ],
   HM: [
-    { diaChi: '12 Đường Trần Hưng Đạo, Phường 1, Vũng Tàu, Bà Rịa - Vũng Tàu', tinhThanh: 'Bà Rịa - Vũng Tàu', quanHuyen: 'Vũng Tàu', phuongXa: 'Phường 1' },
-    { diaChi: '25 Đường Nguyễn Thị Minh Khai, Phường Bến Nghé, Quận 1, TP.HCM', tinhThanh: 'TP.HCM', quanHuyen: 'Quận 1', phuongXa: 'Phường Bến Nghé' },
-    { diaChi: '88 Đường Hoàng Hoa Thám, Phường 2, Vũng Tàu, Bà Rịa - Vũng Tàu', tinhThanh: 'Bà Rịa - Vũng Tàu', quanHuyen: 'Vũng Tàu', phuongXa: 'Phường 2' },
-    { diaChi: '31 Đường Phan Đình Phùng, Phường 2, Đà Lạt, Lâm Đồng', tinhThanh: 'Lâm Đồng', quanHuyen: 'Đà Lạt', phuongXa: 'Phường 2' },
-    { diaChi: '91 Đường Võ Văn Tần, Phường 6, Quận 3, TP.HCM', tinhThanh: 'TP.HCM', quanHuyen: 'Quận 3', phuongXa: 'Phường 6' },
+    { diaChi: '12 Đường Trần Hưng Đạo, Phường Vũng Tàu, TP.HCM', tinhThanh: 'TP.HCM', quanHuyen: null, phuongXa: 'Phường Vũng Tàu', maTinhThanh: '79', maPhuongXa: '26506', routeCity: 'Vũng Tàu' },
+    { diaChi: '25 Đường Nguyễn Thị Minh Khai, Phường Sài Gòn, TP.HCM', tinhThanh: 'TP.HCM', quanHuyen: null, phuongXa: 'Phường Sài Gòn', maTinhThanh: '79', maPhuongXa: '26740', routeCity: 'TP.HCM' },
+    { diaChi: '88 Đường Hoàng Hoa Thám, Phường Vũng Tàu, TP.HCM', tinhThanh: 'TP.HCM', quanHuyen: null, phuongXa: 'Phường Vũng Tàu', maTinhThanh: '79', maPhuongXa: '26506', routeCity: 'Vũng Tàu' },
+    { diaChi: '31 Đường Phan Đình Phùng, Phường Xuân Hương - Đà Lạt, Lâm Đồng', tinhThanh: 'Lâm Đồng', quanHuyen: null, phuongXa: 'Phường Xuân Hương - Đà Lạt', maTinhThanh: '68', maPhuongXa: '24781', routeCity: 'Đà Lạt' },
+    { diaChi: '91 Đường Võ Văn Tần, Phường Xuân Hòa, TP.HCM', tinhThanh: 'TP.HCM', quanHuyen: null, phuongXa: 'Phường Xuân Hòa', maTinhThanh: '79', maPhuongXa: '27139', routeCity: 'TP.HCM' },
   ],
 };
 
@@ -82,6 +82,24 @@ const vehicleTypeDefs = [
   ['GIƯỜNG NẰM', 'Xe giường nằm đường dài'],
   ['LIMOUSINE', 'Xe limousine tiện nghi'],
 ];
+
+const vehicleCapacityDefaults = {
+  'GHẾ NGỒI': {
+    sucChuaXeMayMacDinh: 1,
+    sucChuaHangCongKenhMacDinh: 5,
+    sucChuaHangNheMacDinh: 45,
+  },
+  'GIƯỜNG NẰM': {
+    sucChuaXeMayMacDinh: 2,
+    sucChuaHangCongKenhMacDinh: 8,
+    sucChuaHangNheMacDinh: 80,
+  },
+  LIMOUSINE: {
+    sucChuaXeMayMacDinh: 0,
+    sucChuaHangCongKenhMacDinh: 2,
+    sucChuaHangNheMacDinh: 30,
+  },
+};
 
 const cargoTypeDefs = [
   ['BƯU PHẨM', 'Bưu phẩm đóng gói thông thường'],
@@ -201,24 +219,26 @@ function count(model, action = 'upsert') {
 }
 
 async function upsertBy(db, model, where, create, update = {}) {
-  const record = await db[model].upsert({ where, create, update });
+  const delegateName = `${model[0].toLowerCase()}${model.slice(1)}`;
+  const record = await db[delegateName].upsert({ where, create, update });
   count(model, 'upsert');
   return record;
 }
 
 async function findOrCreate(db, model, where, create, update = {}) {
-  const existing = await db[model].findFirst({ where });
+  const delegateName = `${model[0].toLowerCase()}${model.slice(1)}`;
+  const existing = await db[delegateName].findFirst({ where });
   if (existing) {
     const keys = Object.keys(update);
     if (keys.length) {
-      const updated = await db[model].update({ where: { [`${model[0].toLowerCase()}${model.slice(1)}Id`]: existing[`${model[0].toLowerCase()}${model.slice(1)}Id`] }, data: update });
+      const updated = await db[delegateName].update({ where: { [`${model[0].toLowerCase()}${model.slice(1)}Id`]: existing[`${model[0].toLowerCase()}${model.slice(1)}Id`] }, data: update });
       count(model, 'update');
       return updated;
     }
     count(model, 'existing');
     return existing;
   }
-  const created = await db[model].create({ data: create });
+  const created = await db[delegateName].create({ data: create });
   count(model, 'create');
   return created;
 }
@@ -253,12 +273,13 @@ async function seedVehicleTypes(db, operators) {
     const nhaXeId = operators[definition.code].nhaXeId;
     result[definition.code] = {};
     for (const [name, description] of vehicleTypeDefs) {
+      const capacityDefaults = vehicleCapacityDefaults[name];
       result[definition.code][name] = await upsertBy(
         db,
         'LoaiXe',
         { nhaXeId_tenLoai: { nhaXeId, tenLoai: name } },
-        { nhaXeId, tenLoai: name, moTa: description },
-        { moTa: description },
+        { nhaXeId, tenLoai: name, moTa: description, ...capacityDefaults },
+        { moTa: description, ...capacityDefaults },
       );
     }
   }
@@ -296,9 +317,9 @@ async function seedDefaultRolePermissions(db, roles) {
     const role = roles[roleName];
     if (!role || permissionKeys.length === 0) continue;
     for (const key of permissionKeys) {
-      const permission = await db.Quyen.findUnique({ where: { tenQuyen: key } });
+      const permission = await db.quyen.findUnique({ where: { tenQuyen: key } });
       if (permission) {
-        await db.VaiTroQuyen.upsert({
+        await db.vaiTroQuyen.upsert({
           where: { vaiTroId_quyenId: { vaiTroId: role.vaiTroId, quyenId: permission.quyenId } },
           create: { vaiTroId: role.vaiTroId, quyenId: permission.quyenId },
           update: {},
@@ -393,7 +414,7 @@ async function seedAccounts(db, operators, roles) {
   for (let index = 0; index < customerNames.length; index += 1) {
     const code = `KH-${pad(index + 1, 6)}`;
     const phone = `+8492${pad(index + 1, 7)}`;
-    const existingCustomer = await db.KhachHang.findUnique({ where: { maKhachHang: code }, include: { taiKhoan: true } });
+    const existingCustomer = await db.khachHang.findUnique({ where: { maKhachHang: code }, include: { taiKhoan: true } });
     const accountData = {
       hoTen: customerNames[index],
       soDienThoai: phone,
@@ -405,7 +426,7 @@ async function seedAccounts(db, operators, roles) {
       trangThai: index === 18 ? 'TAM_KHOA' : 'HOAT_DONG',
     };
     const account = existingCustomer
-      ? await db.TaiKhoan.update({ where: byId('TaiKhoan', existingCustomer.taiKhoanId), data: accountData })
+      ? await db.taiKhoan.update({ where: byId('TaiKhoan', existingCustomer.taiKhoanId), data: accountData })
       : await upsertBy(db, 'TaiKhoan', { soDienThoai: phone }, accountData, { hoTen: accountData.hoTen, matKhau: accountData.matKhau, ngaySinh: accountData.ngaySinh, cccd: accountData.cccd, email: accountData.email, daXacThucSoDienThoai: accountData.daXacThucSoDienThoai, trangThai: accountData.trangThai });
     count('TaiKhoan', existingCustomer ? 'update' : 'upsert');
     const customer = await upsertBy(
@@ -510,8 +531,8 @@ async function seedVehiclesAndRoutes(db, operators, vehicleTypes) {
             db,
             'ChuyenXe',
             { maChuyenXe: code },
-            { maChuyenXe: code, ngayKhoiHanh: dateOnly(2026, 9, day), gioKhoiHanh: timeOnly(hour), gioDen: timeOnly(arrHour, arrMin), trangThai: 'CHUA_KHOI_HANH', nhaXeId: operator.nhaXeId, tuyenXeId: route.tuyenXeId, xeId: vehicle.xeId },
-            { ngayKhoiHanh: dateOnly(2026, 9, day), gioKhoiHanh: timeOnly(hour), gioDen: timeOnly(arrHour, arrMin), trangThai: 'CHUA_KHOI_HANH', nhaXeId: operator.nhaXeId, tuyenXeId: route.tuyenXeId, xeId: vehicle.xeId },
+            { maChuyenXe: code, ngayKhoiHanh: dateOnly(2026, 9, day), gioKhoiHanh: timeOnly(hour), gioDen: timeOnly(arrHour, arrMin), ...tripCapacitySnapshot(vehicleTypes, definition.code, vehicle.type, routeIndex === 0 && route.trangThai === 'HOAT_DONG'), trangThai: 'CHUA_KHOI_HANH', nhaXeId: operator.nhaXeId, tuyenXeId: route.tuyenXeId, xeId: vehicle.xeId },
+            { ngayKhoiHanh: dateOnly(2026, 9, day), gioKhoiHanh: timeOnly(hour), gioDen: timeOnly(arrHour, arrMin), ...tripCapacitySnapshot(vehicleTypes, definition.code, vehicle.type, routeIndex === 0 && route.trangThai === 'HOAT_DONG'), trangThai: 'CHUA_KHOI_HANH', nhaXeId: operator.nhaXeId, tuyenXeId: route.tuyenXeId, xeId: vehicle.xeId },
           );
           const tripSeats = [];
           for (const seat of vehicle.seats) {
@@ -554,9 +575,18 @@ async function seedPrices(db, operators, routes, vehicleTypes) {
   return prices;
 }
 
-async function seedBranchesRatesCargo(db, operators, cargoTypes) {
-  const branches = {};
-  const branchesById = new Map();
+function tripCapacitySnapshot(vehicleTypes, operatorCode, typeName, acceptsShipments) {
+  const type = vehicleTypes[operatorCode][typeName];
+  return {
+    nhanGuiHang: acceptsShipments,
+    sucChuaXeMay: type.sucChuaXeMayMacDinh,
+    sucChuaHangCongKenh: type.sucChuaHangCongKenhMacDinh,
+    sucChuaHangNhe: type.sucChuaHangNheMacDinh,
+  };
+}
+
+async function seedBranchesRatesCargo(db, operators, routes) {
+  const points = {};
   const rates = new Map();
   const weightRanges = [
     [0, 1, 30000],
@@ -566,50 +596,77 @@ async function seedBranchesRatesCargo(db, operators, cargoTypes) {
     [20.01, 50, 180000],
     [50.01, null, 250000],
   ];
-  const combos = [
-    ['NHAN_TAN_NOI', 'GIAO_TAN_NOI', 1.35],
-    ['NHAN_TAN_NOI', 'GIAO_TAI_BUU_CUC', 1.2],
-    ['GUI_TAI_BUU_CUC', 'GIAO_TAN_NOI', 1.15],
-    ['GUI_TAI_BUU_CUC', 'GIAO_TAI_BUU_CUC', 1],
-  ];
+
+  const cargo = {};
+  for (const [name, description] of cargoTypeDefs) {
+    cargo[name] = await upsertBy(
+      db,
+      'LoaiHangHoa',
+      { tenLoai: name },
+      { tenLoai: name, moTa: description, trangThai: 'HOAT_DONG', nhomSucChua: 'HANG_NHE' },
+      { moTa: description, trangThai: 'HOAT_DONG', nhomSucChua: 'HANG_NHE' },
+    );
+  }
+
   for (const definition of operatorDefs) {
     const operator = operators[definition.code];
-    branches[definition.code] = [];
+    points[definition.code] = [];
     for (let index = 0; index < 5; index += 1) {
       const code = `${definition.code}-BC-${pad(index + 1, 3)}`;
-      const location = branchDefsByOperator[definition.code][index];
-      const branchData = { maBuuCuc: code, tenBuuCuc: `${definition.name} ${index + 1}`, ...location, trangThai: index === 4 ? 'TAM_NGUNG' : 'HOAT_DONG', nhaXeId: operator.nhaXeId };
-      const branch = await findOrCreate(
+      const { routeCity: _routeCity, ...location } = branchDefsByOperator[definition.code][index];
+      const pointData = { maDiem: code, tenDiem: `${definition.name} ${index + 1}`, ...location, trangThai: index === 4 ? 'TAM_NGUNG' : 'HOAT_DONG', nhaXeId: operator.nhaXeId };
+      const point = await findOrCreate(
         db,
-        'BuuCuc',
-        { nhaXeId: operator.nhaXeId, maBuuCuc: code },
-        branchData,
-        branchData,
-        );
-        branches[definition.code].push(branch);
-        branchesById.set(branch.buuCucId, branch);
-      }
-    const sender = branches[definition.code][0];
-    const receiver = branches[definition.code][1];
-    for (const [fromMethod, toMethod, multiplier] of combos) {
-      for (const [fromWeight, toWeight, base] of weightRanges) {
-        const rateWhere = { buuCucGuiId: sender.buuCucId, buuCucPhatId: receiver.buuCucId, khoiLuongTu: decimal(fromWeight), khoiLuongDen: toWeight === null ? null : decimal(toWeight), hinhThucLayHang: fromMethod, hinhThucGiaoHang: toMethod, tuNgay: dateOnly(2026, 9, 1), denNgay: null };
+        'DiemGiaoNhanHang',
+        { nhaXeId_maDiem: { nhaXeId: operator.nhaXeId, maDiem: code } },
+        pointData,
+        pointData,
+      );
+      points[definition.code].push(point);
+    }
+
+    const route = routes[definition.code][0];
+    const sender = points[definition.code][0];
+    const receiver = points[definition.code][1];
+    const senderCity = branchDefsByOperator[definition.code][0].routeCity;
+    const receiverCity = branchDefsByOperator[definition.code][1].routeCity;
+    if (route.diemDi !== senderCity || route.diemDen !== receiverCity) {
+      throw new Error(`Seed shipment points do not match route direction for ${definition.code}`);
+    }
+    for (const [point, role] of [[sender, 'GUI_HANG'], [receiver, 'NHAN_HANG']]) {
+      await findOrCreate(
+        db,
+        'DiemGiaoNhanTuyenXe',
+        { tuyenXeId_diemGiaoNhanHangId: { tuyenXeId: route.tuyenXeId, diemGiaoNhanHangId: point.diemGiaoNhanHangId } },
+        { tuyenXeId: route.tuyenXeId, diemGiaoNhanHangId: point.diemGiaoNhanHangId, vaiTro: role },
+        { vaiTro: role },
+      );
+    }
+
+    for (let weightIndex = 0; weightIndex < weightRanges.length; weightIndex += 1) {
+      const [fromWeight, toWeight, base] = weightRanges[weightIndex];
+      for (const cargoType of Object.values(cargo)) {
+        const rateData = {
+          diemGuiId: sender.diemGiaoNhanHangId,
+          diemNhanId: receiver.diemGiaoNhanHangId,
+          loaiHangHoaId: cargoType.loaiHangHoaId,
+          khoiLuongTu: decimal(fromWeight),
+          khoiLuongDen: toWeight === null ? null : decimal(toWeight),
+          tuNgay: dateOnly(2026, 9, 1),
+          denNgay: null,
+        };
         const rate = await findOrCreate(
           db,
           'BangCuocGuiHang',
-          rateWhere,
-          { ...rateWhere, mucCuoc: decimal(Math.round((base * multiplier) / 5000) * 5000), trangThai: 'DANG_AP_DUNG' },
-          { mucCuoc: decimal(Math.round((base * multiplier) / 5000) * 5000), trangThai: 'DANG_AP_DUNG' },
+          rateData,
+          { ...rateData, mucCuoc: decimal(base), trangThai: 'HOAT_DONG' },
+          { mucCuoc: decimal(base), trangThai: 'HOAT_DONG' },
         );
-        rates.set(`${definition.code}:${fromWeight}:${toWeight}:${fromMethod}:${toMethod}`, rate);
+        rates.set(shippingRateKey(definition.code, weightIndex, cargoType.loaiHangHoaId), rate);
       }
     }
   }
-  const cargo = {};
-  for (const [name, description] of cargoTypeDefs) {
-    cargo[name] = await upsertBy(db, 'LoaiHangHoa', { tenLoai: name }, { tenLoai: name, moTa: description, trangThai: 'HOAT_DONG' }, { moTa: description, trangThai: 'HOAT_DONG' });
-  }
-  return { branches, branchesById, rates, cargo };
+  return { points, rates, cargo };
 }
 
 async function seedPromotions(db, operators) {
@@ -639,14 +696,14 @@ async function seedPromotions(db, operators) {
 }
 
 const shippingPlans = [
-  { from: 'GUI_TAI_BUU_CUC', to: 'GIAO_TAI_BUU_CUC', status: 'CHO_DIEU_PHOI', trip: null, note: 'Gửi tại bưu cục, chưa điều phối' },
-  { from: 'NHAN_TAN_NOI', to: 'GIAO_TAN_NOI', status: 'MOI_TAO', trip: null, note: 'Nhận và giao tận nơi' },
-  { from: 'GUI_TAI_BUU_CUC', to: 'GIAO_TAN_NOI', status: 'DANG_VAN_CHUYEN', trip: 0, note: 'Đang vận chuyển' },
-  { from: 'NHAN_TAN_NOI', to: 'GIAO_TAI_BUU_CUC', status: 'DA_GIAO', trip: 1, note: 'Đã giao tại bưu cục' },
-  { from: 'GUI_TAI_BUU_CUC', to: 'GIAO_TAI_BUU_CUC', status: 'DA_HUY', trip: null, note: 'Đơn gửi hàng đã hủy' },
-  { from: 'NHAN_TAN_NOI', to: 'GIAO_TAI_BUU_CUC', status: 'DANG_VAN_CHUYEN', trip: 2, note: 'Đang vận chuyển đến bưu cục phát' },
-  { from: 'GUI_TAI_BUU_CUC', to: 'GIAO_TAI_BUU_CUC', status: 'DA_GIAO', trip: 3, note: 'Đã giao thành công' },
-  { from: 'GUI_TAI_BUU_CUC', to: 'GIAO_TAN_NOI', status: 'CHO_DIEU_PHOI', trip: null, note: 'Chờ điều phối' },
+  { status: 'MOI_TAO', trip: 0, note: 'Mới tạo, chờ tiếp nhận tại điểm gửi' },
+  { status: 'MOI_TAO', trip: 1, note: 'Mới tạo, chờ tiếp nhận tại điểm gửi' },
+  { status: 'DANG_VAN_CHUYEN', trip: 2, note: 'Đang vận chuyển giữa hai điểm' },
+  { status: 'DA_GIAO', trip: 3, note: 'Đã giao tại điểm nhận' },
+  { status: 'DA_HUY', trip: 4, note: 'Đơn gửi hàng đã hủy' },
+  { status: 'DANG_VAN_CHUYEN', trip: 5, note: 'Đang vận chuyển giữa hai điểm' },
+  { status: 'DA_GIAO', trip: 6, note: 'Đã giao thành công tại điểm nhận' },
+  { status: 'DA_TIEP_NHAN', trip: 7, note: 'Đã tiếp nhận tại điểm gửi' },
 ];
 
 const cargoKindsByShipment = [
@@ -669,9 +726,8 @@ const weightRanges = [
   { from: 50.01, to: null, actual: 60 },
 ];
 
-function shippingRateKey(operatorCode, weightIndex, from, to) {
-  const range = weightRanges[weightIndex];
-  return `${operatorCode}:${range.from}:${range.to}:${from}:${to}`;
+function shippingRateKey(operatorCode, weightIndex, cargoTypeId) {
+  return `${operatorCode}:${weightIndex}:${cargoTypeId}`;
 }
 
 function cargoKindsFor(shippingOrdinal) {
@@ -683,7 +739,7 @@ function cargoWeightForIndex(itemIndex) {
 }
 
 function cargoWeightForKinds(cargoKinds) {
-  return cargoKinds.reduce((total, _kind, itemIndex) => total + cargoWeightForIndex(itemIndex), 0);
+  return cargoKinds.reduce((total, _kind, itemIndex) => total + cargoWeightForIndex(itemIndex) * (itemIndex + 1), 0);
 }
 
 function weightIndexForTotal(totalWeight) {
@@ -692,16 +748,44 @@ function weightIndexForTotal(totalWeight) {
   return index;
 }
 
-function routeAddress(city, kind) {
-  if (city === 'TP.HCM') return kind === 'pickup' ? '18 Đường Điện Biên Phủ, Phường 17, Bình Thạnh, TP.HCM' : '25 Đường Nguyễn Thị Minh Khai, Phường Bến Nghé, Quận 1, TP.HCM';
-  if (city === 'Đà Lạt') return kind === 'pickup' ? '31 Đường Phan Đình Phùng, Phường 2, Đà Lạt, Lâm Đồng' : '88 Đường Phạm Ngũ Lão, Phường 3, Đà Lạt, Lâm Đồng';
-  if (city === 'Vũng Tàu') return kind === 'pickup' ? '12 Đường Trần Hưng Đạo, Phường 1, Vũng Tàu, Bà Rịa - Vũng Tàu' : '88 Đường Hoàng Hoa Thám, Phường 2, Vũng Tàu, Bà Rịa - Vũng Tàu';
-  return `12 Đường Trần Hưng Đạo, ${city}`;
+function mainCargoType(cargoKinds, cargoTypes) {
+  return cargoKinds
+    .map((name, itemIndex) => ({
+      name,
+      weight: cargoWeightForIndex(itemIndex) * (itemIndex + 1),
+      loaiHangHoaId: cargoTypes[name].loaiHangHoaId,
+    }))
+    .sort((left, right) => right.weight - left.weight || left.loaiHangHoaId - right.loaiHangHoaId)[0].name;
 }
 
-function branchCity(branch) {
-  if (branch.quanHuyen === 'Đà Lạt' || branch.quanHuyen === 'Vũng Tàu') return branch.quanHuyen;
-  return branch.tinhThanh;
+function shipmentHistoryFor(status, sentAt, trip) {
+  const history = [{ trangThai: 'MOI_TAO', thoiGian: sentAt, ghiChu: 'Vận đơn được tạo từ dữ liệu demo.' }];
+  const receivedAt = new Date(sentAt.getTime() + 10 * 60 * 1000);
+  if (status === 'DA_TIEP_NHAN' || status === 'DANG_VAN_CHUYEN' || status === 'DA_GIAO') {
+    history.push({ trangThai: 'DA_TIEP_NHAN', thoiGian: receivedAt, ghiChu: 'Hàng đã được tiếp nhận tại điểm gửi.' });
+  }
+  if (status === 'DANG_VAN_CHUYEN' || status === 'DA_GIAO') {
+    const departureAt = tripDepartureDate(trip);
+    history.push({ trangThai: 'DANG_VAN_CHUYEN', thoiGian: departureAt, ghiChu: 'Hàng bắt đầu di chuyển theo chuyến xe.' });
+    if (status === 'DA_GIAO') {
+      const duration = trip.route.thoiGianChayPhut ?? 0;
+      history.push({ trangThai: 'DA_GIAO', thoiGian: new Date(departureAt.getTime() + duration * 60 * 1000), ghiChu: 'Hàng đã đến điểm nhận.' });
+    }
+  }
+  if (status === 'DA_HUY') {
+    history.push({ trangThai: 'DA_HUY', thoiGian: receivedAt, ghiChu: 'Vận đơn demo đã bị hủy.' });
+  }
+  return history;
+}
+
+async function replaceShipmentHistory(db, shipment, history) {
+  await db.$transaction(async (tx) => {
+    await tx.lichSuTrangThaiPhieuGuiHang.deleteMany({ where: { phieuGuiHangId: shipment.phieuGuiHangId } });
+    await tx.lichSuTrangThaiPhieuGuiHang.createMany({
+      data: history.map((entry) => ({ ...entry, phieuGuiHangId: shipment.phieuGuiHangId })),
+    });
+  });
+  count('LichSuTrangThaiPhieuGuiHang', 'replace');
 }
 
 function customerSnapshot(customer) {
@@ -713,26 +797,26 @@ function customerSnapshot(customer) {
 }
 
 async function ensureImage(db, hangHoa, url, order) {
-  const existing = await db.HinhAnhHangHoa.findFirst({ where: { hangHoaId: hangHoa.hangHoaId, duongDan: url } });
+  const existing = await db.hinhAnhHangHoa.findFirst({ where: { hangHoaId: hangHoa.hangHoaId, duongDan: url } });
   const data = { duongDan: url, thuTu: order, hangHoaId: hangHoa.hangHoaId };
   if (existing) {
-    await db.HinhAnhHangHoa.update({ where: byId('HinhAnhHangHoa', existing.hinhAnhId), data });
+    await db.hinhAnhHangHoa.update({ where: byId('HinhAnhHangHoa', existing.hinhAnhId), data });
     count('HinhAnhHangHoa', 'update');
     return existing;
   }
-  const created = await db.HinhAnhHangHoa.create({ data });
+  const created = await db.hinhAnhHangHoa.create({ data });
   count('HinhAnhHangHoa', 'create');
   return created;
 }
 
 async function ensurePayment(db, data) {
-  const existing = await db.ThanhToan.findFirst({ where: { donGiaoDichId: data.donGiaoDichId, loaiGiaoDich: data.loaiGiaoDich, veId: data.veId ?? null } });
+  const existing = await db.thanhToan.findFirst({ where: { donGiaoDichId: data.donGiaoDichId, loaiGiaoDich: data.loaiGiaoDich, veId: data.veId ?? null } });
   if (existing) {
-    const updated = await db.ThanhToan.update({ where: byId('ThanhToan', existing.thanhToanId), data });
+    const updated = await db.thanhToan.update({ where: byId('ThanhToan', existing.thanhToanId), data });
     count('ThanhToan', 'update');
     return updated;
   }
-  const created = await db.ThanhToan.create({ data });
+  const created = await db.thanhToan.create({ data });
   count('ThanhToan', 'create');
   return created;
 }
@@ -760,10 +844,10 @@ async function ensureCargo(db, shipment, cargoType, itemIndex, operatorCode) {
     phieuGuiHangId: shipment.phieuGuiHangId,
     loaiHangHoaId: shipment.cargoTypes[cargoType].loaiHangHoaId,
   };
-  const existing = await db.HangHoa.findFirst({ where: { phieuGuiHangId: shipment.phieuGuiHangId, tenHang: itemData.tenHang } });
+  const existing = await db.hangHoa.findFirst({ where: { phieuGuiHangId: shipment.phieuGuiHangId, tenHang: itemData.tenHang } });
   const item = existing
-    ? await db.HangHoa.update({ where: byId('HangHoa', existing.hangHoaId), data: itemData })
-    : await db.HangHoa.create({ data: itemData });
+    ? await db.hangHoa.update({ where: byId('HangHoa', existing.hangHoaId), data: itemData })
+    : await db.hangHoa.create({ data: itemData });
   count('HangHoa', existing ? 'update' : 'create');
   const imageKind = cargoType === 'ĐIỆN TỬ' ? IMAGE_URLS.dienTu : cargoType === 'THỰC PHẨM' || cargoType === 'HẢI SẢN' ? IMAGE_URLS.thucPham : IMAGE_URLS.quanAo;
   await ensureImage(db, item, imageKind, 1);
@@ -776,9 +860,9 @@ async function seedTransactions(db, operators, accounts, fleet, prices, logistic
   const allTransactionCodes = [];
   const exchangeOldByOperator = new Map();
   for (const definition of operatorDefs) {
-    const existingTickets = await db.Ve.findMany({ where: { maVe: { startsWith: `${definition.code}-PDV-` } }, select: { gheChuyenXeId: true } });
+    const existingTickets = await db.ve.findMany({ where: { maVe: { startsWith: `${definition.code}-PDV-` } }, select: { gheChuyenXeId: true } });
     for (const gheChuyenXeId of new Set(existingTickets.map((ticket) => ticket.gheChuyenXeId))) {
-      await db.GheChuyenXe.update({ where: byId('GheChuyenXe', gheChuyenXeId), data: { trangThai: 'TRONG' } });
+      await db.gheChuyenXe.update({ where: byId('GheChuyenXe', gheChuyenXeId), data: { trangThai: 'TRONG' } });
     }
   }
   for (let opIndex = 0; opIndex < operatorDefs.length; opIndex += 1) {
@@ -800,8 +884,8 @@ async function seedTransactions(db, operators, accounts, fleet, prices, logistic
       const transactionCode = `${definition.code}-GD-${stamp}-${sequence}`;
       const transactionTime = localDate(2026, 9, day, 10 + Math.floor(txIndex / 5), minute);
       if (txIndex === 4 || txIndex === 13) {
-        const staleTransaction = await db.DonGiaoDich.findUnique({ where: { maDonGiaoDich: transactionCode } });
-        if (staleTransaction) await db.ThanhToan.deleteMany({ where: { donGiaoDichId: staleTransaction.donGiaoDichId, loaiGiaoDich: { in: ['THU_CHENH_LECH', 'HOAN_TIEN'] } } });
+        const staleTransaction = await db.donGiaoDich.findUnique({ where: { maDonGiaoDich: transactionCode } });
+        if (staleTransaction) await db.thanhToan.deleteMany({ where: { donGiaoDichId: staleTransaction.donGiaoDichId, loaiGiaoDich: { in: ['THU_CHENH_LECH', 'HOAN_TIEN'] } } });
       }
       const ticketPlan = [];
       let ticketSubtotal = 0;
@@ -841,28 +925,24 @@ async function seedTransactions(db, operators, accounts, fleet, prices, logistic
         const cargoKinds = cargoKindsFor(shippingOrdinal);
         const totalCargoWeight = cargoWeightForKinds(cargoKinds);
         const weightIndex = weightIndexForTotal(totalCargoWeight);
-        const range = weightRanges[weightIndex];
-        const rate = logistics.rates.get(shippingRateKey(definition.code, weightIndex, shipPlan.from, shipPlan.to));
+        const mainKind = mainCargoType(cargoKinds, logistics.cargo);
+        const mainCargo = logistics.cargo[mainKind];
+        const rate = logistics.rates.get(shippingRateKey(definition.code, weightIndex, mainCargo.loaiHangHoaId));
         if (!rate) throw new Error(`Missing BangCuocGuiHang for ${transactionCode}`);
-        const rateFromBranch = logistics.branchesById.get(rate.buuCucGuiId);
-        const rateToBranch = logistics.branchesById.get(rate.buuCucPhatId);
-        if (!rateFromBranch || !rateToBranch) throw new Error(`Missing rate branches for ${transactionCode}`);
-        const serviceFee = shipPlan.from === 'NHAN_TAN_NOI' && shipPlan.to === 'GIAO_TAN_NOI' ? 15000 : shipPlan.from === 'NHAN_TAN_NOI' || shipPlan.to === 'GIAO_TAN_NOI' ? 10000 : 0;
-        shippingTotal = Number(rate.mucCuoc) + serviceFee;
-        const trip = shipPlan.trip === null ? null : selectTripAfter(outboundTrips, shipPlan.trip, transactionTime, null, true);
+        const trip = selectTripAfter(outboundTrips, shipPlan.trip, transactionTime, null, true);
+        if (!trip) throw new Error(`No shipment-enabled departure after creation for ${transactionCode}`);
+        const pointSend = logistics.points[definition.code][0];
+        const pointReceive = logistics.points[definition.code][1];
+        const serviceFee = 0;
+        shippingTotal = Number(rate.mucCuoc);
         shippingData = {
           shipPlan,
-          weightIndex,
-          range,
           rate,
           serviceFee,
           trip,
+          pointSend,
+          pointReceive,
           cargoKinds,
-          totalCargoWeight,
-          rateFromBranch,
-          rateToBranch,
-          fromBranch: shipPlan.from === 'GUI_TAI_BUU_CUC' ? rateFromBranch : null,
-          toBranch: shipPlan.to === 'GIAO_TAI_BUU_CUC' ? rateToBranch : null,
           cargoTypes: logistics.cargo,
         };
       }
@@ -892,9 +972,9 @@ async function seedTransactions(db, operators, accounts, fleet, prices, logistic
           { ngayDat: transactionTime, soLuongVeBanDau: ticketPlan.length, tongTienBanDau: decimal(ticketSubtotal), trangThai: paymentState === 'SUCCESS' ? 'DA_THANH_TOAN' : 'CHO_THAN_TOAN', khuyenMaiId: null },
         );
         for (const ticket of ticketPlan) {
-          const existingSeatTicket = await db.Ve.findFirst({ where: { gheChuyenXeId: ticket.tripSeat.gheChuyenXeId } });
+          const existingSeatTicket = await db.ve.findFirst({ where: { gheChuyenXeId: ticket.tripSeat.gheChuyenXeId } });
           if (existingSeatTicket && existingSeatTicket.maVe !== ticket.code && existingSeatTicket.trangThai !== 'HUY') {
-            const existingSeat = await db.GheChuyenXe.findUnique({ where: byId('GheChuyenXe', ticket.tripSeat.gheChuyenXeId), select: { trangThai: true } });
+            const existingSeat = await db.gheChuyenXe.findUnique({ where: byId('GheChuyenXe', ticket.tripSeat.gheChuyenXeId), select: { trangThai: true } });
             if (existingSeat?.trangThai === 'DA_DAT') throw new Error(`Active seat collision on ${ticket.code} and ${existingSeatTicket.maVe}`);
           }
           const ve = await upsertBy(
@@ -908,7 +988,7 @@ async function seedTransactions(db, operators, accounts, fleet, prices, logistic
           if (txIndex === 4 && ticket.cancelled) {
             exchangeOldByOperator.set(definition.code, { ve, trip: ticket.trip, tripSeat: ticket.tripSeat });
           }
-          await db.GheChuyenXe.update({ where: byId('GheChuyenXe', ticket.tripSeat.gheChuyenXeId), data: { trangThai: ticket.cancelled ? 'TRONG' : 'DA_DAT' } });
+          await db.gheChuyenXe.update({ where: byId('GheChuyenXe', ticket.tripSeat.gheChuyenXeId), data: { trangThai: ticket.cancelled ? 'TRONG' : 'DA_DAT' } });
           count('GheChuyenXe', 'update');
         }
       }
@@ -920,10 +1000,6 @@ async function seedTransactions(db, operators, accounts, fleet, prices, logistic
           maVanDon: shipmentCode,
           tenNguoiNhan: `Người nhận ${definition.code}-${shippingOrdinal + 1}`,
           soDienThoaiNguoiNhan: `+8493${pad(opIndex * 10 + shippingOrdinal + 1, 7)}`,
-          diaChiNguoiNhan: shippingData.toBranch ? shippingData.toBranch.diaChi : routeAddress(branchCity(shippingData.rateToBranch), 'delivery'),
-          hinhThucLayHang: shippingData.shipPlan.from,
-          hinhThucGiaoHang: shippingData.shipPlan.to,
-          diaChiLayHang: shippingData.fromBranch ? shippingData.fromBranch.diaChi : routeAddress(branchCity(shippingData.rateFromBranch), 'pickup'),
           ngayGui: transactionTime,
           cuocChinh: decimal(Number(shippingData.rate.mucCuoc)),
           phiDichVu: decimal(shippingData.serviceFee),
@@ -932,14 +1008,15 @@ async function seedTransactions(db, operators, accounts, fleet, prices, logistic
           nguoiTraCuoc: shippingOrdinal % 2 === 0 ? 'NGUOI_GUI' : 'NGUOI_NHAN',
           ghiChu: shippingData.shipPlan.note,
           trangThai: shippingData.shipPlan.status,
-          chuyenXeId: shippingData.trip?.chuyenXeId ?? null,
-          buuCucGuiId: shippingData.fromBranch?.buuCucId ?? null,
-          buuCucPhatId: shippingData.toBranch?.buuCucId ?? null,
+          chuyenXeId: shippingData.trip.chuyenXeId,
+          diemGuiId: shippingData.pointSend.diemGiaoNhanHangId,
+          diemNhanId: shippingData.pointReceive.diemGiaoNhanHangId,
           bangCuocApDungId: shippingData.rate.bangCuocGuiHangId,
           khuyenMaiId: null,
           donGiaoDichId: transaction.donGiaoDichId,
         };
         shipment = await upsertBy(db, 'PhieuGuiHang', { maVanDon: shipmentCode }, shipmentData, shipmentData);
+        await replaceShipmentHistory(db, shipment, shipmentHistoryFor(shippingData.shipPlan.status, transactionTime, shippingData.trip));
         const cargoKinds = shippingData.cargoKinds;
         const cargoShipment = { ...shipment, cargoTypes: logistics.cargo };
         for (let itemIndex = 0; itemIndex < cargoKinds.length; itemIndex += 1) {
@@ -976,7 +1053,7 @@ async function seedTransactions(db, operators, accounts, fleet, prices, logistic
         );
       }
       if (ticketPlan.length === 5) scenarios.push({ type: 'booking-5-ve', maDonGiaoDich: transactionCode, maPhieuDatVe: booking.maPhieuDatVe, maVe: tickets.map((ticket) => ticket.maVe) });
-      if (shippingData?.shipPlan.trip === null) scenarios.push({ type: 'gui-hang-chua-dieu-phoi', maDonGiaoDich: transactionCode, maVanDon: shipment.maVanDon });
+      if (shippingData?.shipPlan.status === 'MOI_TAO') scenarios.push({ type: 'gui-hang-moi-tao', maDonGiaoDich: transactionCode, maVanDon: shipment.maVanDon });
       if (shippingData?.shipPlan.status === 'DA_GIAO') scenarios.push({ type: 'gui-hang-da-giao', maDonGiaoDich: transactionCode, maVanDon: shipment.maVanDon });
       allTransactionCodes.push(transactionCode);
     }
@@ -986,7 +1063,7 @@ async function seedTransactions(db, operators, accounts, fleet, prices, logistic
 
 async function applyCustomerSnapshotChange(db, accounts) {
   const customer = accounts.customers[0];
-  await db.TaiKhoan.update({ where: byId('TaiKhoan', customer.account.taiKhoanId), data: { hoTen: 'Nguyễn Minh Anh (đã cập nhật)', soDienThoai: '+84929999999', email: 'kh000001.updated@vexgo.test' } });
+  await db.taiKhoan.update({ where: byId('TaiKhoan', customer.account.taiKhoanId), data: { hoTen: 'Nguyễn Minh Anh (đã cập nhật)', soDienThoai: '+84929999999', email: 'kh000001.updated@vexgo.test' } });
   count('TaiKhoan', 'snapshot-update');
 }
 
@@ -1102,6 +1179,7 @@ async function seedOctoberTrips(db, operators, vehicles, vehicleTypes, routes) {
     const vehicle = pickVehicle(def.op, def.type, def.seats);
     if (!vehicle) continue;
     const operator = operators[def.op];
+    const capacitySnapshot = tripCapacitySnapshot(vehicleTypes, def.op, vehicle.type, false);
     const trip = await upsertBy(
       db,
       'ChuyenXe',
@@ -1111,6 +1189,7 @@ async function seedOctoberTrips(db, operators, vehicles, vehicleTypes, routes) {
         ngayKhoiHanh: tripDate,
         gioKhoiHanh: timeOnly(def.hour, def.min),
         gioDen: timeOnly(def.arrHour, def.arrMin),
+        ...capacitySnapshot,
         trangThai: 'CHUA_KHOI_HANH',
         nhaXeId: operator.nhaXeId,
         tuyenXeId: def.route.tuyenXeId,
@@ -1120,6 +1199,7 @@ async function seedOctoberTrips(db, operators, vehicles, vehicleTypes, routes) {
         ngayKhoiHanh: tripDate,
         gioKhoiHanh: timeOnly(def.hour, def.min),
         gioDen: timeOnly(def.arrHour, def.arrMin),
+        ...capacitySnapshot,
         trangThai: 'CHUA_KHOI_HANH',
         nhaXeId: operator.nhaXeId,
         tuyenXeId: def.route.tuyenXeId,
@@ -1149,7 +1229,7 @@ async function main() {
   const accounts = await seedAccounts(prisma, operators, roles);
   const fleet = await seedVehiclesAndRoutes(prisma, operators, vehicleTypes);
   const prices = await seedPrices(prisma, operators, fleet.routes, vehicleTypes);
-  const cargoAndLogistics = await seedBranchesRatesCargo(prisma, operators, {});
+  const cargoAndLogistics = await seedBranchesRatesCargo(prisma, operators, fleet.routes);
   const promotions = await seedPromotions(prisma, operators);
   void promotions;
   const transactions = await seedTransactions(prisma, operators, accounts, fleet, prices, cargoAndLogistics);
