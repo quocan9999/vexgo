@@ -124,7 +124,7 @@ export class TripsController {
   @Post(':id/cancel')
   @HttpCode(HttpStatus.OK)
   @RequireRoles(...TENANT_PRINCIPAL_ROLES)
-  @RequirePermissions('trip:update')
+  @RequirePermissions('trip:cancel')
   cancel(
     @Param() params: TripIdParamsDto,
     @CurrentPrincipal() principal: AuthPrincipal,
