@@ -20,6 +20,7 @@ Migration đã đưa Prisma/MySQL sang mô hình 002. Branch đã thêm sửa t�
 4. **Admin UI mới chỉ có chỉnh tương thích nhỏ.** Type cho phép hai field hình thức legacy là `null`; tab map `MOI_TAO`/`DA_TIEP_NHAN` và hiển thị địa chỉ điểm dưới tên điểm gửi/nhận, không hiển thị địa chỉ điểm dưới người nhận. Tab vẫn giữ cột `Lấy / Giao` chuyển tiếp và response shape cũ; đợt UI sau nên bỏ hẳn khái niệm pickup/delivery khỏi màn hình.
 5. **Customer Web chưa chạy bằng database.** Trang gửi hàng vẫn dùng dữ liệu, nhà xe, chuyến, sức chứa và cách tính phí hard-code; không gọi API shipment. Đây là chức năng chưa được nối theo mô hình 002, không phải bằng chứng rằng trang đang query sai database.
 6. **Quản lý loại xe chưa cho cấu hình ba loại sức chứa.** Giá trị mặc định hiện là 0, nên snapshot chuyến lấy từ đó cũng có thể bằng 0; cần thêm API và form khi triển khai phần quản lý năng lực.
+7. **Đặt vé kèm hành lý cũng bị ảnh hưởng.** Booking một chiều đang cộng phí hành lý tính ở client vào tổng vé rồi lưu một `PaymentDraft` trong `sessionStorage`; payment hiện chỉ chuyển tới hóa đơn mock. Flow này chưa tạo shipment/fee detail trong database và cần được nối vào backend cùng với luồng shipment độc lập.
 
 ## 2. Schema mới mà ứng dụng phải tuân theo
 
@@ -113,9 +114,11 @@ Không có module shipment chuyên biệt trong `apps/api/src/`. Các khái ni�
 - Các fixture trực tiếp tạo chuyến trong integration tests đã bổ sung ba cột bắt buộc; fixture loại xe cũng có ba giá trị mặc định.
 - Chưa có test/feature nghiệp vụ cho việc bật `nhanGuiHang`, điều chỉnh snapshot theo chuyến hoặc cấp phát sức chứa đồng thời; cần xác định rule trước khi mở rộng API/UI.
 
-## 4. Phần ít hoặc chưa bị tác động trực tiếp
+## 4. Các luồng liên quan và phạm vi ảnh hưởng
 
-- **Đặt vé và bảng giá vé:** `BangGia`, `PhieuDatVe`, `Ve` không thuộc phần thay đổi shipment này. Tạo chuyến backend hiện ghi snapshot từ loại xe nên đã qua yêu cầu schema; cần tiếp tục giữ các kiểm tra hiện có cho luồng chọn/giữ chỗ vé.
+- **Phần vé của luồng đặt vé:** `BangGia`, `PhieuDatVe`, `Ve` không đổi schema trong migration shipment. Tạo chuyến backend hiện ghi snapshot từ loại xe nên đã qua yêu cầu schema; tiếp tục giữ các kiểm tra hiện có cho luồng chọn/giữ chỗ vé. Phần hành lý đi kèm booking chịu ảnh hưởng riêng như mô tả bên dưới.
+- **Đặt vé kèm hành lý — đang tính ở client, chưa lưu shipment thật:** [`luggage-step.tsx`](../../../apps/web/src/features/booking/components/luggage/luggage-step.tsx) tính phí theo các ngưỡng tổng cân nặng hard-code; [`one-way-booking.tsx`](../../../apps/web/src/features/booking/components/one-way-booking.tsx) cộng `luggageFee` vào `totalFare` và đưa hành lý vào `PaymentDraft`. [`payment-draft.ts`](../../../apps/web/src/features/booking/services/payment-draft.ts) chỉ lưu `fee`, `weight` và summary trong `sessionStorage`; summary hiện giữ `luggageItems.length`, tổng cân nặng, phí và category của phần tử đầu tiên, không giữ đủ từng dòng hàng. [`payment-page.tsx`](../../../apps/web/src/features/payments/components/payment-page.tsx) hiện chuyển sang mã hóa đơn cố định sau timeout; [`invoice-page.tsx`](../../../apps/web/src/features/payments/components/invoice-page.tsx) dùng fixture tĩnh. Vì vậy draft và hóa đơn hiện không phải bản ghi `PhieuGuiHang`/`ChiTietCuocGuiHang` đã persist.
+- Khi hoàn thiện flow này, backend phải tự tính lại cước và sức chứa; giữ từng món hàng và loại hàng, tạo một detail cước cho mỗi loại theo schema 002, rồi liên kết phiếu vé và phiếu gửi vào cùng `DonGiaoDich` và cùng `ChuyenXe`. Các ghi database liên quan cần all-or-nothing; không dùng phí hoặc sức chứa do draft frontend gửi lên làm nguồn sự thật. Category UI `normal`/`fragile`/`valuable` cần được ánh xạ rõ sang `LoaiHangHoa`, không được mặc định coi chúng là cùng một danh mục.
 - **CRUD tên/mô tả loại xe:** có thể chạy do default sức chứa mới bằng `0`, nhưng chưa đủ cho nghiệp vụ shipment.
 - **Trang gửi hàng customer hiện tại:** do đang là giao diện demo tĩnh nên chưa query các cột DB đã đổi; tích hợp API thật mới là bước bị ảnh hưởng trực tiếp bởi contract 002.
 - **Hủy chuyến:** `TripsService.cancel` có truy vấn phiếu gửi và chặn chuyến có shipment đang hoạt động. Cần giữ lại hành vi bảo vệ này; kiểm tra lại trạng thái giữ chuyến theo enum 002 và bổ sung xử lý sức chứa khi thiết kế luồng shipment. `DA_GIAO`/`DA_HUY` vẫn là trạng thái hợp lệ trong enum mới.
@@ -125,10 +128,11 @@ Không có module shipment chuyên biệt trong `apps/api/src/`. Các khái ni�
 1. Chốt contract shipment backend: API danh mục điểm/tuyến/cước, tạo vận đơn, chuyển trạng thái và ghi lịch sử; thống nhất DTO/response trước khi nối UI.
 2. Bổ sung ba sức chứa mặc định vào API và màn hình quản lý loại xe; quyết định cách chọn `nhanGuiHang` và cho phép thay đổi snapshot theo chuyến hay không.
 3. Hoàn thiện Admin Customer Workspace: tab history đã hiển thị tên/địa chỉ hai điểm và map trạng thái; đợt sau bỏ cột `Lấy / Giao` legacy, làm rõ các nhãn/response còn lại theo contract điểm.
-4. Thay UI gửi hàng tĩnh bằng service/API thật; backend là nguồn xác thực cuối cùng cho cước, điều kiện tuyến và sức chứa.
-5. Xác định rule giữ/nhả sức chứa và concurrency trước khi triển khai thao tác tạo/cập nhật phiếu gửi.
-6. Seed/verifier đã chạy thành công trên DB cô lập. Khi kiểm tra DB cá nhân, dùng các lệnh trong handoff migration và xác nhận URL `.env` trước khi seed.
-7. Build, lint, typecheck, API tests và E2E đã chạy thành công trên branch; chạy lại CI trên commit sau cùng trước khi merge.
+4. Nối hành lý từ luồng đặt vé vào backend: nhận đủ từng món, map sang `LoaiHangHoa`, để backend tính cước/sức chứa, và tạo phiếu gửi cùng `DonGiaoDich`/`ChuyenXe` của booking. Thay `PaymentDraft` và invoice mock bằng trạng thái/kết quả từ API thật.
+5. Thay UI gửi hàng tĩnh bằng service/API thật; backend là nguồn xác thực cuối cùng cho cước, điều kiện tuyến và sức chứa.
+6. Xác định rule giữ/nhả sức chứa và concurrency trước khi triển khai thao tác tạo/cập nhật phiếu gửi.
+7. Seed/verifier đã chạy thành công trên DB cô lập. Khi kiểm tra DB cá nhân, dùng các lệnh trong handoff migration và xác nhận URL `.env` trước khi seed.
+8. Build, lint, typecheck, API tests và E2E đã chạy thành công trên branch; chạy lại CI trên commit sau cùng trước khi merge.
 
 ## 6. Checklist khi hoàn tất phần ứng dụng
 
@@ -139,6 +143,7 @@ Không có module shipment chuyên biệt trong `apps/api/src/`. Các khái ni�
 - [ ] API shipment đảm bảo bốn FK trực tiếp bắt buộc (`chuyenXeId`, hai điểm, `donGiaoDichId`), tính phí theo từng loại và ghi composite mapping vào `ChiTietCuocGuiHang`; xác minh điểm/cước/chuyến cùng nhà xe, tuyến phù hợp.
 - [ ] Thay đổi trạng thái phiếu gửi ghi một dòng lịch sử trong cùng thao tác ghi cần all-or-nothing.
 - [ ] Sức chứa được tính theo nhóm hàng, số lượng, trạng thái giữ chỗ và có xử lý cạnh tranh ở backend.
+- [ ] Luồng booking có hành lý gửi đủ từng món/loại lên backend; backend tính lại cước và capacity rồi tạo phiếu vé + phiếu gửi dưới cùng `DonGiaoDich` và `ChuyenXe`; không coi payment draft hoặc invoice mock là dữ liệu đã persist.
 - [ ] Admin hiển thị điểm gửi/nhận, không yêu cầu hình thức lấy/giao hoặc địa chỉ người nhận đã bị loại khỏi schema.
 - [ ] Customer Web tải dữ liệu và phí từ API thay vì dữ liệu/giá hard-code.
 - [x] Seed và seed verifier khớp enum/cột mới; integration fixtures liên quan API đã cập nhật.
@@ -148,6 +153,5 @@ Không có module shipment chuyên biệt trong `apps/api/src/`. Các khái ni�
 ## 7. Cách rà soát và giới hạn
 
 - Đối chiếu `prisma/schema.prisma`, source trong `apps/api`, `apps/admin`, `apps/web`, `prisma/seed.mjs`, `prisma/verify-seed.mjs` và các test/fixture liên quan.
-- GitNexus xác nhận một số liên kết component/endpoint, nhưng index đang chậm **30 commit** so với HEAD. Vì vậy kết luận trong tài liệu được kiểm chứng bằng source hiện tại và không dùng kết quả graph cũ làm bằng chứng duy nhất.
 - Trạng thái cuối trên branch: database/schema/migrations, seed/verifier và regression harness đã được cập nhật cho diagram 002; API có các thay đổi tương thích cần cho schema hiện tại nhưng chưa có module shipment đầy đủ; Admin history đã xử lý hiển thị trạng thái và điểm gửi/nhận; Customer shipment vẫn là giao diện demo tĩnh. Các phần cần phát triển tiếp được liệt kê ở mục 3–6 của handoff này. Kết quả CI cần kiểm tra trên các check của commit hiện tại trên PR.
 - Database local đã xóa hai bảng archive theo migration cleanup trước đó; tài liệu này không yêu cầu khôi phục hay tạo lại dữ liệu archive.
