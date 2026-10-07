@@ -54,7 +54,9 @@ function isTripVehicle(value: unknown): value is Trip['vehicle'] {
   );
 }
 
-function isTripSeatSummary(value: unknown): value is NonNullable<Trip['seatSummary']> {
+function isTripSeatSummary(
+  value: unknown,
+): value is NonNullable<Trip['seatSummary']> {
   return (
     isRecord(value) &&
     isNonNegativeInteger(value.total) &&
@@ -91,7 +93,10 @@ function isTrip(value: unknown): value is Trip {
     return false;
   }
 
-  if (value.seatSummary !== undefined && !isTripSeatSummary(value.seatSummary)) {
+  if (
+    value.seatSummary !== undefined &&
+    !isTripSeatSummary(value.seatSummary)
+  ) {
     return false;
   }
 
@@ -128,7 +133,10 @@ export function isTripNotFoundError(error: unknown): boolean {
   return error instanceof TripApiError && error.code === 'TRIP_NOT_FOUND';
 }
 
-async function readResponse(response: Response, resource: string): Promise<unknown> {
+async function readResponse(
+  response: Response,
+  resource: string,
+): Promise<unknown> {
   const body: unknown = await response.json().catch(() => null);
   if (!response.ok) {
     const message =
@@ -220,12 +228,15 @@ async function writeTrip(
   method: 'POST' | 'PATCH',
   input: unknown,
 ): Promise<Trip> {
-  const response = await adminApiFetch(`${getApiBaseUrl()}/api/v1/trips${path}`, {
-    method,
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(input),
-    cache: 'no-store',
-  });
+  const response = await adminApiFetch(
+    `${getApiBaseUrl()}/api/v1/trips${path}`,
+    {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+      cache: 'no-store',
+    },
+  );
   const body: unknown = await response.json().catch(() => null);
   if (!response.ok) {
     const details =
@@ -400,7 +411,9 @@ export async function getTripSeats(
   query?: { status?: string },
   signal?: AbortSignal,
 ): Promise<TripSeatsResponse> {
-  const url = new URL(`${getApiBaseUrl()}/api/v1/trips/${tripId}/seat-inventory`);
+  const url = new URL(
+    `${getApiBaseUrl()}/api/v1/trips/${tripId}/seat-inventory`,
+  );
   if (query?.status) {
     url.searchParams.set('status', query.status);
   }

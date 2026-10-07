@@ -5,7 +5,12 @@ import {
   tripStatusLabel,
   TripStatusBadge,
 } from '../src/features/trips/components/trip-detail-sheet';
-import { getTrips, getTripById, isTripNotFoundError, TripApiError } from '../src/features/trips/services/trip-service';
+import {
+  getTrips,
+  getTripById,
+  isTripNotFoundError,
+  TripApiError,
+} from '../src/features/trips/services/trip-service';
 import type { Trip } from '../src/features/trips/types/trip';
 import { setEmployeeAdminTestSession } from './admin-auth-test-session';
 

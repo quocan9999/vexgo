@@ -10,14 +10,22 @@ type FarePriceQuery = {
   routeId?: number;
   vehicleTypeId?: number;
   status?: 'HOAT_DONG' | 'TAM_NGUNG';
-  effectiveState?: 'CHUA_HIEU_LUC' | 'DANG_HIEU_LUC' | 'HET_HIEU_LUC' | 'TAM_NGUNG';
+  effectiveState?:
+    'CHUA_HIEU_LUC' | 'DANG_HIEU_LUC' | 'HET_HIEU_LUC' | 'TAM_NGUNG';
 };
 
 const service = serviceModule as unknown as {
-  getFarePrices?: (query: FarePriceQuery, signal?: AbortSignal) => Promise<unknown>;
+  getFarePrices?: (
+    query: FarePriceQuery,
+    signal?: AbortSignal,
+  ) => Promise<unknown>;
   getFarePriceById?: (id: number, signal?: AbortSignal) => Promise<unknown>;
-  getFarePriceRouteOptions?: (signal?: AbortSignal) => Promise<Array<{ id: number; label: string }>>;
-  getFarePriceVehicleTypeOptions?: (signal?: AbortSignal) => Promise<Array<{ id: number; label: string }>>;
+  getFarePriceRouteOptions?: (
+    signal?: AbortSignal,
+  ) => Promise<Array<{ id: number; label: string }>>;
+  getFarePriceVehicleTypeOptions?: (
+    signal?: AbortSignal,
+  ) => Promise<Array<{ id: number; label: string }>>;
 };
 
 const fare = {
@@ -28,7 +36,12 @@ const fare = {
   validTo: null,
   status: 'HOAT_DONG',
   effectiveState: 'DANG_HIEU_LUC',
-  route: { routeId: 3, code: 'SG-DL-01', origin: 'TP.HCM', destination: 'Đà Lạt' },
+  route: {
+    routeId: 3,
+    code: 'SG-DL-01',
+    origin: 'TP.HCM',
+    destination: 'Đà Lạt',
+  },
   vehicleType: { vehicleTypeId: 2, name: 'Limousine' },
   createdAt: '2026-09-01T08:30:00.000Z',
   updatedAt: '2026-09-02T08:30:00.000Z',
@@ -38,7 +51,12 @@ function response(body: unknown): Response {
   return { ok: true, status: 200, json: async () => body } as Response;
 }
 
-function route(routeId: number, code: string, origin: string, destination: string) {
+function route(
+  routeId: number,
+  code: string,
+  origin: string,
+  destination: string,
+) {
   return {
     routeId,
     code,
@@ -76,7 +94,10 @@ describe('Fare Price API service', () => {
 
     vi.stubEnv('NEXT_PUBLIC_API_URL', 'http://localhost:4000');
     const fetchMock = vi.fn().mockResolvedValue(
-      response({ data: [fare], meta: { page: 2, pageSize: 5, totalItems: 7, totalPages: 2 } }),
+      response({
+        data: [fare],
+        meta: { page: 2, pageSize: 5, totalItems: 7, totalPages: 2 },
+      }),
     );
     vi.stubGlobal('fetch', fetchMock);
 
@@ -117,18 +138,25 @@ describe('Fare Price API service', () => {
     if (!service.getFarePrices) return;
 
     vi.stubEnv('NEXT_PUBLIC_API_URL', 'http://localhost:4000');
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response({
-      data: [{ farePriceId: 15, listedPrice: 250000 }],
-      meta: { page: 1, pageSize: 10, totalItems: 1, totalPages: 1 },
-    })));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        response({
+          data: [{ farePriceId: 15, listedPrice: 250000 }],
+          meta: { page: 1, pageSize: 10, totalItems: 1, totalPages: 1 },
+        }),
+      ),
+    );
 
-    await expect(service.getFarePrices({
-      page: 1,
-      pageSize: 10,
-      search: '',
-      sortBy: 'validFrom',
-      sortDirection: 'desc',
-    })).rejects.toThrow('API trả về danh sách bảng giá không hợp lệ.');
+    await expect(
+      service.getFarePrices({
+        page: 1,
+        pageSize: 10,
+        search: '',
+        sortBy: 'validFrom',
+        sortDirection: 'desc',
+      }),
+    ).rejects.toThrow('API trả về danh sách bảng giá không hợp lệ.');
   });
 
   it('rejects a malformed detail resource', async () => {
@@ -136,9 +164,14 @@ describe('Fare Price API service', () => {
     if (!service.getFarePriceById) return;
 
     vi.stubEnv('NEXT_PUBLIC_API_URL', 'http://localhost:4000');
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response({
-      data: { farePriceId: 15, listedPrice: 250000 },
-    })));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        response({
+          data: { farePriceId: 15, listedPrice: 250000 },
+        }),
+      ),
+    );
 
     await expect(service.getFarePriceById(15)).rejects.toThrow(
       'API trả về thông tin bảng giá không hợp lệ.',
@@ -148,30 +181,38 @@ describe('Fare Price API service', () => {
   it('loads all route/type lookup pages and labels routes with endpoints only', async () => {
     expect(service.getFarePriceRouteOptions).toBeTypeOf('function');
     expect(service.getFarePriceVehicleTypeOptions).toBeTypeOf('function');
-    if (!service.getFarePriceRouteOptions || !service.getFarePriceVehicleTypeOptions) return;
+    if (
+      !service.getFarePriceRouteOptions ||
+      !service.getFarePriceVehicleTypeOptions
+    )
+      return;
 
     vi.stubEnv('NEXT_PUBLIC_API_URL', 'http://localhost:4000');
     const requests: string[] = [];
-    vi.stubGlobal('fetch', vi.fn().mockImplementation(async (input: RequestInfo | URL) => {
-      const url = new URL(String(input));
-      requests.push(`${url.pathname}${url.search}`);
-      if (url.pathname === '/api/v1/routes') {
-        const page = Number(url.searchParams.get('page'));
-        return response({
-          data: page === 1
-            ? [route(3, 'SG-DL-01', 'TP.HCM', 'Đà Lạt')]
-            : [route(4, 'SG-NT-02', 'TP.HCM', 'Nha Trang')],
-          meta: { page, pageSize: 100, totalItems: 2, totalPages: 2 },
-        });
-      }
-      if (url.pathname === '/api/v1/vehicle-types') {
-        return response({
-          data: [vehicleType(2, 'Limousine')],
-          meta: { page: 1, pageSize: 100, totalItems: 1, totalPages: 1 },
-        });
-      }
-      throw new Error(`Unexpected lookup request: ${url.pathname}`);
-    }));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(async (input: RequestInfo | URL) => {
+        const url = new URL(String(input));
+        requests.push(`${url.pathname}${url.search}`);
+        if (url.pathname === '/api/v1/routes') {
+          const page = Number(url.searchParams.get('page'));
+          return response({
+            data:
+              page === 1
+                ? [route(3, 'SG-DL-01', 'TP.HCM', 'Đà Lạt')]
+                : [route(4, 'SG-NT-02', 'TP.HCM', 'Nha Trang')],
+            meta: { page, pageSize: 100, totalItems: 2, totalPages: 2 },
+          });
+        }
+        if (url.pathname === '/api/v1/vehicle-types') {
+          return response({
+            data: [vehicleType(2, 'Limousine')],
+            meta: { page: 1, pageSize: 100, totalItems: 1, totalPages: 1 },
+          });
+        }
+        throw new Error(`Unexpected lookup request: ${url.pathname}`);
+      }),
+    );
 
     const [routes, vehicleTypes] = await Promise.all([
       service.getFarePriceRouteOptions(),
@@ -183,6 +224,8 @@ describe('Fare Price API service', () => {
       { id: 4, label: 'TP.HCM → Nha Trang' },
     ]);
     expect(vehicleTypes).toEqual([{ id: 2, label: 'Limousine' }]);
-    expect(requests.some((url) => url.startsWith('/api/v1/routes?page=2'))).toBe(true);
+    expect(
+      requests.some((url) => url.startsWith('/api/v1/routes?page=2')),
+    ).toBe(true);
   });
 });

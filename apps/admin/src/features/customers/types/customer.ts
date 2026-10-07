@@ -28,11 +28,7 @@ export interface CustomerDetail extends CustomerSummary {
 }
 
 export type CustomerSortKey =
-  | 'customerCode'
-  | 'fullName'
-  | 'loyaltyPoints'
-  | 'createdAt'
-  | 'updatedAt';
+  'customerCode' | 'fullName' | 'loyaltyPoints' | 'createdAt' | 'updatedAt';
 
 export interface CustomerQuery {
   page?: number;

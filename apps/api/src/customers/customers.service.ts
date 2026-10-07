@@ -234,8 +234,7 @@ export class CustomersService {
       }),
     ]);
 
-    const totalPages =
-      totalItems === 0 ? 0 : Math.ceil(totalItems / pageSize);
+    const totalPages = totalItems === 0 ? 0 : Math.ceil(totalItems / pageSize);
 
     return {
       data: items.map((item) => ({
@@ -353,14 +352,8 @@ export class CustomersService {
 
     const orderBy: Prisma.DonGiaoDichOrderByWithRelationInput[] =
       query.sortBy === 'totalAmount'
-        ? [
-            { tongTien: sortDirection },
-            { donGiaoDichId: sortDirection },
-          ]
-        : [
-            { ngayTao: sortDirection },
-            { donGiaoDichId: sortDirection },
-          ];
+        ? [{ tongTien: sortDirection }, { donGiaoDichId: sortDirection }]
+        : [{ ngayTao: sortDirection }, { donGiaoDichId: sortDirection }];
 
     const [totalItems, items] = await Promise.all([
       this.prisma.donGiaoDich.count({ where }),
@@ -388,8 +381,7 @@ export class CustomersService {
       }),
     ]);
 
-    const totalPages =
-      totalItems === 0 ? 0 : Math.ceil(totalItems / pageSize);
+    const totalPages = totalItems === 0 ? 0 : Math.ceil(totalItems / pageSize);
 
     return {
       data: items.map((item) => ({
@@ -523,8 +515,7 @@ export class CustomersService {
       }),
     ]);
 
-    const totalPages =
-      totalItems === 0 ? 0 : Math.ceil(totalItems / pageSize);
+    const totalPages = totalItems === 0 ? 0 : Math.ceil(totalItems / pageSize);
 
     return {
       data: items.map((t) => ({
@@ -668,8 +659,7 @@ export class CustomersService {
       }),
     ]);
 
-    const totalPages =
-      totalItems === 0 ? 0 : Math.ceil(totalItems / pageSize);
+    const totalPages = totalItems === 0 ? 0 : Math.ceil(totalItems / pageSize);
 
     return {
       data: items.map((p) => ({

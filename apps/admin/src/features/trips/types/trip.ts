@@ -1,8 +1,5 @@
 export type TripStatus =
-  | 'CHUA_KHOI_HANH'
-  | 'DANG_CHAY'
-  | 'HOAN_THANH'
-  | 'DA_HUY';
+  'CHUA_KHOI_HANH' | 'DANG_CHAY' | 'HOAN_THANH' | 'DA_HUY';
 
 export const TRIP_STATUSES: readonly TripStatus[] = [
   'CHUA_KHOI_HANH',

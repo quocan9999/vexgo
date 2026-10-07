@@ -70,7 +70,10 @@ function createService() {
     $queryRaw: vi.fn().mockResolvedValue([{ xeId: 1 }]),
     $transaction: vi.fn(),
   };
-  prisma.$transaction.mockImplementation(async (callback: (tx: typeof prisma) => Promise<unknown>) => callback(prisma));
+  prisma.$transaction.mockImplementation(
+    async (callback: (tx: typeof prisma) => Promise<unknown>) =>
+      callback(prisma),
+  );
   return {
     prisma,
     service: new TripsService(
@@ -653,7 +656,8 @@ describe('TripsService create (05.2)', () => {
       status: 409,
       response: {
         error: 'TRIP_VEHICLE_SCHEDULE_CONFLICT',
-        message: 'Xe đã được phân công cho một chuyến xe khác trong cùng khung giờ.',
+        message:
+          'Xe đã được phân công cho một chuyến xe khác trong cùng khung giờ.',
       },
     });
   });
@@ -711,7 +715,10 @@ describe('TripsService create (05.2)', () => {
         sucChuaHangCongKenh: 8,
         sucChuaHangNhe: 80,
         gheChuyenXes: {
-          create: [{ gheId: 1, trangThai: 'TRONG' }, { gheId: 2, trangThai: 'TRONG' }],
+          create: [
+            { gheId: 1, trangThai: 'TRONG' },
+            { gheId: 2, trangThai: 'TRONG' },
+          ],
         },
       },
       include: {
@@ -785,7 +792,11 @@ describe('TripsService update (05.2)', () => {
     prisma.chuyenXe.updateMany.mockResolvedValue({ count: 1 });
     prisma.chuyenXe.findFirstOrThrow.mockResolvedValue(updatedTrip);
 
-    const result = await service.update(21, updateDto, tenantPrincipal as never);
+    const result = await service.update(
+      21,
+      updateDto,
+      tenantPrincipal as never,
+    );
 
     expect(prisma.$queryRaw).toHaveBeenCalled();
     expect(prisma.chuyenXe.updateMany).toHaveBeenCalledWith({
@@ -861,7 +872,8 @@ describe('TripsService update (05.2)', () => {
       status: 409,
       response: {
         error: 'TRIP_VEHICLE_SCHEDULE_CONFLICT',
-        message: 'Xe đã được phân công cho một chuyến xe khác trong cùng khung giờ.',
+        message:
+          'Xe đã được phân công cho một chuyến xe khác trong cùng khung giờ.',
       },
     });
   });
@@ -898,7 +910,11 @@ describe('TripsService.updateStatus', () => {
     prisma.chuyenXe.findFirst.mockResolvedValue(null);
 
     await expect(
-      service.updateStatus(999, { status: 'DANG_CHAY' }, tenantPrincipal as never),
+      service.updateStatus(
+        999,
+        { status: 'DANG_CHAY' },
+        tenantPrincipal as never,
+      ),
     ).rejects.toMatchObject({
       status: 404,
       response: {
@@ -984,7 +1000,11 @@ describe('TripsService.updateStatus', () => {
       trangThai: 'CHUA_KHOI_HANH',
     });
     await expect(
-      service.updateStatus(21, { status: 'HOAN_THANH' }, tenantPrincipal as never),
+      service.updateStatus(
+        21,
+        { status: 'HOAN_THANH' },
+        tenantPrincipal as never,
+      ),
     ).rejects.toMatchObject({
       status: 409,
       response: {
@@ -999,7 +1019,11 @@ describe('TripsService.updateStatus', () => {
       trangThai: 'DANG_CHAY',
     });
     await expect(
-      service.updateStatus(21, { status: 'CHUA_KHOI_HANH' }, tenantPrincipal as never),
+      service.updateStatus(
+        21,
+        { status: 'CHUA_KHOI_HANH' },
+        tenantPrincipal as never,
+      ),
     ).rejects.toMatchObject({
       status: 409,
       response: {
@@ -1013,7 +1037,11 @@ describe('TripsService.updateStatus', () => {
       trangThai: 'HOAN_THANH',
     });
     await expect(
-      service.updateStatus(21, { status: 'DANG_CHAY' }, tenantPrincipal as never),
+      service.updateStatus(
+        21,
+        { status: 'DANG_CHAY' },
+        tenantPrincipal as never,
+      ),
     ).rejects.toMatchObject({
       status: 409,
       response: {
@@ -1036,7 +1064,11 @@ describe('TripsService.updateStatus', () => {
     prisma.chuyenXe.updateMany.mockResolvedValue({ count: 0 });
 
     await expect(
-      service.updateStatus(21, { status: 'DANG_CHAY' }, tenantPrincipal as never),
+      service.updateStatus(
+        21,
+        { status: 'DANG_CHAY' },
+        tenantPrincipal as never,
+      ),
     ).rejects.toMatchObject({
       status: 409,
       response: {
@@ -1127,7 +1159,9 @@ describe('TripsService.cancel', () => {
     prisma.gheChuyenXe.findFirst.mockResolvedValue(null);
     prisma.phieuGuiHang.findFirst.mockImplementation(async ({ where }) => {
       const notIn = where?.trangThai?.notIn ?? [];
-      const shipmentsInDb = [{ phieuGuiHangId: 301, trangThai: 'CHO_DIEU_PHOI' }];
+      const shipmentsInDb = [
+        { phieuGuiHangId: 301, trangThai: 'CHO_DIEU_PHOI' },
+      ];
       return shipmentsInDb.find((s) => !notIn.includes(s.trangThai)) ?? null;
     });
 
@@ -1166,7 +1200,9 @@ describe('TripsService.cancel', () => {
         { phieuGuiHangId: 301, trangThai: 'DA_GIAO' },
         { phieuGuiHangId: 302, trangThai: 'DA_HUY' },
       ];
-      return terminalShipments.find((s) => !notIn.includes(s.trangThai)) ?? null;
+      return (
+        terminalShipments.find((s) => !notIn.includes(s.trangThai)) ?? null
+      );
     });
     prisma.chuyenXe.updateMany.mockResolvedValue({ count: 1 });
     prisma.chuyenXe.findFirstOrThrow.mockResolvedValue({
@@ -1318,7 +1354,11 @@ describe('TripsService.getSeats', () => {
     prisma.chuyenXe.findFirst.mockResolvedValue({ chuyenXeId: 21 });
     prisma.gheChuyenXe.findMany.mockResolvedValue([...mockSeats]);
 
-    const result = await service.getSeats(21, { status: 'TRONG' }, tenantPrincipal as never);
+    const result = await service.getSeats(
+      21,
+      { status: 'TRONG' },
+      tenantPrincipal as never,
+    );
 
     expect(result.data).toHaveLength(1);
     expect(result.data[0].seat.code).toBe('A01');

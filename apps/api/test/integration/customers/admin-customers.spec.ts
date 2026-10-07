@@ -2,7 +2,15 @@ import type { ExecutionContext, INestApplication } from '@nestjs/common';
 import { UnauthorizedException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 import { AppModule } from '../../../src/app.module.js';
 import { AccessTokenGuard } from '../../../src/auth/guards/access-token.guard.js';
 import { ADMIN_ROLE_DEFAULT_PERMISSION_KEYS } from '../../../src/auth/permissions/permission-catalog.js';
@@ -72,7 +80,8 @@ const testAccessTokenGuard = {
         message: 'Cần đăng nhập để thực hiện thao tác này.',
       });
     }
-    context.switchToHttp().getRequest<{ user?: AuthPrincipal }>().user = testPrincipal;
+    context.switchToHttp().getRequest<{ user?: AuthPrincipal }>().user =
+      testPrincipal;
     return true;
   },
 };
@@ -326,7 +335,9 @@ describe('Admin Customers API (Feature 06.1)', () => {
       mockPrisma.khachHang.findMany.mockResolvedValue([]);
 
       await request(app.getHttpServer())
-        .get('/api/v1/customers?accountStatus=HOAT_DONG&sortBy=loyaltyPoints&sortDirection=desc')
+        .get(
+          '/api/v1/customers?accountStatus=HOAT_DONG&sortBy=loyaltyPoints&sortDirection=desc',
+        )
         .expect(200);
 
       expect(mockPrisma.khachHang.findMany).toHaveBeenCalledWith(
@@ -510,10 +521,7 @@ describe('Admin Customers API (Feature 06.1)', () => {
           khachHangId: 101,
           nhaXeId: 1,
         },
-        orderBy: [
-          { ngayTao: 'desc' },
-          { donGiaoDichId: 'desc' },
-        ],
+        orderBy: [{ ngayTao: 'desc' }, { donGiaoDichId: 'desc' }],
         skip: 0,
         take: 10,
         include: {
@@ -561,7 +569,9 @@ describe('Admin Customers API (Feature 06.1)', () => {
       mockPrisma.donGiaoDich.findMany.mockResolvedValue([]);
 
       await request(app.getHttpServer())
-        .get('/api/v1/customers/101/transactions?search=GD000501&sortBy=totalAmount&sortDirection=asc')
+        .get(
+          '/api/v1/customers/101/transactions?search=GD000501&sortBy=totalAmount&sortDirection=asc',
+        )
         .expect(200);
 
       expect(mockPrisma.donGiaoDich.findMany).toHaveBeenCalledWith(
@@ -571,10 +581,7 @@ describe('Admin Customers API (Feature 06.1)', () => {
             nhaXeId: 1,
             maDonGiaoDich: { contains: 'GD000501' },
           },
-          orderBy: [
-            { tongTien: 'asc' },
-            { donGiaoDichId: 'asc' },
-          ],
+          orderBy: [{ tongTien: 'asc' }, { donGiaoDichId: 'asc' }],
         }),
       );
     });

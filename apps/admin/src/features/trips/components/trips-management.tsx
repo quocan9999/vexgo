@@ -155,7 +155,7 @@ export function TripsManagement() {
         >
           <div className="panel admin-resource-panel">
             <FilterToolbar
-              totalItems={error ? null : tripPage?.meta.totalItems ?? null}
+              totalItems={error ? null : (tripPage?.meta.totalItems ?? null)}
             >
               <SearchInput
                 label="Tìm chuyến xe"
@@ -237,7 +237,9 @@ export function TripsManagement() {
                       className="admin-resource-table-wrap"
                     >
                       <table className="admin-resource-table">
-                        <caption className="sr-only">Danh sách chuyến xe</caption>
+                        <caption className="sr-only">
+                          Danh sách chuyến xe
+                        </caption>
                         <thead>
                           <tr>
                             <th
@@ -298,7 +300,9 @@ export function TripsManagement() {
                         <tbody>
                           {items.map((trip) => (
                             <tr key={trip.tripId}>
-                              <th className="admin-data-mono" scope="row">{trip.code}</th>
+                              <th className="admin-data-mono" scope="row">
+                                {trip.code}
+                              </th>
                               <td>{formatDate(trip.departureDate)}</td>
                               <td>{formatTime(trip.departureTime)}</td>
                               <td>
@@ -322,7 +326,8 @@ export function TripsManagement() {
                                     Xe máy: {trip.cargoCapacity.motorbikes}
                                   </span>
                                   <span>
-                                    Hàng cồng kềnh: {trip.cargoCapacity.bulkyCargo}
+                                    Hàng cồng kềnh:{' '}
+                                    {trip.cargoCapacity.bulkyCargo}
                                   </span>
                                   <span>
                                     Hàng nhẹ: {trip.cargoCapacity.lightCargo}
@@ -385,7 +390,8 @@ export function TripsManagement() {
                                   Xe máy: {trip.cargoCapacity.motorbikes}
                                 </span>
                                 <span>
-                                  Hàng cồng kềnh: {trip.cargoCapacity.bulkyCargo}
+                                  Hàng cồng kềnh:{' '}
+                                  {trip.cargoCapacity.bulkyCargo}
                                 </span>
                                 <span>
                                   Hàng nhẹ: {trip.cargoCapacity.lightCargo}

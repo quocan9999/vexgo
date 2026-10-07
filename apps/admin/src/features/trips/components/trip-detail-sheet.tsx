@@ -240,7 +240,10 @@ export function TripDetailSheet({
           <div
             className="trips-success-notice"
             role="status"
-            style={{ margin: 'var(--admin-space-field-gap) var(--admin-space-sheet-inline) 0' }}
+            style={{
+              margin:
+                'var(--admin-space-field-gap) var(--admin-space-sheet-inline) 0',
+            }}
           >
             <CheckCircle2 aria-hidden="true" size={16} />
             <span>{updateNotice}</span>
@@ -348,9 +351,7 @@ export function TripDetailSheet({
             </section>
 
             <section className="trips-detail-section">
-              <h4 className="trips-detail-section-title">
-                Thông tin gửi hàng
-              </h4>
+              <h4 className="trips-detail-section-title">Thông tin gửi hàng</h4>
               <dl className="trips-detail-fields">
                 <div>
                   <dt>Nhận gửi hàng</dt>

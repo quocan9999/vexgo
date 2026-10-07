@@ -689,7 +689,10 @@ export class TripsService {
 
     const departureDate = new Date(`${dto.departureDate}T00:00:00.000Z`);
     const departureTime = new Date(`1970-01-01T${dto.departureTime}.000Z`);
-    const arrivalTime = calculateClockTime(departureTime, route.thoiGianChayPhut);
+    const arrivalTime = calculateClockTime(
+      departureTime,
+      route.thoiGianChayPhut,
+    );
 
     const existingCode = await this.prisma.chuyenXe.findFirst({
       where: { maChuyenXe: dto.code },
@@ -746,8 +749,7 @@ export class TripsService {
               tuyenXeId: dto.routeId,
               xeId: dto.vehicleId,
               sucChuaXeMay: vehicle.loaiXe.sucChuaXeMayMacDinh,
-              sucChuaHangCongKenh:
-                vehicle.loaiXe.sucChuaHangCongKenhMacDinh,
+              sucChuaHangCongKenh: vehicle.loaiXe.sucChuaHangCongKenhMacDinh,
               sucChuaHangNhe: vehicle.loaiXe.sucChuaHangNheMacDinh,
               gheChuyenXes: {
                 create: vehicle.ghes.map((ghe) => ({

@@ -10,10 +10,7 @@ import {
   updateTrip,
   type TripApiErrorDetail,
 } from '../services/trip-service';
-import type {
-  Trip,
-  TripLookupOptionsState,
-} from '../types/trip';
+import type { Trip, TripLookupOptionsState } from '../types/trip';
 
 type TripFormDialogProps = {
   routeOptions: TripLookupOptionsState;
@@ -213,8 +210,7 @@ export function TripFormDialog({
         } else if (error.code === 'VEHICLE_HAS_NO_SEATS') {
           setFieldErrors((curr) => ({
             ...curr,
-            vehicleId:
-              'Xe chưa được cấu hình ghế nên chưa thể lập chuyến xe.',
+            vehicleId: 'Xe chưa được cấu hình ghế nên chưa thể lập chuyến xe.',
           }));
         } else if (error.details.length > 0) {
           setFieldErrors(mappedErrors(error.details));
@@ -273,7 +269,10 @@ export function TripFormDialog({
         </div>
 
         <form className="admin-crud-form" noValidate onSubmit={handleSubmit}>
-          <p className="admin-form-dialog__description" id={`${idPrefix}-description`}>
+          <p
+            className="admin-form-dialog__description"
+            id={`${idPrefix}-description`}
+          >
             {editing
               ? 'Cập nhật ngày và giờ khởi hành của chuyến xe.'
               : 'Nhập thông tin chuyến xe, chọn tuyến và xe phục vụ để tạo chuyến và khởi tạo ghế.'}
@@ -282,14 +281,26 @@ export function TripFormDialog({
           {editing ? (
             <div className="admin-crud-form-field">
               <label>Thông tin chuyến hiện tại</label>
-              <div className="trips-detail-fields" style={{ background: 'var(--admin-surface)', padding: 'var(--admin-space-field-gap)', borderRadius: 'var(--admin-radius-card)', border: '1px solid var(--admin-border)' }}>
+              <div
+                className="trips-detail-fields"
+                style={{
+                  background: 'var(--admin-surface)',
+                  padding: 'var(--admin-space-field-gap)',
+                  borderRadius: 'var(--admin-radius-card)',
+                  border: '1px solid var(--admin-border)',
+                }}
+              >
                 <div>
                   <dt>Mã chuyến</dt>
-                  <dd><strong className="admin-data-mono">{trip.code}</strong></dd>
+                  <dd>
+                    <strong className="admin-data-mono">{trip.code}</strong>
+                  </dd>
                 </div>
                 <div>
                   <dt>Tuyến</dt>
-                  <dd>{trip.route.origin} → {trip.route.destination}</dd>
+                  <dd>
+                    {trip.route.origin} → {trip.route.destination}
+                  </dd>
                 </div>
                 <div>
                   <dt>Xe</dt>
@@ -479,9 +490,7 @@ export function TripFormDialog({
             </label>
             <input
               aria-describedby={
-                fieldErrors.departureDate
-                  ? `${idPrefix}-date-error`
-                  : undefined
+                fieldErrors.departureDate ? `${idPrefix}-date-error` : undefined
               }
               aria-invalid={Boolean(fieldErrors.departureDate)}
               aria-required="true"
@@ -508,9 +517,7 @@ export function TripFormDialog({
             </label>
             <input
               aria-describedby={
-                fieldErrors.departureTime
-                  ? `${idPrefix}-time-error`
-                  : undefined
+                fieldErrors.departureTime ? `${idPrefix}-time-error` : undefined
               }
               aria-invalid={Boolean(fieldErrors.departureTime)}
               aria-required="true"

@@ -20,7 +20,11 @@ function formatDateTime(value?: string | null) {
 }
 
 function shipmentStatusTone(status: string): 'active' | 'muted' {
-  if (status === 'DA_TIEP_NHAN' || status === 'DANG_VAN_CHUYEN' || status === 'DA_GIAO') {
+  if (
+    status === 'DA_TIEP_NHAN' ||
+    status === 'DANG_VAN_CHUYEN' ||
+    status === 'DA_GIAO'
+  ) {
     return 'active';
   }
   return 'muted';
@@ -100,7 +104,9 @@ export function CustomerShipmentsTab({ customerId }: { customerId: number }) {
             aria-busy={loading || refreshing}
           >
             <table className="admin-resource-table">
-              <caption className="sr-only">Lịch sử gửi hàng của khách hàng</caption>
+              <caption className="sr-only">
+                Lịch sử gửi hàng của khách hàng
+              </caption>
               <thead>
                 <tr>
                   <th scope="col">Mã vận đơn</th>
@@ -153,11 +159,15 @@ export function CustomerShipmentsTab({ customerId }: { customerId: number }) {
                     </td>
                     <td>
                       <strong>{s.originPoint.name}</strong>
-                      <div className="ticket-seat-pos">{s.originPoint.address}</div>
+                      <div className="ticket-seat-pos">
+                        {s.originPoint.address}
+                      </div>
                     </td>
                     <td>
                       <strong>{s.destinationPoint.name}</strong>
-                      <div className="ticket-seat-pos">{s.destinationPoint.address}</div>
+                      <div className="ticket-seat-pos">
+                        {s.destinationPoint.address}
+                      </div>
                     </td>
                     <td>
                       <strong>{s.totalFee.toLocaleString('vi-VN')} đ</strong>
@@ -208,14 +218,18 @@ export function CustomerShipmentsTab({ customerId }: { customerId: number }) {
                     <dt>Điểm gửi</dt>
                     <dd>
                       <strong>{s.originPoint.name}</strong>
-                      <div className="ticket-seat-pos">{s.originPoint.address}</div>
+                      <div className="ticket-seat-pos">
+                        {s.originPoint.address}
+                      </div>
                     </dd>
                   </div>
                   <div>
                     <dt>Điểm nhận</dt>
                     <dd>
                       <strong>{s.destinationPoint.name}</strong>
-                      <div className="ticket-seat-pos">{s.destinationPoint.address}</div>
+                      <div className="ticket-seat-pos">
+                        {s.destinationPoint.address}
+                      </div>
                     </dd>
                   </div>
                   <div>

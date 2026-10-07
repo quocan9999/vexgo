@@ -158,7 +158,9 @@ describe('TripSeatsManagement Workspace', () => {
     expect(html).toContain('Quay lại danh sách chuyến');
     expect(html).toContain('href="/trips"');
     // Context
-    expect(html).toContain('admin-data-mono">FUTA-TX-0001</span> (TP.HCM → Đà Lạt)');
+    expect(html).toContain(
+      'admin-data-mono">FUTA-TX-0001</span> (TP.HCM → Đà Lạt)',
+    );
     expect(html).toContain('admin-data-mono">30F-123.45</span> (GIƯỜNG NẰM)');
     expect(html).toContain('Chưa khởi hành');
     // Summary
@@ -281,11 +283,7 @@ describe('TripDetailSheet "Xem ghế chuyến" integration', () => {
     setEmployeeAdminTestSession(['trip:read']);
 
     const html = renderToStaticMarkup(
-      <TripDetailSheet
-        initialTrip={mockTrip}
-        onClose={vi.fn()}
-        tripId={101}
-      />,
+      <TripDetailSheet initialTrip={mockTrip} onClose={vi.fn()} tripId={101} />,
     );
 
     expect(html).toContain('Xem ghế chuyến');
@@ -295,15 +293,19 @@ describe('TripDetailSheet "Xem ghế chuyến" integration', () => {
 
 describe('getTripSeats API Service Contract', () => {
   it('queries GET /api/v1/trips/:id/seat-inventory without query when no filter applied', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify(mockSeatsResponse), { status: 200 }),
-    );
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(
+        new Response(JSON.stringify(mockSeatsResponse), { status: 200 }),
+      );
 
     const result = await getTripSeats(101);
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = fetchMock.mock.calls[0];
-    expect(new URL(url as string).pathname).toBe('/api/v1/trips/101/seat-inventory');
+    expect(new URL(url as string).pathname).toBe(
+      '/api/v1/trips/101/seat-inventory',
+    );
     expect(new URL(url as string).search).toBe('');
     expect(init?.method).toBe('GET');
     expect(result.data).toHaveLength(3);
@@ -325,7 +327,9 @@ describe('getTripSeats API Service Contract', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url] = fetchMock.mock.calls[0];
-    expect(new URL(url as string).pathname).toBe('/api/v1/trips/101/seat-inventory');
+    expect(new URL(url as string).pathname).toBe(
+      '/api/v1/trips/101/seat-inventory',
+    );
     expect(new URL(url as string).searchParams.get('status')).toBe('TRONG');
     expect(result.data).toHaveLength(1);
     expect(result.data[0].seat.code).toBe('A01');

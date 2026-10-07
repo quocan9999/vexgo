@@ -84,7 +84,7 @@ function installApi(
   options: {
     customerNotFound?: boolean;
     shipmentsError?: boolean;
-    shipments?: typeof mockShipment[];
+    shipments?: (typeof mockShipment)[];
   } = {},
 ) {
   setEmployeeAdminTestSession(['customer:read']);
@@ -94,52 +94,58 @@ function installApi(
 
   const mockFetch = vi
     .fn()
-    .mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input);
-      const method = init?.method ?? 'GET';
-      requests.push({ url, method });
+    .mockImplementation(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        const method = init?.method ?? 'GET';
+        requests.push({ url, method });
 
-      if (url.includes('/api/v1/customers/101/shipments')) {
-        if (options.shipmentsError) {
-          return response(
-            { message: 'Lỗi tải lịch sử gửi hàng từ máy chủ.' },
-            false,
-            500,
-          );
+        if (url.includes('/api/v1/customers/101/shipments')) {
+          if (options.shipmentsError) {
+            return response(
+              { message: 'Lỗi tải lịch sử gửi hàng từ máy chủ.' },
+              false,
+              500,
+            );
+          }
+          const shipments = options.shipments ?? [mockShipment];
+          return response({
+            data: shipments,
+            meta: {
+              page: 1,
+              pageSize: 10,
+              totalItems: shipments.length,
+              totalPages: shipments.length === 0 ? 0 : 1,
+            },
+          });
         }
-        const shipments = options.shipments ?? [mockShipment];
-        return response({
-          data: shipments,
-          meta: {
-            page: 1,
-            pageSize: 10,
-            totalItems: shipments.length,
-            totalPages: shipments.length === 0 ? 0 : 1,
-          },
-        });
-      }
 
-      if (url.includes('/api/v1/customers/101/transactions')) {
-        return response({
-          data: [],
-          meta: {
-            page: 1,
-            pageSize: 10,
-            totalItems: 0,
-            totalPages: 0,
-          },
-        });
-      }
-
-      if (url.includes('/api/v1/customers/101')) {
-        if (options.customerNotFound) {
-          return response({ message: 'Không tìm thấy khách hàng.' }, false, 404);
+        if (url.includes('/api/v1/customers/101/transactions')) {
+          return response({
+            data: [],
+            meta: {
+              page: 1,
+              pageSize: 10,
+              totalItems: 0,
+              totalPages: 0,
+            },
+          });
         }
-        return response({ data: mockCustomerDetail });
-      }
 
-      return response({}, false, 404);
-    });
+        if (url.includes('/api/v1/customers/101')) {
+          if (options.customerNotFound) {
+            return response(
+              { message: 'Không tìm thấy khách hàng.' },
+              false,
+              404,
+            );
+          }
+          return response({ data: mockCustomerDetail });
+        }
+
+        return response({}, false, 404);
+      },
+    );
 
   vi.stubGlobal('fetch', mockFetch);
   return { requests };
@@ -190,10 +196,16 @@ describe('Customer Shipment History Tab (Feature 06.4)', () => {
     expect(screen.getAllByText('Trần Văn B').length).toBeGreaterThan(0);
     expect(screen.getAllByText('0912345678').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Điểm gửi Miền Đông').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('456 Mai Chí Thọ, Q.2, TP.HCM').length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText('456 Mai Chí Thọ, Q.2, TP.HCM').length,
+    ).toBeGreaterThan(0);
     expect(screen.getAllByText('Điểm nhận Đà Lạt').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('123 Lê Lợi, P.1, Đà Lạt').length).toBeGreaterThan(0);
-    expect(screen.queryByRole('columnheader', { name: 'Lấy / Giao' })).toBeNull();
+    expect(
+      screen.getAllByText('123 Lê Lợi, P.1, Đà Lạt').length,
+    ).toBeGreaterThan(0);
+    expect(
+      screen.queryByRole('columnheader', { name: 'Lấy / Giao' }),
+    ).toBeNull();
     expect(screen.queryByText('Hình thức')).toBeNull();
     expect(screen.queryByText(/—\s*→\s*—/)).toBeNull();
     expect(screen.getAllByText('85.000 đ').length).toBeGreaterThan(0);
@@ -251,7 +263,9 @@ describe('Customer Shipment History Tab (Feature 06.4)', () => {
     fireEvent.click(shipmentsTab);
 
     expect(
-      await screen.findByText('Khách hàng chưa có đơn gửi hàng tại nhà xe này.'),
+      await screen.findByText(
+        'Khách hàng chưa có đơn gửi hàng tại nhà xe này.',
+      ),
     ).toBeTruthy();
   });
 
@@ -282,8 +296,6 @@ describe('Customer Shipment History Tab (Feature 06.4)', () => {
     // Wait a moment for debounced search
     await new Promise((r) => setTimeout(r, 400));
 
-    expect(
-      requests.some((r) => r.url.includes('search=VD000301')),
-    ).toBe(true);
+    expect(requests.some((r) => r.url.includes('search=VD000301'))).toBe(true);
   });
 });

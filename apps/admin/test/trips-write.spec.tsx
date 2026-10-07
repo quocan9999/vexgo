@@ -10,9 +10,7 @@ import {
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { TripFormDialog } from '../src/features/trips/components/trip-form-dialog';
-import {
-  TripDetailSheet,
-} from '../src/features/trips/components/trip-detail-sheet';
+import { TripDetailSheet } from '../src/features/trips/components/trip-detail-sheet';
 import { TripsManagement } from '../src/features/trips/components/trips-management';
 import {
   cancelTrip,
@@ -60,7 +58,9 @@ vi.mock('@/features/super-admin-layout/components/super-admin-layout', () => ({
 }));
 
 vi.mock('@/components/data-filters/data-filters', () => ({
-  FilterToolbar: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  FilterToolbar: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
   SearchInput: () => null,
   SelectFilter: () => null,
   SingleDateFilter: () => null,
@@ -218,9 +218,11 @@ describe('Trip Form Composition & Validation', () => {
   ])(
     'when the create checkbox is %s, submits acceptsShipments=%s',
     async (state, acceptsShipments) => {
-      const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-        new Response(JSON.stringify({ data: mockTrip }), { status: 201 }),
-      );
+      const fetchMock = vi
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValue(
+          new Response(JSON.stringify({ data: mockTrip }), { status: 201 }),
+        );
       render(
         <TripFormDialog
           onClose={vi.fn()}
@@ -274,9 +276,11 @@ describe('Trip Form Composition & Validation', () => {
   );
 
   it('does not expose or submit shipment fields while editing a trip', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify({ data: mockTrip }), { status: 200 }),
-    );
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(
+        new Response(JSON.stringify({ data: mockTrip }), { status: 200 }),
+      );
     render(
       <TripFormDialog
         onClose={vi.fn()}
@@ -367,11 +371,7 @@ describe('Trip shipment snapshot details', () => {
   it('shows the shipment flag and total snapshot capacities in the detail sheet', () => {
     setEmployeeAdminTestSession(['trip:read']);
     const html = renderToStaticMarkup(
-      <TripDetailSheet
-        initialTrip={mockTrip}
-        onClose={vi.fn()}
-        tripId={101}
-      />,
+      <TripDetailSheet initialTrip={mockTrip} onClose={vi.fn()} tripId={101} />,
     );
 
     expect(html).toContain('Nhận gửi hàng');
@@ -398,9 +398,11 @@ describe('Trip shipment snapshot details', () => {
 
 describe('Trip write service API contracts', () => {
   it('createTrip sends POST /api/v1/trips with correct payload', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify({ data: mockTrip }), { status: 201 }),
-    );
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(
+        new Response(JSON.stringify({ data: mockTrip }), { status: 201 }),
+      );
 
     const result = await createTrip({
       code: 'FUTA-CX-001',
@@ -432,9 +434,11 @@ describe('Trip write service API contracts', () => {
       departureDate: '2026-10-15',
       departureTime: '08:00:00',
     };
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify({ data: updatedMock }), { status: 200 }),
-    );
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(
+        new Response(JSON.stringify({ data: updatedMock }), { status: 200 }),
+      );
 
     const result = await updateTrip(101, {
       departureDate: '2026-10-15',
@@ -566,9 +570,7 @@ describe('Trip write service API contracts', () => {
     );
 
     const options = await getTripVehicleOptions();
-    expect(options).toEqual([
-      { id: 8, label: '30F-123.45 (GIƯỜNG NẰM)' },
-    ]);
+    expect(options).toEqual([{ id: 8, label: '30F-123.45 (GIƯỜNG NẰM)' }]);
   });
 
   it('getTripRouteOptions fetches all pages when totalPages > 1 and combines options', async () => {
@@ -584,7 +586,11 @@ describe('Trip write service API contracts', () => {
                 origin: 'TP.HCM',
                 destination: 'Đà Lạt',
                 status: 'HOAT_DONG',
-                busCompany: { busCompanyId: 3, code: 'FUTA', name: 'Phương Trang' },
+                busCompany: {
+                  busCompanyId: 3,
+                  code: 'FUTA',
+                  name: 'Phương Trang',
+                },
                 createdAt: '2026-09-22T07:34:00.000Z',
                 updatedAt: '2026-09-23T07:34:00.000Z',
               },
@@ -604,7 +610,11 @@ describe('Trip write service API contracts', () => {
                 origin: 'TP.HCM',
                 destination: 'Cần Thơ',
                 status: 'HOAT_DONG',
-                busCompany: { busCompanyId: 3, code: 'FUTA', name: 'Phương Trang' },
+                busCompany: {
+                  busCompanyId: 3,
+                  code: 'FUTA',
+                  name: 'Phương Trang',
+                },
                 createdAt: '2026-09-22T07:34:00.000Z',
                 updatedAt: '2026-09-23T07:34:00.000Z',
               },
@@ -634,7 +644,11 @@ describe('Trip write service API contracts', () => {
                 vehicleId: 8,
                 licensePlate: '30F-123.45',
                 status: 'HOAT_DONG',
-                busCompany: { busCompanyId: 3, code: 'FUTA', name: 'Phương Trang' },
+                busCompany: {
+                  busCompanyId: 3,
+                  code: 'FUTA',
+                  name: 'Phương Trang',
+                },
                 vehicleType: { vehicleTypeId: 2, name: 'GIƯỜNG NẰM' },
                 createdAt: '2026-09-22T07:34:00.000Z',
                 updatedAt: '2026-09-23T07:34:00.000Z',
@@ -653,7 +667,11 @@ describe('Trip write service API contracts', () => {
                 vehicleId: 9,
                 licensePlate: '51B-999.99',
                 status: 'HOAT_DONG',
-                busCompany: { busCompanyId: 3, code: 'FUTA', name: 'Phương Trang' },
+                busCompany: {
+                  busCompanyId: 3,
+                  code: 'FUTA',
+                  name: 'Phương Trang',
+                },
                 vehicleType: { vehicleTypeId: 2, name: 'LIMOUSINE' },
                 createdAt: '2026-09-22T07:34:00.000Z',
                 updatedAt: '2026-09-23T07:34:00.000Z',
@@ -774,9 +792,11 @@ describe('Trip lifecycle & cancellation action gates in detail sheet', () => {
 describe('Trip status update and cancellation service API contracts', () => {
   it('updateTripStatus sends PATCH /api/v1/trips/:id/status with target status', async () => {
     const updatedMock = { ...mockTrip, status: 'DANG_CHAY' as const };
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify({ data: updatedMock }), { status: 200 }),
-    );
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(
+        new Response(JSON.stringify({ data: updatedMock }), { status: 200 }),
+      );
 
     const result = await updateTripStatus(101, 'DANG_CHAY');
 
@@ -790,9 +810,11 @@ describe('Trip status update and cancellation service API contracts', () => {
 
   it('cancelTrip sends POST /api/v1/trips/:id/cancel', async () => {
     const cancelledMock = { ...mockTrip, status: 'DA_HUY' as const };
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify({ data: cancelledMock }), { status: 200 }),
-    );
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(
+        new Response(JSON.stringify({ data: cancelledMock }), { status: 200 }),
+      );
 
     const result = await cancelTrip(101);
 
