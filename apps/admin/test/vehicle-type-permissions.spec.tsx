@@ -1,5 +1,12 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { VehicleTypesManagement } from '@/features/vehicle-types/components/vehicle-types-management';
 import { setEmployeeAdminTestSession } from './admin-auth-test-session';
@@ -8,6 +15,9 @@ const vehicleType = {
   vehicleTypeId: 7,
   name: 'Limousine',
   description: 'Xe limousine',
+  motorbikeCapacityDefault: 2,
+  bulkyCargoCapacityDefault: 4,
+  lightCargoCapacityDefault: 7,
   createdAt: '2026-09-25T10:00:00.000Z',
   updatedAt: '2026-09-26T10:00:00.000Z',
 };
@@ -32,7 +42,9 @@ vi.mock('lucide-react', () => {
 });
 
 vi.mock('@/features/super-admin-layout/components/super-admin-layout', () => ({
-  SuperAdminLayout: ({ children }: { children: React.ReactNode }) => <main>{children}</main>,
+  SuperAdminLayout: ({ children }: { children: React.ReactNode }) => (
+    <main>{children}</main>
+  ),
 }));
 
 vi.mock('@/features/vehicle-types/hooks/use-vehicle-types', () => ({
@@ -55,10 +67,15 @@ vi.mock('@/features/vehicle-types/hooks/use-vehicle-types', () => ({
   }),
 }));
 
-vi.mock('@/features/vehicle-types/services/vehicle-type-service', async (importOriginal) => ({
-  ...await importOriginal<typeof import('@/features/vehicle-types/services/vehicle-type-service')>(),
-  getVehicleTypeById: vi.fn(async () => vehicleType),
-}));
+vi.mock(
+  '@/features/vehicle-types/services/vehicle-type-service',
+  async (importOriginal) => ({
+    ...(await importOriginal<
+      typeof import('@/features/vehicle-types/services/vehicle-type-service')
+    >()),
+    getVehicleTypeById: vi.fn(async () => vehicleType),
+  }),
+);
 
 afterEach(() => cleanup());
 
@@ -84,30 +101,55 @@ describe('Vehicle Type action permissions', () => {
     const { rerender } = render(<VehicleTypesManagement />);
 
     expect(screen.queryByRole('button', { name: 'Thêm loại xe' })).toBeNull();
-    fireEvent.click(screen.getAllByRole('button', { name: 'Xem chi tiết loại xe Limousine' })[0]!);
-    const detail = await screen.findByRole('dialog', { name: 'Chi tiết loại xe' });
-    expect(within(detail).queryByRole('button', { name: 'Chỉnh sửa' })).toBeNull();
+    fireEvent.click(
+      screen.getAllByRole('button', {
+        name: 'Xem chi tiết loại xe Limousine',
+      })[0]!,
+    );
+    const detail = await screen.findByRole('dialog', {
+      name: 'Chi tiết loại xe',
+    });
+    expect(
+      within(detail).queryByRole('button', { name: 'Chỉnh sửa' }),
+    ).toBeNull();
 
     setEmployeeAdminTestSession(['vehicle-type:read', 'vehicle-type:create']);
     rerender(<VehicleTypesManagement />);
     fireEvent.click(screen.getByRole('button', { name: 'Thêm loại xe' }));
-    expect(await screen.findByRole('dialog', { name: 'Thêm loại xe' })).toBeTruthy();
+    expect(
+      await screen.findByRole('dialog', { name: 'Thêm loại xe' }),
+    ).toBeTruthy();
   });
 
   it('unmounts an open edit form when vehicle-type:update is revoked', async () => {
     setEmployeeAdminTestSession(['vehicle-type:read', 'vehicle-type:update']);
     const { rerender } = render(<VehicleTypesManagement />);
-    fireEvent.click(screen.getAllByRole('button', { name: 'Xem chi tiết loại xe Limousine' })[0]!);
-    const detail = await screen.findByRole('dialog', { name: 'Chi tiết loại xe' });
-    fireEvent.click(await within(detail).findByRole('button', { name: 'Chỉnh sửa' }));
-    expect(await screen.findByRole('dialog', { name: 'Chỉnh sửa loại xe' })).toBeTruthy();
+    fireEvent.click(
+      screen.getAllByRole('button', {
+        name: 'Xem chi tiết loại xe Limousine',
+      })[0]!,
+    );
+    const detail = await screen.findByRole('dialog', {
+      name: 'Chi tiết loại xe',
+    });
+    fireEvent.click(
+      await within(detail).findByRole('button', { name: 'Chỉnh sửa' }),
+    );
+    expect(
+      await screen.findByRole('dialog', { name: 'Chỉnh sửa loại xe' }),
+    ).toBeTruthy();
 
     setEmployeeAdminTestSession(['vehicle-type:read']);
     rerender(<VehicleTypesManagement />);
     await waitFor(() => {
-      expect(screen.queryByRole('dialog', { name: 'Chỉnh sửa loại xe' })).toBeNull();
-      expect(within(screen.getByRole('dialog', { name: 'Chi tiết loại xe' }))
-        .queryByRole('button', { name: 'Chỉnh sửa' })).toBeNull();
+      expect(
+        screen.queryByRole('dialog', { name: 'Chỉnh sửa loại xe' }),
+      ).toBeNull();
+      expect(
+        within(
+          screen.getByRole('dialog', { name: 'Chi tiết loại xe' }),
+        ).queryByRole('button', { name: 'Chỉnh sửa' }),
+      ).toBeNull();
     });
   });
 });

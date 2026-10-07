@@ -301,6 +301,38 @@
   line-height: var(--admin-type-error-line-height);
 }
 
+.vehicle-type-capacity-group {
+  display: grid;
+  min-width: 0;
+  gap: var(--admin-space-component-gap);
+  margin: 0;
+  padding: var(--admin-space-card-padding);
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius-panel);
+}
+
+.vehicle-type-capacity-group legend {
+  padding: 0 var(--admin-space-2);
+  color: var(--admin-text-strong);
+  font-size: var(--admin-type-label-size);
+  font-weight: var(--admin-weight-semibold);
+  line-height: var(--admin-type-label-line-height);
+}
+
+.vehicle-type-capacity-help {
+  margin: 0;
+  color: var(--admin-text-muted);
+  font-size: var(--admin-type-helper-size);
+  font-weight: var(--admin-weight-regular);
+  line-height: var(--admin-type-helper-line-height);
+}
+
+.vehicle-type-capacity-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--admin-space-field-gap);
+}
+
 .vehicle-type-form-actions {
   position: sticky;
   bottom: 0;
@@ -334,6 +366,10 @@
 
   .vehicle-types-section {
     margin-top: var(--admin-space-section-gap);
+  }
+
+  .vehicle-type-capacity-fields {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .vehicle-types-table-wrap {
@@ -455,7 +491,6 @@
     padding-right: var(--admin-space-form-inline);
     padding-left: var(--admin-space-form-inline);
   }
-
 }
 
 @media (prefers-reduced-motion: reduce) {

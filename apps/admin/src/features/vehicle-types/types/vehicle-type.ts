@@ -2,6 +2,9 @@ export type VehicleType = {
   vehicleTypeId: number;
   name: string;
   description: string | null;
+  motorbikeCapacityDefault: number;
+  bulkyCargoCapacityDefault: number;
+  lightCargoCapacityDefault: number;
   createdAt: string;
   updatedAt: string;
 };
@@ -10,11 +13,17 @@ export type CreateVehicleTypeInput = {
   name: string;
   description: string | null;
   busCompanyId: number;
+  motorbikeCapacityDefault?: number;
+  bulkyCargoCapacityDefault?: number;
+  lightCargoCapacityDefault?: number;
 };
 
 export type UpdateVehicleTypeInput = {
   name: string;
   description: string | null;
+  motorbikeCapacityDefault?: number;
+  bulkyCargoCapacityDefault?: number;
+  lightCargoCapacityDefault?: number;
 };
 
 export type VehicleTypeSortKey = 'name' | 'createdAt' | 'updatedAt';
