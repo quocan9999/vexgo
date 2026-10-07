@@ -1,9 +1,16 @@
-import { renderToStaticMarkup } from 'react-dom/server';
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { TripFormDialog } from '../src/features/trips/components/trip-form-dialog';
+// @vitest-environment jsdom
 import {
-  TripDetailSheet,
-} from '../src/features/trips/components/trip-detail-sheet';
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { TripFormDialog } from '../src/features/trips/components/trip-form-dialog';
+import { TripDetailSheet } from '../src/features/trips/components/trip-detail-sheet';
 import { TripsManagement } from '../src/features/trips/components/trips-management';
 import {
   cancelTrip,
@@ -51,7 +58,9 @@ vi.mock('@/features/super-admin-layout/components/super-admin-layout', () => ({
 }));
 
 vi.mock('@/components/data-filters/data-filters', () => ({
-  FilterToolbar: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  FilterToolbar: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
   SearchInput: () => null,
   SelectFilter: () => null,
   SingleDateFilter: () => null,
@@ -85,6 +94,8 @@ const mockTrip: Trip = {
   departureDate: '2026-10-10',
   departureTime: '07:30:00',
   status: 'CHUA_KHOI_HANH',
+  acceptsShipments: true,
+  cargoCapacity: { motorbikes: 1, bulkyCargo: 2, lightCargo: 3 },
   route: {
     routeId: 1,
     code: 'FUTA-TX-0001',
@@ -126,7 +137,24 @@ const vehicleOptionsSuccess: TripLookupOptionsState = {
   ],
 };
 
+beforeAll(() => {
+  Object.defineProperty(HTMLDialogElement.prototype, 'showModal', {
+    configurable: true,
+    value(this: HTMLDialogElement) {
+      this.setAttribute('open', '');
+    },
+  });
+  Object.defineProperty(HTMLDialogElement.prototype, 'close', {
+    configurable: true,
+    value(this: HTMLDialogElement) {
+      this.removeAttribute('open');
+      this.dispatchEvent(new Event('close'));
+    },
+  });
+});
+
 afterEach(() => {
+  cleanup();
   vi.restoreAllMocks();
 });
 
@@ -147,6 +175,7 @@ describe('Trip Form Composition & Validation', () => {
     expect(html).toContain('Mã chuyến xe');
     expect(html).toContain('Tuyến xe');
     expect(html).toContain('Xe phục vụ');
+    expect(html).toContain('Nhận gửi hàng');
     expect(html).toContain('Ngày khởi hành');
     expect(html).toContain('Giờ khởi hành');
     expect(html).toContain('FUTA-TX-0001 (TP.HCM → Đà Lạt)');
@@ -180,6 +209,112 @@ describe('Trip Form Composition & Validation', () => {
     expect(html).toContain('id="edit-trip-101-departure-time"');
     expect(html).toContain('2026-10-10');
     expect(html).toContain('07:30');
+    expect(html).not.toContain('Nhận gửi hàng');
+  });
+
+  it.each([
+    ['unchecked', false],
+    ['selected', true],
+  ])(
+    'when the create checkbox is %s, submits acceptsShipments=%s',
+    async (state, acceptsShipments) => {
+      const fetchMock = vi
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValue(
+          new Response(JSON.stringify({ data: mockTrip }), { status: 201 }),
+        );
+      render(
+        <TripFormDialog
+          onClose={vi.fn()}
+          onRetryRouteOptions={vi.fn()}
+          onRetryVehicleOptions={vi.fn()}
+          onSaved={vi.fn()}
+          routeOptions={routeOptionsSuccess}
+          vehicleOptions={vehicleOptionsSuccess}
+        />,
+      );
+
+      const dialog = await screen.findByRole('dialog', {
+        name: 'Thêm chuyến xe mới',
+      });
+      const checkbox = within(dialog).getByRole('checkbox', {
+        name: 'Nhận gửi hàng',
+      }) as HTMLInputElement;
+      expect(checkbox.checked).toBe(false);
+      if (state === 'selected') fireEvent.click(checkbox);
+
+      fireEvent.change(within(dialog).getByLabelText(/Mã chuyến xe/), {
+        target: { value: 'FUTA-CX-001' },
+      });
+      fireEvent.change(within(dialog).getByLabelText(/Tuyến xe/), {
+        target: { value: '1' },
+      });
+      fireEvent.change(within(dialog).getByLabelText(/Xe phục vụ/), {
+        target: { value: '8' },
+      });
+      fireEvent.change(within(dialog).getByLabelText(/Ngày khởi hành/), {
+        target: { value: '2026-10-10' },
+      });
+      fireEvent.change(within(dialog).getByLabelText(/Giờ khởi hành/), {
+        target: { value: '07:30' },
+      });
+      fireEvent.click(
+        within(dialog).getByRole('button', { name: 'Tạo chuyến xe' }),
+      );
+
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
+      const [, init] = fetchMock.mock.calls[0];
+      expect(JSON.parse(init?.body as string)).toEqual({
+        code: 'FUTA-CX-001',
+        routeId: 1,
+        vehicleId: 8,
+        departureDate: '2026-10-10',
+        departureTime: '07:30:00',
+        acceptsShipments,
+      });
+    },
+  );
+
+  it('does not expose or submit shipment fields while editing a trip', async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(
+        new Response(JSON.stringify({ data: mockTrip }), { status: 200 }),
+      );
+    render(
+      <TripFormDialog
+        onClose={vi.fn()}
+        onRetryRouteOptions={vi.fn()}
+        onRetryVehicleOptions={vi.fn()}
+        onSaved={vi.fn()}
+        routeOptions={routeOptionsSuccess}
+        trip={mockTrip}
+        vehicleOptions={vehicleOptionsSuccess}
+      />,
+    );
+
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Chỉnh sửa chuyến xe',
+    });
+    expect(
+      within(dialog).queryByRole('checkbox', { name: 'Nhận gửi hàng' }),
+    ).toBeNull();
+    fireEvent.change(within(dialog).getByLabelText(/Ngày khởi hành/), {
+      target: { value: '2026-10-15' },
+    });
+    fireEvent.change(within(dialog).getByLabelText(/Giờ khởi hành/), {
+      target: { value: '08:00' },
+    });
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Cập nhật chuyến' }),
+    );
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
+    const [, init] = fetchMock.mock.calls[0];
+    expect(JSON.parse(init?.body as string)).toEqual({
+      departureDate: '2026-10-15',
+      departureTime: '08:00:00',
+    });
   });
 
   it('shows loading state for route and vehicle options', () => {
@@ -232,11 +367,42 @@ describe('Trip permission gates', () => {
   });
 });
 
+describe('Trip shipment snapshot details', () => {
+  it('shows the shipment flag and total snapshot capacities in the detail sheet', () => {
+    setEmployeeAdminTestSession(['trip:read']);
+    const html = renderToStaticMarkup(
+      <TripDetailSheet initialTrip={mockTrip} onClose={vi.fn()} tripId={101} />,
+    );
+
+    expect(html).toContain('Nhận gửi hàng');
+    expect(html).toContain('Có');
+    expect(html).toContain('Sức chứa hàng');
+    expect(html).toContain('Xe máy');
+    expect(html).toContain('Hàng cồng kềnh');
+    expect(html).toContain('Hàng nhẹ');
+    expect(html).toMatch(/<dt>Xe máy<\/dt><dd>1<\/dd>/);
+    expect(html).toMatch(/<dt>Hàng cồng kềnh<\/dt><dd>2<\/dd>/);
+    expect(html).toMatch(/<dt>Hàng nhẹ<\/dt><dd>3<\/dd>/);
+    expect(html).not.toContain('Còn lại');
+
+    const nonShipmentHtml = renderToStaticMarkup(
+      <TripDetailSheet
+        initialTrip={{ ...mockTrip, acceptsShipments: false }}
+        onClose={vi.fn()}
+        tripId={101}
+      />,
+    );
+    expect(nonShipmentHtml).toContain('<dt>Nhận gửi hàng</dt><dd>Không</dd>');
+  });
+});
+
 describe('Trip write service API contracts', () => {
   it('createTrip sends POST /api/v1/trips with correct payload', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify({ data: mockTrip }), { status: 201 }),
-    );
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(
+        new Response(JSON.stringify({ data: mockTrip }), { status: 201 }),
+      );
 
     const result = await createTrip({
       code: 'FUTA-CX-001',
@@ -244,6 +410,7 @@ describe('Trip write service API contracts', () => {
       vehicleId: 8,
       departureDate: '2026-10-10',
       departureTime: '07:30',
+      acceptsShipments: true,
     });
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -256,6 +423,7 @@ describe('Trip write service API contracts', () => {
       vehicleId: 8,
       departureDate: '2026-10-10',
       departureTime: '07:30',
+      acceptsShipments: true,
     });
     expect(result.tripId).toBe(101);
   });
@@ -266,9 +434,11 @@ describe('Trip write service API contracts', () => {
       departureDate: '2026-10-15',
       departureTime: '08:00:00',
     };
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify({ data: updatedMock }), { status: 200 }),
-    );
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(
+        new Response(JSON.stringify({ data: updatedMock }), { status: 200 }),
+      );
 
     const result = await updateTrip(101, {
       departureDate: '2026-10-15',
@@ -305,6 +475,7 @@ describe('Trip write service API contracts', () => {
         vehicleId: 8,
         departureDate: '2026-10-10',
         departureTime: '07:30',
+        acceptsShipments: false,
       }),
     ).rejects.toMatchObject({
       name: 'TripApiError',
@@ -332,6 +503,7 @@ describe('Trip write service API contracts', () => {
         vehicleId: 8,
         departureDate: '2026-10-10',
         departureTime: '07:30',
+        acceptsShipments: false,
       }),
     ).rejects.toMatchObject({
       name: 'TripApiError',
@@ -398,9 +570,7 @@ describe('Trip write service API contracts', () => {
     );
 
     const options = await getTripVehicleOptions();
-    expect(options).toEqual([
-      { id: 8, label: '30F-123.45 (GIƯỜNG NẰM)' },
-    ]);
+    expect(options).toEqual([{ id: 8, label: '30F-123.45 (GIƯỜNG NẰM)' }]);
   });
 
   it('getTripRouteOptions fetches all pages when totalPages > 1 and combines options', async () => {
@@ -416,7 +586,11 @@ describe('Trip write service API contracts', () => {
                 origin: 'TP.HCM',
                 destination: 'Đà Lạt',
                 status: 'HOAT_DONG',
-                busCompany: { busCompanyId: 3, code: 'FUTA', name: 'Phương Trang' },
+                busCompany: {
+                  busCompanyId: 3,
+                  code: 'FUTA',
+                  name: 'Phương Trang',
+                },
                 createdAt: '2026-09-22T07:34:00.000Z',
                 updatedAt: '2026-09-23T07:34:00.000Z',
               },
@@ -436,7 +610,11 @@ describe('Trip write service API contracts', () => {
                 origin: 'TP.HCM',
                 destination: 'Cần Thơ',
                 status: 'HOAT_DONG',
-                busCompany: { busCompanyId: 3, code: 'FUTA', name: 'Phương Trang' },
+                busCompany: {
+                  busCompanyId: 3,
+                  code: 'FUTA',
+                  name: 'Phương Trang',
+                },
                 createdAt: '2026-09-22T07:34:00.000Z',
                 updatedAt: '2026-09-23T07:34:00.000Z',
               },
@@ -466,7 +644,11 @@ describe('Trip write service API contracts', () => {
                 vehicleId: 8,
                 licensePlate: '30F-123.45',
                 status: 'HOAT_DONG',
-                busCompany: { busCompanyId: 3, code: 'FUTA', name: 'Phương Trang' },
+                busCompany: {
+                  busCompanyId: 3,
+                  code: 'FUTA',
+                  name: 'Phương Trang',
+                },
                 vehicleType: { vehicleTypeId: 2, name: 'GIƯỜNG NẰM' },
                 createdAt: '2026-09-22T07:34:00.000Z',
                 updatedAt: '2026-09-23T07:34:00.000Z',
@@ -485,7 +667,11 @@ describe('Trip write service API contracts', () => {
                 vehicleId: 9,
                 licensePlate: '51B-999.99',
                 status: 'HOAT_DONG',
-                busCompany: { busCompanyId: 3, code: 'FUTA', name: 'Phương Trang' },
+                busCompany: {
+                  busCompanyId: 3,
+                  code: 'FUTA',
+                  name: 'Phương Trang',
+                },
                 vehicleType: { vehicleTypeId: 2, name: 'LIMOUSINE' },
                 createdAt: '2026-09-22T07:34:00.000Z',
                 updatedAt: '2026-09-23T07:34:00.000Z',
@@ -606,9 +792,11 @@ describe('Trip lifecycle & cancellation action gates in detail sheet', () => {
 describe('Trip status update and cancellation service API contracts', () => {
   it('updateTripStatus sends PATCH /api/v1/trips/:id/status with target status', async () => {
     const updatedMock = { ...mockTrip, status: 'DANG_CHAY' as const };
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify({ data: updatedMock }), { status: 200 }),
-    );
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(
+        new Response(JSON.stringify({ data: updatedMock }), { status: 200 }),
+      );
 
     const result = await updateTripStatus(101, 'DANG_CHAY');
 
@@ -622,9 +810,11 @@ describe('Trip status update and cancellation service API contracts', () => {
 
   it('cancelTrip sends POST /api/v1/trips/:id/cancel', async () => {
     const cancelledMock = { ...mockTrip, status: 'DA_HUY' as const };
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify({ data: cancelledMock }), { status: 200 }),
-    );
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(
+        new Response(JSON.stringify({ data: cancelledMock }), { status: 200 }),
+      );
 
     const result = await cancelTrip(101);
 

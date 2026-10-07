@@ -2,7 +2,15 @@ import type { ExecutionContext, INestApplication } from '@nestjs/common';
 import { UnauthorizedException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 import { AppModule } from '../../../src/app.module.js';
 import { AccessTokenGuard } from '../../../src/auth/guards/access-token.guard.js';
 import { ADMIN_ROLE_DEFAULT_PERMISSION_KEYS } from '../../../src/auth/permissions/permission-catalog.js';
@@ -72,7 +80,8 @@ const testAccessTokenGuard = {
         message: 'Cần đăng nhập để thực hiện thao tác này.',
       });
     }
-    context.switchToHttp().getRequest<{ user?: AuthPrincipal }>().user = testPrincipal;
+    context.switchToHttp().getRequest<{ user?: AuthPrincipal }>().user =
+      testPrincipal;
     return true;
   },
 };
@@ -326,7 +335,9 @@ describe('Admin Customers API (Feature 06.1)', () => {
       mockPrisma.khachHang.findMany.mockResolvedValue([]);
 
       await request(app.getHttpServer())
-        .get('/api/v1/customers?accountStatus=HOAT_DONG&sortBy=loyaltyPoints&sortDirection=desc')
+        .get(
+          '/api/v1/customers?accountStatus=HOAT_DONG&sortBy=loyaltyPoints&sortDirection=desc',
+        )
         .expect(200);
 
       expect(mockPrisma.khachHang.findMany).toHaveBeenCalledWith(
@@ -510,10 +521,7 @@ describe('Admin Customers API (Feature 06.1)', () => {
           khachHangId: 101,
           nhaXeId: 1,
         },
-        orderBy: [
-          { ngayTao: 'desc' },
-          { donGiaoDichId: 'desc' },
-        ],
+        orderBy: [{ ngayTao: 'desc' }, { donGiaoDichId: 'desc' }],
         skip: 0,
         take: 10,
         include: {
@@ -561,7 +569,9 @@ describe('Admin Customers API (Feature 06.1)', () => {
       mockPrisma.donGiaoDich.findMany.mockResolvedValue([]);
 
       await request(app.getHttpServer())
-        .get('/api/v1/customers/101/transactions?search=GD000501&sortBy=totalAmount&sortDirection=asc')
+        .get(
+          '/api/v1/customers/101/transactions?search=GD000501&sortBy=totalAmount&sortDirection=asc',
+        )
         .expect(200);
 
       expect(mockPrisma.donGiaoDich.findMany).toHaveBeenCalledWith(
@@ -571,10 +581,7 @@ describe('Admin Customers API (Feature 06.1)', () => {
             nhaXeId: 1,
             maDonGiaoDich: { contains: 'GD000501' },
           },
-          orderBy: [
-            { tongTien: 'asc' },
-            { donGiaoDichId: 'asc' },
-          ],
+          orderBy: [{ tongTien: 'asc' }, { donGiaoDichId: 'asc' }],
         }),
       );
     });
@@ -951,11 +958,7 @@ describe('Admin Customers API (Feature 06.1)', () => {
             receiver: {
               fullName: 'Trần Văn B',
               phoneNumber: '0912345678',
-              address: null,
             },
-            pickupMethod: null,
-            deliveryMethod: null,
-            pickupAddress: '456 Mai Chí Thọ, TP.HCM',
             mainFee: 80000,
             serviceFee: 10000,
             discountAmount: 5000,
@@ -965,14 +968,14 @@ describe('Admin Customers API (Feature 06.1)', () => {
               tripId: 101,
               code: 'FUTA-CX-0001',
             },
-            originBranch: {
-              branchId: 1,
+            originPoint: {
+              pointId: 1,
               code: 'FUTA-BC-001',
               name: 'Điểm gửi Miền Đông',
               address: '456 Mai Chí Thọ, TP.HCM',
             },
-            destinationBranch: {
-              branchId: 2,
+            destinationPoint: {
+              pointId: 2,
               code: 'FUTA-BC-002',
               name: 'Điểm nhận Đà Lạt',
               address: '123 Lê Lợi, Đà Lạt',
@@ -986,6 +989,14 @@ describe('Admin Customers API (Feature 06.1)', () => {
           totalPages: 1,
         },
       });
+
+      const shipment = response.body.data[0];
+      expect(shipment).not.toHaveProperty('pickupMethod');
+      expect(shipment).not.toHaveProperty('deliveryMethod');
+      expect(shipment).not.toHaveProperty('pickupAddress');
+      expect(shipment.receiver).not.toHaveProperty('address');
+      expect(shipment).not.toHaveProperty('originBranch');
+      expect(shipment).not.toHaveProperty('destinationBranch');
 
       expect(mockPrisma.phieuGuiHang.findMany).toHaveBeenCalledWith(
         expect.objectContaining({

@@ -139,6 +139,10 @@ function mapTripItem(trip: {
   ngayKhoiHanh: Date;
   gioKhoiHanh: Date;
   trangThai: string;
+  nhanGuiHang: boolean;
+  sucChuaXeMay: number;
+  sucChuaHangCongKenh: number;
+  sucChuaHangNhe: number;
   createdAt: Date;
   updatedAt: Date;
   tuyenXe: {
@@ -163,6 +167,12 @@ function mapTripItem(trip: {
     departureDate: formatTripDate(trip.ngayKhoiHanh),
     departureTime: formatTripTime(trip.gioKhoiHanh),
     status: trip.trangThai,
+    acceptsShipments: trip.nhanGuiHang,
+    cargoCapacity: {
+      motorbikes: trip.sucChuaXeMay,
+      bulkyCargo: trip.sucChuaHangCongKenh,
+      lightCargo: trip.sucChuaHangNhe,
+    },
     route: {
       routeId: trip.tuyenXe.tuyenXeId,
       code: trip.tuyenXe.maTuyenXe,
@@ -679,7 +689,10 @@ export class TripsService {
 
     const departureDate = new Date(`${dto.departureDate}T00:00:00.000Z`);
     const departureTime = new Date(`1970-01-01T${dto.departureTime}.000Z`);
-    const arrivalTime = calculateClockTime(departureTime, route.thoiGianChayPhut);
+    const arrivalTime = calculateClockTime(
+      departureTime,
+      route.thoiGianChayPhut,
+    );
 
     const existingCode = await this.prisma.chuyenXe.findFirst({
       where: { maChuyenXe: dto.code },
@@ -731,12 +744,12 @@ export class TripsService {
               gioKhoiHanh: departureTime,
               gioDen: arrivalTime,
               trangThai: 'CHUA_KHOI_HANH',
+              nhanGuiHang: dto.acceptsShipments ?? false,
               nhaXeId,
               tuyenXeId: dto.routeId,
               xeId: dto.vehicleId,
               sucChuaXeMay: vehicle.loaiXe.sucChuaXeMayMacDinh,
-              sucChuaHangCongKenh:
-                vehicle.loaiXe.sucChuaHangCongKenhMacDinh,
+              sucChuaHangCongKenh: vehicle.loaiXe.sucChuaHangCongKenhMacDinh,
               sucChuaHangNhe: vehicle.loaiXe.sucChuaHangNheMacDinh,
               gheChuyenXes: {
                 create: vehicle.ghes.map((ghe) => ({
@@ -799,6 +812,10 @@ export class TripsService {
     ngayKhoiHanh: Date;
     gioKhoiHanh: Date;
     trangThai: string;
+    nhanGuiHang: boolean;
+    sucChuaXeMay: number;
+    sucChuaHangCongKenh: number;
+    sucChuaHangNhe: number;
     createdAt: Date;
     updatedAt: Date;
     tuyenXe: {
