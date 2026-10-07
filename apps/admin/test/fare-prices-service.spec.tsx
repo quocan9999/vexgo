@@ -56,6 +56,9 @@ function vehicleType(vehicleTypeId: number, name: string) {
     vehicleTypeId,
     name,
     description: null,
+    motorbikeCapacityDefault: 0,
+    bulkyCargoCapacityDefault: 0,
+    lightCargoCapacityDefault: 0,
     createdAt: '2026-09-01T08:30:00.000Z',
     updatedAt: '2026-09-02T08:30:00.000Z',
   };

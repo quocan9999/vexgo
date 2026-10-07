@@ -78,6 +78,7 @@
 
 - `npm test --workspace=@vexgo/api -- test/unit/trips/trips.service.spec.ts test/integration/trips/trips-read.spec.ts test/integration/trips/trips-write.spec.ts`
 - `npm test --workspace=@vexgo/admin -- test/trips-read.spec.tsx test/trips-write.spec.tsx test/trips-seats.spec.tsx`
+- `npm test --workspace=@vexgo/admin -- test/fare-prices-create.spec.tsx test/fare-prices-read.spec.tsx test/fare-prices-service.spec.tsx test/fare-prices-status.spec.tsx test/fare-prices-update.spec.tsx`
 - `npm run typecheck --workspace=@vexgo/api`
 - `npm run typecheck --workspace=@vexgo/admin`
 - `git diff --check`
@@ -87,10 +88,15 @@
 
 - API: 3 targeted files passed, 119 tests passed.
 - Admin: 3 targeted files passed, 49 tests passed.
+- Fare Price: 5 file test mục tiêu đạt, 29 test đạt sau khi bổ sung ba giá trị capacity mặc định theo contract Phase 1 vào fixture API Vehicle Type.
 - API và Admin typecheck đều thành công.
 - `git diff --check` thành công; chỉ có cảnh báo Git về chuyển đổi LF/CRLF trên các file đã sửa.
 - GitNexus ghi nhận 14 file code/test, 24 symbols, 34 execution flows và mức rủi ro `CRITICAL`. Rủi ro chủ yếu do contract `Trip` và parser `isTrip` dùng chung được mở rộng; đã rà các mapper list/detail/write response và chạy test read, create/update cùng seat workspace.
 - Không chạy toàn bộ Admin/API suite hoặc `trips-concurrency.spec.ts`.
+
+## CI_RESULTS
+
+- GitHub Actions run #300 trước khi sửa fixture: API CI đạt, Web CI đạt, Admin CI thất bại. Finding: mock Vehicle Type trong Fare Price thiếu ba giá trị capacity mặc định bắt buộc; lần chạy lại 5 file mục tiêu đã đạt sau khi cập nhật fixture.
 
 ## BROWSER_CHECK
 
