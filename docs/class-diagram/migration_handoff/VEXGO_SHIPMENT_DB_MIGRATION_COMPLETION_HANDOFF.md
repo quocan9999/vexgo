@@ -227,6 +227,12 @@ Ngoài ra, database demo local đã từng áp dụng bản cũ của migration 
 
 Chạy sau khi PR này đã được merge vào `develop`. Các lệnh chạy từ thư mục gốc repository. `DATABASE_URL`, `MIGRATION_URL` và `SHADOW_DATABASE_URL` trong `.env` phải trỏ đúng các database dev của người chạy lệnh; shadow database phải riêng biệt.
 
+#### Nếu database đã có dữ liệu shipment từ seed cũ
+
+Không chạy thẳng `migrate deploy` trên database dev/demo cũ mà chưa kiểm tra dữ liệu cước. Migration `20261007100000_add_shipment_cargo_type_fees` cố ý dừng tại `_ShipmentCargoFeePreflight_financial_check` nếu tổng rate lịch sử theo từng loại hàng không khớp `PhieuGuiHang.cuocChinh`/`tongPhi`. Trường hợp này đã xảy ra trên database demo local: có 15 phiếu lệch do dữ liệu fixture được seed ở phiên bản rate cũ. Đây là guard bảo vệ snapshot tài chính; không bỏ guard hoặc đánh dấu migration là đã áp dụng để đi tiếp.
+
+Với database demo có thể tạo lại, hãy dùng một database dev mới/rỗng rồi chạy quy trình bên dưới. Nếu cần giữ dữ liệu đang có, dừng tại preflight và đối chiếu/mapping các khoản cước trước khi retry; không áp dụng hướng dẫn reset database lên dữ liệu cần giữ. Với lỗi preflight ở query 7 của migration này, chưa có bảng `ChiTietCuocGuiHang` hay DDL bền vững nào được tạo.
+
 Với database mới hoặc database dev/demo đã được tạo lại rỗng:
 
 ```bash
