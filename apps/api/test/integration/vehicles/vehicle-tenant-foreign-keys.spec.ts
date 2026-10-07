@@ -107,6 +107,9 @@ describe('vehicle tenant composite foreign keys', () => {
         nhaXeId: companyA.nhaXeId,
         tuyenXeId: routeA.tuyenXeId,
         xeId: vehicleA.xeId,
+        sucChuaXeMay: 0,
+        sucChuaHangCongKenh: 0,
+        sucChuaHangNhe: 0,
       },
       select: { chuyenXeId: true },
     });

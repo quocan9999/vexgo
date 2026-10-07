@@ -655,6 +655,11 @@ describe('TripsService create (05.2)', () => {
       nhaXeId: 3,
       trangThai: 'HOAT_DONG',
       ghes: [{ gheId: 1 }, { gheId: 2 }],
+      loaiXe: {
+        sucChuaXeMayMacDinh: 2,
+        sucChuaHangCongKenhMacDinh: 8,
+        sucChuaHangNheMacDinh: 80,
+      },
     });
     prisma.chuyenXe.findFirst.mockResolvedValue(null);
 
@@ -681,6 +686,9 @@ describe('TripsService create (05.2)', () => {
         nhaXeId: 3,
         tuyenXeId: 8,
         xeId: 4,
+        sucChuaXeMay: 2,
+        sucChuaHangCongKenh: 8,
+        sucChuaHangNhe: 80,
         gheChuyenXes: {
           create: [{ gheId: 1, trangThai: 'TRONG' }, { gheId: 2, trangThai: 'TRONG' }],
         },
@@ -689,6 +697,19 @@ describe('TripsService create (05.2)', () => {
         tuyenXe: true,
         xe: { include: { loaiXe: true } },
         gheChuyenXes: { select: { trangThai: true } },
+      },
+    });
+    expect(prisma.xe.findFirst).toHaveBeenCalledWith({
+      where: { xeId: 4, nhaXeId: 3 },
+      include: {
+        ghes: true,
+        loaiXe: {
+          select: {
+            sucChuaXeMayMacDinh: true,
+            sucChuaHangCongKenhMacDinh: true,
+            sucChuaHangNheMacDinh: true,
+          },
+        },
       },
     });
     expect(result.data.seatSummary).toEqual({

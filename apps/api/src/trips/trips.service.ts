@@ -645,7 +645,16 @@ export class TripsService {
 
     const vehicle = await this.prisma.xe.findFirst({
       where: { xeId: dto.vehicleId, nhaXeId },
-      include: { ghes: true },
+      include: {
+        ghes: true,
+        loaiXe: {
+          select: {
+            sucChuaXeMayMacDinh: true,
+            sucChuaHangCongKenhMacDinh: true,
+            sucChuaHangNheMacDinh: true,
+          },
+        },
+      },
     });
     if (!vehicle) {
       throw new NotFoundException({
@@ -725,6 +734,10 @@ export class TripsService {
               nhaXeId,
               tuyenXeId: dto.routeId,
               xeId: dto.vehicleId,
+              sucChuaXeMay: vehicle.loaiXe.sucChuaXeMayMacDinh,
+              sucChuaHangCongKenh:
+                vehicle.loaiXe.sucChuaHangCongKenhMacDinh,
+              sucChuaHangNhe: vehicle.loaiXe.sucChuaHangNheMacDinh,
               gheChuyenXes: {
                 create: vehicle.ghes.map((ghe) => ({
                   gheId: ghe.gheId,

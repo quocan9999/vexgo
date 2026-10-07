@@ -23,6 +23,7 @@ function shipmentStatusTone(status: string): 'active' | 'muted' {
   if (
     status === 'DA_GIAO' ||
     status === 'HOAN_TAT' ||
+    status === 'DA_TIEP_NHAN' ||
     status === 'DA_GIAO_HANG' ||
     status === 'DANG_VAN_CHUYEN' ||
     status === 'DA_NHAN_HANG'
@@ -34,6 +35,10 @@ function shipmentStatusTone(status: string): 'active' | 'muted' {
 
 function formatShipmentStatus(status: string): string {
   switch (status) {
+    case 'MOI_TAO':
+      return 'Mới tạo';
+    case 'DA_TIEP_NHAN':
+      return 'Đã tiếp nhận';
     case 'CHO_LAY_HANG':
       return 'Chờ lấy hàng';
     case 'DA_NHAN_HANG':
@@ -58,7 +63,9 @@ function formatShipmentStatus(status: string): string {
   }
 }
 
-function formatMethod(method: string): string {
+function formatMethod(method: string | null): string {
+  if (!method) return '—';
+
   switch (method) {
     case 'TAI_BUU_CUC':
       return 'Tại bưu cục';
@@ -158,7 +165,7 @@ export function CustomerShipmentsTab({ customerId }: { customerId: number }) {
                   </th>
                   <th scope="col">Người nhận</th>
                   <th scope="col">Lấy / Giao</th>
-                  <th scope="col">Bưu cục</th>
+                  <th scope="col">Điểm gửi / nhận</th>
                   <th scope="col">Tổng phí</th>
                   <th scope="col">Trạng thái</th>
                 </tr>
@@ -191,9 +198,17 @@ export function CustomerShipmentsTab({ customerId }: { customerId: number }) {
                     </td>
                     <td>
                       {s.originBranch && s.destinationBranch ? (
-                        <span>
-                          {s.originBranch.name} → {s.destinationBranch.name}
-                        </span>
+                        <>
+                          <span>
+                            {s.originBranch.name} → {s.destinationBranch.name}
+                          </span>
+                          {(s.originBranch.address || s.destinationBranch.address) && (
+                            <div className="ticket-seat-pos">
+                              {s.originBranch.address || '—'} →{' '}
+                              {s.destinationBranch.address || '—'}
+                            </div>
+                          )}
+                        </>
                       ) : (
                         '—'
                       )}
@@ -251,11 +266,23 @@ export function CustomerShipmentsTab({ customerId }: { customerId: number }) {
                     </dd>
                   </div>
                   <div>
-                    <dt>Chi nhánh</dt>
+                    <dt>Điểm gửi / nhận</dt>
                     <dd>
-                      {s.originBranch && s.destinationBranch
-                        ? `${s.originBranch.name} → ${s.destinationBranch.name}`
-                        : '—'}
+                      {s.originBranch && s.destinationBranch ? (
+                        <>
+                          <span>
+                            {s.originBranch.name} → {s.destinationBranch.name}
+                          </span>
+                          {(s.originBranch.address || s.destinationBranch.address) && (
+                            <div className="ticket-seat-pos">
+                              {s.originBranch.address || '—'} →{' '}
+                              {s.destinationBranch.address || '—'}
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        '—'
+                      )}
                     </dd>
                   </div>
                   <div>

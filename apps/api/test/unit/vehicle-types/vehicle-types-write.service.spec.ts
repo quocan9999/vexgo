@@ -11,6 +11,9 @@ const vehicleTypeRecord = {
   nhaXeId: 4,
   tenLoai: 'Limousine 22 phòng',
   moTa: 'Loại xe giường phòng cao cấp',
+  sucChuaXeMayMacDinh: 0,
+  sucChuaHangCongKenhMacDinh: 0,
+  sucChuaHangNheMacDinh: 0,
   createdAt: new Date('2026-09-25T10:00:00.000Z'),
   updatedAt: new Date('2026-09-25T11:00:00.000Z'),
 };

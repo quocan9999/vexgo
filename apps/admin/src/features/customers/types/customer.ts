@@ -173,6 +173,7 @@ export interface CustomerShipmentBranchSummary {
   branchId: number;
   code: string;
   name: string;
+  address: string;
 }
 
 export interface CustomerShipment {
@@ -181,8 +182,8 @@ export interface CustomerShipment {
   sentAt: string;
   status: string;
   receiver: CustomerShipmentReceiver;
-  pickupMethod: string;
-  deliveryMethod: string;
+  pickupMethod: string | null;
+  deliveryMethod: string | null;
   pickupAddress: string | null;
   mainFee: number;
   serviceFee: number;
