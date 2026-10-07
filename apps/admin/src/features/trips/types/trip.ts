@@ -45,12 +45,20 @@ export type TripSeatSummary = {
   booked: number;
 };
 
+export type TripCargoCapacity = {
+  motorbikes: number;
+  bulkyCargo: number;
+  lightCargo: number;
+};
+
 export type Trip = {
   tripId: number;
   code: string;
   departureDate: string;
   departureTime: string;
   status: TripStatus;
+  acceptsShipments: boolean;
+  cargoCapacity: TripCargoCapacity;
   route: TripRoute;
   vehicle: TripVehicle;
   seatSummary?: TripSeatSummary;
@@ -86,6 +94,7 @@ export type CreateTripInput = {
   vehicleId: number;
   departureDate: string;
   departureTime: string;
+  acceptsShipments: boolean;
 };
 
 export type UpdateTripInput = {

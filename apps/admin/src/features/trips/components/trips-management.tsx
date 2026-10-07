@@ -278,6 +278,8 @@ export function TripsManagement() {
                             </th>
                             <th scope="col">Tuyến xe</th>
                             <th scope="col">Xe</th>
+                            <th scope="col">Nhận gửi hàng</th>
+                            <th scope="col">Sức chứa hàng</th>
                             <th
                               aria-sort={
                                 sortBy === 'status'
@@ -312,6 +314,20 @@ export function TripsManagement() {
                                 <span className="trips-vehicle-type">
                                   {trip.vehicle.vehicleType.name}
                                 </span>
+                              </td>
+                              <td>{trip.acceptsShipments ? 'Có' : 'Không'}</td>
+                              <td>
+                                <div className="trips-cargo-capacity">
+                                  <span>
+                                    Xe máy: {trip.cargoCapacity.motorbikes}
+                                  </span>
+                                  <span>
+                                    Hàng cồng kềnh: {trip.cargoCapacity.bulkyCargo}
+                                  </span>
+                                  <span>
+                                    Hàng nhẹ: {trip.cargoCapacity.lightCargo}
+                                  </span>
+                                </div>
                               </td>
                               <td>
                                 <TripStatusBadge status={trip.status} />
@@ -356,6 +372,24 @@ export function TripsManagement() {
                                   {trip.vehicle.licensePlate}
                                 </span>{' '}
                                 ({trip.vehicle.vehicleType.name})
+                              </dd>
+                            </div>
+                            <div>
+                              <dt>Nhận gửi hàng</dt>
+                              <dd>{trip.acceptsShipments ? 'Có' : 'Không'}</dd>
+                            </div>
+                            <div className="trips-mobile-capacity">
+                              <dt>Sức chứa hàng</dt>
+                              <dd className="trips-cargo-capacity">
+                                <span>
+                                  Xe máy: {trip.cargoCapacity.motorbikes}
+                                </span>
+                                <span>
+                                  Hàng cồng kềnh: {trip.cargoCapacity.bulkyCargo}
+                                </span>
+                                <span>
+                                  Hàng nhẹ: {trip.cargoCapacity.lightCargo}
+                                </span>
                               </dd>
                             </div>
                           </dl>

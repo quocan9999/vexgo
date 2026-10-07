@@ -139,6 +139,10 @@ function mapTripItem(trip: {
   ngayKhoiHanh: Date;
   gioKhoiHanh: Date;
   trangThai: string;
+  nhanGuiHang: boolean;
+  sucChuaXeMay: number;
+  sucChuaHangCongKenh: number;
+  sucChuaHangNhe: number;
   createdAt: Date;
   updatedAt: Date;
   tuyenXe: {
@@ -163,6 +167,12 @@ function mapTripItem(trip: {
     departureDate: formatTripDate(trip.ngayKhoiHanh),
     departureTime: formatTripTime(trip.gioKhoiHanh),
     status: trip.trangThai,
+    acceptsShipments: trip.nhanGuiHang,
+    cargoCapacity: {
+      motorbikes: trip.sucChuaXeMay,
+      bulkyCargo: trip.sucChuaHangCongKenh,
+      lightCargo: trip.sucChuaHangNhe,
+    },
     route: {
       routeId: trip.tuyenXe.tuyenXeId,
       code: trip.tuyenXe.maTuyenXe,
@@ -731,6 +741,7 @@ export class TripsService {
               gioKhoiHanh: departureTime,
               gioDen: arrivalTime,
               trangThai: 'CHUA_KHOI_HANH',
+              nhanGuiHang: dto.acceptsShipments ?? false,
               nhaXeId,
               tuyenXeId: dto.routeId,
               xeId: dto.vehicleId,
@@ -799,6 +810,10 @@ export class TripsService {
     ngayKhoiHanh: Date;
     gioKhoiHanh: Date;
     trangThai: string;
+    nhanGuiHang: boolean;
+    sucChuaXeMay: number;
+    sucChuaHangCongKenh: number;
+    sucChuaHangNhe: number;
     createdAt: Date;
     updatedAt: Date;
     tuyenXe: {

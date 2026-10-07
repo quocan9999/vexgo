@@ -7,6 +7,7 @@ import {
   type CreateTripInput,
   type PaginatedTrips,
   type Trip,
+  type TripCargoCapacity,
   type TripListQuery,
   type TripLookupOption,
   type TripSeat,
@@ -63,6 +64,15 @@ function isTripSeatSummary(value: unknown): value is NonNullable<Trip['seatSumma
   );
 }
 
+function isTripCargoCapacity(value: unknown): value is TripCargoCapacity {
+  return (
+    isRecord(value) &&
+    isNonNegativeInteger(value.motorbikes) &&
+    isNonNegativeInteger(value.bulkyCargo) &&
+    isNonNegativeInteger(value.lightCargo)
+  );
+}
+
 function isTrip(value: unknown): value is Trip {
   if (
     !isRecord(value) ||
@@ -71,6 +81,8 @@ function isTrip(value: unknown): value is Trip {
     typeof value.departureDate !== 'string' ||
     typeof value.departureTime !== 'string' ||
     !isTripStatus(value.status) ||
+    typeof value.acceptsShipments !== 'boolean' ||
+    !isTripCargoCapacity(value.cargoCapacity) ||
     !isTripRoute(value.route) ||
     !isTripVehicle(value.vehicle) ||
     typeof value.createdAt !== 'string' ||

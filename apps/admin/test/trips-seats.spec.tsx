@@ -42,6 +42,8 @@ const mockTrip: Trip = {
   departureDate: '2026-10-10',
   departureTime: '07:30:00',
   status: 'CHUA_KHOI_HANH',
+  acceptsShipments: false,
+  cargoCapacity: { motorbikes: 1, bulkyCargo: 2, lightCargo: 3 },
   route: {
     routeId: 1,
     code: 'FUTA-TX-0001',

@@ -1,5 +1,14 @@
+// @vitest-environment jsdom
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { TripFormDialog } from '../src/features/trips/components/trip-form-dialog';
 import {
   TripDetailSheet,
@@ -85,6 +94,8 @@ const mockTrip: Trip = {
   departureDate: '2026-10-10',
   departureTime: '07:30:00',
   status: 'CHUA_KHOI_HANH',
+  acceptsShipments: true,
+  cargoCapacity: { motorbikes: 1, bulkyCargo: 2, lightCargo: 3 },
   route: {
     routeId: 1,
     code: 'FUTA-TX-0001',
@@ -126,7 +137,24 @@ const vehicleOptionsSuccess: TripLookupOptionsState = {
   ],
 };
 
+beforeAll(() => {
+  Object.defineProperty(HTMLDialogElement.prototype, 'showModal', {
+    configurable: true,
+    value(this: HTMLDialogElement) {
+      this.setAttribute('open', '');
+    },
+  });
+  Object.defineProperty(HTMLDialogElement.prototype, 'close', {
+    configurable: true,
+    value(this: HTMLDialogElement) {
+      this.removeAttribute('open');
+      this.dispatchEvent(new Event('close'));
+    },
+  });
+});
+
 afterEach(() => {
+  cleanup();
   vi.restoreAllMocks();
 });
 
@@ -147,6 +175,7 @@ describe('Trip Form Composition & Validation', () => {
     expect(html).toContain('Mã chuyến xe');
     expect(html).toContain('Tuyến xe');
     expect(html).toContain('Xe phục vụ');
+    expect(html).toContain('Nhận gửi hàng');
     expect(html).toContain('Ngày khởi hành');
     expect(html).toContain('Giờ khởi hành');
     expect(html).toContain('FUTA-TX-0001 (TP.HCM → Đà Lạt)');
@@ -180,6 +209,108 @@ describe('Trip Form Composition & Validation', () => {
     expect(html).toContain('id="edit-trip-101-departure-time"');
     expect(html).toContain('2026-10-10');
     expect(html).toContain('07:30');
+    expect(html).not.toContain('Nhận gửi hàng');
+  });
+
+  it.each([
+    ['unchecked', false],
+    ['selected', true],
+  ])(
+    'when the create checkbox is %s, submits acceptsShipments=%s',
+    async (state, acceptsShipments) => {
+      const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+        new Response(JSON.stringify({ data: mockTrip }), { status: 201 }),
+      );
+      render(
+        <TripFormDialog
+          onClose={vi.fn()}
+          onRetryRouteOptions={vi.fn()}
+          onRetryVehicleOptions={vi.fn()}
+          onSaved={vi.fn()}
+          routeOptions={routeOptionsSuccess}
+          vehicleOptions={vehicleOptionsSuccess}
+        />,
+      );
+
+      const dialog = await screen.findByRole('dialog', {
+        name: 'Thêm chuyến xe mới',
+      });
+      const checkbox = within(dialog).getByRole('checkbox', {
+        name: 'Nhận gửi hàng',
+      }) as HTMLInputElement;
+      expect(checkbox.checked).toBe(false);
+      if (state === 'selected') fireEvent.click(checkbox);
+
+      fireEvent.change(within(dialog).getByLabelText(/Mã chuyến xe/), {
+        target: { value: 'FUTA-CX-001' },
+      });
+      fireEvent.change(within(dialog).getByLabelText(/Tuyến xe/), {
+        target: { value: '1' },
+      });
+      fireEvent.change(within(dialog).getByLabelText(/Xe phục vụ/), {
+        target: { value: '8' },
+      });
+      fireEvent.change(within(dialog).getByLabelText(/Ngày khởi hành/), {
+        target: { value: '2026-10-10' },
+      });
+      fireEvent.change(within(dialog).getByLabelText(/Giờ khởi hành/), {
+        target: { value: '07:30' },
+      });
+      fireEvent.click(
+        within(dialog).getByRole('button', { name: 'Tạo chuyến xe' }),
+      );
+
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
+      const [, init] = fetchMock.mock.calls[0];
+      expect(JSON.parse(init?.body as string)).toEqual({
+        code: 'FUTA-CX-001',
+        routeId: 1,
+        vehicleId: 8,
+        departureDate: '2026-10-10',
+        departureTime: '07:30:00',
+        acceptsShipments,
+      });
+    },
+  );
+
+  it('does not expose or submit shipment fields while editing a trip', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ data: mockTrip }), { status: 200 }),
+    );
+    render(
+      <TripFormDialog
+        onClose={vi.fn()}
+        onRetryRouteOptions={vi.fn()}
+        onRetryVehicleOptions={vi.fn()}
+        onSaved={vi.fn()}
+        routeOptions={routeOptionsSuccess}
+        trip={mockTrip}
+        vehicleOptions={vehicleOptionsSuccess}
+      />,
+    );
+
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Chỉnh sửa chuyến xe',
+    });
+    expect(
+      within(dialog).queryByRole('checkbox', { name: 'Nhận gửi hàng' }),
+    ).toBeNull();
+    fireEvent.change(within(dialog).getByLabelText(/Ngày khởi hành/), {
+      target: { value: '2026-10-15' },
+    });
+    fireEvent.change(within(dialog).getByLabelText(/Giờ khởi hành/), {
+      target: { value: '08:00' },
+    });
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Cập nhật chuyến' }),
+    );
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
+    const [, init] = fetchMock.mock.calls[0];
+    expect(JSON.parse(init?.body as string)).toEqual({
+      departureDate: '2026-10-15',
+      departureTime: '08:00:00',
+    });
   });
 
   it('shows loading state for route and vehicle options', () => {
@@ -232,6 +363,39 @@ describe('Trip permission gates', () => {
   });
 });
 
+describe('Trip shipment snapshot details', () => {
+  it('shows the shipment flag and total snapshot capacities in the detail sheet', () => {
+    setEmployeeAdminTestSession(['trip:read']);
+    const html = renderToStaticMarkup(
+      <TripDetailSheet
+        initialTrip={mockTrip}
+        onClose={vi.fn()}
+        tripId={101}
+      />,
+    );
+
+    expect(html).toContain('Nhận gửi hàng');
+    expect(html).toContain('Có');
+    expect(html).toContain('Sức chứa hàng');
+    expect(html).toContain('Xe máy');
+    expect(html).toContain('Hàng cồng kềnh');
+    expect(html).toContain('Hàng nhẹ');
+    expect(html).toMatch(/<dt>Xe máy<\/dt><dd>1<\/dd>/);
+    expect(html).toMatch(/<dt>Hàng cồng kềnh<\/dt><dd>2<\/dd>/);
+    expect(html).toMatch(/<dt>Hàng nhẹ<\/dt><dd>3<\/dd>/);
+    expect(html).not.toContain('Còn lại');
+
+    const nonShipmentHtml = renderToStaticMarkup(
+      <TripDetailSheet
+        initialTrip={{ ...mockTrip, acceptsShipments: false }}
+        onClose={vi.fn()}
+        tripId={101}
+      />,
+    );
+    expect(nonShipmentHtml).toContain('<dt>Nhận gửi hàng</dt><dd>Không</dd>');
+  });
+});
+
 describe('Trip write service API contracts', () => {
   it('createTrip sends POST /api/v1/trips with correct payload', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
@@ -244,6 +408,7 @@ describe('Trip write service API contracts', () => {
       vehicleId: 8,
       departureDate: '2026-10-10',
       departureTime: '07:30',
+      acceptsShipments: true,
     });
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -256,6 +421,7 @@ describe('Trip write service API contracts', () => {
       vehicleId: 8,
       departureDate: '2026-10-10',
       departureTime: '07:30',
+      acceptsShipments: true,
     });
     expect(result.tripId).toBe(101);
   });
@@ -305,6 +471,7 @@ describe('Trip write service API contracts', () => {
         vehicleId: 8,
         departureDate: '2026-10-10',
         departureTime: '07:30',
+        acceptsShipments: false,
       }),
     ).rejects.toMatchObject({
       name: 'TripApiError',
@@ -332,6 +499,7 @@ describe('Trip write service API contracts', () => {
         vehicleId: 8,
         departureDate: '2026-10-10',
         departureTime: '07:30',
+        acceptsShipments: false,
       }),
     ).rejects.toMatchObject({
       name: 'TripApiError',

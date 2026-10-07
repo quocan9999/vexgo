@@ -24,6 +24,8 @@ const mockTrip: Trip = {
   departureDate: '2026-10-10',
   departureTime: '07:30:00',
   status: 'CHUA_KHOI_HANH',
+  acceptsShipments: true,
+  cargoCapacity: { motorbikes: 1, bulkyCargo: 2, lightCargo: 3 },
   route: {
     routeId: 1,
     code: 'FUTA-TX-0001',
@@ -147,6 +149,16 @@ describe('Admin trips read page and components', () => {
     expect(html).toContain('TP.HCM → Đà Lạt');
     expect(html).toContain('30F-123.45');
     expect(html).toContain('Chưa khởi hành');
+    expect(html).toContain('Nhận gửi hàng');
+    expect(html).toContain('Có');
+    expect(html).toContain('Sức chứa hàng');
+    expect(html).toContain('Xe máy');
+    expect(html).toContain('Hàng cồng kềnh');
+    expect(html).toContain('Hàng nhẹ');
+    expect(html).toContain('Xe máy: 1');
+    expect(html).toContain('Hàng cồng kềnh: 2');
+    expect(html).toContain('Hàng nhẹ: 3');
+    expect(html).not.toContain('Còn lại');
     expect(html).toContain('aria-label="Xem chi tiết chuyến FUTA-CX-001"');
     expect(html).toContain('trips-mobile-card');
     expect(html).not.toContain('Đang tải danh sách chuyến xe');
@@ -216,6 +228,12 @@ describe('Trip service API contract validation', () => {
 
     expect(result.data).toHaveLength(1);
     expect(result.data[0].code).toBe('FUTA-CX-001');
+    expect(result.data[0].acceptsShipments).toBe(true);
+    expect(result.data[0].cargoCapacity).toEqual({
+      motorbikes: 1,
+      bulkyCargo: 2,
+      lightCargo: 3,
+    });
     expect(result.meta.totalItems).toBe(1);
   });
 
@@ -237,6 +255,48 @@ describe('Trip service API contract validation', () => {
     expect(result.code).toBe('FUTA-CX-001');
     expect(result.seatSummary?.total).toBe(34);
     expect(result.seatSummary?.available).toBe(30);
+    expect(result.acceptsShipments).toBe(true);
+    expect(result.cargoCapacity).toEqual({
+      motorbikes: 1,
+      bulkyCargo: 2,
+      lightCargo: 3,
+    });
+  });
+
+  it('accepts zero-valued shipment capacity snapshots', async () => {
+    const zeroCapacityTrip = {
+      ...mockTrip,
+      cargoCapacity: { motorbikes: 0, bulkyCargo: 0, lightCargo: 0 },
+    };
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ data: zeroCapacityTrip }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(getTripById(101)).resolves.toMatchObject({
+      cargoCapacity: { motorbikes: 0, bulkyCargo: 0, lightCargo: 0 },
+    });
+  });
+
+  it('rejects a trip response missing shipment acceptance and snapshot capacity', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        data: {
+          ...mockTrip,
+          acceptsShipments: undefined,
+          cargoCapacity: undefined,
+        },
+      }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(getTripById(101)).rejects.toThrow(
+      'API trả về thông tin chuyến xe không hợp lệ.',
+    );
   });
 
   it('throws error when API response is invalid or missing required fields', async () => {

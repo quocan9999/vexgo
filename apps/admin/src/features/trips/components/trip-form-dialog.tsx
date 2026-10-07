@@ -31,8 +31,9 @@ type Values = {
   vehicleId: string;
   departureDate: string;
   departureTime: string;
+  acceptsShipments: boolean;
 };
-type Field = keyof Values;
+type Field = Exclude<keyof Values, 'acceptsShipments'>;
 type FieldErrors = Partial<Record<Field, string>>;
 
 function mappedErrors(details: TripApiErrorDetail[]): FieldErrors {
@@ -79,6 +80,7 @@ export function TripFormDialog({
     vehicleId: trip ? String(trip.vehicle.vehicleId) : '',
     departureDate: trip?.departureDate ?? '',
     departureTime: trip?.departureTime ? trip.departureTime.slice(0, 5) : '',
+    acceptsShipments: false,
   }));
 
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
@@ -185,6 +187,7 @@ export function TripFormDialog({
           vehicleId: Number(values.vehicleId),
           departureDate: values.departureDate.trim(),
           departureTime: formattedTime,
+          acceptsShipments: values.acceptsShipments,
         });
       }
 
@@ -447,6 +450,26 @@ export function TripFormDialog({
                   </span>
                 )}
               </div>
+              <label
+                className="trips-shipment-checkbox-field"
+                htmlFor={`${idPrefix}-accepts-shipments`}
+              >
+                <input
+                  checked={values.acceptsShipments}
+                  className="trips-shipment-checkbox"
+                  disabled={submitting}
+                  id={`${idPrefix}-accepts-shipments`}
+                  onChange={(event) => {
+                    setValues((current) => ({
+                      ...current,
+                      acceptsShipments: event.target.checked,
+                    }));
+                    setFormError(null);
+                  }}
+                  type="checkbox"
+                />
+                <span>Nhận gửi hàng</span>
+              </label>
             </>
           )}
 

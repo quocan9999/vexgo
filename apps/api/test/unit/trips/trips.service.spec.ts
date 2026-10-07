@@ -9,6 +9,10 @@ const firstTrip = {
   gioKhoiHanh: new Date('1970-01-01T22:00:00.000Z'),
   gioDen: null,
   trangThai: 'CHUA_KHOI_HANH',
+  nhanGuiHang: false,
+  sucChuaXeMay: 1,
+  sucChuaHangCongKenh: 2,
+  sucChuaHangNhe: 3,
   nhaXeId: 3,
   tuyenXeId: 8,
   xeId: 4,
@@ -25,7 +29,13 @@ const firstTrip = {
     bienSoXe: '51B-12345',
     trangThai: 'HOAT_DONG',
     loaiXeId: 2,
-    loaiXe: { loaiXeId: 2, tenLoai: 'Giường nằm' },
+    loaiXe: {
+      loaiXeId: 2,
+      tenLoai: 'Giường nằm',
+      sucChuaXeMayMacDinh: 9,
+      sucChuaHangCongKenhMacDinh: 9,
+      sucChuaHangNheMacDinh: 9,
+    },
   },
   createdAt: new Date('2026-10-01T10:00:00.000Z'),
   updatedAt: new Date('2026-10-01T10:00:00.000Z'),
@@ -362,6 +372,8 @@ describe('TripsService findAll (Feature 05)', () => {
           departureDate: '2026-10-15',
           departureTime: '22:00:00',
           status: 'CHUA_KHOI_HANH',
+          acceptsShipments: false,
+          cargoCapacity: { motorbikes: 1, bulkyCargo: 2, lightCargo: 3 },
           route: {
             routeId: 8,
             code: 'SG-DL',
@@ -456,6 +468,10 @@ describe('TripsService findOne (Feature 05)', () => {
       available: 2,
       held: 1,
       booked: 1,
+    });
+    expect(result.data).toMatchObject({
+      acceptsShipments: false,
+      cargoCapacity: { motorbikes: 1, bulkyCargo: 2, lightCargo: 3 },
     });
   });
 
@@ -668,6 +684,10 @@ describe('TripsService create (05.2)', () => {
       chuyenXeId: 99,
       maChuyenXe: 'FUTA-CX-99',
       gioDen: new Date('1970-01-01T05:00:00.000Z'),
+      nhanGuiHang: false,
+      sucChuaXeMay: 2,
+      sucChuaHangCongKenh: 8,
+      sucChuaHangNhe: 80,
       gheChuyenXes: [{ trangThai: 'TRONG' }, { trangThai: 'TRONG' }],
     };
     prisma.chuyenXe.create.mockResolvedValue(createdTrip);
@@ -686,6 +706,7 @@ describe('TripsService create (05.2)', () => {
         nhaXeId: 3,
         tuyenXeId: 8,
         xeId: 4,
+        nhanGuiHang: false,
         sucChuaXeMay: 2,
         sucChuaHangCongKenh: 8,
         sucChuaHangNhe: 80,
@@ -717,6 +738,10 @@ describe('TripsService create (05.2)', () => {
       available: 2,
       held: 0,
       booked: 0,
+    });
+    expect(result.data).toMatchObject({
+      acceptsShipments: false,
+      cargoCapacity: { motorbikes: 2, bulkyCargo: 8, lightCargo: 80 },
     });
   });
 });

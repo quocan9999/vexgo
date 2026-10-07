@@ -16,6 +16,10 @@ const mockTrip = {
   ngayKhoiHanh: new Date('2026-10-10T00:00:00.000Z'),
   gioKhoiHanh: new Date('1970-01-01T07:30:00.000Z'),
   trangThai: 'CHUA_KHOI_HANH',
+  nhanGuiHang: true,
+  sucChuaXeMay: 1,
+  sucChuaHangCongKenh: 2,
+  sucChuaHangNhe: 3,
   createdAt: new Date('2026-10-01T10:00:00.000Z'),
   updatedAt: new Date('2026-10-01T10:00:00.000Z'),
   tuyenXe: {
@@ -31,6 +35,9 @@ const mockTrip = {
     loaiXe: {
       loaiXeId: 2,
       tenLoai: 'GIƯỜNG NẰM',
+      sucChuaXeMayMacDinh: 9,
+      sucChuaHangCongKenhMacDinh: 9,
+      sucChuaHangNheMacDinh: 9,
     },
   },
   gheChuyenXes: [
@@ -196,6 +203,8 @@ describe('Trips read HTTP contract and authorization', () => {
           departureDate: '2026-10-10',
           departureTime: '07:30:00',
           status: 'CHUA_KHOI_HANH',
+          acceptsShipments: true,
+          cargoCapacity: { motorbikes: 1, bulkyCargo: 2, lightCargo: 3 },
           route: {
             routeId: 1,
             code: 'FUTA-TX-0001',
@@ -283,6 +292,8 @@ describe('Trips read HTTP contract and authorization', () => {
         departureDate: '2026-10-10',
         departureTime: '07:30:00',
         status: 'CHUA_KHOI_HANH',
+        acceptsShipments: true,
+        cargoCapacity: { motorbikes: 1, bulkyCargo: 2, lightCargo: 3 },
         route: {
           routeId: 1,
           code: 'FUTA-TX-0001',
