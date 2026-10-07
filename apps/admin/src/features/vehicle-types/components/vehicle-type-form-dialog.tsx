@@ -219,7 +219,7 @@ export function VehicleTypeFormDialog({
   return (
     <AdminFormDialog
       ariaBusy={submitting}
-      ariaDescribedBy={`${idPrefix}-description`}
+      ariaDescribedBy={`${idPrefix}-dialog-description`}
       ariaLabelledBy={`${idPrefix}-title`}
       dialogRef={dialogRef}
       onClose={onClose}
@@ -232,7 +232,7 @@ export function VehicleTypeFormDialog({
             <h2 id={`${idPrefix}-title`}>
               {editing ? 'Chỉnh sửa loại xe' : 'Thêm loại xe'}
             </h2>
-            <p id={`${idPrefix}-description`}>
+            <p id={`${idPrefix}-dialog-description`}>
               {editing
                 ? 'Cập nhật tên và mô tả của loại xe.'
                 : 'Nhập tên và mô tả cho loại xe mới.'}

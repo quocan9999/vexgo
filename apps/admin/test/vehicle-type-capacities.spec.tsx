@@ -68,7 +68,7 @@ function fillCreateBasics(dialog: HTMLElement) {
   fireEvent.change(within(dialog).getByLabelText('Tên loại xe *'), {
     target: { value: 'Xe du lịch' },
   });
-  fireEvent.change(dialog.querySelector('textarea') as HTMLTextAreaElement, {
+  fireEvent.change(within(dialog).getByLabelText('Mô tả'), {
     target: { value: 'Xe chở khách' },
   });
 }
@@ -120,6 +120,37 @@ afterEach(() => {
 });
 
 describe('Vehicle Type default cargo capacities', () => {
+  it('keeps the dialog description and description textarea on unique accessible IDs', async () => {
+    const dialogDescriptionText = 'Nhập tên và mô tả cho loại xe mới.';
+    render(<VehicleTypeFormDialog onClose={vi.fn()} onSaved={vi.fn()} />);
+
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Thêm loại xe',
+      description: dialogDescriptionText,
+    });
+    const descriptionParagraph = within(dialog).getByText(
+      dialogDescriptionText,
+    );
+    const descriptionTextarea = within(dialog).getByLabelText('Mô tả');
+
+    expect(descriptionParagraph.tagName).toBe('P');
+    expect(descriptionTextarea.tagName).toBe('TEXTAREA');
+    expect(dialog.getAttribute('aria-describedby')).toBe(
+      descriptionParagraph.id,
+    );
+    expect(descriptionParagraph.id).not.toBe(descriptionTextarea.id);
+    expect(
+      Array.from(dialog.querySelectorAll('[id]')).filter(
+        (element) => element.id === descriptionParagraph.id,
+      ),
+    ).toHaveLength(1);
+    expect(
+      Array.from(dialog.querySelectorAll('[id]')).filter(
+        (element) => element.id === descriptionTextarea.id,
+      ),
+    ).toHaveLength(1);
+  });
+
   it('starts create capacities at zero and submits numeric values to the API', async () => {
     const savedVehicleType = {
       ...existingVehicleType,

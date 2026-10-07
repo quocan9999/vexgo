@@ -14,6 +14,7 @@
 - Added create support with omitted values defaulting to zero, and update support where omitted values preserve the stored values.
 - Added backend validation for integer values from `0` through signed Int32 max (`2147483647`).
 - Added Admin create/edit fields, defaults, client validation, accessible field errors, and the required explanatory copy.
+- Fixed the duplicate dialog-description and textarea IDs; the dialog now describes its header paragraph and the “Mô tả” label resolves to the textarea.
 - Kept tenant scoping, authorization, endpoint paths, response envelopes, and existing description behavior unchanged.
 - Added targeted API and Admin regression coverage.
 
@@ -59,8 +60,11 @@ Endpoints remain shared and unchanged:
   `npm test --workspace=@vexgo/api -- test/integration/vehicle-types/vehicle-types.spec.ts test/integration/vehicle-types/vehicle-types-write.spec.ts test/unit/vehicle-types/vehicle-types.service.spec.ts test/unit/vehicle-types/vehicle-types-write.service.spec.ts`
 - Admin targeted tests:
   `npm test --workspace=@vexgo/admin -- test/vehicle-type-capacities.spec.tsx test/feature-02-ui-regressions.spec.tsx test/vehicle-type-permissions.spec.tsx`
+- Accessibility review regression test:
+  `npm test --workspace=@vexgo/admin -- test/vehicle-type-capacities.spec.tsx`
 - `npm run typecheck --workspace=@vexgo/api`
-- `npm run typecheck --workspace=@vexgo/admin`
+- Post-review Admin typecheck:
+  `npm run typecheck --workspace=@vexgo/admin`
 - `npm run lint --workspace=@vexgo/api`
 - Targeted Admin ESLint on the three changed feature files and three vehicle type test files.
 - Prettier check on all changed TypeScript, TSX, and CSS files.
@@ -70,12 +74,13 @@ Endpoints remain shared and unchanged:
 ## TEST_RESULTS
 
 - API: 4 targeted files passed, 84 tests passed.
-- Admin: 3 targeted files passed, 17 tests passed.
+- Initial Phase 1 Admin run: 3 targeted files passed, 17 tests passed; after adding the review regression, `vehicle-type-capacities.spec.tsx` passed all 11 tests.
 - API and Admin typechecks passed.
 - API lint, targeted Admin lint, and Prettier check passed.
 - GitNexus detected 14 changed files, 48 symbols, and 17 affected execution flows. It reports `CRITICAL` risk because the shared `isVehicleType` response validator now requires the expanded resource shape. Its list, detail, create, and update paths were reviewed and covered by the targeted tests; downstream API consumers must return these fields.
 - Browser smoke could not reach the feature form: the route rendered the existing “Chưa thể xác minh phiên đăng nhập” guard at both viewports. No auth bypass was attempted. Component tests cover the form behavior, but a signed-in visual check remains outstanding.
-- The first test-first runs failed on the missing capacity behavior as expected. The test helper also avoided an existing duplicate description ID, and unsupported Jest DOM matcher assertions were replaced with DOM assertions before the final targeted runs passed.
+- The first test-first runs failed on the missing capacity behavior as expected. The description helper has since been changed from a direct selector workaround to an accessible label query; unsupported Jest DOM matcher assertions were replaced with DOM assertions.
+- The accessibility regression first failed because “Mô tả” resolved to a non-labellable `<p>`. After separating the IDs, the accessible label resolves to the textarea, the dialog’s accessible description resolves to its paragraph, and the two IDs are unique.
 
 ## DECISIONS
 
@@ -114,4 +119,5 @@ Phase 2 is Trips only, and should start after Phase 1 review. Follow the Phase 2
 
 ## COMMIT
 
-`feat(admin): cấu hình sức chứa hàng mặc định cho loại xe` — one Phase 1 commit on `fix/admin-shipment-002-impact`, including this handoff.
+- Phase 1 implementation: `8d84c48e1e4eb647ac910301cc25daedfa914438` (`feat(admin): cấu hình sức chứa mặc định cho loại xe`).
+- Accessibility review fix: separate commit on `fix/admin-shipment-002-impact` with message `fix(admin): sửa accessibility form loại xe`.
