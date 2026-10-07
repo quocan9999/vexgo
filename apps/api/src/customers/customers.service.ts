@@ -680,38 +680,28 @@ export class CustomersService {
         receiver: {
           fullName: p.tenNguoiNhan,
           phoneNumber: p.soDienThoaiNguoiNhan,
-          address: null,
         },
-        pickupMethod: null,
-        deliveryMethod: null,
-        pickupAddress: p.diemGui?.diaChi ?? null,
         mainFee: Number(p.cuocChinh),
         serviceFee: Number(p.phiDichVu),
         discountAmount: Number(p.soTienGiam),
         totalFee: Number(p.tongPhi),
         freightPayer: p.nguoiTraCuoc,
-        trip: p.chuyenXe
-          ? {
-              tripId: p.chuyenXe.chuyenXeId,
-              code: p.chuyenXe.maChuyenXe,
-            }
-          : null,
-        originBranch: p.diemGui
-          ? {
-              branchId: p.diemGui.diemGiaoNhanHangId,
-              code: p.diemGui.maDiem,
-              name: p.diemGui.tenDiem,
-              address: p.diemGui.diaChi,
-            }
-          : null,
-        destinationBranch: p.diemNhan
-          ? {
-              branchId: p.diemNhan.diemGiaoNhanHangId,
-              code: p.diemNhan.maDiem,
-              name: p.diemNhan.tenDiem,
-              address: p.diemNhan.diaChi,
-            }
-          : null,
+        trip: {
+          tripId: p.chuyenXe.chuyenXeId,
+          code: p.chuyenXe.maChuyenXe,
+        },
+        originPoint: {
+          pointId: p.diemGui.diemGiaoNhanHangId,
+          code: p.diemGui.maDiem,
+          name: p.diemGui.tenDiem,
+          address: p.diemGui.diaChi,
+        },
+        destinationPoint: {
+          pointId: p.diemNhan.diemGiaoNhanHangId,
+          code: p.diemNhan.maDiem,
+          name: p.diemNhan.tenDiem,
+          address: p.diemNhan.diaChi,
+        },
       })),
       meta: {
         page,

@@ -951,11 +951,7 @@ describe('Admin Customers API (Feature 06.1)', () => {
             receiver: {
               fullName: 'Trần Văn B',
               phoneNumber: '0912345678',
-              address: null,
             },
-            pickupMethod: null,
-            deliveryMethod: null,
-            pickupAddress: '456 Mai Chí Thọ, TP.HCM',
             mainFee: 80000,
             serviceFee: 10000,
             discountAmount: 5000,
@@ -965,14 +961,14 @@ describe('Admin Customers API (Feature 06.1)', () => {
               tripId: 101,
               code: 'FUTA-CX-0001',
             },
-            originBranch: {
-              branchId: 1,
+            originPoint: {
+              pointId: 1,
               code: 'FUTA-BC-001',
               name: 'Điểm gửi Miền Đông',
               address: '456 Mai Chí Thọ, TP.HCM',
             },
-            destinationBranch: {
-              branchId: 2,
+            destinationPoint: {
+              pointId: 2,
               code: 'FUTA-BC-002',
               name: 'Điểm nhận Đà Lạt',
               address: '123 Lê Lợi, Đà Lạt',
@@ -986,6 +982,14 @@ describe('Admin Customers API (Feature 06.1)', () => {
           totalPages: 1,
         },
       });
+
+      const shipment = response.body.data[0];
+      expect(shipment).not.toHaveProperty('pickupMethod');
+      expect(shipment).not.toHaveProperty('deliveryMethod');
+      expect(shipment).not.toHaveProperty('pickupAddress');
+      expect(shipment.receiver).not.toHaveProperty('address');
+      expect(shipment).not.toHaveProperty('originBranch');
+      expect(shipment).not.toHaveProperty('destinationBranch');
 
       expect(mockPrisma.phieuGuiHang.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
