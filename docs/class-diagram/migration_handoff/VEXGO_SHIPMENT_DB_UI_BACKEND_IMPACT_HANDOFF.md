@@ -98,7 +98,7 @@ Không có module shipment chuyên biệt trong `apps/api/src/`. Các khái ni�
 
 Đây là phạm vi backend cần agent triển khai theo module riêng, không nên tiếp tục nhúng toàn bộ truy vấn shipment vào UI hoặc controller khách hàng.
 
-### P1 — Seed và xác minh seed đã khớp schema 002
+### Đã xử lý — Seed và xác minh seed theo schema 002
 
 - [`prisma/seed.mjs`](../../../prisma/seed.mjs): tạo `DiemGiaoNhanHang`, `DiemGiaoNhanTuyenXe`, 126 dòng cước theo 7 loại hàng và 6 khoảng cân nặng; gán nhóm `HANG_NHE`; ghi ba snapshot sức chứa trên mọi chuyến; tạo phiếu gửi với đủ điểm gửi/nhận, nhiều loại hàng, detail cước từng loại và lịch sử trạng thái. Giao dịch ghép vé/gửi dùng cùng chuyến. Seed dọn các dòng hàng demo cũ không còn thuộc fixture mới. Các mã điểm giữ convention demo `FUTA-BC-001` dạng tương tự.
 - [`prisma/verify-seed.mjs`](../../../prisma/verify-seed.mjs): kỳ vọng 15 điểm, 6 mapping điểm/tuyến, 126 dòng cước và 60 bản ghi lịch sử; kiểm tra mã hành chính, nhà xe/tuyến/điểm/cước, trạng thái hiện hành, snapshot sức chứa, tải hàng theo nhóm, đúng một detail mỗi loại, composite type/rate, tổng `cuocChinh` và giao dịch vé/gửi cùng chuyến. `soTienCuoc` là snapshot: verifier không so nó với `mucCuoc` hiện tại của rate.
@@ -149,5 +149,5 @@ Không có module shipment chuyên biệt trong `apps/api/src/`. Các khái ni�
 
 - Đối chiếu `prisma/schema.prisma`, source trong `apps/api`, `apps/admin`, `apps/web`, `prisma/seed.mjs`, `prisma/verify-seed.mjs` và các test/fixture liên quan.
 - GitNexus xác nhận một số liên kết component/endpoint, nhưng index đang chậm **30 commit** so với HEAD. Vì vậy kết luận trong tài liệu được kiểm chứng bằng source hiện tại và không dùng kết quả graph cũ làm bằng chứng duy nhất.
-- Bản rà soát ban đầu không sửa code/database. Cập nhật ngày 07/10 đã sửa API tương thích tối thiểu, fixtures, seed và seed verifier; migration, Admin UI và Customer UI không bị sửa trong lượt CI này. Migrate, seed và verifier được xác nhận trên MySQL cô lập mới; full API suite, E2E, build, lint và typecheck cũng đạt.
+- Trạng thái cuối trên branch: database/schema/migrations, seed/verifier và regression harness đã được cập nhật cho diagram 002; API có các thay đổi tương thích cần cho schema hiện tại nhưng chưa có module shipment đầy đủ; Admin history đã xử lý hiển thị trạng thái và điểm gửi/nhận; Customer shipment vẫn là giao diện demo tĩnh. Các phần cần phát triển tiếp được liệt kê ở mục 3–6 của handoff này. Kết quả CI cần kiểm tra trên các check của commit hiện tại trên PR.
 - Database local đã xóa hai bảng archive theo migration cleanup trước đó; tài liệu này không yêu cầu khôi phục hay tạo lại dữ liệu archive.
