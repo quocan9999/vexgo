@@ -97,7 +97,7 @@ Hoàn tất các thay đổi Phase 1–3 cho Admin Shipment 002 trên branch `fi
 - `npx prettier --check` trên toàn bộ file TS/TSX/CSS thay đổi — passed.
 - `git diff --check` — passed; Git chỉ cảnh báo line ending LF/CRLF theo cấu hình Windows.
 - `node .gitnexus/run.cjs detect-changes --scope all --repo .` — completed: 23 changed files, 29 symbols, `CRITICAL` risk, 793 affected flows.
-- GitHub Actions run `37604228110` trên commit Phase 3: API CI, Admin CI và Web CI đều green. Actions sẽ được kiểm tra lại sau khi push commit final handoff.
+- GitHub Actions run `37647487813` trên commit `f31cbc2`: API CI, Admin CI và Web CI đều green. Commit hiện tại chỉ cập nhật kết quả này vào handoff.
 
 ## TESTS_NOT_RUN
 
@@ -128,5 +128,5 @@ Yêu cầu Phase 4 giới hạn ở targeted union tests và typecheck/lint theo
 - [x] Targeted API/Admin regression và typecheck đã pass.
 - [x] API/Admin lint, format và `git diff --check` đã xác nhận.
 - [x] GitNexus change analysis của Phase 4 đã chạy; rủi ro/giới hạn được ghi lại.
-- [ ] Commit handoff đã push; API CI, Admin CI và Web CI trên Actions đã green.
+- [x] Commit handoff đã push; API CI, Admin CI và Web CI trên Actions đã green trên run `37647487813`.
 - [x] Browser smoke đã thực hiện hoặc giới hạn môi trường đã được ghi lại như trên.

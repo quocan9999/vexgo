@@ -137,7 +137,7 @@ Không có module shipment chuyên biệt trong `apps/api/src/`. Các khái ni�
 6. Thay UI gửi hàng tĩnh bằng service/API thật; backend là nguồn xác thực cuối cùng cho cước, điều kiện tuyến và sức chứa.
 7. Xác định rule giữ/nhả sức chứa và concurrency trước khi triển khai thao tác tạo/cập nhật phiếu gửi.
 8. Seed/verifier đã chạy thành công trên DB cô lập. Khi kiểm tra DB cá nhân, dùng các lệnh trong handoff migration và xác nhận URL `.env` trước khi seed.
-9. Đã chạy targeted regression, API/Admin typecheck và lint cho phạm vi Phase 1–3; không chạy full suites hoặc full E2E. GitHub Actions run `37604228110` trên commit Phase 3 có API CI, Admin CI và Web CI đều green. Sau commit final handoff cần kiểm tra lại Actions của commit mới nhất trước khi merge.
+9. Đã chạy targeted regression, API/Admin typecheck và lint cho phạm vi Phase 1–3; không chạy full suites hoặc full E2E. GitHub Actions run `37647487813` trên commit `f31cbc2` có API CI, Admin CI và Web CI đều green.
 
 ## 6. Checklist khi hoàn tất phần ứng dụng
 
@@ -160,5 +160,5 @@ Không có module shipment chuyên biệt trong `apps/api/src/`. Các khái ni�
 ## 7. Cách rà soát và giới hạn
 
 - Đối chiếu `prisma/schema.prisma`, source trong `apps/api`, `apps/admin`, `apps/web`, `prisma/seed.mjs`, `prisma/verify-seed.mjs` và các test/fixture liên quan.
-- Trạng thái sau Phase 1–3 trên `fix/admin-shipment-002-impact`: cấu hình Vehicle Type capacity, tạo trip nhận gửi/snapshot và Admin shipment history đã hoàn tất; seed/verifier và schema 002 được giữ nguyên. Chưa có API shipment đầy đủ; Customer Web shipment vẫn là giao diện demo tĩnh và booking hành lý chưa persist shipment. Xem mục 3–6 để biết phần còn lại. Browser smoke Phase 4 không chạy vì không có browser/session sẵn dùng và local Admin/API không phản hồi. CI phải được xác nhận trên commit cuối cùng.
+- Trạng thái sau Phase 1–3 trên `fix/admin-shipment-002-impact`: cấu hình Vehicle Type capacity, tạo trip nhận gửi/snapshot và Admin shipment history đã hoàn tất; seed/verifier và schema 002 được giữ nguyên. Chưa có API shipment đầy đủ; Customer Web shipment vẫn là giao diện demo tĩnh và booking hành lý chưa persist shipment. Xem mục 3–6 để biết phần còn lại. Browser smoke Phase 4 không chạy vì không có browser/session sẵn dùng và local Admin/API không phản hồi. GitHub Actions run `37647487813` xác nhận API CI, Admin CI và Web CI đều green trên commit `f31cbc2`.
 - Database local đã xóa hai bảng archive theo migration cleanup trước đó; tài liệu này không yêu cầu khôi phục hay tạo lại dữ liệu archive.
