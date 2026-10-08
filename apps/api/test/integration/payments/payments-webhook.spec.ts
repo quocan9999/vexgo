@@ -24,6 +24,7 @@ describe('Payments Webhook & Status Security with MySQL (Integration)', () => {
   let currentPrincipal: AuthPrincipal | null = null;
 
   beforeAll(async () => {
+    process.env.PAYMENT_DEMO_MODE = 'true';
     let reflector: Reflector;
     const accessTokenGuard = {
       canActivate(context: ExecutionContext) {
@@ -128,6 +129,15 @@ describe('Payments Webhook & Status Security with MySQL (Integration)', () => {
 
   afterAll(async () => {
     try {
+      await prisma.lichSuTrangThaiVe.deleteMany({
+        where: { ve: { is: { phieuDatVe: { is: { donGiaoDich: { is: { khachHangId: { in: [customerAId, customerBId] } } } } } } } },
+      });
+      await prisma.ve.deleteMany({
+        where: { phieuDatVe: { is: { donGiaoDich: { is: { khachHangId: { in: [customerAId, customerBId] } } } } } },
+      });
+      await prisma.lichSuTrangThaiPhieuDatVe.deleteMany({
+        where: { phieuDatVe: { is: { donGiaoDich: { is: { khachHangId: { in: [customerAId, customerBId] } } } } } },
+      });
       await prisma.thanhToan.deleteMany({
         where: { donGiaoDich: { is: { khachHangId: { in: [customerAId, customerBId] } } } },
       });
@@ -142,12 +152,22 @@ describe('Payments Webhook & Status Security with MySQL (Integration)', () => {
       await prisma.khachHang.deleteMany({ where: { khachHangId: { in: [customerAId, customerBId] } } });
       await prisma.taiKhoan.deleteMany({ where: { taiKhoanId: { in: [customerAPrincipal.taiKhoanId, customerBPrincipal.taiKhoanId] } } });
     } finally {
+      delete process.env.PAYMENT_DEMO_MODE;
       await app?.close();
     }
   }, 30_000);
 
   beforeEach(async () => {
     currentPrincipal = null;
+    await prisma.lichSuTrangThaiVe.deleteMany({
+      where: { ve: { is: { phieuDatVe: { is: { donGiaoDich: { is: { khachHangId: { in: [customerAId, customerBId] } } } } } } } },
+    });
+    await prisma.ve.deleteMany({
+      where: { phieuDatVe: { is: { donGiaoDich: { is: { khachHangId: { in: [customerAId, customerBId] } } } } } },
+    });
+    await prisma.lichSuTrangThaiPhieuDatVe.deleteMany({
+      where: { phieuDatVe: { is: { donGiaoDich: { is: { khachHangId: { in: [customerAId, customerBId] } } } } } },
+    });
     await prisma.thanhToan.deleteMany({
       where: { donGiaoDich: { is: { khachHangId: { in: [customerAId, customerBId] } } } },
     });
@@ -283,6 +303,17 @@ describe('Payments Webhook & Status Security with MySQL (Integration)', () => {
       where: { phieuDatVeId: phieuDatVe.phieuDatVeId },
     });
     expect(updatedBooking?.trangThai).toBe('DA_THANH_TOAN');
+
+    // Status history verification (PR #33 / discussion_r4220529096)
+    const bookingHistory = await prisma.lichSuTrangThaiPhieuDatVe.findFirst({
+      where: { phieuDatVeId: phieuDatVe.phieuDatVeId },
+    });
+    expect(bookingHistory?.trangThaiMoi).toBe('DA_THANH_TOAN');
+    expect(bookingHistory?.nguonThayDoi).toBe('SYSTEM');
+    expect(bookingHistory?.taiKhoanId).toBeNull();
+    expect(bookingHistory?.maThaoTac).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-1[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+    );
   });
 
   it('rejects MoMo webhook with invalid or forged signature with 400 Bad Request without mutating DB', async () => {
@@ -394,5 +425,33 @@ describe('Payments Webhook & Status Security with MySQL (Integration)', () => {
       .get(`/api/v1/payments/${thanhToan.thanhToanId}/status`);
     expect(resB.status).toBe(403);
     expect(resB.body.error).toBe('FORBIDDEN');
+  });
+
+  it('rejects webhook when provider or amount mismatches (discussion_r4164957958 & r4164957969)', async () => {
+    // 1. Create a payment for VNPAY
+    const { thanhToan: vnpayPayment } = await createTestPayment(customerAId, 'VNPAY');
+
+    // Attempt to confirm via MOMO webhook -> 400 Bad Request
+    const forgedMomoPayload = buildMomoPayload(vnpayPayment.thanhToanId);
+    const resProviderMismatch = await request(app.getHttpServer())
+      .post('/api/v1/payments/momo/webhook')
+      .send(forgedMomoPayload);
+    expect(resProviderMismatch.status).toBe(400);
+
+    // 2. Create a payment for MOMO with amount 200,000đ
+    const { thanhToan: momoPayment } = await createTestPayment(customerAId, 'MOMO');
+
+    // Attempt to confirm with mismatched amount (e.g. 50,000đ)
+    const forgedAmountPayload = buildMomoPayload(momoPayment.thanhToanId, { amount: 50000 });
+    const resAmountMismatch = await request(app.getHttpServer())
+      .post('/api/v1/payments/momo/webhook')
+      .send(forgedAmountPayload);
+    expect(resAmountMismatch.status).toBe(400);
+
+    // Ensure payment remains DANG_XU_LY without any status corruption
+    const paymentCheck = await prisma.thanhToan.findUnique({
+      where: { thanhToanId: momoPayment.thanhToanId },
+    });
+    expect(paymentCheck?.trangThai).toBe('DANG_XU_LY');
   });
 });

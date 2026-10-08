@@ -1,6 +1,7 @@
 import {
   Injectable,
   ConflictException,
+  ForbiddenException,
   NotFoundException,
   Logger,
   type OnModuleInit,
@@ -81,14 +82,30 @@ export class SeatHoldsService implements OnModuleInit, OnModuleDestroy {
       const now = new Date();
       const expiredHolds = await this.prisma.giuCho.findMany({
         where: {
-          trangThai: 'DANG_GIU',
-          hetHanLuc: { lte: now },
+          OR: [
+            {
+              trangThai: 'DANG_GIU',
+              hetHanLuc: { lte: now },
+            },
+            {
+              trangThai: 'HET_HAN',
+              gheChuyenXes: {
+                some: {
+                  trangThai: 'DANG_GIU',
+                },
+              },
+            },
+          ],
         },
-        select: { giuChoId: true },
+        select: { giuChoId: true, trangThai: true },
       });
 
       if (expiredHolds.length > 0) {
         const expiredIds = expiredHolds.map((h) => h.giuChoId);
+        const dangGiuIds = expiredHolds
+          .filter((h) => h.trangThai !== 'HET_HAN')
+          .map((h) => h.giuChoId);
+
         const result = await this.prisma.$transaction(async (tx) => {
           const seatResult = await tx.gheChuyenXe.updateMany({
             where: {
@@ -100,10 +117,12 @@ export class SeatHoldsService implements OnModuleInit, OnModuleDestroy {
               giuChoId: null,
             },
           });
-          await tx.giuCho.updateMany({
-            where: { giuChoId: { in: expiredIds } },
-            data: { trangThai: 'HET_HAN' },
-          });
+          if (dangGiuIds.length > 0) {
+            await tx.giuCho.updateMany({
+              where: { giuChoId: { in: dangGiuIds } },
+              data: { trangThai: 'HET_HAN' },
+            });
+          }
           return seatResult.count;
         });
         releasedCount += result;
@@ -381,20 +400,38 @@ export class SeatHoldsService implements OnModuleInit, OnModuleDestroy {
     }
 
     if (dbHold) {
-      // Nếu hold đã hết hạn hoặc đã được giải phóng/đặt vé, tuyệt đối không đụng vào ghế!
-      if (dbHold.trangThai !== 'DANG_GIU' || dbHold.hetHanLuc <= new Date()) {
-        if (dbHold.trangThai === 'DANG_GIU' && dbHold.hetHanLuc <= new Date()) {
-          await this.prisma.giuCho.update({
-            where: { giuChoId: dbHold.giuChoId },
-            data: { trangThai: 'HET_HAN' },
+      if (dbHold.trangThai === 'DANG_GIU') {
+        const isExpired = dbHold.hetHanLuc <= new Date();
+        const nextStatus = isExpired ? 'HET_HAN' : 'DA_GIAI_PHONG';
+
+        // Generation-safe release: Chỉ giải phóng ghế nếu ghế đang trỏ đúng vào giuChoId này!
+        await this.prisma.$transaction(async (tx) => {
+          await tx.gheChuyenXe.updateMany({
+            where: {
+              chuyenXeId: dbHold.chuyenXeId,
+              giuChoId: dbHold.giuChoId,
+              trangThai: 'DANG_GIU',
+            },
+            data: {
+              trangThai: 'TRONG',
+              giuChoId: null,
+            },
           });
-        }
+          await tx.giuCho.update({
+            where: { giuChoId: dbHold.giuChoId },
+            data: { trangThai: nextStatus },
+          });
+        });
+
+        this.logger.log(
+          `Released seat hold ${holdToken} (giuChoId: ${dbHold.giuChoId}, status: ${nextStatus}) for trip ${dbHold.chuyenXeId}`,
+        );
         return { success: true };
       }
 
-      // Generation-safe release: Chỉ giải phóng ghế nếu ghế đang trỏ đúng vào giuChoId này!
-      await this.prisma.$transaction(async (tx) => {
-        await tx.gheChuyenXe.updateMany({
+      // Nếu hold đã là HET_HAN, dọn sạch ghế nếu còn sót
+      if (dbHold.trangThai === 'HET_HAN') {
+        await this.prisma.gheChuyenXe.updateMany({
           where: {
             chuyenXeId: dbHold.chuyenXeId,
             giuChoId: dbHold.giuChoId,
@@ -405,15 +442,8 @@ export class SeatHoldsService implements OnModuleInit, OnModuleDestroy {
             giuChoId: null,
           },
         });
-        await tx.giuCho.update({
-          where: { giuChoId: dbHold.giuChoId },
-          data: { trangThai: 'DA_GIAI_PHONG' },
-        });
-      });
+      }
 
-      this.logger.log(
-        `Released seat hold ${holdToken} (giuChoId: ${dbHold.giuChoId}) for trip ${dbHold.chuyenXeId}`,
-      );
       return { success: true };
     }
 
@@ -517,6 +547,113 @@ export class SeatHoldsService implements OnModuleInit, OnModuleDestroy {
         message: 'Mã giữ chỗ đã hết hạn. Vui lòng chọn ghế lại.',
       });
     }
+  }
+
+  async consumeHoldInTx(
+    tx: any,
+    holdToken?: string,
+    tripId?: number,
+    seatIds?: number[],
+    expectedCustomerId?: number | null,
+  ): Promise<{ giuChoId: number }> {
+    if (!holdToken) {
+      throw new ConflictException({
+        error: 'HOLD_REQUIRED',
+        message: 'Yêu cầu mã giữ chỗ (holdToken) hợp lệ để thực hiện đặt vé.',
+      });
+    }
+
+    const tokenHash = this.hashHoldToken(holdToken);
+    let dbHold: any = null;
+    if (tx.giuCho) {
+      dbHold = await tx.giuCho.findUnique({
+        where: { tokenHash },
+      });
+    }
+
+    if (dbHold) {
+      if (dbHold.trangThai !== 'DANG_GIU') {
+        throw new ConflictException({
+          error: 'HOLD_INACTIVE',
+          message: 'Mã giữ chỗ không còn ở trạng thái giữ chỗ.',
+        });
+      }
+
+      if (dbHold.hetHanLuc <= new Date()) {
+        throw new ConflictException({
+          error: 'HOLD_EXPIRED',
+          message: 'Mã giữ chỗ đã hết hạn. Vui lòng chọn ghế lại.',
+        });
+      }
+
+      if (tripId && dbHold.chuyenXeId !== tripId) {
+        throw new ConflictException({
+          error: 'HOLD_TRIP_MISMATCH',
+          message: 'Mã giữ chỗ không khớp với chuyến xe được chọn.',
+        });
+      }
+
+      if (
+        dbHold.khachHangId &&
+        expectedCustomerId &&
+        dbHold.khachHangId !== expectedCustomerId
+      ) {
+        throw new ForbiddenException(
+          'Mã giữ chỗ không thuộc về tài khoản khách hàng hiện tại.',
+        );
+      }
+
+      // Kiểm tra chính xác danh sách ghế gắn với hold này trong DB
+      const heldSeats = await tx.gheChuyenXe.findMany({
+        where: {
+          giuChoId: dbHold.giuChoId,
+          trangThai: 'DANG_GIU',
+        },
+        select: { gheChuyenXeId: true },
+      });
+
+      const heldSeatIdSet = new Set(heldSeats.map((s: any) => s.gheChuyenXeId));
+      const requestedSeatIds = seatIds ?? [];
+      const isExactMatch =
+        requestedSeatIds.length === heldSeats.length &&
+        requestedSeatIds.every((id) => heldSeatIdSet.has(id));
+
+      if (!isExactMatch) {
+        throw new ConflictException({
+          error: 'HOLD_SEATS_MISMATCH',
+          message: 'Danh sách ghế không khớp với mã giữ chỗ.',
+        });
+      }
+
+      // Cập nhật trạng thái hold sang DA_DAT ngay trong transaction
+      await tx.giuCho.update({
+        where: { giuChoId: dbHold.giuChoId },
+        data: { trangThai: 'DA_DAT' },
+      });
+
+      // Dọn dẹp in-memory hold nếu có
+      const memoryHold = this.holds.get(holdToken);
+      if (memoryHold) {
+        if (memoryHold.timer) clearTimeout(memoryHold.timer);
+        this.holds.delete(holdToken);
+      }
+
+      return { giuChoId: dbHold.giuChoId };
+    }
+
+    // Fallback cho môi trường test nếu không có bảng giuCho
+    this.verifyHold(
+      holdToken,
+      tripId ?? 0,
+      seatIds ?? [],
+      expectedCustomerId,
+    );
+    const memoryHold = this.holds.get(holdToken);
+    if (memoryHold) {
+      if (memoryHold.timer) clearTimeout(memoryHold.timer);
+      this.holds.delete(holdToken);
+    }
+    return { giuChoId: 0 };
   }
 
   async consumeHold(

@@ -11,6 +11,7 @@ import { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { SeatHoldsService } from '../seat-holds/seat-holds.service.js';
 import { PromotionsService } from '../promotions/promotions.service.js';
+import { generateUuidV1 } from '../common/uuid-v1.js';
 import {
   businessDateStartUtc,
   combineDeparture,
@@ -294,6 +295,16 @@ export class BookingsService {
 
     // 6. Tạo đơn giao dịch, phiếu đặt vé và các vé trong transaction
     const result = await this.prisma.$transaction(async (tx) => {
+      // 6.1 Lock & consume DB hold atomically gắn đúng tokenHash, khách hàng, chuyến xe và tập ghế
+      const { giuChoId: activeGiuChoId } =
+        await this.seatHoldsService.consumeHoldInTx(
+          tx,
+          params.holdToken,
+          effectiveTripId,
+          resolvedSeatIds,
+          customer.khachHangId,
+        );
+
       const donGiaoDich = await tx.donGiaoDich.create({
         data: {
           maDonGiaoDich: transactionCode,
@@ -324,12 +335,14 @@ export class BookingsService {
       const baseTicketPrice = Math.floor(quote.finalTotal / seatCount);
       const remainder = quote.finalTotal % seatCount;
 
+      const createdTickets: Array<{ veId: number }> = [];
+
       for (let i = 0; i < tripSeats.length; i++) {
         const seat = tripSeats[i];
         const ticketCode = `${bookingCode}-${seat.ghe.soGhe}`;
         const actualTicketPrice = baseTicketPrice + (i < remainder ? 1 : 0);
 
-        await tx.ve.create({
+        const newVe = await tx.ve.create({
           data: {
             maVe: ticketCode,
             diemDon: params.pickupPoint,
@@ -341,14 +354,17 @@ export class BookingsService {
             bangGiaApDungId: bangGiaId,
           },
         });
+        createdTickets.push(newVe);
       }
 
       // CAS update trong transaction: Chuyển ghế từ DANG_GIU sang DA_DAT
+      // Bắt buộc ràng buộc giuChoId phải trỏ đúng vào hold đang được tiêu thụ!
       const updatedSeats = await tx.gheChuyenXe.updateMany({
         where: {
           chuyenXeId: effectiveTripId,
           gheChuyenXeId: { in: resolvedSeatIds },
           trangThai: 'DANG_GIU',
+          ...(activeGiuChoId ? { giuChoId: activeGiuChoId } : {}),
         },
         data: {
           trangThai: 'DA_DAT',
@@ -363,16 +379,46 @@ export class BookingsService {
         });
       }
 
+      // Ghi nhận lịch sử trạng thái ban đầu cho Phiếu đặt vé và các Vé (PR #33)
+      const operationId = generateUuidV1();
+      const operationTime = new Date();
+
+      if (tx.lichSuTrangThaiPhieuDatVe) {
+        await tx.lichSuTrangThaiPhieuDatVe.create({
+          data: {
+            phieuDatVeId: phieuDatVe.phieuDatVeId,
+            trangThaiCu: null,
+            trangThaiMoi: 'CHO_THANH_TOAN',
+            thoiDiem: operationTime,
+            nguonThayDoi: 'CUSTOMER',
+            taiKhoanId: customer.taiKhoanId,
+            lyDo: 'Khởi tạo đặt vé',
+            laOverride: false,
+            maThaoTac: operationId,
+          },
+        });
+      }
+
+      if (tx.lichSuTrangThaiVe) {
+        for (const ticket of createdTickets) {
+          await tx.lichSuTrangThaiVe.create({
+            data: {
+              veId: ticket.veId,
+              trangThaiCu: null,
+              trangThaiMoi: 'DA_DAT',
+              thoiDiem: operationTime,
+              nguonThayDoi: 'CUSTOMER',
+              taiKhoanId: customer.taiKhoanId,
+              lyDo: 'Khởi tạo vé',
+              laOverride: false,
+              maThaoTac: operationId,
+            },
+          });
+        }
+      }
+
       return { donGiaoDich, phieuDatVe };
     });
-
-    // 7. Tiêu thụ token giữ chỗ sau khi đặt vé thành công
-    await this.seatHoldsService.consumeHold(
-      params.holdToken,
-      effectiveTripId,
-      resolvedSeatIds,
-      customer.khachHangId,
-    );
 
     const seatNames = tripSeats.map((s) => s.ghe.soGhe);
 

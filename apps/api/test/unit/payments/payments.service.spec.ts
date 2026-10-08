@@ -50,6 +50,8 @@ describe('PaymentsService', () => {
     },
   };
 
+  let configService: any;
+
   beforeEach(() => {
     prisma = {
       phieuDatVe: {
@@ -67,10 +69,30 @@ describe('PaymentsService', () => {
       khachHang: {
         findUnique: vi.fn(),
       },
+      ve: {
+        updateMany: vi.fn(),
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+      lichSuTrangThaiPhieuDatVe: {
+        create: vi.fn(),
+      },
+      lichSuTrangThaiVe: {
+        create: vi.fn(),
+      },
       $transaction: vi.fn(async (cb) => cb(prisma)),
     };
 
-    service = new PaymentsService(prisma as unknown as PrismaService);
+    configService = {
+      get: vi.fn((key: string) => {
+        if (key === 'PAYMENT_DEMO_MODE') return 'true';
+        if (key === 'MOMO_SECRET_KEY') return 'vexgo_momo_demo_secret';
+        if (key === 'VNPAY_HASH_SECRET') return 'vexgo_vnpay_demo_secret';
+        if (key === 'ZALOPAY_KEY2') return 'vexgo_zalopay_demo_key2';
+        return null;
+      }),
+    };
+
+    service = new PaymentsService(prisma as unknown as PrismaService, configService);
   });
 
   describe('createPayment', () => {
@@ -100,6 +122,36 @@ describe('PaymentsService', () => {
       expect(result.mode).toBe('DEMO');
       expect(result.status).toBe('PENDING');
       expect(result.paymentUrl).toContain('sandbox.momo.vn');
+    });
+
+    it('throws ServiceUnavailableException when PAYMENT_DEMO_MODE is not true (discussion_r4220529077)', async () => {
+      const prodConfigService = {
+        get: vi.fn((key: string) => (key === 'PAYMENT_DEMO_MODE' ? 'false' : null)),
+      };
+      const prodService = new PaymentsService(prisma as unknown as PrismaService, prodConfigService as any);
+
+      prisma.phieuDatVe.findUnique.mockResolvedValue({
+        phieuDatVeId: 300,
+        donGiaoDich: { khachHangId: 10 },
+      });
+      prisma.khachHang.findUnique.mockResolvedValue({ khachHangId: 10, taiKhoanId: 1 });
+
+      await expect(prodService.createPayment(300, 'MOMO', mockCustomerPrincipal)).rejects.toThrowError();
+    });
+
+    it('rejects webhook signatures when secrets are unconfigured in non-demo mode (discussion_r4220529064 & r4199181810)', () => {
+      const emptySecretConfig = {
+        get: vi.fn(() => null), // Fail-closed default: isDemoMode = false, secrets = ''
+      };
+      const strictService = new PaymentsService(prisma as unknown as PrismaService, emptySecretConfig as any);
+      expect(strictService.isDemoMode).toBe(false);
+      expect(strictService.momoSecretKey).toBe('');
+      expect(strictService.vnpayHashSecret).toBe('');
+      expect(strictService.zalopayKey2).toBe('');
+
+      expect(strictService.verifyMomoSignature({ signature: 'any' } as any)).toBe(false);
+      expect(strictService.verifyVnpaySignature({ vnp_SecureHash: 'any' } as any)).toBe(false);
+      expect(strictService.verifyZaloPayMac({ mac: 'any', data: '{}' } as any)).toBe(false);
     });
   });
 
@@ -144,7 +196,11 @@ describe('PaymentsService', () => {
     it('atomically updates payment, transaction, and booking to DA_THANH_TOAN', async () => {
       prisma.thanhToan.findUnique.mockResolvedValue(samplePayment);
 
-      const result = await service.confirmPaymentSuccess(100);
+      const result = await service.confirmPaymentSuccess({
+        paymentId: 100,
+        provider: 'MOMO',
+        amount: 300000,
+      });
 
       expect(result.success).toBe(true);
       expect(prisma.thanhToan.update).toHaveBeenCalledWith(
@@ -173,10 +229,38 @@ describe('PaymentsService', () => {
         trangThai: 'THANH_CONG',
       });
 
-      const result = await service.confirmPaymentSuccess(100);
+      const result = await service.confirmPaymentSuccess({
+        paymentId: 100,
+        provider: 'MOMO',
+        amount: 300000,
+      });
 
       expect(result.success).toBe(true);
       expect(prisma.thanhToan.update).not.toHaveBeenCalled();
+    });
+
+    it('rejects confirmation with BadRequestException when provider mismatches (discussion_r4164957958)', async () => {
+      prisma.thanhToan.findUnique.mockResolvedValue(samplePayment); // phuongThuc: MOMO
+
+      await expect(
+        service.confirmPaymentSuccess({
+          paymentId: 100,
+          provider: 'VNPAY',
+          amount: 300000,
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('rejects confirmation with BadRequestException when amount mismatches (discussion_r4164957969)', async () => {
+      prisma.thanhToan.findUnique.mockResolvedValue(samplePayment); // soTien: 300000
+
+      await expect(
+        service.confirmPaymentSuccess({
+          paymentId: 100,
+          provider: 'MOMO',
+          amount: 150000,
+        }),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 

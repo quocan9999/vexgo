@@ -367,4 +367,190 @@ describe('SeatHolds Concurrency & Isolation with MySQL (Integration)', () => {
     });
     expect(updatedHold?.trangThai).toBe('DA_DAT');
   }, 30_000);
+
+  it('releases held seats back to TRONG when hold expires and allows other customers to hold them (discussion_r4220529046)', async () => {
+    // Customer A creates hold on seat 1
+    currentPrincipal = customerAPrincipal;
+    const holdRes = await request(app.getHttpServer())
+      .post('/api/v1/seat-holds')
+      .send({ tripId, seatIds: [tripSeat1] });
+    expect(holdRes.status).toBe(201);
+    const holdToken = (holdRes.body.data ?? holdRes.body).holdToken;
+
+    const seatWhileHeld = await prisma.gheChuyenXe.findUnique({
+      where: { gheChuyenXeId: tripSeat1 },
+    });
+    expect(seatWhileHeld?.trangThai).toBe('DANG_GIU');
+    const holdId = seatWhileHeld?.giuChoId;
+    expect(holdId).toBeDefined();
+
+    // Simulate hold TTL expiration in DB (hetHanLuc in the past)
+    await prisma.giuCho.update({
+      where: { giuChoId: holdId! },
+      data: { hetHanLuc: new Date(Date.now() - 60_000) },
+    });
+
+    // Customer or system triggers release on expired hold
+    const releaseRes = await request(app.getHttpServer())
+      .delete(`/api/v1/seat-holds/${holdToken}`)
+      .expect(200);
+    expect(releaseRes.body.data?.success ?? releaseRes.body.success).toBe(true);
+
+    // Assert: GiuCho must transition to HET_HAN
+    const dbHoldAfter = await prisma.giuCho.findUnique({
+      where: { giuChoId: holdId! },
+    });
+    expect(dbHoldAfter?.trangThai).toBe('HET_HAN');
+
+    // Assert: Seat MUST be freed to TRONG and giuChoId cleared to null (no stranding!)
+    const seatAfterRelease = await prisma.gheChuyenXe.findUnique({
+      where: { gheChuyenXeId: tripSeat1 },
+    });
+    expect(seatAfterRelease?.trangThai).toBe('TRONG');
+    expect(seatAfterRelease?.giuChoId).toBeNull();
+
+    // Customer B can now immediately hold seat 1
+    currentPrincipal = customerBPrincipal;
+    const customerBHoldRes = await request(app.getHttpServer())
+      .post('/api/v1/seat-holds')
+      .send({ tripId, seatIds: [tripSeat1] });
+    expect(customerBHoldRes.status).toBe(201);
+
+    // Clean up Customer B hold
+    const holdTokenB = (customerBHoldRes.body.data ?? customerBHoldRes.body).holdToken;
+    await request(app.getHttpServer())
+      .delete(`/api/v1/seat-holds/${holdTokenB}`)
+      .expect(200);
+  }, 30_000);
+
+  it('releaseStaleHolds sweeps orphaned seats associated with HET_HAN holds (discussion_r4220529046)', async () => {
+    // Customer A creates hold on seat 1
+    currentPrincipal = customerAPrincipal;
+    const holdRes = await request(app.getHttpServer())
+      .post('/api/v1/seat-holds')
+      .send({ tripId, seatIds: [tripSeat1] });
+    expect(holdRes.status).toBe(201);
+    const holdToken = (holdRes.body.data ?? holdRes.body).holdToken;
+
+    const seatHeld = await prisma.gheChuyenXe.findUnique({
+      where: { gheChuyenXeId: tripSeat1 },
+    });
+    const holdId = seatHeld!.giuChoId!;
+
+    // Manually simulate a stranded state: hold is HET_HAN but seat was never released (e.g. legacy bug/crash)
+    await prisma.giuCho.update({
+      where: { giuChoId: holdId },
+      data: { trangThai: 'HET_HAN', hetHanLuc: new Date(Date.now() - 120_000) },
+    });
+    // Seat is still DANG_GIU with giuChoId = holdId
+    const strandedSeat = await prisma.gheChuyenXe.findUnique({
+      where: { gheChuyenXeId: tripSeat1 },
+    });
+    expect(strandedSeat?.trangThai).toBe('DANG_GIU');
+    expect(strandedSeat?.giuChoId).toBe(holdId);
+
+    // Run releaseStaleHolds
+    const released = await seatHoldsService.releaseStaleHolds();
+    expect(released).toBeGreaterThanOrEqual(1);
+
+    // Seat must be cleaned to TRONG and giuChoId null
+    const cleanedSeat = await prisma.gheChuyenXe.findUnique({
+      where: { gheChuyenXeId: tripSeat1 },
+    });
+    expect(cleanedSeat?.trangThai).toBe('TRONG');
+    expect(cleanedSeat?.giuChoId).toBeNull();
+  }, 30_000);
+
+  it('prevents released hold from consuming or stealing seat acquired by subsequent holder in tx (discussion_r4164957997 & r4220529053)', async () => {
+    // 1. Customer A holds seat 1
+    currentPrincipal = customerAPrincipal;
+    const holdResA = await request(app.getHttpServer())
+      .post('/api/v1/seat-holds')
+      .send({ tripId, seatIds: [tripSeat1] });
+    expect(holdResA.status).toBe(201);
+    const holdTokenA = (holdResA.body.data ?? holdResA.body).holdToken;
+
+    const seatHeldA = await prisma.gheChuyenXe.findUnique({
+      where: { gheChuyenXeId: tripSeat1 },
+    });
+    const holdIdA = seatHeldA!.giuChoId!;
+
+    // 2. Customer A releases hold
+    await request(app.getHttpServer())
+      .delete(`/api/v1/seat-holds/${holdTokenA}`)
+      .expect(200);
+
+    // 3. Customer B holds the exact same seat
+    currentPrincipal = customerBPrincipal;
+    const holdResB = await request(app.getHttpServer())
+      .post('/api/v1/seat-holds')
+      .send({ tripId, seatIds: [tripSeat1] });
+    expect(holdResB.status).toBe(201);
+    const holdTokenB = (holdResB.body.data ?? holdResB.body).holdToken;
+
+    const seatHeldB = await prisma.gheChuyenXe.findUnique({
+      where: { gheChuyenXeId: tripSeat1 },
+    });
+    const holdIdB = seatHeldB!.giuChoId!;
+    expect(holdIdB).not.toBe(holdIdA);
+
+    // 4. Customer A attempts to consume using old holdTokenA inside tx
+    await expect(
+      seatHoldsService.consumeHoldInTx(
+        prisma,
+        holdTokenA,
+        tripId,
+        [tripSeat1],
+        customerAId,
+      ),
+    ).rejects.toThrowError();
+
+    // 5. Customer A attempting CAS update with holdIdA MUST match 0 rows (prevent theft!)
+    const stolenAttemptCount = await prisma.gheChuyenXe.updateMany({
+      where: {
+        chuyenXeId: tripId,
+        gheChuyenXeId: { in: [tripSeat1] },
+        trangThai: 'DANG_GIU',
+        giuChoId: holdIdA,
+      },
+      data: {
+        trangThai: 'DA_DAT',
+        giuChoId: null,
+      },
+    });
+    expect(stolenAttemptCount.count).toBe(0);
+
+    // Verify Customer B's seat is 100% untampered
+    const seatAfterAttempt = await prisma.gheChuyenXe.findUnique({
+      where: { gheChuyenXeId: tripSeat1 },
+    });
+    expect(seatAfterAttempt?.trangThai).toBe('DANG_GIU');
+    expect(seatAfterAttempt?.giuChoId).toBe(holdIdB);
+
+    // 6. Customer B can consume legitimately inside tx
+    const consumedB = await seatHoldsService.consumeHoldInTx(
+      prisma,
+      holdTokenB,
+      tripId,
+      [tripSeat1],
+      customerBId,
+    );
+    expect(consumedB.giuChoId).toBe(holdIdB);
+
+    // CAS update with holdIdB succeeds for Customer B
+    const legitimateBookingUpdate = await prisma.gheChuyenXe.updateMany({
+      where: {
+        chuyenXeId: tripId,
+        gheChuyenXeId: { in: [tripSeat1] },
+        trangThai: 'DANG_GIU',
+        giuChoId: holdIdB,
+      },
+      data: {
+        trangThai: 'DA_DAT',
+        giuChoId: null,
+      },
+    });
+    expect(legitimateBookingUpdate.count).toBe(1);
+  }, 30_000);
 });
+

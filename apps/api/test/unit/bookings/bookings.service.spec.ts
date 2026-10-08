@@ -248,6 +248,7 @@ describe('BookingsService', () => {
       const mockSeatHolds = {
         verifyHold: vi.fn(),
         consumeHold: vi.fn(),
+        consumeHoldInTx: vi.fn().mockResolvedValue({ giuChoId: 1 }),
       };
       const mockPromotions = {
         validatePromotion: vi.fn().mockResolvedValue({ isValid: false, discountAmount: 0 }),
@@ -302,11 +303,17 @@ describe('BookingsService', () => {
             ve: {
               create: vi.fn().mockImplementation(async ({ data }: any) => {
                 createdTickets.push(data);
-                return data;
+                return { veId: 501, ...data };
               }),
             },
             gheChuyenXe: {
               updateMany: vi.fn().mockResolvedValue({ count: 3 }),
+            },
+            lichSuTrangThaiPhieuDatVe: {
+              create: vi.fn().mockResolvedValue({}),
+            },
+            lichSuTrangThaiVe: {
+              create: vi.fn().mockResolvedValue({}),
             },
           };
           return cb(tx);
@@ -361,7 +368,8 @@ describe('BookingsService', () => {
         [101, 102, 103],
         10,
       );
-      expect(mockSeatHolds.consumeHold).toHaveBeenCalledWith(
+      expect(mockSeatHolds.consumeHoldInTx).toHaveBeenCalledWith(
+        expect.anything(),
         'hold_test_token',
         50,
         [101, 102, 103],

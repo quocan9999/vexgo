@@ -4,10 +4,12 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHmac } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { generateUuidV1 } from '../common/uuid-v1.js';
 import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
 import type {
   MomoWebhookDto,
@@ -27,16 +29,18 @@ export class PaymentsService {
     private readonly prisma: PrismaService,
     private readonly configService?: ConfigService,
   ) {
-    this.isDemoMode = this.configService?.get<string>('PAYMENT_DEMO_MODE') !== 'false';
+    this.isDemoMode =
+      (this.configService?.get<string>('PAYMENT_DEMO_MODE') ?? '').toLowerCase() ===
+      'true';
     this.momoSecretKey =
       this.configService?.get<string>('MOMO_SECRET_KEY') ||
-      'vexgo_momo_demo_secret';
+      (this.isDemoMode ? 'vexgo_momo_demo_secret' : '');
     this.vnpayHashSecret =
       this.configService?.get<string>('VNPAY_HASH_SECRET') ||
-      'vexgo_vnpay_demo_secret';
+      (this.isDemoMode ? 'vexgo_vnpay_demo_secret' : '');
     this.zalopayKey2 =
       this.configService?.get<string>('ZALOPAY_KEY2') ||
-      'vexgo_zalopay_demo_key2';
+      (this.isDemoMode ? 'vexgo_zalopay_demo_key2' : '');
   }
 
   private async verifyCustomerOwnership(
@@ -87,17 +91,11 @@ export class PaymentsService {
 
     const cleanProvider = (provider || 'MOMO').toUpperCase();
 
-    // Check production mode configuration (Finding 9)
+    // Production vs Demo check (discussion_r4220529077)
     if (!this.isDemoMode) {
-      const hasSecret =
-        (cleanProvider === 'MOMO' && !!this.configService?.get('MOMO_SECRET_KEY')) ||
-        (cleanProvider === 'VNPAY' && !!this.configService?.get('VNPAY_HASH_SECRET')) ||
-        (cleanProvider === 'ZALOPAY' && !!this.configService?.get('ZALOPAY_KEY2'));
-      if (!hasSecret) {
-        throw new BadRequestException(
-          `Cổng thanh toán ${cleanProvider} chưa được cấu hình cho môi trường sản xuất.`,
-        );
-      }
+      throw new ServiceUnavailableException(
+        `Cổng thanh toán ${cleanProvider} chưa được cấu hình cho môi trường thực tế. Vui lòng bật PAYMENT_DEMO_MODE=true để thử nghiệm.`,
+      );
     }
 
     // Create record in ThanhToan table
@@ -116,15 +114,9 @@ export class PaymentsService {
     const paymentUrl = `https://sandbox.${cleanProvider.toLowerCase()}.vn/pay?id=${payment.thanhToanId}&amount=${amount}`;
     const deeplink = `${cleanProvider.toLowerCase()}://app?id=${payment.thanhToanId}`;
 
-    if (this.isDemoMode) {
-      this.logger.warn(
-        `[DEMO MODE] Generated sandbox payment URL for payment #${payment.thanhToanId} via ${cleanProvider}`,
-      );
-    } else {
-      this.logger.log(
-        `Created payment #${payment.thanhToanId} via ${cleanProvider} for booking #${bookingId}, amount: ${amount}đ`,
-      );
-    }
+    this.logger.warn(
+      `[DEMO MODE] Generated sandbox payment URL for payment #${payment.thanhToanId} via ${cleanProvider}`,
+    );
 
     return {
       paymentId: payment.thanhToanId,
@@ -134,7 +126,7 @@ export class PaymentsService {
       paymentUrl,
       deeplink,
       status: 'PENDING',
-      ...(this.isDemoMode ? { mode: 'DEMO' } : {}),
+      mode: 'DEMO',
       createdAt: payment.createdAt.toISOString(),
     };
   }
@@ -213,13 +205,18 @@ export class PaymentsService {
     };
   }
 
-  async confirmPaymentSuccess(paymentId: number) {
+  async confirmPaymentSuccess(params: {
+    paymentId: number;
+    provider: string;
+    amount: number;
+  }) {
     const payment = await this.prisma.thanhToan.findUnique({
-      where: { thanhToanId: Number(paymentId) },
+      where: { thanhToanId: Number(params.paymentId) },
       include: {
         donGiaoDich: {
           include: {
             phieuDatVe: true,
+            khachHang: true,
           },
         },
       },
@@ -227,8 +224,26 @@ export class PaymentsService {
 
     if (!payment) {
       throw new NotFoundException(
-        `Giao dịch thanh toán #${paymentId} không tồn tại.`,
+        `Giao dịch thanh toán #${params.paymentId} không tồn tại.`,
       );
+    }
+
+    // 1. Kiểm tra khớp provider (Discussion #discussion_r4164957958)
+    if (payment.phuongThuc.toUpperCase() !== params.provider.toUpperCase()) {
+      throw new BadRequestException({
+        error: 'PAYMENT_PROVIDER_MISMATCH',
+        message: `Phương thức thanh toán không khớp: mong đợi ${payment.phuongThuc}, nhận được ${params.provider}`,
+      });
+    }
+
+    // 2. Kiểm tra khớp số tiền (Discussion #discussion_r4164957969)
+    const expectedAmount = Math.round(Number(payment.soTien));
+    const receivedAmount = Math.round(Number(params.amount));
+    if (expectedAmount !== receivedAmount) {
+      throw new BadRequestException({
+        error: 'PAYMENT_AMOUNT_MISMATCH',
+        message: `Số tiền thanh toán không khớp: mong đợi ${expectedAmount}, nhận được ${receivedAmount}`,
+      });
     }
 
     if (payment.trangThai === 'THANH_CONG') {
@@ -249,23 +264,74 @@ export class PaymentsService {
           data: { trangThai: 'DA_THANH_TOAN' },
         });
 
-        if (payment.donGiaoDich.phieuDatVe) {
+        const phieuDatVe = payment.donGiaoDich.phieuDatVe;
+        if (phieuDatVe) {
           await tx.phieuDatVe.update({
-            where: { phieuDatVeId: payment.donGiaoDich.phieuDatVe.phieuDatVeId },
+            where: { phieuDatVeId: phieuDatVe.phieuDatVeId },
             data: { trangThai: 'DA_THANH_TOAN' },
           });
+
+          // Cập nhật tất cả vé sang DA_THANH_TOAN
+          let tickets: any[] = [];
+          if (tx.ve) {
+            await tx.ve.updateMany({
+              where: { phieuDatVeId: phieuDatVe.phieuDatVeId },
+              data: { trangThai: 'DA_THANH_TOAN' },
+            });
+            tickets = await tx.ve.findMany({
+              where: { phieuDatVeId: phieuDatVe.phieuDatVeId },
+            });
+          }
+
+          const operationId = generateUuidV1();
+          const timestamp = new Date();
+          const providerName = payment.phuongThuc.toUpperCase();
+
+          if (tx.lichSuTrangThaiPhieuDatVe) {
+            await tx.lichSuTrangThaiPhieuDatVe.create({
+              data: {
+                phieuDatVeId: phieuDatVe.phieuDatVeId,
+                trangThaiCu: phieuDatVe.trangThai || 'CHO_THANH_TOAN',
+                trangThaiMoi: 'DA_THANH_TOAN',
+                thoiDiem: timestamp,
+                nguonThayDoi: 'SYSTEM',
+                taiKhoanId: null,
+                lyDo: `Thanh toán thành công qua ${providerName}`,
+                laOverride: false,
+                maThaoTac: operationId,
+              },
+            });
+          }
+
+          if (tx.lichSuTrangThaiVe) {
+            for (const ticket of tickets) {
+              await tx.lichSuTrangThaiVe.create({
+                data: {
+                  veId: ticket.veId,
+                  trangThaiCu: 'DA_DAT',
+                  trangThaiMoi: 'DA_THANH_TOAN',
+                  thoiDiem: timestamp,
+                  nguonThayDoi: 'SYSTEM',
+                  taiKhoanId: null,
+                  lyDo: `Thanh toán vé thành công qua ${providerName}`,
+                  laOverride: false,
+                  maThaoTac: operationId,
+                },
+              });
+            }
+          }
         }
       }
     });
 
     this.logger.log(
-      `Payment #${paymentId} confirmed SUCCESS via verified webhook.`,
+      `Payment #${params.paymentId} confirmed SUCCESS via verified webhook.`,
     );
     return { success: true };
   }
 
   verifyMomoSignature(body: MomoWebhookDto): boolean {
-    if (!body.signature) return false;
+    if (!this.momoSecretKey || !body.signature) return false;
     const raw = `accessKey=${body.accessKey ?? ''}&amount=${body.amount ?? ''}&extraData=${body.extraData ?? ''}&message=${body.message ?? ''}&orderId=${body.orderId ?? ''}&orderInfo=${body.orderInfo ?? ''}&orderType=${body.orderType ?? ''}&partnerCode=${body.partnerCode ?? ''}&payType=${body.payType ?? ''}&requestId=${body.requestId ?? ''}&responseTime=${body.responseTime ?? ''}&resultCode=${body.resultCode ?? ''}&transId=${body.transId ?? ''}`;
     const expectedSig = createHmac('sha256', this.momoSecretKey)
       .update(raw)
@@ -274,6 +340,7 @@ export class PaymentsService {
   }
 
   verifyVnpaySignature(queryOrBody: VnpayWebhookDto): boolean {
+    if (!this.vnpayHashSecret) return false;
     const secureHash = queryOrBody.vnp_SecureHash;
     if (!secureHash) return false;
 
@@ -304,7 +371,7 @@ export class PaymentsService {
   }
 
   verifyZaloPayMac(body: ZaloPayWebhookDto): boolean {
-    if (!body.mac || !body.data) return false;
+    if (!this.zalopayKey2 || !body.mac || !body.data) return false;
     const expectedMac = createHmac('sha256', this.zalopayKey2)
       .update(body.data)
       .digest('hex');
@@ -338,7 +405,11 @@ export class PaymentsService {
       throw new BadRequestException('Mã thanh toán không hợp lệ.');
     }
 
-    await this.confirmPaymentSuccess(paymentId);
+    await this.confirmPaymentSuccess({
+      paymentId,
+      provider: 'MOMO',
+      amount: Number(body.amount),
+    });
     return { resultCode: 0, message: 'Received' };
   }
 
@@ -373,7 +444,14 @@ export class PaymentsService {
       throw new BadRequestException('Mã thanh toán không hợp lệ.');
     }
 
-    await this.confirmPaymentSuccess(paymentId);
+    const rawAmount = Number(queryOrBody.vnp_Amount);
+    const vnpayAmount = rawAmount > 0 ? rawAmount / 100 : 0;
+
+    await this.confirmPaymentSuccess({
+      paymentId,
+      provider: 'VNPAY',
+      amount: vnpayAmount,
+    });
     return { RspCode: '00', Message: 'Confirm Success' };
   }
 
@@ -390,23 +468,30 @@ export class PaymentsService {
     }
 
     let paymentId: number | null = null;
+    let amount = 0;
     if (body.data) {
       try {
         const parsed = JSON.parse(body.data);
         paymentId = Number(parsed.app_trans_id || parsed.paymentId);
+        amount = Number(parsed.amount || parsed.item_price || 0);
       } catch {
         // ignore parse error, fallback
       }
     }
     if (!paymentId) {
       paymentId = Number(body.app_trans_id || body.paymentId);
+      amount = Number(body.amount ?? 0);
     }
 
     if (!paymentId || isNaN(paymentId)) {
       throw new BadRequestException('Mã thanh toán không hợp lệ.');
     }
 
-    await this.confirmPaymentSuccess(paymentId);
+    await this.confirmPaymentSuccess({
+      paymentId,
+      provider: 'ZALOPAY',
+      amount,
+    });
     return { return_code: 1, return_message: 'success' };
   }
 }

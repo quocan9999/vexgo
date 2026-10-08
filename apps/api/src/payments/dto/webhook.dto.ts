@@ -128,4 +128,7 @@ export class ZaloPayWebhookDto {
 
   @IsOptional()
   paymentId?: number | string;
+
+  @IsOptional()
+  amount?: number;
 }
