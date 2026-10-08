@@ -28,11 +28,7 @@ export interface CustomerDetail extends CustomerSummary {
 }
 
 export type CustomerSortKey =
-  | 'customerCode'
-  | 'fullName'
-  | 'loyaltyPoints'
-  | 'createdAt'
-  | 'updatedAt';
+  'customerCode' | 'fullName' | 'loyaltyPoints' | 'createdAt' | 'updatedAt';
 
 export interface CustomerQuery {
   page?: number;
@@ -161,7 +157,6 @@ export interface CustomerTicketsResponse {
 export interface CustomerShipmentReceiver {
   fullName: string;
   phoneNumber: string;
-  address: string | null;
 }
 
 export interface CustomerShipmentTripSummary {
@@ -169,10 +164,11 @@ export interface CustomerShipmentTripSummary {
   code: string;
 }
 
-export interface CustomerShipmentBranchSummary {
-  branchId: number;
+export interface CustomerShipmentPointSummary {
+  pointId: number;
   code: string;
   name: string;
+  address: string;
 }
 
 export interface CustomerShipment {
@@ -181,17 +177,14 @@ export interface CustomerShipment {
   sentAt: string;
   status: string;
   receiver: CustomerShipmentReceiver;
-  pickupMethod: string;
-  deliveryMethod: string;
-  pickupAddress: string | null;
   mainFee: number;
   serviceFee: number;
   discountAmount: number;
   totalFee: number;
   freightPayer: string;
-  trip: CustomerShipmentTripSummary | null;
-  originBranch: CustomerShipmentBranchSummary | null;
-  destinationBranch: CustomerShipmentBranchSummary | null;
+  trip: CustomerShipmentTripSummary;
+  originPoint: CustomerShipmentPointSummary;
+  destinationPoint: CustomerShipmentPointSummary;
 }
 
 export interface CustomerShipmentsQuery {

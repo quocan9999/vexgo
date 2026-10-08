@@ -14,6 +14,9 @@ const vehicleTypeRecord = {
   nhaXeId: 4,
   tenLoai: 'Limousine',
   moTa: 'Dòng xe limousine',
+  sucChuaXeMayMacDinh: 0,
+  sucChuaHangCongKenhMacDinh: 0,
+  sucChuaHangNheMacDinh: 0,
   createdAt: new Date('2026-09-25T10:00:00.000Z'),
   updatedAt: new Date('2026-09-25T11:00:00.000Z'),
 };
@@ -57,19 +60,23 @@ describe('VehicleTypesService', () => {
   });
 
   it('maps Prisma field names and dates to the English API shape', () => {
-    expect(
-      mapVehicleType({ ...vehicleTypeRecord, moTa: null }),
-    ).toEqual({
+    expect(mapVehicleType({ ...vehicleTypeRecord, moTa: null })).toEqual({
       vehicleTypeId: 1,
       name: 'Limousine',
       description: null,
+      motorbikeCapacityDefault: 0,
+      bulkyCargoCapacityDefault: 0,
+      lightCargoCapacityDefault: 0,
       createdAt: '2026-09-25T10:00:00.000Z',
       updatedAt: '2026-09-25T11:00:00.000Z',
     });
   });
 
   it('trims search and searches both vehicle type name and description', async () => {
-    await service.findAll(createQuery({ search: '  Limousine  ' }), tenantAdmin);
+    await service.findAll(
+      createQuery({ search: '  Limousine  ' }),
+      tenantAdmin,
+    );
 
     expect(prisma.loaiXe.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -107,7 +114,10 @@ describe('VehicleTypesService', () => {
     ['createdAt', 'createdAt'],
     ['updatedAt', 'updatedAt'],
   ] as const)('maps %s sorting to Prisma %s', async (sortBy, prismaField) => {
-    await service.findAll(createQuery({ sortBy, sortDirection: 'desc' }), tenantAdmin);
+    await service.findAll(
+      createQuery({ sortBy, sortDirection: 'desc' }),
+      tenantAdmin,
+    );
 
     expect(prisma.loaiXe.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ orderBy: { [prismaField]: 'desc' } }),
@@ -137,6 +147,9 @@ describe('VehicleTypesService', () => {
         vehicleTypeId: 1,
         name: 'Limousine',
         description: 'Dòng xe limousine',
+        motorbikeCapacityDefault: 0,
+        bulkyCargoCapacityDefault: 0,
+        lightCargoCapacityDefault: 0,
         createdAt: '2026-09-25T10:00:00.000Z',
         updatedAt: '2026-09-25T11:00:00.000Z',
       },
@@ -149,7 +162,9 @@ describe('VehicleTypesService', () => {
   it('returns a domain not found error when the detail record is missing', async () => {
     vi.mocked(prisma.loaiXe.findFirst).mockResolvedValueOnce(null);
 
-    const error = await service.findOne(999999, tenantAdmin).catch((caught: unknown) => caught);
+    const error = await service
+      .findOne(999999, tenantAdmin)
+      .catch((caught: unknown) => caught);
 
     expect(error).toBeInstanceOf(NotFoundException);
     if (!(error instanceof NotFoundException)) {

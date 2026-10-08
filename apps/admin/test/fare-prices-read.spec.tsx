@@ -1,5 +1,12 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import type { AnchorHTMLAttributes } from 'react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { FarePricesManagement } from '@/features/fare-prices/components/fare-prices-management';
@@ -11,8 +18,14 @@ vi.mock('next/navigation', () => ({
 }));
 
 vi.mock('next/link', () => ({
-  default: ({ href, children, ...props }: AnchorHTMLAttributes<HTMLAnchorElement> & { href: string }) => (
-    <a href={href} {...props}>{children}</a>
+  default: ({
+    href,
+    children,
+    ...props
+  }: AnchorHTMLAttributes<HTMLAnchorElement> & { href: string }) => (
+    <a href={href} {...props}>
+      {children}
+    </a>
   ),
 }));
 
@@ -57,6 +70,9 @@ const vehicleTypePage = {
       vehicleTypeId: 2,
       name: 'Limousine',
       description: null,
+      motorbikeCapacityDefault: 0,
+      bulkyCargoCapacityDefault: 0,
+      lightCargoCapacityDefault: 0,
       createdAt: '2026-09-01T08:30:00.000Z',
       updatedAt: '2026-09-02T08:30:00.000Z',
     },
@@ -72,11 +88,13 @@ function response(body: unknown, ok = true, status = ok ? 200 : 500): Response {
   } as Response;
 }
 
-function installApi(options: {
-  failFirstFareList?: boolean;
-  emptyFareList?: boolean;
-  missingFareDetail?: boolean;
-} = {}) {
+function installApi(
+  options: {
+    failFirstFareList?: boolean;
+    emptyFareList?: boolean;
+    missingFareDetail?: boolean;
+  } = {},
+) {
   setEmployeeAdminTestSession([
     'fare-price:read',
     'route:read',
@@ -106,11 +124,14 @@ function installApi(options: {
     if (url.pathname === '/api/v1/fare-prices') {
       fareListRequests += 1;
       if (options.failFirstFareList && fareListRequests === 1) {
-        return response({
-          statusCode: 500,
-          error: 'INTERNAL_SERVER_ERROR',
-          message: 'raw Prisma stack must stay hidden',
-        }, false);
+        return response(
+          {
+            statusCode: 500,
+            error: 'INTERNAL_SERVER_ERROR',
+            message: 'raw Prisma stack must stay hidden',
+          },
+          false,
+        );
       }
       return response({
         data: options.emptyFareList ? [] : [fare],
@@ -123,7 +144,8 @@ function installApi(options: {
       });
     }
     if (url.pathname === '/api/v1/routes') return response(routePage);
-    if (url.pathname === '/api/v1/vehicle-types') return response(vehicleTypePage);
+    if (url.pathname === '/api/v1/vehicle-types')
+      return response(vehicleTypePage);
 
     throw new Error(`Unexpected API request: ${url.pathname}${url.search}`);
   });
@@ -142,7 +164,9 @@ beforeAll(() => {
   Object.defineProperty(HTMLDialogElement.prototype, 'showModal', {
     configurable: true,
     value(this: HTMLDialogElement) {
-      (this as HTMLDialogElement & { returnFocusTo?: Element | null }).returnFocusTo = document.activeElement;
+      (
+        this as HTMLDialogElement & { returnFocusTo?: Element | null }
+      ).returnFocusTo = document.activeElement;
       this.setAttribute('open', '');
     },
   });
@@ -150,7 +174,9 @@ beforeAll(() => {
     configurable: true,
     value(this: HTMLDialogElement) {
       this.removeAttribute('open');
-      const returnFocusTo = (this as HTMLDialogElement & { returnFocusTo?: Element | null }).returnFocusTo;
+      const returnFocusTo = (
+        this as HTMLDialogElement & { returnFocusTo?: Element | null }
+      ).returnFocusTo;
       if (returnFocusTo instanceof HTMLElement) returnFocusTo.focus();
       this.dispatchEvent(new Event('close'));
     },
@@ -163,22 +189,34 @@ describe('Fare Prices list and detail behavior', () => {
 
     render(<FarePricesManagement />);
 
-    expect(screen.getByRole('heading', { name: 'Quản lý bảng giá vé' })).toBeTruthy();
-    expect(screen.getByText('Theo dõi giá vé theo tuyến, loại xe và thời gian hiệu lực.')).toBeTruthy();
+    expect(
+      screen.getByRole('heading', { name: 'Quản lý bảng giá vé' }),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(
+        'Theo dõi giá vé theo tuyến, loại xe và thời gian hiệu lực.',
+      ),
+    ).toBeTruthy();
     expect((await screen.findAllByText('Limousine')).length).toBeGreaterThan(0);
     expect(screen.queryByRole('button', { name: 'Thêm bảng giá' })).toBeNull();
-    const mobileList = screen.getByRole('list', { name: 'Danh sách bảng giá dạng thẻ' });
+    const mobileList = screen.getByRole('list', {
+      name: 'Danh sách bảng giá dạng thẻ',
+    });
     expect(mobileList.tagName).toBe('UL');
     expect(within(mobileList).getAllByRole('listitem')).toHaveLength(1);
 
-    const trigger = screen.getAllByRole('button', { name: 'Xem chi tiết SG-DL-01' })[0];
+    const trigger = screen.getAllByRole('button', {
+      name: 'Xem chi tiết SG-DL-01',
+    })[0];
     trigger.focus();
     fireEvent.click(trigger);
     const detail = await screen.findByRole('dialog');
     expect(within(detail).getByText(/250\.000/)).toBeTruthy();
     expect(api.requests).toContain('/api/v1/fare-prices/15');
 
-    const closeButton = within(detail).getByRole('button', { name: 'Đóng chi tiết bảng giá' });
+    const closeButton = within(detail).getByRole('button', {
+      name: 'Đóng chi tiết bảng giá',
+    });
     closeButton.focus();
     fireEvent.click(closeButton);
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
@@ -211,7 +249,9 @@ describe('Fare Prices list and detail behavior', () => {
     render(<FarePricesManagement />);
 
     fireEvent.click(
-      (await screen.findAllByRole('button', { name: 'Xem chi tiết SG-DL-01' }))[0]!,
+      (
+        await screen.findAllByRole('button', { name: 'Xem chi tiết SG-DL-01' })
+      )[0]!,
     );
 
     await waitFor(() => {
@@ -228,11 +268,15 @@ describe('Fare Prices list and detail behavior', () => {
 
     render(<FarePricesManagement />);
 
-    const search = await screen.findByRole('searchbox', { name: 'Tìm bảng giá' });
+    const search = await screen.findByRole('searchbox', {
+      name: 'Tìm bảng giá',
+    });
     fireEvent.change(search, { target: { value: 'SG-DL' } });
 
     await waitFor(() => {
-      expect(api.requests.some((url) => url.includes('search=SG-DL'))).toBe(true);
+      expect(api.requests.some((url) => url.includes('search=SG-DL'))).toBe(
+        true,
+      );
     });
   });
 });

@@ -1,7 +1,15 @@
 import type { ExecutionContext, INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 import { Prisma } from '../../../src/generated/prisma/client.js';
 import { AppModule } from '../../../src/app.module.js';
 import { AccessTokenGuard } from '../../../src/auth/guards/access-token.guard.js';
@@ -19,7 +27,8 @@ let testPrincipal: AuthPrincipal = {
 };
 const testAccessTokenGuard = {
   canActivate(context: ExecutionContext) {
-    context.switchToHttp().getRequest<{ user?: AuthPrincipal }>().user = testPrincipal;
+    context.switchToHttp().getRequest<{ user?: AuthPrincipal }>().user =
+      testPrincipal;
     return true;
   },
 };
@@ -28,6 +37,9 @@ const vehicleTypeRecord = {
   loaiXeId: 8,
   tenLoai: 'Limousine 22 phòng',
   moTa: 'Loại xe giường phòng cao cấp',
+  sucChuaXeMayMacDinh: 2,
+  sucChuaHangCongKenhMacDinh: 4,
+  sucChuaHangNheMacDinh: 7,
   createdAt: new Date('2026-09-25T10:00:00.000Z'),
   updatedAt: new Date('2026-09-25T11:00:00.000Z'),
 };
@@ -44,18 +56,21 @@ const prisma = {
 };
 
 function mariaDbUniqueError(index: string) {
-  return new Prisma.PrismaClientKnownRequestError('duplicate vehicle type name', {
-    code: 'P2002',
-    clientVersion: '7.10.0',
-    meta: {
-      driverAdapterError: {
-        cause: {
-          kind: 'UniqueConstraintViolation',
-          constraint: { index },
+  return new Prisma.PrismaClientKnownRequestError(
+    'duplicate vehicle type name',
+    {
+      code: 'P2002',
+      clientVersion: '7.10.0',
+      meta: {
+        driverAdapterError: {
+          cause: {
+            kind: 'UniqueConstraintViolation',
+            constraint: { index },
+          },
         },
       },
     },
-  });
+  );
 }
 
 describe('Vehicle type write API request-pipeline integration', () => {
@@ -95,6 +110,12 @@ describe('Vehicle type write API request-pipeline integration', () => {
   });
 
   it('creates a vehicle type, trims fields, and returns the mapped envelope', async () => {
+    prisma.loaiXe.create.mockResolvedValueOnce({
+      ...vehicleTypeRecord,
+      sucChuaXeMayMacDinh: 0,
+      sucChuaHangCongKenhMacDinh: 0,
+      sucChuaHangNheMacDinh: 0,
+    });
     const response = await request(app.getHttpServer())
       .post('/api/v1/vehicle-types')
       .send({
@@ -109,6 +130,9 @@ describe('Vehicle type write API request-pipeline integration', () => {
         vehicleTypeId: 8,
         name: 'Limousine 22 phòng',
         description: 'Loại xe giường phòng cao cấp',
+        motorbikeCapacityDefault: 0,
+        bulkyCargoCapacityDefault: 0,
+        lightCargoCapacityDefault: 0,
         createdAt: '2026-09-25T10:00:00.000Z',
         updatedAt: '2026-09-25T11:00:00.000Z',
       },
@@ -119,7 +143,80 @@ describe('Vehicle type write API request-pipeline integration', () => {
           tenLoai: 'Limousine 22 phòng',
           nhaXeId: 4,
           moTa: 'Loại xe giường phòng cao cấp',
+          sucChuaXeMayMacDinh: 0,
+          sucChuaHangCongKenhMacDinh: 0,
+          sucChuaHangNheMacDinh: 0,
         },
+      }),
+    );
+  });
+
+  it('accepts explicit zero values for all default capacities', async () => {
+    prisma.loaiXe.create.mockResolvedValueOnce({
+      ...vehicleTypeRecord,
+      sucChuaXeMayMacDinh: 0,
+      sucChuaHangCongKenhMacDinh: 0,
+      sucChuaHangNheMacDinh: 0,
+    });
+
+    const response = await request(app.getHttpServer())
+      .post('/api/v1/vehicle-types')
+      .send({
+        name: 'Xe du lịch',
+        busCompanyId: 4,
+        motorbikeCapacityDefault: 0,
+        bulkyCargoCapacityDefault: 0,
+        lightCargoCapacityDefault: 0,
+      })
+      .expect(201);
+
+    expect(response.body.data).toMatchObject({
+      motorbikeCapacityDefault: 0,
+      bulkyCargoCapacityDefault: 0,
+      lightCargoCapacityDefault: 0,
+    });
+    expect(prisma.loaiXe.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          sucChuaXeMayMacDinh: 0,
+          sucChuaHangCongKenhMacDinh: 0,
+          sucChuaHangNheMacDinh: 0,
+        }),
+      }),
+    );
+  });
+
+  it('persists explicitly supplied default capacities during create', async () => {
+    prisma.loaiXe.create.mockResolvedValueOnce({
+      ...vehicleTypeRecord,
+      sucChuaXeMayMacDinh: 12,
+      sucChuaHangCongKenhMacDinh: 6,
+      sucChuaHangNheMacDinh: 18,
+    });
+
+    const response = await request(app.getHttpServer())
+      .post('/api/v1/vehicle-types')
+      .send({
+        name: 'Xe du lịch',
+        busCompanyId: 4,
+        motorbikeCapacityDefault: 12,
+        bulkyCargoCapacityDefault: 6,
+        lightCargoCapacityDefault: 18,
+      })
+      .expect(201);
+
+    expect(response.body.data).toMatchObject({
+      motorbikeCapacityDefault: 12,
+      bulkyCargoCapacityDefault: 6,
+      lightCargoCapacityDefault: 18,
+    });
+    expect(prisma.loaiXe.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          sucChuaXeMayMacDinh: 12,
+          sucChuaHangCongKenhMacDinh: 6,
+          sucChuaHangNheMacDinh: 18,
+        }),
       }),
     );
   });
@@ -129,23 +226,32 @@ describe('Vehicle type write API request-pipeline integration', () => {
     ['null', null],
     ['empty', ''],
     ['whitespace-only', '  \t '],
-  ])('normalizes %s description to null during create', async (_label, description) => {
-    prisma.loaiXe.create.mockResolvedValueOnce({
-      ...vehicleTypeRecord,
-      moTa: null,
-    });
-    const body = { name: 'Limousine 22 phòng', busCompanyId: 4, ...(description !== undefined ? { description } : {}) };
+  ])(
+    'normalizes %s description to null during create',
+    async (_label, description) => {
+      prisma.loaiXe.create.mockResolvedValueOnce({
+        ...vehicleTypeRecord,
+        moTa: null,
+      });
+      const body = {
+        name: 'Limousine 22 phòng',
+        busCompanyId: 4,
+        ...(description !== undefined ? { description } : {}),
+      };
 
-    const response = await request(app.getHttpServer())
-      .post('/api/v1/vehicle-types')
-      .send(body)
-      .expect(201);
+      const response = await request(app.getHttpServer())
+        .post('/api/v1/vehicle-types')
+        .send(body)
+        .expect(201);
 
-    expect(response.body.data.description).toBeNull();
-    expect(prisma.loaiXe.create).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ moTa: null }) }),
-    );
-  });
+      expect(response.body.data.description).toBeNull();
+      expect(prisma.loaiXe.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ moTa: null }),
+        }),
+      );
+    },
+  );
 
   it.each([
     ['missing name', {}, 'name'],
@@ -153,7 +259,11 @@ describe('Vehicle type write API request-pipeline integration', () => {
     ['non-string name', { name: 22 }, 'name'],
     ['name longer than 100 characters', { name: 'N'.repeat(101) }, 'name'],
     ['non-string description', { name: 'Xe', description: 22 }, 'description'],
-    ['description longer than 500 characters', { name: 'Xe', description: 'D'.repeat(501) }, 'description'],
+    [
+      'description longer than 500 characters',
+      { name: 'Xe', description: 'D'.repeat(501) },
+      'description',
+    ],
     ['unknown field', { name: 'Xe', status: 'ACTIVE' }, 'status'],
   ] as const)(
     'rejects create with %s before writing to Prisma',
@@ -209,17 +319,29 @@ describe('Vehicle type write API request-pipeline integration', () => {
       ...vehicleTypeRecord,
       tenLoai: 'Limousine 24 phòng',
       moTa: 'Phiên bản 24 phòng',
+      sucChuaXeMayMacDinh: 10,
+      sucChuaHangCongKenhMacDinh: 20,
+      sucChuaHangNheMacDinh: 30,
     });
 
     const response = await request(app.getHttpServer())
       .patch('/api/v1/vehicle-types/8')
-      .send({ name: '  Limousine 24 phòng ', description: ' Phiên bản 24 phòng ' })
+      .send({
+        name: '  Limousine 24 phòng ',
+        description: ' Phiên bản 24 phòng ',
+        motorbikeCapacityDefault: 10,
+        bulkyCargoCapacityDefault: 20,
+        lightCargoCapacityDefault: 30,
+      })
       .expect(200);
 
     expect(response.body.data).toMatchObject({
       vehicleTypeId: 8,
       name: 'Limousine 24 phòng',
       description: 'Phiên bản 24 phòng',
+      motorbikeCapacityDefault: 10,
+      bulkyCargoCapacityDefault: 20,
+      lightCargoCapacityDefault: 30,
     });
     expect(prisma.loaiXe.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -227,10 +349,95 @@ describe('Vehicle type write API request-pipeline integration', () => {
         data: {
           tenLoai: 'Limousine 24 phòng',
           moTa: 'Phiên bản 24 phòng',
+          sucChuaXeMayMacDinh: 10,
+          sucChuaHangCongKenhMacDinh: 20,
+          sucChuaHangNheMacDinh: 30,
         },
       }),
     );
   });
+
+  it('preserves stored capacities when update omits all capacity fields', async () => {
+    prisma.loaiXe.findFirst.mockResolvedValueOnce(vehicleTypeRecord);
+
+    const response = await request(app.getHttpServer())
+      .patch('/api/v1/vehicle-types/8')
+      .send({ name: 'Limousine 22 phòng' })
+      .expect(200);
+
+    expect(response.body.data).toMatchObject({
+      motorbikeCapacityDefault: 2,
+      bulkyCargoCapacityDefault: 4,
+      lightCargoCapacityDefault: 7,
+    });
+    expect(prisma.loaiXe.updateMany).toHaveBeenCalledWith({
+      where: { loaiXeId: 8, nhaXeId: 4 },
+      data: { tenLoai: 'Limousine 22 phòng', moTa: null },
+    });
+  });
+
+  it.each([
+    ['negative', { motorbikeCapacityDefault: -1 }, 'motorbikeCapacityDefault'],
+    [
+      'decimal',
+      { bulkyCargoCapacityDefault: 1.5 },
+      'bulkyCargoCapacityDefault',
+    ],
+    [
+      'out of Int32 range',
+      { lightCargoCapacityDefault: 2147483648 },
+      'lightCargoCapacityDefault',
+    ],
+    ['null', { motorbikeCapacityDefault: null }, 'motorbikeCapacityDefault'],
+  ] as const)(
+    'rejects create with a %s capacity before writing',
+    async (_label, capacity, field) => {
+      const response = await request(app.getHttpServer())
+        .post('/api/v1/vehicle-types')
+        .send({ name: 'Xe mới', busCompanyId: 4, ...capacity })
+        .expect(400);
+
+      expect(response.body).toMatchObject({
+        statusCode: 400,
+        error: 'VALIDATION_ERROR',
+      });
+      expect(response.body.details).toEqual(
+        expect.arrayContaining([expect.objectContaining({ field })]),
+      );
+      expect(prisma.loaiXe.create).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    ['negative', { motorbikeCapacityDefault: -1 }, 'motorbikeCapacityDefault'],
+    [
+      'decimal',
+      { bulkyCargoCapacityDefault: 1.5 },
+      'bulkyCargoCapacityDefault',
+    ],
+    [
+      'out of Int32 range',
+      { lightCargoCapacityDefault: 2147483648 },
+      'lightCargoCapacityDefault',
+    ],
+  ] as const)(
+    'rejects update with a %s capacity before writing',
+    async (_label, capacity, field) => {
+      const response = await request(app.getHttpServer())
+        .patch('/api/v1/vehicle-types/8')
+        .send({ name: 'Xe mới', ...capacity })
+        .expect(400);
+
+      expect(response.body).toMatchObject({
+        statusCode: 400,
+        error: 'VALIDATION_ERROR',
+      });
+      expect(response.body.details).toEqual(
+        expect.arrayContaining([expect.objectContaining({ field })]),
+      );
+      expect(prisma.loaiXe.updateMany).not.toHaveBeenCalled();
+    },
+  );
 
   it('normalizes omitted and whitespace-only descriptions to null during update', async () => {
     for (const body of [
@@ -238,7 +445,10 @@ describe('Vehicle type write API request-pipeline integration', () => {
       { name: 'Limousine 22 phòng', description: '' },
       { name: 'Limousine 22 phòng', description: '   ' },
     ]) {
-      prisma.loaiXe.findFirst.mockResolvedValueOnce({ ...vehicleTypeRecord, moTa: null });
+      prisma.loaiXe.findFirst.mockResolvedValueOnce({
+        ...vehicleTypeRecord,
+        moTa: null,
+      });
       const response = await request(app.getHttpServer())
         .patch('/api/v1/vehicle-types/8')
         .send(body)
@@ -246,7 +456,9 @@ describe('Vehicle type write API request-pipeline integration', () => {
 
       expect(response.body.data.description).toBeNull();
       expect(prisma.loaiXe.updateMany).toHaveBeenLastCalledWith(
-        expect.objectContaining({ data: { tenLoai: 'Limousine 22 phòng', moTa: null } }),
+        expect.objectContaining({
+          data: { tenLoai: 'Limousine 22 phòng', moTa: null },
+        }),
       );
     }
   });
@@ -257,7 +469,11 @@ describe('Vehicle type write API request-pipeline integration', () => {
     ['non-string name', { name: 22 }, 'name'],
     ['name longer than 100 characters', { name: 'N'.repeat(101) }, 'name'],
     ['non-string description', { name: 'Xe', description: [] }, 'description'],
-    ['description longer than 500 characters', { name: 'Xe', description: 'D'.repeat(501) }, 'description'],
+    [
+      'description longer than 500 characters',
+      { name: 'Xe', description: 'D'.repeat(501) },
+      'description',
+    ],
     ['unknown field', { name: 'Xe', status: 'ACTIVE' }, 'status'],
   ] as const)(
     'rejects update with %s before writing to Prisma',

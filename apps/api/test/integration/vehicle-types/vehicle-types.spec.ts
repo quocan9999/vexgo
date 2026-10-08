@@ -26,7 +26,8 @@ let testPrincipal: AuthPrincipal = {
 };
 const testAccessTokenGuard = {
   canActivate(context: ExecutionContext) {
-    context.switchToHttp().getRequest<{ user?: AuthPrincipal }>().user = testPrincipal;
+    context.switchToHttp().getRequest<{ user?: AuthPrincipal }>().user =
+      testPrincipal;
     return true;
   },
 };
@@ -35,6 +36,9 @@ const vehicleTypeRecord = {
   loaiXeId: 1,
   tenLoai: 'Limousine',
   moTa: 'Dòng xe limousine',
+  sucChuaXeMayMacDinh: 2,
+  sucChuaHangCongKenhMacDinh: 5,
+  sucChuaHangNheMacDinh: 8,
   createdAt: new Date('2026-09-25T10:00:00.000Z'),
   updatedAt: new Date('2026-09-25T11:00:00.000Z'),
 };
@@ -126,6 +130,9 @@ describe('Vehicle types API integration', () => {
           vehicleTypeId: 1,
           name: 'Limousine',
           description: 'Dòng xe limousine',
+          motorbikeCapacityDefault: 2,
+          bulkyCargoCapacityDefault: 5,
+          lightCargoCapacityDefault: 8,
           createdAt: '2026-09-25T10:00:00.000Z',
           updatedAt: '2026-09-25T11:00:00.000Z',
         },
@@ -235,6 +242,9 @@ describe('Vehicle types API integration', () => {
       vehicleTypeId: 1,
       name: 'Limousine',
       description: 'Dòng xe limousine',
+      motorbikeCapacityDefault: 2,
+      bulkyCargoCapacityDefault: 5,
+      lightCargoCapacityDefault: 8,
       createdAt: '2026-09-25T10:00:00.000Z',
       updatedAt: '2026-09-25T11:00:00.000Z',
     });

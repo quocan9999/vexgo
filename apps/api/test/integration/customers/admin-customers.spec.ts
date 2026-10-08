@@ -2,7 +2,15 @@ import type { ExecutionContext, INestApplication } from '@nestjs/common';
 import { UnauthorizedException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 import { AppModule } from '../../../src/app.module.js';
 import { AccessTokenGuard } from '../../../src/auth/guards/access-token.guard.js';
 import { ADMIN_ROLE_DEFAULT_PERMISSION_KEYS } from '../../../src/auth/permissions/permission-catalog.js';
@@ -72,7 +80,8 @@ const testAccessTokenGuard = {
         message: 'Cần đăng nhập để thực hiện thao tác này.',
       });
     }
-    context.switchToHttp().getRequest<{ user?: AuthPrincipal }>().user = testPrincipal;
+    context.switchToHttp().getRequest<{ user?: AuthPrincipal }>().user =
+      testPrincipal;
     return true;
   },
 };
@@ -326,7 +335,9 @@ describe('Admin Customers API (Feature 06.1)', () => {
       mockPrisma.khachHang.findMany.mockResolvedValue([]);
 
       await request(app.getHttpServer())
-        .get('/api/v1/customers?accountStatus=HOAT_DONG&sortBy=loyaltyPoints&sortDirection=desc')
+        .get(
+          '/api/v1/customers?accountStatus=HOAT_DONG&sortBy=loyaltyPoints&sortDirection=desc',
+        )
         .expect(200);
 
       expect(mockPrisma.khachHang.findMany).toHaveBeenCalledWith(
@@ -510,10 +521,7 @@ describe('Admin Customers API (Feature 06.1)', () => {
           khachHangId: 101,
           nhaXeId: 1,
         },
-        orderBy: [
-          { ngayTao: 'desc' },
-          { donGiaoDichId: 'desc' },
-        ],
+        orderBy: [{ ngayTao: 'desc' }, { donGiaoDichId: 'desc' }],
         skip: 0,
         take: 10,
         include: {
@@ -561,7 +569,9 @@ describe('Admin Customers API (Feature 06.1)', () => {
       mockPrisma.donGiaoDich.findMany.mockResolvedValue([]);
 
       await request(app.getHttpServer())
-        .get('/api/v1/customers/101/transactions?search=GD000501&sortBy=totalAmount&sortDirection=asc')
+        .get(
+          '/api/v1/customers/101/transactions?search=GD000501&sortBy=totalAmount&sortDirection=asc',
+        )
         .expect(200);
 
       expect(mockPrisma.donGiaoDich.findMany).toHaveBeenCalledWith(
@@ -571,10 +581,7 @@ describe('Admin Customers API (Feature 06.1)', () => {
             nhaXeId: 1,
             maDonGiaoDich: { contains: 'GD000501' },
           },
-          orderBy: [
-            { tongTien: 'asc' },
-            { donGiaoDichId: 'asc' },
-          ],
+          orderBy: [{ tongTien: 'asc' }, { donGiaoDichId: 'asc' }],
         }),
       );
     });
@@ -899,10 +906,6 @@ describe('Admin Customers API (Feature 06.1)', () => {
       maVanDon: 'VD000301',
       tenNguoiNhan: 'Trần Văn B',
       soDienThoaiNguoiNhan: '0912345678',
-      diaChiNguoiNhan: '123 Lê Lợi, P.1, Đà Lạt',
-      hinhThucLayHang: 'TAI_BUU_CUC',
-      hinhThucGiaoHang: 'GIAO_TAN_NOI',
-      diaChiLayHang: '456 Mai Chí Thọ, Q.2, TP.HCM',
       ngayGui: NOW,
       cuocChinh: new Prisma.Decimal('80000'),
       phiDichVu: new Prisma.Decimal('10000'),
@@ -912,9 +915,8 @@ describe('Admin Customers API (Feature 06.1)', () => {
       ghiChu: 'Hàng dễ vỡ',
       trangThai: 'DANG_VAN_CHUYEN',
       chuyenXeId: 101,
-      buuCucGuiId: 1,
-      buuCucPhatId: 2,
-      bangCuocApDungId: 10,
+      diemGuiId: 1,
+      diemNhanId: 2,
       khuyenMaiId: null,
       donGiaoDichId: 502,
       createdAt: NOW,
@@ -923,15 +925,17 @@ describe('Admin Customers API (Feature 06.1)', () => {
         chuyenXeId: 101,
         maChuyenXe: 'FUTA-CX-0001',
       },
-      buuCucGui: {
-        buuCucId: 1,
-        maBuuCuc: 'FUTA-BC-001',
-        tenBuuCuc: 'Bưu cục Miền Đông',
+      diemGui: {
+        diemGiaoNhanHangId: 1,
+        maDiem: 'FUTA-BC-001',
+        tenDiem: 'Điểm gửi Miền Đông',
+        diaChi: '456 Mai Chí Thọ, TP.HCM',
       },
-      buuCucPhat: {
-        buuCucId: 2,
-        maBuuCuc: 'FUTA-BC-002',
-        tenBuuCuc: 'Bưu cục Đà Lạt',
+      diemNhan: {
+        diemGiaoNhanHangId: 2,
+        maDiem: 'FUTA-BC-002',
+        tenDiem: 'Điểm nhận Đà Lạt',
+        diaChi: '123 Lê Lợi, Đà Lạt',
       },
     };
 
@@ -954,11 +958,7 @@ describe('Admin Customers API (Feature 06.1)', () => {
             receiver: {
               fullName: 'Trần Văn B',
               phoneNumber: '0912345678',
-              address: '123 Lê Lợi, P.1, Đà Lạt',
             },
-            pickupMethod: 'TAI_BUU_CUC',
-            deliveryMethod: 'GIAO_TAN_NOI',
-            pickupAddress: '456 Mai Chí Thọ, Q.2, TP.HCM',
             mainFee: 80000,
             serviceFee: 10000,
             discountAmount: 5000,
@@ -968,15 +968,17 @@ describe('Admin Customers API (Feature 06.1)', () => {
               tripId: 101,
               code: 'FUTA-CX-0001',
             },
-            originBranch: {
-              branchId: 1,
+            originPoint: {
+              pointId: 1,
               code: 'FUTA-BC-001',
-              name: 'Bưu cục Miền Đông',
+              name: 'Điểm gửi Miền Đông',
+              address: '456 Mai Chí Thọ, TP.HCM',
             },
-            destinationBranch: {
-              branchId: 2,
+            destinationPoint: {
+              pointId: 2,
               code: 'FUTA-BC-002',
-              name: 'Bưu cục Đà Lạt',
+              name: 'Điểm nhận Đà Lạt',
+              address: '123 Lê Lợi, Đà Lạt',
             },
           },
         ],
@@ -987,6 +989,14 @@ describe('Admin Customers API (Feature 06.1)', () => {
           totalPages: 1,
         },
       });
+
+      const shipment = response.body.data[0];
+      expect(shipment).not.toHaveProperty('pickupMethod');
+      expect(shipment).not.toHaveProperty('deliveryMethod');
+      expect(shipment).not.toHaveProperty('pickupAddress');
+      expect(shipment.receiver).not.toHaveProperty('address');
+      expect(shipment).not.toHaveProperty('originBranch');
+      expect(shipment).not.toHaveProperty('destinationBranch');
 
       expect(mockPrisma.phieuGuiHang.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -999,6 +1009,30 @@ describe('Admin Customers API (Feature 06.1)', () => {
                 },
               },
             ],
+          },
+          include: {
+            chuyenXe: {
+              select: {
+                chuyenXeId: true,
+                maChuyenXe: true,
+              },
+            },
+            diemGui: {
+              select: {
+                diemGiaoNhanHangId: true,
+                maDiem: true,
+                tenDiem: true,
+                diaChi: true,
+              },
+            },
+            diemNhan: {
+              select: {
+                diemGiaoNhanHangId: true,
+                maDiem: true,
+                tenDiem: true,
+                diaChi: true,
+              },
+            },
           },
         }),
       );
@@ -1054,31 +1088,6 @@ describe('Admin Customers API (Feature 06.1)', () => {
           },
         }),
       );
-    });
-
-    it('handles null optional relations safely', async () => {
-      const minimalShipment = {
-        ...mockShipment,
-        chuyenXe: null,
-        buuCucGui: null,
-        buuCucPhat: null,
-        diaChiNguoiNhan: null,
-        diaChiLayHang: null,
-      };
-
-      mockPrisma.khachHang.findFirst.mockResolvedValue({ khachHangId: 101 });
-      mockPrisma.phieuGuiHang.count.mockResolvedValue(1);
-      mockPrisma.phieuGuiHang.findMany.mockResolvedValue([minimalShipment]);
-
-      const response = await request(app.getHttpServer())
-        .get('/api/v1/customers/101/shipments')
-        .expect(200);
-
-      expect(response.body.data[0].trip).toBeNull();
-      expect(response.body.data[0].originBranch).toBeNull();
-      expect(response.body.data[0].destinationBranch).toBeNull();
-      expect(response.body.data[0].receiver.address).toBeNull();
-      expect(response.body.data[0].pickupAddress).toBeNull();
     });
 
     it('returns 404 CUSTOMER_NOT_FOUND if customer is not visible to tenant', async () => {

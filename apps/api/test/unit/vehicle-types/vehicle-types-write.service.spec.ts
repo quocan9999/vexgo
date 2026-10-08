@@ -1,5 +1,9 @@
 import 'reflect-metadata';
-import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma } from '../../../src/generated/prisma/client.js';
 import { PrismaService } from '../../../src/prisma/prisma.service.js';
 import type { AuthPrincipal } from '../../../src/auth/tokens/auth-principal.js';
@@ -11,6 +15,9 @@ const vehicleTypeRecord = {
   nhaXeId: 4,
   tenLoai: 'Limousine 22 phòng',
   moTa: 'Loại xe giường phòng cao cấp',
+  sucChuaXeMayMacDinh: 0,
+  sucChuaHangCongKenhMacDinh: 0,
+  sucChuaHangNheMacDinh: 0,
   createdAt: new Date('2026-09-25T10:00:00.000Z'),
   updatedAt: new Date('2026-09-25T11:00:00.000Z'),
 };
@@ -67,25 +74,35 @@ function mariaDbUniqueError(index: string) {
 describe('VehicleTypesService write operations', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(prisma.nhaXe.findUnique).mockResolvedValue({ nhaXeId: 4 } as never);
+    vi.mocked(prisma.nhaXe.findUnique).mockResolvedValue({
+      nhaXeId: 4,
+    } as never);
     vi.mocked(prisma.loaiXe.create).mockResolvedValue(vehicleTypeRecord);
     vi.mocked(prisma.loaiXe.update).mockResolvedValue(vehicleTypeRecord);
-    vi.mocked(prisma.loaiXe.updateMany).mockResolvedValue({ count: 1 } as never);
+    vi.mocked(prisma.loaiXe.updateMany).mockResolvedValue({
+      count: 1,
+    } as never);
     vi.mocked(prisma.loaiXe.findFirst).mockResolvedValue(vehicleTypeRecord);
   });
 
   it('creates a vehicle type through the shared Prisma mapper', async () => {
     await expect(
-      service.create({
-        name: 'Limousine 22 phòng',
-        description: 'Loại xe giường phòng cao cấp',
-        busCompanyId: 4,
-      }, tenantAdmin),
+      service.create(
+        {
+          name: 'Limousine 22 phòng',
+          description: 'Loại xe giường phòng cao cấp',
+          busCompanyId: 4,
+        },
+        tenantAdmin,
+      ),
     ).resolves.toEqual({
       data: {
         vehicleTypeId: 8,
         name: 'Limousine 22 phòng',
         description: 'Loại xe giường phòng cao cấp',
+        motorbikeCapacityDefault: 0,
+        bulkyCargoCapacityDefault: 0,
+        lightCargoCapacityDefault: 0,
         createdAt: '2026-09-25T10:00:00.000Z',
         updatedAt: '2026-09-25T11:00:00.000Z',
       },
@@ -95,11 +112,17 @@ describe('VehicleTypesService write operations', () => {
         nhaXeId: 4,
         tenLoai: 'Limousine 22 phòng',
         moTa: 'Loại xe giường phòng cao cấp',
+        sucChuaXeMayMacDinh: 0,
+        sucChuaHangCongKenhMacDinh: 0,
+        sucChuaHangNheMacDinh: 0,
       },
       select: expect.objectContaining({
         loaiXeId: true,
         tenLoai: true,
         moTa: true,
+        sucChuaXeMayMacDinh: true,
+        sucChuaHangCongKenhMacDinh: true,
+        sucChuaHangNheMacDinh: true,
         createdAt: true,
         updatedAt: true,
       }),
@@ -122,6 +145,9 @@ describe('VehicleTypesService write operations', () => {
           nhaXeId: 4,
           tenLoai: 'Limousine 22 phòng',
           moTa: null,
+          sucChuaXeMayMacDinh: 0,
+          sucChuaHangCongKenhMacDinh: 0,
+          sucChuaHangNheMacDinh: 0,
         },
       }),
     );
@@ -134,27 +160,33 @@ describe('VehicleTypesService write operations', () => {
       'MariaDB adapter target',
       mariaDbUniqueError('LoaiXe_nhaXeId_tenLoai_key').meta,
     ],
-  ])('maps the %s duplicate name to the domain conflict', async (_label, meta) => {
-    const duplicateError =
-      _label === 'MariaDB adapter target'
-        ? mariaDbUniqueError('LoaiXe_nhaXeId_tenLoai_key')
-        : knownRequestError('P2002', meta);
-    vi.mocked(prisma.loaiXe.create).mockRejectedValueOnce(duplicateError);
+  ])(
+    'maps the %s duplicate name to the domain conflict',
+    async (_label, meta) => {
+      const duplicateError =
+        _label === 'MariaDB adapter target'
+          ? mariaDbUniqueError('LoaiXe_nhaXeId_tenLoai_key')
+          : knownRequestError('P2002', meta);
+      vi.mocked(prisma.loaiXe.create).mockRejectedValueOnce(duplicateError);
 
-    const error = await service
-      .create({ name: 'Limousine', description: null, busCompanyId: 4 }, tenantAdmin)
-      .catch((caught: unknown) => caught);
+      const error = await service
+        .create(
+          { name: 'Limousine', description: null, busCompanyId: 4 },
+          tenantAdmin,
+        )
+        .catch((caught: unknown) => caught);
 
-    expect(error).toBeInstanceOf(ConflictException);
-    if (!(error instanceof ConflictException)) {
-      throw new Error('Expected a ConflictException');
-    }
-    expect(error.getStatus()).toBe(409);
-    expect(error.getResponse()).toEqual({
-      error: 'VEHICLE_TYPE_NAME_EXISTS',
-      message: 'Tên loại xe đã tồn tại.',
-    });
-  });
+      expect(error).toBeInstanceOf(ConflictException);
+      if (!(error instanceof ConflictException)) {
+        throw new Error('Expected a ConflictException');
+      }
+      expect(error.getStatus()).toBe(409);
+      expect(error.getResponse()).toEqual({
+        error: 'VEHICLE_TYPE_NAME_EXISTS',
+        message: 'Tên loại xe đã tồn tại.',
+      });
+    },
+  );
 
   it.each([
     knownRequestError('P2002', { target: ['otherField'] }),
@@ -164,21 +196,31 @@ describe('VehicleTypesService write operations', () => {
     vi.mocked(prisma.loaiXe.create).mockRejectedValueOnce(error);
 
     await expect(
-      service.create({ name: 'Limousine', description: null, busCompanyId: 4 }, tenantAdmin),
+      service.create(
+        { name: 'Limousine', description: null, busCompanyId: 4 },
+        tenantAdmin,
+      ),
     ).rejects.toBe(error);
   });
 
   it('updates only the editable fields and maps the Prisma result', async () => {
     await expect(
-      service.update(8, {
-        name: 'Limousine 24 phòng',
-        description: 'Phiên bản 24 phòng',
-      }, tenantAdmin),
+      service.update(
+        8,
+        {
+          name: 'Limousine 24 phòng',
+          description: 'Phiên bản 24 phòng',
+        },
+        tenantAdmin,
+      ),
     ).resolves.toEqual({
       data: {
         vehicleTypeId: 8,
         name: 'Limousine 22 phòng',
         description: 'Loại xe giường phòng cao cấp',
+        motorbikeCapacityDefault: 0,
+        bulkyCargoCapacityDefault: 0,
+        lightCargoCapacityDefault: 0,
         createdAt: '2026-09-25T10:00:00.000Z',
         updatedAt: '2026-09-25T11:00:00.000Z',
       },
@@ -194,14 +236,18 @@ describe('VehicleTypesService write operations', () => {
 
   it('allows updating a vehicle type while keeping its current name', async () => {
     await expect(
-      service.update(8, {
-        name: 'Limousine 22 phòng',
-        description: 'Mô tả đã cập nhật',
-      }, tenantAdmin),
+      service.update(
+        8,
+        {
+          name: 'Limousine 22 phòng',
+          description: 'Mô tả đã cập nhật',
+        },
+        tenantAdmin,
+      ),
     ).resolves.toMatchObject({ data: { vehicleTypeId: 8 } });
     expect(prisma.loaiXe.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-      where: { loaiXeId: 8, nhaXeId: 4 },
+        where: { loaiXeId: 8, nhaXeId: 4 },
         data: {
           tenLoai: 'Limousine 22 phòng',
           moTa: 'Mô tả đã cập nhật',
@@ -240,7 +286,9 @@ describe('VehicleTypesService write operations', () => {
   });
 
   it('maps Prisma P2025 from update to the vehicle type not-found contract', async () => {
-    vi.mocked(prisma.loaiXe.updateMany).mockResolvedValueOnce({ count: 0 } as never);
+    vi.mocked(prisma.loaiXe.updateMany).mockResolvedValueOnce({
+      count: 0,
+    } as never);
 
     const error = await service
       .update(999, { name: 'Khác', description: null }, tenantAdmin)
@@ -259,7 +307,10 @@ describe('VehicleTypesService write operations', () => {
 
   it('rejects a create request that names a different tenant before querying or writing it', async () => {
     const error = await service
-      .create({ name: 'Limousine', description: null, busCompanyId: 8 }, tenantAdmin)
+      .create(
+        { name: 'Limousine', description: null, busCompanyId: 8 },
+        tenantAdmin,
+      )
       .catch((caught: unknown) => caught);
 
     expect(error).toBeInstanceOf(ForbiddenException);

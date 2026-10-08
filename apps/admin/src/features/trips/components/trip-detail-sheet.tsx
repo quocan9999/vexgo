@@ -240,7 +240,10 @@ export function TripDetailSheet({
           <div
             className="trips-success-notice"
             role="status"
-            style={{ margin: 'var(--admin-space-field-gap) var(--admin-space-sheet-inline) 0' }}
+            style={{
+              margin:
+                'var(--admin-space-field-gap) var(--admin-space-sheet-inline) 0',
+            }}
           >
             <CheckCircle2 aria-hidden="true" size={16} />
             <span>{updateNotice}</span>
@@ -343,6 +346,33 @@ export function TripDetailSheet({
                           : 'Không xác định'}
                     </AdminStatusBadge>
                   </dd>
+                </div>
+              </dl>
+            </section>
+
+            <section className="trips-detail-section">
+              <h4 className="trips-detail-section-title">Thông tin gửi hàng</h4>
+              <dl className="trips-detail-fields">
+                <div>
+                  <dt>Nhận gửi hàng</dt>
+                  <dd>{detail.trip.acceptsShipments ? 'Có' : 'Không'}</dd>
+                </div>
+              </dl>
+              <h5 className="trips-detail-section-title trips-detail-capacity-title">
+                Sức chứa hàng
+              </h5>
+              <dl className="trips-detail-fields">
+                <div>
+                  <dt>Xe máy</dt>
+                  <dd>{detail.trip.cargoCapacity.motorbikes}</dd>
+                </div>
+                <div>
+                  <dt>Hàng cồng kềnh</dt>
+                  <dd>{detail.trip.cargoCapacity.bulkyCargo}</dd>
+                </div>
+                <div>
+                  <dt>Hàng nhẹ</dt>
+                  <dd>{detail.trip.cargoCapacity.lightCargo}</dd>
                 </div>
               </dl>
             </section>

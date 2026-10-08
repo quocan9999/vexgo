@@ -11,6 +11,43 @@
   line-height: var(--admin-type-helper-line-height);
 }
 
+.trips-cargo-capacity {
+  display: grid;
+  gap: var(--admin-space-label-control-gap);
+  white-space: nowrap;
+}
+
+.trips-detail-capacity-title {
+  margin-top: var(--admin-space-component-gap);
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.trips-shipment-checkbox-field {
+  display: flex;
+  align-items: center;
+  justify-self: start;
+  gap: var(--admin-space-control-gap);
+  min-height: 42px;
+  color: var(--admin-text-strong);
+  font-size: var(--admin-type-label-size);
+  font-weight: var(--admin-type-label-weight);
+  line-height: var(--admin-type-label-line-height);
+  cursor: pointer;
+}
+
+.trips-shipment-checkbox {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--admin-blue);
+}
+
+.trips-shipment-checkbox:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--admin-blue) 22%, transparent);
+  outline-offset: 3px;
+}
+
 .trips-list-state,
 .trips-detail-state {
   display: grid;
@@ -201,6 +238,17 @@
   grid-template-columns: 1fr 1fr;
   gap: var(--admin-space-field-gap);
   margin: 0;
+}
+
+.trips-mobile-capacity {
+  grid-column: 1 / -1;
+}
+
+.trips-mobile-capacity .trips-cargo-capacity {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--admin-space-control-gap) var(--admin-space-component-gap);
+  white-space: normal;
 }
 
 .trips-mobile-actions {

@@ -234,8 +234,7 @@ export class CustomersService {
       }),
     ]);
 
-    const totalPages =
-      totalItems === 0 ? 0 : Math.ceil(totalItems / pageSize);
+    const totalPages = totalItems === 0 ? 0 : Math.ceil(totalItems / pageSize);
 
     return {
       data: items.map((item) => ({
@@ -353,14 +352,8 @@ export class CustomersService {
 
     const orderBy: Prisma.DonGiaoDichOrderByWithRelationInput[] =
       query.sortBy === 'totalAmount'
-        ? [
-            { tongTien: sortDirection },
-            { donGiaoDichId: sortDirection },
-          ]
-        : [
-            { ngayTao: sortDirection },
-            { donGiaoDichId: sortDirection },
-          ];
+        ? [{ tongTien: sortDirection }, { donGiaoDichId: sortDirection }]
+        : [{ ngayTao: sortDirection }, { donGiaoDichId: sortDirection }];
 
     const [totalItems, items] = await Promise.all([
       this.prisma.donGiaoDich.count({ where }),
@@ -388,8 +381,7 @@ export class CustomersService {
       }),
     ]);
 
-    const totalPages =
-      totalItems === 0 ? 0 : Math.ceil(totalItems / pageSize);
+    const totalPages = totalItems === 0 ? 0 : Math.ceil(totalItems / pageSize);
 
     return {
       data: items.map((item) => ({
@@ -523,8 +515,7 @@ export class CustomersService {
       }),
     ]);
 
-    const totalPages =
-      totalItems === 0 ? 0 : Math.ceil(totalItems / pageSize);
+    const totalPages = totalItems === 0 ? 0 : Math.ceil(totalItems / pageSize);
 
     return {
       data: items.map((t) => ({
@@ -648,26 +639,27 @@ export class CustomersService {
               maChuyenXe: true,
             },
           },
-          buuCucGui: {
+          diemGui: {
             select: {
-              buuCucId: true,
-              maBuuCuc: true,
-              tenBuuCuc: true,
+              diemGiaoNhanHangId: true,
+              maDiem: true,
+              tenDiem: true,
+              diaChi: true,
             },
           },
-          buuCucPhat: {
+          diemNhan: {
             select: {
-              buuCucId: true,
-              maBuuCuc: true,
-              tenBuuCuc: true,
+              diemGiaoNhanHangId: true,
+              maDiem: true,
+              tenDiem: true,
+              diaChi: true,
             },
           },
         },
       }),
     ]);
 
-    const totalPages =
-      totalItems === 0 ? 0 : Math.ceil(totalItems / pageSize);
+    const totalPages = totalItems === 0 ? 0 : Math.ceil(totalItems / pageSize);
 
     return {
       data: items.map((p) => ({
@@ -678,36 +670,28 @@ export class CustomersService {
         receiver: {
           fullName: p.tenNguoiNhan,
           phoneNumber: p.soDienThoaiNguoiNhan,
-          address: p.diaChiNguoiNhan ?? null,
         },
-        pickupMethod: p.hinhThucLayHang,
-        deliveryMethod: p.hinhThucGiaoHang,
-        pickupAddress: p.diaChiLayHang ?? null,
         mainFee: Number(p.cuocChinh),
         serviceFee: Number(p.phiDichVu),
         discountAmount: Number(p.soTienGiam),
         totalFee: Number(p.tongPhi),
         freightPayer: p.nguoiTraCuoc,
-        trip: p.chuyenXe
-          ? {
-              tripId: p.chuyenXe.chuyenXeId,
-              code: p.chuyenXe.maChuyenXe,
-            }
-          : null,
-        originBranch: p.buuCucGui
-          ? {
-              branchId: p.buuCucGui.buuCucId,
-              code: p.buuCucGui.maBuuCuc,
-              name: p.buuCucGui.tenBuuCuc,
-            }
-          : null,
-        destinationBranch: p.buuCucPhat
-          ? {
-              branchId: p.buuCucPhat.buuCucId,
-              code: p.buuCucPhat.maBuuCuc,
-              name: p.buuCucPhat.tenBuuCuc,
-            }
-          : null,
+        trip: {
+          tripId: p.chuyenXe.chuyenXeId,
+          code: p.chuyenXe.maChuyenXe,
+        },
+        originPoint: {
+          pointId: p.diemGui.diemGiaoNhanHangId,
+          code: p.diemGui.maDiem,
+          name: p.diemGui.tenDiem,
+          address: p.diemGui.diaChi,
+        },
+        destinationPoint: {
+          pointId: p.diemNhan.diemGiaoNhanHangId,
+          code: p.diemNhan.maDiem,
+          name: p.diemNhan.tenDiem,
+          address: p.diemNhan.diaChi,
+        },
       })),
       meta: {
         page,
