@@ -248,19 +248,19 @@ DA_THANH_TOAN -> DA_THANH_TOAN
 
 ## 7. `maThaoTac`
 
-Yêu cầu khi triển khai thao tác history từ nghiệp vụ: `maThaoTac` do ứng dụng tạo dùng UUID v4:
+`maThaoTac` dùng UUID version 1 cho cả migration backfill và thao tác nghiệp vụ runtime sau này:
 
 ```text
 CHAR(36)
 NOT NULL
 ```
 
-Quy tắc UUID v4 ở trên áp dụng cho mã thao tác do application tạo. Migration baseline hiện tại gọi MySQL `UUID()`, hàm này sinh UUID version 1 cho từng history baseline. `schema.prisma` chỉ khai báo cột `CHAR(36)`, không đặt default sinh UUID; service tạo history về sau phải tự truyền mã theo quy tắc UUID v4.
+Migration MySQL `UUID()` hiện sinh UUID version 1. Service tạo history về sau cũng phải tự truyền UUID version 1; `schema.prisma` chỉ khai báo cột `CHAR(36)`, không đặt default sinh UUID. Database integration tests cũng lấy mã từ `SELECT UUID()` để giữ cùng version.
 
 Ví dụ:
 
 ```text
-550e8400-e29b-41d4-a716-446655440000
+6ccd780c-baba-1026-9564-5b8c656024db
 ```
 
 Mỗi nghiệp vụ sinh một UUID.
@@ -525,7 +525,7 @@ maThaoTac = UUID riêng
 - Không suy diễn transition cũ.
 - Không dùng `createdAt` của entity làm `thoiDiem`.
 - Không gom toàn bộ backfill vào cùng một `maThaoTac`.
-- Mỗi baseline history có UUID riêng. Migration `20261008040000_add_booking_and_ticket_status_histories` dùng MySQL `UUID()` (UUID version 1) cho các record này; đây là cách sinh riêng của bước backfill, không thay đổi quy tắc UUID v4 cho thao tác nghiệp vụ do application tạo.
+- Mỗi baseline history của cohort entity tồn tại ngay trước migration có UUID version 1 riêng. Migration `20261008040000_add_booking_and_ticket_status_histories` dùng MySQL `UUID()` để sinh các mã này; thao tác nghiệp vụ runtime về sau cũng phải dùng UUID version 1.
 - Không thay đổi trạng thái hiện tại của `PhieuDatVe` hoặc `Ve`.
 
 Record baseline có nghĩa:
@@ -620,15 +620,16 @@ Chỉ chạy targeted tests/gates cần thiết cho DB task này, không cần f
 Phải kiểm tra tối thiểu:
 
 - migration chạy thành công trên database phù hợp/scratch;
-- số baseline `LichSuTrangThaiPhieuDatVe` bằng số `PhieuDatVe` hiện có;
-- số baseline `LichSuTrangThaiVe` bằng số `Ve` hiện có;
+- với cohort `PhieuDatVe` và `Ve` được tạo trước migration, mỗi entity trong cohort có đúng một baseline history sau migration;
+- không so tổng số history với tổng entity sau migration, vì một entity có thể có nhiều transition history hợp lệ;
+- cho phép nhiều entity cùng chia sẻ `maThaoTac` khi chúng thuộc cùng một nghiệp vụ; unique chỉ áp dụng cho cặp `(maThaoTac, entityId)` trong từng bảng;
 - baseline có `trangThaiCu = NULL`;
 - `trangThaiMoi` đúng bằng status hiện tại của entity;
 - baseline dùng `SYSTEM`;
 - baseline có `taiKhoanId = NULL`;
 - baseline có `laOverride = false`;
 - `lyDo` không null;
-- `maThaoTac` không null và đúng dạng UUID;
+- `maThaoTac` không null và đúng cấu trúc UUID version 1;
 - CHECK reject source ngoài `CUSTOMER|STAFF|SYSTEM`;
 - CHECK reject `CUSTOMER/STAFF` thiếu `taiKhoanId`;
 - CHECK reject `SYSTEM` có `taiKhoanId`;

@@ -1,100 +1,160 @@
-import 'dotenv/config';
+import { resolve } from 'node:path';
+import { config as loadDotenv } from 'dotenv';
 import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import { PrismaClient } from '../../apps/api/dist/generated/prisma/client.js';
 
-function config() {
-  const url = new URL(process.env.DATABASE_URL ?? process.env.MIGRATION_URL);
+loadDotenv();
+loadDotenv({ path: resolve(process.cwd(), '.env.test') });
+
+const TEST_DATABASE_ENV = 'BOOKING_TICKET_STATUS_HISTORY_TEST_DATABASE_URL';
+const TEST_DATABASE_NAME = /^vexgo_booking_ticket_status_history_[a-z0-9_]*_test$/i;
+const UUID_V1_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-1[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const BACKFILL_REASON = 'Khởi tạo lịch sử trạng thái từ dữ liệu hiện có';
+
+function testDatabaseConfig() {
+  const configuredUrl = process.env[TEST_DATABASE_ENV];
+  if (!configuredUrl) {
+    throw new Error(`${TEST_DATABASE_ENV} is required; verifier never uses DATABASE_URL.`);
+  }
+
+  let url;
+  try {
+    url = new URL(configuredUrl);
+  } catch {
+    throw new Error(`${TEST_DATABASE_ENV} must be a valid MySQL URL.`);
+  }
+
+  const database = decodeURIComponent(url.pathname.replace(/^\/+/, ''));
+  if (url.protocol !== 'mysql:' || !TEST_DATABASE_NAME.test(database)) {
+    throw new Error(
+      `${TEST_DATABASE_ENV} must target a dedicated vexgo_booking_ticket_status_history_*_test schema.`,
+    );
+  }
+
+  const host = url.hostname.toLowerCase();
+  const localHosts = new Set(['localhost', '127.0.0.1', '::1']);
+  if (
+    !localHosts.has(host) &&
+    process.env.BOOKING_TICKET_STATUS_HISTORY_ALLOW_REMOTE_TEST_DATABASE !== 'true'
+  ) {
+    throw new Error(
+      'Remote test database blocked. Set BOOKING_TICKET_STATUS_HISTORY_ALLOW_REMOTE_TEST_DATABASE=true only for a dedicated test server.',
+    );
+  }
+
+  const target = {
+    host,
+    port: Number(url.port || 3306),
+    database: database.toLowerCase(),
+  };
+  for (const name of ['DATABASE_URL', 'MIGRATION_URL', 'SHADOW_DATABASE_URL']) {
+    const value = process.env[name];
+    if (!value) continue;
+    const other = new URL(value);
+    if (
+      target.host === other.hostname.toLowerCase() &&
+      target.port === Number(other.port || 3306) &&
+      target.database === decodeURIComponent(other.pathname.replace(/^\/+/, '')).toLowerCase()
+    ) {
+      throw new Error(`${TEST_DATABASE_ENV} must not point to ${name}.`);
+    }
+  }
+
   return {
     host: url.hostname,
     port: Number(url.port || 3306),
     user: decodeURIComponent(url.username),
     password: decodeURIComponent(url.password),
-    database: decodeURIComponent(url.pathname.replace(/^\/+/, '')),
+    database,
     allowPublicKeyRetrieval: true,
   };
 }
 
-const prisma = new PrismaClient({ adapter: new PrismaMariaDb(config()) });
+const prisma = new PrismaClient({
+  adapter: new PrismaMariaDb(testDatabaseConfig()),
+});
+
+function isValidHistory(record) {
+  const actorMatchesSource =
+    ['CUSTOMER', 'STAFF'].includes(record.nguonThayDoi)
+      ? record.taiKhoanId !== null
+      : record.nguonThayDoi === 'SYSTEM' && record.taiKhoanId === null;
+
+  return (
+    UUID_V1_PATTERN.test(record.maThaoTac) &&
+    ['CUSTOMER', 'STAFF', 'SYSTEM'].includes(record.nguonThayDoi) &&
+    actorMatchesSource &&
+    (!record.laOverride || record.nguonThayDoi === 'STAFF') &&
+    (record.trangThaiCu === null || record.trangThaiCu !== record.trangThaiMoi)
+  );
+}
+
+function countBaselineShapedRecords(records) {
+  return records.filter(
+    (record) =>
+      record.trangThaiCu === null &&
+      record.nguonThayDoi === 'SYSTEM' &&
+      record.taiKhoanId === null &&
+      !record.laOverride &&
+      record.lyDo === BACKFILL_REASON,
+  ).length;
+}
+
+function assertUniqueWithinEntity(records, entityIdField, label) {
+  const seen = new Set();
+  for (const record of records) {
+    const key = `${record[entityIdField]}\u0000${record.maThaoTac}`;
+    if (seen.has(key)) {
+      throw new Error(`${label} repeats maThaoTac for the same entity.`);
+    }
+    seen.add(key);
+  }
+}
 
 async function verify() {
-  console.log('--- Verifying Booking & Ticket Status History DB Foundation ---');
+  console.log('--- Verifying booking/ticket history data in an isolated test database ---');
 
-  const [bookingCount, bHistoryCount, ticketCount, tHistoryCount] = await Promise.all([
+  const [bookingCount, ticketCount, bookingHistory, ticketHistory] = await Promise.all([
     prisma.phieuDatVe.count(),
-    prisma.lichSuTrangThaiPhieuDatVe.count(),
     prisma.ve.count(),
-    prisma.lichSuTrangThaiVe.count(),
+    prisma.lichSuTrangThaiPhieuDatVe.findMany(),
+    prisma.lichSuTrangThaiVe.findMany(),
   ]);
 
-  console.log(`PhieuDatVe count: ${bookingCount}, History count: ${bHistoryCount}`);
-  console.log(`Ve count: ${ticketCount}, History count: ${tHistoryCount}`);
-
-  if (bookingCount !== bHistoryCount) {
-    throw new Error(`Booking history count mismatch: ${bHistoryCount} vs ${bookingCount}`);
-  }
-  if (ticketCount !== tHistoryCount) {
-    throw new Error(`Ticket history count mismatch: ${tHistoryCount} vs ${ticketCount}`);
-  }
-
-  // Verify baseline fields for PhieuDatVe
-  const invalidBookings = await prisma.lichSuTrangThaiPhieuDatVe.findMany({
-    where: {
-      OR: [
-        { trangThaiCu: { not: null } },
-        { nguonThayDoi: { not: 'SYSTEM' } },
-        { taiKhoanId: { not: null } },
-        { laOverride: true },
-        { lyDo: { not: 'Khởi tạo lịch sử trạng thái từ dữ liệu hiện có' } },
-      ],
-    },
-  });
-
-  if (invalidBookings.length > 0) {
-    throw new Error(`Found ${invalidBookings.length} invalid booking baseline records`);
-  }
-
-  // Verify baseline fields for Ve
-  const invalidTickets = await prisma.lichSuTrangThaiVe.findMany({
-    where: {
-      OR: [
-        { trangThaiCu: { not: null } },
-        { nguonThayDoi: { not: 'SYSTEM' } },
-        { taiKhoanId: { not: null } },
-        { laOverride: true },
-        { lyDo: { not: 'Khởi tạo lịch sử trạng thái từ dữ liệu hiện có' } },
-      ],
-    },
-  });
-
-  if (invalidTickets.length > 0) {
-    throw new Error(`Found ${invalidTickets.length} invalid ticket baseline records`);
-  }
-
-  // Check unique maThaoTac
-  const bDistinctOps = await prisma.$queryRawUnsafe(
-    'SELECT COUNT(DISTINCT maThaoTac) as c FROM LichSuTrangThaiPhieuDatVe',
+  assertUniqueWithinEntity(
+    bookingHistory,
+    'phieuDatVeId',
+    'LichSuTrangThaiPhieuDatVe',
   );
-  const tDistinctOps = await prisma.$queryRawUnsafe(
-    'SELECT COUNT(DISTINCT maThaoTac) as c FROM LichSuTrangThaiVe',
+  assertUniqueWithinEntity(ticketHistory, 'veId', 'LichSuTrangThaiVe');
+
+  const invalidBookings = bookingHistory.filter((record) => !isValidHistory(record));
+  const invalidTickets = ticketHistory.filter((record) => !isValidHistory(record));
+  if (invalidBookings.length > 0 || invalidTickets.length > 0) {
+    throw new Error(
+      `Invalid history rows: ${invalidBookings.length} booking, ${invalidTickets.length} ticket.`,
+    );
+  }
+
+  console.log(
+    `PhieuDatVe=${bookingCount}; booking histories=${bookingHistory.length}; baseline-shaped=${countBaselineShapedRecords(bookingHistory)}; transitions=${bookingHistory.filter((record) => record.trangThaiCu !== null).length}`,
   );
-
-  const bOpCount = Number(bDistinctOps[0].c);
-  const tOpCount = Number(tDistinctOps[0].c);
-
-  if (bOpCount !== bookingCount) {
-    throw new Error(`Booking maThaoTac uniqueness violated: ${bOpCount} unique vs ${bookingCount} total`);
-  }
-  if (tOpCount !== ticketCount) {
-    throw new Error(`Ticket maThaoTac uniqueness violated: ${tOpCount} unique vs ${ticketCount} total`);
-  }
-
-  console.log('✔ All baseline records, counts, and invariants verified successfully!');
+  console.log(
+    `Ve=${ticketCount}; ticket histories=${ticketHistory.length}; baseline-shaped=${countBaselineShapedRecords(ticketHistory)}; transitions=${ticketHistory.filter((record) => record.trangThaiCu !== null).length}`,
+  );
+  console.log(
+    'Verified UUID v1, source/account, override, transition, and per-entity operation uniqueness for every history row.',
+  );
+  console.log(
+    'History counts may exceed entity counts. Baseline-shaped counts are informational; migration cohort assertions run against captured pre-migration fixture IDs.',
+  );
 }
 
 verify()
-  .catch((err) => {
-    console.error('❌ Verification failed:', err);
-    process.exit(1);
+  .catch((error) => {
+    console.error('❌ Verification failed:', error);
+    process.exitCode = 1;
   })
   .finally(async () => {
     await prisma.$disconnect();

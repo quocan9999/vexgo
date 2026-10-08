@@ -2,7 +2,7 @@
 
 **Branch:** `feature/booking-ticket-status-history`
 **Spec tham chiếu:** `docs/sua-Database-LichSuTrangThaiPDV-Ve/BOOKING_TICKET_STATUS_HISTORY_DB_SPEC.md`
-**Class Diagram cập nhật:** `docs/sua-Database-LichSuTrangThaiPDV-Ve/003-20261008040000_booking_ticket_status_history.mdl`
+**Class Diagram cập nhật:** `docs/class-diagram/003-20261008040000_booking_ticket_status_history.mdl`
 
 ---
 
@@ -89,6 +89,7 @@ Sau khi tạo bảng, migration thực hiện backfill tự động cho toàn b�
   - `laOverride = FALSE`
   - `maThaoTac = UUID()` (MySQL `UUID()` sinh UUID version 1; mỗi baseline record có một UUID 36 ký tự riêng)
 - Mỗi record `Ve` có đúng 1 baseline record trong `LichSuTrangThaiVe` với quy tắc tương tự.
+- Đây là cohort có mặt đúng tại thời điểm migration chạy. Entity tạo mới về sau có thể có nhiều history transition; tổng history sau migration không phải invariant bằng tổng entity.
 - Trạng thái hiện tại của `PhieuDatVe` và `Ve` được giữ nguyên toàn vẹn (không thay đổi trạng thái gốc).
 - Kiểm tra dữ liệu thực tế tại thời điểm migration:
   - `PhieuDatVe`: 27 records → 27 baseline history records (27 `maThaoTac` phân biệt).
@@ -99,9 +100,9 @@ Sau khi tạo bảng, migration thực hiện backfill tự động cho toàn b�
 ## 4. Semantics của `maThaoTac` và `thoiDiem`
 
 ### `maThaoTac` (CHAR(36) NOT NULL)
-- Đại diện cho mã định danh của **một lần thao tác nghiệp vụ** (transaction/operation). Với history do application tạo, dùng định dạng UUID v4 chuẩn.
-- Đây là yêu cầu cho history runtime; tại thời điểm handoff chưa có history writer trong `apps/api/src`.
-- Các integration test tạo history dùng `node:crypto.randomUUID()`, tức UUID v4. `schema.prisma` chỉ khai báo `String @db.Char(36)` và không đặt UUID default, nên schema không quyết định version.
+- Đại diện cho mã định danh của **một lần thao tác nghiệp vụ** (transaction/operation). Quyết định cuối cùng là dùng UUID version 1 cho cả migration và history runtime.
+- Migration gọi MySQL `UUID()` cho từng baseline record; integration test cũng gọi `SELECT UUID()` để tạo UUID version 1.
+- Đây là yêu cầu cho history runtime; tại thời điểm handoff chưa có history writer trong `apps/api/src`. `schema.prisma` chỉ khai báo `String @db.Char(36)` và không đặt UUID default, nên service về sau phải tự truyền UUID version 1.
 - Khi một hành động nghiệp vụ làm thay đổi trạng thái của cả 1 `PhieuDatVe` và nhiều `Ve` (ví dụ hủy đặt vé bao gồm 3 vé), tất cả các bản ghi history sinh ra trong thao tác đó **phải dùng chung một `maThaoTac`**.
 - `maThaoTac` không phải là Foreign Key, không có bảng `ThaoTac` riêng.
 - Ràng buộc duy nhất theo từng entity:
@@ -144,6 +145,27 @@ Sau khi tạo bảng, migration thực hiện backfill tự động cho toàn b�
    - `taiKhoanId` REFERENCES `TaiKhoan(taiKhoanId)` ON DELETE RESTRICT ON UPDATE RESTRICT
    -> Đảm bảo không thể xóa các thực thể gốc khi đang được lịch sử audit tham chiếu.
 
+### Ràng buộc Database không thể hiện trên Class Diagram
+
+Class Diagram chính thức giữ mức field và kiểu logic như các class khác. Theo quyết định thiết kế, không thêm CHECK, UNIQUE, DEFAULT hay độ dài kiểu cột vào file `.mdl`.
+
+Hai bảng history có tổng cộng 8 CHECK constraints (4 mỗi bảng):
+
+1. `nguonThayDoi` chỉ nhận `CUSTOMER`, `STAFF` hoặc `SYSTEM`.
+2. `CUSTOMER`/`STAFF` bắt buộc có `taiKhoanId`; `SYSTEM` bắt buộc `taiKhoanId IS NULL`.
+3. `laOverride = true` chỉ hợp lệ khi `nguonThayDoi = 'STAFF'`.
+4. `trangThaiCu` phải NULL hoặc khác `trangThaiMoi`.
+
+CHECK constraints không được khai báo trong `prisma/schema.prisma` vì Prisma chưa hỗ trợ biểu diễn trực tiếp các biểu thức này. Chúng được khai báo thủ công trong forward migration SQL, nên cần đối chiếu migration khi kiểm tra tính toàn vẹn DB.
+
+Các ràng buộc DB khác:
+
+- UNIQUE(maThaoTac, phieuDatVeId) trên `LichSuTrangThaiPhieuDatVe`.
+- UNIQUE(maThaoTac, veId) trên `LichSuTrangThaiVe`.
+- `laOverride` có DEFAULT `false`.
+- `trangThaiCu` / `trangThaiMoi`: VARCHAR(30); `nguonThayDoi`: VARCHAR(20); `lyDo`: VARCHAR(255); `maThaoTac`: CHAR(36); `thoiDiem`: DATETIME(0).
+- Tất cả FK dùng ON DELETE RESTRICT và ON UPDATE RESTRICT.
+
 ---
 
 ## 6. Tests và Verifiers đã chạy
@@ -151,33 +173,28 @@ Sau khi tạo bảng, migration thực hiện backfill tự động cho toàn b�
 ### Targeted Vitest Integration Test
 - **File:** `apps/api/test/integration/tickets/booking-ticket-status-history-db.spec.ts`
 - **Kết quả:** **16/16 tests PASS**
-- **Nội dung kiểm tra:**
-  1. Count `LichSuTrangThaiPhieuDatVe` == `PhieuDatVe` count (27 == 27).
-  2. Count `LichSuTrangThaiVe` == `Ve` count (54 == 54).
-  3. Kiểm tra chi tiết baseline PhieuDatVe: `trangThaiCu = null`, `trangThaiMoi = status`, `nguonThayDoi = 'SYSTEM'`, `taiKhoanId = null`, `laOverride = false`, lý do chuẩn, UUID riêng phân biệt.
-  4. Kiểm tra chi tiết baseline Ve: các thuộc tính chuẩn và UUID riêng phân biệt.
-  5. CHECK constraint reject source khác `CUSTOMER|STAFF|SYSTEM`.
-  6. CHECK constraint reject `CUSTOMER`/`STAFF` khi thiếu `taiKhoanId`.
-  7. CHECK constraint reject `SYSTEM` khi có `taiKhoanId`.
-  8. CHECK constraint reject `CUSTOMER`/`SYSTEM` khi có `laOverride = true`.
-  9. CHECK constraint reject `trangThaiCu == trangThaiMoi` (không cho phép transition rỗng).
-  10. Cho phép `STAFF` có `laOverride = true` và `taiKhoanId` hợp lệ.
-  11. UNIQUE reject duplicate `(maThaoTac, phieuDatVeId)`.
-  12. UNIQUE reject duplicate `(maThaoTac, veId)`.
-  13. FK Restrict chặn xóa `PhieuDatVe` khi đã có history.
-  14. FK Restrict chặn xóa `Ve` khi đã có history.
-  15. FK Restrict chặn xóa `TaiKhoan` khi được history tham chiếu.
-  16. FK reject insert history với id không tồn tại.
+- Chỉ kết nối qua `BOOKING_TICKET_STATUS_HISTORY_TEST_DATABASE_URL`, bắt buộc schema chuyên biệt có hậu tố `_test`, mặc định chặn host từ xa và từ chối trùng host/port/schema với `DATABASE_URL`, `MIGRATION_URL` hoặc `SHADOW_DATABASE_URL`.
+- Mỗi test tạo fixture riêng có các ID do test tạo, chạy trong transaction và chỉ cleanup fixture đó; không tìm/xóa/cập nhật entity nghiệp vụ có sẵn.
+- Kiểm tra cả hai bảng: 4 CHECK constraint tương ứng (assert mã lỗi adapter `P2039` và tên CHECK cụ thể), giá trị hợp lệ/không hợp lệ, nhiều history trên một entity, chia sẻ `maThaoTac` giữa entity khác nhau, UNIQUE cặp operation/entity, FK reject ID không tồn tại và FK Restrict khi xóa entity/account đang được fixture history tham chiếu.
+- UUID test lấy từ MySQL `SELECT UUID()` và xác nhận version 1.
 
 ### Standalone Verifier Script
 - **File:** `prisma/tests/verify-booking-ticket-status-history.mjs`
-- **Lệnh chạy:** `node prisma/tests/verify-booking-ticket-status-history.mjs`
-- **Kết quả:** Pass thành công mọi điều kiện kiểm tra dữ liệu hiện có trong database.
+- **Kết quả:** chạy thành công trên schema test cô lập sau khi integration tests cleanup; schema lúc verifier chạy có 0 Phiếu đặt vé, 0 Vé và 0 history. Kết quả này chỉ xác nhận verifier kết nối/đánh giá dataset rỗng thành công, không phải kiểm toán dữ liệu ứng dụng.
+- Verifier kiểm tra UUID v1, source/account, override, transition và unique theo từng entity; không so tổng history với tổng entity, không yêu cầu một entity chỉ có một history, và chỉ báo số record có hình dạng baseline để tham khảo.
+
+### Migration verification trên MySQL test cô lập
+- **Database rỗng:** `prisma migrate deploy` áp dụng thành công toàn bộ 23 migration, gồm migration lịch sử trạng thái.
+- **Database có cohort trước migration:** áp dụng 22 migration trước trên schema tạm; chèn fixture tối thiểu gồm 2 `PhieuDatVe` và 3 `Ve`, chụp ID/status trước migration; sau đó áp migration lịch sử. Việc seed fixture tối thiểu tắt `FOREIGN_KEY_CHECKS` riêng trên connection seed và bật lại trước khi chạy migration; đây không phải dữ liệu nghiệp vụ và schema được drop sau kiểm tra.
+- Kết quả cohort: mỗi entity trong cohort có đúng một baseline; `trangThaiMoi` giữ nguyên status đã chụp, `trangThaiCu = NULL`, nguồn `SYSTEM`, account `NULL`, override `false`, đúng lý do backfill; 5 `maThaoTac` là UUID v1 và phân biệt; tất cả baseline dùng cùng một timestamp.
+- CHECK, UNIQUE và FK Restrict đã được thực thi qua targeted integration tests trên schema đầy đủ đã migrate, với fixture quan hệ hợp lệ. Schema cohort và thư mục migration tạm đều đã được dọn.
 
 ### Quality Gates khác
-- `npx prisma validate`: Schema hợp lệ.
-- `npx prisma migrate status`: Database schema is up to date (23 migrations).
-- `npm run typecheck --workspace=@vexgo/api`: TypeScript check pass 100%.
+- `npm exec -- prisma validate`: PASS.
+- `npm exec -- prisma generate`: PASS; Prisma Client 7.10.0 được sinh vào `apps/api/src/generated/prisma`.
+- `npm run typecheck --workspace=@vexgo/api`: PASS.
+- `npm run build --workspace=@vexgo/api`: PASS.
+- `git diff --check`: PASS (exit 0; chỉ có cảnh báo Git chuẩn hóa LF/CRLF trên Windows).
 
 ---
 
