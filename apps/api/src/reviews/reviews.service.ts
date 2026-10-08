@@ -100,39 +100,58 @@ export class ReviewsService {
       );
     }
 
-    // 4. Chống đánh giá trùng lặp
-    const existingReview = await this.prisma.phanHoi.findFirst({
-      where: {
-        khachHangId: customer.khachHangId,
-        chuyenXeId: dto.tripId,
-      },
-    });
+    // 4. Chống đánh giá trùng lặp bằng transaction và row-lock trên KhachHang
+    const runInTx = async (tx: any) => {
+      if (typeof tx.$executeRaw === 'function') {
+        await tx.$executeRaw`SELECT khachHangId FROM KhachHang WHERE khachHangId = ${customer.khachHangId} FOR UPDATE`;
+      }
 
-    if (existingReview) {
-      throw new ConflictException(
-        'Bạn đã gửi đánh giá cho chuyến xe này rồi.',
-      );
-    }
+      const existingReview = await tx.phanHoi.findFirst({
+        where: {
+          khachHangId: customer.khachHangId,
+          chuyenXeId: dto.tripId,
+        },
+      });
 
-    // 5. Tạo bản ghi đánh giá
-    const review = await this.prisma.phanHoi.create({
-      data: {
-        mucDanhGia: dto.rating,
-        noiDung: dto.comment?.trim() || null,
-        thoiGian: new Date(),
-        trangThai: 'HIEN_THI',
-        khachHangId: customer.khachHangId,
-        chuyenXeId: dto.tripId,
-      },
-    });
+      if (existingReview) {
+        throw new ConflictException(
+          'Bạn đã gửi đánh giá cho chuyến xe này rồi.',
+        );
+      }
 
-    return {
-      reviewId: review.phanHoiId,
-      tripId: review.chuyenXeId,
-      rating: review.mucDanhGia,
-      comment: review.noiDung,
-      createdAt: review.thoiGian.toISOString(),
-      status: review.trangThai,
+      return await tx.phanHoi.create({
+        data: {
+          mucDanhGia: dto.rating,
+          noiDung: dto.comment?.trim() || null,
+          thoiGian: new Date(),
+          trangThai: 'HIEN_THI',
+          khachHangId: customer.khachHangId,
+          chuyenXeId: dto.tripId,
+        },
+      });
     };
+
+    try {
+      const review =
+        typeof this.prisma.$transaction === 'function'
+          ? await this.prisma.$transaction(async (tx) => runInTx(tx))
+          : await runInTx(this.prisma);
+
+      return {
+        reviewId: review.phanHoiId,
+        tripId: review.chuyenXeId,
+        rating: review.mucDanhGia,
+        comment: review.noiDung,
+        createdAt: review.thoiGian.toISOString(),
+        status: review.trangThai,
+      };
+    } catch (err: any) {
+      if (err?.code === 'P2002') {
+        throw new ConflictException(
+          'Bạn đã gửi đánh giá cho chuyến xe này rồi.',
+        );
+      }
+      throw err;
+    }
   }
 }

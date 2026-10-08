@@ -21,6 +21,8 @@ describe('ReviewsService', () => {
     chuyenXe: { findUnique: vi.fn() },
     ve: { findFirst: vi.fn() },
     phanHoi: { findFirst: vi.fn(), create: vi.fn() },
+    $transaction: vi.fn(async (cb) => cb(prisma)),
+    $executeRaw: vi.fn().mockResolvedValue(1),
   };
 
   const service = new ReviewsService(prisma as unknown as PrismaService);
@@ -93,5 +95,17 @@ describe('ReviewsService', () => {
     expect(res.rating).toBe(5);
     expect(res.comment).toBe('Bác tài nhiệt tình, xe sạch sẽ');
     expect(prisma.phanHoi.create).toHaveBeenCalled();
+  });
+
+  it('maps Prisma P2002 duplicate error to ConflictException (discussion_r4222294117)', async () => {
+    prisma.ve.findFirst.mockResolvedValue({ veId: 1 });
+    prisma.phanHoi.findFirst.mockResolvedValue(null);
+    const p2002Error = new Error('Unique constraint failed');
+    (p2002Error as any).code = 'P2002';
+    prisma.phanHoi.create.mockRejectedValue(p2002Error);
+
+    await expect(
+      service.createReview(42, { tripId: 101, rating: 5 }),
+    ).rejects.toThrow(ConflictException);
   });
 });

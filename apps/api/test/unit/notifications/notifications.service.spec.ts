@@ -69,7 +69,7 @@ describe('NotificationsService', () => {
     expect(res.meta.totalPages).toBe(1);
   });
 
-  it('marks a single notification as read', async () => {
+  it('marks a single notification as read by recipient ID strictly', async () => {
     prisma.thongBaoNguoiNhan.findFirst.mockResolvedValue(mockNotification);
     prisma.thongBaoNguoiNhan.update.mockResolvedValue({
       ...mockNotification,
@@ -80,7 +80,33 @@ describe('NotificationsService', () => {
     const res = await service.markAsRead(42, 1);
     expect(res.isRead).toBe(true);
     expect(res.notificationId).toBe(101);
+    expect(prisma.thongBaoNguoiNhan.findFirst).toHaveBeenCalledWith({
+      where: {
+        khachHangId: 10,
+        thongBaoNguoiNhanId: 1,
+      },
+    });
     expect(prisma.thongBaoNguoiNhan.update).toHaveBeenCalled();
+  });
+
+  it('throws NotFoundException when passing thongBaoId instead of thongBaoNguoiNhanId (ID collision prevention - discussion_r4222294124)', async () => {
+    // If client passes 101 (which is thongBaoId, but not a valid thongBaoNguoiNhanId for customer 10)
+    prisma.thongBaoNguoiNhan.findFirst.mockImplementation((args: any) => {
+      if (args.where?.thongBaoNguoiNhanId === 101) {
+        return Promise.resolve(null);
+      }
+      return Promise.resolve(mockNotification);
+    });
+
+    await expect(service.markAsRead(42, 101)).rejects.toThrow(
+      NotFoundException,
+    );
+    expect(prisma.thongBaoNguoiNhan.findFirst).toHaveBeenCalledWith({
+      where: {
+        khachHangId: 10,
+        thongBaoNguoiNhanId: 101,
+      },
+    });
   });
 
   it('throws NotFoundException when notification not found for customer', async () => {

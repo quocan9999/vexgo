@@ -55,16 +55,23 @@ describe('PaymentsService', () => {
   beforeEach(() => {
     prisma = {
       phieuDatVe: {
-        findUnique: vi.fn(),
+        findUnique: vi.fn().mockResolvedValue({
+          phieuDatVeId: 300,
+          trangThai: 'CHO_THANH_TOAN',
+          ves: [],
+        }),
         update: vi.fn(),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       },
       thanhToan: {
         findUnique: vi.fn(),
         create: vi.fn(),
         update: vi.fn(),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       },
       donGiaoDich: {
         update: vi.fn(),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       },
       khachHang: {
         findUnique: vi.fn(),
@@ -203,24 +210,51 @@ describe('PaymentsService', () => {
       });
 
       expect(result.success).toBe(true);
-      expect(prisma.thanhToan.update).toHaveBeenCalledWith(
+      expect(prisma.thanhToan.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { thanhToanId: 100 },
+          where: { thanhToanId: 100, trangThai: { not: 'THANH_CONG' } },
           data: { trangThai: 'THANH_CONG' },
         }),
       );
-      expect(prisma.donGiaoDich.update).toHaveBeenCalledWith(
+      expect(prisma.donGiaoDich.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { donGiaoDichId: 200 },
+          where: { donGiaoDichId: 200, trangThai: { notIn: ['DA_HUY', 'HUY'] } },
           data: { trangThai: 'DA_THANH_TOAN' },
         }),
       );
-      expect(prisma.phieuDatVe.update).toHaveBeenCalledWith(
+      expect(prisma.phieuDatVe.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { phieuDatVeId: 300 },
+          where: { phieuDatVeId: 300, trangThai: { in: ['CHO_THANH_TOAN', 'DANG_XU_LY'] } },
           data: { trangThai: 'DA_THANH_TOAN' },
         }),
       );
+    });
+
+    it('does not revive cancelled booking or tickets upon receiving late webhook (discussion_r4222294102)', async () => {
+      prisma.thanhToan.findUnique.mockResolvedValue(samplePayment);
+      prisma.phieuDatVe.findUnique.mockResolvedValue({
+        phieuDatVeId: 300,
+        trangThai: 'DA_HUY',
+        ves: [{ veId: 501, trangThai: 'DA_HUY' }],
+      });
+
+      const result = await service.confirmPaymentSuccess({
+        paymentId: 100,
+        provider: 'MOMO',
+        amount: 300000,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.isLatePayment).toBe(true);
+      expect(prisma.thanhToan.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { thanhToanId: 100, trangThai: { not: 'THANH_CONG' } },
+          data: { trangThai: 'THANH_CONG' },
+        }),
+      );
+      expect(prisma.phieuDatVe.updateMany).not.toHaveBeenCalled();
+      expect(prisma.ve.updateMany).not.toHaveBeenCalled();
+      expect(prisma.lichSuTrangThaiPhieuDatVe.create).not.toHaveBeenCalled();
     });
 
     it('is idempotent if payment was already marked THANH_CONG', async () => {
@@ -236,7 +270,25 @@ describe('PaymentsService', () => {
       });
 
       expect(result.success).toBe(true);
-      expect(prisma.thanhToan.update).not.toHaveBeenCalled();
+      expect(prisma.thanhToan.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('returns idempotent success without mutating downstream records when concurrent claim is lost (discussion_r4222294112)', async () => {
+      prisma.thanhToan.findUnique.mockResolvedValue(samplePayment);
+      // Simulate that another concurrent transaction already claimed the record
+      prisma.thanhToan.updateMany.mockResolvedValue({ count: 0 });
+
+      const result = await service.confirmPaymentSuccess({
+        paymentId: 100,
+        provider: 'MOMO',
+        amount: 300000,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.message).toBe('Giao dịch đã được xác nhận trước đó.');
+      expect(prisma.phieuDatVe.updateMany).not.toHaveBeenCalled();
+      expect(prisma.ve.updateMany).not.toHaveBeenCalled();
+      expect(prisma.lichSuTrangThaiPhieuDatVe.create).not.toHaveBeenCalled();
     });
 
     it('rejects confirmation with BadRequestException when provider mismatches (discussion_r4164957958)', async () => {

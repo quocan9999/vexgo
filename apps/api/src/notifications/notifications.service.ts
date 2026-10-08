@@ -90,10 +90,7 @@ export class NotificationsService {
     const recipientRecord = await this.prisma.thongBaoNguoiNhan.findFirst({
       where: {
         khachHangId: customer.khachHangId,
-        OR: [
-          { thongBaoNguoiNhanId: id },
-          { thongBaoId: id },
-        ],
+        thongBaoNguoiNhanId: id,
       },
     });
 

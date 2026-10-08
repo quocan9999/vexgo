@@ -71,6 +71,11 @@ export class SeatHoldsService implements OnModuleInit, OnModuleDestroy {
     return createHash('sha256').update(token).digest('hex');
   }
 
+  private maskHoldToken(token?: string): string {
+    if (!token) return 'n/a';
+    return `${this.hashHoldToken(token).slice(0, 8)}...`;
+  }
+
   /**
    * Tự động giải phóng các ghế bị giữ quá thời gian TTL (10 phút) trong DB
    * Đảm bảo tính bền vững (Durability) chống kẹt ghế khi restart server hoặc multi-instance.
@@ -292,6 +297,8 @@ export class SeatHoldsService implements OnModuleInit, OnModuleDestroy {
     });
     const tokenHash = this.hashHoldToken(holdToken);
 
+    let createdGiuChoId: number | undefined;
+
     // 5. Khắc phục Race condition: CAS trong transaction kèm tạo GiuCho trong DB
     await this.prisma.$transaction(async (tx) => {
       const occupiedSeat = await tx.gheChuyenXe.findFirst({
@@ -310,7 +317,6 @@ export class SeatHoldsService implements OnModuleInit, OnModuleDestroy {
         });
       }
 
-      let giuChoId: number | undefined;
       if (tx.giuCho) {
         const createdHold = await tx.giuCho.create({
           data: {
@@ -321,7 +327,7 @@ export class SeatHoldsService implements OnModuleInit, OnModuleDestroy {
             trangThai: 'DANG_GIU',
           },
         });
-        giuChoId = createdHold.giuChoId;
+        createdGiuChoId = createdHold.giuChoId;
       }
 
       const updateResult = await tx.gheChuyenXe.updateMany({
@@ -332,7 +338,7 @@ export class SeatHoldsService implements OnModuleInit, OnModuleDestroy {
         },
         data: {
           trangThai: 'DANG_GIU',
-          ...(giuChoId !== undefined ? { giuChoId } : {}),
+          ...(createdGiuChoId !== undefined ? { giuChoId: createdGiuChoId } : {}),
         },
       });
 
@@ -346,7 +352,10 @@ export class SeatHoldsService implements OnModuleInit, OnModuleDestroy {
 
     const timer = setTimeout(() => {
       this.releaseSeatHold(holdToken).catch((err) => {
-        this.logger.error(`Error auto-releasing hold ${holdToken}:`, err);
+        this.logger.error(
+          `Error auto-releasing hold (tokenHash: ${this.maskHoldToken(holdToken)}):`,
+          err,
+        );
       });
     }, 10 * 60 * 1000);
 
@@ -360,7 +369,7 @@ export class SeatHoldsService implements OnModuleInit, OnModuleDestroy {
     });
 
     this.logger.log(
-      `Created seat hold ${holdToken} for trip ${validTripId}, seats [${resolvedTripSeatIds.join(', ')}] until ${expiresAt.toISOString()}`,
+      `Created seat hold #${createdGiuChoId ?? 'mem'} (tokenHash: ${this.maskHoldToken(holdToken)}) for trip ${validTripId}, seats [${resolvedTripSeatIds.join(', ')}] until ${expiresAt.toISOString()}`,
     );
 
     return {
@@ -424,7 +433,7 @@ export class SeatHoldsService implements OnModuleInit, OnModuleDestroy {
         });
 
         this.logger.log(
-          `Released seat hold ${holdToken} (giuChoId: ${dbHold.giuChoId}, status: ${nextStatus}) for trip ${dbHold.chuyenXeId}`,
+          `Released seat hold #${dbHold.giuChoId} (tokenHash: ${dbHold.tokenHash.slice(0, 8)}..., status: ${nextStatus}) for trip ${dbHold.chuyenXeId}`,
         );
         return { success: true };
       }
@@ -466,7 +475,7 @@ export class SeatHoldsService implements OnModuleInit, OnModuleDestroy {
         },
       });
       this.logger.log(
-        `Released seat hold ${holdToken} for trip ${tripId}, seats [${seatIds.join(', ')}]`,
+        `Released seat hold (tokenHash: ${this.maskHoldToken(holdToken)}) for trip ${tripId}, seats [${seatIds.join(', ')}]`,
       );
     }
 
@@ -682,7 +691,9 @@ export class SeatHoldsService implements OnModuleInit, OnModuleDestroy {
     if (hold) {
       if (hold.timer) clearTimeout(hold.timer);
       this.holds.delete(holdToken);
-      this.logger.log(`Consumed seat hold ${holdToken} for confirmed booking`);
+      this.logger.log(
+        `Consumed seat hold (tokenHash: ${this.maskHoldToken(holdToken)}) for confirmed booking`,
+      );
       return true;
     }
     return false;

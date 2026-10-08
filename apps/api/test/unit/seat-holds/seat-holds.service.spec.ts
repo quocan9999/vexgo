@@ -156,4 +156,34 @@ describe('SeatHoldsService (Unit)', () => {
       );
     });
   });
+
+  describe('Credential leakage in logs prevention (discussion_r4222294130)', () => {
+    it('does not log raw holdToken during create, release or consume operations', async () => {
+      const logSpy = vi.spyOn((service as any).logger, 'log');
+
+      const hold = await service.createSeatHold(50, [101]);
+      const createLogCall = logSpy.mock.calls.find((call) =>
+        String(call[0]).includes('Created seat hold'),
+      );
+      expect(createLogCall).toBeDefined();
+      expect(String(createLogCall![0])).not.toContain(hold.holdToken);
+      expect(String(createLogCall![0])).toContain('tokenHash:');
+
+      await service.releaseSeatHold(hold.holdToken);
+      const releaseLogCall = logSpy.mock.calls.find((call) =>
+        String(call[0]).includes('Released seat hold'),
+      );
+      if (releaseLogCall) {
+        expect(String(releaseLogCall[0])).not.toContain(hold.holdToken);
+      }
+
+      await service.consumeHold(hold.holdToken, 50, [101]);
+      const consumeLogCall = logSpy.mock.calls.find((call) =>
+        String(call[0]).includes('Consumed seat hold'),
+      );
+      if (consumeLogCall) {
+        expect(String(consumeLogCall[0])).not.toContain(hold.holdToken);
+      }
+    });
+  });
 });

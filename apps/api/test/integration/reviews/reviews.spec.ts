@@ -431,4 +431,39 @@ describe('Reviews API Integration with MySQL', () => {
     expect(res.status).toBe(409);
     expect(res.body.error).toBe('CONFLICT');
   });
+
+  it('prevents concurrent duplicate review creation for the same customer/trip (race condition - discussion_r4222294117)', async () => {
+    await createBookingWithTickets({
+      customerId: customerAId,
+      tripSeatId: departedTripSeatId,
+      transactionStatus: 'DA_THANH_TOAN',
+      bookingStatus: 'DA_THANH_TOAN',
+      ticketStatus: 'DA_THANH_TOAN',
+    });
+
+    currentPrincipal = customerAPrincipal;
+
+    // Send two concurrent POST requests for the same trip
+    const [res1, res2] = await Promise.all([
+      request(app.getHttpServer()).post('/api/v1/reviews').send({
+        tripId: departedTripId,
+        rating: 5,
+        comment: 'Concurrent review 1',
+      }),
+      request(app.getHttpServer()).post('/api/v1/reviews').send({
+        tripId: departedTripId,
+        rating: 4,
+        comment: 'Concurrent review 2',
+      }),
+    ]);
+
+    const statuses = [res1.status, res2.status].sort();
+    expect(statuses).toEqual([201, 409]);
+
+    // Exactly one review exists in MySQL
+    const reviewsInDb = await prisma.phanHoi.findMany({
+      where: { khachHangId: customerAId, chuyenXeId: departedTripId },
+    });
+    expect(reviewsInDb).toHaveLength(1);
+  });
 });

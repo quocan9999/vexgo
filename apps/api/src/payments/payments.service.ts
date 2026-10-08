@@ -7,7 +7,7 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { createHmac } from 'node:crypto';
+import { createHmac, randomBytes } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { generateUuidV1 } from '../common/uuid-v1.js';
 import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
@@ -34,13 +34,37 @@ export class PaymentsService {
       'true';
     this.momoSecretKey =
       this.configService?.get<string>('MOMO_SECRET_KEY') ||
-      (this.isDemoMode ? 'vexgo_momo_demo_secret' : '');
+      (this.isDemoMode
+        ? (process.env.NODE_ENV === 'test'
+            ? 'vexgo_momo_demo_secret'
+            : randomBytes(32).toString('hex'))
+        : '');
     this.vnpayHashSecret =
       this.configService?.get<string>('VNPAY_HASH_SECRET') ||
-      (this.isDemoMode ? 'vexgo_vnpay_demo_secret' : '');
+      (this.isDemoMode
+        ? (process.env.NODE_ENV === 'test'
+            ? 'vexgo_vnpay_demo_secret'
+            : randomBytes(32).toString('hex'))
+        : '');
     this.zalopayKey2 =
       this.configService?.get<string>('ZALOPAY_KEY2') ||
-      (this.isDemoMode ? 'vexgo_zalopay_demo_key2' : '');
+      (this.isDemoMode
+        ? (process.env.NODE_ENV === 'test'
+            ? 'vexgo_zalopay_demo_key2'
+            : randomBytes(32).toString('hex'))
+        : '');
+
+    if (this.isDemoMode && process.env.NODE_ENV !== 'test') {
+      if (
+        !this.configService?.get<string>('MOMO_SECRET_KEY') ||
+        !this.configService?.get<string>('VNPAY_HASH_SECRET') ||
+        !this.configService?.get<string>('ZALOPAY_KEY2')
+      ) {
+        this.logger.warn(
+          '[PAYMENT DEMO MODE] Generated random in-memory ephemeral secret keys because explicit keys were not provided. Hardcoded literal secrets are disabled to prevent external forged webhooks.',
+        );
+      }
+    }
   }
 
   private async verifyCustomerOwnership(
@@ -250,36 +274,87 @@ export class PaymentsService {
       return { success: true, message: 'Giao dịch đã được xác nhận trước đó.' };
     }
 
+    let isAlreadyClaimed = false;
+    let isLatePaymentForCancelledBooking = false;
+
     await this.prisma.$transaction(async (tx) => {
-      await tx.thanhToan.update({
-        where: { thanhToanId: payment.thanhToanId },
+      // Atomic state claim: Chỉ update nếu trạng thái CHƯA PHẢI là THANH_CONG (discussion_r4222294112)
+      // MySQL InnoDB sẽ acquire exclusive row lock trên dòng thanh toán này.
+      const claimResult = await tx.thanhToan.updateMany({
+        where: {
+          thanhToanId: payment.thanhToanId,
+          trangThai: { not: 'THANH_CONG' },
+        },
         data: {
           trangThai: 'THANH_CONG',
         },
       });
 
-      if (payment.donGiaoDich) {
-        await tx.donGiaoDich.update({
-          where: { donGiaoDichId: payment.donGiaoDichId },
-          data: { trangThai: 'DA_THANH_TOAN' },
-        });
+      // Nếu count === 0, giao dịch này đã được claim/xác nhận thành công bởi 1 webhook đồng thời khác
+      if (claimResult.count === 0) {
+        isAlreadyClaimed = true;
+        return;
+      }
 
+      if (payment.donGiaoDich) {
         const phieuDatVe = payment.donGiaoDich.phieuDatVe;
         if (phieuDatVe) {
-          await tx.phieuDatVe.update({
+          // Lấy trạng thái mới nhất của phieuDatVe và các vé trong transaction
+          const currentBooking = await tx.phieuDatVe.findUnique({
             where: { phieuDatVeId: phieuDatVe.phieuDatVeId },
+            include: { ves: true },
+          });
+
+          const isBookingCancelled =
+            currentBooking &&
+            ['DA_HUY', 'HUY'].includes(currentBooking.trangThai);
+
+          if (isBookingCancelled) {
+            isLatePaymentForCancelledBooking = true;
+            this.logger.warn(
+              `Payment #${payment.thanhToanId} confirmed SUCCESS for ALREADY CANCELLED booking #${phieuDatVe.phieuDatVeId}. Kept booking and tickets CANCELLED. Requires refund.`,
+            );
+            return;
+          }
+
+          // Cập nhật DonGiaoDich nếu chưa bị hủy
+          await tx.donGiaoDich.updateMany({
+            where: {
+              donGiaoDichId: payment.donGiaoDichId,
+              trangThai: { notIn: ['DA_HUY', 'HUY'] },
+            },
             data: { trangThai: 'DA_THANH_TOAN' },
           });
 
-          // Cập nhật tất cả vé sang DA_THANH_TOAN
-          let tickets: any[] = [];
+          // Conditional update: Chỉ chuyển DA_THANH_TOAN nếu đơn đang ở trạng thái CHO_THANH_TOAN / DANG_XU_LY
+          const updateBookingResult = await tx.phieuDatVe.updateMany({
+            where: {
+              phieuDatVeId: phieuDatVe.phieuDatVeId,
+              trangThai: { in: ['CHO_THANH_TOAN', 'DANG_XU_LY'] },
+            },
+            data: { trangThai: 'DA_THANH_TOAN' },
+          });
+
+          if (updateBookingResult.count === 0) {
+            // Đơn không ở trạng thái hợp lệ để chuyển DA_THANH_TOAN (hoặc đã hoàn tất)
+            return;
+          }
+
+          // Chỉ cập nhật các vé CHƯA bị hủy sang DA_THANH_TOAN
+          let activeTickets: any[] = [];
           if (tx.ve) {
             await tx.ve.updateMany({
-              where: { phieuDatVeId: phieuDatVe.phieuDatVeId },
+              where: {
+                phieuDatVeId: phieuDatVe.phieuDatVeId,
+                trangThai: { notIn: ['DA_HUY', 'HUY'] },
+              },
               data: { trangThai: 'DA_THANH_TOAN' },
             });
-            tickets = await tx.ve.findMany({
-              where: { phieuDatVeId: phieuDatVe.phieuDatVeId },
+            activeTickets = await tx.ve.findMany({
+              where: {
+                phieuDatVeId: phieuDatVe.phieuDatVeId,
+                trangThai: 'DA_THANH_TOAN',
+              },
             });
           }
 
@@ -291,7 +366,7 @@ export class PaymentsService {
             await tx.lichSuTrangThaiPhieuDatVe.create({
               data: {
                 phieuDatVeId: phieuDatVe.phieuDatVeId,
-                trangThaiCu: phieuDatVe.trangThai || 'CHO_THANH_TOAN',
+                trangThaiCu: currentBooking?.trangThai || 'CHO_THANH_TOAN',
                 trangThaiMoi: 'DA_THANH_TOAN',
                 thoiDiem: timestamp,
                 nguonThayDoi: 'SYSTEM',
@@ -304,7 +379,7 @@ export class PaymentsService {
           }
 
           if (tx.lichSuTrangThaiVe) {
-            for (const ticket of tickets) {
+            for (const ticket of activeTickets) {
               await tx.lichSuTrangThaiVe.create({
                 data: {
                   veId: ticket.veId,
@@ -323,6 +398,22 @@ export class PaymentsService {
         }
       }
     });
+
+    if (isAlreadyClaimed) {
+      this.logger.log(
+        `Payment #${payment.thanhToanId} was already claimed/confirmed by concurrent transaction.`,
+      );
+      return { success: true, message: 'Giao dịch đã được xác nhận trước đó.' };
+    }
+
+    if (isLatePaymentForCancelledBooking) {
+      return {
+        success: true,
+        isLatePayment: true,
+        message:
+          'Thanh toán thành công nhưng đơn đặt vé đã bị hủy trước đó. Cần hoàn tiền cho khách.',
+      };
+    }
 
     this.logger.log(
       `Payment #${params.paymentId} confirmed SUCCESS via verified webhook.`,

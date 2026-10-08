@@ -147,6 +147,13 @@ describe('Payments Webhook & Status Security with MySQL (Integration)', () => {
       await prisma.donGiaoDich.deleteMany({
         where: { khachHangId: { in: [customerAId, customerBId] } },
       });
+      await prisma.gheChuyenXe.deleteMany({ where: { chuyenXe: { nhaXeId: busCompanyId } } });
+      await prisma.chuyenXe.deleteMany({ where: { nhaXeId: busCompanyId } });
+      await prisma.ghe.deleteMany({ where: { xe: { nhaXeId: busCompanyId } } });
+      await prisma.bangGia.deleteMany({ where: { nhaXeId: busCompanyId } });
+      await prisma.tuyenXe.deleteMany({ where: { nhaXeId: busCompanyId } });
+      await prisma.xe.deleteMany({ where: { nhaXeId: busCompanyId } });
+      await prisma.loaiXe.deleteMany({ where: { nhaXeId: busCompanyId } });
       await prisma.nhaXe.deleteMany({ where: { nhaXeId: busCompanyId } });
 
       await prisma.khachHang.deleteMany({ where: { khachHangId: { in: [customerAId, customerBId] } } });
@@ -216,6 +223,158 @@ describe('Payments Webhook & Status Security with MySQL (Integration)', () => {
     });
 
     return { donGiaoDich, phieuDatVe: donGiaoDich.phieuDatVe!, thanhToan };
+  }
+
+  async function createMultiTicketPayment(customerId: number, ticketCount = 3, provider = 'MOMO') {
+    const suffix = randomUUID().replaceAll('-', '').slice(0, 8).toUpperCase();
+    const totalAmount = 100000 * ticketCount;
+
+    const loaiXe = await prisma.loaiXe.create({
+      data: { nhaXeId: busCompanyId, tenLoai: `Multi-Ticket Coach ${suffix}` },
+      select: { loaiXeId: true },
+    });
+
+    const xe = await prisma.xe.create({
+      data: {
+        bienSoXe: `51B-${suffix}`,
+        trangThai: 'HOAT_DONG',
+        nhaXeId: busCompanyId,
+        loaiXeId: loaiXe.loaiXeId,
+      },
+      select: { xeId: true },
+    });
+
+    const tuyenXe = await prisma.tuyenXe.create({
+      data: {
+        maTuyenXe: `TX-${suffix}`,
+        diemDi: 'Sài Gòn',
+        diemDen: 'Đà Lạt',
+        trangThai: 'HOAT_DONG',
+        nhaXeId: busCompanyId,
+      },
+      select: { tuyenXeId: true },
+    });
+
+    const bangGia = await prisma.bangGia.create({
+      data: {
+        giaNiemYet: 100000,
+        tuNgay: new Date('2025-01-01'),
+        trangThai: 'HOAT_DONG',
+        nhaXeId: busCompanyId,
+        tuyenXeId: tuyenXe.tuyenXeId,
+        loaiXeId: loaiXe.loaiXeId,
+      },
+      select: { bangGiaId: true },
+    });
+
+    const chuyenXe = await prisma.chuyenXe.create({
+      data: {
+        maChuyenXe: `CX-${suffix}`,
+        ngayKhoiHanh: new Date('2026-12-01'),
+        gioKhoiHanh: new Date('1970-01-01T08:00:00Z'),
+        sucChuaXeMay: 0,
+        sucChuaHangCongKenh: 0,
+        sucChuaHangNhe: 0,
+        trangThai: 'CHUA_KHOI_HANH',
+        nhaXeId: busCompanyId,
+        tuyenXeId: tuyenXe.tuyenXeId,
+        xeId: xe.xeId,
+      },
+      select: { chuyenXeId: true },
+    });
+
+    const gheChuyenXeIds: number[] = [];
+    for (let i = 1; i <= ticketCount; i++) {
+      const ghe = await prisma.ghe.create({
+        data: { soGhe: `M${i}`, xeId: xe.xeId },
+        select: { gheId: true },
+      });
+      const gcx = await prisma.gheChuyenXe.create({
+        data: {
+          trangThai: 'DANG_GIU_CHO',
+          chuyenXeId: chuyenXe.chuyenXeId,
+          gheId: ghe.gheId,
+        },
+        select: { gheChuyenXeId: true },
+      });
+      gheChuyenXeIds.push(gcx.gheChuyenXeId);
+    }
+
+    const donGiaoDich = await prisma.donGiaoDich.create({
+      data: {
+        maDonGiaoDich: `DGD-M-${suffix}`,
+        ngayTao: new Date(),
+        tongTien: totalAmount,
+        trangThai: 'CHO_THANH_TOAN',
+        tenKhachHang: 'Multi Ticket Customer',
+        soDienThoaiKhachHang: '+84950000002',
+        khachHangId: customerId,
+        nhaXeId: busCompanyId,
+        phieuDatVe: {
+          create: {
+            maPhieuDatVe: `PDV-M-${suffix}`,
+            ngayDat: new Date(),
+            soLuongVeBanDau: ticketCount,
+            tongTienBanDau: totalAmount,
+            trangThai: 'CHO_THANH_TOAN',
+          },
+        },
+      },
+      include: { phieuDatVe: true },
+    });
+
+    const phieuDatVe = donGiaoDich.phieuDatVe!;
+
+    const veIds: number[] = [];
+    for (let i = 0; i < ticketCount; i++) {
+      const ve = await prisma.ve.create({
+        data: {
+          maVe: `VE-M-${suffix}-${i + 1}`,
+          giaNiemYet: 100000,
+          giaThucTe: 100000,
+          trangThai: 'CHO_THANH_TOAN',
+          phieuDatVeId: phieuDatVe.phieuDatVeId,
+          gheChuyenXeId: gheChuyenXeIds[i],
+          bangGiaApDungId: bangGia.bangGiaId,
+        },
+        select: { veId: true },
+      });
+      veIds.push(ve.veId);
+    }
+
+    const thanhToan = await prisma.thanhToan.create({
+      data: {
+        soTien: totalAmount,
+        phuongThuc: provider,
+        loaiGiaoDich: 'THANH_TOAN',
+        thoiGian: new Date(),
+        trangThai: 'DANG_XU_LY',
+        donGiaoDichId: donGiaoDich.donGiaoDichId,
+      },
+    });
+
+    return {
+      donGiaoDich,
+      phieuDatVe,
+      thanhToan,
+      veIds,
+      totalAmount,
+      cleanup: async () => {
+        await prisma.lichSuTrangThaiVe.deleteMany({ where: { veId: { in: veIds } } });
+        await prisma.lichSuTrangThaiPhieuDatVe.deleteMany({ where: { phieuDatVeId: phieuDatVe.phieuDatVeId } });
+        await prisma.thanhToan.deleteMany({ where: { thanhToanId: thanhToan.thanhToanId } });
+        await prisma.ve.deleteMany({ where: { veId: { in: veIds } } });
+        await prisma.phieuDatVe.deleteMany({ where: { phieuDatVeId: phieuDatVe.phieuDatVeId } });
+        await prisma.donGiaoDich.deleteMany({ where: { donGiaoDichId: donGiaoDich.donGiaoDichId } });
+        await prisma.gheChuyenXe.deleteMany({ where: { gheChuyenXeId: { in: gheChuyenXeIds } } });
+        await prisma.chuyenXe.deleteMany({ where: { chuyenXeId: chuyenXe.chuyenXeId } });
+        await prisma.ghe.deleteMany({ where: { xeId: xe.xeId } });
+        await prisma.bangGia.deleteMany({ where: { bangGiaId: bangGia.bangGiaId } });
+        await prisma.tuyenXe.deleteMany({ where: { tuyenXeId: tuyenXe.tuyenXeId } });
+        await prisma.xe.deleteMany({ where: { xeId: xe.xeId } });
+        await prisma.loaiXe.deleteMany({ where: { loaiXeId: loaiXe.loaiXeId } });
+      },
+    };
   }
 
   function buildMomoPayload(paymentId: number, options: Partial<MomoWebhookDto> = {}) {
@@ -401,6 +560,40 @@ describe('Payments Webhook & Status Security with MySQL (Integration)', () => {
     expect(payment?.trangThai).toBe('THANH_CONG');
   });
 
+  it('concurrent webhooks are atomic and create exactly one history transition (discussion_r4222294112)', async () => {
+    const { thanhToan, phieuDatVe } = await createTestPayment(customerAId, 'MOMO');
+    const payload = buildMomoPayload(thanhToan.thanhToanId);
+
+    // Fire 2 concurrent webhooks simultaneously
+    const [res1, res2] = await Promise.all([
+      request(app.getHttpServer())
+        .post('/api/v1/payments/momo/webhook')
+        .send(payload),
+      request(app.getHttpServer())
+        .post('/api/v1/payments/momo/webhook')
+        .send(payload),
+    ]);
+
+    expect(res1.status).toBe(201);
+    expect(res2.status).toBe(201);
+
+    const payment = await prisma.thanhToan.findUnique({
+      where: { thanhToanId: thanhToan.thanhToanId },
+    });
+    expect(payment?.trangThai).toBe('THANH_CONG');
+
+    // Exactly 1 LichSuTrangThaiPhieuDatVe record must exist
+    const bookingHistories = await prisma.lichSuTrangThaiPhieuDatVe.findMany({
+      where: { phieuDatVeId: phieuDatVe.phieuDatVeId },
+    });
+    expect(bookingHistories).toHaveLength(1);
+    expect(bookingHistories[0].trangThaiMoi).toBe('DA_THANH_TOAN');
+    expect(bookingHistories[0].nguonThayDoi).toBe('SYSTEM');
+    expect(bookingHistories[0].maThaoTac).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-1[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+    );
+  });
+
   it('getPaymentStatus is read-only and enforces customer ownership', async () => {
     const { thanhToan } = await createTestPayment(customerAId, 'MOMO');
 
@@ -453,5 +646,113 @@ describe('Payments Webhook & Status Security with MySQL (Integration)', () => {
       where: { thanhToanId: momoPayment.thanhToanId },
     });
     expect(paymentCheck?.trangThai).toBe('DANG_XU_LY');
+  });
+
+  it('does not revive cancelled booking or tickets upon receiving late valid webhook (discussion_r4222294102)', async () => {
+    const { thanhToan, phieuDatVe, donGiaoDich } = await createTestPayment(customerAId, 'MOMO');
+
+    // Simulate booking and transaction cancellation before webhook arrives
+    await prisma.phieuDatVe.update({
+      where: { phieuDatVeId: phieuDatVe.phieuDatVeId },
+      data: { trangThai: 'DA_HUY' },
+    });
+    await prisma.donGiaoDich.update({
+      where: { donGiaoDichId: donGiaoDich.donGiaoDichId },
+      data: { trangThai: 'DA_HUY' },
+    });
+
+    // Valid signed MoMo webhook arrives late
+    const payload = buildMomoPayload(thanhToan.thanhToanId, { amount: 200000 });
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/payments/momo/webhook')
+      .send(payload);
+
+    expect(res.status).toBe(201);
+
+    // Verify booking is NOT revived to DA_THANH_TOAN
+    const bookingInDb = await prisma.phieuDatVe.findUnique({
+      where: { phieuDatVeId: phieuDatVe.phieuDatVeId },
+    });
+    expect(bookingInDb?.trangThai).toBe('DA_HUY');
+
+    // Verify donGiaoDich is NOT revived
+    const donInDb = await prisma.donGiaoDich.findUnique({
+      where: { donGiaoDichId: donGiaoDich.donGiaoDichId },
+    });
+    expect(donInDb?.trangThai).toBe('DA_HUY');
+
+    // Verify no incorrect history transitions were created for cancelled booking
+    const histories = await prisma.lichSuTrangThaiPhieuDatVe.findMany({
+      where: { phieuDatVeId: phieuDatVe.phieuDatVeId },
+    });
+    expect(histories).toHaveLength(0);
+  });
+
+  it('creates synchronized status histories with identical operation UUID v1 and timestamp for multi-ticket bookings (discussion_r4222309384)', async () => {
+    const multiTicket = await createMultiTicketPayment(customerAId, 3, 'MOMO');
+
+    try {
+      const payload = buildMomoPayload(multiTicket.thanhToan.thanhToanId, {
+        amount: multiTicket.totalAmount,
+      });
+
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/payments/momo/webhook')
+        .send(payload);
+
+      expect(res.status).toBe(201);
+
+      // Verify payment, transaction, and booking are DA_THANH_TOAN / THANH_CONG
+      const updatedPayment = await prisma.thanhToan.findUnique({
+        where: { thanhToanId: multiTicket.thanhToan.thanhToanId },
+      });
+      expect(updatedPayment?.trangThai).toBe('THANH_CONG');
+
+      const updatedBooking = await prisma.phieuDatVe.findUnique({
+        where: { phieuDatVeId: multiTicket.phieuDatVe.phieuDatVeId },
+      });
+      expect(updatedBooking?.trangThai).toBe('DA_THANH_TOAN');
+
+      // Verify all 3 tickets transitioned to DA_THANH_TOAN
+      const updatedTickets = await prisma.ve.findMany({
+        where: { veId: { in: multiTicket.veIds } },
+      });
+      expect(updatedTickets).toHaveLength(3);
+      for (const ticket of updatedTickets) {
+        expect(ticket.trangThai).toBe('DA_THANH_TOAN');
+      }
+
+      // Verify exactly 1 booking status history
+      const bookingHistories = await prisma.lichSuTrangThaiPhieuDatVe.findMany({
+        where: { phieuDatVeId: multiTicket.phieuDatVe.phieuDatVeId },
+      });
+      expect(bookingHistories).toHaveLength(1);
+      const bookingHistory = bookingHistories[0];
+      expect(bookingHistory.trangThaiCu).toBe('CHO_THANH_TOAN');
+      expect(bookingHistory.trangThaiMoi).toBe('DA_THANH_TOAN');
+      expect(bookingHistory.nguonThayDoi).toBe('SYSTEM');
+      expect(bookingHistory.taiKhoanId).toBeNull();
+      expect(bookingHistory.maThaoTac).toMatch(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-1[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+      );
+
+      // Verify exactly 3 ticket status histories (1 for each ticket)
+      const ticketHistories = await prisma.lichSuTrangThaiVe.findMany({
+        where: { veId: { in: multiTicket.veIds } },
+      });
+      expect(ticketHistories).toHaveLength(3);
+      for (const th of ticketHistories) {
+        expect(th.trangThaiCu).toBe('DA_DAT');
+        expect(th.trangThaiMoi).toBe('DA_THANH_TOAN');
+        expect(th.nguonThayDoi).toBe('SYSTEM');
+        expect(th.taiKhoanId).toBeNull();
+        // Invariant: Must share the exact same maThaoTac UUID v1
+        expect(th.maThaoTac).toBe(bookingHistory.maThaoTac);
+        // Invariant: Must share the exact same timestamp
+        expect(th.thoiDiem.getTime()).toBe(bookingHistory.thoiDiem.getTime());
+      }
+    } finally {
+      await multiTicket.cleanup();
+    }
   });
 });
