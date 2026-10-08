@@ -168,36 +168,38 @@ Các ràng buộc DB khác:
 
 ---
 
-## 6. Tests và Verifiers đã chạy
+## 6. Kiểm chứng sau CI regression fix (2026-10-08)
 
-### Targeted Vitest Integration Test
-- **File:** `apps/api/test/integration/tickets/booking-ticket-status-history-db.spec.ts`
-- **Kết quả:** **16/16 tests PASS**
-- Chỉ kết nối qua `BOOKING_TICKET_STATUS_HISTORY_TEST_DATABASE_URL`, bắt buộc schema chuyên biệt có hậu tố `_test`, mặc định chặn host từ xa và từ chối trùng host/port/schema với `DATABASE_URL`, `MIGRATION_URL` hoặc `SHADOW_DATABASE_URL`.
-- Mỗi test tạo fixture riêng có các ID do test tạo, chạy trong transaction và chỉ cleanup fixture đó; không tìm/xóa/cập nhật entity nghiệp vụ có sẵn.
-- Kiểm tra cả hai bảng: 4 CHECK constraint tương ứng (assert mã lỗi adapter `P2039` và tên CHECK cụ thể), giá trị hợp lệ/không hợp lệ, nhiều history trên một entity, chia sẻ `maThaoTac` giữa entity khác nhau, UNIQUE cặp operation/entity, FK reject ID không tồn tại và FK Restrict khi xóa entity/account đang được fixture history tham chiếu.
-- UUID test lấy từ MySQL `SELECT UUID()` và xác nhận version 1.
+### GitHub Actions API CI
 
-### Standalone Verifier Script
-- **File:** `prisma/tests/verify-booking-ticket-status-history.mjs`
-- **Kết quả:** chạy thành công trên schema test cô lập sau khi integration tests cleanup; schema lúc verifier chạy có 0 Phiếu đặt vé, 0 Vé và 0 history. Kết quả này chỉ xác nhận verifier kết nối/đánh giá dataset rỗng thành công, không phải kiểm toán dữ liệu ứng dụng.
-- Verifier kiểm tra UUID v1, source/account, override, transition và unique theo từng entity; không so tổng history với tổng entity, không yêu cầu một entity chỉ có một history, và chỉ báo số record có hình dạng baseline để tham khảo.
+- API job tạo schema riêng `vexgo_booking_ticket_status_history_ci_test`, chạy toàn bộ migration vào schema đó và chỉ truyền `BOOKING_TICKET_STATUS_HISTORY_TEST_DATABASE_URL` cho bước API tests.
+- Test user `vexgo_history_ci_test` chỉ có SELECT/INSERT/UPDATE/DELETE trên schema history test; mật khẩu được sinh ngẫu nhiên mỗi job và mask trong log. URL chứa thông tin đăng nhập được xóa khỏi environment sau API tests. Tài khoản root chỉ dùng để tạo schema, cấp quyền và chạy migration; MySQL service của Actions là ephemeral.
+- `MIGRATION_URL` được override riêng ở bước migrate history-test DB; API tests giữ URL nghiệp vụ của `vexgo_ci` và dùng URL history test riêng. Không có skip hoặc fallback cho integration test history.
+- **Chưa có GitHub Actions run mới cho thay đổi này**, vì vậy chưa thể kết luận API CI trên GitHub PASS. Run trước trong spec thất bại do thiếu `BOOKING_TICKET_STATUS_HISTORY_TEST_DATABASE_URL`.
 
-### Migration verification trên MySQL test cô lập
-- **Database rỗng:** `prisma migrate deploy` áp dụng thành công toàn bộ 23 migration, gồm migration lịch sử trạng thái.
-- **Database có cohort trước migration:** áp dụng 22 migration trước trên schema tạm; chèn fixture tối thiểu gồm 2 `PhieuDatVe` và 3 `Ve`, chụp ID/status trước migration; sau đó áp migration lịch sử. Việc seed fixture tối thiểu tắt `FOREIGN_KEY_CHECKS` riêng trên connection seed và bật lại trước khi chạy migration; đây không phải dữ liệu nghiệp vụ và schema được drop sau kiểm tra.
-- Kết quả cohort: mỗi entity trong cohort có đúng một baseline; `trangThaiMoi` giữ nguyên status đã chụp, `trangThaiCu = NULL`, nguồn `SYSTEM`, account `NULL`, override `false`, đúng lý do backfill; 5 `maThaoTac` là UUID v1 và phân biệt; tất cả baseline dùng cùng một timestamp.
-- CHECK, UNIQUE và FK Restrict đã được thực thi qua targeted integration tests trên schema đầy đủ đã migrate, với fixture quan hệ hợp lệ. Schema cohort và thư mục migration tạm đều đã được dọn.
+### Migration regression harness
 
-### Quality Gates khác
-- `npm exec -- prisma validate`: PASS.
-- `npm exec -- prisma generate`: PASS; Prisma Client 7.10.0 được sinh vào `apps/api/src/generated/prisma`.
-- `npm run typecheck --workspace=@vexgo/api`: PASS.
-- `npm run build --workspace=@vexgo/api`: PASS.
-- `git diff --check`: PASS (exit 0; chỉ có cảnh báo Git chuẩn hóa LF/CRLF trên Windows).
+- Harness: `prisma/tests/booking-ticket-status-history-migration-upgrade.mjs`; chạy bằng `node prisma/tests/booking-ticket-status-history-migration-upgrade.mjs` với `BOOKING_TICKET_STATUS_HISTORY_HARNESS_ADMIN_DATABASE_URL` trỏ tới MySQL local có quyền tạo/xóa schema scratch. Không fallback sang `DATABASE_URL`.
+- **Schema rỗng — PASS:** áp dụng đủ 23 migration hiện có, gồm migration history; Phiếu đặt vé/Vé và hai history table đều rỗng, không sinh baseline giả. Verifier từ chối dataset rỗng và ghi rõ không có bằng chứng kiểm tra migration/backfill.
+- **Cohort trước migration — PASS:** áp dụng 22 migration tiền nhiệm, seed quan hệ hợp lệ do harness tạo gồm 2 Phiếu đặt vé và 3 Vé, chụp ID/status, sau đó áp migration history thật. Mỗi ID cohort có đúng một baseline; status cũ không đổi; source SYSTEM, account NULL, override false và lý do backfill đúng; năm operation ID là UUID v1 riêng biệt; timestamp chung.
+- Harness xác nhận sau migration có đủ 8 CHECK, hai composite UNIQUE và bốn FK ON DELETE/UPDATE RESTRICT. Sau đó thêm các transition hợp lệ để kiểm verifier: mỗi entity có nhiều history và một operation STAFF được dùng chung cho một Phiếu đặt vé cùng hai Vé.
+- Cả hai schema scratch và thư mục config/migration tạm được dọn trong `finally`; harness không tắt/bỏ qua FK khi seed cohort.
+
+### Verifier và integration tests
+
+- `node --test prisma/tests/booking-ticket-status-history-invariants.test.mjs`: **6/6 PASS**. Có positive case gồm baseline + nhiều transition/entity + operation dùng chung; negative cases cho UUID v4, source/account, override, trạng thái cũ/mới trùng và UNIQUE lặp trong từng bảng.
+- Standalone verifier được chạy **PASS** trên cohort sau backfill có transition hợp lệ; được chạy **FAIL như kỳ vọng** trên schema rỗng với thông báo dataset chưa đủ bằng chứng. Verifier không ép tổng history bằng tổng entity, không giới hạn một history/entity và không yêu cầu UUID operation duy nhất trên toàn bảng.
+- `apps/api/test/integration/tickets/booking-ticket-status-history-db.spec.ts`: **16/16 PASS** trên schema history riêng sau khi deploy migration. Một lượt chạy dùng đúng flow CI: script sinh password, mask và xuất URL qua `GITHUB_ENV`; test user chỉ có quyền DML. Schema và user cục bộ được dọn sau test.
+
+### Quality gates đã chạy
+
+- `npm exec -- prisma validate`: **PASS**.
+- `npm exec -- prisma generate`: **PASS**, sinh Prisma Client 7.10.0.
+- `npm run build --workspace=@vexgo/api`: **PASS**.
+- `npm run typecheck --workspace=@vexgo/api`: **PASS**.
+- `git diff --check`: **PASS** sau khi cập nhật các file trong lần sửa này.
 
 ---
-
 ## 7. Phạm vi chưa thực hiện (Out of Scope) & Bước tiếp theo
 
 - **Customer cancellation:** Hiện tại code nghiệp vụ hủy vé phía Customer Web/API **CHƯA** ghi history vào hai bảng mới này.

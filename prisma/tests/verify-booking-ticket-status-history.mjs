@@ -2,15 +2,16 @@ import { resolve } from 'node:path';
 import { config as loadDotenv } from 'dotenv';
 import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import { PrismaClient } from '../../apps/api/dist/generated/prisma/client.js';
+import {
+  assertHistoryDataValid,
+  countBaselineShapedRecords,
+} from './booking-ticket-status-history-invariants.mjs';
 
 loadDotenv();
 loadDotenv({ path: resolve(process.cwd(), '.env.test') });
 
 const TEST_DATABASE_ENV = 'BOOKING_TICKET_STATUS_HISTORY_TEST_DATABASE_URL';
 const TEST_DATABASE_NAME = /^vexgo_booking_ticket_status_history_[a-z0-9_]*_test$/i;
-const UUID_V1_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-1[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const BACKFILL_REASON = 'Khởi tạo lịch sử trạng thái từ dữ liệu hiện có';
 
 function testDatabaseConfig() {
   const configuredUrl = process.env[TEST_DATABASE_ENV];
@@ -75,43 +76,6 @@ const prisma = new PrismaClient({
   adapter: new PrismaMariaDb(testDatabaseConfig()),
 });
 
-function isValidHistory(record) {
-  const actorMatchesSource =
-    ['CUSTOMER', 'STAFF'].includes(record.nguonThayDoi)
-      ? record.taiKhoanId !== null
-      : record.nguonThayDoi === 'SYSTEM' && record.taiKhoanId === null;
-
-  return (
-    UUID_V1_PATTERN.test(record.maThaoTac) &&
-    ['CUSTOMER', 'STAFF', 'SYSTEM'].includes(record.nguonThayDoi) &&
-    actorMatchesSource &&
-    (!record.laOverride || record.nguonThayDoi === 'STAFF') &&
-    (record.trangThaiCu === null || record.trangThaiCu !== record.trangThaiMoi)
-  );
-}
-
-function countBaselineShapedRecords(records) {
-  return records.filter(
-    (record) =>
-      record.trangThaiCu === null &&
-      record.nguonThayDoi === 'SYSTEM' &&
-      record.taiKhoanId === null &&
-      !record.laOverride &&
-      record.lyDo === BACKFILL_REASON,
-  ).length;
-}
-
-function assertUniqueWithinEntity(records, entityIdField, label) {
-  const seen = new Set();
-  for (const record of records) {
-    const key = `${record[entityIdField]}\u0000${record.maThaoTac}`;
-    if (seen.has(key)) {
-      throw new Error(`${label} repeats maThaoTac for the same entity.`);
-    }
-    seen.add(key);
-  }
-}
-
 async function verify() {
   console.log('--- Verifying booking/ticket history data in an isolated test database ---');
 
@@ -122,20 +86,19 @@ async function verify() {
     prisma.lichSuTrangThaiVe.findMany(),
   ]);
 
-  assertUniqueWithinEntity(
-    bookingHistory,
-    'phieuDatVeId',
-    'LichSuTrangThaiPhieuDatVe',
-  );
-  assertUniqueWithinEntity(ticketHistory, 'veId', 'LichSuTrangThaiVe');
-
-  const invalidBookings = bookingHistory.filter((record) => !isValidHistory(record));
-  const invalidTickets = ticketHistory.filter((record) => !isValidHistory(record));
-  if (invalidBookings.length > 0 || invalidTickets.length > 0) {
+  if (bookingCount === 0 || ticketCount === 0) {
+    console.error(
+      `Dataset is empty or incomplete for verification (PhieuDatVe=${bookingCount}, Ve=${ticketCount}); no migration/backfill correctness is established.`,
+    );
+    throw new Error('Verifier requires at least one booking and one ticket.');
+  }
+  if (bookingHistory.length === 0 || ticketHistory.length === 0) {
     throw new Error(
-      `Invalid history rows: ${invalidBookings.length} booking, ${invalidTickets.length} ticket.`,
+      `Dataset is incomplete for verification (booking histories=${bookingHistory.length}, ticket histories=${ticketHistory.length}); baseline/backfill correctness is not established.`,
     );
   }
+
+  assertHistoryDataValid(bookingHistory, ticketHistory);
 
   console.log(
     `PhieuDatVe=${bookingCount}; booking histories=${bookingHistory.length}; baseline-shaped=${countBaselineShapedRecords(bookingHistory)}; transitions=${bookingHistory.filter((record) => record.trangThaiCu !== null).length}`,
