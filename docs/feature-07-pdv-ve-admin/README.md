@@ -1,8 +1,12 @@
 # Feature 07 — Quản lý phiếu đặt vé & vé (Admin nhà xe)
 
-**Trạng thái:** Thiết kế nghiệp vụ đã duyệt; chưa triển khai.  
-**Branch dự kiến:** `feature/admin-bookings-tickets`  
-**Bắt buộc:** Làm việc trên Git worktree và MySQL độc lập, không dùng lại database gốc.
+**Trạng thái:** Worktree và database riêng đã xác minh; Phase 01 hoàn tất. Phase 02–05 chưa triển khai.
+
+**Branch:** `feature/admin-bookings-tickets`
+
+**Worktree:** `E:/Huit_Local/KhoaLuanCuNhan/SourceCode/vexgo-feature07`
+
+**Bắt buộc:** Tiếp tục trong worktree và MySQL riêng, không dùng database/volume gốc.
 
 ## Cấu trúc tài liệu
 
@@ -12,25 +16,26 @@ docs/feature-07-pdv-ve-admin/
 ├── ENVIRONMENT_WORKTREE.md
 ├── spec/
 │   ├── MASTER_SPEC.md
-│   └── PHASE_01_RBAC_BACKEND_FOUNDATION.md
+│   ├── PHASE_01_RBAC_BACKEND_FOUNDATION.md
+│   ├── PHASE_02_ADMIN_READ_APIS.md
+│   ├── PHASE_03_ADMIN_LIST_UI.md
+│   ├── PHASE_04_ADMIN_DETAIL_HISTORY_UI.md
+│   └── PHASE_05_INTEGRATION_ACCEPTANCE.md
 └── handoff/
-    └── HANDOFF_TEMPLATE.md
+    ├── IMPLEMENTATION_PLAN.md
+    ├── ENVIRONMENT_HANDOFF.md
+    ├── HANDOFF_TEMPLATE.md
+    └── PHASE_01_HANDOFF.md
 ```
 
-Tất cả tài liệu, spec của Phase 2–5, báo cáo kiểm thử và handoff chỉ đặt dưới thư mục này. Ví dụ:
-
-- `spec/PHASE_02_ADMIN_READ_APIS.md`
-- `spec/PHASE_03_ADMIN_LIST_UI.md`
-- `spec/PHASE_04_ADMIN_DETAIL_HISTORY_UI.md`
-- `spec/PHASE_05_INTEGRATION_ACCEPTANCE.md`
-- `handoff/PHASE_01_HANDOFF.md`, ...
+Toàn bộ tài liệu, báo cáo kiểm thử và handoff Feature 07 chỉ đặt dưới thư mục này.
 
 ## Trình tự
 
-1. Đọc `AGENTS.md`, các hướng dẫn app liên quan và `ENVIRONMENT_WORKTREE.md`.
-2. **Chuẩn bị và xác minh worktree + Docker project + DB + `.env` riêng trước mọi migration/seed.** Không chuyển sang coding nếu chưa xác nhận isolation.
+1. Đọc `AGENTS.md`, hướng dẫn app liên quan, `ENVIRONMENT_WORKTREE.md` và handoff gần nhất.
+2. Kiểm tra worktree/branch, Docker project `vexgo_feature07`, `.env` riêng và URLs trước thao tác database.
 3. Đọc `spec/MASTER_SPEC.md` và spec của phase hiện tại.
-4. Implement từng phase, chạy targeted tests, tự review diff, commit local và ghi handoff.
-5. Trước phase kế tiếp đọc handoff trước đó. Không tự push hoặc mở PR khi chưa được giao; PR cuối cùng vào `develop` sau Phase 5.
+4. Thực hiện đúng phase, chạy targeted tests, tự review diff, commit local và ghi handoff.
+5. Không push, mở PR hoặc merge trong quá trình này. Phase 05 kết thúc bằng handoff cuối.
 
-> Tài liệu này là một gói để đưa vào repo/worktree. Chưa tạo worktree, database hay sửa code thật trong repo của người dùng.
+> Phase 01 chỉ bổ sung RBAC permission foundation và rollout dữ liệu tối thiểu. Admin bookings/tickets vẫn chưa có UI/API đọc; các phần đó thuộc Phase 02–04.

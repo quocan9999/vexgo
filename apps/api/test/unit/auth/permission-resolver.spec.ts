@@ -26,6 +26,20 @@ describe('PermissionResolverService', () => {
     expect(permissions).toEqual(['vehicle:read']);
   });
 
+  it('resolves booking:read for a tenant role and never for SUPER_ADMIN', () => {
+    const tenantPermissions = resolver.resolve(
+      [role('NHA_XE_ADMIN', 'booking:read')],
+      { nhanVienId: 71, nhaXeId: 14 },
+    );
+    const platformPermissions = resolver.resolve(
+      [role('SUPER_ADMIN', 'booking:read')],
+      { nhanVienId: null, nhaXeId: null },
+    );
+
+    expect(tenantPermissions).toEqual(['booking:read']);
+    expect(platformPermissions).toEqual([]);
+  });
+
   it('unions permissions from multiple valid tenant roles and ignores unknown keys', () => {
     const permissions = resolver.resolve(
       [

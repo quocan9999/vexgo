@@ -12,6 +12,7 @@ import {
   hasPlatformAdminPermission,
   isPlatformRbacPath,
   isTenantRbacPath,
+  type AdminPermission,
 } from '@/features/admin-auth/services/admin-access';
 import { getAdminAccessScope } from '@/features/admin-auth/services/admin-scope';
 import type { AdminSession } from '@/features/admin-auth/services/admin-auth';
@@ -49,6 +50,8 @@ function makePlatformSession(permissions: string[] = []): AdminSession {
     busCompanyId: null,
   };
 }
+
+const bookingReadPermission: AdminPermission = 'booking:read';
 
 describe('admin access scope and permissions', () => {
   it('accepts an employee-only account with matching tenant identity', () => {
@@ -192,6 +195,17 @@ describe('admin access scope and permissions', () => {
     expect(getFirstAccessibleAdminPath(session)).toBe('/routes');
     expect(hasAdminPermission(session, 'fare-price:read')).toBe(true);
     expect(hasAdminPermission(session, 'vehicle:read')).toBe(false);
+  });
+
+  it('accepts booking read as a tenant permission and denies it to platform scope', () => {
+    const tenant = makeTenantSession(
+      ['NHA_XE_ADMIN'],
+      [bookingReadPermission],
+    );
+    const platform = makePlatformSession([bookingReadPermission]);
+
+    expect(hasAdminPermission(tenant, bookingReadPermission)).toBe(true);
+    expect(hasAdminPermission(platform, bookingReadPermission)).toBe(false);
   });
 
   it('uses tenant RBAC as a fallback only for an authorized tenant admin', () => {
