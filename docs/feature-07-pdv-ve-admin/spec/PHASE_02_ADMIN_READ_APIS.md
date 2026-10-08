@@ -1,7 +1,7 @@
 # Phase 02 Spec — Admin Read APIs: Phiếu đặt vé, Vé và lịch sử
 
 **Feature:** 07 — Quản lý phiếu đặt vé & vé (Admin nhà xe)  
-**Trạng thái:** Đặc tả để triển khai sau khi Phase 01 hoàn tất; chưa phải kết quả implement.  
+**Trạng thái:** Phase 02 đã triển khai; contract thực tế và kiểm chứng được ghi ở mục 9 và `handoff/PHASE_02_HANDOFF.md`.<br>
 **Phụ thuộc:** `MASTER_SPEC.md`, `PHASE_01_RBAC_BACKEND_FOUNDATION.md`, `handoff/PHASE_01_HANDOFF.md`, `ENVIRONMENT_WORKTREE.md`.
 
 ## 1. Goal và ranh giới
@@ -24,14 +24,14 @@ Sử dụng controller/service thuộc domain tương ứng (`bookings` và `tic
 
 ## 3. Endpoint contract (tất cả trong `/api/v1`)
 
-| Endpoint | Response | Quyền |
-|---|---|---|
-| `GET /admin/bookings` | `{data: BookingListItem[], meta: {page,pageSize,totalItems,totalPages}}` | `booking:read` |
-| `GET /admin/bookings/:id` | `{data: BookingDetail}` | `booking:read` |
+| Endpoint                          | Response                                                                      | Quyền          |
+| --------------------------------- | ----------------------------------------------------------------------------- | -------------- |
+| `GET /admin/bookings`             | `{data: BookingListItem[], meta: {page,pageSize,totalItems,totalPages}}`      | `booking:read` |
+| `GET /admin/bookings/:id`         | `{data: BookingDetail}`                                                       | `booking:read` |
 | `GET /admin/bookings/:id/history` | `{data: BookingHistoryEntry[]}` hoặc phân trang có `meta` nếu được thống nhất | `booking:read` |
-| `GET /admin/tickets` | `{data: TicketListItem[], meta: ...}` | `booking:read` |
-| `GET /admin/tickets/:id` | `{data: TicketDetail}` | `booking:read` |
-| `GET /admin/tickets/:id/history` | `{data: TicketHistoryEntry[]}` hoặc phân trang có `meta` nếu được thống nhất | `booking:read` |
+| `GET /admin/tickets`              | `{data: TicketListItem[], meta: ...}`                                         | `booking:read` |
+| `GET /admin/tickets/:id`          | `{data: TicketDetail}`                                                        | `booking:read` |
+| `GET /admin/tickets/:id/history`  | `{data: TicketHistoryEntry[]}` hoặc phân trang có `meta` nếu được thống nhất  | `booking:read` |
 
 Dùng `@RequireRoles(...TENANT_PRINCIPAL_ROLES)` và `@RequirePermissions('booking:read')` cùng `@CurrentPrincipal()`; trong **mỗi service** dùng `requireTenantPrincipal(principal)`. Không tin `nhaXeId` từ query/body/client; không thêm một route public hay quyền `SUPER_ADMIN` mặc định.
 
@@ -94,3 +94,14 @@ Query cho **mỗi** list endpoint: `search?`, `status?`, `bookedFrom?`, `bookedT
 - No mutation, no public Admin route, no fake data, no Customer breakage, no schema migration thiếu lý do.
 - Trước mọi DB test, kiểm tra `DATABASE_URL`/test DB riêng thuộc Docker Feature 07. Không dùng `vexgo` (original) hoặc volume original.
 - Commit local Conventional Commits; handoff `handoff/PHASE_02_HANDOFF.md` liệt kê endpoints + mẫu contract, DB test setup, test counts thật, SHA và known limitations. Dừng phase khi không đạt gate; tự động chuyển Phase 03 chỉ khi đạt.
+
+## 9. Contract đã triển khai
+
+- Cả sáu endpoint giữ `data`; list và history trả `meta` theo `{page,pageSize,totalItems,totalPages}`. History mặc định `page=1&pageSize=100`, tối đa 100 hàng/trang, sắp xếp `thoiDiem ASC` rồi ID tăng dần.
+- Tiền VND được trả bằng chuỗi decimal chính xác, ví dụ `"300000"`; API không cộng hoặc làm tròn tiền bằng floating-point. `initialTicketAmount` luôn lấy từ `PhieuDatVe.tongTienBanDau`; `transactionTotalAmount` được trả riêng.
+- Booking list/detail trả `ticketCount`, các số vé ban đầu/hủy/còn hiệu lực, `isPartiallyCancelled` suy ra từ số vé thực tế và `tripIntegrity`. Các giá trị integrity là `CONSISTENT`, `MULTIPLE_TRIPS`, `NO_TICKETS`, `TRIP_UNAVAILABLE`; khi chuyến không thể khẳng định duy nhất, `trip` là `null`.
+- Ticket list/detail cũng trả `tripIntegrity`; nếu chuyến không thuộc tenant thì `trip` và `seatNumber` là `null` ở detail. Không đọc tên tuyến/chuyến khác tenant.
+- Booking detail trả `transactionStatus` độc lập với `status`, `transactionTotalAmount` độc lập tiền vé, danh sách payment attempts và ba nhóm refund `pending`, `succeeded`, `other`. Mỗi khoản có trạng thái/method/amount gốc; không cộng attempt. `allocation` là `TICKET` chỉ khi `veId` trỏ tới vé cùng booking, nếu không là `UNALLOCATED`.
+- Shipment được đọc qua giao dịch đã tenant-scope, chỉ trả mã vận đơn/trạng thái/chuyến và tóm tắt tên hàng, loại hàng, số lượng. Không trả ảnh hoặc giá trị khai báo; trip không thuộc tenant bị ẩn bằng `tripId: null`.
+- Search trim khoảng trắng và giới hạn 100 ký tự. Filter status của booking chỉ dùng bốn trạng thái trong `ADMIN_BOOKING_STATUSES`; filter ticket chỉ dùng `DA_DAT`/`HUY`. Booking sort là `bookedAt`, `departureTime`, `totalTicketAmount`; ticket sort là `bookedAt`, `departureTime`, `ticketPrice`; mọi sort có ID làm tie-breaker.
+- Booking list dùng điều kiện tenant trên giao dịch ở cả count và trang; filter khởi hành dùng `EXISTS`, tránh nhân bản phiếu khi có nhiều vé. Tổng vé/trip được gom theo trang và không tải history/payment/shipment cho list row.

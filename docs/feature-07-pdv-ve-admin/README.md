@@ -1,6 +1,6 @@
 # Feature 07 — Quản lý phiếu đặt vé & vé (Admin nhà xe)
 
-**Trạng thái:** Worktree và database riêng đã xác minh; Phase 01 hoàn tất. Phase 02–05 chưa triển khai.
+**Trạng thái:** Worktree và database riêng đã xác minh; Phase 01–02 hoàn tất. Phase 03–05 chưa triển khai.
 
 **Branch:** `feature/admin-bookings-tickets`
 
@@ -25,7 +25,8 @@ docs/feature-07-pdv-ve-admin/
     ├── IMPLEMENTATION_PLAN.md
     ├── ENVIRONMENT_HANDOFF.md
     ├── HANDOFF_TEMPLATE.md
-    └── PHASE_01_HANDOFF.md
+    ├── PHASE_01_HANDOFF.md
+    └── PHASE_02_HANDOFF.md
 ```
 
 Toàn bộ tài liệu, báo cáo kiểm thử và handoff Feature 07 chỉ đặt dưới thư mục này.
@@ -38,4 +39,4 @@ Toàn bộ tài liệu, báo cáo kiểm thử và handoff Feature 07 chỉ đ�
 4. Thực hiện đúng phase, chạy targeted tests, tự review diff, commit local và ghi handoff.
 5. Không push, mở PR hoặc merge trong quá trình này. Phase 05 kết thúc bằng handoff cuối.
 
-> Phase 01 chỉ bổ sung RBAC permission foundation và rollout dữ liệu tối thiểu. Admin bookings/tickets vẫn chưa có UI/API đọc; các phần đó thuộc Phase 02–04.
+> Phase 01 bổ sung RBAC permission foundation và rollout dữ liệu tối thiểu. Phase 02 cung cấp sáu Admin GET APIs; UI thuộc Phase 03–04.
