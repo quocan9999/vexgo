@@ -3,7 +3,7 @@
 **Trạng thái:** Hoàn tất<br>
 **Branch:** `feature/admin-bookings-tickets`<br>
 **Worktree:** `E:/Huit_Local/KhoaLuanCuNhan/SourceCode/vexgo-feature07`<br>
-**Implementation commit:** Sẽ ghi SHA sau khi commit hoàn tất.
+**Implementation commit:** `40e90780cd0344f634296c46235c32b406392875`
 
 ## Phạm vi
 
@@ -50,4 +50,4 @@ Contract chi tiết đã ghi trong [`spec/PHASE_02_ADMIN_READ_APIS.md`](../spec/
 
 ## Commit
 
-SHA của implementation commit sẽ được ghi ở đây bằng commit tài liệu follow-up sau khi phase commit được tạo.
+SHA implementation đầy đủ: `40e90780cd0344f634296c46235c32b406392875`. Handoff được cập nhật trong commit tài liệu follow-up.
