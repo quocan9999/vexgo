@@ -350,7 +350,10 @@ export class BookingsService {
           gheChuyenXeId: { in: resolvedSeatIds },
           trangThai: 'DANG_GIU',
         },
-        data: { trangThai: 'DA_DAT' },
+        data: {
+          trangThai: 'DA_DAT',
+          giuChoId: null,
+        },
       });
 
       if (updatedSeats.count !== resolvedSeatIds.length) {
@@ -364,7 +367,7 @@ export class BookingsService {
     });
 
     // 7. Tiêu thụ token giữ chỗ sau khi đặt vé thành công
-    this.seatHoldsService.consumeHold(
+    await this.seatHoldsService.consumeHold(
       params.holdToken,
       effectiveTripId,
       resolvedSeatIds,

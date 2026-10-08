@@ -7,7 +7,7 @@ import {
   type OnModuleDestroy,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { createHmac, randomUUID } from 'node:crypto';
+import { createHash, createHmac, randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service.js';
 import {
   combineDeparture,
@@ -66,28 +66,70 @@ export class SeatHoldsService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  private hashHoldToken(token: string): string {
+    return createHash('sha256').update(token).digest('hex');
+  }
+
   /**
    * Tự động giải phóng các ghế bị giữ quá thời gian TTL (10 phút) trong DB
    * Đảm bảo tính bền vững (Durability) chống kẹt ghế khi restart server hoặc multi-instance.
    */
   async releaseStaleHolds(): Promise<number> {
+    let releasedCount = 0;
+
+    if (this.prisma.giuCho) {
+      const now = new Date();
+      const expiredHolds = await this.prisma.giuCho.findMany({
+        where: {
+          trangThai: 'DANG_GIU',
+          hetHanLuc: { lte: now },
+        },
+        select: { giuChoId: true },
+      });
+
+      if (expiredHolds.length > 0) {
+        const expiredIds = expiredHolds.map((h) => h.giuChoId);
+        const result = await this.prisma.$transaction(async (tx) => {
+          const seatResult = await tx.gheChuyenXe.updateMany({
+            where: {
+              giuChoId: { in: expiredIds },
+              trangThai: 'DANG_GIU',
+            },
+            data: {
+              trangThai: 'TRONG',
+              giuChoId: null,
+            },
+          });
+          await tx.giuCho.updateMany({
+            where: { giuChoId: { in: expiredIds } },
+            data: { trangThai: 'HET_HAN' },
+          });
+          return seatResult.count;
+        });
+        releasedCount += result;
+      }
+    }
+
+    // Fallback dọn dẹp các ghế cũ chưa gắn giuChoId
     const staleThreshold = new Date(Date.now() - 10 * 60 * 1000);
-    const result = await this.prisma.gheChuyenXe.updateMany({
+    const legacyResult = await this.prisma.gheChuyenXe.updateMany({
       where: {
         trangThai: 'DANG_GIU',
+        giuChoId: null,
         updatedAt: { lt: staleThreshold },
       },
       data: {
         trangThai: 'TRONG',
       },
     });
+    releasedCount += legacyResult.count;
 
-    if (result.count > 0) {
+    if (releasedCount > 0) {
       this.logger.log(
-        `Released ${result.count} stale held seats back to TRONG in MySQL.`,
+        `Released ${releasedCount} stale held seats back to TRONG in MySQL.`,
       );
     }
-    return result.count;
+    return releasedCount;
   }
 
   private signHoldToken(payload: HoldTokenPayload): string {
@@ -210,7 +252,28 @@ export class SeatHoldsService implements OnModuleInit, OnModuleDestroy {
     // Toàn bộ quy trình dùng gheChuyenXeId xuyên suốt
     const resolvedTripSeatIds = tripSeats.map((s) => s.gheChuyenXeId);
 
-    // 3. Khắc phục Race condition: CAS trong transaction
+    // 3. Lấy customerId nếu có principal
+    let customerId: number | null = null;
+    if (principal?.taiKhoanId) {
+      const cust = await this.prisma.khachHang.findUnique({
+        where: { taiKhoanId: principal.taiKhoanId },
+        select: { khachHangId: true },
+      });
+      if (cust) customerId = cust.khachHangId;
+    }
+
+    // 4. Tạo signed hold token & thiết lập TTL 10 phút
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 phút
+    const holdToken = this.signHoldToken({
+      tripId: validTripId,
+      seats: resolvedTripSeatIds,
+      customerId,
+      exp: expiresAt.getTime(),
+      nonce: randomUUID(),
+    });
+    const tokenHash = this.hashHoldToken(holdToken);
+
+    // 5. Khắc phục Race condition: CAS trong transaction kèm tạo GiuCho trong DB
     await this.prisma.$transaction(async (tx) => {
       const occupiedSeat = await tx.gheChuyenXe.findFirst({
         where: {
@@ -228,6 +291,20 @@ export class SeatHoldsService implements OnModuleInit, OnModuleDestroy {
         });
       }
 
+      let giuChoId: number | undefined;
+      if (tx.giuCho) {
+        const createdHold = await tx.giuCho.create({
+          data: {
+            tokenHash,
+            chuyenXeId: validTripId,
+            khachHangId: customerId,
+            hetHanLuc: expiresAt,
+            trangThai: 'DANG_GIU',
+          },
+        });
+        giuChoId = createdHold.giuChoId;
+      }
+
       const updateResult = await tx.gheChuyenXe.updateMany({
         where: {
           chuyenXeId: validTripId,
@@ -236,6 +313,7 @@ export class SeatHoldsService implements OnModuleInit, OnModuleDestroy {
         },
         data: {
           trangThai: 'DANG_GIU',
+          ...(giuChoId !== undefined ? { giuChoId } : {}),
         },
       });
 
@@ -245,26 +323,6 @@ export class SeatHoldsService implements OnModuleInit, OnModuleDestroy {
           message: 'Một hoặc nhiều ghế đã được giữ bởi người khác.',
         });
       }
-    });
-
-    // 4. Lấy customerId nếu có principal
-    let customerId: number | null = null;
-    if (principal?.taiKhoanId) {
-      const cust = await this.prisma.khachHang.findUnique({
-        where: { taiKhoanId: principal.taiKhoanId },
-        select: { khachHangId: true },
-      });
-      if (cust) customerId = cust.khachHangId;
-    }
-
-    // 5. Tạo signed hold token & thiết lập TTL 10 phút
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 phút
-    const holdToken = this.signHoldToken({
-      tripId: validTripId,
-      seats: resolvedTripSeatIds,
-      customerId,
-      exp: expiresAt.getTime(),
-      nonce: randomUUID(),
     });
 
     const timer = setTimeout(() => {
@@ -295,6 +353,7 @@ export class SeatHoldsService implements OnModuleInit, OnModuleDestroy {
   }
 
   async releaseSeatHold(holdToken: string) {
+    const tokenHash = this.hashHoldToken(holdToken);
     const hold = this.holds.get(holdToken);
     let tripId = hold?.tripId;
     let seatIds = hold?.seatIds;
@@ -313,12 +372,64 @@ export class SeatHoldsService implements OnModuleInit, OnModuleDestroy {
       }
     }
 
+    // Xử lý bền vững với persistent GiuCho trong MySQL
+    let dbHold: any = null;
+    if (this.prisma.giuCho) {
+      dbHold = await this.prisma.giuCho.findUnique({
+        where: { tokenHash },
+      });
+    }
+
+    if (dbHold) {
+      // Nếu hold đã hết hạn hoặc đã được giải phóng/đặt vé, tuyệt đối không đụng vào ghế!
+      if (dbHold.trangThai !== 'DANG_GIU' || dbHold.hetHanLuc <= new Date()) {
+        if (dbHold.trangThai === 'DANG_GIU' && dbHold.hetHanLuc <= new Date()) {
+          await this.prisma.giuCho.update({
+            where: { giuChoId: dbHold.giuChoId },
+            data: { trangThai: 'HET_HAN' },
+          });
+        }
+        return { success: true };
+      }
+
+      // Generation-safe release: Chỉ giải phóng ghế nếu ghế đang trỏ đúng vào giuChoId này!
+      await this.prisma.$transaction(async (tx) => {
+        await tx.gheChuyenXe.updateMany({
+          where: {
+            chuyenXeId: dbHold.chuyenXeId,
+            giuChoId: dbHold.giuChoId,
+            trangThai: 'DANG_GIU',
+          },
+          data: {
+            trangThai: 'TRONG',
+            giuChoId: null,
+          },
+        });
+        await tx.giuCho.update({
+          where: { giuChoId: dbHold.giuChoId },
+          data: { trangThai: 'DA_GIAI_PHONG' },
+        });
+      });
+
+      this.logger.log(
+        `Released seat hold ${holdToken} (giuChoId: ${dbHold.giuChoId}) for trip ${dbHold.chuyenXeId}`,
+      );
+      return { success: true };
+    }
+
+    // Fallback cho signed token nếu không tìm thấy trong DB (ví dụ unit test không mock giuCho)
+    const payload = this.parseSignedHoldToken(holdToken);
+    if (payload && payload.exp <= Date.now()) {
+      return { success: true };
+    }
+
     if (tripId && seatIds && seatIds.length > 0) {
       await this.prisma.gheChuyenXe.updateMany({
         where: {
           chuyenXeId: tripId,
           gheChuyenXeId: { in: seatIds },
           trangThai: 'DANG_GIU',
+          giuChoId: null,
         },
         data: {
           trangThai: 'TRONG',
@@ -408,12 +519,12 @@ export class SeatHoldsService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  consumeHold(
+  async consumeHold(
     holdToken?: string,
     tripId?: number,
     seatIds?: number[],
     expectedCustomerId?: number | null,
-  ): boolean {
+  ): Promise<boolean> {
     if (!holdToken) return false;
     this.verifyHold(
       holdToken,
@@ -421,6 +532,15 @@ export class SeatHoldsService implements OnModuleInit, OnModuleDestroy {
       seatIds ?? [],
       expectedCustomerId,
     );
+
+    const tokenHash = this.hashHoldToken(holdToken);
+    if (this.prisma.giuCho) {
+      await this.prisma.giuCho.updateMany({
+        where: { tokenHash, trangThai: 'DANG_GIU' },
+        data: { trangThai: 'DA_DAT' },
+      });
+    }
+
     const hold = this.holds.get(holdToken);
     if (hold) {
       if (hold.timer) clearTimeout(hold.timer);

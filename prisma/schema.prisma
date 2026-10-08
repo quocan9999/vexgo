@@ -150,6 +150,7 @@ model ChuyenXe {
   xe                  Xe             @relation(fields: [nhaXeId, xeId], references: [nhaXeId, xeId], onDelete: Restrict, onUpdate: Restrict)
   tuyenXe             TuyenXe        @relation(fields: [nhaXeId, tuyenXeId], references: [nhaXeId, tuyenXeId], onDelete: Restrict, onUpdate: Restrict)
   gheChuyenXes        GheChuyenXe[]
+  giuChos             GiuCho[]
   phieuGuiHangs       PhieuGuiHang[]
   phanHois            PhanHoi[]
 }
@@ -159,13 +160,33 @@ model GheChuyenXe {
   trangThai     String   @db.VarChar(30)
   chuyenXeId    Int      @db.Int
   gheId         Int      @db.Int
+  giuChoId      Int?     @db.Int
   createdAt     DateTime @default(now()) @db.DateTime(0)
   updatedAt     DateTime @default(now()) @updatedAt @db.DateTime(0)
   chuyenXe      ChuyenXe @relation(fields: [chuyenXeId], references: [chuyenXeId], onDelete: Restrict, onUpdate: Restrict)
   ghe           Ghe      @relation(fields: [gheId], references: [gheId], onDelete: Restrict, onUpdate: Restrict)
+  giuCho        GiuCho?  @relation(fields: [giuChoId], references: [giuChoId], onDelete: SetNull, onUpdate: Restrict)
   ves           Ve[]
 
   @@unique([chuyenXeId, gheId], map: "GheChuyenXe_index_3")
+  @@index([giuChoId], map: "GheChuyenXe_giuChoId_idx")
+}
+
+model GiuCho {
+  giuChoId     Int           @id @default(autoincrement()) @db.Int
+  tokenHash    String        @unique @db.Char(64)
+  chuyenXeId   Int           @db.Int
+  khachHangId  Int?          @db.Int
+  hetHanLuc    DateTime      @db.DateTime(3)
+  trangThai    String        @default("DANG_GIU") @db.VarChar(30)
+  createdAt    DateTime      @default(now()) @db.DateTime(3)
+  updatedAt    DateTime      @default(now()) @updatedAt @db.DateTime(3)
+  chuyenXe     ChuyenXe      @relation(fields: [chuyenXeId], references: [chuyenXeId], onDelete: Restrict, onUpdate: Restrict)
+  khachHang    KhachHang?    @relation(fields: [khachHangId], references: [khachHangId], onDelete: Restrict, onUpdate: Restrict)
+  gheChuyenXes GheChuyenXe[]
+
+  @@index([chuyenXeId, hetHanLuc], map: "GiuCho_chuyenXeId_hetHanLuc_idx")
+  @@index([khachHangId], map: "GiuCho_khachHangId_idx")
 }
 
 model BangGia {
@@ -257,6 +278,7 @@ model KhachHang {
   thongBaoNguoiNhans ThongBaoNguoiNhan[]
   tinNhanHoTros      TinNhanHoTro[]
   phanHois           PhanHoi[]
+  giuChos            GiuCho[]
 }
 
 model NhanVien {

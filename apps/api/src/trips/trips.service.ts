@@ -1221,21 +1221,11 @@ export class TripsService {
     });
     const originalPrice = origFare ? Number(origFare.giaNiemYet) : 0;
 
-    const getTripDateTime = (t: { ngayKhoiHanh?: Date | null; gioKhoiHanh?: Date | null }) => {
-      const d = t.ngayKhoiHanh ? new Date(t.ngayKhoiHanh) : new Date();
-      if (!t.gioKhoiHanh) return d;
-      const gh = new Date(t.gioKhoiHanh);
-      return new Date(
-        d.getFullYear(),
-        d.getMonth(),
-        d.getDate(),
-        gh.getHours(),
-        gh.getMinutes(),
-        gh.getSeconds(),
-      );
-    };
-
-    const origTime = getTripDateTime(originalTrip);
+    const origTime = combineDeparture(
+      originalTrip.ngayKhoiHanh,
+      originalTrip.gioKhoiHanh,
+      businessTimeZone,
+    );
 
     // Tiêu chí 1 & 2: Cùng tuyến hoặc cùng điểm đi & điểm đến (bắt buộc), trạng thái CHUA_KHOI_HANH
     const candidates = await this.prisma.chuyenXe.findMany({
@@ -1283,7 +1273,11 @@ export class TripsService {
           return null; // Bỏ qua chuyến đã hết chỗ
         }
 
-        const candTime = getTripDateTime(trip);
+        const candTime = combineDeparture(
+          trip.ngayKhoiHanh,
+          trip.gioKhoiHanh,
+          businessTimeZone,
+        );
 
         // Loại bỏ chuyến đã qua thời điểm khởi hành (departureAt <= now)
         if (candTime.getTime() <= Date.now()) {

@@ -3,6 +3,10 @@ import { IsOptional, IsString } from 'class-validator';
 export class MomoWebhookDto {
   @IsOptional()
   @IsString()
+  accessKey?: string;
+
+  @IsOptional()
+  @IsString()
   partnerCode?: string;
 
   @IsOptional()

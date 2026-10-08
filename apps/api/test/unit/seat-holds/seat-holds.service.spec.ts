@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SeatHoldsService } from '../../../src/seat-holds/seat-holds.service.js';
 import type { PrismaService } from '../../../src/prisma/prisma.service.js';
 
-describe('SeatHoldsService', () => {
+describe('SeatHoldsService (Unit)', () => {
   let service: SeatHoldsService;
   let prisma: any;
 
@@ -32,7 +32,14 @@ describe('SeatHoldsService', () => {
       },
       gheChuyenXe: {
         findMany: vi.fn().mockResolvedValue(sampleTripSeats),
-        findFirst: vi.fn(),
+        findFirst: vi.fn().mockResolvedValue(null),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+      },
+      giuCho: {
+        create: vi.fn().mockResolvedValue({ giuChoId: 1 }),
+        findMany: vi.fn().mockResolvedValue([]),
+        findUnique: vi.fn(),
+        update: vi.fn(),
         updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       },
       $transaction: vi.fn(async (cb) => cb(prisma)),
@@ -41,67 +48,62 @@ describe('SeatHoldsService', () => {
     service = new SeatHoldsService(prisma as unknown as PrismaService);
   });
 
-  describe('Concurrency CAS Regression Test', () => {
-    it('ensures two competing requests cannot hold the same seat simultaneously', async () => {
-      let callCount = 0;
-      prisma.$transaction.mockImplementation(async (cb: any) => {
-        callCount++;
-        if (callCount === 1) {
-          // Request 1 / Transaction 1: Ghế còn trống, update thành công
-          const tx1 = {
-            ...prisma,
-            gheChuyenXe: {
-              ...prisma.gheChuyenXe,
-              findFirst: vi.fn().mockResolvedValue(null),
-              updateMany: vi.fn().mockResolvedValue({ count: 1 }),
-            },
-          };
-          return cb(tx1);
-        } else {
-          // Request 2 / Transaction 2: Ghế đã bị giữ, xung đột CAS
-          const tx2 = {
-            ...prisma,
-            gheChuyenXe: {
-              ...prisma.gheChuyenXe,
-              findFirst: vi.fn().mockResolvedValue({
-                ...sampleTripSeats[0],
-                trangThai: 'DANG_GIU',
-              }),
-              updateMany: vi.fn().mockResolvedValue({ count: 0 }),
-            },
-          };
-          return cb(tx2);
-        }
+  describe('createSeatHold', () => {
+    it('successfully creates hold, persists GiuCho and updates seat with giuChoId', async () => {
+      const result = await service.createSeatHold(50, [101]);
+
+      expect(result.holdToken).toBeDefined();
+      expect(result.seatIds).toEqual([101]);
+      expect(prisma.giuCho.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            chuyenXeId: 50,
+            trangThai: 'DANG_GIU',
+          }),
+        }),
+      );
+      expect(prisma.gheChuyenXe.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            chuyenXeId: 50,
+            gheChuyenXeId: { in: [101] },
+            trangThai: 'TRONG',
+          },
+          data: {
+            trangThai: 'DANG_GIU',
+            giuChoId: 1,
+          },
+        }),
+      );
+    });
+
+    it('rejects with ConflictException if any seat is already occupied or held', async () => {
+      prisma.gheChuyenXe.findFirst.mockResolvedValueOnce({
+        ...sampleTripSeats[0],
+        trangThai: 'DANG_GIU',
       });
 
-      // Chạy 2 request cạnh tranh đồng thời qua Promise.allSettled
-      const [result1, result2] = await Promise.allSettled([
-        service.createSeatHold(50, [101]),
-        service.createSeatHold(50, [101]),
-      ]);
-
-      // Chính xác 1 request thành công và 1 request thất bại vì xung đột
-      const fulfilled = [result1, result2].filter(
-        (r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled',
+      await expect(service.createSeatHold(50, [101])).rejects.toThrow(
+        ConflictException,
       );
-      const rejected = [result1, result2].filter(
-        (r): r is PromiseRejectedResult => r.status === 'rejected',
+    });
+
+    it('rejects with ConflictException if update count does not match requested seats', async () => {
+      prisma.gheChuyenXe.updateMany.mockImplementation(async (args: any) => {
+        if (args.where?.trangThai === 'TRONG') {
+          return { count: 0 };
+        }
+        return { count: 1 };
+      });
+
+      await expect(service.createSeatHold(50, [101])).rejects.toThrow(
+        ConflictException,
       );
-
-      expect(fulfilled).toHaveLength(1);
-      expect(fulfilled[0].value.holdToken).toBeDefined();
-      expect(fulfilled[0].value.seatIds).toEqual([101]);
-
-      expect(rejected).toHaveLength(1);
-      expect(rejected[0].reason).toBeInstanceOf(ConflictException);
     });
   });
 
   describe('Seat Identity Contract', () => {
     it('uses gheChuyenXeId (tripSeatId) to hold seats', async () => {
-      prisma.gheChuyenXe.findFirst.mockResolvedValue(null);
-      prisma.gheChuyenXe.updateMany.mockResolvedValue({ count: 1 });
-
       const result = await service.createSeatHold(50, [101]);
 
       expect(result.seatIds).toEqual([101]);
@@ -117,20 +119,39 @@ describe('SeatHoldsService', () => {
   });
 
   describe('Durability: Stale Hold Cleanup', () => {
-    it('reverts expired DANG_GIU seats back to TRONG', async () => {
-      prisma.gheChuyenXe.updateMany.mockResolvedValue({ count: 3 });
+    it('sweeps expired GiuCho records and reverts linked seats to TRONG', async () => {
+      prisma.giuCho.findMany.mockResolvedValueOnce([{ giuChoId: 99 }]);
+      prisma.gheChuyenXe.updateMany
+        .mockResolvedValueOnce({ count: 2 }) // via giuChoId
+        .mockResolvedValueOnce({ count: 0 }); // legacy fallback
 
       const released = await service.releaseStaleHolds();
 
-      expect(released).toBe(3);
+      expect(released).toBe(2);
+      expect(prisma.giuCho.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { giuChoId: { in: [99] } },
+          data: { trangThai: 'HET_HAN' },
+        }),
+      );
       expect(prisma.gheChuyenXe.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: expect.objectContaining({
-            trangThai: 'DANG_GIU',
-          }),
-          data: {
-            trangThai: 'TRONG',
-          },
+          where: { giuChoId: { in: [99] }, trangThai: 'DANG_GIU' },
+          data: { trangThai: 'TRONG', giuChoId: null },
+        }),
+      );
+    });
+  });
+
+  describe('verifyHold and consumeHold', () => {
+    it('consumes hold and marks GiuCho as DA_DAT', async () => {
+      const hold = await service.createSeatHold(50, [101]);
+      const consumed = await service.consumeHold(hold.holdToken, 50, [101]);
+
+      expect(consumed).toBe(true);
+      expect(prisma.giuCho.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: { trangThai: 'DA_DAT' },
         }),
       );
     });
