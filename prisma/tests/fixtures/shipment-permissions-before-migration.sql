@@ -39,7 +39,8 @@ CREATE TABLE `CauHinhQuyenVaiTroNhaXeChiTiet` (
 
 INSERT INTO `VaiTro` (`vaiTroId`, `tenVaiTro`, `moTa`) VALUES
   (1, 'NHA_XE_ADMIN', 'Tenant admin'),
-  (2, 'SUPER_ADMIN', 'Platform admin');
+  (2, 'SUPER_ADMIN', 'Platform admin'),
+  (3, 'NHAN_VIEN_DIEU_HANH', 'Tenant operator');
 
 INSERT INTO `Quyen` (`quyenId`, `tenQuyen`, `moTa`) VALUES
   (1, 'vehicle:read', 'Existing tenant permission');

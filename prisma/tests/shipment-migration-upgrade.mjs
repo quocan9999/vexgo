@@ -19,6 +19,7 @@ const migrationNames = [
   '20261007020000_correct_shipment_capacity_and_validate_invariants',
   '20261007100000_add_shipment_cargo_type_fees',
   '20261009010000_add_shipment_management_permissions',
+  '20261009020000_add_shipment_operator_permissions',
 ];
 
 function connectionConfig(connectionUrl) {
@@ -214,6 +215,13 @@ async function runUpgradeCase(admin, label, { fixture = {}, expectedFailureMigra
     assert(
       shipmentRoleGrants.map(({ tenQuyen }) => tenQuyen).join(',') === 'shipment:read,shipment:update',
       `${label}: migrate deploy did not grant the shipment defaults to NHA_XE_ADMIN`,
+    );
+    const shipmentOperatorGrants = await prisma.$queryRawUnsafe(
+      "SELECT `permission`.`tenQuyen` FROM `VaiTroQuyen` AS `grant` JOIN `VaiTro` AS `role` ON `role`.`vaiTroId` = `grant`.`vaiTroId` JOIN `Quyen` AS `permission` ON `permission`.`quyenId` = `grant`.`quyenId` WHERE `role`.`tenVaiTro` = 'NHAN_VIEN_DIEU_HANH' AND `permission`.`tenQuyen` IN ('shipment:read', 'shipment:update') ORDER BY `permission`.`tenQuyen`",
+    );
+    assert(
+      shipmentOperatorGrants.map(({ tenQuyen }) => tenQuyen).join(',') === 'shipment:read,shipment:update',
+      `${label}: migrate deploy did not grant the shipment defaults to NHAN_VIEN_DIEU_HANH`,
     );
     const overrideBeforeSync = await prisma.$queryRawUnsafe(
       'SELECT `nhaXeId`, `vaiTroId`, `quyenId` FROM `CauHinhQuyenVaiTroNhaXeChiTiet` ORDER BY `nhaXeId`, `vaiTroId`, `quyenId`',
