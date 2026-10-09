@@ -14,8 +14,13 @@ import { TripsModule } from './trips/trips.module.js';
 import { AdminAccountsModule } from './admin-accounts/admin-accounts.module.js';
 import { AdminRbacModule } from './admin-rbac/admin-rbac.module.js';
 import { ContactsModule } from './contacts/contacts.module.js';
-import { BookingsModule } from './bookings/bookings.module.js';
 import { TicketsModule } from './tickets/tickets.module.js';
+import { SeatHoldsModule } from './seat-holds/seat-holds.module.js';
+import { PromotionsModule } from './promotions/promotions.module.js';
+import { BookingsModule } from './bookings/bookings.module.js';
+import { PaymentsModule } from './payments/payments.module.js';
+import { NotificationsModule } from './notifications/notifications.module.js';
+import { ReviewsModule } from './reviews/reviews.module.js';
 
 @Module({
   imports: [
@@ -39,8 +44,13 @@ import { TicketsModule } from './tickets/tickets.module.js';
     AdminAccountsModule,
     AdminRbacModule,
     ContactsModule,
-    BookingsModule,
     TicketsModule,
+    SeatHoldsModule,
+    PromotionsModule,
+    BookingsModule,
+    PaymentsModule,
+    NotificationsModule,
+    ReviewsModule,
   ],
 })
 export class AppModule {}
