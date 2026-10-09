@@ -1,0 +1,387 @@
+.shipments-section {
+  margin-top: var(--admin-space-section-gap);
+}
+
+.shipments-waybill-code {
+  font-family:
+    var(--admin-font-mono), ui-monospace, SFMono-Regular, Menlo, Consolas,
+    monospace;
+  font-size: var(--admin-type-table-body-size);
+  font-weight: var(--admin-weight-semibold);
+  color: var(--admin-text-strong);
+  line-height: var(--admin-type-table-body-line-height);
+}
+
+.shipments-phone {
+  color: var(--admin-text-muted);
+  font-size: var(--admin-type-helper-size);
+}
+
+.shipments-trip-time {
+  color: var(--admin-text-muted);
+  font-size: var(--admin-type-helper-size);
+}
+
+.shipments-route-point {
+  font-size: var(--admin-type-secondary-body-size);
+  color: var(--admin-text-default);
+}
+
+.shipments-route-arrow {
+  color: var(--admin-text-muted);
+  margin: 0 var(--admin-space-1);
+}
+
+.text-right {
+  text-align: right;
+}
+
+.shipments-state-panel {
+  display: grid;
+  justify-items: center;
+  gap: var(--admin-space-component-gap);
+  margin: 0;
+  padding: var(--admin-space-state-padding);
+  color: var(--admin-text-muted);
+  font-size: var(--admin-type-body-size);
+  text-align: center;
+  line-height: var(--admin-type-body-line-height);
+}
+
+.shipments-state-panel p {
+  margin: 0;
+}
+
+.shipments-mobile-list {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .shipments-mobile-list {
+    display: grid;
+    gap: var(--admin-space-card-gap);
+    padding: var(--admin-space-3);
+  }
+
+  .shipments-mobile-card {
+    min-width: 0;
+    padding: var(--admin-space-card-padding);
+    border: 1px solid var(--admin-border);
+    border-radius: var(--admin-radius-panel, 12px);
+    background: var(--background, #fff);
+  }
+
+  .shipments-mobile-card-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--admin-space-component-gap);
+  }
+
+  .shipments-mobile-date {
+    margin: var(--admin-space-1) 0 0;
+    color: var(--admin-text-muted);
+    font-size: var(--admin-type-helper-size);
+  }
+
+  .shipments-mobile-fields {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--admin-space-field-gap);
+    margin: var(--admin-space-component-gap) 0;
+  }
+
+  .shipments-mobile-fields dt {
+    color: var(--admin-text-muted);
+    font-size: var(--admin-type-label-size);
+    line-height: var(--admin-type-label-line-height);
+  }
+
+  .shipments-mobile-fields dd {
+    margin: var(--admin-space-title-copy-gap) 0 0;
+    color: var(--admin-text-strong);
+    font-size: var(--admin-type-body-size);
+    overflow-wrap: anywhere;
+    line-height: var(--admin-type-body-line-height);
+  }
+
+  .shipments-mobile-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: var(--admin-space-component-gap);
+    padding-top: var(--admin-space-table-cell-y);
+    border-top: 1px solid var(--admin-border);
+  }
+}
+
+/* Detail Sheet Styles */
+.shipments-detail-content {
+  display: grid;
+  gap: var(--admin-space-section-gap);
+  padding: 0 var(--admin-space-dialog-padding) var(--admin-space-dialog-padding);
+}
+
+.shipments-detail-hero {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--admin-space-component-gap);
+  padding-bottom: var(--admin-space-component-gap);
+  border-bottom: 1px solid var(--admin-border);
+}
+
+.shipments-detail-sent-at {
+  margin: var(--admin-space-1) 0 0;
+  color: var(--admin-text-muted);
+  font-size: var(--admin-type-helper-size);
+}
+
+.shipments-detail-note {
+  padding: var(--admin-space-3);
+  background: var(--admin-surface-muted, #f8fafc);
+  border-radius: var(--admin-radius-input, 8px);
+  border: 1px solid var(--admin-border);
+  font-size: var(--admin-type-secondary-body-size);
+  color: var(--admin-text-strong);
+}
+
+.shipments-detail-section {
+  display: grid;
+  gap: var(--admin-space-3);
+}
+
+.shipments-detail-section-title {
+  margin: 0;
+  color: var(--admin-text-strong);
+  font-size: var(--admin-type-component-title-size);
+  font-weight: var(--admin-weight-semibold);
+  line-height: var(--admin-type-component-title-line-height);
+}
+
+.shipments-detail-sub-title {
+  margin: 0 0 var(--admin-space-2);
+  color: var(--admin-text-default);
+  font-size: var(--admin-type-label-size);
+  font-weight: var(--admin-weight-semibold);
+}
+
+.shipments-detail-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--admin-space-component-gap);
+}
+
+.shipments-detail-card-sub {
+  padding: var(--admin-space-3);
+  background: var(--admin-surface-muted, #f8fafc);
+  border-radius: var(--admin-radius-input, 8px);
+  border: 1px solid var(--admin-border);
+}
+
+.shipments-detail-dl {
+  display: grid;
+  gap: var(--admin-space-2);
+  margin: 0;
+}
+
+.shipments-detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--admin-space-2);
+  font-size: var(--admin-type-secondary-body-size);
+}
+
+.shipments-detail-row dt {
+  color: var(--admin-text-muted);
+}
+
+.shipments-detail-row dd {
+  margin: 0;
+  text-align: right;
+  color: var(--admin-text-strong);
+}
+
+.shipments-address-text {
+  color: var(--admin-text-muted);
+  font-size: var(--admin-type-helper-size);
+}
+
+/* Cargo list */
+.shipments-cargo-list {
+  display: grid;
+  gap: var(--admin-space-3);
+}
+
+.shipments-cargo-card {
+  padding: var(--admin-space-3);
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius-input, 8px);
+  background: var(--background, #fff);
+}
+
+.shipments-cargo-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--admin-space-2);
+  margin-bottom: var(--admin-space-2);
+}
+
+.shipments-cargo-type {
+  font-size: var(--admin-type-helper-size);
+  color: var(--admin-text-muted);
+  background: var(--admin-surface-muted, #f1f5f9);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.shipments-cargo-dl {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: var(--admin-space-2);
+  margin: 0;
+}
+
+.shipments-cargo-field dt {
+  color: var(--admin-text-muted);
+  font-size: var(--admin-type-helper-size);
+}
+
+.shipments-cargo-field dd {
+  margin: 2px 0 0;
+  font-size: var(--admin-type-secondary-body-size);
+  color: var(--admin-text-strong);
+}
+
+.shipments-cargo-desc {
+  margin: var(--admin-space-2) 0 0;
+  font-size: var(--admin-type-helper-size);
+  color: var(--admin-text-muted);
+}
+
+/* Fee table */
+.shipments-fee-table-wrap {
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius-input, 8px);
+  overflow: hidden;
+}
+
+.shipments-fee-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--admin-type-table-body-size);
+}
+
+.shipments-fee-table th {
+  background: var(--admin-surface-muted, #f8fafc);
+  padding: var(--admin-space-2) var(--admin-space-3);
+  font-size: var(--admin-type-table-header-size);
+  font-weight: var(--admin-weight-semibold);
+  color: var(--admin-text-muted);
+  text-align: left;
+  border-bottom: 1px solid var(--admin-border);
+}
+
+.shipments-fee-table td {
+  padding: var(--admin-space-2) var(--admin-space-3);
+  border-bottom: 1px solid var(--admin-border);
+  color: var(--admin-text-strong);
+}
+
+.shipments-fee-table tr:last-child td {
+  border-bottom: none;
+}
+
+.shipments-fee-summary-card {
+  padding: var(--admin-space-3);
+  background: var(--admin-surface-muted, #f8fafc);
+  border-radius: var(--admin-radius-input, 8px);
+  border: 1px solid var(--admin-border);
+}
+
+.shipments-discount-text {
+  color: #dc2626;
+}
+
+.shipments-total-fee-row {
+  margin-top: var(--admin-space-2);
+  padding-top: var(--admin-space-2);
+  border-top: 1px dashed var(--admin-border);
+}
+
+.shipments-total-fee-value {
+  font-size: var(--admin-type-component-title-size);
+  font-weight: var(--admin-weight-bold);
+  color: #2563eb;
+}
+
+/* Timeline */
+.shipments-empty-history {
+  color: var(--admin-text-muted);
+  font-size: var(--admin-type-secondary-body-size);
+  margin: 0;
+}
+
+.shipments-timeline {
+  display: grid;
+  gap: var(--admin-space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  position: relative;
+}
+
+.shipments-timeline-item {
+  display: grid;
+  grid-template-columns: 16px 1fr;
+  gap: var(--admin-space-3);
+  position: relative;
+}
+
+.shipments-timeline-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #2563eb;
+  margin-top: 4px;
+  z-index: 1;
+}
+
+.shipments-timeline-line {
+  position: absolute;
+  top: 16px;
+  bottom: -16px;
+  left: 5px;
+  width: 2px;
+  background: var(--admin-border);
+}
+
+.shipments-timeline-body {
+  display: grid;
+  gap: var(--admin-space-1);
+}
+
+.shipments-timeline-header {
+  display: flex;
+  align-items: center;
+  gap: var(--admin-space-2);
+}
+
+.shipments-timeline-time {
+  font-size: var(--admin-type-helper-size);
+  color: var(--admin-text-muted);
+}
+
+.shipments-timeline-actor {
+  margin: 0;
+  font-size: var(--admin-type-secondary-body-size);
+  color: var(--admin-text-default);
+}
+
+.shipments-timeline-note {
+  margin: 0;
+  font-size: var(--admin-type-helper-size);
+  color: var(--admin-text-muted);
+  font-style: italic;
+}
