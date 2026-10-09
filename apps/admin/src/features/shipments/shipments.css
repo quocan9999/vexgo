@@ -385,3 +385,82 @@
   color: var(--admin-text-muted);
   font-style: italic;
 }
+
+/* Actions & Confirm Dialog */
+.shipments-detail-actions-panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--admin-space-control-gap);
+  padding: var(--admin-space-notice-padding);
+  margin-bottom: var(--admin-space-component-gap);
+  background: var(--admin-surface-muted);
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius-card);
+}
+
+.shipments-detail-actions-label {
+  font-size: var(--admin-type-label-size);
+  font-weight: var(--admin-type-label-weight);
+  line-height: var(--admin-type-label-line-height);
+  color: var(--admin-text-strong);
+}
+
+.shipments-btn-danger {
+  color: var(--admin-danger);
+  border-color: color-mix(in srgb, var(--admin-danger) 30%, white);
+}
+
+.shipments-btn-danger:hover:not(:disabled) {
+  background-color: color-mix(in srgb, var(--admin-danger) 5%, white);
+  border-color: var(--admin-danger);
+}
+
+.shipments-confirm-form {
+  display: grid;
+  gap: var(--admin-space-field-gap);
+  margin: var(--admin-space-field-gap) 0;
+}
+
+.shipments-confirm-field {
+  display: grid;
+  gap: var(--admin-space-label-control-gap);
+}
+
+.shipments-confirm-field label {
+  font-size: var(--admin-type-label-size);
+  font-weight: var(--admin-type-label-weight);
+  line-height: var(--admin-type-label-line-height);
+  color: var(--admin-text-default);
+}
+
+.shipments-confirm-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: var(--admin-space-control-padding);
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius-control);
+  font-family: inherit;
+  font-size: var(--admin-type-body-size);
+  line-height: var(--admin-type-body-line-height);
+  resize: vertical;
+  background: var(--background, #fff);
+  color: var(--foreground, #0f172a);
+}
+
+.shipments-confirm-textarea:focus {
+  border-color: var(--admin-blue);
+  outline: 2px solid var(--admin-blue);
+  outline-offset: 1px;
+}
+
+.shipments-confirm-field-footer {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.shipments-char-count {
+  font-size: var(--admin-type-helper-size);
+  line-height: var(--admin-type-helper-line-height);
+  color: var(--admin-text-muted);
+}

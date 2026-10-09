@@ -1,11 +1,17 @@
 'use client';
 
-import { X } from 'lucide-react';
+import { LoaderCircle, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { AdminConfirmDialog } from '@/components/admin/admin-confirm-dialog';
 import { AdminDetailSheet } from '@/components/admin/admin-detail-sheet';
 import { AdminStatusBadge } from '@/components/admin/admin-status-badge';
 import { Button } from '@/components/ui/button';
-import { getShipmentById } from '../services/shipment-service';
+import { useAdminPermissions } from '@/features/admin-auth/hooks/use-admin-permissions';
+import {
+  getShipmentById,
+  ShipmentStatusUpdateError,
+  updateShipmentStatus,
+} from '../services/shipment-service';
 import type {
   FreightPayer,
   ShipmentDetail,
@@ -66,34 +72,120 @@ type DetailState =
 interface ShipmentDetailsProps {
   shipmentId: number;
   onClose: () => void;
+  onStatusUpdated?: () => void;
+}
+
+export type StatusActionConfig = {
+  targetStatus: ShipmentStatus;
+  title: string;
+  description: string;
+  actionLabel: string;
+  confirmLabel: string;
+  variant?: 'primary' | 'destructive';
+};
+
+export function getAvailableStatusActions(status: ShipmentStatus): StatusActionConfig[] {
+  switch (status) {
+    case 'MOI_TAO':
+      return [
+        {
+          targetStatus: 'DA_TIEP_NHAN',
+          title: 'Tiếp nhận hàng gửi?',
+          description:
+            'Phiếu gửi hàng sẽ chuyển sang trạng thái Đã tiếp nhận tại điểm gửi.',
+          actionLabel: 'Xác nhận đã tiếp nhận hàng',
+          confirmLabel: 'Xác nhận tiếp nhận',
+          variant: 'primary',
+        },
+        {
+          targetStatus: 'DA_HUY',
+          title: 'Hủy phiếu gửi hàng?',
+          description:
+            'Phiếu gửi hàng sẽ chuyển sang trạng thái Đã hủy. Thao tác này chỉ áp dụng cho phiếu chưa thanh toán trong MVP.',
+          actionLabel: 'Hủy phiếu gửi',
+          confirmLabel: 'Xác nhận hủy',
+          variant: 'destructive',
+        },
+      ];
+    case 'DA_TIEP_NHAN':
+      return [
+        {
+          targetStatus: 'DANG_VAN_CHUYEN',
+          title: 'Bắt đầu vận chuyển hàng?',
+          description:
+            'Phiếu gửi hàng sẽ chuyển sang trạng thái Đang vận chuyển cùng chuyến xe.',
+          actionLabel: 'Bắt đầu vận chuyển',
+          confirmLabel: 'Bắt đầu vận chuyển',
+          variant: 'primary',
+        },
+      ];
+    case 'DANG_VAN_CHUYEN':
+      return [
+        {
+          targetStatus: 'DA_GIAO',
+          title: 'Xác nhận đã giao hàng?',
+          description:
+            'Phiếu gửi hàng sẽ chuyển sang trạng thái Đã giao và hoàn tất việc giao nhận.',
+          actionLabel: 'Xác nhận đã giao hàng',
+          confirmLabel: 'Xác nhận đã giao',
+          variant: 'primary',
+        },
+      ];
+    default:
+      return [];
+  }
 }
 
 export function ShipmentDetails({
   shipmentId,
   onClose,
+  onStatusUpdated,
 }: ShipmentDetailsProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
-  const [detail, setDetail] = useState<DetailState>({ status: 'loading' });
+  const [loadedDetail, setLoadedDetail] = useState<{
+    requestKey: string;
+    state: DetailState;
+  }>({ requestKey: '', state: { status: 'loading' } });
   const [retryCount, setRetryCount] = useState(0);
+  const requestKey = `${shipmentId}:${retryCount}`;
+  const detail: DetailState =
+    loadedDetail.requestKey === requestKey
+      ? loadedDetail.state
+      : { status: 'loading' };
+
+  const { can } = useAdminPermissions();
+  const canUpdate = can('shipment:update');
+
+  const [activeAction, setActiveAction] = useState<StatusActionConfig | null>(null);
+  const [note, setNote] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [actionLocked, setActionLocked] = useState(false);
+  const [statusError, setStatusError] = useState<string | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
-    setDetail({ status: 'loading' });
+    const currentRequestKey = `${shipmentId}:${retryCount}`;
 
     getShipmentById(shipmentId, controller.signal)
       .then((shipment) => {
         if (!controller.signal.aborted) {
-          setDetail({ status: 'success', shipment });
+          setLoadedDetail({
+            requestKey: currentRequestKey,
+            state: { status: 'success', shipment },
+          });
         }
       })
       .catch((error: unknown) => {
         if (!controller.signal.aborted) {
-          setDetail({
-            status: 'error',
-            message:
-              error instanceof Error
-                ? error.message
-                : 'Không thể tải thông tin phiếu gửi hàng.',
+          setLoadedDetail({
+            requestKey: currentRequestKey,
+            state: {
+              status: 'error',
+              message:
+                error instanceof Error
+                  ? error.message
+                  : 'Không thể tải thông tin phiếu gửi hàng.',
+            },
           });
         }
       });
@@ -103,6 +195,55 @@ export function ShipmentDetails({
 
   function retry() {
     setRetryCount((c) => c + 1);
+  }
+
+  function handleOpenAction(action: StatusActionConfig) {
+    setActiveAction(action);
+    setNote('');
+    setActionLocked(false);
+    setStatusError(null);
+  }
+
+  function handleCloseDialog() {
+    if (!submitting) {
+      setActiveAction(null);
+      setActionLocked(false);
+      setStatusError(null);
+    }
+  }
+
+  async function handleConfirmStatus() {
+    if (!activeAction || submitting) return;
+    setSubmitting(true);
+    setStatusError(null);
+
+    try {
+      await updateShipmentStatus(shipmentId, {
+        status: activeAction.targetStatus,
+        note: note.trim() || undefined,
+      });
+      setActiveAction(null);
+      setNote('');
+      setActionLocked(false);
+      setRetryCount((c) => c + 1);
+      onStatusUpdated?.();
+    } catch (err: unknown) {
+      if (err instanceof ShipmentStatusUpdateError && err.status === 409) {
+        setActionLocked(true);
+
+        if (err.code !== 'SHIPMENT_REFUND_REQUIRED') {
+          setRetryCount((c) => c + 1);
+          onStatusUpdated?.();
+        }
+      }
+      setStatusError(
+        err instanceof Error
+          ? err.message
+          : 'Có lỗi xảy ra khi cập nhật trạng thái.',
+      );
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -164,6 +305,44 @@ export function ShipmentDetails({
             <div className="shipments-detail-note">
               <strong>Ghi chú:</strong> {detail.shipment.note}
             </div>
+          )}
+
+          {canUpdate && (
+            (() => {
+              const availableActions = getAvailableStatusActions(
+                detail.shipment.status,
+              );
+              if (availableActions.length === 0) return null;
+              return (
+                <div className="shipments-detail-actions-panel">
+                  <span className="shipments-detail-actions-label">
+                    Thao tác trạng thái:
+                  </span>
+                  <div className="admin-detail-sheet__actions">
+                    {availableActions.map((action) => (
+                      <Button
+                        key={action.targetStatus}
+                        className={
+                          action.variant === 'destructive'
+                            ? 'shipments-btn-danger'
+                            : undefined
+                        }
+                        disabled={submitting}
+                        onClick={() => handleOpenAction(action)}
+                        type="button"
+                        variant={
+                          action.variant === 'destructive'
+                            ? 'secondary'
+                            : 'primary'
+                        }
+                      >
+                        {action.actionLabel}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()
           )}
 
           {/* Người gửi & Người nhận */}
@@ -458,6 +637,93 @@ export function ShipmentDetails({
             )}
           </section>
         </div>
+      )}
+
+      {activeAction && (
+        <AdminConfirmDialog
+          ariaBusy={submitting}
+          ariaDescribedBy="shipment-status-confirm-desc"
+          ariaLabelledBy="shipment-status-confirm-title"
+          onClose={handleCloseDialog}
+          preventDismiss={submitting}
+        >
+          <div className="admin-dialog-header">
+            <div className="admin-dialog-header__copy">
+              <p className="eyebrow">XÁC NHẬN TRẠNG THÁI</p>
+              <h3 id="shipment-status-confirm-title">{activeAction.title}</h3>
+            </div>
+          </div>
+          <p
+            className="admin-confirm-dialog__description"
+            id="shipment-status-confirm-desc"
+          >
+            {activeAction.description}
+          </p>
+
+          <div className="shipments-confirm-form">
+            <div className="shipments-confirm-field">
+              <label htmlFor="shipment-status-note">
+                Ghi chú trạng thái (tùy chọn)
+              </label>
+              <textarea
+                className="shipments-confirm-textarea"
+                disabled={submitting || actionLocked}
+                id="shipment-status-note"
+                maxLength={500}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="Nhập ghi chú hoặc lý do nếu có..."
+                rows={3}
+                value={note}
+              />
+              <div className="shipments-confirm-field-footer">
+                <span className="shipments-char-count">{note.length}/500</span>
+              </div>
+            </div>
+          </div>
+
+          {statusError && (
+            <p className="admin-confirm-dialog__error" role="alert">
+              {statusError}
+            </p>
+          )}
+
+          <div className="admin-confirm-dialog__actions">
+            <Button
+              disabled={submitting}
+              onClick={handleCloseDialog}
+              type="button"
+              variant="secondary"
+            >
+              {actionLocked ? 'Đóng' : 'Hủy'}
+            </Button>
+            {!actionLocked && (
+              <Button
+                className={
+                  activeAction.variant === 'destructive'
+                    ? 'shipments-btn-danger'
+                    : undefined
+                }
+                disabled={submitting}
+                onClick={handleConfirmStatus}
+                type="button"
+                variant={
+                  activeAction.variant === 'destructive'
+                    ? 'secondary'
+                    : 'primary'
+                }
+              >
+                {submitting && (
+                  <LoaderCircle
+                    aria-hidden="true"
+                    className="admin-crud-form-spinner"
+                    size={15}
+                  />
+                )}
+                {submitting ? 'Đang cập nhật…' : activeAction.confirmLabel}
+              </Button>
+            )}
+          </div>
+        </AdminConfirmDialog>
       )}
     </AdminDetailSheet>
   );

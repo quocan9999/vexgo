@@ -43,7 +43,6 @@ export function ShipmentsManagement() {
     error,
     searchInput,
     setSearchInput,
-    page,
     setPage,
     status,
     setStatus,
@@ -323,6 +322,7 @@ export function ShipmentsManagement() {
           <ShipmentDetails
             shipmentId={selectedShipmentId}
             onClose={() => setSelectedShipmentId(null)}
+            onStatusUpdated={refresh}
           />
         )}
       </div>

@@ -1,6 +1,6 @@
 # VexGo — Feature 09: Gửi hàng Admin (MVP, ưu tiên demo)
 
-**Trạng thái:** Bộ spec chuẩn bị triển khai, chưa xác nhận có code chạy thực tế.  
+**Trạng thái:** Phase 05 status UI và luồng API/MySQL/browser đã triển khai; kết luận demo cuối hiện **NOT READY** cho đến khi kiểm tra được detail phiếu có nhiều kiện hàng trên DB feature. Xem [`handoff/FINAL_HANDOFF.md`](handoff/FINAL_HANDOFF.md). CRUD hàng hóa/điểm/bảng cước và Customer online vẫn là backlog riêng.
 **Quyết định nghiệp vụ:** 09/10/2026; roadmap HTML chỉ là tham khảo lịch sử.  
 **Branch:** `feature/shipment-management` từ `origin/develop`. **Worktree:** sibling `vexgo-feature09`.  
 **Mục tiêu:** Admin quản lý các phiếu gửi **đã tồn tại** trong database thật; không tạo phiếu thay khách.
@@ -20,12 +20,17 @@ docs/features/feature-09-gui-hang-admin/
 │   └── PHASE_05_ADMIN_STATUS_UI_ACCEPTANCE.md
 └── handoff/
     ├── INITIAL_HANDOFF.md
-    └── HANDOFF_TEMPLATE.md
+    ├── HANDOFF_TEMPLATE.md
+    ├── PHASE_04_HANDOFF.md
+    ├── PHASE_05_HANDOFF.md
+    └── FINAL_HANDOFF.md
 ```
 
 **Gói ZIP** có thêm `CODEX_GOAL.txt` và `SETUP_FOR_CODEX.md` ở root archive để bootstrap; hai file này là hướng dẫn cho agent, **không cần commit vào repo**.
 
 ## Thứ tự làm việc
+
+Các bước bootstrap bên dưới mô tả lần thiết lập ban đầu. Khi tiếp quản worktree/branch/database Feature 09 đang tồn tại, tiếp tục từ handoff gần nhất và **không chạy lại bước tạo worktree/database hoặc Setup Prompt**.
 
 1. Người dùng đặt ZIP vào repository chính rồi mở Codex tại repo chính; Codex tự tạo/kiểm tra worktree và bung bộ docs vào worktree. **Người dùng không cần tự chạy git worktree.**
 2. Codex đọc root `AGENTS.md`, `apps/admin/AGENTS.md`, `apps/admin/DESIGN.md`, tenant rules, `ENVIRONMENT_WORKTREE.md` và `spec/MASTER_SPEC.md` trước khi sửa.
