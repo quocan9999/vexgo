@@ -401,20 +401,35 @@ export class SeatHoldsService implements OnModuleInit, OnModuleDestroy {
     }
 
     // Xử lý bền vững với persistent GiuCho trong MySQL
-    let dbHold: any = null;
     if (this.prisma.giuCho) {
-      dbHold = await this.prisma.giuCho.findUnique({
-        where: { tokenHash },
-      });
-    }
+      const releaseResult = await this.prisma.$transaction(async (tx) => {
+        const dbHold = await tx.giuCho.findUnique({
+          where: { tokenHash },
+        });
 
-    if (dbHold) {
-      if (dbHold.trangThai === 'DANG_GIU') {
-        const isExpired = dbHold.hetHanLuc <= new Date();
-        const nextStatus = isExpired ? 'HET_HAN' : 'DA_GIAI_PHONG';
+        if (!dbHold) {
+          return { handled: false };
+        }
 
-        // Generation-safe release: Chỉ giải phóng ghế nếu ghế đang trỏ đúng vào giuChoId này!
-        await this.prisma.$transaction(async (tx) => {
+        if (dbHold.trangThai === 'DANG_GIU') {
+          const isExpired = dbHold.hetHanLuc <= new Date();
+          const nextStatus = isExpired ? 'HET_HAN' : 'DA_GIAI_PHONG';
+
+          // Atomic conditional update on hold: CHỈ update nếu trạng thái VẪN LÀ DANG_GIU
+          const holdUpdateResult = await tx.giuCho.updateMany({
+            where: {
+              giuChoId: dbHold.giuChoId,
+              trangThai: 'DANG_GIU',
+            },
+            data: { trangThai: nextStatus },
+          });
+
+          // Nếu count === 0: đã bị đổi trạng thái (ví dụ booking đồng thời consume thành DA_DAT)
+          if (holdUpdateResult.count === 0) {
+            return { handled: true, released: false, status: 'CONCURRENTLY_UPDATED' };
+          }
+
+          // Generation-safe release: Chỉ giải phóng ghế nếu ghế đang trỏ đúng vào giuChoId này và vẫn DANG_GIU
           await tx.gheChuyenXe.updateMany({
             where: {
               chuyenXeId: dbHold.chuyenXeId,
@@ -426,34 +441,43 @@ export class SeatHoldsService implements OnModuleInit, OnModuleDestroy {
               giuChoId: null,
             },
           });
-          await tx.giuCho.update({
-            where: { giuChoId: dbHold.giuChoId },
-            data: { trangThai: nextStatus },
-          });
-        });
 
-        this.logger.log(
-          `Released seat hold #${dbHold.giuChoId} (tokenHash: ${dbHold.tokenHash.slice(0, 8)}..., status: ${nextStatus}) for trip ${dbHold.chuyenXeId}`,
-        );
+          return {
+            handled: true,
+            released: true,
+            giuChoId: dbHold.giuChoId,
+            status: nextStatus,
+            chuyenXeId: dbHold.chuyenXeId,
+          };
+        }
+
+        // Nếu hold đã là HET_HAN, dọn sạch ghế nếu còn sót
+        if (dbHold.trangThai === 'HET_HAN') {
+          await tx.gheChuyenXe.updateMany({
+            where: {
+              chuyenXeId: dbHold.chuyenXeId,
+              giuChoId: dbHold.giuChoId,
+              trangThai: 'DANG_GIU',
+            },
+            data: {
+              trangThai: 'TRONG',
+              giuChoId: null,
+            },
+          });
+          return { handled: true, released: false, status: 'HET_HAN' };
+        }
+
+        return { handled: true, released: false, status: dbHold.trangThai };
+      });
+
+      if (releaseResult.handled) {
+        if (releaseResult.released) {
+          this.logger.log(
+            `Released seat hold #${releaseResult.giuChoId} (tokenHash: ${this.maskHoldToken(tokenHash)}, status: ${releaseResult.status}) for trip ${releaseResult.chuyenXeId}`,
+          );
+        }
         return { success: true };
       }
-
-      // Nếu hold đã là HET_HAN, dọn sạch ghế nếu còn sót
-      if (dbHold.trangThai === 'HET_HAN') {
-        await this.prisma.gheChuyenXe.updateMany({
-          where: {
-            chuyenXeId: dbHold.chuyenXeId,
-            giuChoId: dbHold.giuChoId,
-            trangThai: 'DANG_GIU',
-          },
-          data: {
-            trangThai: 'TRONG',
-            giuChoId: null,
-          },
-        });
-      }
-
-      return { success: true };
     }
 
     // Fallback cho signed token nếu không tìm thấy trong DB (ví dụ unit test không mock giuCho)
@@ -634,11 +658,21 @@ export class SeatHoldsService implements OnModuleInit, OnModuleDestroy {
         });
       }
 
-      // Cập nhật trạng thái hold sang DA_DAT ngay trong transaction
-      await tx.giuCho.update({
-        where: { giuChoId: dbHold.giuChoId },
+      // Cập nhật trạng thái hold sang DA_DAT bằng conditional CAS ngay trong transaction
+      const updateHoldResult = await tx.giuCho.updateMany({
+        where: {
+          giuChoId: dbHold.giuChoId,
+          trangThai: 'DANG_GIU',
+        },
         data: { trangThai: 'DA_DAT' },
       });
+
+      if (updateHoldResult.count === 0) {
+        throw new ConflictException({
+          error: 'HOLD_INACTIVE',
+          message: 'Mã giữ chỗ không còn ở trạng thái giữ chỗ (đã bị giải phóng hoặc thay đổi).',
+        });
+      }
 
       // Dọn dẹp in-memory hold nếu có
       const memoryHold = this.holds.get(holdToken);

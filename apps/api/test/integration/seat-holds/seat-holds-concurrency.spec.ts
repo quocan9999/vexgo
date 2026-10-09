@@ -552,5 +552,80 @@ describe('SeatHolds Concurrency & Isolation with MySQL (Integration)', () => {
     });
     expect(legitimateBookingUpdate.count).toBe(1);
   }, 30_000);
+
+  it('handles race condition between concurrent releaseSeatHold and booking consumeHoldInTx (discussion_r4226248016)', async () => {
+    // Reset seat 1 to TRONG
+    await prisma.gheChuyenXe.update({
+      where: { gheChuyenXeId: tripSeat1 },
+      data: { trangThai: 'TRONG', giuChoId: null },
+    });
+
+    // Customer A creates hold on seat 1
+    currentPrincipal = customerAPrincipal;
+    const holdRes = await request(app.getHttpServer())
+      .post('/api/v1/seat-holds')
+      .send({ tripId, seatIds: [tripSeat1] });
+    expect(holdRes.status).toBe(201);
+    const holdToken = (holdRes.body.data ?? holdRes.body).holdToken;
+    expect(holdToken).toBeDefined();
+
+    const initialSeat = await prisma.gheChuyenXe.findUnique({
+      where: { gheChuyenXeId: tripSeat1 },
+    });
+    expect(initialSeat?.trangThai).toBe('DANG_GIU');
+    const holdId = initialSeat?.giuChoId;
+    expect(holdId).toBeDefined();
+
+    // Concurrently trigger releaseSeatHold and booking consumption using Promise.allSettled
+    const [releaseResult, bookingAttempt] = await Promise.allSettled([
+      seatHoldsService.releaseSeatHold(holdToken),
+      prisma.$transaction(async (tx) => {
+        const consumed = await seatHoldsService.consumeHoldInTx(
+          tx,
+          holdToken,
+          tripId,
+          [tripSeat1],
+          customerAId,
+        );
+        const updateSeats = await tx.gheChuyenXe.updateMany({
+          where: {
+            chuyenXeId: tripId,
+            gheChuyenXeId: { in: [tripSeat1] },
+            trangThai: 'DANG_GIU',
+            giuChoId: consumed.giuChoId,
+          },
+          data: {
+            trangThai: 'DA_DAT',
+            giuChoId: null,
+          },
+        });
+        if (updateSeats.count !== 1) {
+          throw new Error('SEAT_UNAVAILABLE');
+        }
+        return { booked: true };
+      }),
+    ]);
+
+    // Inspect DB final state: MUST be strictly ONE valid outcome, NEVER inconsistent/hybrid
+    const finalHold = await prisma.giuCho.findUnique({
+      where: { giuChoId: holdId! },
+    });
+    const finalSeat = await prisma.gheChuyenXe.findUnique({
+      where: { gheChuyenXeId: tripSeat1 },
+    });
+
+    if (bookingAttempt.status === 'fulfilled') {
+      // Outcome 1: Booking won the race! Hold MUST be DA_DAT, seat MUST be DA_DAT
+      expect(finalHold?.trangThai).toBe('DA_DAT');
+      expect(finalSeat?.trangThai).toBe('DA_DAT');
+      expect(finalSeat?.giuChoId).toBeNull();
+    } else {
+      // Outcome 2: Release won the race! Booking got rejected, hold MUST be DA_GIAI_PHONG, seat MUST be TRONG
+      expect(finalHold?.trangThai).toBe('DA_GIAI_PHONG');
+      expect(finalSeat?.trangThai).toBe('TRONG');
+      expect(finalSeat?.giuChoId).toBeNull();
+    }
+  }, 30_000);
 });
+
 

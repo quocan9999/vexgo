@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   Logger,
@@ -113,7 +114,63 @@ export class PaymentsService {
       'Bạn không có quyền thanh toán cho đơn đặt vé này.',
     );
 
+    // 1. Kiểm tra trạng thái booking & transaction (discussion_r4226248027)
+    const isCancelled =
+      ['DA_HUY', 'HUY'].includes(booking.trangThai) ||
+      (booking.donGiaoDich && ['DA_HUY', 'HUY'].includes(booking.donGiaoDich.trangThai));
+    if (isCancelled) {
+      throw new ConflictException({
+        error: 'BOOKING_CANCELLED',
+        message: 'Đơn đặt vé đã bị hủy, không thể tạo giao dịch thanh toán.',
+      });
+    }
+
+    const isAlreadyPaid =
+      booking.trangThai === 'DA_THANH_TOAN' ||
+      (booking.donGiaoDich && booking.donGiaoDich.trangThai === 'DA_THANH_TOAN');
+    if (isAlreadyPaid) {
+      throw new ConflictException({
+        error: 'BOOKING_ALREADY_PAID',
+        message: 'Đơn đặt vé đã được thanh toán thành công.',
+      });
+    }
+
+    if (!['CHO_THANH_TOAN', 'DANG_XU_LY'].includes(booking.trangThai)) {
+      throw new ConflictException({
+        error: 'INVALID_BOOKING_STATUS',
+        message: 'Trạng thái đơn đặt vé không hợp lệ để tạo giao dịch thanh toán.',
+      });
+    }
+
     const cleanProvider = (provider || 'MOMO').toUpperCase();
+
+    // 2. Pending Payment Idempotency: Tái sử dụng payment DANG_XU_LY nếu đã tồn tại cùng provider
+    const existingPendingPayment = await this.prisma.thanhToan.findFirst({
+      where: {
+        donGiaoDichId: booking.donGiaoDichId,
+        trangThai: 'DANG_XU_LY',
+        phuongThuc: cleanProvider,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (existingPendingPayment) {
+      const existingAmount = Number(existingPendingPayment.soTien);
+      const existingUrl = `https://sandbox.${cleanProvider.toLowerCase()}.vn/pay?id=${existingPendingPayment.thanhToanId}&amount=${existingAmount}`;
+      const existingDeeplink = `${cleanProvider.toLowerCase()}://app?id=${existingPendingPayment.thanhToanId}`;
+
+      return {
+        paymentId: existingPendingPayment.thanhToanId,
+        bookingId: booking.phieuDatVeId,
+        provider: cleanProvider,
+        amount: existingAmount,
+        paymentUrl: existingUrl,
+        deeplink: existingDeeplink,
+        status: 'PENDING',
+        mode: 'DEMO',
+        createdAt: existingPendingPayment.createdAt?.toISOString?.() ?? new Date().toISOString(),
+      };
+    }
 
     // Production vs Demo check (discussion_r4220529077)
     if (!this.isDemoMode) {
@@ -151,7 +208,7 @@ export class PaymentsService {
       deeplink,
       status: 'PENDING',
       mode: 'DEMO',
-      createdAt: payment.createdAt.toISOString(),
+      createdAt: payment.createdAt?.toISOString?.() ?? new Date().toISOString(),
     };
   }
 
@@ -299,32 +356,50 @@ export class PaymentsService {
       if (payment.donGiaoDich) {
         const phieuDatVe = payment.donGiaoDich.phieuDatVe;
         if (phieuDatVe) {
-          // Lấy trạng thái mới nhất của phieuDatVe và các vé trong transaction
+          // Lấy trạng thái mới nhất của donGiaoDich, phieuDatVe và các vé trong transaction
+          const currentDonGiaoDich = await tx.donGiaoDich.findUnique({
+            where: { donGiaoDichId: payment.donGiaoDichId },
+          });
+
           const currentBooking = await tx.phieuDatVe.findUnique({
             where: { phieuDatVeId: phieuDatVe.phieuDatVeId },
             include: { ves: true },
           });
 
-          const isBookingCancelled =
-            currentBooking &&
-            ['DA_HUY', 'HUY'].includes(currentBooking.trangThai);
+          const isCancelled =
+            (currentBooking &&
+              ['DA_HUY', 'HUY'].includes(currentBooking.trangThai)) ||
+            (currentDonGiaoDich &&
+              ['DA_HUY', 'HUY'].includes(currentDonGiaoDich.trangThai));
 
-          if (isBookingCancelled) {
+          if (isCancelled) {
             isLatePaymentForCancelledBooking = true;
             this.logger.warn(
-              `Payment #${payment.thanhToanId} confirmed SUCCESS for ALREADY CANCELLED booking #${phieuDatVe.phieuDatVeId}. Kept booking and tickets CANCELLED. Requires refund.`,
+              `Payment #${payment.thanhToanId} confirmed SUCCESS for ALREADY CANCELLED booking/transaction #${phieuDatVe.phieuDatVeId}. Kept booking and tickets CANCELLED. Requires refund.`,
             );
             return;
           }
 
-          // Cập nhật DonGiaoDich nếu chưa bị hủy
-          await tx.donGiaoDich.updateMany({
+          // Cập nhật DonGiaoDich nếu chưa bị hủy (Atomic CAS)
+          const updateDonGiaoDichResult = await tx.donGiaoDich.updateMany({
             where: {
               donGiaoDichId: payment.donGiaoDichId,
               trangThai: { notIn: ['DA_HUY', 'HUY'] },
             },
             data: { trangThai: 'DA_THANH_TOAN' },
           });
+
+          // Nếu DonGiaoDich không cập nhật được (bị hủy concurrent hoặc trạng thái không hợp lệ)
+          if (
+            updateDonGiaoDichResult.count === 0 &&
+            currentDonGiaoDich?.trangThai !== 'DA_THANH_TOAN'
+          ) {
+            isLatePaymentForCancelledBooking = true;
+            this.logger.warn(
+              `Payment #${payment.thanhToanId} confirmed SUCCESS but transaction #${payment.donGiaoDichId} update failed (cancelled or invalid). Kept booking and tickets CANCELLED. Requires refund.`,
+            );
+            return;
+          }
 
           // Conditional update: Chỉ chuyển DA_THANH_TOAN nếu đơn đang ở trạng thái CHO_THANH_TOAN / DANG_XU_LY
           const updateBookingResult = await tx.phieuDatVe.updateMany({

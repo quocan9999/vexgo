@@ -65,11 +65,16 @@ describe('PaymentsService', () => {
       },
       thanhToan: {
         findUnique: vi.fn(),
+        findFirst: vi.fn().mockResolvedValue(null),
         create: vi.fn(),
         update: vi.fn(),
         updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       },
       donGiaoDich: {
+        findUnique: vi.fn().mockResolvedValue({
+          donGiaoDichId: 200,
+          trangThai: 'CHO_THANH_TOAN',
+        }),
         update: vi.fn(),
         updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       },
@@ -129,6 +134,71 @@ describe('PaymentsService', () => {
       expect(result.mode).toBe('DEMO');
       expect(result.status).toBe('PENDING');
       expect(result.paymentUrl).toContain('sandbox.momo.vn');
+    });
+
+    it('rejects createPayment with ConflictException when booking is cancelled (discussion_r4226248027)', async () => {
+      prisma.phieuDatVe.findUnique.mockResolvedValue({
+        phieuDatVeId: 300,
+        trangThai: 'DA_HUY',
+        donGiaoDich: { khachHangId: 10, trangThai: 'DA_HUY' },
+      });
+      prisma.khachHang.findUnique.mockResolvedValue({ khachHangId: 10, taiKhoanId: 1 });
+
+      await expect(service.createPayment(300, 'MOMO', mockCustomerPrincipal)).rejects.toMatchObject({
+        response: { error: 'BOOKING_CANCELLED' },
+      });
+      expect(prisma.thanhToan.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects createPayment with ConflictException when booking is already paid', async () => {
+      prisma.phieuDatVe.findUnique.mockResolvedValue({
+        phieuDatVeId: 300,
+        trangThai: 'DA_THANH_TOAN',
+        donGiaoDich: { khachHangId: 10, trangThai: 'DA_THANH_TOAN' },
+      });
+      prisma.khachHang.findUnique.mockResolvedValue({ khachHangId: 10, taiKhoanId: 1 });
+
+      await expect(service.createPayment(300, 'MOMO', mockCustomerPrincipal)).rejects.toMatchObject({
+        response: { error: 'BOOKING_ALREADY_PAID' },
+      });
+      expect(prisma.thanhToan.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects createPayment with ConflictException when booking has invalid status', async () => {
+      prisma.phieuDatVe.findUnique.mockResolvedValue({
+        phieuDatVeId: 300,
+        trangThai: 'HOAN_TAT',
+        donGiaoDich: { khachHangId: 10, trangThai: 'HOAN_TAT' },
+      });
+      prisma.khachHang.findUnique.mockResolvedValue({ khachHangId: 10, taiKhoanId: 1 });
+
+      await expect(service.createPayment(300, 'MOMO', mockCustomerPrincipal)).rejects.toMatchObject({
+        response: { error: 'INVALID_BOOKING_STATUS' },
+      });
+      expect(prisma.thanhToan.create).not.toHaveBeenCalled();
+    });
+
+    it('returns existing pending payment without creating duplicate if already exists (idempotency)', async () => {
+      prisma.phieuDatVe.findUnique.mockResolvedValue({
+        phieuDatVeId: 300,
+        trangThai: 'CHO_THANH_TOAN',
+        donGiaoDichId: 200,
+        donGiaoDich: { khachHangId: 10, trangThai: 'CHO_THANH_TOAN' },
+      });
+      prisma.khachHang.findUnique.mockResolvedValue({ khachHangId: 10, taiKhoanId: 1 });
+      prisma.thanhToan.findFirst.mockResolvedValue({
+        thanhToanId: 888,
+        soTien: '300000',
+        trangThai: 'DANG_XU_LY',
+        phuongThuc: 'MOMO',
+        createdAt: new Date('2026-03-30T10:00:00.000Z'),
+      });
+
+      const result = await service.createPayment(300, 'MOMO', mockCustomerPrincipal);
+
+      expect(result.paymentId).toBe(888);
+      expect(result.status).toBe('PENDING');
+      expect(prisma.thanhToan.create).not.toHaveBeenCalled();
     });
 
     it('throws ServiceUnavailableException when PAYMENT_DEMO_MODE is not true (discussion_r4220529077)', async () => {
@@ -286,6 +356,57 @@ describe('PaymentsService', () => {
 
       expect(result.success).toBe(true);
       expect(result.message).toBe('Giao dịch đã được xác nhận trước đó.');
+      expect(prisma.phieuDatVe.updateMany).not.toHaveBeenCalled();
+      expect(prisma.ve.updateMany).not.toHaveBeenCalled();
+      expect(prisma.lichSuTrangThaiPhieuDatVe.create).not.toHaveBeenCalled();
+    });
+
+    it('does not revive booking or tickets when donGiaoDich is cancelled upon receiving late webhook (Finding 1 / discussion_r4226248027)', async () => {
+      prisma.thanhToan.findUnique.mockResolvedValue(samplePayment);
+      prisma.donGiaoDich.findUnique.mockResolvedValue({
+        donGiaoDichId: 200,
+        trangThai: 'DA_HUY',
+      });
+      prisma.phieuDatVe.findUnique.mockResolvedValue({
+        phieuDatVeId: 300,
+        trangThai: 'CHO_THANH_TOAN',
+        ves: [{ veId: 501, trangThai: 'CHO_THANH_TOAN' }],
+      });
+
+      const result = await service.confirmPaymentSuccess({
+        paymentId: 100,
+        provider: 'MOMO',
+        amount: 300000,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.isLatePayment).toBe(true);
+      expect(prisma.phieuDatVe.updateMany).not.toHaveBeenCalled();
+      expect(prisma.ve.updateMany).not.toHaveBeenCalled();
+      expect(prisma.lichSuTrangThaiPhieuDatVe.create).not.toHaveBeenCalled();
+    });
+
+    it('does not mutate booking or tickets if donGiaoDich updateMany returns count 0 (Finding 1 CAS check)', async () => {
+      prisma.thanhToan.findUnique.mockResolvedValue(samplePayment);
+      prisma.donGiaoDich.findUnique.mockResolvedValue({
+        donGiaoDichId: 200,
+        trangThai: 'CHO_THANH_TOAN',
+      });
+      prisma.donGiaoDich.updateMany.mockResolvedValue({ count: 0 }); // Concurrently cancelled
+      prisma.phieuDatVe.findUnique.mockResolvedValue({
+        phieuDatVeId: 300,
+        trangThai: 'CHO_THANH_TOAN',
+        ves: [{ veId: 501, trangThai: 'CHO_THANH_TOAN' }],
+      });
+
+      const result = await service.confirmPaymentSuccess({
+        paymentId: 100,
+        provider: 'MOMO',
+        amount: 300000,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.isLatePayment).toBe(true);
       expect(prisma.phieuDatVe.updateMany).not.toHaveBeenCalled();
       expect(prisma.ve.updateMany).not.toHaveBeenCalled();
       expect(prisma.lichSuTrangThaiPhieuDatVe.create).not.toHaveBeenCalled();

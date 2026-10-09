@@ -43,6 +43,29 @@ export function getAllowedOrigins(config: ConfigService): string[] {
     : DEFAULT_DEVELOPMENT_ORIGINS;
 }
 
+/**
+ * Sanitizes URLs for global HTTP logging to prevent leaking sensitive credentials,
+ * such as signed bearer seat-hold tokens or sensitive query tokens (discussion_r4226252855).
+ */
+export function sanitizeRequestUrl(url: string): string {
+  if (!url) return '';
+  let sanitized = url;
+
+  // Redact seat-holds bearer token in URL path: /api/v1/seat-holds/<signedHoldToken>
+  sanitized = sanitized.replace(
+    /(\/seat-holds\/)([^/?#]+)/gi,
+    '$1[REDACTED_HOLD_TOKEN]',
+  );
+
+  // Redact potential sensitive tokens in query params
+  sanitized = sanitized.replace(
+    /([?&](?:holdToken|token|access_token|secret)=)[^&]+/gi,
+    '$1[REDACTED]',
+  );
+
+  return sanitized;
+}
+
 export function configureApi(app: INestApplication): void {
   const config = app.get(ConfigService);
   const allowedOrigins = getAllowedOrigins(config);
@@ -57,7 +80,10 @@ export function configureApi(app: INestApplication): void {
     const start = Date.now();
     res.on('finish', () => {
       const duration = Date.now() - start;
-      console.log(`\x1b[36m[API REQUEST]\x1b[0m ${req.method} ${req.originalUrl} -> \x1b[32m${res.statusCode}\x1b[0m (${duration}ms)`);
+      const sanitizedUrl = sanitizeRequestUrl(req.originalUrl || req.url || '');
+      console.log(
+        `\x1b[36m[API REQUEST]\x1b[0m ${req.method} ${sanitizedUrl} -> \x1b[32m${res.statusCode}\x1b[0m (${duration}ms)`,
+      );
     });
     next();
   });

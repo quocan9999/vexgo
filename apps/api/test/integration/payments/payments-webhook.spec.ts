@@ -225,6 +225,38 @@ describe('Payments Webhook & Status Security with MySQL (Integration)', () => {
     return { donGiaoDich, phieuDatVe: donGiaoDich.phieuDatVe!, thanhToan };
   }
 
+  async function createTestBooking(
+    customerId: number,
+    status: 'CHO_THANH_TOAN' | 'DA_HUY' | 'DA_THANH_TOAN' = 'CHO_THANH_TOAN',
+    amount = 200000,
+  ) {
+    const suffix = randomUUID().slice(0, 8).toUpperCase();
+    const donGiaoDich = await prisma.donGiaoDich.create({
+      data: {
+        maDonGiaoDich: `DGD-BK-${suffix}`,
+        ngayTao: new Date(),
+        tongTien: amount,
+        trangThai: status,
+        tenKhachHang: 'Booking Customer',
+        soDienThoaiKhachHang: '+84950000001',
+        khachHangId: customerId,
+        nhaXeId: busCompanyId,
+        phieuDatVe: {
+          create: {
+            maPhieuDatVe: `PDV-BK-${suffix}`,
+            ngayDat: new Date(),
+            soLuongVeBanDau: 1,
+            tongTienBanDau: amount,
+            trangThai: status,
+          },
+        },
+      },
+      include: { phieuDatVe: true },
+    });
+
+    return { donGiaoDich, phieuDatVe: donGiaoDich.phieuDatVe! };
+  }
+
   async function createMultiTicketPayment(customerId: number, ticketCount = 3, provider = 'MOMO') {
     const suffix = randomUUID().replaceAll('-', '').slice(0, 8).toUpperCase();
     const totalAmount = 100000 * ticketCount;
@@ -688,6 +720,44 @@ describe('Payments Webhook & Status Security with MySQL (Integration)', () => {
     expect(histories).toHaveLength(0);
   });
 
+  it('does not revive booking or tickets when donGiaoDich is DA_HUY but phieuDatVe is CHO_THANH_TOAN (Finding 1 / discussion_r4226248027)', async () => {
+    const { thanhToan, phieuDatVe, donGiaoDich } = await createTestPayment(customerAId, 'MOMO');
+
+    // Simulate scenario from Lead's review: donGiaoDich was cancelled, but phieuDatVe remained CHO_THANH_TOAN
+    await prisma.donGiaoDich.update({
+      where: { donGiaoDichId: donGiaoDich.donGiaoDichId },
+      data: { trangThai: 'DA_HUY' },
+    });
+
+    // Valid signed MoMo webhook arrives late
+    const payload = buildMomoPayload(thanhToan.thanhToanId, { amount: 200000 });
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/payments/momo/webhook')
+      .send(payload);
+
+    expect(res.status).toBe(201);
+    const body = res.body.data ?? res.body;
+    expect(body.resultCode).toBe(0);
+
+    // Verify donGiaoDich is NOT revived
+    const donInDb = await prisma.donGiaoDich.findUnique({
+      where: { donGiaoDichId: donGiaoDich.donGiaoDichId },
+    });
+    expect(donInDb?.trangThai).toBe('DA_HUY');
+
+    // Verify booking is NOT transitioned to DA_THANH_TOAN
+    const bookingInDb = await prisma.phieuDatVe.findUnique({
+      where: { phieuDatVeId: phieuDatVe.phieuDatVeId },
+    });
+    expect(bookingInDb?.trangThai).toBe('CHO_THANH_TOAN');
+
+    // Verify no incorrect history transition to DA_THANH_TOAN was created
+    const histories = await prisma.lichSuTrangThaiPhieuDatVe.findMany({
+      where: { phieuDatVeId: phieuDatVe.phieuDatVeId },
+    });
+    expect(histories).toHaveLength(0);
+  });
+
   it('creates synchronized status histories with identical operation UUID v1 and timestamp for multi-ticket bookings (discussion_r4222309384)', async () => {
     const multiTicket = await createMultiTicketPayment(customerAId, 3, 'MOMO');
 
@@ -754,5 +824,88 @@ describe('Payments Webhook & Status Security with MySQL (Integration)', () => {
     } finally {
       await multiTicket.cleanup();
     }
+  });
+
+  describe('POST /api/v1/payments (Payment Creation & Idempotency)', () => {
+    it('creates payment successfully for CHO_THANH_TOAN booking', async () => {
+      const { phieuDatVe } = await createTestBooking(customerAId, 'CHO_THANH_TOAN', 250000);
+
+      currentPrincipal = customerAPrincipal;
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/payments')
+        .send({ bookingId: phieuDatVe.phieuDatVeId, provider: 'MOMO' });
+
+      expect(res.status).toBe(201);
+      const data = res.body.data ?? res.body;
+      expect(data.paymentId).toBeDefined();
+      expect(data.amount).toBe(250000);
+      expect(data.provider).toBe('MOMO');
+      expect(data.status).toBe('PENDING');
+
+      const paymentInDb = await prisma.thanhToan.findUnique({
+        where: { thanhToanId: data.paymentId },
+      });
+      expect(paymentInDb).not.toBeNull();
+      expect(paymentInDb?.trangThai).toBe('DANG_XU_LY');
+      expect(Number(paymentInDb?.soTien)).toBe(250000);
+    });
+
+    it('returns existing pending payment for idempotent duplicate call without creating duplicate record', async () => {
+      const { phieuDatVe } = await createTestBooking(customerAId, 'CHO_THANH_TOAN', 300000);
+
+      currentPrincipal = customerAPrincipal;
+      const firstRes = await request(app.getHttpServer())
+        .post('/api/v1/payments')
+        .send({ bookingId: phieuDatVe.phieuDatVeId, provider: 'MOMO' });
+      expect(firstRes.status).toBe(201);
+      const firstData = firstRes.body.data ?? firstRes.body;
+
+      const secondRes = await request(app.getHttpServer())
+        .post('/api/v1/payments')
+        .send({ bookingId: phieuDatVe.phieuDatVeId, provider: 'MOMO' });
+      expect(secondRes.status).toBe(201);
+      const secondData = secondRes.body.data ?? secondRes.body;
+
+      expect(secondData.paymentId).toBe(firstData.paymentId);
+
+      const paymentsCount = await prisma.thanhToan.count({
+        where: { donGiaoDichId: phieuDatVe.donGiaoDichId },
+      });
+      expect(paymentsCount).toBe(1);
+    });
+
+    it('rejects payment creation with 409 Conflict when booking is DA_HUY (discussion_r4226248027)', async () => {
+      const { phieuDatVe } = await createTestBooking(customerAId, 'DA_HUY', 200000);
+
+      currentPrincipal = customerAPrincipal;
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/payments')
+        .send({ bookingId: phieuDatVe.phieuDatVeId, provider: 'MOMO' });
+
+      expect(res.status).toBe(409);
+      expect(res.body.error).toBe('BOOKING_CANCELLED');
+
+      const paymentsCount = await prisma.thanhToan.count({
+        where: { donGiaoDichId: phieuDatVe.donGiaoDichId },
+      });
+      expect(paymentsCount).toBe(0);
+    });
+
+    it('rejects payment creation with 409 Conflict when booking is DA_THANH_TOAN', async () => {
+      const { phieuDatVe } = await createTestBooking(customerAId, 'DA_THANH_TOAN', 200000);
+
+      currentPrincipal = customerAPrincipal;
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/payments')
+        .send({ bookingId: phieuDatVe.phieuDatVeId, provider: 'MOMO' });
+
+      expect(res.status).toBe(409);
+      expect(res.body.error).toBe('BOOKING_ALREADY_PAID');
+
+      const paymentsCount = await prisma.thanhToan.count({
+        where: { donGiaoDichId: phieuDatVe.donGiaoDichId },
+      });
+      expect(paymentsCount).toBe(0);
+    });
   });
 });
