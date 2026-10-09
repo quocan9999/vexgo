@@ -12,6 +12,7 @@ import {
   hasPlatformAdminPermission,
   isPlatformRbacPath,
   isTenantRbacPath,
+  type AdminPermission,
 } from '@/features/admin-auth/services/admin-access';
 import { getAdminAccessScope } from '@/features/admin-auth/services/admin-scope';
 import type { AdminSession } from '@/features/admin-auth/services/admin-auth';
@@ -50,6 +51,8 @@ function makePlatformSession(permissions: string[] = []): AdminSession {
   };
 }
 
+const bookingReadPermission: AdminPermission = 'booking:read';
+
 describe('admin access scope and permissions', () => {
   it('accepts an employee-only account with matching tenant identity', () => {
     expect(
@@ -74,6 +77,13 @@ describe('admin access scope and permissions', () => {
     expect(getRequiredAdminPermissions('/trips')).toEqual(['trip:read']);
     expect(getRequiredAdminPermissions('/trips/456')).toEqual(['trip:read']);
     expect(getRequiredAdminPermissions('/customers')).toEqual(['customer:read']);
+    expect(getRequiredAdminPermissions('/booking-management')).toEqual([
+      'booking:read',
+    ]);
+    expect(
+      getRequiredAdminPermissions('/booking-management/bookings/42'),
+    ).toEqual(['booking:read']);
+    expect(getRequiredAdminPermissions('/booking-management-extra')).toBeNull();
     expect(getRequiredAdminPermissions('/vehicle-types-extra')).toBeNull();
   });
 
@@ -194,6 +204,17 @@ describe('admin access scope and permissions', () => {
     expect(hasAdminPermission(session, 'vehicle:read')).toBe(false);
   });
 
+  it('accepts booking read as a tenant permission and denies it to platform scope', () => {
+    const tenant = makeTenantSession(
+      ['NHA_XE_ADMIN'],
+      [bookingReadPermission],
+    );
+    const platform = makePlatformSession([bookingReadPermission]);
+
+    expect(hasAdminPermission(tenant, bookingReadPermission)).toBe(true);
+    expect(hasAdminPermission(platform, bookingReadPermission)).toBe(false);
+  });
+
   it('uses tenant RBAC as a fallback only for an authorized tenant admin', () => {
     const tenantAdmin = makeTenantSession(['NHA_XE_ADMIN'], ['role:read']);
     const employeeWithSameKeys = makeTenantSession(
@@ -208,6 +229,14 @@ describe('admin access scope and permissions', () => {
         makeTenantSession(['NHA_XE_ADMIN'], ['permission:assign']),
       ),
     ).toBeNull();
+  });
+
+  it('uses booking management as the landing page when it is the only readable operation', () => {
+    expect(
+      getFirstAccessibleAdminPath(
+        makeTenantSession(['NHAN_VIEN_CSKH'], ['booking:read']),
+      ),
+    ).toBe('/booking-management');
   });
 
   it('fails closed for empty permission checks without an authenticated tenant session', () => {

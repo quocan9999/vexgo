@@ -46,6 +46,7 @@ type SuperAdminLayoutProps = {
     | 'fare-prices'
     | 'trips'
     | 'customers'
+    | 'booking-management'
     | 'admin-accounts'
     | 'rbac'
     | 'tenant-rbac';
@@ -155,6 +156,10 @@ const OPERATION_NAVIGATION_DETAILS: Record<
   'fare-prices': { label: 'Bảng giá vé', icon: () => <Ticket size={18} /> },
   trips: { label: 'Chuyến xe', icon: () => <CalendarDays size={18} /> },
   customers: { label: 'Khách hàng', icon: () => <UsersRound size={18} /> },
+  'booking-management': {
+    label: 'Quản lý phiếu đặt vé & vé',
+    icon: () => <Ticket size={18} />,
+  },
 };
 
 export function SuperAdminLayout({

@@ -34,6 +34,7 @@ describe('Admin permission defaults', () => {
       'role:read',
       'permission:assign',
       'customer:read',
+      'booking:read',
     ]);
   });
 
@@ -87,6 +88,7 @@ describe('Admin permission defaults', () => {
       'role:read',
       'permission:assign',
       'customer:read',
+      'booking:read',
       'bus-company:read',
       'bus-company:create',
       'bus-company:update',
@@ -122,6 +124,7 @@ describe('Admin permission defaults', () => {
       'role:read',
       'permission:assign',
       'customer:read',
+      'booking:read',
     ];
     const platformPermissionKeys = [
       'bus-company:read',
@@ -198,11 +201,17 @@ describe('Admin permission defaults', () => {
     expect(isPermissionAllowedForRole('NHA_XE_ADMIN', 'vehicle:read')).toBe(
       true,
     );
+    expect(isPermissionAllowedForRole('NHA_XE_ADMIN', 'booking:read')).toBe(
+      true,
+    );
     expect(isPermissionAllowedForRole('NHA_XE_ADMIN', 'role:read')).toBe(true);
     expect(
       isPermissionAllowedForRole('NHA_XE_ADMIN', 'permission:assign'),
     ).toBe(true);
     expect(isPermissionAllowedForRole('SUPER_ADMIN', 'role:read')).toBe(false);
+    expect(isPermissionAllowedForRole('SUPER_ADMIN', 'booking:read')).toBe(
+      false,
+    );
     expect(
       isPermissionAllowedForRole('NHAN_VIEN_CSKH', 'permission:assign'),
     ).toBe(true);
