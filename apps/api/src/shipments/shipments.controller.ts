@@ -1,8 +1,10 @@
 import {
+  Body,
   Controller,
   Get,
   Param,
   ParseIntPipe,
+  Patch,
   Query,
 } from '@nestjs/common';
 import { CurrentPrincipal } from '../auth/decorators/current-principal.decorator.js';
@@ -11,6 +13,7 @@ import { RequireRoles } from '../auth/decorators/require-roles.decorator.js';
 import { TENANT_PRINCIPAL_ROLES } from '../auth/principal-scope.js';
 import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
 import { ShipmentQueryDto } from './dto/shipment-query.dto.js';
+import { UpdateShipmentStatusDto } from './dto/update-shipment-status.dto.js';
 import { ShipmentsService } from './shipments.service.js';
 
 @Controller('shipments')
@@ -35,5 +38,16 @@ export class ShipmentsController {
     @CurrentPrincipal() principal: AuthPrincipal,
   ) {
     return this.shipmentsService.findOne(id, principal);
+  }
+
+  @Patch(':id/status')
+  @RequireRoles(...TENANT_PRINCIPAL_ROLES)
+  @RequirePermissions('shipment:update')
+  updateStatus(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateShipmentStatusDto,
+    @CurrentPrincipal() principal: AuthPrincipal,
+  ) {
+    return this.shipmentsService.updateStatus(id, dto, principal);
   }
 }

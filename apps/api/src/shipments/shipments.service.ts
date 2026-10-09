@@ -1,8 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { requireTenantPrincipal } from '../auth/tenant-scope.js';
 import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
 import { ShipmentQueryDto } from './dto/shipment-query.dto.js';
+import type { UpdateShipmentStatusDto } from './dto/update-shipment-status.dto.js';
 import type {
   CargoFeeDetail,
   CargoItemDetail,
@@ -10,7 +11,7 @@ import type {
   ShipmentHistoryItem,
   ShipmentSummary,
 } from './dto/shipment-response.dto.js';
-import { Prisma } from '../generated/prisma/client.js';
+import { Prisma, TrangThaiPhieuGuiHang } from '../generated/prisma/client.js';
 
 function formatTripDate(d: Date): string {
   return d.toISOString().slice(0, 10);
@@ -339,5 +340,151 @@ export class ShipmentsService {
     };
 
     return { data };
+  }
+
+  async updateStatus(
+    id: number,
+    dto: UpdateShipmentStatusDto,
+    principal: AuthPrincipal,
+  ): Promise<{
+    data: {
+      shipmentId: number;
+      status: TrangThaiPhieuGuiHang;
+      updatedAt: string;
+    };
+  }> {
+    const tenantId = requireTenantPrincipal(principal);
+
+    const shipment = await this.prisma.phieuGuiHang.findUnique({
+      where: { phieuGuiHangId: id },
+      include: {
+        donGiaoDich: {
+          select: {
+            nhaXeId: true,
+            trangThai: true,
+            thanhToans: {
+              select: { trangThai: true },
+            },
+          },
+        },
+        chuyenXe: { select: { nhaXeId: true } },
+        diemGui: { select: { nhaXeId: true } },
+        diemNhan: { select: { nhaXeId: true } },
+      },
+    });
+
+    if (
+      !shipment ||
+      shipment.donGiaoDich.nhaXeId !== tenantId ||
+      shipment.chuyenXe.nhaXeId !== tenantId ||
+      shipment.diemGui.nhaXeId !== tenantId ||
+      shipment.diemNhan.nhaXeId !== tenantId
+    ) {
+      throw new NotFoundException({
+        statusCode: 404,
+        error: 'SHIPMENT_NOT_FOUND',
+        message: 'Không tìm thấy phiếu gửi hàng.',
+      });
+    }
+
+    const currentStatus = shipment.trangThai;
+    const targetStatus = dto.status;
+
+    if (currentStatus === targetStatus) {
+      throw new ConflictException({
+        statusCode: 409,
+        error: 'INVALID_STATUS_TRANSITION',
+        message: `Phiếu gửi hàng đã ở trạng thái ${targetStatus}.`,
+      });
+    }
+
+    if (currentStatus === 'DA_GIAO' || currentStatus === 'DA_HUY') {
+      throw new ConflictException({
+        statusCode: 409,
+        error: 'INVALID_STATUS_TRANSITION',
+        message: `Phiếu gửi hàng đã ở trạng thái kết thúc (${currentStatus}), không thể thay đổi trạng thái.`,
+      });
+    }
+
+    const validTransitions: Record<
+      TrangThaiPhieuGuiHang,
+      TrangThaiPhieuGuiHang[]
+    > = {
+      MOI_TAO: ['DA_TIEP_NHAN', 'DA_HUY'],
+      DA_TIEP_NHAN: ['DANG_VAN_CHUYEN'],
+      DANG_VAN_CHUYEN: ['DA_GIAO'],
+      DA_GIAO: [],
+      DA_HUY: [],
+    };
+
+    const allowed = validTransitions[currentStatus] ?? [];
+    if (!allowed.includes(targetStatus)) {
+      throw new ConflictException({
+        statusCode: 409,
+        error: 'INVALID_STATUS_TRANSITION',
+        message: `Không thể chuyển trạng thái từ ${currentStatus} sang ${targetStatus}.`,
+      });
+    }
+
+    if (targetStatus === 'DA_HUY') {
+      const hasPaid =
+        shipment.donGiaoDich.trangThai === 'DA_THANH_TOAN' ||
+        shipment.donGiaoDich.thanhToans.some(
+          (t) =>
+            t.trangThai === 'THANH_CONG' || t.trangThai === 'DA_THANH_TOAN',
+        );
+      if (hasPaid) {
+        throw new ConflictException({
+          statusCode: 409,
+          error: 'SHIPMENT_REFUND_REQUIRED',
+          message:
+            'Phiếu gửi hàng đã thanh toán thành công, không thể hủy khi chưa có quy trình hoàn tiền trong MVP.',
+        });
+      }
+    }
+
+    const now = new Date();
+    const noteText = dto.note?.trim() || null;
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.phieuGuiHang.updateMany({
+        where: {
+          phieuGuiHangId: id,
+          trangThai: currentStatus,
+          donGiaoDich: { nhaXeId: tenantId },
+        },
+        data: {
+          trangThai: targetStatus,
+          updatedAt: now,
+        },
+      });
+
+      if (updated.count === 0) {
+        throw new ConflictException({
+          statusCode: 409,
+          error: 'CONCURRENT_STATUS_UPDATE',
+          message:
+            'Trạng thái phiếu gửi hàng đã bị thay đổi bởi thao tác khác.',
+        });
+      }
+
+      await tx.lichSuTrangThaiPhieuGuiHang.create({
+        data: {
+          phieuGuiHangId: id,
+          trangThai: targetStatus,
+          thoiGian: now,
+          taiKhoanId: principal.taiKhoanId,
+          ghiChu: noteText,
+        },
+      });
+
+      return {
+        shipmentId: id,
+        status: targetStatus,
+        updatedAt: now.toISOString(),
+      };
+    });
+
+    return { data: result };
   }
 }
