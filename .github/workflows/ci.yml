@@ -95,6 +95,9 @@ jobs:
         env:
           MIGRATION_URL: mysql://root:ci-root-password@127.0.0.1:3306/vexgo_booking_ticket_status_history_ci_test
 
+      - name: Shipment status cleanup regression (repeat on one isolated DB)
+        run: node prisma/tests/run-shipment-integration-isolated.mjs --repeat=2 test/integration/shipments/shipments-status.spec.ts
+
       - name: API tests
         run: npm run test --workspace=@vexgo/api
         env:

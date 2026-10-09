@@ -76,17 +76,31 @@ async function main() {
     const migrateStatus = runNode(prismaCli, ['migrate', 'deploy'], testEnv);
     if (migrateStatus !== 0) throw new Error(`Isolated shipment test database migration failed (${migrateStatus}).`);
 
-    const requestedFiles = process.argv.slice(2);
-    const testFiles = requestedFiles.length > 0
-      ? requestedFiles
+    const requestedArgs = process.argv.slice(2);
+    const repeatArgument = requestedArgs.find((arg) => arg.startsWith('--repeat='));
+    const repeatCount = repeatArgument
+      ? Number(repeatArgument.slice('--repeat='.length))
+      : 1;
+    if (!Number.isInteger(repeatCount) || repeatCount < 1) {
+      throw new Error('--repeat must be a positive integer.');
+    }
+    const testFiles = requestedArgs.filter((arg) => !arg.startsWith('--repeat='));
+    const selectedFiles = testFiles.length > 0
+      ? testFiles
       : ['test/integration/shipments/shipments-status.spec.ts'];
-    const testStatus = runNode(
-      vitestCli,
-      ['run', '--config', 'vitest.config.ts', ...testFiles],
-      testEnv,
-      path.join(repoRoot, 'apps/api'),
-    );
-    if (testStatus !== 0) process.exitCode = testStatus;
+    for (let run = 1; run <= repeatCount; run += 1) {
+      console.log(`Shipment integration run ${run}/${repeatCount}`);
+      const testStatus = runNode(
+        vitestCli,
+        ['run', '--config', 'vitest.config.ts', ...selectedFiles],
+        testEnv,
+        path.join(repoRoot, 'apps/api'),
+      );
+      if (testStatus !== 0) {
+        process.exitCode = testStatus;
+        break;
+      }
+    }
   } finally {
     if (createdShadowDatabase) {
       await admin.$executeRawUnsafe(`DROP DATABASE IF EXISTS \`${shadowDatabase}\``);

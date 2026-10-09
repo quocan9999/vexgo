@@ -42,6 +42,96 @@ describe('Shipment Status Transition APIs (Phase 04)', () => {
     number,
     { chuyenXeId: number; diemGuiId: number; diemNhanId: number }
   >();
+  const fixtureIds = {
+    nhaXe: new Set<number>(),
+    loaiXe: new Set<number>(),
+    xe: new Set<number>(),
+    tuyenXe: new Set<number>(),
+    chuyenXe: new Set<number>(),
+    diem: new Set<number>(),
+    taiKhoan: new Set<number>(),
+    nhanVien: new Set<number>(),
+    khachHang: new Set<number>(),
+    donGiaoDich: new Set<number>(),
+    phieuGuiHang: new Set<number>(),
+  };
+
+  async function countFixtureResidue() {
+    const [
+      nhaXe,
+      loaiXe,
+      xe,
+      tuyenXe,
+      chuyenXe,
+      diem,
+      taiKhoan,
+      nhanVien,
+      khachHang,
+      phieuGuiHang,
+      donGiaoDich,
+      thanhToan,
+      lichSu,
+    ] = await Promise.all([
+      prisma.nhaXe.count({ where: { maNhaXe: { startsWith: 'F09-STATUS-' } } }),
+      prisma.loaiXe.count({ where: { tenLoai: { startsWith: 'F09-STATUS-LOAI-' } } }),
+      prisma.xe.count({
+        where: { nhaXe: { maNhaXe: { startsWith: 'F09-STATUS-' } } },
+      }),
+      prisma.tuyenXe.count({
+        where: { maTuyenXe: { startsWith: 'F09-STATUS-' } },
+      }),
+      prisma.chuyenXe.count({
+        where: { maChuyenXe: { startsWith: 'F09-STATUS-' } },
+      }),
+      prisma.diemGiaoNhanHang.count({
+        where: { maDiem: { startsWith: 'F09-STATUS-' } },
+      }),
+      prisma.taiKhoan.count({
+        where: { email: { startsWith: 'f09-status-' } },
+      }),
+      prisma.nhanVien.count({
+        where: { maNhanVien: { startsWith: 'F09-STATUS-' } },
+      }),
+      prisma.khachHang.count({
+        where: { maKhachHang: { startsWith: 'F09-STATUS-' } },
+      }),
+      prisma.phieuGuiHang.count({
+        where: { maVanDon: { startsWith: 'F09-STATUS-VD-' } },
+      }),
+      prisma.donGiaoDich.count({
+        where: { maDonGiaoDich: { startsWith: 'F09-STATUS-DON-' } },
+      }),
+      prisma.thanhToan.count({
+        where: {
+          donGiaoDich: {
+            maDonGiaoDich: { startsWith: 'F09-STATUS-DON-' },
+          },
+        },
+      }),
+      prisma.lichSuTrangThaiPhieuGuiHang.count({
+        where: {
+          phieuGuiHang: {
+            maVanDon: { startsWith: 'F09-STATUS-VD-' },
+          },
+        },
+      }),
+    ]);
+    return {
+      nhaXe,
+      loaiXe,
+      xe,
+      tuyenXe,
+      chuyenXe,
+      diem,
+      taiKhoan,
+      nhanVien,
+      khachHang,
+      phieuGuiHang,
+      donGiaoDich,
+      thanhToan,
+      lichSu,
+    };
+  }
 
   beforeAll(async () => {
     const testDatabaseUrl = process.env.SHIPMENT_TEST_DATABASE_URL;
@@ -73,6 +163,22 @@ describe('Shipment Status Transition APIs (Phase 04)', () => {
       }
     }
 
+    expect(await countFixtureResidue()).toEqual({
+      nhaXe: 0,
+      loaiXe: 0,
+      xe: 0,
+      tuyenXe: 0,
+      chuyenXe: 0,
+      diem: 0,
+      taiKhoan: 0,
+      nhanVien: 0,
+      khachHang: 0,
+      phieuGuiHang: 0,
+      donGiaoDich: 0,
+      thanhToan: 0,
+      lichSu: 0,
+    });
+
     const token = randomUUID().replaceAll('-', '').slice(0, 12);
     const tenantOne = await createTenantFixture(`A-${token}`);
     const tenantTwo = await createTenantFixture(`B-${token}`);
@@ -84,6 +190,7 @@ describe('Shipment Status Transition APIs (Phase 04)', () => {
     const employeeAccount = await prisma.taiKhoan.create({
       data: {
         hoTen: `Nhân viên test ${token}`,
+        email: `f09-status-nv-${token}@example.test`,
         soDienThoai: `+849${randomInt(0, 1_000_000_000).toString().padStart(9, '0')}`,
         matKhau: 'test-only-password-hash',
         daXacThucSoDienThoai: true,
@@ -91,6 +198,7 @@ describe('Shipment Status Transition APIs (Phase 04)', () => {
       },
     });
     testAccountId = employeeAccount.taiKhoanId;
+    fixtureIds.taiKhoan.add(testAccountId);
     const employee = await prisma.nhanVien.create({
       data: {
         maNhanVien: `F09-STATUS-${token}`,
@@ -100,16 +208,19 @@ describe('Shipment Status Transition APIs (Phase 04)', () => {
       },
     });
     testEmployeeId = employee.nhanVienId;
+    fixtureIds.nhanVien.add(testEmployeeId);
 
     const customerAccount = await prisma.taiKhoan.create({
       data: {
         hoTen: `Khách test ${token}`,
+        email: `f09-status-kh-${token}@example.test`,
         soDienThoai: `+848${randomInt(0, 1_000_000_000).toString().padStart(9, '0')}`,
         matKhau: 'test-only-password-hash',
         daXacThucSoDienThoai: true,
         trangThai: 'HOAT_DONG',
       },
     });
+    fixtureIds.taiKhoan.add(customerAccount.taiKhoanId);
     const customer = await prisma.khachHang.create({
       data: {
         maKhachHang: `F09-STATUS-${token}`,
@@ -117,15 +228,125 @@ describe('Shipment Status Transition APIs (Phase 04)', () => {
       },
     });
     testCustomerId = customer.khachHangId;
+    fixtureIds.khachHang.add(testCustomerId);
 
     const preconditionShipment = await createTestShipment({
       nhaXeId: tenantOneId,
     });
     preconditionShipmentId = preconditionShipment.phieuGuiHangId;
-  });
+  }, 30_000);
+
+  async function cleanupShipmentRecords() {
+    const shipmentIds = [...fixtureIds.phieuGuiHang];
+    const transactionIds = [...fixtureIds.donGiaoDich];
+    if (!prisma || (shipmentIds.length === 0 && transactionIds.length === 0)) {
+      return;
+    }
+
+    await prisma.$transaction(async (tx) => {
+      if (shipmentIds.length > 0) {
+        const cargoItems = await tx.hangHoa.findMany({
+          where: { phieuGuiHangId: { in: shipmentIds } },
+          select: { hangHoaId: true },
+        });
+        const cargoIds = cargoItems.map(({ hangHoaId }) => hangHoaId);
+        if (cargoIds.length > 0) {
+          await tx.hinhAnhHangHoa.deleteMany({
+            where: { hangHoaId: { in: cargoIds } },
+          });
+          await tx.hangHoa.deleteMany({
+            where: { hangHoaId: { in: cargoIds } },
+          });
+        }
+        await tx.lichSuTrangThaiPhieuGuiHang.deleteMany({
+          where: { phieuGuiHangId: { in: shipmentIds } },
+        });
+        await tx.chiTietCuocGuiHang.deleteMany({
+          where: { phieuGuiHangId: { in: shipmentIds } },
+        });
+        await tx.phanHoi.deleteMany({
+          where: { phieuGuiHangId: { in: shipmentIds } },
+        });
+        await tx.phieuGuiHang.deleteMany({
+          where: { phieuGuiHangId: { in: shipmentIds } },
+        });
+      }
+
+      if (transactionIds.length > 0) {
+        await tx.thanhToan.deleteMany({
+          where: { donGiaoDichId: { in: transactionIds } },
+        });
+        await tx.hoaDon.deleteMany({
+          where: { donGiaoDichId: { in: transactionIds } },
+        });
+        await tx.donGiaoDich.deleteMany({
+          where: { donGiaoDichId: { in: transactionIds } },
+        });
+      }
+    });
+
+    fixtureIds.phieuGuiHang.clear();
+    fixtureIds.donGiaoDich.clear();
+  }
+
+  async function cleanupTestFixtures() {
+    if (!prisma) return;
+    await cleanupShipmentRecords();
+    await prisma.$transaction(async (tx) => {
+      await tx.khachHang.deleteMany({
+        where: { khachHangId: { in: [...fixtureIds.khachHang] } },
+      });
+      await tx.nhanVien.deleteMany({
+        where: { nhanVienId: { in: [...fixtureIds.nhanVien] } },
+      });
+      await tx.taiKhoan.deleteMany({
+        where: { taiKhoanId: { in: [...fixtureIds.taiKhoan] } },
+      });
+      await tx.chuyenXe.deleteMany({
+        where: { chuyenXeId: { in: [...fixtureIds.chuyenXe] } },
+      });
+      await tx.xe.deleteMany({ where: { xeId: { in: [...fixtureIds.xe] } } });
+      await tx.loaiXe.deleteMany({
+        where: { loaiXeId: { in: [...fixtureIds.loaiXe] } },
+      });
+      await tx.tuyenXe.deleteMany({
+        where: { tuyenXeId: { in: [...fixtureIds.tuyenXe] } },
+      });
+      await tx.diemGiaoNhanHang.deleteMany({
+        where: { diemGiaoNhanHangId: { in: [...fixtureIds.diem] } },
+      });
+      await tx.nhaXe.deleteMany({
+        where: { nhaXeId: { in: [...fixtureIds.nhaXe] } },
+      });
+    });
+
+    for (const ids of Object.values(fixtureIds)) ids.clear();
+    tenantFixtures.clear();
+  }
 
   afterAll(async () => {
-    await app?.close();
+    try {
+      await cleanupTestFixtures();
+      if (prisma) {
+        expect(await countFixtureResidue()).toEqual({
+          nhaXe: 0,
+          loaiXe: 0,
+          xe: 0,
+          tuyenXe: 0,
+          chuyenXe: 0,
+          diem: 0,
+          taiKhoan: 0,
+          nhanVien: 0,
+          khachHang: 0,
+          phieuGuiHang: 0,
+          donGiaoDich: 0,
+          thanhToan: 0,
+          lichSu: 0,
+        });
+      }
+    } finally {
+      await app?.close();
+    }
   });
 
   async function createTenantFixture(label: string) {
@@ -136,12 +357,14 @@ describe('Shipment Status Transition APIs (Phase 04)', () => {
         trangThai: 'HOAT_DONG',
       },
     });
+    fixtureIds.nhaXe.add(company.nhaXeId);
     const vehicleType = await prisma.loaiXe.create({
       data: {
         nhaXeId: company.nhaXeId,
-        tenLoai: `Loại xe test ${label}`,
+        tenLoai: `F09-STATUS-LOAI-${label}`,
       },
     });
+    fixtureIds.loaiXe.add(vehicleType.loaiXeId);
     const vehicle = await prisma.xe.create({
       data: {
         bienSoXe: `F09${label.replace(/[^A-Z0-9]/gi, '').slice(0, 10)}`,
@@ -150,6 +373,7 @@ describe('Shipment Status Transition APIs (Phase 04)', () => {
         loaiXeId: vehicleType.loaiXeId,
       },
     });
+    fixtureIds.xe.add(vehicle.xeId);
     const route = await prisma.tuyenXe.create({
       data: {
         maTuyenXe: `F09-STATUS-${label}`,
@@ -159,6 +383,7 @@ describe('Shipment Status Transition APIs (Phase 04)', () => {
         nhaXeId: company.nhaXeId,
       },
     });
+    fixtureIds.tuyenXe.add(route.tuyenXeId);
     const chuyenXe = await prisma.chuyenXe.create({
       data: {
         maChuyenXe: `F09-STATUS-${label}`,
@@ -174,6 +399,7 @@ describe('Shipment Status Transition APIs (Phase 04)', () => {
         xeId: vehicle.xeId,
       },
     });
+    fixtureIds.chuyenXe.add(chuyenXe.chuyenXeId);
     const pickup = await prisma.diemGiaoNhanHang.create({
       data: {
         maDiem: `F09-STATUS-G-${label}`,
@@ -184,6 +410,7 @@ describe('Shipment Status Transition APIs (Phase 04)', () => {
         nhaXeId: company.nhaXeId,
       },
     });
+    fixtureIds.diem.add(pickup.diemGiaoNhanHangId);
     const dropoff = await prisma.diemGiaoNhanHang.create({
       data: {
         maDiem: `F09-STATUS-N-${label}`,
@@ -194,6 +421,7 @@ describe('Shipment Status Transition APIs (Phase 04)', () => {
         nhaXeId: company.nhaXeId,
       },
     });
+    fixtureIds.diem.add(dropoff.diemGiaoNhanHangId);
 
     return {
       nhaXeId: company.nhaXeId,
@@ -277,6 +505,7 @@ describe('Shipment Status Transition APIs (Phase 04)', () => {
           : undefined,
       },
     });
+    fixtureIds.donGiaoDich.add(donGiaoDich.donGiaoDichId);
 
     const phieuGuiHang = await prisma.phieuGuiHang.create({
       data: {
@@ -303,6 +532,7 @@ describe('Shipment Status Transition APIs (Phase 04)', () => {
         },
       },
     });
+    fixtureIds.phieuGuiHang.add(phieuGuiHang.phieuGuiHangId);
 
     return phieuGuiHang;
   }
@@ -570,6 +800,41 @@ describe('Shipment Status Transition APIs (Phase 04)', () => {
       });
       expect(db.trangThai).toBe('DA_TIEP_NHAN');
       expect(db.lichSuTrangThais).toHaveLength(2); // 1 khởi tạo + 1 từ winner
+    });
+  });
+
+  describe('Fixture cleanup', () => {
+    it('removes shipment, payment, history and transaction fixtures on repeated cleanup', async () => {
+      for (let run = 0; run < 2; run += 1) {
+        await createTestShipment({ isPaid: true });
+        await cleanupShipmentRecords();
+
+        const [shipments, transactions, payments, history] = await Promise.all([
+          prisma.phieuGuiHang.count({
+            where: { maVanDon: { startsWith: 'F09-STATUS-VD-' } },
+          }),
+          prisma.donGiaoDich.count({
+            where: { maDonGiaoDich: { startsWith: 'F09-STATUS-DON-' } },
+          }),
+          prisma.thanhToan.count({
+            where: {
+              donGiaoDich: {
+                maDonGiaoDich: { startsWith: 'F09-STATUS-DON-' },
+              },
+            },
+          }),
+          prisma.lichSuTrangThaiPhieuGuiHang.count({
+            where: {
+              phieuGuiHang: {
+                maVanDon: { startsWith: 'F09-STATUS-VD-' },
+              },
+            },
+          }),
+        ]);
+        expect([shipments, transactions, payments, history]).toEqual([
+          0, 0, 0, 0,
+        ]);
+      }
     });
   });
 });
