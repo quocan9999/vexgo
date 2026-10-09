@@ -36,6 +36,34 @@ describe('Shipment Read APIs (Phase 02)', () => {
     diemNhanId: number;
   };
 
+  type ShipmentDetailExpectation = {
+    cargoItems: Array<{
+      cargoId: number;
+      name: string;
+      typeName: string;
+      weightKg: number;
+      quantity: number;
+      dimensions: null;
+      declaredValue: null;
+      description: null;
+    }>;
+    cargoFeeDetails: Array<{
+      feeDetailId: number;
+      cargoTypeName: string;
+      chargeableWeightKg: number;
+      fee: number;
+    }>;
+    history: Array<{
+      historyId: number;
+      status: string;
+      time: string;
+      note: string | null;
+      actor: null;
+    }>;
+  };
+
+  let detailExpectation: ShipmentDetailExpectation;
+
   const tenantFixtures = new Map<number, TenantFixture>();
   const fixtureIds = {
     nhaXe: new Set<number>(),
@@ -131,22 +159,58 @@ describe('Shipment Read APIs (Phase 02)', () => {
     customerId = customer.khachHangId;
     fixtureIds.khachHang.add(customerId);
 
-    const cargoType = await prisma.loaiHangHoa.create({
+    const fragileType = await prisma.loaiHangHoa.create({
       data: {
-        tenLoai: `F09 read cargo ${token}`,
+        tenLoai: `F09 read fragile ${token}`,
         trangThai: 'HOAT_DONG',
         nhomSucChua: 'HANG_NHE',
       },
     });
-    fixtureIds.loaiHangHoa.add(cargoType.loaiHangHoaId);
+    fixtureIds.loaiHangHoa.add(fragileType.loaiHangHoaId);
+    const bulkyType = await prisma.loaiHangHoa.create({
+      data: {
+        tenLoai: `F09 read bulky ${token}`,
+        trangThai: 'HOAT_DONG',
+        nhomSucChua: 'HANG_CONG_KENH',
+      },
+    });
+    fixtureIds.loaiHangHoa.add(bulkyType.loaiHangHoaId);
+    const cargoTypes = [fragileType, bulkyType];
 
     const detailShipment = await createShipment({
       nhaXeId: tenantOneId,
       status: 'MOI_TAO',
-      cargoTypeId: cargoType.loaiHangHoaId,
+      feeSummary: {
+        mainFee: 60000,
+        serviceFee: 5000,
+        discountAmount: 2500,
+      },
+      cargoItems: [
+        {
+          cargoTypeId: cargoTypes[0].loaiHangHoaId,
+          name: 'Fragile glassware',
+          quantity: 2,
+          weightKg: 1.25,
+          chargeableWeightKg: 1.5,
+          fee: 25000,
+        },
+        {
+          cargoTypeId: cargoTypes[1].loaiHangHoaId,
+          name: 'Boxed equipment',
+          quantity: 1,
+          weightKg: 7.5,
+          chargeableWeightKg: 8,
+          fee: 35000,
+        },
+      ],
     });
     detailShipmentId = detailShipment.phieuGuiHangId;
     detailWaybillCode = detailShipment.maVanDon;
+    detailExpectation = {
+      cargoItems: detailShipment.cargoItems,
+      cargoFeeDetails: detailShipment.cargoFeeDetails,
+      history: [detailShipment.history],
+    };
     const filteredShipment = await createShipment({
       nhaXeId: tenantOneId,
       status: 'DA_TIEP_NHAN',
@@ -268,7 +332,7 @@ describe('Shipment Read APIs (Phase 02)', () => {
             where: { maDonGiaoDich: { startsWith: 'F09-READ-DON-' } },
           }),
           prisma.loaiHangHoa.count({
-            where: { tenLoai: { startsWith: 'F09 read cargo ' } },
+            where: { tenLoai: { startsWith: 'F09 read ' } },
           }),
           prisma.taiKhoan.count({
             where: { email: { startsWith: 'f09-read-' } },
@@ -394,18 +458,37 @@ describe('Shipment Read APIs (Phase 02)', () => {
   async function createShipment(options: {
     nhaXeId: number;
     status: 'MOI_TAO' | 'DA_TIEP_NHAN';
-    cargoTypeId?: number;
+    feeSummary?: {
+      mainFee: number;
+      serviceFee: number;
+      discountAmount: number;
+    };
+    cargoItems?: Array<{
+      cargoTypeId: number;
+      name: string;
+      quantity: number;
+      weightKg: number;
+      chargeableWeightKg: number;
+      fee: number;
+    }>;
   }) {
     const tenant = tenantFixtures.get(options.nhaXeId);
     if (!tenant)
       throw new Error(`Missing read fixture for tenant ${options.nhaXeId}.`);
 
     const token = randomUUID().replaceAll('-', '').slice(0, 10);
+    const feeSummary = options.feeSummary ?? {
+      mainFee: 25000,
+      serviceFee: 5000,
+      discountAmount: 0,
+    };
+    const totalFee =
+      feeSummary.mainFee + feeSummary.serviceFee - feeSummary.discountAmount;
     const transaction = await prisma.donGiaoDich.create({
       data: {
         maDonGiaoDich: `F09-READ-DON-${token}`,
         ngayTao: new Date(),
-        tongTien: 30000,
+        tongTien: totalFee,
         trangThai: 'CHO_THANH_TOAN',
         tenKhachHang: 'F09 read sender',
         soDienThoaiKhachHang: '+84900000111',
@@ -419,10 +502,10 @@ describe('Shipment Read APIs (Phase 02)', () => {
       data: {
         maVanDon: `F09-READ-VD-${token}`,
         ngayGui: new Date(),
-        tongPhi: 30000,
-        cuocChinh: 25000,
-        phiDichVu: 5000,
-        soTienGiam: 0,
+        tongPhi: totalFee,
+        cuocChinh: feeSummary.mainFee,
+        phiDichVu: feeSummary.serviceFee,
+        soTienGiam: feeSummary.discountAmount,
         nguoiTraCuoc: 'NGUOI_GUI',
         trangThai: options.status,
         tenNguoiNhan: `F09 read receiver ${token}`,
@@ -431,51 +514,86 @@ describe('Shipment Read APIs (Phase 02)', () => {
         chuyenXeId: tenant.chuyenXeId,
         diemGuiId: tenant.diemGuiId,
         diemNhanId: tenant.diemNhanId,
-        lichSuTrangThais: {
-          create: {
-            trangThai: options.status,
-            thoiGian: new Date(),
-            ghiChu: 'Created by shipment read integration test',
-          },
-        },
       },
     });
     fixtureIds.phieuGuiHang.add(shipment.phieuGuiHangId);
 
-    if (options.cargoTypeId !== undefined) {
+    const cargoItems: ShipmentDetailExpectation['cargoItems'] = [];
+    const cargoFeeDetails: ShipmentDetailExpectation['cargoFeeDetails'] = [];
+    for (const cargo of options.cargoItems ?? []) {
+      const cargoType = await prisma.loaiHangHoa.findUniqueOrThrow({
+        where: { loaiHangHoaId: cargo.cargoTypeId },
+      });
       const rate = await prisma.bangCuocGuiHang.create({
         data: {
           khoiLuongTu: 0,
-          khoiLuongDen: 10,
-          mucCuoc: 25000,
+          khoiLuongDen: 50,
+          mucCuoc: cargo.fee,
           tuNgay: new Date('2026-01-01T00:00:00.000Z'),
           trangThai: 'HOAT_DONG',
           diemGuiId: tenant.diemGuiId,
           diemNhanId: tenant.diemNhanId,
-          loaiHangHoaId: options.cargoTypeId,
+          loaiHangHoaId: cargo.cargoTypeId,
         },
       });
       fixtureIds.bangCuocGuiHang.add(rate.bangCuocGuiHangId);
-      await prisma.hangHoa.create({
+      const cargoItem = await prisma.hangHoa.create({
         data: {
-          tenHang: 'F09 read cargo item',
-          soLuong: 2,
-          khoiLuong: 1.5,
+          tenHang: cargo.name,
+          soLuong: cargo.quantity,
+          khoiLuong: cargo.weightKg,
           phieuGuiHangId: shipment.phieuGuiHangId,
-          loaiHangHoaId: options.cargoTypeId,
+          loaiHangHoaId: cargo.cargoTypeId,
         },
       });
-      await prisma.chiTietCuocGuiHang.create({
+      const feeDetail = await prisma.chiTietCuocGuiHang.create({
         data: {
           phieuGuiHangId: shipment.phieuGuiHangId,
-          loaiHangHoaId: options.cargoTypeId,
+          loaiHangHoaId: cargo.cargoTypeId,
           bangCuocGuiHangId: rate.bangCuocGuiHangId,
-          khoiLuongTinhCuoc: 1.5,
-          soTienCuoc: 25000,
+          khoiLuongTinhCuoc: cargo.chargeableWeightKg,
+          soTienCuoc: cargo.fee,
         },
+      });
+      cargoItems.push({
+        cargoId: cargoItem.hangHoaId,
+        name: cargoItem.tenHang,
+        typeName: cargoType.tenLoai,
+        weightKg: cargo.weightKg,
+        quantity: cargoItem.soLuong,
+        dimensions: null,
+        declaredValue: null,
+        description: null,
+      });
+      cargoFeeDetails.push({
+        feeDetailId: feeDetail.chiTietCuocGuiHangId,
+        cargoTypeName: cargoType.tenLoai,
+        chargeableWeightKg: cargo.chargeableWeightKg,
+        fee: cargo.fee,
       });
     }
-    return shipment;
+
+    const history = await prisma.lichSuTrangThaiPhieuGuiHang.create({
+      data: {
+        trangThai: options.status,
+        thoiGian: new Date(),
+        ghiChu: 'Created by shipment read integration test',
+        phieuGuiHangId: shipment.phieuGuiHangId,
+      },
+    });
+
+    return {
+      ...shipment,
+      cargoItems,
+      cargoFeeDetails,
+      history: {
+        historyId: history.lichSuTrangThaiId,
+        status: history.trangThai,
+        time: history.thoiGian.toISOString(),
+        note: history.ghiChu,
+        actor: null,
+      },
+    };
   }
 
   function setTenantAdmin(nhaXeId: number = tenantOneId) {
@@ -723,47 +841,46 @@ describe('Shipment Read APIs (Phase 02)', () => {
 
       expect(Array.isArray(data.cargoItems)).toBe(true);
       expect(data.cargoItems).toHaveLength(sample.hangHoas.length);
-      expect(data.cargoItems).toHaveLength(1);
-      expect(data.cargoItems[0]).toMatchObject({
-        name: 'F09 read cargo item',
-        weightKg: 1.5,
-        quantity: 2,
-      });
-      expect(data.cargoItems[0]).toHaveProperty(
-        'cargoId',
-        sample.hangHoas[0].hangHoaId,
-      );
-      expect(data.cargoItems[0]).toHaveProperty('typeName');
+      expect(data.cargoItems).toHaveLength(2);
+      expect(
+        new Set(
+          data.cargoItems.map((item: { typeName: string }) => item.typeName),
+        ).size,
+      ).toBe(2);
+      expect(data.cargoItems).toEqual(detailExpectation.cargoItems);
+      expect(
+        data.cargoItems.map((item: { cargoId: number }) => item.cargoId),
+      ).toEqual(sample.hangHoas.map((item) => item.hangHoaId));
 
       expect(Array.isArray(data.cargoFeeDetails)).toBe(true);
       expect(data.cargoFeeDetails).toHaveLength(
         sample.chiTietCuocGuiHangs.length,
       );
-      expect(data.cargoFeeDetails).toHaveLength(1);
-      expect(data.cargoFeeDetails[0]).toMatchObject({
-        chargeableWeightKg: 1.5,
-        fee: 25000,
-      });
+      expect(data.cargoFeeDetails).toHaveLength(2);
+      expect(data.cargoFeeDetails).toEqual(detailExpectation.cargoFeeDetails);
+      expect(
+        data.cargoFeeDetails.map(
+          (detail: { feeDetailId: number }) => detail.feeDetailId,
+        ),
+      ).toEqual(
+        sample.chiTietCuocGuiHangs.map((detail) => detail.chiTietCuocGuiHangId),
+      );
       expect(data.feeSummary).toEqual({
-        mainFee: 25000,
+        mainFee: 60000,
         serviceFee: 5000,
-        discountAmount: 0,
-        totalFee: 30000,
+        discountAmount: 2500,
+        totalFee: 62500,
         freightPayer: 'NGUOI_GUI',
       });
+      expect(data.totalFee).toBe(62500);
 
       expect(Array.isArray(data.history)).toBe(true);
       expect(data.history).toHaveLength(sample.lichSuTrangThais.length);
       expect(data.history).toHaveLength(1);
-      expect(data.history[0]).toMatchObject({
-        status: 'MOI_TAO',
-        note: 'Created by shipment read integration test',
-      });
-      expect(data.history[0]).toHaveProperty(
-        'historyId',
-        sample.lichSuTrangThais[0].lichSuTrangThaiId,
-      );
-      expect(data.history[0]).toHaveProperty('time');
+      expect(data.history).toEqual(detailExpectation.history);
+      expect(
+        data.history.map((item: { historyId: number }) => item.historyId),
+      ).toEqual(sample.lichSuTrangThais.map((item) => item.lichSuTrangThaiId));
     });
 
     it('returns 404 for non-existent shipment ID', async () => {
