@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
-import { render, screen } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 import type { AnchorHTMLAttributes } from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
 import { setAdminTestSession } from './admin-auth-test-session';
 
@@ -11,10 +11,18 @@ vi.mock('next/navigation', () => ({
 }));
 
 vi.mock('next/link', () => ({
-  default: ({ href, children, ...props }: AnchorHTMLAttributes<HTMLAnchorElement> & { href: string }) => (
-    <a href={href} {...props}>{children}</a>
+  default: ({
+    href,
+    children,
+    ...props
+  }: AnchorHTMLAttributes<HTMLAnchorElement> & { href: string }) => (
+    <a href={href} {...props}>
+      {children}
+    </a>
   ),
 }));
+
+afterEach(cleanup);
 
 describe('Super Admin navigation for fare prices', () => {
   it('shows the active fare-price link and header account control', () => {
@@ -51,5 +59,59 @@ describe('Super Admin navigation for fare prices', () => {
     ).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Đăng xuất' })).toBeTruthy();
     expect(document.querySelector('.breadcrumb')).toBeNull();
+  });
+
+  it('shows booking management only to a tenant with booking:read', () => {
+    setAdminTestSession({
+      status: 'authenticated',
+      session: {
+        accountId: 2,
+        fullName: 'Nhân viên CSKH',
+        phoneNumber: '+84900000002',
+        email: 'cskh@vexgo.test',
+        roles: ['NHAN_VIEN_CSKH'],
+        permissions: ['booking:read'],
+        employee: {
+          employeeId: 1,
+          busCompanyId: 10,
+          busCompanyCode: 'FUTA',
+          busCompanyName: 'FUTA',
+        },
+        busCompanyId: 10,
+      },
+    });
+    const { rerender } = render(
+      <SuperAdminLayout activeSection="booking-management">
+        <h1>Quản lý phiếu đặt vé &amp; vé</h1>
+      </SuperAdminLayout>,
+    );
+
+    expect(
+      screen
+        .getByRole('link', { name: 'Quản lý phiếu đặt vé & vé' })
+        .getAttribute('href'),
+    ).toBe('/booking-management');
+
+    setAdminTestSession({
+      status: 'authenticated',
+      session: {
+        accountId: 1,
+        fullName: 'Super Admin',
+        phoneNumber: '+84900000001',
+        email: 'admin@vexgo.test',
+        roles: ['SUPER_ADMIN'],
+        permissions: ['booking:read'],
+        employee: null,
+        busCompanyId: null,
+      },
+    });
+    rerender(
+      <SuperAdminLayout activeSection="overview">
+        <h1>Tổng quan</h1>
+      </SuperAdminLayout>,
+    );
+    expect(
+      screen.queryByRole('link', { name: 'Quản lý phiếu đặt vé & vé' }),
+    ).toBeNull();
   });
 });

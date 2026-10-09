@@ -77,6 +77,13 @@ describe('admin access scope and permissions', () => {
     expect(getRequiredAdminPermissions('/trips')).toEqual(['trip:read']);
     expect(getRequiredAdminPermissions('/trips/456')).toEqual(['trip:read']);
     expect(getRequiredAdminPermissions('/customers')).toEqual(['customer:read']);
+    expect(getRequiredAdminPermissions('/booking-management')).toEqual([
+      'booking:read',
+    ]);
+    expect(
+      getRequiredAdminPermissions('/booking-management/bookings/42'),
+    ).toEqual(['booking:read']);
+    expect(getRequiredAdminPermissions('/booking-management-extra')).toBeNull();
     expect(getRequiredAdminPermissions('/vehicle-types-extra')).toBeNull();
   });
 
@@ -222,6 +229,14 @@ describe('admin access scope and permissions', () => {
         makeTenantSession(['NHA_XE_ADMIN'], ['permission:assign']),
       ),
     ).toBeNull();
+  });
+
+  it('uses booking management as the landing page when it is the only readable operation', () => {
+    expect(
+      getFirstAccessibleAdminPath(
+        makeTenantSession(['NHAN_VIEN_CSKH'], ['booking:read']),
+      ),
+    ).toBe('/booking-management');
   });
 
   it('fails closed for empty permission checks without an authenticated tenant session', () => {

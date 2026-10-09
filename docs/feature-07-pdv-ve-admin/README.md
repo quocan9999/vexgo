@@ -1,14 +1,14 @@
 # Feature 07 — Quản lý phiếu đặt vé & vé (Admin nhà xe)
 
-**Trạng thái:** Worktree và database riêng đã xác minh; Phase 01–02 hoàn tất. Phase 03–05 chưa triển khai.
+**Trạng thái:** P01–P05 hoàn tất, READY trong phạm vi Admin read-only. Xem `handoff/FINAL_HANDOFF.md` để biết tests, môi trường và commit SHA.
 
 **Branch:** `feature/admin-bookings-tickets`
 
 **Worktree:** `E:/Huit_Local/KhoaLuanCuNhan/SourceCode/vexgo-feature07`
 
-**Bắt buộc:** Tiếp tục trong worktree và MySQL riêng, không dùng database/volume gốc.
+**Bắt buộc:** Tiếp tục trong worktree và MySQL riêng; không dùng database/volume gốc.
 
-## Cấu trúc tài liệu
+## Cấu trúc
 
 ```text
 docs/feature-07-pdv-ve-admin/
@@ -26,17 +26,27 @@ docs/feature-07-pdv-ve-admin/
     ├── ENVIRONMENT_HANDOFF.md
     ├── HANDOFF_TEMPLATE.md
     ├── PHASE_01_HANDOFF.md
-    └── PHASE_02_HANDOFF.md
+    ├── PHASE_02_HANDOFF.md
+    ├── PHASE_03_HANDOFF.md
+    ├── PHASE_04_HANDOFF.md
+    ├── PHASE_05_HANDOFF.md
+    └── FINAL_HANDOFF.md
 ```
 
-Toàn bộ tài liệu, báo cáo kiểm thử và handoff Feature 07 chỉ đặt dưới thư mục này.
+## Môi trường
 
-## Trình tự
+- Docker Compose project: `vexgo_feature07`.
+- MySQL host port 3307; app DB `vexgo_feature07`; shadow DB `vexgo_feature07_shadow`; test DB `vexgo_feature07_test`.
+- API port 4001; Admin port 3002. Dev server dùng CLI bind `127.0.0.1` để origin khớp environment.
+- Customer Web không cần chạy cho Feature 07.
+- Repo gốc giữ nguyên `develop`; không dùng seed/reset/drop.
 
-1. Đọc `AGENTS.md`, hướng dẫn app liên quan, `ENVIRONMENT_WORKTREE.md` và handoff gần nhất.
-2. Kiểm tra worktree/branch, Docker project `vexgo_feature07`, `.env` riêng và URLs trước thao tác database.
-3. Đọc `spec/MASTER_SPEC.md` và spec của phase hiện tại.
-4. Thực hiện đúng phase, chạy targeted tests, tự review diff, commit local và ghi handoff.
-5. Không push, mở PR hoặc merge trong quá trình này. Phase 05 kết thúc bằng handoff cuối.
+## Trình tự và phạm vi
 
-> Phase 01 bổ sung RBAC permission foundation và rollout dữ liệu tối thiểu. Phase 02 cung cấp sáu Admin GET APIs; UI thuộc Phase 03–04.
+P01 permission foundation → P02 sáu GET APIs → P03 hai tab danh sách → P04 booking/ticket detail và history → P05 integration acceptance.
+
+Feature Admin chỉ đọc dữ liệu. Không triển khai Customer cancellation/timeline, soát vé, refund writer hoặc shipment mutation. History chỉ hiển thị từ các bản ghi hiện có.
+
+## Kết quả
+
+Unit/component tests, API DB integration, lint/typecheck/build, Prisma status/generate và browser smoke đều PASS. Browser smoke dùng fixture tạm trong test DB riêng và đã cleanup. Xem handoff từng phase để biết kết quả chi tiết.

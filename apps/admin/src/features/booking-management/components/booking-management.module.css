@@ -1,0 +1,208 @@
+﻿.section,
+.panel,
+.tableWrap {
+  min-width: 0;
+}
+
+.tabs {
+  display: flex;
+  gap: var(--admin-space-2);
+  padding: var(--admin-space-3) var(--admin-space-card-padding) 0;
+  border-bottom: 1px solid var(--admin-border);
+}
+
+.tab {
+  min-height: 44px;
+  padding: 0 var(--admin-space-4);
+  border: 0;
+  border-bottom: 3px solid transparent;
+  background: transparent;
+  color: var(--admin-text-muted);
+  cursor: pointer;
+  font: inherit;
+  font-weight: var(--admin-weight-medium);
+}
+
+.tab[aria-selected='true'] {
+  border-bottom-color: var(--admin-blue);
+  color: var(--admin-blue);
+  font-weight: var(--admin-weight-semibold);
+}
+
+.tab:focus-visible,
+.detailLink:focus-visible,
+.resetButton:focus-visible,
+.retryButton:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--admin-blue) 40%, white);
+  outline-offset: 2px;
+}
+
+.panel {
+  padding-top: var(--admin-space-3);
+}
+
+.dateFilter,
+.pageSize {
+  display: grid;
+  min-width: 0;
+  gap: var(--admin-space-1);
+  color: var(--admin-text-muted);
+  font-size: var(--admin-type-helper-size);
+}
+
+.dateFilter input,
+.pageSize select {
+  min-height: 40px;
+  min-width: 135px;
+  padding: 0 var(--admin-space-2);
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius-control);
+  background: #fff;
+  color: var(--admin-text-strong);
+  font: inherit;
+}
+
+.resetButton,
+.retryButton {
+  min-height: 40px;
+  padding: 0 var(--admin-space-3);
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius-control);
+  background: #fff;
+  color: var(--admin-blue);
+  cursor: pointer;
+  font: inherit;
+  font-weight: var(--admin-weight-semibold);
+}
+
+.tableWrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.secondary {
+  display: block;
+  margin-top: var(--admin-space-1);
+  color: var(--admin-text-muted);
+  font-size: var(--admin-type-helper-size);
+  line-height: var(--admin-type-helper-line-height);
+}
+
+.partial {
+  display: block;
+  margin-top: var(--admin-space-1);
+  color: var(--admin-danger);
+  font-size: var(--admin-type-helper-size);
+}
+
+.detailLink {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  color: var(--admin-blue);
+  font-weight: var(--admin-weight-semibold);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.error,
+.empty {
+  display: grid;
+  justify-items: start;
+  gap: var(--admin-space-3);
+  margin: var(--admin-space-4);
+  padding: var(--admin-space-state-padding);
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius-panel);
+  color: var(--admin-text-muted);
+}
+
+.error {
+  border-color: color-mix(in srgb, var(--admin-danger) 30%, white);
+  background: color-mix(in srgb, var(--admin-danger) 5%, white);
+  color: var(--admin-danger);
+}
+
+.error p,
+.empty p {
+  margin: 0;
+}
+
+.mobileCards {
+  display: none;
+  margin: 0;
+  padding: var(--admin-space-3) var(--admin-space-card-padding);
+  list-style: none;
+}
+
+.mobileCard {
+  display: grid;
+  min-width: 0;
+  gap: var(--admin-space-3);
+  padding: var(--admin-space-card-padding);
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius-panel);
+  background: var(--admin-surface);
+}
+
+.cardHeader {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--admin-space-3);
+}
+
+.cardHeader > div {
+  min-width: 0;
+}
+
+.cardHeader p {
+  margin: var(--admin-space-1) 0 0;
+  overflow-wrap: anywhere;
+}
+
+.cardDetails {
+  display: grid;
+  gap: var(--admin-space-2);
+  margin: 0;
+}
+
+.cardDetails > div {
+  display: grid;
+  grid-template-columns: minmax(95px, 0.8fr) minmax(0, 1.2fr);
+  gap: var(--admin-space-2);
+}
+
+.cardDetails dt {
+  color: var(--admin-text-muted);
+  font-size: var(--admin-type-label-size);
+}
+
+.cardDetails dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--admin-text-strong);
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 760px) {
+  .tabs {
+    padding-right: var(--admin-space-3);
+    padding-left: var(--admin-space-3);
+  }
+
+  .dateFilter input,
+  .pageSize select {
+    min-width: 125px;
+  }
+
+  .tableWrap {
+    display: none;
+  }
+
+  .mobileCards {
+    display: grid;
+    gap: var(--admin-space-3);
+  }
+}
