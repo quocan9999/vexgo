@@ -79,6 +79,9 @@ jobs:
       - name: Apply API database migrations
         run: npm exec -- prisma migrate deploy
 
+      - name: Sync permission catalog
+        run: node prisma/sync-permissions.mjs
+
       - name: Seed the auth E2E role
         run: node prisma/seed-auth-e2e.mjs
 
