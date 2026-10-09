@@ -68,6 +68,13 @@ function detailErrorMessage(error: unknown, kind: DetailKind) {
   return 'Không thể tải dữ liệu. Hãy thử lại.';
 }
 
+function isAuthorizationError(error: unknown) {
+  return (
+    error instanceof BookingManagementApiError &&
+    (error.status === 401 || error.status === 403)
+  );
+}
+
 function sourceLabel(source: string) {
   if (source === 'SYSTEM') return 'Hệ thống';
   if (source === 'STAFF') return 'Nhân viên';
@@ -140,6 +147,10 @@ export function BookingManagementDetail({
     key: string;
     error: unknown;
   } | null>(null);
+  const [historyAuthorizationError, setHistoryAuthorizationError] = useState<{
+    viewKey: string;
+    error: unknown;
+  } | null>(null);
   const currentDetail =
     detailResult?.key === detailRequestKey ? detailResult.value : null;
   const currentDetailError = invalidResourceId
@@ -154,6 +165,15 @@ export function BookingManagementDetail({
     : historyErrorState?.key === historyRequestKey
       ? historyErrorState.error
       : null;
+  const currentHistoryAuthorizationError =
+    historyAuthorizationError?.viewKey === viewKey
+      ? historyAuthorizationError.error
+      : null;
+  const visibleDetail = currentHistoryAuthorizationError
+    ? null
+    : currentDetail;
+  const visibleDetailError =
+    currentDetailError ?? currentHistoryAuthorizationError;
   const detailLoading =
     authState.status === 'authenticated' &&
     !currentDetail &&
@@ -212,11 +232,15 @@ export function BookingManagementDetail({
     void request
       .then((value) => {
         if (active && !controller.signal.aborted) {
+          setHistoryAuthorizationError(null);
           setHistoryResult({ key: historyRequestKey, value });
         }
       })
       .catch((error: unknown) => {
         if (active && !controller.signal.aborted) {
+          if (isAuthorizationError(error)) {
+            setHistoryAuthorizationError({ viewKey, error });
+          }
           setHistoryErrorState({ key: historyRequestKey, error });
         }
       });
@@ -232,6 +256,7 @@ export function BookingManagementDetail({
     invalidResourceId,
     kind,
     resourceId,
+    viewKey,
   ]);
 
   const pageTitle =
@@ -251,14 +276,14 @@ export function BookingManagementDetail({
           titleId="booking-management-detail-title"
         />
 
-        {detailLoading && !currentDetail && (
+        {detailLoading && !visibleDetail && !visibleDetailError && (
           <AdminTableSkeleton
             resourceLabel={kind === 'bookings' ? 'phiếu đặt vé' : 'vé'}
           />
         )}
-        {Boolean(currentDetailError) && (
+        {Boolean(visibleDetailError) && (
           <div className={styles.detailError} role="alert">
-            <p>{detailErrorMessage(currentDetailError, kind)}</p>
+            <p>{detailErrorMessage(visibleDetailError, kind)}</p>
             <button
               onClick={() => setDetailRetry((retry) => retry + 1)}
               type="button"
@@ -268,9 +293,9 @@ export function BookingManagementDetail({
           </div>
         )}
 
-        {kind === 'bookings' && currentDetail && (
+        {kind === 'bookings' && visibleDetail && (
           <BookingDetailContent
-            booking={currentDetail as AdminBookingDetail}
+            booking={visibleDetail as AdminBookingDetail}
             backHref={backHref}
             history={currentHistory}
             historyError={currentHistoryError}
@@ -281,9 +306,9 @@ export function BookingManagementDetail({
             }
           />
         )}
-        {kind === 'tickets' && currentDetail && (
+        {kind === 'tickets' && visibleDetail && (
           <TicketDetailContent
-            ticket={currentDetail as AdminTicketDetail}
+            ticket={visibleDetail as AdminTicketDetail}
             backHref={backHref}
             history={currentHistory}
             historyError={currentHistoryError}
@@ -477,6 +502,11 @@ function BookingDetailContent({
 
       {booking.shipment && (
         <InfoCard title="Phiếu gửi hàng cùng giao dịch">
+          {booking.shipment.tripIntegrity !== 'CONSISTENT' && (
+            <p className={styles.warning} role="status">
+              {tripIntegrityMessage(booking.shipment.tripIntegrity)}
+            </p>
+          )}
           <InfoRows>
             <InfoRow label="Mã vận đơn">
               {booking.shipment.trackingCode}

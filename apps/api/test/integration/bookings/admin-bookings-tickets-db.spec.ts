@@ -110,8 +110,8 @@ featureDescribe(
     let prisma: PrismaService;
     let tenantA: TenantFixture;
     let tenantB: TenantFixture;
-    let customerId: number;
-    let customerAccountId: number;
+    let customerId: number | undefined;
+    let customerAccountId: number | undefined;
     let bookingA: BookingFixture;
     let bookingA2: BookingFixture;
     let inconsistentBookingA: BookingFixture;
@@ -323,6 +323,9 @@ featureDescribe(
       initialAmount: string;
       orderAmount: string;
     }): Promise<BookingFixture> {
+      if (customerId === undefined) {
+        throw new Error('Test fixture customer was not initialized.');
+      }
       const bookedAt = options.bookedAt ?? new Date('2026-10-08T17:00:00.000Z');
       const transaction = await prisma.donGiaoDich.create({
         data: {
@@ -385,10 +388,14 @@ featureDescribe(
       };
     }
 
-    async function addShipment(booking: BookingFixture, tripId: number) {
+    async function addShipment(
+      booking: BookingFixture,
+      tripId: number,
+      shipmentSuffix = '',
+    ) {
       const sendPoint = await prisma.diemGiaoNhanHang.create({
         data: {
-          maDiem: `${fixturePrefix}-SEND`,
+          maDiem: `${fixturePrefix}-SEND${shipmentSuffix}`,
           tenDiem: 'Điểm gửi thử',
           diaChi: '1 Đường Thử',
           tinhThanh: 'TP.HCM',
@@ -399,7 +406,7 @@ featureDescribe(
       });
       const receivePoint = await prisma.diemGiaoNhanHang.create({
         data: {
-          maDiem: `${fixturePrefix}-RECEIVE`,
+          maDiem: `${fixturePrefix}-RECEIVE${shipmentSuffix}`,
           tenDiem: 'Điểm nhận thử',
           diaChi: '2 Đường Thử',
           tinhThanh: 'Lâm Đồng',
@@ -410,7 +417,7 @@ featureDescribe(
       });
       const cargoType = await prisma.loaiHangHoa.create({
         data: {
-          tenLoai: `${fixturePrefix} xe máy`,
+          tenLoai: `${fixturePrefix}${shipmentSuffix} xe máy`,
           trangThai: 'HOAT_DONG',
           nhomSucChua: 'XE_MAY',
         },
@@ -418,7 +425,7 @@ featureDescribe(
       });
       const shipment = await prisma.phieuGuiHang.create({
         data: {
-          maVanDon: `${fixturePrefix}-SHIPMENT`,
+          maVanDon: `${fixturePrefix}-SHIPMENT${shipmentSuffix}`,
           tenNguoiNhan: 'Người nhận thử',
           soDienThoaiNguoiNhan: '+84905554444',
           ngayGui: new Date('2026-10-08T17:00:00.000Z'),
@@ -452,6 +459,9 @@ featureDescribe(
     }
 
     async function addHistory(booking: BookingFixture) {
+      if (customerAccountId === undefined) {
+        throw new Error('Test fixture customer account was not initialized.');
+      }
       const sameTime = new Date('2026-10-08T17:00:00.000Z');
       await prisma.lichSuTrangThaiPhieuDatVe.createMany({
         data: [
@@ -616,6 +626,11 @@ featureDescribe(
         bookingA,
         tenantA.trips.get('primary')!,
       );
+      await addShipment(
+        bookingA2,
+        tenantA.trips.get('secondary')!,
+        '-MISMATCH',
+      );
       await addHistory(bookingA);
       await prisma.thanhToan.createMany({
         data: [
@@ -765,12 +780,16 @@ featureDescribe(
             await tx.nhaXe.deleteMany({
               where: { nhaXeId: { in: companyIds } },
             });
-            await tx.khachHang.deleteMany({
-              where: { khachHangId: customerId },
-            });
-            await tx.taiKhoan.deleteMany({
-              where: { taiKhoanId: customerAccountId },
-            });
+            if (customerId !== undefined) {
+              await tx.khachHang.deleteMany({
+                where: { khachHangId: customerId },
+              });
+            }
+            if (customerAccountId !== undefined) {
+              await tx.taiKhoan.deleteMany({
+                where: { taiKhoanId: customerAccountId },
+              });
+            }
           });
           expect(
             await prisma.donGiaoDich.count({
@@ -997,9 +1016,21 @@ featureDescribe(
       expect(JSON.stringify(response.body)).not.toContain('12300000');
       expect(JSON.stringify(response.body)).not.toContain('matKhau');
 
-      const noOptionalRelations = await request(app.getHttpServer())
+      const mismatchedShipment = await request(app.getHttpServer())
         .get(`/api/v1/admin/bookings/${bookingA2.phieuDatVeId}`)
         .set('Authorization', tenantAToken)
+        .expect(200);
+      expect(mismatchedShipment.body.data).toMatchObject({
+        tripIntegrity: 'CONSISTENT',
+        shipment: {
+          tripId: null,
+          tripIntegrity: 'TRIP_MISMATCH',
+        },
+      });
+
+      const noOptionalRelations = await request(app.getHttpServer())
+        .get(`/api/v1/admin/bookings/${bookingB.phieuDatVeId}`)
+        .set('Authorization', tenantBToken)
         .expect(200);
       expect(noOptionalRelations.body.data.shipment).toBeNull();
       expect(

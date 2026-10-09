@@ -49,6 +49,8 @@ export function tripIntegrityMessage(integrity: string) {
       return 'Phiếu hiện chưa có vé để xác định chuyến.';
     case 'TRIP_UNAVAILABLE':
       return 'Không thể xác định chuyến trong phạm vi nhà xe.';
+    case 'TRIP_MISMATCH':
+      return 'Chuyến của hàng gửi không khớp với chuyến của phiếu.';
     default:
       return 'Chuyến xe chưa có thông tin.';
   }

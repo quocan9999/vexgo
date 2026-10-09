@@ -305,6 +305,14 @@ export function BookingManagement() {
     }));
   }
 
+  function changeSortDirection(sortDirection: 'asc' | 'desc') {
+    updateListState((current) => ({
+      ...current,
+      sortDirection,
+      page: 1,
+    }));
+  }
+
   const items = resultPage?.data ?? [];
   const totalItems = requestError
     ? null
@@ -323,6 +331,21 @@ export function BookingManagement() {
     urlState.tab === 'bookings'
       ? BOOKING_STATUS_OPTIONS
       : TICKET_STATUS_OPTIONS;
+  const sortOptions: Array<{
+    value: BookingManagementSortKey;
+    label: string;
+  }> =
+    urlState.tab === 'bookings'
+      ? [
+          { value: 'bookedAt', label: 'Ngày đặt' },
+          { value: 'departureTime', label: 'Khởi hành' },
+          { value: 'totalTicketAmount', label: 'Tiền vé ban đầu' },
+        ]
+      : [
+          { value: 'bookedAt', label: 'Ngày đặt' },
+          { value: 'departureTime', label: 'Khởi hành' },
+          { value: 'ticketPrice', label: 'Giá thực tế' },
+        ];
 
   return (
     <SuperAdminLayout activeSection="booking-management">
@@ -475,6 +498,35 @@ export function BookingManagement() {
                     ))}
                   </select>
                 </label>
+                <label className={styles.pageSize}>
+                  <span>Sắp xếp theo</span>
+                  <select
+                    aria-label="Sắp xếp theo"
+                    onChange={(event) =>
+                      changeSort(event.target.value as BookingManagementSortKey)
+                    }
+                    value={activeState.sortBy}
+                  >
+                    {sortOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className={styles.pageSize}>
+                  <span>Hướng sắp xếp</span>
+                  <select
+                    aria-label="Hướng sắp xếp"
+                    onChange={(event) =>
+                      changeSortDirection(event.target.value as 'asc' | 'desc')
+                    }
+                    value={activeState.sortDirection}
+                  >
+                    <option value="desc">Giảm dần</option>
+                    <option value="asc">Tăng dần</option>
+                  </select>
+                </label>
                 {hasFilters && (
                   <button
                     className={styles.resetButton}
@@ -514,7 +566,9 @@ export function BookingManagement() {
                   <div className={styles.empty} role="status">
                     <Search aria-hidden="true" size={21} />
                     <p>
-                      {hasFilters
+                      {resultPage.meta.totalItems > 0
+                        ? 'Trang hiện tại không có dữ liệu. Hãy quay về trang trước.'
+                        : hasFilters
                         ? 'Không tìm thấy kết quả phù hợp với bộ lọc.'
                         : urlState.tab === 'bookings'
                           ? 'Chưa có phiếu đặt vé trong nhà xe.'
@@ -560,20 +614,22 @@ export function BookingManagement() {
                       state={urlState}
                     />
                   )}
-                  <AdminPagination
-                    currentPage={resultPage.meta.page}
-                    disabled={loading}
-                    onPageChange={(page) =>
-                      updateListState((current) => ({ ...current, page }))
-                    }
-                    pageSize={resultPage.meta.pageSize}
-                    summaryLabel={
-                      urlState.tab === 'bookings' ? 'phiếu đặt vé' : 'vé'
-                    }
-                    totalItems={resultPage.meta.totalItems}
-                    totalPages={resultPage.meta.totalPages}
-                  />
                 </>
+              )}
+              {resultPage && resultPage.meta.totalItems > 0 && (
+                <AdminPagination
+                  currentPage={resultPage.meta.page}
+                  disabled={loading}
+                  onPageChange={(page) =>
+                    updateListState((current) => ({ ...current, page }))
+                  }
+                  pageSize={resultPage.meta.pageSize}
+                  summaryLabel={
+                    urlState.tab === 'bookings' ? 'phiếu đặt vé' : 'vé'
+                  }
+                  totalItems={resultPage.meta.totalItems}
+                  totalPages={resultPage.meta.totalPages}
+                />
               )}
             </div>
           </div>

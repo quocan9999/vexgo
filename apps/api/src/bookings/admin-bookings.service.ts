@@ -441,6 +441,40 @@ export class AdminBookingsService {
           : 'UNALLOCATED',
     });
     const shipment = booking.donGiaoDich.phieuGuiHang;
+    const resolvedBookingTripId =
+      tripIntegrity === 'CONSISTENT'
+        ? tickets[0]?.gheChuyenXe.chuyenXe.chuyenXeId ?? null
+        : null;
+    const shipmentSummary = shipment
+      ? (() => {
+          const isShipmentTripInTenant =
+            shipment.chuyenXe.nhaXeId === nhaXeId;
+          const hasKnownBookingTrip = resolvedBookingTripId !== null;
+          const hasMatchingTrip =
+            hasKnownBookingTrip &&
+            shipment.chuyenXeId === resolvedBookingTripId;
+          const tripIntegrity = !isShipmentTripInTenant
+            ? 'TRIP_UNAVAILABLE'
+            : !hasKnownBookingTrip
+              ? 'TRIP_UNAVAILABLE'
+              : hasMatchingTrip
+                ? 'CONSISTENT'
+                : 'TRIP_MISMATCH';
+
+          return {
+            shipmentId: shipment.phieuGuiHangId,
+            trackingCode: shipment.maVanDon,
+            status: shipment.trangThai,
+            tripId: tripIntegrity === 'CONSISTENT' ? shipment.chuyenXeId : null,
+            tripIntegrity,
+            items: shipment.hangHoas.map((item) => ({
+              name: item.tenHang,
+              quantity: item.soLuong,
+              itemType: item.loaiHangHoa.tenLoai,
+            })),
+          };
+        })()
+      : null;
 
     return {
       data: {
@@ -484,26 +518,7 @@ export class AdminBookingsService {
               .map(mapPayment),
           },
         },
-        shipment: shipment
-          ? {
-              shipmentId: shipment.phieuGuiHangId,
-              trackingCode: shipment.maVanDon,
-              status: shipment.trangThai,
-              tripId:
-                shipment.chuyenXe.nhaXeId === nhaXeId
-                  ? shipment.chuyenXeId
-                  : null,
-              tripIntegrity:
-                shipment.chuyenXe.nhaXeId === nhaXeId
-                  ? 'CONSISTENT'
-                  : 'TRIP_UNAVAILABLE',
-              items: shipment.hangHoas.map((item) => ({
-                name: item.tenHang,
-                quantity: item.soLuong,
-                itemType: item.loaiHangHoa.tenLoai,
-              })),
-            }
-          : null,
+        shipment: shipmentSummary,
         tickets: tickets.map((ticket) => ({
           ticketId: ticket.veId,
           ticketCode: ticket.maVe,

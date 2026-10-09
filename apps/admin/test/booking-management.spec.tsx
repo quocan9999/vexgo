@@ -112,7 +112,12 @@ function response(body: unknown, status = 200): Response {
 }
 
 function installApi(
-  options: { historyFailsOnce?: boolean; deferSlowSearch?: boolean } = {},
+  options: {
+    historyFailsOnce?: boolean;
+    historyForbidden?: boolean;
+    deferSlowSearch?: boolean;
+    emptyOutOfRange?: boolean;
+  } = {},
 ) {
   setEmployeeAdminTestSession(['booking:read']);
   vi.stubEnv('NEXT_PUBLIC_API_URL', 'http://127.0.0.1:4001');
@@ -136,6 +141,12 @@ function installApi(
         return response({
           data: [{ ...booking, bookingCode: 'PD-FAST' }],
           meta: { page, pageSize, totalItems: 1, totalPages: 1 },
+        });
+      }
+      if (options.emptyOutOfRange && page === 3) {
+        return response({
+          data: [],
+          meta: { page, pageSize, totalItems: 21, totalPages: 3 },
         });
       }
       return response({
@@ -255,6 +266,12 @@ function installApi(
     if (
       /^\/api\/v1\/admin\/(bookings|tickets)\/\d+\/history$/.test(url.pathname)
     ) {
+      if (options.historyForbidden) {
+        return response(
+          { error: 'FORBIDDEN', message: 'permission revoked' },
+          403,
+        );
+      }
       if (options.historyFailsOnce && !historyFailed) {
         historyFailed = true;
         return response(
@@ -381,6 +398,70 @@ describe('Admin booking and ticket lists', () => {
     });
   });
 
+  it('keeps recovery pagination visible when the requested page has no rows', async () => {
+    const api = installApi({ emptyOutOfRange: true });
+    navigation.reset('bPage=3');
+    render(<BookingManagement />);
+
+    expect(
+      await screen.findByText(/Trang hiện tại không có dữ liệu/),
+    ).toBeTruthy();
+    const previous = screen.getByRole('button', { name: 'Trang trước' });
+    expect(previous.hasAttribute('disabled')).toBe(false);
+    expect(
+      screen.getByRole('button', { name: 'Trang sau' }).hasAttribute('disabled'),
+    ).toBe(true);
+
+    fireEvent.click(previous);
+    await waitFor(() => {
+      expect(
+        api.urls.some(
+          (url) =>
+            url.pathname === '/api/v1/admin/bookings' &&
+            url.searchParams.get('page') === '2',
+        ),
+      ).toBe(true);
+    });
+  });
+
+  it('exposes every ticket sort key through accessible controls', async () => {
+    const api = installApi();
+    navigation.reset('tab=tickets');
+    render(<BookingManagement />);
+
+    await screen.findAllByText('VE-0044');
+    fireEvent.change(screen.getByRole('combobox', { name: 'Sắp xếp theo' }), {
+      target: { value: 'ticketPrice' },
+    });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Hướng sắp xếp' }), {
+      target: { value: 'asc' },
+    });
+
+    await waitFor(() => {
+      expect(
+        api.urls.some(
+          (url) =>
+            url.pathname === '/api/v1/admin/tickets' &&
+            url.searchParams.get('sortBy') === 'ticketPrice' &&
+            url.searchParams.get('sortDirection') === 'asc',
+        ),
+      ).toBe(true);
+    });
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Sắp xếp theo' }), {
+      target: { value: 'bookedAt' },
+    });
+    await waitFor(() => {
+      expect(
+        api.urls.some(
+          (url) =>
+            url.pathname === '/api/v1/admin/tickets' &&
+            url.searchParams.get('sortBy') === 'bookedAt',
+        ),
+      ).toBe(true);
+    });
+  });
+
   it('ignores a slow earlier search response after the active query changes', async () => {
     const api = installApi({ deferSlowSearch: true });
     render(<BookingManagement />);
@@ -464,6 +545,16 @@ describe('Admin booking and ticket lists', () => {
     expect(
       api.urls.filter((url) => url.pathname.endsWith('/history')),
     ).toHaveLength(2);
+  });
+
+  it('hides loaded detail data when history authorization is revoked', async () => {
+    installApi({ historyForbidden: true });
+    render(<BookingManagementDetail kind="bookings" resourceId={12} />);
+
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toContain('không có quyền');
+    expect(screen.queryByText('Nguyễn An')).toBeNull();
+    expect(screen.queryByText('1.050.000 ₫')).toBeNull();
   });
 
   it('loads the ticket detail and ticket history independently from its booking', async () => {
