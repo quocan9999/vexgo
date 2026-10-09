@@ -50,6 +50,14 @@
   font-size: var(--admin-type-helper-size);
 }
 
+.dateRangeGroup {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: end;
+  gap: var(--admin-space-control-gap);
+}
+
 .dateFilter input,
 .pageSize select {
   min-height: 40px;
@@ -60,6 +68,30 @@
   background: #fff;
   color: var(--admin-text-strong);
   font: inherit;
+}
+
+.dateFilter input[aria-invalid='true'] {
+  border-color: var(--admin-danger);
+}
+
+.dateRangeError {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--admin-danger);
+  font-size: var(--admin-type-error-size);
+  font-weight: var(--admin-type-error-weight);
+  line-height: var(--admin-type-error-line-height);
+}
+
+.dateDraftNotice {
+  margin: var(--admin-space-3) var(--admin-space-table-cell-x) 0;
+  padding: var(--admin-space-notice-padding);
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius-control);
+  background: var(--admin-surface-muted);
+  color: var(--admin-text-strong);
+  font-size: var(--admin-type-secondary-body-size);
+  line-height: var(--admin-type-secondary-body-line-height);
 }
 
 .resetButton,

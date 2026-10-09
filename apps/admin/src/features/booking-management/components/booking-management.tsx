@@ -47,6 +47,36 @@ import styles from './booking-management.module.css';
 type BookingPage = AdminPage<AdminBookingListItem>;
 type TicketPage = AdminPage<AdminTicketListItem>;
 type ResultPage = BookingPage | TicketPage;
+type DateRangeDraft = {
+  bookedFrom: string;
+  bookedTo: string;
+  departureFrom: string;
+  departureTo: string;
+};
+type DateRangeDrafts = Record<BookingManagementTab, DateRangeDraft>;
+
+function dateRangeDraftsFromState(
+  state: BookingManagementUrlState,
+): DateRangeDrafts {
+  return {
+    bookings: {
+      bookedFrom: state.bookings.bookedFrom ?? '',
+      bookedTo: state.bookings.bookedTo ?? '',
+      departureFrom: state.bookings.departureFrom ?? '',
+      departureTo: state.bookings.departureTo ?? '',
+    },
+    tickets: {
+      bookedFrom: state.tickets.bookedFrom ?? '',
+      bookedTo: state.tickets.bookedTo ?? '',
+      departureFrom: state.tickets.departureFrom ?? '',
+      departureTo: state.tickets.departureTo ?? '',
+    },
+  };
+}
+
+function dateRangeIsInvalid(from: string, to: string) {
+  return Boolean(from && to && from > to);
+}
 
 function pathWithState(state: BookingManagementUrlState) {
   const query = serializeBookingManagementUrlState(state).toString();
@@ -97,6 +127,21 @@ export function BookingManagement() {
   );
   const { state: urlState, needsCanonicalization } = parsedUrl;
   const activeState = urlState[urlState.tab];
+  const [dateDrafts, setDateDrafts] = useState<DateRangeDrafts>(() =>
+    dateRangeDraftsFromState(urlState),
+  );
+  const activeDateDraft = dateDrafts[urlState.tab];
+  const bookedRangeIsInvalid = dateRangeIsInvalid(
+    activeDateDraft.bookedFrom,
+    activeDateDraft.bookedTo,
+  );
+  const departureRangeIsInvalid = dateRangeIsInvalid(
+    activeDateDraft.departureFrom,
+    activeDateDraft.departureTo,
+  );
+  const hasInvalidDateDraft = bookedRangeIsInvalid || departureRangeIsInvalid;
+  const bookedRangeErrorId = `${urlState.tab}-booked-date-range-error`;
+  const departureRangeErrorId = `${urlState.tab}-departure-date-range-error`;
   const authState = useAdminSession();
   const sessionKey = getSessionKey(authState);
   const queryKey = JSON.stringify([sessionKey, urlState.tab, activeState]);
@@ -128,13 +173,31 @@ export function BookingManagement() {
     latestUrlState.current = urlState;
   }, [urlState]);
 
+  useEffect(() => {
+    function restoreDateDraftsFromHistory() {
+      const restoredState = parseBookingManagementUrlState(
+        new URLSearchParams(window.location.search),
+      ).state;
+      latestUrlState.current = restoredState;
+      setDateDrafts(dateRangeDraftsFromState(restoredState));
+    }
+
+    window.addEventListener('popstate', restoreDateDraftsFromHistory);
+    return () =>
+      window.removeEventListener('popstate', restoreDateDraftsFromHistory);
+  }, []);
+
   const writeUrlState = useCallback(
     (nextState: BookingManagementUrlState, history: 'push' | 'replace') => {
+      const nextQuery =
+        serializeBookingManagementUrlState(nextState).toString();
+      latestUrlState.current = nextState;
+      if (nextQuery === queryString) return;
       const url = pathWithState(nextState);
       if (history === 'push') router.push(url, { scroll: false });
       else router.replace(url, { scroll: false });
     },
-    [router],
+    [queryString, router],
   );
 
   useEffect(() => {
@@ -263,26 +326,23 @@ export function BookingManagement() {
   ) {
     const fromKey = key === 'booked' ? 'bookedFrom' : 'departureFrom';
     const toKey = key === 'booked' ? 'bookedTo' : 'departureTo';
+    const tab = urlState.tab;
+    const currentDraft = dateDrafts[tab];
+    const from = edge === 'From' ? value : currentDraft[fromKey];
+    const to = edge === 'To' ? value : currentDraft[toKey];
+
+    setDateDrafts((current) => ({
+      ...current,
+      [tab]: {
+        ...current[tab],
+        [fromKey]: from,
+        [toKey]: to,
+      },
+    }));
+
+    if (dateRangeIsInvalid(from, to)) return;
+
     updateListState((current) => {
-      const from = edge === 'From' ? value : (current[fromKey] ?? '');
-      const to = edge === 'To' ? value : (current[toKey] ?? '');
-      const invalidRange = Boolean(from && to && from > to);
-      if (invalidRange) {
-        if (edge === 'From') {
-          return {
-            ...current,
-            [fromKey]: from || undefined,
-            [toKey]: undefined,
-            page: 1,
-          };
-        }
-        return {
-          ...current,
-          [fromKey]: undefined,
-          [toKey]: to || undefined,
-          page: 1,
-        };
-      }
       return {
         ...current,
         [fromKey]: from || undefined,
@@ -295,6 +355,15 @@ export function BookingManagement() {
   function resetFilters() {
     searchDirty.current = false;
     setSearchDraft('');
+    setDateDrafts((current) => ({
+      ...current,
+      [urlState.tab]: {
+        bookedFrom: '',
+        bookedTo: '',
+        departureFrom: '',
+        departureTo: '',
+      },
+    }));
     updateListState((current) => ({
       ...current,
       search: '',
@@ -338,10 +407,10 @@ export function BookingManagement() {
   const hasFilters = Boolean(
     activeState.search ||
     activeState.status ||
-    activeState.bookedFrom ||
-    activeState.bookedTo ||
-    activeState.departureFrom ||
-    activeState.departureTo,
+    activeDateDraft.bookedFrom ||
+    activeDateDraft.bookedTo ||
+    activeDateDraft.departureFrom ||
+    activeDateDraft.departureTo,
   );
   const statusOptions =
     urlState.tab === 'bookings'
@@ -446,54 +515,92 @@ export function BookingManagement() {
                   }))}
                   value={activeState.status ?? ''}
                 />
-                <label className={styles.dateFilter}>
-                  <span>Ngày đặt từ</span>
-                  <input
-                    aria-label="Ngày đặt từ"
-                    max={activeState.bookedTo}
-                    onChange={(event) =>
-                      changeDateRange('booked', 'From', event.target.value)
-                    }
-                    type="date"
-                    value={activeState.bookedFrom ?? ''}
-                  />
-                </label>
-                <label className={styles.dateFilter}>
-                  <span>Đến</span>
-                  <input
-                    aria-label="Ngày đặt đến"
-                    min={activeState.bookedFrom}
-                    onChange={(event) =>
-                      changeDateRange('booked', 'To', event.target.value)
-                    }
-                    type="date"
-                    value={activeState.bookedTo ?? ''}
-                  />
-                </label>
-                <label className={styles.dateFilter}>
-                  <span>Khởi hành từ</span>
-                  <input
-                    aria-label="Ngày khởi hành từ"
-                    max={activeState.departureTo}
-                    onChange={(event) =>
-                      changeDateRange('departure', 'From', event.target.value)
-                    }
-                    type="date"
-                    value={activeState.departureFrom ?? ''}
-                  />
-                </label>
-                <label className={styles.dateFilter}>
-                  <span>Đến</span>
-                  <input
-                    aria-label="Ngày khởi hành đến"
-                    min={activeState.departureFrom}
-                    onChange={(event) =>
-                      changeDateRange('departure', 'To', event.target.value)
-                    }
-                    type="date"
-                    value={activeState.departureTo ?? ''}
-                  />
-                </label>
+                <div className={styles.dateRangeGroup}>
+                  <label className={styles.dateFilter}>
+                    <span>Ngày đặt từ</span>
+                    <input
+                      aria-describedby={
+                        bookedRangeIsInvalid ? bookedRangeErrorId : undefined
+                      }
+                      aria-invalid={bookedRangeIsInvalid || undefined}
+                      aria-label="Ngày đặt từ"
+                      onChange={(event) =>
+                        changeDateRange('booked', 'From', event.target.value)
+                      }
+                      type="date"
+                      value={activeDateDraft.bookedFrom}
+                    />
+                  </label>
+                  <label className={styles.dateFilter}>
+                    <span>Đến</span>
+                    <input
+                      aria-describedby={
+                        bookedRangeIsInvalid ? bookedRangeErrorId : undefined
+                      }
+                      aria-invalid={bookedRangeIsInvalid || undefined}
+                      aria-label="Ngày đặt đến"
+                      onChange={(event) =>
+                        changeDateRange('booked', 'To', event.target.value)
+                      }
+                      type="date"
+                      value={activeDateDraft.bookedTo}
+                    />
+                  </label>
+                  {bookedRangeIsInvalid && (
+                    <p
+                      className={styles.dateRangeError}
+                      id={bookedRangeErrorId}
+                      role="alert"
+                    >
+                      Ngày bắt đầu không được sau ngày kết thúc.
+                    </p>
+                  )}
+                </div>
+                <div className={styles.dateRangeGroup}>
+                  <label className={styles.dateFilter}>
+                    <span>Khởi hành từ</span>
+                    <input
+                      aria-describedby={
+                        departureRangeIsInvalid
+                          ? departureRangeErrorId
+                          : undefined
+                      }
+                      aria-invalid={departureRangeIsInvalid || undefined}
+                      aria-label="Ngày khởi hành từ"
+                      onChange={(event) =>
+                        changeDateRange('departure', 'From', event.target.value)
+                      }
+                      type="date"
+                      value={activeDateDraft.departureFrom}
+                    />
+                  </label>
+                  <label className={styles.dateFilter}>
+                    <span>Đến</span>
+                    <input
+                      aria-describedby={
+                        departureRangeIsInvalid
+                          ? departureRangeErrorId
+                          : undefined
+                      }
+                      aria-invalid={departureRangeIsInvalid || undefined}
+                      aria-label="Ngày khởi hành đến"
+                      onChange={(event) =>
+                        changeDateRange('departure', 'To', event.target.value)
+                      }
+                      type="date"
+                      value={activeDateDraft.departureTo}
+                    />
+                  </label>
+                  {departureRangeIsInvalid && (
+                    <p
+                      className={styles.dateRangeError}
+                      id={departureRangeErrorId}
+                      role="alert"
+                    >
+                      Ngày bắt đầu không được sau ngày kết thúc.
+                    </p>
+                  )}
+                </div>
                 <label className={styles.pageSize}>
                   <span>Số dòng</span>
                   <select
@@ -554,6 +661,13 @@ export function BookingManagement() {
                 )}
               </FilterToolbar>
 
+              {hasInvalidDateDraft && (
+                <p className={styles.dateDraftNotice} role="status">
+                  Khoảng ngày chưa được áp dụng. Kết quả hiện tại vẫn theo bộ
+                  lọc ngày hợp lệ trước đó.
+                </p>
+              )}
+
               {loading && !resultPage && (
                 <AdminTableSkeleton
                   resourceLabel={
@@ -585,10 +699,10 @@ export function BookingManagement() {
                       {resultPage.meta.totalItems > 0
                         ? 'Trang hiện tại không có dữ liệu. Hãy quay về trang trước.'
                         : hasFilters
-                        ? 'Không tìm thấy kết quả phù hợp với bộ lọc.'
-                        : urlState.tab === 'bookings'
-                          ? 'Chưa có phiếu đặt vé trong nhà xe.'
-                          : 'Chưa có vé trong nhà xe.'}
+                          ? 'Không tìm thấy kết quả phù hợp với bộ lọc.'
+                          : urlState.tab === 'bookings'
+                            ? 'Chưa có phiếu đặt vé trong nhà xe.'
+                            : 'Chưa có vé trong nhà xe.'}
                     </p>
                     {hasFilters && (
                       <button

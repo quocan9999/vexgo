@@ -73,6 +73,26 @@ describe('booking management URL query state', () => {
     );
   });
 
+  it('canonicalizes inverted booked and departure ranges from an external URL safely', () => {
+    const result = parseBookingManagementUrlState(
+      new URLSearchParams(
+        'bBookedFrom=2026-10-15&bBookedTo=2026-10-10&bDepartureFrom=2026-11-15&bDepartureTo=2026-11-10',
+      ),
+    );
+
+    expect(result.state.bookings.bookedFrom).toBe('2026-10-15');
+    expect(result.state.bookings.bookedTo).toBeUndefined();
+    expect(result.state.bookings.departureFrom).toBe('2026-11-15');
+    expect(result.state.bookings.departureTo).toBeUndefined();
+    expect(result.needsCanonicalization).toBe(true);
+
+    const safeUrlState = serializeBookingManagementUrlState(result.state);
+    expect(safeUrlState.get('bBookedFrom')).toBe('2026-10-15');
+    expect(safeUrlState.has('bBookedTo')).toBe(false);
+    expect(safeUrlState.get('bDepartureFrom')).toBe('2026-11-15');
+    expect(safeUrlState.has('bDepartureTo')).toBe(false);
+  });
+
   it('maps filter edits without altering the other tab state', () => {
     const initial = parseBookingManagementUrlState(
       new URLSearchParams('tab=bookings&bPage=5&tPage=4&tSearch=VE'),
