@@ -1,0 +1,39 @@
+# Feature 09 — Environment Handoff
+
+- **Phase / spec chính xác:** Environment & Worktree Isolation (`docs/features/feature-09-gui-hang-admin/ENVIRONMENT_WORKTREE.md`)
+- **Ngày giờ / trạng thái:** 09/10/2026 / READY
+- **Branch / worktree path / base origin/develop SHA:**
+  - Branch: `feature/shipment-management`
+  - Worktree: `E:\Huit_Local\KhoaLuanCuNhan\SourceCode\vexgo-feature09`
+  - Base `origin/develop` SHA: `f2edf7f8562a2e397f58b7c88568e7f1e6bd40c5`
+- **Ports đã xác minh:**
+  - Admin: `http://localhost:3003` (cấu hình trong `apps/admin/.env.local` `NEXT_PUBLIC_API_URL=http://localhost:4003`)
+  - API: `http://localhost:4003` (`PORT=4003` trong `.env`)
+  - MySQL: `127.0.0.1:3306` (tái sử dụng instance đang chạy, không đổi port/container)
+- **DB đã xác minh (tên, không đưa credential):**
+  - Database chính: `vexgo_feature09` (độc lập 100%, không đụng `vexgo` hay `vexgo_feature07`)
+  - Shadow DB: `vexgo_feature09_shadow`
+- **Source/rules đã đọc và khác biệt so develop:**
+  - `docs/features/feature-09-gui-hang-admin/{README.md,ENVIRONMENT_WORKTREE.md,spec/MASTER_SPEC.md,handoff/INITIAL_HANDOFF.md}`
+  - Root `AGENTS.md`, `apps/admin/AGENTS.md`, `apps/admin/DESIGN.md`, `docs/ADMIN_TENANCY_AND_OPERATIONS.md`
+- **Changed files và logic đã hoàn tất:**
+  - Tạo worktree cô lập `../vexgo-feature09` từ `origin/develop`
+  - Tạo `.env` riêng worktree với port 4003, MySQL 3306, DB `vexgo_feature09`, cookie allowed origin 3003
+  - Tạo `apps/admin/.env.local` với `NEXT_PUBLIC_API_URL=http://localhost:4003`
+  - Chạy `npm ci` độc lập
+  - Chạy `npx prisma migrate deploy` áp dụng 23 migrations vào `vexgo_feature09`
+  - Chạy `npx prisma generate` sinh Prisma Client
+  - Chạy `node prisma/seed-bootstrap.mjs` seed 1 lần duy nhất, xác nhận 24 vận đơn (6 vận đơn trạng thái `MOI_TAO` cho FUTA, TB, HM)
+- **DB / migrations / seed đã chạy (tên, tác động, không secret):**
+  - Migrations: 23 migrations áp dụng thành công trên `vexgo_feature09`.
+  - Seed: 1 lần hoàn tất, 24 `PhieuGuiHang`, 42 `HangHoa`, 24 `ChiTietCuocGuiHang`, 24 `LichSuTrangThaiPhieuGuiHang`, tài khoản staff và nhà xe đầy đủ.
+- **API contract, security scope, negative cases đã xác minh:**
+  - Sẵn sàng cho Phase 01.
+- **GitNexus impact / detect changes risk:**
+  - Worktree mới, chưa có code thay đổi ngoài env và docs.
+- **Commit subject và cách tra SHA:**
+  - Sẽ được commit cùng Phase 01.
+- **Blockers / remaining scope:**
+  - Không có blocker.
+- **Next phase exact path / checklist preflight:**
+  - Phase 01: `docs/features/feature-09-gui-hang-admin/spec/PHASE_01_RBAC_BACKEND_FOUNDATION.md`
