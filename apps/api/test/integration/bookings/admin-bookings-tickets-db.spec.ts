@@ -118,6 +118,8 @@ type BookingFixture = {
   phieuDatVeId: number;
   donGiaoDichId: number;
   ticketIds: number[];
+  bookingCode: string;
+  ticketCodes: string[];
 };
 
 featureDescribe(
@@ -339,11 +341,16 @@ featureDescribe(
       bookedAt?: Date;
       initialAmount: string;
       orderAmount: string;
+      searchSuffix?: string;
     }): Promise<BookingFixture> {
       if (customerId === undefined) {
         throw new Error('Test fixture customer was not initialized.');
       }
       const bookedAt = options.bookedAt ?? new Date('2026-10-08T17:00:00.000Z');
+      const searchableSuffix = options.searchSuffix
+        ? `-${options.searchSuffix}`
+        : '';
+      const bookingCode = `${fixturePrefix}-BOOKING-${options.label}${searchableSuffix}`;
       const transaction = await prisma.donGiaoDich.create({
         data: {
           maDonGiaoDich: `${fixturePrefix}-ORDER-${options.label}`,
@@ -360,7 +367,7 @@ featureDescribe(
       });
       const booking = await prisma.phieuDatVe.create({
         data: {
-          maPhieuDatVe: `${fixturePrefix}-BOOKING-${options.label}`,
+          maPhieuDatVe: bookingCode,
           ngayDat: bookedAt,
           soLuongVeBanDau: options.ticketDefinitions.length,
           tongTienBanDau: options.initialAmount,
@@ -370,6 +377,7 @@ featureDescribe(
         select: { phieuDatVeId: true },
       });
       const ticketIds: number[] = [];
+      const createdTicketCodes: string[] = [];
       for (const [index, definition] of options.ticketDefinitions.entries()) {
         const tripId = options.tenant.trips.get(definition.trip);
         const gheChuyenXeId = options.tenant.seats.get(
@@ -380,9 +388,10 @@ featureDescribe(
             `Test fixture is missing trip seat ${definition.trip}:${definition.seat}.`,
           );
         }
+        const ticketCode = `${fixturePrefix}-TICKET-${options.label}-${index + 1}${searchableSuffix}`;
         const ticket = await prisma.ve.create({
           data: {
-            maVe: `${fixturePrefix}-TICKET-${options.label}-${index + 1}`,
+            maVe: ticketCode,
             diemDon: 'Bến xe thử',
             giaNiemYet: '100000',
             giaThucTe: '100000',
@@ -395,13 +404,16 @@ featureDescribe(
           select: { veId: true, maVe: true },
         });
         ticketIds.push(ticket.veId);
-        ticketCodes.push(ticket.maVe);
+        ticketCodes.push(ticketCode);
+        createdTicketCodes.push(ticketCode);
       }
-      bookingCodes.push(`${fixturePrefix}-BOOKING-${options.label}`);
+      bookingCodes.push(bookingCode);
       return {
         phieuDatVeId: booking.phieuDatVeId,
         donGiaoDichId: transaction.donGiaoDichId,
         ticketIds,
+        bookingCode,
+        ticketCodes: createdTicketCodes,
       };
     }
 
@@ -895,23 +907,50 @@ featureDescribe(
     });
 
     it('searches booking code, ticket code, customer name and phone without leaking another tenant', async () => {
-      const searches = [
-        `${fixturePrefix}-BOOKING-A1`,
-        ticketCodes[0],
-        customerName,
-        customerPhone,
+      const tenantABookingIds = [
+        bookingA.phieuDatVeId,
+        bookingA2.phieuDatVeId,
+        inconsistentBookingA.phieuDatVeId,
       ];
-      for (const search of searches) {
+      const tenantABookingCodes = bookingCodes.slice(0, 3);
+      const bookingSearches = [
+        {
+          search: bookingCodes[0],
+          bookingIds: [bookingA.phieuDatVeId],
+          codes: [bookingCodes[0]],
+        },
+        {
+          search: ticketCodes[0],
+          bookingIds: [bookingA.phieuDatVeId],
+          codes: [bookingCodes[0]],
+        },
+        {
+          search: customerName,
+          bookingIds: tenantABookingIds,
+          codes: tenantABookingCodes,
+        },
+        {
+          search: customerPhone,
+          bookingIds: tenantABookingIds,
+          codes: tenantABookingCodes,
+        },
+      ];
+      for (const { search, bookingIds, codes } of bookingSearches) {
         const response = await request(app.getHttpServer())
           .get(`/api/v1/admin/bookings?search=${encodeURIComponent(search)}`)
           .set('Authorization', tenantAToken)
           .expect(200);
-        expect(response.body.meta.totalItems).toBeGreaterThan(0);
+        expect(response.body.meta.totalItems).toBe(bookingIds.length);
         expect(
-          response.body.data.every((item: { bookingCode: string }) =>
-            bookingCodes.slice(0, 3).includes(item.bookingCode),
-          ),
-        ).toBe(true);
+          response.body.data
+            .map((item: { bookingId: number }) => item.bookingId)
+            .sort((left: number, right: number) => left - right),
+        ).toEqual([...bookingIds].sort((left, right) => left - right));
+        expect(
+          response.body.data
+            .map((item: { bookingCode: string }) => item.bookingCode)
+            .sort(),
+        ).toEqual([...codes].sort());
       }
 
       const foreignSearch = await request(app.getHttpServer())
@@ -925,22 +964,50 @@ featureDescribe(
         meta: { page: 1, pageSize: 10, totalItems: 0, totalPages: 0 },
       });
 
-      for (const search of [
-        ticketCodes[0],
-        bookingCodes[0],
-        customerName,
-        customerPhone,
-      ]) {
+      const tenantATicketIds = [
+        ...bookingA.ticketIds,
+        ...bookingA2.ticketIds,
+        ...inconsistentBookingA.ticketIds,
+      ];
+      const tenantATicketCodes = ticketCodes.slice(0, 6);
+      const ticketSearches = [
+        {
+          search: ticketCodes[0],
+          ticketIds: [bookingA.ticketIds[0]],
+          codes: [ticketCodes[0]],
+        },
+        {
+          search: bookingCodes[0],
+          ticketIds: bookingA.ticketIds,
+          codes: ticketCodes.slice(0, 3),
+        },
+        {
+          search: customerName,
+          ticketIds: tenantATicketIds,
+          codes: tenantATicketCodes,
+        },
+        {
+          search: customerPhone,
+          ticketIds: tenantATicketIds,
+          codes: tenantATicketCodes,
+        },
+      ];
+      for (const { search, ticketIds, codes } of ticketSearches) {
         const ticketSearch = await request(app.getHttpServer())
           .get(`/api/v1/admin/tickets?search=${encodeURIComponent(search)}`)
           .set('Authorization', tenantAToken)
           .expect(200);
-        expect(ticketSearch.body.meta.totalItems).toBeGreaterThan(0);
+        expect(ticketSearch.body.meta.totalItems).toBe(ticketIds.length);
         expect(
-          ticketSearch.body.data.every((item: { bookingCode: string }) =>
-            bookingCodes.slice(0, 3).includes(item.bookingCode),
-          ),
-        ).toBe(true);
+          ticketSearch.body.data
+            .map((item: { ticketId: number }) => item.ticketId)
+            .sort((left: number, right: number) => left - right),
+        ).toEqual([...ticketIds].sort((left, right) => left - right));
+        expect(
+          ticketSearch.body.data
+            .map((item: { ticketCode: string }) => item.ticketCode)
+            .sort(),
+        ).toEqual([...codes].sort());
       }
     });
 
@@ -1301,6 +1368,153 @@ featureDescribe(
         .set('Authorization', missingTenantToken)
         .expect(403);
       expect(missingTenant.body.error).toBe('TENANT_SCOPE_REQUIRED');
+    });
+
+    it('matches literal LIKE wildcards through both tenant-scoped MySQL search APIs', async () => {
+      const marker = `F3${suffix.slice(0, 6)}`;
+      const cases = [
+        {
+          label: 'PCT',
+          search: `${marker}P%`,
+          lookalike: `${marker}PX`,
+        },
+        {
+          label: 'UND',
+          search: `${marker}U_`,
+          lookalike: `${marker}UX`,
+        },
+        {
+          label: 'BSL',
+          search: `${marker}B\\`,
+          lookalike: `${marker}B%`,
+        },
+      ];
+      const tenantASeats = [
+        { seat: 'A06', trip: 'primary' },
+        { seat: 'A01', trip: 'secondary' },
+        { seat: 'A02', trip: 'secondary' },
+        { seat: 'A03', trip: 'secondary' },
+        { seat: 'A04', trip: 'secondary' },
+        { seat: 'A05', trip: 'secondary' },
+      ];
+      const tenantBSeats = ['B02', 'B03', 'B04'];
+      let tenantASeatIndex = 0;
+      let tenantBSeatIndex = 0;
+
+      async function createSearchBooking(
+        tenant: TenantFixture,
+        label: string,
+        searchSuffix: string,
+        seat: { seat: string; trip: string },
+      ) {
+        return createBooking({
+          tenant,
+          label,
+          searchSuffix,
+          transactionStatus: 'DA_THANH_TOAN',
+          bookingStatus: 'DA_THANH_TOAN',
+          initialAmount: '100000',
+          orderAmount: '100000',
+          ticketDefinitions: [{ ...seat, status: 'DA_DAT' }],
+        });
+      }
+
+      for (const testCase of cases) {
+        const caseLabel = `F3${testCase.label}`;
+        const targetA = await createSearchBooking(
+          tenantA,
+          `${caseLabel}A`,
+          testCase.search,
+          tenantASeats[tenantASeatIndex++],
+        );
+        const lookalikeA = await createSearchBooking(
+          tenantA,
+          `${caseLabel}D`,
+          testCase.lookalike,
+          tenantASeats[tenantASeatIndex++],
+        );
+        const targetB = await createSearchBooking(
+          tenantB,
+          `${caseLabel}B`,
+          testCase.search,
+          { seat: tenantBSeats[tenantBSeatIndex++], trip: 'primary' },
+        );
+
+        const persistedBookings = await prisma.phieuDatVe.findMany({
+          where: {
+            phieuDatVeId: {
+              in: [
+                targetA.phieuDatVeId,
+                lookalikeA.phieuDatVeId,
+                targetB.phieuDatVeId,
+              ],
+            },
+          },
+          select: { phieuDatVeId: true, maPhieuDatVe: true },
+        });
+        expect(
+          persistedBookings
+            .map(({ phieuDatVeId, maPhieuDatVe }) => ({
+              phieuDatVeId,
+              maPhieuDatVe,
+            }))
+            .sort((left, right) => left.phieuDatVeId - right.phieuDatVeId),
+        ).toEqual(
+          [targetA, lookalikeA, targetB]
+            .map(({ phieuDatVeId, bookingCode }) => ({
+              phieuDatVeId,
+              maPhieuDatVe: bookingCode,
+            }))
+            .sort((left, right) => left.phieuDatVeId - right.phieuDatVeId),
+        );
+
+        for (const [token, expected] of [
+          [tenantAToken, targetA],
+          [tenantBToken, targetB],
+        ] as const) {
+          const bookingSearch = await request(app.getHttpServer())
+            .get(
+              `/api/v1/admin/bookings?search=${encodeURIComponent(testCase.search)}`,
+            )
+            .set('Authorization', token)
+            .expect(200);
+          expect(bookingSearch.body.meta.totalItems).toBe(1);
+          expect(
+            bookingSearch.body.data.map(
+              (item: { bookingId: number; bookingCode: string }) => ({
+                bookingId: item.bookingId,
+                bookingCode: item.bookingCode,
+              }),
+            ),
+          ).toEqual([
+            {
+              bookingId: expected.phieuDatVeId,
+              bookingCode: expected.bookingCode,
+            },
+          ]);
+
+          const ticketSearch = await request(app.getHttpServer())
+            .get(
+              `/api/v1/admin/tickets?search=${encodeURIComponent(testCase.search)}`,
+            )
+            .set('Authorization', token)
+            .expect(200);
+          expect(ticketSearch.body.meta.totalItems).toBe(1);
+          expect(
+            ticketSearch.body.data.map(
+              (item: { ticketId: number; ticketCode: string }) => ({
+                ticketId: item.ticketId,
+                ticketCode: item.ticketCode,
+              }),
+            ),
+          ).toEqual([
+            {
+              ticketId: expected.ticketIds[0],
+              ticketCode: expected.ticketCodes[0],
+            },
+          ]);
+        }
+      }
     });
   },
 );
