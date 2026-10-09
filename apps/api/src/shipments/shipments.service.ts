@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { lockPaymentOrder } from '../payments/payment-order-lock.js';
 import { requireTenantPrincipal } from '../auth/tenant-scope.js';
 import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
 import { ShipmentQueryDto } from './dto/shipment-query.dto.js';
@@ -361,10 +362,6 @@ export class ShipmentsService {
         donGiaoDich: {
           select: {
             nhaXeId: true,
-            trangThai: true,
-            thanhToans: {
-              select: { trangThai: true },
-            },
           },
         },
         chuyenXe: { select: { nhaXeId: true } },
@@ -426,27 +423,97 @@ export class ShipmentsService {
       });
     }
 
-    if (targetStatus === 'DA_HUY') {
-      const hasPaid =
-        shipment.donGiaoDich.trangThai === 'DA_THANH_TOAN' ||
-        shipment.donGiaoDich.thanhToans.some(
-          (t) =>
-            t.trangThai === 'THANH_CONG' || t.trangThai === 'DA_THANH_TOAN',
-        );
-      if (hasPaid) {
-        throw new ConflictException({
-          statusCode: 409,
-          error: 'SHIPMENT_REFUND_REQUIRED',
-          message:
-            'Phiếu gửi hàng đã thanh toán thành công, không thể hủy khi chưa có quy trình hoàn tiền trong MVP.',
-        });
-      }
-    }
-
     const now = new Date();
     const noteText = dto.note?.trim() || null;
 
     const result = await this.prisma.$transaction(async (tx) => {
+      if (targetStatus === 'DA_HUY') {
+        const hasOrder = await lockPaymentOrder(tx, shipment.donGiaoDichId);
+        if (!hasOrder) {
+          throw new NotFoundException({
+            statusCode: 404,
+            error: 'SHIPMENT_NOT_FOUND',
+            message: 'Shipment was not found.',
+          });
+        }
+
+        const lockedShipment = await tx.phieuGuiHang.findUnique({
+          where: { phieuGuiHangId: id },
+          include: {
+            donGiaoDich: {
+              select: {
+                nhaXeId: true,
+                trangThai: true,
+                thanhToans: {
+                  select: { loaiGiaoDich: true, trangThai: true },
+                },
+              },
+            },
+            chuyenXe: { select: { nhaXeId: true } },
+            diemGui: { select: { nhaXeId: true } },
+            diemNhan: { select: { nhaXeId: true } },
+          },
+        });
+
+        if (
+          !lockedShipment ||
+          lockedShipment.donGiaoDich.nhaXeId !== tenantId ||
+          lockedShipment.chuyenXe.nhaXeId !== tenantId ||
+          lockedShipment.diemGui.nhaXeId !== tenantId ||
+          lockedShipment.diemNhan.nhaXeId !== tenantId
+        ) {
+          throw new NotFoundException({
+            statusCode: 404,
+            error: 'SHIPMENT_NOT_FOUND',
+            message: 'Shipment was not found.',
+          });
+        }
+        if (lockedShipment.trangThai !== currentStatus) {
+          throw new ConflictException({
+            statusCode: 409,
+            error: 'CONCURRENT_STATUS_UPDATE',
+            message: 'Shipment status changed during this request.',
+          });
+        }
+
+        const chargePayments = lockedShipment.donGiaoDich.thanhToans.filter(
+          (payment) => payment.loaiGiaoDich !== 'HOAN_TIEN',
+        );
+        const hasPaid =
+          lockedShipment.donGiaoDich.trangThai === 'DA_THANH_TOAN' ||
+          chargePayments.some(
+            (payment) =>
+              payment.trangThai === 'THANH_CONG' ||
+              payment.trangThai === 'DA_THANH_TOAN',
+          );
+        if (hasPaid) {
+          throw new ConflictException({
+            statusCode: 409,
+            error: 'SHIPMENT_REFUND_REQUIRED',
+            message:
+              'Shipment payment succeeded; a refund is required before cancellation.',
+          });
+        }
+
+        const hasUncertainPayment = lockedShipment.donGiaoDich.thanhToans.some(
+          (payment) =>
+            !['THANH_CONG', 'DA_THANH_TOAN', 'THAT_BAI', 'DA_HUY'].includes(
+              payment.trangThai,
+            ),
+        );
+        if (
+          lockedShipment.donGiaoDich.trangThai !== 'CHO_THANH_TOAN' ||
+          hasUncertainPayment
+        ) {
+          throw new ConflictException({
+            statusCode: 409,
+            error: 'SHIPMENT_PAYMENT_UNCERTAIN',
+            message:
+              'Cannot cancel while payment is pending or its state is unknown.',
+          });
+        }
+      }
+
       const updated = await tx.phieuGuiHang.updateMany({
         where: {
           phieuGuiHangId: id,

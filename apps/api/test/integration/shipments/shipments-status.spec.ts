@@ -11,6 +11,8 @@ import { AccessTokenGuard } from '../../../src/auth/guards/access-token.guard.js
 import { ADMIN_ROLE_DEFAULT_PERMISSION_KEYS } from '../../../src/auth/permissions/permission-catalog.js';
 import type { AuthPrincipal } from '../../../src/auth/tokens/auth-principal.js';
 import { configureApi } from '../../../src/common/configure-api.js';
+import { lockPaymentOrder } from '../../../src/payments/payment-order-lock.js';
+import { PaymentSettlementService } from '../../../src/payments/payment-settlement.service.js';
 import { PrismaService } from '../../../src/prisma/prisma.service.js';
 
 describe('Shipment Status Transition APIs (Phase 04)', () => {
@@ -722,6 +724,115 @@ describe('Shipment Status Transition APIs (Phase 04)', () => {
       });
       expect(db.trangThai).toBe('MOI_TAO'); // Unchanged
     });
+
+    it.each(['DANG_XU_LY', 'PROVIDER_RESPONSE_UNKNOWN'])(
+      'fails closed when cancellation finds payment state %s',
+      async (paymentStatus) => {
+        const shipment = await createTestShipment({
+          nhaXeId: tenantOneId,
+          initialStatus: 'MOI_TAO',
+        });
+        await prisma.thanhToan.create({
+          data: {
+            soTien: 100000,
+            phuongThuc: 'VNPAY',
+            loaiGiaoDich: 'THANH_TOAN_DON_HANG',
+            thoiGian: new Date(),
+            trangThai: paymentStatus,
+            donGiaoDichId: shipment.donGiaoDichId,
+          },
+        });
+        setTenantAdmin();
+
+        const response = await request(app.getHttpServer())
+          .patch(`/api/v1/shipments/${shipment.phieuGuiHangId}/status`)
+          .send({ status: 'DA_HUY' });
+
+        expect(response.status).toBe(409);
+        expect(response.body.error).toBe('SHIPMENT_PAYMENT_UNCERTAIN');
+        const updatedShipment = await prisma.phieuGuiHang.findUniqueOrThrow({
+          where: { phieuGuiHangId: shipment.phieuGuiHangId },
+        });
+        expect(updatedShipment.trangThai).toBe('MOI_TAO');
+      },
+    );
+
+    it('rejects a provider confirmation after the shipment has been cancelled', async () => {
+      const shipment = await createTestShipment({
+        nhaXeId: tenantOneId,
+        initialStatus: 'MOI_TAO',
+      });
+      const payment = await prisma.thanhToan.create({
+        data: {
+          soTien: 100000,
+          phuongThuc: 'VNPAY',
+          loaiGiaoDich: 'THANH_TOAN_DON_HANG',
+          thoiGian: new Date(),
+          trangThai: 'DANG_XU_LY',
+          donGiaoDichId: shipment.donGiaoDichId,
+        },
+      });
+      await prisma.phieuGuiHang.update({
+        where: { phieuGuiHangId: shipment.phieuGuiHangId },
+        data: { trangThai: 'DA_HUY' },
+      });
+
+      const paymentSettlement = app.get(PaymentSettlementService);
+      await expect(
+        paymentSettlement.confirmPayment(payment.thanhToanId),
+      ).rejects.toMatchObject({
+        response: { error: 'PAYMENT_ORDER_CANCELLED' },
+      });
+      const [unchangedPayment, unchangedOrder] = await Promise.all([
+        prisma.thanhToan.findUniqueOrThrow({
+          where: { thanhToanId: payment.thanhToanId },
+        }),
+        prisma.donGiaoDich.findUniqueOrThrow({
+          where: { donGiaoDichId: shipment.donGiaoDichId },
+        }),
+      ]);
+      expect(unchangedPayment.trangThai).toBe('DANG_XU_LY');
+      expect(unchangedOrder.trangThai).toBe('CHO_THANH_TOAN');
+    });
+
+    it('marks a provider-confirmed payment and its order as paid atomically', async () => {
+      const shipment = await createTestShipment({
+        nhaXeId: tenantOneId,
+        initialStatus: 'MOI_TAO',
+      });
+      const payment = await prisma.thanhToan.create({
+        data: {
+          soTien: 100000,
+          phuongThuc: 'VNPAY',
+          loaiGiaoDich: 'THANH_TOAN_DON_HANG',
+          thoiGian: new Date(),
+          trangThai: 'DANG_XU_LY',
+          donGiaoDichId: shipment.donGiaoDichId,
+        },
+      });
+
+      const paymentSettlement = app.get(PaymentSettlementService);
+      const result = await paymentSettlement.confirmPayment(
+        payment.thanhToanId,
+      );
+      expect(result.data).toEqual({
+        paymentId: payment.thanhToanId,
+        status: 'THANH_CONG',
+      });
+      await expect(
+        paymentSettlement.confirmPayment(payment.thanhToanId),
+      ).resolves.toEqual(result);
+      const [settledPayment, settledOrder] = await Promise.all([
+        prisma.thanhToan.findUniqueOrThrow({
+          where: { thanhToanId: payment.thanhToanId },
+        }),
+        prisma.donGiaoDich.findUniqueOrThrow({
+          where: { donGiaoDichId: shipment.donGiaoDichId },
+        }),
+      ]);
+      expect(settledPayment.trangThai).toBe('THANH_CONG');
+      expect(settledOrder.trangThai).toBe('DA_THANH_TOAN');
+    });
   });
 
   describe('Invalid Transitions, Jumps, Repeats and Terminal States', () => {
@@ -775,6 +886,78 @@ describe('Shipment Status Transition APIs (Phase 04)', () => {
   });
 
   describe('Concurrency & Race Condition Handling', () => {
+    it('serializes cancellation against an in-flight payment confirmation', async () => {
+      const shipment = await createTestShipment({ initialStatus: 'MOI_TAO' });
+      let signalPaymentLock: () => void = () => undefined;
+      let releasePayment: () => void = () => undefined;
+      const paymentLockAcquired = new Promise<void>((resolve) => {
+        signalPaymentLock = resolve;
+      });
+      const paymentCanCommit = new Promise<void>((resolve) => {
+        releasePayment = resolve;
+      });
+
+      const paymentConfirmation = prisma.$transaction(async (tx) => {
+        const hasOrder = await lockPaymentOrder(tx, shipment.donGiaoDichId);
+        expect(hasOrder).toBe(true);
+        signalPaymentLock();
+        await paymentCanCommit;
+        await tx.thanhToan.create({
+          data: {
+            soTien: 100000,
+            phuongThuc: 'VNPAY',
+            loaiGiaoDich: 'THANH_TOAN_DON_HANG',
+            thoiGian: new Date(),
+            trangThai: 'THANH_CONG',
+            donGiaoDichId: shipment.donGiaoDichId,
+          },
+        });
+        await tx.donGiaoDich.update({
+          where: { donGiaoDichId: shipment.donGiaoDichId },
+          data: { trangThai: 'DA_THANH_TOAN' },
+        });
+      });
+
+      await paymentLockAcquired;
+      setTenantAdmin();
+      const cancellation = request(app.getHttpServer())
+        .patch(`/api/v1/shipments/${shipment.phieuGuiHangId}/status`)
+        .send({ status: 'DA_HUY' });
+      let responseBeforePaymentCommit: Awaited<typeof cancellation> | undefined;
+      try {
+        responseBeforePaymentCommit = await Promise.race([
+          cancellation,
+          new Promise<undefined>((resolve) =>
+            setTimeout(() => resolve(undefined), 500),
+          ),
+        ]);
+      } finally {
+        releasePayment();
+      }
+      await paymentConfirmation;
+
+      expect(responseBeforePaymentCommit).toBeUndefined();
+      const response = responseBeforePaymentCommit ?? (await cancellation);
+      expect(response.status).toBe(409);
+      expect(response.body.error).toBe('SHIPMENT_REFUND_REQUIRED');
+
+      const [updatedShipment, updatedOrder, payments] = await Promise.all([
+        prisma.phieuGuiHang.findUniqueOrThrow({
+          where: { phieuGuiHangId: shipment.phieuGuiHangId },
+        }),
+        prisma.donGiaoDich.findUniqueOrThrow({
+          where: { donGiaoDichId: shipment.donGiaoDichId },
+        }),
+        prisma.thanhToan.findMany({
+          where: { donGiaoDichId: shipment.donGiaoDichId },
+        }),
+      ]);
+      expect(updatedShipment.trangThai).toBe('MOI_TAO');
+      expect(updatedOrder.trangThai).toBe('DA_THANH_TOAN');
+      expect(payments).toHaveLength(1);
+      expect(payments[0].trangThai).toBe('THANH_CONG');
+    });
+
     it('handles concurrent status updates safely with only one winner', async () => {
       const shipment = await createTestShipment({ initialStatus: 'MOI_TAO' });
       setTenantAdmin();
