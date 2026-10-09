@@ -573,4 +573,118 @@ describe('Shipment Status Actions UI (Phase 05)', () => {
     expect(screen.getByRole('button', { name: 'Đóng' })).toBeTruthy();
     expect(patchCount).toBe(1);
   });
+
+  it('hides previous filter results and pagination when the new filter request fails', async () => {
+    setEmployeeAdminTestSession(['shipment:read']);
+
+    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname !== '/api/v1/shipments') {
+        return Promise.resolve(jsonResponse({ message: 'Not found' }, false, 404));
+      }
+      if (url.searchParams.get('status') === 'DA_HUY') {
+        return Promise.resolve(
+          jsonResponse({ message: 'Không thể tải dữ liệu theo bộ lọc.' }, false, 503),
+        );
+      }
+      return Promise.resolve(
+        jsonResponse({
+          data: [mockShipmentSummary],
+          meta: { page: 1, pageSize: 10, totalItems: 15, totalPages: 2 },
+        }),
+      );
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<ShipmentsManagement />);
+    await waitFor(() => {
+      expect(screen.getAllByText('VD20261009001')).toHaveLength(2);
+    });
+
+    fireEvent.click(screen.getByRole('combobox', { name: 'Trạng thái phiếu gửi' }));
+    const cancelledOption = await screen.findByRole('option', { name: 'Đã hủy' });
+    fireEvent.pointerDown(cancelledOption, { button: 0, pointerType: 'mouse' });
+    fireEvent.pointerUp(cancelledOption, { button: 0, pointerType: 'mouse' });
+    fireEvent.click(cancelledOption);
+
+    expect((await screen.findByRole('alert')).textContent).toContain(
+      'Không thể tải dữ liệu theo bộ lọc.',
+    );
+    expect(screen.queryAllByText('VD20261009001')).toHaveLength(0);
+    expect(screen.queryByText('Trang 1 / 2')).toBeNull();
+    expect(screen.queryByText('Không tìm thấy phiếu gửi hàng phù hợp với bộ lọc.')).toBeNull();
+  });
+
+  it('hides previous page results and pagination when the new page request fails', async () => {
+    setEmployeeAdminTestSession(['shipment:read']);
+
+    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname !== '/api/v1/shipments') {
+        return Promise.resolve(jsonResponse({ message: 'Not found' }, false, 404));
+      }
+      if (url.searchParams.get('page') === '2') {
+        return Promise.resolve(
+          jsonResponse({ message: 'Không thể tải trang tiếp theo.' }, false, 503),
+        );
+      }
+      return Promise.resolve(
+        jsonResponse({
+          data: [mockShipmentSummary],
+          meta: { page: 1, pageSize: 10, totalItems: 15, totalPages: 2 },
+        }),
+      );
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<ShipmentsManagement />);
+    await waitFor(() => {
+      expect(screen.getAllByText('VD20261009001')).toHaveLength(2);
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Trang sau' }));
+
+    expect((await screen.findByRole('alert')).textContent).toContain(
+      'Không thể tải trang tiếp theo.',
+    );
+    expect(screen.queryAllByText('VD20261009001')).toHaveLength(0);
+    expect(screen.queryByText('Trang 1 / 2')).toBeNull();
+  });
+
+  it('keeps matching rows visible and reports an error when refreshing the same query fails', async () => {
+    setEmployeeAdminTestSession(['shipment:read']);
+
+    let requestCount = 0;
+    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname !== '/api/v1/shipments') {
+        return Promise.resolve(jsonResponse({ message: 'Not found' }, false, 404));
+      }
+      requestCount += 1;
+      if (requestCount > 1) {
+        return Promise.resolve(
+          jsonResponse({ message: 'Không thể làm mới danh sách.' }, false, 503),
+        );
+      }
+      return Promise.resolve(
+        jsonResponse({
+          data: [mockShipmentSummary],
+          meta: { page: 1, pageSize: 10, totalItems: 1, totalPages: 1 },
+        }),
+      );
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<ShipmentsManagement />);
+    await waitFor(() => {
+      expect(screen.getAllByText('VD20261009001')).toHaveLength(2);
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Làm mới' }));
+
+    expect((await screen.findByRole('alert')).textContent).toContain(
+      'Không thể làm mới danh sách.',
+    );
+    expect(screen.getAllByText('VD20261009001')).toHaveLength(2);
+    expect(screen.getByRole('button', { name: 'Thử lại' })).toBeTruthy();
+    expect(requestCount).toBe(2);
+  });
 });

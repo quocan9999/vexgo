@@ -115,8 +115,8 @@ export function useShipments() {
   };
 
   return {
-    shipments: activePage?.data ?? result?.response.data ?? [],
-    meta: activePage?.meta ?? result?.response.meta ?? defaultMeta,
+    shipments: activePage?.data ?? [],
+    meta: activePage?.meta ?? defaultMeta,
     loading,
     refreshing,
     error,

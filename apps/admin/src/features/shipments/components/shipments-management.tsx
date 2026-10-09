@@ -105,18 +105,20 @@ export function ShipmentsManagement() {
             {loading && shipments.length === 0 ? (
               <AdminTableSkeleton resourceLabel="phiếu gửi hàng" />
             ) : shipments.length === 0 ? (
-              <div className="shipments-state-panel">
-                <p>
-                  {isFiltered
-                    ? 'Không tìm thấy phiếu gửi hàng phù hợp với bộ lọc.'
-                    : 'Chưa có phiếu gửi hàng nào trong hệ thống nhà xe.'}
-                </p>
-                {isFiltered && (
-                  <Button onClick={resetFilters} type="button" variant="secondary">
-                    Đặt lại bộ lọc
-                  </Button>
-                )}
-              </div>
+              error ? null : (
+                <div className="shipments-state-panel">
+                  <p>
+                    {isFiltered
+                      ? 'Không tìm thấy phiếu gửi hàng phù hợp với bộ lọc.'
+                      : 'Chưa có phiếu gửi hàng nào trong hệ thống nhà xe.'}
+                  </p>
+                  {isFiltered && (
+                    <Button onClick={resetFilters} type="button" variant="secondary">
+                      Đặt lại bộ lọc
+                    </Button>
+                  )}
+                </div>
+              )
             ) : (
               <>
                 <div
