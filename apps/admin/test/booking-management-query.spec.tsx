@@ -54,6 +54,92 @@ describe('booking management URL query state', () => {
     expect(restored.tickets.status).toBeUndefined();
   });
 
+  it('accepts page 10000 and canonicalizes unsafe pages on either tab without losing filters', () => {
+    const scenarios = [
+      {
+        tab: 'bookings' as const,
+        prefix: 'b' as const,
+        otherPrefix: 't' as const,
+        otherTab: 'tickets' as const,
+        otherPage: 4,
+        activeSearch: 'PD-KEEP',
+        otherSearch: 'VE-KEEP',
+        query:
+          'bPage=10000&bSearch=PD-KEEP&bStatus=DA_HUY&bBookedFrom=2026-10-05&bBookedTo=2026-10-10&tPage=4&tSearch=VE-KEEP&tStatus=HUY',
+      },
+      {
+        tab: 'tickets' as const,
+        prefix: 't' as const,
+        otherPrefix: 'b' as const,
+        otherTab: 'bookings' as const,
+        otherPage: 3,
+        activeSearch: 'VE-KEEP',
+        otherSearch: 'PD-KEEP',
+        query:
+          'tab=tickets&tPage=10000&tSearch=VE-KEEP&tStatus=HUY&tDepartureFrom=2026-11-01&tDepartureTo=2026-11-05&bPage=3&bSearch=PD-KEEP&bStatus=DA_HUY',
+      },
+    ];
+    const invalidPages = [
+      '10001',
+      '999999999999999999999999999999999999',
+      '-1',
+      'not-a-page',
+      '1.5',
+    ];
+
+    for (const scenario of scenarios) {
+      const accepted = parseBookingManagementUrlState(
+        new URLSearchParams(scenario.query),
+      );
+      expect(accepted.state[scenario.tab].page).toBe(10_000);
+      expect(
+        serializeBookingManagementUrlState(accepted.state).get(
+          `${scenario.prefix}Page`,
+        ),
+      ).toBe('10000');
+      expect(accepted.state[scenario.otherTab].page).toBe(scenario.otherPage);
+
+      for (const invalidPage of invalidPages) {
+        const params = new URLSearchParams(scenario.query);
+        params.set(`${scenario.prefix}Page`, invalidPage);
+        const parsed = parseBookingManagementUrlState(params);
+        const canonical = serializeBookingManagementUrlState(parsed.state);
+
+        expect(parsed.state.tab).toBe(scenario.tab);
+        expect(parsed.state[scenario.tab].page).toBe(1);
+        expect(parsed.state[scenario.tab].search).toBe(scenario.activeSearch);
+        expect(parsed.state[scenario.otherTab].page).toBe(scenario.otherPage);
+        expect(parsed.state[scenario.otherTab].search).toBe(scenario.otherSearch);
+        expect(parsed.needsCanonicalization).toBe(true);
+        expect(canonical.has(`${scenario.prefix}Page`)).toBe(false);
+        expect(canonical.get(`${scenario.otherPrefix}Page`)).toBe(
+          String(scenario.otherPage),
+        );
+        expect(canonical.get(`${scenario.prefix}Search`)).toBe(
+          scenario.activeSearch,
+        );
+        expect(canonical.get(`${scenario.otherPrefix}Search`)).toBe(
+          scenario.otherSearch,
+        );
+        expect(
+          parseBookingManagementUrlState(canonical).needsCanonicalization,
+        ).toBe(false);
+
+        if (scenario.tab === 'bookings') {
+          expect(parsed.state.bookings.bookedFrom).toBe('2026-10-05');
+          expect(parsed.state.bookings.bookedTo).toBe('2026-10-10');
+          expect(canonical.get('bBookedFrom')).toBe('2026-10-05');
+          expect(canonical.get('bBookedTo')).toBe('2026-10-10');
+        } else {
+          expect(parsed.state.tickets.departureFrom).toBe('2026-11-01');
+          expect(parsed.state.tickets.departureTo).toBe('2026-11-05');
+          expect(canonical.get('tDepartureFrom')).toBe('2026-11-01');
+          expect(canonical.get('tDepartureTo')).toBe('2026-11-05');
+        }
+      }
+    }
+  });
+
   it('sanitizes invalid tabs, status, dates, page and unknown URL keys', () => {
     const result = parseBookingManagementUrlState(
       new URLSearchParams(

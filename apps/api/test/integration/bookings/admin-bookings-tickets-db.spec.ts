@@ -1347,6 +1347,114 @@ featureDescribe(
       }
     });
 
+    const paginationEndpoints: Array<{
+      name: string;
+      path: () => string;
+      defaultPageSize: number;
+    }> = [
+      {
+        name: 'bookings list',
+        path: () => '/api/v1/admin/bookings',
+        defaultPageSize: 10,
+      },
+      {
+        name: 'tickets list',
+        path: () => '/api/v1/admin/tickets',
+        defaultPageSize: 10,
+      },
+      {
+        name: 'booking history',
+        path: () =>
+          `/api/v1/admin/bookings/${bookingA.phieuDatVeId}/history`,
+        defaultPageSize: 100,
+      },
+      {
+        name: 'ticket history',
+        path: () =>
+          `/api/v1/admin/tickets/${bookingA.ticketIds[0]}/history`,
+        defaultPageSize: 100,
+      },
+    ];
+
+    for (const endpoint of paginationEndpoints) {
+      it(`validates page boundaries through MySQL for ${endpoint.name}`, async () => {
+        const endpointPath = endpoint.path();
+
+        async function expectValidPage(
+          query: string,
+          expectedPage: number,
+          expectedPageSize: number,
+        ) {
+          const response = await request(app.getHttpServer())
+            .get(`${endpointPath}?${query}`)
+            .set('Authorization', tenantAToken)
+            .expect(200);
+          const { meta, data } = response.body;
+
+          expect(Array.isArray(data)).toBe(true);
+          expect(meta).toEqual(
+            expect.objectContaining({
+              page: expectedPage,
+              pageSize: expectedPageSize,
+              totalItems: expect.any(Number),
+              totalPages: expect.any(Number),
+            }),
+          );
+          expect(meta.totalItems).toBeGreaterThan(0);
+          expect(meta.totalPages).toBe(
+            Math.ceil(meta.totalItems / meta.pageSize),
+          );
+          expect(data.length).toBeLessThanOrEqual(meta.pageSize);
+          if (expectedPage === 1) expect(data.length).toBeGreaterThan(0);
+        }
+
+        async function expectInvalidQuery(query: string, field: string) {
+          const response = await request(app.getHttpServer())
+            .get(`${endpointPath}?${query}`)
+            .set('Authorization', tenantAToken)
+            .expect(400);
+
+          expect(response.body).toMatchObject({
+            statusCode: 400,
+            error: 'VALIDATION_ERROR',
+          });
+          expect(response.body.details).toEqual(
+            expect.arrayContaining([expect.objectContaining({ field })]),
+          );
+        }
+
+        for (const page of [1, 10_000]) {
+          await expectValidPage(
+            `page=${page}`,
+            page,
+            endpoint.defaultPageSize,
+          );
+        }
+        for (const pageSize of [1, 100]) {
+          await expectValidPage(`pageSize=${pageSize}`, 1, pageSize);
+        }
+        for (const page of [
+          '0',
+          '-1',
+          '10001',
+          '999999999999999999999999999999999999',
+          'not-a-number',
+          '1.5',
+        ]) {
+          await expectInvalidQuery(
+            `page=${encodeURIComponent(page)}`,
+            'page',
+          );
+        }
+        for (const pageSize of ['0', '101', 'not-a-number', '1.5']) {
+          await expectInvalidQuery(
+            `pageSize=${encodeURIComponent(pageSize)}`,
+            'pageSize',
+          );
+        }
+      }, 60_000);
+    }
+
     it('checks authentication, role, permission and tenant scope before endpoint access', async () => {
       await request(app.getHttpServer())
         .get('/api/v1/admin/bookings')

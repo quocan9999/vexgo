@@ -115,7 +115,7 @@ function parseListState(
       departureFrom && departureTo && departureFrom > departureTo
         ? undefined
         : departureTo,
-    page: parsePositiveInteger(params.get(`${prefix}Page`), 1, 1_000_000),
+    page: parsePositiveInteger(params.get(`${prefix}Page`), 1, 10_000),
     pageSize: parsePositiveInteger(params.get(`${prefix}PageSize`), 10, 100),
     sortBy: sortKeys.some((key) => key === rawSort)
       ? (rawSort as BookingManagementSortKey)

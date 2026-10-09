@@ -172,6 +172,7 @@ function installApi(
     historyForbidden?: boolean;
     deferSlowSearch?: boolean;
     emptyOutOfRange?: boolean;
+    rejectsInvalidPagination?: boolean;
   } = {},
 ) {
   setEmployeeAdminTestSession(['booking:read']);
@@ -189,6 +190,24 @@ function installApi(
     urls.push(url);
     const page = Number(url.searchParams.get('page') ?? 1);
     const pageSize = Number(url.searchParams.get('pageSize') ?? 10);
+    if (
+      options.rejectsInvalidPagination &&
+      (!Number.isSafeInteger(page) ||
+        page < 1 ||
+        page > 10_000 ||
+        !Number.isInteger(pageSize) ||
+        pageSize < 1 ||
+        pageSize > 100)
+    ) {
+      return response(
+        {
+          statusCode: 400,
+          error: 'VALIDATION_ERROR',
+          message: 'Dữ liệu không hợp lệ.',
+        },
+        400,
+      );
+    }
     if (url.pathname === '/api/v1/admin/bookings') {
       const search = url.searchParams.get('search');
       if (search === 'slow' && slowResponse) return slowResponse;
@@ -375,6 +394,110 @@ afterEach(() => {
 });
 
 describe('Admin booking and ticket lists', () => {
+  it.each([
+    {
+      tab: 'bookings' as const,
+      query:
+        'bPage=10001&bSearch=PD-0012&bBookedFrom=2026-10-05&bBookedTo=2026-10-10&tPage=4&tSearch=VE-0044',
+      pageKey: 'bPage',
+      otherPageKey: 'tPage',
+      otherPage: '4',
+      activeSearchKey: 'bSearch',
+      activeSearch: 'PD-0012',
+      otherSearchKey: 'tSearch',
+      otherSearch: 'VE-0044',
+      apiPath: '/api/v1/admin/bookings',
+    },
+    {
+      tab: 'tickets' as const,
+      query:
+        'tab=tickets&tPage=10001&tSearch=VE-0044&tDepartureFrom=2026-11-01&tDepartureTo=2026-11-05&bPage=3&bSearch=PD-0012',
+      pageKey: 'tPage',
+      otherPageKey: 'bPage',
+      otherPage: '3',
+      activeSearchKey: 'tSearch',
+      activeSearch: 'VE-0044',
+      otherSearchKey: 'bSearch',
+      otherSearch: 'PD-0012',
+      apiPath: '/api/v1/admin/tickets',
+    },
+  ])(
+    'canonicalizes an over-limit deep-link page for the $tab tab without losing URL filters',
+    async (scenario) => {
+      navigation.reset(scenario.query);
+      const api = installApi({ rejectsInvalidPagination: true });
+      render(<BookingManagement />);
+
+      await waitFor(() => {
+        const requests = api.urls.filter(
+          (url) => url.pathname === scenario.apiPath,
+        );
+        expect(requests.length).toBeGreaterThan(0);
+        expect(
+          requests.some(
+            (url) =>
+              url.searchParams.get('page') === '1' &&
+              url.searchParams.get('search') === scenario.activeSearch,
+          ),
+        ).toBe(true);
+      });
+
+      await waitFor(() => {
+        const params = new URLSearchParams(navigation.getSnapshot());
+        expect(params.has(scenario.pageKey)).toBe(false);
+        expect(params.get(scenario.otherPageKey)).toBe(scenario.otherPage);
+        expect(params.get(scenario.activeSearchKey)).toBe(
+          scenario.activeSearch,
+        );
+        expect(params.get(scenario.otherSearchKey)).toBe(scenario.otherSearch);
+        expect(params.get('tab')).toBe(
+          scenario.tab === 'tickets' ? 'tickets' : null,
+        );
+      });
+
+      const activeRequests = api.urls.filter(
+        (url) => url.pathname === scenario.apiPath,
+      );
+      expect(
+        activeRequests.every(
+          (url) => Number(url.searchParams.get('page')) <= 10_000,
+        ),
+      ).toBe(true);
+      expect(screen.queryByRole('alert')).toBeNull();
+
+      if (scenario.tab === 'bookings') {
+        expect((await screen.findAllByText('PD-0012')).length).toBeGreaterThan(
+          0,
+        );
+        expect(
+          (screen.getByLabelText('Ngày đặt từ') as HTMLInputElement).value,
+        ).toBe('2026-10-05');
+        expect(
+          (screen.getByLabelText('Ngày đặt đến') as HTMLInputElement).value,
+        ).toBe('2026-10-10');
+      } else {
+        expect((await screen.findAllByText('VE-0044')).length).toBeGreaterThan(
+          0,
+        );
+        expect(
+          (
+            screen.getByLabelText('Ngày khởi hành từ') as HTMLInputElement
+          ).value,
+        ).toBe('2026-11-01');
+        expect(
+          (
+            screen.getByLabelText('Ngày khởi hành đến') as HTMLInputElement
+          ).value,
+        ).toBe('2026-11-05');
+      }
+
+      await act(async () => {
+        await new Promise((resolve) => window.setTimeout(resolve, 0));
+      });
+      expect(navigation.getTransitionCount()).toBe(1);
+    },
+  );
+
   it('loads real API lists and retains independent filters and pagination across tabs', async () => {
     const api = installApi();
     navigation.reset(
