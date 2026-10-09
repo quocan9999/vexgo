@@ -1,3 +1,4 @@
+import { randomInt, randomUUID } from 'node:crypto';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -6,7 +7,6 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { AppModule } from '../../../src/app.module.js';
 import { AccessTokenGuard } from '../../../src/auth/guards/access-token.guard.js';
 import { ADMIN_ROLE_DEFAULT_PERMISSION_KEYS } from '../../../src/auth/permissions/permission-catalog.js';
 import type { AuthPrincipal } from '../../../src/auth/tokens/auth-principal.js';
@@ -32,55 +32,202 @@ describe('Shipment Status Transition APIs (Phase 04)', () => {
     },
   };
 
+  let tenantOneId: number;
+  let tenantTwoId: number;
   let testAccountId: number;
+  let testEmployeeId: number;
+  let testCustomerId: number;
+  let preconditionShipmentId: number;
+  const tenantFixtures = new Map<
+    number,
+    { chuyenXeId: number; diemGuiId: number; diemNhanId: number }
+  >();
 
   beforeAll(async () => {
-    const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
-      .overrideProvider(AccessTokenGuard)
-      .useValue(testAccessTokenGuard)
-      .compile();
+    const testDatabaseUrl = process.env.SHIPMENT_TEST_DATABASE_URL;
+    if (!testDatabaseUrl) {
+      throw new Error(
+        'Set SHIPMENT_TEST_DATABASE_URL to a migrated, isolated MySQL test database.',
+      );
+    }
 
-    app = moduleRef.createNestApplication();
-    configureApi(app);
-    await app.init();
+    const previousDatabaseUrl = process.env.DATABASE_URL;
+    process.env.DATABASE_URL = testDatabaseUrl;
+    try {
+      const { AppModule } = await import('../../../src/app.module.js');
+      const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
+        .overrideProvider(AccessTokenGuard)
+        .useValue(testAccessTokenGuard)
+        .compile();
 
-    prisma = app.get(PrismaService);
+      app = moduleRef.createNestApplication();
+      configureApi(app);
+      await app.init();
 
-    const testAccount = await prisma.taiKhoan.findFirstOrThrow({
-      where: { nhanVien: { nhaXeId: 1 } },
+      prisma = app.get<PrismaService>(PrismaService);
+    } finally {
+      if (previousDatabaseUrl === undefined) {
+        delete process.env.DATABASE_URL;
+      } else {
+        process.env.DATABASE_URL = previousDatabaseUrl;
+      }
+    }
+
+    const token = randomUUID().replaceAll('-', '').slice(0, 12);
+    const tenantOne = await createTenantFixture(`A-${token}`);
+    const tenantTwo = await createTenantFixture(`B-${token}`);
+    tenantOneId = tenantOne.nhaXeId;
+    tenantTwoId = tenantTwo.nhaXeId;
+    tenantFixtures.set(tenantOne.nhaXeId, tenantOne);
+    tenantFixtures.set(tenantTwo.nhaXeId, tenantTwo);
+
+    const employeeAccount = await prisma.taiKhoan.create({
+      data: {
+        hoTen: `Nhân viên test ${token}`,
+        soDienThoai: `+849${randomInt(0, 1_000_000_000).toString().padStart(9, '0')}`,
+        matKhau: 'test-only-password-hash',
+        daXacThucSoDienThoai: true,
+        trangThai: 'HOAT_DONG',
+      },
     });
-    testAccountId = testAccount.taiKhoanId;
+    testAccountId = employeeAccount.taiKhoanId;
+    const employee = await prisma.nhanVien.create({
+      data: {
+        maNhanVien: `F09-STATUS-${token}`,
+        trangThaiLamViec: 'DANG_LAM',
+        nhaXeId: tenantOneId,
+        taiKhoanId: testAccountId,
+      },
+    });
+    testEmployeeId = employee.nhanVienId;
+
+    const customerAccount = await prisma.taiKhoan.create({
+      data: {
+        hoTen: `Khách test ${token}`,
+        soDienThoai: `+848${randomInt(0, 1_000_000_000).toString().padStart(9, '0')}`,
+        matKhau: 'test-only-password-hash',
+        daXacThucSoDienThoai: true,
+        trangThai: 'HOAT_DONG',
+      },
+    });
+    const customer = await prisma.khachHang.create({
+      data: {
+        maKhachHang: `F09-STATUS-${token}`,
+        taiKhoanId: customerAccount.taiKhoanId,
+      },
+    });
+    testCustomerId = customer.khachHangId;
+
+    const preconditionShipment = await createTestShipment({
+      nhaXeId: tenantOneId,
+    });
+    preconditionShipmentId = preconditionShipment.phieuGuiHangId;
   });
 
   afterAll(async () => {
     await app?.close();
   });
 
-  function setTenantAdmin(nhaXeId: number = 1, accountId?: number) {
+  async function createTenantFixture(label: string) {
+    const company = await prisma.nhaXe.create({
+      data: {
+        maNhaXe: `F09-STATUS-${label}`,
+        tenNhaXe: `Nhà xe test ${label}`,
+        trangThai: 'HOAT_DONG',
+      },
+    });
+    const vehicleType = await prisma.loaiXe.create({
+      data: {
+        nhaXeId: company.nhaXeId,
+        tenLoai: `Loại xe test ${label}`,
+      },
+    });
+    const vehicle = await prisma.xe.create({
+      data: {
+        bienSoXe: `F09${label.replace(/[^A-Z0-9]/gi, '').slice(0, 10)}`,
+        trangThai: 'HOAT_DONG',
+        nhaXeId: company.nhaXeId,
+        loaiXeId: vehicleType.loaiXeId,
+      },
+    });
+    const route = await prisma.tuyenXe.create({
+      data: {
+        maTuyenXe: `F09-STATUS-${label}`,
+        diemDi: 'Điểm A test',
+        diemDen: 'Điểm B test',
+        trangThai: 'HOAT_DONG',
+        nhaXeId: company.nhaXeId,
+      },
+    });
+    const chuyenXe = await prisma.chuyenXe.create({
+      data: {
+        maChuyenXe: `F09-STATUS-${label}`,
+        ngayKhoiHanh: new Date('2030-01-01T00:00:00.000Z'),
+        gioKhoiHanh: new Date('1970-01-01T08:00:00.000Z'),
+        nhanGuiHang: true,
+        sucChuaXeMay: 0,
+        sucChuaHangCongKenh: 0,
+        sucChuaHangNhe: 0,
+        trangThai: 'CHUA_KHOI_HANH',
+        nhaXeId: company.nhaXeId,
+        tuyenXeId: route.tuyenXeId,
+        xeId: vehicle.xeId,
+      },
+    });
+    const pickup = await prisma.diemGiaoNhanHang.create({
+      data: {
+        maDiem: `F09-STATUS-G-${label}`,
+        tenDiem: `Điểm gửi ${label}`,
+        diaChi: 'Địa chỉ test',
+        tinhThanh: 'Thành phố Hồ Chí Minh',
+        trangThai: 'HOAT_DONG',
+        nhaXeId: company.nhaXeId,
+      },
+    });
+    const dropoff = await prisma.diemGiaoNhanHang.create({
+      data: {
+        maDiem: `F09-STATUS-N-${label}`,
+        tenDiem: `Điểm nhận ${label}`,
+        diaChi: 'Địa chỉ test',
+        tinhThanh: 'Thành phố Hồ Chí Minh',
+        trangThai: 'HOAT_DONG',
+        nhaXeId: company.nhaXeId,
+      },
+    });
+
+    return {
+      nhaXeId: company.nhaXeId,
+      chuyenXeId: chuyenXe.chuyenXeId,
+      diemGuiId: pickup.diemGiaoNhanHangId,
+      diemNhanId: dropoff.diemGiaoNhanHangId,
+    };
+  }
+
+  function setTenantAdmin(nhaXeId: number = tenantOneId, accountId?: number) {
     currentPrincipal = {
       taiKhoanId: accountId ?? testAccountId,
       sessionId: 'session-tenant-admin',
       roles: ['NHA_XE_ADMIN'],
       permissions: [...ADMIN_ROLE_DEFAULT_PERMISSION_KEYS.NHA_XE_ADMIN],
-      nhanVienId: 201,
+      nhanVienId: testEmployeeId,
       nhaXeId,
     };
   }
 
-  function setUnauthorizedRole(nhaXeId: number = 1) {
+  function setUnauthorizedRole(nhaXeId: number = tenantOneId) {
     currentPrincipal = {
-      taiKhoanId: 103,
+      taiKhoanId: testAccountId,
       sessionId: 'session-no-perm',
       roles: ['NHAN_VIEN_BAN_VE'],
       permissions: [],
-      nhanVienId: 203,
+      nhanVienId: testEmployeeId,
       nhaXeId,
     };
   }
 
   function setSuperAdmin() {
     currentPrincipal = {
-      taiKhoanId: 1,
+      taiKhoanId: testAccountId,
       sessionId: 'session-super-admin',
       roles: ['SUPER_ADMIN'],
       permissions: [...ADMIN_ROLE_DEFAULT_PERMISSION_KEYS.SUPER_ADMIN],
@@ -94,24 +241,18 @@ describe('Shipment Status Transition APIs (Phase 04)', () => {
     initialStatus?: 'MOI_TAO' | 'DA_TIEP_NHAN' | 'DANG_VAN_CHUYEN';
     isPaid?: boolean;
   } = {}) {
-    const nhaXeId = options.nhaXeId ?? 1;
+    const nhaXeId = options.nhaXeId ?? tenantOneId;
     const initialStatus = options.initialStatus ?? 'MOI_TAO';
     const isPaid = options.isPaid ?? false;
 
     // Tìm chuyến và điểm dừng của nhà xe
-    const [chuyenXe, diemGui, diemNhan, khachHang] = await Promise.all([
-      prisma.chuyenXe.findFirstOrThrow({ where: { nhaXeId } }),
-      prisma.diemGiaoNhanHang.findFirstOrThrow({ where: { nhaXeId } }),
-      prisma.diemGiaoNhanHang.findFirstOrThrow({
-        where: { nhaXeId, diemGiaoNhanHangId: { not: undefined } },
-        orderBy: { diemGiaoNhanHangId: 'desc' },
-      }),
-      prisma.khachHang.findFirstOrThrow(),
-    ]);
-
-    const randomSuffix = Math.floor(100000 + Math.random() * 900000);
-    const maDonGiaoDich = `TEST-DON-${randomSuffix}`;
-    const maVanDon = `TEST-VD-${randomSuffix}`;
+    const tenantFixture = tenantFixtures.get(nhaXeId);
+    if (!tenantFixture) {
+      throw new Error(`Missing shipment test fixture for tenant ${nhaXeId}.`);
+    }
+    const token = randomUUID().slice(0, 8);
+    const maDonGiaoDich = `F09-STATUS-DON-${token}`;
+    const maVanDon = `F09-STATUS-VD-${token}`;
 
     const donGiaoDich = await prisma.donGiaoDich.create({
       data: {
@@ -121,7 +262,7 @@ describe('Shipment Status Transition APIs (Phase 04)', () => {
         trangThai: isPaid ? 'DA_THANH_TOAN' : 'CHO_THANH_TOAN',
         tenKhachHang: 'Khách Test Status',
         soDienThoaiKhachHang: '+84900111222',
-        khachHangId: khachHang.khachHangId,
+        khachHangId: testCustomerId,
         nhaXeId,
         thanhToans: isPaid
           ? {
@@ -150,9 +291,9 @@ describe('Shipment Status Transition APIs (Phase 04)', () => {
         tenNguoiNhan: 'Người Nhận Test',
         soDienThoaiNguoiNhan: '+84900333444',
         donGiaoDichId: donGiaoDich.donGiaoDichId,
-        chuyenXeId: chuyenXe.chuyenXeId,
-        diemGuiId: diemGui.diemGiaoNhanHangId,
-        diemNhanId: diemNhan.diemGiaoNhanHangId,
+        chuyenXeId: tenantFixture.chuyenXeId,
+        diemGuiId: tenantFixture.diemGuiId,
+        diemNhanId: tenantFixture.diemNhanId,
         lichSuTrangThais: {
           create: {
             trangThai: initialStatus,
@@ -171,7 +312,7 @@ describe('Shipment Status Transition APIs (Phase 04)', () => {
       currentPrincipal = null;
 
       const response = await request(app.getHttpServer())
-        .patch('/api/v1/shipments/1/status')
+        .patch(`/api/v1/shipments/${preconditionShipmentId}/status`)
         .send({ status: 'DA_TIEP_NHAN' });
 
       expect(response.status).toBe(401);
@@ -179,10 +320,10 @@ describe('Shipment Status Transition APIs (Phase 04)', () => {
     });
 
     it('returns 403 when user does not have shipment:update permission', async () => {
-      setUnauthorizedRole(1);
+      setUnauthorizedRole();
 
       const response = await request(app.getHttpServer())
-        .patch('/api/v1/shipments/1/status')
+        .patch(`/api/v1/shipments/${preconditionShipmentId}/status`)
         .send({ status: 'DA_TIEP_NHAN' });
 
       expect(response.status).toBe(403);
@@ -193,15 +334,15 @@ describe('Shipment Status Transition APIs (Phase 04)', () => {
       setSuperAdmin();
 
       const response = await request(app.getHttpServer())
-        .patch('/api/v1/shipments/1/status')
+        .patch(`/api/v1/shipments/${preconditionShipmentId}/status`)
         .send({ status: 'DA_TIEP_NHAN' });
 
       expect(response.status).toBe(403);
     });
 
     it('returns 404 when shipment belongs to another tenant', async () => {
-      const shipment = await createTestShipment({ nhaXeId: 2 });
-      setTenantAdmin(1); // Tenant 1 trying to update Tenant 2
+      const shipment = await createTestShipment({ nhaXeId: tenantTwoId });
+      setTenantAdmin(); // Tenant one cannot update Tenant two
 
       const response = await request(app.getHttpServer())
         .patch(`/api/v1/shipments/${shipment.phieuGuiHangId}/status`)
@@ -214,10 +355,10 @@ describe('Shipment Status Transition APIs (Phase 04)', () => {
 
   describe('Validation & DTO constraints', () => {
     it('returns 400 when status is invalid enum', async () => {
-      setTenantAdmin(1);
+      setTenantAdmin();
 
       const response = await request(app.getHttpServer())
-        .patch('/api/v1/shipments/1/status')
+        .patch(`/api/v1/shipments/${preconditionShipmentId}/status`)
         .send({ status: 'TRANG_THAI_BAY_BA' });
 
       expect(response.status).toBe(400);
@@ -225,10 +366,10 @@ describe('Shipment Status Transition APIs (Phase 04)', () => {
     });
 
     it('returns 400 when note exceeds 500 characters', async () => {
-      setTenantAdmin(1);
+      setTenantAdmin();
 
       const response = await request(app.getHttpServer())
-        .patch('/api/v1/shipments/1/status')
+        .patch(`/api/v1/shipments/${preconditionShipmentId}/status`)
         .send({
           status: 'DA_TIEP_NHAN',
           note: 'a'.repeat(501),
@@ -242,11 +383,11 @@ describe('Shipment Status Transition APIs (Phase 04)', () => {
   describe('Happy Path 3-Step Transitions & History Verification', () => {
     it('executes MOI_TAO -> DA_TIEP_NHAN -> DANG_VAN_CHUYEN -> DA_GIAO consecutively', async () => {
       const shipment = await createTestShipment({
-        nhaXeId: 1,
+        nhaXeId: tenantOneId,
         initialStatus: 'MOI_TAO',
       });
       const id = shipment.phieuGuiHangId;
-      setTenantAdmin(1);
+      setTenantAdmin();
 
       // Step 1: MOI_TAO -> DA_TIEP_NHAN
       const res1 = await request(app.getHttpServer())
@@ -269,7 +410,7 @@ describe('Shipment Status Transition APIs (Phase 04)', () => {
       expect(db1.lichSuTrangThais[1].ghiChu).toBe('Đã nhận hàng tại quầy');
 
       // Step 2: DA_TIEP_NHAN -> DANG_VAN_CHUYEN
-      setTenantAdmin(1);
+      setTenantAdmin();
       const res2 = await request(app.getHttpServer())
         .patch(`/api/v1/shipments/${id}/status`)
         .send({ status: 'DANG_VAN_CHUYEN', note: 'Đã xếp lên xe' });
@@ -288,7 +429,7 @@ describe('Shipment Status Transition APIs (Phase 04)', () => {
       expect(db2.lichSuTrangThais[2].ghiChu).toBe('Đã xếp lên xe');
 
       // Step 3: DANG_VAN_CHUYEN -> DA_GIAO
-      setTenantAdmin(1);
+      setTenantAdmin();
       const res3 = await request(app.getHttpServer())
         .patch(`/api/v1/shipments/${id}/status`)
         .send({ status: 'DA_GIAO', note: 'Người nhận đã ký nhận' });
@@ -311,11 +452,11 @@ describe('Shipment Status Transition APIs (Phase 04)', () => {
   describe('Cancellation Rules (MOI_TAO -> DA_HUY)', () => {
     it('allows cancelling unpaid shipment in MOI_TAO status', async () => {
       const shipment = await createTestShipment({
-        nhaXeId: 1,
+        nhaXeId: tenantOneId,
         initialStatus: 'MOI_TAO',
         isPaid: false,
       });
-      setTenantAdmin(1);
+      setTenantAdmin();
 
       const response = await request(app.getHttpServer())
         .patch(`/api/v1/shipments/${shipment.phieuGuiHangId}/status`)
@@ -333,11 +474,11 @@ describe('Shipment Status Transition APIs (Phase 04)', () => {
 
     it('returns 409 SHIPMENT_REFUND_REQUIRED when cancelling paid shipment', async () => {
       const shipment = await createTestShipment({
-        nhaXeId: 1,
+        nhaXeId: tenantOneId,
         initialStatus: 'MOI_TAO',
         isPaid: true,
       });
-      setTenantAdmin(1);
+      setTenantAdmin();
 
       const response = await request(app.getHttpServer())
         .patch(`/api/v1/shipments/${shipment.phieuGuiHangId}/status`)
@@ -356,7 +497,7 @@ describe('Shipment Status Transition APIs (Phase 04)', () => {
   describe('Invalid Transitions, Jumps, Repeats and Terminal States', () => {
     it('returns 409 when jumping from MOI_TAO directly to DA_GIAO', async () => {
       const shipment = await createTestShipment({ initialStatus: 'MOI_TAO' });
-      setTenantAdmin(1);
+      setTenantAdmin();
 
       const response = await request(app.getHttpServer())
         .patch(`/api/v1/shipments/${shipment.phieuGuiHangId}/status`)
@@ -368,7 +509,7 @@ describe('Shipment Status Transition APIs (Phase 04)', () => {
 
     it('returns 409 when updating to the same status (repeat)', async () => {
       const shipment = await createTestShipment({ initialStatus: 'MOI_TAO' });
-      setTenantAdmin(1);
+      setTenantAdmin();
 
       const response = await request(app.getHttpServer())
         .patch(`/api/v1/shipments/${shipment.phieuGuiHangId}/status`)
@@ -380,7 +521,7 @@ describe('Shipment Status Transition APIs (Phase 04)', () => {
 
     it('returns 409 when trying to transition from terminal status DA_GIAO', async () => {
       const shipment = await createTestShipment({ initialStatus: 'MOI_TAO' });
-      setTenantAdmin(1);
+      setTenantAdmin();
 
       // Đi tới DA_GIAO
       await request(app.getHttpServer())
@@ -406,7 +547,7 @@ describe('Shipment Status Transition APIs (Phase 04)', () => {
   describe('Concurrency & Race Condition Handling', () => {
     it('handles concurrent status updates safely with only one winner', async () => {
       const shipment = await createTestShipment({ initialStatus: 'MOI_TAO' });
-      setTenantAdmin(1);
+      setTenantAdmin();
 
       // Gửi 2 request đồng thời từ MOI_TAO sang DA_TIEP_NHAN
       const [res1, res2] = await Promise.all([

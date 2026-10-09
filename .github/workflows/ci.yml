@@ -97,6 +97,8 @@ jobs:
 
       - name: API tests
         run: npm run test --workspace=@vexgo/api
+        env:
+          SHIPMENT_TEST_DATABASE_URL: mysql://root:ci-root-password@127.0.0.1:3306/vexgo_ci
 
       - name: Clear booking/ticket history test credentials
         if: always()
