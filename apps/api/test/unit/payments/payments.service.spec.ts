@@ -66,6 +66,7 @@ describe('PaymentsService', () => {
       thanhToan: {
         findUnique: vi.fn(),
         findFirst: vi.fn().mockResolvedValue(null),
+        findMany: vi.fn().mockResolvedValue([]),
         create: vi.fn(),
         update: vi.fn(),
         updateMany: vi.fn().mockResolvedValue({ count: 1 }),
@@ -91,6 +92,7 @@ describe('PaymentsService', () => {
       lichSuTrangThaiVe: {
         create: vi.fn(),
       },
+      $executeRaw: vi.fn().mockResolvedValue(1),
       $transaction: vi.fn(async (cb) => cb(prisma)),
     };
 
@@ -113,9 +115,12 @@ describe('PaymentsService', () => {
         phieuDatVeId: 300,
         tongTienBanDau: '300000',
         trangThai: 'CHO_THANH_TOAN',
+        donGiaoDichId: 200,
         donGiaoDich: {
           donGiaoDichId: 200,
           khachHangId: 10,
+          tongTien: '300000',
+          trangThai: 'CHO_THANH_TOAN',
         },
       });
       prisma.khachHang.findUnique.mockResolvedValue({
@@ -134,6 +139,7 @@ describe('PaymentsService', () => {
       expect(result.mode).toBe('DEMO');
       expect(result.status).toBe('PENDING');
       expect(result.paymentUrl).toContain('sandbox.momo.vn');
+      expect(prisma.$executeRaw).toHaveBeenCalled();
     });
 
     it('rejects createPayment with ConflictException when booking is cancelled (discussion_r4226248027)', async () => {
@@ -186,13 +192,15 @@ describe('PaymentsService', () => {
         donGiaoDich: { khachHangId: 10, trangThai: 'CHO_THANH_TOAN' },
       });
       prisma.khachHang.findUnique.mockResolvedValue({ khachHangId: 10, taiKhoanId: 1 });
-      prisma.thanhToan.findFirst.mockResolvedValue({
-        thanhToanId: 888,
-        soTien: '300000',
-        trangThai: 'DANG_XU_LY',
-        phuongThuc: 'MOMO',
-        createdAt: new Date('2026-03-30T10:00:00.000Z'),
-      });
+      prisma.thanhToan.findMany.mockResolvedValue([
+        {
+          thanhToanId: 888,
+          soTien: '300000',
+          trangThai: 'DANG_XU_LY',
+          phuongThuc: 'MOMO',
+          createdAt: new Date('2026-03-30T10:00:00.000Z'),
+        },
+      ]);
 
       const result = await service.createPayment(300, 'MOMO', mockCustomerPrincipal);
 
@@ -201,7 +209,50 @@ describe('PaymentsService', () => {
       expect(prisma.thanhToan.create).not.toHaveBeenCalled();
     });
 
-    it('throws ServiceUnavailableException when PAYMENT_DEMO_MODE is not true (discussion_r4220529077)', async () => {
+    it('supersedes previous active payment of different provider to THAT_BAI when switching providers (Finding B)', async () => {
+      prisma.phieuDatVe.findUnique.mockResolvedValue({
+        phieuDatVeId: 300,
+        trangThai: 'CHO_THANH_TOAN',
+        donGiaoDichId: 200,
+        donGiaoDich: {
+          donGiaoDichId: 200,
+          khachHangId: 10,
+          trangThai: 'CHO_THANH_TOAN',
+          tongTien: '300000',
+        },
+      });
+      prisma.khachHang.findUnique.mockResolvedValue({ khachHangId: 10, taiKhoanId: 1 });
+      // Existing active attempt is MOMO
+      prisma.thanhToan.findMany.mockResolvedValue([
+        {
+          thanhToanId: 777,
+          soTien: '300000',
+          trangThai: 'DANG_XU_LY',
+          phuongThuc: 'MOMO',
+          createdAt: new Date('2026-03-30T10:00:00.000Z'),
+        },
+      ]);
+      prisma.thanhToan.create.mockResolvedValue({
+        thanhToanId: 999,
+        soTien: '300000',
+        phuongThuc: 'VNPAY',
+        trangThai: 'DANG_XU_LY',
+        createdAt: new Date('2026-03-30T10:05:00.000Z'),
+      });
+
+      const result = await service.createPayment(300, 'VNPAY', mockCustomerPrincipal);
+
+      expect(result.paymentId).toBe(999);
+      expect(result.provider).toBe('VNPAY');
+      // Previous attempt #777 must be superseded to THAT_BAI
+      expect(prisma.thanhToan.updateMany).toHaveBeenCalledWith({
+        where: { thanhToanId: { in: [777] } },
+        data: { trangThai: 'THAT_BAI' },
+      });
+      expect(prisma.thanhToan.create).toHaveBeenCalled();
+    });
+
+    it('throws ServiceUnavailableException when PAYMENT_DEMO_MODE is not true even if pending payment exists in DB (Finding A)', async () => {
       const prodConfigService = {
         get: vi.fn((key: string) => (key === 'PAYMENT_DEMO_MODE' ? 'false' : null)),
       };
@@ -209,11 +260,25 @@ describe('PaymentsService', () => {
 
       prisma.phieuDatVe.findUnique.mockResolvedValue({
         phieuDatVeId: 300,
-        donGiaoDich: { khachHangId: 10 },
+        trangThai: 'CHO_THANH_TOAN',
+        donGiaoDichId: 200,
+        donGiaoDich: { khachHangId: 10, trangThai: 'CHO_THANH_TOAN' },
       });
       prisma.khachHang.findUnique.mockResolvedValue({ khachHangId: 10, taiKhoanId: 1 });
+      prisma.thanhToan.findMany.mockResolvedValue([
+        {
+          thanhToanId: 888,
+          soTien: '300000',
+          trangThai: 'DANG_XU_LY',
+          phuongThuc: 'MOMO',
+        },
+      ]);
 
-      await expect(prodService.createPayment(300, 'MOMO', mockCustomerPrincipal)).rejects.toThrowError();
+      await expect(prodService.createPayment(300, 'MOMO', mockCustomerPrincipal)).rejects.toThrowError(
+        /Cổng thanh toán MOMO chưa được cấu hình cho môi trường thực tế/,
+      );
+      // Ensure no transaction or payment query was executed
+      expect(prisma.thanhToan.create).not.toHaveBeenCalled();
     });
 
     it('rejects webhook signatures when secrets are unconfigured in non-demo mode (discussion_r4220529064 & r4199181810)', () => {
@@ -409,6 +474,44 @@ describe('PaymentsService', () => {
       expect(result.isLatePayment).toBe(true);
       expect(prisma.phieuDatVe.updateMany).not.toHaveBeenCalled();
       expect(prisma.ve.updateMany).not.toHaveBeenCalled();
+      expect(prisma.lichSuTrangThaiPhieuDatVe.create).not.toHaveBeenCalled();
+    });
+
+    it('does not re-settle transaction and booking when callback arrives for superseded attempt and transaction is already DA_THANH_TOAN (Finding B)', async () => {
+      // Payment 100 was superseded to THAT_BAI when user switched provider
+      const supersededPayment = {
+        ...samplePayment,
+        trangThai: 'THAT_BAI',
+      };
+      prisma.thanhToan.findUnique.mockResolvedValue(supersededPayment);
+      prisma.donGiaoDich.findUnique.mockResolvedValue({
+        donGiaoDichId: 200,
+        trangThai: 'DA_THANH_TOAN', // Already settled by another attempt
+      });
+      prisma.phieuDatVe.findUnique.mockResolvedValue({
+        phieuDatVeId: 300,
+        trangThai: 'DA_THANH_TOAN',
+        ves: [{ veId: 501, trangThai: 'DA_THANH_TOAN' }],
+      });
+
+      const result = await service.confirmPaymentSuccess({
+        paymentId: 100,
+        provider: 'MOMO',
+        amount: 300000,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.requiresReconciliation).toBe(true);
+      // Payment itself was claimed as THANH_CONG
+      expect(prisma.thanhToan.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { thanhToanId: 100, trangThai: { not: 'THANH_CONG' } },
+          data: { trangThai: 'THANH_CONG' },
+        }),
+      );
+      // But DonGiaoDich and PhieuDatVe were NOT mutated again
+      expect(prisma.donGiaoDich.updateMany).not.toHaveBeenCalled();
+      expect(prisma.phieuDatVe.updateMany).not.toHaveBeenCalled();
       expect(prisma.lichSuTrangThaiPhieuDatVe.create).not.toHaveBeenCalled();
     });
 

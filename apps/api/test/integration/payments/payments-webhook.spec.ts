@@ -9,6 +9,7 @@ import type { AuthPrincipal } from '../../../src/auth/tokens/auth-principal.js';
 import { configureApi } from '../../../src/common/configure-api.js';
 import { PrismaService } from '../../../src/prisma/prisma.service.js';
 import type { MomoWebhookDto, VnpayWebhookDto } from '../../../src/payments/dto/webhook.dto.js';
+import { PaymentsService } from '../../../src/payments/payments.service.js';
 
 import { Reflector } from '@nestjs/core';
 import { AUTH_MODE_KEY, type EndpointAuthMode } from '../../../src/auth/decorators/public.decorator.js';
@@ -906,6 +907,225 @@ describe('Payments Webhook & Status Security with MySQL (Integration)', () => {
         where: { donGiaoDichId: phieuDatVe.donGiaoDichId },
       });
       expect(paymentsCount).toBe(0);
+    });
+
+    it('two concurrent requests for same booking and provider return identical paymentId and create exactly one record (Finding B concurrency)', async () => {
+      const { phieuDatVe } = await createTestBooking(customerAId, 'CHO_THANH_TOAN', 400000);
+
+      currentPrincipal = customerAPrincipal;
+      const [res1, res2] = await Promise.all([
+        request(app.getHttpServer())
+          .post('/api/v1/payments')
+          .send({ bookingId: phieuDatVe.phieuDatVeId, provider: 'MOMO' }),
+        request(app.getHttpServer())
+          .post('/api/v1/payments')
+          .send({ bookingId: phieuDatVe.phieuDatVeId, provider: 'MOMO' }),
+      ]);
+
+      expect(res1.status).toBe(201);
+      expect(res2.status).toBe(201);
+
+      const data1 = res1.body.data ?? res1.body;
+      const data2 = res2.body.data ?? res2.body;
+
+      expect(data1.paymentId).toBeDefined();
+      expect(data2.paymentId).toBeDefined();
+      expect(data1.paymentId).toBe(data2.paymentId);
+
+      const allPayments = await prisma.thanhToan.findMany({
+        where: { donGiaoDichId: phieuDatVe.donGiaoDichId },
+      });
+      expect(allPayments).toHaveLength(1);
+      expect(allPayments[0].trangThai).toBe('DANG_XU_LY');
+    });
+
+    it('switching payment provider supersedes previous active payment to THAT_BAI and leaves exactly one active payment (Finding B provider switch)', async () => {
+      const { phieuDatVe } = await createTestBooking(customerAId, 'CHO_THANH_TOAN', 500000);
+
+      currentPrincipal = customerAPrincipal;
+      // Step 1: Create MOMO payment
+      const resMomo = await request(app.getHttpServer())
+        .post('/api/v1/payments')
+        .send({ bookingId: phieuDatVe.phieuDatVeId, provider: 'MOMO' });
+      expect(resMomo.status).toBe(201);
+      const momoData = resMomo.body.data ?? resMomo.body;
+
+      // Step 2: Switch to VNPAY
+      const resVnpay = await request(app.getHttpServer())
+        .post('/api/v1/payments')
+        .send({ bookingId: phieuDatVe.phieuDatVeId, provider: 'VNPAY' });
+      expect(resVnpay.status).toBe(201);
+      const vnpayData = resVnpay.body.data ?? resVnpay.body;
+
+      expect(vnpayData.paymentId).not.toBe(momoData.paymentId);
+      expect(vnpayData.provider).toBe('VNPAY');
+
+      // Check DB: Momo is THAT_BAI, VNPAY is DANG_XU_LY
+      const momoInDb = await prisma.thanhToan.findUnique({
+        where: { thanhToanId: momoData.paymentId },
+      });
+      expect(momoInDb?.trangThai).toBe('THAT_BAI');
+
+      const vnpayInDb = await prisma.thanhToan.findUnique({
+        where: { thanhToanId: vnpayData.paymentId },
+      });
+      expect(vnpayInDb?.trangThai).toBe('DANG_XU_LY');
+
+      // Exactly 1 active payment attempt exists
+      const activeCount = await prisma.thanhToan.count({
+        where: {
+          donGiaoDichId: phieuDatVe.donGiaoDichId,
+          trangThai: 'DANG_XU_LY',
+        },
+      });
+      expect(activeCount).toBe(1);
+    });
+
+    it('two concurrent requests switching providers result in exactly one active payment (Finding B concurrent switch)', async () => {
+      const { phieuDatVe } = await createTestBooking(customerAId, 'CHO_THANH_TOAN', 600000);
+
+      currentPrincipal = customerAPrincipal;
+      // Seed initial MOMO payment
+      const initialRes = await request(app.getHttpServer())
+        .post('/api/v1/payments')
+        .send({ bookingId: phieuDatVe.phieuDatVeId, provider: 'MOMO' });
+      expect(initialRes.status).toBe(201);
+
+      // Concurrent switches: one to VNPAY, one to ZALOPAY
+      const [switchRes1, switchRes2] = await Promise.all([
+        request(app.getHttpServer())
+          .post('/api/v1/payments')
+          .send({ bookingId: phieuDatVe.phieuDatVeId, provider: 'VNPAY' }),
+        request(app.getHttpServer())
+          .post('/api/v1/payments')
+          .send({ bookingId: phieuDatVe.phieuDatVeId, provider: 'ZALOPAY' }),
+      ]);
+
+      expect(switchRes1.status).toBe(201);
+      expect(switchRes2.status).toBe(201);
+
+      // Invariant: Exactly 1 active payment attempt (DANG_XU_LY) exists for this DonGiaoDich
+      const activePayments = await prisma.thanhToan.findMany({
+        where: {
+          donGiaoDichId: phieuDatVe.donGiaoDichId,
+          trangThai: 'DANG_XU_LY',
+        },
+      });
+      expect(activePayments).toHaveLength(1);
+
+      // All other payments for this DonGiaoDich must be THAT_BAI
+      const supersededPayments = await prisma.thanhToan.findMany({
+        where: {
+          donGiaoDichId: phieuDatVe.donGiaoDichId,
+          trangThai: { not: 'DANG_XU_LY' },
+        },
+      });
+      expect(supersededPayments.length).toBeGreaterThanOrEqual(1);
+      for (const p of supersededPayments) {
+        expect(p.trangThai).toBe('THAT_BAI');
+      }
+    });
+
+    it('superseded payment attempt receiving late webhook is marked THANH_CONG without duplicate settlement or duplicate history (Finding B double-charge protection)', async () => {
+      const { phieuDatVe } = await createTestBooking(customerAId, 'CHO_THANH_TOAN', 700000);
+
+      currentPrincipal = customerAPrincipal;
+      // Step 1: Create MOMO payment
+      const resMomo = await request(app.getHttpServer())
+        .post('/api/v1/payments')
+        .send({ bookingId: phieuDatVe.phieuDatVeId, provider: 'MOMO' });
+      const momoPaymentId = (resMomo.body.data ?? resMomo.body).paymentId;
+
+      // Step 2: Switch to VNPAY (supersedes MOMO to THAT_BAI)
+      const resVnpay = await request(app.getHttpServer())
+        .post('/api/v1/payments')
+        .send({ bookingId: phieuDatVe.phieuDatVeId, provider: 'VNPAY' });
+      const vnpayPaymentId = (resVnpay.body.data ?? resVnpay.body).paymentId;
+
+      // Step 3: VNPAY webhook arrives first and settles the booking
+      const vnpayPayload = buildVnpayPayload(vnpayPaymentId, {
+        vnp_Amount: '70000000', // 700,000 * 100
+      });
+      const vnpayWebhookRes = await request(app.getHttpServer())
+        .post('/api/v1/payments/vnpay/webhook')
+        .send(vnpayPayload);
+      expect(vnpayWebhookRes.status).toBe(201);
+
+      // Verify VNPAY settled the booking and created exactly 1 history
+      const txAfterVnpay = await prisma.donGiaoDich.findUnique({
+        where: { donGiaoDichId: phieuDatVe.donGiaoDichId },
+      });
+      expect(txAfterVnpay?.trangThai).toBe('DA_THANH_TOAN');
+
+      const historiesAfterVnpay = await prisma.lichSuTrangThaiPhieuDatVe.findMany({
+        where: { phieuDatVeId: phieuDatVe.phieuDatVeId },
+      });
+      expect(historiesAfterVnpay).toHaveLength(1);
+
+      // Step 4: Late webhook arrives from MOMO for the superseded attempt
+      const momoPayload = buildMomoPayload(momoPaymentId, {
+        amount: 700000,
+      });
+      const momoWebhookRes = await request(app.getHttpServer())
+        .post('/api/v1/payments/momo/webhook')
+        .send(momoPayload);
+      expect(momoWebhookRes.status).toBe(201);
+
+      // Verify MOMO payment record is marked THANH_CONG (capturing financial reality)
+      const momoInDb = await prisma.thanhToan.findUnique({
+        where: { thanhToanId: momoPaymentId },
+      });
+      expect(momoInDb?.trangThai).toBe('THANH_CONG');
+
+      // Crucial invariants:
+      // 1. Transaction remains DA_THANH_TOAN (not modified again)
+      const txAfterMomo = await prisma.donGiaoDich.findUnique({
+        where: { donGiaoDichId: phieuDatVe.donGiaoDichId },
+      });
+      expect(txAfterMomo?.trangThai).toBe('DA_THANH_TOAN');
+
+      // 2. Booking remains DA_THANH_TOAN
+      const bookingAfterMomo = await prisma.phieuDatVe.findUnique({
+        where: { phieuDatVeId: phieuDatVe.phieuDatVeId },
+      });
+      expect(bookingAfterMomo?.trangThai).toBe('DA_THANH_TOAN');
+
+      // 3. NO duplicate history created! Still exactly 1!
+      const historiesAfterMomo = await prisma.lichSuTrangThaiPhieuDatVe.findMany({
+        where: { phieuDatVeId: phieuDatVe.phieuDatVeId },
+      });
+      expect(historiesAfterMomo).toHaveLength(1);
+    });
+
+    it('rejects payment creation with 503 Service Unavailable when demo mode is disabled even if pending payment exists in DB (Finding A)', async () => {
+      const { phieuDatVe } = await createTestBooking(customerAId, 'CHO_THANH_TOAN', 200000);
+      // Pre-seed a pending payment in DB
+      await prisma.thanhToan.create({
+        data: {
+          soTien: 200000,
+          phuongThuc: 'MOMO',
+          loaiGiaoDich: 'THANH_TOAN',
+          thoiGian: new Date(),
+          trangThai: 'DANG_XU_LY',
+          donGiaoDichId: phieuDatVe.donGiaoDichId,
+        },
+      });
+
+      const paymentsService = app.get(PaymentsService);
+      const originalDemoMode = paymentsService.isDemoMode;
+      (paymentsService as any).isDemoMode = false;
+
+      try {
+        currentPrincipal = customerAPrincipal;
+        const res = await request(app.getHttpServer())
+          .post('/api/v1/payments')
+          .send({ bookingId: phieuDatVe.phieuDatVeId, provider: 'MOMO' });
+
+        expect(res.status).toBe(503);
+        expect(res.body.error).toBe('SERVICE_UNAVAILABLE');
+      } finally {
+        (paymentsService as any).isDemoMode = originalDemoMode;
+      }
     });
   });
 });

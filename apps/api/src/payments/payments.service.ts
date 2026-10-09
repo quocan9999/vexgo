@@ -114,21 +114,21 @@ export class PaymentsService {
       'Bạn không có quyền thanh toán cho đơn đặt vé này.',
     );
 
-    // 1. Kiểm tra trạng thái booking & transaction (discussion_r4226248027)
-    const isCancelled =
+    // 1. Kiểm tra trạng thái booking & transaction ban đầu (discussion_r4226248027)
+    const isCancelledInitially =
       ['DA_HUY', 'HUY'].includes(booking.trangThai) ||
       (booking.donGiaoDich && ['DA_HUY', 'HUY'].includes(booking.donGiaoDich.trangThai));
-    if (isCancelled) {
+    if (isCancelledInitially) {
       throw new ConflictException({
         error: 'BOOKING_CANCELLED',
         message: 'Đơn đặt vé đã bị hủy, không thể tạo giao dịch thanh toán.',
       });
     }
 
-    const isAlreadyPaid =
+    const isAlreadyPaidInitially =
       booking.trangThai === 'DA_THANH_TOAN' ||
       (booking.donGiaoDich && booking.donGiaoDich.trangThai === 'DA_THANH_TOAN');
-    if (isAlreadyPaid) {
+    if (isAlreadyPaidInitially) {
       throw new ConflictException({
         error: 'BOOKING_ALREADY_PAID',
         message: 'Đơn đặt vé đã được thanh toán thành công.',
@@ -144,72 +144,157 @@ export class PaymentsService {
 
     const cleanProvider = (provider || 'MOMO').toUpperCase();
 
-    // 2. Pending Payment Idempotency: Tái sử dụng payment DANG_XU_LY nếu đã tồn tại cùng provider
-    const existingPendingPayment = await this.prisma.thanhToan.findFirst({
-      where: {
-        donGiaoDichId: booking.donGiaoDichId,
-        trangThai: 'DANG_XU_LY',
-        phuongThuc: cleanProvider,
-      },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    if (existingPendingPayment) {
-      const existingAmount = Number(existingPendingPayment.soTien);
-      const existingUrl = `https://sandbox.${cleanProvider.toLowerCase()}.vn/pay?id=${existingPendingPayment.thanhToanId}&amount=${existingAmount}`;
-      const existingDeeplink = `${cleanProvider.toLowerCase()}://app?id=${existingPendingPayment.thanhToanId}`;
-
-      return {
-        paymentId: existingPendingPayment.thanhToanId,
-        bookingId: booking.phieuDatVeId,
-        provider: cleanProvider,
-        amount: existingAmount,
-        paymentUrl: existingUrl,
-        deeplink: existingDeeplink,
-        status: 'PENDING',
-        mode: 'DEMO',
-        createdAt: existingPendingPayment.createdAt?.toISOString?.() ?? new Date().toISOString(),
-      };
-    }
-
-    // Production vs Demo check (discussion_r4220529077)
+    // Finding A [P1] (Production demo-mode bypass / discussion_r4220529077):
+    // Fail-closed guard MUST run before checking/reusing any pending payments or entering transaction
     if (!this.isDemoMode) {
       throw new ServiceUnavailableException(
         `Cổng thanh toán ${cleanProvider} chưa được cấu hình cho môi trường thực tế. Vui lòng bật PAYMENT_DEMO_MODE=true để thử nghiệm.`,
       );
     }
 
-    // Create record in ThanhToan table
-    const payment = await this.prisma.thanhToan.create({
-      data: {
-        soTien: booking.donGiaoDich.tongTien,
-        phuongThuc: cleanProvider,
-        loaiGiaoDich: 'THANH_TOAN',
-        thoiGian: new Date(),
-        trangThai: 'DANG_XU_LY',
-        donGiaoDichId: booking.donGiaoDichId,
-      },
+    // Finding B [P1]: Atomic single active payment creation with transaction & row lock
+    return await this.prisma.$transaction(async (tx) => {
+      // 1. Khóa dòng DonGiaoDich bằng SELECT ... FOR UPDATE để serialize concurrent creation
+      if (booking.donGiaoDichId && typeof tx.$executeRaw === 'function') {
+        await tx.$executeRaw`SELECT donGiaoDichId FROM DonGiaoDich WHERE donGiaoDichId = ${booking.donGiaoDichId} FOR UPDATE`;
+      }
+
+      // 2. Đọc lại booking và transaction bên trong tx sau khi đã giữ lock
+      const currentBooking = await tx.phieuDatVe.findUnique({
+        where: { phieuDatVeId: Number(bookingId) },
+        include: {
+          donGiaoDich: true,
+        },
+      });
+
+      if (!currentBooking || !currentBooking.donGiaoDich) {
+        throw new NotFoundException(`Đơn đặt vé #${bookingId} không tồn tại.`);
+      }
+
+      const isCancelled =
+        ['DA_HUY', 'HUY'].includes(currentBooking.trangThai) ||
+        ['DA_HUY', 'HUY'].includes(currentBooking.donGiaoDich.trangThai);
+      if (isCancelled) {
+        throw new ConflictException({
+          error: 'BOOKING_CANCELLED',
+          message: 'Đơn đặt vé đã bị hủy, không thể tạo giao dịch thanh toán.',
+        });
+      }
+
+      const isAlreadyPaid =
+        currentBooking.trangThai === 'DA_THANH_TOAN' ||
+        currentBooking.donGiaoDich.trangThai === 'DA_THANH_TOAN';
+      if (isAlreadyPaid) {
+        throw new ConflictException({
+          error: 'BOOKING_ALREADY_PAID',
+          message: 'Đơn đặt vé đã được thanh toán thành công.',
+        });
+      }
+
+      if (!['CHO_THANH_TOAN', 'DANG_XU_LY'].includes(currentBooking.trangThai)) {
+        throw new ConflictException({
+          error: 'INVALID_BOOKING_STATUS',
+          message: 'Trạng thái đơn đặt vé không hợp lệ để tạo giao dịch thanh toán.',
+        });
+      }
+
+      // 3. Đọc tất cả active payment attempts (DANG_XU_LY) của donGiaoDich này
+      const activePayments = await tx.thanhToan.findMany({
+        where: {
+          donGiaoDichId: currentBooking.donGiaoDichId,
+          trangThai: 'DANG_XU_LY',
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      // Case A: Đã có active payment cùng provider -> reuse
+      const sameProviderActive = activePayments.find(
+        (p) => p.phuongThuc.toUpperCase() === cleanProvider,
+      );
+
+      if (sameProviderActive) {
+        // Tái sử dụng sameProviderActive. Nếu DB có nhiều active payment cùng provider (dirty data),
+        // chuyển các attempt thừa sang THAT_BAI để bảo đảm invariant tối đa 1 active payment attempt.
+        const staleActiveIds = activePayments
+          .filter((p) => p.thanhToanId !== sameProviderActive.thanhToanId)
+          .map((p) => p.thanhToanId);
+
+        if (staleActiveIds.length > 0) {
+          await tx.thanhToan.updateMany({
+            where: { thanhToanId: { in: staleActiveIds } },
+            data: { trangThai: 'THAT_BAI' },
+          });
+          this.logger.log(
+            `Superseded ${staleActiveIds.length} duplicate active payment attempt(s) for donGiaoDich #${currentBooking.donGiaoDichId} to THAT_BAI.`,
+          );
+        }
+
+        const existingAmount = Number(sameProviderActive.soTien);
+        const existingUrl = `https://sandbox.${cleanProvider.toLowerCase()}.vn/pay?id=${sameProviderActive.thanhToanId}&amount=${existingAmount}`;
+        const existingDeeplink = `${cleanProvider.toLowerCase()}://app?id=${sameProviderActive.thanhToanId}`;
+
+        return {
+          paymentId: sameProviderActive.thanhToanId,
+          bookingId: currentBooking.phieuDatVeId,
+          provider: cleanProvider,
+          amount: existingAmount,
+          paymentUrl: existingUrl,
+          deeplink: existingDeeplink,
+          status: 'PENDING',
+          mode: 'DEMO',
+          createdAt:
+            sameProviderActive.createdAt?.toISOString?.() ??
+            new Date().toISOString(),
+        };
+      }
+
+      // Case B: Không có active payment cùng provider, nhưng có active payment khác provider (hoặc dirty data)
+      // Supersede toàn bộ active attempts cũ sang THAT_BAI trước khi tạo payment mới
+      if (activePayments.length > 0) {
+        await tx.thanhToan.updateMany({
+          where: {
+            thanhToanId: { in: activePayments.map((p) => p.thanhToanId) },
+          },
+          data: { trangThai: 'THAT_BAI' },
+        });
+        this.logger.log(
+          `Superseded ${activePayments.length} active payment attempt(s) of different provider(s) for donGiaoDich #${currentBooking.donGiaoDichId} to THAT_BAI before creating ${cleanProvider} attempt.`,
+        );
+      }
+
+      // Case C: Tạo đúng 1 payment record mới với trạng thái DANG_XU_LY
+      const payment = await tx.thanhToan.create({
+        data: {
+          soTien: currentBooking.donGiaoDich.tongTien,
+          phuongThuc: cleanProvider,
+          loaiGiaoDich: 'THANH_TOAN',
+          thoiGian: new Date(),
+          trangThai: 'DANG_XU_LY',
+          donGiaoDichId: currentBooking.donGiaoDichId,
+        },
+      });
+
+      const amount = Number(payment.soTien);
+      const paymentUrl = `https://sandbox.${cleanProvider.toLowerCase()}.vn/pay?id=${payment.thanhToanId}&amount=${amount}`;
+      const deeplink = `${cleanProvider.toLowerCase()}://app?id=${payment.thanhToanId}`;
+
+      this.logger.warn(
+        `[DEMO MODE] Generated sandbox payment URL for payment #${payment.thanhToanId} via ${cleanProvider}`,
+      );
+
+      return {
+        paymentId: payment.thanhToanId,
+        bookingId: currentBooking.phieuDatVeId,
+        provider: cleanProvider,
+        amount,
+        paymentUrl,
+        deeplink,
+        status: 'PENDING',
+        mode: 'DEMO',
+        createdAt:
+          payment.createdAt?.toISOString?.() ?? new Date().toISOString(),
+      };
     });
-
-    const amount = Number(payment.soTien);
-    const paymentUrl = `https://sandbox.${cleanProvider.toLowerCase()}.vn/pay?id=${payment.thanhToanId}&amount=${amount}`;
-    const deeplink = `${cleanProvider.toLowerCase()}://app?id=${payment.thanhToanId}`;
-
-    this.logger.warn(
-      `[DEMO MODE] Generated sandbox payment URL for payment #${payment.thanhToanId} via ${cleanProvider}`,
-    );
-
-    return {
-      paymentId: payment.thanhToanId,
-      bookingId: booking.phieuDatVeId,
-      provider: cleanProvider,
-      amount,
-      paymentUrl,
-      deeplink,
-      status: 'PENDING',
-      mode: 'DEMO',
-      createdAt: payment.createdAt?.toISOString?.() ?? new Date().toISOString(),
-    };
   }
 
   async getPaymentStatus(paymentId: number, principal?: AuthPrincipal) {
@@ -333,9 +418,15 @@ export class PaymentsService {
 
     let isAlreadyClaimed = false;
     let isLatePaymentForCancelledBooking = false;
+    let isDuplicateSettlement = false;
 
     await this.prisma.$transaction(async (tx) => {
-      // Atomic state claim: Chỉ update nếu trạng thái CHƯA PHẢI là THANH_CONG (discussion_r4222294112)
+      // 1. Serialize settlement by locking the parent DonGiaoDich row if present
+      if (payment.donGiaoDichId && typeof tx.$executeRaw === 'function') {
+        await tx.$executeRaw`SELECT donGiaoDichId FROM DonGiaoDich WHERE donGiaoDichId = ${payment.donGiaoDichId} FOR UPDATE`;
+      }
+
+      // 2. Atomic state claim: Chỉ update nếu trạng thái CHƯA PHẢI là THANH_CONG (discussion_r4222294112)
       // MySQL InnoDB sẽ acquire exclusive row lock trên dòng thanh toán này.
       const claimResult = await tx.thanhToan.updateMany({
         where: {
@@ -380,6 +471,19 @@ export class PaymentsService {
             return;
           }
 
+          // Invariant: Nếu DonGiaoDich hoặc Booking đã DA_THANH_TOAN (đã được quyết toán bởi attempt khác),
+          // tuyệt đối không quyết toán lần hai và không tạo duplicate history!
+          if (
+            currentDonGiaoDich?.trangThai === 'DA_THANH_TOAN' ||
+            currentBooking?.trangThai === 'DA_THANH_TOAN'
+          ) {
+            isDuplicateSettlement = true;
+            this.logger.warn(
+              `Payment #${payment.thanhToanId} confirmed SUCCESS via provider callback, but transaction #${payment.donGiaoDichId} / booking #${phieuDatVe.phieuDatVeId} was ALREADY SETTLED. Kept original settlement, skipped secondary update and history. Requires refund/reconciliation.`,
+            );
+            return;
+          }
+
           // Cập nhật DonGiaoDich nếu chưa bị hủy (Atomic CAS)
           const updateDonGiaoDichResult = await tx.donGiaoDich.updateMany({
             where: {
@@ -390,13 +494,14 @@ export class PaymentsService {
           });
 
           // Nếu DonGiaoDich không cập nhật được (bị hủy concurrent hoặc trạng thái không hợp lệ)
-          if (
-            updateDonGiaoDichResult.count === 0 &&
-            currentDonGiaoDich?.trangThai !== 'DA_THANH_TOAN'
-          ) {
-            isLatePaymentForCancelledBooking = true;
+          if (updateDonGiaoDichResult.count === 0) {
+            if (currentDonGiaoDich?.trangThai === 'DA_THANH_TOAN') {
+              isDuplicateSettlement = true;
+            } else {
+              isLatePaymentForCancelledBooking = true;
+            }
             this.logger.warn(
-              `Payment #${payment.thanhToanId} confirmed SUCCESS but transaction #${payment.donGiaoDichId} update failed (cancelled or invalid). Kept booking and tickets CANCELLED. Requires refund.`,
+              `Payment #${payment.thanhToanId} confirmed SUCCESS but transaction #${payment.donGiaoDichId} update failed. Requires refund/reconciliation.`,
             );
             return;
           }
@@ -432,6 +537,16 @@ export class PaymentsService {
               },
             });
           }
+
+          // Invariant: Chuyển mọi attempt DANG_XU_LY còn lại của donGiaoDichId sang THAT_BAI
+          await tx.thanhToan.updateMany({
+            where: {
+              donGiaoDichId: payment.donGiaoDichId,
+              thanhToanId: { not: payment.thanhToanId },
+              trangThai: 'DANG_XU_LY',
+            },
+            data: { trangThai: 'THAT_BAI' },
+          });
 
           const operationId = generateUuidV1();
           const timestamp = new Date();
@@ -487,6 +602,16 @@ export class PaymentsService {
         isLatePayment: true,
         message:
           'Thanh toán thành công nhưng đơn đặt vé đã bị hủy trước đó. Cần hoàn tiền cho khách.',
+      };
+    }
+
+    if (isDuplicateSettlement) {
+      return {
+        success: true,
+        isLatePayment: true,
+        requiresReconciliation: true,
+        message:
+          'Thanh toán thành công nhưng giao dịch đã được thanh toán bởi phương thức khác. Cần đối soát/hoàn tiền.',
       };
     }
 
