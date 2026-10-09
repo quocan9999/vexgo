@@ -2,6 +2,7 @@ import { randomInt, randomUUID } from 'node:crypto';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
+  ConflictException,
   type ExecutionContext,
   type INestApplication,
   UnauthorizedException,
@@ -793,6 +794,55 @@ describe('Shipment Status Transition APIs (Phase 04)', () => {
       ]);
       expect(unchangedPayment.trangThai).toBe('DANG_XU_LY');
       expect(unchangedOrder.trangThai).toBe('CHO_THANH_TOAN');
+    });
+
+    it('returns a readable 409 when a successful payment has an incompatible order status', async () => {
+      const shipment = await createTestShipment({
+        nhaXeId: tenantOneId,
+        initialStatus: 'MOI_TAO',
+      });
+      const payment = await prisma.thanhToan.create({
+        data: {
+          soTien: 100000,
+          phuongThuc: 'VNPAY',
+          loaiGiaoDich: 'THANH_TOAN_DON_HANG',
+          thoiGian: new Date(),
+          trangThai: 'THANH_CONG',
+          donGiaoDichId: shipment.donGiaoDichId,
+        },
+      });
+      await prisma.donGiaoDich.update({
+        where: { donGiaoDichId: shipment.donGiaoDichId },
+        data: { trangThai: 'MOI_TAO' },
+      });
+
+      const paymentSettlement = app.get(PaymentSettlementService);
+      let thrown: unknown;
+      try {
+        await paymentSettlement.confirmPayment(payment.thanhToanId);
+      } catch (error) {
+        thrown = error;
+      }
+
+      expect(thrown).toBeInstanceOf(ConflictException);
+      const conflict = thrown as ConflictException;
+      expect(conflict.getStatus()).toBe(409);
+      expect(conflict.getResponse()).toEqual({
+        error: 'PAYMENT_ORDER_STATE_CHANGED',
+        message:
+          'Trạng thái đơn giao dịch không cho phép xác nhận thanh toán.',
+      });
+
+      const [unchangedPayment, unchangedOrder] = await Promise.all([
+        prisma.thanhToan.findUniqueOrThrow({
+          where: { thanhToanId: payment.thanhToanId },
+        }),
+        prisma.donGiaoDich.findUniqueOrThrow({
+          where: { donGiaoDichId: shipment.donGiaoDichId },
+        }),
+      ]);
+      expect(unchangedPayment.trangThai).toBe('THANH_CONG');
+      expect(unchangedOrder.trangThai).toBe('MOI_TAO');
     });
 
     it('marks a provider-confirmed payment and its order as paid atomically', async () => {

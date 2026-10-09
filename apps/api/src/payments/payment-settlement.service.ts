@@ -86,7 +86,7 @@ export class PaymentSettlementService {
           throw new ConflictException({
             error: 'PAYMENT_ORDER_STATE_CHANGED',
             message:
-              'Tráº¡ng thÃ¡i Ä‘Æ¡n giao dá»‹ch khÃ´ng cho phÃ©p xÃ¡c nháº­n thanh toÃ¡n.',
+              'Trạng thái đơn giao dịch không cho phép xác nhận thanh toán.',
           });
         }
         return { data: { paymentId, status: 'THANH_CONG' as const } };
