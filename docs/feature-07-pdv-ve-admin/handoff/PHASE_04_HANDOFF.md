@@ -3,7 +3,7 @@
 **Trạng thái:** PASS — đã xác minh bằng component test và browser/API thật trên DB test riêng.
 **Branch:** `feature/admin-bookings-tickets`
 **Worktree:** `E:/Huit_Local/KhoaLuanCuNhan/SourceCode/vexgo-feature07`
-**Commit implementation P03/P04:** `48447c9c7567d8a8579ba881bdd3e24056dcdf68` (các route/detail được giao cùng list để các link luôn trỏ tới trang thật).
+**Commit implementation P03/P04:** `33c97be5ec74e9fc8151e08f0bd9cfd8310cd717` (các route/detail được giao cùng list để các link luôn trỏ tới trang thật).
 
 ## Routes và nội dung
 

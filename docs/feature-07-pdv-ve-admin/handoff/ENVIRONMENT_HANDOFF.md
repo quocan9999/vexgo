@@ -9,13 +9,13 @@ Phạm vi của lần setup này là worktree, dependencies, MySQL/Prisma và x�
 - Worktree: `E:\Huit_Local\KhoaLuanCuNhan\SourceCode\vexgo-feature07`
 - Branch: `feature/admin-bookings-tickets`
 - Base commit: `f2edf7f8562a2e397f58b7c88568e7f1e6bd40c5`
-- HEAD hiện tại: `48447c9c7567d8a8579ba881bdd3e24056dcdf68`; branch đang ahead 5 commit so với `origin/develop`.
+- HEAD tại lần xác minh setup ban đầu: `48447c9c7567d8a8579ba881bdd3e24056dcdf68`; branch khi đó ahead 5 commit so với `origin/develop`. Sau đó lịch sử local được rebase/reword theo yêu cầu và tiếp tục có các commit P05/handoff.
 - `origin/develop` sau `git fetch origin develop`: cùng commit `f2edf7f8562a2e397f58b7c88568e7f1e6bd40c5`
 - Worktree tracking: `origin/develop`
 - Checkout gốc `develop` vẫn ở commit trên và `git status --short --branch` sạch tại lần xác minh ngày 2026-10-09.
 - ZIP `D:\data\Downloads\feature-07-pdv-ve-admin-docs.zip` đã được đối chiếu với thư mục đích. Cả năm file trong ZIP đều hiện diện; `HANDOFF_TEMPLATE.md` và `PHASE_01_RBAC_BACKEND_FOUNDATION.md` khớp byte-for-byte. Ba file `ENVIRONMENT_WORKTREE.md`, `README.md` và `MASTER_SPEC.md` khác bản ZIP, có thời gian cập nhật mới hơn; không giải nén đè lên các bản local này.
-- Lưu ý phạm vi: tại lúc xác minh, worktree đã có năm commit Feature 07 trên baseline, gồm các commit P01–P04. Phần kiểm tra môi trường này không tạo commit, không reset/rebase branch và không sửa code nghiệp vụ.
-- Trạng thái Git worktree hiện có hai thay đổi staged đã tồn tại: `handoff/PHASE_03_HANDOFF.md` (modified) và `handoff/PHASE_04_HANDOFF.md` (added). Không commit các thay đổi này trong bước setup.
+- Lưu ý phạm vi: tại lúc xác minh setup, worktree đã có năm commit Feature 07 trên baseline, gồm các commit P01–P04. Phần kiểm tra môi trường ban đầu không reset/clean DB hoặc volume; các commit implementation và handoff được thực hiện sau đó theo mục tiêu Feature 07.
+- Các thay đổi tài liệu handoff phát sinh sau lần setup được ghi ở các commit docs riêng; không chứa secrets.
 - **Lưu ý Git cục bộ:** file chung `.git/info/exclude` có quy tắc `docs/*`, nên tài liệu Feature 07 hiện có trên đĩa nhưng bị ignore và không hiện trong `git status`. Không sửa quy tắc chung này và không force-stage tài liệu trong bước setup. Nếu muốn đưa tài liệu vào commit sau này, cần chủ động `git add -f docs/feature-07-pdv-ve-admin/` hoặc điều chỉnh exclude phù hợp.
 
 ## Môi trường riêng
