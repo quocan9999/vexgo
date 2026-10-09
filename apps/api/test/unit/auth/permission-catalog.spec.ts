@@ -34,6 +34,8 @@ describe('Admin permission defaults', () => {
       'role:read',
       'permission:assign',
       'customer:read',
+      'shipment:read',
+      'shipment:update',
     ]);
   });
 
@@ -59,6 +61,8 @@ describe('Admin permission defaults', () => {
       'trip:create',
       'trip:update',
       'trip:cancel',
+      'shipment:read',
+      'shipment:update',
     ]);
   });
 
@@ -87,6 +91,8 @@ describe('Admin permission defaults', () => {
       'role:read',
       'permission:assign',
       'customer:read',
+      'shipment:read',
+      'shipment:update',
       'bus-company:read',
       'bus-company:create',
       'bus-company:update',
@@ -122,6 +128,8 @@ describe('Admin permission defaults', () => {
       'role:read',
       'permission:assign',
       'customer:read',
+      'shipment:read',
+      'shipment:update',
     ];
     const platformPermissionKeys = [
       'bus-company:read',
@@ -218,5 +226,23 @@ describe('Admin permission defaults', () => {
     expect(isPermissionAllowedForRole('NHA_XE_ADMIN', 'unknown:read')).toBe(
       false,
     );
+    expect(isPermissionAllowedForRole('SUPER_ADMIN', 'shipment:read')).toBe(
+      false,
+    );
+    expect(isPermissionAllowedForRole('SUPER_ADMIN', 'shipment:update')).toBe(
+      false,
+    );
+    expect(isPermissionAllowedForRole('NHA_XE_ADMIN', 'shipment:read')).toBe(
+      true,
+    );
+    expect(isPermissionAllowedForRole('NHA_XE_ADMIN', 'shipment:update')).toBe(
+      true,
+    );
+    expect(
+      isPermissionAllowedForRole('NHAN_VIEN_DIEU_HANH', 'shipment:read'),
+    ).toBe(true);
+    expect(
+      isPermissionAllowedForRole('NHAN_VIEN_DIEU_HANH', 'shipment:update'),
+    ).toBe(true);
   });
 });

@@ -79,6 +79,9 @@ jobs:
       - name: Apply API database migrations
         run: npm exec -- prisma migrate deploy
 
+      - name: Sync permission catalog
+        run: node prisma/sync-permissions.mjs
+
       - name: Seed the auth E2E role
         run: node prisma/seed-auth-e2e.mjs
 
@@ -92,8 +95,13 @@ jobs:
         env:
           MIGRATION_URL: mysql://root:ci-root-password@127.0.0.1:3306/vexgo_booking_ticket_status_history_ci_test
 
+      - name: Shipment status cleanup regression (repeat on one isolated DB)
+        run: node prisma/tests/run-shipment-integration-isolated.mjs --repeat=2 test/integration/shipments/shipments-status.spec.ts
+
       - name: API tests
         run: npm run test --workspace=@vexgo/api
+        env:
+          SHIPMENT_TEST_DATABASE_URL: mysql://root:ci-root-password@127.0.0.1:3306/vexgo_ci
 
       - name: Clear booking/ticket history test credentials
         if: always()
