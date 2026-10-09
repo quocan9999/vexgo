@@ -10,6 +10,7 @@ import type { AnchorHTMLAttributes } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { BookingManagement } from '@/features/booking-management/components/booking-management';
 import { BookingManagementDetail } from '@/features/booking-management/components/booking-management-detail';
+import { statusLabel } from '@/features/booking-management/services/booking-management-format';
 import { setEmployeeAdminTestSession } from './admin-auth-test-session';
 
 const navigation = vi.hoisted(() => {
@@ -574,5 +575,33 @@ describe('Admin booking and ticket lists', () => {
     expect(
       screen.queryByRole('button', { name: /hủy|hoàn tiền|soát vé/i }),
     ).toBeNull();
+  });
+
+  it('formats shipment statuses MOI_TAO and DA_TIEP_NHAN with correct Vietnamese labels', () => {
+    expect(statusLabel('MOI_TAO')).toBe('Mới tạo');
+    expect(statusLabel('DA_TIEP_NHAN')).toBe('Đã tiếp nhận');
+  });
+
+  it('preserves the user-chosen date edge instead of clearing both when date range is invalid', async () => {
+    installApi();
+    render(<BookingManagement />);
+
+    const fromInput = screen.getByLabelText('Ngày đặt từ') as HTMLInputElement;
+    const toInput = screen.getByLabelText('Ngày đặt đến') as HTMLInputElement;
+
+    fireEvent.change(fromInput, { target: { value: '2026-10-05' } });
+    fireEvent.change(toInput, { target: { value: '2026-10-10' } });
+    expect(fromInput.value).toBe('2026-10-05');
+    expect(toInput.value).toBe('2026-10-10');
+
+    // Setting From later than To (2026-10-15 > 2026-10-10): From is kept, only To is cleared
+    fireEvent.change(fromInput, { target: { value: '2026-10-15' } });
+    expect(fromInput.value).toBe('2026-10-15');
+    expect(toInput.value).toBe('');
+
+    // Setting To earlier than From (2026-10-01 < 2026-10-15): To is kept, only From is cleared
+    fireEvent.change(toInput, { target: { value: '2026-10-01' } });
+    expect(toInput.value).toBe('2026-10-01');
+    expect(fromInput.value).toBe('');
   });
 });

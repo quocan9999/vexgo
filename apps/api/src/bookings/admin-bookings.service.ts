@@ -12,6 +12,7 @@ import {
   combineDeparture,
   resolveBusinessTimeZone,
 } from '../common/time/business-date.js';
+import { escapeSqlLike } from '../common/escape-sql-like.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import type {
   AdminBookingQueryDto,
@@ -193,14 +194,15 @@ export class AdminBookingsService {
       predicates.push(Prisma.sql`bookingRow.trangThai = ${query.status}`);
     }
     if (search) {
+      const escapedSearch = escapeSqlLike(search);
       predicates.push(Prisma.sql`(
-        bookingRow.maPhieuDatVe LIKE CONCAT('%', ${search}, '%')
-        OR orderRow.tenKhachHang LIKE CONCAT('%', ${search}, '%')
-        OR orderRow.soDienThoaiKhachHang LIKE CONCAT('%', ${search}, '%')
+        bookingRow.maPhieuDatVe LIKE CONCAT('%', ${escapedSearch}, '%')
+        OR orderRow.tenKhachHang LIKE CONCAT('%', ${escapedSearch}, '%')
+        OR orderRow.soDienThoaiKhachHang LIKE CONCAT('%', ${escapedSearch}, '%')
         OR EXISTS (
           SELECT 1 FROM Ve AS searchedTicket
           WHERE searchedTicket.phieuDatVeId = bookingRow.phieuDatVeId
-            AND searchedTicket.maVe LIKE CONCAT('%', ${search}, '%')
+            AND searchedTicket.maVe LIKE CONCAT('%', ${escapedSearch}, '%')
         )
       )`);
     }

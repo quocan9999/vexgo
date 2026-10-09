@@ -267,10 +267,26 @@ export function BookingManagement() {
       const from = edge === 'From' ? value : (current[fromKey] ?? '');
       const to = edge === 'To' ? value : (current[toKey] ?? '');
       const invalidRange = Boolean(from && to && from > to);
+      if (invalidRange) {
+        if (edge === 'From') {
+          return {
+            ...current,
+            [fromKey]: from || undefined,
+            [toKey]: undefined,
+            page: 1,
+          };
+        }
+        return {
+          ...current,
+          [fromKey]: undefined,
+          [toKey]: to || undefined,
+          page: 1,
+        };
+      }
       return {
         ...current,
-        [fromKey]: invalidRange ? undefined : from || undefined,
-        [toKey]: invalidRange ? undefined : to || undefined,
+        [fromKey]: from || undefined,
+        [toKey]: to || undefined,
         page: 1,
       };
     });

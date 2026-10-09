@@ -51,13 +51,18 @@ function assertSafeTargets() {
   if (!runtime.database || runtime.database.toLowerCase() === 'vexgo') {
     throw new Error('The rollout refuses the original VexGo database.');
   }
-  if (
-    ['localhost', '127.0.0.1', '::1'].includes(runtime.host) &&
-    (runtime.port !== 3307 || !runtime.database.startsWith('vexgo_feature07'))
-  ) {
-    throw new Error(
-      'Local rollout is restricted to port 3307 and a vexgo_feature07 database.',
-    );
+  if (['localhost', '127.0.0.1', '::1'].includes(runtime.host)) {
+    const isCi = process.env.CI === 'true';
+    const allowedPort = isCi
+      ? runtime.port === 3306 || runtime.port === 3307
+      : runtime.port === 3307;
+    if (!allowedPort || !runtime.database.startsWith('vexgo_feature07')) {
+      throw new Error(
+        isCi
+          ? 'CI rollout is restricted to port 3306/3307 and a vexgo_feature07 database.'
+          : 'Local rollout is restricted to port 3307 and a vexgo_feature07 database.',
+      );
+    }
   }
   if (process.env[confirmationVariable] !== runtime.database) {
     throw new Error(

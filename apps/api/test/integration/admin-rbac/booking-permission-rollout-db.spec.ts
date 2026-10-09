@@ -35,15 +35,27 @@ function databaseTarget(value: string) {
 }
 
 const testTarget = testDatabaseUrl ? databaseTarget(testDatabaseUrl) : null;
-if (
-  testTarget &&
-  (testTarget.host !== '127.0.0.1' ||
-    testTarget.port !== 3307 ||
-    testTarget.database !== 'vexgo_feature07_test')
-) {
-  throw new Error(
-    'Feature 07 RBAC DB tests only allow 127.0.0.1:3307/vexgo_feature07_test.',
-  );
+if (testTarget) {
+  const localHosts = new Set(['localhost', '127.0.0.1', '::1']);
+  if (!localHosts.has(testTarget.host)) {
+    throw new Error('Feature 07 RBAC DB tests must target localhost.');
+  }
+  if (!/^vexgo_feature07.*test$/i.test(testTarget.database)) {
+    throw new Error(
+      'Feature 07 RBAC DB tests only allow a dedicated test database (e.g. vexgo_feature07_test or vexgo_feature07_ci_test).',
+    );
+  }
+  const isCi = process.env.CI === 'true';
+  const allowedPort = isCi
+    ? testTarget.port === 3306 || testTarget.port === 3307
+    : testTarget.port === 3307;
+  if (!allowedPort) {
+    throw new Error(
+      isCi
+        ? 'CI Feature 07 test database port must be 3306 or 3307.'
+        : 'Local Feature 07 test database must use port 3307.',
+    );
+  }
 }
 
 const featureTestDescribe = testTarget ? describe : describe.skip;

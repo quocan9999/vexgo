@@ -29,6 +29,8 @@ export function statusLabel(status: string) {
     THAT_BAI: 'Thất bại',
     DA_HOAN_TIEN: 'Đã hoàn tiền',
     CHO_XAC_NHAN: 'Chờ xác nhận',
+    MOI_TAO: 'Mới tạo',
+    DA_TIEP_NHAN: 'Đã tiếp nhận',
     DANG_VAN_CHUYEN: 'Đang vận chuyển',
     DA_GIAO: 'Đã giao',
   };

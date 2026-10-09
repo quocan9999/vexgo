@@ -107,14 +107,10 @@ function parseListState(
     search: (params.get(`${prefix}Search`) ?? '').slice(0, 100),
     status:
       rawStatus && statusValues.includes(rawStatus) ? rawStatus : undefined,
-    bookedFrom:
-      bookedFrom && bookedTo && bookedFrom > bookedTo ? undefined : bookedFrom,
+    bookedFrom,
     bookedTo:
       bookedFrom && bookedTo && bookedFrom > bookedTo ? undefined : bookedTo,
-    departureFrom:
-      departureFrom && departureTo && departureFrom > departureTo
-        ? undefined
-        : departureFrom,
+    departureFrom,
     departureTo:
       departureFrom && departureTo && departureFrom > departureTo
         ? undefined

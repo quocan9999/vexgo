@@ -12,6 +12,7 @@ import {
   combineDeparture,
   resolveBusinessTimeZone,
 } from '../common/time/business-date.js';
+import { escapeSqlLike } from '../common/escape-sql-like.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import type {
   AdminHistoryQueryDto,
@@ -217,21 +218,22 @@ export class AdminTicketsService {
     if (query.status) and.push({ trangThai: query.status });
     const search = query.search?.trim();
     if (search) {
+      const escapedSearch = escapeSqlLike(search);
       and.push({
         OR: [
-          { maVe: { contains: search } },
-          { phieuDatVe: { maPhieuDatVe: { contains: search } } },
+          { maVe: { contains: escapedSearch } },
+          { phieuDatVe: { maPhieuDatVe: { contains: escapedSearch } } },
           {
             phieuDatVe: {
               donGiaoDich: {
-                tenKhachHang: { contains: search },
+                tenKhachHang: { contains: escapedSearch },
               },
             },
           },
           {
             phieuDatVe: {
               donGiaoDich: {
-                soDienThoaiKhachHang: { contains: search },
+                soDienThoaiKhachHang: { contains: escapedSearch },
               },
             },
           },

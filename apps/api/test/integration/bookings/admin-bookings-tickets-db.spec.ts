@@ -47,33 +47,50 @@ const shadowDatabaseUrl =
 
 if (testDatabaseUrl) {
   const target = databaseTarget(testDatabaseUrl);
-  if (
-    target.host !== '127.0.0.1' ||
-    target.port !== 3307 ||
-    target.database !== 'vexgo_feature07_test'
-  ) {
+  const localHosts = new Set(['localhost', '127.0.0.1', '::1']);
+  if (!localHosts.has(target.host)) {
+    throw new Error('Feature 07 test database must target localhost.');
+  }
+  if (!/^vexgo_feature07.*test$/i.test(target.database)) {
     throw new Error(
-      'Feature 07 read API tests only allow 127.0.0.1:3307/vexgo_feature07_test.',
+      'Feature 07 read API tests only allow a dedicated test database (e.g. vexgo_feature07_test or vexgo_feature07_ci_test).',
     );
   }
-  if (!runtimeDatabaseUrl || !shadowDatabaseUrl) {
+  const isCi = process.env.CI === 'true';
+  const allowedPort = isCi
+    ? target.port === 3306 || target.port === 3307
+    : target.port === 3307;
+  if (!allowedPort) {
     throw new Error(
-      'Feature 07 database URLs must be configured before tests.',
+      isCi
+        ? 'CI Feature 07 test database port must be 3306 or 3307.'
+        : 'Local Feature 07 test database must use port 3307.',
     );
   }
-  const runtimeTarget = databaseTarget(runtimeDatabaseUrl);
-  const shadowTarget = databaseTarget(shadowDatabaseUrl);
-  if (
-    runtimeTarget.host !== '127.0.0.1' ||
-    runtimeTarget.port !== 3307 ||
-    runtimeTarget.database !== 'vexgo_feature07' ||
-    shadowTarget.host !== '127.0.0.1' ||
-    shadowTarget.port !== 3307 ||
-    shadowTarget.database !== 'vexgo_feature07_shadow'
-  ) {
-    throw new Error(
-      'Feature 07 runtime and shadow database targets failed the isolation check.',
-    );
+
+  if (runtimeDatabaseUrl) {
+    const runtimeTarget = databaseTarget(runtimeDatabaseUrl);
+    if (
+      target.host === runtimeTarget.host &&
+      target.port === runtimeTarget.port &&
+      target.database === runtimeTarget.database
+    ) {
+      throw new Error(
+        'Feature 07 test database must not point to the runtime database.',
+      );
+    }
+  }
+  if (shadowDatabaseUrl) {
+    const shadowTarget = databaseTarget(shadowDatabaseUrl);
+    if (
+      target.host === shadowTarget.host &&
+      target.port === shadowTarget.port &&
+      target.database === shadowTarget.database
+    ) {
+      throw new Error(
+        'Feature 07 test database must not point to the shadow database.',
+      );
+    }
   }
 }
 

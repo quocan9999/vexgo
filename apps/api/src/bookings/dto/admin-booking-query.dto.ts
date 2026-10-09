@@ -43,6 +43,20 @@ class DateRangeStartBeforeOrEqualEnd implements ValidatorConstraintInterface {
 
 abstract class AdminBookingTicketFiltersDto extends PaginationQueryDto {
   @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: 'Trang phải là số nguyên.' })
+  @Min(1, { message: 'Trang phải lớn hơn hoặc bằng 1.' })
+  @Max(10_000, { message: 'Trang không được vượt quá 10000.' })
+  declare page: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: 'Số lượng mục trên trang phải là số nguyên.' })
+  @Min(1, { message: 'Số lượng mục trên trang phải lớn hơn hoặc bằng 1.' })
+  @Max(100, { message: 'Số lượng mục trên trang không được vượt quá 100.' })
+  declare pageSize: number;
+
+  @IsOptional()
   @IsString()
   @MaxLength(100)
   declare search?: string;
@@ -91,14 +105,15 @@ export class AdminTicketQueryDto extends AdminBookingTicketFiltersDto {
 export class AdminHistoryQueryDto {
   @IsOptional()
   @Type(() => Number)
-  @IsInt()
-  @Min(1)
+  @IsInt({ message: 'Trang phải là số nguyên.' })
+  @Min(1, { message: 'Trang phải lớn hơn hoặc bằng 1.' })
+  @Max(10_000, { message: 'Trang không được vượt quá 10000.' })
   page = 1;
 
   @IsOptional()
   @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  @Max(100)
+  @IsInt({ message: 'Số lượng mục trên trang phải là số nguyên.' })
+  @Min(1, { message: 'Số lượng mục trên trang phải lớn hơn hoặc bằng 1.' })
+  @Max(100, { message: 'Số lượng mục trên trang không được vượt quá 100.' })
   pageSize = 100;
 }
