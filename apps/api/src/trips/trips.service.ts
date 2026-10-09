@@ -40,6 +40,165 @@ type FareRecord = {
   denNgay: Date | null;
 };
 
+export interface StopPointPayload {
+  id: string;
+  name: string;
+  time: string;
+  address: string;
+  type: 'station' | 'office' | 'transfer' | 'point';
+  isDefault: boolean;
+}
+
+const PASSENGER_STATIONS_BY_CITY: Record<
+  string,
+  Array<{ name: string; address: string; type: 'station' | 'point' }>
+> = {
+  'TP.HCM': [
+    {
+      name: 'Bến xe Miền Đông mới',
+      address: 'Đường Hoàng Hữu Nam, TP. Thủ Đức, TP.HCM',
+      type: 'station',
+    },
+    {
+      name: 'Bến xe Miền Tây',
+      address: '395 Kinh Dương Vương, An Lạc, Bình Tân, TP.HCM',
+      type: 'station',
+    },
+    {
+      name: 'Bến xe An Sương',
+      address: 'Quốc lộ 22, Bà Điểm, Hóc Môn, TP.HCM',
+      type: 'station',
+    },
+  ],
+  'Đà Lạt': [
+    {
+      name: 'Bến xe Liên tỉnh Đà Lạt',
+      address: '01 Tô Hiến Thành, Phường 3, Đà Lạt',
+      type: 'station',
+    },
+    {
+      name: 'Bến xe Trung tâm Đà Lạt',
+      address: 'Đường Mai Anh Đào, Phường 8, Đà Lạt',
+      type: 'station',
+    },
+  ],
+  'Vũng Tàu': [
+    {
+      name: 'Bến xe Vũng Tàu',
+      address: '192 Nam Kỳ Khởi Nghĩa, Phường 3, Vũng Tàu',
+      type: 'station',
+    },
+    {
+      name: 'Bến xe Bà Rịa',
+      address: 'Quốc lộ 51, Phước Trung, TP. Bà Rịa',
+      type: 'station',
+    },
+  ],
+  'Nha Trang': [
+    {
+      name: 'Bến xe Phía Nam Nha Trang',
+      address: 'Km 6 Đường 23/10, Vĩnh Trung, Nha Trang',
+      type: 'station',
+    },
+    {
+      name: 'Bến xe Phía Bắc Nha Trang',
+      address: 'Đường 2/4, Vĩnh Hải, Nha Trang',
+      type: 'station',
+    },
+  ],
+  'Hà Nội': [
+    {
+      name: 'Bến xe Mỹ Đình',
+      address: '20 Phạm Hùng, Mỹ Đình, Nam Từ Liêm, Hà Nội',
+      type: 'station',
+    },
+    {
+      name: 'Bến xe Giáp Bát',
+      address: 'Giải Phóng, Hoàng Mai, Hà Nội',
+      type: 'station',
+    },
+  ],
+  'Đà Nẵng': [
+    {
+      name: 'Bến xe Trung tâm Đà Nẵng',
+      address: 'Tôn Đức Thắng, Hòa Minh, Liên Chiểu, Đà Nẵng',
+      type: 'station',
+    },
+  ],
+  'Cần Thơ': [
+    {
+      name: 'Bến xe Trung tâm Cần Thơ',
+      address: 'Khu Đô Thị Nam Cần Thơ, Q. Cái Răng, Cần Thơ',
+      type: 'station',
+    },
+  ],
+};
+
+function formatClockTime(d: Date): string {
+  const h = String(d.getUTCHours()).padStart(2, '0');
+  const m = String(d.getUTCMinutes()).padStart(2, '0');
+  return `${h}:${m}`;
+}
+
+function computePickupAndDropoffPoints(
+  trip: TripRecord,
+  departureTimeIso: string,
+  arrivalTimeIso: string | null,
+) {
+  const originCity = trip.tuyenXe?.diemDi || 'TP.HCM';
+  const destCity = trip.tuyenXe?.diemDen || 'Đà Lạt';
+
+  const depTimeFormatted = formatClockTime(new Date(trip.gioKhoiHanh));
+  const arrDate = arrivalTimeIso ? new Date(arrivalTimeIso) : null;
+  const arrTimeFormatted =
+    arrDate && !isNaN(arrDate.getTime())
+      ? `${String(arrDate.getHours()).padStart(2, '0')}:${String(arrDate.getMinutes()).padStart(2, '0')}`
+      : depTimeFormatted;
+
+  const originStations = PASSENGER_STATIONS_BY_CITY[originCity] ?? [
+    {
+      name: `Bến xe trung tâm ${originCity}`,
+      address: `Trung tâm ${originCity}`,
+      type: 'station' as const,
+    },
+  ];
+
+  const pickupPoints: StopPointPayload[] = originStations.map((st, idx) => ({
+    id: idx === 0 ? `PU_STATION_${trip.chuyenXeId}` : `PU_${trip.chuyenXeId}_${idx + 1}`,
+    name: st.name,
+    time: depTimeFormatted,
+    address: st.address,
+    type: st.type,
+    isDefault: idx === 0,
+  }));
+
+  const destStations = PASSENGER_STATIONS_BY_CITY[destCity] ?? [
+    {
+      name: `Bến xe trung tâm ${destCity}`,
+      address: `Trung tâm ${destCity}`,
+      type: 'station' as const,
+    },
+  ];
+
+  const dropoffPoints: StopPointPayload[] = destStations.map((st, idx) => ({
+    id: idx === 0 ? `DO_STATION_${trip.chuyenXeId}` : `DO_${trip.chuyenXeId}_${idx + 1}`,
+    name: st.name,
+    time: arrTimeFormatted,
+    address: st.address,
+    type: st.type,
+    isDefault: idx === 0,
+  }));
+
+  return {
+    pickupPoints,
+    dropoffPoints,
+    pickupPoint: pickupPoints[0].name,
+    pickupAddress: pickupPoints[0].address,
+    dropoffPoint: dropoffPoints[0].name,
+    dropoffAddress: dropoffPoints[0].address,
+  };
+}
+
 function matchesTimeRange(time: Date, timeRange?: string): boolean {
   if (!timeRange || timeRange === 'all') return true;
   const hour = time.getUTCHours();
@@ -79,6 +238,26 @@ function mapTrip(
   businessTimeZone: string,
   fare?: FareRecord,
 ) {
+  const departureTime = combineDeparture(
+    trip.ngayKhoiHanh,
+    trip.gioKhoiHanh,
+    businessTimeZone,
+  ).toISOString();
+
+  const arrivalTime = computeArrival(
+    trip.ngayKhoiHanh,
+    trip.gioKhoiHanh,
+    trip.tuyenXe.thoiGianChayPhut,
+    trip.gioDen,
+    businessTimeZone,
+  );
+
+  const stopPoints = computePickupAndDropoffPoints(
+    trip,
+    departureTime,
+    arrivalTime,
+  );
+
   return {
     id: trip.chuyenXeId,
     code: trip.maChuyenXe,
@@ -98,18 +277,8 @@ function mapTrip(
       distance: null,
       durationMinutes: trip.tuyenXe.thoiGianChayPhut ?? null,
     },
-    departureTime: combineDeparture(
-      trip.ngayKhoiHanh,
-      trip.gioKhoiHanh,
-      businessTimeZone,
-    ).toISOString(),
-    arrivalTime: computeArrival(
-      trip.ngayKhoiHanh,
-      trip.gioKhoiHanh,
-      trip.tuyenXe.thoiGianChayPhut,
-      trip.gioDen,
-      businessTimeZone,
-    ),
+    departureTime,
+    arrivalTime,
     vehicle: {
       id: trip.xe.xeId,
       typeId: trip.xe.loaiXeId,
@@ -122,6 +291,12 @@ function mapTrip(
     availableSeats: trip.gheChuyenXes.filter(
       ({ trangThai }) => trangThai === 'TRONG',
     ).length,
+    pickupPoints: stopPoints.pickupPoints,
+    dropoffPoints: stopPoints.dropoffPoints,
+    pickupPoint: stopPoints.pickupPoint,
+    pickupAddress: stopPoints.pickupAddress,
+    dropoffPoint: stopPoints.dropoffPoint,
+    dropoffAddress: stopPoints.dropoffAddress,
   };
 }
 
@@ -205,6 +380,19 @@ function cityToCode(city: string): string {
   return city;
 }
 
+function codeToCity(code?: string): string | undefined {
+  if (!code) return undefined;
+  const upper = code.trim().toUpperCase();
+  if (upper === 'HCM' || upper === 'SG') return 'TP.HCM';
+  if (upper === 'DL') return 'Đà Lạt';
+  if (upper === 'VT') return 'Vũng Tàu';
+  if (upper === 'NT') return 'Nha Trang';
+  if (upper === 'HN') return 'Hà Nội';
+  if (upper === 'DN') return 'Đà Nẵng';
+  if (upper === 'CT') return 'Cần Thơ';
+  return code;
+}
+
 @Injectable()
 export class TripsService {
   constructor(
@@ -224,10 +412,10 @@ export class TripsService {
     if (dto.from || dto.to || dto.busCompanyId || dto.operator) {
       where.tuyenXe = {};
       if (dto.from) {
-        where.tuyenXe.diemDi = { contains: dto.from };
+        where.tuyenXe.diemDi = { contains: codeToCity(dto.from) };
       }
       if (dto.to) {
-        where.tuyenXe.diemDen = { contains: dto.to };
+        where.tuyenXe.diemDen = { contains: codeToCity(dto.to) };
       }
       if (dto.busCompanyId) {
         where.tuyenXe.nhaXeId = dto.busCompanyId;
@@ -403,7 +591,7 @@ export class TripsService {
   async getCustomerSeats(id: number) {
     const trip = await this.prisma.chuyenXe.findUnique({
       where: { chuyenXeId: id },
-      select: { chuyenXeId: true, trangThai: true },
+      include: { xe: true },
     });
 
     if (!trip) {
@@ -419,6 +607,20 @@ export class TripsService {
         message: 'Chuyến xe này hiện không mở bán.',
       });
     }
+
+    const fare = (trip as any)?.xe?.loaiXeId
+      ? await this.prisma.bangGia.findFirst({
+          where: {
+            nhaXeId: trip.nhaXeId,
+            tuyenXeId: trip.tuyenXeId,
+            loaiXeId: (trip as any).xe.loaiXeId,
+            trangThai: 'HOAT_DONG',
+            tuNgay: { lte: trip.ngayKhoiHanh },
+            OR: [{ denNgay: null }, { denNgay: { gte: trip.ngayKhoiHanh } }],
+          },
+        })
+      : null;
+    const defaultPrice = fare ? Number(fare.giaNiemYet) : undefined;
 
     const gheChuyenXes = await this.prisma.gheChuyenXe.findMany({
       where: { chuyenXeId: id },
@@ -438,6 +640,7 @@ export class TripsService {
       seatNumber: gx.ghe.soGhe,
       position: gx.ghe.viTri,
       status: gx.trangThai,
+      ...(defaultPrice !== undefined ? { price: defaultPrice } : {}),
     }));
   }
 
