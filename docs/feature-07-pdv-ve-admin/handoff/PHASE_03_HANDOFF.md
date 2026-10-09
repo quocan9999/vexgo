@@ -3,11 +3,11 @@
 **Trạng thái:** PASS — đã xác minh bằng unit/component test và API thật trên DB test riêng.
 **Branch:** `feature/admin-bookings-tickets`
 **Worktree:** `E:/Huit_Local/KhoaLuanCuNhan/SourceCode/vexgo-feature07`
-**Commit UI:** P03 và P04 được giao cùng một commit implementation để các link detail luôn trỏ tới route thật; SHA sẽ ghi ở final handoff.
+**Commit UI P03/P04:** `48447c9c7567d8a8579ba881bdd3e24056dcdf68` (implementation được giao cùng commit để các link detail luôn trỏ tới route thật).
 
 ## Thay đổi
 
-- Thêm `/booking-management` với hai tab Phiếu đặt vé/Vé, query state độc lập `b*` và `t*), debounce search, status/date filters, sort, page/page size và reset filter.
+- Thêm `/booking-management` với hai tab Phiếu đặt vé/Vé, query state độc lập `b*` và `t*`, debounce search, status/date filters, sort, page/page size và reset filter.
 - Gọi hai list API GET Phase 02 qua Admin API client; không dùng dữ liệu fixture làm nguồn runtime.
 - Thêm sidebar/route access theo `booking:read`; Super Admin không nhận quyền này mặc định.
 - Có trạng thái loading, error/retry, empty/no-match; keyboard tabs, debounce, stale-response protection và mobile card layout.
