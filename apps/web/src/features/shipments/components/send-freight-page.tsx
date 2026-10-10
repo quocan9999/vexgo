@@ -69,7 +69,7 @@ function SendFreightContent() {
   const [cargoCategories, setCargoCategories] = useState<
     Array<{ categoryId: number; name: string; description: string }>
   >([]);
-  const [cargoName, setCargoName] = useState<string>('Hàng bưu phẩm tiêu chuẩn');
+  const [cargoName, setCargoName] = useState<string>('');
   const [cargoCategory, setCargoCategory] = useState<string>('Bưu phẩm');
   const [quantity, setQuantity] = useState<number>(1);
   const [weight, setWeight] = useState<number>(5);
