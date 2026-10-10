@@ -378,10 +378,6 @@ function SendFreightContent() {
       <div className="bg-[#17223B] text-white pt-10 pb-16 px-4 sm:px-6 relative overflow-hidden">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
           <div>
-            <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/10 rounded-full text-xs font-semibold text-amber-300 mb-3 border border-white/10">
-              <span>📦</span>
-              <span>Gửi hàng cùng xe khách · Nhận tại bến</span>
-            </div>
             <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight text-white mb-2">
               Gửi hàng theo nhà xe , <br className="hidden sm:inline" />
               <span className="text-[#FF7D42]">nhanh – gọn – an toàn</span>
