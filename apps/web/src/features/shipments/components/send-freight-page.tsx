@@ -60,11 +60,29 @@ function SendFreightContent() {
   const [trips, setTrips] = useState<ApiTrip[]>([]);
   const [loadingTrips, setLoadingTrips] = useState<boolean>(false);
   const [selectedTripId, setSelectedTripId] = useState<number | null>(null);
+  const [selectedCompanyFilter, setSelectedCompanyFilter] = useState<string>('all');
 
   const handleSwapLocations = () => {
     setOrigin(destination);
     setDestination(origin);
   };
+
+  // Danh sách các nhà xe duy nhất từ kết quả tìm chuyến
+  const availableCompanies = useMemo(() => {
+    const map = new Map<number, { id: number; name: string }>();
+    trips.forEach((t) => {
+      if (t.busCompany?.id) {
+        map.set(t.busCompany.id, { id: t.busCompany.id, name: t.busCompany.name });
+      }
+    });
+    return Array.from(map.values());
+  }, [trips]);
+
+  // Danh sách chuyến xe sau khi áp dụng bộ lọc nhà xe
+  const filteredTrips = useMemo(() => {
+    if (selectedCompanyFilter === 'all') return trips;
+    return trips.filter((t) => String(t.busCompany?.id) === selectedCompanyFilter);
+  }, [trips, selectedCompanyFilter]);
 
   // Người gửi
   const [senderName, setSenderName] = useState<string>('');
@@ -635,21 +653,59 @@ function SendFreightContent() {
                         </div>
 
                         <span className="px-3 py-1 bg-blue-50 text-blue-600 font-bold text-xs rounded-full">
-                          {loadingTrips ? 'Đang tải...' : `${trips.length} lựa chọn`}
+                          {loadingTrips ? 'Đang tải...' : `${filteredTrips.length} lựa chọn`}
                         </span>
                       </div>
+
+                      {/* Bộ lọc nhà xe */}
+                      {availableCompanies.length > 1 && (
+                        <div className="flex flex-wrap items-center gap-2 mb-4 pb-3 border-b border-slate-100">
+                          <span className="text-xs font-bold text-slate-500 mr-1">Lọc nhà xe:</span>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedCompanyFilter('all')}
+                            className={`px-3 py-1 rounded-full text-xs font-bold transition-all border ${
+                              selectedCompanyFilter === 'all'
+                                ? 'bg-slate-900 text-white border-slate-900 shadow-2xs'
+                                : 'bg-slate-50 text-slate-600 border-slate-200 hover:border-slate-300'
+                            }`}
+                          >
+                            Tất cả ({trips.length})
+                          </button>
+                          {availableCompanies.map((comp) => {
+                            const count = trips.filter((t) => t.busCompany?.id === comp.id).length;
+                            const isSelected = selectedCompanyFilter === String(comp.id);
+                            return (
+                              <button
+                                type="button"
+                                key={comp.id}
+                                onClick={() => setSelectedCompanyFilter(String(comp.id))}
+                                className={`px-3 py-1 rounded-full text-xs font-bold transition-all border ${
+                                  isSelected
+                                    ? 'bg-[#0060c4] text-white border-[#0060c4] shadow-2xs'
+                                    : 'bg-slate-50 text-slate-600 border-slate-200 hover:border-slate-300'
+                                }`}
+                              >
+                                {comp.name} ({count})
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
 
                       {loadingTrips ? (
                         <div className="p-8 text-center text-slate-400 text-sm bg-slate-50 rounded-xl">
                           Đang tải danh sách nhà xe nhận hàng...
                         </div>
-                      ) : trips.length === 0 ? (
+                      ) : filteredTrips.length === 0 ? (
                         <div className="p-6 text-center text-slate-500 text-sm bg-amber-50 rounded-xl border border-amber-200">
-                          Chưa có nhà xe nào nhận tuyến này vào ngày đã chọn. Vui lòng chọn ngày khác (ví dụ: ngày 20/10/2026).
+                          {trips.length > 0
+                            ? 'Không có chuyến xe nào phù hợp với bộ lọc nhà xe này.'
+                            : 'Chưa có nhà xe nào nhận tuyến này vào ngày đã chọn. Vui lòng chọn ngày khác (ví dụ: ngày 20/10/2026).'}
                         </div>
                       ) : (
                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5">
-                          {trips.map((trip) => {
+                          {filteredTrips.map((trip) => {
                             const isSelected = selectedTripId === trip.id;
                             const depTime = formatIsoTime(trip.departureTime);
 
