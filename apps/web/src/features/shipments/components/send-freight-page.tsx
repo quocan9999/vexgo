@@ -26,6 +26,9 @@ import {
   ArrowLeftRight,
   ShieldCheck,
   Check,
+  ChevronDown,
+  Filter,
+  ArrowUpDown,
 } from 'lucide-react';
 import { tripsApi, type ApiTrip } from '@/features/trips/services/trips.api';
 import {
@@ -691,128 +694,95 @@ function SendFreightContent() {
 
                       {/* BỐ CỤC 2 CỘT: CỘT TRÁI BỘ LỌC - CỘT PHẢI DANH SÁCH XE */}
                       <div className="flex flex-col md:flex-row gap-5 items-start">
-                        {/* CỘT TRÁI: BỘ LỌC (NHÀ XE, GIỜ CHẠY, GIÁ TIỀN) */}
-                        <div className="w-full md:w-64 shrink-0 bg-slate-50/70 p-4 rounded-2xl border border-slate-200/80 space-y-4">
-                          {/* 1. Lọc Nhà xe */}
-                          {availableCompanies.length > 1 && (
-                            <div>
-                              <div className="text-[11px] font-extrabold text-slate-500 uppercase mb-2 flex items-center justify-between">
-                                <span>Nhà xe</span>
-                                <span className="text-[10px] text-slate-400 font-normal">
-                                  {availableCompanies.length} hãng
-                                </span>
-                              </div>
-                              <div className="flex flex-col gap-1.5">
-                                <button
-                                  type="button"
-                                  onClick={() => setSelectedCompanyFilter('all')}
-                                  className={`w-full px-3 py-1.5 rounded-xl text-xs font-bold transition-all text-left flex items-center justify-between border ${
-                                    selectedCompanyFilter === 'all'
-                                      ? 'bg-slate-900 text-white border-slate-900 shadow-2xs'
-                                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-                                  }`}
-                                >
-                                  <span>Tất cả</span>
-                                  <span
-                                    className={`text-[10px] px-1.5 py-0.5 rounded-full ${
-                                      selectedCompanyFilter === 'all'
-                                        ? 'bg-white/20 text-white'
-                                        : 'bg-slate-100 text-slate-500'
-                                    }`}
-                                  >
-                                    {trips.length}
-                                  </span>
-                                </button>
+                        {/* CỘT TRÁI: BỘ LỌC DẠNG DROPDOWN SỔ XUỐNG */}
+                        <div className="w-full md:w-64 shrink-0 bg-slate-50/80 p-4 rounded-2xl border border-slate-200 space-y-4">
+                          <div className="flex items-center justify-between pb-2 border-b border-slate-200">
+                            <div className="flex items-center gap-1.5 text-xs font-extrabold text-slate-800 uppercase tracking-wide">
+                              <Filter className="w-3.5 h-3.5 text-slate-500" />
+                              <span>Bộ lọc tìm kiếm</span>
+                            </div>
+                            {(selectedCompanyFilter !== 'all' ||
+                              selectedTimeFilter !== 'all' ||
+                              selectedPriceSort !== 'default') && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedCompanyFilter('all');
+                                  setSelectedTimeFilter('all');
+                                  setSelectedPriceSort('default');
+                                }}
+                                className="text-[11px] text-[#0060c4] hover:underline font-semibold flex items-center gap-0.5"
+                              >
+                                <RotateCcw className="w-3 h-3" /> Đặt lại
+                              </button>
+                            )}
+                          </div>
+
+                          {/* 1. Dropdown Nhà xe */}
+                          <div>
+                            <label className="block text-[11px] font-bold text-slate-600 mb-1.5 flex items-center gap-1">
+                              <Building2 className="w-3 h-3 text-slate-400" />
+                              <span>Nhà xe vận chuyển</span>
+                            </label>
+                            <div className="relative">
+                              <select
+                                value={selectedCompanyFilter}
+                                onChange={(e) => setSelectedCompanyFilter(e.target.value)}
+                                className="w-full h-10 pl-3 pr-8 rounded-xl border border-slate-200 hover:border-slate-300 focus:outline-none focus:border-[#0060c4] font-medium text-slate-800 bg-white appearance-none cursor-pointer text-xs"
+                              >
+                                <option value="all">Tất cả nhà xe ({trips.length})</option>
                                 {availableCompanies.map((comp) => {
                                   const count = trips.filter((t) => t.busCompany?.id === comp.id).length;
-                                  const isSelected = selectedCompanyFilter === String(comp.id);
                                   return (
-                                    <button
-                                      type="button"
-                                      key={comp.id}
-                                      onClick={() => setSelectedCompanyFilter(String(comp.id))}
-                                      className={`w-full px-3 py-1.5 rounded-xl text-xs font-bold transition-all text-left flex items-center justify-between border ${
-                                        isSelected
-                                          ? 'bg-[#0060c4] text-white border-[#0060c4] shadow-2xs'
-                                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-                                      }`}
-                                    >
-                                      <span className="truncate">{comp.name}</span>
-                                      <span
-                                        className={`text-[10px] px-1.5 py-0.5 rounded-full ${
-                                          isSelected
-                                            ? 'bg-white/20 text-white'
-                                            : 'bg-slate-100 text-slate-500'
-                                        }`}
-                                      >
-                                        {count}
-                                      </span>
-                                    </button>
+                                    <option key={comp.id} value={String(comp.id)}>
+                                      {comp.name} ({count} chuyến)
+                                    </option>
                                   );
                                 })}
-                              </div>
-                            </div>
-                          )}
-
-                          {/* 2. Lọc Khung giờ xuất bến */}
-                          <div className={availableCompanies.length > 1 ? 'pt-3 border-t border-slate-200/60' : ''}>
-                            <div className="text-[11px] font-extrabold text-slate-500 uppercase mb-2">
-                              Giờ chạy
-                            </div>
-                            <div className="flex flex-col gap-1.5">
-                              {[
-                                { id: 'all', label: 'Tất cả giờ' },
-                                { id: 'morning', label: 'Sáng (06:00 – 12:00)' },
-                                { id: 'afternoon', label: 'Chiều (12:00 – 18:00)' },
-                                { id: 'evening', label: 'Tối (18:00 – 22:00)' },
-                                { id: 'night', label: 'Đêm (22:00 – 06:00)' },
-                              ].map((slot) => {
-                                const isSelected = selectedTimeFilter === slot.id;
-                                return (
-                                  <button
-                                    type="button"
-                                    key={slot.id}
-                                    onClick={() => setSelectedTimeFilter(slot.id)}
-                                    className={`w-full px-3 py-1.5 rounded-xl text-xs font-bold transition-all text-left border ${
-                                      isSelected
-                                        ? 'bg-amber-600 text-white border-amber-600 shadow-2xs'
-                                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-                                    }`}
-                                  >
-                                    {slot.label}
-                                  </button>
-                                );
-                              })}
+                              </select>
+                              <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                             </div>
                           </div>
 
-                          {/* 3. Lọc & Sắp xếp Giá tiền */}
-                          <div className="pt-3 border-t border-slate-200/60">
-                            <div className="text-[11px] font-extrabold text-slate-500 uppercase mb-2">
-                              Giá cước
+                          {/* 2. Dropdown Khung giờ xuất bến */}
+                          <div>
+                            <label className="block text-[11px] font-bold text-slate-600 mb-1.5 flex items-center gap-1">
+                              <Clock className="w-3 h-3 text-slate-400" />
+                              <span>Khung giờ xuất bến</span>
+                            </label>
+                            <div className="relative">
+                              <select
+                                value={selectedTimeFilter}
+                                onChange={(e) => setSelectedTimeFilter(e.target.value)}
+                                className="w-full h-10 pl-3 pr-8 rounded-xl border border-slate-200 hover:border-slate-300 focus:outline-none focus:border-[#0060c4] font-medium text-slate-800 bg-white appearance-none cursor-pointer text-xs"
+                              >
+                                <option value="all">Tất cả giờ xuất bến</option>
+                                <option value="morning">Sáng (06:00 – 12:00)</option>
+                                <option value="afternoon">Chiều (12:00 – 18:00)</option>
+                                <option value="evening">Tối (18:00 – 22:00)</option>
+                                <option value="night">Đêm (22:00 – 06:00)</option>
+                              </select>
+                              <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                             </div>
-                            <div className="flex flex-col gap-1.5">
-                              {[
-                                { id: 'default', label: 'Mặc định' },
-                                { id: 'asc', label: 'Giá thấp → cao' },
-                                { id: 'desc', label: 'Giá cao → thấp' },
-                              ].map((sortOption) => {
-                                const isSelected = selectedPriceSort === sortOption.id;
-                                return (
-                                  <button
-                                    type="button"
-                                    key={sortOption.id}
-                                    onClick={() => setSelectedPriceSort(sortOption.id)}
-                                    className={`w-full px-3 py-1.5 rounded-xl text-xs font-bold transition-all text-left border ${
-                                      isSelected
-                                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs'
-                                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-                                    }`}
-                                  >
-                                    {sortOption.label}
-                                  </button>
-                                );
-                              })}
+                          </div>
+
+                          {/* 3. Dropdown Giá cước / Sắp xếp */}
+                          <div>
+                            <label className="block text-[11px] font-bold text-slate-600 mb-1.5 flex items-center gap-1">
+                              <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                              <span>Sắp xếp giá cước</span>
+                            </label>
+                            <div className="relative">
+                              <select
+                                value={selectedPriceSort}
+                                onChange={(e) => setSelectedPriceSort(e.target.value)}
+                                className="w-full h-10 pl-3 pr-8 rounded-xl border border-slate-200 hover:border-slate-300 focus:outline-none focus:border-[#0060c4] font-medium text-slate-800 bg-white appearance-none cursor-pointer text-xs"
+                              >
+                                <option value="default">Mặc định</option>
+                                <option value="asc">Giá thấp → cao</option>
+                                <option value="desc">Giá cao → thấp</option>
+                              </select>
+                              <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                             </div>
                           </div>
                         </div>
