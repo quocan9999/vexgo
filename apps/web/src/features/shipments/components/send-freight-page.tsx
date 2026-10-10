@@ -776,7 +776,7 @@ function SendFreightContent() {
                                 : 'Chưa có nhà xe nào nhận tuyến này vào ngày đã chọn. Vui lòng chọn ngày khác (ví dụ: ngày 20/10/2026).'}
                             </div>
                           ) : (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                            <div className="flex flex-col gap-3">
                               {filteredTrips.map((trip) => {
                                 const isSelected = selectedTripId === trip.id;
                                 const depTime = formatIsoTime(trip.departureTime);
@@ -797,64 +797,67 @@ function SendFreightContent() {
                                   <div
                                     key={trip.id}
                                     onClick={() => setSelectedTripId(trip.id)}
-                                    className={`p-4 rounded-2xl border-2 cursor-pointer transition-all relative flex flex-col justify-between ${
+                                    className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
                                       isSelected
                                         ? 'border-[#3B82F6] bg-white ring-2 ring-blue-100 shadow-sm'
                                         : 'border-slate-200 bg-white hover:border-slate-300'
                                     }`}
                                   >
-                                    <div>
-                                      <div className="flex items-start justify-between gap-2 mb-3">
-                                        <div className="flex items-center gap-2 min-w-0">
-                                          <div
-                                            className={`w-7 h-7 rounded-lg ${badgeBg} text-white flex items-center justify-center font-black text-xs shrink-0`}
-                                          >
-                                            {initial}
-                                          </div>
-                                          <div className="min-w-0">
-                                            <div className="font-extrabold text-slate-900 text-sm leading-tight truncate">
-                                              {trip.busCompany.name}
-                                            </div>
-                                            <div className="flex items-center gap-1 text-[11px] text-emerald-600 font-semibold mt-0.5">
-                                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>
-                                              <span className="truncate">Nhận hàng tại bến</span>
-                                            </div>
-                                          </div>
+                                    {/* Cột 1: Thông tin nhà xe */}
+                                    <div className="flex items-center gap-3 min-w-[170px]">
+                                      <div
+                                        className={`w-9 h-9 rounded-xl ${badgeBg} text-white flex items-center justify-center font-black text-sm shrink-0`}
+                                      >
+                                        {initial}
+                                      </div>
+                                      <div>
+                                        <div className="font-extrabold text-slate-900 text-sm leading-tight">
+                                          {trip.busCompany.name}
                                         </div>
-
-                                        {/* GIÁ CƯỚC VÀ NÚT CHỌN GÓC TRÊN BÊN PHẢI CARD */}
-                                        <div className="shrink-0 flex items-center gap-2">
-                                          <div className="text-right">
-                                            <span className="text-[11px] text-slate-400 mr-1 font-medium">Từ</span>
-                                            <span className="text-base font-black text-orange-600">50.000đ</span>
-                                          </div>
-                                          <div
-                                            className={`w-5 h-5 rounded-full flex items-center justify-center border transition-all ${
-                                              isSelected
-                                                ? 'bg-orange-500 border-orange-500 text-white'
-                                                : 'border-slate-300 bg-white'
-                                            }`}
-                                          >
-                                            {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
-                                          </div>
+                                        <div className="flex items-center gap-1 text-[11px] text-emerald-600 font-semibold mt-1">
+                                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                          Nhận hàng tại bến
                                         </div>
                                       </div>
+                                    </div>
 
+                                    {/* Cột 2: Thời gian xuất bến & Địa điểm */}
+                                    <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-xs text-slate-500 flex-1">
                                       <div>
                                         <div className="flex items-baseline gap-1.5">
-                                          <span className="text-2xl font-black text-slate-900 font-mono tracking-tight">
+                                          <span className="text-xl font-black text-slate-900 font-mono tracking-tight">
                                             {depTime}
                                           </span>
-                                          <span className="text-xs text-slate-400 font-normal">xuất bến</span>
+                                          <span className="text-[11px] text-slate-400">xuất bến</span>
                                         </div>
-                                        <div className="text-[11px] text-slate-500 mt-1 flex items-center gap-1.5">
+                                      </div>
+                                      <div className="h-6 w-px bg-slate-200 hidden md:block" />
+                                      <div className="space-y-0.5">
+                                        <div className="flex items-center gap-1.5 text-slate-600">
                                           <Clock className="w-3.5 h-3.5 text-slate-400" />
                                           <span>Trong ngày (24h – 48h)</span>
                                         </div>
-                                        <div className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-1.5">
+                                        <div className="flex items-center gap-1.5 text-slate-400">
                                           <MapPin className="w-3.5 h-3.5 text-rose-400" />
                                           <span>Bến {origin}</span>
                                         </div>
+                                      </div>
+                                    </div>
+
+                                    {/* Cột 3: Giá cước & Nút chọn */}
+                                    <div className="flex items-center justify-between sm:justify-end gap-3 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100 shrink-0">
+                                      <div className="text-left sm:text-right">
+                                        <span className="text-[11px] text-slate-400 mr-1 font-medium">Từ</span>
+                                        <span className="text-base font-black text-orange-600">50.000đ</span>
+                                      </div>
+                                      <div
+                                        className={`w-5 h-5 rounded-full flex items-center justify-center border transition-all ${
+                                          isSelected
+                                            ? 'bg-orange-500 border-orange-500 text-white'
+                                            : 'border-slate-300 bg-white'
+                                        }`}
+                                      >
+                                        {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
                                       </div>
                                     </div>
                                   </div>
