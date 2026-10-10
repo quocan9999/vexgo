@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Filter, ChevronDown, MapPin, X } from 'lucide-react';
+import { Filter, ChevronDown, MapPin, X, Bus } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Pagination } from '@/components/ui/pagination';
 import { TripCard } from '@/features/trips/components/trip-card';
@@ -766,13 +766,12 @@ export function TripList() {
                   />
                 ))
               ) : (
-                <div className="bg-white rounded-xl p-12 text-center text-slate-500 border border-slate-100 shadow-sm">
-                  <div className="text-4xl mb-4">🚌</div>
-                  <p className="font-semibold text-sm">
-                    Không tìm thấy chuyến xe nào phù hợp.
-                  </p>
-                  <p className="text-xs mt-1">
-                    Vui lòng thay đổi bộ lọc hoặc chọn ngày khác.
+                <div className="bg-white rounded-2xl py-14 px-8 text-center border border-slate-200/80 shadow-2xs">
+                  <h3 className="font-bold text-slate-900 text-base mb-1.5">
+                    Không tìm thấy chuyến xe nào phù hợp
+                  </h3>
+                  <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                    Vui lòng thử thay đổi điểm đón/trả, bộ lọc hoặc chọn ngày khởi hành khác.
                   </p>
                 </div>
               )}

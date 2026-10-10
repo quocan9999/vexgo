@@ -147,4 +147,30 @@ export const authApi = {
       // ignore network errors - local session will still be cleared
     }
   },
+
+  async changePassword(
+    accessToken: string,
+    payload: { oldPassword: string; newPassword: string },
+  ): Promise<{ message: string }> {
+    const response = await fetch(`${API_BASE_URL}/auth/change-password`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new ApiError(
+        response.status,
+        errorData.error || 'CHANGE_PASSWORD_FAILED',
+        errorData.message || 'Đổi mật khẩu thất bại.',
+      );
+    }
+
+    return response.json();
+  },
 };
+

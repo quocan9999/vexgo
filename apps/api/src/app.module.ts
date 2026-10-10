@@ -16,6 +16,8 @@ import { AdminRbacModule } from './admin-rbac/admin-rbac.module.js';
 import { ContactsModule } from './contacts/contacts.module.js';
 import { BookingsModule } from './bookings/bookings.module.js';
 import { TicketsModule } from './tickets/tickets.module.js';
+import { ShipmentsModule } from './shipments/shipments.module.js';
+import { PaymentsModule } from './payments/payments.module.js';
 
 @Module({
   imports: [
@@ -41,6 +43,8 @@ import { TicketsModule } from './tickets/tickets.module.js';
     ContactsModule,
     BookingsModule,
     TicketsModule,
+    ShipmentsModule,
+    PaymentsModule,
   ],
 })
 export class AppModule {}

@@ -1,425 +1,1140 @@
 /* eslint-disable */
-/* eslint-disable */
 'use client';
 
-import React, { useState, useEffect, Suspense } from "react";
-import Link from 'next/link';
-import { useSearchParams, useRouter } from 'next/navigation';
-import { Package, MapPin, Calculator, ShieldAlert, ArrowRight, Truck, User, Users } from 'lucide-react';
+import React, { useState, useEffect, useMemo, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import {
+  Package,
+  MapPin,
+  Calculator,
+  ArrowRight,
+  Truck,
+  User,
+  Users,
+  CheckCircle,
+  Copy,
+  Clock,
+  Search,
+  AlertCircle,
+  Info,
+  Calendar,
+  Building2,
+  QrCode,
+  RotateCcw,
+} from 'lucide-react';
+import { tripsApi, type ApiTrip } from '@/features/trips/services/trips.api';
+import {
+  shipmentsApi,
+  type ShipmentResponseData,
+} from '@/features/shipments/services/shipments.api';
+import { PAYMENT_DRAFT_STORAGE_PREFIX } from '@/features/booking/services/payment-draft';
+
+const POPULAR_LOCATIONS = ['TP.HCM', 'Đà Lạt', 'Vũng Tàu', 'Nha Trang'];
+
+const CARGO_CATEGORIES = [
+  'Bưu phẩm',
+  'Thực phẩm',
+  'Điện tử',
+  'Quần áo',
+  'Hàng gia dụng',
+  'Hàng dễ vỡ',
+  'Giá trị cao',
+];
 
 function SendFreightContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const [origin, setOrigin] = useState<string>('Bến xe Miền Đông, TP.HCM');
-  const [destination, setDestination] = useState<string>('Bến xe trung tâm, Đà Lạt');
-  const [date, setDate] = useState<string>('2026-09-26');
+  // Tab: 'create' | 'lookup'
+  const [activeTab, setActiveTab] = useState<'create' | 'lookup'>('create');
 
-  const [selectedCompany, setSelectedCompany] = useState<string>('phuong-dong');
-  
+  // Tuyến & Chuyến
+  const [origin, setOrigin] = useState<string>('TP.HCM');
+  const [destination, setDestination] = useState<string>('Đà Lạt');
+  const [date, setDate] = useState<string>('2026-10-20');
+  const [trips, setTrips] = useState<ApiTrip[]>([]);
+  const [loadingTrips, setLoadingTrips] = useState<boolean>(false);
+  const [selectedTripId, setSelectedTripId] = useState<number | null>(null);
+
+  // Người gửi
   const [senderName, setSenderName] = useState<string>('');
   const [senderPhone, setSenderPhone] = useState<string>('');
+  const [senderEmail, setSenderEmail] = useState<string>('');
+
+  // Người nhận
   const [receiverName, setReceiverName] = useState<string>('');
   const [receiverPhone, setReceiverPhone] = useState<string>('');
-  
-  const [freightType, setFreightType] = useState<string>('Hàng thường');
+
+  // Kiện hàng
+  const [cargoName, setCargoName] = useState<string>('Hàng bưu phẩm tiêu chuẩn');
+  const [cargoCategory, setCargoCategory] = useState<string>('Bưu phẩm');
   const [quantity, setQuantity] = useState<number>(1);
   const [weight, setWeight] = useState<number>(5);
-  const [length, setLength] = useState<number>(40);
-  const [width, setWidth] = useState<number>(30);
-  const [height, setHeight] = useState<number>(25);
+  const [length, setLength] = useState<number>(30);
+  const [width, setWidth] = useState<number>(25);
+  const [height, setHeight] = useState<number>(20);
   const [note, setNote] = useState<string>('');
-  
   const [isFragile, setIsFragile] = useState<boolean>(false);
   const [isValuable, setIsValuable] = useState<boolean>(false);
-  const [needsCare, setNeedsCare] = useState<boolean>(false);
 
+  // Trạng thái xử lý tạo đơn
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [createdShipment, setCreatedShipment] = useState<ShipmentResponseData | null>(null);
+  const [copiedCode, setCopiedCode] = useState<boolean>(false);
+
+  // Tra cứu vận đơn
+  const [lookupCode, setLookupCode] = useState<string>('');
+  const [lookupPhone, setLookupPhone] = useState<string>('');
+  const [isLookingUp, setIsLookingUp] = useState<boolean>(false);
+  const [lookupResult, setLookupResult] = useState<ShipmentResponseData | null>(null);
+  const [lookupError, setLookupError] = useState<string | null>(null);
+
+  // Khởi tạo params từ URL nếu có
   useEffect(() => {
     if (searchParams) {
-      if (searchParams.get('origin')) setOrigin(searchParams.get('origin') as string);
-      if (searchParams.get('destination')) setDestination(searchParams.get('destination') as string);
+      if (searchParams.get('from')) setOrigin(searchParams.get('from') as string);
+      if (searchParams.get('to')) setDestination(searchParams.get('to') as string);
       if (searchParams.get('date')) setDate(searchParams.get('date') as string);
-      if (searchParams.get('weight')) {
-        const wStr = searchParams.get('weight');
-        // If it comes from radio buttons (e.g., "Dưới 5kg", "5 - 10kg")
-        if (wStr === 'Dưới 5kg') setWeight(5);
-        else if (wStr === '5 - 10kg') setWeight(10);
-        else if (wStr === '10 - 20kg') setWeight(20);
-        else if (wStr === 'Trên 20kg') setWeight(25);
-        else setWeight(Number(wStr) || 5);
-      }
+      if (searchParams.get('tab') === 'lookup') setActiveTab('lookup');
+      if (searchParams.get('code')) setLookupCode(searchParams.get('code') as string);
+      if (searchParams.get('phone')) setLookupPhone(searchParams.get('phone') as string);
     }
   }, [searchParams]);
 
-  const calculateFee = () => {
-    let base = 50000; // 50k base
-    if (weight > 5) base += (weight - 5) * 10000;
-    if (freightType === 'Dễ vỡ' || isFragile) base += 20000;
-    if (freightType === 'Giá trị cao' || isValuable) base += 50000;
-    return base;
+  // Tự động tải danh sách chuyến xe khi thay đổi tuyến hoặc ngày
+  useEffect(() => {
+    let isCancelled = false;
+    async function fetchTrips() {
+      setLoadingTrips(true);
+      setSelectedTripId(null);
+      try {
+        const res = await tripsApi.searchTrips({
+          from: origin,
+          to: destination,
+          departureDate: date,
+        });
+        if (!isCancelled) {
+          const loadedTrips = res.data || [];
+          setTrips(loadedTrips);
+          if (loadedTrips.length > 0) {
+            setSelectedTripId(loadedTrips[0].id);
+          }
+        }
+      } catch (err) {
+        if (!isCancelled) {
+          setTrips([]);
+        }
+      } finally {
+        if (!isCancelled) {
+          setLoadingTrips(false);
+        }
+      }
+    }
+
+    if (origin && destination) {
+      fetchTrips();
+    }
+    return () => {
+      isCancelled = true;
+    };
+  }, [origin, destination, date]);
+
+  // Tính cước phí dự kiến
+  const calculatedPricing = useMemo(() => {
+    let base = 50000;
+    const safeWeight = Math.max(1, Number(weight) || 1);
+    const safeQty = Math.max(1, Number(quantity) || 1);
+    const totalWeight = safeWeight * safeQty;
+
+    if (totalWeight > 5) {
+      base += Math.ceil(totalWeight - 5) * 10000;
+    }
+
+    let service = 0;
+    if (isFragile || cargoCategory === 'Hàng dễ vỡ') service += 20000;
+    if (isValuable || cargoCategory === 'Giá trị cao') service += 50000;
+
+    return {
+      baseFee: base,
+      serviceFee: service,
+      totalFee: base + service,
+      totalWeight,
+    };
+  }, [weight, quantity, isFragile, isValuable, cargoCategory]);
+
+  const selectedTrip = useMemo(() => {
+    return trips.find((t) => t.id === selectedTripId) || null;
+  }, [trips, selectedTripId]);
+
+  // Xử lý tạo mã vận đơn
+  const handleCreateShipment = async () => {
+    setErrorMessage(null);
+
+    if (!selectedTripId) {
+      setErrorMessage('Vui lòng chọn một chuyến xe vận chuyển hàng.');
+      return;
+    }
+
+    if (!senderName.trim()) {
+      setErrorMessage('Vui lòng nhập họ và tên người gửi.');
+      return;
+    }
+
+    if (!senderPhone.trim()) {
+      setErrorMessage('Vui lòng nhập số điện thoại người gửi.');
+      return;
+    }
+
+    if (!receiverName.trim()) {
+      setErrorMessage('Vui lòng nhập họ và tên người nhận.');
+      return;
+    }
+
+    if (!receiverPhone.trim()) {
+      setErrorMessage('Vui lòng nhập số điện thoại người nhận.');
+      return;
+    }
+
+    if (!cargoName.trim()) {
+      setErrorMessage('Vui lòng nhập tên món hàng/kiện hàng.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const payload = {
+        tripId: selectedTripId,
+        sender: {
+          fullName: senderName.trim(),
+          phoneNumber: senderPhone.trim(),
+          email: senderEmail.trim() || undefined,
+        },
+        receiver: {
+          fullName: receiverName.trim(),
+          phoneNumber: receiverPhone.trim(),
+        },
+        items: [
+          {
+            name: cargoName.trim(),
+            category: cargoCategory,
+            quantity: Math.max(1, Number(quantity) || 1),
+            weight: Math.max(0.5, Number(weight) || 1),
+            length: length ? Number(length) : undefined,
+            width: width ? Number(width) : undefined,
+            height: height ? Number(height) : undefined,
+            note: note.trim() || undefined,
+          },
+        ],
+        isFragile: isFragile || cargoCategory === 'Hàng dễ vỡ',
+        isValuable: isValuable || cargoCategory === 'Giá trị cao',
+        note: note.trim() || undefined,
+      };
+
+      const res = await shipmentsApi.createShipment(payload);
+      const data = res.data;
+      setCreatedShipment(data);
+
+      // Lưu draft để tiện chuyển sang thanh toán trực tuyến VietQR nếu muốn
+      try {
+        const draftId = `draft-${Date.now()}`;
+        const paymentDraft = {
+          bookingId: data.shipmentId,
+          orderId: data.orderId,
+          bookingCode: data.waybillCode,
+          orderCode: data.orderCode,
+          totalFare: data.pricing.totalFee,
+          seatNumbers: [],
+          ticketCount: 1,
+          pickup: data.pickupPoint.name,
+          dropoff: data.dropoffPoint.name,
+          route: `${data.trip.route.origin} → ${data.trip.route.destination}`,
+          busCompanyName: data.trip.busCompany.name,
+          departureTime: data.trip.departureTime,
+          passenger: {
+            fullName: data.sender.fullName,
+            phoneNumber: data.sender.phoneNumber,
+            email: data.sender.email || '',
+          },
+        };
+        sessionStorage.setItem(
+          `${PAYMENT_DRAFT_STORAGE_PREFIX}${draftId}`,
+          JSON.stringify(paymentDraft),
+        );
+      } catch {
+        // bỏ qua nếu storage lỗi
+      }
+
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Không thể tạo đơn gửi hàng. Vui lòng kiểm tra lại thông tin.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const fee = calculateFee();
+  // Tra cứu vận đơn
+  const handleLookup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLookupError(null);
+    setLookupResult(null);
+
+    if (!lookupCode.trim()) {
+      setLookupError('Vui lòng nhập mã vận đơn.');
+      return;
+    }
+    if (!lookupPhone.trim()) {
+      setLookupError('Vui lòng nhập số điện thoại người gửi hoặc người nhận.');
+      return;
+    }
+
+    setIsLookingUp(true);
+    try {
+      const res = await shipmentsApi.lookupShipment({
+        waybillCode: lookupCode.trim(),
+        phoneNumber: lookupPhone.trim(),
+      });
+      setLookupResult(res.data);
+    } catch (err: any) {
+      setLookupError(err.message || 'Không tìm thấy thông tin vận đơn khớp với thông tin đã nhập.');
+    } finally {
+      setIsLookingUp(false);
+    }
+  };
+
+  const copyToClipboard = (text: string) => {
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(text);
+      setCopiedCode(true);
+      setTimeout(() => setCopiedCode(false), 2000);
+    }
+  };
+
+  const formatIsoDate = (isoStr: string) => {
+    try {
+      const d = new Date(isoStr);
+      return d.toLocaleDateString('vi-VN', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+      });
+    } catch {
+      return isoStr;
+    }
+  };
+
+  const formatIsoTime = (isoStr: string) => {
+    try {
+      const d = new Date(isoStr);
+      return d.toLocaleTimeString('vi-VN', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      });
+    } catch {
+      return isoStr;
+    }
+  };
 
   return (
-    <div className="min-h-screen">
-      <div className="min-h-screen bg-[#F8FAF9] py-8 font-sans">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6">
-          <div className="mb-6">
-            <h1 className="text-2xl md:text-3xl font-black text-slate-900 flex items-center gap-3">
-              📦 Gửi hàng theo nhà xe
+    <div className="min-h-screen bg-[#F8FAF9] py-8 font-sans">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6">
+        {/* Tiêu đề & Chọn tab */}
+        <div className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-black text-slate-900">
+              Gửi hàng theo nhà xe
             </h1>
-            <p className="text-sm text-slate-500 mt-2">VexGo kết nối khách hàng với các nhà xe có hỗ trợ nhận và vận chuyển hàng hóa.</p>
+            <p className="text-sm text-slate-500 mt-1">
+              Giao nhận hàng trực tiếp tại bến xe và văn phòng nhà xe. Nhanh chóng, tiết kiệm và an toàn.
+            </p>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 space-y-6">
-              
-              {/* Tuyến vận chuyển */}
-              <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
-                <h2 className="text-lg font-black text-slate-800 mb-4 flex items-center gap-2">
-                  <div className="bg-rose-100 p-1.5 rounded-full">
-                    <MapPin className="w-5 h-5 text-rose-500" />
+          {/* Switch Tab */}
+          <div className="inline-flex p-1 bg-slate-200/80 rounded-xl">
+            <button
+              onClick={() => {
+                setActiveTab('create');
+                setCreatedShipment(null);
+              }}
+              className={`px-4 py-2 text-xs md:text-sm font-bold rounded-lg transition-all ${
+                activeTab === 'create'
+                  ? 'bg-white text-slate-900 shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Tạo đơn gửi hàng
+            </button>
+            <button
+              onClick={() => setActiveTab('lookup')}
+              className={`px-4 py-2 text-xs md:text-sm font-bold rounded-lg transition-all ${
+                activeTab === 'lookup'
+                  ? 'bg-white text-[#0060c4] shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Tra cứu vận đơn
+            </button>
+          </div>
+        </div>
+
+        {/* ============================================================== */}
+        {/* TAB 1: TẠO ĐƠN GỬI HÀNG */}
+        {/* ============================================================== */}
+        {activeTab === 'create' && (
+          <>
+            {/* THÔNG BÁO TẠO THÀNH CÔNG NẾU CÓ */}
+            {createdShipment ? (
+              <div className="bg-white rounded-3xl p-6 md:p-8 shadow-sm border border-emerald-200 mb-8">
+                <div className="text-center max-w-xl mx-auto">
+                  <div className="inline-flex items-center justify-center w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full mb-4">
+                    <CheckCircle className="w-10 h-10" />
                   </div>
-                  Tuyến vận chuyển
-                </h2>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                  <div>
-                    <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-1.5">Nơi gửi</label>
-                    <input 
-                      type="text" 
-                      value={origin}
-                      onChange={(e) => setOrigin(e.target.value)}
-                      className="w-full h-11 px-4 rounded-xl border border-slate-300 focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand font-semibold text-slate-800 bg-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-1.5">Nơi nhận</label>
-                    <input 
-                      type="text" 
-                      value={destination}
-                      onChange={(e) => setDestination(e.target.value)}
-                      className="w-full h-11 px-4 rounded-xl border border-slate-300 focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand font-semibold text-slate-800 bg-white"
-                    />
+                  <h2 className="text-2xl font-black text-slate-900 mb-2">
+                    Tạo mã vận đơn gửi hàng thành công!
+                  </h2>
+                  <p className="text-sm text-slate-600 mb-6 leading-relaxed">
+                    Đơn gửi hàng của bạn đã được tiếp nhận vào hệ thống. Bạn chỉ cần mang kiện hàng ra bến xe trước giờ xuất bến và đọc mã vận đơn bên dưới cho nhân viên nhà xe.
+                  </p>
+
+                  {/* Mã vận đơn nổi bật */}
+                  <div className="bg-slate-50 border-2 border-emerald-500/30 rounded-2xl p-5 mb-6 text-center">
+                    <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">
+                      Mã vận đơn của bạn
+                    </div>
+                    <div className="text-2xl md:text-3xl font-black text-[#0060c4] tracking-wide flex items-center justify-center gap-3">
+                      <span>{createdShipment.waybillCode}</span>
+                      <button
+                        onClick={() => copyToClipboard(createdShipment.waybillCode)}
+                        className="p-2 hover:bg-slate-200 rounded-lg text-slate-600 transition-colors"
+                        title="Sao chép mã"
+                      >
+                        <Copy className="w-5 h-5" />
+                      </button>
+                    </div>
+                    {copiedCode && (
+                      <div className="text-xs text-emerald-600 font-bold mt-1">Đã sao chép vào bộ nhớ tạm!</div>
+                    )}
+                    <div className="text-xs text-slate-500 mt-2">
+                      Mã đơn giao dịch: <strong className="text-slate-700">{createdShipment.orderCode}</strong>
+                    </div>
                   </div>
                 </div>
+
+                {/* Chi tiết tiếp nhận */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-slate-100 pt-6 max-w-2xl mx-auto text-sm">
+                  <div className="bg-slate-50 p-4 rounded-xl">
+                    <div className="font-bold text-slate-800 flex items-center gap-2 mb-2">
+                      <MapPin className="w-4 h-4 text-rose-500" /> Điểm gửi (Nơi bạn mang hàng ra):
+                    </div>
+                    <div className="font-extrabold text-slate-900">{createdShipment.pickupPoint.name}</div>
+                    <div className="text-xs text-slate-600 mt-1">{createdShipment.pickupPoint.address}</div>
+                    <div className="text-xs text-blue-600 font-semibold mt-2">
+                      Khởi hành lúc: {formatIsoTime(createdShipment.trip.departureTime)} - {formatIsoDate(createdShipment.trip.departureTime)}
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-50 p-4 rounded-xl">
+                    <div className="font-bold text-slate-800 flex items-center gap-2 mb-2">
+                      <MapPin className="w-4 h-4 text-emerald-500" /> Điểm nhận (Nơi người nhận đến lấy):
+                    </div>
+                    <div className="font-extrabold text-slate-900">{createdShipment.dropoffPoint.name}</div>
+                    <div className="text-xs text-slate-600 mt-1">{createdShipment.dropoffPoint.address}</div>
+                    <div className="text-xs text-slate-600 font-semibold mt-2">
+                      Người nhận: <strong>{createdShipment.receiver.fullName}</strong> ({createdShipment.receiver.phoneNumber})
+                    </div>
+                  </div>
+                </div>
+
+                {/* Hàng hóa & Cước */}
+                <div className="max-w-2xl mx-auto mt-4 bg-blue-50/50 p-4 rounded-xl border border-blue-100 flex justify-between items-center text-sm">
+                  <div>
+                    <span className="text-slate-600">Kiện hàng: </span>
+                    <strong className="text-slate-900">
+                      {createdShipment.items.map((i) => `${i.name} (${i.weight}kg)`).join(', ')}
+                    </strong>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-xs text-slate-500">Tổng cước phí</div>
+                    <div className="text-lg font-black text-rose-600">
+                      {createdShipment.pricing.totalFee.toLocaleString('vi-VN')}đ
+                    </div>
+                  </div>
+                </div>
+
+                {/* Nút hành động */}
+                <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4 max-w-xl mx-auto">
+                  <button
+                    onClick={() => {
+                      setCreatedShipment(null);
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
+                    className="w-full sm:w-auto px-6 py-3 border border-slate-300 hover:bg-slate-100 text-slate-700 font-bold rounded-xl text-sm transition-colors flex items-center justify-center gap-2"
+                  >
+                    <RotateCcw className="w-4 h-4" /> Tạo đơn gửi hàng khác
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setActiveTab('lookup');
+                      setLookupCode(createdShipment.waybillCode);
+                      setLookupPhone(createdShipment.sender.phoneNumber);
+                    }}
+                    className="w-full sm:w-auto px-6 py-3 bg-[#0060c4] hover:bg-blue-700 text-white font-bold rounded-xl text-sm transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Search className="w-4 h-4" /> Xem chi tiết vận đơn
+                  </button>
+                </div>
+              </div>
+            ) : (
+              /* FORM TẠO ĐƠN GỬI HÀNG */
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-2 space-y-6">
+                  {errorMessage && (
+                    <div className="bg-rose-50 border border-rose-200 text-rose-700 p-4 rounded-2xl flex items-start gap-3 text-sm">
+                      <AlertCircle className="w-5 h-5 shrink-0 mt-0.5 text-rose-500" />
+                      <div>{errorMessage}</div>
+                    </div>
+                  )}
+
+                  {/* 1. Tuyến vận chuyển & Chọn chuyến xe */}
+                  <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+                    <h2 className="text-lg font-black text-slate-800 mb-4 flex items-center gap-2">
+                      <div className="bg-rose-100 p-1.5 rounded-full">
+                        <MapPin className="w-5 h-5 text-rose-500" />
+                      </div>
+                      1. Chọn tuyến & Chuyến xe gửi hàng
+                    </h2>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                      <div>
+                        <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-1.5">
+                          Điểm đi (Nơi gửi)
+                        </label>
+                        <select
+                          value={origin}
+                          onChange={(e) => setOrigin(e.target.value)}
+                          className="w-full h-11 px-3 rounded-xl border border-slate-300 focus:outline-none focus:border-brand font-semibold text-slate-800 bg-white"
+                        >
+                          {POPULAR_LOCATIONS.map((loc) => (
+                            <option key={`from-${loc}`} value={loc}>
+                              {loc}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-1.5">
+                          Điểm đến (Nơi nhận)
+                        </label>
+                        <select
+                          value={destination}
+                          onChange={(e) => setDestination(e.target.value)}
+                          className="w-full h-11 px-3 rounded-xl border border-slate-300 focus:outline-none focus:border-brand font-semibold text-slate-800 bg-white"
+                        >
+                          {POPULAR_LOCATIONS.map((loc) => (
+                            <option key={`to-${loc}`} value={loc} disabled={loc === origin}>
+                              {loc}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-1.5">
+                          Ngày gửi
+                        </label>
+                        <input
+                          type="date"
+                          value={date}
+                          onChange={(e) => setDate(e.target.value)}
+                          className="w-full h-11 px-3 rounded-xl border border-slate-300 focus:outline-none focus:border-brand font-semibold text-slate-800 bg-white"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Danh sách chuyến xe khả dụng */}
+                    <div className="mt-6">
+                      <div className="flex justify-between items-center mb-3">
+                        <span className="text-sm font-bold text-slate-800">
+                          Các chuyến xe nhận vận chuyển trong ngày:
+                        </span>
+                        <span className="px-2.5 py-0.5 bg-blue-50 text-[#0060c4] font-bold text-xs rounded-full">
+                          {loadingTrips ? 'Đang tìm...' : `${trips.length} chuyến khả dụng`}
+                        </span>
+                      </div>
+
+                      {loadingTrips ? (
+                        <div className="p-8 text-center text-slate-500 text-sm bg-slate-50 rounded-xl">
+                          Đang tải danh sách chuyến xe nhận hàng...
+                        </div>
+                      ) : trips.length === 0 ? (
+                        <div className="p-6 text-center text-slate-500 text-sm bg-amber-50 rounded-xl border border-amber-200">
+                          Chưa có chuyến xe nào chạy tuyến này vào ngày đã chọn. Vui lòng chọn ngày khác (ví dụ: ngày 20/10/2026).
+                        </div>
+                      ) : (
+                        <div className="space-y-3 max-h-[320px] overflow-y-auto pr-1">
+                          {trips.map((trip) => {
+                            const isSelected = selectedTripId === trip.id;
+                            const depTime = formatIsoTime(trip.departureTime);
+                            const arrTime = trip.arrivalTime ? formatIsoTime(trip.arrivalTime) : 'Trong ngày';
+
+                            return (
+                              <div
+                                key={trip.id}
+                                onClick={() => setSelectedTripId(trip.id)}
+                                className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                                  isSelected
+                                    ? 'border-[#0060c4] bg-blue-50/40 shadow-sm'
+                                    : 'border-slate-200 bg-white hover:border-blue-200'
+                                }`}
+                              >
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="flex items-center gap-3">
+                                    <input
+                                      type="radio"
+                                      name="tripSelect"
+                                      checked={isSelected}
+                                      onChange={() => setSelectedTripId(trip.id)}
+                                      className="w-4 h-4 accent-[#0060c4]"
+                                    />
+                                    <div>
+                                      <div className="flex items-center gap-2">
+                                        <span className="font-extrabold text-slate-900 text-sm">
+                                          {trip.busCompany.name}
+                                        </span>
+                                        <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
+                                          Nhận gửi hàng
+                                        </span>
+                                      </div>
+                                      <div className="text-xs text-slate-600 mt-1 flex items-center gap-2">
+                                        <Clock className="w-3.5 h-3.5 text-slate-400" />
+                                        <span className="font-bold text-slate-800">{depTime}</span>
+                                        <ArrowRight className="w-3 h-3 text-slate-400" />
+                                        <span>{arrTime}</span>
+                                        <span className="text-slate-400">•</span>
+                                        <span>{trip.vehicle.type}</span>
+                                        {trip.vehicle.licensePlate && (
+                                          <span className="text-slate-500 font-mono">
+                                            ({trip.vehicle.licensePlate})
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <div className="text-right">
+                                    <div className="text-xs font-extrabold text-emerald-700 bg-emerald-50 px-2 py-1 rounded border border-emerald-100">
+                                      Bến {origin} → {destination}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 2. Thông tin người gửi */}
+                  <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+                    <h2 className="text-lg font-black text-slate-800 mb-4 flex items-center gap-2">
+                      <div className="bg-blue-100 p-1.5 rounded-full">
+                        <User className="w-5 h-5 text-blue-600" />
+                      </div>
+                      2. Thông tin người gửi
+                    </h2>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-1.5">
+                          Họ và tên <span className="text-rose-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={senderName}
+                          onChange={(e) => setSenderName(e.target.value)}
+                          placeholder="Ví dụ: Nguyễn Văn A"
+                          className="w-full h-11 px-4 rounded-xl border border-slate-300 focus:outline-none focus:border-brand font-semibold text-slate-800 bg-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-1.5">
+                          Số điện thoại <span className="text-rose-500">*</span>
+                        </label>
+                        <input
+                          type="tel"
+                          value={senderPhone}
+                          onChange={(e) => setSenderPhone(e.target.value)}
+                          placeholder="09xxxxxxxx"
+                          className="w-full h-11 px-4 rounded-xl border border-slate-300 focus:outline-none focus:border-brand font-semibold text-slate-800 bg-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-1.5">
+                          Email (không bắt buộc)
+                        </label>
+                        <input
+                          type="email"
+                          value={senderEmail}
+                          onChange={(e) => setSenderEmail(e.target.value)}
+                          placeholder="email@example.com"
+                          className="w-full h-11 px-4 rounded-xl border border-slate-300 focus:outline-none focus:border-brand font-semibold text-slate-800 bg-white"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 3. Thông tin người nhận */}
+                  <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+                    <h2 className="text-lg font-black text-slate-800 mb-4 flex items-center gap-2">
+                      <div className="bg-slate-100 p-1.5 rounded-full">
+                        <Users className="w-5 h-5 text-slate-600" />
+                      </div>
+                      3. Thông tin người nhận (Ra bến nhận hàng)
+                    </h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-1.5">
+                          Họ và tên người nhận <span className="text-rose-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={receiverName}
+                          onChange={(e) => setReceiverName(e.target.value)}
+                          placeholder="Ví dụ: Lê Thị B"
+                          className="w-full h-11 px-4 rounded-xl border border-slate-300 focus:outline-none focus:border-brand font-semibold text-slate-800 bg-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-1.5">
+                          Số điện thoại người nhận <span className="text-rose-500">*</span>
+                        </label>
+                        <input
+                          type="tel"
+                          value={receiverPhone}
+                          onChange={(e) => setReceiverPhone(e.target.value)}
+                          placeholder="09xxxxxxxx"
+                          className="w-full h-11 px-4 rounded-xl border border-slate-300 focus:outline-none focus:border-brand font-semibold text-slate-800 bg-white"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 4. Thông tin kiện hàng */}
+                  <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+                    <h2 className="text-lg font-black text-slate-800 mb-4 flex items-center gap-2">
+                      <div className="bg-amber-100 p-1.5 rounded-full">
+                        <Package className="w-5 h-5 text-amber-600" />
+                      </div>
+                      4. Thông tin kiện hàng
+                    </h2>
+
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-1.5">
+                            Tên hàng hóa <span className="text-rose-500">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={cargoName}
+                            onChange={(e) => setCargoName(e.target.value)}
+                            placeholder="Ví dụ: Thùng hoa quả, tài liệu, quần áo..."
+                            className="w-full h-11 px-4 rounded-xl border border-slate-300 focus:outline-none focus:border-brand font-semibold text-slate-800 bg-white"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-1.5">
+                            Loại hàng hóa
+                          </label>
+                          <select
+                            value={cargoCategory}
+                            onChange={(e) => setCargoCategory(e.target.value)}
+                            className="w-full h-11 px-3 rounded-xl border border-slate-300 focus:outline-none focus:border-brand font-semibold text-slate-800 bg-white"
+                          >
+                            {CARGO_CATEGORIES.map((cat) => (
+                              <option key={cat} value={cat}>
+                                {cat}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                        <div className="col-span-1 md:col-span-2">
+                          <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-1.5">
+                            Số kiện
+                          </label>
+                          <input
+                            type="number"
+                            min="1"
+                            value={quantity}
+                            onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                            className="w-full h-11 px-4 rounded-xl border border-slate-300 focus:outline-none focus:border-brand font-semibold text-slate-800 bg-white"
+                          />
+                        </div>
+                        <div className="col-span-1 md:col-span-3">
+                          <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-1.5">
+                            Khối lượng mỗi kiện (kg)
+                          </label>
+                          <input
+                            type="number"
+                            min="1"
+                            value={weight}
+                            onChange={(e) => setWeight(Math.max(1, parseFloat(e.target.value) || 1))}
+                            className="w-full h-11 px-4 rounded-xl border border-slate-300 focus:outline-none focus:border-brand font-semibold text-slate-800 bg-white"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-4">
+                        <div>
+                          <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-1.5">
+                            Dài (cm)
+                          </label>
+                          <input
+                            type="number"
+                            min="1"
+                            value={length}
+                            onChange={(e) => setLength(parseInt(e.target.value) || 0)}
+                            className="w-full h-11 px-4 rounded-xl border border-slate-300 focus:outline-none focus:border-brand font-semibold text-slate-800 bg-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-1.5">
+                            Rộng (cm)
+                          </label>
+                          <input
+                            type="number"
+                            min="1"
+                            value={width}
+                            onChange={(e) => setWidth(parseInt(e.target.value) || 0)}
+                            className="w-full h-11 px-4 rounded-xl border border-slate-300 focus:outline-none focus:border-brand font-semibold text-slate-800 bg-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-1.5">
+                            Cao (cm)
+                          </label>
+                          <input
+                            type="number"
+                            min="1"
+                            value={height}
+                            onChange={(e) => setHeight(parseInt(e.target.value) || 0)}
+                            className="w-full h-11 px-4 rounded-xl border border-slate-300 focus:outline-none focus:border-brand font-semibold text-slate-800 bg-white"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-1.5">
+                          Ghi chú hàng hóa
+                        </label>
+                        <textarea
+                          value={note}
+                          onChange={(e) => setNote(e.target.value)}
+                          placeholder="Ví dụ: hàng trái cây tươi cần gửi sớm, đóng thùng xốp..."
+                          className="w-full p-3 rounded-xl border border-slate-300 focus:outline-none focus:border-brand text-sm resize-none h-20"
+                        />
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-6 pt-2">
+                        <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer font-medium">
+                          <input
+                            type="checkbox"
+                            checked={isFragile}
+                            onChange={(e) => setIsFragile(e.target.checked)}
+                            className="w-4 h-4 rounded border-slate-300 text-[#0060c4] accent-[#0060c4]"
+                          />
+                          Hàng dễ vỡ (+20.000đ)
+                        </label>
+                        <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer font-medium">
+                          <input
+                            type="checkbox"
+                            checked={isValuable}
+                            onChange={(e) => setIsValuable(e.target.checked)}
+                            className="w-4 h-4 rounded border-slate-300 text-[#0060c4] accent-[#0060c4]"
+                          />
+                          Hàng giá trị cao / Bảo hiểm (+50.000đ)
+                        </label>
+                      </div>
+
+                      <div className="bg-amber-50 rounded-xl p-4 text-xs text-amber-800 border border-amber-200/60 flex items-start gap-2.5">
+                        <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                        <div>
+                          <strong>Quy định giao nhận:</strong> Người gửi tự mang kiện hàng ra bến xe trước giờ xe chạy 15-30 phút. Người nhận mang CCCD/SĐT ra bến xe đích để nhận hàng. Nhà xe không nhận vận chuyển hàng cấm, vũ khí, chất cháy nổ.
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* CỘT PHẢI: DỰ TÍNH CƯỚC & NÚT HÀNH ĐỘNG */}
+                <div className="w-full lg:w-[360px] shrink-0">
+                  <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sticky top-24">
+                    <h2 className="text-lg font-bold text-slate-900 mb-5 flex items-center gap-2">
+                      <Calculator className="w-5 h-5 text-[#0060c4]" /> Dự tính cước phí
+                    </h2>
+
+                    <div className="space-y-3 mb-6 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-slate-500 font-medium">Cước cơ bản (5kg đầu):</span>
+                        <span className="font-bold text-slate-900">50.000đ</span>
+                      </div>
+
+                      {calculatedPricing.totalWeight > 5 && (
+                        <div className="flex justify-between">
+                          <span className="text-slate-500 font-medium">
+                            Phụ cước vượt mức ({calculatedPricing.totalWeight - 5}kg):
+                          </span>
+                          <span className="font-bold text-slate-900">
+                            {((calculatedPricing.totalWeight - 5) * 10000).toLocaleString('vi-VN')}đ
+                          </span>
+                        </div>
+                      )}
+
+                      {(isFragile || cargoCategory === 'Hàng dễ vỡ') && (
+                        <div className="flex justify-between">
+                          <span className="text-slate-500 font-medium">Phụ phí dễ vỡ:</span>
+                          <span className="font-bold text-slate-900">20.000đ</span>
+                        </div>
+                      )}
+
+                      {(isValuable || cargoCategory === 'Giá trị cao') && (
+                        <div className="flex justify-between">
+                          <span className="text-slate-500 font-medium">Bảo hiểm giá trị:</span>
+                          <span className="font-bold text-slate-900">50.000đ</span>
+                        </div>
+                      )}
+
+                      <div className="pt-4 border-t border-slate-200 flex justify-between items-center">
+                        <span className="text-base font-black text-slate-800">Tổng cước phí:</span>
+                        <span className="text-2xl font-black text-[#f05123]">
+                          {calculatedPricing.totalFee.toLocaleString('vi-VN')}đ
+                        </span>
+                      </div>
+                    </div>
+
+                    {selectedTrip && (
+                      <div className="mb-5 bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs text-slate-600 space-y-1">
+                        <div>
+                          Nhà xe:{' '}
+                          <strong className="text-slate-800">{selectedTrip.busCompany.name}</strong>
+                        </div>
+                        <div>
+                          Khởi hành:{' '}
+                          <strong className="text-slate-800">
+                            {formatIsoTime(selectedTrip.departureTime)} ({date})
+                          </strong>
+                        </div>
+                        <div>
+                          Tuyến:{' '}
+                          <strong className="text-slate-800">
+                            {origin} → {destination}
+                          </strong>
+                        </div>
+                      </div>
+                    )}
+
+                    <button
+                      onClick={handleCreateShipment}
+                      disabled={isSubmitting || !selectedTripId}
+                      className="w-full h-12 bg-[#f05123] text-white font-black text-base rounded-xl hover:bg-[#d94419] disabled:opacity-50 transition-colors flex items-center justify-center gap-2 shadow-sm"
+                    >
+                      {isSubmitting ? 'Đang tạo vận đơn...' : 'Tạo mã vận đơn'}
+                      <ArrowRight className="w-5 h-5" />
+                    </button>
+
+                    <p className="text-xs text-center text-slate-500 mt-4 leading-relaxed">
+                      Sau khi tạo, mang kiện hàng ra bến xe gửi trước giờ xuất bến.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* ============================================================== */}
+        {/* TAB 2: TRA CỨU VẬN ĐƠN */}
+        {/* ============================================================== */}
+        {activeTab === 'lookup' && (
+          <div className="max-w-2xl mx-auto space-y-6">
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+              <h2 className="text-lg font-black text-slate-800 mb-4 flex items-center gap-2">
+                <Search className="w-5 h-5 text-[#0060c4]" /> Tra cứu trạng thái đơn gửi hàng
+              </h2>
+              <p className="text-xs text-slate-500 mb-6">
+                Nhập mã vận đơn (VD: FUTA-VD-...) và số điện thoại người gửi hoặc người nhận để xem chi tiết bến nhận và trạng thái đơn hàng.
+              </p>
+
+              <form onSubmit={handleLookup} className="space-y-4">
+                {lookupError && (
+                  <div className="bg-rose-50 border border-rose-200 text-rose-700 p-3 rounded-xl text-xs flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{lookupError}</span>
+                  </div>
+                )}
+
                 <div>
-                  <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-1.5">Ngày gửi</label>
-                  <input 
-                    type="date" 
-                    value={date}
-                    onChange={(e) => setDate(e.target.value)}
-                    className="w-full h-11 px-4 rounded-xl border border-slate-300 focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand font-semibold text-slate-800 bg-white"
+                  <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-1.5">
+                    Mã vận đơn <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={lookupCode}
+                    onChange={(e) => setLookupCode(e.target.value.toUpperCase())}
+                    placeholder="VD: FUTA-VD-09102026..."
+                    className="w-full h-11 px-4 rounded-xl border border-slate-300 focus:outline-none focus:border-[#0060c4] font-semibold text-slate-800 uppercase"
                   />
                 </div>
 
-                <div className="mt-8 mb-4 flex justify-between items-end">
-                  <div>
-                    <h3 className="font-bold text-slate-900 text-base">Chọn nhà xe & chuyến nhận hàng</h3>
-                    <p className="text-xs text-slate-500 mt-1">Chỉ hiển thị các nhà xe có hỗ trợ nhận hàng trên tuyến và ngày bạn đã chọn.</p>
-                  </div>
-                  <span className="px-3 py-1 bg-blue-50 text-blue-600 font-bold text-xs rounded-full">3 chuyến</span>
+                <div>
+                  <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-1.5">
+                    Số điện thoại người gửi hoặc người nhận <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="tel"
+                    value={lookupPhone}
+                    onChange={(e) => setLookupPhone(e.target.value)}
+                    placeholder="09xxxxxxxx"
+                    className="w-full h-11 px-4 rounded-xl border border-slate-300 focus:outline-none focus:border-[#0060c4] font-semibold text-slate-800"
+                  />
                 </div>
 
-                <div className="space-y-4">
-                  {/* Company 1 */}
-                  <label className={`block p-4 rounded-xl border-2 cursor-pointer transition-colors ${selectedCompany === 'phuong-dong' ? 'border-blue-500 bg-blue-50/30' : 'border-slate-200 bg-white hover:border-blue-200'}`}>
-                    <div className="flex items-start gap-3">
-                      <div className="mt-1">
-                        <input type="radio" name="company" checked={selectedCompany === 'phuong-dong'} onChange={() => setSelectedCompany('phuong-dong')} className="w-5 h-5 accent-blue-600" />
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <div className="flex items-center gap-2 mb-1">
-                              <span className="font-extrabold text-slate-900 text-base">Nhà xe Phương Đông</span>
-                              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full border border-emerald-200">Nhận gửi hàng</span>
-                            </div>
-                            <div className="font-bold text-slate-800 text-sm mb-1">
-                              08:00 <ArrowRight className="w-3 h-3 inline text-slate-400 mx-1" /> 14:00
-                            </div>
-                            <div className="text-xs text-slate-500">
-                              Điểm gửi: Bến xe Miền Đông • Điểm nhận: Bến xe Đà Lạt • Dự kiến nhận: 14:30
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <div className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-1 rounded border border-emerald-100 inline-block mb-1">Còn 45 kg</div>
-                            <div className="text-xs text-slate-500">Cước từ 50.000đ</div>
-                          </div>
+                <button
+                  type="submit"
+                  disabled={isLookingUp}
+                  className="w-full h-11 bg-[#0060c4] text-white font-bold rounded-xl hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 text-sm disabled:opacity-50"
+                >
+                  <Search className="w-4 h-4" />
+                  {isLookingUp ? 'Đang tra cứu...' : 'Tra cứu vận đơn'}
+                </button>
+              </form>
+            </div>
+
+            {/* KẾT QUẢ TRA CỨU */}
+            {lookupResult && (
+              <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 space-y-5 animate-in fade-in duration-300">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-100 gap-2">
+                  <div>
+                    <span className="text-xs font-bold text-slate-400 uppercase">Mã vận đơn</span>
+                    <div className="text-xl font-black text-[#0060c4]">{lookupResult.waybillCode}</div>
+                  </div>
+                  <div>
+                    <span
+                      className={`px-3 py-1 text-xs font-black rounded-full ${
+                        lookupResult.status === 'DA_GIAO'
+                          ? 'bg-emerald-100 text-emerald-700'
+                          : lookupResult.status === 'DANG_VAN_CHUYEN'
+                            ? 'bg-blue-100 text-blue-700'
+                            : 'bg-amber-100 text-amber-700'
+                      }`}
+                    >
+                      {lookupResult.status === 'MOI_TAO'
+                        ? 'Chờ mang hàng ra bến'
+                        : lookupResult.status === 'DA_TIEP_NHAN'
+                          ? 'Đã tiếp nhận tại bến'
+                          : lookupResult.status === 'DANG_VAN_CHUYEN'
+                            ? 'Đang vận chuyển'
+                            : lookupResult.status === 'DA_GIAO'
+                              ? 'Đã giao thành công'
+                              : lookupResult.status}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Điểm giao & nhận */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                  <div className="p-3 bg-slate-50 rounded-xl">
+                    <span className="font-bold text-slate-500 uppercase block mb-1">Điểm gửi</span>
+                    <div className="font-extrabold text-slate-900">{lookupResult.pickupPoint.name}</div>
+                    <div className="text-slate-600 mt-0.5">{lookupResult.pickupPoint.address}</div>
+                    <div className="mt-2 text-slate-500">
+                      Người gửi: <strong>{lookupResult.sender.fullName}</strong> ({lookupResult.sender.phoneNumber})
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-slate-50 rounded-xl">
+                    <span className="font-bold text-slate-500 uppercase block mb-1">Điểm nhận</span>
+                    <div className="font-extrabold text-slate-900">{lookupResult.dropoffPoint.name}</div>
+                    <div className="text-slate-600 mt-0.5">{lookupResult.dropoffPoint.address}</div>
+                    <div className="mt-2 text-slate-500">
+                      Người nhận: <strong>{lookupResult.receiver.fullName}</strong> ({lookupResult.receiver.phoneNumber})
+                    </div>
+                  </div>
+                </div>
+
+                {/* Chuyến xe */}
+                <div className="p-3 bg-blue-50/50 rounded-xl border border-blue-100 text-xs flex justify-between items-center">
+                  <div>
+                    <span className="text-slate-500">Chuyến xe vận chuyển:</span>
+                    <div className="font-bold text-slate-900">
+                      {lookupResult.trip.busCompany.name} • {lookupResult.trip.route.origin} → {lookupResult.trip.route.destination}
+                    </div>
+                    <div className="text-slate-500 mt-0.5">
+                      Khởi hành: {formatIsoTime(lookupResult.trip.departureTime)} ngày {formatIsoDate(lookupResult.trip.departureTime)}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-slate-500">Tổng cước phí:</span>
+                    <div className="font-black text-rose-600 text-base">
+                      {lookupResult.pricing.totalFee.toLocaleString('vi-VN')}đ
+                    </div>
+                  </div>
+                </div>
+
+                {/* Danh sách hàng */}
+                <div>
+                  <span className="text-xs font-bold text-slate-500 uppercase block mb-2">Kiện hàng đã gửi:</span>
+                  <div className="space-y-2">
+                    {lookupResult.items.map((item) => (
+                      <div key={item.id} className="p-2.5 bg-slate-50 rounded-lg text-xs flex justify-between items-center">
+                        <div>
+                          <strong className="text-slate-800">{item.name}</strong>
+                          <span className="text-slate-500 ml-2">({item.category})</span>
+                        </div>
+                        <div className="font-semibold text-slate-700">
+                          {item.quantity} kiện • {item.weight} kg
                         </div>
                       </div>
-                    </div>
-                  </label>
-                  
-                  {/* Company 2 */}
-                  <label className={`block p-4 rounded-xl border-2 cursor-pointer transition-colors ${selectedCompany === 'thanh-buoi' ? 'border-blue-500 bg-blue-50/30' : 'border-slate-200 bg-white hover:border-blue-200'}`}>
-                    <div className="flex items-start gap-3">
-                      <div className="mt-1">
-                        <input type="radio" name="company" checked={selectedCompany === 'thanh-buoi'} onChange={() => setSelectedCompany('thanh-buoi')} className="w-5 h-5 accent-blue-600" />
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <div className="flex items-center gap-2 mb-1">
-                              <span className="font-extrabold text-slate-900 text-base">Nhà xe Thành Bưởi</span>
-                              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full border border-emerald-200">Nhận gửi hàng</span>
-                            </div>
-                            <div className="font-bold text-slate-800 text-sm mb-1">
-                              14:30 <ArrowRight className="w-3 h-3 inline text-slate-400 mx-1" /> 20:30
-                            </div>
-                            <div className="text-xs text-slate-500">
-                              Điểm gửi: Văn phòng Q1 • Điểm nhận: VP Đà Lạt • Dự kiến nhận: 21:00
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <div className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-1 rounded border border-emerald-100 inline-block mb-1">Còn 80 kg</div>
-                            <div className="text-xs text-slate-500">Cước từ 60.000đ</div>
-                          </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Timeline */}
+                {lookupResult.timeline && lookupResult.timeline.length > 0 && (
+                  <div>
+                    <span className="text-xs font-bold text-slate-500 uppercase block mb-2">Lịch sử xử lý:</span>
+                    <div className="space-y-2 border-l-2 border-slate-200 ml-2 pl-3">
+                      {lookupResult.timeline.map((log) => (
+                        <div key={log.id} className="text-xs">
+                          <span className="font-bold text-slate-800">
+                            {log.status === 'MOI_TAO'
+                              ? 'Tạo đơn gửi hàng'
+                              : log.status === 'DA_TIEP_NHAN'
+                                ? 'Tiếp nhận hàng tại quầy bến xe'
+                                : log.status === 'DANG_VAN_CHUYEN'
+                                  ? 'Xe đang lăn bánh chở hàng'
+                                  : log.status === 'DA_GIAO'
+                                    ? 'Đã trả hàng cho người nhận'
+                                    : log.status}
+                          </span>
+                          <span className="text-slate-400 ml-2">({formatIsoTime(log.time)} {formatIsoDate(log.time)})</span>
+                          {log.note && <div className="text-slate-500 text-[11px]">{log.note}</div>}
                         </div>
-                      </div>
-                    </div>
-                  </label>
-                </div>
-              </div>
-
-              {/* Thông tin người gửi */}
-              <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
-                <h2 className="text-lg font-black text-slate-800 mb-4 flex items-center gap-2">
-                  <div className="bg-blue-100 p-1.5 rounded-full">
-                    <User className="w-5 h-5 text-blue-600" />
-                  </div>
-                  Thông tin người gửi
-                </h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-1.5">Họ và tên</label>
-                    <input 
-                      type="text" 
-                      value={senderName}
-                      onChange={(e) => setSenderName(e.target.value)}
-                      placeholder="Nguyễn Văn A" 
-                      className="w-full h-11 px-4 rounded-xl border border-slate-300 focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand font-semibold text-slate-800 bg-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-1.5">Số điện thoại</label>
-                    <input 
-                      type="text" 
-                      value={senderPhone}
-                      onChange={(e) => setSenderPhone(e.target.value)}
-                      placeholder="09xxxxxxxx" 
-                      className="w-full h-11 px-4 rounded-xl border border-slate-300 focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand font-semibold text-slate-800 bg-white"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Thông tin người nhận */}
-              <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
-                <h2 className="text-lg font-black text-slate-800 mb-4 flex items-center gap-2">
-                  <div className="bg-slate-100 p-1.5 rounded-full">
-                    <Users className="w-5 h-5 text-slate-600" />
-                  </div>
-                  Thông tin người nhận
-                </h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-1.5">Họ và tên</label>
-                    <input 
-                      type="text" 
-                      value={receiverName}
-                      onChange={(e) => setReceiverName(e.target.value)}
-                      placeholder="Nguyễn Văn B" 
-                      className="w-full h-11 px-4 rounded-xl border border-slate-300 focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand font-semibold text-slate-800 bg-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-1.5">Số điện thoại</label>
-                    <input 
-                      type="text" 
-                      value={receiverPhone}
-                      onChange={(e) => setReceiverPhone(e.target.value)}
-                      placeholder="09xxxxxxxx" 
-                      className="w-full h-11 px-4 rounded-xl border border-slate-300 focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand font-semibold text-slate-800 bg-white"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Thông tin kiện hàng */}
-              <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
-                <h2 className="text-lg font-black text-slate-800 mb-4 flex items-center gap-2">
-                  <div className="bg-amber-100 p-1.5 rounded-full">
-                    <Package className="w-5 h-5 text-amber-600" />
-                  </div>
-                  Thông tin kiện hàng
-                </h2>
-                
-                <div className="space-y-5">
-                  <div>
-                    <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-2">Loại hàng hóa</label>
-                    <div className="grid grid-cols-3 gap-3">
-                      {[
-                        { id: 'Hàng thường', label: 'Hàng thường' },
-                        { id: 'Dễ vỡ', label: 'Dễ vỡ' },
-                        { id: 'Giá trị cao', label: 'Giá trị cao' }
-                      ].map((type) => (
-                        <button
-                          key={type.id}
-                          onClick={() => setFreightType(type.id)}
-                          className={`h-11 rounded-xl text-sm font-bold border transition-colors ${
-                            freightType === type.id 
-                              ? 'bg-blue-50 border-blue-500 text-blue-700' 
-                              : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
-                          }`}
-                        >
-                          {type.label}
-                        </button>
                       ))}
                     </div>
                   </div>
-
-                  <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                    <div className="col-span-1 md:col-span-2">
-                      <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-1.5">Số kiện</label>
-                      <input 
-                        type="number" 
-                        min="1"
-                        value={quantity || ''}
-                        onChange={(e) => setQuantity(Number(e.target.value))}
-                        className="w-full h-11 px-4 rounded-xl border border-slate-300 focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand font-semibold"
-                      />
-                    </div>
-                    <div className="col-span-1 md:col-span-3">
-                      <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-1.5">Khối lượng ước tính (kg)</label>
-                      <input 
-                        type="number" 
-                        min="1"
-                        value={weight || ''}
-                        onChange={(e) => setWeight(Number(e.target.value))}
-                        className="w-full h-11 px-4 rounded-xl border border-slate-300 focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand font-semibold"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-4">
-                    <div>
-                      <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-1.5">Dài (cm)</label>
-                      <input 
-                        type="number" 
-                        min="1"
-                        value={length || ''}
-                        onChange={(e) => setLength(Number(e.target.value))}
-                        className="w-full h-11 px-4 rounded-xl border border-slate-300 focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand font-semibold"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-1.5">Rộng (cm)</label>
-                      <input 
-                        type="number" 
-                        min="1"
-                        value={width || ''}
-                        onChange={(e) => setWidth(Number(e.target.value))}
-                        className="w-full h-11 px-4 rounded-xl border border-slate-300 focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand font-semibold"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-1.5">Cao (cm)</label>
-                      <input 
-                        type="number" 
-                        min="1"
-                        value={height || ''}
-                        onChange={(e) => setHeight(Number(e.target.value))}
-                        className="w-full h-11 px-4 rounded-xl border border-slate-300 focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand font-semibold"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-1.5">Ghi chú</label>
-                    <textarea 
-                      value={note}
-                      onChange={(e) => setNote(e.target.value)}
-                      placeholder="Ví dụ: hàng dễ vỡ, không chồng vật nặng lên trên..."
-                      className="w-full p-4 rounded-xl border border-slate-300 focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand text-sm resize-none h-24"
-                    ></textarea>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-6">
-                    <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer hover:text-slate-900">
-                      <input type="checkbox" checked={isFragile} onChange={(e) => setIsFragile(e.target.checked)} className="w-4 h-4 rounded border-slate-300 text-brand focus:ring-brand" />
-                      Hàng dễ vỡ
-                    </label>
-                    <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer hover:text-slate-900">
-                      <input type="checkbox" checked={isValuable} onChange={(e) => setIsValuable(e.target.checked)} className="w-4 h-4 rounded border-slate-300 text-brand focus:ring-brand" />
-                      Giá trị cao
-                    </label>
-                    <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer hover:text-slate-900">
-                      <input type="checkbox" checked={needsCare} onChange={(e) => setNeedsCare(e.target.checked)} className="w-4 h-4 rounded border-slate-300 text-brand focus:ring-brand" />
-                      Cần xử lý cẩn thận
-                    </label>
-                  </div>
-
-                  <div className="bg-amber-50 rounded-xl p-4 text-sm text-amber-800 border border-amber-100">
-                    <strong>Lưu ý:</strong> Không nhận vận chuyển hàng thuộc danh mục cấm. Nhà xe có quyền kiểm tra kiện hàng trước khi tiếp nhận.
-                  </div>
-                </div>
+                )}
               </div>
-            </div>
-
-            {/* Cột phải: Tính phí */}
-            <div className="w-full lg:w-[380px] shrink-0">
-              <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sticky top-24">
-                <h2 className="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2">
-                  <Calculator className="w-5 h-5 text-brand" /> Dự tính cước phí
-                </h2>
-
-                <div className="space-y-3 mb-6">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-slate-500 font-semibold">Cước cơ bản (5kg đầu):</span>
-                    <span className="font-bold text-slate-900">50.000đ</span>
-                  </div>
-                  {weight > 5 && (
-                    <div className="flex justify-between text-sm">
-                      <span className="text-slate-500 font-semibold">Phụ phí vượt mức:</span>
-                      <span className="font-bold text-slate-900">{((weight - 5) * 10000).toLocaleString('vi-VN')}đ</span>
-                    </div>
-                  )}
-                  {(freightType === 'Dễ vỡ' || isFragile) && (
-                    <div className="flex justify-between text-sm">
-                      <span className="text-slate-500 font-semibold">Phụ phí hàng dễ vỡ:</span>
-                      <span className="font-bold text-slate-900">20.000đ</span>
-                    </div>
-                  )}
-                  {(freightType === 'Giá trị cao' || isValuable) && (
-                    <div className="flex justify-between text-sm">
-                      <span className="text-slate-500 font-semibold">Bảo hiểm hàng giá trị:</span>
-                      <span className="font-bold text-slate-900">50.000đ</span>
-                    </div>
-                  )}
-                  
-                  <div className="pt-3 border-t border-slate-200 flex justify-between items-center">
-                    <span className="text-base font-black text-slate-800">Tổng tiền</span>
-                    <span className="text-2xl font-black text-rose-600">{fee.toLocaleString('vi-VN')}đ</span>
-                  </div>
-                </div>
-
-                <button 
-                  onClick={() => router.push('/payment')}
-                  className="w-full h-12 bg-accent text-white font-black text-base rounded-xl hover:bg-accent-hover transition-colors flex items-center justify-center gap-2 shadow-sm"
-                >
-                  Tạo mã vận đơn
-                  <ArrowRight className="w-5 h-5" />
-                </button>
-                
-                <p className="text-xs text-center text-slate-500 mt-4">
-                  Mang kiện hàng và mã vận đơn ra bến xe để hoàn tất thủ tục gửi hàng.
-                </p>
-              </div>
-            </div>
+            )}
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

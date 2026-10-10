@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { Ticket } from 'lucide-react';
 import { ProfileSidebar } from '@/features/account/components/profile-sidebar';
 import { useAuthSession } from '@/features/auth/auth-session';
 import {
@@ -78,6 +79,10 @@ export default function CustomerActivityPage() {
   const [errorMessage, setErrorMessage] = useState('');
   const [retryKey, setRetryKey] = useState(0);
 
+  // Tab states: 'upcoming' | 'history' | 'all'
+  const [activeTab, setActiveTab] = useState<'upcoming' | 'history' | 'all'>('upcoming');
+  const [hasInitializedTab, setHasInitializedTab] = useState(false);
+
   // Filter states
   const [codeFilter, setCodeFilter] = useState('');
   const [dateFilter, setDateFilter] = useState('');
@@ -120,13 +125,25 @@ export default function CustomerActivityPage() {
           setMeta(res.meta);
           setErrorMessage('');
         }
-      } catch (err) {
-        console.error('Lỗi khi tải lịch sử đặt vé:', err);
+      } catch (err: unknown) {
+        const isAuthError =
+          (err && typeof err === 'object' && 'status' in err && (err as { status?: number }).status === 401) ||
+          (err instanceof Error &&
+            (err.message.includes('Refresh token') ||
+              err.message.includes('Chưa đăng nhập') ||
+              err.message.includes('hết hạn')));
+
+        if (isAuthError) {
+          router.replace('/auth/login?next=/account/tickets');
+          return;
+        }
+
         if (!ignore) {
+          console.warn('Lỗi khi tải danh sách vé:', err);
           setErrorMessage(
             err instanceof Error
               ? err.message
-              : 'Không thể tải lịch sử đặt vé. Vui lòng thử lại.',
+              : 'Không thể tải danh sách vé. Vui lòng thử lại.',
           );
         }
       } finally {
@@ -154,10 +171,41 @@ export default function CustomerActivityPage() {
     retryKey,
   ]);
 
+  // Phân loại chuyến xe sắp đi và lịch sử chuyến đi
+  const isUpcoming = (b: BookingItem) => {
+    if (b.status === 'DA_HUY' || b.paymentStatus === 'DA_HUY') return false;
+    if (!b.departureTime) return true;
+    try {
+      const departure = new Date(b.departureTime);
+      return departure.getTime() >= Date.now() - 2 * 60 * 60 * 1000;
+    } catch {
+      return true;
+    }
+  };
+
+  const upcomingBookings = useMemo(() => bookings.filter(isUpcoming), [bookings]);
+  const pastBookings = useMemo(() => bookings.filter((b) => !isUpcoming(b)), [bookings]);
+
+  // Khởi tạo tab ban đầu một lần duy nhất nếu không có chuyến sắp đi nhưng có lịch sử
+  useEffect(() => {
+    if (!isLoading && bookings.length > 0 && !hasInitializedTab) {
+      if (upcomingBookings.length === 0 && pastBookings.length > 0) {
+        setActiveTab('history');
+      }
+      setHasInitializedTab(true);
+    }
+  }, [isLoading, bookings.length, upcomingBookings.length, pastBookings.length, hasInitializedTab]);
+
+  const displayedBookings = useMemo(() => {
+    if (activeTab === 'upcoming') return upcomingBookings;
+    if (activeTab === 'history') return pastBookings;
+    return bookings;
+  }, [activeTab, upcomingBookings, pastBookings, bookings]);
+
   const viewState = resolveCustomerActivityViewState(
     isLoading,
     errorMessage,
-    bookings.length,
+    displayedBookings.length,
   );
 
   const handleRetry = () => {
@@ -192,8 +240,8 @@ export default function CustomerActivityPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F5F5F5] py-8 md:py-12 overflow-x-hidden">
-      <div className="max-w-[1050px] mx-auto px-4 sm:px-6 w-full">
+    <div className="min-h-screen bg-[#F5F5F5] py-8 md:py-12 overflow-x-hidden font-sans">
+      <div className="max-w-[1080px] mx-auto px-4 sm:px-6 w-full">
         <div className="flex flex-col md:flex-row gap-6 md:gap-8">
           {/* Sidebar */}
           <div className="w-full md:w-[280px] shrink-0">
@@ -202,22 +250,89 @@ export default function CustomerActivityPage() {
 
           {/* Main Content */}
           <div className="flex-1 min-w-0">
-            <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-4 sm:p-6">
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 sm:p-6">
+              {/* Header Title */}
               <div className="flex justify-between items-start mb-6">
                 <div>
-                  <h2 className="text-xl md:text-2xl font-black text-slate-900">
-                    Lịch sử mua vé
+                  <h2 className="text-xl md:text-2xl font-black text-slate-900 tracking-tight">
+                    Vé của tôi
                   </h2>
                   <p className="text-sm text-slate-500 mt-1 font-medium">
-                    Theo dõi và quản lý quá trình lịch sử mua vé của bạn
+                    Theo dõi vé xe sắp đi và lịch sử mua vé của bạn
                   </p>
                 </div>
                 <Link
                   href="/"
-                  className="bg-accent hover:bg-accent-hover text-white px-6 py-2 rounded-full text-sm font-black shadow-sm transition-colors shrink-0"
+                  className="bg-accent hover:bg-accent-hover text-white px-5 py-2 rounded-full text-sm font-black shadow-sm transition-colors shrink-0"
                 >
-                  Đặt vé
+                  Đặt vé mới
                 </Link>
+              </div>
+
+              {/* 2 Tabs: Chuyến sắp đi vs Lịch sử mua vé */}
+              <div className="flex items-center gap-2 border-b border-slate-200 mb-6">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('upcoming')}
+                  className={`pb-3 px-3 text-sm font-bold border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
+                    activeTab === 'upcoming'
+                      ? 'border-accent text-accent'
+                      : 'border-transparent text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  <span>Chuyến sắp đi</span>
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
+                      activeTab === 'upcoming'
+                        ? 'bg-accent/10 text-accent'
+                        : 'bg-slate-100 text-slate-600'
+                    }`}
+                  >
+                    {upcomingBookings.length}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('history')}
+                  className={`pb-3 px-3 text-sm font-bold border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
+                    activeTab === 'history'
+                      ? 'border-accent text-accent'
+                      : 'border-transparent text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  <span>Lịch sử mua vé</span>
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
+                      activeTab === 'history'
+                        ? 'bg-accent/10 text-accent'
+                        : 'bg-slate-100 text-slate-600'
+                    }`}
+                  >
+                    {pastBookings.length}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('all')}
+                  className={`pb-3 px-3 text-sm font-bold border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
+                    activeTab === 'all'
+                      ? 'border-accent text-accent'
+                      : 'border-transparent text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  <span>Tất cả</span>
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
+                      activeTab === 'all'
+                        ? 'bg-accent/10 text-accent'
+                        : 'bg-slate-100 text-slate-600'
+                    }`}
+                  >
+                    {bookings.length}
+                  </span>
+                </button>
               </div>
 
               {/* Filters */}
@@ -278,7 +393,7 @@ export default function CustomerActivityPage() {
                 <div className="flex items-end">
                   <button
                     type="submit"
-                    className="w-full lg:w-auto px-6 py-2 border border-slate-300 rounded-full text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors h-[38px]"
+                    className="w-full lg:w-auto px-6 py-2 border border-slate-300 rounded-full text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors h-[38px] cursor-pointer"
                   >
                     Tìm
                   </button>
@@ -286,8 +401,8 @@ export default function CustomerActivityPage() {
               </form>
 
               {/* Table */}
-              <div className="overflow-x-auto border border-slate-200 rounded-lg">
-                <table className="w-full min-w-[620px] text-sm text-center">
+              <div className="overflow-x-auto border border-slate-200 rounded-xl">
+                <table className="w-full min-w-[700px] text-sm text-center">
                   <thead className="bg-slate-50 border-b border-slate-200">
                     <tr>
                       <th className="px-3 sm:px-4 py-3 font-semibold text-slate-700 whitespace-nowrap">
@@ -308,28 +423,32 @@ export default function CustomerActivityPage() {
                       <th className="px-3 sm:px-4 py-3 font-semibold text-slate-700 whitespace-nowrap border-l border-slate-200">
                         Thanh toán
                       </th>
+                      <th className="px-3 sm:px-4 py-3 font-semibold text-slate-700 whitespace-nowrap border-l border-slate-200">
+                        Thao tác
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
                     {viewState === 'loading' ? (
                       <tr>
                         <td
-                          colSpan={6}
-                          className="px-4 py-8 text-center text-slate-500 font-medium whitespace-nowrap"
+                          colSpan={7}
+                          className="px-4 py-10 text-center text-slate-500 font-medium whitespace-nowrap"
                         >
-                          Đang tải lịch sử đặt vé...
+                          <div className="w-7 h-7 border-3 border-accent border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+                          Đang tải danh sách vé...
                         </td>
                       </tr>
                     ) : viewState === 'error' ? (
                       <tr>
-                        <td colSpan={6} className="px-4 py-8 text-center">
+                        <td colSpan={7} className="px-4 py-8 text-center">
                           <p className="font-medium text-red-600">
                             {errorMessage}
                           </p>
                           <button
                             type="button"
                             onClick={handleRetry}
-                            className="mt-3 rounded-full border border-red-200 px-5 py-2 text-sm font-bold text-red-700 transition-colors hover:bg-red-50"
+                            className="mt-3 rounded-full border border-red-200 px-5 py-2 text-sm font-bold text-red-700 transition-colors hover:bg-red-50 cursor-pointer"
                           >
                             Thử lại
                           </button>
@@ -338,37 +457,111 @@ export default function CustomerActivityPage() {
                     ) : viewState === 'empty' ? (
                       <tr>
                         <td
-                          colSpan={6}
-                          className="px-4 py-8 text-center text-slate-500 font-medium whitespace-nowrap"
+                          colSpan={7}
+                          className="px-4 py-14 text-center"
                         >
-                          Chưa có lịch sử đặt vé nào phù hợp.
+                          <div className="max-w-md mx-auto">
+                            <div className="w-14 h-14 rounded-full bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center mx-auto mb-3 shadow-2xs">
+                              <Ticket className="w-7 h-7" />
+                            </div>
+                            <h3 className="text-base font-bold text-slate-800 mb-1.5">
+                              {activeTab === 'upcoming'
+                                ? 'Hiện tại bạn chưa có chuyến xe nào sắp đi'
+                                : activeTab === 'history'
+                                  ? 'Chưa có lịch sử chuyến đi nào'
+                                  : 'Chưa có vé xe nào phù hợp'}
+                            </h3>
+                            <p className="text-xs text-slate-500 mb-5 leading-relaxed">
+                              {activeTab === 'upcoming'
+                                ? 'Các vé xe bạn mới đặt và chuẩn bị khởi hành sẽ hiển thị tại đây để bạn tiện lấy mã QR lên xe.'
+                                : 'Các chuyến xe đã đi hoặc đã hủy của bạn sẽ được lưu trữ tại đây.'}
+                            </p>
+                            <div className="flex flex-wrap items-center justify-center gap-3">
+                              {activeTab === 'upcoming' ? (
+                                <>
+                                  <Link
+                                    href="/"
+                                    className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-full bg-accent text-white text-xs font-black hover:bg-accent-hover transition-colors shadow-2xs"
+                                  >
+                                    <span>Tìm chuyến & Đặt vé ngay</span>
+                                  </Link>
+                                  {pastBookings.length > 0 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setActiveTab('history')}
+                                      className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full bg-white border border-slate-300 text-slate-700 text-xs font-bold hover:bg-slate-50 transition-colors shadow-2xs cursor-pointer"
+                                    >
+                                      <span>Xem lịch sử mua vé ({pastBookings.length})</span>
+                                    </button>
+                                  )}
+                                </>
+                              ) : (
+                                <Link
+                                  href="/"
+                                  className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-full bg-accent text-white text-xs font-black hover:bg-accent-hover transition-colors shadow-2xs"
+                                >
+                                  <span>Đặt vé mới</span>
+                                </Link>
+                              )}
+                            </div>
+                          </div>
                         </td>
                       </tr>
                     ) : (
-                      bookings.map((row, idx) => (
+                      displayedBookings.map((row, idx) => (
                         <tr
                           key={row.bookingId}
                           className={
-                            idx % 2 === 0 ? 'bg-white' : 'bg-[#FFFBEB]'
+                            idx % 2 === 0
+                              ? 'bg-white hover:bg-slate-50/70 transition-colors'
+                              : 'bg-[#FFFBEB] hover:bg-amber-50/80 transition-colors'
                           }
                         >
                           <td className="px-3 sm:px-4 py-3 sm:py-3.5 font-bold text-accent whitespace-nowrap">
-                            {row.bookingCode}
+                            <Link
+                              href={`/invoice/${row.bookingId}`}
+                              className="hover:underline flex items-center justify-center gap-1"
+                              title="Bấm để xem chi tiết vé điện tử"
+                            >
+                              {row.bookingCode}
+                            </Link>
                           </td>
                           <td className="px-2 sm:px-3 py-3 sm:py-3.5 font-medium text-slate-700 border-l border-slate-100 whitespace-nowrap">
-                            {row.ticketCount}
+                            <span className="font-bold">{row.ticketCount}</span>
+                            {row.seatNumbers && row.seatNumbers.length > 0 && (
+                              <span className="text-[11px] text-slate-500 block">
+                                Ghế: {row.seatNumbers.join(', ')}
+                              </span>
+                            )}
                           </td>
-                          <td className="px-3 sm:px-4 py-3 sm:py-3.5 font-medium text-slate-700 border-l border-slate-100 whitespace-nowrap">
-                            {row.route || 'Đang cập nhật'}
+                          <td className="px-3 sm:px-4 py-3 sm:py-3.5 font-medium text-slate-700 border-l border-slate-100 whitespace-nowrap text-left sm:text-center">
+                            <span className="font-bold text-slate-900 block">
+                              {row.route || 'Đang cập nhật'}
+                            </span>
+                            {row.busCompanyName && (
+                              <span className="text-[11px] text-slate-500 block">
+                                {row.busCompanyName}
+                              </span>
+                            )}
                           </td>
                           <td className="px-3 sm:px-4 py-3 sm:py-3.5 font-medium text-slate-700 border-l border-slate-100 whitespace-nowrap">
                             {formatDeparture(row.departureTime)}
                           </td>
-                          <td className="px-3 sm:px-4 py-3 sm:py-3.5 font-semibold text-slate-800 border-l border-slate-100 whitespace-nowrap">
+                          <td className="px-3 sm:px-4 py-3 sm:py-3.5 font-bold text-slate-900 border-l border-slate-100 whitespace-nowrap">
                             {formatPrice(row.totalAmount)}
                           </td>
                           <td className="px-3 sm:px-4 py-3 sm:py-3.5 font-medium border-l border-slate-100 whitespace-nowrap">
                             {renderStatusBadge(row.paymentStatus || row.status)}
+                          </td>
+                          <td className="px-3 sm:px-4 py-3 sm:py-3.5 border-l border-slate-100 whitespace-nowrap">
+                            <Link
+                              href={`/invoice/${row.bookingId}`}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-colors shadow-2xs cursor-pointer"
+                              title="Mở cuống vé điện tử"
+                            >
+                              <Ticket className="w-3.5 h-3.5 text-amber-400" />
+                              <span>Xem vé</span>
+                            </Link>
                           </td>
                         </tr>
                       ))

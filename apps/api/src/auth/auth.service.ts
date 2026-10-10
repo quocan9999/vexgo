@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Injectable,
   ConflictException,
   ForbiddenException,
@@ -248,4 +249,59 @@ export class AuthService {
   logout(refreshToken: string) {
     return this.tokenService.revokeRefreshToken(refreshToken);
   }
+
+  async changePassword(
+    accountId: number,
+    oldPassword: string,
+    newPassword: string,
+  ): Promise<{ message: string }> {
+    const account = await this.prisma.taiKhoan.findUnique({
+      where: { taiKhoanId: accountId },
+      select: { taiKhoanId: true, matKhau: true, trangThai: true },
+    });
+
+    if (!account) {
+      throw new UnauthorizedException({
+        error: 'ACCESS_TOKEN_INVALID',
+        message: 'Phiên đăng nhập không còn hợp lệ.',
+      });
+    }
+
+    if (account.trangThai !== 'HOAT_DONG') {
+      throw new ForbiddenException({
+        error: 'ACCOUNT_INACTIVE',
+        message: 'Tài khoản không hoạt động.',
+      });
+    }
+
+    const isMatch = await bcrypt.compare(
+      oldPassword,
+      account.matKhau ?? DUMMY_PASSWORD_HASH,
+    );
+
+    if (!isMatch) {
+      throw new BadRequestException({
+        error: 'INVALID_OLD_PASSWORD',
+        message: 'Mật khẩu cũ không chính xác.',
+      });
+    }
+
+    const isSamePassword = await bcrypt.compare(newPassword, account.matKhau);
+    if (isSamePassword) {
+      throw new BadRequestException({
+        error: 'SAME_PASSWORD',
+        message: 'Mật khẩu mới không được trùng với mật khẩu cũ.',
+      });
+    }
+
+    const hashedNewPassword = await bcrypt.hash(newPassword, 10);
+
+    await this.prisma.taiKhoan.update({
+      where: { taiKhoanId: accountId },
+      data: { matKhau: hashedNewPassword },
+    });
+
+    return { message: 'Đổi mật khẩu thành công.' };
+  }
 }
+

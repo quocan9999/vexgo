@@ -14,6 +14,7 @@ import {
   Info,
   Mail,
   MapPin,
+  Package,
   PackageCheck,
   Phone,
   Ticket,
@@ -29,12 +30,13 @@ import {
   formatTripDateTime,
 } from '../utils/one-way-booking';
 import { validatePassengerInfo } from '../utils/passenger-validation';
+import { hydrateUntouchedProfileField } from '../utils/profile-hydration';
 import { createPaymentDraft } from '../services/payment-draft';
 import { FeaturePlaceholderModal } from './feature-placeholder-modal';
 import { useAuthSession } from '@/features/auth/auth-session';
 import { customerApi } from '@/features/account/services/customer.api';
-import { hydrateUntouchedProfileField } from '../utils/profile-hydration';
-import type { ApiTripSeat } from '@/features/trips/services/trips.api';
+import { bookingsApi } from '@/features/account/services/bookings.api';
+import { tripsApi, type ApiTripSeat } from '@/features/trips/services/trips.api';
 
 export interface OneWayBookingProps {
   post: Post;
@@ -124,6 +126,7 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
 
   const [selectedSeats, setSelectedSeats] = useState<string[]>([]);
   const [showTripInfoModal, setShowTripInfoModal] = useState(false);
+  const [showCargoInfoModal, setShowCargoInfoModal] = useState(false);
   const [isAcceptedTerms, setIsAcceptedTerms] = useState(false);
   const descriptionLines = post.description
     .split('\n')
@@ -173,6 +176,35 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
       .filter((seat) => seat.status !== 'TRONG')
       .map((seat) => seat.seatNumber),
   );
+  const [cargoCapacity, setCargoCapacity] = useState<{
+    acceptsShipments: boolean;
+    capacities: {
+      motorcycles: { total: number; used: number; remaining: number };
+      bulkyGoods: { total: number; used: number; remaining: number };
+      parcels: { total: number; used: number; remaining: number };
+    };
+  } | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    const tripId = Number(post.id);
+    if (!Number.isNaN(tripId) && tripId > 0) {
+      tripsApi
+        .getCargoCapacity(tripId)
+        .then((res) => {
+          if (active && res) {
+            setCargoCapacity(res);
+          }
+        })
+        .catch(() => {});
+    }
+    return () => {
+      active = false;
+    };
+  }, [post.id]);
+
   const [luggageFee, setLuggageFee] = useState(0);
   const [luggageWeight, setLuggageWeight] = useState(0);
   const [luggageItems, setLuggageItems] = useState<ILuggageItem[]>([]);
@@ -672,6 +704,7 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
               time={departureDateTimeText}
               seat={selectedSeatText}
               passenger={customerName || 'Khách hàng'}
+              cargoCapacity={cargoCapacity}
               onFeeChange={handleLuggageChange}
             />
 
@@ -734,9 +767,10 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
                 </button>
                 <button
                   type="button"
-                  disabled={!canPay}
-                  onClick={() => {
+                  disabled={!canPay || isSubmitting}
+                  onClick={async () => {
                     setValidationAttempted(true);
+                    setSubmitError(null);
                     if (!passengerValidation.isValid) {
                       return;
                     }
@@ -750,52 +784,165 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
                       );
                       return;
                     }
-                    const draft = createPaymentDraft({
-                      tripType: 'one-way',
-                      passenger: {
-                        fullName: customerName.trim(),
-                        phoneNumber: customerPhone.trim(),
-                        email: customerEmail.trim(),
-                      },
-                      legs: [
-                        {
-                          tripId: post.id,
-                          route:
-                            post.title || `${post.province} - ${post.district}`,
-                          departureTime: departureDateTimeText,
-                          seats: selectedSeats,
-                          pickup: pickup || post.province,
-                          dropoff: dropoff || post.district,
-                          unitFare: baseFareNumber,
-                          subtotal: baseFareNumber * selectedSeats.length,
+
+                    setIsSubmitting(true);
+                    try {
+                      const tripIdNum = Number(post.id);
+
+                      // Kiểm tra giới hạn kích thước hành lý (ngoại trừ xe máy, xe đạp)
+                      const oversizedItem = luggageItems.find(
+                        (item) =>
+                          item.type !== 'Xe máy' &&
+                          item.type !== 'Xe đạp' &&
+                          ((item.length && item.length > 150) ||
+                            (item.width && item.width > 80) ||
+                            (item.height && item.height > 80)),
+                      );
+                      if (oversizedItem) {
+                        alert(
+                          `Kiện "${oversizedItem.type}" vượt quá kích thước cho phép của hầm xe khách (Dài ≤ 150cm, Rộng ≤ 80cm, Cao ≤ 80cm). Vui lòng điều chỉnh lại kích thước.`,
+                        );
+                        setIsSubmitting(false);
+                        return;
+                      }
+                      // Kiểm tra tổng khối lượng hành lý thông thường đi kèm vé: tối đa 40kg
+                      if (luggageWeight > 40) {
+                        alert(
+                          `Tổng khối lượng hành lý (${luggageWeight}kg) vượt quá hạn mức đi kèm vé (tối đa 40kg). Vui lòng chuyển qua phần "Gửi hàng bưu kiện" hoặc liên hệ nhà xe để gửi hàng riêng.`,
+                        );
+                        setIsSubmitting(false);
+                        return;
+                      }
+                      const validCargoItems =
+                        luggageItems.filter(
+                          (item) =>
+                            item.type === 'Xe máy' ||
+                            item.type === 'Xe đạp' ||
+                            (item.weight || 0) > 0 ||
+                            (item.length && item.width && item.height),
+                        );
+
+                      const mappedCargoItems =
+                        validCargoItems.length > 0 && luggageFee > 0
+                          ? validCargoItems.map((item) => ({
+                              name:
+                                item.type === 'Xe máy'
+                                  ? `Xe máy (${item.motorbikeType || 'Xe số'})`
+                                  : item.type === 'Xe đạp'
+                                    ? `Xe đạp (${item.bicycleType || 'Xe đạp thường'})`
+                                    : (item.type || 'Hành lý gửi kèm'),
+                              type: item.type,
+                              quantity: item.quantity || 1,
+                              weight: item.type === 'Xe máy' ? 100 : item.type === 'Xe đạp' ? 15 : (item.weight || 0),
+                              length: item.length,
+                              width: item.width,
+                              height: item.height,
+                              category: item.category,
+                              note: item.note,
+                              motorbikeModel: item.motorbikeType || item.bicycleType,
+                              licensePlate: item.licensePlate,
+                            }))
+                          : undefined;
+
+                      const bookingPayload = {
+                        tripId: tripIdNum,
+                        seatNumbers: selectedSeats,
+                        passenger: {
+                          fullName: customerName.trim(),
+                          phoneNumber: customerPhone.trim(),
+                          email: customerEmail.trim(),
                         },
-                      ],
-                      luggage:
-                        luggageFee > 0 || luggageWeight > 0
-                          ? {
-                              fee: luggageFee,
-                              weight: luggageWeight,
-                              info:
-                                luggageItems.length > 0
-                                  ? {
-                                      count: luggageItems.length,
-                                      weight: luggageWeight,
-                                      fee: luggageFee,
-                                      category:
-                                        luggageItems[0]?.category || 'normal',
-                                    }
-                                  : undefined,
-                            }
-                          : undefined,
-                      totalFare,
-                    });
-                    router.push(
-                      `/payment?draftId=${encodeURIComponent(draft.id)}`,
-                    );
+                        pickup: pickup || post.province,
+                        dropoff: dropoff || post.district,
+                        cargoItems: mappedCargoItems,
+                      };
+
+                      let bookingResult: any = null;
+                      if (isAuthenticated) {
+                        try {
+                          const res = await executeWithAuth((token) =>
+                            bookingsApi.createBooking(bookingPayload, token),
+                          );
+                          bookingResult = res.data ?? res;
+                        } catch (err: any) {
+                          // Fallback as unauthenticated if auth error
+                          const res = await bookingsApi.createBooking(bookingPayload);
+                          bookingResult = res.data ?? res;
+                        }
+                      } else {
+                        const res = await bookingsApi.createBooking(bookingPayload);
+                        bookingResult = res.data ?? res;
+                      }
+
+                      const finalLuggageFee =
+                        bookingResult?.shippingFee !== undefined
+                          ? Number(bookingResult.shippingFee)
+                          : luggageFee;
+                      const finalTotalFare =
+                        bookingResult?.totalAmount !== undefined
+                          ? Number(bookingResult.totalAmount)
+                          : totalFare;
+
+                      const draft = createPaymentDraft({
+                        tripType: 'one-way',
+                        passenger: {
+                          fullName: customerName.trim(),
+                          phoneNumber: customerPhone.trim(),
+                          email: customerEmail.trim(),
+                        },
+                        legs: [
+                          {
+                            tripId: post.id,
+                            route:
+                              post.title || `${post.province} - ${post.district}`,
+                            departureTime: departureDateTimeText,
+                            seats: selectedSeats,
+                            pickup: pickup || post.province,
+                            dropoff: dropoff || post.district,
+                            unitFare: baseFareNumber,
+                            subtotal: baseFareNumber * selectedSeats.length,
+                          },
+                        ],
+                        luggage:
+                          luggageWeight > 0 || finalLuggageFee > 0
+                            ? {
+                                fee: finalLuggageFee,
+                                weight: luggageWeight,
+                                items: luggageItems,
+                                info:
+                                  luggageItems.length > 0 && luggageWeight > 0
+                                    ? {
+                                        count: luggageItems.length,
+                                        weight: luggageWeight,
+                                        fee: finalLuggageFee,
+                                        category:
+                                          luggageItems[0]?.category || 'normal',
+                                      }
+                                    : undefined,
+                              }
+                            : undefined,
+                        totalFare: finalTotalFare,
+                        bookingId: bookingResult?.bookingId,
+                        bookingCode: bookingResult?.bookingCode,
+                        orderCode: bookingResult?.orderCode,
+                      });
+
+                      router.push(
+                        `/payment?draftId=${encodeURIComponent(draft.id)}`,
+                      );
+                    } catch (err: any) {
+                      const msg =
+                        err?.message ||
+                        'Đã xảy ra lỗi khi tạo đơn đặt vé. Vui lòng thử lại.';
+                      setSubmitError(msg);
+                      alert(msg);
+                    } finally {
+                      setIsSubmitting(false);
+                    }
                   }}
                   className="h-11 px-8 rounded-full bg-accent hover:bg-accent-hover text-white text-sm font-black transition-colors disabled:cursor-not-allowed disabled:opacity-45"
                 >
-                  Thanh toán
+                  {isSubmitting ? 'Đang xử lý...' : 'Thanh toán'}
                 </button>
               </div>
             </div>
@@ -852,12 +999,174 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
                 </div>
                 <div className="flex justify-between gap-3">
                   <span className="text-slate-500 font-semibold">
-                    Tổng tiền lượt đi
+                    Tiền vé ({selectedSeats.length} ghế)
                   </span>
-                  <strong className="text-red-600">{totalFareText}đ</strong>
+                  <strong className="text-red-600">
+                    {(baseFareNumber * selectedSeats.length).toLocaleString('vi-VN')}đ
+                  </strong>
                 </div>
               </div>
             </section>
+
+            {luggageItems.length > 0 && (
+              <section className="bg-white rounded-lg border border-slate-200 shadow-sm p-4">
+                <div className="mb-3 pb-2.5 border-b border-slate-100">
+                  <div className="flex items-center justify-between gap-3">
+                    <h2 className="text-base font-black text-slate-950">
+                      Hàng gửi hầm xe
+                    </h2>
+                    <button
+                      type="button"
+                      onClick={() => setShowCargoInfoModal(true)}
+                      className="text-xs font-black text-accent hover:underline"
+                    >
+                      Chi tiết
+                    </button>
+                  </div>
+                  <div className="mt-2 flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-accent bg-accent/10 px-2.5 py-0.5 rounded-full border border-accent/20">
+                      {luggageItems.length} kiện • {Number(luggageWeight.toFixed(2))}kg
+                    </span>
+                  </div>
+                </div>
+                <div className="space-y-2.5">
+                  {luggageItems.map((item, idx) => (
+                    <div
+                      key={item.id || idx}
+                      className="p-3 rounded-xl bg-slate-50/90 border border-slate-200/80 flex items-start justify-between gap-3 transition-colors hover:bg-slate-100/70"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-bold text-slate-900 text-xs">
+                            Kiện {idx + 1}: {item.type}
+                          </span>
+                          {item.quantity > 1 && (
+                            <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-slate-200 text-slate-700">
+                              x{item.quantity}
+                            </span>
+                          )}
+                          {item.category === 'fragile' && (
+                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-900 text-white">
+                              Dễ vỡ
+                            </span>
+                          )}
+                          {item.category === 'valuable' && (
+                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-900 text-white">
+                              Giá trị cao
+                            </span>
+                          )}
+                        </div>
+
+                        {item.type === 'Xe máy' ? (
+                          <div className="flex items-center gap-2 text-[11px] text-slate-600 font-medium mt-1 flex-wrap">
+                            <span className="font-semibold text-slate-800">{item.motorbikeType || 'Xe số'}</span>
+                            {item.licensePlate && (
+                              <>
+                                <span className="text-slate-300">•</span>
+                                <span className="bg-slate-200 text-slate-800 font-bold px-1.5 py-0.2 rounded text-[10px]">
+                                  {item.licensePlate}
+                                </span>
+                              </>
+                            )}
+                          </div>
+                        ) : item.type === 'Xe đạp' ? (
+                          <div className="flex items-center gap-2 text-[11px] text-slate-600 font-medium mt-1 flex-wrap">
+                            <span className="font-semibold text-slate-800">{item.bicycleType || 'Xe đạp thường'}</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2 text-[11px] text-slate-600 font-medium mt-1 flex-wrap">
+                            <span>
+                              {item.weight > 0 ? (
+                                <strong className="text-slate-800">{Number((item.weight).toFixed(2))} kg</strong>
+                              ) : (
+                                <span className="text-slate-600 font-normal">Chưa nhập khối lượng</span>
+                              )}
+                            </span>
+                            {item.length && item.width && item.height ? (
+                              (() => {
+                                const vol = Number(((item.length * item.width * item.height) / 5000).toFixed(2));
+                                return (
+                                  <>
+                                    <span className="text-slate-300">•</span>
+                                    <span className="text-slate-500">
+                                      {item.length}×{item.width}×{item.height}cm
+                                    </span>
+                                    {vol > (item.weight || 0) && (
+                                      <span className="text-[10px] text-accent font-bold bg-accent/10 px-1.5 py-0.2 rounded">
+                                        (Tính cước: {vol}kg quy đổi)
+                                      </span>
+                                    )}
+                                  </>
+                                );
+                              })()
+                            ) : null}
+                          </div>
+                        )}
+
+                        {item.note && (
+                          <p className="text-[11px] text-slate-500 italic mt-1 line-clamp-2">
+                            "{item.note}"
+                          </p>
+                        )}
+                      </div>
+
+                      {(() => {
+                        if (item.type === 'Xe máy') {
+                          const motoFee = 250000 * (item.quantity || 1);
+                          return (
+                            <div className="text-right shrink-0">
+                              <span className="text-xs font-extrabold text-red-600">
+                                +{motoFee.toLocaleString('vi-VN')}đ
+                              </span>
+                            </div>
+                          );
+                        }
+
+                        if (item.type === 'Xe đạp') {
+                          const bikeFee = 100000 * (item.quantity || 1);
+                          return (
+                            <div className="text-right shrink-0">
+                              <span className="text-xs font-extrabold text-red-600">
+                                +{bikeFee.toLocaleString('vi-VN')}đ
+                              </span>
+                            </div>
+                          );
+                        }
+
+                        const actualW = item.weight || 0;
+                        const volW =
+                          item.length && item.width && item.height
+                            ? Math.round(((item.length * item.width * item.height) / 5000) * 10) / 10
+                            : 0;
+                        const effW = Math.max(actualW, volW) * (item.quantity || 1);
+                        let itemFee = 0;
+                        if (effW <= 20) itemFee = 0;
+                        else if (effW <= 40) itemFee = 30000;
+                        else itemFee = -1; // Vượt quá 40kg phải qua phần gửi hàng
+
+                        return (
+                          <div className="text-right shrink-0">
+                            {itemFee === 0 ? (
+                              <span className="text-xs font-bold text-emerald-600">
+                                Miễn phí
+                              </span>
+                            ) : itemFee > 0 ? (
+                              <span className="text-xs font-extrabold text-red-600">
+                                +{itemFee.toLocaleString('vi-VN')}đ
+                              </span>
+                            ) : (
+                              <span className="text-[11px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                                Cần gửi hàng riêng
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
 
             <section className="bg-white rounded-lg border border-slate-200 shadow-sm p-4">
               <h2 className="text-base font-black text-slate-950 mb-4 flex items-center gap-1.5">
@@ -867,16 +1176,13 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
               <div className="space-y-3 text-sm pb-4 border-b border-slate-100">
                 <div className="flex justify-between gap-3">
                   <span className="text-slate-500 font-semibold">
-                    Giá vé lượt đi
+                    Giá vé lượt đi ({selectedSeats.length} ghế)
                   </span>
-                  <strong className="text-red-600">{baseFare}</strong>
+                  <strong className="text-red-600">
+                    {(baseFareNumber * selectedSeats.length).toLocaleString('vi-VN')}đ
+                  </strong>
                 </div>
-                <div className="flex justify-between gap-3">
-                  <span className="text-slate-500 font-semibold">
-                    Phí thanh toán
-                  </span>
-                  <strong className="text-slate-950">0đ</strong>
-                </div>
+
                 <LuggageSummary fee={luggageFee} totalWeight={luggageWeight} />
               </div>
               <div className="pt-4 flex justify-between gap-3 text-sm">
@@ -955,6 +1261,153 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
                   </strong>
                 </div>
               </div>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {showCargoInfoModal && (
+        <div
+          className="fixed inset-0 z-[80] bg-black/45 px-4 py-6 flex items-start justify-center"
+          onClick={() => setShowCargoInfoModal(false)}
+        >
+          <section
+            className="w-full max-w-[420px] rounded-xl bg-white p-5 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3 pb-3 border-b border-slate-100">
+              <div>
+                <h2 className="text-base font-black text-slate-950">
+                  Chi tiết hàng gửi hầm xe
+                </h2>
+                <p className="text-xs text-slate-500 font-medium mt-0.5">
+                  Tổng cộng: {luggageItems.length} kiện • {Number(luggageWeight.toFixed(2))}kg
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCargoInfoModal(false)}
+                className="p-1 rounded-md text-slate-400 hover:text-slate-800 hover:bg-slate-100"
+                aria-label="Đóng chi tiết hàng gửi"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="mt-3.5 space-y-2.5 max-h-[60vh] overflow-y-auto pr-1">
+              {luggageItems.map((item, idx) => {
+                const isMoto = item.type === 'Xe máy';
+                const isBike = item.type === 'Xe đạp';
+                const actualW = item.weight || 0;
+                const volW =
+                  !isMoto && !isBike && item.length && item.width && item.height
+                    ? Math.round(((item.length * item.width * item.height) / 5000) * 10) / 10
+                    : 0;
+                const effW = Math.max(actualW, volW) * (item.quantity || 1);
+
+                let itemFee = 0;
+                if (isMoto) {
+                  itemFee = 250000 * (item.quantity || 1);
+                } else if (isBike) {
+                  itemFee = 100000 * (item.quantity || 1);
+                } else {
+                  if (effW <= 20) itemFee = 0;
+                  else if (effW <= 40) itemFee = 30000;
+                  else itemFee = -1;
+                }
+
+                return (
+                  <div
+                    key={item.id || idx}
+                    className="p-3 rounded-lg border border-slate-200 bg-slate-50 text-xs flex items-start justify-between gap-3"
+                  >
+                    <div className="space-y-1 flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <strong className="text-slate-900 font-bold">
+                          {isMoto || isBike ? `Phương tiện ${idx + 1}: ${item.type}` : `Kiện ${idx + 1}: ${item.type}`}
+                        </strong>
+                        {item.quantity > 1 && (
+                          <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-slate-200 text-slate-700">
+                            x{item.quantity}
+                          </span>
+                        )}
+                        {item.category === 'fragile' && (
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-900 text-white">
+                            Dễ vỡ
+                          </span>
+                        )}
+                        {item.category === 'valuable' && (
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-900 text-white">
+                            Giá trị cao
+                          </span>
+                        )}
+                      </div>
+
+                      {isMoto ? (
+                        <div className="flex items-center gap-2 text-[11px] text-slate-600 font-medium flex-wrap">
+                          <span className="font-semibold text-slate-800">{item.motorbikeType || 'Xe số'}</span>
+                          {item.licensePlate && (
+                            <>
+                              <span className="text-slate-300">•</span>
+                              <span className="font-mono bg-slate-200/80 px-1.5 py-0.5 rounded text-slate-800 font-bold text-[10px]">
+                                {item.licensePlate}
+                              </span>
+                            </>
+                          )}
+                        </div>
+                      ) : isBike ? (
+                        <div className="flex items-center gap-2 text-[11px] text-slate-600 font-medium flex-wrap">
+                          <span className="font-semibold text-slate-800">{item.bicycleType || 'Xe đạp thường'}</span>
+                        </div>
+                      ) : (
+                        <div className="text-slate-600 flex items-center gap-1.5 flex-wrap">
+                          <span>
+                            {actualW > 0 ? (
+                              <strong className="text-slate-800 font-semibold">{Number(actualW.toFixed(2))} kg</strong>
+                            ) : (
+                              <span className="text-slate-600 font-normal">Chưa nhập khối lượng</span>
+                            )}
+                          </span>
+                          {item.length && item.width && item.height ? (
+                            <>
+                              <span className="text-slate-300">•</span>
+                              <span>{item.length}×{item.width}×{item.height}cm</span>
+                              {volW > actualW && (
+                                <span className="text-accent font-semibold">
+                                  ({volW}kg quy đổi)
+                                </span>
+                              )}
+                            </>
+                          ) : null}
+                        </div>
+                      )}
+
+                      {item.note && (
+                        <p className="text-slate-500 italic mt-0.5">
+                          "{item.note}"
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="text-right shrink-0">
+                      {itemFee === 0 ? (
+                        <span className="font-bold text-emerald-600">Miễn phí</span>
+                      ) : itemFee < 0 ? (
+                        <span className="font-bold text-red-600">Quá 40kg</span>
+                      ) : (
+                        <span className="font-extrabold text-red-600">+{itemFee.toLocaleString('vi-VN')}đ</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="mt-4 pt-3 border-t border-slate-200 flex items-center justify-between text-xs">
+              <span className="font-bold text-slate-600">Tổng phụ phí hành lý</span>
+              <strong className="text-red-600 text-sm">
+                {luggageFee === 0 ? 'Miễn phí' : `${luggageFee.toLocaleString('vi-VN')}đ`}
+              </strong>
             </div>
           </section>
         </div>

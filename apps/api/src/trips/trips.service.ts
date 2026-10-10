@@ -378,6 +378,103 @@ export class TripsService {
     return mapTrip(cx, businessTimeZone, bangGia ?? undefined);
   }
 
+  async getCargoCapacity(id: number) {
+    const trip = await this.prisma.chuyenXe.findUnique({
+      where: { chuyenXeId: id },
+      select: {
+        chuyenXeId: true,
+        nhanGuiHang: true,
+        sucChuaXeMay: true,
+        sucChuaHangCongKenh: true,
+        sucChuaHangNhe: true,
+        trangThai: true,
+      },
+    });
+
+    if (!trip) {
+      throw new NotFoundException({
+        error: 'TRIP_NOT_FOUND',
+        message: 'Không tìm thấy chuyến xe.',
+      });
+    }
+
+    if (trip.trangThai !== 'CHUA_KHOI_HANH') {
+      throw new NotFoundException({
+        error: 'TRIP_NOT_AVAILABLE',
+        message: 'Chuyến xe này hiện không mở bán.',
+      });
+    }
+
+    if (!trip.nhanGuiHang) {
+      return {
+        data: {
+          acceptsShipments: false,
+          capacities: {
+            motorcycles: { total: 0, used: 0, remaining: 0 },
+            bulkyGoods: { total: 0, used: 0, remaining: 0 },
+            parcels: { total: 0, used: 0, remaining: 0 },
+          },
+        },
+      };
+    }
+
+    const activeShipments = await this.prisma.hangHoa.findMany({
+      where: {
+        phieuGuiHang: {
+          chuyenXeId: id,
+          trangThai: { notIn: ['DA_HUY', 'DA_GIAO'] },
+        },
+      },
+      include: {
+        loaiHangHoa: {
+          select: { nhomSucChua: true },
+        },
+      },
+    });
+
+    let usedXeMay = 0;
+    let usedCongKenh = 0;
+    let usedNhe = 0;
+
+    for (const item of activeShipments) {
+      const group = item.loaiHangHoa.nhomSucChua;
+      if (group === 'XE_MAY') {
+        usedXeMay += item.soLuong;
+      } else if (group === 'HANG_CONG_KENH') {
+        usedCongKenh += item.soLuong;
+      } else if (group === 'HANG_NHE') {
+        usedNhe += item.soLuong;
+      }
+    }
+
+    const remainingXeMay = Math.max(0, trip.sucChuaXeMay - usedXeMay);
+    const remainingCongKenh = Math.max(0, trip.sucChuaHangCongKenh - usedCongKenh);
+    const remainingNhe = Math.max(0, trip.sucChuaHangNhe - usedNhe);
+
+    return {
+      data: {
+        acceptsShipments: true,
+        capacities: {
+          motorcycles: {
+            total: trip.sucChuaXeMay,
+            used: usedXeMay,
+            remaining: remainingXeMay,
+          },
+          bulkyGoods: {
+            total: trip.sucChuaHangCongKenh,
+            used: usedCongKenh,
+            remaining: remainingCongKenh,
+          },
+          parcels: {
+            total: trip.sucChuaHangNhe,
+            used: usedNhe,
+            remaining: remainingNhe,
+          },
+        },
+      },
+    };
+  }
+
   async getCustomerSeats(id: number) {
     const trip = await this.prisma.chuyenXe.findUnique({
       where: { chuyenXeId: id },
@@ -417,6 +514,92 @@ export class TripsService {
       position: gx.ghe.viTri,
       status: gx.trangThai,
     }));
+  }
+
+  async holdSeats(id: number, seatNumbers: string[]) {
+    const trip = await this.prisma.chuyenXe.findUnique({
+      where: { chuyenXeId: id },
+      select: { chuyenXeId: true, trangThai: true },
+    });
+
+    if (!trip) {
+      throw new NotFoundException({
+        error: 'TRIP_NOT_FOUND',
+        message: 'Không tìm thấy chuyến xe.',
+      });
+    }
+
+    if (trip.trangThai !== 'CHUA_KHOI_HANH') {
+      throw new NotFoundException({
+        error: 'TRIP_NOT_AVAILABLE',
+        message: 'Chuyến xe này hiện không mở bán.',
+      });
+    }
+
+    const uniqueSeatNumbers = Array.from(new Set(seatNumbers));
+
+    return this.prisma.$transaction(async (tx) => {
+      const seats = await tx.gheChuyenXe.findMany({
+        where: {
+          chuyenXeId: id,
+          ghe: { soGhe: { in: uniqueSeatNumbers } },
+        },
+        include: { ghe: true },
+      });
+
+      if (seats.length !== uniqueSeatNumbers.length) {
+        throw new NotFoundException({
+          error: 'SEAT_NOT_FOUND',
+          message: 'Một hoặc nhiều ghế được chọn không tồn tại trên chuyến này.',
+        });
+      }
+
+      const unavailable = seats.filter((s) => s.trangThai !== 'TRONG');
+      if (unavailable.length > 0) {
+        throw new ConflictException({
+          error: 'SEAT_UNAVAILABLE',
+          message: `Ghế ${unavailable.map((s) => s.ghe.soGhe).join(', ')} không còn trống.`,
+        });
+      }
+
+      await tx.gheChuyenXe.updateMany({
+        where: {
+          gheChuyenXeId: { in: seats.map((s) => s.gheChuyenXeId) },
+          trangThai: 'TRONG',
+        },
+        data: { trangThai: 'DANG_GIU' },
+      });
+
+      const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes TTL
+
+      return {
+        tripId: id,
+        heldSeats: seats.map((s) => ({
+          tripSeatId: s.gheChuyenXeId,
+          seatNumber: s.ghe.soGhe,
+        })),
+        expiresAt: expiresAt.toISOString(),
+      };
+    });
+  }
+
+  async releaseSeats(id: number, seatNumbers: string[]) {
+    const uniqueSeatNumbers = Array.from(new Set(seatNumbers));
+
+    await this.prisma.gheChuyenXe.updateMany({
+      where: {
+        chuyenXeId: id,
+        ghe: { soGhe: { in: uniqueSeatNumbers } },
+        trangThai: 'DANG_GIU',
+      },
+      data: { trangThai: 'TRONG' },
+    });
+
+    return {
+      success: true,
+      tripId: id,
+      releasedSeats: uniqueSeatNumbers,
+    };
   }
 
   async getSeats(

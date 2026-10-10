@@ -240,4 +240,68 @@ describe('BookingsService', () => {
       expect(result.data.tickets[0].seatNumber).toBe('A01');
     });
   });
+
+  describe('createBooking', () => {
+    it('creates a booking atomically when valid trip and seats are provided', async () => {
+      const mockTrip = {
+        chuyenXeId: 1,
+        ngayKhoiHanh: new Date(Date.now() + 86400000), // tomorrow
+        gioKhoiHanh: new Date('1970-01-01T08:00:00.000Z'),
+        nhanGuiHang: true,
+        sucChuaXeMay: 3,
+        sucChuaHangCongKenh: 10,
+        sucChuaHangNhe: 10,
+        trangThai: 'CHUA_KHOI_HANH',
+        nhaXeId: 1,
+        tuyenXeId: 1,
+        tuyenXe: {
+          tuyenXeId: 1,
+          diemDi: 'TP.HCM',
+          diemDen: 'Đà Lạt',
+          nhaXe: { nhaXeId: 1, maNhaXe: 'FUTA', tenNhaXe: 'Phương Trang' },
+        },
+        xe: { loaiXeId: 1 },
+      };
+
+      (prisma as any).chuyenXe = { findUnique: vi.fn().mockResolvedValue(mockTrip) };
+      (prisma as any).bangGia = { findFirst: vi.fn().mockResolvedValue({ bangGiaId: 1, giaNiemYet: 250000 }) };
+      (prisma as any).$transaction = vi.fn().mockImplementation(async (cb) => {
+        const txMock = {
+          gheChuyenXe: {
+            findMany: vi.fn().mockResolvedValue([
+              { gheChuyenXeId: 1, trangThai: 'TRONG', ghe: { soGhe: 'A01' } },
+            ]),
+            update: vi.fn().mockResolvedValue({}),
+          },
+          khachHang: { findUnique: vi.fn().mockResolvedValue({ khachHangId: 10 }) },
+          donGiaoDich: {
+            count: vi.fn().mockResolvedValue(1),
+            create: vi.fn().mockResolvedValue({ donGiaoDichId: 99 }),
+          },
+          phieuDatVe: {
+            create: vi.fn().mockResolvedValue({ phieuDatVeId: 88, trangThai: 'CHO_THANH_TOAN' }),
+          },
+          ve: {
+            create: vi.fn().mockResolvedValue({ veId: 77 }),
+          },
+        };
+        return cb(txMock);
+      });
+
+      const res = await service.createBooking({
+        tripId: 1,
+        seatNumbers: ['A01'],
+        passenger: {
+          fullName: 'Nguyễn Văn Test',
+          phoneNumber: '0901234567',
+          email: 'test@example.com',
+        },
+      }, 1);
+
+      expect(res.bookingId).toBe(88);
+      expect(res.ticketCount).toBe(1);
+      expect(res.totalAmount).toBe(250000);
+      expect(res.tickets[0].soGhe).toBe('A01');
+    });
+  });
 });

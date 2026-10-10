@@ -171,6 +171,28 @@ test('authApi.logout sends refreshToken in request body and access token in auth
   assert.equal(calls[0].init.headers.Authorization, 'Bearer current-access-token');
 });
 
+test('authApi.changePassword sends old and new password with bearer token', async () => {
+  const calls = [];
+  globalThis.fetch = async (url, init) => {
+    calls.push({ url: String(url), init });
+    return jsonResponse({ message: 'Đổi mật khẩu thành công.' });
+  };
+
+  const response = await authApi.changePassword('access-token-123', {
+    oldPassword: 'OldPassword123',
+    newPassword: 'NewPassword456',
+  });
+
+  assert.equal(calls[0].url, 'http://localhost:4000/api/v1/auth/change-password');
+  assert.equal(calls[0].init.method, 'POST');
+  assert.equal(calls[0].init.headers.Authorization, 'Bearer access-token-123');
+  assert.deepEqual(JSON.parse(calls[0].init.body), {
+    oldPassword: 'OldPassword123',
+    newPassword: 'NewPassword456',
+  });
+  assert.equal(response.message, 'Đổi mật khẩu thành công.');
+});
+
 test('bookingsApi.getBookingDetail returns response with data envelope', async () => {
   const calls = [];
   globalThis.fetch = async (url, init) => {

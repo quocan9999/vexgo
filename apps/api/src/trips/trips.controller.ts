@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
@@ -11,6 +12,7 @@ import {
 } from '@nestjs/common';
 import { TripsService } from './trips.service.js';
 import { CreateTripDto } from './dto/create-trip.dto.js';
+import { CreateSeatHoldDto } from './dto/create-seat-hold.dto.js';
 import { SearchTripsDto } from './dto/search-trips.dto.js';
 import { TripQueryDto } from './dto/trip-query.dto.js';
 import { TripIdParamsDto } from './dto/trip-id-params.dto.js';
@@ -75,10 +77,34 @@ export class TripsController {
     return this.tripsService.getSeats(params.id, query, principal);
   }
 
+  @Get(':id/cargo-capacity')
+  @OptionalAuth()
+  getCargoCapacity(@Param() params: TripIdParamsDto) {
+    return this.tripsService.getCargoCapacity(params.id);
+  }
+
   @Get(':id/seats')
   @OptionalAuth()
   getCustomerSeats(@Param() params: TripIdParamsDto) {
     return this.tripsService.getCustomerSeats(params.id);
+  }
+
+  @Post(':id/seat-holds')
+  @OptionalAuth()
+  holdSeats(
+    @Param() params: TripIdParamsDto,
+    @Body() body: CreateSeatHoldDto,
+  ) {
+    return this.tripsService.holdSeats(params.id, body.seatNumbers);
+  }
+
+  @Delete(':id/seat-holds')
+  @OptionalAuth()
+  releaseSeats(
+    @Param() params: TripIdParamsDto,
+    @Body() body: CreateSeatHoldDto,
+  ) {
+    return this.tripsService.releaseSeats(params.id, body.seatNumbers);
   }
 
   @Get(':id')

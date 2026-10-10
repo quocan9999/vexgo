@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VexGo Customer — Các tính năng cần Database Transaction</title>
+
+<style>
+:root{
+  --bg:#f5f7fb; --paper:#fff; --ink:#172033; --muted:#637083; --line:#dfe5ee;
+  --primary:#2457d6; --primary-soft:#edf3ff;
+  --must:#b42318; --must-soft:#fff0ee;
+  --cond:#9a6700; --cond-soft:#fff7db;
+  --no:#316b4f; --no-soft:#eaf8f1;
+  --lock:#6b4fd3; --lock-soft:#f2efff;
+  --shadow:0 10px 28px rgba(31,45,75,.07);
+  --radius:16px; --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:1.58}
+.wrap{max-width:1260px;margin:0 auto;padding:28px 22px 80px}
+.hero{padding:36px 40px;border-radius:24px;background:linear-gradient(135deg,#163d9f,#2457d6 60%,#597fe3);color:#fff;box-shadow:var(--shadow)}
+.hero h1{margin:8px 0 10px;font-size:clamp(30px,4vw,48px);line-height:1.12}
+.hero p{margin:0;max-width:980px;color:rgba(255,255,255,.9);font-size:16px}
+.eyebrow{font-size:12px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;opacity:.9}
+.meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
+.pill{border:1px solid rgba(255,255,255,.28);background:rgba(255,255,255,.12);border-radius:999px;padding:6px 10px;font-size:12px}
+nav{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0 0}
+nav a{color:var(--ink);text-decoration:none;border:1px solid var(--line);background:var(--paper);border-radius:999px;padding:7px 11px;font-size:13px}
+section{margin-top:30px}
+h2{margin:0 0 8px;font-size:27px}
+h3{margin:0 0 8px;font-size:19px}
+p{margin:6px 0}
+.muted{color:var(--muted)}
+.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+.card{background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);padding:18px;box-shadow:0 7px 20px rgba(31,45,75,.045)}
+.big{font-size:28px;font-weight:800;color:var(--primary)}
+.callout{padding:17px 19px;background:var(--primary-soft);border-left:5px solid var(--primary);border-radius:0 var(--radius) var(--radius) 0}
+.legend{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.badge{display:inline-flex;align-items:center;padding:4px 9px;border-radius:999px;font-size:12px;font-weight:800;white-space:nowrap}
+.must{background:var(--must-soft);color:var(--must)}
+.cond{background:var(--cond-soft);color:var(--cond)}
+.no{background:var(--no-soft);color:var(--no)}
+.lock{background:var(--lock-soft);color:var(--lock)}
+.table-wrap{overflow-x:auto;background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);box-shadow:0 6px 20px rgba(31,45,75,.045)}
+table{width:100%;border-collapse:collapse;min-width:1100px}
+th,td{padding:12px 13px;text-align:left;vertical-align:top;border-bottom:1px solid var(--line);font-size:13.5px}
+th{background:#f8faff;color:#3b485c;font-size:12px}
+tr:last-child td{border-bottom:0}
+code{font-family:var(--mono);background:#f1f4f9;border:1px solid #e2e7ef;padding:2px 5px;border-radius:6px;font-size:.92em}
+.mono{font-family:var(--mono);font-size:12.5px;color:#43506a}
+.detail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.detail{background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);padding:19px;box-shadow:0 7px 20px rgba(31,45,75,.04)}
+.flow{font-family:var(--mono);white-space:pre-wrap;background:#20293b;color:#ecf0f6;border-radius:14px;padding:16px;overflow:auto;font-size:12.5px}
+.warn{background:#fff8eb;border:1px solid #f0d7a4;border-radius:14px;padding:16px}
+.source{background:#20293b;color:#eaf0f8;border-radius:16px;padding:20px 22px}
+.source li{color:#cfd7e5;margin:6px 0}
+.small{font-size:12px;color:var(--muted)}
+@media(max-width:920px){
+  .grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .detail-grid{grid-template-columns:1fr}
+  .hero{padding:28px 24px}
+}
+@media(max-width:580px){.grid{grid-template-columns:1fr}}
+@media print{
+  body{background:#fff}.wrap{max-width:none;padding:0}.hero,.card,.detail,.table-wrap{box-shadow:none}nav{display:none}
+}
+</style>
+
+</head>
+<body>
+<main class="wrap">
+<header class="hero">
+  <div class="eyebrow">VexGo · Customer transaction planning</div>
+  <h1>Các tính năng Customer cần Database Transaction</h1>
+  <p>
+    Tài liệu này tách riêng các luồng Customer/public của VexGo: đăng ký, đặt vé, đổi/hủy vé,
+    gửi hàng, booking kèm hành lý, khuyến mãi, thanh toán và các luồng đọc. Phân loại tập trung vào
+    transaction boundary, locking và idempotency phía backend.
+  </p>
+  <div class="meta">
+    <span class="pill">Customer/Public flows</span>
+    <span class="pill">Prisma + MySQL</span>
+    <span class="pill">Booking + Shipment + Payment</span>
+  </div>
+</header>
+
+<nav>
+  <a href="#summary">Kết luận nhanh</a>
+  <a href="#matrix">Ma trận Customer</a>
+  <a href="#flows">Transaction mẫu</a>
+  <a href="#locking">Concurrency</a>
+  <a href="#rules">Quy tắc triển khai</a>
+</nav>
+
+<section id="summary">
+<h2>Kết luận nhanh</h2>
+<div class="grid">
+  <div class="card"><div class="big">6</div><h3>Nhóm bắt buộc</h3><p class="muted">Đăng ký account+profile, booking, đổi/hủy vé, shipment standalone, booking+shipment, payment/refund.</p></div>
+  <div class="card"><div class="big">3</div><h3>Nhóm có điều kiện</h3><p class="muted">Promotion usage, review aggregate, chat multi-write.</p></div>
+  <div class="card"><div class="big">4+</div><h3>Nhóm không cần</h3><p class="muted">Search, lịch sử, invoice view, profile read, dashboard cá nhân read-only.</p></div>
+  <div class="card"><div class="big">4</div><h3>Luồng cần lock</h3><p class="muted">Ghế, shipment capacity, payment callback, promotion usage nếu có giới hạn lượt.</p></div>
+</div>
+
+<div class="callout" style="margin-top:16px">
+  <strong>Điểm quan trọng nhất:</strong> checkout chỉ được tin các lựa chọn từ frontend.
+  Backend phải tự kiểm tra ghế, giá, promotion, sức chứa, bảng cước và tổng tiền trong transaction phù hợp.
+</div>
+
+<div class="legend">
+  <span class="badge must">BẮT BUỘC</span>
+  <span class="badge cond">CÓ ĐIỀU KIỆN</span>
+  <span class="badge no">THƯỜNG KHÔNG CẦN</span>
+  <span class="badge lock">CẦN LOCK / IDEMPOTENCY</span>
+</div>
+</section>
+
+<section id="matrix">
+<h2>Ma trận các luồng Customer</h2>
+<div class="table-wrap">
+<table>
+<thead>
+<tr><th>Luồng</th><th>Mức transaction</th><th>Boundary đề xuất</th><th>Bảng/record chính</th><th>Lưu ý nghiệp vụ</th></tr>
+</thead>
+<tbody>
+<tr><td>Đăng ký khách hàng</td><td><span class="badge must">BẮT BUỘC</span></td><td>Tạo account + profile + role cùng transaction.</td><td class="mono">TaiKhoan · KhachHang · TaiKhoanVaiTro</td><td>Không để account tồn tại nhưng thiếu profile hoặc role.</td></tr>
+
+<tr><td>Đăng nhập</td><td><span class="badge cond">Có điều kiện</span></td><td>Nếu login tạo session record thì transaction ngắn; refresh rotation bắt buộc atomic.</td><td class="mono">TaiKhoan · PhienDangNhap</td><td>Login đơn giản có thể chỉ insert session; refresh token rotation nên transaction.</td></tr>
+
+<tr><td>Tìm kiếm chuyến</td><td><span class="badge no">Không cần</span></td><td>Read-only.</td><td class="mono">ChuyenXe · TuyenXe · GheChuyenXe · BangGia</td><td>Không mở transaction dài cho search.</td></tr>
+
+<tr><td>Đặt vé một chiều</td><td><span class="badge must">BẮT BUỘC</span> <span class="badge lock">LOCK ghế</span></td><td><code>DonGiaoDich + PhieuDatVe + Ve + GheChuyenXe</code>.</td><td class="mono">DonGiaoDich · PhieuDatVe · Ve · GheChuyenXe · BangGia</td><td>Backend tự xác minh giá và trạng thái ghế.</td></tr>
+
+<tr><td>Đặt vé khứ hồi</td><td><span class="badge must">BẮT BUỘC</span></td><td>Tất cả mutation thuộc checkout phải theo transaction model đã chốt.</td><td class="mono">DonGiaoDich · PhieuDatVe · Ve · GheChuyenXe</td><td>Cần thiết kế rõ cách đại diện nhiều leg trước khi implementation hoàn chỉnh.</td></tr>
+
+<tr><td>Đổi ghế / đổi vé</td><td><span class="badge must">BẮT BUỘC</span> <span class="badge lock">LOCK ghế</span></td><td>Release ghế cũ + claim ghế mới + update vé.</td><td class="mono">Ve · GheChuyenXe · DonGiaoDich</td><td>Không được release ghế cũ rồi fail khi claim ghế mới mà không rollback.</td></tr>
+
+<tr><td>Hủy vé</td><td><span class="badge must">BẮT BUỘC</span></td><td>Update trạng thái vé + ghế + giao dịch + refund/payment nếu có.</td><td class="mono">Ve · GheChuyenXe · ThanhToan · DonGiaoDich</td><td>Rule hoàn tiền cần nằm trong một use case nhất quán.</td></tr>
+
+<tr><td>Gửi hàng riêng</td><td><span class="badge must">BẮT BUỘC</span> <span class="badge lock">LOCK chuyến</span></td><td><code>DonGiaoDich + PhieuGuiHang + HangHoa + ChiTietCuocGuiHang + history</code>.</td><td class="mono">DonGiaoDich · PhieuGuiHang · HangHoa · ChiTietCuocGuiHang · LichSuTrangThaiPhieuGuiHang · ChuyenXe</td><td>Người gửi không đi chuyến nhưng hàng vẫn phải gắn một <code>ChuyenXe</code>.</td></tr>
+
+<tr><td>Đặt vé một chiều + gửi hàng/hành lý</td><td><span class="badge must">BẮT BUỘC — OUTER TX chung</span> <span class="badge lock">LOCK ghế + chuyến</span></td><td>Booking và shipment trong cùng outer transaction.</td><td class="mono">DonGiaoDich · PhieuDatVe · Ve · PhieuGuiHang · HangHoa · ChiTietCuocGuiHang</td><td>Không mở hai transaction độc lập. Phạm vi hiện tại chỉ nên bật cho one-way.</td></tr>
+
+<tr><td>Booking khứ hồi + shipment</td><td><span class="badge no">CHƯA NÊN BẬT</span></td><td>Chưa có transaction model cuối cùng.</td><td class="mono">PhieuDatVe · Ve · PhieuGuiHang</td><td>Một <code>PhieuGuiHang</code> chỉ có một <code>chuyenXeId</code>; cần chốt leg-specific design trước.</td></tr>
+
+<tr><td>Áp mã khuyến mãi</td><td><span class="badge cond">Nằm trong checkout transaction</span></td><td>Tính discount + snapshot tổng tiền cùng checkout.</td><td class="mono">KhuyenMai · PhieuDatVe · PhieuGuiHang</td><td>Nếu có usage limit/counter thì cần lock/atomic counter.</td></tr>
+
+<tr><td>Thanh toán online</td><td><span class="badge must">BẮT BUỘC ở callback</span> <span class="badge lock">IDEMPOTENCY</span></td><td>Gateway call ngoài DB transaction; webhook mở transaction ngắn.</td><td class="mono">ThanhToan · HoaDon · DonGiaoDich</td><td>Không giữ lock DB trong lúc chờ gateway.</td></tr>
+
+<tr><td>Hoàn tiền</td><td><span class="badge must">BẮT BUỘC</span></td><td>Payment/refund record + trạng thái giao dịch + vé/shipment liên quan.</td><td class="mono">ThanhToan · DonGiaoDich · Ve · PhieuGuiHang</td><td>Refund API ngoài hệ thống vẫn ở ngoài DB transaction; callback/confirmation cập nhật DB atomically.</td></tr>
+
+<tr><td>Tra cứu vé / lịch sử / hóa đơn</td><td><span class="badge no">Không cần</span></td><td>Read-only.</td><td class="mono">Ve · PhieuDatVe · HoaDon · ThanhToan</td><td>Không mở transaction chỉ để render lịch sử.</td></tr>
+
+<tr><td>Tra cứu shipment</td><td><span class="badge no">Không cần</span></td><td>Read-only.</td><td class="mono">PhieuGuiHang · HangHoa · LichSuTrangThaiPhieuGuiHang</td><td>Chỉ đọc snapshot/history.</td></tr>
+
+<tr><td>Đánh giá / phản hồi</td><td><span class="badge no">Thường không cần</span></td><td>Insert một row phản hồi.</td><td class="mono">PhanHoi</td><td>Nếu đồng thời update aggregate rating thì chuyển thành transaction.</td></tr>
+
+<tr><td>Chat hỗ trợ</td><td><span class="badge cond">Có điều kiện</span></td><td>Một message đơn lẻ không cần; message + unread/conversation metadata thì nên transaction.</td><td class="mono">TinNhanHoTro · KhachHang</td><td>Schema hiện còn đơn giản.</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section id="flows">
+<h2>Transaction mẫu phía Customer</h2>
+<div class="detail-grid">
+<div class="detail">
+<h3>Đặt vé một chiều</h3>
+<div class="flow">BEGIN TX
+lock/claim GheChuyenXe
+validate BangGia
+create DonGiaoDich
+create PhieuDatVe
+create Ve[]
+update trạng thái ghế
+recalculate tongTien
+COMMIT</div>
+</div>
+
+<div class="detail">
+<h3>Gửi hàng riêng</h3>
+<div class="flow">BEGIN TX
+lock ChuyenXe
+validate diemGui/diemNhan
+validate capacity
+create DonGiaoDich
+create PhieuGuiHang
+create HangHoa[]
+group theo LoaiHangHoa
+find đúng 1 BangCuocGuiHang / loại
+create ChiTietCuocGuiHang[]
+create LichSuTrangThaiPhieuGuiHang
+update tongTien
+COMMIT</div>
+</div>
+
+<div class="detail">
+<h3>Đặt vé + gửi hàng cùng chuyến</h3>
+<div class="flow">BEGIN OUTER TX
+lock ghế
+lock ChuyenXe
+create DonGiaoDich
+create PhieuDatVe + Ve[]
+create PhieuGuiHang
+create HangHoa[]
+create ChiTietCuocGuiHang[]
+create history
+recalculate tongTien
+COMMIT
+
+Bất kỳ bước nào fail => rollback toàn bộ</div>
+</div>
+
+<div class="detail">
+<h3>Payment callback</h3>
+<div class="flow">CALL GATEWAY
+(outside DB transaction)
+
+WEBHOOK:
+BEGIN TX
+check idempotency
+insert/update ThanhToan
+update DonGiaoDich
+create/update HoaDon
+update booking/shipment status nếu cần
+COMMIT</div>
+</div>
+
+<div class="detail">
+<h3>Đổi ghế</h3>
+<div class="flow">BEGIN TX
+lock ghế cũ
+lock ghế mới
+verify ghế mới còn trống
+release ghế cũ
+claim ghế mới
+update Ve.gheChuyenXeId
+COMMIT</div>
+</div>
+
+<div class="detail">
+<h3>Hủy vé có hoàn tiền</h3>
+<div class="flow">CALL REFUND GATEWAY
+(outside DB transaction)
+
+CONFIRM/CALLBACK:
+BEGIN TX
+update ThanhToan/refund state
+update Ve
+release GheChuyenXe nếu rule cho phép
+update DonGiaoDich
+COMMIT</div>
+</div>
+</div>
+</section>
+
+<section id="locking">
+<h2>Concurrency quan trọng phía Customer</h2>
+<div class="table-wrap">
+<table>
+<thead><tr><th>Tài nguyên</th><th>Race condition</th><th>Khuyến nghị</th><th>Không nên làm</th></tr></thead>
+<tbody>
+<tr><td>Ghế chuyến</td><td>Hai khách cùng đặt ghế cuối.</td><td><span class="badge lock">Row lock / atomic claim</span> trên <code>GheChuyenXe</code>.</td><td>Read “TRONG” rồi cả hai cùng update.</td></tr>
+<tr><td>Sức chứa shipment</td><td>Hai khách cùng lấy slot cuối.</td><td><span class="badge lock">SELECT ... FOR UPDATE</span> trên <code>ChuyenXe</code>, rồi tính lại used capacity.</td><td>Tin remaining capacity do frontend gửi.</td></tr>
+<tr><td>Payment callback</td><td>Gateway retry nhiều lần.</td><td><span class="badge lock">Idempotency key / unique reference</span> + transaction ngắn.</td><td>Mỗi callback tạo một payment mới.</td></tr>
+<tr><td>Promotion usage</td><td>Hai checkout cùng dùng lượt cuối.</td><td>Atomic counter/usage record trong checkout transaction.</td><td>Đếm usage trước transaction rồi cho cả hai cùng pass.</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section id="rules">
+<h2>Quy tắc triển khai cho agent</h2>
+<div class="detail-grid">
+<div class="warn"><h3>Frontend không phải source of truth</h3><p>Frontend chỉ gửi lựa chọn. Backend phải tự tính fare, discount, capacity, total và snapshot áp dụng.</p></div>
+<div class="warn"><h3>Không gọi gateway trong DB transaction</h3><p>MoMo/VNPAY/ZaloPay, email, SMS, upload file phải ở ngoài transaction đang giữ lock.</p></div>
+<div class="warn"><h3>Booking + shipment phải dùng cùng outer transaction</h3><p>Helper shipment nhận <code>tx</code> từ checkout service; không tự mở transaction riêng.</p></div>
+<div class="warn"><h3>Concurrency test phải chạy DB thật</h3><p>Mock repository không chứng minh được row lock hoặc race condition. Nên có integration test trên MySQL.</p></div>
+<div class="warn"><h3>Capacity và pricing là hai phép tính khác nhau</h3><p>Capacity = <code>SUM(soLuong)</code>; pricing weight = <code>SUM(khoiLuong * soLuong)</code>.</p></div>
+<div class="warn"><h3>Idempotency cho checkout/payment</h3><p>Double-click, retry mạng và webhook retry không được tạo giao dịch trùng.</p></div>
+</div>
+</section>
+
+<section class="source">
+<h2>Nguồn đối chiếu</h2>
+<ul>
+<li>Handoff shipment 002: schema, capacity, fare details và invariant same-trip.</li>
+<li>Handoff UI/backend shipment: booking một chiều kèm hành lý, Customer Web mock và yêu cầu backend all-or-nothing.</li>
+<li>Prisma schema trên <code>develop</code> cho booking, payment, shipment, session và account.</li>
+</ul>
+</section>
+</main>
+</body>
+</html>

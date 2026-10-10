@@ -335,10 +335,23 @@ export class TicketsService {
   }
 
   async lookupTicket(query: TicketLookupQueryDto) {
-    const ticket = await this.prisma.ve.findUnique({
-      where: { maVe: query.ticketCode.trim() },
+    const rawCode = query.ticketCode.trim();
+    let ticket = await this.prisma.ve.findUnique({
+      where: { maVe: rawCode },
       include: TICKET_INCLUDE,
     });
+
+    if (!ticket && typeof this.prisma.ve.findFirst === 'function') {
+      ticket = await this.prisma.ve.findFirst({
+        where: {
+          OR: [
+            { phieuDatVe: { maPhieuDatVe: rawCode } },
+            { phieuDatVe: { donGiaoDich: { maDonGiaoDich: rawCode } } },
+          ],
+        },
+        include: TICKET_INCLUDE,
+      });
+    }
 
     if (!ticket) {
       throw new NotFoundException({
@@ -363,10 +376,23 @@ export class TicketsService {
     try {
       const result = await this.prisma.$transaction(
         async (tx) => {
-          const ticket = await tx.ve.findUnique({
-            where: { maVe: dto.ticketCode.trim() },
+          const rawCode = dto.ticketCode.trim();
+          let ticket = await tx.ve.findUnique({
+            where: { maVe: rawCode },
             include: TICKET_INCLUDE,
           });
+
+          if (!ticket && typeof tx.ve.findFirst === 'function') {
+            ticket = await tx.ve.findFirst({
+              where: {
+                OR: [
+                  { phieuDatVe: { maPhieuDatVe: rawCode } },
+                  { phieuDatVe: { donGiaoDich: { maDonGiaoDich: rawCode } } },
+                ],
+              },
+              include: TICKET_INCLUDE,
+            });
+          }
 
           if (!ticket) {
             throw new NotFoundException({

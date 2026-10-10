@@ -55,6 +55,7 @@ function createService() {
     bangGia: { findMany: vi.fn(), findFirst: vi.fn() },
     gheChuyenXe: { findMany: vi.fn(), findFirst: vi.fn() },
     phieuGuiHang: { findFirst: vi.fn() },
+    hangHoa: { findMany: vi.fn() },
     tuyenXe: { findFirst: vi.fn() },
     xe: { findFirst: vi.fn() },
     $queryRaw: vi.fn().mockResolvedValue([{ xeId: 1 }]),
@@ -320,6 +321,45 @@ describe('TripsService detail', () => {
     const details36h = await service.getDetails(21);
     expect(details36h.departureTime).toBe('2026-10-15T15:00:00.000Z');
     expect(details36h.arrivalTime).toBe('2026-10-17T03:00:00.000Z'); // Next day + 12h!
+  });
+
+  it('calculates cargo capacity accurately excluding cancelled and delivered shipments', async () => {
+    const { prisma, service } = createService();
+    prisma.chuyenXe.findUnique.mockResolvedValue({
+      chuyenXeId: 21,
+      nhanGuiHang: true,
+      sucChuaXeMay: 3,
+      sucChuaHangCongKenh: 10,
+      sucChuaHangNhe: 10,
+      trangThai: 'CHUA_KHOI_HANH',
+    });
+    prisma.hangHoa.findMany.mockResolvedValue([
+      { soLuong: 1, loaiHangHoa: { nhomSucChua: 'XE_MAY' } },
+      { soLuong: 4, loaiHangHoa: { nhomSucChua: 'HANG_CONG_KENH' } },
+      { soLuong: 2, loaiHangHoa: { nhomSucChua: 'HANG_NHE' } },
+    ]);
+
+    const result = await service.getCargoCapacity(21);
+    expect(result.data.acceptsShipments).toBe(true);
+    expect(result.data.capacities.motorcycles).toEqual({ total: 3, used: 1, remaining: 2 });
+    expect(result.data.capacities.bulkyGoods).toEqual({ total: 10, used: 4, remaining: 6 });
+    expect(result.data.capacities.parcels).toEqual({ total: 10, used: 2, remaining: 8 });
+  });
+
+  it('returns acceptsShipments: false when trip does not accept cargo', async () => {
+    const { prisma, service } = createService();
+    prisma.chuyenXe.findUnique.mockResolvedValue({
+      chuyenXeId: 21,
+      nhanGuiHang: false,
+      sucChuaXeMay: 0,
+      sucChuaHangCongKenh: 0,
+      sucChuaHangNhe: 0,
+      trangThai: 'CHUA_KHOI_HANH',
+    });
+
+    const result = await service.getCargoCapacity(21);
+    expect(result.data.acceptsShipments).toBe(false);
+    expect(result.data.capacities.motorcycles.remaining).toBe(0);
   });
 });
 

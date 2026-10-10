@@ -108,6 +108,43 @@ export const tripsApi = {
     const body: { data: ApiTripSeat[] } = await response.json();
     return body.data;
   },
+
+  async getCargoCapacity(tripId: number): Promise<{
+    acceptsShipments: boolean;
+    capacities: {
+      motorcycles: { total: number; used: number; remaining: number };
+      bulkyGoods: { total: number; used: number; remaining: number };
+      parcels: { total: number; used: number; remaining: number };
+    };
+  }> {
+    const response = await fetch(`${API_BASE_URL}/trips/${tripId}/cargo-capacity`);
+    if (!response.ok)
+      throw await parseError(response, 'Không thể tải sức chứa hàng hóa');
+    const body = await response.json();
+    return body.data ?? body;
+  },
+
+  async holdSeats(tripId: number, seatNumbers: string[]): Promise<any> {
+    const response = await fetch(`${API_BASE_URL}/trips/${tripId}/seat-holds`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ seatNumbers }),
+    });
+    if (!response.ok)
+      throw await parseError(response, 'Không thể giữ ghế');
+    return response.json();
+  },
+
+  async releaseSeats(tripId: number, seatNumbers: string[]): Promise<any> {
+    const response = await fetch(`${API_BASE_URL}/trips/${tripId}/seat-holds`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ seatNumbers }),
+    });
+    if (!response.ok)
+      throw await parseError(response, 'Không thể giải phóng ghế');
+    return response.json();
+  },
 };
 
 export type ApiBusCompany = {

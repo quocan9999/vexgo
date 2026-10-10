@@ -7,23 +7,46 @@ export type PaymentDraftLeg = {
   dropoff: string;
   unitFare: number;
   subtotal: number;
+  busCompanyName?: string;
+  vehicleType?: string;
 };
 
 export type PaymentDraft = {
   id: string;
   tripType: 'one-way' | 'round-trip';
+  legs: PaymentDraftLeg[];
   passenger: {
     fullName: string;
     phoneNumber: string;
     email: string;
   };
-  legs: PaymentDraftLeg[];
   luggage?: {
     fee: number;
     weight: number;
+    items?: Array<{
+      id?: string;
+      type?: string;
+      quantity?: number;
+      weight?: number;
+      length?: number;
+      width?: number;
+      height?: number;
+      category?: string;
+      note?: string;
+      motorbikeType?: string;
+      licensePlate?: string;
+      bicycleType?: string;
+    }>;
     info?: unknown;
   };
   totalFare: number;
+  bookingId?: number;
+  bookingCode?: string;
+  orderCode?: string;
+  status?: string;
+  paymentStatus?: string;
+  paymentMethod?: string;
+  createdAt?: string;
 };
 
 export const PAYMENT_DRAFT_STORAGE_PREFIX = 'vexgo:payment-draft:';

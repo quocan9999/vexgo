@@ -81,9 +81,7 @@ export const ContactPageContent: React.FC = () => {
   };
 
   return (
-    <div className="w-full max-w-[1360px] mx-auto px-4 sm:px-6 lg:px-8 py-4 space-y-4 font-sans">
-      <Breadcrumb items={[{ label: 'Liên hệ hỗ trợ' }]} />
-
+    <div className="w-full max-w-[1360px] mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6 font-sans">
       <div className="max-w-5xl mx-auto space-y-6">
 
       <div className="text-center max-w-xl mx-auto space-y-2">

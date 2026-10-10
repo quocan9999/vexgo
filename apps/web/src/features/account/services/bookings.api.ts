@@ -121,4 +121,87 @@ export const bookingsApi = {
 
     return res.json();
   },
+
+  async createBooking(
+    payload: {
+      tripId: number;
+      seatNumbers: string[];
+      passenger: {
+        fullName: string;
+        phoneNumber: string;
+        email: string;
+      };
+      pickup?: string;
+      dropoff?: string;
+      cargoItems?: Array<{
+        name: string;
+        type?: string;
+        quantity: number;
+        weight: number;
+        length?: number;
+        width?: number;
+        height?: number;
+        category?: string;
+        note?: string;
+      }>;
+    },
+    accessToken?: string,
+  ): Promise<{ data: any }> {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (accessToken) {
+      headers.Authorization = `Bearer ${accessToken}`;
+    }
+
+    const res = await fetch(`${API_BASE_URL}/bookings`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      throw new ApiError(
+        error.message || 'Tạo đơn đặt vé thất bại',
+        res.status,
+      );
+    }
+
+    return res.json();
+  },
+
+  async getPublicBookingDetail(bookingId: number): Promise<{ data: any }> {
+    const res = await fetch(`${API_BASE_URL}/bookings/${bookingId}/detail`);
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      throw new ApiError(
+        error.message || 'Lấy thông tin đơn đặt vé thất bại',
+        res.status,
+      );
+    }
+    return res.json();
+  },
+
+  async confirmPayment(
+    bookingId: number,
+    paymentMethod: string = 'CHUYEN_KHOAN',
+  ): Promise<{ data: any }> {
+    const res = await fetch(`${API_BASE_URL}/bookings/${bookingId}/confirm-payment`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ paymentMethod }),
+    });
+
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      throw new ApiError(
+        error.message || 'Xác nhận thanh toán thất bại',
+        res.status,
+      );
+    }
+    return res.json();
+  },
 };
