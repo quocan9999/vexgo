@@ -702,8 +702,7 @@ function SendFreightContent() {
                               <span>Bộ lọc tìm kiếm</span>
                             </div>
                             {(selectedCompanyFilter !== 'all' ||
-                              selectedTimeFilter !== 'all' ||
-                              selectedPriceSort !== 'default') && (
+                              selectedTimeFilter !== 'all') && (
                               <button
                                 type="button"
                                 onClick={() => {
@@ -730,15 +729,12 @@ function SendFreightContent() {
                                 onChange={(e) => setSelectedCompanyFilter(e.target.value)}
                                 className="w-full h-10 pl-3 pr-8 rounded-xl border border-slate-200 hover:border-slate-300 focus:outline-none focus:border-[#0060c4] font-medium text-slate-800 bg-white appearance-none cursor-pointer text-xs"
                               >
-                                <option value="all">Tất cả nhà xe ({trips.length})</option>
-                                {availableCompanies.map((comp) => {
-                                  const count = trips.filter((t) => t.busCompany?.id === comp.id).length;
-                                  return (
-                                    <option key={comp.id} value={String(comp.id)}>
-                                      {comp.name} ({count} chuyến)
-                                    </option>
-                                  );
-                                })}
+                                <option value="all">Tất cả nhà xe</option>
+                                {availableCompanies.map((comp) => (
+                                  <option key={comp.id} value={String(comp.id)}>
+                                    {comp.name}
+                                  </option>
+                                ))}
                               </select>
                               <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                             </div>
@@ -761,26 +757,6 @@ function SendFreightContent() {
                                 <option value="afternoon">Chiều (12:00 – 18:00)</option>
                                 <option value="evening">Tối (18:00 – 22:00)</option>
                                 <option value="night">Đêm (22:00 – 06:00)</option>
-                              </select>
-                              <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-                            </div>
-                          </div>
-
-                          {/* 3. Dropdown Giá cước / Sắp xếp */}
-                          <div>
-                            <label className="block text-[11px] font-bold text-slate-600 mb-1.5 flex items-center gap-1">
-                              <ArrowUpDown className="w-3 h-3 text-slate-400" />
-                              <span>Sắp xếp giá cước</span>
-                            </label>
-                            <div className="relative">
-                              <select
-                                value={selectedPriceSort}
-                                onChange={(e) => setSelectedPriceSort(e.target.value)}
-                                className="w-full h-10 pl-3 pr-8 rounded-xl border border-slate-200 hover:border-slate-300 focus:outline-none focus:border-[#0060c4] font-medium text-slate-800 bg-white appearance-none cursor-pointer text-xs"
-                              >
-                                <option value="default">Mặc định</option>
-                                <option value="asc">Giá thấp → cao</option>
-                                <option value="desc">Giá cao → thấp</option>
                               </select>
                               <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                             </div>
@@ -829,24 +805,29 @@ function SendFreightContent() {
                                   >
                                     <div>
                                       <div className="flex items-start justify-between gap-2 mb-3">
-                                        <div className="flex items-center gap-2">
+                                        <div className="flex items-center gap-2 min-w-0">
                                           <div
                                             className={`w-7 h-7 rounded-lg ${badgeBg} text-white flex items-center justify-center font-black text-xs shrink-0`}
                                           >
                                             {initial}
                                           </div>
-                                          <div>
-                                            <div className="font-extrabold text-slate-900 text-sm leading-tight">
+                                          <div className="min-w-0">
+                                            <div className="font-extrabold text-slate-900 text-sm leading-tight truncate">
                                               {trip.busCompany.name}
                                             </div>
                                             <div className="flex items-center gap-1 text-[11px] text-emerald-600 font-semibold mt-0.5">
-                                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                                              Nhận hàng tại bến
+                                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>
+                                              <span className="truncate">Nhận hàng tại bến</span>
                                             </div>
                                           </div>
                                         </div>
 
-                                        <div className="shrink-0 mt-0.5">
+                                        {/* GIÁ CƯỚC VÀ NÚT CHỌN GÓC TRÊN BÊN PHẢI CARD */}
+                                        <div className="shrink-0 flex items-center gap-2">
+                                          <div className="text-right">
+                                            <span className="text-[11px] text-slate-400 mr-1 font-medium">Từ</span>
+                                            <span className="text-base font-black text-orange-600">50.000đ</span>
+                                          </div>
                                           <div
                                             className={`w-5 h-5 rounded-full flex items-center justify-center border transition-all ${
                                               isSelected
@@ -859,7 +840,7 @@ function SendFreightContent() {
                                         </div>
                                       </div>
 
-                                      <div className="mb-3">
+                                      <div>
                                         <div className="flex items-baseline gap-1.5">
                                           <span className="text-2xl font-black text-slate-900 font-mono tracking-tight">
                                             {depTime}
@@ -875,11 +856,6 @@ function SendFreightContent() {
                                           <span>Bến {origin}</span>
                                         </div>
                                       </div>
-                                    </div>
-
-                                    <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
-                                      <span className="text-slate-400">Từ</span>
-                                      <span className="font-black text-orange-600">50.000đ</span>
                                     </div>
                                   </div>
                                 );
