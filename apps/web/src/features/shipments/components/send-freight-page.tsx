@@ -672,9 +672,9 @@ function SendFreightContent() {
                   <div className="lg:col-span-8 space-y-6">
                     {/* STEP 2: CHỌN NHÀ XE VẬN CHUYỂN */}
                     <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
-                      <div className="flex items-center justify-between mb-4">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
                         <div className="flex items-center gap-2.5">
-                          <div className="w-6 h-6 rounded-full bg-[#EF4444] text-white flex items-center justify-center text-xs font-bold">
+                          <div className="w-6 h-6 rounded-full bg-[#EF4444] text-white flex items-center justify-center text-xs font-bold shrink-0">
                             1
                           </div>
                           <div>
@@ -687,182 +687,184 @@ function SendFreightContent() {
                           </div>
                         </div>
 
-                        <span className="px-3 py-1 bg-blue-50 text-blue-600 font-bold text-xs rounded-full">
-                          {loadingTrips ? 'Đang tải...' : `${filteredTrips.length} lựa chọn`}
-                        </span>
-                      </div>
+                        {/* GÓC NÀY: HIỆN SỐ LỰA CHỌN VÀ SẮP XẾP GIÁ */}
+                        <div className="flex items-center gap-2.5 self-end sm:self-auto shrink-0">
+                          <span className="px-3 py-1.5 bg-blue-50 text-blue-600 font-bold text-xs rounded-full whitespace-nowrap">
+                            {loadingTrips ? 'Đang tải...' : `${filteredTrips.length} lựa chọn`}
+                          </span>
 
-                      {/* BỐ CỤC 2 CỘT: CỘT TRÁI BỘ LỌC - CỘT PHẢI DANH SÁCH XE */}
-                      <div className="flex flex-col md:flex-row gap-5 items-start">
-                        {/* CỘT TRÁI: BỘ LỌC DẠNG DROPDOWN SỔ XUỐNG */}
-                        <div className="w-full md:w-64 shrink-0 bg-slate-50/80 p-4 rounded-2xl border border-slate-200 space-y-4">
-                          <div className="flex items-center justify-between pb-2 border-b border-slate-200">
-                            <div className="flex items-center gap-1.5 text-xs font-extrabold text-slate-800 uppercase tracking-wide">
-                              <Filter className="w-3.5 h-3.5 text-slate-500" />
-                              <span>Bộ lọc tìm kiếm</span>
-                            </div>
-                            {(selectedCompanyFilter !== 'all' ||
-                              selectedTimeFilter !== 'all') && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setSelectedCompanyFilter('all');
-                                  setSelectedTimeFilter('all');
-                                  setSelectedPriceSort('default');
-                                }}
-                                className="text-[11px] text-[#0060c4] hover:underline font-semibold flex items-center gap-0.5"
-                              >
-                                <RotateCcw className="w-3 h-3" /> Đặt lại
-                              </button>
-                            )}
-                          </div>
-
-                          {/* 1. Dropdown Nhà xe */}
-                          <div>
-                            <label className="block text-[11px] font-bold text-slate-600 mb-1.5 flex items-center gap-1">
-                              <Building2 className="w-3 h-3 text-slate-400" />
-                              <span>Nhà xe vận chuyển</span>
-                            </label>
-                            <div className="relative">
-                              <select
-                                value={selectedCompanyFilter}
-                                onChange={(e) => setSelectedCompanyFilter(e.target.value)}
-                                className="w-full h-10 pl-3 pr-8 rounded-xl border border-slate-200 hover:border-slate-300 focus:outline-none focus:border-[#0060c4] font-medium text-slate-800 bg-white appearance-none cursor-pointer text-xs"
-                              >
-                                <option value="all">Tất cả nhà xe</option>
-                                {availableCompanies.map((comp) => (
-                                  <option key={comp.id} value={String(comp.id)}>
-                                    {comp.name}
-                                  </option>
-                                ))}
-                              </select>
-                              <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-                            </div>
-                          </div>
-
-                          {/* 2. Dropdown Khung giờ xuất bến */}
-                          <div>
-                            <label className="block text-[11px] font-bold text-slate-600 mb-1.5 flex items-center gap-1">
-                              <Clock className="w-3 h-3 text-slate-400" />
-                              <span>Khung giờ xuất bến</span>
-                            </label>
-                            <div className="relative">
-                              <select
-                                value={selectedTimeFilter}
-                                onChange={(e) => setSelectedTimeFilter(e.target.value)}
-                                className="w-full h-10 pl-3 pr-8 rounded-xl border border-slate-200 hover:border-slate-300 focus:outline-none focus:border-[#0060c4] font-medium text-slate-800 bg-white appearance-none cursor-pointer text-xs"
-                              >
-                                <option value="all">Tất cả giờ xuất bến</option>
-                                <option value="morning">Sáng (06:00 – 12:00)</option>
-                                <option value="afternoon">Chiều (12:00 – 18:00)</option>
-                                <option value="evening">Tối (18:00 – 22:00)</option>
-                                <option value="night">Đêm (22:00 – 06:00)</option>
-                              </select>
-                              <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-                            </div>
+                          <div className="relative">
+                            <select
+                              value={selectedPriceSort}
+                              onChange={(e) => setSelectedPriceSort(e.target.value)}
+                              className="h-8 pl-3 pr-7 rounded-xl border border-slate-200 hover:border-slate-300 focus:outline-none focus:border-[#0060c4] font-medium text-slate-700 bg-white appearance-none cursor-pointer text-xs"
+                            >
+                              <option value="default">Sắp xếp: Mặc định</option>
+                              <option value="asc">Giá cước: Thấp → cao</option>
+                              <option value="desc">Giá cước: Cao → thấp</option>
+                            </select>
+                            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
                           </div>
                         </div>
+                      </div>
 
-                        {/* CỘT PHẢI: HIỂN THỊ THÔNG TIN CHUYẾN XE */}
-                        <div className="flex-1 w-full">
-                          {loadingTrips ? (
-                            <div className="p-8 text-center text-slate-400 text-sm bg-slate-50 rounded-xl">
-                              Đang tải danh sách nhà xe nhận hàng...
-                            </div>
-                          ) : filteredTrips.length === 0 ? (
-                            <div className="p-6 text-center text-slate-500 text-sm bg-amber-50 rounded-xl border border-amber-200">
-                              {trips.length > 0
-                                ? 'Không có chuyến xe nào phù hợp với bộ lọc đã chọn.'
-                                : 'Chưa có nhà xe nào nhận tuyến này vào ngày đã chọn. Vui lòng chọn ngày khác (ví dụ: ngày 20/10/2026).'}
-                            </div>
-                          ) : (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                              {filteredTrips.map((trip) => {
-                                const isSelected = selectedTripId === trip.id;
-                                const depTime = formatIsoTime(trip.departureTime);
+                      {/* BỘ LỌC HÀNG NGANG: NHÀ XE & GIỜ CHẠY */}
+                      <div className="flex flex-wrap items-center gap-3 mb-5 p-3.5 bg-slate-50/70 rounded-2xl border border-slate-200/80">
+                        <div className="flex items-center gap-1.5 text-xs font-bold text-slate-500 uppercase tracking-wide mr-1 shrink-0">
+                          <Filter className="w-3.5 h-3.5 text-slate-400" />
+                          <span>Lọc:</span>
+                        </div>
 
-                                // Avatar initials and color
-                                const nameUpper = trip.busCompany.name.toUpperCase();
-                                const initial = nameUpper.charAt(0) || 'V';
-                                const badgeBg =
-                                  initial === 'P'
-                                    ? 'bg-orange-600'
-                                    : initial === 'H'
-                                      ? 'bg-emerald-600'
-                                      : initial === 'T'
-                                        ? 'bg-blue-600'
-                                        : 'bg-purple-600';
+                        {/* 1. Dropdown Nhà xe */}
+                        <div className="relative min-w-[160px] sm:w-48">
+                          <select
+                            value={selectedCompanyFilter}
+                            onChange={(e) => setSelectedCompanyFilter(e.target.value)}
+                            className="w-full h-9 pl-3 pr-7 rounded-xl border border-slate-200 hover:border-slate-300 focus:outline-none focus:border-[#0060c4] font-medium text-slate-800 bg-white appearance-none cursor-pointer text-xs"
+                          >
+                            <option value="all">Tất cả nhà xe</option>
+                            {availableCompanies.map((comp) => (
+                              <option key={comp.id} value={String(comp.id)}>
+                                {comp.name}
+                              </option>
+                            ))}
+                          </select>
+                          <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+                        </div>
 
-                                return (
-                                  <div
-                                    key={trip.id}
-                                    onClick={() => setSelectedTripId(trip.id)}
-                                    className={`p-4 rounded-2xl border-2 cursor-pointer transition-all relative flex flex-col justify-between ${
-                                      isSelected
-                                        ? 'border-[#3B82F6] bg-white ring-2 ring-blue-100 shadow-sm'
-                                        : 'border-slate-200 bg-white hover:border-slate-300'
-                                    }`}
-                                  >
-                                    <div>
-                                      <div className="flex items-start justify-between gap-2 mb-3">
-                                        <div className="flex items-center gap-2 min-w-0">
-                                          <div
-                                            className={`w-7 h-7 rounded-lg ${badgeBg} text-white flex items-center justify-center font-black text-xs shrink-0`}
-                                          >
-                                            {initial}
-                                          </div>
-                                          <div className="min-w-0">
-                                            <div className="font-extrabold text-slate-900 text-sm leading-tight truncate">
-                                              {trip.busCompany.name}
-                                            </div>
-                                            <div className="flex items-center gap-1 text-[11px] text-emerald-600 font-semibold mt-0.5">
-                                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>
-                                              <span className="truncate">Nhận hàng tại bến</span>
-                                            </div>
-                                          </div>
+                        {/* 2. Dropdown Khung giờ xuất bến */}
+                        <div className="relative min-w-[170px] sm:w-52">
+                          <select
+                            value={selectedTimeFilter}
+                            onChange={(e) => setSelectedTimeFilter(e.target.value)}
+                            className="w-full h-9 pl-3 pr-7 rounded-xl border border-slate-200 hover:border-slate-300 focus:outline-none focus:border-[#0060c4] font-medium text-slate-800 bg-white appearance-none cursor-pointer text-xs"
+                          >
+                            <option value="all">Tất cả giờ xuất bến</option>
+                            <option value="morning">Sáng (06:00 – 12:00)</option>
+                            <option value="afternoon">Chiều (12:00 – 18:00)</option>
+                            <option value="evening">Tối (18:00 – 22:00)</option>
+                            <option value="night">Đêm (22:00 – 06:00)</option>
+                          </select>
+                          <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+                        </div>
+
+                        {/* Nút đặt lại */}
+                        {(selectedCompanyFilter !== 'all' ||
+                          selectedTimeFilter !== 'all' ||
+                          selectedPriceSort !== 'default') && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedCompanyFilter('all');
+                              setSelectedTimeFilter('all');
+                              setSelectedPriceSort('default');
+                            }}
+                            className="text-xs text-[#0060c4] hover:underline font-semibold flex items-center gap-1 ml-auto"
+                          >
+                            <RotateCcw className="w-3 h-3" /> Đặt lại
+                          </button>
+                        )}
+                      </div>
+
+                      {/* DANH SÁCH THẺ XE HÀNG NGANG / GRID */}
+                      <div>
+                        {loadingTrips ? (
+                          <div className="p-8 text-center text-slate-400 text-sm bg-slate-50 rounded-xl">
+                            Đang tải danh sách nhà xe nhận hàng...
+                          </div>
+                        ) : filteredTrips.length === 0 ? (
+                          <div className="p-6 text-center text-slate-500 text-sm bg-amber-50 rounded-xl border border-amber-200">
+                            {trips.length > 0
+                              ? 'Không có chuyến xe nào phù hợp với bộ lọc đã chọn.'
+                              : 'Chưa có nhà xe nào nhận tuyến này vào ngày đã chọn. Vui lòng chọn ngày khác (ví dụ: ngày 20/10/2026).'}
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-3.5">
+                            {filteredTrips.map((trip) => {
+                              const isSelected = selectedTripId === trip.id;
+                              const depTime = formatIsoTime(trip.departureTime);
+
+                              // Avatar initials and color
+                              const nameUpper = trip.busCompany.name.toUpperCase();
+                              const initial = nameUpper.charAt(0) || 'V';
+                              const badgeBg =
+                                initial === 'P'
+                                  ? 'bg-orange-600'
+                                  : initial === 'H'
+                                    ? 'bg-emerald-600'
+                                    : initial === 'T'
+                                      ? 'bg-blue-600'
+                                      : 'bg-purple-600';
+
+                              return (
+                                <div
+                                  key={trip.id}
+                                  onClick={() => setSelectedTripId(trip.id)}
+                                  className={`p-4 rounded-2xl border-2 cursor-pointer transition-all relative flex flex-col justify-between ${
+                                    isSelected
+                                      ? 'border-[#3B82F6] bg-white ring-2 ring-blue-100 shadow-sm'
+                                      : 'border-slate-200 bg-white hover:border-slate-300'
+                                  }`}
+                                >
+                                  <div>
+                                    <div className="flex items-start justify-between gap-2 mb-3">
+                                      <div className="flex items-center gap-2 min-w-0">
+                                        <div
+                                          className={`w-7 h-7 rounded-lg ${badgeBg} text-white flex items-center justify-center font-black text-xs shrink-0`}
+                                        >
+                                          {initial}
                                         </div>
-
-                                        {/* GIÁ CƯỚC VÀ NÚT CHỌN GÓC TRÊN BÊN PHẢI CARD */}
-                                        <div className="shrink-0 flex items-center gap-2">
-                                          <div className="text-right">
-                                            <span className="text-[11px] text-slate-400 mr-1 font-medium">Từ</span>
-                                            <span className="text-base font-black text-orange-600">50.000đ</span>
+                                        <div className="min-w-0">
+                                          <div className="font-extrabold text-slate-900 text-sm leading-tight truncate">
+                                            {trip.busCompany.name}
                                           </div>
-                                          <div
-                                            className={`w-5 h-5 rounded-full flex items-center justify-center border transition-all ${
-                                              isSelected
-                                                ? 'bg-orange-500 border-orange-500 text-white'
-                                                : 'border-slate-300 bg-white'
-                                            }`}
-                                          >
-                                            {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                                          <div className="flex items-center gap-1 text-[11px] text-emerald-600 font-semibold mt-0.5">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>
+                                            <span className="truncate">Nhận hàng tại bến</span>
                                           </div>
                                         </div>
                                       </div>
 
-                                      <div>
-                                        <div className="flex items-baseline gap-1.5">
-                                          <span className="text-2xl font-black text-slate-900 font-mono tracking-tight">
-                                            {depTime}
-                                          </span>
-                                          <span className="text-xs text-slate-400 font-normal">xuất bến</span>
-                                        </div>
-                                        <div className="text-[11px] text-slate-500 mt-1 flex items-center gap-1.5">
-                                          <Clock className="w-3.5 h-3.5 text-slate-400" />
-                                          <span>Trong ngày (24h – 48h)</span>
-                                        </div>
-                                        <div className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-1.5">
-                                          <MapPin className="w-3.5 h-3.5 text-rose-400" />
-                                          <span>Bến {origin}</span>
+                                      <div className="shrink-0 mt-0.5">
+                                        <div
+                                          className={`w-5 h-5 rounded-full flex items-center justify-center border transition-all ${
+                                            isSelected
+                                              ? 'bg-orange-500 border-orange-500 text-white'
+                                              : 'border-slate-300 bg-white'
+                                          }`}
+                                        >
+                                          {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
                                         </div>
                                       </div>
                                     </div>
+
+                                    <div className="mb-3">
+                                      <div className="flex items-baseline gap-1.5">
+                                        <span className="text-2xl font-black text-slate-900 font-mono tracking-tight">
+                                          {depTime}
+                                        </span>
+                                        <span className="text-xs text-slate-400 font-normal">xuất bến</span>
+                                      </div>
+                                      <div className="text-[11px] text-slate-500 mt-1 flex items-center gap-1.5">
+                                        <Clock className="w-3.5 h-3.5 text-slate-400" />
+                                        <span>Trong ngày (24h – 48h)</span>
+                                      </div>
+                                      <div className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-1.5">
+                                        <MapPin className="w-3.5 h-3.5 text-rose-400" />
+                                        <span>Bến {origin}</span>
+                                      </div>
+                                    </div>
                                   </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
+
+                                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
+                                    <span className="text-slate-400">Từ</span>
+                                    <span className="font-black text-orange-600">50.000đ</span>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     </div>
 
