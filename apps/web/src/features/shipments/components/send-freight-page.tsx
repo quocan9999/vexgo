@@ -61,6 +61,8 @@ function SendFreightContent() {
   const [loadingTrips, setLoadingTrips] = useState<boolean>(false);
   const [selectedTripId, setSelectedTripId] = useState<number | null>(null);
   const [selectedCompanyFilter, setSelectedCompanyFilter] = useState<string>('all');
+  const [selectedTimeFilter, setSelectedTimeFilter] = useState<string>('all'); // 'all' | 'morning' | 'afternoon' | 'evening' | 'night'
+  const [selectedPriceSort, setSelectedPriceSort] = useState<string>('default'); // 'default' | 'asc' | 'desc'
 
   const handleSwapLocations = () => {
     setOrigin(destination);
@@ -78,11 +80,41 @@ function SendFreightContent() {
     return Array.from(map.values());
   }, [trips]);
 
-  // Danh sách chuyến xe sau khi áp dụng bộ lọc nhà xe
+  // Danh sách chuyến xe sau khi áp dụng bộ lọc nhà xe, khung giờ và sắp xếp giá
   const filteredTrips = useMemo(() => {
-    if (selectedCompanyFilter === 'all') return trips;
-    return trips.filter((t) => String(t.busCompany?.id) === selectedCompanyFilter);
-  }, [trips, selectedCompanyFilter]);
+    let result = [...trips];
+
+    // 1. Lọc theo nhà xe
+    if (selectedCompanyFilter !== 'all') {
+      result = result.filter((t) => String(t.busCompany?.id) === selectedCompanyFilter);
+    }
+
+    // 2. Lọc theo khung giờ khởi hành
+    if (selectedTimeFilter !== 'all') {
+      result = result.filter((t) => {
+        try {
+          const d = new Date(t.departureTime);
+          const hour = d.getHours();
+          if (selectedTimeFilter === 'morning') return hour >= 6 && hour < 12; // Sáng 06:00 - 12:00
+          if (selectedTimeFilter === 'afternoon') return hour >= 12 && hour < 18; // Chiều 12:00 - 18:00
+          if (selectedTimeFilter === 'evening') return hour >= 18 && hour < 22; // Tối 18:00 - 22:00
+          if (selectedTimeFilter === 'night') return hour >= 22 || hour < 6; // Đêm 22:00 - 06:00
+          return true;
+        } catch {
+          return true;
+        }
+      });
+    }
+
+    // 3. Sắp xếp theo giá cước (dựa trên price của chuyến nếu có hoặc mặc định)
+    if (selectedPriceSort === 'asc') {
+      result.sort((a, b) => (Number(a.price) || 50000) - (Number(b.price) || 50000));
+    } else if (selectedPriceSort === 'desc') {
+      result.sort((a, b) => (Number(b.price) || 50000) - (Number(a.price) || 50000));
+    }
+
+    return result;
+  }, [trips, selectedCompanyFilter, selectedTimeFilter, selectedPriceSort]);
 
   // Người gửi
   const [senderName, setSenderName] = useState<string>('');
@@ -657,41 +689,110 @@ function SendFreightContent() {
                         </span>
                       </div>
 
-                      {/* Bộ lọc nhà xe */}
-                      {availableCompanies.length > 1 && (
-                        <div className="flex flex-wrap items-center gap-2 mb-4 pb-3 border-b border-slate-100">
-                          <span className="text-xs font-bold text-slate-500 mr-1">Lọc nhà xe:</span>
-                          <button
-                            type="button"
-                            onClick={() => setSelectedCompanyFilter('all')}
-                            className={`px-3 py-1 rounded-full text-xs font-bold transition-all border ${
-                              selectedCompanyFilter === 'all'
-                                ? 'bg-slate-900 text-white border-slate-900 shadow-2xs'
-                                : 'bg-slate-50 text-slate-600 border-slate-200 hover:border-slate-300'
-                            }`}
-                          >
-                            Tất cả ({trips.length})
-                          </button>
-                          {availableCompanies.map((comp) => {
-                            const count = trips.filter((t) => t.busCompany?.id === comp.id).length;
-                            const isSelected = selectedCompanyFilter === String(comp.id);
-                            return (
+                      {/* Bộ lọc: Nhà xe, Khung giờ & Sắp xếp Giá */}
+                      <div className="space-y-2.5 mb-5 pb-4 border-b border-slate-100">
+                        {/* 1. Lọc Nhà xe */}
+                        {availableCompanies.length > 1 && (
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-[11px] font-extrabold text-slate-400 uppercase w-20 shrink-0">
+                              Nhà xe:
+                            </span>
+                            <div className="flex flex-wrap items-center gap-1.5 flex-1">
                               <button
                                 type="button"
-                                key={comp.id}
-                                onClick={() => setSelectedCompanyFilter(String(comp.id))}
+                                onClick={() => setSelectedCompanyFilter('all')}
                                 className={`px-3 py-1 rounded-full text-xs font-bold transition-all border ${
-                                  isSelected
-                                    ? 'bg-[#0060c4] text-white border-[#0060c4] shadow-2xs'
+                                  selectedCompanyFilter === 'all'
+                                    ? 'bg-slate-900 text-white border-slate-900 shadow-2xs'
                                     : 'bg-slate-50 text-slate-600 border-slate-200 hover:border-slate-300'
                                 }`}
                               >
-                                {comp.name} ({count})
+                                Tất cả ({trips.length})
                               </button>
-                            );
-                          })}
+                              {availableCompanies.map((comp) => {
+                                const count = trips.filter((t) => t.busCompany?.id === comp.id).length;
+                                const isSelected = selectedCompanyFilter === String(comp.id);
+                                return (
+                                  <button
+                                    type="button"
+                                    key={comp.id}
+                                    onClick={() => setSelectedCompanyFilter(String(comp.id))}
+                                    className={`px-3 py-1 rounded-full text-xs font-bold transition-all border ${
+                                      isSelected
+                                        ? 'bg-[#0060c4] text-white border-[#0060c4] shadow-2xs'
+                                        : 'bg-slate-50 text-slate-600 border-slate-200 hover:border-slate-300'
+                                    }`}
+                                  >
+                                    {comp.name} ({count})
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* 2. Lọc Khung giờ xuất bến */}
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-[11px] font-extrabold text-slate-400 uppercase w-20 shrink-0">
+                            Giờ chạy:
+                          </span>
+                          <div className="flex flex-wrap items-center gap-1.5 flex-1">
+                            {[
+                              { id: 'all', label: 'Tất cả giờ' },
+                              { id: 'morning', label: 'Sáng (06:00 - 12:00)' },
+                              { id: 'afternoon', label: 'Chiều (12:00 - 18:00)' },
+                              { id: 'evening', label: 'Tối (18:00 - 22:00)' },
+                              { id: 'night', label: 'Đêm (22:00 - 06:00)' },
+                            ].map((slot) => {
+                              const isSelected = selectedTimeFilter === slot.id;
+                              return (
+                                <button
+                                  type="button"
+                                  key={slot.id}
+                                  onClick={() => setSelectedTimeFilter(slot.id)}
+                                  className={`px-3 py-1 rounded-full text-xs font-bold transition-all border ${
+                                    isSelected
+                                      ? 'bg-amber-600 text-white border-amber-600 shadow-2xs'
+                                      : 'bg-slate-50 text-slate-600 border-slate-200 hover:border-slate-300'
+                                  }`}
+                                >
+                                  {slot.label}
+                                </button>
+                              );
+                            })}
+                          </div>
                         </div>
-                      )}
+
+                        {/* 3. Lọc & Sắp xếp Giá tiền */}
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-[11px] font-extrabold text-slate-400 uppercase w-20 shrink-0">
+                            Giá cước:
+                          </span>
+                          <div className="flex flex-wrap items-center gap-1.5 flex-1">
+                            {[
+                              { id: 'default', label: 'Mặc định' },
+                              { id: 'asc', label: 'Giá thấp → cao' },
+                              { id: 'desc', label: 'Giá cao → thấp' },
+                            ].map((sortOption) => {
+                              const isSelected = selectedPriceSort === sortOption.id;
+                              return (
+                                <button
+                                  type="button"
+                                  key={sortOption.id}
+                                  onClick={() => setSelectedPriceSort(sortOption.id)}
+                                  className={`px-3 py-1 rounded-full text-xs font-bold transition-all border ${
+                                    isSelected
+                                      ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs'
+                                      : 'bg-slate-50 text-slate-600 border-slate-200 hover:border-slate-300'
+                                  }`}
+                                >
+                                  {sortOption.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
 
                       {loadingTrips ? (
                         <div className="p-8 text-center text-slate-400 text-sm bg-slate-50 rounded-xl">
