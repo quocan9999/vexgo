@@ -43,6 +43,13 @@ export class ShipmentsController {
     return { data };
   }
 
+  @Get('categories')
+  @OptionalAuth()
+  async getCargoCategories() {
+    const data = await this.shipmentsService.getCargoCategories();
+    return { data };
+  }
+
   @Get(':id')
   @OptionalAuth()
   async getShipmentDetail(

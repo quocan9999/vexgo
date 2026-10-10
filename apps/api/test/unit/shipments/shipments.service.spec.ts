@@ -251,4 +251,41 @@ describe('ShipmentsService', () => {
       ).rejects.toThrow(NotFoundException);
     });
   });
+
+  describe('getCargoCategories', () => {
+    it('returns list of active cargo categories with mapped fields', async () => {
+      prismaMock.loaiHangHoa.findMany.mockResolvedValue([
+        {
+          loaiHangHoaId: 1,
+          tenLoai: 'BƯU PHẨM',
+          moTa: 'Bưu phẩm đóng gói thông thường',
+          nhomSucChua: 'HANG_NHE',
+          trangThai: 'HOAT_DONG',
+        },
+        {
+          loaiHangHoaId: 2,
+          tenLoai: 'THỰC PHẨM',
+          moTa: null,
+          nhomSucChua: 'HANG_NHE',
+          trangThai: 'HOAT_DONG',
+        },
+      ]);
+
+      const result = await service.getCargoCategories();
+
+      expect(prismaMock.loaiHangHoa.findMany).toHaveBeenCalledWith({
+        where: { trangThai: 'HOAT_DONG' },
+        orderBy: { loaiHangHoaId: 'asc' },
+      });
+      expect(result).toHaveLength(2);
+      expect(result[0]).toEqual({
+        categoryId: 1,
+        name: 'BƯU PHẨM',
+        description: 'Bưu phẩm đóng gói thông thường',
+        capacityGroup: 'HANG_NHE',
+      });
+      expect(result[1].description).toBe('');
+    });
+  });
 });
+

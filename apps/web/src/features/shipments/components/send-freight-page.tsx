@@ -66,6 +66,9 @@ function SendFreightContent() {
   const [receiverPhone, setReceiverPhone] = useState<string>('');
 
   // Kiện hàng
+  const [cargoCategories, setCargoCategories] = useState<
+    Array<{ categoryId: number; name: string; description: string }>
+  >([]);
   const [cargoName, setCargoName] = useState<string>('Hàng bưu phẩm tiêu chuẩn');
   const [cargoCategory, setCargoCategory] = useState<string>('Bưu phẩm');
   const [quantity, setQuantity] = useState<number>(1);
@@ -76,6 +79,27 @@ function SendFreightContent() {
   const [note, setNote] = useState<string>('');
   const [isFragile, setIsFragile] = useState<boolean>(false);
   const [isValuable, setIsValuable] = useState<boolean>(false);
+
+  // Tải danh mục loại hàng hóa từ API
+  useEffect(() => {
+    let isMounted = true;
+    shipmentsApi
+      .getCargoCategories()
+      .then((res) => {
+        if (isMounted && res.data && res.data.length > 0) {
+          setCargoCategories(res.data);
+          if (!cargoCategory) {
+            setCargoCategory(res.data[0].name);
+          }
+        }
+      })
+      .catch(() => {
+        // Fallback giữ nguyên CARGO_CATEGORIES mặc định nếu có lỗi
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // Trạng thái xử lý tạo đơn
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
@@ -755,11 +779,17 @@ function SendFreightContent() {
                             onChange={(e) => setCargoCategory(e.target.value)}
                             className="w-full h-11 px-3 rounded-xl border border-slate-300 focus:outline-none focus:border-brand font-semibold text-slate-800 bg-white"
                           >
-                            {CARGO_CATEGORIES.map((cat) => (
-                              <option key={cat} value={cat}>
-                                {cat}
-                              </option>
-                            ))}
+                            {cargoCategories.length > 0
+                              ? cargoCategories.map((cat) => (
+                                  <option key={cat.categoryId} value={cat.name}>
+                                    {cat.name}
+                                  </option>
+                                ))
+                              : CARGO_CATEGORIES.map((cat) => (
+                                  <option key={cat} value={cat}>
+                                    {cat}
+                                  </option>
+                                ))}
                           </select>
                         </div>
                       </div>

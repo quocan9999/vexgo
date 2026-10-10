@@ -774,4 +774,19 @@ export class ShipmentsService {
       },
     };
   }
+
+  async getCargoCategories() {
+    const list = await this.prisma.loaiHangHoa.findMany({
+      where: { trangThai: 'HOAT_DONG' },
+      orderBy: { loaiHangHoaId: 'asc' },
+    });
+
+    return list.map((item) => ({
+      categoryId: item.loaiHangHoaId,
+      name: item.tenLoai,
+      description: item.moTa ?? '',
+      capacityGroup: item.nhomSucChua,
+    }));
+  }
 }
+

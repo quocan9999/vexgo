@@ -186,4 +186,24 @@ export const shipmentsApi = {
 
     return res.json();
   },
+
+  async getCargoCategories(): Promise<{
+    data: Array<{
+      categoryId: number;
+      name: string;
+      description: string;
+      capacityGroup: string;
+    }>;
+  }> {
+    const res = await fetch(`${API_BASE_URL}/shipments/categories`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new ApiError(
+        err.message || 'Không thể tải danh mục loại hàng hóa.',
+        res.status,
+      );
+    }
+    return res.json();
+  },
 };
+
