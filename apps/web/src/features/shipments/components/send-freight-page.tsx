@@ -689,208 +689,235 @@ function SendFreightContent() {
                         </span>
                       </div>
 
-                      {/* Bộ lọc: Nhà xe, Khung giờ & Sắp xếp Giá */}
-                      <div className="space-y-2.5 mb-5 pb-4 border-b border-slate-100">
-                        {/* 1. Lọc Nhà xe */}
-                        {availableCompanies.length > 1 && (
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="text-[11px] font-extrabold text-slate-400 uppercase w-20 shrink-0">
-                              Nhà xe:
-                            </span>
-                            <div className="flex flex-wrap items-center gap-1.5 flex-1">
-                              <button
-                                type="button"
-                                onClick={() => setSelectedCompanyFilter('all')}
-                                className={`px-3 py-1 rounded-full text-xs font-bold transition-all border ${
-                                  selectedCompanyFilter === 'all'
-                                    ? 'bg-slate-900 text-white border-slate-900 shadow-2xs'
-                                    : 'bg-slate-50 text-slate-600 border-slate-200 hover:border-slate-300'
-                                }`}
-                              >
-                                Tất cả ({trips.length})
-                              </button>
-                              {availableCompanies.map((comp) => {
-                                const count = trips.filter((t) => t.busCompany?.id === comp.id).length;
-                                const isSelected = selectedCompanyFilter === String(comp.id);
+                      {/* BỐ CỤC 2 CỘT: CỘT TRÁI BỘ LỌC - CỘT PHẢI DANH SÁCH XE */}
+                      <div className="flex flex-col md:flex-row gap-5 items-start">
+                        {/* CỘT TRÁI: BỘ LỌC (NHÀ XE, GIỜ CHẠY, GIÁ TIỀN) */}
+                        <div className="w-full md:w-64 shrink-0 bg-slate-50/70 p-4 rounded-2xl border border-slate-200/80 space-y-4">
+                          {/* 1. Lọc Nhà xe */}
+                          {availableCompanies.length > 1 && (
+                            <div>
+                              <div className="text-[11px] font-extrabold text-slate-500 uppercase mb-2 flex items-center justify-between">
+                                <span>Nhà xe</span>
+                                <span className="text-[10px] text-slate-400 font-normal">
+                                  {availableCompanies.length} hãng
+                                </span>
+                              </div>
+                              <div className="flex flex-col gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedCompanyFilter('all')}
+                                  className={`w-full px-3 py-1.5 rounded-xl text-xs font-bold transition-all text-left flex items-center justify-between border ${
+                                    selectedCompanyFilter === 'all'
+                                      ? 'bg-slate-900 text-white border-slate-900 shadow-2xs'
+                                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                                  }`}
+                                >
+                                  <span>Tất cả</span>
+                                  <span
+                                    className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                                      selectedCompanyFilter === 'all'
+                                        ? 'bg-white/20 text-white'
+                                        : 'bg-slate-100 text-slate-500'
+                                    }`}
+                                  >
+                                    {trips.length}
+                                  </span>
+                                </button>
+                                {availableCompanies.map((comp) => {
+                                  const count = trips.filter((t) => t.busCompany?.id === comp.id).length;
+                                  const isSelected = selectedCompanyFilter === String(comp.id);
+                                  return (
+                                    <button
+                                      type="button"
+                                      key={comp.id}
+                                      onClick={() => setSelectedCompanyFilter(String(comp.id))}
+                                      className={`w-full px-3 py-1.5 rounded-xl text-xs font-bold transition-all text-left flex items-center justify-between border ${
+                                        isSelected
+                                          ? 'bg-[#0060c4] text-white border-[#0060c4] shadow-2xs'
+                                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                                      }`}
+                                    >
+                                      <span className="truncate">{comp.name}</span>
+                                      <span
+                                        className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                                          isSelected
+                                            ? 'bg-white/20 text-white'
+                                            : 'bg-slate-100 text-slate-500'
+                                        }`}
+                                      >
+                                        {count}
+                                      </span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* 2. Lọc Khung giờ xuất bến */}
+                          <div className={availableCompanies.length > 1 ? 'pt-3 border-t border-slate-200/60' : ''}>
+                            <div className="text-[11px] font-extrabold text-slate-500 uppercase mb-2">
+                              Giờ chạy
+                            </div>
+                            <div className="flex flex-col gap-1.5">
+                              {[
+                                { id: 'all', label: 'Tất cả giờ' },
+                                { id: 'morning', label: 'Sáng (06:00 – 12:00)' },
+                                { id: 'afternoon', label: 'Chiều (12:00 – 18:00)' },
+                                { id: 'evening', label: 'Tối (18:00 – 22:00)' },
+                                { id: 'night', label: 'Đêm (22:00 – 06:00)' },
+                              ].map((slot) => {
+                                const isSelected = selectedTimeFilter === slot.id;
                                 return (
                                   <button
                                     type="button"
-                                    key={comp.id}
-                                    onClick={() => setSelectedCompanyFilter(String(comp.id))}
-                                    className={`px-3 py-1 rounded-full text-xs font-bold transition-all border ${
+                                    key={slot.id}
+                                    onClick={() => setSelectedTimeFilter(slot.id)}
+                                    className={`w-full px-3 py-1.5 rounded-xl text-xs font-bold transition-all text-left border ${
                                       isSelected
-                                        ? 'bg-[#0060c4] text-white border-[#0060c4] shadow-2xs'
-                                        : 'bg-slate-50 text-slate-600 border-slate-200 hover:border-slate-300'
+                                        ? 'bg-amber-600 text-white border-amber-600 shadow-2xs'
+                                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
                                     }`}
                                   >
-                                    {comp.name} ({count})
+                                    {slot.label}
                                   </button>
                                 );
                               })}
                             </div>
                           </div>
-                        )}
 
-                        {/* 2. Lọc Khung giờ xuất bến */}
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-[11px] font-extrabold text-slate-400 uppercase w-20 shrink-0">
-                            Giờ chạy:
-                          </span>
-                          <div className="flex flex-wrap items-center gap-1.5 flex-1">
-                            {[
-                              { id: 'all', label: 'Tất cả giờ' },
-                              { id: 'morning', label: 'Sáng (06:00 - 12:00)' },
-                              { id: 'afternoon', label: 'Chiều (12:00 - 18:00)' },
-                              { id: 'evening', label: 'Tối (18:00 - 22:00)' },
-                              { id: 'night', label: 'Đêm (22:00 - 06:00)' },
-                            ].map((slot) => {
-                              const isSelected = selectedTimeFilter === slot.id;
-                              return (
-                                <button
-                                  type="button"
-                                  key={slot.id}
-                                  onClick={() => setSelectedTimeFilter(slot.id)}
-                                  className={`px-3 py-1 rounded-full text-xs font-bold transition-all border ${
-                                    isSelected
-                                      ? 'bg-amber-600 text-white border-amber-600 shadow-2xs'
-                                      : 'bg-slate-50 text-slate-600 border-slate-200 hover:border-slate-300'
-                                  }`}
-                                >
-                                  {slot.label}
-                                </button>
-                              );
-                            })}
+                          {/* 3. Lọc & Sắp xếp Giá tiền */}
+                          <div className="pt-3 border-t border-slate-200/60">
+                            <div className="text-[11px] font-extrabold text-slate-500 uppercase mb-2">
+                              Giá cước
+                            </div>
+                            <div className="flex flex-col gap-1.5">
+                              {[
+                                { id: 'default', label: 'Mặc định' },
+                                { id: 'asc', label: 'Giá thấp → cao' },
+                                { id: 'desc', label: 'Giá cao → thấp' },
+                              ].map((sortOption) => {
+                                const isSelected = selectedPriceSort === sortOption.id;
+                                return (
+                                  <button
+                                    type="button"
+                                    key={sortOption.id}
+                                    onClick={() => setSelectedPriceSort(sortOption.id)}
+                                    className={`w-full px-3 py-1.5 rounded-xl text-xs font-bold transition-all text-left border ${
+                                      isSelected
+                                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs'
+                                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                                    }`}
+                                  >
+                                    {sortOption.label}
+                                  </button>
+                                );
+                              })}
+                            </div>
                           </div>
                         </div>
 
-                        {/* 3. Lọc & Sắp xếp Giá tiền */}
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-[11px] font-extrabold text-slate-400 uppercase w-20 shrink-0">
-                            Giá cước:
-                          </span>
-                          <div className="flex flex-wrap items-center gap-1.5 flex-1">
-                            {[
-                              { id: 'default', label: 'Mặc định' },
-                              { id: 'asc', label: 'Giá thấp → cao' },
-                              { id: 'desc', label: 'Giá cao → thấp' },
-                            ].map((sortOption) => {
-                              const isSelected = selectedPriceSort === sortOption.id;
-                              return (
-                                <button
-                                  type="button"
-                                  key={sortOption.id}
-                                  onClick={() => setSelectedPriceSort(sortOption.id)}
-                                  className={`px-3 py-1 rounded-full text-xs font-bold transition-all border ${
-                                    isSelected
-                                      ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs'
-                                      : 'bg-slate-50 text-slate-600 border-slate-200 hover:border-slate-300'
-                                  }`}
-                                >
-                                  {sortOption.label}
-                                </button>
-                              );
-                            })}
-                          </div>
+                        {/* CỘT PHẢI: HIỂN THỊ THÔNG TIN CHUYẾN XE */}
+                        <div className="flex-1 w-full">
+                          {loadingTrips ? (
+                            <div className="p-8 text-center text-slate-400 text-sm bg-slate-50 rounded-xl">
+                              Đang tải danh sách nhà xe nhận hàng...
+                            </div>
+                          ) : filteredTrips.length === 0 ? (
+                            <div className="p-6 text-center text-slate-500 text-sm bg-amber-50 rounded-xl border border-amber-200">
+                              {trips.length > 0
+                                ? 'Không có chuyến xe nào phù hợp với bộ lọc đã chọn.'
+                                : 'Chưa có nhà xe nào nhận tuyến này vào ngày đã chọn. Vui lòng chọn ngày khác (ví dụ: ngày 20/10/2026).'}
+                            </div>
+                          ) : (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                              {filteredTrips.map((trip) => {
+                                const isSelected = selectedTripId === trip.id;
+                                const depTime = formatIsoTime(trip.departureTime);
+
+                                // Avatar initials and color
+                                const nameUpper = trip.busCompany.name.toUpperCase();
+                                const initial = nameUpper.charAt(0) || 'V';
+                                const badgeBg =
+                                  initial === 'P'
+                                    ? 'bg-orange-600'
+                                    : initial === 'H'
+                                      ? 'bg-emerald-600'
+                                      : initial === 'T'
+                                        ? 'bg-blue-600'
+                                        : 'bg-purple-600';
+
+                                return (
+                                  <div
+                                    key={trip.id}
+                                    onClick={() => setSelectedTripId(trip.id)}
+                                    className={`p-4 rounded-2xl border-2 cursor-pointer transition-all relative flex flex-col justify-between ${
+                                      isSelected
+                                        ? 'border-[#3B82F6] bg-white ring-2 ring-blue-100 shadow-sm'
+                                        : 'border-slate-200 bg-white hover:border-slate-300'
+                                    }`}
+                                  >
+                                    <div>
+                                      <div className="flex items-start justify-between gap-2 mb-3">
+                                        <div className="flex items-center gap-2">
+                                          <div
+                                            className={`w-7 h-7 rounded-lg ${badgeBg} text-white flex items-center justify-center font-black text-xs shrink-0`}
+                                          >
+                                            {initial}
+                                          </div>
+                                          <div>
+                                            <div className="font-extrabold text-slate-900 text-sm leading-tight">
+                                              {trip.busCompany.name}
+                                            </div>
+                                            <div className="flex items-center gap-1 text-[11px] text-emerald-600 font-semibold mt-0.5">
+                                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                              Nhận hàng tại bến
+                                            </div>
+                                          </div>
+                                        </div>
+
+                                        <div className="shrink-0 mt-0.5">
+                                          <div
+                                            className={`w-5 h-5 rounded-full flex items-center justify-center border transition-all ${
+                                              isSelected
+                                                ? 'bg-orange-500 border-orange-500 text-white'
+                                                : 'border-slate-300 bg-white'
+                                            }`}
+                                          >
+                                            {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                                          </div>
+                                        </div>
+                                      </div>
+
+                                      <div className="mb-3">
+                                        <div className="flex items-baseline gap-1.5">
+                                          <span className="text-2xl font-black text-slate-900 font-mono tracking-tight">
+                                            {depTime}
+                                          </span>
+                                          <span className="text-xs text-slate-400 font-normal">xuất bến</span>
+                                        </div>
+                                        <div className="text-[11px] text-slate-500 mt-1 flex items-center gap-1.5">
+                                          <Clock className="w-3.5 h-3.5 text-slate-400" />
+                                          <span>Trong ngày (24h – 48h)</span>
+                                        </div>
+                                        <div className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-1.5">
+                                          <MapPin className="w-3.5 h-3.5 text-rose-400" />
+                                          <span>Bến {origin}</span>
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
+                                      <span className="text-slate-400">Từ</span>
+                                      <span className="font-black text-orange-600">50.000đ</span>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
                         </div>
                       </div>
-
-                      {loadingTrips ? (
-                        <div className="p-8 text-center text-slate-400 text-sm bg-slate-50 rounded-xl">
-                          Đang tải danh sách nhà xe nhận hàng...
-                        </div>
-                      ) : filteredTrips.length === 0 ? (
-                        <div className="p-6 text-center text-slate-500 text-sm bg-amber-50 rounded-xl border border-amber-200">
-                          {trips.length > 0
-                            ? 'Không có chuyến xe nào phù hợp với bộ lọc nhà xe này.'
-                            : 'Chưa có nhà xe nào nhận tuyến này vào ngày đã chọn. Vui lòng chọn ngày khác (ví dụ: ngày 20/10/2026).'}
-                        </div>
-                      ) : (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5">
-                          {filteredTrips.map((trip) => {
-                            const isSelected = selectedTripId === trip.id;
-                            const depTime = formatIsoTime(trip.departureTime);
-
-                            // Avatar initials and color
-                            const nameUpper = trip.busCompany.name.toUpperCase();
-                            const initial = nameUpper.charAt(0) || 'V';
-                            const badgeBg =
-                              initial === 'P'
-                                ? 'bg-orange-600'
-                                : initial === 'H'
-                                  ? 'bg-emerald-600'
-                                  : initial === 'T'
-                                    ? 'bg-blue-600'
-                                    : 'bg-purple-600';
-
-                            return (
-                              <div
-                                key={trip.id}
-                                onClick={() => setSelectedTripId(trip.id)}
-                                className={`p-4 rounded-2xl border-2 cursor-pointer transition-all relative flex flex-col justify-between ${
-                                  isSelected
-                                    ? 'border-[#3B82F6] bg-white ring-2 ring-blue-100 shadow-sm'
-                                    : 'border-slate-200 bg-white hover:border-slate-300'
-                                }`}
-                              >
-                                <div>
-                                  <div className="flex items-start justify-between gap-2 mb-3">
-                                    <div className="flex items-center gap-2">
-                                      <div
-                                        className={`w-7 h-7 rounded-lg ${badgeBg} text-white flex items-center justify-center font-black text-xs shrink-0`}
-                                      >
-                                        {initial}
-                                      </div>
-                                      <div>
-                                        <div className="font-extrabold text-slate-900 text-sm leading-tight">
-                                          {trip.busCompany.name}
-                                        </div>
-                                        <div className="flex items-center gap-1 text-[11px] text-emerald-600 font-semibold mt-0.5">
-                                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                                          Nhận hàng tại bến
-                                        </div>
-                                      </div>
-                                    </div>
-
-                                    <div className="shrink-0 mt-0.5">
-                                      <div
-                                        className={`w-5 h-5 rounded-full flex items-center justify-center border transition-all ${
-                                          isSelected
-                                            ? 'bg-orange-500 border-orange-500 text-white'
-                                            : 'border-slate-300 bg-white'
-                                        }`}
-                                      >
-                                        {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
-                                      </div>
-                                    </div>
-                                  </div>
-
-                                  <div className="mb-3">
-                                    <div className="flex items-baseline gap-1.5">
-                                      <span className="text-2xl font-black text-slate-900 font-mono tracking-tight">
-                                        {depTime}
-                                      </span>
-                                      <span className="text-xs text-slate-400 font-normal">xuất bến</span>
-                                    </div>
-                                    <div className="text-[11px] text-slate-500 mt-1 flex items-center gap-1.5">
-                                      <Clock className="w-3.5 h-3.5 text-slate-400" />
-                                      <span>Trong ngày (24h – 48h)</span>
-                                    </div>
-                                    <div className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-1.5">
-                                      <MapPin className="w-3.5 h-3.5 text-rose-400" />
-                                      <span>Bến {origin}</span>
-                                    </div>
-                                  </div>
-                                </div>
-
-                                <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
-                                  <span className="text-slate-400">Từ</span>
-                                  <span className="font-black text-orange-600">50.000đ</span>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
                     </div>
 
                     {/* STEP 3: THÔNG TIN NGƯỜI GỬI & NGƯỜI NHẬN */}
