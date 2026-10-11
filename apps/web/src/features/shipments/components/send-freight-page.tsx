@@ -781,18 +781,6 @@ function SendFreightContent() {
                                 const isSelected = selectedTripId === trip.id;
                                 const depTime = formatIsoTime(trip.departureTime);
 
-                                // Avatar initials and color
-                                const nameUpper = trip.busCompany.name.toUpperCase();
-                                const initial = nameUpper.charAt(0) || 'V';
-                                const badgeBg =
-                                  initial === 'P'
-                                    ? 'bg-orange-600'
-                                    : initial === 'H'
-                                      ? 'bg-emerald-600'
-                                      : initial === 'T'
-                                        ? 'bg-blue-600'
-                                        : 'bg-purple-600';
-
                                 return (
                                   <div
                                     key={trip.id}
@@ -804,20 +792,13 @@ function SendFreightContent() {
                                     }`}
                                   >
                                     {/* Cột 1: Thông tin nhà xe */}
-                                    <div className="flex items-center gap-2 min-w-0 shrink">
-                                      <div
-                                        className={`w-6 h-6 sm:w-7 sm:h-7 rounded-lg ${badgeBg} text-white flex items-center justify-center font-black text-xs shrink-0`}
-                                      >
-                                        {initial}
+                                    <div className="min-w-0 shrink">
+                                      <div className="font-extrabold text-slate-900 text-sm sm:text-base leading-tight truncate">
+                                        {trip.busCompany.name}
                                       </div>
-                                      <div className="min-w-0">
-                                        <div className="font-bold text-slate-900 text-xs sm:text-sm leading-tight truncate">
-                                          {trip.busCompany.name}
-                                        </div>
-                                        <div className="flex items-center gap-1 text-[10px] text-emerald-600 font-medium mt-0.5 truncate">
-                                          <span className="w-1 h-1 rounded-full bg-emerald-500 shrink-0"></span>
-                                          <span className="truncate">Nhận tại bến</span>
-                                        </div>
+                                      <div className="flex items-center gap-1 text-[10px] sm:text-[11px] text-emerald-600 font-semibold mt-0.5 truncate">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>
+                                        <span className="truncate">Nhận tại bến</span>
                                       </div>
                                     </div>
 
