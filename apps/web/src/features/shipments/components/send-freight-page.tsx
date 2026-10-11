@@ -776,59 +776,88 @@ function SendFreightContent() {
                                 : 'Chưa có nhà xe nào nhận tuyến này vào ngày đã chọn. Vui lòng chọn ngày khác (ví dụ: ngày 20/10/2026).'}
                             </div>
                           ) : (
-                            <div className="flex flex-col gap-2.5 w-full">
-                              {filteredTrips.map((trip) => {
-                                const isSelected = selectedTripId === trip.id;
-                                const depTime = formatIsoTime(trip.departureTime);
-
-                                return (
-                                  <div
-                                    key={trip.id}
-                                    onClick={() => setSelectedTripId(trip.id)}
-                                    className={`py-2 px-3 sm:px-3.5 rounded-xl border-2 cursor-pointer transition-all flex items-center justify-between gap-2 sm:gap-3 w-full ${
-                                      isSelected
-                                        ? 'border-orange-500 bg-white ring-2 ring-orange-100 shadow-xs'
-                                        : 'border-slate-200 bg-white hover:border-slate-300'
-                                    }`}
-                                  >
-                                    {/* Cột 1: Thông tin nhà xe - cố định độ rộng để căn thẳng hàng dọc */}
-                                    <div className="w-28 sm:w-32 shrink-0 min-w-0">
-                                      <div className="font-extrabold text-slate-900 text-xs sm:text-sm leading-tight truncate">
-                                        {trip.busCompany.name}
-                                      </div>
-                                      <div className="flex items-center gap-1 text-[10px] sm:text-[11px] text-emerald-600 font-semibold mt-0.5 truncate">
-                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>
-                                        <span className="truncate">Nhận tại bến</span>
-                                      </div>
-                                    </div>
-
-                                    {/* Cột 2: Thời gian xuất bến & Địa điểm - căn thẳng cột dọc qua tất cả các card */}
-                                    <div className="flex-1 min-w-0 px-1 sm:px-2">
-                                      <div className="flex items-baseline gap-1">
-                                        <span className="text-sm sm:text-base font-black text-slate-900 font-mono tracking-tight">
-                                          {depTime}
-                                        </span>
-                                        <span className="text-[10px] text-slate-400">xuất bến</span>
-                                      </div>
-                                      <div className="flex items-center gap-1 text-[10px] sm:text-[11px] text-slate-500 mt-0.5 truncate">
-                                        <span className="shrink-0">Trong ngày</span>
-                                        <span className="text-slate-300 shrink-0">·</span>
-                                        <span className="flex items-center gap-0.5 truncate">
-                                          <MapPin className="w-2.5 h-2.5 text-rose-400 shrink-0" />
-                                          <span className="truncate">Bến {origin}</span>
-                                        </span>
-                                      </div>
-                                    </div>
-
-                                    {/* Cột 3: Giá cước */}
-                                    <div className="text-right shrink-0">
-                                      <span className="text-[10px] text-slate-400 mr-1 font-medium">Từ</span>
-                                      <span className="text-xs sm:text-sm font-black text-orange-600">50.000đ</span>
-                                    </div>
+                            <>
+                              {/* Thanh tóm tắt nhanh chuyến đang chọn khi danh sách có nhiều chuyến */}
+                              {selectedTrip && filteredTrips.length > 5 && (
+                                <div className="flex items-center justify-between px-3 py-1.5 mb-2 bg-orange-50 border border-orange-200/80 rounded-xl text-xs">
+                                  <div className="flex items-center gap-1.5 truncate">
+                                    <span className="w-2 h-2 rounded-full bg-orange-500 shrink-0"></span>
+                                    <span className="text-slate-500">Đang chọn:</span>
+                                    <span className="font-extrabold text-slate-900 truncate">
+                                      {selectedTrip.busCompany.name} ({formatIsoTime(selectedTrip.departureTime)})
+                                    </span>
                                   </div>
-                                );
-                              })}
-                            </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      document.getElementById(`trip-card-${selectedTrip.id}`)?.scrollIntoView({
+                                        behavior: 'smooth',
+                                        block: 'nearest',
+                                      });
+                                    }}
+                                    className="text-orange-600 hover:text-orange-700 font-bold shrink-0 ml-2 text-[11px] underline cursor-pointer"
+                                  >
+                                    Xem vị trí thẻ ↗
+                                  </button>
+                                </div>
+                              )}
+
+                              {/* Khung cuộn cố định chiều cao (hiện ~5.5 chuyến để người dùng biết có thể cuộn tiếp) */}
+                              <div className="flex flex-col gap-2.5 w-full max-h-[380px] sm:max-h-[400px] overflow-y-auto pr-1 sm:pr-1.5 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-slate-100 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-300 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-slate-400">
+                                {filteredTrips.map((trip) => {
+                                  const isSelected = selectedTripId === trip.id;
+                                  const depTime = formatIsoTime(trip.departureTime);
+
+                                  return (
+                                    <div
+                                      key={trip.id}
+                                      id={`trip-card-${trip.id}`}
+                                      onClick={() => setSelectedTripId(trip.id)}
+                                      className={`py-2 px-3 sm:px-3.5 rounded-xl border-2 cursor-pointer transition-all flex items-center justify-between gap-2 sm:gap-3 w-full shrink-0 ${
+                                        isSelected
+                                          ? 'border-orange-500 bg-white ring-2 ring-orange-100 shadow-xs'
+                                          : 'border-slate-200 bg-white hover:border-slate-300'
+                                      }`}
+                                    >
+                                      {/* Cột 1: Thông tin nhà xe - cố định độ rộng để căn thẳng hàng dọc */}
+                                      <div className="w-28 sm:w-32 shrink-0 min-w-0">
+                                        <div className="font-extrabold text-slate-900 text-xs sm:text-sm leading-tight truncate">
+                                          {trip.busCompany.name}
+                                        </div>
+                                        <div className="flex items-center gap-1 text-[10px] sm:text-[11px] text-emerald-600 font-semibold mt-0.5 truncate">
+                                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>
+                                          <span className="truncate">Nhận tại bến</span>
+                                        </div>
+                                      </div>
+
+                                      {/* Cột 2: Thời gian xuất bến & Địa điểm - căn thẳng cột dọc qua tất cả các card */}
+                                      <div className="flex-1 min-w-0 px-1 sm:px-2">
+                                        <div className="flex items-baseline gap-1">
+                                          <span className="text-sm sm:text-base font-black text-slate-900 font-mono tracking-tight">
+                                            {depTime}
+                                          </span>
+                                          <span className="text-[10px] text-slate-400">xuất bến</span>
+                                        </div>
+                                        <div className="flex items-center gap-1 text-[10px] sm:text-[11px] text-slate-500 mt-0.5 truncate">
+                                          <span className="shrink-0">Trong ngày</span>
+                                          <span className="text-slate-300 shrink-0">·</span>
+                                          <span className="flex items-center gap-0.5 truncate">
+                                            <MapPin className="w-2.5 h-2.5 text-rose-400 shrink-0" />
+                                            <span className="truncate">Bến {origin}</span>
+                                          </span>
+                                        </div>
+                                      </div>
+
+                                      {/* Cột 3: Giá cước */}
+                                      <div className="text-right shrink-0">
+                                        <span className="text-[10px] text-slate-400 mr-1 font-medium">Từ</span>
+                                        <span className="text-xs sm:text-sm font-black text-orange-600">50.000đ</span>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </>
                           )}
                         </div>
                       </div>
