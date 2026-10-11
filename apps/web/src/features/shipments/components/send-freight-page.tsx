@@ -66,6 +66,7 @@ function SendFreightContent() {
   const [selectedCompanyFilter, setSelectedCompanyFilter] = useState<string>('all');
   const [selectedTimeFilter, setSelectedTimeFilter] = useState<string>('all'); // 'all' | 'morning' | 'afternoon' | 'evening' | 'night'
   const [selectedPriceSort, setSelectedPriceSort] = useState<string>('default'); // 'default' | 'asc' | 'desc'
+  const [visibleTripCount, setVisibleTripCount] = useState<number>(8);
 
   const handleSwapLocations = () => {
     setOrigin(destination);
@@ -118,6 +119,16 @@ function SendFreightContent() {
 
     return result;
   }, [trips, selectedCompanyFilter, selectedTimeFilter, selectedPriceSort]);
+
+  // Tự động reset về 8 chuyến ban đầu khi thay đổi tuyến đường hoặc bộ lọc
+  useEffect(() => {
+    setVisibleTripCount(8);
+  }, [selectedCompanyFilter, selectedTimeFilter, origin, destination, date]);
+
+  // Danh sách chuyến xe đang hiển thị (phục vụ cuộn dọc + nút Xem thêm)
+  const visibleTrips = useMemo(() => {
+    return filteredTrips.slice(0, visibleTripCount);
+  }, [filteredTrips, visibleTripCount]);
 
   // Người gửi
   const [senderName, setSenderName] = useState<string>('');
@@ -776,9 +787,9 @@ function SendFreightContent() {
                                 : 'Chưa có nhà xe nào nhận tuyến này vào ngày đã chọn. Vui lòng chọn ngày khác (ví dụ: ngày 20/10/2026).'}
                             </div>
                           ) : (
-                            /* Khung cuộn cố định chiều cao (hiện ~5.5 chuyến để người dùng biết có thể cuộn tiếp) */
-                            <div className="flex flex-col gap-2.5 w-full max-h-[380px] sm:max-h-[400px] overflow-y-auto pr-1 sm:pr-1.5 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-slate-100 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-300 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-slate-400">
-                              {filteredTrips.map((trip) => {
+                            /* Khung cuộn cố định chiều cao kèm nút Xem thêm */
+                            <div className="flex flex-col gap-2.5 w-full max-h-[400px] sm:max-h-[440px] overflow-y-auto pr-1 sm:pr-1.5 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-slate-100 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-300 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-slate-400">
+                              {visibleTrips.map((trip) => {
                                   const isSelected = selectedTripId === trip.id;
                                   const depTime = formatIsoTime(trip.departureTime);
 
@@ -830,7 +841,28 @@ function SendFreightContent() {
                                     </div>
                                   );
                                 })}
-                              </div>
+
+                              {/* Nút Xem thêm chuyến xe khi còn chuyến chưa hiển thị */}
+                              {visibleTripCount < filteredTrips.length ? (
+                                <div className="pt-2 pb-1 flex flex-col items-center gap-1 shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={() => setVisibleTripCount((prev) => prev + 8)}
+                                    className="w-full py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-orange-50 hover:border-orange-300 hover:text-orange-600 font-extrabold text-xs text-slate-700 shadow-2xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                                  >
+                                    <span>Xem thêm chuyến xe</span>
+                                    <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                                  </button>
+                                  <p className="text-[10px] text-slate-400">
+                                    Đang hiển thị {visibleTrips.length} / {filteredTrips.length} chuyến
+                                  </p>
+                                </div>
+                              ) : filteredTrips.length > 8 ? (
+                                <div className="text-center pt-2 pb-1 text-[11px] text-slate-400 font-medium shrink-0">
+                                  ✓ Đã hiển thị tất cả {filteredTrips.length} chuyến xe
+                                </div>
+                              ) : null}
+                            </div>
                           )}
                         </div>
                       </div>
