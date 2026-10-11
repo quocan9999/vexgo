@@ -791,8 +791,8 @@ function SendFreightContent() {
                                         : 'border-slate-200 bg-white hover:border-slate-300'
                                     }`}
                                   >
-                                    {/* Cột 1: Thông tin nhà xe */}
-                                    <div className="min-w-0 shrink">
+                                    {/* Cột 1: Thông tin nhà xe - cố định độ rộng để căn thẳng hàng */}
+                                    <div className="w-32 sm:w-36 shrink-0 min-w-0">
                                       <div className="font-extrabold text-slate-900 text-sm sm:text-base leading-tight truncate">
                                         {trip.busCompany.name}
                                       </div>
@@ -802,22 +802,21 @@ function SendFreightContent() {
                                       </div>
                                     </div>
 
-                                    {/* Cột 2: Thời gian xuất bến & Địa điểm */}
-                                    <div className="text-center shrink-0 px-1 sm:px-2">
-                                      <div className="flex items-baseline justify-center gap-1">
+                                    {/* Cột 2: Thời gian xuất bến & Địa điểm - thẳng một hàng ngang */}
+                                    <div className="flex items-center gap-1.5 sm:gap-2 text-xs text-slate-500 whitespace-nowrap shrink-0">
+                                      <div className="flex items-baseline gap-1">
                                         <span className="text-sm sm:text-base font-black text-slate-900 font-mono tracking-tight">
                                           {depTime}
                                         </span>
                                         <span className="text-[10px] text-slate-400">xuất bến</span>
                                       </div>
-                                      <div className="flex items-center justify-center gap-1 text-[10px] sm:text-[11px] text-slate-500 mt-0.5 whitespace-nowrap">
-                                        <span>Trong ngày</span>
-                                        <span className="text-slate-300">·</span>
-                                        <span className="flex items-center gap-0.5 text-slate-500">
-                                          <MapPin className="w-2.5 h-2.5 text-rose-400 shrink-0" />
-                                          <span>Bến {origin}</span>
-                                        </span>
-                                      </div>
+                                      <span className="text-slate-300">·</span>
+                                      <span className="text-[11px] text-slate-500">Trong ngày</span>
+                                      <span className="text-slate-300">·</span>
+                                      <span className="flex items-center gap-0.5 text-[11px] text-slate-500">
+                                        <MapPin className="w-2.5 h-2.5 text-rose-400 shrink-0" />
+                                        <span>Bến {origin}</span>
+                                      </span>
                                     </div>
 
                                     {/* Cột 3: Giá cước */}
