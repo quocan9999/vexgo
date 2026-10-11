@@ -776,35 +776,9 @@ function SendFreightContent() {
                                 : 'Chưa có nhà xe nào nhận tuyến này vào ngày đã chọn. Vui lòng chọn ngày khác (ví dụ: ngày 20/10/2026).'}
                             </div>
                           ) : (
-                            <>
-                              {/* Thanh tóm tắt nhanh chuyến đang chọn khi danh sách có nhiều chuyến */}
-                              {selectedTrip && filteredTrips.length > 5 && (
-                                <div className="flex items-center justify-between px-3 py-1.5 mb-2 bg-orange-50 border border-orange-200/80 rounded-xl text-xs">
-                                  <div className="flex items-center gap-1.5 truncate">
-                                    <span className="w-2 h-2 rounded-full bg-orange-500 shrink-0"></span>
-                                    <span className="text-slate-500">Đang chọn:</span>
-                                    <span className="font-extrabold text-slate-900 truncate">
-                                      {selectedTrip.busCompany.name} ({formatIsoTime(selectedTrip.departureTime)})
-                                    </span>
-                                  </div>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      document.getElementById(`trip-card-${selectedTrip.id}`)?.scrollIntoView({
-                                        behavior: 'smooth',
-                                        block: 'nearest',
-                                      });
-                                    }}
-                                    className="text-orange-600 hover:text-orange-700 font-bold shrink-0 ml-2 text-[11px] underline cursor-pointer"
-                                  >
-                                    Xem vị trí thẻ ↗
-                                  </button>
-                                </div>
-                              )}
-
-                              {/* Khung cuộn cố định chiều cao (hiện ~5.5 chuyến để người dùng biết có thể cuộn tiếp) */}
-                              <div className="flex flex-col gap-2.5 w-full max-h-[380px] sm:max-h-[400px] overflow-y-auto pr-1 sm:pr-1.5 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-slate-100 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-300 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-slate-400">
-                                {filteredTrips.map((trip) => {
+                            /* Khung cuộn cố định chiều cao (hiện ~5.5 chuyến để người dùng biết có thể cuộn tiếp) */
+                            <div className="flex flex-col gap-2.5 w-full max-h-[380px] sm:max-h-[400px] overflow-y-auto pr-1 sm:pr-1.5 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-slate-100 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-300 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-slate-400">
+                              {filteredTrips.map((trip) => {
                                   const isSelected = selectedTripId === trip.id;
                                   const depTime = formatIsoTime(trip.departureTime);
 
@@ -857,7 +831,6 @@ function SendFreightContent() {
                                   );
                                 })}
                               </div>
-                            </>
                           )}
                         </div>
                       </div>
