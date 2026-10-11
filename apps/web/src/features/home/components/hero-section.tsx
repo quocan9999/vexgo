@@ -154,8 +154,6 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
       new Date(),
     ),
   );
-  const [freightType, setFreightType] = useState('Hàng thường');
-  const freightWeight = 'Dưới 5kg';
 
   const swapRoute = () => {
     const currentProvince = selectedProvince;
@@ -414,21 +412,6 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                     className="h-12 w-full border border-slate-300 rounded-lg px-3 text-sm font-bold text-slate-900 outline-none focus:border-brand"
                   />
                 </div>
-                <div className="flex-1 space-y-1.5">
-                  <label className="text-[11px] font-extrabold text-slate-500 uppercase flex items-center gap-1.5">
-                    <PackageCheck className="w-3.5 h-3.5 text-brand" />
-                    Loại hàng
-                  </label>
-                  <select
-                    value={freightType}
-                    onChange={(e) => setFreightType(e.target.value)}
-                    className="h-12 w-full bg-white border border-slate-300 rounded-lg px-3 text-sm font-bold text-slate-900 outline-none focus:border-brand"
-                  >
-                    <option value="Hàng thường">Hàng thường</option>
-                    <option value="Dễ vỡ">Dễ vỡ</option>
-                    <option value="Giá trị cao">Giá trị cao</option>
-                  </select>
-                </div>
               </div>
 
               <div className="mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -440,7 +423,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                 </Link>
                 <div>
                   <Link
-                    href={`/shipments/new?origin=${selectedProvince}&destination=${selectedDistrict}&date=${freightDate}&type=${freightType}&weight=${freightWeight}`}
+                    href={`/shipments/new?origin=${selectedProvince}&destination=${selectedDistrict}&date=${freightDate}`}
                     className="flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-accent px-7 text-sm font-black text-white shadow-sm hover:bg-accent-hover sm:w-[170px]"
                   >
                     <Search className="w-4 h-4 shrink-0" />
