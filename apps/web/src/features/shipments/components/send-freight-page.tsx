@@ -695,7 +695,7 @@ function SendFreightContent() {
                       {/* BỐ CỤC 2 CỘT: CỘT TRÁI BỘ LỌC - CỘT PHẢI DANH SÁCH XE */}
                       <div className="flex flex-col md:flex-row gap-5 items-start">
                         {/* CỘT TRÁI: BỘ LỌC DẠNG DROPDOWN SỔ XUỐNG */}
-                        <div className="w-full md:w-64 shrink-0 bg-slate-50/80 p-4 rounded-2xl border border-slate-200 space-y-4">
+                        <div className="w-full md:w-56 shrink-0 bg-slate-50/80 p-4 rounded-2xl border border-slate-200 space-y-4">
                           <div className="flex items-center justify-between pb-2 border-b border-slate-200">
                             <div className="flex items-center gap-1.5 text-xs font-extrabold text-slate-800 uppercase tracking-wide">
                               <Filter className="w-3.5 h-3.5 text-slate-500" />
@@ -764,7 +764,7 @@ function SendFreightContent() {
                         </div>
 
                         {/* CỘT PHẢI: HIỂN THỊ THÔNG TIN CHUYẾN XE */}
-                        <div className="flex-1 w-full">
+                        <div className="flex-1 min-w-0 w-full">
                           {loadingTrips ? (
                             <div className="p-8 text-center text-slate-400 text-sm bg-slate-50 rounded-xl">
                               Đang tải danh sách nhà xe nhận hàng...
@@ -776,7 +776,7 @@ function SendFreightContent() {
                                 : 'Chưa có nhà xe nào nhận tuyến này vào ngày đã chọn. Vui lòng chọn ngày khác (ví dụ: ngày 20/10/2026).'}
                             </div>
                           ) : (
-                            <div className="flex flex-col gap-2.5 max-w-xl">
+                            <div className="flex flex-col gap-2.5 w-full">
                               {filteredTrips.map((trip) => {
                                 const isSelected = selectedTripId === trip.id;
                                 const depTime = formatIsoTime(trip.departureTime);
@@ -791,9 +791,9 @@ function SendFreightContent() {
                                         : 'border-slate-200 bg-white hover:border-slate-300'
                                     }`}
                                   >
-                                    {/* Cột 1: Thông tin nhà xe - cố định độ rộng để căn thẳng hàng */}
-                                    <div className="w-32 sm:w-36 shrink-0 min-w-0">
-                                      <div className="font-extrabold text-slate-900 text-sm sm:text-base leading-tight truncate">
+                                    {/* Cột 1: Thông tin nhà xe - cố định độ rộng để căn thẳng hàng dọc */}
+                                    <div className="w-28 sm:w-32 shrink-0 min-w-0">
+                                      <div className="font-extrabold text-slate-900 text-xs sm:text-sm leading-tight truncate">
                                         {trip.busCompany.name}
                                       </div>
                                       <div className="flex items-center gap-1 text-[10px] sm:text-[11px] text-emerald-600 font-semibold mt-0.5 truncate">
@@ -802,21 +802,22 @@ function SendFreightContent() {
                                       </div>
                                     </div>
 
-                                    {/* Cột 2: Thời gian xuất bến & Địa điểm - thẳng một hàng ngang */}
-                                    <div className="flex items-center gap-1.5 sm:gap-2 text-xs text-slate-500 whitespace-nowrap shrink-0">
+                                    {/* Cột 2: Thời gian xuất bến & Địa điểm - căn thẳng cột dọc qua tất cả các card */}
+                                    <div className="flex-1 min-w-0 px-1 sm:px-2">
                                       <div className="flex items-baseline gap-1">
                                         <span className="text-sm sm:text-base font-black text-slate-900 font-mono tracking-tight">
                                           {depTime}
                                         </span>
                                         <span className="text-[10px] text-slate-400">xuất bến</span>
                                       </div>
-                                      <span className="text-slate-300">·</span>
-                                      <span className="text-[11px] text-slate-500">Trong ngày</span>
-                                      <span className="text-slate-300">·</span>
-                                      <span className="flex items-center gap-0.5 text-[11px] text-slate-500">
-                                        <MapPin className="w-2.5 h-2.5 text-rose-400 shrink-0" />
-                                        <span>Bến {origin}</span>
-                                      </span>
+                                      <div className="flex items-center gap-1 text-[10px] sm:text-[11px] text-slate-500 mt-0.5 truncate">
+                                        <span className="shrink-0">Trong ngày</span>
+                                        <span className="text-slate-300 shrink-0">·</span>
+                                        <span className="flex items-center gap-0.5 truncate">
+                                          <MapPin className="w-2.5 h-2.5 text-rose-400 shrink-0" />
+                                          <span className="truncate">Bến {origin}</span>
+                                        </span>
+                                      </div>
                                     </div>
 
                                     {/* Cột 3: Giá cước */}
