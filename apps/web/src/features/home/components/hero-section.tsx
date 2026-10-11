@@ -283,7 +283,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                   </div>
                 </div>
 
-                {/* Vùng Ngày & Số vé */}
+                {/* Vùng Ngày & Số ghế */}
                 <div className="flex flex-col md:flex-row gap-3 lg:contents">
                   <div className="flex-1 space-y-1.5">
                     <label className="text-[11px] font-extrabold text-slate-500 uppercase flex items-center gap-1.5">
@@ -325,7 +325,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                   <div className="flex-1 md:w-28 md:flex-none lg:w-28 lg:flex-none space-y-1.5">
                     <label className="text-[11px] font-extrabold text-slate-500 uppercase flex items-center gap-1.5">
                       <Users className="w-3.5 h-3.5 text-brand" />
-                      Số vé
+                      Số ghế
                     </label>
                     <input
                       type="number"
