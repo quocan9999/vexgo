@@ -797,9 +797,9 @@ function SendFreightContent() {
                                   <div
                                     key={trip.id}
                                     onClick={() => setSelectedTripId(trip.id)}
-                                    className={`py-2 px-3 sm:px-3.5 rounded-xl border cursor-pointer transition-all flex items-center justify-between gap-2 sm:gap-3 w-full ${
+                                    className={`py-2 px-3 sm:px-3.5 rounded-xl border-2 cursor-pointer transition-all flex items-center justify-between gap-2 sm:gap-3 w-full ${
                                       isSelected
-                                        ? 'border-[#3B82F6] bg-white ring-2 ring-blue-100 shadow-xs'
+                                        ? 'border-orange-500 bg-white ring-2 ring-orange-100 shadow-xs'
                                         : 'border-slate-200 bg-white hover:border-slate-300'
                                     }`}
                                   >
@@ -839,21 +839,10 @@ function SendFreightContent() {
                                       </div>
                                     </div>
 
-                                    {/* Cột 3: Giá cước & Nút chọn */}
-                                    <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-                                      <div className="text-right">
-                                        <span className="text-[10px] text-slate-400 mr-1 font-medium">Từ</span>
-                                        <span className="text-xs sm:text-sm font-black text-orange-600">50.000đ</span>
-                                      </div>
-                                      <div
-                                        className={`w-4 h-4 sm:w-4.5 sm:h-4.5 rounded-full flex items-center justify-center border transition-all shrink-0 ${
-                                          isSelected
-                                            ? 'bg-orange-500 border-orange-500 text-white'
-                                            : 'border-slate-300 bg-white'
-                                        }`}
-                                      >
-                                        {isSelected && <Check className="w-2.5 h-2.5 sm:w-3 sm:h-3 stroke-[3]" />}
-                                      </div>
+                                    {/* Cột 3: Giá cước */}
+                                    <div className="text-right shrink-0">
+                                      <span className="text-[10px] text-slate-400 mr-1 font-medium">Từ</span>
+                                      <span className="text-xs sm:text-sm font-black text-orange-600">50.000đ</span>
                                     </div>
                                   </div>
                                 );
