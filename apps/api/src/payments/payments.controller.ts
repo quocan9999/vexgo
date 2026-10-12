@@ -9,7 +9,9 @@ import {
   Param,
   ParseIntPipe,
   Post,
+  UnauthorizedException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Public } from '../auth/decorators/public.decorator.js';
 import { CurrentPrincipal } from '../auth/decorators/current-principal.decorator.js';
 import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
@@ -46,6 +48,7 @@ export class PaymentsController {
     private readonly prisma: PrismaService,
     private readonly bookingsService: BookingsService,
     private readonly paymentsService: PaymentsService,
+    private readonly configService: ConfigService,
   ) {}
 
   @Post()
@@ -99,73 +102,82 @@ export class PaymentsController {
   @HttpCode(HttpStatus.OK)
   async handleSepayWebhook(
     @Body() payload: SepayWebhookPayload,
-    @Headers('authorization') _authHeader?: string,
+    @Headers('authorization') authHeader?: string,
   ) {
     this.logger.log(`Received SePay Webhook: ${JSON.stringify(payload)}`);
+
+    // 1. Xác thực token nếu webhook token được cấu hình
+    const expectedToken = this.configService.get<string>('SEPAY_WEBHOOK_TOKEN');
+    if (expectedToken) {
+      const incomingToken = (authHeader || '').replace(/^Apikey\s+/i, '').trim();
+      if (!incomingToken || incomingToken !== expectedToken.trim()) {
+        throw new UnauthorizedException({
+          error: 'UNAUTHORIZED_WEBHOOK',
+          message: 'Mã xác thực SePay Webhook không hợp lệ.',
+        });
+      }
+    }
 
     const content = (payload.content || payload.description || '').toUpperCase();
     const transferAmount = Number(payload.transferAmount || 0);
 
-    if (!content) {
+    if (!content && !payload.code && !payload.referenceCode) {
       return { success: false, message: 'Nội dung chuyển khoản rỗng' };
     }
 
-    // 1. Tìm kiếm mã đơn giao dịch hoặc mã phiếu đặt vé trong nội dung
-    const idMatch = content.match(/VEXGO\s*(\d+)/i) || content.match(/BOOKING\s*(\d+)/i);
-    let matchedBooking = null;
+    // 2. Tìm kiếm chính xác (indexed queries) - không fuzzy scan 50 đơn
+    let matchedBooking: any = null;
 
-    if (idMatch && idMatch[1]) {
-      const bId = parseInt(idMatch[1], 10);
-      matchedBooking = await this.prisma.phieuDatVe.findUnique({
-        where: { phieuDatVeId: bId },
+    // 2.1 Kiểm tra direct field code hoặc referenceCode từ webhook payload
+    const directCode = (payload.code || payload.referenceCode || '').trim();
+    if (directCode) {
+      matchedBooking = await this.prisma.phieuDatVe.findFirst({
+        where: {
+          OR: [
+            { maPhieuDatVe: directCode },
+            { donGiaoDich: { maDonGiaoDich: directCode } },
+          ],
+        },
         include: { donGiaoDich: true },
       });
     }
 
-    const cleanContent = content.replace(/[^A-Z0-9]/g, '');
-
-    // Nếu chưa tìm thấy, tìm theo mã đơn giao dịch (DonGiaoDich.maDonGiaoDich)
+    // 2.2 Trích xuất mã giao dịch (GD-...) từ nội dung chuyển khoản
     if (!matchedBooking) {
-      const allOrders = await this.prisma.donGiaoDich.findMany({
-        where: { trangThai: 'CHO_THANH_TOAN' },
-        include: { phieuDatVe: true },
-        take: 50,
-        orderBy: { donGiaoDichId: 'desc' },
-      });
-
-      for (const order of allOrders) {
-        if (!order.maDonGiaoDich) continue;
-        const cleanOrderCode = order.maDonGiaoDich.toUpperCase().replace(/[^A-Z0-9]/g, '');
-        if (
-          content.includes(order.maDonGiaoDich.toUpperCase()) ||
-          cleanContent.includes(cleanOrderCode)
-        ) {
-          matchedBooking = order.phieuDatVe
-            ? { ...order.phieuDatVe, donGiaoDich: order }
-            : null;
-          break;
-        }
+      const orderCodeMatch = content.match(/[A-Z0-9]+-GD-[A-Z0-9-]+/i) || content.match(/GD-[A-Z0-9-]+/i);
+      if (orderCodeMatch) {
+        matchedBooking = await this.prisma.phieuDatVe.findFirst({
+          where: {
+            donGiaoDich: { maDonGiaoDich: orderCodeMatch[0].toUpperCase() },
+          },
+          include: { donGiaoDich: true },
+        });
       }
     }
 
-    // Nếu vẫn chưa tìm thấy, tìm theo mã phiếu đặt vé (PhieuDatVe.maPhieuDatVe)
+    // 2.3 Trích xuất mã phiếu đặt vé (PDV-...) từ nội dung chuyển khoản
     if (!matchedBooking) {
-      const pendingBookings = await this.prisma.phieuDatVe.findMany({
-        where: { trangThai: 'CHO_THANH_TOAN' },
-        include: { donGiaoDich: true },
-        take: 50,
-        orderBy: { phieuDatVeId: 'desc' },
-      });
+      const bookingCodeMatch = content.match(/[A-Z0-9]+-PDV-[A-Z0-9-]+/i) || content.match(/PDV-[A-Z0-9-]+/i);
+      if (bookingCodeMatch) {
+        matchedBooking = await this.prisma.phieuDatVe.findFirst({
+          where: {
+            maPhieuDatVe: bookingCodeMatch[0].toUpperCase(),
+          },
+          include: { donGiaoDich: true },
+        });
+      }
+    }
 
-      for (const b of pendingBookings) {
-        if (!b.maPhieuDatVe) continue;
-        const cleanBookingCode = b.maPhieuDatVe.toUpperCase().replace(/[^A-Z0-9]/g, '');
-        if (
-          content.includes(b.maPhieuDatVe.toUpperCase()) ||
-          cleanContent.includes(cleanBookingCode)
-        ) {
-          matchedBooking = b;
-          break;
+    // 2.4 Trích xuất booking ID: VEXGO <id> hoặc BOOKING <id>
+    if (!matchedBooking) {
+      const idMatch = content.match(/VEXGO\s*(\d+)/i) || content.match(/BOOKING\s*(\d+)/i);
+      if (idMatch && idMatch[1]) {
+        const bId = parseInt(idMatch[1], 10);
+        if (!isNaN(bId) && bId > 0) {
+          matchedBooking = await this.prisma.phieuDatVe.findUnique({
+            where: { phieuDatVeId: bId },
+            include: { donGiaoDich: true },
+          });
         }
       }
     }
@@ -178,6 +190,18 @@ export class PaymentsController {
       };
     }
 
+    // 3. Idempotency: Nếu đơn đã thanh toán trước đó, trả về thành công ngay lập tức
+    if (matchedBooking.trangThai === 'DA_THANH_TOAN') {
+      this.logger.log(`Booking #${matchedBooking.phieuDatVeId} đã thanh toán trước đó (idempotent duplicate webhook).`);
+      return {
+        success: true,
+        message: 'Đơn hàng đã được thanh toán thành công trước đó.',
+        bookingId: matchedBooking.phieuDatVeId,
+        orderCode: matchedBooking.donGiaoDich.maDonGiaoDich,
+      };
+    }
+
+    // 4. Kiểm tra số tiền chuyển khoản
     const orderAmount = Number(matchedBooking.donGiaoDich.tongTien);
     if (transferAmount > 0 && transferAmount < orderAmount) {
       this.logger.warn(
@@ -189,7 +213,7 @@ export class PaymentsController {
       };
     }
 
-    // 2. Kích hoạt xác nhận thanh toán
+    // 5. Kích hoạt xác nhận thanh toán
     await this.bookingsService.confirmBookingPayment(
       matchedBooking.phieuDatVeId,
       'CHUYEN_KHOAN_SEPAY',

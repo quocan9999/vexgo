@@ -54,6 +54,7 @@ function PaymentContent() {
   const [showTripDetailModal, setShowTripDetailModal] = useState(false);
   const [showCargoDetailModal, setShowCargoDetailModal] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
 
   useEffect(() => {
     if (timeLeft <= 0) return;
@@ -121,21 +122,49 @@ function PaymentContent() {
 
   const handlePayment = async () => {
     if (!draft) return;
+    setPaymentError(null);
+
+    if (!draft.bookingId) {
+      setPaymentError('Không tìm thấy thông tin đơn đặt vé hợp lệ. Vui lòng quay lại đặt vé.');
+      return;
+    }
+
     setIsProcessing(true);
     try {
-      if (draft.bookingId) {
+      // 1. Kiểm tra trạng thái thực tế từ backend trước
+      const checkRes = await bookingsApi.getPublicBookingDetail(draft.bookingId);
+      const bookingData = checkRes.data;
+
+      if (bookingData?.status === 'DA_THANH_TOAN' || bookingData?.paymentStatus === 'DA_THANH_TOAN') {
+        const paidDraft = {
+          ...draft,
+          status: 'DA_THANH_TOAN',
+          paymentStatus: 'DA_THANH_TOAN',
+          paymentMethod: selectedMethod,
+        };
         try {
-          await bookingsApi.confirmPayment(
-            draft.bookingId,
-            selectedMethod === 'momo'
-              ? 'MOMO'
-              : selectedMethod === 'vnpay'
-                ? 'VNPAY'
-                : 'CHUYEN_KHOAN',
-          );
-        } catch (e) {
-          console.warn('Confirm payment api notice:', e);
-        }
+          sessionStorage.setItem('vexgo:last-completed-booking', JSON.stringify(paidDraft));
+          sessionStorage.setItem(`vexgo:invoice:${draft.bookingId}`, JSON.stringify(paidDraft));
+          if (draft.bookingCode) {
+            sessionStorage.setItem(`vexgo:invoice:${draft.bookingCode}`, JSON.stringify(paidDraft));
+          }
+        } catch {}
+        router.push(`/invoice/${draft.bookingId}`);
+        return;
+      }
+
+      // 2. Nếu chưa thanh toán, gọi confirmPayment API xác nhận
+      const confirmRes = await bookingsApi.confirmPayment(
+        draft.bookingId,
+        selectedMethod === 'momo'
+          ? 'MOMO'
+          : selectedMethod === 'vnpay'
+            ? 'VNPAY'
+            : 'CHUYEN_KHOAN',
+      );
+
+      const confirmedData = confirmRes?.data ?? confirmRes;
+      if (confirmedData?.status === 'DA_THANH_TOAN' || confirmedData?.paymentStatus === 'DA_THANH_TOAN') {
         const paidDraft = {
           ...draft,
           status: 'DA_THANH_TOAN',
@@ -151,35 +180,11 @@ function PaymentContent() {
         } catch {}
         router.push(`/invoice/${draft.bookingId}`);
       } else {
-        const invoiceCode = draft.bookingCode || 'BW-888999';
-        const paidDraft = {
-          ...draft,
-          bookingCode: invoiceCode,
-          status: 'DA_THANH_TOAN',
-          paymentStatus: 'DA_THANH_TOAN',
-          paymentMethod: selectedMethod,
-        };
-        try {
-          sessionStorage.setItem('vexgo:last-completed-booking', JSON.stringify(paidDraft));
-          sessionStorage.setItem(`vexgo:invoice:${invoiceCode}`, JSON.stringify(paidDraft));
-          sessionStorage.setItem('vexgo:invoice:BW-888999', JSON.stringify(paidDraft));
-        } catch {}
-        router.push(`/invoice/${invoiceCode}`);
+        setPaymentError('Hệ thống chưa nhận được tiền từ ngân hàng. Nếu bạn đã chuyển khoản, vui lòng đợi 1-2 phút để hệ thống cập nhật hoặc bấm thử lại.');
       }
-    } catch {
-      const fallbackTarget = draft.bookingId || draft.bookingCode || 'BW-888999';
-      try {
-        const paidDraft = {
-          ...draft,
-          bookingCode: draft.bookingCode || 'BW-888999',
-          status: 'DA_THANH_TOAN',
-          paymentStatus: 'DA_THANH_TOAN',
-          paymentMethod: selectedMethod,
-        };
-        sessionStorage.setItem('vexgo:last-completed-booking', JSON.stringify(paidDraft));
-        sessionStorage.setItem(`vexgo:invoice:${fallbackTarget}`, JSON.stringify(paidDraft));
-      } catch {}
-      router.push(`/invoice/${fallbackTarget}`);
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || err?.message || 'Xác nhận thanh toán thất bại. Vui lòng kiểm tra lại giao dịch và thử lại.';
+      setPaymentError(msg);
     } finally {
       setIsProcessing(false);
     }
@@ -382,6 +387,12 @@ function PaymentContent() {
                   <ScanLine className="w-4 h-4 text-emerald-600 inline-block" />
                   Quét mã qua bất kỳ App Ngân hàng
                 </p>
+
+                {paymentError && (
+                  <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-xl text-left">
+                    <p className="text-xs font-semibold text-red-600">{paymentError}</p>
+                  </div>
+                )}
 
                 <button
                   type="button"

@@ -1128,4 +1128,102 @@ describe('Payments Webhook & Status Security with MySQL (Integration)', () => {
       }
     });
   });
+
+  describe('POST /api/v1/payments/sepay-webhook (SePay Bank Transfer Webhook)', () => {
+    it('confirms booking payment via indexed match on maDonGiaoDich and is idempotent', async () => {
+      const suffix = randomUUID().slice(0, 8).toUpperCase();
+      const maDonGiaoDich = `VXG-GD-20261013-${suffix}`;
+      const donGiaoDich = await prisma.donGiaoDich.create({
+        data: {
+          maDonGiaoDich,
+          ngayTao: new Date(),
+          tongTien: 150000,
+          trangThai: 'CHO_THANH_TOAN',
+          tenKhachHang: 'Sepay Customer',
+          soDienThoaiKhachHang: '+84950000001',
+          khachHangId: customerAId,
+          nhaXeId: busCompanyId,
+          phieuDatVe: {
+            create: {
+              maPhieuDatVe: `VXG-PDV-20261013-${suffix}`,
+              ngayDat: new Date(),
+              soLuongVeBanDau: 1,
+              tongTienBanDau: 150000,
+              trangThai: 'CHO_THANH_TOAN',
+            },
+          },
+        },
+        include: { phieuDatVe: true },
+      });
+
+      const webhookPayload = {
+        id: 99991,
+        gateway: 'STB',
+        transferAmount: 150000,
+        content: `CHUYEN KHOAN VEXGO ${maDonGiaoDich}`,
+      };
+
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/payments/sepay-webhook')
+        .send(webhookPayload);
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.success).toBe(true);
+      expect(res.body.data.bookingId).toBe(donGiaoDich.phieuDatVe!.phieuDatVeId);
+
+      const updatedBooking = await prisma.phieuDatVe.findUnique({
+        where: { phieuDatVeId: donGiaoDich.phieuDatVe!.phieuDatVeId },
+        include: { donGiaoDich: true },
+      });
+      expect(updatedBooking?.trangThai).toBe('DA_THANH_TOAN');
+      expect(updatedBooking?.donGiaoDich.trangThai).toBe('DA_THANH_TOAN');
+
+      const duplicateRes = await request(app.getHttpServer())
+        .post('/api/v1/payments/sepay-webhook')
+        .send(webhookPayload);
+
+      expect(duplicateRes.status).toBe(200);
+      expect(duplicateRes.body.data.success).toBe(true);
+      expect(duplicateRes.body.data.message).toContain('đã được thanh toán');
+    });
+
+    it('rejects SePay webhook when transfer amount is insufficient', async () => {
+      const suffix = randomUUID().slice(0, 8).toUpperCase();
+      const maDonGiaoDich = `VXG-GD-20261013-${suffix}`;
+      await prisma.donGiaoDich.create({
+        data: {
+          maDonGiaoDich,
+          ngayTao: new Date(),
+          tongTien: 300000,
+          trangThai: 'CHO_THANH_TOAN',
+          tenKhachHang: 'Sepay Customer',
+          soDienThoaiKhachHang: '+84950000001',
+          khachHangId: customerAId,
+          nhaXeId: busCompanyId,
+          phieuDatVe: {
+            create: {
+              maPhieuDatVe: `VXG-PDV-20261013-${suffix}`,
+              ngayDat: new Date(),
+              soLuongVeBanDau: 1,
+              tongTienBanDau: 300000,
+              trangThai: 'CHO_THANH_TOAN',
+            },
+          },
+        },
+      });
+
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/payments/sepay-webhook')
+        .send({
+          id: 99992,
+          transferAmount: 100000,
+          content: `VEXGO ${maDonGiaoDich}`,
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.success).toBe(false);
+      expect(res.body.data.message).toContain('chưa đủ');
+    });
+  });
 });
+
