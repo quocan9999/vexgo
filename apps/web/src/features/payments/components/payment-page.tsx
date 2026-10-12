@@ -182,8 +182,11 @@ function PaymentContent() {
       } else {
         setPaymentError('Hệ thống chưa nhận được tiền từ ngân hàng. Nếu bạn đã chuyển khoản, vui lòng đợi 1-2 phút để hệ thống cập nhật hoặc bấm thử lại.');
       }
-    } catch (err: any) {
-      const msg = err?.response?.data?.message || err?.message || 'Xác nhận thanh toán thất bại. Vui lòng kiểm tra lại giao dịch và thử lại.';
+    } catch (err) {
+      let msg = 'Xác nhận thanh toán thất bại. Vui lòng kiểm tra lại giao dịch và thử lại.';
+      if (err instanceof Error) {
+        msg = err.message;
+      }
       setPaymentError(msg);
     } finally {
       setIsProcessing(false);
