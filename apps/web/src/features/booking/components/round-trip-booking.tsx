@@ -938,7 +938,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                       <span>✓ Đã sao chép danh sách hành lý & phương tiện từ chuyến đi (+{returnLuggageFee.toLocaleString('vi-VN')}đ)</span>
                     </div>
                     <p className="text-[11px] text-slate-500 mt-1.5 font-medium">
-                      Bỏ tích "Áp dụng giống chuyến đi" ở trên nếu bạn muốn chỉnh sửa hoặc không gửi hàng ở chuyến về.
+                      Bỏ tích &quot;Áp dụng giống chuyến đi&quot; ở trên nếu bạn muốn chỉnh sửa hoặc không gửi hàng ở chuyến về.
                     </p>
                   </div>
                 ) : (
@@ -1086,7 +1086,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                         if (bData?.bookingId) {
                           backendBookingId = bData.bookingId;
                           backendBookingCode = bData.bookingCode;
-                          backendOrderCode = bData.orderCode;
+                          backendOrderCode = bData.orderCode || undefined;
                         }
                       } catch {
                         // Tiếp tục luồng thanh toán với mã đặt vé dự phòng nếu chuyến dùng dữ liệu giả lập
@@ -1382,7 +1382,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
 
                         {item.note && (
                           <p className="text-[11px] text-slate-500 italic mt-1 line-clamp-2">
-                            "{item.note}"
+                            &quot;{item.note}&quot;
                           </p>
                         )}
                       </div>
@@ -1604,7 +1604,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
 
                       {item.note && (
                         <p className="text-slate-500 italic mt-0.5">
-                          "{item.note}"
+                          &quot;{item.note}&quot;
                         </p>
                       )}
                     </div>

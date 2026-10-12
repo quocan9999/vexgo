@@ -964,7 +964,7 @@ function PaymentContent() {
 
                       {item.note && (
                         <p className="mt-1 text-[11px] text-slate-500 italic">
-                          "{item.note}"
+                          &quot;{item.note}&quot;
                         </p>
                       )}
                     </div>

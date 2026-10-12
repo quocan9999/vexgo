@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Ticket } from 'lucide-react';
@@ -82,6 +82,7 @@ export default function CustomerActivityPage() {
   // Tab states: 'upcoming' | 'history' | 'all'
   const [activeTab, setActiveTab] = useState<'upcoming' | 'history' | 'all'>('upcoming');
   const [hasInitializedTab, setHasInitializedTab] = useState(false);
+  const [referenceTime] = useState(() => Date.now());
 
   // Filter states
   const [codeFilter, setCodeFilter] = useState('');
@@ -124,6 +125,25 @@ export default function CustomerActivityPage() {
           setBookings(res.data);
           setMeta(res.meta);
           setErrorMessage('');
+
+          if (!hasInitializedTab) {
+            const hasUpcoming = res.data.some((b) => {
+              if (b.status === 'DA_HUY' || b.paymentStatus === 'DA_HUY') return false;
+              if (!b.departureTime) return true;
+              try {
+                return (
+                  new Date(b.departureTime).getTime() >=
+                  referenceTime - 2 * 60 * 60 * 1000
+                );
+              } catch {
+                return true;
+              }
+            });
+            if (!hasUpcoming && res.data.length > 0) {
+              setActiveTab('history');
+            }
+            setHasInitializedTab(true);
+          }
         }
       } catch (err: unknown) {
         const isAuthError =
@@ -169,32 +189,33 @@ export default function CustomerActivityPage() {
     activeQuery.route,
     activeQuery.status,
     retryKey,
+    hasInitializedTab,
+    referenceTime,
   ]);
 
   // Phân loại chuyến xe sắp đi và lịch sử chuyến đi
-  const isUpcoming = (b: BookingItem) => {
-    if (b.status === 'DA_HUY' || b.paymentStatus === 'DA_HUY') return false;
-    if (!b.departureTime) return true;
-    try {
-      const departure = new Date(b.departureTime);
-      return departure.getTime() >= Date.now() - 2 * 60 * 60 * 1000;
-    } catch {
-      return true;
-    }
-  };
-
-  const upcomingBookings = useMemo(() => bookings.filter(isUpcoming), [bookings]);
-  const pastBookings = useMemo(() => bookings.filter((b) => !isUpcoming(b)), [bookings]);
-
-  // Khởi tạo tab ban đầu một lần duy nhất nếu không có chuyến sắp đi nhưng có lịch sử
-  useEffect(() => {
-    if (!isLoading && bookings.length > 0 && !hasInitializedTab) {
-      if (upcomingBookings.length === 0 && pastBookings.length > 0) {
-        setActiveTab('history');
+  const isUpcoming = useCallback(
+    (b: BookingItem) => {
+      if (b.status === 'DA_HUY' || b.paymentStatus === 'DA_HUY') return false;
+      if (!b.departureTime) return true;
+      try {
+        const departure = new Date(b.departureTime);
+        return departure.getTime() >= referenceTime - 2 * 60 * 60 * 1000;
+      } catch {
+        return true;
       }
-      setHasInitializedTab(true);
-    }
-  }, [isLoading, bookings.length, upcomingBookings.length, pastBookings.length, hasInitializedTab]);
+    },
+    [referenceTime],
+  );
+
+  const upcomingBookings = useMemo(
+    () => bookings.filter(isUpcoming),
+    [bookings, isUpcoming],
+  );
+  const pastBookings = useMemo(
+    () => bookings.filter((b) => !isUpcoming(b)),
+    [bookings, isUpcoming],
+  );
 
   const displayedBookings = useMemo(() => {
     if (activeTab === 'upcoming') return upcomingBookings;

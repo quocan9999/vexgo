@@ -52,6 +52,55 @@ export type BookingQuery = {
   sortDirection?: 'asc' | 'desc';
 };
 
+export type BookingResponseData = {
+  bookingId?: number;
+  bookingCode?: string;
+  orderCode?: string | null;
+  orderId?: number;
+  totalAmount?: number | string;
+  shippingFee?: number | string;
+  ticketPrice?: number | string;
+  paymentMethod?: string | null;
+  paymentStatus?: string | null;
+  status?: string;
+  busCompanyName?: string | null;
+  vehicleType?: string | null;
+  departureTime?: string | null;
+  route?: string | null;
+  pickup?: string | null;
+  dropoff?: string | null;
+  seats?: string[];
+  cargoItems?: Array<{
+    name?: string;
+    quantity?: number;
+    weight?: number;
+    category?: string;
+    categoryName?: string;
+  }>;
+  legs?: Array<{
+    route?: string;
+    departureTime?: string;
+    seats?: string[];
+    pickup?: string;
+    dropoff?: string;
+    busCompanyName?: string;
+    vehicleType?: string;
+    subtotal?: number;
+  }>;
+  cargoFee?: number;
+  ticketSubtotal?: number | string;
+  origin?: string | null;
+  destination?: string | null;
+  seatNumbers?: string[];
+  passenger?: {
+    fullName?: string;
+    phoneNumber?: string;
+    email?: string;
+  } | null;
+  createdAt?: string;
+  [key: string]: unknown;
+};
+
 export class ApiError extends Error {
   status: number;
 
@@ -146,7 +195,7 @@ export const bookingsApi = {
       }>;
     },
     accessToken?: string,
-  ): Promise<{ data: any }> {
+  ): Promise<{ data: BookingResponseData }> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
@@ -171,7 +220,9 @@ export const bookingsApi = {
     return res.json();
   },
 
-  async getPublicBookingDetail(bookingId: number): Promise<{ data: any }> {
+  async getPublicBookingDetail(
+    bookingId: number,
+  ): Promise<{ data: BookingResponseData }> {
     const res = await fetch(`${API_BASE_URL}/bookings/${bookingId}/detail`);
     if (!res.ok) {
       const error = await res.json().catch(() => ({}));
@@ -186,7 +237,7 @@ export const bookingsApi = {
   async confirmPayment(
     bookingId: number,
     paymentMethod: string = 'CHUYEN_KHOAN',
-  ): Promise<{ data: any }> {
+  ): Promise<{ data: BookingResponseData }> {
     const res = await fetch(`${API_BASE_URL}/bookings/${bookingId}/confirm-payment`, {
       method: 'POST',
       headers: {

@@ -120,7 +120,17 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
 
         if (raw) {
           const parsed = JSON.parse(raw);
-          const legs: InvoiceLeg[] = (parsed.legs || []).map((leg: any) => ({
+          type RawLeg = {
+            route?: string;
+            departureTime?: string;
+            seats?: string[];
+            pickup?: string;
+            dropoff?: string;
+            busCompanyName?: string;
+            vehicleType?: string;
+            subtotal?: number;
+          };
+          const legs: InvoiceLeg[] = ((parsed.legs as RawLeg[]) || []).map((leg) => ({
             route: leg.route || 'Chuyến xe liên tỉnh',
             departureTime: formatTimeText(leg.departureTime),
             seats: Array.isArray(leg.seats) && leg.seats.length > 0 ? leg.seats : ['A01'],
@@ -137,7 +147,14 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
             fare: leg.subtotal || 0,
           }));
 
-          const cargoItems = (parsed.luggage?.items || []).map((it: any) => ({
+          type RawLuggageItem = {
+            type?: string;
+            name?: string;
+            quantity?: number;
+            weight?: number;
+            category?: string;
+          };
+          const cargoItems = ((parsed.luggage?.items as RawLuggageItem[]) || []).map((it) => ({
             name: it.type || it.name || 'Hành lý',
             quantity: it.quantity || 1,
             weight: it.weight || 0,
@@ -219,18 +236,18 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
       };
     };
 
-    if (!isNaN(numericBookingId) && numericBookingId > 0) {
-      bookingsApi
-        .getPublicBookingDetail(numericBookingId)
-        .then((res) => {
+    const loadInvoice = async () => {
+      if (!isNaN(numericBookingId) && numericBookingId > 0) {
+        try {
+          const res = await bookingsApi.getPublicBookingDetail(numericBookingId);
           if (!isMounted) return;
           const b = res.data;
-          const cargo = (b.cargoItems || []).map((c: any) => ({
-            name: c.name,
-            quantity: c.quantity,
-            weight: c.weight,
+          const cargo = (b.cargoItems || []).map((c) => ({
+            name: c.name || 'Hành lý',
+            quantity: c.quantity || 1,
+            weight: c.weight || 0,
             category: c.category,
-            categoryName: c.categoryName,
+            categoryName: c.categoryName || 'Hàng gửi kèm',
           }));
 
           setInvoice({
@@ -241,7 +258,7 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
             passengerName: b.passenger?.fullName || 'Hành khách VexGo',
             passengerPhone: b.passenger?.phoneNumber || '—',
             passengerEmail: b.passenger?.email || '',
-            totalAmount: b.totalAmount || 0,
+            totalAmount: Number(b.totalAmount) || 0,
             cargoFee: b.cargoFee || 0,
             cargoItems: cargo,
             legs: [
@@ -253,26 +270,27 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
                 dropoff: b.dropoff || b.destination || 'Bến xe đến',
                 busCompanyName: b.busCompanyName || 'VexGo Transport',
                 vehicleType: b.vehicleType || 'Xe khách chất lượng cao',
-                fare: b.ticketSubtotal || b.totalAmount || 0,
+                fare: Number(b.ticketSubtotal || b.totalAmount) || 0,
               },
             ],
             paymentStatus: b.paymentStatus || 'Đã thanh toán',
             paymentMethod: b.paymentMethod || 'Chuyển khoản',
-            createdAt: b.createdAt,
+            createdAt: b.createdAt || new Date().toISOString(),
           });
           setLoading(false);
-        })
-        .catch(() => {
-          if (!isMounted) return;
-          const fromDraft = findDraftFromSessionStorage();
-          setInvoice(fromDraft || createFallbackModel());
-          setLoading(false);
-        });
-    } else {
+          return;
+        } catch {
+          // Fall through to sessionStorage / fallback
+        }
+      }
+
+      if (!isMounted) return;
       const fromDraft = findDraftFromSessionStorage();
       setInvoice(fromDraft || createFallbackModel());
       setLoading(false);
-    }
+    };
+
+    void loadInvoice();
 
     return () => {
       isMounted = false;
