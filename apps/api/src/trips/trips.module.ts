@@ -7,5 +7,6 @@ import { TripsService } from './trips.service.js';
   imports: [PrismaModule],
   controllers: [TripsController],
   providers: [TripsService],
+  exports: [TripsService],
 })
 export class TripsModule {}

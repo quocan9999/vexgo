@@ -1,8 +1,5 @@
 export type TripStatus =
-  | 'CHUA_KHOI_HANH'
-  | 'DANG_CHAY'
-  | 'HOAN_THANH'
-  | 'DA_HUY';
+  'CHUA_KHOI_HANH' | 'DANG_CHAY' | 'HOAN_THANH' | 'DA_HUY';
 
 export const TRIP_STATUSES: readonly TripStatus[] = [
   'CHUA_KHOI_HANH',
@@ -45,12 +42,20 @@ export type TripSeatSummary = {
   booked: number;
 };
 
+export type TripCargoCapacity = {
+  motorbikes: number;
+  bulkyCargo: number;
+  lightCargo: number;
+};
+
 export type Trip = {
   tripId: number;
   code: string;
   departureDate: string;
   departureTime: string;
   status: TripStatus;
+  acceptsShipments: boolean;
+  cargoCapacity: TripCargoCapacity;
   route: TripRoute;
   vehicle: TripVehicle;
   seatSummary?: TripSeatSummary;
@@ -86,6 +91,7 @@ export type CreateTripInput = {
   vehicleId: number;
   departureDate: string;
   departureTime: string;
+  acceptsShipments: boolean;
 };
 
 export type UpdateTripInput = {

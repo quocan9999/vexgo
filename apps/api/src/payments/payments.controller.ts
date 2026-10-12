@@ -1,16 +1,27 @@
 import {
-  BadRequestException,
   Body,
   Controller,
+  Get,
   Headers,
   HttpCode,
   HttpStatus,
   Logger,
+  Param,
+  ParseIntPipe,
   Post,
 } from '@nestjs/common';
 import { Public } from '../auth/decorators/public.decorator.js';
+import { CurrentPrincipal } from '../auth/decorators/current-principal.decorator.js';
+import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
 import { BookingsService } from '../bookings/bookings.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { PaymentsService } from './payments.service.js';
+import { CreatePaymentDto } from './dto/create-payment.dto.js';
+import {
+  MomoWebhookDto,
+  VnpayWebhookDto,
+  ZaloPayWebhookDto,
+} from './dto/webhook.dto.js';
 
 export interface SepayWebhookPayload {
   id?: number;
@@ -34,14 +45,61 @@ export class PaymentsController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly bookingsService: BookingsService,
+    private readonly paymentsService: PaymentsService,
   ) {}
+
+  @Post()
+  async createPayment(
+    @CurrentPrincipal() principal: AuthPrincipal,
+    @Body() dto: CreatePaymentDto,
+  ) {
+    return this.paymentsService.createPayment(
+      dto.bookingId,
+      dto.provider,
+      principal,
+    );
+  }
+
+  @Get(':paymentId/status')
+  async getPaymentStatus(
+    @CurrentPrincipal() principal: AuthPrincipal,
+    @Param('paymentId', ParseIntPipe) paymentId: number,
+  ) {
+    return this.paymentsService.getPaymentStatus(paymentId, principal);
+  }
+
+  @Get(':paymentId')
+  async getPaymentById(
+    @CurrentPrincipal() principal: AuthPrincipal,
+    @Param('paymentId', ParseIntPipe) paymentId: number,
+  ) {
+    return this.paymentsService.getPaymentById(paymentId, principal);
+  }
+
+  @Public()
+  @Post('momo/webhook')
+  async momoWebhook(@Body() body: MomoWebhookDto) {
+    return this.paymentsService.handleMomoWebhook(body);
+  }
+
+  @Public()
+  @Post('vnpay/webhook')
+  async vnpayWebhook(@Body() body: VnpayWebhookDto) {
+    return this.paymentsService.handleVnpayWebhook(body);
+  }
+
+  @Public()
+  @Post('zalopay/webhook')
+  async zalopayWebhook(@Body() body: ZaloPayWebhookDto) {
+    return this.paymentsService.handleZaloPayWebhook(body);
+  }
 
   @Public()
   @Post('sepay-webhook')
   @HttpCode(HttpStatus.OK)
   async handleSepayWebhook(
     @Body() payload: SepayWebhookPayload,
-    @Headers('authorization') authHeader?: string,
+    @Headers('authorization') _authHeader?: string,
   ) {
     this.logger.log(`Received SePay Webhook: ${JSON.stringify(payload)}`);
 
@@ -53,10 +111,6 @@ export class PaymentsController {
     }
 
     // 1. Tìm kiếm mã đơn giao dịch hoặc mã phiếu đặt vé trong nội dung
-    // Quy ước nội dung: VEXGO [maDonGiaoDich] hoặc [maPhieuDatVe] hoặc VEXGO [bookingId]
-    // Ví dụ: "VEXGO HN-DN-GD-..." hoặc "VEXGO 15" hoặc "HN-DN-GD-..."
-    
-    // Tìm theo bookingId dạng số (ví dụ: VEXGO 12, BOOKING 12)
     const idMatch = content.match(/VEXGO\s*(\d+)/i) || content.match(/BOOKING\s*(\d+)/i);
     let matchedBooking = null;
 
@@ -125,7 +179,6 @@ export class PaymentsController {
     }
 
     const orderAmount = Number(matchedBooking.donGiaoDich.tongTien);
-    // Cho phép dung sai hoặc xác nhận nếu số tiền chuyển >= tiền đơn
     if (transferAmount > 0 && transferAmount < orderAmount) {
       this.logger.warn(
         `Số tiền chuyển ${transferAmount} nhỏ hơn tổng tiền đơn ${orderAmount} của booking #${matchedBooking.phieuDatVeId}`,

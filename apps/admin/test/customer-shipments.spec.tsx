@@ -48,11 +48,7 @@ const mockShipment = {
   receiver: {
     fullName: 'Trần Văn B',
     phoneNumber: '0912345678',
-    address: null,
   },
-  pickupMethod: null,
-  deliveryMethod: null,
-  pickupAddress: '456 Mai Chí Thọ, Q.2, TP.HCM',
   mainFee: 80000,
   serviceFee: 10000,
   discountAmount: 5000,
@@ -62,16 +58,16 @@ const mockShipment = {
     tripId: 101,
     code: 'FUTA-CX-0001',
   },
-  originBranch: {
-    branchId: 1,
+  originPoint: {
+    pointId: 1,
     code: 'FUTA-BC-001',
-    name: 'Bưu cục Miền Đông',
+    name: 'Điểm gửi Miền Đông',
     address: '456 Mai Chí Thọ, Q.2, TP.HCM',
   },
-  destinationBranch: {
-    branchId: 2,
+  destinationPoint: {
+    pointId: 2,
     code: 'FUTA-BC-002',
-    name: 'Bưu cục Đà Lạt',
+    name: 'Điểm nhận Đà Lạt',
     address: '123 Lê Lợi, P.1, Đà Lạt',
   },
 };
@@ -88,7 +84,7 @@ function installApi(
   options: {
     customerNotFound?: boolean;
     shipmentsError?: boolean;
-    shipments?: typeof mockShipment[];
+    shipments?: (typeof mockShipment)[];
   } = {},
 ) {
   setEmployeeAdminTestSession(['customer:read']);
@@ -98,52 +94,58 @@ function installApi(
 
   const mockFetch = vi
     .fn()
-    .mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input);
-      const method = init?.method ?? 'GET';
-      requests.push({ url, method });
+    .mockImplementation(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        const method = init?.method ?? 'GET';
+        requests.push({ url, method });
 
-      if (url.includes('/api/v1/customers/101/shipments')) {
-        if (options.shipmentsError) {
-          return response(
-            { message: 'Lỗi tải lịch sử gửi hàng từ máy chủ.' },
-            false,
-            500,
-          );
+        if (url.includes('/api/v1/customers/101/shipments')) {
+          if (options.shipmentsError) {
+            return response(
+              { message: 'Lỗi tải lịch sử gửi hàng từ máy chủ.' },
+              false,
+              500,
+            );
+          }
+          const shipments = options.shipments ?? [mockShipment];
+          return response({
+            data: shipments,
+            meta: {
+              page: 1,
+              pageSize: 10,
+              totalItems: shipments.length,
+              totalPages: shipments.length === 0 ? 0 : 1,
+            },
+          });
         }
-        const shipments = options.shipments ?? [mockShipment];
-        return response({
-          data: shipments,
-          meta: {
-            page: 1,
-            pageSize: 10,
-            totalItems: shipments.length,
-            totalPages: shipments.length === 0 ? 0 : 1,
-          },
-        });
-      }
 
-      if (url.includes('/api/v1/customers/101/transactions')) {
-        return response({
-          data: [],
-          meta: {
-            page: 1,
-            pageSize: 10,
-            totalItems: 0,
-            totalPages: 0,
-          },
-        });
-      }
-
-      if (url.includes('/api/v1/customers/101')) {
-        if (options.customerNotFound) {
-          return response({ message: 'Không tìm thấy khách hàng.' }, false, 404);
+        if (url.includes('/api/v1/customers/101/transactions')) {
+          return response({
+            data: [],
+            meta: {
+              page: 1,
+              pageSize: 10,
+              totalItems: 0,
+              totalPages: 0,
+            },
+          });
         }
-        return response({ data: mockCustomerDetail });
-      }
 
-      return response({}, false, 404);
-    });
+        if (url.includes('/api/v1/customers/101')) {
+          if (options.customerNotFound) {
+            return response(
+              { message: 'Không tìm thấy khách hàng.' },
+              false,
+              404,
+            );
+          }
+          return response({ data: mockCustomerDetail });
+        }
+
+        return response({}, false, 404);
+      },
+    );
 
   vi.stubGlobal('fetch', mockFetch);
   return { requests };
@@ -193,11 +195,19 @@ describe('Customer Shipment History Tab (Feature 06.4)', () => {
     expect((await screen.findAllByText('VD000301')).length).toBeGreaterThan(0);
     expect(screen.getAllByText('Trần Văn B').length).toBeGreaterThan(0);
     expect(screen.getAllByText('0912345678').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Điểm gửi Miền Đông').length).toBeGreaterThan(0);
     expect(
-      screen.getAllByText(
-        '456 Mai Chí Thọ, Q.2, TP.HCM → 123 Lê Lợi, P.1, Đà Lạt',
-      ).length,
+      screen.getAllByText('456 Mai Chí Thọ, Q.2, TP.HCM').length,
     ).toBeGreaterThan(0);
+    expect(screen.getAllByText('Điểm nhận Đà Lạt').length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText('123 Lê Lợi, P.1, Đà Lạt').length,
+    ).toBeGreaterThan(0);
+    expect(
+      screen.queryByRole('columnheader', { name: 'Lấy / Giao' }),
+    ).toBeNull();
+    expect(screen.queryByText('Hình thức')).toBeNull();
+    expect(screen.queryByText(/—\s*→\s*—/)).toBeNull();
     expect(screen.getAllByText('85.000 đ').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Đang vận chuyển').length).toBeGreaterThan(0);
   });
@@ -207,6 +217,9 @@ describe('Customer Shipment History Tab (Feature 06.4)', () => {
       shipments: [
         { ...mockShipment, shipmentId: 302, status: 'MOI_TAO' },
         { ...mockShipment, shipmentId: 303, status: 'DA_TIEP_NHAN' },
+        { ...mockShipment, shipmentId: 304, status: 'DANG_VAN_CHUYEN' },
+        { ...mockShipment, shipmentId: 305, status: 'DA_GIAO' },
+        { ...mockShipment, shipmentId: 306, status: 'DA_HUY' },
       ],
     });
     render(<CustomerWorkspace customerId={101} />);
@@ -216,14 +229,29 @@ describe('Customer Shipment History Tab (Feature 06.4)', () => {
 
     const createdBadges = await screen.findAllByText('Mới tạo');
     const acceptedBadges = await screen.findAllByText('Đã tiếp nhận');
+    const transportingBadges = await screen.findAllByText('Đang vận chuyển');
+    const deliveredBadges = await screen.findAllByText('Đã giao hàng');
+    const cancelledBadges = await screen.findAllByText('Đã hủy');
 
     expect(createdBadges.length).toBe(2);
     expect(acceptedBadges.length).toBe(2);
+    expect(transportingBadges.length).toBe(2);
+    expect(deliveredBadges.length).toBe(2);
+    expect(cancelledBadges.length).toBe(2);
     for (const badge of createdBadges) {
       expect(badge.className).not.toContain('is-active');
     }
     for (const badge of acceptedBadges) {
       expect(badge.className).toContain('is-active');
+    }
+    for (const badge of transportingBadges) {
+      expect(badge.className).toContain('is-active');
+    }
+    for (const badge of deliveredBadges) {
+      expect(badge.className).toContain('is-active');
+    }
+    for (const badge of cancelledBadges) {
+      expect(badge.className).not.toContain('is-active');
     }
   });
 
@@ -235,7 +263,9 @@ describe('Customer Shipment History Tab (Feature 06.4)', () => {
     fireEvent.click(shipmentsTab);
 
     expect(
-      await screen.findByText('Khách hàng chưa có đơn gửi hàng tại nhà xe này.'),
+      await screen.findByText(
+        'Khách hàng chưa có đơn gửi hàng tại nhà xe này.',
+      ),
     ).toBeTruthy();
   });
 
@@ -266,8 +296,6 @@ describe('Customer Shipment History Tab (Feature 06.4)', () => {
     // Wait a moment for debounced search
     await new Promise((r) => setTimeout(r, 400));
 
-    expect(
-      requests.some((r) => r.url.includes('search=VD000301')),
-    ).toBe(true);
+    expect(requests.some((r) => r.url.includes('search=VD000301'))).toBe(true);
   });
 });

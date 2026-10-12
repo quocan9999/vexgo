@@ -1,6 +1,5 @@
 import { Type } from 'class-transformer';
 import {
-  ArrayMinSize,
   IsArray,
   IsEmail,
   IsInt,
@@ -26,8 +25,23 @@ export class PassengerInfoDto {
   })
   phoneNumber!: string;
 
+  @IsOptional()
   @IsEmail({}, { message: 'Email không hợp lệ.' })
-  email!: string;
+  email?: string;
+}
+
+export class BookingContactDto {
+  @IsNotEmpty({ message: 'Họ tên người liên hệ không được để trống.' })
+  @IsString({ message: 'Họ tên phải là chuỗi ký tự.' })
+  fullName!: string;
+
+  @IsNotEmpty({ message: 'Số điện thoại người liên hệ không được để trống.' })
+  @IsString({ message: 'Số điện thoại phải là chuỗi ký tự.' })
+  phone!: string;
+
+  @IsOptional()
+  @IsEmail({}, { message: 'Email không đúng định dạng.' })
+  email?: string;
 }
 
 export class CargoItemDto {
@@ -89,18 +103,30 @@ export class CargoItemDto {
 }
 
 export class CreateBookingDto {
+  @IsNotEmpty({ message: 'tripId không được để trống.' })
   @Type(() => Number)
-  @IsInt()
+  @IsInt({ message: 'tripId phải là số nguyên.' })
+  @Min(1, { message: 'tripId phải lớn hơn 0.' })
   tripId!: number;
 
-  @IsArray()
-  @ArrayMinSize(1, { message: 'Vui lòng chọn ít nhất một ghế.' })
-  @IsString({ each: true })
-  seatNumbers!: string[];
+  @IsOptional()
+  @IsArray({ message: 'seatIds phải là mảng số nguyên.' })
+  @Type(() => Number)
+  @IsInt({ each: true, message: 'Mỗi seatId phải là số nguyên.' })
+  seatIds?: number[];
 
-  @ValidateNested()
-  @Type(() => PassengerInfoDto)
-  passenger!: PassengerInfoDto;
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  seatNumbers?: string[];
+
+  @IsOptional()
+  @IsString()
+  pickupPoint?: string;
+
+  @IsOptional()
+  @IsString()
+  dropoffPoint?: string;
 
   @IsOptional()
   @IsString()
@@ -109,6 +135,24 @@ export class CreateBookingDto {
   @IsOptional()
   @IsString()
   dropoff?: string;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => BookingContactDto)
+  contact?: BookingContactDto;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => PassengerInfoDto)
+  passenger?: PassengerInfoDto;
+
+  @IsOptional()
+  @IsString()
+  promotionCode?: string;
+
+  @IsOptional()
+  @IsString()
+  holdToken?: string;
 
   @IsOptional()
   @IsArray()

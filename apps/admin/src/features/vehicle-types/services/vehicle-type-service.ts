@@ -34,8 +34,20 @@ function isVehicleType(value: unknown): value is VehicleType {
     Number.isSafeInteger(value.vehicleTypeId) &&
     typeof value.name === 'string' &&
     (typeof value.description === 'string' || value.description === null) &&
+    isNonNegativeInt32(value.motorbikeCapacityDefault) &&
+    isNonNegativeInt32(value.bulkyCargoCapacityDefault) &&
+    isNonNegativeInt32(value.lightCargoCapacityDefault) &&
     typeof value.createdAt === 'string' &&
     typeof value.updatedAt === 'string'
+  );
+}
+
+function isNonNegativeInt32(value: unknown): value is number {
+  return (
+    typeof value === 'number' &&
+    Number.isInteger(value) &&
+    value >= 0 &&
+    value <= 2_147_483_647
   );
 }
 
@@ -93,12 +105,15 @@ function parseVehicleTypeResponse(body: unknown) {
 export async function createVehicleType(
   input: CreateVehicleTypeInput,
 ): Promise<VehicleType> {
-  const response = await adminApiFetch(`${getApiBaseUrl()}/api/v1/vehicle-types`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(input),
-    cache: 'no-store',
-  });
+  const response = await adminApiFetch(
+    `${getApiBaseUrl()}/api/v1/vehicle-types`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+      cache: 'no-store',
+    },
+  );
   const body: unknown = await response.json().catch(() => null);
 
   if (!response.ok) throw getWriteError(body, response.status, 'tạo');
@@ -142,7 +157,9 @@ export async function getVehicleTypes(
   const body: unknown = await response.json().catch(() => null);
 
   if (!response.ok) {
-    throw new Error(getErrorMessage(body, response.status, 'danh sách loại xe'));
+    throw new Error(
+      getErrorMessage(body, response.status, 'danh sách loại xe'),
+    );
   }
   if (!isPaginatedVehicleTypes(body)) {
     throw new Error('API trả về danh sách loại xe không hợp lệ.');

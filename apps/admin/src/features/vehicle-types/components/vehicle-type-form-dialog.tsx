@@ -24,6 +24,9 @@ type FormValues = {
   busCompanyId: string;
   name: string;
   description: string;
+  motorbikeCapacityDefault: string;
+  bulkyCargoCapacityDefault: string;
+  lightCargoCapacityDefault: string;
 };
 
 type FormField = keyof FormValues;
@@ -36,7 +39,10 @@ function fieldErrorsFromDetails(details: VehicleTypeApiErrorDetail[]) {
     if (
       detail.field === 'busCompanyId' ||
       detail.field === 'name' ||
-      detail.field === 'description'
+      detail.field === 'description' ||
+      detail.field === 'motorbikeCapacityDefault' ||
+      detail.field === 'bulkyCargoCapacityDefault' ||
+      detail.field === 'lightCargoCapacityDefault'
     ) {
       errors[detail.field] = detail.message;
     }
@@ -60,6 +66,15 @@ export function VehicleTypeFormDialog({
     busCompanyId: '',
     name: vehicleType?.name ?? '',
     description: vehicleType?.description ?? '',
+    motorbikeCapacityDefault: String(
+      vehicleType?.motorbikeCapacityDefault ?? 0,
+    ),
+    bulkyCargoCapacityDefault: String(
+      vehicleType?.bulkyCargoCapacityDefault ?? 0,
+    ),
+    lightCargoCapacityDefault: String(
+      vehicleType?.lightCargoCapacityDefault ?? 0,
+    ),
   }));
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -98,7 +113,10 @@ export function VehicleTypeFormDialog({
 
   function validate(): FieldErrors {
     const errors: FieldErrors = {};
-    if (!editing && (!/^\d+$/.test(values.busCompanyId) || Number(values.busCompanyId) < 1)) {
+    if (
+      !editing &&
+      (!/^\d+$/.test(values.busCompanyId) || Number(values.busCompanyId) < 1)
+    ) {
       errors.busCompanyId = 'Vui lòng chọn nhà xe.';
     }
     const name = values.name.trim();
@@ -111,6 +129,22 @@ export function VehicleTypeFormDialog({
 
     if (description.length > 500) {
       errors.description = 'Mô tả không được vượt quá 500 ký tự.';
+    }
+
+    for (const field of [
+      'motorbikeCapacityDefault',
+      'bulkyCargoCapacityDefault',
+      'lightCargoCapacityDefault',
+    ] as const) {
+      const value = values[field];
+      const capacity = Number(value);
+      if (
+        !/^\d+$/.test(value) ||
+        !Number.isSafeInteger(capacity) ||
+        capacity > 2_147_483_647
+      ) {
+        errors[field] = 'Nhập số nguyên từ 0 đến 2147483647.';
+      }
     }
 
     return errors;
@@ -130,6 +164,9 @@ export function VehicleTypeFormDialog({
     const editableFields = {
       name: values.name.trim(),
       description: values.description.trim() || null,
+      motorbikeCapacityDefault: Number(values.motorbikeCapacityDefault),
+      bulkyCargoCapacityDefault: Number(values.bulkyCargoCapacityDefault),
+      lightCargoCapacityDefault: Number(values.lightCargoCapacityDefault),
     };
 
     try {
@@ -154,15 +191,16 @@ export function VehicleTypeFormDialog({
               (detail) =>
                 detail.field === 'busCompanyId' ||
                 detail.field === 'name' ||
-                detail.field === 'description',
+                detail.field === 'description' ||
+                detail.field === 'motorbikeCapacityDefault' ||
+                detail.field === 'bulkyCargoCapacityDefault' ||
+                detail.field === 'lightCargoCapacityDefault',
             );
           setFieldErrors(serverErrors);
           setFormError(detailsAreMapped ? null : requestError.message);
         }
       } else if (requestError instanceof TypeError) {
-        setFormError(
-          'Không thể kết nối đến máy chủ API. Vui lòng thử lại.',
-        );
+        setFormError('Không thể kết nối đến máy chủ API. Vui lòng thử lại.');
       } else {
         setFormError(
           requestError instanceof Error
@@ -181,7 +219,7 @@ export function VehicleTypeFormDialog({
   return (
     <AdminFormDialog
       ariaBusy={submitting}
-      ariaDescribedBy={`${idPrefix}-description`}
+      ariaDescribedBy={`${idPrefix}-dialog-description`}
       ariaLabelledBy={`${idPrefix}-title`}
       dialogRef={dialogRef}
       onClose={onClose}
@@ -194,7 +232,7 @@ export function VehicleTypeFormDialog({
             <h2 id={`${idPrefix}-title`}>
               {editing ? 'Chỉnh sửa loại xe' : 'Thêm loại xe'}
             </h2>
-            <p id={`${idPrefix}-description`}>
+            <p id={`${idPrefix}-dialog-description`}>
               {editing
                 ? 'Cập nhật tên và mô tả của loại xe.'
                 : 'Nhập tên và mô tả cho loại xe mới.'}
@@ -202,7 +240,9 @@ export function VehicleTypeFormDialog({
           </div>
           <Button
             aria-label={
-              editing ? 'Đóng biểu mẫu chỉnh sửa loại xe' : 'Đóng biểu mẫu thêm loại xe'
+              editing
+                ? 'Đóng biểu mẫu chỉnh sửa loại xe'
+                : 'Đóng biểu mẫu thêm loại xe'
             }
             className="icon-button"
             disabled={submitting}
@@ -214,11 +254,7 @@ export function VehicleTypeFormDialog({
           </Button>
         </div>
 
-        <form
-          className="vehicle-type-form"
-          noValidate
-          onSubmit={handleSubmit}
-        >
+        <form className="vehicle-type-form" noValidate onSubmit={handleSubmit}>
           {formError && (
             <div className="vehicle-type-form-error" role="alert">
               {formError}
@@ -237,7 +273,9 @@ export function VehicleTypeFormDialog({
                 aria-invalid={Boolean(fieldErrors.busCompanyId)}
                 disabled={submitting || busCompanyOptions.status !== 'success'}
                 id={`${idPrefix}-bus-company`}
-                onChange={(event) => updateField('busCompanyId', event.target.value)}
+                onChange={(event) =>
+                  updateField('busCompanyId', event.target.value)
+                }
                 required
                 value={values.busCompanyId}
               >
@@ -316,6 +354,101 @@ export function VehicleTypeFormDialog({
               </span>
             )}
           </div>
+
+          <fieldset className="vehicle-type-capacity-group">
+            <legend>Sức chứa hàng mặc định</legend>
+            <p
+              className="vehicle-type-capacity-help"
+              id={`${idPrefix}-capacity-help`}
+            >
+              Các giá trị này được dùng làm sức chứa mặc định khi tạo chuyến
+              mới. Thay đổi tại đây không cập nhật sức chứa của các chuyến đã
+              tồn tại.
+            </p>
+            <div className="vehicle-type-capacity-fields">
+              <div className="vehicle-type-form-field">
+                <label htmlFor={`${idPrefix}-motorbikeCapacityDefault`}>
+                  Xe máy
+                </label>
+                <input
+                  aria-describedby={`${idPrefix}-capacity-help${fieldErrors.motorbikeCapacityDefault ? ` ${idPrefix}-motorbikeCapacityDefault-error` : ''}`}
+                  aria-invalid={Boolean(fieldErrors.motorbikeCapacityDefault)}
+                  disabled={submitting}
+                  id={`${idPrefix}-motorbikeCapacityDefault`}
+                  max={2_147_483_647}
+                  min={0}
+                  onChange={(event) =>
+                    updateField('motorbikeCapacityDefault', event.target.value)
+                  }
+                  step={1}
+                  type="number"
+                  value={values.motorbikeCapacityDefault}
+                />
+                {fieldErrors.motorbikeCapacityDefault && (
+                  <span
+                    className="vehicle-type-form-field-error"
+                    id={`${idPrefix}-motorbikeCapacityDefault-error`}
+                  >
+                    {fieldErrors.motorbikeCapacityDefault}
+                  </span>
+                )}
+              </div>
+              <div className="vehicle-type-form-field">
+                <label htmlFor={`${idPrefix}-bulkyCargoCapacityDefault`}>
+                  Hàng cồng kềnh
+                </label>
+                <input
+                  aria-describedby={`${idPrefix}-capacity-help${fieldErrors.bulkyCargoCapacityDefault ? ` ${idPrefix}-bulkyCargoCapacityDefault-error` : ''}`}
+                  aria-invalid={Boolean(fieldErrors.bulkyCargoCapacityDefault)}
+                  disabled={submitting}
+                  id={`${idPrefix}-bulkyCargoCapacityDefault`}
+                  max={2_147_483_647}
+                  min={0}
+                  onChange={(event) =>
+                    updateField('bulkyCargoCapacityDefault', event.target.value)
+                  }
+                  step={1}
+                  type="number"
+                  value={values.bulkyCargoCapacityDefault}
+                />
+                {fieldErrors.bulkyCargoCapacityDefault && (
+                  <span
+                    className="vehicle-type-form-field-error"
+                    id={`${idPrefix}-bulkyCargoCapacityDefault-error`}
+                  >
+                    {fieldErrors.bulkyCargoCapacityDefault}
+                  </span>
+                )}
+              </div>
+              <div className="vehicle-type-form-field">
+                <label htmlFor={`${idPrefix}-lightCargoCapacityDefault`}>
+                  Hàng nhẹ
+                </label>
+                <input
+                  aria-describedby={`${idPrefix}-capacity-help${fieldErrors.lightCargoCapacityDefault ? ` ${idPrefix}-lightCargoCapacityDefault-error` : ''}`}
+                  aria-invalid={Boolean(fieldErrors.lightCargoCapacityDefault)}
+                  disabled={submitting}
+                  id={`${idPrefix}-lightCargoCapacityDefault`}
+                  max={2_147_483_647}
+                  min={0}
+                  onChange={(event) =>
+                    updateField('lightCargoCapacityDefault', event.target.value)
+                  }
+                  step={1}
+                  type="number"
+                  value={values.lightCargoCapacityDefault}
+                />
+                {fieldErrors.lightCargoCapacityDefault && (
+                  <span
+                    className="vehicle-type-form-field-error"
+                    id={`${idPrefix}-lightCargoCapacityDefault-error`}
+                  >
+                    {fieldErrors.lightCargoCapacityDefault}
+                  </span>
+                )}
+              </div>
+            </div>
+          </fieldset>
 
           <div className="vehicle-type-form-actions">
             <Button

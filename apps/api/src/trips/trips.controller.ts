@@ -107,6 +107,18 @@ export class TripsController {
     return this.tripsService.releaseSeats(params.id, body.seatNumbers);
   }
 
+  @Get(':id/alternatives')
+  @OptionalAuth()
+  getTripAlternatives(
+    @Param() params: TripIdParamsDto,
+    @Query('limit') limit?: string,
+  ) {
+    return this.tripsService.getTripAlternatives(
+      params.id,
+      limit ? Number(limit) : 5,
+    );
+  }
+
   @Get(':id')
   @OptionalAuth()
   getDetails(@Param() params: TripIdParamsDto) {

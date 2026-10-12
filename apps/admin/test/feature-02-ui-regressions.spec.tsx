@@ -48,6 +48,9 @@ vi.mock('@/features/vehicle-types/hooks/use-vehicle-types', () => ({
           vehicleTypeId: 7,
           name: 'Limousine',
           description: 'Xe limousine',
+          motorbikeCapacityDefault: 0,
+          bulkyCargoCapacityDefault: 0,
+          lightCargoCapacityDefault: 0,
           createdAt: '2026-09-25T10:00:00.000Z',
           updatedAt: '2026-09-26T10:00:00.000Z',
         },
@@ -104,13 +107,17 @@ describe('Feature 02 Admin UI regressions', () => {
   it('uses a defined shared typography token for the vehicle detail heading', () => {
     const vehicleStyles = postcss.parse(
       readFileSync(
-        fileURLToPath(new URL('../src/features/vehicles/vehicles.css', import.meta.url)),
+        fileURLToPath(
+          new URL('../src/features/vehicles/vehicles.css', import.meta.url),
+        ),
         'utf8',
       ),
     );
     const tokenStyles = postcss.parse(
       readFileSync(
-        fileURLToPath(new URL('../src/styles/admin-tokens.css', import.meta.url)),
+        fileURLToPath(
+          new URL('../src/styles/admin-tokens.css', import.meta.url),
+        ),
         'utf8',
       ),
     );

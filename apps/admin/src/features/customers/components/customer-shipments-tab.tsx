@@ -21,12 +21,9 @@ function formatDateTime(value?: string | null) {
 
 function shipmentStatusTone(status: string): 'active' | 'muted' {
   if (
-    status === 'DA_GIAO' ||
-    status === 'HOAN_TAT' ||
     status === 'DA_TIEP_NHAN' ||
-    status === 'DA_GIAO_HANG' ||
     status === 'DANG_VAN_CHUYEN' ||
-    status === 'DA_NHAN_HANG'
+    status === 'DA_GIAO'
   ) {
     return 'active';
   }
@@ -39,41 +36,14 @@ function formatShipmentStatus(status: string): string {
       return 'Mới tạo';
     case 'DA_TIEP_NHAN':
       return 'Đã tiếp nhận';
-    case 'CHO_LAY_HANG':
-      return 'Chờ lấy hàng';
-    case 'DA_NHAN_HANG':
-      return 'Đã nhận hàng';
     case 'DANG_VAN_CHUYEN':
       return 'Đang vận chuyển';
-    case 'DA_DEN_BUU_CUC_PHAT':
-      return 'Đã đến bưu cục phát';
-    case 'DANG_GIAO_HANG':
-      return 'Đang giao hàng';
     case 'DA_GIAO':
-    case 'DA_GIAO_HANG':
       return 'Đã giao hàng';
-    case 'GIAO_THAT_BAI':
-      return 'Giao thất bại';
     case 'DA_HUY':
       return 'Đã hủy';
-    case 'HOAN_TAT':
-      return 'Hoàn tất';
     default:
       return status;
-  }
-}
-
-function formatMethod(method: string | null): string {
-  if (!method) return '—';
-
-  switch (method) {
-    case 'TAI_BUU_CUC':
-      return 'Tại bưu cục';
-    case 'GIAO_TAN_NOI':
-    case 'LAY_TAN_NOI':
-      return 'Tận nơi';
-    default:
-      return method;
   }
 }
 
@@ -134,7 +104,9 @@ export function CustomerShipmentsTab({ customerId }: { customerId: number }) {
             aria-busy={loading || refreshing}
           >
             <table className="admin-resource-table">
-              <caption className="sr-only">Lịch sử gửi hàng của khách hàng</caption>
+              <caption className="sr-only">
+                Lịch sử gửi hàng của khách hàng
+              </caption>
               <thead>
                 <tr>
                   <th scope="col">Mã vận đơn</th>
@@ -164,8 +136,8 @@ export function CustomerShipmentsTab({ customerId }: { customerId: number }) {
                     </button>
                   </th>
                   <th scope="col">Người nhận</th>
-                  <th scope="col">Lấy / Giao</th>
-                  <th scope="col">Điểm gửi / nhận</th>
+                  <th scope="col">Điểm gửi</th>
+                  <th scope="col">Điểm nhận</th>
                   <th scope="col">Tổng phí</th>
                   <th scope="col">Trạng thái</th>
                 </tr>
@@ -184,34 +156,18 @@ export function CustomerShipmentsTab({ customerId }: { customerId: number }) {
                       <div className="customer-code">
                         {s.receiver.phoneNumber}
                       </div>
-                      {s.receiver.address && (
-                        <div className="ticket-seat-pos">
-                          {s.receiver.address}
-                        </div>
-                      )}
                     </td>
                     <td>
-                      <span>
-                        {formatMethod(s.pickupMethod)} →{' '}
-                        {formatMethod(s.deliveryMethod)}
-                      </span>
+                      <strong>{s.originPoint.name}</strong>
+                      <div className="ticket-seat-pos">
+                        {s.originPoint.address}
+                      </div>
                     </td>
                     <td>
-                      {s.originBranch && s.destinationBranch ? (
-                        <>
-                          <span>
-                            {s.originBranch.name} → {s.destinationBranch.name}
-                          </span>
-                          {(s.originBranch.address || s.destinationBranch.address) && (
-                            <div className="ticket-seat-pos">
-                              {s.originBranch.address || '—'} →{' '}
-                              {s.destinationBranch.address || '—'}
-                            </div>
-                          )}
-                        </>
-                      ) : (
-                        '—'
-                      )}
+                      <strong>{s.destinationPoint.name}</strong>
+                      <div className="ticket-seat-pos">
+                        {s.destinationPoint.address}
+                      </div>
                     </td>
                     <td>
                       <strong>{s.totalFee.toLocaleString('vi-VN')} đ</strong>
@@ -259,30 +215,21 @@ export function CustomerShipmentsTab({ customerId }: { customerId: number }) {
                     <dd>{formatDateTime(s.sentAt)}</dd>
                   </div>
                   <div>
-                    <dt>Hình thức</dt>
+                    <dt>Điểm gửi</dt>
                     <dd>
-                      {formatMethod(s.pickupMethod)} →{' '}
-                      {formatMethod(s.deliveryMethod)}
+                      <strong>{s.originPoint.name}</strong>
+                      <div className="ticket-seat-pos">
+                        {s.originPoint.address}
+                      </div>
                     </dd>
                   </div>
                   <div>
-                    <dt>Điểm gửi / nhận</dt>
+                    <dt>Điểm nhận</dt>
                     <dd>
-                      {s.originBranch && s.destinationBranch ? (
-                        <>
-                          <span>
-                            {s.originBranch.name} → {s.destinationBranch.name}
-                          </span>
-                          {(s.originBranch.address || s.destinationBranch.address) && (
-                            <div className="ticket-seat-pos">
-                              {s.originBranch.address || '—'} →{' '}
-                              {s.destinationBranch.address || '—'}
-                            </div>
-                          )}
-                        </>
-                      ) : (
-                        '—'
-                      )}
+                      <strong>{s.destinationPoint.name}</strong>
+                      <div className="ticket-seat-pos">
+                        {s.destinationPoint.address}
+                      </div>
                     </dd>
                   </div>
                   <div>

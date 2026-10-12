@@ -12,22 +12,30 @@ import { OptionalAuth, Public } from '../auth/decorators/public.decorator.js';
 import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
 import { BookingsService } from './bookings.service.js';
 import { BookingQueryDto } from './dto/booking-query.dto.js';
+import { BookingQuoteDto } from './dto/booking-quote.dto.js';
 import { CreateBookingDto } from './dto/create-booking.dto.js';
 
 @Controller('bookings')
 export class BookingsController {
   constructor(private readonly bookingsService: BookingsService) {}
 
+  @Public()
+  @Post('quote')
+  async getBookingQuote(@Body() dto: BookingQuoteDto) {
+    return this.bookingsService.getBookingQuote(
+      dto.tripId,
+      dto.seatIds,
+      dto.promotionCode,
+    );
+  }
+
   @Post()
   @OptionalAuth()
   async createBooking(
-    @Body() body: CreateBookingDto,
+    @Body() dto: CreateBookingDto,
     @CurrentPrincipal() principal?: AuthPrincipal,
   ) {
-    const data = await this.bookingsService.createBooking(
-      body,
-      principal?.taiKhoanId,
-    );
+    const data = await this.bookingsService.createBooking(dto, principal);
     return { data };
   }
 
@@ -36,7 +44,10 @@ export class BookingsController {
     @CurrentPrincipal() principal: AuthPrincipal,
     @Query() query: BookingQueryDto,
   ) {
-    return this.bookingsService.findCustomerBookings(principal.taiKhoanId, query);
+    return this.bookingsService.findCustomerBookings(
+      principal.taiKhoanId,
+      query,
+    );
   }
 
   @Get(':bookingId')

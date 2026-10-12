@@ -1,7 +1,19 @@
 import { Test } from '@nestjs/testing';
-import { type ExecutionContext, type INestApplication, UnauthorizedException } from '@nestjs/common';
+import {
+  type ExecutionContext,
+  type INestApplication,
+  UnauthorizedException,
+} from '@nestjs/common';
 import request from 'supertest';
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 import { AppModule } from '../../../src/app.module.js';
 import { AccessTokenGuard } from '../../../src/auth/guards/access-token.guard.js';
 import { ADMIN_ROLE_DEFAULT_PERMISSION_KEYS } from '../../../src/auth/permissions/permission-catalog.js';
@@ -16,6 +28,10 @@ const mockTrip = {
   ngayKhoiHanh: new Date('2026-10-10T00:00:00.000Z'),
   gioKhoiHanh: new Date('1970-01-01T07:30:00.000Z'),
   trangThai: 'CHUA_KHOI_HANH',
+  nhanGuiHang: true,
+  sucChuaXeMay: 1,
+  sucChuaHangCongKenh: 2,
+  sucChuaHangNhe: 3,
   createdAt: new Date('2026-10-01T10:00:00.000Z'),
   updatedAt: new Date('2026-10-01T10:00:00.000Z'),
   tuyenXe: {
@@ -31,6 +47,9 @@ const mockTrip = {
     loaiXe: {
       loaiXeId: 2,
       tenLoai: 'GIƯỜNG NẰM',
+      sucChuaXeMayMacDinh: 9,
+      sucChuaHangCongKenhMacDinh: 9,
+      sucChuaHangNheMacDinh: 9,
     },
   },
   gheChuyenXes: [
@@ -75,7 +94,8 @@ const testAccessTokenGuard = {
         message: 'Yêu cầu đăng nhập.',
       });
     }
-    context.switchToHttp().getRequest<{ user?: AuthPrincipal }>().user = currentPrincipal;
+    context.switchToHttp().getRequest<{ user?: AuthPrincipal }>().user =
+      currentPrincipal;
     return true;
   },
 };
@@ -196,6 +216,8 @@ describe('Trips read HTTP contract and authorization', () => {
           departureDate: '2026-10-10',
           departureTime: '07:30:00',
           status: 'CHUA_KHOI_HANH',
+          acceptsShipments: true,
+          cargoCapacity: { motorbikes: 1, bulkyCargo: 2, lightCargo: 3 },
           route: {
             routeId: 1,
             code: 'FUTA-TX-0001',
@@ -283,6 +305,8 @@ describe('Trips read HTTP contract and authorization', () => {
         departureDate: '2026-10-10',
         departureTime: '07:30:00',
         status: 'CHUA_KHOI_HANH',
+        acceptsShipments: true,
+        cargoCapacity: { motorbikes: 1, bulkyCargo: 2, lightCargo: 3 },
         route: {
           routeId: 1,
           code: 'FUTA-TX-0001',
@@ -340,15 +364,18 @@ describe('Trips read HTTP contract and authorization', () => {
     ['status', 'MO_BAN'],
     ['sortBy', 'unknownField'],
     ['sortDirection', 'diagonal'],
-  ])('rejects invalid query %s=%s with 400 VALIDATION_ERROR', async (field, val) => {
-    const res = await request(app.getHttpServer())
-      .get('/api/v1/trips')
-      .query({ [field]: val })
-      .expect(400);
+  ])(
+    'rejects invalid query %s=%s with 400 VALIDATION_ERROR',
+    async (field, val) => {
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/trips')
+        .query({ [field]: val })
+        .expect(400);
 
-    expect(res.body.error).toBe('VALIDATION_ERROR');
-    expect(prisma.chuyenXe.findMany).not.toHaveBeenCalled();
-  });
+      expect(res.body.error).toBe('VALIDATION_ERROR');
+      expect(prisma.chuyenXe.findMany).not.toHaveBeenCalled();
+    },
+  );
 
   it.each(['0', '-1', 'abc'])(
     'rejects invalid trip id %s with 400 VALIDATION_ERROR',
@@ -455,7 +482,9 @@ describe('Trips read HTTP contract and authorization', () => {
         taiKhoanId: 12,
         sessionId: 'test-session-dieu-hanh',
         roles: ['NHAN_VIEN_DIEU_HANH'],
-        permissions: [...ADMIN_ROLE_DEFAULT_PERMISSION_KEYS.NHAN_VIEN_DIEU_HANH],
+        permissions: [
+          ...ADMIN_ROLE_DEFAULT_PERMISSION_KEYS.NHAN_VIEN_DIEU_HANH,
+        ],
         nhanVienId: 102,
         nhaXeId: 5,
       };

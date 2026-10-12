@@ -19,6 +19,9 @@ const VEHICLE_TYPE_SELECT = {
   loaiXeId: true,
   tenLoai: true,
   moTa: true,
+  sucChuaXeMayMacDinh: true,
+  sucChuaHangCongKenhMacDinh: true,
+  sucChuaHangNheMacDinh: true,
   createdAt: true,
   updatedAt: true,
 } satisfies Prisma.LoaiXeSelect;
@@ -32,6 +35,9 @@ export function mapVehicleType(vehicleType: VehicleTypeRecord) {
     vehicleTypeId: vehicleType.loaiXeId,
     name: vehicleType.tenLoai,
     description: vehicleType.moTa,
+    motorbikeCapacityDefault: vehicleType.sucChuaXeMayMacDinh,
+    bulkyCargoCapacityDefault: vehicleType.sucChuaHangCongKenhMacDinh,
+    lightCargoCapacityDefault: vehicleType.sucChuaHangNheMacDinh,
     createdAt: vehicleType.createdAt.toISOString(),
     updatedAt: vehicleType.updatedAt.toISOString(),
   };
@@ -101,7 +107,10 @@ const sortFieldMap = {
   name: 'tenLoai',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt',
-} satisfies Record<VehicleTypeSortField, keyof Prisma.LoaiXeOrderByWithRelationInput>;
+} satisfies Record<
+  VehicleTypeSortField,
+  keyof Prisma.LoaiXeOrderByWithRelationInput
+>;
 
 @Injectable()
 export class VehicleTypesService {
@@ -127,6 +136,9 @@ export class VehicleTypesService {
           nhaXeId,
           tenLoai: input.name,
           moTa: input.description ?? null,
+          sucChuaXeMayMacDinh: input.motorbikeCapacityDefault ?? 0,
+          sucChuaHangCongKenhMacDinh: input.bulkyCargoCapacityDefault ?? 0,
+          sucChuaHangNheMacDinh: input.lightCargoCapacityDefault ?? 0,
         },
         select: VEHICLE_TYPE_SELECT,
       });
@@ -153,6 +165,15 @@ export class VehicleTypesService {
         data: {
           tenLoai: input.name,
           moTa: input.description ?? null,
+          ...(input.motorbikeCapacityDefault !== undefined && {
+            sucChuaXeMayMacDinh: input.motorbikeCapacityDefault,
+          }),
+          ...(input.bulkyCargoCapacityDefault !== undefined && {
+            sucChuaHangCongKenhMacDinh: input.bulkyCargoCapacityDefault,
+          }),
+          ...(input.lightCargoCapacityDefault !== undefined && {
+            sucChuaHangNheMacDinh: input.lightCargoCapacityDefault,
+          }),
         },
       });
 

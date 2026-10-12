@@ -1,9 +1,11 @@
 import { Transform } from 'class-transformer';
 import {
+  IsBoolean,
   IsDateString,
   IsDefined,
   IsInt,
   IsNotEmpty,
+  IsOptional,
   IsString,
   Matches,
   Max,
@@ -12,6 +14,10 @@ import {
 } from 'class-validator';
 
 export class CreateTripDto {
+  @IsOptional()
+  @IsBoolean()
+  acceptsShipments?: boolean;
+
   @IsDefined()
   @IsString()
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))

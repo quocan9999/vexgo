@@ -40,6 +40,9 @@ const mockVehicle = {
   loaiXe: {
     loaiXeId: 2,
     tenLoai: 'GIƯỜNG NẰM',
+    sucChuaXeMayMacDinh: 1,
+    sucChuaHangCongKenhMacDinh: 2,
+    sucChuaHangNheMacDinh: 3,
   },
   ghes: [
     { gheId: 101, soGhe: 'A01' },
@@ -54,6 +57,10 @@ const mockTripCreated = {
   gioKhoiHanh: new Date('1970-01-01T07:30:00.000Z'),
   gioDen: new Date('1970-01-01T14:30:00.000Z'),
   trangThai: 'CHUA_KHOI_HANH',
+  nhanGuiHang: false,
+  sucChuaXeMay: 1,
+  sucChuaHangCongKenh: 2,
+  sucChuaHangNhe: 3,
   createdAt: new Date('2026-10-01T10:00:00.000Z'),
   updatedAt: new Date('2026-10-01T10:00:00.000Z'),
   tuyenXe: mockRoute,
@@ -223,6 +230,10 @@ describe('Trips write HTTP contract (05.2)', () => {
           nhaXeId: 5,
           tuyenXeId: 1,
           xeId: 8,
+          nhanGuiHang: false,
+          sucChuaXeMay: 1,
+          sucChuaHangCongKenh: 2,
+          sucChuaHangNhe: 3,
           gheChuyenXes: {
             create: [
               { gheId: 101, trangThai: 'TRONG' },
@@ -244,6 +255,8 @@ describe('Trips write HTTP contract (05.2)', () => {
           departureDate: '2026-10-10',
           departureTime: '07:30:00',
           status: 'CHUA_KHOI_HANH',
+          acceptsShipments: false,
+          cargoCapacity: { motorbikes: 1, bulkyCargo: 2, lightCargo: 3 },
           route: {
             routeId: 1,
             code: 'FUTA-TX-0001',
@@ -269,6 +282,111 @@ describe('Trips write HTTP contract (05.2)', () => {
           updatedAt: '2026-10-01T10:00:00.000Z',
         },
       });
+    });
+
+    it('accepts shipment opt-in while allowing zero snapshot capacities', async () => {
+      prisma.xe.findFirst.mockResolvedValue({
+        ...mockVehicle,
+        loaiXe: {
+          ...mockVehicle.loaiXe,
+          sucChuaXeMayMacDinh: 0,
+          sucChuaHangCongKenhMacDinh: 0,
+          sucChuaHangNheMacDinh: 0,
+        },
+      });
+      prisma.chuyenXe.create.mockResolvedValue({
+        ...mockTripCreated,
+        nhanGuiHang: true,
+        sucChuaXeMay: 0,
+        sucChuaHangCongKenh: 0,
+        sucChuaHangNhe: 0,
+      });
+
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/trips')
+        .send({ ...validBody, acceptsShipments: true })
+        .expect(201);
+
+      expect(prisma.chuyenXe.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            nhanGuiHang: true,
+            sucChuaXeMay: 0,
+            sucChuaHangCongKenh: 0,
+            sucChuaHangNhe: 0,
+          }),
+        }),
+      );
+      expect(res.body.data).toMatchObject({
+        acceptsShipments: true,
+        cargoCapacity: { motorbikes: 0, bulkyCargo: 0, lightCargo: 0 },
+      });
+    });
+
+    it('keeps a trip capacity snapshot after vehicle-type defaults change', async () => {
+      await request(app.getHttpServer())
+        .post('/api/v1/trips')
+        .send(validBody)
+        .expect(201);
+
+      expect(prisma.chuyenXe.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            sucChuaXeMay: 1,
+            sucChuaHangCongKenh: 2,
+            sucChuaHangNhe: 3,
+          }),
+        }),
+      );
+
+      prisma.chuyenXe.findFirst.mockResolvedValueOnce({
+        ...mockTripCreated,
+        xe: {
+          ...mockVehicle,
+          loaiXe: {
+            ...mockVehicle.loaiXe,
+            sucChuaXeMayMacDinh: 9,
+            sucChuaHangCongKenhMacDinh: 9,
+            sucChuaHangNheMacDinh: 9,
+          },
+        },
+      });
+
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/trips/101/operational-detail')
+        .expect(200);
+
+      expect(res.body.data.cargoCapacity).toEqual({
+        motorbikes: 1,
+        bulkyCargo: 2,
+        lightCargo: 3,
+      });
+    });
+
+    it('rejects client-supplied cargo capacity snapshots', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/trips')
+        .send({
+          ...validBody,
+          cargoCapacity: { motorbikes: 99, bulkyCargo: 99, lightCargo: 99 },
+          sucChuaXeMay: 99,
+          sucChuaHangCongKenh: 99,
+          sucChuaHangNhe: 99,
+        })
+        .expect(400);
+
+      expect(res.body.error).toBe('VALIDATION_ERROR');
+      expect(prisma.chuyenXe.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects a non-boolean acceptsShipments value', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/trips')
+        .send({ ...validBody, acceptsShipments: 'true' })
+        .expect(400);
+
+      expect(res.body.error).toBe('VALIDATION_ERROR');
+      expect(prisma.chuyenXe.create).not.toHaveBeenCalled();
     });
 
     it('rejects with 404 ROUTE_NOT_FOUND when route does not belong to tenant', async () => {
@@ -569,7 +687,7 @@ describe('Trips write HTTP contract (05.2)', () => {
       });
     });
 
-    it('rejects attempt to mutate immutable fields (code, routeId, vehicleId, status) with 400', async () => {
+    it('rejects attempts to mutate immutable trip, shipment, and capacity fields', async () => {
       const res = await request(app.getHttpServer())
         .patch('/api/v1/trips/101')
         .send({
@@ -578,10 +696,13 @@ describe('Trips write HTTP contract (05.2)', () => {
           routeId: 2,
           vehicleId: 9,
           status: 'DANG_CHAY',
+          acceptsShipments: true,
+          cargoCapacity: { motorbikes: 9, bulkyCargo: 9, lightCargo: 9 },
         })
         .expect(400);
 
       expect(res.body.error).toBe('VALIDATION_ERROR');
+      expect(prisma.chuyenXe.updateMany).not.toHaveBeenCalled();
     });
 
     it('rejects with 409 TRIP_STATUS_TRANSITION_NOT_ALLOWED when editing DANG_CHAY trip', async () => {
