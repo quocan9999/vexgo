@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "node --env-file=.env.local ../../scripts/run-next-workspace.mjs dev",
     "build": "next build",
-    "start": "node --env-file=.env.local ../../scripts/run-next-workspace.mjs start",
+    "start": "node --env-file-if-exists=.env.local ../../scripts/run-next-workspace.mjs start",
     "lint": "eslint",
     "test": "vitest run --config vitest.config.mts",
     "typecheck": "next typegen && tsc --noEmit"
