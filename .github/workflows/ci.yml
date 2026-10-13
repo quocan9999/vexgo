@@ -144,6 +144,11 @@ jobs:
       - name: Admin build
         run: npm run build --workspace=@vexgo/admin
 
+      - name: Admin production start smoke test
+        run: node --test scripts/next-workspace-start-smoke.test.mjs
+        env:
+          VEXGO_NEXT_START_SMOKE_APP: admin
+
   web:
     name: Web CI
     runs-on: ubuntu-latest
@@ -179,6 +184,11 @@ jobs:
 
       - name: Web build
         run: npm run build --workspace=@vexgo/web
+
+      - name: Web production start smoke test
+        run: node --test scripts/next-workspace-start-smoke.test.mjs
+        env:
+          VEXGO_NEXT_START_SMOKE_APP: web
 
       - name: Web e2e and route regression tests
         run: npm run test:e2e --workspace=@vexgo/web
