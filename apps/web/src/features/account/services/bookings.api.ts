@@ -222,8 +222,11 @@ export const bookingsApi = {
 
   async getPublicBookingDetail(
     bookingId: number,
+    options?: { signal?: AbortSignal },
   ): Promise<{ data: BookingResponseData }> {
-    const res = await fetch(`${API_BASE_URL}/bookings/${bookingId}/detail`);
+    const res = await fetch(`${API_BASE_URL}/bookings/${bookingId}/detail`, {
+      signal: options?.signal,
+    });
     if (!res.ok) {
       const error = await res.json().catch(() => ({}));
       throw new ApiError(

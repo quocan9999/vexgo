@@ -66,33 +66,6 @@ function PaymentContent() {
     return () => clearInterval(timer);
   }, [timeLeft]);
 
-  // Tự động kiểm tra trạng thái thanh toán (Auto-Polling khi SePay bắn Webhook)
-  useEffect(() => {
-    const bookingId = draft?.bookingId;
-    if (!bookingId) return;
-
-    let isSubscribed = true;
-    const checkInterval = setInterval(async () => {
-      try {
-        const res = await bookingsApi.getPublicBookingDetail(bookingId);
-        if (
-          isSubscribed &&
-          (res.data?.status === 'DA_THANH_TOAN' || res.data?.paymentStatus === 'DA_THANH_TOAN')
-        ) {
-          clearInterval(checkInterval);
-          router.push(`/invoice/${bookingId}`);
-        }
-      } catch {
-        // Giữ polling tiếp tục nếu có lỗi tạm thời
-      }
-    }, 2500);
-
-    return () => {
-      isSubscribed = false;
-      clearInterval(checkInterval);
-    };
-  }, [draft?.bookingId, router]);
-
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60)
       .toString()
@@ -125,6 +98,48 @@ function PaymentContent() {
     [draft, transferContent, vietQrConfig],
   );
 
+  // VietQR chỉ theo dõi trạng thái từ backend khi tài khoản nhận tiền đã được cấu hình.
+  useEffect(() => {
+    const bookingId = draft?.bookingId;
+    if (!bookingId || selectedMethod !== 'vietqr' || !vietQrUrl) return;
+
+    let isSubscribed = true;
+    let hasNavigated = false;
+    let timeout: ReturnType<typeof setTimeout> | null = null;
+    const controller = new AbortController();
+
+    const checkPaymentStatus = async () => {
+      try {
+        const res = await bookingsApi.getPublicBookingDetail(bookingId, {
+          signal: controller.signal,
+        });
+        const isPaid =
+          res.data?.status === 'DA_THANH_TOAN' ||
+          res.data?.paymentStatus === 'DA_THANH_TOAN';
+
+        if (isSubscribed && !hasNavigated && isPaid) {
+          hasNavigated = true;
+          router.push(`/invoice/${bookingId}`);
+          return;
+        }
+      } catch {
+        // Tiếp tục chờ nếu API tạm thời chưa phản hồi hoặc gặp lỗi mạng.
+      }
+
+      if (isSubscribed && !hasNavigated) {
+        timeout = setTimeout(() => void checkPaymentStatus(), 2500);
+      }
+    };
+
+    timeout = setTimeout(() => void checkPaymentStatus(), 2500);
+
+    return () => {
+      isSubscribed = false;
+      if (timeout) clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [draft?.bookingId, router, selectedMethod, vietQrUrl]);
+
   const copyToClipboard = (text: string, field: string) => {
     navigator.clipboard?.writeText(text);
     setCopiedField(field);
@@ -133,6 +148,7 @@ function PaymentContent() {
 
   const handlePayment = async () => {
     if (!draft) return;
+    if (selectedMethod === 'vietqr') return;
     setPaymentError(null);
 
     if (!draft.bookingId) {
@@ -327,7 +343,7 @@ function PaymentContent() {
                       3
                     </span>
                     <span className="font-medium">
-                      Quét mã ở trang này và xác nhận thanh toán
+                      Quét mã và hoàn tất chuyển khoản trong ứng dụng ngân hàng
                     </span>
                   </div>
                 </div>
@@ -370,6 +386,16 @@ function PaymentContent() {
                   </div>
                 )}
               </div>
+
+              {vietQrUrl && (
+                <p
+                  role="status"
+                  aria-live="polite"
+                  className="w-full max-w-[420px] mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-center text-sm font-semibold text-amber-800"
+                >
+                  Đang chờ hệ thống xác nhận thanh toán từ ngân hàng.
+                </p>
+              )}
 
               {/* Thông tin chuyển khoản sao chép */}
               {vietQrConfig && (
@@ -421,20 +447,24 @@ function PaymentContent() {
                   </p>
                 )}
 
-                {paymentError && (
-                  <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-xl text-left">
-                    <p className="text-xs font-semibold text-red-600">{paymentError}</p>
-                  </div>
-                )}
+                {selectedMethod !== 'vietqr' && (
+                  <>
+                    {paymentError && (
+                      <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-xl text-left">
+                        <p className="text-xs font-semibold text-red-600">{paymentError}</p>
+                      </div>
+                    )}
 
-                <button
-                  type="button"
-                  onClick={handlePayment}
-                  disabled={isProcessing}
-                  className="w-full h-11 bg-accent text-white font-bold rounded-xl hover:bg-accent-hover transition-colors flex items-center justify-center gap-2 disabled:opacity-70 text-sm cursor-pointer shadow-sm"
-                >
-                  {isProcessing ? 'Đang xác nhận...' : 'Tôi đã chuyển khoản thành công'}
-                </button>
+                    <button
+                      type="button"
+                      onClick={handlePayment}
+                      disabled={isProcessing}
+                      className="w-full h-11 bg-accent text-white font-bold rounded-xl hover:bg-accent-hover transition-colors flex items-center justify-center gap-2 disabled:opacity-70 text-sm cursor-pointer shadow-sm"
+                    >
+                      {isProcessing ? 'Đang xác nhận...' : 'Tôi đã chuyển khoản thành công'}
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           </div>
