@@ -217,6 +217,64 @@ describe('SeatHolds Concurrency & Isolation with MySQL (Integration)', () => {
     tripSeat2 = trip.gheChuyenXes[1].gheChuyenXeId;
   });
 
+  it('rejects the removed trip-scoped create endpoint without changing seat state', async () => {
+    const response = await request(app.getHttpServer())
+      .post(`/api/v1/trips/${tripId}/seat-holds`)
+      .send({ seatNumbers: ['S01'] });
+
+    expect(response.status).toBe(404);
+
+    const seat = await prisma.gheChuyenXe.findUnique({
+      where: { gheChuyenXeId: tripSeat1 },
+    });
+    const holds = await prisma.giuCho.findMany({
+      where: { chuyenXeId: tripId },
+    });
+
+    expect(seat?.trangThai).toBe('TRONG');
+    expect(seat?.giuChoId).toBeNull();
+    expect(holds).toHaveLength(0);
+  }, 30_000);
+
+  it('rejects the removed trip-scoped release endpoint without releasing a canonical hold', async () => {
+    const holdResponse = await request(app.getHttpServer())
+      .post('/api/v1/seat-holds')
+      .send({ tripId, seatIds: [tripSeat1] })
+      .expect(201);
+    const holdToken = (holdResponse.body.data ?? holdResponse.body).holdToken;
+    expect(holdToken).toBeDefined();
+
+    const seatWhileHeld = await prisma.gheChuyenXe.findUnique({
+      where: { gheChuyenXeId: tripSeat1 },
+    });
+    expect(seatWhileHeld?.trangThai).toBe('DANG_GIU');
+    expect(seatWhileHeld?.giuChoId).toBeDefined();
+
+    const response = await request(app.getHttpServer())
+      .delete(`/api/v1/trips/${tripId}/seat-holds`)
+      .send({ seatNumbers: ['S01'] });
+
+    expect(response.status).toBe(404);
+
+    const seatAfterLegacyRequest = await prisma.gheChuyenXe.findUnique({
+      where: { gheChuyenXeId: tripSeat1 },
+    });
+    const holdAfterLegacyRequest = await prisma.giuCho.findUnique({
+      where: { giuChoId: seatWhileHeld!.giuChoId! },
+    });
+
+    expect(seatAfterLegacyRequest?.trangThai).toBe('DANG_GIU');
+    expect(seatAfterLegacyRequest?.giuChoId).toBe(seatWhileHeld?.giuChoId);
+    expect(holdAfterLegacyRequest?.trangThai).toBe('DANG_GIU');
+
+    await request(app.getHttpServer())
+      .delete('/api/v1/seat-holds')
+      .set('X-Hold-Token', holdToken)
+      .expect(200);
+
+    await request(app.getHttpServer()).delete('/api/v1/seat-holds').expect(400);
+  }, 30_000);
+
   it('allows only one of two concurrent requests to hold the exact same seat on real MySQL (CAS Race Condition)', async () => {
     // Both requests attempt to hold tripSeat1 simultaneously
     const [res1, res2] = await Promise.all([

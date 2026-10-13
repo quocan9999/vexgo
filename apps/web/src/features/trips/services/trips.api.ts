@@ -124,27 +124,6 @@ export const tripsApi = {
     return body.data ?? body;
   },
 
-  async holdSeats(tripId: number, seatNumbers: string[]): Promise<unknown> {
-    const response = await fetch(`${API_BASE_URL}/trips/${tripId}/seat-holds`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ seatNumbers }),
-    });
-    if (!response.ok)
-      throw await parseError(response, 'Không thể giữ ghế');
-    return response.json();
-  },
-
-  async releaseSeats(tripId: number, seatNumbers: string[]): Promise<unknown> {
-    const response = await fetch(`${API_BASE_URL}/trips/${tripId}/seat-holds`, {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ seatNumbers }),
-    });
-    if (!response.ok)
-      throw await parseError(response, 'Không thể giải phóng ghế');
-    return response.json();
-  },
 };
 
 export type ApiBusCompany = {
