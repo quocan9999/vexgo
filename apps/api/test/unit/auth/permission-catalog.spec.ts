@@ -34,6 +34,8 @@ describe('Admin permission defaults', () => {
       'role:read',
       'permission:assign',
       'customer:read',
+      'chat:read',
+      'chat:manage',
     ]);
   });
 
@@ -93,6 +95,8 @@ describe('Admin permission defaults', () => {
       'admin-account:read',
       'admin-account:create',
       'admin-account:update',
+      'chat:read',
+      'chat:manage',
     ]);
     expect(new Set(permissionKeys).size).toBe(permissionKeys.length);
   });
@@ -122,6 +126,8 @@ describe('Admin permission defaults', () => {
       'role:read',
       'permission:assign',
       'customer:read',
+      'chat:read',
+      'chat:manage',
     ];
     const platformPermissionKeys = [
       'bus-company:read',
@@ -160,12 +166,19 @@ describe('Admin permission defaults', () => {
     ]);
   });
 
-  it('leaves employee and customer roles without default permissions', () => {
+  it('leaves ticket-seller, attendant, sales and customer roles without default permissions', () => {
     expect(ADMIN_ROLE_DEFAULT_PERMISSION_KEYS.NHAN_VIEN_BAN_VE).toEqual([]);
-    expect(ADMIN_ROLE_DEFAULT_PERMISSION_KEYS.NHAN_VIEN_CSKH).toEqual([]);
     expect(ADMIN_ROLE_DEFAULT_PERMISSION_KEYS.NHAN_VIEN_PHU_XE).toEqual([]);
     expect(ADMIN_ROLE_DEFAULT_PERMISSION_KEYS.NHAN_VIEN_KINH_DOANH).toEqual([]);
     expect(ADMIN_ROLE_DEFAULT_PERMISSION_KEYS.KHACH_HANG).toEqual([]);
+  });
+
+  it('assigns customer support and chat capabilities to NHAN_VIEN_CSKH by default', () => {
+    expect(ADMIN_ROLE_DEFAULT_PERMISSION_KEYS.NHAN_VIEN_CSKH).toEqual([
+      'chat:read',
+      'chat:manage',
+      'customer:read',
+    ]);
   });
 
   it('references only permissions defined in the catalog', () => {

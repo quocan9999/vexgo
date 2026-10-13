@@ -1325,6 +1325,144 @@ async function seedOctoberTrips(db, operators, vehicles, vehicleTypes, routes) {
   }
 }
 
+async function seedSupportChat(db, operators, accounts) {
+  const futaOperator = operators.FUTA;
+  const tbOperator = operators.TB;
+  const customer1 = accounts.customers[0];
+  const customer2 = accounts.customers[1];
+
+  const futaCskh = accounts.employees.find(
+    (e) => e.operatorCode === 'FUTA' && e.roleName === 'NHAN_VIEN_CSKH',
+  );
+  const tbCskh = accounts.employees.find(
+    (e) => e.operatorCode === 'TB' && e.roleName === 'NHAN_VIEN_CSKH',
+  );
+
+  if (!futaOperator || !customer1 || !futaCskh) return;
+
+  // 1. Cuộc trò chuyện đang xử lý giữa customer1 và CSKH Phương Trang
+  const conv1 = await upsertBy(
+    db,
+    'CuocTroChuyen',
+    { maCuocTroChuyen: 'CC-FUTA-20261013-0001' },
+    {
+      maCuocTroChuyen: 'CC-FUTA-20261013-0001',
+      tieuDe: 'Hỏi về đón trả tận nơi tại Đà Lạt',
+      trangThai: 'DANG_XU_LY',
+      kenhHoTro: 'WEB',
+      cheDoChat: 'NGUOI_THAT',
+      khachHangId: customer1.khachHangId,
+      nhanVienId: futaCskh.nhanVienId,
+      nhaXeId: futaOperator.nhaXeId,
+    },
+    {
+      trangThai: 'DANG_XU_LY',
+      nhanVienId: futaCskh.nhanVienId,
+    },
+  );
+
+  await upsertBy(
+    db,
+    'TinNhanHoTro',
+    { clientMessageId: 'msg-seed-futa-001' },
+    {
+      clientMessageId: 'msg-seed-futa-001',
+      cuocTroChuyenId: conv1.cuocTroChuyenId,
+      taiKhoanGuiId: customer1.account.taiKhoanId,
+      loaiNguoiGui: 'KHACH_HANG',
+      loaiTinNhan: 'VAN_BAN',
+      noiDung: 'Chào nhà xe Phương Trang, chuyến 22h tối nay từ TP.HCM đi Đà Lạt có trung chuyển tận nơi khách sạn không ạ?',
+      trangThai: 'DA_DOC',
+      daDocLuc: new Date(),
+    },
+    {
+      noiDung: 'Chào nhà xe Phương Trang, chuyến 22h tối nay từ TP.HCM đi Đà Lạt có trung chuyển tận nơi khách sạn không ạ?',
+    },
+  );
+
+  await upsertBy(
+    db,
+    'TinNhanHoTro',
+    { clientMessageId: 'msg-seed-futa-002' },
+    {
+      clientMessageId: 'msg-seed-futa-002',
+      cuocTroChuyenId: conv1.cuocTroChuyenId,
+      taiKhoanGuiId: futaCskh.account.taiKhoanId,
+      loaiNguoiGui: 'NHAN_VIEN',
+      loaiTinNhan: 'VAN_BAN',
+      noiDung: 'Dạ chào bạn, Phương Trang có hỗ trợ trung chuyển miễn phí trong bán kính 5km trung tâm Đà Lạt nhé ạ. Bạn cho mình xin mã vé để kiểm tra nha!',
+      trangThai: 'DA_DOC',
+      daDocLuc: new Date(),
+    },
+    {
+      noiDung: 'Dạ chào bạn, Phương Trang có hỗ trợ trung chuyển miễn phí trong bán kính 5km trung tâm Đà Lạt nhé ạ. Bạn cho mình xin mã vé để kiểm tra nha!',
+    },
+  );
+
+  // 2. Cuộc trò chuyện đang chờ tiếp nhận giữa customer1 và Thành Bưởi
+  if (tbOperator) {
+    const conv2 = await upsertBy(
+      db,
+      'CuocTroChuyen',
+      { maCuocTroChuyen: 'CC-TB-20261013-0002' },
+      {
+        maCuocTroChuyen: 'CC-TB-20261013-0002',
+        tieuDe: 'Hỏi về quy định mang thú cưng',
+        trangThai: 'CHO_TIEP_NHAN',
+        kenhHoTro: 'MOBILE',
+        cheDoChat: 'NGUOI_THAT',
+        khachHangId: customer1.khachHangId,
+        nhanVienId: null,
+        nhaXeId: tbOperator.nhaXeId,
+      },
+      {
+        trangThai: 'CHO_TIEP_NHAN',
+      },
+    );
+
+    await upsertBy(
+      db,
+      'TinNhanHoTro',
+      { clientMessageId: 'msg-seed-tb-001' },
+      {
+        clientMessageId: 'msg-seed-tb-001',
+        cuocTroChuyenId: conv2.cuocTroChuyenId,
+        taiKhoanGuiId: customer1.account.taiKhoanId,
+        loaiNguoiGui: 'KHACH_HANG',
+        loaiTinNhan: 'VAN_BAN',
+        noiDung: 'Chào nhà xe Thành Bưởi, mình có thể mang 1 bé mèo nhỏ đựng trong lồng chuyên dụng lên xe limousine không ạ?',
+        trangThai: 'DA_GUI',
+      },
+      {
+        noiDung: 'Chào nhà xe Thành Bưởi, mình có thể mang 1 bé mèo nhỏ đựng trong lồng chuyên dụng lên xe limousine không ạ?',
+      },
+    );
+  }
+
+  // 3. Cuộc trò chuyện đã đóng giữa customer2 và Phương Trang
+  if (customer2) {
+    await upsertBy(
+      db,
+      'CuocTroChuyen',
+      { maCuocTroChuyen: 'CC-FUTA-20261013-0003' },
+      {
+        maCuocTroChuyen: 'CC-FUTA-20261013-0003',
+        tieuDe: 'Hỏi về hoàn hủy vé',
+        trangThai: 'DA_DONG',
+        kenhHoTro: 'WEB',
+        cheDoChat: 'NGUOI_THAT',
+        khachHangId: customer2.khachHangId,
+        nhanVienId: futaCskh.nhanVienId,
+        nhaXeId: futaOperator.nhaXeId,
+        dongLuc: new Date(),
+      },
+      {
+        trangThai: 'DA_DONG',
+      },
+    );
+  }
+}
+
 async function main() {
   await prisma.$connect();
   const operators = await seedOperators(prisma);
@@ -1341,6 +1479,7 @@ async function main() {
   const transactions = await seedTransactions(prisma, operators, accounts, fleet, prices, cargoAndLogistics);
   await applyCustomerSnapshotChange(prisma, accounts);
   await seedOctoberTrips(prisma, operators, fleet.vehicles, vehicleTypes, fleet.routes);
+  await seedSupportChat(prisma, operators, accounts);
   printSummary(transactions);
 }
 

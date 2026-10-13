@@ -51,6 +51,8 @@ const expected = {
   HinhAnhHangHoa: 57,
   ThanhToan: 51,
   HoaDon: 39,
+  CuocTroChuyen: 3,
+  TinNhanHoTro: 3,
 };
 
 async function scalar(sql) {
@@ -181,7 +183,7 @@ async function main() {
 
   await verifyPermissionCatalogAndDefaults();
 
-  for (const table of ['ThongBao', 'ThongBaoNguoiNhan', 'PhanHoi', 'TinNhanHoTro']) {
+  for (const table of ['ThongBao', 'ThongBaoNguoiNhan', 'PhanHoi']) {
     await assertZero(`${table} omitted`, await scalar(`SELECT COUNT(*) AS value FROM \`${table}\``));
   }
 

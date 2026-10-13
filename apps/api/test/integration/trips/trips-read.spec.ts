@@ -573,7 +573,7 @@ describe('Trips read HTTP contract and authorization', () => {
           ...mockTrip.xe,
           loaiXe: { loaiXeId: 2, tenLoai: 'GIƯỜNG NẰM' },
         },
-        ngayKhoiHanh: new Date('2026-10-10T00:00:00.000Z'),
+        ngayKhoiHanh: new Date('2099-10-10T00:00:00.000Z'),
         gioKhoiHanh: new Date('1970-01-01T23:59:00.000Z'),
         gheChuyenXes: [{ trangThai: 'TRONG' }],
       });

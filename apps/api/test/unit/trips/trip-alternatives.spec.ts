@@ -1,5 +1,5 @@
 import { NotFoundException } from '@nestjs/common';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TripsService } from '../../../src/trips/trips.service.js';
 import type { PrismaService } from '../../../src/prisma/prisma.service.js';
 
@@ -99,6 +99,8 @@ describe('TripsService - getTripAlternatives', () => {
   );
 
   beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-10T00:00:00.000Z'));
     vi.clearAllMocks();
     prisma.chuyenXe.findUnique.mockResolvedValue(mockOriginalTrip);
     prisma.bangGia.findFirst.mockImplementation(async ({ where }) => {
@@ -107,6 +109,10 @@ describe('TripsService - getTripAlternatives', () => {
       }
       return { bangGiaId: 1, giaNiemYet: 250000 };
     });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('throws NotFoundException when original trip does not exist', async () => {
