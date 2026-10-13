@@ -9,6 +9,10 @@ import {
   type PaymentDraft,
 } from '@/features/booking/services/payment-draft';
 import { bookingsApi } from '@/features/account/services/bookings.api';
+import {
+  createVietQrImageUrl,
+  readVietQrAccountConfig,
+} from '@/features/payments/services/vietqr-config';
 
 const emptySubscribe = () => () => {};
 
@@ -104,15 +108,22 @@ function PaymentContent() {
     return `VEXGO ${draft.passenger.phoneNumber || 'DATVE'}`;
   }, [draft]);
 
-  const vietQrUrl = useMemo(() => {
-    if (!draft) return '';
-    const bankId = 'STB'; // Sacombank
-    const accountNo = 'SEP1000IHVEXGO';
-    const accountName = 'LE SONY';
-    const amount = draft.totalFare;
-    const memo = encodeURIComponent(transferContent);
-    return `https://img.vietqr.io/image/${bankId}-${accountNo}-compact2.png?amount=${amount}&addInfo=${memo}&accountName=${encodeURIComponent(accountName)}`;
-  }, [draft, transferContent]);
+  const vietQrConfig = useMemo(
+    () =>
+      readVietQrAccountConfig({
+        bankId: process.env.NEXT_PUBLIC_SEPAY_BANK_ID,
+        accountNumber: process.env.NEXT_PUBLIC_SEPAY_ACCOUNT_NUMBER,
+        accountName: process.env.NEXT_PUBLIC_SEPAY_ACCOUNT_NAME,
+      }),
+    [],
+  );
+  const vietQrUrl = useMemo(
+    () =>
+      draft
+        ? createVietQrImageUrl(vietQrConfig, draft.totalFare, transferContent)
+        : null,
+    [draft, transferContent, vietQrConfig],
+  );
 
   const copyToClipboard = (text: string, field: string) => {
     navigator.clipboard?.writeText(text);
@@ -340,56 +351,75 @@ function PaymentContent() {
 
               {/* VietQR Image động thật - Kích thước lớn dễ quét */}
               <div className="w-full max-w-[420px] aspect-square border-2 border-slate-200 rounded-3xl p-3 mb-6 bg-white flex items-center justify-center overflow-hidden shadow-2xs">
-                <img
-                  src={vietQrUrl}
-                  alt="Mã QR thanh toán VietQR"
-                  className="w-full h-full object-contain"
-                />
+                {vietQrUrl ? (
+                  <img
+                    src={vietQrUrl}
+                    alt="Mã QR thanh toán VietQR"
+                    className="w-full h-full object-contain"
+                  />
+                ) : (
+                  <div
+                    role="alert"
+                    className="flex flex-col items-center gap-3 px-5 text-center text-sm font-semibold text-amber-800"
+                  >
+                    <Info aria-hidden="true" className="h-6 w-6 shrink-0" />
+                    <p>
+                      VietQR chưa được cấu hình đầy đủ nên chưa thể hiển thị mã
+                      thanh toán. Vui lòng liên hệ bộ phận hỗ trợ.
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* Thông tin chuyển khoản sao chép */}
-              <div className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 mb-5 text-[13px] space-y-2.5">
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-500 font-medium">Ngân hàng:</span>
-                  <span className="font-bold text-slate-900">Sacombank</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-500 font-medium">Chủ tài khoản:</span>
-                  <span className="font-bold text-slate-900">LE SONY</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-500 font-medium">Số tài khoản VA:</span>
-                  <div className="flex items-center gap-2">
-                    <strong className="text-slate-950 font-black tracking-wide">SEP1000IHVEXGO</strong>
-                    <button
-                      type="button"
-                      onClick={() => copyToClipboard('SEP1000IHVEXGO', 'stk')}
-                      className="text-[11px] text-accent font-bold px-2 py-0.5 rounded bg-accent/10 hover:bg-accent/20 transition-colors whitespace-nowrap shrink-0"
-                    >
-                      {copiedField === 'stk' ? 'Đã chép' : 'Sao chép'}
-                    </button>
+              {vietQrConfig && (
+                <div className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 mb-5 text-[13px] space-y-2.5">
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-500 font-medium">Mã ngân hàng:</span>
+                    <span className="font-bold text-slate-900">{vietQrConfig.bankId}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-500 font-medium">Chủ tài khoản:</span>
+                    <span className="font-bold text-slate-900">{vietQrConfig.accountName}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-500 font-medium">Số tài khoản:</span>
+                    <div className="flex items-center gap-2">
+                      <strong className="text-slate-950 font-black tracking-wide">
+                        {vietQrConfig.accountNumber}
+                      </strong>
+                      <button
+                        type="button"
+                        onClick={() => copyToClipboard(vietQrConfig.accountNumber, 'stk')}
+                        className="text-[11px] text-accent font-bold px-2 py-0.5 rounded bg-accent/10 hover:bg-accent/20 transition-colors whitespace-nowrap shrink-0"
+                      >
+                        {copiedField === 'stk' ? 'Đã chép' : 'Sao chép'}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-500 font-medium">Nội dung CK:</span>
+                    <div className="flex items-center gap-2">
+                      <strong className="text-emerald-700 font-black">{transferContent}</strong>
+                      <button
+                        type="button"
+                        onClick={() => copyToClipboard(transferContent, 'nd')}
+                        className="text-[11px] text-accent font-bold px-2 py-0.5 rounded bg-accent/10 hover:bg-accent/20 transition-colors whitespace-nowrap shrink-0"
+                      >
+                        {copiedField === 'nd' ? 'Đã chép' : 'Sao chép'}
+                      </button>
+                    </div>
                   </div>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-500 font-medium">Nội dung CK:</span>
-                  <div className="flex items-center gap-2">
-                    <strong className="text-emerald-700 font-black">{transferContent}</strong>
-                    <button
-                      type="button"
-                      onClick={() => copyToClipboard(transferContent, 'nd')}
-                      className="text-[11px] text-accent font-bold px-2 py-0.5 rounded bg-accent/10 hover:bg-accent/20 transition-colors whitespace-nowrap shrink-0"
-                    >
-                      {copiedField === 'nd' ? 'Đã chép' : 'Sao chép'}
-                    </button>
-                  </div>
-                </div>
-              </div>
+              )}
 
               <div className="w-full text-center">
-                <p className="text-xs font-semibold text-slate-600 mb-3 flex items-center justify-center gap-1.5">
-                  <ScanLine className="w-4 h-4 text-emerald-600 inline-block" />
-                  Quét mã qua bất kỳ App Ngân hàng
-                </p>
+                {vietQrUrl && (
+                  <p className="text-xs font-semibold text-slate-600 mb-3 flex items-center justify-center gap-1.5">
+                    <ScanLine className="w-4 h-4 text-emerald-600 inline-block" />
+                    Quét mã qua bất kỳ App Ngân hàng
+                  </p>
+                )}
 
                 {paymentError && (
                   <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-xl text-left">
