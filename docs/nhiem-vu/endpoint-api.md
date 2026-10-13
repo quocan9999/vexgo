@@ -165,17 +165,14 @@ những tuyến hiện hữu đã có thời lượng đáng tin cậy.
 | Priority | Method | Endpoint | Auth | Mục đích / dữ liệu chính |
 |---|---|---|---|---|
 | HIGH | GET | `/api/v1/trips/:tripId/seats` | Public | Sơ đồ ghế của chuyến + trạng thái hiện tại + giá nếu có biến thể theo ghế. |
-| HIGH (TBD) | POST | `/api/v1/seat-holds` | Customer hoặc guest-session | Giữ một hoặc nhiều `seatIds` cho một `tripId`, trả `holdToken`, `expiresAt`. |
-| HIGH (TBD) | DELETE | `/api/v1/seat-holds/:holdToken` | Chủ hold | Chủ động giải phóng hold khi bỏ chọn/hủy checkout. |
+| HIGH (TBD) | POST | `/api/v1/seat-holds` | Customer principal hoặc guest-session cookie do backend cấp | Header `Idempotency-Key`; body `{tripId, seatIds}` với `seatIds` là `gheChuyenXeId` dương, duy nhất. Bearer sai/hết hạn trả `401`, không hạ cấp thành guest. Guest phải có cookie phiên hợp lệ; anonymous không cookie chưa được phép tạo hold. Backend giữ ghế 10 phút và trả `data.holdToken`, `data.expiresAt`; replay cùng key/payload/owner trả lại đúng token active. Active quota conflict trả `409`; vượt rate window trả `429` kèm `Retry-After`. |
+| HIGH (TBD) | DELETE | `/api/v1/seat-holds` | Guest dùng capability token; hold Customer cần đúng Customer principal | Gửi token qua header `X-Hold-Token`, không đưa token vào URL/body. Gọi để giải phóng hold khi bỏ chọn/hủy checkout; retry release là idempotent. |
 
-### Gap bắt buộc xử lý trước khi code seat hold
+### Các điều kiện cần đáp ứng trước khi triển khai seat hold
 
-Class diagram hiện có `GheChuyenXe.trangThai = TRONG | DANG_GIU | DA_DAT` và hành vi `giuGhe/giaiPhongGhe`, nhưng **chưa thể hiện rõ ai đang giữ ghế và giữ đến khi nào**. Nếu triển khai hold tạm thời, schema cần bổ sung một trong hai hướng:
+Prisma hiện đã có model `GiuCho`, liên kết ghế chuyến, trạng thái, chủ Customer tùy chọn, thời hạn và `tokenHash` duy nhất. Schema hiện tại chưa lưu idempotency key/fingerprint, nonce và key ID cần để khôi phục chính xác token sau khi mất response hoặc API restart; phần này cần migration riêng được duyệt trước khi triển khai idempotency bền vững.
 
-1. Entity `SeatHold` riêng có `holdToken`, owner/session, `expiresAt`, trip/seat; hoặc
-2. Bổ sung thông tin hold tương đương vào `GheChuyenXe`.
-
-Không được chỉ đổi `TRONG → DANG_GIU` mà không có owner/expiry vì sẽ tạo ghế bị treo và khó xử lý concurrency.
+Chỉ coi hold còn hiệu lực khi token khớp record `GiuCho` active trong DB, đúng owner/chuyến/tập ghế và chưa hết hạn. Tạo/release/consume phải dùng transaction cùng conditional update; không chỉ đổi `TRONG → DANG_GIU` hoặc dựa vào token đã ký mà bỏ qua record. Contract chi tiết, guest-session, idempotency và quota được chốt tại [TASK_A0_SEAT_HOLD_CONTRACT.md](../pr36-reconciliation/TASK_A0_SEAT_HOLD_CONTRACT.md).
 
 ---
 
@@ -184,7 +181,7 @@ Không được chỉ đổi `TRONG → DANG_GIU` mà không có owner/expiry v�
 | Priority | Method | Endpoint | Auth | Mục đích / dữ liệu chính |
 |---|---|---|---|---|
 | HIGH | POST | `/api/v1/bookings/quote` | Public/Customer | Backend tính preview: giá vé, số lượng ghế, khuyến mãi hợp lệ, tổng tiền. Không ghi booking. |
-| HIGH | POST | `/api/v1/bookings` | Customer; guest checkout nếu team chốt hỗ trợ | Tạo `PhieuDatVe` + `Ve` trong transaction; re-check trip/seat/price/promotion; gắn hold nếu có. |
+| HIGH | POST | `/api/v1/bookings` | Customer principal; guest chỉ sau khi chốt ownership/claim | Tạo `PhieuDatVe` + `Ve` trong transaction; `holdToken` bắt buộc, backend xác minh và consume hold đúng owner/chuyến/tập ghế trong cùng transaction; re-check trip/seat/price/promotion. |
 | HIGH | GET | `/api/v1/bookings/:bookingId` | Owner | Chi tiết booking + tickets + payment summary. |
 | MEDIUM | GET | `/api/v1/bookings` | Customer | Danh sách booking của chính khách hàng; filter `status`, date range. |
 | MEDIUM | POST | `/api/v1/bookings/:bookingId/cancel` | Owner | Hủy toàn booking khi rule cho phép; backend quyết định refund/fee. |
@@ -204,7 +201,7 @@ Client chỉ gửi các lựa chọn cần thiết, ví dụ:
     "phone": "...",
     "email": "..."
   },
-  "holdToken": "optional"
+  "holdToken": "<token nhận từ POST /api/v1/seat-holds>"
 }
 ```
 
@@ -404,13 +401,15 @@ Không để chatbot trực tiếp xác nhận giá, ghế trống, hủy/đổi
 GET  /trips/search
 GET  /trips/:id
 GET  /trips/:id/seats
-POST /seat-holds                (nếu dùng hold)
+POST /seat-holds                (Idempotency-Key; guest cần cookie phiên backend cấp)
 POST /bookings/quote
 POST /bookings
 POST /payments
 GET  /payments/:id/status
 GET  /bookings/:id
 ```
+
+Nếu khách bỏ checkout trước khi tạo booking, giải phóng hold bằng `DELETE /seat-holds` với `X-Hold-Token`.
 
 **Backend ownership:** A làm search/trip; B làm seat/booking/payment.  
 Hai người có thể code song song nếu thống nhất response của `GET /trips/:id` và identifier `tripId` từ đầu.
@@ -532,8 +531,7 @@ Bạn B lấy current customer từ auth guard/decorator/shared auth contract; k
 1. **Có cho guest booking không?**  
    Class `DonGiaoDich` có snapshot tên/số điện thoại/email và quan hệ khách hàng, nhưng tài liệu hiện tại chưa đủ để khẳng định guest checkout. Nếu không chốt, endpoint `POST /bookings` mặc định yêu cầu Customer auth.
 
-2. **Seat hold timeout bao lâu và lưu ở đâu?**  
-   Class diagram hiện thiếu owner/expiry của hold. Đây là gap cần sửa trước khi code.
+2. **Seat hold và guest-session bootstrap.** Contract A0 chốt TTL 10 phút và lưu trạng thái hold trong Prisma `GiuCho`; guest chỉ được tạo hold khi có cookie session do backend cấp. Trước triển khai cần duyệt cách bootstrap session, metadata/index migration cho idempotency, key rotation và quota/rate-limit; xem [TASK_A0_SEAT_HOLD_CONTRACT.md](../pr36-reconciliation/TASK_A0_SEAT_HOLD_CONTRACT.md).
 
 3. **Một booking có được hủy từng vé hay chỉ hủy cả booking?**  
    Model hiện có cả `PhieuDatVe.huyDatVe()` và `Ve.huyVe()`, vì vậy API đang chừa cả hai use case; business rule cần chốt rõ.
