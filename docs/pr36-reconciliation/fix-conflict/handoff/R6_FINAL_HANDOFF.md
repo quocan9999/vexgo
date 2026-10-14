@@ -3,7 +3,7 @@
 ## Trạng thái
 
 - Logic dùng chung và regression unit/UI đã triển khai.
-- `R6-AC06` **BLOCKED**: chưa chạy lại integration test MySQL sau sự cố dữ liệu ở `vexgo_pr36`; không được coi integration test là PASS.
+- `R6-AC06` **PASS**: integration test MySQL được chạy lại thành công sau khi khôi phục dữ liệu bị xóa.
 - Không sửa schema, migration hoặc cấu hình môi trường. Có sự cố ghi dữ liệu do integration-test cleanup trước đó; chi tiết và trạng thái phục hồi được ghi ở dưới. Không push.
 
 ## Quy tắc cước đã áp dụng
@@ -40,13 +40,16 @@
 - Web lint các file liên quan: **PASS**, 0 lỗi; còn 1 warning có sẵn `handleReloadUserInfo` không dùng trong `round-trip-booking.tsx`.
 - `git diff --cached --check`: **PASS**, không có whitespace error.
 - GitNexus `detect-changes --scope all` báo `critical` trên tập thay đổi tổng hợp 25 file, gồm cả README/tài liệu người dùng đã sửa. Impact theo UID cho `BookingsService.createBooking` và `ShipmentsService.createShipment` lần lượt là `LOW` tới controller trực tiếp; index vẫn đứng sau HEAD 4 commit. Cập nhật index bị treo và đã dừng, nên không xem kết quả stale là bảo đảm. Kiểm tra caller trong source xác nhận: booking đi từ `BookingsController` và Web `one-way-booking.tsx`; shipment đi từ `ShipmentsController` và Web `send-freight-page.tsx`. Không tìm thấy thư mục/mobile caller trong worktree.
+- Trước commit cập nhật handoff này, `detect_changes(scope=staged)` hoàn tất với risk `LOW`, 1 file tài liệu, 0 symbol/process bị ảnh hưởng. Lệnh refresh index theo hook không có tiến triển sau khoảng 80 giây nên đã dừng; index repository vẫn stale.
 
-## Integration test và sự cố dữ liệu cần xử lý
+## Integration test và khôi phục dữ liệu
 
 - Lượt chạy integration ban đầu không qua: 13 test thất bại khi cleanup chạy trong lúc `tripId` chưa được khởi tạo. Một điều kiện Prisma có `tripId: undefined` đã làm bộ lọc quá rộng; kết quả đọc chỉ sau lượt lỗi cho thấy `ChiTietCuocGuiHang` và `LichSuTrangThaiPhieuGuiHang` trong `vexgo_pr36` đều có 0 dòng. Xóa `HangHoa` tiếp theo bị chặn bởi khóa ngoại; khi đó có 24 phiếu gửi, 42 hàng hóa và 60 ảnh hàng hóa.
-- Test cleanup đã được sửa để chỉ xóa shipment khi có `tripId`, đồng thời xóa ảnh trước hàng hóa. Không chạy lại integration test và không thực hiện thêm ghi DB sau khi phát hiện sự cố.
-- Đã tìm backup trong các vị trí thường dùng. File SQL tìm thấy gần nhất là dump cũ ngày 21/09/2026 của database `vexgo`; file không có dữ liệu insert cho hai bảng cần phục hồi nên không dùng. Hiện chưa tìm thấy nguồn backup đủ tin cậy để khôi phục chính xác. Không tự tái tạo dữ liệu hoặc chép từ database khác.
-- Trước khi chạy lại integration, cần khôi phục đúng hai bảng từ backup của `vexgo_pr36`, hoặc dùng một bản clone test đã xác nhận an toàn; sau đó chạy riêng test này và kiểm tra cleanup.
+- Test cleanup đã được sửa để chỉ xóa shipment khi có `tripId`, đồng thời xóa ảnh trước hàng hóa.
+- Không tìm thấy dump phù hợp. Dữ liệu chính xác được khôi phục từ binary log của chính MySQL `vexgo_pr36`: binlog dùng `ROW`/`FULL`, hai event xóa cuối tại `binlog.000003` lưu đầy đủ row image. Khôi phục trong một transaction 36 dòng `ChiTietCuocGuiHang` và 60 dòng `LichSuTrangThaiPhieuGuiHang`, không tắt kiểm tra khóa ngoại và không lấy dữ liệu từ database khác.
+- Sau khôi phục, xác minh đủ 36/60 dòng và không có orphan theo phiếu gửi, bảng cước/loại hàng hoặc tài khoản. Các bảng không thuộc phạm vi giữ nguyên số lượng: `PhieuGuiHang=24`, `HangHoa=42`, `HinhAnhHangHoa=60`.
+- Chạy lại `npm --prefix apps/api run test -- test/integration/bookings/booking-status-history.spec.ts`: **PASS**, 13/13 tests. Log có thông báo lỗi được tiêm có chủ đích trong test rollback; Vitest hoàn tất exit code 0. Sau test, hai bảng vẫn đủ 36/60 dòng, các kiểm tra orphan đều 0 và số lượng ba bảng liên quan không đổi.
+- Tệp binlog/giải mã/SQL khôi phục tạm trong Temp đã được xóa sau khi xác minh. Integration test đã dọn fixture do chính test tạo; số hàng các bảng dữ liệu hiện hữu được đối chiếu trước/sau và không đổi.
 
 ## Postman smoke checklist
 
@@ -59,7 +62,6 @@
 
 ## Còn tồn tại / ngoài R6
 
-- Chưa xác minh integration MySQL do dữ liệu test đang thiếu và không có backup đã xác minh.
 - Luồng cargo khứ hồi chưa được lưu vào booking; cần quyết định/phạm vi riêng trước khi tích hợp.
 - Web chưa có endpoint quote; người dùng chỉ nhận giá authoritative khi submit, và lỗi bảng cước được hiển thị từ API.
 - Những vấn đề capacity/locking R7, persistence/order history R8, payment và các findings SePay không thuộc R6, không được xử lý ở đây.
