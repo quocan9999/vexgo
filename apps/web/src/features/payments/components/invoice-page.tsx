@@ -11,10 +11,10 @@ import {
   Armchair,
   Printer,
   MapPin,
-  Calendar,
 } from 'lucide-react';
 import { bookingsApi } from '@/features/account/services/bookings.api';
 import { useAuthSession } from '@/features/auth/auth-session';
+import { PAYMENT_DRAFT_STORAGE_PREFIX } from '@/features/booking/services/payment-draft';
 
 interface InvoiceLeg {
   route: string;
@@ -53,304 +53,201 @@ interface InvoiceModel {
 export default function InvoicePage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
   const { isAuthenticated, isHydrated, executeWithAuth } = useAuthSession();
-  const rawId = resolvedParams?.id || 'BW-888999';
+  const rawId = resolvedParams?.id || '';
   const numericBookingId = Number(rawId);
 
   const [invoice, setInvoice] = useState<InvoiceModel | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [loadedKey, setLoadedKey] = useState<string | null>(null);
+  const loadKey = `${rawId}:${isAuthenticated}:${isHydrated}`;
 
   useEffect(() => {
     if (!isHydrated) return;
-    let isMounted = true;
+    const controller = new AbortController();
 
-    // Helper format datetime
     const formatTimeText = (timeStr?: string | null) => {
-      if (!timeStr) return '20:00 • Hôm nay';
-      try {
-        const d = new Date(timeStr);
-        if (!isNaN(d.getTime())) {
-          return `${d.getHours().toString().padStart(2, '0')}:${d
-            .getMinutes()
-            .toString()
-            .padStart(2, '0')} • ${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1)
-            .toString()
-            .padStart(2, '0')}/${d.getFullYear()}`;
-        }
-      } catch {}
-      return timeStr;
-    };
-
-    // Helper search sessionStorage for drafts or completed payments
-    const findDraftFromSessionStorage = (): InvoiceModel | null => {
-      if (typeof window === 'undefined') return null;
-      try {
-        let raw = sessionStorage.getItem(`vexgo:invoice:${rawId}`);
-        if (!raw) {
-          raw = sessionStorage.getItem(`vexgo:payment-draft:${rawId}`);
-        }
-        if (!raw) {
-          raw = sessionStorage.getItem('vexgo:last-completed-booking');
-        }
-        if (!raw) {
-          for (let i = 0; i < sessionStorage.length; i++) {
-            const key = sessionStorage.key(i);
-            if (
-              key &&
-              (key.startsWith('vexgo:payment-draft:') ||
-                key.startsWith('vexgo:invoice:'))
-            ) {
-              const val = sessionStorage.getItem(key);
-              if (val) {
-                try {
-                  const parsed = JSON.parse(val);
-                  if (
-                    parsed.bookingCode === rawId ||
-                    parsed.orderCode === rawId ||
-                    parsed.id === rawId ||
-                    (numericBookingId && parsed.bookingId === numericBookingId)
-                  ) {
-                    raw = val;
-                    break;
-                  }
-                } catch {}
-              }
-            }
-          }
-        }
-        if (!raw) {
-          raw = sessionStorage.getItem('vexgo:last-completed-booking');
-        }
-
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          type RawLeg = {
-            route?: string;
-            departureTime?: string;
-            seats?: string[];
-            pickup?: string;
-            dropoff?: string;
-            busCompanyName?: string;
-            vehicleType?: string;
-            subtotal?: number;
-          };
-          const legs: InvoiceLeg[] = ((parsed.legs as RawLeg[]) || []).map((leg) => ({
-            route: leg.route || 'Chuyến xe liên tỉnh',
-            departureTime: formatTimeText(leg.departureTime),
-            seats: Array.isArray(leg.seats) && leg.seats.length > 0 ? leg.seats : ['A01'],
-            pickup: leg.pickup || 'Bến xe xuất phát',
-            dropoff: leg.dropoff || 'Bến xe đến',
-            busCompanyName:
-              leg.busCompanyName ||
-              parsed.legs?.[0]?.busCompanyName ||
-              'VexGo Transport',
-            vehicleType:
-              leg.vehicleType ||
-              parsed.legs?.[0]?.vehicleType ||
-              'Xe khách chất lượng cao',
-            fare: leg.subtotal || 0,
-          }));
-
-          type RawLuggageItem = {
-            type?: string;
-            name?: string;
-            quantity?: number;
-            weight?: number;
-            category?: string;
-          };
-          const cargoItems = ((parsed.luggage?.items as RawLuggageItem[]) || []).map((it) => ({
-            name: it.type || it.name || 'Hành lý',
-            quantity: it.quantity || 1,
-            weight: it.weight || 0,
-            categoryName: it.category || 'Hàng gửi kèm',
-          }));
-
-          const isRoundTrip =
-            parsed.tripType === 'round-trip' || legs.length > 1;
-
-          return {
-            bookingCode: parsed.bookingCode || rawId || 'VG-888999',
-            orderCode:
-              parsed.orderCode ||
-              `GD-${(rawId || '888999').replace(/[^A-Za-z0-9]/g, '')}`,
-            tripType: isRoundTrip ? 'round-trip' : 'one-way',
-            busCompanyName:
-              legs[0]?.busCompanyName || 'VexGo Transport',
-            passengerName: parsed.passenger?.fullName || 'Hành khách VexGo',
-            passengerPhone: parsed.passenger?.phoneNumber || '0987 654 321',
-            passengerEmail: parsed.passenger?.email || '',
-            totalAmount: parsed.totalFare || 620000,
-            cargoFee: parsed.luggage?.fee || 0,
-            cargoItems,
-            legs:
-              legs.length > 0
-                ? legs
-                : [
-                    {
-                      route: 'TP. Hồ Chí Minh - Đà Lạt',
-                      departureTime: '20:00 • Hôm nay',
-                      seats: ['A02', 'A03'],
-                      pickup: 'Bến xe Miền Đông mới - Quầy vé 42',
-                      dropoff: 'Bến xe Liên tỉnh Đà Lạt',
-                      busCompanyName: 'Phương Trang (FUTA Bus Lines)',
-                      vehicleType: 'Limousine 34 Phòng VIP',
-                      fare: parsed.totalFare || 620000,
-                    },
-                  ],
-            paymentStatus: parsed.paymentStatus || 'Đã thanh toán',
-            paymentMethod: parsed.paymentMethod || 'Chuyển khoản VietQR',
-            createdAt: parsed.createdAt || new Date().toISOString(),
-          };
-        }
-      } catch (err) {
-        console.warn('Error retrieving invoice from storage:', err);
-      }
-      return null;
-    };
-
-    // Realistic fallback data when opened directly with empty sessionStorage
-    const createFallbackModel = (): InvoiceModel => {
-      const code = rawId || 'BW-888999';
-      return {
-        bookingCode: code,
-        orderCode: `GD-${code.replace(/[^A-Za-z0-9]/g, '')}`,
-        tripType: 'one-way',
-        busCompanyName: 'Phương Trang (FUTA Bus Lines)',
-        passengerName: 'Nguyễn Văn An',
-        passengerPhone: '0987 654 321',
-        passengerEmail: 'nguyenvanan@vexgo.vn',
-        totalAmount: 620000,
-        cargoFee: 0,
-        cargoItems: [],
-        legs: [
-          {
-            route: 'TP. Hồ Chí Minh - Đà Lạt',
-            departureTime: '20:00 • 15/10/2026',
-            seats: ['A02', 'A03'],
-            pickup: 'Bến xe Miền Đông mới - Quầy vé 42',
-            dropoff: 'Bến xe Liên tỉnh Đà Lạt',
-            busCompanyName: 'Phương Trang (FUTA Bus Lines)',
-            vehicleType: 'Limousine 34 Phòng VIP',
-            fare: 620000,
-          },
-        ],
-        paymentStatus: 'Đã thanh toán',
-        paymentMethod: 'Chuyển khoản VietQR',
-        createdAt: new Date().toISOString(),
-      };
+      if (!timeStr) return '—';
+      const date = new Date(timeStr);
+      if (Number.isNaN(date.getTime())) return '—';
+      return `${date.getHours().toString().padStart(2, '0')}:${date
+        .getMinutes()
+        .toString()
+        .padStart(2, '0')} • ${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1)
+        .toString()
+        .padStart(2, '0')}/${date.getFullYear()}`;
     };
 
     const loadInvoice = async () => {
-      if (!isNaN(numericBookingId) && numericBookingId > 0) {
-        try {
-          let guestCredentials:
-            | { bookingCode: string; phoneNumber: string }
-            | undefined;
-          if (typeof window !== 'undefined') {
-            for (let index = 0; index < sessionStorage.length; index++) {
-              const key = sessionStorage.key(index);
-              if (!key) continue;
-              const raw = sessionStorage.getItem(key);
-              if (!raw) continue;
-              try {
-                const parsed: {
-                  bookingId?: number;
-                  bookingCode?: string;
-                  passenger?: { phoneNumber?: string };
-                } = JSON.parse(raw);
-                if (
-                  parsed.bookingId === numericBookingId &&
-                  parsed.bookingCode &&
-                  parsed.passenger?.phoneNumber
-                ) {
-                  guestCredentials = {
-                    bookingCode: parsed.bookingCode,
-                    phoneNumber: parsed.passenger.phoneNumber,
-                  };
-                  break;
-                }
-              } catch {
-                // Ignore unrelated or invalid entries in sessionStorage.
-              }
-            }
-          }
-          const res = isAuthenticated
-            ? await executeWithAuth((token) =>
-                bookingsApi.getPublicBookingDetail(numericBookingId, {
-                  accessToken: token,
-                  ...guestCredentials,
-                }),
-              )
-            : await bookingsApi.getPublicBookingDetail(
-                numericBookingId,
-                guestCredentials,
-              );
-          if (!isMounted) return;
-          const b = res.data;
-          const cargo = (b.cargoItems || []).map((c) => ({
-            name: c.name || 'Hành lý',
-            quantity: c.quantity || 1,
-            weight: c.weight || 0,
-            category: c.category,
-            categoryName: c.categoryName || 'Hàng gửi kèm',
-          }));
+      if (!Number.isSafeInteger(numericBookingId) || numericBookingId <= 0) {
+        setError('Mã đặt vé không hợp lệ nên chưa thể xác minh vé.');
+        setLoading(false);
+        setLoadedKey(loadKey);
+        return;
+      }
 
-          setInvoice({
-            bookingCode: b.bookingCode || rawId,
-            orderCode: b.orderCode || `GD-${b.bookingCode || rawId}`,
-            tripType: 'one-way',
-            busCompanyName: b.busCompanyName || 'VexGo Transport',
-            passengerName: b.passenger?.fullName || 'Hành khách VexGo',
-            passengerPhone: b.passenger?.phoneNumber || '—',
-            passengerEmail: b.passenger?.email || '',
-            totalAmount: Number(b.totalAmount) || 0,
-            cargoFee: b.cargoFee || 0,
-            cargoItems: cargo,
-            legs: [
-              {
-                route: b.route || 'Chuyến xe liên tỉnh',
-                departureTime: formatTimeText(b.departureTime),
-                seats: b.seatNumbers || [],
-                pickup: b.pickup || b.origin || 'Bến xe xuất phát',
-                dropoff: b.dropoff || b.destination || 'Bến xe đến',
-                busCompanyName: b.busCompanyName || 'VexGo Transport',
-                vehicleType: b.vehicleType || 'Xe khách chất lượng cao',
-                fare: Number(b.ticketSubtotal || b.totalAmount) || 0,
-              },
-            ],
-            paymentStatus: b.paymentStatus || 'Đã thanh toán',
-            paymentMethod: b.paymentMethod || 'Chuyển khoản',
-            createdAt: b.createdAt || new Date().toISOString(),
-          });
-          setLoading(false);
-          return;
+      let guestCredentials:
+        | { bookingCode: string; phoneNumber: string }
+        | undefined;
+      for (let index = 0; index < sessionStorage.length; index++) {
+        const key = sessionStorage.key(index);
+        if (!key?.startsWith(PAYMENT_DRAFT_STORAGE_PREFIX)) continue;
+        const raw = sessionStorage.getItem(key);
+        if (!raw) continue;
+        try {
+          const parsed: {
+            bookingId?: number;
+            bookingCode?: string;
+            passenger?: { phoneNumber?: string };
+          } = JSON.parse(raw);
+          if (
+            parsed.bookingId === numericBookingId &&
+            parsed.bookingCode?.trim() &&
+            parsed.passenger?.phoneNumber?.trim()
+          ) {
+            guestCredentials = {
+              bookingCode: parsed.bookingCode,
+              phoneNumber: parsed.passenger.phoneNumber,
+            };
+            break;
+          }
         } catch {
-          // Fall through to sessionStorage / fallback
+          // Ignore malformed drafts; the backend still decides access.
         }
       }
 
-      if (!isMounted) return;
-      const fromDraft = findDraftFromSessionStorage();
-      setInvoice(fromDraft || createFallbackModel());
-      setLoading(false);
+      try {
+        const response = isAuthenticated
+          ? await executeWithAuth((token) =>
+              bookingsApi.getPublicBookingDetail(numericBookingId, {
+                signal: controller.signal,
+                accessToken: token,
+                ...guestCredentials,
+              }),
+            )
+          : await bookingsApi.getPublicBookingDetail(numericBookingId, {
+              signal: controller.signal,
+              ...guestCredentials,
+            });
+        if (controller.signal.aborted) return;
+
+        const booking = response.data;
+        if (booking.bookingId !== numericBookingId) {
+          throw new Error('Thông tin đơn đặt vé không khớp với yêu cầu.');
+        }
+
+        const statuses = [booking.status, booking.paymentStatus];
+        const isPaid =
+          booking.paymentStatus === 'DA_THANH_TOAN' &&
+          ['DA_THANH_TOAN', 'HOAN_TAT'].includes(booking.status ?? '');
+        if (!isPaid) {
+          if (statuses.some((status) => ['DA_HUY', 'HUY'].includes(status ?? ''))) {
+            throw new Error('Đơn đặt vé đã bị hủy nên không thể xuất vé điện tử.');
+          }
+          if (statuses.some((status) => ['HET_HAN', 'EXPIRED'].includes(status ?? ''))) {
+            throw new Error('Đơn đặt vé đã hết hạn nên không thể xuất vé điện tử.');
+          }
+          if (statuses.some((status) => ['CHO_THANH_TOAN', 'DANG_XU_LY'].includes(status ?? ''))) {
+            throw new Error('Thanh toán chưa được hệ thống xác nhận. Vé sẽ xuất hiện sau khi ngân hàng xác nhận giao dịch.');
+          }
+          throw new Error('Chưa thể xác minh trạng thái thanh toán của đơn đặt vé.');
+        }
+
+        const totalAmount = Number(booking.totalAmount);
+        if (
+          !booking.bookingCode?.trim() ||
+          !booking.orderCode?.trim() ||
+          !Number.isFinite(totalAmount) ||
+          totalAmount < 0
+        ) {
+          throw new Error('Thông tin vé từ máy chủ chưa đầy đủ nên chưa thể xuất vé.');
+        }
+
+        const cargoItems = (booking.cargoItems || []).map((item) => ({
+          name: item.name || 'Hàng gửi kèm',
+          quantity: item.quantity ?? 1,
+          weight: item.weight ?? 0,
+          category: item.category,
+          categoryName: item.categoryName || 'Hàng gửi kèm',
+        }));
+        setInvoice({
+          bookingCode: booking.bookingCode,
+          orderCode: booking.orderCode,
+          tripType: 'one-way',
+          busCompanyName: booking.busCompanyName || '—',
+          passengerName: booking.passenger?.fullName || '—',
+          passengerPhone: booking.passenger?.phoneNumber || '—',
+          passengerEmail: booking.passenger?.email || '',
+          totalAmount,
+          cargoFee: Number(booking.cargoFee) || 0,
+          cargoItems,
+          legs: [
+            {
+              route: booking.route || '—',
+              departureTime: formatTimeText(booking.departureTime),
+              seats: booking.seatNumbers || [],
+              pickup: booking.pickup || booking.origin || '—',
+              dropoff: booking.dropoff || booking.destination || '—',
+              busCompanyName: booking.busCompanyName || '—',
+              vehicleType: booking.vehicleType || '—',
+              fare: Number(booking.ticketSubtotal ?? totalAmount),
+            },
+          ],
+          paymentStatus: booking.paymentStatus!,
+          paymentMethod: booking.paymentMethod || '—',
+          createdAt: booking.createdAt || '—',
+        });
+      } catch (loadError) {
+        if (controller.signal.aborted) return;
+        setError(
+          loadError instanceof Error
+            ? loadError.message
+            : 'Không thể xác minh trạng thái thanh toán. Vui lòng thử lại sau.',
+        );
+      } finally {
+        if (!controller.signal.aborted) {
+          setLoading(false);
+          setLoadedKey(loadKey);
+        }
+      }
     };
 
     void loadInvoice();
 
     return () => {
-      isMounted = false;
+      controller.abort();
     };
-  }, [executeWithAuth, isAuthenticated, isHydrated, rawId, numericBookingId]);
+  }, [executeWithAuth, isAuthenticated, isHydrated, loadKey, numericBookingId]);
 
   const handlePrint = () => {
     window.print();
   };
 
-  if (loading || !invoice) {
+  if (loading || loadedKey !== loadKey) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center font-sans">
         <div className="text-center">
           <div className="w-10 h-10 border-4 border-slate-900 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
           <p className="text-sm font-semibold text-slate-600">Đang xuất vé điện tử...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !invoice) {
+    return (
+      <div className="min-h-screen bg-slate-50 px-4 py-16 font-sans">
+        <div className="mx-auto max-w-[460px] rounded-2xl border border-amber-200 bg-white p-6 text-center shadow-sm">
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full border border-amber-200 bg-amber-50 text-amber-700">
+            <Clock aria-hidden="true" className="h-7 w-7" />
+          </div>
+          <h1 className="mb-2 text-lg font-bold text-slate-900">Chưa thể xuất vé điện tử</h1>
+          <p role="alert" className="text-sm leading-relaxed text-slate-600">
+            {error || 'Chưa thể xác minh trạng thái thanh toán của đơn đặt vé.'}
+          </p>
+          <Link href="/" className="mt-5 inline-flex h-10 items-center justify-center rounded-xl bg-slate-900 px-4 text-sm font-bold text-white hover:bg-slate-800">
+            Về trang chủ
+          </Link>
         </div>
       </div>
     );

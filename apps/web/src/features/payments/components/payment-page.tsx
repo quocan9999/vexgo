@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback, useSyncExternalStore, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, Info, ScanLine, X, MapPin, Calendar, Clock, Armchair, User, Package } from 'lucide-react';
+import { ArrowLeft, Info, ScanLine, X } from 'lucide-react';
 import {
   PAYMENT_DRAFT_STORAGE_PREFIX,
   validatePaymentDraft,
@@ -37,11 +37,20 @@ function useRawPaymentDraft(draftId: string | null): string | null {
 }
 
 type PaymentReadSnapshot = {
+  draftId: string;
   bookingId: number;
+  expectedOrderCode: string;
+  expectedTotalAmount: number;
+  orderCode: string | null;
+  totalAmount: number | null;
   paymentExpiresAt: string | null;
   serverTimeOffsetMs: number;
-  terminalStatus: 'cancelled' | 'expired' | 'verification-needed' | null;
+  terminalStatus: 'cancelled' | 'expired' | 'verification-needed' | 'failed' | null;
 };
+
+const PAYMENT_POLL_INTERVAL_MS = 2500;
+const MAX_INITIAL_STATUS_READ_FAILURES = 3;
+const PAYMENT_STATUS_REQUEST_TIMEOUT_MS = 10_000;
 
 function PaymentContent() {
   const router = useRouter();
@@ -61,24 +70,26 @@ function PaymentContent() {
     }
   }, [rawDraft]);
 
-  const [selectedMethod, setSelectedMethod] = useState('vietqr');
-  const [isProcessing, setIsProcessing] = useState(false);
   const [clockTick, setClockTick] = useState(0);
   const [paymentReadSnapshot, setPaymentReadSnapshot] =
     useState<PaymentReadSnapshot | null>(null);
   const [showTripDetailModal, setShowTripDetailModal] = useState(false);
   const [showCargoDetailModal, setShowCargoDetailModal] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
-  const [paymentError, setPaymentError] = useState<string | null>(null);
   const activePaymentReadSnapshot =
-    paymentReadSnapshot?.bookingId === draft?.bookingId
+    paymentReadSnapshot?.draftId === draft?.id &&
+    paymentReadSnapshot?.bookingId === draft?.bookingId &&
+    paymentReadSnapshot?.expectedOrderCode === draft?.orderCode?.trim() &&
+    paymentReadSnapshot?.expectedTotalAmount === draft?.totalFare
       ? paymentReadSnapshot
       : null;
+  const hasValidBookingId =
+    Number.isSafeInteger(draft?.bookingId) && (draft?.bookingId ?? 0) > 0;
   const paymentExpiresAt = activePaymentReadSnapshot?.paymentExpiresAt ?? null;
   const serverTimeOffsetMs =
     activePaymentReadSnapshot?.serverTimeOffsetMs ?? 0;
-  const paymentTerminalStatus =
-    activePaymentReadSnapshot?.terminalStatus ?? null;
+  const paymentTerminalStatus = activePaymentReadSnapshot?.terminalStatus ??
+    (draft && !hasValidBookingId ? 'verification-needed' : null);
   const deadlineMs = paymentExpiresAt ? Date.parse(paymentExpiresAt) : NaN;
   const timeLeft = clockTick > 0 && Number.isFinite(deadlineMs)
     ? Math.max(
@@ -129,9 +140,7 @@ function PaymentContent() {
     return `${m}:${s}`;
   };
 
-  const transferContent = useMemo(() => {
-    return draft?.orderCode?.trim() ?? '';
-  }, [draft]);
+  const transferContent = activePaymentReadSnapshot?.orderCode ?? '';
 
   const vietQrConfig = useMemo(
     () =>
@@ -144,112 +153,191 @@ function PaymentContent() {
   );
   const vietQrUrl = useMemo(
     () =>
-      draft
-        ? createVietQrImageUrl(vietQrConfig, draft.totalFare, transferContent)
+      activePaymentReadSnapshot &&
+      !activePaymentReadSnapshot.terminalStatus &&
+      activePaymentReadSnapshot.totalAmount !== null
+        ? createVietQrImageUrl(
+            vietQrConfig,
+            activePaymentReadSnapshot.totalAmount,
+            transferContent,
+          )
         : null,
-    [draft, transferContent, vietQrConfig],
+    [activePaymentReadSnapshot, transferContent, vietQrConfig],
   );
 
-  // VietQR chỉ theo dõi trạng thái từ backend khi tài khoản nhận tiền đã được cấu hình.
+  // Chỉ dùng dữ liệu booking đã được API xác thực để dựng QR hoặc điều hướng.
   useEffect(() => {
     const bookingId = draft?.bookingId;
-    if (!isHydrated || !bookingId || selectedMethod !== 'vietqr' || !vietQrUrl) return;
+    const expectedOrderCode = draft?.orderCode?.trim();
+    if (
+      !isHydrated ||
+      !draft?.id ||
+      !vietQrConfig ||
+      !hasValidBookingId ||
+      typeof bookingId !== 'number'
+    ) return;
+    if (!expectedOrderCode) return;
 
     let isSubscribed = true;
     let hasNavigated = false;
     let timeout: ReturnType<typeof setTimeout> | null = null;
-    const controller = new AbortController();
+    let activeRequestController: AbortController | null = null;
     let observedDeadlineMs: number | null = null;
     let observedServerTimeOffsetMs = 0;
+    let consecutiveFailures = 0;
+
+    const stopWithStatus = (
+      terminalStatus: NonNullable<PaymentReadSnapshot['terminalStatus']>,
+      paymentExpiresAt: string | null = null,
+    ) => {
+      if (!isSubscribed) return;
+      setPaymentReadSnapshot({
+        draftId: draft.id,
+        bookingId,
+        expectedOrderCode,
+        expectedTotalAmount: draft.totalFare,
+        orderCode: null,
+        totalAmount: null,
+        paymentExpiresAt,
+        serverTimeOffsetMs: observedServerTimeOffsetMs,
+        terminalStatus,
+      });
+    };
+
+    const scheduleNextRead = (delayMs: number) => {
+      if (!isSubscribed) return;
+      const remainingMs = observedDeadlineMs === null
+        ? delayMs
+        : observedDeadlineMs - (Date.now() + observedServerTimeOffsetMs);
+      if (remainingMs <= 0) {
+        stopWithStatus('verification-needed', new Date(observedDeadlineMs!).toISOString());
+        return;
+      }
+      timeout = setTimeout(
+        () => void checkPaymentStatus(),
+        Math.min(delayMs, remainingMs),
+      );
+    };
 
     const checkPaymentStatus = async () => {
+      const requestController = new AbortController();
+      activeRequestController = requestController;
+      const requestTimeout = setTimeout(
+        () => requestController.abort(),
+        PAYMENT_STATUS_REQUEST_TIMEOUT_MS,
+      );
       try {
-        const res = await readBookingDetail(bookingId, controller.signal);
-        const isPaid =
-          res.data?.status === 'DA_THANH_TOAN' ||
-          res.data?.paymentStatus === 'DA_THANH_TOAN';
+        const res = await readBookingDetail(bookingId, requestController.signal);
+        if (!isSubscribed) return;
+        const booking = res.data;
+        const amount = Number(booking?.totalAmount);
+        const hasMatchingBooking =
+          booking?.bookingId === bookingId &&
+          (!draft.bookingCode || booking.bookingCode === draft.bookingCode) &&
+          booking.orderCode === expectedOrderCode &&
+          Number.isFinite(amount) &&
+          amount === draft.totalFare;
 
-        const deadline = res.data?.paymentExpiresAt;
-        const serverTime = res.data?.serverTime;
-        const responseDeadlineMs =
-          typeof deadline === 'string' ? Date.parse(deadline) : NaN;
-        const serverTimeMs =
-          typeof serverTime === 'string' ? Date.parse(serverTime) : NaN;
-        if (Number.isFinite(responseDeadlineMs)) {
-          observedDeadlineMs = responseDeadlineMs;
+        if (!hasMatchingBooking) {
+          stopWithStatus('verification-needed');
+          return;
         }
-        if (Number.isFinite(serverTimeMs)) {
-          observedServerTimeOffsetMs = serverTimeMs - Date.now();
-        }
-        if (isSubscribed) setClockTick(Date.now());
 
-        if (isSubscribed && !hasNavigated && isPaid) {
+        const statuses = [booking.status, booking.paymentStatus];
+        const isPaid = statuses.every((status) => status === 'DA_THANH_TOAN');
+        if (isPaid && !hasNavigated) {
           hasNavigated = true;
           router.push(`/invoice/${bookingId}`);
           return;
         }
 
-        const statuses = [res.data?.status, res.data?.paymentStatus];
-        const isExpiredByStatus = statuses.some((status) =>
-          ['HET_HAN', 'EXPIRED'].includes(status ?? ''),
-        );
-        const isCancelled = statuses.some((status) =>
-          ['DA_HUY', 'HUY'].includes(status ?? ''),
-        );
-        const isExpiredByDeadline =
-          Number.isFinite(responseDeadlineMs) &&
-          responseDeadlineMs <=
-            (Number.isFinite(serverTimeMs) ? serverTimeMs : Date.now());
-        const terminalStatus = isCancelled
-          ? 'cancelled'
-          : isExpiredByStatus || isExpiredByDeadline
-            ? 'expired'
-            : null;
-
-        if (isSubscribed) {
-          setPaymentReadSnapshot({
-            bookingId,
-            paymentExpiresAt: Number.isFinite(responseDeadlineMs)
-              ? deadline!
-              : null,
-            serverTimeOffsetMs: Number.isFinite(serverTimeMs)
-              ? serverTimeMs - Date.now()
-              : 0,
-            terminalStatus,
-          });
-        }
-        if (terminalStatus) {
+        if (statuses.some((status) => ['DA_HUY', 'HUY'].includes(status ?? ''))) {
+          stopWithStatus('cancelled');
           return;
         }
+        if (statuses.some((status) => ['HET_HAN', 'EXPIRED'].includes(status ?? ''))) {
+          stopWithStatus('expired', booking.paymentExpiresAt ?? null);
+          return;
+        }
+        if (statuses.some((status) => ['THAT_BAI', 'DA_THAT_BAI', 'FAILED'].includes(status ?? ''))) {
+          stopWithStatus('failed');
+          return;
+        }
+        if (!statuses.every((status) => status === 'CHO_THANH_TOAN')) {
+          stopWithStatus('verification-needed');
+          return;
+        }
+
+        const deadline = booking.paymentExpiresAt;
+        const serverTime = booking.serverTime;
+        const responseDeadlineMs = typeof deadline === 'string' ? Date.parse(deadline) : NaN;
+        const serverTimeMs = typeof serverTime === 'string' ? Date.parse(serverTime) : NaN;
+        if (!Number.isFinite(responseDeadlineMs) || !Number.isFinite(serverTimeMs)) {
+          stopWithStatus('verification-needed');
+          return;
+        }
+
+        observedDeadlineMs = responseDeadlineMs;
+        observedServerTimeOffsetMs = serverTimeMs - Date.now();
+        consecutiveFailures = 0;
+        setClockTick(Date.now());
+        if (responseDeadlineMs <= serverTimeMs) {
+          stopWithStatus('expired', deadline!);
+          return;
+        }
+
+        setPaymentReadSnapshot({
+          draftId: draft.id,
+          bookingId,
+          expectedOrderCode,
+          expectedTotalAmount: draft.totalFare,
+          orderCode: booking.orderCode!,
+          totalAmount: amount,
+          paymentExpiresAt: deadline!,
+          serverTimeOffsetMs: observedServerTimeOffsetMs,
+          terminalStatus: null,
+        });
       } catch {
-        if (
-          isSubscribed &&
-          observedDeadlineMs !== null &&
-          observedDeadlineMs <= Date.now() + observedServerTimeOffsetMs
-        ) {
-          setPaymentReadSnapshot({
-            bookingId,
-            paymentExpiresAt: new Date(observedDeadlineMs).toISOString(),
-            serverTimeOffsetMs: observedServerTimeOffsetMs,
-            terminalStatus: 'verification-needed',
-          });
+        if (!isSubscribed) return;
+        consecutiveFailures += 1;
+        if (observedDeadlineMs === null && consecutiveFailures >= MAX_INITIAL_STATUS_READ_FAILURES) {
+          stopWithStatus('verification-needed');
           return;
+        }
+      } finally {
+        clearTimeout(requestTimeout);
+        if (activeRequestController === requestController) {
+          activeRequestController = null;
         }
       }
 
-      if (isSubscribed && !hasNavigated) {
-        timeout = setTimeout(() => void checkPaymentStatus(), 2500);
-      }
+      if (!isSubscribed || hasNavigated) return;
+      const delayMs = observedDeadlineMs === null
+        ? PAYMENT_POLL_INTERVAL_MS * 2 ** Math.max(0, consecutiveFailures - 1)
+        : PAYMENT_POLL_INTERVAL_MS;
+      scheduleNextRead(Math.min(delayMs, 15_000));
     };
 
-    timeout = setTimeout(() => void checkPaymentStatus(), 2500);
+    void checkPaymentStatus();
 
     return () => {
       isSubscribed = false;
       if (timeout) clearTimeout(timeout);
-      controller.abort();
+      activeRequestController?.abort();
     };
-  }, [draft?.bookingId, isHydrated, readBookingDetail, router, selectedMethod, vietQrUrl]);
+  }, [
+    draft?.bookingCode,
+    draft?.bookingId,
+    draft?.id,
+    draft?.orderCode,
+    draft?.passenger,
+    draft?.totalFare,
+    hasValidBookingId,
+    isHydrated,
+    readBookingDetail,
+    router,
+    vietQrConfig,
+  ]);
 
   const copyToClipboard = (text: string, field: string) => {
     navigator.clipboard?.writeText(text);
@@ -257,92 +345,23 @@ function PaymentContent() {
     setTimeout(() => setCopiedField(null), 2000);
   };
 
-  const handlePayment = async () => {
-    if (!draft) return;
-    if (selectedMethod === 'vietqr') return;
-    setPaymentError(null);
-
-    if (!isHydrated) {
-      setPaymentError('Đang kiểm tra phiên tài khoản. Vui lòng thử lại sau ít giây.');
-      return;
-    }
-
-    if (!draft.bookingId) {
-      setPaymentError('Không tìm thấy thông tin đơn đặt vé hợp lệ. Vui lòng quay lại đặt vé.');
-      return;
-    }
-
-    setIsProcessing(true);
-    try {
-      // 1. Kiểm tra trạng thái thực tế từ backend trước
-      const checkRes = await readBookingDetail(draft.bookingId);
-      const bookingData = checkRes.data;
-
-      if (bookingData?.status === 'DA_THANH_TOAN' || bookingData?.paymentStatus === 'DA_THANH_TOAN') {
-        const paidDraft = {
-          ...draft,
-          status: 'DA_THANH_TOAN',
-          paymentStatus: 'DA_THANH_TOAN',
-          paymentMethod: selectedMethod,
-        };
-        try {
-          sessionStorage.setItem('vexgo:last-completed-booking', JSON.stringify(paidDraft));
-          sessionStorage.setItem(`vexgo:invoice:${draft.bookingId}`, JSON.stringify(paidDraft));
-          if (draft.bookingCode) {
-            sessionStorage.setItem(`vexgo:invoice:${draft.bookingCode}`, JSON.stringify(paidDraft));
-          }
-        } catch {}
-        router.push(`/invoice/${draft.bookingId}`);
-        return;
-      }
-
-      // 2. Nếu chưa thanh toán, gọi confirmPayment API xác nhận
-      const confirmRes = await bookingsApi.confirmPayment(
-        draft.bookingId,
-        selectedMethod === 'momo'
-          ? 'MOMO'
-          : selectedMethod === 'vnpay'
-            ? 'VNPAY'
-            : 'CHUYEN_KHOAN',
-      );
-
-      const confirmedData = confirmRes?.data ?? confirmRes;
-      if (confirmedData?.status === 'DA_THANH_TOAN' || confirmedData?.paymentStatus === 'DA_THANH_TOAN') {
-        const paidDraft = {
-          ...draft,
-          status: 'DA_THANH_TOAN',
-          paymentStatus: 'DA_THANH_TOAN',
-          paymentMethod: selectedMethod,
-        };
-        try {
-          sessionStorage.setItem('vexgo:last-completed-booking', JSON.stringify(paidDraft));
-          sessionStorage.setItem(`vexgo:invoice:${draft.bookingId}`, JSON.stringify(paidDraft));
-          if (draft.bookingCode) {
-            sessionStorage.setItem(`vexgo:invoice:${draft.bookingCode}`, JSON.stringify(paidDraft));
-          }
-        } catch {}
-        router.push(`/invoice/${draft.bookingId}`);
-      } else {
-        setPaymentError('Hệ thống chưa nhận được tiền từ ngân hàng. Nếu bạn đã chuyển khoản, vui lòng đợi 1-2 phút để hệ thống cập nhật hoặc bấm thử lại.');
-      }
-    } catch (err) {
-      let msg = 'Xác nhận thanh toán thất bại. Vui lòng kiểm tra lại giao dịch và thử lại.';
-      if (err instanceof Error) {
-        msg = err.message;
-      }
-      setPaymentError(msg);
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const methods = [
-    {
-      id: 'vietqr',
-      name: 'Chuyển khoản VietQR',
-      extra: 'Quét mã VietQR bằng mọi ứng dụng Ngân hàng (MB, VCB, BIDV, Techcombank...).',
-    },
-  ];
+  const totalFareText = activePaymentReadSnapshot?.totalAmount === null ||
+    activePaymentReadSnapshot?.totalAmount === undefined
+      ? '—'
+      : `${activePaymentReadSnapshot.totalAmount.toLocaleString('vi-VN')}đ`;
+  const hasVerifiedPaymentAmount = Boolean(
+    activePaymentReadSnapshot &&
+    !activePaymentReadSnapshot.terminalStatus &&
+    activePaymentReadSnapshot.totalAmount !== null,
+  );
+  const formatDraftAmount = (amount: number) =>
+    hasVerifiedPaymentAmount ? `${amount.toLocaleString('vi-VN')}đ` : '—';
+  const formatDraftFee = (amount: number) =>
+    hasVerifiedPaymentAmount
+      ? amount > 0
+        ? `+${amount.toLocaleString('vi-VN')}đ`
+        : 'Miễn phí'
+      : '—';
 
   if (!isClient) {
     return (
@@ -383,7 +402,13 @@ function PaymentContent() {
     );
   }
 
-  const totalFareText = `${draft.totalFare.toLocaleString('vi-VN')}đ`;
+  const methods = [
+    {
+      id: 'vietqr',
+      name: 'Chuyển khoản VietQR',
+      extra: 'Quét mã VietQR bằng mọi ứng dụng Ngân hàng (MB, VCB, BIDV, Techcombank...).',
+    },
+  ];
 
   return (
     <div className="min-h-screen bg-slate-50 py-8 font-sans">
@@ -477,7 +502,7 @@ function PaymentContent() {
             </h1>
 
             <div className="w-full max-w-[520px] bg-white rounded-3xl p-7 shadow-sm border border-slate-200 flex flex-col items-center">
-              {!paymentTerminalStatus && (
+              {paymentExpiresAt && !paymentTerminalStatus && (
                 <p className="text-sm font-semibold text-amber-600 mb-4">
                   {timeLeft === null
                     ? 'Đang kiểm tra thời hạn thanh toán.'
@@ -489,15 +514,17 @@ function PaymentContent() {
               <div className="w-full max-w-[420px] aspect-square border-2 border-slate-200 rounded-3xl p-3 mb-6 bg-white flex items-center justify-center overflow-hidden shadow-2xs">
                 {paymentTerminalStatus ? (
                   <p
-                    role="status"
+                    role={paymentTerminalStatus === 'verification-needed' ? 'alert' : 'status'}
                     aria-live="polite"
                     className="px-5 text-center text-sm font-semibold text-amber-800"
                   >
                     {paymentTerminalStatus === 'verification-needed'
-                      ? 'Chưa thể xác minh trạng thái thanh toán từ máy chủ. Mã QR đã được ẩn; vui lòng tải lại trang hoặc liên hệ hỗ trợ.'
+                      ? 'Không thể xác minh thông tin đơn đặt vé với máy chủ. Mã QR đã được ẩn; vui lòng tải lại trang hoặc liên hệ hỗ trợ.'
                       : paymentTerminalStatus === 'cancelled'
                         ? 'Đơn đặt vé đã bị hủy. Mã QR thanh toán không còn khả dụng.'
-                        : 'Đơn đặt vé đã hết hạn. Mã QR thanh toán không còn khả dụng.'}
+                        : paymentTerminalStatus === 'failed'
+                          ? 'Giao dịch thanh toán chưa thành công. Mã QR đã được ẩn; vui lòng liên hệ hỗ trợ.'
+                          : 'Đơn đặt vé đã hết hạn. Mã QR thanh toán không còn khả dụng.'}
                   </p>
                 ) : timeLeft === 0 ? (
                   <p role="status" aria-live="polite" className="px-5 text-center text-sm font-semibold text-amber-800">
@@ -509,18 +536,24 @@ function PaymentContent() {
                     alt="Mã QR thanh toán VietQR"
                     className="w-full h-full object-contain"
                   />
-                ) : (
+                ) : !vietQrConfig ? (
                   <div
                     role="alert"
                     className="flex flex-col items-center gap-3 px-5 text-center text-sm font-semibold text-amber-800"
                   >
                     <Info aria-hidden="true" className="h-6 w-6 shrink-0" />
                     <p>
-                      {!vietQrConfig
-                        ? 'VietQR chưa được cấu hình đầy đủ nên chưa thể hiển thị mã thanh toán. Vui lòng liên hệ bộ phận hỗ trợ.'
-                        : 'Đơn đặt vé chưa có mã giao dịch hợp lệ nên chưa thể tạo mã VietQR. Vui lòng liên hệ bộ phận hỗ trợ.'}
+                      VietQR chưa được cấu hình đầy đủ nên chưa thể hiển thị mã thanh toán. Vui lòng liên hệ bộ phận hỗ trợ.
                     </p>
                   </div>
+                ) : !draft.orderCode?.trim() ? (
+                  <div role="alert" className="px-5 text-center text-sm font-semibold text-amber-800">
+                    Đơn đặt vé chưa có mã giao dịch hợp lệ nên chưa thể tạo mã VietQR. Vui lòng liên hệ bộ phận hỗ trợ.
+                  </div>
+                ) : (
+                  <p role="status" aria-live="polite" className="px-5 text-center text-sm font-semibold text-slate-600">
+                    Đang xác minh booking với máy chủ. Mã QR sẽ hiển thị sau khi thông tin đơn được xác nhận.
+                  </p>
                 )}
               </div>
 
@@ -584,24 +617,6 @@ function PaymentContent() {
                   </p>
                 )}
 
-                {selectedMethod !== 'vietqr' && (
-                  <>
-                    {paymentError && (
-                      <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-xl text-left">
-                        <p className="text-xs font-semibold text-red-600">{paymentError}</p>
-                      </div>
-                    )}
-
-                    <button
-                      type="button"
-                      onClick={handlePayment}
-                      disabled={isProcessing}
-                      className="w-full h-11 bg-accent text-white font-bold rounded-xl hover:bg-accent-hover transition-colors flex items-center justify-center gap-2 disabled:opacity-70 text-sm cursor-pointer shadow-sm"
-                    >
-                      {isProcessing ? 'Đang xác nhận...' : 'Tôi đã chuyển khoản thành công'}
-                    </button>
-                  </>
-                )}
               </div>
             </div>
           </div>
@@ -710,7 +725,7 @@ function PaymentContent() {
                             : 'Tổng tiền'}
                         </span>
                         <span className="font-bold text-red-600 text-right">
-                          {leg.subtotal.toLocaleString('vi-VN')}đ
+                          {formatDraftAmount(leg.subtotal)}
                         </span>
                       </div>
                     </div>
@@ -826,7 +841,9 @@ function PaymentContent() {
                             )}
                           </div>
                           <span className="font-extrabold text-red-600 shrink-0">
-                            {itemFee === 0 ? (
+                            {!hasVerifiedPaymentAmount ? (
+                              '—'
+                            ) : itemFee === 0 ? (
                               <span className="text-emerald-600 font-bold">Miễn phí</span>
                             ) : (
                               `+${itemFee.toLocaleString('vi-VN')}đ`
@@ -849,7 +866,7 @@ function PaymentContent() {
                   <div className="p-3 rounded-xl bg-slate-50/80 border border-slate-200/80 flex items-center justify-between text-xs">
                     <span className="text-slate-600 font-medium">Phụ phí ký gửi</span>
                     <strong className={draft.luggage.fee > 0 ? 'text-red-600 font-extrabold' : 'text-emerald-600 font-bold'}>
-                      {draft.luggage.fee > 0 ? `+${draft.luggage.fee.toLocaleString('vi-VN')}đ` : 'Miễn phí'}
+                      {formatDraftFee(draft.luggage.fee)}
                     </strong>
                   </div>
                 )}
@@ -873,7 +890,7 @@ function PaymentContent() {
                         : `Giá vé (${leg.seats.length} ghế)`}
                     </span>
                     <span className="font-bold text-red-600">
-                      {leg.subtotal.toLocaleString('vi-VN')}đ
+                      {formatDraftAmount(leg.subtotal)}
                     </span>
                   </div>
                 ))}
@@ -884,7 +901,7 @@ function PaymentContent() {
                       Phụ phí hành lý ({draft.luggage.weight}kg)
                     </span>
                     <span className="font-bold text-red-600">
-                      {draft.luggage.fee.toLocaleString('vi-VN')}đ
+                      {formatDraftAmount(draft.luggage.fee)}
                     </span>
                   </div>
                 ) : draft.luggage ? (
@@ -989,7 +1006,7 @@ function PaymentContent() {
                     <div className="flex justify-between items-center gap-2 pt-1">
                       <span className="text-slate-500 font-medium">Tiền vé ({leg.seats.length} ghế):</span>
                       <strong className="text-red-600 font-extrabold">
-                        {leg.subtotal.toLocaleString('vi-VN')}đ
+                        {formatDraftAmount(leg.subtotal)}
                       </strong>
                     </div>
                   </div>
@@ -1030,7 +1047,7 @@ function PaymentContent() {
                   <div className="flex justify-between">
                     <span className="text-slate-500 font-medium">Phụ phí:</span>
                     <strong className={draft.luggage.fee > 0 ? 'text-red-600 font-extrabold' : 'text-emerald-600 font-bold'}>
-                      {draft.luggage.fee > 0 ? `+${draft.luggage.fee.toLocaleString('vi-VN')}đ` : 'Miễn phí'}
+                      {formatDraftFee(draft.luggage.fee)}
                     </strong>
                   </div>
                 </div>
@@ -1182,7 +1199,9 @@ function PaymentContent() {
 
                     <div className="text-right shrink-0">
                       <span className="font-extrabold text-red-600">
-                        {itemFee === 0 ? (
+                        {!hasVerifiedPaymentAmount ? (
+                          '—'
+                        ) : itemFee === 0 ? (
                           <span className="text-emerald-600 font-bold">Miễn phí</span>
                         ) : (
                           `+${itemFee.toLocaleString('vi-VN')}đ`
@@ -1200,7 +1219,7 @@ function PaymentContent() {
                   Tổng phụ phí hành lý
                 </span>
                 <strong className={draft.luggage.fee > 0 ? 'text-red-600 font-extrabold text-sm' : 'text-emerald-600 font-bold text-sm'}>
-                  {draft.luggage.fee > 0 ? `+${draft.luggage.fee.toLocaleString('vi-VN')}đ` : 'Miễn phí'}
+                  {formatDraftFee(draft.luggage.fee)}
                 </strong>
               </div>
               <button
