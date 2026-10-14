@@ -216,6 +216,130 @@ async function teardownTestSchema(db: PrismaClient, tableNames: MigrationTableNa
   }
 }
 
+async function createRecoveryProcedure(
+  conn: Connection,
+  procedureName: string,
+  tableNames: MigrationTableNames,
+  options?: { forceGuard2Fail?: boolean },
+) {
+  const quoted = (name: string) => `\`${name}\``;
+  await conn.query(`DROP PROCEDURE IF EXISTS \`${procedureName}\`;`);
+
+  const guard2Condition = options?.forceGuard2Fail
+    ? `v_insertedCount <> p_expectedCount OR 1 = 1`
+    : `v_insertedCount <> p_expectedCount`;
+
+  const procedureSql = `
+    CREATE PROCEDURE \`${procedureName}\`(
+      IN p_targetKhachHangId INT,
+      IN p_targetNhaXeId INT,
+      IN p_tinNhanIdsJson JSON,
+      IN p_expectedCount INT,
+      OUT p_newCuocTroChuyenId INT
+    )
+    proc_body: BEGIN
+      DECLARE v_verifiedCount INT DEFAULT 0;
+      DECLARE v_insertedCount INT DEFAULT 0;
+      DECLARE v_maCuocTroChuyen VARCHAR(100);
+      DECLARE v_taiKhoanId INT DEFAULT NULL;
+
+      DECLARE EXIT HANDLER FOR SQLEXCEPTION
+      BEGIN
+        ROLLBACK;
+        RESIGNAL;
+      END;
+
+      START TRANSACTION;
+
+      IF p_targetKhachHangId IS NULL OR p_targetKhachHangId <= 0 THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'INVALID_TARGET_KHACH_HANG_ID';
+      END IF;
+
+      IF p_targetNhaXeId IS NULL OR p_targetNhaXeId <= 0 THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'INVALID_TARGET_NHA_XE_ID';
+      END IF;
+
+      IF p_tinNhanIdsJson IS NULL OR NOT JSON_VALID(p_tinNhanIdsJson) OR JSON_LENGTH(p_tinNhanIdsJson) = 0 THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'INVALID_OR_EMPTY_TIN_NHAN_IDS_JSON';
+      END IF;
+
+      IF p_expectedCount IS NULL OR p_expectedCount <= 0 OR p_expectedCount <> JSON_LENGTH(p_tinNhanIdsJson) THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'EXPECTED_COUNT_MISMATCH_WITH_JSON_LENGTH';
+      END IF;
+
+      SELECT \`taiKhoanId\` INTO v_taiKhoanId
+      FROM ${quoted(tableNames.khachHang)}
+      WHERE \`khachHangId\` = p_targetKhachHangId;
+
+      IF v_taiKhoanId IS NULL THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'CUSTOMER_OR_ACCOUNT_NOT_FOUND';
+      END IF;
+
+      IF NOT EXISTS (SELECT 1 FROM ${quoted(tableNames.nhaXe)} WHERE \`nhaXeId\` = p_targetNhaXeId) THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'BUS_COMPANY_NOT_FOUND';
+      END IF;
+
+      SELECT COUNT(*) INTO v_verifiedCount
+      FROM ${quoted(tableNames.luuTru)} arc
+      JOIN JSON_TABLE(p_tinNhanIdsJson, '$[*]' COLUMNS (\`tinNhanId\` INT PATH '$')) jt
+        ON jt.\`tinNhanId\` = arc.\`tinNhanId\`
+      WHERE arc.\`khachHangIdCu\` = p_targetKhachHangId;
+
+      IF v_verifiedCount <> p_expectedCount THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'CROSS_CUSTOMER_OR_MISSING_ARCHIVE_MESSAGES_DETECTED';
+      END IF;
+
+      SET v_maCuocTroChuyen = CONCAT('RECOVERED-KH', p_targetKhachHangId, '-NX', p_targetNhaXeId, '-', UNIX_TIMESTAMP());
+      INSERT INTO ${quoted(tableNames.cuocTroChuyen)} (
+        \`maCuocTroChuyen\`, \`tieuDe\`, \`trangThai\`, \`kenhHoTro\`, \`cheDoChat\`,
+        \`khachHangId\`, \`nhaXeId\`, \`createdAt\`, \`updatedAt\`
+      ) VALUES (
+        v_maCuocTroChuyen,
+        CONCAT('Phục hồi hỗ trợ khách hàng KH', p_targetKhachHangId),
+        'CHO_TIEP_NHAN',
+        'WEB',
+        'NGUOI_THAT',
+        p_targetKhachHangId,
+        p_targetNhaXeId,
+        CURRENT_TIMESTAMP(0),
+        CURRENT_TIMESTAMP(0)
+      );
+
+      SET p_newCuocTroChuyenId = LAST_INSERT_ID();
+
+      INSERT INTO ${quoted(tableNames.tinNhan)} (
+        \`cuocTroChuyenId\`, \`taiKhoanGuiId\`, \`loaiNguoiGui\`, \`loaiTinNhan\`,
+        \`noiDung\`, \`trangThai\`, \`createdAt\`, \`updatedAt\`
+      )
+      SELECT
+        ctc.\`cuocTroChuyenId\`,
+        v_taiKhoanId,
+        'KHACH_HANG',
+        'VAN_BAN',
+        arc.\`noiDung\`,
+        arc.\`trangThaiCu\`,
+        arc.\`thoiGianCu\`,
+        arc.\`updatedAtCu\`
+      FROM ${quoted(tableNames.luuTru)} arc
+      JOIN JSON_TABLE(p_tinNhanIdsJson, '$[*]' COLUMNS (\`tinNhanId\` INT PATH '$')) jt
+        ON jt.\`tinNhanId\` = arc.\`tinNhanId\`
+      JOIN ${quoted(tableNames.cuocTroChuyen)} ctc
+        ON ctc.\`cuocTroChuyenId\` = p_newCuocTroChuyenId
+      WHERE arc.\`khachHangIdCu\` = ctc.\`khachHangId\`;
+
+      SET v_insertedCount = ROW_COUNT();
+
+      IF ${guard2Condition} THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'INSERTED_ROW_COUNT_MISMATCH';
+      END IF;
+
+      COMMIT;
+    END;
+  `;
+
+  await conn.query(procedureSql);
+}
+
 describe('Support chat schema migration with preflight archive and RBAC bootstrap (Option A)', () => {
   let prisma: PrismaClient | undefined;
 
@@ -660,11 +784,13 @@ describe('Support chat schema migration with preflight archive and RBAC bootstra
     }
   });
 
-  it('8. Test C — Archive query and controlled recovery procedure: proves retrieval and authorized manual restoration', async () => {
+  it('8. Test C1 — Valid restoration via Stored Procedure: proves retrieval, atomic commit, and correct state transition', async () => {
     const db = createMigrationTestClient();
     prisma = db;
     await db.$connect();
     const { suffix, tableNames, quoted } = generateTestContext();
+    const procName = `sp_RecoverLegacyMessages_${suffix}`;
+    const conn = await createDirectDatabaseConnection();
 
     try {
       await createLegacyBaseSchema(db, suffix, tableNames);
@@ -702,114 +828,64 @@ describe('Support chat schema migration with preflight archive and RBAC bootstra
       expect(found.noiDung).toBe('Tin nhắn cần phục hồi theo quy trình runbook');
       expect(found.khachHangIdCu).toBe(88);
 
-      // Bước 2: Mô phỏng Quy trình Phục hồi An toàn theo Runbook (Case A: Khôi phục đúng khách hàng)
-      const conn = await createDirectDatabaseConnection();
-      try {
-        await conn.query(`START TRANSACTION;`);
-        await conn.query(`SET @targetKhachHangId = 88;`);
-        await conn.query(`SET @targetNhaXeId = 7;`);
-        await conn.query(`SET @expectedCount = 1;`);
+      // Bước 2: Tạo Stored Procedure phục hồi chuẩn theo Runbook Mục 6
+      await createRecoveryProcedure(conn, procName, tableNames);
 
-        // Guard 1: Đếm số lượng tin nhắn trong danh sách thuộc đúng targetKhachHangId
-        await conn.query(`
-          SET @verifiedCount = (
-            SELECT COUNT(*)
-            FROM ${quoted(tableNames.luuTru)} arc
-            WHERE arc.\`tinNhanId\` IN (888)
-              AND arc.\`khachHangIdCu\` = @targetKhachHangId
-          );
-        `);
-        // Guard fail-closed ném lỗi nếu count không khớp
-        await conn.query(`
-          SET @cross_customer_guard = (
-            SELECT 1
-            FROM (SELECT 1 UNION ALL SELECT 2) \`_cross_customer_abort\`
-            WHERE @verifiedCount <> @expectedCount
-          );
-        `);
+      // Bước 3: Gọi Stored Procedure để khôi phục tin nhắn 888
+      await conn.query(`SET @newConvId = NULL;`);
+      await conn.query(`CALL \`${procName}\`(88, 7, '[888]', 1, @newConvId);`);
 
-        // Tạo cuộc trò chuyện hợp lệ cho nhà xe và khách hàng đích
-        await conn.query(
-          `INSERT INTO ${quoted(tableNames.cuocTroChuyen)} (
-            \`maCuocTroChuyen\`, \`tieuDe\`, \`trangThai\`, \`kenhHoTro\`, \`cheDoChat\`, \`khachHangId\`, \`nhaXeId\`, \`createdAt\`, \`updatedAt\`
-          ) VALUES (
-            'RECOVERED-KH88-NX7', 'Hỗ trợ phục hồi cho KH088', 'CHO_TIEP_NHAN', 'WEB', 'NGUOI_THAT', 88, 7, CURRENT_TIMESTAMP(0), CURRENT_TIMESTAMP(0)
-          );`,
-        );
+      const convIdRows = await conn.query(`SELECT @newConvId AS newConvId;`);
+      const newConvId = Number(convIdRows[0]?.newConvId);
+      expect(newConvId).toBeGreaterThan(0);
 
-        const convRows = await conn.query(
-          `SELECT \`cuocTroChuyenId\` FROM ${quoted(tableNames.cuocTroChuyen)} WHERE \`maCuocTroChuyen\` = 'RECOVERED-KH88-NX7'`,
-        );
-        const newConv = convRows[0];
-        expect(newConv).toBeDefined();
+      // Bước 4: Kiểm tra CuocTroChuyen và TinNhanHoTro sau commit
+      const [restoredConv] = await db.$queryRawUnsafe<
+        Array<{
+          cuocTroChuyenId: number;
+          khachHangId: number;
+          nhaXeId: number;
+          trangThai: string;
+        }>
+      >(
+        `SELECT \`cuocTroChuyenId\`, \`khachHangId\`, \`nhaXeId\`, \`trangThai\`
+         FROM ${quoted(tableNames.cuocTroChuyen)} WHERE \`cuocTroChuyenId\` = ${newConvId}`,
+      );
+      expect(restoredConv).toBeDefined();
+      expect(restoredConv.khachHangId).toBe(88);
+      expect(restoredConv.nhaXeId).toBe(7);
 
-        // Nạp tin nhắn từ archive với ràng buộc kép: arc.khachHangIdCu = ctc.khachHangId
-        await conn.query(
-          `INSERT INTO ${quoted(tableNames.tinNhan)} (
-            \`cuocTroChuyenId\`, \`taiKhoanGuiId\`, \`loaiNguoiGui\`, \`loaiTinNhan\`, \`noiDung\`, \`trangThai\`, \`createdAt\`, \`updatedAt\`
-          )
-          SELECT
-            ${newConv.cuocTroChuyenId},
-            kh.\`taiKhoanId\`,
-            'KHACH_HANG',
-            'VAN_BAN',
-            arc.\`noiDung\`,
-            arc.\`trangThaiCu\`,
-            arc.\`thoiGianCu\`,
-            arc.\`updatedAtCu\`
-          FROM ${quoted(tableNames.luuTru)} arc
-          JOIN ${quoted(tableNames.cuocTroChuyen)} ctc ON ctc.\`cuocTroChuyenId\` = ${newConv.cuocTroChuyenId}
-          JOIN ${quoted(tableNames.khachHang)} kh ON kh.\`khachHangId\` = arc.\`khachHangIdCu\`
-          WHERE arc.\`tinNhanId\` IN (888)
-            AND arc.\`khachHangIdCu\` = ctc.\`khachHangId\`;`,
-        );
-
-        // Guard 2: Kiểm tra số lượng dòng thực tế đã ghi vào TinNhanHoTro
-        await conn.query(`SET @insertedCount = ROW_COUNT();`);
-        await conn.query(`
-          SET @row_count_guard = (
-            SELECT 1
-            FROM (SELECT 1 UNION ALL SELECT 2) \`_row_count_abort\`
-            WHERE @insertedCount <> @expectedCount
-          );
-        `);
-
-        await conn.query(`COMMIT;`);
-
-        // Kiểm tra tin nhắn được phục hồi hoạt động bình thường và ràng buộc khóa ngoại thỏa mãn
-        const [restoredMsg] = await db.$queryRawUnsafe<
-          Array<{
-            tinNhanId: number;
-            cuocTroChuyenId: number;
-            taiKhoanGuiId: number;
-            loaiNguoiGui: string;
-            noiDung: string;
-          }>
-        >(
-          `SELECT \`tinNhanId\`, \`cuocTroChuyenId\`, \`taiKhoanGuiId\`, \`loaiNguoiGui\`, \`noiDung\`
-           FROM ${quoted(tableNames.tinNhan)} WHERE \`cuocTroChuyenId\` = ${newConv.cuocTroChuyenId}`,
-        );
-        expect(restoredMsg).toBeDefined();
-        expect(restoredMsg.cuocTroChuyenId).toBe(Number(newConv.cuocTroChuyenId));
-        expect(restoredMsg.taiKhoanGuiId).toBe(88);
-        expect(restoredMsg.loaiNguoiGui).toBe('KHACH_HANG');
-        expect(restoredMsg.noiDung).toBe('Tin nhắn cần phục hồi theo quy trình runbook');
-      } catch (err) {
-        await conn.query(`ROLLBACK;`).catch(() => {});
-        throw err;
-      } finally {
-        await conn.end();
-      }
+      const [restoredMsg] = await db.$queryRawUnsafe<
+        Array<{
+          tinNhanId: number;
+          cuocTroChuyenId: number;
+          taiKhoanGuiId: number;
+          loaiNguoiGui: string;
+          noiDung: string;
+        }>
+      >(
+        `SELECT \`tinNhanId\`, \`cuocTroChuyenId\`, \`taiKhoanGuiId\`, \`loaiNguoiGui\`, \`noiDung\`
+         FROM ${quoted(tableNames.tinNhan)} WHERE \`cuocTroChuyenId\` = ${newConvId}`,
+      );
+      expect(restoredMsg).toBeDefined();
+      expect(restoredMsg.cuocTroChuyenId).toBe(newConvId);
+      expect(restoredMsg.taiKhoanGuiId).toBe(88);
+      expect(restoredMsg.loaiNguoiGui).toBe('KHACH_HANG');
+      expect(restoredMsg.noiDung).toBe('Tin nhắn cần phục hồi theo quy trình runbook');
     } finally {
+      await conn.query(`DROP PROCEDURE IF EXISTS \`${procName}\`;`).catch(() => {});
+      await conn.end();
       await teardownTestSchema(db, tableNames);
     }
   });
 
-  it('9. Test C2 — Cross-Customer isolation protection: rejects recovery containing message IDs belonging to different customer, rolls back atomic transaction', async () => {
+  it('9. Test C2 — Cross-Customer isolation protection via Stored Procedure: rejects recovery containing message IDs belonging to different customer, rolls back atomic transaction', async () => {
     const db = createMigrationTestClient();
     prisma = db;
     await db.$connect();
     const { suffix, tableNames, quoted } = generateTestContext();
+    const procName = `sp_RecoverLegacyMessages_${suffix}`;
+    const conn = await createDirectDatabaseConnection();
 
     try {
       await createLegacyBaseSchema(db, suffix, tableNames);
@@ -833,48 +909,22 @@ describe('Support chat schema migration with preflight archive and RBAC bootstra
           (999, 'Tin nhắn riêng tư của khách B', '2026-09-01 16:00:00', 'DA_GUI', 99, '2026-09-01 16:00:00', '2026-09-01 16:00:00')`,
       );
 
-      // Chạy migration
       await executeMigrationScript(db, suffix, tableNames);
 
-      // Cố ý thực hiện kịch bản DBA gõ nhầm ID của khách B (999) vào danh sách cần khôi phục cho khách A (88)
-      // Danh sách ID: [888, 999] (expectedCount = 2), nhưng @targetKhachHangId = 88
+      await createRecoveryProcedure(conn, procName, tableNames);
+
+      // Cố ý gọi procedure cho khách A (88) với danh sách ID chứa cả tin nhắn của khách B (999)
       let recoveryError: Error | undefined;
-      const conn = await createDirectDatabaseConnection();
       try {
-        await conn.query(`START TRANSACTION;`);
-        await conn.query(`SET @targetKhachHangId = 88;`);
-        await conn.query(`SET @targetNhaXeId = 7;`);
-        await conn.query(`SET @expectedCount = 2;`);
-
-        await conn.query(`
-          SET @verifiedCount = (
-            SELECT COUNT(*)
-            FROM ${quoted(tableNames.luuTru)} arc
-            WHERE arc.\`tinNhanId\` IN (888, 999)
-              AND arc.\`khachHangIdCu\` = @targetKhachHangId
-          );
-        `);
-
-        // Guard 1 phát hiện @verifiedCount (1) <> @expectedCount (2) -> Throw error ném ra exception
-        await conn.query(`
-          SET @cross_customer_guard = (
-            SELECT 1
-            FROM (SELECT 1 UNION ALL SELECT 2) \`_cross_customer_abort\`
-            WHERE @verifiedCount <> @expectedCount
-          );
-        `);
-
-        await conn.query(`COMMIT;`);
+        await conn.query(`SET @newConvId = NULL;`);
+        await conn.query(`CALL \`${procName}\`(88, 7, '[888, 999]', 2, @newConvId);`);
       } catch (err) {
         recoveryError = err instanceof Error ? err : new Error(String(err));
-        await conn.query(`ROLLBACK;`).catch(() => {});
-      } finally {
-        await conn.end();
       }
 
-      // Xác nhận Guard đã chặn thành công
+      // Xác nhận Procedure đã SIGNAL lỗi và EXIT HANDLER đã bắt lỗi
       expect(recoveryError).toBeDefined();
-      expect(recoveryError?.message).toMatch(/Subquery returns more than 1 row|1242/);
+      expect(recoveryError?.message).toMatch(/CROSS_CUSTOMER_OR_MISSING_ARCHIVE_MESSAGES_DETECTED|45000/);
 
       // BẢO VỆ CỐT LÕI:
       // 1. Không có bất kỳ cuộc trò chuyện nào bị tạo thừa
@@ -899,6 +949,135 @@ describe('Support chat schema migration with preflight archive and RBAC bootstra
       expect(arcA.khachHangIdCu).toBe(88);
       expect(arcB.khachHangIdCu).toBe(99);
     } finally {
+      await conn.query(`DROP PROCEDURE IF EXISTS \`${procName}\`;`).catch(() => {});
+      await conn.end();
+      await teardownTestSchema(db, tableNames);
+    }
+  });
+
+  it('9b. Test C3 — Guard 2 failure after partial insert: rolls back atomic transaction, cleans up conversation and partially inserted messages', async () => {
+    const db = createMigrationTestClient();
+    prisma = db;
+    await db.$connect();
+    const { suffix, tableNames, quoted } = generateTestContext();
+    const procName = `sp_RecoverLegacyMessages_${suffix}`;
+    const conn = await createDirectDatabaseConnection();
+
+    try {
+      await createLegacyBaseSchema(db, suffix, tableNames);
+
+      await db.$executeRawUnsafe(
+        `INSERT INTO ${quoted(tableNames.nhaXe)} (\`nhaXeId\`, \`tenNhaXe\`) VALUES (7, 'Nhà xe Mai Linh')`,
+      );
+      await db.$executeRawUnsafe(
+        `INSERT INTO ${quoted(tableNames.taiKhoan)} (\`taiKhoanId\`, \`email\`) VALUES (88, 'cust88@vexgo.vn')`,
+      );
+      await db.$executeRawUnsafe(
+        `INSERT INTO ${quoted(tableNames.khachHang)} (\`khachHangId\`, \`maKhachHang\`, \`taiKhoanId\`) VALUES (88, 'KH088', 88)`,
+      );
+      await db.$executeRawUnsafe(
+        `INSERT INTO ${quoted(tableNames.tinNhan)} (\`tinNhanId\`, \`noiDung\`, \`thoiGian\`, \`trangThai\`, \`khachHangId\`, \`createdAt\`, \`updatedAt\`) VALUES
+          (888, 'Tin nhắn 1 của khách 88', '2026-09-01 15:00:00', 'DA_GUI', 88, '2026-09-01 15:00:00', '2026-09-01 15:00:00'),
+          (889, 'Tin nhắn 2 của khách 88', '2026-09-01 15:05:00', 'DA_GUI', 88, '2026-09-01 15:05:00', '2026-09-01 15:05:00')`,
+      );
+
+      await executeMigrationScript(db, suffix, tableNames);
+
+      // Tạo Stored Procedure với cờ forceGuard2Fail = true:
+      // CuocTroChuyen và TinNhanHoTro ĐÃ ĐƯỢC INSERT thành công bên trong transaction,
+      // nhưng Guard 2 cố ý kích hoạt lỗi mismatch để kiểm chứng hành vi rollback của EXIT HANDLER!
+      await createRecoveryProcedure(conn, procName, tableNames, { forceGuard2Fail: true });
+
+      let recoveryError: Error | undefined;
+      try {
+        await conn.query(`SET @newConvId = NULL;`);
+        await conn.query(`CALL \`${procName}\`(88, 7, '[888, 889]', 2, @newConvId);`);
+      } catch (err) {
+        recoveryError = err instanceof Error ? err : new Error(String(err));
+      }
+
+      // Xác nhận Guard 2 đã kích hoạt SIGNAL và EXIT HANDLER ném lại lỗi
+      expect(recoveryError).toBeDefined();
+      expect(recoveryError?.message).toMatch(/INSERTED_ROW_COUNT_MISMATCH|45000/);
+
+      // BẢO ĐẢM ATOMICITY CỐT LÕI (FINDING P1 VERIFICATION):
+      // 1. Toàn bộ cuộc trò chuyện vừa tạo đã bị ROLLBACK hoàn toàn, không còn dòng nào
+      const convs = await db.$queryRawUnsafe<Array<any>>(
+        `SELECT * FROM ${quoted(tableNames.cuocTroChuyen)}`,
+      );
+      expect(convs.length).toBe(0);
+
+      // 2. Toàn bộ các tin nhắn đã nạp một phần đã bị ROLLBACK hoàn toàn, không còn dòng nào
+      const msgs = await db.$queryRawUnsafe<Array<any>>(
+        `SELECT * FROM ${quoted(tableNames.tinNhan)}`,
+      );
+      expect(msgs.length).toBe(0);
+
+      // 3. Toàn bộ dữ liệu archive ban đầu vẫn nguyên vẹn 100%
+      const arcMsgs = await db.$queryRawUnsafe<Array<any>>(
+        `SELECT * FROM ${quoted(tableNames.luuTru)} WHERE \`tinNhanId\` IN (888, 889)`,
+      );
+      expect(arcMsgs).toHaveLength(2);
+    } finally {
+      await conn.query(`DROP PROCEDURE IF EXISTS \`${procName}\`;`).catch(() => {});
+      await conn.end();
+      await teardownTestSchema(db, tableNames);
+    }
+  });
+
+  it('9c. Test C4 — Input validation & missing archive message ID: rejects recovery before data creation', async () => {
+    const db = createMigrationTestClient();
+    prisma = db;
+    await db.$connect();
+    const { suffix, tableNames, quoted } = generateTestContext();
+    const procName = `sp_RecoverLegacyMessages_${suffix}`;
+    const conn = await createDirectDatabaseConnection();
+
+    try {
+      await createLegacyBaseSchema(db, suffix, tableNames);
+
+      await db.$executeRawUnsafe(
+        `INSERT INTO ${quoted(tableNames.nhaXe)} (\`nhaXeId\`, \`tenNhaXe\`) VALUES (7, 'Nhà xe Mai Linh')`,
+      );
+      await db.$executeRawUnsafe(
+        `INSERT INTO ${quoted(tableNames.taiKhoan)} (\`taiKhoanId\`, \`email\`) VALUES (88, 'cust88@vexgo.vn')`,
+      );
+      await db.$executeRawUnsafe(
+        `INSERT INTO ${quoted(tableNames.khachHang)} (\`khachHangId\`, \`maKhachHang\`, \`taiKhoanId\`) VALUES (88, 'KH088', 88)`,
+      );
+      await db.$executeRawUnsafe(
+        `INSERT INTO ${quoted(tableNames.tinNhan)} (\`tinNhanId\`, \`noiDung\`, \`thoiGian\`, \`trangThai\`, \`khachHangId\`, \`createdAt\`, \`updatedAt\`) VALUES
+          (888, 'Tin nhắn test', '2026-09-01 15:00:00', 'DA_GUI', 88, '2026-09-01 15:00:00', '2026-09-01 15:00:00')`,
+      );
+
+      await executeMigrationScript(db, suffix, tableNames);
+
+      await createRecoveryProcedure(conn, procName, tableNames);
+
+      // Gọi với ID 9999 không tồn tại trong archive
+      let recoveryError: Error | undefined;
+      try {
+        await conn.query(`SET @newConvId = NULL;`);
+        await conn.query(`CALL \`${procName}\`(88, 7, '[9999]', 1, @newConvId);`);
+      } catch (err) {
+        recoveryError = err instanceof Error ? err : new Error(String(err));
+      }
+
+      expect(recoveryError).toBeDefined();
+      expect(recoveryError?.message).toMatch(/CROSS_CUSTOMER_OR_MISSING_ARCHIVE_MESSAGES_DETECTED|45000/);
+
+      const convs = await db.$queryRawUnsafe<Array<any>>(
+        `SELECT * FROM ${quoted(tableNames.cuocTroChuyen)}`,
+      );
+      expect(convs.length).toBe(0);
+
+      const msgs = await db.$queryRawUnsafe<Array<any>>(
+        `SELECT * FROM ${quoted(tableNames.tinNhan)}`,
+      );
+      expect(msgs.length).toBe(0);
+    } finally {
+      await conn.query(`DROP PROCEDURE IF EXISTS \`${procName}\`;`).catch(() => {});
+      await conn.end();
       await teardownTestSchema(db, tableNames);
     }
   });
@@ -1277,7 +1456,7 @@ describe('Support chat schema migration with preflight archive and RBAC bootstra
     }
   });
 
-  it('16. Test F3 — Partial retry idempotency: safely resumes when schema was partially migrated after step 4 without false conflict', async () => {
+  it('16. Test F3 — Preflight guard compatibility: preflight accepts previously normalized createdAt without false conflict (manual recovery required for partial migration)', async () => {
     const db = createMigrationTestClient();
     prisma = db;
     await db.$connect();
@@ -1293,8 +1472,15 @@ describe('Support chat schema migration with preflight archive and RBAC bootstra
         `INSERT INTO ${quoted(tableNames.khachHang)} (\`khachHangId\`, \`maKhachHang\`, \`taiKhoanId\`) VALUES (1, 'KH1', 1)`,
       );
 
-      // Giả lập trạng thái chạy dở sau bước 4:
-      // Bảng nguồn đã có cột cuocTroChuyenId (từ bước 3), và createdAt đã được bước 4 đồng bộ bằng thoiGian (10:00:00)
+      // ĐẶC TẢ KIỂM CHỨNG CỦA TEST NÀY (FINDING P2):
+      // Test này CHỨNG MINH: Câu lệnh preflight conflict guard (bước 1.1) nhận diện đúng trạng thái
+      // createdAt đã được chuẩn hóa theo thoiGian ở bước 4 của lần chạy trước, và KHÔNG phát sinh xung đột giả (no false conflict).
+      //
+      // GIỚI HẠN VÀ KHUYẾN CÁO VẬN HÀNH:
+      // Test này KHÔNG chứng minh toàn bộ migration script có thể tự động chạy lại từ đầu (not resumable),
+      // bởi vì các câu lệnh DDL MySQL ở bước 3 (ADD COLUMN cuocTroChuyenId) sẽ lỗi duplicate column nếu chạy lại từ đầu.
+      // Khi migration bị dừng dở dang, DBA bắt buộc phải thực hiện Quy trình Phục hồi Thủ công (Manual Recovery)
+      // được hướng dẫn chi tiết tại Mục 8 của Runbook (docs/runbooks/legacy-chat-archive-runbook.md).
       await db.$executeRawUnsafe(`ALTER TABLE ${quoted(tableNames.tinNhan)} ADD COLUMN \`cuocTroChuyenId\` INT NULL;`);
       await db.$executeRawUnsafe(
         `INSERT INTO ${quoted(tableNames.tinNhan)} (\`tinNhanId\`, \`noiDung\`, \`thoiGian\`, \`trangThai\`, \`khachHangId\`, \`createdAt\`, \`updatedAt\`) VALUES

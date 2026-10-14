@@ -124,7 +124,14 @@ WHERE `tinNhanId` IS NULL
 
 ---
 
-## 6. Quy trình Phục hồi Dữ liệu An toàn & Chống Trộn Khách Hàng (Safe Restoration Procedure)
+---
+
+## 6. Quy trình Phục hồi Dữ liệu An toàn bằng MySQL Stored Procedure (Safe Restoration Procedure)
+
+> [!CAUTION]
+> **BẢO ĐẢM TÍNH NGUYÊN TỬ (TRANSACTION ATOMICITY & ROLLBACK TRONG MYSQL):**  
+> MySQL **mặc định KHÔNG tự động rollback toàn bộ transaction** nếu một câu lệnh SQL đơn lẻ phát sinh lỗi trong quá trình thực thi script. Nếu DBA chạy một chuỗi câu lệnh SQL độc lập và client/GUI tiếp tục thực thi đến lệnh `COMMIT`, các dữ liệu đã chèn trước đó (như `CuocTroChuyen` hoặc một phần `TinNhanHoTro`) **vẫn sẽ bị commit vào database**, dẫn đến tình trạng phục hồi dở dang và phá vỡ tính toàn vẹn dữ liệu.  
+> **YÊU CẦU BẮT BUỘC:** Quy trình phục hồi phải được đóng gói vào **MySQL Stored Procedure** có khai báo `DECLARE EXIT HANDLER FOR SQLEXCEPTION BEGIN ROLLBACK; RESIGNAL; END;`. Khi phát sinh bất kỳ lỗi SQL hoặc lỗi kiểm tra nghiệp vụ (`SIGNAL SQLSTATE '45000'`), handler sẽ lập tức thực thi `ROLLBACK` toàn bộ transaction trước khi phát sinh lại lỗi (`RESIGNAL`), bảo đảm 100% không còn bất kỳ bản ghi phục hồi dở dang nào trong cơ sở dữ liệu.
 
 > [!WARNING]
 > **ĐIỀU KIỆN TIÊN QUYẾT TRƯỚC KHI KHÔI PHỤC:**  
@@ -135,88 +142,182 @@ WHERE `tinNhanId` IS NULL
 > 3. Đã tạo một `CuocTroChuyen` hợp lệ thuộc nhà xe đó trước khi đưa tin nhắn vào.  
 > 4. **RÀNG BUỘC CÁCH LY KHÁCH HÀNG (Cross-Customer Protection):** Bắt buộc phải xác minh tất cả tin nhắn khôi phục thuộc cùng một `khachHangId` duy nhất. **Tuyệt đối không được trộn tin nhắn của khách hàng này vào cuộc trò chuyện của khách hàng khác.**
 
-### Kịch bản phục hồi thủ công nguyên tử (Atomic Safe Recovery Script):
+### 6.1. Định nghĩa Stored Procedure Phục hồi Dữ liệu (`sp_RecoverLegacyMessages`)
 
-Quy trình sử dụng Database Transaction kết hợp với 3 lớp kiểm tra (Guards) fail-closed. Nếu có bất kỳ ID nào không tồn tại hoặc thuộc về khách hàng khác, giao dịch sẽ **hủy bỏ toàn bộ (ROLLBACK)**, không để lại cuộc trò chuyện rỗng hay dữ liệu phục hồi dở dang:
+Stored Procedure dưới đây tích hợp đầy đủ:
+- Exception handler tự động `ROLLBACK` toàn bộ transaction khi có lỗi.
+- Validation tham số đầu vào và kiểm tra quyền sở hữu dữ liệu.
+- **Guard 1 (Preflight ID & Customer Isolation):** Xác minh 100% ID trong danh sách thuộc duy nhất khách hàng đích trước khi tạo hội thoại.
+- **Join Constraint:** Ràng buộc kép `arc.khachHangIdCu = ctc.khachHangId` ở mức truy vấn nạp tin nhắn.
+- **Guard 2 (Row Count Check):** Kiểm tra số lượng bản ghi thực tế được chèn khớp chính xác số lượng kỳ vọng.
 
 ```sql
-START TRANSACTION;
+-- Lưu ý: Khi thực thi qua mysql CLI, bắt buộc phải dùng DELIMITER //
+DELIMITER //
 
--- 1. Thiết lập tham số kiểm soát
-SET @targetKhachHangId = 123;  -- Khách hàng được chỉ định nhận phiên phục hồi
-SET @targetNhaXeId = 5;       -- Nhà xe chịu trách nhiệm xử lý
-SET @expectedCount = 3;        -- Số lượng tin nhắn cần phục hồi trong danh sách (101, 102, 103)
+DROP PROCEDURE IF EXISTS `sp_RecoverLegacyMessages` //
 
--- 2. Guard 1: Xác thực số lượng tin nhắn hợp lệ thuộc DUY NHẤT khách hàng đích @targetKhachHangId
--- Nếu có bất kỳ tin nhắn nào thuộc khách hàng khác, @verifiedCount sẽ nhỏ hơn @expectedCount
-SET @verifiedCount = (
-    SELECT COUNT(*)
-    FROM `LuuTruTinNhanHoTroCu` arc
-    WHERE arc.`tinNhanId` IN (101, 102, 103)
-      AND arc.`khachHangIdCu` = @targetKhachHangId
-);
-
--- Kích hoạt abort nếu phát hiện sai lệch (ID không tồn tại hoặc thuộc khách hàng khác)
-SET @cross_customer_guard = (
-    SELECT 1
-    FROM (SELECT 1 UNION ALL SELECT 2) `_cross_customer_guard_abort`
-    WHERE @verifiedCount <> @expectedCount
-);
-
--- 3. Tạo cuộc trò chuyện mới cho đúng khách hàng đích và nhà xe đã xác thực
-INSERT INTO `CuocTroChuyen` (
-    `maCuocTroChuyen`, `tieuDe`, `trangThai`, `kenhHoTro`, `cheDoChat`,
-    `khachHangId`, `nhaXeId`, `createdAt`, `updatedAt`
-) VALUES (
-    CONCAT('RECOVERED-KH', @targetKhachHangId, '-NX', @targetNhaXeId, '-', UNIX_TIMESTAMP()),
-    'Phục hồi hỗ trợ khách hàng',
-    'CHO_TIEP_NHAN',
-    'WEB',
-    'NGUOI_THAT',
-    @targetKhachHangId,
-    @targetNhaXeId,
-    CURRENT_TIMESTAMP(0),
-    CURRENT_TIMESTAMP(0)
-);
-SET @newCuocTroChuyenId = LAST_INSERT_ID();
-
--- 4. Nạp tin nhắn từ archive: RÀNG BUỘC KÉP arc.khachHangIdCu = ctc.khachHangId
--- Đảm bảo 100% ở cấp truy vấn rằng chỉ có tin nhắn của khách hàng sở hữu hội thoại mới được nạp
-INSERT INTO `TinNhanHoTro` (
-    `cuocTroChuyenId`, `taiKhoanGuiId`, `loaiNguoiGui`, `loaiTinNhan`,
-    `noiDung`, `trangThai`, `createdAt`, `updatedAt`
+CREATE PROCEDURE `sp_RecoverLegacyMessages`(
+    IN p_targetKhachHangId INT,
+    IN p_targetNhaXeId INT,
+    IN p_tinNhanIdsJson JSON,
+    IN p_expectedCount INT,
+    OUT p_newCuocTroChuyenId INT
 )
-SELECT
-    ctc.`cuocTroChuyenId`,
-    kh.`taiKhoanId`,
-    'KHACH_HANG',
-    'VAN_BAN',
-    arc.`noiDung`,
-    arc.`trangThaiCu`,
-    arc.`thoiGianCu`,
-    arc.`updatedAtCu`
-FROM `LuuTruTinNhanHoTroCu` arc
-JOIN `CuocTroChuyen` ctc ON ctc.`cuocTroChuyenId` = @newCuocTroChuyenId
-JOIN `KhachHang` kh ON kh.`khachHangId` = arc.`khachHangIdCu`
-WHERE arc.`tinNhanId` IN (101, 102, 103)
-  AND arc.`khachHangIdCu` = ctc.`khachHangId`;
+proc_body: BEGIN
+    DECLARE v_verifiedCount INT DEFAULT 0;
+    DECLARE v_insertedCount INT DEFAULT 0;
+    DECLARE v_maCuocTroChuyen VARCHAR(100);
+    DECLARE v_taiKhoanId INT DEFAULT NULL;
 
--- 5. Guard 2: Kiểm tra số lượng dòng thực tế đã ghi vào TinNhanHoTro phải khớp chính xác @expectedCount
-SET @insertedCount = ROW_COUNT();
-SET @row_count_guard = (
-    SELECT 1
-    FROM (SELECT 1 UNION ALL SELECT 2) `_row_count_guard_abort`
-    WHERE @insertedCount <> @expectedCount
-);
+    -- Bắt mọi lỗi SQL, lập tức ROLLBACK toàn bộ transaction và RESIGNAL lỗi cho caller
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        ROLLBACK;
+        RESIGNAL;
+    END;
 
--- 6. Hoàn tất giao dịch khi mọi điều kiện an toàn đều thỏa mãn
-COMMIT;
+    -- Bắt đầu giao dịch nguyên tử (Atomic Transaction)
+    START TRANSACTION;
+
+    -- 1. Validation tham số đầu vào
+    IF p_targetKhachHangId IS NULL OR p_targetKhachHangId <= 0 THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'INVALID_TARGET_KHACH_HANG_ID';
+    END IF;
+
+    IF p_targetNhaXeId IS NULL OR p_targetNhaXeId <= 0 THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'INVALID_TARGET_NHA_XE_ID';
+    END IF;
+
+    IF p_tinNhanIdsJson IS NULL OR NOT JSON_VALID(p_tinNhanIdsJson) OR JSON_LENGTH(p_tinNhanIdsJson) = 0 THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'INVALID_OR_EMPTY_TIN_NHAN_IDS_JSON';
+    END IF;
+
+    IF p_expectedCount IS NULL OR p_expectedCount <= 0 OR p_expectedCount <> JSON_LENGTH(p_tinNhanIdsJson) THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'EXPECTED_COUNT_MISMATCH_WITH_JSON_LENGTH';
+    END IF;
+
+    -- 2. Kiểm tra tồn tại khách hàng và lấy tài khoản tương ứng
+    SELECT `taiKhoanId` INTO v_taiKhoanId
+    FROM `KhachHang`
+    WHERE `khachHangId` = p_targetKhachHangId;
+
+    IF v_taiKhoanId IS NULL THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'CUSTOMER_OR_ACCOUNT_NOT_FOUND';
+    END IF;
+
+    -- 3. Kiểm tra tồn tại nhà xe đích
+    IF NOT EXISTS (SELECT 1 FROM `NhaXe` WHERE `nhaXeId` = p_targetNhaXeId) THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'BUS_COMPANY_NOT_FOUND';
+    END IF;
+
+    -- 4. Guard 1: Xác thực số lượng tin nhắn trong archive thuộc DUY NHẤT khách hàng đích
+    SELECT COUNT(*) INTO v_verifiedCount
+    FROM `LuuTruTinNhanHoTroCu` arc
+    JOIN JSON_TABLE(p_tinNhanIdsJson, '$[*]' COLUMNS (`tinNhanId` INT PATH '$')) jt
+      ON jt.`tinNhanId` = arc.`tinNhanId`
+    WHERE arc.`khachHangIdCu` = p_targetKhachHangId;
+
+    -- Nếu có bất kỳ ID nào không tồn tại, bị trùng lặp hoặc thuộc về khách hàng khác:
+    IF v_verifiedCount <> p_expectedCount THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'CROSS_CUSTOMER_OR_MISSING_ARCHIVE_MESSAGES_DETECTED';
+    END IF;
+
+    -- 5. Tạo cuộc trò chuyện mới hợp lệ cho đúng khách hàng đích và nhà xe đã xác thực
+    SET v_maCuocTroChuyen = CONCAT('RECOVERED-KH', p_targetKhachHangId, '-NX', p_targetNhaXeId, '-', UNIX_TIMESTAMP());
+    INSERT INTO `CuocTroChuyen` (
+        `maCuocTroChuyen`, `tieuDe`, `trangThai`, `kenhHoTro`, `cheDoChat`,
+        `khachHangId`, `nhaXeId`, `createdAt`, `updatedAt`
+    ) VALUES (
+        v_maCuocTroChuyen,
+        CONCAT('Phục hồi hỗ trợ khách hàng KH', p_targetKhachHangId),
+        'CHO_TIEP_NHAN',
+        'WEB',
+        'NGUOI_THAT',
+        p_targetKhachHangId,
+        p_targetNhaXeId,
+        CURRENT_TIMESTAMP(0),
+        CURRENT_TIMESTAMP(0)
+    );
+
+    SET p_newCuocTroChuyenId = LAST_INSERT_ID();
+
+    -- 6. Nạp tin nhắn từ archive: RÀNG BUỘC KÉP arc.khachHangIdCu = ctc.khachHangId
+    INSERT INTO `TinNhanHoTro` (
+        `cuocTroChuyenId`, `taiKhoanGuiId`, `loaiNguoiGui`, `loaiTinNhan`,
+        `noiDung`, `trangThai`, `createdAt`, `updatedAt`
+    )
+    SELECT
+        ctc.`cuocTroChuyenId`,
+        v_taiKhoanId,
+        'KHACH_HANG',
+        'VAN_BAN',
+        arc.`noiDung`,
+        arc.`trangThaiCu`,
+        arc.`thoiGianCu`,
+        arc.`updatedAtCu`
+    FROM `LuuTruTinNhanHoTroCu` arc
+    JOIN JSON_TABLE(p_tinNhanIdsJson, '$[*]' COLUMNS (`tinNhanId` INT PATH '$')) jt
+      ON jt.`tinNhanId` = arc.`tinNhanId`
+    JOIN `CuocTroChuyen` ctc
+      ON ctc.`cuocTroChuyenId` = p_newCuocTroChuyenId
+    WHERE arc.`khachHangIdCu` = ctc.`khachHangId`;
+
+    -- 7. Guard 2: Kiểm tra số lượng dòng thực tế đã ghi vào TinNhanHoTro
+    SET v_insertedCount = ROW_COUNT();
+
+    IF v_insertedCount <> p_expectedCount THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'INSERTED_ROW_COUNT_MISMATCH';
+    END IF;
+
+    -- 8. Hoàn tất giao dịch khi mọi điều kiện an toàn đều thỏa mãn
+    COMMIT;
+END //
+
+DELIMITER ;
 ```
 
-> [!CAUTION]
-> **QUY TẮC BẮT BUỘC KHI PHỤC HỒI THẤT BẠI:**  
-> Nếu bất kỳ câu lệnh nào trong khối transaction gặp lỗi (ví dụ `Subquery returns more than 1 row` do Guard kích hoạt), DBA **TUYỆT ĐỐI KHÔNG ĐƯỢC PHÉP TIẾP TỤC THAO TÁC THỦ CÔNG**. Hệ thống sẽ tự động ROLLBACK toàn bộ transaction, hủy bỏ `CuocTroChuyen` vừa tạo và không ghi nhận bất kỳ tin nhắn nào vào `TinNhanHoTro`. Người vận hành phải kiểm tra lại danh sách ID tin nhắn và báo cáo sự cố an toàn dữ liệu.
+### 6.2. Hướng dẫn Vận hành và Chu trình Gọi Procedure
 
+Khi DBA cần phục hồi một phiên chat lịch sử cho khách hàng `123`, nhà xe `5`, danh sách ID tin nhắn `[101, 102, 103]` (tổng cộng 3 tin nhắn):
+
+```sql
+-- Bước 1: Tạo procedure (nếu chưa có trong hệ quản trị) bằng script ở mục 6.1
+
+-- Bước 2: Khai báo biến nhận kết quả và gọi procedure
+SET @targetKhachHangId = 123;
+SET @targetNhaXeId = 5;
+SET @tinNhanIdsJson = '[101, 102, 103]';
+SET @expectedCount = 3;
+SET @newConvId = NULL;
+
+CALL `sp_RecoverLegacyMessages`(
+    @targetKhachHangId,
+    @targetNhaXeId,
+    @tinNhanIdsJson,
+    @expectedCount,
+    @newConvId
+);
+
+-- Bước 3: Xác minh kết quả sau khi gọi thành công
+SELECT @newConvId AS `recoveredConversationId`;
+
+-- Kiểm tra tin nhắn đã được chèn vào bảng hoạt động
+SELECT `tinNhanId`, `cuocTroChuyenId`, `taiKhoanGuiId`, `loaiNguoiGui`, `noiDung`, `createdAt`
+FROM `TinNhanHoTro`
+WHERE `cuocTroChuyenId` = @newConvId;
+```
+
+### 6.3. Quy trình Dọn dẹp Procedure (Cleanup Lifecycle)
+
+> [!IMPORTANT]
+> **QUY TẮC DỌN DẸP PROCEDURE:**  
+> DDL `CREATE PROCEDURE` và `DROP PROCEDURE` là các thao tác độc lập với transaction DML.  
+> Sau khi hoàn tất thao tác phục hồi (hoặc sau khi xử lý sự cố lỗi), DBA **BẮT BUỘC** phải dọn dẹp Stored Procedure để tránh tồn đọng thủ tục tạm thời hoặc xung đột schema:
+> ```sql
+> DROP PROCEDURE IF EXISTS `sp_RecoverLegacyMessages`;
+> ```
+> Nếu sử dụng script điều phối tự động (Node.js/Bash/Python), lệnh cleanup này phải được đặt trong khối `finally` để luôn được thực thi dù `CALL` thành công hay thất bại.
 
 ---
 
@@ -227,9 +328,94 @@ MySQL tự động kích hoạt **implicit commit** sau mỗi câu lệnh DDL (`
 
 ### 7.2. Chiến lược Bảo vệ Preflight
 Để triệt tiêu nguy cơ mất mát dữ liệu do implicit commit:
-1. **Kiểm tra xung đột trước (Preflight Conflict Detection):** Bước kiểm tra xung đột dữ liệu giữa `TinNhanHoTro` và `LuuTruTinNhanHoTroCu` được thực hiện **ngay ở bước 1.1**, trước khi bất kỳ thay đổi cấu trúc bảng nào diễn ra. Nếu phát hiện sai lệch (khác `noiDung`, `thoiGian`, `trangThai`, hoặc `khachHangId`), migration sẽ abort ngay lập tức (`ERROR_ARCHIVE_DATA_CONFLICT_DETECTED`), giữ nguyên 100% dữ liệu và schema cũ.
+1. **Kiểm tra xung đột trước (Preflight Conflict Detection):** Bước kiểm tra xung đột dữ liệu giữa `TinNhanHoTro` và `LuuTruTinNhanHoTroCu` được thực hiện **ngay ở bước 1.1**, trước khi bất kỳ thay đổi cấu trúc bảng nào diễn ra. Nếu phát hiện sai lệch (khác `noiDung`, `thoiGian`, `trangThai`, `khachHangId`, `updatedAt` hoặc `createdAt`), migration sẽ abort ngay lập tức (`ER_SUBQUERY_NO_1_ROW` Code 1242) mà không sửa đổi (zero-mutation) bất kỳ dữ liệu nào.
 2. **Double-check trước khi xóa:** Bước 7.1 xác minh lại lần cuối rằng 100% bản ghi legacy sắp bị loại bỏ đã nằm an toàn trong `LuuTruTinNhanHoTroCu`.
-3. **Quy trình phục hồi cho DBA khi migration fail giữa chừng:**
-   - Trường hợp migration dừng trước bước DDL: Dữ liệu nguồn chưa bị thay đổi, chỉ cần kiểm tra lỗi dữ liệu xung đột và chạy lại migration.
-   - Trường hợp migration dừng ở các bước DDL cuối (sau khi xóa bản ghi legacy): Toàn bộ dữ liệu tin nhắn cũ đã nằm an toàn trong `LuuTruTinNhanHoTroCu`. DBA có thể tra cứu bảng archive để đối chiếu hoặc hoàn tất các bước DDL còn lại theo hướng dẫn của migration script mà không lo ngại mất mát dữ liệu.
+
+---
+
+## 8. Quy trình Phục hồi Thủ công khi Migration dừng dở dang (Manual Recovery for Incomplete Migration)
+
+> [!CAUTION]
+> **QUY TẮC CỐT LÕI: KHÔNG CHẠY LẠI MIGRATION TỪ ĐẦU MỘT CÁCH MÙ QUÁNG!**  
+> Do đặc tính implicit commit của MySQL DDL, một migration bị lỗi giữa chừng sẽ để lại schema ở trạng thái đã thay đổi một phần. Nếu DBA chạy lại toàn bộ script `migration.sql` từ đầu, các câu lệnh như `ALTER TABLE TinNhanHoTro ADD COLUMN cuocTroChuyenId` ở bước 3 sẽ bị lỗi **Duplicate column name** và tiếp tục thất bại.  
+> **Lưu ý về Test F3:** Test tích hợp F3 trong codebase chỉ chứng minh rằng *câu lệnh preflight guard chấp nhận trạng thái `createdAt` đã chuẩn hóa mà không sinh xung đột giả*. Test F3 **KHÔNG PHẢI** là bằng chứng cho thấy migration có khả năng tự động chạy lại từ đầu (not automatically resumable). Mọi trường hợp migration dừng giữa chừng **bắt buộc cần có sự can thiệp thủ công (manual recovery) của DBA theo quy trình 10 bước dưới đây**.
+
+### Quy trình 10 bước can thiệp và kiểm tra cho DBA:
+
+1. **Dừng toàn bộ tiến trình áp dụng migration:**  
+   Không retry tự động qua CI/CD hoặc chạy lại lệnh Prisma Migrate. Đánh dấu trạng thái bảo trì nếu cần thiết.
+
+2. **Sao lưu khẩn cấp schema và dữ liệu hiện tại:**  
+   Thực hiện backup snapshot cơ sở dữ liệu ngay lập tức trước khi thực hiện bất kỳ truy vấn sửa đổi nào:
+   ```bash
+   mysqldump -u root -p vexgo TinNhanHoTro LuuTruTinNhanHoTroCu CuocTroChuyen > backup_partial_migration.sql
+   ```
+
+3. **Xác định cấu trúc bảng thực tế qua `information_schema`:**  
+   Không đoán trạng thái dựa trên log. Truy vấn trực tiếp metadata của MySQL để xác định chính xác các cột và bảng đã được tạo:
+   ```sql
+   -- Kiểm tra sự tồn tại của bảng archive
+   SELECT TABLE_NAME FROM information_schema.TABLES
+   WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'LuuTruTinNhanHoTroCu';
+
+   -- Kiểm tra các cột đã được thêm vào TinNhanHoTro
+   SELECT COLUMN_NAME, DATA_TYPE, IS_NULLABLE
+   FROM information_schema.COLUMNS
+   WHERE TABLE_SCHEMA = DATABASE()
+     AND TABLE_NAME = 'TinNhanHoTro'
+     AND COLUMN_NAME IN ('cuocTroChuyenId', 'taiKhoanGuiId', 'loaiNguoiGui', 'loaiTinNhan');
+   ```
+
+4. **Đối chiếu dữ liệu nguồn và archive:**  
+   Kiểm tra số lượng bản ghi giữa `TinNhanHoTro` và `LuuTruTinNhanHoTroCu`:
+   ```sql
+   SELECT COUNT(*) AS total_source FROM `TinNhanHoTro`;
+   SELECT COUNT(*) AS total_archive FROM `LuuTruTinNhanHoTroCu`;
+   ```
+
+5. **Phân loại 5 mốc trạng thái cụ thể của database:**
+   - **Mốc 1 (Dừng ở Bước 1 - Trước DDL):** Bảng `LuuTruTinNhanHoTroCu` chưa được tạo hoặc preflight guard kích hoạt lỗi. Dữ liệu nguồn `TinNhanHoTro` nguyên vẹn 100%. DBA kiểm tra nguyên nhân xung đột dữ liệu, sửa dữ liệu không nhất quán và chạy lại bình thường.
+   - **Mốc 2 (Dừng ở Bước 2 - Đã tạo archive nhưng chưa sửa cấu trúc nguồn):** Bảng `LuuTruTinNhanHoTroCu` đã có dữ liệu nhưng `TinNhanHoTro` chưa có cột mới. Dữ liệu nguồn vẫn nguyên vẹn.
+   - **Mốc 3 (Dừng ở Bước 3 hoặc 4 - Đã thêm cột `cuocTroChuyenId` và chuẩn hóa `createdAt = thoiGian`):** Các cột mới đã tồn tại nhưng chưa có khóa ngoại. `createdAt` của nguồn đã được đồng bộ. Bảng archive vẫn giữ nguyên snapshot `createdAtCu` ban đầu.
+   - **Mốc 4 (Dừng ở Bước 5 hoặc 6 - Đang liên kết hoặc chuẩn hóa trạng thái):** Bảng `CuocTroChuyen` đã được tạo, một số tin nhắn có thể đã được gắn `cuocTroChuyenId`.
+   - **Mốc 5 (Dừng ở Bước 7 - Trước hoặc sau khi xóa legacy message):** Kiểm tra xem các bản ghi có `cuocTroChuyenId IS NULL` đã bị xóa hay chưa.
+
+6. **Kiểm tra điều kiện tiên quyết trước khi tiếp tục thao tác xóa:**  
+   Nếu database đang ở Mốc 4 hoặc Mốc 5, DBA **BẮT BUỘC** phải chạy truy vấn kiểm tra bước 7.1 để xác nhận 100% bản ghi không có `cuocTroChuyenId` đã nằm an toàn trong archive:
+   ```sql
+   SELECT COUNT(*) AS unarchived_count
+   FROM `TinNhanHoTro` src
+   LEFT JOIN `LuuTruTinNhanHoTroCu` arc ON arc.`tinNhanId` = src.`tinNhanId`
+   WHERE src.`cuocTroChuyenId` IS NULL AND arc.`tinNhanId` IS NULL;
+   -- Kết quả BẮT BUỘC PHẢI BẰNG 0. Nếu > 0, DỪNG LẠI NGAY LẬP TỨC.
+   ```
+
+7. **Xử lý thủ công các bước DDL còn thiếu theo kịch bản có kiểm soát:**  
+   Dựa trên mốc trạng thái đã xác định ở Bước 5, DBA chỉ thực thi các khối lệnh SQL tiếp theo từ điểm bị dừng, thay vì chạy lại từ Bước 1:
+   - Nếu đã thêm cột ở Bước 3 nhưng chưa tạo bảng `CuocTroChuyen`: Thực thi từ Bước 5.
+   - Nếu đã xóa tin nhắn legacy nhưng chưa thêm ràng buộc khóa ngoại (Bước 7.3): Thực thi các câu lệnh `ALTER TABLE ... ADD CONSTRAINT` tương ứng.
+
+8. **Đồng bộ hóa trạng thái Prisma Migration:**  
+   Sau khi hoàn tất thủ công các thay đổi schema trên cơ sở dữ liệu, sử dụng lệnh Prisma CLI để đánh dấu migration đã được áp dụng thành công:
+   ```bash
+   npx prisma migrate resolve --applied 20261013150000_add_chat_support_conversations_and_messages
+   ```
+   Hoặc nếu cần rollback về schema cũ trước đó:
+   ```bash
+   npx prisma migrate resolve --rolled-back 20261013150000_add_chat_support_conversations_and_messages
+   ```
+
+9. **Xác minh không có schema drift:**  
+   Chạy lệnh kiểm tra drift giữa Prisma schema và database thực tế:
+   ```bash
+   npx prisma migrate diff \
+     --from-migrations prisma/migrations \
+     --to-schema-datamodel prisma/schema.prisma \
+     --exit-code
+   ```
+   Kết quả trả về mã thoát `0` xác nhận zero drift.
+
+10. **Lưu nhật ký can thiệp vào hồ sơ vận hành:**  
+    Ghi nhận đầy đủ thời gian, người thực hiện, lý do migration bị dừng, danh sách câu lệnh SQL thủ công đã chạy và kết quả kiểm tra toàn vẹn dữ liệu vào hệ thống ticket/runbook của dự án.
+
 
