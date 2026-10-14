@@ -26,8 +26,7 @@ import type {
   ZaloPayWebhookDto,
 } from './dto/webhook.dto.js';
 
-const PAYMENT_PENDING_STATUSES = ['CHO_THANH_TOAN', 'DANG_XU_LY'] as const;
-type PaymentPendingStatus = (typeof PAYMENT_PENDING_STATUSES)[number];
+const BOOKING_ORDER_PENDING_STATUS = 'CHO_THANH_TOAN';
 
 type SepayWebhookPayload = {
   id?: unknown;
@@ -159,9 +158,9 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
     const candidates = await this.prisma.phieuDatVe.findMany({
       where: {
         createdAt: { lte: expiredBefore },
-        trangThai: { in: [...PAYMENT_PENDING_STATUSES] },
+        trangThai: BOOKING_ORDER_PENDING_STATUS,
         donGiaoDich: {
-          is: { trangThai: { in: [...PAYMENT_PENDING_STATUSES] } },
+          is: { trangThai: BOOKING_ORDER_PENDING_STATUS },
         },
       },
       select: { phieuDatVeId: true },
@@ -229,12 +228,8 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
     const expiredBefore = new Date(now.getTime() - BOOKING_PAYMENT_TTL_MS);
     if (
       booking.createdAt > expiredBefore ||
-      !PAYMENT_PENDING_STATUSES.includes(
-        booking.trangThai as PaymentPendingStatus,
-      ) ||
-      !PAYMENT_PENDING_STATUSES.includes(
-        booking.donGiaoDich.trangThai as PaymentPendingStatus,
-      )
+      booking.trangThai !== BOOKING_ORDER_PENDING_STATUS ||
+      booking.donGiaoDich.trangThai !== BOOKING_ORDER_PENDING_STATUS
     ) {
       return false;
     }
@@ -274,7 +269,7 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
     const orderUpdate = await tx.donGiaoDich.updateMany({
       where: {
         donGiaoDichId: booking.donGiaoDichId,
-        trangThai: { in: [...PAYMENT_PENDING_STATUSES] },
+        trangThai: BOOKING_ORDER_PENDING_STATUS,
       },
       data: { trangThai: 'DA_HUY' },
     });
@@ -283,7 +278,7 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
     const bookingUpdate = await tx.phieuDatVe.updateMany({
       where: {
         phieuDatVeId: booking.phieuDatVeId,
-        trangThai: { in: [...PAYMENT_PENDING_STATUSES] },
+        trangThai: BOOKING_ORDER_PENDING_STATUS,
         createdAt: { lte: expiredBefore },
       },
       data: { trangThai: 'DA_HUY' },
@@ -639,10 +634,8 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
 
     if (
       booking.createdAt instanceof Date &&
-      PAYMENT_PENDING_STATUSES.includes(booking.trangThai as PaymentPendingStatus) &&
-      PAYMENT_PENDING_STATUSES.includes(
-        booking.donGiaoDich?.trangThai as PaymentPendingStatus,
-      ) &&
+      booking.trangThai === BOOKING_ORDER_PENDING_STATUS &&
+      booking.donGiaoDich?.trangThai === BOOKING_ORDER_PENDING_STATUS &&
       getBookingPaymentDeadline(booking.createdAt) <= new Date()
     ) {
       await this.prisma.$transaction((tx) =>
@@ -679,7 +672,10 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
       });
     }
 
-    if (!['CHO_THANH_TOAN', 'DANG_XU_LY'].includes(booking.trangThai)) {
+    if (
+      booking.trangThai !== BOOKING_ORDER_PENDING_STATUS ||
+      booking.donGiaoDich?.trangThai !== BOOKING_ORDER_PENDING_STATUS
+    ) {
       throw new ConflictException({
         error: 'INVALID_BOOKING_STATUS',
         message: 'Trạng thái đơn đặt vé không hợp lệ để tạo giao dịch thanh toán.',
@@ -717,12 +713,8 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
 
       if (
         currentBooking.createdAt instanceof Date &&
-        PAYMENT_PENDING_STATUSES.includes(
-          currentBooking.trangThai as PaymentPendingStatus,
-        ) &&
-        PAYMENT_PENDING_STATUSES.includes(
-          currentBooking.donGiaoDich.trangThai as PaymentPendingStatus,
-        ) &&
+        currentBooking.trangThai === BOOKING_ORDER_PENDING_STATUS &&
+        currentBooking.donGiaoDich.trangThai === BOOKING_ORDER_PENDING_STATUS &&
         getBookingPaymentDeadline(currentBooking.createdAt) <= new Date()
       ) {
         await this.expirePendingBookingInTransaction(
@@ -753,7 +745,10 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
         });
       }
 
-      if (!['CHO_THANH_TOAN', 'DANG_XU_LY'].includes(currentBooking.trangThai)) {
+      if (
+        currentBooking.trangThai !== BOOKING_ORDER_PENDING_STATUS ||
+        currentBooking.donGiaoDich.trangThai !== BOOKING_ORDER_PENDING_STATUS
+      ) {
         throw new ConflictException({
           error: 'INVALID_BOOKING_STATUS',
           message: 'Trạng thái đơn đặt vé không hợp lệ để tạo giao dịch thanh toán.',
@@ -905,12 +900,9 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
       ? getBookingPaymentDeadline(payment.donGiaoDich.phieuDatVe.createdAt)
       : null;
     const bookingPaymentIsPending =
-      PAYMENT_PENDING_STATUSES.includes(
-        payment.donGiaoDich?.phieuDatVe?.trangThai as PaymentPendingStatus,
-      ) &&
-      PAYMENT_PENDING_STATUSES.includes(
-        payment.donGiaoDich?.trangThai as PaymentPendingStatus,
-      );
+      payment.donGiaoDich?.phieuDatVe?.trangThai ===
+        BOOKING_ORDER_PENDING_STATUS &&
+      payment.donGiaoDich?.trangThai === BOOKING_ORDER_PENDING_STATUS;
     const bookingPaymentHasExpired =
       bookingPaymentIsPending &&
       paymentExpiresAt !== null &&
@@ -1083,12 +1075,8 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
       const booking = payment.donGiaoDich?.phieuDatVe;
       if (
         booking?.createdAt instanceof Date &&
-        PAYMENT_PENDING_STATUSES.includes(
-          booking.trangThai as PaymentPendingStatus,
-        ) &&
-        PAYMENT_PENDING_STATUSES.includes(
-          payment.donGiaoDich?.trangThai as PaymentPendingStatus,
-        ) &&
+        booking.trangThai === BOOKING_ORDER_PENDING_STATUS &&
+        payment.donGiaoDich?.trangThai === BOOKING_ORDER_PENDING_STATUS &&
         getBookingPaymentDeadline(booking.createdAt) <= new Date()
       ) {
         await this.expirePendingBookingInTransaction(
@@ -1178,7 +1166,7 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
           const updateDonGiaoDichResult = await tx.donGiaoDich.updateMany({
             where: {
               donGiaoDichId: payment.donGiaoDichId,
-              trangThai: { notIn: ['DA_HUY', 'HUY'] },
+              trangThai: BOOKING_ORDER_PENDING_STATUS,
             },
             data: { trangThai: 'DA_THANH_TOAN' },
           });
@@ -1196,11 +1184,11 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
             return;
           }
 
-          // Conditional update: Chỉ chuyển DA_THANH_TOAN nếu đơn đang ở trạng thái CHO_THANH_TOAN / DANG_XU_LY
+          // Conditional update: Chỉ chuyển booking đang chờ thanh toán sang DA_THANH_TOAN.
           const updateBookingResult = await tx.phieuDatVe.updateMany({
             where: {
               phieuDatVeId: phieuDatVe.phieuDatVeId,
-              trangThai: { in: ['CHO_THANH_TOAN', 'DANG_XU_LY'] },
+              trangThai: BOOKING_ORDER_PENDING_STATUS,
             },
             data: { trangThai: 'DA_THANH_TOAN' },
           });

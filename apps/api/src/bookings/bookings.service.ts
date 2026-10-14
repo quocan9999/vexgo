@@ -1293,10 +1293,8 @@ export class BookingsService {
     const originalTicketSubtotal = Number(booking.tongTienBanDau ?? 0);
     const paymentExpiresAt = getBookingPaymentDeadline(booking.createdAt);
     const bookingPaymentIsPending =
-      ['CHO_THANH_TOAN', 'DANG_XU_LY'].includes(booking.trangThai) &&
-      ['CHO_THANH_TOAN', 'DANG_XU_LY'].includes(
-        booking.donGiaoDich?.trangThai ?? '',
-      );
+      booking.trangThai === 'CHO_THANH_TOAN' &&
+      booking.donGiaoDich?.trangThai === 'CHO_THANH_TOAN';
     const bookingPaymentHasExpired =
       bookingPaymentIsPending && paymentExpiresAt <= new Date();
 

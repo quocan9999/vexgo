@@ -147,7 +147,7 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
           if (statuses.some((status) => ['HET_HAN', 'EXPIRED'].includes(status ?? ''))) {
             throw new Error('Đơn đặt vé đã hết hạn nên không thể xuất vé điện tử.');
           }
-          if (statuses.some((status) => ['CHO_THANH_TOAN', 'DANG_XU_LY'].includes(status ?? ''))) {
+          if (statuses.some((status) => status === 'CHO_THANH_TOAN')) {
             throw new Error('Thanh toán chưa được hệ thống xác nhận. Vé sẽ xuất hiện sau khi ngân hàng xác nhận giao dịch.');
           }
           throw new Error('Chưa thể xác minh trạng thái thanh toán của đơn đặt vé.');
@@ -197,6 +197,7 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
           paymentMethod: booking.paymentMethod || '—',
           createdAt: booking.createdAt || '—',
         });
+        setError(null);
       } catch (loadError) {
         if (controller.signal.aborted) return;
         setError(

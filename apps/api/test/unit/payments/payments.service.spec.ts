@@ -192,6 +192,25 @@ describe('PaymentsService', () => {
       expect(prisma.thanhToan.create).not.toHaveBeenCalled();
     });
 
+    it('rejects DANG_XU_LY on booking/order while keeping it as a payment-attempt state', async () => {
+      prisma.phieuDatVe.findUnique.mockResolvedValue({
+        phieuDatVeId: 300,
+        createdAt: new Date(),
+        trangThai: 'DANG_XU_LY',
+        donGiaoDich: { khachHangId: 10, trangThai: 'DANG_XU_LY' },
+      });
+      prisma.khachHang.findUnique.mockResolvedValue({ khachHangId: 10, taiKhoanId: 1 });
+
+      await expect(
+        service.createPayment(300, 'MOMO', mockCustomerPrincipal),
+      ).rejects.toMatchObject({
+        response: { error: 'INVALID_BOOKING_STATUS' },
+      });
+      expect(prisma.thanhToan.findMany).not.toHaveBeenCalled();
+      expect(prisma.thanhToan.create).not.toHaveBeenCalled();
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
     it('returns existing pending payment without creating duplicate if already exists (idempotency)', async () => {
       prisma.phieuDatVe.findUnique.mockResolvedValue({
         phieuDatVeId: 300,
@@ -363,13 +382,13 @@ describe('PaymentsService', () => {
       );
       expect(prisma.donGiaoDich.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { donGiaoDichId: 200, trangThai: { notIn: ['DA_HUY', 'HUY'] } },
+          where: { donGiaoDichId: 200, trangThai: 'CHO_THANH_TOAN' },
           data: { trangThai: 'DA_THANH_TOAN' },
         }),
       );
       expect(prisma.phieuDatVe.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { phieuDatVeId: 300, trangThai: { in: ['CHO_THANH_TOAN', 'DANG_XU_LY'] } },
+          where: { phieuDatVeId: 300, trangThai: 'CHO_THANH_TOAN' },
           data: { trangThai: 'DA_THANH_TOAN' },
         }),
       );

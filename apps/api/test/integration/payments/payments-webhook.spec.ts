@@ -915,6 +915,37 @@ describe('Payments Webhook & Status Security with MySQL (Integration)', () => {
       expect(paymentsCount).toBe(0);
     });
 
+    it('rejects DANG_XU_LY booking/order states because only CHO_THANH_TOAN is a pending lifecycle state', async () => {
+      const { donGiaoDich, phieuDatVe } = await createTestBooking(
+        customerAId,
+        'CHO_THANH_TOAN',
+        200000,
+      );
+      await prisma.$transaction([
+        prisma.donGiaoDich.update({
+          where: { donGiaoDichId: donGiaoDich.donGiaoDichId },
+          data: { trangThai: 'DANG_XU_LY' },
+        }),
+        prisma.phieuDatVe.update({
+          where: { phieuDatVeId: phieuDatVe.phieuDatVeId },
+          data: { trangThai: 'DANG_XU_LY' },
+        }),
+      ]);
+
+      currentPrincipal = customerAPrincipal;
+      const response = await request(app.getHttpServer())
+        .post('/api/v1/payments')
+        .send({ bookingId: phieuDatVe.phieuDatVeId, provider: 'MOMO' });
+
+      expect(response.status).toBe(409);
+      expect(response.body.error).toBe('INVALID_BOOKING_STATUS');
+      await expect(
+        prisma.thanhToan.count({
+          where: { donGiaoDichId: donGiaoDich.donGiaoDichId },
+        }),
+      ).resolves.toBe(0);
+    });
+
     it('rejects payment creation with 409 Conflict when booking is DA_THANH_TOAN', async () => {
       const { phieuDatVe } = await createTestBooking(customerAId, 'DA_THANH_TOAN', 200000);
 
@@ -1467,6 +1498,76 @@ describe('Payments Webhook & Status Security with MySQL (Integration)', () => {
   });
 
   describe('payment settlement atomicity', () => {
+    it('does not settle an order or booking in the provider-attempt DANG_XU_LY state', async () => {
+      const fixture = await createTestPayment(customerAId, 'MOMO');
+      await prisma.$transaction([
+        prisma.donGiaoDich.update({
+          where: { donGiaoDichId: fixture.donGiaoDich.donGiaoDichId },
+          data: { trangThai: 'DANG_XU_LY' },
+        }),
+        prisma.phieuDatVe.update({
+          where: { phieuDatVeId: fixture.phieuDatVe.phieuDatVeId },
+          data: { trangThai: 'DANG_XU_LY' },
+        }),
+      ]);
+
+      const response = await request(app.getHttpServer())
+        .post('/api/v1/payments/momo/webhook')
+        .send(buildMomoPayload(fixture.thanhToan.thanhToanId, { amount: 200000 }));
+
+      expect(response.status).toBe(201);
+      const [currentOrder, currentBooking, currentAttempt] = await Promise.all([
+        prisma.donGiaoDich.findUniqueOrThrow({
+          where: { donGiaoDichId: fixture.donGiaoDich.donGiaoDichId },
+        }),
+        prisma.phieuDatVe.findUniqueOrThrow({
+          where: { phieuDatVeId: fixture.phieuDatVe.phieuDatVeId },
+        }),
+        prisma.thanhToan.findUniqueOrThrow({
+          where: { thanhToanId: fixture.thanhToan.thanhToanId },
+        }),
+      ]);
+      expect(currentOrder.trangThai).toBe('DANG_XU_LY');
+      expect(currentBooking.trangThai).toBe('DANG_XU_LY');
+      expect(currentAttempt.trangThai).toBe('THANH_CONG');
+    });
+
+    it('does not expire booking/order records in the provider-attempt DANG_XU_LY state', async () => {
+      const { donGiaoDich, phieuDatVe } = await createTestBooking(
+        customerAId,
+        'CHO_THANH_TOAN',
+        200000,
+      );
+      const createdAt = new Date(Date.now() - 11 * 60 * 1000);
+      await prisma.$transaction([
+        prisma.donGiaoDich.update({
+          where: { donGiaoDichId: donGiaoDich.donGiaoDichId },
+          data: { trangThai: 'DANG_XU_LY' },
+        }),
+        prisma.phieuDatVe.update({
+          where: { phieuDatVeId: phieuDatVe.phieuDatVeId },
+          data: { trangThai: 'DANG_XU_LY', createdAt },
+        }),
+      ]);
+
+      await expect(
+        app
+          .get(PaymentsService)
+          .expireBookingIfExpired(phieuDatVe.phieuDatVeId, new Date()),
+      ).resolves.toBe(false);
+
+      const [currentOrder, currentBooking] = await Promise.all([
+        prisma.donGiaoDich.findUniqueOrThrow({
+          where: { donGiaoDichId: donGiaoDich.donGiaoDichId },
+        }),
+        prisma.phieuDatVe.findUniqueOrThrow({
+          where: { phieuDatVeId: phieuDatVe.phieuDatVeId },
+        }),
+      ]);
+      expect(currentOrder.trangThai).toBe('DANG_XU_LY');
+      expect(currentBooking.trangThai).toBe('DANG_XU_LY');
+    });
+
     it('expires an overdue booking atomically, releases its seats, cancels cargo, and keeps a late payment from reviving it', async () => {
       const fixture = await createMultiTicketPayment(customerAId, 1, 'MOMO');
       const suffix = randomUUID().replaceAll('-', '').slice(0, 8).toUpperCase();

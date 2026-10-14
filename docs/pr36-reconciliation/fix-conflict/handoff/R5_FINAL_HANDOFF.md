@@ -53,6 +53,18 @@ Dùng API/Web local sau khi khởi động đúng cấu hình worktree: Customer
 6. Mở trực tiếp invoice khi booking pending, hoặc thử sai guest code/phone: không được thấy vé/badge “Đã thanh toán”. Sau khi API trả paid với đúng quyền sở hữu, kiểm tra mã booking/order và số tiền trên invoice khớp backend.
 7. Thử API 401/403/404/5xx, booking bị hủy/hết hạn và tải lại/unmount: không có success giả; request/timer polling được dừng hoặc cleanup.
 
+## Bổ sung sau review — chuẩn hóa trạng thái Booking/Order
+
+- Áp dụng policy đã chốt: `PhieuDatVe` và `DonGiaoDich` chỉ được coi là đang chờ khi cả hai có `CHO_THANH_TOAN`; thanh toán thành công là `DA_THANH_TOAN`; hủy/hết hạn được lưu thành `DA_HUY`. `HET_HAN` trong API là trạng thái chiếu theo deadline backend; tiến trình expiry vẫn cập nhật DB bằng transaction/CAS.
+- `ThanhToan.DANG_XU_LY` tiếp tục là trạng thái payment attempt đang chờ provider. Tạo payment, kiểm tra hết hạn và settlement không dùng trạng thái attempt để đánh dấu Booking/Order pending; CAS chuyển paid chỉ nhận đúng `CHO_THANH_TOAN`.
+- API booking detail trả `paymentStatus` từ `DonGiaoDich` (hoặc projection `HET_HAN`), không lấy trạng thái attempt gần nhất. Regression DB-backed kiểm tra guest/customer: Booking và Order là `CHO_THANH_TOAN` trong khi attempt SEPAY là `DANG_XU_LY`; Web giữ QR/poll theo trạng thái Order. Invoice không coi `DANG_XU_LY` là pending Booking/Order.
+- Khi đổi auth/load key, invoice tiếp tục hiển thị loading trong lúc đọc backend; nếu lần đọc mới xác minh paid, lỗi của lần đọc trước được xóa và invoice mới hiển thị. Nếu lần đọc mới lỗi, invoice vẫn bị khóa và hiện cảnh báo.
+- Audit chỉ đọc trên `vexgo_pr36` ghi nhận không có `PhieuDatVe` hoặc `DonGiaoDich` hiện trạng `DANG_XU_LY`; do đó không tạo/chạy migration dữ liệu. Có 3 `DonGiaoDich.THAT_BAI` không liên kết `PhieuDatVe`; giữ nguyên ngoài thay đổi này. Không có thay đổi schema hoặc database.
+- Regression tests: API từ chối tạo payment, không expiry và không settle Booking/Order gắn `DANG_XU_LY`; attempt đã được provider xác nhận vẫn được ghi nhận riêng. API status-history kiểm tra contract guest/customer; Web kiểm tra pending `DANG_XU_LY` không được coi là trạng thái Booking/Order và lỗi xác minh cũ được xóa sau lần retry thành công.
+- Verification follow-up: `payments-webhook.spec.ts` **31/31**, `booking-status-history.spec.ts` **12/12**, API unit Booking/Payment **55/55**, Web payment/invoice **37/37**; API/Web typecheck và API lint **PASS**. ESLint Web liên quan **0 lỗi, 1 cảnh báo `<img>` có sẵn** trong invoice.
+- GitNexus `detect-changes --scope all` báo risk tổng thể **HIGH** và index **tụt 3 commit so với HEAD**; method impact báo LOW, nhưng impact của `confirmPaymentSuccess` là lower-bound do thiếu một caller trong index. Đã đối chiếu thủ công callers trong `PaymentsService`, booking detail/creation, provider webhooks, tiến trình expiry và các target API/Web tests nêu trên; không thay đổi luồng xác thực provider hay payment attempt.
+- Review threads `PRRT_kwDOUfyB7s6sb_6D`, `PRRT_kwDOUfyB7s6sb_6G`, `PRRT_kwDOUfyB7s6sb_6K`, `PRRT_kwDOUfyB7s6sbtUg` và `PRRT_kwDOUfyB7s6sbtUo` vẫn cần reviewer kiểm tra và tự resolve; không thay đổi SePay/webhook policy trong follow-up này.
+
 ## DEFERRED / rủi ro ngoài R5
 
 - Chưa thực hiện full browser smoke bằng webhook SePay sandbox thật do API local cổng 4002 không chạy tại thời điểm kiểm tra. Cần chủ dự án tự bật API và xác minh webhook sandbox trước khi xác nhận end-to-end.

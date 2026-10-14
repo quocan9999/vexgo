@@ -146,7 +146,7 @@ describe('Customer VietQR payment page', () => {
     expect(routerPush).not.toHaveBeenCalled();
   });
 
-  it('shows a QR with the configured bank details and starts in a pending state', async () => {
+  it('shows and polls a QR while backend booking/order state is CHO_THANH_TOAN', async () => {
     configureVietQr();
     fetchMock.mockResolvedValue(jsonResponse(bookingDetail()));
 

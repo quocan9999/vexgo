@@ -84,8 +84,7 @@ function saveGuestReadCredentials() {
   );
 }
 
-async function renderInvoice(id = String(bookingId)) {
-  const params = Promise.resolve({ id });
+async function renderInvoiceWithParams(params: Promise<{ id: string }>) {
   let result: ReturnType<typeof render>;
   await act(async () => {
     result = render(
@@ -96,6 +95,10 @@ async function renderInvoice(id = String(bookingId)) {
     await params;
   });
   return result!;
+}
+
+async function renderInvoice(id = String(bookingId)) {
+  return renderInvoiceWithParams(Promise.resolve({ id }));
 }
 
 beforeEach(() => {
@@ -122,6 +125,20 @@ describe('Customer invoice page', () => {
 
     expect(await screen.findByRole('alert')).toBeTruthy();
     expect(screen.queryByText('Đã thanh toán')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'In vé' })).toBeNull();
+  });
+
+  it('does not treat a provider attempt state as a pending booking/order state', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse(paidBooking({ status: 'DANG_XU_LY', paymentStatus: 'DANG_XU_LY' })),
+    );
+
+    await renderInvoice();
+
+    expect((await screen.findByRole('alert')).textContent).toContain(
+      'Chưa thể xác minh trạng thái thanh toán',
+    );
+    expect(screen.queryByText('Thanh toán chưa được hệ thống xác nhận')).toBeNull();
     expect(screen.queryByRole('button', { name: 'In vé' })).toBeNull();
   });
 
@@ -209,6 +226,30 @@ describe('Customer invoice page', () => {
         headers: { Authorization: 'Bearer invoice-test-token' },
       }),
     );
+  });
+
+  it('clears a guest read error when an authenticated retry verifies the paid invoice', async () => {
+    saveGuestReadCredentials();
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 403,
+      json: async () => ({ message: 'Không thể xác minh booking' }),
+    });
+    const params = Promise.resolve({ id: String(bookingId) });
+    const view = await renderInvoiceWithParams(params);
+
+    expect(await screen.findByRole('alert')).toBeTruthy();
+
+    auth.isAuthenticated = true;
+    fetchMock.mockResolvedValue(jsonResponse(paidBooking()));
+    view.rerender(
+      <Suspense fallback={<p>Đang tải</p>}>
+        <InvoicePage params={params} />
+      </Suspense>,
+    );
+
+    expect(await screen.findByRole('button', { name: 'In vé' })).toBeTruthy();
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 
   it('does not treat a paid order with a non-paid booking status as a valid invoice', async () => {

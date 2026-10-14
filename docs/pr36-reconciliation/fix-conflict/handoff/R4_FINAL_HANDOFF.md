@@ -34,6 +34,11 @@
 
 Cho đến khi các quyết định trên được xử lý, không bật webhook SePay production và không tuyên bố R4 settlement hoàn tất. Các callback MoMo/VNPay/ZaloPay và refund processor giữ nguyên; refund provider mới không thuộc R4.
 
+## Cập nhật phối hợp với R5 — trạng thái Booking/Order
+
+- Payment attempt `ThanhToan.DANG_XU_LY` không phải trạng thái pending của `PhieuDatVe` hoặc `DonGiaoDich`. R5 giới hạn việc tạo payment, hết hạn và CAS settlement của hai thực thể đó ở `CHO_THANH_TOAN`; settlement không chuyển Order/Booking có trạng thái khác thành paid.
+- DB audit read-only trên `vexgo_pr36` không tìm thấy Booking/Order hiện trạng `DANG_XU_LY`, nên follow-up R5 không cần migration dữ liệu. Chi tiết code và regression xem `R5_FINAL_HANDOFF.md`.
+
 ## Kiểm thử
 
 - `npm exec -- prisma migrate status` trước thay đổi — **PASS**, database `vexgo_pr36` và shadow DB `vexgo_pr36_shadow` có 25 migration up to date.

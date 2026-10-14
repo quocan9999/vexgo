@@ -312,9 +312,26 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
       include: { donGiaoDich: { include: { thanhToans: true } } },
     });
     expect(saved.donGiaoDich.khachHangId).toBe(mode === 'guest' ? null : customerId);
+    expect(saved.trangThai).toBe('CHO_THANH_TOAN');
+    expect(saved.donGiaoDich.trangThai).toBe('CHO_THANH_TOAN');
     expect(saved.donGiaoDich.thanhToans).toHaveLength(1);
     expect(saved.donGiaoDich.thanhToans[0]).toMatchObject({ phuongThuc: 'SEPAY', trangThai: 'DANG_XU_LY' });
     expect(Number(saved.donGiaoDich.thanhToans[0].soTien)).toBe(booking.totalAmount);
+
+    const pendingDetailRequest = request(app.getHttpServer()).get(
+      `/api/v1/bookings/${booking.bookingId}/detail`,
+    );
+    if (mode === 'guest') {
+      pendingDetailRequest
+        .set('x-booking-code', booking.bookingCode)
+        .set('x-booking-phone', customerPhone);
+    }
+    const pendingDetail = await pendingDetailRequest;
+    expect(pendingDetail.status).toBe(200);
+    expect(pendingDetail.body.data).toMatchObject({
+      status: 'CHO_THANH_TOAN',
+      paymentStatus: 'CHO_THANH_TOAN',
+    });
     const timestamp = String(Math.floor(Date.now() / 1000));
     const eventId = Date.now();
     const body = JSON.stringify({ id: eventId, code: 'TRUNCATED', content: booking.orderCode, transferType: 'in', transferAmount: booking.totalAmount });
