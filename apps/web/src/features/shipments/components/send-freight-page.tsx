@@ -36,7 +36,6 @@ import {
   type ShipmentRoutePoints,
   type ShipmentResponseData,
 } from '@/features/shipments/services/shipments.api';
-import { PAYMENT_DRAFT_STORAGE_PREFIX } from '@/features/booking/services/payment-draft';
 
 const POPULAR_LOCATIONS = ['TP.HCM', 'Đà Lạt', 'Vũng Tàu', 'Nha Trang'];
 
@@ -56,7 +55,6 @@ function SendFreightContent() {
   const [selectedTripId, setSelectedTripId] = useState<number | null>(null);
   const [selectedCompanyFilter, setSelectedCompanyFilter] = useState<string>('all');
   const [selectedTimeFilter, setSelectedTimeFilter] = useState<string>('all'); // 'all' | 'morning' | 'afternoon' | 'evening' | 'night'
-  const [selectedPriceSort, setSelectedPriceSort] = useState<string>('default'); // 'default' | 'asc' | 'desc'
   const [visibleTripCount, setVisibleTripCount] = useState<number>(8);
   const [routePoints, setRoutePoints] = useState<ShipmentRoutePoints | null>(null);
   const [routePointsLoading, setRoutePointsLoading] = useState(false);
@@ -80,7 +78,7 @@ function SendFreightContent() {
     return Array.from(map.values());
   }, [trips]);
 
-  // Danh sách chuyến xe sau khi áp dụng bộ lọc nhà xe, khung giờ và sắp xếp giá
+  // Danh sách chuyến xe sau khi áp dụng bộ lọc nhà xe và khung giờ
   const filteredTrips = useMemo(() => {
     let result = [...trips];
 
@@ -106,15 +104,8 @@ function SendFreightContent() {
       });
     }
 
-    // 3. Sắp xếp theo giá cước (dựa trên price của chuyến nếu có hoặc mặc định)
-    if (selectedPriceSort === 'asc') {
-      result.sort((a, b) => (Number(a.price) || 50000) - (Number(b.price) || 50000));
-    } else if (selectedPriceSort === 'desc') {
-      result.sort((a, b) => (Number(b.price) || 50000) - (Number(a.price) || 50000));
-    }
-
     return result;
-  }, [trips, selectedCompanyFilter, selectedTimeFilter, selectedPriceSort]);
+  }, [trips, selectedCompanyFilter, selectedTimeFilter]);
 
   // Tự động reset về 8 chuyến ban đầu khi thay đổi tuyến đường hoặc bộ lọc
   useEffect(() => {
@@ -395,36 +386,6 @@ function SendFreightContent() {
       const res = await shipmentsApi.createShipment(payload);
       const data = res.data;
       setCreatedShipment(data);
-
-      // Lưu draft để tiện chuyển sang thanh toán trực tuyến VietQR nếu muốn
-      try {
-        const draftId = `draft-${Date.now()}`;
-        const paymentDraft = {
-          bookingId: data.shipmentId,
-          orderId: data.orderId,
-          bookingCode: data.waybillCode,
-          orderCode: data.orderCode,
-          totalFare: data.pricing.totalFee,
-          seatNumbers: [],
-          ticketCount: 1,
-          pickup: data.pickupPoint.name,
-          dropoff: data.dropoffPoint.name,
-          route: `${data.trip.route.origin} → ${data.trip.route.destination}`,
-          busCompanyName: data.trip.busCompany.name,
-          departureTime: data.trip.departureTime,
-          passenger: {
-            fullName: data.sender.fullName,
-            phoneNumber: data.sender.phoneNumber,
-            email: data.sender.email || '',
-          },
-        };
-        sessionStorage.setItem(
-          `${PAYMENT_DRAFT_STORAGE_PREFIX}${draftId}`,
-          JSON.stringify(paymentDraft),
-        );
-      } catch {
-        // bỏ qua nếu storage lỗi
-      }
 
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err: any) {
@@ -782,7 +743,6 @@ function SendFreightContent() {
                                 onClick={() => {
                                   setSelectedCompanyFilter('all');
                                   setSelectedTimeFilter('all');
-                                  setSelectedPriceSort('default');
                                 }}
                                 className="text-[11px] text-[#0060c4] hover:underline font-semibold flex items-center gap-0.5"
                               >
@@ -896,10 +856,11 @@ function SendFreightContent() {
                                         </div>
                                       </div>
 
-                                      {/* Cột 3: Giá cước */}
+                                      {/* Cột 3: Cước theo bảng giá, backend chốt khi tạo vận đơn */}
                                       <div className="text-right shrink-0">
-                                        <span className="text-[10px] text-slate-400 mr-1 font-medium">Từ</span>
-                                        <span className="text-xs sm:text-sm font-black text-orange-600">50.000đ</span>
+                                        <span className="text-[10px] sm:text-xs font-semibold text-slate-500">
+                                          Theo bảng cước
+                                        </span>
                                       </div>
                                     </div>
                                   );
