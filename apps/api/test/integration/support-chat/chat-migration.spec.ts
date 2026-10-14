@@ -270,14 +270,26 @@ async function createRecoveryProcedure(
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'INVALID_OR_EMPTY_TIN_NHAN_IDS_JSON';
       END IF;
 
-      -- Kiểm tra danh sách ID: từ chối ID không hợp lệ và từ chối danh sách chứa ID trùng lặp (Finding A)
+      -- Kiểm tra danh sách ID: từ chối ID không hợp lệ và từ chối danh sách chứa ID trùng lặp (Finding A & Lead Review)
+      -- Bắt buộc từng phần tử trong mảng JSON thô phải là kiểu số nguyên dương thuần túy (JSON_TYPE = 'INTEGER', không decimal/double/string/boolean/null)
+      -- Ngăn chặn cơ chế type coercion của MySQL tự động làm tròn số thập phân (ví dụ: [888.9] -> 889)
       SELECT 
         COUNT(DISTINCT jt.\`tinNhanId\`),
-        COUNT(CASE WHEN jt.\`tinNhanId\` IS NULL OR jt.\`tinNhanId\` <= 0 THEN 1 END)
+        COUNT(CASE 
+          WHEN jt.\`rawVal\` IS NULL 
+            OR JSON_TYPE(jt.\`rawVal\`) <> 'INTEGER'
+            OR jt.\`tinNhanId\` IS NULL 
+            OR jt.\`tinNhanId\` <= 0 
+            OR CAST(jt.\`rawVal\` AS CHAR) <> CAST(jt.\`tinNhanId\` AS CHAR)
+          THEN 1 
+        END)
       INTO 
         v_uniqueIdCount,
         v_invalidIdCount
-      FROM JSON_TABLE(p_tinNhanIdsJson, '$[*]' COLUMNS (\`tinNhanId\` INT PATH '$')) jt;
+      FROM JSON_TABLE(p_tinNhanIdsJson, '$[*]' COLUMNS (
+        \`rawVal\` JSON PATH '$',
+        \`tinNhanId\` INT PATH '$'
+      )) jt;
 
       IF v_invalidIdCount > 0 THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'INVALID_TIN_NHAN_ID_IN_LIST';
@@ -308,8 +320,12 @@ async function createRecoveryProcedure(
       -- 4. Guard 1: Xác thực số lượng tin nhắn trong archive thuộc DUY NHẤT khách hàng đích
       SELECT COUNT(DISTINCT arc.\`tinNhanId\`) INTO v_verifiedCount
       FROM ${quoted(tableNames.luuTru)} arc
-      JOIN JSON_TABLE(p_tinNhanIdsJson, '$[*]' COLUMNS (\`tinNhanId\` INT PATH '$')) jt
+      JOIN JSON_TABLE(p_tinNhanIdsJson, '$[*]' COLUMNS (
+        \`rawVal\` JSON PATH '$',
+        \`tinNhanId\` INT PATH '$'
+      )) jt
         ON jt.\`tinNhanId\` = arc.\`tinNhanId\`
+       AND JSON_TYPE(jt.\`rawVal\`) = 'INTEGER'
       WHERE arc.\`khachHangIdCu\` = p_targetKhachHangId;
 
       IF v_verifiedCount <> p_expectedCount THEN
@@ -350,8 +366,12 @@ async function createRecoveryProcedure(
         arc.\`thoiGianCu\`,
         arc.\`updatedAtCu\`
       FROM ${quoted(tableNames.luuTru)} arc
-      JOIN JSON_TABLE(p_tinNhanIdsJson, '$[*]' COLUMNS (\`tinNhanId\` INT PATH '$')) jt
+      JOIN JSON_TABLE(p_tinNhanIdsJson, '$[*]' COLUMNS (
+        \`rawVal\` JSON PATH '$',
+        \`tinNhanId\` INT PATH '$'
+      )) jt
         ON jt.\`tinNhanId\` = arc.\`tinNhanId\`
+       AND JSON_TYPE(jt.\`rawVal\`) = 'INTEGER'
       JOIN ${quoted(tableNames.cuocTroChuyen)} ctc
         ON ctc.\`cuocTroChuyenId\` = p_newCuocTroChuyenId
       WHERE arc.\`khachHangIdCu\` = ctc.\`khachHangId\`
@@ -1240,6 +1260,77 @@ describe('Support chat schema migration with preflight archive and RBAC bootstra
       expect(msgs[1].noiDung).toBe('Tin nhắn 2 của khách 88');
       expect(msgs[0].taiKhoanGuiId).toBe(88);
       expect(msgs[1].taiKhoanGuiId).toBe(88);
+    } finally {
+      await conn.query(`DROP PROCEDURE IF EXISTS \`${procName}\`;`).catch(() => {});
+      await conn.end();
+      await teardownTestSchema(db, tableNames);
+    }
+  });
+
+  it('9f. Test C7 — Decimal ID rejection & type coercion protection (Lead Review P2): rejects non-integer decimal IDs like [888.9] and prevents unintended restoration of message 889', async () => {
+    const db = createMigrationTestClient();
+    prisma = db;
+    await db.$connect();
+    const { suffix, tableNames, quoted } = generateTestContext();
+    const procName = `sp_RecoverLegacyMessages_${suffix}`;
+    const conn = await createDirectDatabaseConnection();
+
+    try {
+      await createLegacyBaseSchema(db, suffix, tableNames);
+
+      await db.$executeRawUnsafe(
+        `INSERT INTO ${quoted(tableNames.nhaXe)} (\`nhaXeId\`, \`tenNhaXe\`) VALUES (7, 'Nhà xe Mai Linh')`,
+      );
+      await db.$executeRawUnsafe(
+        `INSERT INTO ${quoted(tableNames.taiKhoan)} (\`taiKhoanId\`, \`email\`) VALUES (88, 'cust88@vexgo.vn')`,
+      );
+      await db.$executeRawUnsafe(
+        `INSERT INTO ${quoted(tableNames.khachHang)} (\`khachHangId\`, \`maKhachHang\`, \`taiKhoanId\`) VALUES (88, 'KH088', 88)`,
+      );
+      // Tạo sẵn cả tin nhắn 888 và tin nhắn 889 trong bảng legacy (sau đó migration sẽ nạp vào archive)
+      await db.$executeRawUnsafe(
+        `INSERT INTO ${quoted(tableNames.tinNhan)} (\`tinNhanId\`, \`noiDung\`, \`thoiGian\`, \`trangThai\`, \`khachHangId\`, \`createdAt\`, \`updatedAt\`) VALUES
+          (888, 'Tin nhắn 888 của khách 88', '2026-09-01 15:00:00', 'DA_GUI', 88, '2026-09-01 15:00:00', '2026-09-01 15:00:00'),
+          (889, 'Tin nhắn 889 của khách 88', '2026-09-01 15:05:00', 'DA_GUI', 88, '2026-09-01 15:05:00', '2026-09-01 15:05:00')`,
+      );
+
+      await executeMigrationScript(db, suffix, tableNames);
+
+      await createRecoveryProcedure(conn, procName, tableNames);
+
+      // Gọi procedure với ID thập phân [888.9] và expectedCount = 1
+      // Nếu không có rawVal validation, MySQL 8.4 tự ép kiểu và làm tròn 888.9 thành 889,
+      // dẫn đến việc phục hồi nhầm tin nhắn 889 khác với input của người vận hành!
+      let recoveryError: Error | undefined;
+      try {
+        await conn.query(`SET @newConvId = NULL;`);
+        await conn.query(`CALL \`${procName}\`(88, 7, '[888.9]', 1, @newConvId);`);
+      } catch (err) {
+        recoveryError = err instanceof Error ? err : new Error(String(err));
+      }
+
+      // Xác nhận procedure từ chối với lỗi INVALID_TIN_NHAN_ID_IN_LIST
+      expect(recoveryError).toBeDefined();
+      expect(recoveryError?.message).toMatch(/INVALID_TIN_NHAN_ID_IN_LIST|45000/);
+
+      // BẢO VỆ DỮ LIỆU & ROLLBACK:
+      // 1. Không có cuộc trò chuyện nào được tạo
+      const convs = await db.$queryRawUnsafe<Array<any>>(
+        `SELECT * FROM ${quoted(tableNames.cuocTroChuyen)}`,
+      );
+      expect(convs).toHaveLength(0);
+
+      // 2. Không có tin nhắn nào bị khôi phục nhầm (đặc biệt tin nhắn 889 không bị nạp nhầm vào bảng hoạt động)
+      const msgs = await db.$queryRawUnsafe<Array<any>>(
+        `SELECT * FROM ${quoted(tableNames.tinNhan)}`,
+      );
+      expect(msgs).toHaveLength(0);
+
+      // 3. Toàn bộ dữ liệu trong archive vẫn nguyên vẹn 100%
+      const arcMsgs = await db.$queryRawUnsafe<Array<any>>(
+        `SELECT * FROM ${quoted(tableNames.luuTru)} WHERE \`tinNhanId\` IN (888, 889)`,
+      );
+      expect(arcMsgs).toHaveLength(2);
     } finally {
       await conn.query(`DROP PROCEDURE IF EXISTS \`${procName}\`;`).catch(() => {});
       await conn.end();

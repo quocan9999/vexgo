@@ -195,14 +195,26 @@ proc_body: BEGIN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'INVALID_OR_EMPTY_TIN_NHAN_IDS_JSON';
     END IF;
 
-    -- Kiểm tra danh sách ID: từ chối ID không hợp lệ và từ chối danh sách chứa ID trùng lặp (Finding A)
+    -- Kiểm tra danh sách ID: từ chối ID không hợp lệ và từ chối danh sách chứa ID trùng lặp (Finding A & Lead Review)
+    -- Bắt buộc từng phần tử trong mảng JSON thô phải là kiểu số nguyên dương thuần túy (JSON_TYPE = 'INTEGER', không decimal/double/string/boolean/null)
+    -- Ngăn chặn cơ chế type coercion của MySQL tự động làm tròn số thập phân (ví dụ: [888.9] -> 889)
     SELECT 
         COUNT(DISTINCT jt.`tinNhanId`),
-        COUNT(CASE WHEN jt.`tinNhanId` IS NULL OR jt.`tinNhanId` <= 0 THEN 1 END)
+        COUNT(CASE 
+            WHEN jt.`rawVal` IS NULL 
+              OR JSON_TYPE(jt.`rawVal`) <> 'INTEGER'
+              OR jt.`tinNhanId` IS NULL 
+              OR jt.`tinNhanId` <= 0 
+              OR CAST(jt.`rawVal` AS CHAR) <> CAST(jt.`tinNhanId` AS CHAR)
+            THEN 1 
+        END)
     INTO 
         v_uniqueIdCount,
         v_invalidIdCount
-    FROM JSON_TABLE(p_tinNhanIdsJson, '$[*]' COLUMNS (`tinNhanId` INT PATH '$')) jt;
+    FROM JSON_TABLE(p_tinNhanIdsJson, '$[*]' COLUMNS (
+        `rawVal` JSON PATH '$',
+        `tinNhanId` INT PATH '$'
+    )) jt;
 
     IF v_invalidIdCount > 0 THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'INVALID_TIN_NHAN_ID_IN_LIST';
@@ -233,8 +245,12 @@ proc_body: BEGIN
     -- 4. Guard 1: Xác thực số lượng tin nhắn trong archive thuộc DUY NHẤT khách hàng đích
     SELECT COUNT(DISTINCT arc.`tinNhanId`) INTO v_verifiedCount
     FROM `LuuTruTinNhanHoTroCu` arc
-    JOIN JSON_TABLE(p_tinNhanIdsJson, '$[*]' COLUMNS (`tinNhanId` INT PATH '$')) jt
+    JOIN JSON_TABLE(p_tinNhanIdsJson, '$[*]' COLUMNS (
+        `rawVal` JSON PATH '$',
+        `tinNhanId` INT PATH '$'
+    )) jt
       ON jt.`tinNhanId` = arc.`tinNhanId`
+     AND JSON_TYPE(jt.`rawVal`) = 'INTEGER'
     WHERE arc.`khachHangIdCu` = p_targetKhachHangId;
 
     -- Nếu có bất kỳ ID nào không tồn tại hoặc thuộc về khách hàng khác:
@@ -276,8 +292,12 @@ proc_body: BEGIN
         arc.`thoiGianCu`,
         arc.`updatedAtCu`
     FROM `LuuTruTinNhanHoTroCu` arc
-    JOIN JSON_TABLE(p_tinNhanIdsJson, '$[*]' COLUMNS (`tinNhanId` INT PATH '$')) jt
+    JOIN JSON_TABLE(p_tinNhanIdsJson, '$[*]' COLUMNS (
+        `rawVal` JSON PATH '$',
+        `tinNhanId` INT PATH '$'
+    )) jt
       ON jt.`tinNhanId` = arc.`tinNhanId`
+     AND JSON_TYPE(jt.`rawVal`) = 'INTEGER'
     JOIN `CuocTroChuyen` ctc
       ON ctc.`cuocTroChuyenId` = p_newCuocTroChuyenId
     WHERE arc.`khachHangIdCu` = ctc.`khachHangId`;
