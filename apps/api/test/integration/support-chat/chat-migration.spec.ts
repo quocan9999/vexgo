@@ -738,12 +738,31 @@ describe('Support chat schema migration with preflight archive and RBAC bootstra
     }
   });
 
-  it('9. Test D — Prisma schema lifecycle & drift protection: verifies model registration and zero drift', () => {
+  it('9. Test D — Prisma schema lifecycle & drift protection: verifies model registration and zero drift', async () => {
     // 1. Kiểm tra Prisma Client đã định nghĩa model LuuTruTinNhanHoTroCu
     const client = createMigrationTestClient();
     expect(client).toHaveProperty('luuTruTinNhanHoTroCu');
 
-    // 2. Chạy prisma migrate diff kiểm tra schema drift giữa migrations và schema.prisma
+    // 2. Tự động đảm bảo shadow database tồn tại trước khi chạy prisma migrate diff
+    const shadowUrlValue = process.env.SHADOW_DATABASE_URL;
+    if (shadowUrlValue) {
+      try {
+        const shadowUrl = new URL(shadowUrlValue);
+        const shadowDbName = decodeURIComponent(shadowUrl.pathname.replace(/^\/+/, ''));
+        if (shadowDbName) {
+          const db = createMigrationTestClient();
+          await db.$connect();
+          await db.$executeRawUnsafe(
+            `CREATE DATABASE IF NOT EXISTS \`${shadowDbName}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`,
+          );
+          await db.$disconnect();
+        }
+      } catch (err) {
+        console.warn('Could not auto-create shadow database in test helper:', err);
+      }
+    }
+
+    // 3. Chạy prisma migrate diff kiểm tra schema drift giữa migrations và schema.prisma
     const diffOutput = execSync(
       'npx prisma migrate diff --from-migrations prisma/migrations --to-schema prisma/schema.prisma --script',
       { cwd: resolve(process.cwd(), '../../'), encoding: 'utf8' },
@@ -755,7 +774,7 @@ describe('Support chat schema migration with preflight archive and RBAC bootstra
     expect(diffOutput).not.toContain('DROP TABLE LuuTruTinNhanHoTroCu');
   }, 60000);
 
-  it('10. Test E — Migration failure & partial retry safety: verifies INSERT IGNORE idempotency on archive step', async () => {
+  it('10. Test E1 — Migration failure & partial retry safety: verifies INSERT IGNORE idempotency on identical archive', async () => {
     const db = createMigrationTestClient();
     prisma = db;
     await db.$connect();
@@ -775,7 +794,8 @@ describe('Support chat schema migration with preflight archive and RBAC bootstra
           (1, 'Thử nghiệm retry archive', '2026-10-10 10:00:00', 'DA_GUI', 1, '2026-10-10 10:00:00', '2026-10-10 10:00:00')`,
       );
 
-      // Tạo bảng archive trước và chèn trước bản ghi 1 (mô phỏng lần chạy migration trước bị fail sau bước archive)
+      // Tạo bảng archive trước và chèn trước bản ghi 1 với dữ liệu giống hệt nguồn
+      // (mô phỏng lần chạy migration trước bị dừng sau bước archive nhưng trước khi hoàn tất)
       await db.$executeRawUnsafe(
         `CREATE TABLE IF NOT EXISTS ${quoted(tableNames.luuTru)} (
           \`tinNhanId\` INTEGER NOT NULL,
@@ -794,13 +814,100 @@ describe('Support chat schema migration with preflight archive and RBAC bootstra
           (1, 'Thử nghiệm retry archive', '2026-10-10 10:00:00', 'DA_GUI', 1, '2026-10-10 10:00:00', '2026-10-10 10:00:00')`,
       );
 
-      // Chạy migration: Lệnh INSERT IGNORE INTO LuuTruTinNhanHoTroCu không bị crash vì duplicate key
+      // Chạy migration: Bước conflict check vượt qua, INSERT IGNORE bỏ qua bản ghi trùng một cách an toàn
       await executeMigrationScript(db, suffix, tableNames);
 
       const [archiveCount] = await db.$queryRawUnsafe<Array<{ count: bigint }>>(
         `SELECT COUNT(*) AS count FROM ${quoted(tableNames.luuTru)}`,
       );
       expect(Number(archiveCount.count)).toBe(1);
+
+      // Bảng hoạt động sau migration đã loại bỏ bản ghi legacy an toàn (vì đã có trong archive)
+      const [activeCount] = await db.$queryRawUnsafe<Array<{ count: bigint }>>(
+        `SELECT COUNT(*) AS count FROM ${quoted(tableNames.tinNhan)}`,
+      );
+      expect(Number(activeCount.count)).toBe(0);
+    } finally {
+      await teardownTestSchema(db, tableNames);
+    }
+  });
+
+  it('11. Test E2 — Archive conflict safety: detects conflicting archive data and aborts migration without deleting source messages', async () => {
+    // Lưu ý kiến trúc: MySQL thực hiện implicit commit đối với các câu lệnh DDL (ALTER TABLE, CREATE TABLE...).
+    // Nếu migration bị lỗi ở giai đoạn DDL sau đó, MySQL không thể tự động rollback các DDL trước đó.
+    // Vì vậy, bước kiểm tra xung đột dữ liệu (Conflict Detection) PHẢI nằm ở ngay đầu giai đoạn PREFLIGHT
+    // (trước bất kỳ lệnh DDL phá hủy nào), nhằm đảm bảo:
+    // 1. Nếu có xung đột, migration sẽ abort ngay lập tức.
+    // 2. Không một bản ghi nguồn nào bị xóa mất (bước DELETE chưa từng được chạy).
+    // 3. Toàn bộ schema cũ và dữ liệu nguồn được giữ nguyên vẹn để DBA can thiệp theo Runbook.
+    const db = createMigrationTestClient();
+    prisma = db;
+    await db.$connect();
+    const { suffix, tableNames, quoted } = generateTestContext();
+
+    try {
+      await createLegacyBaseSchema(db, suffix, tableNames);
+
+      await db.$executeRawUnsafe(
+        `INSERT INTO ${quoted(tableNames.taiKhoan)} (\`taiKhoanId\`, \`email\`) VALUES (1, 'u1@vexgo.vn')`,
+      );
+      await db.$executeRawUnsafe(
+        `INSERT INTO ${quoted(tableNames.khachHang)} (\`khachHangId\`, \`maKhachHang\`, \`taiKhoanId\`) VALUES (1, 'KH1', 1)`,
+      );
+      // Dữ liệu nguồn: tinNhanId = 1 với nội dung mới
+      await db.$executeRawUnsafe(
+        `INSERT INTO ${quoted(tableNames.tinNhan)} (\`tinNhanId\`, \`noiDung\`, \`thoiGian\`, \`trangThai\`, \`khachHangId\`, \`createdAt\`, \`updatedAt\`) VALUES
+          (1, 'Nội dung mới trong bảng nguồn', '2026-10-10 10:00:00', 'DA_GUI', 1, '2026-10-10 10:00:00', '2026-10-10 10:00:00')`,
+      );
+
+      // Archive đã có bản ghi 1 nhưng nội dung KHÁC BIỆT (Xung đột dữ liệu / data conflict)
+      await db.$executeRawUnsafe(
+        `CREATE TABLE IF NOT EXISTS ${quoted(tableNames.luuTru)} (
+          \`tinNhanId\` INTEGER NOT NULL,
+          \`noiDung\` TEXT NOT NULL,
+          \`thoiGianCu\` DATETIME(0) NOT NULL,
+          \`trangThaiCu\` VARCHAR(30) NOT NULL,
+          \`khachHangIdCu\` INTEGER NOT NULL,
+          \`createdAtCu\` DATETIME(0) NOT NULL,
+          \`updatedAtCu\` DATETIME(0) NOT NULL,
+          \`archivedAt\` DATETIME(0) NOT NULL DEFAULT CURRENT_TIMESTAMP(0),
+          PRIMARY KEY (\`tinNhanId\`)
+        ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`,
+      );
+      await db.$executeRawUnsafe(
+        `INSERT INTO ${quoted(tableNames.luuTru)} (\`tinNhanId\`, \`noiDung\`, \`thoiGianCu\`, \`trangThaiCu\`, \`khachHangIdCu\`, \`createdAtCu\`, \`updatedAtCu\`) VALUES
+          (1, 'Nội dung cũ trong archive', '2026-10-10 10:00:00', 'DA_GUI', 1, '2026-10-10 10:00:00', '2026-10-10 10:00:00')`,
+      );
+
+      // Thực thi migration: Phải ném lỗi phát hiện xung đột dữ liệu
+      let migrationError: Error | undefined;
+      try {
+        await executeMigrationScript(db, suffix, tableNames);
+      } catch (error) {
+        migrationError = error instanceof Error ? error : new Error(String(error));
+      }
+
+      expect(migrationError).toBeDefined();
+      expect(migrationError?.message).toMatch(/ERROR_ARCHIVE_DATA_CONFLICT_DETECTED|1292/);
+
+      // QUAN TRỌNG: Bản ghi nguồn trong TinNhanHoTro KHÔNG ĐƯỢC PHÉP BỊ XÓA!
+      const [sourceMessage] = await db.$queryRawUnsafe<
+        Array<{ tinNhanId: number; noiDung: string }>
+      >(
+        `SELECT \`tinNhanId\`, \`noiDung\` FROM ${quoted(tableNames.tinNhan)} WHERE \`tinNhanId\` = 1`,
+      );
+      expect(sourceMessage).toBeDefined();
+      expect(sourceMessage.tinNhanId).toBe(1);
+      expect(sourceMessage.noiDung).toBe('Nội dung mới trong bảng nguồn');
+
+      // Archive vẫn giữ bản ghi ban đầu, không bị ghi đè hay hỏng
+      const [archiveMessage] = await db.$queryRawUnsafe<
+        Array<{ tinNhanId: number; noiDung: string }>
+      >(
+        `SELECT \`tinNhanId\`, \`noiDung\` FROM ${quoted(tableNames.luuTru)} WHERE \`tinNhanId\` = 1`,
+      );
+      expect(archiveMessage).toBeDefined();
+      expect(archiveMessage.noiDung).toBe('Nội dung cũ trong archive');
     } finally {
       await teardownTestSchema(db, tableNames);
     }

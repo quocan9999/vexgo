@@ -164,3 +164,19 @@ FROM `LuuTruTinNhanHoTroCu` arc
 JOIN `KhachHang` kh ON kh.`khachHangId` = arc.`khachHangIdCu`
 WHERE arc.`tinNhanId` IN (101, 102, 103); -- Danh sách ID tin nhắn cụ thể đã được xác minh
 ```
+
+---
+
+## 7. Xử lý Sự cố Migration & Giới hạn Implicit Commit của MySQL
+
+### 7.1. Đặc tính Implicit Commit trong MySQL DDL
+MySQL tự động kích hoạt **implicit commit** sau mỗi câu lệnh DDL (`CREATE TABLE`, `ALTER TABLE`, `DROP TABLE`, `CREATE INDEX`). Vì vậy, nếu một migration script bị lỗi ở giữa chừng (ví dụ sau bước `ALTER TABLE`), MySQL **không thể rollback tự động** các câu lệnh DDL đã thực thi trước đó.
+
+### 7.2. Chiến lược Bảo vệ Preflight
+Để triệt tiêu nguy cơ mất mát dữ liệu do implicit commit:
+1. **Kiểm tra xung đột trước (Preflight Conflict Detection):** Bước kiểm tra xung đột dữ liệu giữa `TinNhanHoTro` và `LuuTruTinNhanHoTroCu` được thực hiện **ngay ở bước 1.1**, trước khi bất kỳ thay đổi cấu trúc bảng nào diễn ra. Nếu phát hiện sai lệch (khác `noiDung`, `thoiGian`, `trangThai`, hoặc `khachHangId`), migration sẽ abort ngay lập tức (`ERROR_ARCHIVE_DATA_CONFLICT_DETECTED`), giữ nguyên 100% dữ liệu và schema cũ.
+2. **Double-check trước khi xóa:** Bước 7.1 xác minh lại lần cuối rằng 100% bản ghi legacy sắp bị loại bỏ đã nằm an toàn trong `LuuTruTinNhanHoTroCu`.
+3. **Quy trình phục hồi cho DBA khi migration fail giữa chừng:**
+   - Trường hợp migration dừng trước bước DDL: Dữ liệu nguồn chưa bị thay đổi, chỉ cần kiểm tra lỗi dữ liệu xung đột và chạy lại migration.
+   - Trường hợp migration dừng ở các bước DDL cuối (sau khi xóa bản ghi legacy): Toàn bộ dữ liệu tin nhắn cũ đã nằm an toàn trong `LuuTruTinNhanHoTroCu`. DBA có thể tra cứu bảng archive để đối chiếu hoặc hoàn tất các bước DDL còn lại theo hướng dẫn của migration script mà không lo ngại mất mát dữ liệu.
+

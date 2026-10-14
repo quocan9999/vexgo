@@ -11,6 +11,16 @@ CREATE TABLE IF NOT EXISTS `LuuTruTinNhanHoTroCu` (
     PRIMARY KEY (`tinNhanId`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
+-- 1.1. Phát hiện xung đột dữ liệu: Nếu bản ghi đã tồn tại trong archive nhưng dữ liệu nguồn khác biệt, abort ngay để không xóa mất dữ liệu
+UPDATE `TinNhanHoTro` src
+JOIN `LuuTruTinNhanHoTroCu` arc ON arc.`tinNhanId` = src.`tinNhanId`
+SET src.`tinNhanId` = CAST('ERROR_ARCHIVE_DATA_CONFLICT_DETECTED' AS UNSIGNED)
+WHERE BINARY(src.`noiDung`) <> BINARY(arc.`noiDung`)
+   OR src.`thoiGian` <> arc.`thoiGianCu`
+   OR BINARY(src.`trangThai`) <> BINARY(arc.`trangThaiCu`)
+   OR src.`khachHangId` <> arc.`khachHangIdCu`;
+
+-- 1.2. Lưu trữ toàn bộ dữ liệu lịch sử chưa có trong archive
 INSERT IGNORE INTO `LuuTruTinNhanHoTroCu` (
     `tinNhanId`, `noiDung`, `thoiGianCu`, `trangThaiCu`, `khachHangIdCu`, `createdAtCu`, `updatedAtCu`
 )
@@ -73,7 +83,14 @@ SET msg.`taiKhoanGuiId` = COALESCE(msg.`taiKhoanGuiId`, kh.`taiKhoanId`),
 WHERE msg.`cuocTroChuyenId` IS NOT NULL
   AND (msg.`taiKhoanGuiId` IS NULL OR msg.`loaiNguoiGui` IS NULL);
 
--- 7. Bảo toàn Tenant Isolation & Dọn dẹp bản ghi không thể ánh xạ:
+-- 7.1. Double-check Verification: Đảm bảo 100% bản ghi legacy sắp xóa đã nằm an toàn trong LuuTruTinNhanHoTroCu
+UPDATE `TinNhanHoTro` src
+LEFT JOIN `LuuTruTinNhanHoTroCu` arc ON arc.`tinNhanId` = src.`tinNhanId`
+SET src.`tinNhanId` = CAST('ERROR_UNARCHIVED_LEGACY_MESSAGE_DETECTED' AS UNSIGNED)
+WHERE src.`cuocTroChuyenId` IS NULL
+  AND arc.`tinNhanId` IS NULL;
+
+-- 7.2. Bảo toàn Tenant Isolation & Dọn dẹp bản ghi không thể ánh xạ:
 -- Toàn bộ dữ liệu cũ không có căn cứ xác định nhà xe sở hữu đã được lưu trữ an toàn 100% trong LuuTruTinNhanHoTroCu.
 -- Tuyệt đối không tự ý gán nhà xe theo MIN(nhaXeId) hoặc suy đoán theo lịch sử giao dịch.
 -- Loại bỏ các bản ghi chưa có cuocTroChuyenId khỏi bảng hoạt động trước khi siết ràng buộc NOT NULL.
