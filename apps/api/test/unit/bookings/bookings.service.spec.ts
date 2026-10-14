@@ -128,12 +128,26 @@ describe('BookingsService', () => {
     consumeHoldInTx: vi.fn().mockResolvedValue({ giuChoId: 1 }),
   };
 
+  const cargoCapacityService = {
+    lockTrip: vi.fn().mockResolvedValue(undefined),
+    getSnapshot: vi.fn().mockResolvedValue({
+      trip: { chuyenXeId: 50, trangThai: 'CHUA_KHOI_HANH', nhanGuiHang: true },
+      capacities: {
+        XE_MAY: { total: 100, used: 0, remaining: 100 },
+        HANG_CONG_KENH: { total: 100, used: 0, remaining: 100 },
+        HANG_NHE: { total: 100, used: 0, remaining: 100 },
+      },
+    }),
+    assertAvailable: vi.fn(),
+  };
+
   const service = new BookingsService(
     prisma as unknown as PrismaService,
     config as unknown as ConfigService,
     seatHoldsService as any,
     {} as any,
     new CargoPricingService(),
+    cargoCapacityService as any,
   );
 
   beforeEach(() => {
@@ -632,6 +646,7 @@ describe('BookingsService', () => {
         seatHoldMock as any,
         {} as any,
         new CargoPricingService(),
+        cargoCapacityService as any,
       );
       vi.spyOn(bookingService, 'getBookingQuote').mockResolvedValue({
         unitPrice: 150000,
@@ -729,6 +744,7 @@ describe('BookingsService', () => {
         seatHoldMock as any,
         {} as any,
         new CargoPricingService(),
+        cargoCapacityService as any,
       );
       prismaMock.$transaction = vi.fn(async (callback: (tx: unknown) => unknown) =>
         callback({
@@ -851,6 +867,7 @@ describe('BookingsService', () => {
         mockSeatHolds as any,
         mockPromotions as any,
         new CargoPricingService(),
+        cargoCapacityService as any,
       );
 
       // Giả lập tính giá: 100,000 VND chia cho 3 ghế (không chia hết)

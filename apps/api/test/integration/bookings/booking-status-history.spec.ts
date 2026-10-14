@@ -9,6 +9,7 @@ import type { AuthPrincipal } from '../../../src/auth/tokens/auth-principal.js';
 import { configureApi } from '../../../src/common/configure-api.js';
 import { PrismaService } from '../../../src/prisma/prisma.service.js';
 import { SeatHoldsService } from '../../../src/seat-holds/seat-holds.service.js';
+import { CargoCapacityService } from '../../../src/cargo-capacity/cargo-capacity.service.js';
 import type { MomoWebhookDto } from '../../../src/payments/dto/webhook.dto.js';
 
 const UUID_V1_PATTERN =
@@ -42,6 +43,7 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
   const sepaySecret = 'booking-sepay-integration-secret';
   const originalSepaySecret = process.env.SEPAY_WEBHOOK_SECRET;
   let app: INestApplication;
+  let competingApp: INestApplication;
   let prisma: PrismaService;
   let busCompanyId: number;
   let routeId: number;
@@ -49,9 +51,11 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
   let vehicleId: number;
   let bangGiaId: number;
   let cargoTypeId: number;
+  let bulkyCargoTypeId: number;
   let senderPointId: number;
   let receiverPointId: number;
   let cargoRateId: number;
+  let bulkyCargoRateId: number;
   let tripId: number;
   let tripSeatIds: number[] = [];
   let currentPrincipal: AuthPrincipal | null = null;
@@ -59,6 +63,40 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
   let customerId: number;
   let customerPrincipal: AuthPrincipal;
   let customerPhone: string;
+
+  const standaloneShipmentPayload = (quantity = 1, loaiHangHoaId = cargoTypeId) => ({
+    tripId,
+    senderPointId,
+    receiverPointId,
+    sender: { fullName: 'Cargo capacity test', phoneNumber: customerPhone },
+    receiver: { fullName: 'Cargo recipient', phoneNumber: '0912345678' },
+    items: [{ name: 'Hàng thử nghiệm', loaiHangHoaId, quantity, weight: 1 }],
+  });
+
+  const bookingWithCargoPayload = (
+    holdToken: string,
+    cargoItems: Array<{
+      name: string;
+      loaiHangHoaId: number;
+      quantity: number;
+      type?: string;
+    }>,
+  ) => ({
+    tripId,
+    seatIds: [tripSeatIds[0]],
+    holdToken,
+    contact: { fullName: 'Cargo capacity test', phone: customerPhone },
+    pickupPoint: 'Bến xe Miền Đông',
+    dropoffPoint: 'Bến xe Đà Lạt',
+    senderPointId,
+    receiverPointId,
+    cargoItems: cargoItems.map((item) => ({
+      ...item,
+      type: item.type ?? 'Vali',
+      weight: 1,
+      category: 'normal',
+    })),
+  });
 
   beforeAll(async () => {
     process.env.PAYMENT_DEMO_MODE = 'true';
@@ -82,6 +120,14 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
     app = moduleRef.createNestApplication({ rawBody: true });
     configureApi(app);
     await app.init();
+
+    const competingModuleRef = await Test.createTestingModule({ imports: [AppModule] })
+      .overrideProvider(AccessTokenGuard)
+      .useValue(accessTokenGuard)
+      .compile();
+    competingApp = competingModuleRef.createNestApplication({ rawBody: true });
+    configureApi(competingApp);
+    await competingApp.init();
 
     prisma = app.get(PrismaService);
 
@@ -165,6 +211,30 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
       select: { bangCuocGuiHangId: true },
     });
     cargoRateId = cargoRate.bangCuocGuiHangId;
+
+    const bulkyCargoType = await prisma.loaiHangHoa.create({
+      data: {
+        tenLoai: `Hàng cồng kềnh ${suffix}`,
+        trangThai: 'HOAT_DONG',
+        nhomSucChua: 'HANG_CONG_KENH',
+      },
+      select: { loaiHangHoaId: true },
+    });
+    bulkyCargoTypeId = bulkyCargoType.loaiHangHoaId;
+    const bulkyCargoRate = await prisma.bangCuocGuiHang.create({
+      data: {
+        khoiLuongTu: 0,
+        khoiLuongDen: 10,
+        mucCuoc: 60000,
+        tuNgay: new Date('2020-01-01T00:00:00.000Z'),
+        trangThai: 'HOAT_DONG',
+        diemGuiId: senderPointId,
+        diemNhanId: receiverPointId,
+        loaiHangHoaId: bulkyCargoTypeId,
+      },
+      select: { bangCuocGuiHangId: true },
+    });
+    bulkyCargoRateId = bulkyCargoRate.bangCuocGuiHangId;
 
     const vehicleType = await prisma.loaiXe.create({
       data: {
@@ -281,6 +351,9 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
       if (cargoRateId) {
         await prisma.bangCuocGuiHang.deleteMany({ where: { bangCuocGuiHangId: cargoRateId } });
       }
+      if (bulkyCargoRateId) {
+        await prisma.bangCuocGuiHang.deleteMany({ where: { bangCuocGuiHangId: bulkyCargoRateId } });
+      }
       if (senderPointId || receiverPointId) {
         await prisma.diemGiaoNhanTuyenXe.deleteMany({
           where: { diemGiaoNhanHangId: { in: [senderPointId, receiverPointId].filter(Boolean) } },
@@ -293,6 +366,9 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
       }
       if (cargoTypeId) {
         await prisma.loaiHangHoa.deleteMany({ where: { loaiHangHoaId: cargoTypeId } });
+      }
+      if (bulkyCargoTypeId) {
+        await prisma.loaiHangHoa.deleteMany({ where: { loaiHangHoaId: bulkyCargoTypeId } });
       }
       if (vehicleId) {
         await prisma.ghe.deleteMany({ where: { xeId: vehicleId } });
@@ -316,6 +392,7 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
       delete process.env.PAYMENT_DEMO_MODE;
       if (originalSepaySecret === undefined) delete process.env.SEPAY_WEBHOOK_SECRET;
       else process.env.SEPAY_WEBHOOK_SECRET = originalSepaySecret;
+      await competingApp?.close();
       await app?.close();
     }
   }, 30_000);
@@ -571,6 +648,326 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
     expect(failedNoRate.status).toBe(409);
     expect(failedNoRate.body.error).toBe('CARGO_RATE_NOT_FOUND');
     expect(await prisma.donGiaoDich.count({ where: { nhaXeId: busCompanyId } })).toBe(orderCount);
+  });
+
+  it('accepts the last available unit and returns the committed live capacity projection', async () => {
+    await prisma.chuyenXe.update({
+      where: { chuyenXeId: tripId },
+      data: { sucChuaHangNhe: 2 },
+    });
+
+    const created = await request(app.getHttpServer())
+      .post('/api/v1/shipments')
+      .send(standaloneShipmentPayload());
+    expect(created.status, JSON.stringify(created.body)).toBe(201);
+    let capacity = await request(app.getHttpServer())
+      .get(`/api/v1/trips/${tripId}/cargo-capacity`);
+    expect(capacity.body.data.capacities.parcels).toEqual({
+      total: 2,
+      used: 1,
+      remaining: 1,
+    });
+
+    const lastUnit = await request(app.getHttpServer())
+      .post('/api/v1/shipments')
+      .send(standaloneShipmentPayload());
+    expect(lastUnit.status, JSON.stringify(lastUnit.body)).toBe(201);
+
+    capacity = await request(app.getHttpServer())
+      .get(`/api/v1/trips/${tripId}/cargo-capacity`);
+    expect(capacity.status).toBe(200);
+    expect(capacity.body.data).toMatchObject({
+      acceptsShipments: true,
+      capacities: {
+        parcels: { total: 2, used: 2, remaining: 0 },
+      },
+    });
+  });
+
+  it('counts soLuong for a cargo row instead of counting it as one row', async () => {
+    await prisma.chuyenXe.update({
+      where: { chuyenXeId: tripId },
+      data: { sucChuaHangNhe: 3 },
+    });
+
+    const created = await request(app.getHttpServer())
+      .post('/api/v1/shipments')
+      .send(standaloneShipmentPayload(2));
+    expect(created.status, JSON.stringify(created.body)).toBe(201);
+
+    const capacity = await request(app.getHttpServer())
+      .get(`/api/v1/trips/${tripId}/cargo-capacity`);
+    expect(capacity.body.data.capacities.parcels).toEqual({
+      total: 3,
+      used: 2,
+      remaining: 1,
+    });
+  });
+
+  it('rejects a request over the remaining capacity without creating partial rows', async () => {
+    await prisma.chuyenXe.update({
+      where: { chuyenXeId: tripId },
+      data: { sucChuaHangNhe: 1 },
+    });
+    const beforeOrders = await prisma.donGiaoDich.count({ where: { nhaXeId: busCompanyId } });
+
+    const response = await request(app.getHttpServer())
+      .post('/api/v1/shipments')
+      .send(standaloneShipmentPayload(2));
+
+    expect(response.status).toBe(409);
+    expect(response.body.error).toBe('CARGO_CAPACITY_EXCEEDED');
+    expect(await prisma.donGiaoDich.count({ where: { nhaXeId: busCompanyId } })).toBe(beforeOrders);
+    expect(await prisma.phieuGuiHang.count({ where: { chuyenXeId: tripId } })).toBe(0);
+    expect(await prisma.hangHoa.count({ where: { phieuGuiHang: { chuyenXeId: tripId } } })).toBe(0);
+  });
+
+  it('serializes competing standalone shipments across two API instances', async () => {
+    await prisma.chuyenXe.update({
+      where: { chuyenXeId: tripId },
+      data: { sucChuaHangNhe: 1 },
+    });
+
+    const responses = await Promise.all([
+      request(app.getHttpServer())
+        .post('/api/v1/shipments')
+        .send(standaloneShipmentPayload()),
+      request(competingApp.getHttpServer())
+        .post('/api/v1/shipments')
+        .send(standaloneShipmentPayload()),
+    ]);
+
+    expect(responses.map(({ status }) => status).sort((a, b) => a - b)).toEqual([201, 409]);
+    const rejected = responses.find(({ status }) => status === 409);
+    expect(rejected?.body.error).toBe('CARGO_CAPACITY_EXCEEDED');
+    expect(await prisma.donGiaoDich.count({ where: { nhaXeId: busCompanyId } })).toBe(1);
+    expect(await prisma.phieuGuiHang.count({ where: { chuyenXeId: tripId } })).toBe(1);
+    expect(await prisma.hangHoa.count({ where: { phieuGuiHang: { chuyenXeId: tripId } } })).toBe(1);
+
+    const capacity = await request(app.getHttpServer())
+      .get(`/api/v1/trips/${tripId}/cargo-capacity`);
+    expect(capacity.body.data.capacities.parcels).toEqual({
+      total: 1,
+      used: 1,
+      remaining: 0,
+    });
+  });
+
+  it('serializes a standalone shipment against a cargo-attached booking across API instances', async () => {
+    currentPrincipal = customerPrincipal;
+    await prisma.chuyenXe.update({
+      where: { chuyenXeId: tripId },
+      data: { sucChuaHangNhe: 1 },
+    });
+    const hold = await request(app.getHttpServer())
+      .post('/api/v1/seat-holds')
+      .send({ tripId, seatIds: [tripSeatIds[0]] });
+    expect(hold.status, JSON.stringify(hold.body)).toBe(201);
+    const holdData = hold.body.data ?? hold.body;
+
+    const bookingRequest = request(app.getHttpServer())
+      .post('/api/v1/bookings')
+      .send(bookingWithCargoPayload(holdData.holdToken, [
+        { name: 'Hàng đặt kèm vé', loaiHangHoaId: cargoTypeId, quantity: 1 },
+      ]));
+    const shipmentRequest = request(competingApp.getHttpServer())
+      .post('/api/v1/shipments')
+      .send(standaloneShipmentPayload());
+    const [booking, shipment] = await Promise.all([bookingRequest, shipmentRequest]);
+
+    expect([booking.status, shipment.status].sort((a, b) => a - b)).toEqual([201, 409]);
+    const rejected = booking.status === 409 ? booking : shipment;
+    expect(rejected.body.error).toBe('CARGO_CAPACITY_EXCEEDED');
+    expect(await prisma.donGiaoDich.count({ where: { nhaXeId: busCompanyId } })).toBe(1);
+    expect(await prisma.phieuGuiHang.count({ where: { chuyenXeId: tripId } })).toBe(1);
+    expect(await prisma.hangHoa.count({ where: { phieuGuiHang: { chuyenXeId: tripId } } })).toBe(1);
+    expect(await prisma.ve.count({ where: { phieuDatVe: { donGiaoDich: { nhaXeId: busCompanyId } } } }))
+      .toBe(booking.status === 201 ? 1 : 0);
+
+    const heldSeat = await prisma.gheChuyenXe.findUniqueOrThrow({
+      where: { gheChuyenXeId: tripSeatIds[0] },
+    });
+    expect(heldSeat.trangThai).toBe(booking.status === 201 ? 'DA_DAT' : 'DANG_GIU');
+  });
+
+  it('rolls back a multi-group booking when the last group exceeds its limit', async () => {
+    currentPrincipal = customerPrincipal;
+    await prisma.chuyenXe.update({
+      where: { chuyenXeId: tripId },
+      data: { sucChuaHangNhe: 1, sucChuaHangCongKenh: 0 },
+    });
+    const hold = await request(app.getHttpServer())
+      .post('/api/v1/seat-holds')
+      .send({ tripId, seatIds: [tripSeatIds[0]] });
+    expect(hold.status, JSON.stringify(hold.body)).toBe(201);
+    const holdData = hold.body.data ?? hold.body;
+
+    const response = await request(app.getHttpServer())
+      .post('/api/v1/bookings')
+      .send(bookingWithCargoPayload(holdData.holdToken, [
+        { name: 'Hàng nhẹ hợp lệ', loaiHangHoaId: cargoTypeId, quantity: 1 },
+        {
+          name: 'Hàng cồng kềnh vượt mức',
+          loaiHangHoaId: bulkyCargoTypeId,
+          quantity: 1,
+          type: 'Hàng cồng kềnh',
+        },
+      ]));
+
+    expect(response.status).toBe(409);
+    expect(response.body.error).toBe('CARGO_CAPACITY_EXCEEDED');
+    expect(await prisma.donGiaoDich.count({ where: { nhaXeId: busCompanyId } })).toBe(0);
+    expect(await prisma.phieuDatVe.count({ where: { donGiaoDich: { nhaXeId: busCompanyId } } })).toBe(0);
+    expect(await prisma.ve.count({ where: { phieuDatVe: { donGiaoDich: { nhaXeId: busCompanyId } } } })).toBe(0);
+    expect(await prisma.phieuGuiHang.count({ where: { chuyenXeId: tripId } })).toBe(0);
+    expect(await prisma.hangHoa.count({ where: { phieuGuiHang: { chuyenXeId: tripId } } })).toBe(0);
+
+    const heldSeat = await prisma.gheChuyenXe.findUniqueOrThrow({
+      where: { gheChuyenXeId: tripSeatIds[0] },
+    });
+    expect(heldSeat.trangThai).toBe('DANG_GIU');
+    expect(heldSeat.giuChoId).not.toBeNull();
+  });
+
+  it('keeps pending and in-transit shipments in capacity and releases delivered/cancelled shipments', async () => {
+    await prisma.chuyenXe.update({
+      where: { chuyenXeId: tripId },
+      data: { sucChuaHangNhe: 1 },
+    });
+    const created = await request(app.getHttpServer())
+      .post('/api/v1/shipments')
+      .send(standaloneShipmentPayload());
+    expect(created.status, JSON.stringify(created.body)).toBe(201);
+    const shipmentId = created.body.data.shipmentId as number;
+
+    for (const status of ['MOI_TAO', 'DA_TIEP_NHAN', 'DANG_VAN_CHUYEN'] as const) {
+      await prisma.phieuGuiHang.update({
+        where: { phieuGuiHangId: shipmentId },
+        data: { trangThai: status },
+      });
+      const capacity = await request(app.getHttpServer())
+        .get(`/api/v1/trips/${tripId}/cargo-capacity`);
+      expect(capacity.body.data.capacities.parcels).toEqual({
+        total: 1,
+        used: 1,
+        remaining: 0,
+      });
+    }
+
+    await prisma.phieuGuiHang.update({
+      where: { phieuGuiHangId: shipmentId },
+      data: { trangThai: 'DA_GIAO' },
+    });
+    let capacity = await request(app.getHttpServer())
+      .get(`/api/v1/trips/${tripId}/cargo-capacity`);
+    expect(capacity.body.data.capacities.parcels).toEqual({
+      total: 1,
+      used: 0,
+      remaining: 1,
+    });
+
+    const secondShipment = await request(app.getHttpServer())
+      .post('/api/v1/shipments')
+      .send(standaloneShipmentPayload());
+    expect(secondShipment.status, JSON.stringify(secondShipment.body)).toBe(201);
+    await prisma.phieuGuiHang.update({
+      where: { phieuGuiHangId: secondShipment.body.data.shipmentId },
+      data: { trangThai: 'DA_HUY' },
+    });
+    capacity = await request(app.getHttpServer())
+      .get(`/api/v1/trips/${tripId}/cargo-capacity`);
+    expect(capacity.body.data.capacities.parcels).toEqual({
+      total: 1,
+      used: 0,
+      remaining: 1,
+    });
+  });
+
+  it('rolls back a cargo booking after a failure immediately following the capacity check', async () => {
+    currentPrincipal = customerPrincipal;
+    await prisma.chuyenXe.update({
+      where: { chuyenXeId: tripId },
+      data: { sucChuaHangNhe: 1 },
+    });
+    const hold = await request(app.getHttpServer())
+      .post('/api/v1/seat-holds')
+      .send({ tripId, seatIds: [tripSeatIds[0]] });
+    expect(hold.status, JSON.stringify(hold.body)).toBe(201);
+    const holdData = hold.body.data ?? hold.body;
+    const payload = bookingWithCargoPayload(holdData.holdToken, [
+      { name: 'Hàng đặt kèm vé', loaiHangHoaId: cargoTypeId, quantity: 1 },
+    ]);
+    const cargoCapacity = app.get(CargoCapacityService);
+    const assertAvailable = cargoCapacity.assertAvailable.bind(cargoCapacity);
+    const assertSpy = vi
+      .spyOn(cargoCapacity, 'assertAvailable')
+      .mockImplementation((snapshot, requested) => {
+        assertAvailable(snapshot, requested);
+        throw new Error('Injected failure after capacity validation');
+      });
+
+    let failedResponse;
+    try {
+      failedResponse = await request(app.getHttpServer())
+        .post('/api/v1/bookings')
+        .send(payload);
+    } finally {
+      assertSpy.mockRestore();
+    }
+
+    expect(failedResponse.status).toBe(500);
+    expect(await prisma.donGiaoDich.count({ where: { nhaXeId: busCompanyId } })).toBe(0);
+    expect(await prisma.phieuDatVe.count({ where: { donGiaoDich: { nhaXeId: busCompanyId } } })).toBe(0);
+    expect(await prisma.phieuGuiHang.count({ where: { chuyenXeId: tripId } })).toBe(0);
+    const heldSeat = await prisma.gheChuyenXe.findUniqueOrThrow({
+      where: { gheChuyenXeId: tripSeatIds[0] },
+    });
+    expect(heldSeat.trangThai).toBe('DANG_GIU');
+
+    const retried = await request(app.getHttpServer())
+      .post('/api/v1/bookings')
+      .send(payload);
+    expect(retried.status, JSON.stringify(retried.body)).toBe(201);
+    const capacity = await request(app.getHttpServer())
+      .get(`/api/v1/trips/${tripId}/cargo-capacity`);
+    expect(capacity.body.data.capacities.parcels).toEqual({
+      total: 1,
+      used: 1,
+      remaining: 0,
+    });
+  });
+
+  it('preserves the read shape and rejects cargo when the trip disables shipment intake', async () => {
+    await prisma.chuyenXe.update({
+      where: { chuyenXeId: tripId },
+      data: {
+        nhanGuiHang: false,
+        sucChuaXeMay: 0,
+        sucChuaHangCongKenh: 0,
+        sucChuaHangNhe: 0,
+      },
+    });
+
+    const [capacity, shipment] = await Promise.all([
+      request(app.getHttpServer()).get(`/api/v1/trips/${tripId}/cargo-capacity`),
+      request(app.getHttpServer())
+        .post('/api/v1/shipments')
+        .send(standaloneShipmentPayload()),
+    ]);
+
+    expect(capacity.status).toBe(200);
+    expect(capacity.body.data).toEqual({
+      acceptsShipments: false,
+      capacities: {
+        motorcycles: { total: 0, used: 0, remaining: 0 },
+        bulkyGoods: { total: 0, used: 0, remaining: 0 },
+        parcels: { total: 0, used: 0, remaining: 0 },
+      },
+    });
+    expect(shipment.status).toBe(409);
+    expect(shipment.body.error).toBe('TRIP_DOES_NOT_ACCEPT_CARGO');
+    expect(await prisma.donGiaoDich.count({ where: { nhaXeId: busCompanyId } })).toBe(0);
+    expect(await prisma.phieuGuiHang.count({ where: { chuyenXeId: tripId } })).toBe(0);
   });
 
   it('does not expose shipment list or detail to an anonymous caller', async () => {

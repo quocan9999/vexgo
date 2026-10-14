@@ -12,6 +12,10 @@ import {
   resolveBusinessTimeZone,
 } from '../common/time/business-date.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import {
+  CargoCapacityService,
+  type CargoCapacitySnapshot,
+} from '../cargo-capacity/cargo-capacity.service.js';
 import { CreateTripDto } from './dto/create-trip.dto.js';
 import { SearchTripsDto } from './dto/search-trips.dto.js';
 import type { TripQueryDto, TripSortField } from './dto/trip-query.dto.js';
@@ -398,6 +402,7 @@ export class TripsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
+    private readonly cargoCapacityService: CargoCapacityService,
   ) {}
 
   async search(dto: SearchTripsDto) {
@@ -589,24 +594,16 @@ export class TripsService {
   }
 
   async getCargoCapacity(id: number) {
-    const trip = await this.prisma.chuyenXe.findUnique({
-      where: { chuyenXeId: id },
-      select: {
-        chuyenXeId: true,
-        nhanGuiHang: true,
-        sucChuaXeMay: true,
-        sucChuaHangCongKenh: true,
-        sucChuaHangNhe: true,
-        trangThai: true,
-      },
-    });
+    const snapshot = await this.cargoCapacityService.getSnapshot(this.prisma, id);
 
-    if (!trip) {
+    if (!snapshot) {
       throw new NotFoundException({
         error: 'TRIP_NOT_FOUND',
         message: 'Không tìm thấy chuyến xe.',
       });
     }
+
+    const { trip, capacities } = snapshot;
 
     if (trip.trangThai !== 'CHUA_KHOI_HANH') {
       throw new NotFoundException({
@@ -619,69 +616,26 @@ export class TripsService {
       return {
         data: {
           acceptsShipments: false,
-          capacities: {
-            motorcycles: { total: 0, used: 0, remaining: 0 },
-            bulkyGoods: { total: 0, used: 0, remaining: 0 },
-            parcels: { total: 0, used: 0, remaining: 0 },
-          },
+          capacities: this.toCargoCapacityResponse(capacities),
         },
       };
     }
 
-    const activeShipments = await this.prisma.hangHoa.findMany({
-      where: {
-        phieuGuiHang: {
-          chuyenXeId: id,
-          trangThai: { notIn: ['DA_HUY', 'DA_GIAO'] },
-        },
-      },
-      include: {
-        loaiHangHoa: {
-          select: { nhomSucChua: true },
-        },
-      },
-    });
-
-    let usedXeMay = 0;
-    let usedCongKenh = 0;
-    let usedNhe = 0;
-
-    for (const item of activeShipments) {
-      const group = item.loaiHangHoa.nhomSucChua;
-      if (group === 'XE_MAY') {
-        usedXeMay += item.soLuong;
-      } else if (group === 'HANG_CONG_KENH') {
-        usedCongKenh += item.soLuong;
-      } else if (group === 'HANG_NHE') {
-        usedNhe += item.soLuong;
-      }
-    }
-
-    const remainingXeMay = Math.max(0, trip.sucChuaXeMay - usedXeMay);
-    const remainingCongKenh = Math.max(0, trip.sucChuaHangCongKenh - usedCongKenh);
-    const remainingNhe = Math.max(0, trip.sucChuaHangNhe - usedNhe);
-
     return {
       data: {
         acceptsShipments: true,
-        capacities: {
-          motorcycles: {
-            total: trip.sucChuaXeMay,
-            used: usedXeMay,
-            remaining: remainingXeMay,
-          },
-          bulkyGoods: {
-            total: trip.sucChuaHangCongKenh,
-            used: usedCongKenh,
-            remaining: remainingCongKenh,
-          },
-          parcels: {
-            total: trip.sucChuaHangNhe,
-            used: usedNhe,
-            remaining: remainingNhe,
-          },
-        },
+        capacities: this.toCargoCapacityResponse(capacities),
       },
+    };
+  }
+
+  private toCargoCapacityResponse(
+    capacities: CargoCapacitySnapshot['capacities'],
+  ) {
+    return {
+      motorcycles: capacities.XE_MAY,
+      bulkyGoods: capacities.HANG_CONG_KENH,
+      parcels: capacities.HANG_NHE,
     };
   }
 

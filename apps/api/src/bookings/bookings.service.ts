@@ -13,6 +13,8 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { SeatHoldsService } from '../seat-holds/seat-holds.service.js';
 import { PromotionsService } from '../promotions/promotions.service.js';
 import { CargoPricingService } from '../cargo-pricing/cargo-pricing.service.js';
+import { CargoCapacityService } from '../cargo-capacity/cargo-capacity.service.js';
+import type { CargoCapacityGroup } from '../cargo-capacity/cargo-capacity.service.js';
 import { generateUuidV1 } from '../common/uuid-v1.js';
 import { getBookingPaymentDeadline } from '../common/booking-payment-deadline.js';
 import {
@@ -43,6 +45,7 @@ export class BookingsService {
     private readonly seatHoldsService: SeatHoldsService,
     private readonly promotionsService: PromotionsService,
     private readonly cargoPricingService: CargoPricingService,
+    private readonly cargoCapacityService: CargoCapacityService,
   ) {
     this.businessTimeZone = resolveBusinessTimeZone(
       config.get<string>('BUSINESS_TIME_ZONE'),
@@ -322,6 +325,10 @@ export class BookingsService {
 
     // All-or-nothing database transaction
     const txResult = await this.prisma.$transaction(async (tx) => {
+      if (hasCargo) {
+        await this.cargoCapacityService.lockTrip(tx, trip.chuyenXeId);
+      }
+
       const cargoPricing = hasCargo
         ? await this.cargoPricingService.calculate(
             tx,
@@ -404,54 +411,23 @@ export class BookingsService {
 
       // 2. Validate cargo capacity if cargo present
       if (hasCargo) {
-        const activeShipments = await tx.hangHoa.findMany({
-          where: {
-            phieuGuiHang: {
-              chuyenXeId: trip.chuyenXeId,
-              trangThai: { notIn: ['DA_HUY', 'DA_GIAO'] },
-            },
-          },
-          include: {
-            loaiHangHoa: { select: { nhomSucChua: true } },
-          },
-        });
-
-        let usedXeMay = 0;
-        let usedCongKenh = 0;
-        let usedNhe = 0;
-        for (const itm of activeShipments) {
-          if (itm.loaiHangHoa.nhomSucChua === 'XE_MAY') usedXeMay += itm.soLuong;
-          else if (itm.loaiHangHoa.nhomSucChua === 'HANG_CONG_KENH') usedCongKenh += itm.soLuong;
-          else if (itm.loaiHangHoa.nhomSucChua === 'HANG_NHE') usedNhe += itm.soLuong;
-        }
-
-        let newXeMay = 0;
-        let newCongKenh = 0;
-        let newNhe = 0;
-        for (const m of mappedCargoItems) {
-          if (m.loaiHangHoa.nhomSucChua === 'XE_MAY') newXeMay += m.itemDto.quantity;
-          else if (m.loaiHangHoa.nhomSucChua === 'HANG_CONG_KENH') newCongKenh += m.itemDto.quantity;
-          else if (m.loaiHangHoa.nhomSucChua === 'HANG_NHE') newNhe += m.itemDto.quantity;
-        }
-
-        if (usedXeMay + newXeMay > trip.sucChuaXeMay) {
-          throw new ConflictException({
-            error: 'CARGO_CAPACITY_EXCEEDED',
-            message: 'Chuyến xe đã hết chỗ chở xe máy.',
+        const snapshot = await this.cargoCapacityService.getSnapshot(
+          tx,
+          trip.chuyenXeId,
+        );
+        if (!snapshot) {
+          throw new NotFoundException({
+            error: 'TRIP_NOT_FOUND',
+            message: 'Không tìm thấy chuyến xe.',
           });
         }
-        if (usedCongKenh + newCongKenh > trip.sucChuaHangCongKenh) {
-          throw new ConflictException({
-            error: 'CARGO_CAPACITY_EXCEEDED',
-            message: 'Chuyến xe đã hết chỗ chứa hàng cồng kềnh.',
-          });
-        }
-        if (usedNhe + newNhe > trip.sucChuaHangNhe) {
-          throw new ConflictException({
-            error: 'CARGO_CAPACITY_EXCEEDED',
-            message: 'Chuyến xe đã hết chỗ chứa hàng nhẹ.',
-          });
-        }
+        this.cargoCapacityService.assertAvailable(
+          snapshot,
+          mappedCargoItems.map((item) => ({
+            group: item.loaiHangHoa.nhomSucChua as CargoCapacityGroup,
+            quantity: item.itemDto.quantity,
+          })),
+        );
       }
 
       // 3. Resolve customer ID

@@ -2,9 +2,11 @@ import { NotFoundException } from '@nestjs/common';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TripsService } from '../../../src/trips/trips.service.js';
 import type { PrismaService } from '../../../src/prisma/prisma.service.js';
+import { CargoCapacityService } from '../../../src/cargo-capacity/cargo-capacity.service.js';
 
 describe('TripsService - getTripAlternatives', () => {
-  const baseDate = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  const baseDate = new Date(Date.now() + 48 * 60 * 60 * 1000);
+  baseDate.setUTCHours(10, 0, 0, 0);
 
   const mockOriginalTrip = {
     chuyenXeId: 101,
@@ -96,6 +98,7 @@ describe('TripsService - getTripAlternatives', () => {
   const service = new TripsService(
     prisma as unknown as PrismaService,
     { get: vi.fn().mockReturnValue('Asia/Ho_Chi_Minh') } as unknown as any,
+    new CargoCapacityService(),
   );
 
   beforeEach(() => {
@@ -124,6 +127,7 @@ describe('TripsService - getTripAlternatives', () => {
     ]);
 
     const alternatives = await service.getTripAlternatives(101, 5);
+
 
     expect(alternatives).toHaveLength(2);
     // candidateSoldOut (id: 104) is completely excluded

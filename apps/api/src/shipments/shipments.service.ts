@@ -10,6 +10,8 @@ import { ConfigService } from '@nestjs/config';
 import { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CargoPricingService } from '../cargo-pricing/cargo-pricing.service.js';
+import { CargoCapacityService } from '../cargo-capacity/cargo-capacity.service.js';
+import type { CargoCapacityGroup } from '../cargo-capacity/cargo-capacity.service.js';
 import { hasTenantRole } from '../auth/principal-scope.js';
 import {
   businessDateStartUtc,
@@ -50,6 +52,7 @@ export class ShipmentsService {
     private readonly prisma: PrismaService,
     config: ConfigService,
     private readonly cargoPricingService: CargoPricingService,
+    private readonly cargoCapacityService: CargoCapacityService,
   ) {
     this.businessTimeZone = resolveBusinessTimeZone(
       config.get<string>('BUSINESS_TIME_ZONE'),
@@ -172,6 +175,8 @@ export class ShipmentsService {
     const receiverPhone = normalizePhone(dto.receiver.phoneNumber);
 
     return this.prisma.$transaction(async (tx) => {
+      await this.cargoCapacityService.lockTrip(tx, trip.chuyenXeId);
+
       const pricing = await this.cargoPricingService.calculate(
         tx,
         {
@@ -202,6 +207,24 @@ export class ShipmentsService {
       const cuocChinh = pricing.baseFee;
       const phiDichVu = pricing.serviceFee;
       const tongPhi = pricing.totalFee;
+
+      const capacitySnapshot = await this.cargoCapacityService.getSnapshot(
+        tx,
+        trip.chuyenXeId,
+      );
+      if (!capacitySnapshot) {
+        throw new NotFoundException({
+          error: 'TRIP_NOT_FOUND',
+          message: 'Không tìm thấy chuyến xe.',
+        });
+      }
+      this.cargoCapacityService.assertAvailable(
+        capacitySnapshot,
+        pricing.items.map((item) => ({
+          group: item.loaiHangHoa.nhomSucChua as CargoCapacityGroup,
+          quantity: item.input.quantity,
+        })),
+      );
 
       // 1. Resolve Customer record
       let customerId: number;

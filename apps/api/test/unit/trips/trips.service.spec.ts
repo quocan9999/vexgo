@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { PrismaService } from '../../../src/prisma/prisma.service.js';
 import { TripsService } from '../../../src/trips/trips.service.js';
+import { CargoCapacityService } from '../../../src/cargo-capacity/cargo-capacity.service.js';
 
 const firstTrip = {
   chuyenXeId: 21,
@@ -82,6 +83,7 @@ function createService() {
       {
         get: vi.fn().mockReturnValue('Asia/Ho_Chi_Minh'),
       } as never,
+      new CargoCapacityService(),
     ),
   };
 }

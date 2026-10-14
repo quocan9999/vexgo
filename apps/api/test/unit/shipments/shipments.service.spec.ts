@@ -15,10 +15,23 @@ describe('ShipmentsService', () => {
   let service: ShipmentsService;
   let prismaMock: any;
   let configMock: any;
+  let cargoCapacityServiceMock: any;
 
   beforeEach(() => {
     configMock = {
       get: vi.fn().mockReturnValue('Asia/Ho_Chi_Minh'),
+    };
+    cargoCapacityServiceMock = {
+      lockTrip: vi.fn().mockResolvedValue(undefined),
+      getSnapshot: vi.fn().mockResolvedValue({
+        trip: { chuyenXeId: 1, trangThai: 'CHUA_KHOI_HANH', nhanGuiHang: true },
+        capacities: {
+          XE_MAY: { total: 100, used: 0, remaining: 100 },
+          HANG_CONG_KENH: { total: 100, used: 0, remaining: 100 },
+          HANG_NHE: { total: 100, used: 0, remaining: 100 },
+        },
+      }),
+      assertAvailable: vi.fn(),
     };
 
     prismaMock = {
@@ -53,6 +66,7 @@ describe('ShipmentsService', () => {
       prismaMock as unknown as PrismaService,
       configMock as unknown as ConfigService,
       new CargoPricingService(),
+      cargoCapacityServiceMock,
     );
   });
 
