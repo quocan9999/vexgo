@@ -451,7 +451,17 @@ describe('BookingsService', () => {
       expect(res.ticketCount).toBe(1);
       expect(res.totalAmount).toBe(250000);
       expect(res.tickets[0].soGhe).toBe('A01');
-      expect(createdOrderData?.maDonGiaoDich).toMatch(/^FUTA-GD-[A-F\d]{30}$/);
+      expect(createdOrderData?.maDonGiaoDich).toMatch(/^FUTAGD[A-F\d]{30}$/);
+      expect(createdOrderData?.thanhToans).toEqual({
+        create: {
+          phuongThuc: 'SEPAY',
+          loaiGiaoDich: 'THANH_TOAN',
+          trangThai: 'DANG_XU_LY',
+          soTien: expect.anything(),
+          thoiGian: expect.any(Date),
+        },
+      });
+      expect(Number((createdOrderData?.thanhToans as any).create.soTien)).toBe(250000);
       expect(createdBookingData?.maPhieuDatVe).toMatch(/^FUTA-PDV-[A-F\d]{30}$/);
     });
   });
@@ -640,6 +650,11 @@ describe('BookingsService', () => {
         soTienCuoc: expect.objectContaining({ d: [60000] }),
       });
       expect(Number(orderRows[0].tongTien)).toBe(210000);
+      expect(orderRows[0].khachHangId).toBeNull();
+      expect((orderRows[0].thanhToans as any).create).toMatchObject({
+        phuongThuc: 'SEPAY', loaiGiaoDich: 'THANH_TOAN', trangThai: 'DANG_XU_LY',
+      });
+      expect(Number((orderRows[0].thanhToans as any).create.soTien)).toBe(210000);
       expect(Number(shipmentRows[0].tongPhi)).toBe(60000);
       expect(cargoRows).toHaveLength(2);
     });

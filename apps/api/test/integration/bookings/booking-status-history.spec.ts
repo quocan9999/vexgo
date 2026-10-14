@@ -39,6 +39,8 @@ function buildMomoPayload(paymentId: number, options: Partial<MomoWebhookDto> = 
 }
 
 describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)', () => {
+  const sepaySecret = 'booking-sepay-integration-secret';
+  const originalSepaySecret = process.env.SEPAY_WEBHOOK_SECRET;
   let app: INestApplication;
   let prisma: PrismaService;
   let busCompanyId: number;
@@ -56,6 +58,7 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
 
   beforeAll(async () => {
     process.env.PAYMENT_DEMO_MODE = 'true';
+    process.env.SEPAY_WEBHOOK_SECRET = sepaySecret;
 
     const accessTokenGuard = {
       canActivate(context: ExecutionContext) {
@@ -72,7 +75,7 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
       .useValue(accessTokenGuard)
       .compile();
 
-    app = moduleRef.createNestApplication();
+    app = moduleRef.createNestApplication({ rawBody: true });
     configureApi(app);
     await app.init();
 
@@ -222,6 +225,8 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
       }
     } finally {
       delete process.env.PAYMENT_DEMO_MODE;
+      if (originalSepaySecret === undefined) delete process.env.SEPAY_WEBHOOK_SECRET;
+      else process.env.SEPAY_WEBHOOK_SECRET = originalSepaySecret;
       await app?.close();
     }
   }, 30_000);
@@ -287,6 +292,54 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
     });
     tripId = trip.chuyenXeId;
     tripSeatIds = trip.gheChuyenXes.map((s) => s.gheChuyenXeId);
+  });
+
+  it.each(['guest', 'customer'])('creates a SePay attempt atomically and settles %s booking only via signed webhook', async (mode) => {
+    currentPrincipal = mode === 'customer' ? customerPrincipal : null;
+    const hold = await request(app.getHttpServer()).post('/api/v1/seat-holds')
+      .send({ tripId, seatIds: [tripSeatIds[0]] });
+    expect(hold.status).toBe(201);
+    const bookingResponse = await request(app.getHttpServer()).post('/api/v1/bookings').send({
+      tripId, seatIds: [tripSeatIds[0]], holdToken: hold.body.data.holdToken,
+      contact: { fullName: 'SePay customer', phone: customerPhone },
+      pickupPoint: 'Bến xe Miền Đông', dropoffPoint: 'Bến xe Đà Lạt',
+    });
+    expect(bookingResponse.status, JSON.stringify(bookingResponse.body)).toBe(201);
+    const booking = bookingResponse.body.data;
+    expect(booking.orderCode).toMatch(/^[A-Z0-9]{1,8}GD[A-F\d]{30}$/);
+    const saved = await prisma.phieuDatVe.findUniqueOrThrow({
+      where: { phieuDatVeId: booking.bookingId },
+      include: { donGiaoDich: { include: { thanhToans: true } } },
+    });
+    expect(saved.donGiaoDich.khachHangId).toBe(mode === 'guest' ? null : customerId);
+    expect(saved.donGiaoDich.thanhToans).toHaveLength(1);
+    expect(saved.donGiaoDich.thanhToans[0]).toMatchObject({ phuongThuc: 'SEPAY', trangThai: 'DANG_XU_LY' });
+    expect(Number(saved.donGiaoDich.thanhToans[0].soTien)).toBe(booking.totalAmount);
+    const timestamp = String(Math.floor(Date.now() / 1000));
+    const eventId = Date.now();
+    const body = JSON.stringify({ id: eventId, code: 'TRUNCATED', content: booking.orderCode, transferType: 'in', transferAmount: booking.totalAmount });
+    const signature = `sha256=${createHmac('sha256', sepaySecret).update(`${timestamp}.${body}`).digest('hex')}`;
+    currentPrincipal = null;
+    const forged = await request(app.getHttpServer()).post('/api/v1/payments/sepay-webhook')
+      .set('Content-Type', 'application/json').set('X-SePay-Timestamp', timestamp)
+      .set('X-SePay-Signature', `sha256=${'0'.repeat(64)}`).send(body);
+    expect(forged.status).toBe(401);
+    const stillPending = await prisma.phieuDatVe.findUniqueOrThrow({ where: { phieuDatVeId: booking.bookingId } });
+    expect(stillPending.trangThai).toBe('CHO_THANH_TOAN');
+    for (let retry = 0; retry < 2; retry++) {
+      const paid = await request(app.getHttpServer()).post('/api/v1/payments/sepay-webhook')
+        .set('Content-Type', 'application/json').set('X-SePay-Timestamp', timestamp)
+        .set('X-SePay-Signature', signature).send(body);
+      expect(paid.status, JSON.stringify(paid.body)).toBe(200);
+      expect(paid.body).toEqual({ success: true });
+    }
+    currentPrincipal = mode === 'customer' ? customerPrincipal : null;
+    const detail = await request(app.getHttpServer()).get(`/api/v1/bookings/${booking.bookingId}/detail`)
+      .set('x-booking-code', booking.bookingCode).set('x-booking-phone', customerPhone);
+    expect(detail.status).toBe(200);
+    expect(detail.body.data.paymentStatus).toBe('DA_THANH_TOAN');
+    expect(await prisma.thanhToan.count({ where: { donGiaoDichId: saved.donGiaoDichId } })).toBe(1);
+    expect(await prisma.lichSuTrangThaiPhieuDatVe.count({ where: { phieuDatVeId: booking.bookingId, trangThaiMoi: 'DA_THANH_TOAN' } })).toBe(1);
   });
 
   it('does not expose shipment list or detail to an anonymous caller', async () => {
@@ -543,6 +596,7 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
     expect(
       responses.map((response) => response.status).sort((left, right) => left - right),
     ).toEqual([201, 409]);
+    expect(await prisma.thanhToan.count({ where: { donGiaoDich: { nhaXeId: busCompanyId } } })).toBe(1);
     expect(
       await prisma.donGiaoDich.count({ where: { nhaXeId: busCompanyId } }),
     ).toBe(1);

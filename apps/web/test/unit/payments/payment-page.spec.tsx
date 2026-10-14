@@ -166,6 +166,20 @@ describe('Customer VietQR payment page', () => {
     expect(routerPush).not.toHaveBeenCalled();
   });
 
+  it('keeps the canonical SePay reference identical in QR and displayed transfer content', async () => {
+    const orderCode = 'FUTAGD29612020BAC94BCEA507A24A8D759B';
+    savePaymentDraft(orderCode);
+    configureVietQr();
+    fetchMock.mockResolvedValue(jsonResponse({ status: 'CHO_THANH_TOAN', paymentStatus: 'CHO_THANH_TOAN' }));
+    render(<PaymentPage />);
+    expect(screen.getByText(orderCode)).toBeTruthy();
+    const qr = screen.getByRole('img', { name: 'Mã QR thanh toán VietQR' });
+    expect(new URL(qr.getAttribute('src')!).searchParams.get('addInfo')).toBe(orderCode);
+    await advanceTime(2_500);
+    expect(routerPush).not.toHaveBeenCalled();
+    expect(fetchMock.mock.calls.every(([, options]) => !options?.method || options.method === 'GET')).toBe(true);
+  });
+
   it('does not create a QR or guess a transfer reference when the order code is missing', async () => {
     configureVietQr();
     window.sessionStorage.clear();

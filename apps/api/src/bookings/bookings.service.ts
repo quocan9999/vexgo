@@ -622,7 +622,9 @@ export class BookingsService {
         .slice(0, 30)
         .toUpperCase();
       const codePrefix = opCode.slice(0, 8);
-      const maDonGiaoDich = `${codePrefix}-GD-${uniqueSuffix}`;
+      // Nội dung chuyển khoản cần giữ nguyên qua ngân hàng; tránh dấu phân cách.
+      const paymentCodePrefix = (codePrefix.replace(/[^A-Za-z0-9]/g, '') || 'VXG').toUpperCase();
+      const maDonGiaoDich = `${paymentCodePrefix}GD${uniqueSuffix}`;
       const maPhieuDatVe = `${codePrefix}-PDV-${uniqueSuffix}`;
 
       // 5. Create DonGiaoDich
@@ -637,6 +639,17 @@ export class BookingsService {
           emailKhachHang: contactEmail,
           khachHangId: resolvedCustomerId,
           nhaXeId: trip.nhaXeId,
+          // Tạo payment chờ trong cùng transaction, trước khi trả booking/QR.
+          // Guest dùng quyền tạo booking hiện có, không cần mở endpoint thanh toán công khai.
+          thanhToans: {
+            create: {
+              phuongThuc: 'SEPAY',
+              loaiGiaoDich: 'THANH_TOAN',
+              trangThai: 'DANG_XU_LY',
+              soTien: new Prisma.Decimal(totalOrderAmount),
+              thoiGian: now,
+            },
+          },
         },
       });
 

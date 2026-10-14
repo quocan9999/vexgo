@@ -9,9 +9,10 @@ import {
   ParseIntPipe,
   Post,
   Req,
+  Res,
 } from '@nestjs/common';
 import type { RawBodyRequest } from '@nestjs/common';
-import type { Request } from 'express';
+import type { Request, Response } from 'express';
 import { Public } from '../auth/decorators/public.decorator.js';
 import { CurrentPrincipal } from '../auth/decorators/current-principal.decorator.js';
 import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
@@ -76,15 +77,18 @@ export class PaymentsController {
   @Public()
   @Post('sepay-webhook')
   @HttpCode(HttpStatus.OK)
-  handleSepayWebhook(
+  async handleSepayWebhook(
     @Req() request: RawBodyRequest<Request>,
+    @Res() response: Response,
     @Headers('x-sepay-signature') signature?: string,
     @Headers('x-sepay-timestamp') timestamp?: string,
   ) {
-    return this.paymentsService.handleSepayWebhook({
+    await this.paymentsService.handleSepayWebhook({
       rawBody: request.rawBody,
       signature,
       timestamp,
     });
+    // SePay yêu cầu acknowledgment ở cấp ngoài, không dùng envelope REST của ứng dụng.
+    response.status(HttpStatus.OK).json({ success: true });
   }
 }

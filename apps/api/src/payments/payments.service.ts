@@ -497,10 +497,28 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
       });
     }
 
-    const order = await this.prisma.donGiaoDich.findUnique({
-      where: { maDonGiaoDich: paymentReference },
-      include: { phieuDatVe: true },
-    });
+    // SePay có thể nhận diện `code` không đầy đủ dù `content` chứa đúng mã đơn.
+    // Chỉ tìm mã đầy đủ; mã legacy mất dấu '-' được khôi phục theo cấu trúc cố định.
+    const references = new Set<string>();
+    for (const reference of [content, paymentCode]) {
+      if (!reference) continue;
+      references.add(reference);
+      const legacy = /^([A-Z0-9]{1,8})GD([A-F\d]{30})$/.exec(reference);
+      if (legacy) references.add(`${legacy[1]}-GD-${legacy[2]}`);
+    }
+    const matchingOrders = (await Promise.all(
+      [...references].map((reference) => this.prisma.donGiaoDich.findUnique({
+        where: { maDonGiaoDich: reference },
+        include: { phieuDatVe: true },
+      })),
+    )).filter((candidate) => candidate !== null);
+    const order = matchingOrders[0];
+    if (matchingOrders.some((candidate) => candidate.donGiaoDichId !== order?.donGiaoDichId)) {
+      throw new BadRequestException({
+        error: 'SEPAY_REFERENCE_MISMATCH',
+        message: 'Mã thanh toán và nội dung chuyển khoản trỏ tới các đơn khác nhau.',
+      });
+    }
     if (!order || !order.phieuDatVe) {
       throw new NotFoundException({
         error: 'SEPAY_ORDER_NOT_FOUND',

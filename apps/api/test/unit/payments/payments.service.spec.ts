@@ -691,6 +691,50 @@ describe('PaymentsService', () => {
       ).rejects.toThrow(BadRequestException);
     });
 
+    it.each([
+      ['FUTAGD29612020BAC94BCEA507A24A8D759B', 'FUTAGD29612020BAC94BCEA507A24A8D759B'],
+      ['FUTAGD29612020BAC94BCEA507A24A8D759B', 'FUTA-GD-29612020BAC94BCEA507A24A8D759B'],
+      ['FUTA-GD-29612020BAC94BCEA507A24A8D759B', 'FUTA-GD-29612020BAC94BCEA507A24A8D759B'],
+    ])('matches complete content %s to order %s despite a truncated provider code', async (content, orderCode) => {
+      const secret = 'sepay-hmac-test-secret';
+      configService.get.mockImplementation((key: string) => key === 'SEPAY_WEBHOOK_SECRET' ? secret : null);
+      const order = { donGiaoDichId: 200, tongTien: '300000', phieuDatVe: { phieuDatVeId: 300 } };
+      prisma.donGiaoDich.findUnique.mockImplementation(async ({ where }: any) =>
+        where.maDonGiaoDich === orderCode ? order : null,
+      );
+      prisma.thanhToan.findFirst.mockResolvedValue({ ...samplePayment, phuongThuc: 'SEPAY' });
+      const settle = vi.spyOn(service, 'confirmPaymentSuccess').mockResolvedValue({ success: true } as any);
+      const body = Buffer.from(JSON.stringify({
+        id: 12345, code: 'AGD29612020BAC', content, transferType: 'in', transferAmount: 300000,
+      }));
+      await service.handleSepayWebhook({ rawBody: body, timestamp, signature: makeSepaySignature(body, timestamp, secret) });
+      expect(settle).toHaveBeenCalledOnce();
+      expect(settle).toHaveBeenCalledWith(expect.objectContaining({ provider: 'SEPAY', providerTransactionId: '12345' }));
+    });
+
+    it('rejects code and content identifying different orders without settlement', async () => {
+      const secret = 'sepay-hmac-test-secret';
+      configService.get.mockImplementation((key: string) => key === 'SEPAY_WEBHOOK_SECRET' ? secret : null);
+      prisma.donGiaoDich.findUnique.mockImplementation(async ({ where }: any) => ({
+        donGiaoDichId: where.maDonGiaoDich === 'ORDER-A' ? 200 : 201,
+        phieuDatVe: { phieuDatVeId: 300 },
+      }));
+      const settle = vi.spyOn(service, 'confirmPaymentSuccess');
+      const body = Buffer.from(JSON.stringify({ id: 12345, code: 'ORDER-A', content: 'ORDER-B', transferType: 'in', transferAmount: 300000 }));
+      await expect(service.handleSepayWebhook({ rawBody: body, timestamp, signature: makeSepaySignature(body, timestamp, secret) })).rejects.toMatchObject({ response: { error: 'SEPAY_REFERENCE_MISMATCH' } });
+      expect(settle).not.toHaveBeenCalled();
+    });
+
+    it('rejects incomplete transfer references without attempting settlement', async () => {
+      const secret = 'sepay-hmac-test-secret';
+      configService.get.mockImplementation((key: string) => key === 'SEPAY_WEBHOOK_SECRET' ? secret : null);
+      prisma.donGiaoDich.findUnique.mockResolvedValue(null);
+      const settle = vi.spyOn(service, 'confirmPaymentSuccess');
+      const body = Buffer.from(JSON.stringify({ id: 12345, code: 'AGD29612020BAC', content: 'FUTAGD29612020BAC', transferType: 'in', transferAmount: 300000 }));
+      await expect(service.handleSepayWebhook({ rawBody: body, timestamp, signature: makeSepaySignature(body, timestamp, secret) })).rejects.toMatchObject({ response: { error: 'SEPAY_ORDER_NOT_FOUND' } });
+      expect(settle).not.toHaveBeenCalled();
+    });
+
     it('verifies valid MoMo HMAC-SHA256 signature and rejects forged ones', () => {
       const raw = `accessKey=DEMO&amount=100000&extraData=100&message=Success&orderId=100&orderInfo=Test&orderType=momo_wallet&partnerCode=MOMO&payType=qr&requestId=REQ100&responseTime=123456&resultCode=0&transId=999`;
       const validSig = createHmac('sha256', service.momoSecretKey)

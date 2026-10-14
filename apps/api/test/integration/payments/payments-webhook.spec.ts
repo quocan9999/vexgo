@@ -1233,9 +1233,9 @@ describe('Payments Webhook & Status Security with MySQL (Integration)', () => {
         sendSignedEvent(),
       ]);
       expect(firstDelivery.status).toBe(200);
-      expect(firstDelivery.body.data).toMatchObject({ success: true });
+      expect(firstDelivery.body).toEqual({ success: true });
       expect(concurrentRetry.status).toBe(200);
-      expect(concurrentRetry.body.data).toMatchObject({ success: true });
+      expect(concurrentRetry.body).toEqual({ success: true });
 
       const updatedBooking = await prisma.phieuDatVe.findUnique({
         where: { phieuDatVeId: phieuDatVe.phieuDatVeId },
@@ -1251,7 +1251,7 @@ describe('Payments Webhook & Status Security with MySQL (Integration)', () => {
 
       const replay = await sendSignedEvent();
       expect(replay.status).toBe(200);
-      expect(replay.body.data).toMatchObject({ success: true });
+      expect(replay.body).toEqual({ success: true });
 
       const differentTransactionForSamePayment = await sendSignedEvent({
         ...webhookPayload,
@@ -1275,7 +1275,7 @@ describe('Payments Webhook & Status Security with MySQL (Integration)', () => {
         {
           id: eventIdStart,
           code: `WRONG-${donGiaoDich.maDonGiaoDich}`,
-          content: donGiaoDich.maDonGiaoDich,
+          content: `WRONG-${donGiaoDich.maDonGiaoDich}`,
           transferType: 'in',
           transferAmount: 200000,
           expectedStatus: 404,
