@@ -10,25 +10,36 @@ Trang invoice chỉ hiển thị vé khi API trả đúng booking ID, payment đ
 
 - `apps/web/src/features/payments/components/payment-page.tsx`: xác minh booking qua `GET /api/v1/bookings/:id/detail`; kiểm tra identity/reference/amount/status/deadline; polling có timeout, retry hữu hạn khi lỗi khởi tạo, dừng theo deadline/trạng thái cuối và abort khi unmount; bỏ thao tác `confirmPayment()` cùng ghi trạng thái paid giả.
 - `apps/web/src/features/payments/components/invoice-page.tsx`: chỉ đọc booking từ API; gửi bearer token hoặc bằng chứng guest bookingCode + phoneNumber để backend quyết định quyền đọc; chỉ dựng invoice sau trạng thái paid; bỏ fallback sessionStorage và dữ liệu vé mẫu.
+- `apps/web/src/features/account/services/bookings.api.ts`: xóa wrapper `confirmPayment()` không còn caller trong Customer Web; tìm kiếm source xác nhận frontend không còn gọi endpoint `confirm-payment`.
 - `apps/web/test/unit/payments/payment-page.spec.tsx`: kiểm thử hành vi QR, pending/paid/terminal/error, identity/amount mismatch, timeout, cleanup và không gọi mutation.
 - `apps/web/test/unit/payments/invoice-page.spec.tsx`: kiểm thử component invoice khi pending, paid, unauthorized/API lỗi, guest/auth, dữ liệu sessionStorage cũ và unmount.
+- `apps/api/test/integration/bookings/booking-status-history.spec.ts`: mở rộng regression DB-backed xác minh booking guest/customer → payment SEPAY chờ → webhook HMAC hợp lệ → API detail trả đúng booking/order/amount, trạng thái paid, deadline, server time và vé.
 - `apps/web/package.json`: đưa invoice component test vào lệnh test mục tiêu của Customer Web.
 - `apps/web/AGENTS.md` và `apps/web/CLAUDE.md`: Next.js tự tạo hướng dẫn agent của phiên bản đang dùng khi chạy dev server; đã đọc hướng dẫn và tài liệu cấu trúc Next.js tương ứng.
 - `docs/pr36-reconciliation/fix-conflict/handoff/R5_FINAL_HANDOFF.md`: tài liệu bàn giao này.
 
-Không thay đổi API/backend, schema/database, migration, webhook, settlement, `.env` hoặc cấu hình SePay. Hàm wrapper `bookingsApi.confirmPayment()` cũ vẫn còn trong service dùng chung nhưng không có caller trong Customer Web; luồng R5 không gọi endpoint này.
+Không đổi API/backend runtime, Prisma schema, database structure, migration, webhook implementation, settlement implementation, `.env` hoặc cấu hình SePay. Integration test chỉ tạo và dọn fixture thuộc test riêng trên database `vexgo_pr36`.
+
+## Đối chiếu review conversations
+
+- **F1 P1 — `PRRT_kwDOUfyB7s6sZcTY`:** invoice chỉ dùng response backend có quyền truy cập và trạng thái booking/payment đã thanh toán; pending, terminal, mismatch, lỗi API/offline và dữ liệu session cũ không dựng hóa đơn success.
+- **F2 P2 — `PRRT_kwDOUfyB7s6sZcTm`:** QR chỉ xuất hiện sau khi booking backend khớp ID, booking/order code, amount và trạng thái chờ; QR dùng amount/reference xác minh từ response backend.
+- **F3 P2 — `PRRT_kwDOUfyB7s6ryIAt`:** polling dùng deadline/serverTime từ backend, retry ban đầu có giới hạn, ngừng ở deadline/trạng thái terminal, và hủy timer/request khi unmount.
+- Ba review conversations vẫn chưa được resolve; reviewer cần tự xác minh rồi resolve.
 
 ## Kiểm thử và self-review
 
 - `apps/web: npm test`: PASS — 104 Node tests và 51 Vitest tests trong 3 file mục tiêu.
-- ESLint các component/test liên quan: PASS — 0 lỗi; còn 2 warning hiện có về dùng `<img>` cho ảnh QR từ nhà cung cấp bên ngoài.
-- `apps/web: npm run typecheck`: PASS — `next typegen` và `tsc --noEmit` hoàn tất.
-- Integration test R4 `booking-status-history.spec.ts -t "creates a SePay attempt atomically and settles"`: PASS — 2 trường hợp guest/customer; test dùng DB riêng `vexgo_pr36`, không reset/seed/migrate.
+- Customer Web `npm run typecheck`: PASS — `next typegen` và `tsc --noEmit` hoàn tất.
+- ESLint các component/test Customer Web liên quan: PASS — 0 lỗi; 2 warning `<img>` ở payment/invoice.
+- API integration `npx vitest run --config vitest.config.ts test/integration/bookings/booking-status-history.spec.ts -t "creates a SePay attempt atomically and settles"`: PASS — 2 trường hợp guest/customer trên MySQL `vexgo_pr36`.
+- API `npm run typecheck`: PASS. Oxlint trên integration test: PASS, có một warning `typescript(no-misused-spread)` tại dòng 38, không nằm trong thay đổi R5.
+- Toàn bộ file integration `booking-status-history.spec.ts`: PASS — 12 tests; có một log lỗi được test cố ý tiêm để kiểm tra rollback, không phải test failure.
 - Browser smoke desktop 1440×900 và mobile 375×667 tại Customer Web cổng 3004: PASS cho hiển thị pending, mã tham chiếu server, QR khi cấu hình local hợp lệ, không có nút xác nhận thủ công và không tràn ngang. Phản hồi `GET /bookings/:id/detail` trong browser smoke được stub ở tầng network.
 - Browser smoke phản hồi chuyển pending → paid: PASS cho điều hướng tới `/invoice/:id` đúng một lần và chỉ hiển thị invoice sau paid. Phản hồi backend được stub ở tầng network.
 - Luồng browser nối trực tiếp API local + webhook SePay sandbox → polling thật: DEFERRED. Khi kiểm tra, cổng API 4002 không có listener; vì vậy không ghi nhận đây là smoke end-to-end. R4 đã kiểm tra settlement/backend riêng bằng integration test nêu trên.
-- `git diff --check`: PASS. GitNexus index cũ hơn worktree 2 commit; lần `analyze --index-only` bị dừng sau hơn 5 phút và trả exit 1. Vì vậy output `detect_changes` medium risk không được xem là kết luận đáng tin cậy; đường đi payment/invoice đã được đối chiếu trực tiếp với source và test.
-- Diff R5 không chứa thay đổi backend, Admin, booking creation, cargo, database, migration, env, README hoặc handoff R4. Hai file hướng dẫn agent trong apps/web do Next.js tự sinh khi chạy dev server.
+- `git diff --check`: PASS. GitNexus index cũ hơn worktree 2 commit; lần `analyze --index-only` bị dừng sau hơn 5 phút và trả exit 1. Kết quả impact còn trỏ caller `confirmPayment` cũ nên không dùng làm kết luận; đã đối chiếu source trực tiếp và không còn caller.
+- Diff R5 không chứa thay đổi API runtime, Admin, booking creation, cargo, database structure, migration, env, README hoặc handoff R4. Hai file hướng dẫn agent trong apps/web do Next.js tự sinh khi chạy dev server.
 
 ## Checklist smoke test thủ công
 

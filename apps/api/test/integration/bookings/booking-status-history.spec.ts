@@ -337,7 +337,17 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
     const detail = await request(app.getHttpServer()).get(`/api/v1/bookings/${booking.bookingId}/detail`)
       .set('x-booking-code', booking.bookingCode).set('x-booking-phone', customerPhone);
     expect(detail.status).toBe(200);
-    expect(detail.body.data.paymentStatus).toBe('DA_THANH_TOAN');
+    expect(detail.body.data).toMatchObject({
+      bookingId: booking.bookingId,
+      bookingCode: booking.bookingCode,
+      orderCode: booking.orderCode,
+      totalAmount: booking.totalAmount,
+      status: 'DA_THANH_TOAN',
+      paymentStatus: 'DA_THANH_TOAN',
+    });
+    expect(detail.body.data.paymentExpiresAt).toEqual(expect.any(String));
+    expect(detail.body.data.serverTime).toEqual(expect.any(String));
+    expect(detail.body.data.tickets).toHaveLength(1);
     expect(await prisma.thanhToan.count({ where: { donGiaoDichId: saved.donGiaoDichId } })).toBe(1);
     expect(await prisma.lichSuTrangThaiPhieuDatVe.count({ where: { phieuDatVeId: booking.bookingId, trangThaiMoi: 'DA_THANH_TOAN' } })).toBe(1);
   });

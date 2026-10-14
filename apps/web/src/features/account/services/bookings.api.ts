@@ -338,25 +338,4 @@ export const bookingsApi = {
     return res.json();
   },
 
-  async confirmPayment(
-    bookingId: number,
-    paymentMethod: string = 'CHUYEN_KHOAN',
-  ): Promise<{ data: BookingResponseData }> {
-    const res = await fetch(`${API_BASE_URL}/bookings/${bookingId}/confirm-payment`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ paymentMethod }),
-    });
-
-    if (!res.ok) {
-      const error = await res.json().catch(() => ({}));
-      throw new ApiError(
-        error.message || 'Xác nhận thanh toán thất bại',
-        res.status,
-      );
-    }
-    return res.json();
-  },
 };
