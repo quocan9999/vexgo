@@ -105,6 +105,7 @@ Chỉ chạy trên API và DB worktree `vexgo_pr36`; dùng SePay test mode, khô
 
 ## Findings và việc còn mở ngoài R9
 
+- **P1 — Chưa xác minh tài khoản nhận tiền SePay (`PRRT_kwDOUfyB7s6sWMrd`, `PREEXISTING_FINDING`, ngoài R6–R9):** Tại HEAD `9d54b9a`, `handleSepayWebhook()` kiểm tra chữ ký HMAC, mã tham chiếu, chiều tiền vào, số tiền và currency nhưng chưa đọc `payload.accountNumber` hoặc đối chiếu với allowlist cấu hình backend. Nếu SePay theo dõi nhiều tài khoản, khoản tiền vào tài khoản khác vẫn có thể được ghép với đơn. R6–R9 không sửa finding này; task riêng cần cấu hình backend fail-closed, so khớp chính xác tài khoản nhận, và unit/HTTP integration tests cho thiếu hoặc sai `accountNumber` không làm đổi payment/order.
 - **P0/P1 — PII shipment lookup công khai (`PREEXISTING_FINDING`):** `POST /api/v1/shipments/lookup` là optional-auth, kiểm tra mã + phone người gửi hoặc người nhận rồi trả sender email/phone, receiver phone, địa chỉ, kiện hàng và timeline. Controller không gắn `ThrottlerGuard` (throttling hiện chỉ gắn rõ ở ticket/contact/auth routes). API list/detail thông thường yêu cầu auth và Service áp tenant/Customer ownership, nhưng lookup công khai cần review/rate-limit/redaction riêng trước merge/deploy.
 - **P0 — seat hold hardening (`PREEXISTING_FINDING`):** R1/A0.1 chưa triển khai đầy đủ secret chuyên biệt/rotation, ownership fail-closed, cleanup/cạnh tranh, khôi phục token bền vững qua idempotency và quota chống abuse guest. `releaseSeatHold` còn fallback từ signed token/in-memory khi không tìm thấy record DB, rồi có thể cập nhật ghế đang `DANG_GIU` với `giuChoId = null`; đường này phải bị loại trong hardening riêng, không được xem là bằng chứng hold active. Release không nhận principal và token là bearer. Endpoint hiện trả success cả khi không tìm thấy hold. R1 smoke chưa chạy.
 - **P1 — guest ownership/claim:** guest order không tự gắn theo phone; guest booking detail hiện dựa mã booking + phone. Chưa có OTP/claim flow để liên kết lịch sử guest với Customer.
@@ -113,6 +114,16 @@ Chỉ chạy trên API và DB worktree `vexgo_pr36`; dùng SePay test mode, khô
 - **P2 — payment demo cũ:** `/booking/:id/payment` chứa fixture/`setPaid` nhưng UI ghi rõ demo; không được nối vào production checkout. Kiểm tra route isolation khi có thay đổi routing.
 - **External client:** không có app Mobile trong workspace/API caller inventory đã kiểm tra; caller Mobile hoặc consumer ngoài repo là `UNVERIFIED_EXTERNAL_CLIENT`.
 - Không thấy invoice dùng dữ liệu local làm nguồn sự thật: trang invoice tải booking detail và chỉ hiển thị khi cả payment/order đã `DA_THANH_TOAN`; guest credentials cục bộ chỉ dùng cho request mà Backend vẫn xác minh.
+
+## Trạng thái review GitHub (đã tra cứu, không thao tác)
+
+Tại lần kiểm tra R9, năm review thread sau vẫn unresolved trên PR #36. Bốn finding R6–R8 đã có implementation/regression trong branch này nhưng vẫn cần reviewer kiểm tra lại; finding tài khoản SePay chưa được xử lý và vẫn nằm ngoài scope R6–R9.
+
+- `PRRT_kwDOUfyB7s6sX8yH` — R6 shared cargo rate: implementation và parity test đã có; reviewer cần xác minh rồi resolve.
+- `PRRT_kwDOUfyB7s6sX8xr` — R7 shared atomic capacity: implementation và MySQL concurrency tests đã có; policy status đã được chủ dự án duyệt; reviewer cần xác minh rồi resolve.
+- `PRRT_kwDOUfyB7s6sX8xz` — R8 guest shipment không tự liên kết theo phone: implementation và DB regression đã có; reviewer cần xác minh rồi resolve.
+- `PRRT_kwDOUfyB7s6sX8x8` — R8 shipment code collision: generator và regression đã có; reviewer cần xác minh rồi resolve.
+- `PRRT_kwDOUfyB7s6sWMrd` — P1 xác minh tài khoản nhận SePay: chưa triển khai trong R6–R9; giữ mở cho task SePay riêng.
 
 ## Git hygiene và điểm dừng
 
