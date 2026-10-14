@@ -742,6 +742,17 @@ model TinNhanHoTro {
   @@index([cuocTroChuyenId, createdAt], map: "TinNhanHoTro_cuocTroChuyen_createdAt_idx")
 }
 
+model LuuTruTinNhanHoTroCu {
+  tinNhanId     Int      @id @db.Int
+  noiDung       String   @db.Text
+  thoiGianCu    DateTime @db.DateTime(0)
+  trangThaiCu   String   @db.VarChar(30)
+  khachHangIdCu Int      @db.Int
+  createdAtCu   DateTime @db.DateTime(0)
+  updatedAtCu   DateTime @db.DateTime(0)
+  archivedAt    DateTime @default(now()) @db.DateTime(0)
+}
+
 model PhanHoi {
   phanHoiId      Int           @id @default(autoincrement()) @db.Int
   mucDanhGia     Int           @db.Int
