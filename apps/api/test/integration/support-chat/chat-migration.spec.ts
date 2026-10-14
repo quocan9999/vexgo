@@ -1281,6 +1281,13 @@ describe('Support chat schema migration with preflight archive and RBAC bootstra
     expect(diffOutput).toContain('-- This is an empty migration.');
     expect(diffOutput).not.toContain('DROP TABLE `LuuTruTinNhanHoTroCu`');
     expect(diffOutput).not.toContain('DROP TABLE LuuTruTinNhanHoTroCu');
+
+    // 4. Smoke test: xác minh lệnh với cờ --exit-code của Prisma 7 trả về mã thoát 0 (No difference detected)
+    const exitCodeOutput = execSync(
+      'npx prisma migrate diff --from-migrations prisma/migrations --to-schema prisma/schema.prisma --exit-code',
+      { cwd: resolve(process.cwd(), '../../'), encoding: 'utf8' },
+    );
+    expect(exitCodeOutput).toContain('No difference detected.');
   }, 60000);
 
   it('11. Test E1 — Migration failure & partial retry safety: verifies INSERT IGNORE idempotency on identical archive', async () => {

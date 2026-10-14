@@ -433,15 +433,43 @@ MySQL tự động kích hoạt **implicit commit** sau mỗi câu lệnh DDL (`
    >   ```
    > - **Nếu không thể xác minh chắc chắn schema và dữ liệu:** DỪNG LẠI và yêu cầu đối soát kỹ thuật cấp cao, tuyệt đối không dùng `prisma migrate resolve` để che giấu trạng thái không nhất quán.
 
-9. **Xác minh không có schema drift:**  
-   Chạy lệnh kiểm tra drift giữa Prisma schema và database thực tế:
-   ```bash
-   npx prisma migrate diff \
-     --from-migrations prisma/migrations \
-     --to-schema-datamodel prisma/schema.prisma \
-     --exit-code
-   ```
-   Kết quả trả về mã thoát `0` xác nhận zero drift.
+9. **Xác minh không có schema drift (Quy trình kiểm tra hai lớp trên Prisma 7):**  
+   Sau khi hoàn tất can thiệp thủ công và đánh dấu migration, DBA bắt buộc phải chạy quy trình kiểm tra drift hai lớp để chứng minh cơ sở dữ liệu thực tế và lịch sử migration đã đồng bộ hoàn toàn với schema ứng dụng.
+
+   > [!NOTE]
+   > **LƯU Ý TƯƠNG THÍCH PRISMA 7 (`7.10.0`):**  
+   > Prisma 7 đã loại bỏ hoàn toàn cờ `--to-schema-datamodel` (nếu sử dụng sẽ gặp lỗi `Error: --to-schema-datamodel was removed. Please use --[from/to]-schema instead`). Thay vào đó, sử dụng `--to-schema` kết hợp với `--from-config-datasource` để tự động đọc thông tin kết nối từ `prisma.config.ts`.
+
+   - **Bước 9.1: Xác minh Cơ sở dữ liệu thực tế đồng bộ 100% với Prisma Schema (Actual Database Sync):**  
+     Lệnh này đối chiếu trực tiếp cấu trúc của cơ sở dữ liệu thực tế vừa được DBA can thiệp với file `prisma/schema.prisma`:
+     ```bash
+     npx prisma migrate diff \
+       --from-config-datasource \
+       --to-schema prisma/schema.prisma \
+       --exit-code
+     ```
+     * **Ý nghĩa & Mã thoát:**
+       - **Mã thoát `0` (`No difference detected.`):** Xác nhận cơ sở dữ liệu thực tế đã khớp 100% với schema ứng dụng, không có bất kỳ bảng, cột, khóa ngoại hay chỉ mục nào bị lệch hoặc thiếu.
+       - **Mã thoát `2` (Drift detected):** Báo hiệu cơ sở dữ liệu thực tế vẫn còn sai lệch so với schema. Prisma sẽ liệt kê chi tiết các phần tử chưa đồng bộ.
+       - **Mã thoát `1`:** Lỗi kết nối hoặc lỗi cấu hình Prisma CLI.
+     * **Lệnh xuất SQL khắc phục (nếu phát hiện drift):** Nếu mã thoát là `2`, DBA có thể chạy thêm cờ `--script` để hiển thị chính xác các câu lệnh DDL cần thiết nhằm đưa database thực tế về đúng chuẩn:
+       ```bash
+       npx prisma migrate diff \
+         --from-config-datasource \
+         --to-schema prisma/schema.prisma \
+         --script
+       ```
+
+   - **Bước 9.2: Xác minh Chuỗi Migration History đồng bộ với Prisma Schema (Migration History Sync):**  
+     Lệnh này đối chiếu toàn bộ lịch sử các file migration trong thư mục `prisma/migrations` với `prisma/schema.prisma` (thông qua shadow database):
+     ```bash
+     npx prisma migrate diff \
+       --from-migrations prisma/migrations \
+       --to-schema prisma/schema.prisma \
+       --exit-code
+     ```
+     * **Ý nghĩa & Mã thoát:**
+       - **Mã thoát `0` (`No difference detected.`):** Xác nhận chuỗi file migration đã bao quát đầy đủ mọi model và trường dữ liệu (bao gồm model `LuuTruTinNhanHoTroCu`), đảm bảo các lần deploy tự động qua CI/CD trong tương lai sẽ không phát sinh schema drift hay lệnh DROP TABLE ngoài ý muốn.
 
 10. **Lưu nhật ký can thiệp vào hồ sơ vận hành:**  
     Ghi nhận đầy đủ thời gian, người thực hiện, lý do migration bị dừng, danh sách câu lệnh SQL thủ công đã chạy và kết quả kiểm tra toàn vẹn dữ liệu vào hệ thống ticket/runbook của dự án.
