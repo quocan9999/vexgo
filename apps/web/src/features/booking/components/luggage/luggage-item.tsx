@@ -3,19 +3,36 @@
 
 import React from 'react';
 import { Trash2 } from 'lucide-react';
+import type { CargoCategory } from '@/features/shipments/services/shipments.api';
 
 
 interface LuggageItemProps {
   index: number;
   item: ILuggageItem;
+  cargoCategories: CargoCategory[];
   onChange: (id: string, fieldOrUpdates: keyof ILuggageItem | Partial<ILuggageItem>, value?: any) => void;
   onRemove: (id: string) => void;
 }
 
-export const LuggageItemComponent: React.FC<LuggageItemProps> = ({ index, item, onChange, onRemove }) => {
+export const LuggageItemComponent: React.FC<LuggageItemProps> = ({ index, item, cargoCategories, onChange, onRemove }) => {
   const isMotorbike = item.type === 'Xe máy';
   const isBicycle = item.type === 'Xe đạp';
   const isVehicle = isMotorbike || isBicycle;
+  const unitWeight = Math.max(
+    item.weight || 0,
+    item.length && item.width && item.height
+      ? (item.length * item.width * item.height) / 5000
+      : 0,
+  );
+  const capacityGroup = isMotorbike
+    ? 'XE_MAY'
+    : isBicycle || item.type.toLocaleUpperCase('vi-VN').includes('CỒNG KỀNH') ||
+        (unitWeight >= 20 && unitWeight <= 40)
+      ? 'HANG_CONG_KENH'
+      : 'HANG_NHE';
+  const availableCargoCategories = cargoCategories.filter(
+    (category) => category.capacityGroup === capacityGroup,
+  );
 
   return (
     <div className="p-4 border border-slate-200 rounded-lg bg-slate-50 relative">
@@ -83,6 +100,33 @@ export const LuggageItemComponent: React.FC<LuggageItemProps> = ({ index, item, 
         </label>
 
         <label className="block">
+          <span className="text-xs font-bold text-slate-700">Danh mục hàng hóa</span>
+          <select
+            className="mt-1 h-10 w-full rounded-lg border border-slate-300 px-3 text-sm font-semibold outline-none focus:border-accent bg-white"
+            value={item.loaiHangHoaId?.toString() || ''}
+            onChange={(event) =>
+              onChange(
+                item.id,
+                'loaiHangHoaId',
+                event.target.value ? Number(event.target.value) : undefined,
+              )
+            }
+          >
+            <option value="">Chọn danh mục hàng hóa</option>
+            {availableCargoCategories.map((category) => (
+              <option key={category.categoryId} value={category.categoryId}>
+                {category.name}
+              </option>
+            ))}
+          </select>
+          {availableCargoCategories.length === 0 ? (
+            <span className="mt-1 block text-xs text-amber-700">
+              Chuyến xe chưa có danh mục hàng phù hợp với nhóm này.
+            </span>
+          ) : null}
+        </label>
+
+        <label className="block">
           <span className="text-xs font-bold text-slate-700">Số lượng</span>
           <input
             type="number"
@@ -146,7 +190,8 @@ export const LuggageItemComponent: React.FC<LuggageItemProps> = ({ index, item, 
                 onChange={(e) => onChange(item.id, 'category', e.target.value)}
               >
                 <option value="normal">Nguyên chiếc (không tháo)</option>
-                <option value="fragile">Xe giá trị cao / Carbon (cần bao bọc kỹ)</option>
+                <option value="fragile">Dễ vỡ (+20.000đ phụ phí)</option>
+                <option value="valuable">Giá trị cao (+50.000đ phụ phí)</option>
               </select>
             </label>
           </>
@@ -172,8 +217,8 @@ export const LuggageItemComponent: React.FC<LuggageItemProps> = ({ index, item, 
                 onChange={(e) => onChange(item.id, 'category', e.target.value)}
               >
                 <option value="normal">Hàng thường</option>
-                <option value="fragile">Dễ vỡ</option>
-                <option value="valuable">Giá trị cao</option>
+                <option value="fragile">Dễ vỡ (+20.000đ phụ phí)</option>
+                <option value="valuable">Giá trị cao (+50.000đ phụ phí)</option>
               </select>
             </label>
           </>
@@ -357,6 +402,7 @@ export interface ILuggageItem {
   width?: number;
   height?: number;
   category: "normal" | "fragile" | "valuable";
+  loaiHangHoaId?: number;
   note?: string;
   motorbikeType?: string;
   licensePlate?: string;

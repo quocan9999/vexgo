@@ -35,6 +35,7 @@ vi.mock('@/features/booking/components/luggage/luggage-step', () => ({
       items: Array<{
         id: string;
         type: string;
+        loaiHangHoaId?: number;
         quantity: number;
         weight: number;
         category: string;
@@ -48,6 +49,7 @@ vi.mock('@/features/booking/components/luggage/luggage-step', () => ({
           {
             id: 'free-cargo',
             type: 'Vali',
+            loaiHangHoaId: 21,
             quantity: 1,
             weight: 10,
             category: 'normal',
@@ -271,7 +273,7 @@ describe('one-way booking with server seat holds', () => {
     });
   });
 
-  it('sends valid free luggage to the booking API so the backend can persist it', async () => {
+  it('sends the selected cargo type and route points so the backend can price and persist luggage', async () => {
     render(<OneWayBooking post={post} tripSeats={tripSeats} />);
     fireEvent.click(screen.getByRole('button', { name: 'Thêm hành lý miễn phí' }));
     await waitFor(() => {
@@ -290,6 +292,7 @@ describe('one-way booking with server seat holds', () => {
       expect.objectContaining({
         name: 'Vali',
         type: 'Vali',
+        loaiHangHoaId: 21,
         quantity: 1,
         weight: 10,
       }),

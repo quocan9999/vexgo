@@ -1,4 +1,3 @@
-/* eslint-disable */
 'use client';
 
 import type { ILuggageItem } from "./luggage-item";
@@ -7,6 +6,7 @@ import Link from 'next/link';
 import { Package, PackageX, Info } from 'lucide-react';
 
 import { LuggageForm } from './luggage-form';
+import { shipmentsApi, type CargoCategory } from '@/features/shipments/services/shipments.api';
 
 interface CargoCapacityInfo {
   acceptsShipments: boolean;
@@ -29,45 +29,52 @@ interface LuggageStepProps {
 export const LuggageStep: React.FC<LuggageStepProps> = ({ route, time, seat, passenger, cargoCapacity, onFeeChange }) => {
   const [hasExtraLuggage, setHasExtraLuggage] = useState(false);
   const [items, setItems] = useState<ILuggageItem[]>([]);
+  const [cargoCategories, setCargoCategories] = useState<CargoCategory[]>([]);
+  const [cargoCategoriesLoading, setCargoCategoriesLoading] = useState(true);
+  const [cargoCategoriesError, setCargoCategoriesError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    shipmentsApi
+      .getCargoCategories()
+      .then((response) => {
+        if (isMounted) setCargoCategories(response.data);
+      })
+      .catch((error: unknown) => {
+        if (isMounted) {
+          setCargoCategoriesError(
+            error instanceof Error
+              ? error.message
+              : 'Không thể tải danh mục loại hàng hóa.',
+          );
+        }
+      })
+      .finally(() => {
+        if (isMounted) setCargoCategoriesLoading(false);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!hasExtraLuggage) {
       onFeeChange(0, 0, []);
       return;
     }
-
-    const normalItems = items.filter((item) => item.type !== 'Xe máy' && item.type !== 'Xe đạp');
-    const motorbikeItems = items.filter((item) => item.type === 'Xe máy');
-    const bicycleItems = items.filter((item) => item.type === 'Xe đạp');
-
-    const normalTotalWeight = Number(
-      normalItems
+    const totalWeight = Number(
+      items
         .reduce((sum, item) => {
           const actualWeight = item.weight || 0;
           const volumetricWeight =
             item.length && item.width && item.height
               ? (item.length * item.width * item.height) / 5000
               : 0;
-          const effectiveWeight = Math.max(actualWeight, volumetricWeight);
-          return sum + effectiveWeight * (item.quantity || 1);
+          return sum + Math.max(actualWeight, volumetricWeight) * (item.quantity || 1);
         }, 0)
         .toFixed(2),
     );
-
-    let normalFee = 0;
-    if (normalTotalWeight <= 20) {
-      normalFee = 0;
-    } else if (normalTotalWeight <= 40) {
-      normalFee = 30000;
-    } else {
-      normalFee = 0;
-    }
-
-    const motorbikeFee = motorbikeItems.reduce((sum, item) => sum + 250000 * (item.quantity || 1), 0);
-    const bicycleFee = bicycleItems.reduce((sum, item) => sum + 100000 * (item.quantity || 1), 0);
-    const totalFee = normalFee + motorbikeFee + bicycleFee;
-
-    onFeeChange(totalFee, normalTotalWeight, items);
+    onFeeChange(0, totalWeight, items);
   }, [hasExtraLuggage, items, onFeeChange]);
 
   return (
@@ -197,7 +204,23 @@ export const LuggageStep: React.FC<LuggageStepProps> = ({ route, time, seat, pas
               <span>Chuyến xe này không nhận chở xe máy hoặc hàng ký gửi dưới hầm. Khách chỉ được mang hành lý xách tay tiêu chuẩn.</span>
             </div>
           ) : null}
-          <LuggageForm items={items} onChange={setItems} />
+          {cargoCategoriesLoading ? (
+            <p role="status" className="mb-3 text-xs text-slate-500">
+              Đang tải danh mục hàng hóa...
+            </p>
+          ) : cargoCategoriesError ? (
+            <p role="alert" className="mb-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+              {cargoCategoriesError} Cước hàng sẽ chỉ được xác định sau khi hệ thống tải được danh mục hợp lệ.
+            </p>
+          ) : null}
+          <LuggageForm
+            items={items}
+            cargoCategories={cargoCategories}
+            onChange={setItems}
+          />
+          <p className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs leading-relaxed text-slate-600">
+            Cước hàng được máy chủ tính theo danh mục, tổng khối lượng và bảng giá của tuyến; số tiền chính xác sẽ hiển thị sau khi đặt vé. Phụ phí dễ vỡ 20.000đ và giá trị cao 50.000đ được tính tối đa một lần cho mỗi loại dịch vụ.
+          </p>
           {items
             .filter((item) => item.type !== 'Xe máy' && item.type !== 'Xe đạp')
             .reduce((sum, item) => {

@@ -6,13 +6,15 @@ import React from 'react';
 import { Plus } from 'lucide-react';
 
 import { LuggageItemComponent } from './luggage-item';
+import type { CargoCategory } from '@/features/shipments/services/shipments.api';
 
 interface LuggageFormProps {
   items: ILuggageItem[];
+  cargoCategories: CargoCategory[];
   onChange: (items: ILuggageItem[]) => void;
 }
 
-export const LuggageForm: React.FC<LuggageFormProps> = ({ items, onChange }) => {
+export const LuggageForm: React.FC<LuggageFormProps> = ({ items, cargoCategories, onChange }) => {
   const [showLimitModal, setShowLimitModal] = React.useState(false);
 
   const handleAddItem = () => {
@@ -35,13 +37,27 @@ export const LuggageForm: React.FC<LuggageFormProps> = ({ items, onChange }) => 
   };
 
   const handleChangeItem = (id: string, fieldOrUpdates: keyof ILuggageItem | Partial<ILuggageItem>, value?: any) => {
+    const shouldClearCargoType =
+      typeof fieldOrUpdates === 'string'
+        ? ['type', 'weight', 'length', 'width', 'height'].includes(fieldOrUpdates)
+        : ['type', 'weight', 'length', 'width', 'height'].some((field) =>
+            Object.prototype.hasOwnProperty.call(fieldOrUpdates, field),
+          );
     onChange(
       items.map((item) => {
         if (item.id !== id) return item;
         if (typeof fieldOrUpdates === 'object') {
-          return { ...item, ...fieldOrUpdates };
+          return {
+            ...item,
+            ...fieldOrUpdates,
+            ...(shouldClearCargoType ? { loaiHangHoaId: undefined } : {}),
+          };
         }
-        return { ...item, [fieldOrUpdates]: value };
+        return {
+          ...item,
+          [fieldOrUpdates]: value,
+          ...(shouldClearCargoType ? { loaiHangHoaId: undefined } : {}),
+        };
       })
     );
   };
@@ -53,6 +69,7 @@ export const LuggageForm: React.FC<LuggageFormProps> = ({ items, onChange }) => 
           key={item.id}
           index={index}
           item={item}
+          cargoCategories={cargoCategories}
           onChange={handleChangeItem}
           onRemove={handleRemoveItem}
         />

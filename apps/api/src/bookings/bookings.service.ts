@@ -12,6 +12,7 @@ import { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { SeatHoldsService } from '../seat-holds/seat-holds.service.js';
 import { PromotionsService } from '../promotions/promotions.service.js';
+import { CargoPricingService } from '../cargo-pricing/cargo-pricing.service.js';
 import { generateUuidV1 } from '../common/uuid-v1.js';
 import { getBookingPaymentDeadline } from '../common/booking-payment-deadline.js';
 import {
@@ -20,7 +21,7 @@ import {
   resolveBusinessTimeZone,
 } from '../common/time/business-date.js';
 import type { BookingQueryDto } from './dto/booking-query.dto.js';
-import type { CargoItemDto, CreateBookingDto } from './dto/create-booking.dto.js';
+import type { CreateBookingDto } from './dto/create-booking.dto.js';
 import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
 
 function normalizePhone(phone: string): string {
@@ -41,6 +42,7 @@ export class BookingsService {
     config: ConfigService,
     private readonly seatHoldsService: SeatHoldsService,
     private readonly promotionsService: PromotionsService,
+    private readonly cargoPricingService: CargoPricingService,
   ) {
     this.businessTimeZone = resolveBusinessTimeZone(
       config.get<string>('BUSINESS_TIME_ZONE'),
@@ -310,228 +312,6 @@ export class BookingsService {
       });
     }
 
-    let shippingFee = 0;
-    let mappedCargoItems: Array<{
-      itemDto: CargoItemDto;
-      loaiHangHoa: { loaiHangHoaId: number; tenLoai: string; nhomSucChua: string };
-      effectiveUnitWeight: number;
-      totalWeight: number;
-    }> = [];
-    const categoryWeights = new Map<number, number>();
-    const selectedRates = new Map<
-      number,
-      { bangCuocGuiHangId: number; totalWeight: number; fee: Prisma.Decimal }
-    >();
-
-    let diemGuiId: number | null = null;
-    let diemNhanId: number | null = null;
-
-    if (hasCargo) {
-      const routePoints = await this.prisma.diemGiaoNhanTuyenXe.findMany({
-        where: {
-          tuyenXeId: trip.tuyenXeId,
-          diemGiaoNhanHang: {
-            nhaXeId: trip.nhaXeId,
-            trangThai: 'HOAT_DONG',
-          },
-        },
-        include: { diemGiaoNhanHang: true },
-      });
-
-      const senderCandidates = routePoints.filter(
-        (point) =>
-          (point.vaiTro === 'GUI_HANG' || point.vaiTro === 'CA_HAI') &&
-          point.diemGiaoNhanHang.trangThai === 'HOAT_DONG' &&
-          point.diemGiaoNhanHang.nhaXeId === trip.nhaXeId,
-      );
-      const receiverCandidates = routePoints.filter(
-        (point) =>
-          (point.vaiTro === 'NHAN_HANG' || point.vaiTro === 'CA_HAI') &&
-          point.diemGiaoNhanHang.trangThai === 'HOAT_DONG' &&
-          point.diemGiaoNhanHang.nhaXeId === trip.nhaXeId,
-      );
-
-      if (senderCandidates.length === 0 || receiverCandidates.length === 0) {
-        throw new ConflictException({
-          error: 'SHIPMENT_POINTS_NOT_CONFIGURED',
-          message: 'Tuyến xe chưa được cấu hình điểm gửi/nhận hàng.',
-        });
-      }
-
-      const resolveRoutePoint = (
-        requestedId: number | undefined,
-        candidates: typeof routePoints,
-        role: 'gửi' | 'nhận',
-      ) => {
-        if (requestedId !== undefined) {
-          const requestedPoint = candidates.find(
-            (point) => point.diemGiaoNhanHangId === requestedId,
-          );
-          if (!requestedPoint) {
-            throw new ConflictException({
-              error: 'SHIPMENT_POINT_INVALID',
-              message: `Điểm ${role} không thuộc tuyến và nhà xe của chuyến xe.`,
-            });
-          }
-          return requestedPoint.diemGiaoNhanHangId;
-        }
-        if (candidates.length !== 1) {
-          throw new ConflictException({
-            error: 'SHIPMENT_POINT_REQUIRED',
-            message: `Vui lòng chọn điểm ${role} hàng trên tuyến xe.`,
-          });
-        }
-        return candidates[0].diemGiaoNhanHangId;
-      };
-
-      diemGuiId = resolveRoutePoint(
-        dto.senderPointId,
-        senderCandidates,
-        'gửi',
-      );
-      diemNhanId = resolveRoutePoint(
-        dto.receiverPointId,
-        receiverCandidates,
-        'nhận',
-      );
-      if (diemGuiId === diemNhanId) {
-        throw new ConflictException({
-          error: 'SHIPMENT_POINTS_MUST_DIFFER',
-          message: 'Điểm gửi và điểm nhận hàng phải khác nhau.',
-        });
-      }
-
-      const allLoaiHang = await this.prisma.loaiHangHoa.findMany({
-        where: { trangThai: 'HOAT_DONG' },
-      });
-
-      const activeRates = await this.prisma.bangCuocGuiHang.findMany({
-        where: {
-          diemGuiId,
-          diemNhanId,
-          trangThai: 'HOAT_DONG',
-          tuNgay: { lte: trip.ngayKhoiHanh },
-          OR: [{ denNgay: null }, { denNgay: { gte: trip.ngayKhoiHanh } }],
-        },
-      });
-
-      for (const item of dto.cargoItems!) {
-        let loaiHang: (typeof allLoaiHang)[0] | undefined;
-        const itemTypeUpper = (item.type || item.name || '').toUpperCase();
-        const isMotorbike = itemTypeUpper.includes('XE MÁY') || itemTypeUpper.includes('MOTORCYCLE');
-        const isBicycle = itemTypeUpper.includes('XE ĐẠP') || itemTypeUpper.includes('BICYCLE');
-        const isVehicle = isMotorbike || isBicycle;
-
-        if (!isVehicle) {
-          if (
-            (item.length && item.length > 150) ||
-            (item.width && item.width > 80) ||
-            (item.height && item.height > 80)
-          ) {
-            throw new BadRequestException({
-              error: 'CARGO_DIMENSIONS_EXCEEDED',
-              message: `Kích thước món "${item.name}" vượt quá quy định hầm xe khách (Dài ≤ 150cm, Rộng ≤ 80cm, Cao ≤ 80cm).`,
-            });
-          }
-        }
-
-        const volumetricWeight =
-          !isVehicle && item.length && item.width && item.height
-            ? Math.round(((item.length * item.width * item.height) / 5000) * 10) / 10
-            : 0;
-        const effectiveUnitWeight = isMotorbike
-          ? (item.weight || 100)
-          : isBicycle
-            ? (item.weight || 15)
-            : Math.max(item.weight, volumetricWeight);
-
-        if (isMotorbike) {
-          loaiHang = allLoaiHang.find((l) => l.nhomSucChua === 'XE_MAY');
-        } else if (isBicycle || (effectiveUnitWeight >= 20 && effectiveUnitWeight <= 40)) {
-          loaiHang = allLoaiHang.find((l) => l.nhomSucChua === 'HANG_CONG_KENH');
-        } else {
-          loaiHang = allLoaiHang.find((l) => l.nhomSucChua === 'HANG_NHE');
-        }
-
-        if (!loaiHang) {
-          throw new ConflictException({
-            error: 'CARGO_TYPE_NOT_FOUND',
-            message: `Không tìm thấy loại hàng phù hợp cho món: ${item.name}`,
-          });
-        }
-
-        const totalWeight = effectiveUnitWeight * item.quantity;
-        if (!Number.isFinite(totalWeight) || totalWeight <= 0) {
-          throw new BadRequestException({
-            error: 'CARGO_WEIGHT_INVALID',
-            message: `Khối lượng hàng "${item.name}" không hợp lệ.`,
-          });
-        }
-
-        if (!isVehicle && totalWeight > 40) {
-          throw new BadRequestException({
-            error: 'CARGO_WEIGHT_EXCEEDED',
-            message: `Hành lý "${item.name}" có khối lượng (${totalWeight}kg) vượt quá hạn mức tối đa 40kg đi kèm vé. Quý khách vui lòng tạo đơn gửi hàng riêng tại mục Gửi hàng bưu kiện.`,
-          });
-        }
-
-        mappedCargoItems.push({
-          itemDto: item,
-          loaiHangHoa: loaiHang,
-          effectiveUnitWeight,
-          totalWeight,
-        });
-        categoryWeights.set(
-          loaiHang.loaiHangHoaId,
-          (categoryWeights.get(loaiHang.loaiHangHoaId) ?? 0) + totalWeight,
-        );
-      }
-
-      for (const [loaiHangHoaId, totalWeight] of categoryWeights.entries()) {
-        const matchingRates = activeRates.filter(
-          (rate) =>
-            rate.loaiHangHoaId === loaiHangHoaId &&
-            Number(rate.khoiLuongTu) <= totalWeight &&
-            (rate.khoiLuongDen === null ||
-              Number(rate.khoiLuongDen) >= totalWeight),
-        );
-        if (matchingRates.length !== 1) {
-          throw new ConflictException({
-            error:
-              matchingRates.length > 1
-                ? 'CARGO_RATE_AMBIGUOUS'
-                : 'CARGO_RATE_NOT_FOUND',
-            message:
-              matchingRates.length > 1
-                ? 'Có nhiều mức cước phù hợp cho loại hàng và tổng khối lượng này.'
-                : 'Chưa có mức cước phù hợp cho loại hàng và tổng khối lượng này.',
-          });
-        }
-
-        const rate = matchingRates[0];
-        const fee = new Prisma.Decimal(rate.mucCuoc);
-        if (
-          !fee.isFinite() ||
-          fee.isNegative() ||
-          !Number.isSafeInteger(fee.toNumber())
-        ) {
-          throw new ConflictException({
-            error: 'CARGO_RATE_INVALID',
-            message: 'Mức cước cấu hình không hợp lệ.',
-          });
-        }
-
-        selectedRates.set(loaiHangHoaId, {
-          bangCuocGuiHangId: rate.bangCuocGuiHangId,
-          totalWeight,
-          fee,
-        });
-        shippingFee += fee.toNumber();
-      }
-    }
-
-    const totalOrderAmount = quote.finalTotal + shippingFee;
-
     // Contact/Passenger normalization
     const contactName = dto.contact.fullName.trim();
     const rawPhone = dto.contact.phone;
@@ -542,6 +322,69 @@ export class BookingsService {
 
     // All-or-nothing database transaction
     const txResult = await this.prisma.$transaction(async (tx) => {
+      const cargoPricing = hasCargo
+        ? await this.cargoPricingService.calculate(
+            tx,
+            {
+              chuyenXeId: trip.chuyenXeId,
+              tuyenXeId: trip.tuyenXeId,
+              nhaXeId: trip.nhaXeId,
+              ngayKhoiHanh: trip.ngayKhoiHanh,
+            },
+            {
+              senderPointId: dto.senderPointId,
+              receiverPointId: dto.receiverPointId,
+              bookingLimits: {
+                maxNonVehiclePackageWeightKg: 40,
+                maxNonVehicleDimensionsCm: {
+                  length: 150,
+                  width: 80,
+                  height: 80,
+                },
+              },
+              items: dto.cargoItems!.map((item) => ({
+                name: item.name,
+                physicalType: item.type,
+                quantity: item.quantity,
+                weight: item.weight,
+                loaiHangHoaId: item.loaiHangHoaId,
+                length: item.length,
+                width: item.width,
+                height: item.height,
+                serviceType:
+                  item.category === 'fragile'
+                    ? 'FRAGILE'
+                    : item.category === 'valuable'
+                      ? 'VALUABLE'
+                      : 'NORMAL',
+              })),
+            },
+          )
+        : null;
+      const shippingFee = cargoPricing?.totalFee.toNumber() ?? 0;
+      const baseShippingFee = cargoPricing?.baseFee.toNumber() ?? 0;
+      const serviceShippingFee = cargoPricing?.serviceFee.toNumber() ?? 0;
+      const diemGuiId = cargoPricing?.senderPointId ?? null;
+      const diemNhanId = cargoPricing?.receiverPointId ?? null;
+      const mappedCargoItems = cargoPricing?.items.map((item, index) => ({
+        itemDto: dto.cargoItems![index],
+        loaiHangHoa: item.loaiHangHoa,
+        effectiveUnitWeight: item.effectiveUnitWeight.toNumber(),
+        totalWeight: item.totalWeight.toNumber(),
+      })) ?? [];
+      const totalOrderAmount = quote.finalTotal + shippingFee;
+
+      const selectedRates = new Map(
+        (cargoPricing?.rates ?? []).map((rate) => [
+          rate.loaiHangHoaId,
+          {
+            bangCuocGuiHangId: rate.bangCuocGuiHangId,
+            totalWeight: rate.totalWeight.toNumber(),
+            fee: rate.fee,
+          },
+        ]),
+      );
+
       // 1. Consume hold if present
       let activeGiuChoId: number | null = null;
       const holdResult = await this.seatHoldsService.consumeHoldInTx(
@@ -782,8 +625,8 @@ export class BookingsService {
             tenNguoiNhan: contactName,
             soDienThoaiNguoiNhan: contactPhone,
             ngayGui: now,
-            cuocChinh: new Prisma.Decimal(shippingFee),
-            phiDichVu: new Prisma.Decimal(0),
+            cuocChinh: new Prisma.Decimal(baseShippingFee),
+            phiDichVu: new Prisma.Decimal(serviceShippingFee),
             soTienGiam: new Prisma.Decimal(0),
             tongPhi: new Prisma.Decimal(shippingFee),
             nguoiTraCuoc: 'NGUOI_GUI',
@@ -851,6 +694,8 @@ export class BookingsService {
         phieuDatVe,
         createdTickets,
         createdShipment,
+        shippingFee,
+        totalOrderAmount,
       };
     });
 
@@ -882,8 +727,8 @@ export class BookingsService {
       ticketCount: resolvedSeatIds.length,
       tickets: txResult.createdTickets,
       ticketSubtotal: quote.finalTotal,
-      shippingFee,
-      totalAmount: totalOrderAmount,
+      shippingFee: txResult.shippingFee,
+      totalAmount: txResult.totalOrderAmount,
       shipment: txResult.createdShipment,
       createdAt: txResult.phieuDatVe.createdAt ? txResult.phieuDatVe.createdAt.toISOString() : new Date().toISOString(),
       paymentExpiresAt: getBookingPaymentDeadline(

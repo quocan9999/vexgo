@@ -21,6 +21,12 @@ export class CargoItemInputDto {
   @IsString()
   category?: string;
 
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: 'Mã loại hàng hóa phải là số nguyên.' })
+  @Min(1, { message: 'Mã loại hàng hóa không hợp lệ.' })
+  loaiHangHoaId?: number;
+
   @IsInt()
   @Min(1, { message: 'Số lượng phải lớn hơn hoặc bằng 1.' })
   quantity!: number;

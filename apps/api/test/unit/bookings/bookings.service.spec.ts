@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { BookingsService } from '../../../src/bookings/bookings.service.js';
 import type { PrismaService } from '../../../src/prisma/prisma.service.js';
 import type { ConfigService } from '@nestjs/config';
+import { CargoPricingService } from '../../../src/cargo-pricing/cargo-pricing.service.js';
 
 describe('BookingsService', () => {
   const mockCustomer = {
@@ -132,6 +133,7 @@ describe('BookingsService', () => {
     config as unknown as ConfigService,
     seatHoldsService as any,
     {} as any,
+    new CargoPricingService(),
   );
 
   beforeEach(() => {
@@ -552,8 +554,31 @@ describe('BookingsService', () => {
       const feeRows: Record<string, unknown>[] = [];
       const orderRows: Record<string, unknown>[] = [];
       const shipmentRows: Record<string, unknown>[] = [];
+      const rateLookup = vi.fn().mockResolvedValue([
+        {
+          bangCuocGuiHangId: 31,
+          loaiHangHoaId: 21,
+          khoiLuongTu: 0,
+          khoiLuongDen: 5,
+          mucCuoc: 20000,
+        },
+        {
+          bangCuocGuiHangId: 32,
+          loaiHangHoaId: 21,
+          khoiLuongTu: 5,
+          khoiLuongDen: 10,
+          mucCuoc: 60000,
+        },
+      ]);
       prismaMock.$transaction = vi.fn(async (callback) =>
         callback({
+          diemGiaoNhanTuyenXe: {
+            findMany: vi.fn().mockResolvedValue([senderPoint, receiverPoint]),
+          },
+          loaiHangHoa: {
+            findMany: vi.fn().mockResolvedValue([lightCargoType]),
+          },
+          bangCuocGuiHang: { findMany: rateLookup },
           gheChuyenXe: {
             findMany: vi.fn().mockResolvedValue([tripSeat]),
             updateMany: vi.fn().mockResolvedValue({ count: 1 }),
@@ -606,6 +631,7 @@ describe('BookingsService', () => {
         config as unknown as ConfigService,
         seatHoldMock as any,
         {} as any,
+        new CargoPricingService(),
       );
       vi.spyOn(bookingService, 'getBookingQuote').mockResolvedValue({
         unitPrice: 150000,
@@ -625,16 +651,16 @@ describe('BookingsService', () => {
           pickupPoint: 'Bến xe Miền Đông',
           dropoffPoint: 'Bến xe Đà Lạt',
           contact: { fullName: 'Khách thử', phone: '0901234567' },
-          cargoItems: [
-            { name: 'Túi sách', type: 'Hàng nhẹ', quantity: 1, weight: 2 },
-            { name: 'Va li', type: 'Hàng nhẹ', quantity: 1, weight: 4 },
+        cargoItems: [
+            { name: 'Túi sách', type: 'Hàng nhẹ', loaiHangHoaId: 21, quantity: 1, weight: 2 },
+            { name: 'Va li', type: 'Hàng nhẹ', loaiHangHoaId: 21, quantity: 1, weight: 4 },
           ],
         } as any,
       );
 
       expect(result.shippingFee).toBe(60000);
       expect(result.totalAmount).toBe(210000);
-      expect(prismaMock.bangCuocGuiHang.findMany).toHaveBeenCalledWith(
+      expect(rateLookup).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
             diemGuiId: 11,
@@ -702,6 +728,18 @@ describe('BookingsService', () => {
         config as unknown as ConfigService,
         seatHoldMock as any,
         {} as any,
+        new CargoPricingService(),
+      );
+      prismaMock.$transaction = vi.fn(async (callback: (tx: unknown) => unknown) =>
+        callback({
+          diemGiaoNhanTuyenXe: {
+            findMany: vi.fn().mockResolvedValue([
+              { vaiTro: 'GUI_HANG', diemGiaoNhanHangId: 11, diemGiaoNhanHang: { nhaXeId: 1, trangThai: 'HOAT_DONG' } },
+              { vaiTro: 'GUI_HANG', diemGiaoNhanHangId: 13, diemGiaoNhanHang: { nhaXeId: 1, trangThai: 'HOAT_DONG' } },
+              { vaiTro: 'NHAN_HANG', diemGiaoNhanHangId: 12, diemGiaoNhanHang: { nhaXeId: 1, trangThai: 'HOAT_DONG' } },
+            ]),
+          },
+        }),
       );
       vi.spyOn(bookingService, 'getBookingQuote').mockResolvedValue({
         unitPrice: 150000,
@@ -812,6 +850,7 @@ describe('BookingsService', () => {
         config as unknown as ConfigService,
         mockSeatHolds as any,
         mockPromotions as any,
+        new CargoPricingService(),
       );
 
       // Giả lập tính giá: 100,000 VND chia cho 3 ghế (không chia hết)

@@ -121,6 +121,7 @@ export type CreateBookingPayload = {
   cargoItems?: Array<{
     name: string;
     type?: string;
+    loaiHangHoaId?: number;
     quantity: number;
     weight: number;
     length?: number;

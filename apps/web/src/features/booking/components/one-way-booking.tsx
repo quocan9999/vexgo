@@ -464,6 +464,10 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
     }
 
     if (validCargoItems.length > 0) {
+      if (validCargoItems.some((item) => !item.loaiHangHoaId)) {
+        setSubmitError('Vui lòng chọn danh mục hàng hóa cho từng kiện trước khi tiếp tục.');
+        return;
+      }
       if (cargoRoutePointsLoading) {
         setSubmitError('Đang tải điểm gửi và điểm nhận hàng. Vui lòng thử lại.');
         return;
@@ -501,6 +505,7 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
             length: item.length,
             width: item.width,
             height: item.height,
+            loaiHangHoaId: item.loaiHangHoaId,
             category: item.category,
             note: item.note,
             motorbikeModel: item.motorbikeType,
@@ -668,7 +673,7 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
       const serverShippingFee = Number(booking.shippingFee);
       const finalLuggageFee = Number.isFinite(serverShippingFee)
         ? serverShippingFee
-        : luggageFee;
+        : 0;
       const draft = createPaymentDraft({
         tripType: 'one-way',
         passenger: {
@@ -1568,58 +1573,9 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
                         )}
                       </div>
 
-                      {(() => {
-                        if (item.type === 'Xe máy') {
-                          const motoFee = 250000 * (item.quantity || 1);
-                          return (
-                            <div className="text-right shrink-0">
-                              <span className="text-xs font-extrabold text-red-600">
-                                +{motoFee.toLocaleString('vi-VN')}đ
-                              </span>
-                            </div>
-                          );
-                        }
-
-                        if (item.type === 'Xe đạp') {
-                          const bikeFee = 100000 * (item.quantity || 1);
-                          return (
-                            <div className="text-right shrink-0">
-                              <span className="text-xs font-extrabold text-red-600">
-                                +{bikeFee.toLocaleString('vi-VN')}đ
-                              </span>
-                            </div>
-                          );
-                        }
-
-                        const actualW = item.weight || 0;
-                        const volW =
-                          item.length && item.width && item.height
-                            ? Math.round(((item.length * item.width * item.height) / 5000) * 10) / 10
-                            : 0;
-                        const effW = Math.max(actualW, volW) * (item.quantity || 1);
-                        let itemFee = 0;
-                        if (effW <= 20) itemFee = 0;
-                        else if (effW <= 40) itemFee = 30000;
-                        else itemFee = -1; // Vượt quá 40kg phải qua phần gửi hàng
-
-                        return (
-                          <div className="text-right shrink-0">
-                            {itemFee === 0 ? (
-                              <span className="text-xs font-bold text-emerald-600">
-                                Miễn phí
-                              </span>
-                            ) : itemFee > 0 ? (
-                              <span className="text-xs font-extrabold text-red-600">
-                                +{itemFee.toLocaleString('vi-VN')}đ
-                              </span>
-                            ) : (
-                              <span className="text-[11px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                                Cần gửi hàng riêng
-                              </span>
-                            )}
-                          </div>
-                        );
-                      })()}
+                      <span className="shrink-0 text-right text-xs font-semibold text-slate-500">
+                        Theo bảng cước tuyến
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -1761,18 +1717,6 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
                   !isMoto && !isBike && item.length && item.width && item.height
                     ? Math.round(((item.length * item.width * item.height) / 5000) * 10) / 10
                     : 0;
-                const effW = Math.max(actualW, volW) * (item.quantity || 1);
-
-                let itemFee = 0;
-                if (isMoto) {
-                  itemFee = 250000 * (item.quantity || 1);
-                } else if (isBike) {
-                  itemFee = 100000 * (item.quantity || 1);
-                } else {
-                  if (effW <= 20) itemFee = 0;
-                  else if (effW <= 40) itemFee = 30000;
-                  else itemFee = -1;
-                }
 
                 return (
                   <div
@@ -1847,14 +1791,8 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
                       )}
                     </div>
 
-                    <div className="text-right shrink-0">
-                      {itemFee === 0 ? (
-                        <span className="font-bold text-emerald-600">Miễn phí</span>
-                      ) : itemFee < 0 ? (
-                        <span className="font-bold text-red-600">Quá 40kg</span>
-                      ) : (
-                        <span className="font-extrabold text-red-600">+{itemFee.toLocaleString('vi-VN')}đ</span>
-                      )}
+                    <div className="shrink-0 text-right text-xs font-semibold text-slate-500">
+                      Theo bảng cước tuyến
                     </div>
                   </div>
                 );
@@ -1862,9 +1800,9 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
             </div>
 
             <div className="mt-4 pt-3 border-t border-slate-200 flex items-center justify-between text-xs">
-              <span className="font-bold text-slate-600">Tổng phụ phí hành lý</span>
-              <strong className="text-red-600 text-sm">
-                {luggageFee === 0 ? 'Miễn phí' : `${luggageFee.toLocaleString('vi-VN')}đ`}
+              <span className="font-bold text-slate-600">Cước hàng</span>
+              <strong className="text-slate-600 text-xs">
+                Máy chủ xác định theo bảng cước tuyến
               </strong>
             </div>
           </section>

@@ -1,4 +1,3 @@
-/* eslint-disable */
 'use client';
 
 import React from 'react';
@@ -15,7 +14,11 @@ export const LuggageSummary: React.FC<LuggageSummaryProps> = ({ totalWeight, fee
         Hành lý ({totalWeight}kg)
       </span>
       <strong className={fee === 0 ? 'text-emerald-600' : 'text-red-600'}>
-        {fee === 0 ? 'Miễn phí' : `${fee.toLocaleString('vi-VN')}đ`}
+        {fee === 0
+          ? totalWeight > 0
+            ? 'Theo bảng cước tuyến'
+            : '0đ'
+          : `${fee.toLocaleString('vi-VN')}đ`}
       </strong>
     </div>
   );

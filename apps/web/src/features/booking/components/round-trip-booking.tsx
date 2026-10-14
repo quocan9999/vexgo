@@ -1240,58 +1240,9 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                         )}
                       </div>
 
-                      {(() => {
-                        if (item.type === 'Xe máy') {
-                          const motoFee = 250000 * (item.quantity || 1);
-                          return (
-                            <div className="text-right shrink-0">
-                              <span className="text-xs font-extrabold text-red-600">
-                                +{motoFee.toLocaleString('vi-VN')}đ
-                              </span>
-                            </div>
-                          );
-                        }
-
-                        if (item.type === 'Xe đạp') {
-                          const bikeFee = 100000 * (item.quantity || 1);
-                          return (
-                            <div className="text-right shrink-0">
-                              <span className="text-xs font-extrabold text-red-600">
-                                +{bikeFee.toLocaleString('vi-VN')}đ
-                              </span>
-                            </div>
-                          );
-                        }
-
-                        const actualW = item.weight || 0;
-                        const volW =
-                          item.length && item.width && item.height
-                            ? Math.round(((item.length * item.width * item.height) / 5000) * 10) / 10
-                            : 0;
-                        const effW = Math.max(actualW, volW) * (item.quantity || 1);
-                        let itemFee = 0;
-                        if (effW <= 20) itemFee = 0;
-                        else if (effW <= 40) itemFee = 30000;
-                        else itemFee = -1;
-
-                        return (
-                          <div className="text-right shrink-0">
-                            {itemFee === 0 ? (
-                              <span className="text-xs font-bold text-emerald-600">
-                                Miễn phí
-                              </span>
-                            ) : itemFee > 0 ? (
-                              <span className="text-xs font-extrabold text-red-600">
-                                +{itemFee.toLocaleString('vi-VN')}đ
-                              </span>
-                            ) : (
-                              <span className="text-[11px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                                Cần gửi hàng riêng
-                              </span>
-                            )}
-                          </div>
-                        );
-                      })()}
+                      <span className="shrink-0 text-right text-xs font-semibold text-slate-500">
+                        Chưa áp dụng cho vé khứ hồi
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -1314,7 +1265,11 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                 <div className="flex justify-between">
                   <span>Hành lý ({luggageWeight}kg)</span>
                   <span className={luggageFee > 0 ? 'text-red-600 font-bold' : 'text-slate-600'}>
-                    {luggageFee === 0 ? '0đ' : `+${luggageFee.toLocaleString('vi-VN')}đ`}
+                    {luggageFee === 0
+                      ? luggageWeight > 0
+                        ? 'Chưa tính vào đơn vé khứ hồi'
+                        : '0đ'
+                      : `+${luggageFee.toLocaleString('vi-VN')}đ`}
                   </span>
                 </div>
                 <div className="flex justify-between">
@@ -1373,18 +1328,6 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                   !isMoto && !isBike && item.length && item.width && item.height
                     ? Math.round(((item.length * item.width * item.height) / 5000) * 10) / 10
                     : 0;
-                const effW = Math.max(actualW, volW) * (item.quantity || 1);
-
-                let itemFee = 0;
-                if (isMoto) {
-                  itemFee = 250000 * (item.quantity || 1);
-                } else if (isBike) {
-                  itemFee = 100000 * (item.quantity || 1);
-                } else {
-                  if (effW <= 20) itemFee = 0;
-                  else if (effW <= 40) itemFee = 30000;
-                  else itemFee = -1;
-                }
 
                 return (
                   <div
@@ -1462,14 +1405,8 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                       )}
                     </div>
 
-                    <div className="text-right shrink-0">
-                      {itemFee === 0 ? (
-                        <span className="font-bold text-emerald-600">Miễn phí</span>
-                      ) : itemFee < 0 ? (
-                        <span className="font-bold text-red-600">Quá 40kg</span>
-                      ) : (
-                        <span className="font-extrabold text-red-600">+{itemFee.toLocaleString('vi-VN')}đ</span>
-                      )}
+                    <div className="shrink-0 text-right text-xs font-semibold text-slate-500">
+                      Chưa áp dụng cho vé khứ hồi
                     </div>
                   </div>
                 );
@@ -1477,9 +1414,9 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
             </div>
 
             <div className="mt-4 pt-3 border-t border-slate-200 flex items-center justify-between text-xs">
-              <span className="font-bold text-slate-600">Tổng phụ phí hành lý</span>
-              <strong className="text-red-600 text-sm">
-                {luggageFee === 0 ? 'Miễn phí' : `${luggageFee.toLocaleString('vi-VN')}đ`}
+              <span className="font-bold text-slate-600">Cước hàng</span>
+              <strong className="text-slate-600 text-xs">
+                Chưa tính trong đơn vé khứ hồi
               </strong>
             </div>
           </section>

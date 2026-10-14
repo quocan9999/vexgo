@@ -20,6 +20,7 @@ const API_BASE_URL =
 export type CargoItemInput = {
   name: string;
   category?: string;
+  loaiHangHoaId?: number;
   quantity: number;
   weight: number;
   length?: number;
@@ -57,6 +58,13 @@ export type ShipmentRoutePoints = {
   tripId: number;
   senderPoints: ShipmentRoutePoint[];
   receiverPoints: ShipmentRoutePoint[];
+};
+
+export type CargoCategory = {
+  categoryId: number;
+  name: string;
+  description: string;
+  capacityGroup: string;
 };
 
 export type ShipmentResponseData = {
@@ -215,14 +223,7 @@ export const shipmentsApi = {
     return res.json();
   },
 
-  async getCargoCategories(): Promise<{
-    data: Array<{
-      categoryId: number;
-      name: string;
-      description: string;
-      capacityGroup: string;
-    }>;
-  }> {
+  async getCargoCategories(): Promise<{ data: CargoCategory[] }> {
     const res = await fetch(`${API_BASE_URL}/shipments/categories`);
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));

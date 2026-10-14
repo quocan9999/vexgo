@@ -42,6 +42,12 @@ export class CargoItemDto {
   @IsString()
   type?: string;
 
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: 'Mã loại hàng hóa phải là số nguyên.' })
+  @Min(1, { message: 'Mã loại hàng hóa không hợp lệ.' })
+  loaiHangHoaId?: number;
+
   @Type(() => Number)
   @IsInt({ message: 'Số lượng phải là số nguyên.' })
   @Min(1, { message: 'Số lượng tối thiểu là 1.' })

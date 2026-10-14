@@ -48,6 +48,10 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
   let vehicleTypeId: number;
   let vehicleId: number;
   let bangGiaId: number;
+  let cargoTypeId: number;
+  let senderPointId: number;
+  let receiverPointId: number;
+  let cargoRateId: number;
   let tripId: number;
   let tripSeatIds: number[] = [];
   let currentPrincipal: AuthPrincipal | null = null;
@@ -105,6 +109,62 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
       select: { tuyenXeId: true },
     });
     routeId = route.tuyenXeId;
+
+    const [senderPoint, receiverPoint] = await Promise.all([
+      prisma.diemGiaoNhanHang.create({
+        data: {
+          maDiem: `DG-GUI-${suffix}`,
+          tenDiem: `Điểm gửi ${suffix}`,
+          diaChi: '1 Đường thử nghiệm',
+          tinhThanh: 'TP. Hồ Chí Minh',
+          trangThai: 'HOAT_DONG',
+          nhaXeId: busCompanyId,
+          tuyenXeDiemGiaoNhaps: {
+            create: { tuyenXeId: routeId, vaiTro: 'GUI_HANG' },
+          },
+        },
+        select: { diemGiaoNhanHangId: true },
+      }),
+      prisma.diemGiaoNhanHang.create({
+        data: {
+          maDiem: `DG-NHAN-${suffix}`,
+          tenDiem: `Điểm nhận ${suffix}`,
+          diaChi: '2 Đường thử nghiệm',
+          tinhThanh: 'Lâm Đồng',
+          trangThai: 'HOAT_DONG',
+          nhaXeId: busCompanyId,
+          tuyenXeDiemGiaoNhaps: {
+            create: { tuyenXeId: routeId, vaiTro: 'NHAN_HANG' },
+          },
+        },
+        select: { diemGiaoNhanHangId: true },
+      }),
+    ]);
+    senderPointId = senderPoint.diemGiaoNhanHangId;
+    receiverPointId = receiverPoint.diemGiaoNhanHangId;
+    const cargoType = await prisma.loaiHangHoa.create({
+      data: {
+        tenLoai: `Hàng nhẹ ${suffix}`,
+        trangThai: 'HOAT_DONG',
+        nhomSucChua: 'HANG_NHE',
+      },
+      select: { loaiHangHoaId: true },
+    });
+    cargoTypeId = cargoType.loaiHangHoaId;
+    const cargoRate = await prisma.bangCuocGuiHang.create({
+      data: {
+        khoiLuongTu: 0,
+        khoiLuongDen: 10,
+        mucCuoc: 60000,
+        tuNgay: new Date('2020-01-01T00:00:00.000Z'),
+        trangThai: 'HOAT_DONG',
+        diemGuiId: senderPointId,
+        diemNhanId: receiverPointId,
+        loaiHangHoaId: cargoTypeId,
+      },
+      select: { bangCuocGuiHangId: true },
+    });
+    cargoRateId = cargoRate.bangCuocGuiHangId;
 
     const vehicleType = await prisma.loaiXe.create({
       data: {
@@ -180,6 +240,19 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
   afterAll(async () => {
     try {
       if (tripId) {
+        await prisma.lichSuTrangThaiPhieuGuiHang.deleteMany({
+          where: { phieuGuiHang: { chuyenXeId: tripId } },
+        });
+        await prisma.chiTietCuocGuiHang.deleteMany({
+          where: { phieuGuiHang: { chuyenXeId: tripId } },
+        });
+        await prisma.hinhAnhHangHoa.deleteMany({
+          where: { hangHoa: { phieuGuiHang: { chuyenXeId: tripId } } },
+        });
+        await prisma.hangHoa.deleteMany({
+          where: { phieuGuiHang: { chuyenXeId: tripId } },
+        });
+        await prisma.phieuGuiHang.deleteMany({ where: { chuyenXeId: tripId } });
         await prisma.lichSuTrangThaiVe.deleteMany({
           where: { ve: { phieuDatVe: { donGiaoDich: { nhaXeId: busCompanyId } } } },
         });
@@ -204,6 +277,22 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
       }
       if (bangGiaId) {
         await prisma.bangGia.deleteMany({ where: { bangGiaId } });
+      }
+      if (cargoRateId) {
+        await prisma.bangCuocGuiHang.deleteMany({ where: { bangCuocGuiHangId: cargoRateId } });
+      }
+      if (senderPointId || receiverPointId) {
+        await prisma.diemGiaoNhanTuyenXe.deleteMany({
+          where: { diemGiaoNhanHangId: { in: [senderPointId, receiverPointId].filter(Boolean) } },
+        });
+      }
+      if (senderPointId || receiverPointId) {
+        await prisma.diemGiaoNhanHang.deleteMany({
+          where: { diemGiaoNhanHangId: { in: [senderPointId, receiverPointId].filter(Boolean) } },
+        });
+      }
+      if (cargoTypeId) {
+        await prisma.loaiHangHoa.deleteMany({ where: { loaiHangHoaId: cargoTypeId } });
       }
       if (vehicleId) {
         await prisma.ghe.deleteMany({ where: { xeId: vehicleId } });
@@ -233,6 +322,22 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
 
   beforeEach(async () => {
     currentPrincipal = null;
+
+    if (tripId) {
+      await prisma.lichSuTrangThaiPhieuGuiHang.deleteMany({
+        where: { phieuGuiHang: { chuyenXeId: tripId } },
+      });
+      await prisma.chiTietCuocGuiHang.deleteMany({
+        where: { phieuGuiHang: { chuyenXeId: tripId } },
+      });
+      await prisma.hinhAnhHangHoa.deleteMany({
+        where: { hangHoa: { phieuGuiHang: { chuyenXeId: tripId } } },
+      });
+      await prisma.hangHoa.deleteMany({
+        where: { phieuGuiHang: { chuyenXeId: tripId } },
+      });
+      await prisma.phieuGuiHang.deleteMany({ where: { chuyenXeId: tripId } });
+    }
 
     // Clean up bookings, tickets, and status histories for this bus company
     await prisma.lichSuTrangThaiVe.deleteMany({
@@ -276,7 +381,8 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
         xeId: vehicleId,
         sucChuaXeMay: 0,
         sucChuaHangCongKenh: 0,
-        sucChuaHangNhe: 0,
+        sucChuaHangNhe: 10,
+        nhanGuiHang: true,
         gheChuyenXes: {
           create: seats.map((g) => ({
             gheId: g.gheId,
@@ -367,6 +473,104 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
     expect(detail.body.data.tickets).toHaveLength(1);
     expect(await prisma.thanhToan.count({ where: { donGiaoDichId: saved.donGiaoDichId } })).toBe(1);
     expect(await prisma.lichSuTrangThaiPhieuDatVe.count({ where: { phieuDatVeId: booking.bookingId, trangThaiMoi: 'DA_THANH_TOAN' } })).toBe(1);
+  });
+
+  it('uses the same database-backed cargo rate and one-time service fees for booking-attached and standalone shipments', async () => {
+    currentPrincipal = customerPrincipal;
+    const hold = await request(app.getHttpServer())
+      .post('/api/v1/seat-holds')
+      .send({ tripId, seatIds: [tripSeatIds[0]] });
+    expect(hold.status, JSON.stringify(hold.body)).toBe(201);
+
+    const bookingResponse = await request(app.getHttpServer())
+      .post('/api/v1/bookings')
+      .send({
+        tripId,
+        seatIds: [tripSeatIds[0]],
+        holdToken: hold.body.data.holdToken,
+        contact: { fullName: 'Cargo integration', phone: customerPhone },
+        pickupPoint: 'Bến xe Miền Đông',
+        dropoffPoint: 'Bến xe Đà Lạt',
+        senderPointId,
+        receiverPointId,
+        cargoItems: [
+          {
+            name: 'Máy ảnh',
+            type: 'Vali',
+            loaiHangHoaId: cargoTypeId,
+            quantity: 1,
+            weight: 2,
+            category: 'fragile',
+          },
+          {
+            name: 'Máy tính bảng',
+            type: 'Vali',
+            loaiHangHoaId: cargoTypeId,
+            quantity: 1,
+            weight: 3,
+            category: 'valuable',
+          },
+        ],
+      });
+    expect(bookingResponse.status, JSON.stringify(bookingResponse.body)).toBe(201);
+    const booking = bookingResponse.body.data;
+    expect(booking.shippingFee).toBe(130000);
+    expect(booking.totalAmount).toBe(280000);
+
+    const standaloneResponse = await request(app.getHttpServer())
+      .post('/api/v1/shipments')
+      .send({
+        tripId,
+        senderPointId,
+        receiverPointId,
+        sender: { fullName: 'Cargo integration', phoneNumber: customerPhone },
+        receiver: { fullName: 'Cargo recipient', phoneNumber: '0912345678' },
+        items: [
+          { name: 'Máy ảnh', loaiHangHoaId: cargoTypeId, quantity: 1, weight: 2 },
+          { name: 'Máy tính bảng', loaiHangHoaId: cargoTypeId, quantity: 1, weight: 3 },
+        ],
+        isFragile: true,
+        isValuable: true,
+      });
+    expect(standaloneResponse.status, JSON.stringify(standaloneResponse.body)).toBe(201);
+    expect(standaloneResponse.body.data.pricing).toMatchObject({
+      baseFee: 60000,
+      serviceFee: 70000,
+      totalFee: booking.shippingFee,
+    });
+
+    const bookingShipment = await prisma.phieuGuiHang.findUniqueOrThrow({
+      where: { phieuGuiHangId: booking.shipment.shipmentId },
+      include: { chiTietCuocGuiHangs: true, hangHoas: true },
+    });
+    const standaloneShipment = await prisma.phieuGuiHang.findUniqueOrThrow({
+      where: { phieuGuiHangId: standaloneResponse.body.data.shipmentId },
+      include: { chiTietCuocGuiHangs: true, hangHoas: true },
+    });
+    for (const shipment of [bookingShipment, standaloneShipment]) {
+      expect(Number(shipment.cuocChinh)).toBe(60000);
+      expect(Number(shipment.phiDichVu)).toBe(70000);
+      expect(Number(shipment.tongPhi)).toBe(130000);
+      expect(shipment.chiTietCuocGuiHangs).toHaveLength(1);
+      expect(Number(shipment.chiTietCuocGuiHangs[0].khoiLuongTinhCuoc)).toBe(5);
+      expect(Number(shipment.chiTietCuocGuiHangs[0].soTienCuoc)).toBe(60000);
+      expect(shipment.hangHoas).toHaveLength(2);
+    }
+
+    const orderCount = await prisma.donGiaoDich.count({ where: { nhaXeId: busCompanyId } });
+    const failedNoRate = await request(app.getHttpServer())
+      .post('/api/v1/shipments')
+      .send({
+        tripId,
+        senderPointId,
+        receiverPointId,
+        sender: { fullName: 'Cargo integration', phoneNumber: customerPhone },
+        receiver: { fullName: 'Cargo recipient', phoneNumber: '0912345678' },
+        items: [{ name: 'Thùng quá khổ', loaiHangHoaId: cargoTypeId, quantity: 1, weight: 11 }],
+      });
+    expect(failedNoRate.status).toBe(409);
+    expect(failedNoRate.body.error).toBe('CARGO_RATE_NOT_FOUND');
+    expect(await prisma.donGiaoDich.count({ where: { nhaXeId: busCompanyId } })).toBe(orderCount);
   });
 
   it('does not expose shipment list or detail to an anonymous caller', async () => {

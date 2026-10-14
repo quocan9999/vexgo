@@ -9,6 +9,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ShipmentsService } from '../../../src/shipments/shipments.service.js';
 import type { PrismaService } from '../../../src/prisma/prisma.service.js';
 import type { ConfigService } from '@nestjs/config';
+import { CargoPricingService } from '../../../src/cargo-pricing/cargo-pricing.service.js';
 
 describe('ShipmentsService', () => {
   let service: ShipmentsService;
@@ -45,12 +46,13 @@ describe('ShipmentsService', () => {
         count: vi.fn(),
         findMany: vi.fn(),
       },
-      $transaction: vi.fn(),
+      $transaction: vi.fn(async (callback) => callback(prismaMock)),
     };
 
     service = new ShipmentsService(
       prismaMock as unknown as PrismaService,
       configMock as unknown as ConfigService,
+      new CargoPricingService(),
     );
   });
 
@@ -215,6 +217,11 @@ describe('ShipmentsService', () => {
       // Mock transaction
       prismaMock.$transaction.mockImplementation(async (callback: any) => {
         const txMock = {
+          diemGiaoNhanTuyenXe: {
+            findMany: prismaMock.diemGiaoNhanTuyenXe.findMany,
+          },
+          loaiHangHoa: { findMany: prismaMock.loaiHangHoa.findMany },
+          bangCuocGuiHang: { findMany: prismaMock.bangCuocGuiHang.findMany },
           khachHang: {
             findUnique: vi.fn().mockResolvedValue({ khachHangId: 10 }),
             count: vi.fn().mockResolvedValue(10),

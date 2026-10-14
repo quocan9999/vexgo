@@ -147,7 +147,9 @@ function SendFreightContent() {
   const [cargoCategoriesLoading, setCargoCategoriesLoading] = useState(true);
   const [cargoCategoriesError, setCargoCategoriesError] = useState<string | null>(null);
   const [cargoName, setCargoName] = useState<string>('');
-  const [cargoCategory, setCargoCategory] = useState<string>('');
+  const [cargoCategoryId, setCargoCategoryId] = useState<number | undefined>();
+  const cargoCategory =
+    cargoCategories.find((category) => category.categoryId === cargoCategoryId)?.name || '';
   const [quantity, setQuantity] = useState<number>(1);
   const [weight, setWeight] = useState<number>(5);
   const [length, setLength] = useState<string>('');
@@ -167,7 +169,7 @@ function SendFreightContent() {
         if (isMounted) {
           const categories = res.data || [];
           setCargoCategories(categories);
-          setCargoCategory(categories[0]?.name || '');
+          setCargoCategoryId(undefined);
           setCargoCategoriesError(
             categories.length === 0
               ? 'Hệ thống chưa cấu hình danh mục loại hàng hóa.'
@@ -376,6 +378,7 @@ function SendFreightContent() {
           {
             name: cargoName.trim(),
             category: cargoCategory,
+            loaiHangHoaId: cargoCategoryId,
             quantity: Math.max(1, Number(quantity) || 1),
             weight: Math.max(0.5, Number(weight) || 1),
             length: length ? Number(length) : undefined,
@@ -1159,12 +1162,12 @@ function SendFreightContent() {
                           ) : (
                             <div className="flex flex-wrap gap-2">
                             {cargoCategories.map((category) => {
-                              const isSelected = cargoCategory === category.name;
+                              const isSelected = cargoCategoryId === category.categoryId;
                               return (
                                 <button
                                   type="button"
                                   key={category.categoryId}
-                                  onClick={() => setCargoCategory(category.name)}
+                                  onClick={() => setCargoCategoryId(category.categoryId)}
                                   className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 border ${
                                     isSelected
                                       ? 'bg-slate-900 text-white border-slate-900'
