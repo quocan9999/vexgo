@@ -6,9 +6,10 @@ import {
   Logger,
   NotFoundException,
   ServiceUnavailableException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { createHmac, randomBytes } from 'node:crypto';
+import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { generateUuidV1 } from '../common/uuid-v1.js';
 import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
@@ -66,6 +67,61 @@ export class PaymentsService {
         );
       }
     }
+  }
+
+  async handleSepayWebhook(params: {
+    rawBody?: Buffer;
+    signature?: string;
+    timestamp?: string;
+  }): Promise<never> {
+    const secret = this.configService?.get<string>('SEPAY_WEBHOOK_SECRET');
+    if (typeof secret !== 'string' || !secret.trim()) {
+      throw new ServiceUnavailableException({
+        error: 'SEPAY_WEBHOOK_NOT_CONFIGURED',
+        message: 'Webhook SePay chưa được cấu hình.',
+      });
+    }
+
+    const timestamp = params.timestamp ?? '';
+    const signatureMatch = /^sha256=([a-f\d]{64})$/i.exec(
+      params.signature ?? '',
+    );
+    const timestampSeconds = Number(timestamp);
+    const timestampIsValid =
+      /^\d{10,12}$/.test(timestamp) &&
+      Number.isSafeInteger(timestampSeconds) &&
+      Math.abs(Math.floor(Date.now() / 1000) - timestampSeconds) <= 300;
+
+    if (
+      !Buffer.isBuffer(params.rawBody) ||
+      !signatureMatch ||
+      !timestampIsValid
+    ) {
+      throw new UnauthorizedException({
+        error: 'UNAUTHORIZED_WEBHOOK',
+        message: 'Chữ ký SePay Webhook không hợp lệ.',
+      });
+    }
+
+    const expectedBytes = createHmac('sha256', secret)
+      .update(`${timestamp}.`, 'utf8')
+      .update(params.rawBody)
+      .digest();
+    const actualBytes = Buffer.from(signatureMatch[1], 'hex');
+    if (
+      expectedBytes.length !== actualBytes.length ||
+      !timingSafeEqual(expectedBytes, actualBytes)
+    ) {
+      throw new UnauthorizedException({
+        error: 'UNAUTHORIZED_WEBHOOK',
+        message: 'Chữ ký SePay Webhook không hợp lệ.',
+      });
+    }
+
+    throw new ServiceUnavailableException({
+      error: 'SEPAY_SETTLEMENT_UNAVAILABLE',
+      message: 'Thanh toán chuyển khoản hiện chưa thể xử lý tự động.',
+    });
   }
 
   private async verifyCustomerOwnership(
@@ -516,8 +572,11 @@ export class PaymentsService {
           });
 
           if (updateBookingResult.count === 0) {
-            // Đơn không ở trạng thái hợp lệ để chuyển DA_THANH_TOAN (hoặc đã hoàn tất)
-            return;
+            throw new ConflictException({
+              error: 'BOOKING_STATE_CHANGED',
+              message:
+                'Trạng thái đặt vé đã thay đổi; giao dịch thanh toán chưa được quyết toán.',
+            });
           }
 
           // Chỉ cập nhật các vé CHƯA bị hủy sang DA_THANH_TOAN

@@ -72,17 +72,4 @@ export class BookingsController {
   ) {
     return this.bookingsService.findPublicBookingById(bookingId, principal);
   }
-
-  @Public()
-  @Post(':bookingId/confirm-payment')
-  async confirmPayment(
-    @Param('bookingId', ParseIntPipe) bookingId: number,
-    @Body() body?: { paymentMethod?: string },
-  ) {
-    const data = await this.bookingsService.confirmBookingPayment(
-      bookingId,
-      body?.paymentMethod || 'CHUYEN_KHOAN',
-    );
-    return { data };
-  }
 }

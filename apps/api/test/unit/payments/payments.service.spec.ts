@@ -1,4 +1,11 @@
-import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+  ServiceUnavailableException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { createHmac } from 'node:crypto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PaymentsService } from '../../../src/payments/payments.service.js';
@@ -477,6 +484,28 @@ describe('PaymentsService', () => {
       expect(prisma.lichSuTrangThaiPhieuDatVe.create).not.toHaveBeenCalled();
     });
 
+    it('rolls back settlement when the booking state cannot be claimed', async () => {
+      prisma.thanhToan.findUnique.mockResolvedValue(samplePayment);
+      prisma.donGiaoDich.findUnique.mockResolvedValue({
+        donGiaoDichId: 200,
+        trangThai: 'CHO_THANH_TOAN',
+      });
+      prisma.phieuDatVe.findUnique.mockResolvedValue({
+        phieuDatVeId: 300,
+        trangThai: 'KHONG_HOP_LE',
+        ves: [],
+      });
+      prisma.phieuDatVe.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(
+        service.confirmPaymentSuccess({
+          paymentId: 100,
+          provider: 'MOMO',
+          amount: 300000,
+        }),
+      ).rejects.toThrow(ConflictException);
+    });
+
     it('does not re-settle transaction and booking when callback arrives for superseded attempt and transaction is already DA_THANH_TOAN (Finding B)', async () => {
       // Payment 100 was superseded to THAT_BAI when user switched provider
       const supersededPayment = {
@@ -541,6 +570,55 @@ describe('PaymentsService', () => {
   });
 
   describe('Signature Verifications & Webhook Handlers', () => {
+    const rawBody = Buffer.from('{"id":123,"transferAmount":150000}');
+    const timestamp = String(Math.floor(Date.now() / 1000));
+    const makeSepaySignature = (body: Buffer, signedAt: string, secret: string) =>
+      `sha256=${createHmac('sha256', secret)
+        .update(`${signedAt}.`)
+        .update(body)
+        .digest('hex')}`;
+
+    it('fails closed when the SePay HMAC secret is not configured', async () => {
+      await expect(
+        service.handleSepayWebhook({
+          rawBody,
+          timestamp,
+          signature: `sha256=${'a'.repeat(64)}`,
+        }),
+      )
+        .rejects.toThrow(ServiceUnavailableException);
+    });
+
+    it('validates the SePay HMAC signature and blocks settlement until it is safe', async () => {
+      const secret = 'sepay-hmac-test-secret';
+      configService.get.mockImplementation((key: string) => {
+        if (key === 'SEPAY_WEBHOOK_SECRET') return secret;
+        return null;
+      });
+
+      await expect(
+        service.handleSepayWebhook({
+          rawBody,
+          timestamp,
+          signature: 'sha256=' + 'a'.repeat(64),
+        }),
+      ).rejects.toThrow(UnauthorizedException);
+      await expect(
+        service.handleSepayWebhook({
+          rawBody,
+          timestamp: String(Number(timestamp) - 301),
+          signature: makeSepaySignature(rawBody, String(Number(timestamp) - 301), secret),
+        }),
+      ).rejects.toThrow(UnauthorizedException);
+      await expect(
+        service.handleSepayWebhook({
+          rawBody,
+          timestamp,
+          signature: makeSepaySignature(rawBody, timestamp, secret),
+        }),
+      ).rejects.toThrow(ServiceUnavailableException);
+    });
+
     it('verifies valid MoMo HMAC-SHA256 signature and rejects forged ones', () => {
       const raw = `accessKey=DEMO&amount=100000&extraData=100&message=Success&orderId=100&orderInfo=Test&orderType=momo_wallet&partnerCode=MOMO&payType=qr&requestId=REQ100&responseTime=123456&resultCode=0&transId=999`;
       const validSig = createHmac('sha256', service.momoSecretKey)
