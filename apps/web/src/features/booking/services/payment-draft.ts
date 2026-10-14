@@ -41,6 +41,7 @@ export type PaymentDraft = {
   };
   totalFare: number;
   bookingId?: number;
+  orderId?: number;
   bookingCode?: string;
   orderCode?: string;
   status?: string;

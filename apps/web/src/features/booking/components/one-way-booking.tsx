@@ -1,7 +1,7 @@
 /* eslint-disable */
 'use client';
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -35,7 +35,12 @@ import { createPaymentDraft } from '../services/payment-draft';
 import { FeaturePlaceholderModal } from './feature-placeholder-modal';
 import { useAuthSession } from '@/features/auth/auth-session';
 import { customerApi } from '@/features/account/services/customer.api';
-import { bookingsApi } from '@/features/account/services/bookings.api';
+import {
+  ApiError,
+  bookingsApi,
+  type CreatedBookingData,
+  type CreateBookingPayload,
+} from '@/features/account/services/bookings.api';
 import { tripsApi, type ApiTripSeat } from '@/features/trips/services/trips.api';
 
 export interface OneWayBookingProps {
@@ -56,7 +61,7 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
   tripSeats,
 }) => {
   const router = useRouter();
-  const { user, executeWithAuth, isAuthenticated } = useAuthSession();
+  const { user, executeWithAuth, isAuthenticated, isHydrated } = useAuthSession();
   const isTicket = post.needType === 'BUY';
   const [userNameOverride, setUserNameOverride] = useState<string | null>(null);
   const [userPhoneOverride, setUserPhoneOverride] = useState<string | null>(null);
@@ -125,6 +130,21 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
   );
 
   const [selectedSeats, setSelectedSeats] = useState<string[]>([]);
+  const [seatMap, setSeatMap] = useState(tripSeats);
+  const activeTripIdRef = useRef(Number(post.id));
+  const latestTripIdRef = useRef(Number(post.id));
+  latestTripIdRef.current = Number(post.id);
+  const mountedRef = useRef(true);
+  const submissionLockRef = useRef(false);
+  const submissionUnknownRef = useRef(false);
+  const activeHoldRef = useRef<{
+    holdToken: string;
+    tripId: number;
+    bookingRequestStarted: boolean;
+  } | null>(null);
+  const [submissionUnknown, setSubmissionUnknown] = useState(false);
+  const [holdExpiresAt, setHoldExpiresAt] = useState<string | null>(null);
+  const [requiresLogin, setRequiresLogin] = useState(false);
   const [showTripInfoModal, setShowTripInfoModal] = useState(false);
   const [showCargoInfoModal, setShowCargoInfoModal] = useState(false);
   const [isAcceptedTerms, setIsAcceptedTerms] = useState(false);
@@ -142,10 +162,10 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
   );
   const isSleeper =
     post.propertyType?.toUpperCase().includes('GIƯỜNG') ||
-    tripSeats.some((s) => s.position?.includes('Tầng'));
+    seatMap.some((s) => s.position?.includes('Tầng'));
 
   const seatGroups = Object.entries(
-    tripSeats.reduce<Record<string, string[]>>((groups, seat) => {
+    seatMap.reduce<Record<string, string[]>>((groups, seat) => {
       let label = seat.position?.trim() || 'Sơ đồ ghế';
       if (isSleeper) {
         if (
@@ -172,7 +192,7 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
   });
 
   const bookedSeats = new Set(
-    tripSeats
+    seatMap
       .filter((seat) => seat.status !== 'TRONG')
       .map((seat) => seat.seatNumber),
   );
@@ -186,6 +206,46 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
   } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const releaseSeatHoldSafely = useCallback(async (holdToken: string) => {
+    try {
+      const response = await bookingsApi.releaseSeatHold(holdToken);
+      return response.data?.success === true;
+    } catch {
+      // The backend TTL remains the fallback if release cannot be confirmed.
+      return false;
+    }
+  }, []);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      const activeHold = activeHoldRef.current;
+      if (activeHold && !activeHold.bookingRequestStarted) {
+        activeHoldRef.current = null;
+        void releaseSeatHoldSafely(activeHold.holdToken);
+      }
+    };
+  }, [releaseSeatHoldSafely]);
+
+  useEffect(() => {
+    const nextTripId = Number(post.id);
+    if (activeTripIdRef.current === nextTripId) return;
+
+    activeTripIdRef.current = nextTripId;
+    setSeatMap(tripSeats);
+    setSelectedSeats([]);
+    setSubmitError(null);
+    setHoldExpiresAt(null);
+    setRequiresLogin(false);
+
+    const activeHold = activeHoldRef.current;
+    if (activeHold && !activeHold.bookingRequestStarted) {
+      activeHoldRef.current = null;
+      void releaseSeatHoldSafely(activeHold.holdToken);
+    }
+  }, [post.id, releaseSeatHoldSafely, tripSeats]);
 
   useEffect(() => {
     let active = true;
@@ -226,12 +286,383 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
   const canPay = canPayForOneWayBooking(selectedSeats, isAcceptedTerms);
 
   const toggleSeat = (seat: string) => {
-    if (bookedSeats.has(seat)) return;
+    if (bookedSeats.has(seat) || isSubmitting || submissionUnknown) return;
+    setSubmitError(null);
+    setRequiresLogin(false);
     setSelectedSeats((prev) =>
       prev.includes(seat)
         ? prev.filter((item) => item !== seat)
         : [...prev, seat],
     );
+  };
+
+  const refreshSeatMap = async (tripId: number) => {
+    try {
+      const refreshedSeats = await tripsApi.getTripSeats(tripId);
+      if (mountedRef.current && latestTripIdRef.current === tripId) {
+        setSeatMap(refreshedSeats);
+        setSelectedSeats((current) =>
+          current.filter((seatNumber) =>
+            refreshedSeats.some(
+              (seat) => seat.seatNumber === seatNumber && seat.status === 'TRONG',
+            ),
+          ),
+        );
+      }
+    } catch {
+      // The booking error remains visible if the seat-map refresh also fails.
+    }
+  };
+
+  const showApiError = (error: unknown, tripId: number) => {
+    if (!mountedRef.current) return;
+    if (error instanceof ApiError && error.status === 409) {
+      setSubmitError(
+        error.message || 'Ghế vừa được người khác giữ. Sơ đồ ghế đang được cập nhật.',
+      );
+      void refreshSeatMap(tripId);
+      return;
+    }
+    if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
+      setRequiresLogin(isAuthenticated);
+      setSubmitError(
+        isAuthenticated
+          ? 'Phiên đăng nhập không còn hợp lệ. Hãy đăng nhập lại rồi thử đặt vé.'
+          : error.message || 'Bạn chưa được phép thực hiện thao tác này.',
+      );
+      return;
+    }
+    setSubmitError(
+      error instanceof Error
+        ? error.message
+        : 'Không thể tạo đơn đặt vé. Vui lòng thử lại.',
+    );
+  };
+
+  const handleSubmit = async () => {
+    if (submissionLockRef.current || submissionUnknownRef.current) return;
+
+    setValidationAttempted(true);
+    setSubmitError(null);
+    setRequiresLogin(false);
+    if (!isHydrated) {
+      setSubmitError('Đang tải trạng thái tài khoản. Vui lòng đợi rồi thử lại.');
+      return;
+    }
+    if (!passengerValidation.isValid) return;
+    if (selectedSeats.length === 0) return;
+    if (!isAcceptedTerms) return;
+
+    const tripId = Number(post.id);
+    if (!Number.isSafeInteger(tripId) || tripId <= 0) {
+      setSubmitError('Không xác định được chuyến xe. Vui lòng tải lại trang.');
+      return;
+    }
+
+    const resolvedSeats = selectedSeats.map((seatNumber) =>
+      seatMap.find(
+        (seat) => seat.seatNumber === seatNumber && seat.status === 'TRONG',
+      ),
+    );
+    const seatIds = resolvedSeats.map((seat) => seat?.tripSeatId);
+    const requestedSeatIds = seatIds.filter(
+      (seatId): seatId is number =>
+        typeof seatId === 'number' && Number.isSafeInteger(seatId) && seatId > 0,
+    );
+    if (
+      resolvedSeats.some((seat) => !seat) ||
+      requestedSeatIds.length !== seatIds.length
+    ) {
+      setSubmitError('Sơ đồ ghế đã thay đổi. Hãy chọn lại ghế còn trống.');
+      await refreshSeatMap(tripId);
+      return;
+    }
+
+    const oversizedItem = luggageItems.find(
+      (item) =>
+        item.type !== 'Xe máy' &&
+        item.type !== 'Xe đạp' &&
+        ((item.length && item.length > 150) ||
+          (item.width && item.width > 80) ||
+          (item.height && item.height > 80)),
+    );
+    if (oversizedItem) {
+      setSubmitError(
+        `Kiện "${oversizedItem.type}" vượt quá kích thước cho phép (Dài ≤ 150cm, Rộng ≤ 80cm, Cao ≤ 80cm).`,
+      );
+      return;
+    }
+    if (luggageWeight > 40) {
+      setSubmitError(
+        `Tổng khối lượng hành lý (${luggageWeight}kg) vượt quá hạn mức đi kèm vé (tối đa 40kg).`,
+      );
+      return;
+    }
+
+    const validCargoItems = luggageItems.filter(
+      (item) =>
+        item.type === 'Xe máy' ||
+        item.type === 'Xe đạp' ||
+        (item.weight || 0) > 0 ||
+        (item.length && item.width && item.height),
+    );
+    const mappedCargoItems =
+      validCargoItems.length > 0 && luggageFee > 0
+        ? validCargoItems.map((item) => ({
+            name:
+              item.type === 'Xe máy'
+                ? `Xe máy (${item.motorbikeType || 'Xe số'})`
+                : item.type === 'Xe đạp'
+                  ? `Xe đạp (${item.bicycleType || 'Xe đạp thường'})`
+                  : item.type || 'Hành lý gửi kèm',
+            type: item.type,
+            quantity: item.quantity || 1,
+            weight:
+              item.type === 'Xe máy'
+                ? 100
+                : item.type === 'Xe đạp'
+                  ? 15
+                  : item.weight || 0,
+            length: item.length,
+            width: item.width,
+            height: item.height,
+            category: item.category,
+            note: item.note,
+            motorbikeModel: item.motorbikeType,
+            bicycleType: item.bicycleType,
+            licensePlate: item.licensePlate,
+          }))
+        : undefined;
+
+    const bookingDetails: Omit<CreateBookingPayload, 'holdToken'> = {
+      tripId,
+      seatIds: requestedSeatIds,
+      contact: {
+        fullName: customerName.trim(),
+        phone: customerPhone.trim(),
+        ...(customerEmail.trim() ? { email: customerEmail.trim() } : {}),
+      },
+      pickupPoint: pickup || post.province,
+      dropoffPoint: dropoff || post.district,
+      cargoItems: mappedCargoItems,
+    };
+
+    submissionLockRef.current = true;
+    setIsSubmitting(true);
+    setHoldExpiresAt(null);
+
+    let holdToken: string | null = null;
+    try {
+      const holdResponse = isAuthenticated
+        ? await executeWithAuth((token) =>
+            bookingsApi.createSeatHold({ tripId, seatIds: requestedSeatIds }, token),
+          )
+        : await bookingsApi.createSeatHold({ tripId, seatIds: requestedSeatIds });
+      const hold = holdResponse.data;
+      const expiresAtMs = Date.parse(hold?.expiresAt || '');
+      const sortedRequestedSeatIds = [...requestedSeatIds].sort((a, b) => a - b);
+      const sortedReturnedSeatIds = Array.isArray(hold?.seatIds)
+        ? [...hold.seatIds].sort((a, b) => a - b)
+        : [];
+      const sameSeats =
+        sortedReturnedSeatIds.length === sortedRequestedSeatIds.length &&
+        sortedReturnedSeatIds.every(
+          (id, index) => id === sortedRequestedSeatIds[index],
+        );
+
+      if (
+        !hold ||
+        typeof hold.holdToken !== 'string' ||
+        hold.holdToken.trim().length === 0 ||
+        hold.tripId !== tripId ||
+        !sameSeats ||
+        !Number.isFinite(expiresAtMs) ||
+        expiresAtMs <= Date.now()
+      ) {
+        const released = hold?.holdToken
+          ? await releaseSeatHoldSafely(hold.holdToken)
+          : false;
+        if (!released) {
+          submissionUnknownRef.current = true;
+          if (mountedRef.current) {
+            setSubmissionUnknown(true);
+            setSubmitError(
+              'Chưa xác định được kết quả giữ ghế. Ghế có thể đang được giữ; vui lòng không gửi lại yêu cầu ngay.',
+            );
+          }
+          return;
+        }
+        setSubmitError('Không thể xác nhận lượt giữ ghế từ máy chủ. Hãy chọn lại ghế.');
+        await refreshSeatMap(tripId);
+        return;
+      }
+
+      holdToken = hold.holdToken;
+      activeHoldRef.current = {
+        holdToken,
+        tripId,
+        bookingRequestStarted: false,
+      };
+      if (mountedRef.current) setHoldExpiresAt(hold.expiresAt);
+
+      if (!mountedRef.current || latestTripIdRef.current !== tripId) {
+        activeHoldRef.current = null;
+        await releaseSeatHoldSafely(holdToken);
+        return;
+      }
+
+      activeHoldRef.current.bookingRequestStarted = true;
+      const bookingPayload: CreateBookingPayload = {
+        ...bookingDetails,
+        holdToken,
+      };
+
+      let bookingResponse;
+      try {
+        bookingResponse = isAuthenticated
+          ? await executeWithAuth((token) =>
+              bookingsApi.createBooking(bookingPayload, token),
+            )
+          : await bookingsApi.createBooking(bookingPayload);
+      } catch (error) {
+        if (error instanceof ApiError && error.status >= 400 && error.status < 500) {
+          activeHoldRef.current = null;
+          const released = await releaseSeatHoldSafely(holdToken);
+          if (!released) {
+            submissionUnknownRef.current = true;
+            if (mountedRef.current) {
+              setSubmissionUnknown(true);
+              setSubmitError(
+                'Đơn chưa được tạo, nhưng chưa xác nhận được việc giải phóng ghế. Vui lòng không gửi lại yêu cầu ngay.',
+              );
+            }
+            return;
+          }
+          if (mountedRef.current) setHoldExpiresAt(null);
+          showApiError(error, tripId);
+          return;
+        }
+
+        activeHoldRef.current = null;
+        submissionUnknownRef.current = true;
+        if (mountedRef.current) {
+          setSubmissionUnknown(true);
+          setSubmitError(
+            'Chưa xác định được kết quả đặt vé. Vui lòng không gửi lại yêu cầu; kiểm tra lịch sử đặt vé hoặc liên hệ hỗ trợ.',
+          );
+        }
+        return;
+      }
+
+      const booking = bookingResponse.data as CreatedBookingData | undefined;
+      const totalAmount = Number(booking?.totalAmount);
+      if (
+        !booking ||
+        !Number.isSafeInteger(booking.bookingId) ||
+        booking.bookingId <= 0 ||
+        booking.tripId !== tripId ||
+        !Array.isArray(booking.seatIds) ||
+        booking.seatIds.length !== requestedSeatIds.length ||
+        ![...booking.seatIds].sort((a, b) => a - b).every(
+          (id, index) => id === sortedRequestedSeatIds[index],
+        ) ||
+        !Number.isSafeInteger(booking.orderId) ||
+        booking.orderId <= 0 ||
+        !booking.bookingCode ||
+        !booking.orderCode ||
+        !Number.isFinite(totalAmount) ||
+        totalAmount < 0
+      ) {
+        activeHoldRef.current = null;
+        submissionUnknownRef.current = true;
+        if (mountedRef.current) {
+          setSubmissionUnknown(true);
+          setSubmitError(
+            'Chưa xác định được kết quả đặt vé. Máy chủ chưa trả đủ mã đơn để tiếp tục; vui lòng kiểm tra lịch sử đặt vé hoặc liên hệ hỗ trợ.',
+          );
+        }
+        return;
+      }
+
+      activeHoldRef.current = null;
+      if (!mountedRef.current) return;
+
+      const serverShippingFee = Number(booking.shippingFee);
+      const finalLuggageFee = Number.isFinite(serverShippingFee)
+        ? serverShippingFee
+        : luggageFee;
+      const draft = createPaymentDraft({
+        tripType: 'one-way',
+        passenger: {
+          fullName: customerName.trim(),
+          phoneNumber: customerPhone.trim(),
+          email: customerEmail.trim(),
+        },
+        legs: [
+          {
+            tripId,
+            route: post.title || `${post.province} - ${post.district}`,
+            departureTime: departureDateTimeText,
+            seats: selectedSeats,
+            pickup: pickup || post.province,
+            dropoff: dropoff || post.district,
+            unitFare: baseFareNumber,
+            subtotal: baseFareNumber * selectedSeats.length,
+          },
+        ],
+        luggage:
+          luggageWeight > 0 || finalLuggageFee > 0
+            ? {
+                fee: finalLuggageFee,
+                weight: luggageWeight,
+                items: luggageItems,
+                info:
+                  luggageItems.length > 0 && luggageWeight > 0
+                    ? {
+                        count: luggageItems.length,
+                        weight: luggageWeight,
+                        fee: finalLuggageFee,
+                        category: luggageItems[0]?.category || 'normal',
+                      }
+                    : undefined,
+              }
+            : undefined,
+        totalFare: totalAmount,
+        bookingId: booking.bookingId,
+        orderId: booking.orderId,
+        bookingCode: booking.bookingCode,
+        orderCode: booking.orderCode,
+        status: booking.status,
+      });
+
+      setHoldExpiresAt(null);
+      router.push(`/payment?draftId=${encodeURIComponent(draft.id)}`);
+    } catch (error) {
+      if (holdToken && activeHoldRef.current?.holdToken === holdToken) {
+        const activeHold = activeHoldRef.current;
+        activeHoldRef.current = null;
+        if (!activeHold.bookingRequestStarted) {
+          await releaseSeatHoldSafely(holdToken);
+        }
+      }
+
+      if (error instanceof ApiError && error.status >= 400 && error.status < 500) {
+        showApiError(error, tripId);
+      } else {
+        submissionUnknownRef.current = true;
+        if (mountedRef.current) {
+          setSubmissionUnknown(true);
+          setSubmitError(
+            holdToken
+              ? 'Chưa xác định được kết quả đặt vé. Vui lòng không gửi lại yêu cầu; kiểm tra lịch sử đặt vé hoặc liên hệ hỗ trợ.'
+              : 'Chưa xác định được kết quả giữ ghế. Ghế có thể đã được giữ trong tối đa 10 phút; vui lòng không gửi lại yêu cầu ngay.',
+          );
+        }
+      }
+    } finally {
+      submissionLockRef.current = false;
+      if (mountedRef.current) setIsSubmitting(false);
+    }
   };
 
 
@@ -283,7 +714,7 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
   let rightSeats: string[] = [];
   if (!isSleeper) {
     const unassigned: string[] = [];
-    tripSeats.forEach((seat) => {
+    seatMap.forEach((seat) => {
       const pos = seat.position?.toLowerCase() || '';
       if (pos.includes('trái')) {
         leftSeats.push(seat.seatNumber);
@@ -295,7 +726,7 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
     });
 
     if (leftSeats.length === 0 && rightSeats.length === 0) {
-      const all = tripSeats.map((s) => s.seatNumber);
+      const all = seatMap.map((s) => s.seatNumber);
       all.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
       for (let i = 0; i < all.length; i += 4) {
         if (i < all.length) leftSeats.push(all[i]);
@@ -338,7 +769,7 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
     return (
       <button
         type="button"
-        disabled={isBooked}
+        disabled={isBooked || isSubmitting || submissionUnknown}
         aria-label={`${seat}${isBooked ? ' đã bán' : isSelected ? ' đang chọn' : ' còn trống'}`}
         aria-pressed={isSelected}
         className="group relative min-h-11 min-w-11 inline-flex flex-col items-center justify-center rounded-md disabled:cursor-not-allowed disabled:opacity-60 hover:scale-105 active:scale-95 disabled:hover:scale-100 disabled:active:scale-100 transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
@@ -380,7 +811,7 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
                       Chọn ghế
                     </h2>
                     <span className="text-xs font-bold text-slate-600 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200">
-                      {tripSeats.length} chỗ
+                      {seatMap.length} chỗ
                     </span>
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded border bg-amber-50 text-amber-700 border-amber-200">
                       {isSleeper ? 'Giường nằm' : 'Ghế ngồi'}
@@ -743,6 +1174,38 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
               </label>
             </div>
 
+            {(isSubmitting || submissionUnknown || holdExpiresAt) && (
+              <div className="px-4 pt-4 md:px-5" aria-live="polite">
+                {isSubmitting && (
+                  <p role="status" className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-semibold text-sky-800">
+                    Đang giữ ghế và gửi yêu cầu đặt vé. Vui lòng không đóng trang.
+                  </p>
+                )}
+                {holdExpiresAt && (
+                  <p className="mt-2 text-sm text-slate-600">
+                    Ghế đang được giữ đến {new Date(holdExpiresAt).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}.
+                  </p>
+                )}
+                {submissionUnknown && (
+                  <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900">
+                    Kết quả chưa xác định
+                  </p>
+                )}
+              </div>
+            )}
+            {submitError && (
+              <div className="px-4 pt-4 md:px-5">
+                <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-800">
+                  {submitError}
+                </p>
+                {requiresLogin && (
+                  <Link className="mt-2 inline-flex min-h-11 items-center text-sm font-bold text-accent underline underline-offset-2" href="/login">
+                    Đăng nhập lại
+                  </Link>
+                )}
+              </div>
+            )}
+
             <div className="p-4 md:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
                 <div className="flex items-center gap-2 mb-1">
@@ -767,182 +1230,15 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
                 </button>
                 <button
                   type="button"
-                  disabled={!canPay || isSubmitting}
-                  onClick={async () => {
-                    setValidationAttempted(true);
-                    setSubmitError(null);
-                    if (!passengerValidation.isValid) {
-                      return;
-                    }
-                    if (selectedSeats.length === 0) {
-                      alert('Vui lòng chọn ít nhất một ghế để tiếp tục.');
-                      return;
-                    }
-                    if (!isAcceptedTerms) {
-                      alert(
-                        'Vui lòng chấp nhận điều khoản đặt vé & chính sách bảo mật để tiếp tục.',
-                      );
-                      return;
-                    }
-
-                    setIsSubmitting(true);
-                    try {
-                      const tripIdNum = Number(post.id);
-
-                      // Kiểm tra giới hạn kích thước hành lý (ngoại trừ xe máy, xe đạp)
-                      const oversizedItem = luggageItems.find(
-                        (item) =>
-                          item.type !== 'Xe máy' &&
-                          item.type !== 'Xe đạp' &&
-                          ((item.length && item.length > 150) ||
-                            (item.width && item.width > 80) ||
-                            (item.height && item.height > 80)),
-                      );
-                      if (oversizedItem) {
-                        alert(
-                          `Kiện "${oversizedItem.type}" vượt quá kích thước cho phép của hầm xe khách (Dài ≤ 150cm, Rộng ≤ 80cm, Cao ≤ 80cm). Vui lòng điều chỉnh lại kích thước.`,
-                        );
-                        setIsSubmitting(false);
-                        return;
-                      }
-                      // Kiểm tra tổng khối lượng hành lý thông thường đi kèm vé: tối đa 40kg
-                      if (luggageWeight > 40) {
-                        alert(
-                          `Tổng khối lượng hành lý (${luggageWeight}kg) vượt quá hạn mức đi kèm vé (tối đa 40kg). Vui lòng chuyển qua phần "Gửi hàng bưu kiện" hoặc liên hệ nhà xe để gửi hàng riêng.`,
-                        );
-                        setIsSubmitting(false);
-                        return;
-                      }
-                      const validCargoItems =
-                        luggageItems.filter(
-                          (item) =>
-                            item.type === 'Xe máy' ||
-                            item.type === 'Xe đạp' ||
-                            (item.weight || 0) > 0 ||
-                            (item.length && item.width && item.height),
-                        );
-
-                      const mappedCargoItems =
-                        validCargoItems.length > 0 && luggageFee > 0
-                          ? validCargoItems.map((item) => ({
-                              name:
-                                item.type === 'Xe máy'
-                                  ? `Xe máy (${item.motorbikeType || 'Xe số'})`
-                                  : item.type === 'Xe đạp'
-                                    ? `Xe đạp (${item.bicycleType || 'Xe đạp thường'})`
-                                    : (item.type || 'Hành lý gửi kèm'),
-                              type: item.type,
-                              quantity: item.quantity || 1,
-                              weight: item.type === 'Xe máy' ? 100 : item.type === 'Xe đạp' ? 15 : (item.weight || 0),
-                              length: item.length,
-                              width: item.width,
-                              height: item.height,
-                              category: item.category,
-                              note: item.note,
-                              motorbikeModel: item.motorbikeType || item.bicycleType,
-                              licensePlate: item.licensePlate,
-                            }))
-                          : undefined;
-
-                      const bookingPayload = {
-                        tripId: tripIdNum,
-                        seatNumbers: selectedSeats,
-                        passenger: {
-                          fullName: customerName.trim(),
-                          phoneNumber: customerPhone.trim(),
-                          email: customerEmail.trim(),
-                        },
-                        pickup: pickup || post.province,
-                        dropoff: dropoff || post.district,
-                        cargoItems: mappedCargoItems,
-                      };
-
-                      let bookingResult: any = null;
-                      if (isAuthenticated) {
-                        try {
-                          const res = await executeWithAuth((token) =>
-                            bookingsApi.createBooking(bookingPayload, token),
-                          );
-                          bookingResult = res.data ?? res;
-                        } catch (err: any) {
-                          // Fallback as unauthenticated if auth error
-                          const res = await bookingsApi.createBooking(bookingPayload);
-                          bookingResult = res.data ?? res;
-                        }
-                      } else {
-                        const res = await bookingsApi.createBooking(bookingPayload);
-                        bookingResult = res.data ?? res;
-                      }
-
-                      const finalLuggageFee =
-                        bookingResult?.shippingFee !== undefined
-                          ? Number(bookingResult.shippingFee)
-                          : luggageFee;
-                      const finalTotalFare =
-                        bookingResult?.totalAmount !== undefined
-                          ? Number(bookingResult.totalAmount)
-                          : totalFare;
-
-                      const draft = createPaymentDraft({
-                        tripType: 'one-way',
-                        passenger: {
-                          fullName: customerName.trim(),
-                          phoneNumber: customerPhone.trim(),
-                          email: customerEmail.trim(),
-                        },
-                        legs: [
-                          {
-                            tripId: post.id,
-                            route:
-                              post.title || `${post.province} - ${post.district}`,
-                            departureTime: departureDateTimeText,
-                            seats: selectedSeats,
-                            pickup: pickup || post.province,
-                            dropoff: dropoff || post.district,
-                            unitFare: baseFareNumber,
-                            subtotal: baseFareNumber * selectedSeats.length,
-                          },
-                        ],
-                        luggage:
-                          luggageWeight > 0 || finalLuggageFee > 0
-                            ? {
-                                fee: finalLuggageFee,
-                                weight: luggageWeight,
-                                items: luggageItems,
-                                info:
-                                  luggageItems.length > 0 && luggageWeight > 0
-                                    ? {
-                                        count: luggageItems.length,
-                                        weight: luggageWeight,
-                                        fee: finalLuggageFee,
-                                        category:
-                                          luggageItems[0]?.category || 'normal',
-                                      }
-                                    : undefined,
-                              }
-                            : undefined,
-                        totalFare: finalTotalFare,
-                        bookingId: bookingResult?.bookingId,
-                        bookingCode: bookingResult?.bookingCode,
-                        orderCode: bookingResult?.orderCode,
-                      });
-
-                      router.push(
-                        `/payment?draftId=${encodeURIComponent(draft.id)}`,
-                      );
-                    } catch (err: any) {
-                      const msg =
-                        err?.message ||
-                        'Đã xảy ra lỗi khi tạo đơn đặt vé. Vui lòng thử lại.';
-                      setSubmitError(msg);
-                      alert(msg);
-                    } finally {
-                      setIsSubmitting(false);
-                    }
-                  }}
+                  disabled={!canPay || !isHydrated || isSubmitting || submissionUnknown}
+                  onClick={handleSubmit}
                   className="h-11 px-8 rounded-full bg-accent hover:bg-accent-hover text-white text-sm font-black transition-colors disabled:cursor-not-allowed disabled:opacity-45"
                 >
-                  {isSubmitting ? 'Đang xử lý...' : 'Thanh toán'}
+                  {submissionUnknown
+                    ? 'Kết quả chưa xác định'
+                    : isSubmitting
+                      ? 'Đang xử lý...'
+                      : 'Thanh toán'}
                 </button>
               </div>
             </div>

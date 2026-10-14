@@ -12,8 +12,6 @@ import {
 } from '../utils/round-trip-booking';
 import { formatTripDateTime } from '../utils/one-way-booking';
 import { validatePassengerInfo } from '../utils/passenger-validation';
-import { createPaymentDraft } from '../services/payment-draft';
-import { bookingsApi } from '@/features/account/services/bookings.api';
 import { FeaturePlaceholderModal } from './feature-placeholder-modal';
 import { LuggageStep } from './luggage/luggage-step';
 import type { ILuggageItem } from './luggage/luggage-item';
@@ -333,12 +331,11 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
   const [outboundSeats, setOutboundSeats] = useState<string[]>([]);
   const [returnSeats, setReturnSeats] = useState<string[]>([]);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
-  const [validationAttempted, setValidationAttempted] = useState(false);
+  const validationAttempted = false;
   const [showVehicleInfoModal, setShowVehicleInfoModal] = useState(false);
   const [showOutboundTripModal, setShowOutboundTripModal] = useState(false);
   const [showReturnTripModal, setShowReturnTripModal] = useState(false);
   const [showCargoInfoModal, setShowCargoInfoModal] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Sức chứa hàng hóa cho Chuyến đi
   const [outboundCargoCapacity, setOutboundCargoCapacity] = useState<{
@@ -557,9 +554,6 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
     : returnDateLabel;
   const outboundRoute = `${outboundPost.province} - ${outboundPost.district}`;
   const returnRoute = `${returnPost.province} - ${returnPost.district}`;
-  const canPay =
-    outboundSeats.length > 0 && returnSeats.length > 0 && acceptedTerms;
-
   return (
     <div className="min-h-screen bg-[#F8FAF9] font-sans pb-12">
       <div className="bg-white border-b border-slate-200">
@@ -1004,7 +998,11 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                   {totalFare.toLocaleString('vi-VN')}đ
                 </span>
               </div>
-              <div className="flex gap-3">
+              <div className="flex flex-col gap-3 sm:items-end">
+                <div role="status" className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900">
+                  Đặt vé khứ hồi hiện chưa được hỗ trợ. Để tiếp tục, hãy quay lại và chọn chuyến một chiều.
+                </div>
+                <div className="flex gap-3">
                 <button
                   type="button"
                   onClick={() => router.back()}
@@ -1014,157 +1012,12 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                 </button>
                 <button
                   type="button"
-                  disabled={!canPay || isSubmitting}
-                  onClick={async () => {
-                    setValidationAttempted(true);
-                    if (!passengerValidation.isValid) {
-                      return;
-                    }
-                    if (
-                      outboundSeats.length === 0 ||
-                      returnSeats.length === 0
-                    ) {
-                      alert(
-                        'Vui lòng chọn ghế cho cả lượt đi và lượt về để tiếp tục.',
-                      );
-                      return;
-                    }
-                    if (!acceptedTerms) {
-                      alert(
-                        'Vui lòng chấp nhận điều khoản đặt vé & chính sách bảo mật để tiếp tục.',
-                      );
-                      return;
-                    }
-
-                    // Kiểm tra giới hạn kích thước hành lý (ngoại trừ xe máy, xe đạp)
-                    const oversizedItem = allLuggageItems.find(
-                      (item) =>
-                        item.type !== 'Xe máy' &&
-                        item.type !== 'Xe đạp' &&
-                        ((item.length && item.length > 150) ||
-                          (item.width && item.width > 80) ||
-                          (item.height && item.height > 80)),
-                    );
-                    if (oversizedItem) {
-                      alert(
-                        `Kiện "${oversizedItem.type}" (${oversizedItem.legTitle}) vượt quá kích thước cho phép của hầm xe khách (Dài ≤ 150cm, Rộng ≤ 80cm, Cao ≤ 80cm). Vui lòng điều chỉnh lại kích thước.`,
-                      );
-                      return;
-                    }
-
-                    // Kiểm tra tổng khối lượng hành lý thông thường mỗi chiều: tối đa 40kg/chuyến
-                    if (outboundLuggageWeight > 40 || returnLuggageWeight > 40) {
-                      const exceedLeg = outboundLuggageWeight > 40 ? 'Chuyến đi' : 'Chuyến về';
-                      const exceedWeight = outboundLuggageWeight > 40 ? outboundLuggageWeight : returnLuggageWeight;
-                      alert(
-                        `Tổng khối lượng hành lý ${exceedLeg} (${exceedWeight}kg) vượt quá hạn mức đi kèm vé (tối đa 40kg/chuyến). Vui lòng chuyển qua phần "Gửi hàng bưu kiện" hoặc liên hệ nhà xe để gửi hàng riêng.`,
-                      );
-                      return;
-                    }
-
-                    setIsSubmitting(true);
-                    let backendBookingId: number | undefined = undefined;
-                    let backendBookingCode: string | undefined = undefined;
-                    let backendOrderCode: string | undefined = undefined;
-
-                    // Thử tạo đơn đặt vé chặng đi trên backend nếu chuyến tồn tại
-                    const outboundTripIdNum = Number(outboundPost.id);
-                    if (!isNaN(outboundTripIdNum) && outboundTripIdNum > 0) {
-                      try {
-                        const res = await bookingsApi.createBooking({
-                          tripId: outboundTripIdNum,
-                          seatNumbers: outboundSeats,
-                          passenger: {
-                            fullName: customerName.trim(),
-                            phoneNumber: customerPhone.trim(),
-                            email: customerEmail.trim(),
-                          },
-                          pickup: outboundPost.province,
-                          dropoff: outboundPost.district,
-                        });
-                        const bData = res?.data ?? res;
-                        if (bData?.bookingId) {
-                          backendBookingId = bData.bookingId;
-                          backendBookingCode = bData.bookingCode;
-                          backendOrderCode = bData.orderCode || undefined;
-                        }
-                      } catch {
-                        // Tiếp tục luồng thanh toán với mã đặt vé dự phòng nếu chuyến dùng dữ liệu giả lập
-                      }
-                    }
-
-                    const fallbackDigits = Math.floor(100000 + Math.random() * 900000);
-                    const finalBookingCode = backendBookingCode || `VG-${fallbackDigits}`;
-                    const finalOrderCode = backendOrderCode || `GD-${fallbackDigits}`;
-
-                    const draft = createPaymentDraft({
-                      tripType: 'round-trip',
-                      passenger: {
-                        fullName: customerName.trim(),
-                        phoneNumber: customerPhone.trim(),
-                        email: customerEmail.trim(),
-                      },
-                      legs: [
-                        {
-                          tripId: outboundPost.id,
-                          route: outboundRoute,
-                          departureTime: outboundDepartureTimeText,
-                          seats: outboundSeats,
-                          pickup: outboundPost.province,
-                          dropoff: outboundPost.district,
-                          unitFare: outboundUnitFare,
-                          subtotal: outboundFare,
-                          busCompanyName: outboundPost.authorName || 'VexGo Transport',
-                          vehicleType: outboundPost.propertyType || 'Xe khách chất lượng cao',
-                        },
-                        {
-                          tripId: returnPost.id,
-                          route: returnRoute,
-                          departureTime: returnDepartureTimeText,
-                          seats: returnSeats,
-                          pickup: returnLocations.pickup,
-                          dropoff: returnLocations.dropoff,
-                          unitFare: returnUnitFare,
-                          subtotal: returnFare,
-                          busCompanyName: returnPost.authorName || outboundPost.authorName || 'VexGo Transport',
-                          vehicleType: returnPost.propertyType || outboundPost.propertyType || 'Xe khách chất lượng cao',
-                        },
-                      ],
-                      luggage:
-                        allLuggageItems.length > 0
-                          ? {
-                              fee: luggageFee,
-                              weight: luggageWeight,
-                              items: allLuggageItems.map((item) => ({
-                                id: item.id,
-                                type: item.type,
-                                quantity: item.quantity,
-                                weight: item.weight,
-                                length: item.length,
-                                width: item.width,
-                                height: item.height,
-                                category: item.category,
-                                note: `[${item.legTitle}] ${item.note || ''}`.trim(),
-                                motorbikeType: item.motorbikeType,
-                                licensePlate: item.licensePlate,
-                                bicycleType: item.bicycleType,
-                              })),
-                            }
-                          : undefined,
-                      totalFare,
-                      bookingId: backendBookingId,
-                      bookingCode: finalBookingCode,
-                      orderCode: finalOrderCode,
-                    });
-                    setIsSubmitting(false);
-                    router.push(
-                      `/payment?draftId=${encodeURIComponent(draft.id)}`,
-                    );
-                  }}
-                  className="min-h-11 px-6 rounded-lg bg-accent text-white font-bold text-sm hover:bg-accent-hover shadow-sm disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                  disabled
+                  className="min-h-11 px-6 rounded-lg bg-accent text-white font-bold text-sm opacity-60 cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
                 >
-                  {isSubmitting ? 'Đang xử lý...' : 'Thanh toán'}
+                  Khứ hồi chưa khả dụng
                 </button>
+                </div>
               </div>
             </div>
           </section>

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useSyncExternalStore, Suspense } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useSyncExternalStore, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Info, ScanLine, X, MapPin, Calendar, Clock, Armchair, User, Package } from 'lucide-react';
 import {
@@ -9,6 +9,7 @@ import {
   type PaymentDraft,
 } from '@/features/booking/services/payment-draft';
 import { bookingsApi } from '@/features/account/services/bookings.api';
+import { useAuthSession } from '@/features/auth/auth-session';
 import {
   createVietQrImageUrl,
   readVietQrAccountConfig,
@@ -38,6 +39,7 @@ function useRawPaymentDraft(draftId: string | null): string | null {
 function PaymentContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { isAuthenticated, isHydrated, executeWithAuth } = useAuthSession();
   const draftId = searchParams.get('draftId');
 
   const isClient = useIsClient();
@@ -59,6 +61,21 @@ function PaymentContent() {
   const [showCargoDetailModal, setShowCargoDetailModal] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [paymentError, setPaymentError] = useState<string | null>(null);
+
+  const readBookingDetail = useCallback(
+    (bookingId: number, signal?: AbortSignal) => {
+      if (isAuthenticated) {
+        return executeWithAuth((token) =>
+          bookingsApi.getPublicBookingDetail(bookingId, {
+            signal,
+            accessToken: token,
+          }),
+        );
+      }
+      return bookingsApi.getPublicBookingDetail(bookingId, { signal });
+    },
+    [executeWithAuth, isAuthenticated],
+  );
 
   useEffect(() => {
     if (timeLeft <= 0) return;
@@ -101,7 +118,7 @@ function PaymentContent() {
   // VietQR chỉ theo dõi trạng thái từ backend khi tài khoản nhận tiền đã được cấu hình.
   useEffect(() => {
     const bookingId = draft?.bookingId;
-    if (!bookingId || selectedMethod !== 'vietqr' || !vietQrUrl) return;
+    if (!isHydrated || !bookingId || selectedMethod !== 'vietqr' || !vietQrUrl) return;
 
     let isSubscribed = true;
     let hasNavigated = false;
@@ -110,9 +127,7 @@ function PaymentContent() {
 
     const checkPaymentStatus = async () => {
       try {
-        const res = await bookingsApi.getPublicBookingDetail(bookingId, {
-          signal: controller.signal,
-        });
+        const res = await readBookingDetail(bookingId, controller.signal);
         const isPaid =
           res.data?.status === 'DA_THANH_TOAN' ||
           res.data?.paymentStatus === 'DA_THANH_TOAN';
@@ -138,7 +153,7 @@ function PaymentContent() {
       if (timeout) clearTimeout(timeout);
       controller.abort();
     };
-  }, [draft?.bookingId, router, selectedMethod, vietQrUrl]);
+  }, [draft?.bookingId, isHydrated, readBookingDetail, router, selectedMethod, vietQrUrl]);
 
   const copyToClipboard = (text: string, field: string) => {
     navigator.clipboard?.writeText(text);
@@ -151,6 +166,11 @@ function PaymentContent() {
     if (selectedMethod === 'vietqr') return;
     setPaymentError(null);
 
+    if (!isHydrated) {
+      setPaymentError('Đang kiểm tra phiên tài khoản. Vui lòng thử lại sau ít giây.');
+      return;
+    }
+
     if (!draft.bookingId) {
       setPaymentError('Không tìm thấy thông tin đơn đặt vé hợp lệ. Vui lòng quay lại đặt vé.');
       return;
@@ -159,7 +179,7 @@ function PaymentContent() {
     setIsProcessing(true);
     try {
       // 1. Kiểm tra trạng thái thực tế từ backend trước
-      const checkRes = await bookingsApi.getPublicBookingDetail(draft.bookingId);
+      const checkRes = await readBookingDetail(draft.bookingId);
       const bookingData = checkRes.data;
 
       if (bookingData?.status === 'DA_THANH_TOAN' || bookingData?.paymentStatus === 'DA_THANH_TOAN') {

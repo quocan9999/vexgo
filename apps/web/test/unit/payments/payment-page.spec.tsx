@@ -3,9 +3,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import PaymentPage from '../../../src/features/payments/components/payment-page';
 import { PAYMENT_DRAFT_STORAGE_PREFIX } from '../../../src/features/booking/services/payment-draft';
 
-const { routerPush, router } = vi.hoisted(() => {
+const { routerPush, router, auth } = vi.hoisted(() => {
   const routerPush = vi.fn();
-  return { routerPush, router: { push: routerPush } };
+  const auth = {
+    isAuthenticated: false,
+    isHydrated: true,
+    executeWithAuth: async <T,>(action: (token: string) => Promise<T>) =>
+      action('test-access-token'),
+  };
+  return { routerPush, router: { push: routerPush }, auth };
 });
 const draftId = 'vietqr-payment-test';
 const bookingId = 4201;
@@ -14,6 +20,10 @@ const fetchMock = vi.fn();
 vi.mock('next/navigation', () => ({
   useRouter: () => router,
   useSearchParams: () => new URLSearchParams(`draftId=${draftId}`),
+}));
+
+vi.mock('@/features/auth/auth-session', () => ({
+  useAuthSession: () => auth,
 }));
 
 function savePaymentDraft() {
@@ -76,6 +86,8 @@ beforeEach(() => {
   vi.stubGlobal('fetch', fetchMock);
   fetchMock.mockReset();
   routerPush.mockReset();
+  auth.isAuthenticated = false;
+  auth.isHydrated = true;
   window.sessionStorage.clear();
   savePaymentDraft();
 });
@@ -146,6 +158,25 @@ describe('Customer VietQR payment page', () => {
     expect(String(fetchMock.mock.calls[0][0])).not.toContain('confirm-payment');
     expect(routerPush).not.toHaveBeenCalled();
   });
+
+  it('reads an account booking status with the authenticated customer token', async () => {
+    configureVietQr();
+    auth.isAuthenticated = true;
+    fetchMock.mockResolvedValue(
+      jsonResponse({ status: 'CHO_THANH_TOAN', paymentStatus: 'CHO_THANH_TOAN' }),
+    );
+
+    render(<PaymentPage />);
+    await advanceTime(2_500);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining(`/bookings/${bookingId}/detail`),
+      expect.objectContaining({
+        headers: { Authorization: 'Bearer test-access-token' },
+      }),
+    );
+  });
+
 
   it('navigates once only after the booking detail endpoint reports paid', async () => {
     configureVietQr();

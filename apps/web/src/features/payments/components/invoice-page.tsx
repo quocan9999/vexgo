@@ -14,6 +14,7 @@ import {
   Calendar,
 } from 'lucide-react';
 import { bookingsApi } from '@/features/account/services/bookings.api';
+import { useAuthSession } from '@/features/auth/auth-session';
 
 interface InvoiceLeg {
   route: string;
@@ -51,6 +52,7 @@ interface InvoiceModel {
 
 export default function InvoicePage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
+  const { isAuthenticated, isHydrated, executeWithAuth } = useAuthSession();
   const rawId = resolvedParams?.id || 'BW-888999';
   const numericBookingId = Number(rawId);
 
@@ -58,6 +60,7 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!isHydrated) return;
     let isMounted = true;
 
     // Helper format datetime
@@ -239,7 +242,13 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
     const loadInvoice = async () => {
       if (!isNaN(numericBookingId) && numericBookingId > 0) {
         try {
-          const res = await bookingsApi.getPublicBookingDetail(numericBookingId);
+          const res = isAuthenticated
+            ? await executeWithAuth((token) =>
+                bookingsApi.getPublicBookingDetail(numericBookingId, {
+                  accessToken: token,
+                }),
+              )
+            : await bookingsApi.getPublicBookingDetail(numericBookingId);
           if (!isMounted) return;
           const b = res.data;
           const cargo = (b.cargoItems || []).map((c) => ({
@@ -295,7 +304,7 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
     return () => {
       isMounted = false;
     };
-  }, [rawId, numericBookingId]);
+  }, [executeWithAuth, isAuthenticated, isHydrated, rawId, numericBookingId]);
 
   const handlePrint = () => {
     window.print();

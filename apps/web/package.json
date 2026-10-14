@@ -8,7 +8,7 @@
     "build": "next build",
     "start": "node --env-file-if-exists=.env.local ../../scripts/run-next-workspace.mjs start",
     "lint": "eslint",
-    "test": "node --test test/unit/**/*.spec.mjs && vitest run --config vitest.config.mts test/unit/payments/payment-page.spec.tsx",
+    "test": "node --test test/unit/**/*.spec.mjs && vitest run --config vitest.config.mts test/unit/payments/payment-page.spec.tsx test/unit/booking/one-way-booking-flow.spec.tsx",
     "test:e2e": "node --test test/e2e/*.e2e-spec.mjs",
     "typecheck": "next typegen && tsc --noEmit"
   },

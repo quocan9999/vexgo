@@ -54,6 +54,8 @@ export type BookingQuery = {
 
 export type BookingResponseData = {
   bookingId?: number;
+  tripId?: number;
+  seatIds?: number[];
   bookingCode?: string;
   orderCode?: string | null;
   orderId?: number;
@@ -101,13 +103,65 @@ export type BookingResponseData = {
   [key: string]: unknown;
 };
 
+export type CreateBookingPayload = {
+  tripId: number;
+  seatIds: number[];
+  holdToken: string;
+  contact: {
+    fullName: string;
+    phone: string;
+    email?: string;
+  };
+  pickupPoint: string;
+  dropoffPoint: string;
+  cargoItems?: Array<{
+    name: string;
+    type?: string;
+    quantity: number;
+    weight: number;
+    length?: number;
+    width?: number;
+    height?: number;
+    category?: string;
+    note?: string;
+    motorbikeModel?: string;
+    bicycleType?: string;
+    licensePlate?: string;
+  }>;
+};
+
+export type CreatedBookingData = BookingResponseData & {
+  bookingId: number;
+  tripId: number;
+  seatIds: number[];
+  bookingCode: string;
+  orderId: number;
+  orderCode: string;
+  totalAmount: number | string;
+  status: string;
+};
+
+export type CreateSeatHoldPayload = {
+  tripId: number;
+  seatIds: number[];
+};
+
+export type SeatHoldData = {
+  holdToken: string;
+  expiresAt: string;
+  tripId: number;
+  seatIds: number[];
+};
+
 export class ApiError extends Error {
   status: number;
+  code?: string;
 
-  constructor(message: string, status: number) {
+  constructor(message: string, status: number, code?: string) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
+    this.code = code;
   }
 }
 
@@ -172,30 +226,9 @@ export const bookingsApi = {
   },
 
   async createBooking(
-    payload: {
-      tripId: number;
-      seatNumbers: string[];
-      passenger: {
-        fullName: string;
-        phoneNumber: string;
-        email: string;
-      };
-      pickup?: string;
-      dropoff?: string;
-      cargoItems?: Array<{
-        name: string;
-        type?: string;
-        quantity: number;
-        weight: number;
-        length?: number;
-        width?: number;
-        height?: number;
-        category?: string;
-        note?: string;
-      }>;
-    },
+    payload: CreateBookingPayload,
     accessToken?: string,
-  ): Promise<{ data: BookingResponseData }> {
+  ): Promise<{ data: CreatedBookingData }> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
@@ -214,18 +247,71 @@ export const bookingsApi = {
       throw new ApiError(
         error.message || 'Tạo đơn đặt vé thất bại',
         res.status,
+        error.error,
       );
     }
 
     return res.json();
   },
 
+  async createSeatHold(
+    payload: CreateSeatHoldPayload,
+    accessToken?: string,
+  ): Promise<{ data: SeatHoldData }> {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+
+    const res = await fetch(`${API_BASE_URL}/seat-holds`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      throw new ApiError(
+        error.message || 'Không thể giữ ghế đã chọn.',
+        res.status,
+        error.error,
+      );
+    }
+    return res.json();
+  },
+
+  async releaseSeatHold(
+    holdToken: string,
+    accessToken?: string,
+  ): Promise<{ data: { success: boolean } }> {
+    const headers: Record<string, string> = { 'X-Hold-Token': holdToken };
+    if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+
+    const res = await fetch(`${API_BASE_URL}/seat-holds`, {
+      method: 'DELETE',
+      headers,
+    });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      throw new ApiError(
+        error.message || 'Không thể giải phóng ghế đang giữ.',
+        res.status,
+        error.error,
+      );
+    }
+    return res.json();
+  },
+
   async getPublicBookingDetail(
     bookingId: number,
-    options?: { signal?: AbortSignal },
+    options?: { signal?: AbortSignal; accessToken?: string },
   ): Promise<{ data: BookingResponseData }> {
+    const headers: Record<string, string> = {};
+    if (options?.accessToken) {
+      headers.Authorization = `Bearer ${options.accessToken}`;
+    }
     const res = await fetch(`${API_BASE_URL}/bookings/${bookingId}/detail`, {
       signal: options?.signal,
+      headers,
     });
     if (!res.ok) {
       const error = await res.json().catch(() => ({}));
