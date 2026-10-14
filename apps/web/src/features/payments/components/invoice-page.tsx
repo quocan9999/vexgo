@@ -242,13 +242,48 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
     const loadInvoice = async () => {
       if (!isNaN(numericBookingId) && numericBookingId > 0) {
         try {
+          let guestCredentials:
+            | { bookingCode: string; phoneNumber: string }
+            | undefined;
+          if (typeof window !== 'undefined') {
+            for (let index = 0; index < sessionStorage.length; index++) {
+              const key = sessionStorage.key(index);
+              if (!key) continue;
+              const raw = sessionStorage.getItem(key);
+              if (!raw) continue;
+              try {
+                const parsed: {
+                  bookingId?: number;
+                  bookingCode?: string;
+                  passenger?: { phoneNumber?: string };
+                } = JSON.parse(raw);
+                if (
+                  parsed.bookingId === numericBookingId &&
+                  parsed.bookingCode &&
+                  parsed.passenger?.phoneNumber
+                ) {
+                  guestCredentials = {
+                    bookingCode: parsed.bookingCode,
+                    phoneNumber: parsed.passenger.phoneNumber,
+                  };
+                  break;
+                }
+              } catch {
+                // Ignore unrelated or invalid entries in sessionStorage.
+              }
+            }
+          }
           const res = isAuthenticated
             ? await executeWithAuth((token) =>
                 bookingsApi.getPublicBookingDetail(numericBookingId, {
                   accessToken: token,
+                  ...guestCredentials,
                 }),
               )
-            : await bookingsApi.getPublicBookingDetail(numericBookingId);
+            : await bookingsApi.getPublicBookingDetail(
+                numericBookingId,
+                guestCredentials,
+              );
           if (!isMounted) return;
           const b = res.data;
           const cargo = (b.cargoItems || []).map((c) => ({

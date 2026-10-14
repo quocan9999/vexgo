@@ -120,6 +120,7 @@ describe('PaymentsService', () => {
     it('creates payment with DEMO mode marker when running in demo mode', async () => {
       prisma.phieuDatVe.findUnique.mockResolvedValue({
         phieuDatVeId: 300,
+        createdAt: new Date(),
         tongTienBanDau: '300000',
         trangThai: 'CHO_THANH_TOAN',
         donGiaoDichId: 200,
@@ -194,6 +195,7 @@ describe('PaymentsService', () => {
     it('returns existing pending payment without creating duplicate if already exists (idempotency)', async () => {
       prisma.phieuDatVe.findUnique.mockResolvedValue({
         phieuDatVeId: 300,
+        createdAt: new Date(),
         trangThai: 'CHO_THANH_TOAN',
         donGiaoDichId: 200,
         donGiaoDich: { khachHangId: 10, trangThai: 'CHO_THANH_TOAN' },
@@ -219,6 +221,7 @@ describe('PaymentsService', () => {
     it('supersedes previous active payment of different provider to THAT_BAI when switching providers (Finding B)', async () => {
       prisma.phieuDatVe.findUnique.mockResolvedValue({
         phieuDatVeId: 300,
+        createdAt: new Date(),
         trangThai: 'CHO_THANH_TOAN',
         donGiaoDichId: 200,
         donGiaoDich: {
@@ -415,6 +418,57 @@ describe('PaymentsService', () => {
       expect(prisma.thanhToan.updateMany).not.toHaveBeenCalled();
     });
 
+    it('stores the SePay transaction ID atomically with the successful payment claim', async () => {
+      prisma.thanhToan.findUnique.mockResolvedValue({
+        ...samplePayment,
+        phuongThuc: 'SEPAY',
+        maGiaoDichSePay: null,
+      });
+
+      const result = await service.confirmPaymentSuccess({
+        paymentId: 100,
+        provider: 'SEPAY',
+        amount: 300000,
+        providerTransactionId: '987654321',
+      });
+
+      expect(result.success).toBe(true);
+      expect(prisma.thanhToan.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            thanhToanId: 100,
+            trangThai: { not: 'THANH_CONG' },
+            maGiaoDichSePay: null,
+          },
+          data: {
+            trangThai: 'THANH_CONG',
+            maGiaoDichSePay: '987654321',
+          },
+        }),
+      );
+    });
+
+    it('rejects a different SePay transaction ID for an already claimed payment', async () => {
+      prisma.thanhToan.findUnique.mockResolvedValue({
+        ...samplePayment,
+        phuongThuc: 'SEPAY',
+        trangThai: 'THANH_CONG',
+        maGiaoDichSePay: '987654321',
+      });
+
+      await expect(
+        service.confirmPaymentSuccess({
+          paymentId: 100,
+          provider: 'SEPAY',
+          amount: 300000,
+          providerTransactionId: '987654322',
+        }),
+      ).rejects.toMatchObject({
+        response: { error: 'SEPAY_TRANSACTION_ALREADY_PROCESSED' },
+      });
+      expect(prisma.thanhToan.updateMany).not.toHaveBeenCalled();
+    });
+
     it('returns idempotent success without mutating downstream records when concurrent claim is lost (discussion_r4222294112)', async () => {
       prisma.thanhToan.findUnique.mockResolvedValue(samplePayment);
       // Simulate that another concurrent transaction already claimed the record
@@ -567,6 +621,24 @@ describe('PaymentsService', () => {
         }),
       ).rejects.toThrow(BadRequestException);
     });
+
+    it.each([0, -1, Number.NaN, 300000.4])(
+      'rejects invalid non-positive, non-finite, or fractional VND amount %s',
+      async (amount) => {
+        prisma.thanhToan.findUnique.mockResolvedValue(samplePayment);
+
+        await expect(
+          service.confirmPaymentSuccess({
+            paymentId: 100,
+            provider: 'MOMO',
+            amount,
+          }),
+        ).rejects.toThrow(BadRequestException);
+
+        expect(prisma.thanhToan.updateMany).not.toHaveBeenCalled();
+        expect(prisma.$transaction).not.toHaveBeenCalled();
+      },
+    );
   });
 
   describe('Signature Verifications & Webhook Handlers', () => {
@@ -589,7 +661,7 @@ describe('PaymentsService', () => {
         .rejects.toThrow(ServiceUnavailableException);
     });
 
-    it('validates the SePay HMAC signature and blocks settlement until it is safe', async () => {
+    it('validates the SePay HMAC signature before parsing a signed event', async () => {
       const secret = 'sepay-hmac-test-secret';
       configService.get.mockImplementation((key: string) => {
         if (key === 'SEPAY_WEBHOOK_SECRET') return secret;
@@ -616,7 +688,7 @@ describe('PaymentsService', () => {
           timestamp,
           signature: makeSepaySignature(rawBody, timestamp, secret),
         }),
-      ).rejects.toThrow(ServiceUnavailableException);
+      ).rejects.toThrow(BadRequestException);
     });
 
     it('verifies valid MoMo HMAC-SHA256 signature and rejects forged ones', () => {

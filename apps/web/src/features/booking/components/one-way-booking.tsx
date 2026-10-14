@@ -42,6 +42,10 @@ import {
   type CreateBookingPayload,
 } from '@/features/account/services/bookings.api';
 import { tripsApi, type ApiTripSeat } from '@/features/trips/services/trips.api';
+import {
+  shipmentsApi,
+  type ShipmentRoutePoints,
+} from '@/features/shipments/services/shipments.api';
 
 export interface OneWayBookingProps {
   post: Post;
@@ -55,6 +59,15 @@ const formatDisplayPhone = (phone?: string | null): string => {
   }
   return phone;
 };
+
+function isValidCargoItem(item: ILuggageItem): boolean {
+  return (
+    item.type === 'Xe máy' ||
+    item.type === 'Xe đạp' ||
+    (item.weight || 0) > 0 ||
+    Boolean(item.length && item.width && item.height)
+  );
+}
 
 export const OneWayBooking: React.FC<OneWayBookingProps> = ({
   post,
@@ -268,6 +281,57 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
   const [luggageFee, setLuggageFee] = useState(0);
   const [luggageWeight, setLuggageWeight] = useState(0);
   const [luggageItems, setLuggageItems] = useState<ILuggageItem[]>([]);
+  const validCargoItems = luggageItems.filter(isValidCargoItem);
+  const hasCargoItems = validCargoItems.length > 0;
+  const [cargoRoutePoints, setCargoRoutePoints] =
+    useState<ShipmentRoutePoints | null>(null);
+  const [cargoRoutePointsLoading, setCargoRoutePointsLoading] = useState(false);
+  const [cargoRoutePointsError, setCargoRoutePointsError] = useState<string | null>(null);
+  const [senderPointId, setSenderPointId] = useState<number | null>(null);
+  const [receiverPointId, setReceiverPointId] = useState<number | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    const tripId = Number(post.id);
+    setCargoRoutePoints(null);
+    setCargoRoutePointsError(null);
+    setSenderPointId(null);
+    setReceiverPointId(null);
+    if (!hasCargoItems || !Number.isSafeInteger(tripId) || tripId <= 0) {
+      setCargoRoutePointsLoading(false);
+      return;
+    }
+
+    setCargoRoutePointsLoading(true);
+    shipmentsApi
+      .getRoutePoints(tripId)
+      .then(({ data }) => {
+        if (!active) return;
+        setCargoRoutePoints(data);
+        const senderId =
+          data.senderPoints.length === 1 ? data.senderPoints[0].id : null;
+        const receiverId =
+          data.receiverPoints.length === 1 ? data.receiverPoints[0].id : null;
+        setSenderPointId(senderId);
+        setReceiverPointId(receiverId !== senderId ? receiverId : null);
+      })
+      .catch((error: unknown) => {
+        if (active) {
+          setCargoRoutePointsError(
+            error instanceof Error
+              ? error.message
+              : 'Không thể tải điểm gửi và điểm nhận hàng.',
+          );
+        }
+      })
+      .finally(() => {
+        if (active) setCargoRoutePointsLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [hasCargoItems, post.id]);
 
   const handleLuggageChange = useCallback(
     (fee: number, weight: number, items: ILuggageItem[]) => {
@@ -399,15 +463,26 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
       return;
     }
 
-    const validCargoItems = luggageItems.filter(
-      (item) =>
-        item.type === 'Xe máy' ||
-        item.type === 'Xe đạp' ||
-        (item.weight || 0) > 0 ||
-        (item.length && item.width && item.height),
-    );
+    if (validCargoItems.length > 0) {
+      if (cargoRoutePointsLoading) {
+        setSubmitError('Đang tải điểm gửi và điểm nhận hàng. Vui lòng thử lại.');
+        return;
+      }
+      if (cargoRoutePointsError) {
+        setSubmitError(cargoRoutePointsError);
+        return;
+      }
+      if (!senderPointId || !receiverPointId) {
+        setSubmitError('Vui lòng chọn điểm gửi và điểm nhận hàng trên tuyến.');
+        return;
+      }
+      if (senderPointId === receiverPointId) {
+        setSubmitError('Điểm gửi và điểm nhận hàng phải khác nhau.');
+        return;
+      }
+    }
     const mappedCargoItems =
-      validCargoItems.length > 0 && luggageFee > 0
+      validCargoItems.length > 0
         ? validCargoItems.map((item) => ({
             name:
               item.type === 'Xe máy'
@@ -445,6 +520,9 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
       pickupPoint: pickup || post.province,
       dropoffPoint: dropoff || post.district,
       cargoItems: mappedCargoItems,
+      ...(mappedCargoItems
+        ? { senderPointId: senderPointId!, receiverPointId: receiverPointId! }
+        : {}),
     };
 
     submissionLockRef.current = true;
@@ -1138,6 +1216,90 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
               cargoCapacity={cargoCapacity}
               onFeeChange={handleLuggageChange}
             />
+
+            {hasCargoItems && (
+              <div className="border-b border-slate-200 p-4 md:p-5">
+                <h2 className="text-base font-black text-slate-950">
+                  Điểm gửi và điểm nhận hàng
+                </h2>
+                <p className="mt-1 text-xs text-slate-600">
+                  Chọn điểm đang hoạt động trên tuyến. Nếu mỗi loại chỉ có một điểm,
+                  hệ thống sẽ tự chọn điểm đó.
+                </p>
+                {cargoRoutePointsLoading ? (
+                  <p role="status" className="mt-3 text-sm text-slate-500">
+                    Đang tải điểm gửi và điểm nhận hàng...
+                  </p>
+                ) : cargoRoutePointsError ? (
+                  <p role="alert" className="mt-3 text-sm font-semibold text-rose-700">
+                    {cargoRoutePointsError}
+                  </p>
+                ) : (
+                  <div className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <label className="block">
+                      <span className="mb-1 block text-xs font-bold text-slate-700">
+                        Điểm gửi <span className="text-rose-500">*</span>
+                      </span>
+                      <select
+                        aria-label="Điểm gửi hàng"
+                        value={senderPointId ?? ''}
+                        onChange={(event) => {
+                          const nextId = Number(event.target.value) || null;
+                          setSenderPointId(nextId);
+                          if (nextId === receiverPointId) setReceiverPointId(null);
+                        }}
+                        disabled={!cargoRoutePoints?.senderPoints.length}
+                        className="h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 outline-none focus:border-accent disabled:bg-slate-50"
+                      >
+                        <option value="">Chọn điểm gửi</option>
+                        {cargoRoutePoints?.senderPoints.map((point) => (
+                          <option key={point.id} value={point.id}>
+                            {point.name} — {point.address}
+                          </option>
+                        ))}
+                      </select>
+                      {!cargoRoutePointsLoading &&
+                        !cargoRoutePoints?.senderPoints.length && (
+                          <span className="mt-1 block text-xs text-amber-700">
+                            Tuyến chưa có điểm gửi hàng đang hoạt động.
+                          </span>
+                        )}
+                    </label>
+                    <label className="block">
+                      <span className="mb-1 block text-xs font-bold text-slate-700">
+                        Điểm nhận <span className="text-rose-500">*</span>
+                      </span>
+                      <select
+                        aria-label="Điểm nhận hàng"
+                        value={receiverPointId ?? ''}
+                        onChange={(event) =>
+                          setReceiverPointId(Number(event.target.value) || null)
+                        }
+                        disabled={!cargoRoutePoints?.receiverPoints.length}
+                        className="h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 outline-none focus:border-accent disabled:bg-slate-50"
+                      >
+                        <option value="">Chọn điểm nhận</option>
+                        {cargoRoutePoints?.receiverPoints.map((point) => (
+                          <option
+                            key={point.id}
+                            value={point.id}
+                            disabled={point.id === senderPointId}
+                          >
+                            {point.name} — {point.address}
+                          </option>
+                        ))}
+                      </select>
+                      {!cargoRoutePointsLoading &&
+                        !cargoRoutePoints?.receiverPoints.length && (
+                          <span className="mt-1 block text-xs text-amber-700">
+                            Tuyến chưa có điểm nhận hàng đang hoạt động.
+                          </span>
+                        )}
+                    </label>
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="p-4 md:p-5 border-b border-slate-200 flex items-center justify-center">
               <label className="flex items-center gap-2.5 cursor-pointer select-none">

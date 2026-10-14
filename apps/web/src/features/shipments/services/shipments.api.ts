@@ -30,6 +30,8 @@ export type CargoItemInput = {
 
 export type CreateShipmentPayload = {
   tripId: number;
+  senderPointId: number;
+  receiverPointId: number;
   sender: {
     fullName: string;
     phoneNumber: string;
@@ -43,6 +45,18 @@ export type CreateShipmentPayload = {
   isFragile?: boolean;
   isValuable?: boolean;
   note?: string;
+};
+
+export type ShipmentRoutePoint = {
+  id: number;
+  name: string;
+  address: string;
+};
+
+export type ShipmentRoutePoints = {
+  tripId: number;
+  senderPoints: ShipmentRoutePoint[];
+  receiverPoints: ShipmentRoutePoint[];
 };
 
 export type ShipmentResponseData = {
@@ -113,6 +127,20 @@ export type ShipmentResponseData = {
 };
 
 export const shipmentsApi = {
+  async getRoutePoints(tripId: number): Promise<{ data: ShipmentRoutePoints }> {
+    const res = await fetch(
+      `${API_BASE_URL}/shipments/trips/${tripId}/route-points`,
+    );
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new ApiError(
+        err.message || 'Không thể tải điểm gửi và điểm nhận của chuyến xe.',
+        res.status,
+      );
+    }
+    return res.json();
+  },
+
   async createShipment(
     payload: CreateShipmentPayload,
     accessToken?: string,

@@ -33,21 +33,12 @@ import {
 import { tripsApi, type ApiTrip } from '@/features/trips/services/trips.api';
 import {
   shipmentsApi,
+  type ShipmentRoutePoints,
   type ShipmentResponseData,
 } from '@/features/shipments/services/shipments.api';
 import { PAYMENT_DRAFT_STORAGE_PREFIX } from '@/features/booking/services/payment-draft';
 
 const POPULAR_LOCATIONS = ['TP.HCM', 'Đà Lạt', 'Vũng Tàu', 'Nha Trang'];
-
-const CARGO_CATEGORIES = [
-  'Bưu phẩm',
-  'Thực phẩm',
-  'Điện tử',
-  'Quần áo',
-  'Hàng gia dụng',
-  'Hàng dễ vỡ',
-  'Giá trị cao',
-];
 
 function SendFreightContent() {
   const router = useRouter();
@@ -67,6 +58,11 @@ function SendFreightContent() {
   const [selectedTimeFilter, setSelectedTimeFilter] = useState<string>('all'); // 'all' | 'morning' | 'afternoon' | 'evening' | 'night'
   const [selectedPriceSort, setSelectedPriceSort] = useState<string>('default'); // 'default' | 'asc' | 'desc'
   const [visibleTripCount, setVisibleTripCount] = useState<number>(8);
+  const [routePoints, setRoutePoints] = useState<ShipmentRoutePoints | null>(null);
+  const [routePointsLoading, setRoutePointsLoading] = useState(false);
+  const [routePointsError, setRoutePointsError] = useState<string | null>(null);
+  const [senderPointId, setSenderPointId] = useState<number | null>(null);
+  const [receiverPointId, setReceiverPointId] = useState<number | null>(null);
 
   const handleSwapLocations = () => {
     setOrigin(destination);
@@ -141,10 +137,17 @@ function SendFreightContent() {
 
   // Kiện hàng
   const [cargoCategories, setCargoCategories] = useState<
-    Array<{ categoryId: number; name: string; description: string }>
+    Array<{
+      categoryId: number;
+      name: string;
+      description: string;
+      capacityGroup: string;
+    }>
   >([]);
+  const [cargoCategoriesLoading, setCargoCategoriesLoading] = useState(true);
+  const [cargoCategoriesError, setCargoCategoriesError] = useState<string | null>(null);
   const [cargoName, setCargoName] = useState<string>('');
-  const [cargoCategory, setCargoCategory] = useState<string>('Bưu phẩm');
+  const [cargoCategory, setCargoCategory] = useState<string>('');
   const [quantity, setQuantity] = useState<number>(1);
   const [weight, setWeight] = useState<number>(5);
   const [length, setLength] = useState<string>('');
@@ -157,18 +160,32 @@ function SendFreightContent() {
   // Tải danh mục loại hàng hóa từ API
   useEffect(() => {
     let isMounted = true;
+    setCargoCategoriesLoading(true);
     shipmentsApi
       .getCargoCategories()
       .then((res) => {
-        if (isMounted && res.data && res.data.length > 0) {
-          setCargoCategories(res.data);
-          if (!cargoCategory) {
-            setCargoCategory(res.data[0].name);
-          }
+        if (isMounted) {
+          const categories = res.data || [];
+          setCargoCategories(categories);
+          setCargoCategory(categories[0]?.name || '');
+          setCargoCategoriesError(
+            categories.length === 0
+              ? 'Hệ thống chưa cấu hình danh mục loại hàng hóa.'
+              : null,
+          );
         }
       })
-      .catch(() => {
-        // Fallback giữ nguyên CARGO_CATEGORIES mặc định nếu có lỗi
+      .catch((error: unknown) => {
+        if (isMounted) {
+          setCargoCategoriesError(
+            error instanceof Error
+              ? error.message
+              : 'Không thể tải danh mục loại hàng hóa.',
+          );
+        }
+      })
+      .finally(() => {
+        if (isMounted) setCargoCategoriesLoading(false);
       });
     return () => {
       isMounted = false;
@@ -238,32 +255,51 @@ function SendFreightContent() {
     };
   }, [origin, destination, date]);
 
-  // Tính cước phí dự kiến
-  const calculatedPricing = useMemo(() => {
-    let base = 50000;
-    const safeWeight = Math.max(1, Number(weight) || 1);
-    const safeQty = Math.max(1, Number(quantity) || 1);
-    const totalWeight = safeWeight * safeQty;
-
-    if (totalWeight > 5) {
-      base += Math.ceil(totalWeight - 5) * 10000;
-    }
-
-    let service = 0;
-    if (isFragile || cargoCategory === 'Hàng dễ vỡ') service += 20000;
-    if (isValuable || cargoCategory === 'Giá trị cao') service += 50000;
-
-    return {
-      baseFee: base,
-      serviceFee: service,
-      totalFee: base + service,
-      totalWeight,
-    };
-  }, [weight, quantity, isFragile, isValuable, cargoCategory]);
-
   const selectedTrip = useMemo(() => {
     return trips.find((t) => t.id === selectedTripId) || null;
   }, [trips, selectedTripId]);
+
+  useEffect(() => {
+    let active = true;
+    setRoutePoints(null);
+    setRoutePointsError(null);
+    setSenderPointId(null);
+    setReceiverPointId(null);
+    if (!selectedTripId) {
+      setRoutePointsLoading(false);
+      return;
+    }
+
+    setRoutePointsLoading(true);
+    shipmentsApi
+      .getRoutePoints(selectedTripId)
+      .then(({ data }) => {
+        if (!active) return;
+        setRoutePoints(data);
+        if (data.senderPoints.length === 1) {
+          setSenderPointId(data.senderPoints[0].id);
+        }
+        if (data.receiverPoints.length === 1) {
+          setReceiverPointId(data.receiverPoints[0].id);
+        }
+      })
+      .catch((error: unknown) => {
+        if (active) {
+          setRoutePointsError(
+            error instanceof Error
+              ? error.message
+              : 'Không thể tải điểm gửi và điểm nhận của chuyến xe.',
+          );
+        }
+      })
+      .finally(() => {
+        if (active) setRoutePointsLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [selectedTripId]);
 
   // Xử lý tạo mã vận đơn
   const handleCreateShipment = async () => {
@@ -271,6 +307,28 @@ function SendFreightContent() {
 
     if (!selectedTripId) {
       setErrorMessage('Vui lòng chọn một chuyến xe vận chuyển hàng.');
+      return;
+    }
+    if (cargoCategoriesLoading || cargoCategoriesError || !cargoCategory) {
+      setErrorMessage(
+        cargoCategoriesError ||
+          'Danh mục loại hàng chưa sẵn sàng. Vui lòng thử lại sau.',
+      );
+      return;
+    }
+
+    if (routePointsLoading || routePointsError) {
+      setErrorMessage(
+        routePointsError || 'Đang tải điểm gửi và điểm nhận. Vui lòng thử lại.',
+      );
+      return;
+    }
+    if (!senderPointId || !receiverPointId) {
+      setErrorMessage('Vui lòng chọn điểm gửi và điểm nhận hàng trên tuyến.');
+      return;
+    }
+    if (senderPointId === receiverPointId) {
+      setErrorMessage('Điểm gửi và điểm nhận phải khác nhau.');
       return;
     }
 
@@ -303,6 +361,8 @@ function SendFreightContent() {
     try {
       const payload = {
         tripId: selectedTripId,
+        senderPointId,
+        receiverPointId,
         sender: {
           fullName: senderName.trim(),
           phoneNumber: senderPhone.trim(),
@@ -324,8 +384,8 @@ function SendFreightContent() {
             note: note.trim() || undefined,
           },
         ],
-        isFragile: isFragile || cargoCategory === 'Hàng dễ vỡ',
-        isValuable: isValuable || cargoCategory === 'Giá trị cao',
+        isFragile,
+        isValuable,
         note: note.trim() || undefined,
       };
 
@@ -974,6 +1034,85 @@ function SendFreightContent() {
                           </div>
                         </div>
                       </div>
+
+                      <div className="mt-6 border-t border-slate-100 pt-5">
+                        <h3 className="text-sm font-extrabold text-slate-900">
+                          Điểm gửi và điểm nhận hàng
+                        </h3>
+                        <p className="mt-1 text-xs text-slate-500">
+                          Chọn điểm đang hoạt động trên tuyến của chuyến xe đã chọn.
+                        </p>
+                        {routePointsLoading ? (
+                          <p role="status" className="mt-3 text-sm text-slate-500">
+                            Đang tải danh sách điểm gửi và điểm nhận...
+                          </p>
+                        ) : routePointsError ? (
+                          <p role="alert" className="mt-3 text-sm font-semibold text-rose-700">
+                            {routePointsError}
+                          </p>
+                        ) : (
+                          <div className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-2">
+                            <label className="block">
+                              <span className="mb-1 block text-[11px] font-bold uppercase text-slate-500">
+                                Điểm gửi <span className="text-rose-500">*</span>
+                              </span>
+                              <select
+                                value={senderPointId ?? ''}
+                                onChange={(event) => {
+                                  const nextId = Number(event.target.value) || null;
+                                  setSenderPointId(nextId);
+                                  if (nextId === receiverPointId) {
+                                    setReceiverPointId(null);
+                                  }
+                                }}
+                                disabled={!routePoints?.senderPoints.length}
+                                className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 focus:border-orange-500 focus:outline-none disabled:bg-slate-50"
+                              >
+                                <option value="">Chọn điểm gửi</option>
+                                {routePoints?.senderPoints.map((point) => (
+                                  <option key={point.id} value={point.id}>
+                                    {point.name} — {point.address}
+                                  </option>
+                                ))}
+                              </select>
+                              {!routePoints?.senderPoints.length && (
+                                <span className="mt-1 block text-xs text-amber-700">
+                                  Chuyến xe chưa có điểm gửi hàng đang hoạt động.
+                                </span>
+                              )}
+                            </label>
+                            <label className="block">
+                              <span className="mb-1 block text-[11px] font-bold uppercase text-slate-500">
+                                Điểm nhận <span className="text-rose-500">*</span>
+                              </span>
+                              <select
+                                value={receiverPointId ?? ''}
+                                onChange={(event) =>
+                                  setReceiverPointId(Number(event.target.value) || null)
+                                }
+                                disabled={!routePoints?.receiverPoints.length}
+                                className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 focus:border-orange-500 focus:outline-none disabled:bg-slate-50"
+                              >
+                                <option value="">Chọn điểm nhận</option>
+                                {routePoints?.receiverPoints.map((point) => (
+                                  <option
+                                    key={point.id}
+                                    value={point.id}
+                                    disabled={point.id === senderPointId}
+                                  >
+                                    {point.name} — {point.address}
+                                  </option>
+                                ))}
+                              </select>
+                              {!routePoints?.receiverPoints.length && (
+                                <span className="mt-1 block text-xs text-amber-700">
+                                  Chuyến xe chưa có điểm nhận hàng đang hoạt động.
+                                </span>
+                              )}
+                            </label>
+                          </div>
+                        )}
+                      </div>
                     </div>
 
                     {/* STEP 4: THÔNG TIN KIỆN HÀNG */}
@@ -1009,32 +1148,36 @@ function SendFreightContent() {
                           <label className="block text-[11px] font-bold text-slate-400 uppercase mb-2">
                             Loại hàng hóa
                           </label>
-                          <div className="flex flex-wrap gap-2">
-                            {[
-                              { label: 'Bưu phẩm', emoji: '📦' },
-                              { label: 'Thực phẩm', emoji: '🍎' },
-                              { label: 'Quần áo', emoji: '👕' },
-                              { label: 'Điện tử', emoji: '💻' },
-                              { label: 'Khác', emoji: '📦' },
-                            ].map((tag) => {
-                              const isSelected = cargoCategory.toLowerCase() === tag.label.toLowerCase();
+                          {cargoCategoriesLoading ? (
+                            <p role="status" className="text-xs text-slate-500">
+                              Đang tải danh mục loại hàng...
+                            </p>
+                          ) : cargoCategoriesError ? (
+                            <p role="alert" className="text-xs font-semibold text-rose-700">
+                              {cargoCategoriesError}
+                            </p>
+                          ) : (
+                            <div className="flex flex-wrap gap-2">
+                            {cargoCategories.map((category) => {
+                              const isSelected = cargoCategory === category.name;
                               return (
                                 <button
                                   type="button"
-                                  key={tag.label}
-                                  onClick={() => setCargoCategory(tag.label)}
+                                  key={category.categoryId}
+                                  onClick={() => setCargoCategory(category.name)}
                                   className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 border ${
                                     isSelected
                                       ? 'bg-slate-900 text-white border-slate-900'
                                       : 'bg-slate-50 text-slate-700 border-slate-200 hover:border-slate-300'
                                   }`}
+                                  title={category.description}
                                 >
-                                  <span>{tag.emoji}</span>
-                                  <span>{tag.label}</span>
+                                  <span>{category.name}</span>
                                 </button>
                               );
                             })}
-                          </div>
+                            </div>
+                          )}
                         </div>
 
                         {/* Số kiện & Khối lượng */}
@@ -1290,39 +1433,30 @@ function SendFreightContent() {
                       {/* Card Body pricing details */}
                       <div className="p-5 space-y-3 text-sm">
                         <div className="flex justify-between items-center text-xs">
-                          <span className="text-slate-500">Cước cơ bản (5kg đầu)</span>
-                          <span className="font-bold text-slate-900">50.000đ</span>
+                          <span className="text-slate-500">Cước vận chuyển</span>
+                          <span className="font-bold text-slate-900">Theo bảng cước tuyến</span>
                         </div>
 
                         <div className="flex justify-between items-center text-xs">
-                          <span className="text-slate-500">Phụ phí vượt cân</span>
-                          <span className="font-bold text-slate-900">
-                            {calculatedPricing.totalWeight > 5
-                              ? `${((calculatedPricing.totalWeight - 5) * 10000).toLocaleString('vi-VN')}đ`
-                              : '0đ'}
-                          </span>
+                          <span className="text-slate-500">Phí hàng dễ vỡ</span>
+                          <span className="font-bold text-slate-900">{isFragile ? 'Đã chọn' : 'Không chọn'}</span>
                         </div>
 
                         <div className="flex justify-between items-center text-xs">
-                          <span className="text-slate-500">Hàng dễ vỡ</span>
-                          <span className="font-bold text-slate-900">
-                            {isFragile || cargoCategory === 'Hàng dễ vỡ' ? '20.000đ' : '0đ'}
-                          </span>
-                        </div>
-
-                        <div className="flex justify-between items-center text-xs">
-                          <span className="text-slate-500">Bảo hiểm</span>
-                          <span className="font-bold text-slate-900">
-                            {isValuable || cargoCategory === 'Giá trị cao' ? '50.000đ' : '0đ'}
-                          </span>
+                          <span className="text-slate-500">Phí hàng giá trị cao</span>
+                          <span className="font-bold text-slate-900">{isValuable ? 'Đã chọn' : 'Không chọn'}</span>
                         </div>
 
                         <div className="pt-3 border-t border-slate-100 flex items-baseline justify-between">
                           <span className="text-sm font-extrabold text-slate-900">Tổng cước phí:</span>
-                          <span className="text-2xl font-black text-[#EF4444]">
-                            {calculatedPricing.totalFee.toLocaleString('vi-VN')}đ
+                          <span className="text-sm font-black text-[#EF4444]">
+                            Máy chủ tính sau khi xác nhận
                           </span>
                         </div>
+                        <p className="text-xs leading-relaxed text-slate-500">
+                          Cước chính xác được tính theo điểm gửi, điểm nhận, loại hàng và
+                          tổng khối lượng. Hệ thống hiển thị tổng sau khi tạo vận đơn.
+                        </p>
 
                         {/* Progress */}
                         <div className="pt-3">

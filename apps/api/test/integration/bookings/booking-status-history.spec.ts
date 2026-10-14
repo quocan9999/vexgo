@@ -289,6 +289,20 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
     tripSeatIds = trip.gheChuyenXes.map((s) => s.gheChuyenXeId);
   });
 
+  it('does not expose shipment list or detail to an anonymous caller', async () => {
+    currentPrincipal = null;
+
+    const [listResponse, detailResponse] = await Promise.all([
+      request(app.getHttpServer()).get('/api/v1/shipments'),
+      request(app.getHttpServer()).get('/api/v1/shipments/1'),
+    ]);
+
+    expect(listResponse.status).toBe(401);
+    expect(detailResponse.status).toBe(401);
+    expect(listResponse.body.data).toBeUndefined();
+    expect(detailResponse.body.data).toBeUndefined();
+  });
+
   it('rejects a booking without a hold token before creating any booking rows', async () => {
     const beforeOrders = await prisma.donGiaoDich.count({
       where: { nhaXeId: busCompanyId },
@@ -430,8 +444,32 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
     const guestDetailResponse = await request(app.getHttpServer()).get(
       `/api/v1/bookings/${bookingData.bookingId}/detail`,
     );
-    expect(guestDetailResponse.status).toBe(200);
-    expect(guestDetailResponse.body.data.passenger.phoneNumber).toBe(customerPhone);
+    expect(guestDetailResponse.status).toBe(404);
+    expect(guestDetailResponse.body.error).toBe('BOOKING_NOT_FOUND');
+    expect(guestDetailResponse.body.data).toBeUndefined();
+
+    const guestDetailWithWrongCode = await request(app.getHttpServer())
+      .get(`/api/v1/bookings/${bookingData.bookingId}/detail`)
+      .set('x-booking-code', `${bookingData.bookingCode}X`)
+      .set('x-booking-phone', customerPhone);
+    expect(guestDetailWithWrongCode.status).toBe(404);
+    expect(guestDetailWithWrongCode.body.data).toBeUndefined();
+
+    const guestDetailWithWrongPhone = await request(app.getHttpServer())
+      .get(`/api/v1/bookings/${bookingData.bookingId}/detail`)
+      .set('x-booking-code', bookingData.bookingCode)
+      .set('x-booking-phone', '0900000000');
+    expect(guestDetailWithWrongPhone.status).toBe(404);
+    expect(guestDetailWithWrongPhone.body.data).toBeUndefined();
+
+    const guestDetailWithCredentials = await request(app.getHttpServer())
+      .get(`/api/v1/bookings/${bookingData.bookingId}/detail`)
+      .set('x-booking-code', bookingData.bookingCode)
+      .set('x-booking-phone', customerPhone);
+    expect(guestDetailWithCredentials.status).toBe(200);
+    expect(guestDetailWithCredentials.body.data.passenger.phoneNumber).toBe(
+      customerPhone,
+    );
 
     currentPrincipal = customerPrincipal;
     const historyResponse = await request(app.getHttpServer())
@@ -518,6 +556,47 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
         where: { phieuDatVe: { donGiaoDich: { nhaXeId: busCompanyId } } },
       }),
     ).toBe(1);
+  });
+
+  it('creates concurrent bookings on distinct holds with unique order and booking codes', async () => {
+    currentPrincipal = null;
+    const seatIds = tripSeatIds.slice(0, 2);
+    expect(seatIds).toHaveLength(2);
+
+    const holdResponses = await Promise.all(
+      seatIds.map((seatId) =>
+        request(app.getHttpServer())
+          .post('/api/v1/seat-holds')
+          .send({ tripId, seatIds: [seatId] }),
+      ),
+    );
+    expect(holdResponses.map((response) => response.status)).toEqual([201, 201]);
+
+    const bookingResponses = await Promise.all(
+      holdResponses.map((response, index) => {
+        const holdToken = (response.body.data ?? response.body).holdToken;
+        return request(app.getHttpServer())
+          .post('/api/v1/bookings')
+          .send({
+            tripId,
+            seatIds: [seatIds[index]],
+            holdToken,
+            contact: { fullName: `Guest ${index}`, phone: '0901234567' },
+            pickupPoint: 'Bến xe Miền Đông',
+            dropoffPoint: 'Bến xe Đà Lạt',
+          });
+      }),
+    );
+
+    expect(bookingResponses.map((response) => response.status)).toEqual([201, 201]);
+    const bookings = bookingResponses.map(
+      (response) => response.body.data ?? response.body,
+    );
+    expect(new Set(bookings.map((booking) => booking.bookingCode)).size).toBe(2);
+    expect(new Set(bookings.map((booking) => booking.orderCode)).size).toBe(2);
+    expect(
+      bookings.every((booking) => /^.+-PDV-[A-F\d]{30}$/.test(booking.bookingCode)),
+    ).toBe(true);
   });
 
   it('rolls back hold consumption when a later booking transaction step fails', async () => {

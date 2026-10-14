@@ -64,6 +64,8 @@ export type BookingResponseData = {
   ticketPrice?: number | string;
   paymentMethod?: string | null;
   paymentStatus?: string | null;
+  paymentExpiresAt?: string;
+  serverTime?: string;
   status?: string;
   busCompanyName?: string | null;
   vehicleType?: string | null;
@@ -107,6 +109,8 @@ export type CreateBookingPayload = {
   tripId: number;
   seatIds: number[];
   holdToken: string;
+  senderPointId?: number;
+  receiverPointId?: number;
   contact: {
     fullName: string;
     phone: string;
@@ -303,11 +307,22 @@ export const bookingsApi = {
 
   async getPublicBookingDetail(
     bookingId: number,
-    options?: { signal?: AbortSignal; accessToken?: string },
+    options?: {
+      signal?: AbortSignal;
+      accessToken?: string;
+      bookingCode?: string;
+      phoneNumber?: string;
+    },
   ): Promise<{ data: BookingResponseData }> {
     const headers: Record<string, string> = {};
     if (options?.accessToken) {
       headers.Authorization = `Bearer ${options.accessToken}`;
+    }
+    if (options?.bookingCode) {
+      headers['x-booking-code'] = options.bookingCode;
+    }
+    if (options?.phoneNumber) {
+      headers['x-booking-phone'] = options.phoneNumber;
     }
     const res = await fetch(`${API_BASE_URL}/bookings/${bookingId}/detail`, {
       signal: options?.signal,

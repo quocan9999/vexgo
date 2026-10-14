@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   Param,
   ParseIntPipe,
   Post,
@@ -69,7 +70,14 @@ export class BookingsController {
   findPublicBookingDetail(
     @Param('bookingId', ParseIntPipe) bookingId: number,
     @OptionalPrincipal() principal?: AuthPrincipal,
+    @Headers('x-booking-code') bookingCode?: string,
+    @Headers('x-booking-phone') phoneNumber?: string,
   ) {
-    return this.bookingsService.findPublicBookingById(bookingId, principal);
+    return this.bookingsService.findPublicBookingById(
+      bookingId,
+      principal,
+      bookingCode,
+      phoneNumber,
+    );
   }
 }

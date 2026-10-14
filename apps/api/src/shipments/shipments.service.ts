@@ -4,10 +4,12 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { hasTenantRole } from '../auth/principal-scope.js';
 import {
   businessDateStartUtc,
   resolveBusinessTimeZone,
@@ -50,6 +52,69 @@ export class ShipmentsService {
     this.businessTimeZone = resolveBusinessTimeZone(
       config.get<string>('BUSINESS_TIME_ZONE'),
     );
+  }
+
+  async getRoutePoints(tripId: number) {
+    const trip = await this.prisma.chuyenXe.findUnique({
+      where: { chuyenXeId: tripId },
+      select: {
+        chuyenXeId: true,
+        tuyenXeId: true,
+        nhaXeId: true,
+        nhanGuiHang: true,
+      },
+    });
+
+    if (!trip) {
+      throw new NotFoundException({
+        error: 'TRIP_NOT_FOUND',
+        message: 'Không tìm thấy chuyến xe tiếp nhận hàng.',
+      });
+    }
+
+    if (!trip.nhanGuiHang) {
+      throw new ConflictException({
+        error: 'TRIP_DOES_NOT_ACCEPT_CARGO',
+        message: 'Chuyến xe này không hỗ trợ nhận gửi hàng.',
+      });
+    }
+
+    const routePoints = await this.prisma.diemGiaoNhanTuyenXe.findMany({
+      where: {
+        tuyenXeId: trip.tuyenXeId,
+        diemGiaoNhanHang: {
+          nhaXeId: trip.nhaXeId,
+          trangThai: 'HOAT_DONG',
+        },
+      },
+      include: { diemGiaoNhanHang: true },
+      orderBy: { diemGiaoNhanHangId: 'asc' },
+    });
+    const toOption = (point: (typeof routePoints)[number]) => ({
+      id: point.diemGiaoNhanHangId,
+      name: point.diemGiaoNhanHang.tenDiem,
+      address: point.diemGiaoNhanHang.diaChi,
+    });
+
+    return {
+      tripId: trip.chuyenXeId,
+      senderPoints: routePoints
+        .filter(
+          (point) =>
+            point.diemGiaoNhanHang.trangThai === 'HOAT_DONG' &&
+            point.diemGiaoNhanHang.nhaXeId === trip.nhaXeId &&
+            (point.vaiTro === 'GUI_HANG' || point.vaiTro === 'CA_HAI'),
+        )
+        .map(toOption),
+      receiverPoints: routePoints
+        .filter(
+          (point) =>
+            point.diemGiaoNhanHang.trangThai === 'HOAT_DONG' &&
+            point.diemGiaoNhanHang.nhaXeId === trip.nhaXeId &&
+            (point.vaiTro === 'NHAN_HANG' || point.vaiTro === 'CA_HAI'),
+        )
+        .map(toOption),
+    };
   }
 
   async createShipment(dto: CreateShipmentDto, taiKhoanId?: number) {
@@ -101,78 +166,155 @@ export class ShipmentsService {
       });
     }
 
-    // Determine sender & receiver points
-    let diemGuiId = dto.senderPointId;
-    let diemNhanId = dto.receiverPointId;
-
-    if (!diemGuiId || !diemNhanId) {
-      const routePoints = await this.prisma.diemGiaoNhanTuyenXe.findMany({
-        where: { tuyenXeId: trip.tuyenXeId },
-        include: { diemGiaoNhanHang: true },
-      });
-
-      const routeSender = routePoints.find(
-        (p) =>
-          (p.vaiTro === 'GUI_HANG' || p.vaiTro === 'CA_HAI') &&
-          p.diemGiaoNhanHang.trangThai === 'HOAT_DONG',
-      );
-      const routeReceiver = routePoints.find(
-        (p) =>
-          (p.vaiTro === 'NHAN_HANG' || p.vaiTro === 'CA_HAI') &&
-          p.diemGiaoNhanHang.trangThai === 'HOAT_DONG',
-      );
-
-      if (!diemGuiId && routeSender) {
-        diemGuiId = routeSender.diemGiaoNhanHangId;
+    const routePoints = await this.prisma.diemGiaoNhanTuyenXe.findMany({
+      where: {
+        tuyenXeId: trip.tuyenXeId,
+        diemGiaoNhanHang: {
+          nhaXeId: trip.nhaXeId,
+          trangThai: 'HOAT_DONG',
+        },
+      },
+      include: { diemGiaoNhanHang: true },
+    });
+    const senderCandidates = routePoints.filter(
+      (point) =>
+        (point.vaiTro === 'GUI_HANG' || point.vaiTro === 'CA_HAI') &&
+        point.diemGiaoNhanHang.trangThai === 'HOAT_DONG' &&
+        point.diemGiaoNhanHang.nhaXeId === trip.nhaXeId,
+    );
+    const receiverCandidates = routePoints.filter(
+      (point) =>
+        (point.vaiTro === 'NHAN_HANG' || point.vaiTro === 'CA_HAI') &&
+        point.diemGiaoNhanHang.trangThai === 'HOAT_DONG' &&
+        point.diemGiaoNhanHang.nhaXeId === trip.nhaXeId,
+    );
+    const resolvePoint = (
+      requestedId: number | undefined,
+      candidates: typeof routePoints,
+    ) => {
+      if (requestedId) {
+        return candidates.find(
+          (point) => point.diemGiaoNhanHangId === requestedId,
+        )?.diemGiaoNhanHangId;
       }
-      if (!diemNhanId && routeReceiver) {
-        diemNhanId = routeReceiver.diemGiaoNhanHangId;
-      }
+      return candidates.length === 1
+        ? candidates[0].diemGiaoNhanHangId
+        : undefined;
+    };
+    const diemGuiId = resolvePoint(dto.senderPointId, senderCandidates);
+    const diemNhanId = resolvePoint(dto.receiverPointId, receiverCandidates);
 
-      // Fallback to operator active points if not specifically set on route
-      if (!diemGuiId) {
-        const companyPoint = await this.prisma.diemGiaoNhanHang.findFirst({
-          where: {
-            nhaXeId: trip.nhaXeId,
-            trangThai: 'HOAT_DONG',
-          },
-        });
-        if (companyPoint) diemGuiId = companyPoint.diemGiaoNhanHangId;
-      }
-      if (!diemNhanId) {
-        const companyPoint = await this.prisma.diemGiaoNhanHang.findFirst({
-          where: {
-            nhaXeId: trip.nhaXeId,
-            trangThai: 'HOAT_DONG',
-            diemGiaoNhanHangId: { not: diemGuiId ?? -1 },
-          },
-        });
-        if (companyPoint) {
-          diemNhanId = companyPoint.diemGiaoNhanHangId;
-        } else {
-          diemNhanId = diemGuiId;
-        }
-      }
-    }
-
-    if (!diemGuiId || !diemNhanId) {
+    if (!diemGuiId || !diemNhanId || diemGuiId === diemNhanId) {
       throw new ConflictException({
         error: 'SHIPMENT_POINTS_NOT_FOUND',
-        message: 'Chưa có cấu hình điểm gửi/nhận hàng cho nhà xe này.',
+        message:
+          'Vui lòng chọn điểm gửi và điểm nhận đang hoạt động trên tuyến của chuyến xe.',
       });
     }
 
-    // Calculate freight cost:
-    // Base rule: 50,000 for up to 5kg, 10,000 per kg above 5kg
-    // Fragile surcharge: +20,000, Valuable insurance: +50,000
-    let totalWeight = 0;
-    for (const item of dto.items) {
-      totalWeight += Number(item.weight) * Number(item.quantity);
+    const allLoaiHang = await this.prisma.loaiHangHoa.findMany({
+      where: { trangThai: 'HOAT_DONG' },
+    });
+    if (allLoaiHang.length === 0) {
+      throw new ConflictException({
+        error: 'CARGO_TYPE_NOT_CONFIGURED',
+        message: 'Hệ thống chưa cấu hình danh mục loại hàng hóa.',
+      });
     }
 
-    let cuocChinh = 50000;
-    if (totalWeight > 5) {
-      cuocChinh += Math.ceil(totalWeight - 5) * 10000;
+    const categoryWeight = new Map<number, number>();
+    for (const item of dto.items) {
+      const normalizedCategory = item.category?.trim().toLocaleUpperCase('vi-VN');
+      let category = normalizedCategory
+        ? allLoaiHang.find(
+            (type) =>
+              type.tenLoai.trim().toLocaleUpperCase('vi-VN') ===
+                normalizedCategory ||
+              type.nhomSucChua === normalizedCategory,
+          )
+        : undefined;
+
+      if (normalizedCategory && !category) {
+        throw new ConflictException({
+          error: 'CARGO_TYPE_NOT_FOUND',
+          message: `Không tìm thấy loại hàng hóa "${item.category}".`,
+        });
+      }
+
+      if (!category) {
+        const normalizedName = item.name.toLocaleUpperCase('vi-VN');
+        const capacityGroup = normalizedName.includes('XE MÁY')
+          ? 'XE_MAY'
+          : normalizedName.includes('XE ĐẠP')
+            ? 'HANG_CONG_KENH'
+            : item.weight * item.quantity >= 20
+              ? 'HANG_CONG_KENH'
+              : 'HANG_NHE';
+        category = allLoaiHang.find(
+          (type) => type.nhomSucChua === capacityGroup,
+        );
+      }
+
+      if (!category) {
+        throw new ConflictException({
+          error: 'CARGO_TYPE_NOT_FOUND',
+          message: `Không tìm thấy loại hàng phù hợp cho món: ${item.name}.`,
+        });
+      }
+
+      categoryWeight.set(
+        category.loaiHangHoaId,
+        (categoryWeight.get(category.loaiHangHoaId) ?? 0) +
+          Number(item.weight) * Number(item.quantity),
+      );
+    }
+
+    const activeRates = await this.prisma.bangCuocGuiHang.findMany({
+      where: {
+        diemGuiId,
+        diemNhanId,
+        trangThai: 'HOAT_DONG',
+        tuNgay: { lte: trip.ngayKhoiHanh },
+        OR: [{ denNgay: null }, { denNgay: { gte: trip.ngayKhoiHanh } }],
+      },
+    });
+
+    const selectedRates = new Map<
+      number,
+      { bangCuocGuiHangId: number; weight: number; fee: Prisma.Decimal }
+    >();
+    let cuocChinh = new Prisma.Decimal(0);
+    for (const [loaiHangHoaId, weight] of categoryWeight.entries()) {
+      const matches = activeRates.filter(
+        (rate) =>
+          rate.loaiHangHoaId === loaiHangHoaId &&
+          Number(rate.khoiLuongTu) <= weight &&
+          (rate.khoiLuongDen === null || Number(rate.khoiLuongDen) >= weight),
+      );
+      if (matches.length !== 1) {
+        throw new ConflictException({
+          error:
+            matches.length > 1 ? 'CARGO_RATE_AMBIGUOUS' : 'CARGO_RATE_NOT_FOUND',
+          message:
+            matches.length > 1
+              ? 'Có nhiều mức cước phù hợp cho loại hàng và khối lượng này.'
+              : 'Chưa có mức cước phù hợp cho loại hàng và khối lượng này.',
+        });
+      }
+      const rate = matches[0];
+      const fee = new Prisma.Decimal(rate.mucCuoc);
+      if (!fee.isFinite() || fee.isNegative()) {
+        throw new ConflictException({
+          error: 'CARGO_RATE_INVALID',
+          message: 'Mức cước cấu hình không hợp lệ.',
+        });
+      }
+      selectedRates.set(loaiHangHoaId, {
+        bangCuocGuiHangId: rate.bangCuocGuiHangId,
+        weight,
+        fee,
+      });
+      cuocChinh = cuocChinh.plus(fee);
     }
 
     let phiDichVu = 0;
@@ -183,20 +325,7 @@ export class ShipmentsService {
       phiDichVu += 50000;
     }
 
-    const tongPhi = cuocChinh + phiDichVu;
-
-    // Load available cargo categories
-    const allLoaiHang = await this.prisma.loaiHangHoa.findMany({
-      where: { trangThai: 'HOAT_DONG' },
-    });
-    const defaultLoaiHang = allLoaiHang[0];
-
-    if (!defaultLoaiHang) {
-      throw new ConflictException({
-        error: 'CARGO_TYPE_NOT_CONFIGURED',
-        message: 'Hệ thống chưa cấu hình danh mục loại hàng hóa.',
-      });
-    }
+    const tongPhi = cuocChinh.plus(phiDichVu);
 
     const senderPhone = normalizePhone(dto.sender.phoneNumber);
     const receiverPhone = normalizePhone(dto.receiver.phoneNumber);
@@ -271,7 +400,6 @@ export class ShipmentsService {
       const stamp = `${day}${month}${year}${hour}${minute}`;
       const totalTxCount = await tx.donGiaoDich.count();
       const sequence = String(totalTxCount + 1).padStart(4, '0');
-
       const maDonGiaoDich = `${opCode}-GD-${stamp}-${sequence}`;
       const maVanDon = `${opCode}-VD-${stamp}-${sequence}`;
 
@@ -280,7 +408,7 @@ export class ShipmentsService {
         data: {
           maDonGiaoDich,
           ngayTao: now,
-          tongTien: new Prisma.Decimal(tongPhi),
+          tongTien: tongPhi,
           trangThai: 'CHO_THANH_TOAN',
           tenKhachHang: dto.sender.fullName.trim(),
           soDienThoaiKhachHang: senderPhone,
@@ -297,10 +425,10 @@ export class ShipmentsService {
           tenNguoiNhan: dto.receiver.fullName.trim(),
           soDienThoaiNguoiNhan: receiverPhone,
           ngayGui: now,
-          cuocChinh: new Prisma.Decimal(cuocChinh),
+          cuocChinh,
           phiDichVu: new Prisma.Decimal(phiDichVu),
           soTienGiam: new Prisma.Decimal(0),
-          tongPhi: new Prisma.Decimal(tongPhi),
+          tongPhi,
           nguoiTraCuoc: 'NGUOI_GUI',
           ghiChu: dto.note?.trim() || null,
           trangThai: 'MOI_TAO',
@@ -321,15 +449,37 @@ export class ShipmentsService {
         },
       });
 
-      // 5. Create HangHoa items
+      // 5. Create HangHoa items using the requested/derived category; never use an unrelated default type.
       const createdItems = [];
       for (const item of dto.items) {
-        let loaiHang = allLoaiHang.find(
-          (l) =>
-            l.tenLoai.toLowerCase() === (item.category || '').toLowerCase() ||
-            l.tenLoai.toLowerCase().includes((item.name || '').toLowerCase()),
-        );
-        if (!loaiHang) loaiHang = defaultLoaiHang;
+        const normalizedCategory = item.category?.trim().toLocaleUpperCase('vi-VN');
+        let loaiHang = normalizedCategory
+          ? allLoaiHang.find(
+              (type) =>
+                type.tenLoai.trim().toLocaleUpperCase('vi-VN') ===
+                  normalizedCategory ||
+                type.nhomSucChua === normalizedCategory,
+            )
+          : undefined;
+        if (!loaiHang) {
+          const normalizedName = item.name.toLocaleUpperCase('vi-VN');
+          const capacityGroup = normalizedName.includes('XE MÁY')
+            ? 'XE_MAY'
+            : normalizedName.includes('XE ĐẠP')
+              ? 'HANG_CONG_KENH'
+              : item.weight * item.quantity >= 20
+                ? 'HANG_CONG_KENH'
+                : 'HANG_NHE';
+          loaiHang = allLoaiHang.find(
+            (type) => type.nhomSucChua === capacityGroup,
+          );
+        }
+        if (!loaiHang) {
+          throw new ConflictException({
+            error: 'CARGO_TYPE_NOT_FOUND',
+            message: `Không tìm thấy loại hàng phù hợp cho món: ${item.name}.`,
+          });
+        }
 
         const hangHoa = await tx.hangHoa.create({
           data: {
@@ -348,6 +498,18 @@ export class ShipmentsService {
           },
         });
         createdItems.push(hangHoa);
+      }
+
+      for (const [loaiHangHoaId, detail] of selectedRates.entries()) {
+        await tx.chiTietCuocGuiHang.create({
+          data: {
+            phieuGuiHangId: phieuGui.phieuGuiHangId,
+            loaiHangHoaId,
+            bangCuocGuiHangId: detail.bangCuocGuiHangId,
+            khoiLuongTinhCuoc: new Prisma.Decimal(detail.weight),
+            soTienCuoc: detail.fee,
+          },
+        });
       }
 
       // 6. Create Status History
@@ -370,10 +532,10 @@ export class ShipmentsService {
         paymentStatus: donGiaoDich.trangThai,
         sentAt: phieuGui.ngayGui.toISOString(),
         pricing: {
-          baseFee: cuocChinh,
+          baseFee: cuocChinh.toNumber(),
           serviceFee: phiDichVu,
           discount: 0,
-          totalFee: tongPhi,
+          totalFee: tongPhi.toNumber(),
         },
         sender: {
           fullName: dto.sender.fullName,
@@ -555,6 +717,7 @@ export class ShipmentsService {
   }
 
   async getShipmentDetail(id: number, principal?: AuthPrincipal) {
+    this.assertShipmentPrincipal(principal);
     const shipment = await this.prisma.phieuGuiHang.findUnique({
       where: { phieuGuiHangId: id },
       include: {
@@ -583,17 +746,7 @@ export class ShipmentsService {
       });
     }
 
-    if (principal) {
-      const isTenantUser =
-        principal.roles.includes('NHA_XE_ADMIN') ||
-        principal.roles.includes('NHAN_VIEN');
-      if (isTenantUser && principal.nhaXeId !== shipment.chuyenXe.nhaXeId) {
-        throw new ForbiddenException({
-          error: 'FORBIDDEN_SCOPE',
-          message: 'Bạn không có quyền truy cập phiếu gửi hàng của nhà xe khác.',
-        });
-      }
-    }
+    await this.assertShipmentOwnership(principal, shipment);
 
     const departureAt = combineDeparture(
       shipment.chuyenXe.ngayKhoiHanh,
@@ -673,24 +826,40 @@ export class ShipmentsService {
   }
 
   async listShipments(query: ShipmentQueryDto, principal?: AuthPrincipal) {
+    this.assertShipmentPrincipal(principal);
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 10;
     const sortDirection = query.sortDirection ?? 'desc';
 
     const andConditions: Prisma.PhieuGuiHangWhereInput[] = [];
 
-    if (principal?.roles.includes('KHACH_HANG')) {
+    if (principal.roles.includes('KHACH_HANG')) {
       const cust = await this.prisma.khachHang.findUnique({
         where: { taiKhoanId: principal.taiKhoanId },
       });
-      if (cust) {
-        andConditions.push({
-          donGiaoDich: { khachHangId: cust.khachHangId },
+      if (!cust) {
+        throw new ForbiddenException({
+          error: 'FORBIDDEN_SCOPE',
+          message: 'Tài khoản chưa có hồ sơ khách hàng hợp lệ.',
         });
       }
-    } else if (principal?.nhaXeId) {
+      andConditions.push({
+        donGiaoDich: { khachHangId: cust.khachHangId },
+      });
+    } else if (hasTenantRole(principal.roles)) {
+      if (!principal.nhaXeId || principal.nhaXeId <= 0) {
+        throw new ForbiddenException({
+          error: 'TENANT_SCOPE_REQUIRED',
+          message: 'Tài khoản chưa được gán nhà xe hợp lệ.',
+        });
+      }
       andConditions.push({
         chuyenXe: { nhaXeId: principal.nhaXeId },
+      });
+    } else if (!principal.roles.includes('SUPER_ADMIN')) {
+      throw new ForbiddenException({
+        error: 'FORBIDDEN_SCOPE',
+        message: 'Bạn không có quyền xem danh sách phiếu gửi hàng.',
       });
     }
 
@@ -787,6 +956,54 @@ export class ShipmentsService {
       description: item.moTa ?? '',
       capacityGroup: item.nhomSucChua,
     }));
+  }
+
+  private assertShipmentPrincipal(
+    principal: AuthPrincipal | undefined,
+  ): asserts principal is AuthPrincipal {
+    if (!principal) {
+      throw new UnauthorizedException({
+        error: 'ACCESS_TOKEN_INVALID',
+        message: 'Cần đăng nhập để xem thông tin phiếu gửi hàng.',
+      });
+    }
+  }
+
+  private async assertShipmentOwnership(
+    principal: AuthPrincipal,
+    shipment: { chuyenXe: { nhaXeId: number }; donGiaoDich: { khachHangId: number | null } },
+  ) {
+    if (principal.roles.includes('SUPER_ADMIN')) return;
+
+    if (principal.roles.includes('KHACH_HANG')) {
+      const customer = await this.prisma.khachHang.findUnique({
+        where: { taiKhoanId: principal.taiKhoanId },
+        select: { khachHangId: true },
+      });
+      if (
+        !customer ||
+        shipment.donGiaoDich.khachHangId !== customer.khachHangId
+      ) {
+        throw new ForbiddenException({
+          error: 'FORBIDDEN_SCOPE',
+          message: 'Bạn không có quyền truy cập phiếu gửi hàng này.',
+        });
+      }
+      return;
+    }
+
+    if (
+      hasTenantRole(principal.roles) &&
+      principal.nhaXeId &&
+      principal.nhaXeId === shipment.chuyenXe.nhaXeId
+    ) {
+      return;
+    }
+
+    throw new ForbiddenException({
+      error: 'FORBIDDEN_SCOPE',
+      message: 'Bạn không có quyền truy cập phiếu gửi hàng này.',
+    });
   }
 }
 

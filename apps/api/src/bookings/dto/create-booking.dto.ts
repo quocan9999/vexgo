@@ -127,6 +127,18 @@ export class CreateBookingDto {
   holdToken!: string;
 
   @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: 'Mã điểm gửi hàng phải là số nguyên.' })
+  @Min(1)
+  senderPointId?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: 'Mã điểm nhận hàng phải là số nguyên.' })
+  @Min(1)
+  receiverPointId?: number;
+
+  @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => CargoItemDto)

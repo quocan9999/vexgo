@@ -7,6 +7,7 @@ import { tripsApi } from '../../../src/features/trips/services/trips.api.ts';
 import { bookingsApi } from '../../../src/features/account/services/bookings.api.ts';
 import { ticketsApi } from '../../../src/features/account/services/tickets.api.ts';
 import { contactApi } from '../../../src/features/content/services/contact.api.ts';
+import { shipmentsApi } from '../../../src/features/shipments/services/shipments.api.ts';
 
 const originalFetch = globalThis.fetch;
 
@@ -107,6 +108,29 @@ test('trip search sends the documented query names and keeps pagination metadata
     totalItems: 0,
     totalPages: 0,
   });
+});
+
+test('shipment route points use the selected trip and preserve the API envelope', async () => {
+  let requestedUrl = '';
+  globalThis.fetch = async (url) => {
+    requestedUrl = String(url);
+    return jsonResponse({
+      data: {
+        tripId: 42,
+        senderPoints: [{ id: 901, name: 'Điểm gửi', address: 'Địa chỉ gửi' }],
+        receiverPoints: [{ id: 902, name: 'Điểm nhận', address: 'Địa chỉ nhận' }],
+      },
+    });
+  };
+
+  const result = await shipmentsApi.getRoutePoints(42);
+
+  assert.equal(
+    requestedUrl,
+    'http://localhost:4000/api/v1/shipments/trips/42/route-points',
+  );
+  assert.equal(result.data.senderPoints[0].id, 901);
+  assert.equal(result.data.receiverPoints[0].id, 902);
 });
 
 test('route options are loaded through the shared API service', async () => {

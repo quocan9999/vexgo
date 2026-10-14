@@ -7,12 +7,13 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { randomInt } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { SeatHoldsService } from '../seat-holds/seat-holds.service.js';
 import { PromotionsService } from '../promotions/promotions.service.js';
 import { generateUuidV1 } from '../common/uuid-v1.js';
+import { getBookingPaymentDeadline } from '../common/booking-payment-deadline.js';
 import {
   businessDateStartUtc,
   combineDeparture,
@@ -313,35 +314,92 @@ export class BookingsService {
     let mappedCargoItems: Array<{
       itemDto: CargoItemDto;
       loaiHangHoa: { loaiHangHoaId: number; tenLoai: string; nhomSucChua: string };
-      rate: { bangCuocGuiHangId: number; mucCuoc: Prisma.Decimal | number };
-      itemFee: number;
+      effectiveUnitWeight: number;
+      totalWeight: number;
     }> = [];
+    const categoryWeights = new Map<number, number>();
+    const selectedRates = new Map<
+      number,
+      { bangCuocGuiHangId: number; totalWeight: number; fee: Prisma.Decimal }
+    >();
 
     let diemGuiId: number | null = null;
     let diemNhanId: number | null = null;
 
     if (hasCargo) {
       const routePoints = await this.prisma.diemGiaoNhanTuyenXe.findMany({
-        where: { tuyenXeId: trip.tuyenXeId },
+        where: {
+          tuyenXeId: trip.tuyenXeId,
+          diemGiaoNhanHang: {
+            nhaXeId: trip.nhaXeId,
+            trangThai: 'HOAT_DONG',
+          },
+        },
         include: { diemGiaoNhanHang: true },
       });
 
-      const senderPoint = routePoints.find(
-        (p) => p.vaiTro === 'GUI_HANG' || p.vaiTro === 'CA_HAI',
+      const senderCandidates = routePoints.filter(
+        (point) =>
+          (point.vaiTro === 'GUI_HANG' || point.vaiTro === 'CA_HAI') &&
+          point.diemGiaoNhanHang.trangThai === 'HOAT_DONG' &&
+          point.diemGiaoNhanHang.nhaXeId === trip.nhaXeId,
       );
-      const receiverPoint = routePoints.find(
-        (p) => p.vaiTro === 'NHAN_HANG' || p.vaiTro === 'CA_HAI',
+      const receiverCandidates = routePoints.filter(
+        (point) =>
+          (point.vaiTro === 'NHAN_HANG' || point.vaiTro === 'CA_HAI') &&
+          point.diemGiaoNhanHang.trangThai === 'HOAT_DONG' &&
+          point.diemGiaoNhanHang.nhaXeId === trip.nhaXeId,
       );
 
-      if (!senderPoint || !receiverPoint) {
+      if (senderCandidates.length === 0 || receiverCandidates.length === 0) {
         throw new ConflictException({
           error: 'SHIPMENT_POINTS_NOT_CONFIGURED',
           message: 'Tuyến xe chưa được cấu hình điểm gửi/nhận hàng.',
         });
       }
 
-      diemGuiId = senderPoint.diemGiaoNhanHangId;
-      diemNhanId = receiverPoint.diemGiaoNhanHangId;
+      const resolveRoutePoint = (
+        requestedId: number | undefined,
+        candidates: typeof routePoints,
+        role: 'gửi' | 'nhận',
+      ) => {
+        if (requestedId !== undefined) {
+          const requestedPoint = candidates.find(
+            (point) => point.diemGiaoNhanHangId === requestedId,
+          );
+          if (!requestedPoint) {
+            throw new ConflictException({
+              error: 'SHIPMENT_POINT_INVALID',
+              message: `Điểm ${role} không thuộc tuyến và nhà xe của chuyến xe.`,
+            });
+          }
+          return requestedPoint.diemGiaoNhanHangId;
+        }
+        if (candidates.length !== 1) {
+          throw new ConflictException({
+            error: 'SHIPMENT_POINT_REQUIRED',
+            message: `Vui lòng chọn điểm ${role} hàng trên tuyến xe.`,
+          });
+        }
+        return candidates[0].diemGiaoNhanHangId;
+      };
+
+      diemGuiId = resolveRoutePoint(
+        dto.senderPointId,
+        senderCandidates,
+        'gửi',
+      );
+      diemNhanId = resolveRoutePoint(
+        dto.receiverPointId,
+        receiverCandidates,
+        'nhận',
+      );
+      if (diemGuiId === diemNhanId) {
+        throw new ConflictException({
+          error: 'SHIPMENT_POINTS_MUST_DIFFER',
+          message: 'Điểm gửi và điểm nhận hàng phải khác nhau.',
+        });
+      }
 
       const allLoaiHang = await this.prisma.loaiHangHoa.findMany({
         where: { trangThai: 'HOAT_DONG' },
@@ -396,10 +454,6 @@ export class BookingsService {
         }
 
         if (!loaiHang) {
-          loaiHang = allLoaiHang[0];
-        }
-
-        if (!loaiHang) {
           throw new ConflictException({
             error: 'CARGO_TYPE_NOT_FOUND',
             message: `Không tìm thấy loại hàng phù hợp cho món: ${item.name}`,
@@ -407,51 +461,72 @@ export class BookingsService {
         }
 
         const totalWeight = effectiveUnitWeight * item.quantity;
-        let matchedRate = activeRates.find(
-          (r) =>
-            r.loaiHangHoaId === loaiHang!.loaiHangHoaId &&
-            Number(r.khoiLuongTu) <= totalWeight &&
-            (r.khoiLuongDen === null || Number(r.khoiLuongDen) >= totalWeight),
-        );
-
-        if (!matchedRate) {
-          matchedRate = activeRates.find((r) => r.loaiHangHoaId === loaiHang!.loaiHangHoaId) || activeRates[0];
-        }
-
-        if (!matchedRate) {
-          throw new ConflictException({
-            error: 'CARGO_RATE_NOT_FOUND',
-            message: `Chưa có bảng cước cho loại hàng ${loaiHang.tenLoai}.`,
+        if (!Number.isFinite(totalWeight) || totalWeight <= 0) {
+          throw new BadRequestException({
+            error: 'CARGO_WEIGHT_INVALID',
+            message: `Khối lượng hàng "${item.name}" không hợp lệ.`,
           });
         }
 
-        let itemLuggageFee = 0;
-        if (isMotorbike) {
-          itemLuggageFee = 250000 * item.quantity;
-        } else if (isBicycle) {
-          itemLuggageFee = 100000 * item.quantity;
-        } else {
-          if (totalWeight > 40) {
-            throw new BadRequestException({
-              error: 'CARGO_WEIGHT_EXCEEDED',
-              message: `Hành lý "${item.name}" có khối lượng (${totalWeight}kg) vượt quá hạn mức tối đa 40kg đi kèm vé. Quý khách vui lòng tạo đơn gửi hàng riêng tại mục Gửi hàng bưu kiện.`,
-            });
-          }
-
-          if (totalWeight <= 20) {
-            itemLuggageFee = 0;
-          } else {
-            itemLuggageFee = 30000;
-          }
+        if (!isVehicle && totalWeight > 40) {
+          throw new BadRequestException({
+            error: 'CARGO_WEIGHT_EXCEEDED',
+            message: `Hành lý "${item.name}" có khối lượng (${totalWeight}kg) vượt quá hạn mức tối đa 40kg đi kèm vé. Quý khách vui lòng tạo đơn gửi hàng riêng tại mục Gửi hàng bưu kiện.`,
+          });
         }
 
-        shippingFee += itemLuggageFee;
         mappedCargoItems.push({
           itemDto: item,
           loaiHangHoa: loaiHang,
-          rate: matchedRate,
-          itemFee: itemLuggageFee,
+          effectiveUnitWeight,
+          totalWeight,
         });
+        categoryWeights.set(
+          loaiHang.loaiHangHoaId,
+          (categoryWeights.get(loaiHang.loaiHangHoaId) ?? 0) + totalWeight,
+        );
+      }
+
+      for (const [loaiHangHoaId, totalWeight] of categoryWeights.entries()) {
+        const matchingRates = activeRates.filter(
+          (rate) =>
+            rate.loaiHangHoaId === loaiHangHoaId &&
+            Number(rate.khoiLuongTu) <= totalWeight &&
+            (rate.khoiLuongDen === null ||
+              Number(rate.khoiLuongDen) >= totalWeight),
+        );
+        if (matchingRates.length !== 1) {
+          throw new ConflictException({
+            error:
+              matchingRates.length > 1
+                ? 'CARGO_RATE_AMBIGUOUS'
+                : 'CARGO_RATE_NOT_FOUND',
+            message:
+              matchingRates.length > 1
+                ? 'Có nhiều mức cước phù hợp cho loại hàng và tổng khối lượng này.'
+                : 'Chưa có mức cước phù hợp cho loại hàng và tổng khối lượng này.',
+          });
+        }
+
+        const rate = matchingRates[0];
+        const fee = new Prisma.Decimal(rate.mucCuoc);
+        if (
+          !fee.isFinite() ||
+          fee.isNegative() ||
+          !Number.isSafeInteger(fee.toNumber())
+        ) {
+          throw new ConflictException({
+            error: 'CARGO_RATE_INVALID',
+            message: 'Mức cước cấu hình không hợp lệ.',
+          });
+        }
+
+        selectedRates.set(loaiHangHoaId, {
+          bangCuocGuiHangId: rate.bangCuocGuiHangId,
+          totalWeight,
+          fee,
+        });
+        shippingFee += fee.toNumber();
       }
     }
 
@@ -542,25 +617,13 @@ export class BookingsService {
       // 4. Generate transaction codes
       const now = new Date();
       const opCode = trip.tuyenXe?.nhaXe?.maNhaXe || (trip.xe as any)?.nhaXe?.maNhaXe || 'VXG';
-      const day = String(now.getDate()).padStart(2, '0');
-      const month = String(now.getMonth() + 1).padStart(2, '0');
-      const year = now.getFullYear();
-      const hour = String(now.getHours()).padStart(2, '0');
-      const minute = String(now.getMinutes()).padStart(2, '0');
-      const stamp = `${day}${month}${year}${hour}${minute}`;
-      let sequence = String(randomInt(1000, 9999));
-      if (typeof tx.donGiaoDich?.count === 'function') {
-        try {
-          const totalTxCount = await tx.donGiaoDich.count();
-          sequence = String(totalTxCount + 1).padStart(4, '0');
-        } catch {
-          // ignore error and use random sequence
-        }
-      }
-
-
-      const maDonGiaoDich = `${opCode}-GD-${stamp}-${sequence}`;
-      const maPhieuDatVe = `${opCode}-PDV-${stamp}-${sequence}`;
+      const uniqueSuffix = randomUUID()
+        .replaceAll('-', '')
+        .slice(0, 30)
+        .toUpperCase();
+      const codePrefix = opCode.slice(0, 8);
+      const maDonGiaoDich = `${codePrefix}-GD-${uniqueSuffix}`;
+      const maPhieuDatVe = `${codePrefix}-PDV-${uniqueSuffix}`;
 
       // 5. Create DonGiaoDich
       const donGiaoDich = await tx.donGiaoDich.create({
@@ -699,7 +762,7 @@ export class BookingsService {
       // 10. Shipment creation if cargo requested
       let createdShipment: any = null;
       if (hasCargo && diemGuiId && diemNhanId) {
-        const maVanDon = `${opCode}-VD-${stamp}-${sequence}`;
+        const maVanDon = `${codePrefix}-VD-${uniqueSuffix}`;
         const phieuGui = await tx.phieuGuiHang.create({
           data: {
             maVanDon,
@@ -730,7 +793,6 @@ export class BookingsService {
           },
         });
 
-        const detailsMap = new Map<number, { rateId: number; totalWeight: number; fee: number }>();
         for (const m of mappedCargoItems) {
           const vehicleModel = m.itemDto.motorbikeModel || m.itemDto.bicycleType;
           const itemDescription = [
@@ -743,35 +805,22 @@ export class BookingsService {
             data: {
               tenHang: m.itemDto.name,
               soLuong: m.itemDto.quantity,
-              khoiLuong: new Prisma.Decimal(m.itemDto.weight),
+              khoiLuong: new Prisma.Decimal(m.effectiveUnitWeight),
               moTa: itemDescription || null,
               phieuGuiHangId: phieuGui.phieuGuiHangId,
               loaiHangHoaId: m.loaiHangHoa.loaiHangHoaId,
             },
           });
-
-          const current = detailsMap.get(m.loaiHangHoa.loaiHangHoaId);
-          const itemWeight = m.itemDto.weight * m.itemDto.quantity;
-          if (current) {
-            current.totalWeight += itemWeight;
-            current.fee += m.itemFee;
-          } else {
-            detailsMap.set(m.loaiHangHoa.loaiHangHoaId, {
-              rateId: m.rate.bangCuocGuiHangId,
-              totalWeight: itemWeight,
-              fee: m.itemFee,
-            });
-          }
         }
 
-        for (const [loaiHangHoaId, detail] of detailsMap.entries()) {
+        for (const [loaiHangHoaId, rate] of selectedRates.entries()) {
           await tx.chiTietCuocGuiHang.create({
             data: {
               phieuGuiHangId: phieuGui.phieuGuiHangId,
               loaiHangHoaId,
-              bangCuocGuiHangId: detail.rateId,
-              khoiLuongTinhCuoc: new Prisma.Decimal(detail.totalWeight),
-              soTienCuoc: new Prisma.Decimal(detail.fee),
+              bangCuocGuiHangId: rate.bangCuocGuiHangId,
+              khoiLuongTinhCuoc: new Prisma.Decimal(rate.totalWeight),
+              soTienCuoc: rate.fee,
             },
           });
         }
@@ -824,6 +873,10 @@ export class BookingsService {
       totalAmount: totalOrderAmount,
       shipment: txResult.createdShipment,
       createdAt: txResult.phieuDatVe.createdAt ? txResult.phieuDatVe.createdAt.toISOString() : new Date().toISOString(),
+      paymentExpiresAt: getBookingPaymentDeadline(
+        txResult.phieuDatVe.createdAt,
+      ).toISOString(),
+      serverTime: new Date().toISOString(),
     };
   }
 
@@ -1055,16 +1108,29 @@ export class BookingsService {
   async findPublicBookingById(
     bookingId: number,
     principal?: AuthPrincipal,
+    bookingCode?: string,
+    phoneNumber?: string,
   ) {
     const booking = await this.loadBookingForPublicDetail(bookingId);
 
-    if (
-      booking.donGiaoDich.khachHangId !== null &&
-      booking.donGiaoDich.khachHang?.taiKhoanId !== principal?.taiKhoanId
+    if (booking.donGiaoDich.khachHangId != null) {
+      if (booking.donGiaoDich.khachHang?.taiKhoanId !== principal?.taiKhoanId) {
+        throw new ForbiddenException({
+          error: 'FORBIDDEN_BOOKING_ACCESS',
+          message: 'Bạn không có quyền truy cập phiếu đặt vé này.',
+        });
+      }
+    } else if (
+      !/-PDV-[A-F\d]{30}$/i.test(booking.maPhieuDatVe) ||
+      !bookingCode?.trim() ||
+      booking.maPhieuDatVe !== bookingCode.trim() ||
+      !phoneNumber?.trim() ||
+      normalizePhone(booking.donGiaoDich.soDienThoaiKhachHang) !==
+        normalizePhone(phoneNumber)
     ) {
-      throw new ForbiddenException({
-        error: 'FORBIDDEN_BOOKING_ACCESS',
-        message: 'Bạn không có quyền truy cập phiếu đặt vé này.',
+      throw new NotFoundException({
+        error: 'BOOKING_NOT_FOUND',
+        message: 'Không tìm thấy phiếu đặt vé.',
       });
     }
 
@@ -1206,6 +1272,20 @@ export class BookingsService {
       category: h.loaiHangHoa?.nhomSucChua ?? 'HANG_NHE',
       categoryName: h.loaiHangHoa?.tenLoai ?? 'Hàng nhẹ',
     }));
+    const ticketSubtotal = (booking.ves ?? []).reduce(
+      (sum: number, ticket: any) =>
+        sum + Number(ticket.giaThucTe ?? ticket.giaNiemYet ?? 0),
+      0,
+    );
+    const originalTicketSubtotal = Number(booking.tongTienBanDau ?? 0);
+    const paymentExpiresAt = getBookingPaymentDeadline(booking.createdAt);
+    const bookingPaymentIsPending =
+      ['CHO_THANH_TOAN', 'DANG_XU_LY'].includes(booking.trangThai) &&
+      ['CHO_THANH_TOAN', 'DANG_XU_LY'].includes(
+        booking.donGiaoDich?.trangThai ?? '',
+      );
+    const bookingPaymentHasExpired =
+      bookingPaymentIsPending && paymentExpiresAt <= new Date();
 
     return {
       bookingId: booking.phieuDatVeId,
@@ -1227,14 +1307,18 @@ export class BookingsService {
       },
       pickup: firstTicket?.diemDon || tuyenXe?.diemDi || null,
       dropoff: tuyenXe?.diemDen || null,
-      totalAmount: Number(
-        booking.tongTienBanDau ?? booking.donGiaoDich?.tongTien ?? 0,
-      ),
-      ticketSubtotal: Number(booking.tongTienBanDau ?? 0),
+      totalAmount: Number(booking.donGiaoDich?.tongTien ?? 0),
+      ticketSubtotal,
+      originalTicketSubtotal,
+      discountAmount: Math.max(0, originalTicketSubtotal - ticketSubtotal),
       cargoFee: Number(shipment?.tongPhi ?? 0),
       cargoItems,
-      status: booking.trangThai,
-      paymentStatus: booking.donGiaoDich?.trangThai ?? null,
+      status: bookingPaymentHasExpired ? 'HET_HAN' : booking.trangThai,
+      paymentStatus: bookingPaymentHasExpired
+        ? 'HET_HAN'
+        : (booking.donGiaoDich?.trangThai ?? null),
+      paymentExpiresAt: paymentExpiresAt.toISOString(),
+      serverTime: new Date().toISOString(),
       paymentMethod: latestPayment?.phuongThuc ?? null,
       tickets: (booking.ves ?? []).map((v: any) => ({
         ticketId: v.veId,

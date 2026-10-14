@@ -26,7 +26,38 @@ vi.mock('@/features/auth/auth-session', () => ({
 }));
 
 vi.mock('@/features/booking/components/luggage/luggage-step', () => ({
-  LuggageStep: () => null,
+  LuggageStep: ({
+    onFeeChange,
+  }: {
+    onFeeChange: (
+      fee: number,
+      weight: number,
+      items: Array<{
+        id: string;
+        type: string;
+        quantity: number;
+        weight: number;
+        category: string;
+      }>,
+    ) => void;
+  }) => (
+    <button
+      type="button"
+      onClick={() =>
+        onFeeChange(0, 10, [
+          {
+            id: 'free-cargo',
+            type: 'Vali',
+            quantity: 1,
+            weight: 10,
+            category: 'normal',
+          },
+        ])
+      }
+    >
+      Thêm hành lý miễn phí
+    </button>
+  ),
 }));
 
 vi.mock('@/features/booking/components/luggage/luggage-summary', () => ({
@@ -153,6 +184,15 @@ beforeEach(() => {
     if (/\/trips\/(42|43)\/cargo-capacity$/.test(pathname)) {
       return response({ data: { acceptsShipments: false, capacities: {} } });
     }
+    if (/\/shipments\/trips\/(42|43)\/route-points$/.test(pathname)) {
+      return response({
+        data: {
+          tripId: 42,
+          senderPoints: [{ id: 901, name: 'Điểm gửi', address: 'Địa chỉ gửi' }],
+          receiverPoints: [{ id: 902, name: 'Điểm nhận', address: 'Địa chỉ nhận' }],
+        },
+      });
+    }
     if (pathname.endsWith('/seat-holds') && method === 'POST') {
       return holdResponse();
     }
@@ -228,6 +268,35 @@ describe('one-way booking with server seat holds', () => {
       bookingCode: 'VG-101',
       orderCode: 'OD-202',
       totalFare: 250000,
+    });
+  });
+
+  it('sends valid free luggage to the booking API so the backend can persist it', async () => {
+    render(<OneWayBooking post={post} tripSeats={tripSeats} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Thêm hành lý miễn phí' }));
+    await waitFor(() => {
+      expect(
+        (screen.getByLabelText('Điểm gửi hàng') as HTMLSelectElement).value,
+      ).toBe('901');
+      expect(
+        (screen.getByLabelText('Điểm nhận hàng') as HTMLSelectElement).value,
+      ).toBe('902');
+    });
+    completeForm();
+
+    await waitFor(() => expect(requestsFor('/bookings', 'POST')).toHaveLength(1));
+
+    expect(requestBody(requestsFor('/bookings', 'POST')[0]).cargoItems).toEqual([
+      expect.objectContaining({
+        name: 'Vali',
+        type: 'Vali',
+        quantity: 1,
+        weight: 10,
+      }),
+    ]);
+    expect(requestBody(requestsFor('/bookings', 'POST')[0])).toMatchObject({
+      senderPointId: 901,
+      receiverPointId: 902,
     });
   });
 

@@ -1,4 +1,8 @@
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { BookingsService } from '../../../src/bookings/bookings.service.js';
 import type { PrismaService } from '../../../src/prisma/prisma.service.js';
@@ -228,6 +232,7 @@ describe('BookingsService', () => {
     it('throws ForbiddenException when booking belongs to another customer', async () => {
       prisma.phieuDatVe.findUnique.mockResolvedValue({
         ...sampleBooking,
+        maPhieuDatVe: 'FUTA-PDV-0123456789ABCDEF0123456789ABCD',
         donGiaoDich: {
           ...sampleBooking.donGiaoDich,
           khachHang: { taiKhoanId: 888 },
@@ -242,6 +247,7 @@ describe('BookingsService', () => {
     it('denies account history access to an unlinked guest booking', async () => {
       prisma.phieuDatVe.findUnique.mockResolvedValue({
         ...sampleBooking,
+        maPhieuDatVe: 'FUTA-PDV-0123456789ABCDEF0123456789ABCD',
         donGiaoDich: {
           ...sampleBooking.donGiaoDich,
           khachHangId: null,
@@ -276,9 +282,10 @@ describe('BookingsService', () => {
       ).resolves.toMatchObject({ bookingId: 101 });
     });
 
-    it('keeps guest booking details available without linking a customer account', async () => {
+    it('requires booking code and matching phone to read an unlinked guest booking', async () => {
       prisma.phieuDatVe.findUnique.mockResolvedValue({
         ...sampleBooking,
+        maPhieuDatVe: 'FUTA-PDV-0123456789ABCDEF0123456789ABCD',
         donGiaoDich: {
           ...sampleBooking.donGiaoDich,
           khachHangId: null,
@@ -286,9 +293,61 @@ describe('BookingsService', () => {
         },
       });
 
-      await expect(service.findPublicBookingById(101)).resolves.toMatchObject({
+      await expect(service.findPublicBookingById(101)).rejects.toThrow(
+        NotFoundException,
+      );
+      await expect(
+        service.findPublicBookingById(
+          101,
+          undefined,
+          'FUTA-PDV-0123456789ABCDEF0123456789ABCD',
+          '0900000000',
+        ),
+      ).rejects.toThrow(NotFoundException);
+      await expect(
+        service.findPublicBookingById(101, undefined, 'PDV-101', '0901234567'),
+      ).rejects.toThrow(NotFoundException);
+      await expect(
+        service.findPublicBookingById(
+          101,
+          undefined,
+          'FUTA-PDV-0123456789ABCDEF0123456789ABCD',
+          '0901234567',
+        ),
+      ).resolves.toMatchObject({
         bookingId: 101,
         passenger: { phoneNumber: '+84901234567' },
+      });
+    });
+  });
+
+  describe('mapBooking financial totals', () => {
+    it('uses the final order total and reports discounted ticket subtotal separately', async () => {
+      prisma.phieuDatVe.findUnique.mockResolvedValue({
+        ...sampleBooking,
+        tongTienBanDau: '600000',
+        donGiaoDich: {
+          ...sampleBooking.donGiaoDich,
+          tongTien: '650000',
+          phieuGuiHang: {
+            tongPhi: '150000',
+            hangHoas: [],
+          },
+        },
+        ves: sampleBooking.ves.map((ticket) => ({
+          ...ticket,
+          giaThucTe: '250000',
+        })),
+      });
+
+      await expect(
+        service.findPublicBookingById(101, { taiKhoanId: 1 } as any),
+      ).resolves.toMatchObject({
+        totalAmount: 650000,
+        ticketSubtotal: 500000,
+        originalTicketSubtotal: 600000,
+        discountAmount: 100000,
+        cargoFee: 150000,
       });
     });
   });
@@ -339,6 +398,8 @@ describe('BookingsService', () => {
           { gheChuyenXeId: 1, trangThai: 'DANG_GIU', giuChoId: 1, ghe: { soGhe: 'A01' } },
         ]),
       };
+      let createdOrderData: Record<string, unknown> | undefined;
+      let createdBookingData: Record<string, unknown> | undefined;
       (prisma as any).$transaction = vi.fn().mockImplementation(async (cb) => {
         const txMock = {
           gheChuyenXe: {
@@ -350,11 +411,21 @@ describe('BookingsService', () => {
           },
           khachHang: { findUnique: vi.fn().mockResolvedValue({ khachHangId: 10 }) },
           donGiaoDich: {
-            count: vi.fn().mockResolvedValue(1),
-            create: vi.fn().mockResolvedValue({ donGiaoDichId: 99 }),
+            count: vi.fn().mockRejectedValue(new Error('count must not be used')),
+            create: vi.fn().mockImplementation(({ data }: { data: Record<string, unknown> }) => {
+              createdOrderData = data;
+              return { donGiaoDichId: 99 };
+            }),
           },
           phieuDatVe: {
-            create: vi.fn().mockResolvedValue({ phieuDatVeId: 88, trangThai: 'CHO_THANH_TOAN' }),
+            create: vi.fn().mockImplementation(({ data }: { data: Record<string, unknown> }) => {
+              createdBookingData = data;
+              return {
+                phieuDatVeId: 88,
+                createdAt: new Date(),
+                trangThai: 'CHO_THANH_TOAN',
+              };
+            }),
           },
           ve: {
             create: vi.fn().mockResolvedValue({ veId: 77 }),
@@ -380,6 +451,267 @@ describe('BookingsService', () => {
       expect(res.ticketCount).toBe(1);
       expect(res.totalAmount).toBe(250000);
       expect(res.tickets[0].soGhe).toBe('A01');
+      expect(createdOrderData?.maDonGiaoDich).toMatch(/^FUTA-GD-[A-F\d]{30}$/);
+      expect(createdBookingData?.maPhieuDatVe).toMatch(/^FUTA-PDV-[A-F\d]{30}$/);
+    });
+  });
+
+  describe('createBooking cargo rates', () => {
+    it('applies one active tariff per cargo type using aggregate weight and stores its snapshot', async () => {
+      const trip = {
+        chuyenXeId: 50,
+        ngayKhoiHanh: new Date('2099-12-01T00:00:00.000Z'),
+        gioKhoiHanh: new Date('1970-01-01T08:00:00.000Z'),
+        nhanGuiHang: true,
+        sucChuaXeMay: 3,
+        sucChuaHangCongKenh: 10,
+        sucChuaHangNhe: 10,
+        trangThai: 'CHUA_KHOI_HANH',
+        nhaXeId: 1,
+        tuyenXeId: 2,
+        tuyenXe: {
+          tuyenXeId: 2,
+          diemDi: 'TP.HCM',
+          diemDen: 'Đà Lạt',
+          nhaXe: { nhaXeId: 1, maNhaXe: 'FUTA', tenNhaXe: 'Phương Trang' },
+        },
+        xe: { loaiXeId: 3, nhaXe: { maNhaXe: 'FUTA' } },
+      };
+      const tripSeat = {
+        gheChuyenXeId: 101,
+        chuyenXeId: 50,
+        trangThai: 'DANG_GIU',
+        giuChoId: 1,
+        ghe: { soGhe: 'A01' },
+      };
+      const senderPoint = {
+        vaiTro: 'GUI_HANG',
+        diemGiaoNhanHangId: 11,
+        diemGiaoNhanHang: {
+          diemGiaoNhanHangId: 11,
+          nhaXeId: 1,
+          trangThai: 'HOAT_DONG',
+        },
+      };
+      const receiverPoint = {
+        vaiTro: 'NHAN_HANG',
+        diemGiaoNhanHangId: 12,
+        diemGiaoNhanHang: {
+          diemGiaoNhanHangId: 12,
+          nhaXeId: 1,
+          trangThai: 'HOAT_DONG',
+        },
+      };
+      const lightCargoType = {
+        loaiHangHoaId: 21,
+        tenLoai: 'Hàng nhẹ',
+        nhomSucChua: 'HANG_NHE',
+      };
+      const prismaMock: Record<string, any> = {
+        chuyenXe: { findUnique: vi.fn().mockResolvedValue(trip) },
+        gheChuyenXe: { findMany: vi.fn().mockResolvedValue([tripSeat]) },
+        bangGia: {
+          findFirst: vi.fn().mockResolvedValue({ bangGiaId: 9, giaNiemYet: 150000 }),
+        },
+        diemGiaoNhanTuyenXe: {
+          findMany: vi.fn().mockResolvedValue([senderPoint, receiverPoint]),
+        },
+        loaiHangHoa: {
+          findMany: vi.fn().mockResolvedValue([lightCargoType]),
+        },
+        bangCuocGuiHang: {
+          findMany: vi.fn().mockResolvedValue([
+            {
+              bangCuocGuiHangId: 31,
+              loaiHangHoaId: 21,
+              khoiLuongTu: 0,
+              khoiLuongDen: 5,
+              mucCuoc: 20000,
+            },
+            {
+              bangCuocGuiHangId: 32,
+              loaiHangHoaId: 21,
+              khoiLuongTu: 5,
+              khoiLuongDen: 10,
+              mucCuoc: 60000,
+            },
+          ]),
+        },
+      };
+      const cargoRows: Record<string, unknown>[] = [];
+      const feeRows: Record<string, unknown>[] = [];
+      const orderRows: Record<string, unknown>[] = [];
+      const shipmentRows: Record<string, unknown>[] = [];
+      prismaMock.$transaction = vi.fn(async (callback) =>
+        callback({
+          gheChuyenXe: {
+            findMany: vi.fn().mockResolvedValue([tripSeat]),
+            updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+          },
+          hangHoa: {
+            findMany: vi.fn().mockResolvedValue([]),
+            create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
+              cargoRows.push(data);
+              return { hangHoaId: cargoRows.length, ...data };
+            }),
+          },
+          donGiaoDich: {
+            create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
+              orderRows.push(data);
+              return { donGiaoDichId: 201, maDonGiaoDich: data.maDonGiaoDich };
+            }),
+          },
+          phieuDatVe: {
+            create: vi.fn().mockResolvedValue({
+              phieuDatVeId: 301,
+              maPhieuDatVe: 'FUTA-PDV-TEST',
+              createdAt: new Date('2026-10-14T12:00:00.000Z'),
+              trangThai: 'CHO_THANH_TOAN',
+            }),
+          },
+          ve: { create: vi.fn().mockResolvedValue({ veId: 401 }) },
+          phieuGuiHang: {
+            create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
+              shipmentRows.push(data);
+              return { phieuGuiHangId: 501 };
+            }),
+          },
+          chiTietCuocGuiHang: {
+            create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
+              feeRows.push(data);
+              return { chiTietCuocGuiHangId: feeRows.length };
+            }),
+          },
+          lichSuTrangThaiPhieuGuiHang: { create: vi.fn() },
+          lichSuTrangThaiPhieuDatVe: { create: vi.fn() },
+          lichSuTrangThaiVe: { create: vi.fn() },
+        }),
+      );
+      const seatHoldMock = {
+        verifyHold: vi.fn(),
+        consumeHoldInTx: vi.fn().mockResolvedValue({ giuChoId: 1 }),
+      };
+      const bookingService = new BookingsService(
+        prismaMock as unknown as PrismaService,
+        config as unknown as ConfigService,
+        seatHoldMock as any,
+        {} as any,
+      );
+      vi.spyOn(bookingService, 'getBookingQuote').mockResolvedValue({
+        unitPrice: 150000,
+        seatCount: 1,
+        originalTotal: 150000,
+        discountAmount: 0,
+        finalTotal: 150000,
+        currency: 'VND',
+        appliedPromotionCode: null,
+      });
+
+      const result = await bookingService.createBooking(
+        {
+          tripId: 50,
+          seatIds: [101],
+          holdToken: 'hold_test_token',
+          pickupPoint: 'Bến xe Miền Đông',
+          dropoffPoint: 'Bến xe Đà Lạt',
+          contact: { fullName: 'Khách thử', phone: '0901234567' },
+          cargoItems: [
+            { name: 'Túi sách', type: 'Hàng nhẹ', quantity: 1, weight: 2 },
+            { name: 'Va li', type: 'Hàng nhẹ', quantity: 1, weight: 4 },
+          ],
+        } as any,
+      );
+
+      expect(result.shippingFee).toBe(60000);
+      expect(result.totalAmount).toBe(210000);
+      expect(prismaMock.bangCuocGuiHang.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            diemGuiId: 11,
+            diemNhanId: 12,
+          }),
+        }),
+      );
+      expect(feeRows).toHaveLength(1);
+      expect(feeRows[0]).toMatchObject({
+        loaiHangHoaId: 21,
+        bangCuocGuiHangId: 32,
+        khoiLuongTinhCuoc: expect.objectContaining({ d: [6] }),
+        soTienCuoc: expect.objectContaining({ d: [60000] }),
+      });
+      expect(Number(orderRows[0].tongTien)).toBe(210000);
+      expect(Number(shipmentRows[0].tongPhi)).toBe(60000);
+      expect(cargoRows).toHaveLength(2);
+    });
+
+    it('requires explicit route points when multiple active sender choices exist', async () => {
+      const trip = {
+        chuyenXeId: 50,
+        ngayKhoiHanh: new Date('2099-12-01T00:00:00.000Z'),
+        gioKhoiHanh: new Date('1970-01-01T08:00:00.000Z'),
+        nhanGuiHang: true,
+        trangThai: 'CHUA_KHOI_HANH',
+        nhaXeId: 1,
+        tuyenXeId: 2,
+        tuyenXe: { nhaXe: { maNhaXe: 'FUTA' } },
+        xe: { loaiXeId: 3 },
+      };
+      const prismaMock: Record<string, any> = {
+        chuyenXe: { findUnique: vi.fn().mockResolvedValue(trip) },
+        gheChuyenXe: {
+          findMany: vi.fn().mockResolvedValue([
+            {
+              gheChuyenXeId: 101,
+              trangThai: 'DANG_GIU',
+              ghe: { soGhe: 'A01' },
+            },
+          ]),
+        },
+        bangGia: {
+          findFirst: vi.fn().mockResolvedValue({ bangGiaId: 9 }),
+        },
+        diemGiaoNhanTuyenXe: {
+          findMany: vi.fn().mockResolvedValue([
+            { vaiTro: 'GUI_HANG', diemGiaoNhanHangId: 11, diemGiaoNhanHang: { nhaXeId: 1, trangThai: 'HOAT_DONG' } },
+            { vaiTro: 'GUI_HANG', diemGiaoNhanHangId: 13, diemGiaoNhanHang: { nhaXeId: 1, trangThai: 'HOAT_DONG' } },
+            { vaiTro: 'NHAN_HANG', diemGiaoNhanHangId: 12, diemGiaoNhanHang: { nhaXeId: 1, trangThai: 'HOAT_DONG' } },
+          ]),
+        },
+      };
+      const seatHoldMock = {
+        verifyHold: vi.fn(),
+        consumeHoldInTx: vi.fn(),
+      };
+      const bookingService = new BookingsService(
+        prismaMock as unknown as PrismaService,
+        config as unknown as ConfigService,
+        seatHoldMock as any,
+        {} as any,
+      );
+      vi.spyOn(bookingService, 'getBookingQuote').mockResolvedValue({
+        unitPrice: 150000,
+        seatCount: 1,
+        originalTotal: 150000,
+        discountAmount: 0,
+        finalTotal: 150000,
+        currency: 'VND',
+        appliedPromotionCode: null,
+      });
+
+      await expect(
+        bookingService.createBooking(
+          {
+            tripId: 50,
+            seatIds: [101],
+            holdToken: 'hold_test_token',
+            pickupPoint: 'Bến xe Miền Đông',
+            dropoffPoint: 'Bến xe Đà Lạt',
+            contact: { fullName: 'Khách thử', phone: '0901234567' },
+            cargoItems: [{ name: 'Túi sách', type: 'Hàng nhẹ', quantity: 1, weight: 2 }],
+          } as any,
+        ),
+      ).rejects.toThrow(ConflictException);
+      expect(seatHoldMock.consumeHoldInTx).not.toHaveBeenCalled();
     });
   });
 

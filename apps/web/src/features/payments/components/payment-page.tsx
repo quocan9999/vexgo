@@ -36,6 +36,13 @@ function useRawPaymentDraft(draftId: string | null): string | null {
   );
 }
 
+type PaymentReadSnapshot = {
+  bookingId: number;
+  paymentExpiresAt: string | null;
+  serverTimeOffsetMs: number;
+  terminalStatus: 'cancelled' | 'expired' | 'verification-needed' | null;
+};
+
 function PaymentContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -56,11 +63,31 @@ function PaymentContent() {
 
   const [selectedMethod, setSelectedMethod] = useState('vietqr');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [timeLeft, setTimeLeft] = useState(599); // 9:59
+  const [clockTick, setClockTick] = useState(0);
+  const [paymentReadSnapshot, setPaymentReadSnapshot] =
+    useState<PaymentReadSnapshot | null>(null);
   const [showTripDetailModal, setShowTripDetailModal] = useState(false);
   const [showCargoDetailModal, setShowCargoDetailModal] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [paymentError, setPaymentError] = useState<string | null>(null);
+  const activePaymentReadSnapshot =
+    paymentReadSnapshot?.bookingId === draft?.bookingId
+      ? paymentReadSnapshot
+      : null;
+  const paymentExpiresAt = activePaymentReadSnapshot?.paymentExpiresAt ?? null;
+  const serverTimeOffsetMs =
+    activePaymentReadSnapshot?.serverTimeOffsetMs ?? 0;
+  const paymentTerminalStatus =
+    activePaymentReadSnapshot?.terminalStatus ?? null;
+  const deadlineMs = paymentExpiresAt ? Date.parse(paymentExpiresAt) : NaN;
+  const timeLeft = clockTick > 0 && Number.isFinite(deadlineMs)
+    ? Math.max(
+        0,
+        Math.ceil(
+          (deadlineMs - (clockTick + serverTimeOffsetMs)) / 1000,
+        ),
+      )
+    : null;
 
   const readBookingDetail = useCallback(
     (bookingId: number, signal?: AbortSignal) => {
@@ -69,19 +96,30 @@ function PaymentContent() {
           bookingsApi.getPublicBookingDetail(bookingId, {
             signal,
             accessToken: token,
+            bookingCode: draft?.bookingCode,
+            phoneNumber: draft?.passenger.phoneNumber,
           }),
         );
       }
-      return bookingsApi.getPublicBookingDetail(bookingId, { signal });
+      return bookingsApi.getPublicBookingDetail(bookingId, {
+        signal,
+        bookingCode: draft?.bookingCode,
+        phoneNumber: draft?.passenger.phoneNumber,
+      });
     },
-    [executeWithAuth, isAuthenticated],
+    [
+      draft?.bookingCode,
+      draft?.passenger,
+      executeWithAuth,
+      isAuthenticated,
+    ],
   );
 
   useEffect(() => {
-    if (timeLeft <= 0) return;
-    const timer = setInterval(() => setTimeLeft((prev) => prev - 1), 1000);
+    if (!paymentExpiresAt) return;
+    const timer = setInterval(() => setClockTick(Date.now()), 1000);
     return () => clearInterval(timer);
-  }, [timeLeft]);
+  }, [paymentExpiresAt]);
 
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60)
@@ -92,10 +130,7 @@ function PaymentContent() {
   };
 
   const transferContent = useMemo(() => {
-    if (!draft) return 'VEXGO DATVE';
-    if (draft.bookingCode) return `VEXGO ${draft.bookingCode}`;
-    if (draft.orderCode) return `VEXGO ${draft.orderCode}`;
-    return `VEXGO ${draft.passenger.phoneNumber || 'DATVE'}`;
+    return draft?.orderCode?.trim() ?? '';
   }, [draft]);
 
   const vietQrConfig = useMemo(
@@ -124,6 +159,8 @@ function PaymentContent() {
     let hasNavigated = false;
     let timeout: ReturnType<typeof setTimeout> | null = null;
     const controller = new AbortController();
+    let observedDeadlineMs: number | null = null;
+    let observedServerTimeOffsetMs = 0;
 
     const checkPaymentStatus = async () => {
       try {
@@ -132,13 +169,72 @@ function PaymentContent() {
           res.data?.status === 'DA_THANH_TOAN' ||
           res.data?.paymentStatus === 'DA_THANH_TOAN';
 
+        const deadline = res.data?.paymentExpiresAt;
+        const serverTime = res.data?.serverTime;
+        const responseDeadlineMs =
+          typeof deadline === 'string' ? Date.parse(deadline) : NaN;
+        const serverTimeMs =
+          typeof serverTime === 'string' ? Date.parse(serverTime) : NaN;
+        if (Number.isFinite(responseDeadlineMs)) {
+          observedDeadlineMs = responseDeadlineMs;
+        }
+        if (Number.isFinite(serverTimeMs)) {
+          observedServerTimeOffsetMs = serverTimeMs - Date.now();
+        }
+        if (isSubscribed) setClockTick(Date.now());
+
         if (isSubscribed && !hasNavigated && isPaid) {
           hasNavigated = true;
           router.push(`/invoice/${bookingId}`);
           return;
         }
+
+        const statuses = [res.data?.status, res.data?.paymentStatus];
+        const isExpiredByStatus = statuses.some((status) =>
+          ['HET_HAN', 'EXPIRED'].includes(status ?? ''),
+        );
+        const isCancelled = statuses.some((status) =>
+          ['DA_HUY', 'HUY'].includes(status ?? ''),
+        );
+        const isExpiredByDeadline =
+          Number.isFinite(responseDeadlineMs) &&
+          responseDeadlineMs <=
+            (Number.isFinite(serverTimeMs) ? serverTimeMs : Date.now());
+        const terminalStatus = isCancelled
+          ? 'cancelled'
+          : isExpiredByStatus || isExpiredByDeadline
+            ? 'expired'
+            : null;
+
+        if (isSubscribed) {
+          setPaymentReadSnapshot({
+            bookingId,
+            paymentExpiresAt: Number.isFinite(responseDeadlineMs)
+              ? deadline!
+              : null,
+            serverTimeOffsetMs: Number.isFinite(serverTimeMs)
+              ? serverTimeMs - Date.now()
+              : 0,
+            terminalStatus,
+          });
+        }
+        if (terminalStatus) {
+          return;
+        }
       } catch {
-        // Tiếp tục chờ nếu API tạm thời chưa phản hồi hoặc gặp lỗi mạng.
+        if (
+          isSubscribed &&
+          observedDeadlineMs !== null &&
+          observedDeadlineMs <= Date.now() + observedServerTimeOffsetMs
+        ) {
+          setPaymentReadSnapshot({
+            bookingId,
+            paymentExpiresAt: new Date(observedDeadlineMs).toISOString(),
+            serverTimeOffsetMs: observedServerTimeOffsetMs,
+            terminalStatus: 'verification-needed',
+          });
+          return;
+        }
       }
 
       if (isSubscribed && !hasNavigated) {
@@ -381,13 +477,33 @@ function PaymentContent() {
             </h1>
 
             <div className="w-full max-w-[520px] bg-white rounded-3xl p-7 shadow-sm border border-slate-200 flex flex-col items-center">
-              <p className="text-sm font-semibold text-amber-600 mb-4">
-                Thời gian giữ chỗ còn lại {formatTime(timeLeft)}
-              </p>
+              {!paymentTerminalStatus && (
+                <p className="text-sm font-semibold text-amber-600 mb-4">
+                  {timeLeft === null
+                    ? 'Đang kiểm tra thời hạn thanh toán.'
+                    : `Thời gian thanh toán còn lại ${formatTime(timeLeft)}`}
+                </p>
+              )}
 
               {/* VietQR Image động thật - Kích thước lớn dễ quét */}
               <div className="w-full max-w-[420px] aspect-square border-2 border-slate-200 rounded-3xl p-3 mb-6 bg-white flex items-center justify-center overflow-hidden shadow-2xs">
-                {vietQrUrl ? (
+                {paymentTerminalStatus ? (
+                  <p
+                    role="status"
+                    aria-live="polite"
+                    className="px-5 text-center text-sm font-semibold text-amber-800"
+                  >
+                    {paymentTerminalStatus === 'verification-needed'
+                      ? 'Chưa thể xác minh trạng thái thanh toán từ máy chủ. Mã QR đã được ẩn; vui lòng tải lại trang hoặc liên hệ hỗ trợ.'
+                      : paymentTerminalStatus === 'cancelled'
+                        ? 'Đơn đặt vé đã bị hủy. Mã QR thanh toán không còn khả dụng.'
+                        : 'Đơn đặt vé đã hết hạn. Mã QR thanh toán không còn khả dụng.'}
+                  </p>
+                ) : timeLeft === 0 ? (
+                  <p role="status" aria-live="polite" className="px-5 text-center text-sm font-semibold text-amber-800">
+                    Đang xác nhận trạng thái đơn sau thời hạn thanh toán.
+                  </p>
+                ) : vietQrUrl ? (
                   <img
                     src={vietQrUrl}
                     alt="Mã QR thanh toán VietQR"
@@ -400,14 +516,15 @@ function PaymentContent() {
                   >
                     <Info aria-hidden="true" className="h-6 w-6 shrink-0" />
                     <p>
-                      VietQR chưa được cấu hình đầy đủ nên chưa thể hiển thị mã
-                      thanh toán. Vui lòng liên hệ bộ phận hỗ trợ.
+                      {!vietQrConfig
+                        ? 'VietQR chưa được cấu hình đầy đủ nên chưa thể hiển thị mã thanh toán. Vui lòng liên hệ bộ phận hỗ trợ.'
+                        : 'Đơn đặt vé chưa có mã giao dịch hợp lệ nên chưa thể tạo mã VietQR. Vui lòng liên hệ bộ phận hỗ trợ.'}
                     </p>
                   </div>
                 )}
               </div>
 
-              {vietQrUrl && (
+              {vietQrUrl && !paymentTerminalStatus && (
                 <p
                   role="status"
                   aria-live="polite"
@@ -418,7 +535,7 @@ function PaymentContent() {
               )}
 
               {/* Thông tin chuyển khoản sao chép */}
-              {vietQrConfig && (
+              {vietQrUrl && vietQrConfig && !paymentTerminalStatus && timeLeft !== 0 && (
                 <div className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 mb-5 text-[13px] space-y-2.5">
                   <div className="flex justify-between items-center">
                     <span className="text-slate-500 font-medium">Mã ngân hàng:</span>
@@ -460,7 +577,7 @@ function PaymentContent() {
               )}
 
               <div className="w-full text-center">
-                {vietQrUrl && (
+                {vietQrUrl && !paymentTerminalStatus && timeLeft !== 0 && (
                   <p className="text-xs font-semibold text-slate-600 mb-3 flex items-center justify-center gap-1.5">
                     <ScanLine className="w-4 h-4 text-emerald-600 inline-block" />
                     Quét mã qua bất kỳ App Ngân hàng

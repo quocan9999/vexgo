@@ -26,7 +26,7 @@ vi.mock('@/features/auth/auth-session', () => ({
   useAuthSession: () => auth,
 }));
 
-function savePaymentDraft() {
+function savePaymentDraft(orderCode: string | null = 'DGD-TEST-4201') {
   window.sessionStorage.setItem(
     `${PAYMENT_DRAFT_STORAGE_PREFIX}${draftId}`,
     JSON.stringify({
@@ -52,6 +52,7 @@ function savePaymentDraft() {
       totalFare: 125000,
       bookingId,
       bookingCode: 'VG-TEST-4201',
+      ...(orderCode === null ? {} : { orderCode }),
       status: 'CHO_THANH_TOAN',
       paymentStatus: 'CHO_THANH_TOAN',
     }),
@@ -141,7 +142,9 @@ describe('Customer VietQR payment page', () => {
     expect(screen.getByText('BIDV')).toBeTruthy();
     expect(screen.getByText('1234567890')).toBeTruthy();
     expect(screen.getByText('VEXGO TEST')).toBeTruthy();
-    expect(screen.getByText('VEXGO VG-TEST-4201')).toBeTruthy();
+    expect(screen.getByText('DGD-TEST-4201')).toBeTruthy();
+    expect(qr.getAttribute('src')).toContain('addInfo=DGD-TEST-4201');
+    expect(qr.getAttribute('src')).not.toContain('VG-TEST-4201');
     expect(screen.getByRole('status').textContent).toContain(
       'Đang chờ hệ thống xác nhận thanh toán từ ngân hàng.',
     );
@@ -155,7 +158,67 @@ describe('Customer VietQR payment page', () => {
     expect(String(fetchMock.mock.calls[0][0])).toContain(
       `/bookings/${bookingId}/detail`,
     );
+    expect(fetchMock.mock.calls[0][1].headers).toMatchObject({
+      'x-booking-code': 'VG-TEST-4201',
+      'x-booking-phone': '0900000000',
+    });
     expect(String(fetchMock.mock.calls[0][0])).not.toContain('confirm-payment');
+    expect(routerPush).not.toHaveBeenCalled();
+  });
+
+  it('does not create a QR or guess a transfer reference when the order code is missing', async () => {
+    configureVietQr();
+    window.sessionStorage.clear();
+    savePaymentDraft(null);
+
+    render(<PaymentPage />);
+
+    expect(screen.getByRole('alert').textContent).toContain(
+      'Đơn đặt vé chưa có mã giao dịch hợp lệ nên chưa thể tạo mã VietQR.',
+    );
+    expect(screen.queryByRole('img', { name: 'Mã QR thanh toán VietQR' })).toBeNull();
+    expect(screen.queryByText('1234567890')).toBeNull();
+    expect(screen.queryByText('DGD-TEST-4201')).toBeNull();
+    expect(screen.queryByText('VG-TEST-4201')).toBeNull();
+
+    await advanceTime(5_000);
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(routerPush).not.toHaveBeenCalled();
+  });
+
+  it('uses the backend payment deadline for the countdown and removes the QR after it expires', async () => {
+    configureVietQr();
+    const backendNow = Date.now();
+    const paymentExpiresAt = new Date(backendNow + 3_000).toISOString();
+    fetchMock
+      .mockImplementationOnce(async () =>
+        jsonResponse({
+          status: 'CHO_THANH_TOAN',
+          paymentStatus: 'CHO_THANH_TOAN',
+          paymentExpiresAt,
+          serverTime: new Date(Date.now()).toISOString(),
+        }),
+      )
+      .mockImplementation(async () =>
+        jsonResponse({
+          status: 'HET_HAN',
+          paymentStatus: 'HET_HAN',
+          paymentExpiresAt,
+          serverTime: new Date(Date.now()).toISOString(),
+        }),
+      );
+
+    render(<PaymentPage />);
+    await advanceTime(2_500);
+
+    expect(screen.getByText('Thời gian thanh toán còn lại 00:01')).toBeTruthy();
+    expect(screen.getByRole('img', { name: 'Mã QR thanh toán VietQR' })).toBeTruthy();
+
+    await advanceTime(3_000);
+
+    expect(screen.queryByRole('img', { name: 'Mã QR thanh toán VietQR' })).toBeNull();
+    expect(screen.getByText(/đã hết hạn/i)).toBeTruthy();
     expect(routerPush).not.toHaveBeenCalled();
   });
 
@@ -172,7 +235,11 @@ describe('Customer VietQR payment page', () => {
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining(`/bookings/${bookingId}/detail`),
       expect.objectContaining({
-        headers: { Authorization: 'Bearer test-access-token' },
+        headers: {
+          Authorization: 'Bearer test-access-token',
+          'x-booking-code': 'VG-TEST-4201',
+          'x-booking-phone': '0900000000',
+        },
       }),
     );
   });
@@ -220,6 +287,63 @@ describe('Customer VietQR payment page', () => {
     );
     expect(String(fetchMock.mock.calls[0][0])).not.toContain('confirm-payment');
   });
+
+  it('stops polling after the backend deadline when status reads fail and keeps the payment unverified', async () => {
+    configureVietQr();
+    const backendNow = Date.now();
+    const paymentExpiresAt = new Date(backendNow + 3_000).toISOString();
+    fetchMock
+      .mockImplementationOnce(async () =>
+        jsonResponse({
+          status: 'CHO_THANH_TOAN',
+          paymentStatus: 'CHO_THANH_TOAN',
+          paymentExpiresAt,
+          serverTime: new Date(Date.now()).toISOString(),
+        }),
+      )
+      .mockRejectedValue(new Error('status endpoint unavailable'));
+
+    render(<PaymentPage />);
+    await advanceTime(5_000);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(screen.getByRole('status').textContent).toContain(
+      'Chưa thể xác minh trạng thái thanh toán',
+    );
+    expect(
+      screen.queryByRole('img', { name: 'Mã QR thanh toán VietQR' }),
+    ).toBeNull();
+    expect(routerPush).not.toHaveBeenCalled();
+
+    await advanceTime(10_000);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(routerPush).not.toHaveBeenCalled();
+  });
+
+  it.each(['DA_HUY', 'HET_HAN'])(
+    'stops polling and removes the QR when backend status is %s',
+    async (status) => {
+      configureVietQr();
+      fetchMock.mockResolvedValue(
+        jsonResponse({ status, paymentStatus: status }),
+      );
+
+      render(<PaymentPage />);
+      await advanceTime(2_500);
+
+      expect(
+        screen.queryByRole('img', { name: 'Mã QR thanh toán VietQR' }),
+      ).toBeNull();
+      expect(screen.getByRole('status').textContent).toContain(
+        status === 'DA_HUY' ? 'đã bị hủy' : 'đã hết hạn',
+      );
+      expect(routerPush).not.toHaveBeenCalled();
+
+      await advanceTime(10_000);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    },
+  );
 
   it('aborts an in-flight status request and stops polling when unmounted', async () => {
     configureVietQr();

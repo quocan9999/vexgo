@@ -50,8 +50,14 @@ export class ShipmentsController {
     return { data };
   }
 
-  @Get(':id')
+  @Get('trips/:tripId/route-points')
   @OptionalAuth()
+  async getRoutePoints(@Param('tripId', ParseIntPipe) tripId: number) {
+    const data = await this.shipmentsService.getRoutePoints(tripId);
+    return { data };
+  }
+
+  @Get(':id')
   async getShipmentDetail(
     @Param('id', ParseIntPipe) id: number,
     @CurrentPrincipal() principal?: AuthPrincipal,
@@ -61,7 +67,6 @@ export class ShipmentsController {
   }
 
   @Get()
-  @OptionalAuth()
   async listShipments(
     @Query() query: ShipmentQueryDto,
     @CurrentPrincipal() principal?: AuthPrincipal,
