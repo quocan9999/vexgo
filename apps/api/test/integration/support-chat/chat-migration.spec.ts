@@ -4,13 +4,32 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import { config as loadDotenv } from 'dotenv';
+import mariadb, { type Connection } from 'mariadb';
 import { afterEach, describe, expect, it } from 'vitest';
 import { PrismaClient } from '../../../src/generated/prisma/client.js';
 
 loadDotenv({ path: resolve(process.cwd(), '../../.env') });
 loadDotenv({ path: resolve(process.cwd(), '.env') });
 
-function createMigrationTestClient(): PrismaClient {
+async function createDirectDatabaseConnection(): Promise<Connection> {
+  const configuredDatabaseUrl = process.env.DATABASE_URL;
+  if (!configuredDatabaseUrl) {
+    throw new Error(
+      'DATABASE_URL is required for the chat migration integration test',
+    );
+  }
+  const databaseUrl = new URL(configuredDatabaseUrl);
+  return mariadb.createConnection({
+    host: databaseUrl.hostname,
+    port: Number(databaseUrl.port || 3306),
+    user: decodeURIComponent(databaseUrl.username),
+    password: decodeURIComponent(databaseUrl.password),
+    database: decodeURIComponent(databaseUrl.pathname.replace(/^\/+/, '')),
+    multipleStatements: true,
+  });
+}
+
+function createMigrationTestClient(options?: { connectionLimit?: number }): PrismaClient {
   const configuredDatabaseUrl = process.env.DATABASE_URL;
   if (!configuredDatabaseUrl) {
     throw new Error(
@@ -30,6 +49,7 @@ function createMigrationTestClient(): PrismaClient {
       password: decodeURIComponent(databaseUrl.password),
       database: decodeURIComponent(databaseUrl.pathname.replace(/^\/+/, '')),
       allowPublicKeyRetrieval: true,
+      ...(options?.connectionLimit ? { connectionLimit: options.connectionLimit } : {}),
     }),
   });
 }
@@ -157,7 +177,8 @@ async function executeMigrationScript(
     .replaceAll('CuocTroChuyen_maCuocTroChuyen_key', `${suffix}_CMC_key`)
     .replaceAll('CuocTroChuyen_nhaXe_trangThai_idx', `${suffix}_CNT_idx`)
     .replaceAll('CuocTroChuyen_khachHang_trangThai_idx', `${suffix}_CKT_idx`)
-    .replaceAll('CuocTroChuyen_nhanVien_trangThai_idx', `${suffix}_CVT_idx`);
+    .replaceAll('CuocTroChuyen_nhanVien_trangThai_idx', `${suffix}_CVT_idx`)
+    .replaceAll("'TinNhanHoTro'", `'${tableNames.tinNhan}'`);
 
   if (!options.enforceLegacyFk) {
     transformedSql = transformedSql.replace(
@@ -681,64 +702,208 @@ describe('Support chat schema migration with preflight archive and RBAC bootstra
       expect(found.noiDung).toBe('Tin nhắn cần phục hồi theo quy trình runbook');
       expect(found.khachHangIdCu).toBe(88);
 
-      // Bước 2: Mô phỏng Quy trình Phục hồi có kiểm soát (Manual Handled Recovery theo Runbook)
-      // Khi đã xác minh được tenant sở hữu là Nhà xe 7, tạo cuộc trò chuyện hợp lệ cho khách hàng 88
-      await db.$executeRawUnsafe(
-        `INSERT INTO ${quoted(tableNames.cuocTroChuyen)} (
-          \`maCuocTroChuyen\`, \`tieuDe\`, \`trangThai\`, \`kenhHoTro\`, \`cheDoChat\`, \`khachHangId\`, \`nhaXeId\`, \`createdAt\`, \`updatedAt\`
-        ) VALUES (
-          'RECOVERED-KH88-NX7', 'Hỗ trợ phục hồi cho KH088', 'CHO_TIEP_NHAN', 'WEB', 'NGUOI_THAT', 88, 7, CURRENT_TIMESTAMP(0), CURRENT_TIMESTAMP(0)
-        )`,
-      );
+      // Bước 2: Mô phỏng Quy trình Phục hồi An toàn theo Runbook (Case A: Khôi phục đúng khách hàng)
+      const conn = await createDirectDatabaseConnection();
+      try {
+        await conn.query(`START TRANSACTION;`);
+        await conn.query(`SET @targetKhachHangId = 88;`);
+        await conn.query(`SET @targetNhaXeId = 7;`);
+        await conn.query(`SET @expectedCount = 1;`);
 
-      const [newConv] = await db.$queryRawUnsafe<Array<{ cuocTroChuyenId: number }>>(
-        `SELECT \`cuocTroChuyenId\` FROM ${quoted(tableNames.cuocTroChuyen)} WHERE \`maCuocTroChuyen\` = 'RECOVERED-KH88-NX7'`,
-      );
-      expect(newConv).toBeDefined();
+        // Guard 1: Đếm số lượng tin nhắn trong danh sách thuộc đúng targetKhachHangId
+        await conn.query(`
+          SET @verifiedCount = (
+            SELECT COUNT(*)
+            FROM ${quoted(tableNames.luuTru)} arc
+            WHERE arc.\`tinNhanId\` IN (888)
+              AND arc.\`khachHangIdCu\` = @targetKhachHangId
+          );
+        `);
+        // Guard fail-closed ném lỗi nếu count không khớp
+        await conn.query(`
+          SET @cross_customer_guard = (
+            SELECT 1
+            FROM (SELECT 1 UNION ALL SELECT 2) \`_cross_customer_abort\`
+            WHERE @verifiedCount <> @expectedCount
+          );
+        `);
 
-      // Nạp tin nhắn từ archive vào bảng hoạt động theo đúng schema mới
-      await db.$executeRawUnsafe(
-        `INSERT INTO ${quoted(tableNames.tinNhan)} (
-          \`cuocTroChuyenId\`, \`taiKhoanGuiId\`, \`loaiNguoiGui\`, \`loaiTinNhan\`, \`noiDung\`, \`trangThai\`, \`createdAt\`, \`updatedAt\`
-        )
-        SELECT
-          ${newConv.cuocTroChuyenId},
-          kh.\`taiKhoanId\`,
-          'KHACH_HANG',
-          'VAN_BAN',
-          arc.\`noiDung\`,
-          arc.\`trangThaiCu\`,
-          arc.\`thoiGianCu\`,
-          arc.\`updatedAtCu\`
-        FROM ${quoted(tableNames.luuTru)} arc
-        JOIN ${quoted(tableNames.khachHang)} kh ON kh.\`khachHangId\` = arc.\`khachHangIdCu\`
-        WHERE arc.\`tinNhanId\` = 888`,
-      );
+        // Tạo cuộc trò chuyện hợp lệ cho nhà xe và khách hàng đích
+        await conn.query(
+          `INSERT INTO ${quoted(tableNames.cuocTroChuyen)} (
+            \`maCuocTroChuyen\`, \`tieuDe\`, \`trangThai\`, \`kenhHoTro\`, \`cheDoChat\`, \`khachHangId\`, \`nhaXeId\`, \`createdAt\`, \`updatedAt\`
+          ) VALUES (
+            'RECOVERED-KH88-NX7', 'Hỗ trợ phục hồi cho KH088', 'CHO_TIEP_NHAN', 'WEB', 'NGUOI_THAT', 88, 7, CURRENT_TIMESTAMP(0), CURRENT_TIMESTAMP(0)
+          );`,
+        );
 
-      // Kiểm tra tin nhắn được phục hồi hoạt động bình thường và ràng buộc khóa ngoại thỏa mãn
-      const [restoredMsg] = await db.$queryRawUnsafe<
-        Array<{
-          tinNhanId: number;
-          cuocTroChuyenId: number;
-          taiKhoanGuiId: number;
-          loaiNguoiGui: string;
-          noiDung: string;
-        }>
-      >(
-        `SELECT \`tinNhanId\`, \`cuocTroChuyenId\`, \`taiKhoanGuiId\`, \`loaiNguoiGui\`, \`noiDung\`
-         FROM ${quoted(tableNames.tinNhan)} WHERE \`cuocTroChuyenId\` = ${newConv.cuocTroChuyenId}`,
-      );
-      expect(restoredMsg).toBeDefined();
-      expect(restoredMsg.cuocTroChuyenId).toBe(newConv.cuocTroChuyenId);
-      expect(restoredMsg.taiKhoanGuiId).toBe(88);
-      expect(restoredMsg.loaiNguoiGui).toBe('KHACH_HANG');
-      expect(restoredMsg.noiDung).toBe('Tin nhắn cần phục hồi theo quy trình runbook');
+        const convRows = await conn.query(
+          `SELECT \`cuocTroChuyenId\` FROM ${quoted(tableNames.cuocTroChuyen)} WHERE \`maCuocTroChuyen\` = 'RECOVERED-KH88-NX7'`,
+        );
+        const newConv = convRows[0];
+        expect(newConv).toBeDefined();
+
+        // Nạp tin nhắn từ archive với ràng buộc kép: arc.khachHangIdCu = ctc.khachHangId
+        await conn.query(
+          `INSERT INTO ${quoted(tableNames.tinNhan)} (
+            \`cuocTroChuyenId\`, \`taiKhoanGuiId\`, \`loaiNguoiGui\`, \`loaiTinNhan\`, \`noiDung\`, \`trangThai\`, \`createdAt\`, \`updatedAt\`
+          )
+          SELECT
+            ${newConv.cuocTroChuyenId},
+            kh.\`taiKhoanId\`,
+            'KHACH_HANG',
+            'VAN_BAN',
+            arc.\`noiDung\`,
+            arc.\`trangThaiCu\`,
+            arc.\`thoiGianCu\`,
+            arc.\`updatedAtCu\`
+          FROM ${quoted(tableNames.luuTru)} arc
+          JOIN ${quoted(tableNames.cuocTroChuyen)} ctc ON ctc.\`cuocTroChuyenId\` = ${newConv.cuocTroChuyenId}
+          JOIN ${quoted(tableNames.khachHang)} kh ON kh.\`khachHangId\` = arc.\`khachHangIdCu\`
+          WHERE arc.\`tinNhanId\` IN (888)
+            AND arc.\`khachHangIdCu\` = ctc.\`khachHangId\`;`,
+        );
+
+        // Guard 2: Kiểm tra số lượng dòng thực tế đã ghi vào TinNhanHoTro
+        await conn.query(`SET @insertedCount = ROW_COUNT();`);
+        await conn.query(`
+          SET @row_count_guard = (
+            SELECT 1
+            FROM (SELECT 1 UNION ALL SELECT 2) \`_row_count_abort\`
+            WHERE @insertedCount <> @expectedCount
+          );
+        `);
+
+        await conn.query(`COMMIT;`);
+
+        // Kiểm tra tin nhắn được phục hồi hoạt động bình thường và ràng buộc khóa ngoại thỏa mãn
+        const [restoredMsg] = await db.$queryRawUnsafe<
+          Array<{
+            tinNhanId: number;
+            cuocTroChuyenId: number;
+            taiKhoanGuiId: number;
+            loaiNguoiGui: string;
+            noiDung: string;
+          }>
+        >(
+          `SELECT \`tinNhanId\`, \`cuocTroChuyenId\`, \`taiKhoanGuiId\`, \`loaiNguoiGui\`, \`noiDung\`
+           FROM ${quoted(tableNames.tinNhan)} WHERE \`cuocTroChuyenId\` = ${newConv.cuocTroChuyenId}`,
+        );
+        expect(restoredMsg).toBeDefined();
+        expect(restoredMsg.cuocTroChuyenId).toBe(Number(newConv.cuocTroChuyenId));
+        expect(restoredMsg.taiKhoanGuiId).toBe(88);
+        expect(restoredMsg.loaiNguoiGui).toBe('KHACH_HANG');
+        expect(restoredMsg.noiDung).toBe('Tin nhắn cần phục hồi theo quy trình runbook');
+      } catch (err) {
+        await conn.query(`ROLLBACK;`).catch(() => {});
+        throw err;
+      } finally {
+        await conn.end();
+      }
     } finally {
       await teardownTestSchema(db, tableNames);
     }
   });
 
-  it('9. Test D — Prisma schema lifecycle & drift protection: verifies model registration and zero drift', async () => {
+  it('9. Test C2 — Cross-Customer isolation protection: rejects recovery containing message IDs belonging to different customer, rolls back atomic transaction', async () => {
+    const db = createMigrationTestClient();
+    prisma = db;
+    await db.$connect();
+    const { suffix, tableNames, quoted } = generateTestContext();
+
+    try {
+      await createLegacyBaseSchema(db, suffix, tableNames);
+
+      await db.$executeRawUnsafe(
+        `INSERT INTO ${quoted(tableNames.nhaXe)} (\`nhaXeId\`, \`tenNhaXe\`) VALUES (7, 'Nhà xe Mai Linh')`,
+      );
+      await db.$executeRawUnsafe(
+        `INSERT INTO ${quoted(tableNames.taiKhoan)} (\`taiKhoanId\`, \`email\`) VALUES
+          (88, 'cust88@vexgo.vn'),
+          (99, 'cust99@vexgo.vn')`,
+      );
+      await db.$executeRawUnsafe(
+        `INSERT INTO ${quoted(tableNames.khachHang)} (\`khachHangId\`, \`maKhachHang\`, \`taiKhoanId\`) VALUES
+          (88, 'KH088', 88),
+          (99, 'KH099', 99)`,
+      );
+      await db.$executeRawUnsafe(
+        `INSERT INTO ${quoted(tableNames.tinNhan)} (\`tinNhanId\`, \`noiDung\`, \`thoiGian\`, \`trangThai\`, \`khachHangId\`, \`createdAt\`, \`updatedAt\`) VALUES
+          (888, 'Tin nhắn của khách A', '2026-09-01 15:00:00', 'DA_GUI', 88, '2026-09-01 15:00:00', '2026-09-01 15:00:00'),
+          (999, 'Tin nhắn riêng tư của khách B', '2026-09-01 16:00:00', 'DA_GUI', 99, '2026-09-01 16:00:00', '2026-09-01 16:00:00')`,
+      );
+
+      // Chạy migration
+      await executeMigrationScript(db, suffix, tableNames);
+
+      // Cố ý thực hiện kịch bản DBA gõ nhầm ID của khách B (999) vào danh sách cần khôi phục cho khách A (88)
+      // Danh sách ID: [888, 999] (expectedCount = 2), nhưng @targetKhachHangId = 88
+      let recoveryError: Error | undefined;
+      const conn = await createDirectDatabaseConnection();
+      try {
+        await conn.query(`START TRANSACTION;`);
+        await conn.query(`SET @targetKhachHangId = 88;`);
+        await conn.query(`SET @targetNhaXeId = 7;`);
+        await conn.query(`SET @expectedCount = 2;`);
+
+        await conn.query(`
+          SET @verifiedCount = (
+            SELECT COUNT(*)
+            FROM ${quoted(tableNames.luuTru)} arc
+            WHERE arc.\`tinNhanId\` IN (888, 999)
+              AND arc.\`khachHangIdCu\` = @targetKhachHangId
+          );
+        `);
+
+        // Guard 1 phát hiện @verifiedCount (1) <> @expectedCount (2) -> Throw error ném ra exception
+        await conn.query(`
+          SET @cross_customer_guard = (
+            SELECT 1
+            FROM (SELECT 1 UNION ALL SELECT 2) \`_cross_customer_abort\`
+            WHERE @verifiedCount <> @expectedCount
+          );
+        `);
+
+        await conn.query(`COMMIT;`);
+      } catch (err) {
+        recoveryError = err instanceof Error ? err : new Error(String(err));
+        await conn.query(`ROLLBACK;`).catch(() => {});
+      } finally {
+        await conn.end();
+      }
+
+      // Xác nhận Guard đã chặn thành công
+      expect(recoveryError).toBeDefined();
+      expect(recoveryError?.message).toMatch(/Subquery returns more than 1 row|1242/);
+
+      // BẢO VỆ CỐT LÕI:
+      // 1. Không có bất kỳ cuộc trò chuyện nào bị tạo thừa
+      const convs = await db.$queryRawUnsafe<Array<any>>(
+        `SELECT * FROM ${quoted(tableNames.cuocTroChuyen)}`,
+      );
+      expect(convs.length).toBe(0);
+
+      // 2. Không có bất kỳ tin nhắn nào của khách B bị trộn vào bảng hoạt động
+      const activeMsgs = await db.$queryRawUnsafe<Array<any>>(
+        `SELECT * FROM ${quoted(tableNames.tinNhan)}`,
+      );
+      expect(activeMsgs.length).toBe(0);
+
+      // 3. Toàn bộ dữ liệu của cả 2 khách hàng trong archive vẫn an toàn nguyên vẹn
+      const [arcA] = await db.$queryRawUnsafe<Array<any>>(
+        `SELECT * FROM ${quoted(tableNames.luuTru)} WHERE \`tinNhanId\` = 888`,
+      );
+      const [arcB] = await db.$queryRawUnsafe<Array<any>>(
+        `SELECT * FROM ${quoted(tableNames.luuTru)} WHERE \`tinNhanId\` = 999`,
+      );
+      expect(arcA.khachHangIdCu).toBe(88);
+      expect(arcB.khachHangIdCu).toBe(99);
+    } finally {
+      await teardownTestSchema(db, tableNames);
+    }
+  });
+
+  it('10. Test D — Prisma schema lifecycle & drift protection: verifies model registration and zero drift', async () => {
     // 1. Kiểm tra Prisma Client đã định nghĩa model LuuTruTinNhanHoTroCu
     const client = createMigrationTestClient();
     expect(client).toHaveProperty('luuTruTinNhanHoTroCu');
@@ -774,7 +939,7 @@ describe('Support chat schema migration with preflight archive and RBAC bootstra
     expect(diffOutput).not.toContain('DROP TABLE LuuTruTinNhanHoTroCu');
   }, 60000);
 
-  it('10. Test E1 — Migration failure & partial retry safety: verifies INSERT IGNORE idempotency on identical archive', async () => {
+  it('11. Test E1 — Migration failure & partial retry safety: verifies INSERT IGNORE idempotency on identical archive', async () => {
     const db = createMigrationTestClient();
     prisma = db;
     await db.$connect();
@@ -795,7 +960,6 @@ describe('Support chat schema migration with preflight archive and RBAC bootstra
       );
 
       // Tạo bảng archive trước và chèn trước bản ghi 1 với dữ liệu giống hệt nguồn
-      // (mô phỏng lần chạy migration trước bị dừng sau bước archive nhưng trước khi hoàn tất)
       await db.$executeRawUnsafe(
         `CREATE TABLE IF NOT EXISTS ${quoted(tableNames.luuTru)} (
           \`tinNhanId\` INTEGER NOT NULL,
@@ -832,20 +996,17 @@ describe('Support chat schema migration with preflight archive and RBAC bootstra
     }
   });
 
-  it('11. Test E2 — Archive conflict safety: detects conflicting archive data and aborts migration without deleting source messages', async () => {
-    // Lưu ý kiến trúc: MySQL thực hiện implicit commit đối với các câu lệnh DDL (ALTER TABLE, CREATE TABLE...).
-    // Nếu migration bị lỗi ở giai đoạn DDL sau đó, MySQL không thể tự động rollback các DDL trước đó.
-    // Vì vậy, bước kiểm tra xung đột dữ liệu (Conflict Detection) PHẢI nằm ở ngay đầu giai đoạn PREFLIGHT
-    // (trước bất kỳ lệnh DDL phá hủy nào), nhằm đảm bảo:
-    // 1. Nếu có xung đột, migration sẽ abort ngay lập tức.
-    // 2. Không một bản ghi nguồn nào bị xóa mất (bước DELETE chưa từng được chạy).
-    // 3. Toàn bộ schema cũ và dữ liệu nguồn được giữ nguyên vẹn để DBA can thiệp theo Runbook.
-    const db = createMigrationTestClient();
+  it('12. Test E2 — Archive conflict safety under non-strict SQL mode: aborts deterministically without mutating source primary key or deleting messages', async () => {
+    // Client với connectionLimit: 1 để đảm bảo session sql_mode = '' tồn tại trên mọi câu lệnh
+    const db = createMigrationTestClient({ connectionLimit: 1 });
     prisma = db;
     await db.$connect();
     const { suffix, tableNames, quoted } = generateTestContext();
 
     try {
+      // 1. Ép chế độ SQL non-strict cho session
+      await db.$executeRawUnsafe(`SET @@SESSION.sql_mode = '';`);
+
       await createLegacyBaseSchema(db, suffix, tableNames);
 
       await db.$executeRawUnsafe(
@@ -879,7 +1040,7 @@ describe('Support chat schema migration with preflight archive and RBAC bootstra
           (1, 'Nội dung cũ trong archive', '2026-10-10 10:00:00', 'DA_GUI', 1, '2026-10-10 10:00:00', '2026-10-10 10:00:00')`,
       );
 
-      // Thực thi migration: Phải ném lỗi phát hiện xung đột dữ liệu
+      // Thực thi migration: Phải ném lỗi phát hiện xung đột dữ liệu ngay cả khi sql_mode non-strict
       let migrationError: Error | undefined;
       try {
         await executeMigrationScript(db, suffix, tableNames);
@@ -888,9 +1049,11 @@ describe('Support chat schema migration with preflight archive and RBAC bootstra
       }
 
       expect(migrationError).toBeDefined();
-      expect(migrationError?.message).toMatch(/ERROR_ARCHIVE_DATA_CONFLICT_DETECTED|1292/);
+      expect(migrationError?.message).toMatch(/Subquery returns more than 1 row|1242/);
 
-      // QUAN TRỌNG: Bản ghi nguồn trong TinNhanHoTro KHÔNG ĐƯỢC PHÉP BỊ XÓA!
+      // QUAN TRỌNG NHẤT:
+      // 1. Khóa chính tinNhanId KHÔNG BỊ ĐỔI THÀNH 0 (zero mutation)!
+      // 2. Toàn bộ bản ghi nguồn KHÔNG BỊ XÓA!
       const [sourceMessage] = await db.$queryRawUnsafe<
         Array<{ tinNhanId: number; noiDung: string }>
       >(
@@ -900,7 +1063,13 @@ describe('Support chat schema migration with preflight archive and RBAC bootstra
       expect(sourceMessage.tinNhanId).toBe(1);
       expect(sourceMessage.noiDung).toBe('Nội dung mới trong bảng nguồn');
 
-      // Archive vẫn giữ bản ghi ban đầu, không bị ghi đè hay hỏng
+      // 3. Không có bản ghi nào bị gán tinNhanId = 0
+      const zeroRows = await db.$queryRawUnsafe<Array<any>>(
+        `SELECT * FROM ${quoted(tableNames.tinNhan)} WHERE \`tinNhanId\` = 0`,
+      );
+      expect(zeroRows.length).toBe(0);
+
+      // Archive vẫn giữ nguyên bản gốc
       const [archiveMessage] = await db.$queryRawUnsafe<
         Array<{ tinNhanId: number; noiDung: string }>
       >(
@@ -908,6 +1077,295 @@ describe('Support chat schema migration with preflight archive and RBAC bootstra
       );
       expect(archiveMessage).toBeDefined();
       expect(archiveMessage.noiDung).toBe('Nội dung cũ trong archive');
+    } finally {
+      await teardownTestSchema(db, tableNames);
+    }
+  });
+
+  it('13. Test E3 — Missing archive detection under non-strict SQL mode: aborts before delete without mutating source records', async () => {
+    const db = createMigrationTestClient({ connectionLimit: 1 });
+    prisma = db;
+    await db.$connect();
+    const { suffix, tableNames, quoted } = generateTestContext();
+
+    try {
+      await db.$executeRawUnsafe(`SET @@SESSION.sql_mode = '';`);
+      await createLegacyBaseSchema(db, suffix, tableNames);
+
+      await db.$executeRawUnsafe(
+        `INSERT INTO ${quoted(tableNames.taiKhoan)} (\`taiKhoanId\`, \`email\`) VALUES (1, 'u1@vexgo.vn')`,
+      );
+      await db.$executeRawUnsafe(
+        `INSERT INTO ${quoted(tableNames.khachHang)} (\`khachHangId\`, \`maKhachHang\`, \`taiKhoanId\`) VALUES (1, 'KH1', 1)`,
+      );
+      // Tạo tin nhắn legacy
+      await db.$executeRawUnsafe(
+        `INSERT INTO ${quoted(tableNames.tinNhan)} (\`tinNhanId\`, \`noiDung\`, \`thoiGian\`, \`trangThai\`, \`khachHangId\`, \`createdAt\`, \`updatedAt\`) VALUES
+          (99, 'Tin nhắn chưa có archive', '2026-10-10 10:00:00', 'DA_GUI', 1, '2026-10-10 10:00:00', '2026-10-10 10:00:00')`,
+      );
+
+      // Tạo bảng archive nhưng để RỖNG (không có bản ghi 99), và mô phỏng chạy đến bước 7.1
+      await db.$executeRawUnsafe(
+        `CREATE TABLE IF NOT EXISTS ${quoted(tableNames.luuTru)} (
+          \`tinNhanId\` INTEGER NOT NULL,
+          \`noiDung\` TEXT NOT NULL,
+          \`thoiGianCu\` DATETIME(0) NOT NULL,
+          \`trangThaiCu\` VARCHAR(30) NOT NULL,
+          \`khachHangIdCu\` INTEGER NOT NULL,
+          \`createdAtCu\` DATETIME(0) NOT NULL,
+          \`updatedAtCu\` DATETIME(0) NOT NULL,
+          \`archivedAt\` DATETIME(0) NOT NULL DEFAULT CURRENT_TIMESTAMP(0),
+          PRIMARY KEY (\`tinNhanId\`)
+        ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`,
+      );
+      await db.$executeRawUnsafe(`ALTER TABLE ${quoted(tableNames.tinNhan)} ADD COLUMN \`cuocTroChuyenId\` INT NULL;`);
+
+      // Chạy câu lệnh kiểm tra bước 7.1
+      let guardError: Error | undefined;
+      try {
+        await db.$executeRawUnsafe(`
+          SET @unarchived_legacy_guard = (
+            SELECT 1
+            FROM (SELECT 1 UNION ALL SELECT 2) \`_unarchived_legacy_guard_fail_closed\`
+            WHERE EXISTS (
+              SELECT 1
+              FROM ${quoted(tableNames.tinNhan)} src
+              LEFT JOIN ${quoted(tableNames.luuTru)} arc ON arc.\`tinNhanId\` = src.\`tinNhanId\`
+              WHERE src.\`cuocTroChuyenId\` IS NULL
+                AND arc.\`tinNhanId\` IS NULL
+            )
+          );
+        `);
+      } catch (err) {
+        guardError = err instanceof Error ? err : new Error(String(err));
+      }
+
+      expect(guardError).toBeDefined();
+      expect(guardError?.message).toMatch(/Subquery returns more than 1 row|1242/);
+
+      // Bản ghi nguồn KHÔNG BỊ MUTATE và KHÔNG BỊ XÓA
+      const [sourceMessage] = await db.$queryRawUnsafe<Array<any>>(
+        `SELECT * FROM ${quoted(tableNames.tinNhan)} WHERE \`tinNhanId\` = 99`,
+      );
+      expect(sourceMessage).toBeDefined();
+      expect(sourceMessage.tinNhanId).toBe(99);
+      expect(sourceMessage.noiDung).toBe('Tin nhắn chưa có archive');
+    } finally {
+      await teardownTestSchema(db, tableNames);
+    }
+  });
+
+  it('14. Test F1 — Archive timestamp conflict: aborts migration when updatedAtCu differs', async () => {
+    const db = createMigrationTestClient();
+    prisma = db;
+    await db.$connect();
+    const { suffix, tableNames, quoted } = generateTestContext();
+
+    try {
+      await createLegacyBaseSchema(db, suffix, tableNames);
+
+      await db.$executeRawUnsafe(
+        `INSERT INTO ${quoted(tableNames.taiKhoan)} (\`taiKhoanId\`, \`email\`) VALUES (1, 'u1@vexgo.vn')`,
+      );
+      await db.$executeRawUnsafe(
+        `INSERT INTO ${quoted(tableNames.khachHang)} (\`khachHangId\`, \`maKhachHang\`, \`taiKhoanId\`) VALUES (1, 'KH1', 1)`,
+      );
+      // Nguồn có updatedAt = 10:30:00
+      await db.$executeRawUnsafe(
+        `INSERT INTO ${quoted(tableNames.tinNhan)} (\`tinNhanId\`, \`noiDung\`, \`thoiGian\`, \`trangThai\`, \`khachHangId\`, \`createdAt\`, \`updatedAt\`) VALUES
+          (1, 'Tin nhắn test updatedAt', '2026-10-10 10:00:00', 'DA_GUI', 1, '2026-10-10 10:00:00', '2026-10-10 10:30:00')`,
+      );
+
+      // Archive: Mọi trường đều giống hệt, CHỈ RIÊNG updatedAtCu bị lệch (08:00:00)
+      await db.$executeRawUnsafe(
+        `CREATE TABLE IF NOT EXISTS ${quoted(tableNames.luuTru)} (
+          \`tinNhanId\` INTEGER NOT NULL,
+          \`noiDung\` TEXT NOT NULL,
+          \`thoiGianCu\` DATETIME(0) NOT NULL,
+          \`trangThaiCu\` VARCHAR(30) NOT NULL,
+          \`khachHangIdCu\` INTEGER NOT NULL,
+          \`createdAtCu\` DATETIME(0) NOT NULL,
+          \`updatedAtCu\` DATETIME(0) NOT NULL,
+          \`archivedAt\` DATETIME(0) NOT NULL DEFAULT CURRENT_TIMESTAMP(0),
+          PRIMARY KEY (\`tinNhanId\`)
+        ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`,
+      );
+      await db.$executeRawUnsafe(
+        `INSERT INTO ${quoted(tableNames.luuTru)} (\`tinNhanId\`, \`noiDung\`, \`thoiGianCu\`, \`trangThaiCu\`, \`khachHangIdCu\`, \`createdAtCu\`, \`updatedAtCu\`) VALUES
+          (1, 'Tin nhắn test updatedAt', '2026-10-10 10:00:00', 'DA_GUI', 1, '2026-10-10 10:00:00', '2026-10-10 08:00:00')`,
+      );
+
+      let migrationError: Error | undefined;
+      try {
+        await executeMigrationScript(db, suffix, tableNames);
+      } catch (error) {
+        migrationError = error instanceof Error ? error : new Error(String(error));
+      }
+
+      expect(migrationError).toBeDefined();
+      expect(migrationError?.message).toMatch(/Subquery returns more than 1 row|1242/);
+
+      // Bản ghi nguồn không bị xóa
+      const [sourceMessage] = await db.$queryRawUnsafe<Array<any>>(
+        `SELECT * FROM ${quoted(tableNames.tinNhan)} WHERE \`tinNhanId\` = 1`,
+      );
+      expect(sourceMessage).toBeDefined();
+      expect(sourceMessage.tinNhanId).toBe(1);
+    } finally {
+      await teardownTestSchema(db, tableNames);
+    }
+  });
+
+  it('15. Test F2 — Archive timestamp conflict: aborts migration when createdAtCu differs on fresh schema', async () => {
+    const db = createMigrationTestClient();
+    prisma = db;
+    await db.$connect();
+    const { suffix, tableNames, quoted } = generateTestContext();
+
+    try {
+      await createLegacyBaseSchema(db, suffix, tableNames);
+
+      await db.$executeRawUnsafe(
+        `INSERT INTO ${quoted(tableNames.taiKhoan)} (\`taiKhoanId\`, \`email\`) VALUES (1, 'u1@vexgo.vn')`,
+      );
+      await db.$executeRawUnsafe(
+        `INSERT INTO ${quoted(tableNames.khachHang)} (\`khachHangId\`, \`maKhachHang\`, \`taiKhoanId\`) VALUES (1, 'KH1', 1)`,
+      );
+      // Nguồn có createdAt = 10:00:00
+      await db.$executeRawUnsafe(
+        `INSERT INTO ${quoted(tableNames.tinNhan)} (\`tinNhanId\`, \`noiDung\`, \`thoiGian\`, \`trangThai\`, \`khachHangId\`, \`createdAt\`, \`updatedAt\`) VALUES
+          (1, 'Tin nhắn test createdAt', '2026-10-10 10:00:00', 'DA_GUI', 1, '2026-10-10 10:00:00', '2026-10-10 10:00:00')`,
+      );
+
+      // Archive: createdAtCu bị sai lệch (09:00:00) trên schema gốc
+      await db.$executeRawUnsafe(
+        `CREATE TABLE IF NOT EXISTS ${quoted(tableNames.luuTru)} (
+          \`tinNhanId\` INTEGER NOT NULL,
+          \`noiDung\` TEXT NOT NULL,
+          \`thoiGianCu\` DATETIME(0) NOT NULL,
+          \`trangThaiCu\` VARCHAR(30) NOT NULL,
+          \`khachHangIdCu\` INTEGER NOT NULL,
+          \`createdAtCu\` DATETIME(0) NOT NULL,
+          \`updatedAtCu\` DATETIME(0) NOT NULL,
+          \`archivedAt\` DATETIME(0) NOT NULL DEFAULT CURRENT_TIMESTAMP(0),
+          PRIMARY KEY (\`tinNhanId\`)
+        ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`,
+      );
+      await db.$executeRawUnsafe(
+        `INSERT INTO ${quoted(tableNames.luuTru)} (\`tinNhanId\`, \`noiDung\`, \`thoiGianCu\`, \`trangThaiCu\`, \`khachHangIdCu\`, \`createdAtCu\`, \`updatedAtCu\`) VALUES
+          (1, 'Tin nhắn test createdAt', '2026-10-10 10:00:00', 'DA_GUI', 1, '2026-10-10 09:00:00', '2026-10-10 10:00:00')`,
+      );
+
+      let migrationError: Error | undefined;
+      try {
+        await executeMigrationScript(db, suffix, tableNames);
+      } catch (error) {
+        migrationError = error instanceof Error ? error : new Error(String(error));
+      }
+
+      expect(migrationError).toBeDefined();
+      expect(migrationError?.message).toMatch(/Subquery returns more than 1 row|1242/);
+
+      // Bản ghi nguồn không bị xóa
+      const [sourceMessage] = await db.$queryRawUnsafe<Array<any>>(
+        `SELECT * FROM ${quoted(tableNames.tinNhan)} WHERE \`tinNhanId\` = 1`,
+      );
+      expect(sourceMessage).toBeDefined();
+      expect(sourceMessage.tinNhanId).toBe(1);
+    } finally {
+      await teardownTestSchema(db, tableNames);
+    }
+  });
+
+  it('16. Test F3 — Partial retry idempotency: safely resumes when schema was partially migrated after step 4 without false conflict', async () => {
+    const db = createMigrationTestClient();
+    prisma = db;
+    await db.$connect();
+    const { suffix, tableNames, quoted } = generateTestContext();
+
+    try {
+      await createLegacyBaseSchema(db, suffix, tableNames);
+
+      await db.$executeRawUnsafe(
+        `INSERT INTO ${quoted(tableNames.taiKhoan)} (\`taiKhoanId\`, \`email\`) VALUES (1, 'u1@vexgo.vn')`,
+      );
+      await db.$executeRawUnsafe(
+        `INSERT INTO ${quoted(tableNames.khachHang)} (\`khachHangId\`, \`maKhachHang\`, \`taiKhoanId\`) VALUES (1, 'KH1', 1)`,
+      );
+
+      // Giả lập trạng thái chạy dở sau bước 4:
+      // Bảng nguồn đã có cột cuocTroChuyenId (từ bước 3), và createdAt đã được bước 4 đồng bộ bằng thoiGian (10:00:00)
+      await db.$executeRawUnsafe(`ALTER TABLE ${quoted(tableNames.tinNhan)} ADD COLUMN \`cuocTroChuyenId\` INT NULL;`);
+      await db.$executeRawUnsafe(
+        `INSERT INTO ${quoted(tableNames.tinNhan)} (\`tinNhanId\`, \`noiDung\`, \`thoiGian\`, \`trangThai\`, \`khachHangId\`, \`createdAt\`, \`updatedAt\`) VALUES
+          (1, 'Tin nhắn chạy dở', '2026-10-10 10:00:00', 'DA_GUI', 1, '2026-10-10 10:00:00', '2026-10-10 10:00:00')`,
+      );
+
+      // Archive lưu trữ snapshot ban đầu với createdAtCu = 09:00:00 (< thoiGianCu)
+      await db.$executeRawUnsafe(
+        `CREATE TABLE IF NOT EXISTS ${quoted(tableNames.luuTru)} (
+          \`tinNhanId\` INTEGER NOT NULL,
+          \`noiDung\` TEXT NOT NULL,
+          \`thoiGianCu\` DATETIME(0) NOT NULL,
+          \`trangThaiCu\` VARCHAR(30) NOT NULL,
+          \`khachHangIdCu\` INTEGER NOT NULL,
+          \`createdAtCu\` DATETIME(0) NOT NULL,
+          \`updatedAtCu\` DATETIME(0) NOT NULL,
+          \`archivedAt\` DATETIME(0) NOT NULL DEFAULT CURRENT_TIMESTAMP(0),
+          PRIMARY KEY (\`tinNhanId\`)
+        ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`,
+      );
+      await db.$executeRawUnsafe(
+        `INSERT INTO ${quoted(tableNames.luuTru)} (\`tinNhanId\`, \`noiDung\`, \`thoiGianCu\`, \`trangThaiCu\`, \`khachHangIdCu\`, \`createdAtCu\`, \`updatedAtCu\`) VALUES
+          (1, 'Tin nhắn chạy dở', '2026-10-10 10:00:00', 'DA_GUI', 1, '2026-10-10 09:00:00', '2026-10-10 10:00:00')`,
+      );
+
+      // Chạy câu lệnh kiểm tra preflight guard (bước 1.1)
+      let guardError: Error | undefined;
+      try {
+        await db.$executeRawUnsafe(`
+          SET @archive_conflict_guard = (
+            SELECT 1
+            FROM (
+              SELECT 1 UNION ALL SELECT 2
+            ) \`_archive_conflict_guard_fail_closed\`
+            WHERE EXISTS (
+              SELECT 1
+              FROM ${quoted(tableNames.tinNhan)} src
+              JOIN ${quoted(tableNames.luuTru)} arc ON arc.\`tinNhanId\` = src.\`tinNhanId\`
+              WHERE BINARY(src.\`noiDung\`) <> BINARY(arc.\`noiDung\`)
+                 OR src.\`thoiGian\` <> arc.\`thoiGianCu\`
+                 OR BINARY(src.\`trangThai\`) <> BINARY(arc.\`trangThaiCu\`)
+                 OR src.\`khachHangId\` <> arc.\`khachHangIdCu\`
+                 OR src.\`updatedAt\` <> arc.\`updatedAtCu\`
+                 OR (
+                    src.\`createdAt\` <> arc.\`createdAtCu\`
+                    AND NOT (
+                      EXISTS (
+                        SELECT 1 FROM information_schema.COLUMNS
+                        WHERE TABLE_SCHEMA = DATABASE()
+                          AND TABLE_NAME = '${tableNames.tinNhan}'
+                          AND COLUMN_NAME = 'cuocTroChuyenId'
+                      )
+                      AND src.\`createdAt\` = src.\`thoiGian\`
+                      AND arc.\`thoiGianCu\` = src.\`thoiGian\`
+                    )
+                 )
+            )
+          );
+        `);
+      } catch (err) {
+        guardError = err instanceof Error ? err : new Error(String(err));
+      }
+
+      // Không được sinh lỗi xung đột giả (no false conflict)
+      expect(guardError).toBeUndefined();
+
+      // Dữ liệu nguồn và archive nguyên vẹn
+      const [src] = await db.$queryRawUnsafe<Array<any>>(
+        `SELECT * FROM ${quoted(tableNames.tinNhan)} WHERE \`tinNhanId\` = 1`,
+      );
+      expect(src.tinNhanId).toBe(1);
     } finally {
       await teardownTestSchema(db, tableNames);
     }

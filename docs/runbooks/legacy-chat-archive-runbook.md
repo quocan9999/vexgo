@@ -16,7 +16,7 @@ Trước đợt nâng cấp hệ thống Chat Hỗ trợ Trực tuyến Đa ngư
 Bảng này **hoàn toàn không có cột `nhaXeId`** và không liên kết trực tiếp với nhà xe, chuyến xe hay vé xe cụ thể. Khi chuyển đổi sang mô hình `CuocTroChuyen` bắt buộc `nhaXeId NOT NULL`, việc gán tùy tiện tin nhắn của khách hàng vào một nhà xe (dù là `MIN(nhaXeId)`, nhà xe mặc định `1`, hay suy đoán dựa trên lịch sử đặt vé) là **vi phạm nghiêm trọng nguyên tắc Tenant Isolation và chính sách bảo mật thông tin khách hàng**.
 
 ### 1.2. Chính sách Option A (Archive-Only)
-Theo quyết định kiến trúc đã phê duyệt:
+Theo đề xuất định hướng Option A (Archive-Only) trong PR #37 nhằm bảo vệ toàn vẹn dữ liệu và phân tách tenant:
 1. **Lưu trữ bảo toàn 100%:** Toàn bộ tin nhắn cũ được sao chép nguyên vẹn vào bảng `LuuTruTinNhanHoTroCu` trước khi thay đổi cấu trúc bảng nguồn.
 2. **Không suy đoán Tenant:** Tuyệt đối không tạo cuộc trò chuyện giả hoặc gán nhà xe không có căn cứ xác thực.
 3. **Làm sạch bảng hoạt động:** Các bản ghi cũ chưa xác định được cuộc trò chuyện/tenant sẽ được loại bỏ khỏi bảng hoạt động `TinNhanHoTro` để đảm bảo tính toàn vẹn dữ liệu và tuân thủ ràng buộc `NOT NULL` của schema mới.
@@ -124,7 +124,7 @@ WHERE `tinNhanId` IS NULL
 
 ---
 
-## 6. Quy trình Phục hồi Dữ liệu có Điều kiện (Restoration Procedure)
+## 6. Quy trình Phục hồi Dữ liệu An toàn & Chống Trộn Khách Hàng (Safe Restoration Procedure)
 
 > [!WARNING]
 > **ĐIỀU KIỆN TIÊN QUYẾT TRƯỚC KHI KHÔI PHỤC:**  
@@ -132,27 +132,62 @@ WHERE `tinNhanId` IS NULL
 > Việc phục hồi một phiên chat lịch sử chỉ được thực hiện khi thỏa mãn **TẤT CẢ** các điều kiện sau:  
 > 1. Có văn bản/yêu cầu chính thức từ khách hàng yêu cầu tiếp tục phiên hỗ trợ cũ.  
 > 2. Đã xác định **chính xác 100% nhà xe (`nhaXeId`)** chịu trách nhiệm xử lý (có bằng chứng giao dịch vé xe / gửi hàng tương ứng).  
-> 3. Đã tạo một `CuocTroChuyen` hợp lệ thuộc nhà xe đó trước khi đưa tin nhắn vào.
+> 3. Đã tạo một `CuocTroChuyen` hợp lệ thuộc nhà xe đó trước khi đưa tin nhắn vào.  
+> 4. **RÀNG BUỘC CÁCH LY KHÁCH HÀNG (Cross-Customer Protection):** Bắt buộc phải xác minh tất cả tin nhắn khôi phục thuộc cùng một `khachHangId` duy nhất. **Tuyệt đối không được trộn tin nhắn của khách hàng này vào cuộc trò chuyện của khách hàng khác.**
 
-### Kịch bản phục hồi thủ công có kiểm soát (Manual Handled Recovery):
+### Kịch bản phục hồi thủ công nguyên tử (Atomic Safe Recovery Script):
+
+Quy trình sử dụng Database Transaction kết hợp với 3 lớp kiểm tra (Guards) fail-closed. Nếu có bất kỳ ID nào không tồn tại hoặc thuộc về khách hàng khác, giao dịch sẽ **hủy bỏ toàn bộ (ROLLBACK)**, không để lại cuộc trò chuyện rỗng hay dữ liệu phục hồi dở dang:
+
 ```sql
--- Bước 1: Tạo cuộc trò chuyện hợp lệ cho nhà xe được chỉ định
+START TRANSACTION;
+
+-- 1. Thiết lập tham số kiểm soát
+SET @targetKhachHangId = 123;  -- Khách hàng được chỉ định nhận phiên phục hồi
+SET @targetNhaXeId = 5;       -- Nhà xe chịu trách nhiệm xử lý
+SET @expectedCount = 3;        -- Số lượng tin nhắn cần phục hồi trong danh sách (101, 102, 103)
+
+-- 2. Guard 1: Xác thực số lượng tin nhắn hợp lệ thuộc DUY NHẤT khách hàng đích @targetKhachHangId
+-- Nếu có bất kỳ tin nhắn nào thuộc khách hàng khác, @verifiedCount sẽ nhỏ hơn @expectedCount
+SET @verifiedCount = (
+    SELECT COUNT(*)
+    FROM `LuuTruTinNhanHoTroCu` arc
+    WHERE arc.`tinNhanId` IN (101, 102, 103)
+      AND arc.`khachHangIdCu` = @targetKhachHangId
+);
+
+-- Kích hoạt abort nếu phát hiện sai lệch (ID không tồn tại hoặc thuộc khách hàng khác)
+SET @cross_customer_guard = (
+    SELECT 1
+    FROM (SELECT 1 UNION ALL SELECT 2) `_cross_customer_guard_abort`
+    WHERE @verifiedCount <> @expectedCount
+);
+
+-- 3. Tạo cuộc trò chuyện mới cho đúng khách hàng đích và nhà xe đã xác thực
 INSERT INTO `CuocTroChuyen` (
     `maCuocTroChuyen`, `tieuDe`, `trangThai`, `kenhHoTro`, `cheDoChat`,
     `khachHangId`, `nhaXeId`, `createdAt`, `updatedAt`
 ) VALUES (
-    'RECOVERED-KH123-NX5', 'Phục hồi hỗ trợ khách hàng', 'CHO_TIEP_NHAN', 'WEB', 'NGUOI_THAT',
-    123, 5, CURRENT_TIMESTAMP(0), CURRENT_TIMESTAMP(0)
+    CONCAT('RECOVERED-KH', @targetKhachHangId, '-NX', @targetNhaXeId, '-', UNIX_TIMESTAMP()),
+    'Phục hồi hỗ trợ khách hàng',
+    'CHO_TIEP_NHAN',
+    'WEB',
+    'NGUOI_THAT',
+    @targetKhachHangId,
+    @targetNhaXeId,
+    CURRENT_TIMESTAMP(0),
+    CURRENT_TIMESTAMP(0)
 );
 SET @newCuocTroChuyenId = LAST_INSERT_ID();
 
--- Bước 2: Nạp các tin nhắn đã xác minh từ archive vào cuộc trò chuyện mới
+-- 4. Nạp tin nhắn từ archive: RÀNG BUỘC KÉP arc.khachHangIdCu = ctc.khachHangId
+-- Đảm bảo 100% ở cấp truy vấn rằng chỉ có tin nhắn của khách hàng sở hữu hội thoại mới được nạp
 INSERT INTO `TinNhanHoTro` (
     `cuocTroChuyenId`, `taiKhoanGuiId`, `loaiNguoiGui`, `loaiTinNhan`,
     `noiDung`, `trangThai`, `createdAt`, `updatedAt`
 )
 SELECT
-    @newCuocTroChuyenId,
+    ctc.`cuocTroChuyenId`,
     kh.`taiKhoanId`,
     'KHACH_HANG',
     'VAN_BAN',
@@ -161,9 +196,27 @@ SELECT
     arc.`thoiGianCu`,
     arc.`updatedAtCu`
 FROM `LuuTruTinNhanHoTroCu` arc
+JOIN `CuocTroChuyen` ctc ON ctc.`cuocTroChuyenId` = @newCuocTroChuyenId
 JOIN `KhachHang` kh ON kh.`khachHangId` = arc.`khachHangIdCu`
-WHERE arc.`tinNhanId` IN (101, 102, 103); -- Danh sách ID tin nhắn cụ thể đã được xác minh
+WHERE arc.`tinNhanId` IN (101, 102, 103)
+  AND arc.`khachHangIdCu` = ctc.`khachHangId`;
+
+-- 5. Guard 2: Kiểm tra số lượng dòng thực tế đã ghi vào TinNhanHoTro phải khớp chính xác @expectedCount
+SET @insertedCount = ROW_COUNT();
+SET @row_count_guard = (
+    SELECT 1
+    FROM (SELECT 1 UNION ALL SELECT 2) `_row_count_guard_abort`
+    WHERE @insertedCount <> @expectedCount
+);
+
+-- 6. Hoàn tất giao dịch khi mọi điều kiện an toàn đều thỏa mãn
+COMMIT;
 ```
+
+> [!CAUTION]
+> **QUY TẮC BẮT BUỘC KHI PHỤC HỒI THẤT BẠI:**  
+> Nếu bất kỳ câu lệnh nào trong khối transaction gặp lỗi (ví dụ `Subquery returns more than 1 row` do Guard kích hoạt), DBA **TUYỆT ĐỐI KHÔNG ĐƯỢC PHÉP TIẾP TỤC THAO TÁC THỦ CÔNG**. Hệ thống sẽ tự động ROLLBACK toàn bộ transaction, hủy bỏ `CuocTroChuyen` vừa tạo và không ghi nhận bất kỳ tin nhắn nào vào `TinNhanHoTro`. Người vận hành phải kiểm tra lại danh sách ID tin nhắn và báo cáo sự cố an toàn dữ liệu.
+
 
 ---
 
