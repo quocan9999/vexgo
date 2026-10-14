@@ -167,6 +167,8 @@ CREATE PROCEDURE `sp_RecoverLegacyMessages`(
 proc_body: BEGIN
     DECLARE v_verifiedCount INT DEFAULT 0;
     DECLARE v_insertedCount INT DEFAULT 0;
+    DECLARE v_uniqueIdCount INT DEFAULT 0;
+    DECLARE v_invalidIdCount INT DEFAULT 0;
     DECLARE v_maCuocTroChuyen VARCHAR(100);
     DECLARE v_taiKhoanId INT DEFAULT NULL;
 
@@ -193,7 +195,24 @@ proc_body: BEGIN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'INVALID_OR_EMPTY_TIN_NHAN_IDS_JSON';
     END IF;
 
-    IF p_expectedCount IS NULL OR p_expectedCount <= 0 OR p_expectedCount <> JSON_LENGTH(p_tinNhanIdsJson) THEN
+    -- Kiểm tra danh sách ID: từ chối ID không hợp lệ và từ chối danh sách chứa ID trùng lặp (Finding A)
+    SELECT 
+        COUNT(DISTINCT jt.`tinNhanId`),
+        COUNT(CASE WHEN jt.`tinNhanId` IS NULL OR jt.`tinNhanId` <= 0 THEN 1 END)
+    INTO 
+        v_uniqueIdCount,
+        v_invalidIdCount
+    FROM JSON_TABLE(p_tinNhanIdsJson, '$[*]' COLUMNS (`tinNhanId` INT PATH '$')) jt;
+
+    IF v_invalidIdCount > 0 THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'INVALID_TIN_NHAN_ID_IN_LIST';
+    END IF;
+
+    IF v_uniqueIdCount <> JSON_LENGTH(p_tinNhanIdsJson) THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'DUPLICATE_TIN_NHAN_IDS_DETECTED';
+    END IF;
+
+    IF p_expectedCount IS NULL OR p_expectedCount <= 0 OR p_expectedCount <> v_uniqueIdCount THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'EXPECTED_COUNT_MISMATCH_WITH_JSON_LENGTH';
     END IF;
 
@@ -212,13 +231,13 @@ proc_body: BEGIN
     END IF;
 
     -- 4. Guard 1: Xác thực số lượng tin nhắn trong archive thuộc DUY NHẤT khách hàng đích
-    SELECT COUNT(*) INTO v_verifiedCount
+    SELECT COUNT(DISTINCT arc.`tinNhanId`) INTO v_verifiedCount
     FROM `LuuTruTinNhanHoTroCu` arc
     JOIN JSON_TABLE(p_tinNhanIdsJson, '$[*]' COLUMNS (`tinNhanId` INT PATH '$')) jt
       ON jt.`tinNhanId` = arc.`tinNhanId`
     WHERE arc.`khachHangIdCu` = p_targetKhachHangId;
 
-    -- Nếu có bất kỳ ID nào không tồn tại, bị trùng lặp hoặc thuộc về khách hàng khác:
+    -- Nếu có bất kỳ ID nào không tồn tại hoặc thuộc về khách hàng khác:
     IF v_verifiedCount <> p_expectedCount THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'CROSS_CUSTOMER_OR_MISSING_ARCHIVE_MESSAGES_DETECTED';
     END IF;
@@ -395,15 +414,24 @@ MySQL tự động kích hoạt **implicit commit** sau mỗi câu lệnh DDL (`
    - Nếu đã thêm cột ở Bước 3 nhưng chưa tạo bảng `CuocTroChuyen`: Thực thi từ Bước 5.
    - Nếu đã xóa tin nhắn legacy nhưng chưa thêm ràng buộc khóa ngoại (Bước 7.3): Thực thi các câu lệnh `ALTER TABLE ... ADD CONSTRAINT` tương ứng.
 
-8. **Đồng bộ hóa trạng thái Prisma Migration:**  
-   Sau khi hoàn tất thủ công các thay đổi schema trên cơ sở dữ liệu, sử dụng lệnh Prisma CLI để đánh dấu migration đã được áp dụng thành công:
-   ```bash
-   npx prisma migrate resolve --applied 20261013150000_add_chat_support_conversations_and_messages
-   ```
-   Hoặc nếu cần rollback về schema cũ trước đó:
-   ```bash
-   npx prisma migrate resolve --rolled-back 20261013150000_add_chat_support_conversations_and_messages
-   ```
+8. **Đồng bộ hóa trạng thái Prisma Migration (Cảnh báo quan trọng về `migrate resolve`):**  
+   > [!CAUTION]
+   > **BẢN CHẤT LỆNH `prisma migrate resolve`:**  
+   > Lệnh `prisma migrate resolve` **CHỈ cập nhật cờ trạng thái metadata** trong bảng nội bộ `_prisma_migrations`, **HOÀN TOÀN KHÔNG thực thi rollback DDL, không tái tạo các cột đã bị drop và không phục hồi dữ liệu trong MySQL**.  
+   > - **TUYỆT ĐỐI KHÔNG CHẠY `--rolled-back` khi schema thực tế đang ở trạng thái chạy dở!** Nếu chạy lệnh này mà schema chưa được khôi phục về ban đầu, Prisma sẽ coi như migration chưa được chạy và lần deploy tiếp theo sẽ cố gắng áp dụng lại từ đầu, gây lỗi crash nghiêm trọng (`Duplicate column name`, `Table already exists`) hoặc xung đột dữ liệu.  
+   > 
+   > **Quy tắc sử dụng có điều kiện:**
+   > - **Trường hợp 1 (Khuyến nghị chuẩn): Khôi phục thủ công hoàn tất $\rightarrow$ dùng `--applied`:**  
+   >   Khi DBA đã thực hiện thủ công các bước DDL/DML còn lại để đưa schema thực tế khớp hoàn toàn với định nghĩa mới và xác minh `prisma migrate diff` trả về zero drift:
+   >   ```bash
+   >   npx prisma migrate resolve --applied 20261013150000_add_chat_support_conversations_and_messages
+   >   ```
+   > - **Trường hợp 2: Khôi phục database về bản sao lưu ban đầu $\rightarrow$ dùng `--rolled-back`:**  
+   >   Chỉ sử dụng `--rolled-back` khi DBA **đã restore toàn bộ cơ sở dữ liệu về snapshot ban đầu** (từ file backup ở Bước 2) hoặc đã thực thi thủ công các câu lệnh DDL ngược lại để đưa schema và dữ liệu trở về đúng 100% trạng thái trước migration:
+   >   ```bash
+   >   npx prisma migrate resolve --rolled-back 20261013150000_add_chat_support_conversations_and_messages
+   >   ```
+   > - **Nếu không thể xác minh chắc chắn schema và dữ liệu:** DỪNG LẠI và yêu cầu đối soát kỹ thuật cấp cao, tuyệt đối không dùng `prisma migrate resolve` để che giấu trạng thái không nhất quán.
 
 9. **Xác minh không có schema drift:**  
    Chạy lệnh kiểm tra drift giữa Prisma schema và database thực tế:
