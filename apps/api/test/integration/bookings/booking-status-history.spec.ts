@@ -10,6 +10,7 @@ import { configureApi } from '../../../src/common/configure-api.js';
 import { PrismaService } from '../../../src/prisma/prisma.service.js';
 import { SeatHoldsService } from '../../../src/seat-holds/seat-holds.service.js';
 import { CargoCapacityService } from '../../../src/cargo-capacity/cargo-capacity.service.js';
+import { ShipmentPersistenceService } from '../../../src/shipments/shipment-persistence.service.js';
 import type { MomoWebhookDto } from '../../../src/payments/dto/webhook.dto.js';
 
 const UUID_V1_PATTERN =
@@ -59,6 +60,7 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
   let tripId: number;
   let tripSeatIds: number[] = [];
   let currentPrincipal: AuthPrincipal | null = null;
+  let failAfterShipmentPersistence = false;
 
   let customerId: number;
   let customerPrincipal: AuthPrincipal;
@@ -98,6 +100,20 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
     })),
   });
 
+  const shipmentPersistenceProxy = {
+    persistInTransaction: async (
+      ...args: Parameters<ShipmentPersistenceService['persistInTransaction']>
+    ) => {
+      const result = await new ShipmentPersistenceService().persistInTransaction(
+        ...args,
+      );
+      if (failAfterShipmentPersistence) {
+        throw new Error('Integration fault after cargo persistence');
+      }
+      return result;
+    },
+  };
+
   beforeAll(async () => {
     process.env.PAYMENT_DEMO_MODE = 'true';
     process.env.SEPAY_WEBHOOK_SECRET = sepaySecret;
@@ -115,6 +131,8 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(AccessTokenGuard)
       .useValue(accessTokenGuard)
+      .overrideProvider(ShipmentPersistenceService)
+      .useValue(shipmentPersistenceProxy)
       .compile();
 
     app = moduleRef.createNestApplication({ rawBody: true });
@@ -124,6 +142,8 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
     const competingModuleRef = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(AccessTokenGuard)
       .useValue(accessTokenGuard)
+      .overrideProvider(ShipmentPersistenceService)
+      .useValue(shipmentPersistenceProxy)
       .compile();
     competingApp = competingModuleRef.createNestApplication({ rawBody: true });
     configureApi(competingApp);
@@ -399,6 +419,7 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
 
   beforeEach(async () => {
     currentPrincipal = null;
+    failAfterShipmentPersistence = false;
 
     if (tripId) {
       await prisma.lichSuTrangThaiPhieuGuiHang.deleteMany({
@@ -594,6 +615,8 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
     expect(booking.shippingFee).toBe(130000);
     expect(booking.totalAmount).toBe(280000);
 
+    // Guest gửi hàng vẫn độc lập, kể cả khi số điện thoại được khai báo thuộc một tài khoản.
+    currentPrincipal = null;
     const standaloneResponse = await request(app.getHttpServer())
       .post('/api/v1/shipments')
       .send({
@@ -618,11 +641,21 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
 
     const bookingShipment = await prisma.phieuGuiHang.findUniqueOrThrow({
       where: { phieuGuiHangId: booking.shipment.shipmentId },
-      include: { chiTietCuocGuiHangs: true, hangHoas: true },
+      include: {
+        chiTietCuocGuiHangs: true,
+        hangHoas: true,
+        lichSuTrangThais: true,
+        donGiaoDich: { include: { phieuDatVe: true, thanhToans: true } },
+      },
     });
     const standaloneShipment = await prisma.phieuGuiHang.findUniqueOrThrow({
       where: { phieuGuiHangId: standaloneResponse.body.data.shipmentId },
-      include: { chiTietCuocGuiHangs: true, hangHoas: true },
+      include: {
+        chiTietCuocGuiHangs: true,
+        hangHoas: true,
+        lichSuTrangThais: true,
+        donGiaoDich: { include: { phieuDatVe: true, thanhToans: true } },
+      },
     });
     for (const shipment of [bookingShipment, standaloneShipment]) {
       expect(Number(shipment.cuocChinh)).toBe(60000);
@@ -633,6 +666,33 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
       expect(Number(shipment.chiTietCuocGuiHangs[0].soTienCuoc)).toBe(60000);
       expect(shipment.hangHoas).toHaveLength(2);
     }
+    expect(bookingShipment.donGiaoDichId).toBe(booking.orderId);
+    expect(bookingShipment.donGiaoDich.phieuDatVe?.phieuDatVeId).toBe(
+      booking.bookingId,
+    );
+    expect(bookingShipment.donGiaoDich.khachHangId).toBe(customerId);
+    expect(bookingShipment.donGiaoDich.tongTien.toNumber()).toBe(booking.totalAmount);
+    expect(bookingShipment.donGiaoDich.thanhToans).toHaveLength(1);
+    expect(bookingShipment.chuyenXeId).toBe(tripId);
+    expect(bookingShipment.lichSuTrangThais).toMatchObject([
+      {
+        trangThai: 'MOI_TAO',
+        taiKhoanId: customerPrincipal.taiKhoanId,
+        ghiChu: 'Tạo phiếu gửi hàng kèm đặt vé',
+      },
+    ]);
+    expect(standaloneShipment.donGiaoDichId).not.toBe(booking.orderId);
+    expect(standaloneShipment.donGiaoDich.phieuDatVe).toBeNull();
+    expect(standaloneShipment.donGiaoDich.thanhToans).toHaveLength(0);
+    expect(standaloneShipment.donGiaoDich.khachHangId).toBeNull();
+    expect(standaloneShipment.chuyenXeId).toBe(tripId);
+    expect(standaloneShipment.lichSuTrangThais).toMatchObject([
+      {
+        trangThai: 'MOI_TAO',
+        taiKhoanId: null,
+        ghiChu: 'Tạo phiếu gửi hàng độc lập',
+      },
+    ]);
 
     const orderCount = await prisma.donGiaoDich.count({ where: { nhaXeId: busCompanyId } });
     const failedNoRate = await request(app.getHttpServer())
@@ -648,6 +708,56 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
     expect(failedNoRate.status).toBe(409);
     expect(failedNoRate.body.error).toBe('CARGO_RATE_NOT_FOUND');
     expect(await prisma.donGiaoDich.count({ where: { nhaXeId: busCompanyId } })).toBe(orderCount);
+  });
+
+  it('rolls back booking, payment, consumed hold, and cargo when shared cargo persistence fails after writes', async () => {
+    currentPrincipal = customerPrincipal;
+    const hold = await request(app.getHttpServer())
+      .post('/api/v1/seat-holds')
+      .send({ tripId, seatIds: [tripSeatIds[0]] });
+    expect(hold.status, JSON.stringify(hold.body)).toBe(201);
+
+    failAfterShipmentPersistence = true;
+    const response = await request(app.getHttpServer())
+      .post('/api/v1/bookings')
+      .send(
+        bookingWithCargoPayload(hold.body.data.holdToken, [
+          { name: 'Hàng cần rollback', loaiHangHoaId: cargoTypeId, quantity: 1 },
+        ]),
+      );
+    failAfterShipmentPersistence = false;
+
+    expect(response.status).toBe(500);
+    expect(
+      await prisma.donGiaoDich.count({ where: { nhaXeId: busCompanyId } }),
+    ).toBe(0);
+    expect(
+      await prisma.phieuDatVe.count({
+        where: { donGiaoDich: { nhaXeId: busCompanyId } },
+      }),
+    ).toBe(0);
+    expect(
+      await prisma.ve.count({
+        where: { phieuDatVe: { donGiaoDich: { nhaXeId: busCompanyId } } },
+      }),
+    ).toBe(0);
+    expect(await prisma.phieuGuiHang.count({ where: { chuyenXeId: tripId } })).toBe(0);
+    expect(await prisma.hangHoa.count({ where: { phieuGuiHang: { chuyenXeId: tripId } } })).toBe(0);
+    expect(
+      await prisma.chiTietCuocGuiHang.count({
+        where: { phieuGuiHang: { chuyenXeId: tripId } },
+      }),
+    ).toBe(0);
+    expect(
+      await prisma.lichSuTrangThaiPhieuGuiHang.count({
+        where: { phieuGuiHang: { chuyenXeId: tripId } },
+      }),
+    ).toBe(0);
+    const heldSeat = await prisma.gheChuyenXe.findUniqueOrThrow({
+      where: { gheChuyenXeId: tripSeatIds[0] },
+    });
+    expect(heldSeat.trangThai).toBe('DANG_GIU');
+    expect(heldSeat.giuChoId).not.toBeNull();
   });
 
   it('accepts the last available unit and returns the committed live capacity projection', async () => {

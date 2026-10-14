@@ -16,6 +16,7 @@ describe('ShipmentsService', () => {
   let prismaMock: any;
   let configMock: any;
   let cargoCapacityServiceMock: any;
+  let shipmentPersistenceServiceMock: any;
 
   beforeEach(() => {
     configMock = {
@@ -32,6 +33,38 @@ describe('ShipmentsService', () => {
         },
       }),
       assertAvailable: vi.fn(),
+    };
+    shipmentPersistenceServiceMock = {
+      persistInTransaction: vi.fn(async (_tx: unknown, input: any) => ({
+        shipment: {
+          phieuGuiHangId: 300,
+          maVanDon: input.waybillCode,
+          ngayGui: input.sentAt,
+          trangThai: 'MOI_TAO',
+          ghiChu: input.note,
+          diemGui: {
+            diemGiaoNhanHangId: input.senderPointId,
+            tenDiem: 'Bến xe Miền Đông',
+            diaChi: 'TP.HCM',
+          },
+          diemNhan: {
+            diemGiaoNhanHangId: input.receiverPointId,
+            tenDiem: 'Bến xe Đà Lạt',
+            diaChi: 'Đà Lạt',
+          },
+        },
+        items: input.items.map((item: any, index: number) => ({
+          hangHoaId: 400 + index,
+          tenHang: item.name,
+          soLuong: item.quantity,
+          khoiLuong: item.unitWeight,
+          chieuDai: item.length,
+          chieuRong: item.width,
+          chieuCao: item.height,
+          moTa: item.description,
+          loaiHangHoa: { tenLoai: 'BƯU PHẨM' },
+        })),
+      })),
     };
 
     prismaMock = {
@@ -67,6 +100,7 @@ describe('ShipmentsService', () => {
       configMock as unknown as ConfigService,
       new CargoPricingService(),
       cargoCapacityServiceMock,
+      shipmentPersistenceServiceMock,
     );
   });
 
@@ -229,6 +263,7 @@ describe('ShipmentsService', () => {
       ]);
 
       // Mock transaction
+      let transactionMock: any;
       prismaMock.$transaction.mockImplementation(async (callback: any) => {
         const txMock = {
           diemGiaoNhanTuyenXe: {
@@ -293,6 +328,7 @@ describe('ShipmentsService', () => {
             create: vi.fn().mockResolvedValue({}),
           },
         };
+        transactionMock = txMock;
         return callback(txMock);
       });
 
@@ -306,10 +342,38 @@ describe('ShipmentsService', () => {
       });
 
       expect(result).toBeDefined();
-      expect(result.waybillCode).toBe('FUTA-VD-20102026-0013');
+      expect(result.waybillCode).toMatch(/^FUTA-VD-\d{12}-[A-F\d]{25}$/);
       expect(result.pricing.totalFee).toBe(95000);
       expect(result.sender.phoneNumber).toBe('0901234567');
       expect(result.receiver.fullName).toBe('Trần Thị B');
+      expect(transactionMock.khachHang.findUnique).not.toHaveBeenCalled();
+      expect(transactionMock.taiKhoan.findUnique).not.toHaveBeenCalled();
+      expect(transactionMock.donGiaoDich.count).not.toHaveBeenCalled();
+      expect(transactionMock.khachHang.count).not.toHaveBeenCalled();
+      expect(transactionMock.taiKhoan.count).not.toHaveBeenCalled();
+      expect(transactionMock.donGiaoDich.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ khachHangId: null }),
+        }),
+      );
+      expect(shipmentPersistenceServiceMock.persistInTransaction).toHaveBeenCalledWith(
+        transactionMock,
+        expect.objectContaining({
+          tripId: 1,
+          senderPointId: 1,
+          receiverPointId: 2,
+          orderId: 200,
+          actorAccountId: null,
+          historyNote: 'Tạo phiếu gửi hàng độc lập',
+          items: [
+            expect.objectContaining({
+              name: 'Bình gốm sứ',
+              quantity: 1,
+              cargoTypeId: 1,
+            }),
+          ],
+        }),
+      );
       expect(prismaMock.bangCuocGuiHang.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({

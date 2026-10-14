@@ -7,6 +7,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { randomUUID } from 'node:crypto';
 import { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CargoPricingService } from '../cargo-pricing/cargo-pricing.service.js';
@@ -21,6 +22,8 @@ import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
 import type { CreateShipmentDto } from './dto/create-shipment.dto.js';
 import type { LookupShipmentDto } from './dto/lookup-shipment.dto.js';
 import type { ShipmentQueryDto } from './dto/shipment-query.dto.js';
+import { ShipmentPersistenceService } from './shipment-persistence.service.js';
+import { generateStandaloneShipmentCodes } from './shipment-codes.js';
 
 function combineDeparture(
   date: Date,
@@ -53,6 +56,7 @@ export class ShipmentsService {
     config: ConfigService,
     private readonly cargoPricingService: CargoPricingService,
     private readonly cargoCapacityService: CargoCapacityService,
+    private readonly shipmentPersistenceService: ShipmentPersistenceService,
   ) {
     this.businessTimeZone = resolveBusinessTimeZone(
       config.get<string>('BUSINESS_TIME_ZONE'),
@@ -226,8 +230,9 @@ export class ShipmentsService {
         })),
       );
 
-      // 1. Resolve Customer record
-      let customerId: number;
+      // Chỉ danh tính đăng nhập đã xác thực mới được gắn với hồ sơ Customer.
+      // Guest contact phone là dữ liệu liên hệ, không chứng minh quyền sở hữu tài khoản.
+      let customerId: number | null = null;
       if (taiKhoanId) {
         const cust = await tx.khachHang.findUnique({
           where: { taiKhoanId },
@@ -236,67 +241,20 @@ export class ShipmentsService {
         if (cust) {
           customerId = cust.khachHangId;
         } else {
-          const count = await tx.khachHang.count();
           const newCust = await tx.khachHang.create({
             data: {
-              maKhachHang: `KH-${Date.now()}-${count + 1}`,
+              maKhachHang: `KH-${randomUUID().replaceAll('-', '').toUpperCase()}`,
               taiKhoanId,
-            },
-          });
-          customerId = newCust.khachHangId;
-        }
-      } else {
-        const existingAccount = await tx.taiKhoan.findUnique({
-          where: { soDienThoai: senderPhone },
-          include: { khachHang: true },
-        });
-
-        if (existingAccount?.khachHang) {
-          customerId = existingAccount.khachHang.khachHangId;
-        } else if (existingAccount) {
-          const count = await tx.khachHang.count();
-          const newCust = await tx.khachHang.create({
-            data: {
-              maKhachHang: `KH-${Date.now()}-${count + 1}`,
-              taiKhoanId: existingAccount.taiKhoanId,
-            },
-          });
-          customerId = newCust.khachHangId;
-        } else {
-          const guestCount = await tx.taiKhoan.count();
-          const guestAccount = await tx.taiKhoan.create({
-            data: {
-              hoTen: dto.sender.fullName.trim(),
-              soDienThoai: senderPhone,
-              matKhau: '$2b$10$DUMMY_PASSWORD_FOR_GUEST_SHIPMENT',
-              email: dto.sender.email?.trim() || null,
-              daXacThucSoDienThoai: false,
-              trangThai: 'HOAT_DONG',
-            },
-          });
-          const newCust = await tx.khachHang.create({
-            data: {
-              maKhachHang: `KH-${Date.now()}-${guestCount + 1}`,
-              taiKhoanId: guestAccount.taiKhoanId,
             },
           });
           customerId = newCust.khachHangId;
         }
       }
 
-      // 2. Generate transaction & waybill codes
+      // 1. Generate collision-resistant transaction and waybill codes.
       const now = new Date();
-      const opCode = trip.tuyenXe.nhaXe.maNhaXe;
-      const day = String(now.getDate()).padStart(2, '0');
-      const month = String(now.getMonth() + 1).padStart(2, '0');
-      const year = now.getFullYear();
-      const hour = String(now.getHours()).padStart(2, '0');
-      const minute = String(now.getMinutes()).padStart(2, '0');
-      const stamp = `${day}${month}${year}${hour}${minute}`;
-      const totalTxCount = await tx.donGiaoDich.count();
-      const sequence = String(totalTxCount + 1).padStart(4, '0');
-      const maDonGiaoDich = `${opCode}-GD-${stamp}-${sequence}`;
-      const maVanDon = `${opCode}-VD-${stamp}-${sequence}`;
+      const { orderCode: maDonGiaoDich, waybillCode: maVanDon } =
+        generateStandaloneShipmentCodes(trip.tuyenXe.nhaXe.maNhaXe, now);
 
       // 3. Create DonGiaoDich
       const donGiaoDich = await tx.donGiaoDich.create({
@@ -313,82 +271,43 @@ export class ShipmentsService {
         },
       });
 
-      // 4. Create PhieuGuiHang
-      const phieuGui = await tx.phieuGuiHang.create({
-        data: {
-          maVanDon,
-          tenNguoiNhan: dto.receiver.fullName.trim(),
-          soDienThoaiNguoiNhan: receiverPhone,
-          ngayGui: now,
-          cuocChinh,
-          phiDichVu: new Prisma.Decimal(phiDichVu),
-          soTienGiam: new Prisma.Decimal(0),
-          tongPhi,
-          nguoiTraCuoc: 'NGUOI_GUI',
-          ghiChu: dto.note?.trim() || null,
-          trangThai: 'MOI_TAO',
-          chuyenXeId: trip.chuyenXeId,
-          diemGuiId: diemGuiId!,
-          diemNhanId: diemNhanId!,
-          donGiaoDichId: donGiaoDich.donGiaoDichId,
-        },
-        include: {
-          diemGui: true,
-          diemNhan: true,
-          chuyenXe: {
-            include: {
-              tuyenXe: { include: { nhaXe: true } },
-              xe: true,
-            },
-          },
-        },
-      });
-
-      // 5. Persist exactly the normalized categories used by the shared tariff resolver.
-      const createdItems = [];
-      for (const [index, item] of dto.items.entries()) {
-        const resolvedItem = pricing.items[index];
-        const hangHoa = await tx.hangHoa.create({
-          data: {
-            tenHang: item.name.trim(),
-            soLuong: item.quantity,
-            khoiLuong: resolvedItem.effectiveUnitWeight,
-            chieuDai: item.length ? new Prisma.Decimal(item.length) : null,
-            chieuRong: item.width ? new Prisma.Decimal(item.width) : null,
-            chieuCao: item.height ? new Prisma.Decimal(item.height) : null,
-            moTa: item.note?.trim() || null,
-            phieuGuiHangId: phieuGui.phieuGuiHangId,
-            loaiHangHoaId: resolvedItem.loaiHangHoa.loaiHangHoaId,
-          },
-          include: {
-            loaiHangHoa: true,
-          },
+      const { shipment: phieuGui, items: createdItems } =
+        await this.shipmentPersistenceService.persistInTransaction(tx, {
+          waybillCode: maVanDon,
+          recipientName: dto.receiver.fullName.trim(),
+          recipientPhone: receiverPhone,
+          sentAt: now,
+          baseFee: cuocChinh,
+          serviceFee: phiDichVu,
+          discount: 0,
+          totalFee: tongPhi,
+          note: dto.note?.trim() || null,
+          tripId: trip.chuyenXeId,
+          senderPointId: diemGuiId,
+          receiverPointId: diemNhanId,
+          orderId: donGiaoDich.donGiaoDichId,
+          actorAccountId: taiKhoanId ?? null,
+          historyNote: 'Tạo phiếu gửi hàng độc lập',
+          items: pricing.items.map((resolvedItem, index) => {
+            const item = dto.items[index];
+            return {
+              name: item.name.trim(),
+              quantity: item.quantity,
+              unitWeight: resolvedItem.effectiveUnitWeight,
+              length: item.length || null,
+              width: item.width || null,
+              height: item.height || null,
+              description: item.note?.trim() || null,
+              cargoTypeId: resolvedItem.loaiHangHoa.loaiHangHoaId,
+            };
+          }),
+          rates: pricing.rates.map((rate) => ({
+            cargoTypeId: rate.loaiHangHoaId,
+            rateId: rate.bangCuocGuiHangId,
+            billableWeight: rate.totalWeight,
+            fee: rate.fee,
+          })),
         });
-        createdItems.push(hangHoa);
-      }
-
-      for (const detail of pricing.rates) {
-        await tx.chiTietCuocGuiHang.create({
-          data: {
-            phieuGuiHangId: phieuGui.phieuGuiHangId,
-            loaiHangHoaId: detail.loaiHangHoaId,
-            bangCuocGuiHangId: detail.bangCuocGuiHangId,
-            khoiLuongTinhCuoc: detail.totalWeight,
-            soTienCuoc: detail.fee,
-          },
-        });
-      }
-
-      // 6. Create Status History
-      await tx.lichSuTrangThaiPhieuGuiHang.create({
-        data: {
-          trangThai: 'MOI_TAO',
-          thoiGian: now,
-          ghiChu: 'Tạo phiếu gửi hàng độc lập',
-          phieuGuiHangId: phieuGui.phieuGuiHangId,
-          taiKhoanId: taiKhoanId || null,
-        },
-      });
 
       return {
         shipmentId: phieuGui.phieuGuiHangId,

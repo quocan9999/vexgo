@@ -15,6 +15,7 @@ import { PromotionsService } from '../promotions/promotions.service.js';
 import { CargoPricingService } from '../cargo-pricing/cargo-pricing.service.js';
 import { CargoCapacityService } from '../cargo-capacity/cargo-capacity.service.js';
 import type { CargoCapacityGroup } from '../cargo-capacity/cargo-capacity.service.js';
+import { ShipmentPersistenceService } from '../shipments/shipment-persistence.service.js';
 import { generateUuidV1 } from '../common/uuid-v1.js';
 import { getBookingPaymentDeadline } from '../common/booking-payment-deadline.js';
 import {
@@ -46,6 +47,7 @@ export class BookingsService {
     private readonly promotionsService: PromotionsService,
     private readonly cargoPricingService: CargoPricingService,
     private readonly cargoCapacityService: CargoCapacityService,
+    private readonly shipmentPersistenceService: ShipmentPersistenceService,
   ) {
     this.businessTimeZone = resolveBusinessTimeZone(
       config.get<string>('BUSINESS_TIME_ZONE'),
@@ -369,8 +371,6 @@ export class BookingsService {
           )
         : null;
       const shippingFee = cargoPricing?.totalFee.toNumber() ?? 0;
-      const baseShippingFee = cargoPricing?.baseFee.toNumber() ?? 0;
-      const serviceShippingFee = cargoPricing?.serviceFee.toNumber() ?? 0;
       const diemGuiId = cargoPricing?.senderPointId ?? null;
       const diemNhanId = cargoPricing?.receiverPointId ?? null;
       const mappedCargoItems = cargoPricing?.items.map((item, index) => ({
@@ -380,17 +380,6 @@ export class BookingsService {
         totalWeight: item.totalWeight.toNumber(),
       })) ?? [];
       const totalOrderAmount = quote.finalTotal + shippingFee;
-
-      const selectedRates = new Map(
-        (cargoPricing?.rates ?? []).map((rate) => [
-          rate.loaiHangHoaId,
-          {
-            bangCuocGuiHangId: rate.bangCuocGuiHangId,
-            totalWeight: rate.totalWeight.toNumber(),
-            fee: rate.fee,
-          },
-        ]),
-      );
 
       // 1. Consume hold if present
       let activeGiuChoId: number | null = null;
@@ -593,75 +582,69 @@ export class BookingsService {
 
       // 10. Shipment creation if cargo requested
       let createdShipment: any = null;
-      if (hasCargo && diemGuiId && diemNhanId) {
+      if (hasCargo) {
+        if (!cargoPricing || diemGuiId === null || diemNhanId === null) {
+          throw new ConflictException({
+            error: 'CARGO_POINTS_REQUIRED',
+            message: 'Không thể tạo hàng gửi kèm vé khi chưa xác định đủ điểm gửi và điểm nhận.',
+          });
+        }
+
         const maVanDon = `${codePrefix}-VD-${uniqueSuffix}`;
-        const phieuGui = await tx.phieuGuiHang.create({
-          data: {
-            maVanDon,
-            tenNguoiNhan: contactName,
-            soDienThoaiNguoiNhan: contactPhone,
-            ngayGui: now,
-            cuocChinh: new Prisma.Decimal(baseShippingFee),
-            phiDichVu: new Prisma.Decimal(serviceShippingFee),
-            soTienGiam: new Prisma.Decimal(0),
-            tongPhi: new Prisma.Decimal(shippingFee),
-            nguoiTraCuoc: 'NGUOI_GUI',
-            ghiChu: 'Hành lý/hàng gửi kèm vé cùng chuyến',
-            trangThai: 'MOI_TAO',
-            chuyenXeId: trip.chuyenXeId,
-            diemGuiId,
-            diemNhanId,
-            donGiaoDichId: donGiaoDich.donGiaoDichId,
+        const cargoPersistence = await this.shipmentPersistenceService.persistInTransaction(
+          tx,
+          {
+            waybillCode: maVanDon,
+            recipientName: contactName,
+            recipientPhone: contactPhone,
+            sentAt: now,
+            baseFee: cargoPricing.baseFee,
+            serviceFee: cargoPricing.serviceFee,
+            discount: 0,
+            totalFee: cargoPricing.totalFee,
+            note: 'Hành lý/hàng gửi kèm vé cùng chuyến',
+            tripId: trip.chuyenXeId,
+            senderPointId: diemGuiId,
+            receiverPointId: diemNhanId,
+            orderId: donGiaoDich.donGiaoDichId,
+            actorAccountId: taiKhoanId ?? null,
+            historyNote: 'Tạo phiếu gửi hàng kèm đặt vé',
+            items: cargoPricing.items.map((resolvedItem, index) => {
+              const item = dto.cargoItems![index];
+              const vehicleModel = item.motorbikeModel || item.bicycleType;
+              const description = [
+                item.note?.trim(),
+                vehicleModel ? `Loại phương tiện / Dòng xe: ${vehicleModel}` : null,
+                item.licensePlate ? `Biển số: ${item.licensePlate}` : null,
+              ]
+                .filter(Boolean)
+                .join(' | ');
+
+              return {
+                name: item.name.trim(),
+                quantity: item.quantity,
+                unitWeight: resolvedItem.effectiveUnitWeight,
+                length: item.length || null,
+                width: item.width || null,
+                height: item.height || null,
+                description: description || null,
+                cargoTypeId: resolvedItem.loaiHangHoa.loaiHangHoaId,
+              };
+            }),
+            rates: cargoPricing.rates.map((rate) => ({
+              cargoTypeId: rate.loaiHangHoaId,
+              rateId: rate.bangCuocGuiHangId,
+              billableWeight: rate.totalWeight,
+              fee: rate.fee,
+            })),
           },
-        });
-
-        await tx.lichSuTrangThaiPhieuGuiHang.create({
-          data: {
-            trangThai: 'MOI_TAO',
-            thoiGian: now,
-            ghiChu: 'Tạo phiếu gửi hàng kèm đặt vé',
-            phieuGuiHangId: phieuGui.phieuGuiHangId,
-            taiKhoanId: taiKhoanId || null,
-          },
-        });
-
-        for (const m of mappedCargoItems) {
-          const vehicleModel = m.itemDto.motorbikeModel || m.itemDto.bicycleType;
-          const itemDescription = [
-            m.itemDto.note,
-            vehicleModel ? `Loại phương tiện / Dòng xe: ${vehicleModel}` : null,
-            m.itemDto.licensePlate ? `Biển số: ${m.itemDto.licensePlate}` : null,
-          ].filter(Boolean).join(' | ');
-
-          await tx.hangHoa.create({
-            data: {
-              tenHang: m.itemDto.name,
-              soLuong: m.itemDto.quantity,
-              khoiLuong: new Prisma.Decimal(m.effectiveUnitWeight),
-              moTa: itemDescription || null,
-              phieuGuiHangId: phieuGui.phieuGuiHangId,
-              loaiHangHoaId: m.loaiHangHoa.loaiHangHoaId,
-            },
-          });
-        }
-
-        for (const [loaiHangHoaId, rate] of selectedRates.entries()) {
-          await tx.chiTietCuocGuiHang.create({
-            data: {
-              phieuGuiHangId: phieuGui.phieuGuiHangId,
-              loaiHangHoaId,
-              bangCuocGuiHangId: rate.bangCuocGuiHangId,
-              khoiLuongTinhCuoc: new Prisma.Decimal(rate.totalWeight),
-              soTienCuoc: rate.fee,
-            },
-          });
-        }
+        );
 
         createdShipment = {
-          shipmentId: phieuGui.phieuGuiHangId,
+          shipmentId: cargoPersistence.shipment.phieuGuiHangId,
           shipmentCode: maVanDon,
           shippingFee,
-          itemCount: mappedCargoItems.length,
+          itemCount: cargoPersistence.items.length,
         };
       }
 

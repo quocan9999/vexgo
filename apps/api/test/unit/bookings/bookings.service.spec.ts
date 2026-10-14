@@ -140,6 +140,12 @@ describe('BookingsService', () => {
     }),
     assertAvailable: vi.fn(),
   };
+  const shipmentPersistenceService = {
+    persistInTransaction: vi.fn().mockResolvedValue({
+      shipment: { phieuGuiHangId: 501, maVanDon: 'FUTA-VD-TEST' },
+      items: [],
+    }),
+  };
 
   const service = new BookingsService(
     prisma as unknown as PrismaService,
@@ -148,11 +154,16 @@ describe('BookingsService', () => {
     {} as any,
     new CargoPricingService(),
     cargoCapacityService as any,
+    shipmentPersistenceService as any,
   );
 
   beforeEach(() => {
     vi.clearAllMocks();
     seatHoldsService.consumeHoldInTx.mockResolvedValue({ giuChoId: 1 });
+    shipmentPersistenceService.persistInTransaction.mockResolvedValue({
+      shipment: { phieuGuiHangId: 501, maVanDon: 'FUTA-VD-TEST' },
+      items: [],
+    });
   });
 
   describe('findCustomerBookings', () => {
@@ -564,10 +575,16 @@ describe('BookingsService', () => {
           ]),
         },
       };
-      const cargoRows: Record<string, unknown>[] = [];
-      const feeRows: Record<string, unknown>[] = [];
       const orderRows: Record<string, unknown>[] = [];
-      const shipmentRows: Record<string, unknown>[] = [];
+      const cargoPersistence = {
+        persistInTransaction: vi.fn(async (_tx: unknown, input: any) => ({
+          shipment: { phieuGuiHangId: 501, maVanDon: input.waybillCode },
+          items: input.items.map((item: any, index: number) => ({
+            hangHoaId: index + 1,
+            ...item,
+          })),
+        })),
+      };
       const rateLookup = vi.fn().mockResolvedValue([
         {
           bangCuocGuiHangId: 31,
@@ -597,13 +614,7 @@ describe('BookingsService', () => {
             findMany: vi.fn().mockResolvedValue([tripSeat]),
             updateMany: vi.fn().mockResolvedValue({ count: 1 }),
           },
-          hangHoa: {
-            findMany: vi.fn().mockResolvedValue([]),
-            create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
-              cargoRows.push(data);
-              return { hangHoaId: cargoRows.length, ...data };
-            }),
-          },
+          hangHoa: { findMany: vi.fn().mockResolvedValue([]) },
           donGiaoDich: {
             create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
               orderRows.push(data);
@@ -619,19 +630,6 @@ describe('BookingsService', () => {
             }),
           },
           ve: { create: vi.fn().mockResolvedValue({ veId: 401 }) },
-          phieuGuiHang: {
-            create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
-              shipmentRows.push(data);
-              return { phieuGuiHangId: 501 };
-            }),
-          },
-          chiTietCuocGuiHang: {
-            create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
-              feeRows.push(data);
-              return { chiTietCuocGuiHangId: feeRows.length };
-            }),
-          },
-          lichSuTrangThaiPhieuGuiHang: { create: vi.fn() },
           lichSuTrangThaiPhieuDatVe: { create: vi.fn() },
           lichSuTrangThaiVe: { create: vi.fn() },
         }),
@@ -647,6 +645,7 @@ describe('BookingsService', () => {
         {} as any,
         new CargoPricingService(),
         cargoCapacityService as any,
+        cargoPersistence as any,
       );
       vi.spyOn(bookingService, 'getBookingQuote').mockResolvedValue({
         unitPrice: 150000,
@@ -683,21 +682,36 @@ describe('BookingsService', () => {
           }),
         }),
       );
-      expect(feeRows).toHaveLength(1);
-      expect(feeRows[0]).toMatchObject({
-        loaiHangHoaId: 21,
-        bangCuocGuiHangId: 32,
-        khoiLuongTinhCuoc: expect.objectContaining({ d: [6] }),
-        soTienCuoc: expect.objectContaining({ d: [60000] }),
+      expect(cargoPersistence.persistInTransaction).toHaveBeenCalledOnce();
+      const cargoInput = cargoPersistence.persistInTransaction.mock.calls[0][1];
+      expect(cargoInput).toMatchObject({
+        tripId: 50,
+        senderPointId: 11,
+        receiverPointId: 12,
+        recipientPhone: '0901234567',
+        historyNote: 'Tạo phiếu gửi hàng kèm đặt vé',
+        items: [
+          { name: 'Túi sách', quantity: 1, cargoTypeId: 21 },
+          { name: 'Va li', quantity: 1, cargoTypeId: 21 },
+        ],
+        rates: [
+          {
+            cargoTypeId: 21,
+            rateId: 32,
+            billableWeight: expect.anything(),
+            fee: expect.anything(),
+          },
+        ],
       });
+      expect(Number(cargoInput.totalFee)).toBe(60000);
+      expect(Number(cargoInput.rates[0].billableWeight)).toBe(6);
+      expect(Number(cargoInput.rates[0].fee)).toBe(60000);
       expect(Number(orderRows[0].tongTien)).toBe(210000);
       expect(orderRows[0].khachHangId).toBeNull();
       expect((orderRows[0].thanhToans as any).create).toMatchObject({
         phuongThuc: 'SEPAY', loaiGiaoDich: 'THANH_TOAN', trangThai: 'DANG_XU_LY',
       });
       expect(Number((orderRows[0].thanhToans as any).create.soTien)).toBe(210000);
-      expect(Number(shipmentRows[0].tongPhi)).toBe(60000);
-      expect(cargoRows).toHaveLength(2);
     });
 
     it('requires explicit route points when multiple active sender choices exist', async () => {
@@ -745,6 +759,7 @@ describe('BookingsService', () => {
         {} as any,
         new CargoPricingService(),
         cargoCapacityService as any,
+        shipmentPersistenceService as any,
       );
       prismaMock.$transaction = vi.fn(async (callback: (tx: unknown) => unknown) =>
         callback({
@@ -868,6 +883,7 @@ describe('BookingsService', () => {
         mockPromotions as any,
         new CargoPricingService(),
         cargoCapacityService as any,
+        shipmentPersistenceService as any,
       );
 
       // Giả lập tính giá: 100,000 VND chia cho 3 ghế (không chia hết)
