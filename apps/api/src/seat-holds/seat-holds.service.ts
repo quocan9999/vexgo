@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   NotFoundException,
   Logger,
+  ServiceUnavailableException,
   type OnModuleInit,
   type OnModuleDestroy,
 } from '@nestjs/common';
@@ -563,12 +564,8 @@ export class SeatHoldsService implements OnModuleInit, OnModuleDestroy {
       });
     }
 
-    if (
-      hold.customerId &&
-      expectedCustomerId &&
-      hold.customerId !== expectedCustomerId
-    ) {
-      throw new ConflictException({
+    if ((hold.customerId ?? null) !== (expectedCustomerId ?? null)) {
+      throw new ForbiddenException({
         error: 'HOLD_OWNERSHIP_MISMATCH',
         message: 'Mã giữ chỗ không thuộc về tài khoản khách hàng hiện tại.',
       });
@@ -596,107 +593,108 @@ export class SeatHoldsService implements OnModuleInit, OnModuleDestroy {
       });
     }
 
-    const tokenHash = this.hashHoldToken(holdToken);
-    let dbHold: any = null;
-    if (tx.giuCho) {
-      dbHold = await tx.giuCho.findUnique({
-        where: { tokenHash },
-      });
-    }
-
-    if (dbHold) {
-      if (dbHold.trangThai !== 'DANG_GIU') {
-        throw new ConflictException({
-          error: 'HOLD_INACTIVE',
-          message: 'Mã giữ chỗ không còn ở trạng thái giữ chỗ.',
-        });
-      }
-
-      if (dbHold.hetHanLuc <= new Date()) {
-        throw new ConflictException({
-          error: 'HOLD_EXPIRED',
-          message: 'Mã giữ chỗ đã hết hạn. Vui lòng chọn ghế lại.',
-        });
-      }
-
-      if (tripId && dbHold.chuyenXeId !== tripId) {
-        throw new ConflictException({
-          error: 'HOLD_TRIP_MISMATCH',
-          message: 'Mã giữ chỗ không khớp với chuyến xe được chọn.',
-        });
-      }
-
-      if (
-        dbHold.khachHangId &&
-        expectedCustomerId &&
-        dbHold.khachHangId !== expectedCustomerId
-      ) {
-        throw new ForbiddenException(
-          'Mã giữ chỗ không thuộc về tài khoản khách hàng hiện tại.',
-        );
-      }
-
-      // Kiểm tra chính xác danh sách ghế gắn với hold này trong DB
-      const heldSeats = await tx.gheChuyenXe.findMany({
-        where: {
-          giuChoId: dbHold.giuChoId,
-          trangThai: 'DANG_GIU',
-        },
-        select: { gheChuyenXeId: true },
-      });
-
-      const heldSeatIdSet = new Set(heldSeats.map((s: any) => s.gheChuyenXeId));
-      const requestedSeatIds = seatIds ?? [];
-      const isExactMatch =
-        requestedSeatIds.length === heldSeats.length &&
-        requestedSeatIds.every((id) => heldSeatIdSet.has(id));
-
-      if (!isExactMatch) {
-        throw new ConflictException({
-          error: 'HOLD_SEATS_MISMATCH',
-          message: 'Danh sách ghế không khớp với mã giữ chỗ.',
-        });
-      }
-
-      // Cập nhật trạng thái hold sang DA_DAT bằng conditional CAS ngay trong transaction
-      const updateHoldResult = await tx.giuCho.updateMany({
-        where: {
-          giuChoId: dbHold.giuChoId,
-          trangThai: 'DANG_GIU',
-        },
-        data: { trangThai: 'DA_DAT' },
-      });
-
-      if (updateHoldResult.count === 0) {
-        throw new ConflictException({
-          error: 'HOLD_INACTIVE',
-          message: 'Mã giữ chỗ không còn ở trạng thái giữ chỗ (đã bị giải phóng hoặc thay đổi).',
-        });
-      }
-
-      // Dọn dẹp in-memory hold nếu có
-      const memoryHold = this.holds.get(holdToken);
-      if (memoryHold) {
-        if (memoryHold.timer) clearTimeout(memoryHold.timer);
-        this.holds.delete(holdToken);
-      }
-
-      return { giuChoId: dbHold.giuChoId };
-    }
-
-    // Fallback cho môi trường test nếu không có bảng giuCho
     this.verifyHold(
       holdToken,
       tripId ?? 0,
       seatIds ?? [],
-      expectedCustomerId,
+      expectedCustomerId ?? null,
     );
+
+    const tokenHash = this.hashHoldToken(holdToken);
+    if (!tx.giuCho) {
+      throw new ServiceUnavailableException({
+        error: 'HOLD_STORE_UNAVAILABLE',
+        message: 'Không thể xác minh mã giữ chỗ trong hệ thống lưu trữ.',
+      });
+    }
+
+    const dbHold = await tx.giuCho.findUnique({ where: { tokenHash } });
+    if (!dbHold) {
+      throw new ConflictException({
+        error: 'HOLD_INVALID',
+        message: 'Không tìm thấy bản ghi giữ chỗ hợp lệ trong hệ thống.',
+      });
+    }
+
+    if (dbHold.trangThai !== 'DANG_GIU') {
+      throw new ConflictException({
+        error: 'HOLD_INACTIVE',
+        message: 'Mã giữ chỗ không còn ở trạng thái giữ chỗ.',
+      });
+    }
+
+    if (dbHold.hetHanLuc <= new Date()) {
+      throw new ConflictException({
+        error: 'HOLD_EXPIRED',
+        message: 'Mã giữ chỗ đã hết hạn. Vui lòng chọn ghế lại.',
+      });
+    }
+
+    if (tripId && dbHold.chuyenXeId !== tripId) {
+      throw new ConflictException({
+        error: 'HOLD_TRIP_MISMATCH',
+        message: 'Mã giữ chỗ không khớp với chuyến xe được chọn.',
+      });
+    }
+
+    if ((dbHold.khachHangId ?? null) !== (expectedCustomerId ?? null)) {
+      throw new ForbiddenException({
+        error: 'HOLD_OWNERSHIP_MISMATCH',
+        message: 'Mã giữ chỗ không thuộc về khách hàng hiện tại.',
+      });
+    }
+
+    // Kiểm tra chính xác danh sách ghế gắn với hold này trong DB
+    const heldSeats = await tx.gheChuyenXe.findMany({
+      where: {
+        giuChoId: dbHold.giuChoId,
+        chuyenXeId: dbHold.chuyenXeId,
+        trangThai: 'DANG_GIU',
+      },
+      select: { gheChuyenXeId: true },
+    });
+
+    const heldSeatIdSet = new Set(heldSeats.map((s: any) => s.gheChuyenXeId));
+    const requestedSeatIds = seatIds ?? [];
+    const isExactMatch =
+      requestedSeatIds.length === heldSeats.length &&
+      requestedSeatIds.every((id) => heldSeatIdSet.has(id));
+
+    if (!isExactMatch) {
+      throw new ConflictException({
+        error: 'HOLD_SEATS_MISMATCH',
+        message: 'Danh sách ghế không khớp với mã giữ chỗ.',
+      });
+    }
+
+    // Cập nhật trạng thái hold sang DA_DAT bằng conditional CAS ngay trong transaction
+    const updateHoldResult = await tx.giuCho.updateMany({
+      where: {
+        giuChoId: dbHold.giuChoId,
+        tokenHash,
+        chuyenXeId: dbHold.chuyenXeId,
+        khachHangId: dbHold.khachHangId,
+        trangThai: 'DANG_GIU',
+        hetHanLuc: { gt: new Date() },
+      },
+      data: { trangThai: 'DA_DAT' },
+    });
+
+    if (updateHoldResult.count === 0) {
+      throw new ConflictException({
+        error: 'HOLD_INACTIVE',
+        message: 'Mã giữ chỗ không còn ở trạng thái giữ chỗ (đã bị giải phóng hoặc thay đổi).',
+      });
+    }
+
+    // Dọn dẹp in-memory hold nếu có
     const memoryHold = this.holds.get(holdToken);
     if (memoryHold) {
       if (memoryHold.timer) clearTimeout(memoryHold.timer);
       this.holds.delete(holdToken);
     }
-    return { giuChoId: 0 };
+
+    return { giuChoId: dbHold.giuChoId };
   }
 
   async consumeHold(

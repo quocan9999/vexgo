@@ -7,7 +7,10 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import { CurrentPrincipal } from '../auth/decorators/current-principal.decorator.js';
+import {
+  CurrentPrincipal,
+  OptionalPrincipal,
+} from '../auth/decorators/current-principal.decorator.js';
 import { OptionalAuth, Public } from '../auth/decorators/public.decorator.js';
 import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
 import { BookingsService } from './bookings.service.js';
@@ -33,7 +36,7 @@ export class BookingsController {
   @OptionalAuth()
   async createBooking(
     @Body() dto: CreateBookingDto,
-    @CurrentPrincipal() principal?: AuthPrincipal,
+    @OptionalPrincipal() principal?: AuthPrincipal,
   ) {
     const data = await this.bookingsService.createBooking(dto, principal);
     return { data };
@@ -61,10 +64,13 @@ export class BookingsController {
     );
   }
 
-  @Public()
+  @OptionalAuth()
   @Get(':bookingId/detail')
-  findPublicBookingDetail(@Param('bookingId', ParseIntPipe) bookingId: number) {
-    return this.bookingsService.findPublicBookingById(bookingId);
+  findPublicBookingDetail(
+    @Param('bookingId', ParseIntPipe) bookingId: number,
+    @OptionalPrincipal() principal?: AuthPrincipal,
+  ) {
+    return this.bookingsService.findPublicBookingById(bookingId, principal);
   }
 
   @Public()

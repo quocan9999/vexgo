@@ -140,25 +140,34 @@ export class BookingsService {
     };
   }
 
-  async createBooking(arg1: any, arg2?: any) {
-    let dto: CreateBookingDto;
-    let principal: AuthPrincipal | undefined;
-    let explicitTaiKhoanId: number | undefined;
+  async createBooking(
+    dto: CreateBookingDto,
+    principal?: AuthPrincipal,
+  ) {
+    if (!dto?.holdToken?.trim()) {
+      throw new ConflictException({
+        error: 'HOLD_REQUIRED',
+        message: 'Yêu cầu mã giữ chỗ (holdToken) hợp lệ để thực hiện đặt vé.',
+      });
+    }
 
-    if (arg1 && typeof arg1 === 'object' && ('tripId' in arg1 || 'seatNumbers' in arg1 || 'seatIds' in arg1)) {
-      dto = arg1 as CreateBookingDto;
-      if (typeof arg2 === 'number') {
-        explicitTaiKhoanId = arg2;
-      } else if (arg2 && typeof arg2 === 'object' && 'taiKhoanId' in arg2) {
-        principal = arg2 as AuthPrincipal;
-      }
-    } else {
-      dto = arg2 as CreateBookingDto;
-      if (typeof arg1 === 'number') {
-        explicitTaiKhoanId = arg1;
-      } else if (arg1 && typeof arg1 === 'object' && 'taiKhoanId' in arg1) {
-        principal = arg1 as AuthPrincipal;
-      }
+    if (
+      !Array.isArray(dto.seatIds) ||
+      dto.seatIds.length === 0 ||
+      dto.seatIds.some((seatId) => !Number.isInteger(seatId) || seatId <= 0) ||
+      new Set(dto.seatIds).size !== dto.seatIds.length
+    ) {
+      throw new BadRequestException({
+        error: 'INVALID_SEATS',
+        message: 'Danh sách seatIds phải gồm các mã ghế chuyến xe hợp lệ, không trùng.',
+      });
+    }
+
+    if (!dto.contact || !dto.pickupPoint?.trim() || !dto.dropoffPoint?.trim()) {
+      throw new BadRequestException({
+        error: 'INVALID_BOOKING_CONTACT',
+        message: 'Thông tin liên hệ, điểm đón và điểm trả là bắt buộc.',
+      });
     }
 
     const validTripId = Number(dto.tripId);
@@ -201,57 +210,34 @@ export class BookingsService {
       });
     }
 
-    // Resolve customer ownership if principal or explicit user id is passed
-    const taiKhoanId = principal?.taiKhoanId ?? explicitTaiKhoanId;
+    // A principal establishes ownership; contact details are only booking snapshots.
+    const taiKhoanId = principal?.taiKhoanId;
     let customer: { khachHangId: number; taiKhoanId: number | null } | null = null;
     if (taiKhoanId) {
       customer = await this.prisma.khachHang.findUnique({
         where: { taiKhoanId },
         select: { khachHangId: true, taiKhoanId: true },
       });
-      if (!customer && principal && (!dto.passenger && !dto.contact)) {
-        throw new ForbiddenException('Tài khoản không phải là khách hàng hợp lệ.');
-      }
-    }
-
-    // Resolve seats (support both seatIds numeric and seatNumbers strings)
-    let tripSeats: any[] = [];
-    if (Array.isArray(dto.seatIds) && dto.seatIds.length > 0) {
-      const numericIds = dto.seatIds.map(Number).filter((n) => !isNaN(n) && n > 0);
-      tripSeats = await this.prisma.gheChuyenXe.findMany({
-        where: {
-          chuyenXeId: trip.chuyenXeId,
-          gheChuyenXeId: { in: numericIds },
-        },
-        include: { ghe: true },
-      });
-      if (tripSeats.length !== numericIds.length) {
-        const byGheId = await this.prisma.gheChuyenXe.findMany({
-          where: {
-            chuyenXeId: trip.chuyenXeId,
-            gheId: { in: numericIds },
-          },
-          include: { ghe: true },
+      if (!customer) {
+        throw new ForbiddenException({
+          error: 'CUSTOMER_PROFILE_REQUIRED',
+          message: 'Tài khoản không có hồ sơ khách hàng hợp lệ.',
         });
-        if (byGheId.length === numericIds.length) {
-          tripSeats = byGheId;
-        }
       }
-    } else if (Array.isArray(dto.seatNumbers) && dto.seatNumbers.length > 0) {
-      const uniqueSeatNumbers = Array.from(new Set(dto.seatNumbers.map((s) => s.trim())));
-      tripSeats = await this.prisma.gheChuyenXe.findMany({
-        where: {
-          chuyenXeId: trip.chuyenXeId,
-          ghe: { soGhe: { in: uniqueSeatNumbers } },
-        },
-        include: { ghe: true },
-      });
     }
 
-    if (tripSeats.length === 0) {
+    const tripSeats = await this.prisma.gheChuyenXe.findMany({
+      where: {
+        chuyenXeId: trip.chuyenXeId,
+        gheChuyenXeId: { in: dto.seatIds },
+      },
+      include: { ghe: true },
+    });
+
+    if (tripSeats.length !== dto.seatIds.length) {
       throw new ConflictException({
         error: 'INVALID_SEATS',
-        message: 'Danh sách ghế không được để trống hoặc không tìm thấy trên chuyến xe.',
+        message: 'Một hoặc nhiều seatIds không thuộc chuyến xe đã chọn.',
       });
     }
 
@@ -259,23 +245,20 @@ export class BookingsService {
     const seatNames = tripSeats.map((s) => s.ghe.soGhe);
 
     for (const seat of tripSeats) {
-      if (seat.trangThai === 'DA_DAT') {
+      if (seat.trangThai !== 'DANG_GIU') {
         throw new ConflictException({
           error: 'SEAT_UNAVAILABLE',
-          message: `Ghế ${seat.ghe.soGhe} đã được đặt bởi khách hàng khác.`,
+          message: `Ghế ${seat.ghe.soGhe} không còn được giữ hợp lệ.`,
         });
       }
     }
 
-    // Verify hold token if provided
-    if (dto.holdToken) {
-      this.seatHoldsService.verifyHold(
-        dto.holdToken,
-        trip.chuyenXeId,
-        resolvedSeatIds,
-        customer?.khachHangId,
-      );
-    }
+    this.seatHoldsService.verifyHold(
+      dto.holdToken,
+      trip.chuyenXeId,
+      resolvedSeatIds,
+      customer?.khachHangId ?? null,
+    );
 
     // Calculate fare & promotions quote
     const quote = await this.getBookingQuote(
@@ -475,26 +458,30 @@ export class BookingsService {
     const totalOrderAmount = quote.finalTotal + shippingFee;
 
     // Contact/Passenger normalization
-    const contactName = (dto.passenger?.fullName ?? dto.contact?.fullName ?? '').trim();
-    const rawPhone = dto.passenger?.phoneNumber ?? dto.contact?.phone ?? '';
+    const contactName = dto.contact.fullName.trim();
+    const rawPhone = dto.contact.phone;
     const contactPhone = normalizePhone(rawPhone);
-    const contactEmail = (dto.passenger?.email ?? dto.contact?.email ?? '')?.trim() || null;
-    const pickupPoint = dto.pickup ?? dto.pickupPoint ?? trip.tuyenXe?.diemDi ?? null;
-    const dropoffPoint = dto.dropoffPoint ?? (trip.tuyenXe?.diemDen ? `Bến xe ${trip.tuyenXe.diemDen}` : null);
+    const contactEmail = dto.contact.email?.trim() || null;
+    const pickupPoint = dto.pickupPoint.trim();
+    const dropoffPoint = dto.dropoffPoint.trim();
 
     // All-or-nothing database transaction
     const txResult = await this.prisma.$transaction(async (tx) => {
       // 1. Consume hold if present
       let activeGiuChoId: number | null = null;
-      if (dto.holdToken) {
-        const holdResult = await this.seatHoldsService.consumeHoldInTx(
-          tx,
-          dto.holdToken,
-          trip.chuyenXeId,
-          resolvedSeatIds,
-          customer?.khachHangId,
-        );
-        activeGiuChoId = holdResult?.giuChoId ?? null;
+      const holdResult = await this.seatHoldsService.consumeHoldInTx(
+        tx,
+        dto.holdToken,
+        trip.chuyenXeId,
+        resolvedSeatIds,
+        customer?.khachHangId ?? null,
+      );
+      activeGiuChoId = holdResult.giuChoId;
+      if (!activeGiuChoId) {
+        throw new ConflictException({
+          error: 'HOLD_INVALID',
+          message: 'Mã giữ chỗ không còn hợp lệ để đặt vé.',
+        });
       }
 
       // 2. Validate cargo capacity if cargo present
@@ -550,64 +537,7 @@ export class BookingsService {
       }
 
       // 3. Resolve customer ID
-      let resolvedCustomerId: number;
-      if (customer) {
-        resolvedCustomerId = customer.khachHangId;
-      } else if (taiKhoanId) {
-        const cust = await tx.khachHang.findUnique({
-          where: { taiKhoanId },
-          select: { khachHangId: true },
-        });
-        if (cust) {
-          resolvedCustomerId = cust.khachHangId;
-        } else {
-          const count = await tx.khachHang.count();
-          const newCust = await tx.khachHang.create({
-            data: {
-              maKhachHang: `KH-${Date.now()}-${count + 1}`,
-              taiKhoanId,
-            },
-          });
-          resolvedCustomerId = newCust.khachHangId;
-        }
-      } else {
-        const existingAccount = await tx.taiKhoan.findUnique({
-          where: { soDienThoai: contactPhone },
-          include: { khachHang: true },
-        });
-
-        if (existingAccount?.khachHang) {
-          resolvedCustomerId = existingAccount.khachHang.khachHangId;
-        } else if (existingAccount) {
-          const count = await tx.khachHang.count();
-          const newCust = await tx.khachHang.create({
-            data: {
-              maKhachHang: `KH-${Date.now()}-${count + 1}`,
-              taiKhoanId: existingAccount.taiKhoanId,
-            },
-          });
-          resolvedCustomerId = newCust.khachHangId;
-        } else {
-          const guestCount = await tx.taiKhoan.count();
-          const guestAccount = await tx.taiKhoan.create({
-            data: {
-              hoTen: contactName || 'Khách hàng',
-              soDienThoai: contactPhone,
-              matKhau: '$2b$10$DUMMY_PASSWORD_FOR_GUEST_BOOKING',
-              email: contactEmail,
-              daXacThucSoDienThoai: false,
-              trangThai: 'HOAT_DONG',
-            },
-          });
-          const newCust = await tx.khachHang.create({
-            data: {
-              maKhachHang: `KH-${Date.now()}-${guestCount + 1}`,
-              taiKhoanId: guestAccount.taiKhoanId,
-            },
-          });
-          resolvedCustomerId = newCust.khachHangId;
-        }
-      }
+      const resolvedCustomerId = customer?.khachHangId ?? null;
 
       // 4. Generate transaction codes
       const now = new Date();
@@ -707,46 +637,25 @@ export class BookingsService {
         });
       }
 
-      // 8. Update seats to DA_DAT atomically
-      if (activeGiuChoId) {
-        const updatedSeats = await tx.gheChuyenXe.updateMany({
-          where: {
-            chuyenXeId: trip.chuyenXeId,
-            gheChuyenXeId: { in: resolvedSeatIds },
-            trangThai: 'DANG_GIU',
-            giuChoId: activeGiuChoId,
-          },
-          data: {
-            trangThai: 'DA_DAT',
-            giuChoId: null,
-          },
-        });
+      // 8. Update only seats owned by the hold consumed in this transaction.
+      const updatedSeats = await tx.gheChuyenXe.updateMany({
+        where: {
+          chuyenXeId: trip.chuyenXeId,
+          gheChuyenXeId: { in: resolvedSeatIds },
+          trangThai: 'DANG_GIU',
+          giuChoId: activeGiuChoId,
+        },
+        data: {
+          trangThai: 'DA_DAT',
+          giuChoId: null,
+        },
+      });
 
-        if (updatedSeats.count !== resolvedSeatIds.length) {
-          throw new ConflictException({
-            error: 'SEAT_UNAVAILABLE',
-            message: 'Một hoặc nhiều ghế đã không còn ở trạng thái giữ chỗ hợp lệ.',
-          });
-        }
-      } else {
-        const updatedSeats = await tx.gheChuyenXe.updateMany({
-          where: {
-            chuyenXeId: trip.chuyenXeId,
-            gheChuyenXeId: { in: resolvedSeatIds },
-            trangThai: { in: ['TRONG', 'DANG_GIU'] },
-          },
-          data: {
-            trangThai: 'DA_DAT',
-            giuChoId: null,
-          },
+      if (updatedSeats.count !== resolvedSeatIds.length) {
+        throw new ConflictException({
+          error: 'SEAT_UNAVAILABLE',
+          message: 'Một hoặc nhiều ghế đã không còn ở trạng thái giữ chỗ hợp lệ.',
         });
-
-        if (updatedSeats.count !== resolvedSeatIds.length) {
-          throw new ConflictException({
-            error: 'SEAT_UNAVAILABLE',
-            message: 'Một hoặc nhiều ghế đã được đặt hoặc không còn khả dụng.',
-          });
-        }
       }
 
       // 9. Status history recording
@@ -760,7 +669,7 @@ export class BookingsService {
             trangThaiCu: null,
             trangThaiMoi: 'CHO_THANH_TOAN',
             thoiDiem: operationTime,
-            nguonThayDoi: customer?.taiKhoanId ? 'CUSTOMER' : 'HE_THONG',
+            nguonThayDoi: customer?.taiKhoanId ? 'CUSTOMER' : 'SYSTEM',
             taiKhoanId: customer?.taiKhoanId ?? null,
             lyDo: 'Khởi tạo đặt vé',
             laOverride: false,
@@ -777,7 +686,7 @@ export class BookingsService {
               trangThaiCu: null,
               trangThaiMoi: 'DA_DAT',
               thoiDiem: operationTime,
-              nguonThayDoi: customer?.taiKhoanId ? 'CUSTOMER' : 'HE_THONG',
+              nguonThayDoi: customer?.taiKhoanId ? 'CUSTOMER' : 'SYSTEM',
               taiKhoanId: customer?.taiKhoanId ?? null,
               lyDo: 'Khởi tạo vé',
               laOverride: false,
@@ -1160,7 +1069,7 @@ export class BookingsService {
     }
 
     if (booking.trangThai === 'DA_THANH_TOAN') {
-      return this.findPublicBookingById(bookingId);
+      return this.mapBooking(await this.loadBookingForPublicDetail(bookingId));
     }
 
     const now = new Date();
@@ -1212,10 +1121,29 @@ export class BookingsService {
       });
     });
 
-    return this.findPublicBookingById(bookingId);
+    return this.mapBooking(await this.loadBookingForPublicDetail(bookingId));
   }
 
-  async findPublicBookingById(bookingId: number) {
+  async findPublicBookingById(
+    bookingId: number,
+    principal?: AuthPrincipal,
+  ) {
+    const booking = await this.loadBookingForPublicDetail(bookingId);
+
+    if (
+      booking.donGiaoDich.khachHangId !== null &&
+      booking.donGiaoDich.khachHang?.taiKhoanId !== principal?.taiKhoanId
+    ) {
+      throw new ForbiddenException({
+        error: 'FORBIDDEN_BOOKING_ACCESS',
+        message: 'Bạn không có quyền truy cập phiếu đặt vé này.',
+      });
+    }
+
+    return this.mapBooking(booking);
+  }
+
+  private async loadBookingForPublicDetail(bookingId: number) {
     const booking = await this.prisma.phieuDatVe.findUnique({
       where: { phieuDatVeId: bookingId },
       include: {
@@ -1263,7 +1191,7 @@ export class BookingsService {
       });
     }
 
-    return this.mapBooking(booking);
+    return booking;
   }
 
   async findCustomerBookingById(taiKhoanId: number, bookingId: number) {
@@ -1305,7 +1233,7 @@ export class BookingsService {
       });
     }
 
-    if (booking.donGiaoDich.khachHang.taiKhoanId !== taiKhoanId) {
+    if (booking.donGiaoDich.khachHang?.taiKhoanId !== taiKhoanId) {
       throw new ForbiddenException({
         error: 'FORBIDDEN_BOOKING_ACCESS',
         message: 'Bạn không có quyền truy cập phiếu đặt vé này.',

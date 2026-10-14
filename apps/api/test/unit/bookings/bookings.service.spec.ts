@@ -118,15 +118,21 @@ describe('BookingsService', () => {
     get: vi.fn().mockReturnValue('Asia/Ho_Chi_Minh'),
   };
 
+  const seatHoldsService = {
+    verifyHold: vi.fn(),
+    consumeHoldInTx: vi.fn().mockResolvedValue({ giuChoId: 1 }),
+  };
+
   const service = new BookingsService(
     prisma as unknown as PrismaService,
     config as unknown as ConfigService,
-    {} as any,
+    seatHoldsService as any,
     {} as any,
   );
 
   beforeEach(() => {
     vi.clearAllMocks();
+    seatHoldsService.consumeHoldInTx.mockResolvedValue({ giuChoId: 1 });
   });
 
   describe('findCustomerBookings', () => {
@@ -233,6 +239,21 @@ describe('BookingsService', () => {
       );
     });
 
+    it('denies account history access to an unlinked guest booking', async () => {
+      prisma.phieuDatVe.findUnique.mockResolvedValue({
+        ...sampleBooking,
+        donGiaoDich: {
+          ...sampleBooking.donGiaoDich,
+          khachHangId: null,
+          khachHang: null,
+        },
+      });
+
+      await expect(service.findCustomerBookingById(1, 101)).rejects.toThrow(
+        ForbiddenException,
+      );
+    });
+
     it('returns booking detail wrapped in data envelope when authorized', async () => {
       prisma.phieuDatVe.findUnique.mockResolvedValue(sampleBooking);
 
@@ -243,7 +264,50 @@ describe('BookingsService', () => {
     });
   });
 
+  describe('findPublicBookingById', () => {
+    it('requires the account owner for a registered customer booking', async () => {
+      prisma.phieuDatVe.findUnique.mockResolvedValue(sampleBooking);
+
+      await expect(service.findPublicBookingById(101)).rejects.toThrow(
+        ForbiddenException,
+      );
+      await expect(
+        service.findPublicBookingById(101, { taiKhoanId: 1 } as any),
+      ).resolves.toMatchObject({ bookingId: 101 });
+    });
+
+    it('keeps guest booking details available without linking a customer account', async () => {
+      prisma.phieuDatVe.findUnique.mockResolvedValue({
+        ...sampleBooking,
+        donGiaoDich: {
+          ...sampleBooking.donGiaoDich,
+          khachHangId: null,
+          khachHang: null,
+        },
+      });
+
+      await expect(service.findPublicBookingById(101)).resolves.toMatchObject({
+        bookingId: 101,
+        passenger: { phoneNumber: '+84901234567' },
+      });
+    });
+  });
+
   describe('createBooking', () => {
+    it('requires a hold token before reading booking data or starting a transaction', async () => {
+      await expect(
+        service.createBooking({
+          tripId: 1,
+          seatIds: [11],
+          contact: { fullName: 'Guest', phone: '0901234567' },
+        } as any),
+      ).rejects.toMatchObject({
+        response: { error: 'HOLD_REQUIRED' },
+      });
+
+      expect(prisma.khachHang.findUnique).not.toHaveBeenCalled();
+    });
+
     it('creates a booking atomically when valid trip and seats are provided', async () => {
       const mockTrip = {
         chuyenXeId: 1,
@@ -265,18 +329,21 @@ describe('BookingsService', () => {
         xe: { loaiXeId: 1 },
       };
 
-      (prisma as any).chuyenXe = { findUnique: vi.fn().mockResolvedValue(mockTrip) };
+      prisma.khachHang.findUnique.mockResolvedValue(mockCustomer as any);
+      (prisma as any).chuyenXe = {
+        findUnique: vi.fn().mockResolvedValue(mockTrip),
+      };
       (prisma as any).bangGia = { findFirst: vi.fn().mockResolvedValue({ bangGiaId: 1, giaNiemYet: 250000 }) };
       (prisma as any).gheChuyenXe = {
         findMany: vi.fn().mockResolvedValue([
-          { gheChuyenXeId: 1, trangThai: 'TRONG', ghe: { soGhe: 'A01' } },
+          { gheChuyenXeId: 1, trangThai: 'DANG_GIU', giuChoId: 1, ghe: { soGhe: 'A01' } },
         ]),
       };
       (prisma as any).$transaction = vi.fn().mockImplementation(async (cb) => {
         const txMock = {
           gheChuyenXe: {
             findMany: vi.fn().mockResolvedValue([
-              { gheChuyenXeId: 1, trangThai: 'TRONG', ghe: { soGhe: 'A01' } },
+              { gheChuyenXeId: 1, trangThai: 'DANG_GIU', giuChoId: 1, ghe: { soGhe: 'A01' } },
             ]),
             update: vi.fn().mockResolvedValue({}),
             updateMany: vi.fn().mockResolvedValue({ count: 1 }),
@@ -298,13 +365,16 @@ describe('BookingsService', () => {
 
       const res = await service.createBooking({
         tripId: 1,
-        seatNumbers: ['A01'],
-        passenger: {
+        seatIds: [1],
+        holdToken: 'hold_test_token',
+        pickupPoint: 'Bến xe Miền Đông',
+        dropoffPoint: 'Bến xe Đà Lạt',
+        contact: {
           fullName: 'Nguyễn Văn Test',
-          phoneNumber: '0901234567',
+          phone: '0901234567',
           email: 'test@example.com',
         },
-      }, 1);
+      }, { taiKhoanId: 1 } as any);
 
       expect(res.bookingId).toBe(88);
       expect(res.ticketCount).toBe(1);
@@ -336,9 +406,9 @@ describe('BookingsService', () => {
       };
 
       const tripSeats = [
-        { gheChuyenXeId: 101, chuyenXeId: 50, trangThai: 'TRONG', ghe: { soGhe: 'A1' } },
-        { gheChuyenXeId: 102, chuyenXeId: 50, trangThai: 'TRONG', ghe: { soGhe: 'A2' } },
-        { gheChuyenXeId: 103, chuyenXeId: 50, trangThai: 'TRONG', ghe: { soGhe: 'A3' } },
+        { gheChuyenXeId: 101, chuyenXeId: 50, trangThai: 'DANG_GIU', ghe: { soGhe: 'A1' } },
+        { gheChuyenXeId: 102, chuyenXeId: 50, trangThai: 'DANG_GIU', ghe: { soGhe: 'A2' } },
+        { gheChuyenXeId: 103, chuyenXeId: 50, trangThai: 'DANG_GIU', ghe: { soGhe: 'A3' } },
       ];
 
       const createdTickets: any[] = [];
@@ -414,10 +484,11 @@ describe('BookingsService', () => {
         seatIds: [101, 102, 103],
         holdToken: 'hold_test_token',
         pickupPoint: 'Bến xe',
+        dropoffPoint: 'Bến xe khác',
         contact: { fullName: 'Test', phone: '0901234567' },
       };
 
-      const result = await bookingService.createBooking(principal, dto);
+      const result = await bookingService.createBooking(dto, principal);
 
       expect(result).toBeDefined();
       expect(createdTickets).toHaveLength(3);

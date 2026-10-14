@@ -324,7 +324,7 @@ export class TicketsService {
       });
     }
 
-    if (ticket.phieuDatVe.donGiaoDich.khachHang.taiKhoanId !== taiKhoanId) {
+    if (ticket.phieuDatVe.donGiaoDich.khachHang?.taiKhoanId !== taiKhoanId) {
       throw new ForbiddenException({
         error: 'FORBIDDEN_TICKET_ACCESS',
         message: 'Bạn không có quyền truy cập vé này.',

@@ -1,6 +1,9 @@
 import { Type } from 'class-transformer';
 import {
   IsArray,
+  ArrayNotEmpty,
+  ArrayUnique,
+  IsDefined,
   IsEmail,
   IsInt,
   IsNotEmpty,
@@ -13,23 +16,6 @@ import {
 } from 'class-validator';
 import { VIETNAM_PHONE_NUMBER_REGEX } from '../../common/validation/vietnamese-phone.js';
 
-export class PassengerInfoDto {
-  @IsString()
-  @IsNotEmpty({ message: 'Họ tên không được để trống.' })
-  fullName!: string;
-
-  @IsString()
-  @IsNotEmpty({ message: 'Số điện thoại không được để trống.' })
-  @Matches(VIETNAM_PHONE_NUMBER_REGEX, {
-    message: 'Số điện thoại không hợp lệ.',
-  })
-  phoneNumber!: string;
-
-  @IsOptional()
-  @IsEmail({}, { message: 'Email không hợp lệ.' })
-  email?: string;
-}
-
 export class BookingContactDto {
   @IsNotEmpty({ message: 'Họ tên người liên hệ không được để trống.' })
   @IsString({ message: 'Họ tên phải là chuỗi ký tự.' })
@@ -37,6 +23,9 @@ export class BookingContactDto {
 
   @IsNotEmpty({ message: 'Số điện thoại người liên hệ không được để trống.' })
   @IsString({ message: 'Số điện thoại phải là chuỗi ký tự.' })
+  @Matches(VIETNAM_PHONE_NUMBER_REGEX, {
+    message: 'Số điện thoại không hợp lệ.',
+  })
   phone!: string;
 
   @IsOptional()
@@ -109,50 +98,33 @@ export class CreateBookingDto {
   @Min(1, { message: 'tripId phải lớn hơn 0.' })
   tripId!: number;
 
-  @IsOptional()
   @IsArray({ message: 'seatIds phải là mảng số nguyên.' })
+  @ArrayNotEmpty({ message: 'Phải chọn ít nhất một ghế.' })
+  @ArrayUnique({ message: 'Danh sách ghế không được trùng.' })
   @Type(() => Number)
   @IsInt({ each: true, message: 'Mỗi seatId phải là số nguyên.' })
-  seatIds?: number[];
+  seatIds!: number[];
 
-  @IsOptional()
-  @IsArray()
-  @IsString({ each: true })
-  seatNumbers?: string[];
-
-  @IsOptional()
   @IsString()
-  pickupPoint?: string;
+  @IsNotEmpty({ message: 'Điểm đón không được để trống.' })
+  pickupPoint!: string;
 
-  @IsOptional()
   @IsString()
-  dropoffPoint?: string;
+  @IsNotEmpty({ message: 'Điểm trả không được để trống.' })
+  dropoffPoint!: string;
 
-  @IsOptional()
-  @IsString()
-  pickup?: string;
-
-  @IsOptional()
-  @IsString()
-  dropoff?: string;
-
-  @IsOptional()
+  @IsDefined({ message: 'Thông tin liên hệ là bắt buộc.' })
   @ValidateNested()
   @Type(() => BookingContactDto)
-  contact?: BookingContactDto;
-
-  @IsOptional()
-  @ValidateNested()
-  @Type(() => PassengerInfoDto)
-  passenger?: PassengerInfoDto;
+  contact!: BookingContactDto;
 
   @IsOptional()
   @IsString()
   promotionCode?: string;
 
-  @IsOptional()
   @IsString()
-  holdToken?: string;
+  @IsNotEmpty({ message: 'holdToken không được để trống.' })
+  holdToken!: string;
 
   @IsOptional()
   @IsArray()

@@ -389,12 +389,12 @@ model DonGiaoDich {
   tenKhachHang         String        @db.VarChar(100)
   soDienThoaiKhachHang String        @db.VarChar(16)
   emailKhachHang       String?       @db.VarChar(150)
-  khachHangId          Int           @db.Int
+  khachHangId          Int?          @db.Int
   nhaXeId              Int           @db.Int
   createdAt            DateTime      @default(now()) @db.DateTime(0)
   updatedAt            DateTime      @default(now()) @updatedAt @db.DateTime(0)
   nhaXe                NhaXe         @relation(fields: [nhaXeId], references: [nhaXeId], onDelete: Restrict, onUpdate: Restrict)
-  khachHang            KhachHang     @relation(fields: [khachHangId], references: [khachHangId], onDelete: Restrict, onUpdate: Restrict)
+  khachHang            KhachHang?    @relation(fields: [khachHangId], references: [khachHangId], onDelete: Restrict, onUpdate: Restrict)
   phieuDatVe           PhieuDatVe?
   phieuGuiHang         PhieuGuiHang?
   thanhToans           ThanhToan[]
