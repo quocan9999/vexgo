@@ -49,46 +49,37 @@ ALTER TABLE `TinNhanHoTro`
     ADD COLUMN `tepDinhKemUrl` VARCHAR(500) NULL,
     ADD COLUMN `daDocLuc` DATETIME(0) NULL;
 
--- 4. Backfill: Tạo CuocTroChuyen đại diện cho dữ liệu cũ và liên kết vào TinNhanHoTro
-INSERT INTO `CuocTroChuyen` (
-    `maCuocTroChuyen`,
-    `tieuDe`,
-    `trangThai`,
-    `kenhHoTro`,
-    `cheDoChat`,
-    `khachHangId`,
-    `nhaXeId`,
-    `createdAt`,
-    `updatedAt`
-)
-SELECT
-    CONCAT('LEGACY-KH-', kh.`khachHangId`) AS `maCuocTroChuyen`,
-    'Hỗ trợ khách hàng (Lịch sử)' AS `tieuDe`,
-    'DONG' AS `trangThai`,
-    'WEB' AS `kenhHoTro`,
-    'NGUOI_THAT' AS `cheDoChat`,
-    kh.`khachHangId`,
-    COALESCE(
-        (SELECT `nhaXeId` FROM `NhaXe` ORDER BY `nhaXeId` ASC LIMIT 1),
-        1
-    ) AS `nhaXeId`,
-    MIN(msg.`createdAt`) AS `createdAt`,
-    MAX(msg.`updatedAt`) AS `updatedAt`
-FROM `TinNhanHoTro` msg
-JOIN `KhachHang` kh ON kh.`khachHangId` = msg.`khachHangId`
-WHERE msg.`cuocTroChuyenId` IS NULL
-GROUP BY kh.`khachHangId`
-ON DUPLICATE KEY UPDATE `updatedAt` = VALUES(`updatedAt`);
+-- 4. Đồng bộ thời điểm gửi tin nhắn ban đầu sang createdAt trước khi xóa thoiGian
+UPDATE `TinNhanHoTro`
+SET `createdAt` = `thoiGian`
+WHERE `thoiGian` IS NOT NULL;
 
+-- 5. Chuẩn hóa trạng thái các cuộc trò chuyện đóng (nếu có) sang DA_DONG và gán dongLuc hợp lệ
+UPDATE `CuocTroChuyen`
+SET `trangThai` = 'DA_DONG',
+    `dongLuc` = COALESCE(`dongLuc`, `updatedAt`, `createdAt`, CURRENT_TIMESTAMP(0))
+WHERE `trangThai` = 'DONG';
+
+UPDATE `CuocTroChuyen`
+SET `dongLuc` = COALESCE(`updatedAt`, `createdAt`, CURRENT_TIMESTAMP(0))
+WHERE `trangThai` = 'DA_DONG' AND `dongLuc` IS NULL;
+
+-- 6. Điền thông tin người gửi cho tin nhắn đã được liên kết với cuộc trò chuyện hợp lệ (nếu có)
 UPDATE `TinNhanHoTro` msg
-JOIN `KhachHang` kh ON kh.`khachHangId` = msg.`khachHangId`
-JOIN `CuocTroChuyen` ctc ON ctc.`khachHangId` = kh.`khachHangId`
-SET msg.`cuocTroChuyenId` = ctc.`cuocTroChuyenId`,
-    msg.`taiKhoanGuiId` = kh.`taiKhoanId`,
-    msg.`loaiNguoiGui` = 'KHACH_HANG'
-WHERE msg.`cuocTroChuyenId` IS NULL;
+JOIN `CuocTroChuyen` ctc ON ctc.`cuocTroChuyenId` = msg.`cuocTroChuyenId`
+JOIN `KhachHang` kh ON kh.`khachHangId` = ctc.`khachHangId`
+SET msg.`taiKhoanGuiId` = COALESCE(msg.`taiKhoanGuiId`, kh.`taiKhoanId`),
+    msg.`loaiNguoiGui` = COALESCE(msg.`loaiNguoiGui`, 'KHACH_HANG')
+WHERE msg.`cuocTroChuyenId` IS NOT NULL
+  AND (msg.`taiKhoanGuiId` IS NULL OR msg.`loaiNguoiGui` IS NULL);
 
--- 5. Contract: Drop ràng buộc cũ, drop cột cũ, chuẩn hóa NOT NULL, indexes và foreign keys mới
+-- 7. Bảo toàn Tenant Isolation & Dọn dẹp bản ghi không thể ánh xạ:
+-- Toàn bộ dữ liệu cũ không có căn cứ xác định nhà xe sở hữu đã được lưu trữ an toàn 100% trong LuuTruTinNhanHoTroCu.
+-- Tuyệt đối không tự ý gán nhà xe theo MIN(nhaXeId) hoặc suy đoán theo lịch sử giao dịch.
+-- Loại bỏ các bản ghi chưa có cuocTroChuyenId khỏi bảng hoạt động trước khi siết ràng buộc NOT NULL.
+DELETE FROM `TinNhanHoTro` WHERE `cuocTroChuyenId` IS NULL;
+
+-- 8. Contract: Drop ràng buộc cũ, drop cột cũ, chuẩn hóa NOT NULL, indexes và foreign keys mới
 ALTER TABLE `TinNhanHoTro` DROP FOREIGN KEY `TinNhanHoTro_khachHangId_fkey`;
 DROP INDEX `TinNhanHoTro_khachHangId_fkey` ON `TinNhanHoTro`;
 
@@ -101,7 +92,7 @@ ALTER TABLE `TinNhanHoTro`
     MODIFY `trangThai` VARCHAR(30) NOT NULL DEFAULT 'DA_GUI';
 
 CREATE UNIQUE INDEX `TinNhanHoTro_clientMessageId_key` ON `TinNhanHoTro`(`clientMessageId`);
-CREATE INDEX `TinNhanHoTro_cuocTroChuyenId_createdAt_idx` ON `TinNhanHoTro`(`cuocTroChuyenId`, `createdAt`);
+CREATE INDEX `TinNhanHoTro_cuocTroChuyen_createdAt_idx` ON `TinNhanHoTro`(`cuocTroChuyenId`, `createdAt`);
 
 ALTER TABLE `CuocTroChuyen` ADD CONSTRAINT `CuocTroChuyen_khachHangId_fkey` FOREIGN KEY (`khachHangId`) REFERENCES `KhachHang`(`khachHangId`) ON DELETE RESTRICT ON UPDATE RESTRICT;
 ALTER TABLE `CuocTroChuyen` ADD CONSTRAINT `CuocTroChuyen_nhanVienId_fkey` FOREIGN KEY (`nhanVienId`) REFERENCES `NhanVien`(`nhanVienId`) ON DELETE RESTRICT ON UPDATE RESTRICT;
@@ -110,12 +101,12 @@ ALTER TABLE `CuocTroChuyen` ADD CONSTRAINT `CuocTroChuyen_nhaXeId_fkey` FOREIGN 
 ALTER TABLE `TinNhanHoTro` ADD CONSTRAINT `TinNhanHoTro_cuocTroChuyenId_fkey` FOREIGN KEY (`cuocTroChuyenId`) REFERENCES `CuocTroChuyen`(`cuocTroChuyenId`) ON DELETE RESTRICT ON UPDATE RESTRICT;
 ALTER TABLE `TinNhanHoTro` ADD CONSTRAINT `TinNhanHoTro_taiKhoanGuiId_fkey` FOREIGN KEY (`taiKhoanGuiId`) REFERENCES `TaiKhoan`(`taiKhoanId`) ON DELETE RESTRICT ON UPDATE RESTRICT;
 
--- 6. Canonical Permissions cho Chat Realtime
+-- 9. Canonical Permissions cho Chat Realtime
 INSERT IGNORE INTO `Quyen` (`tenQuyen`, `moTa`) VALUES
   ('chat:read', 'Xem danh sách và lịch sử cuộc trò chuyện trong phạm vi nhà xe.'),
   ('chat:manage', 'Tiếp nhận, phản hồi và quản lý cuộc trò chuyện trong phạm vi nhà xe.');
 
--- 7. Gán quyền mặc định cho NHA_XE_ADMIN
+-- 10. Gán quyền mặc định cho NHA_XE_ADMIN
 INSERT IGNORE INTO `VaiTroQuyen` (`vaiTroId`, `quyenId`)
 SELECT `role`.`vaiTroId`, `permission`.`quyenId`
 FROM `VaiTro` AS `role`
@@ -123,7 +114,7 @@ JOIN `Quyen` AS `permission`
   ON `permission`.`tenQuyen` IN ('chat:read', 'chat:manage')
 WHERE `role`.`tenVaiTro` = 'NHA_XE_ADMIN';
 
--- 8. Gán quyền mặc định cho NHAN_VIEN_CSKH (chat:read, chat:manage, customer:read)
+-- 11. Gán quyền mặc định cho NHAN_VIEN_CSKH (chat:read, chat:manage, customer:read)
 INSERT IGNORE INTO `VaiTroQuyen` (`vaiTroId`, `quyenId`)
 SELECT `role`.`vaiTroId`, `permission`.`quyenId`
 FROM `VaiTro` AS `role`
