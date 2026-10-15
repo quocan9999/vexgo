@@ -65,3 +65,11 @@ Integration command đã thử: `npx vitest run --no-file-parallelism test/integ
 - Hai DB-backed suites đã được thử; Prisma pool timeout trước khi tạo fixture. Teardown seat-hold chỉ xóa theo ID fixture đã có và được xác minh không chạy cleanup khi setup thất bại.
 - README.md và `handoff/R4_FINAL_HANDOFF.md` đã thay đổi từ trước lượt này, được giữ nguyên và không đưa vào các commit F3/F4.
 - Hai review conversations F3/F4 vẫn mở để reviewer kiểm tra và xác nhận; không tự resolve, không push hoặc tạo PR.
+
+## Cập nhật xác minh mới nhất — 2026-10-15
+
+- Đã bật Docker Desktop và xác nhận `vexgo_pr36-mysql-1` healthy trên `127.0.0.1:3306`; `.env` trỏ `DATABASE_URL`/`MIGRATION_URL` tới `vexgo_pr36`, `SHADOW_DATABASE_URL` tới `vexgo_pr36_shadow`.
+- Chạy lại `npx vitest run --no-file-parallelism test/integration/shipments/public-shipment-lookup.spec.ts test/integration/seat-holds/seat-holds-concurrency.spec.ts` trong `apps/api`: **PASS — 2 files, 12 tests** (1 HTTP/MySQL shipment lookup, 11 MySQL seat-hold tests). Kết quả này thay thế trạng thái BLOCKED của lần thử trước.
+- Integration tests tạo fixture với hậu tố ngẫu nhiên và cleanup theo ID fixture; không chạy migration, seed, reset hoặc cleanup diện rộng. Không phát hiện lỗi cleanup.
+- Git sau kiểm tra: branch `fix/pr36-integration` đang ahead 3 commit; `README.md` và `handoff/R4_FINAL_HANDOFF.md` vẫn là hai thay đổi unstaged có sẵn, không thuộc F3/F4. F3/F4 review threads vẫn unresolved.
+- Browser/Postman smoke tùy chọn trước merge: tra cứu vận đơn hợp lệ lần lượt bằng số điện thoại người gửi và người nhận; thử sai mã/sai số điện thoại và vượt 10 request/phút; xác nhận chỉ hiện projection tracking. Tạo hold, thử `DELETE /api/v1/seat-holds/{token}` (404, ghế vẫn giữ), rồi release qua `X-Hold-Token`; kiểm tra ghế orphan (`giuChoId=null`), hold đã consume/expired và thao tác release cạnh tranh với booking không làm đổi ghế đã đặt hoặc ghế của holder mới.
