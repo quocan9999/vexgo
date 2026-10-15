@@ -1,5 +1,16 @@
-import { IsArray, IsInt, IsNotEmpty, IsOptional, IsString, Min } from 'class-validator';
+import {
+  ArrayNotEmpty,
+  ArrayUnique,
+  IsArray,
+  IsInt,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  Matches,
+  Min,
+} from 'class-validator';
 import { Type } from 'class-transformer';
+import { VIETNAM_PHONE_NUMBER_REGEX } from '../../common/validation/vietnamese-phone.js';
 
 export class BookingQuoteDto {
   @IsNotEmpty({ message: 'tripId không được để trống.' })
@@ -9,12 +20,21 @@ export class BookingQuoteDto {
   tripId!: number;
 
   @IsArray({ message: 'seatIds phải là danh sách.' })
-  @IsNotEmpty({ message: 'seatIds không được rỗng.' })
+  @ArrayNotEmpty({ message: 'seatIds không được rỗng.' })
+  @ArrayUnique({ message: 'Danh sách ghế không được trùng.' })
   @Type(() => Number)
   @IsInt({ each: true, message: 'Mỗi seatId phải là số nguyên.' })
+  @Min(1, { each: true, message: 'Mỗi seatId phải lớn hơn 0.' })
   seatIds!: number[];
 
   @IsOptional()
   @IsString({ message: 'promotionCode phải là chuỗi ký tự.' })
   promotionCode?: string;
+
+  @IsOptional()
+  @IsString({ message: 'contactPhone phải là chuỗi ký tự.' })
+  @Matches(VIETNAM_PHONE_NUMBER_REGEX, {
+    message: 'Số điện thoại không hợp lệ.',
+  })
+  contactPhone?: string;
 }

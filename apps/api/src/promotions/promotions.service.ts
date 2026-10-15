@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  GoneException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -33,6 +34,22 @@ export interface PromotionResponse {
   usageLimit: number;
   remainingUses: number;
   effectiveState: PromotionEffectiveState;
+}
+
+export interface PromotionQuoteInput {
+  code: string;
+  nhaXeId: number;
+  ticketOriginalTotal: Prisma.Decimal;
+  khachHangId?: number | null;
+  phoneNormalized?: string | null;
+}
+
+export interface PromotionQuote {
+  promotionId: number;
+  code: string;
+  discountAmount: Prisma.Decimal;
+  identityChecked: boolean;
+  quotaLimit: number;
 }
 
 function validationError(field: string, message: string): never {
@@ -418,107 +435,277 @@ export class PromotionsService {
     nhaXeId?: number;
     seatCount?: number;
     totalAmount?: number;
-  }) {
-    const cleanCode = (params.code || '').trim().toUpperCase();
-    if (!cleanCode) {
-      return {
-        code: cleanCode,
-        isValid: false,
-        discountAmount: 0,
-        message: 'Mã khuyến mãi không hợp lệ.',
-      };
-    }
+  }): Promise<never> {
+    void params;
+    throw new GoneException({
+      error: 'PROMOTION_VALIDATE_DEPRECATED',
+      message: 'Vui lòng kiểm tra mã tại báo giá đặt vé.',
+    });
+  }
 
-    let nhaXeId = params.nhaXeId;
-    if (!nhaXeId && params.tripId) {
-      const trip = await this.prisma.chuyenXe.findUnique({
-        where: { chuyenXeId: params.tripId },
-        select: { nhaXeId: true },
-      });
-      if (trip) {
-        nhaXeId = trip.nhaXeId;
-      }
-    }
+  async quotePromotion(input: PromotionQuoteInput): Promise<PromotionQuote> {
+    return this.evaluatePromotion(this.prisma, input);
+  }
 
-    // Bắt buộc xác định tenant (nhà xe) - không cho phép tìm kiếm toàn cục
-    if (!nhaXeId) {
-      throw new BadRequestException({
-        error: 'TENANT_SCOPE_REQUIRED',
-        message:
-          'Vui lòng cung cấp nhaXeId hoặc tripId để xác định nhà xe áp dụng mã khuyến mãi.',
-      });
+  async lockPromotionForBooking(
+    tx: Prisma.TransactionClient,
+    input: PromotionQuoteInput,
+  ): Promise<PromotionQuote> {
+    const code = input.code.trim().toUpperCase();
+    const locked = await tx.$queryRaw<Array<{
+      khuyenMaiId: number;
+      maKhuyenMai: string;
+      phamViApDung: string;
+      hinhThucApDung: string;
+      loaiGiamGia: string;
+      giaTriGiam: Prisma.Decimal | string | number;
+      giamToiDa: Prisma.Decimal | string | number | null;
+      giaTriDonToiThieu: Prisma.Decimal | string | number | null;
+      tuNgay: Date;
+      denNgay: Date;
+      trangThai: string;
+      nhaXeId: number;
+      soLuotToiDa: number;
+      soLuotDaSuDung: number;
+    }>>`
+      SELECT khuyenMaiId, maKhuyenMai, phamViApDung, hinhThucApDung,
+             loaiGiamGia, giaTriGiam, giamToiDa, giaTriDonToiThieu,
+             tuNgay, denNgay, trangThai, nhaXeId, soLuotToiDa, soLuotDaSuDung
+      FROM KhuyenMai
+      WHERE nhaXeId = ${input.nhaXeId} AND maKhuyenMai = ${code}
+      FOR UPDATE
+    `;
+    if (locked.length === 0) this.promotionCodeInvalid();
+    const row = locked[0];
+    const promotion = {
+      ...row,
+      giaTriGiam: new Prisma.Decimal(String(row.giaTriGiam)),
+      giamToiDa:
+        row.giamToiDa === null
+          ? null
+          : new Prisma.Decimal(String(row.giamToiDa)),
+      giaTriDonToiThieu:
+        row.giaTriDonToiThieu === null
+          ? null
+          : new Prisma.Decimal(String(row.giaTriDonToiThieu)),
+    } as unknown as KhuyenMai;
+    const calculated = this.calculatePromotion(promotion, input);
+    if (await this.hasUsageWithCurrentRead(tx, promotion.khuyenMaiId, input)) {
+      this.promotionAlreadyUsed();
     }
+    return {
+      ...calculated,
+      identityChecked:
+        Boolean(input.phoneNormalized) || Boolean(input.khachHangId),
+    };
+  }
 
-    const promo = await this.prisma.khuyenMai.findFirst({
+  async recordUsageInTransaction(
+    tx: Prisma.TransactionClient,
+    input: {
+      promotionId: number;
+      bookingId: number;
+      customerId: number | null;
+      phoneNormalized: string | null;
+      discountAmount: Prisma.Decimal;
+      quotaLimit: number;
+    },
+  ): Promise<void> {
+    const updated = await tx.khuyenMai.updateMany({
       where: {
-        maKhuyenMai: cleanCode,
-        nhaXeId,
+        khuyenMaiId: input.promotionId,
         trangThai: 'HOAT_DONG',
+        soLuotDaSuDung: { lt: input.quotaLimit },
       },
+      data: { soLuotDaSuDung: { increment: 1 } },
     });
 
-    if (!promo) {
-      return {
-        code: cleanCode,
-        isValid: false,
-        discountAmount: 0,
-        message: 'Mã khuyến mãi không tồn tại hoặc không áp dụng cho nhà xe này.',
-      };
-    }
+    if (updated.count !== 1) this.promotionUnavailable();
 
-    const now = new Date();
-    if (promo.tuNgay && new Date(promo.tuNgay) > now) {
-      return {
-        code: cleanCode,
-        isValid: false,
-        discountAmount: 0,
-        message: 'Chương trình khuyến mãi chưa bắt đầu.',
-      };
-    }
-
-    if (promo.denNgay && new Date(promo.denNgay) < now) {
-      return {
-        code: cleanCode,
-        isValid: false,
-        discountAmount: 0,
-        message: 'Mã khuyến mãi đã hết hạn sử dụng.',
-      };
-    }
-
-    const originalTotal = Number(params.totalAmount || 0);
-    if (
-      promo.giaTriDonToiThieu &&
-      originalTotal < Number(promo.giaTriDonToiThieu)
-    ) {
-      return {
-        code: cleanCode,
-        isValid: false,
-        discountAmount: 0,
-        message: `Đơn hàng tối thiểu ${Number(promo.giaTriDonToiThieu).toLocaleString('vi-VN')}đ để sử dụng mã này.`,
-      };
-    }
-
-    let discountAmount = 0;
-    if (promo.loaiGiamGia === 'PHAN_TRAM') {
-      const percentage = Number(promo.giaTriGiam);
-      discountAmount = Math.round((originalTotal * percentage) / 100);
+    try {
+      await tx.suDungKhuyenMai.create({
+        data: {
+          khuyenMaiId: input.promotionId,
+          phieuDatVeId: input.bookingId,
+          khachHangId: input.customerId,
+          soDienThoaiChuanHoa: input.phoneNormalized,
+          soTienGiam: input.discountAmount,
+        },
+      });
+    } catch (error) {
       if (
-        promo.giamToiDa &&
-        discountAmount > Number(promo.giamToiDa)
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
       ) {
-        discountAmount = Number(promo.giamToiDa);
+        throw new ConflictException({
+          error: 'PROMOTION_ALREADY_USED',
+          message: 'Mã khuyến mãi đã được sử dụng cho khách hàng này.',
+        });
       }
-    } else {
-      discountAmount = Number(promo.giaTriGiam);
+      throw error;
+    }
+  }
+
+  private async evaluatePromotion(
+    client: Pick<Prisma.TransactionClient, 'khuyenMai' | 'suDungKhuyenMai'>,
+    input: PromotionQuoteInput,
+  ): Promise<PromotionQuote> {
+    const code = input.code.trim().toUpperCase();
+    if (!code) this.promotionCodeInvalid();
+
+    const promotion = await client.khuyenMai.findFirst({
+      where: { maKhuyenMai: code, nhaXeId: input.nhaXeId },
+    });
+    if (!promotion) this.promotionCodeInvalid();
+    const calculated = this.calculatePromotion(promotion, input);
+
+    const identityParts = [
+      ...(input.phoneNormalized
+        ? [{ soDienThoaiChuanHoa: input.phoneNormalized }]
+        : []),
+      ...(input.khachHangId ? [{ khachHangId: input.khachHangId }] : []),
+    ];
+    if (
+      identityParts.length > 0 &&
+      (await client.suDungKhuyenMai.findFirst({
+        where: {
+          khuyenMaiId: promotion.khuyenMaiId,
+          OR: identityParts,
+        },
+        select: { suDungKhuyenMaiId: true },
+      }))
+    ) {
+      this.promotionAlreadyUsed();
     }
 
     return {
-      code: cleanCode,
-      isValid: true,
-      discountAmount: Math.min(originalTotal, discountAmount),
-      promotionId: promo.khuyenMaiId,
-      message: 'Áp dụng mã khuyến mãi thành công.',
+      ...calculated,
+      identityChecked:
+        Boolean(input.phoneNormalized) || Boolean(input.khachHangId),
     };
+  }
+
+  private calculatePromotion(
+    promotion: KhuyenMai,
+    input: PromotionQuoteInput,
+  ): Omit<PromotionQuote, 'identityChecked'> {
+    if (!hasValidPromotionConfiguration(promotion)) {
+      throw new ConflictException({
+        error: 'PROMOTION_LEGACY_UNCONFIGURED',
+        message: 'Mã khuyến mãi chưa được cấu hình để áp dụng cho đặt vé.',
+      });
+    }
+    if (promotion.trangThai !== 'HOAT_DONG') this.promotionUnavailable();
+
+    const businessDate = getBusinessDate();
+    if (businessDate < dateOnly(promotion.tuNgay)) {
+      throw new ConflictException({
+        error: 'PROMOTION_NOT_STARTED',
+        message: 'Chương trình khuyến mãi chưa bắt đầu.',
+      });
+    }
+    if (businessDate > dateOnly(promotion.denNgay)) {
+      throw new ConflictException({
+        error: 'PROMOTION_EXPIRED',
+        message: 'Mã khuyến mãi đã hết hạn sử dụng.',
+      });
+    }
+    if (promotion.soLuotDaSuDung >= promotion.soLuotToiDa) {
+      throw new ConflictException({
+        error: 'PROMOTION_QUOTA_EXHAUSTED',
+        message: 'Mã khuyến mãi đã hết lượt sử dụng.',
+      });
+    }
+    if (
+      promotion.giaTriDonToiThieu &&
+      input.ticketOriginalTotal.lt(promotion.giaTriDonToiThieu)
+    ) {
+      throw new ConflictException({
+        error: 'PROMOTION_MINIMUM_NOT_MET',
+        message: 'Tổng tiền vé chưa đạt mức tối thiểu để dùng mã này.',
+      });
+    }
+
+    let discountAmount: Prisma.Decimal;
+    if (promotion.loaiGiamGia === 'PHAN_TRAM') {
+      discountAmount = input.ticketOriginalTotal
+        .mul(promotion.giaTriGiam)
+        .div(100)
+        .toDecimalPlaces(0, Prisma.Decimal.ROUND_HALF_UP);
+      if (promotion.giamToiDa) {
+        const roundedMaximum = promotion.giamToiDa.toDecimalPlaces(
+          0,
+          Prisma.Decimal.ROUND_HALF_UP,
+        );
+        if (discountAmount.gt(roundedMaximum)) {
+          discountAmount = roundedMaximum;
+        }
+      }
+    } else {
+      discountAmount = promotion.giaTriGiam.toDecimalPlaces(
+        0,
+        Prisma.Decimal.ROUND_HALF_UP,
+      );
+    }
+
+    return {
+      promotionId: promotion.khuyenMaiId,
+      code: promotion.maKhuyenMai,
+      discountAmount: Prisma.Decimal.min(
+        input.ticketOriginalTotal,
+        discountAmount,
+      ),
+      quotaLimit: promotion.soLuotToiDa,
+    };
+  }
+
+  private async hasUsageWithCurrentRead(
+    tx: Prisma.TransactionClient,
+    promotionId: number,
+    input: PromotionQuoteInput,
+  ): Promise<boolean> {
+    const conditions = [
+      ...(input.phoneNormalized
+        ? [Prisma.sql`soDienThoaiChuanHoa = ${input.phoneNormalized}`]
+        : []),
+      ...(input.khachHangId
+        ? [Prisma.sql`khachHangId = ${input.khachHangId}`]
+        : []),
+    ];
+    if (conditions.length === 0) return false;
+
+    const rows = await tx.$queryRaw<Array<{ suDungKhuyenMaiId: number }>>(
+      Prisma.sql`
+        SELECT suDungKhuyenMaiId
+        FROM SuDungKhuyenMai
+        WHERE khuyenMaiId = ${promotionId}
+          AND (${Prisma.join(conditions, ' OR ')})
+        LIMIT 1
+        FOR UPDATE
+      `,
+    );
+    return rows.length > 0;
+  }
+
+  private promotionAlreadyUsed(): never {
+    throw new ConflictException({
+      error: 'PROMOTION_ALREADY_USED',
+      message: 'Mã khuyến mãi đã được sử dụng cho khách hàng này.',
+    });
+  }
+
+  private promotionCodeInvalid(): never {
+    throw new ConflictException({
+      error: 'PROMOTION_CODE_INVALID',
+      message: 'Mã khuyến mãi không hợp lệ cho chuyến xe này.',
+    });
+  }
+
+  private promotionUnavailable(): never {
+    throw new ConflictException({
+      error: 'PROMOTION_UNAVAILABLE',
+      message: 'Mã khuyến mãi hiện không khả dụng.',
+    });
   }
 
   private promotionNotFound(): NotFoundException {

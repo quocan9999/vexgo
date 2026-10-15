@@ -22,7 +22,9 @@ describe('BookingsService', () => {
     soLuongVeBanDau: 2,
     tongTienBanDau: '500000',
     trangThai: 'DA_THANH_TOAN',
-    khuyenMaiId: null,
+    khuyenMaiId: 5,
+    soTienGiamKhuyenMai: 100000,
+    khuyenMai: { maKhuyenMai: 'TEST100' },
     donGiaoDichId: 201,
     createdAt: new Date('2026-09-20T10:00:00.000Z'),
     updatedAt: new Date('2026-09-20T10:05:00.000Z'),
@@ -648,13 +650,16 @@ describe('BookingsService', () => {
         cargoPersistence as any,
       );
       vi.spyOn(bookingService, 'getBookingQuote').mockResolvedValue({
-        unitPrice: 150000,
+        unitPrice: '150000.00',
         seatCount: 1,
-        originalTotal: 150000,
-        discountAmount: 0,
-        finalTotal: 150000,
+        originalTotal: '150000.00',
+        discountAmount: '0.00',
+        finalTotal: '150000.00',
         currency: 'VND',
         appliedPromotionCode: null,
+        identityChecked: false,
+        phoneEligibilityChecked: true,
+        requiresPhoneBeforeBooking: false,
       });
 
       const result = await bookingService.createBooking(
@@ -738,7 +743,7 @@ describe('BookingsService', () => {
           ]),
         },
         bangGia: {
-          findFirst: vi.fn().mockResolvedValue({ bangGiaId: 9 }),
+          findFirst: vi.fn().mockResolvedValue({ bangGiaId: 9, giaNiemYet: 150000 }),
         },
         diemGiaoNhanTuyenXe: {
           findMany: vi.fn().mockResolvedValue([
@@ -773,13 +778,16 @@ describe('BookingsService', () => {
         }),
       );
       vi.spyOn(bookingService, 'getBookingQuote').mockResolvedValue({
-        unitPrice: 150000,
+        unitPrice: '150000.00',
         seatCount: 1,
-        originalTotal: 150000,
-        discountAmount: 0,
-        finalTotal: 150000,
+        originalTotal: '150000.00',
+        discountAmount: '0.00',
+        finalTotal: '150000.00',
         currency: 'VND',
         appliedPromotionCode: null,
+        identityChecked: false,
+        phoneEligibilityChecked: true,
+        requiresPhoneBeforeBooking: false,
       });
 
       await expect(
@@ -886,15 +894,18 @@ describe('BookingsService', () => {
         shipmentPersistenceService as any,
       );
 
-      // Giả lập tính giá: 100,000 VND chia cho 3 ghế (không chia hết)
+      // Mỗi ghế có giá 33,333.33 VND; tổng được lấy theo giá vé trong DB.
       vi.spyOn(bookingService, 'getBookingQuote').mockResolvedValue({
-        unitPrice: 33333.33,
+        unitPrice: '33333.33',
         seatCount: 3,
-        originalTotal: 100000,
-        discountAmount: 0,
-        finalTotal: 100000,
+        originalTotal: '99999.99',
+        discountAmount: '0.00',
+        finalTotal: '99999.99',
         currency: 'VND',
         appliedPromotionCode: null,
+        identityChecked: false,
+        phoneEligibilityChecked: true,
+        requiresPhoneBeforeBooking: false,
       });
 
       const principal: any = { taiKhoanId: 1, roles: ['CUSTOMER'] };
@@ -912,14 +923,16 @@ describe('BookingsService', () => {
       expect(result).toBeDefined();
       expect(createdTickets).toHaveLength(3);
 
-      // Giá từng vé: 100000 / 3 = 33333 dư 1 -> Vé 1: 33334, Vé 2: 33333, Vé 3: 33333
-      expect(createdTickets[0].giaThucTe).toBe(33334);
-      expect(createdTickets[1].giaThucTe).toBe(33333);
-      expect(createdTickets[2].giaThucTe).toBe(33333);
+      expect(createdTickets[0].giaThucTe.toNumber()).toBe(33333.33);
+      expect(createdTickets[1].giaThucTe.toNumber()).toBe(33333.33);
+      expect(createdTickets[2].giaThucTe.toNumber()).toBe(33333.33);
 
       // Tổng tiền từng vé phải khớp tuyệt đối 100% với finalTotal
-      const totalTicketPrices = createdTickets.reduce((sum, t) => sum + t.giaThucTe, 0);
-      expect(totalTicketPrices).toBe(100000);
+      const totalTicketPrices = createdTickets.reduce(
+        (sum, ticket) => sum + ticket.giaThucTe.toNumber(),
+        0,
+      );
+      expect(totalTicketPrices).toBe(99999.99);
 
       // Kiểm tra holdToken được verify với customerId và consume
       expect(mockSeatHolds.verifyHold).toHaveBeenCalledWith(

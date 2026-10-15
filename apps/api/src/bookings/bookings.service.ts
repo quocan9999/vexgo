@@ -58,6 +58,8 @@ export class BookingsService {
     tripId: number,
     seatIds: number[],
     promotionCode?: string,
+    contactPhone?: string,
+    principal?: AuthPrincipal,
   ) {
     const validTripId = Number(tripId);
     if (!validTripId || isNaN(validTripId) || validTripId <= 0) {
@@ -73,6 +75,32 @@ export class BookingsService {
 
     if (!trip) {
       throw new NotFoundException(`Chuyến xe #${tripId} không tồn tại.`);
+    }
+
+    if (
+      !Array.isArray(seatIds) ||
+      seatIds.length === 0 ||
+      new Set(seatIds).size !== seatIds.length ||
+      seatIds.some((seatId) => !Number.isInteger(seatId) || seatId <= 0)
+    ) {
+      throw new BadRequestException({
+        error: 'INVALID_SEATS',
+        message: 'Danh sách ghế phải có ít nhất một mã ghế hợp lệ và không trùng.',
+      });
+    }
+
+    const tripSeats = await this.prisma.gheChuyenXe.findMany({
+      where: {
+        chuyenXeId: validTripId,
+        gheChuyenXeId: { in: seatIds },
+      },
+      select: { gheChuyenXeId: true },
+    });
+    if (tripSeats.length !== seatIds.length) {
+      throw new ConflictException({
+        error: 'INVALID_SEATS',
+        message: 'Một hoặc nhiều ghế không thuộc chuyến xe đã chọn.',
+      });
     }
 
     if (trip.trangThai !== 'CHUA_KHOI_HANH') {
@@ -113,38 +141,70 @@ export class BookingsService {
       throw new NotFoundException('Không tìm thấy bảng giá áp dụng cho chuyến xe.');
     }
 
-    const unitPrice = Number(fare.giaNiemYet);
+    const unitPrice = new Prisma.Decimal(fare.giaNiemYet.toString());
     const seatCount = (seatIds || []).length;
-    const originalTotal = unitPrice * seatCount;
+    const originalTotal = unitPrice.mul(seatCount);
 
-    let discountAmount = 0;
+    let discountAmount = new Prisma.Decimal(0);
     let appliedPromotionCode: string | null = null;
+    let identityChecked = false;
 
     if (promotionCode && promotionCode.trim().length > 0) {
-      const promoResult = await this.promotionsService.validatePromotion({
+      let khachHangId: number | null = null;
+      let phoneNormalized: string | null = null;
+      if (principal) {
+        const customer = await this.prisma.khachHang.findUnique({
+          where: { taiKhoanId: principal.taiKhoanId },
+          select: {
+            khachHangId: true,
+            taiKhoan: {
+              select: {
+                soDienThoai: true,
+                daXacThucSoDienThoai: true,
+              },
+            },
+          },
+        });
+        if (!customer) {
+          throw new ForbiddenException({
+            error: 'CUSTOMER_PROFILE_REQUIRED',
+            message: 'Tài khoản không có hồ sơ khách hàng hợp lệ.',
+          });
+        }
+        khachHangId = customer.khachHangId;
+        if (customer.taiKhoan.daXacThucSoDienThoai) {
+          phoneNormalized = normalizePhone(customer.taiKhoan.soDienThoai);
+        }
+      } else if (contactPhone) {
+        phoneNormalized = normalizePhone(contactPhone);
+      }
+
+      const promoQuote = await this.promotionsService.quotePromotion({
         code: promotionCode,
         nhaXeId: trip.nhaXeId,
-        tripId: validTripId,
-        seatCount,
-        totalAmount: originalTotal,
+        ticketOriginalTotal: originalTotal,
+        khachHangId,
+        phoneNormalized,
       });
-
-      if (promoResult.isValid) {
-        discountAmount = promoResult.discountAmount;
-        appliedPromotionCode = promoResult.code;
-      }
+      discountAmount = promoQuote.discountAmount;
+      appliedPromotionCode = promoQuote.code;
+      identityChecked = promoQuote.identityChecked;
     }
 
-    const finalTotal = Math.max(0, originalTotal - discountAmount);
+    const finalTotal = originalTotal.sub(discountAmount);
 
     return {
-      unitPrice,
+      unitPrice: unitPrice.toFixed(2),
       seatCount,
-      originalTotal,
-      discountAmount,
-      finalTotal,
+      originalTotal: originalTotal.toFixed(2),
+      discountAmount: discountAmount.toFixed(2),
+      finalTotal: finalTotal.toFixed(2),
       currency: 'VND',
       appliedPromotionCode,
+      identityChecked,
+      phoneEligibilityChecked: Boolean(principal || contactPhone),
+      requiresPhoneBeforeBooking:
+        Boolean(promotionCode?.trim()) && !principal && !contactPhone,
     };
   }
 
@@ -273,18 +333,11 @@ export class BookingsService {
       trip.chuyenXeId,
       resolvedSeatIds,
       dto.promotionCode,
+      dto.contact.phone,
+      principal,
     );
-
-    let promotionRecord: any = null;
-    if (quote.appliedPromotionCode) {
-      promotionRecord = await this.prisma.khuyenMai.findFirst({
-        where: {
-          maKhuyenMai: quote.appliedPromotionCode,
-          nhaXeId: trip.nhaXeId,
-          trangThai: 'HOAT_DONG',
-        },
-      });
-    }
+    const unitPrice = new Prisma.Decimal(quote.unitPrice);
+    const originalTotal = new Prisma.Decimal(quote.originalTotal);
 
     const fare = await this.prisma.bangGia.findFirst({
       where: {
@@ -304,6 +357,12 @@ export class BookingsService {
       throw new ConflictException({
         error: 'FARE_NOT_FOUND',
         message: 'Chưa có cấu hình giá vé áp dụng cho chuyến xe này.',
+      });
+    }
+    if (!unitPrice.eq(fare.giaNiemYet)) {
+      throw new ConflictException({
+        error: 'FARE_CHANGED',
+        message: 'Giá vé vừa thay đổi. Vui lòng kiểm tra lại báo giá.',
       });
     }
     const bangGiaId = fare.bangGiaId;
@@ -370,7 +429,7 @@ export class BookingsService {
             },
           )
         : null;
-      const shippingFee = cargoPricing?.totalFee.toNumber() ?? 0;
+      const shippingFee = cargoPricing?.totalFee ?? new Prisma.Decimal(0);
       const diemGuiId = cargoPricing?.senderPointId ?? null;
       const diemNhanId = cargoPricing?.receiverPointId ?? null;
       const mappedCargoItems = cargoPricing?.items.map((item, index) => ({
@@ -379,8 +438,6 @@ export class BookingsService {
         effectiveUnitWeight: item.effectiveUnitWeight.toNumber(),
         totalWeight: item.totalWeight.toNumber(),
       })) ?? [];
-      const totalOrderAmount = quote.finalTotal + shippingFee;
-
       // 1. Consume hold if present
       let activeGiuChoId: number | null = null;
       const holdResult = await this.seatHoldsService.consumeHoldInTx(
@@ -419,8 +476,49 @@ export class BookingsService {
         );
       }
 
-      // 3. Resolve customer ID
-      const resolvedCustomerId = customer?.khachHangId ?? null;
+      // 3. Resolve trusted booking identity and revalidate the promotion under a row lock.
+      const bookingCustomer = taiKhoanId && dto.promotionCode?.trim()
+        ? await tx.khachHang.findUnique({
+            where: { taiKhoanId },
+            select: {
+              khachHangId: true,
+              taiKhoan: {
+                select: {
+                  soDienThoai: true,
+                  daXacThucSoDienThoai: true,
+                },
+              },
+            },
+          })
+        : null;
+      if (taiKhoanId && dto.promotionCode?.trim() && !bookingCustomer) {
+        throw new ForbiddenException({
+          error: 'CUSTOMER_PROFILE_REQUIRED',
+          message: 'Tài khoản không có hồ sơ khách hàng hợp lệ.',
+        });
+      }
+      const resolvedCustomerId =
+        bookingCustomer?.khachHangId ?? customer?.khachHangId ?? null;
+      const identityPhone = bookingCustomer
+        ? bookingCustomer.taiKhoan.daXacThucSoDienThoai
+          ? normalizePhone(bookingCustomer.taiKhoan.soDienThoai)
+          : null
+        : taiKhoanId
+          ? null
+          : contactPhone;
+      const promotionQuote = dto.promotionCode?.trim()
+        ? await this.promotionsService.lockPromotionForBooking(tx, {
+            code: dto.promotionCode,
+            nhaXeId: trip.nhaXeId,
+            ticketOriginalTotal: originalTotal,
+            khachHangId: resolvedCustomerId,
+            phoneNormalized: identityPhone,
+          })
+        : null;
+      const discountAmount =
+        promotionQuote?.discountAmount ?? new Prisma.Decimal(0);
+      const finalTicketTotal = originalTotal.sub(discountAmount);
+      const totalOrderAmount = finalTicketTotal.add(shippingFee);
 
       // 4. Generate transaction codes
       const now = new Date();
@@ -440,7 +538,7 @@ export class BookingsService {
         data: {
           maDonGiaoDich,
           ngayTao: now,
-          tongTien: new Prisma.Decimal(totalOrderAmount),
+          tongTien: totalOrderAmount,
           trangThai: 'CHO_THANH_TOAN',
           tenKhachHang: contactName,
           soDienThoaiKhachHang: contactPhone,
@@ -467,17 +565,19 @@ export class BookingsService {
           maPhieuDatVe,
           ngayDat: now,
           soLuongVeBanDau: resolvedSeatIds.length,
-          tongTienBanDau: new Prisma.Decimal(quote.originalTotal),
+          tongTienBanDau: originalTotal,
           trangThai: 'CHO_THANH_TOAN',
-          khuyenMaiId: promotionRecord?.khuyenMaiId ?? null,
+          khuyenMaiId: promotionQuote?.promotionId ?? null,
+          soTienGiamKhuyenMai: discountAmount,
           donGiaoDichId: donGiaoDich.donGiaoDichId,
         },
       });
 
       // 7. Deterministic ticket pricing & remainder allocation
-      const seatCount = resolvedSeatIds.length || 1;
-      const baseTicketPrice = Math.floor(quote.finalTotal / seatCount);
-      const remainder = quote.finalTotal % seatCount;
+      const orderedSeats = [...tripSeats].sort(
+        (left, right) => left.gheChuyenXeId - right.gheChuyenXeId,
+      );
+      let allocatedDiscount = new Prisma.Decimal(0);
 
       const createdTickets: Array<{
         veId: number;
@@ -490,17 +590,27 @@ export class BookingsService {
         status: string;
       }> = [];
 
-      for (let i = 0; i < tripSeats.length; i++) {
-        const seat = tripSeats[i];
+      for (let i = 0; i < orderedSeats.length; i++) {
+        const seat = orderedSeats[i];
         const ticketSeq = String(i + 1).padStart(2, '0');
         const ticketCode = `${maPhieuDatVe}-VE-${ticketSeq}`;
-        const actualTicketPrice = baseTicketPrice + (i < remainder ? 1 : 0);
+        const ticketDiscount =
+          i === orderedSeats.length - 1
+            ? discountAmount.sub(allocatedDiscount)
+            : originalTotal.gt(0)
+              ? unitPrice
+                  .mul(discountAmount)
+                  .div(originalTotal)
+                  .toDecimalPlaces(0, Prisma.Decimal.ROUND_HALF_UP)
+              : new Prisma.Decimal(0);
+        allocatedDiscount = allocatedDiscount.add(ticketDiscount);
+        const actualTicketPrice = unitPrice.sub(ticketDiscount);
 
         const newVe = await tx.ve.create({
           data: {
             maVe: ticketCode,
             diemDon: pickupPoint,
-            giaNiemYet: quote.unitPrice,
+            giaNiemYet: unitPrice,
             giaThucTe: actualTicketPrice,
             trangThai: 'DA_DAT',
             phieuDatVeId: phieuDatVe.phieuDatVeId,
@@ -515,8 +625,8 @@ export class BookingsService {
           soGhe: seat.ghe.soGhe,
           seatNumber: seat.ghe.soGhe,
           seatName: seat.ghe.soGhe,
-          gia: actualTicketPrice,
-          price: actualTicketPrice,
+          gia: actualTicketPrice.toNumber(),
+          price: actualTicketPrice.toNumber(),
           status: 'DA_DAT',
         });
       }
@@ -643,9 +753,39 @@ export class BookingsService {
         createdShipment = {
           shipmentId: cargoPersistence.shipment.phieuGuiHangId,
           shipmentCode: maVanDon,
-          shippingFee,
+          shippingFee: shippingFee.toNumber(),
           itemCount: cargoPersistence.items.length,
         };
+      }
+
+      if (promotionQuote) {
+        const commitPromotionQuote = await this.promotionsService.lockPromotionForBooking(
+          tx,
+          {
+            code: promotionQuote.code,
+            nhaXeId: trip.nhaXeId,
+            ticketOriginalTotal: originalTotal,
+            khachHangId: resolvedCustomerId,
+            phoneNormalized: identityPhone,
+          },
+        );
+        if (
+          !commitPromotionQuote.discountAmount.eq(discountAmount) ||
+          commitPromotionQuote.promotionId !== promotionQuote.promotionId
+        ) {
+          throw new ConflictException({
+            error: 'PROMOTION_UNAVAILABLE',
+            message: 'Mã khuyến mãi vừa thay đổi. Vui lòng kiểm tra lại.',
+          });
+        }
+        await this.promotionsService.recordUsageInTransaction(tx, {
+          promotionId: commitPromotionQuote.promotionId,
+          bookingId: phieuDatVe.phieuDatVeId,
+          customerId: resolvedCustomerId,
+          phoneNormalized: identityPhone,
+          discountAmount,
+          quotaLimit: commitPromotionQuote.quotaLimit,
+        });
       }
 
       return {
@@ -655,6 +795,10 @@ export class BookingsService {
         createdShipment,
         shippingFee,
         totalOrderAmount,
+        originalTotal,
+        discountAmount,
+        finalTicketTotal,
+        promotionCode: promotionQuote?.code ?? null,
       };
     });
 
@@ -685,9 +829,12 @@ export class BookingsService {
       seatIds: resolvedSeatIds,
       ticketCount: resolvedSeatIds.length,
       tickets: txResult.createdTickets,
-      ticketSubtotal: quote.finalTotal,
-      shippingFee: txResult.shippingFee,
-      totalAmount: txResult.totalOrderAmount,
+      originalTicketSubtotal: txResult.originalTotal.toNumber(),
+      discountAmount: txResult.discountAmount.toNumber(),
+      promotionCode: txResult.promotionCode,
+      ticketSubtotal: txResult.finalTicketTotal.toNumber(),
+      shippingFee: txResult.shippingFee.toNumber(),
+      totalAmount: txResult.totalOrderAmount.toNumber(),
       shipment: txResult.createdShipment,
       createdAt: txResult.phieuDatVe.createdAt ? txResult.phieuDatVe.createdAt.toISOString() : new Date().toISOString(),
       paymentExpiresAt: getBookingPaymentDeadline(
@@ -879,6 +1026,7 @@ export class BookingsService {
     const bookings = await this.prisma.phieuDatVe.findMany({
       where,
       include: {
+        khuyenMai: true,
         ves: {
           include: {
             gheChuyenXe: {
@@ -958,6 +1106,7 @@ export class BookingsService {
     const booking = await this.prisma.phieuDatVe.findUnique({
       where: { phieuDatVeId: bookingId },
       include: {
+        khuyenMai: true,
         ves: {
           include: {
             gheChuyenXe: {
@@ -1009,6 +1158,7 @@ export class BookingsService {
     const booking = await this.prisma.phieuDatVe.findUnique({
       where: { phieuDatVeId: bookingId },
       include: {
+        khuyenMai: true,
         ves: {
           include: {
             gheChuyenXe: {
@@ -1125,7 +1275,8 @@ export class BookingsService {
       totalAmount: Number(booking.donGiaoDich?.tongTien ?? 0),
       ticketSubtotal,
       originalTicketSubtotal,
-      discountAmount: Math.max(0, originalTicketSubtotal - ticketSubtotal),
+      discountAmount: Number(booking.soTienGiamKhuyenMai ?? 0),
+      promotionCode: booking.khuyenMai?.maKhuyenMai ?? null,
       cargoFee: Number(shipment?.tongPhi ?? 0),
       cargoItems,
       status: bookingPaymentHasExpired ? 'HET_HAN' : booking.trangThai,
