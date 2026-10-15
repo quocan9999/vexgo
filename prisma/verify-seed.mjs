@@ -117,7 +117,7 @@ async function assertBusinessCodePatterns() {
     ['maTuyenXe', "SELECT maTuyenXe AS value FROM TuyenXe WHERE maTuyenXe REGEXP '^(FUTA|TB|HM)-TX-'", /^(FUTA|TB|HM)-TX-\d{4,}$/],
     ['maChuyenXe', "SELECT maChuyenXe AS value FROM ChuyenXe WHERE maChuyenXe REGEXP '^(FUTA|TB|HM)-CX-'", /^(FUTA|TB|HM)-CX-\d{8}-\d{4,}$/],
     ['maDiem', "SELECT maDiem AS value FROM DiemGiaoNhanHang WHERE maDiem REGEXP '^(FUTA|TB|HM)-BC-'", /^(FUTA|TB|HM)-BC-\d{3,}$/],
-    ['maKhuyenMai', "SELECT maKhuyenMai AS value FROM KhuyenMai WHERE maKhuyenMai REGEXP '^(FUTA|TB|HM)(10|SHIP50K|AUTO|OLD|PAUSE)$'", /^[A-Z0-9]{3,20}$/],
+    ['maKhuyenMai', "SELECT maKhuyenMai AS value FROM KhuyenMai WHERE maKhuyenMai REGEXP '^(FUTA|TB|HM)(10|FIX30K|NOVEMBER|OLD|PAUSE)$'", /^[A-Z0-9]{3,20}$/],
     ['maDonGiaoDich', "SELECT maDonGiaoDich AS value FROM DonGiaoDich WHERE maDonGiaoDich REGEXP '^(FUTA|TB|HM)-GD-'", /^(FUTA|TB|HM)-GD-\d{12}-\d{4,}$/],
     ['maPhieuDatVe', "SELECT maPhieuDatVe AS value FROM PhieuDatVe WHERE maPhieuDatVe REGEXP '^(FUTA|TB|HM)-PDV-'", /^(FUTA|TB|HM)-PDV-\d{12}-\d{4,}$/],
     ['maVe', "SELECT maVe AS value FROM Ve WHERE maVe REGEXP '^(FUTA|TB|HM)-PDV-'", /^(FUTA|TB|HM)-PDV-\d{12}-\d{4,}-VE-\d{2,}$/],
@@ -197,6 +197,10 @@ async function main() {
   await assertZero('duplicate maVanDon', await scalar('SELECT COUNT(*) - COUNT(DISTINCT maVanDon) AS value FROM PhieuGuiHang'));
   await assertZero('duplicate maHoaDon', await scalar('SELECT COUNT(*) - COUNT(DISTINCT maHoaDon) AS value FROM HoaDon'));
   await assertZero('duplicate maKhuyenMai within operator', await scalar("SELECT COUNT(*) - COUNT(DISTINCT CONCAT(nhaXeId, ':', maKhuyenMai)) AS value FROM KhuyenMai"));
+  await assertZero('invalid promotion scope, code, date range, or quota', await scalar("SELECT COUNT(*) AS value FROM KhuyenMai WHERE maKhuyenMai IS NULL OR maKhuyenMai <> UPPER(maKhuyenMai) OR phamViApDung <> 'DAT_VE' OR hinhThucApDung <> 'NHAP_MA' OR tuNgay IS NULL OR denNgay IS NULL OR tuNgay > denNgay OR soLuotToiDa <= 0 OR soLuotDaSuDung < 0 OR soLuotDaSuDung > soLuotToiDa"));
+  await assertZero('promotion counter differs from usage ledger', await scalar('SELECT COUNT(*) AS value FROM KhuyenMai p LEFT JOIN (SELECT khuyenMaiId, COUNT(*) AS usedCount FROM SuDungKhuyenMai GROUP BY khuyenMaiId) u ON u.khuyenMaiId=p.khuyenMaiId WHERE p.soLuotDaSuDung <> COALESCE(u.usedCount, 0)'));
+  await assertZero('promotion usage does not match its booking snapshot', await scalar('SELECT COUNT(*) AS value FROM SuDungKhuyenMai u JOIN PhieuDatVe p ON p.phieuDatVeId=u.phieuDatVeId WHERE p.khuyenMaiId IS NULL OR p.khuyenMaiId <> u.khuyenMaiId OR p.soTienGiamKhuyenMai <> u.soTienGiam'));
+  await assertZero('booking discount snapshot is negative or unpromoted', await scalar('SELECT COUNT(*) AS value FROM PhieuDatVe WHERE soTienGiamKhuyenMai < 0 OR (khuyenMaiId IS NULL AND soTienGiamKhuyenMai <> 0)'));
   await assertZero('duplicate active seat', await scalar("SELECT COUNT(*) AS value FROM (SELECT gheChuyenXeId FROM Ve WHERE trangThai <> 'HUY' GROUP BY gheChuyenXeId HAVING COUNT(*) > 1) x"));
   await assertZero('booking tickets span multiple trips', await scalar('SELECT COUNT(*) AS value FROM (SELECT v.phieuDatVeId FROM Ve v JOIN GheChuyenXe gc ON gc.gheChuyenXeId=v.gheChuyenXeId GROUP BY v.phieuDatVeId HAVING COUNT(DISTINCT gc.chuyenXeId) > 1) invalid'));
   await assertZero('shipment and booking tickets share one transaction trip', await scalar('SELECT COUNT(*) AS value FROM PhieuGuiHang p JOIN PhieuDatVe b ON b.donGiaoDichId=p.donGiaoDichId JOIN Ve v ON v.phieuDatVeId=b.phieuDatVeId JOIN GheChuyenXe gc ON gc.gheChuyenXeId=v.gheChuyenXeId WHERE gc.chuyenXeId <> p.chuyenXeId'));
@@ -251,9 +255,9 @@ async function main() {
   await assertEqual('failed payment scenario', await scalar("SELECT COUNT(*) AS value FROM ThanhToan WHERE trangThai='THAT_BAI'"), 3);
   await assertEqual('pending payment scenario', await scalar("SELECT COUNT(*) AS value FROM ThanhToan WHERE trangThai='DANG_XU_LY'"), 3);
   await assertEqual('refund scenario', await scalar("SELECT COUNT(*) AS value FROM ThanhToan tt JOIN Ve v ON v.veId=tt.veId WHERE tt.loaiGiaoDich='HOAN_TIEN' AND v.trangThai='HUY'"), 3);
-  await assertEqual('promotion active status', await scalar("SELECT COUNT(*) AS value FROM KhuyenMai WHERE trangThai='DANG_HOAT_DONG'"), 6);
-  await assertEqual('promotion future status', await scalar("SELECT COUNT(*) AS value FROM KhuyenMai WHERE trangThai='SAP_DIEN_RA'"), 3);
-  await assertEqual('promotion expired status', await scalar("SELECT COUNT(*) AS value FROM KhuyenMai WHERE trangThai='HET_HAN'"), 3);
+  await assertEqual('promotion currently eligible date range', await scalar("SELECT COUNT(*) AS value FROM KhuyenMai WHERE trangThai='HOAT_DONG' AND CURRENT_DATE BETWEEN tuNgay AND denNgay"), 6);
+  await assertEqual('promotion future date range', await scalar("SELECT COUNT(*) AS value FROM KhuyenMai WHERE trangThai='HOAT_DONG' AND tuNgay > CURRENT_DATE"), 3);
+  await assertEqual('promotion expired date range', await scalar("SELECT COUNT(*) AS value FROM KhuyenMai WHERE trangThai='HOAT_DONG' AND denNgay < CURRENT_DATE"), 3);
   await assertEqual('promotion paused status', await scalar("SELECT COUNT(*) AS value FROM KhuyenMai WHERE trangThai='TAM_NGUNG'"), 3);
   await assertZero('ticket exchange timing mismatch', await scalar("SELECT COUNT(*) AS value FROM DonGiaoDich exchangeTx JOIN PhieuDatVe oldBooking ON oldBooking.maPhieuDatVe LIKE '%-PDV-220920261040-0005' JOIN Ve old ON old.phieuDatVeId=oldBooking.phieuDatVeId AND old.maVe LIKE '%-PDV-220920261040-0005-VE-01' JOIN GheChuyenXe oldSeat ON oldSeat.gheChuyenXeId=old.gheChuyenXeId JOIN ChuyenXe oldTrip ON oldTrip.chuyenXeId=oldSeat.chuyenXeId JOIN PhieuDatVe newBooking ON newBooking.donGiaoDichId=exchangeTx.donGiaoDichId JOIN Ve newVe ON newVe.phieuDatVeId=newBooking.phieuDatVeId AND newVe.maVe LIKE '%-PDV-240920261230-0014-VE-01' JOIN GheChuyenXe newSeat ON newSeat.gheChuyenXeId=newVe.gheChuyenXeId JOIN ChuyenXe newTrip ON newTrip.chuyenXeId=newSeat.chuyenXeId WHERE exchangeTx.maDonGiaoDich LIKE '%-GD-240920261230-0014' AND (exchangeTx.ngayTao >= TIMESTAMP(DATE(oldTrip.ngayKhoiHanh), TIME(oldTrip.gioKhoiHanh)) - INTERVAL 7 HOUR OR exchangeTx.ngayTao >= TIMESTAMP(DATE(newTrip.ngayKhoiHanh), TIME(newTrip.gioKhoiHanh)) - INTERVAL 7 HOUR)"));
   for (const code of ['FUTA', 'TB', 'HM']) {
