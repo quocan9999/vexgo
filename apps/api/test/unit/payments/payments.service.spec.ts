@@ -661,13 +661,27 @@ describe('PaymentsService', () => {
   });
 
   describe('Signature Verifications & Webhook Handlers', () => {
-    const rawBody = Buffer.from('{"id":123,"transferAmount":150000}');
+    const sepayAccountNumber = '0012345678';
+    const rawBody = Buffer.from(
+      JSON.stringify({
+        id: 123,
+        accountNumber: sepayAccountNumber,
+        transferAmount: 150000,
+      }),
+    );
     const timestamp = String(Math.floor(Date.now() / 1000));
     const makeSepaySignature = (body: Buffer, signedAt: string, secret: string) =>
       `sha256=${createHmac('sha256', secret)
         .update(`${signedAt}.`)
         .update(body)
         .digest('hex')}`;
+    const setSepayConfig = (secret: string, accountNumber?: unknown) => {
+      configService.get.mockImplementation((key: string) => {
+        if (key === 'SEPAY_WEBHOOK_SECRET') return secret;
+        if (key === 'SEPAY_ACCOUNT_NUMBER') return accountNumber;
+        return null;
+      });
+    };
 
     it('fails closed when the SePay HMAC secret is not configured', async () => {
       await expect(
@@ -682,10 +696,7 @@ describe('PaymentsService', () => {
 
     it('validates the SePay HMAC signature before parsing a signed event', async () => {
       const secret = 'sepay-hmac-test-secret';
-      configService.get.mockImplementation((key: string) => {
-        if (key === 'SEPAY_WEBHOOK_SECRET') return secret;
-        return null;
-      });
+      setSepayConfig(secret, sepayAccountNumber);
 
       await expect(
         service.handleSepayWebhook({
@@ -711,12 +722,116 @@ describe('PaymentsService', () => {
     });
 
     it.each([
+      ['missing', undefined],
+      ['empty', ''],
+      ['whitespace-only', '   '],
+      ['surrounded by whitespace', ` ${sepayAccountNumber} `],
+      ['containing whitespace', '0012 345678'],
+    ])('fails closed when the SePay account configuration is %s', async (_label, configuredAccount) => {
+      const secret = 'sepay-hmac-test-secret';
+      setSepayConfig(secret, configuredAccount);
+      const body = Buffer.from(
+        JSON.stringify({
+          id: 12345,
+          accountNumber: sepayAccountNumber,
+          code: 'ORDER-1',
+          content: 'ORDER-1',
+          transferType: 'in',
+          transferAmount: 300000,
+        }),
+      );
+      const settle = vi.spyOn(service, 'confirmPaymentSuccess');
+
+      await expect(
+        service.handleSepayWebhook({
+          rawBody: body,
+          timestamp,
+          signature: makeSepaySignature(body, timestamp, secret),
+        }),
+      ).rejects.toMatchObject({
+        response: { error: 'SEPAY_ACCOUNT_NOT_CONFIGURED' },
+      });
+      expect(prisma.donGiaoDich.findUnique).not.toHaveBeenCalled();
+      expect(prisma.thanhToan.findUnique).not.toHaveBeenCalled();
+      expect(settle).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['missing', undefined, false, 'SEPAY_ACCOUNT_NUMBER_INVALID'],
+      ['null', null, true, 'SEPAY_ACCOUNT_NUMBER_INVALID'],
+      ['number', 12345678, true, 'SEPAY_ACCOUNT_NUMBER_INVALID'],
+      ['empty', '', true, 'SEPAY_ACCOUNT_NUMBER_INVALID'],
+      ['whitespace-only', '   ', true, 'SEPAY_ACCOUNT_NUMBER_INVALID'],
+      ['containing whitespace', '0012 345678', true, 'SEPAY_ACCOUNT_NUMBER_INVALID'],
+      ['different account with leading zero', '0012345679', true, 'SEPAY_ACCOUNT_MISMATCH'],
+      ['same digits without leading zero', '12345678', true, 'SEPAY_ACCOUNT_MISMATCH'],
+    ])('rejects a SePay event with %s accountNumber before database lookups', async (_label, accountNumber, includeAccountNumber, expectedError) => {
+      const secret = 'sepay-hmac-test-secret';
+      setSepayConfig(secret, sepayAccountNumber);
+      const payload: Record<string, unknown> = {
+        id: 12345,
+        code: 'ORDER-1',
+        content: 'ORDER-1',
+        transferType: 'in',
+        transferAmount: 300000,
+      };
+      if (includeAccountNumber) payload.accountNumber = accountNumber;
+      const body = Buffer.from(JSON.stringify(payload));
+      const settle = vi.spyOn(service, 'confirmPaymentSuccess');
+
+      await expect(
+        service.handleSepayWebhook({
+          rawBody: body,
+          timestamp,
+          signature: makeSepaySignature(body, timestamp, secret),
+        }),
+      ).rejects.toMatchObject({
+        response: { error: expectedError },
+      });
+      expect(prisma.donGiaoDich.findUnique).not.toHaveBeenCalled();
+      expect(prisma.thanhToan.findUnique).not.toHaveBeenCalled();
+      expect(prisma.thanhToan.findFirst).not.toHaveBeenCalled();
+      expect(settle).not.toHaveBeenCalled();
+    });
+
+    it('rejects a replay with a mismatched destination account before checking its transaction ID', async () => {
+      const secret = 'sepay-hmac-test-secret';
+      setSepayConfig(secret, sepayAccountNumber);
+      prisma.thanhToan.findUnique.mockResolvedValue({
+        ...samplePayment,
+        phuongThuc: 'SEPAY',
+        trangThai: 'THANH_CONG',
+        maGiaoDichSePay: '12345',
+      });
+      const body = Buffer.from(JSON.stringify({
+        id: 12345,
+        accountNumber: '0099999999',
+        code: 'ORDER-1',
+        content: 'ORDER-1',
+        transferType: 'in',
+        transferAmount: 300000,
+      }));
+
+      await expect(
+        service.handleSepayWebhook({
+          rawBody: body,
+          timestamp,
+          signature: makeSepaySignature(body, timestamp, secret),
+        }),
+      ).rejects.toMatchObject({
+        response: { error: 'SEPAY_ACCOUNT_MISMATCH' },
+      });
+      expect(prisma.thanhToan.findUnique).not.toHaveBeenCalled();
+      expect(prisma.donGiaoDich.findUnique).not.toHaveBeenCalled();
+    });
+
+    it.each([
       ['FUTAGD29612020BAC94BCEA507A24A8D759B', 'FUTAGD29612020BAC94BCEA507A24A8D759B'],
       ['FUTAGD29612020BAC94BCEA507A24A8D759B', 'FUTA-GD-29612020BAC94BCEA507A24A8D759B'],
       ['FUTA-GD-29612020BAC94BCEA507A24A8D759B', 'FUTA-GD-29612020BAC94BCEA507A24A8D759B'],
     ])('matches complete content %s to order %s despite a truncated provider code', async (content, orderCode) => {
       const secret = 'sepay-hmac-test-secret';
-      configService.get.mockImplementation((key: string) => key === 'SEPAY_WEBHOOK_SECRET' ? secret : null);
+      setSepayConfig(secret, sepayAccountNumber);
       const order = { donGiaoDichId: 200, tongTien: '300000', phieuDatVe: { phieuDatVeId: 300 } };
       prisma.donGiaoDich.findUnique.mockImplementation(async ({ where }: any) =>
         where.maDonGiaoDich === orderCode ? order : null,
@@ -724,7 +839,7 @@ describe('PaymentsService', () => {
       prisma.thanhToan.findFirst.mockResolvedValue({ ...samplePayment, phuongThuc: 'SEPAY' });
       const settle = vi.spyOn(service, 'confirmPaymentSuccess').mockResolvedValue({ success: true } as any);
       const body = Buffer.from(JSON.stringify({
-        id: 12345, code: 'AGD29612020BAC', content, transferType: 'in', transferAmount: 300000,
+        id: 12345, accountNumber: sepayAccountNumber, code: 'AGD29612020BAC', content, transferType: 'in', transferAmount: 300000,
       }));
       await service.handleSepayWebhook({ rawBody: body, timestamp, signature: makeSepaySignature(body, timestamp, secret) });
       expect(settle).toHaveBeenCalledOnce();
@@ -733,23 +848,23 @@ describe('PaymentsService', () => {
 
     it('rejects code and content identifying different orders without settlement', async () => {
       const secret = 'sepay-hmac-test-secret';
-      configService.get.mockImplementation((key: string) => key === 'SEPAY_WEBHOOK_SECRET' ? secret : null);
+      setSepayConfig(secret, sepayAccountNumber);
       prisma.donGiaoDich.findUnique.mockImplementation(async ({ where }: any) => ({
         donGiaoDichId: where.maDonGiaoDich === 'ORDER-A' ? 200 : 201,
         phieuDatVe: { phieuDatVeId: 300 },
       }));
       const settle = vi.spyOn(service, 'confirmPaymentSuccess');
-      const body = Buffer.from(JSON.stringify({ id: 12345, code: 'ORDER-A', content: 'ORDER-B', transferType: 'in', transferAmount: 300000 }));
+      const body = Buffer.from(JSON.stringify({ id: 12345, accountNumber: sepayAccountNumber, code: 'ORDER-A', content: 'ORDER-B', transferType: 'in', transferAmount: 300000 }));
       await expect(service.handleSepayWebhook({ rawBody: body, timestamp, signature: makeSepaySignature(body, timestamp, secret) })).rejects.toMatchObject({ response: { error: 'SEPAY_REFERENCE_MISMATCH' } });
       expect(settle).not.toHaveBeenCalled();
     });
 
     it('rejects incomplete transfer references without attempting settlement', async () => {
       const secret = 'sepay-hmac-test-secret';
-      configService.get.mockImplementation((key: string) => key === 'SEPAY_WEBHOOK_SECRET' ? secret : null);
+      setSepayConfig(secret, sepayAccountNumber);
       prisma.donGiaoDich.findUnique.mockResolvedValue(null);
       const settle = vi.spyOn(service, 'confirmPaymentSuccess');
-      const body = Buffer.from(JSON.stringify({ id: 12345, code: 'AGD29612020BAC', content: 'FUTAGD29612020BAC', transferType: 'in', transferAmount: 300000 }));
+      const body = Buffer.from(JSON.stringify({ id: 12345, accountNumber: sepayAccountNumber, code: 'AGD29612020BAC', content: 'FUTAGD29612020BAC', transferType: 'in', transferAmount: 300000 }));
       await expect(service.handleSepayWebhook({ rawBody: body, timestamp, signature: makeSepaySignature(body, timestamp, secret) })).rejects.toMatchObject({ response: { error: 'SEPAY_ORDER_NOT_FOUND' } });
       expect(settle).not.toHaveBeenCalled();
     });

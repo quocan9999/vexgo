@@ -30,6 +30,7 @@ const BOOKING_ORDER_PENDING_STATUS = 'CHO_THANH_TOAN';
 
 type SepayWebhookPayload = {
   id?: unknown;
+  accountNumber?: unknown;
   code?: unknown;
   content?: unknown;
   transferType?: unknown;
@@ -448,6 +449,38 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
       throw new BadRequestException({
         error: 'SEPAY_PAYLOAD_INVALID',
         message: 'Dữ liệu webhook SePay không hợp lệ.',
+      });
+    }
+
+    const configuredAccountNumber = this.configService?.get<string>(
+      'SEPAY_ACCOUNT_NUMBER',
+    );
+    if (
+      typeof configuredAccountNumber !== 'string' ||
+      configuredAccountNumber.trim().length === 0 ||
+      /\s/.test(configuredAccountNumber)
+    ) {
+      throw new ServiceUnavailableException({
+        error: 'SEPAY_ACCOUNT_NOT_CONFIGURED',
+        message: 'Tài khoản nhận tiền SePay chưa được cấu hình hợp lệ ở máy chủ.',
+      });
+    }
+
+    const accountNumber = payload.accountNumber;
+    if (
+      typeof accountNumber !== 'string' ||
+      accountNumber.trim().length === 0 ||
+      /\s/.test(accountNumber)
+    ) {
+      throw new BadRequestException({
+        error: 'SEPAY_ACCOUNT_NUMBER_INVALID',
+        message: 'Webhook SePay thiếu số tài khoản nhận hợp lệ.',
+      });
+    }
+    if (accountNumber !== configuredAccountNumber) {
+      throw new BadRequestException({
+        error: 'SEPAY_ACCOUNT_MISMATCH',
+        message: 'Giao dịch SePay không chuyển vào tài khoản nhận đã cấu hình.',
       });
     }
 

@@ -20,7 +20,9 @@ import { AUTH_MODE_KEY, type EndpointAuthMode } from '../../../src/auth/decorato
 
 describe('Payments Webhook & Status Security with MySQL (Integration)', () => {
   const sepayTestSecret = 'integration-sepay-hmac-secret';
+  const sepayTestAccountNumber = '0012345678';
   let originalSepaySecret: string | undefined;
+  let originalSepayAccountNumber: string | undefined;
   let originalNodeEnv: string | undefined;
   let app: INestApplication;
   let prisma: PrismaService;
@@ -37,6 +39,8 @@ describe('Payments Webhook & Status Security with MySQL (Integration)', () => {
     process.env.PAYMENT_DEMO_MODE = 'true';
     originalSepaySecret = process.env.SEPAY_WEBHOOK_SECRET;
     process.env.SEPAY_WEBHOOK_SECRET = sepayTestSecret;
+    originalSepayAccountNumber = process.env.SEPAY_ACCOUNT_NUMBER;
+    process.env.SEPAY_ACCOUNT_NUMBER = sepayTestAccountNumber;
     let reflector: Reflector;
     const accessTokenGuard = {
       canActivate(context: ExecutionContext) {
@@ -181,6 +185,11 @@ describe('Payments Webhook & Status Security with MySQL (Integration)', () => {
         delete process.env.SEPAY_WEBHOOK_SECRET;
       } else {
         process.env.SEPAY_WEBHOOK_SECRET = originalSepaySecret;
+      }
+      if (originalSepayAccountNumber === undefined) {
+        delete process.env.SEPAY_ACCOUNT_NUMBER;
+      } else {
+        process.env.SEPAY_ACCOUNT_NUMBER = originalSepayAccountNumber;
       }
       await app?.close();
     }
@@ -1237,7 +1246,7 @@ describe('Payments Webhook & Status Security with MySQL (Integration)', () => {
       const webhookPayload = {
         id: transactionId,
         gateway: 'STB',
-        accountNumber: 'TEST_ACCOUNT',
+        accountNumber: sepayTestAccountNumber,
         code: donGiaoDich.maDonGiaoDich,
         transferType: 'in',
         transferAmount: 200000,
@@ -1284,6 +1293,13 @@ describe('Payments Webhook & Status Security with MySQL (Integration)', () => {
       expect(replay.status).toBe(200);
       expect(replay.body).toEqual({ success: true });
 
+      const wrongAccountReplay = await sendSignedEvent({
+        ...webhookPayload,
+        accountNumber: '0099999999',
+      });
+      expect(wrongAccountReplay.status).toBe(400);
+      expect(wrongAccountReplay.body.error).toBe('SEPAY_ACCOUNT_MISMATCH');
+
       const differentTransactionForSamePayment = await sendSignedEvent({
         ...webhookPayload,
         id: transactionId + 1,
@@ -1296,6 +1312,81 @@ describe('Payments Webhook & Status Security with MySQL (Integration)', () => {
       ).resolves.toBe(1);
     });
 
+    it.each([
+      {
+        label: 'a different account',
+        accountNumber: '0099999999',
+        includeAccountNumber: true,
+        expectedError: 'SEPAY_ACCOUNT_MISMATCH',
+      },
+      {
+        label: 'a missing accountNumber',
+        accountNumber: undefined,
+        includeAccountNumber: false,
+        expectedError: 'SEPAY_ACCOUNT_NUMBER_INVALID',
+      },
+    ])('rejects a signed event with $label without changing booking or payment records', async ({ accountNumber, includeAccountNumber, expectedError }) => {
+      const { donGiaoDich, phieuDatVe, thanhToan } = await createTestPayment(
+        customerAId,
+        'SEPAY',
+      );
+      const transactionId = Date.now() + Math.floor(Math.random() * 10000);
+      const basePayload: Record<string, unknown> = {
+        id: transactionId,
+        gateway: 'STB',
+        accountNumber: sepayTestAccountNumber,
+        code: donGiaoDich.maDonGiaoDich,
+        transferType: 'in',
+        transferAmount: 200000,
+        content: `${donGiaoDich.maDonGiaoDich} chuyen tien`,
+      };
+      if (includeAccountNumber) {
+        basePayload.accountNumber = accountNumber;
+      } else {
+        delete basePayload.accountNumber;
+      }
+      const payload = basePayload;
+      const rawBody = JSON.stringify(payload);
+      const timestamp = String(Math.floor(Date.now() / 1000));
+      const signature = `sha256=${createHmac('sha256', sepayTestSecret)
+        .update(`${timestamp}.`)
+        .update(rawBody)
+        .digest('hex')}`;
+      const response = await request(app.getHttpServer())
+        .post('/api/v1/payments/sepay-webhook')
+        .set('Content-Type', 'application/json')
+        .set('X-SePay-Timestamp', timestamp)
+        .set('X-SePay-Signature', signature)
+        .send(rawBody);
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBe(expectedError);
+
+      const [unchangedOrder, unchangedBooking, unchangedPayment] = await Promise.all([
+        prisma.donGiaoDich.findUniqueOrThrow({
+          where: { donGiaoDichId: donGiaoDich.donGiaoDichId },
+        }),
+        prisma.phieuDatVe.findUniqueOrThrow({
+          where: { phieuDatVeId: phieuDatVe.phieuDatVeId },
+        }),
+        prisma.thanhToan.findUniqueOrThrow({
+          where: { thanhToanId: thanhToan.thanhToanId },
+        }),
+      ]);
+      expect(unchangedOrder.trangThai).toBe('CHO_THANH_TOAN');
+      expect(unchangedBooking.trangThai).toBe('CHO_THANH_TOAN');
+      expect(unchangedPayment.trangThai).toBe('DANG_XU_LY');
+      expect(unchangedPayment.maGiaoDichSePay).toBeNull();
+      await expect(
+        prisma.ve.count({ where: { phieuDatVeId: phieuDatVe.phieuDatVeId } }),
+      ).resolves.toBe(0);
+      await expect(
+        prisma.lichSuTrangThaiPhieuDatVe.count({
+          where: { phieuDatVeId: phieuDatVe.phieuDatVeId },
+        }),
+      ).resolves.toBe(0);
+    });
+
     it('rejects authenticated SePay events with the wrong reference, direction, currency, or amount', async () => {
       const { donGiaoDich, phieuDatVe, thanhToan } = await createTestPayment(
         customerAId,
@@ -1305,6 +1396,7 @@ describe('Payments Webhook & Status Security with MySQL (Integration)', () => {
       const invalidPayloads = [
         {
           id: eventIdStart,
+          accountNumber: sepayTestAccountNumber,
           code: `WRONG-${donGiaoDich.maDonGiaoDich}`,
           content: `WRONG-${donGiaoDich.maDonGiaoDich}`,
           transferType: 'in',
@@ -1313,6 +1405,7 @@ describe('Payments Webhook & Status Security with MySQL (Integration)', () => {
         },
         {
           id: eventIdStart + 1,
+          accountNumber: sepayTestAccountNumber,
           code: donGiaoDich.maDonGiaoDich,
           content: donGiaoDich.maDonGiaoDich,
           transferType: 'out',
@@ -1321,6 +1414,7 @@ describe('Payments Webhook & Status Security with MySQL (Integration)', () => {
         },
         {
           id: eventIdStart + 2,
+          accountNumber: sepayTestAccountNumber,
           code: donGiaoDich.maDonGiaoDich,
           content: donGiaoDich.maDonGiaoDich,
           transferType: 'in',
@@ -1330,6 +1424,7 @@ describe('Payments Webhook & Status Security with MySQL (Integration)', () => {
         },
         {
           id: eventIdStart + 3,
+          accountNumber: sepayTestAccountNumber,
           code: donGiaoDich.maDonGiaoDich,
           content: donGiaoDich.maDonGiaoDich,
           transferType: 'in',
@@ -1338,6 +1433,7 @@ describe('Payments Webhook & Status Security with MySQL (Integration)', () => {
         },
         {
           id: eventIdStart + 4,
+          accountNumber: sepayTestAccountNumber,
           code: donGiaoDich.maDonGiaoDich,
           content: donGiaoDich.maDonGiaoDich,
           transferType: 'in',
