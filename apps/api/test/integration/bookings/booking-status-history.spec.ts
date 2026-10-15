@@ -42,7 +42,9 @@ function buildMomoPayload(paymentId: number, options: Partial<MomoWebhookDto> = 
 
 describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)', () => {
   const sepaySecret = 'booking-sepay-integration-secret';
+  const sepayAccountNumber = '0012345678';
   const originalSepaySecret = process.env.SEPAY_WEBHOOK_SECRET;
+  const originalSepayAccountNumber = process.env.SEPAY_ACCOUNT_NUMBER;
   let app: INestApplication;
   let competingApp: INestApplication;
   let prisma: PrismaService;
@@ -122,6 +124,7 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
   beforeAll(async () => {
     process.env.PAYMENT_DEMO_MODE = 'true';
     process.env.SEPAY_WEBHOOK_SECRET = sepaySecret;
+    process.env.SEPAY_ACCOUNT_NUMBER = sepayAccountNumber;
 
     const accessTokenGuard = {
       canActivate(context: ExecutionContext) {
@@ -436,6 +439,8 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
       delete process.env.PAYMENT_DEMO_MODE;
       if (originalSepaySecret === undefined) delete process.env.SEPAY_WEBHOOK_SECRET;
       else process.env.SEPAY_WEBHOOK_SECRET = originalSepaySecret;
+      if (originalSepayAccountNumber === undefined) delete process.env.SEPAY_ACCOUNT_NUMBER;
+      else process.env.SEPAY_ACCOUNT_NUMBER = originalSepayAccountNumber;
       await competingApp?.close();
       await app?.close();
     }
@@ -562,7 +567,14 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
     });
     const timestamp = String(Math.floor(Date.now() / 1000));
     const eventId = Date.now();
-    const body = JSON.stringify({ id: eventId, code: 'TRUNCATED', content: booking.orderCode, transferType: 'in', transferAmount: booking.totalAmount });
+    const body = JSON.stringify({
+      id: eventId,
+      accountNumber: sepayAccountNumber,
+      code: 'TRUNCATED',
+      content: booking.orderCode,
+      transferType: 'in',
+      transferAmount: booking.totalAmount,
+    });
     const signature = `sha256=${createHmac('sha256', sepaySecret).update(`${timestamp}.${body}`).digest('hex')}`;
     currentPrincipal = null;
     const forged = await request(app.getHttpServer()).post('/api/v1/payments/sepay-webhook')
@@ -593,6 +605,20 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
     expect(detail.body.data.paymentExpiresAt).toEqual(expect.any(String));
     expect(detail.body.data.serverTime).toEqual(expect.any(String));
     expect(detail.body.data.tickets).toHaveLength(1);
+    const settled = await prisma.phieuDatVe.findUniqueOrThrow({
+      where: { phieuDatVeId: booking.bookingId },
+      include: { donGiaoDich: { include: { thanhToans: true } }, ves: true },
+    });
+    expect(settled.trangThai).toBe('DA_THANH_TOAN');
+    expect(settled.donGiaoDich.trangThai).toBe('DA_THANH_TOAN');
+    expect(settled.ves).toHaveLength(1);
+    expect(settled.ves[0].trangThai).toBe('DA_THANH_TOAN');
+    expect(settled.donGiaoDich.thanhToans).toHaveLength(1);
+    expect(settled.donGiaoDich.thanhToans[0]).toMatchObject({
+      phuongThuc: 'SEPAY',
+      trangThai: 'THANH_CONG',
+      maGiaoDichSePay: String(eventId),
+    });
     expect(await prisma.thanhToan.count({ where: { donGiaoDichId: saved.donGiaoDichId } })).toBe(1);
     expect(await prisma.lichSuTrangThaiPhieuDatVe.count({ where: { phieuDatVeId: booking.bookingId, trangThaiMoi: 'DA_THANH_TOAN' } })).toBe(1);
   });
