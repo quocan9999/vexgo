@@ -518,6 +518,95 @@ describe('ShipmentsService', () => {
   });
 
   describe('lookupShipment', () => {
+    it('returns a tracking-only projection after matching either contact phone', async () => {
+      prismaMock.phieuGuiHang.findFirst.mockResolvedValue({
+        phieuGuiHangId: 12,
+        maVanDon: 'FUTA-VD-PUBLIC-12',
+        trangThai: 'DANG_VAN_CHUYEN',
+        ngayGui: new Date('2026-10-15T08:00:00.000Z'),
+        tenNguoiNhan: 'PII_RECEIVER_NAME',
+        soDienThoaiNguoiNhan: '0907654321',
+        ghiChu: 'PRIVATE_SHIPMENT_NOTE',
+        cuocChinh: 100_000,
+        phiDichVu: 20_000,
+        soTienGiam: 0,
+        tongPhi: 120_000,
+        donGiaoDich: {
+          donGiaoDichId: 22,
+          maDonGiaoDich: 'ORDER-22',
+          tenKhachHang: 'PII_SENDER_NAME',
+          soDienThoaiKhachHang: '0901234567',
+          emailKhachHang: 'PII_SENDER_EMAIL',
+        },
+        diemGui: { diemGiaoNhanHangId: 3, tenDiem: 'Bến gửi', diaChi: 'Địa chỉ gửi' },
+        diemNhan: { diemGiaoNhanHangId: 4, tenDiem: 'Bến nhận', diaChi: 'Địa chỉ nhận' },
+        chuyenXe: {
+          chuyenXeId: 5,
+          maChuyenXe: 'TRIP-5',
+          ngayKhoiHanh: new Date('2026-10-20T00:00:00.000Z'),
+          gioKhoiHanh: new Date('1970-01-01T08:00:00.000Z'),
+          gioDen: new Date('1970-01-01T12:00:00.000Z'),
+          tuyenXe: {
+            diemDi: 'TP.HCM',
+            diemDen: 'Đà Lạt',
+            thoiGianChayPhut: 240,
+            nhaXe: { tenNhaXe: 'Nhà xe công khai' },
+          },
+          xe: { bienSoXe: '51A-00012' },
+        },
+        hangHoas: [
+          { soLuong: 2, tenHang: 'PRIVATE_CARGO_NAME' },
+          { soLuong: 1, tenHang: 'PRIVATE_CARGO_NAME_2' },
+        ],
+        lichSuTrangThais: [
+          {
+            lichSuTrangThaiId: 8,
+            trangThai: 'DA_TIEP_NHAN',
+            thoiGian: new Date('2026-10-15T09:00:00.000Z'),
+            ghiChu: 'PRIVATE_HISTORY_NOTE',
+          },
+        ],
+      });
+
+      const result = await service.lookupShipment({
+        waybillCode: 'futa-vd-public-12',
+        phoneNumber: '0901234567',
+      });
+
+      expect(result).toEqual({
+        waybillCode: 'FUTA-VD-PUBLIC-12',
+        status: 'DANG_VAN_CHUYEN',
+        carrier: { name: 'Nhà xe công khai' },
+        route: { origin: 'TP.HCM', destination: 'Đà Lạt' },
+        pickupPoint: { name: 'Bến gửi', address: 'Địa chỉ gửi' },
+        dropoffPoint: { name: 'Bến nhận', address: 'Địa chỉ nhận' },
+        scheduledDepartureAt: expect.any(String),
+        estimatedArrivalAt: expect.any(String),
+        packageCount: 3,
+        timeline: [
+          {
+            status: 'DA_TIEP_NHAN',
+            time: '2026-10-15T09:00:00.000Z',
+          },
+        ],
+      });
+      const serializedResult = JSON.stringify(result);
+      for (const privateValue of [
+        'PII_RECEIVER_NAME',
+        'PII_SENDER_NAME',
+        'PII_SENDER_EMAIL',
+        '0901234567',
+        '0907654321',
+        'PRIVATE_SHIPMENT_NOTE',
+        'PRIVATE_HISTORY_NOTE',
+        'PRIVATE_CARGO_NAME',
+        'ORDER-22',
+        '120000',
+      ]) {
+        expect(serializedResult).not.toContain(privateValue);
+      }
+    });
+
     it('throws NotFoundException when waybill code not found', async () => {
       prismaMock.phieuGuiHang.findFirst.mockResolvedValue(null);
 

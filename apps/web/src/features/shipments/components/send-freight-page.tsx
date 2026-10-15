@@ -33,6 +33,7 @@ import {
 import { tripsApi, type ApiTrip } from '@/features/trips/services/trips.api';
 import {
   shipmentsApi,
+  type PublicShipmentLookupData,
   type ShipmentRoutePoints,
   type ShipmentResponseData,
 } from '@/features/shipments/services/shipments.api';
@@ -195,7 +196,7 @@ function SendFreightContent() {
   const [lookupCode, setLookupCode] = useState<string>('');
   const [lookupPhone, setLookupPhone] = useState<string>('');
   const [isLookingUp, setIsLookingUp] = useState<boolean>(false);
-  const [lookupResult, setLookupResult] = useState<ShipmentResponseData | null>(null);
+  const [lookupResult, setLookupResult] = useState<PublicShipmentLookupData | null>(null);
   const [lookupError, setLookupError] = useState<string | null>(null);
 
   // Khởi tạo params từ URL nếu có
@@ -1574,56 +1575,38 @@ function SendFreightContent() {
                     <span className="font-bold text-slate-500 uppercase block mb-1">Điểm gửi</span>
                     <div className="font-extrabold text-slate-900">{lookupResult.pickupPoint.name}</div>
                     <div className="text-slate-600 mt-0.5">{lookupResult.pickupPoint.address}</div>
-                    <div className="mt-2 text-slate-500">
-                      Người gửi: <strong>{lookupResult.sender.fullName}</strong> ({lookupResult.sender.phoneNumber})
-                    </div>
                   </div>
 
                   <div className="p-3 bg-slate-50 rounded-xl">
                     <span className="font-bold text-slate-500 uppercase block mb-1">Điểm nhận</span>
                     <div className="font-extrabold text-slate-900">{lookupResult.dropoffPoint.name}</div>
                     <div className="text-slate-600 mt-0.5">{lookupResult.dropoffPoint.address}</div>
-                    <div className="mt-2 text-slate-500">
-                      Người nhận: <strong>{lookupResult.receiver.fullName}</strong> ({lookupResult.receiver.phoneNumber})
-                    </div>
                   </div>
                 </div>
 
                 {/* Chuyến xe */}
-                <div className="p-3 bg-blue-50/50 rounded-xl border border-blue-100 text-xs flex justify-between items-center">
+                <div className="p-3 bg-blue-50/50 rounded-xl border border-blue-100 text-xs">
                   <div>
                     <span className="text-slate-500">Chuyến xe vận chuyển:</span>
                     <div className="font-bold text-slate-900">
-                      {lookupResult.trip.busCompany.name} • {lookupResult.trip.route.origin} → {lookupResult.trip.route.destination}
+                      {lookupResult.carrier.name} • {lookupResult.route.origin} → {lookupResult.route.destination}
                     </div>
                     <div className="text-slate-500 mt-0.5">
-                      Khởi hành: {formatIsoTime(lookupResult.trip.departureTime)} ngày {formatIsoDate(lookupResult.trip.departureTime)}
+                      Khởi hành: {formatIsoTime(lookupResult.scheduledDepartureAt)} ngày {formatIsoDate(lookupResult.scheduledDepartureAt)}
                     </div>
                   </div>
-                  <div className="text-right">
-                    <span className="text-slate-500">Tổng cước phí:</span>
-                    <div className="font-black text-rose-600 text-base">
-                      {lookupResult.pricing.totalFee.toLocaleString('vi-VN')}đ
+                  {lookupResult.estimatedArrivalAt && (
+                    <div className="mt-1 text-slate-500">
+                      Dự kiến đến: {formatIsoTime(lookupResult.estimatedArrivalAt)} ngày {formatIsoDate(lookupResult.estimatedArrivalAt)}
                     </div>
-                  </div>
+                  )}
                 </div>
 
-                {/* Danh sách hàng */}
-                <div>
-                  <span className="text-xs font-bold text-slate-500 uppercase block mb-2">Kiện hàng đã gửi:</span>
-                  <div className="space-y-2">
-                    {lookupResult.items.map((item) => (
-                      <div key={item.id} className="p-2.5 bg-slate-50 rounded-lg text-xs flex justify-between items-center">
-                        <div>
-                          <strong className="text-slate-800">{item.name}</strong>
-                          <span className="text-slate-500 ml-2">({item.category})</span>
-                        </div>
-                        <div className="font-semibold text-slate-700">
-                          {item.quantity} kiện • {item.weight} kg
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                <div className="text-xs text-slate-600">
+                  Số kiện hàng:{' '}
+                  <strong className="text-slate-900">
+                    {lookupResult.packageCount} kiện
+                  </strong>
                 </div>
 
                 {/* Timeline */}
@@ -1632,7 +1615,7 @@ function SendFreightContent() {
                     <span className="text-xs font-bold text-slate-500 uppercase block mb-2">Lịch sử xử lý:</span>
                     <div className="space-y-2 border-l-2 border-slate-200 ml-2 pl-3">
                       {lookupResult.timeline.map((log) => (
-                        <div key={log.id} className="text-xs">
+                        <div key={`${log.status}-${log.time}`} className="text-xs">
                           <span className="font-bold text-slate-800">
                             {log.status === 'MOI_TAO'
                               ? 'Tạo đơn gửi hàng'
@@ -1645,7 +1628,6 @@ function SendFreightContent() {
                                     : log.status}
                           </span>
                           <span className="text-slate-400 ml-2">({formatIsoTime(log.time)} {formatIsoDate(log.time)})</span>
-                          {log.note && <div className="text-slate-500 text-[11px]">{log.note}</div>}
                         </div>
                       ))}
                     </div>

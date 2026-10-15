@@ -8,7 +8,9 @@ import {
   ParseIntPipe,
   Post,
   Query,
+  UseGuards,
 } from '@nestjs/common';
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { ShipmentsService } from './shipments.service.js';
 import { CreateShipmentDto } from './dto/create-shipment.dto.js';
 import { LookupShipmentDto } from './dto/lookup-shipment.dto.js';
@@ -16,6 +18,10 @@ import { ShipmentQueryDto } from './dto/shipment-query.dto.js';
 import { OptionalAuth } from '../auth/decorators/public.decorator.js';
 import { CurrentPrincipal } from '../auth/decorators/current-principal.decorator.js';
 import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
+import {
+  PUBLIC_RATE_LIMIT_TTL_MS,
+  PUBLIC_SHIPMENT_LOOKUP_RATE_LIMIT,
+} from '../common/rate-limit-policy.js';
 
 @Controller('shipments')
 export class ShipmentsController {
@@ -38,6 +44,13 @@ export class ShipmentsController {
   @Post('lookup')
   @OptionalAuth()
   @HttpCode(HttpStatus.OK)
+  @UseGuards(ThrottlerGuard)
+  @Throttle({
+    default: {
+      limit: PUBLIC_SHIPMENT_LOOKUP_RATE_LIMIT,
+      ttl: PUBLIC_RATE_LIMIT_TTL_MS,
+    },
+  })
   async lookupShipment(@Body() dto: LookupShipmentDto) {
     const data = await this.shipmentsService.lookupShipment(dto);
     return { data };

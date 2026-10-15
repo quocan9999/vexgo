@@ -134,6 +134,19 @@ export type ShipmentResponseData = {
   note?: string | null;
 };
 
+export type PublicShipmentLookupData = {
+  waybillCode: string;
+  status: string;
+  pickupPoint: { name: string; address: string };
+  dropoffPoint: { name: string; address: string };
+  carrier: { name: string };
+  route: { origin: string; destination: string };
+  scheduledDepartureAt: string;
+  estimatedArrivalAt: string | null;
+  packageCount: number;
+  timeline: Array<{ status: string; time: string }>;
+};
+
 export const shipmentsApi = {
   async getRoutePoints(tripId: number): Promise<{ data: ShipmentRoutePoints }> {
     const res = await fetch(
@@ -181,7 +194,7 @@ export const shipmentsApi = {
   async lookupShipment(params: {
     waybillCode: string;
     phoneNumber: string;
-  }): Promise<{ data: ShipmentResponseData }> {
+  }): Promise<{ data: PublicShipmentLookupData }> {
     const res = await fetch(`${API_BASE_URL}/shipments/lookup`, {
       method: 'POST',
       headers: {

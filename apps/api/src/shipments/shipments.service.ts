@@ -16,6 +16,7 @@ import type { CargoCapacityGroup } from '../cargo-capacity/cargo-capacity.servic
 import { hasTenantRole } from '../auth/principal-scope.js';
 import {
   businessDateStartUtc,
+  computeArrival,
   resolveBusinessTimeZone,
 } from '../common/time/business-date.js';
 import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
@@ -386,20 +387,36 @@ export class ShipmentsService {
           { donGiaoDich: { maDonGiaoDich: waybillCode } },
         ],
       },
-      include: {
-        donGiaoDich: true,
-        diemGui: true,
-        diemNhan: true,
-        chuyenXe: {
-          include: {
-            tuyenXe: { include: { nhaXe: true } },
-            xe: true,
+      select: {
+        maVanDon: true,
+        trangThai: true,
+        soDienThoaiNguoiNhan: true,
+        donGiaoDich: {
+          select: {
+            maDonGiaoDich: true,
+            soDienThoaiKhachHang: true,
           },
         },
-        hangHoas: {
-          include: { loaiHangHoa: true },
+        diemGui: { select: { tenDiem: true, diaChi: true } },
+        diemNhan: { select: { tenDiem: true, diaChi: true } },
+        chuyenXe: {
+          select: {
+            ngayKhoiHanh: true,
+            gioKhoiHanh: true,
+            gioDen: true,
+            tuyenXe: {
+              select: {
+                diemDi: true,
+                diemDen: true,
+                thoiGianChayPhut: true,
+                nhaXe: { select: { tenNhaXe: true } },
+              },
+            },
+          },
         },
+        hangHoas: { select: { soLuong: true } },
         lichSuTrangThais: {
+          select: { trangThai: true, thoiGian: true },
           orderBy: { thoiGian: 'asc' },
         },
       },
@@ -430,75 +447,40 @@ export class ShipmentsService {
       shipment.chuyenXe.gioKhoiHanh,
       this.businessTimeZone,
     );
+    const estimatedArrivalAt = computeArrival(
+      shipment.chuyenXe.ngayKhoiHanh,
+      shipment.chuyenXe.gioKhoiHanh,
+      shipment.chuyenXe.tuyenXe.thoiGianChayPhut,
+      shipment.chuyenXe.gioDen,
+      this.businessTimeZone,
+    );
 
     return {
-      shipmentId: shipment.phieuGuiHangId,
-      orderId: shipment.donGiaoDich.donGiaoDichId,
       waybillCode: shipment.maVanDon,
-      orderCode: shipment.donGiaoDich.maDonGiaoDich,
       status: shipment.trangThai,
-      paymentStatus: shipment.donGiaoDich.trangThai,
-      sentAt: shipment.ngayGui.toISOString(),
-      pricing: {
-        baseFee: Number(shipment.cuocChinh),
-        serviceFee: Number(shipment.phiDichVu),
-        discount: Number(shipment.soTienGiam),
-        totalFee: Number(shipment.tongPhi),
-      },
-      sender: {
-        fullName: shipment.donGiaoDich.tenKhachHang,
-        phoneNumber: shipment.donGiaoDich.soDienThoaiKhachHang,
-        email: shipment.donGiaoDich.emailKhachHang,
-      },
-      receiver: {
-        fullName: shipment.tenNguoiNhan,
-        phoneNumber: shipment.soDienThoaiNguoiNhan,
-      },
       pickupPoint: {
-        id: shipment.diemGui.diemGiaoNhanHangId,
         name: shipment.diemGui.tenDiem,
         address: shipment.diemGui.diaChi,
       },
       dropoffPoint: {
-        id: shipment.diemNhan.diemGiaoNhanHangId,
         name: shipment.diemNhan.tenDiem,
         address: shipment.diemNhan.diaChi,
       },
-      trip: {
-        tripId: shipment.chuyenXe.chuyenXeId,
-        code: shipment.chuyenXe.maChuyenXe,
-        departureTime: departureAt.toISOString(),
-        route: {
-          origin: shipment.chuyenXe.tuyenXe.diemDi,
-          destination: shipment.chuyenXe.tuyenXe.diemDen,
-        },
-        busCompany: {
-          id: shipment.chuyenXe.tuyenXe.nhaXe.nhaXeId,
-          name: shipment.chuyenXe.tuyenXe.nhaXe.tenNhaXe,
-        },
-        vehicle: {
-          licensePlate: shipment.chuyenXe.xe.bienSoXe,
-        },
+      carrier: { name: shipment.chuyenXe.tuyenXe.nhaXe.tenNhaXe },
+      route: {
+        origin: shipment.chuyenXe.tuyenXe.diemDi,
+        destination: shipment.chuyenXe.tuyenXe.diemDen,
       },
-      items: shipment.hangHoas.map((itm) => ({
-        id: itm.hangHoaId,
-        name: itm.tenHang,
-        quantity: itm.soLuong,
-        weight: Number(itm.khoiLuong),
-        category: itm.loaiHangHoa.tenLoai,
-        dimensions:
-          itm.chieuDai && itm.chieuRong && itm.chieuCao
-            ? `${Number(itm.chieuDai)}x${Number(itm.chieuRong)}x${Number(itm.chieuCao)}cm`
-            : null,
-        note: itm.moTa,
-      })),
+      scheduledDepartureAt: departureAt.toISOString(),
+      estimatedArrivalAt,
+      packageCount: shipment.hangHoas.reduce(
+        (total, item) => total + item.soLuong,
+        0,
+      ),
       timeline: shipment.lichSuTrangThais.map((log) => ({
-        id: log.lichSuTrangThaiId,
         status: log.trangThai,
         time: log.thoiGian.toISOString(),
-        note: log.ghiChu,
       })),
-      note: shipment.ghiChu,
     };
   }
 

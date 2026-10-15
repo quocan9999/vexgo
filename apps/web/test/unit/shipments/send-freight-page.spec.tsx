@@ -70,6 +70,21 @@ const createdShipment = {
   timeline: [],
 };
 
+const publicShipmentLookup = {
+  waybillCode: 'VG-VD-PUBLIC-1',
+  status: 'DANG_VAN_CHUYEN',
+  carrier: { name: 'Nhà xe công khai' },
+  route: { origin: 'Đà Lạt', destination: 'TP.HCM' },
+  pickupPoint: { name: 'Điểm gửi công khai', address: 'Địa chỉ gửi công khai' },
+  dropoffPoint: { name: 'Điểm nhận công khai', address: 'Địa chỉ nhận công khai' },
+  scheduledDepartureAt: '2026-10-20T08:00:00.000Z',
+  estimatedArrivalAt: '2026-10-20T12:00:00.000Z',
+  packageCount: 3,
+  timeline: [
+    { status: 'DA_TIEP_NHAN', time: '2026-10-15T10:00:00.000Z' },
+  ],
+};
+
 beforeEach(() => {
   window.sessionStorage.clear();
   vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
@@ -151,5 +166,40 @@ describe('independent shipment flow', () => {
     ).toBeTruthy();
     expect(api.createShipment).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(window.sessionStorage.length).toBe(0));
+  });
+
+  it('shows public tracking details without exposing sender, receiver, payment, or cargo PII', async () => {
+    api.lookupShipment.mockResolvedValue({ data: publicShipmentLookup });
+    render(<SendFreightPage />);
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Tra cứu vận đơn' })[0]);
+    fireEvent.change(screen.getByPlaceholderText('VD: FUTA-VD-09102026...'), {
+      target: { value: 'VG-VD-PUBLIC-1' },
+    });
+    fireEvent.change(screen.getByPlaceholderText('09xxxxxxxx'), {
+      target: { value: '0901234567' },
+    });
+    fireEvent.click(screen.getAllByRole('button', { name: 'Tra cứu vận đơn' })[1]);
+
+    expect(await screen.findByText('VG-VD-PUBLIC-1')).toBeTruthy();
+    expect(
+      screen.getByText(
+        (_, element) =>
+          element?.className === 'font-bold text-slate-900' &&
+          element.textContent === 'Nhà xe công khai • Đà Lạt → TP.HCM',
+      ),
+    ).toBeTruthy();
+    expect(screen.getByText('Địa chỉ gửi công khai')).toBeTruthy();
+    expect(screen.getByText('Địa chỉ nhận công khai')).toBeTruthy();
+    expect(screen.getByText('3 kiện')).toBeTruthy();
+    expect(screen.getByText('Tiếp nhận hàng tại quầy bến xe')).toBeTruthy();
+    expect(screen.queryByText(/Người gửi:/)).toBeNull();
+    expect(screen.queryByText(/Người nhận:/)).toBeNull();
+    expect(screen.queryByText(/Tổng cước phí:/)).toBeNull();
+    expect(screen.queryByText(/Kiện hàng đã gửi:/)).toBeNull();
+    expect(api.lookupShipment).toHaveBeenCalledWith({
+      waybillCode: 'VG-VD-PUBLIC-1',
+      phoneNumber: '0901234567',
+    });
   });
 });
