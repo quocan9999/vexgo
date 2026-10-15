@@ -4,6 +4,7 @@ import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import { PrismaClient } from '../apps/api/dist/generated/prisma/client.js';
 import {
   ADMIN_PERMISSION_CATALOG,
+  ADMIN_ROLE_DEFAULT_PERMISSION_KEYS,
   ADMIN_ROLE_PERMISSION_SCOPE_BY_NAME,
   isPermissionAllowedForRole,
 } from '../apps/api/dist/auth/permissions/permission-catalog.js';
@@ -100,6 +101,23 @@ async function verifyPermissionCatalogAndDefaults() {
     }
     if (!isPermissionAllowedForRole(roleName, permissionKey)) {
       throw new Error(`Permission scope mismatch for ${roleName} -> ${permissionKey}`);
+    }
+  }
+  const promotionPermissionKeys = ADMIN_PERMISSION_CATALOG
+    .filter(({ key, scope }) => scope === 'tenant' && key.startsWith('promotion:'))
+    .map(({ key }) => key);
+  const adminPromotionDefaults = ADMIN_ROLE_DEFAULT_PERMISSION_KEYS.NHA_XE_ADMIN
+    .filter((key) => key.startsWith('promotion:'));
+  for (const permissionKey of adminPromotionDefaults) {
+    if (!assignmentRows.some((row) =>
+      row.roleName === 'NHA_XE_ADMIN' && row.permissionKey === permissionKey
+    )) {
+      throw new Error(`NHA_XE_ADMIN is missing default permission ${permissionKey}`);
+    }
+  }
+  for (const { roleName, permissionKey } of assignmentRows) {
+    if (roleName !== 'NHA_XE_ADMIN' && promotionPermissionKeys.includes(permissionKey)) {
+      throw new Error(`${roleName} must not receive a default promotion permission: ${permissionKey}`);
     }
   }
   console.log(`OK RBAC role-permission assignments (${assignmentRows.length} valid mappings)`);

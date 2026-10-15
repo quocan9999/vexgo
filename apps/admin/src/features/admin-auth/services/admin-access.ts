@@ -56,6 +56,9 @@ export type AdminPermission =
   | 'trip:update'
   | 'trip:cancel'
   | 'customer:read'
+  | 'promotion:read'
+  | 'promotion:create'
+  | 'promotion:update'
   | 'role:read'
   | 'permission:assign';
 
