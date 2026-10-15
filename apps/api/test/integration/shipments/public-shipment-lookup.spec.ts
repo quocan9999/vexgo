@@ -252,6 +252,7 @@ describe('Public shipment lookup HTTP contract (MySQL integration)', () => {
     const receiverResponse = await sendLookup(waybillCode, receiverPhone).expect(200);
 
     expect(senderResponse.body.data).toEqual({
+      bookingPromotionCode: null,
       waybillCode,
       status: 'DANG_VAN_CHUYEN',
       carrier: { name: `Nhà xe công khai ${suffix}` },
