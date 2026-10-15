@@ -424,8 +424,8 @@ describe('Admin accounts management page', () => {
       await screen.findByRole('heading', { name: 'Thông tin tài khoản' }),
     ).toBeTruthy();
     const detailSheet = screen.getByRole('dialog');
-    expect(within(detailSheet).getByText('PT-081')).toBeTruthy();
-    expect(within(detailSheet).getByText(/Phương Trang/)).toBeTruthy();
+    expect(await within(detailSheet).findByText('PT-081')).toBeTruthy();
+    expect(await within(detailSheet).findByText(/Phương Trang/)).toBeTruthy();
     await waitFor(() =>
       expect(state.getAdminAccountById).toHaveBeenCalledWith(
         41,

@@ -88,6 +88,11 @@ function createService() {
   };
 }
 
+function freezeClockBeforeFixtureDeparture() {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date('2026-10-14T12:00:00.000Z'));
+}
+
 afterEach(() => {
   vi.useRealTimers();
 });
@@ -124,6 +129,7 @@ describe('TripsService search', () => {
   });
 
   it('returns real database fields, applicable fares and pagination without fabricated display data', async () => {
+    freezeClockBeforeFixtureDeparture();
     const { prisma, service } = createService();
     prisma.chuyenXe.findMany.mockResolvedValue([firstTrip, secondTrip]);
     prisma.bangGia.findMany.mockResolvedValue([
@@ -328,6 +334,7 @@ describe('TripsService search', () => {
 
 describe('TripsService detail', () => {
   it('maps one trip without random ratings, guessed duration or fallback fare', async () => {
+    freezeClockBeforeFixtureDeparture();
     const { prisma, service } = createService();
     prisma.chuyenXe.findUnique.mockResolvedValue(firstTrip);
     prisma.bangGia.findFirst.mockResolvedValue(null);
@@ -344,6 +351,7 @@ describe('TripsService detail', () => {
   });
 
   it('derives arrivalTime accurately from route durationMinutes', async () => {
+    freezeClockBeforeFixtureDeparture();
     const { prisma, service } = createService();
     const tripWithDuration = {
       ...firstTrip,
@@ -364,6 +372,7 @@ describe('TripsService detail', () => {
   });
 
   it('preserves multi-day journeys for 24h and 36h duration without modulo loss', async () => {
+    freezeClockBeforeFixtureDeparture();
     const { prisma, service } = createService();
     // 24h duration
     prisma.chuyenXe.findUnique.mockResolvedValue({

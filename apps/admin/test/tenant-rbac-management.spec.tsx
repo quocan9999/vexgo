@@ -209,7 +209,7 @@ describe('tenant RBAC management', () => {
     renderManagement();
     await screen.findByRole('heading', { name: 'Phân quyền vai trò' });
 
-    const appliedPermissions = screen.getByRole('region', {
+    const appliedPermissions = await screen.findByRole('region', {
       name: 'Quyền đang áp dụng',
     });
     const readCheckbox = screen.getByRole('checkbox', {
