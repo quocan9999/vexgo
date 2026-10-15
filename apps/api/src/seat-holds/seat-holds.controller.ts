@@ -4,7 +4,6 @@ import {
   Controller,
   Delete,
   Headers,
-  Param,
   Post,
 } from '@nestjs/common';
 import { SeatHoldsService } from './seat-holds.service.js';
@@ -41,15 +40,6 @@ export class SeatHoldsController {
       throw new BadRequestException('Mã giữ chỗ (holdToken) là bắt buộc.');
     }
     return this.seatHoldsService.releaseSeatHold(token.trim());
-  }
-
-  @Delete(':holdToken')
-  async releaseSeatHold(
-    @Param('holdToken') holdToken: string,
-    @Headers('x-hold-token') headerToken?: string,
-  ) {
-    const token = headerToken || holdToken;
-    return this.seatHoldsService.releaseSeatHold(token);
   }
 }
 

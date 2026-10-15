@@ -1,6 +1,10 @@
 import { createHmac, randomUUID } from 'node:crypto';
 import { Test } from '@nestjs/testing';
-import type { ExecutionContext, INestApplication } from '@nestjs/common';
+import {
+  ConflictException,
+  type ExecutionContext,
+  type INestApplication,
+} from '@nestjs/common';
 import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { AppModule } from '../../../src/app.module.js';
@@ -15,6 +19,11 @@ import { Reflector } from '@nestjs/core';
 import { AUTH_MODE_KEY, type EndpointAuthMode } from '../../../src/auth/decorators/public.decorator.js';
 
 describe('Payments Webhook & Status Security with MySQL (Integration)', () => {
+  const sepayTestSecret = 'integration-sepay-hmac-secret';
+  const sepayTestAccountNumber = '0012345678';
+  let originalSepaySecret: string | undefined;
+  let originalSepayAccountNumber: string | undefined;
+  let originalNodeEnv: string | undefined;
   let app: INestApplication;
   let prisma: PrismaService;
   let busCompanyId: number;
@@ -25,7 +34,13 @@ describe('Payments Webhook & Status Security with MySQL (Integration)', () => {
   let currentPrincipal: AuthPrincipal | null = null;
 
   beforeAll(async () => {
+    originalNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'test';
     process.env.PAYMENT_DEMO_MODE = 'true';
+    originalSepaySecret = process.env.SEPAY_WEBHOOK_SECRET;
+    process.env.SEPAY_WEBHOOK_SECRET = sepayTestSecret;
+    originalSepayAccountNumber = process.env.SEPAY_ACCOUNT_NUMBER;
+    process.env.SEPAY_ACCOUNT_NUMBER = sepayTestAccountNumber;
     let reflector: Reflector;
     const accessTokenGuard = {
       canActivate(context: ExecutionContext) {
@@ -55,7 +70,7 @@ describe('Payments Webhook & Status Security with MySQL (Integration)', () => {
       .useValue(accessTokenGuard)
       .compile();
 
-    app = moduleRef.createNestApplication();
+    app = moduleRef.createNestApplication({ rawBody: true });
     configureApi(app);
     await app.init();
 
@@ -161,6 +176,21 @@ describe('Payments Webhook & Status Security with MySQL (Integration)', () => {
       await prisma.taiKhoan.deleteMany({ where: { taiKhoanId: { in: [customerAPrincipal.taiKhoanId, customerBPrincipal.taiKhoanId] } } });
     } finally {
       delete process.env.PAYMENT_DEMO_MODE;
+      if (originalNodeEnv === undefined) {
+        delete process.env.NODE_ENV;
+      } else {
+        process.env.NODE_ENV = originalNodeEnv;
+      }
+      if (originalSepaySecret === undefined) {
+        delete process.env.SEPAY_WEBHOOK_SECRET;
+      } else {
+        process.env.SEPAY_WEBHOOK_SECRET = originalSepaySecret;
+      }
+      if (originalSepayAccountNumber === undefined) {
+        delete process.env.SEPAY_ACCOUNT_NUMBER;
+      } else {
+        process.env.SEPAY_ACCOUNT_NUMBER = originalSepayAccountNumber;
+      }
       await app?.close();
     }
   }, 30_000);
@@ -391,6 +421,8 @@ describe('Payments Webhook & Status Security with MySQL (Integration)', () => {
       phieuDatVe,
       thanhToan,
       veIds,
+      chuyenXeId: chuyenXe.chuyenXeId,
+      gheChuyenXeIds,
       totalAmount,
       cleanup: async () => {
         await prisma.lichSuTrangThaiVe.deleteMany({ where: { veId: { in: veIds } } });
@@ -892,6 +924,37 @@ describe('Payments Webhook & Status Security with MySQL (Integration)', () => {
       expect(paymentsCount).toBe(0);
     });
 
+    it('rejects DANG_XU_LY booking/order states because only CHO_THANH_TOAN is a pending lifecycle state', async () => {
+      const { donGiaoDich, phieuDatVe } = await createTestBooking(
+        customerAId,
+        'CHO_THANH_TOAN',
+        200000,
+      );
+      await prisma.$transaction([
+        prisma.donGiaoDich.update({
+          where: { donGiaoDichId: donGiaoDich.donGiaoDichId },
+          data: { trangThai: 'DANG_XU_LY' },
+        }),
+        prisma.phieuDatVe.update({
+          where: { phieuDatVeId: phieuDatVe.phieuDatVeId },
+          data: { trangThai: 'DANG_XU_LY' },
+        }),
+      ]);
+
+      currentPrincipal = customerAPrincipal;
+      const response = await request(app.getHttpServer())
+        .post('/api/v1/payments')
+        .send({ bookingId: phieuDatVe.phieuDatVeId, provider: 'MOMO' });
+
+      expect(response.status).toBe(409);
+      expect(response.body.error).toBe('INVALID_BOOKING_STATUS');
+      await expect(
+        prisma.thanhToan.count({
+          where: { donGiaoDichId: donGiaoDich.donGiaoDichId },
+        }),
+      ).resolves.toBe(0);
+    });
+
     it('rejects payment creation with 409 Conflict when booking is DA_THANH_TOAN', async () => {
       const { phieuDatVe } = await createTestBooking(customerAId, 'DA_THANH_TOAN', 200000);
 
@@ -1128,4 +1191,718 @@ describe('Payments Webhook & Status Security with MySQL (Integration)', () => {
       }
     });
   });
+
+  describe('SePay webhook authentication, validation, settlement, and idempotency', () => {
+    it('allows multiple null SePay IDs while rejecting duplicate transaction IDs', async () => {
+      const first = await createTestPayment(customerAId, 'SEPAY');
+      const second = await createTestPayment(customerAId, 'SEPAY');
+      const sepayTransactionId = BigInt(
+        `0x${randomUUID().replaceAll('-', '')}`,
+      ).toString();
+
+      const nullIdRows = await prisma.$queryRaw<Array<{ rowCount: bigint }>>`
+        SELECT COUNT(*) AS rowCount
+        FROM ThanhToan
+        WHERE thanhToanId IN (
+          ${first.thanhToan.thanhToanId},
+          ${second.thanhToan.thanhToanId}
+        )
+          AND maGiaoDichSePay IS NULL
+      `;
+      expect(Number(nullIdRows[0]?.rowCount)).toBe(2);
+
+      await prisma.$executeRaw`
+        UPDATE ThanhToan
+        SET maGiaoDichSePay = ${sepayTransactionId}
+        WHERE thanhToanId = ${first.thanhToan.thanhToanId}
+      `;
+
+      await expect(
+        prisma.$executeRaw`
+          UPDATE ThanhToan
+          SET maGiaoDichSePay = ${sepayTransactionId}
+          WHERE thanhToanId = ${second.thanhToan.thanhToanId}
+        `,
+      ).rejects.toThrow();
+
+      const persistedRows = await prisma.$queryRaw<
+        Array<{ thanhToanId: number }>
+      >`
+        SELECT thanhToanId
+        FROM ThanhToan
+        WHERE maGiaoDichSePay = ${sepayTransactionId}
+      `;
+      expect(persistedRows.map((row) => row.thanhToanId)).toEqual([
+        first.thanhToan.thanhToanId,
+      ]);
+    });
+
+    it('authenticates, settles one exact SePay order once, and stores its transaction ID', async () => {
+      const { donGiaoDich, phieuDatVe, thanhToan } = await createTestPayment(
+        customerAId,
+        'SEPAY',
+      );
+      const transactionId = Date.now() + Math.floor(Math.random() * 10000);
+      const webhookPayload = {
+        id: transactionId,
+        gateway: 'STB',
+        accountNumber: sepayTestAccountNumber,
+        code: donGiaoDich.maDonGiaoDich,
+        transferType: 'in',
+        transferAmount: 200000,
+        content: `${donGiaoDich.maDonGiaoDich} chuyen tien`,
+      };
+
+      const sendSignedEvent = async (payload = webhookPayload) => {
+        const rawBody = JSON.stringify(payload, null, 2);
+        const timestamp = String(Math.floor(Date.now() / 1000));
+        const signature = `sha256=${createHmac('sha256', sepayTestSecret)
+          .update(`${timestamp}.`)
+          .update(rawBody)
+          .digest('hex')}`;
+        return request(app.getHttpServer())
+          .post('/api/v1/payments/sepay-webhook')
+          .set('Content-Type', 'application/json')
+          .set('X-SePay-Timestamp', timestamp)
+          .set('X-SePay-Signature', signature)
+          .send(rawBody);
+      };
+
+      const [firstDelivery, concurrentRetry] = await Promise.all([
+        sendSignedEvent(),
+        sendSignedEvent(),
+      ]);
+      expect(firstDelivery.status).toBe(200);
+      expect(firstDelivery.body).toEqual({ success: true });
+      expect(concurrentRetry.status).toBe(200);
+      expect(concurrentRetry.body).toEqual({ success: true });
+
+      const updatedBooking = await prisma.phieuDatVe.findUnique({
+        where: { phieuDatVeId: phieuDatVe.phieuDatVeId },
+        include: { donGiaoDich: true },
+      });
+      expect(updatedBooking?.trangThai).toBe('DA_THANH_TOAN');
+      expect(updatedBooking?.donGiaoDich.trangThai).toBe('DA_THANH_TOAN');
+      const settledPayment = await prisma.thanhToan.findUniqueOrThrow({
+        where: { thanhToanId: thanhToan.thanhToanId },
+      });
+      expect(settledPayment.trangThai).toBe('THANH_CONG');
+      expect(settledPayment.maGiaoDichSePay).toBe(String(transactionId));
+
+      const replay = await sendSignedEvent();
+      expect(replay.status).toBe(200);
+      expect(replay.body).toEqual({ success: true });
+
+      const wrongAccountReplay = await sendSignedEvent({
+        ...webhookPayload,
+        accountNumber: '0099999999',
+      });
+      expect(wrongAccountReplay.status).toBe(400);
+      expect(wrongAccountReplay.body.error).toBe('SEPAY_ACCOUNT_MISMATCH');
+
+      const differentTransactionForSamePayment = await sendSignedEvent({
+        ...webhookPayload,
+        id: transactionId + 1,
+      });
+      expect(differentTransactionForSamePayment.status).toBe(409);
+      await expect(
+        prisma.lichSuTrangThaiPhieuDatVe.count({
+          where: { phieuDatVeId: phieuDatVe.phieuDatVeId, trangThaiMoi: 'DA_THANH_TOAN' },
+        }),
+      ).resolves.toBe(1);
+    });
+
+    it.each([
+      {
+        label: 'a different account',
+        accountNumber: '0099999999',
+        includeAccountNumber: true,
+        expectedError: 'SEPAY_ACCOUNT_MISMATCH',
+      },
+      {
+        label: 'a missing accountNumber',
+        accountNumber: undefined,
+        includeAccountNumber: false,
+        expectedError: 'SEPAY_ACCOUNT_NUMBER_INVALID',
+      },
+    ])('rejects a signed event with $label without changing booking or payment records', async ({ accountNumber, includeAccountNumber, expectedError }) => {
+      const { donGiaoDich, phieuDatVe, thanhToan } = await createTestPayment(
+        customerAId,
+        'SEPAY',
+      );
+      const transactionId = Date.now() + Math.floor(Math.random() * 10000);
+      const basePayload: Record<string, unknown> = {
+        id: transactionId,
+        gateway: 'STB',
+        accountNumber: sepayTestAccountNumber,
+        code: donGiaoDich.maDonGiaoDich,
+        transferType: 'in',
+        transferAmount: 200000,
+        content: `${donGiaoDich.maDonGiaoDich} chuyen tien`,
+      };
+      if (includeAccountNumber) {
+        basePayload.accountNumber = accountNumber;
+      } else {
+        delete basePayload.accountNumber;
+      }
+      const payload = basePayload;
+      const rawBody = JSON.stringify(payload);
+      const timestamp = String(Math.floor(Date.now() / 1000));
+      const signature = `sha256=${createHmac('sha256', sepayTestSecret)
+        .update(`${timestamp}.`)
+        .update(rawBody)
+        .digest('hex')}`;
+      const response = await request(app.getHttpServer())
+        .post('/api/v1/payments/sepay-webhook')
+        .set('Content-Type', 'application/json')
+        .set('X-SePay-Timestamp', timestamp)
+        .set('X-SePay-Signature', signature)
+        .send(rawBody);
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBe(expectedError);
+
+      const [unchangedOrder, unchangedBooking, unchangedPayment] = await Promise.all([
+        prisma.donGiaoDich.findUniqueOrThrow({
+          where: { donGiaoDichId: donGiaoDich.donGiaoDichId },
+        }),
+        prisma.phieuDatVe.findUniqueOrThrow({
+          where: { phieuDatVeId: phieuDatVe.phieuDatVeId },
+        }),
+        prisma.thanhToan.findUniqueOrThrow({
+          where: { thanhToanId: thanhToan.thanhToanId },
+        }),
+      ]);
+      expect(unchangedOrder.trangThai).toBe('CHO_THANH_TOAN');
+      expect(unchangedBooking.trangThai).toBe('CHO_THANH_TOAN');
+      expect(unchangedPayment.trangThai).toBe('DANG_XU_LY');
+      expect(unchangedPayment.maGiaoDichSePay).toBeNull();
+      await expect(
+        prisma.ve.count({ where: { phieuDatVeId: phieuDatVe.phieuDatVeId } }),
+      ).resolves.toBe(0);
+      await expect(
+        prisma.lichSuTrangThaiPhieuDatVe.count({
+          where: { phieuDatVeId: phieuDatVe.phieuDatVeId },
+        }),
+      ).resolves.toBe(0);
+    });
+
+    it('rejects authenticated SePay events with the wrong reference, direction, currency, or amount', async () => {
+      const { donGiaoDich, phieuDatVe, thanhToan } = await createTestPayment(
+        customerAId,
+        'SEPAY',
+      );
+      const eventIdStart = Date.now() + Math.floor(Math.random() * 10000);
+      const invalidPayloads = [
+        {
+          id: eventIdStart,
+          accountNumber: sepayTestAccountNumber,
+          code: `WRONG-${donGiaoDich.maDonGiaoDich}`,
+          content: `WRONG-${donGiaoDich.maDonGiaoDich}`,
+          transferType: 'in',
+          transferAmount: 200000,
+          expectedStatus: 404,
+        },
+        {
+          id: eventIdStart + 1,
+          accountNumber: sepayTestAccountNumber,
+          code: donGiaoDich.maDonGiaoDich,
+          content: donGiaoDich.maDonGiaoDich,
+          transferType: 'out',
+          transferAmount: 200000,
+          expectedStatus: 400,
+        },
+        {
+          id: eventIdStart + 2,
+          accountNumber: sepayTestAccountNumber,
+          code: donGiaoDich.maDonGiaoDich,
+          content: donGiaoDich.maDonGiaoDich,
+          transferType: 'in',
+          currency: 'USD',
+          transferAmount: 200000,
+          expectedStatus: 400,
+        },
+        {
+          id: eventIdStart + 3,
+          accountNumber: sepayTestAccountNumber,
+          code: donGiaoDich.maDonGiaoDich,
+          content: donGiaoDich.maDonGiaoDich,
+          transferType: 'in',
+          transferAmount: 199999,
+          expectedStatus: 400,
+        },
+        {
+          id: eventIdStart + 4,
+          accountNumber: sepayTestAccountNumber,
+          code: donGiaoDich.maDonGiaoDich,
+          content: donGiaoDich.maDonGiaoDich,
+          transferType: 'in',
+          transferAmount: 0,
+          expectedStatus: 400,
+        },
+      ];
+
+      for (const payload of invalidPayloads) {
+        const { expectedStatus, ...webhookPayload } = payload;
+        const rawBody = JSON.stringify(webhookPayload);
+        const timestamp = String(Math.floor(Date.now() / 1000));
+        const signature = `sha256=${createHmac('sha256', sepayTestSecret)
+          .update(`${timestamp}.`)
+          .update(rawBody)
+          .digest('hex')}`;
+        const response = await request(app.getHttpServer())
+          .post('/api/v1/payments/sepay-webhook')
+          .set('Content-Type', 'application/json')
+          .set('X-SePay-Timestamp', timestamp)
+          .set('X-SePay-Signature', signature)
+          .send(rawBody);
+        expect(response.status).toBe(expectedStatus);
+      }
+
+      const unchanged = await prisma.phieuDatVe.findUniqueOrThrow({
+        where: { phieuDatVeId: phieuDatVe.phieuDatVeId },
+        include: { donGiaoDich: true },
+      });
+      expect(unchanged.trangThai).toBe('CHO_THANH_TOAN');
+      expect(unchanged.donGiaoDich.trangThai).toBe('CHO_THANH_TOAN');
+      const unchangedPayment = await prisma.thanhToan.findUniqueOrThrow({
+        where: { thanhToanId: thanhToan.thanhToanId },
+      });
+      expect(unchangedPayment.trangThai).toBe('DANG_XU_LY');
+      expect(unchangedPayment.maGiaoDichSePay).toBeNull();
+    });
+
+    it('rejects missing, forged, and expired SePay signatures without settling', async () => {
+      const suffix = randomUUID().slice(0, 8).toUpperCase();
+      const maDonGiaoDich = `VXG-GD-20261013-${suffix}`;
+      const donGiaoDich = await prisma.donGiaoDich.create({
+        data: {
+          maDonGiaoDich,
+          ngayTao: new Date(),
+          tongTien: 150000,
+          trangThai: 'CHO_THANH_TOAN',
+          tenKhachHang: 'Sepay Customer',
+          soDienThoaiKhachHang: '+84950000001',
+          khachHangId: customerAId,
+          nhaXeId: busCompanyId,
+          phieuDatVe: {
+            create: {
+              maPhieuDatVe: `VXG-PDV-20261013-${suffix}`,
+              ngayDat: new Date(),
+              soLuongVeBanDau: 1,
+              tongTienBanDau: 150000,
+              trangThai: 'CHO_THANH_TOAN',
+            },
+          },
+        },
+        include: { phieuDatVe: true },
+      });
+
+      const rawBody = JSON.stringify({
+        id: 99992,
+        transferAmount: 150000,
+        code: maDonGiaoDich,
+        content: `VEXGO ${maDonGiaoDich}`,
+      });
+      const timestamp = String(Math.floor(Date.now() / 1000));
+
+      const missingSignature = await request(app.getHttpServer())
+        .post('/api/v1/payments/sepay-webhook')
+        .set('X-SePay-Timestamp', timestamp)
+        .set('Content-Type', 'application/json')
+        .send(rawBody);
+      const forgedSignature = await request(app.getHttpServer())
+        .post('/api/v1/payments/sepay-webhook')
+        .set('X-SePay-Timestamp', timestamp)
+        .set('X-SePay-Signature', `sha256=${'a'.repeat(64)}`)
+        .set('Content-Type', 'application/json')
+        .send(rawBody);
+      const expiredTimestamp = String(Number(timestamp) - 301);
+      const expiredSignature = `sha256=${createHmac('sha256', sepayTestSecret)
+        .update(`${expiredTimestamp}.`)
+        .update(rawBody)
+        .digest('hex')}`;
+      const expiredRequest = await request(app.getHttpServer())
+        .post('/api/v1/payments/sepay-webhook')
+        .set('X-SePay-Timestamp', expiredTimestamp)
+        .set('X-SePay-Signature', expiredSignature)
+        .set('Content-Type', 'application/json')
+        .send(rawBody);
+
+      expect(missingSignature.status).toBe(401);
+      expect(forgedSignature.status).toBe(401);
+      expect(expiredRequest.status).toBe(401);
+      const updatedBooking = await prisma.phieuDatVe.findUnique({
+        where: { phieuDatVeId: donGiaoDich.phieuDatVe!.phieuDatVeId },
+        include: { donGiaoDich: true },
+      });
+      expect(updatedBooking?.trangThai).toBe('CHO_THANH_TOAN');
+      expect(updatedBooking?.donGiaoDich.trangThai).toBe('CHO_THANH_TOAN');
+      await expect(
+        prisma.thanhToan.count({
+          where: { donGiaoDichId: donGiaoDich.donGiaoDichId },
+        }),
+      ).resolves.toBe(0);
+    });
+  });
+
+  describe('POST /api/v1/bookings/:bookingId/confirm-payment', () => {
+    it('does not expose the legacy public payment mutation', async () => {
+      const suffix = randomUUID().slice(0, 8).toUpperCase();
+      const donGiaoDich = await prisma.donGiaoDich.create({
+        data: {
+          maDonGiaoDich: `VXG-GD-20261013-${suffix}`,
+          ngayTao: new Date(),
+          tongTien: 150000,
+          trangThai: 'CHO_THANH_TOAN',
+          tenKhachHang: 'Payment Test Customer',
+          soDienThoaiKhachHang: '+84950000001',
+          khachHangId: customerAId,
+          nhaXeId: busCompanyId,
+          phieuDatVe: {
+            create: {
+              maPhieuDatVe: `VXG-PDV-20261013-${suffix}`,
+              ngayDat: new Date(),
+              soLuongVeBanDau: 1,
+              tongTienBanDau: 150000,
+              trangThai: 'CHO_THANH_TOAN',
+            },
+          },
+        },
+        include: { phieuDatVe: true },
+      });
+
+      const res = await request(app.getHttpServer())
+        .post(
+          `/api/v1/bookings/${donGiaoDich.phieuDatVe!.phieuDatVeId}/confirm-payment`,
+        )
+        .send({ paymentMethod: 'CHUYEN_KHOAN' });
+
+      expect(res.status).toBe(404);
+      const currentBooking = await prisma.phieuDatVe.findUnique({
+        where: { phieuDatVeId: donGiaoDich.phieuDatVe!.phieuDatVeId },
+        include: { donGiaoDich: true },
+      });
+      expect(currentBooking?.trangThai).toBe('CHO_THANH_TOAN');
+      expect(currentBooking?.donGiaoDich.trangThai).toBe('CHO_THANH_TOAN');
+      await expect(
+        prisma.thanhToan.count({
+          where: { donGiaoDichId: donGiaoDich.donGiaoDichId },
+        }),
+      ).resolves.toBe(0);
+    });
+  });
+
+  describe('payment settlement atomicity', () => {
+    it('does not settle an order or booking in the provider-attempt DANG_XU_LY state', async () => {
+      const fixture = await createTestPayment(customerAId, 'MOMO');
+      await prisma.$transaction([
+        prisma.donGiaoDich.update({
+          where: { donGiaoDichId: fixture.donGiaoDich.donGiaoDichId },
+          data: { trangThai: 'DANG_XU_LY' },
+        }),
+        prisma.phieuDatVe.update({
+          where: { phieuDatVeId: fixture.phieuDatVe.phieuDatVeId },
+          data: { trangThai: 'DANG_XU_LY' },
+        }),
+      ]);
+
+      const response = await request(app.getHttpServer())
+        .post('/api/v1/payments/momo/webhook')
+        .send(buildMomoPayload(fixture.thanhToan.thanhToanId, { amount: 200000 }));
+
+      expect(response.status).toBe(201);
+      const [currentOrder, currentBooking, currentAttempt] = await Promise.all([
+        prisma.donGiaoDich.findUniqueOrThrow({
+          where: { donGiaoDichId: fixture.donGiaoDich.donGiaoDichId },
+        }),
+        prisma.phieuDatVe.findUniqueOrThrow({
+          where: { phieuDatVeId: fixture.phieuDatVe.phieuDatVeId },
+        }),
+        prisma.thanhToan.findUniqueOrThrow({
+          where: { thanhToanId: fixture.thanhToan.thanhToanId },
+        }),
+      ]);
+      expect(currentOrder.trangThai).toBe('DANG_XU_LY');
+      expect(currentBooking.trangThai).toBe('DANG_XU_LY');
+      expect(currentAttempt.trangThai).toBe('THANH_CONG');
+    });
+
+    it('does not expire booking/order records in the provider-attempt DANG_XU_LY state', async () => {
+      const { donGiaoDich, phieuDatVe } = await createTestBooking(
+        customerAId,
+        'CHO_THANH_TOAN',
+        200000,
+      );
+      const createdAt = new Date(Date.now() - 11 * 60 * 1000);
+      await prisma.$transaction([
+        prisma.donGiaoDich.update({
+          where: { donGiaoDichId: donGiaoDich.donGiaoDichId },
+          data: { trangThai: 'DANG_XU_LY' },
+        }),
+        prisma.phieuDatVe.update({
+          where: { phieuDatVeId: phieuDatVe.phieuDatVeId },
+          data: { trangThai: 'DANG_XU_LY', createdAt },
+        }),
+      ]);
+
+      await expect(
+        app
+          .get(PaymentsService)
+          .expireBookingIfExpired(phieuDatVe.phieuDatVeId, new Date()),
+      ).resolves.toBe(false);
+
+      const [currentOrder, currentBooking] = await Promise.all([
+        prisma.donGiaoDich.findUniqueOrThrow({
+          where: { donGiaoDichId: donGiaoDich.donGiaoDichId },
+        }),
+        prisma.phieuDatVe.findUniqueOrThrow({
+          where: { phieuDatVeId: phieuDatVe.phieuDatVeId },
+        }),
+      ]);
+      expect(currentOrder.trangThai).toBe('DANG_XU_LY');
+      expect(currentBooking.trangThai).toBe('DANG_XU_LY');
+    });
+
+    it('expires an overdue booking atomically, releases its seats, cancels cargo, and keeps a late payment from reviving it', async () => {
+      const fixture = await createMultiTicketPayment(customerAId, 1, 'MOMO');
+      const suffix = randomUUID().replaceAll('-', '').slice(0, 8).toUpperCase();
+      const sender = await prisma.diemGiaoNhanHang.create({
+        data: {
+          maDiem: `EXP-S-${suffix}`,
+          tenDiem: `Điểm gửi ${suffix}`,
+          diaChi: '1 Đường thử',
+          tinhThanh: 'Hồ Chí Minh',
+          trangThai: 'HOAT_DONG',
+          nhaXeId: busCompanyId,
+        },
+        select: { diemGiaoNhanHangId: true },
+      });
+      const receiver = await prisma.diemGiaoNhanHang.create({
+        data: {
+          maDiem: `EXP-R-${suffix}`,
+          tenDiem: `Điểm nhận ${suffix}`,
+          diaChi: '2 Đường thử',
+          tinhThanh: 'Lâm Đồng',
+          trangThai: 'HOAT_DONG',
+          nhaXeId: busCompanyId,
+        },
+        select: { diemGiaoNhanHangId: true },
+      });
+      const shipment = await prisma.phieuGuiHang.create({
+        data: {
+          maVanDon: `VD-EXP-${suffix}`,
+          tenNguoiNhan: 'Người nhận kiểm thử',
+          soDienThoaiNguoiNhan: '+84950000001',
+          ngayGui: new Date(),
+          cuocChinh: 0,
+          phiDichVu: 0,
+          soTienGiam: 0,
+          tongPhi: 0,
+          nguoiTraCuoc: 'NGUOI_GUI',
+          trangThai: 'MOI_TAO',
+          chuyenXeId: fixture.chuyenXeId,
+          diemGuiId: sender.diemGiaoNhanHangId,
+          diemNhanId: receiver.diemGiaoNhanHangId,
+          donGiaoDichId: fixture.donGiaoDich.donGiaoDichId,
+        },
+      });
+
+      try {
+        const createdAt = new Date(Date.now() - 11 * 60 * 1000);
+        await prisma.phieuDatVe.update({
+          where: { phieuDatVeId: fixture.phieuDatVe.phieuDatVeId },
+          data: { createdAt },
+        });
+        await prisma.gheChuyenXe.updateMany({
+          where: { gheChuyenXeId: { in: fixture.gheChuyenXeIds } },
+          data: { trangThai: 'DA_DAT' },
+        });
+
+        const expiredCount = await app
+          .get(PaymentsService)
+          .expireBookingIfExpired(fixture.phieuDatVe.phieuDatVeId, new Date());
+        expect(expiredCount).toBe(true);
+
+        const expiredBooking = await prisma.phieuDatVe.findUnique({
+          where: { phieuDatVeId: fixture.phieuDatVe.phieuDatVeId },
+          include: { donGiaoDich: true, ves: { include: { gheChuyenXe: true } } },
+        });
+        expect(expiredBooking?.trangThai).toBe('DA_HUY');
+        expect(expiredBooking?.donGiaoDich.trangThai).toBe('DA_HUY');
+        expect(expiredBooking?.ves[0]?.trangThai).toBe('DA_HUY');
+        expect(expiredBooking?.ves[0]?.gheChuyenXe.trangThai).toBe('TRONG');
+        expect((await prisma.thanhToan.findUnique({
+          where: { thanhToanId: fixture.thanhToan.thanhToanId },
+        }))?.trangThai).toBe('THAT_BAI');
+        expect((await prisma.phieuGuiHang.findUnique({
+          where: { phieuGuiHangId: shipment.phieuGuiHangId },
+        }))?.trangThai).toBe('DA_HUY');
+
+        const bookingHistory = await prisma.lichSuTrangThaiPhieuDatVe.findMany({
+          where: { phieuDatVeId: fixture.phieuDatVe.phieuDatVeId },
+        });
+        expect(bookingHistory.map((entry) => [entry.trangThaiCu, entry.trangThaiMoi])).toContainEqual([
+          'CHO_THANH_TOAN',
+          'DA_HUY',
+        ]);
+        const shipmentHistory = await prisma.lichSuTrangThaiPhieuGuiHang.findMany({
+          where: { phieuGuiHangId: shipment.phieuGuiHangId },
+        });
+        expect(shipmentHistory.map((entry) => entry.trangThai)).toContain('DA_HUY');
+
+        const lateWebhook = await request(app.getHttpServer())
+          .post('/api/v1/payments/momo/webhook')
+          .send(buildMomoPayload(fixture.thanhToan.thanhToanId, { amount: fixture.totalAmount }));
+        expect(lateWebhook.status).toBe(201);
+        const afterLateWebhook = await prisma.phieuDatVe.findUnique({
+          where: { phieuDatVeId: fixture.phieuDatVe.phieuDatVeId },
+          include: { donGiaoDich: true, ves: true },
+        });
+        expect(afterLateWebhook?.trangThai).toBe('DA_HUY');
+        expect(afterLateWebhook?.donGiaoDich.trangThai).toBe('DA_HUY');
+        expect(afterLateWebhook?.ves[0]?.trangThai).toBe('DA_HUY');
+        expect((await prisma.thanhToan.findUnique({
+          where: { thanhToanId: fixture.thanhToan.thanhToanId },
+        }))?.trangThai).toBe('THANH_CONG');
+      } finally {
+        await prisma.lichSuTrangThaiPhieuGuiHang.deleteMany({
+          where: { phieuGuiHangId: shipment.phieuGuiHangId },
+        });
+        await prisma.phieuGuiHang.deleteMany({
+          where: { phieuGuiHangId: shipment.phieuGuiHangId },
+        });
+        await prisma.diemGiaoNhanHang.deleteMany({
+          where: { diemGiaoNhanHangId: { in: [sender.diemGiaoNhanHangId, receiver.diemGiaoNhanHangId] } },
+        });
+        await fixture.cleanup();
+      }
+    });
+
+    it('does not expire or release seats after an on-time payment settles', async () => {
+      const fixture = await createMultiTicketPayment(customerAId, 1, 'MOMO');
+      try {
+        await prisma.gheChuyenXe.updateMany({
+          where: { gheChuyenXeId: { in: fixture.gheChuyenXeIds } },
+          data: { trangThai: 'DA_DAT' },
+        });
+        const payload = buildMomoPayload(fixture.thanhToan.thanhToanId, {
+          amount: fixture.totalAmount,
+        });
+        const settled = await request(app.getHttpServer())
+          .post('/api/v1/payments/momo/webhook')
+          .send(payload);
+        expect(settled.status).toBe(201);
+
+        const expiredCount = await app
+          .get(PaymentsService)
+          .expireBookingIfExpired(
+            fixture.phieuDatVe.phieuDatVeId,
+            new Date(Date.now() + 20 * 60 * 1000),
+          );
+        expect(expiredCount).toBe(false);
+        const current = await prisma.phieuDatVe.findUnique({
+          where: { phieuDatVeId: fixture.phieuDatVe.phieuDatVeId },
+          include: { ves: { include: { gheChuyenXe: true } } },
+        });
+        expect(current?.trangThai).toBe('DA_THANH_TOAN');
+        expect(current?.ves[0]?.gheChuyenXe.trangThai).toBe('DA_DAT');
+      } finally {
+        await fixture.cleanup();
+      }
+    });
+
+    it('serializes expiration against an on-time payment webhook by the booking deadline', async () => {
+      const fixture = await createMultiTicketPayment(customerAId, 1, 'MOMO');
+      try {
+        const createdAt = new Date(Date.now() - 11 * 60 * 1000);
+        await prisma.phieuDatVe.update({
+          where: { phieuDatVeId: fixture.phieuDatVe.phieuDatVeId },
+          data: { createdAt },
+        });
+        await prisma.gheChuyenXe.updateMany({
+          where: { gheChuyenXeId: { in: fixture.gheChuyenXeIds } },
+          data: { trangThai: 'DA_DAT' },
+        });
+        const expiration = app
+          .get(PaymentsService)
+          .expireBookingIfExpired(fixture.phieuDatVe.phieuDatVeId, new Date());
+        const webhook = request(app.getHttpServer())
+          .post('/api/v1/payments/momo/webhook')
+          .send(buildMomoPayload(fixture.thanhToan.thanhToanId, { amount: fixture.totalAmount }));
+        const [, webhookResult] = await Promise.all([expiration, webhook]);
+        expect([201, 409]).toContain(webhookResult.status);
+
+        const current = await prisma.phieuDatVe.findUnique({
+          where: { phieuDatVeId: fixture.phieuDatVe.phieuDatVeId },
+          include: { donGiaoDich: true, ves: { include: { gheChuyenXe: true } } },
+        });
+        expect(current?.trangThai).toBe('DA_HUY');
+        expect(current?.donGiaoDich.trangThai).toBe('DA_HUY');
+        expect(current?.ves[0]?.trangThai).toBe('DA_HUY');
+        expect(current?.ves[0]?.gheChuyenXe.trangThai).toBe('TRONG');
+      } finally {
+        await fixture.cleanup();
+      }
+    });
+
+    it('rolls back payment and order updates when the booking state CAS fails', async () => {
+      const suffix = randomUUID().slice(0, 8).toUpperCase();
+      const donGiaoDich = await prisma.donGiaoDich.create({
+        data: {
+          maDonGiaoDich: `VXG-GD-20261013-${suffix}`,
+          ngayTao: new Date(),
+          tongTien: 150000,
+          trangThai: 'CHO_THANH_TOAN',
+          tenKhachHang: 'Payment Test Customer',
+          soDienThoaiKhachHang: '+84950000001',
+          khachHangId: customerAId,
+          nhaXeId: busCompanyId,
+          phieuDatVe: {
+            create: {
+              maPhieuDatVe: `VXG-PDV-20261013-${suffix}`,
+              ngayDat: new Date(),
+              soLuongVeBanDau: 1,
+              tongTienBanDau: 150000,
+              trangThai: 'KHONG_HOP_LE',
+            },
+          },
+        },
+        include: { phieuDatVe: true },
+      });
+      const payment = await prisma.thanhToan.create({
+        data: {
+          soTien: 150000,
+          phuongThuc: 'MOMO',
+          loaiGiaoDich: 'THANH_TOAN',
+          thoiGian: new Date(),
+          trangThai: 'DANG_XU_LY',
+          donGiaoDichId: donGiaoDich.donGiaoDichId,
+        },
+      });
+
+      await expect(
+        app.get(PaymentsService).confirmPaymentSuccess({
+          paymentId: payment.thanhToanId,
+          provider: 'MOMO',
+          amount: 150000,
+        }),
+      ).rejects.toThrow(ConflictException);
+
+      const currentOrder = await prisma.donGiaoDich.findUnique({
+        where: { donGiaoDichId: donGiaoDich.donGiaoDichId },
+      });
+      const currentBooking = await prisma.phieuDatVe.findUnique({
+        where: { phieuDatVeId: donGiaoDich.phieuDatVe!.phieuDatVeId },
+      });
+      const currentPayment = await prisma.thanhToan.findUnique({
+        where: { thanhToanId: payment.thanhToanId },
+      });
+
+      expect(currentOrder?.trangThai).toBe('CHO_THANH_TOAN');
+      expect(currentBooking?.trangThai).toBe('KHONG_HOP_LE');
+      expect(currentPayment?.trangThai).toBe('DANG_XU_LY');
+    });
+  });
 });
+

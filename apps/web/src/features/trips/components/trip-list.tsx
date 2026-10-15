@@ -1,9 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Filter, ChevronDown, MapPin, X } from 'lucide-react';
+import { Filter, ChevronDown, MapPin, X, Bus, Loader2 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Pagination } from '@/components/ui/pagination';
 import { TripCard } from '@/features/trips/components/trip-card';
 import type { Trip } from '@/types/customer';
 import {
@@ -207,6 +206,8 @@ export function TripList() {
   });
   const [loadingOutbound, setLoadingOutbound] = useState(true);
   const [loadingReturn, setLoadingReturn] = useState(false);
+  const [loadingMoreOutbound, setLoadingMoreOutbound] = useState(false);
+  const [loadingMoreReturn, setLoadingMoreReturn] = useState(false);
   const [errorOutbound, setErrorOutbound] = useState('');
   const [errorReturn, setErrorReturn] = useState('');
   const [query, setQuery] = useState('');
@@ -315,7 +316,7 @@ export function TripList() {
           origin,
           destination,
           date,
-          outboundPage,
+          1,
           sort,
           query,
           vehicleType,
@@ -325,6 +326,7 @@ export function TripList() {
         if (ignore) return;
         setOutboundTrips(response.trips);
         setOutboundMeta(response.meta);
+        setOutboundPageState({ searchKey: outboundSearchKey, page: 1 });
       } catch (error) {
         if (ignore) return;
         setOutboundTrips([]);
@@ -344,7 +346,6 @@ export function TripList() {
     origin,
     destination,
     date,
-    outboundPage,
     sort,
     query,
     vehicleType,
@@ -367,7 +368,7 @@ export function TripList() {
           destination,
           origin,
           returnDate,
-          returnPage,
+          1,
           sort,
           query,
           vehicleType,
@@ -377,6 +378,7 @@ export function TripList() {
         if (ignore) return;
         setReturnTrips(response.trips);
         setReturnMeta(response.meta);
+        setReturnPageState({ searchKey: returnSearchKey, page: 1 });
       } catch (error) {
         if (ignore) return;
         setReturnTrips([]);
@@ -398,7 +400,6 @@ export function TripList() {
     origin,
     returnDate,
     isRoundTrip,
-    returnPage,
     sort,
     query,
     vehicleType,
@@ -477,11 +478,63 @@ export function TripList() {
     if (bookingHref) router.push(bookingHref);
   }
 
-  function handlePageChange(page: number) {
+  const loadingMore =
+    effectiveActiveTab === 'outbound'
+      ? loadingMoreOutbound
+      : loadingMoreReturn;
+  const hasMore =
+    activeTrips.length < activeMeta.totalItems &&
+    currentPage < activeMeta.totalPages;
+
+  async function handleLoadMore() {
     if (effectiveActiveTab === 'outbound') {
-      setOutboundPageState({ searchKey: outboundSearchKey, page });
+      if (loadingMoreOutbound || outboundPage >= outboundMeta.totalPages) return;
+      const nextPage = outboundPage + 1;
+      setLoadingMoreOutbound(true);
+      try {
+        const response = await fetchTripsByRoute(
+          origin,
+          destination,
+          date,
+          nextPage,
+          sort,
+          query,
+          vehicleType,
+          timeRange,
+          operator,
+        );
+        setOutboundTrips((prev) => [...prev, ...response.trips]);
+        setOutboundMeta(response.meta);
+        setOutboundPageState({ searchKey: outboundSearchKey, page: nextPage });
+      } catch {
+        // preserve current trips on error
+      } finally {
+        setLoadingMoreOutbound(false);
+      }
     } else {
-      setReturnPageState({ searchKey: returnSearchKey, page });
+      if (loadingMoreReturn || returnPage >= returnMeta.totalPages) return;
+      const nextPage = returnPage + 1;
+      setLoadingMoreReturn(true);
+      try {
+        const response = await fetchTripsByRoute(
+          destination,
+          origin,
+          returnDate,
+          nextPage,
+          sort,
+          query,
+          vehicleType,
+          timeRange,
+          operator,
+        );
+        setReturnTrips((prev) => [...prev, ...response.trips]);
+        setReturnMeta(response.meta);
+        setReturnPageState({ searchKey: returnSearchKey, page: nextPage });
+      } catch {
+        // preserve current trips on error
+      } finally {
+        setLoadingMoreReturn(false);
+      }
     }
   }
 
@@ -766,26 +819,48 @@ export function TripList() {
                   />
                 ))
               ) : (
-                <div className="bg-white rounded-xl p-12 text-center text-slate-500 border border-slate-100 shadow-sm">
-                  <div className="text-4xl mb-4">🚌</div>
-                  <p className="font-semibold text-sm">
-                    Không tìm thấy chuyến xe nào phù hợp.
-                  </p>
-                  <p className="text-xs mt-1">
-                    Vui lòng thay đổi bộ lọc hoặc chọn ngày khác.
+                <div className="bg-white rounded-2xl py-14 px-8 text-center border border-slate-200/80 shadow-2xs">
+                  <h3 className="font-bold text-slate-900 text-base mb-1.5">
+                    Không tìm thấy chuyến xe nào phù hợp
+                  </h3>
+                  <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                    Vui lòng thử thay đổi điểm đón/trả, bộ lọc hoặc chọn ngày khởi hành khác.
                   </p>
                 </div>
               )}
             </div>
 
-            {/* Pagination */}
-            {activeMeta.totalPages > 1 && (
-              <div className="flex justify-center mt-4">
-                <Pagination
-                  currentPage={currentPage}
-                  totalPages={activeMeta.totalPages}
-                  onPageChange={handlePageChange}
-                />
+            {/* Nút Xem thêm chuyến xe (thay thế phân trang 1, 2, 3, 4, 5) */}
+            {activeTrips.length > 0 && (
+              <div className="flex flex-col items-center justify-center mt-6 gap-2">
+                {hasMore ? (
+                  <button
+                    type="button"
+                    onClick={handleLoadMore}
+                    disabled={loadingMore}
+                    className="group px-8 py-3 rounded-xl border border-slate-200 bg-white hover:bg-orange-50 hover:border-orange-300 hover:text-orange-600 font-extrabold text-sm text-slate-800 shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
+                  >
+                    {loadingMore ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin text-orange-500" />
+                        <span>Đang tải thêm chuyến xe...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>Xem thêm chuyến xe</span>
+                        <ChevronDown className="w-4 h-4 text-slate-400 group-hover:text-orange-500 transition-colors" />
+                      </>
+                    )}
+                  </button>
+                ) : activeMeta.totalItems > 10 ? (
+                  <div className="text-center py-2 text-xs text-slate-400 font-medium">
+                    ✓ Đã hiển thị tất cả {activeMeta.totalItems} chuyến xe
+                  </div>
+                ) : null}
+
+                <p className="text-[11px] text-slate-400">
+                  Đang hiển thị {activeTrips.length} trên tổng số {activeMeta.totalItems} chuyến
+                </p>
               </div>
             )}
           </div>
