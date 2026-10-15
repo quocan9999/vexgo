@@ -32,6 +32,11 @@ export const ADMIN_OPERATION_SECTIONS = [
     href: '/customers',
     readPermission: 'customer:read',
   },
+  {
+    section: 'promotions',
+    href: '/promotions',
+    readPermission: 'promotion:read',
+  },
 ] as const;
 
 export type AdminPermission =
@@ -185,6 +190,7 @@ export function getRequiredAdminPermissions(
   if (matchesPath(pathname, '/fare-prices')) return ['fare-price:read'];
   if (matchesPath(pathname, '/trips')) return ['trip:read'];
   if (matchesPath(pathname, '/customers')) return ['customer:read'];
+  if (matchesPath(pathname, '/promotions')) return ['promotion:read'];
   return null;
 }
 
