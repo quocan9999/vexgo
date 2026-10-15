@@ -452,6 +452,8 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
     ...outboundLuggageItems.map((it) => ({ ...it, legTitle: 'Chuyến đi' as const })),
     ...returnLuggageItems.map((it) => ({ ...it, legTitle: 'Chuyến về' as const })),
   ];
+  const hasCargoItems = allLuggageItems.length > 0;
+  const totalFareLabel = hasCargoItems ? 'Tạm tính tiền vé' : 'Tổng tiền';
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -929,7 +931,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                 {copyOutboundToReturn ? (
                   <div className="p-4 md:p-6 text-center bg-slate-50/50">
                     <div className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-accent/10 border border-accent/20 text-xs font-bold text-accent">
-                      <span>✓ Đã sao chép danh sách hành lý & phương tiện từ chuyến đi (+{returnLuggageFee.toLocaleString('vi-VN')}đ)</span>
+                      <span>✓ Đã sao chép danh sách hàng gửi hầm xe từ chuyến đi</span>
                     </div>
                     <p className="text-[11px] text-slate-500 mt-1.5 font-medium">
                       Bỏ tích &quot;Áp dụng giống chuyến đi&quot; ở trên nếu bạn muốn chỉnh sửa hoặc không gửi hàng ở chuyến về.
@@ -991,7 +993,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                     VEXGO
                   </span>
                   <span className="text-xs font-bold text-slate-500">
-                    Tổng tiền
+                    {totalFareLabel}
                   </span>
                 </div>
                 <span className="text-2xl font-black text-red-600">
@@ -1262,23 +1264,19 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                   <span>Giá vé lượt về</span>
                   <span>{returnFare.toLocaleString('vi-VN')}đ</span>
                 </div>
-                <div className="flex justify-between">
-                  <span>Hành lý ({luggageWeight}kg)</span>
-                  <span className={luggageFee > 0 ? 'text-red-600 font-bold' : 'text-slate-600'}>
-                    {luggageFee === 0
-                      ? luggageWeight > 0
-                        ? 'Chưa tính vào đơn vé khứ hồi'
-                        : '0đ'
-                      : `+${luggageFee.toLocaleString('vi-VN')}đ`}
-                  </span>
-                </div>
+                {hasCargoItems && (
+                  <div className="flex justify-between gap-3">
+                    <span>Hàng gửi hầm xe ({luggageWeight}kg)</span>
+                    <span className="text-slate-600">Chưa tính trong đơn vé khứ hồi</span>
+                  </div>
+                )}
                 <div className="flex justify-between">
                   <span>Phí thanh toán</span>
                   <span>0đ</span>
                 </div>
                 <div className="flex justify-between pt-3 border-t border-slate-200">
                   <span className="text-sm font-bold text-slate-900">
-                    Tổng tiền
+                    {totalFareLabel}
                   </span>
                   <span className="text-sm font-black text-accent">
                     {totalFare.toLocaleString('vi-VN')}đ

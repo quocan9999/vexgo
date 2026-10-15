@@ -286,6 +286,7 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
   const [luggageFee, setLuggageFee] = useState(0);
   const [luggageWeight, setLuggageWeight] = useState(0);
   const [luggageItems, setLuggageItems] = useState<ILuggageItem[]>([]);
+  const hasSelectedCargoItems = luggageItems.length > 0;
   const validCargoItems = luggageItems.filter(isValidCargoItem);
   const hasCargoItems = validCargoItems.length > 0;
   const overweightRegularCargoItem = findOverweightRegularCargoItem(luggageItems);
@@ -357,6 +358,7 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
   const baseFareNumber = Number(baseFare.replace(/[^\d]/g, '')) || 0;
   const totalFare = baseFareNumber * selectedSeats.length + luggageFee;
   const totalFareText = totalFare.toLocaleString('vi-VN');
+  const totalFareLabel = hasSelectedCargoItems ? 'Tạm tính tiền vé' : 'Tổng tiền';
   const canPay = canPayForOneWayBooking(selectedSeats, isAcceptedTerms);
 
   const toggleSeat = (seat: string) => {
@@ -1393,7 +1395,7 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
                     VEXGO
                   </span>
                   <span className="text-xs font-bold text-slate-500">
-                    Tổng tiền
+                    {totalFareLabel}
                   </span>
                 </div>
                 <p className="text-2xl font-black text-red-600">
@@ -1610,10 +1612,14 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
                   </strong>
                 </div>
 
-                <LuggageSummary fee={luggageFee} totalWeight={luggageWeight} />
+                <LuggageSummary
+                  fee={luggageFee}
+                  totalWeight={luggageWeight}
+                  hasCargo={hasSelectedCargoItems}
+                />
               </div>
               <div className="pt-4 flex justify-between gap-3 text-sm">
-                <span className="text-slate-500 font-black">Tổng tiền</span>
+                <span className="text-slate-500 font-black">{totalFareLabel}</span>
                 <strong className="text-red-600 text-base">
                   {totalFareText}đ
                 </strong>
@@ -1682,7 +1688,7 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
                 </div>
 
                 <div className="flex justify-between gap-2 pt-2.5 border-t border-slate-200 mt-0.5">
-                  <span className="font-black text-slate-700">Tổng tiền</span>
+                  <span className="font-black text-slate-700">{totalFareLabel}</span>
                   <strong className="text-right text-red-600 text-sm">
                     {totalFareText}đ
                   </strong>

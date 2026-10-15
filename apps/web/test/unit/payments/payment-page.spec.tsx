@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import PaymentPage from '../../../src/features/payments/components/payment-page';
 import { PAYMENT_DRAFT_STORAGE_PREFIX } from '../../../src/features/booking/services/payment-draft';
@@ -26,7 +26,10 @@ vi.mock('@/features/auth/auth-session', () => ({
   useAuthSession: () => auth,
 }));
 
-function savePaymentDraft(orderCode: string | null = 'DGD-TEST-4201') {
+function savePaymentDraft(
+  orderCode: string | null = 'DGD-TEST-4201',
+  options: { totalFare?: number; luggage?: Record<string, unknown> } = {},
+) {
   window.sessionStorage.setItem(
     `${PAYMENT_DRAFT_STORAGE_PREFIX}${draftId}`,
     JSON.stringify({
@@ -49,7 +52,8 @@ function savePaymentDraft(orderCode: string | null = 'DGD-TEST-4201') {
         phoneNumber: '0900000000',
         email: 'customer@example.test',
       },
-      totalFare: 125000,
+      totalFare: options.totalFare ?? 125000,
+      ...(options.luggage ? { luggage: options.luggage } : {}),
       bookingId,
       bookingCode: 'VG-TEST-4201',
       ...(orderCode === null ? {} : { orderCode }),
@@ -73,6 +77,8 @@ function bookingDetail(overrides: Record<string, unknown> = {}) {
     bookingCode: 'VG-TEST-4201',
     orderCode: 'DGD-TEST-4201',
     totalAmount: 125000,
+    ticketSubtotal: 125000,
+    cargoFee: 0,
     status: 'CHO_THANH_TOAN',
     paymentStatus: 'CHO_THANH_TOAN',
     paymentExpiresAt: new Date(Date.now() + 600_000).toISOString(),
@@ -182,6 +188,93 @@ describe('Customer VietQR payment page', () => {
     });
     expect(String(fetchMock.mock.calls[0][0])).not.toContain('confirm-payment');
     expect(routerPush).not.toHaveBeenCalled();
+  });
+
+  it('shows backend ticket, cargo, and total amounts without estimating per-item cargo fees', async () => {
+    configureVietQr();
+    savePaymentDraft('DGD-TEST-4201', {
+      totalFare: 157000,
+      luggage: {
+        fee: 0,
+        weight: 10,
+        items: [{ id: 'cargo-1', type: 'Vali', quantity: 1, weight: 10 }],
+      },
+    });
+    fetchMock.mockResolvedValue(
+      jsonResponse(bookingDetail({
+        totalAmount: 157000,
+        ticketSubtotal: 125000,
+        cargoFee: 32000,
+      })),
+    );
+
+    render(<PaymentPage />);
+    await flushPromises();
+
+    expect(screen.getByText('Cước vé').parentElement?.textContent).toContain('125.000đ');
+    expect(screen.getByText('Cước hàng (10kg)').parentElement?.textContent).toContain('32.000đ');
+    expect(screen.getAllByText('Tổng thanh toán').some((label) =>
+      label.parentElement?.textContent?.includes('157.000đ'),
+    )).toBe(true);
+    expect(screen.getByText('Cước hàng theo đơn').parentElement?.textContent).toContain('32.000đ');
+    expect(screen.queryByText('Miễn phí')).toBeNull();
+    expect(screen.queryByText(/250\.000đ|100\.000đ|30\.000đ/)).toBeNull();
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Chi tiết' })[1]);
+    expect(screen.getAllByText('Cước tính chung theo đơn').length).toBeGreaterThan(0);
+    expect(screen.queryByText(/250\.000đ|100\.000đ|30\.000đ/)).toBeNull();
+  });
+
+  it('says cargo is free only when the backend returns a verified zero cargo fee', async () => {
+    configureVietQr();
+    savePaymentDraft('DGD-TEST-4201', {
+      luggage: { fee: 0, weight: 10, items: [{ id: 'cargo-1', type: 'Vali', weight: 10 }] },
+    });
+    fetchMock.mockResolvedValue(jsonResponse(bookingDetail({ cargoFee: 0 })));
+
+    render(<PaymentPage />);
+    await flushPromises();
+
+    expect(screen.getByText('Cước hàng (10kg)').parentElement?.textContent).toContain('Miễn phí');
+    expect(screen.queryByText(/250\.000đ|100\.000đ|30\.000đ/)).toBeNull();
+  });
+
+  it('shows a backend cargo fee even when the local draft has no cargo details', async () => {
+    configureVietQr();
+    savePaymentDraft('DGD-TEST-4201', { totalFare: 157000 });
+    fetchMock.mockResolvedValue(
+      jsonResponse(bookingDetail({
+        totalAmount: 157000,
+        ticketSubtotal: 125000,
+        cargoFee: 32000,
+      })),
+    );
+
+    render(<PaymentPage />);
+    await flushPromises();
+
+    expect(screen.getByText('Cước hàng').parentElement?.textContent).toContain('32.000đ');
+  });
+
+  it('does not treat a missing backend cargo fee as free even when the payment total is verified', async () => {
+    configureVietQr();
+    savePaymentDraft('DGD-TEST-4201', {
+      luggage: { fee: 0, weight: 10, items: [{ id: 'cargo-1', type: 'Vali', weight: 10 }] },
+    });
+    fetchMock.mockResolvedValue(
+      jsonResponse(bookingDetail({ cargoFee: undefined, ticketSubtotal: undefined })),
+    );
+
+    render(<PaymentPage />);
+    await flushPromises();
+
+    expect(screen.getByText('Cước hàng (10kg)').parentElement?.textContent).toContain(
+      'Chưa có dữ liệu cước từ máy chủ',
+    );
+    expect(screen.getByText('Cước vé').parentElement?.textContent).toContain(
+      'Chưa có dữ liệu từ máy chủ',
+    );
+    expect(screen.queryByText('Miễn phí')).toBeNull();
   });
 
   it('keeps the canonical SePay reference identical in QR and displayed transfer content', async () => {

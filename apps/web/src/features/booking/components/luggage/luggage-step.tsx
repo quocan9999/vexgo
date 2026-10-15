@@ -224,7 +224,7 @@ export const LuggageStep: React.FC<LuggageStepProps> = ({ route, time, seat, pas
             onChange={setItems}
           />
           <p className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs leading-relaxed text-slate-600">
-            Cước hàng được máy chủ tính theo danh mục, tổng khối lượng và bảng giá của tuyến; số tiền chính xác sẽ hiển thị sau khi đặt vé. Phụ phí dễ vỡ 20.000đ và giá trị cao 50.000đ được tính tối đa một lần cho mỗi loại dịch vụ.
+            Cước vận chuyển hàng hóa được tính theo loại hàng, tổng khối lượng và bảng cước của nhà xe trên tuyến đã chọn. Phụ phí dễ vỡ 20.000đ và hàng giá trị cao 50.000đ được tính một lần cho mỗi loại nếu có ít nhất một kiện tương ứng. Số tiền chính xác được máy chủ xác định khi tạo đơn.
           </p>
           {overweightRegularCargoItem && (
             <div className="mt-4 p-4 rounded-xl border border-red-200 bg-red-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -237,7 +237,7 @@ export const LuggageStep: React.FC<LuggageStepProps> = ({ route, time, seat, pas
                     Có kiện hành lý thường vượt quá 40kg — Cần tạo vận đơn gửi hàng
                   </h4>
                   <p className="text-xs text-slate-600 leading-relaxed max-w-xl">
-                    Vé xe hỗ trợ tối đa {MAX_REGULAR_CARGO_PACKAGE_WEIGHT_KG}kg cho mỗi kiện hành lý thường (dưới 20kg miễn phí, 20–40kg phụ phí 30.000đ). Kiện vượt mức này cần gửi riêng bằng dịch vụ gửi hàng hầm xe.
+                    Vé xe nhận hàng thường tối đa {MAX_REGULAR_CARGO_PACKAGE_WEIGHT_KG}kg mỗi kiện. Cước hàng gửi kèm được xác định theo bảng cước của tuyến khi tạo đơn; kiện vượt giới hạn này cần gửi riêng bằng dịch vụ gửi hàng hầm xe.
                   </p>
                 </div>
               </div>

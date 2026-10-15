@@ -25,10 +25,6 @@ vi.mock('@/features/auth/auth-session', () => ({
   useAuthSession: () => state.auth,
 }));
 
-vi.mock('@/features/booking/components/luggage/luggage-summary', () => ({
-  LuggageSummary: () => null,
-}));
-
 const post: Post = {
   id: '42',
   title: 'TP. Hồ Chí Minh - Đà Lạt',
@@ -327,6 +323,11 @@ describe('one-way booking with server seat holds', () => {
         (screen.getByLabelText('Điểm nhận hàng') as HTMLSelectElement).value,
       ).toBe('902');
     });
+    const cargoSummary = screen.getByText('Hàng gửi hầm xe (10kg)').parentElement;
+    expect(cargoSummary?.textContent).toContain('Tính khi đặt vé');
+    expect(cargoSummary?.textContent).not.toMatch(/0đ|miễn phí/i);
+    expect(screen.getByText(/Cước vận chuyển hàng hóa được tính theo loại hàng/)).toBeTruthy();
+    expect(screen.getAllByText('Tạm tính tiền vé').length).toBeGreaterThan(0);
     completeForm();
 
     await waitFor(() => expect(requestsFor('/bookings', 'POST')).toHaveLength(1));
@@ -468,6 +469,9 @@ describe('one-way booking with server seat holds', () => {
     await waitFor(() =>
       expect(screen.getByRole('alert').textContent).toContain('mỗi kiện tối đa 40kg'),
     );
+    const overweightNotice = screen.getByText(/Vé xe nhận hàng thường tối đa 40kg mỗi kiện/);
+    expect(overweightNotice.textContent).toContain('Cước hàng');
+    expect(overweightNotice.textContent).not.toMatch(/miễn phí|30\.000đ/i);
     expect(screen.getByText(/Có kiện hành lý thường vượt quá 40kg/)).toBeTruthy();
     expect(requestsFor('/seat-holds', 'POST')).toHaveLength(0);
     expect(requestsFor('/bookings', 'POST')).toHaveLength(0);
@@ -862,5 +866,27 @@ describe('one-way booking with server seat holds', () => {
     expect(requestsFor('/bookings', 'POST')).toHaveLength(0);
     expect(state.routerPush).not.toHaveBeenCalled();
     expect(window.sessionStorage.length).toBe(0);
+  });
+
+  it('does not present selected round-trip cargo as free before a backend quote', async () => {
+    render(
+      <RoundTripBooking
+        outboundPost={post}
+        returnPost={{ ...post, id: '43', title: 'Đà Lạt - TP. Hồ Chí Minh' }}
+        departureDate="2026-10-15"
+        returnDate="2026-10-18"
+        outboundTripSeats={tripSeats}
+        returnTripSeats={[{ ...tripSeats[0], tripSeatId: 9002 }]}
+      />,
+    );
+
+    fireEvent.click(screen.getAllByText(/Có hành lý cồng kềnh/)[0]);
+    await screen.findAllByLabelText('Loại hành lý');
+    fireEvent.click(screen.getByLabelText('Áp dụng giống chuyến đi'));
+
+    const cargoSummary = screen.getByText('Hàng gửi hầm xe (0kg)').parentElement;
+    expect(cargoSummary?.textContent).toContain('Chưa tính trong đơn vé khứ hồi');
+    expect(cargoSummary?.textContent).not.toMatch(/0đ|miễn phí/i);
+    expect(screen.queryByText(/\(\+0đ\)/)).toBeNull();
   });
 });

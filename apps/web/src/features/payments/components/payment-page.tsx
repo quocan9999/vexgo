@@ -43,6 +43,8 @@ type PaymentReadSnapshot = {
   expectedTotalAmount: number;
   orderCode: string | null;
   totalAmount: number | null;
+  ticketSubtotal: number | null;
+  cargoFee: number | null;
   paymentExpiresAt: string | null;
   serverTimeOffsetMs: number;
   terminalStatus: 'cancelled' | 'expired' | 'verification-needed' | 'failed' | null;
@@ -51,6 +53,13 @@ type PaymentReadSnapshot = {
 const PAYMENT_POLL_INTERVAL_MS = 2500;
 const MAX_INITIAL_STATUS_READ_FAILURES = 3;
 const PAYMENT_STATUS_REQUEST_TIMEOUT_MS = 10_000;
+
+function readNonNegativeAmount(value: unknown): number | null {
+  if (typeof value !== 'number' && typeof value !== 'string') return null;
+  if (typeof value === 'string' && value.trim() === '') return null;
+  const amount = Number(value);
+  return Number.isFinite(amount) && amount >= 0 ? amount : null;
+}
 
 function PaymentContent() {
   const router = useRouter();
@@ -198,6 +207,8 @@ function PaymentContent() {
         expectedTotalAmount: draft.totalFare,
         orderCode: null,
         totalAmount: null,
+        ticketSubtotal: null,
+        cargoFee: null,
         paymentExpiresAt,
         serverTimeOffsetMs: observedServerTimeOffsetMs,
         terminalStatus,
@@ -293,6 +304,8 @@ function PaymentContent() {
           expectedTotalAmount: draft.totalFare,
           orderCode: booking.orderCode!,
           totalAmount: amount,
+          ticketSubtotal: readNonNegativeAmount(booking.ticketSubtotal),
+          cargoFee: readNonNegativeAmount(booking.cargoFee),
           paymentExpiresAt: deadline!,
           serverTimeOffsetMs: observedServerTimeOffsetMs,
           terminalStatus: null,
@@ -356,12 +369,29 @@ function PaymentContent() {
   );
   const formatDraftAmount = (amount: number) =>
     hasVerifiedPaymentAmount ? `${amount.toLocaleString('vi-VN')}đ` : '—';
-  const formatDraftFee = (amount: number) =>
-    hasVerifiedPaymentAmount
-      ? amount > 0
-        ? `+${amount.toLocaleString('vi-VN')}đ`
-        : 'Miễn phí'
-      : '—';
+  const formatConfirmedAmount = (amount: number | null | undefined) =>
+    !hasVerifiedPaymentAmount
+      ? 'Đang xác minh từ máy chủ'
+      : amount === null || amount === undefined
+        ? 'Chưa có dữ liệu từ máy chủ'
+        : `${amount.toLocaleString('vi-VN')}đ`;
+  const confirmedCargoFee = activePaymentReadSnapshot?.cargoFee ?? null;
+  const shouldShowCargoFeeBreakdown = Boolean(
+    draft?.luggage ||
+    (hasVerifiedPaymentAmount && confirmedCargoFee !== null && confirmedCargoFee > 0),
+  );
+  const cargoFeeText = !hasVerifiedPaymentAmount
+    ? 'Đang xác minh từ máy chủ'
+    : confirmedCargoFee === null
+      ? 'Chưa có dữ liệu cước từ máy chủ'
+      : confirmedCargoFee === 0
+        ? 'Miễn phí'
+        : `${confirmedCargoFee.toLocaleString('vi-VN')}đ`;
+  const cargoFeeClassName = confirmedCargoFee === null
+    ? 'text-slate-600'
+    : confirmedCargoFee === 0
+      ? 'text-emerald-600'
+      : 'text-red-600';
 
   if (!isClient) {
     return (
@@ -735,7 +765,7 @@ function PaymentContent() {
             </div>
 
             {/* Card Hàng gửi hầm xe */}
-            {draft.luggage && draft.luggage.weight > 0 && (
+            {draft.luggage && (
               <div className="bg-white rounded-xl border border-slate-200 p-5">
                 <div className="flex items-center justify-between mb-3.5">
                   <div className="flex items-center gap-2">
@@ -760,7 +790,7 @@ function PaymentContent() {
                   <span>{draft.luggage.weight}kg</span>
                 </div>
 
-                {draft.luggage.items && draft.luggage.items.length > 0 ? (
+                {draft.luggage.items && draft.luggage.items.length > 0 && (
                   <div className="space-y-2">
                     {draft.luggage.items.slice(0, 2).map((item, idx) => {
                       const actualW = item.weight || 0;
@@ -768,19 +798,8 @@ function PaymentContent() {
                         item.length && item.width && item.height
                           ? Math.round(((item.length * item.width * item.height) / 5000) * 10) / 10
                           : 0;
-                      const effW = Math.max(actualW, volW) * (item.quantity || 1);
                       const isMotorbike = item.type === 'Xe máy';
                       const isBicycle = item.type === 'Xe đạp';
-                      let itemFee = 0;
-                      if (isMotorbike) {
-                        itemFee = 250000 * (item.quantity || 1);
-                      } else if (isBicycle) {
-                        itemFee = 100000 * (item.quantity || 1);
-                      } else {
-                        if (effW <= 20) itemFee = 0;
-                        else if (effW <= 40) itemFee = 30000;
-                        else itemFee = 30000;
-                      }
 
                       return (
                         <div
@@ -840,14 +859,8 @@ function PaymentContent() {
                               </>
                             )}
                           </div>
-                          <span className="font-extrabold text-red-600 shrink-0">
-                            {!hasVerifiedPaymentAmount ? (
-                              '—'
-                            ) : itemFee === 0 ? (
-                              <span className="text-emerald-600 font-bold">Miễn phí</span>
-                            ) : (
-                              `+${itemFee.toLocaleString('vi-VN')}đ`
-                            )}
+                          <span className="text-slate-500 font-semibold text-right shrink-0">
+                            Cước tính chung theo đơn
                           </span>
                         </div>
                       );
@@ -862,14 +875,13 @@ function PaymentContent() {
                       </button>
                     )}
                   </div>
-                ) : (
-                  <div className="p-3 rounded-xl bg-slate-50/80 border border-slate-200/80 flex items-center justify-between text-xs">
-                    <span className="text-slate-600 font-medium">Phụ phí ký gửi</span>
-                    <strong className={draft.luggage.fee > 0 ? 'text-red-600 font-extrabold' : 'text-emerald-600 font-bold'}>
-                      {formatDraftFee(draft.luggage.fee)}
-                    </strong>
-                  </div>
                 )}
+                <div className="p-3 rounded-xl bg-slate-50/80 border border-slate-200/80 flex items-center justify-between gap-3 text-xs">
+                  <span className="text-slate-600 font-medium">Cước hàng theo đơn</span>
+                  <strong className={`${cargoFeeClassName} font-extrabold text-right`}>
+                    {cargoFeeText}
+                  </strong>
+                </div>
               </div>
             )}
 
@@ -880,40 +892,24 @@ function PaymentContent() {
                 <Info className="w-4 h-4 text-red-600" />
               </h3>
               <div className="space-y-2.5 text-sm">
-                {draft.legs.map((leg, index) => (
-                  <div key={index} className="flex justify-between">
-                    <span className="text-slate-500">
-                      {draft.legs.length > 1
-                        ? index === 0
-                          ? `Giá vé lượt đi (${leg.seats.length} ghế)`
-                          : `Giá vé lượt về (${leg.seats.length} ghế)`
-                        : `Giá vé (${leg.seats.length} ghế)`}
-                    </span>
-                    <span className="font-bold text-red-600">
-                      {formatDraftAmount(leg.subtotal)}
-                    </span>
-                  </div>
-                ))}
-
-                {draft.luggage && draft.luggage.fee > 0 ? (
+                <div className="flex justify-between gap-3">
+                  <span className="text-slate-500">Cước vé</span>
+                  <span className="font-bold text-red-600 text-right">
+                    {formatConfirmedAmount(activePaymentReadSnapshot?.ticketSubtotal)}
+                  </span>
+                </div>
+                {shouldShowCargoFeeBreakdown && (
                   <div className="flex justify-between">
                     <span className="text-slate-500">
-                      Phụ phí hành lý ({draft.luggage.weight}kg)
+                      Cước hàng{draft.luggage ? ` (${draft.luggage.weight}kg)` : ''}
                     </span>
-                    <span className="font-bold text-red-600">
-                      {formatDraftAmount(draft.luggage.fee)}
+                    <span className={`font-bold text-right ${cargoFeeClassName}`}>
+                      {cargoFeeText}
                     </span>
                   </div>
-                ) : draft.luggage ? (
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">
-                      Hành lý ({draft.luggage.weight}kg)
-                    </span>
-                    <span className="font-bold text-emerald-600">Miễn phí</span>
-                  </div>
-                ) : null}
+                )}
                 <div className="flex justify-between pt-3 border-t border-slate-200 text-base">
-                  <span className="text-slate-500 font-bold">Tổng tiền</span>
+                  <span className="text-slate-500 font-bold">Tổng thanh toán</span>
                   <span className="font-bold text-red-600 text-lg">
                     {totalFareText}
                   </span>
@@ -1045,9 +1041,9 @@ function PaymentContent() {
                     <span className="font-bold text-slate-900">{draft.luggage.weight} kg</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-500 font-medium">Phụ phí:</span>
-                    <strong className={draft.luggage.fee > 0 ? 'text-red-600 font-extrabold' : 'text-emerald-600 font-bold'}>
-                      {formatDraftFee(draft.luggage.fee)}
+                    <span className="text-slate-500 font-medium">Cước hàng:</span>
+                    <strong className={`${cargoFeeClassName} font-extrabold`}>
+                      {cargoFeeText}
                     </strong>
                   </div>
                 </div>
@@ -1112,19 +1108,8 @@ function PaymentContent() {
                   item.length && item.width && item.height
                     ? Math.round(((item.length * item.width * item.height) / 5000) * 10) / 10
                     : 0;
-                const effW = Math.max(actualW, volW) * (item.quantity || 1);
                 const isMotorbike = item.type === 'Xe máy';
                 const isBicycle = item.type === 'Xe đạp';
-                let itemFee = 0;
-                if (isMotorbike) {
-                  itemFee = 250000 * (item.quantity || 1);
-                } else if (isBicycle) {
-                  itemFee = 100000 * (item.quantity || 1);
-                } else {
-                  if (effW <= 20) itemFee = 0;
-                  else if (effW <= 40) itemFee = 30000;
-                  else itemFee = 30000;
-                }
 
                 return (
                   <div
@@ -1198,14 +1183,8 @@ function PaymentContent() {
                     </div>
 
                     <div className="text-right shrink-0">
-                      <span className="font-extrabold text-red-600">
-                        {!hasVerifiedPaymentAmount ? (
-                          '—'
-                        ) : itemFee === 0 ? (
-                          <span className="text-emerald-600 font-bold">Miễn phí</span>
-                        ) : (
-                          `+${itemFee.toLocaleString('vi-VN')}đ`
-                        )}
+                      <span className="text-slate-500 font-semibold">
+                        Cước tính chung theo đơn
                       </span>
                     </div>
                   </div>
@@ -1216,10 +1195,10 @@ function PaymentContent() {
             <div className="pt-3 border-t border-slate-100 flex items-center justify-between shrink-0">
               <div>
                 <span className="text-[11px] text-slate-500 font-medium block">
-                  Tổng phụ phí hành lý
+                  Cước hàng theo đơn
                 </span>
-                <strong className={draft.luggage.fee > 0 ? 'text-red-600 font-extrabold text-sm' : 'text-emerald-600 font-bold text-sm'}>
-                  {formatDraftFee(draft.luggage.fee)}
+                <strong className={`${cargoFeeClassName} font-extrabold text-sm`}>
+                  {cargoFeeText}
                 </strong>
               </div>
               <button
