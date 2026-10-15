@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '../generated/prisma/client.js';
+import { assertValidCargoDimensions } from '../cargo-pricing/cargo-dimensions.validation.js';
 
 type DecimalInput = number | Prisma.Decimal;
 
@@ -52,6 +53,14 @@ export class ShipmentPersistenceService {
     tx: Prisma.TransactionClient,
     input: ShipmentPersistenceInput,
   ) {
+    for (const item of input.items) {
+      assertValidCargoDimensions(item.name, {
+        length: item.length ?? undefined,
+        width: item.width ?? undefined,
+        height: item.height ?? undefined,
+      });
+    }
+
     const shipment = await tx.phieuGuiHang.create({
       data: {
         maVanDon: input.waybillCode,

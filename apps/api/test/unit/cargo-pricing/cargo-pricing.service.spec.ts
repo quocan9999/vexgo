@@ -246,4 +246,103 @@ describe('CargoPricingService', () => {
     });
     expect(oversizedWeightTx.bangCuocGuiHang.findMany).not.toHaveBeenCalled();
   });
+
+  it.each([
+    ['negative dimension', { length: -150, width: 50, height: 50 }],
+    ['zero dimension', { length: 150, width: 0, height: 50 }],
+    ['partial dimensions', { length: 150, width: 50 }],
+    ['non-number dimension', { length: '150', width: 50, height: 50 }],
+    ['NaN dimension', { length: Number.NaN, width: 50, height: 50 }],
+    ['infinite dimension', { length: 150, width: 50, height: Number.POSITIVE_INFINITY }],
+  ])('rejects %s before resolving points or rates', async (_caseName, dimensions) => {
+    const tx = makeTransaction();
+    const service = new CargoPricingService();
+    const item = {
+      name: 'Thùng hàng',
+      quantity: 1,
+      weight: 1,
+      loaiHangHoaId: 21,
+      ...dimensions,
+    } as unknown as {
+      name: string;
+      quantity: number;
+      weight: number;
+      loaiHangHoaId: number;
+      length?: number;
+      width?: number;
+      height?: number;
+    };
+
+    await expect(
+      service.calculate(tx, trip, {
+        senderPointId: 11,
+        receiverPointId: 12,
+        items: [item],
+      }),
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({
+        error: 'CARGO_DIMENSIONS_INVALID',
+        message: expect.stringContaining('Kích thước'),
+      }),
+    });
+    expect(tx.diemGiaoNhanTuyenXe.findMany).not.toHaveBeenCalled();
+    expect(tx.bangCuocGuiHang.findMany).not.toHaveBeenCalled();
+  });
+
+  it('accepts omitted dimensions and keeps the entered weight for pricing', async () => {
+    const tx = makeTransaction();
+    const result = await new CargoPricingService().calculate(tx, trip, {
+      senderPointId: 11,
+      receiverPointId: 12,
+      items: [{ name: 'Túi hàng', quantity: 1, weight: 1, loaiHangHoaId: 21 }],
+    });
+
+    expect(result.items[0].effectiveUnitWeight.toNumber()).toBe(1);
+    expect(result.rates[0].bangCuocGuiHangId).toBe(31);
+    expect(result.totalFee.toNumber()).toBe(60_000);
+  });
+
+  it('uses valid volumetric weight to select the existing matching bracket and fee', async () => {
+    const tx = makeTransaction({
+      rates: [
+        {
+          bangCuocGuiHangId: 31,
+          loaiHangHoaId: 21,
+          khoiLuongTu: 0,
+          khoiLuongDen: 7,
+          mucCuoc: 20_000,
+        },
+        {
+          bangCuocGuiHangId: 32,
+          loaiHangHoaId: 21,
+          khoiLuongTu: 70,
+          khoiLuongDen: 80,
+          mucCuoc: 90_000,
+        },
+      ],
+    });
+
+    const result = await new CargoPricingService().calculate(tx, trip, {
+      senderPointId: 11,
+      receiverPointId: 12,
+      items: [
+        {
+          name: 'Thùng hàng',
+          quantity: 1,
+          weight: 1,
+          length: 150,
+          width: 50,
+          height: 50,
+          loaiHangHoaId: 21,
+        },
+      ],
+    });
+
+    expect(result.items[0].effectiveUnitWeight.toNumber()).toBe(75);
+    expect(result.rates).toMatchObject([
+      { bangCuocGuiHangId: 32, totalWeight: expect.objectContaining({ d: [75] }) },
+    ]);
+    expect(result.baseFee.toNumber()).toBe(90_000);
+    expect(result.totalFee.toNumber()).toBe(90_000);
+  });
 });

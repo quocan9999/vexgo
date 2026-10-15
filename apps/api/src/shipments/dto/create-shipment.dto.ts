@@ -1,4 +1,5 @@
 import {
+  Allow,
   IsArray,
   IsBoolean,
   IsEmail,
@@ -8,9 +9,29 @@ import {
   IsOptional,
   IsString,
   Min,
+  Validate,
+  ValidationArguments,
+  ValidatorConstraint,
+  ValidatorConstraintInterface,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import {
+  CARGO_DIMENSIONS_INVALID_MESSAGE,
+  hasValidCargoDimensions,
+  type CargoDimensionsInput,
+} from '../../cargo-pricing/cargo-dimensions.validation.js';
+
+@ValidatorConstraint({ name: 'cargoDimensions', async: false })
+class CargoDimensionsConstraint implements ValidatorConstraintInterface {
+  validate(_length: unknown, args: ValidationArguments): boolean {
+    return hasValidCargoDimensions(args.object as CargoDimensionsInput);
+  }
+
+  defaultMessage(): string {
+    return CARGO_DIMENSIONS_INVALID_MESSAGE;
+  }
+}
 
 export class CargoItemInputDto {
   @IsString()
@@ -35,16 +56,13 @@ export class CargoItemInputDto {
   @Min(0.1, { message: 'Khối lượng phải lớn hơn 0.' })
   weight!: number;
 
-  @IsOptional()
-  @IsNumber()
+  @Validate(CargoDimensionsConstraint)
   length?: number;
 
-  @IsOptional()
-  @IsNumber()
+  @Allow()
   width?: number;
 
-  @IsOptional()
-  @IsNumber()
+  @Allow()
   height?: number;
 
   @IsOptional()

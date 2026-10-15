@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
 import { Prisma } from '../generated/prisma/client.js';
+import { assertValidCargoDimensions } from './cargo-dimensions.validation.js';
 
 type CapacityGroup = 'XE_MAY' | 'HANG_CONG_KENH' | 'HANG_NHE';
 
@@ -112,6 +113,10 @@ export class CargoPricingService {
         error: 'EMPTY_CARGO_ITEMS',
         message: 'Vui lòng nhập ít nhất một kiện hàng cần gửi.',
       });
+    }
+
+    for (const item of input.items) {
+      assertValidCargoDimensions(item.name, item);
     }
 
     const routePoints = await tx.diemGiaoNhanTuyenXe.findMany({

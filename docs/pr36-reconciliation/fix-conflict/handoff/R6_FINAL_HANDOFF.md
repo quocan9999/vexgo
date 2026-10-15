@@ -65,3 +65,13 @@
 - Luồng cargo khứ hồi chưa được lưu vào booking; cần quyết định/phạm vi riêng trước khi tích hợp.
 - Web chưa có endpoint quote; người dùng chỉ nhận giá authoritative khi submit, và lỗi bảng cước được hiển thị từ API.
 - Những vấn đề capacity/locking R7, persistence/order history R8, payment và các findings SePay không thuộc R6, không được xử lý ở đây.
+
+## Bổ sung sau review P1 — xác thực kích thước hàng hóa
+
+- Nguyên nhân: DTO tạo shipment trước đây cho phép chiều âm, bằng 0 hoặc chỉ nhập một phần; pricing cũng có thể bỏ qua khối lượng thể tích khi kích thước không đầy đủ. Điều này có thể làm hàng sai kích thước được tính vào bracket thấp hơn.
+- Quy tắc chung: được bỏ trống cả ba chiều (bao gồm trường hợp client gửi cả ba giá trị `null`); nếu nhập kích thước thì phải nhập đủ dài, rộng, cao và mỗi chiều phải là số hữu hạn lớn hơn 0. Không thêm giới hạn kích thước mới cho đơn gửi riêng; giới hạn tối đa hiện hữu của booking vẫn giữ nguyên.
+- Dùng chung `cargo-dimensions.validation.ts` ở DTO tạo shipment, `CargoPricingService` và `ShipmentPersistenceService`. Đầu vào không hợp lệ bị từ chối trước khi đọc bảng cước hoặc ghi dữ liệu; lỗi kích thước chéo ở booking trả `CARGO_DIMENSIONS_INVALID`, lỗi trường đơn giản giữ `VALIDATION_ERROR` hiện có, còn shipment trả lỗi validation 400 có thông báo tiếng Việt.
+- Không thay đổi công thức cước, payment, capacity, schema hoặc migration.
+- Regression: unit tests DTO/pricing/persistence phủ kích thước âm, 0, thiếu chiều, sai kiểu, NaN/Infinity; API/MySQL integration xác minh shipment và booking bị từ chối, không tạo dữ liệu cargo và hold ghế không bị consume.
+- Kết quả xác minh sau sửa: 6 unit-test files, 62 tests PASS; `booking-status-history.spec.ts` MySQL integration 24/24 PASS; API typecheck PASS; oxlint target PASS; `git diff --check` PASS.
+- Files bổ sung: `apps/api/src/cargo-pricing/cargo-dimensions.validation.ts`, `apps/api/src/cargo-pricing/cargo-pricing.service.ts`, `apps/api/src/shipments/dto/create-shipment.dto.ts`, `apps/api/src/shipments/shipment-persistence.service.ts`, cùng regression tests tại `apps/api/test/unit/cargo-pricing/`, `apps/api/test/unit/shipments/` và `apps/api/test/integration/bookings/booking-status-history.spec.ts`.

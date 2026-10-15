@@ -3,6 +3,53 @@ import type { Prisma } from '../../../src/generated/prisma/client.js';
 import { ShipmentPersistenceService } from '../../../src/shipments/shipment-persistence.service.js';
 
 describe('ShipmentPersistenceService', () => {
+  it('rejects invalid dimensions before writing any shipment records', async () => {
+    const transaction = {
+      phieuGuiHang: { create: vi.fn() },
+      hangHoa: { create: vi.fn() },
+      chiTietCuocGuiHang: { create: vi.fn() },
+      lichSuTrangThaiPhieuGuiHang: { create: vi.fn() },
+    } as unknown as Prisma.TransactionClient;
+
+    await expect(
+      new ShipmentPersistenceService().persistInTransaction(transaction, {
+        waybillCode: 'FUTA-VD-INVALID-DIMENSIONS',
+        recipientName: 'Người nhận',
+        recipientPhone: '0900000001',
+        sentAt: new Date('2026-10-15T00:00:00.000Z'),
+        baseFee: 60_000,
+        serviceFee: 0,
+        discount: 0,
+        totalFee: 60_000,
+        tripId: 10,
+        senderPointId: 11,
+        receiverPointId: 12,
+        orderId: 13,
+        actorAccountId: null,
+        historyNote: 'Tạo phiếu gửi hàng độc lập',
+        items: [
+          {
+            name: 'Hộp hàng',
+            quantity: 1,
+            unitWeight: 1,
+            length: -150,
+            width: 50,
+            height: 50,
+            cargoTypeId: 14,
+          },
+        ],
+        rates: [],
+      }),
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({ error: 'CARGO_DIMENSIONS_INVALID' }),
+    });
+
+    expect(transaction.phieuGuiHang.create).not.toHaveBeenCalled();
+    expect(transaction.hangHoa.create).not.toHaveBeenCalled();
+    expect(transaction.chiTietCuocGuiHang.create).not.toHaveBeenCalled();
+    expect(transaction.lichSuTrangThaiPhieuGuiHang.create).not.toHaveBeenCalled();
+  });
+
   it('writes shipment, items, fee breakdown, and first history through the supplied transaction', async () => {
     const transaction = {
       $transaction: vi.fn(),

@@ -82,6 +82,9 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
       loaiHangHoaId: number;
       quantity: number;
       type?: string;
+      length?: number;
+      width?: number;
+      height?: number;
     }>,
   ) => ({
     tripId,
@@ -708,6 +711,87 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
     expect(failedNoRate.status).toBe(409);
     expect(failedNoRate.body.error).toBe('CARGO_RATE_NOT_FOUND');
     expect(await prisma.donGiaoDich.count({ where: { nhaXeId: busCompanyId } })).toBe(orderCount);
+  });
+
+  it('rejects invalid dimensions on standalone shipment and booking cargo without persisting related rows', async () => {
+    const countCargoRecords = async () => ({
+      orders: await prisma.donGiaoDich.count({ where: { nhaXeId: busCompanyId } }),
+      shipments: await prisma.phieuGuiHang.count({ where: { chuyenXeId: tripId } }),
+      items: await prisma.hangHoa.count({
+        where: { phieuGuiHang: { chuyenXeId: tripId } },
+      }),
+      feeDetails: await prisma.chiTietCuocGuiHang.count({
+        where: { phieuGuiHang: { chuyenXeId: tripId } },
+      }),
+      histories: await prisma.lichSuTrangThaiPhieuGuiHang.count({
+        where: { phieuGuiHang: { chuyenXeId: tripId } },
+      }),
+    });
+
+    currentPrincipal = null;
+    const beforeStandalone = await countCargoRecords();
+    const standaloneResponse = await request(app.getHttpServer())
+      .post('/api/v1/shipments')
+      .send({
+        ...standaloneShipmentPayload(),
+        items: [
+          {
+            name: 'Thùng hàng sai kích thước',
+            loaiHangHoaId: cargoTypeId,
+            quantity: 1,
+            weight: 1,
+            length: -150,
+            width: 50,
+            height: 50,
+          },
+        ],
+      });
+
+    expect(standaloneResponse.status).toBe(400);
+    expect(standaloneResponse.body).toMatchObject({
+      statusCode: 400,
+      error: 'VALIDATION_ERROR',
+    });
+    expect(
+      standaloneResponse.body.details.some(
+        (detail: { message: string }) =>
+          detail.message.includes('Kích thước hàng hóa') &&
+          detail.message.includes('số hữu hạn lớn hơn 0'),
+      ),
+    ).toBe(true);
+    expect(await countCargoRecords()).toEqual(beforeStandalone);
+
+    currentPrincipal = customerPrincipal;
+    const hold = await request(app.getHttpServer())
+      .post('/api/v1/seat-holds')
+      .send({ tripId, seatIds: [tripSeatIds[0]] });
+    expect(hold.status, JSON.stringify(hold.body)).toBe(201);
+    const beforeBooking = await countCargoRecords();
+    const bookingResponse = await request(app.getHttpServer())
+      .post('/api/v1/bookings')
+      .send(
+        bookingWithCargoPayload(hold.body.data.holdToken, [
+          {
+            name: 'Thùng hàng sai kích thước',
+            loaiHangHoaId: cargoTypeId,
+            quantity: 1,
+            length: 150,
+            width: 50,
+          },
+        ]),
+      );
+
+    expect(bookingResponse.status).toBe(400);
+    expect(bookingResponse.body).toMatchObject({
+      statusCode: 400,
+      error: 'CARGO_DIMENSIONS_INVALID',
+      message: expect.stringContaining('Kích thước hàng hóa'),
+    });
+    expect(await countCargoRecords()).toEqual(beforeBooking);
+    const seat = await prisma.gheChuyenXe.findUniqueOrThrow({
+      where: { gheChuyenXeId: tripSeatIds[0] },
+    });
+    expect(seat.trangThai).toBe('DANG_GIU');
   });
 
   it('rolls back booking, payment, consumed hold, and cargo when shared cargo persistence fails after writes', async () => {
