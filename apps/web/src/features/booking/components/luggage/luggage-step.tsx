@@ -106,7 +106,10 @@ export const LuggageStep: React.FC<LuggageStepProps> = ({ route, time, seat, pas
         </div>
       </div>
 
-      <h3 className="text-sm font-bold text-slate-900 mb-4">Bạn có hành lý mang theo không?</h3>
+      <h3 className="text-sm font-bold text-slate-900 mb-2">Bạn có hàng hóa cần gửi dưới hầm xe không?</h3>
+      <p className="mb-4 text-xs leading-relaxed text-slate-600">
+        Hành lý xách tay tiêu chuẩn không thuộc dịch vụ hàng gửi dưới hầm xe.
+      </p>
       
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
         <div
@@ -117,7 +120,7 @@ export const LuggageStep: React.FC<LuggageStepProps> = ({ route, time, seat, pas
         >
           <PackageX className={`w-8 h-8 ${!hasExtraLuggage ? 'text-accent' : 'text-slate-400'}`} />
           <span className={`text-sm font-bold ${!hasExtraLuggage ? 'text-accent' : 'text-slate-700'}`}>
-            Không có hành lý<br/>vượt tiêu chuẩn
+            Chỉ có hành lý xách tay<br/>tiêu chuẩn
           </span>
         </div>
 
@@ -140,7 +143,7 @@ export const LuggageStep: React.FC<LuggageStepProps> = ({ route, time, seat, pas
         >
           <Package className={`w-8 h-8 ${hasExtraLuggage ? 'text-accent' : 'text-slate-400'}`} />
           <span className={`text-sm font-bold ${hasExtraLuggage ? 'text-accent' : 'text-slate-700'}`}>
-            Có hành lý cồng kềnh /<br/>vượt tiêu chuẩn
+            Có hàng gửi<br/>dưới hầm xe
           </span>
         </div>
       </div>

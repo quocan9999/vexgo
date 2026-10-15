@@ -153,7 +153,7 @@ function completeForm() {
 }
 
 async function enableExtraLuggage() {
-  fireEvent.click(screen.getByText(/Có hành lý cồng kềnh/));
+  fireEvent.click(screen.getByText(/Có hàng gửi/));
   await screen.findByLabelText('Loại hành lý');
 }
 
@@ -323,6 +323,12 @@ describe('one-way booking with server seat holds', () => {
         (screen.getByLabelText('Điểm nhận hàng') as HTMLSelectElement).value,
       ).toBe('902');
     });
+    expect(
+      screen.getByRole('heading', { name: 'Bạn có hàng hóa cần gửi dưới hầm xe không?' }),
+    ).toBeTruthy();
+    expect(
+      screen.getByText('Hành lý xách tay tiêu chuẩn không thuộc dịch vụ hàng gửi dưới hầm xe.'),
+    ).toBeTruthy();
     const cargoSummary = screen.getByText('Hàng gửi hầm xe (10kg)').parentElement;
     expect(cargoSummary?.textContent).toContain('Tính khi đặt vé');
     expect(cargoSummary?.textContent).not.toMatch(/0đ|miễn phí/i);
@@ -880,7 +886,7 @@ describe('one-way booking with server seat holds', () => {
       />,
     );
 
-    fireEvent.click(screen.getAllByText(/Có hành lý cồng kềnh/)[0]);
+    fireEvent.click(screen.getAllByText(/Có hàng gửi/)[0]);
     await screen.findAllByLabelText('Loại hành lý');
     fireEvent.click(screen.getByLabelText('Áp dụng giống chuyến đi'));
 
