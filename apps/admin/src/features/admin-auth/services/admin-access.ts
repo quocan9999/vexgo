@@ -32,6 +32,11 @@ export const ADMIN_OPERATION_SECTIONS = [
     href: '/customers',
     readPermission: 'customer:read',
   },
+  {
+    section: 'support-chat',
+    href: '/support-chat',
+    readPermission: 'chat:read',
+  },
 ] as const;
 
 export type AdminPermission =
@@ -57,7 +62,9 @@ export type AdminPermission =
   | 'trip:cancel'
   | 'customer:read'
   | 'role:read'
-  | 'permission:assign';
+  | 'permission:assign'
+  | 'chat:read'
+  | 'chat:manage';
 
 export type PlatformAdminPermission =
   | 'bus-company:read'
@@ -182,6 +189,7 @@ export function getRequiredAdminPermissions(
   if (matchesPath(pathname, '/fare-prices')) return ['fare-price:read'];
   if (matchesPath(pathname, '/trips')) return ['trip:read'];
   if (matchesPath(pathname, '/customers')) return ['customer:read'];
+  if (matchesPath(pathname, '/support-chat')) return ['chat:read'];
   return null;
 }
 

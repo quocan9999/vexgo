@@ -68,6 +68,13 @@ function readPositiveInteger(
     ConsoleSmsSender,
     { provide: SMS_SENDER, useExisting: ConsoleSmsSender },
   ],
-  exports: [TokenService, AccessTokenGuard, AuthorizationGuard, JwtModule],
+  exports: [
+    TokenService,
+    AccessTokenGuard,
+    AuthorizationGuard,
+    JwtModule,
+    PermissionResolverService,
+    EffectiveRolePermissionLoaderService,
+  ],
 })
 export class AuthModule {}

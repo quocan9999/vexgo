@@ -149,6 +149,16 @@ export const ADMIN_PERMISSION_CATALOG = [
     scope: 'platform',
     description: 'Cập nhật và thay đổi trạng thái tài khoản quản trị nhà xe.',
   },
+  {
+    key: 'chat:read',
+    scope: 'tenant',
+    description: 'Xem danh sách và lịch sử cuộc trò chuyện trong phạm vi nhà xe.',
+  },
+  {
+    key: 'chat:manage',
+    scope: 'tenant',
+    description: 'Tiếp nhận, phản hồi và quản lý cuộc trò chuyện trong phạm vi nhà xe.',
+  },
 ] as const;
 
 export type AdminPermissionKey =
@@ -194,6 +204,8 @@ export const ADMIN_ROLE_DEFAULT_PERMISSION_KEYS = {
     'role:read',
     'permission:assign',
     'customer:read',
+    'chat:read',
+    'chat:manage',
   ],
   NHAN_VIEN_DIEU_HANH: [
     'vehicle-type:read',
@@ -218,7 +230,7 @@ export const ADMIN_ROLE_DEFAULT_PERMISSION_KEYS = {
     'trip:cancel',
   ],
   NHAN_VIEN_BAN_VE: [],
-  NHAN_VIEN_CSKH: [],
+  NHAN_VIEN_CSKH: ['chat:read', 'chat:manage', 'customer:read'],
   NHAN_VIEN_PHU_XE: [],
   NHAN_VIEN_KINH_DOANH: [],
   KHACH_HANG: [],

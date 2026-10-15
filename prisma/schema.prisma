@@ -23,6 +23,7 @@ model NhaXe {
   diemGiaoNhanHangs        DiemGiaoNhanHang[]
   donGiaoDichs             DonGiaoDich[]
   cauHinhQuyenVaiTroNhaXes CauHinhQuyenVaiTroNhaXe[]
+  cuocTroChuyens           CuocTroChuyen[]
 }
 
 model TrangNoiDung {
@@ -228,6 +229,7 @@ model TaiKhoan {
   lichSuTrangThaiPhieuGuiHangs LichSuTrangThaiPhieuGuiHang[]
   lichSuTrangThaiPhieuDatVes   LichSuTrangThaiPhieuDatVe[]
   lichSuTrangThaiVes           LichSuTrangThaiVe[]
+  tinNhanHoTros                TinNhanHoTro[]
 }
 
 model PhienDangNhap {
@@ -276,7 +278,7 @@ model KhachHang {
   taiKhoan           TaiKhoan            @relation(fields: [taiKhoanId], references: [taiKhoanId], onDelete: Restrict, onUpdate: Restrict)
   donGiaoDichs       DonGiaoDich[]
   thongBaoNguoiNhans ThongBaoNguoiNhan[]
-  tinNhanHoTros      TinNhanHoTro[]
+  cuocTroChuyens     CuocTroChuyen[]
   phanHois           PhanHoi[]
   giuChos            GiuCho[]
 }
@@ -289,8 +291,9 @@ model NhanVien {
   taiKhoanId       Int      @unique @db.Int
   createdAt        DateTime @default(now()) @db.DateTime(0)
   updatedAt        DateTime @default(now()) @updatedAt @db.DateTime(0)
-  nhaXe            NhaXe    @relation(fields: [nhaXeId], references: [nhaXeId], onDelete: Restrict, onUpdate: Restrict)
-  taiKhoan         TaiKhoan @relation(fields: [taiKhoanId], references: [taiKhoanId], onDelete: Restrict, onUpdate: Restrict)
+  nhaXe            NhaXe           @relation(fields: [nhaXeId], references: [nhaXeId], onDelete: Restrict, onUpdate: Restrict)
+  taiKhoan         TaiKhoan        @relation(fields: [taiKhoanId], references: [taiKhoanId], onDelete: Restrict, onUpdate: Restrict)
+  cuocTroChuyens   CuocTroChuyen[]
 
   @@unique([nhaXeId, maNhanVien], map: "NhanVien_index_5")
 }
@@ -697,15 +700,57 @@ model ThongBaoNguoiNhan {
   @@unique([thongBaoId, khachHangId], map: "ThongBaoNguoiNhan_index_9")
 }
 
+model CuocTroChuyen {
+  cuocTroChuyenId Int            @id @default(autoincrement()) @db.Int
+  maCuocTroChuyen String         @unique(map: "CuocTroChuyen_maCuocTroChuyen_key") @db.VarChar(50)
+  tieuDe          String?        @db.VarChar(255)
+  trangThai       String         @default("CHO_TIEP_NHAN") @db.VarChar(30)
+  kenhHoTro       String         @default("WEB") @db.VarChar(20)
+  cheDoChat       String         @default("NGUOI_THAT") @db.VarChar(30)
+  khachHangId     Int            @db.Int
+  nhanVienId      Int?           @db.Int
+  nhaXeId         Int            @db.Int
+  dongLuc         DateTime?      @db.DateTime(0)
+  createdAt       DateTime       @default(now()) @db.DateTime(0)
+  updatedAt       DateTime       @default(now()) @updatedAt @db.DateTime(0)
+  khachHang       KhachHang      @relation(fields: [khachHangId], references: [khachHangId], onDelete: Restrict, onUpdate: Restrict)
+  nhanVien        NhanVien?      @relation(fields: [nhanVienId], references: [nhanVienId], onDelete: Restrict, onUpdate: Restrict)
+  nhaXe           NhaXe          @relation(fields: [nhaXeId], references: [nhaXeId], onDelete: Restrict, onUpdate: Restrict)
+  tinNhans        TinNhanHoTro[]
+
+  @@index([nhaXeId, trangThai], map: "CuocTroChuyen_nhaXe_trangThai_idx")
+  @@index([khachHangId, trangThai], map: "CuocTroChuyen_khachHang_trangThai_idx")
+  @@index([nhanVienId, trangThai], map: "CuocTroChuyen_nhanVien_trangThai_idx")
+}
+
 model TinNhanHoTro {
-  tinNhanId   Int       @id @default(autoincrement()) @db.Int
-  noiDung     String    @db.Text
-  thoiGian    DateTime  @db.DateTime(0)
-  trangThai   String    @db.VarChar(30)
-  khachHangId Int       @db.Int
-  createdAt   DateTime  @default(now()) @db.DateTime(0)
-  updatedAt   DateTime  @default(now()) @updatedAt @db.DateTime(0)
-  khachHang   KhachHang @relation(fields: [khachHangId], references: [khachHangId], onDelete: Restrict, onUpdate: Restrict)
+  tinNhanId       Int           @id @default(autoincrement()) @db.Int
+  cuocTroChuyenId Int           @db.Int
+  taiKhoanGuiId   Int           @db.Int
+  loaiNguoiGui    String        @db.VarChar(30)
+  loaiTinNhan     String        @default("VAN_BAN") @db.VarChar(30)
+  noiDung         String        @db.Text
+  tepDinhKemUrl   String?       @db.VarChar(500)
+  trangThai       String        @default("DA_GUI") @db.VarChar(30)
+  daDocLuc        DateTime?     @db.DateTime(0)
+  clientMessageId String?       @unique(map: "TinNhanHoTro_clientMessageId_key") @db.VarChar(64)
+  createdAt       DateTime      @default(now()) @db.DateTime(0)
+  updatedAt       DateTime      @default(now()) @updatedAt @db.DateTime(0)
+  cuocTroChuyen   CuocTroChuyen @relation(fields: [cuocTroChuyenId], references: [cuocTroChuyenId], onDelete: Restrict, onUpdate: Restrict)
+  taiKhoanGui     TaiKhoan      @relation(fields: [taiKhoanGuiId], references: [taiKhoanId], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([cuocTroChuyenId, createdAt], map: "TinNhanHoTro_cuocTroChuyen_createdAt_idx")
+}
+
+model LuuTruTinNhanHoTroCu {
+  tinNhanId     Int      @id @db.Int
+  noiDung       String   @db.Text
+  thoiGianCu    DateTime @db.DateTime(0)
+  trangThaiCu   String   @db.VarChar(30)
+  khachHangIdCu Int      @db.Int
+  createdAtCu   DateTime @db.DateTime(0)
+  updatedAtCu   DateTime @db.DateTime(0)
+  archivedAt    DateTime @default(now()) @db.DateTime(0)
 }
 
 model PhanHoi {
