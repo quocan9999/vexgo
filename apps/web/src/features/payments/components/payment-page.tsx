@@ -43,6 +43,8 @@ type PaymentReadSnapshot = {
   expectedTotalAmount: number;
   orderCode: string | null;
   totalAmount: number | null;
+  originalTicketSubtotal: number | null;
+  discountAmount: number | null;
   ticketSubtotal: number | null;
   cargoFee: number | null;
   paymentExpiresAt: string | null;
@@ -59,6 +61,98 @@ function readNonNegativeAmount(value: unknown): number | null {
   if (typeof value === 'string' && value.trim() === '') return null;
   const amount = Number(value);
   return Number.isFinite(amount) && amount >= 0 ? amount : null;
+}
+
+function getCargoItemQuantity(quantity?: number): number | null {
+  return typeof quantity === 'number' && Number.isSafeInteger(quantity) && quantity > 0
+    ? quantity
+    : null;
+}
+
+function getCargoPackageCount(items?: Array<{ quantity?: number }>): number | null {
+  if (!items?.length) return null;
+  let total = 0;
+  for (const item of items) {
+    const quantity = getCargoItemQuantity(item.quantity);
+    if (quantity === null) return null;
+    total += quantity;
+    if (!Number.isSafeInteger(total)) return null;
+  }
+  return total;
+}
+
+type PaymentPriceBreakdownRowsProps = {
+  originalTicketSubtotal: number | null | undefined;
+  discountAmount: number | null | undefined;
+  ticketSubtotal: number | null | undefined;
+  totalAmount: number | null | undefined;
+  hasVerifiedPaymentAmount: boolean;
+  showCargoFee: boolean;
+  cargoFeeText: string;
+  cargoFeeClassName: string;
+  formatConfirmedAmount: (amount: number | null | undefined) => string;
+  showTotal?: boolean;
+};
+
+function PaymentPriceBreakdownRows({
+  originalTicketSubtotal,
+  discountAmount,
+  ticketSubtotal,
+  totalAmount,
+  hasVerifiedPaymentAmount,
+  showCargoFee,
+  cargoFeeText,
+  cargoFeeClassName,
+  formatConfirmedAmount,
+  showTotal = true,
+}: PaymentPriceBreakdownRowsProps) {
+  const showDiscount = hasVerifiedPaymentAmount &&
+    (discountAmount === null || discountAmount === undefined || discountAmount > 0);
+
+  return (
+    <div className="space-y-2.5 text-sm">
+      <div className="flex justify-between gap-3">
+        <span className="text-slate-500">Giá vé gốc</span>
+        <span className="font-bold text-slate-700 text-right">
+          {formatConfirmedAmount(originalTicketSubtotal)}
+        </span>
+      </div>
+      {showDiscount && (
+        <div className="flex justify-between gap-3">
+          <span className="text-slate-500">Giảm giá</span>
+          <span className="font-bold text-emerald-700 text-right">
+            {discountAmount === null || discountAmount === undefined
+              ? 'Chưa có dữ liệu từ máy chủ'
+              : `−${discountAmount.toLocaleString('vi-VN')}đ`}
+          </span>
+        </div>
+      )}
+      <div className="flex justify-between gap-3">
+        <span className="text-slate-500">Tổng tiền vé sau ưu đãi</span>
+        <span className="font-bold text-red-600 text-right">
+          {formatConfirmedAmount(ticketSubtotal)}
+        </span>
+      </div>
+      {showCargoFee && (
+        <div className="flex justify-between gap-3">
+          <span className="text-slate-500">
+            Cước hàng
+          </span>
+          <span className={`font-bold text-right ${cargoFeeClassName}`}>
+            {cargoFeeText}
+          </span>
+        </div>
+      )}
+      {showTotal && (
+        <div className="flex justify-between gap-3 pt-3 border-t border-slate-200 text-base">
+          <span className="text-slate-500 font-bold">Tổng thanh toán</span>
+          <span className="font-bold text-red-600 text-lg">
+            {formatConfirmedAmount(totalAmount)}
+          </span>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function PaymentContent() {
@@ -92,6 +186,17 @@ function PaymentContent() {
     paymentReadSnapshot?.expectedTotalAmount === draft?.totalFare
       ? paymentReadSnapshot
       : null;
+
+  useEffect(() => {
+    if (!showTripDetailModal && !showCargoDetailModal) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      setShowTripDetailModal(false);
+      setShowCargoDetailModal(false);
+    };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [showTripDetailModal, showCargoDetailModal]);
   const hasValidBookingId =
     Number.isSafeInteger(draft?.bookingId) && (draft?.bookingId ?? 0) > 0;
   const paymentExpiresAt = activePaymentReadSnapshot?.paymentExpiresAt ?? null;
@@ -207,6 +312,8 @@ function PaymentContent() {
         expectedTotalAmount: draft.totalFare,
         orderCode: null,
         totalAmount: null,
+        originalTicketSubtotal: null,
+        discountAmount: null,
         ticketSubtotal: null,
         cargoFee: null,
         paymentExpiresAt,
@@ -304,6 +411,8 @@ function PaymentContent() {
           expectedTotalAmount: draft.totalFare,
           orderCode: booking.orderCode!,
           totalAmount: amount,
+          originalTicketSubtotal: readNonNegativeAmount(booking.originalTicketSubtotal),
+          discountAmount: readNonNegativeAmount(booking.discountAmount),
           ticketSubtotal: readNonNegativeAmount(booking.ticketSubtotal),
           cargoFee: readNonNegativeAmount(booking.cargoFee),
           paymentExpiresAt: deadline!,
@@ -367,8 +476,6 @@ function PaymentContent() {
     !activePaymentReadSnapshot.terminalStatus &&
     activePaymentReadSnapshot.totalAmount !== null,
   );
-  const formatDraftAmount = (amount: number) =>
-    hasVerifiedPaymentAmount ? `${amount.toLocaleString('vi-VN')}đ` : '—';
   const formatConfirmedAmount = (amount: number | null | undefined) =>
     !hasVerifiedPaymentAmount
       ? 'Đang xác minh từ máy chủ'
@@ -392,6 +499,18 @@ function PaymentContent() {
     : confirmedCargoFee === 0
       ? 'text-emerald-600'
       : 'text-red-600';
+  const cargoPackageCount = getCargoPackageCount(draft?.luggage?.items);
+  const priceBreakdownProps = {
+    originalTicketSubtotal: activePaymentReadSnapshot?.originalTicketSubtotal,
+    discountAmount: activePaymentReadSnapshot?.discountAmount,
+    ticketSubtotal: activePaymentReadSnapshot?.ticketSubtotal,
+    totalAmount: activePaymentReadSnapshot?.totalAmount,
+    hasVerifiedPaymentAmount,
+    showCargoFee: shouldShowCargoFeeBreakdown,
+    cargoFeeText,
+    cargoFeeClassName,
+    formatConfirmedAmount,
+  };
 
   if (!isClient) {
     return (
@@ -746,18 +865,6 @@ function PaymentContent() {
                           {leg.dropoff}
                         </span>
                       </div>
-                      <div className="flex justify-between pt-1">
-                        <span className="text-slate-500">
-                          {draft.legs.length > 1
-                            ? index === 0
-                              ? 'Tiền lượt đi'
-                              : 'Tiền lượt về'
-                            : 'Tổng tiền'}
-                        </span>
-                        <span className="font-bold text-red-600 text-right">
-                          {formatDraftAmount(leg.subtotal)}
-                        </span>
-                      </div>
                     </div>
                   </div>
                 ))}
@@ -778,6 +885,7 @@ function PaymentContent() {
                       type="button"
                       onClick={() => setShowCargoDetailModal(true)}
                       className="text-xs text-rose-500 font-bold underline cursor-pointer hover:text-rose-600 transition-colors"
+                      aria-label="Chi tiết hàng gửi hầm xe"
                     >
                       Chi tiết
                     </button>
@@ -785,7 +893,7 @@ function PaymentContent() {
                 </div>
 
                 <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-rose-50 border border-rose-200/60 text-xs font-bold text-rose-700 mb-3.5">
-                  <span>{draft.luggage.items?.length || 1} kiện</span>
+                  <span>{cargoPackageCount === null ? 'Chưa rõ số kiện' : `${cargoPackageCount} kiện`}</span>
                   <span>•</span>
                   <span>{draft.luggage.weight}kg</span>
                 </div>
@@ -793,7 +901,13 @@ function PaymentContent() {
                 {draft.luggage.items && draft.luggage.items.length > 0 && (
                   <div className="space-y-2">
                     {draft.luggage.items.slice(0, 2).map((item, idx) => {
-                      const actualW = item.weight || 0;
+                      const quantity = getCargoItemQuantity(item.quantity);
+                      const actualW = typeof item.weight === 'number' && Number.isFinite(item.weight)
+                        ? item.weight
+                        : null;
+                      const totalItemWeight = actualW === null || quantity === null
+                        ? null
+                        : actualW * quantity;
                       const volW =
                         item.length && item.width && item.height
                           ? Math.round(((item.length * item.width * item.height) / 5000) * 10) / 10
@@ -813,7 +927,7 @@ function PaymentContent() {
                                   ? `Xe máy: ${item.motorbikeType || 'Xe số'}`
                                   : isBicycle
                                     ? `Xe đạp: ${item.bicycleType || 'Xe đạp thường'}`
-                                    : `Kiện ${idx + 1}: ${item.type || 'Vali'}`}
+                                    : `Loại hàng ${idx + 1}: ${item.type || 'Vali'}`}
                               </span>
                               {item.category === 'fragile' && (
                                 <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-900 text-white">
@@ -826,37 +940,36 @@ function PaymentContent() {
                                 </span>
                               )}
                             </div>
-                            {isMotorbike ? (
-                              <div className="text-[11px] text-slate-500 mt-1 flex items-center gap-2 flex-wrap">
-                                {item.licensePlate && (
-                                  <span className="bg-slate-200 text-slate-800 font-bold px-1.5 py-0.2 rounded text-[10px]">
-                                    Biển số: {item.licensePlate}
+                            <div className="text-[11px] text-slate-500 mt-1 flex items-center gap-2 flex-wrap">
+                              <span>Số lượng: {quantity ?? 'chưa rõ'} kiện</span>
+                              {actualW !== null && (
+                                <>
+                                  <span className="text-slate-300">•</span>
+                                  <span>
+                                    {actualW} kg/kiện
+                                    {totalItemWeight === null
+                                      ? ' • chưa rõ khối lượng tổng'
+                                      : ` • ${totalItemWeight} kg tổng`}
                                   </span>
-                                )}
-                              </div>
-                            ) : isBicycle ? (
-                              <div className="text-[11px] text-slate-500 mt-1 flex items-center gap-2 flex-wrap">
-                                <span>{item.quantity || 1} xe</span>
-                                <span className="text-slate-300">•</span>
-                                <span>Gửi hầm xe</span>
-                              </div>
-                            ) : (
-                              <>
-                                <div className="text-[11px] text-slate-500 mt-1 flex items-center gap-2 flex-wrap">
-                                  <span>{item.weight} kg</span>
-                                  {item.length && item.width && item.height && (
-                                    <>
-                                      <span className="text-slate-300">•</span>
-                                      <span>{item.length}×{item.width}×{item.height}cm</span>
-                                    </>
-                                  )}
-                                </div>
-                                {volW > actualW && (
-                                  <span className="inline-block mt-1 text-[10px] text-accent font-bold bg-accent/10 px-1.5 py-0.2 rounded">
-                                    (Tính cước: {volW}kg quy đổi)
-                                  </span>
-                                )}
-                              </>
+                                </>
+                              )}
+                              {item.length && item.width && item.height && (
+                                <>
+                                  <span className="text-slate-300">•</span>
+                                  <span>{item.length}×{item.width}×{item.height}cm</span>
+                                </>
+                              )}
+                              {isBicycle && <span>• Gửi hầm xe</span>}
+                              {isMotorbike && item.licensePlate && (
+                                <span className="bg-slate-200 text-slate-800 font-bold px-1.5 py-0.2 rounded text-[10px]">
+                                  Biển số: {item.licensePlate}
+                                </span>
+                              )}
+                            </div>
+                            {actualW !== null && volW > actualW && (
+                              <span className="inline-block mt-1 text-[10px] text-accent font-bold bg-accent/10 px-1.5 py-0.2 rounded">
+                                (Tính cước: {volW}kg quy đổi/kiện)
+                              </span>
                             )}
                           </div>
                           <span className="text-slate-500 font-semibold text-right shrink-0">
@@ -871,7 +984,7 @@ function PaymentContent() {
                         onClick={() => setShowCargoDetailModal(true)}
                         className="text-[11px] text-slate-500 hover:text-slate-800 font-medium pt-1 text-center w-full block cursor-pointer"
                       >
-                        + Xem thêm {draft.luggage.items.length - 2} kiện khác
+                        + Xem thêm {draft.luggage.items.length - 2} loại hàng khác
                       </button>
                     )}
                   </div>
@@ -891,30 +1004,7 @@ function PaymentContent() {
                 Chi tiết giá
                 <Info className="w-4 h-4 text-red-600" />
               </h3>
-              <div className="space-y-2.5 text-sm">
-                <div className="flex justify-between gap-3">
-                  <span className="text-slate-500">Cước vé</span>
-                  <span className="font-bold text-red-600 text-right">
-                    {formatConfirmedAmount(activePaymentReadSnapshot?.ticketSubtotal)}
-                  </span>
-                </div>
-                {shouldShowCargoFeeBreakdown && (
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">
-                      Cước hàng{draft.luggage ? ` (${draft.luggage.weight}kg)` : ''}
-                    </span>
-                    <span className={`font-bold text-right ${cargoFeeClassName}`}>
-                      {cargoFeeText}
-                    </span>
-                  </div>
-                )}
-                <div className="flex justify-between pt-3 border-t border-slate-200 text-base">
-                  <span className="text-slate-500 font-bold">Tổng thanh toán</span>
-                  <span className="font-bold text-red-600 text-lg">
-                    {totalFareText}
-                  </span>
-                </div>
-              </div>
+              <PaymentPriceBreakdownRows {...priceBreakdownProps} />
             </div>
           </div>
         </div>
@@ -929,6 +1019,10 @@ function PaymentContent() {
           <div
             className="w-full max-w-[440px] rounded-2xl bg-white p-5 shadow-2xl border border-slate-200 flex flex-col max-h-[85vh] overflow-hidden"
             onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="payment-trip-detail-heading"
+            tabIndex={-1}
           >
             {/* Header Modal */}
             <div className="flex items-center justify-between pb-3.5 border-b border-slate-100 shrink-0">
@@ -936,7 +1030,7 @@ function PaymentContent() {
                 <span className="w-7 h-7 rounded-full bg-accent/10 text-accent flex items-center justify-center font-bold text-xs">
                   <Info className="w-4 h-4" />
                 </span>
-                <h3 className="text-base font-black text-slate-900">
+                <h3 id="payment-trip-detail-heading" className="text-base font-black text-slate-900">
                   Chi tiết chuyến đi
                 </h3>
               </div>
@@ -944,7 +1038,7 @@ function PaymentContent() {
                 type="button"
                 onClick={() => setShowTripDetailModal(false)}
                 className="p-1 rounded-lg text-slate-400 hover:text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer"
-                aria-label="Đóng"
+                aria-label="Đóng chi tiết chuyến đi"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -999,12 +1093,6 @@ function PaymentContent() {
                       </span>
                     </div>
 
-                    <div className="flex justify-between items-center gap-2 pt-1">
-                      <span className="text-slate-500 font-medium">Tiền vé ({leg.seats.length} ghế):</span>
-                      <strong className="text-red-600 font-extrabold">
-                        {formatDraftAmount(leg.subtotal)}
-                      </strong>
-                    </div>
                   </div>
                 </div>
               ))}
@@ -1038,16 +1126,50 @@ function PaymentContent() {
                   </span>
                   <div className="flex justify-between">
                     <span className="text-slate-500 font-medium">Khối lượng:</span>
-                    <span className="font-bold text-slate-900">{draft.luggage.weight} kg</span>
+                    <span className="font-bold text-slate-900">
+                      {cargoPackageCount === null ? 'Chưa rõ số kiện' : `${cargoPackageCount} kiện`}
+                      {' • '}{draft.luggage.weight} kg
+                    </span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-500 font-medium">Cước hàng:</span>
-                    <strong className={`${cargoFeeClassName} font-extrabold`}>
-                      {cargoFeeText}
-                    </strong>
-                  </div>
+                  {draft.luggage.items && draft.luggage.items.length > 0 && (
+                    <div className="space-y-2 border-t border-slate-100 pt-2">
+                      <span className="text-slate-500 font-medium">Chi tiết kiện hàng:</span>
+                      {draft.luggage.items.map((item, index) => {
+                        const quantity = getCargoItemQuantity(item.quantity);
+                        const unitWeight = typeof item.weight === 'number' && Number.isFinite(item.weight)
+                          ? item.weight
+                          : null;
+                        const itemName = item.type === 'Xe máy'
+                          ? `Xe máy: ${item.motorbikeType || 'Xe số'}`
+                          : item.type === 'Xe đạp'
+                            ? `Xe đạp: ${item.bicycleType || 'Xe đạp thường'}`
+                            : item.type || 'Kiện hàng';
+
+                        return (
+                          <div key={item.id || index} className="rounded-lg bg-slate-50 px-3 py-2">
+                            <div className="font-semibold text-slate-800">{itemName}</div>
+                            <div className="mt-0.5 text-slate-600">
+                              {quantity === null ? 'Chưa rõ số lượng kiện' : `${quantity} kiện`}
+                              {unitWeight === null
+                                ? ''
+                                : quantity === null
+                                  ? ` • ${unitWeight} kg/kiện • chưa rõ khối lượng tổng`
+                                  : ` • ${unitWeight} kg/kiện • ${unitWeight * quantity} kg`}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
+
+              <div className="rounded-xl border border-slate-200/90 bg-white p-3.5">
+                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-3">
+                  Chi tiết giá từ máy chủ
+                </span>
+                <PaymentPriceBreakdownRows {...priceBreakdownProps} showTotal={false} />
+              </div>
 
               {/* Tổng thanh toán trong modal */}
               <div className="rounded-xl bg-slate-900 text-white p-3.5 flex items-center justify-between">
@@ -1081,21 +1203,26 @@ function PaymentContent() {
           <div
             className="w-full max-w-[440px] rounded-2xl bg-white p-5 shadow-2xl border border-slate-200 flex flex-col max-h-[85vh] overflow-hidden"
             onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="payment-cargo-detail-heading"
+            tabIndex={-1}
           >
             <div className="flex items-start justify-between gap-3 pb-3.5 border-b border-slate-100 shrink-0">
               <div>
-                <h3 className="text-base font-black text-slate-900">
+                <h3 id="payment-cargo-detail-heading" className="text-base font-black text-slate-900">
                   Chi tiết hàng gửi hầm xe
                 </h3>
                 <p className="text-xs text-slate-500 font-medium mt-0.5">
-                  Tổng cộng: {draft.luggage.items.length} kiện • {draft.luggage.weight}kg
+                  Tổng cộng: {cargoPackageCount === null ? 'Chưa rõ số kiện' : `${cargoPackageCount} kiện`}
+                  {' • '}{draft.luggage.weight}kg
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setShowCargoDetailModal(false)}
                 className="p-1 rounded-lg text-slate-400 hover:text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer"
-                aria-label="Đóng"
+                aria-label="Đóng chi tiết hàng gửi hầm xe"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1103,7 +1230,10 @@ function PaymentContent() {
 
             <div className="py-3.5 space-y-2.5 overflow-y-auto pr-0.5 max-h-[55vh]">
               {draft.luggage.items.map((item, idx) => {
-                const actualW = item.weight || 0;
+                const quantity = getCargoItemQuantity(item.quantity);
+                const actualW = typeof item.weight === 'number' && Number.isFinite(item.weight)
+                  ? item.weight
+                  : null;
                 const volW =
                   item.length && item.width && item.height
                     ? Math.round(((item.length * item.width * item.height) / 5000) * 10) / 10
@@ -1123,7 +1253,7 @@ function PaymentContent() {
                             ? `Xe máy: ${item.motorbikeType || 'Xe số'}`
                             : isBicycle
                               ? `Xe đạp: ${item.bicycleType || 'Xe đạp thường'}`
-                              : `Kiện ${idx + 1}: ${item.type || 'Vali'}`}
+                              : `Loại hàng ${idx + 1}: ${item.type || 'Vali'}`}
                         </strong>
                         {item.category === 'fragile' && (
                           <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-900 text-white">
@@ -1139,7 +1269,12 @@ function PaymentContent() {
 
                       {isMotorbike ? (
                         <div className="mt-1 text-slate-600 flex items-center gap-2 flex-wrap text-[11px]">
-                          <span>Số lượng: {item.quantity || 1} xe</span>
+                          <span>Số lượng: {quantity ?? 'chưa rõ'} xe</span>
+                          {actualW !== null && (
+                            <span>
+                              • {actualW} kg/kiện • {quantity === null ? 'chưa rõ khối lượng tổng' : `${actualW * quantity} kg tổng`}
+                            </span>
+                          )}
                           {item.licensePlate && (
                             <>
                               <span>•</span>
@@ -1151,15 +1286,22 @@ function PaymentContent() {
                         </div>
                       ) : isBicycle ? (
                         <div className="mt-1 text-slate-600 flex items-center gap-2 flex-wrap text-[11px]">
-                          <span>Số lượng: {item.quantity || 1} xe</span>
+                          <span>Số lượng: {quantity ?? 'chưa rõ'} xe</span>
                           <span className="text-slate-300">•</span>
                           <span>Gửi hầm xe</span>
+                          {actualW !== null && (
+                            <span>
+                              • {actualW} kg/kiện • {quantity === null ? 'chưa rõ khối lượng tổng' : `${actualW * quantity} kg tổng`}
+                            </span>
+                          )}
                         </div>
                       ) : (
                         <div className="mt-1 text-slate-600 flex items-center gap-2 flex-wrap text-[11px]">
-                          <span>Số lượng: {item.quantity || 1}</span>
+                          <span>Số lượng: {quantity ?? 'chưa rõ'} kiện</span>
                           <span>•</span>
-                          <span>Khối lượng: {item.weight} kg</span>
+                          {actualW === null
+                            ? <span>Chưa có khối lượng</span>
+                            : <span>Khối lượng: {actualW} kg/kiện • {quantity === null ? 'chưa rõ khối lượng tổng' : `${actualW * quantity} kg tổng`}</span>}
                           {item.length && item.width && item.height && (
                             <>
                               <span>•</span>
@@ -1169,7 +1311,7 @@ function PaymentContent() {
                         </div>
                       )}
 
-                      {volW > actualW && (
+                      {actualW !== null && volW > actualW && (
                         <p className="mt-1 text-[10px] text-accent font-semibold bg-accent/10 px-1.5 py-0.5 rounded inline-block">
                           Tính cước: {volW}kg quy đổi
                         </p>

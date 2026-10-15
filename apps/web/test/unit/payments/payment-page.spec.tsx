@@ -28,14 +28,18 @@ vi.mock('@/features/auth/auth-session', () => ({
 
 function savePaymentDraft(
   orderCode: string | null = 'DGD-TEST-4201',
-  options: { totalFare?: number; luggage?: Record<string, unknown> } = {},
+  options: {
+    totalFare?: number;
+    luggage?: Record<string, unknown>;
+    legs?: unknown[];
+  } = {},
 ) {
   window.sessionStorage.setItem(
     `${PAYMENT_DRAFT_STORAGE_PREFIX}${draftId}`,
     JSON.stringify({
       id: draftId,
       tripType: 'one-way',
-      legs: [
+      legs: options.legs ?? [
         {
           tripId: 71,
           route: 'TP. Hồ Chí Minh - Đà Lạt',
@@ -78,7 +82,10 @@ function bookingDetail(overrides: Record<string, unknown> = {}) {
     orderCode: 'DGD-TEST-4201',
     totalAmount: 125000,
     ticketSubtotal: 125000,
+    originalTicketSubtotal: 125000,
+    discountAmount: 0,
     cargoFee: 0,
+    cargoItems: [],
     status: 'CHO_THANH_TOAN',
     paymentStatus: 'CHO_THANH_TOAN',
     paymentExpiresAt: new Date(Date.now() + 600_000).toISOString(),
@@ -211,8 +218,8 @@ describe('Customer VietQR payment page', () => {
     render(<PaymentPage />);
     await flushPromises();
 
-    expect(screen.getByText('Cước vé').parentElement?.textContent).toContain('125.000đ');
-    expect(screen.getByText('Cước hàng (10kg)').parentElement?.textContent).toContain('32.000đ');
+    expect(screen.getByText('Tổng tiền vé sau ưu đãi').parentElement?.textContent).toContain('125.000đ');
+    expect(screen.getByText('Cước hàng').parentElement?.textContent).toContain('32.000đ');
     expect(screen.getAllByText('Tổng thanh toán').some((label) =>
       label.parentElement?.textContent?.includes('157.000đ'),
     )).toBe(true);
@@ -220,7 +227,7 @@ describe('Customer VietQR payment page', () => {
     expect(screen.queryByText('Miễn phí')).toBeNull();
     expect(screen.queryByText(/250\.000đ|100\.000đ|30\.000đ/)).toBeNull();
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'Chi tiết' })[1]);
+    fireEvent.click(screen.getByRole('button', { name: 'Chi tiết hàng gửi hầm xe' }));
     expect(screen.getAllByText('Cước tính chung theo đơn').length).toBeGreaterThan(0);
     expect(screen.queryByText(/250\.000đ|100\.000đ|30\.000đ/)).toBeNull();
   });
@@ -235,7 +242,7 @@ describe('Customer VietQR payment page', () => {
     render(<PaymentPage />);
     await flushPromises();
 
-    expect(screen.getByText('Cước hàng (10kg)').parentElement?.textContent).toContain('Miễn phí');
+    expect(screen.getByText('Cước hàng').parentElement?.textContent).toContain('Miễn phí');
     expect(screen.queryByText(/250\.000đ|100\.000đ|30\.000đ/)).toBeNull();
   });
 
@@ -268,13 +275,198 @@ describe('Customer VietQR payment page', () => {
     render(<PaymentPage />);
     await flushPromises();
 
-    expect(screen.getByText('Cước hàng (10kg)').parentElement?.textContent).toContain(
+    expect(screen.getByText('Cước hàng').parentElement?.textContent).toContain(
       'Chưa có dữ liệu cước từ máy chủ',
     );
-    expect(screen.getByText('Cước vé').parentElement?.textContent).toContain(
+    expect(screen.getByText('Tổng tiền vé sau ưu đãi').parentElement?.textContent).toContain(
       'Chưa có dữ liệu từ máy chủ',
     );
     expect(screen.queryByText('Miễn phí')).toBeNull();
+  });
+
+  it('shows the authoritative promotion breakdown in the payment summary and trip detail modal', async () => {
+    configureVietQr();
+    savePaymentDraft('DGD-TEST-4201', {
+      totalFare: 280000,
+      legs: [
+        {
+          tripId: 71,
+          route: 'TP. Hồ Chí Minh - Đà Lạt',
+          departureTime: '2026-10-15T22:00:00.000Z',
+          seats: ['A02', 'A03'],
+          pickup: 'Bến xe Miền Đông',
+          dropoff: 'Bến xe Đà Lạt',
+          unitFare: 150000,
+          subtotal: 300000,
+        },
+      ],
+      luggage: {
+        fee: 0,
+        weight: 10,
+        items: [{ id: 'cargo-1', type: 'Vali', quantity: 1, weight: 10 }],
+      },
+    });
+    fetchMock.mockResolvedValue(
+      jsonResponse(bookingDetail({
+        totalAmount: 280000,
+        ticketSubtotal: 250000,
+        originalTicketSubtotal: 300000,
+        discountAmount: 50000,
+        cargoFee: 30000,
+      })),
+    );
+
+    render(<PaymentPage />);
+    await flushPromises();
+
+    expect(screen.getByText('Giá vé gốc').parentElement?.textContent).toContain('300.000đ');
+    expect(screen.getByText('Giảm giá').parentElement?.textContent).toContain('50.000đ');
+    expect(screen.getByText('Tổng tiền vé sau ưu đãi').parentElement?.textContent).toContain('250.000đ');
+    expect(screen.getByText('Cước hàng').parentElement?.textContent).toContain('30.000đ');
+    expect(screen.getByRole('img', { name: 'Mã QR thanh toán VietQR' }).getAttribute('src')).toContain('amount=280000');
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Chi tiết' })[0]);
+
+    const dialog = screen.getByRole('dialog', { name: 'Chi tiết chuyến đi' });
+    expect(dialog.getAttribute('aria-modal')).toBe('true');
+    expect(dialog.className).toContain('max-h-[85vh]');
+    expect(dialog.querySelector('.overflow-y-auto')).not.toBeNull();
+    expect(dialog.textContent).toContain('300.000đ');
+    expect(dialog.textContent).toContain('50.000đ');
+    expect(dialog.textContent).toContain('250.000đ');
+    expect(dialog.textContent).toContain('30.000đ');
+    expect(dialog.textContent).toContain('280.000đ');
+  });
+
+  it('does not show a discount row when the backend confirms there was no promotion', async () => {
+    configureVietQr();
+    fetchMock.mockResolvedValue(
+      jsonResponse(bookingDetail({
+        originalTicketSubtotal: 125000,
+        ticketSubtotal: 125000,
+        discountAmount: 0,
+      })),
+    );
+
+    render(<PaymentPage />);
+    await flushPromises();
+    fireEvent.click(screen.getAllByRole('button', { name: 'Chi tiết' })[0]);
+
+    expect(screen.queryByText('Giảm giá')).toBeNull();
+    expect(screen.getByRole('dialog', { name: 'Chi tiết chuyến đi' }).textContent).toContain('125.000đ');
+  });
+
+  it('shows missing discount data without inventing a promotion or a zero discount', async () => {
+    configureVietQr();
+    fetchMock.mockResolvedValue(
+      jsonResponse(bookingDetail({ discountAmount: undefined })),
+    );
+
+    render(<PaymentPage />);
+    await flushPromises();
+
+    expect(screen.getByText('Giảm giá').parentElement?.textContent).toContain(
+      'Chưa có dữ liệu từ máy chủ',
+    );
+    expect(screen.queryByText(/khuyến mãi|voucher|ưu đãi [A-Z0-9]/i)).toBeNull();
+  });
+
+  it('counts quantity instead of item rows for a multi-package cargo item in payment and both modals', async () => {
+    configureVietQr();
+    savePaymentDraft('DGD-TEST-4201', {
+      totalFare: 155000,
+      luggage: {
+        fee: 0,
+        weight: 50,
+        items: [{ id: 'cargo-1', type: 'Vali', quantity: 2, weight: 25 }],
+      },
+    });
+    fetchMock.mockResolvedValue(
+      jsonResponse(bookingDetail({
+        totalAmount: 155000,
+        cargoFee: 30000,
+        cargoItems: [{ name: 'Vali', quantity: 2, weight: 25, categoryName: 'Hàng nhẹ' }],
+      })),
+    );
+
+    render(<PaymentPage />);
+    await flushPromises();
+
+    expect(screen.getByText('2 kiện').parentElement?.textContent).toContain('50kg');
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Chi tiết' })[0]);
+    const tripDialog = screen.getByRole('dialog', { name: 'Chi tiết chuyến đi' });
+    expect(tripDialog.className).toContain('max-h-[85vh]');
+    expect(tripDialog.querySelector('.overflow-y-auto')).not.toBeNull();
+    expect(tripDialog.textContent).toContain('2 kiện');
+    expect(tripDialog.textContent).toContain('25 kg/kiện');
+    expect(tripDialog.textContent).toContain('50 kg');
+    fireEvent.click(screen.getByRole('button', { name: 'Đóng chi tiết chuyến đi' }));
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Chi tiết hàng gửi hầm xe' })[0]);
+    const cargoDialog = screen.getByRole('dialog', { name: 'Chi tiết hàng gửi hầm xe' });
+    expect(cargoDialog.getAttribute('aria-modal')).toBe('true');
+    expect(cargoDialog.className).toContain('max-h-[85vh]');
+    expect(cargoDialog.textContent).toContain('2 kiện');
+    expect(cargoDialog.textContent).toContain('25 kg/kiện');
+    expect(cargoDialog.textContent).toContain('50 kg');
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByRole('dialog', { name: 'Chi tiết hàng gửi hầm xe' })).toBeNull();
+  });
+
+  it('sums quantities across cargo rows for the payment card and detail modals', async () => {
+    configureVietQr();
+    savePaymentDraft('DGD-TEST-4201', {
+      totalFare: 155000,
+      luggage: {
+        fee: 0,
+        weight: 50,
+        items: [
+          { id: 'cargo-1', type: 'Vali', quantity: 2, weight: 10 },
+          { id: 'cargo-2', type: 'Thùng hàng', quantity: 3, weight: 10 },
+        ],
+      },
+    });
+    fetchMock.mockResolvedValue(
+      jsonResponse(bookingDetail({
+        totalAmount: 155000,
+        cargoFee: 30000,
+        cargoItems: [
+          { name: 'Vali', quantity: 2, weight: 10, categoryName: 'Hàng nhẹ' },
+          { name: 'Thùng hàng', quantity: 3, weight: 10, categoryName: 'Hàng nhẹ' },
+        ],
+      })),
+    );
+
+    render(<PaymentPage />);
+    await flushPromises();
+
+    expect(screen.getByText('5 kiện').parentElement?.textContent).toContain('50kg');
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Chi tiết' })[0]);
+    expect(screen.getByRole('dialog', { name: 'Chi tiết chuyến đi' }).textContent).toContain('5 kiện');
+    fireEvent.click(screen.getByRole('button', { name: 'Đóng chi tiết chuyến đi' }));
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Chi tiết hàng gửi hầm xe' })[0]);
+    expect(screen.getByRole('dialog', { name: 'Chi tiết hàng gửi hầm xe' }).textContent).toContain('5 kiện');
+  });
+
+  it('does not invent a package count when cargo quantity is missing from the draft', async () => {
+    configureVietQr();
+    savePaymentDraft('DGD-TEST-4201', {
+      luggage: {
+        fee: 0,
+        weight: 10,
+        items: [{ id: 'cargo-1', type: 'Vali', weight: 10 }],
+      },
+    });
+    fetchMock.mockResolvedValue(jsonResponse(bookingDetail()));
+
+    render(<PaymentPage />);
+    await flushPromises();
+
+    expect(screen.getByText('Chưa rõ số kiện')).toBeTruthy();
+    expect(screen.queryByText('1 kiện')).toBeNull();
   });
 
   it('keeps the canonical SePay reference identical in QR and displayed transfer content', async () => {

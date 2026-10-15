@@ -91,8 +91,10 @@ export type BookingResponseData = {
     vehicleType?: string;
     subtotal?: number;
   }>;
-  cargoFee?: number;
+  cargoFee?: number | string;
   ticketSubtotal?: number | string;
+  originalTicketSubtotal?: number | string;
+  discountAmount?: number | string;
   origin?: string | null;
   destination?: string | null;
   seatNumbers?: string[];
