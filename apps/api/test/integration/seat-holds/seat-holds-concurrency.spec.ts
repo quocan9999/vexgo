@@ -25,6 +25,8 @@ describe('SeatHolds Concurrency & Isolation with MySQL (Integration)', () => {
 
   let customerAId: number;
   let customerBId: number;
+  let customerAAccountId: number;
+  let customerBAccountId: number;
   let customerAPrincipal: AuthPrincipal;
   let customerBPrincipal: AuthPrincipal;
 
@@ -118,6 +120,7 @@ describe('SeatHolds Concurrency & Isolation with MySQL (Integration)', () => {
       },
       include: { khachHang: true },
     });
+    customerAAccountId = accountA.taiKhoanId;
     customerAId = accountA.khachHang!.khachHangId;
     customerAPrincipal = {
       taiKhoanId: accountA.taiKhoanId,
@@ -143,6 +146,7 @@ describe('SeatHolds Concurrency & Isolation with MySQL (Integration)', () => {
       },
       include: { khachHang: true },
     });
+    customerBAccountId = accountB.taiKhoanId;
     customerBId = accountB.khachHang!.khachHangId;
     customerBPrincipal = {
       taiKhoanId: accountB.taiKhoanId,
@@ -161,19 +165,31 @@ describe('SeatHolds Concurrency & Isolation with MySQL (Integration)', () => {
         await prisma.giuCho.deleteMany({ where: { chuyenXeId: tripId } });
         await prisma.chuyenXe.deleteMany({ where: { chuyenXeId: tripId } });
       }
-      await prisma.ghe.deleteMany({ where: { xeId: vehicleId } });
-      await prisma.xe.deleteMany({ where: { xeId: vehicleId } });
-      await prisma.loaiXe.deleteMany({ where: { loaiXeId: vehicleTypeId } });
-      await prisma.tuyenXe.deleteMany({ where: { tuyenXeId: routeId } });
-      await prisma.nhaXe.deleteMany({ where: { nhaXeId: busCompanyId } });
+      if (vehicleId) {
+        await prisma.ghe.deleteMany({ where: { xeId: vehicleId } });
+        await prisma.xe.deleteMany({ where: { xeId: vehicleId } });
+      }
+      if (vehicleTypeId) {
+        await prisma.loaiXe.deleteMany({ where: { loaiXeId: vehicleTypeId } });
+      }
+      if (routeId) {
+        await prisma.tuyenXe.deleteMany({ where: { tuyenXeId: routeId } });
+      }
+      if (busCompanyId) {
+        await prisma.nhaXe.deleteMany({ where: { nhaXeId: busCompanyId } });
+      }
 
       if (customerAId) {
         await prisma.khachHang.deleteMany({ where: { khachHangId: customerAId } });
-        await prisma.taiKhoan.deleteMany({ where: { taiKhoanId: customerAPrincipal.taiKhoanId } });
+      }
+      if (customerAAccountId) {
+        await prisma.taiKhoan.deleteMany({ where: { taiKhoanId: customerAAccountId } });
       }
       if (customerBId) {
         await prisma.khachHang.deleteMany({ where: { khachHangId: customerBId } });
-        await prisma.taiKhoan.deleteMany({ where: { taiKhoanId: customerBPrincipal.taiKhoanId } });
+      }
+      if (customerBAccountId) {
+        await prisma.taiKhoan.deleteMany({ where: { taiKhoanId: customerBAccountId } });
       }
     } finally {
       await app?.close();
