@@ -66,6 +66,65 @@ export interface ConversationSummaryResponse {
   soTinChuaDoc?: number;
 }
 
+export interface CreateConversationResult {
+  conversation: any;
+  isNew: boolean;
+  firstMessage: any | null;
+}
+
+function isSameFirstMessagePayload(
+  existing: { noiDung: string; loaiTinNhan: string },
+  dto: { tinNhanDauTien?: string },
+): boolean {
+  return existing.noiDung === dto.tinNhanDauTien && existing.loaiTinNhan === 'VAN_BAN';
+}
+
+function formatNhaXe(nx: any) {
+  if (!nx) return nx;
+  return {
+    nhaXeId: nx.nhaXeId,
+    tenNhaXe: nx.tenNhaXe,
+    logo: nx.logo ?? null,
+    hotline: nx.hotline ?? nx.thongTinLienHe ?? '',
+  };
+}
+
+function formatTaiKhoan(tk: any) {
+  if (!tk) return tk;
+  return {
+    ...tk,
+    avatarUrl: tk.avatarUrl ?? null,
+  };
+}
+
+function formatConversation(conv: any) {
+  if (!conv) return conv;
+  return {
+    ...conv,
+    nhaXe: conv.nhaXe ? formatNhaXe(conv.nhaXe) : conv.nhaXe,
+    khachHang: conv.khachHang
+      ? {
+          ...conv.khachHang,
+          taiKhoan: formatTaiKhoan(conv.khachHang.taiKhoan),
+        }
+      : conv.khachHang,
+    nhanVien: conv.nhanVien
+      ? {
+          ...conv.nhanVien,
+          taiKhoan: formatTaiKhoan(conv.nhanVien.taiKhoan),
+        }
+      : conv.nhanVien,
+  };
+}
+
+function formatMessage(msg: any) {
+  if (!msg) return msg;
+  return {
+    ...msg,
+    taiKhoanGui: msg.taiKhoanGui ? formatTaiKhoan(msg.taiKhoanGui) : msg.taiKhoanGui,
+  };
+}
+
 @Injectable()
 export class SupportChatService {
   constructor(private readonly prisma: PrismaService) {}
@@ -138,7 +197,7 @@ export class SupportChatService {
   async createConversation(
     principal: AuthPrincipal,
     dto: CreateConversationDto,
-  ) {
+  ): Promise<CreateConversationResult> {
     this.assertNotSuperAdmin(principal);
 
     // Chặn nhân viên nhà xe hoặc mạo danh khách hàng
@@ -153,25 +212,25 @@ export class SupportChatService {
       });
     }
 
-    // Kiểm tra nhà xe hợp lệ
+    // Kiểm tra nhà xe hợp lệ (BE-06: Chỉ chấp nhận HOAT_DONG)
     const nhaXe = await this.prisma.nhaXe.findUnique({
       where: { nhaXeId: dto.nhaXeId },
-      select: { nhaXeId: true, tenNhaXe: true, trangThai: true, logo: true, hotline: true },
+      select: { nhaXeId: true, tenNhaXe: true, trangThai: true, thongTinLienHe: true },
     });
 
-    if (!nhaXe || nhaXe.trangThai === 'NGUNG_HOAT_DONG') {
+    if (!nhaXe || nhaXe.trangThai !== 'HOAT_DONG') {
       throw new NotFoundException({
         error: 'BUS_COMPANY_NOT_FOUND',
-        message: 'Không tìm thấy nhà xe hoặc nhà xe đã ngừng hoạt động.',
+        message: 'Không tìm thấy nhà xe hoặc nhà xe hiện không hoạt động.',
       });
     }
 
     const khachHang = await this.ensureKhachHang(principal.taiKhoanId);
 
-    // Sử dụng transaction với row lock FOR UPDATE để ngăn ngừa 2 request đồng thời tạo 2 active conversations
+    // Sử dụng transaction với row lock FOR UPDATE để ngăn ngừa 2 request đồng thời tạo 2 active conversations (BE-08)
     return this.prisma.$transaction(async (tx) => {
-      // Row lock trên bảng KhachHang
-      await tx.$executeRaw`SELECT khachHangId FROM KhachHang WHERE khachHangId = ${khachHang.khachHangId} FOR UPDATE`;
+      // Row lock trên bảng KhachHang sử dụng queryRaw
+      await tx.$queryRaw`SELECT khachHangId FROM KhachHang WHERE khachHangId = ${khachHang.khachHangId} FOR UPDATE`;
 
       // Kiểm tra cuộc trò chuyện đang hoạt động giữa khách hàng và nhà xe này
       const existingConversation = await tx.cuocTroChuyen.findFirst({
@@ -182,40 +241,104 @@ export class SupportChatService {
         },
         include: {
           nhaXe: {
-            select: { nhaXeId: true, tenNhaXe: true, logo: true, hotline: true },
+            select: { nhaXeId: true, tenNhaXe: true, thongTinLienHe: true },
           },
           khachHang: {
             select: {
               khachHangId: true,
               maKhachHang: true,
-              taiKhoan: { select: { hoTen: true, soDienThoai: true, avatarUrl: true } },
+              taiKhoan: { select: { hoTen: true, soDienThoai: true } },
             },
           },
           nhanVien: {
             select: {
               nhanVienId: true,
               maNhanVien: true,
-              taiKhoan: { select: { hoTen: true, avatarUrl: true } },
+              taiKhoan: { select: { hoTen: true } },
             },
           },
         },
       });
 
       if (existingConversation) {
+        let firstMessage = null;
         if (dto.tinNhanDauTien) {
-          await tx.tinNhanHoTro.create({
-            data: {
-              cuocTroChuyenId: existingConversation.cuocTroChuyenId,
-              taiKhoanGuiId: principal.taiKhoanId,
-              loaiNguoiGui: 'KHACH_HANG',
-              loaiTinNhan: 'VAN_BAN',
-              noiDung: dto.tinNhanDauTien,
-              clientMessageId: dto.clientMessageId,
-              trangThai: 'DA_GUI',
-            },
-          });
+          // Xử lý idempotent cho tin nhắn đầu tiên khi cuộc trò chuyện đã tồn tại (BE-04)
+          if (dto.clientMessageId) {
+            const existingMsg = await tx.tinNhanHoTro.findUnique({
+              where: { clientMessageId: dto.clientMessageId },
+              include: {
+                taiKhoanGui: { select: { taiKhoanId: true, hoTen: true } },
+              },
+            });
+
+            if (existingMsg) {
+              if (
+                existingMsg.cuocTroChuyenId !== existingConversation.cuocTroChuyenId ||
+                existingMsg.taiKhoanGuiId !== principal.taiKhoanId
+              ) {
+                throw new ConflictException({
+                  error: 'IDEMPOTENCY_CONFLICT',
+                  message: 'ClientMessageId đã được sử dụng cho một cuộc trò chuyện hoặc người gửi khác.',
+                });
+              }
+              if (!isSameFirstMessagePayload(existingMsg, dto)) {
+                throw new ConflictException({
+                  error: 'IDEMPOTENCY_PAYLOAD_MISMATCH',
+                  message: 'ClientMessageId đã tồn tại nhưng mang nội dung tin nhắn khác.',
+                });
+              }
+              // Idempotent retry khớp: không tạo lại tin nhắn
+              firstMessage = null;
+            } else {
+              try {
+                firstMessage = await tx.tinNhanHoTro.create({
+                  data: {
+                    cuocTroChuyenId: existingConversation.cuocTroChuyenId,
+                    taiKhoanGuiId: principal.taiKhoanId,
+                    loaiNguoiGui: 'KHACH_HANG',
+                    loaiTinNhan: 'VAN_BAN',
+                    noiDung: dto.tinNhanDauTien,
+                    clientMessageId: dto.clientMessageId,
+                    trangThai: 'DA_GUI',
+                  },
+                  include: {
+                    taiKhoanGui: { select: { taiKhoanId: true, hoTen: true } },
+                  },
+                });
+              } catch (err) {
+                if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+                  const raceMsg = await tx.tinNhanHoTro.findUnique({
+                    where: { clientMessageId: dto.clientMessageId },
+                    include: {
+                      taiKhoanGui: { select: { taiKhoanId: true, hoTen: true } },
+                    },
+                  });
+                  if (
+                    raceMsg &&
+                    raceMsg.cuocTroChuyenId === existingConversation.cuocTroChuyenId &&
+                    raceMsg.taiKhoanGuiId === principal.taiKhoanId &&
+                    isSameFirstMessagePayload(raceMsg, dto)
+                  ) {
+                    firstMessage = null;
+                  } else {
+                    throw new ConflictException({
+                      error: 'IDEMPOTENCY_CONFLICT',
+                      message: 'ClientMessageId đã được sử dụng cho một cuộc trò chuyện hoặc người gửi khác.',
+                    });
+                  }
+                } else {
+                  throw err;
+                }
+              }
+            }
+          }
         }
-        return existingConversation;
+        return {
+          conversation: formatConversation(existingConversation),
+          isNew: false,
+          firstMessage: formatMessage(firstMessage),
+        };
       }
 
       const maCuocTroChuyen = `CHAT-${Date.now()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
@@ -232,33 +355,67 @@ export class SupportChatService {
         },
         include: {
           nhaXe: {
-            select: { nhaXeId: true, tenNhaXe: true, logo: true, hotline: true },
+            select: { nhaXeId: true, tenNhaXe: true, thongTinLienHe: true },
           },
           khachHang: {
             select: {
               khachHangId: true,
               maKhachHang: true,
-              taiKhoan: { select: { hoTen: true, soDienThoai: true, avatarUrl: true } },
+              taiKhoan: { select: { hoTen: true, soDienThoai: true } },
             },
           },
         },
       });
 
+      let firstMessage = null;
       if (dto.tinNhanDauTien) {
-        await tx.tinNhanHoTro.create({
-          data: {
-            cuocTroChuyenId: conv.cuocTroChuyenId,
-            taiKhoanGuiId: principal.taiKhoanId,
-            loaiNguoiGui: 'KHACH_HANG',
-            loaiTinNhan: 'VAN_BAN',
-            noiDung: dto.tinNhanDauTien,
-            clientMessageId: dto.clientMessageId,
-            trangThai: 'DA_GUI',
-          },
-        });
+        try {
+          firstMessage = await tx.tinNhanHoTro.create({
+            data: {
+              cuocTroChuyenId: conv.cuocTroChuyenId,
+              taiKhoanGuiId: principal.taiKhoanId,
+              loaiNguoiGui: 'KHACH_HANG',
+              loaiTinNhan: 'VAN_BAN',
+              noiDung: dto.tinNhanDauTien,
+              clientMessageId: dto.clientMessageId,
+              trangThai: 'DA_GUI',
+            },
+            include: {
+              taiKhoanGui: { select: { taiKhoanId: true, hoTen: true } },
+            },
+          });
+        } catch (err) {
+          if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002' && dto.clientMessageId) {
+            const existingMsg = await tx.tinNhanHoTro.findUnique({
+              where: { clientMessageId: dto.clientMessageId },
+              include: {
+                taiKhoanGui: { select: { taiKhoanId: true, hoTen: true } },
+              },
+            });
+            if (
+              existingMsg &&
+              existingMsg.cuocTroChuyenId === conv.cuocTroChuyenId &&
+              existingMsg.taiKhoanGuiId === principal.taiKhoanId &&
+              isSameFirstMessagePayload(existingMsg, dto)
+            ) {
+              firstMessage = existingMsg;
+            } else {
+              throw new ConflictException({
+                error: 'IDEMPOTENCY_CONFLICT',
+                message: 'ClientMessageId đã được sử dụng cho một cuộc trò chuyện hoặc người gửi khác.',
+              });
+            }
+          } else {
+            throw err;
+          }
+        }
       }
 
-      return conv;
+      return {
+        conversation: formatConversation(conv),
+        isNew: true,
+        firstMessage: formatMessage(firstMessage),
+      };
     });
   }
 
@@ -312,20 +469,20 @@ export class SupportChatService {
         orderBy: { updatedAt: 'desc' },
         include: {
           nhaXe: {
-            select: { nhaXeId: true, tenNhaXe: true, logo: true, hotline: true },
+            select: { nhaXeId: true, tenNhaXe: true, thongTinLienHe: true },
           },
           khachHang: {
             select: {
               khachHangId: true,
               maKhachHang: true,
-              taiKhoan: { select: { hoTen: true, soDienThoai: true, avatarUrl: true } },
+              taiKhoan: { select: { hoTen: true, soDienThoai: true } },
             },
           },
           nhanVien: {
             select: {
               nhanVienId: true,
               maNhanVien: true,
-              taiKhoan: { select: { hoTen: true, avatarUrl: true } },
+              taiKhoan: { select: { hoTen: true } },
             },
           },
           tinNhans: {
@@ -345,24 +502,27 @@ export class SupportChatService {
       }),
     ]);
 
-    const formattedData: ConversationSummaryResponse[] = conversations.map((c) => ({
-      cuocTroChuyenId: c.cuocTroChuyenId,
-      maCuocTroChuyen: c.maCuocTroChuyen,
-      tieuDe: c.tieuDe,
-      trangThai: c.trangThai,
-      kenhHoTro: c.kenhHoTro,
-      cheDoChat: c.cheDoChat,
-      khachHangId: c.khachHangId,
-      nhanVienId: c.nhanVienId,
-      nhaXeId: c.nhaXeId,
-      dongLuc: c.dongLuc,
-      createdAt: c.createdAt,
-      updatedAt: c.updatedAt,
-      nhaXe: c.nhaXe,
-      khachHang: c.khachHang,
-      nhanVien: c.nhanVien,
-      tinNhanCuoi: c.tinNhans[0] ?? null,
-    }));
+    const formattedData: ConversationSummaryResponse[] = conversations.map((c) => {
+      const formatted = formatConversation(c);
+      return {
+        cuocTroChuyenId: formatted.cuocTroChuyenId,
+        maCuocTroChuyen: formatted.maCuocTroChuyen,
+        tieuDe: formatted.tieuDe,
+        trangThai: formatted.trangThai,
+        kenhHoTro: formatted.kenhHoTro,
+        cheDoChat: formatted.cheDoChat,
+        khachHangId: formatted.khachHangId,
+        nhanVienId: formatted.nhanVienId,
+        nhaXeId: formatted.nhaXeId,
+        dongLuc: formatted.dongLuc,
+        createdAt: formatted.createdAt,
+        updatedAt: formatted.updatedAt,
+        nhaXe: formatted.nhaXe,
+        khachHang: formatted.khachHang,
+        nhanVien: formatted.nhanVien,
+        tinNhanCuoi: formatted.tinNhans[0] ?? null,
+      };
+    });
 
     return {
       data: formattedData,
@@ -388,20 +548,20 @@ export class SupportChatService {
       where: { cuocTroChuyenId },
       include: {
         nhaXe: {
-          select: { nhaXeId: true, tenNhaXe: true, logo: true, hotline: true },
+          select: { nhaXeId: true, tenNhaXe: true, thongTinLienHe: true },
         },
         khachHang: {
           select: {
             khachHangId: true,
             maKhachHang: true,
-            taiKhoan: { select: { hoTen: true, soDienThoai: true, avatarUrl: true } },
+            taiKhoan: { select: { hoTen: true, soDienThoai: true } },
           },
         },
         nhanVien: {
           select: {
             nhanVienId: true,
             maNhanVien: true,
-            taiKhoan: { select: { hoTen: true, avatarUrl: true } },
+            taiKhoan: { select: { hoTen: true } },
           },
         },
       },
@@ -436,7 +596,7 @@ export class SupportChatService {
       }
     }
 
-    return conv;
+    return formatConversation(conv);
   }
 
   /**
@@ -469,13 +629,13 @@ export class SupportChatService {
       },
       include: {
         nhaXe: {
-          select: { nhaXeId: true, tenNhaXe: true, logo: true, hotline: true },
+          select: { nhaXeId: true, tenNhaXe: true, thongTinLienHe: true },
         },
         nhanVien: {
           select: {
             nhanVienId: true,
             maNhanVien: true,
-            taiKhoan: { select: { hoTen: true, avatarUrl: true } },
+            taiKhoan: { select: { hoTen: true } },
           },
         },
         tinNhans: {
@@ -486,7 +646,7 @@ export class SupportChatService {
       orderBy: { updatedAt: 'desc' },
     });
 
-    return activeConv;
+    return activeConv ? formatConversation(activeConv) : null;
   }
 
   /**
@@ -524,7 +684,6 @@ export class SupportChatService {
             select: {
               taiKhoanId: true,
               hoTen: true,
-              avatarUrl: true,
             },
           },
         },
@@ -532,7 +691,7 @@ export class SupportChatService {
     ]);
 
     // Trả về theo thứ tự thời gian tăng dần cho UI dễ hiển thị
-    const messages = rawMessages.reverse();
+    const messages = rawMessages.reverse().map(formatMessage);
 
     return {
       data: messages,
@@ -606,7 +765,7 @@ export class SupportChatService {
         where: { clientMessageId: dto.clientMessageId },
         include: {
           taiKhoanGui: {
-            select: { taiKhoanId: true, hoTen: true, avatarUrl: true },
+            select: { taiKhoanId: true, hoTen: true },
           },
         },
       });
@@ -620,11 +779,79 @@ export class SupportChatService {
             message: 'ClientMessageId đã được sử dụng cho một cuộc trò chuyện hoặc người gửi khác.',
           });
         }
-        return existingMessage;
+        if (
+          existingMessage.noiDung !== dto.noiDung ||
+          (existingMessage.loaiTinNhan ?? 'VAN_BAN') !== (dto.loaiTinNhan ?? 'VAN_BAN') ||
+          (existingMessage.tepDinhKemUrl ?? null) !== (dto.tepDinhKemUrl ?? null)
+        ) {
+          throw new ConflictException({
+            error: 'IDEMPOTENCY_PAYLOAD_MISMATCH',
+            message: 'ClientMessageId đã tồn tại nhưng mang nội dung tin nhắn khác.',
+          });
+        }
+        return formatMessage(existingMessage);
       }
     }
 
     return this.prisma.$transaction(async (tx) => {
+      // Row lock trên dòng cuộc trò chuyện để tuần tự hóa các ghi đồng thời và ngăn ngừa deadlock (BE-02 & BE-08)
+      await tx.$queryRaw`SELECT cuocTroChuyenId FROM CuocTroChuyen WHERE cuocTroChuyenId = ${conv.cuocTroChuyenId} FOR UPDATE`;
+
+      const currentConv = await tx.cuocTroChuyen.findUnique({
+        where: { cuocTroChuyenId: conv.cuocTroChuyenId },
+        select: { trangThai: true, nhanVienId: true },
+      });
+
+      if (!currentConv || currentConv.trangThai === TrangThaiCuocTroChuyen.DA_DONG) {
+        throw new BadRequestException({
+          error: 'CONVERSATION_CLOSED',
+          message: 'Cuộc trò chuyện này đã kết thúc, không thể gửi thêm tin nhắn.',
+        });
+      }
+
+      // Kiểm tra trạng thái hiện tại trong DB để tránh race condition (BE-02)
+      if (isTenantUser) {
+        // Chỉ auto-claim khi cuộc trò chuyện VẪN ĐANG ở CHO_TIEP_NHAN và CHƯA CÓ AI TIẾP NHẬN (nhanVienId IS NULL)
+        const claimResult = await tx.cuocTroChuyen.updateMany({
+          where: {
+            cuocTroChuyenId: conv.cuocTroChuyenId,
+            nhaXeId: principal.nhaXeId!,
+            trangThai: TrangThaiCuocTroChuyen.CHO_TIEP_NHAN,
+            nhanVienId: null,
+          },
+          data: {
+            trangThai: TrangThaiCuocTroChuyen.DANG_XU_LY,
+            nhanVienId: principal.nhanVienId!,
+            updatedAt: new Date(),
+          },
+        });
+
+        if (claimResult.count > 0) {
+          // Tạo tin nhắn hệ thống ghi nhận tiếp nhận
+          await tx.tinNhanHoTro.create({
+            data: {
+              cuocTroChuyenId: conv.cuocTroChuyenId,
+              taiKhoanGuiId: principal.taiKhoanId,
+              loaiNguoiGui: 'HE_THONG',
+              loaiTinNhan: 'HE_THONG',
+              noiDung: 'Nhân viên hỗ trợ đã tiếp nhận cuộc trò chuyện.',
+              trangThai: 'DA_GUI',
+            },
+          });
+        }
+
+        // Cập nhật updatedAt, tuyệt đối KHÔNG ghi đè nhanVienId của người đã claim trước đó
+        await tx.cuocTroChuyen.update({
+          where: { cuocTroChuyenId: conv.cuocTroChuyenId },
+          data: { updatedAt: new Date() },
+        });
+      } else {
+        await tx.cuocTroChuyen.update({
+          where: { cuocTroChuyenId: conv.cuocTroChuyenId },
+          data: { updatedAt: new Date() },
+        });
+      }
+
       let message;
       try {
         message = await tx.tinNhanHoTro.create({
@@ -640,7 +867,7 @@ export class SupportChatService {
           },
           include: {
             taiKhoanGui: {
-              select: { taiKhoanId: true, hoTen: true, avatarUrl: true },
+              select: { taiKhoanId: true, hoTen: true },
             },
           },
         });
@@ -654,7 +881,7 @@ export class SupportChatService {
             where: { clientMessageId: dto.clientMessageId },
             include: {
               taiKhoanGui: {
-                select: { taiKhoanId: true, hoTen: true, avatarUrl: true },
+                select: { taiKhoanId: true, hoTen: true },
               },
             },
           });
@@ -663,7 +890,17 @@ export class SupportChatService {
             existing.cuocTroChuyenId === conv.cuocTroChuyenId &&
             existing.taiKhoanGuiId === principal.taiKhoanId
           ) {
-            return existing;
+            if (
+              existing.noiDung !== dto.noiDung ||
+              (existing.loaiTinNhan ?? 'VAN_BAN') !== (dto.loaiTinNhan ?? 'VAN_BAN') ||
+              (existing.tepDinhKemUrl ?? null) !== (dto.tepDinhKemUrl ?? null)
+            ) {
+              throw new ConflictException({
+                error: 'IDEMPOTENCY_PAYLOAD_MISMATCH',
+                message: 'ClientMessageId đã tồn tại nhưng mang nội dung tin nhắn khác.',
+              });
+            }
+            return formatMessage(existing);
           }
           throw new ConflictException({
             error: 'IDEMPOTENCY_CONFLICT',
@@ -673,21 +910,7 @@ export class SupportChatService {
         throw error;
       }
 
-      // Nếu nhân viên trả lời khi cuộc trò chuyện còn CHO_TIEP_NHAN, tự động tiếp nhận
-      const updateData: Prisma.CuocTroChuyenUpdateInput = {
-        updatedAt: new Date(),
-      };
-      if (isTenantUser && conv.trangThai === TrangThaiCuocTroChuyen.CHO_TIEP_NHAN) {
-        updateData.trangThai = TrangThaiCuocTroChuyen.DANG_XU_LY;
-        updateData.nhanVien = { connect: { nhanVienId: principal.nhanVienId! } };
-      }
-
-      await tx.cuocTroChuyen.update({
-        where: { cuocTroChuyenId: conv.cuocTroChuyenId },
-        data: updateData,
-      });
-
-      return message;
+      return formatMessage(message);
     });
   }
 
@@ -770,26 +993,27 @@ export class SupportChatService {
         },
       });
 
-      return tx.cuocTroChuyen.findUniqueOrThrow({
+      const updated = await tx.cuocTroChuyen.findUniqueOrThrow({
         where: { cuocTroChuyenId },
         include: {
-          nhaXe: { select: { nhaXeId: true, tenNhaXe: true, logo: true, hotline: true } },
+          nhaXe: { select: { nhaXeId: true, tenNhaXe: true, thongTinLienHe: true } },
           khachHang: {
             select: {
               khachHangId: true,
               maKhachHang: true,
-              taiKhoan: { select: { hoTen: true, soDienThoai: true, avatarUrl: true } },
+              taiKhoan: { select: { hoTen: true, soDienThoai: true } },
             },
           },
           nhanVien: {
             select: {
               nhanVienId: true,
               maNhanVien: true,
-              taiKhoan: { select: { hoTen: true, avatarUrl: true } },
+              taiKhoan: { select: { hoTen: true } },
             },
           },
         },
       });
+      return formatConversation(updated);
     });
   }
 
@@ -840,7 +1064,7 @@ export class SupportChatService {
     }
 
     if (conv.trangThai === TrangThaiCuocTroChuyen.DA_DONG) {
-      return conv;
+      return formatConversation(conv);
     }
 
     return this.prisma.$transaction(async (tx) => {
@@ -868,7 +1092,7 @@ export class SupportChatService {
         },
       });
 
-      return closedConv;
+      return formatConversation(closedConv);
     });
   }
 

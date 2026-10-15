@@ -53,7 +53,7 @@ describe('SupportChatController', () => {
     );
   });
 
-  it('createConversation gọi chatService.createConversation và emit sự kiện tới room nhà xe', async () => {
+  it('createConversation gọi chatService.createConversation và emit sự kiện tới room nhà xe khi isNew = true', async () => {
     const mockCreated = {
       cuocTroChuyenId: 1,
       maCuocTroChuyen: 'CHAT-001',
@@ -61,7 +61,11 @@ describe('SupportChatController', () => {
       nhaXeId: 5,
       khachHang: { khachHangId: 50 },
     };
-    service.createConversation.mockResolvedValue(mockCreated);
+    service.createConversation.mockResolvedValue({
+      conversation: mockCreated,
+      isNew: true,
+      firstMessage: null,
+    });
 
     const result = await controller.createConversation(mockCustomer, {
       nhaXeId: 5,
@@ -73,6 +77,58 @@ describe('SupportChatController', () => {
       tinNhanDauTien: 'Xin chào',
     });
     expect(gateway.server.to).toHaveBeenCalledWith('company_5');
+    expect(result).toEqual(mockCreated);
+  });
+
+  it('createConversation không emit CONVERSATION_NEW nếu cuộc trò chuyện đã tồn tại trước đó (isNew = false)', async () => {
+    const mockExisting = {
+      cuocTroChuyenId: 1,
+      maCuocTroChuyen: 'CHAT-001',
+      tieuDe: 'Hỗ trợ',
+      nhaXeId: 5,
+      khachHang: { khachHangId: 50 },
+    };
+    service.createConversation.mockResolvedValue({
+      conversation: mockExisting,
+      isNew: false,
+      firstMessage: null,
+    });
+
+    const result = await controller.createConversation(mockCustomer, {
+      nhaXeId: 5,
+    });
+
+    expect(gateway.server.to).not.toHaveBeenCalled();
+    expect(result).toEqual(mockExisting);
+  });
+
+  it('createConversation emit MESSAGE_NEW khi có firstMessage được tạo kèm theo', async () => {
+    const mockCreated = {
+      cuocTroChuyenId: 1,
+      maCuocTroChuyen: 'CHAT-001',
+      tieuDe: 'Hỗ trợ',
+      nhaXeId: 5,
+      khachHang: { khachHangId: 50 },
+    };
+    const mockMsg = {
+      tinNhanId: 10,
+      cuocTroChuyenId: 1,
+      noiDung: 'Xin chào',
+      loaiNguoiGui: 'KHACH_HANG',
+    };
+    service.createConversation.mockResolvedValue({
+      conversation: mockCreated,
+      isNew: true,
+      firstMessage: mockMsg,
+    });
+
+    const result = await controller.createConversation(mockCustomer, {
+      nhaXeId: 5,
+      tinNhanDauTien: 'Xin chào',
+    });
+
+    expect(gateway.server.to).toHaveBeenCalledWith('company_5');
+    expect(gateway.server.to).toHaveBeenCalledWith('conversation_1');
     expect(result).toEqual(mockCreated);
   });
 

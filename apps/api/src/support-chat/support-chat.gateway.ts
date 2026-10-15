@@ -18,6 +18,7 @@ import { requireAuthSecret } from '../auth/auth-secret.js';
 import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
 import { SupportChatService } from './support-chat.service.js';
 import { CHAT_EVENTS } from './constants/chat-events.constants.js';
+import { getAllowedOrigins } from '../common/configure-api.js';
 import {
   SendMessageDto,
   WsClaimConversationDto,
@@ -38,27 +39,18 @@ interface AccessTokenPayload {
   roles: string[];
 }
 
-const DEFAULT_CORS_ORIGINS = [
-  'http://localhost:3000',
-  'http://localhost:3001',
-  'http://127.0.0.1:3000',
-  'http://127.0.0.1:3001',
-];
-
-function isOriginAllowed(origin: string | undefined): boolean {
+export function isSocketOriginAllowed(origin: string | undefined): boolean {
   if (!origin) return true;
-  const envOrigins = process.env.CORS_ALLOWED_ORIGINS
-    ? process.env.CORS_ALLOWED_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean)
-    : [];
-  const allowed = [...DEFAULT_CORS_ORIGINS, ...envOrigins];
-  return allowed.includes(origin) || allowed.includes('*');
+  const config = new ConfigService();
+  const allowed = getAllowedOrigins(config);
+  return allowed.includes(origin);
 }
 
 @WebSocketGateway({
   namespace: '/chat',
   cors: {
     origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
-      if (isOriginAllowed(origin)) {
+      if (isSocketOriginAllowed(origin)) {
         callback(null, true);
       } else {
         callback(new Error(`Origin ${origin} not allowed by CORS`));
@@ -280,13 +272,15 @@ export class SupportChatGateway implements OnGatewayConnection, OnGatewayDisconn
   }
 
   /**
-   * Revalidate session & active status against the database on each critical socket action
+   * Revalidate session, role assignments, effective permissions & tenant scope against the database
+   * on each critical socket action (BE-01). Disconnects socket if session is revoked, user is locked,
+   * or chat permissions are insufficient.
    */
   private async revalidatePrincipalSession(client: Socket): Promise<AuthPrincipal> {
-    const principal = this.getPrincipalFromSocket(client);
+    const cachedPrincipal = this.getPrincipalFromSocket(client);
 
     const session = await this.prisma.phienDangNhap.findUnique({
-      where: { sessionId: principal.sessionId },
+      where: { sessionId: cachedPrincipal.sessionId },
       include: {
         taiKhoan: {
           select: {
@@ -298,6 +292,16 @@ export class SupportChatGateway implements OnGatewayConnection, OnGatewayDisconn
                 nhaXeId: true,
               },
             },
+            taiKhoanVaiTros: {
+              include: {
+                vaiTro: {
+                  select: {
+                    vaiTroId: true,
+                    tenVaiTro: true,
+                  },
+                },
+              },
+            },
           },
         },
       },
@@ -305,6 +309,7 @@ export class SupportChatGateway implements OnGatewayConnection, OnGatewayDisconn
 
     if (
       !session ||
+      session.taiKhoanId !== cachedPrincipal.taiKhoanId ||
       session.thuHoiLuc !== null ||
       session.hetHanLuc <= new Date() ||
       session.taiKhoan.trangThai !== 'HOAT_DONG'
@@ -317,7 +322,73 @@ export class SupportChatGateway implements OnGatewayConnection, OnGatewayDisconn
       throw new Error('Phiên đăng nhập đã bị thu hồi.');
     }
 
-    return principal;
+    const roleAssignments = session.taiKhoan.taiKhoanVaiTros ?? [];
+    const roles = roleAssignments.map(({ vaiTro }) => vaiTro.tenVaiTro);
+    const nhanVienId = session.taiKhoan.nhanVien?.nhanVienId ?? null;
+    const nhaXeId = session.taiKhoan.nhanVien?.nhaXeId ?? null;
+
+    // Chặn Super Admin tuyệt đối (BE-01 / Super Admin isolation)
+    if (roles.includes('SUPER_ADMIN')) {
+      this.emitSocketErrorAndDisconnect(
+        client,
+        'SUPER_ADMIN_NOT_ALLOWED',
+        'Tài khoản Quản trị hệ thống không được phép tham gia chat CSKH.',
+      );
+      throw new Error('Super admin không được phép truy cập.');
+    }
+
+    const effectiveAssignments = await this.permissionLoader.load(
+      roleAssignments.map(({ vaiTro }) => ({
+        roleId: vaiTro.vaiTroId,
+        roleName: vaiTro.tenVaiTro,
+      })),
+      nhaXeId,
+    );
+
+    const permissions = this.permissionResolver.resolve(effectiveAssignments, {
+      nhanVienId,
+      nhaXeId,
+    });
+
+    const isTenantUser = nhaXeId !== null && nhanVienId !== null;
+
+    if (isTenantUser) {
+      const hasChatPermission =
+        permissions.includes('chat:read') || permissions.includes('chat:manage');
+      if (!hasChatPermission) {
+        this.emitSocketErrorAndDisconnect(
+          client,
+          'CHAT_PERMISSION_DENIED',
+          'Tài khoản nhân viên không có quyền truy cập chức năng chat CSKH.',
+        );
+        throw new Error('Quyền chat đã bị thu hồi.');
+      }
+    }
+
+    // Nếu tenant scope thay đổi (chuyển nhà xe): cập nhật room
+    if (cachedPrincipal.nhaXeId !== nhaXeId) {
+      if (cachedPrincipal.nhaXeId) {
+        await client.leave(`company_${cachedPrincipal.nhaXeId}`);
+      }
+      if (nhaXeId) {
+        await client.join(`company_${nhaXeId}`);
+      }
+    }
+
+    const freshPrincipal: AuthPrincipal = {
+      taiKhoanId: session.taiKhoan.taiKhoanId,
+      sessionId: session.sessionId,
+      roles,
+      permissions,
+      nhanVienId,
+      nhaXeId,
+    };
+
+    // Cập nhật lại cache trong socket
+    const data = client.data as SocketPrincipalData;
+    data.principal = freshPrincipal;
+
+    return freshPrincipal;
   }
 
   @SubscribeMessage(CHAT_EVENTS.CONVERSATION_JOIN)

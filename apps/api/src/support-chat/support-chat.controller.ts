@@ -34,18 +34,39 @@ export class SupportChatController {
     @CurrentPrincipal() principal: AuthPrincipal,
     @Body() dto: CreateConversationDto,
   ) {
-    const conversation = await this.chatService.createConversation(principal, dto);
+    const result = await this.chatService.createConversation(principal, dto);
 
-    // Thông báo cho nhà xe qua room socket với event CONVERSATION_NEW
+    // Thông báo realtime qua socket server
     try {
-      this.chatGateway.server
-        ?.to(`company_${conversation.nhaXeId}`)
-        .emit(CHAT_EVENTS.CONVERSATION_NEW, conversation);
+      // Chỉ phát sự kiện CONVERSATION_NEW khi thực sự là cuộc trò chuyện mới (BE-05)
+      if (result.isNew) {
+        this.chatGateway.server
+          ?.to(`company_${result.conversation.nhaXeId}`)
+          .emit(CHAT_EVENTS.CONVERSATION_NEW, result.conversation);
+      }
+
+      // Nếu có tin nhắn đầu tiên được gửi, phát sự kiện MESSAGE_NEW để các client realtime nhận được
+      if (result.firstMessage) {
+        this.chatGateway.server
+          ?.to(`conversation_${result.conversation.cuocTroChuyenId}`)
+          .emit(CHAT_EVENTS.MESSAGE_NEW, result.firstMessage);
+
+        this.chatGateway.server
+          ?.to(`company_${result.conversation.nhaXeId}`)
+          .emit(CHAT_EVENTS.MESSAGE_NEW, {
+            ...result.firstMessage,
+            cuocTroChuyen: {
+              cuocTroChuyenId: result.conversation.cuocTroChuyenId,
+              tieuDe: result.conversation.tieuDe,
+              khachHang: result.conversation.khachHang,
+            },
+          });
+      }
     } catch {
       // Ignored if socket server not ready
     }
 
-    return conversation;
+    return result.conversation;
   }
 
   @Get('conversations')

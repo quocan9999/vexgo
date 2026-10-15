@@ -250,6 +250,14 @@ describe('SupportChatGateway', () => {
           taiKhoanId: 101,
           trangThai: 'HOAT_DONG',
           nhanVien: null,
+          taiKhoanVaiTros: [
+            {
+              vaiTro: {
+                vaiTroId: 1,
+                tenVaiTro: 'KHACH_HANG',
+              },
+            },
+          ],
         },
       });
     });

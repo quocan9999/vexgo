@@ -87,6 +87,7 @@ describe('SupportChatService', () => {
         create: vi.fn(),
         updateMany: vi.fn(),
       },
+      $queryRaw: vi.fn().mockResolvedValue([{ khachHangId: 50 }]),
       $executeRaw: vi.fn().mockResolvedValue(1),
       $transaction: vi.fn(async (cb: any) => cb(prisma)),
     };
@@ -142,6 +143,18 @@ describe('SupportChatService', () => {
       ).rejects.toThrow(NotFoundException);
     });
 
+    it('từ chối tạo cuộc trò chuyện nếu nhà xe ở trạng thái TAM_NGUNG (BE-06)', async () => {
+      prisma.nhaXe.findUnique.mockResolvedValue({
+        nhaXeId: 5,
+        tenNhaXe: 'Nhà Xe Tạm Ngừng',
+        trangThai: 'TAM_NGUNG',
+      });
+
+      await expect(
+        service.createConversation(mockCustomerPrincipal, { nhaXeId: 5 }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
     it('trả về cuộc trò chuyện đang mở nếu khách hàng đã có phiên chat chưa kết thúc với nhà xe này', async () => {
       prisma.nhaXe.findUnique.mockResolvedValue({
         nhaXeId: 5,
@@ -163,7 +176,11 @@ describe('SupportChatService', () => {
       prisma.cuocTroChuyen.findFirst.mockResolvedValue(existingConv);
 
       const result = await service.createConversation(mockCustomerPrincipal, { nhaXeId: 5 });
-      expect(result).toEqual(existingConv);
+      expect(result).toEqual({
+        conversation: existingConv,
+        isNew: false,
+        firstMessage: null,
+      });
       expect(prisma.cuocTroChuyen.create).not.toHaveBeenCalled();
     });
 
@@ -187,6 +204,14 @@ describe('SupportChatService', () => {
         nhaXeId: 5,
       };
       prisma.cuocTroChuyen.create.mockResolvedValue(createdConv);
+      const createdFirstMsg = {
+        tinNhanId: 101,
+        cuocTroChuyenId: 15,
+        noiDung: 'Xin chào nhà xe',
+        loaiNguoiGui: 'KHACH_HANG',
+        loaiTinNhan: 'VAN_BAN',
+      };
+      prisma.tinNhanHoTro.create.mockResolvedValue(createdFirstMsg);
 
       const result = await service.createConversation(mockCustomerPrincipal, {
         nhaXeId: 5,
@@ -204,7 +229,11 @@ describe('SupportChatService', () => {
           }),
         }),
       );
-      expect(result).toEqual(createdConv);
+      expect(result).toEqual({
+        conversation: createdConv,
+        isNew: true,
+        firstMessage: createdFirstMsg,
+      });
     });
   });
 
@@ -297,6 +326,8 @@ describe('SupportChatService', () => {
         taiKhoanGuiId: mockStaffWithChatManage.taiKhoanId,
         clientMessageId: 'idempotent-uuid-123',
         noiDung: 'Tin nhắn đã tạo trước đó',
+        loaiTinNhan: 'VAN_BAN',
+        tepDinhKemUrl: null,
       };
       prisma.tinNhanHoTro.findUnique.mockResolvedValue(existingMsg);
 
@@ -324,6 +355,7 @@ describe('SupportChatService', () => {
         taiKhoanGuiId: mockStaffWithChatManage.taiKhoanId,
         clientMessageId: 'idempotent-uuid-123',
         noiDung: 'Tin nhắn cũ',
+        loaiTinNhan: 'VAN_BAN',
       };
       prisma.tinNhanHoTro.findUnique.mockResolvedValue(mismatchMsg);
 
@@ -331,6 +363,33 @@ describe('SupportChatService', () => {
         service.sendMessage(mockStaffWithChatManage, {
           cuocTroChuyenId: 1,
           noiDung: 'Tin nhắn mới',
+          clientMessageId: 'idempotent-uuid-123',
+        }),
+      ).rejects.toThrow(ConflictException);
+    });
+
+    it('idempotency: ném ConflictException (IDEMPOTENCY_PAYLOAD_MISMATCH) nếu clientMessageId trùng nhưng nội dung khác', async () => {
+      prisma.cuocTroChuyen.findUnique.mockResolvedValue({
+        cuocTroChuyenId: 1,
+        trangThai: 'DANG_XU_LY',
+        nhaXeId: 5,
+        khachHangId: 50,
+      });
+
+      const existingMsg = {
+        tinNhanId: 99,
+        cuocTroChuyenId: 1,
+        taiKhoanGuiId: mockStaffWithChatManage.taiKhoanId,
+        clientMessageId: 'idempotent-uuid-123',
+        noiDung: 'Nội dung ban đầu',
+        loaiTinNhan: 'VAN_BAN',
+      };
+      prisma.tinNhanHoTro.findUnique.mockResolvedValue(existingMsg);
+
+      await expect(
+        service.sendMessage(mockStaffWithChatManage, {
+          cuocTroChuyenId: 1,
+          noiDung: 'Nội dung bị sửa đổi',
           clientMessageId: 'idempotent-uuid-123',
         }),
       ).rejects.toThrow(ConflictException);
@@ -344,6 +403,7 @@ describe('SupportChatService', () => {
         khachHangId: 50,
       });
       prisma.tinNhanHoTro.findUnique.mockResolvedValue(null);
+      prisma.cuocTroChuyen.updateMany.mockResolvedValue({ count: 1 });
 
       const newMsg = {
         tinNhanId: 100,
@@ -358,15 +418,47 @@ describe('SupportChatService', () => {
       });
 
       expect(result).toEqual(newMsg);
-      expect(prisma.cuocTroChuyen.update).toHaveBeenCalledWith(
+      expect(prisma.cuocTroChuyen.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { cuocTroChuyenId: 1 },
+          where: expect.objectContaining({
+            cuocTroChuyenId: 1,
+            trangThai: 'CHO_TIEP_NHAN',
+            nhanVienId: null,
+          }),
           data: expect.objectContaining({
             trangThai: 'DANG_XU_LY',
-            nhanVien: { connect: { nhanVienId: 12 } },
+            nhanVienId: 12,
           }),
         }),
       );
+    });
+
+    it('BE-02: nếu cuộc trò chuyện đã có nhân viên khác tiếp nhận trước đó, không ghi đè nhanVienId', async () => {
+      prisma.cuocTroChuyen.findUnique.mockResolvedValue({
+        cuocTroChuyenId: 1,
+        trangThai: 'CHO_TIEP_NHAN',
+        nhaXeId: 5,
+        khachHangId: 50,
+      });
+      prisma.tinNhanHoTro.findUnique.mockResolvedValue(null);
+      // updateMany trả về count 0 vì người khác đã nhận trước
+      prisma.cuocTroChuyen.updateMany.mockResolvedValue({ count: 0 });
+
+      const newMsg = {
+        tinNhanId: 101,
+        noiDung: 'Em cũng hỗ trợ ạ',
+        loaiNguoiGui: 'NHAN_VIEN',
+      };
+      prisma.tinNhanHoTro.create.mockResolvedValue(newMsg);
+
+      const result = await service.sendMessage(mockStaffWithChatManage, {
+        cuocTroChuyenId: 1,
+        noiDung: 'Em cũng hỗ trợ ạ',
+      });
+
+      expect(result).toEqual(newMsg);
+      // Không tạo system message vì count === 0
+      expect(prisma.tinNhanHoTro.create).toHaveBeenCalledTimes(1);
     });
   });
 
