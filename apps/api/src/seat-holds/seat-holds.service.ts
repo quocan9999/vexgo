@@ -383,127 +383,79 @@ export class SeatHoldsService implements OnModuleInit, OnModuleDestroy {
 
   async releaseSeatHold(holdToken: string) {
     const tokenHash = this.hashHoldToken(holdToken);
-    const hold = this.holds.get(holdToken);
-    let tripId = hold?.tripId;
-    let seatIds = hold?.seatIds;
-
-    if (hold) {
-      if (hold.timer) {
-        clearTimeout(hold.timer);
-      }
-      this.holds.delete(holdToken);
-    } else {
-      // Thử parse signed token nếu map mất do server restart
-      const payload = this.parseSignedHoldToken(holdToken);
-      if (payload) {
-        tripId = payload.tripId;
-        seatIds = payload.seats;
-      }
+    if (!this.prisma.giuCho) {
+      throw new ServiceUnavailableException({
+        error: 'HOLD_STORE_UNAVAILABLE',
+        message: 'Không thể xác minh mã giữ chỗ trong hệ thống lưu trữ.',
+      });
     }
 
-    // Xử lý bền vững với persistent GiuCho trong MySQL
-    if (this.prisma.giuCho) {
-      const releaseResult = await this.prisma.$transaction(async (tx) => {
-        const dbHold = await tx.giuCho.findUnique({
-          where: { tokenHash },
+    const releaseResult = await this.prisma.$transaction(async (tx) => {
+      const dbHold = await tx.giuCho.findUnique({ where: { tokenHash } });
+      if (!dbHold) {
+        return { released: false, status: 'NOT_FOUND' };
+      }
+
+      if (dbHold.trangThai === 'DANG_GIU') {
+        const nextStatus =
+          dbHold.hetHanLuc <= new Date() ? 'HET_HAN' : 'DA_GIAI_PHONG';
+        const holdUpdateResult = await tx.giuCho.updateMany({
+          where: {
+            giuChoId: dbHold.giuChoId,
+            trangThai: 'DANG_GIU',
+          },
+          data: { trangThai: nextStatus },
         });
 
-        if (!dbHold) {
-          return { handled: false };
+        // Booking/cleanup may have changed the hold after it was read. In that
+        // case its transaction owns the seat transition and this request stops.
+        if (holdUpdateResult.count === 0) {
+          return { released: false, status: 'CONCURRENTLY_UPDATED' };
         }
 
-        if (dbHold.trangThai === 'DANG_GIU') {
-          const isExpired = dbHold.hetHanLuc <= new Date();
-          const nextStatus = isExpired ? 'HET_HAN' : 'DA_GIAI_PHONG';
-
-          // Atomic conditional update on hold: CHỈ update nếu trạng thái VẪN LÀ DANG_GIU
-          const holdUpdateResult = await tx.giuCho.updateMany({
-            where: {
-              giuChoId: dbHold.giuChoId,
-              trangThai: 'DANG_GIU',
-            },
-            data: { trangThai: nextStatus },
-          });
-
-          // Nếu count === 0: đã bị đổi trạng thái (ví dụ booking đồng thời consume thành DA_DAT)
-          if (holdUpdateResult.count === 0) {
-            return { handled: true, released: false, status: 'CONCURRENTLY_UPDATED' };
-          }
-
-          // Generation-safe release: Chỉ giải phóng ghế nếu ghế đang trỏ đúng vào giuChoId này và vẫn DANG_GIU
-          await tx.gheChuyenXe.updateMany({
-            where: {
-              chuyenXeId: dbHold.chuyenXeId,
-              giuChoId: dbHold.giuChoId,
-              trangThai: 'DANG_GIU',
-            },
-            data: {
-              trangThai: 'TRONG',
-              giuChoId: null,
-            },
-          });
-
-          return {
-            handled: true,
-            released: true,
-            giuChoId: dbHold.giuChoId,
-            status: nextStatus,
+        await tx.gheChuyenXe.updateMany({
+          where: {
             chuyenXeId: dbHold.chuyenXeId,
-          };
-        }
+            giuChoId: dbHold.giuChoId,
+            trangThai: 'DANG_GIU',
+          },
+          data: { trangThai: 'TRONG', giuChoId: null },
+        });
 
-        // Nếu hold đã là HET_HAN, dọn sạch ghế nếu còn sót
-        if (dbHold.trangThai === 'HET_HAN') {
-          await tx.gheChuyenXe.updateMany({
-            where: {
-              chuyenXeId: dbHold.chuyenXeId,
-              giuChoId: dbHold.giuChoId,
-              trangThai: 'DANG_GIU',
-            },
-            data: {
-              trangThai: 'TRONG',
-              giuChoId: null,
-            },
-          });
-          return { handled: true, released: false, status: 'HET_HAN' };
-        }
-
-        return { handled: true, released: false, status: dbHold.trangThai };
-      });
-
-      if (releaseResult.handled) {
-        if (releaseResult.released) {
-          this.logger.log(
-            `Released seat hold #${releaseResult.giuChoId} (tokenHash: ${this.maskHoldToken(tokenHash)}, status: ${releaseResult.status}) for trip ${releaseResult.chuyenXeId}`,
-          );
-        }
-        return { success: true };
+        return {
+          released: true,
+          giuChoId: dbHold.giuChoId,
+          status: nextStatus,
+          chuyenXeId: dbHold.chuyenXeId,
+        };
       }
-    }
 
-    // Fallback cho signed token nếu không tìm thấy trong DB (ví dụ unit test không mock giuCho)
-    const payload = this.parseSignedHoldToken(holdToken);
-    if (payload && payload.exp <= Date.now()) {
-      return { success: true };
-    }
+      // Recover only seats still linked to this exact expired hold.
+      if (dbHold.trangThai === 'HET_HAN') {
+        await tx.gheChuyenXe.updateMany({
+          where: {
+            chuyenXeId: dbHold.chuyenXeId,
+            giuChoId: dbHold.giuChoId,
+            trangThai: 'DANG_GIU',
+          },
+          data: { trangThai: 'TRONG', giuChoId: null },
+        });
+      }
 
-    if (tripId && seatIds && seatIds.length > 0) {
-      await this.prisma.gheChuyenXe.updateMany({
-        where: {
-          chuyenXeId: tripId,
-          gheChuyenXeId: { in: seatIds },
-          trangThai: 'DANG_GIU',
-          giuChoId: null,
-        },
-        data: {
-          trangThai: 'TRONG',
-        },
-      });
+      return { released: false, status: dbHold.trangThai };
+    });
+
+    // Keep the in-memory timer if the DB operation failed; otherwise remove
+    // only local bookkeeping after the durable state has been checked.
+    const hold = this.holds.get(holdToken);
+    if (hold?.timer) clearTimeout(hold.timer);
+    this.holds.delete(holdToken);
+
+    if (releaseResult.released) {
       this.logger.log(
-        `Released seat hold (tokenHash: ${this.maskHoldToken(holdToken)}) for trip ${tripId}, seats [${seatIds.join(', ')}]`,
+        `Released seat hold #${releaseResult.giuChoId} (tokenHash: ${this.maskHoldToken(tokenHash)}, status: ${releaseResult.status}) for trip ${releaseResult.chuyenXeId}`,
       );
     }
-
     return { success: true };
   }
 

@@ -106,6 +106,41 @@ describe('SeatHoldsService (Unit)', () => {
     });
   });
 
+  describe('releaseSeatHold DB ownership', () => {
+    it('fails closed when persistent hold storage is unavailable', async () => {
+      const hold = await service.createSeatHold(50, [101]);
+      const updateCallsBeforeRelease = prisma.gheChuyenXe.updateMany.mock.calls.length;
+      prisma.giuCho = undefined;
+
+      await expect(service.releaseSeatHold(hold.holdToken)).rejects.toThrow(
+        ServiceUnavailableException,
+      );
+      expect(prisma.gheChuyenXe.updateMany).toHaveBeenCalledTimes(
+        updateCallsBeforeRelease,
+      );
+    });
+
+    it('does not release an orphaned seat when no matching database hold exists', async () => {
+      const hold = await service.createSeatHold(50, [101]);
+      const updateCallsBeforeRelease = prisma.gheChuyenXe.updateMany.mock.calls.length;
+      prisma.giuCho.findUnique.mockResolvedValue(null);
+
+      await expect(service.releaseSeatHold(hold.holdToken)).resolves.toEqual({
+        success: true,
+      });
+
+      expect(
+        prisma.gheChuyenXe.updateMany.mock.calls
+          .slice(updateCallsBeforeRelease)
+          .some(
+            ([args]: [any]) =>
+              args.where?.trangThai === 'DANG_GIU' &&
+              args.where?.giuChoId === null,
+          ),
+      ).toBe(false);
+    });
+  });
+
   describe('Seat Identity Contract', () => {
     it('uses gheChuyenXeId (tripSeatId) to hold seats', async () => {
       const result = await service.createSeatHold(50, [101]);

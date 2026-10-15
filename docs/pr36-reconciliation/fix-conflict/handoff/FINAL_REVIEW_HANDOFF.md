@@ -54,3 +54,13 @@ Integration command đã thử: `npx vitest run --no-file-parallelism test/integ
 ## Đánh giá bàn giao
 
 **NOT READY FOR MERGE.** F1 fixture đã được cập nhật nhưng integration chưa chạy được vì MySQL worktree không khả dụng. Ngoài ra còn hai blocker ngoài scope: P1 release seat hold fallback/ownership và P1 public shipment lookup PII không có rate limit riêng. Reviewer cần tự kiểm tra hai diff F1/F2 rồi resolve đúng review conversations; không resolve thay reviewer. Không push/merge/tạo PR.
+
+## Cập nhật — F3/F4
+
+- F3: `POST /api/v1/shipments/lookup` vẫn nhận cùng mã vận đơn và số điện thoại, nhưng giới hạn 10 request/phút bằng `ThrottlerGuard`. Service chỉ trả dữ liệu theo dõi công khai: mã/trạng thái, điểm gửi/nhận, nhà xe/tuyến, lịch khởi hành/dự kiến đến, tổng kiện và lịch sử trạng thái. Không trả tên/số điện thoại/email, mã đơn, giá, thông tin hàng hóa chi tiết, biển số hoặc ghi chú. Customer Web chỉ hiển thị projection này.
+- F3 đã được commit riêng: `9319bcf` (`fix(shipments): bảo vệ thông tin tra cứu vận đơn`).
+- F4: chỉ còn `DELETE /api/v1/seat-holds` nhận token qua `X-Hold-Token` hoặc body; alias token trong URL đã bị xóa. Release tra bản ghi `GiuCho` bằng SHA-256 của token, dùng CAS trên trạng thái DB và chỉ nhả ghế đang `DANG_GIU` gắn chính xác với `giuChoId` đó. Không tìm thấy hold thì không đổi ghế; kho hold không khả dụng thì trả 503; release cạnh tranh với consume dừng nếu CAS thất bại.
+- Regression unit/component tests: API 34/34 PASS; Customer Web shipment component 2/2 PASS. API/Web typecheck và lint liên quan PASS; `git diff --check` PASS.
+- Đã thêm MySQL integration tests cho lookup PII/rate limit và seat-hold alias/orphan/race. Chưa thể chạy vì `127.0.0.1:3306` không nhận kết nối; không chạy migration/seed/reset và không ghi database.
+- README.md và `handoff/R4_FINAL_HANDOFF.md` đã thay đổi từ trước lượt này, được giữ nguyên và không đưa vào các commit F3/F4.
+- Hai review conversations F3/F4 vẫn mở để reviewer kiểm tra và xác nhận; không tự resolve, không push hoặc tạo PR.

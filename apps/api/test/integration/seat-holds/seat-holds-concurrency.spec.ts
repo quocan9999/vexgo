@@ -275,6 +275,68 @@ describe('SeatHolds Concurrency & Isolation with MySQL (Integration)', () => {
     await request(app.getHttpServer()).delete('/api/v1/seat-holds').expect(400);
   }, 30_000);
 
+  it('rejects the legacy token-path release alias and keeps the DB-backed hold active', async () => {
+    const holdResponse = await request(app.getHttpServer())
+      .post('/api/v1/seat-holds')
+      .send({ tripId, seatIds: [tripSeat1] })
+      .expect(201);
+    const holdToken = (holdResponse.body.data ?? holdResponse.body).holdToken;
+    const heldSeat = await prisma.gheChuyenXe.findUniqueOrThrow({
+      where: { gheChuyenXeId: tripSeat1 },
+    });
+
+    await request(app.getHttpServer())
+      .delete(`/api/v1/seat-holds/${holdToken}`)
+      .expect(404);
+
+    const seatAfterAlias = await prisma.gheChuyenXe.findUniqueOrThrow({
+      where: { gheChuyenXeId: tripSeat1 },
+    });
+    const holdAfterAlias = await prisma.giuCho.findUniqueOrThrow({
+      where: { giuChoId: heldSeat.giuChoId! },
+    });
+    expect(seatAfterAlias.trangThai).toBe('DANG_GIU');
+    expect(seatAfterAlias.giuChoId).toBe(heldSeat.giuChoId);
+    expect(holdAfterAlias.trangThai).toBe('DANG_GIU');
+
+    await request(app.getHttpServer())
+      .delete('/api/v1/seat-holds')
+      .set('X-Hold-Token', holdToken)
+      .expect(200);
+  }, 30_000);
+
+  it('does not release an orphaned DANG_GIU seat when the signed token has no DB hold', async () => {
+    const holdResponse = await request(app.getHttpServer())
+      .post('/api/v1/seat-holds')
+      .send({ tripId, seatIds: [tripSeat1] })
+      .expect(201);
+    const holdToken = (holdResponse.body.data ?? holdResponse.body).holdToken;
+    const heldSeat = await prisma.gheChuyenXe.findUniqueOrThrow({
+      where: { gheChuyenXeId: tripSeat1 },
+    });
+    const holdId = heldSeat.giuChoId!;
+
+    // Deleting only this test-owned GiuCho exercises the legacy orphan state;
+    // the FK sets giuChoId to null while leaving the seat status unchanged.
+    await prisma.giuCho.delete({ where: { giuChoId: holdId } });
+    const orphanSeat = await prisma.gheChuyenXe.findUniqueOrThrow({
+      where: { gheChuyenXeId: tripSeat1 },
+    });
+    expect(orphanSeat.trangThai).toBe('DANG_GIU');
+    expect(orphanSeat.giuChoId).toBeNull();
+
+    await request(app.getHttpServer())
+      .delete('/api/v1/seat-holds')
+      .set('X-Hold-Token', holdToken)
+      .expect(200);
+
+    const seatAfterRelease = await prisma.gheChuyenXe.findUniqueOrThrow({
+      where: { gheChuyenXeId: tripSeat1 },
+    });
+    expect(seatAfterRelease.trangThai).toBe('DANG_GIU');
+    expect(seatAfterRelease.giuChoId).toBeNull();
+  }, 30_000);
+
   it('allows only one of two concurrent requests to hold the exact same seat on real MySQL (CAS Race Condition)', async () => {
     // Both requests attempt to hold tripSeat1 simultaneously
     const [res1, res2] = await Promise.all([
@@ -364,7 +426,8 @@ describe('SeatHolds Concurrency & Isolation with MySQL (Integration)', () => {
 
     // Step 4: User A attempts to release using old stale holdTokenA
     await request(app.getHttpServer())
-      .delete(`/api/v1/seat-holds/${holdTokenA}`)
+      .delete('/api/v1/seat-holds')
+      .set('X-Hold-Token', holdTokenA)
       .expect(200);
 
     // CRUCIAL ASSERTION: User B's seat MUST REMAIN 'DANG_GIU' and still linked to holdBId!
@@ -376,7 +439,8 @@ describe('SeatHolds Concurrency & Isolation with MySQL (Integration)', () => {
 
     // Step 5: User B releases using legitimate holdTokenB -> seat should successfully revert to TRONG
     await request(app.getHttpServer())
-      .delete(`/api/v1/seat-holds/${holdTokenB}`)
+      .delete('/api/v1/seat-holds')
+      .set('X-Hold-Token', holdTokenB)
       .expect(200);
 
     const seatFinal = await prisma.gheChuyenXe.findUnique({
@@ -424,6 +488,24 @@ describe('SeatHolds Concurrency & Isolation with MySQL (Integration)', () => {
       where: { giuChoId: dbHold!.giuChoId },
     });
     expect(updatedHold?.trangThai).toBe('DA_DAT');
+
+    await prisma.gheChuyenXe.updateMany({
+      where: {
+        gheChuyenXeId: tripSeat2,
+        trangThai: 'DANG_GIU',
+        giuChoId: dbHold!.giuChoId,
+      },
+      data: { trangThai: 'DA_DAT', giuChoId: null },
+    });
+    await request(app.getHttpServer())
+      .delete('/api/v1/seat-holds')
+      .set('X-Hold-Token', holdToken)
+      .expect(200);
+    const bookedSeat = await prisma.gheChuyenXe.findUniqueOrThrow({
+      where: { gheChuyenXeId: tripSeat2 },
+    });
+    expect(bookedSeat.trangThai).toBe('DA_DAT');
+    expect(bookedSeat.giuChoId).toBeNull();
   }, 30_000);
 
   it('releases held seats back to TRONG when hold expires and allows other customers to hold them (discussion_r4220529046)', async () => {
@@ -450,7 +532,8 @@ describe('SeatHolds Concurrency & Isolation with MySQL (Integration)', () => {
 
     // Customer or system triggers release on expired hold
     const releaseRes = await request(app.getHttpServer())
-      .delete(`/api/v1/seat-holds/${holdToken}`)
+      .delete('/api/v1/seat-holds')
+      .set('X-Hold-Token', holdToken)
       .expect(200);
     expect(releaseRes.body.data?.success ?? releaseRes.body.success).toBe(true);
 
@@ -477,7 +560,8 @@ describe('SeatHolds Concurrency & Isolation with MySQL (Integration)', () => {
     // Clean up Customer B hold
     const holdTokenB = (customerBHoldRes.body.data ?? customerBHoldRes.body).holdToken;
     await request(app.getHttpServer())
-      .delete(`/api/v1/seat-holds/${holdTokenB}`)
+      .delete('/api/v1/seat-holds')
+      .set('X-Hold-Token', holdTokenB)
       .expect(200);
   }, 30_000);
 
@@ -535,7 +619,8 @@ describe('SeatHolds Concurrency & Isolation with MySQL (Integration)', () => {
 
     // 2. Customer A releases hold
     await request(app.getHttpServer())
-      .delete(`/api/v1/seat-holds/${holdTokenA}`)
+      .delete('/api/v1/seat-holds')
+      .set('X-Hold-Token', holdTokenA)
       .expect(200);
 
     // 3. Customer B holds the exact same seat
