@@ -194,7 +194,7 @@ describe('CargoPricingService', () => {
     });
   });
 
-  it('applies booking-only dimension and per-package weight limits before looking up rates', async () => {
+  it('applies booking-only dimension limits before looking up rates', async () => {
     const service = new CargoPricingService();
     const limits = {
       maxNonVehiclePackageWeightKg: 40,
@@ -225,26 +225,120 @@ describe('CargoPricingService', () => {
     });
     expect(oversizedDimensionsTx.bangCuocGuiHang.findMany).not.toHaveBeenCalled();
 
-    const oversizedWeightTx = makeTransaction();
+  });
+
+  it('accepts two 25kg packages on one row and prices the aggregate 50kg bracket', async () => {
+    const tx = makeTransaction({
+      rates: [
+        {
+          bangCuocGuiHangId: 32,
+          loaiHangHoaId: 21,
+          khoiLuongTu: new Prisma.Decimal(45),
+          khoiLuongDen: new Prisma.Decimal(50),
+          mucCuoc: new Prisma.Decimal(90_000),
+        },
+      ],
+    });
+
+    const result = await new CargoPricingService().calculate(tx, trip, {
+      senderPointId: 11,
+      receiverPointId: 12,
+      bookingLimits: { maxNonVehiclePackageWeightKg: 40 },
+      items: [{ name: 'Thùng hàng', quantity: 2, weight: 25, loaiHangHoaId: 21 }],
+    });
+
+    expect(result.items[0].effectiveUnitWeight.toNumber()).toBe(25);
+    expect(result.items[0].totalWeight.toNumber()).toBe(50);
+    expect(result.rates).toHaveLength(1);
+    expect(result.rates[0].totalWeight.toNumber()).toBe(50);
+    expect(result.rates[0].bangCuocGuiHangId).toBe(32);
+    expect(result.rates[0].fee.toNumber()).toBe(90_000);
+    expect(result.totalFee.toNumber()).toBe(90_000);
+  });
+
+  it('aggregates separate 25kg rows for bracket pricing without treating their sum as one package', async () => {
+    const tx = makeTransaction({
+      rates: [
+        {
+          bangCuocGuiHangId: 32,
+          loaiHangHoaId: 21,
+          khoiLuongTu: new Prisma.Decimal(45),
+          khoiLuongDen: new Prisma.Decimal(50),
+          mucCuoc: new Prisma.Decimal(90_000),
+        },
+      ],
+    });
+
+    const result = await new CargoPricingService().calculate(tx, trip, {
+      senderPointId: 11,
+      receiverPointId: 12,
+      bookingLimits: { maxNonVehiclePackageWeightKg: 40 },
+      items: [
+        { name: 'Thùng hàng 1', quantity: 1, weight: 25, loaiHangHoaId: 21 },
+        { name: 'Thùng hàng 2', quantity: 1, weight: 25, loaiHangHoaId: 21 },
+      ],
+    });
+
+    expect(result.items.map((item) => item.effectiveUnitWeight.toNumber())).toEqual([
+      25,
+      25,
+    ]);
+    expect(result.rates[0].totalWeight.toNumber()).toBe(50);
+    expect(result.rates[0].fee.toNumber()).toBe(90_000);
+  });
+
+  it('accepts exactly 40kg effective weight for one regular package', async () => {
+    const tx = makeTransaction({
+      rates: [
+        {
+          bangCuocGuiHangId: 33,
+          loaiHangHoaId: 21,
+          khoiLuongTu: new Prisma.Decimal(0),
+          khoiLuongDen: new Prisma.Decimal(40),
+          mucCuoc: new Prisma.Decimal(80_000),
+        },
+      ],
+    });
+
+    const result = await new CargoPricingService().calculate(tx, trip, {
+      senderPointId: 11,
+      receiverPointId: 12,
+      bookingLimits: { maxNonVehiclePackageWeightKg: 40 },
+      items: [{ name: 'Thùng hàng', quantity: 1, weight: 40, loaiHangHoaId: 21 }],
+    });
+
+    expect(result.items[0].effectiveUnitWeight.toNumber()).toBe(40);
+    expect(result.rates[0].totalWeight.toNumber()).toBe(40);
+    expect(result.totalFee.toNumber()).toBe(80_000);
+  });
+
+  it.each([
+    ['one 41kg package', { quantity: 1, weight: 41 }],
+    ['two 41kg packages', { quantity: 2, weight: 41 }],
+    [
+      'volumetric weight above 40kg',
+      { quantity: 1, weight: 1, length: 100, width: 50, height: 41 },
+    ],
+  ])('rejects %s using effective weight per package', async (_caseName, item) => {
+    const tx = makeTransaction();
+
     await expect(
-      service.calculate(oversizedWeightTx, trip, {
+      new CargoPricingService().calculate(tx, trip, {
         senderPointId: 11,
         receiverPointId: 12,
-        bookingLimits: limits,
-        items: [
-          {
-            name: 'Thùng hàng nặng',
-            physicalType: 'Vali',
-            loaiHangHoaId: 21,
-            quantity: 2,
-            weight: 21,
-          },
-        ],
+        bookingLimits: {
+          maxNonVehiclePackageWeightKg: 40,
+          maxNonVehicleDimensionsCm: { length: 150, width: 80, height: 80 },
+        },
+        items: [{ name: 'Thùng hàng', loaiHangHoaId: 21, ...item }],
       }),
     ).rejects.toMatchObject({
-      response: expect.objectContaining({ error: 'CARGO_WEIGHT_EXCEEDED' }),
+      response: expect.objectContaining({
+        error: 'CARGO_WEIGHT_EXCEEDED',
+        message: expect.stringContaining('mỗi kiện tối đa 40kg'),
+      }),
     });
-    expect(oversizedWeightTx.bangCuocGuiHang.findMany).not.toHaveBeenCalled();
+    expect(tx.bangCuocGuiHang.findMany).not.toHaveBeenCalled();
   });
 
   it.each([

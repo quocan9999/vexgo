@@ -285,12 +285,12 @@ export class CargoPricingService {
       if (
         !isVehicle &&
         maxPackageWeight !== undefined &&
-        totalWeight.greaterThan(maxPackageWeight)
+        unitWeight.greaterThan(maxPackageWeight)
       ) {
         throw new BadRequestException({
           error: 'CARGO_WEIGHT_EXCEEDED',
           message:
-            `Hành lý "${item.name}" có khối lượng (${totalWeight.toString()}kg) vượt quá hạn mức tối đa ${maxPackageWeight}kg đi kèm vé. Quý khách vui lòng tạo đơn gửi hàng riêng tại mục Gửi hàng bưu kiện.`,
+            `Kiện "${item.name}" có khối lượng hiệu dụng ${unitWeight.toString()}kg; mỗi kiện tối đa ${maxPackageWeight}kg khi đi kèm vé. Quý khách vui lòng tạo đơn gửi hàng riêng tại mục Gửi hàng bưu kiện.`,
         });
       }
 

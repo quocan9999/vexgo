@@ -7,6 +7,10 @@ import { Package, PackageX, Info } from 'lucide-react';
 
 import { LuggageForm } from './luggage-form';
 import { shipmentsApi, type CargoCategory } from '@/features/shipments/services/shipments.api';
+import {
+  findOverweightRegularCargoItem,
+  MAX_REGULAR_CARGO_PACKAGE_WEIGHT_KG,
+} from '../../utils/cargo-weight';
 
 interface CargoCapacityInfo {
   acceptsShipments: boolean;
@@ -32,6 +36,7 @@ export const LuggageStep: React.FC<LuggageStepProps> = ({ route, time, seat, pas
   const [cargoCategories, setCargoCategories] = useState<CargoCategory[]>([]);
   const [cargoCategoriesLoading, setCargoCategoriesLoading] = useState(true);
   const [cargoCategoriesError, setCargoCategoriesError] = useState<string | null>(null);
+  const overweightRegularCargoItem = findOverweightRegularCargoItem(items);
 
   useEffect(() => {
     let isMounted = true;
@@ -221,17 +226,7 @@ export const LuggageStep: React.FC<LuggageStepProps> = ({ route, time, seat, pas
           <p className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs leading-relaxed text-slate-600">
             Cước hàng được máy chủ tính theo danh mục, tổng khối lượng và bảng giá của tuyến; số tiền chính xác sẽ hiển thị sau khi đặt vé. Phụ phí dễ vỡ 20.000đ và giá trị cao 50.000đ được tính tối đa một lần cho mỗi loại dịch vụ.
           </p>
-          {items
-            .filter((item) => item.type !== 'Xe máy' && item.type !== 'Xe đạp')
-            .reduce((sum, item) => {
-              const actualWeight = item.weight || 0;
-              const volumetricWeight =
-                item.length && item.width && item.height
-                  ? (item.length * item.width * item.height) / 5000
-                  : 0;
-              const effectiveWeight = Math.max(actualWeight, volumetricWeight);
-              return sum + effectiveWeight * (item.quantity || 1);
-            }, 0) > 40 && (
+          {overweightRegularCargoItem && (
             <div className="mt-4 p-4 rounded-xl border border-red-200 bg-red-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="flex items-start gap-3">
                 <div className="w-8 h-8 rounded-lg bg-red-100 flex items-center justify-center shrink-0 mt-0.5">
@@ -239,10 +234,10 @@ export const LuggageStep: React.FC<LuggageStepProps> = ({ route, time, seat, pas
                 </div>
                 <div className="space-y-1">
                   <h4 className="text-sm font-bold text-slate-900">
-                    Hành lý vượt quá 40kg — Cần tạo vận đơn gửi hàng
+                    Có kiện hành lý thường vượt quá 40kg — Cần tạo vận đơn gửi hàng
                   </h4>
                   <p className="text-xs text-slate-600 leading-relaxed max-w-xl">
-                    Vé xe chỉ hỗ trợ tối đa 40kg hành lý kèm theo (dưới 20kg miễn phí, 20–40kg phụ phí 30.000đ). Với kiện trên 40kg hoặc kích thước lớn, vui lòng chuyển sang dịch vụ gửi hàng hầm xe để được xếp chỗ.
+                    Vé xe hỗ trợ tối đa {MAX_REGULAR_CARGO_PACKAGE_WEIGHT_KG}kg cho mỗi kiện hành lý thường (dưới 20kg miễn phí, 20–40kg phụ phí 30.000đ). Kiện vượt mức này cần gửi riêng bằng dịch vụ gửi hàng hầm xe.
                   </p>
                 </div>
               </div>

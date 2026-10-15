@@ -31,6 +31,11 @@ import {
 } from '../utils/one-way-booking';
 import { validatePassengerInfo } from '../utils/passenger-validation';
 import { hydrateUntouchedProfileField } from '../utils/profile-hydration';
+import {
+  findOverweightRegularCargoItem,
+  getEffectiveCargoUnitWeightKg,
+  MAX_REGULAR_CARGO_PACKAGE_WEIGHT_KG,
+} from '../utils/cargo-weight';
 import { createPaymentDraft } from '../services/payment-draft';
 import { FeaturePlaceholderModal } from './feature-placeholder-modal';
 import { useAuthSession } from '@/features/auth/auth-session';
@@ -283,18 +288,10 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
   const [luggageItems, setLuggageItems] = useState<ILuggageItem[]>([]);
   const validCargoItems = luggageItems.filter(isValidCargoItem);
   const hasCargoItems = validCargoItems.length > 0;
-  const regularLuggageWeight = Number(
-    luggageItems
-      .filter((item) => item.type !== 'Xe máy' && item.type !== 'Xe đạp')
-      .reduce((total, item) => {
-        const actualWeight = item.weight || 0;
-        const volumetricWeight =
-          item.length && item.width && item.height
-            ? (item.length * item.width * item.height) / 5000
-            : 0;
-        return total + Math.max(actualWeight, volumetricWeight) * (item.quantity || 1);
-      }, 0)
-      .toFixed(2),
+  const overweightRegularCargoItem = findOverweightRegularCargoItem(luggageItems);
+  const luggagePackageCount = luggageItems.reduce(
+    (total, item) => total + (Number.isFinite(item.quantity) ? item.quantity : 0),
+    0,
   );
   const [cargoRoutePoints, setCargoRoutePoints] =
     useState<ShipmentRoutePoints | null>(null);
@@ -469,9 +466,12 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
       );
       return;
     }
-    if (regularLuggageWeight > 40) {
+    if (overweightRegularCargoItem) {
+      const effectiveUnitWeight = getEffectiveCargoUnitWeightKg(
+        overweightRegularCargoItem,
+      );
       setSubmitError(
-        `Tổng khối lượng hành lý thường (${regularLuggageWeight}kg) vượt quá hạn mức đi kèm vé (tối đa 40kg).`,
+        `Kiện "${overweightRegularCargoItem.type}" có khối lượng hiệu dụng ${effectiveUnitWeight}kg; mỗi kiện tối đa ${MAX_REGULAR_CARGO_PACKAGE_WEIGHT_KG}kg khi đi kèm vé.`,
       );
       return;
     }
@@ -715,7 +715,7 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
                 info:
                   luggageItems.length > 0 && luggageWeight > 0
                     ? {
-                        count: luggageItems.length,
+                        count: luggagePackageCount,
                         weight: luggageWeight,
                         fee: finalLuggageFee,
                         category: luggageItems[0]?.category || 'normal',
@@ -1501,7 +1501,7 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
                   </div>
                   <div className="mt-2 flex items-center justify-between">
                     <span className="text-[11px] font-bold text-accent bg-accent/10 px-2.5 py-0.5 rounded-full border border-accent/20">
-                      {luggageItems.length} kiện • {Number(luggageWeight.toFixed(2))}kg
+                      {luggagePackageCount} kiện • {Number(luggageWeight.toFixed(2))}kg
                     </span>
                   </div>
                 </div>
@@ -1708,7 +1708,7 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
                   Chi tiết hàng gửi hầm xe
                 </h2>
                 <p className="text-xs text-slate-500 font-medium mt-0.5">
-                  Tổng cộng: {luggageItems.length} kiện • {Number(luggageWeight.toFixed(2))}kg
+                  Tổng cộng: {luggagePackageCount} kiện • {Number(luggageWeight.toFixed(2))}kg
                 </p>
               </div>
               <button

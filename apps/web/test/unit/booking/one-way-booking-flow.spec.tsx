@@ -70,6 +70,12 @@ const cargoCategories = [
     description: 'Hàng hóa thông thường',
     capacityGroup: 'HANG_NHE',
   },
+  {
+    categoryId: 14,
+    name: 'Hàng cồng kềnh',
+    description: 'Hàng hóa từ 20kg đến 40kg mỗi kiện',
+    capacityGroup: 'HANG_CONG_KENH',
+  },
 ];
 
 type RecordedRequest = { url: string; init?: RequestInit };
@@ -181,6 +187,13 @@ async function selectCargoCategory(
     ).toBe(true);
   });
   fireEvent.change(categorySelect, { target: { value: String(categoryId) } });
+}
+
+function setCargoQuantity(itemIndex: number, quantity: number) {
+  const quantityInputs = screen.getAllByLabelText('Số lượng');
+  fireEvent.change(quantityInputs[itemIndex], {
+    target: { value: String(quantity) },
+  });
 }
 
 beforeEach(() => {
@@ -333,6 +346,48 @@ describe('one-way booking with server seat holds', () => {
     });
   });
 
+  it('submits quantity two at 25kg each while retaining 50kg as the displayed total', async () => {
+    render(<OneWayBooking post={post} tripSeats={tripSeats} />);
+    await enableExtraLuggage();
+    await selectCargoCategory(0, 'Vali', 14, 25);
+    setCargoQuantity(0, 2);
+    await screen.findByLabelText('Điểm gửi hàng');
+
+    expect(screen.getByText('2 kiện • 50kg')).toBeTruthy();
+    expect(screen.queryByText(/mỗi kiện tối đa 40kg/i)).toBeNull();
+    completeForm();
+
+    await waitFor(() => expect(requestsFor('/bookings', 'POST')).toHaveLength(1));
+    expect(requestBody(requestsFor('/bookings', 'POST')[0]).cargoItems).toEqual([
+      expect.objectContaining({
+        type: 'Vali',
+        quantity: 2,
+        weight: 25,
+        loaiHangHoaId: 14,
+      }),
+    ]);
+  });
+
+  it('submits separate 25kg rows without treating their 50kg sum as one package', async () => {
+    render(<OneWayBooking post={post} tripSeats={tripSeats} />);
+    await enableExtraLuggage();
+    await selectCargoCategory(0, 'Vali', 14, 25);
+    fireEvent.click(screen.getByRole('button', { name: 'Thêm kiện hành lý' }));
+    await waitFor(() => expect(screen.getAllByLabelText('Loại hành lý')).toHaveLength(2));
+    await selectCargoCategory(1, 'Vali', 14, 25);
+    await screen.findByLabelText('Điểm gửi hàng');
+
+    expect(screen.getByText('2 kiện • 50kg')).toBeTruthy();
+    expect(screen.queryByText(/mỗi kiện tối đa 40kg/i)).toBeNull();
+    completeForm();
+
+    await waitFor(() => expect(requestsFor('/bookings', 'POST')).toHaveLength(1));
+    expect(requestBody(requestsFor('/bookings', 'POST')[0]).cargoItems).toEqual([
+      expect.objectContaining({ type: 'Vali', quantity: 1, weight: 25, loaiHangHoaId: 14 }),
+      expect.objectContaining({ type: 'Vali', quantity: 1, weight: 25, loaiHangHoaId: 14 }),
+    ]);
+  });
+
   it('submits a 100kg motorcycle without applying the regular-luggage limit and preserves its cargo payload', async () => {
     render(<OneWayBooking post={post} tripSeats={tripSeats} />);
     await enableExtraLuggage();
@@ -381,13 +436,14 @@ describe('one-way booking with server seat holds', () => {
     await waitFor(() => expect(state.routerPush).toHaveBeenCalledTimes(1));
   });
 
-  it('submits a motorcycle plus regular luggage without counting motorcycle weight toward 40kg', async () => {
+  it('submits a 100kg motorcycle and two 25kg packages without treating cargo totals as per-package limits', async () => {
     render(<OneWayBooking post={post} tripSeats={tripSeats} />);
     await enableExtraLuggage();
     await selectCargoCategory(0, 'Xe máy', 11);
     fireEvent.click(screen.getByRole('button', { name: 'Thêm kiện hành lý' }));
     await waitFor(() => expect(screen.getAllByLabelText('Loại hành lý')).toHaveLength(2));
-    await selectCargoCategory(1, 'Vali', 13, 10);
+    await selectCargoCategory(1, 'Vali', 14, 25);
+    setCargoQuantity(1, 2);
     await screen.findByLabelText('Điểm gửi hàng');
 
     completeForm();
@@ -395,7 +451,7 @@ describe('one-way booking with server seat holds', () => {
     await waitFor(() => expect(requestsFor('/bookings', 'POST')).toHaveLength(1));
     expect(requestBody(requestsFor('/bookings', 'POST')[0]).cargoItems).toEqual([
       expect.objectContaining({ type: 'Xe máy', weight: 100, loaiHangHoaId: 11 }),
-      expect.objectContaining({ type: 'Vali', weight: 10, loaiHangHoaId: 13 }),
+      expect.objectContaining({ type: 'Vali', quantity: 2, weight: 25, loaiHangHoaId: 14 }),
     ]);
     await waitFor(() => expect(state.routerPush).toHaveBeenCalledTimes(1));
   });
@@ -410,7 +466,33 @@ describe('one-way booking with server seat holds', () => {
     completeForm();
 
     await waitFor(() =>
-      expect(screen.getByRole('alert').textContent).toContain('vượt quá hạn mức đi kèm vé'),
+      expect(screen.getByRole('alert').textContent).toContain('mỗi kiện tối đa 40kg'),
+    );
+    expect(screen.getByText(/Có kiện hành lý thường vượt quá 40kg/)).toBeTruthy();
+    expect(requestsFor('/seat-holds', 'POST')).toHaveLength(0);
+    expect(requestsFor('/bookings', 'POST')).toHaveLength(0);
+    expect(state.routerPush).not.toHaveBeenCalled();
+  });
+
+  it('blocks a package whose effective volumetric weight exceeds 40kg', async () => {
+    render(<OneWayBooking post={post} tripSeats={tripSeats} />);
+    await enableExtraLuggage();
+    fireEvent.change(screen.getByPlaceholderText('Dài (tối đa 150)'), {
+      target: { value: '100' },
+    });
+    fireEvent.change(screen.getByPlaceholderText('Rộng (tối đa 80)'), {
+      target: { value: '50' },
+    });
+    fireEvent.change(screen.getByPlaceholderText('Cao (tối đa 80)'), {
+      target: { value: '41' },
+    });
+    await selectCargoCategory(0, 'Vali', 13, 1);
+    await screen.findByLabelText('Điểm gửi hàng');
+
+    completeForm();
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert').textContent).toContain('mỗi kiện tối đa 40kg'),
     );
     expect(requestsFor('/seat-holds', 'POST')).toHaveLength(0);
     expect(requestsFor('/bookings', 'POST')).toHaveLength(0);
@@ -464,6 +546,32 @@ describe('one-way booking with server seat holds', () => {
     completeForm();
 
     await waitFor(() => expect(requestsFor('/bookings', 'POST')).toHaveLength(1));
+    await waitFor(() =>
+      expect(screen.getByRole('alert').textContent).toContain(message),
+    );
+    expect(requestsFor('/seat-holds', 'DELETE')).toHaveLength(1);
+    expect(state.routerPush).not.toHaveBeenCalled();
+    expect(window.sessionStorage.length).toBe(0);
+  });
+
+  it.each([
+    ['CARGO_CAPACITY_EXCEEDED', 'Chuyến xe đã hết sức chứa hàng cồng kềnh.'],
+    ['CARGO_RATE_NOT_FOUND', 'Chưa có mức cước phù hợp cho tổng khối lượng 50kg.'],
+  ])('shows regular cargo backend %s without creating a successful booking', async (code, message) => {
+    bookingResponse = async () =>
+      response({ statusCode: 409, error: code, message }, 409);
+    render(<OneWayBooking post={post} tripSeats={tripSeats} />);
+    await enableExtraLuggage();
+    await selectCargoCategory(0, 'Vali', 14, 25);
+    setCargoQuantity(0, 2);
+    await screen.findByLabelText('Điểm gửi hàng');
+
+    completeForm();
+
+    await waitFor(() => expect(requestsFor('/bookings', 'POST')).toHaveLength(1));
+    expect(requestBody(requestsFor('/bookings', 'POST')[0]).cargoItems).toEqual([
+      expect.objectContaining({ quantity: 2, weight: 25, loaiHangHoaId: 14 }),
+    ]);
     await waitFor(() =>
       expect(screen.getByRole('alert').textContent).toContain(message),
     );

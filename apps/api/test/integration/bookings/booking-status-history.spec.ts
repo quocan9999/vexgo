@@ -56,6 +56,7 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
   let senderPointId: number;
   let receiverPointId: number;
   let cargoRateId: number;
+  let bulkyHeavyCargoRateId: number;
   let bulkyCargoRateId: number;
   let tripId: number;
   let tripSeatIds: number[] = [];
@@ -82,6 +83,7 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
       loaiHangHoaId: number;
       quantity: number;
       type?: string;
+      weight?: number;
       length?: number;
       width?: number;
       height?: number;
@@ -98,7 +100,7 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
     cargoItems: cargoItems.map((item) => ({
       ...item,
       type: item.type ?? 'Vali',
-      weight: 1,
+      weight: item.weight ?? 1,
       category: 'normal',
     })),
   });
@@ -258,6 +260,20 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
       select: { bangCuocGuiHangId: true },
     });
     bulkyCargoRateId = bulkyCargoRate.bangCuocGuiHangId;
+    const bulkyHeavyCargoRate = await prisma.bangCuocGuiHang.create({
+      data: {
+        khoiLuongTu: 45,
+        khoiLuongDen: 50,
+        mucCuoc: 90_000,
+        tuNgay: new Date('2020-01-01T00:00:00.000Z'),
+        trangThai: 'HOAT_DONG',
+        diemGuiId: senderPointId,
+        diemNhanId: receiverPointId,
+        loaiHangHoaId: bulkyCargoTypeId,
+      },
+      select: { bangCuocGuiHangId: true },
+    });
+    bulkyHeavyCargoRateId = bulkyHeavyCargoRate.bangCuocGuiHangId;
 
     const vehicleType = await prisma.loaiXe.create({
       data: {
@@ -376,6 +392,11 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
       }
       if (bulkyCargoRateId) {
         await prisma.bangCuocGuiHang.deleteMany({ where: { bangCuocGuiHangId: bulkyCargoRateId } });
+      }
+      if (bulkyHeavyCargoRateId) {
+        await prisma.bangCuocGuiHang.deleteMany({
+          where: { bangCuocGuiHangId: bulkyHeavyCargoRateId },
+        });
       }
       if (senderPointId || receiverPointId) {
         await prisma.diemGiaoNhanTuyenXe.deleteMany({
@@ -711,6 +732,115 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
     expect(failedNoRate.status).toBe(409);
     expect(failedNoRate.body.error).toBe('CARGO_RATE_NOT_FOUND');
     expect(await prisma.donGiaoDich.count({ where: { nhaXeId: busCompanyId } })).toBe(orderCount);
+  });
+
+  it('accepts two 25kg packages, snapshots the 50kg rate, and consumes two capacity units', async () => {
+    currentPrincipal = customerPrincipal;
+    await prisma.chuyenXe.update({
+      where: { chuyenXeId: tripId },
+      data: { sucChuaHangCongKenh: 2 },
+    });
+    const hold = await request(app.getHttpServer())
+      .post('/api/v1/seat-holds')
+      .send({ tripId, seatIds: [tripSeatIds[0]] });
+    expect(hold.status, JSON.stringify(hold.body)).toBe(201);
+
+    const response = await request(app.getHttpServer())
+      .post('/api/v1/bookings')
+      .send(
+        bookingWithCargoPayload(hold.body.data.holdToken, [
+          {
+            name: 'Hai thùng hàng',
+            type: 'Vali',
+            loaiHangHoaId: bulkyCargoTypeId,
+            quantity: 2,
+            weight: 25,
+          },
+        ]),
+      );
+
+    expect(response.status, JSON.stringify(response.body)).toBe(201);
+    expect(response.body.data).toMatchObject({
+      shippingFee: 90_000,
+      totalAmount: 240_000,
+    });
+    const shipmentId = response.body.data.shipment.shipmentId as number;
+    const shipment = await prisma.phieuGuiHang.findUniqueOrThrow({
+      where: { phieuGuiHangId: shipmentId },
+      include: { chiTietCuocGuiHangs: true, hangHoas: true },
+    });
+    expect(shipment.chiTietCuocGuiHangs).toHaveLength(1);
+    expect(shipment.chiTietCuocGuiHangs[0].bangCuocGuiHangId).toBe(
+      bulkyHeavyCargoRateId,
+    );
+    expect(Number(shipment.chiTietCuocGuiHangs[0].khoiLuongTinhCuoc)).toBe(50);
+    expect(Number(shipment.chiTietCuocGuiHangs[0].soTienCuoc)).toBe(90_000);
+    expect(shipment.hangHoas).toHaveLength(1);
+    expect(shipment.hangHoas[0].soLuong).toBe(2);
+    expect(Number(shipment.hangHoas[0].khoiLuong)).toBe(25);
+
+    const capacity = await request(app.getHttpServer())
+      .get(`/api/v1/trips/${tripId}/cargo-capacity`);
+    expect(capacity.body.data.capacities.bulkyGoods).toEqual({
+      total: 2,
+      used: 2,
+      remaining: 0,
+    });
+  });
+
+  it('rejects a 41kg package without partial booking writes or consuming its seat hold', async () => {
+    currentPrincipal = customerPrincipal;
+    const hold = await request(app.getHttpServer())
+      .post('/api/v1/seat-holds')
+      .send({ tripId, seatIds: [tripSeatIds[0]] });
+    expect(hold.status, JSON.stringify(hold.body)).toBe(201);
+
+    const countBookingAndCargoRecords = async () => ({
+      orders: await prisma.donGiaoDich.count({ where: { nhaXeId: busCompanyId } }),
+      bookings: await prisma.phieuDatVe.count({
+        where: { donGiaoDich: { nhaXeId: busCompanyId } },
+      }),
+      tickets: await prisma.ve.count({
+        where: { phieuDatVe: { donGiaoDich: { nhaXeId: busCompanyId } } },
+      }),
+      payments: await prisma.thanhToan.count({
+        where: { donGiaoDich: { nhaXeId: busCompanyId } },
+      }),
+      shipments: await prisma.phieuGuiHang.count({ where: { chuyenXeId: tripId } }),
+      items: await prisma.hangHoa.count({
+        where: { phieuGuiHang: { chuyenXeId: tripId } },
+      }),
+      feeDetails: await prisma.chiTietCuocGuiHang.count({
+        where: { phieuGuiHang: { chuyenXeId: tripId } },
+      }),
+    });
+    const before = await countBookingAndCargoRecords();
+
+    const response = await request(app.getHttpServer())
+      .post('/api/v1/bookings')
+      .send(
+        bookingWithCargoPayload(hold.body.data.holdToken, [
+          {
+            name: 'Thùng quá cân',
+            type: 'Vali',
+            loaiHangHoaId: bulkyCargoTypeId,
+            quantity: 2,
+            weight: 41,
+          },
+        ]),
+      );
+
+    expect(response.status).toBe(400);
+    expect(response.body).toMatchObject({
+      error: 'CARGO_WEIGHT_EXCEEDED',
+      message: expect.stringContaining('mỗi kiện tối đa 40kg'),
+    });
+    expect(await countBookingAndCargoRecords()).toEqual(before);
+    const seat = await prisma.gheChuyenXe.findUniqueOrThrow({
+      where: { gheChuyenXeId: tripSeatIds[0] },
+    });
+    expect(seat.trangThai).toBe('DANG_GIU');
+    expect(seat.giuChoId).not.toBeNull();
   });
 
   it('rejects invalid dimensions on standalone shipment and booking cargo without persisting related rows', async () => {
