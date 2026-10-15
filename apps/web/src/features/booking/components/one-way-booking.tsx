@@ -17,6 +17,7 @@ import {
   Package,
   PackageCheck,
   Phone,
+  Tag,
   Ticket,
   User,
   X,
@@ -43,6 +44,7 @@ import { customerApi } from '@/features/account/services/customer.api';
 import {
   ApiError,
   bookingsApi,
+  type BookingQuoteData,
   type CreatedBookingData,
   type CreateBookingPayload,
 } from '@/features/account/services/bookings.api';
@@ -83,6 +85,7 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
   const isTicket = post.needType === 'BUY';
   const [userNameOverride, setUserNameOverride] = useState<string | null>(null);
   const [userPhoneOverride, setUserPhoneOverride] = useState<string | null>(null);
+  const [verifiedAccountPhone, setVerifiedAccountPhone] = useState<string | null>(null);
   const [customerEmail, setCustomerEmail] = useState('');
   const [pickupOverride, setPickupOverride] = useState<string | null>(null);
   const [dropoffOverride, setDropoffOverride] = useState<string | null>(null);
@@ -102,6 +105,11 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
         if (res.data.phoneNumber) {
           setUserPhoneOverride((current) => hydrateUntouchedProfileField(current, formatDisplayPhone(res.data.phoneNumber)));
         }
+        setVerifiedAccountPhone(
+          res.data.phoneVerified && res.data.phoneNumber
+            ? formatDisplayPhone(res.data.phoneNumber)
+            : null,
+        );
       })
       .catch(() => {});
     return () => {
@@ -124,6 +132,11 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
         if (res?.data) {
           if (res.data.fullName) setUserNameOverride(res.data.fullName);
           if (res.data.phoneNumber) setUserPhoneOverride(formatDisplayPhone(res.data.phoneNumber));
+          setVerifiedAccountPhone(
+            res.data.phoneVerified && res.data.phoneNumber
+              ? formatDisplayPhone(res.data.phoneNumber)
+              : null,
+          );
           if (res.data.email) setCustomerEmail(res.data.email);
         }
       })
@@ -148,6 +161,16 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
   );
 
   const [selectedSeats, setSelectedSeats] = useState<string[]>([]);
+  const [promotionInput, setPromotionInput] = useState('');
+  const [activePromotionCode, setActivePromotionCode] = useState<string | null>(null);
+  const [promotionRequestVersion, setPromotionRequestVersion] = useState(0);
+  const [promotionQuoteState, setPromotionQuoteState] = useState<{
+    requestKey: string;
+    status: 'idle' | 'loading' | 'valid' | 'invalid';
+    message: string;
+    quote?: BookingQuoteData;
+  }>({ requestKey: '', status: 'idle', message: '' });
+  const promotionInputRef = useRef<HTMLInputElement | null>(null);
   const [seatMap, setSeatMap] = useState(tripSeats);
   const activeTripIdRef = useRef(Number(post.id));
   const latestTripIdRef = useRef(Number(post.id));
@@ -356,10 +379,189 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
   const selectedSeatText = selectedSeats.join(', ');
   const baseFare = post.price.split(' - ')[0];
   const baseFareNumber = Number(baseFare.replace(/[^\d]/g, '')) || 0;
-  const totalFare = baseFareNumber * selectedSeats.length + luggageFee;
-  const totalFareText = totalFare.toLocaleString('vi-VN');
-  const totalFareLabel = hasSelectedCargoItems ? 'Tạm tính tiền vé' : 'Tổng tiền';
+  const quoteTripId = Number(post.id);
+  const quoteSeatIds = selectedSeats
+    .map((seatNumber) =>
+      seatMap.find((seat) => seat.seatNumber === seatNumber && seat.status === 'TRONG')?.tripSeatId,
+    )
+    .filter(
+      (seatId): seatId is number =>
+        typeof seatId === 'number' && Number.isSafeInteger(seatId) && seatId > 0,
+    );
+  const promotionIdentityPhone = isAuthenticated ? '' : customerPhone.trim();
+  const promotionRequestKey = JSON.stringify({
+    tripId: quoteTripId,
+    seatIds: quoteSeatIds,
+    selectedSeats,
+    promotionCode: activePromotionCode,
+    identityPhone: promotionIdentityPhone,
+    isAuthenticated,
+    isHydrated,
+    fare: baseFareNumber,
+    version: promotionRequestVersion,
+  });
+  const currentPromotionState =
+    promotionQuoteState.requestKey === promotionRequestKey
+      ? promotionQuoteState
+      : null;
+  const promotionStatus = activePromotionCode
+    ? currentPromotionState?.status ?? 'loading'
+    : 'idle';
+  const promotionMessage = currentPromotionState?.message ?? '';
+  const promotionQuote =
+    promotionStatus === 'valid' ? currentPromotionState?.quote ?? null : null;
+  const hasCurrentPromotionQuote = Boolean(promotionQuote);
+  const quotedTicketTotal = promotionQuote ? Number(promotionQuote.finalTotal) : null;
+  const totalFare =
+    quotedTicketTotal !== null && Number.isFinite(quotedTicketTotal)
+      ? quotedTicketTotal + luggageFee
+      : baseFareNumber * selectedSeats.length + luggageFee;
+  const isPromotionQuotePending =
+    Boolean(activePromotionCode) && promotionStatus === 'loading';
+  const totalFareText = isPromotionQuotePending
+    ? 'Đang xác minh…'
+    : `${totalFare.toLocaleString('vi-VN')}đ`;
+  const totalFareLabel = hasCurrentPromotionQuote
+    ? 'Tổng thanh toán tạm tính'
+    : hasSelectedCargoItems
+      ? 'Tạm tính tiền vé'
+      : 'Tổng tiền';
   const canPay = canPayForOneWayBooking(selectedSeats, isAcceptedTerms);
+  const hasUnappliedPromotionInput = Boolean(
+    promotionInput.trim() && !activePromotionCode,
+  );
+  const canPayWithPromotion =
+    !hasUnappliedPromotionInput &&
+    (!activePromotionCode || hasCurrentPromotionQuote);
+
+  useEffect(() => {
+    if (!activePromotionCode) {
+      setPromotionQuoteState({
+        requestKey: promotionRequestKey,
+        status: 'idle',
+        message: '',
+      });
+      return;
+    }
+
+    if (!isHydrated) {
+      setPromotionQuoteState({
+        requestKey: promotionRequestKey,
+        status: 'idle',
+        message: 'Đang xác minh trạng thái tài khoản trước khi kiểm tra mã.',
+      });
+      return;
+    }
+
+    if (selectedSeats.length === 0) {
+      setPromotionQuoteState({
+        requestKey: promotionRequestKey,
+        status: 'idle',
+        message: 'Chọn ít nhất một ghế để kiểm tra mã khuyến mãi.',
+      });
+      return;
+    }
+
+    if (!isAuthenticated && !customerPhone.trim()) {
+      setPromotionQuoteState({
+        requestKey: promotionRequestKey,
+        status: 'idle',
+        message: 'Nhập số điện thoại để kiểm tra điều kiện sử dụng mã.',
+      });
+      return;
+    }
+
+    if (
+      !Number.isSafeInteger(quoteTripId) ||
+      quoteTripId <= 0 ||
+      quoteSeatIds.length !== selectedSeats.length
+    ) {
+      setPromotionQuoteState({
+        requestKey: promotionRequestKey,
+        status: 'invalid',
+        message: 'Không thể xác minh chuyến hoặc ghế đã chọn. Hãy tải lại sơ đồ ghế.',
+      });
+      promotionInputRef.current?.focus();
+      return;
+    }
+
+    const controller = new AbortController();
+    let isCurrent = true;
+    setPromotionQuoteState({
+      requestKey: promotionRequestKey,
+      status: 'loading',
+      message: 'Đang kiểm tra mã khuyến mãi…',
+    });
+
+    const timeout = setTimeout(async () => {
+      try {
+        const payload = {
+          tripId: quoteTripId,
+          seatIds: [...quoteSeatIds].sort((a, b) => a - b),
+          promotionCode: activePromotionCode,
+          ...(!isAuthenticated ? { contactPhone: customerPhone.trim() } : {}),
+        };
+        const response = isAuthenticated
+          ? await executeWithAuth((token) =>
+              bookingsApi.getBookingQuote(payload, token, controller.signal),
+            )
+          : await bookingsApi.getBookingQuote(payload, undefined, controller.signal);
+        if (!isCurrent || controller.signal.aborted) return;
+
+        const quote = response.data;
+        const amounts = [quote.originalTotal, quote.discountAmount, quote.finalTotal].map(Number);
+        if (
+          !quote.appliedPromotionCode ||
+          quote.appliedPromotionCode.toUpperCase() !== activePromotionCode ||
+          amounts.some((amount) => !Number.isFinite(amount) || amount < 0)
+        ) {
+          throw new Error('Máy chủ chưa xác nhận được mã khuyến mãi. Hãy kiểm tra lại mã.');
+        }
+
+        setPromotionQuoteState({
+          requestKey: promotionRequestKey,
+          status: 'valid',
+          message: `Mã ${quote.appliedPromotionCode} đã được áp dụng.`,
+          quote,
+        });
+      } catch (error) {
+        if (!isCurrent || controller.signal.aborted) return;
+        setPromotionQuoteState({
+          requestKey: promotionRequestKey,
+          status: 'invalid',
+          message:
+            error instanceof Error
+              ? error.message
+              : 'Không thể kiểm tra mã khuyến mãi. Vui lòng thử lại.',
+        });
+        promotionInputRef.current?.focus();
+      }
+    }, 250);
+
+    return () => {
+      isCurrent = false;
+      clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [promotionRequestKey]);
+
+  const handleApplyPromotion = () => {
+    const code = promotionInput.trim().toUpperCase();
+    if (!code) {
+      promotionInputRef.current?.focus();
+      return;
+    }
+    setSubmitError(null);
+    setActivePromotionCode(code);
+    setPromotionRequestVersion((version) => version + 1);
+  };
+
+  const handleRemovePromotion = () => {
+    setPromotionInput('');
+    setActivePromotionCode(null);
+    setPromotionQuoteState({ requestKey: '', status: 'idle', message: '' });
+    setSubmitError(null);
+  };
 
   const toggleSeat = (seat: string) => {
     if (bookedSeats.has(seat) || isSubmitting || submissionUnknown) return;
@@ -428,6 +630,18 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
     if (!passengerValidation.isValid) return;
     if (selectedSeats.length === 0) return;
     if (!isAcceptedTerms) return;
+    if (promotionInput.trim() && !activePromotionCode) {
+      setSubmitError('Hãy áp dụng hoặc bỏ mã khuyến mãi đã nhập trước khi tiếp tục.');
+      promotionInputRef.current?.focus();
+      return;
+    }
+    if (activePromotionCode && !hasCurrentPromotionQuote) {
+      setSubmitError(
+        promotionMessage || 'Đang kiểm tra mã khuyến mãi. Vui lòng đợi rồi thử lại.',
+      );
+      promotionInputRef.current?.focus();
+      return;
+    }
 
     const tripId = Number(post.id);
     if (!Number.isSafeInteger(tripId) || tripId <= 0) {
@@ -540,6 +754,7 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
       pickupPoint: pickup || post.province,
       dropoffPoint: dropoff || post.district,
       cargoItems: mappedCargoItems,
+      ...(activePromotionCode ? { promotionCode: activePromotionCode } : {}),
       ...(mappedCargoItems
         ? { senderPointId: senderPointId!, receiverPointId: receiverPointId! }
         : {}),
@@ -637,7 +852,22 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
             return;
           }
           if (mountedRef.current) setHoldExpiresAt(null);
-          showApiError(error, tripId);
+          if (
+            mountedRef.current &&
+            activePromotionCode &&
+            error instanceof ApiError &&
+            error.code?.startsWith('PROMOTION_')
+          ) {
+            setPromotionQuoteState({
+              requestKey: promotionRequestKey,
+              status: 'invalid',
+              message: error.message,
+            });
+            setSubmitError(null);
+            promotionInputRef.current?.focus();
+          } else {
+            showApiError(error, tripId);
+          }
           return;
         }
 
@@ -1142,6 +1372,149 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
               </div>
             </div>
 
+            <section
+              className="p-4 md:p-5 border-b border-slate-200"
+              aria-labelledby="booking-promotion-heading"
+            >
+              <h2
+                id="booking-promotion-heading"
+                className="text-base font-black text-slate-950 mb-3 flex items-center gap-2"
+              >
+                <Tag className="w-4 h-4 text-accent" />
+                Mã khuyến mãi
+              </h2>
+              <div className="max-w-2xl">
+                <label
+                  htmlFor="booking-promotion-code"
+                  className="block text-xs font-bold text-slate-700 mb-1.5"
+                >
+                  Nhập một mã cho đơn đặt vé
+                </label>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <input
+                    ref={promotionInputRef}
+                    id="booking-promotion-code"
+                    type="text"
+                    autoComplete="off"
+                    value={promotionInput}
+                    onChange={(event) => {
+                      const value = event.target.value.toUpperCase();
+                      setPromotionInput(value);
+                      if (activePromotionCode && value.trim() !== activePromotionCode) {
+                        setActivePromotionCode(null);
+                      }
+                    }}
+                    aria-invalid={promotionStatus === 'invalid'}
+                    aria-describedby="booking-promotion-feedback"
+                    className={`h-11 min-w-0 flex-1 rounded-lg border px-3 text-sm font-bold uppercase tracking-wide outline-none focus:ring-2 focus:ring-accent/20 ${
+                      promotionStatus === 'invalid'
+                        ? 'border-red-500 focus:border-red-500'
+                        : promotionStatus === 'valid'
+                          ? 'border-emerald-500 focus:border-emerald-500'
+                          : 'border-slate-300 focus:border-accent'
+                    }`}
+                    placeholder="Ví dụ: VEXGO50"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleApplyPromotion}
+                    disabled={!promotionInput.trim() || promotionStatus === 'loading'}
+                    className="min-h-11 rounded-lg bg-accent px-5 text-sm font-black text-white transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {promotionStatus === 'loading'
+                      ? 'Đang kiểm tra…'
+                      : activePromotionCode
+                        ? 'Kiểm tra lại'
+                        : 'Áp dụng'}
+                  </button>
+                  {(promotionInput || activePromotionCode) && (
+                    <button
+                      type="button"
+                      onClick={handleRemovePromotion}
+                      className="min-h-11 rounded-lg border border-slate-300 px-4 text-sm font-bold text-slate-700 hover:bg-slate-50"
+                    >
+                      Bỏ mã
+                    </button>
+                  )}
+                </div>
+                {promotionMessage && (
+                  <p
+                    id="booking-promotion-feedback"
+                    role={promotionStatus === 'invalid' ? 'alert' : 'status'}
+                    aria-live="polite"
+                    className={`mt-2 text-sm font-semibold ${
+                      promotionStatus === 'invalid'
+                        ? 'text-red-700'
+                        : promotionStatus === 'valid'
+                          ? 'text-emerald-700'
+                          : 'text-slate-600'
+                    }`}
+                  >
+                    {promotionMessage}
+                  </p>
+                )}
+                {isAuthenticated ? (
+                  verifiedAccountPhone ? (
+                    <p className="mt-2 text-xs font-medium text-slate-500">
+                      Điều kiện ưu đãi được kiểm tra theo SĐT tài khoản đã xác minh:{' '}
+                      <strong className="text-slate-700">{verifiedAccountPhone}</strong>
+                    </p>
+                  ) : (
+                    <p className="mt-2 text-xs font-medium text-slate-500">
+                      Điều kiện ưu đãi được kiểm tra theo tài khoản đang đăng nhập.
+                    </p>
+                  )
+                ) : (
+                  <p className="mt-2 text-xs font-medium text-slate-500">
+                    Khách chưa đăng nhập cần nhập số điện thoại để kiểm tra lượt sử dụng.
+                  </p>
+                )}
+                {promotionQuote && (
+                  <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50/70 p-3 text-sm">
+                    <div className="space-y-2">
+                      <div className="flex justify-between gap-3">
+                        <span className="text-slate-600">Giá vé gốc</span>
+                        <strong className="text-right text-slate-800">
+                          {Number(promotionQuote.originalTotal).toLocaleString('vi-VN')}đ
+                        </strong>
+                      </div>
+                      <div className="flex justify-between gap-3">
+                        <span className="text-slate-600">Giảm giá</span>
+                        <strong className="text-right text-emerald-700">
+                          −{Number(promotionQuote.discountAmount).toLocaleString('vi-VN')}đ
+                        </strong>
+                      </div>
+                      <div className="flex justify-between gap-3">
+                        <span className="text-slate-600">Tổng tiền vé sau ưu đãi</span>
+                        <strong className="text-right text-slate-900">
+                          {Number(promotionQuote.finalTotal).toLocaleString('vi-VN')}đ
+                        </strong>
+                      </div>
+                      {hasSelectedCargoItems && (
+                        <div className="flex justify-between gap-3">
+                          <span className="text-slate-600">Cước hàng, không áp dụng mã</span>
+                          <strong className="text-right text-slate-800">
+                            {luggageFee > 0
+                              ? `${luggageFee.toLocaleString('vi-VN')}đ`
+                              : 'Tính khi đặt vé'}
+                          </strong>
+                        </div>
+                      )}
+                      <div className="flex justify-between gap-3 border-t border-emerald-200 pt-2 font-black">
+                        <span className="text-slate-800">Tổng thanh toán tạm tính</span>
+                        <strong className="text-right text-red-600">
+                          {totalFare.toLocaleString('vi-VN')}đ
+                        </strong>
+                      </div>
+                    </div>
+                    <p className="mt-2 text-xs font-medium text-slate-600">
+                      Mã chỉ giảm tiền vé. Cước hàng (nếu có) được tính riêng; tổng cuối cùng được máy chủ xác nhận khi tạo đơn.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </section>
+
             <div className="p-4 md:p-5 border-b border-slate-200">
               <h2 className="text-base font-black text-slate-950 mb-4 flex items-center gap-2">
                 Thông đón trả
@@ -1399,7 +1772,7 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
                   </span>
                 </div>
                 <p className="text-2xl font-black text-red-600">
-                  {totalFareText}đ
+                  {totalFareText}
                 </p>
               </div>
               <div className="flex items-center gap-3">
@@ -1412,7 +1785,7 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
                 </button>
                 <button
                   type="button"
-                  disabled={!canPay || !isHydrated || isSubmitting || submissionUnknown}
+                  disabled={!canPay || !canPayWithPromotion || !isHydrated || isSubmitting || submissionUnknown}
                   onClick={handleSubmit}
                   className="h-11 px-8 rounded-full bg-accent hover:bg-accent-hover text-white text-sm font-black transition-colors disabled:cursor-not-allowed disabled:opacity-45"
                 >
@@ -1621,7 +1994,7 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
               <div className="pt-4 flex justify-between gap-3 text-sm">
                 <span className="text-slate-500 font-black">{totalFareLabel}</span>
                 <strong className="text-red-600 text-base">
-                  {totalFareText}đ
+                  {totalFareText}
                 </strong>
               </div>
             </section>
@@ -1690,7 +2063,7 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
                 <div className="flex justify-between gap-2 pt-2.5 border-t border-slate-200 mt-0.5">
                   <span className="font-black text-slate-700">{totalFareLabel}</span>
                   <strong className="text-right text-red-600 text-sm">
-                    {totalFareText}đ
+                    {totalFareText}
                   </strong>
                 </div>
               </div>

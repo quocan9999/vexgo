@@ -3,6 +3,10 @@ export type TicketItem = {
   ticketCode: string;
   bookingId: number;
   bookingCode: string | null;
+  promotionCode?: string | null;
+  originalTicketSubtotal?: number | null;
+  discountAmount?: number | null;
+  ticketSubtotal?: number | null;
   route: string | null;
   origin: string | null;
   destination: string | null;

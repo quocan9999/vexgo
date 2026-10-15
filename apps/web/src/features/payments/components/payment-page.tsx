@@ -43,6 +43,7 @@ type PaymentReadSnapshot = {
   expectedTotalAmount: number;
   orderCode: string | null;
   totalAmount: number | null;
+  promotionCode: string | null;
   originalTicketSubtotal: number | null;
   discountAmount: number | null;
   ticketSubtotal: number | null;
@@ -84,6 +85,7 @@ function getCargoPackageCount(items?: Array<{ quantity?: number }>): number | nu
 type PaymentPriceBreakdownRowsProps = {
   originalTicketSubtotal: number | null | undefined;
   discountAmount: number | null | undefined;
+  promotionCode: string | null | undefined;
   ticketSubtotal: number | null | undefined;
   totalAmount: number | null | undefined;
   hasVerifiedPaymentAmount: boolean;
@@ -97,6 +99,7 @@ type PaymentPriceBreakdownRowsProps = {
 function PaymentPriceBreakdownRows({
   originalTicketSubtotal,
   discountAmount,
+  promotionCode,
   ticketSubtotal,
   totalAmount,
   hasVerifiedPaymentAmount,
@@ -117,6 +120,14 @@ function PaymentPriceBreakdownRows({
           {formatConfirmedAmount(originalTicketSubtotal)}
         </span>
       </div>
+      {promotionCode && (
+        <div className="flex justify-between gap-3">
+          <span className="text-slate-500">Mã khuyến mãi</span>
+          <strong className="font-mono font-bold text-emerald-700 text-right">
+            {promotionCode}
+          </strong>
+        </div>
+      )}
       {showDiscount && (
         <div className="flex justify-between gap-3">
           <span className="text-slate-500">Giảm giá</span>
@@ -312,6 +323,7 @@ function PaymentContent() {
         expectedTotalAmount: draft.totalFare,
         orderCode: null,
         totalAmount: null,
+        promotionCode: null,
         originalTicketSubtotal: null,
         discountAmount: null,
         ticketSubtotal: null,
@@ -411,6 +423,10 @@ function PaymentContent() {
           expectedTotalAmount: draft.totalFare,
           orderCode: booking.orderCode!,
           totalAmount: amount,
+          promotionCode:
+            typeof booking.promotionCode === 'string'
+              ? booking.promotionCode
+              : null,
           originalTicketSubtotal: readNonNegativeAmount(booking.originalTicketSubtotal),
           discountAmount: readNonNegativeAmount(booking.discountAmount),
           ticketSubtotal: readNonNegativeAmount(booking.ticketSubtotal),
@@ -503,6 +519,7 @@ function PaymentContent() {
   const priceBreakdownProps = {
     originalTicketSubtotal: activePaymentReadSnapshot?.originalTicketSubtotal,
     discountAmount: activePaymentReadSnapshot?.discountAmount,
+    promotionCode: activePaymentReadSnapshot?.promotionCode,
     ticketSubtotal: activePaymentReadSnapshot?.ticketSubtotal,
     totalAmount: activePaymentReadSnapshot?.totalAmount,
     hasVerifiedPaymentAmount,

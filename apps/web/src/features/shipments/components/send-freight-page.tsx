@@ -1609,6 +1609,22 @@ function SendFreightContent() {
                   </strong>
                 </div>
 
+                {lookupResult.bookingPromotionCode && (
+                  <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-3 text-xs">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="font-bold text-slate-700">
+                        Mã khuyến mãi tham chiếu từ đơn vé
+                      </span>
+                      <strong className="font-mono text-emerald-800">
+                        {lookupResult.bookingPromotionCode}
+                      </strong>
+                    </div>
+                    <p className="mt-1 text-slate-600">
+                      Mã chỉ giảm tiền vé của đơn đặt chỗ; không giảm cước gửi hàng.
+                    </p>
+                  </div>
+                )}
+
                 {/* Timeline */}
                 {lookupResult.timeline && lookupResult.timeline.length > 0 && (
                   <div>

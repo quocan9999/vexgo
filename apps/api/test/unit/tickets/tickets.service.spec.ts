@@ -32,6 +32,9 @@ describe('TicketsService', () => {
       donGiaoDichId: 201,
       maPhieuDatVe: 'PDV-101',
       trangThai: 'DA_THANH_TOAN',
+      tongTienBanDau: '250000',
+      soTienGiamKhuyenMai: '25000',
+      khuyenMai: { maKhuyenMai: 'SAVE50' },
       donGiaoDich: {
         donGiaoDichId: 201,
         trangThai: 'DA_THANH_TOAN',
@@ -149,6 +152,12 @@ describe('TicketsService', () => {
       expect(ticket.route).toBe('TP.HCM - Đà Lạt');
       expect(ticket.busCompanyName).toBe('Phương Trang');
       expect(ticket.price).toBe(250000);
+      expect(ticket).toMatchObject({
+        promotionCode: 'SAVE50',
+        originalTicketSubtotal: 250000,
+        discountAmount: 25000,
+        ticketSubtotal: 225000,
+      });
       expect(result.meta.totalItems).toBe(1);
     });
 

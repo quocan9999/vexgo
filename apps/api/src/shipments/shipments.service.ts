@@ -395,6 +395,11 @@ export class ShipmentsService {
           select: {
             maDonGiaoDich: true,
             soDienThoaiKhachHang: true,
+            phieuDatVe: {
+              select: {
+                khuyenMai: { select: { maKhuyenMai: true } },
+              },
+            },
           },
         },
         diemGui: { select: { tenDiem: true, diaChi: true } },
@@ -477,6 +482,8 @@ export class ShipmentsService {
         (total, item) => total + item.soLuong,
         0,
       ),
+      bookingPromotionCode:
+        shipment.donGiaoDich.phieuDatVe?.khuyenMai?.maKhuyenMai ?? null,
       timeline: shipment.lichSuTrangThais.map((log) => ({
         status: log.trangThai,
         time: log.thoiGian.toISOString(),

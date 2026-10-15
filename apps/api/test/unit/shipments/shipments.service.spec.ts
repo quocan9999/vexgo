@@ -583,6 +583,7 @@ describe('ShipmentsService', () => {
         scheduledDepartureAt: expect.any(String),
         estimatedArrivalAt: expect.any(String),
         packageCount: 3,
+        bookingPromotionCode: null,
         timeline: [
           {
             status: 'DA_TIEP_NHAN',
@@ -605,6 +606,42 @@ describe('ShipmentsService', () => {
       ]) {
         expect(serializedResult).not.toContain(privateValue);
       }
+    });
+
+    it('returns a booking coupon as a ticket-only reference for a linked shipment', async () => {
+      prismaMock.phieuGuiHang.findFirst.mockResolvedValue({
+        maVanDon: 'FUTA-VD-LINKED-12',
+        trangThai: 'DANG_VAN_CHUYEN',
+        soDienThoaiNguoiNhan: '0901234567',
+        donGiaoDich: {
+          soDienThoaiKhachHang: '0901234567',
+          phieuDatVe: { khuyenMai: { maKhuyenMai: 'SAVE50' } },
+        },
+        diemGui: { tenDiem: 'Bến gửi', diaChi: 'Địa chỉ gửi' },
+        diemNhan: { tenDiem: 'Bến nhận', diaChi: 'Địa chỉ nhận' },
+        chuyenXe: {
+          ngayKhoiHanh: new Date('2026-10-20T00:00:00.000Z'),
+          gioKhoiHanh: new Date('1970-01-01T08:00:00.000Z'),
+          gioDen: new Date('1970-01-01T12:00:00.000Z'),
+          tuyenXe: {
+            diemDi: 'TP.HCM',
+            diemDen: 'Đà Lạt',
+            thoiGianChayPhut: 240,
+            nhaXe: { tenNhaXe: 'Nhà xe công khai' },
+          },
+        },
+        hangHoas: [],
+        lichSuTrangThais: [],
+      });
+
+      const result = await service.lookupShipment({
+        waybillCode: 'FUTA-VD-LINKED-12',
+        phoneNumber: '0901234567',
+      });
+
+      expect(result.bookingPromotionCode).toBe('SAVE50');
+      expect(result).not.toHaveProperty('shipmentPromotionCode');
+      expect(result).not.toHaveProperty('discountAmount');
     });
 
     it('throws NotFoundException when waybill code not found', async () => {

@@ -312,6 +312,7 @@ describe('Customer VietQR payment page', () => {
         ticketSubtotal: 250000,
         originalTicketSubtotal: 300000,
         discountAmount: 50000,
+        promotionCode: 'SAVE50',
         cargoFee: 30000,
       })),
     );
@@ -320,6 +321,7 @@ describe('Customer VietQR payment page', () => {
     await flushPromises();
 
     expect(screen.getByText('Giá vé gốc').parentElement?.textContent).toContain('300.000đ');
+    expect(screen.getByText('Mã khuyến mãi').parentElement?.textContent).toContain('SAVE50');
     expect(screen.getByText('Giảm giá').parentElement?.textContent).toContain('50.000đ');
     expect(screen.getByText('Tổng tiền vé sau ưu đãi').parentElement?.textContent).toContain('250.000đ');
     expect(screen.getByText('Cước hàng').parentElement?.textContent).toContain('30.000đ');

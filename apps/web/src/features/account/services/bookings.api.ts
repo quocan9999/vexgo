@@ -12,6 +12,10 @@ export type BookingItem = {
   vehicleType: string | null;
   seatNumbers: string[];
   totalAmount: number;
+  originalTicketSubtotal?: number | string;
+  discountAmount?: number | string;
+  ticketSubtotal?: number | string;
+  promotionCode?: string | null;
   status: string;
   paymentStatus: string | null;
   paymentMethod: string | null;
@@ -95,6 +99,7 @@ export type BookingResponseData = {
   ticketSubtotal?: number | string;
   originalTicketSubtotal?: number | string;
   discountAmount?: number | string;
+  promotionCode?: string | null;
   origin?: string | null;
   destination?: string | null;
   seatNumbers?: string[];
@@ -111,6 +116,7 @@ export type CreateBookingPayload = {
   tripId: number;
   seatIds: number[];
   holdToken: string;
+  promotionCode?: string;
   senderPointId?: number;
   receiverPointId?: number;
   contact: {
@@ -151,6 +157,26 @@ export type CreatedBookingData = BookingResponseData & {
 export type CreateSeatHoldPayload = {
   tripId: number;
   seatIds: number[];
+};
+
+export type BookingQuotePayload = {
+  tripId: number;
+  seatIds: number[];
+  promotionCode: string;
+  contactPhone?: string;
+};
+
+export type BookingQuoteData = {
+  unitPrice: number | string;
+  seatCount: number;
+  originalTotal: number | string;
+  discountAmount: number | string;
+  finalTotal: number | string;
+  currency: 'VND';
+  appliedPromotionCode: string | null;
+  identityChecked: boolean;
+  phoneEligibilityChecked: boolean;
+  requiresPhoneBeforeBooking: boolean;
 };
 
 export type SeatHoldData = {
@@ -253,6 +279,35 @@ export const bookingsApi = {
       const error = await res.json().catch(() => ({}));
       throw new ApiError(
         error.message || 'Tạo đơn đặt vé thất bại',
+        res.status,
+        error.error,
+      );
+    }
+
+    return res.json();
+  },
+
+  async getBookingQuote(
+    payload: BookingQuotePayload,
+    accessToken?: string,
+    signal?: AbortSignal,
+  ): Promise<{ data: BookingQuoteData }> {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+
+    const res = await fetch(`${API_BASE_URL}/bookings/quote`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload),
+      signal,
+    });
+
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      throw new ApiError(
+        error.message || 'Không thể kiểm tra mã khuyến mãi.',
         res.status,
         error.error,
       );

@@ -39,6 +39,7 @@ function phonesMatch(phone1: string, phone2: string): boolean {
 const TICKET_INCLUDE = {
   phieuDatVe: {
     include: {
+      khuyenMai: { select: { maKhuyenMai: true } },
       donGiaoDich: {
         include: {
           khachHang: true,
@@ -576,12 +577,22 @@ export class TicketsService {
 
     const order = ticket.phieuDatVe?.donGiaoDich;
     const latestPayment = order?.thanhToans?.[0];
+    const originalTicketSubtotal = Number(
+      ticket.phieuDatVe?.tongTienBanDau ?? 0,
+    );
+    const discountAmount = Number(
+      ticket.phieuDatVe?.soTienGiamKhuyenMai ?? 0,
+    );
 
     return {
       ticketId: ticket.veId,
       ticketCode: ticket.maVe,
       bookingId: ticket.phieuDatVeId,
       bookingCode: ticket.phieuDatVe?.maPhieuDatVe ?? null,
+      promotionCode: ticket.phieuDatVe?.khuyenMai?.maKhuyenMai ?? null,
+      originalTicketSubtotal,
+      discountAmount,
+      ticketSubtotal: originalTicketSubtotal - discountAmount,
       route,
       origin: tuyenXe?.diemDi ?? null,
       destination: tuyenXe?.diemDen ?? null,

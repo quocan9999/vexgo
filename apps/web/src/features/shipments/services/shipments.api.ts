@@ -144,6 +144,7 @@ export type PublicShipmentLookupData = {
   scheduledDepartureAt: string;
   estimatedArrivalAt: string | null;
   packageCount: number;
+  bookingPromotionCode?: string | null;
   timeline: Array<{ status: string; time: string }>;
 };
 
