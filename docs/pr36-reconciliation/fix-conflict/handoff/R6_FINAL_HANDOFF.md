@@ -75,3 +75,12 @@
 - Regression: unit tests DTO/pricing/persistence phủ kích thước âm, 0, thiếu chiều, sai kiểu, NaN/Infinity; API/MySQL integration xác minh shipment và booking bị từ chối, không tạo dữ liệu cargo và hold ghế không bị consume.
 - Kết quả xác minh sau sửa: 6 unit-test files, 62 tests PASS; `booking-status-history.spec.ts` MySQL integration 24/24 PASS; API typecheck PASS; oxlint target PASS; `git diff --check` PASS.
 - Files bổ sung: `apps/api/src/cargo-pricing/cargo-dimensions.validation.ts`, `apps/api/src/cargo-pricing/cargo-pricing.service.ts`, `apps/api/src/shipments/dto/create-shipment.dto.ts`, `apps/api/src/shipments/shipment-persistence.service.ts`, cùng regression tests tại `apps/api/test/unit/cargo-pricing/`, `apps/api/test/unit/shipments/` và `apps/api/test/integration/bookings/booking-status-history.spec.ts`.
+
+## Bổ sung sau review P1 — xe máy trong booking kèm vé
+
+- Finding: Customer Web cộng khối lượng xe máy/xe đạp vào giới hạn 40kg của hành lý thường, khiến `OneWayBooking` từ chối submit trước khi gọi `POST /api/v1/bookings`.
+- Sửa trong Web: tính riêng khối lượng hiệu dụng của hành lý không phải xe máy/xe đạp để áp dụng giới hạn 40kg. Tổng khối lượng cargo, payload từng kiện, điểm gửi/nhận, cước và flow booking vẫn giữ nguyên; không sửa API, capacity hay payment.
+- Regression UI thực: dùng `LuggageStep` thật trong component test; xác minh xe máy 100kg, xe đạp 15kg và xe máy kèm 10kg vali gửi booking; vali thường 41kg vẫn bị chặn; đổi loại hàng xóa danh mục không tương thích; lỗi `CARGO_CAPACITY_EXCEEDED`/`CARGO_RATE_NOT_FOUND` từ API vẫn hiển thị và không điều hướng thành công.
+- Kiểm tra: Web flow spec 23/23 PASS; Web typecheck PASS; ESLint hai file Web liên quan PASS; `git diff --check` PASS. Không chạy browser smoke trực tiếp và không sửa CSS/layout; các breakpoint hiện tại được giữ nguyên.
+- Smoke trình duyệt: mở đặt vé một chiều có nhận hàng, bật hành lý, thêm xe máy (100kg) cùng danh mục phù hợp, điền điểm gửi/nhận và thông tin hành khách rồi submit. Xác minh request booking được gửi với cargo xe máy; thử thêm vali 10kg vẫn gửi được; tăng riêng hàng thường lên 41kg thì bị cảnh báo giới hạn và không gửi booking. Backend vẫn quyết định giá/sức chứa và lỗi API vẫn được hiển thị.
+- Không xử lý finding P2 về giới hạn theo từng kiện; đây là scope riêng. Không sửa Admin, Mobile, database, migration, cấu hình hoặc logic thanh toán.

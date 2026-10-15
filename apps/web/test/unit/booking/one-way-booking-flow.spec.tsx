@@ -25,43 +25,6 @@ vi.mock('@/features/auth/auth-session', () => ({
   useAuthSession: () => state.auth,
 }));
 
-vi.mock('@/features/booking/components/luggage/luggage-step', () => ({
-  LuggageStep: ({
-    onFeeChange,
-  }: {
-    onFeeChange: (
-      fee: number,
-      weight: number,
-      items: Array<{
-        id: string;
-        type: string;
-        loaiHangHoaId?: number;
-        quantity: number;
-        weight: number;
-        category: string;
-      }>,
-    ) => void;
-  }) => (
-    <button
-      type="button"
-      onClick={() =>
-        onFeeChange(0, 10, [
-          {
-            id: 'free-cargo',
-            type: 'Vali',
-            loaiHangHoaId: 21,
-            quantity: 1,
-            weight: 10,
-            category: 'normal',
-          },
-        ])
-      }
-    >
-      Thêm hành lý miễn phí
-    </button>
-  ),
-}));
-
 vi.mock('@/features/booking/components/luggage/luggage-summary', () => ({
   LuggageSummary: () => null,
 }));
@@ -86,6 +49,27 @@ const post: Post = {
 
 const tripSeats: ApiTripSeat[] = [
   { tripSeatId: 9001, seatNumber: 'A01', position: 'Trái', status: 'TRONG' },
+];
+
+const cargoCategories = [
+  {
+    categoryId: 11,
+    name: 'Xe máy',
+    description: 'Phương tiện xe máy',
+    capacityGroup: 'XE_MAY',
+  },
+  {
+    categoryId: 12,
+    name: 'Xe đạp',
+    description: 'Phương tiện xe đạp',
+    capacityGroup: 'HANG_CONG_KENH',
+  },
+  {
+    categoryId: 13,
+    name: 'Hàng thường',
+    description: 'Hàng hóa thông thường',
+    capacityGroup: 'HANG_NHE',
+  },
 ];
 
 type RecordedRequest = { url: string; init?: RequestInit };
@@ -166,6 +150,39 @@ function completeForm() {
   fireEvent.click(screen.getByRole('button', { name: 'Thanh toán' }));
 }
 
+async function enableExtraLuggage() {
+  fireEvent.click(screen.getByText(/Có hành lý cồng kềnh/));
+  await screen.findByLabelText('Loại hành lý');
+}
+
+async function selectCargoCategory(
+  itemIndex: number,
+  type: string,
+  categoryId: number,
+  weight?: number,
+) {
+  const typeSelect = screen.getAllByLabelText('Loại hành lý')[itemIndex] as HTMLSelectElement;
+  if (typeSelect.value !== type) {
+    fireEvent.change(typeSelect, { target: { value: type } });
+  }
+
+  if (weight !== undefined) {
+    const weightInputs = screen.getAllByLabelText('Khối lượng ước tính (kg)');
+    const weightInput = weightInputs[Math.min(itemIndex, weightInputs.length - 1)];
+    fireEvent.change(weightInput, { target: { value: String(weight) } });
+  }
+
+  const categorySelect = screen.getAllByLabelText('Danh mục hàng hóa')[itemIndex] as HTMLSelectElement;
+  await waitFor(() => {
+    expect(
+      Array.from(categorySelect.options).some(
+        (option) => option.value === String(categoryId),
+      ),
+    ).toBe(true);
+  });
+  fireEvent.change(categorySelect, { target: { value: String(categoryId) } });
+}
+
 beforeEach(() => {
   requests.length = 0;
   state.routerPush.mockReset();
@@ -184,7 +201,19 @@ beforeEach(() => {
     const method = init?.method || 'GET';
 
     if (/\/trips\/(42|43)\/cargo-capacity$/.test(pathname)) {
-      return response({ data: { acceptsShipments: false, capacities: {} } });
+      return response({
+        data: {
+          acceptsShipments: true,
+          capacities: {
+            motorcycles: { total: 4, used: 0, remaining: 4 },
+            bulkyGoods: { total: 8, used: 0, remaining: 8 },
+            parcels: { total: 12, used: 0, remaining: 12 },
+          },
+        },
+      });
+    }
+    if (pathname.endsWith('/shipments/categories')) {
+      return response({ data: cargoCategories });
     }
     if (/\/shipments\/trips\/(42|43)\/route-points$/.test(pathname)) {
       return response({
@@ -275,7 +304,8 @@ describe('one-way booking with server seat holds', () => {
 
   it('sends the selected cargo type and route points so the backend can price and persist luggage', async () => {
     render(<OneWayBooking post={post} tripSeats={tripSeats} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Thêm hành lý miễn phí' }));
+    await enableExtraLuggage();
+    await selectCargoCategory(0, 'Vali', 13, 10);
     await waitFor(() => {
       expect(
         (screen.getByLabelText('Điểm gửi hàng') as HTMLSelectElement).value,
@@ -292,7 +322,7 @@ describe('one-way booking with server seat holds', () => {
       expect.objectContaining({
         name: 'Vali',
         type: 'Vali',
-        loaiHangHoaId: 21,
+        loaiHangHoaId: 13,
         quantity: 1,
         weight: 10,
       }),
@@ -301,6 +331,145 @@ describe('one-way booking with server seat holds', () => {
       senderPointId: 901,
       receiverPointId: 902,
     });
+  });
+
+  it('submits a 100kg motorcycle without applying the regular-luggage limit and preserves its cargo payload', async () => {
+    render(<OneWayBooking post={post} tripSeats={tripSeats} />);
+    await enableExtraLuggage();
+    await selectCargoCategory(0, 'Xe máy', 11);
+    await screen.findByLabelText('Điểm gửi hàng');
+
+    completeForm();
+
+    await waitFor(() => expect(requestsFor('/bookings', 'POST')).toHaveLength(1));
+    expect(requestBody(requestsFor('/bookings', 'POST')[0])).toMatchObject({
+      senderPointId: 901,
+      receiverPointId: 902,
+      cargoItems: [
+        expect.objectContaining({
+          type: 'Xe máy',
+          name: 'Xe máy (Xe số)',
+          quantity: 1,
+          weight: 100,
+          loaiHangHoaId: 11,
+          motorbikeModel: 'Xe số',
+        }),
+      ],
+    });
+    await waitFor(() => expect(state.routerPush).toHaveBeenCalledTimes(1));
+  });
+
+  it('submits a 15kg bicycle with its matching cargo category', async () => {
+    render(<OneWayBooking post={post} tripSeats={tripSeats} />);
+    await enableExtraLuggage();
+    await selectCargoCategory(0, 'Xe đạp', 12);
+    await screen.findByLabelText('Điểm gửi hàng');
+
+    completeForm();
+
+    await waitFor(() => expect(requestsFor('/bookings', 'POST')).toHaveLength(1));
+    expect(requestBody(requestsFor('/bookings', 'POST')[0]).cargoItems).toEqual([
+      expect.objectContaining({
+        type: 'Xe đạp',
+        name: 'Xe đạp (Xe đạp thường)',
+        quantity: 1,
+        weight: 15,
+        loaiHangHoaId: 12,
+        bicycleType: 'Xe đạp thường',
+      }),
+    ]);
+    await waitFor(() => expect(state.routerPush).toHaveBeenCalledTimes(1));
+  });
+
+  it('submits a motorcycle plus regular luggage without counting motorcycle weight toward 40kg', async () => {
+    render(<OneWayBooking post={post} tripSeats={tripSeats} />);
+    await enableExtraLuggage();
+    await selectCargoCategory(0, 'Xe máy', 11);
+    fireEvent.click(screen.getByRole('button', { name: 'Thêm kiện hành lý' }));
+    await waitFor(() => expect(screen.getAllByLabelText('Loại hành lý')).toHaveLength(2));
+    await selectCargoCategory(1, 'Vali', 13, 10);
+    await screen.findByLabelText('Điểm gửi hàng');
+
+    completeForm();
+
+    await waitFor(() => expect(requestsFor('/bookings', 'POST')).toHaveLength(1));
+    expect(requestBody(requestsFor('/bookings', 'POST')[0]).cargoItems).toEqual([
+      expect.objectContaining({ type: 'Xe máy', weight: 100, loaiHangHoaId: 11 }),
+      expect.objectContaining({ type: 'Vali', weight: 10, loaiHangHoaId: 13 }),
+    ]);
+    await waitFor(() => expect(state.routerPush).toHaveBeenCalledTimes(1));
+  });
+
+  it('keeps the regular-luggage limit when one regular item exceeds 40kg', async () => {
+    render(<OneWayBooking post={post} tripSeats={tripSeats} />);
+    await enableExtraLuggage();
+    fireEvent.change(screen.getByLabelText('Khối lượng ước tính (kg)'), {
+      target: { value: '41' },
+    });
+
+    completeForm();
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert').textContent).toContain('vượt quá hạn mức đi kèm vé'),
+    );
+    expect(requestsFor('/seat-holds', 'POST')).toHaveLength(0);
+    expect(requestsFor('/bookings', 'POST')).toHaveLength(0);
+    expect(state.routerPush).not.toHaveBeenCalled();
+  });
+
+  it('clears an incompatible category when cargo changes between motorcycle, bicycle, and regular luggage', async () => {
+    render(<OneWayBooking post={post} tripSeats={tripSeats} />);
+    await enableExtraLuggage();
+    await selectCargoCategory(0, 'Xe máy', 11);
+
+    const typeSelect = screen.getAllByLabelText('Loại hành lý')[0] as HTMLSelectElement;
+    const categorySelect = screen.getAllByLabelText('Danh mục hàng hóa')[0] as HTMLSelectElement;
+    expect(categorySelect.value).toBe('11');
+
+    fireEvent.change(typeSelect, { target: { value: 'Xe đạp' } });
+    await waitFor(() => expect(categorySelect.value).toBe(''));
+    expect(Array.from(categorySelect.options).map((option) => option.value)).toContain('12');
+    expect(Array.from(categorySelect.options).map((option) => option.value)).not.toContain('11');
+    fireEvent.change(categorySelect, { target: { value: '12' } });
+
+    fireEvent.change(typeSelect, { target: { value: 'Vali' } });
+    await waitFor(() => expect(categorySelect.value).toBe(''));
+    expect(Array.from(categorySelect.options).map((option) => option.value)).toContain('13');
+    expect(Array.from(categorySelect.options).map((option) => option.value)).not.toContain('12');
+    fireEvent.change(screen.getByLabelText('Khối lượng ước tính (kg)'), {
+      target: { value: '10' },
+    });
+    fireEvent.change(categorySelect, { target: { value: '13' } });
+    await screen.findByLabelText('Điểm gửi hàng');
+
+    completeForm();
+
+    await waitFor(() => expect(requestsFor('/bookings', 'POST')).toHaveLength(1));
+    expect(requestBody(requestsFor('/bookings', 'POST')[0]).cargoItems).toEqual([
+      expect.objectContaining({ type: 'Vali', weight: 10, loaiHangHoaId: 13 }),
+    ]);
+  });
+
+  it.each([
+    ['CARGO_CAPACITY_EXCEEDED', 'Chuyến xe đã hết chỗ chứa xe máy.'],
+    ['CARGO_RATE_NOT_FOUND', 'Chưa có mức cước phù hợp cho loại xe máy.'],
+  ])('shows backend %s errors without creating a successful booking', async (code, message) => {
+    bookingResponse = async () =>
+      response({ statusCode: 409, error: code, message }, 409);
+    render(<OneWayBooking post={post} tripSeats={tripSeats} />);
+    await enableExtraLuggage();
+    await selectCargoCategory(0, 'Xe máy', 11);
+    await screen.findByLabelText('Điểm gửi hàng');
+
+    completeForm();
+
+    await waitFor(() => expect(requestsFor('/bookings', 'POST')).toHaveLength(1));
+    await waitFor(() =>
+      expect(screen.getByRole('alert').textContent).toContain(message),
+    );
+    expect(requestsFor('/seat-holds', 'DELETE')).toHaveLength(1);
+    expect(state.routerPush).not.toHaveBeenCalled();
+    expect(window.sessionStorage.length).toBe(0);
   });
 
   it('refreshes seats and does not create a booking when the hold conflicts', async () => {

@@ -283,6 +283,19 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
   const [luggageItems, setLuggageItems] = useState<ILuggageItem[]>([]);
   const validCargoItems = luggageItems.filter(isValidCargoItem);
   const hasCargoItems = validCargoItems.length > 0;
+  const regularLuggageWeight = Number(
+    luggageItems
+      .filter((item) => item.type !== 'Xe máy' && item.type !== 'Xe đạp')
+      .reduce((total, item) => {
+        const actualWeight = item.weight || 0;
+        const volumetricWeight =
+          item.length && item.width && item.height
+            ? (item.length * item.width * item.height) / 5000
+            : 0;
+        return total + Math.max(actualWeight, volumetricWeight) * (item.quantity || 1);
+      }, 0)
+      .toFixed(2),
+  );
   const [cargoRoutePoints, setCargoRoutePoints] =
     useState<ShipmentRoutePoints | null>(null);
   const [cargoRoutePointsLoading, setCargoRoutePointsLoading] = useState(false);
@@ -456,9 +469,9 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
       );
       return;
     }
-    if (luggageWeight > 40) {
+    if (regularLuggageWeight > 40) {
       setSubmitError(
-        `Tổng khối lượng hành lý (${luggageWeight}kg) vượt quá hạn mức đi kèm vé (tối đa 40kg).`,
+        `Tổng khối lượng hành lý thường (${regularLuggageWeight}kg) vượt quá hạn mức đi kèm vé (tối đa 40kg).`,
       );
       return;
     }
