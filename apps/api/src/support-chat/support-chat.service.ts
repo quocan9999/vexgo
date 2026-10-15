@@ -69,7 +69,7 @@ export interface ConversationSummaryResponse {
 export interface CreateConversationResult {
   conversation: any;
   isNew: boolean;
-  firstMessage: any | null;
+  firstMessage: any;
 }
 
 function isSameFirstMessagePayload(
@@ -167,12 +167,24 @@ export class SupportChatService {
       });
     }
 
-    return this.prisma.khachHang.create({
-      data: {
-        taiKhoanId,
-        maKhachHang: `KH${Date.now()}`,
-      },
-    });
+    try {
+      return await this.prisma.khachHang.create({
+        data: {
+          taiKhoanId,
+          maKhachHang: `KH${Date.now()}`,
+        },
+      });
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        const concurrent = await this.prisma.khachHang.findUnique({
+          where: { taiKhoanId },
+        });
+        if (concurrent) {
+          return concurrent;
+        }
+      }
+      throw err;
+    }
   }
 
   /**
@@ -233,7 +245,7 @@ export class SupportChatService {
       await tx.$queryRaw`SELECT khachHangId FROM KhachHang WHERE khachHangId = ${khachHang.khachHangId} FOR UPDATE`;
 
       // Kiểm tra cuộc trò chuyện đang hoạt động giữa khách hàng và nhà xe này
-      const existingConversation = await tx.cuocTroChuyen.findFirst({
+      let existingConversation = await tx.cuocTroChuyen.findFirst({
         where: {
           khachHangId: khachHang.khachHangId,
           nhaXeId: dto.nhaXeId,
@@ -306,6 +318,29 @@ export class SupportChatService {
                     taiKhoanGui: { select: { taiKhoanId: true, hoTen: true } },
                   },
                 });
+                existingConversation = await tx.cuocTroChuyen.update({
+                  where: { cuocTroChuyenId: existingConversation.cuocTroChuyenId },
+                  data: { updatedAt: new Date() },
+                  include: {
+                    nhaXe: {
+                      select: { nhaXeId: true, tenNhaXe: true, thongTinLienHe: true },
+                    },
+                    khachHang: {
+                      select: {
+                        khachHangId: true,
+                        maKhachHang: true,
+                        taiKhoan: { select: { hoTen: true, soDienThoai: true } },
+                      },
+                    },
+                    nhanVien: {
+                      select: {
+                        nhanVienId: true,
+                        maNhanVien: true,
+                        taiKhoan: { select: { hoTen: true } },
+                      },
+                    },
+                  },
+                });
               } catch (err) {
                 if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
                   const raceMsg = await tx.tinNhanHoTro.findUnique({
@@ -332,6 +367,45 @@ export class SupportChatService {
                 }
               }
             }
+          } else {
+            // Không truyền clientMessageId: tạo tin nhắn đầu tiên mới và cập nhật updatedAt (BE-R03)
+            firstMessage = await tx.tinNhanHoTro.create({
+              data: {
+                cuocTroChuyenId: existingConversation.cuocTroChuyenId,
+                taiKhoanGuiId: principal.taiKhoanId,
+                loaiNguoiGui: 'KHACH_HANG',
+                loaiTinNhan: 'VAN_BAN',
+                noiDung: dto.tinNhanDauTien,
+                clientMessageId: null,
+                trangThai: 'DA_GUI',
+              },
+              include: {
+                taiKhoanGui: { select: { taiKhoanId: true, hoTen: true } },
+              },
+            });
+            existingConversation = await tx.cuocTroChuyen.update({
+              where: { cuocTroChuyenId: existingConversation.cuocTroChuyenId },
+              data: { updatedAt: new Date() },
+              include: {
+                nhaXe: {
+                  select: { nhaXeId: true, tenNhaXe: true, thongTinLienHe: true },
+                },
+                khachHang: {
+                  select: {
+                    khachHangId: true,
+                    maKhachHang: true,
+                    taiKhoan: { select: { hoTen: true, soDienThoai: true } },
+                  },
+                },
+                nhanVien: {
+                  select: {
+                    nhanVienId: true,
+                    maNhanVien: true,
+                    taiKhoan: { select: { hoTen: true } },
+                  },
+                },
+              },
+            });
           }
         }
         return {

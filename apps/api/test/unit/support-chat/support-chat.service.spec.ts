@@ -8,6 +8,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SupportChatService } from '../../../src/support-chat/support-chat.service.js';
 import type { PrismaService } from '../../../src/prisma/prisma.service.js';
 import type { AuthPrincipal } from '../../../src/auth/tokens/auth-principal.js';
+import { Prisma } from '../../../src/generated/prisma/client.js';
 
 describe('SupportChatService', () => {
   let service: SupportChatService;
@@ -93,6 +94,63 @@ describe('SupportChatService', () => {
     };
 
     service = new SupportChatService(prisma as unknown as PrismaService);
+  });
+
+  describe('Đảm bảo thông tin khách hàng (ensureKhachHang)', () => {
+    it('trả về bản ghi khách hàng nếu đã tồn tại', async () => {
+      const existing = { khachHangId: 50, taiKhoanId: 101, maKhachHang: 'KH101' };
+      prisma.khachHang.findUnique.mockResolvedValue(existing);
+
+      const result = await service.ensureKhachHang(101);
+
+      expect(result).toEqual(existing);
+      expect(prisma.khachHang.create).not.toHaveBeenCalled();
+    });
+
+    it('từ chối nếu tài khoản là nhân viên', async () => {
+      prisma.khachHang.findUnique.mockResolvedValue(null);
+      prisma.taiKhoan.findUnique.mockResolvedValue({
+        taiKhoanId: 201,
+        nhanVien: { nhanVienId: 10 },
+        taiKhoanVaiTros: [{ vaiTro: { tenVaiTro: 'NHAN_VIEN' } }],
+      });
+
+      await expect(service.ensureKhachHang(201)).rejects.toThrow(ForbiddenException);
+    });
+
+    it('xử lý race condition P2002 khi nhiều request khởi tạo cùng tài khoản khách hàng (BE-R04)', async () => {
+      prisma.khachHang.findUnique
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({
+          khachHangId: 77,
+          taiKhoanId: 101,
+          maKhachHang: 'KH123',
+        });
+
+      prisma.taiKhoan.findUnique.mockResolvedValue({
+        taiKhoanId: 101,
+        nhanVien: null,
+        taiKhoanVaiTros: [{ vaiTro: { tenVaiTro: 'KHACH_HANG' } }],
+      });
+
+      const p2002Error = new Prisma.PrismaClientKnownRequestError(
+        'Unique constraint failed on the fields: (`taiKhoanId`)',
+        {
+          code: 'P2002',
+          clientVersion: '5.x',
+        },
+      );
+      prisma.khachHang.create.mockRejectedValue(p2002Error);
+
+      const result = await service.ensureKhachHang(101);
+
+      expect(result).toEqual({
+        khachHangId: 77,
+        taiKhoanId: 101,
+        maKhachHang: 'KH123',
+      });
+      expect(prisma.khachHang.findUnique).toHaveBeenCalledTimes(2);
+    });
   });
 
   describe('Phân quyền Super Admin (LEAD RULE)', () => {
@@ -182,6 +240,74 @@ describe('SupportChatService', () => {
         firstMessage: null,
       });
       expect(prisma.cuocTroChuyen.create).not.toHaveBeenCalled();
+    });
+
+    it('khi mở lại cuộc trò chuyện có sẵn và truyền tinNhanDauTien không có clientMessageId, tạo tin nhắn mới và cập nhật updatedAt (BE-R03)', async () => {
+      prisma.nhaXe.findUnique.mockResolvedValue({
+        nhaXeId: 5,
+        tenNhaXe: 'Nhà Xe Phương Trang',
+        trangThai: 'HOAT_DONG',
+      });
+      prisma.khachHang.findUnique.mockResolvedValue({
+        khachHangId: 50,
+        taiKhoanId: 101,
+      });
+
+      const existingConv = {
+        cuocTroChuyenId: 10,
+        maCuocTroChuyen: 'CHAT-123456',
+        trangThai: 'CHO_TIEP_NHAN',
+        khachHangId: 50,
+        nhaXeId: 5,
+        updatedAt: new Date('2026-01-01T00:00:00Z'),
+      };
+      prisma.cuocTroChuyen.findFirst.mockResolvedValue(existingConv);
+
+      const createdFirstMsg = {
+        tinNhanId: 888,
+        cuocTroChuyenId: 10,
+        taiKhoanGuiId: 101,
+        loaiNguoiGui: 'KHACH_HANG',
+        loaiTinNhan: 'VAN_BAN',
+        noiDung: 'Tôi cần hỗ trợ thêm',
+        clientMessageId: null,
+        trangThai: 'DA_GUI',
+      };
+      prisma.tinNhanHoTro.create.mockResolvedValue(createdFirstMsg);
+      const updatedConv = {
+        ...existingConv,
+        updatedAt: new Date('2026-10-16T00:00:00Z'),
+      };
+      prisma.cuocTroChuyen.update.mockResolvedValue(updatedConv);
+
+      const result = await service.createConversation(mockCustomerPrincipal, {
+        nhaXeId: 5,
+        tinNhanDauTien: 'Tôi cần hỗ trợ thêm',
+      });
+
+      expect(prisma.tinNhanHoTro.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            cuocTroChuyenId: 10,
+            noiDung: 'Tôi cần hỗ trợ thêm',
+            clientMessageId: null,
+            loaiNguoiGui: 'KHACH_HANG',
+          }),
+        }),
+      );
+      expect(prisma.cuocTroChuyen.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { cuocTroChuyenId: 10 },
+          data: expect.objectContaining({
+            updatedAt: expect.any(Date),
+          }),
+        }),
+      );
+      expect(result).toEqual({
+        conversation: updatedConv,
+        isNew: false,
+        firstMessage: createdFirstMsg,
+      });
     });
 
     it('tạo cuộc trò chuyện mới ở trạng thái CHO_TIEP_NHAN nếu chưa có cuộc trò chuyện nào', async () => {

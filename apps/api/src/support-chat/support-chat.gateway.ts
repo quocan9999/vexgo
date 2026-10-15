@@ -365,10 +365,20 @@ export class SupportChatGateway implements OnGatewayConnection, OnGatewayDisconn
       }
     }
 
-    // Nếu tenant scope thay đổi (chuyển nhà xe): cập nhật room
+    // Nếu tenant scope thay đổi (chuyển nhà xe hoặc mất quyền nhà xe):
+    // 1. Rời company room cũ
+    // 2. Rời TOÀN BỘ các room conversation_* đã tham gia trước đó để ngăn rò rỉ sự kiện của tenant cũ (BE-R01)
     if (cachedPrincipal.nhaXeId !== nhaXeId) {
       if (cachedPrincipal.nhaXeId) {
         await client.leave(`company_${cachedPrincipal.nhaXeId}`);
+      }
+      if (client.rooms) {
+        const conversationRooms = Array.from(client.rooms).filter((room) =>
+          room.startsWith('conversation_'),
+        );
+        for (const room of conversationRooms) {
+          await client.leave(room);
+        }
       }
       if (nhaXeId) {
         await client.join(`company_${nhaXeId}`);
@@ -492,10 +502,11 @@ export class SupportChatGateway implements OnGatewayConnection, OnGatewayDisconn
     try {
       const principal = await this.revalidatePrincipalSession(client);
 
+      // Luôn kiểm tra quyền truy cập vào cuộc trò chuyện trước khi phát sự kiện typing (BE-R01)
+      await this.supportChatService.getConversationById(principal, payload.cuocTroChuyenId);
+
       const roomName = `conversation_${payload.cuocTroChuyenId}`;
-      // Verify authorization: nếu socket chưa trong room, xác minh quyền truy cập
       if (!client.rooms.has(roomName)) {
-        await this.supportChatService.getConversationById(principal, payload.cuocTroChuyenId);
         await client.join(roomName);
       }
 

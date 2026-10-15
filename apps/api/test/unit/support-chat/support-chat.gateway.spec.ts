@@ -325,5 +325,73 @@ describe('SupportChatGateway', () => {
       });
       expect(res).toEqual({ success: true });
     });
+
+    it('rời khỏi company room cũ và toàn bộ conversation room khi nhân viên thay đổi nhaXeId (BE-R01)', async () => {
+      const client = createMockSocket();
+      client.data = {
+        principal: {
+          taiKhoanId: 202,
+          sessionId: 'test-session-staff',
+          roles: ['NHAN_VIEN_CSKH'],
+          nhanVienId: 12,
+          nhaXeId: 5,
+        },
+      };
+      // Giả lập client đang ở company room 5 và 2 conversation rooms thuộc nhaXe 5
+      client.rooms.add('company_5');
+      client.rooms.add('conversation_10');
+      client.rooms.add('conversation_11');
+
+      // Database phản hồi nhân viên đã được chuyển sang nhaXeId: 9
+      prisma.phienDangNhap.findUnique.mockResolvedValue({
+        sessionId: 'test-session-staff',
+        taiKhoanId: 202,
+        thuHoiLuc: null,
+        hetHanLuc: new Date(Date.now() + 3600000),
+        taiKhoan: {
+          taiKhoanId: 202,
+          trangThai: 'HOAT_DONG',
+          nhanVien: { nhanVienId: 12, nhaXeId: 9 },
+          taiKhoanVaiTros: [{ vaiTro: { vaiTroId: 4, tenVaiTro: 'NHAN_VIEN_CSKH' } }],
+        },
+      });
+      permissionResolver.resolve.mockReturnValue(['chat:read', 'chat:manage']);
+      supportChatService.getConversationById.mockResolvedValue({ cuocTroChuyenId: 99 });
+
+      // Gọi handleJoinConversation cho conversation mới thuộc tenant 9
+      await gateway.handleJoinConversation(client, { cuocTroChuyenId: 99 });
+
+      // Phải rời company_5
+      expect(client.leave).toHaveBeenCalledWith('company_5');
+      // Phải rời toàn bộ conversation_* cũ
+      expect(client.leave).toHaveBeenCalledWith('conversation_10');
+      expect(client.leave).toHaveBeenCalledWith('conversation_11');
+      // Phải tham gia company_9 và conversation_99
+      expect(client.join).toHaveBeenCalledWith('company_9');
+      expect(client.join).toHaveBeenCalledWith('conversation_99');
+    });
+
+    it('handleTypingStatus kiểm tra quyền getConversationById và từ chối emit nếu không có quyền (BE-R01)', async () => {
+      const client = createMockSocket();
+      client.data = {
+        principal: { taiKhoanId: 101, sessionId: 'test-session-123' },
+      };
+      client.rooms.add('conversation_10');
+
+      // Giả lập getConversationById từ chối (404/403)
+      supportChatService.getConversationById.mockRejectedValue(new Error('Forbidden'));
+
+      const res = await gateway.handleTypingStatus(client, {
+        cuocTroChuyenId: 10,
+        isTyping: true,
+      });
+
+      expect(supportChatService.getConversationById).toHaveBeenCalledWith(
+        expect.objectContaining({ taiKhoanId: 101 }),
+        10,
+      );
+      expect(client.to).not.toHaveBeenCalled();
+      expect(res).toEqual({ success: false });
+    });
   });
 });
