@@ -112,7 +112,6 @@ describe('SupportChatController', () => {
     });
 
     const result = await controller.sendMessage(mockStaff, 10, {
-      cuocTroChuyenId: 10,
       noiDung: 'Chào bạn',
     });
 

@@ -8,7 +8,7 @@ import {
   WebSocketServer,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { Logger } from '@nestjs/common';
+import { Logger, UsePipes, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -18,7 +18,14 @@ import { requireAuthSecret } from '../auth/auth-secret.js';
 import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
 import { SupportChatService } from './support-chat.service.js';
 import { CHAT_EVENTS } from './constants/chat-events.constants.js';
-import type { SendMessageDto } from './dto/send-message.dto.js';
+import {
+  SendMessageDto,
+  WsClaimConversationDto,
+  WsCloseConversationDto,
+  WsJoinConversationDto,
+  WsMarkReadDto,
+  WsTypingStatusDto,
+} from './dto/index.js';
 
 interface SocketPrincipalData {
   principal: AuthPrincipal;
@@ -31,20 +38,36 @@ interface AccessTokenPayload {
   roles: string[];
 }
 
+const DEFAULT_CORS_ORIGINS = [
+  'http://localhost:3000',
+  'http://localhost:3001',
+  'http://127.0.0.1:3000',
+  'http://127.0.0.1:3001',
+];
+
+function isOriginAllowed(origin: string | undefined): boolean {
+  if (!origin) return true;
+  const envOrigins = process.env.CORS_ALLOWED_ORIGINS
+    ? process.env.CORS_ALLOWED_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean)
+    : [];
+  const allowed = [...DEFAULT_CORS_ORIGINS, ...envOrigins];
+  return allowed.includes(origin) || allowed.includes('*');
+}
+
 @WebSocketGateway({
   namespace: '/chat',
   cors: {
     origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
-      // Trong môi trường dev hoặc mobile app không có origin header
-      if (!origin) {
+      if (isOriginAllowed(origin)) {
         callback(null, true);
-        return;
+      } else {
+        callback(new Error(`Origin ${origin} not allowed by CORS`));
       }
-      callback(null, true);
     },
     credentials: true,
   },
 })
+@UsePipes(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true }))
 export class SupportChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server!: Server;
@@ -256,13 +279,54 @@ export class SupportChatGateway implements OnGatewayConnection, OnGatewayDisconn
     return data.principal;
   }
 
+  /**
+   * Revalidate session & active status against the database on each critical socket action
+   */
+  private async revalidatePrincipalSession(client: Socket): Promise<AuthPrincipal> {
+    const principal = this.getPrincipalFromSocket(client);
+
+    const session = await this.prisma.phienDangNhap.findUnique({
+      where: { sessionId: principal.sessionId },
+      include: {
+        taiKhoan: {
+          select: {
+            taiKhoanId: true,
+            trangThai: true,
+            nhanVien: {
+              select: {
+                nhanVienId: true,
+                nhaXeId: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (
+      !session ||
+      session.thuHoiLuc !== null ||
+      session.hetHanLuc <= new Date() ||
+      session.taiKhoan.trangThai !== 'HOAT_DONG'
+    ) {
+      this.emitSocketErrorAndDisconnect(
+        client,
+        'SESSION_REVOKED',
+        'Phiên đăng nhập không hợp lệ hoặc đã bị thu hồi.',
+      );
+      throw new Error('Phiên đăng nhập đã bị thu hồi.');
+    }
+
+    return principal;
+  }
+
   @SubscribeMessage(CHAT_EVENTS.CONVERSATION_JOIN)
   async handleJoinConversation(
     @ConnectedSocket() client: Socket,
-    @MessageBody() payload: { cuocTroChuyenId: number },
+    @MessageBody() payload: WsJoinConversationDto,
   ) {
     try {
-      const principal = this.getPrincipalFromSocket(client);
+      const principal = await this.revalidatePrincipalSession(client);
       const conv = await this.supportChatService.getConversationById(
         principal,
         payload.cuocTroChuyenId,
@@ -286,7 +350,7 @@ export class SupportChatGateway implements OnGatewayConnection, OnGatewayDisconn
   @SubscribeMessage(CHAT_EVENTS.CONVERSATION_LEAVE)
   async handleLeaveConversation(
     @ConnectedSocket() client: Socket,
-    @MessageBody() payload: { cuocTroChuyenId: number },
+    @MessageBody() payload: WsJoinConversationDto,
   ) {
     try {
       await client.leave(`conversation_${payload.cuocTroChuyenId}`);
@@ -308,7 +372,7 @@ export class SupportChatGateway implements OnGatewayConnection, OnGatewayDisconn
     @MessageBody() dto: SendMessageDto,
   ) {
     try {
-      const principal = this.getPrincipalFromSocket(client);
+      const principal = await this.revalidatePrincipalSession(client);
       const message = await this.supportChatService.sendMessage(principal, dto);
 
       // Lấy thông tin cuộc trò chuyện để broadcast
@@ -352,12 +416,19 @@ export class SupportChatGateway implements OnGatewayConnection, OnGatewayDisconn
   @SubscribeMessage(CHAT_EVENTS.TYPING_STATUS)
   async handleTypingStatus(
     @ConnectedSocket() client: Socket,
-    @MessageBody() payload: { cuocTroChuyenId: number; isTyping: boolean },
+    @MessageBody() payload: WsTypingStatusDto,
   ) {
     try {
-      const principal = this.getPrincipalFromSocket(client);
+      const principal = await this.revalidatePrincipalSession(client);
 
-      client.to(`conversation_${payload.cuocTroChuyenId}`).emit(CHAT_EVENTS.TYPING_STATUS, {
+      const roomName = `conversation_${payload.cuocTroChuyenId}`;
+      // Verify authorization: nếu socket chưa trong room, xác minh quyền truy cập
+      if (!client.rooms.has(roomName)) {
+        await this.supportChatService.getConversationById(principal, payload.cuocTroChuyenId);
+        await client.join(roomName);
+      }
+
+      client.to(roomName).emit(CHAT_EVENTS.TYPING_STATUS, {
         cuocTroChuyenId: payload.cuocTroChuyenId,
         taiKhoanId: principal.taiKhoanId,
         isTyping: payload.isTyping,
@@ -372,10 +443,10 @@ export class SupportChatGateway implements OnGatewayConnection, OnGatewayDisconn
   @SubscribeMessage(CHAT_EVENTS.CONVERSATION_CLAIM)
   async handleClaimConversation(
     @ConnectedSocket() client: Socket,
-    @MessageBody() payload: { cuocTroChuyenId: number },
+    @MessageBody() payload: WsClaimConversationDto,
   ) {
     try {
-      const principal = this.getPrincipalFromSocket(client);
+      const principal = await this.revalidatePrincipalSession(client);
       const updatedConv = await this.supportChatService.claimConversation(
         principal,
         payload.cuocTroChuyenId,
@@ -406,10 +477,10 @@ export class SupportChatGateway implements OnGatewayConnection, OnGatewayDisconn
   @SubscribeMessage(CHAT_EVENTS.CONVERSATION_CLOSE)
   async handleCloseConversation(
     @ConnectedSocket() client: Socket,
-    @MessageBody() payload: { cuocTroChuyenId: number; lyDo?: string },
+    @MessageBody() payload: WsCloseConversationDto,
   ) {
     try {
-      const principal = this.getPrincipalFromSocket(client);
+      const principal = await this.revalidatePrincipalSession(client);
       const closedConv = await this.supportChatService.closeConversation(
         principal,
         payload.cuocTroChuyenId,
@@ -440,10 +511,10 @@ export class SupportChatGateway implements OnGatewayConnection, OnGatewayDisconn
   @SubscribeMessage(CHAT_EVENTS.MESSAGE_READ)
   async handleMarkAsRead(
     @ConnectedSocket() client: Socket,
-    @MessageBody() payload: { cuocTroChuyenId: number; tinNhanIds?: number[] },
+    @MessageBody() payload: WsMarkReadDto,
   ) {
     try {
-      const principal = this.getPrincipalFromSocket(client);
+      const principal = await this.revalidatePrincipalSession(client);
       const result = await this.supportChatService.markMessagesAsRead(
         principal,
         payload.cuocTroChuyenId,

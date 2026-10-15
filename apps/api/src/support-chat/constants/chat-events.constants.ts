@@ -21,6 +21,7 @@ export const CHAT_EVENTS = {
   TYPING_STATUS: 'support.typing',
 
   // Conversation Lifecycle
+  CONVERSATION_NEW: 'support.conversation.new',
   CONVERSATION_CLAIM: 'support.conversation.claim',
   CONVERSATION_CLAIMED: 'support.conversation.claimed',
   CONVERSATION_CLOSE: 'support.conversation.close',

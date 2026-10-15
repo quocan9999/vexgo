@@ -18,6 +18,7 @@ import {
   GetMessagesQueryDto,
   ListConversationsQueryDto,
   MarkReadDto,
+  SendChatMessageBodyDto,
   SendMessageDto,
 } from './dto/index.js';
 
@@ -35,16 +36,11 @@ export class SupportChatController {
   ) {
     const conversation = await this.chatService.createConversation(principal, dto);
 
-    // Thông báo cho nhà xe qua room socket
+    // Thông báo cho nhà xe qua room socket với event CONVERSATION_NEW
     try {
       this.chatGateway.server
         ?.to(`company_${conversation.nhaXeId}`)
-        .emit(CHAT_EVENTS.MESSAGE_NEW, {
-          cuocTroChuyenId: conversation.cuocTroChuyenId,
-          maCuocTroChuyen: conversation.maCuocTroChuyen,
-          tieuDe: conversation.tieuDe,
-          khachHang: (conversation as any).khachHang,
-        });
+        .emit(CHAT_EVENTS.CONVERSATION_NEW, conversation);
     } catch {
       // Ignored if socket server not ready
     }
@@ -89,9 +85,14 @@ export class SupportChatController {
   async sendMessage(
     @CurrentPrincipal() principal: AuthPrincipal,
     @Param('id', ParseIntPipe) id: number,
-    @Body() dto: SendMessageDto,
+    @Body() bodyDto: SendChatMessageBodyDto,
   ) {
+    const dto = new SendMessageDto();
     dto.cuocTroChuyenId = id;
+    dto.noiDung = bodyDto.noiDung;
+    dto.loaiTinNhan = bodyDto.loaiTinNhan;
+    dto.tepDinhKemUrl = bodyDto.tepDinhKemUrl;
+    dto.clientMessageId = bodyDto.clientMessageId;
     const message = await this.chatService.sendMessage(principal, dto);
 
     try {
@@ -103,7 +104,14 @@ export class SupportChatController {
       if (message.loaiNguoiGui === 'KHACH_HANG') {
         this.chatGateway.server
           ?.to(`company_${conv.nhaXeId}`)
-          .emit(CHAT_EVENTS.MESSAGE_NEW, message);
+          .emit(CHAT_EVENTS.MESSAGE_NEW, {
+            ...message,
+            cuocTroChuyen: {
+              cuocTroChuyenId: conv.cuocTroChuyenId,
+              tieuDe: conv.tieuDe,
+              khachHang: conv.khachHang,
+            },
+          });
       }
     } catch {
       // Socket emission best-effort

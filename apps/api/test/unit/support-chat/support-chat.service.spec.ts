@@ -1,4 +1,9 @@
-import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SupportChatService } from '../../../src/support-chat/support-chat.service.js';
 import type { PrismaService } from '../../../src/prisma/prisma.service.js';
@@ -59,16 +64,21 @@ describe('SupportChatService', () => {
         findUnique: vi.fn(),
         create: vi.fn(),
       },
+      taiKhoan: {
+        findUnique: vi.fn(),
+      },
       nhaXe: {
         findUnique: vi.fn(),
       },
       cuocTroChuyen: {
         findFirst: vi.fn(),
         findUnique: vi.fn(),
+        findUniqueOrThrow: vi.fn(),
         findMany: vi.fn(),
         count: vi.fn(),
         create: vi.fn(),
         update: vi.fn(),
+        updateMany: vi.fn(),
       },
       tinNhanHoTro: {
         findUnique: vi.fn(),
@@ -77,6 +87,7 @@ describe('SupportChatService', () => {
         create: vi.fn(),
         updateMany: vi.fn(),
       },
+      $executeRaw: vi.fn().mockResolvedValue(1),
       $transaction: vi.fn(async (cb: any) => cb(prisma)),
     };
 
@@ -117,6 +128,12 @@ describe('SupportChatService', () => {
   });
 
   describe('Tạo cuộc trò chuyện (createConversation)', () => {
+    it('nhân viên nhà xe không được phép tạo cuộc trò chuyện (CUSTOMER_ONLY_ACTION)', async () => {
+      await expect(
+        service.createConversation(mockStaffWithChatManage, { nhaXeId: 5 }),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
     it('ném lỗi NotFoundException nếu nhà xe không tồn tại hoặc đã ngừng hoạt động', async () => {
       prisma.nhaXe.findUnique.mockResolvedValue(null);
 
@@ -276,6 +293,8 @@ describe('SupportChatService', () => {
 
       const existingMsg = {
         tinNhanId: 99,
+        cuocTroChuyenId: 1,
+        taiKhoanGuiId: mockStaffWithChatManage.taiKhoanId,
         clientMessageId: 'idempotent-uuid-123',
         noiDung: 'Tin nhắn đã tạo trước đó',
       };
@@ -289,6 +308,32 @@ describe('SupportChatService', () => {
 
       expect(result).toEqual(existingMsg);
       expect(prisma.tinNhanHoTro.create).not.toHaveBeenCalled();
+    });
+
+    it('idempotency: ném ConflictException nếu clientMessageId đã được dùng cho hội thoại khác hoặc người gửi khác', async () => {
+      prisma.cuocTroChuyen.findUnique.mockResolvedValue({
+        cuocTroChuyenId: 1,
+        trangThai: 'DANG_XU_LY',
+        nhaXeId: 5,
+        khachHangId: 50,
+      });
+
+      const mismatchMsg = {
+        tinNhanId: 99,
+        cuocTroChuyenId: 999, // Khác cuộc trò chuyện!
+        taiKhoanGuiId: mockStaffWithChatManage.taiKhoanId,
+        clientMessageId: 'idempotent-uuid-123',
+        noiDung: 'Tin nhắn cũ',
+      };
+      prisma.tinNhanHoTro.findUnique.mockResolvedValue(mismatchMsg);
+
+      await expect(
+        service.sendMessage(mockStaffWithChatManage, {
+          cuocTroChuyenId: 1,
+          noiDung: 'Tin nhắn mới',
+          clientMessageId: 'idempotent-uuid-123',
+        }),
+      ).rejects.toThrow(ConflictException);
     });
 
     it('gửi tin nhắn thành công và tự động chuyển sang DANG_XU_LY nếu nhân viên phản hồi cuộc trò chuyện CHO_TIEP_NHAN', async () => {
@@ -327,6 +372,7 @@ describe('SupportChatService', () => {
 
   describe('Tiếp nhận cuộc trò chuyện (claimConversation)', () => {
     it('nhân viên nhà xe khác không thể tiếp nhận', async () => {
+      prisma.cuocTroChuyen.updateMany.mockResolvedValue({ count: 0 });
       prisma.cuocTroChuyen.findUnique.mockResolvedValue({
         cuocTroChuyenId: 1,
         trangThai: 'CHO_TIEP_NHAN',
@@ -339,18 +385,14 @@ describe('SupportChatService', () => {
     });
 
     it('tiếp nhận thành công chuyển trạng thái sang DANG_XU_LY và tạo tin nhắn hệ thống', async () => {
-      prisma.cuocTroChuyen.findUnique.mockResolvedValue({
-        cuocTroChuyenId: 1,
-        trangThai: 'CHO_TIEP_NHAN',
-        nhaXeId: 5,
-      });
+      prisma.cuocTroChuyen.updateMany.mockResolvedValue({ count: 1 });
 
       const updated = {
         cuocTroChuyenId: 1,
         trangThai: 'DANG_XU_LY',
         nhanVienId: 12,
       };
-      prisma.cuocTroChuyen.update.mockResolvedValue(updated);
+      prisma.cuocTroChuyen.findUniqueOrThrow.mockResolvedValue(updated);
 
       const result = await service.claimConversation(mockStaffWithChatManage, 1);
       expect(result).toEqual(updated);
@@ -362,6 +404,21 @@ describe('SupportChatService', () => {
           }),
         }),
       );
+    });
+
+    it('ném ConflictException nếu cuộc trò chuyện đã được nhân viên khác tiếp nhận', async () => {
+      // updateMany trả về 0 vì không còn ở trạng thái CHO_TIEP_NHAN / nhanVienId !== null
+      prisma.cuocTroChuyen.updateMany.mockResolvedValue({ count: 0 });
+      prisma.cuocTroChuyen.findUnique.mockResolvedValue({
+        cuocTroChuyenId: 1,
+        trangThai: 'DANG_XU_LY',
+        nhanVienId: 99,
+        nhaXeId: 5,
+      });
+
+      await expect(
+        service.claimConversation(mockStaffWithChatManage, 1),
+      ).rejects.toThrow(ConflictException);
     });
   });
 

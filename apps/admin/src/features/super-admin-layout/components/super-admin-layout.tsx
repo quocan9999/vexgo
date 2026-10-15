@@ -5,6 +5,7 @@ import {
   Building2,
   CalendarDays,
   Database,
+  Headphones,
   LogOut,
   MapPinned,
   Menu,
@@ -48,7 +49,8 @@ type SuperAdminLayoutProps = {
     | 'customers'
     | 'admin-accounts'
     | 'rbac'
-    | 'tenant-rbac';
+    | 'tenant-rbac'
+    | 'support-chat';
   children: ReactNode;
 };
 
@@ -155,6 +157,7 @@ const OPERATION_NAVIGATION_DETAILS: Record<
   'fare-prices': { label: 'Bảng giá vé', icon: () => <Ticket size={18} /> },
   trips: { label: 'Chuyến xe', icon: () => <CalendarDays size={18} /> },
   customers: { label: 'Khách hàng', icon: () => <UsersRound size={18} /> },
+  'support-chat': { label: 'Chăm sóc khách hàng', icon: () => <Headphones size={18} /> },
 };
 
 export function SuperAdminLayout({

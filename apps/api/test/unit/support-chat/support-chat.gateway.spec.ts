@@ -68,16 +68,24 @@ describe('SupportChatGateway', () => {
   });
 
   function createMockSocket(auth?: Record<string, any>, headers?: Record<string, any>) {
+    const rooms = new Set<string>();
     return {
       handshake: {
         auth: auth || {},
         headers: headers || {},
       },
       data: {},
+      rooms,
       emit: vi.fn(),
       disconnect: vi.fn(),
-      join: vi.fn(),
-      leave: vi.fn(),
+      join: vi.fn().mockImplementation((r: string) => {
+        rooms.add(r);
+        return Promise.resolve();
+      }),
+      leave: vi.fn().mockImplementation((r: string) => {
+        rooms.delete(r);
+        return Promise.resolve();
+      }),
       to: vi.fn().mockReturnThis(),
     } as any;
   }
@@ -232,10 +240,24 @@ describe('SupportChatGateway', () => {
   });
 
   describe('WebSocket Event Handlers', () => {
+    beforeEach(() => {
+      prisma.phienDangNhap.findUnique.mockResolvedValue({
+        sessionId: 'test-session-123',
+        taiKhoanId: 101,
+        thuHoiLuc: null,
+        hetHanLuc: new Date(Date.now() + 3600000),
+        taiKhoan: {
+          taiKhoanId: 101,
+          trangThai: 'HOAT_DONG',
+          nhanVien: null,
+        },
+      });
+    });
+
     it('handleJoinConversation cho phép client tham gia room conversation_{id}', async () => {
       const client = createMockSocket();
       client.data = {
-        principal: { taiKhoanId: 101, roles: ['KHACH_HANG'] },
+        principal: { taiKhoanId: 101, sessionId: 'test-session-123', roles: ['KHACH_HANG'] },
       };
       supportChatService.getConversationById.mockResolvedValue({
         cuocTroChuyenId: 10,
@@ -250,7 +272,7 @@ describe('SupportChatGateway', () => {
     it('handleSendMessage lưu tin nhắn và broadcast tới room conversation_{id}', async () => {
       const client = createMockSocket();
       client.data = {
-        principal: { taiKhoanId: 101, roles: ['KHACH_HANG'] },
+        principal: { taiKhoanId: 101, sessionId: 'test-session-123', roles: ['KHACH_HANG'] },
       };
       const msg = {
         tinNhanId: 1,
@@ -277,8 +299,10 @@ describe('SupportChatGateway', () => {
     it('handleTypingStatus broadcast trạng thái gõ cho đối phương trong cùng room', async () => {
       const client = createMockSocket();
       client.data = {
-        principal: { taiKhoanId: 101 },
+        principal: { taiKhoanId: 101, sessionId: 'test-session-123' },
       };
+      // Giả lập client đã trong room
+      client.rooms.add('conversation_10');
 
       const res = await gateway.handleTypingStatus(client, {
         cuocTroChuyenId: 10,
