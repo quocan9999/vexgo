@@ -12,6 +12,8 @@ import { SeatHoldsService } from '../../../src/seat-holds/seat-holds.service.js'
 import { CargoCapacityService } from '../../../src/cargo-capacity/cargo-capacity.service.js';
 import { ShipmentPersistenceService } from '../../../src/shipments/shipment-persistence.service.js';
 import { PromotionsService } from '../../../src/promotions/promotions.service.js';
+import { lockPaymentOrder } from '../../../src/payments/payment-order-lock.js';
+import { ShipmentsService } from '../../../src/shipments/shipments.service.js';
 import { PaymentsService } from '../../../src/payments/payments.service.js';
 import { RefundProcessorService } from '../../../src/payments/refund-processor.service.js';
 import type { MomoWebhookDto } from '../../../src/payments/dto/webhook.dto.js';
@@ -67,6 +69,7 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
   let tripSeatIds: number[] = [];
   let promotionCode = '';
   let currentPrincipal: AuthPrincipal | null = null;
+  let cancellationClient = 0;
   let failAfterShipmentPersistence = false;
 
   let customerId: number;
@@ -162,6 +165,7 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
     );
     const webhookBody = JSON.stringify({
       id: eventId,
+      transactionDate: new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().slice(0, 19).replace('T', ' '),
       accountNumber: sepayAccountNumber,
       content: orderCode,
       transferType: 'in',
@@ -218,6 +222,9 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
       .compile();
 
     app = moduleRef.createNestApplication({ rawBody: true });
+    // Give each regression fixture a separate simulated client; keep the real
+    // rate-limit guard and its per-client limit active.
+    app.getHttpAdapter().getInstance().set('trust proxy', 'loopback');
     configureApi(app);
     await app.init();
 
@@ -525,6 +532,7 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
   }, 30_000);
 
   beforeEach(async () => {
+    cancellationClient += 1;
     currentPrincipal = null;
     failAfterShipmentPersistence = false;
 
@@ -699,7 +707,7 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
         totalAmount: 0,
       });
       const timestamp = String(Math.floor(Date.now() / 1000));
-    const webhookBody = JSON.stringify({ id: Date.now(), accountNumber: sepayAccountNumber,
+    const webhookBody = JSON.stringify({ id: Date.now(), transactionDate: new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().slice(0, 19).replace('T', ' '), accountNumber: sepayAccountNumber,
       content: booking.orderCode, transferType: 'in', transferAmount: 1 });
     const signature = `sha256=${createHmac('sha256', sepaySecret).update(`${timestamp}.${webhookBody}`).digest('hex')}`;
     const lateWebhook = await request(app.getHttpServer()).post('/api/v1/payments/sepay-webhook')
@@ -1064,201 +1072,164 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
     expect(Number(payment.soTien)).toBe(60_000);
   });
 
-  it('cancels a paid zero-fare ticket without refunding paid cargo or restoring promotion usage', async () => {
-    const promotion = await createPromotion({ amount: 300_000 });
-    const hold = await request(app.getHttpServer())
-      .post('/api/v1/seat-holds')
-      .send({ tripId, seatIds: [tripSeatIds[0]] });
-    const bookingResponse = await request(app.getHttpServer())
-      .post('/api/v1/bookings')
-      .send({
-        ...bookingWithCargoPayload(hold.body.data.holdToken, [
-          {
-            name: 'Hàng đã thanh toán',
-            loaiHangHoaId: cargoTypeId,
-            quantity: 1,
-            weight: 2,
-          },
-        ]),
-        promotionCode: promotion.maKhuyenMai,
-      });
-    expect(bookingResponse.status, JSON.stringify(bookingResponse.body)).toBe(
-      201,
-    );
-    const booking = bookingResponse.body.data;
-    expect(booking).toMatchObject({
-      status: 'CHO_THANH_TOAN',
-      ticketSubtotal: 0,
-      shippingFee: 60_000,
-      totalAmount: 60_000,
+  async function guardedCargoFixture(free = true, seatCount = 1, paid = true) {
+    const promotion = await createPromotion({ amount: free ? 300000 : 30000 });
+    const seatIds = tripSeatIds.slice(0, seatCount);
+    const hold = await request(app.getHttpServer()).post('/api/v1/seat-holds').send({ tripId, seatIds });
+    expect(hold.status).toBe(201);
+    const response = await request(app.getHttpServer()).post('/api/v1/bookings').send({
+      ...bookingWithCargoPayload(hold.body.data.holdToken, [{ name: 'G3B cargo', loaiHangHoaId: cargoTypeId, quantity: 1, weight: 2 }]),
+      seatIds, promotionCode: promotion.maKhuyenMai,
     });
+    expect(response.status, JSON.stringify(response.body)).toBe(201);
+    const booking = response.body.data as { bookingId: number; orderId: number; orderCode: string; totalAmount: number };
+    if (paid) await settleSePayOrder(booking.orderCode, booking.totalAmount);
+    const shipment = await prisma.phieuGuiHang.findFirstOrThrow({ where: { donGiaoDichId: booking.orderId } });
+    const tickets = await prisma.ve.findMany({ where: { phieuDatVeId: booking.bookingId }, orderBy: { veId: 'asc' } });
+    return { booking, promotion, shipment, tickets };
+  }
 
-    const eventId = await settleSePayOrder(
-      booking.orderCode,
-      booking.totalAmount,
-    );
-    const [
-      paidBooking,
-      paidTicket,
-      shipmentBefore,
-      usageBefore,
-      promotionBefore,
-    ] = await Promise.all([
-      prisma.phieuDatVe.findUniqueOrThrow({
-        where: { phieuDatVeId: booking.bookingId },
-        include: { donGiaoDich: { include: { thanhToans: true } } },
-      }),
-      prisma.ve.findFirstOrThrow({
-        where: { phieuDatVeId: booking.bookingId },
-      }),
-      prisma.phieuGuiHang.findFirstOrThrow({
-        where: { donGiaoDichId: booking.orderId },
-        select: { phieuGuiHangId: true, tongPhi: true, trangThai: true },
-      }),
-      prisma.suDungKhuyenMai.count({
-        where: { khuyenMaiId: promotion.khuyenMaiId },
-      }),
-      prisma.khuyenMai.findUniqueOrThrow({
-        where: { khuyenMaiId: promotion.khuyenMaiId },
-      }),
+  async function cancellationSnapshot(orderId: number, promotionId: number) {
+    return Promise.all([
+      prisma.donGiaoDich.findUniqueOrThrow({ where: { donGiaoDichId: orderId }, include: {
+        thanhToans: true,
+        phieuDatVe: { include: { ves: { include: { gheChuyenXe: true, lichSuTrangThais: true } }, lichSuTrangThais: true, suDungKhuyenMai: true } },
+        phieuGuiHang: { include: { hangHoas: true, chiTietCuocGuiHangs: true, lichSuTrangThais: true } },
+      } }),
+      prisma.khuyenMai.findUniqueOrThrow({ where: { khuyenMaiId: promotionId } }),
+      app.get(CargoCapacityService).getSnapshot(prisma, tripId),
     ]);
-    expect(paidBooking.trangThai).toBe('DA_THANH_TOAN');
-    expect(paidBooking.donGiaoDich.trangThai).toBe('DA_THANH_TOAN');
-    expect(paidBooking.donGiaoDich.thanhToans).toHaveLength(1);
-    expect(paidBooking.donGiaoDich.thanhToans[0]).toMatchObject({
-      loaiGiaoDich: 'THANH_TOAN',
-      phuongThuc: 'SEPAY',
-      trangThai: 'THANH_CONG',
-      maGiaoDichSePay: String(eventId),
-    });
-    expect(Number(paidBooking.donGiaoDich.thanhToans[0].soTien)).toBe(
-      60_000,
-    );
-    expect(paidTicket.trangThai).toBe('DA_THANH_TOAN');
-    expect(Number(paidTicket.giaThucTe)).toBe(0);
-    expect(Number(shipmentBefore.tongPhi)).toBe(60_000);
-    expect(usageBefore).toBe(1);
-    expect(promotionBefore.soLuotDaSuDung).toBe(1);
+  }
 
-    const enqueueRefund = vi.spyOn(
-      app.get(RefundProcessorService),
-      'enqueueRefund',
-    );
+  const cancelRequest = (code: string, phone = customerPhone, rate = 0.1) => request(app.getHttpServer())
+    .post('/api/v1/tickets/cancel').set('X-Forwarded-For', `192.0.2.${cancellationClient}`).send({ ticketCode: code, phoneNumber: phone, expectedCancelFeeRate: rate });
+
+  it.each((['MOI_TAO', 'DA_TIEP_NHAN', 'DANG_VAN_CHUYEN', 'DA_GIAO'] as const).flatMap(status =>
+    [true, false].flatMap(free => [1, 2].map(seatCount => ({ status, free, seatCount }))),
+  ))('blocks cargo $status free=$free seats=$seatCount without any DB side effects', async ({ status, free, seatCount }) => {
+    const f = await guardedCargoFixture(free, seatCount);
+    await prisma.phieuGuiHang.update({ where: { phieuGuiHangId: f.shipment.phieuGuiHangId }, data: { trangThai: status } });
+    const before = await cancellationSnapshot(f.booking.orderId, f.promotion.khuyenMaiId);
+    const enqueue = vi.spyOn(app.get(RefundProcessorService), 'enqueueRefund');
     try {
-      const cancellation = await request(app.getHttpServer())
-        .post('/api/v1/tickets/cancel')
-        .send({
-          ticketCode: paidTicket.maVe,
-          phoneNumber: customerPhone,
-          expectedCancelFeeRate: 0.1,
-        });
-      expect(cancellation.status, JSON.stringify(cancellation.body)).toBe(201);
-      expect(cancellation.body.data).toMatchObject({
-        ticketId: paidTicket.veId,
-        status: 'HUY',
-        cancelFee: 0,
-        refundAmount: 0,
-        message: 'Hủy vé thành công. Không phát sinh khoản hoàn tiền.',
-      });
-      expect(enqueueRefund).not.toHaveBeenCalled();
+      for (const ticket of f.tickets) {
+        const lookup = await request(app.getHttpServer()).post('/api/v1/tickets/lookup').set('X-Forwarded-For', `192.0.2.${cancellationClient}`).send({ ticketCode: ticket.maVe, phoneNumber: customerPhone });
+        expect(lookup.status, JSON.stringify(lookup.body)).toBe(200);
+        expect(lookup.body.data.cancellation).toMatchObject({ eligible: false, reason: 'ACTIVE_SHIPMENT', refundAmount: 0 });
+        const cancelled = await cancelRequest(ticket.maVe);
+        expect(cancelled.status, JSON.stringify(cancelled.body)).toBe(409);
+        expect(cancelled.body.error).toBe('TICKET_CANCELLATION_ACTIVE_SHIPMENT');
+        expect(cancelled.body.message).toMatch(/hàng gửi kèm.*liên hệ nhà xe/i);
+      }
+      expect(enqueue).not.toHaveBeenCalled();
+      expect(await cancellationSnapshot(f.booking.orderId, f.promotion.khuyenMaiId)).toEqual(before);
+    } finally { enqueue.mockRestore(); }
+  });
 
-      const [
-        savedBooking,
-        savedOrder,
-        savedTicket,
-        savedSeat,
-        savedShipment,
-        payments,
-        ticketHistory,
-        bookingHistory,
-        usageAfter,
-        promotionAfter,
-      ] = await Promise.all([
-        prisma.phieuDatVe.findUniqueOrThrow({
-          where: { phieuDatVeId: booking.bookingId },
-        }),
-        prisma.donGiaoDich.findUniqueOrThrow({
-          where: { donGiaoDichId: booking.orderId },
-        }),
-        prisma.ve.findUniqueOrThrow({ where: { veId: paidTicket.veId } }),
-        prisma.gheChuyenXe.findUniqueOrThrow({
-          where: { gheChuyenXeId: tripSeatIds[0] },
-        }),
-        prisma.phieuGuiHang.findUniqueOrThrow({
-          where: { phieuGuiHangId: shipmentBefore.phieuGuiHangId },
-        }),
-        prisma.thanhToan.findMany({
-          where: { donGiaoDichId: booking.orderId },
-          orderBy: { thanhToanId: 'asc' },
-        }),
-        prisma.lichSuTrangThaiVe.findMany({
-          where: { veId: paidTicket.veId },
-          orderBy: { lichSuTrangThaiVeId: 'asc' },
-        }),
-        prisma.lichSuTrangThaiPhieuDatVe.findMany({
-          where: { phieuDatVeId: booking.bookingId },
-          orderBy: { lichSuTrangThaiPhieuDatVeId: 'asc' },
-        }),
-        prisma.suDungKhuyenMai.count({
-          where: { khuyenMaiId: promotion.khuyenMaiId },
-        }),
-        prisma.khuyenMai.findUniqueOrThrow({
-          where: { khuyenMaiId: promotion.khuyenMaiId },
-        }),
-      ]);
+  it.each([true, false])('allows cancellation when attached cargo is already cancelled, free=$0', async (free) => {
+    const f = await guardedCargoFixture(free);
+    await prisma.phieuGuiHang.update({ where: { phieuGuiHangId: f.shipment.phieuGuiHangId }, data: { trangThai: 'DA_HUY' } });
+    const usage = await prisma.suDungKhuyenMai.findMany({ where: { phieuDatVeId: f.booking.bookingId } });
+    const enqueue = vi.spyOn(app.get(RefundProcessorService), 'enqueueRefund').mockImplementation(() => undefined);
+    try {
+      const result = await cancelRequest(f.tickets[0].maVe);
+      expect(result.status, JSON.stringify(result.body)).toBe(201);
+      expect(result.body.data.refundAmount).toBe(free ? 0 : 108000);
+      expect(enqueue).toHaveBeenCalledTimes(free ? 0 : 1);
+      const payments = await prisma.thanhToan.findMany({ where: { donGiaoDichId: f.booking.orderId } });
+      expect(payments).toHaveLength(free ? 1 : 2);
+      expect(payments.filter(p => p.loaiGiaoDich === 'HOAN_TIEN')).toHaveLength(free ? 0 : 1);
+      expect((await prisma.gheChuyenXe.findUniqueOrThrow({ where: { gheChuyenXeId: f.tickets[0].gheChuyenXeId } })).trangThai).toBe('TRONG');
+      expect(await prisma.suDungKhuyenMai.findMany({ where: { phieuDatVeId: f.booking.bookingId } })).toEqual(usage);
+      expect((await prisma.khuyenMai.findUniqueOrThrow({ where: { khuyenMaiId: f.promotion.khuyenMaiId } })).soLuotDaSuDung).toBe(1);
+    } finally { enqueue.mockRestore(); }
+  });
 
-      expect(savedBooking.trangThai).toBe('DA_HUY');
-      expect(savedOrder.trangThai).toBe('DA_HUY');
-      expect(savedTicket.trangThai).toBe('HUY');
-      expect(savedSeat.trangThai).toBe('TRONG');
-      expect(Number(savedShipment.tongPhi)).toBe(60_000);
-      expect(savedShipment.trangThai).toBe(shipmentBefore.trangThai);
-      expect(payments).toHaveLength(1);
-      expect(payments[0]).toMatchObject({
-        loaiGiaoDich: 'THANH_TOAN',
-        trangThai: 'THANH_CONG',
+  it('rolls back cancellation writes if history fails after the shipment restriction is cleared', async () => {
+    const f = await guardedCargoFixture();
+    await prisma.phieuGuiHang.update({ where: { phieuGuiHangId: f.shipment.phieuGuiHangId }, data: { trangThai: 'DA_HUY' } });
+    const before = await cancellationSnapshot(f.booking.orderId, f.promotion.khuyenMaiId);
+    const transaction = prisma.$transaction.bind(prisma);
+    let wroteHistory = false;
+    const fault = vi.spyOn(prisma, '$transaction').mockImplementation(((
+      callback: (tx: unknown) => Promise<unknown>, options: unknown,
+    ) => transaction(async tx => {
+      const create = tx.lichSuTrangThaiVe.create.bind(tx.lichSuTrangThaiVe);
+      tx.lichSuTrangThaiVe.create = (async (args: Parameters<typeof create>[0]) => {
+        await create(args);
+        wroteHistory = true;
+        throw new Error('G3B injected cancellation history failure');
+      }) as unknown as typeof tx.lichSuTrangThaiVe.create;
+      return callback(tx);
+    }, options as never)) as typeof prisma.$transaction);
+    const enqueue = vi.spyOn(app.get(RefundProcessorService), 'enqueueRefund');
+    try {
+      expect((await cancelRequest(f.tickets[0].maVe)).status).toBe(500);
+      expect(wroteHistory).toBe(true);
+      expect(enqueue).not.toHaveBeenCalled();
+    } finally { fault.mockRestore(); enqueue.mockRestore(); }
+    expect(await cancellationSnapshot(f.booking.orderId, f.promotion.khuyenMaiId)).toEqual(before);
+  });
+
+  it('keeps wrong-phone verification ahead of the cargo restriction without mutation', async () => {
+    const f = await guardedCargoFixture();
+    const before = await cancellationSnapshot(f.booking.orderId, f.promotion.khuyenMaiId);
+    expect((await cancelRequest(f.tickets[0].maVe, '0900000000')).status).toBe(404);
+    expect(await cancellationSnapshot(f.booking.orderId, f.promotion.khuyenMaiId)).toEqual(before);
+  });
+
+  it.each(['status', 'payment'] as const)('serializes cancellation against concurrent $0 writes on the shared order', async (writer) => {
+    const f = await guardedCargoFixture(true, 1, writer !== 'payment');
+    let release!: () => void;
+    let acquired!: () => void;
+    const locked = new Promise<void>(resolve => { acquired = resolve; });
+    const unblock = new Promise<void>(resolve => { release = resolve; });
+    const blocker = prisma.$transaction(async tx => {
+      expect(await lockPaymentOrder(tx, f.booking.orderId)).toBe(true);
+      acquired(); await unblock;
+    });
+    await locked;
+    let cancellationFinished = false;
+    const cancellation = cancelRequest(f.tickets[0].maVe).then(result => { cancellationFinished = true; return result; });
+    const otherWriter = writer === 'payment'
+      ? settleSePayOrder(f.booking.orderCode, f.booking.totalAmount)
+      : app.get(ShipmentsService).updateStatus(f.shipment.phieuGuiHangId, { status: 'DA_TIEP_NHAN', note: 'G3B race' }, {
+        ...customerPrincipal, roles: ['NHA_XE_ADMIN'], nhaXeId: busCompanyId, nhanVienId: 1,
       });
-      expect(Number(payments[0].soTien)).toBe(60_000);
-      expect(
-        ticketHistory.map(({ trangThaiCu, trangThaiMoi }) => [
-          trangThaiCu,
-          trangThaiMoi,
-        ]),
-      ).toEqual([
-        [null, 'DA_DAT'],
-        ['DA_DAT', 'DA_THANH_TOAN'],
-        ['DA_THANH_TOAN', 'HUY'],
-      ]);
-      expect(
-        bookingHistory.map(({ trangThaiCu, trangThaiMoi }) => [
-          trangThaiCu,
-          trangThaiMoi,
-        ]),
-      ).toEqual([
-        [null, 'CHO_THANH_TOAN'],
-        ['CHO_THANH_TOAN', 'DA_THANH_TOAN'],
-        ['DA_THANH_TOAN', 'DA_HUY'],
-      ]);
-      const ticketCancellation = ticketHistory[2];
-      const bookingCancellation = bookingHistory[2];
-      expect(ticketCancellation).toMatchObject({
-        nguonThayDoi: 'SYSTEM',
-        taiKhoanId: null,
-        laOverride: false,
-      });
-      expect(bookingCancellation).toMatchObject({
-        nguonThayDoi: 'SYSTEM',
-        taiKhoanId: null,
-        laOverride: false,
-        maThaoTac: ticketCancellation.maThaoTac,
-        thoiDiem: ticketCancellation.thoiDiem,
-      });
-      expect(ticketCancellation.maThaoTac).toMatch(UUID_V1_PATTERN);
-      expect(usageAfter).toBe(1);
-      expect(promotionAfter.soLuotDaSuDung).toBe(1);
-    } finally {
-      enqueueRefund.mockRestore();
-    }
+    try {
+      await new Promise(resolve => setTimeout(resolve, 100));
+      expect(cancellationFinished).toBe(false);
+    } finally { release(); }
+    await blocker;
+    const [cancelled] = await Promise.all([cancellation, otherWriter]);
+    expect(cancelled.status).toBe(409);
+    expect(cancelled.body.error).toBe('TICKET_CANCELLATION_ACTIVE_SHIPMENT');
+    const [order] = await cancellationSnapshot(f.booking.orderId, f.promotion.khuyenMaiId);
+    expect(order.trangThai).toBe('DA_THANH_TOAN');
+    expect(order.phieuDatVe?.trangThai).toBe('DA_THANH_TOAN');
+    expect(order.phieuDatVe?.ves[0].trangThai).toBe('DA_THANH_TOAN');
+    expect(order.phieuDatVe?.ves[0].gheChuyenXe.trangThai).toBe('DA_DAT');
+    expect(order.thanhToans).toHaveLength(1);
+    expect(order.thanhToans[0].trangThai).toBe('THANH_CONG');
+    expect(order.phieuGuiHang?.trangThai).toBe(writer === 'status' ? 'DA_TIEP_NHAN' : 'MOI_TAO');
+    expect(order.phieuGuiHang?.lichSuTrangThais).toHaveLength(writer === 'status' ? 2 : 1);
+    expect(order.phieuDatVe?.ves[0].lichSuTrangThais).toHaveLength(2);
+    expect(order.phieuDatVe?.lichSuTrangThais).toHaveLength(2);
+  });
+
+  it('still expires unpaid cargo bookings and releases seats/capacity without restoring promotion usage', async () => {
+    const f = await guardedCargoFixture(true, 1, false);
+    expect(await app.get(PaymentsService).expireBookingIfExpired(f.booking.bookingId, new Date(Date.now() + 11 * 60_000))).toBe(true);
+    const [order, promo, capacity] = await cancellationSnapshot(f.booking.orderId, f.promotion.khuyenMaiId);
+    expect(order.trangThai).toBe('DA_HUY');
+    expect(order.phieuDatVe?.trangThai).toBe('DA_HUY');
+    expect(order.phieuDatVe?.ves[0].trangThai).toBe('DA_HUY');
+    expect(order.phieuDatVe?.ves[0].gheChuyenXe.trangThai).toBe('TRONG');
+    expect(order.phieuGuiHang?.trangThai).toBe('DA_HUY');
+    expect(capacity?.capacities.HANG_NHE.used).toBe(0);
+    expect(order.phieuDatVe?.suDungKhuyenMai).not.toBeNull();
+    expect(promo.soLuotDaSuDung).toBe(1);
+    expect(order.thanhToans.filter(p => p.loaiGiaoDich === 'HOAN_TIEN')).toHaveLength(0);
   });
 
   it('continues to create and enqueue positive ticket refunds after successful payment', async () => {
@@ -1860,6 +1831,10 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
     const eventId = Date.now();
     const body = JSON.stringify({
       id: eventId,
+      transactionDate: new Date(Date.now() + 7 * 60 * 60 * 1000)
+        .toISOString()
+        .slice(0, 19)
+        .replace('T', ' '),
       accountNumber: sepayAccountNumber,
       code: 'TRUNCATED',
       content: booking.orderCode,
@@ -2024,7 +1999,15 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
     ]);
     expect(standaloneShipment.donGiaoDichId).not.toBe(booking.orderId);
     expect(standaloneShipment.donGiaoDich.phieuDatVe).toBeNull();
-    expect(standaloneShipment.donGiaoDich.thanhToans).toHaveLength(0);
+    expect(standaloneShipment.donGiaoDich.thanhToans).toHaveLength(1);
+    expect(standaloneShipment.donGiaoDich.thanhToans[0]).toMatchObject({
+      phuongThuc: 'SEPAY',
+      loaiGiaoDich: 'THANH_TOAN',
+      trangThai: 'DANG_XU_LY',
+    });
+    expect(Number(standaloneShipment.donGiaoDich.thanhToans[0].soTien)).toBe(
+      Number(standaloneShipment.donGiaoDich.tongTien),
+    );
     expect(standaloneShipment.donGiaoDich.khachHangId).toBeNull();
     expect(standaloneShipment.chuyenXeId).toBe(tripId);
     expect(standaloneShipment.lichSuTrangThais).toMatchObject([

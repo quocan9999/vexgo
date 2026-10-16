@@ -6,6 +6,15 @@ import {
 } from '../../../src/features/tickets/services/cancel-eligibility.ts';
 import * as cancelEligibilityModule from '../../../src/features/tickets/services/cancel-eligibility.ts';
 
+test('active shipment reason keeps cancellation blocked with an actionable Vietnamese message', () => {
+  const result = checkTicketCancelEligibility({ status: 'DA_THANH_TOAN', departureTime: '2099-01-01T08:00:00Z', cancellation: {
+    eligible: false, reason: 'ACTIVE_SHIPMENT', cancelFeeRate: 0, cancelFee: 0, refundAmount: 0,
+  } });
+  assert.equal(result.eligible, false);
+  assert.equal(result.reason, 'ACTIVE_SHIPMENT');
+  assert.match(result.message, /hàng gửi kèm.*liên hệ nhà xe/i);
+});
+
 test('checkTicketCancelEligibility rejects already cancelled ticket', () => {
   const result = checkTicketCancelEligibility({
     status: 'HUY',

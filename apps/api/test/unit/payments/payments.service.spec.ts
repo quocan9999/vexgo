@@ -46,6 +46,8 @@ describe('PaymentsService', () => {
     updatedAt: new Date('2026-10-06T10:00:00Z'),
     donGiaoDich: {
       donGiaoDichId: 200,
+      ngayTao: new Date(),
+      trangThai: 'CHO_THANH_TOAN',
       khachHangId: 10,
       phieuDatVe: {
         phieuDatVeId: 300,
@@ -99,6 +101,7 @@ describe('PaymentsService', () => {
       lichSuTrangThaiVe: {
         create: vi.fn(),
       },
+      $queryRaw: vi.fn().mockResolvedValue([{ donGiaoDichId: 200 }]),
       $executeRaw: vi.fn().mockResolvedValue(1),
       $transaction: vi.fn(async (cb) => cb(prisma)),
     };
@@ -126,6 +129,7 @@ describe('PaymentsService', () => {
         donGiaoDichId: 200,
         donGiaoDich: {
           donGiaoDichId: 200,
+          ngayTao: new Date(),
           khachHangId: 10,
           tongTien: '300000',
           trangThai: 'CHO_THANH_TOAN',
@@ -217,7 +221,11 @@ describe('PaymentsService', () => {
         createdAt: new Date(),
         trangThai: 'CHO_THANH_TOAN',
         donGiaoDichId: 200,
-        donGiaoDich: { khachHangId: 10, trangThai: 'CHO_THANH_TOAN' },
+        donGiaoDich: {
+          khachHangId: 10,
+          ngayTao: new Date(),
+          trangThai: 'CHO_THANH_TOAN',
+        },
       });
       prisma.khachHang.findUnique.mockResolvedValue({ khachHangId: 10, taiKhoanId: 1 });
       prisma.thanhToan.findMany.mockResolvedValue([
@@ -245,6 +253,7 @@ describe('PaymentsService', () => {
         donGiaoDichId: 200,
         donGiaoDich: {
           donGiaoDichId: 200,
+          ngayTao: new Date(),
           khachHangId: 10,
           trangThai: 'CHO_THANH_TOAN',
           tongTien: '300000',
@@ -364,6 +373,32 @@ describe('PaymentsService', () => {
   });
 
   describe('confirmPaymentSuccess', () => {
+    it('returns PAYMENT_ORDER_STATE_CHANGED when a successful payment has an incompatible order status', async () => {
+      prisma.thanhToan.findUnique.mockResolvedValue({
+        ...samplePayment,
+        trangThai: 'THANH_CONG',
+        donGiaoDich: {
+          ...samplePayment.donGiaoDich,
+          trangThai: 'MOI_TAO',
+        },
+      });
+
+      await expect(
+        service.confirmPaymentSuccess({
+          paymentId: 100,
+          provider: 'MOMO',
+          amount: 300000,
+        }),
+      ).rejects.toMatchObject({
+        response: {
+          error: 'PAYMENT_ORDER_STATE_CHANGED',
+          message: 'Trạng thái đơn giao dịch không cho phép xác nhận thanh toán.',
+        },
+        status: 409,
+      });
+      expect(prisma.donGiaoDich.updateMany).not.toHaveBeenCalled();
+    });
+
     it('atomically updates payment, transaction, and booking to DA_THANH_TOAN', async () => {
       prisma.thanhToan.findUnique.mockResolvedValue(samplePayment);
 
@@ -537,6 +572,15 @@ describe('PaymentsService', () => {
         donGiaoDichId: 200,
         trangThai: 'CHO_THANH_TOAN',
       });
+      prisma.donGiaoDich.findUnique
+        .mockResolvedValueOnce({
+          donGiaoDichId: 200,
+          trangThai: 'CHO_THANH_TOAN',
+        })
+        .mockResolvedValueOnce({
+          donGiaoDichId: 200,
+          trangThai: 'DA_HUY',
+        });
       prisma.donGiaoDich.updateMany.mockResolvedValue({ count: 0 }); // Concurrently cancelled
       prisma.phieuDatVe.findUnique.mockResolvedValue({
         phieuDatVeId: 300,
@@ -662,6 +706,10 @@ describe('PaymentsService', () => {
 
   describe('Signature Verifications & Webhook Handlers', () => {
     const sepayAccountNumber = '0012345678';
+    const sepayTransactionDate = new Date(Date.now() + 7 * 60 * 60 * 1000)
+      .toISOString()
+      .slice(0, 19)
+      .replace('T', ' ');
     const rawBody = Buffer.from(
       JSON.stringify({
         id: 123,
@@ -839,7 +887,7 @@ describe('PaymentsService', () => {
       prisma.thanhToan.findFirst.mockResolvedValue({ ...samplePayment, phuongThuc: 'SEPAY' });
       const settle = vi.spyOn(service, 'confirmPaymentSuccess').mockResolvedValue({ success: true } as any);
       const body = Buffer.from(JSON.stringify({
-        id: 12345, accountNumber: sepayAccountNumber, code: 'AGD29612020BAC', content, transferType: 'in', transferAmount: 300000,
+        id: 12345, accountNumber: sepayAccountNumber, transactionDate: sepayTransactionDate, code: 'AGD29612020BAC', content, transferType: 'in', transferAmount: 300000,
       }));
       await service.handleSepayWebhook({ rawBody: body, timestamp, signature: makeSepaySignature(body, timestamp, secret) });
       expect(settle).toHaveBeenCalledOnce();
@@ -854,7 +902,7 @@ describe('PaymentsService', () => {
         phieuDatVe: { phieuDatVeId: 300 },
       }));
       const settle = vi.spyOn(service, 'confirmPaymentSuccess');
-      const body = Buffer.from(JSON.stringify({ id: 12345, accountNumber: sepayAccountNumber, code: 'ORDER-A', content: 'ORDER-B', transferType: 'in', transferAmount: 300000 }));
+      const body = Buffer.from(JSON.stringify({ id: 12345, accountNumber: sepayAccountNumber, transactionDate: sepayTransactionDate, code: 'ORDER-A', content: 'ORDER-B', transferType: 'in', transferAmount: 300000 }));
       await expect(service.handleSepayWebhook({ rawBody: body, timestamp, signature: makeSepaySignature(body, timestamp, secret) })).rejects.toMatchObject({ response: { error: 'SEPAY_REFERENCE_MISMATCH' } });
       expect(settle).not.toHaveBeenCalled();
     });
@@ -864,7 +912,7 @@ describe('PaymentsService', () => {
       setSepayConfig(secret, sepayAccountNumber);
       prisma.donGiaoDich.findUnique.mockResolvedValue(null);
       const settle = vi.spyOn(service, 'confirmPaymentSuccess');
-      const body = Buffer.from(JSON.stringify({ id: 12345, accountNumber: sepayAccountNumber, code: 'AGD29612020BAC', content: 'FUTAGD29612020BAC', transferType: 'in', transferAmount: 300000 }));
+      const body = Buffer.from(JSON.stringify({ id: 12345, accountNumber: sepayAccountNumber, transactionDate: sepayTransactionDate, code: 'AGD29612020BAC', content: 'FUTAGD29612020BAC', transferType: 'in', transferAmount: 300000 }));
       await expect(service.handleSepayWebhook({ rawBody: body, timestamp, signature: makeSepaySignature(body, timestamp, secret) })).rejects.toMatchObject({ response: { error: 'SEPAY_ORDER_NOT_FOUND' } });
       expect(settle).not.toHaveBeenCalled();
     });

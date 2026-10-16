@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AppModule } from '../../../src/app.module.js';
 import { configureApi } from '../../../src/common/configure-api.js';
 import { PrismaService } from '../../../src/prisma/prisma.service.js';
+import { ShipmentsService } from '../../../src/shipments/shipments.service.js';
 
 describe('Public shipment lookup HTTP contract (MySQL integration)', () => {
   let app: INestApplication;
@@ -19,6 +20,7 @@ describe('Public shipment lookup HTTP contract (MySQL integration)', () => {
   let receiverPointId: number;
   let cargoTypeId: number;
   let orderId: number;
+  let orderCreatedAt: Date;
   let shipmentId: number;
 
   const suffix = randomUUID().replaceAll('-', '').slice(0, 8).toUpperCase();
@@ -147,9 +149,20 @@ describe('Public shipment lookup HTTP contract (MySQL integration)', () => {
         khachHangId: null,
         nhaXeId: busCompanyId,
       },
-      select: { donGiaoDichId: true },
+      select: { donGiaoDichId: true, ngayTao: true },
     });
     orderId = order.donGiaoDichId;
+    orderCreatedAt = order.ngayTao;
+    await prisma.thanhToan.create({
+      data: {
+        soTien: 120_000,
+        phuongThuc: 'SEPAY',
+        loaiGiaoDich: 'THANH_TOAN',
+        thoiGian: orderCreatedAt,
+        trangThai: 'DANG_XU_LY',
+        donGiaoDichId: orderId,
+      },
+    });
 
     const shipment = await prisma.phieuGuiHang.create({
       data: {
@@ -206,6 +219,9 @@ describe('Public shipment lookup HTTP contract (MySQL integration)', () => {
         });
       }
       if (orderId) {
+        await prisma.thanhToan.deleteMany({
+          where: { donGiaoDichId: orderId },
+        });
         await prisma.donGiaoDich.deleteMany({
           where: { donGiaoDichId: orderId },
         });
@@ -242,7 +258,43 @@ describe('Public shipment lookup HTTP contract (MySQL integration)', () => {
     }
   });
 
-  it('matches sender or receiver, returns only tracking data, rejects mismatches, and limits public retries', async () => {
+  it('reads the linked booking coupon without discounting cargo or mutating financial records', async () => {
+    const promotion = await prisma.khuyenMai.create({ data: {
+      nhaXeId: busCompanyId, tenChuongTrinh: `Public linked ${suffix}`, maKhuyenMai: `PUBLIC-${suffix}`,
+      phamViApDung: 'DAT_VE', hinhThucApDung: 'NHAP_MA', loaiGiamGia: 'SO_TIEN', giaTriGiam: 30000,
+      tuNgay: new Date('2020-01-01T00:00:00Z'), denNgay: new Date('2099-12-31T00:00:00Z'),
+      trangThai: 'HOAT_DONG', soLuotToiDa: 5, soLuotDaSuDung: 0,
+    } });
+    let bookingId: number | undefined;
+    try {
+      const booking = await prisma.phieuDatVe.create({ data: {
+        maPhieuDatVe: `PUBLIC-PDV-${suffix}`, ngayDat: new Date(), soLuongVeBanDau: 1,
+        tongTienBanDau: 30000, soTienGiamKhuyenMai: 30000, trangThai: 'CHO_THANH_TOAN',
+        khuyenMaiId: promotion.khuyenMaiId, donGiaoDichId: orderId,
+      } });
+      bookingId = booking.phieuDatVeId;
+      const service = app.get(ShipmentsService);
+      for (const phoneNumber of [senderPhone, receiverPhone]) {
+        const result = await service.lookupShipment({ waybillCode, phoneNumber });
+        expect(result).toMatchObject({ bookingPromotionCode: promotion.maKhuyenMai, amount: 120000, paymentStatus: 'DANG_XU_LY' });
+        expect(result).not.toHaveProperty('shipmentPromotionCode');
+        expect(result).not.toHaveProperty('discountAmount');
+      }
+      await expect(service.lookupShipment({ waybillCode, phoneNumber: '0900000000' })).rejects.toMatchObject({ response: { error: 'SHIPMENT_NOT_FOUND' } });
+      const cargo = await prisma.phieuGuiHang.findUniqueOrThrow({ where: { phieuGuiHangId: shipmentId } });
+      expect(cargo.khuyenMaiId).toBeNull();
+      expect(Number(cargo.soTienGiam)).toBe(0);
+      expect(Number(cargo.tongPhi)).toBe(120000);
+      expect(await prisma.thanhToan.count({ where: { donGiaoDichId: orderId } })).toBe(1);
+      expect((await prisma.khuyenMai.findUniqueOrThrow({ where: { khuyenMaiId: promotion.khuyenMaiId } })).soLuotDaSuDung).toBe(0);
+      expect(await prisma.suDungKhuyenMai.count({ where: { khuyenMaiId: promotion.khuyenMaiId } })).toBe(0);
+    } finally {
+      if (bookingId) await prisma.phieuDatVe.delete({ where: { phieuDatVeId: bookingId } });
+      await prisma.khuyenMai.delete({ where: { khuyenMaiId: promotion.khuyenMaiId } });
+    }
+  });
+
+  it('returns minimal payment details only to a matched contact while keeping private shipment data hidden', async () => {
     const sendLookup = (code: string, phone: string) =>
       request(app.getHttpServer())
         .post('/api/v1/shipments/lookup')
@@ -268,6 +320,14 @@ describe('Public shipment lookup HTTP contract (MySQL integration)', () => {
       scheduledDepartureAt: expect.any(String),
       estimatedArrivalAt: expect.any(String),
       packageCount: 3,
+      orderCode: `ORDER-PUBLIC-${suffix}`,
+      orderStatus: 'CHO_THANH_TOAN',
+      amount: 120_000,
+      paymentStatus: 'DANG_XU_LY',
+      requiresReconciliation: false,
+      paymentMethod: 'SEPAY',
+      paymentExpiresAt: new Date(orderCreatedAt.getTime() + 10 * 60_000).toISOString(),
+      serverTime: expect.any(String),
       timeline: [
         {
           status: 'DA_TIEP_NHAN',
@@ -275,7 +335,10 @@ describe('Public shipment lookup HTTP contract (MySQL integration)', () => {
         },
       ],
     });
-    expect(receiverResponse.body.data).toEqual(senderResponse.body.data);
+    expect(receiverResponse.body.data).toEqual({
+      ...senderResponse.body.data,
+      serverTime: expect.any(String),
+    });
 
     const serializedResponse = JSON.stringify(senderResponse.body);
     for (const privateValue of [
@@ -288,8 +351,6 @@ describe('Public shipment lookup HTTP contract (MySQL integration)', () => {
       privateShipmentNote,
       privateHistoryNote,
       `PRIVATE_CARGO_DESCRIPTION_${suffix}`,
-      `ORDER-PUBLIC-${suffix}`,
-      '120000',
     ]) {
       expect(serializedResponse).not.toContain(privateValue);
     }
@@ -298,6 +359,10 @@ describe('Public shipment lookup HTTP contract (MySQL integration)', () => {
     const wrongPhone = await sendLookup(waybillCode, '0900000000').expect(404);
     expect(JSON.stringify(wrongCode.body)).not.toContain(privateSenderName);
     expect(JSON.stringify(wrongPhone.body)).not.toContain(privateReceiverName);
+    expect(JSON.stringify(wrongCode.body)).not.toContain(`ORDER-PUBLIC-${suffix}`);
+    expect(JSON.stringify(wrongPhone.body)).not.toContain(`ORDER-PUBLIC-${suffix}`);
+    expect(JSON.stringify(wrongCode.body)).not.toContain('120000');
+    expect(JSON.stringify(wrongPhone.body)).not.toContain('120000');
 
     // Ticket lookup policy is 10 requests/minute. Four requests above have used this client bucket.
     for (let index = 4; index < 10; index += 1) {

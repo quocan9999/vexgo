@@ -62,6 +62,19 @@ afterEach(() => {
 });
 
 describe('ticket lookup promotion snapshot', () => {
+  it('shows the active-shipment explanation when cancellation is requested', async () => {
+    const body = await (await fetchMock()).json();
+    body.data.cancellation.reason = 'ACTIVE_SHIPMENT';
+    fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => body });
+    render(<TicketSearchPage />);
+    fireEvent.change(screen.getByPlaceholderText('Vui lòng nhập số điện thoại'), { target: { value: '0901234567' } });
+    fireEvent.change(screen.getByPlaceholderText('Vui lòng nhập mã vé'), { target: { value: 'VE-501' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Tra cứu vé' }));
+    await screen.findByText('SAVE50');
+    fireEvent.click(screen.getByRole('button', { name: 'Hủy vé' }));
+    expect(await screen.findByText(/Đơn có hàng gửi kèm còn hiệu lực.*liên hệ nhà xe/)).toBeTruthy();
+  });
+
   it('shows the linked code and booking-level discount once as a reference on ticket detail', async () => {
     render(<TicketSearchPage />);
     fireEvent.change(screen.getByPlaceholderText('Vui lòng nhập số điện thoại'), {

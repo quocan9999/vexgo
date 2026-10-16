@@ -8,21 +8,36 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'node:crypto';
-import { Prisma } from '../generated/prisma/client.js';
+import { Prisma, TrangThaiPhieuGuiHang } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { lockPaymentOrder } from '../payments/payment-order-lock.js';
+import { createSepayPaymentAttempt } from '../payments/payment-attempt.js';
+import { requireTenantPrincipal } from '../auth/tenant-scope.js';
 import { CargoPricingService } from '../cargo-pricing/cargo-pricing.service.js';
 import { CargoCapacityService } from '../cargo-capacity/cargo-capacity.service.js';
 import type { CargoCapacityGroup } from '../cargo-capacity/cargo-capacity.service.js';
-import { hasTenantRole } from '../auth/principal-scope.js';
+import {
+  assertPrincipalScope,
+  hasTenantRole,
+} from '../auth/principal-scope.js';
 import {
   businessDateStartUtc,
   computeArrival,
   resolveBusinessTimeZone,
 } from '../common/time/business-date.js';
+import { getBookingPaymentDeadline } from '../common/booking-payment-deadline.js';
 import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
 import type { CreateShipmentDto } from './dto/create-shipment.dto.js';
 import type { LookupShipmentDto } from './dto/lookup-shipment.dto.js';
 import type { ShipmentQueryDto } from './dto/shipment-query.dto.js';
+import type { UpdateShipmentStatusDto } from './dto/update-shipment-status.dto.js';
+import type {
+  CargoFeeDetail,
+  CargoItemDetail,
+  ShipmentDetail as AdminShipmentDetail,
+  ShipmentHistoryItem,
+  ShipmentSummary,
+} from './dto/shipment-response.dto.js';
 import { ShipmentPersistenceService } from './shipment-persistence.service.js';
 import { generateStandaloneShipmentCodes } from './shipment-codes.js';
 
@@ -47,6 +62,61 @@ function normalizePhone(phone: string): string {
   }
   return digits;
 }
+
+function formatTripDate(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+function formatTripTime(time: Date): string {
+  return time.toISOString().slice(11, 19);
+}
+
+function toVnd(value: Prisma.Decimal | number | null | undefined): number {
+  if (value === null || value === undefined) return 0;
+  return Math.round(Number(value));
+}
+
+const SHIPMENT_LIST_INCLUDE = {
+  donGiaoDich: true,
+  diemGui: true,
+  diemNhan: true,
+  chuyenXe: {
+    include: {
+      tuyenXe: { include: { nhaXe: true } },
+      xe: true,
+    },
+  },
+  hangHoas: {
+    include: { loaiHangHoa: true },
+    orderBy: { hangHoaId: 'asc' },
+  },
+} satisfies Prisma.PhieuGuiHangInclude;
+
+const SHIPMENT_DETAIL_INCLUDE = {
+  donGiaoDich: true,
+  diemGui: true,
+  diemNhan: true,
+  chuyenXe: {
+    include: {
+      tuyenXe: { include: { nhaXe: true } },
+      xe: true,
+    },
+  },
+  hangHoas: {
+    include: { loaiHangHoa: true },
+    orderBy: { hangHoaId: 'asc' },
+  },
+  chiTietCuocGuiHangs: {
+    include: { loaiHangHoa: true },
+    orderBy: { chiTietCuocGuiHangId: 'asc' },
+  },
+  lichSuTrangThais: {
+    include: {
+      taiKhoan: { select: { taiKhoanId: true, hoTen: true } },
+    },
+    orderBy: [{ thoiGian: 'asc' }, { lichSuTrangThaiId: 'asc' }],
+  },
+} satisfies Prisma.PhieuGuiHangInclude;
 
 @Injectable()
 export class ShipmentsService {
@@ -271,6 +341,11 @@ export class ShipmentsService {
           nhaXeId: trip.nhaXeId,
         },
       });
+      const paymentAttempt = await createSepayPaymentAttempt(tx, {
+        donGiaoDichId: donGiaoDich.donGiaoDichId,
+        amount: tongPhi,
+        createdAt: now,
+      });
 
       const { shipment: phieuGui, items: createdItems } =
         await this.shipmentPersistenceService.persistInTransaction(tx, {
@@ -313,6 +388,8 @@ export class ShipmentsService {
       return {
         shipmentId: phieuGui.phieuGuiHangId,
         orderId: donGiaoDich.donGiaoDichId,
+        paymentId: paymentAttempt.thanhToanId,
+        paymentExpiresAt: getBookingPaymentDeadline(donGiaoDich.ngayTao).toISOString(),
         waybillCode: phieuGui.maVanDon,
         orderCode: donGiaoDich.maDonGiaoDich,
         status: phieuGui.trangThai,
@@ -393,12 +470,22 @@ export class ShipmentsService {
         soDienThoaiNguoiNhan: true,
         donGiaoDich: {
           select: {
+            donGiaoDichId: true,
             maDonGiaoDich: true,
             soDienThoaiKhachHang: true,
             phieuDatVe: {
               select: {
                 khuyenMai: { select: { maKhuyenMai: true } },
               },
+            },
+            ngayTao: true,
+            tongTien: true,
+            trangThai: true,
+            thanhToans: {
+              where: { loaiGiaoDich: 'THANH_TOAN' },
+              orderBy: [{ thoiGian: 'desc' }, { thanhToanId: 'desc' }],
+              take: 1,
+              select: { phuongThuc: true, trangThai: true },
             },
           },
         },
@@ -459,10 +546,43 @@ export class ShipmentsService {
       shipment.chuyenXe.gioDen,
       this.businessTimeZone,
     );
+    const latestPayment = shipment.donGiaoDich.thanhToans[0] ?? null;
+    const additionalSePayTransfer = await this.prisma.thanhToan.findFirst({
+      where: {
+        donGiaoDichId: shipment.donGiaoDich.donGiaoDichId,
+        phuongThuc: 'SEPAY',
+        loaiGiaoDich: 'THANH_TOAN',
+        trangThai: 'CAN_DOI_SOAT',
+        maGiaoDichSePay: { not: null },
+      },
+      select: { phuongThuc: true, trangThai: true },
+      orderBy: [{ thoiGian: 'desc' }, { thanhToanId: 'desc' }],
+    });
+    const paymentExpiresAt = getBookingPaymentDeadline(
+      shipment.donGiaoDich.ngayTao,
+    );
+    const paymentExpired =
+      shipment.donGiaoDich.trangThai === 'CHO_THANH_TOAN' &&
+      latestPayment?.trangThai === 'DANG_XU_LY' &&
+      paymentExpiresAt <= new Date();
 
     return {
       waybillCode: shipment.maVanDon,
       status: shipment.trangThai,
+      orderCode: shipment.donGiaoDich.maDonGiaoDich,
+      amount: Number(shipment.donGiaoDich.tongTien),
+      orderStatus: shipment.donGiaoDich.trangThai,
+      paymentStatus: paymentExpired
+        ? 'HET_HAN'
+        : (additionalSePayTransfer?.trangThai ?? latestPayment?.trangThai ?? null),
+      requiresReconciliation: Boolean(additionalSePayTransfer) ||
+        (latestPayment?.trangThai === 'THANH_CONG' &&
+          (['DA_HUY', 'HUY'].includes(shipment.donGiaoDich.trangThai) ||
+            shipment.trangThai === 'DA_HUY')),
+      paymentMethod:
+        additionalSePayTransfer?.phuongThuc ?? latestPayment?.phuongThuc ?? null,
+      paymentExpiresAt: paymentExpiresAt.toISOString(),
+      serverTime: new Date().toISOString(),
       pickupPoint: {
         name: shipment.diemGui.tenDiem,
         address: shipment.diemGui.diaChi,
@@ -493,26 +613,7 @@ export class ShipmentsService {
 
   async getShipmentDetail(id: number, principal?: AuthPrincipal) {
     this.assertShipmentPrincipal(principal);
-    const shipment = await this.prisma.phieuGuiHang.findUnique({
-      where: { phieuGuiHangId: id },
-      include: {
-        donGiaoDich: true,
-        diemGui: true,
-        diemNhan: true,
-        chuyenXe: {
-          include: {
-            tuyenXe: { include: { nhaXe: true } },
-            xe: true,
-          },
-        },
-        hangHoas: {
-          include: { loaiHangHoa: true },
-        },
-        lichSuTrangThais: {
-          orderBy: { thoiGian: 'asc' },
-        },
-      },
-    });
+    const shipment = await this.findShipmentDetailRecord(id);
 
     if (!shipment) {
       throw new NotFoundException({
@@ -600,51 +701,231 @@ export class ShipmentsService {
     };
   }
 
+  async findAll(query: ShipmentQueryDto, principal: AuthPrincipal): Promise<{
+    data: ShipmentSummary[];
+    meta: {
+      page: number;
+      pageSize: number;
+      totalItems: number;
+      totalPages: number;
+    };
+  }> {
+    requireTenantPrincipal(principal);
+    const page = await this.queryShipmentPage(query, principal);
+    return {
+      data: page.records.map((record) => ({
+        shipmentId: record.phieuGuiHangId,
+        waybillCode: record.maVanDon,
+        sentAt: record.ngayGui.toISOString(),
+        status: record.trangThai,
+        sender: {
+          fullName: record.donGiaoDich.tenKhachHang,
+          phoneNumber: record.donGiaoDich.soDienThoaiKhachHang,
+        },
+        receiver: {
+          fullName: record.tenNguoiNhan,
+          phoneNumber: record.soDienThoaiNguoiNhan,
+        },
+        trip: {
+          tripId: record.chuyenXe.chuyenXeId,
+          code: record.chuyenXe.maChuyenXe,
+          departureDate: formatTripDate(record.chuyenXe.ngayKhoiHanh),
+          departureTime: formatTripTime(record.chuyenXe.gioKhoiHanh),
+        },
+        originPoint: {
+          pointId: record.diemGui.diemGiaoNhanHangId,
+          name: record.diemGui.tenDiem,
+          code: record.diemGui.maDiem,
+          address: record.diemGui.diaChi,
+        },
+        destinationPoint: {
+          pointId: record.diemNhan.diemGiaoNhanHangId,
+          name: record.diemNhan.tenDiem,
+          code: record.diemNhan.maDiem,
+          address: record.diemNhan.diaChi,
+        },
+        totalFee: toVnd(record.tongPhi),
+      })),
+      meta: page.meta,
+    };
+  }
+
   async listShipments(query: ShipmentQueryDto, principal?: AuthPrincipal) {
+    this.assertShipmentPrincipal(principal);
+    const page = await this.queryShipmentPage(query, principal);
+
+    return {
+      data: page.records.map((shipment) => ({
+        shipmentId: shipment.phieuGuiHangId,
+        waybillCode: shipment.maVanDon,
+        orderCode: shipment.donGiaoDich.maDonGiaoDich,
+        sentAt: shipment.ngayGui.toISOString(),
+        status: shipment.trangThai,
+        paymentStatus: shipment.donGiaoDich.trangThai,
+        totalFee: toVnd(shipment.tongPhi),
+        sender: {
+          fullName: shipment.donGiaoDich.tenKhachHang,
+          phoneNumber: shipment.donGiaoDich.soDienThoaiKhachHang,
+        },
+        receiver: {
+          fullName: shipment.tenNguoiNhan,
+          phoneNumber: shipment.soDienThoaiNguoiNhan,
+        },
+        trip: {
+          tripId: shipment.chuyenXe.chuyenXeId,
+          code: shipment.chuyenXe.maChuyenXe,
+          route: `${shipment.chuyenXe.tuyenXe.diemDi} → ${shipment.chuyenXe.tuyenXe.diemDen}`,
+          busCompany: shipment.chuyenXe.tuyenXe.nhaXe.tenNhaXe,
+        },
+        itemsCount: shipment.hangHoas.length,
+      })),
+      meta: page.meta,
+    };
+  }
+
+  async findOne(
+    id: number,
+    principal: AuthPrincipal,
+  ): Promise<{ data: AdminShipmentDetail }> {
+    const tenantId = requireTenantPrincipal(principal);
+    const record = await this.findShipmentDetailRecord(id);
+    if (!record || !this.isShipmentInTenant(record, tenantId)) {
+      throw new NotFoundException({
+        error: 'SHIPMENT_NOT_FOUND',
+        message: 'Không tìm thấy phiếu gửi hàng.',
+      });
+    }
+
+    const data: AdminShipmentDetail = {
+      shipmentId: record.phieuGuiHangId,
+      waybillCode: record.maVanDon,
+      sentAt: record.ngayGui.toISOString(),
+      status: record.trangThai,
+      paymentStatus: record.donGiaoDich.trangThai,
+      note: record.ghiChu ?? null,
+      sender: {
+        fullName: record.donGiaoDich.tenKhachHang,
+        phoneNumber: record.donGiaoDich.soDienThoaiKhachHang,
+      },
+      receiver: {
+        fullName: record.tenNguoiNhan,
+        phoneNumber: record.soDienThoaiNguoiNhan,
+      },
+      trip: {
+        tripId: record.chuyenXe.chuyenXeId,
+        code: record.chuyenXe.maChuyenXe,
+        departureDate: formatTripDate(record.chuyenXe.ngayKhoiHanh),
+        departureTime: formatTripTime(record.chuyenXe.gioKhoiHanh),
+      },
+      originPoint: {
+        pointId: record.diemGui.diemGiaoNhanHangId,
+        name: record.diemGui.tenDiem,
+        code: record.diemGui.maDiem,
+        address: record.diemGui.diaChi,
+      },
+      destinationPoint: {
+        pointId: record.diemNhan.diemGiaoNhanHangId,
+        name: record.diemNhan.tenDiem,
+        code: record.diemNhan.maDiem,
+        address: record.diemNhan.diaChi,
+      },
+      cargoItems: record.hangHoas.map((item): CargoItemDetail => ({
+        cargoId: item.hangHoaId,
+        name: item.tenHang,
+        typeName: item.loaiHangHoa.tenLoai,
+        weightKg: Number(item.khoiLuong),
+        quantity: item.soLuong,
+        dimensions:
+          item.chieuDai != null && item.chieuRong != null && item.chieuCao != null
+            ? {
+                length: Number(item.chieuDai),
+                width: Number(item.chieuRong),
+                height: Number(item.chieuCao),
+              }
+            : null,
+        declaredValue:
+          item.giaTriKhaiBao != null ? toVnd(item.giaTriKhaiBao) : null,
+        description: item.moTa ?? null,
+      })),
+      cargoFeeDetails: record.chiTietCuocGuiHangs.map(
+        (detail): CargoFeeDetail => ({
+          feeDetailId: detail.chiTietCuocGuiHangId,
+          cargoTypeName: detail.loaiHangHoa.tenLoai,
+          chargeableWeightKg: Number(detail.khoiLuongTinhCuoc),
+          fee: toVnd(detail.soTienCuoc),
+        }),
+      ),
+      feeSummary: {
+        mainFee: toVnd(record.cuocChinh),
+        serviceFee: toVnd(record.phiDichVu),
+        discountAmount: toVnd(record.soTienGiam),
+        totalFee: toVnd(record.tongPhi),
+        freightPayer: record.nguoiTraCuoc,
+      },
+      history: record.lichSuTrangThais.map(
+        (history): ShipmentHistoryItem => ({
+          historyId: history.lichSuTrangThaiId,
+          status: history.trangThai,
+          time: history.thoiGian.toISOString(),
+          note: history.ghiChu ?? null,
+          actor: history.taiKhoan
+            ? {
+                accountId: history.taiKhoan.taiKhoanId,
+                fullName: history.taiKhoan.hoTen,
+              }
+            : null,
+        }),
+      ),
+      totalFee: toVnd(record.tongPhi),
+    };
+
+    return { data };
+  }
+
+  private async queryShipmentPage(
+    query: ShipmentQueryDto,
+    principal: AuthPrincipal,
+  ) {
     this.assertShipmentPrincipal(principal);
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 10;
-    const sortDirection = query.sortDirection ?? 'desc';
+    const sortDirection: Prisma.SortOrder =
+      query.sortDirection === 'asc' ? 'asc' : 'desc';
+    const conditions: Prisma.PhieuGuiHangWhereInput[] = [];
 
-    const andConditions: Prisma.PhieuGuiHangWhereInput[] = [];
-
-    if (principal.roles.includes('KHACH_HANG')) {
-      const cust = await this.prisma.khachHang.findUnique({
+    if (hasTenantRole(principal.roles)) {
+      const tenantId = requireTenantPrincipal(principal);
+      conditions.push(
+        { donGiaoDich: { nhaXeId: tenantId } },
+        { chuyenXe: { nhaXeId: tenantId } },
+        { diemGui: { nhaXeId: tenantId } },
+        { diemNhan: { nhaXeId: tenantId } },
+      );
+    } else if (principal.roles.includes('KHACH_HANG')) {
+      const customer = await this.prisma.khachHang.findUnique({
         where: { taiKhoanId: principal.taiKhoanId },
+        select: { khachHangId: true },
       });
-      if (!cust) {
+      if (!customer) {
         throw new ForbiddenException({
           error: 'FORBIDDEN_SCOPE',
           message: 'Tài khoản chưa có hồ sơ khách hàng hợp lệ.',
         });
       }
-      andConditions.push({
-        donGiaoDich: { khachHangId: cust.khachHangId },
+      conditions.push({
+        donGiaoDich: { khachHangId: customer.khachHangId },
       });
-    } else if (hasTenantRole(principal.roles)) {
-      if (!principal.nhaXeId || principal.nhaXeId <= 0) {
-        throw new ForbiddenException({
-          error: 'TENANT_SCOPE_REQUIRED',
-          message: 'Tài khoản chưa được gán nhà xe hợp lệ.',
-        });
-      }
-      andConditions.push({
-        chuyenXe: { nhaXeId: principal.nhaXeId },
-      });
-    } else if (!principal.roles.includes('SUPER_ADMIN')) {
+    } else {
       throw new ForbiddenException({
         error: 'FORBIDDEN_SCOPE',
         message: 'Bạn không có quyền xem danh sách phiếu gửi hàng.',
       });
     }
 
-    if (query.status) {
-      andConditions.push({ trangThai: query.status as any });
-    }
-
+    if (query.status) conditions.push({ trangThai: query.status });
     if (query.search?.trim()) {
       const search = query.search.trim();
-      andConditions.push({
+      conditions.push({
         OR: [
           { maVanDon: { contains: search } },
           { tenNguoiNhan: { contains: search } },
@@ -655,68 +936,193 @@ export class ShipmentsService {
       });
     }
 
-    const where: Prisma.PhieuGuiHangWhereInput =
-      andConditions.length > 0 ? { AND: andConditions } : {};
-
-    const [totalItems, items] = await Promise.all([
+    const where: Prisma.PhieuGuiHangWhereInput = { AND: conditions };
+    const [totalItems, records] = await Promise.all([
       this.prisma.phieuGuiHang.count({ where }),
       this.prisma.phieuGuiHang.findMany({
         where,
-        orderBy: [{ ngayGui: sortDirection }, { phieuGuiHangId: sortDirection }],
+        orderBy: [
+          { ngayGui: sortDirection },
+          { phieuGuiHangId: sortDirection },
+        ],
         skip: (page - 1) * pageSize,
         take: pageSize,
-        include: {
-          donGiaoDich: true,
-          diemGui: true,
-          diemNhan: true,
-          chuyenXe: {
-            include: {
-              tuyenXe: { include: { nhaXe: true } },
-              xe: true,
-            },
-          },
-          hangHoas: {
-            include: { loaiHangHoa: true },
-          },
-        },
+        include: SHIPMENT_LIST_INCLUDE,
       }),
     ]);
 
-    const totalPages =
-      totalItems === 0 ? 0 : Math.ceil(totalItems / pageSize);
-
     return {
-      data: items.map((p) => ({
-        shipmentId: p.phieuGuiHangId,
-        waybillCode: p.maVanDon,
-        orderCode: p.donGiaoDich.maDonGiaoDich,
-        sentAt: p.ngayGui.toISOString(),
-        status: p.trangThai,
-        paymentStatus: p.donGiaoDich.trangThai,
-        totalFee: Number(p.tongPhi),
-        sender: {
-          fullName: p.donGiaoDich.tenKhachHang,
-          phoneNumber: p.donGiaoDich.soDienThoaiKhachHang,
-        },
-        receiver: {
-          fullName: p.tenNguoiNhan,
-          phoneNumber: p.soDienThoaiNguoiNhan,
-        },
-        trip: {
-          tripId: p.chuyenXe.chuyenXeId,
-          code: p.chuyenXe.maChuyenXe,
-          route: `${p.chuyenXe.tuyenXe.diemDi} → ${p.chuyenXe.tuyenXe.diemDen}`,
-          busCompany: p.chuyenXe.tuyenXe.nhaXe.tenNhaXe,
-        },
-        itemsCount: p.hangHoas.length,
-      })),
+      records,
       meta: {
         page,
         pageSize,
         totalItems,
-        totalPages,
+        totalPages: totalItems === 0 ? 0 : Math.ceil(totalItems / pageSize),
       },
     };
+  }
+
+  private findShipmentDetailRecord(id: number) {
+    return this.prisma.phieuGuiHang.findUnique({
+      where: { phieuGuiHangId: id },
+      include: SHIPMENT_DETAIL_INCLUDE,
+    });
+  }
+
+  private isShipmentInTenant(
+    shipment: {
+      donGiaoDich: { nhaXeId: number };
+      chuyenXe: { nhaXeId: number };
+      diemGui: { nhaXeId: number };
+      diemNhan: { nhaXeId: number };
+    },
+    tenantId: number,
+  ): boolean {
+    return (
+      shipment.donGiaoDich.nhaXeId === tenantId &&
+      shipment.chuyenXe.nhaXeId === tenantId &&
+      shipment.diemGui.nhaXeId === tenantId &&
+      shipment.diemNhan.nhaXeId === tenantId
+    );
+  }
+
+  async updateStatus(
+    id: number,
+    dto: UpdateShipmentStatusDto,
+    principal: AuthPrincipal,
+  ): Promise<{
+    data: {
+      shipmentId: number;
+      status: TrangThaiPhieuGuiHang;
+      updatedAt: string;
+    };
+  }> {
+    const tenantId = requireTenantPrincipal(principal);
+    if ((dto.status as string) === 'DA_HUY') {
+      throw new ConflictException({
+        error: 'INVALID_STATUS_TRANSITION',
+        message: 'Không hỗ trợ hủy thủ công phiếu gửi hàng.',
+      });
+    }
+
+    const snapshot = await this.prisma.phieuGuiHang.findUnique({
+      where: { phieuGuiHangId: id },
+      select: { donGiaoDichId: true },
+    });
+    if (!snapshot) {
+      throw new NotFoundException({
+        error: 'SHIPMENT_NOT_FOUND',
+        message: 'Không tìm thấy phiếu gửi hàng.',
+      });
+    }
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      const orderLocked = await lockPaymentOrder(tx, snapshot.donGiaoDichId);
+      if (!orderLocked) {
+        throw new NotFoundException({
+          error: 'SHIPMENT_NOT_FOUND',
+          message: 'Không tìm thấy phiếu gửi hàng.',
+        });
+      }
+
+      const shipment = await tx.phieuGuiHang.findUnique({
+        where: { phieuGuiHangId: id },
+        include: {
+          donGiaoDich: {
+            select: {
+              nhaXeId: true,
+              trangThai: true,
+              thanhToans: {
+                select: { loaiGiaoDich: true, trangThai: true },
+              },
+            },
+          },
+          chuyenXe: { select: { nhaXeId: true } },
+          diemGui: { select: { nhaXeId: true } },
+          diemNhan: { select: { nhaXeId: true } },
+        },
+      });
+      if (!shipment || !this.isShipmentInTenant(shipment, tenantId)) {
+        throw new NotFoundException({
+          error: 'SHIPMENT_NOT_FOUND',
+          message: 'Không tìm thấy phiếu gửi hàng.',
+        });
+      }
+
+      const currentStatus = shipment.trangThai;
+      const targetStatus = dto.status;
+      const transitions: Record<
+        TrangThaiPhieuGuiHang,
+        TrangThaiPhieuGuiHang[]
+      > = {
+        MOI_TAO: ['DA_TIEP_NHAN'],
+        DA_TIEP_NHAN: ['DANG_VAN_CHUYEN'],
+        DANG_VAN_CHUYEN: ['DA_GIAO'],
+        DA_GIAO: [],
+        DA_HUY: [],
+      };
+      if (!transitions[currentStatus].includes(targetStatus)) {
+        throw new ConflictException({
+          error: 'INVALID_STATUS_TRANSITION',
+          message: `Không thể chuyển trạng thái từ ${currentStatus} sang ${targetStatus}.`,
+        });
+      }
+
+      const hasSuccessfulCharge = shipment.donGiaoDich.thanhToans.some(
+        (payment) =>
+          payment.loaiGiaoDich !== 'HOAN_TIEN' &&
+          (payment.trangThai === 'THANH_CONG' ||
+            payment.trangThai === 'DA_THANH_TOAN'),
+      );
+      if (
+        shipment.donGiaoDich.trangThai !== 'DA_THANH_TOAN' ||
+        !hasSuccessfulCharge
+      ) {
+        throw new ConflictException({
+          error: 'SHIPMENT_PAYMENT_NOT_CONFIRMED',
+          message:
+            'Chỉ được cập nhật trạng thái vận chuyển sau khi đơn đã thanh toán.',
+        });
+      }
+
+      const now = new Date();
+      const updated = await tx.phieuGuiHang.updateMany({
+        where: {
+          phieuGuiHangId: id,
+          trangThai: currentStatus,
+          donGiaoDich: { nhaXeId: tenantId },
+          chuyenXe: { nhaXeId: tenantId },
+          diemGui: { nhaXeId: tenantId },
+          diemNhan: { nhaXeId: tenantId },
+        },
+        data: { trangThai: targetStatus, updatedAt: now },
+      });
+      if (updated.count !== 1) {
+        throw new ConflictException({
+          error: 'CONCURRENT_STATUS_UPDATE',
+          message:
+            'Trạng thái phiếu gửi hàng đã bị thay đổi bởi thao tác khác.',
+        });
+      }
+
+      await tx.lichSuTrangThaiPhieuGuiHang.create({
+        data: {
+          phieuGuiHangId: id,
+          trangThai: targetStatus,
+          thoiGian: now,
+          taiKhoanId: principal.taiKhoanId,
+          ghiChu: dto.note?.trim() || null,
+        },
+      });
+
+      return {
+        shipmentId: id,
+        status: targetStatus,
+        updatedAt: now.toISOString(),
+      };
+    });
+
+    return { data: result };
   }
 
   async getCargoCategories() {
@@ -742,14 +1148,33 @@ export class ShipmentsService {
         message: 'Cần đăng nhập để xem thông tin phiếu gửi hàng.',
       });
     }
+    assertPrincipalScope(principal);
+    if (principal.roles.includes('SUPER_ADMIN')) {
+      throw new ForbiddenException({
+        error: 'FORBIDDEN_SCOPE',
+        message: 'SUPER_ADMIN không có phạm vi dữ liệu vận hành phiếu gửi hàng.',
+      });
+    }
+    if (
+      !hasTenantRole(principal.roles) &&
+      !principal.roles.includes('KHACH_HANG')
+    ) {
+      throw new ForbiddenException({
+        error: 'FORBIDDEN_SCOPE',
+        message: 'Bạn không có quyền truy cập phiếu gửi hàng.',
+      });
+    }
   }
 
   private async assertShipmentOwnership(
     principal: AuthPrincipal,
-    shipment: { chuyenXe: { nhaXeId: number }; donGiaoDich: { khachHangId: number | null } },
+    shipment: {
+      donGiaoDich: { khachHangId: number | null; nhaXeId: number };
+      chuyenXe: { nhaXeId: number };
+      diemGui: { nhaXeId: number };
+      diemNhan: { nhaXeId: number };
+    },
   ) {
-    if (principal.roles.includes('SUPER_ADMIN')) return;
-
     if (principal.roles.includes('KHACH_HANG')) {
       const customer = await this.prisma.khachHang.findUnique({
         where: { taiKhoanId: principal.taiKhoanId },
@@ -767,12 +1192,9 @@ export class ShipmentsService {
       return;
     }
 
-    if (
-      hasTenantRole(principal.roles) &&
-      principal.nhaXeId &&
-      principal.nhaXeId === shipment.chuyenXe.nhaXeId
-    ) {
-      return;
+    if (hasTenantRole(principal.roles)) {
+      const tenantId = requireTenantPrincipal(principal);
+      if (this.isShipmentInTenant(shipment, tenantId)) return;
     }
 
     throw new ForbiddenException({
@@ -780,5 +1202,6 @@ export class ShipmentsService {
       message: 'Bạn không có quyền truy cập phiếu gửi hàng này.',
     });
   }
+
 }
 

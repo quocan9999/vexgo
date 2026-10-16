@@ -9,6 +9,7 @@ import { ConfigService } from '@nestjs/config';
 import { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { RefundProcessorService } from '../payments/refund-processor.service.js';
+import { lockPaymentOrder } from '../payments/payment-order-lock.js';
 import {
   combineDeparture,
   computeArrival,
@@ -45,6 +46,7 @@ const TICKET_INCLUDE = {
         include: {
           khachHang: true,
           nhaXe: true,
+          phieuGuiHang: { select: { trangThai: true } },
           thanhToans: {
             where: {
               loaiGiaoDich: 'THANH_TOAN',
@@ -74,6 +76,7 @@ type TicketRecord = Prisma.VeGetPayload<{ include: typeof TICKET_INCLUDE }>;
 
 type CancellationReason =
   | 'ALREADY_CANCELLED'
+  | 'ACTIVE_SHIPMENT'
   | 'ALREADY_DEPARTED'
   | 'LESS_THAN_12_HOURS'
   | 'DEPARTURE_TIME_UNAVAILABLE';
@@ -144,6 +147,16 @@ function getCancellationQuote(
   }
 
   const cancelFeeRate = hoursUntilDeparture <= 24 ? 0.2 : 0.1;
+  const shipment = ticket.phieuDatVe.donGiaoDich.phieuGuiHang;
+  if (shipment && shipment.trangThai !== 'DA_HUY') {
+    return {
+      eligible: false,
+      reason: 'ACTIVE_SHIPMENT',
+      cancelFeeRate: 0,
+      cancelFee: zero,
+      refundAmount: zero,
+    };
+  }
   const cancelFee = price.mul(cancelFeeRate.toString()).toDecimalPlaces(0);
 
   return {
@@ -376,27 +389,52 @@ export class TicketsService {
 
   async cancelTicket(dto: CancelTicketDto) {
     try {
+      // Discover only the reference before opening the transaction. Never hold
+      // ticket/seat read locks while waiting for the shared financial order lock.
+      const rawCode = dto.ticketCode.trim();
+      const referenceSelect = {
+        veId: true,
+        phieuDatVe: { select: { donGiaoDichId: true } },
+      } as const;
+      let reference = await this.prisma.ve.findUnique({
+        where: { maVe: rawCode },
+        select: referenceSelect,
+      });
+      if (!reference) {
+        reference = await this.prisma.ve.findFirst({
+          where: {
+            OR: [
+              { phieuDatVe: { maPhieuDatVe: rawCode } },
+              { phieuDatVe: { donGiaoDich: { maDonGiaoDich: rawCode } } },
+            ],
+          },
+          select: referenceSelect,
+        });
+      }
+      if (!reference)
+        throw new NotFoundException({
+          error: 'TICKET_NOT_FOUND',
+          message: 'Không tìm thấy vé hoặc thông tin xác minh không khớp.',
+        });
       const result = await this.prisma.$transaction(
         async (tx) => {
-          const rawCode = dto.ticketCode.trim();
-          let ticket = await tx.ve.findUnique({
-            where: { maVe: rawCode },
-            include: TICKET_INCLUDE,
-          });
-
-          if (!ticket && typeof tx.ve.findFirst === 'function') {
-            ticket = await tx.ve.findFirst({
-              where: {
-                OR: [
-                  { phieuDatVe: { maPhieuDatVe: rawCode } },
-                  { phieuDatVe: { donGiaoDich: { maDonGiaoDich: rawCode } } },
-                ],
-              },
-              include: TICKET_INCLUDE,
+          if (
+            !(await lockPaymentOrder(tx, reference.phieuDatVe.donGiaoDichId))
+          ) {
+            throw new NotFoundException({
+              error: 'TICKET_NOT_FOUND',
+              message: 'Không tìm thấy vé hoặc thông tin xác minh không khớp.',
             });
           }
-
-          if (!ticket) {
+          const ticket = await tx.ve.findUnique({
+            where: { veId: reference.veId },
+            include: TICKET_INCLUDE,
+          });
+          if (
+            !ticket ||
+            ticket.phieuDatVe.donGiaoDichId !==
+              reference.phieuDatVe.donGiaoDichId
+          ) {
             throw new NotFoundException({
               error: 'TICKET_NOT_FOUND',
               message: 'Không tìm thấy vé hoặc thông tin xác minh không khớp.',
@@ -418,8 +456,15 @@ export class TicketsService {
             new Date(),
           );
           if (!quote.eligible) {
+            if (quote.reason === 'ACTIVE_SHIPMENT') {
+              throw new ConflictException({
+                error: 'TICKET_CANCELLATION_ACTIVE_SHIPMENT',
+                message:
+                  'Đơn có hàng gửi kèm còn hiệu lực. Vui lòng liên hệ nhà xe để được hỗ trợ hủy vé.',
+              });
+            }
             const errors: Record<
-              CancellationReason,
+              Exclude<CancellationReason, 'ACTIVE_SHIPMENT'>,
               { error: string; message: string }
             > = {
               ALREADY_CANCELLED: {

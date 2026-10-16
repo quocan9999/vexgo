@@ -33,6 +33,7 @@ export type TicketItem = {
 export type TicketCancellationQuote = {
   eligible: boolean;
   reason?:
+    | 'ACTIVE_SHIPMENT'
     | 'ALREADY_CANCELLED'
     | 'ALREADY_DEPARTED'
     | 'LESS_THAN_12_HOURS'

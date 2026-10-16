@@ -8,6 +8,7 @@ import {
   LogOut,
   MapPinned,
   Menu,
+  Package,
   PanelLeftClose,
   PanelLeftOpen,
   Tag,
@@ -48,6 +49,7 @@ type SuperAdminLayoutProps = {
     | 'trips'
     | 'customers'
     | 'promotions'
+    | 'shipments'
     | 'admin-accounts'
     | 'rbac'
     | 'tenant-rbac';
@@ -158,6 +160,7 @@ const OPERATION_NAVIGATION_DETAILS: Record<
   trips: { label: 'Chuyến xe', icon: () => <CalendarDays size={18} /> },
   customers: { label: 'Khách hàng', icon: () => <UsersRound size={18} /> },
   promotions: { label: 'Khuyến mãi', icon: () => <Tag size={18} /> },
+  shipments: { label: 'Gửi hàng', icon: () => <Package size={18} /> },
 };
 
 export function SuperAdminLayout({

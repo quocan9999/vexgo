@@ -31,6 +31,7 @@ describe('BookingsService', () => {
     donGiaoDich: {
       donGiaoDichId: 201,
       maDonGiaoDich: 'GD-201',
+      ngayTao: new Date('2026-09-20T09:58:00.000Z'),
       tongTien: '500000',
       trangThai: 'DA_THANH_TOAN',
       tenKhachHang: 'Nguyễn Văn A',
@@ -351,6 +352,33 @@ describe('BookingsService', () => {
   });
 
   describe('mapBooking financial totals', () => {
+    it.each([
+      ['2026-09-20T10:07:59.999Z', 'CHO_THANH_TOAN'],
+      ['2026-09-20T10:08:00.000Z', 'HET_HAN'],
+      ['2026-09-20T10:08:00.001Z', 'HET_HAN'],
+    ])('uses order time for every booking reader at %s', async (now, expectedStatus) => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date(now));
+      try {
+        const pending = { ...sampleBooking, trangThai: 'CHO_THANH_TOAN', donGiaoDich: {
+          ...sampleBooking.donGiaoDich, trangThai: 'CHO_THANH_TOAN',
+        } };
+        prisma.khachHang.findUnique.mockResolvedValue(mockCustomer);
+        prisma.phieuDatVe.count.mockResolvedValue(1);
+        prisma.phieuDatVe.findMany.mockResolvedValue([pending]);
+        prisma.phieuDatVe.findUnique.mockResolvedValue(pending);
+        const list = await service.findCustomerBookings(1, { page: 1, pageSize: 10 });
+        const detail = await service.findCustomerBookingById(1, 101);
+        const publicDetail = await service.findPublicBookingById(101, { taiKhoanId: 1 } as any);
+        for (const booking of [list.data[0], detail.data, publicDetail]) {
+          expect(booking.paymentExpiresAt).toBe('2026-09-20T10:08:00.000Z');
+          expect(booking.createdAt).toBe('2026-09-20T10:00:00.000Z');
+          expect(booking.status).toBe(expectedStatus);
+          expect(booking.paymentStatus).toBe(expectedStatus);
+        }
+      } finally { vi.useRealTimers(); }
+    });
+
     it('uses the final order total and reports discounted ticket subtotal separately', async () => {
       prisma.phieuDatVe.findUnique.mockResolvedValue({
         ...sampleBooking,
@@ -429,6 +457,13 @@ describe('BookingsService', () => {
       };
       let createdOrderData: Record<string, unknown> | undefined;
       let createdBookingData: Record<string, unknown> | undefined;
+      let createdPaymentData: Record<string, unknown> | undefined;
+      const createPaymentAttempt = vi.fn().mockImplementation(({
+        data,
+      }: { data: Record<string, unknown> }) => {
+        createdPaymentData = data;
+        return { thanhToanId: 501 };
+      });
       (prisma as any).$transaction = vi.fn().mockImplementation(async (cb) => {
         const txMock = {
           gheChuyenXe: {
@@ -443,9 +478,10 @@ describe('BookingsService', () => {
             count: vi.fn().mockRejectedValue(new Error('count must not be used')),
             create: vi.fn().mockImplementation(({ data }: { data: Record<string, unknown> }) => {
               createdOrderData = data;
-              return { donGiaoDichId: 99 };
+              return { donGiaoDichId: 99, ...data };
             }),
           },
+          thanhToan: { create: createPaymentAttempt },
           phieuDatVe: {
             create: vi.fn().mockImplementation(({ data }: { data: Record<string, unknown> }) => {
               createdBookingData = data;
@@ -481,16 +517,18 @@ describe('BookingsService', () => {
       expect(res.totalAmount).toBe(250000);
       expect(res.tickets[0].soGhe).toBe('A01');
       expect(createdOrderData?.maDonGiaoDich).toMatch(/^FUTAGD[A-F\d]{30}$/);
-      expect(createdOrderData?.thanhToans).toEqual({
-        create: {
-          phuongThuc: 'SEPAY',
-          loaiGiaoDich: 'THANH_TOAN',
-          trangThai: 'DANG_XU_LY',
-          soTien: expect.anything(),
-          thoiGian: expect.any(Date),
-        },
+      expect(createPaymentAttempt).toHaveBeenCalledOnce();
+      expect(createdOrderData).not.toHaveProperty('thanhToans');
+      expect(res.paymentExpiresAt).toBe(new Date((createdOrderData?.ngayTao as Date).getTime() + 600000).toISOString());
+      expect(createdPaymentData).toMatchObject({
+        phuongThuc: 'SEPAY',
+        loaiGiaoDich: 'THANH_TOAN',
+        trangThai: 'DANG_XU_LY',
+        donGiaoDichId: 99,
+        soTien: expect.anything(),
+        thoiGian: expect.any(Date),
       });
-      expect(Number((createdOrderData?.thanhToans as any).create.soTien)).toBe(250000);
+      expect(Number(createdPaymentData?.soTien)).toBe(250000);
       expect(createdBookingData?.maPhieuDatVe).toMatch(/^FUTA-PDV-[A-F\d]{30}$/);
     });
   });
@@ -578,6 +616,7 @@ describe('BookingsService', () => {
         },
       };
       const orderRows: Record<string, unknown>[] = [];
+      const paymentRows: Record<string, unknown>[] = [];
       const cargoPersistence = {
         persistInTransaction: vi.fn(async (_tx: unknown, input: any) => ({
           shipment: { phieuGuiHangId: 501, maVanDon: input.waybillCode },
@@ -620,7 +659,13 @@ describe('BookingsService', () => {
           donGiaoDich: {
             create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
               orderRows.push(data);
-              return { donGiaoDichId: 201, maDonGiaoDich: data.maDonGiaoDich };
+              return { donGiaoDichId: 201, ...data };
+            }),
+          },
+          thanhToan: {
+            create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
+              paymentRows.push(data);
+              return { thanhToanId: 401 };
             }),
           },
           phieuDatVe: {
@@ -713,10 +758,16 @@ describe('BookingsService', () => {
       expect(Number(cargoInput.rates[0].fee)).toBe(60000);
       expect(Number(orderRows[0].tongTien)).toBe(210000);
       expect(orderRows[0].khachHangId).toBeNull();
-      expect((orderRows[0].thanhToans as any).create).toMatchObject({
-        phuongThuc: 'SEPAY', loaiGiaoDich: 'THANH_TOAN', trangThai: 'DANG_XU_LY',
+      expect(paymentRows).toHaveLength(1);
+      expect(orderRows).toHaveLength(1);
+      expect(orderRows[0]).not.toHaveProperty('thanhToans');
+      expect(paymentRows[0]).toMatchObject({
+        phuongThuc: 'SEPAY',
+        loaiGiaoDich: 'THANH_TOAN',
+        trangThai: 'DANG_XU_LY',
+        donGiaoDichId: 201,
       });
-      expect(Number((orderRows[0].thanhToans as any).create.soTien)).toBe(210000);
+      expect(Number(paymentRows[0].soTien)).toBe(210000);
     });
 
     it('requires explicit route points when multiple active sender choices exist', async () => {
@@ -855,7 +906,10 @@ describe('BookingsService', () => {
         $transaction: vi.fn(async (cb) => {
           const tx = {
             donGiaoDich: {
-              create: vi.fn().mockResolvedValue({ donGiaoDichId: 201 }),
+              create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({ donGiaoDichId: 201, ...data })),
+            },
+            thanhToan: {
+              create: vi.fn().mockResolvedValue({ thanhToanId: 401 }),
             },
             phieuDatVe: {
               create: vi.fn().mockResolvedValue({

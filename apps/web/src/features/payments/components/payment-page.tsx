@@ -6,9 +6,15 @@ import { ArrowLeft, Info, ScanLine, X } from 'lucide-react';
 import {
   PAYMENT_DRAFT_STORAGE_PREFIX,
   validatePaymentDraft,
+  type BookingPaymentDraft,
   type PaymentDraft,
 } from '@/features/booking/services/payment-draft';
 import { bookingsApi } from '@/features/account/services/bookings.api';
+import {
+  PaymentApiError,
+  paymentsApi,
+} from '@/features/payments/services/payments.api';
+import { shipmentsApi } from '@/features/shipments/services/shipments.api';
 import { useAuthSession } from '@/features/auth/auth-session';
 import {
   createVietQrImageUrl,
@@ -38,7 +44,7 @@ function useRawPaymentDraft(draftId: string | null): string | null {
 
 type PaymentReadSnapshot = {
   draftId: string;
-  bookingId: number;
+  resourceKey: string;
   expectedOrderCode: string;
   expectedTotalAmount: number;
   orderCode: string | null;
@@ -50,7 +56,33 @@ type PaymentReadSnapshot = {
   cargoFee: number | null;
   paymentExpiresAt: string | null;
   serverTimeOffsetMs: number;
-  terminalStatus: 'cancelled' | 'expired' | 'verification-needed' | 'failed' | null;
+  terminalStatus: 'paid' | 'cancelled' | 'expired' | 'verification-needed' | 'failed' | 'reconciliation-required' | null;
+};
+
+type PaymentStatusPayload = {
+  promotionCode?: string | null;
+  paymentId?: number;
+  bookingId?: number;
+  bookingCode?: string;
+  shipmentId?: number | null;
+  waybillCode?: string;
+  orderCode?: string | null;
+  amount?: number | string;
+  totalAmount?: number | string;
+  status?: string;
+  orderStatus?: string | null;
+  paymentStatus?: string | null;
+  bookingStatus?: string | null;
+  shipmentStatus?: string | null;
+  requiresReconciliation?: boolean;
+  provider?: string | null;
+  paymentMethod?: string | null;
+  paymentExpiresAt?: string | null;
+  serverTime?: string;
+  originalTicketSubtotal?: number | string;
+  discountAmount?: number | string;
+  ticketSubtotal?: number | string;
+  cargoFee?: number | string;
 };
 
 const PAYMENT_POLL_INTERVAL_MS = 2500;
@@ -62,6 +94,10 @@ function readNonNegativeAmount(value: unknown): number | null {
   if (typeof value === 'string' && value.trim() === '') return null;
   const amount = Number(value);
   return Number.isFinite(amount) && amount >= 0 ? amount : null;
+}
+
+function isForbiddenApiResponse(error: unknown): boolean {
+  return error instanceof PaymentApiError && error.status === 403;
 }
 
 function getCargoItemQuantity(quantity?: number): number | null {
@@ -183,6 +219,13 @@ function PaymentContent() {
       return null;
     }
   }, [rawDraft]);
+  const shipmentDraft = draft?.kind === 'shipment' ? draft : null;
+  const bookingDraft = draft && draft.kind !== 'shipment' ? draft : null;
+  const paymentResourceKey = shipmentDraft
+    ? `shipment:${shipmentDraft.shipmentId}:${shipmentDraft.paymentId}:${shipmentDraft.waybillCode}:${shipmentDraft.sender.phoneNumber}`
+    : bookingDraft?.bookingId
+      ? `booking:${bookingDraft.bookingId}:${bookingDraft.bookingCode}:${bookingDraft.passenger.phoneNumber}`
+      : null;
 
   const [clockTick, setClockTick] = useState(0);
   const [paymentReadSnapshot, setPaymentReadSnapshot] =
@@ -192,7 +235,7 @@ function PaymentContent() {
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const activePaymentReadSnapshot =
     paymentReadSnapshot?.draftId === draft?.id &&
-    paymentReadSnapshot?.bookingId === draft?.bookingId &&
+    paymentReadSnapshot?.resourceKey === paymentResourceKey &&
     paymentReadSnapshot?.expectedOrderCode === draft?.orderCode?.trim() &&
     paymentReadSnapshot?.expectedTotalAmount === draft?.totalFare
       ? paymentReadSnapshot
@@ -209,12 +252,18 @@ function PaymentContent() {
     return () => window.removeEventListener('keydown', closeOnEscape);
   }, [showTripDetailModal, showCargoDetailModal]);
   const hasValidBookingId =
-    Number.isSafeInteger(draft?.bookingId) && (draft?.bookingId ?? 0) > 0;
+    Number.isSafeInteger(bookingDraft?.bookingId) && (bookingDraft?.bookingId ?? 0) > 0;
+  const hasValidShipmentPayment = Boolean(
+    shipmentDraft &&
+    Number.isSafeInteger(shipmentDraft.shipmentId) && shipmentDraft.shipmentId > 0 &&
+    Number.isSafeInteger(shipmentDraft.paymentId) && shipmentDraft.paymentId > 0,
+  );
+  const hasValidPaymentResource = hasValidBookingId || hasValidShipmentPayment;
   const paymentExpiresAt = activePaymentReadSnapshot?.paymentExpiresAt ?? null;
   const serverTimeOffsetMs =
     activePaymentReadSnapshot?.serverTimeOffsetMs ?? 0;
   const paymentTerminalStatus = activePaymentReadSnapshot?.terminalStatus ??
-    (draft && !hasValidBookingId ? 'verification-needed' : null);
+    (draft && !hasValidPaymentResource ? 'verification-needed' : null);
   const deadlineMs = paymentExpiresAt ? Date.parse(paymentExpiresAt) : NaN;
   const timeLeft = clockTick > 0 && Number.isFinite(deadlineMs)
     ? Math.max(
@@ -226,29 +275,28 @@ function PaymentContent() {
     : null;
 
   const readBookingDetail = useCallback(
-    (bookingId: number, signal?: AbortSignal) => {
+    (bookingDraft: BookingPaymentDraft, signal?: AbortSignal) => {
+      const bookingId = bookingDraft.bookingId;
+      if (!bookingId) {
+        throw new Error('Mã đặt vé không hợp lệ.');
+      }
       if (isAuthenticated) {
         return executeWithAuth((token) =>
           bookingsApi.getPublicBookingDetail(bookingId, {
             signal,
             accessToken: token,
-            bookingCode: draft?.bookingCode,
-            phoneNumber: draft?.passenger.phoneNumber,
+            bookingCode: bookingDraft.bookingCode,
+            phoneNumber: bookingDraft.passenger.phoneNumber,
           }),
         );
       }
       return bookingsApi.getPublicBookingDetail(bookingId, {
         signal,
-        bookingCode: draft?.bookingCode,
-        phoneNumber: draft?.passenger.phoneNumber,
+        bookingCode: bookingDraft.bookingCode,
+        phoneNumber: bookingDraft.passenger.phoneNumber,
       });
     },
-    [
-      draft?.bookingCode,
-      draft?.passenger,
-      executeWithAuth,
-      isAuthenticated,
-    ],
+    [executeWithAuth, isAuthenticated],
   );
 
   useEffect(() => {
@@ -280,7 +328,8 @@ function PaymentContent() {
     () =>
       activePaymentReadSnapshot &&
       !activePaymentReadSnapshot.terminalStatus &&
-      activePaymentReadSnapshot.totalAmount !== null
+      activePaymentReadSnapshot.totalAmount !== null &&
+      activePaymentReadSnapshot.totalAmount > 0
         ? createVietQrImageUrl(
             vietQrConfig,
             activePaymentReadSnapshot.totalAmount,
@@ -290,18 +339,19 @@ function PaymentContent() {
     [activePaymentReadSnapshot, transferContent, vietQrConfig],
   );
 
-  // Chỉ dùng dữ liệu booking đã được API xác thực để dựng QR hoặc điều hướng.
+  // Booking and shipment both use API-verified order details before the shared QR is rendered.
   useEffect(() => {
-    const bookingId = draft?.bookingId;
-    const expectedOrderCode = draft?.orderCode?.trim();
+    const currentDraft: PaymentDraft | null = shipmentDraft ?? bookingDraft;
+    const expectedOrderCode = currentDraft?.orderCode?.trim();
+    const resourceKey = paymentResourceKey;
     if (
       !isHydrated ||
-      !draft?.id ||
-      !vietQrConfig ||
-      !hasValidBookingId ||
-      typeof bookingId !== 'number'
+      !currentDraft?.id ||
+      (!vietQrConfig && currentDraft.totalFare !== 0) ||
+      !hasValidPaymentResource ||
+      !expectedOrderCode ||
+      !resourceKey
     ) return;
-    if (!expectedOrderCode) return;
 
     let isSubscribed = true;
     let hasNavigated = false;
@@ -317,10 +367,10 @@ function PaymentContent() {
     ) => {
       if (!isSubscribed) return;
       setPaymentReadSnapshot({
-        draftId: draft.id,
-        bookingId,
+        draftId: currentDraft.id,
+        resourceKey,
         expectedOrderCode,
-        expectedTotalAmount: draft.totalFare,
+        expectedTotalAmount: currentDraft.totalFare,
         orderCode: null,
         totalAmount: null,
         promotionCode: null,
@@ -337,16 +387,17 @@ function PaymentContent() {
     const scheduleNextRead = (delayMs: number) => {
       if (!isSubscribed) return;
       const remainingMs = observedDeadlineMs === null
-        ? delayMs
+        ? null
         : observedDeadlineMs - (Date.now() + observedServerTimeOffsetMs);
-      if (remainingMs <= 0) {
-        stopWithStatus('verification-needed', new Date(observedDeadlineMs!).toISOString());
+      if (remainingMs !== null && remainingMs <= 0) {
+        stopWithStatus(
+          'verification-needed',
+          new Date(observedDeadlineMs!).toISOString(),
+        );
         return;
       }
-      timeout = setTimeout(
-        () => void checkPaymentStatus(),
-        Math.min(delayMs, remainingMs),
-      );
+      const nextDelay = remainingMs === null ? delayMs : Math.min(delayMs, remainingMs);
+      timeout = setTimeout(() => void checkPaymentStatus(), nextDelay);
     };
 
     const checkPaymentStatus = async () => {
@@ -357,49 +408,186 @@ function PaymentContent() {
         PAYMENT_STATUS_REQUEST_TIMEOUT_MS,
       );
       try {
-        const res = await readBookingDetail(bookingId, requestController.signal);
+        let payload: PaymentStatusPayload;
+        let usedPublicShipmentLookup = false;
+        if (shipmentDraft) {
+          const readVerifiedShipmentLookup = async (): Promise<PaymentStatusPayload> => {
+            usedPublicShipmentLookup = true;
+            const response = await shipmentsApi.lookupShipment(
+              {
+                waybillCode: shipmentDraft.waybillCode,
+                phoneNumber: shipmentDraft.sender.phoneNumber,
+              },
+              { signal: requestController.signal },
+            );
+            return {
+              ...response.data,
+              shipmentStatus: response.data.status,
+              provider: response.data.paymentMethod,
+            };
+          };
+
+          if (isAuthenticated) {
+            try {
+              const response = await executeWithAuth((token) =>
+                paymentsApi.getPaymentStatus(shipmentDraft.paymentId, {
+                  signal: requestController.signal,
+                  accessToken: token,
+                }),
+              );
+              payload = response.data;
+            } catch (error) {
+              if (!isForbiddenApiResponse(error)) throw error;
+              payload = await readVerifiedShipmentLookup();
+            }
+          } else {
+            payload = await readVerifiedShipmentLookup();
+          }
+        } else if (bookingDraft) {
+          const response = await readBookingDetail(bookingDraft, requestController.signal);
+          const booking = response.data;
+          payload = {
+            bookingId: booking.bookingId,
+            bookingCode: booking.bookingCode,
+            orderCode: booking.orderCode,
+            amount: booking.totalAmount,
+            orderStatus: booking.paymentStatus,
+            bookingStatus: booking.status,
+            paymentStatus: booking.paymentStatus,
+            paymentExpiresAt: booking.paymentExpiresAt,
+            serverTime: booking.serverTime,
+            promotionCode: booking.promotionCode,
+            originalTicketSubtotal: booking.originalTicketSubtotal,
+            discountAmount: booking.discountAmount,
+            ticketSubtotal: booking.ticketSubtotal,
+            cargoFee: booking.cargoFee,
+          };
+        } else {
+          stopWithStatus('verification-needed');
+          return;
+        }
+
         if (!isSubscribed) return;
-        const booking = res.data;
-        const amount = Number(booking?.totalAmount);
-        const hasMatchingBooking =
-          booking?.bookingId === bookingId &&
-          (!draft.bookingCode || booking.bookingCode === draft.bookingCode) &&
-          booking.orderCode === expectedOrderCode &&
-          Number.isFinite(amount) &&
-          amount === draft.totalFare;
+        if (requestController.signal.aborted) throw new Error('Payment status request timed out');
+        const amount = readNonNegativeAmount(payload.amount ?? payload.totalAmount);
+        const hasMatchingPayment = shipmentDraft
+          ? payload.orderCode === expectedOrderCode &&
+            amount === currentDraft.totalFare &&
+            payload.provider === 'SEPAY' &&
+            (usedPublicShipmentLookup
+              ? payload.waybillCode === shipmentDraft.waybillCode
+              : payload.paymentId === shipmentDraft.paymentId &&
+                payload.shipmentId === shipmentDraft.shipmentId)
+          : Boolean(
+            bookingDraft &&
+            payload.bookingId === bookingDraft.bookingId &&
+            (!bookingDraft.bookingCode || payload.bookingCode === bookingDraft.bookingCode) &&
+            payload.orderCode === expectedOrderCode &&
+            amount === currentDraft.totalFare,
+          );
 
-        if (!hasMatchingBooking) {
+        if (!hasMatchingPayment || amount === null) {
           stopWithStatus('verification-needed');
           return;
         }
 
-        const statuses = [booking.status, booking.paymentStatus];
-        const isPaid = statuses.every((status) => status === 'DA_THANH_TOAN');
-        if (isPaid && !hasNavigated) {
+        const paymentStatus = payload.paymentStatus ?? '';
+        const orderStatus = payload.orderStatus ?? '';
+        const bookingStatus = payload.bookingStatus ?? '';
+        const shipmentStatus = payload.shipmentStatus ?? '';
+        if (payload.requiresReconciliation === true || paymentStatus === 'CAN_DOI_SOAT') {
+          stopWithStatus('reconciliation-required', payload.paymentExpiresAt ?? null);
+          return;
+        }
+        if (
+          [orderStatus, bookingStatus, shipmentStatus].some((status) =>
+            ['DA_HUY', 'HUY'].includes(status),
+          )
+        ) {
+          stopWithStatus('cancelled', payload.paymentExpiresAt ?? null);
+          return;
+        }
+        if (
+          payload.status === 'EXPIRED' ||
+          paymentStatus === 'HET_HAN' ||
+          orderStatus === 'HET_HAN' ||
+          bookingStatus === 'HET_HAN'
+        ) {
+          stopWithStatus('expired', payload.paymentExpiresAt ?? null);
+          return;
+        }
+        if (
+          payload.status === 'FAILED' ||
+          ['THAT_BAI', 'DA_THAT_BAI', 'FAILED'].includes(paymentStatus)
+        ) {
+          stopWithStatus('failed', payload.paymentExpiresAt ?? null);
+          return;
+        }
+
+        const isShipmentPaid = Boolean(
+          shipmentDraft &&
+          paymentStatus === 'THANH_CONG' &&
+          orderStatus === 'DA_THANH_TOAN' &&
+          shipmentStatus !== 'DA_HUY',
+        );
+        const isBookingPaid = Boolean(
+          bookingDraft &&
+          bookingStatus === 'DA_THANH_TOAN' &&
+          paymentStatus === 'DA_THANH_TOAN',
+        );
+        if (isShipmentPaid) {
+          const serverTimeMs = typeof payload.serverTime === 'string'
+            ? Date.parse(payload.serverTime)
+            : NaN;
+          observedServerTimeOffsetMs = Number.isFinite(serverTimeMs)
+            ? serverTimeMs - Date.now()
+            : 0;
+          setPaymentReadSnapshot({
+            draftId: currentDraft.id,
+            resourceKey,
+            expectedOrderCode,
+            expectedTotalAmount: currentDraft.totalFare,
+            orderCode: expectedOrderCode,
+            totalAmount: amount,
+            promotionCode: null,
+            originalTicketSubtotal: null,
+            discountAmount: null,
+            ticketSubtotal: null,
+            cargoFee: null,
+            paymentExpiresAt: payload.paymentExpiresAt ?? null,
+            serverTimeOffsetMs: observedServerTimeOffsetMs,
+            terminalStatus: 'paid',
+          });
+          return;
+        }
+        if (isBookingPaid && bookingDraft?.bookingId && !hasNavigated) {
           hasNavigated = true;
-          router.push(`/invoice/${bookingId}`);
+          stopWithStatus('paid');
+          router.push(`/invoice/${bookingDraft.bookingId}`);
           return;
         }
 
-        if (statuses.some((status) => ['DA_HUY', 'HUY'].includes(status ?? ''))) {
-          stopWithStatus('cancelled');
-          return;
-        }
-        if (statuses.some((status) => ['HET_HAN', 'EXPIRED'].includes(status ?? ''))) {
-          stopWithStatus('expired', booking.paymentExpiresAt ?? null);
-          return;
-        }
-        if (statuses.some((status) => ['THAT_BAI', 'DA_THAT_BAI', 'FAILED'].includes(status ?? ''))) {
-          stopWithStatus('failed');
-          return;
-        }
-        if (!statuses.every((status) => status === 'CHO_THANH_TOAN')) {
+        if (shipmentDraft) {
+          const isPending =
+            orderStatus === 'CHO_THANH_TOAN' &&
+            ['DANG_XU_LY', 'CHO_THANH_TOAN'].includes(paymentStatus);
+          if (!isPending) {
+            stopWithStatus('verification-needed', payload.paymentExpiresAt ?? null);
+            return;
+          }
+        } else if (
+          ![orderStatus, bookingStatus].every((status) => status === 'CHO_THANH_TOAN')
+        ) {
           stopWithStatus('verification-needed');
           return;
         }
 
-        const deadline = booking.paymentExpiresAt;
-        const serverTime = booking.serverTime;
+        if (amount === 0) {
+          stopWithStatus('verification-needed');
+          return;
+        }
+        const deadline = payload.paymentExpiresAt;
+        const serverTime = payload.serverTime;
         const responseDeadlineMs = typeof deadline === 'string' ? Date.parse(deadline) : NaN;
         const serverTimeMs = typeof serverTime === 'string' ? Date.parse(serverTime) : NaN;
         if (!Number.isFinite(responseDeadlineMs) || !Number.isFinite(serverTimeMs)) {
@@ -417,20 +605,18 @@ function PaymentContent() {
         }
 
         setPaymentReadSnapshot({
-          draftId: draft.id,
-          bookingId,
+          draftId: currentDraft.id,
+          resourceKey,
           expectedOrderCode,
-          expectedTotalAmount: draft.totalFare,
-          orderCode: booking.orderCode!,
+          expectedTotalAmount: currentDraft.totalFare,
+          orderCode: payload.orderCode!,
           totalAmount: amount,
-          promotionCode:
-            typeof booking.promotionCode === 'string'
-              ? booking.promotionCode
-              : null,
-          originalTicketSubtotal: readNonNegativeAmount(booking.originalTicketSubtotal),
-          discountAmount: readNonNegativeAmount(booking.discountAmount),
-          ticketSubtotal: readNonNegativeAmount(booking.ticketSubtotal),
-          cargoFee: readNonNegativeAmount(booking.cargoFee),
+          promotionCode: bookingDraft && typeof payload.promotionCode === 'string'
+            ? payload.promotionCode : null,
+          originalTicketSubtotal: readNonNegativeAmount(payload.originalTicketSubtotal),
+          discountAmount: readNonNegativeAmount(payload.discountAmount),
+          ticketSubtotal: readNonNegativeAmount(payload.ticketSubtotal),
+          cargoFee: readNonNegativeAmount(payload.cargoFee),
           paymentExpiresAt: deadline!,
           serverTimeOffsetMs: observedServerTimeOffsetMs,
           terminalStatus: null,
@@ -464,16 +650,15 @@ function PaymentContent() {
       activeRequestController?.abort();
     };
   }, [
-    draft?.bookingCode,
-    draft?.bookingId,
-    draft?.id,
-    draft?.orderCode,
-    draft?.passenger,
-    draft?.totalFare,
-    hasValidBookingId,
+    bookingDraft,
+    executeWithAuth,
+    hasValidPaymentResource,
+    isAuthenticated,
     isHydrated,
+    paymentResourceKey,
     readBookingDetail,
     router,
+    shipmentDraft,
     vietQrConfig,
   ]);
 
@@ -489,7 +674,7 @@ function PaymentContent() {
       : `${activePaymentReadSnapshot.totalAmount.toLocaleString('vi-VN')}đ`;
   const hasVerifiedPaymentAmount = Boolean(
     activePaymentReadSnapshot &&
-    !activePaymentReadSnapshot.terminalStatus &&
+    (!activePaymentReadSnapshot.terminalStatus || activePaymentReadSnapshot.terminalStatus === 'paid') &&
     activePaymentReadSnapshot.totalAmount !== null,
   );
   const formatConfirmedAmount = (amount: number | null | undefined) =>
@@ -500,7 +685,7 @@ function PaymentContent() {
         : `${amount.toLocaleString('vi-VN')}đ`;
   const confirmedCargoFee = activePaymentReadSnapshot?.cargoFee ?? null;
   const shouldShowCargoFeeBreakdown = Boolean(
-    draft?.luggage ||
+    bookingDraft?.luggage ||
     (hasVerifiedPaymentAmount && confirmedCargoFee !== null && confirmedCargoFee > 0),
   );
   const cargoFeeText = !hasVerifiedPaymentAmount
@@ -515,7 +700,8 @@ function PaymentContent() {
     : confirmedCargoFee === 0
       ? 'text-emerald-600'
       : 'text-red-600';
-  const cargoPackageCount = getCargoPackageCount(draft?.luggage?.items);
+  const cargoPackageCount = getCargoPackageCount(bookingDraft?.luggage?.items);
+  const paymentResourceLabel = shipmentDraft ? 'phiếu gửi hàng' : 'đơn đặt vé';
   const priceBreakdownProps = {
     originalTicketSubtotal: activePaymentReadSnapshot?.originalTicketSubtotal,
     discountAmount: activePaymentReadSnapshot?.discountAmount,
@@ -685,12 +871,16 @@ function PaymentContent() {
                     className="px-5 text-center text-sm font-semibold text-amber-800"
                   >
                     {paymentTerminalStatus === 'verification-needed'
-                      ? 'Không thể xác minh thông tin đơn đặt vé với máy chủ. Mã QR đã được ẩn; vui lòng tải lại trang hoặc liên hệ hỗ trợ.'
+                      ? `Không thể xác minh thông tin ${paymentResourceLabel} với máy chủ. Mã QR đã được ẩn; vui lòng tải lại trang hoặc liên hệ hỗ trợ.`
                       : paymentTerminalStatus === 'cancelled'
-                        ? 'Đơn đặt vé đã bị hủy. Mã QR thanh toán không còn khả dụng.'
+                        ? `${shipmentDraft ? 'Phiếu gửi hàng' : 'Đơn đặt vé'} đã bị hủy. Mã QR thanh toán không còn khả dụng.`
+                        : paymentTerminalStatus === 'reconciliation-required'
+                          ? `Khoản tiền đã được ghi nhận nhưng ${shipmentDraft ? 'phiếu gửi hàng' : 'đơn đặt vé'} đã bị hủy. Đơn không được khôi phục; vui lòng liên hệ hỗ trợ để đối soát.`
                         : paymentTerminalStatus === 'failed'
-                          ? 'Giao dịch thanh toán chưa thành công. Mã QR đã được ẩn; vui lòng liên hệ hỗ trợ.'
-                          : 'Đơn đặt vé đã hết hạn. Mã QR thanh toán không còn khả dụng.'}
+                          ? `Giao dịch thanh toán ${paymentResourceLabel} chưa thành công. Mã QR đã được ẩn; vui lòng liên hệ hỗ trợ.`
+                          : paymentTerminalStatus === 'paid'
+                            ? `Thanh toán ${paymentResourceLabel} đã được xác nhận.`
+                            : `${shipmentDraft ? 'Phiếu gửi hàng' : 'Đơn đặt vé'} đã hết hạn. Mã QR thanh toán không còn khả dụng.`}
                   </p>
                 ) : timeLeft === 0 ? (
                   <p role="status" aria-live="polite" className="px-5 text-center text-sm font-semibold text-amber-800">
@@ -714,11 +904,13 @@ function PaymentContent() {
                   </div>
                 ) : !draft.orderCode?.trim() ? (
                   <div role="alert" className="px-5 text-center text-sm font-semibold text-amber-800">
-                    Đơn đặt vé chưa có mã giao dịch hợp lệ nên chưa thể tạo mã VietQR. Vui lòng liên hệ bộ phận hỗ trợ.
+                    {shipmentDraft
+                      ? 'Phiếu gửi hàng chưa có mã giao dịch hợp lệ nên chưa thể tạo mã VietQR. Vui lòng liên hệ bộ phận hỗ trợ.'
+                      : 'Đơn đặt vé chưa có mã giao dịch hợp lệ nên chưa thể tạo mã VietQR. Vui lòng liên hệ bộ phận hỗ trợ.'}
                   </div>
                 ) : (
                   <p role="status" aria-live="polite" className="px-5 text-center text-sm font-semibold text-slate-600">
-                    Đang xác minh booking với máy chủ. Mã QR sẽ hiển thị sau khi thông tin đơn được xác nhận.
+                    Đang xác minh đơn hàng với máy chủ. Mã QR sẽ hiển thị sau khi thông tin được xác nhận.
                   </p>
                 )}
               </div>
@@ -789,6 +981,88 @@ function PaymentContent() {
 
           {/* Cột 3: Thông tin chi tiết */}
           <div className="w-full lg:w-[360px] shrink-0 space-y-4">
+            {shipmentDraft ? (
+              <>
+                <section className="bg-white rounded-xl border border-slate-200 p-5">
+                  <h3 className="font-bold text-slate-900 text-base mb-4">
+                    Thông tin phiếu gửi
+                  </h3>
+                  <div className="space-y-3 text-sm">
+                    <div>
+                      <span className="block text-xs font-semibold text-slate-500 mb-1">
+                        Mã vận đơn
+                      </span>
+                      <strong className="break-all text-brand">{shipmentDraft.waybillCode}</strong>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <span className="text-slate-500">Tuyến xe</span>
+                      <strong className="min-w-0 max-w-[65%] break-words text-right text-slate-800">
+                        {shipmentDraft.route.origin} → {shipmentDraft.route.destination}
+                      </strong>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <span className="text-slate-500">Trạng thái thanh toán</span>
+                      <strong className={`min-w-0 max-w-[65%] text-right ${paymentTerminalStatus === 'paid' ? 'text-emerald-700' : 'text-amber-700'}`}>
+                        {paymentTerminalStatus === 'paid' ? 'Đã thanh toán' : 'Chờ thanh toán'}
+                      </strong>
+                    </div>
+                  </div>
+                </section>
+
+                <section className="bg-white rounded-xl border border-slate-200 p-5">
+                  <h3 className="font-bold text-slate-900 text-base mb-4">Người gửi</h3>
+                  <div className="space-y-2.5 text-sm">
+                    <div className="flex justify-between gap-3">
+                      <span className="text-slate-500">Họ và tên</span>
+                      <strong className="min-w-0 max-w-[65%] break-words text-right text-slate-800">{shipmentDraft.sender.fullName}</strong>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <span className="text-slate-500">Số điện thoại</span>
+                      <strong className="min-w-0 max-w-[65%] break-words text-right text-slate-800">{shipmentDraft.sender.phoneNumber}</strong>
+                    </div>
+                    {shipmentDraft.sender.email && (
+                      <div className="flex justify-between gap-3">
+                        <span className="text-slate-500">Email</span>
+                        <strong className="min-w-0 max-w-[65%] break-all text-right text-slate-800">{shipmentDraft.sender.email}</strong>
+                      </div>
+                    )}
+                  </div>
+                </section>
+
+                <section className="bg-white rounded-xl border border-slate-200 p-5">
+                  <h3 className="font-bold text-slate-900 text-base mb-4">Người nhận</h3>
+                  <div className="space-y-2.5 text-sm">
+                    <div className="flex justify-between gap-3">
+                      <span className="text-slate-500">Họ và tên</span>
+                      <strong className="min-w-0 max-w-[65%] break-words text-right text-slate-800">{shipmentDraft.receiver.fullName}</strong>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <span className="text-slate-500">Số điện thoại</span>
+                      <strong className="min-w-0 max-w-[65%] break-words text-right text-slate-800">{shipmentDraft.receiver.phoneNumber}</strong>
+                    </div>
+                    <div className="border-t border-slate-100 pt-3">
+                      <p className="text-xs font-semibold text-slate-500 mb-1">Điểm gửi</p>
+                      <strong className="block break-words text-slate-800">{shipmentDraft.pickupPoint.name}</strong>
+                      <p className="mt-1 break-words text-xs text-slate-600">{shipmentDraft.pickupPoint.address}</p>
+                    </div>
+                    <div className="border-t border-slate-100 pt-3">
+                      <p className="text-xs font-semibold text-slate-500 mb-1">Điểm nhận</p>
+                      <strong className="block break-words text-slate-800">{shipmentDraft.dropoffPoint.name}</strong>
+                      <p className="mt-1 break-words text-xs text-slate-600">{shipmentDraft.dropoffPoint.address}</p>
+                    </div>
+                  </div>
+                </section>
+
+                <section className="bg-white rounded-xl border border-slate-200 p-5">
+                  <h3 className="font-bold text-slate-900 text-base mb-4">Chi tiết giá</h3>
+                  <div className="flex justify-between gap-3 text-sm">
+                    <span className="text-slate-500">Cước gửi hàng</span>
+                    <strong className="text-right text-slate-900">{formatConfirmedAmount(activePaymentReadSnapshot?.totalAmount)}</strong>
+                  </div>
+                </section>
+              </>
+            ) : bookingDraft ? (
+              <>
             {/* Thông tin hành khách */}
             <div className="bg-white rounded-xl border border-slate-200 p-5">
               <h3 className="font-bold text-slate-900 text-base mb-4">
@@ -798,19 +1072,19 @@ function PaymentContent() {
                 <div className="flex justify-between">
                   <span className="text-slate-500">Họ và tên</span>
                   <span className="font-bold text-slate-800">
-                    {draft.passenger.fullName}
+                    {bookingDraft.passenger.fullName}
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-500">Số điện thoại</span>
                   <span className="font-bold text-slate-800">
-                    {draft.passenger.phoneNumber}
+                    {bookingDraft.passenger.phoneNumber}
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-500">Email</span>
                   <span className="font-bold text-slate-800">
-                    {draft.passenger.email}
+                    {bookingDraft.passenger.email}
                   </span>
                 </div>
               </div>
@@ -833,14 +1107,14 @@ function PaymentContent() {
               </div>
 
               <div className="space-y-4 text-[13px]">
-                {draft.legs.map((leg, index) => (
+                {bookingDraft.legs.map((leg, index) => (
                   <div
                     key={index}
                     className={
                       index > 0 ? 'pt-4 border-t border-slate-200' : ''
                     }
                   >
-                    {draft.legs.length > 1 && (
+                    {bookingDraft.legs.length > 1 && (
                       <p className="text-xs font-black uppercase text-accent mb-2.5">
                         {index === 0 ? 'Lượt đi' : 'Lượt về'}
                       </p>
@@ -889,7 +1163,7 @@ function PaymentContent() {
             </div>
 
             {/* Card Hàng gửi hầm xe */}
-            {draft.luggage && (
+            {bookingDraft.luggage && (
               <div className="bg-white rounded-xl border border-slate-200 p-5">
                 <div className="flex items-center justify-between mb-3.5">
                   <div className="flex items-center gap-2">
@@ -897,7 +1171,7 @@ function PaymentContent() {
                       Hàng gửi hầm xe
                     </h3>
                   </div>
-                  {draft.luggage.items && draft.luggage.items.length > 0 && (
+                  {bookingDraft.luggage.items && bookingDraft.luggage.items.length > 0 && (
                     <button
                       type="button"
                       onClick={() => setShowCargoDetailModal(true)}
@@ -912,12 +1186,12 @@ function PaymentContent() {
                 <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-rose-50 border border-rose-200/60 text-xs font-bold text-rose-700 mb-3.5">
                   <span>{cargoPackageCount === null ? 'Chưa rõ số kiện' : `${cargoPackageCount} kiện`}</span>
                   <span>•</span>
-                  <span>{draft.luggage.weight}kg</span>
+                  <span>{bookingDraft.luggage.weight}kg</span>
                 </div>
 
-                {draft.luggage.items && draft.luggage.items.length > 0 && (
+                {bookingDraft.luggage.items && bookingDraft.luggage.items.length > 0 && (
                   <div className="space-y-2">
-                    {draft.luggage.items.slice(0, 2).map((item, idx) => {
+                    {bookingDraft.luggage.items.slice(0, 2).map((item, idx) => {
                       const quantity = getCargoItemQuantity(item.quantity);
                       const actualW = typeof item.weight === 'number' && Number.isFinite(item.weight)
                         ? item.weight
@@ -995,13 +1269,13 @@ function PaymentContent() {
                         </div>
                       );
                     })}
-                    {draft.luggage.items.length > 2 && (
+                    {bookingDraft.luggage.items.length > 2 && (
                       <button
                         type="button"
                         onClick={() => setShowCargoDetailModal(true)}
                         className="text-[11px] text-slate-500 hover:text-slate-800 font-medium pt-1 text-center w-full block cursor-pointer"
                       >
-                        + Xem thêm {draft.luggage.items.length - 2} loại hàng khác
+                        + Xem thêm {bookingDraft.luggage.items.length - 2} loại hàng khác
                       </button>
                     )}
                   </div>
@@ -1023,12 +1297,14 @@ function PaymentContent() {
               </h3>
               <PaymentPriceBreakdownRows {...priceBreakdownProps} />
             </div>
+              </>
+            ) : null}
           </div>
         </div>
       </div>
 
       {/* Modal Chi tiết chuyến đi thật */}
-      {showTripDetailModal && (
+      {showTripDetailModal && bookingDraft && (
         <div
           className="fixed inset-0 z-[80] bg-black/50 backdrop-blur-xs px-4 py-6 flex items-center justify-center animate-in fade-in duration-200"
           onClick={() => setShowTripDetailModal(false)}
@@ -1063,12 +1339,12 @@ function PaymentContent() {
 
             {/* Content Modal */}
             <div className="py-4 space-y-4 overflow-y-auto pr-0.5 text-xs">
-              {draft.legs.map((leg, idx) => (
+              {bookingDraft.legs.map((leg, idx) => (
                 <div
                   key={idx}
                   className="rounded-xl border border-slate-200/90 bg-slate-50/70 p-4 space-y-3"
                 >
-                  {draft.legs.length > 1 && (
+                  {bookingDraft.legs.length > 1 && (
                     <span className="inline-block px-2 py-0.5 rounded bg-accent text-white font-extrabold text-[10px] uppercase tracking-wide">
                       {idx === 0 ? 'Chặng đi' : 'Chặng về'}
                     </span>
@@ -1121,22 +1397,22 @@ function PaymentContent() {
                 </span>
                 <div className="flex justify-between">
                   <span className="text-slate-500 font-medium">Họ và tên:</span>
-                  <span className="font-bold text-slate-900">{draft.passenger.fullName}</span>
+                  <span className="font-bold text-slate-900">{bookingDraft.passenger.fullName}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-500 font-medium">Số điện thoại:</span>
-                  <span className="font-bold text-slate-900">{draft.passenger.phoneNumber}</span>
+                  <span className="font-bold text-slate-900">{bookingDraft.passenger.phoneNumber}</span>
                 </div>
-                {draft.passenger.email && (
+                {bookingDraft.passenger.email && (
                   <div className="flex justify-between">
                     <span className="text-slate-500 font-medium">Email:</span>
-                    <span className="font-medium text-slate-700">{draft.passenger.email}</span>
+                    <span className="font-medium text-slate-700">{bookingDraft.passenger.email}</span>
                   </div>
                 )}
               </div>
 
               {/* Thông tin hành lý nếu có */}
-              {draft.luggage && (
+              {bookingDraft.luggage && (
                 <div className="rounded-xl border border-slate-200/90 bg-white p-3.5 space-y-2">
                   <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
                     Hành lý ký gửi hầm xe
@@ -1145,13 +1421,13 @@ function PaymentContent() {
                     <span className="text-slate-500 font-medium">Khối lượng:</span>
                     <span className="font-bold text-slate-900">
                       {cargoPackageCount === null ? 'Chưa rõ số kiện' : `${cargoPackageCount} kiện`}
-                      {' • '}{draft.luggage.weight} kg
+                      {' • '}{bookingDraft.luggage.weight} kg
                     </span>
                   </div>
-                  {draft.luggage.items && draft.luggage.items.length > 0 && (
+                  {bookingDraft.luggage.items && bookingDraft.luggage.items.length > 0 && (
                     <div className="space-y-2 border-t border-slate-100 pt-2">
                       <span className="text-slate-500 font-medium">Chi tiết kiện hàng:</span>
-                      {draft.luggage.items.map((item, index) => {
+                      {bookingDraft.luggage.items.map((item, index) => {
                         const quantity = getCargoItemQuantity(item.quantity);
                         const unitWeight = typeof item.weight === 'number' && Number.isFinite(item.weight)
                           ? item.weight
@@ -1212,7 +1488,7 @@ function PaymentContent() {
       )}
 
       {/* Modal Chi tiết hàng gửi hầm xe */}
-      {showCargoDetailModal && draft.luggage?.items && (
+      {showCargoDetailModal && bookingDraft?.luggage?.items && (
         <div
           className="fixed inset-0 z-[80] bg-black/50 backdrop-blur-xs px-4 py-6 flex items-center justify-center animate-in fade-in duration-200"
           onClick={() => setShowCargoDetailModal(false)}
@@ -1232,7 +1508,7 @@ function PaymentContent() {
                 </h3>
                 <p className="text-xs text-slate-500 font-medium mt-0.5">
                   Tổng cộng: {cargoPackageCount === null ? 'Chưa rõ số kiện' : `${cargoPackageCount} kiện`}
-                  {' • '}{draft.luggage.weight}kg
+                  {' • '}{bookingDraft.luggage.weight}kg
                 </p>
               </div>
               <button
@@ -1246,7 +1522,7 @@ function PaymentContent() {
             </div>
 
             <div className="py-3.5 space-y-2.5 overflow-y-auto pr-0.5 max-h-[55vh]">
-              {draft.luggage.items.map((item, idx) => {
+              {bookingDraft.luggage.items.map((item, idx) => {
                 const quantity = getCargoItemQuantity(item.quantity);
                 const actualW = typeof item.weight === 'number' && Number.isFinite(item.weight)
                   ? item.weight

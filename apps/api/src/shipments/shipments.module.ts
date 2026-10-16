@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AuthModule } from '../auth/auth.module.js';
 import { PrismaModule } from '../prisma/prisma.module.js';
 import { CargoPricingModule } from '../cargo-pricing/cargo-pricing.module.js';
 import { CargoCapacityModule } from '../cargo-capacity/cargo-capacity.module.js';
@@ -7,7 +8,7 @@ import { ShipmentsService } from './shipments.service.js';
 import { ShipmentPersistenceService } from './shipment-persistence.service.js';
 
 @Module({
-  imports: [PrismaModule, CargoPricingModule, CargoCapacityModule],
+  imports: [AuthModule, PrismaModule, CargoPricingModule, CargoCapacityModule],
   controllers: [ShipmentsController],
   providers: [ShipmentsService, ShipmentPersistenceService],
   exports: [ShipmentsService, ShipmentPersistenceService],

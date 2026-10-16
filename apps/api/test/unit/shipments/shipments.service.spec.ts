@@ -92,6 +92,9 @@ describe('ShipmentsService', () => {
         count: vi.fn(),
         findMany: vi.fn(),
       },
+      thanhToan: {
+        findFirst: vi.fn().mockResolvedValue(null),
+      },
       $transaction: vi.fn(async (callback) => callback(prismaMock)),
     };
 
@@ -283,11 +286,15 @@ describe('ShipmentsService', () => {
           },
           donGiaoDich: {
             count: vi.fn().mockResolvedValue(12),
-            create: vi.fn().mockResolvedValue({
+            create: vi.fn().mockImplementation(async ({ data }: any) => ({
+              ...data,
               donGiaoDichId: 200,
               maDonGiaoDich: 'FUTA-GD-20102026-0013',
               trangThai: 'CHO_THANH_TOAN',
-            }),
+            })),
+          },
+          thanhToan: {
+            create: vi.fn().mockResolvedValue({ thanhToanId: 500 }),
           },
           phieuGuiHang: {
             create: vi.fn().mockResolvedValue({
@@ -344,6 +351,7 @@ describe('ShipmentsService', () => {
       expect(result).toBeDefined();
       expect(result.waybillCode).toMatch(/^FUTA-VD-\d{12}-[A-F\d]{25}$/);
       expect(result.pricing.totalFee).toBe(95000);
+      expect(result.paymentId).toBe(500);
       expect(result.sender.phoneNumber).toBe('0901234567');
       expect(result.receiver.fullName).toBe('Trần Thị B');
       expect(transactionMock.khachHang.findUnique).not.toHaveBeenCalled();
@@ -355,6 +363,19 @@ describe('ShipmentsService', () => {
         expect.objectContaining({
           data: expect.objectContaining({ khachHangId: null }),
         }),
+      );
+      const paymentAttempt = transactionMock.thanhToan.create.mock.calls[0][0];
+      const orderCreatedAt = transactionMock.donGiaoDich.create.mock.calls[0][0].data.ngayTao;
+      expect(paymentAttempt.data).toMatchObject({
+        phuongThuc: 'SEPAY',
+        loaiGiaoDich: 'THANH_TOAN',
+        thoiGian: orderCreatedAt,
+        trangThai: 'DANG_XU_LY',
+        donGiaoDichId: 200,
+      });
+      expect(Number(paymentAttempt.data.soTien)).toBe(result.pricing.totalFee);
+      expect(result.paymentExpiresAt).toBe(
+        new Date(orderCreatedAt.getTime() + 10 * 60_000).toISOString(),
       );
       expect(shipmentPersistenceServiceMock.persistInTransaction).toHaveBeenCalledWith(
         transactionMock,
@@ -434,6 +455,19 @@ describe('ShipmentsService', () => {
       expect(prismaMock.phieuGuiHang.count).not.toHaveBeenCalled();
     });
 
+    it('does not grant SUPER_ADMIN an implicit shipment data scope', async () => {
+      await expect(
+        service.listShipments({} as any, {
+          taiKhoanId: 1,
+          roles: ['SUPER_ADMIN'],
+          nhanVienId: null,
+          nhaXeId: null,
+        } as any),
+      ).rejects.toThrow(ForbiddenException);
+      expect(prismaMock.phieuGuiHang.findMany).not.toHaveBeenCalled();
+      expect(prismaMock.phieuGuiHang.count).not.toHaveBeenCalled();
+    });
+
     it('does not let one customer read another customer shipment detail', async () => {
       prismaMock.phieuGuiHang.findUnique.mockResolvedValue({
         phieuGuiHangId: 12,
@@ -473,6 +507,8 @@ describe('ShipmentsService', () => {
 
       await service.listShipments({} as any, {
         taiKhoanId: 7,
+        nhanVienId: null,
+        nhaXeId: null,
         roles: ['KHACH_HANG'],
       } as any);
 
@@ -491,6 +527,7 @@ describe('ShipmentsService', () => {
 
       await service.listShipments({} as any, {
         taiKhoanId: 7,
+        nhanVienId: 7,
         nhaXeId: 2,
         roles: ['NHA_XE_ADMIN'],
       } as any);
@@ -498,7 +535,12 @@ describe('ShipmentsService', () => {
       expect(prismaMock.phieuGuiHang.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: {
-            AND: [{ chuyenXe: { nhaXeId: 2 } }],
+            AND: [
+              { donGiaoDich: { nhaXeId: 2 } },
+              { chuyenXe: { nhaXeId: 2 } },
+              { diemGui: { nhaXeId: 2 } },
+              { diemNhan: { nhaXeId: 2 } },
+            ],
           },
         }),
       );
@@ -510,7 +552,12 @@ describe('ShipmentsService', () => {
       await expect(
         service.listShipments(
           {} as any,
-          { taiKhoanId: 7, roles: ['KHACH_HANG'] } as any,
+          {
+            taiKhoanId: 7,
+            nhanVienId: null,
+            nhaXeId: null,
+            roles: ['KHACH_HANG'],
+          } as any,
         ),
       ).rejects.toThrow(ForbiddenException);
       expect(prismaMock.phieuGuiHang.findMany).not.toHaveBeenCalled();
@@ -534,9 +581,15 @@ describe('ShipmentsService', () => {
         donGiaoDich: {
           donGiaoDichId: 22,
           maDonGiaoDich: 'ORDER-22',
+          ngayTao: new Date('2026-10-15T08:00:00.000Z'),
+          tongTien: 120_000,
+          trangThai: 'DA_THANH_TOAN',
           tenKhachHang: 'PII_SENDER_NAME',
           soDienThoaiKhachHang: '0901234567',
           emailKhachHang: 'PII_SENDER_EMAIL',
+          thanhToans: [
+            { phuongThuc: 'SEPAY', trangThai: 'THANH_CONG' },
+          ],
         },
         diemGui: { diemGiaoNhanHangId: 3, tenDiem: 'Bến gửi', diaChi: 'Địa chỉ gửi' },
         diemNhan: { diemGiaoNhanHangId: 4, tenDiem: 'Bến nhận', diaChi: 'Địa chỉ nhận' },
@@ -573,9 +626,29 @@ describe('ShipmentsService', () => {
         phoneNumber: '0901234567',
       });
 
+      expect(prismaMock.thanhToan.findFirst).toHaveBeenCalledWith({
+        where: {
+          donGiaoDichId: 22,
+          phuongThuc: 'SEPAY',
+          loaiGiaoDich: 'THANH_TOAN',
+          trangThai: 'CAN_DOI_SOAT',
+          maGiaoDichSePay: { not: null },
+        },
+        select: { phuongThuc: true, trangThai: true },
+        orderBy: [{ thoiGian: 'desc' }, { thanhToanId: 'desc' }],
+      });
+
       expect(result).toEqual({
         waybillCode: 'FUTA-VD-PUBLIC-12',
         status: 'DANG_VAN_CHUYEN',
+        orderCode: 'ORDER-22',
+        amount: 120_000,
+        orderStatus: 'DA_THANH_TOAN',
+        paymentStatus: 'THANH_CONG',
+        requiresReconciliation: false,
+        paymentMethod: 'SEPAY',
+        paymentExpiresAt: new Date('2026-10-15T08:10:00.000Z').toISOString(),
+        serverTime: expect.any(String),
         carrier: { name: 'Nhà xe công khai' },
         route: { origin: 'TP.HCM', destination: 'Đà Lạt' },
         pickupPoint: { name: 'Bến gửi', address: 'Địa chỉ gửi' },
@@ -601,21 +674,32 @@ describe('ShipmentsService', () => {
         'PRIVATE_SHIPMENT_NOTE',
         'PRIVATE_HISTORY_NOTE',
         'PRIVATE_CARGO_NAME',
-        'ORDER-22',
-        '120000',
+        'donGiaoDichId',
+        'PII_SENDER_NAME',
       ]) {
         expect(serializedResult).not.toContain(privateValue);
       }
     });
 
-    it('returns a booking coupon as a ticket-only reference for a linked shipment', async () => {
+    it.each([
+      { code: 'SAVE50', linked: true, paid: true, expired: false, lookupPhone: '0901234567' },
+      { code: null, linked: true, paid: false, expired: false, lookupPhone: '+84907654321' },
+      { code: null, linked: false, paid: false, expired: true, lookupPhone: '0901234567' },
+    ])('projects ticket-only coupon $code and payment for linked=$linked expired=$expired', async ({ code, linked, paid, expired, lookupPhone }) => {
+      const orderCreatedAt = new Date(Date.now() - (expired ? 11 : 1) * 60_000);
       prismaMock.phieuGuiHang.findFirst.mockResolvedValue({
         maVanDon: 'FUTA-VD-LINKED-12',
         trangThai: 'DANG_VAN_CHUYEN',
-        soDienThoaiNguoiNhan: '0901234567',
+        soDienThoaiNguoiNhan: '0907654321',
         donGiaoDich: {
+          donGiaoDichId: 22,
+          maDonGiaoDich: 'ORDER-LINKED-22',
+          ngayTao: orderCreatedAt,
+          tongTien: 60000,
+          trangThai: paid ? 'DA_THANH_TOAN' : 'CHO_THANH_TOAN',
+          thanhToans: [{ phuongThuc: 'SEPAY', trangThai: paid ? 'THANH_CONG' : 'DANG_XU_LY' }],
           soDienThoaiKhachHang: '0901234567',
-          phieuDatVe: { khuyenMai: { maKhuyenMai: 'SAVE50' } },
+          phieuDatVe: linked ? { khuyenMai: code ? { maKhuyenMai: code } : null } : null,
         },
         diemGui: { tenDiem: 'Bến gửi', diaChi: 'Địa chỉ gửi' },
         diemNhan: { tenDiem: 'Bến nhận', diaChi: 'Địa chỉ nhận' },
@@ -636,12 +720,80 @@ describe('ShipmentsService', () => {
 
       const result = await service.lookupShipment({
         waybillCode: 'FUTA-VD-LINKED-12',
+        phoneNumber: lookupPhone,
+      });
+
+      expect(result.bookingPromotionCode).toBe(code);
+      expect(result.amount).toBe(60000);
+      expect(result.paymentExpiresAt).toBe(new Date(orderCreatedAt.getTime() + 600_000).toISOString());
+      expect(result.paymentStatus).toBe(paid ? 'THANH_CONG' : expired ? 'HET_HAN' : 'DANG_XU_LY');
+      expect(result.requiresReconciliation).toBe(false);
+      expect(prismaMock.phieuGuiHang.findFirst).toHaveBeenCalledWith(expect.objectContaining({ select: expect.objectContaining({
+        donGiaoDich: { select: expect.objectContaining({
+          ngayTao: true, tongTien: true, trangThai: true,
+          phieuDatVe: { select: { khuyenMai: { select: { maKhuyenMai: true } } } },
+          thanhToans: { where: { loaiGiaoDich: 'THANH_TOAN' }, orderBy: [{ thoiGian: 'desc' }, { thanhToanId: 'desc' }], take: 1, select: { phuongThuc: true, trangThai: true } },
+        }) },
+      }) }));
+      expect(result).not.toHaveProperty('shipmentPromotionCode');
+      expect(result).not.toHaveProperty('discountAmount');
+    });
+
+    it('returns reconciliation status without exposing the additional SePay transfer', async () => {
+      prismaMock.phieuGuiHang.findFirst.mockResolvedValue({
+        maVanDon: 'FUTA-VD-RECON-22',
+        trangThai: 'DA_HUY',
+        soDienThoaiNguoiNhan: '0907654321',
+        donGiaoDich: {
+          donGiaoDichId: 22,
+          maDonGiaoDich: 'ORDER-22',
+          soDienThoaiKhachHang: '0901234567',
+          ngayTao: new Date('2026-10-15T08:00:00.000Z'),
+          tongTien: 120_000,
+          trangThai: 'DA_HUY',
+          thanhToans: [{ phuongThuc: 'SEPAY', trangThai: 'THANH_CONG' }],
+        },
+        diemGui: { tenDiem: 'Bến gửi', diaChi: 'Địa chỉ gửi' },
+        diemNhan: { tenDiem: 'Bến nhận', diaChi: 'Địa chỉ nhận' },
+        chuyenXe: {
+          ngayKhoiHanh: new Date('2026-10-20T00:00:00.000Z'),
+          gioKhoiHanh: new Date('1970-01-01T08:00:00.000Z'),
+          gioDen: new Date('1970-01-01T12:00:00.000Z'),
+          tuyenXe: {
+            diemDi: 'TP.HCM',
+            diemDen: 'Đà Lạt',
+            thoiGianChayPhut: 240,
+            nhaXe: { tenNhaXe: 'Nhà xe công khai' },
+          },
+        },
+        hangHoas: [],
+        lichSuTrangThais: [],
+      });
+      prismaMock.thanhToan.findFirst.mockResolvedValue({
+        phuongThuc: 'SEPAY',
+        trangThai: 'CAN_DOI_SOAT',
+        maGiaoDichSePay: 'PRIVATE_PROVIDER_TRANSACTION_ID',
+      });
+
+      const result = await service.lookupShipment({
+        waybillCode: 'futa-vd-recon-22',
         phoneNumber: '0901234567',
       });
 
-      expect(result.bookingPromotionCode).toBe('SAVE50');
-      expect(result).not.toHaveProperty('shipmentPromotionCode');
-      expect(result).not.toHaveProperty('discountAmount');
+      expect(result).toMatchObject({
+        waybillCode: 'FUTA-VD-RECON-22',
+        status: 'DA_HUY',
+        orderCode: 'ORDER-22',
+        orderStatus: 'DA_HUY',
+        paymentStatus: 'CAN_DOI_SOAT',
+        requiresReconciliation: true,
+        paymentMethod: 'SEPAY',
+        packageCount: 0,
+      });
+      const serializedResult = JSON.stringify(result);
+      expect(serializedResult).not.toContain('PRIVATE_PROVIDER_TRANSACTION_ID');
+      expect(serializedResult).not.toContain('0901234567');
+      expect(serializedResult).not.toContain('0907654321');
     });
 
     it('throws NotFoundException when waybill code not found', async () => {
@@ -653,6 +805,7 @@ describe('ShipmentsService', () => {
           phoneNumber: '0901234567',
         }),
       ).rejects.toThrow(NotFoundException);
+      expect(prismaMock.thanhToan.findFirst).not.toHaveBeenCalled();
     });
 
     it('throws NotFoundException when phone number does not match sender or receiver', async () => {
@@ -671,6 +824,7 @@ describe('ShipmentsService', () => {
           phoneNumber: '0900000000',
         }),
       ).rejects.toThrow(NotFoundException);
+      expect(prismaMock.thanhToan.findFirst).not.toHaveBeenCalled();
     });
   });
 

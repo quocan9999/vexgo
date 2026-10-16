@@ -3,6 +3,7 @@ import type { TicketItem } from '@/features/account/services/tickets.api';
 export interface CancelEligibilityResult {
   eligible: boolean;
   reason?:
+    | 'ACTIVE_SHIPMENT'
     | 'ALREADY_CANCELLED'
     | 'ALREADY_DEPARTED'
     | 'LESS_THAN_12_HOURS'
@@ -69,6 +70,12 @@ export function checkTicketCancelEligibility(
 
   if (ticket.cancellation && !ticket.cancellation.eligible) {
     switch (ticket.cancellation.reason) {
+      case 'ACTIVE_SHIPMENT':
+        return {
+          eligible: false, reason: 'ACTIVE_SHIPMENT', title: 'Đơn có hàng gửi kèm',
+          message: 'Đơn có hàng gửi kèm còn hiệu lực. Vui lòng liên hệ nhà xe để được hỗ trợ hủy vé.',
+          cancelFeeRate: 0, cancelFee: 0, refundAmount: 0,
+        };
       case 'ALREADY_CANCELLED':
         return {
           eligible: false,

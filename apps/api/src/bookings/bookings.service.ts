@@ -10,6 +10,7 @@ import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'node:crypto';
 import { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { createSepayPaymentAttempt } from '../payments/payment-attempt.js';
 import { SeatHoldsService } from '../seat-holds/seat-holds.service.js';
 import { PromotionsService } from '../promotions/promotions.service.js';
 import { CargoPricingService } from '../cargo-pricing/cargo-pricing.service.js';
@@ -520,7 +521,7 @@ export class BookingsService {
       const finalTicketTotal = originalTotal.sub(discountAmount);
       const totalOrderAmount = finalTicketTotal.add(shippingFee);
 
-      const requiresPayment = !totalOrderAmount.isZero();
+      const requiresPayment = totalOrderAmount.gt(0);
 
       // 4. Generate transaction codes
       const now = new Date();
@@ -547,19 +548,16 @@ export class BookingsService {
           emailKhachHang: contactEmail,
           khachHangId: resolvedCustomerId,
           nhaXeId: trip.nhaXeId,
-          // Tạo payment chờ trong cùng transaction, trước khi trả booking/QR.
-          // Guest dùng quyền tạo booking hiện có, không cần mở endpoint thanh toán công khai.
-          thanhToans: requiresPayment ? {
-            create: {
-              phuongThuc: 'SEPAY',
-              loaiGiaoDich: 'THANH_TOAN',
-              trangThai: 'DANG_XU_LY',
-              soTien: new Prisma.Decimal(totalOrderAmount),
-              thoiGian: now,
-            },
-          } : undefined,
         },
       });
+      // Only positive orders need the shared bank attempt; zero-total orders settle below.
+      if (requiresPayment) {
+        await createSepayPaymentAttempt(tx, {
+          donGiaoDichId: donGiaoDich.donGiaoDichId,
+          amount: totalOrderAmount,
+          createdAt: donGiaoDich.ngayTao,
+        });
+      }
 
       // 6. Create PhieuDatVe
       const phieuDatVe = await tx.phieuDatVe.create({
@@ -887,7 +885,7 @@ export class BookingsService {
       shipment: txResult.createdShipment,
       createdAt: txResult.phieuDatVe.createdAt ? txResult.phieuDatVe.createdAt.toISOString() : new Date().toISOString(),
       paymentExpiresAt: getBookingPaymentDeadline(
-        txResult.phieuDatVe.createdAt,
+        txResult.donGiaoDich.ngayTao,
       ).toISOString(),
       serverTime: new Date().toISOString(),
     };
@@ -1294,7 +1292,7 @@ export class BookingsService {
       0,
     );
     const originalTicketSubtotal = Number(booking.tongTienBanDau ?? 0);
-    const paymentExpiresAt = getBookingPaymentDeadline(booking.createdAt);
+    const paymentExpiresAt = getBookingPaymentDeadline(booking.donGiaoDich.ngayTao);
     const bookingPaymentIsPending =
       booking.trangThai === 'CHO_THANH_TOAN' &&
       booking.donGiaoDich?.trangThai === 'CHO_THANH_TOAN';
