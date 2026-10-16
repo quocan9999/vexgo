@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AuthModule } from '../auth/auth.module.js';
 import { PrismaModule } from '../prisma/prisma.module.js';
 import { AdminRbacController } from './admin-rbac.controller.js';
 import { AdminRbacService } from './admin-rbac.service.js';
@@ -7,7 +8,7 @@ import { TenantAdminRbacController } from './tenant-admin-rbac.controller.js';
 import { TenantRolePermissionsService } from './tenant-role-permissions.service.js';
 
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, AuthModule],
   controllers: [
     AdminRbacController,
     TenantAdminRbacController,

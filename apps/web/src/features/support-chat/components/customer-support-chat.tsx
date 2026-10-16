@@ -111,12 +111,16 @@ export function CustomerSupportChat() {
   // Chọn nhà xe và kiểm tra active conversation
   const handleSelectCompany = async (company: BusCompany) => {
     if (!accessToken) return;
+    if (!Number.isInteger(company.busCompanyId) || company.busCompanyId <= 0) {
+      setErrorMsg('Thông tin nhà xe không hợp lệ.');
+      return;
+    }
     setSelectedCompany(company);
     setErrorMsg(null);
     setLoadingMessages(true);
 
     try {
-      const active = await supportChatApi.getActiveConversation(company.nhaXeId, accessToken);
+      const active = await supportChatApi.getActiveConversation(company.busCompanyId, accessToken);
       if (active) {
         setActiveConversation(active);
         const history = await supportChatApi.getMessages(active.cuocTroChuyenId, accessToken);
@@ -135,6 +139,10 @@ export function CustomerSupportChat() {
   // Bắt đầu cuộc trò chuyện mới
   const handleStartConversation = async () => {
     if (!selectedCompany || !accessToken || !initialMessage.trim()) return;
+    if (!Number.isInteger(selectedCompany.busCompanyId) || selectedCompany.busCompanyId <= 0) {
+      setErrorMsg('Thông tin nhà xe không hợp lệ.');
+      return;
+    }
 
     setStartingChat(true);
     setErrorMsg(null);
@@ -143,8 +151,8 @@ export function CustomerSupportChat() {
     try {
       const conv = await supportChatApi.createConversation(
         {
-          nhaXeId: selectedCompany.nhaXeId,
-          tieuDe: `Hỗ trợ khách hàng - ${selectedCompany.tenNhaXe}`,
+          nhaXeId: selectedCompany.busCompanyId,
+          tieuDe: `Hỗ trợ khách hàng - ${selectedCompany.name}`,
           tinNhanDauTien: initialMessage.trim(),
           clientMessageId: clientMsgId,
         },
@@ -316,24 +324,22 @@ export function CustomerSupportChat() {
               ) : (
                 busCompanies.map((c) => (
                   <button
-                    key={c.nhaXeId}
+                    key={c.busCompanyId}
                     onClick={() => handleSelectCompany(c)}
                     className="w-full text-left p-2.5 bg-white border border-slate-100 rounded-xl hover:border-brand/50 hover:shadow-sm transition-all flex items-center gap-3 group"
                   >
                     <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center shrink-0 overflow-hidden border border-slate-100">
-                      {c.logo ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={c.logo} alt={c.tenNhaXe} className="w-full h-full object-cover" />
-                      ) : (
-                        <Building2 className="w-5 h-5 text-slate-400 group-hover:text-brand transition-colors" />
-                      )}
+                      <Building2 className="w-5 h-5 text-slate-400 group-hover:text-brand transition-colors" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="font-semibold text-xs text-slate-800 truncate group-hover:text-brand">
-                        {c.tenNhaXe}
+                        {c.name}
                       </div>
-                      <div className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
-                        <Phone className="w-3 h-3 text-slate-400" /> {c.hotline}
+                      <div className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5 truncate">
+                        <Phone className="w-3 h-3 text-slate-400 shrink-0" />
+                        <span className="truncate">
+                          {c.contactInfo ? `Liên hệ: ${c.contactInfo}` : 'Chưa cập nhật thông tin liên hệ'}
+                        </span>
                       </div>
                     </div>
                   </button>
@@ -348,9 +354,13 @@ export function CustomerSupportChat() {
                 <div className="w-10 h-10 rounded-lg bg-white flex items-center justify-center shrink-0 border border-slate-200">
                   <Building2 className="w-5 h-5 text-brand" />
                 </div>
-                <div>
-                  <h5 className="font-bold text-xs text-slate-800">{selectedCompany.tenNhaXe}</h5>
-                  <p className="text-[11px] text-slate-500">Hotline: {selectedCompany.hotline}</p>
+                <div className="min-w-0">
+                  <h5 className="font-bold text-xs text-slate-800 truncate">{selectedCompany.name}</h5>
+                  <p className="text-[11px] text-slate-500 truncate">
+                    {selectedCompany.contactInfo
+                      ? `Liên hệ: ${selectedCompany.contactInfo}`
+                      : 'Chưa cập nhật thông tin liên hệ'}
+                  </p>
                 </div>
               </div>
 

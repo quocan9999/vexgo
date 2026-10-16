@@ -1,10 +1,11 @@
 export interface BusCompany {
-  nhaXeId: number;
-  tenNhaXe: string;
-  logo: string | null;
-  hotline: string;
-  email?: string;
-  trangThai?: string;
+  busCompanyId: number;
+  code: string;
+  name: string;
+  contactInfo: string | null;
+  status: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface SupportMessage {

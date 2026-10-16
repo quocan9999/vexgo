@@ -8,13 +8,19 @@ import {
   WebSocketServer,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { Logger, UsePipes, ValidationPipe } from '@nestjs/common';
+import { Logger, OnModuleDestroy, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
+import { plainToInstance } from 'class-transformer';
+import { validateSync } from 'class-validator';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { EffectiveRolePermissionLoaderService } from '../auth/permissions/effective-role-permission-loader.service.js';
 import { PermissionResolverService } from '../auth/permissions/permission-resolver.service.js';
 import { requireAuthSecret } from '../auth/auth-secret.js';
+import {
+  RealtimeSessionInvalidatorService,
+  type RealtimeInvalidationHandler,
+} from '../auth/realtime-session-invalidator.service.js';
 import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
 import { SupportChatService } from './support-chat.service.js';
 import { CHAT_EVENTS } from './constants/chat-events.constants.js';
@@ -59,13 +65,16 @@ export function isSocketOriginAllowed(origin: string | undefined): boolean {
     credentials: true,
   },
 })
-@UsePipes(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true }))
-export class SupportChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export class SupportChatGateway
+  implements OnGatewayConnection, OnGatewayDisconnect, OnModuleDestroy, RealtimeInvalidationHandler
+{
   @WebSocketServer()
   server!: Server;
 
   private readonly logger = new Logger(SupportChatGateway.name);
   private readonly accessSecret: string;
+  private readonly connectedSockets = new Set<Socket>();
+  private readonly unregisterInvalidator?: () => void;
 
   constructor(
     private readonly jwtService: JwtService,
@@ -74,11 +83,19 @@ export class SupportChatGateway implements OnGatewayConnection, OnGatewayDisconn
     private readonly permissionLoader: EffectiveRolePermissionLoaderService,
     private readonly permissionResolver: PermissionResolverService,
     private readonly supportChatService: SupportChatService,
+    @Optional()
+    private readonly sessionInvalidator?: RealtimeSessionInvalidatorService,
   ) {
     this.accessSecret = requireAuthSecret(
       this.configService.get<string>('JWT_ACCESS_SECRET'),
       'JWT_ACCESS_SECRET',
     );
+    this.unregisterInvalidator = this.sessionInvalidator?.registerHandler(this);
+  }
+
+  onModuleDestroy() {
+    this.unregisterInvalidator?.();
+    this.connectedSockets.clear();
   }
 
   async handleConnection(client: Socket) {
@@ -221,6 +238,10 @@ export class SupportChatGateway implements OnGatewayConnection, OnGatewayDisconn
       };
 
       client.data = socketData;
+      this.connectedSockets.add(client);
+
+      // Tham gia room theo phiên đăng nhập để có thể thu hồi đúng phiên
+      await client.join(`session_${principal.sessionId}`);
 
       // Tham gia room cá nhân để nhận thông báo / tin nhắn riêng
       await client.join(`user_${principal.taiKhoanId}`);
@@ -248,6 +269,7 @@ export class SupportChatGateway implements OnGatewayConnection, OnGatewayDisconn
   }
 
   handleDisconnect(client: Socket) {
+    this.connectedSockets.delete(client);
     const data = client.data as SocketPrincipalData | undefined;
     if (data?.principal) {
       this.logger.log(`[Socket disconnected] taiKhoanId=${data.principal.taiKhoanId}`);
@@ -259,6 +281,14 @@ export class SupportChatGateway implements OnGatewayConnection, OnGatewayDisconn
     error: string,
     message: string,
   ) {
+    this.connectedSockets.delete(client);
+    if (client.rooms) {
+      for (const room of Array.from(client.rooms)) {
+        if (room !== client.id) {
+          void client.leave(room);
+        }
+      }
+    }
     client.emit(CHAT_EVENTS.SUPPORT_ERROR, { error, message });
     client.disconnect(true);
   }
@@ -272,9 +302,102 @@ export class SupportChatGateway implements OnGatewayConnection, OnGatewayDisconn
   }
 
   /**
+   * Proactive invalidation handlers triggered by Auth / AdminAccounts / AdminRBAC services (BE-R01 / RT-04)
+   */
+  async invalidateSession(sessionId: string, reason = 'SESSION_REVOKED'): Promise<void> {
+    const matchingSockets = Array.from(this.connectedSockets).filter((socket) => {
+      const data = socket.data as SocketPrincipalData | undefined;
+      return data?.principal?.sessionId === sessionId || socket.rooms?.has(`session_${sessionId}`);
+    });
+
+    for (const socket of matchingSockets) {
+      this.emitSocketErrorAndDisconnect(
+        socket,
+        reason,
+        'Phiên đăng nhập không hợp lệ hoặc đã bị thu hồi.',
+      );
+    }
+
+    const roomTarget = (this.server as any)?.in?.(`session_${sessionId}`);
+    if (typeof roomTarget?.disconnectSockets === 'function') {
+      roomTarget.disconnectSockets(true);
+    }
+  }
+
+  async invalidateAccount(taiKhoanId: number, reason = 'SESSION_REVOKED'): Promise<void> {
+    const matchingSockets = Array.from(this.connectedSockets).filter((socket) => {
+      const data = socket.data as SocketPrincipalData | undefined;
+      return data?.principal?.taiKhoanId === taiKhoanId || socket.rooms?.has(`user_${taiKhoanId}`);
+    });
+
+    for (const socket of matchingSockets) {
+      this.emitSocketErrorAndDisconnect(
+        socket,
+        reason,
+        'Tài khoản đã bị khóa hoặc phiên đăng nhập đã bị thu hồi.',
+      );
+    }
+
+    const roomTarget = (this.server as any)?.in?.(`user_${taiKhoanId}`);
+    if (typeof roomTarget?.disconnectSockets === 'function') {
+      roomTarget.disconnectSockets(true);
+    }
+  }
+
+  async revalidateAccount(taiKhoanId: number): Promise<void> {
+    const matchingSockets = Array.from(this.connectedSockets).filter((socket) => {
+      const data = socket.data as SocketPrincipalData | undefined;
+      return data?.principal?.taiKhoanId === taiKhoanId || socket.rooms?.has(`user_${taiKhoanId}`);
+    });
+
+    for (const socket of matchingSockets) {
+      try {
+        await this.revalidatePrincipalSession(socket);
+      } catch {
+        // Socket was disconnected by revalidatePrincipalSession
+      }
+    }
+  }
+
+  async revalidateRole(roleName: string): Promise<void> {
+    const matchingSockets = Array.from(this.connectedSockets).filter((socket) => {
+      const data = socket.data as SocketPrincipalData | undefined;
+      return Boolean(data?.principal?.roles?.includes(roleName));
+    });
+
+    for (const socket of matchingSockets) {
+      try {
+        await this.revalidatePrincipalSession(socket);
+      } catch {
+        // Socket was disconnected by revalidatePrincipalSession
+      }
+    }
+  }
+
+  async revalidateTenantRole(nhaXeId: number, roleName?: string): Promise<void> {
+    const matchingSockets = Array.from(this.connectedSockets).filter((socket) => {
+      const data = socket.data as SocketPrincipalData | undefined;
+      const principal = data?.principal;
+      if (!principal) return false;
+      const matchesTenant =
+        principal.nhaXeId === nhaXeId || Boolean(socket.rooms?.has(`company_${nhaXeId}`));
+      if (!matchesTenant) return false;
+      return roleName ? principal.roles.includes(roleName) : true;
+    });
+
+    for (const socket of matchingSockets) {
+      try {
+        await this.revalidatePrincipalSession(socket);
+      } catch {
+        // Socket was disconnected by revalidatePrincipalSession
+      }
+    }
+  }
+
+  /**
    * Revalidate session, role assignments, effective permissions & tenant scope against the database
-   * on each critical socket action (BE-01). Disconnects socket if session is revoked, user is locked,
-   * or chat permissions are insufficient.
+   * on each critical socket action AND before broadcasting room events (BE-01 / BE-R01 / RT-04).
+   * Disconnects socket if session is revoked, user is locked, or chat permissions are insufficient.
    */
   private async revalidatePrincipalSession(client: Socket): Promise<AuthPrincipal> {
     const cachedPrincipal = this.getPrincipalFromSocket(client);
@@ -401,12 +524,283 @@ export class SupportChatGateway implements OnGatewayConnection, OnGatewayDisconn
     return freshPrincipal;
   }
 
+  private getConnectedSocketsInRoom(roomName: string): Socket[] {
+    return Array.from(this.connectedSockets).filter((socket) =>
+      Boolean(socket.rooms?.has(roomName)),
+    );
+  }
+
+  private async revalidateSocketWithCache(
+    socket: Socket,
+    cache: Map<Socket, AuthPrincipal | null>,
+  ): Promise<AuthPrincipal | null> {
+    if (cache.has(socket)) {
+      return cache.get(socket) ?? null;
+    }
+    try {
+      const principal = await this.revalidatePrincipalSession(socket);
+      cache.set(socket, principal);
+      return principal;
+    } catch {
+      cache.set(socket, null);
+      return null;
+    }
+  }
+
+  /**
+   * Revalidate all connected recipient sockets in a company_* room before emitting (BE-R01 / RT-04).
+   * Evicts any socket that is no longer an active staff member of that tenant with chat permission.
+   */
+  private async sanitizeCompanyRoomRecipients(
+    nhaXeId: number,
+    cache: Map<Socket, AuthPrincipal | null>,
+  ): Promise<void> {
+    const roomName = `company_${nhaXeId}`;
+    const socketsInRoom = this.getConnectedSocketsInRoom(roomName);
+    if (socketsInRoom.length === 0) return;
+
+    for (const socket of socketsInRoom) {
+      const principal = await this.revalidateSocketWithCache(socket, cache);
+      if (!principal) continue;
+
+      if (principal.nhaXeId !== nhaXeId || principal.nhanVienId === null) {
+        await socket.leave(roomName);
+      }
+    }
+  }
+
+  /**
+   * Revalidate all connected recipient sockets in a conversation_* room before emitting (BE-R01 / RT-04).
+   * Evicts any socket whose session/permission was revoked or whose tenant/customer scope no longer matches the conversation.
+   */
+  private async sanitizeConversationRoomRecipients(
+    cuocTroChuyenId: number,
+    cache: Map<Socket, AuthPrincipal | null>,
+    knownScope?: { nhaXeId?: number; khachHangId?: number },
+  ): Promise<void> {
+    const roomName = `conversation_${cuocTroChuyenId}`;
+    const socketsInRoom = this.getConnectedSocketsInRoom(roomName);
+    if (socketsInRoom.length === 0) return;
+
+    let scopeNhaXeId = knownScope?.nhaXeId;
+    let scopeKhachHangId = knownScope?.khachHangId;
+
+    if (
+      (scopeNhaXeId === undefined || scopeKhachHangId === undefined) &&
+      typeof (this.prisma as any)?.cuocTroChuyen?.findUnique === 'function'
+    ) {
+      const convRecord = await this.prisma.cuocTroChuyen.findUnique({
+        where: { cuocTroChuyenId },
+        select: { nhaXeId: true, khachHangId: true },
+      });
+      if (!convRecord) {
+        for (const socket of socketsInRoom) {
+          await socket.leave(roomName);
+        }
+        return;
+      }
+      scopeNhaXeId = convRecord.nhaXeId;
+      scopeKhachHangId = convRecord.khachHangId;
+    }
+
+    for (const socket of socketsInRoom) {
+      const principal = await this.revalidateSocketWithCache(socket, cache);
+      if (!principal) continue;
+
+      const isTenantUser = principal.nhaXeId !== null && principal.nhanVienId !== null;
+      if (isTenantUser) {
+        if (scopeNhaXeId !== undefined && principal.nhaXeId !== scopeNhaXeId) {
+          await socket.leave(roomName);
+        }
+      } else {
+        const socketData = socket.data as SocketPrincipalData | undefined;
+        let khachHangId = socketData?.khachHangId ?? null;
+        if (
+          khachHangId === null &&
+          typeof (this.supportChatService as any)?.ensureKhachHang === 'function'
+        ) {
+          const kh = await this.supportChatService.ensureKhachHang(principal.taiKhoanId);
+          khachHangId = kh.khachHangId;
+          if (socketData) {
+            socketData.khachHangId = khachHangId;
+          }
+        }
+        if (scopeKhachHangId !== undefined && khachHangId !== scopeKhachHangId) {
+          await socket.leave(roomName);
+        }
+      }
+    }
+  }
+
+  /**
+   * Unified authorized broadcast methods used by both SupportChatGateway and SupportChatController (BE-R01 / RT-04)
+   */
+  async emitConversationNew(conversation: {
+    cuocTroChuyenId: number;
+    nhaXeId: number;
+    [key: string]: unknown;
+  }): Promise<void> {
+    if (!this.server) return;
+    const cache = new Map<Socket, AuthPrincipal | null>();
+    await this.sanitizeCompanyRoomRecipients(conversation.nhaXeId, cache);
+    this.server
+      .to(`company_${conversation.nhaXeId}`)
+      .emit(CHAT_EVENTS.CONVERSATION_NEW, conversation);
+  }
+
+  async emitMessageNew(
+    message: {
+      loaiNguoiGui: string;
+      [key: string]: unknown;
+    },
+    conversation: {
+      cuocTroChuyenId: number;
+      nhaXeId: number;
+      khachHangId?: number;
+      tieuDe?: string | null;
+      khachHang?: unknown;
+    },
+  ): Promise<void> {
+    if (!this.server) return;
+    const cache = new Map<Socket, AuthPrincipal | null>();
+    await this.sanitizeConversationRoomRecipients(
+      conversation.cuocTroChuyenId,
+      cache,
+      {
+        nhaXeId: conversation.nhaXeId,
+        khachHangId: conversation.khachHangId,
+      },
+    );
+
+    this.server
+      .to(`conversation_${conversation.cuocTroChuyenId}`)
+      .emit(CHAT_EVENTS.MESSAGE_NEW, message);
+
+    if (message.loaiNguoiGui === 'KHACH_HANG') {
+      await this.sanitizeCompanyRoomRecipients(conversation.nhaXeId, cache);
+      this.server
+        .to(`company_${conversation.nhaXeId}`)
+        .emit(CHAT_EVENTS.MESSAGE_NEW, {
+          ...message,
+          cuocTroChuyen: {
+            cuocTroChuyenId: conversation.cuocTroChuyenId,
+            tieuDe: conversation.tieuDe,
+            khachHang: conversation.khachHang,
+          },
+        });
+    }
+  }
+
+  async emitConversationClaimed(conversation: {
+    cuocTroChuyenId: number;
+    nhaXeId: number;
+    khachHangId?: number;
+    [key: string]: unknown;
+  }): Promise<void> {
+    if (!this.server) return;
+    const cache = new Map<Socket, AuthPrincipal | null>();
+    await this.sanitizeConversationRoomRecipients(
+      conversation.cuocTroChuyenId,
+      cache,
+      {
+        nhaXeId: conversation.nhaXeId,
+        khachHangId: conversation.khachHangId,
+      },
+    );
+    await this.sanitizeCompanyRoomRecipients(conversation.nhaXeId, cache);
+
+    this.server
+      .to(`conversation_${conversation.cuocTroChuyenId}`)
+      .emit(CHAT_EVENTS.CONVERSATION_CLAIMED, conversation);
+
+    this.server
+      .to(`company_${conversation.nhaXeId}`)
+      .emit(CHAT_EVENTS.CONVERSATION_CLAIMED, conversation);
+  }
+
+  async emitConversationClosed(conversation: {
+    cuocTroChuyenId: number;
+    nhaXeId: number;
+    khachHangId?: number;
+    [key: string]: unknown;
+  }): Promise<void> {
+    if (!this.server) return;
+    const cache = new Map<Socket, AuthPrincipal | null>();
+    await this.sanitizeConversationRoomRecipients(
+      conversation.cuocTroChuyenId,
+      cache,
+      {
+        nhaXeId: conversation.nhaXeId,
+        khachHangId: conversation.khachHangId,
+      },
+    );
+    await this.sanitizeCompanyRoomRecipients(conversation.nhaXeId, cache);
+
+    this.server
+      .to(`conversation_${conversation.cuocTroChuyenId}`)
+      .emit(CHAT_EVENTS.CONVERSATION_CLOSED, conversation);
+
+    this.server
+      .to(`company_${conversation.nhaXeId}`)
+      .emit(CHAT_EVENTS.CONVERSATION_CLOSED, conversation);
+  }
+
+  async emitMessagesReadReceipt(payload: {
+    cuocTroChuyenId: number;
+    readByTaiKhoanId: number;
+    tinNhanIds?: number[];
+    updatedCount: number;
+  }): Promise<void> {
+    if (!this.server) return;
+    const cache = new Map<Socket, AuthPrincipal | null>();
+    await this.sanitizeConversationRoomRecipients(payload.cuocTroChuyenId, cache);
+
+    this.server
+      .to(`conversation_${payload.cuocTroChuyenId}`)
+      .emit(CHAT_EVENTS.MESSAGES_READ_RECEIPT, payload);
+  }
+
+  private validateWsPayload<T extends object>(cls: new () => T, rawPayload: unknown): T {
+    const instance = plainToInstance(cls, (rawPayload ?? {}) as Record<string, unknown>);
+    const errors = validateSync(instance, {
+      whitelist: true,
+      forbidNonWhitelisted: true,
+    });
+    if (errors.length > 0) {
+      const firstMessage =
+        Object.values(errors[0].constraints ?? {})[0] || 'Dữ liệu đầu vào không hợp lệ.';
+      const err: any = new Error(firstMessage);
+      err.response = { error: 'VALIDATION_ERROR', message: firstMessage };
+      throw err;
+    }
+    return instance;
+  }
+
+  private extractRawWsPayload(firstArg: unknown, secondArg: unknown): unknown {
+    if (secondArg !== undefined) {
+      return secondArg;
+    }
+    if (
+      firstArg &&
+      typeof firstArg === 'object' &&
+      'handshake' in (firstArg as Record<string, unknown>) &&
+      'disconnect' in (firstArg as Record<string, unknown>)
+    ) {
+      return {};
+    }
+    return firstArg;
+  }
+
   @SubscribeMessage(CHAT_EVENTS.CONVERSATION_JOIN)
   async handleJoinConversation(
     @ConnectedSocket() client: Socket,
-    @MessageBody() payload: WsJoinConversationDto,
+    @MessageBody() rawPayload?: WsJoinConversationDto,
   ) {
     try {
+      const payload = this.validateWsPayload(
+        WsJoinConversationDto,
+        this.extractRawWsPayload(client, rawPayload),
+      );
       const principal = await this.revalidatePrincipalSession(client);
       const conv = await this.supportChatService.getConversationById(
         principal,
@@ -431,9 +825,13 @@ export class SupportChatGateway implements OnGatewayConnection, OnGatewayDisconn
   @SubscribeMessage(CHAT_EVENTS.CONVERSATION_LEAVE)
   async handleLeaveConversation(
     @ConnectedSocket() client: Socket,
-    @MessageBody() payload: WsJoinConversationDto,
+    @MessageBody() rawPayload?: WsJoinConversationDto,
   ) {
     try {
+      const payload = this.validateWsPayload(
+        WsJoinConversationDto,
+        this.extractRawWsPayload(client, rawPayload),
+      );
       await client.leave(`conversation_${payload.cuocTroChuyenId}`);
       return {
         success: true,
@@ -450,9 +848,13 @@ export class SupportChatGateway implements OnGatewayConnection, OnGatewayDisconn
   @SubscribeMessage(CHAT_EVENTS.MESSAGE_SEND)
   async handleSendMessage(
     @ConnectedSocket() client: Socket,
-    @MessageBody() dto: SendMessageDto,
+    @MessageBody() rawDto?: SendMessageDto,
   ) {
     try {
+      const dto = this.validateWsPayload(
+        SendMessageDto,
+        this.extractRawWsPayload(client, rawDto),
+      );
       const principal = await this.revalidatePrincipalSession(client);
       const message = await this.supportChatService.sendMessage(principal, dto);
 
@@ -462,24 +864,7 @@ export class SupportChatGateway implements OnGatewayConnection, OnGatewayDisconn
         dto.cuocTroChuyenId,
       );
 
-      // Broadcast tin nhắn mới tới room cuộc trò chuyện
-      this.server
-        .to(`conversation_${dto.cuocTroChuyenId}`)
-        .emit(CHAT_EVENTS.MESSAGE_NEW, message);
-
-      // Broadcast tới room nhà xe nếu là tin nhắn mới từ khách hàng
-      if (message.loaiNguoiGui === 'KHACH_HANG') {
-        this.server
-          .to(`company_${conv.nhaXeId}`)
-          .emit(CHAT_EVENTS.MESSAGE_NEW, {
-            ...message,
-            cuocTroChuyen: {
-              cuocTroChuyenId: conv.cuocTroChuyenId,
-              tieuDe: conv.tieuDe,
-              khachHang: conv.khachHang,
-            },
-          });
-      }
+      await this.emitMessageNew(message, conv);
 
       return {
         success: true,
@@ -497,18 +882,35 @@ export class SupportChatGateway implements OnGatewayConnection, OnGatewayDisconn
   @SubscribeMessage(CHAT_EVENTS.TYPING_STATUS)
   async handleTypingStatus(
     @ConnectedSocket() client: Socket,
-    @MessageBody() payload: WsTypingStatusDto,
+    @MessageBody() rawPayload?: WsTypingStatusDto,
   ) {
     try {
+      const payload = this.validateWsPayload(
+        WsTypingStatusDto,
+        this.extractRawWsPayload(client, rawPayload),
+      );
       const principal = await this.revalidatePrincipalSession(client);
 
       // Luôn kiểm tra quyền truy cập vào cuộc trò chuyện trước khi phát sự kiện typing (BE-R01)
-      await this.supportChatService.getConversationById(principal, payload.cuocTroChuyenId);
+      const conv = await this.supportChatService.getConversationById(
+        principal,
+        payload.cuocTroChuyenId,
+      );
 
       const roomName = `conversation_${payload.cuocTroChuyenId}`;
       if (!client.rooms.has(roomName)) {
         await client.join(roomName);
       }
+
+      const cache = new Map<Socket, AuthPrincipal | null>([[client, principal]]);
+      await this.sanitizeConversationRoomRecipients(
+        payload.cuocTroChuyenId,
+        cache,
+        {
+          nhaXeId: conv?.nhaXeId,
+          khachHangId: conv?.khachHangId,
+        },
+      );
 
       client.to(roomName).emit(CHAT_EVENTS.TYPING_STATUS, {
         cuocTroChuyenId: payload.cuocTroChuyenId,
@@ -525,23 +927,20 @@ export class SupportChatGateway implements OnGatewayConnection, OnGatewayDisconn
   @SubscribeMessage(CHAT_EVENTS.CONVERSATION_CLAIM)
   async handleClaimConversation(
     @ConnectedSocket() client: Socket,
-    @MessageBody() payload: WsClaimConversationDto,
+    @MessageBody() rawPayload?: WsClaimConversationDto,
   ) {
     try {
+      const payload = this.validateWsPayload(
+        WsClaimConversationDto,
+        this.extractRawWsPayload(client, rawPayload),
+      );
       const principal = await this.revalidatePrincipalSession(client);
       const updatedConv = await this.supportChatService.claimConversation(
         principal,
         payload.cuocTroChuyenId,
       );
 
-      // Broadcast cho cả room conversation và room nhà xe
-      this.server
-        .to(`conversation_${payload.cuocTroChuyenId}`)
-        .emit(CHAT_EVENTS.CONVERSATION_CLAIMED, updatedConv);
-
-      this.server
-        .to(`company_${updatedConv.nhaXeId}`)
-        .emit(CHAT_EVENTS.CONVERSATION_CLAIMED, updatedConv);
+      await this.emitConversationClaimed(updatedConv);
 
       return {
         success: true,
@@ -559,9 +958,13 @@ export class SupportChatGateway implements OnGatewayConnection, OnGatewayDisconn
   @SubscribeMessage(CHAT_EVENTS.CONVERSATION_CLOSE)
   async handleCloseConversation(
     @ConnectedSocket() client: Socket,
-    @MessageBody() payload: WsCloseConversationDto,
+    @MessageBody() rawPayload?: WsCloseConversationDto,
   ) {
     try {
+      const payload = this.validateWsPayload(
+        WsCloseConversationDto,
+        this.extractRawWsPayload(client, rawPayload),
+      );
       const principal = await this.revalidatePrincipalSession(client);
       const closedConv = await this.supportChatService.closeConversation(
         principal,
@@ -569,13 +972,7 @@ export class SupportChatGateway implements OnGatewayConnection, OnGatewayDisconn
         { lyDo: payload.lyDo },
       );
 
-      this.server
-        .to(`conversation_${payload.cuocTroChuyenId}`)
-        .emit(CHAT_EVENTS.CONVERSATION_CLOSED, closedConv);
-
-      this.server
-        .to(`company_${closedConv.nhaXeId}`)
-        .emit(CHAT_EVENTS.CONVERSATION_CLOSED, closedConv);
+      await this.emitConversationClosed(closedConv);
 
       return {
         success: true,
@@ -593,9 +990,13 @@ export class SupportChatGateway implements OnGatewayConnection, OnGatewayDisconn
   @SubscribeMessage(CHAT_EVENTS.MESSAGE_READ)
   async handleMarkAsRead(
     @ConnectedSocket() client: Socket,
-    @MessageBody() payload: WsMarkReadDto,
+    @MessageBody() rawPayload?: WsMarkReadDto,
   ) {
     try {
+      const payload = this.validateWsPayload(
+        WsMarkReadDto,
+        this.extractRawWsPayload(client, rawPayload),
+      );
       const principal = await this.revalidatePrincipalSession(client);
       const result = await this.supportChatService.markMessagesAsRead(
         principal,
@@ -603,14 +1004,12 @@ export class SupportChatGateway implements OnGatewayConnection, OnGatewayDisconn
         { tinNhanIds: payload.tinNhanIds },
       );
 
-      this.server
-        .to(`conversation_${payload.cuocTroChuyenId}`)
-        .emit(CHAT_EVENTS.MESSAGES_READ_RECEIPT, {
-          cuocTroChuyenId: payload.cuocTroChuyenId,
-          readByTaiKhoanId: principal.taiKhoanId,
-          tinNhanIds: payload.tinNhanIds,
-          updatedCount: result.updatedCount,
-        });
+      await this.emitMessagesReadReceipt({
+        cuocTroChuyenId: payload.cuocTroChuyenId,
+        readByTaiKhoanId: principal.taiKhoanId,
+        tinNhanIds: payload.tinNhanIds,
+        updatedCount: result.updatedCount,
+      });
 
       return {
         success: true,

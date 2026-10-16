@@ -45,6 +45,26 @@ describe('SupportChatController', () => {
         to: vi.fn().mockReturnThis(),
         emit: vi.fn(),
       },
+      emitConversationNew: vi.fn().mockImplementation(async (conv: any) => {
+        gateway.server.to(`company_${conv.nhaXeId}`).emit('support.conversation.new', conv);
+      }),
+      emitMessageNew: vi.fn().mockImplementation(async (msg: any, conv: any) => {
+        gateway.server.to(`conversation_${conv.cuocTroChuyenId}`).emit('support.message.new', msg);
+        if (msg.loaiNguoiGui === 'KHACH_HANG') {
+          gateway.server.to(`company_${conv.nhaXeId}`).emit('support.message.new', msg);
+        }
+      }),
+      emitConversationClaimed: vi.fn().mockImplementation(async (conv: any) => {
+        gateway.server.to(`conversation_${conv.cuocTroChuyenId}`).emit('support.conversation.claimed', conv);
+        gateway.server.to(`company_${conv.nhaXeId}`).emit('support.conversation.claimed', conv);
+      }),
+      emitConversationClosed: vi.fn().mockImplementation(async (conv: any) => {
+        gateway.server.to(`conversation_${conv.cuocTroChuyenId}`).emit('support.conversation.closed', conv);
+        gateway.server.to(`company_${conv.nhaXeId}`).emit('support.conversation.closed', conv);
+      }),
+      emitMessagesReadReceipt: vi.fn().mockImplementation(async (payload: any) => {
+        gateway.server.to(`conversation_${payload.cuocTroChuyenId}`).emit('support.messages.read', payload);
+      }),
     };
 
     controller = new SupportChatController(
@@ -76,6 +96,7 @@ describe('SupportChatController', () => {
       nhaXeId: 5,
       tinNhanDauTien: 'Xin chào',
     });
+    expect(gateway.emitConversationNew).toHaveBeenCalledWith(mockCreated);
     expect(gateway.server.to).toHaveBeenCalledWith('company_5');
     expect(result).toEqual(mockCreated);
   });
@@ -98,6 +119,7 @@ describe('SupportChatController', () => {
       nhaXeId: 5,
     });
 
+    expect(gateway.emitConversationNew).not.toHaveBeenCalled();
     expect(gateway.server.to).not.toHaveBeenCalled();
     expect(result).toEqual(mockExisting);
   });
@@ -127,6 +149,8 @@ describe('SupportChatController', () => {
       tinNhanDauTien: 'Xin chào',
     });
 
+    expect(gateway.emitConversationNew).toHaveBeenCalledWith(mockCreated);
+    expect(gateway.emitMessageNew).toHaveBeenCalledWith(mockMsg, mockCreated);
     expect(gateway.server.to).toHaveBeenCalledWith('company_5');
     expect(gateway.server.to).toHaveBeenCalledWith('conversation_1');
     expect(result).toEqual(mockCreated);
@@ -175,6 +199,10 @@ describe('SupportChatController', () => {
       cuocTroChuyenId: 10,
       noiDung: 'Chào bạn',
     });
+    expect(gateway.emitMessageNew).toHaveBeenCalledWith(mockMsg, {
+      cuocTroChuyenId: 10,
+      nhaXeId: 5,
+    });
     expect(gateway.server.to).toHaveBeenCalledWith('conversation_10');
     expect(result).toEqual(mockMsg);
   });
@@ -190,6 +218,7 @@ describe('SupportChatController', () => {
     const result = await controller.claimConversation(mockStaff, 10);
 
     expect(service.claimConversation).toHaveBeenCalledWith(mockStaff, 10);
+    expect(gateway.emitConversationClaimed).toHaveBeenCalledWith(mockUpdated);
     expect(gateway.server.to).toHaveBeenCalledWith('conversation_10');
     expect(gateway.server.to).toHaveBeenCalledWith('company_5');
     expect(result).toEqual(mockUpdated);
@@ -210,6 +239,7 @@ describe('SupportChatController', () => {
     expect(service.closeConversation).toHaveBeenCalledWith(mockStaff, 10, {
       lyDo: 'Xong',
     });
+    expect(gateway.emitConversationClosed).toHaveBeenCalledWith(mockClosed);
     expect(gateway.server.to).toHaveBeenCalledWith('conversation_10');
     expect(gateway.server.to).toHaveBeenCalledWith('company_5');
     expect(result).toEqual(mockClosed);
@@ -224,6 +254,12 @@ describe('SupportChatController', () => {
 
     expect(service.markMessagesAsRead).toHaveBeenCalledWith(mockCustomer, 10, {
       tinNhanIds: [1, 2],
+    });
+    expect(gateway.emitMessagesReadReceipt).toHaveBeenCalledWith({
+      cuocTroChuyenId: 10,
+      readByTaiKhoanId: 101,
+      tinNhanIds: [1, 2],
+      updatedCount: 2,
     });
     expect(gateway.server.to).toHaveBeenCalledWith('conversation_10');
     expect(result).toEqual({ updatedCount: 2 });

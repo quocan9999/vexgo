@@ -1,4 +1,4 @@
-import { BusCompany, SupportConversation, SupportMessage } from '../types';
+import type { BusCompany, SupportConversation, SupportMessage } from '../types';
 
 export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
@@ -28,6 +28,38 @@ async function handleResponse<T>(res: Response): Promise<T> {
   return envelope.data !== undefined ? envelope.data : envelope;
 }
 
+export function mapBusCompanyDto(raw: unknown): BusCompany {
+  if (!raw || typeof raw !== 'object') {
+    throw new SupportChatApiError(500, 'INVALID_BUS_COMPANY_RESPONSE', 'Dữ liệu nhà xe không hợp lệ.');
+  }
+  const record = raw as Record<string, unknown>;
+  const busCompanyId = Number(record.busCompanyId);
+  const name = typeof record.name === 'string' ? record.name.trim() : '';
+
+  if (!Number.isInteger(busCompanyId) || busCompanyId <= 0 || !name) {
+    throw new SupportChatApiError(500, 'INVALID_BUS_COMPANY_RESPONSE', 'Dữ liệu nhà xe không hợp lệ.');
+  }
+
+  return {
+    busCompanyId,
+    code: typeof record.code === 'string' ? record.code : '',
+    name,
+    contactInfo:
+      typeof record.contactInfo === 'string' && record.contactInfo.trim().length > 0
+        ? record.contactInfo.trim()
+        : null,
+    status: typeof record.status === 'string' ? record.status : 'HOAT_DONG',
+    createdAt: typeof record.createdAt === 'string' ? record.createdAt : undefined,
+    updatedAt: typeof record.updatedAt === 'string' ? record.updatedAt : undefined,
+  };
+}
+
+function assertValidBusCompanyId(nhaXeId: number): void {
+  if (!Number.isInteger(nhaXeId) || nhaXeId <= 0) {
+    throw new SupportChatApiError(400, 'INVALID_BUS_COMPANY_ID', 'Mã nhà xe không hợp lệ.');
+  }
+}
+
 export const supportChatApi = {
   /**
    * Lấy danh sách nhà xe đang hoạt động (cho phép khách chọn nhà xe hỗ trợ)
@@ -41,7 +73,9 @@ export const supportChatApi = {
     }
 
     const res = await fetch(`${API_BASE_URL}/bus-companies?${params.toString()}`);
-    return handleResponse<BusCompany[]>(res);
+    const items = await handleResponse<unknown[]>(res);
+    if (!Array.isArray(items)) return [];
+    return items.map(mapBusCompanyDto);
   },
 
   /**
@@ -51,6 +85,7 @@ export const supportChatApi = {
     nhaXeId: number,
     token: string,
   ): Promise<SupportConversation | null> {
+    assertValidBusCompanyId(nhaXeId);
     const res = await fetch(
       `${API_BASE_URL}/support-chat/bus-companies/${nhaXeId}/active-conversation`,
       {
@@ -70,6 +105,7 @@ export const supportChatApi = {
     data: { nhaXeId: number; tieuDe?: string; tinNhanDauTien?: string; clientMessageId?: string },
     token: string,
   ): Promise<SupportConversation> {
+    assertValidBusCompanyId(data.nhaXeId);
     const res = await fetch(`${API_BASE_URL}/support-chat/conversations`, {
       method: 'POST',
       headers: {

@@ -204,6 +204,7 @@ describe('SupportChatGateway', () => {
 
       await gateway.handleConnection(client);
 
+      expect(client.join).toHaveBeenCalledWith('session_session-customer');
       expect(client.join).toHaveBeenCalledWith('user_101');
       expect(client.emit).toHaveBeenCalledWith(CHAT_EVENTS.SUPPORT_CONNECTED, expect.objectContaining({
         taiKhoanId: 101,
@@ -211,7 +212,7 @@ describe('SupportChatGateway', () => {
       }));
     });
 
-    it('kết nối thành công cho Nhân viên có quyền và tham gia cả user_{taiKhoanId} và company_{nhaXeId}', async () => {
+    it('kết nối thành công cho Nhân viên có quyền và tham gia cả session_{sessionId}, user_{taiKhoanId} và company_{nhaXeId}', async () => {
       const client = createMockSocket({ token: 'staff-token' });
       jwtService.verifyAsync.mockResolvedValue({ sub: 202, sid: 'session-staff-cskh', roles: ['NHAN_VIEN_CSKH'] });
       prisma.phienDangNhap.findUnique.mockResolvedValue({
@@ -230,6 +231,7 @@ describe('SupportChatGateway', () => {
 
       await gateway.handleConnection(client);
 
+      expect(client.join).toHaveBeenCalledWith('session_session-staff-cskh');
       expect(client.join).toHaveBeenCalledWith('user_202');
       expect(client.join).toHaveBeenCalledWith('company_5');
       expect(client.emit).toHaveBeenCalledWith(CHAT_EVENTS.SUPPORT_CONNECTED, expect.objectContaining({
@@ -392,6 +394,144 @@ describe('SupportChatGateway', () => {
       );
       expect(client.to).not.toHaveBeenCalled();
       expect(res).toEqual({ success: false });
+    });
+
+    it('invalidateSession chỉ ngắt kết nối socket thuộc đúng session bị thu hồi, giữ nguyên session khác của cùng tài khoản (BE-R01/RT-04)', async () => {
+      const socketSession1 = createMockSocket({ token: 'tok-1' });
+      const socketSession2 = createMockSocket({ token: 'tok-2' });
+
+      jwtService.verifyAsync
+        .mockResolvedValueOnce({ sub: 202, sid: 'sess-1', roles: ['NHAN_VIEN_CSKH'] })
+        .mockResolvedValueOnce({ sub: 202, sid: 'sess-2', roles: ['NHAN_VIEN_CSKH'] });
+
+      prisma.phienDangNhap.findUnique
+        .mockResolvedValueOnce({
+          taiKhoanId: 202,
+          sessionId: 'sess-1',
+          thuHoiLuc: null,
+          hetHanLuc: new Date(Date.now() + 100000),
+          taiKhoan: {
+            taiKhoanId: 202,
+            trangThai: 'HOAT_DONG',
+            nhanVien: { nhanVienId: 12, nhaXeId: 5 },
+            taiKhoanVaiTros: [{ vaiTro: { vaiTroId: 4, tenVaiTro: 'NHAN_VIEN_CSKH' } }],
+          },
+        })
+        .mockResolvedValueOnce({
+          taiKhoanId: 202,
+          sessionId: 'sess-2',
+          thuHoiLuc: null,
+          hetHanLuc: new Date(Date.now() + 100000),
+          taiKhoan: {
+            taiKhoanId: 202,
+            trangThai: 'HOAT_DONG',
+            nhanVien: { nhanVienId: 12, nhaXeId: 5 },
+            taiKhoanVaiTros: [{ vaiTro: { vaiTroId: 4, tenVaiTro: 'NHAN_VIEN_CSKH' } }],
+          },
+        });
+      permissionResolver.resolve.mockReturnValue(['chat:read', 'chat:manage']);
+
+      await gateway.handleConnection(socketSession1);
+      await gateway.handleConnection(socketSession2);
+
+      await gateway.invalidateSession('sess-1');
+
+      expect(socketSession1.disconnect).toHaveBeenCalledWith(true);
+      expect(socketSession1.rooms.has('company_5')).toBe(false);
+      expect(socketSession2.disconnect).not.toHaveBeenCalled();
+      expect(socketSession2.rooms.has('company_5')).toBe(true);
+    });
+
+    it('emitMessageNew tự động kiểm tra lại và loại bỏ socket có quyền đã bị thu hồi hoặc chuyển tenant trước khi broadcast (BE-R01/RT-04)', async () => {
+      const idleRevokedStaffSocket = createMockSocket({ token: 'tok-revoked' });
+      const idleTransferredStaffSocket = createMockSocket({ token: 'tok-transferred' });
+
+      jwtService.verifyAsync
+        .mockResolvedValueOnce({ sub: 201, sid: 'sess-revoked', roles: ['NHAN_VIEN_CSKH'] })
+        .mockResolvedValueOnce({ sub: 202, sid: 'sess-transferred', roles: ['NHAN_VIEN_CSKH'] });
+
+      prisma.phienDangNhap.findUnique
+        .mockResolvedValueOnce({
+          taiKhoanId: 201,
+          sessionId: 'sess-revoked',
+          thuHoiLuc: null,
+          hetHanLuc: new Date(Date.now() + 100000),
+          taiKhoan: {
+            taiKhoanId: 201,
+            trangThai: 'HOAT_DONG',
+            nhanVien: { nhanVienId: 11, nhaXeId: 5 },
+            taiKhoanVaiTros: [{ vaiTro: { vaiTroId: 4, tenVaiTro: 'NHAN_VIEN_CSKH' } }],
+          },
+        })
+        .mockResolvedValueOnce({
+          taiKhoanId: 202,
+          sessionId: 'sess-transferred',
+          thuHoiLuc: null,
+          hetHanLuc: new Date(Date.now() + 100000),
+          taiKhoan: {
+            taiKhoanId: 202,
+            trangThai: 'HOAT_DONG',
+            nhanVien: { nhanVienId: 12, nhaXeId: 5 },
+            taiKhoanVaiTros: [{ vaiTro: { vaiTroId: 4, tenVaiTro: 'NHAN_VIEN_CSKH' } }],
+          },
+        });
+      permissionResolver.resolve.mockReturnValue(['chat:read', 'chat:manage']);
+
+      await gateway.handleConnection(idleRevokedStaffSocket);
+      await gateway.handleConnection(idleTransferredStaffSocket);
+      await idleRevokedStaffSocket.join('conversation_10');
+      await idleTransferredStaffSocket.join('conversation_10');
+
+      // Sau khi kết nối và ngồi im, sess-revoked bị mất quyền chat, còn sess-transferred chuyển sang nhaXeId = 9
+      prisma.phienDangNhap.findUnique.mockImplementation(async ({ where }: any) => {
+        if (where.sessionId === 'sess-revoked') {
+          return {
+            taiKhoanId: 201,
+            sessionId: 'sess-revoked',
+            thuHoiLuc: null,
+            hetHanLuc: new Date(Date.now() + 100000),
+            taiKhoan: {
+              taiKhoanId: 201,
+              trangThai: 'HOAT_DONG',
+              nhanVien: { nhanVienId: 11, nhaXeId: 5 },
+              taiKhoanVaiTros: [{ vaiTro: { vaiTroId: 4, tenVaiTro: 'NHAN_VIEN_CSKH' } }],
+            },
+          };
+        }
+        return {
+          taiKhoanId: 202,
+          sessionId: 'sess-transferred',
+          thuHoiLuc: null,
+          hetHanLuc: new Date(Date.now() + 100000),
+          taiKhoan: {
+            taiKhoanId: 202,
+            trangThai: 'HOAT_DONG',
+            nhanVien: { nhanVienId: 12, nhaXeId: 9 },
+            taiKhoanVaiTros: [{ vaiTro: { vaiTroId: 4, tenVaiTro: 'NHAN_VIEN_CSKH' } }],
+          },
+        };
+      });
+
+      permissionResolver.resolve.mockImplementation((_assignments: any, scope: any) => {
+        if (scope.nhanVienId === 11) return []; // bị thu hồi quyền chat
+        return ['chat:read', 'chat:manage'];
+      });
+
+      await gateway.emitMessageNew(
+        { tinNhanId: 99, cuocTroChuyenId: 10, noiDung: 'Bí mật tenant 5', loaiNguoiGui: 'KHACH_HANG' },
+        { cuocTroChuyenId: 10, nhaXeId: 5, khachHangId: 50, tieuDe: 'Hỗ trợ' },
+      );
+
+      // Socket bị thu hồi quyền đã bị disconnect và xóa khỏi mọi room trước khi emit
+      expect(idleRevokedStaffSocket.disconnect).toHaveBeenCalledWith(true);
+      expect(idleRevokedStaffSocket.rooms.has('conversation_10')).toBe(false);
+      expect(idleRevokedStaffSocket.rooms.has('company_5')).toBe(false);
+
+      // Socket chuyển sang tenant 9 đã rời conversation_10 và company_5, gia nhập company_9
+      expect(idleTransferredStaffSocket.disconnect).not.toHaveBeenCalled();
+      expect(idleTransferredStaffSocket.rooms.has('conversation_10')).toBe(false);
+      expect(idleTransferredStaffSocket.rooms.has('company_5')).toBe(false);
+      expect(idleTransferredStaffSocket.rooms.has('company_9')).toBe(true);
     });
   });
 });

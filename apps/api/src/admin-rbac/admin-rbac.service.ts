@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Optional,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import {
@@ -11,6 +12,7 @@ import {
   type AdminManagedRoleName,
   type AdminPermissionScope,
 } from '../auth/permissions/permission-catalog.js';
+import { RealtimeSessionInvalidatorService } from '../auth/realtime-session-invalidator.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 
 const ROLE_NAMES = Object.keys(
@@ -19,7 +21,11 @@ const ROLE_NAMES = Object.keys(
 
 @Injectable()
 export class AdminRbacService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional()
+    private readonly sessionInvalidator?: RealtimeSessionInvalidatorService,
+  ) {}
 
   async getDefaultRolePermissions() {
     const permissionKeys = ADMIN_PERMISSION_CATALOG.map(({ key }) => key);
@@ -87,7 +93,7 @@ export class AdminRbacService {
     const scope = this.getManagedRoleScope(roleName);
     this.validatePermissionKeys(roleName, permissionKeys);
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const role = await tx.vaiTro.findUnique({
         where: { tenVaiTro: roleName },
         select: { vaiTroId: true, tenVaiTro: true, moTa: true },
@@ -132,6 +138,10 @@ export class AdminRbacService {
         permissionKeys: [...permissionKeys],
       };
     });
+
+    await this.sessionInvalidator?.revalidateRole(roleName);
+
+    return result;
   }
 
   private getManagedRoleScope(roleName: string): AdminPermissionScope {

@@ -36,31 +36,39 @@ export class SupportChatController {
   ) {
     const result = await this.chatService.createConversation(principal, dto);
 
-    // Thông báo realtime qua socket server
+    // Thông báo realtime qua socket server (có xác thực lại recipient rooms trước khi phát - BE-R01/RT-04)
     try {
       // Chỉ phát sự kiện CONVERSATION_NEW khi thực sự là cuộc trò chuyện mới (BE-05)
       if (result.isNew) {
-        this.chatGateway.server
-          ?.to(`company_${result.conversation.nhaXeId}`)
-          .emit(CHAT_EVENTS.CONVERSATION_NEW, result.conversation);
+        if (typeof this.chatGateway.emitConversationNew === 'function') {
+          await this.chatGateway.emitConversationNew(result.conversation);
+        } else {
+          this.chatGateway.server
+            ?.to(`company_${result.conversation.nhaXeId}`)
+            .emit(CHAT_EVENTS.CONVERSATION_NEW, result.conversation);
+        }
       }
 
       // Nếu có tin nhắn đầu tiên được gửi, phát sự kiện MESSAGE_NEW để các client realtime nhận được
       if (result.firstMessage) {
-        this.chatGateway.server
-          ?.to(`conversation_${result.conversation.cuocTroChuyenId}`)
-          .emit(CHAT_EVENTS.MESSAGE_NEW, result.firstMessage);
+        if (typeof this.chatGateway.emitMessageNew === 'function') {
+          await this.chatGateway.emitMessageNew(result.firstMessage, result.conversation);
+        } else {
+          this.chatGateway.server
+            ?.to(`conversation_${result.conversation.cuocTroChuyenId}`)
+            .emit(CHAT_EVENTS.MESSAGE_NEW, result.firstMessage);
 
-        this.chatGateway.server
-          ?.to(`company_${result.conversation.nhaXeId}`)
-          .emit(CHAT_EVENTS.MESSAGE_NEW, {
-            ...result.firstMessage,
-            cuocTroChuyen: {
-              cuocTroChuyenId: result.conversation.cuocTroChuyenId,
-              tieuDe: result.conversation.tieuDe,
-              khachHang: result.conversation.khachHang,
-            },
-          });
+          this.chatGateway.server
+            ?.to(`company_${result.conversation.nhaXeId}`)
+            .emit(CHAT_EVENTS.MESSAGE_NEW, {
+              ...result.firstMessage,
+              cuocTroChuyen: {
+                cuocTroChuyenId: result.conversation.cuocTroChuyenId,
+                tieuDe: result.conversation.tieuDe,
+                khachHang: result.conversation.khachHang,
+              },
+            });
+        }
       }
     } catch {
       // Ignored if socket server not ready
@@ -118,21 +126,25 @@ export class SupportChatController {
 
     try {
       const conv = await this.chatService.getConversationById(principal, id);
-      this.chatGateway.server
-        ?.to(`conversation_${id}`)
-        .emit(CHAT_EVENTS.MESSAGE_NEW, message);
-
-      if (message.loaiNguoiGui === 'KHACH_HANG') {
+      if (typeof this.chatGateway.emitMessageNew === 'function') {
+        await this.chatGateway.emitMessageNew(message, conv);
+      } else {
         this.chatGateway.server
-          ?.to(`company_${conv.nhaXeId}`)
-          .emit(CHAT_EVENTS.MESSAGE_NEW, {
-            ...message,
-            cuocTroChuyen: {
-              cuocTroChuyenId: conv.cuocTroChuyenId,
-              tieuDe: conv.tieuDe,
-              khachHang: conv.khachHang,
-            },
-          });
+          ?.to(`conversation_${id}`)
+          .emit(CHAT_EVENTS.MESSAGE_NEW, message);
+
+        if (message.loaiNguoiGui === 'KHACH_HANG') {
+          this.chatGateway.server
+            ?.to(`company_${conv.nhaXeId}`)
+            .emit(CHAT_EVENTS.MESSAGE_NEW, {
+              ...resultOrMessage(message),
+              cuocTroChuyen: {
+                cuocTroChuyenId: conv.cuocTroChuyenId,
+                tieuDe: conv.tieuDe,
+                khachHang: conv.khachHang,
+              },
+            });
+        }
       }
     } catch {
       // Socket emission best-effort
@@ -149,13 +161,17 @@ export class SupportChatController {
     const updated = await this.chatService.claimConversation(principal, id);
 
     try {
-      this.chatGateway.server
-        ?.to(`conversation_${id}`)
-        .emit(CHAT_EVENTS.CONVERSATION_CLAIMED, updated);
+      if (typeof this.chatGateway.emitConversationClaimed === 'function') {
+        await this.chatGateway.emitConversationClaimed(updated);
+      } else {
+        this.chatGateway.server
+          ?.to(`conversation_${id}`)
+          .emit(CHAT_EVENTS.CONVERSATION_CLAIMED, updated);
 
-      this.chatGateway.server
-        ?.to(`company_${updated.nhaXeId}`)
-        .emit(CHAT_EVENTS.CONVERSATION_CLAIMED, updated);
+        this.chatGateway.server
+          ?.to(`company_${updated.nhaXeId}`)
+          .emit(CHAT_EVENTS.CONVERSATION_CLAIMED, updated);
+      }
     } catch {
       // Socket emission best-effort
     }
@@ -172,13 +188,17 @@ export class SupportChatController {
     const closed = await this.chatService.closeConversation(principal, id, dto);
 
     try {
-      this.chatGateway.server
-        ?.to(`conversation_${id}`)
-        .emit(CHAT_EVENTS.CONVERSATION_CLOSED, closed);
+      if (typeof this.chatGateway.emitConversationClosed === 'function') {
+        await this.chatGateway.emitConversationClosed(closed);
+      } else {
+        this.chatGateway.server
+          ?.to(`conversation_${id}`)
+          .emit(CHAT_EVENTS.CONVERSATION_CLOSED, closed);
 
-      this.chatGateway.server
-        ?.to(`company_${closed.nhaXeId}`)
-        .emit(CHAT_EVENTS.CONVERSATION_CLOSED, closed);
+        this.chatGateway.server
+          ?.to(`company_${closed.nhaXeId}`)
+          .emit(CHAT_EVENTS.CONVERSATION_CLOSED, closed);
+      }
     } catch {
       // Socket emission best-effort
     }
@@ -195,18 +215,27 @@ export class SupportChatController {
     const result = await this.chatService.markMessagesAsRead(principal, id, dto);
 
     try {
-      this.chatGateway.server
-        ?.to(`conversation_${id}`)
-        .emit(CHAT_EVENTS.MESSAGES_READ_RECEIPT, {
-          cuocTroChuyenId: id,
-          readByTaiKhoanId: principal.taiKhoanId,
-          tinNhanIds: dto?.tinNhanIds,
-          updatedCount: result.updatedCount,
-        });
+      const receiptPayload = {
+        cuocTroChuyenId: id,
+        readByTaiKhoanId: principal.taiKhoanId,
+        tinNhanIds: dto?.tinNhanIds,
+        updatedCount: result.updatedCount,
+      };
+      if (typeof this.chatGateway.emitMessagesReadReceipt === 'function') {
+        await this.chatGateway.emitMessagesReadReceipt(receiptPayload);
+      } else {
+        this.chatGateway.server
+          ?.to(`conversation_${id}`)
+          .emit(CHAT_EVENTS.MESSAGES_READ_RECEIPT, receiptPayload);
+      }
     } catch {
       // Socket emission best-effort
     }
 
     return result;
   }
+}
+
+function resultOrMessage<T extends Record<string, unknown>>(msg: T): T {
+  return msg;
 }
