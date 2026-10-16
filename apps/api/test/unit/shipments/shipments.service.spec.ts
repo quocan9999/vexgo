@@ -92,6 +92,9 @@ describe('ShipmentsService', () => {
         count: vi.fn(),
         findMany: vi.fn(),
       },
+      thanhToan: {
+        findFirst: vi.fn().mockResolvedValue(null),
+      },
       $transaction: vi.fn(async (callback) => callback(prismaMock)),
     };
 
@@ -623,6 +626,18 @@ describe('ShipmentsService', () => {
         phoneNumber: '0901234567',
       });
 
+      expect(prismaMock.thanhToan.findFirst).toHaveBeenCalledWith({
+        where: {
+          donGiaoDichId: 22,
+          phuongThuc: 'SEPAY',
+          loaiGiaoDich: 'THANH_TOAN',
+          trangThai: 'CAN_DOI_SOAT',
+          maGiaoDichSePay: { not: null },
+        },
+        select: { phuongThuc: true, trangThai: true },
+        orderBy: [{ thoiGian: 'desc' }, { thanhToanId: 'desc' }],
+      });
+
       expect(result).toEqual({
         waybillCode: 'FUTA-VD-PUBLIC-12',
         status: 'DANG_VAN_CHUYEN',
@@ -663,6 +678,63 @@ describe('ShipmentsService', () => {
       ]) {
         expect(serializedResult).not.toContain(privateValue);
       }
+    });
+
+    it('returns reconciliation status without exposing the additional SePay transfer', async () => {
+      prismaMock.phieuGuiHang.findFirst.mockResolvedValue({
+        maVanDon: 'FUTA-VD-RECON-22',
+        trangThai: 'DA_HUY',
+        soDienThoaiNguoiNhan: '0907654321',
+        donGiaoDich: {
+          donGiaoDichId: 22,
+          maDonGiaoDich: 'ORDER-22',
+          soDienThoaiKhachHang: '0901234567',
+          ngayTao: new Date('2026-10-15T08:00:00.000Z'),
+          tongTien: 120_000,
+          trangThai: 'DA_HUY',
+          thanhToans: [{ phuongThuc: 'SEPAY', trangThai: 'THANH_CONG' }],
+        },
+        diemGui: { tenDiem: 'Bến gửi', diaChi: 'Địa chỉ gửi' },
+        diemNhan: { tenDiem: 'Bến nhận', diaChi: 'Địa chỉ nhận' },
+        chuyenXe: {
+          ngayKhoiHanh: new Date('2026-10-20T00:00:00.000Z'),
+          gioKhoiHanh: new Date('1970-01-01T08:00:00.000Z'),
+          gioDen: new Date('1970-01-01T12:00:00.000Z'),
+          tuyenXe: {
+            diemDi: 'TP.HCM',
+            diemDen: 'Đà Lạt',
+            thoiGianChayPhut: 240,
+            nhaXe: { tenNhaXe: 'Nhà xe công khai' },
+          },
+        },
+        hangHoas: [],
+        lichSuTrangThais: [],
+      });
+      prismaMock.thanhToan.findFirst.mockResolvedValue({
+        phuongThuc: 'SEPAY',
+        trangThai: 'CAN_DOI_SOAT',
+        maGiaoDichSePay: 'PRIVATE_PROVIDER_TRANSACTION_ID',
+      });
+
+      const result = await service.lookupShipment({
+        waybillCode: 'futa-vd-recon-22',
+        phoneNumber: '0901234567',
+      });
+
+      expect(result).toMatchObject({
+        waybillCode: 'FUTA-VD-RECON-22',
+        status: 'DA_HUY',
+        orderCode: 'ORDER-22',
+        orderStatus: 'DA_HUY',
+        paymentStatus: 'CAN_DOI_SOAT',
+        requiresReconciliation: true,
+        paymentMethod: 'SEPAY',
+        packageCount: 0,
+      });
+      const serializedResult = JSON.stringify(result);
+      expect(serializedResult).not.toContain('PRIVATE_PROVIDER_TRANSACTION_ID');
+      expect(serializedResult).not.toContain('0901234567');
+      expect(serializedResult).not.toContain('0907654321');
     });
 
     it('throws NotFoundException when waybill code not found', async () => {
