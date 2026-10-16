@@ -13,6 +13,7 @@ import { CargoCapacityService } from '../../../src/cargo-capacity/cargo-capacity
 import { ShipmentPersistenceService } from '../../../src/shipments/shipment-persistence.service.js';
 import { PromotionsService } from '../../../src/promotions/promotions.service.js';
 import { PaymentsService } from '../../../src/payments/payments.service.js';
+import { RefundProcessorService } from '../../../src/payments/refund-processor.service.js';
 import type { MomoWebhookDto } from '../../../src/payments/dto/webhook.dto.js';
 
 const UUID_V1_PATTERN =
@@ -152,6 +153,33 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
     pickupPoint: 'Bến xe Miền Đông',
     dropoffPoint: 'Bến xe Đà Lạt',
   });
+
+  const settleSePayOrder = async (orderCode: string, amount: number) => {
+    const timestamp = String(Math.floor(Date.now() / 1000));
+    const eventId = Number.parseInt(
+      randomUUID().replaceAll('-', '').slice(0, 12),
+      16,
+    );
+    const webhookBody = JSON.stringify({
+      id: eventId,
+      accountNumber: sepayAccountNumber,
+      content: orderCode,
+      transferType: 'in',
+      transferAmount: amount,
+    });
+    const signature = `sha256=${createHmac('sha256', sepaySecret)
+      .update(`${timestamp}.${webhookBody}`)
+      .digest('hex')}`;
+    const response = await request(app.getHttpServer())
+      .post('/api/v1/payments/sepay-webhook')
+      .set('Content-Type', 'application/json')
+      .set('X-SePay-Timestamp', timestamp)
+      .set('X-SePay-Signature', signature)
+      .send(webhookBody);
+
+    expect(response.status, JSON.stringify(response.body)).toBe(200);
+    return eventId;
+  };
 
   const shipmentPersistenceProxy = {
     persistInTransaction: async (
@@ -417,14 +445,14 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
         await prisma.lichSuTrangThaiVe.deleteMany({
           where: { ve: { phieuDatVe: { donGiaoDich: { nhaXeId: busCompanyId } } } },
         });
+        await prisma.thanhToan.deleteMany({
+          where: { donGiaoDich: { nhaXeId: busCompanyId } },
+        });
         await prisma.ve.deleteMany({
           where: { phieuDatVe: { donGiaoDich: { nhaXeId: busCompanyId } } },
         });
         await prisma.lichSuTrangThaiPhieuDatVe.deleteMany({
           where: { phieuDatVe: { donGiaoDich: { nhaXeId: busCompanyId } } },
-        });
-        await prisma.thanhToan.deleteMany({
-          where: { donGiaoDich: { nhaXeId: busCompanyId } },
         });
         await prisma.phieuDatVe.deleteMany({
           where: { donGiaoDich: { nhaXeId: busCompanyId } },
@@ -524,14 +552,14 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
     await prisma.lichSuTrangThaiVe.deleteMany({
       where: { ve: { phieuDatVe: { donGiaoDich: { nhaXeId: busCompanyId } } } },
     });
+    await prisma.thanhToan.deleteMany({
+      where: { donGiaoDich: { nhaXeId: busCompanyId } },
+    });
     await prisma.ve.deleteMany({
       where: { phieuDatVe: { donGiaoDich: { nhaXeId: busCompanyId } } },
     });
     await prisma.lichSuTrangThaiPhieuDatVe.deleteMany({
       where: { phieuDatVe: { donGiaoDich: { nhaXeId: busCompanyId } } },
-    });
-    await prisma.thanhToan.deleteMany({
-      where: { donGiaoDich: { nhaXeId: busCompanyId } },
     });
     await prisma.phieuDatVe.deleteMany({
       where: { donGiaoDich: { nhaXeId: busCompanyId } },
@@ -1034,6 +1062,275 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
       trangThai: 'DANG_XU_LY',
     });
     expect(Number(payment.soTien)).toBe(60_000);
+  });
+
+  it('cancels a paid zero-fare ticket without refunding paid cargo or restoring promotion usage', async () => {
+    const promotion = await createPromotion({ amount: 300_000 });
+    const hold = await request(app.getHttpServer())
+      .post('/api/v1/seat-holds')
+      .send({ tripId, seatIds: [tripSeatIds[0]] });
+    const bookingResponse = await request(app.getHttpServer())
+      .post('/api/v1/bookings')
+      .send({
+        ...bookingWithCargoPayload(hold.body.data.holdToken, [
+          {
+            name: 'Hàng đã thanh toán',
+            loaiHangHoaId: cargoTypeId,
+            quantity: 1,
+            weight: 2,
+          },
+        ]),
+        promotionCode: promotion.maKhuyenMai,
+      });
+    expect(bookingResponse.status, JSON.stringify(bookingResponse.body)).toBe(
+      201,
+    );
+    const booking = bookingResponse.body.data;
+    expect(booking).toMatchObject({
+      status: 'CHO_THANH_TOAN',
+      ticketSubtotal: 0,
+      shippingFee: 60_000,
+      totalAmount: 60_000,
+    });
+
+    const eventId = await settleSePayOrder(
+      booking.orderCode,
+      booking.totalAmount,
+    );
+    const [
+      paidBooking,
+      paidTicket,
+      shipmentBefore,
+      usageBefore,
+      promotionBefore,
+    ] = await Promise.all([
+      prisma.phieuDatVe.findUniqueOrThrow({
+        where: { phieuDatVeId: booking.bookingId },
+        include: { donGiaoDich: { include: { thanhToans: true } } },
+      }),
+      prisma.ve.findFirstOrThrow({
+        where: { phieuDatVeId: booking.bookingId },
+      }),
+      prisma.phieuGuiHang.findFirstOrThrow({
+        where: { donGiaoDichId: booking.orderId },
+        select: { phieuGuiHangId: true, tongPhi: true, trangThai: true },
+      }),
+      prisma.suDungKhuyenMai.count({
+        where: { khuyenMaiId: promotion.khuyenMaiId },
+      }),
+      prisma.khuyenMai.findUniqueOrThrow({
+        where: { khuyenMaiId: promotion.khuyenMaiId },
+      }),
+    ]);
+    expect(paidBooking.trangThai).toBe('DA_THANH_TOAN');
+    expect(paidBooking.donGiaoDich.trangThai).toBe('DA_THANH_TOAN');
+    expect(paidBooking.donGiaoDich.thanhToans).toHaveLength(1);
+    expect(paidBooking.donGiaoDich.thanhToans[0]).toMatchObject({
+      loaiGiaoDich: 'THANH_TOAN',
+      phuongThuc: 'SEPAY',
+      trangThai: 'THANH_CONG',
+      maGiaoDichSePay: String(eventId),
+    });
+    expect(Number(paidBooking.donGiaoDich.thanhToans[0].soTien)).toBe(
+      60_000,
+    );
+    expect(paidTicket.trangThai).toBe('DA_THANH_TOAN');
+    expect(Number(paidTicket.giaThucTe)).toBe(0);
+    expect(Number(shipmentBefore.tongPhi)).toBe(60_000);
+    expect(usageBefore).toBe(1);
+    expect(promotionBefore.soLuotDaSuDung).toBe(1);
+
+    const enqueueRefund = vi.spyOn(
+      app.get(RefundProcessorService),
+      'enqueueRefund',
+    );
+    try {
+      const cancellation = await request(app.getHttpServer())
+        .post('/api/v1/tickets/cancel')
+        .send({
+          ticketCode: paidTicket.maVe,
+          phoneNumber: customerPhone,
+          expectedCancelFeeRate: 0.1,
+        });
+      expect(cancellation.status, JSON.stringify(cancellation.body)).toBe(201);
+      expect(cancellation.body.data).toMatchObject({
+        ticketId: paidTicket.veId,
+        status: 'HUY',
+        cancelFee: 0,
+        refundAmount: 0,
+        message: 'Hủy vé thành công. Không phát sinh khoản hoàn tiền.',
+      });
+      expect(enqueueRefund).not.toHaveBeenCalled();
+
+      const [
+        savedBooking,
+        savedOrder,
+        savedTicket,
+        savedSeat,
+        savedShipment,
+        payments,
+        ticketHistory,
+        bookingHistory,
+        usageAfter,
+        promotionAfter,
+      ] = await Promise.all([
+        prisma.phieuDatVe.findUniqueOrThrow({
+          where: { phieuDatVeId: booking.bookingId },
+        }),
+        prisma.donGiaoDich.findUniqueOrThrow({
+          where: { donGiaoDichId: booking.orderId },
+        }),
+        prisma.ve.findUniqueOrThrow({ where: { veId: paidTicket.veId } }),
+        prisma.gheChuyenXe.findUniqueOrThrow({
+          where: { gheChuyenXeId: tripSeatIds[0] },
+        }),
+        prisma.phieuGuiHang.findUniqueOrThrow({
+          where: { phieuGuiHangId: shipmentBefore.phieuGuiHangId },
+        }),
+        prisma.thanhToan.findMany({
+          where: { donGiaoDichId: booking.orderId },
+          orderBy: { thanhToanId: 'asc' },
+        }),
+        prisma.lichSuTrangThaiVe.findMany({
+          where: { veId: paidTicket.veId },
+          orderBy: { lichSuTrangThaiVeId: 'asc' },
+        }),
+        prisma.lichSuTrangThaiPhieuDatVe.findMany({
+          where: { phieuDatVeId: booking.bookingId },
+          orderBy: { lichSuTrangThaiPhieuDatVeId: 'asc' },
+        }),
+        prisma.suDungKhuyenMai.count({
+          where: { khuyenMaiId: promotion.khuyenMaiId },
+        }),
+        prisma.khuyenMai.findUniqueOrThrow({
+          where: { khuyenMaiId: promotion.khuyenMaiId },
+        }),
+      ]);
+
+      expect(savedBooking.trangThai).toBe('DA_HUY');
+      expect(savedOrder.trangThai).toBe('DA_HUY');
+      expect(savedTicket.trangThai).toBe('HUY');
+      expect(savedSeat.trangThai).toBe('TRONG');
+      expect(Number(savedShipment.tongPhi)).toBe(60_000);
+      expect(savedShipment.trangThai).toBe(shipmentBefore.trangThai);
+      expect(payments).toHaveLength(1);
+      expect(payments[0]).toMatchObject({
+        loaiGiaoDich: 'THANH_TOAN',
+        trangThai: 'THANH_CONG',
+      });
+      expect(Number(payments[0].soTien)).toBe(60_000);
+      expect(
+        ticketHistory.map(({ trangThaiCu, trangThaiMoi }) => [
+          trangThaiCu,
+          trangThaiMoi,
+        ]),
+      ).toEqual([
+        [null, 'DA_DAT'],
+        ['DA_DAT', 'DA_THANH_TOAN'],
+        ['DA_THANH_TOAN', 'HUY'],
+      ]);
+      expect(
+        bookingHistory.map(({ trangThaiCu, trangThaiMoi }) => [
+          trangThaiCu,
+          trangThaiMoi,
+        ]),
+      ).toEqual([
+        [null, 'CHO_THANH_TOAN'],
+        ['CHO_THANH_TOAN', 'DA_THANH_TOAN'],
+        ['DA_THANH_TOAN', 'DA_HUY'],
+      ]);
+      const ticketCancellation = ticketHistory[2];
+      const bookingCancellation = bookingHistory[2];
+      expect(ticketCancellation).toMatchObject({
+        nguonThayDoi: 'SYSTEM',
+        taiKhoanId: null,
+        laOverride: false,
+      });
+      expect(bookingCancellation).toMatchObject({
+        nguonThayDoi: 'SYSTEM',
+        taiKhoanId: null,
+        laOverride: false,
+        maThaoTac: ticketCancellation.maThaoTac,
+        thoiDiem: ticketCancellation.thoiDiem,
+      });
+      expect(ticketCancellation.maThaoTac).toMatch(UUID_V1_PATTERN);
+      expect(usageAfter).toBe(1);
+      expect(promotionAfter.soLuotDaSuDung).toBe(1);
+    } finally {
+      enqueueRefund.mockRestore();
+    }
+  });
+
+  it('continues to create and enqueue positive ticket refunds after successful payment', async () => {
+    const hold = await request(app.getHttpServer())
+      .post('/api/v1/seat-holds')
+      .send({ tripId, seatIds: [tripSeatIds[0]] });
+    const bookingResponse = await request(app.getHttpServer())
+      .post('/api/v1/bookings')
+      .send({
+        tripId,
+        seatIds: [tripSeatIds[0]],
+        holdToken: hold.body.data.holdToken,
+        contact: { fullName: 'Paid cancellation test', phone: customerPhone },
+        pickupPoint: 'Bến xe Miền Đông',
+        dropoffPoint: 'Bến xe Đà Lạt',
+      });
+    expect(bookingResponse.status, JSON.stringify(bookingResponse.body)).toBe(
+      201,
+    );
+    const booking = bookingResponse.body.data;
+    const eventId = await settleSePayOrder(
+      booking.orderCode,
+      booking.totalAmount,
+    );
+    const ticket = await prisma.ve.findFirstOrThrow({
+      where: { phieuDatVeId: booking.bookingId },
+    });
+    expect(ticket.trangThai).toBe('DA_THANH_TOAN');
+
+    const enqueueRefund = vi.spyOn(
+      app.get(RefundProcessorService),
+      'enqueueRefund',
+    );
+    try {
+      const cancellation = await request(app.getHttpServer())
+        .post('/api/v1/tickets/cancel')
+        .send({
+          ticketCode: ticket.maVe,
+          phoneNumber: customerPhone,
+          expectedCancelFeeRate: 0.1,
+        });
+      expect(cancellation.status, JSON.stringify(cancellation.body)).toBe(201);
+      expect(cancellation.body.data).toMatchObject({
+        status: 'HUY',
+        cancelFee: 15_000,
+        refundAmount: 135_000,
+        message: 'Hủy vé thành công. Yêu cầu hoàn tiền đang được xử lý.',
+      });
+
+      const payments = await prisma.thanhToan.findMany({
+        where: { donGiaoDichId: booking.orderId },
+        orderBy: { thanhToanId: 'asc' },
+      });
+      expect(payments).toHaveLength(2);
+      expect(payments[0]).toMatchObject({
+        loaiGiaoDich: 'THANH_TOAN',
+        trangThai: 'THANH_CONG',
+        maGiaoDichSePay: String(eventId),
+      });
+      const refund = payments[1];
+      expect(refund).toMatchObject({
+        loaiGiaoDich: 'HOAN_TIEN',
+        phuongThuc: 'SEPAY',
+        trangThai: 'DANG_XU_LY',
+        veId: ticket.veId,
+      });
+      expect(Number(refund.soTien)).toBe(135_000);
+      expect(enqueueRefund).toHaveBeenCalledTimes(1);
+      expect(enqueueRefund).toHaveBeenCalledWith(refund.thanhToanId);
+    } finally {
+      enqueueRefund.mockRestore();
+    }
   });
 
   it('rolls back zero-total completion, histories, seats and quota when completion history fails', async () => {

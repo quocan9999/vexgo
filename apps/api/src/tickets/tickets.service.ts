@@ -536,19 +536,20 @@ export class TicketsService {
             });
           }
 
-          const refund = originalPayment
-            ? await tx.thanhToan.create({
-                data: {
-                  soTien: quote.refundAmount,
-                  phuongThuc: originalPayment.phuongThuc,
-                  loaiGiaoDich: 'HOAN_TIEN',
-                  thoiGian: changedAt,
-                  trangThai: 'DANG_XU_LY',
-                  donGiaoDichId: ticket.phieuDatVe.donGiaoDichId,
-                  veId: ticket.veId,
-                },
-              })
-            : null;
+          const refund =
+            originalPayment && !quote.refundAmount.isZero()
+              ? await tx.thanhToan.create({
+                  data: {
+                    soTien: quote.refundAmount,
+                    phuongThuc: originalPayment.phuongThuc,
+                    loaiGiaoDich: 'HOAN_TIEN',
+                    thoiGian: changedAt,
+                    trangThai: 'DANG_XU_LY',
+                    donGiaoDichId: ticket.phieuDatVe.donGiaoDichId,
+                    veId: ticket.veId,
+                  },
+                })
+              : null;
 
           const serializedQuote = serializeCancellationQuote(quote);
           return {
@@ -561,9 +562,9 @@ export class TicketsService {
                 cancelFeeRate: serializedQuote.cancelFeeRate,
                 cancelFee: serializedQuote.cancelFee,
                 refundAmount: serializedQuote.refundAmount,
-                message: refund
-                  ? 'Hủy vé thành công. Yêu cầu hoàn tiền đang được xử lý.'
-                  : 'Hủy vé thành công. Không phát sinh khoản hoàn tiền.',
+                message: quote.refundAmount.isZero()
+                  ? 'Hủy vé thành công. Không phát sinh khoản hoàn tiền.'
+                  : 'Hủy vé thành công. Yêu cầu hoàn tiền đang được xử lý.',
               },
             },
           };

@@ -70,3 +70,18 @@ three timezones. Only PublicPromotionsController registers the legacy validation
 metadata regression asserts one handler and HTTP regression keeps the 410 contract.
 
 Review conversations stay open for reviewer verification.
+
+## F6: cancellation with zero ticket refund
+
+Cancellation still requires the existing identity, cutoff and successful-payment checks. A fully settled
+zero-total order remains eligible without an original payment; positive-total orders without a successful
+payment still fail closed. If the ticket's actual refund amount is zero, cancellation updates ticket and
+booking/order states, releases the seat and writes status histories without creating a refund payment or
+calling the refund processor. The API response states that no refund is generated. Paid cargo is retained,
+and promotion quota and usage ledger remain consumed. Positive refunds continue through the existing
+refund-payment and processor flow.
+
+The MySQL integration regression settles a cargo-only order through a signed SePay webhook, cancels its
+zero-fare ticket, and verifies payment records, shipment charge/status, seat, histories, quota and usage
+ledger. A separate paid-ticket case verifies the positive-refund flow; existing cases cover fully free
+cancellation and fail-closed cancellation when a positive order lacks a successful payment.
