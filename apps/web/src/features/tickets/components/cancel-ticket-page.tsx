@@ -19,6 +19,7 @@ import {
 import { AlertModal } from '@/components/ui/alert-modal';
 import {
   ticketsApi,
+  ApiError,
   isCancellationCutoffPassedError,
   isCancellationQuoteExpiredError,
   type TicketItem,
@@ -395,12 +396,12 @@ function CancelTicketContent() {
       setCancelResult(res.data);
       setStep(3);
     } catch (err: unknown) {
-      if (isCancellationCutoffPassedError(err)) {
+      if (isCancellationCutoffPassedError(err) || (err instanceof ApiError && err.error === 'TICKET_CANCELLATION_ACTIVE_SHIPMENT')) {
         const cutoffTicket: TicketItem = {
           ...ticket,
           cancellation: {
             eligible: false,
-            reason: 'LESS_THAN_12_HOURS',
+            reason: err instanceof ApiError && err.error === 'TICKET_CANCELLATION_ACTIVE_SHIPMENT' ? 'ACTIVE_SHIPMENT' : 'LESS_THAN_12_HOURS',
             cancelFeeRate: 0,
             cancelFee: 0,
             refundAmount: 0,
@@ -795,10 +796,10 @@ function CancelTicketContent() {
                   </button>
                   <button
                     type="button"
-                    disabled={!isConfirmed || isCancelling || isCancelled || isPastDeparture || isNearDeparture}
+                    disabled={!isConfirmed || isCancelling || isCancelled || isPastDeparture || isNearDeparture || eligibility?.eligible === false}
                     onClick={handleConfirmCancel}
                     className={`flex-1 h-12 font-bold rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer ${
-                      isConfirmed && !isCancelling && !isCancelled && !isPastDeparture && !isNearDeparture
+                      isConfirmed && !isCancelling && !isCancelled && !isPastDeparture && !isNearDeparture && eligibility?.eligible !== false
                         ? 'bg-[#E04115] text-white hover:bg-[#c93a12]'
                         : 'bg-slate-200 text-slate-400 cursor-not-allowed'
                     }`}

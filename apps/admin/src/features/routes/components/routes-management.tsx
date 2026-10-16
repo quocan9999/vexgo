@@ -113,7 +113,6 @@ export function RouteDetails({ routeId, onClose, onUpdated }: {
       <>
         <div className="admin-dialog-header">
           <div className="admin-dialog-header__copy">
-            <p className="eyebrow">HỒ SƠ TUYẾN XE</p>
             <h2 id="route-detail-title">Thông tin tuyến xe</h2>
           </div>
           <form method="dialog">

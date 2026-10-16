@@ -1,16 +1,19 @@
 export class ApiError extends Error {
   status: number;
   details?: Array<{ field: string; message: string }>;
+  retryAfter: string | null;
 
   constructor(
     message: string,
     status: number,
     details?: Array<{ field: string; message: string }>,
+    retryAfter: string | null = null,
   ) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
     this.details = details;
+    this.retryAfter = retryAfter;
   }
 }
 
@@ -153,6 +156,7 @@ export type PublicShipmentLookupData = {
   scheduledDepartureAt: string;
   estimatedArrivalAt: string | null;
   packageCount: number;
+  bookingPromotionCode?: string | null;
   timeline: Array<{ status: string; time: string }>;
 };
 
@@ -218,6 +222,8 @@ export const shipmentsApi = {
       throw new ApiError(
         err.message || 'Không tìm thấy thông tin vận đơn.',
         res.status,
+        undefined,
+        res.headers?.get('Retry-After') ?? null,
       );
     }
 

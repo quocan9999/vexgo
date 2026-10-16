@@ -22,13 +22,16 @@ describe('BookingsService', () => {
     soLuongVeBanDau: 2,
     tongTienBanDau: '500000',
     trangThai: 'DA_THANH_TOAN',
-    khuyenMaiId: null,
+    khuyenMaiId: 5,
+    soTienGiamKhuyenMai: 100000,
+    khuyenMai: { maKhuyenMai: 'TEST100' },
     donGiaoDichId: 201,
     createdAt: new Date('2026-09-20T10:00:00.000Z'),
     updatedAt: new Date('2026-09-20T10:05:00.000Z'),
     donGiaoDich: {
       donGiaoDichId: 201,
       maDonGiaoDich: 'GD-201',
+      ngayTao: new Date('2026-09-20T09:58:00.000Z'),
       tongTien: '500000',
       trangThai: 'DA_THANH_TOAN',
       tenKhachHang: 'Nguyễn Văn A',
@@ -349,6 +352,33 @@ describe('BookingsService', () => {
   });
 
   describe('mapBooking financial totals', () => {
+    it.each([
+      ['2026-09-20T10:07:59.999Z', 'CHO_THANH_TOAN'],
+      ['2026-09-20T10:08:00.000Z', 'HET_HAN'],
+      ['2026-09-20T10:08:00.001Z', 'HET_HAN'],
+    ])('uses order time for every booking reader at %s', async (now, expectedStatus) => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date(now));
+      try {
+        const pending = { ...sampleBooking, trangThai: 'CHO_THANH_TOAN', donGiaoDich: {
+          ...sampleBooking.donGiaoDich, trangThai: 'CHO_THANH_TOAN',
+        } };
+        prisma.khachHang.findUnique.mockResolvedValue(mockCustomer);
+        prisma.phieuDatVe.count.mockResolvedValue(1);
+        prisma.phieuDatVe.findMany.mockResolvedValue([pending]);
+        prisma.phieuDatVe.findUnique.mockResolvedValue(pending);
+        const list = await service.findCustomerBookings(1, { page: 1, pageSize: 10 });
+        const detail = await service.findCustomerBookingById(1, 101);
+        const publicDetail = await service.findPublicBookingById(101, { taiKhoanId: 1 } as any);
+        for (const booking of [list.data[0], detail.data, publicDetail]) {
+          expect(booking.paymentExpiresAt).toBe('2026-09-20T10:08:00.000Z');
+          expect(booking.createdAt).toBe('2026-09-20T10:00:00.000Z');
+          expect(booking.status).toBe(expectedStatus);
+          expect(booking.paymentStatus).toBe(expectedStatus);
+        }
+      } finally { vi.useRealTimers(); }
+    });
+
     it('uses the final order total and reports discounted ticket subtotal separately', async () => {
       prisma.phieuDatVe.findUnique.mockResolvedValue({
         ...sampleBooking,
@@ -448,7 +478,7 @@ describe('BookingsService', () => {
             count: vi.fn().mockRejectedValue(new Error('count must not be used')),
             create: vi.fn().mockImplementation(({ data }: { data: Record<string, unknown> }) => {
               createdOrderData = data;
-              return { donGiaoDichId: 99 };
+              return { donGiaoDichId: 99, ...data };
             }),
           },
           thanhToan: { create: createPaymentAttempt },
@@ -488,6 +518,8 @@ describe('BookingsService', () => {
       expect(res.tickets[0].soGhe).toBe('A01');
       expect(createdOrderData?.maDonGiaoDich).toMatch(/^FUTAGD[A-F\d]{30}$/);
       expect(createPaymentAttempt).toHaveBeenCalledOnce();
+      expect(createdOrderData).not.toHaveProperty('thanhToans');
+      expect(res.paymentExpiresAt).toBe(new Date((createdOrderData?.ngayTao as Date).getTime() + 600000).toISOString());
       expect(createdPaymentData).toMatchObject({
         phuongThuc: 'SEPAY',
         loaiGiaoDich: 'THANH_TOAN',
@@ -627,7 +659,7 @@ describe('BookingsService', () => {
           donGiaoDich: {
             create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
               orderRows.push(data);
-              return { donGiaoDichId: 201, maDonGiaoDich: data.maDonGiaoDich };
+              return { donGiaoDichId: 201, ...data };
             }),
           },
           thanhToan: {
@@ -663,13 +695,16 @@ describe('BookingsService', () => {
         cargoPersistence as any,
       );
       vi.spyOn(bookingService, 'getBookingQuote').mockResolvedValue({
-        unitPrice: 150000,
+        unitPrice: '150000.00',
         seatCount: 1,
-        originalTotal: 150000,
-        discountAmount: 0,
-        finalTotal: 150000,
+        originalTotal: '150000.00',
+        discountAmount: '0.00',
+        finalTotal: '150000.00',
         currency: 'VND',
         appliedPromotionCode: null,
+        identityChecked: false,
+        phoneEligibilityChecked: true,
+        requiresPhoneBeforeBooking: false,
       });
 
       const result = await bookingService.createBooking(
@@ -724,6 +759,8 @@ describe('BookingsService', () => {
       expect(Number(orderRows[0].tongTien)).toBe(210000);
       expect(orderRows[0].khachHangId).toBeNull();
       expect(paymentRows).toHaveLength(1);
+      expect(orderRows).toHaveLength(1);
+      expect(orderRows[0]).not.toHaveProperty('thanhToans');
       expect(paymentRows[0]).toMatchObject({
         phuongThuc: 'SEPAY',
         loaiGiaoDich: 'THANH_TOAN',
@@ -757,7 +794,7 @@ describe('BookingsService', () => {
           ]),
         },
         bangGia: {
-          findFirst: vi.fn().mockResolvedValue({ bangGiaId: 9 }),
+          findFirst: vi.fn().mockResolvedValue({ bangGiaId: 9, giaNiemYet: 150000 }),
         },
         diemGiaoNhanTuyenXe: {
           findMany: vi.fn().mockResolvedValue([
@@ -792,13 +829,16 @@ describe('BookingsService', () => {
         }),
       );
       vi.spyOn(bookingService, 'getBookingQuote').mockResolvedValue({
-        unitPrice: 150000,
+        unitPrice: '150000.00',
         seatCount: 1,
-        originalTotal: 150000,
-        discountAmount: 0,
-        finalTotal: 150000,
+        originalTotal: '150000.00',
+        discountAmount: '0.00',
+        finalTotal: '150000.00',
         currency: 'VND',
         appliedPromotionCode: null,
+        identityChecked: false,
+        phoneEligibilityChecked: true,
+        requiresPhoneBeforeBooking: false,
       });
 
       await expect(
@@ -866,7 +906,7 @@ describe('BookingsService', () => {
         $transaction: vi.fn(async (cb) => {
           const tx = {
             donGiaoDich: {
-              create: vi.fn().mockResolvedValue({ donGiaoDichId: 201 }),
+              create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({ donGiaoDichId: 201, ...data })),
             },
             thanhToan: {
               create: vi.fn().mockResolvedValue({ thanhToanId: 401 }),
@@ -908,15 +948,18 @@ describe('BookingsService', () => {
         shipmentPersistenceService as any,
       );
 
-      // Giả lập tính giá: 100,000 VND chia cho 3 ghế (không chia hết)
+      // Mỗi ghế có giá 33,333.33 VND; tổng được lấy theo giá vé trong DB.
       vi.spyOn(bookingService, 'getBookingQuote').mockResolvedValue({
-        unitPrice: 33333.33,
+        unitPrice: '33333.33',
         seatCount: 3,
-        originalTotal: 100000,
-        discountAmount: 0,
-        finalTotal: 100000,
+        originalTotal: '99999.99',
+        discountAmount: '0.00',
+        finalTotal: '99999.99',
         currency: 'VND',
         appliedPromotionCode: null,
+        identityChecked: false,
+        phoneEligibilityChecked: true,
+        requiresPhoneBeforeBooking: false,
       });
 
       const principal: any = { taiKhoanId: 1, roles: ['CUSTOMER'] };
@@ -934,14 +977,16 @@ describe('BookingsService', () => {
       expect(result).toBeDefined();
       expect(createdTickets).toHaveLength(3);
 
-      // Giá từng vé: 100000 / 3 = 33333 dư 1 -> Vé 1: 33334, Vé 2: 33333, Vé 3: 33333
-      expect(createdTickets[0].giaThucTe).toBe(33334);
-      expect(createdTickets[1].giaThucTe).toBe(33333);
-      expect(createdTickets[2].giaThucTe).toBe(33333);
+      expect(createdTickets[0].giaThucTe.toNumber()).toBe(33333.33);
+      expect(createdTickets[1].giaThucTe.toNumber()).toBe(33333.33);
+      expect(createdTickets[2].giaThucTe.toNumber()).toBe(33333.33);
 
       // Tổng tiền từng vé phải khớp tuyệt đối 100% với finalTotal
-      const totalTicketPrices = createdTickets.reduce((sum, t) => sum + t.giaThucTe, 0);
-      expect(totalTicketPrices).toBe(100000);
+      const totalTicketPrices = createdTickets.reduce(
+        (sum, ticket) => sum + ticket.giaThucTe.toNumber(),
+        0,
+      );
+      expect(totalTicketPrices).toBe(99999.99);
 
       // Kiểm tra holdToken được verify với customerId và consume
       expect(mockSeatHolds.verifyHold).toHaveBeenCalledWith(

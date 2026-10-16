@@ -12,7 +12,7 @@ import {
   CurrentPrincipal,
   OptionalPrincipal,
 } from '../auth/decorators/current-principal.decorator.js';
-import { OptionalAuth, Public } from '../auth/decorators/public.decorator.js';
+import { OptionalAuth } from '../auth/decorators/public.decorator.js';
 import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
 import { BookingsService } from './bookings.service.js';
 import { BookingQueryDto } from './dto/booking-query.dto.js';
@@ -23,14 +23,20 @@ import { CreateBookingDto } from './dto/create-booking.dto.js';
 export class BookingsController {
   constructor(private readonly bookingsService: BookingsService) {}
 
-  @Public()
+  @OptionalAuth()
   @Post('quote')
-  async getBookingQuote(@Body() dto: BookingQuoteDto) {
-    return this.bookingsService.getBookingQuote(
+  async getBookingQuote(
+    @Body() dto: BookingQuoteDto,
+    @OptionalPrincipal() principal?: AuthPrincipal,
+  ) {
+    const data = await this.bookingsService.getBookingQuote(
       dto.tripId,
       dto.seatIds,
       dto.promotionCode,
+      dto.contactPhone,
+      principal,
     );
+    return { data };
   }
 
   @Post()

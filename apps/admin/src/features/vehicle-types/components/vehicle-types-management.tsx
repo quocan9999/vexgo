@@ -106,7 +106,6 @@ function VehicleTypeDetails({
       >
         <div className="admin-dialog-header">
           <div className="admin-dialog-header__copy">
-            <p className="eyebrow">DANH MỤC PHƯƠNG TIỆN</p>
             <h2 id="vehicle-type-detail-title">Chi tiết loại xe</h2>
             <p id="vehicle-type-detail-description">
               Thông tin loại xe dùng chung trong hệ thống.

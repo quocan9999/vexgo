@@ -6,7 +6,7 @@ import {
   type INestApplication,
 } from '@nestjs/common';
 import request from 'supertest';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppModule } from '../../../src/app.module.js';
 import { AccessTokenGuard } from '../../../src/auth/guards/access-token.guard.js';
 import type { AuthPrincipal } from '../../../src/auth/tokens/auth-principal.js';
@@ -1404,6 +1404,25 @@ describe('Payments Webhook & Status Security with MySQL (Integration)', () => {
     });
   });
 
+  // Keep the real scheduler/transactions, but constrain candidate queries to this
+  // fixture so running against the shared Feature 10 DB cannot expire other orders.
+  async function expireFixtureOrder(orderId: number, now: Date) {
+    const findBookings = prisma.phieuDatVe.findMany.bind(prisma.phieuDatVe);
+    const findOrders = prisma.donGiaoDich.findMany.bind(prisma.donGiaoDich);
+    const bookings = vi.spyOn(prisma.phieuDatVe, 'findMany').mockImplementation((args) =>
+      findBookings({ ...args, where: { AND: [args?.where ?? {}, { donGiaoDichId: orderId }] } }),
+    );
+    const orders = vi.spyOn(prisma.donGiaoDich, 'findMany').mockImplementation((args) =>
+      findOrders({ ...args, where: { AND: [args?.where ?? {}, { donGiaoDichId: orderId }] } }),
+    );
+    try {
+      return await app.get(PaymentsService).expireExpiredBookings(now);
+    } finally {
+      bookings.mockRestore();
+      orders.mockRestore();
+    }
+  }
+
   describe('SePay webhook authentication, validation, settlement, and idempotency', () => {
     it('expires an overdue shipment-only order from the scheduler once and releases cargo capacity', async () => {
       const fixture = await createShipmentOnlyPayment(customerAId);
@@ -1420,8 +1439,7 @@ describe('Payments Webhook & Status Security with MySQL (Integration)', () => {
         );
         expect(capacityBefore?.capacities.HANG_NHE.used).toBe(2);
 
-        const paymentsService = app.get(PaymentsService);
-        await expect(paymentsService.expireExpiredBookings(new Date())).resolves.toBe(1);
+        await expect(expireFixtureOrder(fixture.order.donGiaoDichId, new Date())).resolves.toBe(1);
 
         const [order, shipment, payment, history] = await Promise.all([
           prisma.donGiaoDich.findUniqueOrThrow({
@@ -1451,7 +1469,7 @@ describe('Payments Webhook & Status Security with MySQL (Integration)', () => {
           used: 0,
           remaining: 5,
         });
-        await expect(paymentsService.expireExpiredBookings(new Date())).resolves.toBe(0);
+        await expect(expireFixtureOrder(fixture.order.donGiaoDichId, new Date())).resolves.toBe(0);
         await expect(
           prisma.lichSuTrangThaiPhieuGuiHang.count({
             where: { phieuGuiHangId: fixture.shipment.phieuGuiHangId },
@@ -1788,7 +1806,7 @@ describe('Payments Webhook & Status Security with MySQL (Integration)', () => {
         );
 
         await expect(
-          app.get(PaymentsService).expireExpiredBookings(new Date()),
+          expireFixtureOrder(fixture.order.donGiaoDichId, new Date()),
         ).resolves.toBe(1);
 
         const response = await postSignedSepayEvent({
@@ -1960,9 +1978,8 @@ describe('Payments Webhook & Status Security with MySQL (Integration)', () => {
           data: { ngayTao: new Date(Date.now() - 11 * 60 * 1000) },
         });
 
-        const paymentsService = app.get(PaymentsService);
         const [expiredCount, callback] = await Promise.all([
-          paymentsService.expireExpiredBookings(new Date()),
+          expireFixtureOrder(fixture.order.donGiaoDichId, new Date()),
           postSignedSepayEvent(payload),
         ]);
         expect([0, 1]).toContain(expiredCount);

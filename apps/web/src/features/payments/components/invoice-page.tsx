@@ -36,6 +36,10 @@ interface InvoiceModel {
   passengerPhone: string;
   passengerEmail?: string;
   totalAmount: number;
+  promotionCode: string | null;
+  originalTicketSubtotal: number;
+  discountAmount: number;
+  ticketSubtotal: number;
   cargoFee: number;
   cargoItems: Array<{
     name: string;
@@ -179,6 +183,19 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
           passengerPhone: booking.passenger?.phoneNumber || '—',
           passengerEmail: booking.passenger?.email || '',
           totalAmount,
+          promotionCode:
+            typeof booking.promotionCode === 'string'
+              ? booking.promotionCode
+              : null,
+          originalTicketSubtotal: Number.isFinite(Number(booking.originalTicketSubtotal))
+            ? Number(booking.originalTicketSubtotal)
+            : Number(booking.ticketSubtotal ?? totalAmount),
+          discountAmount: Number.isFinite(Number(booking.discountAmount))
+            ? Number(booking.discountAmount)
+            : 0,
+          ticketSubtotal: Number.isFinite(Number(booking.ticketSubtotal))
+            ? Number(booking.ticketSubtotal)
+            : totalAmount,
           cargoFee: Number(booking.cargoFee) || 0,
           cargoItems,
           legs: [
@@ -540,6 +557,36 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
                     </div>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {invoice.promotionCode && (
+              <div className="mt-5 rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 space-y-2 text-sm">
+                <div className="flex flex-wrap justify-between gap-2">
+                  <span className="text-slate-600">Mã khuyến mãi</span>
+                  <strong className="font-mono text-emerald-800">{invoice.promotionCode}</strong>
+                </div>
+                <div className="flex flex-wrap justify-between gap-2">
+                  <span className="text-slate-600">Giá vé gốc của toàn đơn</span>
+                  <strong className="text-slate-800">
+                    {invoice.originalTicketSubtotal.toLocaleString('vi-VN')}đ
+                  </strong>
+                </div>
+                <div className="flex flex-wrap justify-between gap-2">
+                  <span className="text-slate-600">Giảm giá cho toàn đơn</span>
+                  <strong className="text-emerald-700">
+                    −{invoice.discountAmount.toLocaleString('vi-VN')}đ
+                  </strong>
+                </div>
+                <div className="flex flex-wrap justify-between gap-2 border-t border-emerald-200 pt-2">
+                  <span className="text-slate-700">Tổng tiền vé sau ưu đãi</span>
+                  <strong className="text-slate-900">
+                    {invoice.ticketSubtotal.toLocaleString('vi-VN')}đ
+                  </strong>
+                </div>
+                <p className="text-xs font-medium text-slate-600">
+                  Ưu đãi chỉ áp dụng cho tiền vé; cước hàng hóa không được giảm.
+                </p>
               </div>
             )}
 

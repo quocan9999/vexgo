@@ -80,6 +80,7 @@ const requests: RecordedRequest[] = [];
 const fetchMock = vi.fn();
 let holdResponse: () => Promise<unknown>;
 let bookingResponse: () => Promise<unknown>;
+let quoteResponse: () => Promise<unknown>;
 let tripSeatResponse: () => Promise<unknown>;
 let releaseResponse: () => Promise<unknown>;
 
@@ -116,6 +117,23 @@ function bookingOk() {
       shippingFee: 0,
     },
   }, 201);
+}
+
+function quoteOk() {
+  return response({
+    data: {
+      unitPrice: '250000.00',
+      seatCount: 1,
+      originalTotal: '250000.00',
+      discountAmount: '50000.00',
+      finalTotal: '200000.00',
+      currency: 'VND',
+      appliedPromotionCode: 'SAVE50',
+      identityChecked: true,
+      phoneEligibilityChecked: true,
+      requiresPhoneBeforeBooking: false,
+    },
+  });
 }
 
 function seatList(status = 'TRONG') {
@@ -196,9 +214,11 @@ beforeEach(() => {
   requests.length = 0;
   state.routerPush.mockReset();
   state.routerBack.mockReset();
+  Object.assign(state.auth, { user: null });
   state.auth.isAuthenticated = false;
   holdResponse = async () => holdOk();
   bookingResponse = async () => bookingOk();
+  quoteResponse = async () => quoteOk();
   tripSeatResponse = async () => seatList();
   releaseResponse = async () => response({ data: { success: true } });
 
@@ -209,6 +229,24 @@ beforeEach(() => {
     const pathname = new URL(url).pathname;
     const method = init?.method || 'GET';
 
+    if (pathname.endsWith('/me')) {
+      return response({
+        data: {
+          accountId: 1,
+          customerId: 10,
+          customerCode: 'KH-10',
+          loyaltyPoints: 0,
+          fullName: 'Nguyễn Văn An',
+          phoneNumber: '0901234567',
+          dateOfBirth: null,
+          citizenId: null,
+          email: 'an@example.test',
+          phoneVerified: true,
+          status: 'HOAT_DONG',
+          createdAt: '2026-10-15T08:00:00.000Z',
+        },
+      });
+    }
     if (/\/trips\/(42|43)\/cargo-capacity$/.test(pathname)) {
       return response({
         data: {
@@ -239,6 +277,9 @@ beforeEach(() => {
     if (pathname.endsWith('/seat-holds') && method === 'DELETE') {
       return releaseResponse();
     }
+    if (pathname.endsWith('/bookings/quote') && method === 'POST') {
+      return quoteResponse();
+    }
     if (pathname.endsWith('/bookings') && method === 'POST') {
       return bookingResponse();
     }
@@ -259,6 +300,133 @@ afterEach(() => {
 });
 
 describe('one-way booking with server seat holds', () => {
+  it('quotes a guest coupon with the supplied phone and carries it into booking', async () => {
+    render(<OneWayBooking post={post} tripSeats={tripSeats} />);
+    fireEvent.click(screen.getByRole('button', { name: 'A01 còn trống' }));
+    fireEvent.change(screen.getByPlaceholderText('Nhập họ và tên'), {
+      target: { value: 'Nguyễn Văn An' },
+    });
+    fireEvent.change(screen.getByPlaceholderText('Nhập số điện thoại'), {
+      target: { value: '0901234567' },
+    });
+    fireEvent.change(screen.getByPlaceholderText('Nhập email'), {
+      target: { value: 'an@example.test' },
+    });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Nhập một mã cho đơn đặt vé' }), {
+      target: { value: 'save50' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Áp dụng' }));
+
+    await screen.findByText('Mã SAVE50 đã được áp dụng.');
+    expect(requestBody(requestsFor('/bookings/quote', 'POST')[0])).toEqual({
+      tripId: 42,
+      seatIds: [9001],
+      promotionCode: 'SAVE50',
+      contactPhone: '0901234567',
+    });
+    expect(screen.getByText('Giá vé gốc').parentElement?.textContent).toContain('250.000đ');
+    expect(screen.getByText('Giảm giá').parentElement?.textContent).toContain('50.000đ');
+    expect(screen.getByText('Tổng tiền vé sau ưu đãi').parentElement?.textContent).toContain('200.000đ');
+
+    fireEvent.click(screen.getByRole('checkbox', { hidden: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Thanh toán' }));
+    await waitFor(() => expect(requestsFor('/bookings', 'POST')).toHaveLength(1));
+    expect(requestBody(requestsFor('/bookings', 'POST')[0]).promotionCode).toBe('SAVE50');
+    await waitFor(() => expect(state.routerPush).toHaveBeenCalledTimes(1));
+  });
+
+  it('rechecks an applied guest coupon when the phone changes', async () => {
+    render(<OneWayBooking post={post} tripSeats={tripSeats} />);
+    fireEvent.click(screen.getByRole('button', { name: 'A01 còn trống' }));
+    fireEvent.change(screen.getByPlaceholderText('Nhập số điện thoại'), {
+      target: { value: '0901234567' },
+    });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Nhập một mã cho đơn đặt vé' }), {
+      target: { value: 'SAVE50' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Áp dụng' }));
+    await screen.findByText('Mã SAVE50 đã được áp dụng.');
+
+    fireEvent.change(screen.getByPlaceholderText('Nhập số điện thoại'), {
+      target: { value: '0912345678' },
+    });
+
+    await waitFor(() => expect(requestsFor('/bookings/quote', 'POST')).toHaveLength(2));
+    expect(requestBody(requestsFor('/bookings/quote', 'POST')[1]).contactPhone).toBe('0912345678');
+  });
+
+  it('uses the verified account identity and omits an editable contact phone from its quote', async () => {
+    state.auth.isAuthenticated = true;
+    Object.assign(state.auth, {
+      user: {
+        accountId: 1,
+        customerId: 10,
+        fullName: 'Nguyễn Văn An',
+        phoneNumber: '0901234567',
+        roles: ['KHACH_HANG'],
+      },
+    });
+    render(<OneWayBooking post={post} tripSeats={tripSeats} />);
+    fireEvent.click(screen.getByRole('button', { name: 'A01 còn trống' }));
+    const verifiedPhone = await screen.findByText('0901234567');
+    expect(verifiedPhone.closest('p')?.textContent).toContain(
+      'SĐT tài khoản đã xác minh:',
+    );
+    const profileRequest = requestsFor('/me')[0];
+    expect(new Headers(profileRequest.init?.headers).get('authorization')).toBe(
+      'Bearer test-access-token',
+    );
+    fireEvent.change(screen.getByPlaceholderText('Nhập số điện thoại'), {
+      target: { value: '0987654321' },
+    });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Nhập một mã cho đơn đặt vé' }), {
+      target: { value: 'SAVE50' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Áp dụng' }));
+
+    await screen.findByText('Mã SAVE50 đã được áp dụng.');
+    const quoteRequest = requestsFor('/bookings/quote', 'POST')[0];
+    expect(requestBody(quoteRequest)).toEqual({
+      tripId: 42,
+      seatIds: [9001],
+      promotionCode: 'SAVE50',
+    });
+    expect(new Headers(quoteRequest.init?.headers).get('authorization')).toBe(
+      'Bearer test-access-token',
+    );
+  });
+
+  it('keeps the booking form and coupon when create rejects a newly unavailable promotion', async () => {
+    bookingResponse = async () => response({
+      statusCode: 409,
+      error: 'PROMOTION_EXHAUSTED',
+      message: 'Mã khuyến mãi vừa hết lượt sử dụng.',
+    }, 409);
+    render(<OneWayBooking post={post} tripSeats={tripSeats} />);
+    fireEvent.click(screen.getByRole('button', { name: 'A01 còn trống' }));
+    fireEvent.change(screen.getByPlaceholderText('Nhập họ và tên'), {
+      target: { value: 'Nguyễn Văn An' },
+    });
+    fireEvent.change(screen.getByPlaceholderText('Nhập số điện thoại'), {
+      target: { value: '0901234567' },
+    });
+    fireEvent.change(screen.getByPlaceholderText('Nhập email'), {
+      target: { value: 'an@example.test' },
+    });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Nhập một mã cho đơn đặt vé' }), {
+      target: { value: 'SAVE50' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Áp dụng' }));
+    await screen.findByText('Mã SAVE50 đã được áp dụng.');
+    fireEvent.click(screen.getByRole('checkbox', { hidden: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Thanh toán' }));
+
+    expect(await screen.findByText('Mã khuyến mãi vừa hết lượt sử dụng.')).toBeTruthy();
+    expect((screen.getByRole('textbox', { name: 'Nhập một mã cho đơn đặt vé' }) as HTMLInputElement).value).toBe('SAVE50');
+    expect(state.routerPush).not.toHaveBeenCalled();
+    expect(requestsFor('/seat-holds', 'DELETE')).toHaveLength(1);
+  });
+
   it('creates a hold with trip-seat IDs before booking and routes with persisted IDs and amount', async () => {
     render(<OneWayBooking post={post} tripSeats={tripSeats} />);
 
@@ -895,4 +1063,34 @@ describe('one-way booking with server seat holds', () => {
     expect(cargoSummary?.textContent).not.toMatch(/0đ|miễn phí/i);
     expect(screen.queryByText(/\(\+0đ\)/)).toBeNull();
   });
+});
+
+
+it('opens the verified invoice directly for a completed free booking and keeps guest credentials', async () => {
+  bookingResponse = async () => {
+    const result = bookingOk();
+    const body = await result.json() as { data: { status: string; totalAmount: number } };
+    body.data.status = 'DA_THANH_TOAN';
+    body.data.totalAmount = 0;
+    return response(body, 201);
+  };
+  render(<OneWayBooking post={post} tripSeats={tripSeats} />);
+  completeForm();
+  await waitFor(() =>
+    expect(state.routerPush).toHaveBeenCalledWith('/invoice/101'),
+  );
+  expect(state.routerPush).not.toHaveBeenCalledWith(
+    expect.stringContaining('/payment'),
+  );
+  const drafts = Object.keys(sessionStorage)
+    .map((key) => sessionStorage.getItem(key))
+    .filter(Boolean)
+    .map((raw) => JSON.parse(raw!));
+  expect(drafts).toContainEqual(
+    expect.objectContaining({
+      bookingId: 101,
+      bookingCode: 'VG-101',
+      passenger: expect.objectContaining({ phoneNumber: '0901234567' }),
+    }),
+  );
 });

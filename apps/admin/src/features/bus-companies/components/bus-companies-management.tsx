@@ -200,7 +200,6 @@ function CompanyDetails({
         <>
           <div className="admin-dialog-header">
             <div className="admin-dialog-header__copy">
-              <p className="eyebrow">HỒ SƠ NHÀ XE</p>
               <h2 id="company-detail-title">Thông tin nhà xe</h2>
             </div>
             <form method="dialog">

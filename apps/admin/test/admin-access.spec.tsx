@@ -203,6 +203,22 @@ describe('admin access scope and permissions', () => {
     expect(hasAdminPermission(shipmentOnlySession, 'shipment:read')).toBe(true);
   });
 
+  it('accepts promotion permissions only within a tenant session', () => {
+    const tenantSales = makeTenantSession(
+      ['NHAN_VIEN_KINH_DOANH'],
+      ['promotion:read', 'promotion:create', 'promotion:update'],
+    );
+    const platform = makePlatformSession(['promotion:read']);
+
+    expect(hasAllAdminPermissions(tenantSales, [
+      'promotion:read',
+      'promotion:create',
+      'promotion:update',
+    ])).toBe(true);
+    expect(hasAdminPermission(platform, 'promotion:read')).toBe(false);
+    expect(hasAdminPermission(tenantSales, 'role:read')).toBe(false);
+  });
+
   it('uses tenant RBAC as a fallback only for an authorized tenant admin', () => {
     const tenantAdmin = makeTenantSession(['NHA_XE_ADMIN'], ['role:read']);
     const employeeWithSameKeys = makeTenantSession(

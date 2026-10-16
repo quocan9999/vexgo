@@ -213,6 +213,24 @@ describe('Customer invoice page', () => {
     );
   });
 
+  it('shows the booking promotion code and stored order-level discount on the invoice', async () => {
+    saveGuestReadCredentials();
+    fetchMock.mockResolvedValue(jsonResponse(paidBooking({
+      totalAmount: 125000,
+      originalTicketSubtotal: 150000,
+      discountAmount: 25000,
+      ticketSubtotal: 125000,
+      promotionCode: 'SAVE50',
+    })));
+
+    await renderInvoice();
+
+    expect(await screen.findByText('Mã khuyến mãi')).toBeTruthy();
+    expect(screen.getByText('SAVE50')).toBeTruthy();
+    expect(screen.getByText('Giảm giá cho toàn đơn').parentElement?.textContent).toContain('25.000đ');
+    expect(screen.getByText(/chỉ áp dụng cho tiền vé/i)).toBeTruthy();
+  });
+
   it('uses the authenticated customer token to read the paid invoice', async () => {
     auth.isAuthenticated = true;
     fetchMock.mockResolvedValue(jsonResponse(paidBooking()));

@@ -304,15 +304,18 @@ async function seedPreMigrationCohort(prisma) {
       },
       select: { donGiaoDichId: true },
     });
-    const booking = await prisma.phieuDatVe.create({
-      data: {
-        maPhieuDatVe: `HIST-PDV-${suffix}-${bookingIndex + 1}`,
-        ngayDat: new Date('2034-12-01T00:00:00.000Z'),
-        soLuongVeBanDau: ticketIndexes.length,
-        tongTienBanDau: ticketIndexes.length * 100000,
-        trangThai: 'CHO_THANH_TOAN',
-        donGiaoDichId: transaction.donGiaoDichId,
-      },
+    const bookingCode = `HIST-PDV-${suffix}-${bookingIndex + 1}`;
+    // This fixture predates promotion snapshots. Prisma create() also inserts
+    // defaults from the current schema, even when select omits those columns.
+    await prisma.$executeRaw`
+      INSERT INTO PhieuDatVe
+        (maPhieuDatVe, ngayDat, soLuongVeBanDau, tongTienBanDau, trangThai, donGiaoDichId)
+      VALUES (${bookingCode}, ${new Date('2034-12-01T00:00:00.000Z')},
+        ${ticketIndexes.length}, ${ticketIndexes.length * 100000},
+        ${'CHO_THANH_TOAN'}, ${transaction.donGiaoDichId})
+    `;
+    const booking = await prisma.phieuDatVe.findUniqueOrThrow({
+      where: { maPhieuDatVe: bookingCode },
       select: { phieuDatVeId: true, trangThai: true },
     });
     bookings.push(booking);
@@ -485,6 +488,7 @@ async function addValidTransitionsAndRunVerifier(prisma, adminUrl, database) {
   await prisma.phieuDatVe.update({
     where: { phieuDatVeId: cohortBookingId },
     data: { trangThai: transition.trangThaiMoi },
+    select: { phieuDatVeId: true },
   });
   await prisma.lichSuTrangThaiPhieuDatVe.create({
     data: { ...transition, phieuDatVeId: cohortBookingId },

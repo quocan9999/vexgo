@@ -9,6 +9,29 @@ import {
 const permissionKeys = ADMIN_PERMISSION_CATALOG.map(({ key }) => key);
 
 describe('Admin permission defaults', () => {
+  it.each([
+    'promotion:read',
+    'promotion:create',
+    'promotion:update',
+    'shipment:read',
+    'shipment:update',
+  ] as const)(
+    'keeps %s tenant-scoped without granting platform access',
+    (key) => {
+      expect(
+        ADMIN_PERMISSION_CATALOG.find((permission) => permission.key === key)
+          ?.scope,
+      ).toBe('tenant');
+      expect(ADMIN_ROLE_DEFAULT_PERMISSION_KEYS.NHA_XE_ADMIN).toContain(key);
+      expect(ADMIN_ROLE_DEFAULT_PERMISSION_KEYS.SUPER_ADMIN).not.toContain(key);
+      expect(isPermissionAllowedForRole('SUPER_ADMIN', key)).toBe(false);
+      expect(isPermissionAllowedForRole('NHAN_VIEN_DIEU_HANH', key)).toBe(true);
+      const operatorDefaults: readonly string[] =
+        ADMIN_ROLE_DEFAULT_PERMISSION_KEYS.NHAN_VIEN_DIEU_HANH;
+      expect(operatorDefaults.includes(key)).toBe(key.startsWith('shipment:'));
+    },
+  );
+
   it('keeps operational and RBAC-management capabilities for NHA_XE_ADMIN', () => {
     expect(ADMIN_ROLE_DEFAULT_PERMISSION_KEYS.NHA_XE_ADMIN).toEqual([
       'vehicle-type:read',
@@ -34,6 +57,9 @@ describe('Admin permission defaults', () => {
       'role:read',
       'permission:assign',
       'customer:read',
+      'promotion:read',
+      'promotion:create',
+      'promotion:update',
       'shipment:read',
       'shipment:update',
     ]);
@@ -91,6 +117,9 @@ describe('Admin permission defaults', () => {
       'role:read',
       'permission:assign',
       'customer:read',
+      'promotion:read',
+      'promotion:create',
+      'promotion:update',
       'shipment:read',
       'shipment:update',
       'bus-company:read',
@@ -128,6 +157,9 @@ describe('Admin permission defaults', () => {
       'role:read',
       'permission:assign',
       'customer:read',
+      'promotion:read',
+      'promotion:create',
+      'promotion:update',
       'shipment:read',
       'shipment:update',
     ];
@@ -207,6 +239,18 @@ describe('Admin permission defaults', () => {
       true,
     );
     expect(isPermissionAllowedForRole('NHA_XE_ADMIN', 'role:read')).toBe(true);
+    expect(isPermissionAllowedForRole('NHA_XE_ADMIN', 'promotion:read')).toBe(
+      true,
+    );
+    expect(isPermissionAllowedForRole('NHA_XE_ADMIN', 'promotion:create')).toBe(
+      true,
+    );
+    expect(isPermissionAllowedForRole('NHA_XE_ADMIN', 'promotion:update')).toBe(
+      true,
+    );
+    expect(
+      isPermissionAllowedForRole('NHAN_VIEN_KINH_DOANH', 'promotion:read'),
+    ).toBe(true);
     expect(
       isPermissionAllowedForRole('NHA_XE_ADMIN', 'permission:assign'),
     ).toBe(true);

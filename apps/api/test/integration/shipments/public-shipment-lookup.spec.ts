@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AppModule } from '../../../src/app.module.js';
 import { configureApi } from '../../../src/common/configure-api.js';
 import { PrismaService } from '../../../src/prisma/prisma.service.js';
+import { ShipmentsService } from '../../../src/shipments/shipments.service.js';
 
 describe('Public shipment lookup HTTP contract (MySQL integration)', () => {
   let app: INestApplication;
@@ -257,6 +258,42 @@ describe('Public shipment lookup HTTP contract (MySQL integration)', () => {
     }
   });
 
+  it('reads the linked booking coupon without discounting cargo or mutating financial records', async () => {
+    const promotion = await prisma.khuyenMai.create({ data: {
+      nhaXeId: busCompanyId, tenChuongTrinh: `Public linked ${suffix}`, maKhuyenMai: `PUBLIC-${suffix}`,
+      phamViApDung: 'DAT_VE', hinhThucApDung: 'NHAP_MA', loaiGiamGia: 'SO_TIEN', giaTriGiam: 30000,
+      tuNgay: new Date('2020-01-01T00:00:00Z'), denNgay: new Date('2099-12-31T00:00:00Z'),
+      trangThai: 'HOAT_DONG', soLuotToiDa: 5, soLuotDaSuDung: 0,
+    } });
+    let bookingId: number | undefined;
+    try {
+      const booking = await prisma.phieuDatVe.create({ data: {
+        maPhieuDatVe: `PUBLIC-PDV-${suffix}`, ngayDat: new Date(), soLuongVeBanDau: 1,
+        tongTienBanDau: 30000, soTienGiamKhuyenMai: 30000, trangThai: 'CHO_THANH_TOAN',
+        khuyenMaiId: promotion.khuyenMaiId, donGiaoDichId: orderId,
+      } });
+      bookingId = booking.phieuDatVeId;
+      const service = app.get(ShipmentsService);
+      for (const phoneNumber of [senderPhone, receiverPhone]) {
+        const result = await service.lookupShipment({ waybillCode, phoneNumber });
+        expect(result).toMatchObject({ bookingPromotionCode: promotion.maKhuyenMai, amount: 120000, paymentStatus: 'DANG_XU_LY' });
+        expect(result).not.toHaveProperty('shipmentPromotionCode');
+        expect(result).not.toHaveProperty('discountAmount');
+      }
+      await expect(service.lookupShipment({ waybillCode, phoneNumber: '0900000000' })).rejects.toMatchObject({ response: { error: 'SHIPMENT_NOT_FOUND' } });
+      const cargo = await prisma.phieuGuiHang.findUniqueOrThrow({ where: { phieuGuiHangId: shipmentId } });
+      expect(cargo.khuyenMaiId).toBeNull();
+      expect(Number(cargo.soTienGiam)).toBe(0);
+      expect(Number(cargo.tongPhi)).toBe(120000);
+      expect(await prisma.thanhToan.count({ where: { donGiaoDichId: orderId } })).toBe(1);
+      expect((await prisma.khuyenMai.findUniqueOrThrow({ where: { khuyenMaiId: promotion.khuyenMaiId } })).soLuotDaSuDung).toBe(0);
+      expect(await prisma.suDungKhuyenMai.count({ where: { khuyenMaiId: promotion.khuyenMaiId } })).toBe(0);
+    } finally {
+      if (bookingId) await prisma.phieuDatVe.delete({ where: { phieuDatVeId: bookingId } });
+      await prisma.khuyenMai.delete({ where: { khuyenMaiId: promotion.khuyenMaiId } });
+    }
+  });
+
   it('returns minimal payment details only to a matched contact while keeping private shipment data hidden', async () => {
     const sendLookup = (code: string, phone: string) =>
       request(app.getHttpServer())
@@ -267,6 +304,7 @@ describe('Public shipment lookup HTTP contract (MySQL integration)', () => {
     const receiverResponse = await sendLookup(waybillCode, receiverPhone).expect(200);
 
     expect(senderResponse.body.data).toEqual({
+      bookingPromotionCode: null,
       waybillCode,
       status: 'DANG_VAN_CHUYEN',
       carrier: { name: `Nhà xe công khai ${suffix}` },

@@ -656,6 +656,7 @@ describe('ShipmentsService', () => {
         scheduledDepartureAt: expect.any(String),
         estimatedArrivalAt: expect.any(String),
         packageCount: 3,
+        bookingPromotionCode: null,
         timeline: [
           {
             status: 'DA_TIEP_NHAN',
@@ -678,6 +679,64 @@ describe('ShipmentsService', () => {
       ]) {
         expect(serializedResult).not.toContain(privateValue);
       }
+    });
+
+    it.each([
+      { code: 'SAVE50', linked: true, paid: true, expired: false, lookupPhone: '0901234567' },
+      { code: null, linked: true, paid: false, expired: false, lookupPhone: '+84907654321' },
+      { code: null, linked: false, paid: false, expired: true, lookupPhone: '0901234567' },
+    ])('projects ticket-only coupon $code and payment for linked=$linked expired=$expired', async ({ code, linked, paid, expired, lookupPhone }) => {
+      const orderCreatedAt = new Date(Date.now() - (expired ? 11 : 1) * 60_000);
+      prismaMock.phieuGuiHang.findFirst.mockResolvedValue({
+        maVanDon: 'FUTA-VD-LINKED-12',
+        trangThai: 'DANG_VAN_CHUYEN',
+        soDienThoaiNguoiNhan: '0907654321',
+        donGiaoDich: {
+          donGiaoDichId: 22,
+          maDonGiaoDich: 'ORDER-LINKED-22',
+          ngayTao: orderCreatedAt,
+          tongTien: 60000,
+          trangThai: paid ? 'DA_THANH_TOAN' : 'CHO_THANH_TOAN',
+          thanhToans: [{ phuongThuc: 'SEPAY', trangThai: paid ? 'THANH_CONG' : 'DANG_XU_LY' }],
+          soDienThoaiKhachHang: '0901234567',
+          phieuDatVe: linked ? { khuyenMai: code ? { maKhuyenMai: code } : null } : null,
+        },
+        diemGui: { tenDiem: 'Bến gửi', diaChi: 'Địa chỉ gửi' },
+        diemNhan: { tenDiem: 'Bến nhận', diaChi: 'Địa chỉ nhận' },
+        chuyenXe: {
+          ngayKhoiHanh: new Date('2026-10-20T00:00:00.000Z'),
+          gioKhoiHanh: new Date('1970-01-01T08:00:00.000Z'),
+          gioDen: new Date('1970-01-01T12:00:00.000Z'),
+          tuyenXe: {
+            diemDi: 'TP.HCM',
+            diemDen: 'Đà Lạt',
+            thoiGianChayPhut: 240,
+            nhaXe: { tenNhaXe: 'Nhà xe công khai' },
+          },
+        },
+        hangHoas: [],
+        lichSuTrangThais: [],
+      });
+
+      const result = await service.lookupShipment({
+        waybillCode: 'FUTA-VD-LINKED-12',
+        phoneNumber: lookupPhone,
+      });
+
+      expect(result.bookingPromotionCode).toBe(code);
+      expect(result.amount).toBe(60000);
+      expect(result.paymentExpiresAt).toBe(new Date(orderCreatedAt.getTime() + 600_000).toISOString());
+      expect(result.paymentStatus).toBe(paid ? 'THANH_CONG' : expired ? 'HET_HAN' : 'DANG_XU_LY');
+      expect(result.requiresReconciliation).toBe(false);
+      expect(prismaMock.phieuGuiHang.findFirst).toHaveBeenCalledWith(expect.objectContaining({ select: expect.objectContaining({
+        donGiaoDich: { select: expect.objectContaining({
+          ngayTao: true, tongTien: true, trangThai: true,
+          phieuDatVe: { select: { khuyenMai: { select: { maKhuyenMai: true } } } },
+          thanhToans: { where: { loaiGiaoDich: 'THANH_TOAN' }, orderBy: [{ thoiGian: 'desc' }, { thanhToanId: 'desc' }], take: 1, select: { phuongThuc: true, trangThai: true } },
+        }) },
+      }) }));
+      expect(result).not.toHaveProperty('shipmentPromotionCode');
+      expect(result).not.toHaveProperty('discountAmount');
     });
 
     it('returns reconciliation status without exposing the additional SePay transfer', async () => {
@@ -746,6 +805,7 @@ describe('ShipmentsService', () => {
           phoneNumber: '0901234567',
         }),
       ).rejects.toThrow(NotFoundException);
+      expect(prismaMock.thanhToan.findFirst).not.toHaveBeenCalled();
     });
 
     it('throws NotFoundException when phone number does not match sender or receiver', async () => {
@@ -764,6 +824,7 @@ describe('ShipmentsService', () => {
           phoneNumber: '0900000000',
         }),
       ).rejects.toThrow(NotFoundException);
+      expect(prismaMock.thanhToan.findFirst).not.toHaveBeenCalled();
     });
   });
 

@@ -75,6 +75,17 @@ function jsonResponse(data: unknown) {
   };
 }
 
+function httpErrorResponse(status: number, retryAfter: string | null = null) {
+  return {
+    ok: false,
+    status,
+    headers: {
+      get: (name: string) => name.toLowerCase() === 'retry-after' ? retryAfter : null,
+    },
+    json: async () => ({ message: 'Too Many Requests' }),
+  };
+}
+
 function bookingDetail(overrides: Record<string, unknown> = {}) {
   return {
     bookingId,
@@ -272,7 +283,7 @@ describe('Customer VietQR payment page', () => {
     });
     expect(String(fetchMock.mock.calls[0][0])).not.toContain('/bookings/');
 
-    await advanceTime(2_500);
+    await advanceTime(15_000);
 
     expect(
       screen.queryByRole('img', { name: 'Mã QR thanh toán VietQR' }),
@@ -297,7 +308,7 @@ describe('Customer VietQR payment page', () => {
     await flushPromises();
     expect(screen.getByRole('img', { name: 'Mã QR thanh toán VietQR' })).toBeTruthy();
 
-    await advanceTime(2_500);
+    await advanceTime(15_000);
 
     expect(screen.queryByRole('img', { name: 'Mã QR thanh toán VietQR' })).toBeNull();
     const status = screen.getByRole('status').textContent ?? '';
@@ -499,6 +510,7 @@ describe('Customer VietQR payment page', () => {
         ticketSubtotal: 250000,
         originalTicketSubtotal: 300000,
         discountAmount: 50000,
+        promotionCode: 'SAVE50',
         cargoFee: 30000,
       })),
     );
@@ -507,6 +519,7 @@ describe('Customer VietQR payment page', () => {
     await flushPromises();
 
     expect(screen.getByText('Giá vé gốc').parentElement?.textContent).toContain('300.000đ');
+    expect(screen.getByText('Mã khuyến mãi').parentElement?.textContent).toContain('SAVE50');
     expect(screen.getByText('Giảm giá').parentElement?.textContent).toContain('50.000đ');
     expect(screen.getByText('Tổng tiền vé sau ưu đãi').parentElement?.textContent).toContain('250.000đ');
     expect(screen.getByText('Cước hàng').parentElement?.textContent).toContain('30.000đ');
@@ -985,4 +998,326 @@ describe('Customer VietQR payment page', () => {
     expect(routerPush).not.toHaveBeenCalled();
     expect(screen.getByRole('alert').textContent).toContain('Không thể xác minh');
   });
+});
+
+
+describe('G4 verified payment regression coverage', () => {
+  it.each([
+    { total: 0, cargo: 0, paid: true, qr: false },
+    { total: 50000, cargo: 50000, paid: false, qr: true },
+    { total: 0, cargo: 0, paid: false, qr: false },
+  ])('handles free tickets with total=$total cargo=$cargo paid=$paid', async ({total, cargo, paid, qr}) => {
+    configureVietQr();
+    savePaymentDraft('DGD-TEST-4201', {totalFare: total});
+    fetchMock.mockResolvedValue(jsonResponse(bookingDetail({
+      totalAmount: total, originalTicketSubtotal: 125000, discountAmount: 125000,
+      ticketSubtotal: 0, cargoFee: cargo, promotionCode: 'FREE-TICKET',
+      status: paid ? 'DA_THANH_TOAN' : 'CHO_THANH_TOAN',
+      paymentStatus: paid ? 'DA_THANH_TOAN' : 'CHO_THANH_TOAN',
+    })));
+    render(<PaymentPage />);
+    await flushPromises();
+    const image = screen.queryByRole('img', {name: 'Mã QR thanh toán VietQR'});
+    expect(Boolean(image)).toBe(qr);
+    if (qr) {
+      expect(image?.getAttribute('src')).toContain('amount=50000');
+      expect(screen.getAllByText('FREE-TICKET').length).toBeGreaterThan(0);
+    }
+    if (paid) expect(routerPush).toHaveBeenCalledExactlyOnceWith(`/invoice/${bookingId}`);
+    else expect(routerPush).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    {orderCode: 'OTHER'}, {totalAmount: 1}, {bookingId: 999},
+    {paymentExpiresAt: null}, {serverTime: 'invalid'},
+  ])('rejects invalid booking snapshot %j', async (overrides) => {
+    configureVietQr();
+    fetchMock.mockResolvedValue(jsonResponse(bookingDetail(overrides)));
+    render(<PaymentPage />);
+    await flushPromises();
+    expect(screen.queryByRole('img', {name: 'Mã QR thanh toán VietQR'})).toBeNull();
+    expect(routerPush).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    {paymentId: 999, shipmentId: 601},
+    {paymentId: 801, shipmentId: 999},
+    {paymentId: 801},
+  ])('rejects authenticated shipment identity mismatch %j', async (identity) => {
+    configureVietQr(); saveShipmentPaymentDraft(); auth.isAuthenticated = true;
+    fetchMock.mockResolvedValue(jsonResponse({
+      ...shipmentLookup(), provider: 'SEPAY', shipmentStatus: 'MOI_TAO', ...identity,
+    }));
+    render(<PaymentPage />); await flushPromises();
+    expect(screen.queryByRole('img', {name: 'Mã QR thanh toán VietQR'})).toBeNull();
+    expect(routerPush).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    {status: 'HET_HAN', orderStatus: 'HET_HAN', paymentStatus: 'HET_HAN'},
+    {status: 'DA_HUY', orderStatus: 'DA_HUY'},
+    {paymentStatus: 'CAN_DOI_SOAT'},
+    {waybillCode: 'OTHER'},
+  ])('does not advertise payment or success for shipment %j', async (overrides) => {
+    configureVietQr(); saveShipmentPaymentDraft();
+    fetchMock.mockResolvedValue(jsonResponse(shipmentLookup(overrides)));
+    render(<PaymentPage />); await flushPromises();
+    expect(screen.queryByRole('img', {name: 'Mã QR thanh toán VietQR'})).toBeNull();
+    expect(routerPush).not.toHaveBeenCalled();
+    if (overrides.paymentStatus === 'CAN_DOI_SOAT') {
+      expect(screen.getByRole('status').textContent).toContain('đối soát');
+    }
+  });
+
+  it('ignores a late response after changing the draft, including paid redirects', async () => {
+    configureVietQr();
+    let resolveOld!: (response: ReturnType<typeof jsonResponse>) => void;
+    fetchMock.mockImplementationOnce(() => new Promise(resolve => { resolveOld = resolve; }));
+    const view = render(<PaymentPage />); await flushPromises();
+    const oldSignal = fetchMock.mock.calls[0][1].signal;
+    saveShipmentPaymentDraft();
+    fetchMock.mockResolvedValue(jsonResponse(shipmentLookup()));
+    view.rerender(<PaymentPage />); await flushPromises();
+    expect(oldSignal.aborted).toBe(true);
+    await act(async () => resolveOld(jsonResponse(bookingDetail({status: 'DA_THANH_TOAN', paymentStatus: 'DA_THANH_TOAN'}))));
+    expect(routerPush).not.toHaveBeenCalled();
+    expect(screen.getByRole('img', {name: 'Mã QR thanh toán VietQR'}).getAttribute('src')).toContain('addInfo=VG-DH-TEST-701');
+  });
+});
+
+describe('PR #38 shipment payment review regressions', () => {
+  it('keeps guest shipment lookup below its 10-per-minute limit over a full minute', async () => {
+    configureVietQr();
+    saveShipmentPaymentDraft();
+    const requestTimes: number[] = [];
+    fetchMock.mockImplementation(async () => {
+      requestTimes.push(Date.now());
+      return jsonResponse(shipmentLookup());
+    });
+
+    render(<PaymentPage />);
+    await flushPromises();
+    await advanceTime(60_000);
+
+    expect(requestTimes.length).toBeGreaterThan(1);
+    expect(requestTimes.length).toBeLessThanOrEqual(5);
+    expect(requestTimes.slice(1).every((time, index) => time - requestTimes[index] >= 15_000)).toBe(true);
+    expect(screen.getByRole('img', { name: 'Mã QR thanh toán VietQR' })).toBeTruthy();
+    expect(routerPush).not.toHaveBeenCalled();
+  });
+
+  it('honors Retry-After after public lookup 429 and recovers without false QR or success', async () => {
+    configureVietQr();
+    saveShipmentPaymentDraft();
+    fetchMock
+      .mockResolvedValueOnce(httpErrorResponse(429, '30'))
+      .mockImplementation(async () => jsonResponse(shipmentLookup()));
+
+    render(<PaymentPage />);
+    await flushPromises();
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(screen.queryByRole('img', { name: 'Mã QR thanh toán VietQR' })).toBeNull();
+    expect(routerPush).not.toHaveBeenCalled();
+
+    await advanceTime(29_999);
+    expect(fetchMock).toHaveBeenCalledOnce();
+
+    await advanceTime(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(screen.getByRole('img', { name: 'Mã QR thanh toán VietQR' })).toBeTruthy();
+    expect(routerPush).not.toHaveBeenCalled();
+  });
+
+  it('does not shorten Retry-After to make a public request at the verified payment deadline', async () => {
+    configureVietQr();
+    saveShipmentPaymentDraft();
+    const paymentExpiresAt = new Date(Date.now() + 20_000).toISOString();
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(shipmentLookup({ paymentExpiresAt })))
+      .mockResolvedValueOnce(httpErrorResponse(429, '30'));
+
+    render(<PaymentPage />);
+    await flushPromises();
+    expect(screen.getByRole('img', { name: 'Mã QR thanh toán VietQR' })).toBeTruthy();
+
+    await advanceTime(15_000);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(screen.getByRole('img', { name: 'Mã QR thanh toán VietQR' })).toBeTruthy();
+
+    await advanceTime(5_000);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole('img', { name: 'Mã QR thanh toán VietQR' })).toBeNull();
+    expect(screen.getByRole('alert').textContent).toContain('Không thể xác minh thông tin phiếu gửi hàng');
+  });
+
+  it('uses exponential rate-limit backoff when public lookup omits Retry-After, then recovers', async () => {
+    configureVietQr();
+    saveShipmentPaymentDraft();
+    fetchMock
+      .mockResolvedValueOnce(httpErrorResponse(429))
+      .mockResolvedValueOnce(httpErrorResponse(429))
+      .mockImplementation(async () => jsonResponse(shipmentLookup()));
+
+    render(<PaymentPage />);
+    await flushPromises();
+    await advanceTime(59_999);
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(screen.queryByRole('img', { name: 'Mã QR thanh toán VietQR' })).toBeNull();
+
+    await advanceTime(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await advanceTime(119_999);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(routerPush).not.toHaveBeenCalled();
+
+    await advanceTime(1);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(screen.getByRole('img', { name: 'Mã QR thanh toán VietQR' })).toBeTruthy();
+    expect(routerPush).not.toHaveBeenCalled();
+  });
+
+  it('aborts guest shipment polling on unmount and does not schedule another public lookup', async () => {
+    configureVietQr();
+    saveShipmentPaymentDraft();
+    fetchMock.mockImplementationOnce(() => new Promise(() => {}));
+    const view = render(<PaymentPage />);
+    await flushPromises();
+    const signal = fetchMock.mock.calls[0][1].signal as AbortSignal;
+
+    view.unmount();
+    expect(signal.aborted).toBe(true);
+    await advanceTime(60_000);
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(routerPush).not.toHaveBeenCalled();
+  });
+
+  it('does not label an unverified shipment as pending', async () => {
+    configureVietQr();
+    saveShipmentPaymentDraft();
+    fetchMock.mockImplementation(() => new Promise(() => {}));
+
+    render(<PaymentPage />);
+
+    const statusLabel = screen.getByText('Trạng thái thanh toán');
+    expect(statusLabel.parentElement?.textContent).toContain('Đang xác minh');
+    expect(statusLabel.parentElement?.textContent).not.toContain('Chờ thanh toán');
+    expect(screen.queryByRole('img', { name: 'Mã QR thanh toán VietQR' })).toBeNull();
+  });
+
+  it('shows verification in the shipment sidebar after the server deadline while status is still being read', async () => {
+    configureVietQr();
+    saveShipmentPaymentDraft();
+    const paymentExpiresAt = new Date(Date.now() + 20_000).toISOString();
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(shipmentLookup({ paymentExpiresAt })))
+      .mockImplementationOnce(() => new Promise(() => {}));
+
+    render(<PaymentPage />);
+    await flushPromises();
+    expect(screen.getByRole('img', { name: 'Mã QR thanh toán VietQR' })).toBeTruthy();
+
+    await advanceTime(20_000);
+
+    const statusLabel = screen.getByText('Trạng thái thanh toán');
+    expect(statusLabel.parentElement?.textContent).toContain('Đang xác minh');
+    expect(statusLabel.parentElement?.textContent).not.toContain('Chờ thanh toán');
+    expect(screen.getAllByRole('status').some((status) =>
+      status.textContent?.includes('Đang xác nhận trạng thái đơn sau thời hạn thanh toán'),
+    )).toBe(true);
+    expect(screen.queryByRole('img', { name: 'Mã QR thanh toán VietQR' })).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    {
+      name: 'pending',
+      overrides: {},
+      label: 'Chờ thanh toán',
+      qrVisible: true,
+      message: 'Đang chờ hệ thống xác nhận thanh toán',
+    },
+    {
+      name: 'paid',
+      overrides: { orderStatus: 'DA_THANH_TOAN', paymentStatus: 'THANH_CONG' },
+      label: 'Đã thanh toán',
+      qrVisible: false,
+      message: 'đã được xác nhận',
+    },
+    {
+      name: 'cancelled',
+      overrides: { status: 'DA_HUY', orderStatus: 'DA_HUY' },
+      label: 'Đã hủy',
+      qrVisible: false,
+      message: 'đã bị hủy',
+    },
+    {
+      name: 'expired',
+      overrides: { orderStatus: 'HET_HAN', paymentStatus: 'HET_HAN' },
+      label: 'Hết hạn',
+      qrVisible: false,
+      message: 'đã hết hạn',
+    },
+    {
+      name: 'failed',
+      overrides: { status: 'FAILED', paymentStatus: 'THAT_BAI' },
+      label: 'Thanh toán thất bại',
+      qrVisible: false,
+      message: 'chưa thành công',
+    },
+    {
+      name: 'reconciliation',
+      overrides: { requiresReconciliation: true },
+      label: 'Cần đối soát',
+      qrVisible: false,
+      message: 'đối soát',
+    },
+  ])('shows consistent verified $name state in the shipment summary', async ({ overrides, label, qrVisible, message }) => {
+    configureVietQr();
+    saveShipmentPaymentDraft();
+    fetchMock.mockResolvedValue(jsonResponse(shipmentLookup(overrides)));
+
+    render(<PaymentPage />);
+    await flushPromises();
+
+    const statusLabel = screen.getByText('Trạng thái thanh toán');
+    expect(statusLabel.parentElement?.textContent).toContain(label);
+    expect(Boolean(screen.queryByRole('img', { name: 'Mã QR thanh toán VietQR' }))).toBe(qrVisible);
+    expect(screen.getByRole('status').textContent).toContain(message);
+    expect(routerPush).not.toHaveBeenCalled();
+  });
+});
+
+it('routes a completed zero-value booking to invoice even without bank configuration', async () => {
+  savePaymentDraft('DGD-TEST-4201', {totalFare: 0});
+  fetchMock.mockResolvedValue(jsonResponse(bookingDetail({
+    totalAmount: 0, status: 'DA_THANH_TOAN', paymentStatus: 'DA_THANH_TOAN',
+  })));
+  render(<PaymentPage />); await flushPromises();
+  expect(routerPush).toHaveBeenCalledExactlyOnceWith(`/invoice/${bookingId}`);
+  expect(screen.queryByRole('img', {name: 'Mã QR thanh toán VietQR'})).toBeNull();
+});
+
+it('rejects a timed-out response even when the transport ignores abort', async () => {
+  configureVietQr();
+  let resolveRead!: (response: ReturnType<typeof jsonResponse>) => void;
+  fetchMock.mockImplementationOnce(() => new Promise(resolve => { resolveRead = resolve; }));
+  render(<PaymentPage />); await flushPromises();
+  await advanceTime(10_001);
+  expect(fetchMock.mock.calls[0][1].signal.aborted).toBe(true);
+  await act(async () => resolveRead(jsonResponse(bookingDetail({status: 'DA_THANH_TOAN', paymentStatus: 'DA_THANH_TOAN'}))));
+  expect(routerPush).not.toHaveBeenCalled();
+  expect(screen.queryByRole('img', {name: 'Mã QR thanh toán VietQR'})).toBeNull();
+});
+
+it('uses server clock offset instead of browser time or draft timestamps', async () => {
+  configureVietQr();
+  const serverNow = Date.now() + 3_600_000;
+  fetchMock.mockResolvedValue(jsonResponse(bookingDetail({
+    serverTime: new Date(serverNow).toISOString(),
+    paymentExpiresAt: new Date(serverNow + 60_000).toISOString(),
+  })));
+  render(<PaymentPage />); await flushPromises();
+  expect(screen.getByText(/Thời gian thanh toán còn lại 01:00/)).toBeTruthy();
+  expect(screen.getByRole('img', {name: 'Mã QR thanh toán VietQR'})).toBeTruthy();
 });

@@ -100,7 +100,9 @@ beforeAll(() => {
 
 async function openVehicleDetails() {
   fireEvent.click(screen.getAllByRole('button', { name: 'Xem chi tiết xe 29A-123.45' })[0]!);
-  return screen.findByRole('dialog', { name: 'Chi tiết xe' });
+  const detail = await screen.findByRole('dialog', { name: 'Chi tiết xe' });
+  await within(detail).findByText('29A-123.45');
+  return detail;
 }
 
 describe('Vehicle action permissions', () => {

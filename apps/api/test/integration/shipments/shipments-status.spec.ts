@@ -1,6 +1,6 @@
 import { randomInt, randomUUID } from 'node:crypto';
 import request from 'supertest';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   ConflictException,
   type ExecutionContext,
@@ -1065,6 +1065,40 @@ describe('Shipment Status Transition APIs (Phase 04)', () => {
       expect(updatedOrder.trangThai).toBe('DA_THANH_TOAN');
       expect(payments).toHaveLength(1);
       expect(payments[0].trangThai).toBe('THANH_CONG');
+    });
+
+    it('rolls back the real status update when writing its history fails', async () => {
+      const shipment = await createTestShipment({ initialStatus: 'MOI_TAO', isPaid: true });
+      setTenantAdmin();
+      const before = await prisma.phieuGuiHang.findUniqueOrThrow({
+        where: { phieuGuiHangId: shipment.phieuGuiHangId },
+        include: { lichSuTrangThais: true, donGiaoDich: { include: { thanhToans: true } } },
+      });
+      const transaction = prisma.$transaction.bind(prisma);
+      let wroteHistory = false;
+      const fault = vi.spyOn(prisma, '$transaction').mockImplementation(((
+        callback: (tx: unknown) => Promise<unknown>, options: unknown,
+      ) => transaction(async (tx) => {
+        const create = tx.lichSuTrangThaiPhieuGuiHang.create.bind(tx.lichSuTrangThaiPhieuGuiHang);
+        tx.lichSuTrangThaiPhieuGuiHang.create = (async (args: Parameters<typeof create>[0]) => {
+          await create(args);
+          wroteHistory = true;
+          throw new Error('Injected failure after real shipment history insert');
+        }) as unknown as typeof tx.lichSuTrangThaiPhieuGuiHang.create;
+        return callback(tx);
+      }, options as never)) as typeof prisma.$transaction);
+      try {
+        const response = await request(app.getHttpServer())
+          .patch(`/api/v1/shipments/${shipment.phieuGuiHangId}/status`)
+          .send({ status: 'DA_TIEP_NHAN', note: 'rollback regression' });
+        expect(response.status).toBe(500);
+        expect(wroteHistory).toBe(true);
+      } finally { fault.mockRestore(); }
+      const after = await prisma.phieuGuiHang.findUniqueOrThrow({
+        where: { phieuGuiHangId: shipment.phieuGuiHangId },
+        include: { lichSuTrangThais: true, donGiaoDich: { include: { thanhToans: true } } },
+      });
+      expect(after).toEqual(before);
     });
 
     it('handles concurrent status updates safely with only one winner', async () => {

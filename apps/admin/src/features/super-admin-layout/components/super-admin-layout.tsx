@@ -11,6 +11,7 @@ import {
   Package,
   PanelLeftClose,
   PanelLeftOpen,
+  Tag,
   ShieldCheck,
   Ticket,
   Truck,
@@ -47,6 +48,7 @@ type SuperAdminLayoutProps = {
     | 'fare-prices'
     | 'trips'
     | 'customers'
+    | 'promotions'
     | 'shipments'
     | 'admin-accounts'
     | 'rbac'
@@ -157,6 +159,7 @@ const OPERATION_NAVIGATION_DETAILS: Record<
   'fare-prices': { label: 'Bảng giá vé', icon: () => <Ticket size={18} /> },
   trips: { label: 'Chuyến xe', icon: () => <CalendarDays size={18} /> },
   customers: { label: 'Khách hàng', icon: () => <UsersRound size={18} /> },
+  promotions: { label: 'Khuyến mãi', icon: () => <Tag size={18} /> },
   shipments: { label: 'Gửi hàng', icon: () => <Package size={18} /> },
 };
 
