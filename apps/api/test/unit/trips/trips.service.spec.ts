@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { PrismaService } from '../../../src/prisma/prisma.service.js';
 import { TripsService } from '../../../src/trips/trips.service.js';
+import { CargoCapacityService } from '../../../src/cargo-capacity/cargo-capacity.service.js';
 
 const firstTrip = {
   chuyenXeId: 21,
@@ -65,6 +66,7 @@ function createService() {
     bangGia: { findMany: vi.fn(), findFirst: vi.fn() },
     gheChuyenXe: { findMany: vi.fn(), findFirst: vi.fn() },
     phieuGuiHang: { findFirst: vi.fn() },
+    hangHoa: { findMany: vi.fn() },
     tuyenXe: { findFirst: vi.fn() },
     xe: { findFirst: vi.fn() },
     $queryRaw: vi.fn().mockResolvedValue([{ xeId: 1 }]),
@@ -81,8 +83,14 @@ function createService() {
       {
         get: vi.fn().mockReturnValue('Asia/Ho_Chi_Minh'),
       } as never,
+      new CargoCapacityService(),
     ),
   };
+}
+
+function freezeTripTimeBeforeFixtureDeparture() {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date('2026-10-14T00:00:00.000Z'));
 }
 
 afterEach(() => {
@@ -121,6 +129,7 @@ describe('TripsService search', () => {
   });
 
   it('returns real database fields, applicable fares and pagination without fabricated display data', async () => {
+    freezeTripTimeBeforeFixtureDeparture();
     const { prisma, service } = createService();
     prisma.chuyenXe.findMany.mockResolvedValue([firstTrip, secondTrip]);
     prisma.bangGia.findMany.mockResolvedValue([
@@ -168,6 +177,7 @@ describe('TripsService search', () => {
           },
           departureTime: '2026-10-15T13:00:00.000Z',
           arrivalTime: null,
+          availableSeats: 1,
           vehicle: {
             id: 4,
             typeId: 2,
@@ -177,7 +187,54 @@ describe('TripsService search', () => {
             amenities: [],
           },
           price: 300000,
-          availableSeats: 1,
+          pickupPoints: [
+            {
+              id: 'PU_STATION_22',
+              name: 'Bến xe Miền Đông mới',
+              time: '20:00',
+              address: 'Đường Hoàng Hữu Nam, TP. Thủ Đức, TP.HCM',
+              type: 'station',
+              isDefault: true,
+            },
+            {
+              id: 'PU_22_2',
+              name: 'Bến xe Miền Tây',
+              time: '20:00',
+              address: '395 Kinh Dương Vương, An Lạc, Bình Tân, TP.HCM',
+              type: 'station',
+              isDefault: false,
+            },
+            {
+              id: 'PU_22_3',
+              name: 'Bến xe An Sương',
+              time: '20:00',
+              address: 'Quốc lộ 22, Bà Điểm, Hóc Môn, TP.HCM',
+              type: 'station',
+              isDefault: false,
+            },
+          ],
+          dropoffPoints: [
+            {
+              id: 'DO_STATION_22',
+              name: 'Bến xe Liên tỉnh Đà Lạt',
+              time: '20:00',
+              address: '01 Tô Hiến Thành, Phường 3, Đà Lạt',
+              type: 'station',
+              isDefault: true,
+            },
+            {
+              id: 'DO_22_2',
+              name: 'Bến xe Trung tâm Đà Lạt',
+              time: '20:00',
+              address: 'Đường Mai Anh Đào, Phường 8, Đà Lạt',
+              type: 'station',
+              isDefault: false,
+            },
+          ],
+          pickupPoint: 'Bến xe Miền Đông mới',
+          pickupAddress: 'Đường Hoàng Hữu Nam, TP. Thủ Đức, TP.HCM',
+          dropoffPoint: 'Bến xe Liên tỉnh Đà Lạt',
+          dropoffAddress: '01 Tô Hiến Thành, Phường 3, Đà Lạt',
         },
       ],
       meta: { page: 1, pageSize: 1, totalItems: 2, totalPages: 2 },
@@ -277,6 +334,7 @@ describe('TripsService search', () => {
 
 describe('TripsService detail', () => {
   it('maps one trip without random ratings, guessed duration or fallback fare', async () => {
+    freezeTripTimeBeforeFixtureDeparture();
     const { prisma, service } = createService();
     prisma.chuyenXe.findUnique.mockResolvedValue(firstTrip);
     prisma.bangGia.findFirst.mockResolvedValue(null);
@@ -293,6 +351,7 @@ describe('TripsService detail', () => {
   });
 
   it('derives arrivalTime accurately from route durationMinutes', async () => {
+    freezeTripTimeBeforeFixtureDeparture();
     const { prisma, service } = createService();
     const tripWithDuration = {
       ...firstTrip,
@@ -313,6 +372,7 @@ describe('TripsService detail', () => {
   });
 
   it('preserves multi-day journeys for 24h and 36h duration without modulo loss', async () => {
+    freezeTripTimeBeforeFixtureDeparture();
     const { prisma, service } = createService();
     // 24h duration
     prisma.chuyenXe.findUnique.mockResolvedValue({
@@ -333,6 +393,45 @@ describe('TripsService detail', () => {
     const details36h = await service.getDetails(21);
     expect(details36h.departureTime).toBe('2026-10-15T15:00:00.000Z');
     expect(details36h.arrivalTime).toBe('2026-10-17T03:00:00.000Z'); // Next day + 12h!
+  });
+
+  it('calculates cargo capacity accurately excluding cancelled and delivered shipments', async () => {
+    const { prisma, service } = createService();
+    prisma.chuyenXe.findUnique.mockResolvedValue({
+      chuyenXeId: 21,
+      nhanGuiHang: true,
+      sucChuaXeMay: 3,
+      sucChuaHangCongKenh: 10,
+      sucChuaHangNhe: 10,
+      trangThai: 'CHUA_KHOI_HANH',
+    });
+    prisma.hangHoa.findMany.mockResolvedValue([
+      { soLuong: 1, loaiHangHoa: { nhomSucChua: 'XE_MAY' } },
+      { soLuong: 4, loaiHangHoa: { nhomSucChua: 'HANG_CONG_KENH' } },
+      { soLuong: 2, loaiHangHoa: { nhomSucChua: 'HANG_NHE' } },
+    ]);
+
+    const result = await service.getCargoCapacity(21);
+    expect(result.data.acceptsShipments).toBe(true);
+    expect(result.data.capacities.motorcycles).toEqual({ total: 3, used: 1, remaining: 2 });
+    expect(result.data.capacities.bulkyGoods).toEqual({ total: 10, used: 4, remaining: 6 });
+    expect(result.data.capacities.parcels).toEqual({ total: 10, used: 2, remaining: 8 });
+  });
+
+  it('returns acceptsShipments: false when trip does not accept cargo', async () => {
+    const { prisma, service } = createService();
+    prisma.chuyenXe.findUnique.mockResolvedValue({
+      chuyenXeId: 21,
+      nhanGuiHang: false,
+      sucChuaXeMay: 0,
+      sucChuaHangCongKenh: 0,
+      sucChuaHangNhe: 0,
+      trangThai: 'CHUA_KHOI_HANH',
+    });
+
+    const result = await service.getCargoCapacity(21);
+    expect(result.data.acceptsShipments).toBe(false);
+    expect(result.data.capacities.motorcycles.remaining).toBe(0);
   });
 });
 

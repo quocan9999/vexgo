@@ -253,6 +253,24 @@ describe('TicketsService', () => {
       );
     });
 
+    it('denies account history access to a ticket from an unlinked guest booking', async () => {
+      prisma.ve.findUnique.mockResolvedValue({
+        ...sampleTicket,
+        phieuDatVe: {
+          ...sampleTicket.phieuDatVe,
+          donGiaoDich: {
+            ...sampleTicket.phieuDatVe.donGiaoDich,
+            khachHangId: null,
+            khachHang: null,
+          },
+        },
+      });
+
+      await expect(service.findCustomerTicketById(1, 1)).rejects.toThrow(
+        ForbiddenException,
+      );
+    });
+
     it('returns ticket detail wrapped in data envelope when authorized', async () => {
       prisma.ve.findUnique.mockResolvedValue(sampleTicket);
 

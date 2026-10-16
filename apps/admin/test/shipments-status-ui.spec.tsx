@@ -67,6 +67,7 @@ const mockShipmentDetailMoiTao = {
   waybillCode: 'VD20261009001',
   sentAt: '2026-10-09T08:00:00.000Z',
   status: 'MOI_TAO',
+  paymentStatus: 'DA_THANH_TOAN',
   note: 'Hàng dễ vỡ, xin nhẹ tay',
   sender: {
     fullName: 'Trần Văn Gửi',
@@ -234,10 +235,51 @@ describe('Shipment Status Actions UI (Phase 05)', () => {
     expect(
       screen.getByRole('button', { name: 'Xác nhận đã tiếp nhận hàng' }),
     ).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Hủy phiếu gửi' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Hủy phiếu gửi' })).toBeNull();
   });
 
-  it('opens confirmation dialog and successfully executes status transition', async () => {
+  it('does not expose operational transitions before payment is confirmed', async () => {
+    setEmployeeAdminTestSession(['shipment:read', 'shipment:update']);
+    const unpaidDetail = {
+      ...mockShipmentDetailMoiTao,
+      paymentStatus: 'CHO_THANH_TOAN',
+    };
+    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/api/v1/shipments/10')) {
+        return Promise.resolve(jsonResponse({ data: unpaidDetail }));
+      }
+      if (url.includes('/api/v1/shipments')) {
+        return Promise.resolve(
+          jsonResponse({
+            data: [mockShipmentSummary],
+            meta: { page: 1, pageSize: 10, totalItems: 1, totalPages: 1 },
+          }),
+        );
+      }
+      return Promise.resolve(jsonResponse({ message: 'Not found' }, false, 404));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<ShipmentsManagement />);
+    fireEvent.click(
+      (await screen.findAllByRole('button', {
+        name: /Xem chi tiết phiếu gửi VD20261009001/i,
+      }))[0],
+    );
+
+    expect(await screen.findByText('Chờ thanh toán')).toBeTruthy();
+    expect(
+      screen.queryByRole('button', { name: 'Xác nhận đã tiếp nhận hàng' }),
+    ).toBeNull();
+    expect(
+      screen.getByText(
+        'Chỉ có thể cập nhật trạng thái vận chuyển sau khi đơn đã thanh toán.',
+      ),
+    ).toBeTruthy();
+  });
+
+  it('keeps the confirmation outside the detail sheet when executing a status transition', async () => {
     setEmployeeAdminTestSession(['shipment:read', 'shipment:update']);
 
     const updatedDetail = {
@@ -304,8 +346,15 @@ describe('Shipment Status Actions UI (Phase 05)', () => {
     });
     fireEvent.click(acceptButton);
 
-    // Dialog should open
+    // The confirmation must stay a top-level dialog so Escape only dismisses it.
     expect(await screen.findByText('Tiếp nhận hàng gửi?')).toBeTruthy();
+    const confirmationDialog = screen.getByRole('dialog', {
+      name: 'Tiếp nhận hàng gửi?',
+    });
+    expect(confirmationDialog.closest('dialog.admin-detail-sheet')).toBeNull();
+    expect(
+      screen.getByRole('dialog', { name: 'Chi tiết phiếu gửi' }),
+    ).toBeTruthy();
 
     const noteTextarea = screen.getByLabelText(/Ghi chú trạng thái/i);
     fireEvent.change(noteTextarea, {
@@ -332,9 +381,10 @@ describe('Shipment Status Actions UI (Phase 05)', () => {
     ).toBeTruthy();
   });
 
-  it('displays 409 conflict error clearly in dialog without false success', async () => {
+  it('refreshes payment state when the server rejects a transition for an unpaid shipment', async () => {
     setEmployeeAdminTestSession(['shipment:read', 'shipment:update']);
 
+    let detailReadCount = 0;
     const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url.includes('/api/v1/shipments/10/status') && init?.method === 'PATCH') {
@@ -342,9 +392,8 @@ describe('Shipment Status Actions UI (Phase 05)', () => {
           jsonResponse(
             {
               statusCode: 409,
-              error: 'SHIPMENT_REFUND_REQUIRED',
-              message:
-                'Phiếu gửi hàng đã thanh toán thành công, không thể hủy khi chưa có quy trình hoàn tiền trong MVP.',
+              error: 'SHIPMENT_PAYMENT_NOT_CONFIRMED',
+              message: 'Payment not confirmed.',
             },
             false,
             409,
@@ -352,7 +401,15 @@ describe('Shipment Status Actions UI (Phase 05)', () => {
         );
       }
       if (url.includes('/api/v1/shipments/10')) {
-        return Promise.resolve(jsonResponse({ data: mockShipmentDetailMoiTao }));
+        detailReadCount += 1;
+        return Promise.resolve(
+          jsonResponse({
+            data:
+              detailReadCount > 1
+                ? { ...mockShipmentDetailMoiTao, paymentStatus: 'CHO_THANH_TOAN' }
+                : mockShipmentDetailMoiTao,
+          }),
+        );
       }
       if (url.includes('/api/v1/shipments')) {
         return Promise.resolve(
@@ -373,24 +430,22 @@ describe('Shipment Status Actions UI (Phase 05)', () => {
     }))[0];
     fireEvent.click(detailButton);
 
-    const cancelButton = await screen.findByRole('button', {
-      name: 'Hủy phiếu gửi',
+    const acceptButton = await screen.findByRole('button', {
+      name: 'Xác nhận đã tiếp nhận hàng',
     });
-    fireEvent.click(cancelButton);
-
-    expect(await screen.findByText('Hủy phiếu gửi hàng?')).toBeTruthy();
-
-    const confirmButton = screen.getByRole('button', {
-      name: 'Xác nhận hủy',
-    });
+    fireEvent.click(acceptButton);
+    const confirmButton = screen.getByRole('button', { name: 'Xác nhận tiếp nhận' });
     fireEvent.click(confirmButton);
 
-    // Dialog stays open and shows error
     expect(
       await screen.findByText(
-        'Phiếu gửi hàng đã thanh toán thành công, không thể hủy khi chưa có quy trình hoàn tiền trong MVP.',
+        'Chỉ có thể cập nhật trạng thái vận chuyển sau khi đơn đã thanh toán.',
       ),
     ).toBeTruthy();
+    await waitFor(() => expect(detailReadCount).toBe(2));
+    expect(
+      screen.queryByRole('button', { name: 'Xác nhận đã tiếp nhận hàng' }),
+    ).toBeNull();
   });
 
   it('sends only one status request while the first submission is pending', async () => {

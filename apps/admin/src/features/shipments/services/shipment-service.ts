@@ -3,6 +3,7 @@ import { getApiBaseUrl } from '@/lib/api-url';
 import type {
   ShipmentDetail,
   ShipmentDetailResponse,
+  ShipmentOperationalStatus,
   ShipmentQuery,
   ShipmentsResponse,
 } from '../types/shipment';
@@ -96,7 +97,7 @@ export async function getShipmentById(
 }
 
 export interface UpdateShipmentStatusPayload {
-  status: ShipmentDetail['status'];
+  status: ShipmentOperationalStatus;
   note?: string;
 }
 
@@ -146,9 +147,9 @@ export async function updateShipmentStatus(
     try {
       errorData = (await response.json()) as ShipmentStatusErrorResponse;
       if (response.status === 409) {
-        if (errorData?.error === 'SHIPMENT_REFUND_REQUIRED') {
+        if (errorData?.error === 'SHIPMENT_PAYMENT_NOT_CONFIRMED') {
           errorMessage =
-            'Phiếu gửi hàng đã thanh toán thành công, không thể hủy khi chưa có quy trình hoàn tiền trong MVP.';
+            'Chỉ có thể cập nhật trạng thái vận chuyển sau khi đơn đã thanh toán.';
         } else if (errorData?.error === 'CONCURRENT_STATUS_UPDATE') {
           errorMessage =
             'Trạng thái phiếu gửi đã được cập nhật bởi thao tác khác. Dữ liệu mới đã được tải lại; vui lòng kiểm tra trước khi tiếp tục.';

@@ -180,7 +180,7 @@ export const CustomerHeader: React.FC = () => {
                       <div className="w-9 h-9 rounded-full bg-sky-400 flex items-center justify-center shrink-0">
                         <FileText className="w-4 h-4 text-white" />
                       </div>
-                      <span className="text-sm font-bold text-slate-700 group-hover:text-sky-500 transition-colors">Lịch sử mua vé</span>
+                      <span className="text-sm font-bold text-slate-700 group-hover:text-sky-500 transition-colors">Vé của tôi</span>
                     </Link>
 
                     <Link
@@ -248,7 +248,7 @@ export const CustomerHeader: React.FC = () => {
                   className="flex items-center gap-2 px-3 py-2 text-sm font-bold text-amber-300 bg-white/5 rounded-lg"
                 >
                   <FileText className="w-4 h-4" />
-                  <span>Vé và đơn hàng</span>
+                  <span>Vé của tôi</span>
                 </Link>
                 <button
                   type="button"

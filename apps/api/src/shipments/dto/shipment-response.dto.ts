@@ -84,6 +84,7 @@ export interface ShipmentHistoryItem {
 }
 
 export interface ShipmentDetail extends ShipmentSummary {
+  paymentStatus: string;
   note: string | null;
   cargoItems: CargoItemDetail[];
   cargoFeeDetails: CargoFeeDetail[];

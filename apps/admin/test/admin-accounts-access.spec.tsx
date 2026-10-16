@@ -13,6 +13,29 @@ const { state, replace } = vi.hoisted(() => ({
   replace: vi.fn(),
 }));
 
+let memoryStore: Record<string, string> = {};
+const mockStorage = {
+  getItem: (key: string) => memoryStore[key] ?? null,
+  setItem: (key: string, value: string) => {
+    memoryStore[key] = String(value);
+  },
+  removeItem: (key: string) => {
+    delete memoryStore[key];
+  },
+  clear: () => {
+    memoryStore = {};
+  },
+  get length() {
+    return Object.keys(memoryStore).length;
+  },
+  key: (index: number) => Object.keys(memoryStore)[index] ?? null,
+};
+Object.defineProperty(window, 'localStorage', {
+  value: mockStorage,
+  writable: true,
+  configurable: true,
+});
+
 vi.mock('next/navigation', () => ({
   usePathname: () => state.pathname,
   useRouter: () => ({ replace }),

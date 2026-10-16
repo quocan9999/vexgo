@@ -31,6 +31,19 @@ export const FREIGHT_PAYER_LABELS: Record<FreightPayer, string> = {
   NGUOI_NHAN: 'Người nhận trả',
 };
 
+export function getPaymentStatusLabel(status: string): string {
+  switch (status) {
+    case 'CHO_THANH_TOAN':
+      return 'Chờ thanh toán';
+    case 'DA_THANH_TOAN':
+      return 'Đã thanh toán';
+    case 'DA_HUY':
+      return 'Đã hủy';
+    default:
+      return status;
+  }
+}
+
 export function getShipmentStatusTone(
   status: ShipmentStatus,
 ): 'active' | 'muted' {
@@ -76,12 +89,11 @@ interface ShipmentDetailsProps {
 }
 
 export type StatusActionConfig = {
-  targetStatus: ShipmentStatus;
+  targetStatus: Exclude<ShipmentStatus, 'DA_HUY'>;
   title: string;
   description: string;
   actionLabel: string;
   confirmLabel: string;
-  variant?: 'primary' | 'destructive';
 };
 
 export function getAvailableStatusActions(status: ShipmentStatus): StatusActionConfig[] {
@@ -95,16 +107,6 @@ export function getAvailableStatusActions(status: ShipmentStatus): StatusActionC
             'Phiếu gửi hàng sẽ chuyển sang trạng thái Đã tiếp nhận tại điểm gửi.',
           actionLabel: 'Xác nhận đã tiếp nhận hàng',
           confirmLabel: 'Xác nhận tiếp nhận',
-          variant: 'primary',
-        },
-        {
-          targetStatus: 'DA_HUY',
-          title: 'Hủy phiếu gửi hàng?',
-          description:
-            'Phiếu gửi hàng sẽ chuyển sang trạng thái Đã hủy. Thao tác này chỉ áp dụng cho phiếu chưa thanh toán trong MVP.',
-          actionLabel: 'Hủy phiếu gửi',
-          confirmLabel: 'Xác nhận hủy',
-          variant: 'destructive',
         },
       ];
     case 'DA_TIEP_NHAN':
@@ -116,7 +118,6 @@ export function getAvailableStatusActions(status: ShipmentStatus): StatusActionC
             'Phiếu gửi hàng sẽ chuyển sang trạng thái Đang vận chuyển cùng chuyến xe.',
           actionLabel: 'Bắt đầu vận chuyển',
           confirmLabel: 'Bắt đầu vận chuyển',
-          variant: 'primary',
         },
       ];
     case 'DANG_VAN_CHUYEN':
@@ -128,7 +129,6 @@ export function getAvailableStatusActions(status: ShipmentStatus): StatusActionC
             'Phiếu gửi hàng sẽ chuyển sang trạng thái Đã giao và hoàn tất việc giao nhận.',
           actionLabel: 'Xác nhận đã giao hàng',
           confirmLabel: 'Xác nhận đã giao',
-          variant: 'primary',
         },
       ];
     default:
@@ -230,11 +230,8 @@ export function ShipmentDetails({
     } catch (err: unknown) {
       if (err instanceof ShipmentStatusUpdateError && err.status === 409) {
         setActionLocked(true);
-
-        if (err.code !== 'SHIPMENT_REFUND_REQUIRED') {
-          setRetryCount((c) => c + 1);
-          onStatusUpdated?.();
-        }
+        setRetryCount((c) => c + 1);
+        onStatusUpdated?.();
       }
       setStatusError(
         err instanceof Error
@@ -247,11 +244,12 @@ export function ShipmentDetails({
   }
 
   return (
-    <AdminDetailSheet
-      ariaLabelledBy="shipment-detail-title"
-      dialogRef={dialogRef}
-      onClose={onClose}
-    >
+    <>
+      <AdminDetailSheet
+        ariaLabelledBy="shipment-detail-title"
+        dialogRef={dialogRef}
+        onClose={onClose}
+      >
       <div className="admin-dialog-header">
         <div className="admin-dialog-header__copy">
           <p className="eyebrow">PHIẾU GỬI HÀNG</p>
@@ -313,33 +311,33 @@ export function ShipmentDetails({
                 detail.shipment.status,
               );
               if (availableActions.length === 0) return null;
+              const paymentConfirmed =
+                detail.shipment.paymentStatus === 'DA_THANH_TOAN';
               return (
                 <div className="shipments-detail-actions-panel">
                   <span className="shipments-detail-actions-label">
                     Thao tác trạng thái:
                   </span>
-                  <div className="admin-detail-sheet__actions">
-                    {availableActions.map((action) => (
-                      <Button
-                        key={action.targetStatus}
-                        className={
-                          action.variant === 'destructive'
-                            ? 'shipments-btn-danger'
-                            : undefined
-                        }
-                        disabled={submitting}
-                        onClick={() => handleOpenAction(action)}
-                        type="button"
-                        variant={
-                          action.variant === 'destructive'
-                            ? 'secondary'
-                            : 'primary'
-                        }
-                      >
-                        {action.actionLabel}
-                      </Button>
-                    ))}
-                  </div>
+                  {paymentConfirmed ? (
+                    <div className="admin-detail-sheet__actions">
+                      {availableActions.map((action) => (
+                        <Button
+                          key={action.targetStatus}
+                          disabled={submitting}
+                          onClick={() => handleOpenAction(action)}
+                          type="button"
+                          variant="primary"
+                        >
+                          {action.actionLabel}
+                        </Button>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="shipments-payment-gate" role="status">
+                      Chỉ có thể cập nhật trạng thái vận chuyển sau khi đơn đã
+                      thanh toán.
+                    </p>
+                  )}
                 </div>
               );
             })()
@@ -574,6 +572,12 @@ export function ShipmentDetails({
                     </strong>
                   </dd>
                 </div>
+                <div className="shipments-detail-row">
+                  <dt>Thanh toán</dt>
+                  <dd>
+                    {getPaymentStatusLabel(detail.shipment.paymentStatus)}
+                  </dd>
+                </div>
               </dl>
             </div>
           </section>
@@ -639,6 +643,8 @@ export function ShipmentDetails({
         </div>
       )}
 
+      </AdminDetailSheet>
+
       {activeAction && (
         <AdminConfirmDialog
           ariaBusy={submitting}
@@ -694,23 +700,14 @@ export function ShipmentDetails({
               type="button"
               variant="secondary"
             >
-              {actionLocked ? 'Đóng' : 'Hủy'}
+              Đóng
             </Button>
             {!actionLocked && (
               <Button
-                className={
-                  activeAction.variant === 'destructive'
-                    ? 'shipments-btn-danger'
-                    : undefined
-                }
                 disabled={submitting}
                 onClick={handleConfirmStatus}
                 type="button"
-                variant={
-                  activeAction.variant === 'destructive'
-                    ? 'secondary'
-                    : 'primary'
-                }
+                variant="primary"
               >
                 {submitting && (
                   <LoaderCircle
@@ -725,6 +722,6 @@ export function ShipmentDetails({
           </div>
         </AdminConfirmDialog>
       )}
-    </AdminDetailSheet>
+    </>
   );
 }

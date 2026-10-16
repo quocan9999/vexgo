@@ -1,4 +1,3 @@
-/* eslint-disable */
 'use client';
 
 import type { ILuggageItem } from "./luggage-item";
@@ -7,40 +6,80 @@ import Link from 'next/link';
 import { Package, PackageX, Info } from 'lucide-react';
 
 import { LuggageForm } from './luggage-form';
+import { shipmentsApi, type CargoCategory } from '@/features/shipments/services/shipments.api';
+import {
+  findOverweightRegularCargoItem,
+  MAX_REGULAR_CARGO_PACKAGE_WEIGHT_KG,
+} from '../../utils/cargo-weight';
+
+interface CargoCapacityInfo {
+  acceptsShipments: boolean;
+  capacities: {
+    motorcycles: { total: number; used: number; remaining: number };
+    bulkyGoods: { total: number; used: number; remaining: number };
+    parcels: { total: number; used: number; remaining: number };
+  };
+}
 
 interface LuggageStepProps {
   route: string;
   time: string;
   seat: string;
   passenger: string;
+  cargoCapacity?: CargoCapacityInfo | null;
   onFeeChange: (fee: number, weight: number, items: ILuggageItem[]) => void;
 }
 
-export const LuggageStep: React.FC<LuggageStepProps> = ({ route, time, seat, passenger, onFeeChange }) => {
+export const LuggageStep: React.FC<LuggageStepProps> = ({ route, time, seat, passenger, cargoCapacity, onFeeChange }) => {
   const [hasExtraLuggage, setHasExtraLuggage] = useState(false);
   const [items, setItems] = useState<ILuggageItem[]>([]);
+  const [cargoCategories, setCargoCategories] = useState<CargoCategory[]>([]);
+  const [cargoCategoriesLoading, setCargoCategoriesLoading] = useState(true);
+  const [cargoCategoriesError, setCargoCategoriesError] = useState<string | null>(null);
+  const overweightRegularCargoItem = findOverweightRegularCargoItem(items);
+
+  useEffect(() => {
+    let isMounted = true;
+    shipmentsApi
+      .getCargoCategories()
+      .then((response) => {
+        if (isMounted) setCargoCategories(response.data);
+      })
+      .catch((error: unknown) => {
+        if (isMounted) {
+          setCargoCategoriesError(
+            error instanceof Error
+              ? error.message
+              : 'Không thể tải danh mục loại hàng hóa.',
+          );
+        }
+      })
+      .finally(() => {
+        if (isMounted) setCargoCategoriesLoading(false);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!hasExtraLuggage) {
       onFeeChange(0, 0, []);
       return;
     }
-
-    const totalWeight = items.reduce((sum, item) => sum + (item.weight || 0) * item.quantity, 0);
-    
-    let fee = 0;
-    if (totalWeight <= 20) {
-      fee = 0;
-    } else if (totalWeight <= 30) {
-      fee = 30000;
-    } else if (totalWeight <= 40) {
-      fee = 50000;
-    } else {
-      // > 40kg, require contact, maybe standard fee + 50k
-      fee = 100000; 
-    }
-
-    onFeeChange(fee, totalWeight, items);
+    const totalWeight = Number(
+      items
+        .reduce((sum, item) => {
+          const actualWeight = item.weight || 0;
+          const volumetricWeight =
+            item.length && item.width && item.height
+              ? (item.length * item.width * item.height) / 5000
+              : 0;
+          return sum + Math.max(actualWeight, volumetricWeight) * (item.quantity || 1);
+        }, 0)
+        .toFixed(2),
+    );
+    onFeeChange(0, totalWeight, items);
   }, [hasExtraLuggage, items, onFeeChange]);
 
   return (
@@ -67,7 +106,10 @@ export const LuggageStep: React.FC<LuggageStepProps> = ({ route, time, seat, pas
         </div>
       </div>
 
-      <h3 className="text-sm font-bold text-slate-900 mb-4">Bạn có hành lý mang theo không?</h3>
+      <h3 className="text-sm font-bold text-slate-900 mb-2">Bạn có hàng hóa cần gửi dưới hầm xe không?</h3>
+      <p className="mb-4 text-xs leading-relaxed text-slate-600">
+        Hành lý xách tay tiêu chuẩn không thuộc dịch vụ hàng gửi dưới hầm xe.
+      </p>
       
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
         <div
@@ -78,7 +120,7 @@ export const LuggageStep: React.FC<LuggageStepProps> = ({ route, time, seat, pas
         >
           <PackageX className={`w-8 h-8 ${!hasExtraLuggage ? 'text-accent' : 'text-slate-400'}`} />
           <span className={`text-sm font-bold ${!hasExtraLuggage ? 'text-accent' : 'text-slate-700'}`}>
-            Không có hành lý<br/>vượt tiêu chuẩn
+            Chỉ có hành lý xách tay<br/>tiêu chuẩn
           </span>
         </div>
 
@@ -101,28 +143,127 @@ export const LuggageStep: React.FC<LuggageStepProps> = ({ route, time, seat, pas
         >
           <Package className={`w-8 h-8 ${hasExtraLuggage ? 'text-accent' : 'text-slate-400'}`} />
           <span className={`text-sm font-bold ${hasExtraLuggage ? 'text-accent' : 'text-slate-700'}`}>
-            Có hành lý cồng kềnh /<br/>vượt tiêu chuẩn
+            Có hàng gửi<br/>dưới hầm xe
           </span>
         </div>
       </div>
 
       {hasExtraLuggage && (
         <div className="mb-6">
-          <LuggageForm items={items} onChange={setItems} />
-          {items.reduce((sum, item) => sum + (item.weight || 0) * item.quantity, 0) > 40 && (
-            <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 flex gap-2">
-              <Info className="w-5 h-5 shrink-0" />
-              <span>Hành lý trên 40kg yêu cầu liên hệ nhà xe hoặc cân nhắc gửi hàng riêng.</span>
+          {cargoCapacity?.acceptsShipments ? (
+            <div className="mb-5 rounded-xl border border-slate-200/90 bg-slate-50/60 p-3.5">
+              <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2.5 pb-2 border-b border-slate-200/60">
+                <span>Khả năng nhận hàng của chuyến</span>
+                <span className="text-slate-400 font-normal lowercase">cập nhật thời gian thực</span>
+              </div>
+              <div className="grid grid-cols-3 divide-x divide-slate-200 text-xs">
+                <div className="pr-3">
+                  <div className="text-slate-500 text-[11px]">Xe máy</div>
+                  <div className="mt-0.5 flex items-baseline gap-1">
+                    {cargoCapacity.capacities.motorcycles.remaining === 0 ? (
+                      <span className="text-xs font-bold text-red-500">Hết chỗ</span>
+                    ) : (
+                      <>
+                        <span className="text-sm font-extrabold text-slate-900">
+                          {cargoCapacity.capacities.motorcycles.remaining}
+                        </span>
+                        <span className="text-[11px] text-slate-500">chỗ trống</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                <div className="px-3">
+                  <div className="text-slate-500 text-[11px]">Hàng 20–40kg / Xe đạp</div>
+                  <div className="mt-0.5 flex items-baseline gap-1">
+                    {cargoCapacity.capacities.bulkyGoods.remaining === 0 ? (
+                      <span className="text-xs font-bold text-red-500">Hết chỗ</span>
+                    ) : (
+                      <>
+                        <span className="text-sm font-extrabold text-slate-900">
+                          {cargoCapacity.capacities.bulkyGoods.remaining}
+                        </span>
+                        <span className="text-[11px] text-slate-500">kiện/chỗ trống</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                <div className="pl-3">
+                  <div className="text-slate-500 text-[11px]">Hàng &lt;20kg</div>
+                  <div className="mt-0.5 flex items-baseline gap-1">
+                    {cargoCapacity.capacities.parcels.remaining === 0 ? (
+                      <span className="text-xs font-bold text-red-500">Hết chỗ</span>
+                    ) : (
+                      <>
+                        <span className="text-sm font-extrabold text-slate-900">
+                          {cargoCapacity.capacities.parcels.remaining}
+                        </span>
+                        <span className="text-[11px] text-slate-500">kiện trống</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : cargoCapacity && !cargoCapacity.acceptsShipments ? (
+            <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800 flex items-center gap-2">
+              <Info className="w-4 h-4 shrink-0 text-amber-600" />
+              <span>Chuyến xe này không nhận chở xe máy hoặc hàng ký gửi dưới hầm. Khách chỉ được mang hành lý xách tay tiêu chuẩn.</span>
+            </div>
+          ) : null}
+          {cargoCategoriesLoading ? (
+            <p role="status" className="mb-3 text-xs text-slate-500">
+              Đang tải danh mục hàng hóa...
+            </p>
+          ) : cargoCategoriesError ? (
+            <p role="alert" className="mb-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+              {cargoCategoriesError} Cước hàng sẽ chỉ được xác định sau khi hệ thống tải được danh mục hợp lệ.
+            </p>
+          ) : null}
+          <LuggageForm
+            items={items}
+            cargoCategories={cargoCategories}
+            onChange={setItems}
+          />
+          <p className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs leading-relaxed text-slate-600">
+            Cước vận chuyển hàng hóa được tính theo loại hàng, tổng khối lượng và bảng cước của nhà xe trên tuyến đã chọn. Phụ phí dễ vỡ 20.000đ và hàng giá trị cao 50.000đ được tính một lần cho mỗi loại nếu có ít nhất một kiện tương ứng. Số tiền chính xác được máy chủ xác định khi tạo đơn.
+          </p>
+          {overweightRegularCargoItem && (
+            <div className="mt-4 p-4 rounded-xl border border-red-200 bg-red-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 rounded-lg bg-red-100 flex items-center justify-center shrink-0 mt-0.5">
+                  <Info className="w-4 h-4 text-red-600" />
+                </div>
+                <div className="space-y-1">
+                  <h4 className="text-sm font-bold text-slate-900">
+                    Có kiện hành lý thường vượt quá 40kg — Cần tạo vận đơn gửi hàng
+                  </h4>
+                  <p className="text-xs text-slate-600 leading-relaxed max-w-xl">
+                    Vé xe nhận hàng thường tối đa {MAX_REGULAR_CARGO_PACKAGE_WEIGHT_KG}kg mỗi kiện. Cước hàng gửi kèm được xác định theo bảng cước của tuyến khi tạo đơn; kiện vượt giới hạn này cần gửi riêng bằng dịch vụ gửi hàng hầm xe.
+                  </p>
+                </div>
+              </div>
+              <Link href="/send-freight" className="shrink-0 self-end sm:self-center">
+                <button
+                  type="button"
+                  className="h-9 px-4 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-colors cursor-pointer"
+                >
+                  Chuyển sang gửi hàng →
+                </button>
+              </Link>
             </div>
           )}
         </div>
       )}
 
-      <div className="mt-6 rounded-xl border border-sky-200 bg-sky-50 p-4">
-        <h4 className="text-sm font-bold text-sky-900 mb-2">Bạn đang muốn gửi hàng thay vì mang hành lý theo vé?</h4>
-        <p className="text-xs text-sky-700 mb-3">Nếu người gửi không đi cùng chuyến, hãy tạo vận đơn ký gửi riêng để đảm bảo an toàn và dễ theo dõi.</p>
-        <Link href="/send-freight">
-          <button type="button" className="h-9 px-4 rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold transition-colors">
+      <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50/80 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h4 className="text-xs font-bold text-slate-900 mb-1">Bạn muốn gửi hàng hóa không đi kèm chuyến xe?</h4>
+          <p className="text-xs text-slate-500">Tạo vận đơn ký gửi riêng để theo dõi lộ trình và giao nhận tận nơi an toàn.</p>
+        </div>
+        <Link href="/send-freight" className="shrink-0">
+          <button type="button" className="h-8 px-3.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-slate-800 text-xs font-bold transition-colors cursor-pointer">
             Tạo vận đơn gửi hàng
           </button>
         </Link>

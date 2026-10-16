@@ -108,6 +108,22 @@ export const tripsApi = {
     const body: { data: ApiTripSeat[] } = await response.json();
     return body.data;
   },
+
+  async getCargoCapacity(tripId: number): Promise<{
+    acceptsShipments: boolean;
+    capacities: {
+      motorcycles: { total: number; used: number; remaining: number };
+      bulkyGoods: { total: number; used: number; remaining: number };
+      parcels: { total: number; used: number; remaining: number };
+    };
+  }> {
+    const response = await fetch(`${API_BASE_URL}/trips/${tripId}/cargo-capacity`);
+    if (!response.ok)
+      throw await parseError(response, 'Không thể tải sức chứa hàng hóa');
+    const body = await response.json();
+    return body.data ?? body;
+  },
+
 };
 
 export type ApiBusCompany = {

@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { AccessTokenGuard } from '../../../src/auth/guards/access-token.guard.js';
+import { AUTH_MODE_KEY } from '../../../src/auth/decorators/public.decorator.js';
 import { ADMIN_ROLE_DEFAULT_PERMISSION_KEYS } from '../../../src/auth/permissions/permission-catalog.js';
 import type { AuthPrincipal } from '../../../src/auth/tokens/auth-principal.js';
 import { configureApi } from '../../../src/common/configure-api.js';
@@ -28,6 +29,7 @@ describe('Shipment Read APIs (Phase 02)', () => {
   let filteredShipmentId: number;
   let otherTenantShipmentId: number;
   let detailWaybillCode: string;
+  let shipmentCreationTypeId: number;
 
   type TenantFixture = {
     nhaXeId: number;
@@ -84,6 +86,16 @@ describe('Shipment Read APIs (Phase 02)', () => {
   const testAccessTokenGuard = {
     canActivate(context: ExecutionContext) {
       if (!currentPrincipal) {
+        const authMode =
+          Reflect.getMetadata(AUTH_MODE_KEY, context.getHandler()) ??
+          Reflect.getMetadata(AUTH_MODE_KEY, context.getClass());
+        const authorization = context
+          .switchToHttp()
+          .getRequest<{ headers: { authorization?: string } }>().headers
+          .authorization;
+        if (authMode === 'optional' && authorization === undefined) {
+          return true;
+        }
         throw new UnauthorizedException({
           error: 'ACCESS_TOKEN_INVALID',
           message: 'Authentication is required for this operation.',
@@ -176,6 +188,28 @@ describe('Shipment Read APIs (Phase 02)', () => {
     });
     fixtureIds.loaiHangHoa.add(bulkyType.loaiHangHoaId);
     const cargoTypes = [fragileType, bulkyType];
+    const shipmentCreationType = await prisma.loaiHangHoa.create({
+      data: {
+        tenLoai: `F09 read create shipment ${token}`,
+        trangThai: 'HOAT_DONG',
+        nhomSucChua: 'HANG_NHE',
+      },
+    });
+    shipmentCreationTypeId = shipmentCreationType.loaiHangHoaId;
+    fixtureIds.loaiHangHoa.add(shipmentCreationTypeId);
+    const shipmentCreationRate = await prisma.bangCuocGuiHang.create({
+      data: {
+        khoiLuongTu: 0,
+        khoiLuongDen: 100,
+        mucCuoc: 45_000,
+        tuNgay: new Date('2026-01-01T00:00:00.000Z'),
+        trangThai: 'HOAT_DONG',
+        diemGuiId: tenantOne.diemGuiId,
+        diemNhanId: tenantOne.diemNhanId,
+        loaiHangHoaId: shipmentCreationTypeId,
+      },
+    });
+    fixtureIds.bangCuocGuiHang.add(shipmentCreationRate.bangCuocGuiHangId);
 
     const detailShipment = await createShipment({
       nhaXeId: tenantOneId,
@@ -272,6 +306,9 @@ describe('Shipment Read APIs (Phase 02)', () => {
       });
       await tx.chuyenXe.deleteMany({
         where: { chuyenXeId: { in: [...fixtureIds.chuyenXe] } },
+      });
+      await tx.diemGiaoNhanTuyenXe.deleteMany({
+        where: { tuyenXeId: { in: [...fixtureIds.tuyenXe] } },
       });
       await tx.xe.deleteMany({ where: { xeId: { in: [...fixtureIds.xe] } } });
       await tx.tuyenXe.deleteMany({
@@ -387,8 +424,8 @@ describe('Shipment Read APIs (Phase 02)', () => {
         gioKhoiHanh: new Date('1970-01-01T08:00:00.000Z'),
         nhanGuiHang: true,
         sucChuaXeMay: 0,
-        sucChuaHangCongKenh: 0,
-        sucChuaHangNhe: 0,
+        sucChuaHangCongKenh: 20,
+        sucChuaHangNhe: 20,
         trangThai: 'CHUA_KHOI_HANH',
         nhaXeId: company.nhaXeId,
         tuyenXeId: route.tuyenXeId,
@@ -404,6 +441,9 @@ describe('Shipment Read APIs (Phase 02)', () => {
         tinhThanh: 'Ho Chi Minh City',
         trangThai: 'HOAT_DONG',
         nhaXeId: company.nhaXeId,
+        tuyenXeDiemGiaoNhaps: {
+          create: { tuyenXeId: route.tuyenXeId, vaiTro: 'GUI_HANG' },
+        },
       },
     });
     fixtureIds.diem.add(origin.diemGiaoNhanHangId);
@@ -415,6 +455,9 @@ describe('Shipment Read APIs (Phase 02)', () => {
         tinhThanh: 'Ho Chi Minh City',
         trangThai: 'HOAT_DONG',
         nhaXeId: company.nhaXeId,
+        tuyenXeDiemGiaoNhaps: {
+          create: { tuyenXeId: route.tuyenXeId, vaiTro: 'NHAN_HANG' },
+        },
       },
     });
     fixtureIds.diem.add(destination.diemGiaoNhanHangId);
@@ -718,6 +761,56 @@ describe('Shipment Read APIs (Phase 02)', () => {
       }
     });
 
+    it('excludes shipments whose order, trip, origin, or destination belongs to another tenant', async () => {
+      const tenantTwo = tenantFixtures.get(tenantTwoId);
+      if (!tenantTwo) throw new Error('Missing second tenant fixture.');
+
+      const mismatchedShipments = await Promise.all(
+        ['order', 'trip', 'origin', 'destination'].map(async (relation) => {
+          const shipment = await createShipment({
+            nhaXeId: tenantOneId,
+            status: 'MOI_TAO',
+          });
+          if (relation === 'order') {
+            await prisma.donGiaoDich.update({
+              where: { donGiaoDichId: shipment.donGiaoDichId },
+              data: { nhaXeId: tenantTwoId },
+            });
+          } else {
+            await prisma.phieuGuiHang.update({
+              where: { phieuGuiHangId: shipment.phieuGuiHangId },
+              data:
+                relation === 'trip'
+                  ? { chuyenXeId: tenantTwo.chuyenXeId }
+                  : relation === 'origin'
+                    ? { diemGuiId: tenantTwo.diemGuiId }
+                    : { diemNhanId: tenantTwo.diemNhanId },
+            });
+          }
+          return shipment.phieuGuiHangId;
+        }),
+      );
+      setTenantAdmin();
+
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/shipments')
+        .query({ page: 1, pageSize: 50 })
+        .expect(200);
+      const returnedIds = response.body.data.map(
+        (item: { shipmentId: number }) => item.shipmentId,
+      );
+      expect(returnedIds).not.toEqual(
+        expect.arrayContaining(mismatchedShipments),
+      );
+
+      for (const shipmentId of mismatchedShipments) {
+        const detail = await request(app.getHttpServer())
+          .get(`/api/v1/shipments/${shipmentId}`)
+          .expect(404);
+        expect(detail.body.error).toBe('SHIPMENT_NOT_FOUND');
+      }
+    });
+
     it('returns 404 when querying a fixture shipment belonging to another tenant', async () => {
       setTenantAdmin();
 
@@ -828,6 +921,7 @@ describe('Shipment Read APIs (Phase 02)', () => {
       expect(data.shipmentId).toBe(sample.phieuGuiHangId);
       expect(data.waybillCode).toBe(sample.maVanDon);
       expect(data.status).toBe(sample.trangThai);
+      expect(data.paymentStatus).toBe('CHO_THANH_TOAN');
       expect(data.sender).toHaveProperty('fullName');
       expect(data.sender).toHaveProperty('phoneNumber');
       expect(data.receiver).toHaveProperty('fullName');
@@ -899,6 +993,90 @@ describe('Shipment Read APIs (Phase 02)', () => {
       await request(app.getHttpServer())
         .get('/api/v1/shipments/abc')
         .expect(400);
+    });
+  });
+
+  describe('Independent shipment payment creation', () => {
+    it('creates a guest shipment with exactly one pending SePay attempt for the server-calculated order total', async () => {
+      currentPrincipal = null;
+      const tenant = tenantFixtures.get(tenantOneId);
+      if (!tenant) throw new Error('Missing shipment creation fixture.');
+
+      const response = await request(app.getHttpServer())
+        .post('/api/v1/shipments')
+        .send({
+          tripId: tenant.chuyenXeId,
+          senderPointId: tenant.diemGuiId,
+          receiverPointId: tenant.diemNhanId,
+          sender: {
+            fullName: 'Feature 09 Guest Sender',
+            phoneNumber: '+848123456789',
+          },
+          receiver: {
+            fullName: 'Feature 09 Guest Receiver',
+            phoneNumber: '+849123456789',
+          },
+          items: [
+            {
+              name: 'Feature 09 payment integration parcel',
+              quantity: 2,
+              weight: 1.5,
+              loaiHangHoaId: shipmentCreationTypeId,
+            },
+          ],
+        });
+      expect(response.status, JSON.stringify(response.body)).toBe(201);
+
+      const data = response.body.data as {
+        shipmentId: number;
+        orderId: number;
+        paymentId: number;
+        orderCode: string;
+        waybillCode: string;
+        paymentStatus: string;
+        paymentExpiresAt: string;
+        pricing: { totalFee: number };
+      };
+      fixtureIds.phieuGuiHang.add(data.shipmentId);
+      fixtureIds.donGiaoDich.add(data.orderId);
+      expect(data).toMatchObject({
+        shipmentId: expect.any(Number),
+        orderId: expect.any(Number),
+        paymentId: expect.any(Number),
+        orderCode: expect.any(String),
+        waybillCode: expect.any(String),
+        paymentStatus: 'CHO_THANH_TOAN',
+      });
+      expect(data.pricing.totalFee).toBeGreaterThan(0);
+
+      const order = await prisma.donGiaoDich.findUnique({
+        where: { donGiaoDichId: data.orderId },
+        include: {
+          phieuGuiHang: true,
+          thanhToans: true,
+        },
+      });
+      expect(order).not.toBeNull();
+      expect(order?.khachHangId).toBeNull();
+      expect(order?.maDonGiaoDich).toBe(data.orderCode);
+      expect(order?.trangThai).toBe('CHO_THANH_TOAN');
+      expect(order?.tongTien.toNumber()).toBe(data.pricing.totalFee);
+      expect(order?.phieuGuiHang).toMatchObject({
+        phieuGuiHangId: data.shipmentId,
+        maVanDon: data.waybillCode,
+        trangThai: 'MOI_TAO',
+      });
+      expect(order?.thanhToans).toHaveLength(1);
+      const [payment] = order?.thanhToans ?? [];
+      expect(payment?.thanhToanId).toBe(data.paymentId);
+      expect(payment?.phuongThuc).toBe('SEPAY');
+      expect(payment?.loaiGiaoDich).toBe('THANH_TOAN');
+      expect(payment?.trangThai).toBe('DANG_XU_LY');
+      expect(payment?.soTien.toNumber()).toBe(order?.tongTien.toNumber());
+      expect(payment?.thoiGian.getTime()).toBe(order?.ngayTao.getTime());
+      expect(Date.parse(data.paymentExpiresAt)).toBe(
+        order!.ngayTao.getTime() + 10 * 60 * 1000,
+      );
     });
   });
 });

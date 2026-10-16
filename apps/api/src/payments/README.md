@@ -1,35 +1,34 @@
-# Payment settlement integration
+# Thanh toán và xử lý settlement
 
-## Current production writers
+## Production entrypoint
 
-The `develop` base and this feature branch do not contain a production charge
-callback, controller, or background job that confirms a provider charge. On
-this branch, `PaymentsModule` registers and exports `PaymentSettlementService`,
-but no production caller invokes `confirmPayment`. The service is currently the
-single charge-settlement boundary added by this feature; it is exercised from
-the API integration tests through Nest dependency injection.
+- SePay gửi callback vào `POST /api/v1/payments/sepay-webhook`; controller chuyển raw body, `x-sepay-signature` và `x-sepay-timestamp` cho `PaymentsService`.
+- `PaymentsService.handleSepayWebhook` xác minh HMAC/timestamp, thời điểm `transactionDate` theo giờ Việt Nam, tài khoản nhận, mã đơn khớp chính xác, giao dịch tiền vào, số tiền VND và mã giao dịch duy nhất trước khi settlement.
+- Đơn booking và đơn chỉ có shipment đi qua cùng callback và `confirmPaymentSuccess`; không có writer payment riêng cho shipment.
 
-The other successful-payment status writer is refund-only:
-`RefundProcessorService.processRefund` claims records with
-`loaiGiaoDich = HOAN_TIEN` and marks those refund records successful after the
-refund provider responds successfully. It does not mark a charge or its order
-as paid. Ticket cancellation creates a `HOAN_TIEN` record and cancels its
-order; it does not confirm a charge.
+## Tạo payment và khóa dùng chung
 
-The in-flight concurrency integration test uses a test-only payment transaction
-that acquires the shared order lock. This exercises the lock protocol against
-the real shipment cancellation endpoint. There is no production charge
-entrypoint to drive that race test today.
+- `createSepayPaymentAttempt` là helper ghi payment `SEPAY / THANH_TOAN / DANG_XU_LY` trong transaction tạo order của cả `BookingsService` và `ShipmentsService`.
+- `PaymentSettlementService.withLockedPayment` mở transaction, khóa hàng `DonGiaoDich` bằng `lockPaymentOrder`, đọc lại payment/order/shipment trong khóa rồi gọi writer của `PaymentsService` trên cùng transaction client.
+- Admin shipment status dùng cùng `lockPaymentOrder`, do đó thay đổi trạng thái vận chuyển và callback tiền không thể cùng ghi dựa trên một trạng thái order cũ.
+- Booking settlement giữ cập nhật order, booking, vé, ghế và lịch sử trong transaction. Shipment-only settlement cập nhật payment và order; trạng thái vận chuyển vẫn bắt đầu ở `MOI_TAO` và được Admin cập nhật theo luồng riêng.
 
-## Contract for a future charge callback or job
+## Đọc trạng thái thanh toán
 
-Before calling `PaymentSettlementService.confirmPayment(paymentId)`, a future
-provider adapter must verify the provider signature, transaction identity, and
-confirmed charge status. Perform provider network calls before entering the
-database transaction. Then call the settlement service; do not update charge
-`ThanhToan` status or `DonGiaoDich` paid status directly in the callback/job.
+- `GET /api/v1/payments/:paymentId/status` yêu cầu Customer đã đăng nhập và kiểm tra payment thuộc hồ sơ Customer đó.
+- Guest xác minh trạng thái shipment qua `POST /api/v1/shipments/lookup` bằng mã vận đơn cùng số điện thoại người gửi hoặc người nhận. Response chỉ trả dữ liệu theo dõi/thanh toán cần thiết sau khi khớp thông tin; không dùng payment ID tuần tự làm bằng chứng sở hữu.
 
-`confirmPayment` is the local persistence and state-transition boundary. It
-serializes against shipment cancellation by locking the shared `DonGiaoDich`
-row, then validates and updates the payment and order in one transaction. It
-does not verify provider signatures or contact a payment provider itself.
+## Hết hạn đơn và khoản thu đến trễ
+
+- Deadline 10 phút được tính từ `DonGiaoDich.ngayTao`. Scheduler xử lý cả booking và shipment độc lập; booking kèm hàng tiếp tục hủy order, booking, vé, shipment, ghi history và nhả ghế như lifecycle hiện có.
+- Callback settlement lấy cùng `DonGiaoDich` lock và so deadline với thời điểm giao dịch ngân hàng đã xác thực từ SePay, không dùng thời điểm webhook tới server để phân loại giao dịch đúng hạn. Nếu scheduler chưa chạy và giao dịch đã tới/sau deadline, transaction settlement tự hủy order/shipment, ghi history và đánh dấu payment attempt đang chờ thất bại trước khi ghi nhận khoản tiền SePay đã xác thực.
+- Thời điểm server xử lý vẫn được dùng để ghi lúc tự hủy. Nếu scheduler đã hủy order trước khi callback tới, kể cả `transactionDate` cho thấy tiền vào trước deadline, callback chỉ ghi nhận tiền và yêu cầu đối soát; không hồi sinh shipment/order đã hủy.
+- Shipment hết hạn chuyển `DonGiaoDich` và `PhieuGuiHang` sang `DA_HUY`; trạng thái này loại hàng khỏi phép tính capacity hiện có. Callback đến sau chỉ chuyển payment thành `THANH_CONG` và lưu transaction ID, không phục hồi order, shipment hoặc capacity.
+- Reconciliation được nhận biết bền từ tổ hợp payment thành công với order/booking/shipment đã hủy; payment status API và guest shipment lookup trả `requiresReconciliation`. Không tự gọi refund provider.
+- Scheduler, settlement và status mutation đều serialize trên cùng order lock. Webhook replay không thêm history hay side effect lần nữa.
+
+## Kiểm thử tham chiếu
+
+- `apps/api/test/integration/payments/payments-webhook.spec.ts` kiểm tra signed production callback cho shipment-only order và booking, idempotency, validation/chữ ký, ownership/status, settlement và các regression booking.
+- `apps/api/test/integration/shipments/shipments.spec.ts` kiểm tra POST tạo shipment guest qua HTTP và xác minh order/payment tồn tại với đúng amount/deadline.
+- `apps/api/test/unit/payments/payment-settlement.service.spec.ts` kiểm tra shared order-lock boundary.

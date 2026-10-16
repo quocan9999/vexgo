@@ -406,14 +406,11 @@
   color: var(--admin-text-strong);
 }
 
-.shipments-btn-danger {
-  color: var(--admin-danger);
-  border-color: color-mix(in srgb, var(--admin-danger) 30%, white);
-}
-
-.shipments-btn-danger:hover:not(:disabled) {
-  background-color: color-mix(in srgb, var(--admin-danger) 5%, white);
-  border-color: var(--admin-danger);
+.shipments-payment-gate {
+  margin: 0;
+  color: var(--admin-text-muted);
+  font-size: var(--admin-type-body-size);
+  line-height: var(--admin-type-body-line-height);
 }
 
 .shipments-confirm-form {

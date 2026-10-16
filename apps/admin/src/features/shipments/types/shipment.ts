@@ -89,6 +89,7 @@ export interface ShipmentDetail {
   waybillCode: string;
   sentAt: string;
   status: ShipmentStatus;
+  paymentStatus: string;
   note: string | null;
   sender: ShipmentContact;
   receiver: ShipmentContact;
@@ -117,6 +118,8 @@ export interface ShipmentsResponse {
 export interface ShipmentDetailResponse {
   data: ShipmentDetail;
 }
+
+export type ShipmentOperationalStatus = Exclude<ShipmentStatus, 'DA_HUY'>;
 
 export interface ShipmentQuery {
   page?: number;

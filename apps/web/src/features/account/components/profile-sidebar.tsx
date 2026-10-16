@@ -4,7 +4,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { UserCircle, History, Lock, LogOut } from 'lucide-react';
+import { UserCircle, Ticket, Lock, LogOut } from 'lucide-react';
 import { useAuthSession } from '@/features/auth/auth-session';
 import { ConfirmModal } from '@/components/ui/confirm-modal';
 import { ACCOUNT_NAVIGATION_ITEMS, isAccountNavigationItemActive } from '@/components/layout/customer-navigation';
@@ -17,7 +17,7 @@ export const ProfileSidebar: React.FC = () => {
 
   const menuIcons = {
     profile: <UserCircle className="w-5 h-5" />,
-    history: <History className="w-5 h-5" />,
+    history: <Ticket className="w-5 h-5" />,
     security: <Lock className="w-5 h-5" />,
   };
 
