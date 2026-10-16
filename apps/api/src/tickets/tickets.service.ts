@@ -14,6 +14,7 @@ import {
   computeArrival,
   resolveBusinessTimeZone,
 } from '../common/time/business-date.js';
+import { generateUuidV1 } from '../common/uuid-v1.js';
 import type { TicketQueryDto } from './dto/ticket-query.dto.js';
 import type { TicketLookupQueryDto } from './dto/ticket-lookup-query.dto.js';
 import type { CancelTicketDto } from './dto/cancel-ticket.dto.js';
@@ -453,8 +454,16 @@ export class TicketsService {
             });
           }
 
-          const originalPayment = ticket.phieuDatVe.donGiaoDich.thanhToans[0];
-          if (!originalPayment) {
+          const order = ticket.phieuDatVe.donGiaoDich;
+          const originalPayment = order.thanhToans[0];
+          const isFreeSettledBooking =
+            !originalPayment &&
+            ticket.phieuDatVe.trangThai === 'DA_THANH_TOAN' &&
+            order.trangThai === 'DA_THANH_TOAN' &&
+            order.tongTien !== null &&
+            order.tongTien !== undefined &&
+            new Prisma.Decimal(order.tongTien).isZero();
+          if (!originalPayment && !isFreeSettledBooking) {
             throw new BadRequestException({
               error: 'REFUND_SOURCE_NOT_FOUND',
               message:
@@ -478,6 +487,24 @@ export class TicketsService {
             data: { trangThai: 'TRONG' },
           });
 
+          const operationId = generateUuidV1();
+          const changedAt = new Date();
+          const reason =
+            dto.reason?.trim().slice(0, 255) || 'Khách yêu cầu hủy vé';
+          await tx.lichSuTrangThaiVe.create({
+            data: {
+              veId: ticket.veId,
+              trangThaiCu: ticket.trangThai,
+              trangThaiMoi: 'HUY',
+              thoiDiem: changedAt,
+              nguonThayDoi: 'SYSTEM',
+              taiKhoanId: null,
+              lyDo: reason,
+              laOverride: false,
+              maThaoTac: operationId,
+            },
+          });
+
           const remainingActiveTickets = await tx.ve.count({
             where: {
               phieuDatVeId: ticket.phieuDatVeId,
@@ -494,23 +521,38 @@ export class TicketsService {
               where: { donGiaoDichId: ticket.phieuDatVe.donGiaoDichId },
               data: { trangThai: 'DA_HUY' },
             });
+            await tx.lichSuTrangThaiPhieuDatVe.create({
+              data: {
+                phieuDatVeId: ticket.phieuDatVeId,
+                trangThaiCu: ticket.phieuDatVe.trangThai,
+                trangThaiMoi: 'DA_HUY',
+                thoiDiem: changedAt,
+                nguonThayDoi: 'SYSTEM',
+                taiKhoanId: null,
+                lyDo: reason,
+                laOverride: false,
+                maThaoTac: operationId,
+              },
+            });
           }
 
-          const refund = await tx.thanhToan.create({
-            data: {
-              soTien: quote.refundAmount,
-              phuongThuc: originalPayment.phuongThuc,
-              loaiGiaoDich: 'HOAN_TIEN',
-              thoiGian: new Date(),
-              trangThai: 'DANG_XU_LY',
-              donGiaoDichId: ticket.phieuDatVe.donGiaoDichId,
-              veId: ticket.veId,
-            },
-          });
+          const refund = originalPayment
+            ? await tx.thanhToan.create({
+                data: {
+                  soTien: quote.refundAmount,
+                  phuongThuc: originalPayment.phuongThuc,
+                  loaiGiaoDich: 'HOAN_TIEN',
+                  thoiGian: changedAt,
+                  trangThai: 'DANG_XU_LY',
+                  donGiaoDichId: ticket.phieuDatVe.donGiaoDichId,
+                  veId: ticket.veId,
+                },
+              })
+            : null;
 
           const serializedQuote = serializeCancellationQuote(quote);
           return {
-            refundId: refund.thanhToanId,
+            refundId: refund?.thanhToanId ?? null,
             response: {
               data: {
                 ticketId: ticket.veId,
@@ -519,15 +561,18 @@ export class TicketsService {
                 cancelFeeRate: serializedQuote.cancelFeeRate,
                 cancelFee: serializedQuote.cancelFee,
                 refundAmount: serializedQuote.refundAmount,
-                message:
-                  'Hủy vé thành công. Yêu cầu hoàn tiền đang được xử lý.',
+                message: refund
+                  ? 'Hủy vé thành công. Yêu cầu hoàn tiền đang được xử lý.'
+                  : 'Hủy vé thành công. Không phát sinh khoản hoàn tiền.',
               },
             },
           };
         },
         { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
       );
-      this.refundProcessor.enqueueRefund(result.refundId);
+      if (result.refundId !== null) {
+        this.refundProcessor.enqueueRefund(result.refundId);
+      }
       return result.response;
     } catch (error) {
       if (

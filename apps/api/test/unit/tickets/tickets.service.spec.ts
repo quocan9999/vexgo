@@ -38,6 +38,7 @@ describe('TicketsService', () => {
       donGiaoDich: {
         donGiaoDichId: 201,
         trangThai: 'DA_THANH_TOAN',
+        tongTien: '250000',
         tenKhachHang: 'Nguyễn Văn A',
         soDienThoaiKhachHang: '0901234567',
         khachHangId: 10,
@@ -97,6 +98,12 @@ describe('TicketsService', () => {
     },
     donGiaoDich: {
       update: vi.fn(),
+    },
+    lichSuTrangThaiVe: {
+      create: vi.fn(),
+    },
+    lichSuTrangThaiPhieuDatVe: {
+      create: vi.fn(),
     },
     thanhToan: {
       create: vi.fn(),

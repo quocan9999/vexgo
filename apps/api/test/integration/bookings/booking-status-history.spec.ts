@@ -707,6 +707,305 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
     },
   );
 
+  it('cancels free tickets without creating refunds or restoring promotion usage', async () => {
+    const promotion = await createPromotion({ amount: 300_000 });
+    const hold = await request(app.getHttpServer())
+      .post('/api/v1/seat-holds')
+      .send({ tripId, seatIds: tripSeatIds.slice(0, 2) });
+    const bookingResponse = await request(app.getHttpServer())
+      .post('/api/v1/bookings')
+      .send(
+        promotionBookingPayload(
+          hold.body.data.holdToken,
+          tripSeatIds.slice(0, 2),
+          promotion.maKhuyenMai,
+          customerPhone,
+        ),
+      );
+    expect(bookingResponse.status, JSON.stringify(bookingResponse.body)).toBe(
+      201,
+    );
+    const booking = bookingResponse.body.data;
+    expect(booking).toMatchObject({ status: 'DA_THANH_TOAN', totalAmount: 0 });
+    const tickets = await prisma.ve.findMany({
+      where: { phieuDatVeId: booking.bookingId },
+      orderBy: { veId: 'asc' },
+    });
+    expect(tickets).toHaveLength(2);
+
+    const departureSoon = new Date(Date.now() + 10 * 60 * 60 * 1000);
+    const localParts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: process.env.BUSINESS_TIME_ZONE || 'Asia/Ho_Chi_Minh',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    }).formatToParts(departureSoon);
+    const localPart = (type: Intl.DateTimeFormatPartTypes) =>
+      localParts.find((part) => part.type === type)?.value;
+    await prisma.chuyenXe.update({
+      where: { chuyenXeId: tripId },
+      data: {
+        ngayKhoiHanh: new Date(
+          `${localPart('year')}-${localPart('month')}-${localPart('day')}T00:00:00.000Z`,
+        ),
+        gioKhoiHanh: new Date(
+          Date.UTC(
+            1970,
+            0,
+            1,
+            Number(localPart('hour')),
+            Number(localPart('minute')),
+          ),
+        ),
+      },
+    });
+    const cutoff = await request(app.getHttpServer())
+      .post('/api/v1/tickets/cancel')
+      .send({
+        ticketCode: tickets[0].maVe,
+        phoneNumber: customerPhone,
+        expectedCancelFeeRate: 0.1,
+      });
+    expect(cutoff.status).toBe(400);
+    expect(cutoff.body.error).toBe('CANCELLATION_CUTOFF_PASSED');
+    expect(
+      (
+        await prisma.gheChuyenXe.findUniqueOrThrow({
+          where: { gheChuyenXeId: tripSeatIds[0] },
+        })
+      ).trangThai,
+    ).toBe('DA_DAT');
+    await prisma.chuyenXe.update({
+      where: { chuyenXeId: tripId },
+      data: {
+        ngayKhoiHanh: new Date('2099-12-01T00:00:00.000Z'),
+        gioKhoiHanh: new Date('1970-01-01T08:00:00.000Z'),
+      },
+    });
+
+    const wrongPhone = await request(app.getHttpServer())
+      .post('/api/v1/tickets/cancel')
+      .send({
+        ticketCode: tickets[0].maVe,
+        phoneNumber: '0900000000',
+        expectedCancelFeeRate: 0.1,
+      });
+    expect(wrongPhone.status).toBe(404);
+    expect(wrongPhone.body.error).toBe('TICKET_NOT_FOUND');
+
+    const cancelFirst = await request(app.getHttpServer())
+      .post('/api/v1/tickets/cancel')
+      .send({
+        ticketCode: tickets[0].maVe,
+        phoneNumber: customerPhone,
+        expectedCancelFeeRate: 0.1,
+      });
+    expect(cancelFirst.status, JSON.stringify(cancelFirst.body)).toBe(201);
+    expect(cancelFirst.body.data).toMatchObject({
+      status: 'HUY',
+      cancelFee: 0,
+      refundAmount: 0,
+      message: 'Hủy vé thành công. Không phát sinh khoản hoàn tiền.',
+    });
+    expect(
+      (
+        await prisma.gheChuyenXe.findUniqueOrThrow({
+          where: { gheChuyenXeId: tripSeatIds[0] },
+        })
+      ).trangThai,
+    ).toBe('TRONG');
+    expect(
+      (
+        await prisma.gheChuyenXe.findUniqueOrThrow({
+          where: { gheChuyenXeId: tripSeatIds[1] },
+        })
+      ).trangThai,
+    ).toBe('DA_DAT');
+    expect(
+      (
+        await prisma.phieuDatVe.findUniqueOrThrow({
+          where: { phieuDatVeId: booking.bookingId },
+        })
+      ).trangThai,
+    ).toBe('DA_THANH_TOAN');
+    expect(
+      (
+        await prisma.donGiaoDich.findUniqueOrThrow({
+          where: { donGiaoDichId: booking.orderId },
+        })
+      ).trangThai,
+    ).toBe('DA_THANH_TOAN');
+
+    const cancelSecond = await request(app.getHttpServer())
+      .post('/api/v1/tickets/cancel')
+      .send({
+        ticketCode: tickets[1].maVe,
+        phoneNumber: customerPhone,
+        expectedCancelFeeRate: 0.1,
+      });
+    expect(cancelSecond.status, JSON.stringify(cancelSecond.body)).toBe(201);
+    expect(cancelSecond.body.data).toMatchObject({
+      status: 'HUY',
+      cancelFee: 0,
+      refundAmount: 0,
+    });
+
+    const [
+      savedBooking,
+      savedOrder,
+      savedSeats,
+      ticketHistories,
+      bookingHistory,
+    ] = await Promise.all([
+      prisma.phieuDatVe.findUniqueOrThrow({
+        where: { phieuDatVeId: booking.bookingId },
+      }),
+      prisma.donGiaoDich.findUniqueOrThrow({
+        where: { donGiaoDichId: booking.orderId },
+      }),
+      prisma.gheChuyenXe.findMany({
+        where: { gheChuyenXeId: { in: tripSeatIds.slice(0, 2) } },
+        orderBy: { gheChuyenXeId: 'asc' },
+      }),
+      prisma.lichSuTrangThaiVe.findMany({
+        where: { veId: { in: tickets.map((ticket) => ticket.veId) } },
+        orderBy: { lichSuTrangThaiVeId: 'asc' },
+      }),
+      prisma.lichSuTrangThaiPhieuDatVe.findMany({
+        where: { phieuDatVeId: booking.bookingId },
+        orderBy: { lichSuTrangThaiPhieuDatVeId: 'asc' },
+      }),
+    ]);
+    expect(savedBooking.trangThai).toBe('DA_HUY');
+    expect(savedOrder.trangThai).toBe('DA_HUY');
+    expect(savedSeats.map((seat) => seat.trangThai)).toEqual([
+      'TRONG',
+      'TRONG',
+    ]);
+    const cancellationHistories = ticketHistories.filter(
+      (history) => history.trangThaiMoi === 'HUY',
+    );
+    expect(
+      cancellationHistories.map((history) => [
+        history.trangThaiCu,
+        history.trangThaiMoi,
+      ]),
+    ).toEqual([
+      ['DA_THANH_TOAN', 'HUY'],
+      ['DA_THANH_TOAN', 'HUY'],
+    ]);
+    for (const history of cancellationHistories) {
+      expect(history).toMatchObject({
+        nguonThayDoi: 'SYSTEM',
+        taiKhoanId: null,
+        laOverride: false,
+      });
+      expect(history.maThaoTac).toMatch(UUID_V1_PATTERN);
+    }
+    expect(
+      bookingHistory.map((history) => [
+        history.trangThaiCu,
+        history.trangThaiMoi,
+      ]),
+    ).toEqual([
+      [null, 'CHO_THANH_TOAN'],
+      ['CHO_THANH_TOAN', 'DA_THANH_TOAN'],
+      ['DA_THANH_TOAN', 'DA_HUY'],
+    ]);
+    const finalBookingHistory = bookingHistory[2];
+    const lastTicketHistory = cancellationHistories.find(
+      (history) => history.veId === tickets[1].veId,
+    );
+    expect(finalBookingHistory?.nguonThayDoi).toBe('SYSTEM');
+    expect(finalBookingHistory?.taiKhoanId).toBeNull();
+    expect(finalBookingHistory?.maThaoTac).toBe(lastTicketHistory?.maThaoTac);
+    expect(finalBookingHistory?.thoiDiem).toEqual(lastTicketHistory?.thoiDiem);
+    expect(
+      await prisma.thanhToan.count({
+        where: { donGiaoDichId: booking.orderId },
+      }),
+    ).toBe(0);
+    expect(
+      await prisma.suDungKhuyenMai.count({
+        where: { khuyenMaiId: promotion.khuyenMaiId },
+      }),
+    ).toBe(1);
+    expect(
+      (
+        await prisma.khuyenMai.findUniqueOrThrow({
+          where: { khuyenMaiId: promotion.khuyenMaiId },
+        })
+      ).soLuotDaSuDung,
+    ).toBe(1);
+  });
+
+  it('keeps paid orders with no successful payment ineligible for cancellation', async () => {
+    const hold = await request(app.getHttpServer())
+      .post('/api/v1/seat-holds')
+      .send({ tripId, seatIds: [tripSeatIds[0]] });
+    const bookingResponse = await request(app.getHttpServer())
+      .post('/api/v1/bookings')
+      .send({
+        tripId,
+        seatIds: [tripSeatIds[0]],
+        holdToken: hold.body.data.holdToken,
+        contact: { fullName: 'Paid order test', phone: customerPhone },
+        pickupPoint: 'Bến xe Miền Đông',
+        dropoffPoint: 'Bến xe Đà Lạt',
+      });
+    expect(bookingResponse.status, JSON.stringify(bookingResponse.body)).toBe(
+      201,
+    );
+    const booking = bookingResponse.body.data;
+    await prisma.thanhToan.deleteMany({
+      where: { donGiaoDichId: booking.orderId },
+    });
+    await prisma.phieuDatVe.update({
+      where: { phieuDatVeId: booking.bookingId },
+      data: { trangThai: 'DA_THANH_TOAN' },
+    });
+    await prisma.donGiaoDich.update({
+      where: { donGiaoDichId: booking.orderId },
+      data: { trangThai: 'DA_THANH_TOAN' },
+    });
+    const ticket = await prisma.ve.findFirstOrThrow({
+      where: { phieuDatVeId: booking.bookingId },
+    });
+    await prisma.ve.update({
+      where: { veId: ticket.veId },
+      data: { trangThai: 'DA_THANH_TOAN' },
+    });
+
+    const response = await request(app.getHttpServer())
+      .post('/api/v1/tickets/cancel')
+      .send({
+        ticketCode: ticket.maVe,
+        phoneNumber: customerPhone,
+        expectedCancelFeeRate: 0.1,
+      });
+    expect(response.status).toBe(400);
+    expect(response.body.error).toBe('REFUND_SOURCE_NOT_FOUND');
+    expect(
+      (await prisma.ve.findUniqueOrThrow({ where: { veId: ticket.veId } }))
+        .trangThai,
+    ).toBe('DA_THANH_TOAN');
+    expect(
+      (
+        await prisma.gheChuyenXe.findUniqueOrThrow({
+          where: { gheChuyenXeId: tripSeatIds[0] },
+        })
+      ).trangThai,
+    ).toBe('DA_DAT');
+    expect(
+      await prisma.thanhToan.count({
+        where: { donGiaoDichId: booking.orderId },
+      }),
+    ).toBe(0);
+  });
+
   it('still charges SePay for cargo when tickets are free', async () => {
     const promotion = await createPromotion({ amount: 300_000 });
     const hold = await request(app.getHttpServer())
