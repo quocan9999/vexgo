@@ -15,6 +15,13 @@ const api = vi.hoisted(() => ({
   createShipment: vi.fn(),
   lookupShipment: vi.fn(),
   routerPush: vi.fn(),
+  auth: {
+    isAuthenticated: false,
+    isHydrated: true,
+    executeWithAuth: vi.fn(async <T,>(action: (token: string) => Promise<T>) =>
+      action('test-access-token'),
+    ),
+  },
   searchParams: new URLSearchParams(),
 }));
 
@@ -34,6 +41,10 @@ vi.mock('@/features/shipments/services/shipments.api', () => ({
     createShipment: api.createShipment,
     lookupShipment: api.lookupShipment,
   },
+}));
+
+vi.mock('@/features/auth/auth-session', () => ({
+  useAuthSession: () => api.auth,
 }));
 
 const createdShipment = {
@@ -91,6 +102,9 @@ const publicShipmentLookup = {
 beforeEach(() => {
   window.sessionStorage.clear();
   api.routerPush.mockReset();
+  api.auth.isAuthenticated = false;
+  api.auth.isHydrated = true;
+  api.auth.executeWithAuth.mockClear();
   vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
   api.searchTrips.mockReset().mockResolvedValue({
     data: [
@@ -167,6 +181,7 @@ describe('independent shipment flow', () => {
 
     await waitFor(() => expect(api.routerPush).toHaveBeenCalledTimes(1));
     expect(api.createShipment).toHaveBeenCalledTimes(1);
+    expect(api.createShipment.mock.calls[0]).toHaveLength(1);
     expect(api.routerPush.mock.calls[0][0]).toMatch(/^\/payment\?draftId=/);
     expect(screen.queryByText('Tạo mã vận đơn gửi hàng thành công!')).toBeNull();
     expect(window.sessionStorage.length).toBe(1);
@@ -185,6 +200,41 @@ describe('independent shipment flow', () => {
         phoneNumber: createdShipment.sender.phoneNumber,
       },
     });
+  });
+
+  it('creates an authenticated shipment with the active Customer access token', async () => {
+    api.auth.isAuthenticated = true;
+    render(<SendFreightPage />);
+    expect(
+      await screen.findByText('Theo bảng cước', { exact: true }),
+    ).toBeTruthy();
+
+    fireEvent.change(screen.getByPlaceholderText('Ví dụ: Nguyễn Văn A'), {
+      target: { value: 'Nguyễn An' },
+    });
+    fireEvent.change(screen.getAllByPlaceholderText('09xxxxxxxx')[0], {
+      target: { value: '0900000001' },
+    });
+    fireEvent.change(screen.getByPlaceholderText('Ví dụ: Lê Thị B'), {
+      target: { value: 'Trần Bình' },
+    });
+    fireEvent.change(screen.getAllByPlaceholderText('09xxxxxxxx')[1], {
+      target: { value: '0900000002' },
+    });
+    fireEvent.change(
+      screen.getByPlaceholderText('Ví dụ: Thùng hoa quả, tài liệu, quần áo...'),
+      { target: { value: 'Hồ sơ' } },
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Tài liệu' }));
+    await waitFor(() => expect(api.getRoutePoints).toHaveBeenCalledWith(42));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Tạo mã vận đơn' }));
+
+    await waitFor(() => expect(api.routerPush).toHaveBeenCalledTimes(1));
+    expect(api.auth.executeWithAuth).toHaveBeenCalledTimes(1);
+    expect(api.createShipment).toHaveBeenCalledTimes(1);
+    expect(api.createShipment.mock.calls[0][1]).toBe('test-access-token');
+    expect(api.routerPush.mock.calls[0][0]).toMatch(/^\/payment\?draftId=/);
   });
 
   it('shows public tracking details without exposing sender, receiver, payment, or cargo PII', async () => {

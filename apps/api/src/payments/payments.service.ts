@@ -778,8 +778,17 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
           message: 'Mã giao dịch SePay đã được liên kết với một đơn khác.',
         });
       }
-      if (existingEvent.trangThai === 'THANH_CONG') {
-        return { success: true, message: 'Webhook SePay đã được xử lý trước đó.' };
+      if (
+        existingEvent.trangThai === 'THANH_CONG' ||
+        existingEvent.trangThai === 'CAN_DOI_SOAT'
+      ) {
+        return {
+          success: true,
+          message: 'Webhook SePay đã được ghi nhận trước đó.',
+          ...(existingEvent.trangThai === 'CAN_DOI_SOAT'
+            ? { requiresReconciliation: true }
+            : {}),
+        };
       }
     }
 
@@ -792,9 +801,14 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
       where: { ...paymentFilter, trangThai: 'DANG_XU_LY' },
       orderBy: [{ createdAt: 'desc' }, { thanhToanId: 'desc' }],
     });
+    const settledPayment = await this.prisma.thanhToan.findFirst({
+      where: { ...paymentFilter, trangThai: 'THANH_CONG' },
+      orderBy: [{ createdAt: 'desc' }, { thanhToanId: 'desc' }],
+    });
     const payment =
       existingEvent ??
       activePayment ??
+      settledPayment ??
       (await this.prisma.thanhToan.findFirst({
         where: paymentFilter,
         orderBy: [{ createdAt: 'desc' }, { thanhToanId: 'desc' }],
@@ -1157,6 +1171,18 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
       bookingPaymentIsPending &&
       paymentExpiresAt !== null &&
       paymentExpiresAt <= new Date();
+    const additionalSePayTransfer = paymentOrder
+      ? await this.prisma.thanhToan.findFirst({
+          where: {
+            donGiaoDichId: paymentOrder.donGiaoDichId,
+            phuongThuc: 'SEPAY',
+            loaiGiaoDich: 'THANH_TOAN',
+            trangThai: 'CAN_DOI_SOAT',
+            maGiaoDichSePay: { not: null },
+          },
+          select: { thanhToanId: true },
+        })
+      : null;
     const status = paymentHasExpired
       ? 'EXPIRED'
       : isSuccess
@@ -1164,11 +1190,11 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
         : isFailed
           ? 'FAILED'
           : 'PENDING';
-    const requiresReconciliation =
-      isSuccess &&
-      (['DA_HUY', 'HUY'].includes(paymentOrder?.trangThai ?? '') ||
-        ['DA_HUY', 'HUY'].includes(booking?.trangThai ?? '') ||
-        shipment?.trangThai === 'DA_HUY');
+    const requiresReconciliation = Boolean(additionalSePayTransfer) ||
+      (isSuccess &&
+        (['DA_HUY', 'HUY'].includes(paymentOrder?.trangThai ?? '') ||
+          ['DA_HUY', 'HUY'].includes(booking?.trangThai ?? '') ||
+          shipment?.trangThai === 'DA_HUY'));
 
     return {
       paymentId: payment.thanhToanId,
@@ -1255,7 +1281,8 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
       | 'already-successful'
       | 'late-booking'
       | 'late-shipment'
-      | 'duplicate-settlement';
+      | 'duplicate-settlement'
+      | 'additional-transfer';
 
     let outcome: SettlementOutcome;
     try {
@@ -1287,7 +1314,41 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
                 payment.maGiaoDichSePay !== null &&
                 payment.maGiaoDichSePay !== params.providerTransactionId
               ) {
-                throw sepayTransactionConflict();
+                if (params.provider !== 'SEPAY') {
+                  throw sepayTransactionConflict();
+                }
+
+                const recordedTransfer = await tx.thanhToan.findUnique({
+                  where: { maGiaoDichSePay: params.providerTransactionId },
+                });
+                if (recordedTransfer) {
+                  if (
+                    recordedTransfer.donGiaoDichId !== payment.donGiaoDichId ||
+                    recordedTransfer.phuongThuc !== 'SEPAY' ||
+                    recordedTransfer.loaiGiaoDich !== 'THANH_TOAN' ||
+                    recordedTransfer.trangThai !== 'CAN_DOI_SOAT' ||
+                    !recordedTransfer.soTien.equals(params.amount)
+                  ) {
+                    throw sepayTransactionConflict();
+                  }
+                  return 'additional-transfer';
+                }
+
+                await tx.thanhToan.create({
+                  data: {
+                    soTien: payment.soTien,
+                    phuongThuc: 'SEPAY',
+                    maGiaoDichSePay: params.providerTransactionId,
+                    loaiGiaoDich: 'THANH_TOAN',
+                    thoiGian: financialTransactionTime,
+                    trangThai: 'CAN_DOI_SOAT',
+                    donGiaoDichId: payment.donGiaoDichId,
+                  },
+                });
+                this.logger.warn(
+                  `Additional SePay transfer ${params.providerTransactionId} was recorded for already-settled order #${payment.donGiaoDichId}; reconciliation is required.`,
+                );
+                return 'additional-transfer';
               }
               if (payment.maGiaoDichSePay === null) {
                 const linked = await tx.thanhToan.updateMany({
@@ -1643,6 +1704,14 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
         requiresReconciliation: true,
         message:
           'Thanh toán thành công nhưng giao dịch đã được thanh toán bởi phương thức khác. Cần đối soát/hoàn tiền.',
+      };
+    }
+    if (outcome === 'additional-transfer') {
+      return {
+        success: true,
+        requiresReconciliation: true,
+        message:
+          'Khoản chuyển khoản bổ sung đã được ghi nhận; đơn không được quyết toán lại và cần đối soát khoản thu.',
       };
     }
 

@@ -428,7 +428,9 @@ describe('Payments Webhook & Status Security with MySQL (Integration)', () => {
       cleanup: async () => {
         await prisma.lichSuTrangThaiVe.deleteMany({ where: { veId: { in: veIds } } });
         await prisma.lichSuTrangThaiPhieuDatVe.deleteMany({ where: { phieuDatVeId: phieuDatVe.phieuDatVeId } });
-        await prisma.thanhToan.deleteMany({ where: { thanhToanId: thanhToan.thanhToanId } });
+        await prisma.thanhToan.deleteMany({
+          where: { donGiaoDichId: donGiaoDich.donGiaoDichId },
+        });
         await prisma.ve.deleteMany({ where: { veId: { in: veIds } } });
         await prisma.phieuDatVe.deleteMany({ where: { phieuDatVeId: phieuDatVe.phieuDatVeId } });
         await prisma.donGiaoDich.deleteMany({ where: { donGiaoDichId: donGiaoDich.donGiaoDichId } });
@@ -585,7 +587,7 @@ describe('Payments Webhook & Status Security with MySQL (Integration)', () => {
       senderPhone: '+84950000001',
       cleanup: async () => {
         await prisma.thanhToan.deleteMany({
-          where: { thanhToanId: payment.thanhToanId },
+          where: { donGiaoDichId: order.donGiaoDichId },
         });
         await prisma.lichSuTrangThaiPhieuGuiHang.deleteMany({
           where: { phieuGuiHangId: shipment.phieuGuiHangId },
@@ -1996,7 +1998,7 @@ describe('Payments Webhook & Status Security with MySQL (Integration)', () => {
       }
     });
 
-    it('rejects a different SePay transaction ID for a paid shipment order that was later cancelled', async () => {
+    it('records a second SePay transfer for a cancelled shipment without restoring it', async () => {
       const fixture = await createShipmentOnlyPayment(customerAId);
       const existingTransactionId = BigInt(
         `0x${randomUUID().replaceAll('-', '')}`,
@@ -2034,30 +2036,181 @@ describe('Payments Webhook & Status Security with MySQL (Integration)', () => {
           currency: 'VND',
           content: fixture.order.maDonGiaoDich,
         });
-        expect(response.status).toBe(409);
-        expect(response.body.error).toBe('SEPAY_TRANSACTION_ALREADY_PROCESSED');
+        expect(response.status).toBe(200);
+        expect(response.body).toEqual({ success: true });
 
-        const [order, shipment, payment] = await Promise.all([
+        const [order, shipment, payments] = await Promise.all([
           prisma.donGiaoDich.findUniqueOrThrow({
             where: { donGiaoDichId: fixture.order.donGiaoDichId },
           }),
           prisma.phieuGuiHang.findUniqueOrThrow({
             where: { phieuGuiHangId: fixture.shipment.phieuGuiHangId },
           }),
-          prisma.thanhToan.findUniqueOrThrow({
-            where: { thanhToanId: fixture.payment.thanhToanId },
+          prisma.thanhToan.findMany({
+            where: { donGiaoDichId: fixture.order.donGiaoDichId },
+            orderBy: { thanhToanId: 'asc' },
           }),
         ]);
         expect(order.trangThai).toBe('DA_HUY');
         expect(shipment.trangThai).toBe('DA_HUY');
-        expect(payment).toMatchObject({
-          trangThai: 'THANH_CONG',
-          maGiaoDichSePay: existingTransactionId,
-        });
+        expect(payments).toHaveLength(2);
+        expect(payments.map(({ trangThai, maGiaoDichSePay }) => ({
+          trangThai,
+          maGiaoDichSePay,
+        }))).toEqual([
+          { trangThai: 'THANH_CONG', maGiaoDichSePay: existingTransactionId },
+          { trangThai: 'CAN_DOI_SOAT', maGiaoDichSePay: unexpectedTransactionId },
+        ]);
       } finally {
         await fixture.cleanup();
       }
     });
+
+    it.each(['booking', 'shipment'] as const)(
+      'records and replays a second signed SePay transfer for a %s exactly once without settling it twice',
+      async (kind) => {
+        const bookingFixture = kind === 'booking'
+          ? await createTestPayment(customerAId, 'SEPAY')
+          : null;
+        const shipmentFixture = kind === 'shipment'
+          ? await createShipmentOnlyPayment(customerAId)
+          : null;
+        const order = bookingFixture?.donGiaoDich ?? shipmentFixture!.order;
+        const payment = bookingFixture?.thanhToan ?? shipmentFixture!.payment;
+        const amount = bookingFixture ? 200000 : shipmentFixture!.amount;
+        const shipment = shipmentFixture?.shipment ?? null;
+        const booking = bookingFixture?.phieuDatVe ?? null;
+        const transactionOne = BigInt(
+          `0x${randomUUID().replaceAll('-', '')}`,
+        ).toString();
+        const transactionTwo = BigInt(
+          `0x${randomUUID().replaceAll('-', '')}`,
+        ).toString();
+        const getHistoryCount = () => kind === 'booking'
+          ? prisma.lichSuTrangThaiPhieuDatVe.count({
+              where: { phieuDatVeId: booking!.phieuDatVeId },
+            })
+          : prisma.lichSuTrangThaiPhieuGuiHang.count({
+              where: { phieuGuiHangId: shipment!.phieuGuiHangId },
+            });
+        const signedTransfer = (id: string) => postSignedSepayEvent({
+          id,
+          gateway: 'STB',
+          accountNumber: sepayTestAccountNumber,
+          code: order.maDonGiaoDich,
+          transferType: 'in',
+          transferAmount: amount,
+          currency: 'VND',
+          content: order.maDonGiaoDich,
+        });
+
+        try {
+          const firstDelivery = await signedTransfer(transactionOne);
+          expect(firstDelivery.status).toBe(200);
+          expect(firstDelivery.body).toEqual({ success: true });
+          const historyAfterFirstSettlement = await getHistoryCount();
+
+          const secondDelivery = await signedTransfer(transactionTwo);
+          expect(secondDelivery.status).toBe(200);
+          expect(secondDelivery.body).toEqual({ success: true });
+
+          const [settledOrder, paymentsAfterSecondTransfer, historyAfterSecondTransfer] =
+            await Promise.all([
+              prisma.donGiaoDich.findUniqueOrThrow({
+                where: { donGiaoDichId: order.donGiaoDichId },
+              }),
+              prisma.thanhToan.findMany({
+                where: { donGiaoDichId: order.donGiaoDichId },
+                orderBy: { thanhToanId: 'asc' },
+              }),
+              getHistoryCount(),
+            ]);
+          expect(settledOrder.trangThai).toBe('DA_THANH_TOAN');
+          expect(paymentsAfterSecondTransfer).toHaveLength(2);
+          expect(paymentsAfterSecondTransfer.map((record) => ({
+            soTien: Number(record.soTien),
+            trangThai: record.trangThai,
+            maGiaoDichSePay: record.maGiaoDichSePay,
+          }))).toEqual([
+            {
+              soTien: amount,
+              trangThai: 'THANH_CONG',
+              maGiaoDichSePay: transactionOne,
+            },
+            {
+              soTien: amount,
+              trangThai: 'CAN_DOI_SOAT',
+              maGiaoDichSePay: transactionTwo,
+            },
+          ]);
+          expect(historyAfterSecondTransfer).toBe(historyAfterFirstSettlement);
+
+          currentPrincipal = customerAPrincipal;
+          const paymentStatus = await request(app.getHttpServer()).get(
+            `/api/v1/payments/${payment.thanhToanId}/status`,
+          );
+          currentPrincipal = null;
+          expect(paymentStatus.status).toBe(200);
+          expect(paymentStatus.body.data ?? paymentStatus.body).toMatchObject({
+            orderStatus: 'DA_THANH_TOAN',
+            paymentStatus: 'THANH_CONG',
+            requiresReconciliation: true,
+          });
+
+          if (shipment) {
+            const publicLookup = await request(app.getHttpServer())
+              .post('/api/v1/shipments/lookup')
+              .send({
+                waybillCode: shipment.maVanDon,
+                phoneNumber: shipmentFixture!.senderPhone,
+              });
+            expect(publicLookup.status).toBe(200);
+            expect(publicLookup.body.data ?? publicLookup.body).toMatchObject({
+              orderStatus: 'DA_THANH_TOAN',
+              paymentStatus: 'CAN_DOI_SOAT',
+              requiresReconciliation: true,
+            });
+            const settledShipment = await prisma.phieuGuiHang.findUniqueOrThrow({
+              where: { phieuGuiHangId: shipment.phieuGuiHangId },
+            });
+            expect(settledShipment.trangThai).toBe('MOI_TAO');
+          } else {
+            const settledBooking = await prisma.phieuDatVe.findUniqueOrThrow({
+              where: { phieuDatVeId: booking!.phieuDatVeId },
+            });
+            expect(settledBooking.trangThai).toBe('DA_THANH_TOAN');
+          }
+
+          const replay = await signedTransfer(transactionTwo);
+          expect(replay.status).toBe(200);
+          expect(replay.body).toEqual({ success: true });
+          await expect(
+            prisma.thanhToan.count({
+              where: { donGiaoDichId: order.donGiaoDichId },
+            }),
+          ).resolves.toBe(2);
+          await expect(getHistoryCount()).resolves.toBe(historyAfterFirstSettlement);
+        } finally {
+          currentPrincipal = null;
+          if (shipmentFixture) {
+            await shipmentFixture.cleanup();
+          } else {
+            await prisma.lichSuTrangThaiPhieuDatVe.deleteMany({
+              where: { phieuDatVeId: booking!.phieuDatVeId },
+            });
+            await prisma.thanhToan.deleteMany({
+              where: { donGiaoDichId: order.donGiaoDichId },
+            });
+            await prisma.phieuDatVe.deleteMany({
+              where: { phieuDatVeId: booking!.phieuDatVeId },
+            });
+            await prisma.donGiaoDich.deleteMany({
+              where: { donGiaoDichId: order.donGiaoDichId },
+            });
+          }
+        }
+      },
+    );
 
     it('returns shipment payment status only to its owning Customer', async () => {
       const fixture = await createShipmentOnlyPayment(customerAId);
@@ -2358,7 +2511,32 @@ describe('Payments Webhook & Status Security with MySQL (Integration)', () => {
           ...webhookPayload,
           id: transactionId + 1,
         });
-        expect(differentTransactionForSamePayment.status).toBe(409);
+        expect(differentTransactionForSamePayment.status).toBe(200);
+        expect(differentTransactionForSamePayment.body).toEqual({
+          success: true,
+        });
+        const additionalTransfer = await prisma.thanhToan.findUniqueOrThrow({
+          where: { maGiaoDichSePay: String(transactionId + 1) },
+        });
+        expect(additionalTransfer).toMatchObject({
+          donGiaoDichId: donGiaoDich.donGiaoDichId,
+          phuongThuc: 'SEPAY',
+          loaiGiaoDich: 'THANH_TOAN',
+          trangThai: 'CAN_DOI_SOAT',
+        });
+        await expect(
+          prisma.lichSuTrangThaiPhieuDatVe.count({
+            where: {
+              phieuDatVeId: phieuDatVe.phieuDatVeId,
+              trangThaiMoi: 'DA_THANH_TOAN',
+            },
+          }),
+        ).resolves.toBe(1);
+        await expect(
+          prisma.lichSuTrangThaiVe.count({
+            where: { veId: { in: fixture.veIds }, trangThaiMoi: 'DA_THANH_TOAN' },
+          }),
+        ).resolves.toBe(3);
       } finally {
         await fixture.cleanup();
       }

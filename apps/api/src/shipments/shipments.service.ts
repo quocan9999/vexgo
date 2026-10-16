@@ -542,6 +542,17 @@ export class ShipmentsService {
       this.businessTimeZone,
     );
     const latestPayment = shipment.donGiaoDich.thanhToans[0] ?? null;
+    const additionalSePayTransfer = await this.prisma.thanhToan.findFirst({
+      where: {
+        donGiaoDichId: shipment.donGiaoDich.donGiaoDichId,
+        phuongThuc: 'SEPAY',
+        loaiGiaoDich: 'THANH_TOAN',
+        trangThai: 'CAN_DOI_SOAT',
+        maGiaoDichSePay: { not: null },
+      },
+      select: { phuongThuc: true, trangThai: true },
+      orderBy: [{ thoiGian: 'desc' }, { thanhToanId: 'desc' }],
+    });
     const paymentExpiresAt = getBookingPaymentDeadline(
       shipment.donGiaoDich.ngayTao,
     );
@@ -558,12 +569,13 @@ export class ShipmentsService {
       orderStatus: shipment.donGiaoDich.trangThai,
       paymentStatus: paymentExpired
         ? 'HET_HAN'
-        : (latestPayment?.trangThai ?? null),
-      requiresReconciliation:
-        latestPayment?.trangThai === 'THANH_CONG' &&
-        (['DA_HUY', 'HUY'].includes(shipment.donGiaoDich.trangThai) ||
-          shipment.trangThai === 'DA_HUY'),
-      paymentMethod: latestPayment?.phuongThuc ?? null,
+        : (additionalSePayTransfer?.trangThai ?? latestPayment?.trangThai ?? null),
+      requiresReconciliation: Boolean(additionalSePayTransfer) ||
+        (latestPayment?.trangThai === 'THANH_CONG' &&
+          (['DA_HUY', 'HUY'].includes(shipment.donGiaoDich.trangThai) ||
+            shipment.trangThai === 'DA_HUY')),
+      paymentMethod:
+        additionalSePayTransfer?.phuongThuc ?? latestPayment?.phuongThuc ?? null,
       paymentExpiresAt: paymentExpiresAt.toISOString(),
       serverTime: new Date().toISOString(),
       pickupPoint: {

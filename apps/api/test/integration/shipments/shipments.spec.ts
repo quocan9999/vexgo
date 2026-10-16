@@ -24,6 +24,7 @@ describe('Shipment Read APIs (Phase 02)', () => {
   let testEmployeeId: number;
   let testOperatorAccountId: number;
   let testOperatorEmployeeId: number;
+  let testCustomerAccountId: number;
   let customerId: number;
   let detailShipmentId: number;
   let filteredShipmentId: number;
@@ -161,6 +162,7 @@ describe('Shipment Read APIs (Phase 02)', () => {
         trangThai: 'HOAT_DONG',
       },
     });
+    testCustomerAccountId = customerAccount.taiKhoanId;
     fixtureIds.taiKhoan.add(customerAccount.taiKhoanId);
     const customer = await prisma.khachHang.create({
       data: {
@@ -650,6 +652,17 @@ describe('Shipment Read APIs (Phase 02)', () => {
     };
   }
 
+  function setCustomer() {
+    currentPrincipal = {
+      taiKhoanId: testCustomerAccountId,
+      sessionId: 'session-customer',
+      roles: ['KHACH_HANG'],
+      permissions: [],
+      nhanVienId: null,
+      nhaXeId: null,
+    };
+  }
+
   function setTenantOperator(nhaXeId: number = tenantOneId) {
     currentPrincipal = {
       taiKhoanId: testOperatorAccountId,
@@ -1077,6 +1090,85 @@ describe('Shipment Read APIs (Phase 02)', () => {
       expect(Date.parse(data.paymentExpiresAt)).toBe(
         order!.ngayTao.getTime() + 10 * 60 * 1000,
       );
+    });
+
+    it('associates an authenticated shipment with its Customer and exposes its payment, list, and detail', async () => {
+      setCustomer();
+      const tenant = tenantFixtures.get(tenantOneId);
+      if (!tenant) throw new Error('Missing shipment creation fixture.');
+
+      const createResponse = await request(app.getHttpServer())
+        .post('/api/v1/shipments')
+        .set('Authorization', 'Bearer customer-test-token')
+        .send({
+          tripId: tenant.chuyenXeId,
+          senderPointId: tenant.diemGuiId,
+          receiverPointId: tenant.diemNhanId,
+          sender: {
+            fullName: 'Feature 09 Signed-in Sender',
+            phoneNumber: '+848123456789',
+          },
+          receiver: {
+            fullName: 'Feature 09 Signed-in Receiver',
+            phoneNumber: '+849123456789',
+          },
+          items: [
+            {
+              name: 'Feature 09 authenticated integration parcel',
+              quantity: 1,
+              weight: 1,
+              loaiHangHoaId: shipmentCreationTypeId,
+            },
+          ],
+        })
+        .expect(201);
+
+      const created = createResponse.body.data as {
+        shipmentId: number;
+        orderId: number;
+        paymentId: number;
+        paymentStatus: string;
+      };
+      fixtureIds.phieuGuiHang.add(created.shipmentId);
+      fixtureIds.donGiaoDich.add(created.orderId);
+      expect(created.paymentStatus).toBe('CHO_THANH_TOAN');
+
+      const order = await prisma.donGiaoDich.findUniqueOrThrow({
+        where: { donGiaoDichId: created.orderId },
+      });
+      expect(order.khachHangId).toBe(customerId);
+
+      const paymentStatus = await request(app.getHttpServer())
+        .get(`/api/v1/payments/${created.paymentId}/status`)
+        .expect(200);
+      expect(paymentStatus.body.data).toMatchObject({
+        paymentId: created.paymentId,
+        orderId: created.orderId,
+        shipmentId: created.shipmentId,
+        status: 'PENDING',
+      });
+
+      const shipmentList = await request(app.getHttpServer())
+        .get('/api/v1/shipments?page=1&pageSize=50')
+        .expect(200);
+      expect(shipmentList.body.data).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            shipmentId: created.shipmentId,
+            paymentStatus: 'CHO_THANH_TOAN',
+          }),
+        ]),
+      );
+
+      const shipmentDetail = await request(app.getHttpServer())
+        .get(`/api/v1/shipments/${created.shipmentId}`)
+        .expect(200);
+      expect(shipmentDetail.body.data).toMatchObject({
+        shipmentId: created.shipmentId,
+        orderId: created.orderId,
+        status: 'MOI_TAO',
+        paymentStatus: 'CHO_THANH_TOAN',
+      });
     });
   });
 });

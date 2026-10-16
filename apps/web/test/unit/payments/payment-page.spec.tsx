@@ -339,6 +339,37 @@ describe('Customer VietQR payment page', () => {
     expect(String(fetchMock.mock.calls[0][0])).not.toContain('/shipments/lookup');
   });
 
+  it('falls back to verified waybill and sender phone lookup when a signed-in guest gets 403', async () => {
+    configureVietQr();
+    saveShipmentPaymentDraft();
+    auth.isAuthenticated = true;
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 403,
+        json: async () => ({ error: 'FORBIDDEN', message: 'Forbidden' }),
+      })
+      .mockResolvedValueOnce(jsonResponse(shipmentLookup()));
+
+    render(<PaymentPage />);
+    await flushPromises();
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/payments/801/status');
+    expect(fetchMock.mock.calls[0][1].headers.Authorization).toBe(
+      'Bearer test-access-token',
+    );
+    expect(String(fetchMock.mock.calls[1][0])).toContain('/shipments/lookup');
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({
+      waybillCode: 'VG-VD-TEST-601',
+      phoneNumber: '0900000001',
+    });
+    expect(
+      screen.getByRole('img', { name: 'Mã QR thanh toán VietQR' }),
+    ).toBeTruthy();
+    expect(screen.getByText('VG-VD-TEST-601')).toBeTruthy();
+  });
+
   it('hides shipment QR when the verified server amount differs from the draft', async () => {
     configureVietQr();
     saveShipmentPaymentDraft();

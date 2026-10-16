@@ -10,7 +10,10 @@ import {
   type PaymentDraft,
 } from '@/features/booking/services/payment-draft';
 import { bookingsApi } from '@/features/account/services/bookings.api';
-import { paymentsApi } from '@/features/payments/services/payments.api';
+import {
+  PaymentApiError,
+  paymentsApi,
+} from '@/features/payments/services/payments.api';
 import { shipmentsApi } from '@/features/shipments/services/shipments.api';
 import { useAuthSession } from '@/features/auth/auth-session';
 import {
@@ -89,6 +92,10 @@ function readNonNegativeAmount(value: unknown): number | null {
   if (typeof value === 'string' && value.trim() === '') return null;
   const amount = Number(value);
   return Number.isFinite(amount) && amount >= 0 ? amount : null;
+}
+
+function isForbiddenApiResponse(error: unknown): boolean {
+  return error instanceof PaymentApiError && error.status === 403;
 }
 
 function getCargoItemQuantity(quantity?: number): number | null {
@@ -389,15 +396,7 @@ function PaymentContent() {
       try {
         let payload: PaymentStatusPayload;
         if (shipmentDraft) {
-          if (isAuthenticated) {
-            const response = await executeWithAuth((token) =>
-              paymentsApi.getPaymentStatus(shipmentDraft.paymentId, {
-                signal: requestController.signal,
-                accessToken: token,
-              }),
-            );
-            payload = response.data;
-          } else {
+          const readVerifiedShipmentLookup = async (): Promise<PaymentStatusPayload> => {
             const response = await shipmentsApi.lookupShipment(
               {
                 waybillCode: shipmentDraft.waybillCode,
@@ -405,11 +404,28 @@ function PaymentContent() {
               },
               { signal: requestController.signal },
             );
-            payload = {
+            return {
               ...response.data,
               shipmentStatus: response.data.status,
               provider: response.data.paymentMethod,
             };
+          };
+
+          if (isAuthenticated) {
+            try {
+              const response = await executeWithAuth((token) =>
+                paymentsApi.getPaymentStatus(shipmentDraft.paymentId, {
+                  signal: requestController.signal,
+                  accessToken: token,
+                }),
+              );
+              payload = response.data;
+            } catch (error) {
+              if (!isForbiddenApiResponse(error)) throw error;
+              payload = await readVerifiedShipmentLookup();
+            }
+          } else {
+            payload = await readVerifiedShipmentLookup();
           }
         } else if (bookingDraft) {
           const response = await readBookingDetail(bookingDraft, requestController.signal);

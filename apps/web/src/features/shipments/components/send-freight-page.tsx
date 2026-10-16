@@ -41,12 +41,14 @@ import {
   createPaymentDraft,
   getPaymentDraft,
 } from '@/features/booking/services/payment-draft';
+import { useAuthSession } from '@/features/auth/auth-session';
 
 const POPULAR_LOCATIONS = ['TP.HCM', 'Đà Lạt', 'Vũng Tàu', 'Nha Trang'];
 
 function SendFreightContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { isAuthenticated, isHydrated, executeWithAuth } = useAuthSession();
 
   // Tab: 'create' | 'lookup'
   const [activeTab, setActiveTab] = useState<'create' | 'lookup'>('create');
@@ -303,6 +305,11 @@ function SendFreightContent() {
   const handleCreateShipment = async () => {
     setErrorMessage(null);
 
+    if (!isHydrated) {
+      setErrorMessage('Đang xác minh phiên đăng nhập. Vui lòng thử lại sau giây lát.');
+      return;
+    }
+
     if (!selectedTripId) {
       setErrorMessage('Vui lòng chọn một chuyến xe vận chuyển hàng.');
       return;
@@ -389,7 +396,11 @@ function SendFreightContent() {
         note: note.trim() || undefined,
       };
 
-      const res = await shipmentsApi.createShipment(payload);
+      const res = isAuthenticated
+        ? await executeWithAuth((token) =>
+            shipmentsApi.createShipment(payload, token),
+          )
+        : await shipmentsApi.createShipment(payload);
       const data = res.data;
       const totalFare = data?.pricing?.totalFee;
       if (
