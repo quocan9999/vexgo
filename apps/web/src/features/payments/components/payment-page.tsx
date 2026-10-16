@@ -14,7 +14,7 @@ import {
   PaymentApiError,
   paymentsApi,
 } from '@/features/payments/services/payments.api';
-import { shipmentsApi } from '@/features/shipments/services/shipments.api';
+import { ApiError, shipmentsApi } from '@/features/shipments/services/shipments.api';
 import { useAuthSession } from '@/features/auth/auth-session';
 import {
   createVietQrImageUrl,
@@ -86,8 +86,44 @@ type PaymentStatusPayload = {
 };
 
 const PAYMENT_POLL_INTERVAL_MS = 2500;
+// Four guest lookups per minute leaves room for a second tab and manual lookups under the IP limit.
+const PUBLIC_SHIPMENT_POLL_INTERVAL_MS = 15_000;
+const PUBLIC_SHIPMENT_RATE_LIMIT_BACKOFF_MS = 60_000;
 const MAX_INITIAL_STATUS_READ_FAILURES = 3;
 const PAYMENT_STATUS_REQUEST_TIMEOUT_MS = 10_000;
+
+function readRetryAfterDelayMs(retryAfter: string | null): number | null {
+  if (!retryAfter?.trim()) return null;
+  const delaySeconds = Number(retryAfter);
+  if (Number.isFinite(delaySeconds) && delaySeconds >= 0) {
+    return Math.ceil(delaySeconds * 1000);
+  }
+  const retryAt = Date.parse(retryAfter);
+  return Number.isFinite(retryAt) ? Math.max(0, retryAt - Date.now()) : null;
+}
+
+function getShipmentPaymentStatusPresentation(
+  hasVerifiedSnapshot: boolean,
+  terminalStatus: PaymentReadSnapshot['terminalStatus'],
+): { label: string; className: string } {
+  if (!hasVerifiedSnapshot || terminalStatus === 'verification-needed') {
+    return { label: 'Đang xác minh', className: 'text-slate-600' };
+  }
+  switch (terminalStatus) {
+    case 'paid':
+      return { label: 'Đã thanh toán', className: 'text-emerald-700' };
+    case 'cancelled':
+      return { label: 'Đã hủy', className: 'text-rose-700' };
+    case 'expired':
+      return { label: 'Hết hạn', className: 'text-rose-700' };
+    case 'failed':
+      return { label: 'Thanh toán thất bại', className: 'text-rose-700' };
+    case 'reconciliation-required':
+      return { label: 'Cần đối soát', className: 'text-amber-700' };
+    default:
+      return { label: 'Chờ thanh toán', className: 'text-amber-700' };
+  }
+}
 
 function readNonNegativeAmount(value: unknown): number | null {
   if (typeof value !== 'number' && typeof value !== 'string') return null;
@@ -273,6 +309,10 @@ function PaymentContent() {
         ),
       )
     : null;
+  const shipmentPaymentStatusPresentation = getShipmentPaymentStatusPresentation(
+    activePaymentReadSnapshot !== null,
+    paymentTerminalStatus ?? (timeLeft === 0 ? 'verification-needed' : null),
+  );
 
   const readBookingDetail = useCallback(
     (bookingDraft: BookingPaymentDraft, signal?: AbortSignal) => {
@@ -360,6 +400,7 @@ function PaymentContent() {
     let observedDeadlineMs: number | null = null;
     let observedServerTimeOffsetMs = 0;
     let consecutiveFailures = 0;
+    let consecutivePublicLookupRateLimits = 0;
 
     const stopWithStatus = (
       terminalStatus: NonNullable<PaymentReadSnapshot['terminalStatus']>,
@@ -384,7 +425,7 @@ function PaymentContent() {
       });
     };
 
-    const scheduleNextRead = (delayMs: number) => {
+    const scheduleNextRead = (delayMs: number, stopAtDeadlineIfRetryBlocked = false) => {
       if (!isSubscribed) return;
       const remainingMs = observedDeadlineMs === null
         ? null
@@ -396,6 +437,13 @@ function PaymentContent() {
         );
         return;
       }
+      if (stopAtDeadlineIfRetryBlocked && remainingMs !== null && delayMs >= remainingMs) {
+        timeout = setTimeout(
+          () => stopWithStatus('verification-needed', new Date(observedDeadlineMs!).toISOString()),
+          remainingMs,
+        );
+        return;
+      }
       const nextDelay = remainingMs === null ? delayMs : Math.min(delayMs, remainingMs);
       timeout = setTimeout(() => void checkPaymentStatus(), nextDelay);
     };
@@ -403,13 +451,14 @@ function PaymentContent() {
     const checkPaymentStatus = async () => {
       const requestController = new AbortController();
       activeRequestController = requestController;
+      let usedPublicShipmentLookup = false;
+      let rateLimitBackoffMs: number | null = null;
       const requestTimeout = setTimeout(
         () => requestController.abort(),
         PAYMENT_STATUS_REQUEST_TIMEOUT_MS,
       );
       try {
         let payload: PaymentStatusPayload;
-        let usedPublicShipmentLookup = false;
         if (shipmentDraft) {
           const readVerifiedShipmentLookup = async (): Promise<PaymentStatusPayload> => {
             usedPublicShipmentLookup = true;
@@ -469,6 +518,7 @@ function PaymentContent() {
 
         if (!isSubscribed) return;
         if (requestController.signal.aborted) throw new Error('Payment status request timed out');
+        if (usedPublicShipmentLookup) consecutivePublicLookupRateLimits = 0;
         const amount = readNonNegativeAmount(payload.amount ?? payload.totalAmount);
         const hasMatchingPayment = shipmentDraft
           ? payload.orderCode === expectedOrderCode &&
@@ -621,9 +671,21 @@ function PaymentContent() {
           serverTimeOffsetMs: observedServerTimeOffsetMs,
           terminalStatus: null,
         });
-      } catch {
+      } catch (error) {
         if (!isSubscribed) return;
         consecutiveFailures += 1;
+        if (
+          usedPublicShipmentLookup &&
+          error instanceof ApiError &&
+          error.status === 429
+        ) {
+          consecutivePublicLookupRateLimits += 1;
+          const retryAfterMs = readRetryAfterDelayMs(error.retryAfter);
+          rateLimitBackoffMs = retryAfterMs === null
+            ? PUBLIC_SHIPMENT_RATE_LIMIT_BACKOFF_MS *
+              2 ** Math.min(consecutivePublicLookupRateLimits - 1, 3)
+            : Math.max(PUBLIC_SHIPMENT_POLL_INTERVAL_MS, retryAfterMs);
+        }
         if (observedDeadlineMs === null && consecutiveFailures >= MAX_INITIAL_STATUS_READ_FAILURES) {
           stopWithStatus('verification-needed');
           return;
@@ -636,10 +698,16 @@ function PaymentContent() {
       }
 
       if (!isSubscribed || hasNavigated) return;
-      const delayMs = observedDeadlineMs === null
-        ? PAYMENT_POLL_INTERVAL_MS * 2 ** Math.max(0, consecutiveFailures - 1)
-        : PAYMENT_POLL_INTERVAL_MS;
-      scheduleNextRead(Math.min(delayMs, 15_000));
+      const defaultDelayMs = usedPublicShipmentLookup
+        ? PUBLIC_SHIPMENT_POLL_INTERVAL_MS
+        : observedDeadlineMs === null
+          ? PAYMENT_POLL_INTERVAL_MS * 2 ** Math.max(0, consecutiveFailures - 1)
+          : PAYMENT_POLL_INTERVAL_MS;
+      const delayMs = rateLimitBackoffMs ?? defaultDelayMs;
+      scheduleNextRead(
+        usedPublicShipmentLookup ? delayMs : Math.min(delayMs, 15_000),
+        rateLimitBackoffMs !== null,
+      );
     };
 
     void checkPaymentStatus();
@@ -1002,8 +1070,8 @@ function PaymentContent() {
                     </div>
                     <div className="flex justify-between gap-3">
                       <span className="text-slate-500">Trạng thái thanh toán</span>
-                      <strong className={`min-w-0 max-w-[65%] text-right ${paymentTerminalStatus === 'paid' ? 'text-emerald-700' : 'text-amber-700'}`}>
-                        {paymentTerminalStatus === 'paid' ? 'Đã thanh toán' : 'Chờ thanh toán'}
+                      <strong className={`min-w-0 max-w-[65%] text-right ${shipmentPaymentStatusPresentation.className}`}>
+                        {shipmentPaymentStatusPresentation.label}
                       </strong>
                     </div>
                   </div>
