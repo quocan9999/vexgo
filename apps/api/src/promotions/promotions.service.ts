@@ -201,10 +201,17 @@ export class PromotionsService {
 
   async findAll(query: PromotionListQueryDto, principal: AuthPrincipal) {
     const nhaXeId = requireTenantPrincipal(principal);
+    if (query.fromDate && !isDateOnly(query.fromDate)) validationError('fromDate', 'Ngày bắt đầu lọc không hợp lệ.');
+    if (query.toDate && !isDateOnly(query.toDate)) validationError('toDate', 'Ngày kết thúc lọc không hợp lệ.');
+    if (query.fromDate && query.toDate && query.fromDate > query.toDate) {
+      validationError('toDate', 'Ngày kết thúc phải bằng hoặc sau ngày bắt đầu.');
+    }
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 10;
     const where: Prisma.KhuyenMaiWhereInput = {
       nhaXeId,
+      ...(query.fromDate ? { denNgay: { gte: dateOnlyToUtc(query.fromDate) } } : {}),
+      ...(query.toDate ? { tuNgay: { lte: dateOnlyToUtc(query.toDate) } } : {}),
       ...(query.status ? { trangThai: query.status } : {}),
       ...(query.search
         ? {

@@ -54,7 +54,7 @@ Các URL dưới đây được thêm prefix /api/v1. Success resource dùng {da
 
 | Method/path | Auth/quyền | Request và response |
 |---|---|---|
-| GET /promotions | Tenant promotion:read | Query page, pageSize, search, status, sortBy, sortDirection; trả DTO list + meta, scope từ principal |
+| GET /promotions | Tenant promotion:read | Query page, pageSize, search, status, fromDate, toDate, sortBy, sortDirection; trả DTO list + meta, scope từ principal |
 | GET /promotions/:id | Tenant promotion:read | Chi tiết trong tenant hiện tại; ngoài tenant trả 404 |
 | POST /promotions | Tenant promotion:create | Body: name, code, discountType (PHAN_TRAM/SO_TIEN), discountValue decimal string, maxDiscount? decimal string (bắt buộc >0 với phần trăm), minimumTicketAmount? decimal string, startsOn, endsOn, usageLimit integer >0. Không nhận nhaXeId; trạng thái ban đầu HOAT_DONG; phạm vi DAT_VE, cách áp dụng NHAP_MA do server đặt. Trả {data: promotion} |
 | PATCH /promotions/:id/status | Tenant promotion:update | Body chỉ {status: HOAT_DONG hoặc TAM_NGUNG}; không sửa cấu hình và không xóa. Bật lại không khôi phục quota/ngày đã mất |
@@ -104,3 +104,7 @@ DTO promotion list/detail không trả Prisma model thẳng; expose các tên AP
 - Public promotions/validate không có first-party consumer trong source repo; API bên ngoài repo chưa xác minh. Chọn trả 410 để tránh tiếp tục tin tenant/price/count do client gửi; customer dùng server-side booking quote.
 - Với user đăng nhập chưa có verified phone, identity key tin cậy là khachHangId; phone ledger có thể null. Không tạo OTP guest.
 - Mã/tenant/list response DTO dùng API field tiếng Anh; model và migration field giữ tiếng Việt theo schema.
+
+### Date-range list filter
+
+`fromDate` và `toDate` là ngày `YYYY-MM-DD` tùy chọn. API lọc các khuyến mãi có thời hạn giao với khoảng đã chọn (bao gồm hai đầu): `denNgay >= fromDate` và `tuNgay <= toDate`. Có thể truyền một đầu khoảng. Ngày không hợp lệ hoặc `fromDate > toDate` trả `400 VALIDATION_ERROR`. Bộ lọc áp dụng cùng tenant/search/status trước count và pagination.

@@ -9,7 +9,7 @@ import { AdminPagination } from '@/components/admin/admin-pagination';
 import { AdminCreateAction, AdminRefreshAction } from '@/components/admin/admin-page-actions';
 import { AdminStatusBadge } from '@/components/admin/admin-status-badge';
 import { AdminTableSkeleton } from '@/components/admin/admin-table-skeleton';
-import { FilterToolbar, SearchInput, SelectFilter, type FilterOption } from '@/components/data-filters/data-filters';
+import { DateRangeFilter, FilterToolbar, SearchInput, SelectFilter, type FilterOption } from '@/components/data-filters/data-filters';
 import { Button } from '@/components/ui/button';
 import { useAdminPermissions } from '@/features/admin-auth/hooks/use-admin-permissions';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
@@ -66,7 +66,7 @@ export function PromotionsManagement() {
   const canCreate = can('promotion:create');
   const canUpdate = can('promotion:update');
   const {
-    promotionPage, error, loading, searchInput, status, sortBy, sortDirection,
+    promotionPage, error, loading, searchInput, status, dateRange, updateDateRange, sortBy, sortDirection,
     changePage, updateSearch, updateStatus, sortPromotions, resetFilters, refresh,
   } = usePromotions();
   const [selectedPromotionId, setSelectedPromotionId] = useState<number | null>(null);
@@ -77,7 +77,7 @@ export function PromotionsManagement() {
   const statusUpdatingRef = useRef(false);
   const [notice, setNotice] = useState<Notice | null>(null);
   const items = promotionPage?.data ?? [];
-  const hasFilters = Boolean(searchInput.trim() || status);
+  const hasFilters = Boolean(searchInput.trim() || status || dateRange);
 
   function handleCreated(promotion: Promotion) {
     setCreateDialogOpen(false);
@@ -161,7 +161,7 @@ export function PromotionsManagement() {
     <SuperAdminLayout activeSection="promotions">
       <div className="admin-page-content">
         <AdminPageHeader
-          actions={<div className="admin-page-actions">
+          actions={<div className="page-intro-actions">
             {canCreate && <AdminCreateAction label="Thêm khuyến mãi" onClick={openCreate} />}
             <AdminRefreshAction loading={loading} onClick={refresh} />
           </div>}
@@ -175,6 +175,7 @@ export function PromotionsManagement() {
           <FilterToolbar totalItems={promotionPage?.meta.totalItems ?? null}>
             <SearchInput label="Tìm khuyến mãi" onChange={updateSearch} placeholder="Tìm theo mã hoặc tên chương trình" value={searchInput} />
             <SelectFilter allLabel="Tất cả trạng thái" label="Lọc theo trạng thái" onChange={updateStatus} options={STATUS_OPTIONS} value={status} />
+            <DateRangeFilter label="Thời hạn khuyến mãi" title="Thời hạn khuyến mãi" onApply={updateDateRange} value={dateRange} />
           </FilterToolbar>
           {loading && !promotionPage && <AdminTableSkeleton resourceLabel="khuyến mãi" />}
           {error && <div className={styles.listError} role="alert"><p>{error}</p><Button onClick={refresh} type="button" variant="secondary">Thử lại</Button></div>}

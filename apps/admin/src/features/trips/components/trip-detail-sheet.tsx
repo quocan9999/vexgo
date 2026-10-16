@@ -222,7 +222,6 @@ export function TripDetailSheet({
       <AdminDetailSheet ariaLabelledBy="trip-detail-title" onClose={onClose}>
         <div className="admin-dialog-header">
           <div className="admin-dialog-header__copy">
-            <p className="eyebrow">HỒ SƠ CHUYẾN XE</p>
             <h2 id="trip-detail-title">Chi tiết chuyến xe</h2>
           </div>
           <form method="dialog">

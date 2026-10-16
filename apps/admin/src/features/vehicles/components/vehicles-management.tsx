@@ -208,7 +208,6 @@ function VehicleDetails({
       >
         <div className="admin-dialog-header">
           <div className="admin-dialog-header__copy">
-            <p className="eyebrow">QUẢN LÝ PHƯƠNG TIỆN</p>
             <h2 id="vehicle-detail-title">Chi tiết xe</h2>
             <p id="vehicle-detail-description">
               Thông tin xe và các danh mục liên kết.

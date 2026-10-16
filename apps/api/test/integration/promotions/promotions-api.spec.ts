@@ -237,6 +237,39 @@ describe('Tenant promotions API with real authentication and MySQL RBAC', () => 
     };
   }
 
+  it('filters inclusive validity overlap before pagination and rejects invalid date ranges', async () => {
+    const code = 'DATE' + suffix.slice(0, 12);
+    const created = await request(app.getHttpServer())
+      .post('/api/v1/promotions').set('Authorization', bearer(adminAToken))
+      .send(createBody({ code, startsOn: '2026-02-10', endsOn: '2026-02-20' })).expect(201);
+    for (const date of ['2026-02-10', '2026-02-15', '2026-02-20']) {
+      const response = await request(app.getHttpServer()).get('/api/v1/promotions')
+        .query({ search: code, fromDate: date, toDate: date, pageSize: 1 })
+        .set('Authorization', bearer(adminAToken)).expect(200);
+      expect(response.body.data.map((p: PromotionApiResponse) => p.id)).toEqual([created.body.data.id]);
+      expect(response.body.meta.totalItems).toBe(1);
+    }
+    for (const date of ['2026-02-09', '2026-02-21']) {
+      const response = await request(app.getHttpServer()).get('/api/v1/promotions')
+        .query({ search: code, fromDate: date, toDate: date })
+        .set('Authorization', bearer(adminAToken)).expect(200);
+      expect(response.body.meta.totalItems).toBe(0);
+      expect(response.body.data).toEqual([]);
+    }
+    const otherTenant = await request(app.getHttpServer()).get('/api/v1/promotions')
+      .query({ search: code, fromDate: '2026-02-01', toDate: '2026-02-28' })
+      .set('Authorization', bearer(adminBToken)).expect(200);
+    expect(otherTenant.body.data).toEqual([]);
+    for (const query of [
+      { fromDate: '2026-02-30' }, { toDate: 'invalid' },
+      { fromDate: '2026-02-20', toDate: '2026-02-10' },
+    ]) {
+      await request(app.getHttpServer()).get('/api/v1/promotions').query(query)
+        .set('Authorization', bearer(adminAToken)).expect(400)
+        .expect(({ body }) => expect(body.error).toBe('VALIDATION_ERROR'));
+    }
+  }, 30000);
+
   it('requires a real session for admin APIs and retires the public legacy validator', async () => {
     const unauthenticated = await request(app.getHttpServer())
       .get('/api/v1/promotions')

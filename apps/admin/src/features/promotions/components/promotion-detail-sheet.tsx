@@ -1,5 +1,6 @@
 'use client';
 
+import { X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { AdminDetailSheet } from '@/components/admin/admin-detail-sheet';
 import { AdminStatusBadge } from '@/components/admin/admin-status-badge';
@@ -94,12 +95,11 @@ export function PromotionDetailSheet({ promotionId, refreshKey, canUpdate, onClo
 
   return (
     <AdminDetailSheet ariaLabelledBy="promotion-detail-title" onClose={onClose}>
-      <header className="admin-detail-sheet__header">
-        <div>
-          <p className="eyebrow">QUẢN LÝ ƯU ĐÃI</p>
+      <header className="admin-dialog-header">
+        <div className="admin-dialog-header__copy">
           <h2 id="promotion-detail-title">Chi tiết khuyến mãi</h2>
-          {promotion && <p className="admin-data-mono">{promotion.code}</p>}
         </div>
+        <form method="dialog"><Button aria-label="Đóng chi tiết khuyến mãi" className="icon-button" type="submit" variant="secondary"><X aria-hidden="true" size={19} /></Button></form>
       </header>
       {loading && <p className={styles.detailState} role="status">Đang tải chi tiết khuyến mãi…</p>}
       {!loading && error && <div className={styles.detailError} role="alert"><p>{error}</p><Button onClick={() => setRetry((count) => count + 1)} type="button" variant="secondary">Thử tải lại</Button></div>}

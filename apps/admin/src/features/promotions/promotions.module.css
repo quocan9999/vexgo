@@ -27,18 +27,9 @@
   color: var(--admin-danger);
 }
 
-.activeNote {
-  margin: 0;
-  padding: var(--admin-space-2) var(--admin-space-3);
-  border-left: 3px solid var(--admin-accent);
-  background: var(--admin-canvas);
-  color: var(--admin-text-muted);
-  font-size: var(--admin-type-helper-size);
-  line-height: var(--admin-type-helper-line-height);
-}
-
 .fieldHint {
-  margin: var(--admin-space-2) var(--admin-space-sheet-padding) 0;
+  margin: 0;
+  flex-basis: 100%;
   color: var(--admin-text-muted);
   font-size: var(--admin-type-helper-size);
   line-height: var(--admin-type-helper-line-height);
@@ -123,10 +114,16 @@
 
 .detailActions {
   display: flex;
+  justify-content: flex-end;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--admin-space-control-gap);
-  padding: var(--admin-space-field-gap) var(--admin-space-card-padding) var(--admin-space-card-padding);
+  padding: var(--admin-space-field-gap) var(--admin-space-sheet-padding) var(--admin-space-sheet-padding);
+}
+
+.detailList {
+  margin: 0;
+  padding: var(--admin-space-field-gap) var(--admin-space-sheet-padding);
 }
 
 .detailItem {

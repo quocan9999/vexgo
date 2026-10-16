@@ -118,6 +118,8 @@ export async function getPromotions(
     sortDirection: query.sortDirection,
   });
   if (query.status) params.set('status', query.status);
+  if (query.fromDate) params.set('fromDate', query.fromDate);
+  if (query.toDate) params.set('toDate', query.toDate);
   const body = await readResponse(
     await adminApiFetch(`${apiUrl('')}?${params.toString()}`, { cache: 'no-store', signal }),
     'danh sách khuyến mãi',

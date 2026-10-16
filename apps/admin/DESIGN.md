@@ -105,6 +105,7 @@ Shared components under `src/components/admin/`, `src/components/ui/`, and `src/
 - Status labels use the shared badge pattern and map domain state in the feature.
 - Forms have associated labels, invalid state, linked error descriptions, and clear submit feedback.
 - Dialogs and sheets have an accessible title, contain focus while open, and support the shared Escape/backdrop behavior.
+- Detail sheet headers show the title and close action. Category eyebrow labels belong to page headers.
 - Icon-only buttons have an accessible name. Loading, success, and error states use appropriate live-region semantics.
 - Nonessential animation respects `prefers-reduced-motion`.
 

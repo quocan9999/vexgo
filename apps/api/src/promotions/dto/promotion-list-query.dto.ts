@@ -1,3 +1,4 @@
+import { IsPromotionDateOnly } from './promotion-validators.js';
 import { Transform, Type } from 'class-transformer';
 import {
   IsIn,
@@ -42,6 +43,14 @@ export class PromotionListQueryDto {
   @IsOptional()
   @IsIn(['HOAT_DONG', 'TAM_NGUNG'])
   status?: 'HOAT_DONG' | 'TAM_NGUNG';
+
+  @IsOptional()
+  @IsPromotionDateOnly()
+  fromDate?: string;
+
+  @IsOptional()
+  @IsPromotionDateOnly()
+  toDate?: string;
 
   @IsOptional()
   @IsIn(PROMOTION_SORT_FIELDS)

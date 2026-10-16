@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import type { DateRangeValue } from '@/components/data-filters/data-filters';
 import { getPromotions } from '../services/promotion-service';
 import type {
   PaginatedPromotions,
@@ -19,12 +20,13 @@ export function usePromotions() {
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<PromotionStatus | ''>('');
+  const [dateRange, setDateRange] = useState<DateRangeValue | null>(null);
   const [page, setPage] = useState(1);
   const [sortBy, setSortBy] = useState<PromotionSortKey>('createdAt');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [refreshCount, setRefreshCount] = useState(0);
 
-  const requestKey = JSON.stringify([page, search, status, sortBy, sortDirection]);
+  const requestKey = JSON.stringify([page, search, status, dateRange, sortBy, sortDirection]);
   const promotionPage = result?.key === requestKey ? result.page : null;
 
   useEffect(() => {
@@ -38,12 +40,14 @@ export function usePromotions() {
   useEffect(() => {
     const controller = new AbortController();
     let current = true;
-    const key = JSON.stringify([page, search, status, sortBy, sortDirection]);
+    const key = JSON.stringify([page, search, status, dateRange, sortBy, sortDirection]);
     const query: PromotionListQuery = {
       page,
       pageSize: PAGE_SIZE,
       search,
       status: status || undefined,
+      fromDate: dateRange?.from,
+      toDate: dateRange?.to,
       sortBy,
       sortDirection,
     };
@@ -69,7 +73,7 @@ export function usePromotions() {
       current = false;
       controller.abort();
     };
-  }, [page, search, status, sortBy, sortDirection, refreshCount]);
+  }, [page, search, status, dateRange, sortBy, sortDirection, refreshCount]);
 
   function updateSearch(value: string) {
     setLoading(true);
@@ -83,6 +87,13 @@ export function usePromotions() {
     setError(null);
     setPage(1);
     setStatus(value === 'HOAT_DONG' || value === 'TAM_NGUNG' ? value : '');
+  }
+
+  function updateDateRange(value: DateRangeValue | null) {
+    setLoading(true);
+    setError(null);
+    setPage(1);
+    setDateRange(value);
   }
 
   function changePage(nextPage: number) {
@@ -111,6 +122,7 @@ export function usePromotions() {
     setSearchInput('');
     setSearch('');
     setStatus('');
+    setDateRange(null);
   }
 
   function refresh() {
@@ -125,6 +137,8 @@ export function usePromotions() {
     loading,
     searchInput,
     status,
+    dateRange,
+    updateDateRange,
     sortBy,
     sortDirection,
     changePage,

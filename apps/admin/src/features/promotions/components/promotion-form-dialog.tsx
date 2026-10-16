@@ -1,12 +1,11 @@
 'use client';
 
-import { LoaderCircle } from 'lucide-react';
+import { LoaderCircle, X } from 'lucide-react';
 import { useRef, useState, type FormEvent } from 'react';
 import { AdminFormDialog } from '@/components/admin/admin-form-dialog';
 import { Button } from '@/components/ui/button';
 import { createPromotion, PromotionApiError, type PromotionApiErrorDetail } from '../services/promotion-service';
 import type { CreatePromotionRequest, Promotion, PromotionDiscountType } from '../types/promotion';
-import styles from '../promotions.module.css';
 
 type Props = { onClose: () => void; onSaved: (promotion: Promotion) => void };
 type FormValues = {
@@ -180,12 +179,13 @@ export function PromotionFormDialog({ onClose, onSaved }: Props) {
       dialogRef={dialogRef}
       onClose={onClose}
       preventDismiss={submitting}
+      lockPageScroll
     >
-      <header className="admin-form-dialog__header">
-        <div>
-          <p className="eyebrow">QUẢN LÝ ƯU ĐÃI</p>
+      <header className="admin-dialog-header">
+        <div className="admin-dialog-header__copy">
           <h2 id={`${idPrefix}-title`}>Thêm khuyến mãi</h2>
         </div>
+        <Button aria-label="Đóng biểu mẫu thêm khuyến mãi" className="icon-button" disabled={submitting} onClick={closeDialog} type="button" variant="secondary"><X aria-hidden="true" size={19} /></Button>
       </header>
       <form className="admin-crud-form" noValidate onSubmit={handleSubmit}>
         {summaryEntries.length > 0 && (
@@ -199,7 +199,6 @@ export function PromotionFormDialog({ onClose, onSaved }: Props) {
           </div>
         )}
         {formError && <p className="admin-crud-form-error" role="alert">{formError}</p>}
-        <p className={styles.activeNote} role="note">Khuyến mãi mới luôn bắt đầu ở trạng thái Hoạt động. Bạn có thể tạm ngưng sau khi tạo.</p>
 
         <div className="admin-crud-form-field">
           <label htmlFor={`${idPrefix}-name`}>Tên chương trình *</label>

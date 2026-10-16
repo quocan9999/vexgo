@@ -75,6 +75,7 @@ vi.mock('@/features/super-admin-layout/components/super-admin-layout', () => ({
 }));
 
 vi.mock('@/components/data-filters/data-filters', () => ({
+  DateRangeFilter: () => null,
   FilterToolbar: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   SearchInput: ({ label, onChange, value }: { label: string; onChange: (value: string) => void; value: string }) => (
     <label>{label}<input value={value} onChange={(event) => onChange(event.target.value)} /></label>
@@ -91,6 +92,8 @@ vi.mock('@/features/promotions/hooks/use-promotions', () => ({
     loading: false,
     searchInput: '',
     status: '',
+    dateRange: null,
+    updateDateRange: vi.fn(),
     sortBy: 'createdAt',
     sortDirection: 'desc',
     changePage: vi.fn(),
@@ -147,7 +150,7 @@ describe('Admin promotion management permissions and actions', () => {
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Xem chi tiết SUMMER10' })[0]!);
     const detail = await screen.findByRole('dialog', { name: 'Chi tiết khuyến mãi' });
-    expect(within(detail).getAllByText('SUMMER10').length).toBeGreaterThan(0);
+    expect((await within(detail).findAllByText('SUMMER10')).length).toBeGreaterThan(0);
     expect(within(detail).queryByRole('button', { name: /Tạm ngưng/ })).toBeNull();
     expect(within(detail).queryByRole('button', { name: /Chỉnh sửa|Xóa/ })).toBeNull();
   });

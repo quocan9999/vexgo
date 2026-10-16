@@ -53,6 +53,8 @@ export type PromotionListQuery = {
   sortBy: PromotionSortKey;
   sortDirection: SortDirection;
   status?: PromotionStatus;
+  fromDate?: string;
+  toDate?: string;
 };
 
 export type PaginatedPromotions = {

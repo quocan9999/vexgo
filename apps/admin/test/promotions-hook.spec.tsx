@@ -20,6 +20,19 @@ function page(code: string) {
 afterEach(() => state.getPromotions.mockReset());
 
 describe('usePromotions request ordering', () => {
+  it('filters dates on the server, resets pagination, and clears the range', async () => {
+    state.getPromotions.mockResolvedValue(page('NEW'));
+    const { result } = renderHook(() => usePromotions());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    act(() => result.current.changePage(3));
+    await waitFor(() => expect(state.getPromotions.mock.lastCall?.[0].page).toBe(3));
+    act(() => result.current.updateDateRange({ from: '2026-10-01', to: '2026-10-31' }));
+    await waitFor(() => expect(state.getPromotions.mock.lastCall?.[0]).toMatchObject({ page: 1, fromDate: '2026-10-01', toDate: '2026-10-31' }));
+    act(() => result.current.resetFilters());
+    await waitFor(() => expect(state.getPromotions.mock.lastCall?.[0]).toMatchObject({ page: 1, fromDate: undefined, toDate: undefined }));
+    expect(result.current.dateRange).toBeNull();
+  });
+
   it('aborts the stale list request and keeps its later search result', async () => {
     const pending: Array<(result: ReturnType<typeof page>) => void> = [];
     state.getPromotions.mockImplementation(() => new Promise((resolve) => pending.push(resolve)));
