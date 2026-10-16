@@ -371,7 +371,7 @@ describe('AdminChatMessenger Component & Flow Regression Tests', () => {
 
       // Giả lập socket nhận tin nhắn mới từ khách hàng
       expect(capturedSocketProps.onNewMessage).toBeDefined();
-      capturedSocketProps.onNewMessage({
+      capturedSocketProps.onNewMessage!({
         tinNhanId: 205,
         cuocTroChuyenId: 1,
         taiKhoanGuiId: 10,
@@ -455,7 +455,7 @@ describe('AdminChatMessenger Component & Flow Regression Tests', () => {
 
       // T1: Trong lúc GET đang chờ kết quả, socket nhận tin nhắn realtime mới
       expect(capturedSocketProps.onNewMessage).toBeDefined();
-      capturedSocketProps.onNewMessage({
+      capturedSocketProps.onNewMessage!({
         tinNhanId: 301,
         cuocTroChuyenId: 1,
         taiKhoanGuiId: 10,
@@ -531,7 +531,7 @@ describe('AdminChatMessenger Component & Flow Regression Tests', () => {
       fireEvent.click(await screen.findByText('Hội thoại A'));
 
       // Kích hoạt reconnect cho hội thoại A trong khi getMessages(1) đang pending
-      capturedSocketProps.onReconnected();
+      capturedSocketProps.onReconnected!();
 
       // Nhân viên nhanh chóng chuyển sang hội thoại B
       fireEvent.click(screen.getByText('Hội thoại B'));
