@@ -1,3 +1,4 @@
+import { promotionTestDatabaseUrl } from '../../support/promotion-test-database.js';
 import { type INestApplication } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
@@ -31,33 +32,6 @@ type PromotionApiResponse = {
   effectiveState: string;
 };
 
-function assertPromotionDatabaseTarget(): void {
-  const raw = process.env.DATABASE_URL;
-  if (!raw)
-    throw new Error('DATABASE_URL is required for promotion API tests.');
-
-  let url: URL;
-  try {
-    url = new URL(raw);
-  } catch {
-    throw new Error('DATABASE_URL is invalid for promotion API tests.');
-  }
-
-  const database = decodeURIComponent(url.pathname.replace(/^\/+/, ''));
-  const username = decodeURIComponent(url.username);
-  if (
-    url.protocol !== 'mysql:' ||
-    url.hostname !== '127.0.0.1' ||
-    Number(url.port || 3306) !== 3306 ||
-    database !== 'vexgo_promotion' ||
-    username !== 'vexgo_promotion_app'
-  ) {
-    throw new Error(
-      'Promotion API integration tests may connect only to vexgo_promotion at 127.0.0.1:3306 with its app user.',
-    );
-  }
-}
-
 describe('Tenant promotions API with real authentication and MySQL RBAC', () => {
   let app: INestApplication;
   let prisma: PrismaService;
@@ -78,7 +52,7 @@ describe('Tenant promotions API with real authentication and MySQL RBAC', () => 
   let accountOrdinal = 0;
 
   beforeAll(async () => {
-    assertPromotionDatabaseTarget();
+    promotionTestDatabaseUrl(process.env.DATABASE_URL);
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();

@@ -1,3 +1,4 @@
+import { promotionTestDatabaseUrl } from '../../support/promotion-test-database.js';
 import { randomUUID } from 'node:crypto';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -13,34 +14,9 @@ loadDotenv({
 let prisma: PrismaClient;
 
 function promotionDatabaseConfig() {
-  const raw = process.env.DATABASE_URL;
-  if (!raw)
-    throw new Error(
-      'DATABASE_URL is required for the promotion schema integration test.',
-    );
-
-  let url: URL;
-  try {
-    url = new URL(raw);
-  } catch {
-    throw new Error(
-      'DATABASE_URL must be a valid MySQL URL for the promotion schema integration test.',
-    );
-  }
-
+  const url = promotionTestDatabaseUrl(process.env.DATABASE_URL);
   const database = decodeURIComponent(url.pathname.replace(/^\/+/, ''));
   const username = decodeURIComponent(url.username);
-  if (
-    url.protocol !== 'mysql:' ||
-    url.hostname !== '127.0.0.1' ||
-    Number(url.port || 3306) !== 3306 ||
-    database !== 'vexgo_promotion' ||
-    username !== 'vexgo_promotion_app'
-  ) {
-    throw new Error(
-      'Promotion schema integration tests may connect only to vexgo_promotion at 127.0.0.1:3306 with its app user.',
-    );
-  }
 
   return {
     host: url.hostname,
@@ -282,7 +258,7 @@ describe('promotion quota schema on MySQL', () => {
     const [row] = await prisma.$queryRaw<
       Array<{ databaseName: string }>
     >`SELECT DATABASE() AS databaseName`;
-    expect(row.databaseName).toBe('vexgo_promotion');
+    expect(row.databaseName).toBe(decodeURIComponent(promotionTestDatabaseUrl(process.env.DATABASE_URL).pathname.slice(1)));
   });
 
   afterAll(async () => {
