@@ -964,7 +964,11 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
       });
 
       setHoldExpiresAt(null);
-      router.push(`/payment?draftId=${encodeURIComponent(draft.id)}`);
+      if (totalAmount === 0 && booking.status === 'DA_THANH_TOAN') {
+        router.push(`/invoice/${booking.bookingId}`);
+      } else {
+        router.push(`/payment?draftId=${encodeURIComponent(draft.id)}`);
+      }
     } catch (error) {
       if (holdToken && activeHoldRef.current?.holdToken === holdToken) {
         const activeHold = activeHoldRef.current;

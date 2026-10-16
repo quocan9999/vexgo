@@ -1,7 +1,6 @@
 import {
   Body,
   Controller,
-  GoneException,
   Get,
   Param,
   Patch,
@@ -9,7 +8,6 @@ import {
   Query,
 } from '@nestjs/common';
 import { CurrentPrincipal } from '../auth/decorators/current-principal.decorator.js';
-import { Public } from '../auth/decorators/public.decorator.js';
 import { RequirePermissions } from '../auth/decorators/require-permissions.decorator.js';
 import { RequireRoles } from '../auth/decorators/require-roles.decorator.js';
 import { TENANT_PRINCIPAL_ROLES } from '../auth/principal-scope.js';
@@ -64,15 +62,5 @@ export class PromotionsController {
       body.status,
       principal,
     );
-  }
-
-  @Public()
-  @RequireRoles()
-  @Post('validate')
-  validateLegacyPromotion(): never {
-    throw new GoneException({
-      error: 'PROMOTION_VALIDATE_DEPRECATED',
-      message: 'Vui lòng kiểm tra mã tại báo giá đặt vé.',
-    });
   }
 }

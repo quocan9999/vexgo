@@ -1064,3 +1064,33 @@ describe('one-way booking with server seat holds', () => {
     expect(screen.queryByText(/\(\+0đ\)/)).toBeNull();
   });
 });
+
+
+it('opens the verified invoice directly for a completed free booking and keeps guest credentials', async () => {
+  bookingResponse = async () => {
+    const result = bookingOk();
+    const body = await result.json() as { data: { status: string; totalAmount: number } };
+    body.data.status = 'DA_THANH_TOAN';
+    body.data.totalAmount = 0;
+    return response(body, 201);
+  };
+  render(<OneWayBooking post={post} tripSeats={tripSeats} />);
+  completeForm();
+  await waitFor(() =>
+    expect(state.routerPush).toHaveBeenCalledWith('/invoice/101'),
+  );
+  expect(state.routerPush).not.toHaveBeenCalledWith(
+    expect.stringContaining('/payment'),
+  );
+  const drafts = Object.keys(sessionStorage)
+    .map((key) => sessionStorage.getItem(key))
+    .filter(Boolean)
+    .map((raw) => JSON.parse(raw!));
+  expect(drafts).toContainEqual(
+    expect.objectContaining({
+      bookingId: 101,
+      bookingCode: 'VG-101',
+      passenger: expect.objectContaining({ phoneNumber: '0901234567' }),
+    }),
+  );
+});

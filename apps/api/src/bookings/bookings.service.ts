@@ -520,6 +520,8 @@ export class BookingsService {
       const finalTicketTotal = originalTotal.sub(discountAmount);
       const totalOrderAmount = finalTicketTotal.add(shippingFee);
 
+      const requiresPayment = !totalOrderAmount.isZero();
+
       // 4. Generate transaction codes
       const now = new Date();
       const opCode = trip.tuyenXe?.nhaXe?.maNhaXe || (trip.xe as any)?.nhaXe?.maNhaXe || 'VXG';
@@ -547,7 +549,7 @@ export class BookingsService {
           nhaXeId: trip.nhaXeId,
           // Tạo payment chờ trong cùng transaction, trước khi trả booking/QR.
           // Guest dùng quyền tạo booking hiện có, không cần mở endpoint thanh toán công khai.
-          thanhToans: {
+          thanhToans: requiresPayment ? {
             create: {
               phuongThuc: 'SEPAY',
               loaiGiaoDich: 'THANH_TOAN',
@@ -555,7 +557,7 @@ export class BookingsService {
               soTien: new Prisma.Decimal(totalOrderAmount),
               thoiGian: now,
             },
-          },
+          } : undefined,
         },
       });
 
@@ -786,6 +788,53 @@ export class BookingsService {
           discountAmount,
           quotaLimit: commitPromotionQuote.quotaLimit,
         });
+      }
+
+      // A zero-total order is settled internally; no bank payment or provider event exists.
+      // Keep both lifecycle transitions in this transaction so any failure rolls back the hold,
+      // seats, booking, histories, and promotion usage together.
+      if (!requiresPayment) {
+        const completion = {
+          thoiDiem: now,
+          nguonThayDoi: 'SYSTEM',
+          taiKhoanId: null,
+          lyDo: 'Đơn 0đ – miễn thanh toán',
+          laOverride: false,
+          maThaoTac: generateUuidV1(),
+        };
+        await tx.donGiaoDich.update({
+          where: { donGiaoDichId: donGiaoDich.donGiaoDichId },
+          data: { trangThai: 'DA_THANH_TOAN' },
+        });
+        await tx.phieuDatVe.update({
+          where: { phieuDatVeId: phieuDatVe.phieuDatVeId },
+          data: { trangThai: 'DA_THANH_TOAN' },
+        });
+        await tx.lichSuTrangThaiPhieuDatVe.create({
+          data: {
+            ...completion,
+            phieuDatVeId: phieuDatVe.phieuDatVeId,
+            trangThaiCu: 'CHO_THANH_TOAN',
+            trangThaiMoi: 'DA_THANH_TOAN',
+          },
+        });
+        for (const ticket of createdTickets) {
+          await tx.ve.update({
+            where: { veId: ticket.veId },
+            data: { trangThai: 'DA_THANH_TOAN' },
+          });
+          await tx.lichSuTrangThaiVe.create({
+            data: {
+              ...completion,
+              veId: ticket.veId,
+              trangThaiCu: 'DA_DAT',
+              trangThaiMoi: 'DA_THANH_TOAN',
+            },
+          });
+          ticket.status = 'DA_THANH_TOAN';
+        }
+        donGiaoDich.trangThai = 'DA_THANH_TOAN';
+        phieuDatVe.trangThai = 'DA_THANH_TOAN';
       }
 
       return {

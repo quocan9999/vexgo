@@ -1,14 +1,16 @@
-/*
-  Warnings:
-
-  - Added the required column `soLuotToiDa` to the `KhuyenMai` table without a default value. This is not possible if the table is not empty.
-  - Made the column `maKhuyenMai` on table `KhuyenMai` required. This step will fail if there are existing NULL values in that column.
-  - Made the column `denNgay` on table `KhuyenMai` required. This step will fail if there are existing NULL values in that column.
-
-*/
--- AlterTable
+-- Upgrade populated develop databases without deleting promotions or their references.
+-- Legacy promotions have no defined lifetime quota/usage ledger. Preserve their business
+-- fields and disable redemption until they are explicitly reconfigured outside this MVP.
 ALTER TABLE `KhuyenMai` ADD COLUMN `soLuotDaSuDung` INTEGER NOT NULL DEFAULT 0,
-    ADD COLUMN `soLuotToiDa` INTEGER NOT NULL,
+    ADD COLUMN `soLuotToiDa` INTEGER NULL;
+
+UPDATE `KhuyenMai`
+SET `soLuotToiDa` = 1,
+    `maKhuyenMai` = COALESCE(`maKhuyenMai`, CONCAT('LEGACY-', `khuyenMaiId`)),
+    `denNgay` = COALESCE(`denNgay`, `tuNgay`),
+    `trangThai` = 'LEGACY_UNCONFIGURED';
+
+ALTER TABLE `KhuyenMai` MODIFY `soLuotToiDa` INTEGER NOT NULL,
     MODIFY `maKhuyenMai` VARCHAR(50) NOT NULL,
     MODIFY `denNgay` DATE NOT NULL;
 

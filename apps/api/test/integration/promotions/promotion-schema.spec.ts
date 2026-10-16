@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { promotionTestDatabaseUrl } from '../../support/promotion-test-database.js';
 import { randomUUID } from 'node:crypto';
 import { dirname, resolve } from 'node:path';
@@ -263,6 +264,45 @@ describe('promotion quota schema on MySQL', () => {
 
   afterAll(async () => {
     await prisma?.$disconnect();
+  });
+
+
+  it('keeps seed date scenarios stable across November, year rollover and MySQL session timezones', async () => {
+    const source = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), '../../../../../prisma/verify-seed.mjs'), 'utf8');
+    const scenarios = [...source.matchAll(/scalar\("([^"\n]*FROM KhuyenMai WHERE[^"\n]*)"\), (\d+)\);/g)];
+    expect(scenarios).toHaveLength(4);
+    await withRollback(async (client) => {
+      const tenantId = await insertTenant(client, randomUUID());
+      for (let i = 0; i < 3; i++) {
+        for (const [name, start, end, status] of [
+          ['PERCENT', '2026-09-01', '2026-12-31', 'HOAT_DONG'],
+          ['FIXED', '2026-09-01', '2026-12-31', 'HOAT_DONG'],
+          ['NOVEMBER', '2026-11-01', '2026-12-31', 'HOAT_DONG'],
+          ['OLD', '2026-01-01', '2026-02-01', 'HOAT_DONG'],
+          ['PAUSE', '2026-09-01', '2026-12-31', 'TAM_NGUNG'],
+        ]) {
+          const id = await insertPromotion(client, tenantId, `${i}-${name}`);
+          await client.$executeRaw`UPDATE KhuyenMai SET tuNgay=${start}, denNgay=${end}, trangThai=${status} WHERE khuyenMaiId=${id}`;
+        }
+      }
+      const [original] = await client.$queryRaw<Array<{ zone: string }>>`SELECT @@session.time_zone AS zone`;
+      try {
+        for (const timestamp of [1791046800, 1793466000, 1798736400]) {
+          for (const zone of ['+00:00', '+07:00', '-12:00']) {
+            await client.$executeRawUnsafe(`SET timestamp = ${timestamp}`);
+            await client.$executeRawUnsafe('SET time_zone = ?', zone);
+            for (const [, sql, expected] of scenarios) {
+              const scoped = sql.replace('FROM KhuyenMai WHERE', `FROM KhuyenMai WHERE nhaXeId=${tenantId} AND`);
+              const [result] = await client.$queryRawUnsafe<Array<{ value: bigint }>>(scoped);
+              expect(Number(result.value), `${timestamp} ${zone} ${sql}`).toBe(Number(expected));
+            }
+          }
+        }
+      } finally {
+        await client.$executeRawUnsafe('SET timestamp = 0');
+        await client.$executeRawUnsafe('SET time_zone = ?', original.zone);
+      }
+    });
   });
 
   it('stores required quota, bounded counters, ledger snapshots, and unique indexes', async () => {

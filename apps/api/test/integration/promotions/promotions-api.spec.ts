@@ -1,3 +1,6 @@
+import { METHOD_METADATA, MODULE_METADATA, PATH_METADATA } from '@nestjs/common/constants';
+import { RequestMethod } from '@nestjs/common';
+import { PromotionsModule } from '../../../src/promotions/promotions.module.js';
 import { promotionTestDatabaseUrl } from '../../support/promotion-test-database.js';
 import { type INestApplication } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -192,6 +195,15 @@ describe('Tenant promotions API with real authentication and MySQL RBAC', () => 
     } finally {
       await app?.close();
     }
+  });
+
+  it('registers exactly one public legacy validation handler', () => {
+    const controllers: Array<{ prototype: object }> = Reflect.getMetadata(MODULE_METADATA.CONTROLLERS, PromotionsModule);
+    const handlers = controllers.flatMap(controller => Object.getOwnPropertyNames(controller.prototype).filter(name => {
+      const handler = Object.getOwnPropertyDescriptor(controller.prototype, name)?.value;
+      return typeof handler === 'function' && Reflect.getMetadata(PATH_METADATA, handler) === 'validate' && Reflect.getMetadata(METHOD_METADATA, handler) === RequestMethod.POST;
+    }));
+    expect(handlers).toHaveLength(1);
   });
 
   const bearer = (token: string) => `Bearer ${token}`;

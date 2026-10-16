@@ -76,6 +76,11 @@ jobs:
         env:
           BOOKING_TICKET_STATUS_HISTORY_HARNESS_ADMIN_DATABASE_URL: mysql://root:ci-root-password@127.0.0.1:3306/vexgo_ci
 
+      - name: Promotion upgrade from seeded develop database
+        run: node prisma/tests/promotion-migration-upgrade.mjs
+        env:
+          PROMOTION_UPGRADE_ADMIN_DATABASE_URL: mysql://root:ci-root-password@127.0.0.1:3306/vexgo_ci
+
       - name: Apply API database migrations
         run: npm exec -- prisma migrate deploy
 
