@@ -10,6 +10,7 @@ import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'node:crypto';
 import { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { createSepayPaymentAttempt } from '../payments/payment-attempt.js';
 import { SeatHoldsService } from '../seat-holds/seat-holds.service.js';
 import { PromotionsService } from '../promotions/promotions.service.js';
 import { CargoPricingService } from '../cargo-pricing/cargo-pricing.service.js';
@@ -447,18 +448,13 @@ export class BookingsService {
           emailKhachHang: contactEmail,
           khachHangId: resolvedCustomerId,
           nhaXeId: trip.nhaXeId,
-          // Tạo payment chờ trong cùng transaction, trước khi trả booking/QR.
-          // Guest dùng quyền tạo booking hiện có, không cần mở endpoint thanh toán công khai.
-          thanhToans: {
-            create: {
-              phuongThuc: 'SEPAY',
-              loaiGiaoDich: 'THANH_TOAN',
-              trangThai: 'DANG_XU_LY',
-              soTien: new Prisma.Decimal(totalOrderAmount),
-              thoiGian: now,
-            },
-          },
         },
+      });
+      // Booking và shipment độc lập cùng tạo một SEPAY attempt qua helper này.
+      await createSepayPaymentAttempt(tx, {
+        donGiaoDichId: donGiaoDich.donGiaoDichId,
+        amount: new Prisma.Decimal(totalOrderAmount),
+        createdAt: now,
       });
 
       // 6. Create PhieuDatVe

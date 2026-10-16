@@ -427,6 +427,13 @@ describe('BookingsService', () => {
       };
       let createdOrderData: Record<string, unknown> | undefined;
       let createdBookingData: Record<string, unknown> | undefined;
+      let createdPaymentData: Record<string, unknown> | undefined;
+      const createPaymentAttempt = vi.fn().mockImplementation(({
+        data,
+      }: { data: Record<string, unknown> }) => {
+        createdPaymentData = data;
+        return { thanhToanId: 501 };
+      });
       (prisma as any).$transaction = vi.fn().mockImplementation(async (cb) => {
         const txMock = {
           gheChuyenXe: {
@@ -444,6 +451,7 @@ describe('BookingsService', () => {
               return { donGiaoDichId: 99 };
             }),
           },
+          thanhToan: { create: createPaymentAttempt },
           phieuDatVe: {
             create: vi.fn().mockImplementation(({ data }: { data: Record<string, unknown> }) => {
               createdBookingData = data;
@@ -479,16 +487,16 @@ describe('BookingsService', () => {
       expect(res.totalAmount).toBe(250000);
       expect(res.tickets[0].soGhe).toBe('A01');
       expect(createdOrderData?.maDonGiaoDich).toMatch(/^FUTAGD[A-F\d]{30}$/);
-      expect(createdOrderData?.thanhToans).toEqual({
-        create: {
-          phuongThuc: 'SEPAY',
-          loaiGiaoDich: 'THANH_TOAN',
-          trangThai: 'DANG_XU_LY',
-          soTien: expect.anything(),
-          thoiGian: expect.any(Date),
-        },
+      expect(createPaymentAttempt).toHaveBeenCalledOnce();
+      expect(createdPaymentData).toMatchObject({
+        phuongThuc: 'SEPAY',
+        loaiGiaoDich: 'THANH_TOAN',
+        trangThai: 'DANG_XU_LY',
+        donGiaoDichId: 99,
+        soTien: expect.anything(),
+        thoiGian: expect.any(Date),
       });
-      expect(Number((createdOrderData?.thanhToans as any).create.soTien)).toBe(250000);
+      expect(Number(createdPaymentData?.soTien)).toBe(250000);
       expect(createdBookingData?.maPhieuDatVe).toMatch(/^FUTA-PDV-[A-F\d]{30}$/);
     });
   });
@@ -576,6 +584,7 @@ describe('BookingsService', () => {
         },
       };
       const orderRows: Record<string, unknown>[] = [];
+      const paymentRows: Record<string, unknown>[] = [];
       const cargoPersistence = {
         persistInTransaction: vi.fn(async (_tx: unknown, input: any) => ({
           shipment: { phieuGuiHangId: 501, maVanDon: input.waybillCode },
@@ -619,6 +628,12 @@ describe('BookingsService', () => {
             create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
               orderRows.push(data);
               return { donGiaoDichId: 201, maDonGiaoDich: data.maDonGiaoDich };
+            }),
+          },
+          thanhToan: {
+            create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
+              paymentRows.push(data);
+              return { thanhToanId: 401 };
             }),
           },
           phieuDatVe: {
@@ -708,10 +723,14 @@ describe('BookingsService', () => {
       expect(Number(cargoInput.rates[0].fee)).toBe(60000);
       expect(Number(orderRows[0].tongTien)).toBe(210000);
       expect(orderRows[0].khachHangId).toBeNull();
-      expect((orderRows[0].thanhToans as any).create).toMatchObject({
-        phuongThuc: 'SEPAY', loaiGiaoDich: 'THANH_TOAN', trangThai: 'DANG_XU_LY',
+      expect(paymentRows).toHaveLength(1);
+      expect(paymentRows[0]).toMatchObject({
+        phuongThuc: 'SEPAY',
+        loaiGiaoDich: 'THANH_TOAN',
+        trangThai: 'DANG_XU_LY',
+        donGiaoDichId: 201,
       });
-      expect(Number((orderRows[0].thanhToans as any).create.soTien)).toBe(210000);
+      expect(Number(paymentRows[0].soTien)).toBe(210000);
     });
 
     it('requires explicit route points when multiple active sender choices exist', async () => {
@@ -848,6 +867,9 @@ describe('BookingsService', () => {
           const tx = {
             donGiaoDich: {
               create: vi.fn().mockResolvedValue({ donGiaoDichId: 201 }),
+            },
+            thanhToan: {
+              create: vi.fn().mockResolvedValue({ thanhToanId: 401 }),
             },
             phieuDatVe: {
               create: vi.fn().mockResolvedValue({

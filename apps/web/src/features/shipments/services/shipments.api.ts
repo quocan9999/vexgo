@@ -70,6 +70,8 @@ export type CargoCategory = {
 export type ShipmentResponseData = {
   shipmentId: number;
   orderId: number;
+  paymentId: number;
+  paymentExpiresAt: string;
   waybillCode: string;
   orderCode: string;
   status: string;
@@ -137,6 +139,13 @@ export type ShipmentResponseData = {
 export type PublicShipmentLookupData = {
   waybillCode: string;
   status: string;
+  orderCode?: string;
+  amount?: number | string;
+  orderStatus?: string;
+  paymentStatus?: string | null;
+  paymentMethod?: string | null;
+  paymentExpiresAt?: string;
+  serverTime?: string;
   pickupPoint: { name: string; address: string };
   dropoffPoint: { name: string; address: string };
   carrier: { name: string };
@@ -194,13 +203,14 @@ export const shipmentsApi = {
   async lookupShipment(params: {
     waybillCode: string;
     phoneNumber: string;
-  }): Promise<{ data: PublicShipmentLookupData }> {
+  }, options: { signal?: AbortSignal } = {}): Promise<{ data: PublicShipmentLookupData }> {
     const res = await fetch(`${API_BASE_URL}/shipments/lookup`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(params),
+      signal: options.signal,
     });
 
     if (!res.ok) {

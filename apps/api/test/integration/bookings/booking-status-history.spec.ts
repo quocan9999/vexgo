@@ -569,6 +569,10 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
     const eventId = Date.now();
     const body = JSON.stringify({
       id: eventId,
+      transactionDate: new Date(Date.now() + 7 * 60 * 60 * 1000)
+        .toISOString()
+        .slice(0, 19)
+        .replace('T', ' '),
       accountNumber: sepayAccountNumber,
       code: 'TRUNCATED',
       content: booking.orderCode,
@@ -733,7 +737,15 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
     ]);
     expect(standaloneShipment.donGiaoDichId).not.toBe(booking.orderId);
     expect(standaloneShipment.donGiaoDich.phieuDatVe).toBeNull();
-    expect(standaloneShipment.donGiaoDich.thanhToans).toHaveLength(0);
+    expect(standaloneShipment.donGiaoDich.thanhToans).toHaveLength(1);
+    expect(standaloneShipment.donGiaoDich.thanhToans[0]).toMatchObject({
+      phuongThuc: 'SEPAY',
+      loaiGiaoDich: 'THANH_TOAN',
+      trangThai: 'DANG_XU_LY',
+    });
+    expect(Number(standaloneShipment.donGiaoDich.thanhToans[0].soTien)).toBe(
+      Number(standaloneShipment.donGiaoDich.tongTien),
+    );
     expect(standaloneShipment.donGiaoDich.khachHangId).toBeNull();
     expect(standaloneShipment.chuyenXeId).toBe(tripId);
     expect(standaloneShipment.lichSuTrangThais).toMatchObject([

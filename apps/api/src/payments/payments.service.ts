@@ -20,6 +20,8 @@ import {
   getBookingPaymentDeadline,
 } from '../common/booking-payment-deadline.js';
 import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
+import { PaymentSettlementService } from './payment-settlement.service.js';
+import { lockPaymentOrder } from './payment-order-lock.js';
 import type {
   MomoWebhookDto,
   VnpayWebhookDto,
@@ -33,10 +35,41 @@ type SepayWebhookPayload = {
   accountNumber?: unknown;
   code?: unknown;
   content?: unknown;
+  transactionDate?: unknown;
   transferType?: unknown;
   transferAmount?: unknown;
   currency?: unknown;
 };
+
+const SEPAY_VIETNAM_UTC_OFFSET_MS = 7 * 60 * 60 * 1000;
+
+function parseSepayTransactionDate(value: unknown): Date | null {
+  if (typeof value !== 'string') return null;
+
+  const match = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/.exec(
+    value,
+  );
+  if (!match) return null;
+
+  const [year, month, day, hour, minute, second] = match
+    .slice(1)
+    .map(Number);
+  const vietnamWallClock = new Date(
+    Date.UTC(year, month - 1, day, hour, minute, second),
+  );
+  if (
+    vietnamWallClock.getUTCFullYear() !== year ||
+    vietnamWallClock.getUTCMonth() !== month - 1 ||
+    vietnamWallClock.getUTCDate() !== day ||
+    vietnamWallClock.getUTCHours() !== hour ||
+    vietnamWallClock.getUTCMinutes() !== minute ||
+    vietnamWallClock.getUTCSeconds() !== second
+  ) {
+    return null;
+  }
+
+  return new Date(vietnamWallClock.getTime() - SEPAY_VIETNAM_UTC_OFFSET_MS);
+}
 
 function isPrismaUniqueConstraintError(error: unknown): boolean {
   return (
@@ -77,6 +110,34 @@ function sepayTransactionConflict(): ConflictException {
   });
 }
 
+function assertPaymentMatchesProvider(
+  payment: { phuongThuc: string; soTien: unknown },
+  provider: string,
+  amount: number,
+): void {
+  if (payment.phuongThuc.toUpperCase() !== provider.toUpperCase()) {
+    throw new BadRequestException({
+      error: 'PAYMENT_PROVIDER_MISMATCH',
+      message: `Phương thức thanh toán không khớp: mong đợi ${payment.phuongThuc}, nhận được ${provider}`,
+    });
+  }
+
+  const expectedAmount = Number(payment.soTien);
+  const receivedAmount = Number(amount);
+  if (
+    !Number.isSafeInteger(expectedAmount) ||
+    expectedAmount <= 0 ||
+    !Number.isSafeInteger(receivedAmount) ||
+    receivedAmount <= 0 ||
+    expectedAmount !== receivedAmount
+  ) {
+    throw new BadRequestException({
+      error: 'PAYMENT_AMOUNT_MISMATCH',
+      message: `Số tiền thanh toán không khớp: mong đợi ${expectedAmount}, nhận được ${receivedAmount}`,
+    });
+  }
+}
+
 @Injectable()
 export class PaymentsService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(PaymentsService.name);
@@ -91,6 +152,8 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly prisma: PrismaService,
     private readonly configService?: ConfigService,
+    private readonly settlementBoundary: PaymentSettlementService =
+      new PaymentSettlementService(prisma),
   ) {
     this.isDemoMode =
       (this.configService?.get<string>('PAYMENT_DEMO_MODE') ?? '').toLowerCase() ===
@@ -130,19 +193,24 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  /** Kept as a method so deadline boundary tests can freeze settlement time. */
+  private getCurrentTime(): Date {
+    return new Date();
+  }
+
   onModuleInit() {
     if (process.env.NODE_ENV === 'test') return;
 
     void this.expireExpiredBookings().catch((error: unknown) => {
       this.logger.error(
-        'Không thể chạy lượt hết hạn booking khi API khởi động.',
+        'Không thể chạy lượt hết hạn đơn thanh toán khi API khởi động.',
         error instanceof Error ? error.stack : undefined,
       );
     });
     this.expiryTimer = setInterval(() => {
       void this.expireExpiredBookings().catch((error: unknown) => {
         this.logger.error(
-          'Không thể xử lý booking quá hạn thanh toán.',
+          'Không thể xử lý đơn quá hạn thanh toán.',
           error instanceof Error ? error.stack : undefined,
         );
       });
@@ -156,21 +224,34 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
 
   async expireExpiredBookings(now = new Date()): Promise<number> {
     const expiredBefore = new Date(now.getTime() - BOOKING_PAYMENT_TTL_MS);
-    const candidates = await this.prisma.phieuDatVe.findMany({
+    const bookingCandidates = await this.prisma.phieuDatVe.findMany({
       where: {
-        createdAt: { lte: expiredBefore },
         trangThai: BOOKING_ORDER_PENDING_STATUS,
         donGiaoDich: {
-          is: { trangThai: BOOKING_ORDER_PENDING_STATUS },
+          is: {
+            ngayTao: { lte: expiredBefore },
+            trangThai: BOOKING_ORDER_PENDING_STATUS,
+          },
         },
       },
       select: { phieuDatVeId: true },
-      orderBy: { createdAt: 'asc' },
+      orderBy: { donGiaoDich: { ngayTao: 'asc' } },
+      take: 100,
+    });
+    const shipmentCandidates = await this.prisma.donGiaoDich.findMany({
+      where: {
+        ngayTao: { lte: expiredBefore },
+        trangThai: BOOKING_ORDER_PENDING_STATUS,
+        phieuDatVe: { is: null },
+        phieuGuiHang: { isNot: null },
+      },
+      select: { phieuGuiHang: { select: { phieuGuiHangId: true } } },
+      orderBy: { ngayTao: 'asc' },
       take: 100,
     });
 
     let expiredCount = 0;
-    for (const candidate of candidates) {
+    for (const candidate of bookingCandidates) {
       try {
         const expired = await this.prisma.$transaction((tx) =>
           this.expirePendingBookingInTransaction(
@@ -183,6 +264,25 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
       } catch (error) {
         this.logger.error(
           `Không thể hết hạn an toàn booking #${candidate.phieuDatVeId}; cần đối soát trạng thái liên quan.`,
+          error instanceof Error ? error.stack : undefined,
+        );
+      }
+    }
+    for (const candidate of shipmentCandidates) {
+      const shipment = candidate.phieuGuiHang;
+      if (!shipment) continue;
+      try {
+        const expired = await this.prisma.$transaction((tx) =>
+          this.expirePendingShipmentInTransaction(
+            tx,
+            shipment.phieuGuiHangId,
+            now,
+          ),
+        );
+        if (expired) expiredCount += 1;
+      } catch (error) {
+        this.logger.error(
+          `Không thể hết hạn an toàn phiếu gửi #${shipment.phieuGuiHangId}; cần đối soát trạng thái liên quan.`,
           error instanceof Error ? error.stack : undefined,
         );
       }
@@ -202,7 +302,8 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
   private async expirePendingBookingInTransaction(
     tx: Prisma.TransactionClient,
     bookingId: number,
-    now: Date,
+    deadlineCheckTime: Date,
+    historyTimestamp = deadlineCheckTime,
   ): Promise<boolean> {
     const bookingIdentity = await tx.phieuDatVe.findUnique({
       where: { phieuDatVeId: bookingId },
@@ -210,12 +311,8 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
     });
     if (!bookingIdentity) return false;
 
-    await tx.$queryRaw<Array<{ donGiaoDichId: number }>>`
-      SELECT donGiaoDichId
-      FROM DonGiaoDich
-      WHERE donGiaoDichId = ${bookingIdentity.donGiaoDichId}
-      FOR UPDATE
-    `;
+    const hasOrder = await lockPaymentOrder(tx, bookingIdentity.donGiaoDichId);
+    if (!hasOrder) return false;
 
     const booking = await tx.phieuDatVe.findUnique({
       where: { phieuDatVeId: bookingId },
@@ -226,9 +323,9 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
     });
     if (!booking || !booking.donGiaoDich) return false;
 
-    const expiredBefore = new Date(now.getTime() - BOOKING_PAYMENT_TTL_MS);
     if (
-      booking.createdAt > expiredBefore ||
+      getBookingPaymentDeadline(booking.donGiaoDich.ngayTao) >
+        deadlineCheckTime ||
       booking.trangThai !== BOOKING_ORDER_PENDING_STATUS ||
       booking.donGiaoDich.trangThai !== BOOKING_ORDER_PENDING_STATUS
     ) {
@@ -246,6 +343,7 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
     const successfulPayment = await tx.thanhToan.findFirst({
       where: {
         donGiaoDichId: booking.donGiaoDichId,
+        loaiGiaoDich: 'THANH_TOAN',
         trangThai: 'THANH_CONG',
       },
       select: { thanhToanId: true },
@@ -280,7 +378,6 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
       where: {
         phieuDatVeId: booking.phieuDatVeId,
         trangThai: BOOKING_ORDER_PENDING_STATUS,
-        createdAt: { lte: expiredBefore },
       },
       data: { trangThai: 'DA_HUY' },
     });
@@ -294,13 +391,14 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
     await tx.thanhToan.updateMany({
       where: {
         donGiaoDichId: booking.donGiaoDichId,
+        loaiGiaoDich: 'THANH_TOAN',
         trangThai: 'DANG_XU_LY',
       },
       data: { trangThai: 'THAT_BAI' },
     });
 
     const operationId = generateUuidV1();
-    const timestamp = now;
+    const timestamp = historyTimestamp;
     await tx.lichSuTrangThaiPhieuDatVe.create({
       data: {
         phieuDatVeId: booking.phieuDatVeId,
@@ -385,6 +483,106 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
         },
       });
     }
+
+    return true;
+  }
+
+  private async expirePendingShipmentInTransaction(
+    tx: Prisma.TransactionClient,
+    shipmentId: number,
+    deadlineCheckTime: Date,
+    historyTimestamp = deadlineCheckTime,
+  ): Promise<boolean> {
+    const shipmentIdentity = await tx.phieuGuiHang.findUnique({
+      where: { phieuGuiHangId: shipmentId },
+      select: { phieuGuiHangId: true, donGiaoDichId: true },
+    });
+    if (!shipmentIdentity) return false;
+
+    const hasOrder = await lockPaymentOrder(tx, shipmentIdentity.donGiaoDichId);
+    if (!hasOrder) return false;
+
+    const shipment = await tx.phieuGuiHang.findUnique({
+      where: { phieuGuiHangId: shipmentId },
+      include: { donGiaoDich: { include: { phieuDatVe: true } } },
+    });
+    const order = shipment?.donGiaoDich;
+    if (
+      !shipment ||
+      !order ||
+      order.phieuDatVe ||
+      order.trangThai !== BOOKING_ORDER_PENDING_STATUS ||
+      getBookingPaymentDeadline(order.ngayTao) > deadlineCheckTime
+    ) {
+      return false;
+    }
+
+    if (shipment.trangThai === 'DA_GIAO') {
+      throw new ConflictException({
+        error: 'SHIPMENT_EXPIRY_STATE_CONFLICT',
+        message:
+          'Đơn đang chờ thanh toán nhưng hàng đã giao; cần đối soát trước khi hết hạn.',
+      });
+    }
+
+    const successfulPayment = await tx.thanhToan.findFirst({
+      where: {
+        donGiaoDichId: order.donGiaoDichId,
+        loaiGiaoDich: 'THANH_TOAN',
+        trangThai: 'THANH_CONG',
+      },
+      select: { thanhToanId: true },
+    });
+    if (successfulPayment) {
+      throw new ConflictException({
+        error: 'SHIPMENT_EXPIRY_PAYMENT_CONFLICT',
+        message:
+          'Đơn đang chờ thanh toán nhưng đã có giao dịch thành công; cần đối soát trước khi hết hạn.',
+      });
+    }
+
+    const orderUpdate = await tx.donGiaoDich.updateMany({
+      where: {
+        donGiaoDichId: order.donGiaoDichId,
+        trangThai: BOOKING_ORDER_PENDING_STATUS,
+      },
+      data: { trangThai: 'DA_HUY' },
+    });
+    if (orderUpdate.count !== 1) return false;
+
+    if (shipment.trangThai !== 'DA_HUY') {
+      const shipmentUpdate = await tx.phieuGuiHang.updateMany({
+        where: {
+          phieuGuiHangId: shipment.phieuGuiHangId,
+          trangThai: shipment.trangThai,
+        },
+        data: { trangThai: 'DA_HUY' },
+      });
+      if (shipmentUpdate.count !== 1) {
+        throw new ConflictException({
+          error: 'SHIPMENT_EXPIRY_STATE_CHANGED',
+          message: 'Trạng thái phiếu gửi thay đổi trong khi xử lý hết hạn.',
+        });
+      }
+      await tx.lichSuTrangThaiPhieuGuiHang.create({
+        data: {
+          phieuGuiHangId: shipment.phieuGuiHangId,
+          trangThai: 'DA_HUY',
+          thoiGian: historyTimestamp,
+          ghiChu: 'Hết thời hạn thanh toán 10 phút.',
+          taiKhoanId: null,
+        },
+      });
+    }
+
+    await tx.thanhToan.updateMany({
+      where: {
+        donGiaoDichId: order.donGiaoDichId,
+        loaiGiaoDich: 'THANH_TOAN',
+        trangThai: 'DANG_XU_LY',
+      },
+      data: { trangThai: 'THAT_BAI' },
+    });
 
     return true;
   }
@@ -525,6 +723,16 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
       });
     }
 
+    const providerTransactionAt = parseSepayTransactionDate(
+      payload.transactionDate,
+    );
+    if (!providerTransactionAt) {
+      throw new BadRequestException({
+        error: 'SEPAY_TRANSACTION_DATE_INVALID',
+        message: 'Thời điểm giao dịch SePay không hợp lệ.',
+      });
+    }
+
     // SePay có thể nhận diện `code` không đầy đủ dù `content` chứa đúng mã đơn.
     // Chỉ tìm mã đầy đủ; mã legacy mất dấu '-' được khôi phục theo cấu trúc cố định.
     const references = new Set<string>();
@@ -537,7 +745,7 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
     const matchingOrders = (await Promise.all(
       [...references].map((reference) => this.prisma.donGiaoDich.findUnique({
         where: { maDonGiaoDich: reference },
-        include: { phieuDatVe: true },
+        include: { phieuDatVe: true, phieuGuiHang: true },
       })),
     )).filter((candidate) => candidate !== null);
     const order = matchingOrders[0];
@@ -547,10 +755,10 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
         message: 'Mã thanh toán và nội dung chuyển khoản trỏ tới các đơn khác nhau.',
       });
     }
-    if (!order || !order.phieuDatVe) {
+    if (!order || (!order.phieuDatVe && !order.phieuGuiHang)) {
       throw new NotFoundException({
         error: 'SEPAY_ORDER_NOT_FOUND',
-        message: 'Không tìm thấy đơn đặt vé khớp chính xác với mã chuyển khoản.',
+        message: 'Không tìm thấy đơn giao dịch khớp chính xác với mã chuyển khoản.',
       });
     }
 
@@ -561,6 +769,7 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
     if (existingEvent) {
       if (
         existingEvent.phuongThuc !== 'SEPAY' ||
+        existingEvent.loaiGiaoDich !== 'THANH_TOAN' ||
         existingEvent.donGiaoDichId !== order.donGiaoDichId ||
         Number(existingEvent.soTien) !== transferAmount
       ) {
@@ -569,8 +778,17 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
           message: 'Mã giao dịch SePay đã được liên kết với một đơn khác.',
         });
       }
-      if (existingEvent.trangThai === 'THANH_CONG') {
-        return { success: true, message: 'Webhook SePay đã được xử lý trước đó.' };
+      if (
+        existingEvent.trangThai === 'THANH_CONG' ||
+        existingEvent.trangThai === 'CAN_DOI_SOAT'
+      ) {
+        return {
+          success: true,
+          message: 'Webhook SePay đã được ghi nhận trước đó.',
+          ...(existingEvent.trangThai === 'CAN_DOI_SOAT'
+            ? { requiresReconciliation: true }
+            : {}),
+        };
       }
     }
 
@@ -583,8 +801,14 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
       where: { ...paymentFilter, trangThai: 'DANG_XU_LY' },
       orderBy: [{ createdAt: 'desc' }, { thanhToanId: 'desc' }],
     });
+    const settledPayment = await this.prisma.thanhToan.findFirst({
+      where: { ...paymentFilter, trangThai: 'THANH_CONG' },
+      orderBy: [{ createdAt: 'desc' }, { thanhToanId: 'desc' }],
+    });
     const payment =
+      existingEvent ??
       activePayment ??
+      settledPayment ??
       (await this.prisma.thanhToan.findFirst({
         where: paymentFilter,
         orderBy: [{ createdAt: 'desc' }, { thanhToanId: 'desc' }],
@@ -593,7 +817,7 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
     if (!payment) {
       throw new ConflictException({
         error: 'SEPAY_PAYMENT_NOT_FOUND',
-        message: 'Đơn đặt vé chưa có giao dịch thanh toán SePay hợp lệ.',
+        message: 'Đơn giao dịch chưa có khoản thanh toán SePay hợp lệ.',
       });
     }
 
@@ -616,6 +840,7 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
       provider: 'SEPAY',
       amount: transferAmount,
       providerTransactionId: transactionId,
+      providerTransactionAt,
     });
   }
 
@@ -665,17 +890,18 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
       'Bạn không có quyền thanh toán cho đơn đặt vé này.',
     );
 
+    const paymentCheckTime = this.getCurrentTime();
     if (
-      booking.createdAt instanceof Date &&
+      booking.donGiaoDich?.ngayTao instanceof Date &&
       booking.trangThai === BOOKING_ORDER_PENDING_STATUS &&
       booking.donGiaoDich?.trangThai === BOOKING_ORDER_PENDING_STATUS &&
-      getBookingPaymentDeadline(booking.createdAt) <= new Date()
+      getBookingPaymentDeadline(booking.donGiaoDich.ngayTao) <= paymentCheckTime
     ) {
       await this.prisma.$transaction((tx) =>
         this.expirePendingBookingInTransaction(
           tx,
           booking.phieuDatVeId,
-          new Date(),
+          paymentCheckTime,
         ),
       );
       throw new ConflictException({
@@ -744,16 +970,16 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
         throw new NotFoundException(`Đơn đặt vé #${bookingId} không tồn tại.`);
       }
 
+      const paymentCheckTime = this.getCurrentTime();
       if (
-        currentBooking.createdAt instanceof Date &&
         currentBooking.trangThai === BOOKING_ORDER_PENDING_STATUS &&
         currentBooking.donGiaoDich.trangThai === BOOKING_ORDER_PENDING_STATUS &&
-        getBookingPaymentDeadline(currentBooking.createdAt) <= new Date()
+        getBookingPaymentDeadline(currentBooking.donGiaoDich.ngayTao) <= paymentCheckTime
       ) {
         await this.expirePendingBookingInTransaction(
           tx,
           currentBooking.phieuDatVeId,
-          new Date(),
+          paymentCheckTime,
         );
         return { paymentExpired: true as const };
       }
@@ -836,7 +1062,7 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
             sameProviderActive.createdAt?.toISOString?.() ??
             new Date().toISOString(),
           paymentExpiresAt: getBookingPaymentDeadline(
-            currentBooking.createdAt,
+            currentBooking.donGiaoDich.ngayTao,
           ).toISOString(),
         };
       }
@@ -887,7 +1113,7 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
         createdAt:
           payment.createdAt?.toISOString?.() ?? new Date().toISOString(),
         paymentExpiresAt: getBookingPaymentDeadline(
-          currentBooking.createdAt,
+          currentBooking.donGiaoDich.ngayTao,
         ).toISOString(),
       };
     });
@@ -909,6 +1135,7 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
         donGiaoDich: {
           include: {
             phieuDatVe: true,
+            phieuGuiHang: true,
             khachHang: true,
           },
         },
@@ -929,34 +1156,62 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
     // Purely READ-ONLY: do NOT mutate database!
     const isSuccess = payment.trangThai === 'THANH_CONG';
     const isFailed = payment.trangThai === 'THAT_BAI';
-    const paymentExpiresAt = payment.donGiaoDich?.phieuDatVe?.createdAt
-      ? getBookingPaymentDeadline(payment.donGiaoDich.phieuDatVe.createdAt)
+    const booking = payment.donGiaoDich?.phieuDatVe;
+    const shipment = payment.donGiaoDich?.phieuGuiHang;
+    const paymentOrder = payment.donGiaoDich;
+    const paymentCreatedAt = paymentOrder?.ngayTao;
+    const paymentExpiresAt = paymentCreatedAt
+      ? getBookingPaymentDeadline(paymentCreatedAt)
       : null;
     const bookingPaymentIsPending =
-      payment.donGiaoDich?.phieuDatVe?.trangThai ===
-        BOOKING_ORDER_PENDING_STATUS &&
-      payment.donGiaoDich?.trangThai === BOOKING_ORDER_PENDING_STATUS;
-    const bookingPaymentHasExpired =
+      paymentOrder?.trangThai === BOOKING_ORDER_PENDING_STATUS &&
+      (!booking || booking.trangThai === BOOKING_ORDER_PENDING_STATUS) &&
+      (!shipment || shipment.trangThai !== 'DA_HUY');
+    const paymentHasExpired =
       bookingPaymentIsPending &&
       paymentExpiresAt !== null &&
       paymentExpiresAt <= new Date();
-    const status = bookingPaymentHasExpired
+    const additionalSePayTransfer = paymentOrder
+      ? await this.prisma.thanhToan.findFirst({
+          where: {
+            donGiaoDichId: paymentOrder.donGiaoDichId,
+            phuongThuc: 'SEPAY',
+            loaiGiaoDich: 'THANH_TOAN',
+            trangThai: 'CAN_DOI_SOAT',
+            maGiaoDichSePay: { not: null },
+          },
+          select: { thanhToanId: true },
+        })
+      : null;
+    const status = paymentHasExpired
       ? 'EXPIRED'
       : isSuccess
         ? 'SUCCESS'
         : isFailed
           ? 'FAILED'
           : 'PENDING';
+    const requiresReconciliation = Boolean(additionalSePayTransfer) ||
+      (isSuccess &&
+        (['DA_HUY', 'HUY'].includes(paymentOrder?.trangThai ?? '') ||
+          ['DA_HUY', 'HUY'].includes(booking?.trangThai ?? '') ||
+          shipment?.trangThai === 'DA_HUY'));
 
     return {
       paymentId: payment.thanhToanId,
-      bookingId: payment.donGiaoDich?.phieuDatVe?.phieuDatVeId ?? 0,
+      bookingId: booking?.phieuDatVeId ?? 0,
+      orderId: paymentOrder?.donGiaoDichId ?? payment.donGiaoDichId,
+      orderCode: paymentOrder?.maDonGiaoDich ?? null,
+      orderStatus: paymentOrder?.trangThai ?? null,
+      shipmentId: shipment?.phieuGuiHangId ?? null,
+      shipmentStatus: shipment?.trangThai ?? null,
       provider: payment.phuongThuc,
       amount: Number(payment.soTien),
       status,
-      bookingStatus: bookingPaymentHasExpired
+      paymentStatus: payment.trangThai,
+      requiresReconciliation,
+      bookingStatus: paymentHasExpired && booking
         ? 'HET_HAN'
-        : (payment.donGiaoDich?.phieuDatVe?.trangThai ?? null),
+        : (booking?.trangThai ?? null),
       paymentExpiresAt: paymentExpiresAt?.toISOString() ?? null,
       serverTime: new Date().toISOString(),
       paidAt: isSuccess ? payment.updatedAt.toISOString() : undefined,
@@ -1003,256 +1258,404 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
     provider: string;
     amount: number;
     providerTransactionId?: string;
+    providerTransactionAt?: Date;
   }) {
-    const payment = await this.prisma.thanhToan.findUnique({
+    const paymentReference = await this.prisma.thanhToan.findUnique({
       where: { thanhToanId: Number(params.paymentId) },
-      include: {
-        donGiaoDich: {
-          include: {
-            phieuDatVe: true,
-            khachHang: true,
-          },
-        },
-      },
+      select: { phuongThuc: true, soTien: true },
     });
-
-    if (!payment) {
+    if (!paymentReference) {
       throw new NotFoundException(
         `Giao dịch thanh toán #${params.paymentId} không tồn tại.`,
       );
     }
+    assertPaymentMatchesProvider(
+      paymentReference,
+      params.provider,
+      params.amount,
+    );
 
-    // 1. Kiểm tra khớp provider (Discussion #discussion_r4164957958)
-    if (payment.phuongThuc.toUpperCase() !== params.provider.toUpperCase()) {
-      throw new BadRequestException({
-        error: 'PAYMENT_PROVIDER_MISMATCH',
-        message: `Phương thức thanh toán không khớp: mong đợi ${payment.phuongThuc}, nhận được ${params.provider}`,
-      });
-    }
+    type SettlementOutcome =
+      | 'settled'
+      | 'already-claimed'
+      | 'already-successful'
+      | 'late-booking'
+      | 'late-shipment'
+      | 'duplicate-settlement'
+      | 'additional-transfer';
 
-    // 2. Kiểm tra khớp số tiền (Discussion #discussion_r4164957969)
-    const expectedAmount = Number(payment.soTien);
-    const receivedAmount = Number(params.amount);
-    if (
-      !Number.isSafeInteger(expectedAmount) ||
-      expectedAmount <= 0 ||
-      !Number.isSafeInteger(receivedAmount) ||
-      receivedAmount <= 0 ||
-      expectedAmount !== receivedAmount
-    ) {
-      throw new BadRequestException({
-        error: 'PAYMENT_AMOUNT_MISMATCH',
-        message: `Số tiền thanh toán không khớp: mong đợi ${expectedAmount}, nhận được ${receivedAmount}`,
-      });
-    }
-
-    if (payment.trangThai === 'THANH_CONG') {
-      if (!params.providerTransactionId) {
-        return { success: true, message: 'Giao dịch đã được xác nhận trước đó.' };
-      }
-
-      if (payment.maGiaoDichSePay === params.providerTransactionId) {
-        return { success: true, message: 'Giao dịch đã được xác nhận trước đó.' };
-      }
-
-      if (
-        payment.maGiaoDichSePay !== null &&
-        payment.maGiaoDichSePay !== undefined
-      ) {
-        throw sepayTransactionConflict();
-      }
-
-      try {
-        const linked = await this.prisma.$transaction((tx) =>
-          tx.thanhToan.updateMany({
-            where: {
-              thanhToanId: payment.thanhToanId,
-              trangThai: 'THANH_CONG',
-              maGiaoDichSePay: null,
-            },
-            data: { maGiaoDichSePay: params.providerTransactionId },
-          }),
-        );
-
-        if (linked.count === 1) {
-          return { success: true, message: 'Giao dịch đã được xác nhận trước đó.' };
-        }
-
-        const current = await this.prisma.thanhToan.findUnique({
-          where: { thanhToanId: payment.thanhToanId },
-          select: { maGiaoDichSePay: true },
-        });
-        if (current?.maGiaoDichSePay === params.providerTransactionId) {
-          return { success: true, message: 'Giao dịch đã được xác nhận trước đó.' };
-        }
-        throw sepayTransactionConflict();
-      } catch (error) {
-        if (isSepayTransactionIdUniqueConstraintError(error)) {
-          throw sepayTransactionConflict();
-        }
-        throw error;
-      }
-    }
-
-    let isAlreadyClaimed = false;
-    let isLatePaymentForCancelledBooking = false;
-    let isDuplicateSettlement = false;
-
+    let outcome: SettlementOutcome;
     try {
-      await this.prisma.$transaction(async (tx) => {
-      // 1. Serialize settlement by locking the parent DonGiaoDich row if present
-      if (payment.donGiaoDichId && typeof tx.$executeRaw === 'function') {
-        await tx.$executeRaw`SELECT donGiaoDichId FROM DonGiaoDich WHERE donGiaoDichId = ${payment.donGiaoDichId} FOR UPDATE`;
-      }
-
-      const booking = payment.donGiaoDich?.phieuDatVe;
-      if (
-        booking?.createdAt instanceof Date &&
-        booking.trangThai === BOOKING_ORDER_PENDING_STATUS &&
-        payment.donGiaoDich?.trangThai === BOOKING_ORDER_PENDING_STATUS &&
-        getBookingPaymentDeadline(booking.createdAt) <= new Date()
-      ) {
-        await this.expirePendingBookingInTransaction(
-          tx,
-          booking.phieuDatVeId,
-          new Date(),
-        );
-      }
-
-      // 2. Atomic state claim: Chỉ update nếu trạng thái CHƯA PHẢI là THANH_CONG (discussion_r4222294112)
-      // MySQL InnoDB sẽ acquire exclusive row lock trên dòng thanh toán này.
-      const paymentClaimWhere: Prisma.ThanhToanWhereInput = {
-        thanhToanId: payment.thanhToanId,
-        trangThai: { not: 'THANH_CONG' },
-      };
-      const paymentClaimData: Prisma.ThanhToanUpdateManyMutationInput = {
-        trangThai: 'THANH_CONG',
-      };
-      if (params.providerTransactionId) {
-        paymentClaimWhere.maGiaoDichSePay = null;
-        paymentClaimData.maGiaoDichSePay = params.providerTransactionId;
-      }
-
-      const claimResult = await tx.thanhToan.updateMany({
-        where: paymentClaimWhere,
-        data: paymentClaimData,
-      });
-
-      // Nếu count === 0, giao dịch này đã được claim/xác nhận thành công bởi 1 webhook đồng thời khác
-      if (claimResult.count === 0) {
-        if (params.providerTransactionId) {
-          const currentPayment = await tx.thanhToan.findUnique({
-            where: { thanhToanId: payment.thanhToanId },
-            select: { maGiaoDichSePay: true },
-          });
-          if (
-            currentPayment?.maGiaoDichSePay !== params.providerTransactionId
-          ) {
-            throw sepayTransactionConflict();
+      outcome = await this.settlementBoundary.withLockedPayment(
+        Number(params.paymentId),
+        async (tx, payment) => {
+          assertPaymentMatchesProvider(payment, params.provider, params.amount);
+          if (payment.loaiGiaoDich === 'HOAN_TIEN') {
+            throw new ConflictException({
+              error: 'PAYMENT_SETTLEMENT_NOT_ALLOWED',
+              message: 'Không thể xác nhận khoản hoàn tiền như một khoản thanh toán.',
+            });
           }
-        }
-        isAlreadyClaimed = true;
-        return;
-      }
 
-      if (payment.donGiaoDich) {
-        const phieuDatVe = payment.donGiaoDich.phieuDatVe;
-        if (phieuDatVe) {
-          // Lấy trạng thái mới nhất của donGiaoDich, phieuDatVe và các vé trong transaction
-          const currentDonGiaoDich = await tx.donGiaoDich.findUnique({
-            where: { donGiaoDichId: payment.donGiaoDichId },
-          });
-
-          const currentBooking = await tx.phieuDatVe.findUnique({
-            where: { phieuDatVeId: phieuDatVe.phieuDatVeId },
-            include: { ves: true },
-          });
-
+          const order = payment.donGiaoDich;
+          const booking = order?.phieuDatVe;
+          const shipment = order?.phieuGuiHang;
+          const settlementTime = this.getCurrentTime();
+          const financialTransactionTime =
+            params.providerTransactionAt ?? settlementTime;
           const isCancelled =
-            (currentBooking &&
-              ['DA_HUY', 'HUY'].includes(currentBooking.trangThai)) ||
-            (currentDonGiaoDich &&
-              ['DA_HUY', 'HUY'].includes(currentDonGiaoDich.trangThai));
+            ['DA_HUY', 'HUY'].includes(order?.trangThai ?? '') ||
+            ['DA_HUY', 'HUY'].includes(booking?.trangThai ?? '') ||
+            shipment?.trangThai === 'DA_HUY';
 
-          if (isCancelled) {
-            isLatePaymentForCancelledBooking = true;
-            this.logger.warn(
-              `Payment #${payment.thanhToanId} confirmed SUCCESS for ALREADY CANCELLED booking/transaction #${phieuDatVe.phieuDatVeId}. Kept booking and tickets CANCELLED. Requires refund.`,
-            );
-            return;
+          if (payment.trangThai === 'THANH_CONG') {
+            if (params.providerTransactionId) {
+              if (
+                payment.maGiaoDichSePay !== null &&
+                payment.maGiaoDichSePay !== params.providerTransactionId
+              ) {
+                if (params.provider !== 'SEPAY') {
+                  throw sepayTransactionConflict();
+                }
+
+                const recordedTransfer = await tx.thanhToan.findUnique({
+                  where: { maGiaoDichSePay: params.providerTransactionId },
+                });
+                if (recordedTransfer) {
+                  if (
+                    recordedTransfer.donGiaoDichId !== payment.donGiaoDichId ||
+                    recordedTransfer.phuongThuc !== 'SEPAY' ||
+                    recordedTransfer.loaiGiaoDich !== 'THANH_TOAN' ||
+                    recordedTransfer.trangThai !== 'CAN_DOI_SOAT' ||
+                    !recordedTransfer.soTien.equals(params.amount)
+                  ) {
+                    throw sepayTransactionConflict();
+                  }
+                  return 'additional-transfer';
+                }
+
+                await tx.thanhToan.create({
+                  data: {
+                    soTien: payment.soTien,
+                    phuongThuc: 'SEPAY',
+                    maGiaoDichSePay: params.providerTransactionId,
+                    loaiGiaoDich: 'THANH_TOAN',
+                    thoiGian: financialTransactionTime,
+                    trangThai: 'CAN_DOI_SOAT',
+                    donGiaoDichId: payment.donGiaoDichId,
+                  },
+                });
+                this.logger.warn(
+                  `Additional SePay transfer ${params.providerTransactionId} was recorded for already-settled order #${payment.donGiaoDichId}; reconciliation is required.`,
+                );
+                return 'additional-transfer';
+              }
+              if (payment.maGiaoDichSePay === null) {
+                const linked = await tx.thanhToan.updateMany({
+                  where: {
+                    thanhToanId: payment.thanhToanId,
+                    trangThai: 'THANH_CONG',
+                    maGiaoDichSePay: null,
+                  },
+                  data: { maGiaoDichSePay: params.providerTransactionId },
+                });
+                if (linked.count !== 1) {
+                  const currentPayment = await tx.thanhToan.findUnique({
+                    where: { thanhToanId: payment.thanhToanId },
+                    select: { maGiaoDichSePay: true },
+                  });
+                  if (
+                    currentPayment?.maGiaoDichSePay !==
+                    params.providerTransactionId
+                  ) {
+                    throw sepayTransactionConflict();
+                  }
+                }
+              }
+            }
+
+            if (isCancelled) return booking ? 'late-booking' : 'late-shipment';
+
+            if (order?.trangThai === 'CHO_THANH_TOAN') {
+              const orderUpdate = await tx.donGiaoDich.updateMany({
+                where: {
+                  donGiaoDichId: payment.donGiaoDichId,
+                  trangThai: 'CHO_THANH_TOAN',
+                },
+                data: { trangThai: 'DA_THANH_TOAN' },
+              });
+              if (orderUpdate.count !== 1) {
+                throw new ConflictException({
+                  error: 'PAYMENT_ORDER_STATE_CHANGED',
+                  message: 'Trạng thái đơn giao dịch không cho phép xác nhận thanh toán.',
+                });
+              }
+            } else if (order?.trangThai !== 'DA_THANH_TOAN') {
+              throw new ConflictException({
+                error: 'PAYMENT_ORDER_STATE_CHANGED',
+                message: 'Trạng thái đơn giao dịch không cho phép xác nhận thanh toán.',
+              });
+            }
+
+            return 'already-successful';
           }
 
-          // Invariant: Nếu DonGiaoDich hoặc Booking đã DA_THANH_TOAN (đã được quyết toán bởi attempt khác),
-          // tuyệt đối không quyết toán lần hai và không tạo duplicate history!
+          if (!order) {
+            throw new ConflictException({
+              error: 'PAYMENT_ORDER_NOT_FOUND',
+              message: 'Không tìm thấy đơn giao dịch của khoản thanh toán.',
+            });
+          }
+
           if (
-            currentDonGiaoDich?.trangThai === 'DA_THANH_TOAN' ||
-            currentBooking?.trangThai === 'DA_THANH_TOAN'
+            payment.trangThai !== 'THANH_CONG' &&
+            order.trangThai === BOOKING_ORDER_PENDING_STATUS &&
+            getBookingPaymentDeadline(order.ngayTao) <=
+              financialTransactionTime
           ) {
-            isDuplicateSettlement = true;
-            this.logger.warn(
-              `Payment #${payment.thanhToanId} confirmed SUCCESS via provider callback, but transaction #${payment.donGiaoDichId} / booking #${phieuDatVe.phieuDatVeId} was ALREADY SETTLED. Kept original settlement, skipped secondary update and history. Requires refund/reconciliation.`,
-            );
-            return;
+            if (booking) {
+              await this.expirePendingBookingInTransaction(
+                tx,
+                booking.phieuDatVeId,
+                financialTransactionTime,
+                settlementTime,
+              );
+            } else if (shipment) {
+              await this.expirePendingShipmentInTransaction(
+                tx,
+                shipment.phieuGuiHangId,
+                financialTransactionTime,
+                settlementTime,
+              );
+            }
           }
 
-          // Cập nhật DonGiaoDich nếu chưa bị hủy (Atomic CAS)
-          const updateDonGiaoDichResult = await tx.donGiaoDich.updateMany({
+          const paymentClaimWhere: Prisma.ThanhToanWhereInput = {
+            thanhToanId: payment.thanhToanId,
+            trangThai: { not: 'THANH_CONG' },
+          };
+          const paymentClaimData: Prisma.ThanhToanUpdateManyMutationInput = {
+            trangThai: 'THANH_CONG',
+          };
+          if (params.providerTransactionId) {
+            paymentClaimWhere.maGiaoDichSePay = null;
+            paymentClaimData.maGiaoDichSePay = params.providerTransactionId;
+          }
+
+          const claimResult = await tx.thanhToan.updateMany({
+            where: paymentClaimWhere,
+            data: paymentClaimData,
+          });
+          if (claimResult.count === 0) {
+            if (params.providerTransactionId) {
+              const currentPayment = await tx.thanhToan.findUnique({
+                where: { thanhToanId: payment.thanhToanId },
+                select: { maGiaoDichSePay: true },
+              });
+              if (currentPayment?.maGiaoDichSePay !== params.providerTransactionId) {
+                throw sepayTransactionConflict();
+              }
+            }
+            return 'already-claimed';
+          }
+
+          if (booking) {
+            const currentOrder = await tx.donGiaoDich.findUnique({
+              where: { donGiaoDichId: payment.donGiaoDichId },
+            });
+            const currentBooking = await tx.phieuDatVe.findUnique({
+              where: { phieuDatVeId: booking.phieuDatVeId },
+              include: { ves: true },
+            });
+            const bookingCancelled =
+              ['DA_HUY', 'HUY'].includes(currentBooking?.trangThai ?? '') ||
+              ['DA_HUY', 'HUY'].includes(currentOrder?.trangThai ?? '');
+
+            if (bookingCancelled) {
+              this.logger.warn(
+                `Payment #${payment.thanhToanId} confirmed SUCCESS for ALREADY CANCELLED booking/transaction #${booking.phieuDatVeId}. Kept booking and tickets CANCELLED. Requires reconciliation.`,
+              );
+              return 'late-booking';
+            }
+
+            if (
+              currentOrder?.trangThai === 'DA_THANH_TOAN' ||
+              currentBooking?.trangThai === 'DA_THANH_TOAN'
+            ) {
+              this.logger.warn(
+                `Payment #${payment.thanhToanId} confirmed SUCCESS via provider callback, but transaction #${payment.donGiaoDichId} / booking #${booking.phieuDatVeId} was ALREADY SETTLED. Requires reconciliation.`,
+              );
+              return 'duplicate-settlement';
+            }
+
+            if (currentOrder?.trangThai !== BOOKING_ORDER_PENDING_STATUS) {
+              throw new ConflictException({
+                error: 'PAYMENT_ORDER_STATE_CHANGED',
+                message: 'Trạng thái đơn giao dịch không cho phép xác nhận thanh toán.',
+              });
+            }
+
+            const updateOrderResult = await tx.donGiaoDich.updateMany({
+              where: {
+                donGiaoDichId: payment.donGiaoDichId,
+                trangThai: BOOKING_ORDER_PENDING_STATUS,
+              },
+              data: { trangThai: 'DA_THANH_TOAN' },
+            });
+            if (updateOrderResult.count !== 1) {
+              const latestOrder = await tx.donGiaoDich.findUnique({
+                where: { donGiaoDichId: payment.donGiaoDichId },
+              });
+              if (
+                ['DA_HUY', 'HUY'].includes(latestOrder?.trangThai ?? '') ||
+                ['DA_HUY', 'HUY'].includes(currentBooking?.trangThai ?? '')
+              ) {
+                return 'late-booking';
+              }
+              if (
+                latestOrder?.trangThai === 'DA_THANH_TOAN' ||
+                currentBooking?.trangThai === 'DA_THANH_TOAN'
+              ) {
+                return 'duplicate-settlement';
+              }
+              throw new ConflictException({
+                error: 'PAYMENT_ORDER_STATE_CHANGED',
+                message: 'Trạng thái đơn giao dịch không cho phép xác nhận thanh toán.',
+              });
+            }
+
+            const updateBookingResult = await tx.phieuDatVe.updateMany({
+              where: {
+                phieuDatVeId: booking.phieuDatVeId,
+                trangThai: BOOKING_ORDER_PENDING_STATUS,
+              },
+              data: { trangThai: 'DA_THANH_TOAN' },
+            });
+            if (updateBookingResult.count === 0) {
+              throw new ConflictException({
+                error: 'BOOKING_STATE_CHANGED',
+                message:
+                  'Trạng thái đặt vé đã thay đổi; giao dịch thanh toán chưa được quyết toán.',
+              });
+            }
+
+            let activeTickets: Array<{ veId: number }> = [];
+            if (tx.ve) {
+              await tx.ve.updateMany({
+                where: {
+                  phieuDatVeId: booking.phieuDatVeId,
+                  trangThai: { notIn: ['DA_HUY', 'HUY'] },
+                },
+                data: { trangThai: 'DA_THANH_TOAN' },
+              });
+              activeTickets = await tx.ve.findMany({
+                where: {
+                  phieuDatVeId: booking.phieuDatVeId,
+                  trangThai: 'DA_THANH_TOAN',
+                },
+              });
+            }
+
+            await tx.thanhToan.updateMany({
+              where: {
+                donGiaoDichId: payment.donGiaoDichId,
+                thanhToanId: { not: payment.thanhToanId },
+                trangThai: 'DANG_XU_LY',
+              },
+              data: { trangThai: 'THAT_BAI' },
+            });
+
+            const operationId = generateUuidV1();
+            const timestamp = new Date();
+            const providerName = payment.phuongThuc.toUpperCase();
+            if (tx.lichSuTrangThaiPhieuDatVe) {
+              await tx.lichSuTrangThaiPhieuDatVe.create({
+                data: {
+                  phieuDatVeId: booking.phieuDatVeId,
+                  trangThaiCu: currentBooking?.trangThai || 'CHO_THANH_TOAN',
+                  trangThaiMoi: 'DA_THANH_TOAN',
+                  thoiDiem: timestamp,
+                  nguonThayDoi: 'SYSTEM',
+                  taiKhoanId: null,
+                  lyDo: `Thanh toán thành công qua ${providerName}`,
+                  laOverride: false,
+                  maThaoTac: operationId,
+                },
+              });
+            }
+            if (tx.lichSuTrangThaiVe) {
+              for (const ticket of activeTickets) {
+                await tx.lichSuTrangThaiVe.create({
+                  data: {
+                    veId: ticket.veId,
+                    trangThaiCu: 'DA_DAT',
+                    trangThaiMoi: 'DA_THANH_TOAN',
+                    thoiDiem: timestamp,
+                    nguonThayDoi: 'SYSTEM',
+                    taiKhoanId: null,
+                    lyDo: `Thanh toán vé thành công qua ${providerName}`,
+                    laOverride: false,
+                    maThaoTac: operationId,
+                  },
+                });
+              }
+            }
+            return 'settled';
+          }
+
+          if (!shipment) {
+            throw new ConflictException({
+              error: 'PAYMENT_ORDER_NOT_SETTLEABLE',
+              message: 'Đơn giao dịch không có booking hoặc phiếu gửi hàng hợp lệ.',
+            });
+          }
+
+          const currentOrder = await tx.donGiaoDich.findUnique({
+            where: { donGiaoDichId: payment.donGiaoDichId },
+            include: { phieuGuiHang: true },
+          });
+          if (
+            ['DA_HUY', 'HUY'].includes(currentOrder?.trangThai ?? '') ||
+            currentOrder?.phieuGuiHang?.trangThai === 'DA_HUY'
+          ) {
+            return 'late-shipment';
+          }
+          if (currentOrder?.trangThai === 'DA_THANH_TOAN') {
+            return 'duplicate-settlement';
+          }
+          if (currentOrder?.trangThai !== BOOKING_ORDER_PENDING_STATUS) {
+            throw new ConflictException({
+              error: 'PAYMENT_ORDER_STATE_CHANGED',
+              message: 'Trạng thái đơn giao dịch không cho phép xác nhận thanh toán.',
+            });
+          }
+
+          const updateOrderResult = await tx.donGiaoDich.updateMany({
             where: {
               donGiaoDichId: payment.donGiaoDichId,
               trangThai: BOOKING_ORDER_PENDING_STATUS,
             },
             data: { trangThai: 'DA_THANH_TOAN' },
           });
-
-          // Nếu DonGiaoDich không cập nhật được (bị hủy concurrent hoặc trạng thái không hợp lệ)
-          if (updateDonGiaoDichResult.count === 0) {
-            if (currentDonGiaoDich?.trangThai === 'DA_THANH_TOAN') {
-              isDuplicateSettlement = true;
-            } else {
-              isLatePaymentForCancelledBooking = true;
+          if (updateOrderResult.count !== 1) {
+            const latestOrder = await tx.donGiaoDich.findUnique({
+              where: { donGiaoDichId: payment.donGiaoDichId },
+              include: { phieuGuiHang: true },
+            });
+            if (
+              ['DA_HUY', 'HUY'].includes(latestOrder?.trangThai ?? '') ||
+              latestOrder?.phieuGuiHang?.trangThai === 'DA_HUY'
+            ) {
+              return 'late-shipment';
             }
-            this.logger.warn(
-              `Payment #${payment.thanhToanId} confirmed SUCCESS but transaction #${payment.donGiaoDichId} update failed. Requires refund/reconciliation.`,
-            );
-            return;
-          }
-
-          // Conditional update: Chỉ chuyển booking đang chờ thanh toán sang DA_THANH_TOAN.
-          const updateBookingResult = await tx.phieuDatVe.updateMany({
-            where: {
-              phieuDatVeId: phieuDatVe.phieuDatVeId,
-              trangThai: BOOKING_ORDER_PENDING_STATUS,
-            },
-            data: { trangThai: 'DA_THANH_TOAN' },
-          });
-
-          if (updateBookingResult.count === 0) {
+            if (latestOrder?.trangThai === 'DA_THANH_TOAN') {
+              return 'duplicate-settlement';
+            }
             throw new ConflictException({
-              error: 'BOOKING_STATE_CHANGED',
-              message:
-                'Trạng thái đặt vé đã thay đổi; giao dịch thanh toán chưa được quyết toán.',
+              error: 'PAYMENT_ORDER_STATE_CHANGED',
+              message: 'Trạng thái đơn giao dịch không cho phép xác nhận thanh toán.',
             });
           }
-
-          // Chỉ cập nhật các vé CHƯA bị hủy sang DA_THANH_TOAN
-          let activeTickets: any[] = [];
-          if (tx.ve) {
-            await tx.ve.updateMany({
-              where: {
-                phieuDatVeId: phieuDatVe.phieuDatVeId,
-                trangThai: { notIn: ['DA_HUY', 'HUY'] },
-              },
-              data: { trangThai: 'DA_THANH_TOAN' },
-            });
-            activeTickets = await tx.ve.findMany({
-              where: {
-                phieuDatVeId: phieuDatVe.phieuDatVeId,
-                trangThai: 'DA_THANH_TOAN',
-              },
-            });
-          }
-
-          // Invariant: Chuyển mọi attempt DANG_XU_LY còn lại của donGiaoDichId sang THAT_BAI
           await tx.thanhToan.updateMany({
             where: {
               donGiaoDichId: payment.donGiaoDichId,
@@ -1261,47 +1664,9 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
             },
             data: { trangThai: 'THAT_BAI' },
           });
-
-          const operationId = generateUuidV1();
-          const timestamp = new Date();
-          const providerName = payment.phuongThuc.toUpperCase();
-
-          if (tx.lichSuTrangThaiPhieuDatVe) {
-            await tx.lichSuTrangThaiPhieuDatVe.create({
-              data: {
-                phieuDatVeId: phieuDatVe.phieuDatVeId,
-                trangThaiCu: currentBooking?.trangThai || 'CHO_THANH_TOAN',
-                trangThaiMoi: 'DA_THANH_TOAN',
-                thoiDiem: timestamp,
-                nguonThayDoi: 'SYSTEM',
-                taiKhoanId: null,
-                lyDo: `Thanh toán thành công qua ${providerName}`,
-                laOverride: false,
-                maThaoTac: operationId,
-              },
-            });
-          }
-
-          if (tx.lichSuTrangThaiVe) {
-            for (const ticket of activeTickets) {
-              await tx.lichSuTrangThaiVe.create({
-                data: {
-                  veId: ticket.veId,
-                  trangThaiCu: 'DA_DAT',
-                  trangThaiMoi: 'DA_THANH_TOAN',
-                  thoiDiem: timestamp,
-                  nguonThayDoi: 'SYSTEM',
-                  taiKhoanId: null,
-                  lyDo: `Thanh toán vé thành công qua ${providerName}`,
-                  laOverride: false,
-                  maThaoTac: operationId,
-                },
-              });
-            }
-          }
-        }
-      }
-      });
+          return 'settled';
+        },
+      );
     } catch (error) {
       if (isSepayTransactionIdUniqueConstraintError(error)) {
         throw sepayTransactionConflict();
@@ -1309,14 +1674,13 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
       throw error;
     }
 
-    if (isAlreadyClaimed) {
+    if (outcome === 'already-claimed' || outcome === 'already-successful') {
       this.logger.log(
-        `Payment #${payment.thanhToanId} was already claimed/confirmed by concurrent transaction.`,
+        `Payment #${params.paymentId} was already claimed/confirmed by concurrent transaction.`,
       );
       return { success: true, message: 'Giao dịch đã được xác nhận trước đó.' };
     }
-
-    if (isLatePaymentForCancelledBooking) {
+    if (outcome === 'late-booking') {
       return {
         success: true,
         isLatePayment: true,
@@ -1324,14 +1688,30 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
           'Thanh toán thành công nhưng đơn đặt vé đã bị hủy trước đó. Cần hoàn tiền cho khách.',
       };
     }
-
-    if (isDuplicateSettlement) {
+    if (outcome === 'late-shipment') {
+      return {
+        success: true,
+        isLatePayment: true,
+        requiresReconciliation: true,
+        message:
+          'Thanh toán thành công nhưng phiếu gửi hàng đã bị hủy trước đó. Cần đối soát khoản thu.',
+      };
+    }
+    if (outcome === 'duplicate-settlement') {
       return {
         success: true,
         isLatePayment: true,
         requiresReconciliation: true,
         message:
           'Thanh toán thành công nhưng giao dịch đã được thanh toán bởi phương thức khác. Cần đối soát/hoàn tiền.',
+      };
+    }
+    if (outcome === 'additional-transfer') {
+      return {
+        success: true,
+        requiresReconciliation: true,
+        message:
+          'Khoản chuyển khoản bổ sung đã được ghi nhận; đơn không được quyết toán lại và cần đối soát khoản thu.',
       };
     }
 

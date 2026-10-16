@@ -94,6 +94,57 @@ function bookingDetail(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function saveShipmentPaymentDraft() {
+  window.sessionStorage.setItem(
+    `${PAYMENT_DRAFT_STORAGE_PREFIX}${draftId}`,
+    JSON.stringify({
+      id: draftId,
+      kind: 'shipment',
+      shipmentId: 601,
+      paymentId: 801,
+      waybillCode: 'VG-VD-TEST-601',
+      orderCode: 'VG-DH-TEST-701',
+      totalFare: 50000,
+      sender: {
+        fullName: 'Nguyễn An',
+        phoneNumber: '0900000001',
+        email: 'an@example.test',
+      },
+      receiver: { fullName: 'Trần Bình', phoneNumber: '0900000002' },
+      route: {
+        origin: 'Đà Lạt',
+        destination: 'TP.HCM',
+        departureTime: '2026-10-20T08:00:00.000Z',
+      },
+      pickupPoint: { name: 'Điểm gửi', address: 'Địa chỉ gửi' },
+      dropoffPoint: { name: 'Điểm nhận', address: 'Địa chỉ nhận' },
+    }),
+  );
+}
+
+function shipmentLookup(overrides: Record<string, unknown> = {}) {
+  return {
+    waybillCode: 'VG-VD-TEST-601',
+    status: 'MOI_TAO',
+    orderCode: 'VG-DH-TEST-701',
+    amount: 50000,
+    orderStatus: 'CHO_THANH_TOAN',
+    paymentStatus: 'DANG_XU_LY',
+    paymentMethod: 'SEPAY',
+    paymentExpiresAt: new Date(Date.now() + 600_000).toISOString(),
+    serverTime: new Date(Date.now()).toISOString(),
+    pickupPoint: { name: 'Điểm gửi', address: 'Địa chỉ gửi' },
+    dropoffPoint: { name: 'Điểm nhận', address: 'Địa chỉ nhận' },
+    carrier: { name: 'Nhà xe kiểm thử' },
+    route: { origin: 'Đà Lạt', destination: 'TP.HCM' },
+    scheduledDepartureAt: '2026-10-20T08:00:00.000Z',
+    estimatedArrivalAt: null,
+    packageCount: 1,
+    timeline: [],
+    ...overrides,
+  };
+}
+
 async function flushPromises() {
   await act(async () => {
     await Promise.resolve();
@@ -195,6 +246,142 @@ describe('Customer VietQR payment page', () => {
     });
     expect(String(fetchMock.mock.calls[0][0])).not.toContain('confirm-payment');
     expect(routerPush).not.toHaveBeenCalled();
+  });
+
+  it('verifies a guest shipment with waybill and sender phone, then stops showing QR after paid status', async () => {
+    configureVietQr();
+    saveShipmentPaymentDraft();
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(shipmentLookup()))
+      .mockResolvedValueOnce(jsonResponse(shipmentLookup({
+        orderStatus: 'DA_THANH_TOAN',
+        paymentStatus: 'THANH_CONG',
+      })));
+
+    render(<PaymentPage />);
+    await flushPromises();
+
+    const qr = screen.getByRole('img', { name: 'Mã QR thanh toán VietQR' });
+    expect(qr.getAttribute('src')).toContain('amount=50000');
+    expect(qr.getAttribute('src')).toContain('addInfo=VG-DH-TEST-701');
+    expect(screen.getByText('VG-VD-TEST-601')).toBeTruthy();
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/shipments/lookup');
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+      waybillCode: 'VG-VD-TEST-601',
+      phoneNumber: '0900000001',
+    });
+    expect(String(fetchMock.mock.calls[0][0])).not.toContain('/bookings/');
+
+    await advanceTime(2_500);
+
+    expect(
+      screen.queryByRole('img', { name: 'Mã QR thanh toán VietQR' }),
+    ).toBeNull();
+    expect(screen.getByRole('status').textContent).toContain('đã được xác nhận');
+    expect(routerPush).not.toHaveBeenCalledWith('/invoice/601');
+  });
+
+  it('shows reconciliation guidance when a late payment is recorded for a cancelled shipment', async () => {
+    configureVietQr();
+    saveShipmentPaymentDraft();
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(shipmentLookup()))
+      .mockResolvedValueOnce(jsonResponse(shipmentLookup({
+        status: 'DA_HUY',
+        orderStatus: 'DA_HUY',
+        paymentStatus: 'THANH_CONG',
+        requiresReconciliation: true,
+      })));
+
+    render(<PaymentPage />);
+    await flushPromises();
+    expect(screen.getByRole('img', { name: 'Mã QR thanh toán VietQR' })).toBeTruthy();
+
+    await advanceTime(2_500);
+
+    expect(screen.queryByRole('img', { name: 'Mã QR thanh toán VietQR' })).toBeNull();
+    const status = screen.getByRole('status').textContent ?? '';
+    expect(status).toContain('Khoản tiền đã được ghi nhận');
+    expect(status).toContain('Đơn không được khôi phục');
+    expect(status).toContain('đối soát');
+    expect(status).not.toContain('Thanh toán phiếu gửi hàng đã được xác nhận');
+  });
+
+  it('uses the authenticated payment status endpoint and renders only its confirmed amount', async () => {
+    configureVietQr();
+    saveShipmentPaymentDraft();
+    auth.isAuthenticated = true;
+    fetchMock.mockResolvedValue(jsonResponse({
+      paymentId: 801,
+      bookingId: 0,
+      orderId: 701,
+      orderCode: 'VG-DH-TEST-701',
+      orderStatus: 'CHO_THANH_TOAN',
+      shipmentId: 601,
+      shipmentStatus: 'MOI_TAO',
+      provider: 'SEPAY',
+      amount: 50000,
+      status: 'PENDING',
+      paymentStatus: 'DANG_XU_LY',
+      paymentExpiresAt: new Date(Date.now() + 600_000).toISOString(),
+      serverTime: new Date(Date.now()).toISOString(),
+    }));
+
+    render(<PaymentPage />);
+    await flushPromises();
+
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/payments/801/status');
+    expect(fetchMock.mock.calls[0][1].headers).toMatchObject({
+      Authorization: 'Bearer test-access-token',
+    });
+    const qr = screen.getByRole('img', { name: 'Mã QR thanh toán VietQR' });
+    expect(qr.getAttribute('src')).toContain('amount=50000');
+    expect(String(fetchMock.mock.calls[0][0])).not.toContain('/shipments/lookup');
+  });
+
+  it('falls back to verified waybill and sender phone lookup when a signed-in guest gets 403', async () => {
+    configureVietQr();
+    saveShipmentPaymentDraft();
+    auth.isAuthenticated = true;
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 403,
+        json: async () => ({ error: 'FORBIDDEN', message: 'Forbidden' }),
+      })
+      .mockResolvedValueOnce(jsonResponse(shipmentLookup()));
+
+    render(<PaymentPage />);
+    await flushPromises();
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/payments/801/status');
+    expect(fetchMock.mock.calls[0][1].headers.Authorization).toBe(
+      'Bearer test-access-token',
+    );
+    expect(String(fetchMock.mock.calls[1][0])).toContain('/shipments/lookup');
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({
+      waybillCode: 'VG-VD-TEST-601',
+      phoneNumber: '0900000001',
+    });
+    expect(
+      screen.getByRole('img', { name: 'Mã QR thanh toán VietQR' }),
+    ).toBeTruthy();
+    expect(screen.getByText('VG-VD-TEST-601')).toBeTruthy();
+  });
+
+  it('hides shipment QR when the verified server amount differs from the draft', async () => {
+    configureVietQr();
+    saveShipmentPaymentDraft();
+    fetchMock.mockResolvedValue(jsonResponse(shipmentLookup({ amount: 50001 })));
+
+    render(<PaymentPage />);
+    await flushPromises();
+
+    expect(screen.queryByRole('img', { name: 'Mã QR thanh toán VietQR' })).toBeNull();
+    expect(screen.getByRole('alert').textContent).toContain(
+      'Không thể xác minh thông tin phiếu gửi hàng với máy chủ',
+    );
   });
 
   it('shows backend ticket, cargo, and total amounts without estimating per-item cargo fees', async () => {

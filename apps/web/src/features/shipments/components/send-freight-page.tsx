@@ -37,12 +37,18 @@ import {
   type ShipmentRoutePoints,
   type ShipmentResponseData,
 } from '@/features/shipments/services/shipments.api';
+import {
+  createPaymentDraft,
+  getPaymentDraft,
+} from '@/features/booking/services/payment-draft';
+import { useAuthSession } from '@/features/auth/auth-session';
 
 const POPULAR_LOCATIONS = ['TP.HCM', 'Đà Lạt', 'Vũng Tàu', 'Nha Trang'];
 
 function SendFreightContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { isAuthenticated, isHydrated, executeWithAuth } = useAuthSession();
 
   // Tab: 'create' | 'lookup'
   const [activeTab, setActiveTab] = useState<'create' | 'lookup'>('create');
@@ -299,6 +305,11 @@ function SendFreightContent() {
   const handleCreateShipment = async () => {
     setErrorMessage(null);
 
+    if (!isHydrated) {
+      setErrorMessage('Đang xác minh phiên đăng nhập. Vui lòng thử lại sau giây lát.');
+      return;
+    }
+
     if (!selectedTripId) {
       setErrorMessage('Vui lòng chọn một chuyến xe vận chuyển hàng.');
       return;
@@ -352,6 +363,7 @@ function SendFreightContent() {
     }
 
     setIsSubmitting(true);
+    setErrorMessage(null);
     try {
       const payload = {
         tripId: selectedTripId,
@@ -384,11 +396,63 @@ function SendFreightContent() {
         note: note.trim() || undefined,
       };
 
-      const res = await shipmentsApi.createShipment(payload);
+      const res = isAuthenticated
+        ? await executeWithAuth((token) =>
+            shipmentsApi.createShipment(payload, token),
+          )
+        : await shipmentsApi.createShipment(payload);
       const data = res.data;
-      setCreatedShipment(data);
+      const totalFare = data?.pricing?.totalFee;
+      if (
+        !Number.isSafeInteger(data?.shipmentId) ||
+        data.shipmentId <= 0 ||
+        !Number.isSafeInteger(data?.paymentId) ||
+        data.paymentId <= 0 ||
+        !data.waybillCode?.trim() ||
+        !data.orderCode?.trim() ||
+        typeof totalFare !== 'number' ||
+        !Number.isFinite(totalFare) ||
+        totalFare < 0 ||
+        !Number.isFinite(Date.parse(data.paymentExpiresAt))
+      ) {
+        throw new Error(
+          'Đơn gửi đã được tạo nhưng chưa nhận đủ thông tin thanh toán. Vui lòng tra cứu bằng mã vận đơn hoặc liên hệ hỗ trợ.',
+        );
+      }
 
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      const paymentDraft = createPaymentDraft({
+        kind: 'shipment',
+        shipmentId: data.shipmentId,
+        paymentId: data.paymentId,
+        orderId: data.orderId,
+        waybillCode: data.waybillCode,
+        orderCode: data.orderCode,
+        totalFare,
+        paymentExpiresAt: data.paymentExpiresAt,
+        sender: data.sender,
+        receiver: data.receiver,
+        route: {
+          origin: data.trip.route.origin,
+          destination: data.trip.route.destination,
+          departureTime: data.trip.departureTime,
+        },
+        pickupPoint: {
+          name: data.pickupPoint.name,
+          address: data.pickupPoint.address,
+        },
+        dropoffPoint: {
+          name: data.dropoffPoint.name,
+          address: data.dropoffPoint.address,
+        },
+      });
+
+      if (!getPaymentDraft(paymentDraft.id)) {
+        throw new Error(
+          'Không thể lưu thông tin thanh toán trên trình duyệt. Vui lòng tra cứu mã vận đơn hoặc liên hệ hỗ trợ trước khi thử tạo lại đơn.',
+        );
+      }
+
+      router.push(`/payment?draftId=${encodeURIComponent(paymentDraft.id)}`);
     } catch (err: any) {
       setErrorMessage(err.message || 'Không thể tạo đơn gửi hàng. Vui lòng kiểm tra lại thông tin.');
     } finally {
