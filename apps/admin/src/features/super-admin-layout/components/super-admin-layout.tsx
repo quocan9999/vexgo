@@ -24,6 +24,7 @@ import { AdminDialogPrimitive } from '@/components/admin/admin-dialog-primitive'
 import { useAdminSession } from '@/features/admin-auth/hooks/use-admin-session';
 import {
   ADMIN_OPERATION_SECTIONS,
+  canAccessSupportChat,
   canReadTenantRbac,
   getFirstAccessibleAdminPath,
   hasAdminPermission,
@@ -192,9 +193,12 @@ export function SuperAdminLayout({
     session,
     'admin-account:read',
   );
-  const accessibleOperationSections = ADMIN_OPERATION_SECTIONS.filter((item) =>
-    hasAdminPermission(session, item.readPermission),
-  );
+  const accessibleOperationSections = ADMIN_OPERATION_SECTIONS.filter((item) => {
+    if (item.section === 'support-chat') {
+      return canAccessSupportChat(session);
+    }
+    return hasAdminPermission(session, item.readPermission);
+  });
   const firstAccessibleTenantPath = getFirstAccessibleAdminPath(session);
   const roleLabel = formatAdminRoleLabels(session.roles);
   const tenantBusCompanyName =

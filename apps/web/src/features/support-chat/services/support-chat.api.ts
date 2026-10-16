@@ -118,15 +118,40 @@ export const supportChatApi = {
   },
 
   /**
-   * Lấy lịch sử tin nhắn của cuộc trò chuyện
+   * Lấy chi tiết cuộc trò chuyện theo ID
+   */
+  async getConversationById(
+    conversationId: number,
+    token: string,
+  ): Promise<SupportConversation> {
+    const res = await fetch(`${API_BASE_URL}/support-chat/conversations/${conversationId}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return handleResponse<SupportConversation>(res);
+  },
+
+  /**
+   * Lấy lịch sử tin nhắn của cuộc trò chuyện (hỗ trợ beforeId để tải tin cũ hơn)
    */
   async getMessages(
     conversationId: number,
     token: string,
-    beforeId?: number,
+    beforeIdOrOptions?: number | { beforeId?: number; pageSize?: number },
   ): Promise<SupportMessage[]> {
     const params = new URLSearchParams();
-    params.set('pageSize', '40');
+    let beforeId: number | undefined;
+    let pageSize = 40;
+
+    if (typeof beforeIdOrOptions === 'number') {
+      beforeId = beforeIdOrOptions;
+    } else if (beforeIdOrOptions) {
+      beforeId = beforeIdOrOptions.beforeId;
+      if (beforeIdOrOptions.pageSize) pageSize = beforeIdOrOptions.pageSize;
+    }
+
+    params.set('pageSize', String(pageSize));
     if (beforeId) {
       params.set('beforeId', String(beforeId));
     }

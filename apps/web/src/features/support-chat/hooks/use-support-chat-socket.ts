@@ -13,6 +13,7 @@ interface UseSupportChatSocketProps {
   onNewMessage?: (message: SupportMessage) => void;
   onConversationClaimed?: (conversation: SupportConversation) => void;
   onConversationClosed?: (conversation: SupportConversation) => void;
+  onReconnected?: () => void;
 }
 
 export function useSupportChatSocket({
@@ -21,8 +22,10 @@ export function useSupportChatSocket({
   onNewMessage,
   onConversationClaimed,
   onConversationClosed,
+  onReconnected,
 }: UseSupportChatSocketProps) {
   const socketRef = useRef<Socket | null>(null);
+  const wasConnectedRef = useRef(false);
   const [isConnected, setIsConnected] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
@@ -49,10 +52,20 @@ export function useSupportChatSocket({
     socket.on('connect', () => {
       setIsConnected(true);
       setConnectionError(null);
+      if (wasConnectedRef.current) {
+        onReconnected?.();
+      }
+      wasConnectedRef.current = true;
     });
 
     socket.on('disconnect', () => {
       setIsConnected(false);
+    });
+
+    socket.io.on('reconnect', () => {
+      setIsConnected(true);
+      setConnectionError(null);
+      onReconnected?.();
     });
 
     socket.on('support.connected', () => {
@@ -99,7 +112,7 @@ export function useSupportChatSocket({
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [token, activeConversationId, onNewMessage, onConversationClaimed, onConversationClosed]);
+  }, [token, activeConversationId, onNewMessage, onConversationClaimed, onConversationClosed, onReconnected]);
 
   // Join room conversation khi activeConversationId thay đổi
   useEffect(() => {

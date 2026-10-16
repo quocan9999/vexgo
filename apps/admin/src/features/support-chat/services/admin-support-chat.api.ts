@@ -80,15 +80,25 @@ export const adminSupportChatApi = {
   },
 
   /**
-   * Lấy lịch sử tin nhắn
+   * Lấy lịch sử tin nhắn (hỗ trợ beforeId để tải tin cũ hơn)
    */
   async getMessages(
     conversationId: number,
     token: string,
-    beforeId?: number,
+    beforeIdOrOptions?: number | { beforeId?: number; pageSize?: number },
   ): Promise<AdminSupportMessage[]> {
     const query = new URLSearchParams();
-    query.set('pageSize', '50');
+    let beforeId: number | undefined;
+    let pageSize = 50;
+
+    if (typeof beforeIdOrOptions === 'number') {
+      beforeId = beforeIdOrOptions;
+    } else if (beforeIdOrOptions) {
+      beforeId = beforeIdOrOptions.beforeId;
+      if (beforeIdOrOptions.pageSize) pageSize = beforeIdOrOptions.pageSize;
+    }
+
+    query.set('pageSize', String(pageSize));
     if (beforeId) query.set('beforeId', String(beforeId));
 
     const res = await fetch(

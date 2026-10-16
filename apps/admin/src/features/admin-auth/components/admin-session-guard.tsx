@@ -11,11 +11,11 @@ import {
   signOutAdmin,
 } from '../services/admin-auth';
 import {
+  canAccessTenantPath,
   canManagePlatformRbac,
   getFirstAccessibleAdminPath,
   getRequiredAdminPermissions,
   getRequiredPlatformAdminPermissions,
-  hasAllAdminPermissions,
   hasAllPlatformAdminPermissions,
   isPlatformRbacPath,
   isTenantRbacPath,
@@ -96,10 +96,10 @@ export function AdminSessionGuard({ children }: { children: ReactNode }) {
     isPlatformRbacPath(pathname) && !canManagePlatformRbac(session);
   const tenantRbacNeedsRedirect =
     isTenantRbacPath(pathname) && !canReadTenantRbac(session);
-  const tenantNeedsRedirect = scope === 'tenant' && !isTenantRbacPath(pathname) && (
-    requiredPermissions === null ||
-    !hasAllAdminPermissions(session, requiredPermissions)
-  );
+  const tenantNeedsRedirect =
+    scope === 'tenant' &&
+    !isTenantRbacPath(pathname) &&
+    !canAccessTenantPath(session, pathname);
   const tenantLandingPath = session
     ? getFirstAccessibleAdminPath(session)
     : null;

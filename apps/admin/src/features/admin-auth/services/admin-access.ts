@@ -165,6 +165,27 @@ export function hasAllAdminPermissions(
   );
 }
 
+export function canAccessSupportChat(session: AdminSession | null): boolean {
+  return (
+    session !== null &&
+    getAdminAccessScope(session) === 'tenant' &&
+    (session.permissions.includes('chat:read') ||
+      session.permissions.includes('chat:manage'))
+  );
+}
+
+export function canAccessTenantPath(
+  session: AdminSession | null,
+  pathname: string,
+): boolean {
+  if (matchesPath(pathname, '/support-chat')) {
+    return canAccessSupportChat(session);
+  }
+  const requiredPermissions = getRequiredAdminPermissions(pathname);
+  if (requiredPermissions === null) return false;
+  return hasAllAdminPermissions(session, requiredPermissions);
+}
+
 function matchesPath(pathname: string, basePath: string): boolean {
   return pathname === basePath || pathname.startsWith(`${basePath}/`);
 }
@@ -199,8 +220,11 @@ export function getFirstAccessibleAdminPath(
   if (getAdminAccessScope(session) !== 'tenant') return null;
 
   return (
-    ADMIN_OPERATION_SECTIONS.find((item) =>
-      hasAdminPermission(session, item.readPermission),
-    )?.href ?? (canReadTenantRbac(session) ? '/tenant-rbac' : null)
+    ADMIN_OPERATION_SECTIONS.find((item) => {
+      if (item.section === 'support-chat') {
+        return canAccessSupportChat(session);
+      }
+      return hasAdminPermission(session, item.readPermission);
+    })?.href ?? (canReadTenantRbac(session) ? '/tenant-rbac' : null)
   );
 }

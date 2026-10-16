@@ -48,6 +48,8 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
   const [selectedConv, setSelectedConv] = useState<AdminSupportConversation | null>(null);
   const [messages, setMessages] = useState<AdminSupportMessage[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
+  const [hasOlderMessages, setHasOlderMessages] = useState(false);
+  const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
 
   const [inputValue, setInputValue] = useState('');
   const [sending, setSending] = useState(false);
@@ -147,9 +149,11 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
     }
   };
 
-  // Tải lịch sử tin nhắn khi chọn một cuộc trò chuyện
+  const selectedConvId = selectedConv?.cuocTroChuyenId;
+
+  // Tải lịch sử tin nhắn khi chọn một cuộc trò chuyện (chỉ fetch khi selectedConvId thay đổi - F-NEW-02)
   useEffect(() => {
-    if (!selectedConv || !token) return;
+    if (!selectedConvId || !token) return;
 
     let active = true;
     queueMicrotask(() => {
@@ -160,11 +164,23 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
     });
 
     adminSupportChatApi
-      .getMessages(selectedConv.cuocTroChuyenId, token)
+      .getMessages(selectedConvId, token, { pageSize: 50 })
       .then((msgs) => {
-        if (active) {
-          setMessages(msgs.map((m) => ({ ...m, deliveryStatus: 'DA_GUI' })));
-        }
+        if (!active) return;
+        setHasOlderMessages(msgs.length >= 50);
+        const serverMessages = msgs.map((m) => ({ ...m, deliveryStatus: 'DA_GUI' as const }));
+        setMessages((prev) => {
+          const serverClientIds = new Set(serverMessages.map((m) => m.clientMessageId).filter(Boolean));
+          const serverIds = new Set(serverMessages.map((m) => m.tinNhanId).filter((id) => id > 0));
+          // Giữ lại các tin pending hoặc thất bại chưa có trên server
+          const pending = prev.filter(
+            (m) =>
+              (m.deliveryStatus === 'DANG_GUI' || m.deliveryStatus === 'THAT_BAI') &&
+              !serverClientIds.has(m.clientMessageId) &&
+              !serverIds.has(m.tinNhanId),
+          );
+          return [...serverMessages, ...pending];
+        });
       })
       .catch((err: unknown) => {
         if (active) {
@@ -180,7 +196,64 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
     return () => {
       active = false;
     };
-  }, [selectedConv, token]);
+  }, [selectedConvId, token]);
+
+  // Tải tin nhắn cũ hơn (Load older messages - F-NEW-04)
+  const handleLoadOlderMessages = async () => {
+    if (!selectedConvId || !token || loadingOlderMessages || !hasOlderMessages) return;
+    const positiveIds = messages.map((m) => m.tinNhanId).filter((id) => id > 0);
+    if (positiveIds.length === 0) return;
+    const oldestId = Math.min(...positiveIds);
+
+    setLoadingOlderMessages(true);
+    try {
+      const older = await adminSupportChatApi.getMessages(selectedConvId, token, {
+        beforeId: oldestId,
+        pageSize: 50,
+      });
+      if (older.length < 50) {
+        setHasOlderMessages(false);
+      }
+      if (older.length > 0) {
+        setMessages((prev) => {
+          const currentIds = new Set(prev.map((m) => m.tinNhanId).filter((id) => id > 0));
+          const newOlder = older
+            .filter((m) => !currentIds.has(m.tinNhanId))
+            .map((m) => ({ ...m, deliveryStatus: 'DA_GUI' as const }));
+          return [...newOlder, ...prev];
+        });
+      }
+    } catch (err: unknown) {
+      setErrorMessage(
+        err instanceof Error ? err.message : 'Không thể tải thêm tin nhắn cũ.',
+      );
+    } finally {
+      setLoadingOlderMessages(false);
+    }
+  };
+
+  // Đồng bộ lại khi Socket reconnect (F-NEW-01)
+  const handleReconnected = useCallback(async () => {
+    setRefreshTrigger((k) => k + 1);
+
+    if (!selectedConvId || !token) return;
+    try {
+      const updatedConv = await adminSupportChatApi.getConversationById(selectedConvId, token);
+      setSelectedConv((prev) => (prev?.cuocTroChuyenId === selectedConvId ? { ...prev, ...updatedConv } : prev));
+
+      const freshMsgs = await adminSupportChatApi.getMessages(selectedConvId, token, { pageSize: 50 });
+      setMessages((prev) => {
+        const existingIds = new Set(prev.map((m) => m.tinNhanId).filter((id) => id > 0));
+        const existingClientIds = new Set(prev.map((m) => m.clientMessageId).filter(Boolean));
+        const newOnes = freshMsgs
+          .filter((m) => !existingIds.has(m.tinNhanId) && !existingClientIds.has(m.clientMessageId))
+          .map((m) => ({ ...m, deliveryStatus: 'DA_GUI' as const }));
+        return [...prev, ...newOnes];
+      });
+    } catch (err) {
+      console.warn('[AdminChat] Reconnect sync error:', err);
+    }
+  }, [selectedConvId, token]);
 
   // Callback khi có tin nhắn mới từ WebSocket
   const handleNewMessage = useCallback(
@@ -254,6 +327,7 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
     onNewMessage: handleNewMessage,
     onConversationClaimed: handleConversationClaimed,
     onConversationClosed: handleConversationClosed,
+    onReconnected: handleReconnected,
   });
 
   // Tiếp nhận cuộc trò chuyện (Claim)
@@ -754,6 +828,23 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                 </div>
               ) : (
                 <>
+                  {hasOlderMessages && (
+                    <div className="text-center py-1">
+                      <button
+                        type="button"
+                        onClick={handleLoadOlderMessages}
+                        disabled={loadingOlderMessages}
+                        className="inline-flex items-center gap-1.5 px-3 py-1 bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-full text-xs font-medium shadow-2xs transition-colors disabled:opacity-50"
+                      >
+                        {loadingOlderMessages ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : (
+                          <Clock className="w-3 h-3 text-slate-400" />
+                        )}
+                        <span>{loadingOlderMessages ? 'Đang tải tin cũ...' : 'Tải tin nhắn cũ hơn'}</span>
+                      </button>
+                    </div>
+                  )}
                   {messages.map((msg) => {
                     const isStaff = msg.loaiNguoiGui === 'NHAN_VIEN';
                     const isSystem = msg.loaiNguoiGui === 'HE_THONG';

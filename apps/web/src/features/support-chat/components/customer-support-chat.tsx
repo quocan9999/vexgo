@@ -33,9 +33,14 @@ export function CustomerSupportChat() {
 
   const [activeConversation, setActiveConversation] = useState<SupportConversation | null>(null);
   const [pastConversations, setPastConversations] = useState<SupportConversation[]>([]);
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyTotalPages, setHistoryTotalPages] = useState(1);
+  const [loadingMoreHistory, setLoadingMoreHistory] = useState(false);
   const [showHistoryList, setShowHistoryList] = useState(false);
   const [messages, setMessages] = useState<SupportMessage[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
+  const [hasOlderMessages, setHasOlderMessages] = useState(false);
+  const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
   const [initialMessage, setInitialMessage] = useState('');
   const [startingChat, setStartingChat] = useState(false);
 
@@ -46,6 +51,7 @@ export function CustomerSupportChat() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const typingTimerRef = useRef<NodeJS.Timeout | null>(null);
   const companyRequestIdRef = useRef(0);
+  const historyRequestIdRef = useRef(0);
 
   const scrollToBottom = useCallback(() => {
     if (typeof messagesEndRef.current?.scrollIntoView === 'function') {
@@ -109,6 +115,28 @@ export function CustomerSupportChat() {
     setActiveConversation((prev) => (prev ? { ...prev, ...closedConv, trangThai: 'DA_DONG' } : closedConv));
   }, []);
 
+  // Đồng bộ lại khi Socket reconnect (F-NEW-01)
+  const handleReconnected = useCallback(async () => {
+    if (!activeConversation || !accessToken) return;
+    try {
+      const convId = activeConversation.cuocTroChuyenId;
+      const updatedConv = await supportChatApi.getConversationById(convId, accessToken);
+      setActiveConversation((prev) => (prev?.cuocTroChuyenId === convId ? { ...prev, ...updatedConv } : prev));
+
+      const freshMsgs = await supportChatApi.getMessages(convId, accessToken, { pageSize: 40 });
+      setMessages((prev) => {
+        const existingIds = new Set(prev.map((m) => m.tinNhanId).filter((id) => id > 0));
+        const existingClientIds = new Set(prev.map((m) => m.clientMessageId).filter(Boolean));
+        const newOnes = freshMsgs
+          .filter((m) => !existingIds.has(m.tinNhanId) && !existingClientIds.has(m.clientMessageId))
+          .map((m) => ({ ...m, deliveryStatus: 'DA_GUI' as const }));
+        return [...prev, ...newOnes];
+      });
+    } catch (err) {
+      console.warn('[CustomerSupportChat] Reconnect sync error:', err);
+    }
+  }, [activeConversation, accessToken]);
+
   // Socket connection hook
   const {
     isConnected: socketConnected,
@@ -122,9 +150,10 @@ export function CustomerSupportChat() {
     onNewMessage: handleNewMessage,
     onConversationClaimed: handleConversationClaimed,
     onConversationClosed: handleConversationClosed,
+    onReconnected: handleReconnected,
   });
 
-  // Chọn nhà xe: chống race condition out-of-order & hỗ trợ xem lịch sử chat đã đóng (F-01)
+  // Chọn nhà xe: chống race condition out-of-order & hỗ trợ xem lịch sử chat đã đóng (F-01, F-NEW-03)
   const handleSelectCompany = async (company: BusCompany) => {
     if (!accessToken) return;
     if (!Number.isInteger(company.busCompanyId) || company.busCompanyId <= 0) {
@@ -140,11 +169,13 @@ export function CustomerSupportChat() {
     setActiveConversation(null);
     setMessages([]);
     setPastConversations([]);
+    setHistoryPage(1);
+    setHistoryTotalPages(1);
 
     try {
       const [active, convsRes] = await Promise.all([
         supportChatApi.getActiveConversation(company.busCompanyId, accessToken),
-        supportChatApi.listConversations({ nhaXeId: company.busCompanyId }, accessToken),
+        supportChatApi.listConversations({ nhaXeId: company.busCompanyId, trangThai: 'DA_DONG', page: 1, pageSize: 20 }, accessToken),
       ]);
 
       // Guard: Nếu có request sau đã được gọi, bỏ qua response cũ để ngăn race condition (F-01)
@@ -152,28 +183,33 @@ export function CustomerSupportChat() {
         return;
       }
 
-      const allConvs = convsRes?.data || [];
-      const closedList = allConvs.filter((c) => c.trangThai === 'DA_DONG');
+      const closedList = convsRes?.data || [];
       setPastConversations(closedList);
+      if (convsRes?.meta?.totalPages) {
+        setHistoryTotalPages(convsRes.meta.totalPages);
+      }
 
       if (active) {
         setActiveConversation(active);
-        const history = await supportChatApi.getMessages(active.cuocTroChuyenId, accessToken);
+        const history = await supportChatApi.getMessages(active.cuocTroChuyenId, accessToken, { pageSize: 40 });
         if (currentReqId === companyRequestIdRef.current) {
+          setHasOlderMessages(history.length >= 40);
           setMessages(history.map((m) => ({ ...m, deliveryStatus: 'DA_GUI' })));
         }
       } else if (closedList.length > 0) {
         // Nếu không có phiên đang mở nhưng có phiên cũ đã đóng, hiển thị phiên gần nhất cho khách đọc
         const latestClosed = closedList[0];
         setActiveConversation(latestClosed);
-        const history = await supportChatApi.getMessages(latestClosed.cuocTroChuyenId, accessToken);
+        const history = await supportChatApi.getMessages(latestClosed.cuocTroChuyenId, accessToken, { pageSize: 40 });
         if (currentReqId === companyRequestIdRef.current) {
+          setHasOlderMessages(history.length >= 40);
           setMessages(history.map((m) => ({ ...m, deliveryStatus: 'DA_GUI' })));
         }
       } else {
         // Chưa có cuộc trò chuyện nào, giữ activeConversation null để hiện form bắt đầu mới
         setActiveConversation(null);
         setMessages([]);
+        setHasOlderMessages(false);
       }
     } catch (err: unknown) {
       if (currentReqId === companyRequestIdRef.current) {
@@ -186,19 +222,82 @@ export function CustomerSupportChat() {
     }
   };
 
-  // Xem một cuộc trò chuyện cụ thể trong lịch sử
+  // Tải thêm lịch sử cuộc trò chuyện đã đóng (F-NEW-03)
+  const handleLoadMoreHistory = async () => {
+    if (!selectedCompany || !accessToken || loadingMoreHistory || historyPage >= historyTotalPages) return;
+    const nextPage = historyPage + 1;
+    setLoadingMoreHistory(true);
+    try {
+      const res = await supportChatApi.listConversations(
+        { nhaXeId: selectedCompany.busCompanyId, trangThai: 'DA_DONG', page: nextPage, pageSize: 20 },
+        accessToken,
+      );
+      const newItems = res.data || [];
+      setPastConversations((prev) => {
+        const existingIds = new Set(prev.map((c) => c.cuocTroChuyenId));
+        return [...prev, ...newItems.filter((c) => !existingIds.has(c.cuocTroChuyenId))];
+      });
+      setHistoryPage(nextPage);
+      if (res.meta?.totalPages) setHistoryTotalPages(res.meta.totalPages);
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : 'Không thể tải thêm lịch sử cuộc trò chuyện.');
+    } finally {
+      setLoadingMoreHistory(false);
+    }
+  };
+
+  // Tải tin nhắn cũ hơn (F-NEW-04)
+  const handleLoadOlderMessages = async () => {
+    if (!activeConversation || !accessToken || loadingOlderMessages || !hasOlderMessages) return;
+    const positiveIds = messages.map((m) => m.tinNhanId).filter((id) => id > 0);
+    if (positiveIds.length === 0) return;
+    const oldestId = Math.min(...positiveIds);
+
+    setLoadingOlderMessages(true);
+    try {
+      const older = await supportChatApi.getMessages(activeConversation.cuocTroChuyenId, accessToken, {
+        beforeId: oldestId,
+        pageSize: 40,
+      });
+      if (older.length < 40) {
+        setHasOlderMessages(false);
+      }
+      if (older.length > 0) {
+        setMessages((prev) => {
+          const currentIds = new Set(prev.map((m) => m.tinNhanId).filter((id) => id > 0));
+          const newOlder = older
+            .filter((m) => !currentIds.has(m.tinNhanId))
+            .map((m) => ({ ...m, deliveryStatus: 'DA_GUI' as const }));
+          return [...newOlder, ...prev];
+        });
+      }
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : 'Không thể tải thêm tin nhắn cũ.');
+    } finally {
+      setLoadingOlderMessages(false);
+    }
+  };
+
+  // Xem một cuộc trò chuyện cụ thể trong lịch sử (có stale guard chống out-of-order - F-NEW-03)
   const handleSelectHistoryConversation = async (conv: SupportConversation) => {
     if (!accessToken) return;
+    const reqId = ++historyRequestIdRef.current;
     setActiveConversation(conv);
     setShowHistoryList(false);
     setLoadingMessages(true);
     try {
-      const history = await supportChatApi.getMessages(conv.cuocTroChuyenId, accessToken);
+      const history = await supportChatApi.getMessages(conv.cuocTroChuyenId, accessToken, { pageSize: 40 });
+      if (historyRequestIdRef.current !== reqId) return;
+      setHasOlderMessages(history.length >= 40);
       setMessages(history.map((m) => ({ ...m, deliveryStatus: 'DA_GUI' })));
     } catch (err: unknown) {
-      setErrorMsg(err instanceof Error ? err.message : 'Không thể tải tin nhắn cuộc trò chuyện này.');
+      if (historyRequestIdRef.current === reqId) {
+        setErrorMsg(err instanceof Error ? err.message : 'Không thể tải tin nhắn cuộc trò chuyện này.');
+      }
     } finally {
-      setLoadingMessages(false);
+      if (historyRequestIdRef.current === reqId) {
+        setLoadingMessages(false);
+      }
     }
   };
 
@@ -466,6 +565,23 @@ export function CustomerSupportChat() {
               </button>
             ))
           )}
+          {historyPage < historyTotalPages && (
+            <div className="pt-2 text-center">
+              <button
+                onClick={handleLoadMoreHistory}
+                disabled={loadingMoreHistory}
+                className="text-xs text-brand hover:underline font-medium py-1.5 px-3 rounded-lg border border-brand/20 bg-brand/5 hover:bg-brand/10 transition-colors disabled:opacity-50"
+              >
+                {loadingMoreHistory ? (
+                  <span className="flex items-center gap-1 justify-center">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> Đang tải thêm...
+                  </span>
+                ) : (
+                  'Tải thêm lịch sử'
+                )}
+              </button>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -684,6 +800,23 @@ export function CustomerSupportChat() {
           </div>
         ) : (
           <>
+            {hasOlderMessages && (
+              <div className="text-center py-1">
+                <button
+                  onClick={handleLoadOlderMessages}
+                  disabled={loadingOlderMessages}
+                  className="text-[11px] text-brand hover:underline font-medium py-1 px-3 rounded-full border border-brand/20 bg-white hover:bg-brand/5 shadow-xs transition-colors disabled:opacity-50"
+                >
+                  {loadingOlderMessages ? (
+                    <span className="flex items-center gap-1 justify-center">
+                      <Loader2 className="w-3 h-3 animate-spin" /> Đang tải tin nhắn cũ...
+                    </span>
+                  ) : (
+                    'Tải tin nhắn cũ hơn'
+                  )}
+                </button>
+              </div>
+            )}
             {messages.map((msg) => {
               const isMe = msg.loaiNguoiGui === 'KHACH_HANG';
               const isSystem = msg.loaiNguoiGui === 'HE_THONG';

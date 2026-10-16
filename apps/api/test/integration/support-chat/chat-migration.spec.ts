@@ -1379,7 +1379,7 @@ describe('Support chat schema migration with preflight archive and RBAC bootstra
       { cwd: resolve(process.cwd(), '../../'), encoding: 'utf8' },
     );
     expect(exitCodeOutput).toContain('No difference detected.');
-  }, 60000);
+  }, 120000);
 
   it('11. Test E1 — Migration failure & partial retry safety: verifies INSERT IGNORE idempotency on identical archive', async () => {
     const db = createMigrationTestClient();

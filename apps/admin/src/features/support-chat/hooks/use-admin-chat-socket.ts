@@ -14,6 +14,7 @@ interface UseAdminChatSocketProps {
   onNewMessage?: (message: AdminSupportMessage) => void;
   onConversationClaimed?: (conversation: AdminSupportConversation) => void;
   onConversationClosed?: (conversation: AdminSupportConversation) => void;
+  onReconnected?: () => void;
 }
 
 export function useAdminChatSocket({
@@ -23,8 +24,10 @@ export function useAdminChatSocket({
   onNewMessage,
   onConversationClaimed,
   onConversationClosed,
+  onReconnected,
 }: UseAdminChatSocketProps) {
   const socketRef = useRef<Socket | null>(null);
+  const wasConnectedRef = useRef(false);
   const [isConnected, setIsConnected] = useState(false);
   const [customerTyping, setCustomerTyping] = useState(false);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -49,10 +52,19 @@ export function useAdminChatSocket({
 
     socket.on('connect', () => {
       setIsConnected(true);
+      if (wasConnectedRef.current) {
+        onReconnected?.();
+      }
+      wasConnectedRef.current = true;
     });
 
     socket.on('disconnect', () => {
       setIsConnected(false);
+    });
+
+    socket.io.on('reconnect', () => {
+      setIsConnected(true);
+      onReconnected?.();
     });
 
     socket.on('support.conversation.new', (conv: AdminSupportConversation) => {
@@ -96,7 +108,7 @@ export function useAdminChatSocket({
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [token, activeConversationId, onNewConversation, onNewMessage, onConversationClaimed, onConversationClosed]);
+  }, [token, activeConversationId, onNewConversation, onNewMessage, onConversationClaimed, onConversationClosed, onReconnected]);
 
   // Join room conversation khi activeConversationId thay đổi
   useEffect(() => {

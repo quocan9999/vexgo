@@ -6,7 +6,7 @@ import { Headphones, ShieldAlert } from 'lucide-react';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
 import { useAdminSession } from '@/features/admin-auth/hooks/use-admin-session';
 import { getAdminAccessScope } from '@/features/admin-auth/services/admin-scope';
-import { hasAdminPermission } from '@/features/admin-auth/services/admin-access';
+import { canAccessSupportChat } from '@/features/admin-auth/services/admin-access';
 import { AdminChatMessenger } from '@/features/support-chat/components/admin-chat-messenger';
 
 export default function SupportChatPage() {
@@ -26,7 +26,7 @@ export default function SupportChatPage() {
   const session = authState.session;
   const scope = getAdminAccessScope(session);
   const isSuperAdmin = scope === 'platform';
-  const hasChatPermission = hasAdminPermission(session, 'chat:read');
+  const hasChatPermission = canAccessSupportChat(session);
 
   // SUPER ADMIN HOẶC TÀI KHOẢN KHÔNG CÓ QUYỀN CHAT BỊ TỪ CHỐI TRUY CẬP
   if (isSuperAdmin || !hasChatPermission) {
@@ -40,7 +40,7 @@ export default function SupportChatPage() {
           <p className="text-xs text-slate-500 max-w-md mt-1">
             {isSuperAdmin
               ? 'Tài khoản Quản trị hệ thống (Super Admin) không có quyền truy cập vào chức năng Chăm sóc khách hàng của nhà xe.'
-              : 'Tài khoản của bạn không có quyền xem hoặc quản lý chức năng Chăm sóc khách hàng (chat:read).'}
+              : 'Tài khoản của bạn không có quyền xem hoặc quản lý chức năng Chăm sóc khách hàng (chat:read hoặc chat:manage).'}
           </p>
         </div>
       </SuperAdminLayout>
