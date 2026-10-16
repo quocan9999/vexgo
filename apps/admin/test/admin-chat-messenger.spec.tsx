@@ -8,23 +8,37 @@ import {
 } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import React from 'react';
-import { AdminChatMessenger } from '../src/features/support-chat/components/admin-chat-messenger';
+import {
+  AdminChatMessenger,
+  reconcileAdminMessages,
+} from '../src/features/support-chat/components/admin-chat-messenger';
 import { adminSupportChatApi } from '../src/features/support-chat/services/admin-support-chat.api';
 import type { AdminSession } from '../src/features/admin-auth/services/admin-auth';
+import type {
+  AdminSupportConversation,
+  AdminSupportMessage,
+} from '../src/features/support-chat/types';
+import type { UseAdminChatSocketProps } from '../src/features/support-chat/hooks/use-admin-chat-socket';
+
+let capturedSocketProps: Partial<UseAdminChatSocketProps> = {};
 
 vi.mock('@/features/admin-auth/services/admin-auth', () => ({
   getAdminAccessToken: () => 'mock-admin-token-123',
 }));
 
 vi.mock('../src/features/support-chat/hooks/use-admin-chat-socket', () => ({
-  useAdminChatSocket: () => ({
-    isConnected: true,
-    customerTyping: false,
-    sendMessage: vi.fn().mockResolvedValue({ success: false, error: 'SOCKET_TIMEOUT' }),
-    claimConversation: vi.fn().mockResolvedValue({ success: true }),
-    closeConversation: vi.fn().mockResolvedValue({ success: true }),
-    emitTyping: vi.fn(),
-  }),
+  useAdminChatSocket: (props: UseAdminChatSocketProps) => {
+    capturedSocketProps = props;
+    return {
+      isConnected: true,
+      customerTyping: false,
+      sendMessage: vi.fn().mockResolvedValue({ success: false, error: 'SOCKET_TIMEOUT' }),
+      claimConversation: vi.fn().mockResolvedValue({ success: true }),
+      closeConversation: vi.fn().mockResolvedValue({ success: true }),
+      emitTyping: vi.fn(),
+      markMessagesAsRead: vi.fn(),
+    };
+  },
 }));
 
 const mockSession: AdminSession = {
@@ -43,7 +57,7 @@ const mockSession: AdminSession = {
   busCompanyId: 1,
 };
 
-const createMockConversation = (id: number, name: string, status = 'CHO_TIEP_NHAN') => ({
+const createMockConversation = (id: number, name: string, status = 'CHO_TIEP_NHAN'): AdminSupportConversation => ({
   cuocTroChuyenId: id,
   maCuocTroChuyen: `CHAT-${id}`,
   tieuDe: `Hỗ trợ ${name}`,
@@ -285,6 +299,265 @@ describe('AdminChatMessenger Component & Flow Regression Tests', () => {
       await waitFor(() => {
         expect(screen.queryByText('Gửi thất bại')).toBeNull();
       });
+    });
+  });
+
+  describe('P1 Finding 1: Mark Messages as Read on Conversation Open and Realtime Inbound Messages', () => {
+    it('automatically marks customer unread messages as read when admin opens a conversation', async () => {
+      const mockConv = createMockConversation(1, 'Nguyễn Khách', 'DANG_XU_LY');
+      mockConv.soTinChuaDoc = 2;
+
+      vi.spyOn(adminSupportChatApi, 'listConversations').mockResolvedValue({
+        data: [mockConv],
+        meta: { page: 1, pageSize: 20, totalItems: 1, totalPages: 1 },
+      });
+
+      const unreadCustomerMsgs = [
+        {
+          tinNhanId: 101,
+          cuocTroChuyenId: 1,
+          taiKhoanGuiId: 10,
+          loaiNguoiGui: 'KHACH_HANG' as const,
+          loaiTinNhan: 'VAN_BAN' as const,
+          noiDung: 'Tin nhắn 1 chưa đọc',
+          trangThai: 'DA_GUI' as const,
+          createdAt: '2026-10-16T08:00:00.000Z',
+        },
+        {
+          tinNhanId: 102,
+          cuocTroChuyenId: 1,
+          taiKhoanGuiId: 10,
+          loaiNguoiGui: 'KHACH_HANG' as const,
+          loaiTinNhan: 'VAN_BAN' as const,
+          noiDung: 'Tin nhắn 2 chưa đọc',
+          trangThai: 'DA_GUI' as const,
+          createdAt: '2026-10-16T08:01:00.000Z',
+        },
+      ];
+
+      vi.spyOn(adminSupportChatApi, 'getMessages').mockResolvedValue(unreadCustomerMsgs);
+      const markReadSpy = vi.spyOn(adminSupportChatApi, 'markMessagesAsRead').mockResolvedValue({ updatedCount: 2 });
+
+      render(<AdminChatMessenger session={mockSession} />);
+
+      // Chọn cuộc trò chuyện
+      fireEvent.click(await screen.findByText('Nguyễn Khách'));
+
+      // Chờ tin nhắn hiển thị
+      expect(await screen.findByText('Tin nhắn 1 chưa đọc')).toBeTruthy();
+
+      // Xác minh markMessagesAsRead đã được gọi với ID cuộc trò chuyện và danh sách ID tin nhắn chưa đọc
+      await waitFor(() => {
+        expect(markReadSpy).toHaveBeenCalledWith(1, 'mock-admin-token-123', [101, 102]);
+      });
+    });
+
+    it('marks incoming customer message as read immediately when admin has the conversation actively open', async () => {
+      const mockConv = createMockConversation(1, 'Trần Khách', 'DANG_XU_LY');
+
+      vi.spyOn(adminSupportChatApi, 'listConversations').mockResolvedValue({
+        data: [mockConv],
+        meta: { page: 1, pageSize: 20, totalItems: 1, totalPages: 1 },
+      });
+
+      vi.spyOn(adminSupportChatApi, 'getMessages').mockResolvedValue([]);
+      const markReadSpy = vi.spyOn(adminSupportChatApi, 'markMessagesAsRead').mockResolvedValue({ updatedCount: 1 });
+
+      render(<AdminChatMessenger session={mockSession} />);
+
+      // Chọn cuộc trò chuyện
+      fireEvent.click(await screen.findByText('Trần Khách'));
+      await screen.findByPlaceholderText('Nhập nội dung phản hồi khách hàng...');
+
+      // Giả lập socket nhận tin nhắn mới từ khách hàng
+      expect(capturedSocketProps.onNewMessage).toBeDefined();
+      capturedSocketProps.onNewMessage({
+        tinNhanId: 205,
+        cuocTroChuyenId: 1,
+        taiKhoanGuiId: 10,
+        loaiNguoiGui: 'KHACH_HANG',
+        loaiTinNhan: 'VAN_BAN',
+        noiDung: 'Em mới gửi thêm tin này ạ',
+        trangThai: 'DA_GUI',
+        createdAt: new Date().toISOString(),
+      });
+
+      // Xác minh tin nhắn mới được hiển thị cả trong tin nhắn và preview
+      const foundNewMsgs = await screen.findAllByText('Em mới gửi thêm tin này ạ');
+      expect(foundNewMsgs.length).toBeGreaterThanOrEqual(1);
+
+      // Xác minh markMessagesAsRead được gọi ngay lập tức cho tin nhắn mới này
+      await waitFor(() => {
+        expect(markReadSpy).toHaveBeenCalledWith(1, 'mock-admin-token-123', [205]);
+      });
+    });
+  });
+
+  describe('P1 Finding 2: Reconciling Optimistic Messages on Reconnect', () => {
+    it('reconciles optimistic THAT_BAI message with confirmed server message', () => {
+      const prevMsgs = [
+        {
+          tinNhanId: -100,
+          cuocTroChuyenId: 1,
+          taiKhoanGuiId: 10,
+          loaiNguoiGui: 'NHAN_VIEN' as const,
+          loaiTinNhan: 'VAN_BAN' as const,
+          noiDung: 'Chào bạn, mình hỗ trợ nhé',
+          clientMessageId: 'staff-client-99',
+          trangThai: 'DA_GUI' as const,
+          deliveryStatus: 'THAT_BAI' as const,
+          createdAt: '2026-10-16T08:00:00.000Z',
+        },
+      ];
+
+      const serverFreshMsgs = [
+        {
+          tinNhanId: 501,
+          cuocTroChuyenId: 1,
+          taiKhoanGuiId: 10,
+          loaiNguoiGui: 'NHAN_VIEN' as const,
+          loaiTinNhan: 'VAN_BAN' as const,
+          noiDung: 'Chào bạn, mình hỗ trợ nhé',
+          clientMessageId: 'staff-client-99',
+          trangThai: 'DA_GUI' as const,
+          createdAt: '2026-10-16T08:00:00.000Z',
+        },
+      ];
+
+      const reconciled = reconcileAdminMessages(prevMsgs, serverFreshMsgs);
+      expect(reconciled).toHaveLength(1);
+      expect(reconciled[0].tinNhanId).toBe(501);
+      expect(reconciled[0].deliveryStatus).toBe('DA_GUI');
+      expect(reconciled[0].clientMessageId).toBe('staff-client-99');
+    });
+  });
+
+  describe('P2 Finding 3: Controlled Deferred History Fetch Does Not Overwrite Realtime Messages', () => {
+    it('preserves realtime message received while old history GET is still pending', async () => {
+      const mockConv = createMockConversation(1, 'Phạm Khách', 'DANG_XU_LY');
+
+      vi.spyOn(adminSupportChatApi, 'listConversations').mockResolvedValue({
+        data: [mockConv],
+        meta: { page: 1, pageSize: 20, totalItems: 1, totalPages: 1 },
+      });
+
+      let resolveDeferredGet: (msgs: AdminSupportMessage[]) => void;
+      const deferredGetPromise = new Promise<AdminSupportMessage[]>((resolve) => {
+        resolveDeferredGet = resolve;
+      });
+
+      vi.spyOn(adminSupportChatApi, 'getMessages').mockReturnValue(deferredGetPromise);
+
+      render(<AdminChatMessenger session={mockSession} />);
+
+      // Chọn cuộc trò chuyện (bắt đầu gọi GET getMessages ở T0)
+      fireEvent.click(await screen.findByText('Phạm Khách'));
+
+      // T1: Trong lúc GET đang chờ kết quả, socket nhận tin nhắn realtime mới
+      expect(capturedSocketProps.onNewMessage).toBeDefined();
+      capturedSocketProps.onNewMessage({
+        tinNhanId: 301,
+        cuocTroChuyenId: 1,
+        taiKhoanGuiId: 10,
+        loaiNguoiGui: 'KHACH_HANG',
+        loaiTinNhan: 'VAN_BAN',
+        noiDung: 'Tin nhắn realtime đến tại T1',
+        trangThai: 'DA_GUI',
+        createdAt: '2026-10-16T08:05:00.000Z',
+      });
+
+      // Xác minh tin nhắn realtime xuất hiện trên màn hình
+      const realtimeElements = await screen.findAllByText('Tin nhắn realtime đến tại T1');
+      expect(realtimeElements.length).toBeGreaterThanOrEqual(1);
+
+      // T2: Snapshot lịch sử cũ trả về (chỉ chứa tin nhắn trước đó)
+      resolveDeferredGet!([
+        {
+          tinNhanId: 200,
+          cuocTroChuyenId: 1,
+          taiKhoanGuiId: 10,
+          loaiNguoiGui: 'KHACH_HANG',
+          loaiTinNhan: 'VAN_BAN',
+          noiDung: 'Tin nhắn cũ từ snapshot T0',
+          trangThai: 'DA_GUI',
+          createdAt: '2026-10-16T08:00:00.000Z',
+        },
+      ]);
+
+      // Xác minh cả tin nhắn cũ T0 và tin nhắn realtime T1 đều có mặt trong UI (không bị ghi đè/xóa mất)
+      expect(await screen.findByText('Tin nhắn cũ từ snapshot T0')).toBeTruthy();
+      expect(screen.getAllByText('Tin nhắn realtime đến tại T1').length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  describe('P2 Finding 4: Reconnect Slow Guard When Switching Conversations', () => {
+    it('does not inject messages of conversation A into conversation B if user switches while reconnect is in-flight', async () => {
+      const convA = createMockConversation(1, 'Hội thoại A', 'DANG_XU_LY');
+      const convB = createMockConversation(2, 'Hội thoại B', 'DANG_XU_LY');
+
+      vi.spyOn(adminSupportChatApi, 'listConversations').mockResolvedValue({
+        data: [convA, convB],
+        meta: { page: 1, pageSize: 20, totalItems: 2, totalPages: 1 },
+      });
+
+      let resolveDeferredGetA: (msgs: AdminSupportMessage[]) => void;
+      const deferredGetAPromise = new Promise<AdminSupportMessage[]>((resolve) => {
+        resolveDeferredGetA = resolve;
+      });
+
+      vi.spyOn(adminSupportChatApi, 'getConversationById').mockResolvedValue(convA);
+
+      vi.spyOn(adminSupportChatApi, 'getMessages').mockImplementation(async (convId) => {
+        if (convId === 1) {
+          return deferredGetAPromise;
+        }
+        return [
+          {
+            tinNhanId: 902,
+            cuocTroChuyenId: 2,
+            taiKhoanGuiId: 20,
+            loaiNguoiGui: 'KHACH_HANG',
+            loaiTinNhan: 'VAN_BAN',
+            noiDung: 'Nội dung hội thoại B',
+            trangThai: 'DA_GUI',
+            createdAt: '2026-10-16T08:00:00.000Z',
+          },
+        ];
+      });
+
+      render(<AdminChatMessenger session={mockSession} />);
+
+      // Chọn hội thoại A
+      fireEvent.click(await screen.findByText('Hội thoại A'));
+
+      // Kích hoạt reconnect cho hội thoại A trong khi getMessages(1) đang pending
+      capturedSocketProps.onReconnected();
+
+      // Nhân viên nhanh chóng chuyển sang hội thoại B
+      fireEvent.click(screen.getByText('Hội thoại B'));
+
+      // Chờ hội thoại B hiển thị tin nhắn của nó
+      expect(await screen.findByText('Nội dung hội thoại B')).toBeTruthy();
+
+      // Lúc này request reconnect của A mới resolve
+      resolveDeferredGetA!([
+        {
+          tinNhanId: 901,
+          cuocTroChuyenId: 1,
+          taiKhoanGuiId: 10,
+          loaiNguoiGui: 'KHACH_HANG',
+          loaiTinNhan: 'VAN_BAN',
+          noiDung: 'Nội dung rò rỉ của hội thoại A',
+          trangThai: 'DA_GUI',
+          createdAt: '2026-10-16T08:00:00.000Z',
+        },
+      ]);
+
+      // Xác minh tin nhắn của hội thoại A KHÔNG bị chèn vào khung chat của hội thoại B
+      await waitFor(() => {
+        expect(screen.queryByText('Nội dung rò rỉ của hội thoại A')).toBeNull();
+      });
+      expect(screen.getByText('Nội dung hội thoại B')).toBeTruthy();
     });
   });
 });

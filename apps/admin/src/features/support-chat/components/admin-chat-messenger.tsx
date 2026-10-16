@@ -29,6 +29,79 @@ import { AdminSupportConversation, AdminSupportMessage } from '../types';
 
 type FilterTab = 'ALL' | 'CHO_TIEP_NHAN' | 'DANG_XU_LY' | 'DA_DONG';
 
+/**
+ * Reconciles server snapshot/fresh messages with existing messages in state.
+ * - Replaces optimistic messages (negative IDs or THAT_BAI/DANG_GUI) when server has confirmed them by clientMessageId.
+ * - Updates confirmed messages with latest server data (e.g. read status DA_DOC).
+ * - Preserves optimistic messages that are still pending/failed and not in server snapshot.
+ * - Preserves realtime messages already in state that arrived after the server snapshot.
+ * - Deduplicates by tinNhanId and clientMessageId, and sorts chronologically.
+ */
+export function reconcileAdminMessages(
+  prevMessages: AdminSupportMessage[],
+  serverMessages: AdminSupportMessage[],
+): AdminSupportMessage[] {
+  const formattedServerMsgs = serverMessages.map((m) => ({
+    ...m,
+    deliveryStatus: 'DA_GUI' as const,
+  }));
+
+  const serverByClientId = new Map<string, AdminSupportMessage>();
+  const serverById = new Map<number, AdminSupportMessage>();
+
+  for (const sm of formattedServerMsgs) {
+    if (sm.clientMessageId) {
+      serverByClientId.set(sm.clientMessageId, sm);
+    }
+    if (sm.tinNhanId > 0) {
+      serverById.set(sm.tinNhanId, sm);
+    }
+  }
+
+  const result: AdminSupportMessage[] = [];
+  const handledServerClientIds = new Set<string>();
+  const handledServerIds = new Set<number>();
+
+  for (const pm of prevMessages) {
+    if (pm.clientMessageId && serverByClientId.has(pm.clientMessageId)) {
+      // Server confirmed this message: replace optimistic negative ID / THAT_BAI with server confirmed version
+      const serverMsg = serverByClientId.get(pm.clientMessageId)!;
+      result.push(serverMsg);
+      handledServerClientIds.add(pm.clientMessageId);
+      if (serverMsg.tinNhanId > 0) handledServerIds.add(serverMsg.tinNhanId);
+    } else if (pm.tinNhanId > 0 && serverById.has(pm.tinNhanId)) {
+      // Both have it: use server version (with up-to-date trangThai like DA_DOC)
+      const serverMsg = serverById.get(pm.tinNhanId)!;
+      result.push(serverMsg);
+      handledServerIds.add(pm.tinNhanId);
+      if (serverMsg.clientMessageId) handledServerClientIds.add(serverMsg.clientMessageId);
+    } else {
+      // Optimistic message not yet on server, or realtime message in prev not in server snapshot
+      result.push(pm);
+    }
+  }
+
+  // Append any server messages not yet in prev
+  for (const sm of formattedServerMsgs) {
+    const alreadyHandled =
+      (sm.clientMessageId && handledServerClientIds.has(sm.clientMessageId)) ||
+      (sm.tinNhanId > 0 && handledServerIds.has(sm.tinNhanId));
+    if (!alreadyHandled) {
+      result.push(sm);
+      if (sm.clientMessageId) handledServerClientIds.add(sm.clientMessageId);
+      if (sm.tinNhanId > 0) handledServerIds.add(sm.tinNhanId);
+    }
+  }
+
+  // Sort chronologically
+  return result.sort((a, b) => {
+    const timeA = new Date(a.createdAt).getTime();
+    const timeB = new Date(b.createdAt).getTime();
+    if (timeA !== timeB) return timeA - timeB;
+    return a.tinNhanId - b.tinNhanId;
+  });
+}
+
 export function AdminChatMessenger({ session }: { session: AdminSession }) {
   const token = getAdminAccessToken();
   const canManageChat = hasAdminPermission(session, 'chat:manage');
@@ -156,50 +229,100 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
 
   const selectedConvId = selectedConv?.cuocTroChuyenId;
   const selectedConvIdRef = useRef(selectedConvId);
+  const selectedConvRef = useRef(selectedConv);
+  const adminReconnectRequestIdRef = useRef(0);
+  const messageFetchRequestIdRef = useRef(0);
+  const markSocketMessagesAsReadRef = useRef<((convId: number, tinNhanIds?: number[]) => void) | null>(null);
+
   useEffect(() => {
     selectedConvIdRef.current = selectedConvId;
-  }, [selectedConvId]);
+    selectedConvRef.current = selectedConv;
+  }, [selectedConvId, selectedConv]);
 
-  // Tải lịch sử tin nhắn khi chọn một cuộc trò chuyện (chỉ fetch khi selectedConvId thay đổi - F-NEW-02)
+  // Tải lịch sử tin nhắn khi chọn một cuộc trò chuyện (chỉ fetch khi selectedConvId thay đổi - F-NEW-02 & F-NEW-03)
   useEffect(() => {
     if (!selectedConvId || !token) return;
 
     let active = true;
+    const targetConvId = selectedConvId;
+    const fetchReqId = ++messageFetchRequestIdRef.current;
+
     queueMicrotask(() => {
-      if (active) {
+      if (active && selectedConvIdRef.current === targetConvId) {
         setLoadingMessages(true);
         setErrorMessage(null);
       }
     });
 
     adminSupportChatApi
-      .getMessages(selectedConvId, token, { pageSize: 50 })
+      .getMessages(targetConvId, token, { pageSize: 50 })
       .then((msgs) => {
-        if (!active) return;
+        if (!active || selectedConvIdRef.current !== targetConvId || messageFetchRequestIdRef.current !== fetchReqId) {
+          return;
+        }
         setHasOlderMessages(msgs.length >= 50);
-        const serverMessages = msgs.map((m) => ({ ...m, deliveryStatus: 'DA_GUI' as const }));
-        setMessages((prev) => {
-          const serverClientIds = new Set(serverMessages.map((m) => m.clientMessageId).filter(Boolean));
-          const serverIds = new Set(serverMessages.map((m) => m.tinNhanId).filter((id) => id > 0));
-          // Giữ lại các tin pending hoặc thất bại chưa có trên server
-          const pending = prev.filter(
-            (m) =>
-              (m.deliveryStatus === 'DANG_GUI' || m.deliveryStatus === 'THAT_BAI') &&
-              !serverClientIds.has(m.clientMessageId) &&
-              !serverIds.has(m.tinNhanId),
+
+        // Chống ghi đè tin nhắn realtime đã nhận trong lúc fetch đang in-flight (F-NEW-03)
+        setMessages((prev) => reconcileAdminMessages(prev, msgs));
+
+        // Tự động đánh dấu đã đọc các tin nhắn của khách hàng khi mở cuộc trò chuyện (P1 Regression fix)
+        const unreadCustomerMessages = msgs.filter(
+          (m) => m.loaiNguoiGui === 'KHACH_HANG' && m.trangThai !== 'DA_DOC' && m.tinNhanId > 0,
+        );
+        const unreadIds = unreadCustomerMessages.map((m) => m.tinNhanId);
+
+        if (
+          unreadIds.length > 0 ||
+          (selectedConvRef.current?.soTinChuaDoc && selectedConvRef.current.soTinChuaDoc > 0)
+        ) {
+          adminSupportChatApi
+            .markMessagesAsRead(targetConvId, token, unreadIds.length > 0 ? unreadIds : undefined)
+            .catch((err) => {
+              console.warn('[AdminChat] Failed to mark messages as read on open:', err);
+            });
+          markSocketMessagesAsReadRef.current?.(
+            targetConvId,
+            unreadIds.length > 0 ? unreadIds : undefined,
           );
-          return [...serverMessages, ...pending];
-        });
+
+          // Cập nhật số tin chưa đọc trong danh sách về 0 và tin cuối thành DA_DOC
+          setConversations((prevList) =>
+            prevList.map((conv) => {
+              if (conv.cuocTroChuyenId === targetConvId) {
+                return {
+                  ...conv,
+                  soTinChuaDoc: 0,
+                  tinNhanCuoi:
+                    conv.tinNhanCuoi && conv.tinNhanCuoi.loaiNguoiGui === 'KHACH_HANG'
+                      ? { ...conv.tinNhanCuoi, trangThai: 'DA_DOC' }
+                      : conv.tinNhanCuoi,
+                };
+              }
+              return conv;
+            }),
+          );
+
+          // Cập nhật tin nhắn trong khung chat thành DA_DOC
+          setMessages((prevMsgs) =>
+            prevMsgs.map((m) =>
+              m.loaiNguoiGui === 'KHACH_HANG' && (unreadIds.length === 0 || unreadIds.includes(m.tinNhanId))
+                ? { ...m, trangThai: 'DA_DOC', daDocLuc: new Date().toISOString() }
+                : m,
+            ),
+          );
+        }
       })
       .catch((err: unknown) => {
-        if (active) {
+        if (active && selectedConvIdRef.current === targetConvId) {
           setErrorMessage(
             err instanceof Error ? err.message : 'Không thể tải tin nhắn cuộc trò chuyện.',
           );
         }
       })
       .finally(() => {
-        if (active) setLoadingMessages(false);
+        if (active && selectedConvIdRef.current === targetConvId) {
+          setLoadingMessages(false);
+        }
       });
 
     return () => {
@@ -249,23 +372,24 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
     }
   };
 
-  // Đồng bộ lại khi Socket reconnect (F-NEW-01)
+  // Đồng bộ lại khi Socket reconnect (F-NEW-01, F-NEW-02, F-NEW-04)
   const handleReconnected = useCallback(async () => {
     setRefreshTrigger((k) => k + 1);
 
     if (!selectedConvId || !token) return;
+    const targetConvId = selectedConvId;
+    const reqId = ++adminReconnectRequestIdRef.current;
     try {
-      const updatedConv = await adminSupportChatApi.getConversationById(selectedConvId, token);
-      setSelectedConv((prev) => (prev?.cuocTroChuyenId === selectedConvId ? { ...prev, ...updatedConv } : prev));
+      const updatedConv = await adminSupportChatApi.getConversationById(targetConvId, token);
+      if (adminReconnectRequestIdRef.current !== reqId || selectedConvIdRef.current !== targetConvId) return;
+      setSelectedConv((prev) => (prev?.cuocTroChuyenId === targetConvId ? { ...prev, ...updatedConv } : prev));
 
-      const freshMsgs = await adminSupportChatApi.getMessages(selectedConvId, token, { pageSize: 50 });
+      const freshMsgs = await adminSupportChatApi.getMessages(targetConvId, token, { pageSize: 50 });
+      if (adminReconnectRequestIdRef.current !== reqId || selectedConvIdRef.current !== targetConvId) return;
+
       setMessages((prev) => {
-        const existingIds = new Set(prev.map((m) => m.tinNhanId).filter((id) => id > 0));
-        const existingClientIds = new Set(prev.map((m) => m.clientMessageId).filter(Boolean));
-        const newOnes = freshMsgs
-          .filter((m) => !existingIds.has(m.tinNhanId) && !existingClientIds.has(m.clientMessageId))
-          .map((m) => ({ ...m, deliveryStatus: 'DA_GUI' as const }));
-        return [...prev, ...newOnes];
+        if (selectedConvIdRef.current !== targetConvId) return prev;
+        return reconcileAdminMessages(prev, freshMsgs);
       });
     } catch (err) {
       console.warn('[AdminChat] Reconnect sync error:', err);
@@ -275,35 +399,63 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
   // Callback khi có tin nhắn mới từ WebSocket
   const handleNewMessage = useCallback(
     (newMsg: AdminSupportMessage) => {
+      const isCurrentlyOpen = selectedConvIdRef.current === newMsg.cuocTroChuyenId;
+
       // 1. Cập nhật tin nhắn trong khung chat hiện tại nếu trùng cuocTroChuyenId
-      if (selectedConv && newMsg.cuocTroChuyenId === selectedConv.cuocTroChuyenId) {
+      if (isCurrentlyOpen) {
+        // Nếu Admin đang mở hội thoại và tin nhắn từ khách hàng, đánh dấu đã đọc ngay lập tức (P1)
+        if (newMsg.loaiNguoiGui === 'KHACH_HANG' && token) {
+          adminSupportChatApi
+            .markMessagesAsRead(newMsg.cuocTroChuyenId, token, [newMsg.tinNhanId])
+            .catch((err) => {
+              console.warn('[AdminChat] Failed to mark realtime message as read:', err);
+            });
+          markSocketMessagesAsReadRef.current?.(newMsg.cuocTroChuyenId, [newMsg.tinNhanId]);
+        }
+
+        const msgWithStatus: AdminSupportMessage = {
+          ...newMsg,
+          trangThai: newMsg.loaiNguoiGui === 'KHACH_HANG' ? 'DA_DOC' : newMsg.trangThai,
+          deliveryStatus: 'DA_GUI',
+        };
+
         setMessages((prev) => {
-          if (prev.some((m) => m.tinNhanId === newMsg.tinNhanId && m.tinNhanId > 0)) return prev;
-          if (newMsg.clientMessageId && prev.some((m) => m.clientMessageId === newMsg.clientMessageId)) {
+          if (prev.some((m) => m.tinNhanId === msgWithStatus.tinNhanId && m.tinNhanId > 0)) return prev;
+          if (msgWithStatus.clientMessageId && prev.some((m) => m.clientMessageId === msgWithStatus.clientMessageId)) {
             return prev.map((m) =>
-              m.clientMessageId === newMsg.clientMessageId
-                ? { ...newMsg, deliveryStatus: 'DA_GUI' }
+              m.clientMessageId === msgWithStatus.clientMessageId
+                ? msgWithStatus
                 : m,
             );
           }
-          return [...prev, { ...newMsg, deliveryStatus: 'DA_GUI' }];
+          return [...prev, msgWithStatus];
         });
       }
 
       // 2. Cập nhật preview tin nhắn cuối trong danh sách cuộc trò chuyện
       setConversations((prev) =>
-        prev.map((c) =>
-          c.cuocTroChuyenId === newMsg.cuocTroChuyenId
-            ? {
-                ...c,
-                tinNhanCuoi: newMsg,
-                updatedAt: newMsg.createdAt,
-              }
-            : c,
-        ),
+        prev.map((c) => {
+          if (c.cuocTroChuyenId === newMsg.cuocTroChuyenId) {
+            const updatedUnread = isCurrentlyOpen
+              ? 0
+              : newMsg.loaiNguoiGui === 'KHACH_HANG'
+                ? (c.soTinChuaDoc || 0) + 1
+                : c.soTinChuaDoc;
+            return {
+              ...c,
+              tinNhanCuoi: {
+                ...newMsg,
+                trangThai: isCurrentlyOpen && newMsg.loaiNguoiGui === 'KHACH_HANG' ? 'DA_DOC' : newMsg.trangThai,
+              },
+              soTinChuaDoc: updatedUnread,
+              updatedAt: newMsg.createdAt,
+            };
+          }
+          return c;
+        }),
       );
     },
-    [selectedConv],
+    [token],
   );
 
   // Callback khi có nhân viên tiếp nhận
@@ -330,6 +482,34 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
     );
   }, []);
 
+  // Callback khi nhận read receipt từ socket
+  const handleMessagesReadReceipt = useCallback(
+    (payload: {
+      cuocTroChuyenId: number;
+      readByTaiKhoanId: number;
+      tinNhanIds?: number[];
+      updatedCount: number;
+    }) => {
+      if (selectedConvIdRef.current && payload.cuocTroChuyenId === selectedConvIdRef.current) {
+        setMessages((prev) =>
+          prev.map((m) => {
+            if (m.loaiNguoiGui === 'NHAN_VIEN') {
+              if (
+                !payload.tinNhanIds ||
+                payload.tinNhanIds.length === 0 ||
+                payload.tinNhanIds.includes(m.tinNhanId)
+              ) {
+                return { ...m, trangThai: 'DA_DOC' };
+              }
+            }
+            return m;
+          }),
+        );
+      }
+    },
+    [],
+  );
+
   // Hook WebSocket kết nối namespace /chat
   const {
     isConnected: socketConnected,
@@ -338,14 +518,20 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
     claimConversation: claimSocketConversation,
     closeConversation: closeSocketConversation,
     emitTyping,
+    markMessagesAsRead: markSocketMessagesAsRead,
   } = useAdminChatSocket({
     token,
     activeConversationId: selectedConv?.cuocTroChuyenId ?? null,
     onNewMessage: handleNewMessage,
     onConversationClaimed: handleConversationClaimed,
     onConversationClosed: handleConversationClosed,
+    onMessagesReadReceipt: handleMessagesReadReceipt,
     onReconnected: handleReconnected,
   });
+
+  useEffect(() => {
+    markSocketMessagesAsReadRef.current = markSocketMessagesAsRead;
+  }, [markSocketMessagesAsRead]);
 
   // Tiếp nhận cuộc trò chuyện (Claim)
   const handleClaim = async () => {
@@ -657,7 +843,10 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                 return (
                   <button
                     key={c.cuocTroChuyenId}
-                    onClick={() => setSelectedConv(c)}
+                    onClick={() => {
+                      adminReconnectRequestIdRef.current++;
+                      setSelectedConv(c);
+                    }}
                     className={`w-full text-left p-3 flex items-start gap-3 transition-colors ${
                       isSelected
                         ? 'bg-brand/5 border-l-4 border-l-brand'
@@ -678,12 +867,22 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                         <span className="font-semibold text-xs text-slate-800 truncate">
                           {c.khachHang.taiKhoan.hoTen}
                         </span>
-                        <span className="text-[10px] text-slate-400 shrink-0">
-                          {new Date(c.updatedAt).toLocaleTimeString('vi-VN', {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                        </span>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {c.soTinChuaDoc !== undefined && c.soTinChuaDoc > 0 && (
+                            <span
+                              data-testid="unread-badge"
+                              className="bg-brand text-white text-[10px] font-bold px-1.5 py-0.2 rounded-full"
+                            >
+                              {c.soTinChuaDoc}
+                            </span>
+                          )}
+                          <span className="text-[10px] text-slate-400">
+                            {new Date(c.updatedAt).toLocaleTimeString('vi-VN', {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </span>
+                        </div>
                       </div>
 
                       <div className="text-[11px] text-slate-500 truncate mb-1">

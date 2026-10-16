@@ -38,7 +38,7 @@ const React = ReactModule.default || ReactModule;
 const { render, screen, fireEvent, cleanup, waitFor } = await import('@testing-library/react');
 
 // Import REAL components and real APIs (F-NEW-06)
-const { CustomerSupportChat } = await import('@/features/support-chat/components/customer-support-chat');
+const { CustomerSupportChat, reconcileMessages } = await import('@/features/support-chat/components/customer-support-chat');
 const { SupportWidget } = await import('@/components/layout/support-widget');
 const { AuthSessionProvider } = await import('@/features/auth/auth-session');
 const { supportChatApi } = await import('@/features/support-chat/services/support-chat.api');
@@ -464,6 +464,143 @@ describe('Customer Support Chat Component Tests with Real Components (F-NEW-06)'
       } finally {
         supportChatApi.getActiveBusCompanies = originalGetActive;
         supportChatApi.getActiveConversation = originalGetActiveConv;
+        supportChatApi.listConversations = originalListConv;
+        supportChatApi.getMessages = originalGetMsg;
+      }
+    });
+  });
+
+  describe('5. P1 Finding 2: Reconciling Optimistic Messages & P2 Finding 4: In-flight Reconnect Guards', () => {
+    it('reconciles optimistic THAT_BAI message with confirmed server message on reconnect', () => {
+      const prev = [
+        {
+          tinNhanId: -100,
+          cuocTroChuyenId: 10,
+          taiKhoanGuiId: 100,
+          loaiNguoiGui: 'KHACH_HANG',
+          noiDung: 'Chào nhà xe',
+          clientMessageId: 'client-fail-1',
+          trangThai: 'DA_GUI',
+          deliveryStatus: 'THAT_BAI',
+          createdAt: '2026-10-16T08:00:00.000Z',
+        },
+      ];
+
+      const serverFresh = [
+        {
+          tinNhanId: 501,
+          cuocTroChuyenId: 10,
+          taiKhoanGuiId: 100,
+          loaiNguoiGui: 'KHACH_HANG',
+          noiDung: 'Chào nhà xe',
+          clientMessageId: 'client-fail-1',
+          trangThai: 'DA_GUI',
+          createdAt: '2026-10-16T08:00:00.000Z',
+        },
+      ];
+
+      const reconciled = reconcileMessages(prev, serverFresh);
+      assert.equal(reconciled.length, 1);
+      assert.equal(reconciled[0].tinNhanId, 501);
+      assert.equal(reconciled[0].deliveryStatus, 'DA_GUI');
+      assert.equal(reconciled[0].clientMessageId, 'client-fail-1');
+    });
+
+    it('does not inject messages of conversation A into conversation B when user switches companies while reconnect is in-flight', async () => {
+      const originalGetActive = supportChatApi.getActiveBusCompanies;
+      const originalGetActiveConv = supportChatApi.getActiveConversation;
+      const originalGetConvById = supportChatApi.getConversationById;
+      const originalListConv = supportChatApi.listConversations;
+      const originalGetMsg = supportChatApi.getMessages;
+
+      try {
+        supportChatApi.getActiveBusCompanies = async () => [
+          { busCompanyId: 10, name: 'Nhà Xe A', contactInfo: '1900 1111' },
+          { busCompanyId: 20, name: 'Nhà Xe B', contactInfo: '1900 2222' },
+        ];
+
+        supportChatApi.listConversations = async () => ({
+          data: [],
+          meta: { page: 1, pageSize: 20, totalItems: 0, totalPages: 1 },
+        });
+
+        supportChatApi.getActiveConversation = async (companyId) => {
+          if (companyId === 10) {
+            return {
+              cuocTroChuyenId: 101,
+              tieuDe: 'Hỗ trợ Nhà Xe A',
+              trangThai: 'DANG_XU_LY',
+              nhaXeId: 10,
+              nhaXe: { nhaXeId: 10, tenNhaXe: 'Nhà Xe A' },
+              createdAt: new Date().toISOString(),
+            };
+          }
+          return {
+            cuocTroChuyenId: 202,
+            tieuDe: 'Hỗ trợ Nhà Xe B',
+            trangThai: 'DANG_XU_LY',
+            nhaXeId: 20,
+            nhaXe: { nhaXeId: 20, tenNhaXe: 'Nhà Xe B' },
+            createdAt: new Date().toISOString(),
+          };
+        };
+
+        supportChatApi.getMessages = async (convId) => {
+          if (convId === 101) {
+            return [
+              {
+                tinNhanId: 1001,
+                cuocTroChuyenId: 101,
+                taiKhoanGuiId: 100,
+                loaiNguoiGui: 'KHACH_HANG',
+                noiDung: 'Tin nhắn ở nhà xe A',
+                createdAt: new Date().toISOString(),
+              },
+            ];
+          }
+          return [
+            {
+              tinNhanId: 2001,
+              cuocTroChuyenId: 202,
+              taiKhoanGuiId: 100,
+              loaiNguoiGui: 'KHACH_HANG',
+              noiDung: 'Tin nhắn ở nhà xe B',
+              createdAt: new Date().toISOString(),
+            },
+          ];
+        };
+
+        renderWithAuth(React.createElement(CustomerSupportChat));
+
+        await waitFor(() => {
+          screen.getByText('Nhà Xe A');
+          screen.getByText('Nhà Xe B');
+        });
+
+        // Chọn nhà xe A
+        fireEvent.click(screen.getByText('Nhà Xe A'));
+
+        await waitFor(() => {
+          screen.getByText('Tin nhắn ở nhà xe A');
+        });
+
+        // Bấm Đổi nhà xe rồi chuyển sang Nhà Xe B
+        fireEvent.click(screen.getByText('Đổi nhà xe'));
+
+        await waitFor(() => {
+          screen.getByText('Nhà Xe B');
+        });
+
+        fireEvent.click(screen.getByText('Nhà Xe B'));
+
+        await waitFor(() => {
+          screen.getByText('Tin nhắn ở nhà xe B');
+          assert.equal(screen.queryByText('Tin nhắn ở nhà xe A'), null);
+        });
+      } finally {
+        supportChatApi.getActiveBusCompanies = originalGetActive;
+        supportChatApi.getActiveConversation = originalGetActiveConv;
+        supportChatApi.getConversationById = originalGetConvById;
         supportChatApi.listConversations = originalListConv;
         supportChatApi.getMessages = originalGetMsg;
       }

@@ -7,13 +7,19 @@ import { AdminSupportConversation, AdminSupportMessage } from '../types';
 const SOCKET_SERVER_URL =
   process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:4000';
 
-interface UseAdminChatSocketProps {
+export interface UseAdminChatSocketProps {
   token: string | null;
   activeConversationId: number | null;
   onNewConversation?: (conversation: AdminSupportConversation) => void;
   onNewMessage?: (message: AdminSupportMessage) => void;
   onConversationClaimed?: (conversation: AdminSupportConversation) => void;
   onConversationClosed?: (conversation: AdminSupportConversation) => void;
+  onMessagesReadReceipt?: (payload: {
+    cuocTroChuyenId: number;
+    readByTaiKhoanId: number;
+    tinNhanIds?: number[];
+    updatedCount: number;
+  }) => void;
   onReconnected?: () => void;
 }
 
@@ -24,6 +30,7 @@ export function useAdminChatSocket({
   onNewMessage,
   onConversationClaimed,
   onConversationClosed,
+  onMessagesReadReceipt,
   onReconnected,
 }: UseAdminChatSocketProps) {
   const socketRef = useRef<Socket | null>(null);
@@ -36,6 +43,7 @@ export function useAdminChatSocket({
   const onNewMessageRef = useRef(onNewMessage);
   const onConversationClaimedRef = useRef(onConversationClaimed);
   const onConversationClosedRef = useRef(onConversationClosed);
+  const onMessagesReadReceiptRef = useRef(onMessagesReadReceipt);
   const onReconnectedRef = useRef(onReconnected);
   const activeConversationIdRef = useRef(activeConversationId);
 
@@ -44,6 +52,7 @@ export function useAdminChatSocket({
     onNewMessageRef.current = onNewMessage;
     onConversationClaimedRef.current = onConversationClaimed;
     onConversationClosedRef.current = onConversationClosed;
+    onMessagesReadReceiptRef.current = onMessagesReadReceipt;
     onReconnectedRef.current = onReconnected;
     activeConversationIdRef.current = activeConversationId;
   });
@@ -106,6 +115,18 @@ export function useAdminChatSocket({
     socket.on('support.conversation.closed', (conv: AdminSupportConversation) => {
       onConversationClosedRef.current?.(conv);
     });
+
+    socket.on(
+      'support.message.read_receipt',
+      (payload: {
+        cuocTroChuyenId: number;
+        readByTaiKhoanId: number;
+        tinNhanIds?: number[];
+        updatedCount: number;
+      }) => {
+        onMessagesReadReceiptRef.current?.(payload);
+      },
+    );
 
     return () => {
       wasConnectedRef.current = false;
@@ -304,6 +325,14 @@ export function useAdminChatSocket({
     });
   }, []);
 
+  const markMessagesAsRead = useCallback((cuocTroChuyenId: number, tinNhanIds?: number[]) => {
+    if (!socketRef.current || !socketRef.current.connected) return;
+    socketRef.current.emit('support.message.read', {
+      cuocTroChuyenId,
+      tinNhanIds,
+    });
+  }, []);
+
   return {
     isConnected,
     customerTyping,
@@ -311,5 +340,6 @@ export function useAdminChatSocket({
     claimConversation,
     closeConversation,
     emitTyping,
+    markMessagesAsRead,
   };
 }

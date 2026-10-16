@@ -13,6 +13,12 @@ interface UseSupportChatSocketProps {
   onNewMessage?: (message: SupportMessage) => void;
   onConversationClaimed?: (conversation: SupportConversation) => void;
   onConversationClosed?: (conversation: SupportConversation) => void;
+  onMessagesReadReceipt?: (payload: {
+    cuocTroChuyenId: number;
+    readByTaiKhoanId: number;
+    tinNhanIds?: number[];
+    updatedCount: number;
+  }) => void;
   onReconnected?: () => void;
 }
 
@@ -22,6 +28,7 @@ export function useSupportChatSocket({
   onNewMessage,
   onConversationClaimed,
   onConversationClosed,
+  onMessagesReadReceipt,
   onReconnected,
 }: UseSupportChatSocketProps) {
   const socketRef = useRef<Socket | null>(null);
@@ -34,6 +41,7 @@ export function useSupportChatSocket({
   const onNewMessageRef = useRef(onNewMessage);
   const onConversationClaimedRef = useRef(onConversationClaimed);
   const onConversationClosedRef = useRef(onConversationClosed);
+  const onMessagesReadReceiptRef = useRef(onMessagesReadReceipt);
   const onReconnectedRef = useRef(onReconnected);
   const activeConversationIdRef = useRef(activeConversationId);
 
@@ -41,6 +49,7 @@ export function useSupportChatSocket({
     onNewMessageRef.current = onNewMessage;
     onConversationClaimedRef.current = onConversationClaimed;
     onConversationClosedRef.current = onConversationClosed;
+    onMessagesReadReceiptRef.current = onMessagesReadReceipt;
     onReconnectedRef.current = onReconnected;
     activeConversationIdRef.current = activeConversationId;
   });
@@ -109,6 +118,18 @@ export function useSupportChatSocket({
     socket.on('support.conversation.closed', (conv: SupportConversation) => {
       onConversationClosedRef.current?.(conv);
     });
+
+    socket.on(
+      'support.message.read_receipt',
+      (payload: {
+        cuocTroChuyenId: number;
+        readByTaiKhoanId: number;
+        tinNhanIds?: number[];
+        updatedCount: number;
+      }) => {
+        onMessagesReadReceiptRef.current?.(payload);
+      },
+    );
 
     return () => {
       wasConnectedRef.current = false;
@@ -261,6 +282,14 @@ export function useSupportChatSocket({
     );
   }, []);
 
+  const markMessagesAsRead = useCallback((cuocTroChuyenId: number, tinNhanIds?: number[]) => {
+    if (!socketRef.current || !socketRef.current.connected) return;
+    socketRef.current.emit('support.message.read', {
+      cuocTroChuyenId,
+      tinNhanIds,
+    });
+  }, []);
+
   return {
     isConnected,
     isTyping,
@@ -268,5 +297,6 @@ export function useSupportChatSocket({
     sendMessage,
     emitTyping,
     closeConversation,
+    markMessagesAsRead,
   };
 }

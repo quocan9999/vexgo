@@ -17,11 +17,86 @@ import {
   PlusCircle,
   Clock,
   Calendar,
+  Check,
+  CheckCheck,
 } from 'lucide-react';
 import { useAuthSession } from '@/features/auth/auth-session';
 import { supportChatApi } from '../services/support-chat.api';
 import { useSupportChatSocket } from '../hooks/use-support-chat-socket';
 import { BusCompany, SupportConversation, SupportMessage } from '../types';
+
+/**
+ * Reconciles server snapshot/fresh messages with existing messages in state.
+ * - Replaces optimistic messages (negative IDs or THAT_BAI/DANG_GUI) when server has confirmed them by clientMessageId.
+ * - Updates confirmed messages with latest server data (e.g. read status DA_DOC).
+ * - Preserves optimistic messages that are still pending/failed and not in server snapshot.
+ * - Preserves realtime messages already in state that arrived after the server snapshot.
+ * - Deduplicates by tinNhanId and clientMessageId, and sorts chronologically.
+ */
+export function reconcileMessages(
+  prevMessages: SupportMessage[],
+  serverMessages: SupportMessage[],
+): SupportMessage[] {
+  const formattedServerMsgs = serverMessages.map((m) => ({
+    ...m,
+    deliveryStatus: 'DA_GUI' as const,
+  }));
+
+  const serverByClientId = new Map<string, SupportMessage>();
+  const serverById = new Map<number, SupportMessage>();
+
+  for (const sm of formattedServerMsgs) {
+    if (sm.clientMessageId) {
+      serverByClientId.set(sm.clientMessageId, sm);
+    }
+    if (sm.tinNhanId > 0) {
+      serverById.set(sm.tinNhanId, sm);
+    }
+  }
+
+  const result: SupportMessage[] = [];
+  const handledServerClientIds = new Set<string>();
+  const handledServerIds = new Set<number>();
+
+  for (const pm of prevMessages) {
+    if (pm.clientMessageId && serverByClientId.has(pm.clientMessageId)) {
+      // Server confirmed this message: replace optimistic negative ID / THAT_BAI with server confirmed version
+      const serverMsg = serverByClientId.get(pm.clientMessageId)!;
+      result.push(serverMsg);
+      handledServerClientIds.add(pm.clientMessageId);
+      if (serverMsg.tinNhanId > 0) handledServerIds.add(serverMsg.tinNhanId);
+    } else if (pm.tinNhanId > 0 && serverById.has(pm.tinNhanId)) {
+      // Both have it: use server version (with up-to-date trangThai like DA_DOC)
+      const serverMsg = serverById.get(pm.tinNhanId)!;
+      result.push(serverMsg);
+      handledServerIds.add(pm.tinNhanId);
+      if (serverMsg.clientMessageId) handledServerClientIds.add(serverMsg.clientMessageId);
+    } else {
+      // Optimistic message not yet on server, or realtime message in prev not in server snapshot
+      result.push(pm);
+    }
+  }
+
+  // Append any server messages not yet in prev
+  for (const sm of formattedServerMsgs) {
+    const alreadyHandled =
+      (sm.clientMessageId && handledServerClientIds.has(sm.clientMessageId)) ||
+      (sm.tinNhanId > 0 && handledServerIds.has(sm.tinNhanId));
+    if (!alreadyHandled) {
+      result.push(sm);
+      if (sm.clientMessageId) handledServerClientIds.add(sm.clientMessageId);
+      if (sm.tinNhanId > 0) handledServerIds.add(sm.tinNhanId);
+    }
+  }
+
+  // Sort chronologically
+  return result.sort((a, b) => {
+    const timeA = new Date(a.createdAt).getTime();
+    const timeB = new Date(b.createdAt).getTime();
+    if (timeA !== timeB) return timeA - timeB;
+    return a.tinNhanId - b.tinNhanId;
+  });
+}
 
 export function CustomerSupportChat() {
   const { isAuthenticated, accessToken, user } = useAuthSession();
@@ -52,6 +127,7 @@ export function CustomerSupportChat() {
   const typingTimerRef = useRef<NodeJS.Timeout | null>(null);
   const companyRequestIdRef = useRef(0);
   const historyRequestIdRef = useRef(0);
+  const reconnectRequestIdRef = useRef(0);
   const isPrependingOlderRef = useRef(false);
 
   const activeConversationId = activeConversation?.cuocTroChuyenId ?? null;
@@ -126,21 +202,50 @@ export function CustomerSupportChat() {
     setActiveConversation((prev) => (prev ? { ...prev, ...closedConv, trangThai: 'DA_DONG' } : closedConv));
   }, []);
 
-  // Đồng bộ lại khi Socket reconnect (F-NEW-01)
+  // Callback khi tin nhắn của khách hàng được nhân viên đọc (read receipt)
+  const handleMessagesReadReceipt = useCallback(
+    (payload: {
+      cuocTroChuyenId: number;
+      readByTaiKhoanId: number;
+      tinNhanIds?: number[];
+      updatedCount: number;
+    }) => {
+      if (activeConversationIdRef.current && payload.cuocTroChuyenId === activeConversationIdRef.current) {
+        setMessages((prev) =>
+          prev.map((m) => {
+            if (m.loaiNguoiGui === 'KHACH_HANG') {
+              if (
+                !payload.tinNhanIds ||
+                payload.tinNhanIds.length === 0 ||
+                payload.tinNhanIds.includes(m.tinNhanId)
+              ) {
+                return { ...m, trangThai: 'DA_DOC' };
+              }
+            }
+            return m;
+          }),
+        );
+      }
+    },
+    [],
+  );
+
+  // Đồng bộ lại khi Socket reconnect (F-NEW-01, F-NEW-02, F-NEW-04)
   const handleReconnected = useCallback(async () => {
     if (!activeConversationId || !accessToken) return;
+    const targetConvId = activeConversationId;
+    const reqId = ++reconnectRequestIdRef.current;
     try {
-      const updatedConv = await supportChatApi.getConversationById(activeConversationId, accessToken);
-      setActiveConversation((prev) => (prev?.cuocTroChuyenId === activeConversationId ? { ...prev, ...updatedConv } : prev));
+      const updatedConv = await supportChatApi.getConversationById(targetConvId, accessToken);
+      if (reconnectRequestIdRef.current !== reqId || activeConversationIdRef.current !== targetConvId) return;
+      setActiveConversation((prev) => (prev?.cuocTroChuyenId === targetConvId ? { ...prev, ...updatedConv } : prev));
 
-      const freshMsgs = await supportChatApi.getMessages(activeConversationId, accessToken, { pageSize: 40 });
+      const freshMsgs = await supportChatApi.getMessages(targetConvId, accessToken, { pageSize: 40 });
+      if (reconnectRequestIdRef.current !== reqId || activeConversationIdRef.current !== targetConvId) return;
+
       setMessages((prev) => {
-        const existingIds = new Set(prev.map((m) => m.tinNhanId).filter((id) => id > 0));
-        const existingClientIds = new Set(prev.map((m) => m.clientMessageId).filter(Boolean));
-        const newOnes = freshMsgs
-          .filter((m) => !existingIds.has(m.tinNhanId) && !existingClientIds.has(m.clientMessageId))
-          .map((m) => ({ ...m, deliveryStatus: 'DA_GUI' as const }));
-        return [...prev, ...newOnes];
+        if (activeConversationIdRef.current !== targetConvId) return prev;
+        return reconcileMessages(prev, freshMsgs);
       });
     } catch (err) {
       console.warn('[CustomerSupportChat] Reconnect sync error:', err);
@@ -160,6 +265,7 @@ export function CustomerSupportChat() {
     onNewMessage: handleNewMessage,
     onConversationClaimed: handleConversationClaimed,
     onConversationClosed: handleConversationClosed,
+    onMessagesReadReceipt: handleMessagesReadReceipt,
     onReconnected: handleReconnected,
   });
 
@@ -172,6 +278,7 @@ export function CustomerSupportChat() {
     }
 
     const currentReqId = ++companyRequestIdRef.current;
+    reconnectRequestIdRef.current++;
     setSelectedCompany(company);
     setShowHistoryList(false);
     setErrorMsg(null);
@@ -300,6 +407,7 @@ export function CustomerSupportChat() {
   const handleSelectHistoryConversation = async (conv: SupportConversation) => {
     if (!accessToken) return;
     const reqId = ++historyRequestIdRef.current;
+    reconnectRequestIdRef.current++;
     setActiveConversation(conv);
     setShowHistoryList(false);
     setLoadingMessages(true);
@@ -329,6 +437,7 @@ export function CustomerSupportChat() {
 
     setStartingChat(true);
     setErrorMsg(null);
+    reconnectRequestIdRef.current++;
 
     const clientMsgId = `client-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
     try {
@@ -869,6 +978,25 @@ export function CustomerSupportChat() {
                       {isPending && (
                         <span className="text-[9px] text-slate-400 flex items-center gap-0.5">
                           <Clock className="w-2.5 h-2.5 animate-spin" /> Đang gửi
+                        </span>
+                      )}
+                      {!isPending && !isFailed && isMe && (
+                        <span
+                          className="text-[9px] flex items-center gap-0.5"
+                          data-testid="message-delivery-status"
+                          title={msg.trangThai === 'DA_DOC' ? 'Đã xem' : 'Đã gửi'}
+                        >
+                          {msg.trangThai === 'DA_DOC' ? (
+                            <>
+                              <CheckCheck className="w-3 h-3 text-sky-500" />
+                              <span className="text-sky-600 font-medium">Đã xem</span>
+                            </>
+                          ) : (
+                            <>
+                              <Check className="w-2.5 h-2.5 text-slate-400" />
+                              <span className="text-slate-400">Đã gửi</span>
+                            </>
+                          )}
                         </span>
                       )}
                     </div>
