@@ -2,19 +2,21 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
+  MessageSquare,
   Search,
+  User,
+  Phone,
   Send,
   Loader2,
-  User,
+  AlertCircle,
   CheckCircle2,
   Clock,
-  Archive,
-  Phone,
-  AlertCircle,
-  MessageSquare,
-  XCircle,
   Sparkles,
+  XCircle,
+  Archive,
   RefreshCw,
+  ArrowLeft,
+  RotateCw,
 } from 'lucide-react';
 import {
   getAdminAccessToken,
@@ -34,7 +36,14 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
   const [activeTab, setActiveTab] = useState<FilterTab>('ALL');
   const [conversations, setConversations] = useState<AdminSupportConversation[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [loadingConversations, setLoadingConversations] = useState(true);
+
+  // Pagination states (F-06)
+  const [page, setPage] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   const [selectedConv, setSelectedConv] = useState<AdminSupportConversation | null>(null);
   const [messages, setMessages] = useState<AdminSupportMessage[]>([]);
@@ -49,34 +58,26 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
   const typingTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (typeof messagesEndRef.current?.scrollIntoView === 'function') {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
   }, []);
 
   useEffect(() => {
     scrollToBottom();
   }, [messages, scrollToBottom]);
 
-  // Tải danh sách cuộc trò chuyện từ API thật
-  const fetchConversations = useCallback(async () => {
-    if (!token) return;
-    try {
-      const res = await adminSupportChatApi.listConversations(
-        {
-          trangThai: activeTab === 'ALL' ? undefined : activeTab,
-          pageSize: 50,
-        },
-        token,
-      );
-      setConversations(res.data || []);
-    } catch (err: unknown) {
-      setErrorMessage(
-        err instanceof Error ? err.message : 'Không thể tải danh sách cuộc trò chuyện.',
-      );
-    } finally {
-      setLoadingConversations(false);
-    }
-  }, [token, activeTab]);
+  // Debounce search query (400ms) để tìm kiếm server-side có tenant scope (F-06)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+  // Tải trang 1 danh sách cuộc trò chuyện theo filter/search
   useEffect(() => {
     if (!token) return;
     let active = true;
@@ -85,19 +86,24 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
       .listConversations(
         {
           trangThai: activeTab === 'ALL' ? undefined : activeTab,
-          pageSize: 50,
+          search: debouncedSearch.trim() || undefined,
+          page: 1,
+          pageSize: 20,
         },
         token,
       )
       .then((res) => {
-        if (active) setConversations(res.data || []);
+        if (!active) return;
+        setConversations(res.data || []);
+        setPage(1);
+        setTotalItems(res.meta?.totalItems || (res.data ? res.data.length : 0));
+        setTotalPages(res.meta?.totalPages || 1);
       })
       .catch((err: unknown) => {
-        if (active) {
-          setErrorMessage(
-            err instanceof Error ? err.message : 'Không thể tải danh sách cuộc trò chuyện.',
-          );
-        }
+        if (!active) return;
+        setErrorMessage(
+          err instanceof Error ? err.message : 'Không thể tải danh sách cuộc trò chuyện.',
+        );
       })
       .finally(() => {
         if (active) setLoadingConversations(false);
@@ -106,58 +112,103 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
     return () => {
       active = false;
     };
-  }, [token, activeTab]);
+  }, [token, activeTab, debouncedSearch, refreshTrigger]);
 
-  const handleTabChange = (tab: FilterTab) => {
-    setActiveTab(tab);
-    setLoadingConversations(true);
-  };
-
-  // Tải tin nhắn khi chọn cuộc trò chuyện
-  const handleSelectConversation = async (conv: AdminSupportConversation) => {
-    setSelectedConv(conv);
-    setErrorMessage(null);
-    if (!token) return;
-
-    setLoadingMessages(true);
+  // Tải thêm cuộc trò chuyện (Load more pagination - F-06)
+  const handleLoadMore = async () => {
+    if (!token || loadingMore || page >= totalPages) return;
+    setLoadingMore(true);
     try {
-      const msgList = await adminSupportChatApi.getMessages(conv.cuocTroChuyenId, token);
-      setMessages(msgList);
-      // Đánh dấu đã đọc
-      adminSupportChatApi.markMessagesAsRead(conv.cuocTroChuyenId, token).catch(() => {});
+      const nextPage = page + 1;
+      const res = await adminSupportChatApi.listConversations(
+        {
+          trangThai: activeTab === 'ALL' ? undefined : activeTab,
+          search: debouncedSearch.trim() || undefined,
+          page: nextPage,
+          pageSize: 20,
+        },
+        token,
+      );
+      const newItems = res.data || [];
+      setConversations((prev) => {
+        const existingIds = new Set(prev.map((c) => c.cuocTroChuyenId));
+        const filtered = newItems.filter((c) => !existingIds.has(c.cuocTroChuyenId));
+        return [...prev, ...filtered];
+      });
+      setPage(nextPage);
+      if (res.meta?.totalItems) setTotalItems(res.meta.totalItems);
+      if (res.meta?.totalPages) setTotalPages(res.meta.totalPages);
     } catch (err: unknown) {
-      setErrorMessage(err instanceof Error ? err.message : 'Không thể tải tin nhắn.');
+      setErrorMessage(
+        err instanceof Error ? err.message : 'Không thể tải thêm cuộc trò chuyện.',
+      );
     } finally {
-      setLoadingMessages(false);
+      setLoadingMore(false);
     }
   };
 
-  // Socket callbacks
-  const handleNewConversation = useCallback((conv: AdminSupportConversation) => {
-    setConversations((prev) => {
-      if (prev.some((c) => c.cuocTroChuyenId === conv.cuocTroChuyenId)) return prev;
-      return [conv, ...prev];
-    });
-  }, []);
+  // Tải lịch sử tin nhắn khi chọn một cuộc trò chuyện
+  useEffect(() => {
+    if (!selectedConv || !token) return;
 
+    let active = true;
+    queueMicrotask(() => {
+      if (active) {
+        setLoadingMessages(true);
+        setErrorMessage(null);
+      }
+    });
+
+    adminSupportChatApi
+      .getMessages(selectedConv.cuocTroChuyenId, token)
+      .then((msgs) => {
+        if (active) {
+          setMessages(msgs.map((m) => ({ ...m, deliveryStatus: 'DA_GUI' })));
+        }
+      })
+      .catch((err: unknown) => {
+        if (active) {
+          setErrorMessage(
+            err instanceof Error ? err.message : 'Không thể tải tin nhắn cuộc trò chuyện.',
+          );
+        }
+      })
+      .finally(() => {
+        if (active) setLoadingMessages(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [selectedConv, token]);
+
+  // Callback khi có tin nhắn mới từ WebSocket
   const handleNewMessage = useCallback(
-    (msg: AdminSupportMessage) => {
-      // Cập nhật tin nhắn trong khung chat nếu đang xem cuộc trò chuyện này
-      if (selectedConv && msg.cuocTroChuyenId === selectedConv.cuocTroChuyenId) {
+    (newMsg: AdminSupportMessage) => {
+      // 1. Cập nhật tin nhắn trong khung chat hiện tại nếu trùng cuocTroChuyenId
+      if (selectedConv && newMsg.cuocTroChuyenId === selectedConv.cuocTroChuyenId) {
         setMessages((prev) => {
-          if (prev.some((m) => m.tinNhanId === msg.tinNhanId)) return prev;
-          if (msg.clientMessageId && prev.some((m) => m.clientMessageId === msg.clientMessageId)) {
-            return prev.map((m) => (m.clientMessageId === msg.clientMessageId ? msg : m));
+          if (prev.some((m) => m.tinNhanId === newMsg.tinNhanId && m.tinNhanId > 0)) return prev;
+          if (newMsg.clientMessageId && prev.some((m) => m.clientMessageId === newMsg.clientMessageId)) {
+            return prev.map((m) =>
+              m.clientMessageId === newMsg.clientMessageId
+                ? { ...newMsg, deliveryStatus: 'DA_GUI' }
+                : m,
+            );
           }
-          return [...prev, msg];
+          return [...prev, { ...newMsg, deliveryStatus: 'DA_GUI' }];
         });
       }
 
-      // Cập nhật tin nhắn cuối trong danh sách cuộc trò chuyện
+      // 2. Cập nhật preview tin nhắn cuối trong danh sách cuộc trò chuyện
       setConversations((prev) =>
         prev.map((c) =>
-          c.cuocTroChuyenId === msg.cuocTroChuyenId
-            ? { ...c, tinNhanCuoi: msg, updatedAt: msg.createdAt }
+          c.cuocTroChuyenId === newMsg.cuocTroChuyenId
+            ? {
+                ...c,
+                tinNhanCuoi: newMsg,
+                updatedAt: newMsg.createdAt,
+              }
             : c,
         ),
       );
@@ -165,15 +216,19 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
     [selectedConv],
   );
 
-  const handleConversationClaimed = useCallback((updatedConv: AdminSupportConversation) => {
+  // Callback khi có nhân viên tiếp nhận
+  const handleConversationClaimed = useCallback((claimedConv: AdminSupportConversation) => {
     setConversations((prev) =>
-      prev.map((c) => (c.cuocTroChuyenId === updatedConv.cuocTroChuyenId ? updatedConv : c)),
+      prev.map((c) =>
+        c.cuocTroChuyenId === claimedConv.cuocTroChuyenId ? { ...c, ...claimedConv } : c,
+      ),
     );
     setSelectedConv((prev) =>
-      prev?.cuocTroChuyenId === updatedConv.cuocTroChuyenId ? updatedConv : prev,
+      prev?.cuocTroChuyenId === claimedConv.cuocTroChuyenId ? { ...prev, ...claimedConv } : prev,
     );
   }, []);
 
+  // Callback khi cuộc trò chuyện kết thúc
   const handleConversationClosed = useCallback((closedConv: AdminSupportConversation) => {
     setConversations((prev) =>
       prev.map((c) =>
@@ -185,7 +240,7 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
     );
   }, []);
 
-  // Hook WebSocket
+  // Hook WebSocket kết nối namespace /chat
   const {
     isConnected: socketConnected,
     customerTyping,
@@ -196,7 +251,6 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
   } = useAdminChatSocket({
     token,
     activeConversationId: selectedConv?.cuocTroChuyenId ?? null,
-    onNewConversation: handleNewConversation,
     onNewMessage: handleNewMessage,
     onConversationClaimed: handleConversationClaimed,
     onConversationClosed: handleConversationClosed,
@@ -270,18 +324,20 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
     }
   };
 
-  // Gửi tin nhắn phản hồi
+  // Gửi tin nhắn phản hồi (F-03 timeout resilience & F-04 delivery states)
   const handleSendMessage = async () => {
     if (!selectedConv || !inputValue.trim() || !token || sending) return;
 
     const content = inputValue.trim();
     const clientMsgId = `staff-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+    const tempId = -Date.now();
     setInputValue('');
     setSending(true);
+    setErrorMessage(null);
 
-    // Optimistic message
+    // Optimistic message với deliveryStatus = DANG_GUI
     const tempMsg: AdminSupportMessage = {
-      tinNhanId: -Date.now(),
+      tinNhanId: tempId,
       cuocTroChuyenId: selectedConv.cuocTroChuyenId,
       taiKhoanGuiId: session.accountId,
       loaiNguoiGui: 'NHAN_VIEN',
@@ -289,6 +345,7 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
       noiDung: content,
       clientMessageId: clientMsgId,
       trangThai: 'DA_GUI',
+      deliveryStatus: 'DANG_GUI',
       createdAt: new Date().toISOString(),
       taiKhoanGui: {
         taiKhoanId: session.accountId,
@@ -300,6 +357,7 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
 
     try {
       let sentSuccess = false;
+      // 1. Gửi qua socket (có timeout 5000ms - F-03)
       if (socketConnected) {
         const socketRes = await sendSocketMessage(
           selectedConv.cuocTroChuyenId,
@@ -308,7 +366,67 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
         );
         if (socketRes.success && socketRes.data) {
           sentSuccess = true;
-          handleNewMessage(socketRes.data);
+          handleNewMessage({ ...socketRes.data, deliveryStatus: 'DA_GUI' });
+        }
+      }
+
+      // 2. Fallback REST nếu socket timeout/lỗi (BẮT BUỘC dùng lại cùng clientMsgId để backend deduplicate)
+      if (!sentSuccess) {
+        const restMsg = await adminSupportChatApi.sendMessage(
+          selectedConv.cuocTroChuyenId,
+          content,
+          token,
+          clientMsgId,
+        );
+        handleNewMessage({ ...restMsg, deliveryStatus: 'DA_GUI' });
+      }
+    } catch (err: unknown) {
+      // Đánh dấu tin nhắn là thất bại để nhân viên có thể bấm Thử lại (F-04)
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.clientMessageId === clientMsgId
+            ? { ...m, deliveryStatus: 'THAT_BAI' }
+            : m,
+        ),
+      );
+      setErrorMessage(
+        err instanceof Error ? err.message : 'Gửi tin nhắn thất bại. Vui lòng bấm Thử lại.',
+      );
+    } finally {
+      // Luôn luôn giải phóng sending để input không bao giờ bị khóa vô hạn (F-03)
+      setSending(false);
+    }
+  };
+
+  // Thử lại tin nhắn đã gửi thất bại (F-04)
+  const handleRetryMessage = async (failedMsg: AdminSupportMessage) => {
+    if (!selectedConv || !token || sending) return;
+
+    const clientMsgId = failedMsg.clientMessageId || `staff-retry-${failedMsg.tinNhanId}`;
+    const content = failedMsg.noiDung;
+
+    setSending(true);
+    setErrorMessage(null);
+
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.clientMessageId === clientMsgId
+          ? { ...m, deliveryStatus: 'DANG_GUI' }
+          : m,
+      ),
+    );
+
+    try {
+      let sentSuccess = false;
+      if (socketConnected) {
+        const socketRes = await sendSocketMessage(
+          selectedConv.cuocTroChuyenId,
+          content,
+          clientMsgId,
+        );
+        if (socketRes.success && socketRes.data) {
+          sentSuccess = true;
+          handleNewMessage({ ...socketRes.data, deliveryStatus: 'DA_GUI' });
         }
       }
 
@@ -319,11 +437,18 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
           token,
           clientMsgId,
         );
-        handleNewMessage(restMsg);
+        handleNewMessage({ ...restMsg, deliveryStatus: 'DA_GUI' });
       }
     } catch (err: unknown) {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.clientMessageId === clientMsgId
+            ? { ...m, deliveryStatus: 'THAT_BAI' }
+            : m,
+        ),
+      );
       setErrorMessage(
-        err instanceof Error ? err.message : 'Gửi tin nhắn thất bại.',
+        err instanceof Error ? err.message : 'Gửi lại tin nhắn thất bại.',
       );
     } finally {
       setSending(false);
@@ -342,23 +467,20 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
     }, 1500);
   };
 
-  // Lọc cuộc trò chuyện theo thanh tìm kiếm
-  const filteredConversations = conversations.filter((c) => {
-    if (!searchQuery.trim()) return true;
-    const query = searchQuery.toLowerCase();
-    const customerName = c.khachHang.taiKhoan.hoTen.toLowerCase();
-    const customerPhone = c.khachHang.taiKhoan.soDienThoai.toLowerCase();
-    const code = c.maCuocTroChuyen.toLowerCase();
-    return customerName.includes(query) || customerPhone.includes(query) || code.includes(query);
-  });
-
   const isClosed = selectedConv?.trangThai === 'DA_DONG';
   const isPending = selectedConv?.trangThai === 'CHO_TIEP_NHAN';
 
   return (
     <div className="flex h-[calc(100vh-120px)] bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-      {/* CỘT TRÁI: DANH SÁCH CUỘC TRÒ CHUYỆN */}
-      <div className="w-80 md:w-96 border-r border-slate-200 flex flex-col bg-slate-50 shrink-0">
+      {/* ============================================================== */}
+      {/* CỘT TRÁI: DANH SÁCH CUỘC TRÒ CHUYỆN (MASTER PANE - F-05 RESPONSIVE) */}
+      {/* Trên mobile: ẩn khi đang chọn cuộc trò chuyện (selectedConv !== null) */}
+      {/* ============================================================== */}
+      <div
+        className={`${
+          selectedConv ? 'hidden md:flex' : 'flex'
+        } w-full md:w-96 border-r border-slate-200 flex-col bg-slate-50 shrink-0`}
+      >
         {/* Header danh sách & Tab lọc */}
         <div className="p-3 border-b border-slate-200 bg-white space-y-2.5">
           <div className="flex items-center justify-between">
@@ -370,7 +492,7 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                 type="button"
                 onClick={() => {
                   setLoadingConversations(true);
-                  void fetchConversations();
+                  setRefreshTrigger((k) => k + 1);
                 }}
                 title="Làm mới danh sách"
                 className="p-1 text-slate-400 hover:text-slate-600 rounded transition-colors"
@@ -399,8 +521,8 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
             />
           </div>
 
-          {/* Tabs trạng thái */}
-          <div className="flex gap-1 text-[11px] font-medium bg-slate-100 p-0.5 rounded-lg">
+          {/* Filter Tabs */}
+          <div className="grid grid-cols-4 gap-1 p-0.5 bg-slate-100 rounded-lg text-[11px] font-medium">
             {(
               [
                 { key: 'ALL', label: 'Tất cả' },
@@ -408,17 +530,17 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                 { key: 'DANG_XU_LY', label: 'Đang chat' },
                 { key: 'DA_DONG', label: 'Đã đóng' },
               ] as const
-            ).map((t) => (
+            ).map((tab) => (
               <button
-                key={t.key}
-                onClick={() => handleTabChange(t.key)}
-                className={`flex-1 py-1 rounded-md transition-all text-center ${
-                  activeTab === t.key
-                    ? 'bg-white text-slate-800 font-semibold shadow-sm'
-                    : 'text-slate-600 hover:text-slate-900'
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={`py-1 rounded-md text-center transition-all ${
+                  activeTab === tab.key
+                    ? 'bg-white text-brand shadow-sm font-semibold'
+                    : 'text-slate-500 hover:text-slate-800'
                 }`}
               >
-                {t.label}
+                {tab.label}
               </button>
             ))}
           </div>
@@ -427,82 +549,114 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
         {/* Danh sách các cuộc trò chuyện */}
         <div className="flex-1 overflow-y-auto divide-y divide-slate-100">
           {loadingConversations ? (
-            <div className="flex items-center justify-center py-12 text-slate-400 gap-2 text-xs">
-              <Loader2 className="w-4 h-4 animate-spin" /> Đang tải...
+            <div className="flex flex-col items-center justify-center py-12 text-slate-400 gap-2 text-xs">
+              <Loader2 className="w-4 h-4 animate-spin text-brand" />
+              <span>Đang tải danh sách...</span>
             </div>
-          ) : filteredConversations.length === 0 ? (
-            <div className="text-center py-12 text-slate-400 text-xs px-4">
-              Không có cuộc trò chuyện nào trong mục này.
+          ) : conversations.length === 0 ? (
+            <div className="p-8 text-center text-slate-400 text-xs">
+              Không có cuộc trò chuyện nào phù hợp.
             </div>
           ) : (
-            filteredConversations.map((c) => {
-              const isSelected = selectedConv?.cuocTroChuyenId === c.cuocTroChuyenId;
-              const isWaiting = c.trangThai === 'CHO_TIEP_NHAN';
+            <>
+              {conversations.map((c) => {
+                const isSelected = selectedConv?.cuocTroChuyenId === c.cuocTroChuyenId;
+                const isWaiting = c.trangThai === 'CHO_TIEP_NHAN';
 
-              return (
-                <button
-                  key={c.cuocTroChuyenId}
-                  onClick={() => handleSelectConversation(c)}
-                  className={`w-full text-left p-3 transition-colors flex items-start gap-3 ${
-                    isSelected ? 'bg-brand/5 border-l-4 border-l-brand' : 'hover:bg-slate-100/70'
-                  }`}
-                >
-                  <div className="relative shrink-0">
-                    <div className="w-10 h-10 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-xs">
-                      {c.khachHang.taiKhoan.hoTen.charAt(0).toUpperCase()}
+                return (
+                  <button
+                    key={c.cuocTroChuyenId}
+                    onClick={() => setSelectedConv(c)}
+                    className={`w-full text-left p-3 flex items-start gap-3 transition-colors ${
+                      isSelected
+                        ? 'bg-brand/5 border-l-4 border-l-brand'
+                        : 'hover:bg-slate-100/60'
+                    }`}
+                  >
+                    <div className="relative shrink-0">
+                      <div className="w-10 h-10 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-xs">
+                        {c.khachHang.taiKhoan.hoTen.charAt(0).toUpperCase()}
+                      </div>
+                      {isWaiting && (
+                        <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-amber-500 rounded-full border-2 border-white animate-pulse" />
+                      )}
                     </div>
-                    {isWaiting && (
-                      <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-amber-500 rounded-full border-2 border-white animate-pulse" />
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-1 mb-0.5">
+                        <span className="font-semibold text-xs text-slate-800 truncate">
+                          {c.khachHang.taiKhoan.hoTen}
+                        </span>
+                        <span className="text-[10px] text-slate-400 shrink-0">
+                          {new Date(c.updatedAt).toLocaleTimeString('vi-VN', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </span>
+                      </div>
+
+                      <div className="text-[11px] text-slate-500 truncate mb-1">
+                        {c.tinNhanCuoi ? c.tinNhanCuoi.noiDung : 'Cuộc trò chuyện mới'}
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        {c.trangThai === 'CHO_TIEP_NHAN' && (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                            <Clock className="w-2.5 h-2.5" /> Chờ tiếp nhận
+                          </span>
+                        )}
+                        {c.trangThai === 'DANG_XU_LY' && (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            <CheckCircle2 className="w-2.5 h-2.5" /> Đang xử lý
+                          </span>
+                        )}
+                        {c.trangThai === 'DA_DONG' && (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600">
+                            <Archive className="w-2.5 h-2.5" /> Đã đóng
+                          </span>
+                        )}
+                        <span className="text-[10px] text-slate-400 truncate">
+                          {c.khachHang.taiKhoan.soDienThoai}
+                        </span>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+
+              {/* Nút tải thêm cuộc trò chuyện (F-06 Pagination) */}
+              {conversations.length < totalItems && (
+                <div className="p-3 bg-white text-center border-t border-slate-200">
+                  <button
+                    type="button"
+                    onClick={handleLoadMore}
+                    disabled={loadingMore}
+                    className="w-full py-2 px-3 text-xs font-semibold text-brand hover:bg-brand/5 rounded-lg border border-brand/20 transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50"
+                  >
+                    {loadingMore ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" /> Đang tải thêm...
+                      </>
+                    ) : (
+                      <>Tải thêm cuộc trò chuyện ({conversations.length}/{totalItems})</>
                     )}
-                  </div>
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-1 mb-0.5">
-                      <span className="font-semibold text-xs text-slate-800 truncate">
-                        {c.khachHang.taiKhoan.hoTen}
-                      </span>
-                      <span className="text-[10px] text-slate-400 shrink-0">
-                        {new Date(c.updatedAt).toLocaleTimeString('vi-VN', {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
-                      </span>
-                    </div>
-
-                    <div className="text-[11px] text-slate-500 truncate mb-1">
-                      {c.tinNhanCuoi ? c.tinNhanCuoi.noiDung : 'Cuộc trò chuyện mới'}
-                    </div>
-
-                    <div className="flex items-center gap-1.5">
-                      {c.trangThai === 'CHO_TIEP_NHAN' && (
-                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200">
-                          <Clock className="w-2.5 h-2.5" /> Chờ tiếp nhận
-                        </span>
-                      )}
-                      {c.trangThai === 'DANG_XU_LY' && (
-                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
-                          <CheckCircle2 className="w-2.5 h-2.5" /> Đang xử lý
-                        </span>
-                      )}
-                      {c.trangThai === 'DA_DONG' && (
-                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600">
-                          <Archive className="w-2.5 h-2.5" /> Đã đóng
-                        </span>
-                      )}
-                      <span className="text-[10px] text-slate-400 truncate">
-                        {c.khachHang.taiKhoan.soDienThoai}
-                      </span>
-                    </div>
-                  </div>
-                </button>
-              );
-            })
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
 
-      {/* KHUNG CHAT CHÍNH */}
-      <div className="flex-1 flex flex-col bg-white overflow-hidden">
+      {/* ============================================================== */}
+      {/* CỘT PHẢI: KHUNG CHAT CHI TIẾT (DETAIL PANE - F-05 RESPONSIVE)   */}
+      {/* Trên mobile: chỉ hiển thị khi đã chọn cuộc trò chuyện (selectedConv !== null) */}
+      {/* ============================================================== */}
+      <div
+        className={`${
+          selectedConv ? 'flex' : 'hidden md:flex'
+        } flex-1 flex-col bg-white overflow-hidden`}
+      >
         {!selectedConv ? (
           <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-slate-50">
             <div className="w-16 h-16 bg-white rounded-2xl shadow-sm border border-slate-200 flex items-center justify-center text-slate-400 mb-3">
@@ -517,24 +671,34 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
           <>
             {/* Topbar cuộc trò chuyện */}
             <div className="p-3 border-b border-slate-200 flex items-center justify-between bg-white shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-slate-700 font-bold text-xs">
+              <div className="flex items-center gap-2 md:gap-3 min-w-0">
+                {/* Nút quay lại danh sách trên mobile (F-05) */}
+                <button
+                  type="button"
+                  onClick={() => setSelectedConv(null)}
+                  className="md:hidden p-1.5 text-slate-600 hover:text-brand hover:bg-slate-100 rounded-lg shrink-0"
+                  title="Quay lại danh sách"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                </button>
+
+                <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-slate-700 font-bold text-xs shrink-0">
                   {selectedConv.khachHang.taiKhoan.hoTen.charAt(0).toUpperCase()}
                 </div>
-                <div>
+                <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <h3 className="font-bold text-xs text-slate-800">
+                    <h3 className="font-bold text-xs text-slate-800 truncate">
                       {selectedConv.khachHang.taiKhoan.hoTen}
                     </h3>
-                    <span className="text-[11px] text-slate-500 flex items-center gap-1 font-mono">
-                      <Phone className="w-3 h-3 text-slate-400" />
+                    <span className="text-[11px] text-slate-500 flex items-center gap-1 font-mono truncate">
+                      <Phone className="w-3 h-3 text-slate-400 shrink-0" />
                       {selectedConv.khachHang.taiKhoan.soDienThoai}
                     </span>
                   </div>
-                  <div className="text-[10px] text-slate-400 flex items-center gap-2 mt-0.5">
+                  <div className="text-[10px] text-slate-400 flex items-center gap-2 mt-0.5 truncate">
                     <span>Mã: {selectedConv.maCuocTroChuyen}</span>
                     <span>•</span>
-                    <span>
+                    <span className="truncate">
                       Người xử lý:{' '}
                       <strong className="text-slate-600">
                         {selectedConv.nhanVien?.taiKhoan.hoTen || 'Chưa tiếp nhận'}
@@ -545,7 +709,7 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
               </div>
 
               {/* Action buttons */}
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 shrink-0">
                 {isPending && canManageChat && (
                   <button
                     onClick={handleClaim}
@@ -557,7 +721,8 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                     ) : (
                       <Sparkles className="w-3.5 h-3.5" />
                     )}
-                    Tiếp nhận hỗ trợ
+                    <span className="hidden sm:inline">Tiếp nhận hỗ trợ</span>
+                    <span className="sm:hidden">Nhận</span>
                   </button>
                 )}
 
@@ -567,7 +732,8 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                     disabled={actionLoading}
                     className="px-3 py-1.5 border border-slate-200 text-slate-600 rounded-lg text-xs font-medium hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 transition-colors flex items-center gap-1 disabled:opacity-50"
                   >
-                    <XCircle className="w-3.5 h-3.5" /> Kết thúc
+                    <XCircle className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Kết thúc</span>
                   </button>
                 )}
               </div>
@@ -591,6 +757,8 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                   {messages.map((msg) => {
                     const isStaff = msg.loaiNguoiGui === 'NHAN_VIEN';
                     const isSystem = msg.loaiNguoiGui === 'HE_THONG';
+                    const isPendingMsg = msg.deliveryStatus === 'DANG_GUI';
+                    const isFailedMsg = msg.deliveryStatus === 'THAT_BAI';
 
                     if (isSystem) {
                       return (
@@ -620,22 +788,47 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                             isStaff ? 'items-end' : 'items-start'
                           }`}
                         >
-                          <span className="text-[10px] text-slate-400">
-                            {isStaff ? msg.taiKhoanGui?.hoTen || 'Nhân viên' : 'Khách hàng'} •{' '}
-                            {new Date(msg.createdAt).toLocaleTimeString('vi-VN', {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
-                          </span>
+                          <div className="flex items-center gap-1">
+                            <span className="text-[10px] text-slate-400">
+                              {isStaff ? msg.taiKhoanGui?.hoTen || 'Nhân viên' : 'Khách hàng'} •{' '}
+                              {new Date(msg.createdAt).toLocaleTimeString('vi-VN', {
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}
+                            </span>
+                            {isPendingMsg && (
+                              <span className="text-[9px] text-slate-400 flex items-center gap-0.5">
+                                <Clock className="w-2.5 h-2.5 animate-spin" /> Đang gửi
+                              </span>
+                            )}
+                          </div>
                           <div
-                            className={`p-3 rounded-2xl text-xs leading-relaxed shadow-sm break-words ${
+                            className={`p-3 rounded-2xl text-xs leading-relaxed shadow-sm break-words transition-opacity ${
                               isStaff
-                                ? 'bg-brand text-white rounded-tr-none'
+                                ? isFailedMsg
+                                  ? 'bg-rose-50 border border-rose-300 text-rose-800 rounded-tr-none'
+                                  : isPendingMsg
+                                    ? 'bg-brand/75 text-white rounded-tr-none'
+                                    : 'bg-brand text-white rounded-tr-none'
                                 : 'bg-white border border-slate-200 text-slate-800 rounded-tl-none'
                             }`}
                           >
                             {msg.noiDung}
                           </div>
+                          {isFailedMsg && (
+                            <div className="flex items-center gap-1 mt-0.5 text-[10px] text-rose-600">
+                              <AlertCircle className="w-3 h-3" />
+                              <span>Gửi thất bại</span>
+                              <button
+                                type="button"
+                                onClick={() => handleRetryMessage(msg)}
+                                disabled={sending}
+                                className="font-semibold underline hover:text-rose-700 flex items-center gap-0.5 ml-1"
+                              >
+                                <RotateCw className="w-2.5 h-2.5" /> Thử lại
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </div>
                     );

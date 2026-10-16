@@ -530,6 +530,24 @@ export class SupportChatService {
       where.trangThai = query.trangThai;
     }
 
+    if (query.search && query.search.trim()) {
+      const s = query.search.trim();
+      where.OR = [
+        { maCuocTroChuyen: { contains: s } },
+        { tieuDe: { contains: s } },
+        {
+          khachHang: {
+            taiKhoan: {
+              OR: [
+                { hoTen: { contains: s } },
+                { soDienThoai: { contains: s } },
+              ],
+            },
+          },
+        },
+      ];
+    }
+
     const page = Math.max(1, query.page ?? 1);
     const pageSize = Math.min(100, Math.max(1, query.pageSize ?? 20));
     const skip = (page - 1) * pageSize;

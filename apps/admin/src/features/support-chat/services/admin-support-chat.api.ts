@@ -37,13 +37,15 @@ export const adminSupportChatApi = {
       trangThai?: string;
       page?: number;
       pageSize?: number;
+      search?: string;
     },
     token: string,
-  ): Promise<{ data: AdminSupportConversation[]; meta?: Record<string, unknown> }> {
+  ): Promise<{ data: AdminSupportConversation[]; meta?: { page: number; pageSize: number; totalItems: number; totalPages: number } }> {
     const query = new URLSearchParams();
     if (params.trangThai) query.set('trangThai', params.trangThai);
     if (params.page) query.set('page', String(params.page));
     if (params.pageSize) query.set('pageSize', String(params.pageSize));
+    if (params.search && params.search.trim()) query.set('search', params.search.trim());
 
     const res = await fetch(`${API_BASE_URL}/support-chat/conversations?${query.toString()}`, {
       headers: {

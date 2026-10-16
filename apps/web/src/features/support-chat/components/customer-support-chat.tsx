@@ -12,6 +12,11 @@ import {
   AlertCircle,
   ArrowLeft,
   XCircle,
+  RotateCw,
+  History,
+  PlusCircle,
+  Clock,
+  Calendar,
 } from 'lucide-react';
 import { useAuthSession } from '@/features/auth/auth-session';
 import { supportChatApi } from '../services/support-chat.api';
@@ -27,6 +32,8 @@ export function CustomerSupportChat() {
   const [loadingCompanies, setLoadingCompanies] = useState(false);
 
   const [activeConversation, setActiveConversation] = useState<SupportConversation | null>(null);
+  const [pastConversations, setPastConversations] = useState<SupportConversation[]>([]);
+  const [showHistoryList, setShowHistoryList] = useState(false);
   const [messages, setMessages] = useState<SupportMessage[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [initialMessage, setInitialMessage] = useState('');
@@ -38,9 +45,12 @@ export function CustomerSupportChat() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const typingTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const companyRequestIdRef = useRef(0);
 
   const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (typeof messagesEndRef.current?.scrollIntoView === 'function') {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
   }, []);
 
   useEffect(() => {
@@ -52,6 +62,9 @@ export function CustomerSupportChat() {
     if (!isAuthenticated || activeConversation) return;
 
     let active = true;
+    queueMicrotask(() => {
+      if (active) setLoadingCompanies(true);
+    });
     supportChatApi
       .getActiveBusCompanies(searchCompany)
       .then((data) => {
@@ -74,12 +87,15 @@ export function CustomerSupportChat() {
   // Callback nhận tin nhắn mới từ WebSocket
   const handleNewMessage = useCallback((newMsg: SupportMessage) => {
     setMessages((prev) => {
-      // Tránh trùng tin nhắn
-      if (prev.some((m) => m.tinNhanId === newMsg.tinNhanId)) return prev;
+      if (prev.some((m) => m.tinNhanId === newMsg.tinNhanId && m.tinNhanId > 0)) return prev;
       if (newMsg.clientMessageId && prev.some((m) => m.clientMessageId === newMsg.clientMessageId)) {
-        return prev.map((m) => (m.clientMessageId === newMsg.clientMessageId ? newMsg : m));
+        return prev.map((m) =>
+          m.clientMessageId === newMsg.clientMessageId
+            ? { ...newMsg, deliveryStatus: 'DA_GUI' }
+            : m,
+        );
       }
-      return [...prev, newMsg];
+      return [...prev, { ...newMsg, deliveryStatus: 'DA_GUI' }];
     });
   }, []);
 
@@ -108,29 +124,79 @@ export function CustomerSupportChat() {
     onConversationClosed: handleConversationClosed,
   });
 
-  // Chọn nhà xe và kiểm tra active conversation
+  // Chọn nhà xe: chống race condition out-of-order & hỗ trợ xem lịch sử chat đã đóng (F-01)
   const handleSelectCompany = async (company: BusCompany) => {
     if (!accessToken) return;
     if (!Number.isInteger(company.busCompanyId) || company.busCompanyId <= 0) {
       setErrorMsg('Thông tin nhà xe không hợp lệ.');
       return;
     }
+
+    const currentReqId = ++companyRequestIdRef.current;
     setSelectedCompany(company);
+    setShowHistoryList(false);
     setErrorMsg(null);
     setLoadingMessages(true);
+    setActiveConversation(null);
+    setMessages([]);
+    setPastConversations([]);
 
     try {
-      const active = await supportChatApi.getActiveConversation(company.busCompanyId, accessToken);
+      const [active, convsRes] = await Promise.all([
+        supportChatApi.getActiveConversation(company.busCompanyId, accessToken),
+        supportChatApi.listConversations({ nhaXeId: company.busCompanyId }, accessToken),
+      ]);
+
+      // Guard: Nếu có request sau đã được gọi, bỏ qua response cũ để ngăn race condition (F-01)
+      if (currentReqId !== companyRequestIdRef.current) {
+        return;
+      }
+
+      const allConvs = convsRes?.data || [];
+      const closedList = allConvs.filter((c) => c.trangThai === 'DA_DONG');
+      setPastConversations(closedList);
+
       if (active) {
         setActiveConversation(active);
         const history = await supportChatApi.getMessages(active.cuocTroChuyenId, accessToken);
-        setMessages(history);
+        if (currentReqId === companyRequestIdRef.current) {
+          setMessages(history.map((m) => ({ ...m, deliveryStatus: 'DA_GUI' })));
+        }
+      } else if (closedList.length > 0) {
+        // Nếu không có phiên đang mở nhưng có phiên cũ đã đóng, hiển thị phiên gần nhất cho khách đọc
+        const latestClosed = closedList[0];
+        setActiveConversation(latestClosed);
+        const history = await supportChatApi.getMessages(latestClosed.cuocTroChuyenId, accessToken);
+        if (currentReqId === companyRequestIdRef.current) {
+          setMessages(history.map((m) => ({ ...m, deliveryStatus: 'DA_GUI' })));
+        }
       } else {
+        // Chưa có cuộc trò chuyện nào, giữ activeConversation null để hiện form bắt đầu mới
         setActiveConversation(null);
         setMessages([]);
       }
     } catch (err: unknown) {
-      setErrorMsg(err instanceof Error ? err.message : 'Không thể kiểm tra cuộc trò chuyện.');
+      if (currentReqId === companyRequestIdRef.current) {
+        setErrorMsg(err instanceof Error ? err.message : 'Không thể kiểm tra cuộc trò chuyện.');
+      }
+    } finally {
+      if (currentReqId === companyRequestIdRef.current) {
+        setLoadingMessages(false);
+      }
+    }
+  };
+
+  // Xem một cuộc trò chuyện cụ thể trong lịch sử
+  const handleSelectHistoryConversation = async (conv: SupportConversation) => {
+    if (!accessToken) return;
+    setActiveConversation(conv);
+    setShowHistoryList(false);
+    setLoadingMessages(true);
+    try {
+      const history = await supportChatApi.getMessages(conv.cuocTroChuyenId, accessToken);
+      setMessages(history.map((m) => ({ ...m, deliveryStatus: 'DA_GUI' })));
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : 'Không thể tải tin nhắn cuộc trò chuyện này.');
     } finally {
       setLoadingMessages(false);
     }
@@ -161,7 +227,7 @@ export function CustomerSupportChat() {
 
       setActiveConversation(conv);
       const history = await supportChatApi.getMessages(conv.cuocTroChuyenId, accessToken);
-      setMessages(history);
+      setMessages(history.map((m) => ({ ...m, deliveryStatus: 'DA_GUI' })));
       setInitialMessage('');
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : 'Không thể tạo cuộc trò chuyện.');
@@ -170,18 +236,20 @@ export function CustomerSupportChat() {
     }
   };
 
-  // Gửi tin nhắn trong cuộc trò chuyện
+  // Gửi tin nhắn trong cuộc trò chuyện (F-03 timeout resilience & F-04 delivery states)
   const handleSendMessage = async () => {
     if (!activeConversation || !inputValue.trim() || !accessToken || sending) return;
 
     const content = inputValue.trim();
     const clientMsgId = `client-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+    const tempId = -Date.now();
     setInputValue('');
     setSending(true);
+    setErrorMsg(null);
 
-    // Optimistic message
+    // Optimistic message với trạng thái DANG_GUI
     const tempMessage: SupportMessage = {
-      tinNhanId: -Date.now(),
+      tinNhanId: tempId,
       cuocTroChuyenId: activeConversation.cuocTroChuyenId,
       taiKhoanGuiId: user?.accountId ?? 0,
       loaiNguoiGui: 'KHACH_HANG',
@@ -189,6 +257,7 @@ export function CustomerSupportChat() {
       noiDung: content,
       clientMessageId: clientMsgId,
       trangThai: 'DA_GUI',
+      deliveryStatus: 'DANG_GUI',
       createdAt: new Date().toISOString(),
       taiKhoanGui: {
         taiKhoanId: user?.accountId ?? 0,
@@ -199,17 +268,17 @@ export function CustomerSupportChat() {
     setMessages((prev) => [...prev, tempMessage]);
 
     try {
-      // Ưu tiên gửi qua WebSocket
       let sentSuccess = false;
+      // 1. Ưu tiên gửi qua WebSocket (có timeout 5000ms - F-03)
       if (socketConnected) {
         const socketRes = await sendSocketMessage(activeConversation.cuocTroChuyenId, content, clientMsgId);
         if (socketRes.success && socketRes.data) {
           sentSuccess = true;
-          handleNewMessage(socketRes.data);
+          handleNewMessage({ ...socketRes.data, deliveryStatus: 'DA_GUI' });
         }
       }
 
-      // Fallback REST nếu socket không gửi được
+      // 2. Fallback REST nếu socket không gửi được / timeout (BẮT BUỘC dùng lại cùng clientMsgId để backend deduplicate)
       if (!sentSuccess) {
         const restMsg = await supportChatApi.sendMessage(
           activeConversation.cuocTroChuyenId,
@@ -217,10 +286,71 @@ export function CustomerSupportChat() {
           accessToken,
           clientMsgId,
         );
-        handleNewMessage(restMsg);
+        handleNewMessage({ ...restMsg, deliveryStatus: 'DA_GUI' });
       }
     } catch (err: unknown) {
-      setErrorMsg(err instanceof Error ? err.message : 'Gửi tin nhắn thất bại.');
+      // Đánh dấu tin nhắn thất bại để người dùng có thể bấm Thử lại (F-04)
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.clientMessageId === clientMsgId
+            ? { ...m, deliveryStatus: 'THAT_BAI' }
+            : m,
+        ),
+      );
+      setErrorMsg(err instanceof Error ? err.message : 'Gửi tin nhắn thất bại. Vui lòng bấm Thử lại.');
+    } finally {
+      // Luôn luôn giải phóng sending để input không bị khóa vô hạn (F-03)
+      setSending(false);
+    }
+  };
+
+  // Thử lại tin nhắn đã gửi thất bại (F-04)
+  const handleRetryMessage = async (failedMsg: SupportMessage) => {
+    if (!activeConversation || !accessToken || sending) return;
+
+    const clientMsgId = failedMsg.clientMessageId || `client-retry-${failedMsg.tinNhanId}`;
+    const content = failedMsg.noiDung;
+
+    setSending(true);
+    setErrorMsg(null);
+
+    // Chuyển lại trạng thái thành DANG_GUI
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.clientMessageId === clientMsgId
+          ? { ...m, deliveryStatus: 'DANG_GUI' }
+          : m,
+      ),
+    );
+
+    try {
+      let sentSuccess = false;
+      if (socketConnected) {
+        const socketRes = await sendSocketMessage(activeConversation.cuocTroChuyenId, content, clientMsgId);
+        if (socketRes.success && socketRes.data) {
+          sentSuccess = true;
+          handleNewMessage({ ...socketRes.data, deliveryStatus: 'DA_GUI' });
+        }
+      }
+
+      if (!sentSuccess) {
+        const restMsg = await supportChatApi.sendMessage(
+          activeConversation.cuocTroChuyenId,
+          content,
+          accessToken,
+          clientMsgId,
+        );
+        handleNewMessage({ ...restMsg, deliveryStatus: 'DA_GUI' });
+      }
+    } catch (err: unknown) {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.clientMessageId === clientMsgId
+            ? { ...m, deliveryStatus: 'THAT_BAI' }
+            : m,
+        ),
+      );
+      setErrorMsg(err instanceof Error ? err.message : 'Gửi lại tin nhắn thất bại.');
     } finally {
       setSending(false);
     }
@@ -279,19 +409,94 @@ export function CustomerSupportChat() {
     );
   }
 
-  // MÀN HÌNH CHỌN NHÀ XE & MỞ CUỘC TRÒ CHUYỆN
+  // MÀN HÌNH DANH SÁCH LỊCH SỬ CÁC PHIÊN CHAT CŨ (F-01)
+  if (showHistoryList && selectedCompany) {
+    return (
+      <div className="flex flex-col h-full bg-slate-50">
+        <div className="p-3 bg-white border-b border-slate-100 flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => setShowHistoryList(false)}
+              className="text-xs text-slate-500 hover:text-brand flex items-center gap-1"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" /> Quay lại
+            </button>
+            <span className="text-xs font-semibold text-slate-700 ml-1">
+              Lịch sử hỗ trợ - {selectedCompany.name}
+            </span>
+          </div>
+          <button
+            onClick={() => {
+              setActiveConversation(null);
+              setShowHistoryList(false);
+            }}
+            className="text-xs text-brand font-medium hover:underline flex items-center gap-1"
+          >
+            <PlusCircle className="w-3.5 h-3.5" /> Tạo chat mới
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-3 space-y-2">
+          {pastConversations.length === 0 ? (
+            <div className="text-center py-12 text-slate-400 text-xs">
+              Chưa có lịch sử cuộc trò chuyện nào đã đóng.
+            </div>
+          ) : (
+            pastConversations.map((c) => (
+              <button
+                key={c.cuocTroChuyenId}
+                onClick={() => handleSelectHistoryConversation(c)}
+                className="w-full text-left p-3 bg-white border border-slate-200 rounded-xl hover:border-brand/50 hover:shadow-sm transition-all"
+              >
+                <div className="flex items-center justify-between text-xs font-semibold text-slate-800">
+                  <span className="truncate">{c.tieuDe || c.maCuocTroChuyen}</span>
+                  <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 shrink-0">
+                    Đã đóng
+                  </span>
+                </div>
+                <div className="text-[11px] text-slate-500 flex items-center gap-2 mt-1">
+                  <span className="flex items-center gap-1">
+                    <Calendar className="w-3 h-3 text-slate-400" />
+                    {new Date(c.createdAt).toLocaleDateString('vi-VN')}
+                  </span>
+                  {c.nhanVien && (
+                    <span className="truncate">CSKH: {c.nhanVien.taiKhoan.hoTen}</span>
+                  )}
+                </div>
+              </button>
+            ))
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // MÀN HÌNH CHỌN NHÀ XE & BẮT ĐẦU CUỘC TRÒ CHUYỆN MỚI
   if (!activeConversation) {
     return (
       <div className="flex flex-col h-full bg-slate-50">
         <div className="p-3 bg-white border-b border-slate-100 flex items-center justify-between">
           <span className="text-xs font-semibold text-slate-700">Chọn nhà xe cần hỗ trợ</span>
           {selectedCompany && (
-            <button
-              onClick={() => setSelectedCompany(null)}
-              className="text-xs text-brand hover:underline flex items-center gap-1"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" /> Đổi nhà xe
-            </button>
+            <div className="flex items-center gap-2">
+              {pastConversations.length > 0 && (
+                <button
+                  onClick={() => setShowHistoryList(true)}
+                  className="text-xs text-slate-600 hover:text-brand flex items-center gap-1"
+                >
+                  <History className="w-3.5 h-3.5" /> Lịch sử ({pastConversations.length})
+                </button>
+              )}
+              <button
+                onClick={() => {
+                  setSelectedCompany(null);
+                  setPastConversations([]);
+                }}
+                className="text-xs text-brand hover:underline flex items-center gap-1"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" /> Đổi nhà xe
+              </button>
+            </div>
           )}
         </div>
 
@@ -397,7 +602,7 @@ export function CustomerSupportChat() {
     );
   }
 
-  // MÀN HÌNH TRÒ CHUYỆN REAL-TIME VỚI NHÂN VIÊN NHÀ XE
+  // MÀN HÌNH TRÒ CHUYỆN REAL-TIME VỚI NHÂN VIÊN NHÀ XE (HOẶC XEM LỊCH SỬ ĐÃ ĐÓNG)
   const isClosed = activeConversation.trangThai === 'DA_DONG';
   const staffName = activeConversation.nhanVien?.taiKhoan.hoTen || 'Nhân viên CSKH';
 
@@ -421,7 +626,9 @@ export function CustomerSupportChat() {
               {activeConversation.nhaXe.tenNhaXe}
             </div>
             <div className="text-[10px] text-slate-500 flex items-center gap-1 truncate">
-              {activeConversation.nhanVien ? (
+              {isClosed ? (
+                <span className="text-slate-500 font-medium">Cuộc trò chuyện đã kết thúc</span>
+              ) : activeConversation.nhanVien ? (
                 <span className="text-emerald-600 font-medium">{staffName}</span>
               ) : (
                 <span className="text-amber-600 font-medium">Đang chờ nhân viên tiếp nhận</span>
@@ -431,18 +638,30 @@ export function CustomerSupportChat() {
         </div>
 
         <div className="flex items-center gap-1 shrink-0">
+          {pastConversations.length > 0 && (
+            <button
+              onClick={() => setShowHistoryList(true)}
+              title="Lịch sử hỗ trợ"
+              className="text-[11px] text-slate-500 hover:text-brand p-1.5 rounded-lg hover:bg-slate-100 transition-colors flex items-center gap-0.5"
+            >
+              <History className="w-3.5 h-3.5" />
+            </button>
+          )}
           {!isClosed && (
             <button
               onClick={handleCloseChat}
               title="Kết thúc hỗ trợ"
-              className="text-[11px] text-slate-400 hover:text-rose-600 p-1 rounded-lg hover:bg-slate-100 transition-colors"
+              className="text-[11px] text-slate-400 hover:text-rose-600 p-1.5 rounded-lg hover:bg-slate-100 transition-colors"
             >
               <XCircle className="w-4 h-4" />
             </button>
           )}
           <button
-            onClick={() => setActiveConversation(null)}
-            title="Đổi cuộc trò chuyện"
+            onClick={() => {
+              setActiveConversation(null);
+              setSelectedCompany(null);
+            }}
+            title="Đổi nhà xe"
             className="text-[11px] text-slate-500 hover:text-brand px-2 py-1 rounded-lg hover:bg-slate-100 transition-colors"
           >
             Đổi nhà xe
@@ -451,8 +670,9 @@ export function CustomerSupportChat() {
       </div>
 
       {errorMsg && (
-        <div className="p-2 bg-rose-50 text-rose-700 text-xs text-center border-b border-rose-100">
-          {errorMsg}
+        <div className="p-2 bg-rose-50 text-rose-700 text-xs text-center border-b border-rose-100 flex items-center justify-center gap-1.5">
+          <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+          <span>{errorMsg}</span>
         </div>
       )}
 
@@ -467,6 +687,8 @@ export function CustomerSupportChat() {
             {messages.map((msg) => {
               const isMe = msg.loaiNguoiGui === 'KHACH_HANG';
               const isSystem = msg.loaiNguoiGui === 'HE_THONG';
+              const isPending = msg.deliveryStatus === 'DANG_GUI';
+              const isFailed = msg.deliveryStatus === 'THAT_BAI';
 
               if (isSystem) {
                 return (
@@ -488,18 +710,43 @@ export function CustomerSupportChat() {
                     {isMe ? <User className="w-3.5 h-3.5" /> : <Headphones className="w-3.5 h-3.5" />}
                   </div>
                   <div className={`flex flex-col gap-0.5 max-w-[75%] ${isMe ? 'items-end' : 'items-start'}`}>
-                    <span className="text-[10px] text-slate-400">
-                      {isMe ? 'Bạn' : msg.taiKhoanGui?.hoTen || staffName}
-                    </span>
+                    <div className="flex items-center gap-1">
+                      <span className="text-[10px] text-slate-400">
+                        {isMe ? 'Bạn' : msg.taiKhoanGui?.hoTen || staffName}
+                      </span>
+                      {isPending && (
+                        <span className="text-[9px] text-slate-400 flex items-center gap-0.5">
+                          <Clock className="w-2.5 h-2.5 animate-spin" /> Đang gửi
+                        </span>
+                      )}
+                    </div>
                     <div
-                      className={`p-2.5 rounded-2xl text-xs leading-relaxed shadow-sm break-words ${
+                      className={`p-2.5 rounded-2xl text-xs leading-relaxed shadow-sm break-words transition-opacity ${
                         isMe
-                          ? 'bg-brand text-white rounded-tr-none'
+                          ? isFailed
+                            ? 'bg-rose-50 border border-rose-300 text-rose-800 rounded-tr-none'
+                            : isPending
+                              ? 'bg-brand/75 text-white rounded-tr-none'
+                              : 'bg-brand text-white rounded-tr-none'
                           : 'bg-white border border-slate-100 text-slate-800 rounded-tl-none'
                       }`}
                     >
                       {msg.noiDung}
                     </div>
+                    {isFailed && (
+                      <div className="flex items-center gap-1.5 mt-0.5 text-[10px] text-rose-600">
+                        <AlertCircle className="w-3 h-3" />
+                        <span>Gửi thất bại</span>
+                        <button
+                          type="button"
+                          onClick={() => handleRetryMessage(msg)}
+                          disabled={sending}
+                          className="font-semibold underline hover:text-rose-700 flex items-center gap-0.5 ml-1"
+                        >
+                          <RotateCw className="w-2.5 h-2.5" /> Thử lại
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               );
@@ -519,8 +766,19 @@ export function CustomerSupportChat() {
       {/* Input gửi tin nhắn */}
       <div className="p-2.5 bg-white border-t border-slate-100 shrink-0">
         {isClosed ? (
-          <div className="p-2 bg-slate-100 text-slate-500 text-xs rounded-xl text-center font-medium">
-            Cuộc trò chuyện này đã kết thúc. Vui lòng chọn &quot;Đổi nhà xe&quot; để mở cuộc trò chuyện mới.
+          <div className="space-y-2">
+            <div className="p-2 bg-slate-100 text-slate-500 text-xs rounded-xl text-center font-medium">
+              Cuộc trò chuyện này đã kết thúc.
+            </div>
+            <button
+              onClick={() => {
+                setActiveConversation(null);
+                setMessages([]);
+              }}
+              className="w-full py-2 bg-brand text-white text-xs font-semibold rounded-xl hover:bg-brand-hover transition-colors flex items-center justify-center gap-1.5"
+            >
+              <PlusCircle className="w-3.5 h-3.5" /> Bắt đầu cuộc trò chuyện mới
+            </button>
           </div>
         ) : (
           <div className="flex gap-2">

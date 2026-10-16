@@ -190,4 +190,33 @@ export const supportChatApi = {
     );
     return handleResponse<SupportConversation>(res);
   },
+
+  /**
+   * Lấy danh sách các cuộc trò chuyện của khách hàng (kể cả đã đóng)
+   */
+  async listConversations(
+    params: { nhaXeId?: number; trangThai?: string; page?: number; pageSize?: number } = {},
+    token: string,
+  ): Promise<{ data: SupportConversation[]; meta?: { page: number; pageSize: number; totalItems: number; totalPages: number } }> {
+    const q = new URLSearchParams();
+    if (params.nhaXeId) q.set('nhaXeId', String(params.nhaXeId));
+    if (params.trangThai) q.set('trangThai', params.trangThai);
+    if (params.page) q.set('page', String(params.page));
+    if (params.pageSize) q.set('pageSize', String(params.pageSize));
+
+    const res = await fetch(`${API_BASE_URL}/support-chat/conversations?${q.toString()}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    if (!res.ok) {
+      const errorBody = await res.json().catch(() => ({}));
+      throw new SupportChatApiError(
+        res.status,
+        errorBody.error || 'API_ERROR',
+        errorBody.message || 'Có lỗi xảy ra khi tải danh sách cuộc trò chuyện.',
+      );
+    }
+    return res.json();
+  },
 };

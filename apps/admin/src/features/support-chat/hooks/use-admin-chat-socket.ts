@@ -116,16 +116,38 @@ export function useAdminChatSocket({
     };
   }, [isConnected, activeConversationId]);
 
+  const SOCKET_TIMEOUT_MS = 5000;
+
   const sendMessage = useCallback(
     (cuocTroChuyenId: number, noiDung: string, clientMessageId?: string) => {
       return new Promise<{ success: boolean; data?: AdminSupportMessage; error?: string }>(
         (resolve) => {
-          if (!socketRef.current || !socketRef.current.connected) {
+          const socket = socketRef.current;
+          if (!socket || !socket.connected) {
             resolve({ success: false, error: 'SOCKET_DISCONNECTED' });
             return;
           }
 
-          socketRef.current.emit(
+          let settled = false;
+          const timer = setTimeout(() => {
+            if (!settled) {
+              settled = true;
+              socket.off('disconnect', onDisconnect);
+              resolve({ success: false, error: 'SOCKET_TIMEOUT' });
+            }
+          }, SOCKET_TIMEOUT_MS);
+
+          const onDisconnect = () => {
+            if (!settled) {
+              settled = true;
+              clearTimeout(timer);
+              socket.off('disconnect', onDisconnect);
+              resolve({ success: false, error: 'SOCKET_DISCONNECTED' });
+            }
+          };
+          socket.once('disconnect', onDisconnect);
+
+          socket.emit(
             'support.message.send',
             {
               cuocTroChuyenId,
@@ -134,13 +156,18 @@ export function useAdminChatSocket({
               clientMessageId,
             },
             (response: { success: boolean; data?: AdminSupportMessage; error?: string; message?: string }) => {
-              if (response?.success && response.data) {
-                resolve({ success: true, data: response.data });
-              } else {
-                resolve({
-                  success: false,
-                  error: response?.error || response?.message || 'Gửi tin nhắn thất bại.',
-                });
+              if (!settled) {
+                settled = true;
+                clearTimeout(timer);
+                socket.off('disconnect', onDisconnect);
+                if (response?.success && response.data) {
+                  resolve({ success: true, data: response.data });
+                } else {
+                  resolve({
+                    success: false,
+                    error: response?.error || response?.message || 'Gửi tin nhắn thất bại.',
+                  });
+                }
               }
             },
           );
@@ -153,22 +180,47 @@ export function useAdminChatSocket({
   const claimConversation = useCallback((cuocTroChuyenId: number) => {
     return new Promise<{ success: boolean; data?: AdminSupportConversation; error?: string }>(
       (resolve) => {
-        if (!socketRef.current || !socketRef.current.connected) {
+        const socket = socketRef.current;
+        if (!socket || !socket.connected) {
           resolve({ success: false, error: 'SOCKET_DISCONNECTED' });
           return;
         }
 
-        socketRef.current.emit(
+        let settled = false;
+        const timer = setTimeout(() => {
+          if (!settled) {
+            settled = true;
+            socket.off('disconnect', onDisconnect);
+            resolve({ success: false, error: 'SOCKET_TIMEOUT' });
+          }
+        }, SOCKET_TIMEOUT_MS);
+
+        const onDisconnect = () => {
+          if (!settled) {
+            settled = true;
+            clearTimeout(timer);
+            socket.off('disconnect', onDisconnect);
+            resolve({ success: false, error: 'SOCKET_DISCONNECTED' });
+          }
+        };
+        socket.once('disconnect', onDisconnect);
+
+        socket.emit(
           'support.conversation.claim',
           { cuocTroChuyenId },
           (response: { success: boolean; data?: AdminSupportConversation; error?: string; message?: string }) => {
-            if (response?.success && response.data) {
-              resolve({ success: true, data: response.data });
-            } else {
-              resolve({
-                success: false,
-                error: response?.error || response?.message || 'Tiếp nhận cuộc trò chuyện thất bại.',
-              });
+            if (!settled) {
+              settled = true;
+              clearTimeout(timer);
+              socket.off('disconnect', onDisconnect);
+              if (response?.success && response.data) {
+                resolve({ success: true, data: response.data });
+              } else {
+                resolve({
+                  success: false,
+                  error: response?.error || response?.message || 'Tiếp nhận cuộc trò chuyện thất bại.',
+                });
+              }
             }
           },
         );
@@ -179,22 +231,47 @@ export function useAdminChatSocket({
   const closeConversation = useCallback((cuocTroChuyenId: number, lyDo?: string) => {
     return new Promise<{ success: boolean; data?: AdminSupportConversation; error?: string }>(
       (resolve) => {
-        if (!socketRef.current || !socketRef.current.connected) {
+        const socket = socketRef.current;
+        if (!socket || !socket.connected) {
           resolve({ success: false, error: 'SOCKET_DISCONNECTED' });
           return;
         }
 
-        socketRef.current.emit(
+        let settled = false;
+        const timer = setTimeout(() => {
+          if (!settled) {
+            settled = true;
+            socket.off('disconnect', onDisconnect);
+            resolve({ success: false, error: 'SOCKET_TIMEOUT' });
+          }
+        }, SOCKET_TIMEOUT_MS);
+
+        const onDisconnect = () => {
+          if (!settled) {
+            settled = true;
+            clearTimeout(timer);
+            socket.off('disconnect', onDisconnect);
+            resolve({ success: false, error: 'SOCKET_DISCONNECTED' });
+          }
+        };
+        socket.once('disconnect', onDisconnect);
+
+        socket.emit(
           'support.conversation.close',
           { cuocTroChuyenId, lyDo },
           (response: { success: boolean; data?: AdminSupportConversation; error?: string; message?: string }) => {
-            if (response?.success && response.data) {
-              resolve({ success: true, data: response.data });
-            } else {
-              resolve({
-                success: false,
-                error: response?.error || response?.message || 'Kết thúc cuộc trò chuyện thất bại.',
-              });
+            if (!settled) {
+              settled = true;
+              clearTimeout(timer);
+              socket.off('disconnect', onDisconnect);
+              if (response?.success && response.data) {
+                resolve({ success: true, data: response.data });
+              } else {
+                resolve({
+                  success: false,
+                  error: response?.error || response?.message || 'Kết thúc cuộc trò chuyện thất bại.',
+                });
+              }
             }
           },
         );

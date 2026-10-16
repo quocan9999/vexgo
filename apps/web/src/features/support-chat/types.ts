@@ -18,6 +18,7 @@ export interface SupportMessage {
   tepDinhKemUrl?: string | null;
   clientMessageId?: string | null;
   trangThai: 'DA_GUI' | 'DA_NHAN' | 'DA_DOC';
+  deliveryStatus?: 'DANG_GUI' | 'DA_GUI' | 'THAT_BAI';
   daDocLuc?: string | null;
   createdAt: string;
   taiKhoanGui?: {
