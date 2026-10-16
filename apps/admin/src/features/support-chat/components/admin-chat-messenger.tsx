@@ -58,6 +58,7 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const typingTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const isPrependingOlderRef = useRef(false);
 
   const scrollToBottom = useCallback(() => {
     if (typeof messagesEndRef.current?.scrollIntoView === 'function') {
@@ -66,6 +67,10 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
   }, []);
 
   useEffect(() => {
+    if (isPrependingOlderRef.current) {
+      isPrependingOlderRef.current = false;
+      return;
+    }
     scrollToBottom();
   }, [messages, scrollToBottom]);
 
@@ -150,6 +155,10 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
   };
 
   const selectedConvId = selectedConv?.cuocTroChuyenId;
+  const selectedConvIdRef = useRef(selectedConvId);
+  useEffect(() => {
+    selectedConvIdRef.current = selectedConvId;
+  }, [selectedConvId]);
 
   // Tải lịch sử tin nhắn khi chọn một cuộc trò chuyện (chỉ fetch khi selectedConvId thay đổi - F-NEW-02)
   useEffect(() => {
@@ -201,20 +210,24 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
   // Tải tin nhắn cũ hơn (Load older messages - F-NEW-04)
   const handleLoadOlderMessages = async () => {
     if (!selectedConvId || !token || loadingOlderMessages || !hasOlderMessages) return;
+    const targetConvId = selectedConvId;
     const positiveIds = messages.map((m) => m.tinNhanId).filter((id) => id > 0);
     if (positiveIds.length === 0) return;
     const oldestId = Math.min(...positiveIds);
 
     setLoadingOlderMessages(true);
     try {
-      const older = await adminSupportChatApi.getMessages(selectedConvId, token, {
+      const older = await adminSupportChatApi.getMessages(targetConvId, token, {
         beforeId: oldestId,
         pageSize: 50,
       });
+      if (selectedConvIdRef.current !== targetConvId) return;
+
       if (older.length < 50) {
         setHasOlderMessages(false);
       }
       if (older.length > 0) {
+        isPrependingOlderRef.current = true;
         setMessages((prev) => {
           const currentIds = new Set(prev.map((m) => m.tinNhanId).filter((id) => id > 0));
           const newOlder = older
@@ -224,11 +237,15 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
         });
       }
     } catch (err: unknown) {
-      setErrorMessage(
-        err instanceof Error ? err.message : 'Không thể tải thêm tin nhắn cũ.',
-      );
+      if (selectedConvIdRef.current === targetConvId) {
+        setErrorMessage(
+          err instanceof Error ? err.message : 'Không thể tải thêm tin nhắn cũ.',
+        );
+      }
     } finally {
-      setLoadingOlderMessages(false);
+      if (selectedConvIdRef.current === targetConvId) {
+        setLoadingOlderMessages(false);
+      }
     }
   };
 

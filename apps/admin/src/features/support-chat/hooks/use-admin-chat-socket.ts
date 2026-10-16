@@ -32,8 +32,25 @@ export function useAdminChatSocket({
   const [customerTyping, setCustomerTyping] = useState(false);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  const onNewConversationRef = useRef(onNewConversation);
+  const onNewMessageRef = useRef(onNewMessage);
+  const onConversationClaimedRef = useRef(onConversationClaimed);
+  const onConversationClosedRef = useRef(onConversationClosed);
+  const onReconnectedRef = useRef(onReconnected);
+  const activeConversationIdRef = useRef(activeConversationId);
+
+  useEffect(() => {
+    onNewConversationRef.current = onNewConversation;
+    onNewMessageRef.current = onNewMessage;
+    onConversationClaimedRef.current = onConversationClaimed;
+    onConversationClosedRef.current = onConversationClosed;
+    onReconnectedRef.current = onReconnected;
+    activeConversationIdRef.current = activeConversationId;
+  });
+
   useEffect(() => {
     if (!token) {
+      wasConnectedRef.current = false;
       if (socketRef.current) {
         socketRef.current.disconnect();
         socketRef.current = null;
@@ -53,7 +70,7 @@ export function useAdminChatSocket({
     socket.on('connect', () => {
       setIsConnected(true);
       if (wasConnectedRef.current) {
-        onReconnected?.();
+        onReconnectedRef.current?.();
       }
       wasConnectedRef.current = true;
     });
@@ -62,25 +79,16 @@ export function useAdminChatSocket({
       setIsConnected(false);
     });
 
-    socket.io.on('reconnect', () => {
-      setIsConnected(true);
-      onReconnected?.();
-    });
-
     socket.on('support.conversation.new', (conv: AdminSupportConversation) => {
-      if (onNewConversation) {
-        onNewConversation(conv);
-      }
+      onNewConversationRef.current?.(conv);
     });
 
     socket.on('support.message.new', (msg: AdminSupportMessage) => {
-      if (onNewMessage) {
-        onNewMessage(msg);
-      }
+      onNewMessageRef.current?.(msg);
     });
 
     socket.on('support.typing', (data: { cuocTroChuyenId: number; isTyping: boolean }) => {
-      if (activeConversationId && data.cuocTroChuyenId === activeConversationId) {
+      if (activeConversationIdRef.current && data.cuocTroChuyenId === activeConversationIdRef.current) {
         setCustomerTyping(data.isTyping);
         if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
         if (data.isTyping) {
@@ -92,23 +100,20 @@ export function useAdminChatSocket({
     });
 
     socket.on('support.conversation.claimed', (conv: AdminSupportConversation) => {
-      if (onConversationClaimed) {
-        onConversationClaimed(conv);
-      }
+      onConversationClaimedRef.current?.(conv);
     });
 
     socket.on('support.conversation.closed', (conv: AdminSupportConversation) => {
-      if (onConversationClosed) {
-        onConversationClosed(conv);
-      }
+      onConversationClosedRef.current?.(conv);
     });
 
     return () => {
+      wasConnectedRef.current = false;
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [token, activeConversationId, onNewConversation, onNewMessage, onConversationClaimed, onConversationClosed, onReconnected]);
+  }, [token]);
 
   // Join room conversation khi activeConversationId thay đổi
   useEffect(() => {

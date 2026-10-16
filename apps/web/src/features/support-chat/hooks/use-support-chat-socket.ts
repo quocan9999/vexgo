@@ -31,8 +31,23 @@ export function useSupportChatSocket({
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  const onNewMessageRef = useRef(onNewMessage);
+  const onConversationClaimedRef = useRef(onConversationClaimed);
+  const onConversationClosedRef = useRef(onConversationClosed);
+  const onReconnectedRef = useRef(onReconnected);
+  const activeConversationIdRef = useRef(activeConversationId);
+
+  useEffect(() => {
+    onNewMessageRef.current = onNewMessage;
+    onConversationClaimedRef.current = onConversationClaimed;
+    onConversationClosedRef.current = onConversationClosed;
+    onReconnectedRef.current = onReconnected;
+    activeConversationIdRef.current = activeConversationId;
+  });
+
   useEffect(() => {
     if (!token) {
+      wasConnectedRef.current = false;
       if (socketRef.current) {
         socketRef.current.disconnect();
         socketRef.current = null;
@@ -53,19 +68,13 @@ export function useSupportChatSocket({
       setIsConnected(true);
       setConnectionError(null);
       if (wasConnectedRef.current) {
-        onReconnected?.();
+        onReconnectedRef.current?.();
       }
       wasConnectedRef.current = true;
     });
 
     socket.on('disconnect', () => {
       setIsConnected(false);
-    });
-
-    socket.io.on('reconnect', () => {
-      setIsConnected(true);
-      setConnectionError(null);
-      onReconnected?.();
     });
 
     socket.on('support.connected', () => {
@@ -78,13 +87,11 @@ export function useSupportChatSocket({
     });
 
     socket.on('support.message.new', (message: SupportMessage) => {
-      if (onNewMessage) {
-        onNewMessage(message);
-      }
+      onNewMessageRef.current?.(message);
     });
 
     socket.on('support.typing', (data: { cuocTroChuyenId: number; isTyping: boolean }) => {
-      if (activeConversationId && data.cuocTroChuyenId === activeConversationId) {
+      if (activeConversationIdRef.current && data.cuocTroChuyenId === activeConversationIdRef.current) {
         setIsTyping(data.isTyping);
         if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
         if (data.isTyping) {
@@ -96,23 +103,20 @@ export function useSupportChatSocket({
     });
 
     socket.on('support.conversation.claimed', (conv: SupportConversation) => {
-      if (onConversationClaimed) {
-        onConversationClaimed(conv);
-      }
+      onConversationClaimedRef.current?.(conv);
     });
 
     socket.on('support.conversation.closed', (conv: SupportConversation) => {
-      if (onConversationClosed) {
-        onConversationClosed(conv);
-      }
+      onConversationClosedRef.current?.(conv);
     });
 
     return () => {
+      wasConnectedRef.current = false;
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [token, activeConversationId, onNewMessage, onConversationClaimed, onConversationClosed, onReconnected]);
+  }, [token]);
 
   // Join room conversation khi activeConversationId thay đổi
   useEffect(() => {

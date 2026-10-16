@@ -52,6 +52,13 @@ export function CustomerSupportChat() {
   const typingTimerRef = useRef<NodeJS.Timeout | null>(null);
   const companyRequestIdRef = useRef(0);
   const historyRequestIdRef = useRef(0);
+  const isPrependingOlderRef = useRef(false);
+
+  const activeConversationId = activeConversation?.cuocTroChuyenId ?? null;
+  const activeConversationIdRef = useRef(activeConversationId);
+  useEffect(() => {
+    activeConversationIdRef.current = activeConversationId;
+  }, [activeConversationId]);
 
   const scrollToBottom = useCallback(() => {
     if (typeof messagesEndRef.current?.scrollIntoView === 'function') {
@@ -60,6 +67,10 @@ export function CustomerSupportChat() {
   }, []);
 
   useEffect(() => {
+    if (isPrependingOlderRef.current) {
+      isPrependingOlderRef.current = false;
+      return;
+    }
     scrollToBottom();
   }, [messages, scrollToBottom]);
 
@@ -117,13 +128,12 @@ export function CustomerSupportChat() {
 
   // Đồng bộ lại khi Socket reconnect (F-NEW-01)
   const handleReconnected = useCallback(async () => {
-    if (!activeConversation || !accessToken) return;
+    if (!activeConversationId || !accessToken) return;
     try {
-      const convId = activeConversation.cuocTroChuyenId;
-      const updatedConv = await supportChatApi.getConversationById(convId, accessToken);
-      setActiveConversation((prev) => (prev?.cuocTroChuyenId === convId ? { ...prev, ...updatedConv } : prev));
+      const updatedConv = await supportChatApi.getConversationById(activeConversationId, accessToken);
+      setActiveConversation((prev) => (prev?.cuocTroChuyenId === activeConversationId ? { ...prev, ...updatedConv } : prev));
 
-      const freshMsgs = await supportChatApi.getMessages(convId, accessToken, { pageSize: 40 });
+      const freshMsgs = await supportChatApi.getMessages(activeConversationId, accessToken, { pageSize: 40 });
       setMessages((prev) => {
         const existingIds = new Set(prev.map((m) => m.tinNhanId).filter((id) => id > 0));
         const existingClientIds = new Set(prev.map((m) => m.clientMessageId).filter(Boolean));
@@ -135,7 +145,7 @@ export function CustomerSupportChat() {
     } catch (err) {
       console.warn('[CustomerSupportChat] Reconnect sync error:', err);
     }
-  }, [activeConversation, accessToken]);
+  }, [activeConversationId, accessToken]);
 
   // Socket connection hook
   const {
@@ -146,7 +156,7 @@ export function CustomerSupportChat() {
     closeConversation: closeSocketConversation,
   } = useSupportChatSocket({
     token: accessToken,
-    activeConversationId: activeConversation?.cuocTroChuyenId ?? null,
+    activeConversationId,
     onNewMessage: handleNewMessage,
     onConversationClaimed: handleConversationClaimed,
     onConversationClosed: handleConversationClosed,
@@ -248,21 +258,25 @@ export function CustomerSupportChat() {
 
   // Tải tin nhắn cũ hơn (F-NEW-04)
   const handleLoadOlderMessages = async () => {
-    if (!activeConversation || !accessToken || loadingOlderMessages || !hasOlderMessages) return;
+    if (!activeConversationId || !accessToken || loadingOlderMessages || !hasOlderMessages) return;
+    const targetConvId = activeConversationId;
     const positiveIds = messages.map((m) => m.tinNhanId).filter((id) => id > 0);
     if (positiveIds.length === 0) return;
     const oldestId = Math.min(...positiveIds);
 
     setLoadingOlderMessages(true);
     try {
-      const older = await supportChatApi.getMessages(activeConversation.cuocTroChuyenId, accessToken, {
+      const older = await supportChatApi.getMessages(targetConvId, accessToken, {
         beforeId: oldestId,
         pageSize: 40,
       });
+      if (activeConversationIdRef.current !== targetConvId) return;
+
       if (older.length < 40) {
         setHasOlderMessages(false);
       }
       if (older.length > 0) {
+        isPrependingOlderRef.current = true;
         setMessages((prev) => {
           const currentIds = new Set(prev.map((m) => m.tinNhanId).filter((id) => id > 0));
           const newOlder = older
@@ -272,9 +286,13 @@ export function CustomerSupportChat() {
         });
       }
     } catch (err: unknown) {
-      setErrorMsg(err instanceof Error ? err.message : 'Không thể tải thêm tin nhắn cũ.');
+      if (activeConversationIdRef.current === targetConvId) {
+        setErrorMsg(err instanceof Error ? err.message : 'Không thể tải thêm tin nhắn cũ.');
+      }
     } finally {
-      setLoadingOlderMessages(false);
+      if (activeConversationIdRef.current === targetConvId) {
+        setLoadingOlderMessages(false);
+      }
     }
   };
 
@@ -326,6 +344,7 @@ export function CustomerSupportChat() {
 
       setActiveConversation(conv);
       const history = await supportChatApi.getMessages(conv.cuocTroChuyenId, accessToken);
+      setHasOlderMessages(history.length >= 40);
       setMessages(history.map((m) => ({ ...m, deliveryStatus: 'DA_GUI' })));
       setInitialMessage('');
     } catch (err: unknown) {
