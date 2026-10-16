@@ -105,7 +105,7 @@ export function PromotionDetailSheet({ promotionId, refreshKey, canUpdate, onClo
       {!loading && error && <div className={styles.detailError} role="alert"><p>{error}</p><Button onClick={() => setRetry((count) => count + 1)} type="button" variant="secondary">Thử tải lại</Button></div>}
       {!loading && !error && promotion && (
         <>
-          <p className={styles.detailDescription}>{promotion.name}</p>
+          <h3 className={styles.detailName}>{promotion.name}</h3>
           <dl className={styles.detailList}>
             <div className={styles.detailItem}><dt>Mã khuyến mãi</dt><dd className="admin-data-mono">{promotion.code}</dd></div>
             <div className={styles.detailItem}><dt>Mức giảm</dt><dd>{formatDiscount(promotion)}</dd></div>
@@ -118,6 +118,7 @@ export function PromotionDetailSheet({ promotionId, refreshKey, canUpdate, onClo
           </dl>
           {canUpdate && nextStatus && <div className={styles.detailActions}>
             <Button
+              className="admin-resource-status-action"
               disabled={reactivationBlocked}
               onClick={() => onRequestStatus(promotion, nextStatus)}
               title={reactivationBlocked ? 'Không thể bật lại khuyến mãi đã hết hạn, hết lượt hoặc không khả dụng.' : undefined}

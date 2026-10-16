@@ -98,11 +98,13 @@
   list-style: none;
 }
 
-.detailDescription {
+.detailName {
   margin: var(--admin-space-component-gap) var(--admin-space-sheet-padding) 0;
-  color: var(--admin-text-muted);
-  font-size: var(--admin-type-body-size);
-  line-height: var(--admin-type-body-line-height);
+  color: var(--admin-text-strong);
+  font-size: var(--admin-type-section-heading-size);
+  font-weight: var(--admin-type-section-heading-weight);
+  line-height: var(--admin-type-section-heading-line-height);
+  overflow-wrap: anywhere;
 }
 
 .detailState {
@@ -213,7 +215,7 @@
     overflow-wrap: anywhere;
   }
 
-  .detailDescription {
+  .detailName {
     margin-right: var(--admin-space-sheet-inline);
     margin-left: var(--admin-space-sheet-inline);
   }

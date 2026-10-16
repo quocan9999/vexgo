@@ -867,6 +867,11 @@ dialog:focus-visible {
   animation: panel-in 200ms ease-out;
 }
 
+.admin-resource-status-action {
+  min-inline-size: calc(9ch + 2 * var(--admin-space-3));
+  justify-content: center;
+}
+
 .admin-detail-sheet__actions {
   display: flex;
   flex-wrap: wrap;

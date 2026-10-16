@@ -149,6 +149,7 @@ export function PromotionsManagement() {
     const disabled = nextStatus === 'HOAT_DONG' && !canReactivate(promotion);
     return <Button
       aria-label={`${nextStatus === 'TAM_NGUNG' ? 'Tạm ngưng' : 'Bật lại'} ${promotion.code}`}
+      className="admin-resource-status-action"
       disabled={disabled}
       onClick={() => openStatusRequest(promotion, nextStatus)}
       title={disabled ? 'Không thể bật lại khuyến mãi đã hết hạn, hết lượt hoặc không khả dụng.' : undefined}
