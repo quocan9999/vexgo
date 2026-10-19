@@ -6,6 +6,7 @@ const ci = 'mysql://root:test@127.0.0.1:3306/vexgo_ci';
 const feature07 = 'mysql://vexgo_feature07_test:test@127.0.0.1:3010/vexgo_feature07_test';
 const github = { CI: 'true', GITHUB_ACTIONS: 'true' };
 const feature07Environment = {
+  CI: 'false',
   FEATURE07_TEST_DATABASE_URL: feature07,
   FEATURE07_RUNTIME_DATABASE_URL: 'mysql://vexgo_f07_app:test@127.0.0.1:3010/vexgo_feature07',
   MIGRATION_URL: 'mysql://root:test@127.0.0.1:3010/vexgo_feature07',

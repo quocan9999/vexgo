@@ -34,6 +34,7 @@ function operatorEnvironment(overrides = {}) {
 
 function testEnvironment(overrides = {}) {
   return {
+    CI: 'false',
     DATABASE_URL: testDatabaseUrl,
     MIGRATION_URL: testDatabaseUrl,
     SHADOW_DATABASE_URL: shadowDatabaseUrl,
