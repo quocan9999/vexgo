@@ -32,9 +32,13 @@ describe('TicketsService', () => {
       donGiaoDichId: 201,
       maPhieuDatVe: 'PDV-101',
       trangThai: 'DA_THANH_TOAN',
+      tongTienBanDau: '250000',
+      soTienGiamKhuyenMai: '25000',
+      khuyenMai: { maKhuyenMai: 'SAVE50' },
       donGiaoDich: {
         donGiaoDichId: 201,
         trangThai: 'DA_THANH_TOAN',
+        tongTien: '250000',
         tenKhachHang: 'Nguyễn Văn A',
         soDienThoaiKhachHang: '0901234567',
         khachHangId: 10,
@@ -85,6 +89,7 @@ describe('TicketsService', () => {
       findMany: vi.fn(),
       findUnique: vi.fn(),
       updateMany: vi.fn(),
+      findFirst: vi.fn().mockResolvedValue(null),
     },
     gheChuyenXe: {
       update: vi.fn(),
@@ -95,9 +100,16 @@ describe('TicketsService', () => {
     donGiaoDich: {
       update: vi.fn(),
     },
+    lichSuTrangThaiVe: {
+      create: vi.fn(),
+    },
+    lichSuTrangThaiPhieuDatVe: {
+      create: vi.fn(),
+    },
     thanhToan: {
       create: vi.fn(),
     },
+    $queryRaw: vi.fn().mockResolvedValue([{ donGiaoDichId: 201 }]),
     $transaction: vi.fn(async (cb: (tx: any) => Promise<any>) => cb(prisma)),
   };
 
@@ -149,6 +161,12 @@ describe('TicketsService', () => {
       expect(ticket.route).toBe('TP.HCM - Đà Lạt');
       expect(ticket.busCompanyName).toBe('Phương Trang');
       expect(ticket.price).toBe(250000);
+      expect(ticket).toMatchObject({
+        promotionCode: 'SAVE50',
+        originalTicketSubtotal: 250000,
+        discountAmount: 25000,
+        ticketSubtotal: 225000,
+      });
       expect(result.meta.totalItems).toBe(1);
     });
 
@@ -244,6 +262,24 @@ describe('TicketsService', () => {
           donGiaoDich: {
             ...sampleTicket.phieuDatVe.donGiaoDich,
             khachHang: { taiKhoanId: 888 },
+          },
+        },
+      });
+
+      await expect(service.findCustomerTicketById(1, 1)).rejects.toThrow(
+        ForbiddenException,
+      );
+    });
+
+    it('denies account history access to a ticket from an unlinked guest booking', async () => {
+      prisma.ve.findUnique.mockResolvedValue({
+        ...sampleTicket,
+        phieuDatVe: {
+          ...sampleTicket.phieuDatVe,
+          donGiaoDich: {
+            ...sampleTicket.phieuDatVe.donGiaoDich,
+            khachHangId: null,
+            khachHang: null,
           },
         },
       });
@@ -366,6 +402,57 @@ describe('TicketsService', () => {
   });
 
   describe('cancelTicket', () => {
+    it.each([
+      { now: '2026-09-23T00:00:00Z', phone: '0900000000', rate: 0.1, paid: true, error: 'TICKET_NOT_FOUND' },
+      { now: '2026-09-24T18:00:00Z', phone: '0901234567', rate: 0.2, paid: true, error: 'CANCELLATION_CUTOFF_PASSED' },
+      { now: '2026-09-24T07:00:00Z', phone: '0901234567', rate: 0.1, paid: true, error: 'CANCELLATION_QUOTE_EXPIRED' },
+      { now: '2026-09-23T00:00:00Z', phone: '0901234567', rate: 0.1, paid: false, error: 'REFUND_SOURCE_NOT_FOUND' },
+    ])('keeps $error protection when cargo is already cancelled', async ({ now, phone, rate, paid, error }) => {
+      vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date(now));
+      prisma.ve.findUnique.mockResolvedValue({ ...sampleTicket, phieuDatVe: { ...sampleTicket.phieuDatVe,
+        donGiaoDich: { ...sampleTicket.phieuDatVe.donGiaoDich, phieuGuiHang: { trangThai: 'DA_HUY' }, thanhToans: paid ? sampleTicket.phieuDatVe.donGiaoDich.thanhToans : [] },
+      } });
+      await expect(service.cancelTicket({ ticketCode: 'VE-001', phoneNumber: phone, expectedCancelFeeRate: rate })).rejects.toMatchObject({ response: { error } });
+      expect(prisma.ve.updateMany).not.toHaveBeenCalled();
+      expect(prisma.donGiaoDich.update).not.toHaveBeenCalled();
+      expect(prisma.thanhToan.create).not.toHaveBeenCalled();
+      expect(refundProcessor.enqueueRefund).not.toHaveBeenCalled();
+    });
+
+    it('locks the order before rereading current cargo instead of trusting the discovered ticket', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2026-09-23T00:00:00Z'));
+      const current = { ...sampleTicket, phieuDatVe: { ...sampleTicket.phieuDatVe,
+        donGiaoDich: { ...sampleTicket.phieuDatVe.donGiaoDich, phieuGuiHang: { trangThai: 'MOI_TAO' } },
+      } };
+      prisma.ve.findUnique.mockResolvedValueOnce(sampleTicket).mockResolvedValueOnce(current);
+      await expect(service.cancelTicket({ ticketCode: 'VE-001', phoneNumber: '0901234567', expectedCancelFeeRate: 0.1 })).rejects.toMatchObject({ response: { error: 'TICKET_CANCELLATION_ACTIVE_SHIPMENT' } });
+      expect(prisma.$queryRaw.mock.invocationCallOrder[0]).toBeLessThan(prisma.ve.findUnique.mock.invocationCallOrder[1]);
+      expect(prisma.ve.findUnique.mock.calls[1][0]).toMatchObject({ where: { veId: 1 }, include: expect.any(Object) });
+      expect(prisma.ve.updateMany).not.toHaveBeenCalled();
+    });
+
+    it.each(['MOI_TAO', 'DA_TIEP_NHAN', 'DANG_VAN_CHUYEN', 'DA_GIAO'])('blocks every ticket with active cargo %s including zero fare', async (status) => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2026-09-23T00:00:00Z'));
+      const ticket = { ...sampleTicket, giaThucTe: '0', phieuDatVe: {
+        ...sampleTicket.phieuDatVe, donGiaoDich: { ...sampleTicket.phieuDatVe.donGiaoDich,
+          phieuGuiHang: { trangThai: status },
+        },
+      } };
+      prisma.ve.findUnique.mockResolvedValue(ticket);
+      await expect(service.cancelTicket({ ticketCode: ticket.maVe, phoneNumber: '0901234567', expectedCancelFeeRate: 0.1 })).rejects.toMatchObject({
+        response: { error: 'TICKET_CANCELLATION_ACTIVE_SHIPMENT' },
+      });
+      expect(prisma.ve.updateMany).not.toHaveBeenCalled();
+      expect(prisma.gheChuyenXe.update).not.toHaveBeenCalled();
+      expect(prisma.thanhToan.create).not.toHaveBeenCalled();
+      expect(prisma.lichSuTrangThaiVe.create).not.toHaveBeenCalled();
+      expect(refundProcessor.enqueueRefund).not.toHaveBeenCalled();
+      const lookup = await service.findCustomerTicketById(1, 1);
+      expect(lookup.data.cancellation).toMatchObject({ eligible: false, reason: 'ACTIVE_SHIPMENT' });
+    });
+
     it('throws NotFoundException when ticket does not exist', async () => {
       prisma.ve.findUnique.mockResolvedValue(null);
 

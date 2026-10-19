@@ -8,8 +8,10 @@ import {
   LogOut,
   MapPinned,
   Menu,
+  Package,
   PanelLeftClose,
   PanelLeftOpen,
+  Tag,
   ShieldCheck,
   Ticket,
   Truck,
@@ -47,6 +49,8 @@ type SuperAdminLayoutProps = {
     | 'trips'
     | 'customers'
     | 'booking-management'
+    | 'promotions'
+    | 'shipments'
     | 'admin-accounts'
     | 'rbac'
     | 'tenant-rbac';
@@ -160,6 +164,8 @@ const OPERATION_NAVIGATION_DETAILS: Record<
     label: 'Quản lý phiếu đặt vé & vé',
     icon: () => <Ticket size={18} />,
   },
+  promotions: { label: 'Khuyến mãi', icon: () => <Tag size={18} /> },
+  shipments: { label: 'Gửi hàng', icon: () => <Package size={18} /> },
 };
 
 export function SuperAdminLayout({

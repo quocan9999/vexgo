@@ -37,6 +37,16 @@ export const ADMIN_OPERATION_SECTIONS = [
     href: '/booking-management',
     readPermission: 'booking:read',
   },
+  {
+    section: 'promotions',
+    href: '/promotions',
+    readPermission: 'promotion:read',
+  },
+  {
+    section: 'shipments',
+    href: '/shipments',
+    readPermission: 'shipment:read',
+  },
 ] as const;
 
 export type AdminPermission =
@@ -62,6 +72,11 @@ export type AdminPermission =
   | 'trip:cancel'
   | 'customer:read'
   | 'booking:read'
+  | 'promotion:read'
+  | 'promotion:create'
+  | 'promotion:update'
+  | 'shipment:read'
+  | 'shipment:update'
   | 'role:read'
   | 'permission:assign';
 
@@ -189,6 +204,8 @@ export function getRequiredAdminPermissions(
   if (matchesPath(pathname, '/trips')) return ['trip:read'];
   if (matchesPath(pathname, '/customers')) return ['customer:read'];
   if (matchesPath(pathname, '/booking-management')) return ['booking:read'];
+  if (matchesPath(pathname, '/promotions')) return ['promotion:read'];
+  if (matchesPath(pathname, '/shipments')) return ['shipment:read'];
   return null;
 }
 

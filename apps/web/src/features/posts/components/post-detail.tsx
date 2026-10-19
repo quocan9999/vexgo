@@ -67,6 +67,8 @@ export const PostDetail: React.FC<PostDetailProps> = ({ post }) => {
   const baseFareNumber = Number(baseFare.replace(/[^\d]/g, '')) || 0;
   const totalFare = baseFareNumber * selectedSeats.length + luggageFee;
   const totalFareText = totalFare.toLocaleString('vi-VN');
+  const hasCargoItems = luggageItems.length > 0;
+  const totalFareLabel = hasCargoItems ? 'Tạm tính tiền vé' : 'Tổng tiền';
 
   const toggleSeat = (seat: string) => {
     if (bookedSeats.has(seat)) return;
@@ -305,7 +307,7 @@ export const PostDetail: React.FC<PostDetailProps> = ({ post }) => {
               <div>
                 <div className="flex items-center gap-2 mb-1">
                   <span className="inline-flex px-2 py-1 rounded-md bg-brand text-white text-[10px] font-black">VEXGO</span>
-                  <span className="text-xs font-bold text-slate-500">Tổng tiền</span>
+                  <span className="text-xs font-bold text-slate-500">{totalFareLabel}</span>
                 </div>
                 <p className="text-2xl font-black text-red-600">{totalFareText}đ</p>
               </div>
@@ -378,7 +380,7 @@ export const PostDetail: React.FC<PostDetailProps> = ({ post }) => {
                   <strong className="text-slate-950 text-right">{selectedSeatText || 'Chưa chọn'}</strong>
                 </div>
                 <div className="flex justify-between gap-3">
-                  <span className="text-slate-500 font-semibold">Tổng tiền lượt đi</span>
+                  <span className="text-slate-500 font-semibold">{hasCargoItems ? 'Tạm tính tiền vé lượt đi' : 'Tổng tiền lượt đi'}</span>
                   <strong className="text-red-600">{totalFareText}đ</strong>
                 </div>
               </div>
@@ -398,10 +400,14 @@ export const PostDetail: React.FC<PostDetailProps> = ({ post }) => {
                   <span className="text-slate-500 font-semibold">Phí thanh toán</span>
                   <strong className="text-slate-950">0đ</strong>
                 </div>
-                <LuggageSummary fee={luggageFee} totalWeight={luggageWeight} />
+                <LuggageSummary
+                  fee={luggageFee}
+                  totalWeight={luggageWeight}
+                  hasCargo={hasCargoItems}
+                />
               </div>
               <div className="pt-4 flex justify-between gap-3 text-sm">
-                <span className="text-slate-500 font-black">Tổng tiền</span>
+                <span className="text-slate-500 font-black">{totalFareLabel}</span>
                 <strong className="text-red-600 text-base">{totalFareText}đ</strong>
               </div>
             </section>
@@ -468,7 +474,7 @@ export const PostDetail: React.FC<PostDetailProps> = ({ post }) => {
                 </div>
 
                 <div className="flex justify-between gap-2 pt-2.5 border-t border-slate-200 mt-0.5">
-                  <span className="font-black text-slate-700">Tổng tiền</span>
+                  <span className="font-black text-slate-700">{totalFareLabel}</span>
                   <strong className="text-right text-red-600 text-sm">
                     {totalFareText}đ
                   </strong>

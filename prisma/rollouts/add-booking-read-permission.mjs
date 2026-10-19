@@ -1,12 +1,20 @@
 import 'dotenv/config';
+import { createRequire } from 'node:module';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import mariadb from 'mariadb';
+
+const require = createRequire(import.meta.url);
+const { assertFeature07TestDatabase, sameDatabaseTarget } = require(
+  '../test-support/feature07-test-database.cjs',
+);
 
 const permissionKey = 'booking:read';
 const roleName = 'NHA_XE_ADMIN';
 const confirmationVariable = 'BOOKING_READ_PERMISSION_ROLLOUT_CONFIRM_DATABASE';
 
-function readDatabaseTarget(name) {
-  const value = process.env[name];
+function readDatabaseTarget(name, environment = process.env) {
+  const value = environment[name];
   if (!value) throw new Error(`${name} is required.`);
 
   let url;
@@ -24,53 +32,72 @@ function readDatabaseTarget(name) {
     host: url.hostname.toLowerCase(),
     port: Number(url.port || 3306),
     database: decodeURIComponent(url.pathname.replace(/^\/+/, '')),
+    username: decodeURIComponent(url.username),
   };
 }
 
-function assertSafeTargets() {
-  const runtime = readDatabaseTarget('DATABASE_URL');
-  const migration = readDatabaseTarget('MIGRATION_URL');
-  const shadow = readDatabaseTarget('SHADOW_DATABASE_URL');
+function assertSafeTargets(environment = process.env) {
+  const target = readDatabaseTarget('DATABASE_URL', environment);
+  const migration = readDatabaseTarget('MIGRATION_URL', environment);
+  const shadow = readDatabaseTarget('SHADOW_DATABASE_URL', environment);
+  const isTestMode =
+    environment.BOOKING_READ_PERMISSION_ROLLOUT_TEST_MODE === 'true';
 
-  if (
-    runtime.host !== migration.host ||
-    runtime.port !== migration.port ||
-    runtime.database !== migration.database
-  ) {
+  if (!sameDatabaseTarget(target, migration)) {
     throw new Error(
       'DATABASE_URL and MIGRATION_URL must target the same database.',
     );
   }
-  if (
-    shadow.host === runtime.host &&
-    shadow.port === runtime.port &&
-    shadow.database === runtime.database
-  ) {
+  if (sameDatabaseTarget(shadow, target)) {
     throw new Error('SHADOW_DATABASE_URL must target a separate database.');
   }
-  if (!runtime.database || runtime.database.toLowerCase() === 'vexgo') {
-    throw new Error('The rollout refuses the original VexGo database.');
-  }
-  if (['localhost', '127.0.0.1', '::1'].includes(runtime.host)) {
-    const isCi = process.env.CI === 'true';
-    const allowedPort = isCi
-      ? runtime.port === 3306 || runtime.port === 3307
-      : runtime.port === 3307;
-    if (!allowedPort || !runtime.database.startsWith('vexgo_feature07')) {
+
+  if (isTestMode) {
+    if (target.username !== migration.username) {
       throw new Error(
-        isCi
-          ? 'CI rollout is restricted to port 3306/3307 and a vexgo_feature07 database.'
-          : 'Local rollout is restricted to port 3307 and a vexgo_feature07 database.',
+        'Test rollout DATABASE_URL and MIGRATION_URL must use the same scoped account.',
       );
     }
+    if (environment.DATABASE_URL !== environment.FEATURE07_TEST_DATABASE_URL) {
+      throw new Error(
+        'Test rollout DATABASE_URL must exactly match FEATURE07_TEST_DATABASE_URL.',
+      );
+    }
+    assertFeature07TestDatabase({
+      testDatabaseUrl: environment.FEATURE07_TEST_DATABASE_URL,
+      ci: environment.CI,
+      protectedDatabaseUrls: [
+        { name: 'runtime', value: environment.FEATURE07_RUNTIME_DATABASE_URL },
+        { name: 'shadow', value: environment.SHADOW_DATABASE_URL },
+      ],
+    });
+  } else {
+    if (!target.database || target.database.toLowerCase() === 'vexgo') {
+      throw new Error('The rollout refuses the original VexGo database.');
+    }
+    if (['localhost', '127.0.0.1', '::1', '[::1]'].includes(target.host)) {
+      const isCi = environment.CI === 'true';
+      const allowedPorts = isCi ? [3306, 3307] : [3010, 3307];
+      if (
+        !allowedPorts.includes(target.port) ||
+        !target.database.toLowerCase().startsWith('vexgo_feature07')
+      ) {
+        throw new Error(
+          isCi
+            ? 'CI rollout is restricted to port 3306/3307 and a vexgo_feature07 database.'
+            : 'Local rollout is restricted to port 3010/3307 and a vexgo_feature07 database.',
+        );
+      }
+    }
   }
-  if (process.env[confirmationVariable] !== runtime.database) {
+
+  if (environment[confirmationVariable] !== target.database) {
     throw new Error(
       `${confirmationVariable} must exactly match the target database name.`,
     );
   }
 
-  return runtime;
+  return target;
 }
 
 async function rollout() {
@@ -125,7 +152,13 @@ async function rollout() {
 
 function redactConnectionSecrets(error) {
   let message = error instanceof Error ? error.message : String(error);
-  for (const name of ['DATABASE_URL', 'MIGRATION_URL', 'SHADOW_DATABASE_URL']) {
+  for (const name of [
+    'DATABASE_URL',
+    'MIGRATION_URL',
+    'SHADOW_DATABASE_URL',
+    'FEATURE07_TEST_DATABASE_URL',
+    'FEATURE07_RUNTIME_DATABASE_URL',
+  ]) {
     const value = process.env[name];
     if (!value) continue;
     try {
@@ -144,9 +177,17 @@ function redactConnectionSecrets(error) {
   return message;
 }
 
-rollout().catch((error) => {
-  console.error(
-    `Booking permission rollout failed: ${redactConnectionSecrets(error)}`,
-  );
-  process.exitCode = 1;
-});
+export { assertSafeTargets };
+
+const isDirectExecution =
+  process.argv[1] &&
+  pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url;
+
+if (isDirectExecution) {
+  rollout().catch((error) => {
+    console.error(
+      `Booking permission rollout failed: ${redactConnectionSecrets(error)}`,
+    );
+    process.exitCode = 1;
+  });
+}

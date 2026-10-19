@@ -75,10 +75,28 @@ export class TripsController {
     return this.tripsService.getSeats(params.id, query, principal);
   }
 
+  @Get(':id/cargo-capacity')
+  @OptionalAuth()
+  getCargoCapacity(@Param() params: TripIdParamsDto) {
+    return this.tripsService.getCargoCapacity(params.id);
+  }
+
   @Get(':id/seats')
   @OptionalAuth()
   getCustomerSeats(@Param() params: TripIdParamsDto) {
     return this.tripsService.getCustomerSeats(params.id);
+  }
+
+  @Get(':id/alternatives')
+  @OptionalAuth()
+  getTripAlternatives(
+    @Param() params: TripIdParamsDto,
+    @Query('limit') limit?: string,
+  ) {
+    return this.tripsService.getTripAlternatives(
+      params.id,
+      limit ? Number(limit) : 5,
+    );
   }
 
   @Get(':id')

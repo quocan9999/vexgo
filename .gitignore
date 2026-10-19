@@ -19,3 +19,6 @@ playwright-report/
 test-results/
 blob-report/
 .worktrees/
+.codex-build/
+.codex-finalizer/
+output/

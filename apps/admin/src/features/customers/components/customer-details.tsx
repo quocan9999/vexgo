@@ -68,7 +68,6 @@ export function CustomerDetails({ customerId, onClose }: CustomerDetailsProps) {
     >
       <div className="admin-dialog-header">
         <div className="admin-dialog-header__copy">
-          <p className="eyebrow">HỒ SƠ KHÁCH HÀNG</p>
           <h2 id="customer-detail-title">Chi tiết khách hàng</h2>
         </div>
         <button

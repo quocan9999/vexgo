@@ -126,6 +126,31 @@ export const ADMIN_PERMISSION_CATALOG = [
       'Xem danh sách, chi tiết và lịch sử phiếu đặt vé trong phạm vi nhà xe.',
   },
   {
+    key: 'promotion:read',
+    scope: 'tenant',
+    description: 'Xem khuyến mãi trong phạm vi nhà xe.',
+  },
+  {
+    key: 'promotion:create',
+    scope: 'tenant',
+    description: 'Tạo khuyến mãi trong phạm vi nhà xe.',
+  },
+  {
+    key: 'promotion:update',
+    scope: 'tenant',
+    description: 'Bật hoặc tạm ngưng khuyến mãi trong phạm vi nhà xe.',
+  },
+  {
+    key: 'shipment:read',
+    scope: 'tenant',
+    description: 'Xem danh sách và chi tiết phiếu gửi hàng trong phạm vi nhà xe.',
+  },
+  {
+    key: 'shipment:update',
+    scope: 'tenant',
+    description: 'Cập nhật trạng thái phiếu gửi hàng trong phạm vi nhà xe.',
+  },
+  {
     key: 'bus-company:read',
     scope: 'platform',
     description: 'Xem danh sách và chi tiết nhà xe trên nền tảng.',
@@ -201,6 +226,11 @@ export const ADMIN_ROLE_DEFAULT_PERMISSION_KEYS = {
     'permission:assign',
     'customer:read',
     'booking:read',
+    'promotion:read',
+    'promotion:create',
+    'promotion:update',
+    'shipment:read',
+    'shipment:update',
   ],
   NHAN_VIEN_DIEU_HANH: [
     'vehicle-type:read',
@@ -223,6 +253,8 @@ export const ADMIN_ROLE_DEFAULT_PERMISSION_KEYS = {
     'trip:create',
     'trip:update',
     'trip:cancel',
+    'shipment:read',
+    'shipment:update',
   ],
   NHAN_VIEN_BAN_VE: [],
   NHAN_VIEN_CSKH: [],

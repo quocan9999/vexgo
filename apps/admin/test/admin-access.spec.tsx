@@ -84,6 +84,8 @@ describe('admin access scope and permissions', () => {
       getRequiredAdminPermissions('/booking-management/bookings/42'),
     ).toEqual(['booking:read']);
     expect(getRequiredAdminPermissions('/booking-management-extra')).toBeNull();
+    expect(getRequiredAdminPermissions('/shipments')).toEqual(['shipment:read']);
+    expect(getRequiredAdminPermissions('/shipments/789')).toEqual(['shipment:read']);
     expect(getRequiredAdminPermissions('/vehicle-types-extra')).toBeNull();
   });
 
@@ -202,6 +204,29 @@ describe('admin access scope and permissions', () => {
     expect(getFirstAccessibleAdminPath(session)).toBe('/routes');
     expect(hasAdminPermission(session, 'fare-price:read')).toBe(true);
     expect(hasAdminPermission(session, 'vehicle:read')).toBe(false);
+
+    const shipmentOnlySession = makeTenantSession(
+      ['NHAN_VIEN_DIEU_HANH'],
+      ['shipment:read'],
+    );
+    expect(getFirstAccessibleAdminPath(shipmentOnlySession)).toBe('/shipments');
+    expect(hasAdminPermission(shipmentOnlySession, 'shipment:read')).toBe(true);
+  });
+
+  it('accepts promotion permissions only within a tenant session', () => {
+    const tenantSales = makeTenantSession(
+      ['NHAN_VIEN_KINH_DOANH'],
+      ['promotion:read', 'promotion:create', 'promotion:update'],
+    );
+    const platform = makePlatformSession(['promotion:read']);
+
+    expect(hasAllAdminPermissions(tenantSales, [
+      'promotion:read',
+      'promotion:create',
+      'promotion:update',
+    ])).toBe(true);
+    expect(hasAdminPermission(platform, 'promotion:read')).toBe(false);
+    expect(hasAdminPermission(tenantSales, 'role:read')).toBe(false);
   });
 
   it('accepts booking read as a tenant permission and denies it to platform scope', () => {

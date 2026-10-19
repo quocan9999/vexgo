@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import type { ExecutionContext, INestApplication } from '@nestjs/common';
 import { UnauthorizedException } from '@nestjs/common';
@@ -12,6 +13,17 @@ import { AccessTokenGuard } from '../../../src/auth/guards/access-token.guard.js
 import type { AuthPrincipal } from '../../../src/auth/tokens/auth-principal.js';
 import { configureApi } from '../../../src/common/configure-api.js';
 import { PrismaService } from '../../../src/prisma/prisma.service.js';
+
+const require = createRequire(import.meta.url);
+const { assertFeature07TestDatabase } = require(
+  '../../../../../prisma/test-support/feature07-test-database.cjs',
+) as {
+  assertFeature07TestDatabase(options: {
+    testDatabaseUrl: string;
+    protectedDatabaseUrls: Array<{ name: string; value: string | undefined }>;
+    ci?: string;
+  }): URL;
+};
 
 function readLocalEnvValue(name: string): string | undefined {
   const candidates = [
@@ -28,70 +40,26 @@ function readLocalEnvValue(name: string): string | undefined {
   return undefined;
 }
 
-function databaseTarget(value: string) {
-  const url = new URL(value);
-  return {
-    host: url.hostname,
-    port: Number(url.port || 3306),
-    database: decodeURIComponent(url.pathname.replace(/^\/+/, '')),
-  };
-}
-
 const testDatabaseUrl =
   process.env.FEATURE07_TEST_DATABASE_URL ??
   readLocalEnvValue('FEATURE07_TEST_DATABASE_URL');
 const runtimeDatabaseUrl =
   process.env.DATABASE_URL ?? readLocalEnvValue('DATABASE_URL');
+const migrationDatabaseUrl =
+  process.env.MIGRATION_URL ?? readLocalEnvValue('MIGRATION_URL');
 const shadowDatabaseUrl =
   process.env.SHADOW_DATABASE_URL ?? readLocalEnvValue('SHADOW_DATABASE_URL');
 
 if (testDatabaseUrl) {
-  const target = databaseTarget(testDatabaseUrl);
-  const localHosts = new Set(['localhost', '127.0.0.1', '::1']);
-  if (!localHosts.has(target.host)) {
-    throw new Error('Feature 07 test database must target localhost.');
-  }
-  if (!/^vexgo_feature07.*test$/i.test(target.database)) {
-    throw new Error(
-      'Feature 07 read API tests only allow a dedicated test database (e.g. vexgo_feature07_test or vexgo_feature07_ci_test).',
-    );
-  }
-  const isCi = process.env.CI === 'true';
-  const allowedPort = isCi
-    ? target.port === 3306 || target.port === 3307
-    : target.port === 3307;
-  if (!allowedPort) {
-    throw new Error(
-      isCi
-        ? 'CI Feature 07 test database port must be 3306 or 3307.'
-        : 'Local Feature 07 test database must use port 3307.',
-    );
-  }
-
-  if (runtimeDatabaseUrl) {
-    const runtimeTarget = databaseTarget(runtimeDatabaseUrl);
-    if (
-      target.host === runtimeTarget.host &&
-      target.port === runtimeTarget.port &&
-      target.database === runtimeTarget.database
-    ) {
-      throw new Error(
-        'Feature 07 test database must not point to the runtime database.',
-      );
-    }
-  }
-  if (shadowDatabaseUrl) {
-    const shadowTarget = databaseTarget(shadowDatabaseUrl);
-    if (
-      target.host === shadowTarget.host &&
-      target.port === shadowTarget.port &&
-      target.database === shadowTarget.database
-    ) {
-      throw new Error(
-        'Feature 07 test database must not point to the shadow database.',
-      );
-    }
-  }
+  assertFeature07TestDatabase({
+    testDatabaseUrl,
+    ci: process.env.CI,
+    protectedDatabaseUrls: [
+      { name: 'runtime', value: runtimeDatabaseUrl },
+      { name: 'migration', value: migrationDatabaseUrl },
+      { name: 'shadow', value: shadowDatabaseUrl },
+    ],
+  });
 }
 
 const featureDescribe = testDatabaseUrl ? describe : describe.skip;
