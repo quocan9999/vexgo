@@ -81,6 +81,7 @@ describe('TicketsService', () => {
   };
 
   const prisma = {
+    phanHoi: { findMany: vi.fn().mockResolvedValue([]) },
     khachHang: {
       findUnique: vi.fn(),
     },
@@ -126,6 +127,7 @@ describe('TicketsService', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    prisma.phanHoi.findMany.mockResolvedValue([]);
     prisma.ve.updateMany.mockResolvedValue({ count: 1 });
     prisma.thanhToan.create.mockResolvedValue({ thanhToanId: 77 });
   });
@@ -135,6 +137,100 @@ describe('TicketsService', () => {
   });
 
   describe('findCustomerTickets', () => {
+    it('hydrates one scoped review for every seat of a trip with one batch query', async () => {
+      prisma.khachHang.findUnique.mockResolvedValue(mockCustomer);
+      prisma.ve.count.mockResolvedValue(2);
+      prisma.ve.findMany.mockResolvedValue([
+        sampleTicket,
+        { ...sampleTicket, veId: 2 },
+      ]);
+      prisma.phanHoi.findMany.mockResolvedValue([
+        {
+          phanHoiId: 71,
+          chuyenXeId: 50,
+          mucDanhGia: 4,
+          noiDung: 'Saved',
+          thoiGian: new Date('2026-10-20T08:00:00Z'),
+          trangThai: 'AN',
+        },
+        {
+          phanHoiId: 70,
+          chuyenXeId: 50,
+          mucDanhGia: 3,
+          noiDung: 'Older',
+          thoiGian: new Date('2026-10-19T08:00:00Z'),
+          trangThai: 'HIEN_THI',
+        },
+      ]);
+      const result = await service.findCustomerTickets(1, {
+        page: 1,
+        pageSize: 10,
+      });
+      expect(result.data.map((ticket) => ticket.review)).toEqual([
+        {
+          reviewId: 71,
+          tripId: 50,
+          rating: 4,
+          comment: 'Saved',
+          createdAt: '2026-10-20T08:00:00.000Z',
+          status: 'AN',
+        },
+        {
+          reviewId: 71,
+          tripId: 50,
+          rating: 4,
+          comment: 'Saved',
+          createdAt: '2026-10-20T08:00:00.000Z',
+          status: 'AN',
+        },
+      ]);
+      expect(prisma.phanHoi.findMany).toHaveBeenCalledTimes(1);
+      expect(prisma.phanHoi.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { khachHangId: 10, chuyenXeId: { in: [50] } },
+          orderBy: [{ thoiGian: 'desc' }, { phanHoiId: 'desc' }],
+        }),
+      );
+    });
+
+    it('returns explicit null for a ticket without a customer review', async () => {
+      prisma.ve.findUnique.mockResolvedValue(sampleTicket);
+      expect(
+        (await service.findCustomerTicketById(1, 1)).data.review,
+      ).toBeNull();
+      expect(prisma.phanHoi.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { khachHangId: 10, chuyenXeId: { in: [50] } },
+        }),
+      );
+    });
+
+    it('does not query or disclose reviews through public ticket lookup', async () => {
+      prisma.ve.findUnique.mockResolvedValue(sampleTicket);
+      const result = await service.lookupTicket({
+        ticketCode: 'VE-001',
+        phoneNumber: '0901234567',
+      });
+      expect(result.data.review).toBeNull();
+      expect(prisma.phanHoi.findMany).not.toHaveBeenCalled();
+    });
+
+    it('checks ticket ownership before reading any review', async () => {
+      prisma.ve.findUnique.mockResolvedValue(sampleTicket);
+      await expect(service.findCustomerTicketById(999, 1)).rejects.toThrow(
+        ForbiddenException,
+      );
+      expect(prisma.phanHoi.findMany).not.toHaveBeenCalled();
+    });
+
+    it('does not query reviews for an empty ticket page', async () => {
+      prisma.khachHang.findUnique.mockResolvedValue(mockCustomer);
+      prisma.ve.count.mockResolvedValue(0);
+      prisma.ve.findMany.mockResolvedValue([]);
+      expect((await service.findCustomerTickets(1, { page: 1, pageSize: 10 })).data).toEqual([]);
+      expect(prisma.phanHoi.findMany).not.toHaveBeenCalled();
+    });
+
     it.each([50, 902])(
       'returns the seat-related tripId %i in every ticket reader',
       async (tripId) => {

@@ -20,6 +20,7 @@ describe('Reviews API Integration with MySQL', () => {
   let departedTripId: number;
   let futureTripId: number;
   let departedTripSeatId: number;
+  let departedSecondTripSeatId: number;
   let futureTripSeatId: number;
 
   let currentPrincipal: AuthPrincipal | null = null;
@@ -180,13 +181,17 @@ describe('Reviews API Integration with MySQL', () => {
         sucChuaHangCongKenh: 0,
         sucChuaHangNhe: 0,
         gheChuyenXes: {
-          create: [{ gheId: vehicle.ghes[0].gheId, trangThai: 'DA_DAT' }],
+          create: vehicle.ghes.map((seat) => ({
+            gheId: seat.gheId,
+            trangThai: 'DA_DAT',
+          })),
         },
       },
       include: { gheChuyenXes: true },
     });
     departedTripId = departedTrip.chuyenXeId;
     departedTripSeatId = departedTrip.gheChuyenXes[0].gheChuyenXeId;
+    departedSecondTripSeatId = departedTrip.gheChuyenXes[1].gheChuyenXeId;
 
     const futureTrip = await prisma.chuyenXe.create({
       data: {
@@ -216,7 +221,7 @@ describe('Reviews API Integration with MySQL', () => {
         where: { chuyenXeId: { in: [departedTripId, futureTripId] } },
       });
       await prisma.ve.deleteMany({
-        where: { gheChuyenXeId: { in: [departedTripSeatId, futureTripSeatId] } },
+        where: { gheChuyenXeId: { in: [departedTripSeatId, departedSecondTripSeatId, futureTripSeatId] } },
       });
       await prisma.phieuDatVe.deleteMany({
         where: { donGiaoDich: { is: { khachHangId: { in: [customerAId, customerBId] } } } },
@@ -250,7 +255,7 @@ describe('Reviews API Integration with MySQL', () => {
       where: { chuyenXeId: { in: [departedTripId, futureTripId] } },
     });
     await prisma.ve.deleteMany({
-      where: { gheChuyenXeId: { in: [departedTripSeatId, futureTripSeatId] } },
+      where: { gheChuyenXeId: { in: [departedTripSeatId, departedSecondTripSeatId, futureTripSeatId] } },
     });
     await prisma.phieuDatVe.deleteMany({
       where: { donGiaoDich: { is: { khachHangId: { in: [customerAId, customerBId] } } } },
@@ -424,6 +429,98 @@ describe('Reviews API Integration with MySQL', () => {
     expect(dbReview).toBeDefined();
     expect(dbReview?.mucDanhGia).toBe(5);
     expect(dbReview?.chuyenXeId).toBe(ticketDetail.body.data.tripId);
+  });
+
+  it('persists review readback across list/detail for all customer seats without leaking another customer review', async () => {
+    const orders = [];
+    for (const tripSeatId of [departedTripSeatId, departedSecondTripSeatId]) {
+      orders.push(
+        await createBookingWithTickets({
+          customerId: customerAId,
+          tripSeatId,
+          transactionStatus: 'DA_THANH_TOAN',
+          bookingStatus: 'HOAN_TAT',
+          ticketStatus: 'HOAN_TAT',
+        }),
+      );
+    }
+    currentPrincipal = customerAPrincipal;
+    const before = await request(app.getHttpServer())
+      .get('/api/v1/tickets')
+      .expect(200);
+    expect(before.body.data).toHaveLength(2);
+    expect(
+      before.body.data.every(
+        (ticket: { review: unknown }) => ticket.review === null,
+      ),
+    ).toBe(true);
+    const response = await request(app.getHttpServer())
+      .post('/api/v1/reviews')
+      .send({
+        tripId: before.body.data[0].tripId,
+        rating: 4,
+        comment: 'Persisted review',
+      })
+      .expect(201);
+    const receipt = response.body.data;
+    // Adversarial pre-existing data must never be selected as this owner's review.
+    await prisma.phanHoi.create({
+      data: {
+        khachHangId: customerBId,
+        chuyenXeId: departedTripId,
+        mucDanhGia: 1,
+        noiDung: 'Other customer private comment',
+        trangThai: 'HIEN_THI',
+        thoiGian: new Date(Date.now() + 60_000),
+      },
+    });
+    // Moderation does not undo review submission or permit another submission.
+    await prisma.phanHoi.update({
+      where: { phanHoiId: receipt.reviewId },
+      data: { trangThai: 'AN' },
+    });
+    const expected = { ...receipt, status: 'AN' };
+    for (let refresh = 0; refresh < 2; refresh++) {
+      const list = await request(app.getHttpServer())
+        .get('/api/v1/tickets')
+        .expect(200);
+      expect(list.body.data).toHaveLength(2);
+      for (const ticket of list.body.data) {
+        expect(ticket.status).toBe('HOAN_TAT');
+        expect(ticket.review).toEqual(expected);
+        const detail = await request(app.getHttpServer())
+          .get(`/api/v1/tickets/${ticket.ticketId}`)
+          .expect(200);
+        expect(detail.body.data.review).toEqual(expected);
+      }
+    }
+    await request(app.getHttpServer())
+      .post('/api/v1/reviews')
+      .send({
+        tripId: departedTripId,
+        rating: 5,
+        comment: 'Duplicate from second seat',
+      })
+      .expect(409);
+    expect(
+      await prisma.phanHoi.count({
+        where: { khachHangId: customerAId, chuyenXeId: departedTripId },
+      }),
+    ).toBe(1);
+    const ticket = orders[0].phieuDatVe!.ves[0];
+    const lookup = await request(app.getHttpServer())
+      .post('/api/v1/tickets/lookup')
+      .send({ ticketCode: ticket.maVe, phoneNumber: '+84930000001' })
+      .expect(200);
+    expect(lookup.body.data.review).toBeNull();
+    currentPrincipal = customerBPrincipal;
+    const otherList = await request(app.getHttpServer())
+      .get('/api/v1/tickets')
+      .expect(200);
+    expect(otherList.body.data).toEqual([]);
+    await request(app.getHttpServer())
+      .get(`/api/v1/tickets/${ticket.veId}`)
+      .expect(403);
   });
 
   it('rejects duplicate review for the same trip with 409 Conflict', async () => {
