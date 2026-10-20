@@ -2,12 +2,13 @@
 
 import { LoaderCircle, X } from 'lucide-react';
 import { useRef, useState, type FormEvent } from 'react';
+import { AdminMoneyInput } from '@/components/admin/admin-money-input';
 import { AdminFormDialog } from '@/components/admin/admin-form-dialog';
 import { Button } from '@/components/ui/button';
-import { createPromotion, PromotionApiError, type PromotionApiErrorDetail } from '../services/promotion-service';
+import { createPromotion, updatePromotion, PromotionApiError, type PromotionApiErrorDetail } from '../services/promotion-service';
 import type { CreatePromotionRequest, Promotion, PromotionDiscountType } from '../types/promotion';
 
-type Props = { onClose: () => void; onSaved: (promotion: Promotion) => void };
+type Props = { promotion?: Promotion; onClose: () => void; onSaved: (promotion: Promotion) => void };
 type FormValues = {
   name: string;
   code: string;
@@ -83,18 +84,34 @@ function mapServerFieldErrors(details: PromotionApiErrorDetail[]): FieldErrors {
   return errors;
 }
 
-export function PromotionFormDialog({ onClose, onSaved }: Props) {
+export function PromotionFormDialog({ promotion, onClose, onSaved }: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null);
-  const summaryRef = useRef<HTMLDivElement>(null);
   const submittingRef = useRef(false);
-  const [values, setValues] = useState<FormValues>({
+  const [codeLocked, setCodeLocked] = useState(Boolean(promotion && promotion.usageCount > 0));
+  const [values, setValues] = useState<FormValues>(() => promotion ? {
+    name: promotion.name,
+    code: promotion.code,
+    discountType: promotion.discountType,
+    discountValue: promotion.discountValue.replace(/\.00$/, ''),
+    maxDiscount: promotion.maxDiscount?.replace(/\.00$/, '') ?? '',
+    minimumTicketAmount: promotion.minimumTicketAmount?.replace(/\.00$/, '') ?? '',
+    startsOn: promotion.startsOn,
+    endsOn: promotion.endsOn,
+    usageLimit: String(promotion.usageLimit),
+  } : {
     name: '', code: '', discountType: '', discountValue: '', maxDiscount: '',
     minimumTicketAmount: '', startsOn: '', endsOn: '', usageLimit: '',
   });
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const idPrefix = 'create-promotion';
+  const idPrefix = promotion ? `edit-promotion-${promotion.id}` : 'create-promotion';
+  const formTitle = promotion ? 'Chỉnh sửa khuyến mãi' : 'Thêm khuyến mãi';
+
+  function focusFirstInvalidField(errors: FieldErrors) {
+    const field = FIELD_NAMES.find((name) => errors[name]);
+    if (field) requestAnimationFrame(() => document.getElementById(`${idPrefix}-${field}`)?.focus());
+  }
 
   function closeDialog() {
     if (!submittingRef.current) dialogRef.current?.close();
@@ -120,9 +137,12 @@ export function PromotionFormDialog({ onClose, onSaved }: Props) {
     if (submittingRef.current) return;
     setFormError(null);
     const errors = validate(values);
+    if (promotion && Number(values.usageLimit) < promotion.usageCount) {
+      errors.usageLimit = 'Số lượt tối đa không được nhỏ hơn số lượt đã sử dụng.';
+    }
     setFieldErrors(errors);
     if (Object.keys(errors).length > 0) {
-      requestAnimationFrame(() => summaryRef.current?.focus());
+      focusFirstInvalidField(errors);
       return;
     }
 
@@ -140,25 +160,28 @@ export function PromotionFormDialog({ onClose, onSaved }: Props) {
     submittingRef.current = true;
     setSubmitting(true);
     try {
-      const created = await createPromotion(request);
+      const saved = promotion ? await updatePromotion(promotion.id, request) : await createPromotion(request);
       dialogRef.current?.close();
-      onSaved(created);
+      onSaved(saved);
     } catch (requestError: unknown) {
       if (requestError instanceof PromotionApiError) {
         const serverErrors = mapServerFieldErrors(requestError.details);
         setFieldErrors(serverErrors);
         if (Object.keys(serverErrors).length > 0) {
-          setFormError('Vui lòng kiểm tra lại các trường được đánh dấu.');
-          requestAnimationFrame(() => summaryRef.current?.focus());
+          if (requestError.code === 'PROMOTION_CODE_LOCKED' && promotion) {
+            setCodeLocked(true);
+            setValues((current) => ({ ...current, code: promotion.code }));
+          }
+          focusFirstInvalidField(serverErrors);
         } else if (requestError.code === 'PROMOTION_CODE_EXISTS') {
-          setFieldErrors((current) => ({ ...current, code: 'Mã khuyến mãi đã tồn tại trong nhà xe này.' }));
-          setFormError('Mã khuyến mãi đã tồn tại trong nhà xe này.');
-          requestAnimationFrame(() => summaryRef.current?.focus());
+          const errors: FieldErrors = { code: 'Mã khuyến mãi đã tồn tại trong nhà xe này.' };
+          setFieldErrors(errors);
+          focusFirstInvalidField(errors);
         } else {
-          setFormError(requestError.message || 'Không thể tạo khuyến mãi. Vui lòng thử lại.');
+          setFormError(requestError.message || 'Không thể lưu khuyến mãi. Vui lòng thử lại.');
         }
       } else {
-        setFormError('Không thể kết nối hoặc tạo khuyến mãi. Vui lòng thử lại.');
+        setFormError('Không thể kết nối hoặc lưu khuyến mãi. Vui lòng thử lại.');
       }
       submittingRef.current = false;
       setSubmitting(false);
@@ -171,8 +194,6 @@ export function PromotionFormDialog({ onClose, onSaved }: Props) {
       : null;
   }
 
-  const summaryEntries = FIELD_NAMES.flatMap((field) => fieldErrors[field] ? [{ field, message: fieldErrors[field]! }] : []);
-
   return (
     <AdminFormDialog
       ariaLabelledBy={`${idPrefix}-title`}
@@ -183,23 +204,11 @@ export function PromotionFormDialog({ onClose, onSaved }: Props) {
     >
       <header className="admin-dialog-header">
         <div className="admin-dialog-header__copy">
-          <h2 id={`${idPrefix}-title`}>Thêm khuyến mãi</h2>
+          <h2 id={`${idPrefix}-title`}>{formTitle}</h2>
         </div>
-        <Button aria-label="Đóng biểu mẫu thêm khuyến mãi" className="icon-button" disabled={submitting} onClick={closeDialog} type="button" variant="secondary"><X aria-hidden="true" size={19} /></Button>
+        <Button aria-label={`Đóng biểu mẫu ${promotion ? 'chỉnh sửa' : 'thêm'} khuyến mãi`} className="icon-button" disabled={submitting} onClick={closeDialog} type="button" variant="secondary"><X aria-hidden="true" size={19} /></Button>
       </header>
       <form className="admin-crud-form" noValidate onSubmit={handleSubmit}>
-        {summaryEntries.length > 0 && (
-          <div aria-labelledby={`${idPrefix}-errors-title`} className="admin-crud-form-error" ref={summaryRef} role="alert" tabIndex={-1}>
-            <strong id={`${idPrefix}-errors-title`}>Có {summaryEntries.length} trường cần kiểm tra</strong>
-            <ul>
-              {summaryEntries.map(({ field, message }) => (
-                <li key={field}><a href={`#${idPrefix}-${field}`} onClick={(event) => { event.preventDefault(); document.getElementById(`${idPrefix}-${field}`)?.focus(); }}>{message}</a></li>
-              ))}
-            </ul>
-          </div>
-        )}
-        {formError && <p className="admin-crud-form-error" role="alert">{formError}</p>}
-
         <div className="admin-crud-form-field">
           <label htmlFor={`${idPrefix}-name`}>Tên chương trình *</label>
           <input id={`${idPrefix}-name`} maxLength={150} required disabled={submitting} value={values.name} aria-invalid={Boolean(fieldErrors.name)} aria-describedby={fieldErrors.name ? `${idPrefix}-name-error` : undefined} onChange={(event) => updateField('name', event.target.value)} />
@@ -207,8 +216,9 @@ export function PromotionFormDialog({ onClose, onSaved }: Props) {
         </div>
         <div className="admin-crud-form-field">
           <label htmlFor={`${idPrefix}-code`}>Mã khuyến mãi *</label>
-          <input autoCapitalize="characters" autoComplete="off" id={`${idPrefix}-code`} maxLength={50} required disabled={submitting} value={values.code} aria-invalid={Boolean(fieldErrors.code)} aria-describedby={fieldErrors.code ? `${idPrefix}-code-error` : undefined} onChange={(event) => updateField('code', event.target.value)} />
+          <input autoCapitalize="characters" autoComplete="off" id={`${idPrefix}-code`} readOnly={codeLocked} maxLength={50} required disabled={submitting} value={values.code} aria-invalid={Boolean(fieldErrors.code)} aria-describedby={fieldErrors.code ? `${idPrefix}-code-error` : undefined} onChange={(event) => updateField('code', event.target.value)} />
           {fieldError('code', `${idPrefix}-code-error`)}
+          {codeLocked && <span>Mã đã phát sinh sử dụng nên không thể thay đổi.</span>}
         </div>
         <div className="admin-crud-form-field">
           <label htmlFor={`${idPrefix}-discountType`}>Loại giảm giá *</label>
@@ -221,17 +231,21 @@ export function PromotionFormDialog({ onClose, onSaved }: Props) {
         </div>
         <div className="admin-crud-form-field">
           <label htmlFor={`${idPrefix}-discountValue`}>Mức giảm {values.discountType === 'PHAN_TRAM' ? '(%)' : '(VND)'} *</label>
-          <input id={`${idPrefix}-discountValue`} inputMode="decimal" autoComplete="off" required disabled={submitting} value={values.discountValue} aria-invalid={Boolean(fieldErrors.discountValue)} aria-describedby={fieldErrors.discountValue ? `${idPrefix}-discountValue-error` : undefined} onChange={(event) => updateField('discountValue', event.target.value)} />
+          {values.discountType === 'SO_TIEN' ? (
+            <AdminMoneyInput id={`${idPrefix}-discountValue`} autoComplete="off" required disabled={submitting} value={values.discountValue} aria-invalid={Boolean(fieldErrors.discountValue)} aria-describedby={fieldErrors.discountValue ? `${idPrefix}-discountValue-error` : undefined} onValueChange={(value) => updateField('discountValue', value)} />
+          ) : (
+            <input id={`${idPrefix}-discountValue`} inputMode="decimal" autoComplete="off" required disabled={submitting} value={values.discountValue} aria-invalid={Boolean(fieldErrors.discountValue)} aria-describedby={fieldErrors.discountValue ? `${idPrefix}-discountValue-error` : undefined} onChange={(event) => updateField('discountValue', event.target.value)} />
+          )}
           {fieldError('discountValue', `${idPrefix}-discountValue-error`)}
         </div>
         {values.discountType === 'PHAN_TRAM' && <div className="admin-crud-form-field">
           <label htmlFor={`${idPrefix}-maxDiscount`}>Giảm tối đa (VND) *</label>
-          <input id={`${idPrefix}-maxDiscount`} inputMode="decimal" autoComplete="off" required disabled={submitting} value={values.maxDiscount} aria-invalid={Boolean(fieldErrors.maxDiscount)} aria-describedby={fieldErrors.maxDiscount ? `${idPrefix}-maxDiscount-error` : undefined} onChange={(event) => updateField('maxDiscount', event.target.value)} />
+          <AdminMoneyInput id={`${idPrefix}-maxDiscount`} autoComplete="off" required disabled={submitting} value={values.maxDiscount} aria-invalid={Boolean(fieldErrors.maxDiscount)} aria-describedby={fieldErrors.maxDiscount ? `${idPrefix}-maxDiscount-error` : undefined} onValueChange={(value) => updateField('maxDiscount', value)} />
           {fieldError('maxDiscount', `${idPrefix}-maxDiscount-error`)}
         </div>}
         <div className="admin-crud-form-field">
           <label htmlFor={`${idPrefix}-minimumTicketAmount`}>Giá trị vé tối thiểu (VND)</label>
-          <input id={`${idPrefix}-minimumTicketAmount`} inputMode="decimal" autoComplete="off" disabled={submitting} value={values.minimumTicketAmount} aria-invalid={Boolean(fieldErrors.minimumTicketAmount)} aria-describedby={fieldErrors.minimumTicketAmount ? `${idPrefix}-minimumTicketAmount-error` : undefined} onChange={(event) => updateField('minimumTicketAmount', event.target.value)} />
+          <AdminMoneyInput id={`${idPrefix}-minimumTicketAmount`} autoComplete="off" disabled={submitting} value={values.minimumTicketAmount} aria-invalid={Boolean(fieldErrors.minimumTicketAmount)} aria-describedby={fieldErrors.minimumTicketAmount ? `${idPrefix}-minimumTicketAmount-error` : undefined} onValueChange={(value) => updateField('minimumTicketAmount', value)} />
           {fieldError('minimumTicketAmount', `${idPrefix}-minimumTicketAmount-error`)}
         </div>
         <div className="admin-crud-form-field">
@@ -246,14 +260,16 @@ export function PromotionFormDialog({ onClose, onSaved }: Props) {
         </div>
         <div className="admin-crud-form-field">
           <label htmlFor={`${idPrefix}-usageLimit`}>Số lượt tối đa *</label>
-          <input id={`${idPrefix}-usageLimit`} inputMode="numeric" min="1" step="1" type="number" required disabled={submitting} value={values.usageLimit} aria-invalid={Boolean(fieldErrors.usageLimit)} aria-describedby={fieldErrors.usageLimit ? `${idPrefix}-usageLimit-error` : undefined} onChange={(event) => updateField('usageLimit', event.target.value)} />
+          <input id={`${idPrefix}-usageLimit`} inputMode="numeric" min={Math.max(1, promotion?.usageCount ?? 0)} step="1" type="number" required disabled={submitting} value={values.usageLimit} aria-invalid={Boolean(fieldErrors.usageLimit)} aria-describedby={fieldErrors.usageLimit ? `${idPrefix}-usageLimit-error` : undefined} onChange={(event) => updateField('usageLimit', event.target.value)} />
           {fieldError('usageLimit', `${idPrefix}-usageLimit-error`)}
+          {promotion && <span>Đã sử dụng: {promotion.usageCount.toLocaleString('vi-VN')} lượt. Số lượt đã dùng được ghi nhận tự động.</span>}
         </div>
+        {formError && <p className="admin-crud-form-error" role="alert">{formError}</p>}
         <div className="admin-crud-form-actions">
           <Button disabled={submitting} onClick={closeDialog} type="button" variant="secondary">Hủy</Button>
           <Button disabled={submitting} type="submit">
             {submitting && <LoaderCircle aria-hidden="true" className="admin-crud-form-spinner" size={16} />}
-            {submitting ? 'Đang tạo…' : 'Tạo khuyến mãi'}
+            {submitting ? (promotion ? 'Đang lưu…' : 'Đang tạo…') : (promotion ? 'Lưu thay đổi' : 'Tạo khuyến mãi')}
           </Button>
         </div>
       </form>

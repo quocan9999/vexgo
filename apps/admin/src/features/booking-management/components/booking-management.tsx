@@ -332,13 +332,7 @@ export function BookingManagement() {
     }));
   }
 
-  function changeSortDirection(sortDirection: 'asc' | 'desc') {
-    updateListState((current) => ({
-      ...current,
-      sortDirection,
-      page: 1,
-    }));
-  }
+
 
   const items = resultPage?.data ?? [];
   const totalItems = requestError
@@ -501,18 +495,8 @@ export function BookingManagement() {
                     changeSort(value as BookingManagementSortKey)
                   }
                   options={sortOptions}
+                  sortDirection={activeState.sortDirection}
                   value={activeState.sortBy}
-                />
-                <LabeledSelectFilter
-                  label="Hướng sắp xếp"
-                  onChange={(value) =>
-                    changeSortDirection(value as 'asc' | 'desc')
-                  }
-                  options={[
-                    { value: 'desc', label: 'Giảm dần' },
-                    { value: 'asc', label: 'Tăng dần' },
-                  ]}
-                  value={activeState.sortDirection}
                 />
                 {hasFilters && (
                   <button

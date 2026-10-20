@@ -472,3 +472,31 @@
     min-width: 125px;
   }
 }
+
+.labeledSortTrigger {
+  width: 135px;
+  min-width: 135px;
+  max-width: 135px;
+}
+
+.labeledSortTrigger > svg {
+  flex-shrink: 0;
+}
+
+.sortOption {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+}
+
+.sortOption:hover,
+.sortOption:focus-visible {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+
+.sortOption[aria-pressed='true'] {
+  font-weight: var(--admin-type-label-weight);
+}
