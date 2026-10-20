@@ -8,11 +8,15 @@ import type { KeyboardEvent } from 'react';
 import { AdminPageHeader } from '@/components/admin/admin-page-header';
 import { AdminPagination } from '@/components/admin/admin-pagination';
 import { AdminStatusBadge } from '@/components/admin/admin-status-badge';
+import { AdminDetailAction } from '@/components/admin/admin-detail-action';
 import { AdminTableSkeleton } from '@/components/admin/admin-table-skeleton';
 import {
+  DateRangeFilter,
   FilterToolbar,
+  LabeledSelectFilter,
   SearchInput,
   SelectFilter,
+  type DateRangeValue,
 } from '@/components/data-filters/data-filters';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
 import { useAdminSession } from '@/features/admin-auth/hooks/use-admin-session';
@@ -47,35 +51,19 @@ import styles from './booking-management.module.css';
 type BookingPage = AdminPage<AdminBookingListItem>;
 type TicketPage = AdminPage<AdminTicketListItem>;
 type ResultPage = BookingPage | TicketPage;
-type DateRangeDraft = {
-  bookedFrom: string;
-  bookedTo: string;
-  departureFrom: string;
-  departureTo: string;
-};
-type DateRangeDrafts = Record<BookingManagementTab, DateRangeDraft>;
-
-function dateRangeDraftsFromState(
+type DetailKind = 'bookings' | 'tickets';
+type OpenDetail = (
+  kind: DetailKind,
+  id: number,
   state: BookingManagementUrlState,
-): DateRangeDrafts {
-  return {
-    bookings: {
-      bookedFrom: state.bookings.bookedFrom ?? '',
-      bookedTo: state.bookings.bookedTo ?? '',
-      departureFrom: state.bookings.departureFrom ?? '',
-      departureTo: state.bookings.departureTo ?? '',
-    },
-    tickets: {
-      bookedFrom: state.tickets.bookedFrom ?? '',
-      bookedTo: state.tickets.bookedTo ?? '',
-      departureFrom: state.tickets.departureFrom ?? '',
-      departureTo: state.tickets.departureTo ?? '',
-    },
-  };
-}
+) => void;
 
-function dateRangeIsInvalid(from: string, to: string) {
-  return Boolean(from && to && from > to);
+function dateRangeValue(
+  from?: string,
+  to?: string,
+): Partial<DateRangeValue> | null {
+  if (!from && !to) return null;
+  return { from: from ?? '', to: to ?? '' };
 }
 
 function pathWithState(state: BookingManagementUrlState) {
@@ -127,21 +115,6 @@ export function BookingManagement() {
   );
   const { state: urlState, needsCanonicalization } = parsedUrl;
   const activeState = urlState[urlState.tab];
-  const [dateDrafts, setDateDrafts] = useState<DateRangeDrafts>(() =>
-    dateRangeDraftsFromState(urlState),
-  );
-  const activeDateDraft = dateDrafts[urlState.tab];
-  const bookedRangeIsInvalid = dateRangeIsInvalid(
-    activeDateDraft.bookedFrom,
-    activeDateDraft.bookedTo,
-  );
-  const departureRangeIsInvalid = dateRangeIsInvalid(
-    activeDateDraft.departureFrom,
-    activeDateDraft.departureTo,
-  );
-  const hasInvalidDateDraft = bookedRangeIsInvalid || departureRangeIsInvalid;
-  const bookedRangeErrorId = `${urlState.tab}-booked-date-range-error`;
-  const departureRangeErrorId = `${urlState.tab}-departure-date-range-error`;
   const authState = useAdminSession();
   const sessionKey = getSessionKey(authState);
   const queryKey = JSON.stringify([sessionKey, urlState.tab, activeState]);
@@ -172,20 +145,6 @@ export function BookingManagement() {
   useEffect(() => {
     latestUrlState.current = urlState;
   }, [urlState]);
-
-  useEffect(() => {
-    function restoreDateDraftsFromHistory() {
-      const restoredState = parseBookingManagementUrlState(
-        new URLSearchParams(window.location.search),
-      ).state;
-      latestUrlState.current = restoredState;
-      setDateDrafts(dateRangeDraftsFromState(restoredState));
-    }
-
-    window.addEventListener('popstate', restoreDateDraftsFromHistory);
-    return () =>
-      window.removeEventListener('popstate', restoreDateDraftsFromHistory);
-  }, []);
 
   const writeUrlState = useCallback(
     (nextState: BookingManagementUrlState, history: 'push' | 'replace') => {
@@ -301,6 +260,14 @@ export function BookingManagement() {
     writeUrlState({ ...latestUrlState.current, tab }, 'push');
   }
 
+  function openDetail(
+    kind: DetailKind,
+    id: number,
+    state: BookingManagementUrlState,
+  ) {
+    router.push(detailHref(kind, id, state));
+  }
+
   function handleTabKeyDown(
     event: KeyboardEvent<HTMLButtonElement>,
     currentTab: BookingManagementTab,
@@ -321,32 +288,16 @@ export function BookingManagement() {
 
   function changeDateRange(
     key: 'booked' | 'departure',
-    edge: 'From' | 'To',
-    value: string,
+    value: DateRangeValue | null,
   ) {
     const fromKey = key === 'booked' ? 'bookedFrom' : 'departureFrom';
     const toKey = key === 'booked' ? 'bookedTo' : 'departureTo';
-    const tab = urlState.tab;
-    const currentDraft = dateDrafts[tab];
-    const from = edge === 'From' ? value : currentDraft[fromKey];
-    const to = edge === 'To' ? value : currentDraft[toKey];
-
-    setDateDrafts((current) => ({
-      ...current,
-      [tab]: {
-        ...current[tab],
-        [fromKey]: from,
-        [toKey]: to,
-      },
-    }));
-
-    if (dateRangeIsInvalid(from, to)) return;
 
     updateListState((current) => {
       return {
         ...current,
-        [fromKey]: from || undefined,
-        [toKey]: to || undefined,
+        [fromKey]: value?.from || undefined,
+        [toKey]: value?.to || undefined,
         page: 1,
       };
     });
@@ -355,15 +306,6 @@ export function BookingManagement() {
   function resetFilters() {
     searchDirty.current = false;
     setSearchDraft('');
-    setDateDrafts((current) => ({
-      ...current,
-      [urlState.tab]: {
-        bookedFrom: '',
-        bookedTo: '',
-        departureFrom: '',
-        departureTo: '',
-      },
-    }));
     updateListState((current) => ({
       ...current,
       search: '',
@@ -407,10 +349,10 @@ export function BookingManagement() {
   const hasFilters = Boolean(
     activeState.search ||
     activeState.status ||
-    activeDateDraft.bookedFrom ||
-    activeDateDraft.bookedTo ||
-    activeDateDraft.departureFrom ||
-    activeDateDraft.departureTo,
+    activeState.bookedFrom ||
+    activeState.bookedTo ||
+    activeState.departureFrom ||
+    activeState.departureTo,
   );
   const statusOptions =
     urlState.tab === 'bookings'
@@ -515,141 +457,63 @@ export function BookingManagement() {
                   }))}
                   value={activeState.status ?? ''}
                 />
-                <div className={styles.dateRangeGroup}>
-                  <label className={styles.dateFilter}>
-                    <span>Ngày đặt từ</span>
-                    <input
-                      aria-describedby={
-                        bookedRangeIsInvalid ? bookedRangeErrorId : undefined
-                      }
-                      aria-invalid={bookedRangeIsInvalid || undefined}
-                      aria-label="Ngày đặt từ"
-                      onChange={(event) =>
-                        changeDateRange('booked', 'From', event.target.value)
-                      }
-                      type="date"
-                      value={activeDateDraft.bookedFrom}
-                    />
-                  </label>
-                  <label className={styles.dateFilter}>
-                    <span>Đến</span>
-                    <input
-                      aria-describedby={
-                        bookedRangeIsInvalid ? bookedRangeErrorId : undefined
-                      }
-                      aria-invalid={bookedRangeIsInvalid || undefined}
-                      aria-label="Ngày đặt đến"
-                      onChange={(event) =>
-                        changeDateRange('booked', 'To', event.target.value)
-                      }
-                      type="date"
-                      value={activeDateDraft.bookedTo}
-                    />
-                  </label>
-                  {bookedRangeIsInvalid && (
-                    <p
-                      className={styles.dateRangeError}
-                      id={bookedRangeErrorId}
-                      role="alert"
-                    >
-                      Ngày bắt đầu không được sau ngày kết thúc.
-                    </p>
+                <DateRangeFilter
+                  fromLabel="Ngày đặt từ"
+                  label="Ngày đặt"
+                  onApply={(value) => changeDateRange('booked', value)}
+                  title="Ngày đặt"
+                  toLabel="Ngày đặt đến"
+                  value={dateRangeValue(
+                    activeState.bookedFrom,
+                    activeState.bookedTo,
                   )}
-                </div>
-                <div className={styles.dateRangeGroup}>
-                  <label className={styles.dateFilter}>
-                    <span>Khởi hành từ</span>
-                    <input
-                      aria-describedby={
-                        departureRangeIsInvalid
-                          ? departureRangeErrorId
-                          : undefined
-                      }
-                      aria-invalid={departureRangeIsInvalid || undefined}
-                      aria-label="Ngày khởi hành từ"
-                      onChange={(event) =>
-                        changeDateRange('departure', 'From', event.target.value)
-                      }
-                      type="date"
-                      value={activeDateDraft.departureFrom}
-                    />
-                  </label>
-                  <label className={styles.dateFilter}>
-                    <span>Đến</span>
-                    <input
-                      aria-describedby={
-                        departureRangeIsInvalid
-                          ? departureRangeErrorId
-                          : undefined
-                      }
-                      aria-invalid={departureRangeIsInvalid || undefined}
-                      aria-label="Ngày khởi hành đến"
-                      onChange={(event) =>
-                        changeDateRange('departure', 'To', event.target.value)
-                      }
-                      type="date"
-                      value={activeDateDraft.departureTo}
-                    />
-                  </label>
-                  {departureRangeIsInvalid && (
-                    <p
-                      className={styles.dateRangeError}
-                      id={departureRangeErrorId}
-                      role="alert"
-                    >
-                      Ngày bắt đầu không được sau ngày kết thúc.
-                    </p>
+                />
+                <DateRangeFilter
+                  fromLabel="Khởi hành từ"
+                  label="Ngày khởi hành"
+                  onApply={(value) => changeDateRange('departure', value)}
+                  title="Ngày khởi hành"
+                  toLabel="Khởi hành đến"
+                  value={dateRangeValue(
+                    activeState.departureFrom,
+                    activeState.departureTo,
                   )}
-                </div>
-                <label className={styles.pageSize}>
-                  <span>Số dòng</span>
-                  <select
-                    aria-label="Số dòng mỗi trang"
-                    onChange={(event) =>
-                      updateListState((current) => ({
-                        ...current,
-                        pageSize: Number(event.target.value),
-                        page: 1,
-                      }))
-                    }
-                    value={activeState.pageSize}
-                  >
-                    {[10, 25, 50, 100].map((size) => (
-                      <option key={size} value={size}>
-                        {size}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className={styles.pageSize}>
-                  <span>Sắp xếp theo</span>
-                  <select
-                    aria-label="Sắp xếp theo"
-                    onChange={(event) =>
-                      changeSort(event.target.value as BookingManagementSortKey)
-                    }
-                    value={activeState.sortBy}
-                  >
-                    {sortOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className={styles.pageSize}>
-                  <span>Hướng sắp xếp</span>
-                  <select
-                    aria-label="Hướng sắp xếp"
-                    onChange={(event) =>
-                      changeSortDirection(event.target.value as 'asc' | 'desc')
-                    }
-                    value={activeState.sortDirection}
-                  >
-                    <option value="desc">Giảm dần</option>
-                    <option value="asc">Tăng dần</option>
-                  </select>
-                </label>
+                />
+                <LabeledSelectFilter
+                  accessibleLabel="Số dòng mỗi trang"
+                  label="Số dòng"
+                  onChange={(value) =>
+                    updateListState((current) => ({
+                      ...current,
+                      pageSize: Number(value),
+                      page: 1,
+                    }))
+                  }
+                  options={[10, 25, 50, 100].map((size) => ({
+                    value: String(size),
+                    label: String(size),
+                  }))}
+                  value={String(activeState.pageSize)}
+                />
+                <LabeledSelectFilter
+                  label="Sắp xếp theo"
+                  onChange={(value) =>
+                    changeSort(value as BookingManagementSortKey)
+                  }
+                  options={sortOptions}
+                  value={activeState.sortBy}
+                />
+                <LabeledSelectFilter
+                  label="Hướng sắp xếp"
+                  onChange={(value) =>
+                    changeSortDirection(value as 'asc' | 'desc')
+                  }
+                  options={[
+                    { value: 'desc', label: 'Giảm dần' },
+                    { value: 'asc', label: 'Tăng dần' },
+                  ]}
+                  value={activeState.sortDirection}
+                />
                 {hasFilters && (
                   <button
                     className={styles.resetButton}
@@ -660,13 +524,6 @@ export function BookingManagement() {
                   </button>
                 )}
               </FilterToolbar>
-
-              {hasInvalidDateDraft && (
-                <p className={styles.dateDraftNotice} role="status">
-                  Khoảng ngày chưa được áp dụng. Kết quả hiện tại vẫn theo bộ
-                  lọc ngày hợp lệ trước đó.
-                </p>
-              )}
 
               {loading && !resultPage && (
                 <AdminTableSkeleton
@@ -722,12 +579,14 @@ export function BookingManagement() {
                     {urlState.tab === 'bookings' ? (
                       <BookingTable
                         items={(resultPage as BookingPage).data}
+                        onOpenDetail={openDetail}
                         onSort={changeSort}
                         state={urlState}
                       />
                     ) : (
                       <TicketTable
                         items={(resultPage as TicketPage).data}
+                        onOpenDetail={openDetail}
                         onSort={changeSort}
                         state={urlState}
                       />
@@ -736,11 +595,13 @@ export function BookingManagement() {
                   {urlState.tab === 'bookings' ? (
                     <BookingCards
                       items={(resultPage as BookingPage).data}
+                      onOpenDetail={openDetail}
                       state={urlState}
                     />
                   ) : (
                     <TicketCards
                       items={(resultPage as TicketPage).data}
+                      onOpenDetail={openDetail}
                       state={urlState}
                     />
                   )}
@@ -805,10 +666,12 @@ function SortHeader({
 
 function BookingTable({
   items,
+  onOpenDetail,
   onSort,
   state,
 }: {
   items: AdminBookingListItem[];
+  onOpenDetail: OpenDetail;
   onSort: (sortBy: BookingManagementSortKey) => void;
   state: BookingManagementUrlState;
 }) {
@@ -929,13 +792,10 @@ function BookingTable({
               </AdminStatusBadge>
             </td>
             <td>
-              <Link
-                className={styles.detailLink}
-                href={detailHref('bookings', item.bookingId, state)}
-              >
-                Xem chi tiết
-                <span className="sr-only"> phiếu {item.bookingCode}</span>
-              </Link>
+              <AdminDetailAction
+                onClick={() => onOpenDetail('bookings', item.bookingId, state)}
+                resourceName={`phiếu ${item.bookingCode}`}
+              />
             </td>
           </tr>
         ))}
@@ -946,10 +806,12 @@ function BookingTable({
 
 function TicketTable({
   items,
+  onOpenDetail,
   onSort,
   state,
 }: {
   items: AdminTicketListItem[];
+  onOpenDetail: OpenDetail;
   onSort: (sortBy: BookingManagementSortKey) => void;
   state: BookingManagementUrlState;
 }) {
@@ -1057,12 +919,10 @@ function TicketTable({
               </AdminStatusBadge>
             </td>
             <td>
-              <Link
-                className={styles.detailLink}
-                href={detailHref('tickets', item.ticketId, state)}
-              >
-                Chi tiết<span className="sr-only"> vé {item.ticketCode}</span>
-              </Link>
+              <AdminDetailAction
+                onClick={() => onOpenDetail('tickets', item.ticketId, state)}
+                resourceName={`vé ${item.ticketCode}`}
+              />
             </td>
           </tr>
         ))}
@@ -1073,9 +933,11 @@ function TicketTable({
 
 function BookingCards({
   items,
+  onOpenDetail,
   state,
 }: {
   items: AdminBookingListItem[];
+  onOpenDetail: OpenDetail;
   state: BookingManagementUrlState;
 }) {
   return (
@@ -1132,12 +994,10 @@ function BookingCards({
               <dd>{formatVnd(item.initialTicketAmount)}</dd>
             </div>
           </dl>
-          <Link
-            className={styles.detailLink}
-            href={detailHref('bookings', item.bookingId, state)}
-          >
-            Xem chi tiết
-          </Link>
+          <AdminDetailAction
+            onClick={() => onOpenDetail('bookings', item.bookingId, state)}
+            resourceName={`phiếu ${item.bookingCode}`}
+          />
         </li>
       ))}
     </ul>
@@ -1146,9 +1006,11 @@ function BookingCards({
 
 function TicketCards({
   items,
+  onOpenDetail,
   state,
 }: {
   items: AdminTicketListItem[];
+  onOpenDetail: OpenDetail;
   state: BookingManagementUrlState;
 }) {
   return (
@@ -1210,12 +1072,10 @@ function TicketCards({
               <dd>{formatVnd(item.actualPrice)}</dd>
             </div>
           </dl>
-          <Link
-            className={styles.detailLink}
-            href={detailHref('tickets', item.ticketId, state)}
-          >
-            Xem chi tiết
-          </Link>
+          <AdminDetailAction
+            onClick={() => onOpenDetail('tickets', item.ticketId, state)}
+            resourceName={`vé ${item.ticketCode}`}
+          />
         </li>
       ))}
     </ul>

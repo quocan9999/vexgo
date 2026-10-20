@@ -20,6 +20,7 @@ const navigation = vi.hoisted(() => {
   let historyEntries = [{ pathname, query }];
   let historyIndex = 0;
   let transitionCount = 0;
+  let lastPushedUrl = '';
   const listeners = new Set<() => void>();
 
   function updateBrowserLocation() {
@@ -45,6 +46,7 @@ const navigation = vi.hoisted(() => {
       query = separator === -1 ? '' : url.slice(separator + 1);
       const location = { pathname, query };
       if (method === 'push') {
+        lastPushedUrl = url;
         historyEntries = historyEntries.slice(0, historyIndex + 1);
         historyEntries.push(location);
         historyIndex += 1;
@@ -61,6 +63,7 @@ const navigation = vi.hoisted(() => {
       historyEntries = [{ pathname, query }];
       historyIndex = 0;
       transitionCount = 0;
+      lastPushedUrl = '';
       updateBrowserLocation();
       notify();
     },
@@ -85,6 +88,9 @@ const navigation = vi.hoisted(() => {
     },
     getTransitionCount() {
       return transitionCount;
+    },
+    getLastPushedUrl() {
+      return lastPushedUrl;
     },
   };
 });
@@ -470,25 +476,19 @@ describe('Admin booking and ticket lists', () => {
           0,
         );
         expect(
-          (screen.getByLabelText('Ngày đặt từ') as HTMLInputElement).value,
-        ).toBe('2026-10-05');
-        expect(
-          (screen.getByLabelText('Ngày đặt đến') as HTMLInputElement).value,
-        ).toBe('2026-10-10');
+          screen.getByRole('button', {
+            name: 'Ngày đặt: 05/10/2026 đến 10/10/2026',
+          }),
+        ).toBeTruthy();
       } else {
         expect((await screen.findAllByText('VE-0044')).length).toBeGreaterThan(
           0,
         );
         expect(
-          (
-            screen.getByLabelText('Ngày khởi hành từ') as HTMLInputElement
-          ).value,
-        ).toBe('2026-11-01');
-        expect(
-          (
-            screen.getByLabelText('Ngày khởi hành đến') as HTMLInputElement
-          ).value,
-        ).toBe('2026-11-05');
+          screen.getByRole('button', {
+            name: 'Ngày khởi hành: 01/11/2026 đến 05/11/2026',
+          }),
+        ).toBeTruthy();
       }
 
       await act(async () => {
@@ -533,9 +533,66 @@ describe('Admin booking and ticket lists', () => {
 
     expect(screen.getByText('Hủy 1/3 vé')).toBeTruthy();
     expect((await screen.findAllByText('750.000 ₫')).length).toBeGreaterThan(0);
-    expect(
-      screen.getByRole('link', { name: /phiếu PD-0012/ }).getAttribute('href'),
-    ).toContain('/booking-management/bookings/12');
+    const detailActions = screen.getAllByRole('button', {
+      name: 'Xem chi tiết phiếu PD-0012',
+    });
+    fireEvent.click(detailActions[0]);
+    const detailTarget = new URL(
+      navigation.getLastPushedUrl(),
+      window.location.origin,
+    );
+    expect(detailTarget.pathname).toBe('/booking-management/bookings/12');
+    expect(detailTarget.searchParams.get('from')).toContain(
+      '/booking-management?bSearch=PD-0012&bPage=3',
+    );
+  });
+
+  it('applies booking and departure ranges through the shared date-range filters', async () => {
+    const api = installApi();
+    render(<BookingManagement />);
+    await screen.findAllByText('PD-0012');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Lọc theo ngày đặt' }));
+    fireEvent.change(await screen.findByLabelText('Ngày đặt từ'), {
+      target: { value: '2026-10-01' },
+    });
+    fireEvent.change(await screen.findByLabelText('Ngày đặt đến'), {
+      target: { value: '2026-10-08' },
+    });
+    expect(navigation.getSnapshot()).toBe('');
+    fireEvent.click(screen.getByRole('button', { name: 'Áp dụng' }));
+
+    await waitFor(() => {
+      expect(
+        new URLSearchParams(navigation.getSnapshot()).get('bBookedFrom'),
+      ).toBe('2026-10-01');
+      expect(
+        api.urls.some(
+          (url) =>
+            url.searchParams.get('bookedFrom') === '2026-10-01' &&
+            url.searchParams.get('bookedTo') === '2026-10-08',
+        ),
+      ).toBe(true);
+    });
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Lọc theo ngày khởi hành' }),
+    );
+    fireEvent.change(await screen.findByLabelText('Khởi hành từ'), {
+      target: { value: '2026-10-10' },
+    });
+    fireEvent.change(await screen.findByLabelText('Khởi hành đến'), {
+      target: { value: '2026-10-12' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Áp dụng' }));
+
+    await waitFor(() => {
+      const params = new URLSearchParams(navigation.getSnapshot());
+      expect(params.get('bDepartureFrom')).toBe('2026-10-10');
+      expect(params.get('bDepartureTo')).toBe('2026-10-12');
+      expect(params.get('bBookedFrom')).toBe('2026-10-01');
+      expect(params.get('bBookedTo')).toBe('2026-10-08');
+    });
   });
 
   it('debounces search and sends supported server-side sort and date parameters', async () => {
@@ -554,12 +611,14 @@ describe('Admin booking and ticket lists', () => {
       ).toBe(true);
     });
 
-    fireEvent.change(screen.getByLabelText('Ngày đặt từ'), {
+    fireEvent.click(screen.getByRole('button', { name: 'Lọc theo ngày đặt' }));
+    fireEvent.change(await screen.findByLabelText('Ngày đặt từ'), {
       target: { value: '2026-10-01' },
     });
-    fireEvent.change(screen.getByLabelText('Ngày đặt đến'), {
+    fireEvent.change(await screen.findByLabelText('Ngày đặt đến'), {
       target: { value: '2026-10-08' },
     });
+    fireEvent.click(screen.getByRole('button', { name: 'Áp dụng' }));
     fireEvent.click(
       await screen.findByRole('button', { name: /Tiền vé ban đầu/ }),
     );
@@ -761,210 +820,79 @@ describe('Admin booking and ticket lists', () => {
     expect(statusLabel('DA_TIEP_NHAN')).toBe('Đã tiếp nhận');
   });
 
-  it.each([
-    {
-      tab: 'bookings',
-      kind: 'booked',
-      edge: 'From',
-      from: '2026-10-05',
-      to: '2026-10-10',
-      nextValue: '2026-10-15',
-    },
-    {
-      tab: 'bookings',
-      kind: 'booked',
-      edge: 'To',
-      from: '2026-10-05',
-      to: '2026-10-10',
-      nextValue: '2026-10-01',
-    },
-    {
-      tab: 'bookings',
-      kind: 'departure',
-      edge: 'From',
-      from: '2026-10-05',
-      to: '2026-10-10',
-      nextValue: '2026-10-15',
-    },
-    {
-      tab: 'bookings',
-      kind: 'departure',
-      edge: 'To',
-      from: '2026-10-05',
-      to: '2026-10-10',
-      nextValue: '2026-10-01',
-    },
-    {
-      tab: 'tickets',
-      kind: 'booked',
-      edge: 'From',
-      from: '2026-10-05',
-      to: '2026-10-10',
-      nextValue: '2026-10-15',
-    },
-    {
-      tab: 'tickets',
-      kind: 'booked',
-      edge: 'To',
-      from: '2026-10-05',
-      to: '2026-10-10',
-      nextValue: '2026-10-01',
-    },
-    {
-      tab: 'tickets',
-      kind: 'departure',
-      edge: 'From',
-      from: '2026-10-05',
-      to: '2026-10-10',
-      nextValue: '2026-10-15',
-    },
-    {
-      tab: 'tickets',
-      kind: 'departure',
-      edge: 'To',
-      from: '2026-10-05',
-      to: '2026-10-10',
-      nextValue: '2026-10-01',
-    },
-  ] as const)(
-    'keeps both $kind dates in $tab when the $edge creates an inverted range',
-    async ({ tab, kind, edge, from, to, nextValue }) => {
-      const tabPrefix = tab === 'bookings' ? 'b' : 't';
-      const urlDatePrefix = kind === 'booked' ? 'Booked' : 'Departure';
-      const apiDatePrefix = kind === 'booked' ? 'booked' : 'departure';
-      const fromLabel = kind === 'booked' ? 'Ngày đặt từ' : 'Ngày khởi hành từ';
-      const toLabel = kind === 'booked' ? 'Ngày đặt đến' : 'Ngày khởi hành đến';
-      const params = new URLSearchParams();
-      if (tab === 'tickets') params.set('tab', tab);
-      params.set(`${tabPrefix}${urlDatePrefix}From`, from);
-      params.set(`${tabPrefix}${urlDatePrefix}To`, to);
-      params.set(`${tabPrefix}Page`, '3');
-      const initialQuery = params.toString();
-      navigation.reset(initialQuery);
-
-      const api = installApi();
-      render(<BookingManagement />);
-      await screen.findAllByText(tab === 'bookings' ? 'PD-0012' : 'VE-0044');
-
-      const fromInput = screen.getByLabelText(fromLabel) as HTMLInputElement;
-      const toInput = screen.getByLabelText(toLabel) as HTMLInputElement;
-      const requestCount = api.urls.length;
-      const changedInput = edge === 'From' ? fromInput : toInput;
-      fireEvent.change(changedInput, { target: { value: nextValue } });
-
-      const expectedFrom = edge === 'From' ? nextValue : from;
-      const expectedTo = edge === 'To' ? nextValue : to;
-      expect(fromInput.value).toBe(expectedFrom);
-      expect(toInput.value).toBe(expectedTo);
-
-      const errorId = `${tab}-${kind}-date-range-error`;
-      const error = screen.getByRole('alert');
-      expect(error.id).toBe(errorId);
-      expect(error.textContent).toContain(
-        'Ngày bắt đầu không được sau ngày kết thúc',
-      );
-      expect(fromInput.getAttribute('aria-invalid')).toBe('true');
-      expect(toInput.getAttribute('aria-invalid')).toBe('true');
-      expect(fromInput.getAttribute('aria-describedby')).toBe(errorId);
-      expect(toInput.getAttribute('aria-describedby')).toBe(errorId);
-      expect(fromInput.hasAttribute('max')).toBe(false);
-      expect(toInput.hasAttribute('min')).toBe(false);
-      expect(
-        screen.getByText(
-          'Khoảng ngày chưa được áp dụng. Kết quả hiện tại vẫn theo bộ lọc ngày hợp lệ trước đó.',
-        ),
-      ).toBeTruthy();
-      expect(navigation.getSnapshot()).toBe(initialQuery);
-      expect(api.urls).toHaveLength(requestCount);
-      expect(
-        api.urls.some((url) => {
-          const apiFrom = url.searchParams.get(`${apiDatePrefix}From`);
-          const apiTo = url.searchParams.get(`${apiDatePrefix}To`);
-          return Boolean(apiFrom && apiTo && apiFrom > apiTo);
-        }),
-      ).toBe(false);
-    },
-  );
-
-  it('applies a corrected equal-date range, clears the error, and resets only the active page', async () => {
-    const params = new URLSearchParams(
-      'bPage=3&bBookedFrom=2026-10-05&bBookedTo=2026-10-10&tPage=4&tSearch=VE-ONLY',
-    );
-    navigation.reset(params.toString());
+  it('rejects an inverted date range without changing the applied URL or issuing another request', async () => {
+    navigation.reset('bPage=3&bBookedFrom=2026-10-05&bBookedTo=2026-10-10');
     const api = installApi();
     render(<BookingManagement />);
     await screen.findAllByText('PD-0012');
 
-    const fromInput = screen.getByLabelText('Ngày đặt từ') as HTMLInputElement;
-    const toInput = screen.getByLabelText('Ngày đặt đến') as HTMLInputElement;
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Ngày đặt: 05/10/2026 đến 10/10/2026',
+      }),
+    );
+    const fromInput = (await screen.findByLabelText(
+      'Ngày đặt từ',
+    )) as HTMLInputElement;
+    const toInput = (await screen.findByLabelText(
+      'Ngày đặt đến',
+    )) as HTMLInputElement;
+    const requestCount = api.urls.length;
     fireEvent.change(fromInput, { target: { value: '2026-10-15' } });
-    expect(screen.getByRole('alert')).toBeTruthy();
-    const requestsBeforeCorrection = api.urls.length;
 
-    fireEvent.change(toInput, { target: { value: '2026-10-15' } });
-
-    await waitFor(() => {
-      expect(
-        api.urls.some(
-          (url) =>
-            url.searchParams.get('bookedFrom') === '2026-10-15' &&
-            url.searchParams.get('bookedTo') === '2026-10-15' &&
-            url.searchParams.get('page') === '1',
-        ),
-      ).toBe(true);
-    });
-    expect(api.urls).toHaveLength(requestsBeforeCorrection + 1);
-    expect(fromInput.value).toBe('2026-10-15');
-    expect(toInput.value).toBe('2026-10-15');
-    expect(screen.queryByRole('alert')).toBeNull();
-    expect(screen.queryByText(/Khoảng ngày chưa được áp dụng/)).toBeNull();
-
+    expect(fromInput.getAttribute('max')).toBe('2026-10-10');
+    expect(toInput.getAttribute('min')).toBe('2026-10-15');
+    expect(
+      screen.getByRole('button', { name: 'Áp dụng' }).hasAttribute('disabled'),
+    ).toBe(true);
     const appliedParams = new URLSearchParams(navigation.getSnapshot());
-    expect(appliedParams.get('bBookedFrom')).toBe('2026-10-15');
-    expect(appliedParams.get('bBookedTo')).toBe('2026-10-15');
-    expect(appliedParams.has('bPage')).toBe(false);
-    expect(appliedParams.get('tPage')).toBe('4');
-    expect(appliedParams.get('tSearch')).toBe('VE-ONLY');
+    expect(appliedParams.get('bPage')).toBe('3');
+    expect(appliedParams.get('bBookedFrom')).toBe('2026-10-05');
+    expect(appliedParams.get('bBookedTo')).toBe('2026-10-10');
+    expect(api.urls).toHaveLength(requestCount);
+    expect(
+      api.urls.some(
+        (url) => url.searchParams.get('bookedFrom') === '2026-10-15',
+      ),
+    ).toBe(false);
   });
 
-  it('applies a cleared range edge and resets the active page', async () => {
+  it('clears only the selected date range from the shared range picker', async () => {
     navigation.reset(
-      'bPage=2&bBookedFrom=2026-10-05&bBookedTo=2026-10-10&tSearch=VE-ONLY',
+      'bPage=2&bBookedFrom=2026-10-05&bBookedTo=2026-10-10&bDepartureFrom=2026-11-01&bDepartureTo=2026-11-05',
     );
     const api = installApi();
     render(<BookingManagement />);
     await screen.findAllByText('PD-0012');
 
-    const fromInput = screen.getByLabelText('Ngày đặt từ') as HTMLInputElement;
-    const toInput = screen.getByLabelText('Ngày đặt đến') as HTMLInputElement;
-    fireEvent.change(fromInput, { target: { value: '2026-10-15' } });
-    expect(screen.getByRole('alert')).toBeTruthy();
-    const requestsBeforeClearing = api.urls.length;
-
-    fireEvent.change(toInput, { target: { value: '' } });
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Ngày đặt: 05/10/2026 đến 10/10/2026',
+      }),
+    );
+    await screen.findByLabelText('Ngày đặt từ');
+    fireEvent.click(screen.getByRole('button', { name: 'Xóa lọc' }));
 
     await waitFor(() => {
-      expect(
-        api.urls.some(
-          (url) =>
-            url.searchParams.get('bookedFrom') === '2026-10-15' &&
-            url.searchParams.has('bookedTo') === false &&
-            url.searchParams.get('page') === '1',
-        ),
-      ).toBe(true);
+      const params = new URLSearchParams(navigation.getSnapshot());
+      expect(params.has('bBookedFrom')).toBe(false);
+      expect(params.has('bBookedTo')).toBe(false);
+      expect(params.has('bPage')).toBe(false);
+      expect(params.get('bDepartureFrom')).toBe('2026-11-01');
+      expect(params.get('bDepartureTo')).toBe('2026-11-05');
     });
-    expect(api.urls).toHaveLength(requestsBeforeClearing + 1);
-    expect(fromInput.value).toBe('2026-10-15');
-    expect(toInput.value).toBe('');
-    expect(screen.queryByRole('alert')).toBeNull();
-    const appliedParams = new URLSearchParams(navigation.getSnapshot());
-    expect(appliedParams.get('bBookedFrom')).toBe('2026-10-15');
-    expect(appliedParams.has('bBookedTo')).toBe(false);
-    expect(appliedParams.has('bPage')).toBe(false);
-    expect(appliedParams.get('tSearch')).toBe('VE-ONLY');
+    expect(
+      api.urls.some(
+        (url) =>
+          url.searchParams.get('departureFrom') === '2026-11-01' &&
+          url.searchParams.get('departureTo') === '2026-11-05' &&
+          !url.searchParams.has('bookedFrom') &&
+          !url.searchParams.has('bookedTo'),
+      ),
+    ).toBe(true);
   });
 
-  it('clears an invalid draft on reset without changing the other tab state', async () => {
+  it('clears the active tab date ranges while preserving the other tab filters', async () => {
     navigation.reset(
       'bPage=3&bBookedFrom=2026-10-05&bBookedTo=2026-10-10&tPage=4&tDepartureFrom=2026-11-01&tDepartureTo=2026-11-05',
     );
@@ -972,30 +900,16 @@ describe('Admin booking and ticket lists', () => {
     render(<BookingManagement />);
     await screen.findAllByText('PD-0012');
 
-    const fromInput = screen.getByLabelText('Ngày đặt từ') as HTMLInputElement;
-    fireEvent.change(fromInput, { target: { value: '2026-10-15' } });
-    expect(screen.getByRole('alert')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Xóa bộ lọc' }));
-
     await waitFor(() => {
-      expect(
-        new URLSearchParams(navigation.getSnapshot()).has('bBookedFrom'),
-      ).toBe(false);
+      const params = new URLSearchParams(navigation.getSnapshot());
+      expect(params.has('bBookedFrom')).toBe(false);
+      expect(params.has('bBookedTo')).toBe(false);
+      expect(params.has('bPage')).toBe(false);
+      expect(params.get('tPage')).toBe('4');
+      expect(params.get('tDepartureFrom')).toBe('2026-11-01');
+      expect(params.get('tDepartureTo')).toBe('2026-11-05');
     });
-    expect(
-      (screen.getByLabelText('Ngày đặt từ') as HTMLInputElement).value,
-    ).toBe('');
-    expect(
-      (screen.getByLabelText('Ngày đặt đến') as HTMLInputElement).value,
-    ).toBe('');
-    expect(screen.queryByRole('alert')).toBeNull();
-    expect(screen.queryByText(/Khoảng ngày chưa được áp dụng/)).toBeNull();
-    const appliedParams = new URLSearchParams(navigation.getSnapshot());
-    expect(appliedParams.has('bBookedTo')).toBe(false);
-    expect(appliedParams.has('bPage')).toBe(false);
-    expect(appliedParams.get('tPage')).toBe('4');
-    expect(appliedParams.get('tDepartureFrom')).toBe('2026-11-01');
-    expect(appliedParams.get('tDepartureTo')).toBe('2026-11-05');
     expect(
       api.urls.some(
         (url) =>
@@ -1006,83 +920,84 @@ describe('Admin booking and ticket lists', () => {
     ).toBe(true);
   });
 
-  it('keeps invalid drafts isolated by tab and preserves them when switching tabs', async () => {
+  it('keeps each tab date ranges independent when switching between bookings and tickets', async () => {
     navigation.reset(
-      'bBookedFrom=2026-10-05&bBookedTo=2026-10-10&bPage=3&tDepartureFrom=2026-11-01&tDepartureTo=2026-11-05&tPage=4',
+      'bBookedFrom=2026-10-05&bBookedTo=2026-10-10&tDepartureFrom=2026-11-01&tDepartureTo=2026-11-05',
     );
-    const api = installApi();
+    installApi();
     render(<BookingManagement />);
     await screen.findAllByText('PD-0012');
-
-    fireEvent.change(screen.getByLabelText('Ngày đặt từ'), {
-      target: { value: '2026-10-15' },
-    });
-    expect(screen.getByRole('alert')).toBeTruthy();
-    const queryBeforeSwitch = navigation.getSnapshot();
-    const requestsBeforeSwitch = api.urls.length;
+    expect(
+      screen.getByRole('button', {
+        name: 'Ngày đặt: 05/10/2026 đến 10/10/2026',
+      }),
+    ).toBeTruthy();
 
     fireEvent.click(screen.getByRole('tab', { name: 'Vé' }));
     await screen.findAllByText('VE-0044');
-
     expect(
-      (screen.getByLabelText('Ngày đặt từ') as HTMLInputElement).value,
-    ).toBe('');
+      screen.getByRole('button', { name: 'Lọc theo ngày đặt' }),
+    ).toBeTruthy();
     expect(
-      (screen.getByLabelText('Ngày khởi hành từ') as HTMLInputElement).value,
-    ).toBe('2026-11-01');
-    expect(
-      (screen.getByLabelText('Ngày khởi hành đến') as HTMLInputElement).value,
-    ).toBe('2026-11-05');
-    expect(screen.queryByRole('alert')).toBeNull();
-    expect(screen.queryByText(/Khoảng ngày chưa được áp dụng/)).toBeNull();
-    const ticketParams = new URLSearchParams(navigation.getSnapshot());
-    expect(ticketParams.get('tab')).toBe('tickets');
-    expect(ticketParams.get('bBookedFrom')).toBe('2026-10-05');
-    expect(ticketParams.get('bBookedTo')).toBe('2026-10-10');
-    expect(ticketParams.get('tDepartureFrom')).toBe('2026-11-01');
-    expect(ticketParams.get('tDepartureTo')).toBe('2026-11-05');
+      screen.getByRole('button', {
+        name: 'Ngày khởi hành: 01/11/2026 đến 05/11/2026',
+      }),
+    ).toBeTruthy();
 
     fireEvent.click(screen.getByRole('tab', { name: 'Phiếu đặt vé' }));
     await screen.findAllByText('PD-0012');
     expect(
-      (screen.getByLabelText('Ngày đặt từ') as HTMLInputElement).value,
-    ).toBe('2026-10-15');
-    expect(
-      (screen.getByLabelText('Ngày đặt đến') as HTMLInputElement).value,
-    ).toBe('2026-10-10');
-    expect(screen.getByRole('alert')).toBeTruthy();
-    expect(navigation.getSnapshot()).toBe(queryBeforeSwitch);
-    expect(api.urls.length).toBeGreaterThan(requestsBeforeSwitch);
-    expect(
-      api.urls.some((url) => {
-        const from = url.searchParams.get('bookedFrom');
-        const to = url.searchParams.get('bookedTo');
-        return Boolean(from && to && from > to);
+      screen.getByRole('button', {
+        name: 'Ngày đặt: 05/10/2026 đến 10/10/2026',
       }),
-    ).toBe(false);
+    ).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: 'Lọc theo ngày khởi hành' }),
+    ).toBeTruthy();
   });
 
-  it('restores applied date values on browser back and forward without adding history entries', async () => {
-    navigation.reset('bBookedFrom=2026-10-05&bBookedTo=2026-10-10&bPage=3');
+  it('restores applied date ranges on browser back and forward', async () => {
     const api = installApi();
     render(<BookingManagement />);
     await screen.findAllByText('PD-0012');
 
-    const fromInput = screen.getByLabelText('Ngày đặt từ') as HTMLInputElement;
-    const toInput = screen.getByLabelText('Ngày đặt đến') as HTMLInputElement;
-    fireEvent.change(fromInput, { target: { value: '2026-10-08' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Lọc theo ngày đặt' }));
+    fireEvent.change(await screen.findByLabelText('Ngày đặt từ'), {
+      target: { value: '2026-10-05' },
+    });
+    fireEvent.change(await screen.findByLabelText('Ngày đặt đến'), {
+      target: { value: '2026-10-10' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Áp dụng' }));
+
     await waitFor(() => {
-      expect(
-        new URLSearchParams(navigation.getSnapshot()).get('bBookedFrom'),
-      ).toBe('2026-10-08');
+      expect(navigation.getSnapshot()).toContain('bBookedFrom=2026-10-05');
+    });
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Ngày đặt: 05/10/2026 đến 10/10/2026',
+      }),
+    );
+    fireEvent.change(await screen.findByLabelText('Ngày đặt từ'), {
+      target: { value: '2026-10-08' },
+    });
+    fireEvent.change(await screen.findByLabelText('Ngày đặt đến'), {
+      target: { value: '2026-10-15' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Áp dụng' }));
+
+    await waitFor(() => {
+      expect(navigation.getSnapshot()).toContain('bBookedFrom=2026-10-08');
     });
     const historyLength = navigation.getHistoryLength();
     const transitionCount = navigation.getTransitionCount();
-
     act(() => navigation.back());
     await waitFor(() => {
-      expect(fromInput.value).toBe('2026-10-05');
-      expect(toInput.value).toBe('2026-10-10');
+      expect(
+        screen.getByRole('button', {
+          name: 'Ngày đặt: 05/10/2026 đến 10/10/2026',
+        }),
+      ).toBeTruthy();
     });
     expect(
       api.urls.some(
@@ -1094,41 +1009,17 @@ describe('Admin booking and ticket lists', () => {
 
     act(() => navigation.forward());
     await waitFor(() => {
-      expect(fromInput.value).toBe('2026-10-08');
-      expect(toInput.value).toBe('2026-10-10');
+      expect(
+        screen.getByRole('button', {
+          name: 'Ngày đặt: 08/10/2026 đến 15/10/2026',
+        }),
+      ).toBeTruthy();
     });
     expect(navigation.getHistoryLength()).toBe(historyLength);
     expect(navigation.getTransitionCount()).toBe(transitionCount);
   });
 
-  it('discards an unapplied invalid draft when browser back restores the applied URL', async () => {
-    navigation.reset('bBookedFrom=2026-10-05&bBookedTo=2026-10-10');
-    installApi();
-    render(<BookingManagement />);
-    await screen.findAllByText('PD-0012');
-
-    fireEvent.change(screen.getByLabelText('Ngày đặt từ'), {
-      target: { value: '2026-10-15' },
-    });
-    expect(screen.getByRole('alert')).toBeTruthy();
-    fireEvent.click(screen.getByRole('tab', { name: 'Vé' }));
-    await screen.findAllByText('VE-0044');
-
-    act(() => navigation.back());
-    await waitFor(() => {
-      expect(
-        (screen.getByLabelText('Ngày đặt từ') as HTMLInputElement).value,
-      ).toBe('2026-10-05');
-      expect(
-        (screen.getByLabelText('Ngày đặt đến') as HTMLInputElement).value,
-      ).toBe('2026-10-10');
-    });
-    expect(new URLSearchParams(navigation.getSnapshot()).get('tab')).toBeNull();
-    expect(screen.queryByRole('alert')).toBeNull();
-    expect(screen.queryByText(/Khoảng ngày chưa được áp dụng/)).toBeNull();
-  });
-
-  it('canonicalizes inverted dates from a deep link without an invalid API range or URL loop', async () => {
+  it('canonicalizes inverted deep-link ranges and keeps the valid endpoint visible', async () => {
     navigation.reset(
       'bBookedFrom=2026-10-15&bBookedTo=2026-10-10&bDepartureFrom=2026-11-15&bDepartureTo=2026-11-10',
     );
@@ -1140,29 +1031,26 @@ describe('Admin booking and ticket lists', () => {
         'bBookedFrom=2026-10-15&bDepartureFrom=2026-11-15',
       );
     });
+    const bookedFilter = screen.getByRole('button', {
+      name: 'Ngày đặt: ngày đặt từ 15/10/2026',
+    });
+    expect(bookedFilter).toBeTruthy();
+    fireEvent.click(bookedFilter);
     expect(
-      (screen.getByLabelText('Ngày đặt từ') as HTMLInputElement).value,
+      ((await screen.findByLabelText('Ngày đặt từ')) as HTMLInputElement).value,
     ).toBe('2026-10-15');
     expect(
-      (screen.getByLabelText('Ngày đặt đến') as HTMLInputElement).value,
+      ((await screen.findByLabelText('Ngày đặt đến')) as HTMLInputElement)
+        .value,
     ).toBe('');
     expect(
-      (screen.getByLabelText('Ngày khởi hành từ') as HTMLInputElement).value,
-    ).toBe('2026-11-15');
-    expect(
-      (screen.getByLabelText('Ngày khởi hành đến') as HTMLInputElement).value,
-    ).toBe('');
-    expect(screen.queryByRole('alert')).toBeNull();
+      screen.getByRole('button', { name: 'Áp dụng' }).hasAttribute('disabled'),
+    ).toBe(true);
     expect(
       api.urls.some((url) => {
-        const bookedFrom = url.searchParams.get('bookedFrom');
-        const bookedTo = url.searchParams.get('bookedTo');
-        const departureFrom = url.searchParams.get('departureFrom');
-        const departureTo = url.searchParams.get('departureTo');
-        return Boolean(
-          (bookedFrom && bookedTo && bookedFrom > bookedTo) ||
-          (departureFrom && departureTo && departureFrom > departureTo),
-        );
+        const from = url.searchParams.get('bookedFrom');
+        const to = url.searchParams.get('bookedTo');
+        return Boolean(from && to && from > to);
       }),
     ).toBe(false);
     await act(async () => {

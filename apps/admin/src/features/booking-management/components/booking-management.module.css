@@ -30,7 +30,6 @@
 }
 
 .tab:focus-visible,
-.detailLink:focus-visible,
 .resetButton:focus-visible,
 .retryButton:focus-visible {
   outline: 3px solid color-mix(in srgb, var(--admin-blue) 40%, white);
@@ -39,59 +38,6 @@
 
 .panel {
   padding-top: var(--admin-space-3);
-}
-
-.dateFilter,
-.pageSize {
-  display: grid;
-  min-width: 0;
-  gap: var(--admin-space-1);
-  color: var(--admin-text-muted);
-  font-size: var(--admin-type-helper-size);
-}
-
-.dateRangeGroup {
-  display: grid;
-  min-width: 0;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  align-items: end;
-  gap: var(--admin-space-control-gap);
-}
-
-.dateFilter input,
-.pageSize select {
-  min-height: 40px;
-  min-width: 135px;
-  padding: 0 var(--admin-space-2);
-  border: 1px solid var(--admin-border);
-  border-radius: var(--admin-radius-control);
-  background: #fff;
-  color: var(--admin-text-strong);
-  font: inherit;
-}
-
-.dateFilter input[aria-invalid='true'] {
-  border-color: var(--admin-danger);
-}
-
-.dateRangeError {
-  grid-column: 1 / -1;
-  margin: 0;
-  color: var(--admin-danger);
-  font-size: var(--admin-type-error-size);
-  font-weight: var(--admin-type-error-weight);
-  line-height: var(--admin-type-error-line-height);
-}
-
-.dateDraftNotice {
-  margin: var(--admin-space-3) var(--admin-space-table-cell-x) 0;
-  padding: var(--admin-space-notice-padding);
-  border: 1px solid var(--admin-border);
-  border-radius: var(--admin-radius-control);
-  background: var(--admin-surface-muted);
-  color: var(--admin-text-strong);
-  font-size: var(--admin-type-secondary-body-size);
-  line-height: var(--admin-type-secondary-body-line-height);
 }
 
 .resetButton,
@@ -125,16 +71,6 @@
   margin-top: var(--admin-space-1);
   color: var(--admin-danger);
   font-size: var(--admin-type-helper-size);
-}
-
-.detailLink {
-  display: inline-flex;
-  min-height: 40px;
-  align-items: center;
-  color: var(--admin-blue);
-  font-weight: var(--admin-weight-semibold);
-  text-decoration: underline;
-  text-underline-offset: 3px;
 }
 
 .error,
@@ -222,11 +158,6 @@
   .tabs {
     padding-right: var(--admin-space-3);
     padding-left: var(--admin-space-3);
-  }
-
-  .dateFilter input,
-  .pageSize select {
-    min-width: 125px;
   }
 
   .tableWrap {

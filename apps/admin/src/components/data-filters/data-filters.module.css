@@ -441,3 +441,34 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.controls:has(> .labeledSelectFilter) {
+  align-items: flex-end;
+}
+
+.labeledSelectFilter {
+  display: grid;
+  min-width: 0;
+  gap: var(--admin-space-1);
+  color: var(--admin-text-muted);
+  font-size: var(--admin-type-helper-size);
+}
+
+.labeledSelectFilter select {
+  box-sizing: border-box;
+  height: 44px;
+  min-height: 44px;
+  min-width: 135px;
+  padding: 0 var(--admin-space-2);
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius-control);
+  background: #fff;
+  color: var(--admin-text-strong);
+  font: inherit;
+}
+
+@media (max-width: 760px) {
+  .labeledSelectFilter select {
+    min-width: 125px;
+  }
+}
