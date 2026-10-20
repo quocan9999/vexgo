@@ -48,12 +48,12 @@ Local validation on 2026-10-20:
 - MySQL reviews integration suite: 6 passed, including the HTTP-to-persisted-review
   contract regression above.
 - API typecheck, lint and build: passed.
-- Full API unit suite: 767 passed, 1 failed. The unchanged shipment pricing test
-  in `test/unit/shipments/shipments.service.spec.ts` uses departure
-  `2026-10-20 07:00` in the business timezone without freezing the clock. It now
-  throws `TRIP_ALREADY_DEPARTED`. Running that file alone reproduces the failure;
-  shipment source/tests are identical to base `8b33925`. This is an outstanding
-  full-suite gate, not a pass. Keep the PR draft until the gate is addressed.
+- Full API unit suite: 768 passed. The initial run had 767 passed and one failure:
+  the existing shipment pricing fixture uses departure `2026-10-20 07:00` in the
+  business timezone and started throwing `TRIP_ALREADY_DEPARTED` as time advanced.
+  A separate test-only fix freezes Date before that departure and restores real
+  timers after each test. Production shipment logic and all assertions are
+  unchanged. The initial failure logs are retained outside Git.
 
 ## Mobile follow-up
 
