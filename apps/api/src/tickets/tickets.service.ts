@@ -74,6 +74,15 @@ const TICKET_INCLUDE = {
 
 type TicketRecord = Prisma.VeGetPayload<{ include: typeof TICKET_INCLUDE }>;
 
+type TicketReview = {
+  reviewId: number;
+  tripId: number;
+  rating: number;
+  comment: string | null;
+  createdAt: string;
+  status: string;
+};
+
 type CancellationReason =
   | 'ALREADY_CANCELLED'
   | 'ACTIVE_SHIPMENT'
@@ -313,7 +322,17 @@ export class TicketsService {
       orderBy,
     });
 
-    const data = tickets.map((t) => this.mapTicket(t));
+    const reviews = await this.loadCustomerTripReviews(
+      customer.khachHangId,
+      tickets.flatMap((ticket) =>
+        ticket.gheChuyenXe?.chuyenXe
+          ? [ticket.gheChuyenXe.chuyenXe.chuyenXeId]
+          : [],
+      ),
+    );
+    const data = tickets.map((t) =>
+      this.mapTicket(t, reviews.get(t.gheChuyenXe?.chuyenXe?.chuyenXeId ?? 0)),
+    );
 
     return {
       data,
@@ -339,14 +358,22 @@ export class TicketsService {
       });
     }
 
-    if (ticket.phieuDatVe.donGiaoDich.khachHang?.taiKhoanId !== taiKhoanId) {
+    const customer = ticket.phieuDatVe.donGiaoDich.khachHang;
+    if (!customer || customer.taiKhoanId !== taiKhoanId) {
       throw new ForbiddenException({
         error: 'FORBIDDEN_TICKET_ACCESS',
         message: 'Bạn không có quyền truy cập vé này.',
       });
     }
 
-    return { data: this.mapTicket(ticket) };
+    const tripId = ticket.gheChuyenXe?.chuyenXe?.chuyenXeId;
+    const reviews = await this.loadCustomerTripReviews(
+      customer.khachHangId,
+      tripId ? [tripId] : [],
+    );
+    return {
+      data: this.mapTicket(ticket, tripId ? reviews.get(tripId) : null),
+    };
   }
 
   async lookupTicket(query: TicketLookupQueryDto) {
@@ -637,7 +664,42 @@ export class TicketsService {
     }
   }
 
-  private mapTicket(ticket: TicketRecord) {
+  private async loadCustomerTripReviews(customerId: number, tripIds: number[]) {
+    const reviews = new Map<number, TicketReview>();
+    const ids = [
+      ...new Set(tripIds.filter((id) => Number.isInteger(id) && id > 0)),
+    ];
+    if (ids.length === 0) return reviews;
+    // One batch per page; never hydrate another customer's review or depend on
+    // moderation visibility to decide whether this customer already reviewed.
+    const rows = await this.prisma.phanHoi.findMany({
+      where: { khachHangId: customerId, chuyenXeId: { in: ids } },
+      select: {
+        phanHoiId: true,
+        chuyenXeId: true,
+        mucDanhGia: true,
+        noiDung: true,
+        thoiGian: true,
+        trangThai: true,
+      },
+      orderBy: [{ thoiGian: 'desc' }, { phanHoiId: 'desc' }],
+    });
+    for (const row of rows) {
+      if (row.chuyenXeId !== null && !reviews.has(row.chuyenXeId)) {
+        reviews.set(row.chuyenXeId, {
+          reviewId: row.phanHoiId,
+          tripId: row.chuyenXeId,
+          rating: row.mucDanhGia,
+          comment: row.noiDung,
+          createdAt: row.thoiGian.toISOString(),
+          status: row.trangThai,
+        });
+      }
+    }
+    return reviews;
+  }
+
+  private mapTicket(ticket: TicketRecord, review: TicketReview | null = null) {
     const chuyenXe = ticket.gheChuyenXe?.chuyenXe;
     const tuyenXe = chuyenXe?.tuyenXe;
     const nhaXe = ticket.phieuDatVe?.donGiaoDich?.nhaXe ?? tuyenXe?.nhaXe;
@@ -671,15 +733,14 @@ export class TicketsService {
     const originalTicketSubtotal = Number(
       ticket.phieuDatVe?.tongTienBanDau ?? 0,
     );
-    const discountAmount = Number(
-      ticket.phieuDatVe?.soTienGiamKhuyenMai ?? 0,
-    );
+    const discountAmount = Number(ticket.phieuDatVe?.soTienGiamKhuyenMai ?? 0);
 
     return {
       ticketId: ticket.veId,
       ticketCode: ticket.maVe,
       bookingId: ticket.phieuDatVeId,
       tripId: chuyenXe?.chuyenXeId ?? null,
+      review,
       bookingCode: ticket.phieuDatVe?.maPhieuDatVe ?? null,
       promotionCode: ticket.phieuDatVe?.khuyenMai?.maKhuyenMai ?? null,
       originalTicketSubtotal,
