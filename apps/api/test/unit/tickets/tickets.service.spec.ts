@@ -135,6 +135,49 @@ describe('TicketsService', () => {
   });
 
   describe('findCustomerTickets', () => {
+    it.each([50, 902])(
+      'returns the seat-related tripId %i in every ticket reader',
+      async (tripId) => {
+        const ticket = {
+          ...sampleTicket,
+          gheChuyenXe: {
+            ...sampleTicket.gheChuyenXe,
+            chuyenXe: {
+              ...sampleTicket.gheChuyenXe.chuyenXe,
+              chuyenXeId: tripId,
+            },
+          },
+        };
+        prisma.khachHang.findUnique.mockResolvedValue(mockCustomer);
+        prisma.ve.count.mockResolvedValue(1);
+        prisma.ve.findMany.mockResolvedValue([ticket]);
+        prisma.ve.findUnique.mockResolvedValue(ticket);
+
+        const list = await service.findCustomerTickets(1, {
+          page: 1,
+          pageSize: 10,
+        });
+        const detail = await service.findCustomerTicketById(1, ticket.veId);
+        const lookup = await service.lookupTicket({
+          ticketCode: ticket.maVe,
+          phoneNumber: '0901234567',
+        });
+        for (const mapped of [list.data[0], detail.data, lookup.data]) {
+          expect(mapped).toMatchObject({ ticketId: 1, bookingId: 101, tripId });
+        }
+      },
+    );
+
+    it('returns null rather than a fabricated tripId if the trip relation is unavailable', async () => {
+      prisma.ve.findUnique.mockResolvedValue({
+        ...sampleTicket,
+        gheChuyenXe: { ...sampleTicket.gheChuyenXe, chuyenXe: null },
+      });
+
+      const result = await service.findCustomerTicketById(1, sampleTicket.veId);
+      expect(result.data.tripId).toBeNull();
+    });
+
     it('throws NotFoundException when customer profile does not exist', async () => {
       prisma.khachHang.findUnique.mockResolvedValue(null);
 

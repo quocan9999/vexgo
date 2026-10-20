@@ -345,8 +345,8 @@ describe('Reviews API Integration with MySQL', () => {
     expect(res.body.error).toBe('FORBIDDEN');
   });
 
-  it('allows review when customer has paid booking (DA_THANH_TOAN) and trip departed with 201 Created', async () => {
-    await createBookingWithTickets({
+  it('submits a review using the authoritative tripId returned by ticket and booking APIs', async () => {
+    const order = await createBookingWithTickets({
       customerId: customerAId,
       tripSeatId: departedTripSeatId,
       transactionStatus: 'DA_THANH_TOAN',
@@ -354,11 +354,58 @@ describe('Reviews API Integration with MySQL', () => {
       ticketStatus: 'DA_THANH_TOAN',
     });
 
+    const booking = order.phieuDatVe!;
+    const ticket = booking.ves[0];
+    currentPrincipal = customerAPrincipal;
+    const ticketList = await request(app.getHttpServer())
+      .get('/api/v1/tickets')
+      .expect(200);
+    const ticketDetail = await request(app.getHttpServer())
+      .get(`/api/v1/tickets/${ticket.veId}`)
+      .expect(200);
+    const bookingList = await request(app.getHttpServer())
+      .get('/api/v1/bookings')
+      .expect(200);
+    const bookingDetail = await request(app.getHttpServer())
+      .get(`/api/v1/bookings/${booking.phieuDatVeId}`)
+      .expect(200);
+    const publicDetail = await request(app.getHttpServer())
+      .get(`/api/v1/bookings/${booking.phieuDatVeId}/detail`)
+      .expect(200);
+    const lookup = await request(app.getHttpServer())
+      .post('/api/v1/tickets/lookup')
+      .send({ ticketCode: ticket.maVe, phoneNumber: '+84930000001' })
+      .expect(200);
+    for (const mapped of [
+      ticketList.body.data[0],
+      ticketDetail.body.data,
+      bookingList.body.data[0],
+      bookingDetail.body.data,
+      publicDetail.body.data,
+      lookup.body.data,
+    ]) {
+      expect(mapped.tripId).toBe(departedTripId);
+    }
+    expect(ticketDetail.body.data.bookingId).toBe(booking.phieuDatVeId);
+
+    // Knowing a trip ID does not grant access to another customer's records or reviews.
+    currentPrincipal = customerBPrincipal;
+    await request(app.getHttpServer())
+      .get(`/api/v1/tickets/${ticket.veId}`)
+      .expect(403);
+    await request(app.getHttpServer())
+      .get(`/api/v1/bookings/${booking.phieuDatVeId}`)
+      .expect(403);
+    await request(app.getHttpServer())
+      .post('/api/v1/reviews')
+      .send({ tripId: ticketDetail.body.data.tripId, rating: 5 })
+      .expect(403);
+
     currentPrincipal = customerAPrincipal;
     const res = await request(app.getHttpServer())
       .post('/api/v1/reviews')
       .send({
-        tripId: departedTripId,
+        tripId: ticketDetail.body.data.tripId,
         rating: 5,
         comment: 'Chuyến xe rất sạch sẽ, tài xế lịch sự!',
       });
@@ -376,6 +423,7 @@ describe('Reviews API Integration with MySQL', () => {
     });
     expect(dbReview).toBeDefined();
     expect(dbReview?.mucDanhGia).toBe(5);
+    expect(dbReview?.chuyenXeId).toBe(ticketDetail.body.data.tripId);
   });
 
   it('rejects duplicate review for the same trip with 409 Conflict', async () => {

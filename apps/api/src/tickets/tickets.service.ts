@@ -679,6 +679,7 @@ export class TicketsService {
       ticketId: ticket.veId,
       ticketCode: ticket.maVe,
       bookingId: ticket.phieuDatVeId,
+      tripId: chuyenXe?.chuyenXeId ?? null,
       bookingCode: ticket.phieuDatVe?.maPhieuDatVe ?? null,
       promotionCode: ticket.phieuDatVe?.khuyenMai?.maKhuyenMai ?? null,
       originalTicketSubtotal,
