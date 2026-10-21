@@ -1,9 +1,8 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { ArrowDown, ArrowUp, ArrowUpDown, CheckCircle2, Search } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, CheckCircle2, Pencil, Search } from 'lucide-react';
 import { AdminConfirmDialog } from '@/components/admin/admin-confirm-dialog';
-import { AdminDetailAction } from '@/components/admin/admin-detail-action';
 import { AdminPageHeader } from '@/components/admin/admin-page-header';
 import { AdminPagination } from '@/components/admin/admin-pagination';
 import { AdminCreateAction, AdminRefreshAction } from '@/components/admin/admin-page-actions';
@@ -16,7 +15,6 @@ import { SuperAdminLayout } from '@/features/super-admin-layout/components/super
 import { PromotionApiError, updatePromotionStatus } from '../services/promotion-service';
 import type { Promotion, PromotionEffectiveState, PromotionSortKey, PromotionStatus } from '../types/promotion';
 import { usePromotions } from '../hooks/use-promotions';
-import { PromotionDetailSheet } from './promotion-detail-sheet';
 import { PromotionFormDialog } from './promotion-form-dialog';
 import styles from '../promotions.module.css';
 
@@ -26,7 +24,7 @@ const STATUS_OPTIONS: FilterOption[] = [
 ];
 const EFFECTIVE_LABELS: Record<PromotionEffectiveState, string> = {
   UPCOMING: 'Chưa bắt đầu', ACTIVE: 'Đang hiệu lực', SUSPENDED: 'Tạm ngưng',
-  EXPIRED: 'Hết hạn', EXHAUSTED: 'Hết lượt', UNAVAILABLE: 'Không khả dụng',
+  EXPIRED: 'Hết hạn', EXHAUSTED: 'Hết lượt', UNAVAILABLE: 'Hết hiệu lực',
 };
 type Notice = { tone: 'success' | 'error'; message: string };
 type StatusRequest = { promotion: Promotion; status: PromotionStatus };
@@ -69,8 +67,7 @@ export function PromotionsManagement() {
     promotionPage, error, loading, searchInput, status, dateRange, updateDateRange, sortBy, sortDirection,
     changePage, updateSearch, updateStatus, sortPromotions, resetFilters, refresh,
   } = usePromotions();
-  const [selectedPromotionId, setSelectedPromotionId] = useState<number | null>(null);
-  const [detailRefreshKey, setDetailRefreshKey] = useState(0);
+  const [editingPromotion, setEditingPromotion] = useState<Promotion | null>(null);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [statusRequest, setStatusRequest] = useState<StatusRequest | null>(null);
   const [statusUpdating, setStatusUpdating] = useState(false);
@@ -83,6 +80,22 @@ export function PromotionsManagement() {
     setCreateDialogOpen(false);
     setNotice({ tone: 'success', message: `Đã tạo khuyến mãi ${promotion.code}.` });
     refresh();
+  }
+
+  function handleUpdated(promotion: Promotion) {
+    setEditingPromotion(null);
+    setNotice({ tone: 'success', message: `Đã cập nhật khuyến mãi ${promotion.code}.` });
+    refresh();
+  }
+
+  function editAction(promotion: Promotion) {
+    if (!canUpdate) return null;
+    return <Button
+      aria-label={`Chỉnh sửa ${promotion.code}`}
+      onClick={() => { setNotice(null); setEditingPromotion(promotion); }}
+      type="button"
+      variant="secondary"
+    ><Pencil aria-hidden="true" size={14} />Chỉnh sửa</Button>;
   }
 
   function openCreate() {
@@ -104,7 +117,6 @@ export function PromotionsManagement() {
       setStatusRequest(null);
       setNotice({ tone: 'success', message: `Đã ${updated.status === 'HOAT_DONG' ? 'bật lại' : 'tạm ngưng'} khuyến mãi ${updated.code}.` });
       refresh();
-      setDetailRefreshKey((key) => key + 1);
     } catch (requestError: unknown) {
       const message = requestError instanceof PromotionApiError
         ? requestError.code === 'PROMOTION_CONCURRENT_MODIFICATION'
@@ -116,7 +128,6 @@ export function PromotionsManagement() {
       setStatusRequest(null);
       setNotice({ tone: 'error', message });
       refresh();
-      setDetailRefreshKey((key) => key + 1);
     } finally {
       statusUpdatingRef.current = false;
       setStatusUpdating(false);
@@ -196,14 +207,14 @@ export function PromotionsManagement() {
                 </tr></thead>
                 <tbody>{items.map((promotion) => <tr key={promotion.id}>
                   <th className="admin-data-mono" scope="row">{promotion.code}</th>
-                  <td>{promotion.name}</td>
+                  <td><span className={styles.programName} title={promotion.name}>{promotion.name}</span></td>
                   <td>{formatDiscount(promotion)}</td>
                   <td>{formatDate(promotion.startsOn)} – {formatDate(promotion.endsOn)}</td>
                   <td>{promotion.usageCount.toLocaleString('vi-VN')} / {promotion.usageLimit.toLocaleString('vi-VN')}</td>
                   <td>{statusBadge(promotion)}</td>
                   <td>{effectiveBadge(promotion)}</td>
                   <td><div className={styles.rowActions}>
-                    <AdminDetailAction onClick={() => setSelectedPromotionId(promotion.id)} resourceName={promotion.code} />
+                    {editAction(promotion)}
                     {statusAction(promotion)}
                   </div></td>
                 </tr>)}</tbody>
@@ -219,19 +230,18 @@ export function PromotionsManagement() {
                   <div><dt>Trạng thái</dt><dd>{statusBadge(promotion)}</dd></div>
                   <div><dt>Hiệu lực</dt><dd>{effectiveBadge(promotion)}</dd></div>
                 </dl>
-                <div className={styles.rowActions}><AdminDetailAction onClick={() => setSelectedPromotionId(promotion.id)} resourceName={promotion.code} />{statusAction(promotion)}</div>
+                <div className={styles.rowActions}>{editAction(promotion)}{statusAction(promotion)}</div>
               </li>)}
             </ul>
             <AdminPagination currentPage={promotionPage.meta.page} disabled={loading} onPageChange={changePage} pageSize={promotionPage.meta.pageSize} summaryLabel="khuyến mãi" totalItems={promotionPage.meta.totalItems} totalPages={promotionPage.meta.totalPages} />
           </>}
         </section>
       </div>
-      {selectedPromotionId !== null && <PromotionDetailSheet
-        canUpdate={canUpdate}
-        onClose={() => setSelectedPromotionId(null)}
-        onRequestStatus={openStatusRequest}
-        promotionId={selectedPromotionId}
-        refreshKey={detailRefreshKey}
+      {editingPromotion && canUpdate && <PromotionFormDialog
+        key={editingPromotion.id}
+        promotion={editingPromotion}
+        onClose={() => setEditingPromotion(null)}
+        onSaved={handleUpdated}
       />}
       {createDialogOpen && canCreate && <PromotionFormDialog onClose={() => setCreateDialogOpen(false)} onSaved={handleCreated} />}
       {statusRequest && <AdminConfirmDialog

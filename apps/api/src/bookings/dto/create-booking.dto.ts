@@ -13,6 +13,7 @@ import {
   Matches,
   Min,
   ValidateNested,
+  ValidateIf,
 } from 'class-validator';
 import { VIETNAM_PHONE_NUMBER_REGEX } from '../../common/validation/vietnamese-phone.js';
 
@@ -97,6 +98,20 @@ export class CargoItemDto {
   licensePlate?: string;
 }
 
+export class ExpectedPromotionQuoteDto {
+  @IsString()
+  @Matches(/^\d{1,16}(?:\.\d{1,2})?$/)
+  originalTotal!: string;
+
+  @IsString()
+  @Matches(/^\d{1,16}(?:\.\d{1,2})?$/)
+  discountAmount!: string;
+
+  @IsString()
+  @Matches(/^\d{1,16}(?:\.\d{1,2})?$/)
+  finalTotal!: string;
+}
+
 export class CreateBookingDto {
   @IsNotEmpty({ message: 'tripId không được để trống.' })
   @Type(() => Number)
@@ -127,6 +142,16 @@ export class CreateBookingDto {
   @IsOptional()
   @IsString()
   promotionCode?: string;
+
+  @ValidateIf(
+    (dto: CreateBookingDto) =>
+      typeof dto.promotionCode === 'string' &&
+      dto.promotionCode.trim().length > 0,
+  )
+  @IsDefined({ message: 'Báo giá khuyến mãi đã xác nhận là bắt buộc.' })
+  @ValidateNested()
+  @Type(() => ExpectedPromotionQuoteDto)
+  expectedPromotionQuote?: ExpectedPromotionQuoteDto;
 
   @IsString()
   @IsNotEmpty({ message: 'holdToken không được để trống.' })

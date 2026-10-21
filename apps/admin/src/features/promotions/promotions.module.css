@@ -224,3 +224,12 @@
     grid-template-columns: minmax(105px, 0.8fr) minmax(0, 1.2fr);
   }
 }
+
+.programName {
+  display: block;
+  width: 220px;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

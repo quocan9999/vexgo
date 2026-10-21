@@ -44,6 +44,8 @@ describe('Tenant promotions API with real authentication and MySQL RBAC', () => 
   const tenantCodes = [`P10-${suffix}-A`, `P10-${suffix}-B`];
   const accountIds: number[] = [];
   const sessionIds: string[] = [];
+  const fixtureOrderIds: number[] = [];
+  const fixtureBookingIds: number[] = [];
   let tenantAId = 0;
   let tenantBId = 0;
   let adminAToken: string;
@@ -170,6 +172,15 @@ describe('Tenant promotions API with real authentication and MySQL RBAC', () => 
         const fixtureTenantIds = [tenantAId, tenantBId].filter(
           (id): id is number => Number.isSafeInteger(id) && id > 0,
         );
+        await prisma.suDungKhuyenMai.deleteMany({
+          where: { phieuDatVeId: { in: fixtureBookingIds } },
+        });
+        await prisma.phieuDatVe.deleteMany({
+          where: { phieuDatVeId: { in: fixtureBookingIds } },
+        });
+        await prisma.donGiaoDich.deleteMany({
+          where: { donGiaoDichId: { in: fixtureOrderIds } },
+        });
         await prisma.khuyenMai.deleteMany({
           where: { nhaXeId: { in: fixtureTenantIds } },
         });
@@ -222,6 +233,59 @@ describe('Tenant promotions API with real authentication and MySQL RBAC', () => 
       ...overrides,
     };
   }
+
+  const createPromotion = async (
+    token: string,
+    overrides: Record<string, unknown> = {},
+  ): Promise<PromotionApiResponse> => {
+    const response = await request(app.getHttpServer())
+      .post('/api/v1/promotions')
+      .set('Authorization', bearer(token))
+      .send(createBody({ code: `EDIT${randomUUID().replaceAll('-', '').slice(0, 10)}`, ...overrides }))
+      .expect(201);
+    return response.body.data as PromotionApiResponse;
+  };
+
+  const createUsageLedger = async (promotionId: number) => {
+    const order = await prisma.donGiaoDich.create({
+      data: {
+        maDonGiaoDich: `P10-${randomUUID().replaceAll('-', '').slice(0, 24)}`,
+        ngayTao: new Date(),
+        tongTien: 100_000,
+        trangThai: 'CHO_THANH_TOAN',
+        tenKhachHang: 'Promotion API fixture',
+        soDienThoaiKhachHang: '0901234567',
+        nhaXeId: tenantAId,
+      },
+      select: { donGiaoDichId: true },
+    });
+    fixtureOrderIds.push(order.donGiaoDichId);
+    const booking = await prisma.phieuDatVe.create({
+      data: {
+        maPhieuDatVe: `P10-${randomUUID().replaceAll('-', '').slice(0, 24)}`,
+        ngayDat: new Date(),
+        soLuongVeBanDau: 1,
+        tongTienBanDau: 100_000,
+        soTienGiamKhuyenMai: 10_000,
+        trangThai: 'CHO_THANH_TOAN',
+        khuyenMaiId: promotionId,
+        donGiaoDichId: order.donGiaoDichId,
+      },
+      select: { phieuDatVeId: true },
+    });
+    fixtureBookingIds.push(booking.phieuDatVeId);
+    await prisma.suDungKhuyenMai.create({
+      data: {
+        khuyenMaiId: promotionId,
+        phieuDatVeId: booking.phieuDatVeId,
+        soTienGiam: 10_000,
+      },
+    });
+    await prisma.khuyenMai.update({
+      where: { khuyenMaiId: promotionId },
+      data: { soLuotDaSuDung: { increment: 1 } },
+    });
+  };
 
   it('filters inclusive validity overlap before pagination and rejects invalid date ranges', async () => {
     const code = 'DATE' + suffix.slice(0, 12);
@@ -423,8 +487,16 @@ describe('Tenant promotions API with real authentication and MySQL RBAC', () => 
     await request(app.getHttpServer())
       .patch(`/api/v1/promotions/${promotionAId}`)
       .set('Authorization', bearer(adminAToken))
-      .send({ name: 'Edited' })
-      .expect(404);
+      .send(createBody({ code: `SHARED${suffix.slice(0, 8)}`, name: 'Edited promotion' }))
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body.data).toMatchObject({
+          id: promotionAId,
+          name: 'Edited promotion',
+          code: `SHARED${suffix.slice(0, 8)}`,
+          usageLimit: 10,
+        });
+      });
     await request(app.getHttpServer())
       .delete(`/api/v1/promotions/${promotionAId}`)
       .set('Authorization', bearer(adminAToken))
@@ -471,6 +543,102 @@ describe('Tenant promotions API with real authentication and MySQL RBAC', () => 
       .send({ status: 'HOAT_DONG' })
       .expect(200);
     expect(activatedExhausted.body.data.effectiveState).toBe('EXHAUSTED');
+  });
+
+  it('updates a promotion only for an authorized tenant with valid, unique values', async () => {
+    const target = await createPromotion(adminAToken);
+    const duplicate = await createPromotion(adminAToken);
+    const before = await prisma.khuyenMai.findUniqueOrThrow({
+      where: { khuyenMaiId: target.id },
+    });
+    const updatePath = `/api/v1/promotions/${target.id}`;
+    const validUpdate = createBody({
+      code: target.code,
+      name: 'Updated API fixture',
+      discountType: 'SO_TIEN',
+      discountValue: '25000',
+      maxDiscount: undefined,
+      minimumTicketAmount: '50000',
+      usageLimit: 12,
+    });
+
+    await request(app.getHttpServer())
+      .patch(updatePath)
+      .set('Authorization', bearer(salesAToken))
+      .send(validUpdate)
+      .expect(403);
+    await request(app.getHttpServer())
+      .patch(updatePath)
+      .set('Authorization', bearer(adminBToken))
+      .send(validUpdate)
+      .expect(404)
+      .expect(({ body }) => expect(body.error).toBe('PROMOTION_NOT_FOUND'));
+    await request(app.getHttpServer())
+      .patch(updatePath)
+      .set('Authorization', bearer(adminAToken))
+      .send({ ...validUpdate, discountValue: '0' })
+      .expect(400)
+      .expect(({ body }) => expect(body.error).toBe('VALIDATION_ERROR'));
+    await request(app.getHttpServer())
+      .patch(updatePath)
+      .set('Authorization', bearer(adminAToken))
+      .send({ ...validUpdate, code: duplicate.code })
+      .expect(409)
+      .expect(({ body }) => expect(body.error).toBe('PROMOTION_CODE_EXISTS'));
+
+    expect(await prisma.khuyenMai.findUniqueOrThrow({ where: { khuyenMaiId: target.id } })).toEqual(before);
+
+    await createUsageLedger(target.id);
+    await createUsageLedger(target.id);
+
+    const updated = await request(app.getHttpServer())
+      .patch(updatePath)
+      .set('Authorization', bearer(adminAToken))
+      .send(validUpdate)
+      .expect(200);
+    expect(updated.body.data).toMatchObject({
+      id: target.id,
+      name: 'Updated API fixture',
+      code: target.code,
+      discountType: 'SO_TIEN',
+      discountValue: '25000.00',
+      minimumTicketAmount: '50000.00',
+      usageCount: 2,
+      usageLimit: 12,
+      remainingUses: 10,
+    });
+  });
+
+  it('locks a used promotion code and never lowers quota below recorded usage', async () => {
+    const target = await createPromotion(adminAToken);
+    await createUsageLedger(target.id);
+    await createUsageLedger(target.id);
+    const before = await prisma.khuyenMai.findUniqueOrThrow({
+      where: { khuyenMaiId: target.id },
+    });
+    const updatePath = `/api/v1/promotions/${target.id}`;
+    const validBody = createBody({ code: target.code, name: 'Usage fixture edit' });
+
+    await request(app.getHttpServer())
+      .patch(updatePath)
+      .set('Authorization', bearer(adminAToken))
+      .send({ ...validBody, code: `CHANGED${suffix.slice(0, 8)}` })
+      .expect(409)
+      .expect(({ body }) => expect(body.error).toBe('PROMOTION_CODE_LOCKED'));
+    await request(app.getHttpServer())
+      .patch(updatePath)
+      .set('Authorization', bearer(adminAToken))
+      .send({ ...validBody, usageLimit: 1 })
+      .expect(400)
+      .expect(({ body }) => {
+        expect(body.error).toBe('VALIDATION_ERROR');
+        expect(body.details).toEqual(
+          expect.arrayContaining([expect.objectContaining({ field: 'usageLimit' })]),
+        );
+      });
+
+    expect(await prisma.khuyenMai.findUniqueOrThrow({ where: { khuyenMaiId: target.id } })).toEqual(before);
+    expect(await prisma.suDungKhuyenMai.count({ where: { khuyenMaiId: target.id } })).toBe(2);
   });
 
   it('enforces real per-tenant permission defaults and preserves employee overrides', async () => {
