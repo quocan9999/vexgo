@@ -49,13 +49,70 @@ vi.mock('socket.io-client', () => ({
   }),
 }));
 import { useAdminChatSocket } from '../src/features/support-chat/hooks/use-admin-chat-socket';
+import { io } from 'socket.io-client';
 beforeEach(() => {
+  vi.stubEnv('NEXT_PUBLIC_API_URL', 'http://localhost:4002');
+  vi.stubEnv('NEXT_PUBLIC_SOCKET_URL', '');
+  vi.mocked(io).mockClear();
   fixture.token = 'old-token';
   fixture.refresh.mockReset().mockResolvedValue(null);
   fixture.sockets.length = 0;
 });
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  vi.unstubAllEnvs();
+});
 describe('Admin chat socket authentication recovery', () => {
+  it('uses the configured REST origin for live messages without a socket override', () => {
+    const onNewMessage = vi.fn();
+    renderHook(() =>
+      useAdminChatSocket({
+        token: 'old-token',
+        activeConversationId: 4,
+        onNewMessage,
+      }),
+    );
+    expect(io).toHaveBeenCalledWith(
+      'http://localhost:4002/chat',
+      expect.objectContaining({ auth: { token: 'old-token' } }),
+    );
+    const message = {
+      tinNhanId: 5,
+      cuocTroChuyenId: 4,
+      noiDung: 'Customer live message',
+    };
+    act(() => fixture.sockets[0].fire('support.message.new', message));
+    expect(onNewMessage).toHaveBeenCalledExactlyOnceWith(message);
+  });
+  it('normalizes an explicit socket override independently of the REST origin', () => {
+    vi.stubEnv('NEXT_PUBLIC_SOCKET_URL', 'https://socket.example.test/');
+    renderHook(() =>
+      useAdminChatSocket({ token: 'old-token', activeConversationId: null }),
+    );
+    expect(io).toHaveBeenCalledWith(
+      'https://socket.example.test/chat',
+      expect.anything(),
+    );
+  });
+  it('resyncs the inbox after a delayed first authenticated connection even with no conversation selected', () => {
+    const onReconnected = vi.fn();
+    renderHook(() =>
+      useAdminChatSocket({
+        token: 'old-token',
+        activeConversationId: null,
+        onReconnected,
+      }),
+    );
+    act(() => fixture.sockets[0].fire('connect'));
+    expect(onReconnected).not.toHaveBeenCalled();
+    act(() => fixture.sockets[0].fire('support.connected'));
+    expect(onReconnected).toHaveBeenCalledTimes(1);
+    act(() => {
+      fixture.sockets[0].fire('disconnect');
+      fixture.sockets[0].fire('support.connected');
+    });
+    expect(onReconnected).toHaveBeenCalledTimes(2);
+  });
   it('waits for authenticated support.connected instead of transport connect', () => {
     const { result } = renderHook(() =>
       useAdminChatSocket({ token: 'old-token', activeConversationId: 4 }),

@@ -4,6 +4,16 @@ The Customer Web, Admin Web and Flutter client use the same NestJS support-chat
 service and MySQL models. REST uses `/api/v1/support-chat`; Socket.IO uses the
 `/chat` namespace with the existing access JWT in `auth.token`.
 
+Environment examples, non-default API ports and realtime troubleshooting:
+[Chat realtime configuration](CHAT_REALTIME_CONFIGURATION.md).
+
+Post-merge realtime follow-up: Web/Admin now derive the socket origin from their
+configured REST URL unless an explicit socket origin is supplied. Admin resyncs
+the inbox on the first authenticated connection as well as reconnects. Both env
+examples document the optional override and restart/rebuild requirement. This
+follow-up changes frontend connection setup only; auth and tenant scope remain
+enforced by the shared backend.
+
 ## Integration corrections
 
 - Integrate develop without dropping shipment/promotion permissions, navigation,
