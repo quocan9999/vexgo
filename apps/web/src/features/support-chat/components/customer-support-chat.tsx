@@ -204,6 +204,13 @@ function CustomerSupportChatSession() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const transcriptRef = useRef<HTMLDivElement>(null);
+  const messageElementsRef = useRef(new Map<number, HTMLDivElement>());
+  const readingIdsRef = useRef(new Set<string>());
+  const confirmedReadIdsRef = useRef(new Set<string>());
+  // Only completed REST history syncs advance this checkpoint; realtime/ACK IDs
+  // may sit beyond a gap after reconnect and cannot prove earlier history exists.
+  const historyWatermarksRef = useRef(new Map<number, number>());
   const typingTimerRef = useRef<NodeJS.Timeout | null>(null);
   const companyRequestIdRef = useRef(0);
   const historyRequestIdRef = useRef(0);
@@ -234,6 +241,10 @@ function CustomerSupportChatSession() {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, []);
+  const transcriptMessageIdentity = useMemo(
+    () => messages.map((message) => message.tinNhanId).join(','),
+    [messages],
+  );
 
   useEffect(() => {
     if (isPrependingOlderRef.current) {
@@ -241,7 +252,7 @@ function CustomerSupportChatSession() {
       return;
     }
     scrollToBottom();
-  }, [messages, scrollToBottom]);
+  }, [transcriptMessageIdentity, scrollToBottom]);
 
   // Tải danh sách nhà xe thật khi ở màn hình chọn nhà xe
   useEffect(() => {
@@ -355,6 +366,10 @@ function CustomerSupportChatSession() {
     if (!activeConversationId || !accessToken) return;
     const targetConvId = activeConversationId;
     const reqId = ++reconnectRequestIdRef.current;
+    const current = () =>
+      mountedRef.current &&
+      reconnectRequestIdRef.current === reqId &&
+      activeConversationIdRef.current === targetConvId;
     try {
       const updatedConv = await chatApi.getConversationById(
         targetConvId,
@@ -371,21 +386,42 @@ function CustomerSupportChatSession() {
           : prev,
       );
 
-      const freshMsgs = await chatApi.getMessages(targetConvId, accessToken, {
+      let chunk = await chatApi.getMessages(targetConvId, accessToken, {
         pageSize: 40,
       });
-      if (
-        reconnectRequestIdRef.current !== reqId ||
-        activeConversationIdRef.current !== targetConvId
-      )
-        return;
+      if (!current()) return;
+      const watermark = historyWatermarksRef.current.get(targetConvId) ?? 0;
+      let freshMsgs = chunk;
+      while (chunk.length === 40) {
+        const oldest = Math.min(...chunk.map((message) => message.tinNhanId));
+        if (!Number.isInteger(oldest) || oldest <= 0)
+          throw new Error('Mã tin nhắn không hợp lệ.');
+        if (oldest <= watermark) break;
+        chunk = await chatApi.getMessages(targetConvId, accessToken, {
+          pageSize: 40,
+          beforeId: oldest,
+        });
+        if (!current()) return;
+        if (chunk.some((message) => message.tinNhanId >= oldest))
+          throw new Error('Trang tin nhắn không tiến về lịch sử cũ.');
+        freshMsgs = [...chunk, ...freshMsgs];
+      }
+      if (!current()) return;
+      historyWatermarksRef.current.set(
+        targetConvId,
+        Math.max(watermark, ...freshMsgs.map((message) => message.tinNhanId)),
+      );
+      if (watermark === 0) setHasOlderMessages(chunk.length >= 40);
 
       setMessages((prev) => {
         if (activeConversationIdRef.current !== targetConvId) return prev;
         return reconcileMessages(prev, freshMsgs);
       });
     } catch (err) {
-      console.warn('[CustomerSupportChat] Reconnect sync error:', err);
+      if (current()) {
+        console.warn('[CustomerSupportChat] Reconnect sync error:', err);
+        setErrorMsg('Chưa đồng bộ đủ tin nhắn. Vui lòng thử kết nối lại.');
+      }
     }
   }, [activeConversationId, accessToken, chatApi]);
 
@@ -414,8 +450,8 @@ function CustomerSupportChatSession() {
     onAuthenticationError: recoverSocketAuthentication,
   });
 
-  // Read only messages actually loaded in this thread. An empty/omitted ID list
-  // means "all" to the API and could mark off-screen history as read.
+  // Read only inbound bubbles intersecting the clipped transcript viewport.
+  // Empty/omitted ID lists mean mark-all at the API and must never be sent.
   useEffect(() => {
     if (
       !isAuthenticated ||
@@ -426,38 +462,88 @@ function CustomerSupportChatSession() {
       showHistoryList
     )
       return;
-    const ids = messages
-      .filter(
-        (message) =>
-          message.cuocTroChuyenId === activeConversationId &&
-          message.loaiNguoiGui === 'NHAN_VIEN' &&
-          message.trangThai === 'DA_GUI' &&
-          message.tinNhanId > 0,
-      )
-      .map((message) => message.tinNhanId);
-    if (ids.length === 0 || document.visibilityState === 'hidden') return;
-
-    let current = true;
+    const root = transcriptRef.current;
+    if (!root) return;
+    let disposed = false;
     const targetId = activeConversationId;
-    chatApi
-      .markMessagesAsRead(targetId, accessToken, ids)
-      .then(() => {
-        if (!current || activeConversationIdRef.current !== targetId) return;
-        setMessages((previous) =>
-          previous.map((message) =>
-            message.cuocTroChuyenId === targetId &&
-            ids.includes(message.tinNhanId)
-              ? { ...message, trangThai: 'DA_DOC' }
-              : message,
+    const checkVisible = () => {
+      if (disposed || document.visibilityState === 'hidden') return;
+      const area = root.getBoundingClientRect();
+      const top = Math.max(0, area.top),
+        bottom = Math.min(window.innerHeight, area.bottom);
+      const left = Math.max(0, area.left),
+        right = Math.min(window.innerWidth, area.right);
+      if (bottom <= top || right <= left) return;
+      const ids = messages
+        .filter((message) => {
+          if (
+            message.cuocTroChuyenId !== targetId ||
+            message.loaiNguoiGui !== 'NHAN_VIEN' ||
+            message.trangThai !== 'DA_GUI' ||
+            message.tinNhanId <= 0 ||
+            readingIdsRef.current.has(`${targetId}:${message.tinNhanId}`) ||
+            confirmedReadIdsRef.current.has(`${targetId}:${message.tinNhanId}`)
+          )
+            return false;
+          const box = messageElementsRef.current
+            .get(message.tinNhanId)
+            ?.getBoundingClientRect();
+          return (
+            box &&
+            box.width > 0 &&
+            box.height > 0 &&
+            box.bottom > top &&
+            box.top < bottom &&
+            box.right > left &&
+            box.left < right
+          );
+        })
+        .map((message) => message.tinNhanId);
+      if (!ids.length) return;
+      ids.forEach((id) => readingIdsRef.current.add(`${targetId}:${id}`));
+      void chatApi
+        .markMessagesAsRead(targetId, accessToken, ids)
+        .then(() => {
+          if (
+            !mountedRef.current ||
+            activeConversationIdRef.current !== targetId
+          )
+            return;
+          ids.forEach((id) =>
+            confirmedReadIdsRef.current.add(`${targetId}:${id}`),
+          );
+          setMessages((previous) =>
+            previous.map((message) =>
+              message.cuocTroChuyenId === targetId &&
+              ids.includes(message.tinNhanId)
+                ? { ...message, trangThai: 'DA_DOC' }
+                : message,
+            ),
+          );
+        })
+        .catch((error: unknown) => {
+          if (!disposed)
+            console.warn('[CustomerSupportChat] Mark read failed:', error);
+        })
+        .finally(() =>
+          ids.forEach((id) =>
+            readingIdsRef.current.delete(`${targetId}:${id}`),
           ),
         );
-      })
-      .catch((error: unknown) => {
-        if (current)
-          console.warn('[CustomerSupportChat] Mark read failed:', error);
-      });
+    };
+    const observer =
+      typeof IntersectionObserver === 'undefined'
+        ? null
+        : new IntersectionObserver(checkVisible, { root });
+    messageElementsRef.current.forEach((element) => observer?.observe(element));
+    root.addEventListener('scroll', checkVisible);
+    window.addEventListener('resize', checkVisible);
+    checkVisible();
     return () => {
-      current = false;
+      disposed = true;
+      observer?.disconnect();
+      root.removeEventListener('scroll', checkVisible);
+      window.removeEventListener('resize', checkVisible);
     };
   }, [
     isAuthenticated,
@@ -525,6 +611,10 @@ function CustomerSupportChatSession() {
           { pageSize: 40 },
         );
         if (currentReqId === companyRequestIdRef.current) {
+          historyWatermarksRef.current.set(
+            history[0]?.cuocTroChuyenId ?? 0,
+            Math.max(0, ...history.map((m) => m.tinNhanId)),
+          );
           setHasOlderMessages(history.length >= 40);
           setMessages((previous) =>
             reconcileMessages(
@@ -545,6 +635,10 @@ function CustomerSupportChatSession() {
           { pageSize: 40 },
         );
         if (currentReqId === companyRequestIdRef.current) {
+          historyWatermarksRef.current.set(
+            history[0]?.cuocTroChuyenId ?? 0,
+            Math.max(0, ...history.map((m) => m.tinNhanId)),
+          );
           setHasOlderMessages(history.length >= 40);
           setMessages((previous) =>
             reconcileMessages(
@@ -653,6 +747,10 @@ function CustomerSupportChatSession() {
           const newOlder = older
             .filter((m) => !currentIds.has(m.tinNhanId))
             .map((m) => ({ ...m, deliveryStatus: 'DA_GUI' as const }));
+          if (!newOlder.length) {
+            isPrependingOlderRef.current = false;
+            return prev;
+          }
           return [...newOlder, ...prev];
         });
       }
@@ -692,6 +790,10 @@ function CustomerSupportChatSession() {
         companyRequestIdRef.current !== companyReqId
       )
         return;
+      historyWatermarksRef.current.set(
+        conv.cuocTroChuyenId,
+        Math.max(0, ...history.map((m) => m.tinNhanId)),
+      );
       setHasOlderMessages(history.length >= 40);
       setMessages((previous) =>
         reconcileMessages(
@@ -753,6 +855,10 @@ function CustomerSupportChatSession() {
         accessToken,
       );
       if (!stillCurrent()) return;
+      historyWatermarksRef.current.set(
+        conv.cuocTroChuyenId,
+        Math.max(0, ...history.map((m) => m.tinNhanId)),
+      );
       setHasOlderMessages(history.length >= 40);
       setMessages(history.map((m) => ({ ...m, deliveryStatus: 'DA_GUI' })));
       setInitialMessage('');
@@ -1288,7 +1394,11 @@ function CustomerSupportChatSession() {
       )}
 
       {/* Danh sách tin nhắn */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-3">
+      <div
+        ref={transcriptRef}
+        data-testid="chat-transcript"
+        className="flex-1 overflow-y-auto p-3 space-y-3"
+      >
         {loadingMessages ? (
           <div className="flex items-center justify-center py-8 text-slate-400 gap-2 text-xs">
             <Loader2 className="w-4 h-4 animate-spin" /> Đang tải tin nhắn...
@@ -1385,6 +1495,15 @@ function CustomerSupportChatSession() {
                       )}
                     </div>
                     <div
+                      data-chat-message-id={msg.tinNhanId}
+                      ref={(element) => {
+                        if (element)
+                          messageElementsRef.current.set(
+                            msg.tinNhanId,
+                            element,
+                          );
+                        else messageElementsRef.current.delete(msg.tinNhanId);
+                      }}
                       className={`p-2.5 rounded-2xl text-xs leading-relaxed shadow-sm break-words transition-opacity ${
                         isMe
                           ? isFailed

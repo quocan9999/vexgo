@@ -735,7 +735,14 @@ export class SupportChatService {
       }
     }
 
-    return formatConversation(conv);
+    const soTinChuaDoc = await this.prisma.tinNhanHoTro.count({
+      where: {
+        cuocTroChuyenId,
+        taiKhoanGuiId: { not: principal.taiKhoanId },
+        trangThai: 'DA_GUI',
+      },
+    });
+    return { ...formatConversation(conv), soTinChuaDoc };
   }
 
   /**

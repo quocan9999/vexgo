@@ -742,4 +742,120 @@ describe('SupportChatService', () => {
       });
     });
   });
+
+  describe('authoritative detail unread count after access validation', () => {
+    const conversation = { cuocTroChuyenId: 77, nhaXeId: 5, khachHangId: 50 };
+    it.each([
+      ['staff', mockStaffWithChatManage, mockCustomerPrincipal.taiKhoanId],
+      ['customer', mockCustomerPrincipal, mockStaffWithChatManage.taiKhoanId],
+    ] as const)(
+      'counts the unread messages of other senders for the authorized %s',
+      async (_label, principal, otherSender) => {
+        prisma.cuocTroChuyen.findUnique.mockResolvedValue(conversation);
+        prisma.khachHang.findUnique.mockResolvedValue({
+          khachHangId: 50,
+          taiKhoanId: 101,
+        });
+        const rows = [
+          ...Array.from({ length: 15 }, () => ({
+            cuocTroChuyenId: 77,
+            taiKhoanGuiId: otherSender,
+            trangThai: 'DA_GUI',
+          })),
+          {
+            cuocTroChuyenId: 77,
+            taiKhoanGuiId: principal.taiKhoanId,
+            trangThai: 'DA_GUI',
+          },
+          {
+            cuocTroChuyenId: 77,
+            taiKhoanGuiId: otherSender,
+            trangThai: 'DA_DOC',
+          },
+          {
+            cuocTroChuyenId: 78,
+            taiKhoanGuiId: otherSender,
+            trangThai: 'DA_GUI',
+          },
+        ];
+        prisma.tinNhanHoTro.count.mockImplementation(
+          async ({
+            where,
+          }: {
+            where: {
+              cuocTroChuyenId: number;
+              taiKhoanGuiId: { not: number };
+              trangThai: string;
+            };
+          }) =>
+            rows.filter(
+              (row) =>
+                row.cuocTroChuyenId === where.cuocTroChuyenId &&
+                row.taiKhoanGuiId !== where.taiKhoanGuiId.not &&
+                row.trangThai === where.trangThai,
+            ).length,
+        );
+        const result = await service.getConversationById(principal, 77);
+        expect(result.soTinChuaDoc).toBe(15);
+        expect(prisma.tinNhanHoTro.count).toHaveBeenCalledExactlyOnceWith({
+          where: {
+            cuocTroChuyenId: 77,
+            taiKhoanGuiId: { not: principal.taiKhoanId },
+            trangThai: 'DA_GUI',
+          },
+        });
+      },
+    );
+
+    it('does not count own outgoing or already read messages as unread', async () => {
+      prisma.cuocTroChuyen.findUnique.mockResolvedValue(conversation);
+      const rows = [
+        { taiKhoanGuiId: 202, trangThai: 'DA_GUI' },
+        { taiKhoanGuiId: 101, trangThai: 'DA_DOC' },
+      ];
+      prisma.tinNhanHoTro.count.mockImplementation(
+        async ({
+          where,
+        }: {
+          where: { taiKhoanGuiId: { not: number }; trangThai: string };
+        }) =>
+          rows.filter(
+            (row) =>
+              row.taiKhoanGuiId !== where.taiKhoanGuiId.not &&
+              row.trangThai === where.trangThai,
+          ).length,
+      );
+      expect(
+        (await service.getConversationById(mockStaffWithChatManage, 77))
+          .soTinChuaDoc,
+      ).toBe(0);
+    });
+
+    it.each([
+      ['different tenant', mockStaffCompanyB],
+      ['staff without chat permission', mockStaffWithoutChatPermission],
+      ['different customer', mockCustomerPrincipal],
+    ] as const)(
+      'does not query unread message counts for a %s denied access',
+      async (_label, principal) => {
+        prisma.cuocTroChuyen.findUnique.mockResolvedValue(conversation);
+        prisma.khachHang.findUnique.mockResolvedValue({
+          khachHangId: 999,
+          taiKhoanId: 101,
+        });
+        await expect(
+          service.getConversationById(principal, 77),
+        ).rejects.toThrow(ForbiddenException);
+        expect(prisma.tinNhanHoTro.count).not.toHaveBeenCalled();
+      },
+    );
+
+    it('does not count messages for a missing conversation', async () => {
+      prisma.cuocTroChuyen.findUnique.mockResolvedValue(null);
+      await expect(
+        service.getConversationById(mockStaffWithChatManage, 77),
+      ).rejects.toThrow(NotFoundException);
+      expect(prisma.tinNhanHoTro.count).not.toHaveBeenCalled();
+    });
+  });
 });

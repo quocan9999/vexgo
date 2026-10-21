@@ -113,7 +113,9 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
   >([]);
   const [searchQuery, setSearchQuery] = useState('');
   const conversationsRef = useRef(conversations);
-  useEffect(() => { conversationsRef.current = conversations; }, [conversations]);
+  useEffect(() => {
+    conversationsRef.current = conversations;
+  }, [conversations]);
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [loadingConversations, setLoadingConversations] = useState(true);
 
@@ -145,13 +147,16 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
     }
   }, []);
 
+  const messageSequence = messages
+    .map((message) => message.clientMessageId ?? message.tinNhanId)
+    .join('|');
   useEffect(() => {
     if (isPrependingOlderRef.current) {
       isPrependingOlderRef.current = false;
       return;
     }
     scrollToBottom();
-  }, [messages, scrollToBottom]);
+  }, [messageSequence, scrollToBottom]);
 
   // Debounce search query (400ms) để tìm kiếm server-side có tenant scope (F-06)
   useEffect(() => {
@@ -244,14 +249,99 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
   const selectedConvRef = useRef(selectedConv);
   const adminReconnectRequestIdRef = useRef(0);
   const messageFetchRequestIdRef = useRef(0);
-  const markSocketMessagesAsReadRef = useRef<
-    ((convId: number, tinNhanIds?: number[]) => void) | null
-  >(null);
+  const historyWatermarkRef = useRef<{ id: number; messageId: number } | null>(
+    null,
+  );
+  const readInFlightRef = useRef<string | null>(null);
+  const tokenRef = useRef(token);
+  useEffect(() => { tokenRef.current = token; }, [token]);
 
   useEffect(() => {
     selectedConvIdRef.current = selectedConvId;
     selectedConvRef.current = selectedConv;
   }, [selectedConvId, selectedConv]);
+
+  // Read only explicit, rendered inbound IDs. One REST acknowledgement owns
+  // local read state; broadcasting a second socket mutation races that result.
+  useEffect(() => {
+    if (
+      !selectedConvId ||
+      !token ||
+      loadingMessages ||
+      document.visibilityState === 'hidden'
+    )
+      return;
+    const ids = messages
+      .filter(
+        (m) =>
+          m.cuocTroChuyenId === selectedConvId &&
+          m.loaiNguoiGui === 'KHACH_HANG' &&
+          m.trangThai === 'DA_GUI' &&
+          m.tinNhanId > 0,
+      )
+      .map((m) => m.tinNhanId);
+    if (ids.length === 0) return;
+    const targetId = selectedConvId;
+    const requestId = messageFetchRequestIdRef.current;
+    const key = `${token}:${targetId}:${requestId}`;
+    if (readInFlightRef.current === key) return;
+    readInFlightRef.current = key;
+    const current = () =>
+      tokenRef.current === token &&
+      selectedConvIdRef.current === targetId &&
+      messageFetchRequestIdRef.current === requestId;
+    void (async () => {
+      try {
+        const acknowledgement = await adminSupportChatApi.markMessagesAsRead(
+          targetId,
+          token,
+          ids,
+        );
+        if (!current()) return;
+        // Detail may carry an authoritative count; older API versions omit it.
+        let detail: AdminSupportConversation | undefined;
+        try {
+          detail = await adminSupportChatApi.getConversationById(
+            targetId,
+            token,
+          );
+        } catch {}
+        if (!current()) return;
+        setMessages((previous) =>
+          previous.map((m) =>
+            m.cuocTroChuyenId === targetId && ids.includes(m.tinNhanId)
+              ? { ...m, trangThai: 'DA_DOC' }
+              : m,
+          ),
+        );
+        setConversations((previous) =>
+          previous.map((c) =>
+            c.cuocTroChuyenId === targetId
+              ? {
+                  ...c,
+                  soTinChuaDoc:
+                    detail?.soTinChuaDoc ??
+                    (c.soTinChuaDoc === undefined
+                      ? undefined
+                      : Math.max(
+                          0,
+                          c.soTinChuaDoc - acknowledgement.updatedCount,
+                        )),
+                  tinNhanCuoi:
+                    c.tinNhanCuoi && ids.includes(c.tinNhanCuoi.tinNhanId)
+                      ? { ...c.tinNhanCuoi, trangThai: 'DA_DOC' }
+                      : c.tinNhanCuoi,
+                }
+              : c,
+          ),
+        );
+      } catch (error) {
+        console.warn('[AdminChat] Read acknowledgement failed:', error);
+      } finally {
+        if (readInFlightRef.current === key) readInFlightRef.current = null;
+      }
+    })();
+  }, [messages, selectedConvId, token, loadingMessages]);
 
   // Tải lịch sử tin nhắn khi chọn một cuộc trò chuyện (chỉ fetch khi selectedConvId thay đổi - F-NEW-02 & F-NEW-03)
   useEffect(() => {
@@ -259,6 +349,7 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
 
     let active = true;
     const targetConvId = selectedConvId;
+    historyWatermarkRef.current = null;
     const fetchReqId = ++messageFetchRequestIdRef.current;
 
     queueMicrotask(() => {
@@ -268,9 +359,13 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
       }
     });
 
-    adminSupportChatApi
-      .getMessages(targetConvId, token, { pageSize: 50 })
-      .then((msgs) => {
+    Promise.all([
+      adminSupportChatApi.getMessages(targetConvId, token, { pageSize: 50 }),
+      adminSupportChatApi
+        .getConversationById(targetConvId, token)
+        .catch(() => undefined),
+    ])
+      .then(([msgs, detail]) => {
         if (
           !active ||
           selectedConvIdRef.current !== targetConvId ||
@@ -278,74 +373,23 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
         ) {
           return;
         }
+        historyWatermarkRef.current = {
+          id: targetConvId,
+          messageId: Math.max(0, ...msgs.map((m) => m.tinNhanId)),
+        };
         setHasOlderMessages(msgs.length >= 50);
-
-        // Chống ghi đè tin nhắn realtime đã nhận trong lúc fetch đang in-flight (F-NEW-03)
-        setMessages((prev) => reconcileAdminMessages(prev, msgs));
-
-        // Tự động đánh dấu đã đọc các tin nhắn của khách hàng khi mở cuộc trò chuyện (P1 Regression fix)
-        const unreadCustomerMessages = msgs.filter(
-          (m) =>
-            m.loaiNguoiGui === 'KHACH_HANG' &&
-            m.trangThai !== 'DA_DOC' &&
-            m.tinNhanId > 0,
-        );
-        const unreadIds = unreadCustomerMessages.map((m) => m.tinNhanId);
-
-        if (
-          unreadIds.length > 0 ||
-          (selectedConvRef.current?.soTinChuaDoc &&
-            selectedConvRef.current.soTinChuaDoc > 0)
-        ) {
-          adminSupportChatApi
-            .markMessagesAsRead(
-              targetConvId,
-              token,
-              unreadIds.length > 0 ? unreadIds : undefined,
-            )
-            .catch((err) => {
-              console.warn(
-                '[AdminChat] Failed to mark messages as read on open:',
-                err,
-              );
-            });
-          markSocketMessagesAsReadRef.current?.(
-            targetConvId,
-            unreadIds.length > 0 ? unreadIds : undefined,
-          );
-
-          // Cập nhật số tin chưa đọc trong danh sách về 0 và tin cuối thành DA_DOC
-          setConversations((prevList) =>
-            prevList.map((conv) => {
-              if (conv.cuocTroChuyenId === targetConvId) {
-                return {
-                  ...conv,
-                  soTinChuaDoc: 0,
-                  tinNhanCuoi:
-                    conv.tinNhanCuoi &&
-                    conv.tinNhanCuoi.loaiNguoiGui === 'KHACH_HANG'
-                      ? { ...conv.tinNhanCuoi, trangThai: 'DA_DOC' }
-                      : conv.tinNhanCuoi,
-                };
-              }
-              return conv;
-            }),
-          );
-
-          // Cập nhật tin nhắn trong khung chat thành DA_DOC
-          setMessages((prevMsgs) =>
-            prevMsgs.map((m) =>
-              m.loaiNguoiGui === 'KHACH_HANG' &&
-              (unreadIds.length === 0 || unreadIds.includes(m.tinNhanId))
-                ? {
-                    ...m,
-                    trangThai: 'DA_DOC',
-                    daDocLuc: new Date().toISOString(),
-                  }
-                : m,
+        if (detail?.soTinChuaDoc !== undefined) {
+          setConversations((previous) =>
+            previous.map((c) =>
+              c.cuocTroChuyenId === targetConvId
+                ? { ...c, soTinChuaDoc: detail.soTinChuaDoc }
+                : c,
             ),
           );
         }
+
+        // Chống ghi đè tin nhắn realtime đã nhận trong lúc fetch đang in-flight (F-NEW-03)
+        setMessages((prev) => reconcileAdminMessages(prev, msgs));
       })
       .catch((err: unknown) => {
         if (active && selectedConvIdRef.current === targetConvId) {
@@ -421,6 +465,16 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
     if (!selectedConvId || !token) return;
     const targetConvId = selectedConvId;
     const reqId = ++adminReconnectRequestIdRef.current;
+    const historyRequest = messageFetchRequestIdRef.current;
+    const current = () =>
+      adminReconnectRequestIdRef.current === reqId &&
+      selectedConvIdRef.current === targetConvId &&
+      messageFetchRequestIdRef.current === historyRequest &&
+      tokenRef.current === token;
+    const watermark =
+      historyWatermarkRef.current?.id === targetConvId
+        ? historyWatermarkRef.current.messageId
+        : 0;
     try {
       const updatedConv = await adminSupportChatApi.getConversationById(
         targetConvId,
@@ -442,6 +496,29 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
         token,
         { pageSize: 50 },
       );
+      if (!current()) return;
+      let pageMessages = freshMsgs;
+      let oldest = Math.min(
+        ...pageMessages.filter((m) => m.tinNhanId > 0).map((m) => m.tinNhanId),
+      );
+      // Realtime delivery may be ahead of the last complete history snapshot.
+      // Bridge to that snapshot, not the newest event we happened to receive.
+      while (watermark > 0 && pageMessages.length >= 50 && oldest > watermark) {
+        const older = await adminSupportChatApi.getMessages(
+          targetConvId,
+          token,
+          { pageSize: 50, beforeId: oldest },
+        );
+        if (!current()) return;
+        const nextOldest = Math.min(
+          ...older.filter((m) => m.tinNhanId > 0).map((m) => m.tinNhanId),
+        );
+        if (older.length && nextOldest >= oldest)
+          throw new Error('History cursor did not advance.');
+        freshMsgs.push(...older);
+        pageMessages = older;
+        oldest = nextOldest;
+      }
       if (
         adminReconnectRequestIdRef.current !== reqId ||
         selectedConvIdRef.current !== targetConvId
@@ -449,18 +526,31 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
         return;
 
       setMessages((prev) => {
-        if (selectedConvIdRef.current !== targetConvId) return prev;
+        if (!current()) return prev;
         return reconcileAdminMessages(prev, freshMsgs);
       });
+      historyWatermarkRef.current = {
+        id: targetConvId,
+        messageId: Math.max(watermark, ...freshMsgs.map((m) => m.tinNhanId)),
+      };
+      if (watermark === 0) setHasOlderMessages(pageMessages.length >= 50);
     } catch (err) {
-      console.warn('[AdminChat] Reconnect sync error:', err);
+      if (current()) {
+        console.warn('[AdminChat] Reconnect sync error:', err);
+        setErrorMessage('Chưa đồng bộ đủ tin nhắn. Vui lòng thử kết nối lại.');
+      }
     }
   }, [selectedConvId, token]);
 
   // Callback khi có tin nhắn mới từ WebSocket
   const handleNewMessage = useCallback(
     (newMsg: AdminSupportMessage) => {
-      if (!conversationsRef.current.some((conversation) => conversation.cuocTroChuyenId === newMsg.cuocTroChuyenId)) {
+      if (
+        !conversationsRef.current.some(
+          (conversation) =>
+            conversation.cuocTroChuyenId === newMsg.cuocTroChuyenId,
+        )
+      ) {
         setRefreshTrigger((value) => value + 1);
       }
       const isCurrentlyOpen =
@@ -468,27 +558,8 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
 
       // 1. Cập nhật tin nhắn trong khung chat hiện tại nếu trùng cuocTroChuyenId
       if (isCurrentlyOpen) {
-        // Nếu Admin đang mở hội thoại và tin nhắn từ khách hàng, đánh dấu đã đọc ngay lập tức (P1)
-        if (newMsg.loaiNguoiGui === 'KHACH_HANG' && token) {
-          adminSupportChatApi
-            .markMessagesAsRead(newMsg.cuocTroChuyenId, token, [
-              newMsg.tinNhanId,
-            ])
-            .catch((err) => {
-              console.warn(
-                '[AdminChat] Failed to mark realtime message as read:',
-                err,
-              );
-            });
-          markSocketMessagesAsReadRef.current?.(newMsg.cuocTroChuyenId, [
-            newMsg.tinNhanId,
-          ]);
-        }
-
         const msgWithStatus: AdminSupportMessage = {
           ...newMsg,
-          trangThai:
-            newMsg.loaiNguoiGui === 'KHACH_HANG' ? 'DA_DOC' : newMsg.trangThai,
           deliveryStatus: 'DA_GUI',
         };
 
@@ -519,20 +590,14 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
       setConversations((prev) =>
         prev.map((c) => {
           if (c.cuocTroChuyenId === newMsg.cuocTroChuyenId) {
-            const updatedUnread = isCurrentlyOpen
-              ? 0
-              : newMsg.loaiNguoiGui === 'KHACH_HANG'
+            const updatedUnread =
+              newMsg.loaiNguoiGui === 'KHACH_HANG' &&
+              newMsg.trangThai !== 'DA_DOC'
                 ? (c.soTinChuaDoc || 0) + 1
                 : c.soTinChuaDoc;
             return {
               ...c,
-              tinNhanCuoi: {
-                ...newMsg,
-                trangThai:
-                  isCurrentlyOpen && newMsg.loaiNguoiGui === 'KHACH_HANG'
-                    ? 'DA_DOC'
-                    : newMsg.trangThai,
-              },
+              tinNhanCuoi: newMsg,
               soTinChuaDoc: updatedUnread,
               updatedAt: newMsg.createdAt,
             };
@@ -541,7 +606,7 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
         }),
       );
     },
-    [token],
+    [],
   );
 
   // Callback khi có nhân viên tiếp nhận
@@ -622,7 +687,6 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
     claimConversation: claimSocketConversation,
     closeConversation: closeSocketConversation,
     emitTyping,
-    markMessagesAsRead: markSocketMessagesAsRead,
   } = useAdminChatSocket({
     token,
     activeConversationId: selectedConv?.cuocTroChuyenId ?? null,
@@ -633,10 +697,6 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
     onMessagesReadReceipt: handleMessagesReadReceipt,
     onReconnected: handleReconnected,
   });
-
-  useEffect(() => {
-    markSocketMessagesAsReadRef.current = markSocketMessagesAsRead;
-  }, [markSocketMessagesAsRead]);
 
   // Tiếp nhận cuộc trò chuyện (Claim)
   const handleClaim = async () => {
@@ -1269,12 +1329,12 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                           >
                             {msg.noiDung}
                           </div>
-                            {isStaff && !isPendingMsg && !isFailedMsg && (
-                              <span className="text-xs text-[var(--admin-text-muted)]">
-                                {msg.trangThai === 'DA_DOC' ? 'Đã đọc' : 'Đã gửi'}
-                              </span>
-                            )}
-                            {isFailedMsg && (
+                          {isStaff && !isPendingMsg && !isFailedMsg && (
+                            <span className="text-xs text-[var(--admin-text-muted)]">
+                              {msg.trangThai === 'DA_DOC' ? 'Đã đọc' : 'Đã gửi'}
+                            </span>
+                          )}
+                          {isFailedMsg && (
                             <div className="flex items-center gap-1 mt-0.5 text-[10px] text-rose-600">
                               <AlertCircle className="w-3 h-3" />
                               <span>Gửi thất bại</span>

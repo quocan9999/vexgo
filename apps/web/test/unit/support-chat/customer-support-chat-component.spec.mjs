@@ -79,6 +79,8 @@ describe('Customer displayed-message read receipts', () => {
   let readCalls;
   let finishRead;
   let originalRefresh;
+  let originalBounds;
+  let bubbleBounds;
   const message = (id, conversationId = 101, sender = 'NHAN_VIEN') => ({
     tinNhanId: id,
     cuocTroChuyenId: conversationId,
@@ -90,6 +92,30 @@ describe('Customer displayed-message read receipts', () => {
     createdAt: '2026-10-20T10:00:00Z',
   });
   beforeEach(() => {
+    originalBounds = dom.window.HTMLElement.prototype.getBoundingClientRect;
+    bubbleBounds = new Map();
+    dom.window.HTMLElement.prototype.getBoundingClientRect = function () {
+      if (this.getAttribute('data-testid') === 'chat-transcript') {
+        return {
+          top: 0,
+          bottom: 100,
+          left: 0,
+          right: 200,
+          width: 200,
+          height: 100,
+        };
+      }
+      return (
+        bubbleBounds.get(Number(this.getAttribute('data-chat-message-id'))) ?? {
+          top: 10,
+          bottom: 30,
+          left: 10,
+          right: 150,
+          width: 140,
+          height: 20,
+        }
+      );
+    };
     seedAuthStorage();
     originals = { ...supportChatApi };
     originalRefresh = authApi.refresh;
@@ -128,6 +154,7 @@ describe('Customer displayed-message read receipts', () => {
     cleanup();
     Object.assign(supportChatApi, originals);
     authApi.refresh = originalRefresh;
+    dom.window.HTMLElement.prototype.getBoundingClientRect = originalBounds;
   });
 
   async function openA(extra = null) {
@@ -143,6 +170,342 @@ describe('Customer displayed-message read receipts', () => {
     fireEvent.click(screen.getByText('Read Company A'));
     await waitFor(() => screen.getByText('visible-message-1'));
   }
+
+  it('bridges every reconnect page after a newer realtime message while preserving a pending optimistic draft', async () => {
+    let records = Array.from({ length: 40 }, (_, i) =>
+      message(i + 1, 101, 'KHACH_HANG'),
+    );
+    const pages = [];
+    supportChatApi.getConversationById = async () => ({
+      cuocTroChuyenId: 101,
+      nhaXeId: 10,
+      trangThai: 'DANG_XU_LY',
+      nhaXe: { tenNhaXe: 'Read Company A' },
+    });
+    supportChatApi.getMessages = async (_id, _token, options) => {
+      const before = options?.beforeId;
+      pages.push(before);
+      return records
+        .filter((item) => !before || item.tinNhanId < before)
+        .slice(-40);
+    };
+    let finishSend;
+    supportChatApi.sendMessage = async (_id, content, _token, clientId) =>
+      new Promise((resolve) => {
+        finishSend = () =>
+          resolve({
+            ...message(122, 101, 'KHACH_HANG'),
+            noiDung: content,
+            clientMessageId: clientId,
+          });
+      });
+    await openA();
+    fireEvent.change(screen.getByPlaceholderText('Nhập tin nhắn...'), {
+      target: { value: 'Pending across reconnect' },
+    });
+    fireEvent.keyDown(screen.getByPlaceholderText('Nhập tin nhắn...'), {
+      key: 'Enter',
+    });
+    await waitFor(() => assert.equal(typeof finishSend, 'function'));
+    records = Array.from({ length: 121 }, (_, i) =>
+      message(i + 1, 101, 'KHACH_HANG'),
+    );
+    await act(async () => {
+      mockSockets
+        .at(-1)
+        .serverEmit('support.message.new', message(121, 101, 'KHACH_HANG'));
+      mockSockets.at(-1).serverEmit('support.connected', {});
+    });
+    await waitFor(() => {
+      assert.ok(
+        screen.getByText('visible-message-41'),
+        'The first missed page cannot remain missing',
+      );
+      assert.ok(screen.getByText('visible-message-81'));
+      assert.equal(screen.getAllByText('Pending across reconnect').length, 1);
+      assert.deepEqual(pages, [undefined, undefined, 82, 42]);
+    });
+    await act(async () => {
+      finishSend();
+    });
+  });
+
+  it('reads only bubbles intersecting the viewport, including after history prepend, scroll and realtime arrival', async () => {
+    const outside = {
+      top: 300,
+      bottom: 330,
+      left: 10,
+      right: 150,
+      width: 140,
+      height: 30,
+    };
+    const inside = {
+      top: 20,
+      bottom: 45,
+      left: 10,
+      right: 150,
+      width: 140,
+      height: 25,
+    };
+    for (let id = 1; id <= 81; id++) bubbleBounds.set(id, outside);
+    bubbleBounds.set(80, inside);
+    supportChatApi.getMessages = async (_id, _token, options) =>
+      options?.beforeId
+        ? Array.from({ length: 40 }, (_, i) => message(i + 1))
+        : Array.from({ length: 40 }, (_, i) => message(i + 41));
+    renderWithAuth(React.createElement(CustomerSupportChat));
+    await waitFor(() => screen.getByText('Read Company A'));
+    fireEvent.click(screen.getByText('Read Company A'));
+    await waitFor(() =>
+      assert.deepEqual(
+        readCalls.map((call) => call.ids),
+        [[80]],
+      ),
+    );
+    fireEvent.click(screen.getByText('Tải tin nhắn cũ hơn'));
+    await waitFor(() => screen.getByText('visible-message-1'));
+    await act(async () => {
+      mockSockets.at(-1).serverEmit('support.message.new', message(81));
+    });
+    assert.deepEqual(
+      readCalls.map((call) => call.ids),
+      [[80]],
+      'Loaded offscreen history and incoming messages stay unread',
+    );
+    bubbleBounds.set(1, inside);
+    fireEvent.scroll(
+      screen.getByText('visible-message-1').closest('.overflow-y-auto'),
+    );
+    await waitFor(() =>
+      assert.deepEqual(
+        readCalls.map((call) => call.ids),
+        [[80], [1]],
+      ),
+    );
+    bubbleBounds.set(81, inside);
+    fireEvent(window, new dom.window.Event('resize'));
+    await waitFor(() =>
+      assert.deepEqual(
+        readCalls.map((call) => call.ids),
+        [[80], [1], [81]],
+      ),
+    );
+  });
+
+  it('does not mark a visible sender header read until the actual text bubble crosses the viewport edge', async () => {
+    const bounds = dom.window.HTMLElement.prototype.getBoundingClientRect;
+    let textVisible = false;
+    dom.window.HTMLElement.prototype.getBoundingClientRect = function () {
+      if (
+        this.getAttribute('data-chat-message-id') === '1' &&
+        this.classList.contains('flex')
+      ) {
+        return {
+          top: 80,
+          bottom: 150,
+          left: 10,
+          right: 150,
+          width: 140,
+          height: 70,
+        };
+      }
+      if (
+        this.textContent === 'visible-message-1' &&
+        this.children.length === 0
+      ) {
+        return textVisible
+          ? {
+              top: 90,
+              bottom: 130,
+              left: 10,
+              right: 150,
+              width: 140,
+              height: 40,
+            }
+          : {
+              top: 110,
+              bottom: 150,
+              left: 10,
+              right: 150,
+              width: 140,
+              height: 40,
+            };
+      }
+      return bounds.call(this);
+    };
+    await openA();
+    assert.equal(
+      readCalls.length,
+      0,
+      'An avatar/header edge is not proof that message text was visible',
+    );
+    textVisible = true;
+    fireEvent.scroll(
+      screen.getByText('visible-message-1').closest('.overflow-y-auto'),
+    );
+    await waitFor(() =>
+      assert.deepEqual(
+        readCalls.map((call) => call.ids),
+        [[1]],
+      ),
+    );
+  });
+
+  it('preserves scroll position after a viewport-read ACK but still scrolls for a new message', async () => {
+    const originalScroll = dom.window.HTMLElement.prototype.scrollIntoView;
+    let scrolls = 0;
+    dom.window.HTMLElement.prototype.scrollIntoView = () => {
+      scrolls++;
+    };
+    try {
+      bubbleBounds.set(1, {
+        top: 300,
+        bottom: 330,
+        left: 10,
+        right: 150,
+        width: 140,
+        height: 30,
+      });
+      await openA();
+      assert.equal(readCalls.length, 0);
+      const beforeRead = scrolls;
+      bubbleBounds.set(1, {
+        top: 10,
+        bottom: 40,
+        left: 10,
+        right: 150,
+        width: 140,
+        height: 30,
+      });
+      fireEvent.scroll(
+        screen.getByText('visible-message-1').closest('.overflow-y-auto'),
+      );
+      await waitFor(() =>
+        assert.deepEqual(
+          readCalls.map((call) => call.ids),
+          [[1]],
+        ),
+      );
+      await act(async () => {
+        await Promise.resolve();
+      });
+      assert.equal(
+        scrolls,
+        beforeRead,
+        'A read-state update must not jump from older visible messages to the bottom',
+      );
+      await act(async () => {
+        mockSockets
+          .at(-1)
+          .serverEmit('support.message.new', message(4, 101, 'KHACH_HANG'));
+      });
+      assert.equal(
+        scrolls,
+        beforeRead + 1,
+        'A new message retains the existing scroll behavior',
+      );
+    } finally {
+      dom.window.HTMLElement.prototype.scrollIntoView = originalScroll;
+    }
+  });
+
+  it('discards a deferred reconnect cursor page after switching conversations', async () => {
+    let reconnect = false;
+    let releasePage;
+    supportChatApi.getConversationById = async () =>
+      supportChatApi.getActiveConversation(10);
+    supportChatApi.getMessages = async (id, _token, options) => {
+      if (id === 202) return [message(200, 202)];
+      if (!reconnect)
+        return Array.from({ length: 40 }, (_, i) =>
+          message(i + 1, 101, 'KHACH_HANG'),
+        );
+      if (!options?.beforeId)
+        return Array.from({ length: 40 }, (_, i) =>
+          message(i + 82, 101, 'KHACH_HANG'),
+        );
+      return new Promise((resolve) => {
+        releasePage = resolve;
+      });
+    };
+    await openA();
+    reconnect = true;
+    await act(async () => {
+      mockSockets.at(-1).serverEmit('support.connected', {});
+    });
+    await waitFor(() => assert.equal(typeof releasePage, 'function'));
+    fireEvent.click(screen.getByText('Đổi nhà xe'));
+    await waitFor(() => screen.getByText('Read Company B'));
+    fireEvent.click(screen.getByText('Read Company B'));
+    await waitFor(() => screen.getByText('visible-message-200'));
+    await act(async () => {
+      releasePage(
+        Array.from({ length: 40 }, (_, i) =>
+          message(i + 42, 101, 'KHACH_HANG'),
+        ),
+      );
+    });
+    assert.equal(screen.queryByText('visible-message-42'), null);
+    assert.equal(screen.queryByText('visible-message-121'), null);
+    assert.ok(screen.getByText('visible-message-200'));
+  });
+
+  it('discards a deferred reconnect cursor page after switching authenticated accounts', async () => {
+    let session;
+    function Controls() {
+      session = useAuthSession();
+      return null;
+    }
+    let reconnect = false;
+    let releasePage;
+    supportChatApi.getConversationById = async () =>
+      supportChatApi.getActiveConversation(10);
+    supportChatApi.getMessages = async (_id, _token, options) => {
+      if (!reconnect)
+        return Array.from({ length: 40 }, (_, i) =>
+          message(i + 1, 101, 'KHACH_HANG'),
+        );
+      if (!options?.beforeId)
+        return Array.from({ length: 40 }, (_, i) =>
+          message(i + 82, 101, 'KHACH_HANG'),
+        );
+      return new Promise((resolve) => {
+        releasePage = resolve;
+      });
+    };
+    await openA(React.createElement(Controls));
+    reconnect = true;
+    await act(async () => {
+      mockSockets.at(-1).serverEmit('support.connected', {});
+    });
+    await waitFor(() => assert.equal(typeof releasePage, 'function'));
+    await act(async () => {
+      session.signIn({
+        user: {
+          accountId: 101,
+          customerId: 2,
+          fullName: 'Replacement customer',
+          phoneNumber: '0900000002',
+          roles: ['CUSTOMER'],
+        },
+        accessToken: 'replacement-access',
+        refreshToken: 'replacement-refresh',
+      });
+      releasePage(
+        Array.from({ length: 40 }, (_, i) =>
+          message(i + 42, 101, 'KHACH_HANG'),
+        ),
+      );
+    });
+    await waitFor(() => screen.getByText('Read Company A'));
+    assert.equal(screen.queryByText('visible-message-42'), null);
+    assert.equal(screen.queryByText('visible-message-121'), null);
+    assert.equal(
+      JSON.parse(dom.window.localStorage.getItem(AUTH_STORAGE_KEY)).user
+        .accountId,
+      101,
+    );
+  });
 
   it('refreshes concurrent expired chat reads once and uses rotated tokens for subsequent history/read calls', async () => {
     let refreshes = 0;

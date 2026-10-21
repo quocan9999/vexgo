@@ -23,6 +23,7 @@ import type {
 import type { UseAdminChatSocketProps } from '../src/features/support-chat/hooks/use-admin-chat-socket';
 
 let capturedSocketProps: Partial<UseAdminChatSocketProps> = {};
+const socketRead = vi.fn();
 
 vi.mock('@/features/admin-auth/services/admin-auth', () => ({
   getAdminAccessToken: () => 'mock-admin-token-123',
@@ -38,7 +39,7 @@ vi.mock('../src/features/support-chat/hooks/use-admin-chat-socket', () => ({
       claimConversation: vi.fn().mockResolvedValue({ success: true }),
       closeConversation: vi.fn().mockResolvedValue({ success: true }),
       emitTyping: vi.fn(),
-      markMessagesAsRead: vi.fn(),
+      markMessagesAsRead: socketRead,
     };
   },
 }));
@@ -99,6 +100,136 @@ describe('AdminChatMessenger Component & Flow Regression Tests', () => {
     vi.clearAllMocks();
     window.HTMLElement.prototype.scrollIntoView = vi.fn();
   });
+
+  describe('Lead R2: authoritative reads and reconnect gaps', () => {
+    const message = (
+      id: number,
+      status: 'DA_GUI' | 'DA_DOC' = 'DA_DOC',
+    ): AdminSupportMessage => ({
+      tinNhanId: id,
+      cuocTroChuyenId: 1,
+      taiKhoanGuiId: 20,
+      loaiNguoiGui: 'KHACH_HANG',
+      loaiTinNhan: 'VAN_BAN',
+      noiDung: `R2 message ${id}`,
+      trangThai: status,
+      createdAt: new Date(Date.UTC(2026, 9, 21, 0, 0, id)).toISOString(),
+    });
+    function setup(unread = 0) {
+      const conversation = createMockConversation(
+        1,
+        'R2 customer',
+        'DANG_XU_LY',
+      );
+      conversation.soTinChuaDoc = unread;
+      vi.spyOn(adminSupportChatApi, 'listConversations').mockResolvedValue({
+        data: [conversation],
+        meta: { page: 1, pageSize: 20, totalItems: 1, totalPages: 1 },
+      });
+      vi.spyOn(adminSupportChatApi, 'getConversationById').mockResolvedValue(
+        conversation,
+      );
+      return conversation;
+    }
+    it('does not mark hidden older unread messages when the latest page has no unread IDs', async () => {
+      setup(10);
+      vi.spyOn(adminSupportChatApi, 'getMessages').mockResolvedValue(
+        Array.from({ length: 50 }, (_, i) => message(i + 11)),
+      );
+      const read = vi
+        .spyOn(adminSupportChatApi, 'markMessagesAsRead')
+        .mockResolvedValue({ updatedCount: 10 });
+      render(<AdminChatMessenger session={mockSession} />);
+      fireEvent.click(await screen.findByText('R2 customer'));
+      await screen.findByText('R2 message 60');
+      expect(read).not.toHaveBeenCalled();
+      expect(socketRead).not.toHaveBeenCalled();
+      expect(screen.getByText('10')).toBeTruthy();
+    });
+    it('keeps unread count until the exact-ID REST acknowledgement and authoritative detail arrive', async () => {
+      const conversation = setup(10);
+      vi.spyOn(adminSupportChatApi, 'getMessages').mockResolvedValue([
+        message(60, 'DA_GUI'),
+      ]);
+      let acknowledge!: (value: { updatedCount: number }) => void;
+      const read = vi
+        .spyOn(adminSupportChatApi, 'markMessagesAsRead')
+        .mockImplementation(
+          () =>
+            new Promise((resolve) => {
+              acknowledge = resolve;
+            }),
+        );
+      vi.mocked(adminSupportChatApi.getConversationById)
+        .mockResolvedValueOnce(conversation)
+        .mockResolvedValue({ ...conversation, soTinChuaDoc: 9 });
+      render(<AdminChatMessenger session={mockSession} />);
+      fireEvent.click(await screen.findByText('R2 customer'));
+      await waitFor(() =>
+        expect(read).toHaveBeenCalledWith(1, 'mock-admin-token-123', [60]),
+      );
+      expect(screen.getByText('10')).toBeTruthy();
+      expect(socketRead).not.toHaveBeenCalled();
+      const scrollCount = vi.mocked(window.HTMLElement.prototype.scrollIntoView).mock.calls.length;
+      await act(async () => acknowledge({ updatedCount: 1 }));
+      await waitFor(() => expect(screen.getByText('9')).toBeTruthy());
+      expect(read).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(window.HTMLElement.prototype.scrollIntoView).mock.calls.length).toBe(scrollCount);
+    });
+    it('preserves unread count when the REST read request fails', async () => {
+      setup(10);
+      vi.spyOn(adminSupportChatApi, 'getMessages').mockResolvedValue([
+        message(60, 'DA_GUI'),
+      ]);
+      const read = vi
+        .spyOn(adminSupportChatApi, 'markMessagesAsRead')
+        .mockRejectedValue(new Error('offline'));
+      render(<AdminChatMessenger session={mockSession} />);
+      fireEvent.click(await screen.findByText('R2 customer'));
+      await waitFor(() => expect(read).toHaveBeenCalled());
+      expect(screen.getByText('10')).toBeTruthy();
+      expect(socketRead).not.toHaveBeenCalled();
+    });
+    it('bridges more than one page offline to the pre-disconnect watermark and retains realtime messages', async () => {
+      setup();
+      let reconnecting = false;
+      const get = vi
+        .spyOn(adminSupportChatApi, 'getMessages')
+        .mockImplementation(async (_id, _token, options) => {
+          if (!reconnecting)
+            return Array.from({ length: 10 }, (_, i) => message(i + 1));
+          const before =
+            typeof options === 'object' ? (options.beforeId ?? 121) : 121;
+          return Array.from({ length: Math.min(50, before - 1) }, (_, i) =>
+            message(Math.max(1, before - 50) + i),
+          );
+        });
+      render(<AdminChatMessenger session={mockSession} />);
+      fireEvent.click(await screen.findByText('R2 customer'));
+      await screen.findByText('R2 message 10');
+      reconnecting = true;
+      await act(async () => {
+        capturedSocketProps.onNewMessage?.({
+          ...message(121),
+          loaiNguoiGui: 'NHAN_VIEN',
+        });
+        await capturedSocketProps.onReconnected?.();
+      });
+      for (let id = 1; id <= 121; id++)
+        expect(
+          screen.getAllByText(`R2 message ${id}`, { exact: true }).length,
+        ).toBeGreaterThanOrEqual(1);
+      expect(get).toHaveBeenCalledWith(1, 'mock-admin-token-123', {
+        pageSize: 50,
+        beforeId: 71,
+      });
+      expect(get).toHaveBeenCalledWith(1, 'mock-admin-token-123', {
+        pageSize: 50,
+        beforeId: 21,
+      });
+    });
+  });
+
 
   afterEach(() => {
     cleanup();

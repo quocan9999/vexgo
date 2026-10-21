@@ -18,10 +18,10 @@ service and MySQL models. REST uses `/api/v1/support-chat`; Socket.IO uses the
 - Admin chat derives its versioned REST URL from the shared Admin API origin,
   just as login and other Admin features do. `NEXT_PUBLIC_API_URL` is an origin
   in Admin; Web's existing chat configuration uses a versioned API base.
-- Customer Web marks explicit loaded staff-message IDs read only in the active,
-  shown transcript and a visible document. It does not use empty IDs, which the
-  Backend interprets as mark-all. This is loaded-transcript semantics, not
-  individual bubble/viewport intersection detection.
+- Customer Web marks explicit staff-message IDs read only when the actual text
+  bubble intersects the clipped transcript viewport in a visible document.
+  History preload, offscreen bubbles and header/avatar visibility do not count.
+  It never sends empty IDs, which the Backend interprets as mark-all.
 - Customer Web ignores unrelated conversation events and own read receipts,
   merges late HTTP snapshots with realtime messages and resets mounted state
   when the authenticated account changes.
@@ -93,3 +93,44 @@ process coverage is bounded, so an absent graph edge is not proof of no impact.
 
 Final Backend head CI remains a separate gate after pushing. No PR
 merge or reviewer-thread resolution is performed by the implementation agent.
+
+## Lead review follow-up
+
+- Admin reads use one REST mutation with explicit loaded inbound IDs. No empty
+  fallback or parallel socket read mutation is sent. UI read state changes only
+  after acknowledgement; a failed request preserves unread state. The detail API
+  now supplies `soTinChuaDoc` from the authorized conversation's other-sender
+  `DA_GUI` records, so initial open and post-ACK counts include unloaded history.
+  This adds one count after scope checks; there is no list N+1 or schema change.
+- Web/Admin reconnect traverse cursor pages back to the last complete REST
+  history checkpoint. A newer realtime/optimistic message cannot advance that
+  checkpoint and hide a gap. Late results are discarded after selection/session
+  changes; pending drafts and realtime messages are reconciled without duplicates.
+- Web observes text-bubble viewport intersections on scroll, resize and layout
+  intersection changes. Read ACK/status changes do not scroll back to the bottom.
+- Deterministic Admin/Web regressions first failed on the reviewed implementation.
+  API count tests additionally verify authorization before querying unread data.
+  Final run counts, actual browser/DB evidence and new-head CI belong in the PR
+  handoff; earlier physical Android evidence applies only to Mobile `5c7ea75`.
+- Mobile follow-up `7a726fa` fixes delayed background reconnect and paged-list
+  refresh with seven red-to-green regressions, 365 full tests and a rebuilt APK.
+  The new APK has not been installed or rechecked on the physical phone.
+
+Follow-up validation: 834 API unit tests, 440 Admin tests, 139 Web Node tests and
+125 Web Vitest tests passed. Focused components: Admin 17, Web 25. API build,
+typecheck/lint and both frontend typecheck/production builds passed. A generated
+Next dev validator initially failed typecheck after concurrent dev/typegen;
+regenerating it through Next dev and stopping dev before checks restored valid
+generated types. The failing logs were retained; no checks were weakened.
+
+Actual browser/MySQL regression verified older 15 unread records stay unread,
+one blocked read request retains its badge until ACK, server unread count and
+Admin badge both equal 15, and Web/Admin reconnect each recover 55 missed
+messages. Web offscreen/unloaded messages remain unread until their text bubbles
+intersect the viewport; read ACK preserves the scroll anchor. Smooth scrolling
+can expose several bubbles on the way, and those intersections count as viewed.
+
+Final refreshed graph reports this follow-up as 7 files/12 symbols, CRITICAL;
+the full PR versus develop is 79 files/230 symbols, also CRITICAL, without a
+capped listing at this checkpoint. This supersedes the earlier listing-cap
+observation, not the shared API impact warning or Lead review requirement.
