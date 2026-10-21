@@ -7,6 +7,7 @@ import {
   useState,
   useMemo,
   useCallback,
+  useRef,
 } from 'react';
 import {
   clearStoredAuth,
@@ -45,16 +46,28 @@ export function AuthSessionProvider({
     isAuthenticated: false,
     isHydrated: false,
   });
+  const current = useRef(state);
+  const generation = useRef(0);
+  const refreshInFlight = useRef<Promise<TokenPair> | null>(null);
+  const invalidatePending = useCallback(() => {
+    generation.current++;
+    refreshInFlight.current = null;
+  }, []);
+  const updateState = useCallback((next: AuthState) => {
+    current.current = next;
+    setState(next);
+  }, []);
 
   useEffect(() => {
     let active = true;
     queueMicrotask(() => {
-      if (active) setState(readStoredAuth(window.localStorage));
+      if (active) updateState(readStoredAuth(window.localStorage));
     });
     return () => {
       active = false;
+      invalidatePending();
     };
-  }, []);
+  }, [updateState, invalidatePending]);
 
   const signIn = useCallback(
     (data: { user: AuthUser; accessToken: string; refreshToken: string }) => {
@@ -65,17 +78,19 @@ export function AuthSessionProvider({
         isAuthenticated: true,
         isHydrated: true,
       };
-      setState(nextState);
+      generation.current++;
+      refreshInFlight.current = null;
+      updateState(nextState);
       try {
         writeStoredAuth(window.localStorage, data);
       } catch {}
     },
-    [],
+    [updateState],
   );
 
   const signOut = useCallback(() => {
-    const currentToken = state.accessToken;
-    const currentRefreshToken = state.refreshToken;
+    const currentToken = current.current.accessToken;
+    const currentRefreshToken = current.current.refreshToken;
     const nextState = {
       user: null,
       accessToken: null,
@@ -84,80 +99,100 @@ export function AuthSessionProvider({
       isHydrated: true,
     };
     void authApi.logout(currentRefreshToken, currentToken);
-    setState(nextState);
+    generation.current++;
+    refreshInFlight.current = null;
+    updateState(nextState);
     try {
       clearStoredAuth(window.localStorage);
     } catch {}
-  }, [state.accessToken, state.refreshToken]);
+  }, [updateState]);
 
-  const refreshSession = useCallback(async (): Promise<string | null> => {
-    const currentRefreshToken = state.refreshToken;
-    if (!currentRefreshToken) {
-      signOut();
-      return null;
-    }
-    try {
-      const res = await authApi.refresh(currentRefreshToken);
-      const newTokens = res.data;
-      if (state.user) {
-        const nextState = {
-          user: state.user,
-          accessToken: newTokens.accessToken,
-          refreshToken: newTokens.refreshToken,
+  const refreshTokens = useCallback(
+    async (epoch: number, previousRefresh?: string): Promise<TokenPair> => {
+      if (epoch !== generation.current)
+        throw new Error('Phiên đăng nhập đã thay đổi.');
+      const snapshot = current.current;
+      if (
+        previousRefresh &&
+        snapshot.refreshToken !== previousRefresh &&
+        snapshot.accessToken &&
+        snapshot.refreshToken
+      ) {
+        return {
+          accessToken: snapshot.accessToken,
+          refreshToken: snapshot.refreshToken,
+        };
+      }
+      if (refreshInFlight.current) return refreshInFlight.current;
+      if (!snapshot.refreshToken || !snapshot.user)
+        throw new Error('Chưa đăng nhập');
+      const operation = (async () => {
+        const { data } = await authApi.refresh(snapshot.refreshToken!);
+        if (epoch !== generation.current)
+          throw new Error('Phiên đăng nhập đã thay đổi.');
+        updateState({
+          ...snapshot,
+          ...data,
           isAuthenticated: true,
           isHydrated: true,
-        };
-        setState(nextState);
+        });
         try {
           writeStoredAuth(window.localStorage, {
-            user: state.user,
-            accessToken: newTokens.accessToken,
-            refreshToken: newTokens.refreshToken,
+            user: snapshot.user!,
+            ...data,
           });
         } catch {}
-        return newTokens.accessToken;
+        return data;
+      })();
+      refreshInFlight.current = operation;
+      try {
+        return await operation;
+      } finally {
+        if (refreshInFlight.current === operation)
+          refreshInFlight.current = null;
       }
-      signOut();
-      return null;
+    },
+    [updateState],
+  );
+
+  const refreshSession = useCallback(async (): Promise<string | null> => {
+    const epoch = generation.current;
+    try {
+      return (await refreshTokens(epoch)).accessToken;
     } catch {
-      signOut();
+      if (epoch === generation.current) signOut();
       return null;
     }
-  }, [state.refreshToken, state.user, signOut]);
+  }, [refreshTokens, signOut]);
 
   const executeWithAuth = useCallback(
     async <T,>(action: (token: string) => Promise<T>): Promise<T> => {
-      return runWithAuthRetry(action, {
-        getTokens: () => ({
-          accessToken: state.accessToken,
-          refreshToken: state.refreshToken,
-        }),
-        onRefresh: (newTokens: TokenPair) => {
-          if (state.user) {
-            const nextState = {
-              user: state.user,
-              accessToken: newTokens.accessToken,
-              refreshToken: newTokens.refreshToken,
-              isAuthenticated: true,
-              isHydrated: true,
-            };
-            setState(nextState);
-            try {
-              writeStoredAuth(window.localStorage, {
-                user: state.user,
-                accessToken: newTokens.accessToken,
-                refreshToken: newTokens.refreshToken,
-              });
-            } catch {}
-          }
+      const epoch = generation.current;
+      const ensureCurrent = () => {
+        if (epoch !== generation.current)
+          throw new Error('Phiên đăng nhập đã thay đổi.');
+      };
+      return runWithAuthRetry(
+        async (token) => {
+          ensureCurrent();
+          const result = await action(token);
+          ensureCurrent();
+          return result;
         },
-        onAuthFailed: () => {
-          signOut();
+        {
+          getTokens: () => ({
+            accessToken: current.current.accessToken,
+            refreshToken: current.current.refreshToken,
+          }),
+          onRefresh: () => {}, // The shared refresh operation publishes tokens once, before any retry.
+          onAuthFailed: () => {
+            if (epoch === generation.current) signOut();
+          },
+          refreshFn: async (rt) => ({ data: await refreshTokens(epoch, rt) }),
         },
-        refreshFn: (rt) => authApi.refresh(rt),
-      });
+      );
     },
-    [state.accessToken, state.refreshToken, state.user, signOut],
+    [refreshTokens, signOut],
   );
 
   const value = useMemo(

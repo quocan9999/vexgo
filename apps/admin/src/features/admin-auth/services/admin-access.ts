@@ -37,6 +37,16 @@ export const ADMIN_OPERATION_SECTIONS = [
     href: '/support-chat',
     readPermission: 'chat:read',
   },
+  {
+    section: 'promotions',
+    href: '/promotions',
+    readPermission: 'promotion:read',
+  },
+  {
+    section: 'shipments',
+    href: '/shipments',
+    readPermission: 'shipment:read',
+  },
 ] as const;
 
 export type AdminPermission =
@@ -61,6 +71,11 @@ export type AdminPermission =
   | 'trip:update'
   | 'trip:cancel'
   | 'customer:read'
+  | 'promotion:read'
+  | 'promotion:create'
+  | 'promotion:update'
+  | 'shipment:read'
+  | 'shipment:update'
   | 'role:read'
   | 'permission:assign'
   | 'chat:read'
@@ -77,9 +92,7 @@ export type PlatformAdminPermission =
 export type AdminOperationSection =
   (typeof ADMIN_OPERATION_SECTIONS)[number]['section'];
 
-export function canManagePlatformRbac(
-  session: AdminSession | null,
-): boolean {
+export function canManagePlatformRbac(session: AdminSession | null): boolean {
   return (
     session !== null &&
     session.roles.length === 1 &&
@@ -96,9 +109,7 @@ export function isTenantRbacPath(pathname: string): boolean {
   return matchesPath(pathname, '/tenant-rbac');
 }
 
-export function canReadTenantRbac(
-  session: AdminSession | null,
-): boolean {
+export function canReadTenantRbac(session: AdminSession | null): boolean {
   return (
     session !== null &&
     getAdminAccessScope(session) === 'tenant' &&
@@ -107,9 +118,7 @@ export function canReadTenantRbac(
   );
 }
 
-export function canWriteTenantRbac(
-  session: AdminSession | null,
-): boolean {
+export function canWriteTenantRbac(session: AdminSession | null): boolean {
   return (
     session !== null &&
     canReadTenantRbac(session) &&
@@ -211,6 +220,8 @@ export function getRequiredAdminPermissions(
   if (matchesPath(pathname, '/trips')) return ['trip:read'];
   if (matchesPath(pathname, '/customers')) return ['customer:read'];
   if (matchesPath(pathname, '/support-chat')) return ['chat:read'];
+  if (matchesPath(pathname, '/promotions')) return ['promotion:read'];
+  if (matchesPath(pathname, '/shipments')) return ['shipment:read'];
   return null;
 }
 

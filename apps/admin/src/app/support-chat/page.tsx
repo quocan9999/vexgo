@@ -8,8 +8,13 @@ import { useAdminSession } from '@/features/admin-auth/hooks/use-admin-session';
 import { getAdminAccessScope } from '@/features/admin-auth/services/admin-scope';
 import { canAccessSupportChat } from '@/features/admin-auth/services/admin-access';
 import { AdminChatMessenger } from '@/features/support-chat/components/admin-chat-messenger';
+import { AdminSessionGuard } from '@/features/admin-auth/components/admin-session-guard';
 
 export default function SupportChatPage() {
+  return <AdminSessionGuard><SupportChatContent /></AdminSessionGuard>;
+}
+
+function SupportChatContent() {
   const router = useRouter();
   const authState = useAdminSession();
 
@@ -52,14 +57,14 @@ export default function SupportChatPage() {
       <div className="space-y-4">
         <div>
           <h1 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-            <Headphones className="w-5 h-5 text-brand" /> Chăm sóc khách hàng
+            <Headphones className="w-5 h-5 text-[var(--admin-blue)]" /> Chăm sóc khách hàng
           </h1>
           <p className="text-xs text-slate-500">
             Tiếp nhận và phản hồi tin nhắn hỗ trợ từ hành khách trong thời gian thực.
           </p>
         </div>
 
-        <AdminChatMessenger session={session} />
+        <AdminChatMessenger key={session.accountId} session={session} />
       </div>
     </SuperAdminLayout>
   );

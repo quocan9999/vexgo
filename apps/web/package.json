@@ -4,11 +4,11 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "next dev --port 3000",
+    "dev": "node --env-file=.env.local ../../scripts/run-next-workspace.mjs dev",
     "build": "next build",
-    "start": "next start --port 3000",
+    "start": "node --env-file-if-exists=.env.local ../../scripts/run-next-workspace.mjs start",
     "lint": "eslint",
-    "test": "node --test test/unit/**/*.spec.mjs",
+    "test": "node --test test/unit/**/*.spec.mjs && vitest run --config vitest.config.mts test/unit/payments/payment-page.spec.tsx test/unit/payments/invoice-page.spec.tsx test/unit/booking/one-way-booking-flow.spec.tsx test/unit/shipments/send-freight-page.spec.tsx test/unit/tickets/ticket-search-page.spec.tsx test/unit/tickets/cancel-ticket-guard.spec.tsx",
     "test:e2e": "node --test test/e2e/*.e2e-spec.mjs",
     "typecheck": "next typegen && tsc --noEmit"
   },
@@ -26,13 +26,16 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@testing-library/react": "^16.3.3",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.3.5",
+    "jsdom": "^29.1.1",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.1.2"
   },
   "packageManager": "npm@11.14.1"
 }

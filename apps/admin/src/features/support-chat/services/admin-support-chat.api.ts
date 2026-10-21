@@ -1,7 +1,10 @@
 import { AdminSupportConversation, AdminSupportMessage } from '../types';
+import { getApiBaseUrl } from '@/lib/api-url';
+import { adminApiFetch } from '@/lib/admin-api-client';
 
-export const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
+function getChatApiBaseUrl(): string {
+  return `${getApiBaseUrl()}/api/v1`;
+}
 
 export class AdminChatApiError extends Error {
   status: number;
@@ -40,18 +43,30 @@ export const adminSupportChatApi = {
       search?: string;
     },
     token: string,
-  ): Promise<{ data: AdminSupportConversation[]; meta?: { page: number; pageSize: number; totalItems: number; totalPages: number } }> {
+  ): Promise<{
+    data: AdminSupportConversation[];
+    meta?: {
+      page: number;
+      pageSize: number;
+      totalItems: number;
+      totalPages: number;
+    };
+  }> {
     const query = new URLSearchParams();
     if (params.trangThai) query.set('trangThai', params.trangThai);
     if (params.page) query.set('page', String(params.page));
     if (params.pageSize) query.set('pageSize', String(params.pageSize));
-    if (params.search && params.search.trim()) query.set('search', params.search.trim());
+    if (params.search && params.search.trim())
+      query.set('search', params.search.trim());
 
-    const res = await fetch(`${API_BASE_URL}/support-chat/conversations?${query.toString()}`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
+    const res = await adminApiFetch(
+      `${getChatApiBaseUrl()}/support-chat/conversations?${query.toString()}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       },
-    });
+    );
 
     if (!res.ok) {
       const errorBody = await res.json().catch(() => ({}));
@@ -71,11 +86,14 @@ export const adminSupportChatApi = {
     id: number,
     token: string,
   ): Promise<AdminSupportConversation> {
-    const res = await fetch(`${API_BASE_URL}/support-chat/conversations/${id}`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
+    const res = await adminApiFetch(
+      `${getChatApiBaseUrl()}/support-chat/conversations/${id}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       },
-    });
+    );
     return handleResponse<AdminSupportConversation>(res);
   },
 
@@ -101,8 +119,8 @@ export const adminSupportChatApi = {
     query.set('pageSize', String(pageSize));
     if (beforeId) query.set('beforeId', String(beforeId));
 
-    const res = await fetch(
-      `${API_BASE_URL}/support-chat/conversations/${conversationId}/messages?${query.toString()}`,
+    const res = await adminApiFetch(
+      `${getChatApiBaseUrl()}/support-chat/conversations/${conversationId}/messages?${query.toString()}`,
       {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -121,8 +139,8 @@ export const adminSupportChatApi = {
     token: string,
     clientMessageId?: string,
   ): Promise<AdminSupportMessage> {
-    const res = await fetch(
-      `${API_BASE_URL}/support-chat/conversations/${conversationId}/messages`,
+    const res = await adminApiFetch(
+      `${getChatApiBaseUrl()}/support-chat/conversations/${conversationId}/messages`,
       {
         method: 'POST',
         headers: {
@@ -146,8 +164,8 @@ export const adminSupportChatApi = {
     conversationId: number,
     token: string,
   ): Promise<AdminSupportConversation> {
-    const res = await fetch(
-      `${API_BASE_URL}/support-chat/conversations/${conversationId}/claim`,
+    const res = await adminApiFetch(
+      `${getChatApiBaseUrl()}/support-chat/conversations/${conversationId}/claim`,
       {
         method: 'POST',
         headers: {
@@ -166,8 +184,8 @@ export const adminSupportChatApi = {
     token: string,
     lyDo?: string,
   ): Promise<AdminSupportConversation> {
-    const res = await fetch(
-      `${API_BASE_URL}/support-chat/conversations/${conversationId}/close`,
+    const res = await adminApiFetch(
+      `${getChatApiBaseUrl()}/support-chat/conversations/${conversationId}/close`,
       {
         method: 'POST',
         headers: {
@@ -188,8 +206,8 @@ export const adminSupportChatApi = {
     token: string,
     tinNhanIds?: number[],
   ): Promise<{ updatedCount: number }> {
-    const res = await fetch(
-      `${API_BASE_URL}/support-chat/conversations/${conversationId}/read`,
+    const res = await adminApiFetch(
+      `${getChatApiBaseUrl()}/support-chat/conversations/${conversationId}/read`,
       {
         method: 'POST',
         headers: {

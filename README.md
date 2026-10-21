@@ -86,6 +86,22 @@ macOS/Linux:
 cp .env.example .env
 ```
 
+Tạo file môi trường cho từng ứng dụng Next.js:
+
+PowerShell:
+
+```powershell
+Copy-Item apps/web/.env.example apps/web/.env.local
+Copy-Item apps/admin/.env.example apps/admin/.env.local
+```
+
+macOS/Linux:
+
+```bash
+cp apps/web/.env.example apps/web/.env.local
+cp apps/admin/.env.example apps/admin/.env.local
+```
+
 Trước khi khởi động API, hãy thay hai giá trị mẫu `OTP_HASH_SECRET` và
 `JWT_ACCESS_SECRET` trong `.env` bằng hai secret ngẫu nhiên riêng biệt, mỗi
 secret dài ít nhất 32 ký tự. Tạo từng giá trị bằng lệnh sau và chạy lệnh hai
@@ -96,7 +112,22 @@ node --input-type=commonjs -e "console.log(require('node:crypto').randomBytes(32
 ```
 
 Chỉ lưu các giá trị này trong `.env`; không dùng chung một secret và không
-commit file `.env`.
+commit file `.env` hoặc `.env.local`.
+
+Trước khi chạy, hãy thay `MYSQL_ROOT_PASSWORD`, `MYSQL_PASSWORD`, `DATABASE_URL`,
+`MIGRATION_URL` và `SHADOW_DATABASE_URL` theo cùng database; URL shadow phải dùng
+database riêng. Thay `OTP_HASH_SECRET`, `JWT_ACCESS_SECRET` bằng secret ngẫu
+nhiên riêng, đồng thời đặt `SEPAY_WEBHOOK_TOKEN` nếu dùng webhook SePay. Trong
+`apps/web/.env.local`, điền `NEXT_PUBLIC_SEPAY_BANK_ID`,
+`NEXT_PUBLIC_SEPAY_ACCOUNT_NUMBER` và `NEXT_PUBLIC_SEPAY_ACCOUNT_NAME` bằng
+thông tin tài khoản nhận tiền thật do dự án cung cấp. Khi chưa có đủ ba giá trị,
+Customer Web sẽ không hiển thị mã VietQR. `SEPAY_WEBHOOK_TOKEN` chỉ nằm trong
+`.env` backend; không tạo biến `NEXT_PUBLIC_` cho token này.
+
+`NEXT_PUBLIC_API_URL` của Customer Web dùng URL có hậu tố `/api/v1`; Admin Web
+dùng địa chỉ gốc vì service Admin tự thêm `/api/v1`. `VEXGO_API_URL` của Customer
+Web cũng cần kết thúc bằng `/api/v1`. Script chạy Next.js nạp `PORT` từ
+`.env.local` trước khi khởi động server.
 
 > File `.env` chỉ dùng cho môi trường local. Không sử dụng các thông tin đăng nhập mẫu cho production.
 
@@ -112,7 +143,7 @@ docker compose ps
 Các địa chỉ mặc định:
 
 - MySQL: `127.0.0.1:3306`
-- phpMyAdmin: <http://localhost:8080>
+- phpMyAdmin: <http://localhost:8080> (đổi cổng bằng `PHPMYADMIN_PORT`)
 
 Khi đăng nhập phpMyAdmin, dùng `mysql` làm database host và thông tin tài khoản được cấu hình trong file `.env`.
 
@@ -133,19 +164,19 @@ docker compose down --volumes
 
 Mỗi lệnh dưới đây nên được chạy trong một terminal riêng, từ thư mục gốc của repository.
 
-Customer web — <http://localhost:3000>:
+Customer Web — địa chỉ theo `PORT` trong `apps/web/.env.local` (mẫu mặc định `3000`):
 
 ```bash
 npm run dev --workspace=@vexgo/web
 ```
 
-Admin web — <http://localhost:3001>:
+Admin Web — địa chỉ theo `PORT` trong `apps/admin/.env.local` (mẫu mặc định `3001`):
 
 ```bash
 npm run dev --workspace=@vexgo/admin
 ```
 
-Backend API — <http://localhost:4000>:
+Backend API — địa chỉ theo `PORT` trong `.env` (mẫu mặc định `4000`):
 
 ```bash
 npm run start:dev --workspace=@vexgo/api
@@ -158,6 +189,12 @@ npm run dev
 ```
 
 Hiện tại backend chưa có script `dev` ở cấp workspace nên cần khởi động bằng lệnh `start:dev` riêng.
+
+Với worktree PR #36 hiện tại, các file local được cấu hình Customer Web `3004`,
+Admin Web `3005`, API `4002`, MySQL `3306`, database `vexgo_pr36` và phpMyAdmin
+`9090`. Các giá trị này nằm trong file môi trường bị Git ignore. Khi tạo worktree
+khác, hãy chọn database riêng và đổi `PORT`/origin CORS tương ứng trong file local;
+không chép các port của worktree này vào file mẫu dùng chung.
 
 ### 4. Các lệnh thường dùng
 
@@ -193,7 +230,9 @@ vexgo/
 │   └── api/                 # NestJS backend API
 ├── docs/                    # Tài liệu phân tích, thiết kế và kế hoạch
 ├── compose.yaml             # MySQL và phpMyAdmin cho local development
-├── .env.example             # Mẫu biến môi trường
+├── .env.example             # Mẫu biến môi trường API và database
+├── apps/web/.env.example    # Mẫu Customer Web
+├── apps/admin/.env.example  # Mẫu Admin Web
 ├── package.json             # Scripts và cấu hình workspace root
 ├── package-lock.json        # Khóa phiên bản dependency của npm
 ├── turbo.json               # Cấu hình Turborepo

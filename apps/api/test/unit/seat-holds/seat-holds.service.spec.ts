@@ -1,4 +1,8 @@
-import { ConflictException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SeatHoldsService } from '../../../src/seat-holds/seat-holds.service.js';
 import type { PrismaService } from '../../../src/prisma/prisma.service.js';
@@ -102,6 +106,41 @@ describe('SeatHoldsService (Unit)', () => {
     });
   });
 
+  describe('releaseSeatHold DB ownership', () => {
+    it('fails closed when persistent hold storage is unavailable', async () => {
+      const hold = await service.createSeatHold(50, [101]);
+      const updateCallsBeforeRelease = prisma.gheChuyenXe.updateMany.mock.calls.length;
+      prisma.giuCho = undefined;
+
+      await expect(service.releaseSeatHold(hold.holdToken)).rejects.toThrow(
+        ServiceUnavailableException,
+      );
+      expect(prisma.gheChuyenXe.updateMany).toHaveBeenCalledTimes(
+        updateCallsBeforeRelease,
+      );
+    });
+
+    it('does not release an orphaned seat when no matching database hold exists', async () => {
+      const hold = await service.createSeatHold(50, [101]);
+      const updateCallsBeforeRelease = prisma.gheChuyenXe.updateMany.mock.calls.length;
+      prisma.giuCho.findUnique.mockResolvedValue(null);
+
+      await expect(service.releaseSeatHold(hold.holdToken)).resolves.toEqual({
+        success: true,
+      });
+
+      expect(
+        prisma.gheChuyenXe.updateMany.mock.calls
+          .slice(updateCallsBeforeRelease)
+          .some(
+            ([args]: [any]) =>
+              args.where?.trangThai === 'DANG_GIU' &&
+              args.where?.giuChoId === null,
+          ),
+      ).toBe(false);
+    });
+  });
+
   describe('Seat Identity Contract', () => {
     it('uses gheChuyenXeId (tripSeatId) to hold seats', async () => {
       const result = await service.createSeatHold(50, [101]);
@@ -154,6 +193,135 @@ describe('SeatHoldsService (Unit)', () => {
           data: { trangThai: 'DA_DAT' },
         }),
       );
+    });
+
+    it('fails closed when the signed token has no persistent GiuCho record', async () => {
+      const hold = await service.createSeatHold(50, [101]);
+      const tx = {
+        giuCho: {
+          findUnique: vi.fn().mockResolvedValue(null),
+          updateMany: vi.fn(),
+        },
+        gheChuyenXe: {
+          findMany: vi.fn(),
+        },
+      };
+
+      await expect(
+        service.consumeHoldInTx(tx, hold.holdToken, 50, [101], null),
+      ).rejects.toMatchObject({
+        response: { error: 'HOLD_INVALID' },
+      });
+
+      expect(tx.gheChuyenXe.findMany).not.toHaveBeenCalled();
+      expect(tx.giuCho.updateMany).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      {
+        name: 'inactive',
+        trangThai: 'DA_DAT',
+        hetHanLuc: new Date(Date.now() + 60_000),
+        error: 'HOLD_INACTIVE',
+      },
+      {
+        name: 'expired',
+        trangThai: 'DANG_GIU',
+        hetHanLuc: new Date(Date.now() - 1_000),
+        error: 'HOLD_EXPIRED',
+      },
+    ])('rejects a database hold that is $name', async ({ trangThai, hetHanLuc, error }) => {
+      const hold = await service.createSeatHold(50, [101]);
+      const tx = {
+        giuCho: {
+          findUnique: vi.fn().mockResolvedValue({
+            giuChoId: 1,
+            chuyenXeId: 50,
+            khachHangId: null,
+            trangThai,
+            hetHanLuc,
+          }),
+          updateMany: vi.fn(),
+        },
+        gheChuyenXe: {
+          findMany: vi.fn(),
+        },
+      };
+
+      await expect(
+        service.consumeHoldInTx(tx, hold.holdToken, 50, [101], null),
+      ).rejects.toMatchObject({ response: { error } });
+
+      expect(tx.gheChuyenXe.findMany).not.toHaveBeenCalled();
+      expect(tx.giuCho.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('fails closed if the persistent hold store is unavailable', async () => {
+      const hold = await service.createSeatHold(50, [101]);
+
+      await expect(
+        service.consumeHoldInTx({}, hold.holdToken, 50, [101], null),
+      ).rejects.toThrow(ServiceUnavailableException);
+    });
+
+    it('rejects a signed guest hold when an authenticated customer tries to consume it', async () => {
+      const hold = await service.createSeatHold(50, [101]);
+      const tx = {
+        giuCho: {
+          findUnique: vi.fn(),
+          updateMany: vi.fn(),
+        },
+        gheChuyenXe: {
+          findMany: vi.fn(),
+        },
+      };
+
+      await expect(
+        service.consumeHoldInTx(tx, hold.holdToken, 50, [101], 88),
+      ).rejects.toThrow(ForbiddenException);
+
+      expect(tx.giuCho.findUnique).not.toHaveBeenCalled();
+      expect(tx.giuCho.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('consumes only an active database hold linked to the exact requested seats', async () => {
+      const hold = await service.createSeatHold(50, [101]);
+      const tokenHash = prisma.giuCho.create.mock.calls.at(-1)?.[0].data.tokenHash;
+      const tx = {
+        giuCho: {
+          findUnique: vi.fn().mockResolvedValue({
+            giuChoId: 1,
+            tokenHash,
+            chuyenXeId: 50,
+            khachHangId: null,
+            trangThai: 'DANG_GIU',
+            hetHanLuc: new Date(Date.now() + 60_000),
+          }),
+          updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+        },
+        gheChuyenXe: {
+          findMany: vi.fn().mockResolvedValue([{ gheChuyenXeId: 101 }]),
+        },
+      };
+
+      const result = await service.consumeHoldInTx(
+        tx,
+        hold.holdToken,
+        50,
+        [101],
+        null,
+      );
+
+      expect(result).toEqual({ giuChoId: 1 });
+      expect(tx.giuCho.updateMany).toHaveBeenCalledWith({
+        where: expect.objectContaining({
+          tokenHash,
+          chuyenXeId: 50,
+          khachHangId: null,
+          trangThai: 'DANG_GIU',
+        }),
+        data: { trangThai: 'DA_DAT' },
+      });
     });
   });
 

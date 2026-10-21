@@ -560,6 +560,27 @@ function TicketSearchForm() {
                     Đơn: {ticket.bookingCode}
                   </p>
                 )}
+                {ticket.promotionCode && (
+                  <div className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50/70 p-2.5 text-xs">
+                    <div className="flex flex-wrap justify-between gap-2">
+                      <span className="text-slate-600">Mã khuyến mãi của đơn</span>
+                      <strong className="font-mono text-emerald-800">
+                        {ticket.promotionCode}
+                      </strong>
+                    </div>
+                    {typeof ticket.discountAmount === 'number' && (
+                      <div className="mt-1 flex flex-wrap justify-between gap-2">
+                        <span className="text-slate-600">Giảm giá của toàn đơn</span>
+                        <strong className="text-emerald-700">
+                          −{formatCurrency(ticket.discountAmount)}
+                        </strong>
+                      </div>
+                    )}
+                    <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
+                      Mức giảm được ghi một lần ở cấp đơn; không lặp lại mức giảm trên từng vé.
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           </div>

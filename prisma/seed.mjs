@@ -676,19 +676,35 @@ async function seedPromotions(db, operators) {
     const operator = operators[definition.code];
     result[definition.code] = [];
     const promotionDefs = [
-      { code: `${definition.code}10`, name: 'Ưu đãi đặt vé 10%', scope: 'DAT_VE', apply: 'NHAP_MA', kind: 'PHAN_TRAM', value: 10, max: 50000, from: dateOnly(2026, 9, 1), to: null, status: 'DANG_HOAT_DONG' },
-      { code: `${definition.code}SHIP50K`, name: 'Giảm phí gửi hàng 50K', scope: 'GUI_HANG', apply: 'NHAP_MA', kind: 'SO_TIEN', value: 50000, max: null, from: dateOnly(2026, 9, 1), to: null, status: 'DANG_HOAT_DONG' },
-      { code: `${definition.code}AUTO`, name: 'Ưu đãi tự động hai dịch vụ', scope: 'CA_HAI', apply: 'TU_DONG', kind: 'PHAN_TRAM', value: 5, max: 30000, from: dateOnly(2026, 10, 1), to: null, status: 'SAP_DIEN_RA' },
-      { code: `${definition.code}OLD`, name: 'Chương trình cũ hết hạn', scope: 'DAT_VE', apply: 'NHAP_MA', kind: 'SO_TIEN', value: 30000, max: null, from: dateOnly(2026, 1, 1), to: dateOnly(2026, 2, 1), status: 'HET_HAN' },
-      { code: `${definition.code}PAUSE`, name: 'Ưu đãi đang tạm ngưng', scope: 'CA_HAI', apply: 'NHAP_MA', kind: 'PHAN_TRAM', value: 15, max: 70000, from: dateOnly(2026, 9, 1), to: null, status: 'TAM_NGUNG' },
+      { code: `${definition.code}10`, name: 'Ưu đãi đặt vé 10%', scope: 'DAT_VE', apply: 'NHAP_MA', kind: 'PHAN_TRAM', value: 10, max: 50000, from: dateOnly(2026, 9, 1), to: dateOnly(2026, 12, 31), status: 'HOAT_DONG', quota: 100 },
+      { code: `${definition.code}FIX30K`, name: 'Giảm 30.000 đồng tiền vé', scope: 'DAT_VE', apply: 'NHAP_MA', kind: 'SO_TIEN', value: 30000, max: null, from: dateOnly(2026, 9, 1), to: dateOnly(2026, 12, 31), status: 'HOAT_DONG', quota: 200 },
+      { code: `${definition.code}NOVEMBER`, name: 'Ưu đãi tháng 11', scope: 'DAT_VE', apply: 'NHAP_MA', kind: 'PHAN_TRAM', value: 5, max: 30000, from: dateOnly(2026, 11, 1), to: dateOnly(2026, 12, 31), status: 'HOAT_DONG', quota: 50 },
+      { code: `${definition.code}OLD`, name: 'Chương trình cũ hết hạn', scope: 'DAT_VE', apply: 'NHAP_MA', kind: 'SO_TIEN', value: 30000, max: null, from: dateOnly(2026, 1, 1), to: dateOnly(2026, 2, 1), status: 'HOAT_DONG', quota: 25 },
+      { code: `${definition.code}PAUSE`, name: 'Ưu đãi đang tạm ngưng', scope: 'DAT_VE', apply: 'NHAP_MA', kind: 'PHAN_TRAM', value: 15, max: 70000, from: dateOnly(2026, 9, 1), to: dateOnly(2026, 12, 31), status: 'TAM_NGUNG', quota: 25 },
     ];
     for (const item of promotionDefs) {
+      const promotionData = {
+        tenChuongTrinh: item.name,
+        maKhuyenMai: item.code,
+        phamViApDung: item.scope,
+        hinhThucApDung: item.apply,
+        loaiGiamGia: item.kind,
+        giaTriGiam: decimal(item.value),
+        giamToiDa: item.max === null ? null : decimal(item.max),
+        giaTriDonToiThieu: null,
+        dieuKienApDung: 'Dữ liệu demo, chỉ áp dụng cho tiền vé.',
+        tuNgay: item.from,
+        denNgay: item.to,
+        trangThai: item.status,
+        nhaXeId: operator.nhaXeId,
+        soLuotToiDa: item.quota,
+      };
       const promotion = await findOrCreate(
         db,
         'KhuyenMai',
         { nhaXeId: operator.nhaXeId, maKhuyenMai: item.code },
-        { tenChuongTrinh: item.name, maKhuyenMai: item.code, phamViApDung: item.scope, hinhThucApDung: item.apply, loaiGiamGia: item.kind, giaTriGiam: decimal(item.value), giamToiDa: item.max === null ? null : decimal(item.max), giaTriDonToiThieu: null, dieuKienApDung: 'Dữ liệu demo, không áp dụng cho giao dịch seed.', tuNgay: item.from, denNgay: item.to, trangThai: item.status, nhaXeId: operator.nhaXeId },
-        { tenChuongTrinh: item.name, trangThai: item.status },
+        { ...promotionData, soLuotDaSuDung: 0 },
+        promotionData,
       );
       result[definition.code].push(promotion);
     }

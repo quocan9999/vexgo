@@ -79,8 +79,16 @@ jobs:
       - name: Prepare CI shadow database
         run: node prisma/tests/prepare-ci-shadow-database.mjs
 
+      - name: Promotion upgrade from seeded develop database
+        run: node prisma/tests/promotion-migration-upgrade.mjs
+        env:
+          PROMOTION_UPGRADE_ADMIN_DATABASE_URL: mysql://root:ci-root-password@127.0.0.1:3306/vexgo_ci
+
       - name: Apply API database migrations
         run: npm exec -- prisma migrate deploy
+
+      - name: Sync permission catalog
+        run: node prisma/sync-permissions.mjs
 
       - name: Seed the auth E2E role
         run: node prisma/seed-auth-e2e.mjs
@@ -95,8 +103,13 @@ jobs:
         env:
           MIGRATION_URL: mysql://root:ci-root-password@127.0.0.1:3306/vexgo_booking_ticket_status_history_ci_test
 
+      - name: Shipment status cleanup regression (repeat on one isolated DB)
+        run: node prisma/tests/run-shipment-integration-isolated.mjs --repeat=2 test/integration/shipments/shipments-status.spec.ts
+
       - name: API tests
         run: npm run test --workspace=@vexgo/api
+        env:
+          SHIPMENT_TEST_DATABASE_URL: mysql://root:ci-root-password@127.0.0.1:3306/vexgo_ci
 
       - name: Clear booking/ticket history test credentials
         if: always()
@@ -147,6 +160,11 @@ jobs:
       - name: Admin build
         run: npm run build --workspace=@vexgo/admin
 
+      - name: Admin production start smoke test
+        run: node --test scripts/next-workspace-start-smoke.test.mjs
+        env:
+          VEXGO_NEXT_START_SMOKE_APP: admin
+
   web:
     name: Web CI
     runs-on: ubuntu-latest
@@ -182,6 +200,11 @@ jobs:
 
       - name: Web build
         run: npm run build --workspace=@vexgo/web
+
+      - name: Web production start smoke test
+        run: node --test scripts/next-workspace-start-smoke.test.mjs
+        env:
+          VEXGO_NEXT_START_SMOKE_APP: web
 
       - name: Web e2e and route regression tests
         run: npm run test:e2e --workspace=@vexgo/web

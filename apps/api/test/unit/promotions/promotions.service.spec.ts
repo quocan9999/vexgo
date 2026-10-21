@@ -1,73 +1,212 @@
-import { BadRequestException } from '@nestjs/common';
+import {
+  GoneException,
+} from '@nestjs/common';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { Prisma } from '../../../src/generated/prisma/client.js';
 import { PromotionsService } from '../../../src/promotions/promotions.service.js';
 import type { PrismaService } from '../../../src/prisma/prisma.service.js';
 
-describe('PromotionsService', () => {
+describe('PromotionsService booking validation', () => {
   let service: PromotionsService;
   let prisma: any;
 
+  const activePercentPromotion = () => ({
+    khuyenMaiId: 1,
+    maKhuyenMai: 'SAVE20',
+    nhaXeId: 5,
+    phamViApDung: 'DAT_VE',
+    hinhThucApDung: 'NHAP_MA',
+    loaiGiamGia: 'PHAN_TRAM',
+    giaTriGiam: new Prisma.Decimal(20),
+    giamToiDa: new Prisma.Decimal(15_000),
+    giaTriDonToiThieu: new Prisma.Decimal(50_000),
+    tuNgay: new Date('2026-01-01T00:00:00.000Z'),
+    denNgay: new Date('2099-12-31T00:00:00.000Z'),
+    trangThai: 'HOAT_DONG',
+    soLuotToiDa: 2,
+    soLuotDaSuDung: 0,
+  });
+
   beforeEach(() => {
     prisma = {
-      chuyenXe: {
-        findUnique: vi.fn(),
-      },
-      khuyenMai: {
-        findFirst: vi.fn(),
-      },
+      khuyenMai: { findFirst: vi.fn() },
+      suDungKhuyenMai: { findFirst: vi.fn().mockResolvedValue(null) },
     };
-
     service = new PromotionsService(prisma as unknown as PrismaService);
   });
 
-  describe('validatePromotion - Tenant Scope', () => {
-    it('throws BadRequestException when neither nhaXeId nor tripId is provided', async () => {
-      await expect(
-        service.validatePromotion({ code: 'DISCOUNT10' }),
-      ).rejects.toThrow(BadRequestException);
+  it('computes a server-side percentage discount capped by the promotion', async () => {
+    prisma.khuyenMai.findFirst.mockResolvedValue(activePercentPromotion());
+
+    const quote = await service.quotePromotion({
+      code: ' save20 ',
+      nhaXeId: 5,
+      ticketOriginalTotal: new Prisma.Decimal(100_000),
+      phoneNormalized: '0901234567',
     });
 
-    it('resolves nhaXeId from tripId and validates within tenant scope', async () => {
-      prisma.chuyenXe.findUnique.mockResolvedValue({ nhaXeId: 5 });
-      prisma.khuyenMai.findFirst.mockResolvedValue({
+    expect(quote.discountAmount.toFixed(2)).toBe('15000.00');
+    expect(quote.code).toBe('SAVE20');
+    expect(quote.identityChecked).toBe(true);
+    expect(prisma.khuyenMai.findFirst).toHaveBeenCalledWith({
+      where: { maKhuyenMai: 'SAVE20', nhaXeId: 5 },
+    });
+  });
+
+  it('rounds a fixed VND discount to the nearest whole đồng using HALF_UP', async () => {
+    prisma.khuyenMai.findFirst.mockResolvedValue({
+      ...activePercentPromotion(),
+      loaiGiamGia: 'SO_TIEN',
+      giaTriGiam: new Prisma.Decimal('30000.50'),
+      giamToiDa: null,
+      giaTriDonToiThieu: null,
+    });
+
+    const quote = await service.quotePromotion({
+      code: 'SAVE20',
+      nhaXeId: 5,
+      ticketOriginalTotal: new Prisma.Decimal(100_000),
+    });
+
+    expect(quote.discountAmount.toFixed(2)).toBe('30001.00');
+  });
+
+  it('fails closed for a code that does not belong to the trip tenant', async () => {
+    prisma.khuyenMai.findFirst.mockResolvedValue(null);
+
+    await expect(
+      service.quotePromotion({
+        code: 'OTHER-TENANT',
+        nhaXeId: 5,
+        ticketOriginalTotal: new Prisma.Decimal(100_000),
+      }),
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({ error: 'PROMOTION_CODE_INVALID' }),
+    });
+  });
+
+  it('checks both the verified phone and customer identity for a signed-in customer', async () => {
+    prisma.khuyenMai.findFirst.mockResolvedValue(activePercentPromotion());
+    prisma.suDungKhuyenMai.findFirst.mockResolvedValue({ suDungKhuyenMaiId: 9 });
+
+    await expect(
+      service.quotePromotion({
+        code: 'SAVE20',
+        nhaXeId: 5,
+        ticketOriginalTotal: new Prisma.Decimal(100_000),
+        khachHangId: 44,
+        phoneNormalized: '0901234567',
+      }),
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({ error: 'PROMOTION_ALREADY_USED' }),
+    });
+    expect(prisma.suDungKhuyenMai.findFirst).toHaveBeenCalledWith({
+      where: {
         khuyenMaiId: 1,
-        maKhuyenMai: 'DISCOUNT10',
+        OR: [
+          { soDienThoaiChuanHoa: '0901234567' },
+          { khachHangId: 44 },
+        ],
+      },
+      select: { suDungKhuyenMaiId: true },
+    });
+  });
+
+  it('does not claim guest identity was checked when phone is missing', async () => {
+    prisma.khuyenMai.findFirst.mockResolvedValue(activePercentPromotion());
+
+    const quote = await service.quotePromotion({
+      code: 'SAVE20',
+      nhaXeId: 5,
+      ticketOriginalTotal: new Prisma.Decimal(100_000),
+    });
+
+    expect(quote.identityChecked).toBe(false);
+    expect(prisma.suDungKhuyenMai.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('rejects an order below the minimum using original ticket subtotal', async () => {
+    prisma.khuyenMai.findFirst.mockResolvedValue(activePercentPromotion());
+
+    await expect(
+      service.quotePromotion({
+        code: 'SAVE20',
         nhaXeId: 5,
-        trangThai: 'HOAT_DONG',
-        loaiGiamGia: 'TIEN_MAT',
-        giaTriGiam: '20000',
-      });
+        ticketOriginalTotal: new Prisma.Decimal(49_999),
+      }),
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({ error: 'PROMOTION_MINIMUM_NOT_MET' }),
+    });
+  });
 
-      const result = await service.validatePromotion({
-        code: 'DISCOUNT10',
-        tripId: 100,
-        totalAmount: 100000,
-      });
+  it('rejects a suspended promotion even when its configuration is valid', async () => {
+    prisma.khuyenMai.findFirst.mockResolvedValue({
+      ...activePercentPromotion(),
+      trangThai: 'TAM_NGUNG',
+    });
 
-      expect(result.isValid).toBe(true);
-      expect(result.discountAmount).toBe(20000);
-      expect(prisma.khuyenMai.findFirst).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: {
-            maKhuyenMai: 'DISCOUNT10',
-            nhaXeId: 5,
-            trangThai: 'HOAT_DONG',
-          },
+    await expect(
+      service.quotePromotion({
+        code: 'SAVE20',
+        nhaXeId: 5,
+        ticketOriginalTotal: new Prisma.Decimal(100_000),
+      }),
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({ error: 'PROMOTION_UNAVAILABLE' }),
+    });
+  });
+
+  it('treats the configured end date as inclusive through 23:59:59 Ho Chi Minh time', async () => {
+    const promotion = {
+      ...activePercentPromotion(),
+      tuNgay: new Date('2026-05-11T00:00:00.000Z'),
+      denNgay: new Date('2026-05-11T00:00:00.000Z'),
+    };
+    prisma.khuyenMai.findFirst.mockResolvedValue(promotion);
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-05-10T16:59:59.999Z'));
+      await expect(
+        service.quotePromotion({
+          code: 'SAVE20',
+          nhaXeId: 5,
+          ticketOriginalTotal: new Prisma.Decimal(100_000),
         }),
-      );
-    });
-
-    it('rejects promotion when code does not belong to the requested nhaXeId', async () => {
-      prisma.khuyenMai.findFirst.mockResolvedValue(null);
-
-      const result = await service.validatePromotion({
-        code: 'OTHERBUS10',
-        nhaXeId: 5,
-        totalAmount: 100000,
+      ).rejects.toMatchObject({
+        response: expect.objectContaining({ error: 'PROMOTION_NOT_STARTED' }),
       });
 
-      expect(result.isValid).toBe(false);
-      expect(result.message).toContain('không áp dụng cho nhà xe này');
-    });
+      vi.setSystemTime(new Date('2026-05-11T16:59:59.999Z'));
+      const finalSecondQuote = await service.quotePromotion({
+        code: 'SAVE20',
+        nhaXeId: 5,
+        ticketOriginalTotal: new Prisma.Decimal(100_000),
+      });
+      expect(finalSecondQuote.discountAmount.toFixed(2)).toBe('15000.00');
+
+      vi.setSystemTime(new Date('2026-05-11T17:00:00.000Z'));
+      await expect(
+        service.quotePromotion({
+          code: 'SAVE20',
+          nhaXeId: 5,
+          ticketOriginalTotal: new Prisma.Decimal(100_000),
+        }),
+      ).rejects.toMatchObject({
+        response: expect.objectContaining({ error: 'PROMOTION_EXPIRED' }),
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('retires the legacy validation method instead of trusting client totals', async () => {
+    await expect(
+      service.validatePromotion({
+        code: 'SAVE20',
+        nhaXeId: 5,
+        totalAmount: 1,
+      }),
+    ).rejects.toBeInstanceOf(GoneException);
+    expect(prisma.khuyenMai.findFirst).not.toHaveBeenCalled();
   });
 });

@@ -187,7 +187,6 @@ function AccountDetailSheet({
       >
         <div className="admin-dialog-header">
           <div className="admin-dialog-header__copy">
-            <p className="eyebrow">HỒ SƠ TÀI KHOẢN</p>
             <h2 id="admin-account-detail-title">Thông tin tài khoản</h2>
           </div>
           <form method="dialog">

@@ -12,6 +12,10 @@ import {
   resolveBusinessTimeZone,
 } from '../common/time/business-date.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import {
+  CargoCapacityService,
+  type CargoCapacitySnapshot,
+} from '../cargo-capacity/cargo-capacity.service.js';
 import { CreateTripDto } from './dto/create-trip.dto.js';
 import { SearchTripsDto } from './dto/search-trips.dto.js';
 import type { TripQueryDto, TripSortField } from './dto/trip-query.dto.js';
@@ -398,6 +402,7 @@ export class TripsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
+    private readonly cargoCapacityService: CargoCapacityService,
   ) {}
 
   async search(dto: SearchTripsDto) {
@@ -586,6 +591,52 @@ export class TripsService {
     });
 
     return mapTrip(cx, businessTimeZone, bangGia ?? undefined);
+  }
+
+  async getCargoCapacity(id: number) {
+    const snapshot = await this.cargoCapacityService.getSnapshot(this.prisma, id);
+
+    if (!snapshot) {
+      throw new NotFoundException({
+        error: 'TRIP_NOT_FOUND',
+        message: 'Không tìm thấy chuyến xe.',
+      });
+    }
+
+    const { trip, capacities } = snapshot;
+
+    if (trip.trangThai !== 'CHUA_KHOI_HANH') {
+      throw new NotFoundException({
+        error: 'TRIP_NOT_AVAILABLE',
+        message: 'Chuyến xe này hiện không mở bán.',
+      });
+    }
+
+    if (!trip.nhanGuiHang) {
+      return {
+        data: {
+          acceptsShipments: false,
+          capacities: this.toCargoCapacityResponse(capacities),
+        },
+      };
+    }
+
+    return {
+      data: {
+        acceptsShipments: true,
+        capacities: this.toCargoCapacityResponse(capacities),
+      },
+    };
+  }
+
+  private toCargoCapacityResponse(
+    capacities: CargoCapacitySnapshot['capacities'],
+  ) {
+    return {
+      motorcycles: capacities.XE_MAY,
+      bulkyGoods: capacities.HANG_CONG_KENH,
+      parcels: capacities.HANG_NHE,
+    };
   }
 
   async getCustomerSeats(id: number) {

@@ -30,14 +30,22 @@ async function handleResponse<T>(res: Response): Promise<T> {
 
 export function mapBusCompanyDto(raw: unknown): BusCompany {
   if (!raw || typeof raw !== 'object') {
-    throw new SupportChatApiError(500, 'INVALID_BUS_COMPANY_RESPONSE', 'Dữ liệu nhà xe không hợp lệ.');
+    throw new SupportChatApiError(
+      500,
+      'INVALID_BUS_COMPANY_RESPONSE',
+      'Dữ liệu nhà xe không hợp lệ.',
+    );
   }
   const record = raw as Record<string, unknown>;
   const busCompanyId = Number(record.busCompanyId);
   const name = typeof record.name === 'string' ? record.name.trim() : '';
 
   if (!Number.isInteger(busCompanyId) || busCompanyId <= 0 || !name) {
-    throw new SupportChatApiError(500, 'INVALID_BUS_COMPANY_RESPONSE', 'Dữ liệu nhà xe không hợp lệ.');
+    throw new SupportChatApiError(
+      500,
+      'INVALID_BUS_COMPANY_RESPONSE',
+      'Dữ liệu nhà xe không hợp lệ.',
+    );
   }
 
   return {
@@ -45,22 +53,48 @@ export function mapBusCompanyDto(raw: unknown): BusCompany {
     code: typeof record.code === 'string' ? record.code : '',
     name,
     contactInfo:
-      typeof record.contactInfo === 'string' && record.contactInfo.trim().length > 0
+      typeof record.contactInfo === 'string' &&
+      record.contactInfo.trim().length > 0
         ? record.contactInfo.trim()
         : null,
     status: typeof record.status === 'string' ? record.status : 'HOAT_DONG',
-    createdAt: typeof record.createdAt === 'string' ? record.createdAt : undefined,
-    updatedAt: typeof record.updatedAt === 'string' ? record.updatedAt : undefined,
+    createdAt:
+      typeof record.createdAt === 'string' ? record.createdAt : undefined,
+    updatedAt:
+      typeof record.updatedAt === 'string' ? record.updatedAt : undefined,
   };
 }
 
 function assertValidBusCompanyId(nhaXeId: number): void {
   if (!Number.isInteger(nhaXeId) || nhaXeId <= 0) {
-    throw new SupportChatApiError(400, 'INVALID_BUS_COMPANY_ID', 'Mã nhà xe không hợp lệ.');
+    throw new SupportChatApiError(
+      400,
+      'INVALID_BUS_COMPANY_ID',
+      'Mã nhà xe không hợp lệ.',
+    );
   }
 }
 
 export const supportChatApi = {
+  async markMessagesAsRead(
+    conversationId: number,
+    token: string,
+    messageIds: number[],
+  ): Promise<{ updatedCount: number }> {
+    if (messageIds.length === 0) return { updatedCount: 0 };
+    const res = await fetch(
+      `${API_BASE_URL}/support-chat/conversations/${conversationId}/read`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ tinNhanIds: messageIds }),
+      },
+    );
+    return handleResponse<{ updatedCount: number }>(res);
+  },
   /**
    * Lấy danh sách nhà xe đang hoạt động (cho phép khách chọn nhà xe hỗ trợ)
    */
@@ -72,7 +106,9 @@ export const supportChatApi = {
       params.set('search', search.trim());
     }
 
-    const res = await fetch(`${API_BASE_URL}/bus-companies?${params.toString()}`);
+    const res = await fetch(
+      `${API_BASE_URL}/bus-companies?${params.toString()}`,
+    );
     const items = await handleResponse<unknown[]>(res);
     if (!Array.isArray(items)) return [];
     return items.map(mapBusCompanyDto);
@@ -102,7 +138,12 @@ export const supportChatApi = {
    * Tạo cuộc trò chuyện mới với nhà xe
    */
   async createConversation(
-    data: { nhaXeId: number; tieuDe?: string; tinNhanDauTien?: string; clientMessageId?: string },
+    data: {
+      nhaXeId: number;
+      tieuDe?: string;
+      tinNhanDauTien?: string;
+      clientMessageId?: string;
+    },
     token: string,
   ): Promise<SupportConversation> {
     assertValidBusCompanyId(data.nhaXeId);
@@ -124,11 +165,14 @@ export const supportChatApi = {
     conversationId: number,
     token: string,
   ): Promise<SupportConversation> {
-    const res = await fetch(`${API_BASE_URL}/support-chat/conversations/${conversationId}`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
+    const res = await fetch(
+      `${API_BASE_URL}/support-chat/conversations/${conversationId}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       },
-    });
+    );
     return handleResponse<SupportConversation>(res);
   },
 
@@ -220,20 +264,36 @@ export const supportChatApi = {
    * Lấy danh sách các cuộc trò chuyện của khách hàng (kể cả đã đóng)
    */
   async listConversations(
-    params: { nhaXeId?: number; trangThai?: string; page?: number; pageSize?: number } = {},
+    params: {
+      nhaXeId?: number;
+      trangThai?: string;
+      page?: number;
+      pageSize?: number;
+    } = {},
     token: string,
-  ): Promise<{ data: SupportConversation[]; meta?: { page: number; pageSize: number; totalItems: number; totalPages: number } }> {
+  ): Promise<{
+    data: SupportConversation[];
+    meta?: {
+      page: number;
+      pageSize: number;
+      totalItems: number;
+      totalPages: number;
+    };
+  }> {
     const q = new URLSearchParams();
     if (params.nhaXeId) q.set('nhaXeId', String(params.nhaXeId));
     if (params.trangThai) q.set('trangThai', params.trangThai);
     if (params.page) q.set('page', String(params.page));
     if (params.pageSize) q.set('pageSize', String(params.pageSize));
 
-    const res = await fetch(`${API_BASE_URL}/support-chat/conversations?${q.toString()}`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
+    const res = await fetch(
+      `${API_BASE_URL}/support-chat/conversations?${q.toString()}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       },
-    });
+    );
     if (!res.ok) {
       const errorBody = await res.json().catch(() => ({}));
       throw new SupportChatApiError(

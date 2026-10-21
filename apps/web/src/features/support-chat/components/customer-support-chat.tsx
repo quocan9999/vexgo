@@ -1,6 +1,12 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  useMemo,
+} from 'react';
 import Link from 'next/link';
 import {
   Building2,
@@ -70,7 +76,8 @@ export function reconcileMessages(
       const serverMsg = serverById.get(pm.tinNhanId)!;
       result.push(serverMsg);
       handledServerIds.add(pm.tinNhanId);
-      if (serverMsg.clientMessageId) handledServerClientIds.add(serverMsg.clientMessageId);
+      if (serverMsg.clientMessageId)
+        handledServerClientIds.add(serverMsg.clientMessageId);
     } else {
       // Optimistic message not yet on server, or realtime message in prev not in server snapshot
       result.push(pm);
@@ -99,15 +106,88 @@ export function reconcileMessages(
 }
 
 export function CustomerSupportChat() {
-  const { isAuthenticated, accessToken, user } = useAuthSession();
+  const { user } = useAuthSession();
+  // A different account must never inherit a mounted conversation or its callbacks.
+  return <CustomerSupportChatSession key={user?.accountId ?? 'guest'} />;
+}
+
+function CustomerSupportChatSession() {
+  const { isAuthenticated, accessToken, user, executeWithAuth } =
+    useAuthSession();
+  const chatApi = useMemo(
+    () => ({
+      getActiveBusCompanies: supportChatApi.getActiveBusCompanies,
+      getActiveConversation: (
+        ...args: Parameters<typeof supportChatApi.getActiveConversation>
+      ) =>
+        executeWithAuth((token) =>
+          supportChatApi.getActiveConversation(args[0], token),
+        ),
+      getConversationById: (
+        ...args: Parameters<typeof supportChatApi.getConversationById>
+      ) =>
+        executeWithAuth((token) =>
+          supportChatApi.getConversationById(args[0], token),
+        ),
+      listConversations: (
+        ...args: Parameters<typeof supportChatApi.listConversations>
+      ) =>
+        executeWithAuth((token) =>
+          supportChatApi.listConversations(args[0], token),
+        ),
+      getMessages: (...args: Parameters<typeof supportChatApi.getMessages>) =>
+        executeWithAuth((token) =>
+          supportChatApi.getMessages(args[0], token, args[2]),
+        ),
+      createConversation: (
+        ...args: Parameters<typeof supportChatApi.createConversation>
+      ) =>
+        executeWithAuth((token) =>
+          supportChatApi.createConversation(args[0], token),
+        ),
+      sendMessage: (...args: Parameters<typeof supportChatApi.sendMessage>) =>
+        executeWithAuth((token) =>
+          supportChatApi.sendMessage(args[0], args[1], token, args[3]),
+        ),
+      closeConversation: (
+        ...args: Parameters<typeof supportChatApi.closeConversation>
+      ) =>
+        executeWithAuth((token) =>
+          supportChatApi.closeConversation(args[0], token, args[2]),
+        ),
+      markMessagesAsRead: (
+        ...args: Parameters<typeof supportChatApi.markMessagesAsRead>
+      ) =>
+        executeWithAuth((token) =>
+          supportChatApi.markMessagesAsRead(args[0], token, args[2]),
+        ),
+    }),
+    [executeWithAuth],
+  );
+  const [documentVisible, setDocumentVisible] = useState(
+    () =>
+      typeof document === 'undefined' || document.visibilityState !== 'hidden',
+  );
+  useEffect(() => {
+    const onVisibilityChange = () =>
+      setDocumentVisible(document.visibilityState !== 'hidden');
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () =>
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+  }, []);
 
   const [busCompanies, setBusCompanies] = useState<BusCompany[]>([]);
-  const [selectedCompany, setSelectedCompany] = useState<BusCompany | null>(null);
+  const [selectedCompany, setSelectedCompany] = useState<BusCompany | null>(
+    null,
+  );
   const [searchCompany, setSearchCompany] = useState('');
   const [loadingCompanies, setLoadingCompanies] = useState(false);
 
-  const [activeConversation, setActiveConversation] = useState<SupportConversation | null>(null);
-  const [pastConversations, setPastConversations] = useState<SupportConversation[]>([]);
+  const [activeConversation, setActiveConversation] =
+    useState<SupportConversation | null>(null);
+  const [pastConversations, setPastConversations] = useState<
+    SupportConversation[]
+  >([]);
   const [historyPage, setHistoryPage] = useState(1);
   const [historyTotalPages, setHistoryTotalPages] = useState(1);
   const [loadingMoreHistory, setLoadingMoreHistory] = useState(false);
@@ -128,6 +208,19 @@ export function CustomerSupportChat() {
   const companyRequestIdRef = useRef(0);
   const historyRequestIdRef = useRef(0);
   const reconnectRequestIdRef = useRef(0);
+  const mountedRef = useRef(false);
+  const invalidateRequests = useCallback(() => {
+    companyRequestIdRef.current++;
+    historyRequestIdRef.current++;
+    reconnectRequestIdRef.current++;
+  }, []);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      invalidateRequests();
+    };
+  }, [invalidateRequests]);
   const isPrependingOlderRef = useRef(false);
 
   const activeConversationId = activeConversation?.cuocTroChuyenId ?? null;
@@ -158,14 +251,18 @@ export function CustomerSupportChat() {
     queueMicrotask(() => {
       if (active) setLoadingCompanies(true);
     });
-    supportChatApi
+    chatApi
       .getActiveBusCompanies(searchCompany)
       .then((data) => {
         if (active) setBusCompanies(data || []);
       })
       .catch((err: unknown) => {
         if (active) {
-          setErrorMsg(err instanceof Error ? err.message : 'Không thể tải danh sách nhà xe.');
+          setErrorMsg(
+            err instanceof Error
+              ? err.message
+              : 'Không thể tải danh sách nhà xe.',
+          );
         }
       })
       .finally(() => {
@@ -175,13 +272,18 @@ export function CustomerSupportChat() {
     return () => {
       active = false;
     };
-  }, [isAuthenticated, activeConversation, searchCompany]);
+  }, [isAuthenticated, activeConversation, searchCompany, chatApi]);
 
   // Callback nhận tin nhắn mới từ WebSocket
   const handleNewMessage = useCallback((newMsg: SupportMessage) => {
+    if (newMsg.cuocTroChuyenId !== activeConversationIdRef.current) return;
     setMessages((prev) => {
-      if (prev.some((m) => m.tinNhanId === newMsg.tinNhanId && m.tinNhanId > 0)) return prev;
-      if (newMsg.clientMessageId && prev.some((m) => m.clientMessageId === newMsg.clientMessageId)) {
+      if (prev.some((m) => m.tinNhanId === newMsg.tinNhanId && m.tinNhanId > 0))
+        return prev;
+      if (
+        newMsg.clientMessageId &&
+        prev.some((m) => m.clientMessageId === newMsg.clientMessageId)
+      ) {
         return prev.map((m) =>
           m.clientMessageId === newMsg.clientMessageId
             ? { ...newMsg, deliveryStatus: 'DA_GUI' }
@@ -193,14 +295,28 @@ export function CustomerSupportChat() {
   }, []);
 
   // Callback khi có nhân viên tiếp nhận
-  const handleConversationClaimed = useCallback((updatedConv: SupportConversation) => {
-    setActiveConversation((prev) => (prev ? { ...prev, ...updatedConv } : updatedConv));
-  }, []);
+  const handleConversationClaimed = useCallback(
+    (updatedConv: SupportConversation) => {
+      setActiveConversation((prev) =>
+        prev?.cuocTroChuyenId === updatedConv.cuocTroChuyenId
+          ? { ...prev, ...updatedConv }
+          : prev,
+      );
+    },
+    [],
+  );
 
   // Callback khi cuộc trò chuyện kết thúc
-  const handleConversationClosed = useCallback((closedConv: SupportConversation) => {
-    setActiveConversation((prev) => (prev ? { ...prev, ...closedConv, trangThai: 'DA_DONG' } : closedConv));
-  }, []);
+  const handleConversationClosed = useCallback(
+    (closedConv: SupportConversation) => {
+      setActiveConversation((prev) =>
+        prev?.cuocTroChuyenId === closedConv.cuocTroChuyenId
+          ? { ...prev, ...closedConv, trangThai: 'DA_DONG' }
+          : prev,
+      );
+    },
+    [],
+  );
 
   // Callback khi tin nhắn của khách hàng được nhân viên đọc (read receipt)
   const handleMessagesReadReceipt = useCallback(
@@ -210,7 +326,11 @@ export function CustomerSupportChat() {
       tinNhanIds?: number[];
       updatedCount: number;
     }) => {
-      if (activeConversationIdRef.current && payload.cuocTroChuyenId === activeConversationIdRef.current) {
+      if (payload.readByTaiKhoanId === user?.accountId) return;
+      if (
+        activeConversationIdRef.current &&
+        payload.cuocTroChuyenId === activeConversationIdRef.current
+      ) {
         setMessages((prev) =>
           prev.map((m) => {
             if (m.loaiNguoiGui === 'KHACH_HANG') {
@@ -227,7 +347,7 @@ export function CustomerSupportChat() {
         );
       }
     },
-    [],
+    [user?.accountId],
   );
 
   // Đồng bộ lại khi Socket reconnect (F-NEW-01, F-NEW-02, F-NEW-04)
@@ -236,12 +356,29 @@ export function CustomerSupportChat() {
     const targetConvId = activeConversationId;
     const reqId = ++reconnectRequestIdRef.current;
     try {
-      const updatedConv = await supportChatApi.getConversationById(targetConvId, accessToken);
-      if (reconnectRequestIdRef.current !== reqId || activeConversationIdRef.current !== targetConvId) return;
-      setActiveConversation((prev) => (prev?.cuocTroChuyenId === targetConvId ? { ...prev, ...updatedConv } : prev));
+      const updatedConv = await chatApi.getConversationById(
+        targetConvId,
+        accessToken,
+      );
+      if (
+        reconnectRequestIdRef.current !== reqId ||
+        activeConversationIdRef.current !== targetConvId
+      )
+        return;
+      setActiveConversation((prev) =>
+        prev?.cuocTroChuyenId === targetConvId
+          ? { ...prev, ...updatedConv }
+          : prev,
+      );
 
-      const freshMsgs = await supportChatApi.getMessages(targetConvId, accessToken, { pageSize: 40 });
-      if (reconnectRequestIdRef.current !== reqId || activeConversationIdRef.current !== targetConvId) return;
+      const freshMsgs = await chatApi.getMessages(targetConvId, accessToken, {
+        pageSize: 40,
+      });
+      if (
+        reconnectRequestIdRef.current !== reqId ||
+        activeConversationIdRef.current !== targetConvId
+      )
+        return;
 
       setMessages((prev) => {
         if (activeConversationIdRef.current !== targetConvId) return prev;
@@ -250,9 +387,16 @@ export function CustomerSupportChat() {
     } catch (err) {
       console.warn('[CustomerSupportChat] Reconnect sync error:', err);
     }
-  }, [activeConversationId, accessToken]);
+  }, [activeConversationId, accessToken, chatApi]);
 
   // Socket connection hook
+  const recoverSocketAuthentication = useCallback(() => {
+    // A protected REST read uses the existing single-flight token refresh.
+    // Publishing the rotated token recreates the Socket.IO connection.
+    void chatApi
+      .listConversations({ page: 1, pageSize: 1 }, accessToken ?? '')
+      .catch(() => {});
+  }, [chatApi, accessToken]);
   const {
     isConnected: socketConnected,
     isTyping: staffTyping,
@@ -267,7 +411,64 @@ export function CustomerSupportChat() {
     onConversationClosed: handleConversationClosed,
     onMessagesReadReceipt: handleMessagesReadReceipt,
     onReconnected: handleReconnected,
+    onAuthenticationError: recoverSocketAuthentication,
   });
+
+  // Read only messages actually loaded in this thread. An empty/omitted ID list
+  // means "all" to the API and could mark off-screen history as read.
+  useEffect(() => {
+    if (
+      !isAuthenticated ||
+      !accessToken ||
+      !activeConversationId ||
+      loadingMessages ||
+      !documentVisible ||
+      showHistoryList
+    )
+      return;
+    const ids = messages
+      .filter(
+        (message) =>
+          message.cuocTroChuyenId === activeConversationId &&
+          message.loaiNguoiGui === 'NHAN_VIEN' &&
+          message.trangThai === 'DA_GUI' &&
+          message.tinNhanId > 0,
+      )
+      .map((message) => message.tinNhanId);
+    if (ids.length === 0 || document.visibilityState === 'hidden') return;
+
+    let current = true;
+    const targetId = activeConversationId;
+    chatApi
+      .markMessagesAsRead(targetId, accessToken, ids)
+      .then(() => {
+        if (!current || activeConversationIdRef.current !== targetId) return;
+        setMessages((previous) =>
+          previous.map((message) =>
+            message.cuocTroChuyenId === targetId &&
+            ids.includes(message.tinNhanId)
+              ? { ...message, trangThai: 'DA_DOC' }
+              : message,
+          ),
+        );
+      })
+      .catch((error: unknown) => {
+        if (current)
+          console.warn('[CustomerSupportChat] Mark read failed:', error);
+      });
+    return () => {
+      current = false;
+    };
+  }, [
+    isAuthenticated,
+    accessToken,
+    activeConversationId,
+    loadingMessages,
+    documentVisible,
+    showHistoryList,
+    messages,
+    chatApi,
+  ]);
 
   // Chọn nhà xe: chống race condition out-of-order & hỗ trợ xem lịch sử chat đã đóng (F-01, F-NEW-03)
   const handleSelectCompany = async (company: BusCompany) => {
@@ -279,6 +480,8 @@ export function CustomerSupportChat() {
 
     const currentReqId = ++companyRequestIdRef.current;
     reconnectRequestIdRef.current++;
+    setSending(false);
+    setStartingChat(false);
     setSelectedCompany(company);
     setShowHistoryList(false);
     setErrorMsg(null);
@@ -291,8 +494,16 @@ export function CustomerSupportChat() {
 
     try {
       const [active, convsRes] = await Promise.all([
-        supportChatApi.getActiveConversation(company.busCompanyId, accessToken),
-        supportChatApi.listConversations({ nhaXeId: company.busCompanyId, trangThai: 'DA_DONG', page: 1, pageSize: 20 }, accessToken),
+        chatApi.getActiveConversation(company.busCompanyId, accessToken),
+        chatApi.listConversations(
+          {
+            nhaXeId: company.busCompanyId,
+            trangThai: 'DA_DONG',
+            page: 1,
+            pageSize: 20,
+          },
+          accessToken,
+        ),
       ]);
 
       // Guard: Nếu có request sau đã được gọi, bỏ qua response cũ để ngăn race condition (F-01)
@@ -308,19 +519,42 @@ export function CustomerSupportChat() {
 
       if (active) {
         setActiveConversation(active);
-        const history = await supportChatApi.getMessages(active.cuocTroChuyenId, accessToken, { pageSize: 40 });
+        const history = await chatApi.getMessages(
+          active.cuocTroChuyenId,
+          accessToken,
+          { pageSize: 40 },
+        );
         if (currentReqId === companyRequestIdRef.current) {
           setHasOlderMessages(history.length >= 40);
-          setMessages(history.map((m) => ({ ...m, deliveryStatus: 'DA_GUI' })));
+          setMessages((previous) =>
+            reconcileMessages(
+              previous.filter(
+                (message) => message.cuocTroChuyenId === active.cuocTroChuyenId,
+              ),
+              history,
+            ),
+          );
         }
       } else if (closedList.length > 0) {
         // Nếu không có phiên đang mở nhưng có phiên cũ đã đóng, hiển thị phiên gần nhất cho khách đọc
         const latestClosed = closedList[0];
         setActiveConversation(latestClosed);
-        const history = await supportChatApi.getMessages(latestClosed.cuocTroChuyenId, accessToken, { pageSize: 40 });
+        const history = await chatApi.getMessages(
+          latestClosed.cuocTroChuyenId,
+          accessToken,
+          { pageSize: 40 },
+        );
         if (currentReqId === companyRequestIdRef.current) {
           setHasOlderMessages(history.length >= 40);
-          setMessages(history.map((m) => ({ ...m, deliveryStatus: 'DA_GUI' })));
+          setMessages((previous) =>
+            reconcileMessages(
+              previous.filter(
+                (message) =>
+                  message.cuocTroChuyenId === latestClosed.cuocTroChuyenId,
+              ),
+              history,
+            ),
+          );
         }
       } else {
         // Chưa có cuộc trò chuyện nào, giữ activeConversation null để hiện form bắt đầu mới
@@ -330,7 +564,11 @@ export function CustomerSupportChat() {
       }
     } catch (err: unknown) {
       if (currentReqId === companyRequestIdRef.current) {
-        setErrorMsg(err instanceof Error ? err.message : 'Không thể kiểm tra cuộc trò chuyện.');
+        setErrorMsg(
+          err instanceof Error
+            ? err.message
+            : 'Không thể kiểm tra cuộc trò chuyện.',
+        );
       }
     } finally {
       if (currentReqId === companyRequestIdRef.current) {
@@ -341,23 +579,41 @@ export function CustomerSupportChat() {
 
   // Tải thêm lịch sử cuộc trò chuyện đã đóng (F-NEW-03)
   const handleLoadMoreHistory = async () => {
-    if (!selectedCompany || !accessToken || loadingMoreHistory || historyPage >= historyTotalPages) return;
+    if (
+      !selectedCompany ||
+      !accessToken ||
+      loadingMoreHistory ||
+      historyPage >= historyTotalPages
+    )
+      return;
     const nextPage = historyPage + 1;
     setLoadingMoreHistory(true);
     try {
-      const res = await supportChatApi.listConversations(
-        { nhaXeId: selectedCompany.busCompanyId, trangThai: 'DA_DONG', page: nextPage, pageSize: 20 },
+      const res = await chatApi.listConversations(
+        {
+          nhaXeId: selectedCompany.busCompanyId,
+          trangThai: 'DA_DONG',
+          page: nextPage,
+          pageSize: 20,
+        },
         accessToken,
       );
       const newItems = res.data || [];
       setPastConversations((prev) => {
         const existingIds = new Set(prev.map((c) => c.cuocTroChuyenId));
-        return [...prev, ...newItems.filter((c) => !existingIds.has(c.cuocTroChuyenId))];
+        return [
+          ...prev,
+          ...newItems.filter((c) => !existingIds.has(c.cuocTroChuyenId)),
+        ];
       });
       setHistoryPage(nextPage);
       if (res.meta?.totalPages) setHistoryTotalPages(res.meta.totalPages);
     } catch (err: unknown) {
-      setErrorMsg(err instanceof Error ? err.message : 'Không thể tải thêm lịch sử cuộc trò chuyện.');
+      setErrorMsg(
+        err instanceof Error
+          ? err.message
+          : 'Không thể tải thêm lịch sử cuộc trò chuyện.',
+      );
     } finally {
       setLoadingMoreHistory(false);
     }
@@ -365,7 +621,13 @@ export function CustomerSupportChat() {
 
   // Tải tin nhắn cũ hơn (F-NEW-04)
   const handleLoadOlderMessages = async () => {
-    if (!activeConversationId || !accessToken || loadingOlderMessages || !hasOlderMessages) return;
+    if (
+      !activeConversationId ||
+      !accessToken ||
+      loadingOlderMessages ||
+      !hasOlderMessages
+    )
+      return;
     const targetConvId = activeConversationId;
     const positiveIds = messages.map((m) => m.tinNhanId).filter((id) => id > 0);
     if (positiveIds.length === 0) return;
@@ -373,7 +635,7 @@ export function CustomerSupportChat() {
 
     setLoadingOlderMessages(true);
     try {
-      const older = await supportChatApi.getMessages(targetConvId, accessToken, {
+      const older = await chatApi.getMessages(targetConvId, accessToken, {
         beforeId: oldestId,
         pageSize: 40,
       });
@@ -385,7 +647,9 @@ export function CustomerSupportChat() {
       if (older.length > 0) {
         isPrependingOlderRef.current = true;
         setMessages((prev) => {
-          const currentIds = new Set(prev.map((m) => m.tinNhanId).filter((id) => id > 0));
+          const currentIds = new Set(
+            prev.map((m) => m.tinNhanId).filter((id) => id > 0),
+          );
           const newOlder = older
             .filter((m) => !currentIds.has(m.tinNhanId))
             .map((m) => ({ ...m, deliveryStatus: 'DA_GUI' as const }));
@@ -394,7 +658,11 @@ export function CustomerSupportChat() {
       }
     } catch (err: unknown) {
       if (activeConversationIdRef.current === targetConvId) {
-        setErrorMsg(err instanceof Error ? err.message : 'Không thể tải thêm tin nhắn cũ.');
+        setErrorMsg(
+          err instanceof Error
+            ? err.message
+            : 'Không thể tải thêm tin nhắn cũ.',
+        );
       }
     } finally {
       if (activeConversationIdRef.current === targetConvId) {
@@ -407,18 +675,39 @@ export function CustomerSupportChat() {
   const handleSelectHistoryConversation = async (conv: SupportConversation) => {
     if (!accessToken) return;
     const reqId = ++historyRequestIdRef.current;
+    const companyReqId = companyRequestIdRef.current;
     reconnectRequestIdRef.current++;
+    setSending(false);
     setActiveConversation(conv);
     setShowHistoryList(false);
     setLoadingMessages(true);
     try {
-      const history = await supportChatApi.getMessages(conv.cuocTroChuyenId, accessToken, { pageSize: 40 });
-      if (historyRequestIdRef.current !== reqId) return;
+      const history = await chatApi.getMessages(
+        conv.cuocTroChuyenId,
+        accessToken,
+        { pageSize: 40 },
+      );
+      if (
+        historyRequestIdRef.current !== reqId ||
+        companyRequestIdRef.current !== companyReqId
+      )
+        return;
       setHasOlderMessages(history.length >= 40);
-      setMessages(history.map((m) => ({ ...m, deliveryStatus: 'DA_GUI' })));
+      setMessages((previous) =>
+        reconcileMessages(
+          previous.filter(
+            (message) => message.cuocTroChuyenId === conv.cuocTroChuyenId,
+          ),
+          history,
+        ),
+      );
     } catch (err: unknown) {
       if (historyRequestIdRef.current === reqId) {
-        setErrorMsg(err instanceof Error ? err.message : 'Không thể tải tin nhắn cuộc trò chuyện này.');
+        setErrorMsg(
+          err instanceof Error
+            ? err.message
+            : 'Không thể tải tin nhắn cuộc trò chuyện này.',
+        );
       }
     } finally {
       if (historyRequestIdRef.current === reqId) {
@@ -430,18 +719,24 @@ export function CustomerSupportChat() {
   // Bắt đầu cuộc trò chuyện mới
   const handleStartConversation = async () => {
     if (!selectedCompany || !accessToken || !initialMessage.trim()) return;
-    if (!Number.isInteger(selectedCompany.busCompanyId) || selectedCompany.busCompanyId <= 0) {
+    if (
+      !Number.isInteger(selectedCompany.busCompanyId) ||
+      selectedCompany.busCompanyId <= 0
+    ) {
       setErrorMsg('Thông tin nhà xe không hợp lệ.');
       return;
     }
 
+    const requestId = companyRequestIdRef.current;
+    const stillCurrent = () =>
+      mountedRef.current && requestId === companyRequestIdRef.current;
     setStartingChat(true);
     setErrorMsg(null);
     reconnectRequestIdRef.current++;
 
     const clientMsgId = `client-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
     try {
-      const conv = await supportChatApi.createConversation(
+      const conv = await chatApi.createConversation(
         {
           nhaXeId: selectedCompany.busCompanyId,
           tieuDe: `Hỗ trợ khách hàng - ${selectedCompany.name}`,
@@ -451,21 +746,30 @@ export function CustomerSupportChat() {
         accessToken,
       );
 
+      if (!stillCurrent()) return;
       setActiveConversation(conv);
-      const history = await supportChatApi.getMessages(conv.cuocTroChuyenId, accessToken);
+      const history = await chatApi.getMessages(
+        conv.cuocTroChuyenId,
+        accessToken,
+      );
+      if (!stillCurrent()) return;
       setHasOlderMessages(history.length >= 40);
       setMessages(history.map((m) => ({ ...m, deliveryStatus: 'DA_GUI' })));
       setInitialMessage('');
     } catch (err: unknown) {
-      setErrorMsg(err instanceof Error ? err.message : 'Không thể tạo cuộc trò chuyện.');
+      if (!stillCurrent()) return;
+      setErrorMsg(
+        err instanceof Error ? err.message : 'Không thể tạo cuộc trò chuyện.',
+      );
     } finally {
-      setStartingChat(false);
+      if (stillCurrent()) setStartingChat(false);
     }
   };
 
   // Gửi tin nhắn trong cuộc trò chuyện (F-03 timeout resilience & F-04 delivery states)
   const handleSendMessage = async () => {
-    if (!activeConversation || !inputValue.trim() || !accessToken || sending) return;
+    if (!activeConversation || !inputValue.trim() || !accessToken || sending)
+      return;
 
     const content = inputValue.trim();
     const clientMsgId = `client-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
@@ -494,11 +798,18 @@ export function CustomerSupportChat() {
     };
     setMessages((prev) => [...prev, tempMessage]);
 
+    const targetId = activeConversation.cuocTroChuyenId;
+    const currentView = () =>
+      mountedRef.current && activeConversationIdRef.current === targetId;
     try {
       let sentSuccess = false;
       // 1. Ưu tiên gửi qua WebSocket (có timeout 5000ms - F-03)
       if (socketConnected) {
-        const socketRes = await sendSocketMessage(activeConversation.cuocTroChuyenId, content, clientMsgId);
+        const socketRes = await sendSocketMessage(
+          activeConversation.cuocTroChuyenId,
+          content,
+          clientMsgId,
+        );
         if (socketRes.success && socketRes.data) {
           sentSuccess = true;
           handleNewMessage({ ...socketRes.data, deliveryStatus: 'DA_GUI' });
@@ -507,7 +818,8 @@ export function CustomerSupportChat() {
 
       // 2. Fallback REST nếu socket không gửi được / timeout (BẮT BUỘC dùng lại cùng clientMsgId để backend deduplicate)
       if (!sentSuccess) {
-        const restMsg = await supportChatApi.sendMessage(
+        if (!currentView()) return;
+        const restMsg = await chatApi.sendMessage(
           activeConversation.cuocTroChuyenId,
           content,
           accessToken,
@@ -516,6 +828,7 @@ export function CustomerSupportChat() {
         handleNewMessage({ ...restMsg, deliveryStatus: 'DA_GUI' });
       }
     } catch (err: unknown) {
+      if (!currentView()) return;
       // Đánh dấu tin nhắn thất bại để người dùng có thể bấm Thử lại (F-04)
       setMessages((prev) =>
         prev.map((m) =>
@@ -524,10 +837,14 @@ export function CustomerSupportChat() {
             : m,
         ),
       );
-      setErrorMsg(err instanceof Error ? err.message : 'Gửi tin nhắn thất bại. Vui lòng bấm Thử lại.');
+      setErrorMsg(
+        err instanceof Error
+          ? err.message
+          : 'Gửi tin nhắn thất bại. Vui lòng bấm Thử lại.',
+      );
     } finally {
       // Luôn luôn giải phóng sending để input không bị khóa vô hạn (F-03)
-      setSending(false);
+      if (currentView()) setSending(false);
     }
   };
 
@@ -535,7 +852,8 @@ export function CustomerSupportChat() {
   const handleRetryMessage = async (failedMsg: SupportMessage) => {
     if (!activeConversation || !accessToken || sending) return;
 
-    const clientMsgId = failedMsg.clientMessageId || `client-retry-${failedMsg.tinNhanId}`;
+    const clientMsgId =
+      failedMsg.clientMessageId || `client-retry-${failedMsg.tinNhanId}`;
     const content = failedMsg.noiDung;
 
     setSending(true);
@@ -550,10 +868,17 @@ export function CustomerSupportChat() {
       ),
     );
 
+    const targetId = activeConversation.cuocTroChuyenId;
+    const currentView = () =>
+      mountedRef.current && activeConversationIdRef.current === targetId;
     try {
       let sentSuccess = false;
       if (socketConnected) {
-        const socketRes = await sendSocketMessage(activeConversation.cuocTroChuyenId, content, clientMsgId);
+        const socketRes = await sendSocketMessage(
+          activeConversation.cuocTroChuyenId,
+          content,
+          clientMsgId,
+        );
         if (socketRes.success && socketRes.data) {
           sentSuccess = true;
           handleNewMessage({ ...socketRes.data, deliveryStatus: 'DA_GUI' });
@@ -561,7 +886,8 @@ export function CustomerSupportChat() {
       }
 
       if (!sentSuccess) {
-        const restMsg = await supportChatApi.sendMessage(
+        if (!currentView()) return;
+        const restMsg = await chatApi.sendMessage(
           activeConversation.cuocTroChuyenId,
           content,
           accessToken,
@@ -570,6 +896,7 @@ export function CustomerSupportChat() {
         handleNewMessage({ ...restMsg, deliveryStatus: 'DA_GUI' });
       }
     } catch (err: unknown) {
+      if (!currentView()) return;
       setMessages((prev) =>
         prev.map((m) =>
           m.clientMessageId === clientMsgId
@@ -577,27 +904,42 @@ export function CustomerSupportChat() {
             : m,
         ),
       );
-      setErrorMsg(err instanceof Error ? err.message : 'Gửi lại tin nhắn thất bại.');
+      setErrorMsg(
+        err instanceof Error ? err.message : 'Gửi lại tin nhắn thất bại.',
+      );
     } finally {
-      setSending(false);
+      if (currentView()) setSending(false);
     }
   };
 
   // Đóng cuộc trò chuyện
   const handleCloseChat = async () => {
     if (!activeConversation || !accessToken) return;
-    if (!confirm('Bạn có chắc chắn muốn kết thúc cuộc trò chuyện này không?')) return;
+    if (!confirm('Bạn có chắc chắn muốn kết thúc cuộc trò chuyện này không?'))
+      return;
 
+    const targetId = activeConversation.cuocTroChuyenId;
+    const currentView = () =>
+      mountedRef.current && activeConversationIdRef.current === targetId;
     try {
-      await closeSocketConversation(activeConversation.cuocTroChuyenId, 'Khách hàng kết thúc hỗ trợ');
-      const updated = await supportChatApi.closeConversation(
+      await closeSocketConversation(
+        activeConversation.cuocTroChuyenId,
+        'Khách hàng kết thúc hỗ trợ',
+      );
+      if (!currentView()) return;
+      const updated = await chatApi.closeConversation(
         activeConversation.cuocTroChuyenId,
         accessToken,
         'Khách hàng kết thúc hỗ trợ',
       );
       handleConversationClosed(updated);
     } catch (err: unknown) {
-      setErrorMsg(err instanceof Error ? err.message : 'Không thể kết thúc cuộc trò chuyện.');
+      if (!currentView()) return;
+      setErrorMsg(
+        err instanceof Error
+          ? err.message
+          : 'Không thể kết thúc cuộc trò chuyện.',
+      );
     }
   };
 
@@ -621,9 +963,12 @@ export function CustomerSupportChat() {
           <Headphones className="w-7 h-7" />
         </div>
         <div>
-          <h4 className="font-semibold text-slate-800 text-sm">Yêu cầu đăng nhập</h4>
+          <h4 className="font-semibold text-slate-800 text-sm">
+            Yêu cầu đăng nhập
+          </h4>
           <p className="text-xs text-slate-500 mt-1">
-            Vui lòng đăng nhập tài khoản Khách hàng để kết nối trực tiếp với nhân viên hỗ trợ của nhà xe.
+            Vui lòng đăng nhập tài khoản Khách hàng để kết nối trực tiếp với
+            nhân viên hỗ trợ của nhà xe.
           </p>
         </div>
         <Link
@@ -676,7 +1021,9 @@ export function CustomerSupportChat() {
                 className="w-full text-left p-3 bg-white border border-slate-200 rounded-xl hover:border-brand/50 hover:shadow-sm transition-all"
               >
                 <div className="flex items-center justify-between text-xs font-semibold text-slate-800">
-                  <span className="truncate">{c.tieuDe || c.maCuocTroChuyen}</span>
+                  <span className="truncate">
+                    {c.tieuDe || c.maCuocTroChuyen}
+                  </span>
                   <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 shrink-0">
                     Đã đóng
                   </span>
@@ -687,7 +1034,9 @@ export function CustomerSupportChat() {
                     {new Date(c.createdAt).toLocaleDateString('vi-VN')}
                   </span>
                   {c.nhanVien && (
-                    <span className="truncate">CSKH: {c.nhanVien.taiKhoan.hoTen}</span>
+                    <span className="truncate">
+                      CSKH: {c.nhanVien.taiKhoan.hoTen}
+                    </span>
                   )}
                 </div>
               </button>
@@ -702,7 +1051,8 @@ export function CustomerSupportChat() {
               >
                 {loadingMoreHistory ? (
                   <span className="flex items-center gap-1 justify-center">
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> Đang tải thêm...
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> Đang tải
+                    thêm...
                   </span>
                 ) : (
                   'Tải thêm lịch sử'
@@ -720,7 +1070,9 @@ export function CustomerSupportChat() {
     return (
       <div className="flex flex-col h-full bg-slate-50">
         <div className="p-3 bg-white border-b border-slate-100 flex items-center justify-between">
-          <span className="text-xs font-semibold text-slate-700">Chọn nhà xe cần hỗ trợ</span>
+          <span className="text-xs font-semibold text-slate-700">
+            Chọn nhà xe cần hỗ trợ
+          </span>
           {selectedCompany && (
             <div className="flex items-center gap-2">
               {pastConversations.length > 0 && (
@@ -728,7 +1080,8 @@ export function CustomerSupportChat() {
                   onClick={() => setShowHistoryList(true)}
                   className="text-xs text-slate-600 hover:text-brand flex items-center gap-1"
                 >
-                  <History className="w-3.5 h-3.5" /> Lịch sử ({pastConversations.length})
+                  <History className="w-3.5 h-3.5" /> Lịch sử (
+                  {pastConversations.length})
                 </button>
               )}
               <button
@@ -766,10 +1119,13 @@ export function CustomerSupportChat() {
             <div className="flex-1 overflow-y-auto space-y-2 pr-1">
               {loadingCompanies ? (
                 <div className="flex items-center justify-center py-8 text-slate-400 gap-2 text-xs">
-                  <Loader2 className="w-4 h-4 animate-spin" /> Đang tải danh sách nhà xe...
+                  <Loader2 className="w-4 h-4 animate-spin" /> Đang tải danh
+                  sách nhà xe...
                 </div>
               ) : busCompanies.length === 0 ? (
-                <div className="text-center py-8 text-slate-400 text-xs">Không tìm thấy nhà xe nào.</div>
+                <div className="text-center py-8 text-slate-400 text-xs">
+                  Không tìm thấy nhà xe nào.
+                </div>
               ) : (
                 busCompanies.map((c) => (
                   <button
@@ -787,7 +1143,9 @@ export function CustomerSupportChat() {
                       <div className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5 truncate">
                         <Phone className="w-3 h-3 text-slate-400 shrink-0" />
                         <span className="truncate">
-                          {c.contactInfo ? `Liên hệ: ${c.contactInfo}` : 'Chưa cập nhật thông tin liên hệ'}
+                          {c.contactInfo
+                            ? `Liên hệ: ${c.contactInfo}`
+                            : 'Chưa cập nhật thông tin liên hệ'}
                         </span>
                       </div>
                     </div>
@@ -804,7 +1162,9 @@ export function CustomerSupportChat() {
                   <Building2 className="w-5 h-5 text-brand" />
                 </div>
                 <div className="min-w-0">
-                  <h5 className="font-bold text-xs text-slate-800 truncate">{selectedCompany.name}</h5>
+                  <h5 className="font-bold text-xs text-slate-800 truncate">
+                    {selectedCompany.name}
+                  </h5>
                   <p className="text-[11px] text-slate-500 truncate">
                     {selectedCompany.contactInfo
                       ? `Liên hệ: ${selectedCompany.contactInfo}`
@@ -848,7 +1208,8 @@ export function CustomerSupportChat() {
 
   // MÀN HÌNH TRÒ CHUYỆN REAL-TIME VỚI NHÂN VIÊN NHÀ XE (HOẶC XEM LỊCH SỬ ĐÃ ĐÓNG)
   const isClosed = activeConversation.trangThai === 'DA_DONG';
-  const staffName = activeConversation.nhanVien?.taiKhoan.hoTen || 'Nhân viên CSKH';
+  const staffName =
+    activeConversation.nhanVien?.taiKhoan.hoTen || 'Nhân viên CSKH';
 
   return (
     <div className="flex flex-col h-full bg-slate-50">
@@ -871,11 +1232,17 @@ export function CustomerSupportChat() {
             </div>
             <div className="text-[10px] text-slate-500 flex items-center gap-1 truncate">
               {isClosed ? (
-                <span className="text-slate-500 font-medium">Cuộc trò chuyện đã kết thúc</span>
+                <span className="text-slate-500 font-medium">
+                  Cuộc trò chuyện đã kết thúc
+                </span>
               ) : activeConversation.nhanVien ? (
-                <span className="text-emerald-600 font-medium">{staffName}</span>
+                <span className="text-emerald-600 font-medium">
+                  {staffName}
+                </span>
               ) : (
-                <span className="text-amber-600 font-medium">Đang chờ nhân viên tiếp nhận</span>
+                <span className="text-amber-600 font-medium">
+                  Đang chờ nhân viên tiếp nhận
+                </span>
               )}
             </div>
           </div>
@@ -937,7 +1304,8 @@ export function CustomerSupportChat() {
                 >
                   {loadingOlderMessages ? (
                     <span className="flex items-center gap-1 justify-center">
-                      <Loader2 className="w-3 h-3 animate-spin" /> Đang tải tin nhắn cũ...
+                      <Loader2 className="w-3 h-3 animate-spin" /> Đang tải tin
+                      nhắn cũ...
                     </span>
                   ) : (
                     'Tải tin nhắn cũ hơn'
@@ -962,34 +1330,50 @@ export function CustomerSupportChat() {
               }
 
               return (
-                <div key={msg.tinNhanId} className={`flex gap-2 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
+                <div
+                  key={msg.tinNhanId}
+                  className={`flex gap-2 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}
+                >
                   <div
                     className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-xs ${
-                      isMe ? 'bg-slate-200 text-slate-700' : 'bg-brand/10 text-brand'
+                      isMe
+                        ? 'bg-slate-200 text-slate-700'
+                        : 'bg-brand/10 text-brand'
                     }`}
                   >
-                    {isMe ? <User className="w-3.5 h-3.5" /> : <Headphones className="w-3.5 h-3.5" />}
+                    {isMe ? (
+                      <User className="w-3.5 h-3.5" />
+                    ) : (
+                      <Headphones className="w-3.5 h-3.5" />
+                    )}
                   </div>
-                  <div className={`flex flex-col gap-0.5 max-w-[75%] ${isMe ? 'items-end' : 'items-start'}`}>
+                  <div
+                    className={`flex flex-col gap-0.5 max-w-[75%] ${isMe ? 'items-end' : 'items-start'}`}
+                  >
                     <div className="flex items-center gap-1">
                       <span className="text-[10px] text-slate-400">
                         {isMe ? 'Bạn' : msg.taiKhoanGui?.hoTen || staffName}
                       </span>
                       {isPending && (
                         <span className="text-[9px] text-slate-400 flex items-center gap-0.5">
-                          <Clock className="w-2.5 h-2.5 animate-spin" /> Đang gửi
+                          <Clock className="w-2.5 h-2.5 animate-spin" /> Đang
+                          gửi
                         </span>
                       )}
                       {!isPending && !isFailed && isMe && (
                         <span
                           className="text-[9px] flex items-center gap-0.5"
                           data-testid="message-delivery-status"
-                          title={msg.trangThai === 'DA_DOC' ? 'Đã xem' : 'Đã gửi'}
+                          title={
+                            msg.trangThai === 'DA_DOC' ? 'Đã xem' : 'Đã gửi'
+                          }
                         >
                           {msg.trangThai === 'DA_DOC' ? (
                             <>
                               <CheckCheck className="w-3 h-3 text-sky-500" />
-                              <span className="text-sky-600 font-medium">Đã xem</span>
+                              <span className="text-sky-600 font-medium">
+                                Đã xem
+                              </span>
                             </>
                           ) : (
                             <>
@@ -1076,7 +1460,11 @@ export function CustomerSupportChat() {
               disabled={!inputValue.trim() || sending}
               className="w-10 h-10 rounded-xl bg-brand text-white flex items-center justify-center shrink-0 hover:bg-brand-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4 ml-0.5" />}
+              {sending ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Send className="w-4 h-4 ml-0.5" />
+              )}
             </button>
           </div>
         )}

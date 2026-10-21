@@ -13,6 +13,29 @@ const { state, replace } = vi.hoisted(() => ({
   replace: vi.fn(),
 }));
 
+let memoryStore: Record<string, string> = {};
+const mockStorage = {
+  getItem: (key: string) => memoryStore[key] ?? null,
+  setItem: (key: string, value: string) => {
+    memoryStore[key] = String(value);
+  },
+  removeItem: (key: string) => {
+    delete memoryStore[key];
+  },
+  clear: () => {
+    memoryStore = {};
+  },
+  get length() {
+    return Object.keys(memoryStore).length;
+  },
+  key: (index: number) => Object.keys(memoryStore)[index] ?? null,
+};
+Object.defineProperty(window, 'localStorage', {
+  value: mockStorage,
+  writable: true,
+  configurable: true,
+});
+
 vi.mock('next/navigation', () => ({
   usePathname: () => state.pathname,
   useRouter: () => ({ replace }),
@@ -58,6 +81,7 @@ vi.mock('lucide-react', () => {
     PanelLeftClose: icon('panel-left-close'),
     PanelLeftOpen: icon('panel-left-open'),
     ShieldCheck: icon('shield-check'),
+    Tag: icon('tag'),
     Ticket: icon('ticket'),
     Truck: icon('truck'),
     UsersRound: icon('users-round'),
@@ -191,6 +215,53 @@ describe('Admin account management access', () => {
     );
 
     expect(screen.getByText('Nội dung tài khoản')).toBeTruthy();
+    expect(replace).not.toHaveBeenCalled();
+  });
+});
+
+describe('Promotion tenant navigation', () => {
+  beforeEach(() => {
+    resetAdminTestSession();
+    state.pathname = '/promotions';
+    replace.mockReset();
+    window.localStorage.clear();
+  });
+
+  afterEach(cleanup);
+
+  it('shows promotions to a tenant reader and marks the current section', () => {
+    setEmployeeAdminTestSession(['promotion:read']);
+    render(
+      <SuperAdminLayout activeSection="promotions">
+        <p>Promotion page</p>
+      </SuperAdminLayout>,
+    );
+
+    const link = screen.getByRole('link', { name: 'Khuyến mãi' });
+    expect(link.getAttribute('href')).toBe('/promotions');
+    expect(link.getAttribute('aria-current')).toBe('page');
+  });
+
+  it('does not expose tenant promotions to a platform principal', () => {
+    setPlatformPermissions(['promotion:read', 'promotion:create', 'promotion:update']);
+    render(
+      <SuperAdminLayout activeSection="overview">
+        <p>Platform page</p>
+      </SuperAdminLayout>,
+    );
+
+    expect(screen.queryByRole('link', { name: 'Khuyến mãi' })).toBeNull();
+  });
+
+  it('allows the guarded promotions route to a tenant reader', () => {
+    setEmployeeAdminTestSession(['promotion:read']);
+    render(
+      <AdminSessionGuard>
+        <p>Promotion route content</p>
+      </AdminSessionGuard>,
+    );
+
+    expect(screen.getByText('Promotion route content')).toBeTruthy();
     expect(replace).not.toHaveBeenCalled();
   });
 });

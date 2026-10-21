@@ -219,7 +219,6 @@ export function FarePriceDetailSheet({
       >
         <div className="admin-dialog-header">
           <div>
-            <p className="eyebrow">BẢNG GIÁ VÉ</p>
             <h2 id="fare-price-detail-title">Chi tiết bảng giá</h2>
           </div>
           <button

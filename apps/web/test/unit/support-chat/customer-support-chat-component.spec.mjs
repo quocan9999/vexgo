@@ -32,16 +32,24 @@ dom.window.HTMLElement.prototype.scrollIntoView = () => {};
 const req = createRequire(import.meta.url);
 const rtlPath = req.resolve('@testing-library/react');
 const rootReactPath = req.resolve('react', { paths: [path.dirname(rtlPath)] });
-const ReactModule = await import('file:///' + rootReactPath.replace(/\\/g, '/'));
+const ReactModule = await import(
+  'file:///' + rootReactPath.replace(/\\/g, '/')
+);
 const React = ReactModule.default || ReactModule;
 
-const { render, screen, fireEvent, cleanup, waitFor } = await import('@testing-library/react');
+const { render, screen, fireEvent, cleanup, waitFor, act } =
+  await import('@testing-library/react');
+const { mockSockets } = await import('../../helpers/mock-socket-client.mjs');
 
 // Import REAL components and real APIs (F-NEW-06)
-const { CustomerSupportChat, reconcileMessages } = await import('@/features/support-chat/components/customer-support-chat');
+const { CustomerSupportChat, reconcileMessages } =
+  await import('@/features/support-chat/components/customer-support-chat');
 const { SupportWidget } = await import('@/components/layout/support-widget');
-const { AuthSessionProvider } = await import('@/features/auth/auth-session');
-const { supportChatApi } = await import('@/features/support-chat/services/support-chat.api');
+const { AuthSessionProvider, useAuthSession } =
+  await import('@/features/auth/auth-session');
+const { supportChatApi } =
+  await import('@/features/support-chat/services/support-chat.api');
+const { authApi } = await import('@/features/auth/services/auth.api');
 
 const AUTH_STORAGE_KEY = 'vexgo:auth';
 
@@ -65,6 +73,440 @@ function seedAuthStorage(token = 'test-customer-token') {
 function renderWithAuth(ui) {
   return render(React.createElement(AuthSessionProvider, null, ui));
 }
+
+describe('Customer displayed-message read receipts', () => {
+  let originals;
+  let readCalls;
+  let finishRead;
+  let originalRefresh;
+  const message = (id, conversationId = 101, sender = 'NHAN_VIEN') => ({
+    tinNhanId: id,
+    cuocTroChuyenId: conversationId,
+    taiKhoanGuiId: sender === 'KHACH_HANG' ? 100 : 200,
+    loaiNguoiGui: sender,
+    loaiTinNhan: 'VAN_BAN',
+    noiDung: `visible-message-${id}`,
+    trangThai: 'DA_GUI',
+    createdAt: '2026-10-20T10:00:00Z',
+  });
+  beforeEach(() => {
+    seedAuthStorage();
+    originals = { ...supportChatApi };
+    originalRefresh = authApi.refresh;
+    readCalls = [];
+    finishRead = null;
+    supportChatApi.getActiveBusCompanies = async () => [
+      { busCompanyId: 10, name: 'Read Company A' },
+      { busCompanyId: 20, name: 'Read Company B' },
+    ];
+    supportChatApi.getActiveConversation = async (id) => ({
+      cuocTroChuyenId: id === 10 ? 101 : 202,
+      nhaXeId: id,
+      trangThai: 'DANG_XU_LY',
+      nhaXe: { nhaXeId: id, tenNhaXe: `Read Company ${id === 10 ? 'A' : 'B'}` },
+      createdAt: '2026-10-20T10:00:00Z',
+    });
+    supportChatApi.listConversations = async () => ({ data: [] });
+    supportChatApi.getMessages = async (id) =>
+      id === 101
+        ? [
+            message(1),
+            message(2, 101, 'KHACH_HANG'),
+            { ...message(3), trangThai: 'DA_DOC' },
+          ]
+        : [message(20, 202)];
+    supportChatApi.markMessagesAsRead = async (id, token, ids) => {
+      readCalls.push({ id, token, ids });
+      if (finishRead)
+        await new Promise((resolve) => {
+          finishRead.resolve = resolve;
+        });
+      return { updatedCount: ids.length };
+    };
+  });
+  afterEach(() => {
+    cleanup();
+    Object.assign(supportChatApi, originals);
+    authApi.refresh = originalRefresh;
+  });
+
+  async function openA(extra = null) {
+    renderWithAuth(
+      React.createElement(
+        React.Fragment,
+        null,
+        extra,
+        React.createElement(CustomerSupportChat),
+      ),
+    );
+    await waitFor(() => screen.getByText('Read Company A'));
+    fireEvent.click(screen.getByText('Read Company A'));
+    await waitFor(() => screen.getByText('visible-message-1'));
+  }
+
+  it('refreshes concurrent expired chat reads once and uses rotated tokens for subsequent history/read calls', async () => {
+    let refreshes = 0;
+    const tokens = [];
+    authApi.refresh = async () => {
+      refreshes++;
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      return {
+        data: {
+          accessToken: 'rotated-access',
+          refreshToken: 'rotated-refresh',
+        },
+      };
+    };
+    const active = supportChatApi.getActiveConversation;
+    supportChatApi.getActiveConversation = async (id, token) => {
+      tokens.push(token);
+      if (token !== 'rotated-access') throw { status: 401 };
+      return active(id);
+    };
+    supportChatApi.listConversations = async (_params, token) => {
+      tokens.push(token);
+      if (token !== 'rotated-access') throw { status: 401 };
+      return { data: [] };
+    };
+    supportChatApi.getMessages = async (_id, token) => {
+      assert.equal(
+        token,
+        'rotated-access',
+        'Sequential history must use the current token, not the pre-refresh closure',
+      );
+      return [message(1)];
+    };
+    await openA();
+    await waitFor(() =>
+      assert.equal(readCalls.at(-1)?.token, 'rotated-access'),
+    );
+    assert.equal(refreshes, 1);
+    assert.equal(
+      tokens.filter((token) => token === 'test-customer-token').length,
+      2,
+    );
+    assert.equal(
+      JSON.parse(dom.window.localStorage.getItem(AUTH_STORAGE_KEY)).accessToken,
+      'rotated-access',
+    );
+  });
+
+  it('discards a pending refresh after account switch without retrying old chat or overwriting the new session', async () => {
+    let releaseRefresh;
+    let controls;
+    function Controls() {
+      controls = useAuthSession();
+      return React.createElement('span', null, controls.user?.fullName);
+    }
+    authApi.refresh = async () =>
+      new Promise((resolve) => {
+        releaseRefresh = resolve;
+      });
+    supportChatApi.getActiveConversation = async () => {
+      throw { status: 401 };
+    };
+    supportChatApi.listConversations = async () => {
+      throw { status: 401 };
+    };
+    let histories = 0;
+    supportChatApi.getMessages = async () => {
+      histories++;
+      return [message(1)];
+    };
+    renderWithAuth(
+      React.createElement(
+        React.Fragment,
+        null,
+        React.createElement(Controls),
+        React.createElement(CustomerSupportChat),
+      ),
+    );
+    await waitFor(() => screen.getByText('Read Company A'));
+    fireEvent.click(screen.getByText('Read Company A'));
+    await waitFor(() => assert.equal(typeof releaseRefresh, 'function'));
+    await act(async () => {
+      controls.signIn({
+        user: {
+          accountId: 101,
+          customerId: 2,
+          fullName: 'New customer',
+          phoneNumber: '0900000002',
+          roles: ['CUSTOMER'],
+        },
+        accessToken: 'new-customer-access',
+        refreshToken: 'new-customer-refresh',
+      });
+      releaseRefresh({
+        data: {
+          accessToken: 'obsolete-refresh-access',
+          refreshToken: 'obsolete-refresh-token',
+        },
+      });
+      await Promise.resolve();
+    });
+    await waitFor(() => screen.getByText('New customer'));
+    assert.equal(histories, 0);
+    assert.equal(screen.queryByText('visible-message-1'), null);
+    const stored = JSON.parse(
+      dom.window.localStorage.getItem(AUTH_STORAGE_KEY),
+    );
+    assert.equal(stored.user.accountId, 101);
+    assert.equal(stored.accessToken, 'new-customer-access');
+  });
+
+  it('recovers an expired Socket.IO handshake through REST refresh and ignores disposed socket events', async () => {
+    let expired = false;
+    let refreshes = 0;
+    const list = supportChatApi.listConversations;
+    supportChatApi.listConversations = async (params, token) => {
+      if (expired && token !== 'socket-rotated-access') throw { status: 401 };
+      return list(params, token);
+    };
+    authApi.refresh = async () => {
+      refreshes++;
+      return {
+        data: {
+          accessToken: 'socket-rotated-access',
+          refreshToken: 'socket-rotated-refresh',
+        },
+      };
+    };
+    await openA();
+    const oldSocket = mockSockets.at(-1);
+    expired = true;
+    await act(async () => {
+      oldSocket.serverEmit('support.error', {
+        error: 'ACCESS_TOKEN_INVALID',
+        message: 'Expired',
+      });
+    });
+    await waitFor(() =>
+      assert.equal(
+        mockSockets.at(-1).options.auth.token,
+        'socket-rotated-access',
+      ),
+    );
+    await act(async () => {
+      oldSocket.serverEmit('support.message.new', message(99));
+    });
+    assert.equal(refreshes, 1);
+    assert.equal(screen.queryByText('visible-message-99'), null);
+    assert.ok(screen.getByText('visible-message-1'));
+  });
+
+  it('retains the socket clientMessageId across ACK failure and expired-token REST retry', async () => {
+    let expired = false;
+    const attempts = [];
+    const active = supportChatApi.getActiveConversation;
+    supportChatApi.getConversationById = async () => active(10);
+    authApi.refresh = async () => ({
+      data: {
+        accessToken: 'send-rotated-access',
+        refreshToken: 'send-rotated-refresh',
+      },
+    });
+    supportChatApi.sendMessage = async (id, content, token, clientId) => {
+      attempts.push({ id, content, token, clientId });
+      if (expired && token !== 'send-rotated-access') throw { status: 401 };
+      return {
+        ...message(80, id, 'KHACH_HANG'),
+        noiDung: content,
+        clientMessageId: clientId,
+      };
+    };
+    await openA();
+    const socket = mockSockets.at(-1);
+    await act(async () => {
+      socket.serverEmit('support.connected', {});
+    });
+    expired = true;
+    fireEvent.change(screen.getByPlaceholderText('Nhập tin nhắn...'), {
+      target: { value: 'One logical message' },
+    });
+    fireEvent.keyDown(screen.getByPlaceholderText('Nhập tin nhắn...'), {
+      key: 'Enter',
+    });
+    await waitFor(() => assert.equal(attempts.length, 2));
+    const sent = socket.requests.find(
+      (request) => request.event === 'support.message.send',
+    );
+    assert.ok(sent);
+    assert.deepEqual(
+      attempts.map((attempt) => attempt.clientId),
+      [sent.data.clientMessageId, sent.data.clientMessageId],
+    );
+    assert.deepEqual(
+      attempts.map((attempt) => attempt.token),
+      ['test-customer-token', 'send-rotated-access'],
+    );
+    await waitFor(() => assert.equal(screen.queryByText('Đang gửi...'), null));
+  });
+
+  it('marks loaded staff messages on open and realtime arrival; excludes own/read/unrelated messages', async () => {
+    await openA();
+    await waitFor(() =>
+      assert.deepEqual(readCalls, [
+        { id: 101, token: 'test-customer-token', ids: [1] },
+      ]),
+    );
+    await act(async () => {
+      mockSockets.at(-1).serverEmit('support.message.new', message(4));
+    });
+    await waitFor(() => assert.deepEqual(readCalls.at(-1).ids, [4]));
+    const count = readCalls.length;
+    await act(async () => {
+      mockSockets.at(-1).serverEmit('support.message.new', message(50, 202));
+    });
+    assert.equal(screen.queryByText('visible-message-50'), null);
+    assert.equal(readCalls.length, count);
+    assert.ok(readCalls.every((call) => call.ids.length > 0));
+  });
+
+  it('ignores delayed read completion after switching conversations', async () => {
+    finishRead = {};
+    await openA();
+    await waitFor(() => assert.equal(readCalls.length, 1));
+    const resolveA = finishRead.resolve;
+    finishRead = null;
+    fireEvent.click(screen.getByText('Đổi nhà xe'));
+    await waitFor(() => screen.getByText('Read Company B'));
+    fireEvent.click(screen.getByText('Read Company B'));
+    await waitFor(() => screen.getByText('visible-message-20'));
+    await act(async () => {
+      resolveA();
+    });
+    assert.equal(screen.queryByText('visible-message-1'), null);
+    assert.deepEqual(readCalls.at(-1).ids, [20]);
+    assert.equal(readCalls.at(-1).id, 202);
+  });
+
+  it('preserves realtime staff message arriving during initial history and reads both displayed IDs', async () => {
+    let finishHistory;
+    supportChatApi.getMessages = async () =>
+      new Promise((resolve) => {
+        finishHistory = resolve;
+      });
+    renderWithAuth(React.createElement(CustomerSupportChat));
+    await waitFor(() => screen.getByText('Read Company A'));
+    fireEvent.click(screen.getByText('Read Company A'));
+    await waitFor(() => assert.equal(typeof finishHistory, 'function'));
+    await act(async () => {
+      mockSockets.at(-1).serverEmit('support.message.new', message(8));
+    });
+    assert.equal(
+      readCalls.length,
+      0,
+      'Loading history is not a displayed read boundary',
+    );
+    await act(async () => {
+      finishHistory([message(1)]);
+    });
+    await waitFor(() => {
+      screen.getByText('visible-message-1');
+      screen.getByText('visible-message-8');
+      assert.deepEqual(
+        [...readCalls.at(-1).ids].sort((a, b) => a - b),
+        [1, 8],
+      );
+    });
+  });
+
+  it('does not mark a hidden document read and resumes only when it becomes visible', async () => {
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      value: 'hidden',
+    });
+    try {
+      await openA();
+      assert.equal(readCalls.length, 0);
+      await act(async () => {
+        Object.defineProperty(document, 'visibilityState', {
+          configurable: true,
+          value: 'visible',
+        });
+        document.dispatchEvent(new dom.window.Event('visibilitychange'));
+      });
+      await waitFor(() => assert.deepEqual(readCalls.at(-1).ids, [1]));
+    } finally {
+      delete document.visibilityState;
+    }
+  });
+
+  it('does not mark incoming transcript messages read while the history chooser hides the transcript', async () => {
+    supportChatApi.listConversations = async () => ({
+      data: [
+        {
+          cuocTroChuyenId: 90,
+          maCuocTroChuyen: 'closed-90',
+          nhaXeId: 10,
+          tieuDe: 'Older support',
+          trangThai: 'DA_DONG',
+          nhaXe: { tenNhaXe: 'Read Company A' },
+          createdAt: '2026-10-19T10:00:00Z',
+          dongLuc: '2026-10-19T11:00:00Z',
+        },
+      ],
+    });
+    await openA();
+    await waitFor(() => assert.equal(readCalls.length, 1));
+    fireEvent.click(screen.getByTitle('Lịch sử hỗ trợ'));
+    await waitFor(() => screen.getByText('Lịch sử hỗ trợ - Read Company A'));
+    await act(async () => {
+      mockSockets.at(-1).serverEmit('support.message.new', message(10));
+    });
+    assert.equal(screen.queryByText('visible-message-10'), null);
+    assert.equal(readCalls.length, 1);
+    fireEvent.click(screen.getByText('Quay lại'));
+    await waitFor(() => {
+      screen.getByText('visible-message-10');
+      assert.deepEqual(readCalls.at(-1).ids, [10]);
+    });
+  });
+
+  it('drops mounted conversation and ignores old socket/read completion after account switch', async () => {
+    function SwitchAccount() {
+      const { signIn } = useAuthSession();
+      return React.createElement(
+        'button',
+        {
+          onClick: () =>
+            signIn({
+              user: {
+                accountId: 101,
+                customerId: 2,
+                fullName: 'Other Account',
+                phoneNumber: '0900000002',
+                roles: ['CUSTOMER'],
+              },
+              accessToken: 'other-account-token',
+              refreshToken: 'other-refresh',
+            }),
+        },
+        'Switch test account',
+      );
+    }
+    finishRead = {};
+    await openA(React.createElement(SwitchAccount));
+    await waitFor(() => assert.equal(readCalls.length, 1));
+    const oldSocket = mockSockets.at(-1);
+    const resolveA = finishRead.resolve;
+    finishRead = null;
+    fireEvent.click(screen.getByText('Switch test account'));
+    await waitFor(() =>
+      assert.equal(screen.queryByText('visible-message-1'), null),
+    );
+    await act(async () => {
+      resolveA();
+      oldSocket.serverEmit('support.message.new', message(99));
+    });
+    assert.equal(screen.queryByText('visible-message-99'), null);
+    assert.equal(
+      readCalls.length,
+      1,
+      'No inherited messages may be marked using the new account token',
+    );
+  });
+});
 
 describe('Customer Support Chat Component Tests with Real Components (F-NEW-06)', () => {
   beforeEach(() => {
@@ -95,13 +537,19 @@ describe('Customer Support Chat Component Tests with Real Components (F-NEW-06)'
       const staffBtn = screen.getByTestId('staff-chat-floating-button');
       fireEvent.click(staffBtn);
 
-      assert.ok(screen.getByTestId('staff-chat-window'), 'Staff chat window should be open');
+      assert.ok(
+        screen.getByTestId('staff-chat-window'),
+        'Staff chat window should be open',
+      );
       assert.equal(
         screen.queryByTestId('staff-chat-floating-button'),
         null,
         'Staff button should hide when open',
       );
-      assert.ok(screen.getByTestId('ai-bot-floating-button'), 'Bot button remains available');
+      assert.ok(
+        screen.getByTestId('ai-bot-floating-button'),
+        'Bot button remains available',
+      );
     });
 
     it('switches cleanly between staff window and bot window without overlap', () => {
@@ -128,8 +576,16 @@ describe('Customer Support Chat Component Tests with Real Components (F-NEW-06)'
 
       try {
         supportChatApi.getActiveBusCompanies = async () => [
-          { busCompanyId: 10, name: 'Nhà Xe Phương Trang', contactInfo: '1900 6067' },
-          { busCompanyId: 20, name: 'Nhà Xe Thành Bưởi', contactInfo: '1900 6079' },
+          {
+            busCompanyId: 10,
+            name: 'Nhà Xe Phương Trang',
+            contactInfo: '1900 6067',
+          },
+          {
+            busCompanyId: 20,
+            name: 'Nhà Xe Thành Bưởi',
+            contactInfo: '1900 6079',
+          },
         ];
 
         supportChatApi.listConversations = async () => ({
@@ -166,7 +622,8 @@ describe('Customer Support Chat Component Tests with Real Components (F-NEW-06)'
         supportChatApi.getMessages = async (convId) => [
           {
             tinNhanId: convId === 101 ? 1001 : 2002,
-            noiDung: convId === 101 ? 'Tin nhắn Phương Trang' : 'Tin nhắn Thành Bưởi',
+            noiDung:
+              convId === 101 ? 'Tin nhắn Phương Trang' : 'Tin nhắn Thành Bưởi',
             loaiNguoiGui: 'NHAN_VIEN',
             createdAt: new Date().toISOString(),
           },
@@ -221,7 +678,11 @@ describe('Customer Support Chat Component Tests with Real Components (F-NEW-06)'
 
       try {
         supportChatApi.getActiveBusCompanies = async () => [
-          { busCompanyId: 10, name: 'Nhà Xe Phương Trang', contactInfo: '1900 6067' },
+          {
+            busCompanyId: 10,
+            name: 'Nhà Xe Phương Trang',
+            contactInfo: '1900 6067',
+          },
         ];
 
         supportChatApi.listConversations = async () => ({
@@ -247,7 +708,12 @@ describe('Customer Support Chat Component Tests with Real Components (F-NEW-06)'
           },
         ];
 
-        supportChatApi.sendMessage = async (convId, noiDung, token, clientMessageId) => {
+        supportChatApi.sendMessage = async (
+          convId,
+          noiDung,
+          token,
+          clientMessageId,
+        ) => {
           attempts.push({ convId, noiDung, clientMessageId });
           if (attempts.length === 1) {
             throw new Error('503 Service Unavailable');
@@ -318,7 +784,11 @@ describe('Customer Support Chat Component Tests with Real Components (F-NEW-06)'
 
       try {
         supportChatApi.getActiveBusCompanies = async () => [
-          { busCompanyId: 10, name: 'Nhà Xe Phương Trang', contactInfo: '1900 6067' },
+          {
+            busCompanyId: 10,
+            name: 'Nhà Xe Phương Trang',
+            contactInfo: '1900 6067',
+          },
         ];
 
         // Không có phiên active để giữ màn hình ở selectedCompany
@@ -362,7 +832,10 @@ describe('Customer Support Chat Component Tests with Real Components (F-NEW-06)'
               };
             }
           }
-          return { data: [], meta: { page: 1, pageSize: 20, totalItems: 0, totalPages: 1 } };
+          return {
+            data: [],
+            meta: { page: 1, pageSize: 20, totalItems: 0, totalPages: 1 },
+          };
         };
 
         renderWithAuth(React.createElement(CustomerSupportChat));
@@ -406,7 +879,11 @@ describe('Customer Support Chat Component Tests with Real Components (F-NEW-06)'
 
       try {
         supportChatApi.getActiveBusCompanies = async () => [
-          { busCompanyId: 10, name: 'Nhà Xe Phương Trang', contactInfo: '1900 6067' },
+          {
+            busCompanyId: 10,
+            name: 'Nhà Xe Phương Trang',
+            contactInfo: '1900 6067',
+          },
         ];
 
         supportChatApi.listConversations = async () => ({
@@ -431,9 +908,24 @@ describe('Customer Support Chat Component Tests with Real Components (F-NEW-06)'
         }));
 
         const olderMessages = [
-          { tinNhanId: 31, noiDung: 'Tin nhắn cũ 31', loaiNguoiGui: 'NHAN_VIEN', createdAt: new Date().toISOString() },
-          { tinNhanId: 32, noiDung: 'Tin nhắn cũ 32', loaiNguoiGui: 'NHAN_VIEN', createdAt: new Date().toISOString() },
-          { tinNhanId: 33, noiDung: 'Tin nhắn cũ 33', loaiNguoiGui: 'NHAN_VIEN', createdAt: new Date().toISOString() },
+          {
+            tinNhanId: 31,
+            noiDung: 'Tin nhắn cũ 31',
+            loaiNguoiGui: 'NHAN_VIEN',
+            createdAt: new Date().toISOString(),
+          },
+          {
+            tinNhanId: 32,
+            noiDung: 'Tin nhắn cũ 32',
+            loaiNguoiGui: 'NHAN_VIEN',
+            createdAt: new Date().toISOString(),
+          },
+          {
+            tinNhanId: 33,
+            noiDung: 'Tin nhắn cũ 33',
+            loaiNguoiGui: 'NHAN_VIEN',
+            createdAt: new Date().toISOString(),
+          },
         ];
 
         supportChatApi.getMessages = async (convId, token, opts) => {

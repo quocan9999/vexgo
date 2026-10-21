@@ -156,6 +156,7 @@ export function SelectFilter({
 }
 
 type DateRangeFilterProps = {
+  title?: string;
   label: string;
   onApply: (value: DateRangeValue | null) => void;
   value: DateRangeValue | null;
@@ -165,7 +166,7 @@ function displayDate(date: string) {
   return date.split('-').reverse().join('/');
 }
 
-export function DateRangeFilter({ label, onApply, value }: DateRangeFilterProps) {
+export function DateRangeFilter({ label, title = 'Khoảng ngày tạo', onApply, value }: DateRangeFilterProps) {
   const [open, setOpen] = useState(false);
   const [draftFrom, setDraftFrom] = useState('');
   const [draftTo, setDraftTo] = useState('');
@@ -222,7 +223,7 @@ export function DateRangeFilter({ label, onApply, value }: DateRangeFilterProps)
           >
             <Popover.Popup className={styles.datePopup}>
               <Popover.Title className={styles.dateTitle}>
-                Khoảng ngày tạo
+                {title}
               </Popover.Title>
               <Popover.Description className={styles.dateDescription}>
                 Chọn ngày bắt đầu và kết thúc để lọc danh sách.

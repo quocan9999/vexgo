@@ -98,7 +98,11 @@ describe('SupportChatService', () => {
 
   describe('Đảm bảo thông tin khách hàng (ensureKhachHang)', () => {
     it('trả về bản ghi khách hàng nếu đã tồn tại', async () => {
-      const existing = { khachHangId: 50, taiKhoanId: 101, maKhachHang: 'KH101' };
+      const existing = {
+        khachHangId: 50,
+        taiKhoanId: 101,
+        maKhachHang: 'KH101',
+      };
       prisma.khachHang.findUnique.mockResolvedValue(existing);
 
       const result = await service.ensureKhachHang(101);
@@ -115,7 +119,9 @@ describe('SupportChatService', () => {
         taiKhoanVaiTros: [{ vaiTro: { tenVaiTro: 'NHAN_VIEN' } }],
       });
 
-      await expect(service.ensureKhachHang(201)).rejects.toThrow(ForbiddenException);
+      await expect(service.ensureKhachHang(201)).rejects.toThrow(
+        ForbiddenException,
+      );
     });
 
     it('xử lý race condition P2002 khi nhiều request khởi tạo cùng tài khoản khách hàng (BE-R04)', async () => {
@@ -233,7 +239,9 @@ describe('SupportChatService', () => {
       };
       prisma.cuocTroChuyen.findFirst.mockResolvedValue(existingConv);
 
-      const result = await service.createConversation(mockCustomerPrincipal, { nhaXeId: 5 });
+      const result = await service.createConversation(mockCustomerPrincipal, {
+        nhaXeId: 5,
+      });
       expect(result).toEqual({
         conversation: existingConv,
         isNew: false,
@@ -386,14 +394,26 @@ describe('SupportChatService', () => {
           dongLuc: null,
           createdAt: new Date(),
           updatedAt: new Date(),
-          nhaXe: { nhaXeId: 5, tenNhaXe: 'Phương Trang', logo: null, hotline: '19001000' },
-          khachHang: { khachHangId: 50, maKhachHang: 'KH01', taiKhoan: { hoTen: 'A', soDienThoai: '0901', avatarUrl: null } },
+          nhaXe: {
+            nhaXeId: 5,
+            tenNhaXe: 'Phương Trang',
+            logo: null,
+            hotline: '19001000',
+          },
+          khachHang: {
+            khachHangId: 50,
+            maKhachHang: 'KH01',
+            taiKhoan: { hoTen: 'A', soDienThoai: '0901', avatarUrl: null },
+          },
           nhanVien: null,
           tinNhans: [],
         },
       ]);
 
-      const res = await service.listConversations(mockStaffWithChatManage, { page: 1, pageSize: 10 });
+      const res = await service.listConversations(mockStaffWithChatManage, {
+        page: 1,
+        pageSize: 10,
+      });
 
       expect(prisma.cuocTroChuyen.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -612,7 +632,10 @@ describe('SupportChatService', () => {
       };
       prisma.cuocTroChuyen.findUniqueOrThrow.mockResolvedValue(updated);
 
-      const result = await service.claimConversation(mockStaffWithChatManage, 1);
+      const result = await service.claimConversation(
+        mockStaffWithChatManage,
+        1,
+      );
       expect(result).toEqual(updated);
       expect(prisma.tinNhanHoTro.create).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -652,22 +675,45 @@ describe('SupportChatService', () => {
         cuocTroChuyenId: 1,
         trangThai: 'DA_DONG',
       };
-      prisma.cuocTroChuyen.update.mockResolvedValue(closed);
+      prisma.cuocTroChuyen.updateMany.mockResolvedValue({ count: 1 });
+      prisma.cuocTroChuyen.findUniqueOrThrow.mockResolvedValue(closed);
 
-      const result = await service.closeConversation(mockStaffWithChatManage, 1, {
-        lyDo: 'Khách đã giải quyết xong vấn đề',
-      });
+      const result = await service.closeConversation(
+        mockStaffWithChatManage,
+        1,
+        {
+          lyDo: 'Khách đã giải quyết xong vấn đề',
+        },
+      );
 
       expect(result).toEqual(closed);
       expect(prisma.tinNhanHoTro.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
             loaiNguoiGui: 'HE_THONG',
-            noiDung: 'Cuộc trò chuyện đã kết thúc: Khách đã giải quyết xong vấn đề',
+            noiDung:
+              'Cuộc trò chuyện đã kết thúc: Khách đã giải quyết xong vấn đề',
           }),
         }),
       );
     });
+  });
+
+  it('does not append another close message when another request already closed the conversation', async () => {
+    prisma.cuocTroChuyen.findUnique.mockResolvedValue({
+      cuocTroChuyenId: 1,
+      trangThai: 'DANG_XU_LY',
+      nhaXeId: 5,
+    });
+    prisma.cuocTroChuyen.updateMany.mockResolvedValue({ count: 0 });
+    prisma.cuocTroChuyen.findUniqueOrThrow.mockResolvedValue({
+      cuocTroChuyenId: 1,
+      trangThai: 'DA_DONG',
+    });
+    await expect(
+      service.closeConversation(mockStaffWithChatManage, 1),
+    ).resolves.toMatchObject({ trangThai: 'DA_DONG' });
+    expect(prisma.tinNhanHoTro.create).not.toHaveBeenCalled();
   });
 
   describe('Đánh dấu tin nhắn đã đọc (markMessagesAsRead)', () => {
@@ -679,7 +725,10 @@ describe('SupportChatService', () => {
       });
       prisma.tinNhanHoTro.updateMany.mockResolvedValue({ count: 3 });
 
-      const result = await service.markMessagesAsRead(mockStaffWithChatManage, 1);
+      const result = await service.markMessagesAsRead(
+        mockStaffWithChatManage,
+        1,
+      );
       expect(result).toEqual({ updatedCount: 3 });
       expect(prisma.tinNhanHoTro.updateMany).toHaveBeenCalledWith({
         where: {

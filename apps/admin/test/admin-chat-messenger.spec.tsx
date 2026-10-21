@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
 import {
+  act,
   cleanup,
   fireEvent,
   render,
   screen,
   waitFor,
+  within,
 } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import React from 'react';
@@ -560,4 +562,152 @@ describe('AdminChatMessenger Component & Flow Regression Tests', () => {
       expect(screen.getByText('Nội dung hội thoại B')).toBeTruthy();
     });
   });
+
+  describe('Browser QA: realtime conversation discovery preserves server filters', () => {
+    it('refreshes the current search and status filter when a new conversation event arrives', async () => {
+      const matching = createMockConversation(81, 'Khớp khách mới', 'CHO_TIEP_NHAN');
+      const excluded = createMockConversation(82, 'Không được chèn từ socket', 'DA_DONG');
+      let createdOnServer = false;
+      const listSpy = vi.spyOn(adminSupportChatApi, 'listConversations').mockImplementation(async (params) => {
+        const matchesCurrentFilter = params.search === 'Khớp' && params.trangThai === 'CHO_TIEP_NHAN';
+        const data = createdOnServer && matchesCurrentFilter ? [matching] : [];
+        return { data, meta: { page: 1, pageSize: 20, totalItems: data.length, totalPages: 1 } };
+      });
+      render(<AdminChatMessenger session={mockSession} />);
+      await waitFor(() => expect(listSpy).toHaveBeenCalled());
+      fireEvent.click(screen.getByRole('button', { name: 'Chờ nhận' }));
+      fireEvent.change(screen.getByPlaceholderText('Tìm khách hàng, số điện thoại...'), { target: { value: 'Khớp' } });
+      await waitFor(() => expect(listSpy).toHaveBeenLastCalledWith(
+        expect.objectContaining({ search: 'Khớp', trangThai: 'CHO_TIEP_NHAN', page: 1 }),
+        'mock-admin-token-123',
+      ));
+      const beforeEvent = listSpy.mock.calls.length;
+      createdOnServer = true;
+      expect(capturedSocketProps.onNewConversation).toBeTypeOf('function');
+      act(() => capturedSocketProps.onNewConversation!(excluded));
+      expect(await screen.findByText('Khớp khách mới')).toBeTruthy();
+      expect(listSpy.mock.calls.length).toBeGreaterThan(beforeEvent);
+      expect(listSpy).toHaveBeenLastCalledWith(
+        expect.objectContaining({ search: 'Khớp', trangThai: 'CHO_TIEP_NHAN', page: 1, pageSize: 20 }),
+        'mock-admin-token-123',
+      );
+      expect(screen.queryByText('Không được chèn từ socket')).toBeNull();
+    });
+
+    it('discovers an unknown incoming conversation through an authoritative list refetch', async () => {
+      const known = createMockConversation(1, 'Khách hiện có', 'DANG_XU_LY');
+      const discovered = createMockConversation(2, 'Khách mới được phát hiện', 'CHO_TIEP_NHAN');
+      let messageArrived = false;
+      const listSpy = vi.spyOn(adminSupportChatApi, 'listConversations').mockImplementation(async () => {
+        const data = messageArrived ? [discovered, known] : [known];
+        return { data, meta: { page: 1, pageSize: 20, totalItems: data.length, totalPages: 1 } };
+      });
+      render(<AdminChatMessenger session={mockSession} />);
+      expect(await screen.findByText('Khách hiện có')).toBeTruthy();
+      expect(screen.queryByText('Khách mới được phát hiện')).toBeNull();
+      const beforeEvent = listSpy.mock.calls.length;
+      messageArrived = true;
+      act(() => capturedSocketProps.onNewMessage!({
+        tinNhanId: 8802,
+        cuocTroChuyenId: 2,
+        taiKhoanGuiId: 20,
+        loaiNguoiGui: 'KHACH_HANG',
+        loaiTinNhan: 'VAN_BAN',
+        noiDung: 'Tin đầu của hội thoại chưa có trong danh sách',
+        trangThai: 'DA_GUI',
+        createdAt: '2026-10-21T00:10:00.000Z',
+      }));
+      expect(await screen.findByText('Khách mới được phát hiện')).toBeTruthy();
+      expect(screen.getByText('Khách hiện có')).toBeTruthy();
+      expect(listSpy.mock.calls.length).toBeGreaterThan(beforeEvent);
+      expect(listSpy).toHaveBeenLastCalledWith(
+        expect.objectContaining({ page: 1, pageSize: 20 }), 'mock-admin-token-123',
+      );
+    });
+
+    it('ignores a late old-search list after realtime refresh of the new search', async () => {
+      type ListResponse = Awaited<ReturnType<typeof adminSupportChatApi.listConversations>>;
+      let resolveOld!: (response: ListResponse) => void;
+      const oldSearch = new Promise<ListResponse>((resolve) => { resolveOld = resolve; });
+      const current = createMockConversation(90, 'Kết quả tìm kiếm mới', 'DANG_XU_LY');
+      const stale = createMockConversation(91, 'Kết quả cũ phải bỏ qua', 'DANG_XU_LY');
+      const listSpy = vi.spyOn(adminSupportChatApi, 'listConversations').mockImplementation(async (params) => {
+        if (params.search === 'cũ') return oldSearch;
+        const data = params.search === 'mới' ? [current] : [];
+        return { data, meta: { page: 1, pageSize: 20, totalItems: data.length, totalPages: 1 } };
+      });
+      render(<AdminChatMessenger session={mockSession} />);
+      await waitFor(() => expect(listSpy).toHaveBeenCalled());
+      const input = screen.getByPlaceholderText('Tìm khách hàng, số điện thoại...');
+      fireEvent.change(input, { target: { value: 'cũ' } });
+      await waitFor(() => expect(listSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ search: 'cũ' }), 'mock-admin-token-123',
+      ));
+      fireEvent.change(input, { target: { value: 'mới' } });
+      expect(await screen.findByText('Kết quả tìm kiếm mới')).toBeTruthy();
+      const beforeEvent = listSpy.mock.calls.length;
+      act(() => capturedSocketProps.onNewConversation!(current));
+      await waitFor(() => expect(listSpy.mock.calls.length).toBeGreaterThan(beforeEvent));
+      await act(async () => {
+        resolveOld({ data: [stale], meta: { page: 1, pageSize: 20, totalItems: 1, totalPages: 1 } });
+        await oldSearch;
+      });
+      expect(screen.getByText('Kết quả tìm kiếm mới')).toBeTruthy();
+      expect(screen.queryByText('Kết quả cũ phải bỏ qua')).toBeNull();
+      expect(listSpy).toHaveBeenLastCalledWith(
+        expect.objectContaining({ search: 'mới', page: 1 }), 'mock-admin-token-123',
+      );
+    });
+  });
+
+
+  describe('Browser QA: staff read-receipt ownership', () => {
+    it('ignores the admin own read receipt and marks only customer-confirmed outgoing IDs as read', async () => {
+      const conversation = createMockConversation(1, 'Khách đọc phản hồi', 'DANG_XU_LY');
+      vi.spyOn(adminSupportChatApi, 'listConversations').mockResolvedValue({
+        data: [conversation], meta: { page: 1, pageSize: 20, totalItems: 1, totalPages: 1 },
+      });
+      vi.spyOn(adminSupportChatApi, 'getMessages').mockResolvedValue([
+        {
+          tinNhanId: 901, cuocTroChuyenId: 1, taiKhoanGuiId: mockSession.accountId,
+          loaiNguoiGui: 'NHAN_VIEN', loaiTinNhan: 'VAN_BAN',
+          noiDung: 'Phản hồi thứ nhất của nhân viên', trangThai: 'DA_GUI',
+          createdAt: '2026-10-21T00:10:00.000Z',
+        },
+        {
+          tinNhanId: 902, cuocTroChuyenId: 1, taiKhoanGuiId: mockSession.accountId,
+          loaiNguoiGui: 'NHAN_VIEN', loaiTinNhan: 'VAN_BAN',
+          noiDung: 'Phản hồi thứ hai của nhân viên', trangThai: 'DA_GUI',
+          createdAt: '2026-10-21T00:11:00.000Z',
+        },
+      ]);
+      render(<AdminChatMessenger session={mockSession} />);
+      fireEvent.click(await screen.findByText('Khách đọc phản hồi'));
+      const first = (await screen.findByText('Phản hồi thứ nhất của nhân viên')).parentElement!;
+      const second = screen.getByText('Phản hồi thứ hai của nhân viên').parentElement!;
+      expect(within(first).getByText('Đã gửi')).toBeTruthy();
+      expect(within(second).getByText('Đã gửi')).toBeTruthy();
+
+      // This event means the admin read inbound messages, not that the customer read replies.
+      act(() => capturedSocketProps.onMessagesReadReceipt!({
+        cuocTroChuyenId: 1, readByTaiKhoanId: mockSession.accountId, updatedCount: 1,
+      }));
+      expect(within(first).queryByText('Đã đọc')).toBeNull();
+      expect(within(second).queryByText('Đã đọc')).toBeNull();
+      expect(screen.getAllByText('Đã gửi')).toHaveLength(2);
+
+      act(() => capturedSocketProps.onMessagesReadReceipt!({
+        cuocTroChuyenId: 1, readByTaiKhoanId: 20, tinNhanIds: [901], updatedCount: 1,
+      }));
+      expect(within(first).getByText('Đã đọc')).toBeTruthy();
+      expect(within(second).getByText('Đã gửi')).toBeTruthy();
+      expect(within(second).queryByText('Đã đọc')).toBeNull();
+
+      act(() => capturedSocketProps.onMessagesReadReceipt!({
+        cuocTroChuyenId: 2, readByTaiKhoanId: 20, tinNhanIds: [902], updatedCount: 1,
+      }));
+      expect(within(second).getByText('Đã gửi')).toBeTruthy();
+    });
+  });
+
 });

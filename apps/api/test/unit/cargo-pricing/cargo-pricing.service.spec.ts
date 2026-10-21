@@ -1,0 +1,442 @@
+import { ConflictException } from '@nestjs/common';
+import { describe, expect, it, vi } from 'vitest';
+import { Prisma } from '../../../src/generated/prisma/client.js';
+import { CargoPricingService } from '../../../src/cargo-pricing/cargo-pricing.service.js';
+
+const trip = {
+  chuyenXeId: 42,
+  tuyenXeId: 7,
+  nhaXeId: 3,
+  ngayKhoiHanh: new Date('2026-12-01T00:00:00.000Z'),
+};
+
+const sender = {
+  vaiTro: 'CA_HAI',
+  diemGiaoNhanHangId: 11,
+  diemGiaoNhanHang: { nhaXeId: 3, trangThai: 'HOAT_DONG' },
+};
+const receiver = {
+  vaiTro: 'NHAN_HANG',
+  diemGiaoNhanHangId: 12,
+  diemGiaoNhanHang: { nhaXeId: 3, trangThai: 'HOAT_DONG' },
+};
+const cargoType = {
+  loaiHangHoaId: 21,
+  tenLoai: 'Điện tử',
+  nhomSucChua: 'HANG_NHE',
+  trangThai: 'HOAT_DONG',
+};
+
+function makeTransaction(options: {
+  points?: unknown[];
+  types?: unknown[];
+  rates?: unknown[];
+} = {}) {
+  return {
+    diemGiaoNhanTuyenXe: {
+      findMany: vi.fn().mockResolvedValue(options.points ?? [sender, receiver]),
+    },
+    loaiHangHoa: {
+      findMany: vi.fn().mockResolvedValue(options.types ?? [cargoType]),
+    },
+    bangCuocGuiHang: {
+      findMany: vi.fn().mockResolvedValue(options.rates ?? [
+        {
+          bangCuocGuiHangId: 31,
+          loaiHangHoaId: 21,
+          khoiLuongTu: new Prisma.Decimal(0),
+          khoiLuongDen: new Prisma.Decimal(7),
+          mucCuoc: new Prisma.Decimal(60000),
+          trangThai: 'HOAT_DONG',
+          tuNgay: new Date('2020-01-01T00:00:00.000Z'),
+          denNgay: null,
+        },
+      ]),
+    },
+  } as unknown as Prisma.TransactionClient;
+}
+
+describe('CargoPricingService', () => {
+  it('shares bracket pricing, aggregates quantity, and charges each selected service fee once', async () => {
+    const tx = makeTransaction();
+    const service = new CargoPricingService();
+
+    const result = await service.calculate(tx, trip, {
+      senderPointId: 11,
+      receiverPointId: 12,
+      items: [
+        {
+          name: 'Máy ảnh',
+          quantity: 2,
+          weight: 2,
+          loaiHangHoaId: 21,
+          serviceType: 'FRAGILE',
+        },
+        {
+          name: 'Máy tính bảng',
+          quantity: 1,
+          weight: 3,
+          loaiHangHoaId: 21,
+          serviceType: 'VALUABLE',
+        },
+      ],
+    });
+
+    expect(result.senderPointId).toBe(11);
+    expect(result.receiverPointId).toBe(12);
+    expect(result.rates).toHaveLength(1);
+    expect(result.rates[0]).toMatchObject({
+      loaiHangHoaId: 21,
+      bangCuocGuiHangId: 31,
+      totalWeight: expect.objectContaining({ d: [7] }),
+      fee: expect.objectContaining({ d: [60000] }),
+    });
+    expect(result.baseFee.toNumber()).toBe(60000);
+    expect(result.serviceFee.toNumber()).toBe(70000);
+    expect(result.totalFee.toNumber()).toBe(130000);
+    expect(tx.bangCuocGuiHang.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          diemGuiId: 11,
+          diemNhanId: 12,
+          trangThai: 'HOAT_DONG',
+          tuNgay: { lte: trip.ngayKhoiHanh },
+        }),
+      }),
+    );
+  });
+
+  it('requires an explicit type when the capacity group is ambiguous', async () => {
+    const tx = makeTransaction({
+      types: [
+        cargoType,
+        { ...cargoType, loaiHangHoaId: 22, tenLoai: 'Quần áo' },
+      ],
+    });
+    const service = new CargoPricingService();
+
+    await expect(
+      service.calculate(tx, trip, {
+        senderPointId: 11,
+        receiverPointId: 12,
+        items: [{ name: 'Vali', physicalType: 'Vali', quantity: 1, weight: 2 }],
+      }),
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({ error: 'CARGO_TYPE_REQUIRED' }),
+    });
+    expect(tx.bangCuocGuiHang.findMany).not.toHaveBeenCalled();
+  });
+
+  it('rejects inactive or off-route points before reading rates', async () => {
+    const tx = makeTransaction({ points: [
+      sender,
+      { ...receiver, diemGiaoNhanHang: { nhaXeId: 999, trangThai: 'HOAT_DONG' } },
+    ] });
+    const service = new CargoPricingService();
+
+    await expect(
+      service.calculate(tx, trip, {
+        senderPointId: 11,
+        receiverPointId: 12,
+        items: [{ name: 'Máy ảnh', quantity: 1, weight: 2, loaiHangHoaId: 21 }],
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(tx.bangCuocGuiHang.findMany).not.toHaveBeenCalled();
+  });
+
+  it('rejects a missing weight bracket without falling back to another rate', async () => {
+    const tx = makeTransaction();
+    const service = new CargoPricingService();
+
+    await expect(
+      service.calculate(tx, trip, {
+        senderPointId: 11,
+        receiverPointId: 12,
+        items: [
+          { name: 'Thùng hàng', quantity: 1, weight: 8, loaiHangHoaId: 21 },
+        ],
+      }),
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({ error: 'CARGO_RATE_NOT_FOUND' }),
+    });
+    expect(tx.bangCuocGuiHang.findMany).toHaveBeenCalledTimes(1);
+  });
+
+  it('fails closed when overlapping rates both include the same boundary weight', async () => {
+    const tx = makeTransaction({
+      rates: [
+        {
+          bangCuocGuiHangId: 31,
+          loaiHangHoaId: 21,
+          khoiLuongTu: new Prisma.Decimal(0),
+          khoiLuongDen: new Prisma.Decimal(2),
+          mucCuoc: new Prisma.Decimal(20000),
+        },
+        {
+          bangCuocGuiHangId: 32,
+          loaiHangHoaId: 21,
+          khoiLuongTu: new Prisma.Decimal(2),
+          khoiLuongDen: new Prisma.Decimal(5),
+          mucCuoc: new Prisma.Decimal(40000),
+        },
+      ],
+    });
+    const service = new CargoPricingService();
+
+    await expect(
+      service.calculate(tx, trip, {
+        senderPointId: 11,
+        receiverPointId: 12,
+        items: [{ name: 'Máy ảnh', quantity: 1, weight: 2, loaiHangHoaId: 21 }],
+      }),
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({ error: 'CARGO_RATE_AMBIGUOUS' }),
+    });
+  });
+
+  it('applies booking-only dimension limits before looking up rates', async () => {
+    const service = new CargoPricingService();
+    const limits = {
+      maxNonVehiclePackageWeightKg: 40,
+      maxNonVehicleDimensionsCm: { length: 150, width: 80, height: 80 },
+    };
+    const oversizedDimensionsTx = makeTransaction();
+
+    await expect(
+      service.calculate(oversizedDimensionsTx, trip, {
+        senderPointId: 11,
+        receiverPointId: 12,
+        bookingLimits: limits,
+        items: [
+          {
+            name: 'Thùng hàng',
+            physicalType: 'Vali',
+            loaiHangHoaId: 21,
+            quantity: 1,
+            weight: 2,
+            length: 151,
+            width: 20,
+            height: 20,
+          },
+        ],
+      }),
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({ error: 'CARGO_DIMENSIONS_EXCEEDED' }),
+    });
+    expect(oversizedDimensionsTx.bangCuocGuiHang.findMany).not.toHaveBeenCalled();
+
+  });
+
+  it('accepts two 25kg packages on one row and prices the aggregate 50kg bracket', async () => {
+    const tx = makeTransaction({
+      rates: [
+        {
+          bangCuocGuiHangId: 32,
+          loaiHangHoaId: 21,
+          khoiLuongTu: new Prisma.Decimal(45),
+          khoiLuongDen: new Prisma.Decimal(50),
+          mucCuoc: new Prisma.Decimal(90_000),
+        },
+      ],
+    });
+
+    const result = await new CargoPricingService().calculate(tx, trip, {
+      senderPointId: 11,
+      receiverPointId: 12,
+      bookingLimits: { maxNonVehiclePackageWeightKg: 40 },
+      items: [{ name: 'Thùng hàng', quantity: 2, weight: 25, loaiHangHoaId: 21 }],
+    });
+
+    expect(result.items[0].effectiveUnitWeight.toNumber()).toBe(25);
+    expect(result.items[0].totalWeight.toNumber()).toBe(50);
+    expect(result.rates).toHaveLength(1);
+    expect(result.rates[0].totalWeight.toNumber()).toBe(50);
+    expect(result.rates[0].bangCuocGuiHangId).toBe(32);
+    expect(result.rates[0].fee.toNumber()).toBe(90_000);
+    expect(result.totalFee.toNumber()).toBe(90_000);
+  });
+
+  it('aggregates separate 25kg rows for bracket pricing without treating their sum as one package', async () => {
+    const tx = makeTransaction({
+      rates: [
+        {
+          bangCuocGuiHangId: 32,
+          loaiHangHoaId: 21,
+          khoiLuongTu: new Prisma.Decimal(45),
+          khoiLuongDen: new Prisma.Decimal(50),
+          mucCuoc: new Prisma.Decimal(90_000),
+        },
+      ],
+    });
+
+    const result = await new CargoPricingService().calculate(tx, trip, {
+      senderPointId: 11,
+      receiverPointId: 12,
+      bookingLimits: { maxNonVehiclePackageWeightKg: 40 },
+      items: [
+        { name: 'Thùng hàng 1', quantity: 1, weight: 25, loaiHangHoaId: 21 },
+        { name: 'Thùng hàng 2', quantity: 1, weight: 25, loaiHangHoaId: 21 },
+      ],
+    });
+
+    expect(result.items.map((item) => item.effectiveUnitWeight.toNumber())).toEqual([
+      25,
+      25,
+    ]);
+    expect(result.rates[0].totalWeight.toNumber()).toBe(50);
+    expect(result.rates[0].fee.toNumber()).toBe(90_000);
+  });
+
+  it('accepts exactly 40kg effective weight for one regular package', async () => {
+    const tx = makeTransaction({
+      rates: [
+        {
+          bangCuocGuiHangId: 33,
+          loaiHangHoaId: 21,
+          khoiLuongTu: new Prisma.Decimal(0),
+          khoiLuongDen: new Prisma.Decimal(40),
+          mucCuoc: new Prisma.Decimal(80_000),
+        },
+      ],
+    });
+
+    const result = await new CargoPricingService().calculate(tx, trip, {
+      senderPointId: 11,
+      receiverPointId: 12,
+      bookingLimits: { maxNonVehiclePackageWeightKg: 40 },
+      items: [{ name: 'Thùng hàng', quantity: 1, weight: 40, loaiHangHoaId: 21 }],
+    });
+
+    expect(result.items[0].effectiveUnitWeight.toNumber()).toBe(40);
+    expect(result.rates[0].totalWeight.toNumber()).toBe(40);
+    expect(result.totalFee.toNumber()).toBe(80_000);
+  });
+
+  it.each([
+    ['one 41kg package', { quantity: 1, weight: 41 }],
+    ['two 41kg packages', { quantity: 2, weight: 41 }],
+    [
+      'volumetric weight above 40kg',
+      { quantity: 1, weight: 1, length: 100, width: 50, height: 41 },
+    ],
+  ])('rejects %s using effective weight per package', async (_caseName, item) => {
+    const tx = makeTransaction();
+
+    await expect(
+      new CargoPricingService().calculate(tx, trip, {
+        senderPointId: 11,
+        receiverPointId: 12,
+        bookingLimits: {
+          maxNonVehiclePackageWeightKg: 40,
+          maxNonVehicleDimensionsCm: { length: 150, width: 80, height: 80 },
+        },
+        items: [{ name: 'Thùng hàng', loaiHangHoaId: 21, ...item }],
+      }),
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({
+        error: 'CARGO_WEIGHT_EXCEEDED',
+        message: expect.stringContaining('mỗi kiện tối đa 40kg'),
+      }),
+    });
+    expect(tx.bangCuocGuiHang.findMany).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['negative dimension', { length: -150, width: 50, height: 50 }],
+    ['zero dimension', { length: 150, width: 0, height: 50 }],
+    ['partial dimensions', { length: 150, width: 50 }],
+    ['non-number dimension', { length: '150', width: 50, height: 50 }],
+    ['NaN dimension', { length: Number.NaN, width: 50, height: 50 }],
+    ['infinite dimension', { length: 150, width: 50, height: Number.POSITIVE_INFINITY }],
+  ])('rejects %s before resolving points or rates', async (_caseName, dimensions) => {
+    const tx = makeTransaction();
+    const service = new CargoPricingService();
+    const item = {
+      name: 'Thùng hàng',
+      quantity: 1,
+      weight: 1,
+      loaiHangHoaId: 21,
+      ...dimensions,
+    } as unknown as {
+      name: string;
+      quantity: number;
+      weight: number;
+      loaiHangHoaId: number;
+      length?: number;
+      width?: number;
+      height?: number;
+    };
+
+    await expect(
+      service.calculate(tx, trip, {
+        senderPointId: 11,
+        receiverPointId: 12,
+        items: [item],
+      }),
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({
+        error: 'CARGO_DIMENSIONS_INVALID',
+        message: expect.stringContaining('Kích thước'),
+      }),
+    });
+    expect(tx.diemGiaoNhanTuyenXe.findMany).not.toHaveBeenCalled();
+    expect(tx.bangCuocGuiHang.findMany).not.toHaveBeenCalled();
+  });
+
+  it('accepts omitted dimensions and keeps the entered weight for pricing', async () => {
+    const tx = makeTransaction();
+    const result = await new CargoPricingService().calculate(tx, trip, {
+      senderPointId: 11,
+      receiverPointId: 12,
+      items: [{ name: 'Túi hàng', quantity: 1, weight: 1, loaiHangHoaId: 21 }],
+    });
+
+    expect(result.items[0].effectiveUnitWeight.toNumber()).toBe(1);
+    expect(result.rates[0].bangCuocGuiHangId).toBe(31);
+    expect(result.totalFee.toNumber()).toBe(60_000);
+  });
+
+  it('uses valid volumetric weight to select the existing matching bracket and fee', async () => {
+    const tx = makeTransaction({
+      rates: [
+        {
+          bangCuocGuiHangId: 31,
+          loaiHangHoaId: 21,
+          khoiLuongTu: 0,
+          khoiLuongDen: 7,
+          mucCuoc: 20_000,
+        },
+        {
+          bangCuocGuiHangId: 32,
+          loaiHangHoaId: 21,
+          khoiLuongTu: 70,
+          khoiLuongDen: 80,
+          mucCuoc: 90_000,
+        },
+      ],
+    });
+
+    const result = await new CargoPricingService().calculate(tx, trip, {
+      senderPointId: 11,
+      receiverPointId: 12,
+      items: [
+        {
+          name: 'Thùng hàng',
+          quantity: 1,
+          weight: 1,
+          length: 150,
+          width: 50,
+          height: 50,
+          loaiHangHoaId: 21,
+        },
+      ],
+    });
+
+    expect(result.items[0].effectiveUnitWeight.toNumber()).toBe(75);
+    expect(result.rates).toMatchObject([
+      { bangCuocGuiHangId: 32, totalWeight: expect.objectContaining({ d: [75] }) },
+    ]);
+    expect(result.baseFee.toNumber()).toBe(90_000);
+    expect(result.totalFee.toNumber()).toBe(90_000);
+  });
+});

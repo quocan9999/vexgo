@@ -74,7 +74,8 @@ export function reconcileAdminMessages(
       const serverMsg = serverById.get(pm.tinNhanId)!;
       result.push(serverMsg);
       handledServerIds.add(pm.tinNhanId);
-      if (serverMsg.clientMessageId) handledServerClientIds.add(serverMsg.clientMessageId);
+      if (serverMsg.clientMessageId)
+        handledServerClientIds.add(serverMsg.clientMessageId);
     } else {
       // Optimistic message not yet on server, or realtime message in prev not in server snapshot
       result.push(pm);
@@ -107,8 +108,12 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
   const canManageChat = hasAdminPermission(session, 'chat:manage');
 
   const [activeTab, setActiveTab] = useState<FilterTab>('ALL');
-  const [conversations, setConversations] = useState<AdminSupportConversation[]>([]);
+  const [conversations, setConversations] = useState<
+    AdminSupportConversation[]
+  >([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const conversationsRef = useRef(conversations);
+  useEffect(() => { conversationsRef.current = conversations; }, [conversations]);
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [loadingConversations, setLoadingConversations] = useState(true);
 
@@ -118,7 +123,8 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
   const [totalPages, setTotalPages] = useState(1);
   const [loadingMore, setLoadingMore] = useState(false);
 
-  const [selectedConv, setSelectedConv] = useState<AdminSupportConversation | null>(null);
+  const [selectedConv, setSelectedConv] =
+    useState<AdminSupportConversation | null>(null);
   const [messages, setMessages] = useState<AdminSupportMessage[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [hasOlderMessages, setHasOlderMessages] = useState(false);
@@ -182,7 +188,9 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
       .catch((err: unknown) => {
         if (!active) return;
         setErrorMessage(
-          err instanceof Error ? err.message : 'Không thể tải danh sách cuộc trò chuyện.',
+          err instanceof Error
+            ? err.message
+            : 'Không thể tải danh sách cuộc trò chuyện.',
         );
       })
       .finally(() => {
@@ -212,7 +220,9 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
       const newItems = res.data || [];
       setConversations((prev) => {
         const existingIds = new Set(prev.map((c) => c.cuocTroChuyenId));
-        const filtered = newItems.filter((c) => !existingIds.has(c.cuocTroChuyenId));
+        const filtered = newItems.filter(
+          (c) => !existingIds.has(c.cuocTroChuyenId),
+        );
         return [...prev, ...filtered];
       });
       setPage(nextPage);
@@ -220,7 +230,9 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
       if (res.meta?.totalPages) setTotalPages(res.meta.totalPages);
     } catch (err: unknown) {
       setErrorMessage(
-        err instanceof Error ? err.message : 'Không thể tải thêm cuộc trò chuyện.',
+        err instanceof Error
+          ? err.message
+          : 'Không thể tải thêm cuộc trò chuyện.',
       );
     } finally {
       setLoadingMore(false);
@@ -232,7 +244,9 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
   const selectedConvRef = useRef(selectedConv);
   const adminReconnectRequestIdRef = useRef(0);
   const messageFetchRequestIdRef = useRef(0);
-  const markSocketMessagesAsReadRef = useRef<((convId: number, tinNhanIds?: number[]) => void) | null>(null);
+  const markSocketMessagesAsReadRef = useRef<
+    ((convId: number, tinNhanIds?: number[]) => void) | null
+  >(null);
 
   useEffect(() => {
     selectedConvIdRef.current = selectedConvId;
@@ -257,7 +271,11 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
     adminSupportChatApi
       .getMessages(targetConvId, token, { pageSize: 50 })
       .then((msgs) => {
-        if (!active || selectedConvIdRef.current !== targetConvId || messageFetchRequestIdRef.current !== fetchReqId) {
+        if (
+          !active ||
+          selectedConvIdRef.current !== targetConvId ||
+          messageFetchRequestIdRef.current !== fetchReqId
+        ) {
           return;
         }
         setHasOlderMessages(msgs.length >= 50);
@@ -267,18 +285,29 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
 
         // Tự động đánh dấu đã đọc các tin nhắn của khách hàng khi mở cuộc trò chuyện (P1 Regression fix)
         const unreadCustomerMessages = msgs.filter(
-          (m) => m.loaiNguoiGui === 'KHACH_HANG' && m.trangThai !== 'DA_DOC' && m.tinNhanId > 0,
+          (m) =>
+            m.loaiNguoiGui === 'KHACH_HANG' &&
+            m.trangThai !== 'DA_DOC' &&
+            m.tinNhanId > 0,
         );
         const unreadIds = unreadCustomerMessages.map((m) => m.tinNhanId);
 
         if (
           unreadIds.length > 0 ||
-          (selectedConvRef.current?.soTinChuaDoc && selectedConvRef.current.soTinChuaDoc > 0)
+          (selectedConvRef.current?.soTinChuaDoc &&
+            selectedConvRef.current.soTinChuaDoc > 0)
         ) {
           adminSupportChatApi
-            .markMessagesAsRead(targetConvId, token, unreadIds.length > 0 ? unreadIds : undefined)
+            .markMessagesAsRead(
+              targetConvId,
+              token,
+              unreadIds.length > 0 ? unreadIds : undefined,
+            )
             .catch((err) => {
-              console.warn('[AdminChat] Failed to mark messages as read on open:', err);
+              console.warn(
+                '[AdminChat] Failed to mark messages as read on open:',
+                err,
+              );
             });
           markSocketMessagesAsReadRef.current?.(
             targetConvId,
@@ -293,7 +322,8 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                   ...conv,
                   soTinChuaDoc: 0,
                   tinNhanCuoi:
-                    conv.tinNhanCuoi && conv.tinNhanCuoi.loaiNguoiGui === 'KHACH_HANG'
+                    conv.tinNhanCuoi &&
+                    conv.tinNhanCuoi.loaiNguoiGui === 'KHACH_HANG'
                       ? { ...conv.tinNhanCuoi, trangThai: 'DA_DOC' }
                       : conv.tinNhanCuoi,
                 };
@@ -305,8 +335,13 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
           // Cập nhật tin nhắn trong khung chat thành DA_DOC
           setMessages((prevMsgs) =>
             prevMsgs.map((m) =>
-              m.loaiNguoiGui === 'KHACH_HANG' && (unreadIds.length === 0 || unreadIds.includes(m.tinNhanId))
-                ? { ...m, trangThai: 'DA_DOC', daDocLuc: new Date().toISOString() }
+              m.loaiNguoiGui === 'KHACH_HANG' &&
+              (unreadIds.length === 0 || unreadIds.includes(m.tinNhanId))
+                ? {
+                    ...m,
+                    trangThai: 'DA_DOC',
+                    daDocLuc: new Date().toISOString(),
+                  }
                 : m,
             ),
           );
@@ -315,7 +350,9 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
       .catch((err: unknown) => {
         if (active && selectedConvIdRef.current === targetConvId) {
           setErrorMessage(
-            err instanceof Error ? err.message : 'Không thể tải tin nhắn cuộc trò chuyện.',
+            err instanceof Error
+              ? err.message
+              : 'Không thể tải tin nhắn cuộc trò chuyện.',
           );
         }
       })
@@ -332,7 +369,8 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
 
   // Tải tin nhắn cũ hơn (Load older messages - F-NEW-04)
   const handleLoadOlderMessages = async () => {
-    if (!selectedConvId || !token || loadingOlderMessages || !hasOlderMessages) return;
+    if (!selectedConvId || !token || loadingOlderMessages || !hasOlderMessages)
+      return;
     const targetConvId = selectedConvId;
     const positiveIds = messages.map((m) => m.tinNhanId).filter((id) => id > 0);
     if (positiveIds.length === 0) return;
@@ -352,7 +390,9 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
       if (older.length > 0) {
         isPrependingOlderRef.current = true;
         setMessages((prev) => {
-          const currentIds = new Set(prev.map((m) => m.tinNhanId).filter((id) => id > 0));
+          const currentIds = new Set(
+            prev.map((m) => m.tinNhanId).filter((id) => id > 0),
+          );
           const newOlder = older
             .filter((m) => !currentIds.has(m.tinNhanId))
             .map((m) => ({ ...m, deliveryStatus: 'DA_GUI' as const }));
@@ -362,7 +402,9 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
     } catch (err: unknown) {
       if (selectedConvIdRef.current === targetConvId) {
         setErrorMessage(
-          err instanceof Error ? err.message : 'Không thể tải thêm tin nhắn cũ.',
+          err instanceof Error
+            ? err.message
+            : 'Không thể tải thêm tin nhắn cũ.',
         );
       }
     } finally {
@@ -380,12 +422,31 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
     const targetConvId = selectedConvId;
     const reqId = ++adminReconnectRequestIdRef.current;
     try {
-      const updatedConv = await adminSupportChatApi.getConversationById(targetConvId, token);
-      if (adminReconnectRequestIdRef.current !== reqId || selectedConvIdRef.current !== targetConvId) return;
-      setSelectedConv((prev) => (prev?.cuocTroChuyenId === targetConvId ? { ...prev, ...updatedConv } : prev));
+      const updatedConv = await adminSupportChatApi.getConversationById(
+        targetConvId,
+        token,
+      );
+      if (
+        adminReconnectRequestIdRef.current !== reqId ||
+        selectedConvIdRef.current !== targetConvId
+      )
+        return;
+      setSelectedConv((prev) =>
+        prev?.cuocTroChuyenId === targetConvId
+          ? { ...prev, ...updatedConv }
+          : prev,
+      );
 
-      const freshMsgs = await adminSupportChatApi.getMessages(targetConvId, token, { pageSize: 50 });
-      if (adminReconnectRequestIdRef.current !== reqId || selectedConvIdRef.current !== targetConvId) return;
+      const freshMsgs = await adminSupportChatApi.getMessages(
+        targetConvId,
+        token,
+        { pageSize: 50 },
+      );
+      if (
+        adminReconnectRequestIdRef.current !== reqId ||
+        selectedConvIdRef.current !== targetConvId
+      )
+        return;
 
       setMessages((prev) => {
         if (selectedConvIdRef.current !== targetConvId) return prev;
@@ -399,29 +460,51 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
   // Callback khi có tin nhắn mới từ WebSocket
   const handleNewMessage = useCallback(
     (newMsg: AdminSupportMessage) => {
-      const isCurrentlyOpen = selectedConvIdRef.current === newMsg.cuocTroChuyenId;
+      if (!conversationsRef.current.some((conversation) => conversation.cuocTroChuyenId === newMsg.cuocTroChuyenId)) {
+        setRefreshTrigger((value) => value + 1);
+      }
+      const isCurrentlyOpen =
+        selectedConvIdRef.current === newMsg.cuocTroChuyenId;
 
       // 1. Cập nhật tin nhắn trong khung chat hiện tại nếu trùng cuocTroChuyenId
       if (isCurrentlyOpen) {
         // Nếu Admin đang mở hội thoại và tin nhắn từ khách hàng, đánh dấu đã đọc ngay lập tức (P1)
         if (newMsg.loaiNguoiGui === 'KHACH_HANG' && token) {
           adminSupportChatApi
-            .markMessagesAsRead(newMsg.cuocTroChuyenId, token, [newMsg.tinNhanId])
+            .markMessagesAsRead(newMsg.cuocTroChuyenId, token, [
+              newMsg.tinNhanId,
+            ])
             .catch((err) => {
-              console.warn('[AdminChat] Failed to mark realtime message as read:', err);
+              console.warn(
+                '[AdminChat] Failed to mark realtime message as read:',
+                err,
+              );
             });
-          markSocketMessagesAsReadRef.current?.(newMsg.cuocTroChuyenId, [newMsg.tinNhanId]);
+          markSocketMessagesAsReadRef.current?.(newMsg.cuocTroChuyenId, [
+            newMsg.tinNhanId,
+          ]);
         }
 
         const msgWithStatus: AdminSupportMessage = {
           ...newMsg,
-          trangThai: newMsg.loaiNguoiGui === 'KHACH_HANG' ? 'DA_DOC' : newMsg.trangThai,
+          trangThai:
+            newMsg.loaiNguoiGui === 'KHACH_HANG' ? 'DA_DOC' : newMsg.trangThai,
           deliveryStatus: 'DA_GUI',
         };
 
         setMessages((prev) => {
-          if (prev.some((m) => m.tinNhanId === msgWithStatus.tinNhanId && m.tinNhanId > 0)) return prev;
-          if (msgWithStatus.clientMessageId && prev.some((m) => m.clientMessageId === msgWithStatus.clientMessageId)) {
+          if (
+            prev.some(
+              (m) => m.tinNhanId === msgWithStatus.tinNhanId && m.tinNhanId > 0,
+            )
+          )
+            return prev;
+          if (
+            msgWithStatus.clientMessageId &&
+            prev.some(
+              (m) => m.clientMessageId === msgWithStatus.clientMessageId,
+            )
+          ) {
             return prev.map((m) =>
               m.clientMessageId === msgWithStatus.clientMessageId
                 ? msgWithStatus
@@ -445,7 +528,10 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
               ...c,
               tinNhanCuoi: {
                 ...newMsg,
-                trangThai: isCurrentlyOpen && newMsg.loaiNguoiGui === 'KHACH_HANG' ? 'DA_DOC' : newMsg.trangThai,
+                trangThai:
+                  isCurrentlyOpen && newMsg.loaiNguoiGui === 'KHACH_HANG'
+                    ? 'DA_DOC'
+                    : newMsg.trangThai,
               },
               soTinChuaDoc: updatedUnread,
               updatedAt: newMsg.createdAt,
@@ -459,28 +545,42 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
   );
 
   // Callback khi có nhân viên tiếp nhận
-  const handleConversationClaimed = useCallback((claimedConv: AdminSupportConversation) => {
-    setConversations((prev) =>
-      prev.map((c) =>
-        c.cuocTroChuyenId === claimedConv.cuocTroChuyenId ? { ...c, ...claimedConv } : c,
-      ),
-    );
-    setSelectedConv((prev) =>
-      prev?.cuocTroChuyenId === claimedConv.cuocTroChuyenId ? { ...prev, ...claimedConv } : prev,
-    );
-  }, []);
+  const handleConversationClaimed = useCallback(
+    (claimedConv: AdminSupportConversation) => {
+      setConversations((prev) =>
+        prev.map((c) =>
+          c.cuocTroChuyenId === claimedConv.cuocTroChuyenId
+            ? { ...c, ...claimedConv }
+            : c,
+        ),
+      );
+      setSelectedConv((prev) =>
+        prev?.cuocTroChuyenId === claimedConv.cuocTroChuyenId
+          ? { ...prev, ...claimedConv }
+          : prev,
+      );
+    },
+    [],
+  );
 
   // Callback khi cuộc trò chuyện kết thúc
-  const handleConversationClosed = useCallback((closedConv: AdminSupportConversation) => {
-    setConversations((prev) =>
-      prev.map((c) =>
-        c.cuocTroChuyenId === closedConv.cuocTroChuyenId ? { ...c, trangThai: 'DA_DONG' } : c,
-      ),
-    );
-    setSelectedConv((prev) =>
-      prev?.cuocTroChuyenId === closedConv.cuocTroChuyenId ? { ...prev, trangThai: 'DA_DONG' } : prev,
-    );
-  }, []);
+  const handleConversationClosed = useCallback(
+    (closedConv: AdminSupportConversation) => {
+      setConversations((prev) =>
+        prev.map((c) =>
+          c.cuocTroChuyenId === closedConv.cuocTroChuyenId
+            ? { ...c, trangThai: 'DA_DONG' }
+            : c,
+        ),
+      );
+      setSelectedConv((prev) =>
+        prev?.cuocTroChuyenId === closedConv.cuocTroChuyenId
+          ? { ...prev, trangThai: 'DA_DONG' }
+          : prev,
+      );
+    },
+    [],
+  );
 
   // Callback khi nhận read receipt từ socket
   const handleMessagesReadReceipt = useCallback(
@@ -490,7 +590,11 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
       tinNhanIds?: number[];
       updatedCount: number;
     }) => {
-      if (selectedConvIdRef.current && payload.cuocTroChuyenId === selectedConvIdRef.current) {
+      if (payload.readByTaiKhoanId === session.accountId) return;
+      if (
+        selectedConvIdRef.current &&
+        payload.cuocTroChuyenId === selectedConvIdRef.current
+      ) {
         setMessages((prev) =>
           prev.map((m) => {
             if (m.loaiNguoiGui === 'NHAN_VIEN') {
@@ -507,7 +611,7 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
         );
       }
     },
-    [],
+    [session.accountId],
   );
 
   // Hook WebSocket kết nối namespace /chat
@@ -522,6 +626,7 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
   } = useAdminChatSocket({
     token,
     activeConversationId: selectedConv?.cuocTroChuyenId ?? null,
+    onNewConversation: () => setRefreshTrigger((value) => value + 1),
     onNewMessage: handleNewMessage,
     onConversationClaimed: handleConversationClaimed,
     onConversationClosed: handleConversationClosed,
@@ -542,7 +647,9 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
     try {
       let claimed = false;
       if (socketConnected) {
-        const socketRes = await claimSocketConversation(selectedConv.cuocTroChuyenId);
+        const socketRes = await claimSocketConversation(
+          selectedConv.cuocTroChuyenId,
+        );
         if (socketRes.success && socketRes.data) {
           claimed = true;
           handleConversationClaimed(socketRes.data);
@@ -557,7 +664,9 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
       }
     } catch (err: unknown) {
       setErrorMessage(
-        err instanceof Error ? err.message : 'Không thể tiếp nhận cuộc trò chuyện.',
+        err instanceof Error
+          ? err.message
+          : 'Không thể tiếp nhận cuộc trò chuyện.',
       );
     } finally {
       setActionLoading(false);
@@ -594,7 +703,9 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
       }
     } catch (err: unknown) {
       setErrorMessage(
-        err instanceof Error ? err.message : 'Không thể kết thúc cuộc trò chuyện.',
+        err instanceof Error
+          ? err.message
+          : 'Không thể kết thúc cuộc trò chuyện.',
       );
     } finally {
       setActionLoading(false);
@@ -667,7 +778,9 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
         ),
       );
       setErrorMessage(
-        err instanceof Error ? err.message : 'Gửi tin nhắn thất bại. Vui lòng bấm Thử lại.',
+        err instanceof Error
+          ? err.message
+          : 'Gửi tin nhắn thất bại. Vui lòng bấm Thử lại.',
       );
     } finally {
       // Luôn luôn giải phóng sending để input không bao giờ bị khóa vô hạn (F-03)
@@ -679,7 +792,8 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
   const handleRetryMessage = async (failedMsg: AdminSupportMessage) => {
     if (!selectedConv || !token || sending) return;
 
-    const clientMsgId = failedMsg.clientMessageId || `staff-retry-${failedMsg.tinNhanId}`;
+    const clientMsgId =
+      failedMsg.clientMessageId || `staff-retry-${failedMsg.tinNhanId}`;
     const content = failedMsg.noiDung;
 
     setSending(true);
@@ -762,7 +876,8 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
         <div className="p-3 border-b border-slate-200 bg-white space-y-2.5">
           <div className="flex items-center justify-between">
             <h2 className="font-bold text-sm text-slate-800 flex items-center gap-2">
-              <MessageSquare className="w-4 h-4 text-brand" /> Hộp thư hỗ trợ
+              <MessageSquare className="w-4 h-4 text-[var(--admin-blue)]" /> Hộp
+              thư hỗ trợ
             </h2>
             <div className="flex items-center gap-1.5">
               <button
@@ -774,11 +889,15 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                 title="Làm mới danh sách"
                 className="p-1 text-slate-400 hover:text-slate-600 rounded transition-colors"
               >
-                <RefreshCw className={`w-3.5 h-3.5 ${loadingConversations ? 'animate-spin' : ''}`} />
+                <RefreshCw
+                  className={`w-3.5 h-3.5 ${loadingConversations ? 'animate-spin' : ''}`}
+                />
               </button>
               <span
                 className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${
-                  socketConnected ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-500'
+                  socketConnected
+                    ? 'bg-emerald-50 text-emerald-600'
+                    : 'bg-slate-100 text-slate-500'
                 }`}
               >
                 {socketConnected ? '● Trực tuyến' : '○ Ngoại tuyến'}
@@ -794,7 +913,7 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
               placeholder="Tìm khách hàng, số điện thoại..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full text-xs pl-8 pr-3 py-1.5 border border-slate-200 rounded-lg bg-slate-50 focus:bg-white focus:outline-none focus:border-brand"
+              className="w-full text-xs pl-8 pr-3 py-1.5 border border-slate-200 rounded-lg bg-slate-50 focus:bg-white focus:outline-none focus:border-[var(--admin-blue)]"
             />
           </div>
 
@@ -813,7 +932,7 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                 onClick={() => setActiveTab(tab.key)}
                 className={`py-1 rounded-md text-center transition-all ${
                   activeTab === tab.key
-                    ? 'bg-white text-brand shadow-sm font-semibold'
+                    ? 'bg-white text-[var(--admin-blue)] shadow-sm font-semibold'
                     : 'text-slate-500 hover:text-slate-800'
                 }`}
               >
@@ -827,7 +946,7 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
         <div className="flex-1 overflow-y-auto divide-y divide-slate-100">
           {loadingConversations ? (
             <div className="flex flex-col items-center justify-center py-12 text-slate-400 gap-2 text-xs">
-              <Loader2 className="w-4 h-4 animate-spin text-brand" />
+              <Loader2 className="w-4 h-4 animate-spin text-[var(--admin-blue)]" />
               <span>Đang tải danh sách...</span>
             </div>
           ) : conversations.length === 0 ? (
@@ -837,7 +956,8 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
           ) : (
             <>
               {conversations.map((c) => {
-                const isSelected = selectedConv?.cuocTroChuyenId === c.cuocTroChuyenId;
+                const isSelected =
+                  selectedConv?.cuocTroChuyenId === c.cuocTroChuyenId;
                 const isWaiting = c.trangThai === 'CHO_TIEP_NHAN';
 
                 return (
@@ -849,7 +969,7 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                     }}
                     className={`w-full text-left p-3 flex items-start gap-3 transition-colors ${
                       isSelected
-                        ? 'bg-brand/5 border-l-4 border-l-brand'
+                        ? 'bg-[var(--admin-blue)]/5 border-l-4 border-l-[var(--admin-blue)]'
                         : 'hover:bg-slate-100/60'
                     }`}
                   >
@@ -868,14 +988,15 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                           {c.khachHang.taiKhoan.hoTen}
                         </span>
                         <div className="flex items-center gap-1.5 shrink-0">
-                          {c.soTinChuaDoc !== undefined && c.soTinChuaDoc > 0 && (
-                            <span
-                              data-testid="unread-badge"
-                              className="bg-brand text-white text-[10px] font-bold px-1.5 py-0.2 rounded-full"
-                            >
-                              {c.soTinChuaDoc}
-                            </span>
-                          )}
+                          {c.soTinChuaDoc !== undefined &&
+                            c.soTinChuaDoc > 0 && (
+                              <span
+                                data-testid="unread-badge"
+                                className="bg-[var(--admin-blue)] text-white text-[10px] font-bold px-1.5 py-0.2 rounded-full"
+                              >
+                                {c.soTinChuaDoc}
+                              </span>
+                            )}
                           <span className="text-[10px] text-slate-400">
                             {new Date(c.updatedAt).toLocaleTimeString('vi-VN', {
                               hour: '2-digit',
@@ -886,7 +1007,9 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                       </div>
 
                       <div className="text-[11px] text-slate-500 truncate mb-1">
-                        {c.tinNhanCuoi ? c.tinNhanCuoi.noiDung : 'Cuộc trò chuyện mới'}
+                        {c.tinNhanCuoi
+                          ? c.tinNhanCuoi.noiDung
+                          : 'Cuộc trò chuyện mới'}
                       </div>
 
                       <div className="flex items-center gap-1.5">
@@ -921,14 +1044,18 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                     type="button"
                     onClick={handleLoadMore}
                     disabled={loadingMore}
-                    className="w-full py-2 px-3 text-xs font-semibold text-brand hover:bg-brand/5 rounded-lg border border-brand/20 transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50"
+                    className="w-full py-2 px-3 text-xs font-semibold text-[var(--admin-blue)] hover:bg-[var(--admin-blue)]/5 rounded-lg border border-[var(--admin-blue)]/20 transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50"
                   >
                     {loadingMore ? (
                       <>
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" /> Đang tải thêm...
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" /> Đang
+                        tải thêm...
                       </>
                     ) : (
-                      <>Tải thêm cuộc trò chuyện ({conversations.length}/{totalItems})</>
+                      <>
+                        Tải thêm cuộc trò chuyện ({conversations.length}/
+                        {totalItems})
+                      </>
                     )}
                   </button>
                 </div>
@@ -952,9 +1079,12 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
             <div className="w-16 h-16 bg-white rounded-2xl shadow-sm border border-slate-200 flex items-center justify-center text-slate-400 mb-3">
               <MessageSquare className="w-8 h-8" />
             </div>
-            <h3 className="font-bold text-sm text-slate-700">Chọn cuộc trò chuyện</h3>
+            <h3 className="font-bold text-sm text-slate-700">
+              Chọn cuộc trò chuyện
+            </h3>
             <p className="text-xs text-slate-400 mt-1 max-w-sm">
-              Chọn một khách hàng từ danh sách bên trái để xem nội dung và trả lời hỗ trợ.
+              Chọn một khách hàng từ danh sách bên trái để xem nội dung và trả
+              lời hỗ trợ.
             </p>
           </div>
         ) : (
@@ -966,14 +1096,16 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                 <button
                   type="button"
                   onClick={() => setSelectedConv(null)}
-                  className="md:hidden p-1.5 text-slate-600 hover:text-brand hover:bg-slate-100 rounded-lg shrink-0"
+                  className="md:hidden p-1.5 text-slate-600 hover:text-[var(--admin-blue)] hover:bg-slate-100 rounded-lg shrink-0"
                   title="Quay lại danh sách"
                 >
                   <ArrowLeft className="w-4 h-4" />
                 </button>
 
                 <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-slate-700 font-bold text-xs shrink-0">
-                  {selectedConv.khachHang.taiKhoan.hoTen.charAt(0).toUpperCase()}
+                  {selectedConv.khachHang.taiKhoan.hoTen
+                    .charAt(0)
+                    .toUpperCase()}
                 </div>
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
@@ -991,7 +1123,8 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                     <span className="truncate">
                       Người xử lý:{' '}
                       <strong className="text-slate-600">
-                        {selectedConv.nhanVien?.taiKhoan.hoTen || 'Chưa tiếp nhận'}
+                        {selectedConv.nhanVien?.taiKhoan.hoTen ||
+                          'Chưa tiếp nhận'}
                       </strong>
                     </span>
                   </div>
@@ -1004,7 +1137,7 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                   <button
                     onClick={handleClaim}
                     disabled={actionLoading}
-                    className="px-3 py-1.5 bg-brand text-white rounded-lg text-xs font-semibold hover:bg-brand-hover transition-colors flex items-center gap-1.5 shadow-sm disabled:opacity-50"
+                    className="px-3 py-1.5 bg-[var(--admin-blue)] text-white rounded-lg text-xs font-semibold hover:bg-[var(--admin-blue-hover)] transition-colors flex items-center gap-1.5 shadow-sm disabled:opacity-50"
                   >
                     {actionLoading ? (
                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -1040,7 +1173,8 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
             <div className="flex-1 overflow-y-auto p-4 bg-slate-50/50 space-y-3">
               {loadingMessages ? (
                 <div className="flex items-center justify-center py-12 text-slate-400 gap-2 text-xs">
-                  <Loader2 className="w-4 h-4 animate-spin" /> Đang tải lịch sử tin nhắn...
+                  <Loader2 className="w-4 h-4 animate-spin" /> Đang tải lịch sử
+                  tin nhắn...
                 </div>
               ) : (
                 <>
@@ -1057,7 +1191,11 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                         ) : (
                           <Clock className="w-3 h-3 text-slate-400" />
                         )}
-                        <span>{loadingOlderMessages ? 'Đang tải tin cũ...' : 'Tải tin nhắn cũ hơn'}</span>
+                        <span>
+                          {loadingOlderMessages
+                            ? 'Đang tải tin cũ...'
+                            : 'Tải tin nhắn cũ hơn'}
+                        </span>
                       </button>
                     </div>
                   )}
@@ -1084,7 +1222,9 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                       >
                         <div
                           className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-xs font-semibold ${
-                            isStaff ? 'bg-brand text-white' : 'bg-slate-200 text-slate-700'
+                            isStaff
+                              ? 'bg-[var(--admin-blue)] text-white'
+                              : 'bg-slate-200 text-slate-700'
                           }`}
                         >
                           {isStaff ? 'NV' : <User className="w-4 h-4" />}
@@ -1097,15 +1237,22 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                         >
                           <div className="flex items-center gap-1">
                             <span className="text-[10px] text-slate-400">
-                              {isStaff ? msg.taiKhoanGui?.hoTen || 'Nhân viên' : 'Khách hàng'} •{' '}
-                              {new Date(msg.createdAt).toLocaleTimeString('vi-VN', {
-                                hour: '2-digit',
-                                minute: '2-digit',
-                              })}
+                              {isStaff
+                                ? msg.taiKhoanGui?.hoTen || 'Nhân viên'
+                                : 'Khách hàng'}{' '}
+                              •{' '}
+                              {new Date(msg.createdAt).toLocaleTimeString(
+                                'vi-VN',
+                                {
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                },
+                              )}
                             </span>
                             {isPendingMsg && (
                               <span className="text-[9px] text-slate-400 flex items-center gap-0.5">
-                                <Clock className="w-2.5 h-2.5 animate-spin" /> Đang gửi
+                                <Clock className="w-2.5 h-2.5 animate-spin" />{' '}
+                                Đang gửi
                               </span>
                             )}
                           </div>
@@ -1115,14 +1262,19 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                                 ? isFailedMsg
                                   ? 'bg-rose-50 border border-rose-300 text-rose-800 rounded-tr-none'
                                   : isPendingMsg
-                                    ? 'bg-brand/75 text-white rounded-tr-none'
-                                    : 'bg-brand text-white rounded-tr-none'
+                                    ? 'bg-[var(--admin-blue)]/75 text-white rounded-tr-none'
+                                    : 'bg-[var(--admin-blue)] text-white rounded-tr-none'
                                 : 'bg-white border border-slate-200 text-slate-800 rounded-tl-none'
                             }`}
                           >
                             {msg.noiDung}
                           </div>
-                          {isFailedMsg && (
+                            {isStaff && !isPendingMsg && !isFailedMsg && (
+                              <span className="text-xs text-[var(--admin-text-muted)]">
+                                {msg.trangThai === 'DA_DOC' ? 'Đã đọc' : 'Đã gửi'}
+                              </span>
+                            )}
+                            {isFailedMsg && (
                             <div className="flex items-center gap-1 mt-0.5 text-[10px] text-rose-600">
                               <AlertCircle className="w-3 h-3" />
                               <span>Gửi thất bại</span>
@@ -1161,7 +1313,8 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                 </div>
               ) : isPending ? (
                 <div className="p-2.5 bg-amber-50 text-amber-700 border border-amber-200 text-xs rounded-xl text-center flex items-center justify-center gap-2 font-medium">
-                  <AlertCircle className="w-4 h-4" /> Vui lòng bấm &quot;Tiếp nhận hỗ trợ&quot; ở trên để bắt đầu phản hồi cho khách hàng.
+                  <AlertCircle className="w-4 h-4" /> Vui lòng bấm &quot;Tiếp
+                  nhận hỗ trợ&quot; ở trên để bắt đầu phản hồi cho khách hàng.
                 </div>
               ) : (
                 <div className="flex gap-2">
@@ -1172,12 +1325,12 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                     onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
                     placeholder="Nhập nội dung phản hồi khách hàng..."
                     disabled={sending}
-                    className="flex-1 h-11 px-4 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:border-brand text-xs"
+                    className="flex-1 h-11 px-4 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:border-[var(--admin-blue)] text-xs"
                   />
                   <button
                     onClick={handleSendMessage}
                     disabled={!inputValue.trim() || sending}
-                    className="px-5 h-11 rounded-xl bg-brand text-white text-xs font-semibold flex items-center justify-center gap-1.5 hover:bg-brand-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                    className="px-5 h-11 rounded-xl bg-[var(--admin-blue)] text-white text-xs font-semibold flex items-center justify-center gap-1.5 hover:bg-[var(--admin-blue-hover)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
                   >
                     {sending ? (
                       <Loader2 className="w-4 h-4 animate-spin" />

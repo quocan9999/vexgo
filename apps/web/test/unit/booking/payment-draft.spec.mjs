@@ -192,6 +192,43 @@ test('round-trip payment draft contains 2 distinct legs with independent routes 
   assert.equal(draft.totalFare, 620000);
 });
 
+test('shipment payment drafts preserve the verified order references without requiring booking legs', () => {
+  const draft = createPaymentDraft({
+    kind: 'shipment',
+    shipmentId: 601,
+    paymentId: 801,
+    waybillCode: 'VG-VD-TEST-601',
+    orderCode: 'VG-DH-TEST-701',
+    totalFare: 50000,
+    sender: {
+      fullName: 'Nguyễn An',
+      phoneNumber: '0900000001',
+      email: 'an@example.test',
+    },
+    receiver: {
+      fullName: 'Trần Bình',
+      phoneNumber: '0900000002',
+    },
+    route: {
+      origin: 'Đà Lạt',
+      destination: 'TP.HCM',
+      departureTime: '2026-10-20T08:00:00.000Z',
+    },
+    pickupPoint: { name: 'Điểm gửi', address: 'Địa chỉ gửi' },
+    dropoffPoint: { name: 'Điểm nhận', address: 'Địa chỉ nhận' },
+  });
+
+  assert.equal(draft.kind, 'shipment');
+  assert.equal(getPaymentDraft(draft.id)?.paymentId, 801);
+  assert.equal(getPaymentDraft(draft.id)?.waybillCode, 'VG-VD-TEST-601');
+
+  sessionStorage.setItem(
+    `${PAYMENT_DRAFT_STORAGE_PREFIX}invalid-shipment-payment`,
+    JSON.stringify({ ...draft, paymentId: 0 }),
+  );
+  assert.equal(getPaymentDraft('invalid-shipment-payment'), null);
+});
+
 test('payment URL constructed from draft contains only draftId without passenger PII', () => {
   const draft = createPaymentDraft({
     tripType: 'one-way',

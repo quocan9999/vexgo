@@ -3,6 +3,10 @@ export type TicketItem = {
   ticketCode: string;
   bookingId: number;
   bookingCode: string | null;
+  promotionCode?: string | null;
+  originalTicketSubtotal?: number | null;
+  discountAmount?: number | null;
+  ticketSubtotal?: number | null;
   route: string | null;
   origin: string | null;
   destination: string | null;
@@ -29,6 +33,7 @@ export type TicketItem = {
 export type TicketCancellationQuote = {
   eligible: boolean;
   reason?:
+    | 'ACTIVE_SHIPMENT'
     | 'ALREADY_CANCELLED'
     | 'ALREADY_DEPARTED'
     | 'LESS_THAN_12_HOURS'

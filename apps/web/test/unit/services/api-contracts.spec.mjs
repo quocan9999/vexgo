@@ -7,6 +7,7 @@ import { tripsApi } from '../../../src/features/trips/services/trips.api.ts';
 import { bookingsApi } from '../../../src/features/account/services/bookings.api.ts';
 import { ticketsApi } from '../../../src/features/account/services/tickets.api.ts';
 import { contactApi } from '../../../src/features/content/services/contact.api.ts';
+import { shipmentsApi } from '../../../src/features/shipments/services/shipments.api.ts';
 
 const originalFetch = globalThis.fetch;
 
@@ -109,6 +110,29 @@ test('trip search sends the documented query names and keeps pagination metadata
   });
 });
 
+test('shipment route points use the selected trip and preserve the API envelope', async () => {
+  let requestedUrl = '';
+  globalThis.fetch = async (url) => {
+    requestedUrl = String(url);
+    return jsonResponse({
+      data: {
+        tripId: 42,
+        senderPoints: [{ id: 901, name: 'Điểm gửi', address: 'Địa chỉ gửi' }],
+        receiverPoints: [{ id: 902, name: 'Điểm nhận', address: 'Địa chỉ nhận' }],
+      },
+    });
+  };
+
+  const result = await shipmentsApi.getRoutePoints(42);
+
+  assert.equal(
+    requestedUrl,
+    'http://localhost:4000/api/v1/shipments/trips/42/route-points',
+  );
+  assert.equal(result.data.senderPoints[0].id, 901);
+  assert.equal(result.data.receiverPoints[0].id, 902);
+});
+
 test('route options are loaded through the shared API service', async () => {
   let requestedUrl = '';
   globalThis.fetch = async (url) => {
@@ -169,6 +193,28 @@ test('authApi.logout sends refreshToken in request body and access token in auth
     refreshToken: 'current-refresh-token',
   });
   assert.equal(calls[0].init.headers.Authorization, 'Bearer current-access-token');
+});
+
+test('authApi.changePassword sends old and new password with bearer token', async () => {
+  const calls = [];
+  globalThis.fetch = async (url, init) => {
+    calls.push({ url: String(url), init });
+    return jsonResponse({ message: 'Đổi mật khẩu thành công.' });
+  };
+
+  const response = await authApi.changePassword('access-token-123', {
+    oldPassword: 'OldPassword123',
+    newPassword: 'NewPassword456',
+  });
+
+  assert.equal(calls[0].url, 'http://localhost:4000/api/v1/auth/change-password');
+  assert.equal(calls[0].init.method, 'POST');
+  assert.equal(calls[0].init.headers.Authorization, 'Bearer access-token-123');
+  assert.deepEqual(JSON.parse(calls[0].init.body), {
+    oldPassword: 'OldPassword123',
+    newPassword: 'NewPassword456',
+  });
+  assert.equal(response.message, 'Đổi mật khẩu thành công.');
 });
 
 test('bookingsApi.getBookingDetail returns response with data envelope', async () => {

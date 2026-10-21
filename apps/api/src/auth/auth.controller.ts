@@ -20,8 +20,10 @@ import { RequestRegisterOtpDto } from './dto/request-register-otp.dto.js';
 import { VerifyRegisterOtpDto } from './dto/verify-register-otp.dto.js';
 import { OtpService } from './otp/otp.service.js';
 import { RefreshTokenDto } from './dto/refresh-token.dto.js';
+import { ChangePasswordDto } from './dto/change-password.dto.js';
 import { Public } from './decorators/public.decorator.js';
 import { AllowRoleScopeConflict } from './decorators/allow-role-scope-conflict.decorator.js';
+import { CurrentPrincipal } from './decorators/current-principal.decorator.js';
 import type { AuthPrincipal } from './tokens/auth-principal.js';
 import {
   assertTrustedCookieOrigin,
@@ -205,5 +207,18 @@ export class AuthController {
   async currentSession(@Req() request: AuthenticatedRequest) {
     if (!request.user) throw invalidAccessToken();
     return this.authService.getCurrentSession(request.user.taiKhoanId);
+  }
+
+  @Post('change-password')
+  @HttpCode(200)
+  async changePassword(
+    @CurrentPrincipal() principal: AuthPrincipal,
+    @Body() dto: ChangePasswordDto,
+  ) {
+    return this.authService.changePassword(
+      principal.taiKhoanId,
+      dto.oldPassword,
+      dto.newPassword,
+    );
   }
 }
