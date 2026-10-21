@@ -5,7 +5,7 @@ import {
   ForbiddenException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ShipmentsService } from '../../../src/shipments/shipments.service.js';
 import type { PrismaService } from '../../../src/prisma/prisma.service.js';
 import type { ConfigService } from '@nestjs/config';
@@ -17,6 +17,10 @@ describe('ShipmentsService', () => {
   let configMock: any;
   let cargoCapacityServiceMock: any;
   let shipmentPersistenceServiceMock: any;
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
 
   beforeEach(() => {
     configMock = {
@@ -203,6 +207,9 @@ describe('ShipmentsService', () => {
     });
 
     it('successfully creates shipment with correct pricing calculation in transaction', async () => {
+      // Keep this pricing scenario before its fixed departure, regardless of run date.
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2026-10-19T00:00:00.000Z'));
       const trip = {
         chuyenXeId: 1,
         maChuyenXe: 'FUTA-CX-20102026-01',

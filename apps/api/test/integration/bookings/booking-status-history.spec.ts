@@ -1,4 +1,5 @@
 import { createHmac, randomUUID } from 'node:crypto';
+import type { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import type { ExecutionContext, INestApplication } from '@nestjs/common';
 import request from 'supertest';
@@ -17,10 +18,49 @@ import { ShipmentsService } from '../../../src/shipments/shipments.service.js';
 import { PaymentsService } from '../../../src/payments/payments.service.js';
 import { RefundProcessorService } from '../../../src/payments/refund-processor.service.js';
 import type { MomoWebhookDto } from '../../../src/payments/dto/webhook.dto.js';
+import {
+  assertPrismaUsesVerifiedHistoryDatabase,
+  BOOKING_HISTORY_TEST_DATABASE_ENV,
+  type HistoryTestDatabaseSession,
+  type VerifiedHistoryTestDatabase,
+  withVerifiedBookingHistoryTestDatabase,
+} from '../../support/booking-history-test-database.js';
 
 const UUID_V1_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-1[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+function createHistoryTestPrismaService(databaseUrl: string | undefined): PrismaService {
+  if (!databaseUrl) {
+    throw new Error(`${BOOKING_HISTORY_TEST_DATABASE_ENV} is required for this suite.`);
+  }
+
+  const configService = {
+    getOrThrow: (key: string) => {
+      if (key !== 'DATABASE_URL') {
+        throw new Error(`Unexpected PrismaService configuration key: ${key}`);
+      }
+      return databaseUrl;
+    },
+  } as unknown as ConfigService;
+
+  return new PrismaService(configService);
+}
+
+async function readPrismaHistoryTestSession(
+  client: PrismaService,
+): Promise<HistoryTestDatabaseSession> {
+  const [session] = await client.$queryRaw<HistoryTestDatabaseSession[]>`
+    SELECT DATABASE() AS schemaName,
+           @@hostname AS serverHost,
+           @@port AS serverPort,
+           @@server_uuid AS serverUuid,
+           CURRENT_USER() AS currentUser
+  `;
+  if (!session) {
+    throw new Error('PrismaService did not return its booking history test session.');
+  }
+  return session;
+}
 function buildMomoPayload(paymentId: number, options: Partial<MomoWebhookDto> = {}) {
   const secret = 'vexgo_momo_demo_secret';
   const base: MomoWebhookDto = {
@@ -48,6 +88,7 @@ function buildMomoPayload(paymentId: number, options: Partial<MomoWebhookDto> = 
 describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)', () => {
   const sepaySecret = 'booking-sepay-integration-secret';
   const sepayAccountNumber = '0012345678';
+  const originalPaymentDemoMode = process.env.PAYMENT_DEMO_MODE;
   const originalSepaySecret = process.env.SEPAY_WEBHOOK_SECRET;
   const originalSepayAccountNumber = process.env.SEPAY_ACCOUNT_NUMBER;
   let app: INestApplication;
@@ -73,6 +114,7 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
   let failAfterShipmentPersistence = false;
 
   let customerId: number;
+  let customerAccountId: number;
   let customerPrincipal: AuthPrincipal;
   let customerPhone: string;
 
@@ -226,10 +268,66 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
     },
   };
 
+  const bookingMutationSnapshot = async () => {
+    const [
+      orders,
+      bookings,
+      tickets,
+      payments,
+      bookingHistories,
+      ticketHistories,
+      promotionUsages,
+      seatHolds,
+      seats,
+    ] = await Promise.all([
+      prisma.donGiaoDich.count({ where: { nhaXeId: busCompanyId } }),
+      prisma.phieuDatVe.count({
+        where: { donGiaoDich: { nhaXeId: busCompanyId } },
+      }),
+      prisma.ve.count({
+        where: { phieuDatVe: { donGiaoDich: { nhaXeId: busCompanyId } } },
+      }),
+      prisma.thanhToan.count({
+        where: { donGiaoDich: { nhaXeId: busCompanyId } },
+      }),
+      prisma.lichSuTrangThaiPhieuDatVe.count({
+        where: { phieuDatVe: { donGiaoDich: { nhaXeId: busCompanyId } } },
+      }),
+      prisma.lichSuTrangThaiVe.count({
+        where: {
+          ve: { phieuDatVe: { donGiaoDich: { nhaXeId: busCompanyId } } },
+        },
+      }),
+      prisma.suDungKhuyenMai.count({
+        where: { khuyenMai: { nhaXeId: busCompanyId } },
+      }),
+      prisma.giuCho.count({ where: { chuyenXeId: tripId } }),
+      prisma.gheChuyenXe.findMany({
+        where: { chuyenXeId: tripId },
+        orderBy: { gheChuyenXeId: 'asc' },
+        select: { gheChuyenXeId: true, trangThai: true, giuChoId: true },
+      }),
+    ]);
+
+    return {
+      orders,
+      bookings,
+      tickets,
+      payments,
+      bookingHistories,
+      ticketHistories,
+      promotionUsages,
+      seatHolds,
+      seats,
+    };
+  };
+
   beforeAll(async () => {
-    process.env.PAYMENT_DEMO_MODE = 'true';
-    process.env.SEPAY_WEBHOOK_SECRET = sepaySecret;
-    process.env.SEPAY_ACCOUNT_NUMBER = sepayAccountNumber;
+    const historyDatabaseEnvironment = { ...process.env };
+    const historyDatabaseUrl =
+      historyDatabaseEnvironment[BOOKING_HISTORY_TEST_DATABASE_ENV];
+    let firstDatabaseVerification!: VerifiedHistoryTestDatabase;
+    let secondDatabaseVerification!: VerifiedHistoryTestDatabase;
 
     const accessTokenGuard = {
       canActivate(context: ExecutionContext) {
@@ -241,12 +339,24 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
       },
     };
 
-    const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
-      .overrideProvider(AccessTokenGuard)
-      .useValue(accessTokenGuard)
-      .overrideProvider(ShipmentPersistenceService)
-      .useValue(shipmentPersistenceProxy)
-      .compile();
+    const moduleRef = await withVerifiedBookingHistoryTestDatabase(
+      historyDatabaseEnvironment,
+      async (verifiedDatabase) => {
+        firstDatabaseVerification = verifiedDatabase;
+        process.env.PAYMENT_DEMO_MODE = 'true';
+        process.env.SEPAY_WEBHOOK_SECRET = sepaySecret;
+        process.env.SEPAY_ACCOUNT_NUMBER = sepayAccountNumber;
+
+        return Test.createTestingModule({ imports: [AppModule] })
+          .overrideProvider(PrismaService)
+          .useValue(createHistoryTestPrismaService(historyDatabaseUrl))
+          .overrideProvider(AccessTokenGuard)
+          .useValue(accessTokenGuard)
+          .overrideProvider(ShipmentPersistenceService)
+          .useValue(shipmentPersistenceProxy)
+          .compile();
+      },
+    );
 
     app = moduleRef.createNestApplication({ rawBody: true });
     // Give each regression fixture a separate simulated client; keep the real
@@ -255,303 +365,392 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
     configureApi(app);
     await app.init();
 
-    const competingModuleRef = await Test.createTestingModule({ imports: [AppModule] })
-      .overrideProvider(AccessTokenGuard)
-      .useValue(accessTokenGuard)
-      .overrideProvider(ShipmentPersistenceService)
-      .useValue(shipmentPersistenceProxy)
-      .compile();
+    const competingModuleRef = await withVerifiedBookingHistoryTestDatabase(
+      historyDatabaseEnvironment,
+      async (verifiedDatabase) => {
+        secondDatabaseVerification = verifiedDatabase;
+        return Test.createTestingModule({ imports: [AppModule] })
+          .overrideProvider(PrismaService)
+          .useValue(createHistoryTestPrismaService(historyDatabaseUrl))
+          .overrideProvider(AccessTokenGuard)
+          .useValue(accessTokenGuard)
+          .overrideProvider(ShipmentPersistenceService)
+          .useValue(shipmentPersistenceProxy)
+          .compile();
+      },
+    );
     competingApp = competingModuleRef.createNestApplication({ rawBody: true });
     configureApi(competingApp);
     await competingApp.init();
 
     prisma = app.get(PrismaService);
+    assertPrismaUsesVerifiedHistoryDatabase(
+      firstDatabaseVerification,
+      await readPrismaHistoryTestSession(prisma),
+    );
+    assertPrismaUsesVerifiedHistoryDatabase(
+      secondDatabaseVerification,
+      await readPrismaHistoryTestSession(competingApp.get(PrismaService)),
+    );
 
     const suffix = randomUUID().replaceAll('-', '').slice(0, 8).toUpperCase();
+    await prisma.$transaction(async (fixtureTx) => {
 
-    // 1. Create company, route, vehicle type, vehicle with 3 seats
-    const company = await prisma.nhaXe.create({
-      data: {
-        maNhaXe: `NX-BK-${suffix}`,
-        tenNhaXe: `Booking Test Co ${suffix}`,
-        trangThai: 'HOAT_DONG',
-      },
-      select: { nhaXeId: true },
-    });
-    busCompanyId = company.nhaXeId;
-
-    const route = await prisma.tuyenXe.create({
-      data: {
-        maTuyenXe: `TX-BK-${suffix}`,
-        diemDi: 'Sài Gòn',
-        diemDen: 'Đà Lạt',
-        trangThai: 'HOAT_DONG',
-        nhaXeId: busCompanyId,
-      },
-      select: { tuyenXeId: true },
-    });
-    routeId = route.tuyenXeId;
-
-    const [senderPoint, receiverPoint] = await Promise.all([
-      prisma.diemGiaoNhanHang.create({
+      // 1. Create company, route, vehicle type, vehicle with 3 seats
+      const company = await fixtureTx.nhaXe.create({
         data: {
-          maDiem: `DG-GUI-${suffix}`,
-          tenDiem: `Điểm gửi ${suffix}`,
-          diaChi: '1 Đường thử nghiệm',
-          tinhThanh: 'TP. Hồ Chí Minh',
+          maNhaXe: `NX-BK-${suffix}`,
+          tenNhaXe: `Booking Test Co ${suffix}`,
+          trangThai: 'HOAT_DONG',
+        },
+        select: { nhaXeId: true },
+      });
+      busCompanyId = company.nhaXeId;
+
+      const route = await fixtureTx.tuyenXe.create({
+        data: {
+          maTuyenXe: `TX-BK-${suffix}`,
+          diemDi: 'Sài Gòn',
+          diemDen: 'Đà Lạt',
           trangThai: 'HOAT_DONG',
           nhaXeId: busCompanyId,
-          tuyenXeDiemGiaoNhaps: {
-            create: { tuyenXeId: routeId, vaiTro: 'GUI_HANG' },
-          },
         },
-        select: { diemGiaoNhanHangId: true },
-      }),
-      prisma.diemGiaoNhanHang.create({
+        select: { tuyenXeId: true },
+      });
+      routeId = route.tuyenXeId;
+
+      const [senderPoint, receiverPoint] = await Promise.all([
+        fixtureTx.diemGiaoNhanHang.create({
+          data: {
+            maDiem: `DG-GUI-${suffix}`,
+            tenDiem: `Điểm gửi ${suffix}`,
+            diaChi: '1 Đường thử nghiệm',
+            tinhThanh: 'TP. Hồ Chí Minh',
+            trangThai: 'HOAT_DONG',
+            nhaXeId: busCompanyId,
+            tuyenXeDiemGiaoNhaps: {
+              create: { tuyenXeId: routeId, vaiTro: 'GUI_HANG' },
+            },
+          },
+          select: { diemGiaoNhanHangId: true },
+        }),
+        fixtureTx.diemGiaoNhanHang.create({
+          data: {
+            maDiem: `DG-NHAN-${suffix}`,
+            tenDiem: `Điểm nhận ${suffix}`,
+            diaChi: '2 Đường thử nghiệm',
+            tinhThanh: 'Lâm Đồng',
+            trangThai: 'HOAT_DONG',
+            nhaXeId: busCompanyId,
+            tuyenXeDiemGiaoNhaps: {
+              create: { tuyenXeId: routeId, vaiTro: 'NHAN_HANG' },
+            },
+          },
+          select: { diemGiaoNhanHangId: true },
+        }),
+      ]);
+      senderPointId = senderPoint.diemGiaoNhanHangId;
+      receiverPointId = receiverPoint.diemGiaoNhanHangId;
+      const cargoType = await fixtureTx.loaiHangHoa.create({
         data: {
-          maDiem: `DG-NHAN-${suffix}`,
-          tenDiem: `Điểm nhận ${suffix}`,
-          diaChi: '2 Đường thử nghiệm',
-          tinhThanh: 'Lâm Đồng',
+          tenLoai: `Hàng nhẹ ${suffix}`,
+          trangThai: 'HOAT_DONG',
+          nhomSucChua: 'HANG_NHE',
+        },
+        select: { loaiHangHoaId: true },
+      });
+      cargoTypeId = cargoType.loaiHangHoaId;
+      const cargoRate = await fixtureTx.bangCuocGuiHang.create({
+        data: {
+          khoiLuongTu: 0,
+          khoiLuongDen: 10,
+          mucCuoc: 60000,
+          tuNgay: new Date('2020-01-01T00:00:00.000Z'),
+          trangThai: 'HOAT_DONG',
+          diemGuiId: senderPointId,
+          diemNhanId: receiverPointId,
+          loaiHangHoaId: cargoTypeId,
+        },
+        select: { bangCuocGuiHangId: true },
+      });
+      cargoRateId = cargoRate.bangCuocGuiHangId;
+
+      const bulkyCargoType = await fixtureTx.loaiHangHoa.create({
+        data: {
+          tenLoai: `Hàng cồng kềnh ${suffix}`,
+          trangThai: 'HOAT_DONG',
+          nhomSucChua: 'HANG_CONG_KENH',
+        },
+        select: { loaiHangHoaId: true },
+      });
+      bulkyCargoTypeId = bulkyCargoType.loaiHangHoaId;
+      const bulkyCargoRate = await fixtureTx.bangCuocGuiHang.create({
+        data: {
+          khoiLuongTu: 0,
+          khoiLuongDen: 10,
+          mucCuoc: 60000,
+          tuNgay: new Date('2020-01-01T00:00:00.000Z'),
+          trangThai: 'HOAT_DONG',
+          diemGuiId: senderPointId,
+          diemNhanId: receiverPointId,
+          loaiHangHoaId: bulkyCargoTypeId,
+        },
+        select: { bangCuocGuiHangId: true },
+      });
+      bulkyCargoRateId = bulkyCargoRate.bangCuocGuiHangId;
+      const bulkyHeavyCargoRate = await fixtureTx.bangCuocGuiHang.create({
+        data: {
+          khoiLuongTu: 45,
+          khoiLuongDen: 50,
+          mucCuoc: 90_000,
+          tuNgay: new Date('2020-01-01T00:00:00.000Z'),
+          trangThai: 'HOAT_DONG',
+          diemGuiId: senderPointId,
+          diemNhanId: receiverPointId,
+          loaiHangHoaId: bulkyCargoTypeId,
+        },
+        select: { bangCuocGuiHangId: true },
+      });
+      bulkyHeavyCargoRateId = bulkyHeavyCargoRate.bangCuocGuiHangId;
+
+      const vehicleType = await fixtureTx.loaiXe.create({
+        data: {
+          nhaXeId: busCompanyId,
+          tenLoai: `Luxury Limousine ${suffix}`,
+        },
+        select: { loaiXeId: true },
+      });
+      vehicleTypeId = vehicleType.loaiXeId;
+
+      const vehicle = await fixtureTx.xe.create({
+        data: {
+          bienSoXe: `49B-${suffix}`,
           trangThai: 'HOAT_DONG',
           nhaXeId: busCompanyId,
-          tuyenXeDiemGiaoNhaps: {
-            create: { tuyenXeId: routeId, vaiTro: 'NHAN_HANG' },
+          loaiXeId: vehicleTypeId,
+          ghes: {
+            create: [
+              { soGhe: 'A01', viTri: 'Tầng 1' },
+              { soGhe: 'A02', viTri: 'Tầng 1' },
+              { soGhe: 'A03', viTri: 'Tầng 1' },
+            ],
           },
         },
-        select: { diemGiaoNhanHangId: true },
-      }),
-    ]);
-    senderPointId = senderPoint.diemGiaoNhanHangId;
-    receiverPointId = receiverPoint.diemGiaoNhanHangId;
-    const cargoType = await prisma.loaiHangHoa.create({
-      data: {
-        tenLoai: `Hàng nhẹ ${suffix}`,
-        trangThai: 'HOAT_DONG',
-        nhomSucChua: 'HANG_NHE',
-      },
-      select: { loaiHangHoaId: true },
-    });
-    cargoTypeId = cargoType.loaiHangHoaId;
-    const cargoRate = await prisma.bangCuocGuiHang.create({
-      data: {
-        khoiLuongTu: 0,
-        khoiLuongDen: 10,
-        mucCuoc: 60000,
-        tuNgay: new Date('2020-01-01T00:00:00.000Z'),
-        trangThai: 'HOAT_DONG',
-        diemGuiId: senderPointId,
-        diemNhanId: receiverPointId,
-        loaiHangHoaId: cargoTypeId,
-      },
-      select: { bangCuocGuiHangId: true },
-    });
-    cargoRateId = cargoRate.bangCuocGuiHangId;
+        include: { ghes: true },
+      });
+      vehicleId = vehicle.xeId;
 
-    const bulkyCargoType = await prisma.loaiHangHoa.create({
-      data: {
-        tenLoai: `Hàng cồng kềnh ${suffix}`,
-        trangThai: 'HOAT_DONG',
-        nhomSucChua: 'HANG_CONG_KENH',
-      },
-      select: { loaiHangHoaId: true },
-    });
-    bulkyCargoTypeId = bulkyCargoType.loaiHangHoaId;
-    const bulkyCargoRate = await prisma.bangCuocGuiHang.create({
-      data: {
-        khoiLuongTu: 0,
-        khoiLuongDen: 10,
-        mucCuoc: 60000,
-        tuNgay: new Date('2020-01-01T00:00:00.000Z'),
-        trangThai: 'HOAT_DONG',
-        diemGuiId: senderPointId,
-        diemNhanId: receiverPointId,
-        loaiHangHoaId: bulkyCargoTypeId,
-      },
-      select: { bangCuocGuiHangId: true },
-    });
-    bulkyCargoRateId = bulkyCargoRate.bangCuocGuiHangId;
-    const bulkyHeavyCargoRate = await prisma.bangCuocGuiHang.create({
-      data: {
-        khoiLuongTu: 45,
-        khoiLuongDen: 50,
-        mucCuoc: 90_000,
-        tuNgay: new Date('2020-01-01T00:00:00.000Z'),
-        trangThai: 'HOAT_DONG',
-        diemGuiId: senderPointId,
-        diemNhanId: receiverPointId,
-        loaiHangHoaId: bulkyCargoTypeId,
-      },
-      select: { bangCuocGuiHangId: true },
-    });
-    bulkyHeavyCargoRateId = bulkyHeavyCargoRate.bangCuocGuiHangId;
-
-    const vehicleType = await prisma.loaiXe.create({
-      data: {
-        nhaXeId: busCompanyId,
-        tenLoai: `Luxury Limousine ${suffix}`,
-      },
-      select: { loaiXeId: true },
-    });
-    vehicleTypeId = vehicleType.loaiXeId;
-
-    const vehicle = await prisma.xe.create({
-      data: {
-        bienSoXe: `49B-${suffix}`,
-        trangThai: 'HOAT_DONG',
-        nhaXeId: busCompanyId,
-        loaiXeId: vehicleTypeId,
-        ghes: {
-          create: [
-            { soGhe: 'A01', viTri: 'Tầng 1' },
-            { soGhe: 'A02', viTri: 'Tầng 1' },
-            { soGhe: 'A03', viTri: 'Tầng 1' },
-          ],
+      // 2. Create fare pricing for route & vehicle type
+      const fare = await fixtureTx.bangGia.create({
+        data: {
+          nhaXeId: busCompanyId,
+          tuyenXeId: routeId,
+          loaiXeId: vehicleTypeId,
+          giaNiemYet: 150000,
+          tuNgay: new Date('2020-01-01T00:00:00.000Z'),
+          trangThai: 'HOAT_DONG',
         },
-      },
-      include: { ghes: true },
-    });
-    vehicleId = vehicle.xeId;
+      });
+      bangGiaId = fare.bangGiaId;
 
-    // 2. Create fare pricing for route & vehicle type
-    const fare = await prisma.bangGia.create({
-      data: {
-        nhaXeId: busCompanyId,
-        tuyenXeId: routeId,
-        loaiXeId: vehicleTypeId,
-        giaNiemYet: 150000,
-        tuNgay: new Date('2020-01-01T00:00:00.000Z'),
-        trangThai: 'HOAT_DONG',
-      },
-    });
-    bangGiaId = fare.bangGiaId;
-
-    // 3. Create customer account
-    const phoneSuffix = String(
-      Number.parseInt(suffix.slice(0, 7), 16) % 10_000_000,
-    ).padStart(7, '0');
-    customerPhone = `096${phoneSuffix}`;
-    const account = await prisma.taiKhoan.create({
-      data: {
-        soDienThoai: customerPhone,
-        matKhau: '$2b$10$hashedpasswordforexampletest',
-        hoTen: `Booking Customer ${suffix}`,
-        trangThai: 'HOAT_DONG',
-        daXacThucSoDienThoai: true,
-        khachHang: {
-          create: {
-            maKhachHang: `KH-BK-${suffix}`,
+      // 3. Create customer account
+      const phoneSuffix = String(
+        Number.parseInt(suffix.slice(0, 7), 16) % 10_000_000,
+      ).padStart(7, '0');
+      customerPhone = `096${phoneSuffix}`;
+      const account = await fixtureTx.taiKhoan.create({
+        data: {
+          soDienThoai: customerPhone,
+          matKhau: '$2b$10$hashedpasswordforexampletest',
+          hoTen: `Booking Customer ${suffix}`,
+          trangThai: 'HOAT_DONG',
+          daXacThucSoDienThoai: true,
+          khachHang: {
+            create: {
+              maKhachHang: `KH-BK-${suffix}`,
+            },
           },
         },
-      },
-      include: { khachHang: true },
-    });
-    customerId = account.khachHang!.khachHangId;
-    customerPrincipal = {
-      taiKhoanId: account.taiKhoanId,
-      sessionId: `sess-bk-${suffix}`,
-      roles: ['CUSTOMER'],
-      permissions: [],
-      nhanVienId: null,
-      nhaXeId: null,
-    };
+        include: { khachHang: true },
+      });
+      customerAccountId = account.taiKhoanId;
+      customerId = account.khachHang!.khachHangId;
+      customerPrincipal = {
+        taiKhoanId: account.taiKhoanId,
+        sessionId: `sess-bk-${suffix}`,
+        roles: ['CUSTOMER'],
+        permissions: [],
+        nhanVienId: null,
+        nhaXeId: null,
+        };
+    }, { maxWait: 10_000, timeout: 30_000 });
+
   }, 30_000);
 
   afterAll(async () => {
     try {
-      if (tripId) {
-        await prisma.suDungKhuyenMai.deleteMany({
-          where: { khuyenMai: { nhaXeId: busCompanyId } },
-        });
-        await prisma.lichSuTrangThaiPhieuGuiHang.deleteMany({
-          where: { phieuGuiHang: { chuyenXeId: tripId } },
-        });
-        await prisma.chiTietCuocGuiHang.deleteMany({
-          where: { phieuGuiHang: { chuyenXeId: tripId } },
-        });
-        await prisma.hinhAnhHangHoa.deleteMany({
-          where: { hangHoa: { phieuGuiHang: { chuyenXeId: tripId } } },
-        });
-        await prisma.hangHoa.deleteMany({
-          where: { phieuGuiHang: { chuyenXeId: tripId } },
-        });
-        await prisma.phieuGuiHang.deleteMany({ where: { chuyenXeId: tripId } });
-        await prisma.lichSuTrangThaiVe.deleteMany({
-          where: { ve: { phieuDatVe: { donGiaoDich: { nhaXeId: busCompanyId } } } },
-        });
-        await prisma.thanhToan.deleteMany({
-          where: { donGiaoDich: { nhaXeId: busCompanyId } },
-        });
-        await prisma.ve.deleteMany({
-          where: { phieuDatVe: { donGiaoDich: { nhaXeId: busCompanyId } } },
-        });
-        await prisma.lichSuTrangThaiPhieuDatVe.deleteMany({
-          where: { phieuDatVe: { donGiaoDich: { nhaXeId: busCompanyId } } },
-        });
-        await prisma.phieuDatVe.deleteMany({
-          where: { donGiaoDich: { nhaXeId: busCompanyId } },
-        });
-        await prisma.donGiaoDich.deleteMany({
-          where: { nhaXeId: busCompanyId },
-        });
-        await prisma.khuyenMai.deleteMany({ where: { nhaXeId: busCompanyId } });
-        await prisma.gheChuyenXe.deleteMany({ where: { chuyenXeId: tripId } });
-        await prisma.giuCho.deleteMany({ where: { chuyenXeId: tripId } });
-        await prisma.chuyenXe.deleteMany({ where: { chuyenXeId: tripId } });
-      }
-      if (bangGiaId) {
-        await prisma.bangGia.deleteMany({ where: { bangGiaId } });
-      }
-      if (cargoRateId) {
-        await prisma.bangCuocGuiHang.deleteMany({ where: { bangCuocGuiHangId: cargoRateId } });
-      }
-      if (bulkyCargoRateId) {
-        await prisma.bangCuocGuiHang.deleteMany({ where: { bangCuocGuiHangId: bulkyCargoRateId } });
-      }
-      if (bulkyHeavyCargoRateId) {
-        await prisma.bangCuocGuiHang.deleteMany({
-          where: { bangCuocGuiHangId: bulkyHeavyCargoRateId },
-        });
-      }
-      if (senderPointId || receiverPointId) {
-        await prisma.diemGiaoNhanTuyenXe.deleteMany({
-          where: { diemGiaoNhanHangId: { in: [senderPointId, receiverPointId].filter(Boolean) } },
-        });
-      }
-      if (senderPointId || receiverPointId) {
-        await prisma.diemGiaoNhanHang.deleteMany({
-          where: { diemGiaoNhanHangId: { in: [senderPointId, receiverPointId].filter(Boolean) } },
-        });
-      }
-      if (cargoTypeId) {
-        await prisma.loaiHangHoa.deleteMany({ where: { loaiHangHoaId: cargoTypeId } });
-      }
-      if (bulkyCargoTypeId) {
-        await prisma.loaiHangHoa.deleteMany({ where: { loaiHangHoaId: bulkyCargoTypeId } });
-      }
-      if (vehicleId) {
-        await prisma.ghe.deleteMany({ where: { xeId: vehicleId } });
-        await prisma.xe.deleteMany({ where: { xeId: vehicleId } });
-      }
-      if (vehicleTypeId) {
-        await prisma.loaiXe.deleteMany({ where: { loaiXeId: vehicleTypeId } });
-      }
-      if (routeId) {
-        await prisma.tuyenXe.deleteMany({ where: { tuyenXeId: routeId } });
-      }
-      if (busCompanyId) {
-        await prisma.nhaXe.deleteMany({ where: { nhaXeId: busCompanyId } });
-      }
+      if (prisma) {
+        await prisma.$transaction(
+          async (cleanupTx) => {
+            if (tripId) {
+              await cleanupTx.suDungKhuyenMai.deleteMany({
+                where: { khuyenMai: { nhaXeId: busCompanyId } },
+              });
+              await cleanupTx.lichSuTrangThaiPhieuGuiHang.deleteMany({
+                where: { phieuGuiHang: { chuyenXeId: tripId } },
+              });
+              await cleanupTx.chiTietCuocGuiHang.deleteMany({
+                where: { phieuGuiHang: { chuyenXeId: tripId } },
+              });
+              await cleanupTx.hinhAnhHangHoa.deleteMany({
+                where: { hangHoa: { phieuGuiHang: { chuyenXeId: tripId } } },
+              });
+              await cleanupTx.hangHoa.deleteMany({
+                where: { phieuGuiHang: { chuyenXeId: tripId } },
+              });
+              await cleanupTx.phieuGuiHang.deleteMany({
+                where: { chuyenXeId: tripId },
+              });
+              await cleanupTx.lichSuTrangThaiVe.deleteMany({
+                where: {
+                  ve: {
+                    phieuDatVe: { donGiaoDich: { nhaXeId: busCompanyId } },
+                  },
+                },
+              });
+              await cleanupTx.thanhToan.deleteMany({
+                where: { donGiaoDich: { nhaXeId: busCompanyId } },
+              });
+              await cleanupTx.ve.deleteMany({
+                where: {
+                  phieuDatVe: { donGiaoDich: { nhaXeId: busCompanyId } },
+                },
+              });
+              await cleanupTx.lichSuTrangThaiPhieuDatVe.deleteMany({
+                where: {
+                  phieuDatVe: { donGiaoDich: { nhaXeId: busCompanyId } },
+                },
+              });
+              await cleanupTx.phieuDatVe.deleteMany({
+                where: { donGiaoDich: { nhaXeId: busCompanyId } },
+              });
+              await cleanupTx.donGiaoDich.deleteMany({
+                where: { nhaXeId: busCompanyId },
+              });
+              await cleanupTx.khuyenMai.deleteMany({
+                where: { nhaXeId: busCompanyId },
+              });
+              await cleanupTx.gheChuyenXe.deleteMany({
+                where: { chuyenXeId: tripId },
+              });
+              await cleanupTx.giuCho.deleteMany({
+                where: { chuyenXeId: tripId },
+              });
+              await cleanupTx.chuyenXe.deleteMany({
+                where: { chuyenXeId: tripId },
+              });
+            }
+            if (bangGiaId) {
+              await cleanupTx.bangGia.deleteMany({ where: { bangGiaId } });
+            }
+            if (cargoRateId) {
+              await cleanupTx.bangCuocGuiHang.deleteMany({
+                where: { bangCuocGuiHangId: cargoRateId },
+              });
+            }
+            if (bulkyCargoRateId) {
+              await cleanupTx.bangCuocGuiHang.deleteMany({
+                where: { bangCuocGuiHangId: bulkyCargoRateId },
+              });
+            }
+            if (bulkyHeavyCargoRateId) {
+              await cleanupTx.bangCuocGuiHang.deleteMany({
+                where: { bangCuocGuiHangId: bulkyHeavyCargoRateId },
+              });
+            }
+            if (senderPointId || receiverPointId) {
+              const pointIds = [senderPointId, receiverPointId].filter(
+                (id): id is number => id !== undefined,
+              );
+              await cleanupTx.diemGiaoNhanTuyenXe.deleteMany({
+                where: { diemGiaoNhanHangId: { in: pointIds } },
+              });
+              await cleanupTx.diemGiaoNhanHang.deleteMany({
+                where: { diemGiaoNhanHangId: { in: pointIds } },
+              });
+            }
+            if (cargoTypeId) {
+              await cleanupTx.loaiHangHoa.deleteMany({
+                where: { loaiHangHoaId: cargoTypeId },
+              });
+            }
+            if (bulkyCargoTypeId) {
+              await cleanupTx.loaiHangHoa.deleteMany({
+                where: { loaiHangHoaId: bulkyCargoTypeId },
+              });
+            }
+            if (vehicleId) {
+              await cleanupTx.ghe.deleteMany({ where: { xeId: vehicleId } });
+              await cleanupTx.xe.deleteMany({ where: { xeId: vehicleId } });
+            }
+            if (vehicleTypeId) {
+              await cleanupTx.loaiXe.deleteMany({
+                where: { loaiXeId: vehicleTypeId },
+              });
+            }
+            if (routeId) {
+              await cleanupTx.tuyenXe.deleteMany({
+                where: { tuyenXeId: routeId },
+              });
+            }
+            if (busCompanyId) {
+              await cleanupTx.nhaXe.deleteMany({
+                where: { nhaXeId: busCompanyId },
+              });
+            }
+            if (customerId) {
+              await cleanupTx.khachHang.deleteMany({
+                where: { khachHangId: customerId },
+              });
+            }
+            if (customerAccountId) {
+              await cleanupTx.taiKhoan.deleteMany({
+                where: { taiKhoanId: customerAccountId },
+              });
+            }
 
-      if (customerId) {
-        await prisma.khachHang.deleteMany({ where: { khachHangId: customerId } });
-        await prisma.taiKhoan.deleteMany({ where: { taiKhoanId: customerPrincipal.taiKhoanId } });
+            const [remainingCompany, remainingAccount, remainingTrip] =
+              await Promise.all([
+                busCompanyId
+                  ? cleanupTx.nhaXe.count({ where: { nhaXeId: busCompanyId } })
+                  : Promise.resolve(0),
+                customerAccountId
+                  ? cleanupTx.taiKhoan.count({
+                      where: { taiKhoanId: customerAccountId },
+                    })
+                  : Promise.resolve(0),
+                tripId
+                  ? cleanupTx.chuyenXe.count({ where: { chuyenXeId: tripId } })
+                  : Promise.resolve(0),
+              ]);
+            if (remainingCompany || remainingAccount || remainingTrip) {
+              throw new Error(
+                'Booking history integration fixture cleanup was incomplete.',
+              );
+            }
+          },
+          { maxWait: 10_000, timeout: 30_000 },
+        );
       }
     } finally {
-      delete process.env.PAYMENT_DEMO_MODE;
-      if (originalSepaySecret === undefined) delete process.env.SEPAY_WEBHOOK_SECRET;
+      if (originalPaymentDemoMode === undefined)
+        delete process.env.PAYMENT_DEMO_MODE;
+      else process.env.PAYMENT_DEMO_MODE = originalPaymentDemoMode;
+      if (originalSepaySecret === undefined)
+        delete process.env.SEPAY_WEBHOOK_SECRET;
       else process.env.SEPAY_WEBHOOK_SECRET = originalSepaySecret;
-      if (originalSepayAccountNumber === undefined) delete process.env.SEPAY_ACCOUNT_NUMBER;
+      if (originalSepayAccountNumber === undefined)
+        delete process.env.SEPAY_ACCOUNT_NUMBER;
       else process.env.SEPAY_ACCOUNT_NUMBER = originalSepayAccountNumber;
       await competingApp?.close();
       await app?.close();
@@ -563,86 +762,106 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
     currentPrincipal = null;
     failAfterShipmentPersistence = false;
 
-    await prisma.suDungKhuyenMai.deleteMany({
-      where: { khuyenMai: { nhaXeId: busCompanyId } },
-    });
+    let nextTripId = 0;
+    let nextTripSeatIds: number[] = [];
+    await prisma.$transaction(
+      async (fixtureTx) => {
+        await fixtureTx.suDungKhuyenMai.deleteMany({
+          where: { khuyenMai: { nhaXeId: busCompanyId } },
+        });
 
-    if (tripId) {
-      await prisma.lichSuTrangThaiPhieuGuiHang.deleteMany({
-        where: { phieuGuiHang: { chuyenXeId: tripId } },
-      });
-      await prisma.chiTietCuocGuiHang.deleteMany({
-        where: { phieuGuiHang: { chuyenXeId: tripId } },
-      });
-      await prisma.hinhAnhHangHoa.deleteMany({
-        where: { hangHoa: { phieuGuiHang: { chuyenXeId: tripId } } },
-      });
-      await prisma.hangHoa.deleteMany({
-        where: { phieuGuiHang: { chuyenXeId: tripId } },
-      });
-      await prisma.phieuGuiHang.deleteMany({ where: { chuyenXeId: tripId } });
-    }
+        if (tripId) {
+          await fixtureTx.lichSuTrangThaiPhieuGuiHang.deleteMany({
+            where: { phieuGuiHang: { chuyenXeId: tripId } },
+          });
+          await fixtureTx.chiTietCuocGuiHang.deleteMany({
+            where: { phieuGuiHang: { chuyenXeId: tripId } },
+          });
+          await fixtureTx.hinhAnhHangHoa.deleteMany({
+            where: { hangHoa: { phieuGuiHang: { chuyenXeId: tripId } } },
+          });
+          await fixtureTx.hangHoa.deleteMany({
+            where: { phieuGuiHang: { chuyenXeId: tripId } },
+          });
+          await fixtureTx.phieuGuiHang.deleteMany({
+            where: { chuyenXeId: tripId },
+          });
+        }
 
-    // Clean up bookings, tickets, and status histories for this bus company
-    await prisma.lichSuTrangThaiVe.deleteMany({
-      where: { ve: { phieuDatVe: { donGiaoDich: { nhaXeId: busCompanyId } } } },
-    });
-    await prisma.thanhToan.deleteMany({
-      where: { donGiaoDich: { nhaXeId: busCompanyId } },
-    });
-    await prisma.ve.deleteMany({
-      where: { phieuDatVe: { donGiaoDich: { nhaXeId: busCompanyId } } },
-    });
-    await prisma.lichSuTrangThaiPhieuDatVe.deleteMany({
-      where: { phieuDatVe: { donGiaoDich: { nhaXeId: busCompanyId } } },
-    });
-    await prisma.phieuDatVe.deleteMany({
-      where: { donGiaoDich: { nhaXeId: busCompanyId } },
-    });
-    await prisma.donGiaoDich.deleteMany({
-      where: { nhaXeId: busCompanyId },
-    });
-    await prisma.khuyenMai.deleteMany({ where: { nhaXeId: busCompanyId } });
+        // Clean up bookings, tickets, and status histories for this bus company
+        await fixtureTx.lichSuTrangThaiVe.deleteMany({
+          where: {
+            ve: { phieuDatVe: { donGiaoDich: { nhaXeId: busCompanyId } } },
+          },
+        });
+        await fixtureTx.thanhToan.deleteMany({
+          where: { donGiaoDich: { nhaXeId: busCompanyId } },
+        });
+        await fixtureTx.ve.deleteMany({
+          where: { phieuDatVe: { donGiaoDich: { nhaXeId: busCompanyId } } },
+        });
+        await fixtureTx.lichSuTrangThaiPhieuDatVe.deleteMany({
+          where: { phieuDatVe: { donGiaoDich: { nhaXeId: busCompanyId } } },
+        });
+        await fixtureTx.phieuDatVe.deleteMany({
+          where: { donGiaoDich: { nhaXeId: busCompanyId } },
+        });
+        await fixtureTx.donGiaoDich.deleteMany({
+          where: { nhaXeId: busCompanyId },
+        });
+        await fixtureTx.khuyenMai.deleteMany({
+          where: { nhaXeId: busCompanyId },
+        });
 
-    if (tripId) {
-      await prisma.gheChuyenXe.deleteMany({ where: { chuyenXeId: tripId } });
-      await prisma.giuCho.deleteMany({ where: { chuyenXeId: tripId } });
-      await prisma.chuyenXe.deleteMany({ where: { chuyenXeId: tripId } });
-    }
+        if (tripId) {
+          await fixtureTx.gheChuyenXe.deleteMany({
+            where: { chuyenXeId: tripId },
+          });
+          await fixtureTx.giuCho.deleteMany({ where: { chuyenXeId: tripId } });
+          await fixtureTx.chuyenXe.deleteMany({
+            where: { chuyenXeId: tripId },
+          });
+        }
 
-    // Create a new future trip with 3 seats
-    const seats = await prisma.ghe.findMany({
-      where: { xeId: vehicleId },
-      orderBy: { soGhe: 'asc' },
-    });
-    const trip = await prisma.chuyenXe.create({
-      data: {
-        maChuyenXe: `CX-BK-${randomUUID().slice(0, 6).toUpperCase()}`,
-        ngayKhoiHanh: new Date('2099-12-01T00:00:00.000Z'),
-        gioKhoiHanh: new Date('1970-01-01T08:00:00.000Z'),
-        trangThai: 'CHUA_KHOI_HANH',
-        nhaXeId: busCompanyId,
-        tuyenXeId: routeId,
-        xeId: vehicleId,
-        sucChuaXeMay: 0,
-        sucChuaHangCongKenh: 0,
-        sucChuaHangNhe: 10,
-        nhanGuiHang: true,
-        gheChuyenXes: {
-          create: seats.map((g) => ({
-            gheId: g.gheId,
-            trangThai: 'TRONG',
-          })),
-        },
+        // Create a new future trip with 3 seats
+        const seats = await fixtureTx.ghe.findMany({
+          where: { xeId: vehicleId },
+          orderBy: { soGhe: 'asc' },
+        });
+        const trip = await fixtureTx.chuyenXe.create({
+          data: {
+            maChuyenXe: `CX-BK-${randomUUID().slice(0, 6).toUpperCase()}`,
+            ngayKhoiHanh: new Date('2099-12-01T00:00:00.000Z'),
+            gioKhoiHanh: new Date('1970-01-01T08:00:00.000Z'),
+            trangThai: 'CHUA_KHOI_HANH',
+            nhaXeId: busCompanyId,
+            tuyenXeId: routeId,
+            xeId: vehicleId,
+            sucChuaXeMay: 0,
+            sucChuaHangCongKenh: 0,
+            sucChuaHangNhe: 10,
+            nhanGuiHang: true,
+            gheChuyenXes: {
+              create: seats.map((g) => ({
+                gheId: g.gheId,
+                trangThai: 'TRONG',
+              })),
+            },
+          },
+          include: {
+            gheChuyenXes: {
+              orderBy: { gheId: 'asc' },
+            },
+          },
+        });
+        nextTripId = trip.chuyenXeId;
+        nextTripSeatIds = trip.gheChuyenXes.map((s) => s.gheChuyenXeId);
       },
-      include: {
-        gheChuyenXes: {
-          orderBy: { gheId: 'asc' },
-        },
-      },
-    });
-    tripId = trip.chuyenXeId;
-    tripSeatIds = trip.gheChuyenXes.map((s) => s.gheChuyenXeId);
+      { maxWait: 10_000, timeout: 30_000 },
+    );
+
+    tripId = nextTripId;
+    tripSeatIds = nextTripSeatIds;
   });
 
   it.each(['guest-fixed', 'registered-percent'])(
@@ -1445,6 +1664,74 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
       })).soLuotDaSuDung,
     ).toBe(0);
   });
+
+  it.each([
+    { label: 'number', promotionCode: 123 },
+    { label: 'object', promotionCode: {} },
+    { label: 'array', promotionCode: [] },
+  ])(
+    'rejects a malformed promotionCode supplied as a $label without writes',
+    async ({ promotionCode: malformedPromotionCode }) => {
+      const before = await bookingMutationSnapshot();
+      const response = await request(app.getHttpServer())
+        .post('/api/v1/bookings')
+        .send({
+          tripId,
+          seatIds: [tripSeatIds[0]],
+          holdToken: 'invalid-validation-only-hold',
+          contact: {
+            fullName: 'Promotion validation guest',
+            phone: '0901234567',
+          },
+          pickupPoint: 'Bến xe Miền Đông',
+          dropoffPoint: 'Bến xe Đà Lạt',
+          promotionCode: malformedPromotionCode,
+        });
+
+      expect(response.status, JSON.stringify(response.body)).toBe(400);
+      expect(response.body.error).toBe('VALIDATION_ERROR');
+      expect(response.body.details).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ field: 'promotionCode' }),
+        ]),
+      );
+      expect(await bookingMutationSnapshot()).toEqual(before);
+    },
+  );
+
+  it.each([
+    { label: 'null', includesPromotionCode: true, promotionCode: null },
+    { label: 'empty string', includesPromotionCode: true, promotionCode: '' },
+    { label: 'whitespace', includesPromotionCode: true, promotionCode: '   ' },
+    {
+      label: 'omitted code',
+      includesPromotionCode: false,
+      promotionCode: undefined,
+    },
+  ])(
+    'keeps $label optional and does not require a quote',
+    async ({ includesPromotionCode, promotionCode: optionalPromotionCode }) => {
+      const before = await bookingMutationSnapshot();
+      const payload = {
+        tripId,
+        seatIds: [tripSeatIds[0]],
+        holdToken: 'invalid-validation-only-hold',
+        contact: { fullName: 'Optional promotion guest', phone: '0901234567' },
+        pickupPoint: 'Bến xe Miền Đông',
+        dropoffPoint: 'Bến xe Đà Lạt',
+        ...(includesPromotionCode
+          ? { promotionCode: optionalPromotionCode }
+          : {}),
+      };
+      const response = await request(app.getHttpServer())
+        .post('/api/v1/bookings')
+        .send(payload);
+
+      expect(response.status, JSON.stringify(response.body)).toBe(409);
+      expect(response.body.error).toBe('SEAT_UNAVAILABLE');
+      expect(await bookingMutationSnapshot()).toEqual(before);
+    },
+  );
 
   it('rejects a requested unknown promotion instead of creating a full-price booking', async () => {
     const hold = await request(app.getHttpServer())

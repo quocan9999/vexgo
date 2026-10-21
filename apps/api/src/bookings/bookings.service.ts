@@ -1325,6 +1325,7 @@ export class BookingsService {
       bookingCode: booking.maPhieuDatVe,
       orderId: booking.donGiaoDichId,
       orderCode: booking.donGiaoDich?.maDonGiaoDich ?? null,
+      tripId: chuyenXe?.chuyenXeId ?? null,
       ticketCount: booking.ves?.length || booking.soLuongVeBanDau || 0,
       route,
       origin: tuyenXe?.diemDi ?? null,

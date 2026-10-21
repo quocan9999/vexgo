@@ -143,7 +143,11 @@ export class CreateBookingDto {
   @IsString()
   promotionCode?: string;
 
-  @ValidateIf((dto: CreateBookingDto) => Boolean(dto.promotionCode?.trim()))
+  @ValidateIf(
+    (dto: CreateBookingDto) =>
+      typeof dto.promotionCode === 'string' &&
+      dto.promotionCode.trim().length > 0,
+  )
   @IsDefined({ message: 'Báo giá khuyến mãi đã xác nhận là bắt buộc.' })
   @ValidateNested()
   @Type(() => ExpectedPromotionQuoteDto)
