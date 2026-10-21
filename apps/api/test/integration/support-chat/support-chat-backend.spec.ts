@@ -1,0 +1,937 @@
+import { randomUUID } from 'node:crypto';
+import { Test } from '@nestjs/testing';
+import type { ExecutionContext, INestApplication } from '@nestjs/common';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { AppModule } from '../../../src/app.module.js';
+import { AccessTokenGuard } from '../../../src/auth/guards/access-token.guard.js';
+import type { AuthPrincipal } from '../../../src/auth/tokens/auth-principal.js';
+import { configureApi } from '../../../src/common/configure-api.js';
+import { PrismaService } from '../../../src/prisma/prisma.service.js';
+import { SupportChatService } from '../../../src/support-chat/support-chat.service.js';
+import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
+
+describe('Support Chat Backend Integration & Concurrency Tests (MySQL DB-backed)', () => {
+  let app: INestApplication;
+  let prisma: PrismaService;
+  let chatService: SupportChatService;
+
+  const testSuffix = randomUUID().replaceAll('-', '').slice(0, 8);
+  let busCompanyAId: number;
+  let busCompanyBId: number;
+  let busCompanySuspendedId: number;
+
+  let customerUser: { taiKhoanId: number; khachHangId: number; principal: AuthPrincipal };
+  let staffUserA1: { taiKhoanId: number; nhanVienId: number; principal: AuthPrincipal };
+  let staffUserA2: { taiKhoanId: number; nhanVienId: number; principal: AuthPrincipal };
+  let staffUserB: { taiKhoanId: number; nhanVienId: number; principal: AuthPrincipal };
+  let superAdminUser: { taiKhoanId: number; principal: AuthPrincipal };
+
+  let createdConversationIds: number[] = [];
+
+  beforeAll(async () => {
+    let currentPrincipal: AuthPrincipal | null = null;
+    const accessTokenGuard = {
+      canActivate(context: ExecutionContext) {
+        if (currentPrincipal) {
+          context.switchToHttp().getRequest<{ user?: AuthPrincipal }>().user = currentPrincipal;
+        }
+        return true;
+      },
+    };
+
+    const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
+      .overrideProvider(AccessTokenGuard)
+      .useValue(accessTokenGuard)
+      .compile();
+
+    app = moduleRef.createNestApplication();
+    configureApi(app);
+    await app.init();
+
+    prisma = app.get(PrismaService);
+    chatService = app.get(SupportChatService);
+
+    // 1. Tạo 2 nhà xe hoạt động và 1 nhà xe tạm ngưng
+    const companyA = await prisma.nhaXe.create({
+      data: {
+        maNhaXe: `NX-A-${testSuffix}`,
+        tenNhaXe: `Nhà Xe A ${testSuffix}`,
+        trangThai: 'HOAT_DONG',
+      },
+    });
+    busCompanyAId = companyA.nhaXeId;
+
+    const companyB = await prisma.nhaXe.create({
+      data: {
+        maNhaXe: `NX-B-${testSuffix}`,
+        tenNhaXe: `Nhà Xe B ${testSuffix}`,
+        trangThai: 'HOAT_DONG',
+      },
+    });
+    busCompanyBId = companyB.nhaXeId;
+
+    const companySuspended = await prisma.nhaXe.create({
+      data: {
+        maNhaXe: `NX-S-${testSuffix}`,
+        tenNhaXe: `Nhà Xe Tam Ngung ${testSuffix}`,
+        trangThai: 'TAM_NGUNG',
+      },
+    });
+    busCompanySuspendedId = companySuspended.nhaXeId;
+
+    // 2. Tạo tài khoản Khách hàng
+    const tkCustomer = await prisma.taiKhoan.create({
+      data: {
+        hoTen: `Khách Hàng ${testSuffix}`,
+        soDienThoai: `09${Math.floor(10000000 + Math.random() * 90000000)}`,
+        matKhau: '$2b$10$hashedpasswordforexample',
+        email: `cust_${testSuffix}@example.com`,
+        daXacThucSoDienThoai: true,
+        trangThai: 'HOAT_DONG',
+      },
+    });
+    const khachHang = await prisma.khachHang.create({
+      data: {
+        maKhachHang: `KH-${testSuffix}`,
+        taiKhoanId: tkCustomer.taiKhoanId,
+      },
+    });
+    customerUser = {
+      taiKhoanId: tkCustomer.taiKhoanId,
+      khachHangId: khachHang.khachHangId,
+      principal: {
+        taiKhoanId: tkCustomer.taiKhoanId,
+        sessionId: `sess-cust-${testSuffix}`,
+        roles: ['KHACH_HANG'],
+        permissions: [],
+        nhanVienId: null,
+        nhaXeId: null,
+      },
+    };
+
+    // 3. Tạo 2 tài khoản Nhân viên nhà xe A có quyền chat:manage
+    const createStaff = async (name: string, companyId: number) => {
+      const tk = await prisma.taiKhoan.create({
+        data: {
+          hoTen: `${name} ${testSuffix}`,
+          soDienThoai: `09${Math.floor(10000000 + Math.random() * 90000000)}`,
+          matKhau: '$2b$10$hashedpasswordforexample',
+          email: `${name.toLowerCase().replace(/\s+/g, '_')}_${testSuffix}@example.com`,
+          daXacThucSoDienThoai: true,
+          trangThai: 'HOAT_DONG',
+        },
+      });
+      const nv = await prisma.nhanVien.create({
+        data: {
+          maNhanVien: `NV-${randomUUID().slice(0, 6)}`,
+          taiKhoanId: tk.taiKhoanId,
+          nhaXeId: companyId,
+          trangThaiLamViec: 'DANG_LAM_VIEC',
+        },
+      });
+      return {
+        taiKhoanId: tk.taiKhoanId,
+        nhanVienId: nv.nhanVienId,
+        principal: {
+          taiKhoanId: tk.taiKhoanId,
+          sessionId: `sess-${nv.nhanVienId}`,
+          roles: ['NHAN_VIEN_CSKH'],
+          permissions: ['chat:read', 'chat:manage'],
+          nhanVienId: nv.nhanVienId,
+          nhaXeId: companyId,
+        },
+      };
+    };
+
+    staffUserA1 = await createStaff('Staff A1', busCompanyAId);
+    staffUserA2 = await createStaff('Staff A2', busCompanyAId);
+    staffUserB = await createStaff('Staff B', busCompanyBId);
+
+    // 4. Tạo tài khoản Super Admin
+    const tkAdmin = await prisma.taiKhoan.create({
+      data: {
+        hoTen: `Super Admin ${testSuffix}`,
+        soDienThoai: `09${Math.floor(10000000 + Math.random() * 90000000)}`,
+        matKhau: '$2b$10$hashedpasswordforexample',
+        email: `superadmin_${testSuffix}@example.com`,
+        daXacThucSoDienThoai: true,
+        trangThai: 'HOAT_DONG',
+      },
+    });
+    superAdminUser = {
+      taiKhoanId: tkAdmin.taiKhoanId,
+      principal: {
+        taiKhoanId: tkAdmin.taiKhoanId,
+        sessionId: `sess-admin-${testSuffix}`,
+        roles: ['SUPER_ADMIN'],
+        permissions: ['*'],
+        nhanVienId: null,
+        nhaXeId: null,
+      },
+    };
+  }, 30000);
+
+  afterAll(async () => {
+    // Cleanup DB
+    if (prisma) {
+      if (createdConversationIds.length > 0) {
+        await prisma.tinNhanHoTro.deleteMany({
+          where: { cuocTroChuyenId: { in: createdConversationIds } },
+        });
+        await prisma.cuocTroChuyen.deleteMany({
+          where: { cuocTroChuyenId: { in: createdConversationIds } },
+        });
+      }
+
+      const allTaiKhoanIds = [
+        customerUser?.taiKhoanId,
+        staffUserA1?.taiKhoanId,
+        staffUserA2?.taiKhoanId,
+        staffUserB?.taiKhoanId,
+        superAdminUser?.taiKhoanId,
+      ].filter(Boolean) as number[];
+
+      if (customerUser?.khachHangId) {
+        await prisma.khachHang.deleteMany({ where: { taiKhoanId: customerUser.taiKhoanId } });
+      }
+
+      const allNhanVienIds = [
+        staffUserA1?.nhanVienId,
+        staffUserA2?.nhanVienId,
+        staffUserB?.nhanVienId,
+      ].filter(Boolean) as number[];
+
+      if (allNhanVienIds.length > 0) {
+        await prisma.nhanVien.deleteMany({ where: { nhanVienId: { in: allNhanVienIds } } });
+      }
+
+      if (allTaiKhoanIds.length > 0) {
+        await prisma.phienDangNhap.deleteMany({ where: { taiKhoanId: { in: allTaiKhoanIds } } });
+        await prisma.taiKhoanVaiTro.deleteMany({ where: { taiKhoanId: { in: allTaiKhoanIds } } });
+        await prisma.taiKhoan.deleteMany({ where: { taiKhoanId: { in: allTaiKhoanIds } } });
+      }
+
+      const companyIds = [busCompanyAId, busCompanyBId, busCompanySuspendedId].filter(Boolean);
+      if (companyIds.length > 0) {
+        await prisma.nhaXe.deleteMany({ where: { nhaXeId: { in: companyIds } } });
+      }
+    }
+
+    if (app) {
+      await app.close();
+    }
+  });
+
+  describe('BE-08 & BE-04: Row-Level Locking & Concurrent Conversation Creation', () => {
+    it('gọi đồng thời createConversation không tạo trùng hội thoại và khóa hàng an toàn qua $queryRaw FOR UPDATE', async () => {
+      // 2 cuộc gọi đồng thời từ cùng 1 khách hàng tới cùng 1 nhà xe
+      const [res1, res2] = await Promise.all([
+        chatService.createConversation(customerUser.principal, {
+          nhaXeId: busCompanyAId,
+          tinNhanDauTien: 'Yêu cầu 1 từ khách hàng',
+        }),
+        chatService.createConversation(customerUser.principal, {
+          nhaXeId: busCompanyAId,
+          tinNhanDauTien: 'Yêu cầu 2 từ khách hàng',
+        }),
+      ]);
+
+      expect(res1.conversation.cuocTroChuyenId).toBe(res2.conversation.cuocTroChuyenId);
+      createdConversationIds.push(res1.conversation.cuocTroChuyenId);
+
+      // Đúng 1 trong 2 là isNew = true
+      const newResults = [res1.isNew, res2.isNew].filter(Boolean);
+      expect(newResults.length).toBe(1);
+
+      // Kiểm tra DB chỉ có đúng 1 record CuocTroChuyen giữa khách hàng và nhà xe này
+      const dbCount = await prisma.cuocTroChuyen.count({
+        where: {
+          khachHangId: customerUser.khachHangId,
+          nhaXeId: busCompanyAId,
+          trangThai: { not: 'DA_DONG' },
+        },
+      });
+      expect(dbCount).toBe(1);
+    });
+  });
+
+  describe('BE-02: Atomic Auto-Claim Concurrency Prevention', () => {
+    it('khi 2 nhân viên cùng gửi tin nhắn phản hồi hội thoại CHO_TIEP_NHAN, chỉ 1 nhân viên claim thành công và không bị ghi đè', async () => {
+      // Tạo cuộc trò chuyện mới đang CHO_TIEP_NHAN
+      // Đóng cuộc trò chuyện cũ trước
+      if (createdConversationIds.length > 0) {
+        await prisma.cuocTroChuyen.updateMany({
+          where: { cuocTroChuyenId: { in: createdConversationIds } },
+          data: { trangThai: 'DA_DONG', dongLuc: new Date() },
+        });
+      }
+
+      const { conversation } = await chatService.createConversation(customerUser.principal, {
+        nhaXeId: busCompanyAId,
+        tinNhanDauTien: 'Cần hỗ trợ đổi vé gấp!',
+      });
+      createdConversationIds.push(conversation.cuocTroChuyenId);
+
+      expect(conversation.trangThai).toBe('CHO_TIEP_NHAN');
+
+      // 2 nhân viên cùng phản hồi đồng thời
+      const [msg1, msg2] = await Promise.all([
+        chatService.sendMessage(staffUserA1.principal, {
+          cuocTroChuyenId: conversation.cuocTroChuyenId,
+          noiDung: 'Chào bạn, mình là Staff A1 hỗ trợ bạn nhé.',
+        }),
+        chatService.sendMessage(staffUserA2.principal, {
+          cuocTroChuyenId: conversation.cuocTroChuyenId,
+          noiDung: 'Chào bạn, mình là Staff A2 hỗ trợ bạn nhé.',
+        }),
+      ]);
+
+      expect(msg1).toBeDefined();
+      expect(msg2).toBeDefined();
+
+      // Kiểm tra trong DB: cuộc trò chuyện chuyển sang DANG_XU_LY
+      const updatedConv = await prisma.cuocTroChuyen.findUnique({
+        where: { cuocTroChuyenId: conversation.cuocTroChuyenId },
+      });
+      expect(updatedConv?.trangThai).toBe('DANG_XU_LY');
+
+      // nhanVienId phải là A1 hoặc A2, không thể null
+      expect([staffUserA1.nhanVienId, staffUserA2.nhanVienId]).toContain(updatedConv?.nhanVienId);
+
+      // Chỉ có đúng 1 tin nhắn hệ thống ghi nhận tiếp nhận
+      const systemMessages = await prisma.tinNhanHoTro.findMany({
+        where: {
+          cuocTroChuyenId: conversation.cuocTroChuyenId,
+          loaiTinNhan: 'HE_THONG',
+        },
+      });
+      expect(systemMessages.length).toBe(1);
+      expect(systemMessages[0].noiDung).toContain('đã tiếp nhận cuộc trò chuyện');
+    });
+  });
+
+  describe('BE-03: Idempotency & Payload Mismatch Protection', () => {
+    it('gửi lặp cùng clientMessageId và cùng payload thì trả về tin nhắn cũ mà không tạo thêm record', async () => {
+      const convId = createdConversationIds[createdConversationIds.length - 1];
+      const clientMessageId = `idemp-key-${randomUUID()}`;
+
+      const firstSend = await chatService.sendMessage(customerUser.principal, {
+        cuocTroChuyenId: convId,
+        noiDung: 'Tin nhắn gửi lần đầu',
+        clientMessageId,
+      });
+
+      const secondSend = await chatService.sendMessage(customerUser.principal, {
+        cuocTroChuyenId: convId,
+        noiDung: 'Tin nhắn gửi lần đầu',
+        clientMessageId,
+      });
+
+      expect(secondSend.tinNhanId).toBe(firstSend.tinNhanId);
+      expect(secondSend.createdAt).toEqual(firstSend.createdAt);
+
+      // Xác minh DB chỉ có đúng 1 record có clientMessageId này
+      const count = await prisma.tinNhanHoTro.count({
+        where: { clientMessageId },
+      });
+      expect(count).toBe(1);
+    });
+
+    it('gửi lặp cùng clientMessageId nhưng mang payload khác thì ném ConflictException(IDEMPOTENCY_PAYLOAD_MISMATCH)', async () => {
+      const convId = createdConversationIds[createdConversationIds.length - 1];
+      const clientMessageId = `idemp-key-${randomUUID()}`;
+
+      await chatService.sendMessage(customerUser.principal, {
+        cuocTroChuyenId: convId,
+        noiDung: 'Nội dung nguyên bản',
+        clientMessageId,
+      });
+
+      await expect(
+        chatService.sendMessage(customerUser.principal, {
+          cuocTroChuyenId: convId,
+          noiDung: 'Nội dung bị sửa đổi trái phép',
+          clientMessageId,
+        }),
+      ).rejects.toThrow(ConflictException);
+    });
+  });
+
+  describe('BE-06: Bus Company Status Check (HOAT_DONG only)', () => {
+    it('từ chối tạo cuộc trò chuyện nếu nhà xe ở trạng thái TAM_NGUNG', async () => {
+      await expect(
+        chatService.createConversation(customerUser.principal, {
+          nhaXeId: busCompanySuspendedId,
+          tinNhanDauTien: 'Xin chào',
+        }),
+      ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('BE-01 & Tenant RBAC Isolation', () => {
+    it('SUPER_ADMIN bị từ chối ở tất cả các chức năng chat CSKH', async () => {
+      await expect(
+        chatService.createConversation(superAdminUser.principal, {
+          nhaXeId: busCompanyAId,
+        }),
+      ).rejects.toThrow(ForbiddenException);
+
+      await expect(
+        chatService.listConversations(superAdminUser.principal, {}),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('nhân viên Nhà xe B tuyệt đối không thể gửi tin nhắn vào cuộc trò chuyện của Nhà xe A', async () => {
+      const convId = createdConversationIds[createdConversationIds.length - 1];
+
+      await expect(
+        chatService.sendMessage(staffUserB.principal, {
+          cuocTroChuyenId: convId,
+          noiDung: 'Nhân viên nhà xe B xâm nhập trái phép',
+        }),
+      ).rejects.toThrow(ForbiddenException);
+    });
+  });
+
+  describe('BE-R03: First Message on Existing Conversation without clientMessageId', () => {
+    it('mở lại conversation đang mở và gửi tinNhanDauTien không có clientMessageId thì tin nhắn được lưu vào DB và updatedAt được cập nhật', async () => {
+      const convId = createdConversationIds[createdConversationIds.length - 1];
+
+      // Đặt updatedAt cũ hơn để kiểm chứng cập nhật rõ ràng
+      const pastDate = new Date(Date.now() - 5000);
+      await prisma.cuocTroChuyen.update({
+        where: { cuocTroChuyenId: convId },
+        data: { updatedAt: pastDate },
+      });
+
+      const res = await chatService.createConversation(customerUser.principal, {
+        nhaXeId: busCompanyAId,
+        tinNhanDauTien: 'Tin nhắn gửi lại không có clientMessageId',
+      });
+
+      expect(res.isNew).toBe(false);
+      expect(res.conversation.cuocTroChuyenId).toBe(convId);
+      expect(res.firstMessage).toBeDefined();
+      expect(res.firstMessage?.noiDung).toBe('Tin nhắn gửi lại không có clientMessageId');
+
+      // Kiểm tra DB tin nhắn đã được tạo với clientMessageId = null
+      const savedMsg = await prisma.tinNhanHoTro.findFirst({
+        where: {
+          cuocTroChuyenId: convId,
+          noiDung: 'Tin nhắn gửi lại không có clientMessageId',
+        },
+      });
+      expect(savedMsg).toBeDefined();
+      expect(savedMsg?.clientMessageId).toBeNull();
+      expect(savedMsg?.taiKhoanGuiId).toBe(customerUser.taiKhoanId);
+
+      // Kiểm tra updatedAt trong DB đã được cập nhật mới hơn pastDate
+      const convAfter = await prisma.cuocTroChuyen.findUniqueOrThrow({
+        where: { cuocTroChuyenId: convId },
+      });
+      expect(new Date(convAfter.updatedAt).getTime()).toBeGreaterThan(pastDate.getTime());
+    });
+  });
+
+  describe('BE-R04: Concurrent ensureKhachHang P2002 Race Condition', () => {
+    it('2 request đồng thời gọi createConversation cho tài khoản người dùng mới tạo chưa có KhachHang record đều thành công và chỉ tạo 1 record KhachHang', async () => {
+      let role = await prisma.vaiTro.findFirst({
+        where: { tenVaiTro: 'KHACH_HANG' },
+      });
+      if (!role) {
+        role = await prisma.vaiTro.create({
+          data: {
+            tenVaiTro: 'KHACH_HANG',
+            moTa: 'Khách hàng',
+          },
+        });
+      }
+
+      const freshUser = await prisma.taiKhoan.create({
+        data: {
+          hoTen: `Khách Hàng Mới ${testSuffix}`,
+          soDienThoai: `09${Math.floor(10000000 + Math.random() * 90000000)}`,
+          matKhau: '$2b$10$hashedpasswordforexample',
+          email: `concurrent_cust_${Date.now()}_${testSuffix}@example.com`,
+          daXacThucSoDienThoai: true,
+          trangThai: 'HOAT_DONG',
+          taiKhoanVaiTros: {
+            create: {
+              vaiTroId: role.vaiTroId,
+            },
+          },
+        },
+      });
+
+      const freshPrincipal: AuthPrincipal = {
+        taiKhoanId: freshUser.taiKhoanId,
+        sessionId: `sess-fresh-${freshUser.taiKhoanId}`,
+        roles: ['KHACH_HANG'],
+        permissions: [],
+        nhanVienId: null,
+        nhaXeId: null,
+      };
+
+      // Đảm bảo ban đầu chưa có bản ghi KhachHang
+      const preCount = await prisma.khachHang.count({
+        where: { taiKhoanId: freshUser.taiKhoanId },
+      });
+      expect(preCount).toBe(0);
+
+      // Gọi đồng thời 2 request createConversation
+      const [res1, res2] = await Promise.all([
+        chatService.createConversation(freshPrincipal, {
+          nhaXeId: busCompanyBId,
+          tinNhanDauTien: 'Tin nhắn đồng thời 1',
+        }),
+        chatService.createConversation(freshPrincipal, {
+          nhaXeId: busCompanyBId,
+          tinNhanDauTien: 'Tin nhắn đồng thời 2',
+        }),
+      ]);
+
+      expect(res1).toBeDefined();
+      expect(res2).toBeDefined();
+      expect(res1.conversation.cuocTroChuyenId).toBe(res2.conversation.cuocTroChuyenId);
+      createdConversationIds.push(res1.conversation.cuocTroChuyenId);
+
+      // DB chỉ có đúng 1 KhachHang cho tài khoản này
+      const postCount = await prisma.khachHang.count({
+        where: { taiKhoanId: freshUser.taiKhoanId },
+      });
+      expect(postCount).toBe(1);
+
+      // Dọn dẹp tài khoản mới theo đúng thứ tự ràng buộc khóa ngoại
+      await prisma.tinNhanHoTro.deleteMany({ where: { cuocTroChuyenId: res1.conversation.cuocTroChuyenId } });
+      await prisma.cuocTroChuyen.delete({ where: { cuocTroChuyenId: res1.conversation.cuocTroChuyenId } });
+      const idx = createdConversationIds.indexOf(res1.conversation.cuocTroChuyenId);
+      if (idx !== -1) createdConversationIds.splice(idx, 1);
+
+      await prisma.khachHang.deleteMany({ where: { taiKhoanId: freshUser.taiKhoanId } });
+      await prisma.taiKhoanVaiTro.deleteMany({ where: { taiKhoanId: freshUser.taiKhoanId } });
+      await prisma.taiKhoan.delete({ where: { taiKhoanId: freshUser.taiKhoanId } });
+    });
+  });
+
+  describe('BE-R01 / RT-04: Live Socket.IO Authorization, Session/Permission Revocation & Tenant Transfer Isolation', () => {
+    let baseUrl: string;
+
+    beforeAll(async () => {
+      await app.listen(0, '127.0.0.1');
+      const addr = app.getHttpServer().address();
+      const port = typeof addr === 'object' && addr ? addr.port : 0;
+      baseUrl = `http://127.0.0.1:${port}/chat`;
+
+      let roleCskh = await prisma.vaiTro.findFirst({ where: { tenVaiTro: 'NHAN_VIEN_CSKH' } });
+      if (!roleCskh) {
+        roleCskh = await prisma.vaiTro.create({
+          data: { tenVaiTro: 'NHAN_VIEN_CSKH', moTa: 'Nhân viên CSKH' },
+        });
+      }
+      for (const permKey of ['chat:read', 'chat:manage']) {
+        let perm = await prisma.quyen.findFirst({ where: { tenQuyen: permKey } });
+        if (!perm) {
+          perm = await prisma.quyen.create({
+            data: { tenQuyen: permKey, moTa: permKey },
+          });
+        }
+        await prisma.vaiTroQuyen.upsert({
+          where: {
+            vaiTroId_quyenId: {
+              vaiTroId: roleCskh.vaiTroId,
+              quyenId: perm.quyenId,
+            },
+          },
+          update: {},
+          create: {
+            vaiTroId: roleCskh.vaiTroId,
+            quyenId: perm.quyenId,
+          },
+        });
+      }
+
+      let roleKh = await prisma.vaiTro.findFirst({ where: { tenVaiTro: 'KHACH_HANG' } });
+      if (!roleKh) {
+        roleKh = await prisma.vaiTro.create({
+          data: { tenVaiTro: 'KHACH_HANG', moTa: 'Khách hàng' },
+        });
+      }
+      await prisma.taiKhoanVaiTro.upsert({
+        where: {
+          taiKhoanId_vaiTroId: {
+            taiKhoanId: customerUser.taiKhoanId,
+            vaiTroId: roleKh.vaiTroId,
+          },
+        },
+        update: {},
+        create: {
+          taiKhoanId: customerUser.taiKhoanId,
+          vaiTroId: roleKh.vaiTroId,
+        },
+      });
+
+      for (const staff of [staffUserA1, staffUserA2, staffUserB]) {
+        await prisma.taiKhoanVaiTro.upsert({
+          where: {
+            taiKhoanId_vaiTroId: {
+              taiKhoanId: staff.taiKhoanId,
+              vaiTroId: roleCskh.vaiTroId,
+            },
+          },
+          update: {},
+          create: {
+            taiKhoanId: staff.taiKhoanId,
+            vaiTroId: roleCskh.vaiTroId,
+          },
+        });
+      }
+    });
+
+    async function connectLiveSocket(user: {
+      accountId: number;
+      customerId: number | null;
+      fullName: string;
+      phoneNumber: string;
+      roles: string[];
+    }) {
+      const { io } = await import('socket.io-client');
+      const { TokenService } = await import('../../../src/auth/tokens/token.service.js');
+      const tokenService = app.get(TokenService);
+
+      const issued = await prisma.$transaction((tx) => tokenService.createSession(tx, user));
+      const socket = io(baseUrl, {
+        auth: { token: issued.accessToken },
+        transports: ['websocket'],
+        reconnection: false,
+      });
+
+      await new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error('Socket connection timeout')), 5000);
+        socket.once('support.connected', () => {
+          clearTimeout(timer);
+          resolve();
+        });
+        socket.once('support.error', (err) => {
+          clearTimeout(timer);
+          reject(new Error(`Socket error on connect: ${JSON.stringify(err)}`));
+        });
+        socket.once('connect_error', (err) => {
+          clearTimeout(timer);
+          reject(err);
+        });
+      });
+
+      return { socket, issued, tokenService };
+    }
+
+    it('Test A — Session revoke while socket is idle: thu hồi refreshToken ngắt đúng session bị revoke, không nhận event mới, và không làm rơi session hợp lệ khác của cùng tài khoản', async () => {
+      const { SupportChatController } = await import('../../../src/support-chat/support-chat.controller.js');
+      const chatController = app.get(SupportChatController);
+
+      const convRes = await chatService.createConversation(customerUser.principal, {
+        nhaXeId: busCompanyAId,
+        tinNhanDauTien: 'Mở hội thoại cho Test A',
+      });
+      if (!createdConversationIds.includes(convRes.conversation.cuocTroChuyenId)) {
+        createdConversationIds.push(convRes.conversation.cuocTroChuyenId);
+      }
+      const convId = convRes.conversation.cuocTroChuyenId;
+
+      const staffIdentity = {
+        accountId: staffUserA1.taiKhoanId,
+        customerId: null,
+        fullName: 'Staff A1',
+        phoneNumber: '0900000001',
+        roles: ['NHAN_VIEN_CSKH'],
+      };
+
+      const session1 = await connectLiveSocket(staffIdentity);
+      const session2 = await connectLiveSocket(staffIdentity);
+
+      try {
+        // Cả 2 phiên cùng tham gia room conversation_${convId}
+        const join1 = await session1.socket.emitWithAck('support.conversation.join', {
+          cuocTroChuyenId: convId,
+        });
+        const join2 = await session2.socket.emitWithAck('support.conversation.join', {
+          cuocTroChuyenId: convId,
+        });
+        expect(join1).toEqual({ success: true, cuocTroChuyenId: convId });
+        expect(join2).toEqual({ success: true, cuocTroChuyenId: convId });
+
+        const session1Messages: unknown[] = [];
+        const session2Messages: unknown[] = [];
+        session1.socket.on('support.message.new', (payload) => session1Messages.push(payload));
+        session2.socket.on('support.message.new', (payload) => session2Messages.push(payload));
+
+        // Thu hồi session 1 qua TokenService (logout) trong khi cả 2 socket đều đang đứng yên
+        const disconnectPromise = new Promise<void>((resolve) => {
+          if (session1.socket.disconnected) {
+            resolve();
+            return;
+          }
+          session1.socket.once('disconnect', () => resolve());
+        });
+
+        await session1.tokenService.revokeRefreshToken(session1.issued.refreshToken);
+        await disconnectPromise;
+
+        expect(session1.socket.connected).toBe(false);
+        expect(session2.socket.connected).toBe(true);
+
+        // Khách hàng gửi tin nhắn mới qua REST controller -> phát vào conversation_${convId} và company_${busCompanyAId}
+        const receivedBySession2 = new Promise<any>((resolve) => {
+          session2.socket.once('support.message.new', (payload) => resolve(payload));
+        });
+
+        await chatController.sendMessage(customerUser.principal, convId, {
+          noiDung: 'Tin nhắn sau khi session 1 bị thu hồi',
+        });
+
+        const msgOnSession2 = await receivedBySession2;
+        await new Promise((r) => setTimeout(r, 80));
+
+        expect(msgOnSession2.noiDung).toBe('Tin nhắn sau khi session 1 bị thu hồi');
+        // Session 1 bị thu hồi tuyệt đối không nhận được sự kiện nào
+        expect(session1Messages.length).toBe(0);
+      } finally {
+        session1.socket.disconnect();
+        session2.socket.disconnect();
+        await prisma.phienDangNhap.deleteMany({
+          where: { taiKhoanId: staffUserA1.taiKhoanId },
+        });
+      }
+    });
+
+    it('Test B — Permission revoke while socket is idle: thu hồi quyền chat:read/chat:manage trong DB khiến socket đang idle không nhận được bất kỳ event mới nào', async () => {
+      const { SupportChatController } = await import('../../../src/support-chat/support-chat.controller.js');
+      const chatController = app.get(SupportChatController);
+
+      const convRes = await chatService.createConversation(customerUser.principal, {
+        nhaXeId: busCompanyAId,
+      });
+      const convId = convRes.conversation.cuocTroChuyenId;
+
+      const staffSession = await connectLiveSocket({
+        accountId: staffUserA2.taiKhoanId,
+        customerId: null,
+        fullName: 'Staff A2',
+        phoneNumber: '0900000002',
+        roles: ['NHAN_VIEN_CSKH'],
+      });
+      const validPeerSession = await connectLiveSocket({
+        accountId: staffUserA1.taiKhoanId,
+        customerId: null,
+        fullName: 'Staff A1',
+        phoneNumber: '0900000001',
+        roles: ['NHAN_VIEN_CSKH'],
+      });
+
+      const roleCskh = await prisma.vaiTro.findFirstOrThrow({
+        where: { tenVaiTro: 'NHAN_VIEN_CSKH' },
+      });
+
+      try {
+        const joinRes = await staffSession.socket.emitWithAck('support.conversation.join', {
+          cuocTroChuyenId: convId,
+        });
+        expect(joinRes.success).toBe(true);
+        await validPeerSession.socket.emitWithAck('support.conversation.join', {
+          cuocTroChuyenId: convId,
+        });
+
+        const revokedSocketEvents: unknown[] = [];
+        staffSession.socket.on('support.message.new', (ev) => revokedSocketEvents.push(ev));
+
+        // Thu hồi toàn bộ vai trò của staffUserA2 trực tiếp trong DB trong khi socket của staffUserA2 hoàn toàn KHÔNG gửi thêm thao tác nào
+        await prisma.taiKhoanVaiTro.deleteMany({
+          where: { taiKhoanId: staffUserA2.taiKhoanId },
+        });
+
+        const peerReceived = new Promise<any>((resolve) => {
+          validPeerSession.socket.once('support.message.new', (ev) => resolve(ev));
+        });
+
+        // Phát tin nhắn từ khách hàng qua REST controller
+        await chatController.sendMessage(customerUser.principal, convId, {
+          noiDung: 'Tin nhắn sau khi Staff A2 bị thu hồi quyền chat',
+        });
+
+        const msgOnPeer = await peerReceived;
+        await new Promise((r) => setTimeout(r, 80));
+
+        expect(msgOnPeer.noiDung).toBe('Tin nhắn sau khi Staff A2 bị thu hồi quyền chat');
+        expect(revokedSocketEvents.length).toBe(0);
+        expect(staffSession.socket.connected).toBe(false);
+      } finally {
+        staffSession.socket.disconnect();
+        validPeerSession.socket.disconnect();
+        // Khôi phục lại vai trò cho staffUserA2
+        await prisma.taiKhoanVaiTro.upsert({
+          where: {
+            taiKhoanId_vaiTroId: {
+              taiKhoanId: staffUserA2.taiKhoanId,
+              vaiTroId: roleCskh.vaiTroId,
+            },
+          },
+          update: {},
+          create: {
+            taiKhoanId: staffUserA2.taiKhoanId,
+            vaiTroId: roleCskh.vaiTroId,
+          },
+        });
+        await prisma.phienDangNhap.deleteMany({
+          where: { taiKhoanId: { in: [staffUserA1.taiKhoanId, staffUserA2.taiKhoanId] } },
+        });
+      }
+    });
+
+    it('Test C & D — Tenant transfer while socket is idle + All broadcast paths: chuyển nhân viên từ Nhà xe A sang Nhà xe B khi socket đang idle ngăn hoàn toàn rò rỉ event của Nhà xe A trên mọi luồng phát và cho phép nhận event của Nhà xe B', async () => {
+      const { SupportChatController } = await import('../../../src/support-chat/support-chat.controller.js');
+      const chatController = app.get(SupportChatController);
+
+      // Chuẩn bị cuộc trò chuyện đang mở tại Nhà xe A và Nhà xe B
+      await prisma.cuocTroChuyen.updateMany({
+        where: { cuocTroChuyenId: { in: createdConversationIds } },
+        data: { trangThai: 'DA_DONG', dongLuc: new Date() },
+      });
+
+      const convARes = await chatService.createConversation(customerUser.principal, {
+        nhaXeId: busCompanyAId,
+        tinNhanDauTien: 'Hội thoại của Nhà xe A',
+      });
+      createdConversationIds.push(convARes.conversation.cuocTroChuyenId);
+      const convAId = convARes.conversation.cuocTroChuyenId;
+
+      const transferredStaffSession = await connectLiveSocket({
+        accountId: staffUserA2.taiKhoanId,
+        customerId: null,
+        fullName: 'Staff A2',
+        phoneNumber: '0900000002',
+        roles: ['NHAN_VIEN_CSKH'],
+      });
+      const staffA1Session = await connectLiveSocket({
+        accountId: staffUserA1.taiKhoanId,
+        customerId: null,
+        fullName: 'Staff A1',
+        phoneNumber: '0900000001',
+        roles: ['NHAN_VIEN_CSKH'],
+      });
+      const customerSession = await connectLiveSocket({
+        accountId: customerUser.taiKhoanId,
+        customerId: customerUser.khachHangId,
+        fullName: 'Customer',
+        phoneNumber: '0900000009',
+        roles: ['KHACH_HANG'],
+      });
+
+      try {
+        // Staff A2, Staff A1 và Customer cùng join conversation_A
+        expect(
+          (await transferredStaffSession.socket.emitWithAck('support.conversation.join', { cuocTroChuyenId: convAId }))
+            .success,
+        ).toBe(true);
+        expect(
+          (await staffA1Session.socket.emitWithAck('support.conversation.join', { cuocTroChuyenId: convAId })).success,
+        ).toBe(true);
+        expect(
+          (await customerSession.socket.emitWithAck('support.conversation.join', { cuocTroChuyenId: convAId })).success,
+        ).toBe(true);
+
+        const leakedTenantAEvents: Array<{ event: string; payload: any }> = [];
+        for (const evName of [
+          'support.message.new',
+          'support.conversation.new',
+          'support.conversation.claimed',
+          'support.conversation.closed',
+          'support.messages.read',
+          'support.typing',
+        ]) {
+          transferredStaffSession.socket.on(evName, (payload) => {
+            // Ghi nhận nếu sự kiện thuộc về Nhà xe A hoặc convAId
+            if (
+              payload?.nhaXeId === busCompanyAId ||
+              payload?.cuocTroChuyenId === convAId ||
+              payload?.cuocTroChuyen?.cuocTroChuyenId === convAId
+            ) {
+              leakedTenantAEvents.push({ event: evName, payload });
+            }
+          });
+        }
+
+        // Chuyển nhân viên Staff A2 từ Nhà xe A sang Nhà xe B trực tiếp trong DB
+        // Socket của Staff A2 vẫn đang kết nối và KHÔNG phát bất kỳ sự kiện nào!
+        await prisma.nhanVien.update({
+          where: { nhanVienId: staffUserA2.nhanVienId },
+          data: { nhaXeId: busCompanyBId },
+        });
+
+        // 1. Broadcast typing từ Customer vào conversation_A
+        await customerSession.socket.emitWithAck('support.typing', {
+          cuocTroChuyenId: convAId,
+          isTyping: true,
+        });
+
+        // 2. Broadcast message.new từ REST controller (sendMessage)
+        await chatController.sendMessage(customerUser.principal, convAId, {
+          noiDung: 'Tin nhắn mật của Nhà xe A sau khi A2 chuyển sang B',
+        });
+
+        // 3. Broadcast conversation.claimed từ REST controller
+        await chatController.claimConversation(staffUserA1.principal, convAId);
+
+        // 4. Broadcast messages.read từ REST controller
+        await chatController.markAsRead(staffUserA1.principal, convAId, {});
+
+        // 5. Broadcast conversation.closed từ REST controller
+        await chatController.closeConversation(staffUserA1.principal, convAId, {
+          lyDo: 'Đóng hội thoại A',
+        });
+
+        // 6. Broadcast conversation.new + firstMessage từ REST controller (createConversation mới cho Nhà xe A)
+        const convA2 = await chatController.createConversation(customerUser.principal, {
+          nhaXeId: busCompanyAId,
+          tinNhanDauTien: 'Hội thoại mới số 2 của Nhà xe A',
+        });
+        createdConversationIds.push(convA2.cuocTroChuyenId);
+
+        await new Promise((r) => setTimeout(r, 100));
+
+        // Xác minh Staff A2 (đã chuyển sang B) KHÔNG nhận bất kỳ sự kiện nào của Nhà xe A!
+        expect(leakedTenantAEvents).toEqual([]);
+
+        // Đồng thời xác minh Staff A2 vẫn đang kết nối và NHẬN ĐƯỢC sự kiện hợp lệ của Nhà xe B mới!
+        expect(transferredStaffSession.socket.connected).toBe(true);
+
+        const tenantBNewConvPromise = new Promise<any>((resolve) => {
+          transferredStaffSession.socket.once('support.conversation.new', (payload) => resolve(payload));
+        });
+
+        const convB = await chatController.createConversation(customerUser.principal, {
+          nhaXeId: busCompanyBId,
+          tinNhanDauTien: 'Xin chào Nhà xe B mới',
+        });
+        createdConversationIds.push(convB.cuocTroChuyenId);
+
+        const receivedConvB = await tenantBNewConvPromise;
+        expect(receivedConvB.cuocTroChuyenId).toBe(convB.cuocTroChuyenId);
+        expect(receivedConvB.nhaXeId).toBe(busCompanyBId);
+      } finally {
+        transferredStaffSession.socket.disconnect();
+        staffA1Session.socket.disconnect();
+        customerSession.socket.disconnect();
+        await prisma.nhanVien.update({
+          where: { nhanVienId: staffUserA2.nhanVienId },
+          data: { nhaXeId: busCompanyAId },
+        });
+        await prisma.phienDangNhap.deleteMany({
+          where: {
+            taiKhoanId: {
+              in: [staffUserA1.taiKhoanId, staffUserA2.taiKhoanId, customerUser.taiKhoanId],
+            },
+          },
+        });
+      }
+    });
+  });
+});

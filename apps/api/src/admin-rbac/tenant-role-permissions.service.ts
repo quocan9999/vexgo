@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
+  Optional,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import type { Prisma } from '../generated/prisma/client.js';
@@ -10,6 +11,7 @@ import {
   ADMIN_ROLE_PERMISSION_SCOPE_BY_NAME,
   isPermissionAllowedForRole,
 } from '../auth/permissions/permission-catalog.js';
+import { RealtimeSessionInvalidatorService } from '../auth/realtime-session-invalidator.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { TENANT_RBAC_ROLE_NAMES } from './tenant-role-permissions.constants.js';
 
@@ -20,7 +22,11 @@ const TENANT_PERMISSION_KEYS = TENANT_PERMISSION_CATALOG.map(({ key }) => key);
 
 @Injectable()
 export class TenantRolePermissionsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional()
+    private readonly sessionInvalidator?: RealtimeSessionInvalidatorService,
+  ) {}
 
   async getPlatformTenantConfiguration(nhaXeId: number) {
     return this.getConfiguration(await this.requireExistingTenantId(nhaXeId));
@@ -77,6 +83,8 @@ export class TenantRolePermissionsService {
       }
     });
 
+    await this.sessionInvalidator?.revalidateTenantRole(nhaXeId, roleName);
+
     return this.getRoleConfiguration(nhaXeId, roleName);
   }
 
@@ -115,6 +123,8 @@ export class TenantRolePermissionsService {
         where: { nhaXeId, vaiTroId: role.vaiTroId },
       });
     });
+
+    await this.sessionInvalidator?.revalidateTenantRole(nhaXeId, roleName);
 
     return this.getRoleConfiguration(nhaXeId, roleName);
   }

@@ -143,7 +143,8 @@ export const ADMIN_PERMISSION_CATALOG = [
   {
     key: 'shipment:read',
     scope: 'tenant',
-    description: 'Xem danh sách và chi tiết phiếu gửi hàng trong phạm vi nhà xe.',
+    description:
+      'Xem danh sách và chi tiết phiếu gửi hàng trong phạm vi nhà xe.',
   },
   {
     key: 'shipment:update',
@@ -179,6 +180,18 @@ export const ADMIN_PERMISSION_CATALOG = [
     key: 'admin-account:update',
     scope: 'platform',
     description: 'Cập nhật và thay đổi trạng thái tài khoản quản trị nhà xe.',
+  },
+  {
+    key: 'chat:read',
+    scope: 'tenant',
+    description:
+      'Xem danh sách và lịch sử cuộc trò chuyện trong phạm vi nhà xe.',
+  },
+  {
+    key: 'chat:manage',
+    scope: 'tenant',
+    description:
+      'Tiếp nhận, phản hồi và quản lý cuộc trò chuyện trong phạm vi nhà xe.',
   },
 ] as const;
 
@@ -231,6 +244,8 @@ export const ADMIN_ROLE_DEFAULT_PERMISSION_KEYS = {
     'promotion:update',
     'shipment:read',
     'shipment:update',
+    'chat:read',
+    'chat:manage',
   ],
   NHAN_VIEN_DIEU_HANH: [
     'vehicle-type:read',
@@ -257,7 +272,7 @@ export const ADMIN_ROLE_DEFAULT_PERMISSION_KEYS = {
     'shipment:update',
   ],
   NHAN_VIEN_BAN_VE: [],
-  NHAN_VIEN_CSKH: [],
+  NHAN_VIEN_CSKH: ['chat:read', 'chat:manage', 'customer:read'],
   NHAN_VIEN_PHU_XE: [],
   NHAN_VIEN_KINH_DOANH: [],
   KHACH_HANG: [],

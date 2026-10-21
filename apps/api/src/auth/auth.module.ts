@@ -15,6 +15,8 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { PermissionResolverService } from './permissions/permission-resolver.service.js';
 import { EffectiveRolePermissionLoaderService } from './permissions/effective-role-permission-loader.service.js';
+import { RealtimeSessionInvalidatorService } from './realtime-session-invalidator.service.js';
+import { RealtimeSessionInvalidatorModule } from './realtime-session-invalidator.module.js';
 
 const DEFAULT_LOGIN_RATE_LIMIT = 20;
 const DEFAULT_LOGIN_RATE_TTL_MS = 15 * 60 * 1000;
@@ -30,7 +32,9 @@ function readPositiveInteger(
 
 @Module({
   imports: [
+    ConfigModule,
     PrismaModule,
+    RealtimeSessionInvalidatorModule,
     JwtModule.register({}),
     ThrottlerModule.forRootAsync({
       imports: [ConfigModule],
@@ -57,6 +61,7 @@ function readPositiveInteger(
     AuthService,
     PermissionResolverService,
     EffectiveRolePermissionLoaderService,
+    RealtimeSessionInvalidatorService,
     OtpCryptoService,
     OtpService,
     TokenService,
@@ -68,6 +73,14 @@ function readPositiveInteger(
     ConsoleSmsSender,
     { provide: SMS_SENDER, useExisting: ConsoleSmsSender },
   ],
-  exports: [TokenService, AccessTokenGuard, AuthorizationGuard, JwtModule],
+  exports: [
+    TokenService,
+    AccessTokenGuard,
+    AuthorizationGuard,
+    JwtModule,
+    PermissionResolverService,
+    EffectiveRolePermissionLoaderService,
+    RealtimeSessionInvalidatorService,
+  ],
 })
 export class AuthModule {}

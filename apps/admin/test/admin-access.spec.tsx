@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  canAccessSupportChat,
+  canAccessTenantPath,
   canManagePlatformRbac,
   canReadTenantRbac,
   canWriteTenantRbac,
@@ -297,5 +299,29 @@ describe('admin access scope and permissions', () => {
 
     expect(hasAdminPermission(session, 'route:read')).toBe(false);
     expect(getFirstAccessibleAdminPath(session)).toBeNull();
+  });
+
+  it('allows access to support-chat for tenant sessions with chat:read or chat:manage (F-NEW-05)', () => {
+    const sessionWithRead = makeTenantSession(['NHAN_VIEN_CSKH'], ['chat:read']);
+    const sessionWithManage = makeTenantSession(['NHAN_VIEN_CSKH'], ['chat:manage']);
+    const sessionWithBoth = makeTenantSession(['NHAN_VIEN_CSKH'], ['chat:read', 'chat:manage']);
+    const sessionWithoutChat = makeTenantSession(['NHAN_VIEN_CSKH'], ['vehicle:read']);
+    const platformSession = makePlatformSession(['chat:read', 'chat:manage']);
+
+    // canAccessSupportChat
+    expect(canAccessSupportChat(sessionWithRead)).toBe(true);
+    expect(canAccessSupportChat(sessionWithManage)).toBe(true);
+    expect(canAccessSupportChat(sessionWithBoth)).toBe(true);
+    expect(canAccessSupportChat(sessionWithoutChat)).toBe(false);
+    expect(canAccessSupportChat(platformSession)).toBe(false);
+    expect(canAccessSupportChat(null)).toBe(false);
+
+    // canAccessTenantPath for /support-chat
+    expect(canAccessTenantPath(sessionWithManage, '/support-chat')).toBe(true);
+    expect(canAccessTenantPath(sessionWithRead, '/support-chat')).toBe(true);
+    expect(canAccessTenantPath(sessionWithoutChat, '/support-chat')).toBe(false);
+
+    // getFirstAccessibleAdminPath resolves to /support-chat for session having only chat:manage
+    expect(getFirstAccessibleAdminPath(sessionWithManage)).toBe('/support-chat');
   });
 });

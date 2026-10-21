@@ -58,6 +58,7 @@ function guardContext(
   user?: AuthPrincipal,
 ): ExecutionContext {
   return {
+    getType: () => 'http',
     switchToHttp: () => ({ getRequest: () => ({ user }) }),
     getHandler: () => controllerHandler(handlerName),
     getClass: () => ShipmentsController,

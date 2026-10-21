@@ -413,9 +413,21 @@ describe('TripsService detail', () => {
 
     const result = await service.getCargoCapacity(21);
     expect(result.data.acceptsShipments).toBe(true);
-    expect(result.data.capacities.motorcycles).toEqual({ total: 3, used: 1, remaining: 2 });
-    expect(result.data.capacities.bulkyGoods).toEqual({ total: 10, used: 4, remaining: 6 });
-    expect(result.data.capacities.parcels).toEqual({ total: 10, used: 2, remaining: 8 });
+    expect(result.data.capacities.motorcycles).toEqual({
+      total: 3,
+      used: 1,
+      remaining: 2,
+    });
+    expect(result.data.capacities.bulkyGoods).toEqual({
+      total: 10,
+      used: 4,
+      remaining: 6,
+    });
+    expect(result.data.capacities.parcels).toEqual({
+      total: 10,
+      used: 2,
+      remaining: 8,
+    });
   });
 
   it('returns acceptsShipments: false when trip does not accept cargo', async () => {
