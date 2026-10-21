@@ -96,7 +96,7 @@ merge or reviewer-thread resolution is performed by the implementation agent.
 
 ## Lead review follow-up
 
-- Admin reads use one REST mutation with explicit loaded inbound IDs. No empty
+- Admin reads use one REST mutation with explicit visible inbound IDs. No empty
   fallback or parallel socket read mutation is sent. UI read state changes only
   after acknowledgement; a failed request preserves unread state. The detail API
   now supplies `soTinChuaDoc` from the authorized conversation's other-sender
@@ -134,3 +134,43 @@ Final refreshed graph reports this follow-up as 7 files/12 symbols, CRITICAL;
 the full PR versus develop is 79 files/230 symbols, also CRITICAL, without a
 capped listing at this checkpoint. This supersedes the earlier listing-cap
 observation, not the shared API impact warning or Lead review requirement.
+
+## Admin viewport follow-up
+
+Admin now uses the same visible-text-bubble semantics as Customer Web and Mobile.
+Only customer text rectangles intersecting the transcript scroll area, clipped
+to the browser viewport in a visible tab, may be sent to the read endpoint.
+Header/avatar visibility, loaded offscreen messages and empty ID lists do not
+qualify. Scroll, resize, tab visibility and intersection changes recheck the
+geometry. No API/schema or Mobile changes are part of this follow-up.
+
+The existing single REST mutation/ACK/count flow remains authoritative. A scroll
+while a read is pending queues the newly visible IDs for the next acknowledged
+batch. Failed reads retain state and do not start a retry loop; another viewport
+event can retry currently visible IDs. Status-only ACKs keep the scroll anchor.
+
+Three new viewport component regressions failed on `349c451`, then passed after
+the correction. Two additional regressions cover pending-ACK serialization and
+failure without an automatic retry loop. Existing 17 component regressions also
+remain included. Browser/database evidence and exact-head CI are reported in the
+PR handoff, separately from these controlled component tests.
+
+Executed validation for this follow-up: all 445 Admin tests (22 focused chat
+component tests), scoped ESLint, Admin typecheck and production build passed.
+Actual Chrome/API/JWT/Socket.IO/MySQL QA used only the dedicated local test DB.
+With 50 loaded customer messages, offscreen records remained unread. Deliberate
+scrolling changed the authoritative unread count from 14 to 9, matched the Admin
+badge, and emitted customer receipt IDs 277..281, all within the observed visible
+text bubbles 277..283. The nine offscreen messages stayed `DA_GUI`; the read ACK
+did not jump the viewport. A new message while Admin was backgrounded stayed
+unread, and detail count 10 matched MySQL. Same-tab foreground return remains
+unverified in this browser run because CUA lost its debugger connection; the
+visibility-change component regression passed. No new physical Mobile test is
+claimed. Raw evidence/report remain outside Git in
+`mobile-qa-evidence/chat-qa/ADMIN_VIEWPORT_P2_QA.md`.
+
+The first incremental graph had incorrect/UNKNOWN node mappings. A full forced
+rebuild restored the component identity: its upstream walk reports LOW (two
+impacted symbols), while all-scope follow-up analysis reports HIGH across three
+files. The aggregate HIGH warning remains applicable; graph results and tests do
+not waive Lead review. Final pushed-head CI is checked separately in PR37.

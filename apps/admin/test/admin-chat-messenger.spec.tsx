@@ -24,6 +24,8 @@ import type { UseAdminChatSocketProps } from '../src/features/support-chat/hooks
 
 let capturedSocketProps: Partial<UseAdminChatSocketProps> = {};
 const socketRead = vi.fn();
+let bubbleBounds = new Map<number, DOMRect>();
+const rect = (top: number, bottom: number): DOMRect => ({top, bottom, left: 10, right: 150, width: 140, height: bottom - top, x: 10, y: top, toJSON: () => ({})});
 
 vi.mock('@/features/admin-auth/services/admin-auth', () => ({
   getAdminAccessToken: () => 'mock-admin-token-123',
@@ -99,6 +101,109 @@ describe('AdminChatMessenger Component & Flow Regression Tests', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     window.HTMLElement.prototype.scrollIntoView = vi.fn();
+    bubbleBounds = new Map();
+    Object.defineProperty(document, 'visibilityState', {configurable: true, value: 'visible'});
+    vi.spyOn(window.HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      if (this.dataset.testid === 'admin-chat-transcript') return rect(0, 100);
+      return bubbleBounds.get(Number(this.dataset.chatMessageId)) ?? rect(10, 30);
+    });
+  });
+
+  describe('Lead R3: Admin visible text bubble read receipts', () => {
+    async function openUnreadPage() {
+      const conversation = createMockConversation(1, 'Viewport customer', 'DANG_XU_LY');
+      conversation.soTinChuaDoc = 50;
+      const records: AdminSupportMessage[] = Array.from({length: 50}, (_, i) => ({
+        tinNhanId: i + 1, cuocTroChuyenId: 1, taiKhoanGuiId: 20,
+        loaiNguoiGui: 'KHACH_HANG', loaiTinNhan: 'VAN_BAN',
+        noiDung: `Viewport text ${i + 1}`, trangThai: 'DA_GUI',
+        createdAt: new Date(Date.UTC(2026, 9, 21, 0, 0, i)).toISOString(),
+      }));
+      vi.spyOn(adminSupportChatApi, 'listConversations').mockResolvedValue({data: [conversation], meta: {page: 1, pageSize: 20, totalItems: 1, totalPages: 1}});
+      vi.spyOn(adminSupportChatApi, 'getMessages').mockResolvedValue(records);
+      vi.spyOn(adminSupportChatApi, 'getConversationById').mockImplementation(async () => ({...conversation, soTinChuaDoc: records.filter(m => m.trangThai === 'DA_GUI').length}));
+      const read = vi.spyOn(adminSupportChatApi, 'markMessagesAsRead').mockImplementation(async (_id, _token, ids) => {
+        for (const m of records) if (ids?.includes(m.tinNhanId)) m.trangThai = 'DA_DOC';
+        return {updatedCount: ids?.length ?? 0};
+      });
+      render(<AdminChatMessenger session={mockSession} />);
+      fireEvent.click(await screen.findByText('Viewport customer'));
+      await screen.findByText('Viewport text 50');
+      return {read, records};
+    }
+    it('reads only visible text bubbles out of 50 loaded unread records and marks more on scroll', async () => {
+      for (let id = 1; id <= 50; id++) bubbleBounds.set(id, rect(200, 240));
+      bubbleBounds.set(49, rect(10, 30));
+      bubbleBounds.set(50, rect(40, 60));
+      const {read, records} = await openUnreadPage();
+      await waitFor(() => expect(read).toHaveBeenCalledWith(1, 'mock-admin-token-123', [49, 50]));
+      await waitFor(() => expect(screen.getByText('48')).toBeTruthy());
+      expect(records.filter(m => m.trangThai === 'DA_GUI')).toHaveLength(48);
+      expect(socketRead).not.toHaveBeenCalled();
+      const textBubble = screen.getByText('Viewport text 1');
+      expect(textBubble.dataset.chatMessageId).toBe('1');
+      expect(textBubble.textContent).toBe('Viewport text 1');
+      bubbleBounds.set(1, rect(20, 40));
+      const scrollCount = vi.mocked(window.HTMLElement.prototype.scrollIntoView).mock.calls.length;
+      fireEvent.scroll(screen.getByTestId('admin-chat-transcript'));
+      await waitFor(() => expect(read.mock.calls.map(call => call[2])).toEqual([[49, 50], [1]]));
+      await waitFor(() => expect(screen.getByText('47')).toBeTruthy());
+      expect(vi.mocked(window.HTMLElement.prototype.scrollIntoView).mock.calls.length).toBe(scrollCount);
+      expect(records[1].trangThai).toBe('DA_GUI');
+    });
+    it('does not read offscreen text merely because its header/row is visible, then detects a visible bubble on resize', async () => {
+      for (let id = 1; id <= 50; id++) bubbleBounds.set(id, rect(110, 140));
+      const {read} = await openUnreadPage();
+      expect(read).not.toHaveBeenCalled();
+      expect(screen.getByText('50', {selector: 'span'})).toBeTruthy();
+      // All outer rows have visible default geometry; only the actual text rectangle matters.
+      bubbleBounds.set(2, rect(90, 120));
+      fireEvent(window, new Event('resize'));
+      await waitFor(() => expect(read.mock.calls.map(call => call[2])).toEqual([[2]]));
+    });
+    it('waits for a visible tab and reads only the visible IDs when visibility returns', async () => {
+      Object.defineProperty(document, 'visibilityState', {configurable: true, value: 'hidden'});
+      for (let id = 1; id <= 50; id++) bubbleBounds.set(id, rect(200, 240));
+      bubbleBounds.set(50, rect(20, 40));
+      const {read} = await openUnreadPage();
+      expect(read).not.toHaveBeenCalled();
+      Object.defineProperty(document, 'visibilityState', {configurable: true, value: 'visible'});
+      fireEvent(document, new Event('visibilitychange'));
+      await waitFor(() => expect(read.mock.calls.map(call => call[2])).toEqual([[50]]));
+    });
+    it('serializes visible reads and checks newly visible IDs after the pending ACK', async () => {
+      for (let id = 1; id <= 50; id++) bubbleBounds.set(id, rect(200, 240));
+      const {read, records} = await openUnreadPage();
+      let release!: () => void;
+      read.mockImplementationOnce(() => new Promise(resolve => { release = () => { records[0].trangThai = 'DA_DOC'; resolve({updatedCount: 1}); }; }));
+      bubbleBounds.set(1, rect(20, 40));
+      fireEvent.scroll(screen.getByTestId('admin-chat-transcript'));
+      await waitFor(() => expect(read.mock.calls.map(call => call[2])).toEqual([[1]]));
+      bubbleBounds.set(2, rect(50, 70));
+      fireEvent.scroll(screen.getByTestId('admin-chat-transcript'));
+      expect(read).toHaveBeenCalledTimes(1);
+      expect(screen.getByText('50', {selector: 'span'})).toBeTruthy();
+      await act(async () => release());
+      await waitFor(() => expect(read.mock.calls.map(call => call[2])).toEqual([[1], [2]]));
+      await waitFor(() => expect(screen.getByText('48')).toBeTruthy());
+      expect(records[2].trangThai).toBe('DA_GUI');
+    });
+    it('preserves failed read state without a retry loop and later reads only the currently visible bubble', async () => {
+      for (let id = 1; id <= 50; id++) bubbleBounds.set(id, rect(200, 240));
+      const {read, records} = await openUnreadPage();
+      read.mockRejectedValueOnce(new Error('read endpoint unavailable'));
+      bubbleBounds.set(1, rect(20, 40));
+      await act(async () => fireEvent.scroll(screen.getByTestId('admin-chat-transcript')));
+      expect(read).toHaveBeenCalledTimes(1);
+      expect(records[0].trangThai).toBe('DA_GUI');
+      expect(screen.getByText('50', {selector: 'span'})).toBeTruthy();
+      bubbleBounds.set(1, rect(200, 240));
+      bubbleBounds.set(2, rect(20, 40));
+      fireEvent.scroll(screen.getByTestId('admin-chat-transcript'));
+      await waitFor(() => expect(read.mock.calls.map(call => call[2])).toEqual([[1], [2]]));
+      await waitFor(() => expect(screen.getByText('49')).toBeTruthy());
+      expect(records[0].trangThai).toBe('DA_GUI');
+    });
   });
 
   describe('Lead R2: authoritative reads and reconnect gaps', () => {

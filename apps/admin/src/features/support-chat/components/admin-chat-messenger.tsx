@@ -138,6 +138,22 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const transcriptRef = useRef<HTMLDivElement>(null);
+  const messageElementsRef = useRef(new Map<number, HTMLDivElement>());
+  const confirmedReadIdsRef = useRef(new Set<string>());
+  const mountedRef = useRef(false);
+  const [documentVisible, setDocumentVisible] = useState(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    const onVisibility = () =>
+      setDocumentVisible(document.visibilityState !== 'hidden');
+    onVisibility();
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      mountedRef.current = false;
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, []);
   const typingTimerRef = useRef<NodeJS.Timeout | null>(null);
   const isPrependingOlderRef = useRef(false);
 
@@ -254,15 +270,17 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
   );
   const readInFlightRef = useRef<string | null>(null);
   const tokenRef = useRef(token);
-  useEffect(() => { tokenRef.current = token; }, [token]);
+  useEffect(() => {
+    tokenRef.current = token;
+  }, [token]);
 
   useEffect(() => {
     selectedConvIdRef.current = selectedConvId;
     selectedConvRef.current = selectedConv;
   }, [selectedConvId, selectedConv]);
 
-  // Read only explicit, rendered inbound IDs. One REST acknowledgement owns
-  // local read state; broadcasting a second socket mutation races that result.
+  // Only actual text-bubble intersections count as viewed. Keep one explicit-ID
+  // REST read in flight; acknowledge before changing local status or badge.
   useEffect(() => {
     if (
       !selectedConvId ||
@@ -271,77 +289,132 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
       document.visibilityState === 'hidden'
     )
       return;
-    const ids = messages
-      .filter(
-        (m) =>
-          m.cuocTroChuyenId === selectedConvId &&
-          m.loaiNguoiGui === 'KHACH_HANG' &&
-          m.trangThai === 'DA_GUI' &&
-          m.tinNhanId > 0,
-      )
-      .map((m) => m.tinNhanId);
-    if (ids.length === 0) return;
+    const root = transcriptRef.current;
+    if (!root || !documentVisible) return;
     const targetId = selectedConvId;
     const requestId = messageFetchRequestIdRef.current;
     const key = `${token}:${targetId}:${requestId}`;
-    if (readInFlightRef.current === key) return;
-    readInFlightRef.current = key;
+    let disposed = false;
     const current = () =>
+      mountedRef.current &&
       tokenRef.current === token &&
       selectedConvIdRef.current === targetId &&
       messageFetchRequestIdRef.current === requestId;
-    void (async () => {
-      try {
-        const acknowledgement = await adminSupportChatApi.markMessagesAsRead(
-          targetId,
-          token,
-          ids,
-        );
-        if (!current()) return;
-        // Detail may carry an authoritative count; older API versions omit it.
-        let detail: AdminSupportConversation | undefined;
+    const checkVisible = () => {
+      if (
+        disposed ||
+        !current() ||
+        document.visibilityState === 'hidden' ||
+        readInFlightRef.current === key
+      )
+        return;
+      const area = root.getBoundingClientRect();
+      const top = Math.max(0, area.top),
+        bottom = Math.min(window.innerHeight, area.bottom);
+      const left = Math.max(0, area.left),
+        right = Math.min(window.innerWidth, area.right);
+      if (bottom <= top || right <= left) return;
+      const ids = messages
+        .filter((message) => {
+          if (
+            message.cuocTroChuyenId !== targetId ||
+            message.loaiNguoiGui !== 'KHACH_HANG' ||
+            message.trangThai !== 'DA_GUI' ||
+            message.tinNhanId <= 0 ||
+            confirmedReadIdsRef.current.has(`${targetId}:${message.tinNhanId}`)
+          )
+            return false;
+          const box = messageElementsRef.current
+            .get(message.tinNhanId)
+            ?.getBoundingClientRect();
+          return (
+            box &&
+            box.width > 0 &&
+            box.height > 0 &&
+            box.bottom > top &&
+            box.top < bottom &&
+            box.right > left &&
+            box.left < right
+          );
+        })
+        .map((message) => message.tinNhanId);
+      if (!ids.length) return;
+      readInFlightRef.current = key;
+      void (async () => {
+        let acknowledged = false;
         try {
-          detail = await adminSupportChatApi.getConversationById(
+          const acknowledgement = await adminSupportChatApi.markMessagesAsRead(
             targetId,
             token,
+            ids,
           );
-        } catch {}
-        if (!current()) return;
-        setMessages((previous) =>
-          previous.map((m) =>
-            m.cuocTroChuyenId === targetId && ids.includes(m.tinNhanId)
-              ? { ...m, trangThai: 'DA_DOC' }
-              : m,
-          ),
-        );
-        setConversations((previous) =>
-          previous.map((c) =>
-            c.cuocTroChuyenId === targetId
-              ? {
-                  ...c,
-                  soTinChuaDoc:
-                    detail?.soTinChuaDoc ??
-                    (c.soTinChuaDoc === undefined
-                      ? undefined
-                      : Math.max(
-                          0,
-                          c.soTinChuaDoc - acknowledgement.updatedCount,
-                        )),
-                  tinNhanCuoi:
-                    c.tinNhanCuoi && ids.includes(c.tinNhanCuoi.tinNhanId)
-                      ? { ...c.tinNhanCuoi, trangThai: 'DA_DOC' }
-                      : c.tinNhanCuoi,
-                }
-              : c,
-          ),
-        );
-      } catch (error) {
-        console.warn('[AdminChat] Read acknowledgement failed:', error);
-      } finally {
-        if (readInFlightRef.current === key) readInFlightRef.current = null;
-      }
-    })();
-  }, [messages, selectedConvId, token, loadingMessages]);
+          if (!current()) return;
+          // Detail may carry an authoritative count; older API versions omit it.
+          let detail: AdminSupportConversation | undefined;
+          try {
+            detail = await adminSupportChatApi.getConversationById(
+              targetId,
+              token,
+            );
+          } catch {}
+          if (!current()) return;
+          ids.forEach((id) =>
+            confirmedReadIdsRef.current.add(`${targetId}:${id}`),
+          );
+          setMessages((previous) =>
+            previous.map((m) =>
+              m.cuocTroChuyenId === targetId && ids.includes(m.tinNhanId)
+                ? { ...m, trangThai: 'DA_DOC' }
+                : m,
+            ),
+          );
+          setConversations((previous) =>
+            previous.map((c) =>
+              c.cuocTroChuyenId === targetId
+                ? {
+                    ...c,
+                    soTinChuaDoc:
+                      detail?.soTinChuaDoc ??
+                      (c.soTinChuaDoc === undefined
+                        ? undefined
+                        : Math.max(
+                            0,
+                            c.soTinChuaDoc - acknowledgement.updatedCount,
+                          )),
+                    tinNhanCuoi:
+                      c.tinNhanCuoi && ids.includes(c.tinNhanCuoi.tinNhanId)
+                        ? { ...c.tinNhanCuoi, trangThai: 'DA_DOC' }
+                        : c.tinNhanCuoi,
+                  }
+                : c,
+            ),
+          );
+          acknowledged = true;
+        } catch (error) {
+          console.warn('[AdminChat] Read acknowledgement failed:', error);
+        } finally {
+          if (readInFlightRef.current === key) readInFlightRef.current = null;
+          // A user can scroll to another bubble while the first ACK is pending.
+          // Recheck it after success, but never spin on a failed request.
+          if (acknowledged) checkVisible();
+        }
+      })();
+    };
+    const observer =
+      typeof IntersectionObserver === 'undefined'
+        ? null
+        : new IntersectionObserver(checkVisible, { root });
+    messageElementsRef.current.forEach((element) => observer?.observe(element));
+    root.addEventListener('scroll', checkVisible);
+    window.addEventListener('resize', checkVisible);
+    checkVisible();
+    return () => {
+      disposed = true;
+      observer?.disconnect();
+      root.removeEventListener('scroll', checkVisible);
+      window.removeEventListener('resize', checkVisible);
+    };
+  }, [messages, selectedConvId, token, loadingMessages, documentVisible]);
 
   // Tải lịch sử tin nhắn khi chọn một cuộc trò chuyện (chỉ fetch khi selectedConvId thay đổi - F-NEW-02 & F-NEW-03)
   useEffect(() => {
@@ -543,71 +616,66 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
   }, [selectedConvId, token]);
 
   // Callback khi có tin nhắn mới từ WebSocket
-  const handleNewMessage = useCallback(
-    (newMsg: AdminSupportMessage) => {
-      if (
-        !conversationsRef.current.some(
-          (conversation) =>
-            conversation.cuocTroChuyenId === newMsg.cuocTroChuyenId,
-        )
-      ) {
-        setRefreshTrigger((value) => value + 1);
-      }
-      const isCurrentlyOpen =
-        selectedConvIdRef.current === newMsg.cuocTroChuyenId;
+  const handleNewMessage = useCallback((newMsg: AdminSupportMessage) => {
+    if (
+      !conversationsRef.current.some(
+        (conversation) =>
+          conversation.cuocTroChuyenId === newMsg.cuocTroChuyenId,
+      )
+    ) {
+      setRefreshTrigger((value) => value + 1);
+    }
+    const isCurrentlyOpen =
+      selectedConvIdRef.current === newMsg.cuocTroChuyenId;
 
-      // 1. Cập nhật tin nhắn trong khung chat hiện tại nếu trùng cuocTroChuyenId
-      if (isCurrentlyOpen) {
-        const msgWithStatus: AdminSupportMessage = {
-          ...newMsg,
-          deliveryStatus: 'DA_GUI',
-        };
+    // 1. Cập nhật tin nhắn trong khung chat hiện tại nếu trùng cuocTroChuyenId
+    if (isCurrentlyOpen) {
+      const msgWithStatus: AdminSupportMessage = {
+        ...newMsg,
+        deliveryStatus: 'DA_GUI',
+      };
 
-        setMessages((prev) => {
-          if (
-            prev.some(
-              (m) => m.tinNhanId === msgWithStatus.tinNhanId && m.tinNhanId > 0,
-            )
+      setMessages((prev) => {
+        if (
+          prev.some(
+            (m) => m.tinNhanId === msgWithStatus.tinNhanId && m.tinNhanId > 0,
           )
-            return prev;
-          if (
-            msgWithStatus.clientMessageId &&
-            prev.some(
-              (m) => m.clientMessageId === msgWithStatus.clientMessageId,
-            )
-          ) {
-            return prev.map((m) =>
-              m.clientMessageId === msgWithStatus.clientMessageId
-                ? msgWithStatus
-                : m,
-            );
-          }
-          return [...prev, msgWithStatus];
-        });
-      }
+        )
+          return prev;
+        if (
+          msgWithStatus.clientMessageId &&
+          prev.some((m) => m.clientMessageId === msgWithStatus.clientMessageId)
+        ) {
+          return prev.map((m) =>
+            m.clientMessageId === msgWithStatus.clientMessageId
+              ? msgWithStatus
+              : m,
+          );
+        }
+        return [...prev, msgWithStatus];
+      });
+    }
 
-      // 2. Cập nhật preview tin nhắn cuối trong danh sách cuộc trò chuyện
-      setConversations((prev) =>
-        prev.map((c) => {
-          if (c.cuocTroChuyenId === newMsg.cuocTroChuyenId) {
-            const updatedUnread =
-              newMsg.loaiNguoiGui === 'KHACH_HANG' &&
-              newMsg.trangThai !== 'DA_DOC'
-                ? (c.soTinChuaDoc || 0) + 1
-                : c.soTinChuaDoc;
-            return {
-              ...c,
-              tinNhanCuoi: newMsg,
-              soTinChuaDoc: updatedUnread,
-              updatedAt: newMsg.createdAt,
-            };
-          }
-          return c;
-        }),
-      );
-    },
-    [],
-  );
+    // 2. Cập nhật preview tin nhắn cuối trong danh sách cuộc trò chuyện
+    setConversations((prev) =>
+      prev.map((c) => {
+        if (c.cuocTroChuyenId === newMsg.cuocTroChuyenId) {
+          const updatedUnread =
+            newMsg.loaiNguoiGui === 'KHACH_HANG' &&
+            newMsg.trangThai !== 'DA_DOC'
+              ? (c.soTinChuaDoc || 0) + 1
+              : c.soTinChuaDoc;
+          return {
+            ...c,
+            tinNhanCuoi: newMsg,
+            soTinChuaDoc: updatedUnread,
+            updatedAt: newMsg.createdAt,
+          };
+        }
+        return c;
+      }),
+    );
+  }, []);
 
   // Callback khi có nhân viên tiếp nhận
   const handleConversationClaimed = useCallback(
@@ -1230,7 +1298,11 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
             )}
 
             {/* Khung tin nhắn */}
-            <div className="flex-1 overflow-y-auto p-4 bg-slate-50/50 space-y-3">
+            <div
+              ref={transcriptRef}
+              data-testid="admin-chat-transcript"
+              className="flex-1 overflow-y-auto p-4 bg-slate-50/50 space-y-3"
+            >
               {loadingMessages ? (
                 <div className="flex items-center justify-center py-12 text-slate-400 gap-2 text-xs">
                   <Loader2 className="w-4 h-4 animate-spin" /> Đang tải lịch sử
@@ -1317,6 +1389,18 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                             )}
                           </div>
                           <div
+                            data-chat-message-id={msg.tinNhanId}
+                            ref={(element) => {
+                              if (element)
+                                messageElementsRef.current.set(
+                                  msg.tinNhanId,
+                                  element,
+                                );
+                              else
+                                messageElementsRef.current.delete(
+                                  msg.tinNhanId,
+                                );
+                            }}
                             className={`p-3 rounded-2xl text-xs leading-relaxed shadow-sm break-words transition-opacity ${
                               isStaff
                                 ? isFailedMsg
