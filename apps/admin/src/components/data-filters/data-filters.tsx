@@ -8,6 +8,7 @@ import { AdminResultSummary } from '@/components/admin/admin-result-summary';
 import styles from './data-filters.module.css';
 
 export { SingleDateFilter } from './single-date-filter';
+export { LabeledSelectFilter } from './labeled-select-filter';
 
 export type FilterOption = {
   value: string;
@@ -112,8 +113,8 @@ export function SelectFilter({
         <Select.Trigger aria-label={label} className={styles.selectTrigger}>
           <Select.Value className={styles.selectValue}>
             {value
-              ? options.find((option) => option.value === value)?.label ??
-                'Không xác định'
+              ? (options.find((option) => option.value === value)?.label ??
+                'Không xác định')
               : allLabel}
           </Select.Value>
           <Select.Icon>
@@ -156,23 +157,30 @@ export function SelectFilter({
 }
 
 type DateRangeFilterProps = {
+  fromLabel?: string;
   title?: string;
   label: string;
   onApply: (value: DateRangeValue | null) => void;
-  value: DateRangeValue | null;
+  toLabel?: string;
+  value: Partial<DateRangeValue> | null;
 };
 
 function displayDate(date: string) {
   return date.split('-').reverse().join('/');
 }
 
-export function DateRangeFilter({ label, title = 'Khoảng ngày tạo', onApply, value }: DateRangeFilterProps) {
+export function DateRangeFilter({
+  fromLabel = 'Từ ngày',
+  label,
+  title = 'Khoảng ngày tạo',
+  onApply,
+  toLabel = 'Đến ngày',
+  value,
+}: DateRangeFilterProps) {
   const [open, setOpen] = useState(false);
   const [draftFrom, setDraftFrom] = useState('');
   const [draftTo, setDraftTo] = useState('');
-  const rangeIsValid = Boolean(
-    draftFrom && draftTo && draftFrom <= draftTo,
-  );
+  const rangeIsValid = Boolean(draftFrom && draftTo && draftFrom <= draftTo);
 
   function handleOpenChange(nextOpen: boolean) {
     if (nextOpen) {
@@ -200,18 +208,26 @@ export function DateRangeFilter({ label, title = 'Khoảng ngày tạo', onApply
       <Popover.Root onOpenChange={handleOpenChange} open={open}>
         <Popover.Trigger
           aria-label={
-            value
+            value?.from && value.to
               ? `${label}: ${displayDate(value.from)} đến ${displayDate(value.to)}`
-              : `Lọc theo ${label.toLocaleLowerCase()}`
+              : value?.from
+                ? `${label}: ${fromLabel.toLocaleLowerCase()} ${displayDate(value.from)}`
+                : value?.to
+                  ? `${label}: ${toLabel.toLocaleLowerCase()} ${displayDate(value.to)}`
+                  : `Lọc theo ${label.toLocaleLowerCase()}`
           }
           className={styles.dateTrigger}
           data-active={Boolean(value)}
         >
           <CalendarDays aria-hidden="true" size={16} />
           <span className={styles.dateTriggerText}>
-            {value
+            {value?.from && value.to
               ? `${displayDate(value.from)} – ${displayDate(value.to)}`
-              : label}
+              : value?.from
+                ? `${fromLabel}: ${displayDate(value.from)}`
+                : value?.to
+                  ? `${toLabel}: ${displayDate(value.to)}`
+                  : label}
           </span>
           <ChevronDown aria-hidden="true" size={15} />
         </Popover.Trigger>
@@ -230,7 +246,7 @@ export function DateRangeFilter({ label, title = 'Khoảng ngày tạo', onApply
               </Popover.Description>
               <div className={styles.dateFields}>
                 <label className={styles.dateField}>
-                  <span>Từ ngày</span>
+                  <span>{fromLabel}</span>
                   <input
                     max={draftTo || undefined}
                     onChange={(event) => setDraftFrom(event.target.value)}
@@ -239,7 +255,7 @@ export function DateRangeFilter({ label, title = 'Khoảng ngày tạo', onApply
                   />
                 </label>
                 <label className={styles.dateField}>
-                  <span>Đến ngày</span>
+                  <span>{toLabel}</span>
                   <input
                     min={draftFrom || undefined}
                     onChange={(event) => setDraftTo(event.target.value)}

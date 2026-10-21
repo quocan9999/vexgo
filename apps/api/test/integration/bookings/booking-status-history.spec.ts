@@ -1,4 +1,5 @@
 import { createHmac, randomUUID } from 'node:crypto';
+import type { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import type { ExecutionContext, INestApplication } from '@nestjs/common';
 import request from 'supertest';
@@ -17,10 +18,49 @@ import { ShipmentsService } from '../../../src/shipments/shipments.service.js';
 import { PaymentsService } from '../../../src/payments/payments.service.js';
 import { RefundProcessorService } from '../../../src/payments/refund-processor.service.js';
 import type { MomoWebhookDto } from '../../../src/payments/dto/webhook.dto.js';
+import {
+  assertPrismaUsesVerifiedHistoryDatabase,
+  BOOKING_HISTORY_TEST_DATABASE_ENV,
+  type HistoryTestDatabaseSession,
+  type VerifiedHistoryTestDatabase,
+  withVerifiedBookingHistoryTestDatabase,
+} from '../../support/booking-history-test-database.js';
 
 const UUID_V1_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-1[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+function createHistoryTestPrismaService(databaseUrl: string | undefined): PrismaService {
+  if (!databaseUrl) {
+    throw new Error(`${BOOKING_HISTORY_TEST_DATABASE_ENV} is required for this suite.`);
+  }
+
+  const configService = {
+    getOrThrow: (key: string) => {
+      if (key !== 'DATABASE_URL') {
+        throw new Error(`Unexpected PrismaService configuration key: ${key}`);
+      }
+      return databaseUrl;
+    },
+  } as unknown as ConfigService;
+
+  return new PrismaService(configService);
+}
+
+async function readPrismaHistoryTestSession(
+  client: PrismaService,
+): Promise<HistoryTestDatabaseSession> {
+  const [session] = await client.$queryRaw<HistoryTestDatabaseSession[]>`
+    SELECT DATABASE() AS schemaName,
+           @@hostname AS serverHost,
+           @@port AS serverPort,
+           @@server_uuid AS serverUuid,
+           CURRENT_USER() AS currentUser
+  `;
+  if (!session) {
+    throw new Error('PrismaService did not return its booking history test session.');
+  }
+  return session;
+}
 function buildMomoPayload(paymentId: number, options: Partial<MomoWebhookDto> = {}) {
   const secret = 'vexgo_momo_demo_secret';
   const base: MomoWebhookDto = {
@@ -48,6 +88,7 @@ function buildMomoPayload(paymentId: number, options: Partial<MomoWebhookDto> = 
 describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)', () => {
   const sepaySecret = 'booking-sepay-integration-secret';
   const sepayAccountNumber = '0012345678';
+  const originalPaymentDemoMode = process.env.PAYMENT_DEMO_MODE;
   const originalSepaySecret = process.env.SEPAY_WEBHOOK_SECRET;
   const originalSepayAccountNumber = process.env.SEPAY_ACCOUNT_NUMBER;
   let app: INestApplication;
@@ -73,6 +114,7 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
   let failAfterShipmentPersistence = false;
 
   let customerId: number;
+  let customerAccountId: number;
   let customerPrincipal: AuthPrincipal;
   let customerPhone: string;
 
@@ -142,20 +184,47 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
     });
   };
 
-  const promotionBookingPayload = (
+  const fetchPromotionQuote = async (
+    seatIds: number[],
+    code: string,
+    phone: string,
+  ) => {
+    const response = await request(app.getHttpServer())
+      .post('/api/v1/bookings/quote')
+      .send({ tripId, seatIds, promotionCode: code, contactPhone: phone });
+    return response.status === 201
+      ? {
+          originalTotal: response.body.data.originalTotal as string,
+          discountAmount: response.body.data.discountAmount as string,
+          finalTotal: response.body.data.finalTotal as string,
+        }
+      : null;
+  };
+
+  const promotionBookingPayload = async (
     holdToken: string,
     seatIds: number[],
     code: string,
     phone: string,
-  ) => ({
-    tripId,
-    seatIds,
-    holdToken,
-    promotionCode: code,
-    contact: { fullName: 'Promotion integration guest', phone },
-    pickupPoint: 'Bến xe Miền Đông',
-    dropoffPoint: 'Bến xe Đà Lạt',
-  });
+  ) => {
+    const quote = await fetchPromotionQuote(seatIds, code, phone);
+    const total = 150_000 * seatIds.length;
+    const expectedPromotionQuote = quote ?? {
+          originalTotal: String(total),
+          discountAmount: '0',
+          finalTotal: String(total),
+        };
+    return {
+      tripId,
+      seatIds,
+      holdToken,
+      promotionCode: code,
+      expectedPromotionQuote,
+      contact: { fullName: 'Promotion integration guest', phone },
+      pickupPoint: 'Bến xe Miền Đông',
+      dropoffPoint: 'Bến xe Đà Lạt',
+    };
+  };
 
   const settleSePayOrder = async (orderCode: string, amount: number) => {
     const timestamp = String(Math.floor(Date.now() / 1000));
@@ -199,10 +268,66 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
     },
   };
 
+  const bookingMutationSnapshot = async () => {
+    const [
+      orders,
+      bookings,
+      tickets,
+      payments,
+      bookingHistories,
+      ticketHistories,
+      promotionUsages,
+      seatHolds,
+      seats,
+    ] = await Promise.all([
+      prisma.donGiaoDich.count({ where: { nhaXeId: busCompanyId } }),
+      prisma.phieuDatVe.count({
+        where: { donGiaoDich: { nhaXeId: busCompanyId } },
+      }),
+      prisma.ve.count({
+        where: { phieuDatVe: { donGiaoDich: { nhaXeId: busCompanyId } } },
+      }),
+      prisma.thanhToan.count({
+        where: { donGiaoDich: { nhaXeId: busCompanyId } },
+      }),
+      prisma.lichSuTrangThaiPhieuDatVe.count({
+        where: { phieuDatVe: { donGiaoDich: { nhaXeId: busCompanyId } } },
+      }),
+      prisma.lichSuTrangThaiVe.count({
+        where: {
+          ve: { phieuDatVe: { donGiaoDich: { nhaXeId: busCompanyId } } },
+        },
+      }),
+      prisma.suDungKhuyenMai.count({
+        where: { khuyenMai: { nhaXeId: busCompanyId } },
+      }),
+      prisma.giuCho.count({ where: { chuyenXeId: tripId } }),
+      prisma.gheChuyenXe.findMany({
+        where: { chuyenXeId: tripId },
+        orderBy: { gheChuyenXeId: 'asc' },
+        select: { gheChuyenXeId: true, trangThai: true, giuChoId: true },
+      }),
+    ]);
+
+    return {
+      orders,
+      bookings,
+      tickets,
+      payments,
+      bookingHistories,
+      ticketHistories,
+      promotionUsages,
+      seatHolds,
+      seats,
+    };
+  };
+
   beforeAll(async () => {
-    process.env.PAYMENT_DEMO_MODE = 'true';
-    process.env.SEPAY_WEBHOOK_SECRET = sepaySecret;
-    process.env.SEPAY_ACCOUNT_NUMBER = sepayAccountNumber;
+    const historyDatabaseEnvironment = { ...process.env };
+    const historyDatabaseUrl =
+      historyDatabaseEnvironment[BOOKING_HISTORY_TEST_DATABASE_ENV];
+    let firstDatabaseVerification!: VerifiedHistoryTestDatabase;
+    let secondDatabaseVerification!: VerifiedHistoryTestDatabase;
 
     const accessTokenGuard = {
       canActivate(context: ExecutionContext) {
@@ -214,12 +339,24 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
       },
     };
 
-    const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
-      .overrideProvider(AccessTokenGuard)
-      .useValue(accessTokenGuard)
-      .overrideProvider(ShipmentPersistenceService)
-      .useValue(shipmentPersistenceProxy)
-      .compile();
+    const moduleRef = await withVerifiedBookingHistoryTestDatabase(
+      historyDatabaseEnvironment,
+      async (verifiedDatabase) => {
+        firstDatabaseVerification = verifiedDatabase;
+        process.env.PAYMENT_DEMO_MODE = 'true';
+        process.env.SEPAY_WEBHOOK_SECRET = sepaySecret;
+        process.env.SEPAY_ACCOUNT_NUMBER = sepayAccountNumber;
+
+        return Test.createTestingModule({ imports: [AppModule] })
+          .overrideProvider(PrismaService)
+          .useValue(createHistoryTestPrismaService(historyDatabaseUrl))
+          .overrideProvider(AccessTokenGuard)
+          .useValue(accessTokenGuard)
+          .overrideProvider(ShipmentPersistenceService)
+          .useValue(shipmentPersistenceProxy)
+          .compile();
+      },
+    );
 
     app = moduleRef.createNestApplication({ rawBody: true });
     // Give each regression fixture a separate simulated client; keep the real
@@ -228,303 +365,392 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
     configureApi(app);
     await app.init();
 
-    const competingModuleRef = await Test.createTestingModule({ imports: [AppModule] })
-      .overrideProvider(AccessTokenGuard)
-      .useValue(accessTokenGuard)
-      .overrideProvider(ShipmentPersistenceService)
-      .useValue(shipmentPersistenceProxy)
-      .compile();
+    const competingModuleRef = await withVerifiedBookingHistoryTestDatabase(
+      historyDatabaseEnvironment,
+      async (verifiedDatabase) => {
+        secondDatabaseVerification = verifiedDatabase;
+        return Test.createTestingModule({ imports: [AppModule] })
+          .overrideProvider(PrismaService)
+          .useValue(createHistoryTestPrismaService(historyDatabaseUrl))
+          .overrideProvider(AccessTokenGuard)
+          .useValue(accessTokenGuard)
+          .overrideProvider(ShipmentPersistenceService)
+          .useValue(shipmentPersistenceProxy)
+          .compile();
+      },
+    );
     competingApp = competingModuleRef.createNestApplication({ rawBody: true });
     configureApi(competingApp);
     await competingApp.init();
 
     prisma = app.get(PrismaService);
+    assertPrismaUsesVerifiedHistoryDatabase(
+      firstDatabaseVerification,
+      await readPrismaHistoryTestSession(prisma),
+    );
+    assertPrismaUsesVerifiedHistoryDatabase(
+      secondDatabaseVerification,
+      await readPrismaHistoryTestSession(competingApp.get(PrismaService)),
+    );
 
     const suffix = randomUUID().replaceAll('-', '').slice(0, 8).toUpperCase();
+    await prisma.$transaction(async (fixtureTx) => {
 
-    // 1. Create company, route, vehicle type, vehicle with 3 seats
-    const company = await prisma.nhaXe.create({
-      data: {
-        maNhaXe: `NX-BK-${suffix}`,
-        tenNhaXe: `Booking Test Co ${suffix}`,
-        trangThai: 'HOAT_DONG',
-      },
-      select: { nhaXeId: true },
-    });
-    busCompanyId = company.nhaXeId;
-
-    const route = await prisma.tuyenXe.create({
-      data: {
-        maTuyenXe: `TX-BK-${suffix}`,
-        diemDi: 'Sài Gòn',
-        diemDen: 'Đà Lạt',
-        trangThai: 'HOAT_DONG',
-        nhaXeId: busCompanyId,
-      },
-      select: { tuyenXeId: true },
-    });
-    routeId = route.tuyenXeId;
-
-    const [senderPoint, receiverPoint] = await Promise.all([
-      prisma.diemGiaoNhanHang.create({
+      // 1. Create company, route, vehicle type, vehicle with 3 seats
+      const company = await fixtureTx.nhaXe.create({
         data: {
-          maDiem: `DG-GUI-${suffix}`,
-          tenDiem: `Điểm gửi ${suffix}`,
-          diaChi: '1 Đường thử nghiệm',
-          tinhThanh: 'TP. Hồ Chí Minh',
+          maNhaXe: `NX-BK-${suffix}`,
+          tenNhaXe: `Booking Test Co ${suffix}`,
+          trangThai: 'HOAT_DONG',
+        },
+        select: { nhaXeId: true },
+      });
+      busCompanyId = company.nhaXeId;
+
+      const route = await fixtureTx.tuyenXe.create({
+        data: {
+          maTuyenXe: `TX-BK-${suffix}`,
+          diemDi: 'Sài Gòn',
+          diemDen: 'Đà Lạt',
           trangThai: 'HOAT_DONG',
           nhaXeId: busCompanyId,
-          tuyenXeDiemGiaoNhaps: {
-            create: { tuyenXeId: routeId, vaiTro: 'GUI_HANG' },
-          },
         },
-        select: { diemGiaoNhanHangId: true },
-      }),
-      prisma.diemGiaoNhanHang.create({
+        select: { tuyenXeId: true },
+      });
+      routeId = route.tuyenXeId;
+
+      const [senderPoint, receiverPoint] = await Promise.all([
+        fixtureTx.diemGiaoNhanHang.create({
+          data: {
+            maDiem: `DG-GUI-${suffix}`,
+            tenDiem: `Điểm gửi ${suffix}`,
+            diaChi: '1 Đường thử nghiệm',
+            tinhThanh: 'TP. Hồ Chí Minh',
+            trangThai: 'HOAT_DONG',
+            nhaXeId: busCompanyId,
+            tuyenXeDiemGiaoNhaps: {
+              create: { tuyenXeId: routeId, vaiTro: 'GUI_HANG' },
+            },
+          },
+          select: { diemGiaoNhanHangId: true },
+        }),
+        fixtureTx.diemGiaoNhanHang.create({
+          data: {
+            maDiem: `DG-NHAN-${suffix}`,
+            tenDiem: `Điểm nhận ${suffix}`,
+            diaChi: '2 Đường thử nghiệm',
+            tinhThanh: 'Lâm Đồng',
+            trangThai: 'HOAT_DONG',
+            nhaXeId: busCompanyId,
+            tuyenXeDiemGiaoNhaps: {
+              create: { tuyenXeId: routeId, vaiTro: 'NHAN_HANG' },
+            },
+          },
+          select: { diemGiaoNhanHangId: true },
+        }),
+      ]);
+      senderPointId = senderPoint.diemGiaoNhanHangId;
+      receiverPointId = receiverPoint.diemGiaoNhanHangId;
+      const cargoType = await fixtureTx.loaiHangHoa.create({
         data: {
-          maDiem: `DG-NHAN-${suffix}`,
-          tenDiem: `Điểm nhận ${suffix}`,
-          diaChi: '2 Đường thử nghiệm',
-          tinhThanh: 'Lâm Đồng',
+          tenLoai: `Hàng nhẹ ${suffix}`,
+          trangThai: 'HOAT_DONG',
+          nhomSucChua: 'HANG_NHE',
+        },
+        select: { loaiHangHoaId: true },
+      });
+      cargoTypeId = cargoType.loaiHangHoaId;
+      const cargoRate = await fixtureTx.bangCuocGuiHang.create({
+        data: {
+          khoiLuongTu: 0,
+          khoiLuongDen: 10,
+          mucCuoc: 60000,
+          tuNgay: new Date('2020-01-01T00:00:00.000Z'),
+          trangThai: 'HOAT_DONG',
+          diemGuiId: senderPointId,
+          diemNhanId: receiverPointId,
+          loaiHangHoaId: cargoTypeId,
+        },
+        select: { bangCuocGuiHangId: true },
+      });
+      cargoRateId = cargoRate.bangCuocGuiHangId;
+
+      const bulkyCargoType = await fixtureTx.loaiHangHoa.create({
+        data: {
+          tenLoai: `Hàng cồng kềnh ${suffix}`,
+          trangThai: 'HOAT_DONG',
+          nhomSucChua: 'HANG_CONG_KENH',
+        },
+        select: { loaiHangHoaId: true },
+      });
+      bulkyCargoTypeId = bulkyCargoType.loaiHangHoaId;
+      const bulkyCargoRate = await fixtureTx.bangCuocGuiHang.create({
+        data: {
+          khoiLuongTu: 0,
+          khoiLuongDen: 10,
+          mucCuoc: 60000,
+          tuNgay: new Date('2020-01-01T00:00:00.000Z'),
+          trangThai: 'HOAT_DONG',
+          diemGuiId: senderPointId,
+          diemNhanId: receiverPointId,
+          loaiHangHoaId: bulkyCargoTypeId,
+        },
+        select: { bangCuocGuiHangId: true },
+      });
+      bulkyCargoRateId = bulkyCargoRate.bangCuocGuiHangId;
+      const bulkyHeavyCargoRate = await fixtureTx.bangCuocGuiHang.create({
+        data: {
+          khoiLuongTu: 45,
+          khoiLuongDen: 50,
+          mucCuoc: 90_000,
+          tuNgay: new Date('2020-01-01T00:00:00.000Z'),
+          trangThai: 'HOAT_DONG',
+          diemGuiId: senderPointId,
+          diemNhanId: receiverPointId,
+          loaiHangHoaId: bulkyCargoTypeId,
+        },
+        select: { bangCuocGuiHangId: true },
+      });
+      bulkyHeavyCargoRateId = bulkyHeavyCargoRate.bangCuocGuiHangId;
+
+      const vehicleType = await fixtureTx.loaiXe.create({
+        data: {
+          nhaXeId: busCompanyId,
+          tenLoai: `Luxury Limousine ${suffix}`,
+        },
+        select: { loaiXeId: true },
+      });
+      vehicleTypeId = vehicleType.loaiXeId;
+
+      const vehicle = await fixtureTx.xe.create({
+        data: {
+          bienSoXe: `49B-${suffix}`,
           trangThai: 'HOAT_DONG',
           nhaXeId: busCompanyId,
-          tuyenXeDiemGiaoNhaps: {
-            create: { tuyenXeId: routeId, vaiTro: 'NHAN_HANG' },
+          loaiXeId: vehicleTypeId,
+          ghes: {
+            create: [
+              { soGhe: 'A01', viTri: 'Tầng 1' },
+              { soGhe: 'A02', viTri: 'Tầng 1' },
+              { soGhe: 'A03', viTri: 'Tầng 1' },
+            ],
           },
         },
-        select: { diemGiaoNhanHangId: true },
-      }),
-    ]);
-    senderPointId = senderPoint.diemGiaoNhanHangId;
-    receiverPointId = receiverPoint.diemGiaoNhanHangId;
-    const cargoType = await prisma.loaiHangHoa.create({
-      data: {
-        tenLoai: `Hàng nhẹ ${suffix}`,
-        trangThai: 'HOAT_DONG',
-        nhomSucChua: 'HANG_NHE',
-      },
-      select: { loaiHangHoaId: true },
-    });
-    cargoTypeId = cargoType.loaiHangHoaId;
-    const cargoRate = await prisma.bangCuocGuiHang.create({
-      data: {
-        khoiLuongTu: 0,
-        khoiLuongDen: 10,
-        mucCuoc: 60000,
-        tuNgay: new Date('2020-01-01T00:00:00.000Z'),
-        trangThai: 'HOAT_DONG',
-        diemGuiId: senderPointId,
-        diemNhanId: receiverPointId,
-        loaiHangHoaId: cargoTypeId,
-      },
-      select: { bangCuocGuiHangId: true },
-    });
-    cargoRateId = cargoRate.bangCuocGuiHangId;
+        include: { ghes: true },
+      });
+      vehicleId = vehicle.xeId;
 
-    const bulkyCargoType = await prisma.loaiHangHoa.create({
-      data: {
-        tenLoai: `Hàng cồng kềnh ${suffix}`,
-        trangThai: 'HOAT_DONG',
-        nhomSucChua: 'HANG_CONG_KENH',
-      },
-      select: { loaiHangHoaId: true },
-    });
-    bulkyCargoTypeId = bulkyCargoType.loaiHangHoaId;
-    const bulkyCargoRate = await prisma.bangCuocGuiHang.create({
-      data: {
-        khoiLuongTu: 0,
-        khoiLuongDen: 10,
-        mucCuoc: 60000,
-        tuNgay: new Date('2020-01-01T00:00:00.000Z'),
-        trangThai: 'HOAT_DONG',
-        diemGuiId: senderPointId,
-        diemNhanId: receiverPointId,
-        loaiHangHoaId: bulkyCargoTypeId,
-      },
-      select: { bangCuocGuiHangId: true },
-    });
-    bulkyCargoRateId = bulkyCargoRate.bangCuocGuiHangId;
-    const bulkyHeavyCargoRate = await prisma.bangCuocGuiHang.create({
-      data: {
-        khoiLuongTu: 45,
-        khoiLuongDen: 50,
-        mucCuoc: 90_000,
-        tuNgay: new Date('2020-01-01T00:00:00.000Z'),
-        trangThai: 'HOAT_DONG',
-        diemGuiId: senderPointId,
-        diemNhanId: receiverPointId,
-        loaiHangHoaId: bulkyCargoTypeId,
-      },
-      select: { bangCuocGuiHangId: true },
-    });
-    bulkyHeavyCargoRateId = bulkyHeavyCargoRate.bangCuocGuiHangId;
-
-    const vehicleType = await prisma.loaiXe.create({
-      data: {
-        nhaXeId: busCompanyId,
-        tenLoai: `Luxury Limousine ${suffix}`,
-      },
-      select: { loaiXeId: true },
-    });
-    vehicleTypeId = vehicleType.loaiXeId;
-
-    const vehicle = await prisma.xe.create({
-      data: {
-        bienSoXe: `49B-${suffix}`,
-        trangThai: 'HOAT_DONG',
-        nhaXeId: busCompanyId,
-        loaiXeId: vehicleTypeId,
-        ghes: {
-          create: [
-            { soGhe: 'A01', viTri: 'Tầng 1' },
-            { soGhe: 'A02', viTri: 'Tầng 1' },
-            { soGhe: 'A03', viTri: 'Tầng 1' },
-          ],
+      // 2. Create fare pricing for route & vehicle type
+      const fare = await fixtureTx.bangGia.create({
+        data: {
+          nhaXeId: busCompanyId,
+          tuyenXeId: routeId,
+          loaiXeId: vehicleTypeId,
+          giaNiemYet: 150000,
+          tuNgay: new Date('2020-01-01T00:00:00.000Z'),
+          trangThai: 'HOAT_DONG',
         },
-      },
-      include: { ghes: true },
-    });
-    vehicleId = vehicle.xeId;
+      });
+      bangGiaId = fare.bangGiaId;
 
-    // 2. Create fare pricing for route & vehicle type
-    const fare = await prisma.bangGia.create({
-      data: {
-        nhaXeId: busCompanyId,
-        tuyenXeId: routeId,
-        loaiXeId: vehicleTypeId,
-        giaNiemYet: 150000,
-        tuNgay: new Date('2020-01-01T00:00:00.000Z'),
-        trangThai: 'HOAT_DONG',
-      },
-    });
-    bangGiaId = fare.bangGiaId;
-
-    // 3. Create customer account
-    const phoneSuffix = String(
-      Number.parseInt(suffix.slice(0, 7), 16) % 10_000_000,
-    ).padStart(7, '0');
-    customerPhone = `096${phoneSuffix}`;
-    const account = await prisma.taiKhoan.create({
-      data: {
-        soDienThoai: customerPhone,
-        matKhau: '$2b$10$hashedpasswordforexampletest',
-        hoTen: `Booking Customer ${suffix}`,
-        trangThai: 'HOAT_DONG',
-        daXacThucSoDienThoai: true,
-        khachHang: {
-          create: {
-            maKhachHang: `KH-BK-${suffix}`,
+      // 3. Create customer account
+      const phoneSuffix = String(
+        Number.parseInt(suffix.slice(0, 7), 16) % 10_000_000,
+      ).padStart(7, '0');
+      customerPhone = `096${phoneSuffix}`;
+      const account = await fixtureTx.taiKhoan.create({
+        data: {
+          soDienThoai: customerPhone,
+          matKhau: '$2b$10$hashedpasswordforexampletest',
+          hoTen: `Booking Customer ${suffix}`,
+          trangThai: 'HOAT_DONG',
+          daXacThucSoDienThoai: true,
+          khachHang: {
+            create: {
+              maKhachHang: `KH-BK-${suffix}`,
+            },
           },
         },
-      },
-      include: { khachHang: true },
-    });
-    customerId = account.khachHang!.khachHangId;
-    customerPrincipal = {
-      taiKhoanId: account.taiKhoanId,
-      sessionId: `sess-bk-${suffix}`,
-      roles: ['CUSTOMER'],
-      permissions: [],
-      nhanVienId: null,
-      nhaXeId: null,
-    };
+        include: { khachHang: true },
+      });
+      customerAccountId = account.taiKhoanId;
+      customerId = account.khachHang!.khachHangId;
+      customerPrincipal = {
+        taiKhoanId: account.taiKhoanId,
+        sessionId: `sess-bk-${suffix}`,
+        roles: ['CUSTOMER'],
+        permissions: [],
+        nhanVienId: null,
+        nhaXeId: null,
+        };
+    }, { maxWait: 10_000, timeout: 30_000 });
+
   }, 30_000);
 
   afterAll(async () => {
     try {
-      if (tripId) {
-        await prisma.suDungKhuyenMai.deleteMany({
-          where: { khuyenMai: { nhaXeId: busCompanyId } },
-        });
-        await prisma.lichSuTrangThaiPhieuGuiHang.deleteMany({
-          where: { phieuGuiHang: { chuyenXeId: tripId } },
-        });
-        await prisma.chiTietCuocGuiHang.deleteMany({
-          where: { phieuGuiHang: { chuyenXeId: tripId } },
-        });
-        await prisma.hinhAnhHangHoa.deleteMany({
-          where: { hangHoa: { phieuGuiHang: { chuyenXeId: tripId } } },
-        });
-        await prisma.hangHoa.deleteMany({
-          where: { phieuGuiHang: { chuyenXeId: tripId } },
-        });
-        await prisma.phieuGuiHang.deleteMany({ where: { chuyenXeId: tripId } });
-        await prisma.lichSuTrangThaiVe.deleteMany({
-          where: { ve: { phieuDatVe: { donGiaoDich: { nhaXeId: busCompanyId } } } },
-        });
-        await prisma.thanhToan.deleteMany({
-          where: { donGiaoDich: { nhaXeId: busCompanyId } },
-        });
-        await prisma.ve.deleteMany({
-          where: { phieuDatVe: { donGiaoDich: { nhaXeId: busCompanyId } } },
-        });
-        await prisma.lichSuTrangThaiPhieuDatVe.deleteMany({
-          where: { phieuDatVe: { donGiaoDich: { nhaXeId: busCompanyId } } },
-        });
-        await prisma.phieuDatVe.deleteMany({
-          where: { donGiaoDich: { nhaXeId: busCompanyId } },
-        });
-        await prisma.donGiaoDich.deleteMany({
-          where: { nhaXeId: busCompanyId },
-        });
-        await prisma.khuyenMai.deleteMany({ where: { nhaXeId: busCompanyId } });
-        await prisma.gheChuyenXe.deleteMany({ where: { chuyenXeId: tripId } });
-        await prisma.giuCho.deleteMany({ where: { chuyenXeId: tripId } });
-        await prisma.chuyenXe.deleteMany({ where: { chuyenXeId: tripId } });
-      }
-      if (bangGiaId) {
-        await prisma.bangGia.deleteMany({ where: { bangGiaId } });
-      }
-      if (cargoRateId) {
-        await prisma.bangCuocGuiHang.deleteMany({ where: { bangCuocGuiHangId: cargoRateId } });
-      }
-      if (bulkyCargoRateId) {
-        await prisma.bangCuocGuiHang.deleteMany({ where: { bangCuocGuiHangId: bulkyCargoRateId } });
-      }
-      if (bulkyHeavyCargoRateId) {
-        await prisma.bangCuocGuiHang.deleteMany({
-          where: { bangCuocGuiHangId: bulkyHeavyCargoRateId },
-        });
-      }
-      if (senderPointId || receiverPointId) {
-        await prisma.diemGiaoNhanTuyenXe.deleteMany({
-          where: { diemGiaoNhanHangId: { in: [senderPointId, receiverPointId].filter(Boolean) } },
-        });
-      }
-      if (senderPointId || receiverPointId) {
-        await prisma.diemGiaoNhanHang.deleteMany({
-          where: { diemGiaoNhanHangId: { in: [senderPointId, receiverPointId].filter(Boolean) } },
-        });
-      }
-      if (cargoTypeId) {
-        await prisma.loaiHangHoa.deleteMany({ where: { loaiHangHoaId: cargoTypeId } });
-      }
-      if (bulkyCargoTypeId) {
-        await prisma.loaiHangHoa.deleteMany({ where: { loaiHangHoaId: bulkyCargoTypeId } });
-      }
-      if (vehicleId) {
-        await prisma.ghe.deleteMany({ where: { xeId: vehicleId } });
-        await prisma.xe.deleteMany({ where: { xeId: vehicleId } });
-      }
-      if (vehicleTypeId) {
-        await prisma.loaiXe.deleteMany({ where: { loaiXeId: vehicleTypeId } });
-      }
-      if (routeId) {
-        await prisma.tuyenXe.deleteMany({ where: { tuyenXeId: routeId } });
-      }
-      if (busCompanyId) {
-        await prisma.nhaXe.deleteMany({ where: { nhaXeId: busCompanyId } });
-      }
+      if (prisma) {
+        await prisma.$transaction(
+          async (cleanupTx) => {
+            if (tripId) {
+              await cleanupTx.suDungKhuyenMai.deleteMany({
+                where: { khuyenMai: { nhaXeId: busCompanyId } },
+              });
+              await cleanupTx.lichSuTrangThaiPhieuGuiHang.deleteMany({
+                where: { phieuGuiHang: { chuyenXeId: tripId } },
+              });
+              await cleanupTx.chiTietCuocGuiHang.deleteMany({
+                where: { phieuGuiHang: { chuyenXeId: tripId } },
+              });
+              await cleanupTx.hinhAnhHangHoa.deleteMany({
+                where: { hangHoa: { phieuGuiHang: { chuyenXeId: tripId } } },
+              });
+              await cleanupTx.hangHoa.deleteMany({
+                where: { phieuGuiHang: { chuyenXeId: tripId } },
+              });
+              await cleanupTx.phieuGuiHang.deleteMany({
+                where: { chuyenXeId: tripId },
+              });
+              await cleanupTx.lichSuTrangThaiVe.deleteMany({
+                where: {
+                  ve: {
+                    phieuDatVe: { donGiaoDich: { nhaXeId: busCompanyId } },
+                  },
+                },
+              });
+              await cleanupTx.thanhToan.deleteMany({
+                where: { donGiaoDich: { nhaXeId: busCompanyId } },
+              });
+              await cleanupTx.ve.deleteMany({
+                where: {
+                  phieuDatVe: { donGiaoDich: { nhaXeId: busCompanyId } },
+                },
+              });
+              await cleanupTx.lichSuTrangThaiPhieuDatVe.deleteMany({
+                where: {
+                  phieuDatVe: { donGiaoDich: { nhaXeId: busCompanyId } },
+                },
+              });
+              await cleanupTx.phieuDatVe.deleteMany({
+                where: { donGiaoDich: { nhaXeId: busCompanyId } },
+              });
+              await cleanupTx.donGiaoDich.deleteMany({
+                where: { nhaXeId: busCompanyId },
+              });
+              await cleanupTx.khuyenMai.deleteMany({
+                where: { nhaXeId: busCompanyId },
+              });
+              await cleanupTx.gheChuyenXe.deleteMany({
+                where: { chuyenXeId: tripId },
+              });
+              await cleanupTx.giuCho.deleteMany({
+                where: { chuyenXeId: tripId },
+              });
+              await cleanupTx.chuyenXe.deleteMany({
+                where: { chuyenXeId: tripId },
+              });
+            }
+            if (bangGiaId) {
+              await cleanupTx.bangGia.deleteMany({ where: { bangGiaId } });
+            }
+            if (cargoRateId) {
+              await cleanupTx.bangCuocGuiHang.deleteMany({
+                where: { bangCuocGuiHangId: cargoRateId },
+              });
+            }
+            if (bulkyCargoRateId) {
+              await cleanupTx.bangCuocGuiHang.deleteMany({
+                where: { bangCuocGuiHangId: bulkyCargoRateId },
+              });
+            }
+            if (bulkyHeavyCargoRateId) {
+              await cleanupTx.bangCuocGuiHang.deleteMany({
+                where: { bangCuocGuiHangId: bulkyHeavyCargoRateId },
+              });
+            }
+            if (senderPointId || receiverPointId) {
+              const pointIds = [senderPointId, receiverPointId].filter(
+                (id): id is number => id !== undefined,
+              );
+              await cleanupTx.diemGiaoNhanTuyenXe.deleteMany({
+                where: { diemGiaoNhanHangId: { in: pointIds } },
+              });
+              await cleanupTx.diemGiaoNhanHang.deleteMany({
+                where: { diemGiaoNhanHangId: { in: pointIds } },
+              });
+            }
+            if (cargoTypeId) {
+              await cleanupTx.loaiHangHoa.deleteMany({
+                where: { loaiHangHoaId: cargoTypeId },
+              });
+            }
+            if (bulkyCargoTypeId) {
+              await cleanupTx.loaiHangHoa.deleteMany({
+                where: { loaiHangHoaId: bulkyCargoTypeId },
+              });
+            }
+            if (vehicleId) {
+              await cleanupTx.ghe.deleteMany({ where: { xeId: vehicleId } });
+              await cleanupTx.xe.deleteMany({ where: { xeId: vehicleId } });
+            }
+            if (vehicleTypeId) {
+              await cleanupTx.loaiXe.deleteMany({
+                where: { loaiXeId: vehicleTypeId },
+              });
+            }
+            if (routeId) {
+              await cleanupTx.tuyenXe.deleteMany({
+                where: { tuyenXeId: routeId },
+              });
+            }
+            if (busCompanyId) {
+              await cleanupTx.nhaXe.deleteMany({
+                where: { nhaXeId: busCompanyId },
+              });
+            }
+            if (customerId) {
+              await cleanupTx.khachHang.deleteMany({
+                where: { khachHangId: customerId },
+              });
+            }
+            if (customerAccountId) {
+              await cleanupTx.taiKhoan.deleteMany({
+                where: { taiKhoanId: customerAccountId },
+              });
+            }
 
-      if (customerId) {
-        await prisma.khachHang.deleteMany({ where: { khachHangId: customerId } });
-        await prisma.taiKhoan.deleteMany({ where: { taiKhoanId: customerPrincipal.taiKhoanId } });
+            const [remainingCompany, remainingAccount, remainingTrip] =
+              await Promise.all([
+                busCompanyId
+                  ? cleanupTx.nhaXe.count({ where: { nhaXeId: busCompanyId } })
+                  : Promise.resolve(0),
+                customerAccountId
+                  ? cleanupTx.taiKhoan.count({
+                      where: { taiKhoanId: customerAccountId },
+                    })
+                  : Promise.resolve(0),
+                tripId
+                  ? cleanupTx.chuyenXe.count({ where: { chuyenXeId: tripId } })
+                  : Promise.resolve(0),
+              ]);
+            if (remainingCompany || remainingAccount || remainingTrip) {
+              throw new Error(
+                'Booking history integration fixture cleanup was incomplete.',
+              );
+            }
+          },
+          { maxWait: 10_000, timeout: 30_000 },
+        );
       }
     } finally {
-      delete process.env.PAYMENT_DEMO_MODE;
-      if (originalSepaySecret === undefined) delete process.env.SEPAY_WEBHOOK_SECRET;
+      if (originalPaymentDemoMode === undefined)
+        delete process.env.PAYMENT_DEMO_MODE;
+      else process.env.PAYMENT_DEMO_MODE = originalPaymentDemoMode;
+      if (originalSepaySecret === undefined)
+        delete process.env.SEPAY_WEBHOOK_SECRET;
       else process.env.SEPAY_WEBHOOK_SECRET = originalSepaySecret;
-      if (originalSepayAccountNumber === undefined) delete process.env.SEPAY_ACCOUNT_NUMBER;
+      if (originalSepayAccountNumber === undefined)
+        delete process.env.SEPAY_ACCOUNT_NUMBER;
       else process.env.SEPAY_ACCOUNT_NUMBER = originalSepayAccountNumber;
       await competingApp?.close();
       await app?.close();
@@ -536,86 +762,106 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
     currentPrincipal = null;
     failAfterShipmentPersistence = false;
 
-    await prisma.suDungKhuyenMai.deleteMany({
-      where: { khuyenMai: { nhaXeId: busCompanyId } },
-    });
+    let nextTripId = 0;
+    let nextTripSeatIds: number[] = [];
+    await prisma.$transaction(
+      async (fixtureTx) => {
+        await fixtureTx.suDungKhuyenMai.deleteMany({
+          where: { khuyenMai: { nhaXeId: busCompanyId } },
+        });
 
-    if (tripId) {
-      await prisma.lichSuTrangThaiPhieuGuiHang.deleteMany({
-        where: { phieuGuiHang: { chuyenXeId: tripId } },
-      });
-      await prisma.chiTietCuocGuiHang.deleteMany({
-        where: { phieuGuiHang: { chuyenXeId: tripId } },
-      });
-      await prisma.hinhAnhHangHoa.deleteMany({
-        where: { hangHoa: { phieuGuiHang: { chuyenXeId: tripId } } },
-      });
-      await prisma.hangHoa.deleteMany({
-        where: { phieuGuiHang: { chuyenXeId: tripId } },
-      });
-      await prisma.phieuGuiHang.deleteMany({ where: { chuyenXeId: tripId } });
-    }
+        if (tripId) {
+          await fixtureTx.lichSuTrangThaiPhieuGuiHang.deleteMany({
+            where: { phieuGuiHang: { chuyenXeId: tripId } },
+          });
+          await fixtureTx.chiTietCuocGuiHang.deleteMany({
+            where: { phieuGuiHang: { chuyenXeId: tripId } },
+          });
+          await fixtureTx.hinhAnhHangHoa.deleteMany({
+            where: { hangHoa: { phieuGuiHang: { chuyenXeId: tripId } } },
+          });
+          await fixtureTx.hangHoa.deleteMany({
+            where: { phieuGuiHang: { chuyenXeId: tripId } },
+          });
+          await fixtureTx.phieuGuiHang.deleteMany({
+            where: { chuyenXeId: tripId },
+          });
+        }
 
-    // Clean up bookings, tickets, and status histories for this bus company
-    await prisma.lichSuTrangThaiVe.deleteMany({
-      where: { ve: { phieuDatVe: { donGiaoDich: { nhaXeId: busCompanyId } } } },
-    });
-    await prisma.thanhToan.deleteMany({
-      where: { donGiaoDich: { nhaXeId: busCompanyId } },
-    });
-    await prisma.ve.deleteMany({
-      where: { phieuDatVe: { donGiaoDich: { nhaXeId: busCompanyId } } },
-    });
-    await prisma.lichSuTrangThaiPhieuDatVe.deleteMany({
-      where: { phieuDatVe: { donGiaoDich: { nhaXeId: busCompanyId } } },
-    });
-    await prisma.phieuDatVe.deleteMany({
-      where: { donGiaoDich: { nhaXeId: busCompanyId } },
-    });
-    await prisma.donGiaoDich.deleteMany({
-      where: { nhaXeId: busCompanyId },
-    });
-    await prisma.khuyenMai.deleteMany({ where: { nhaXeId: busCompanyId } });
+        // Clean up bookings, tickets, and status histories for this bus company
+        await fixtureTx.lichSuTrangThaiVe.deleteMany({
+          where: {
+            ve: { phieuDatVe: { donGiaoDich: { nhaXeId: busCompanyId } } },
+          },
+        });
+        await fixtureTx.thanhToan.deleteMany({
+          where: { donGiaoDich: { nhaXeId: busCompanyId } },
+        });
+        await fixtureTx.ve.deleteMany({
+          where: { phieuDatVe: { donGiaoDich: { nhaXeId: busCompanyId } } },
+        });
+        await fixtureTx.lichSuTrangThaiPhieuDatVe.deleteMany({
+          where: { phieuDatVe: { donGiaoDich: { nhaXeId: busCompanyId } } },
+        });
+        await fixtureTx.phieuDatVe.deleteMany({
+          where: { donGiaoDich: { nhaXeId: busCompanyId } },
+        });
+        await fixtureTx.donGiaoDich.deleteMany({
+          where: { nhaXeId: busCompanyId },
+        });
+        await fixtureTx.khuyenMai.deleteMany({
+          where: { nhaXeId: busCompanyId },
+        });
 
-    if (tripId) {
-      await prisma.gheChuyenXe.deleteMany({ where: { chuyenXeId: tripId } });
-      await prisma.giuCho.deleteMany({ where: { chuyenXeId: tripId } });
-      await prisma.chuyenXe.deleteMany({ where: { chuyenXeId: tripId } });
-    }
+        if (tripId) {
+          await fixtureTx.gheChuyenXe.deleteMany({
+            where: { chuyenXeId: tripId },
+          });
+          await fixtureTx.giuCho.deleteMany({ where: { chuyenXeId: tripId } });
+          await fixtureTx.chuyenXe.deleteMany({
+            where: { chuyenXeId: tripId },
+          });
+        }
 
-    // Create a new future trip with 3 seats
-    const seats = await prisma.ghe.findMany({
-      where: { xeId: vehicleId },
-      orderBy: { soGhe: 'asc' },
-    });
-    const trip = await prisma.chuyenXe.create({
-      data: {
-        maChuyenXe: `CX-BK-${randomUUID().slice(0, 6).toUpperCase()}`,
-        ngayKhoiHanh: new Date('2099-12-01T00:00:00.000Z'),
-        gioKhoiHanh: new Date('1970-01-01T08:00:00.000Z'),
-        trangThai: 'CHUA_KHOI_HANH',
-        nhaXeId: busCompanyId,
-        tuyenXeId: routeId,
-        xeId: vehicleId,
-        sucChuaXeMay: 0,
-        sucChuaHangCongKenh: 0,
-        sucChuaHangNhe: 10,
-        nhanGuiHang: true,
-        gheChuyenXes: {
-          create: seats.map((g) => ({
-            gheId: g.gheId,
-            trangThai: 'TRONG',
-          })),
-        },
+        // Create a new future trip with 3 seats
+        const seats = await fixtureTx.ghe.findMany({
+          where: { xeId: vehicleId },
+          orderBy: { soGhe: 'asc' },
+        });
+        const trip = await fixtureTx.chuyenXe.create({
+          data: {
+            maChuyenXe: `CX-BK-${randomUUID().slice(0, 6).toUpperCase()}`,
+            ngayKhoiHanh: new Date('2099-12-01T00:00:00.000Z'),
+            gioKhoiHanh: new Date('1970-01-01T08:00:00.000Z'),
+            trangThai: 'CHUA_KHOI_HANH',
+            nhaXeId: busCompanyId,
+            tuyenXeId: routeId,
+            xeId: vehicleId,
+            sucChuaXeMay: 0,
+            sucChuaHangCongKenh: 0,
+            sucChuaHangNhe: 10,
+            nhanGuiHang: true,
+            gheChuyenXes: {
+              create: seats.map((g) => ({
+                gheId: g.gheId,
+                trangThai: 'TRONG',
+              })),
+            },
+          },
+          include: {
+            gheChuyenXes: {
+              orderBy: { gheId: 'asc' },
+            },
+          },
+        });
+        nextTripId = trip.chuyenXeId;
+        nextTripSeatIds = trip.gheChuyenXes.map((s) => s.gheChuyenXeId);
       },
-      include: {
-        gheChuyenXes: {
-          orderBy: { gheId: 'asc' },
-        },
-      },
-    });
-    tripId = trip.chuyenXeId;
-    tripSeatIds = trip.gheChuyenXes.map((s) => s.gheChuyenXeId);
+      { maxWait: 10_000, timeout: 30_000 },
+    );
+
+    tripId = nextTripId;
+    tripSeatIds = nextTripSeatIds;
   });
 
   it.each(['guest-fixed', 'registered-percent'])(
@@ -637,7 +883,7 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
       const hold = await request(app.getHttpServer())
         .post('/api/v1/seat-holds')
         .send({ tripId, seatIds: [tripSeatIds[0]] });
-      const payload = promotionBookingPayload(
+      const payload = await promotionBookingPayload(
         hold.body.data.holdToken,
         [tripSeatIds[0]],
         promotion.maKhuyenMai,
@@ -748,16 +994,15 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
     const hold = await request(app.getHttpServer())
       .post('/api/v1/seat-holds')
       .send({ tripId, seatIds: tripSeatIds.slice(0, 2) });
+    const bookingPayload = await promotionBookingPayload(
+      hold.body.data.holdToken,
+      tripSeatIds.slice(0, 2),
+      promotion.maKhuyenMai,
+      customerPhone,
+    );
     const bookingResponse = await request(app.getHttpServer())
       .post('/api/v1/bookings')
-      .send(
-        promotionBookingPayload(
-          hold.body.data.holdToken,
-          tripSeatIds.slice(0, 2),
-          promotion.maKhuyenMai,
-          customerPhone,
-        ),
-      );
+      .send(bookingPayload);
     expect(bookingResponse.status, JSON.stringify(bookingResponse.body)).toBe(
       201,
     );
@@ -1047,6 +1292,14 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
     const hold = await request(app.getHttpServer())
       .post('/api/v1/seat-holds')
       .send({ tripId, seatIds: [tripSeatIds[0]] });
+    const expectedPromotionQuote = await fetchPromotionQuote(
+      [tripSeatIds[0]],
+      promotion.maKhuyenMai,
+      customerPhone,
+    );
+    if (!expectedPromotionQuote) {
+      throw new Error('Cargo promotion quote was rejected.');
+    }
     const response = await request(app.getHttpServer())
       .post('/api/v1/bookings')
       .send({
@@ -1054,6 +1307,7 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
           { name: 'Cargo', loaiHangHoaId: cargoTypeId, quantity: 1, weight: 2 },
         ]),
         promotionCode: promotion.maKhuyenMai,
+        expectedPromotionQuote,
       });
     expect(response.status, JSON.stringify(response.body)).toBe(201);
     expect(response.body.data).toMatchObject({
@@ -1077,9 +1331,17 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
     const seatIds = tripSeatIds.slice(0, seatCount);
     const hold = await request(app.getHttpServer()).post('/api/v1/seat-holds').send({ tripId, seatIds });
     expect(hold.status).toBe(201);
+    const promotionPayload = await promotionBookingPayload(
+      hold.body.data.holdToken,
+      seatIds,
+      promotion.maKhuyenMai,
+      customerPhone,
+    );
     const response = await request(app.getHttpServer()).post('/api/v1/bookings').send({
       ...bookingWithCargoPayload(hold.body.data.holdToken, [{ name: 'G3B cargo', loaiHangHoaId: cargoTypeId, quantity: 1, weight: 2 }]),
-      seatIds, promotionCode: promotion.maKhuyenMai,
+      seatIds,
+      promotionCode: promotion.maKhuyenMai,
+      expectedPromotionQuote: promotionPayload.expectedPromotionQuote,
     });
     expect(response.status, JSON.stringify(response.body)).toBe(201);
     const booking = response.body.data as { bookingId: number; orderId: number; orderCode: string; totalAmount: number };
@@ -1327,16 +1589,15 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
         return callback(tx);
       }, options as never)) as typeof prisma.$transaction);
     try {
+      const payload = await promotionBookingPayload(
+        hold.body.data.holdToken,
+        [tripSeatIds[0]],
+        promotion.maKhuyenMai,
+        customerPhone,
+      );
       const response = await request(app.getHttpServer())
         .post('/api/v1/bookings')
-        .send(
-          promotionBookingPayload(
-            hold.body.data.holdToken,
-            [tripSeatIds[0]],
-            promotion.maKhuyenMai,
-            customerPhone,
-          ),
-        );
+        .send(payload);
       expect(response.status).toBe(500);
     } finally {
       fault.mockRestore();
@@ -1404,6 +1665,74 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
     ).toBe(0);
   });
 
+  it.each([
+    { label: 'number', promotionCode: 123 },
+    { label: 'object', promotionCode: {} },
+    { label: 'array', promotionCode: [] },
+  ])(
+    'rejects a malformed promotionCode supplied as a $label without writes',
+    async ({ promotionCode: malformedPromotionCode }) => {
+      const before = await bookingMutationSnapshot();
+      const response = await request(app.getHttpServer())
+        .post('/api/v1/bookings')
+        .send({
+          tripId,
+          seatIds: [tripSeatIds[0]],
+          holdToken: 'invalid-validation-only-hold',
+          contact: {
+            fullName: 'Promotion validation guest',
+            phone: '0901234567',
+          },
+          pickupPoint: 'Bến xe Miền Đông',
+          dropoffPoint: 'Bến xe Đà Lạt',
+          promotionCode: malformedPromotionCode,
+        });
+
+      expect(response.status, JSON.stringify(response.body)).toBe(400);
+      expect(response.body.error).toBe('VALIDATION_ERROR');
+      expect(response.body.details).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ field: 'promotionCode' }),
+        ]),
+      );
+      expect(await bookingMutationSnapshot()).toEqual(before);
+    },
+  );
+
+  it.each([
+    { label: 'null', includesPromotionCode: true, promotionCode: null },
+    { label: 'empty string', includesPromotionCode: true, promotionCode: '' },
+    { label: 'whitespace', includesPromotionCode: true, promotionCode: '   ' },
+    {
+      label: 'omitted code',
+      includesPromotionCode: false,
+      promotionCode: undefined,
+    },
+  ])(
+    'keeps $label optional and does not require a quote',
+    async ({ includesPromotionCode, promotionCode: optionalPromotionCode }) => {
+      const before = await bookingMutationSnapshot();
+      const payload = {
+        tripId,
+        seatIds: [tripSeatIds[0]],
+        holdToken: 'invalid-validation-only-hold',
+        contact: { fullName: 'Optional promotion guest', phone: '0901234567' },
+        pickupPoint: 'Bến xe Miền Đông',
+        dropoffPoint: 'Bến xe Đà Lạt',
+        ...(includesPromotionCode
+          ? { promotionCode: optionalPromotionCode }
+          : {}),
+      };
+      const response = await request(app.getHttpServer())
+        .post('/api/v1/bookings')
+        .send(payload);
+
+      expect(response.status, JSON.stringify(response.body)).toBe(409);
+      expect(response.body.error).toBe('SEAT_UNAVAILABLE');
+      expect(await bookingMutationSnapshot()).toEqual(before);
+    },
+  );
+
   it('rejects a requested unknown promotion instead of creating a full-price booking', async () => {
     const hold = await request(app.getHttpServer())
       .post('/api/v1/seat-holds')
@@ -1413,21 +1742,106 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
       where: { nhaXeId: busCompanyId },
     });
 
+    const payload = await promotionBookingPayload(
+      hold.body.data.holdToken,
+      [tripSeatIds[0]],
+      'UNKNOWN-CODE',
+      '0901234567',
+    );
     const response = await request(app.getHttpServer())
       .post('/api/v1/bookings')
-      .send(
-        promotionBookingPayload(
-          hold.body.data.holdToken,
-          [tripSeatIds[0]],
-          'UNKNOWN-CODE',
-          '0901234567',
-        ),
-      );
+      .send(payload);
 
     expect(response.status).toBe(409);
     expect(response.body.error).toBe('PROMOTION_CODE_INVALID');
     expect(await prisma.donGiaoDich.count({ where: { nhaXeId: busCompanyId } })).toBe(beforeOrders);
     expect(await prisma.suDungKhuyenMai.count({ where: { khuyenMai: { nhaXeId: busCompanyId } } })).toBe(0);
+  });
+
+  it('rejects a promotion booking without the quote the customer confirmed before writing', async () => {
+    const promotion = await createPromotion({ amount: 30_000 });
+    const hold = await request(app.getHttpServer())
+      .post('/api/v1/seat-holds')
+      .send({ tripId, seatIds: [tripSeatIds[0]] });
+    expect(hold.status).toBe(201);
+    const before = {
+      orders: await prisma.donGiaoDich.count({ where: { nhaXeId: busCompanyId } }),
+      bookings: await prisma.phieuDatVe.count({ where: { donGiaoDich: { nhaXeId: busCompanyId } } }),
+      payments: await prisma.thanhToan.count({ where: { donGiaoDich: { nhaXeId: busCompanyId } } }),
+      histories: await prisma.lichSuTrangThaiPhieuDatVe.count({ where: { phieuDatVe: { donGiaoDich: { nhaXeId: busCompanyId } } } }),
+      usage: await prisma.suDungKhuyenMai.count({ where: { khuyenMaiId: promotion.khuyenMaiId } }),
+      promotion: await prisma.khuyenMai.findUniqueOrThrow({ where: { khuyenMaiId: promotion.khuyenMaiId } }),
+    };
+
+    const response = await request(app.getHttpServer())
+      .post('/api/v1/bookings')
+      .send({
+        tripId,
+        seatIds: [tripSeatIds[0]],
+        holdToken: hold.body.data.holdToken,
+        promotionCode: promotion.maKhuyenMai,
+        contact: { fullName: 'Promotion integration guest', phone: '0901234567' },
+        pickupPoint: 'Bến xe Miền Đông',
+        dropoffPoint: 'Bến xe Đà Lạt',
+      });
+
+    expect(response.status, JSON.stringify(response.body)).toBe(400);
+    expect(response.body.error).toBe('VALIDATION_ERROR');
+    expect(response.body.details).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ field: 'expectedPromotionQuote' }),
+      ]),
+    );
+    expect(await prisma.donGiaoDich.count({ where: { nhaXeId: busCompanyId } })).toBe(before.orders);
+    expect(await prisma.phieuDatVe.count({ where: { donGiaoDich: { nhaXeId: busCompanyId } } })).toBe(before.bookings);
+    expect(await prisma.thanhToan.count({ where: { donGiaoDich: { nhaXeId: busCompanyId } } })).toBe(before.payments);
+    expect(await prisma.lichSuTrangThaiPhieuDatVe.count({ where: { phieuDatVe: { donGiaoDich: { nhaXeId: busCompanyId } } } })).toBe(before.histories);
+    expect(await prisma.suDungKhuyenMai.count({ where: { khuyenMaiId: promotion.khuyenMaiId } })).toBe(before.usage);
+    expect(await prisma.khuyenMai.findUniqueOrThrow({ where: { khuyenMaiId: promotion.khuyenMaiId } })).toEqual(before.promotion);
+    expect((await prisma.gheChuyenXe.findUniqueOrThrow({ where: { gheChuyenXeId: tripSeatIds[0] } })).trangThai).toBe('DANG_GIU');
+  });
+
+  it('rejects a stale promotion quote and rolls back booking, payment, history, and usage writes', async () => {
+    const promotion = await createPromotion({ amount: 30_000 });
+    const hold = await request(app.getHttpServer())
+      .post('/api/v1/seat-holds')
+      .send({ tripId, seatIds: [tripSeatIds[0]] });
+    expect(hold.status).toBe(201);
+    const stalePayload = await promotionBookingPayload(
+      hold.body.data.holdToken,
+      [tripSeatIds[0]],
+      promotion.maKhuyenMai,
+      '0901234567',
+    );
+    expect(stalePayload.expectedPromotionQuote).toMatchObject({
+      originalTotal: '150000.00',
+      discountAmount: '30000.00',
+      finalTotal: '120000.00',
+    });
+    await prisma.khuyenMai.update({
+      where: { khuyenMaiId: promotion.khuyenMaiId },
+      data: { giaTriGiam: 50_000 },
+    });
+    const before = {
+      orders: await prisma.donGiaoDich.count({ where: { nhaXeId: busCompanyId } }),
+      bookings: await prisma.phieuDatVe.count({ where: { donGiaoDich: { nhaXeId: busCompanyId } } }),
+      payments: await prisma.thanhToan.count({ where: { donGiaoDich: { nhaXeId: busCompanyId } } }),
+      histories: await prisma.lichSuTrangThaiPhieuDatVe.count({ where: { phieuDatVe: { donGiaoDich: { nhaXeId: busCompanyId } } } }),
+    };
+
+    const response = await request(app.getHttpServer())
+      .post('/api/v1/bookings')
+      .send(stalePayload);
+
+    expect(response.status, JSON.stringify(response.body)).toBe(409);
+    expect(response.body.error).toBe('PROMOTION_QUOTE_CHANGED');
+    expect(await prisma.donGiaoDich.count({ where: { nhaXeId: busCompanyId } })).toBe(before.orders);
+    expect(await prisma.phieuDatVe.count({ where: { donGiaoDich: { nhaXeId: busCompanyId } } })).toBe(before.bookings);
+    expect(await prisma.thanhToan.count({ where: { donGiaoDich: { nhaXeId: busCompanyId } } })).toBe(before.payments);
+    expect(await prisma.lichSuTrangThaiPhieuDatVe.count({ where: { phieuDatVe: { donGiaoDich: { nhaXeId: busCompanyId } } } })).toBe(before.histories);
+    expect(await prisma.suDungKhuyenMai.count({ where: { khuyenMaiId: promotion.khuyenMaiId } })).toBe(0);
+    expect((await prisma.khuyenMai.findUniqueOrThrow({ where: { khuyenMaiId: promotion.khuyenMaiId } })).soLuotDaSuDung).toBe(0);
+    expect((await prisma.gheChuyenXe.findUniqueOrThrow({ where: { gheChuyenXeId: tripSeatIds[0] } })).trangThai).toBe('DANG_GIU');
   });
 
   it('requires a guest phone before claiming identity eligibility in quote', async () => {
@@ -1478,16 +1892,15 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
       .send({ tripId, seatIds: [tripSeatIds[0], tripSeatIds[1]] });
     expect(hold.status).toBe(201);
 
+    const payload = await promotionBookingPayload(
+      hold.body.data.holdToken,
+      [tripSeatIds[0], tripSeatIds[1]],
+      promotion.maKhuyenMai,
+      '+84901234567',
+    );
     const response = await request(app.getHttpServer())
       .post('/api/v1/bookings')
-      .send(
-        promotionBookingPayload(
-          hold.body.data.holdToken,
-          [tripSeatIds[0], tripSeatIds[1]],
-          promotion.maKhuyenMai,
-          '+84901234567',
-        ),
-      );
+      .send(payload);
 
     expect(response.status, JSON.stringify(response.body)).toBe(201);
     const result = response.body.data;
@@ -1527,16 +1940,15 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
     const guestHold = await request(app.getHttpServer())
       .post('/api/v1/seat-holds')
       .send({ tripId, seatIds: [tripSeatIds[0]] });
+    const guestPayload = await promotionBookingPayload(
+      guestHold.body.data.holdToken,
+      [tripSeatIds[0]],
+      promotion.maKhuyenMai,
+      customerPhone,
+    );
     const guest = await request(app.getHttpServer())
       .post('/api/v1/bookings')
-      .send(
-        promotionBookingPayload(
-          guestHold.body.data.holdToken,
-          [tripSeatIds[0]],
-          promotion.maKhuyenMai,
-          customerPhone,
-        ),
-      );
+      .send(guestPayload);
     expect(guest.status, JSON.stringify(guest.body)).toBe(201);
 
     currentPrincipal = customerPrincipal;
@@ -1544,16 +1956,15 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
       .post('/api/v1/seat-holds')
       .send({ tripId, seatIds: [tripSeatIds[1]] });
     expect(registeredHold.status).toBe(201);
+    const registeredPayload = await promotionBookingPayload(
+      registeredHold.body.data.holdToken,
+      [tripSeatIds[1]],
+      promotion.maKhuyenMai,
+      '0911111111',
+    );
     const registered = await request(app.getHttpServer())
       .post('/api/v1/bookings')
-      .send(
-        promotionBookingPayload(
-          registeredHold.body.data.holdToken,
-          [tripSeatIds[1]],
-          promotion.maKhuyenMai,
-          '0911111111',
-        ),
-      );
+      .send(registeredPayload);
 
     expect(registered.status).toBe(409);
     expect(registered.body.error).toBe('PROMOTION_ALREADY_USED');
@@ -1569,16 +1980,15 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
     const firstHold = await request(app.getHttpServer())
       .post('/api/v1/seat-holds')
       .send({ tripId, seatIds: [tripSeatIds[0]] });
+    const firstPayload = await promotionBookingPayload(
+      firstHold.body.data.holdToken,
+      [tripSeatIds[0]],
+      promotion.maKhuyenMai,
+      '0903333333',
+    );
     const firstBooking = await request(app.getHttpServer())
       .post('/api/v1/bookings')
-      .send(
-        promotionBookingPayload(
-          firstHold.body.data.holdToken,
-          [tripSeatIds[0]],
-          promotion.maKhuyenMai,
-          '0903333333',
-        ),
-      );
+      .send(firstPayload);
     expect(firstBooking.status, JSON.stringify(firstBooking.body)).toBe(201);
     const ledger = await prisma.suDungKhuyenMai.findFirstOrThrow({
       where: { phieuDatVeId: firstBooking.body.data.bookingId },
@@ -1596,16 +2006,15 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
         .post('/api/v1/seat-holds')
         .send({ tripId, seatIds: [tripSeatIds[1]] });
       expect(secondHold.status).toBe(201);
+      const secondPayload = await promotionBookingPayload(
+        secondHold.body.data.holdToken,
+        [tripSeatIds[1]],
+        promotion.maKhuyenMai,
+        '0904444444',
+      );
       const secondBooking = await request(app.getHttpServer())
         .post('/api/v1/bookings')
-        .send(
-          promotionBookingPayload(
-            secondHold.body.data.holdToken,
-            [tripSeatIds[1]],
-            promotion.maKhuyenMai,
-            '0904444444',
-          ),
-        );
+        .send(secondPayload);
       expect(secondBooking.status).toBe(409);
       expect(secondBooking.body.error).toBe('PROMOTION_ALREADY_USED');
     } finally {
@@ -1626,14 +2035,28 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
       .send({ tripId, seatIds: [tripSeatIds[1]] });
     expect(firstHold.status).toBe(201);
     expect(secondHold.status).toBe(201);
+    const [firstPayload, secondPayload] = await Promise.all([
+      promotionBookingPayload(
+        firstHold.body.data.holdToken,
+        [tripSeatIds[0]],
+        promotion.maKhuyenMai,
+        '0901111111',
+      ),
+      promotionBookingPayload(
+        secondHold.body.data.holdToken,
+        [tripSeatIds[1]],
+        promotion.maKhuyenMai,
+        '0902222222',
+      ),
+    ]);
 
     const responses = await Promise.all([
       request(app.getHttpServer())
         .post('/api/v1/bookings')
-        .send(promotionBookingPayload(firstHold.body.data.holdToken, [tripSeatIds[0]], promotion.maKhuyenMai, '0901111111')),
+        .send(firstPayload),
       request(competingApp.getHttpServer())
         .post('/api/v1/bookings')
-        .send(promotionBookingPayload(secondHold.body.data.holdToken, [tripSeatIds[1]], promotion.maKhuyenMai, '0902222222')),
+        .send(secondPayload),
     ]);
 
     expect(responses.map((response) => response.status).sort()).toEqual([201, 409]);
@@ -1642,6 +2065,78 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
     expect(
       (await prisma.khuyenMai.findUniqueOrThrow({ where: { khuyenMaiId: promotion.khuyenMaiId } })).soLuotDaSuDung,
     ).toBe(1);
+  });
+
+  it('serializes a promotion edit against a quoted booking without losing usage or charging a stale quote', async () => {
+    const promotion = await createPromotion({ quota: 2, amount: 30_000 });
+    const hold = await request(app.getHttpServer())
+      .post('/api/v1/seat-holds')
+      .send({ tripId, seatIds: [tripSeatIds[0]] });
+    expect(hold.status).toBe(201);
+    const payload = await promotionBookingPayload(
+      hold.body.data.holdToken,
+      [tripSeatIds[0]],
+      promotion.maKhuyenMai,
+      '0901234567',
+    );
+    const editor: AuthPrincipal = {
+      ...customerPrincipal,
+      roles: ['NHA_XE_ADMIN'],
+      permissions: ['promotion:update'],
+      nhanVienId: 1,
+      nhaXeId: busCompanyId,
+    };
+    const edit = app.get(PromotionsService).update(
+      promotion.khuyenMaiId,
+      {
+        name: 'Concurrent promotion edit',
+        code: promotion.maKhuyenMai,
+        discountType: 'SO_TIEN',
+        discountValue: '50000',
+        startsOn: '2020-01-01',
+        endsOn: '2099-12-31',
+        usageLimit: 2,
+      },
+      editor,
+    );
+    const booking = request(app.getHttpServer())
+      .post('/api/v1/bookings')
+      .send(payload);
+    const [updatedPromotion, bookingResponse] = await Promise.all([edit, booking]);
+
+    expect(updatedPromotion).toMatchObject({
+      discountValue: '50000.00',
+      usageLimit: 2,
+    });
+    expect([201, 409]).toContain(bookingResponse.status);
+    const current = await prisma.khuyenMai.findUniqueOrThrow({
+      where: { khuyenMaiId: promotion.khuyenMaiId },
+    });
+    const uses = await prisma.suDungKhuyenMai.count({
+      where: { khuyenMaiId: promotion.khuyenMaiId },
+    });
+    expect(current.soLuotDaSuDung).toBe(uses);
+    expect(uses).toBeLessThanOrEqual(current.soLuotToiDa);
+
+    if (bookingResponse.status === 201) {
+      expect(bookingResponse.body.data).toMatchObject({
+        originalTicketSubtotal: 150_000,
+        discountAmount: 30_000,
+        ticketSubtotal: 120_000,
+      });
+      const bookingRecord = await prisma.phieuDatVe.findUniqueOrThrow({
+        where: { phieuDatVeId: bookingResponse.body.data.bookingId },
+      });
+      expect(Number(bookingRecord.soTienGiamKhuyenMai)).toBe(30_000);
+      expect(uses).toBe(1);
+    } else {
+      expect(bookingResponse.body.error).toBe('PROMOTION_QUOTE_CHANGED');
+      expect(uses).toBe(0);
+      expect(await prisma.phieuDatVe.count({ where: { donGiaoDich: { nhaXeId: busCompanyId } } })).toBe(0);
+      expect(await prisma.thanhToan.count({ where: { donGiaoDich: { nhaXeId: busCompanyId } } })).toBe(0);
+      expect(await prisma.lichSuTrangThaiPhieuDatVe.count({ where: { phieuDatVe: { donGiaoDich: { nhaXeId: busCompanyId } } } })).toBe(0);
+      expect((await prisma.gheChuyenXe.findUniqueOrThrow({ where: { gheChuyenXeId: tripSeatIds[0] } })).trangThai).toBe('DANG_GIU');
+    }
   });
 
   it('serializes two concurrent booking attempts for the same guest phone on MySQL', async () => {
@@ -1655,14 +2150,28 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
     expect(firstHold.status).toBe(201);
     expect(secondHold.status).toBe(201);
     const phone = '+84901234567';
+    const [firstPayload, secondPayload] = await Promise.all([
+      promotionBookingPayload(
+        firstHold.body.data.holdToken,
+        [tripSeatIds[0]],
+        promotion.maKhuyenMai,
+        phone,
+      ),
+      promotionBookingPayload(
+        secondHold.body.data.holdToken,
+        [tripSeatIds[1]],
+        promotion.maKhuyenMai,
+        '0901234567',
+      ),
+    ]);
 
     const responses = await Promise.all([
       request(app.getHttpServer())
         .post('/api/v1/bookings')
-        .send(promotionBookingPayload(firstHold.body.data.holdToken, [tripSeatIds[0]], promotion.maKhuyenMai, phone)),
+        .send(firstPayload),
       request(competingApp.getHttpServer())
         .post('/api/v1/bookings')
-        .send(promotionBookingPayload(secondHold.body.data.holdToken, [tripSeatIds[1]], promotion.maKhuyenMai, '0901234567')),
+        .send(secondPayload),
     ]);
 
     expect(responses.map((response) => response.status).sort()).toEqual([201, 409]);
@@ -1678,16 +2187,15 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
     const hold = await request(app.getHttpServer())
       .post('/api/v1/seat-holds')
       .send({ tripId, seatIds: [tripSeatIds[0]] });
+    const payload = await promotionBookingPayload(
+      hold.body.data.holdToken,
+      [tripSeatIds[0]],
+      promotion.maKhuyenMai,
+      '0901234567',
+    );
     const bookingResponse = await request(app.getHttpServer())
       .post('/api/v1/bookings')
-      .send(
-        promotionBookingPayload(
-          hold.body.data.holdToken,
-          [tripSeatIds[0]],
-          promotion.maKhuyenMai,
-          '0901234567',
-        ),
-      );
+      .send(payload);
     expect(bookingResponse.status, JSON.stringify(bookingResponse.body)).toBe(201);
     const bookingId = bookingResponse.body.data.bookingId;
 
@@ -1713,11 +2221,23 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
     const hold = await request(app.getHttpServer())
       .post('/api/v1/seat-holds')
       .send({ tripId, seatIds: [tripSeatIds[0]] });
+    const expectedPromotionQuote = await fetchPromotionQuote(
+      [tripSeatIds[0]],
+      promotion.maKhuyenMai,
+      customerPhone,
+    );
+    if (!expectedPromotionQuote) throw new Error('Cargo promotion quote was rejected.');
+    expect(expectedPromotionQuote).toMatchObject({
+      originalTotal: '150000.00',
+      discountAmount: '30000.00',
+      finalTotal: '120000.00',
+    });
     const payload = {
       ...bookingWithCargoPayload(hold.body.data.holdToken, [
         { name: 'Hành lý coupon', loaiHangHoaId: cargoTypeId, quantity: 1, weight: 2 },
       ]),
       promotionCode: promotion.maKhuyenMai,
+      expectedPromotionQuote,
     };
     const response = await request(app.getHttpServer())
       .post('/api/v1/bookings')
@@ -1755,16 +2275,15 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
       });
     let response;
     try {
+      const payload = await promotionBookingPayload(
+        hold.body.data.holdToken,
+        [tripSeatIds[0]],
+        promotion.maKhuyenMai,
+        '0901234567',
+      );
       response = await request(app.getHttpServer())
         .post('/api/v1/bookings')
-        .send(
-          promotionBookingPayload(
-            hold.body.data.holdToken,
-            [tripSeatIds[0]],
-            promotion.maKhuyenMai,
-            '0901234567',
-          ),
-        );
+        .send(payload);
     } finally {
       recordSpy.mockRestore();
     }

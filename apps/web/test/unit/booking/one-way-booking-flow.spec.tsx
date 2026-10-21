@@ -331,7 +331,14 @@ describe('one-way booking with server seat holds', () => {
     fireEvent.click(screen.getByRole('checkbox', { hidden: true }));
     fireEvent.click(screen.getByRole('button', { name: 'Thanh toán' }));
     await waitFor(() => expect(requestsFor('/bookings', 'POST')).toHaveLength(1));
-    expect(requestBody(requestsFor('/bookings', 'POST')[0]).promotionCode).toBe('SAVE50');
+    expect(requestBody(requestsFor('/bookings', 'POST')[0])).toMatchObject({
+      promotionCode: 'SAVE50',
+      expectedPromotionQuote: {
+        originalTotal: '250000.00',
+        discountAmount: '50000.00',
+        finalTotal: '200000.00',
+      },
+    });
     await waitFor(() => expect(state.routerPush).toHaveBeenCalledTimes(1));
   });
 
@@ -421,10 +428,40 @@ describe('one-way booking with server seat holds', () => {
     fireEvent.click(screen.getByRole('checkbox', { hidden: true }));
     fireEvent.click(screen.getByRole('button', { name: 'Thanh toán' }));
 
-    expect(await screen.findByText('Mã khuyến mãi vừa hết lượt sử dụng.')).toBeTruthy();
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      'Mã khuyến mãi vừa hết lượt sử dụng. Hãy áp dụng lại mã hoặc bỏ mã để tiếp tục.',
+    );
     expect((screen.getByRole('textbox', { name: 'Nhập một mã cho đơn đặt vé' }) as HTMLInputElement).value).toBe('SAVE50');
+    expect(screen.getByRole('button', { name: 'Kiểm tra lại' })).toBeTruthy();
+    expect(requestsFor('/bookings', 'POST')).toHaveLength(1);
     expect(state.routerPush).not.toHaveBeenCalled();
     expect(requestsFor('/seat-holds', 'DELETE')).toHaveLength(1);
+  });
+
+  it('requires reapplying a promotion after the server rejects a changed quote', async () => {
+    bookingResponse = async () => response({
+      statusCode: 409,
+      error: 'PROMOTION_QUOTE_CHANGED',
+      message: 'Ưu đãi hoặc giá vé vừa thay đổi. Vui lòng áp dụng lại mã và kiểm tra tổng tiền trước khi thanh toán.',
+    }, 409);
+    render(<OneWayBooking post={post} tripSeats={tripSeats} />);
+    fireEvent.click(screen.getByRole('button', { name: 'A01 còn trống' }));
+    fireEvent.change(screen.getByPlaceholderText('Nhập họ và tên'), { target: { value: 'Nguyễn Văn An' } });
+    fireEvent.change(screen.getByPlaceholderText('Nhập số điện thoại'), { target: { value: '0901234567' } });
+    fireEvent.change(screen.getByPlaceholderText('Nhập email'), { target: { value: 'an@example.test' } });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Nhập một mã cho đơn đặt vé' }), { target: { value: 'SAVE50' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Áp dụng' }));
+    await screen.findByText('Mã SAVE50 đã được áp dụng.');
+    fireEvent.click(screen.getByRole('checkbox', { hidden: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Thanh toán' }));
+
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      'Ưu đãi hoặc giá vé vừa thay đổi. Vui lòng áp dụng lại mã và kiểm tra tổng tiền trước khi thanh toán. Hãy áp dụng lại mã hoặc bỏ mã để tiếp tục.',
+    );
+    expect((screen.getByRole('textbox', { name: 'Nhập một mã cho đơn đặt vé' }) as HTMLInputElement).value).toBe('SAVE50');
+    expect(requestsFor('/bookings', 'POST')).toHaveLength(1);
+    expect(requestsFor('/seat-holds', 'DELETE')).toHaveLength(1);
+    expect(state.routerPush).not.toHaveBeenCalled();
   });
 
   it('creates a hold with trip-seat IDs before booking and routes with persisted IDs and amount', async () => {

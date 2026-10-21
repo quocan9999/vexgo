@@ -4,7 +4,6 @@ import {
   fireEvent,
   render,
   screen,
-  waitFor,
 } from '@testing-library/react';
 import type { AnchorHTMLAttributes } from 'react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -196,10 +195,20 @@ describe('ShipmentsManagement UI', () => {
     expect(waybills.length).toBeGreaterThan(0);
 
     expect(screen.getAllByText('Trần Văn Gửi').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Lê Thị Nhận').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Bến xe Miền Đông').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Bến xe Đà Lạt').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('150.000 đ').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Lê Thị Nhận')).toBeNull();
+    expect(screen.queryByText('150.000 đ')).toBeNull();
+    const table = screen.getByRole('table', { name: 'Danh sách phiếu gửi hàng' });
+    expect(Array.from(table.querySelectorAll('thead th')).map((cell) => cell.textContent?.trim())).toEqual([
+      'Mã vận đơn',
+      'Người gửi',
+      'Điểm gửi',
+      'Điểm nhận',
+      'Trạng thái',
+      'Ngày gửi',
+      'Thao tác',
+    ]);
 
     const detailButtons = screen.getAllByRole('button', {
       name: /Xem chi tiết phiếu gửi VD20261009001/i,
@@ -256,6 +265,9 @@ describe('ShipmentsManagement UI', () => {
     ).toBeTruthy();
 
     expect(await screen.findByText('Thùng trái cây sấy')).toBeTruthy();
+    expect(screen.getByText('Lê Thị Nhận')).toBeTruthy();
+    expect(screen.getByText('+84944555666')).toBeTruthy();
+    expect(screen.getAllByText('150.000 đ')).toHaveLength(3);
     expect(screen.getByText('Hàng dễ vỡ, xin nhẹ tay')).toBeTruthy();
     expect(screen.getByText('Nhân viên Điều hành')).toBeTruthy();
     expect(screen.getByText(/Tạo phiếu gửi mới qua quầy/)).toBeTruthy();
@@ -315,7 +327,7 @@ describe('ShipmentsManagement UI', () => {
   it('renders empty filter state when no shipments match query', async () => {
     setEmployeeAdminTestSession(['shipment:read']);
 
-    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
+    const fetchMock = vi.fn().mockImplementation(() => {
       return Promise.resolve(
         response({
           data: [],

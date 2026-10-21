@@ -57,6 +57,7 @@ describe('Admin permission defaults', () => {
       'role:read',
       'permission:assign',
       'customer:read',
+      'booking:read',
       'promotion:read',
       'promotion:create',
       'promotion:update',
@@ -119,6 +120,7 @@ describe('Admin permission defaults', () => {
       'role:read',
       'permission:assign',
       'customer:read',
+      'booking:read',
       'promotion:read',
       'promotion:create',
       'promotion:update',
@@ -161,6 +163,7 @@ describe('Admin permission defaults', () => {
       'role:read',
       'permission:assign',
       'customer:read',
+      'booking:read',
       'promotion:read',
       'promotion:create',
       'promotion:update',
@@ -251,6 +254,9 @@ describe('Admin permission defaults', () => {
     expect(isPermissionAllowedForRole('NHA_XE_ADMIN', 'vehicle:read')).toBe(
       true,
     );
+    expect(isPermissionAllowedForRole('NHA_XE_ADMIN', 'booking:read')).toBe(
+      true,
+    );
     expect(isPermissionAllowedForRole('NHA_XE_ADMIN', 'role:read')).toBe(true);
     expect(isPermissionAllowedForRole('NHA_XE_ADMIN', 'promotion:read')).toBe(
       true,
@@ -268,6 +274,9 @@ describe('Admin permission defaults', () => {
       isPermissionAllowedForRole('NHA_XE_ADMIN', 'permission:assign'),
     ).toBe(true);
     expect(isPermissionAllowedForRole('SUPER_ADMIN', 'role:read')).toBe(false);
+    expect(isPermissionAllowedForRole('SUPER_ADMIN', 'booking:read')).toBe(
+      false,
+    );
     expect(
       isPermissionAllowedForRole('NHAN_VIEN_CSKH', 'permission:assign'),
     ).toBe(true);

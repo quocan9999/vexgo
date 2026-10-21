@@ -50,6 +50,7 @@ type SuperAdminLayoutProps = {
     | 'fare-prices'
     | 'trips'
     | 'customers'
+    | 'booking-management'
     | 'promotions'
     | 'shipments'
     | 'admin-accounts'
@@ -162,6 +163,10 @@ const OPERATION_NAVIGATION_DETAILS: Record<
   'support-chat': {
     label: 'Chăm sóc khách hàng',
     icon: () => <Headphones size={18} />,
+  },
+  'booking-management': {
+    label: 'Quản lý phiếu đặt vé & vé',
+    icon: () => <Ticket size={18} />,
   },
   promotions: { label: 'Khuyến mãi', icon: () => <Tag size={18} /> },
   shipments: { label: 'Gửi hàng', icon: () => <Package size={18} /> },

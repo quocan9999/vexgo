@@ -120,6 +120,12 @@ export const ADMIN_PERMISSION_CATALOG = [
       'Xem danh sách, chi tiết và lịch sử khách hàng có giao dịch trong phạm vi nhà xe.',
   },
   {
+    key: 'booking:read',
+    scope: 'tenant',
+    description:
+      'Xem danh sách, chi tiết và lịch sử phiếu đặt vé trong phạm vi nhà xe.',
+  },
+  {
     key: 'promotion:read',
     scope: 'tenant',
     description: 'Xem khuyến mãi trong phạm vi nhà xe.',
@@ -232,6 +238,7 @@ export const ADMIN_ROLE_DEFAULT_PERMISSION_KEYS = {
     'role:read',
     'permission:assign',
     'customer:read',
+    'booking:read',
     'promotion:read',
     'promotion:create',
     'promotion:update',

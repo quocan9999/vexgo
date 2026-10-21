@@ -13,7 +13,8 @@
     "format:check": "npx prettier --check .",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
-    "dev": "turbo run dev --ui=stream"
+    "dev": "turbo run dev --ui=stream",
+    "rollout:booking-read": "node prisma/rollouts/add-booking-read-permission.mjs"
   },
   "devDependencies": {
     "@types/bcrypt": "^6.0.0",

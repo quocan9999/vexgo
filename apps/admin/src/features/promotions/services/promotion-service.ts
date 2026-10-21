@@ -162,3 +162,15 @@ export async function updatePromotionStatus(
   );
   return unwrapPromotion(body, 'thông tin khuyến mãi');
 }
+
+export async function updatePromotion(id: number, input: CreatePromotionRequest): Promise<Promotion> {
+  const body = await readResponse(
+    await adminApiFetch(apiUrl(`/${id}`), {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    }),
+    'khuyến mãi',
+  );
+  return unwrapPromotion(body, 'thông tin khuyến mãi');
+}

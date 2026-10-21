@@ -23,7 +23,7 @@ const EFFECTIVE_LABELS: Record<PromotionEffectiveState, string> = {
   SUSPENDED: 'Tạm ngưng',
   EXPIRED: 'Hết hạn',
   EXHAUSTED: 'Hết lượt',
-  UNAVAILABLE: 'Không khả dụng',
+  UNAVAILABLE: 'Hết hiệu lực',
 };
 
 function businessDate(): string {

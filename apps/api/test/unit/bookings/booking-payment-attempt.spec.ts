@@ -172,7 +172,16 @@ function setup({
     pickupPoint: 'A',
     dropoffPoint: 'B',
     contact: { fullName: 'Khách thử', phone: '0901234567' },
-    ...(promoted ? { promotionCode: ' save ' } : {}),
+    ...(promoted
+      ? {
+          promotionCode: ' save ',
+          expectedPromotionQuote: {
+            originalTotal: String(300000 * seatCount),
+            discountAmount: String(Math.min(discount, 300000 * seatCount)),
+            finalTotal: String(Math.max(300000 * seatCount - discount, 0)),
+          },
+        }
+      : {}),
     ...(cargo
       ? {
           cargoItems: [

@@ -18,7 +18,6 @@ import { SuperAdminLayout } from '@/features/super-admin-layout/components/super
 import { useShipments } from '../hooks/use-shipments';
 import type { ShipmentStatus } from '../types/shipment';
 import {
-  formatCurrency,
   formatDateTime,
   getShipmentStatusTone,
   SHIPMENT_STATUS_LABELS,
@@ -132,15 +131,11 @@ export function ShipmentsManagement() {
                     <thead>
                       <tr>
                         <th scope="col">Mã vận đơn</th>
+                        <th scope="col">Người gửi</th>
+                        <th scope="col">Điểm gửi</th>
+                        <th scope="col">Điểm nhận</th>
                         <th scope="col">Trạng thái</th>
                         <th scope="col">Ngày gửi</th>
-                        <th scope="col">Người gửi</th>
-                        <th scope="col">Người nhận</th>
-                        <th scope="col">Chuyến xe</th>
-                        <th scope="col">Lộ trình</th>
-                        <th scope="col" className="text-right">
-                          Tổng cước
-                        </th>
                         <th scope="col">
                           <span className="sr-only">Thao tác</span>
                         </th>
@@ -155,15 +150,6 @@ export function ShipmentsManagement() {
                             </span>
                           </td>
                           <td>
-                            <AdminStatusBadge
-                              tone={getShipmentStatusTone(shipment.status)}
-                            >
-                              {SHIPMENT_STATUS_LABELS[shipment.status] ??
-                                shipment.status}
-                            </AdminStatusBadge>
-                          </td>
-                          <td>{formatDateTime(shipment.sentAt)}</td>
-                          <td>
                             <div>
                               <strong>{shipment.sender.fullName}</strong>
                               <br />
@@ -173,43 +159,24 @@ export function ShipmentsManagement() {
                             </div>
                           </td>
                           <td>
-                            <div>
-                              <strong>{shipment.receiver.fullName}</strong>
-                              <br />
-                              <span className="shipments-phone admin-data-mono">
-                                {shipment.receiver.phoneNumber}
-                              </span>
-                            </div>
-                          </td>
-                          <td>
-                            <span className="admin-data-mono">
-                              {shipment.trip.code}
-                            </span>
-                            <br />
-                            <small className="shipments-trip-time">
-                              {shipment.trip.departureTime} ·{' '}
-                              {shipment.trip.departureDate}
-                            </small>
-                          </td>
-                          <td>
                             <span className="shipments-route-point">
                               {shipment.originPoint.name}
                             </span>
-                            <span
-                              className="shipments-route-arrow"
-                              aria-hidden="true"
-                            >
-                              {' → '}
-                            </span>
+                          </td>
+                          <td>
                             <span className="shipments-route-point">
                               {shipment.destinationPoint.name}
                             </span>
                           </td>
-                          <td className="text-right">
-                            <strong>
-                              {formatCurrency(shipment.totalFee)}
-                            </strong>
+                          <td>
+                            <AdminStatusBadge
+                              tone={getShipmentStatusTone(shipment.status)}
+                            >
+                              {SHIPMENT_STATUS_LABELS[shipment.status] ??
+                                shipment.status}
+                            </AdminStatusBadge>
                           </td>
+                          <td>{formatDateTime(shipment.sentAt)}</td>
                           <td>
                             <AdminDetailAction
                               resourceName={`phiếu gửi ${shipment.waybillCode}`}
@@ -264,33 +231,12 @@ export function ShipmentsManagement() {
                           </dd>
                         </div>
                         <div>
-                          <dt>Người nhận</dt>
-                          <dd>
-                            {shipment.receiver.fullName} (
-                            <span className="admin-data-mono">
-                              {shipment.receiver.phoneNumber}
-                            </span>
-                            )
-                          </dd>
+                          <dt>Điểm gửi</dt>
+                          <dd>{shipment.originPoint.name}</dd>
                         </div>
                         <div>
-                          <dt>Chuyến xe</dt>
-                          <dd className="admin-data-mono">
-                            {shipment.trip.code}
-                          </dd>
-                        </div>
-                        <div>
-                          <dt>Lộ trình</dt>
-                          <dd>
-                            {shipment.originPoint.name} →{' '}
-                            {shipment.destinationPoint.name}
-                          </dd>
-                        </div>
-                        <div>
-                          <dt>Tổng cước</dt>
-                          <dd>
-                            <strong>{formatCurrency(shipment.totalFee)}</strong>
-                          </dd>
+                          <dt>Điểm nhận</dt>
+                          <dd>{shipment.destinationPoint.name}</dd>
                         </div>
                       </dl>
 

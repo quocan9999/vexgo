@@ -7,6 +7,8 @@ import { CargoCapacityModule } from '../cargo-capacity/cargo-capacity.module.js'
 import { ShipmentsModule } from '../shipments/shipments.module.js';
 import { BookingsController } from './bookings.controller.js';
 import { BookingsService } from './bookings.service.js';
+import { AdminBookingsController } from './admin-bookings.controller.js';
+import { AdminBookingsService } from './admin-bookings.service.js';
 
 @Module({
   imports: [
@@ -17,8 +19,8 @@ import { BookingsService } from './bookings.service.js';
     CargoCapacityModule,
     ShipmentsModule,
   ],
-  controllers: [BookingsController],
-  providers: [BookingsService],
-  exports: [BookingsService],
+  controllers: [BookingsController, AdminBookingsController],
+  providers: [BookingsService, AdminBookingsService],
+  exports: [BookingsService, AdminBookingsService],
 })
 export class BookingsModule {}

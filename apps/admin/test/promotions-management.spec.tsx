@@ -9,6 +9,7 @@ const state = vi.hoisted(() => ({
   promotionPage: null as unknown,
   refresh: vi.fn(),
   createPromotion: vi.fn(),
+  updatePromotion: vi.fn(),
   updatePromotionStatus: vi.fn(),
   getPromotionById: vi.fn(),
 }));
@@ -63,6 +64,7 @@ vi.mock('lucide-react', () => {
     Eye: Icon,
     LoaderCircle: Icon,
     Plus: Icon,
+    Pencil: Icon,
     RefreshCw: Icon,
     Search: Icon,
     Tag: Icon,
@@ -108,6 +110,7 @@ vi.mock('@/features/promotions/hooks/use-promotions', () => ({
 vi.mock('@/features/promotions/services/promotion-service', async (importOriginal) => ({
   ...await importOriginal<typeof import('@/features/promotions/services/promotion-service')>(),
   createPromotion: state.createPromotion,
+  updatePromotion: state.updatePromotion,
   getPromotionById: state.getPromotionById,
   updatePromotionStatus: state.updatePromotionStatus,
 }));
@@ -133,6 +136,7 @@ beforeEach(() => {
   };
   state.refresh.mockReset();
   state.createPromotion.mockReset().mockResolvedValue(activePromotion);
+  state.updatePromotion.mockReset().mockResolvedValue({ ...activePromotion, name: 'Mùa hè mới', usageLimit: 200 });
   state.updatePromotionStatus.mockReset().mockResolvedValue({ ...activePromotion, status: 'TAM_NGUNG' });
   state.getPromotionById.mockReset().mockResolvedValue(activePromotion);
 });
@@ -140,7 +144,7 @@ beforeEach(() => {
 afterEach(() => cleanup());
 
 describe('Admin promotion management permissions and actions', () => {
-  it('shows promotion details to a reader without create or status controls', async () => {
+  it('shows promotion data to a reader without create, edit, or status controls', async () => {
     setEmployeeAdminTestSession(['promotion:read']);
     render(<PromotionsManagement />);
 
@@ -148,11 +152,37 @@ describe('Admin promotion management permissions and actions', () => {
     expect(screen.getAllByText('SUMMER10').length).toBeGreaterThan(0);
     expect(screen.queryByRole('button', { name: /Tạm ngưng SUMMER10/ })).toBeNull();
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'Xem chi tiết SUMMER10' })[0]!);
-    const detail = await screen.findByRole('dialog', { name: 'Chi tiết khuyến mãi' });
-    expect((await within(detail).findAllByText('SUMMER10')).length).toBeGreaterThan(0);
-    expect(within(detail).queryByRole('button', { name: /Tạm ngưng/ })).toBeNull();
-    expect(within(detail).queryByRole('button', { name: /Chỉnh sửa|Xóa/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Chỉnh sửa SUMMER10' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Xem chi tiết SUMMER10' })).toBeNull();
+  });
+
+  it('edits all promotion fields in the side drawer and submits the full replacement payload', async () => {
+    setEmployeeAdminTestSession(['promotion:read', 'promotion:update']);
+    render(<PromotionsManagement />);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Chỉnh sửa SUMMER10' })[0]);
+    const drawer = await screen.findByRole('dialog', { name: 'Chỉnh sửa khuyến mãi' });
+
+    fireEvent.change(within(drawer).getByLabelText('Tên chương trình *'), { target: { value: 'Mùa hè mới' } });
+    fireEvent.change(within(drawer).getByLabelText(/Mức giảm/), { target: { value: '12' } });
+    fireEvent.change(within(drawer).getByLabelText('Giảm tối đa (VND) *'), { target: { value: '60.000' } });
+    fireEvent.change(within(drawer).getByLabelText('Giá trị vé tối thiểu (VND)'), { target: { value: '100.000' } });
+    fireEvent.change(within(drawer).getByLabelText('Bắt đầu *'), { target: { value: '2026-02-01' } });
+    fireEvent.change(within(drawer).getByLabelText('Kết thúc *'), { target: { value: '2028-12-31' } });
+    fireEvent.change(within(drawer).getByLabelText('Số lượt tối đa *'), { target: { value: '200' } });
+    fireEvent.click(within(drawer).getByRole('button', { name: 'Lưu thay đổi' }));
+
+    await waitFor(() => expect(state.updatePromotion).toHaveBeenCalledWith(15, {
+      name: 'Mùa hè mới',
+      code: 'SUMMER10',
+      discountType: 'PHAN_TRAM',
+      discountValue: '12',
+      maxDiscount: '60000',
+      minimumTicketAmount: '100000',
+      startsOn: '2026-02-01',
+      endsOn: '2028-12-31',
+      usageLimit: 200,
+    }));
+    expect(state.refresh).toHaveBeenCalled();
   });
 
   it('creates an active promotion with the frozen payload and refreshes the list', async () => {
@@ -215,9 +245,10 @@ describe('Admin promotion management permissions and actions', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Thêm khuyến mãi' });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Tạo khuyến mãi' }));
 
-    expect(within(dialog).getByRole('alert').textContent).toContain('trường cần kiểm tra');
+    expect(within(dialog).queryByText(/trường cần kiểm tra/i)).toBeNull();
     expect(within(dialog).getByLabelText('Tên chương trình *').getAttribute('aria-invalid')).toBe('true');
     expect(within(dialog).getByLabelText('Mã khuyến mãi *').getAttribute('aria-describedby')).toBe('create-promotion-code-error');
+    expect(within(dialog).getByText(/Mã gồm 3–50 ký tự/)).toBeTruthy();
     expect(state.createPromotion).not.toHaveBeenCalled();
   });
 

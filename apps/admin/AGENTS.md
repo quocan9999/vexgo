@@ -101,6 +101,13 @@ Domain callback, label resource, API call, validation và business state vẫn n
 - Nếu shared component chưa đáp ứng use case tương đương, SHOULD mở rộng API của shared component trước.
 - Chỉ tạo component feature-specific khi interaction model thực sự khác; code review/report MUST nêu lý do rõ ràng.
 
+### Date filter reuse
+
+- Với filter một ngày, MUST tìm và dùng shared component `SingleDateFilter` trong `src/components/data-filters/single-date-filter.tsx`.
+- Với filter khoảng ngày bắt đầu–kết thúc, MUST tìm và dùng shared component `DateRangeFilter` trong `src/components/data-filters/data-filters.tsx`; cấu hình label qua props hiện có hoặc mở rộng API dùng chung nếu cần.
+- Source of truth là implementation và styles của các shared component trong codebase. Các màn hình đang dùng chúng chỉ là ví dụ; MUST NOT sao chép hoặc tự thiết kế date picker theo một route cụ thể.
+- MUST NOT tạo date filter riêng theo feature khi interaction tương đương với hai shared component trên.
+
 ### CSS ownership
 
 - CSS của Admin shell và shared component MUST nằm trong `src/styles/admin-components.css` hoặc stylesheet colocated của shared component theo convention project.
@@ -154,3 +161,9 @@ Không được kết luận UI READY nếu chưa kiểm tra visual ở hai view
 - MUST NOT dùng frontend filtering làm tenant security boundary.
 - MUST inspect tenant ownership và API scope trước khi thêm lookup, filter hoặc relation selector.
 - Khi chưa có backend-trusted tenant identity, tenant presentation MUST NOT tải dữ liệu operational aggregate rồi tự lọc; giữ UI ở trạng thái chờ auth/authorization thay vì trình bày dữ liệu cross-tenant.
+
+### Filters có label phía trên
+
+- Khi cần select filter có label hiển thị phía trên, MUST tái sử dụng `LabeledSelectFilter` từ `src/components/data-filters/data-filters.tsx` (implementation: `src/components/data-filters/labeled-select-filter.tsx`).
+- Cấu hình `label`, `accessibleLabel` khi cần, `options`, `value`, `onChange` và `disabled` theo use case; không sao chép markup/CSS sang feature hoặc tự tạo pattern tương đương.
+- Component và stylesheet dùng chung là nguồn sự thật cho chiều cao control, khoảng cách label và căn hàng khi toolbar wrap; dùng bên trong `FilterToolbar` để giữ alignment với search/date/status filters.

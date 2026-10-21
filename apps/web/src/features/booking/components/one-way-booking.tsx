@@ -754,7 +754,14 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
       pickupPoint: pickup || post.province,
       dropoffPoint: dropoff || post.district,
       cargoItems: mappedCargoItems,
-      ...(activePromotionCode ? { promotionCode: activePromotionCode } : {}),
+      ...(activePromotionCode && promotionQuote ? {
+        promotionCode: activePromotionCode,
+        expectedPromotionQuote: {
+          originalTotal: String(promotionQuote.originalTotal),
+          discountAmount: String(promotionQuote.discountAmount),
+          finalTotal: String(promotionQuote.finalTotal),
+        },
+      } : {}),
       ...(mappedCargoItems
         ? { senderPointId: senderPointId!, receiverPointId: receiverPointId! }
         : {}),
@@ -861,7 +868,7 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
             setPromotionQuoteState({
               requestKey: promotionRequestKey,
               status: 'invalid',
-              message: error.message,
+              message: `${error.message} Hãy áp dụng lại mã hoặc bỏ mã để tiếp tục.`,
             });
             setSubmitError(null);
             promotionInputRef.current?.focus();
