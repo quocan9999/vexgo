@@ -10,6 +10,7 @@ export const BOOKING_STATUS_OPTIONS = [
 
 export const TICKET_STATUS_OPTIONS = [
   { value: 'DA_DAT', label: 'Đã đặt' },
+  { value: 'DA_THANH_TOAN', label: 'Đã thanh toán' },
   { value: 'HUY', label: 'Đã hủy' },
 ] as const;
 

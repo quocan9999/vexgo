@@ -897,7 +897,7 @@ function TicketTable({
             <td>{formatVnd(item.actualPrice)}</td>
             <td>
               <AdminStatusBadge
-                tone={item.status === 'DA_DAT' ? 'active' : 'muted'}
+                tone={statusIsActive(item.status) ? 'active' : 'muted'}
               >
                 {statusLabel(item.status)}
               </AdminStatusBadge>
@@ -1012,7 +1012,7 @@ function TicketCards({
               <p>{item.customer.name}</p>
             </div>
             <AdminStatusBadge
-              tone={item.status === 'DA_DAT' ? 'active' : 'muted'}
+              tone={statusIsActive(item.status) ? 'active' : 'muted'}
             >
               {statusLabel(item.status)}
             </AdminStatusBadge>

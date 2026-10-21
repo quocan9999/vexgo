@@ -521,8 +521,14 @@ export class BookingsService {
       const finalTicketTotal = originalTotal.sub(discountAmount);
       // Check under the promotion row lock before persisting any order/payment.
       // The client's quote is an expectation, never a source for charged amounts.
-      if (promotionQuote && dto.expectedPromotionQuote) {
+      if (promotionQuote) {
         const expected = dto.expectedPromotionQuote;
+        if (!expected) {
+          throw new BadRequestException({
+            error: 'PROMOTION_QUOTE_REQUIRED',
+            message: 'Vui lòng kiểm tra báo giá khuyến mãi trước khi đặt vé.',
+          });
+        }
         if (
           !originalTotal.eq(new Prisma.Decimal(expected.originalTotal)) ||
           !discountAmount.eq(new Prisma.Decimal(expected.discountAmount)) ||

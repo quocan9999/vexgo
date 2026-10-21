@@ -44,7 +44,11 @@ const testDatabaseUrl =
   process.env.FEATURE07_TEST_DATABASE_URL ??
   readLocalEnvValue('FEATURE07_TEST_DATABASE_URL');
 const runtimeDatabaseUrl =
-  process.env.DATABASE_URL ?? readLocalEnvValue('DATABASE_URL');
+  process.env.FEATURE07_RUNTIME_DATABASE_URL ??
+  readLocalEnvValue('DATABASE_URL') ??
+  (process.env.DATABASE_URL === testDatabaseUrl
+    ? undefined
+    : process.env.DATABASE_URL);
 const migrationDatabaseUrl =
   process.env.MIGRATION_URL ?? readLocalEnvValue('MIGRATION_URL');
 const shadowDatabaseUrl =
@@ -304,7 +308,7 @@ featureDescribe(
       ticketDefinitions: Array<{
         seat: string;
         trip: string;
-        status: 'DA_DAT' | 'HUY';
+        status: 'DA_DAT' | 'DA_THANH_TOAN' | 'HUY';
       }>;
       bookedAt?: Date;
       initialAmount: string;
@@ -590,11 +594,11 @@ featureDescribe(
         tenant: tenantA,
         label: 'A2',
         transactionStatus: 'DA_THANH_TOAN',
-        bookingStatus: 'CHO_THANH_TOAN',
+        bookingStatus: 'DA_THANH_TOAN',
         bookedAt: new Date('2026-10-09T16:59:59.000Z'),
         initialAmount: '100000',
         orderAmount: '100000',
-        ticketDefinitions: [{ seat: 'A04', trip: 'primary', status: 'DA_DAT' }],
+        ticketDefinitions: [{ seat: 'A04', trip: 'primary', status: 'DA_THANH_TOAN' }],
       });
       inconsistentBookingA = await createBooking({
         tenant: tenantA,
@@ -992,6 +996,38 @@ featureDescribe(
         .expect(200);
       expect(ticketStatus.body.meta.totalItems).toBe(1);
       expect(ticketStatus.body.data[0].ticketCode).toBe(ticketCodes[0]);
+      const paidTicketsPageOne = await request(app.getHttpServer())
+        .get('/api/v1/admin/tickets?status=DA_THANH_TOAN&page=1&pageSize=1')
+        .set('Authorization', tenantAToken)
+        .expect(200);
+      expect(paidTicketsPageOne.body.meta).toMatchObject({
+        page: 1,
+        pageSize: 1,
+        totalItems: 1,
+        totalPages: 1,
+      });
+      expect(paidTicketsPageOne.body.data.map((ticket: { ticketId: number }) => ticket.ticketId)).toEqual(bookingA2.ticketIds);
+      expect(paidTicketsPageOne.body.data[0].status).toBe('DA_THANH_TOAN');
+      const paidTicketsPageTwo = await request(app.getHttpServer())
+        .get('/api/v1/admin/tickets?status=DA_THANH_TOAN&page=2&pageSize=1')
+        .set('Authorization', tenantAToken)
+        .expect(200);
+      expect(paidTicketsPageTwo.body.data).toEqual([]);
+      expect(paidTicketsPageTwo.body.meta.totalItems).toBe(1);
+      const tenantBPaidTickets = await request(app.getHttpServer())
+        .get('/api/v1/admin/tickets?status=DA_THANH_TOAN')
+        .set('Authorization', tenantBToken)
+        .expect(200);
+      expect(tenantBPaidTickets.body.meta.totalItems).toBe(0);
+      expect(tenantBPaidTickets.body.data).toEqual([]);
+      const paidTicketDetail = await request(app.getHttpServer())
+        .get(`/api/v1/admin/tickets/${bookingA2.ticketIds[0]}`)
+        .set('Authorization', tenantAToken)
+        .expect(200);
+      expect(paidTicketDetail.body.data).toMatchObject({
+        ticketId: bookingA2.ticketIds[0],
+        status: 'DA_THANH_TOAN',
+      });
       const allCancelledTenantB = await request(app.getHttpServer())
         .get('/api/v1/admin/bookings')
         .set('Authorization', tenantBToken)

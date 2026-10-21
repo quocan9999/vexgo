@@ -179,6 +179,7 @@ function installApi(
     deferSlowSearch?: boolean;
     emptyOutOfRange?: boolean;
     rejectsInvalidPagination?: boolean;
+    ticketStatus?: string;
   } = {},
 ) {
   setEmployeeAdminTestSession(['booking:read']);
@@ -236,7 +237,7 @@ function installApi(
     }
     if (url.pathname === '/api/v1/admin/tickets') {
       return response({
-        data: [ticket],
+        data: [{ ...ticket, status: options.ticketStatus ?? ticket.status }],
         meta: { page, pageSize, totalItems: 11, totalPages: 2 },
       });
     }
@@ -299,7 +300,7 @@ function installApi(
               ticketId: 44,
               ticketCode: 'VE-0044',
               seatNumber: 'A01',
-              status: 'DA_DAT',
+              status: options.ticketStatus ?? 'DA_DAT',
               listedPrice: '250000',
               actualPrice: '250000',
               pickup: null,
@@ -329,7 +330,7 @@ function installApi(
           listedPrice: '300000',
           actualPrice: '250000',
           pickup: null,
-          status: 'DA_DAT',
+          status: options.ticketStatus ?? 'DA_DAT',
           refunds: [
             {
               refundId: 81,
@@ -663,18 +664,23 @@ describe('Admin booking and ticket lists', () => {
     });
   });
 
-  it('exposes every ticket sort key through accessible controls', async () => {
+  it('selects and toggles ticket sorting through its accessible popover', async () => {
     const api = installApi();
     navigation.reset('tab=tickets');
     render(<BookingManagement />);
 
     await screen.findAllByText('VE-0044');
-    fireEvent.change(screen.getByRole('combobox', { name: 'Sắp xếp theo' }), {
-      target: { value: 'ticketPrice' },
+    const trigger = screen.getByRole('button', {
+      name: 'Sắp xếp theo: Ngày đặt, Giảm dần',
     });
-    fireEvent.change(screen.getByRole('combobox', { name: 'Hướng sắp xếp' }), {
-      target: { value: 'asc' },
-    });
+    trigger.focus();
+    expect(document.activeElement).toBe(trigger);
+    fireEvent.click(trigger);
+    const priceOption = (await screen.findAllByRole('button', { name: 'Giá thực tế' }))
+      .find((option) => option.hasAttribute('aria-pressed'));
+    if (!priceOption) throw new Error('Không tìm thấy tùy chọn giá vé.');
+    expect(priceOption.getAttribute('aria-pressed')).toBe('false');
+    fireEvent.click(priceOption);
 
     await waitFor(() => {
       expect(
@@ -682,23 +688,46 @@ describe('Admin booking and ticket lists', () => {
           (url) =>
             url.pathname === '/api/v1/admin/tickets' &&
             url.searchParams.get('sortBy') === 'ticketPrice' &&
-            url.searchParams.get('sortDirection') === 'asc',
+            url.searchParams.get('sortDirection') === 'desc',
         ),
       ).toBe(true);
     });
+    expect(screen.getByRole('button', {
+      name: 'Sắp xếp theo: Giá thực tế, Giảm dần',
+    })).toBeTruthy();
+    expect(new URLSearchParams(navigation.getSnapshot()).get('tSortDirection')).toBeNull();
+  });
 
-    fireEvent.change(screen.getByRole('combobox', { name: 'Sắp xếp theo' }), {
-      target: { value: 'bookedAt' },
+  it('toggles the active ticket sort direction and updates its accessible arrow label', async () => {
+    const api = installApi();
+    navigation.reset('tab=tickets');
+    render(<BookingManagement />);
+    await screen.findAllByText('VE-0044');
+
+    const trigger = screen.getByRole('button', {
+      name: 'Sắp xếp theo: Ngày đặt, Giảm dần',
     });
+    fireEvent.click(trigger);
+    const selectedDateOption = await screen.findByRole('button', {
+      name: /Ngày đặt/,
+      pressed: true,
+    });
+    fireEvent.click(selectedDateOption);
+
     await waitFor(() => {
       expect(
         api.urls.some(
           (url) =>
             url.pathname === '/api/v1/admin/tickets' &&
-            url.searchParams.get('sortBy') === 'bookedAt',
+            url.searchParams.get('sortBy') === 'bookedAt' &&
+            url.searchParams.get('sortDirection') === 'asc',
         ),
       ).toBe(true);
     });
+    expect(screen.getByRole('button', {
+      name: 'Sắp xếp theo: Ngày đặt, Tăng dần',
+    })).toBeTruthy();
+    expect(new URLSearchParams(navigation.getSnapshot()).get('tSortDirection')).toBe('asc');
   });
 
   it('ignores a slow earlier search response after the active query changes', async () => {
@@ -813,6 +842,32 @@ describe('Admin booking and ticket lists', () => {
     expect(
       screen.queryByRole('button', { name: /hủy|hoàn tiền|soát vé/i }),
     ).toBeNull();
+  });
+
+  it('filters paid tickets and shows the settled status in both list and detail', async () => {
+    const api = installApi({ ticketStatus: 'DA_THANH_TOAN' });
+    navigation.reset('tab=tickets');
+    render(<BookingManagement />);
+    await screen.findAllByText('VE-0044');
+    const statusFilter = screen.getByRole('combobox', { name: 'Lọc theo trạng thái' });
+    fireEvent.click(statusFilter);
+    const paidStatusOption = await screen.findByRole('option', { name: 'Đã thanh toán' });
+    fireEvent.pointerDown(paidStatusOption, { button: 0, pointerType: 'mouse' });
+    fireEvent.pointerUp(paidStatusOption, { button: 0, pointerType: 'mouse' });
+    fireEvent.click(paidStatusOption);
+    await waitFor(() => {
+      expect(api.urls.some((url) =>
+        url.pathname === '/api/v1/admin/tickets' &&
+        url.searchParams.get('status') === 'DA_THANH_TOAN',
+      )).toBe(true);
+    });
+    expect((await screen.findAllByText('Đã thanh toán')).length).toBeGreaterThan(0);
+
+    cleanup();
+    installApi({ ticketStatus: 'DA_THANH_TOAN' });
+    navigation.reset('from=%2Fbooking-management%3Ftab=tickets');
+    render(<BookingManagementDetail kind="tickets" resourceId={44} />);
+    expect((await screen.findAllByText('Đã thanh toán')).length).toBeGreaterThan(0);
   });
 
   it('formats shipment statuses MOI_TAO and DA_TIEP_NHAN with correct Vietnamese labels', () => {

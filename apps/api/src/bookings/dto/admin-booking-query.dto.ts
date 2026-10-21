@@ -22,7 +22,11 @@ export const ADMIN_BOOKING_STATUSES = [
   'DA_HUY',
 ] as const;
 
-export const ADMIN_TICKET_STATUSES = ['DA_DAT', 'HUY'] as const;
+export const ADMIN_TICKET_STATUSES = [
+  'DA_DAT',
+  'DA_THANH_TOAN',
+  'HUY',
+] as const;
 
 @ValidatorConstraint({ name: 'dateRangeStartBeforeOrEqualEnd', async: false })
 class DateRangeStartBeforeOrEqualEnd implements ValidatorConstraintInterface {

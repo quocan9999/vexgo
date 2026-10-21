@@ -37,7 +37,11 @@ const testDatabaseUrl =
   process.env.FEATURE07_TEST_DATABASE_URL ??
   readLocalEnvValue('FEATURE07_TEST_DATABASE_URL');
 const runtimeDatabaseUrl =
-  process.env.DATABASE_URL ?? readLocalEnvValue('DATABASE_URL');
+  process.env.FEATURE07_RUNTIME_DATABASE_URL ??
+  readLocalEnvValue('DATABASE_URL') ??
+  (process.env.DATABASE_URL === testDatabaseUrl
+    ? undefined
+    : process.env.DATABASE_URL);
 const migrationDatabaseUrl =
   process.env.MIGRATION_URL ?? readLocalEnvValue('MIGRATION_URL');
 const shadowDatabaseUrl =

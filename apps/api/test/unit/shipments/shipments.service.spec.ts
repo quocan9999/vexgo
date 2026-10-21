@@ -208,7 +208,7 @@ describe('ShipmentsService', () => {
         maChuyenXe: 'FUTA-CX-20102026-01',
         trangThai: 'CHUA_KHOI_HANH',
         nhanGuiHang: true,
-        ngayKhoiHanh: new Date('2026-10-20T00:00:00.000Z'),
+        ngayKhoiHanh: new Date('2099-10-20T00:00:00.000Z'),
         gioKhoiHanh: new Date('1970-01-01T07:00:00.000Z'),
         nhaXeId: 1,
         tuyenXeId: 1,

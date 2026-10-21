@@ -13,6 +13,7 @@ import {
   Matches,
   Min,
   ValidateNested,
+  ValidateIf,
 } from 'class-validator';
 import { VIETNAM_PHONE_NUMBER_REGEX } from '../../common/validation/vietnamese-phone.js';
 
@@ -142,7 +143,8 @@ export class CreateBookingDto {
   @IsString()
   promotionCode?: string;
 
-  @IsOptional()
+  @ValidateIf((dto: CreateBookingDto) => Boolean(dto.promotionCode?.trim()))
+  @IsDefined({ message: 'Báo giá khuyến mãi đã xác nhận là bắt buộc.' })
   @ValidateNested()
   @Type(() => ExpectedPromotionQuoteDto)
   expectedPromotionQuote?: ExpectedPromotionQuoteDto;

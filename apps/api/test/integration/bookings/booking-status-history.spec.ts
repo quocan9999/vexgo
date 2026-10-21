@@ -142,20 +142,47 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
     });
   };
 
-  const promotionBookingPayload = (
+  const fetchPromotionQuote = async (
+    seatIds: number[],
+    code: string,
+    phone: string,
+  ) => {
+    const response = await request(app.getHttpServer())
+      .post('/api/v1/bookings/quote')
+      .send({ tripId, seatIds, promotionCode: code, contactPhone: phone });
+    return response.status === 201
+      ? {
+          originalTotal: response.body.data.originalTotal as string,
+          discountAmount: response.body.data.discountAmount as string,
+          finalTotal: response.body.data.finalTotal as string,
+        }
+      : null;
+  };
+
+  const promotionBookingPayload = async (
     holdToken: string,
     seatIds: number[],
     code: string,
     phone: string,
-  ) => ({
-    tripId,
-    seatIds,
-    holdToken,
-    promotionCode: code,
-    contact: { fullName: 'Promotion integration guest', phone },
-    pickupPoint: 'Bến xe Miền Đông',
-    dropoffPoint: 'Bến xe Đà Lạt',
-  });
+  ) => {
+    const quote = await fetchPromotionQuote(seatIds, code, phone);
+    const total = 150_000 * seatIds.length;
+    const expectedPromotionQuote = quote ?? {
+          originalTotal: String(total),
+          discountAmount: '0',
+          finalTotal: String(total),
+        };
+    return {
+      tripId,
+      seatIds,
+      holdToken,
+      promotionCode: code,
+      expectedPromotionQuote,
+      contact: { fullName: 'Promotion integration guest', phone },
+      pickupPoint: 'Bến xe Miền Đông',
+      dropoffPoint: 'Bến xe Đà Lạt',
+    };
+  };
 
   const settleSePayOrder = async (orderCode: string, amount: number) => {
     const timestamp = String(Math.floor(Date.now() / 1000));
@@ -637,7 +664,7 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
       const hold = await request(app.getHttpServer())
         .post('/api/v1/seat-holds')
         .send({ tripId, seatIds: [tripSeatIds[0]] });
-      const payload = promotionBookingPayload(
+      const payload = await promotionBookingPayload(
         hold.body.data.holdToken,
         [tripSeatIds[0]],
         promotion.maKhuyenMai,
@@ -748,16 +775,15 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
     const hold = await request(app.getHttpServer())
       .post('/api/v1/seat-holds')
       .send({ tripId, seatIds: tripSeatIds.slice(0, 2) });
+    const bookingPayload = await promotionBookingPayload(
+      hold.body.data.holdToken,
+      tripSeatIds.slice(0, 2),
+      promotion.maKhuyenMai,
+      customerPhone,
+    );
     const bookingResponse = await request(app.getHttpServer())
       .post('/api/v1/bookings')
-      .send(
-        promotionBookingPayload(
-          hold.body.data.holdToken,
-          tripSeatIds.slice(0, 2),
-          promotion.maKhuyenMai,
-          customerPhone,
-        ),
-      );
+      .send(bookingPayload);
     expect(bookingResponse.status, JSON.stringify(bookingResponse.body)).toBe(
       201,
     );
@@ -1047,6 +1073,14 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
     const hold = await request(app.getHttpServer())
       .post('/api/v1/seat-holds')
       .send({ tripId, seatIds: [tripSeatIds[0]] });
+    const expectedPromotionQuote = await fetchPromotionQuote(
+      [tripSeatIds[0]],
+      promotion.maKhuyenMai,
+      customerPhone,
+    );
+    if (!expectedPromotionQuote) {
+      throw new Error('Cargo promotion quote was rejected.');
+    }
     const response = await request(app.getHttpServer())
       .post('/api/v1/bookings')
       .send({
@@ -1054,6 +1088,7 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
           { name: 'Cargo', loaiHangHoaId: cargoTypeId, quantity: 1, weight: 2 },
         ]),
         promotionCode: promotion.maKhuyenMai,
+        expectedPromotionQuote,
       });
     expect(response.status, JSON.stringify(response.body)).toBe(201);
     expect(response.body.data).toMatchObject({
@@ -1077,9 +1112,17 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
     const seatIds = tripSeatIds.slice(0, seatCount);
     const hold = await request(app.getHttpServer()).post('/api/v1/seat-holds').send({ tripId, seatIds });
     expect(hold.status).toBe(201);
+    const promotionPayload = await promotionBookingPayload(
+      hold.body.data.holdToken,
+      seatIds,
+      promotion.maKhuyenMai,
+      customerPhone,
+    );
     const response = await request(app.getHttpServer()).post('/api/v1/bookings').send({
       ...bookingWithCargoPayload(hold.body.data.holdToken, [{ name: 'G3B cargo', loaiHangHoaId: cargoTypeId, quantity: 1, weight: 2 }]),
-      seatIds, promotionCode: promotion.maKhuyenMai,
+      seatIds,
+      promotionCode: promotion.maKhuyenMai,
+      expectedPromotionQuote: promotionPayload.expectedPromotionQuote,
     });
     expect(response.status, JSON.stringify(response.body)).toBe(201);
     const booking = response.body.data as { bookingId: number; orderId: number; orderCode: string; totalAmount: number };
@@ -1327,16 +1370,15 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
         return callback(tx);
       }, options as never)) as typeof prisma.$transaction);
     try {
+      const payload = await promotionBookingPayload(
+        hold.body.data.holdToken,
+        [tripSeatIds[0]],
+        promotion.maKhuyenMai,
+        customerPhone,
+      );
       const response = await request(app.getHttpServer())
         .post('/api/v1/bookings')
-        .send(
-          promotionBookingPayload(
-            hold.body.data.holdToken,
-            [tripSeatIds[0]],
-            promotion.maKhuyenMai,
-            customerPhone,
-          ),
-        );
+        .send(payload);
       expect(response.status).toBe(500);
     } finally {
       fault.mockRestore();
@@ -1413,21 +1455,106 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
       where: { nhaXeId: busCompanyId },
     });
 
+    const payload = await promotionBookingPayload(
+      hold.body.data.holdToken,
+      [tripSeatIds[0]],
+      'UNKNOWN-CODE',
+      '0901234567',
+    );
     const response = await request(app.getHttpServer())
       .post('/api/v1/bookings')
-      .send(
-        promotionBookingPayload(
-          hold.body.data.holdToken,
-          [tripSeatIds[0]],
-          'UNKNOWN-CODE',
-          '0901234567',
-        ),
-      );
+      .send(payload);
 
     expect(response.status).toBe(409);
     expect(response.body.error).toBe('PROMOTION_CODE_INVALID');
     expect(await prisma.donGiaoDich.count({ where: { nhaXeId: busCompanyId } })).toBe(beforeOrders);
     expect(await prisma.suDungKhuyenMai.count({ where: { khuyenMai: { nhaXeId: busCompanyId } } })).toBe(0);
+  });
+
+  it('rejects a promotion booking without the quote the customer confirmed before writing', async () => {
+    const promotion = await createPromotion({ amount: 30_000 });
+    const hold = await request(app.getHttpServer())
+      .post('/api/v1/seat-holds')
+      .send({ tripId, seatIds: [tripSeatIds[0]] });
+    expect(hold.status).toBe(201);
+    const before = {
+      orders: await prisma.donGiaoDich.count({ where: { nhaXeId: busCompanyId } }),
+      bookings: await prisma.phieuDatVe.count({ where: { donGiaoDich: { nhaXeId: busCompanyId } } }),
+      payments: await prisma.thanhToan.count({ where: { donGiaoDich: { nhaXeId: busCompanyId } } }),
+      histories: await prisma.lichSuTrangThaiPhieuDatVe.count({ where: { phieuDatVe: { donGiaoDich: { nhaXeId: busCompanyId } } } }),
+      usage: await prisma.suDungKhuyenMai.count({ where: { khuyenMaiId: promotion.khuyenMaiId } }),
+      promotion: await prisma.khuyenMai.findUniqueOrThrow({ where: { khuyenMaiId: promotion.khuyenMaiId } }),
+    };
+
+    const response = await request(app.getHttpServer())
+      .post('/api/v1/bookings')
+      .send({
+        tripId,
+        seatIds: [tripSeatIds[0]],
+        holdToken: hold.body.data.holdToken,
+        promotionCode: promotion.maKhuyenMai,
+        contact: { fullName: 'Promotion integration guest', phone: '0901234567' },
+        pickupPoint: 'Bến xe Miền Đông',
+        dropoffPoint: 'Bến xe Đà Lạt',
+      });
+
+    expect(response.status, JSON.stringify(response.body)).toBe(400);
+    expect(response.body.error).toBe('VALIDATION_ERROR');
+    expect(response.body.details).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ field: 'expectedPromotionQuote' }),
+      ]),
+    );
+    expect(await prisma.donGiaoDich.count({ where: { nhaXeId: busCompanyId } })).toBe(before.orders);
+    expect(await prisma.phieuDatVe.count({ where: { donGiaoDich: { nhaXeId: busCompanyId } } })).toBe(before.bookings);
+    expect(await prisma.thanhToan.count({ where: { donGiaoDich: { nhaXeId: busCompanyId } } })).toBe(before.payments);
+    expect(await prisma.lichSuTrangThaiPhieuDatVe.count({ where: { phieuDatVe: { donGiaoDich: { nhaXeId: busCompanyId } } } })).toBe(before.histories);
+    expect(await prisma.suDungKhuyenMai.count({ where: { khuyenMaiId: promotion.khuyenMaiId } })).toBe(before.usage);
+    expect(await prisma.khuyenMai.findUniqueOrThrow({ where: { khuyenMaiId: promotion.khuyenMaiId } })).toEqual(before.promotion);
+    expect((await prisma.gheChuyenXe.findUniqueOrThrow({ where: { gheChuyenXeId: tripSeatIds[0] } })).trangThai).toBe('DANG_GIU');
+  });
+
+  it('rejects a stale promotion quote and rolls back booking, payment, history, and usage writes', async () => {
+    const promotion = await createPromotion({ amount: 30_000 });
+    const hold = await request(app.getHttpServer())
+      .post('/api/v1/seat-holds')
+      .send({ tripId, seatIds: [tripSeatIds[0]] });
+    expect(hold.status).toBe(201);
+    const stalePayload = await promotionBookingPayload(
+      hold.body.data.holdToken,
+      [tripSeatIds[0]],
+      promotion.maKhuyenMai,
+      '0901234567',
+    );
+    expect(stalePayload.expectedPromotionQuote).toMatchObject({
+      originalTotal: '150000.00',
+      discountAmount: '30000.00',
+      finalTotal: '120000.00',
+    });
+    await prisma.khuyenMai.update({
+      where: { khuyenMaiId: promotion.khuyenMaiId },
+      data: { giaTriGiam: 50_000 },
+    });
+    const before = {
+      orders: await prisma.donGiaoDich.count({ where: { nhaXeId: busCompanyId } }),
+      bookings: await prisma.phieuDatVe.count({ where: { donGiaoDich: { nhaXeId: busCompanyId } } }),
+      payments: await prisma.thanhToan.count({ where: { donGiaoDich: { nhaXeId: busCompanyId } } }),
+      histories: await prisma.lichSuTrangThaiPhieuDatVe.count({ where: { phieuDatVe: { donGiaoDich: { nhaXeId: busCompanyId } } } }),
+    };
+
+    const response = await request(app.getHttpServer())
+      .post('/api/v1/bookings')
+      .send(stalePayload);
+
+    expect(response.status, JSON.stringify(response.body)).toBe(409);
+    expect(response.body.error).toBe('PROMOTION_QUOTE_CHANGED');
+    expect(await prisma.donGiaoDich.count({ where: { nhaXeId: busCompanyId } })).toBe(before.orders);
+    expect(await prisma.phieuDatVe.count({ where: { donGiaoDich: { nhaXeId: busCompanyId } } })).toBe(before.bookings);
+    expect(await prisma.thanhToan.count({ where: { donGiaoDich: { nhaXeId: busCompanyId } } })).toBe(before.payments);
+    expect(await prisma.lichSuTrangThaiPhieuDatVe.count({ where: { phieuDatVe: { donGiaoDich: { nhaXeId: busCompanyId } } } })).toBe(before.histories);
+    expect(await prisma.suDungKhuyenMai.count({ where: { khuyenMaiId: promotion.khuyenMaiId } })).toBe(0);
+    expect((await prisma.khuyenMai.findUniqueOrThrow({ where: { khuyenMaiId: promotion.khuyenMaiId } })).soLuotDaSuDung).toBe(0);
+    expect((await prisma.gheChuyenXe.findUniqueOrThrow({ where: { gheChuyenXeId: tripSeatIds[0] } })).trangThai).toBe('DANG_GIU');
   });
 
   it('requires a guest phone before claiming identity eligibility in quote', async () => {
@@ -1478,16 +1605,15 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
       .send({ tripId, seatIds: [tripSeatIds[0], tripSeatIds[1]] });
     expect(hold.status).toBe(201);
 
+    const payload = await promotionBookingPayload(
+      hold.body.data.holdToken,
+      [tripSeatIds[0], tripSeatIds[1]],
+      promotion.maKhuyenMai,
+      '+84901234567',
+    );
     const response = await request(app.getHttpServer())
       .post('/api/v1/bookings')
-      .send(
-        promotionBookingPayload(
-          hold.body.data.holdToken,
-          [tripSeatIds[0], tripSeatIds[1]],
-          promotion.maKhuyenMai,
-          '+84901234567',
-        ),
-      );
+      .send(payload);
 
     expect(response.status, JSON.stringify(response.body)).toBe(201);
     const result = response.body.data;
@@ -1527,16 +1653,15 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
     const guestHold = await request(app.getHttpServer())
       .post('/api/v1/seat-holds')
       .send({ tripId, seatIds: [tripSeatIds[0]] });
+    const guestPayload = await promotionBookingPayload(
+      guestHold.body.data.holdToken,
+      [tripSeatIds[0]],
+      promotion.maKhuyenMai,
+      customerPhone,
+    );
     const guest = await request(app.getHttpServer())
       .post('/api/v1/bookings')
-      .send(
-        promotionBookingPayload(
-          guestHold.body.data.holdToken,
-          [tripSeatIds[0]],
-          promotion.maKhuyenMai,
-          customerPhone,
-        ),
-      );
+      .send(guestPayload);
     expect(guest.status, JSON.stringify(guest.body)).toBe(201);
 
     currentPrincipal = customerPrincipal;
@@ -1544,16 +1669,15 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
       .post('/api/v1/seat-holds')
       .send({ tripId, seatIds: [tripSeatIds[1]] });
     expect(registeredHold.status).toBe(201);
+    const registeredPayload = await promotionBookingPayload(
+      registeredHold.body.data.holdToken,
+      [tripSeatIds[1]],
+      promotion.maKhuyenMai,
+      '0911111111',
+    );
     const registered = await request(app.getHttpServer())
       .post('/api/v1/bookings')
-      .send(
-        promotionBookingPayload(
-          registeredHold.body.data.holdToken,
-          [tripSeatIds[1]],
-          promotion.maKhuyenMai,
-          '0911111111',
-        ),
-      );
+      .send(registeredPayload);
 
     expect(registered.status).toBe(409);
     expect(registered.body.error).toBe('PROMOTION_ALREADY_USED');
@@ -1569,16 +1693,15 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
     const firstHold = await request(app.getHttpServer())
       .post('/api/v1/seat-holds')
       .send({ tripId, seatIds: [tripSeatIds[0]] });
+    const firstPayload = await promotionBookingPayload(
+      firstHold.body.data.holdToken,
+      [tripSeatIds[0]],
+      promotion.maKhuyenMai,
+      '0903333333',
+    );
     const firstBooking = await request(app.getHttpServer())
       .post('/api/v1/bookings')
-      .send(
-        promotionBookingPayload(
-          firstHold.body.data.holdToken,
-          [tripSeatIds[0]],
-          promotion.maKhuyenMai,
-          '0903333333',
-        ),
-      );
+      .send(firstPayload);
     expect(firstBooking.status, JSON.stringify(firstBooking.body)).toBe(201);
     const ledger = await prisma.suDungKhuyenMai.findFirstOrThrow({
       where: { phieuDatVeId: firstBooking.body.data.bookingId },
@@ -1596,16 +1719,15 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
         .post('/api/v1/seat-holds')
         .send({ tripId, seatIds: [tripSeatIds[1]] });
       expect(secondHold.status).toBe(201);
+      const secondPayload = await promotionBookingPayload(
+        secondHold.body.data.holdToken,
+        [tripSeatIds[1]],
+        promotion.maKhuyenMai,
+        '0904444444',
+      );
       const secondBooking = await request(app.getHttpServer())
         .post('/api/v1/bookings')
-        .send(
-          promotionBookingPayload(
-            secondHold.body.data.holdToken,
-            [tripSeatIds[1]],
-            promotion.maKhuyenMai,
-            '0904444444',
-          ),
-        );
+        .send(secondPayload);
       expect(secondBooking.status).toBe(409);
       expect(secondBooking.body.error).toBe('PROMOTION_ALREADY_USED');
     } finally {
@@ -1626,14 +1748,28 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
       .send({ tripId, seatIds: [tripSeatIds[1]] });
     expect(firstHold.status).toBe(201);
     expect(secondHold.status).toBe(201);
+    const [firstPayload, secondPayload] = await Promise.all([
+      promotionBookingPayload(
+        firstHold.body.data.holdToken,
+        [tripSeatIds[0]],
+        promotion.maKhuyenMai,
+        '0901111111',
+      ),
+      promotionBookingPayload(
+        secondHold.body.data.holdToken,
+        [tripSeatIds[1]],
+        promotion.maKhuyenMai,
+        '0902222222',
+      ),
+    ]);
 
     const responses = await Promise.all([
       request(app.getHttpServer())
         .post('/api/v1/bookings')
-        .send(promotionBookingPayload(firstHold.body.data.holdToken, [tripSeatIds[0]], promotion.maKhuyenMai, '0901111111')),
+        .send(firstPayload),
       request(competingApp.getHttpServer())
         .post('/api/v1/bookings')
-        .send(promotionBookingPayload(secondHold.body.data.holdToken, [tripSeatIds[1]], promotion.maKhuyenMai, '0902222222')),
+        .send(secondPayload),
     ]);
 
     expect(responses.map((response) => response.status).sort()).toEqual([201, 409]);
@@ -1642,6 +1778,78 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
     expect(
       (await prisma.khuyenMai.findUniqueOrThrow({ where: { khuyenMaiId: promotion.khuyenMaiId } })).soLuotDaSuDung,
     ).toBe(1);
+  });
+
+  it('serializes a promotion edit against a quoted booking without losing usage or charging a stale quote', async () => {
+    const promotion = await createPromotion({ quota: 2, amount: 30_000 });
+    const hold = await request(app.getHttpServer())
+      .post('/api/v1/seat-holds')
+      .send({ tripId, seatIds: [tripSeatIds[0]] });
+    expect(hold.status).toBe(201);
+    const payload = await promotionBookingPayload(
+      hold.body.data.holdToken,
+      [tripSeatIds[0]],
+      promotion.maKhuyenMai,
+      '0901234567',
+    );
+    const editor: AuthPrincipal = {
+      ...customerPrincipal,
+      roles: ['NHA_XE_ADMIN'],
+      permissions: ['promotion:update'],
+      nhanVienId: 1,
+      nhaXeId: busCompanyId,
+    };
+    const edit = app.get(PromotionsService).update(
+      promotion.khuyenMaiId,
+      {
+        name: 'Concurrent promotion edit',
+        code: promotion.maKhuyenMai,
+        discountType: 'SO_TIEN',
+        discountValue: '50000',
+        startsOn: '2020-01-01',
+        endsOn: '2099-12-31',
+        usageLimit: 2,
+      },
+      editor,
+    );
+    const booking = request(app.getHttpServer())
+      .post('/api/v1/bookings')
+      .send(payload);
+    const [updatedPromotion, bookingResponse] = await Promise.all([edit, booking]);
+
+    expect(updatedPromotion).toMatchObject({
+      discountValue: '50000.00',
+      usageLimit: 2,
+    });
+    expect([201, 409]).toContain(bookingResponse.status);
+    const current = await prisma.khuyenMai.findUniqueOrThrow({
+      where: { khuyenMaiId: promotion.khuyenMaiId },
+    });
+    const uses = await prisma.suDungKhuyenMai.count({
+      where: { khuyenMaiId: promotion.khuyenMaiId },
+    });
+    expect(current.soLuotDaSuDung).toBe(uses);
+    expect(uses).toBeLessThanOrEqual(current.soLuotToiDa);
+
+    if (bookingResponse.status === 201) {
+      expect(bookingResponse.body.data).toMatchObject({
+        originalTicketSubtotal: 150_000,
+        discountAmount: 30_000,
+        ticketSubtotal: 120_000,
+      });
+      const bookingRecord = await prisma.phieuDatVe.findUniqueOrThrow({
+        where: { phieuDatVeId: bookingResponse.body.data.bookingId },
+      });
+      expect(Number(bookingRecord.soTienGiamKhuyenMai)).toBe(30_000);
+      expect(uses).toBe(1);
+    } else {
+      expect(bookingResponse.body.error).toBe('PROMOTION_QUOTE_CHANGED');
+      expect(uses).toBe(0);
+      expect(await prisma.phieuDatVe.count({ where: { donGiaoDich: { nhaXeId: busCompanyId } } })).toBe(0);
+      expect(await prisma.thanhToan.count({ where: { donGiaoDich: { nhaXeId: busCompanyId } } })).toBe(0);
+      expect(await prisma.lichSuTrangThaiPhieuDatVe.count({ where: { phieuDatVe: { donGiaoDich: { nhaXeId: busCompanyId } } } })).toBe(0);
+      expect((await prisma.gheChuyenXe.findUniqueOrThrow({ where: { gheChuyenXeId: tripSeatIds[0] } })).trangThai).toBe('DANG_GIU');
+    }
   });
 
   it('serializes two concurrent booking attempts for the same guest phone on MySQL', async () => {
@@ -1655,14 +1863,28 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
     expect(firstHold.status).toBe(201);
     expect(secondHold.status).toBe(201);
     const phone = '+84901234567';
+    const [firstPayload, secondPayload] = await Promise.all([
+      promotionBookingPayload(
+        firstHold.body.data.holdToken,
+        [tripSeatIds[0]],
+        promotion.maKhuyenMai,
+        phone,
+      ),
+      promotionBookingPayload(
+        secondHold.body.data.holdToken,
+        [tripSeatIds[1]],
+        promotion.maKhuyenMai,
+        '0901234567',
+      ),
+    ]);
 
     const responses = await Promise.all([
       request(app.getHttpServer())
         .post('/api/v1/bookings')
-        .send(promotionBookingPayload(firstHold.body.data.holdToken, [tripSeatIds[0]], promotion.maKhuyenMai, phone)),
+        .send(firstPayload),
       request(competingApp.getHttpServer())
         .post('/api/v1/bookings')
-        .send(promotionBookingPayload(secondHold.body.data.holdToken, [tripSeatIds[1]], promotion.maKhuyenMai, '0901234567')),
+        .send(secondPayload),
     ]);
 
     expect(responses.map((response) => response.status).sort()).toEqual([201, 409]);
@@ -1678,16 +1900,15 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
     const hold = await request(app.getHttpServer())
       .post('/api/v1/seat-holds')
       .send({ tripId, seatIds: [tripSeatIds[0]] });
+    const payload = await promotionBookingPayload(
+      hold.body.data.holdToken,
+      [tripSeatIds[0]],
+      promotion.maKhuyenMai,
+      '0901234567',
+    );
     const bookingResponse = await request(app.getHttpServer())
       .post('/api/v1/bookings')
-      .send(
-        promotionBookingPayload(
-          hold.body.data.holdToken,
-          [tripSeatIds[0]],
-          promotion.maKhuyenMai,
-          '0901234567',
-        ),
-      );
+      .send(payload);
     expect(bookingResponse.status, JSON.stringify(bookingResponse.body)).toBe(201);
     const bookingId = bookingResponse.body.data.bookingId;
 
@@ -1713,11 +1934,23 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
     const hold = await request(app.getHttpServer())
       .post('/api/v1/seat-holds')
       .send({ tripId, seatIds: [tripSeatIds[0]] });
+    const expectedPromotionQuote = await fetchPromotionQuote(
+      [tripSeatIds[0]],
+      promotion.maKhuyenMai,
+      customerPhone,
+    );
+    if (!expectedPromotionQuote) throw new Error('Cargo promotion quote was rejected.');
+    expect(expectedPromotionQuote).toMatchObject({
+      originalTotal: '150000.00',
+      discountAmount: '30000.00',
+      finalTotal: '120000.00',
+    });
     const payload = {
       ...bookingWithCargoPayload(hold.body.data.holdToken, [
         { name: 'Hành lý coupon', loaiHangHoaId: cargoTypeId, quantity: 1, weight: 2 },
       ]),
       promotionCode: promotion.maKhuyenMai,
+      expectedPromotionQuote,
     };
     const response = await request(app.getHttpServer())
       .post('/api/v1/bookings')
@@ -1755,16 +1988,15 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
       });
     let response;
     try {
+      const payload = await promotionBookingPayload(
+        hold.body.data.holdToken,
+        [tripSeatIds[0]],
+        promotion.maKhuyenMai,
+        '0901234567',
+      );
       response = await request(app.getHttpServer())
         .post('/api/v1/bookings')
-        .send(
-          promotionBookingPayload(
-            hold.body.data.holdToken,
-            [tripSeatIds[0]],
-            promotion.maKhuyenMai,
-            '0901234567',
-          ),
-        );
+        .send(payload);
     } finally {
       recordSpy.mockRestore();
     }
