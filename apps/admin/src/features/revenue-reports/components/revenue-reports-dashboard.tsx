@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { ArrowDownToLine, CircleAlert, Info } from 'lucide-react';
+import { ArrowDownToLine, ArrowDownLeft, ChartNoAxesCombined, CircleAlert, CircleCheck, Info, Package, Ticket, Wallet, type LucideIcon } from 'lucide-react';
 import { AdminPageHeader } from '@/components/admin/admin-page-header';
 import { AdminTableSkeleton } from '@/components/admin/admin-table-skeleton';
 import {
@@ -39,7 +39,7 @@ function DashboardLoading() {
     <div aria-label="Đang tải báo cáo doanh thu" className={styles.loadingGrid}>
       <div aria-hidden="true" className={styles.metricGrid}>
         {Array.from({ length: 6 }, (_, index) => (
-          <div className={`panel ${styles.metricSkeleton}`} key={index}>
+          <div className={`panel ${styles.metricSkeleton}`} data-wide={index === 0 || index === 5} key={index}>
             <span className={`skeleton ${styles.labelSkeleton}`} />
             <span className={`skeleton ${styles.valueSkeleton}`} />
             <span className={`skeleton ${styles.noteSkeleton}`} />
@@ -62,14 +62,19 @@ function DashboardLoading() {
   );
 }
 
-function MetricCard({ label, note, value }: {
+function MetricCard({ label, note, value, icon: Icon, primary = false }: {
   label: string;
   note: string;
   value: string;
+  icon: LucideIcon;
+  primary?: boolean;
 }) {
   return (
-    <article className={`panel ${styles.metricCard}`}>
-      <h2 className={styles.metricLabel}>{label}</h2>
+    <article className={`panel ${styles.metricCard}`} data-primary={primary}>
+      <div className={styles.metricHeading}>
+        <h2 className={styles.metricLabel}>{label}</h2>
+        <span className={styles.metricIcon}><Icon aria-hidden="true" size={18} /></span>
+      </div>
       <p className={styles.metricValue} data-negative={value.startsWith('−')}>
         {value}
       </p>
@@ -111,14 +116,14 @@ export function RevenueReportsDashboard() {
   }
 
   const periodSummary = report
-    ? `${formatReportRange(report.meta)} · ${groupByLabel(report.meta.groupBy)} · múi giờ Việt Nam`
+    ? `${formatReportRange(report.meta)}`
     : dateRange
-      ? `${formatDateOnly(dateRange.from)} – ${formatDateOnly(dateRange.to)} · ${groupByLabel(groupBy)} · múi giờ Việt Nam`
-      : `Tháng hiện tại · ${groupByLabel(groupBy)} · múi giờ Việt Nam`;
+      ? `${formatDateOnly(dateRange.from)} – ${formatDateOnly(dateRange.to)}`
+      : `Tháng hiện tại`;
 
   return (
     <SuperAdminLayout activeSection="revenue-reports">
-      <div className={styles.page}>
+      <div className={`admin-page-content ${styles.page}`}>
         {toast && (
           <div
             aria-atomic="true"
@@ -144,35 +149,41 @@ export function RevenueReportsDashboard() {
             </Button>
           )}
           eyebrow="BÁO CÁO NHÀ XE"
-          title="Thống kê & Báo cáo doanh thu"
+          title="Báo cáo doanh thu"
           titleId="revenue-report-title"
         />
 
-        <section aria-label="Bộ lọc báo cáo doanh thu" className={styles.filterPanel}>
+        <section aria-label="Bộ lọc báo cáo doanh thu" className={`panel ${styles.filterPanel}`}>
           <div className={styles.filterControls}>
-            <DateRangeFilter
-              label="Khoảng ngày"
-              onApply={updateDateRange}
-              title="Lọc báo cáo theo ngày"
-              value={dateRange}
-            />
+            <div className={styles.dateField}>
+              <span className={styles.filterLabel}>Thời gian báo cáo</span>
+              <DateRangeFilter
+                label={report && !dateRange ? `Tháng ${report.meta.fromDate.slice(5, 7)}/${report.meta.fromDate.slice(0, 4)}` : 'Tháng hiện tại'}
+                onApply={updateDateRange}
+                title="Lọc báo cáo theo ngày"
+                value={dateRange}
+              />
+            </div>
             <LabeledSelectFilter
-              label="Gom theo"
+              label="Gom số liệu theo"
               onChange={updateGroupBy}
               options={GROUP_OPTIONS}
               value={groupBy}
             />
           </div>
           <p aria-live="polite" className={styles.periodSummary}>
-            Kỳ báo cáo: {periodSummary}
-            <span
-              aria-label="Theo giao dịch đã ghi nhận"
-              className={styles.definitionHint}
-              role="note"
-              tabIndex={0}
-              title="Theo giao dịch đã ghi nhận"
-            >
-              <Info aria-hidden="true" size={15} />
+            <span className={styles.periodLabel}>Kỳ đang xem</span>
+            <span>
+              {periodSummary}
+              <span
+                aria-label="Theo giao dịch đã ghi nhận"
+                className={styles.definitionHint}
+                role="note"
+                tabIndex={0}
+                title="Theo giao dịch đã ghi nhận"
+              >
+                <Info aria-hidden="true" size={15} />
+              </span>
             </span>
           </p>
         </section>
@@ -224,37 +235,46 @@ function RevenueReportContent({
     <div className={styles.content}>
       <section aria-label="Chỉ số doanh thu trong kỳ" className={styles.metricGrid}>
         <MetricCard
+          icon={Wallet}
+          primary
           label="Doanh thu ròng"
           note="Sau khi trừ tiền hoàn thành công"
           value={formatRevenueVnd(totals.netRevenue)}
         />
         <MetricCard
+          icon={Ticket}
           label="Doanh thu vé"
           note="Vé đã thu, sau tiền hoàn"
           value={formatRevenueVnd(totals.netTicketRevenue)}
         />
         <MetricCard
+          icon={Package}
           label="Doanh thu gửi hàng"
           note="Phí gửi hàng, sau tiền hoàn"
           value={formatRevenueVnd(totals.netShipmentRevenue)}
         />
         <MetricCard
+          icon={ArrowDownLeft}
           label="Tiền đã hoàn"
           note="Khoản hoàn tiền thành công trong kỳ"
           value={formatRevenueVnd(totals.refundAmount)}
         />
         <MetricCard
+          icon={CircleCheck}
           label="Thanh toán thành công"
           note="Không gồm hoàn tiền, đơn 0đ hoặc đối soát"
           value={totals.successfulPayments.toLocaleString('vi-VN')}
         />
-        <article className={`panel ${styles.metricCard}`}>
-          <h2 className={styles.metricLabel}>Vé đã bán / Vận đơn</h2>
+        <article className={`panel ${styles.metricCard} ${styles.volumeCard}`}>
+          <div className={styles.metricHeading}>
+            <h2 className={styles.metricLabel}>Vé & vận đơn phát hành</h2>
+            <span className={styles.metricIcon}><ChartNoAxesCombined aria-hidden="true" size={18} /></span>
+          </div>
           <div className={styles.countPair}>
             <p><strong>{totals.soldTicketCount.toLocaleString('vi-VN')}</strong><span>Vé đã bán</span></p>
             <p><strong>{totals.issuedShipmentCount.toLocaleString('vi-VN')}</strong><span>Vận đơn đã phát</span></p>
           </div>
-          <p className={styles.metricNote}>Đã phát hành hoặc quyết toán trong kỳ; không phải số còn hiệu lực.</p>
+          <p className={styles.metricNote}>Phát hành hoặc quyết toán trong kỳ, không phải số còn hiệu lực.</p>
         </article>
       </section>
 
@@ -331,11 +351,16 @@ function RevenueReportContent({
                 <th scope="col">Thu trước hoàn</th>
                 <th scope="col">Hoàn tiền</th>
                 <th scope="col">Ròng</th>
-                <th scope="col">Payment thành công</th>
+                <th scope="col">Thanh toán thành công</th>
               </tr>
             </thead>
             <tbody>
-              {series.map((item) => (
+              {noData ? (
+                <tr><td colSpan={7} className={styles.emptyTableCell}>
+                  <strong>Chưa có giao dịch trong kỳ báo cáo</strong>
+                  <span>Thử chọn khoảng ngày khác để xem doanh thu đã ghi nhận.</span>
+                </td></tr>
+              ) : series.map((item) => (
                 <tr key={item.period}>
                   <th scope="row">{formatPeriod(item.period, groupBy)}</th>
                   <td>{formatRevenueVnd(item.netTicketRevenue)}</td>

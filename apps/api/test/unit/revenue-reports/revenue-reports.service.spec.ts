@@ -444,7 +444,7 @@ describe('RevenueReportsService', () => {
     ).toEqual(['1', '2']);
   });
 
-  it('defaults an empty query to the current business month and returns empty buckets', async () => {
+  it('defaults an empty query to the current business month and returns daily buckets', async () => {
     const { service } = makeHarness();
     const report = await service.getReport(
       plainToInstance(RevenueReportQueryDto, {}),
@@ -462,6 +462,21 @@ describe('RevenueReportsService', () => {
     expect(report.data.totals.grossReceipts).toBe('0');
     expect(report.data.serviceBreakdown).toHaveLength(3);
   });
+
+  it.each([
+    ['2023-12-31T17:00:00.000Z', '2024-01-01', '2024-01-01', '2023-12-31T17:00:00.000Z', '2024-01-01T17:00:00.000Z', 1],
+    ['2024-02-29T16:59:59.000Z', '2024-02-01', '2024-02-29', '2024-01-31T17:00:00.000Z', '2024-02-29T17:00:00.000Z', 29],
+  ])('resolves the default business month using Vietnam time at %s', async (now, fromDate, toDate, start, end, buckets) => {
+    const { service, paymentFindMany } = makeHarness();
+    const report = await service.getReport(plainToInstance(RevenueReportQueryDto, {}), tenantAdmin, new Date(now));
+    expect(report.meta.fromDate).toBe(fromDate);
+    expect(report.meta.toDate).toBe(toDate);
+    expect(paymentFindMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ thoiDiemHoanTat: { gte: new Date(start), lt: new Date(end) } }),
+    }));
+    expect(report.data.series).toHaveLength(buckets);
+  });
+
 });
 
 const invalidQueries: Array<{

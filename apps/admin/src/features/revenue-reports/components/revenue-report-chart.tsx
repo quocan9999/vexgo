@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useState, type KeyboardEvent } from 'react';
+import { ChartNoAxesCombined } from 'lucide-react';
 import type {
   RevenueReportGroupBy,
   RevenueReportSeriesItem,
@@ -67,7 +68,10 @@ export function RevenueReportChart({
   if (noData || series.length === 0) {
     return (
       <div className={styles.chartEmpty} role="status">
-        Không có dữ liệu doanh thu trong kỳ này.
+        <span className={styles.emptyIcon}><ChartNoAxesCombined aria-hidden="true" size={28} /></span>
+        <h3>Chưa có doanh thu trong kỳ này</h3>
+        <p>Biểu đồ sẽ hiển thị khi có giao dịch thu hoặc hoàn tiền được ghi nhận.</p>
+        <span className={styles.emptyHint}>Bạn có thể chọn khoảng ngày khác ở bộ lọc phía trên.</span>
       </div>
     );
   }

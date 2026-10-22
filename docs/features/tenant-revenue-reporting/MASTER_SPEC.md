@@ -79,7 +79,7 @@ Ký hiệu kỳ P, tổng hợp từ các **sale settlements hợp lệ** và **
 - **Một biểu đồ:** line/bar theo kỳ `netRevenue` (âm vẫn hiển thị được), nhóm theo ngày/tháng/quý. Tooltip và nhãn format VND; một nguồn dữ liệu chung với bảng theo thời gian.
 - **Bảng 1 — Cơ cấu doanh thu dịch vụ:** 3 dòng "Vé xe", "Gửi hàng độc lập", "Gửi hàng kèm vé"; mỗi dòng có **đã thu trước hoàn / đã hoàn / doanh thu ròng**, và có tổng cộng. Hai dòng gửi cộng bằng KPI gửi hàng; 3 dòng ròng cộng bằng netRevenue.
 - **Bảng 2 — Báo cáo theo thời gian:** cột Kỳ, Vé (ròng), Gửi hàng (ròng), Thu trước hoàn, Đã hoàn, Doanh thu ròng, Thanh toán thành công. Dùng chính `series` server; không tạo một API gần trùng cho chart/table.
-- Bộ lọc kỳ: `fromDate`, `toDate`, `groupBy=day|month|quarter`; khoảng ngày tùy chọn; default khuyến nghị tháng hiện tại, nhóm theo ngày. Ngày/tháng/quý là cách **gom bucket**, phạm vi lọc được chọn riêng để tránh hiểu sai.
+- Bộ lọc kỳ: `fromDate`, `toDate`, `groupBy=day|month|quarter`; khoảng ngày tùy chọn. Theo yêu cầu cập nhật ngày 23/10/2026, mặc định tháng hiện tại (từ đầu tháng đến hôm nay theo múi giờ Việt Nam), nhóm theo ngày; xóa lọc trở về tháng hiện tại. Ngày/tháng/quý là cách **gom bucket**, phạm vi lọc được chọn riêng để tránh hiểu sai.
 - CSV: nút placeholder + toast chính xác **“Tính năng xuất báo cáo đang được triển khai”**, không download/endpoint/thông báo xuất thành công.
 
 ## 6. Tính thời gian, nguồn sự thật (baseline từ `origin/develop`)

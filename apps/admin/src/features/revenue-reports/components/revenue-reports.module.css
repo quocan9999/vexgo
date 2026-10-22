@@ -15,11 +15,11 @@
 .filterPanel {
   display: flex;
   min-width: 0;
-  align-items: end;
+  align-items: center;
   justify-content: space-between;
   gap: var(--admin-space-4);
   flex-wrap: wrap;
-  padding: 0 var(--admin-space-1);
+  padding: var(--admin-space-card-padding);
 }
 
 .filterControls {
@@ -29,11 +29,37 @@
   flex-wrap: wrap;
 }
 
+.filterExplanation {
+  flex-basis: 100%;
+  margin: 0;
+  padding-top: var(--admin-space-3);
+  border-top: 1px solid var(--admin-border);
+  color: var(--admin-text-muted);
+  font-size: var(--admin-type-helper-size);
+  line-height: var(--admin-type-helper-line-height);
+}
+
 .periodSummary {
+  display: grid;
+  gap: var(--admin-space-2);
+  max-width: 440px;
   margin: 0;
   color: var(--admin-text-muted);
   font-size: var(--admin-type-secondary-body-size);
   line-height: var(--admin-type-secondary-body-line-height);
+}
+
+.dateField {
+  display: grid;
+  gap: var(--admin-space-label-control-gap, var(--admin-space-2));
+}
+
+.filterLabel,
+.periodLabel {
+  color: var(--admin-text-strong);
+  font-size: var(--admin-type-label-size);
+  font-weight: var(--admin-type-label-weight);
+  line-height: var(--admin-type-label-line-height);
 }
 
 .definitionHint {
@@ -53,7 +79,7 @@
 .metricGrid {
   display: grid;
   min-width: 0;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--admin-space-4);
 }
 
@@ -61,13 +87,56 @@
 .metricSkeleton {
   display: flex;
   min-width: 0;
-  min-height: 150px;
+  min-height: 160px;
   flex-direction: column;
   padding: var(--admin-space-card-padding);
 }
 
+.metricHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--admin-space-2);
+  margin-bottom: var(--admin-space-3);
+}
+
+.metricIcon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  padding: var(--admin-space-2);
+  border-radius: var(--admin-radius-control);
+  color: var(--admin-blue);
+  background: var(--admin-blue-soft);
+}
+
+.metricCard[data-primary='true'],
+.metricSkeleton[data-wide='true'],
+.volumeCard {
+  grid-column: span 2;
+}
+
+.metricCard[data-primary='true'] {
+  border-color: var(--admin-blue);
+  background: var(--admin-blue);
+}
+
+.metricCard[data-primary='true'] .metricLabel,
+.metricCard[data-primary='true'] .metricValue,
+.metricCard[data-primary='true'] .metricNote {
+  color: #fff;
+}
+
+.metricCard[data-primary='true'] .metricIcon {
+  background: rgb(255 255 255 / 14%);
+  color: #fff;
+}
+
+.metricCard[data-primary='true'] .metricValue {
+  font-size: var(--admin-type-metric-size);
+}
+
 .metricLabel {
-  margin: 0 0 var(--admin-space-3);
+  margin: 0;
   color: var(--admin-text-muted);
   font-size: var(--admin-type-label-size);
   font-weight: var(--admin-type-label-weight);
@@ -77,11 +146,12 @@
 .metricValue {
   margin: 0;
   color: var(--admin-text-strong);
-  font-size: var(--admin-type-metric-size);
+  font-size: var(--admin-type-metric-compact-size);
   font-weight: var(--admin-type-metric-weight);
   letter-spacing: -0.025em;
   line-height: var(--admin-type-metric-line-height);
   overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
 }
 
 .metricValue[data-negative='true'] {
@@ -107,6 +177,11 @@
   display: grid;
   gap: var(--admin-space-1);
   margin: 0;
+}
+
+.countPair p + p {
+  border-left: 1px solid var(--admin-border);
+  padding-left: var(--admin-space-4);
 }
 
 .countPair strong {
@@ -287,17 +362,53 @@
 }
 
 .chartEmpty {
-  display: grid;
-  min-height: 280px;
-  place-items: center;
+  display: flex;
+  min-height: 250px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--admin-space-3);
   padding: var(--admin-space-6);
+  border: 1px dashed var(--admin-border);
+  border-radius: var(--admin-radius-panel);
+  background: var(--admin-surface-muted);
   color: var(--admin-text-muted);
   text-align: center;
+}
+
+.emptyIcon {
+  display: flex;
+  padding: var(--admin-space-3);
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius-panel);
+  background: var(--admin-surface);
+  color: var(--admin-blue);
+}
+
+.chartEmpty h3 {
+  margin: 0;
+  color: var(--admin-text-strong);
+  font-size: var(--admin-type-component-title-size);
+  font-weight: var(--admin-type-component-title-weight);
+  line-height: var(--admin-type-component-title-line-height);
+}
+
+.chartEmpty p {
+  max-width: 420px;
+  margin: 0;
+  font-size: var(--admin-type-secondary-body-size);
+  line-height: var(--admin-type-secondary-body-line-height);
+}
+
+.emptyHint {
+  font-size: var(--admin-type-helper-size);
+  line-height: var(--admin-type-helper-line-height);
 }
 
 .tableScroll {
   width: 100%;
   overflow-x: auto;
+  max-height: 480px;
 }
 
 .dataTable {
@@ -319,10 +430,40 @@
 }
 
 .dataTable thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--admin-surface-muted);
   border-top: 0;
   color: var(--admin-text-strong);
   font-size: var(--admin-type-table-header-size);
   font-weight: var(--admin-type-table-header-weight);
+}
+
+.dataTable td {
+  font-variant-numeric: tabular-nums;
+}
+
+.dataTable td:last-child {
+  color: var(--admin-text-strong);
+  font-weight: var(--admin-weight-semibold);
+}
+
+.dataTable td.emptyTableCell {
+  padding: var(--admin-space-7) var(--admin-space-4);
+  text-align: center;
+  white-space: normal;
+}
+
+.emptyTableCell strong,
+.emptyTableCell span {
+  display: block;
+}
+
+.emptyTableCell span {
+  margin-top: var(--admin-space-2);
+  color: var(--admin-text-muted);
+  font-weight: var(--admin-weight-regular);
 }
 
 .dataTable tbody th {
@@ -340,6 +481,7 @@
   border-top: 2px solid var(--admin-border);
   color: var(--admin-text-strong);
   font-weight: var(--admin-weight-semibold);
+  background: var(--admin-surface-muted);
 }
 
 .metricSkeleton {
@@ -412,9 +554,15 @@
   line-height: var(--admin-type-body-line-height);
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1100px) {
   .metricGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .metricCard[data-primary='true'],
+  .metricSkeleton[data-wide='true'],
+  .volumeCard {
+    grid-column: auto;
   }
 }
 
@@ -425,7 +573,7 @@
   }
 
   .filterPanel {
-    padding-inline: 0;
+    gap: var(--admin-space-5);
   }
 
   .filterControls {
