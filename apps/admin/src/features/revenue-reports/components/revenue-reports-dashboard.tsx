@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { ArrowDownToLine, CircleAlert } from 'lucide-react';
+import { ArrowDownToLine, CircleAlert, Info } from 'lucide-react';
 import { AdminPageHeader } from '@/components/admin/admin-page-header';
 import { AdminTableSkeleton } from '@/components/admin/admin-table-skeleton';
 import {
@@ -165,6 +165,15 @@ export function RevenueReportsDashboard() {
           </div>
           <p aria-live="polite" className={styles.periodSummary}>
             Kỳ báo cáo: {periodSummary}
+            <span
+              aria-label="Theo giao dịch đã ghi nhận"
+              className={styles.definitionHint}
+              role="note"
+              tabIndex={0}
+              title="Theo giao dịch đã ghi nhận"
+            >
+              <Info aria-hidden="true" size={15} />
+            </span>
           </p>
         </section>
 

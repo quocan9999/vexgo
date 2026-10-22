@@ -219,6 +219,44 @@ describe('RevenueReportsService', () => {
     });
   });
 
+  it('preserves large whole-VND values exactly and rejects fractional source prices', async () => {
+    const largeVnd = '9007199254740993';
+    const largeValueReport = await makeHarness({
+      sales: [
+        sale(1, '2026-10-01T05:00:00.000Z', {
+          ticketPrices: [largeVnd],
+          total: largeVnd,
+        }),
+      ],
+    }).service.getReport(
+      query('2026-10-01', '2026-10-01'),
+      tenantAdmin,
+      fixedNow,
+    );
+
+    expect(largeValueReport.data.totals.grossReceipts).toBe(largeVnd);
+    expect(largeValueReport.data.totals.netTicketRevenue).toBe(largeVnd);
+    expect(largeValueReport.data.series[0]?.netRevenue).toBe(largeVnd);
+
+    const fractionalSource = makeHarness({
+      sales: [
+        sale(2, '2026-10-01T05:00:00.000Z', {
+          ticketPrices: ['1.50'],
+          total: '1.50',
+        }),
+      ],
+    });
+    await expect(
+      fractionalSource.service.getReport(
+        query('2026-10-01', '2026-10-01'),
+        tenantAdmin,
+        fixedNow,
+      ),
+    ).rejects.toMatchObject({
+      response: { error: 'REVENUE_SOURCE_DATA_INVALID' },
+    });
+  });
+
   it('uses only principal tenant scope for every source query, including attempted query overrides', async () => {
     const { service, paymentFindMany, zeroTicketFindMany } = makeHarness();
     await service.getReport(

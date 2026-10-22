@@ -36,6 +36,20 @@
   line-height: var(--admin-type-secondary-body-line-height);
 }
 
+.definitionHint {
+  display: inline-flex;
+  margin-inline-start: var(--admin-space-1);
+  border-radius: var(--admin-radius-control);
+  color: var(--admin-text-muted);
+  vertical-align: middle;
+  cursor: help;
+}
+
+.definitionHint:focus-visible {
+  outline: 2px solid var(--admin-blue);
+  outline-offset: 2px;
+}
+
 .metricGrid {
   display: grid;
   min-width: 0;
