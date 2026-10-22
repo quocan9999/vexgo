@@ -267,7 +267,7 @@ function sumTicketPrices(event: SaleEvent): Prisma.Decimal {
 }
 
 function saleSplit(event: SaleEvent): {
-  kind: ServiceKind;
+  shipmentKind: ServiceKind;
   ticketAmount: Prisma.Decimal;
   shipmentAmount: Prisma.Decimal;
 } {
@@ -290,12 +290,10 @@ function saleSplit(event: SaleEvent): {
     return invalidSourceData();
   }
 
-  const kind: ServiceKind = booking
-    ? shipment
-      ? 'accompaniedShipment'
-      : 'ticket'
+  const shipmentKind: ServiceKind = booking
+    ? 'accompaniedShipment'
     : 'standaloneShipment';
-  return { kind, ticketAmount, shipmentAmount };
+  return { shipmentKind, ticketAmount, shipmentAmount };
 }
 
 function saleDate(event: SaleEvent): Date {
@@ -313,7 +311,7 @@ function refundKind(event: RefundEvent): ServiceKind {
   ) {
     return invalidSourceData();
   }
-  return event.donGiaoDich.phieuGuiHang ? 'accompaniedShipment' : 'ticket';
+  return 'ticket';
 }
 
 function refundDate(event: RefundEvent): Date {
@@ -458,8 +456,12 @@ export class RevenueReportsService {
         row.issuedShipmentCount,
         event.donGiaoDich.phieuGuiHang ? 1 : 0,
       );
-      breakdown[split.kind].grossReceipts =
-        breakdown[split.kind].grossReceipts.plus(gross);
+      breakdown.ticket.grossReceipts = breakdown.ticket.grossReceipts.plus(
+        split.ticketAmount,
+      );
+      breakdown[split.shipmentKind].grossReceipts = breakdown[
+        split.shipmentKind
+      ].grossReceipts.plus(split.shipmentAmount);
     }
 
     for (const event of refunds as RefundEvent[]) {
@@ -515,9 +517,18 @@ export class RevenueReportsService {
       (sum, line) => sum.plus(line.refundAmount),
       new Prisma.Decimal(0),
     );
+    const breakdownTicketNet = breakdown.ticket.grossReceipts.minus(
+      breakdown.ticket.refundAmount,
+    );
+    const breakdownShipmentNet = breakdown.standaloneShipment.grossReceipts
+      .plus(breakdown.accompaniedShipment.grossReceipts)
+      .minus(breakdown.standaloneShipment.refundAmount)
+      .minus(breakdown.accompaniedShipment.refundAmount);
     if (
       !breakdownGross.eq(totals.grossReceipts) ||
-      !breakdownRefunds.eq(totals.refundAmount)
+      !breakdownRefunds.eq(totals.refundAmount) ||
+      !breakdownTicketNet.eq(totals.netTicketRevenue) ||
+      !breakdownShipmentNet.eq(totals.netShipmentRevenue)
     ) {
       invalidSourceData();
     }

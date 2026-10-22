@@ -168,9 +168,9 @@ describe('RevenueReportsService', () => {
       {
         kind: 'ticket',
         label: 'Vé',
-        grossReceipts: '703',
-        refundAmount: '0',
-        netRevenue: '703',
+        grossReceipts: '1006',
+        refundAmount: '101',
+        netRevenue: '905',
       },
       {
         kind: 'standaloneShipment',
@@ -182,9 +182,9 @@ describe('RevenueReportsService', () => {
       {
         kind: 'accompaniedShipment',
         label: 'Gửi hàng kèm vé',
-        grossReceipts: '1203',
-        refundAmount: '101',
-        netRevenue: '1102',
+        grossReceipts: '900',
+        refundAmount: '0',
+        netRevenue: '900',
       },
     ]);
     expect(report.data.series).toEqual([

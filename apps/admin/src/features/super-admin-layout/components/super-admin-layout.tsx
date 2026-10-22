@@ -4,6 +4,7 @@ import {
   Bus,
   Building2,
   CalendarDays,
+  ChartNoAxesCombined,
   Database,
   Headphones,
   LogOut,
@@ -53,6 +54,7 @@ type SuperAdminLayoutProps = {
     | 'booking-management'
     | 'promotions'
     | 'shipments'
+    | 'revenue-reports'
     | 'admin-accounts'
     | 'rbac'
     | 'tenant-rbac'
@@ -170,6 +172,10 @@ const OPERATION_NAVIGATION_DETAILS: Record<
   },
   promotions: { label: 'Khuyến mãi', icon: () => <Tag size={18} /> },
   shipments: { label: 'Gửi hàng', icon: () => <Package size={18} /> },
+  'revenue-reports': {
+    label: 'Báo cáo doanh thu',
+    icon: () => <ChartNoAxesCombined size={18} />,
+  },
 };
 
 export function SuperAdminLayout({
