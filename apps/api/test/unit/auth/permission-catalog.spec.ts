@@ -13,6 +13,7 @@ describe('Admin permission defaults', () => {
     'promotion:read',
     'promotion:create',
     'promotion:update',
+    'revenue:read',
     'shipment:read',
     'shipment:update',
   ] as const)(
@@ -58,6 +59,7 @@ describe('Admin permission defaults', () => {
       'permission:assign',
       'customer:read',
       'booking:read',
+      'revenue:read',
       'promotion:read',
       'promotion:create',
       'promotion:update',
@@ -95,7 +97,7 @@ describe('Admin permission defaults', () => {
     ]);
   });
 
-  it('defines unique permissions for the current operational and platform APIs', () => {
+  it('defines unique permissions for tenant and platform APIs', () => {
     expect(permissionKeys).toEqual([
       'vehicle-type:read',
       'vehicle-type:create',
@@ -121,6 +123,7 @@ describe('Admin permission defaults', () => {
       'permission:assign',
       'customer:read',
       'booking:read',
+      'revenue:read',
       'promotion:read',
       'promotion:create',
       'promotion:update',
@@ -164,6 +167,7 @@ describe('Admin permission defaults', () => {
       'permission:assign',
       'customer:read',
       'booking:read',
+      'revenue:read',
       'promotion:read',
       'promotion:create',
       'promotion:update',
@@ -256,6 +260,15 @@ describe('Admin permission defaults', () => {
     );
     expect(isPermissionAllowedForRole('NHA_XE_ADMIN', 'booking:read')).toBe(
       true,
+    );
+    expect(isPermissionAllowedForRole('NHA_XE_ADMIN', 'revenue:read')).toBe(
+      true,
+    );
+    expect(
+      isPermissionAllowedForRole('NHAN_VIEN_DIEU_HANH', 'revenue:read'),
+    ).toBe(true);
+    expect(isPermissionAllowedForRole('SUPER_ADMIN', 'revenue:read')).toBe(
+      false,
     );
     expect(isPermissionAllowedForRole('NHA_XE_ADMIN', 'role:read')).toBe(true);
     expect(isPermissionAllowedForRole('NHA_XE_ADMIN', 'promotion:read')).toBe(
