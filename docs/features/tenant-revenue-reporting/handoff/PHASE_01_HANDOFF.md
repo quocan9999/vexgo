@@ -12,13 +12,13 @@
 - Sale chỉ lấy từ `ThanhToan` có `loaiGiaoDich=THANH_TOAN`, `trangThai=THANH_CONG`, `laQuyetToanHopLe=true` và `thoiDiemHoanTat` nằm trong khoảng nửa mở theo `Asia/Ho_Chi_Minh`. Paid-late, `CAN_DOI_SOAT`, pending/failed và attempt khác bị loại.
 - Ba truy vấn độc lập lấy sale, refund thành công và lịch sử phát hành vé 0đ; tránh nhân bản hàng do JOIN vé × hàng gửi × payment. Mỗi truy vấn áp tenant predicate từ `requireTenantPrincipal(principal)` trước khi tổng hợp.
 - Phân bổ sale dùng tổng `Ve.giaThucTe` và `PhieuGuiHang.tongPhi`; hai snapshot phải bằng `DonGiaoDich.tongTien` và `ThanhToan.soTien`. Discount đã nằm trong giá thực nên không trừ lại. Dữ liệu thiếu/mâu thuẫn fail-closed bằng `REVENUE_SOURCE_DATA_INVALID`.
-- Refund chỉ lấy `HOAN_TIEN + THANH_CONG` và `thoiDiemHoanTat`; xác minh `veId` thuộc đúng booking/order. Refund giảm doanh thu vé, kể cả booking kèm hàng; bảng cơ cấu phân loại theo loại order. Refund pending/failed không bị trừ.
+- Refund chỉ lấy `HOAN_TIEN + THANH_CONG` và `thoiDiemHoanTat`; xác minh `veId` thuộc đúng booking/order. Refund giảm doanh thu vé, kể cả booking kèm hàng. Bảng cơ cấu phải tách toàn bộ tiền vé vào dòng vé và chỉ đưa phí gửi hàng vào dòng gửi hàng độc lập/kèm vé; refund giảm dòng vé. Refund pending/failed không bị trừ.
 - Vé của booking 0đ được đếm từ status-history system event có lý do chuẩn, đúng chuyển trạng thái, order tổng 0đ và không có payment. Không tạo payment giả; hiện không có writer phát hành gửi hàng 0đ để đếm.
 - Tính tiền bằng `Prisma.Decimal`, chỉ nhận VND nguyên, JSON trả tiền dưới dạng chuỗi số nguyên để giữ chính xác. Kiểm tra `grossReceipts - refundAmount = netRevenue` và `netTicketRevenue + netShipmentRevenue = netRevenue`; series có bucket 0 và cùng nhóm thời gian cho chart/bảng.
 
 ## API, validation và quyền
 
-- Response `{ data, meta }`; `data` có totals, ba dòng `ticket` / `standaloneShipment` / `accompaniedShipment` và `series`. Không thêm CSV export route.
+- Response `{ data, meta }`; `data` có totals, ba dòng `ticket` / `standaloneShipment` / `accompaniedShipment` và `series`. Dòng vé net phải bằng `netTicketRevenue`; hai dòng gửi hàng net cộng lại bằng `netShipmentRevenue`. Không thêm CSV export route.
 - Query: `fromDate` và `toDate` cùng có hoặc cùng vắng mặt; ngày ISO hợp lệ, tối đa 366 ngày inclusive; `groupBy=day|month|quarter`; mặc định từ đầu tháng hiện tại đến business date hiện tại. Giới hạn truy vấn là `[00:00 fromDate, 00:00 ngày sau toDate)` theo `Asia/Ho_Chi_Minh`.
 - Tenant chỉ được lấy từ principal đã xác thực. `revenue:read` là tenant scope; mặc định chỉ cho `NHA_XE_ADMIN`. Tenant employee có thể nhận qua effective tenant override; không cấp mặc định cho nhân viên, Customer hoặc Super Admin.
 - `AuthorizationGuard` áp role + permission; service gọi `requireTenantPrincipal`. Permission resolver, tenant RBAC service và shared auth-scope functions được reuse, không sửa.
@@ -38,5 +38,5 @@
 - **Manual UI smoke:** UI chưa thuộc Phase 01. Chưa có UI/API runtime PASS; checklist cho Admin `3018` và API `4019` sẽ bàn giao sau Phase 03 để người dùng tự smoke.
 - **Open limitations:** chưa có writer hoàn tiền gửi hàng hoặc thu tiền mặt; nếu writer/contract thay đổi cần audit nguồn trước khi gộp vào báo cáo. Event lịch sử thiếu completion/eligibility marker không được backfill hoặc suy đoán. phpMyAdmin shared đang ở `9090`, không phải `8091`; giữ nguyên shared stack.
 - **Git status sau implementation commit:** branch `feature/tenant-revenue-reporting`, ahead 3 so với `origin/develop`; docs handoff/progress commit được thực hiện riêng sau implementation commit.
-- **Next phase:** `02` — đọc lại `MASTER_SPEC.md`, `handoff/PROGRESS.md`, handoff này và chỉ `spec/PHASE_02_ADMIN_DASHBOARD_UI.md`; trước UI đọc `apps/admin/AGENTS.md`, `apps/admin/DESIGN.md`, áp dụng skill `ui-ux-pro-max`, kiểm tra shared components/tokens. Không đọc spec Phase 03 trong Phase 02.
+- **Next phase:** `02` — đọc lại `MASTER_SPEC.md`, `handoff/PROGRESS.md`, handoff này và chỉ `spec/PHASE_02_ADMIN_DASHBOARD.md`; trước UI đọc `apps/admin/AGENTS.md`, `apps/admin/DESIGN.md`, áp dụng skill `ui-ux-pro-max`, kiểm tra shared components/tokens. Không đọc spec Phase 03 trong Phase 02.
 - **Resume sau compact:** xác nhận branch/status/HEAD; đọc `MASTER_SPEC.md`, `handoff/PROGRESS.md`, file handoff Phase 01 này và chỉ spec của phase đang chạy; không chạy integration/E2E/browser/UI tests.
