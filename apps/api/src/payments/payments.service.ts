@@ -1341,7 +1341,9 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
                     maGiaoDichSePay: params.providerTransactionId,
                     loaiGiaoDich: 'THANH_TOAN',
                     thoiGian: financialTransactionTime,
+                    thoiDiemHoanTat: financialTransactionTime,
                     trangThai: 'CAN_DOI_SOAT',
+                    laQuyetToanHopLe: false,
                     donGiaoDichId: payment.donGiaoDichId,
                   },
                 });
@@ -1433,9 +1435,11 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
           const paymentClaimWhere: Prisma.ThanhToanWhereInput = {
             thanhToanId: payment.thanhToanId,
             trangThai: { not: 'THANH_CONG' },
+            thoiDiemHoanTat: null,
           };
           const paymentClaimData: Prisma.ThanhToanUpdateManyMutationInput = {
             trangThai: 'THANH_CONG',
+            thoiDiemHoanTat: financialTransactionTime,
           };
           if (params.providerTransactionId) {
             paymentClaimWhere.maGiaoDichSePay = null;
@@ -1600,6 +1604,10 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
                 });
               }
             }
+            await tx.thanhToan.update({
+              where: { thanhToanId: payment.thanhToanId },
+              data: { laQuyetToanHopLe: true },
+            });
             return 'settled';
           }
 
@@ -1663,6 +1671,10 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
               trangThai: 'DANG_XU_LY',
             },
             data: { trangThai: 'THAT_BAI' },
+          });
+          await tx.thanhToan.update({
+            where: { thanhToanId: payment.thanhToanId },
+            data: { laQuyetToanHopLe: true },
           });
           return 'settled';
         },

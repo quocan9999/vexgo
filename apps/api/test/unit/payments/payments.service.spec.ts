@@ -411,8 +411,15 @@ describe('PaymentsService', () => {
       expect(result.success).toBe(true);
       expect(prisma.thanhToan.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { thanhToanId: 100, trangThai: { not: 'THANH_CONG' } },
-          data: { trangThai: 'THANH_CONG' },
+          where: {
+            thanhToanId: 100,
+            trangThai: { not: 'THANH_CONG' },
+            thoiDiemHoanTat: null,
+          },
+          data: {
+            trangThai: 'THANH_CONG',
+            thoiDiemHoanTat: expect.any(Date),
+          },
         }),
       );
       expect(prisma.donGiaoDich.updateMany).toHaveBeenCalledWith(
@@ -427,6 +434,48 @@ describe('PaymentsService', () => {
           data: { trangThai: 'DA_THANH_TOAN' },
         }),
       );
+      expect(prisma.thanhToan.update).toHaveBeenCalledWith({
+        where: { thanhToanId: 100 },
+        data: { laQuyetToanHopLe: true },
+      });
+    });
+
+    it('uses verified SePay time across Vietnam midnight and marks only the valid first sale', async () => {
+      const pendingAt = new Date('2026-10-15T16:58:00.000Z');
+      const providerTransactionAt = new Date('2026-10-15T17:03:00.000Z');
+      prisma.thanhToan.findUnique.mockResolvedValue({
+        ...samplePayment,
+        phuongThuc: 'SEPAY',
+        thoiGian: pendingAt,
+        donGiaoDich: {
+          ...samplePayment.donGiaoDich,
+          ngayTao: new Date('2026-10-15T16:55:00.000Z'),
+        },
+      });
+
+      const result = await service.confirmPaymentSuccess({
+        paymentId: 100,
+        provider: 'SEPAY',
+        amount: 300000,
+        providerTransactionAt,
+      });
+
+      expect(result.success).toBe(true);
+      expect(providerTransactionAt.toISOString()).toBe(
+        '2026-10-15T17:03:00.000Z',
+      );
+      expect(prisma.thanhToan.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ thoiDiemHoanTat: null }),
+          data: expect.objectContaining({
+            thoiDiemHoanTat: providerTransactionAt,
+          }),
+        }),
+      );
+      expect(prisma.thanhToan.update).toHaveBeenCalledWith({
+        where: { thanhToanId: 100 },
+        data: { laQuyetToanHopLe: true },
+      });
     });
 
     it('does not revive cancelled booking or tickets upon receiving late webhook (discussion_r4222294102)', async () => {
@@ -447,19 +496,34 @@ describe('PaymentsService', () => {
       expect(result.isLatePayment).toBe(true);
       expect(prisma.thanhToan.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { thanhToanId: 100, trangThai: { not: 'THANH_CONG' } },
-          data: { trangThai: 'THANH_CONG' },
+          where: {
+            thanhToanId: 100,
+            trangThai: { not: 'THANH_CONG' },
+            thoiDiemHoanTat: null,
+          },
+          data: {
+            trangThai: 'THANH_CONG',
+            thoiDiemHoanTat: expect.any(Date),
+          },
         }),
       );
       expect(prisma.phieuDatVe.updateMany).not.toHaveBeenCalled();
       expect(prisma.ve.updateMany).not.toHaveBeenCalled();
       expect(prisma.lichSuTrangThaiPhieuDatVe.create).not.toHaveBeenCalled();
+      expect(prisma.thanhToan.update).not.toHaveBeenCalled();
     });
 
     it('is idempotent if payment was already marked THANH_CONG', async () => {
+      const completedAt = new Date('2026-10-15T17:03:00.000Z');
       prisma.thanhToan.findUnique.mockResolvedValue({
         ...samplePayment,
         trangThai: 'THANH_CONG',
+        thoiDiemHoanTat: completedAt,
+        laQuyetToanHopLe: true,
+        donGiaoDich: {
+          ...samplePayment.donGiaoDich,
+          trangThai: 'DA_THANH_TOAN',
+        },
       });
 
       const result = await service.confirmPaymentSuccess({
@@ -470,6 +534,7 @@ describe('PaymentsService', () => {
 
       expect(result.success).toBe(true);
       expect(prisma.thanhToan.updateMany).not.toHaveBeenCalled();
+      expect(prisma.thanhToan.update).not.toHaveBeenCalled();
     });
 
     it('stores the SePay transaction ID atomically with the successful payment claim', async () => {
@@ -492,10 +557,12 @@ describe('PaymentsService', () => {
           where: {
             thanhToanId: 100,
             trangThai: { not: 'THANH_CONG' },
+            thoiDiemHoanTat: null,
             maGiaoDichSePay: null,
           },
           data: {
             trangThai: 'THANH_CONG',
+            thoiDiemHoanTat: expect.any(Date),
             maGiaoDichSePay: '987654321',
           },
         }),
@@ -651,10 +718,18 @@ describe('PaymentsService', () => {
       // Payment itself was claimed as THANH_CONG
       expect(prisma.thanhToan.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { thanhToanId: 100, trangThai: { not: 'THANH_CONG' } },
-          data: { trangThai: 'THANH_CONG' },
+          where: {
+            thanhToanId: 100,
+            trangThai: { not: 'THANH_CONG' },
+            thoiDiemHoanTat: null,
+          },
+          data: {
+            trangThai: 'THANH_CONG',
+            thoiDiemHoanTat: expect.any(Date),
+          },
         }),
       );
+      expect(prisma.thanhToan.update).not.toHaveBeenCalled();
       // But DonGiaoDich and PhieuDatVe were NOT mutated again
       expect(prisma.donGiaoDich.updateMany).not.toHaveBeenCalled();
       expect(prisma.phieuDatVe.updateMany).not.toHaveBeenCalled();
@@ -706,10 +781,7 @@ describe('PaymentsService', () => {
 
   describe('Signature Verifications & Webhook Handlers', () => {
     const sepayAccountNumber = '0012345678';
-    const sepayTransactionDate = new Date(Date.now() + 7 * 60 * 60 * 1000)
-      .toISOString()
-      .slice(0, 19)
-      .replace('T', ' ');
+    const sepayTransactionDate = '2026-10-16 00:03:00';
     const rawBody = Buffer.from(
       JSON.stringify({
         id: 123,
@@ -891,7 +963,11 @@ describe('PaymentsService', () => {
       }));
       await service.handleSepayWebhook({ rawBody: body, timestamp, signature: makeSepaySignature(body, timestamp, secret) });
       expect(settle).toHaveBeenCalledOnce();
-      expect(settle).toHaveBeenCalledWith(expect.objectContaining({ provider: 'SEPAY', providerTransactionId: '12345' }));
+      expect(settle).toHaveBeenCalledWith(expect.objectContaining({
+        provider: 'SEPAY',
+        providerTransactionId: '12345',
+        providerTransactionAt: new Date('2026-10-15T17:03:00.000Z'),
+      }));
     });
 
     it('rejects code and content identifying different orders without settlement', async () => {
