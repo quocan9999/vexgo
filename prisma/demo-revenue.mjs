@@ -3,6 +3,29 @@ export function isDemoRevenueOrder(code) {
   return /^(FUTA|TB|HM)-GD-\d{12}-\d{4}$/.test(code);
 }
 
+// Read persisted evidence before considering fixture values. A completed payment
+// (including an offline confirmation) must never be rewritten by demo seeding.
+export async function ensureDemoPayment(db, data) {
+  const existing = await db.thanhToan.findFirst({
+    where: { donGiaoDichId: data.donGiaoDichId, loaiGiaoDich: data.loaiGiaoDich, veId: data.veId ?? null },
+  });
+  if (existing && (existing.maGiaoDichSePay || existing.thoiDiemHoanTat || existing.laQuyetToanHopLe)) {
+    return { payment: existing, operation: 'preserve' };
+  }
+  const paymentData = { ...data, ...await demoRevenueFields(db, { ...existing, ...data }) };
+  if (existing) {
+    const result = await db.thanhToan.updateMany({
+      where: { thanhToanId: existing.thanhToanId, updatedAt: existing.updatedAt, maGiaoDichSePay: null, thoiDiemHoanTat: null, laQuyetToanHopLe: false },
+      data: paymentData,
+    });
+    return {
+      payment: await db.thanhToan.findUnique({ where: { thanhToanId: existing.thanhToanId } }),
+      operation: result.count === 1 ? 'update' : 'preserve',
+    };
+  }
+  return { payment: await db.thanhToan.create({ data: paymentData }), operation: 'create' };
+}
+
 function wholeVnd(value) {
   const text = String(value);
   if (!/^\d+(?:\.0+)?$/.test(text)) return null;

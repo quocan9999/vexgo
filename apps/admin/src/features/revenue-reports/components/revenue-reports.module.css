@@ -525,6 +525,31 @@
   color: var(--admin-danger);
 }
 
+.reconciliationNotice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--admin-space-component-gap);
+  color: var(--admin-blue);
+  background: var(--admin-blue-soft);
+}
+
+.reconciliationNotice > svg { flex: 0 0 auto; }
+
+.reconciliationNotice h2 {
+  margin: 0 0 var(--admin-space-2);
+  color: var(--admin-text-strong);
+  font-size: var(--admin-type-component-title-size);
+  font-weight: var(--admin-type-component-title-weight);
+  line-height: var(--admin-type-component-title-line-height);
+}
+
+.reconciliationNotice p {
+  margin: 0;
+  color: var(--admin-text-muted);
+  font-size: var(--admin-type-secondary-body-size);
+  line-height: var(--admin-type-secondary-body-line-height);
+}
+
 .errorPanel h2 {
   margin: 0 0 var(--admin-space-2);
   color: var(--admin-text-strong);

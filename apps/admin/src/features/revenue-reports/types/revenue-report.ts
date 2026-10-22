@@ -39,6 +39,7 @@ export type RevenueReportBreakdownItem = {
 
 export type RevenueReport = {
   currency: 'VND';
+  reconciliation: { refundCount: number; refundAmount: string };
   totals: RevenueReportTotals;
   serviceBreakdown: RevenueReportBreakdownItem[];
   series: RevenueReportSeriesItem[];

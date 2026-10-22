@@ -48,6 +48,11 @@ const REFUND_EVENT_SELECT = {
     select: {
       phieuDatVe: { select: { donGiaoDichId: true } },
       phieuGuiHang: { select: { donGiaoDichId: true } },
+      // The original sale can be outside the requested reporting period.
+      thanhToans: {
+        where: { loaiGiaoDich: 'THANH_TOAN', trangThai: 'THANH_CONG' },
+        select: { laQuyetToanHopLe: true, thoiDiemHoanTat: true },
+      },
     },
   },
 } satisfies Prisma.ThanhToanSelect;
@@ -414,6 +419,8 @@ export class RevenueReportsService {
     const breakdown = createBreakdown();
     const seenSaleOrderIds = new Set<number>();
     const seenZeroTicketIds = new Set<number>();
+    let reconciliationRefundCount = 0;
+    let reconciliationRefundAmount = new Prisma.Decimal(0);
 
     for (const event of sales as SaleEvent[]) {
       if (seenSaleOrderIds.has(event.donGiaoDichId)) invalidSourceData();
@@ -466,10 +473,22 @@ export class RevenueReportsService {
 
     for (const event of refunds as RefundEvent[]) {
       const date = refundDate(event);
+      const kind = refundKind(event);
+      const eligibleSales = event.donGiaoDich.thanhToans.filter(
+        (sale) => sale.laQuyetToanHopLe && sale.thoiDiemHoanTat !== null,
+      );
+      if (eligibleSales.length > 1) invalidSourceData();
+      if (eligibleSales.length === 0) {
+        // Legacy/unverified sales were never recognized by F12. Disclose their
+        // refunds separately rather than subtracting unrecognized receipts.
+        reconciliationRefundCount = addCount(reconciliationRefundCount, 1);
+        reconciliationRefundAmount = reconciliationRefundAmount.plus(event.soTien);
+        continue;
+      }
+      if (eligibleSales[0].thoiDiemHoanTat!.getTime() > date.getTime()) invalidSourceData();
       const period = periodForInstant(date, groupBy);
       const row = series.get(period);
       if (!row) invalidSourceData();
-      const kind = refundKind(event);
 
       totals.refundAmount = totals.refundAmount.plus(event.soTien);
       totals.netTicketRevenue = totals.netTicketRevenue.minus(event.soTien);
@@ -537,6 +556,10 @@ export class RevenueReportsService {
       data: {
         currency: 'VND' as const,
         totals: serializeAmounts(totals),
+        reconciliation: {
+          refundCount: reconciliationRefundCount,
+          refundAmount: serializeVnd(reconciliationRefundAmount),
+        },
         serviceBreakdown: serializedBreakdown,
         series: [...series.entries()].map(([period, amounts]) => ({
           period,

@@ -233,6 +233,15 @@ function RevenueReportContent({
 
   return (
     <div className={styles.content}>
+      {report.reconciliation.refundCount > 0 && (
+        <section className={`panel ${styles.reconciliationNotice}`} role="status">
+          <CircleAlert aria-hidden="true" size={20} />
+          <div>
+            <h2>Hoàn tiền cần đối soát nguồn thu</h2>
+            <p>{report.reconciliation.refundCount.toLocaleString('vi-VN')} khoản hoàn thành công, tổng {formatRevenueVnd(report.reconciliation.refundAmount)}, chưa được trừ vào báo cáo vì thanh toán gốc chưa đủ điều kiện ghi nhận doanh thu F12. Cần xác minh lịch sử thanh toán trước khi đối soát.</p>
+          </div>
+        </section>
+      )}
       <section aria-label="Chỉ số doanh thu trong kỳ" className={styles.metricGrid}>
         <MetricCard
           icon={Wallet}

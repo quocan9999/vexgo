@@ -74,6 +74,7 @@ function refund(
     },
     donGiaoDich: {
       phieuDatVe: { donGiaoDichId: options.orderId },
+      thanhToans: [{ laQuyetToanHopLe: true, thoiDiemHoanTat: new Date('2026-09-01T00:00:00.000Z') as Date | null }],
       phieuGuiHang: options.accompanied
         ? { donGiaoDichId: options.orderId }
         : null,
@@ -122,6 +123,42 @@ function query(fromDate: string, toDate: string, groupBy = 'day') {
 }
 
 describe('RevenueReportsService', () => {
+  it('discloses a legacy sale refund for reconciliation without subtracting unrecognized receipts', async () => {
+    const legacyRefund = refund(30, '2026-10-01T06:00:00.000Z', '9007199254740993', { orderId: 4 });
+    legacyRefund.donGiaoDich.thanhToans = [{ laQuyetToanHopLe: false, thoiDiemHoanTat: null }];
+    const { service } = makeHarness({ refunds: [legacyRefund] });
+    const report = await service.getReport(query('2026-10-01', '2026-10-01'), tenantAdmin, fixedNow);
+    expect(report.data.reconciliation).toEqual({ refundCount: 1, refundAmount: '9007199254740993' });
+    expect(report.data.totals).toMatchObject({ refundAmount: '0', netRevenue: '0', netTicketRevenue: '0' });
+    expect(report.data.series[0]).toMatchObject({ refundAmount: '0', netRevenue: '0' });
+    expect(report.data.serviceBreakdown.every((line) => line.refundAmount === '0')).toBe(true);
+  });
+
+  it('subtracts a refund whose eligible original sale occurred in a previous period', async () => {
+    const { service, paymentFindMany } = makeHarness({
+      refunds: [refund(31, '2026-10-01T06:00:00.000Z', '123', { orderId: 4 })],
+    });
+    const report = await service.getReport(query('2026-10-01', '2026-10-01'), tenantAdmin, fixedNow);
+    expect(report.data.reconciliation).toEqual({ refundCount: 0, refundAmount: '0' });
+    expect(report.data.totals).toMatchObject({ grossReceipts: '0', refundAmount: '123', netRevenue: '-123' });
+    expect(paymentFindMany).toHaveBeenCalledWith(expect.objectContaining({
+      select: expect.objectContaining({ donGiaoDich: { select: expect.objectContaining({
+        thanhToans: {
+          where: { loaiGiaoDich: 'THANH_TOAN', trangThai: 'THANH_CONG' },
+          select: { laQuyetToanHopLe: true, thoiDiemHoanTat: true },
+        },
+      }) } }),
+    }));
+  });
+
+  it('fails closed when the recognized sale completes after its refund', async () => {
+    const invalidRefund = refund(32, '2026-10-01T06:00:00.000Z', '123', { orderId: 4 });
+    invalidRefund.donGiaoDich.thanhToans[0].thoiDiemHoanTat = new Date('2026-10-02T00:00:00.000Z');
+    const { service } = makeHarness({ refunds: [invalidRefund] });
+    await expect(service.getReport(query('2026-10-01', '2026-10-01'), tenantAdmin, fixedNow))
+      .rejects.toMatchObject({ response: { error: 'REVENUE_SOURCE_DATA_INVALID' } });
+  });
+
   it('keeps exact ticket/shipment splits, refund timing, and zero-value ticket counts', async () => {
     const { service } = makeHarness({
       sales: [

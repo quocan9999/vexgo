@@ -120,6 +120,9 @@ function isRevenueReportResponse(value: unknown): value is RevenueReportResponse
   const groupBy = meta.groupBy;
   if (
     data.currency !== 'VND' ||
+    !isRecord(data.reconciliation) ||
+    !isSafeCount(data.reconciliation.refundCount) ||
+    !isMoney(data.reconciliation.refundAmount, false) ||
     !isTotals(data.totals) ||
     !Array.isArray(data.serviceBreakdown) ||
     data.serviceBreakdown.length !== SERVICE_KINDS.length ||
