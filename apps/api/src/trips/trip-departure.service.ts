@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service.js';
+import type { Prisma } from '../generated/prisma/client.js';
 import {
   getBusinessDate,
   resolveBusinessTimeZone,
@@ -33,7 +34,7 @@ export class TripDepartureService
     void this.tick();
     this.timer = setInterval(() => {
       void this.tick();
-    }, 1_000);
+    }, 30_000);
     this.timer.unref();
   }
 
@@ -65,18 +66,35 @@ export class TripDepartureService
       second: '2-digit',
       hourCycle: 'h23',
     }).format(now);
-    // One atomic predicate also protects cancellation/rescheduling races and
-    // makes repeated ticks safe across multiple API instances.
+    const due: Prisma.ChuyenXeWhereInput = {
+      trangThai: 'CHUA_KHOI_HANH',
+      OR: [
+        { ngayKhoiHanh: { lt: new Date(`${date}T00:00:00.000Z`) } },
+        {
+          ngayKhoiHanh: new Date(`${date}T00:00:00.000Z`),
+          gioKhoiHanh: { lte: new Date(`1970-01-01T${time}.000Z`) },
+        },
+      ],
+    };
+    // The composite status/date/time index supports this bounded range read.
+    // Idle ticks perform no write and overdue backlogs are drained in batches.
+    const trips = await this.prisma.chuyenXe.findMany({
+      where: due,
+      select: { chuyenXeId: true },
+      orderBy: [
+        { ngayKhoiHanh: 'asc' },
+        { gioKhoiHanh: 'asc' },
+        { chuyenXeId: 'asc' },
+      ],
+      take: 100,
+    });
+    if (trips.length === 0) return { count: 0 };
     return this.prisma.chuyenXe.updateMany({
+      // Re-check eligibility at write time: a selected trip may have been
+      // cancelled or rescheduled, or started by another API instance.
       where: {
-        trangThai: 'CHUA_KHOI_HANH',
-        OR: [
-          { ngayKhoiHanh: { lt: new Date(`${date}T00:00:00.000Z`) } },
-          {
-            ngayKhoiHanh: new Date(`${date}T00:00:00.000Z`),
-            gioKhoiHanh: { lte: new Date(`1970-01-01T${time}.000Z`) },
-          },
-        ],
+        ...due,
+        chuyenXeId: { in: trips.map((trip) => trip.chuyenXeId) },
       },
       data: { trangThai: 'DANG_CHAY' },
     });

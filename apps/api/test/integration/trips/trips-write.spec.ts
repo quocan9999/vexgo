@@ -1,3 +1,4 @@
+import { TripDepartureService } from '../../../src/trips/trip-departure.service.js';
 import { Test } from '@nestjs/testing';
 import {
   type ExecutionContext,
@@ -52,7 +53,7 @@ const mockVehicle = {
 
 const mockTripCreated = {
   chuyenXeId: 101,
-  maChuyenXe: 'FUTA-CX-001',
+  maChuyenXe: 'FUTA-CX-10102026-0001',
   ngayKhoiHanh: new Date('2026-10-10T00:00:00.000Z'),
   gioKhoiHanh: new Date('1970-01-01T07:30:00.000Z'),
   gioDen: new Date('1970-01-01T14:30:00.000Z'),
@@ -68,6 +69,8 @@ const mockTripCreated = {
   gheChuyenXes: [{ trangThai: 'TRONG' }, { trangThai: 'TRONG' }],
 };
 
+let issuedSequence = 0;
+let existingCodes: string[] = [];
 const prisma = {
   chuyenXe: {
     findMany: vi.fn(),
@@ -89,7 +92,8 @@ const prisma = {
   phienDangNhap: { findUnique: vi.fn() },
   vaiTroQuyen: { findMany: vi.fn().mockResolvedValue([]) },
   cauHinhQuyenVaiTroNhaXe: { findMany: vi.fn().mockResolvedValue([]) },
-  $queryRaw: vi.fn().mockResolvedValue([{ xeId: 8 }]),
+  $queryRaw: vi.fn(),
+  $executeRaw: vi.fn(),
   $transaction: vi.fn(),
 };
 
@@ -117,6 +121,10 @@ describe('Trips write HTTP contract (05.2)', () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(PrismaService)
       .useValue(prisma)
+      // This HTTP harness controls request mutations only. The background
+      // worker has dedicated unit coverage for bootstrap/timers/eligibility.
+      .overrideProvider(TripDepartureService)
+      .useValue({})
       .overrideProvider(AccessTokenGuard)
       .useValue(testAccessTokenGuard)
       .compile();
@@ -132,6 +140,20 @@ describe('Trips write HTTP contract (05.2)', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    issuedSequence = 0;
+    existingCodes = [];
+    prisma.$queryRaw.mockImplementation(async (parts: TemplateStringsArray, ...values: unknown[]) => {
+      const sql = parts.join('?');
+      if (sql.includes('FROM NhaXe')) return values[0] === 5 ? [{ maNhaXe: 'FUTA' }] : [];
+      if (sql.includes('FROM ChuyenXe')) return existingCodes.map((code) => ({ code }));
+      if (sql.includes('FROM BoDemMaNghiepVu')) return [{ soCuoi: issuedSequence }];
+      if (sql.includes('FROM Xe')) return [{ xeId: 8 }];
+      throw new Error(`Unexpected business code SQL: ${sql}`);
+    });
+    prisma.$executeRaw.mockImplementation(async (_parts: TemplateStringsArray, _prefix: string, sequence: number) => {
+      issuedSequence = sequence;
+      return 1;
+    });
     prisma.$transaction.mockImplementation(
       async (callback: (tx: typeof prisma) => Promise<unknown>) =>
         callback(prisma),
@@ -156,7 +178,6 @@ describe('Trips write HTTP contract (05.2)', () => {
 
   describe('POST /api/v1/trips', () => {
     const validBody = {
-      code: 'FUTA-CX-001',
       routeId: 1,
       vehicleId: 8,
       departureDate: '2026-10-10',
@@ -204,7 +225,7 @@ describe('Trips write HTTP contract (05.2)', () => {
         .send(validBody)
         .expect(201);
 
-      expect(res.body.data.code).toBe('FUTA-CX-001');
+      expect(res.body.data.code).toBe('FUTA-CX-10102026-0001');
       expect(res.body.data.seatSummary).toEqual({
         total: 2,
         available: 2,
@@ -222,7 +243,7 @@ describe('Trips write HTTP contract (05.2)', () => {
       expect(prisma.$transaction).toHaveBeenCalled();
       expect(prisma.chuyenXe.create).toHaveBeenCalledWith({
         data: {
-          maChuyenXe: 'FUTA-CX-001',
+          maChuyenXe: 'FUTA-CX-10102026-0001',
           ngayKhoiHanh: new Date('2026-10-10T00:00:00.000Z'),
           gioKhoiHanh: new Date('1970-01-01T07:30:00.000Z'),
           gioDen: new Date('1970-01-01T14:30:00.000Z'),
@@ -251,7 +272,7 @@ describe('Trips write HTTP contract (05.2)', () => {
       expect(res.body).toEqual({
         data: {
           tripId: 101,
-          code: 'FUTA-CX-001',
+          code: 'FUTA-CX-10102026-0001',
           departureDate: '2026-10-10',
           departureTime: '07:30:00',
           status: 'CHUA_KHOI_HANH',
@@ -473,27 +494,19 @@ describe('Trips write HTTP contract (05.2)', () => {
       });
     });
 
-    it('rejects with 409 TRIP_CODE_EXISTS when trip code already exists', async () => {
-      prisma.chuyenXe.findFirst.mockResolvedValue({ chuyenXeId: 99 });
-
-      const res = await request(app.getHttpServer())
-        .post('/api/v1/trips')
-        .send(validBody)
-        .expect(409);
-
-      expect(res.body).toEqual({
-        statusCode: 409,
-        error: 'TRIP_CODE_EXISTS',
-        message: 'Mã chuyến xe đã tồn tại.',
-      });
+    it('allocates after legacy codes and ignores the client code while keeping tenant ownership', async () => {
+      existingCodes = ['FUTA-CX-10102026-0007', 'TB-CX-10102026-9999', 'FUTA-CX-09102026-9999'];
+      prisma.chuyenXe.create.mockImplementationOnce(async (args: Prisma.ChuyenXeCreateArgs) => ({ ...mockTripCreated, maChuyenXe: args.data.maChuyenXe }));
+      const res = await request(app.getHttpServer()).post('/api/v1/trips').send({ ...validBody, code: 'CLIENT-CANNOT-CHOOSE' }).expect(201);
+      expect(res.body.data.code).toBe('FUTA-CX-10102026-0008');
+      expect(prisma.chuyenXe.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ maChuyenXe: 'FUTA-CX-10102026-0008', nhaXeId: 5 }) }));
+      expect(prisma.$executeRaw.mock.calls[0].slice(1)).toEqual(['FUTA-CX-10102026-', 8, 8]);
     });
 
     it('rejects with 409 TRIP_VEHICLE_SCHEDULE_CONFLICT when same vehicle already assigned to another active trip on same date and time', async () => {
       prisma.tuyenXe.findFirst.mockResolvedValue(mockRoute);
       prisma.xe.findFirst.mockResolvedValue(mockVehicle);
-      prisma.chuyenXe.findFirst
-        .mockResolvedValueOnce(null) // code check -> ok
-        .mockResolvedValueOnce({ chuyenXeId: 99 }); // schedule conflict -> exists
+      prisma.chuyenXe.findFirst.mockResolvedValueOnce({ chuyenXeId: 99 }); // schedule conflict
 
       const res = await request(app.getHttpServer())
         .post('/api/v1/trips')
@@ -512,9 +525,7 @@ describe('Trips write HTTP contract (05.2)', () => {
     it('allows create when vehicle has a cancelled (DA_HUY) trip at the same date and time', async () => {
       prisma.tuyenXe.findFirst.mockResolvedValue(mockRoute);
       prisma.xe.findFirst.mockResolvedValue(mockVehicle);
-      prisma.chuyenXe.findFirst
-        .mockResolvedValueOnce(null) // code check -> ok
-        .mockResolvedValueOnce(null); // schedule conflict query ignores DA_HUY, returns null
+      prisma.chuyenXe.findFirst.mockResolvedValueOnce(null); // schedule query ignores DA_HUY
       prisma.chuyenXe.create.mockResolvedValue(mockTripCreated);
 
       const res = await request(app.getHttpServer())
@@ -522,7 +533,7 @@ describe('Trips write HTTP contract (05.2)', () => {
         .send(validBody)
         .expect(201);
 
-      expect(res.body.data.code).toBe('FUTA-CX-001');
+      expect(res.body.data.code).toBe('FUTA-CX-10102026-0001');
     });
 
     it('handles unique constraint race condition P2002 with 409 TRIP_CODE_EXISTS', async () => {

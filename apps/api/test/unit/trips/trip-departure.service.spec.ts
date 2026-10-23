@@ -4,12 +4,15 @@ import { ConfigService } from '@nestjs/config';
 import type { PrismaService } from '../../../src/prisma/prisma.service.js';
 
 function setup() {
+  const findMany = vi
+    .fn()
+    .mockResolvedValue([{ chuyenXeId: 7 }, { chuyenXeId: 9 }]);
   const updateMany = vi.fn().mockResolvedValue({ count: 1 });
   const service = new TripDepartureService(
-    { chuyenXe: { updateMany } } as unknown as PrismaService,
+    { chuyenXe: { findMany, updateMany } } as unknown as PrismaService,
     new ConfigService({ BUSINESS_TIME_ZONE: 'Asia/Ho_Chi_Minh' }),
   );
-  return { service, updateMany };
+  return { service, findMany, updateMany };
 }
 
 afterEach(() => vi.useRealTimers());
@@ -22,10 +25,30 @@ describe('automatic trip departure', () => {
   ])(
     'uses business wall date/time including midnight for $now',
     async ({ now, date, time }) => {
-      const { service, updateMany } = setup();
+      const { service, findMany, updateMany } = setup();
       await service.startDueTrips(new Date(now));
+      expect(findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          select: { chuyenXeId: true },
+          take: 100,
+          orderBy: [
+            { ngayKhoiHanh: 'asc' },
+            { gioKhoiHanh: 'asc' },
+            { chuyenXeId: 'asc' },
+          ],
+        }),
+      );
+      const read = findMany.mock.calls[0][0];
+      expect(read.where).toEqual({
+        trangThai: 'CHUA_KHOI_HANH',
+        OR: [
+          { ngayKhoiHanh: { lt: new Date(`${date}T00:00:00.000Z`) } },
+          { ngayKhoiHanh: new Date(`${date}T00:00:00.000Z`), gioKhoiHanh: { lte: new Date(`1970-01-01T${time}.000Z`) } },
+        ],
+      });
       expect(updateMany).toHaveBeenCalledWith({
         where: {
+          chuyenXeId: { in: [7, 9] },
           trangThai: 'CHUA_KHOI_HANH',
           OR: [
             { ngayKhoiHanh: { lt: new Date(`${date}T00:00:00.000Z`) } },
@@ -45,10 +68,10 @@ describe('automatic trip departure', () => {
     service.onApplicationBootstrap();
     await vi.advanceTimersByTimeAsync(0);
     expect(updateMany).toHaveBeenCalledTimes(1);
-    await vi.advanceTimersByTimeAsync(1000);
+    await vi.advanceTimersByTimeAsync(30_000);
     expect(updateMany).toHaveBeenCalledTimes(2);
     service.onApplicationShutdown();
-    await vi.advanceTimersByTimeAsync(5000);
+    await vi.advanceTimersByTimeAsync(60_000);
     expect(updateMany).toHaveBeenCalledTimes(2);
   });
   it('does not overlap pending database updates', async () => {
@@ -62,11 +85,24 @@ describe('automatic trip departure', () => {
         }),
     );
     service.onApplicationBootstrap();
-    await vi.advanceTimersByTimeAsync(3000);
+    await vi.advanceTimersByTimeAsync(90_000);
     expect(updateMany).toHaveBeenCalledTimes(1);
     finish();
-    await vi.advanceTimersByTimeAsync(1000);
+    await vi.advanceTimersByTimeAsync(30_000);
     expect(updateMany).toHaveBeenCalledTimes(2);
+    service.onApplicationShutdown();
+  });
+  it('does not write when no trips are due and bounds idle polling to two reads per minute', async () => {
+    vi.useFakeTimers();
+    const { service, findMany, updateMany } = setup();
+    findMany.mockResolvedValue([]);
+    service.onApplicationBootstrap();
+    await vi.advanceTimersByTimeAsync(29_999);
+    expect(findMany).toHaveBeenCalledTimes(1);
+    expect(updateMany).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(findMany).toHaveBeenCalledTimes(2);
+    expect(updateMany).not.toHaveBeenCalled();
     service.onApplicationShutdown();
   });
 });

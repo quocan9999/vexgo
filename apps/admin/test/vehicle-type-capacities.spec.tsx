@@ -16,6 +16,7 @@ import {
   it,
   vi,
 } from 'vitest';
+import { setAdminTestSession } from './admin-auth-test-session';
 import { VehicleTypeFormDialog } from '@/features/vehicle-types/components/vehicle-type-form-dialog';
 import { getVehicleTypes } from '@/features/vehicle-types/services/vehicle-type-service';
 
@@ -62,9 +63,6 @@ function apiResponse(body: unknown, status = 200): Response {
 }
 
 function fillCreateBasics(dialog: HTMLElement) {
-  fireEvent.change(within(dialog).getByLabelText('Nhà xe *'), {
-    target: { value: '4' },
-  });
   fireEvent.change(within(dialog).getByLabelText('Tên loại xe *'), {
     target: { value: 'Xe du lịch' },
   });
@@ -74,7 +72,7 @@ function fillCreateBasics(dialog: HTMLElement) {
 }
 
 async function fillCreateBasicsWhenReady(dialog: HTMLElement) {
-  await within(dialog).findByRole('option', { name: 'Nhà xe ABC' });
+  expect(within(dialog).queryByLabelText('Nhà xe *')).toBeNull();
   fillCreateBasics(dialog);
 }
 
@@ -107,6 +105,10 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
+  setAdminTestSession({ status: 'authenticated', session: {
+    accountId: 2, roles: ['NHA_XE_ADMIN'], permissions: ['vehicle-type:create', 'vehicle-type:update'], busCompanyId: 4,
+    employee: { employeeId: 2, busCompanyId: 4, busCompanyCode: 'ABC', busCompanyName: 'Nhà xe ABC' },
+  } });
   mocks.adminApiFetch.mockReset();
   mocks.getBusCompanyFilterOptions.mockReset();
   mocks.getBusCompanyFilterOptions.mockResolvedValue([

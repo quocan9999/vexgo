@@ -159,6 +159,8 @@ model ChuyenXe {
   giuChos             GiuCho[]
   phieuGuiHangs       PhieuGuiHang[]
   phanHois            PhanHoi[]
+
+  @@index([trangThai, ngayKhoiHanh, gioKhoiHanh], map: "ChuyenXe_departure_due_idx")
 }
 
 model GheChuyenXe {
