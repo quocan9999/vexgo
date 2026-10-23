@@ -11,7 +11,11 @@ import { AdminChatMessenger } from '@/features/support-chat/components/admin-cha
 import { AdminSessionGuard } from '@/features/admin-auth/components/admin-session-guard';
 
 export default function SupportChatPage() {
-  return <AdminSessionGuard><SupportChatContent /></AdminSessionGuard>;
+  return (
+    <AdminSessionGuard>
+      <SupportChatContent />
+    </AdminSessionGuard>
+  );
 }
 
 function SupportChatContent() {
@@ -54,15 +58,19 @@ function SupportChatContent() {
 
   return (
     <SuperAdminLayout activeSection="support-chat">
-      <div className="space-y-4">
-        <div>
-          <h1 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-            <Headphones className="w-5 h-5 text-[var(--admin-blue)]" /> Chăm sóc khách hàng
-          </h1>
-          <p className="text-xs text-slate-500">
-            Tiếp nhận và phản hồi tin nhắn hỗ trợ từ hành khách trong thời gian thực.
-          </p>
-        </div>
+      <div className="admin-page-content py-4 md:py-6">
+        <section aria-labelledby="support-chat-heading" className="page-intro mb-4 md:mb-5">
+          <div>
+            <p className="eyebrow flex items-center gap-1.5">
+              <Headphones className="w-3.5 h-3.5 text-[var(--admin-blue)]" />
+              TỔNG ĐÀI CHĂM SÓC KHÁCH HÀNG REALTIME
+            </p>
+            <h1 id="support-chat-heading">Hỗ trợ khách hàng</h1>
+            <p className="text-xs text-slate-500 mt-1">
+              Tiếp nhận, xử lý và phản hồi tin nhắn hỗ trợ từ hành khách trong thời gian thực.
+            </p>
+          </div>
+        </section>
 
         <AdminChatMessenger key={session.accountId} session={session} />
       </div>
