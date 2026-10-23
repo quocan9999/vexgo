@@ -1,11 +1,10 @@
 'use client';
 
 import { LoaderCircle, X } from 'lucide-react';
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useRef, useState, type FormEvent } from 'react';
 import { AdminFormDialog } from '@/components/admin/admin-form-dialog';
 import { Button } from '@/components/ui/button';
-import { getBusCompanyFilterOptions } from '@/features/bus-companies/services/bus-company-service';
-import type { BusCompanyFilterOption } from '@/features/bus-companies/services/bus-company-service';
+import { useAdminSession } from '@/features/admin-auth/hooks/use-admin-session';
 import {
   createVehicleType,
   updateVehicleType,
@@ -21,7 +20,6 @@ type VehicleTypeFormDialogProps = {
 };
 
 type FormValues = {
-  busCompanyId: string;
   name: string;
   description: string;
   motorbikeCapacityDefault: string;
@@ -37,7 +35,6 @@ function fieldErrorsFromDetails(details: VehicleTypeApiErrorDetail[]) {
 
   for (const detail of details) {
     if (
-      detail.field === 'busCompanyId' ||
       detail.field === 'name' ||
       detail.field === 'description' ||
       detail.field === 'motorbikeCapacityDefault' ||
@@ -63,7 +60,6 @@ export function VehicleTypeFormDialog({
   const dialogRef = useRef<HTMLDialogElement>(null);
   const submittingRef = useRef(false);
   const [values, setValues] = useState<FormValues>(() => ({
-    busCompanyId: '',
     name: vehicleType?.name ?? '',
     description: vehicleType?.description ?? '',
     motorbikeCapacityDefault: String(
@@ -79,27 +75,8 @@ export function VehicleTypeFormDialog({
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [busCompanyOptions, setBusCompanyOptions] = useState<{
-    status: 'loading' | 'success' | 'error';
-    options: BusCompanyFilterOption[];
-  }>({ status: 'loading', options: [] });
-
-  useEffect(() => {
-    if (editing) return;
-    const controller = new AbortController();
-    getBusCompanyFilterOptions(controller.signal)
-      .then((options) => setBusCompanyOptions({ status: 'success', options }))
-      .catch((error: unknown) => {
-        if (controller.signal.aborted) return;
-        setBusCompanyOptions({ status: 'error', options: [] });
-        setFormError(
-          error instanceof Error
-            ? error.message
-            : 'Không thể tải danh sách nhà xe.',
-        );
-      });
-    return () => controller.abort();
-  }, [editing]);
+  const authState = useAdminSession();
+  const tenantId = authState.status === 'authenticated' ? authState.session.busCompanyId : null;
 
   function closeDialog() {
     if (!submittingRef.current) dialogRef.current?.close();
@@ -113,12 +90,6 @@ export function VehicleTypeFormDialog({
 
   function validate(): FieldErrors {
     const errors: FieldErrors = {};
-    if (
-      !editing &&
-      (!/^\d+$/.test(values.busCompanyId) || Number(values.busCompanyId) < 1)
-    ) {
-      errors.busCompanyId = 'Vui lòng chọn nhà xe.';
-    }
     const name = values.name.trim();
     const description = values.description.trim();
 
@@ -155,6 +126,10 @@ export function VehicleTypeFormDialog({
     if (submittingRef.current) return;
 
     setFormError(null);
+    if (!editing && !tenantId) {
+      setFormError('Không xác định được nhà xe của tài khoản. Vui lòng đăng nhập lại.');
+      return;
+    }
     const errors = validate();
     setFieldErrors(errors);
     if (Object.keys(errors).length > 0) return;
@@ -174,7 +149,7 @@ export function VehicleTypeFormDialog({
         ? await updateVehicleType(vehicleType.vehicleTypeId, editableFields)
         : await createVehicleType({
             ...editableFields,
-            busCompanyId: Number(values.busCompanyId),
+            busCompanyId: tenantId!,
           });
       dialogRef.current?.close();
       onSaved(savedVehicleType);
@@ -189,8 +164,7 @@ export function VehicleTypeFormDialog({
             requestError.details.length > 0 &&
             requestError.details.every(
               (detail) =>
-                detail.field === 'busCompanyId' ||
-                detail.field === 'name' ||
+                          detail.field === 'name' ||
                 detail.field === 'description' ||
                 detail.field === 'motorbikeCapacityDefault' ||
                 detail.field === 'bulkyCargoCapacityDefault' ||
@@ -258,46 +232,6 @@ export function VehicleTypeFormDialog({
           {formError && (
             <div className="vehicle-type-form-error" role="alert">
               {formError}
-            </div>
-          )}
-
-          {!editing && (
-            <div className="vehicle-type-form-field">
-              <label htmlFor={`${idPrefix}-bus-company`}>Nhà xe *</label>
-              <select
-                aria-describedby={
-                  fieldErrors.busCompanyId
-                    ? `${idPrefix}-bus-company-error`
-                    : undefined
-                }
-                aria-invalid={Boolean(fieldErrors.busCompanyId)}
-                disabled={submitting || busCompanyOptions.status !== 'success'}
-                id={`${idPrefix}-bus-company`}
-                onChange={(event) =>
-                  updateField('busCompanyId', event.target.value)
-                }
-                required
-                value={values.busCompanyId}
-              >
-                <option value="">
-                  {busCompanyOptions.status === 'loading'
-                    ? 'Đang tải nhà xe…'
-                    : 'Chọn nhà xe'}
-                </option>
-                {busCompanyOptions.options.map((company) => (
-                  <option key={company.id} value={company.id}>
-                    {company.label}
-                  </option>
-                ))}
-              </select>
-              {fieldErrors.busCompanyId && (
-                <span
-                  className="vehicle-type-form-field-error"
-                  id={`${idPrefix}-bus-company-error`}
-                >
-                  {fieldErrors.busCompanyId}
-                </span>
-              )}
             </div>
           )}
 

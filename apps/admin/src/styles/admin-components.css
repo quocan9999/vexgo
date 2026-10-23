@@ -1398,6 +1398,13 @@ dialog:focus-visible {
   line-height: var(--admin-type-body-line-height);
 }
 
+.admin-crud-form-field .admin-generated-code:disabled {
+  background: var(--admin-surface-muted);
+  color: var(--admin-text-muted);
+  cursor: not-allowed;
+}
+
+
 .admin-crud-form-field input:focus-visible,
 .admin-crud-form-field select:focus-visible {
   border-color: var(--admin-blue);

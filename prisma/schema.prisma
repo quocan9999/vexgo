@@ -7,6 +7,11 @@ datasource db {
   provider = "mysql"
 }
 
+model BoDemMaNghiepVu {
+  tienTo String @id @db.VarChar(50)
+  soCuoi Int
+}
+
 model NhaXe {
   nhaXeId                  Int                       @id @default(autoincrement()) @db.Int
   maNhaXe                  String                    @unique @db.VarChar(50)

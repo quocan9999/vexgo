@@ -2,6 +2,8 @@
 
 import { LoaderCircle, X } from 'lucide-react';
 import { useRef, useState, type FormEvent } from 'react';
+import { AdminGeneratedCodeField } from '@/components/admin/admin-generated-code-field';
+import { useBusinessCodePreview } from '@/hooks/use-business-code-preview';
 import { AdminFormDialog } from '@/components/admin/admin-form-dialog';
 import { Button } from '@/components/ui/button';
 import {
@@ -23,7 +25,6 @@ type TripFormDialogProps = {
 };
 
 type Values = {
-  code: string;
   routeId: string;
   vehicleId: string;
   departureDate: string;
@@ -37,7 +38,6 @@ function mappedErrors(details: TripApiErrorDetail[]): FieldErrors {
   const errors: FieldErrors = {};
   for (const detail of details) {
     if (
-      detail.field === 'code' ||
       detail.field === 'routeId' ||
       detail.field === 'vehicleId' ||
       detail.field === 'departureDate' ||
@@ -72,13 +72,14 @@ export function TripFormDialog({
   const submittingRef = useRef(false);
 
   const [values, setValues] = useState<Values>(() => ({
-    code: trip?.code ?? '',
     routeId: trip ? String(trip.route.routeId) : '',
     vehicleId: trip ? String(trip.vehicle.vehicleId) : '',
     departureDate: trip?.departureDate ?? '',
     departureTime: trip?.departureTime ? trip.departureTime.slice(0, 5) : '',
     acceptsShipments: false,
   }));
+
+  const codePreview = useBusinessCodePreview('trips', !editing, values.departureDate);
 
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -106,13 +107,6 @@ export function TripFormDialog({
   function validate(): FieldErrors {
     const errors: FieldErrors = {};
     if (!editing) {
-      const code = values.code.trim();
-      if (!code) {
-        errors.code = 'Vui lòng nhập mã chuyến xe.';
-      } else if (code.length > 50) {
-        errors.code = 'Mã chuyến không được vượt quá 50 ký tự.';
-      }
-
       if (
         !values.routeId ||
         !Number.isSafeInteger(Number(values.routeId)) ||
@@ -179,7 +173,6 @@ export function TripFormDialog({
         });
       } else {
         saved = await createTrip({
-          code: values.code.trim(),
           routeId: Number(values.routeId),
           vehicleId: Number(values.vehicleId),
           departureDate: values.departureDate.trim(),
@@ -193,10 +186,7 @@ export function TripFormDialog({
     } catch (error: unknown) {
       if (error instanceof TripApiError) {
         if (error.code === 'TRIP_CODE_EXISTS') {
-          setFieldErrors((curr) => ({
-            ...curr,
-            code: 'Mã chuyến xe đã tồn tại trong hệ thống.',
-          }));
+          setFormError('Không thể cấp mã chuyến. Vui lòng thử tạo lại.');
         } else if (error.code === 'ROUTE_NOT_ACTIVE') {
           setFieldErrors((curr) => ({
             ...curr,
@@ -315,36 +305,7 @@ export function TripFormDialog({
             </div>
           ) : (
             <>
-              <div className="admin-crud-form-field">
-                <label htmlFor={`${idPrefix}-code`}>
-                  Mã chuyến xe <span aria-hidden="true">*</span>
-                </label>
-                <input
-                  aria-describedby={
-                    fieldErrors.code ? `${idPrefix}-code-error` : undefined
-                  }
-                  aria-invalid={Boolean(fieldErrors.code)}
-                  aria-required="true"
-                  autoComplete="off"
-                  className="admin-data-mono"
-                  disabled={submitting}
-                  id={`${idPrefix}-code`}
-                  maxLength={50}
-                  onChange={(e) => updateField('code', e.target.value)}
-                  placeholder="Ví dụ: FUTA-CX-001"
-                  type="text"
-                  value={values.code}
-                />
-                {fieldErrors.code && (
-                  <span
-                    className="admin-crud-form-field-error"
-                    id={`${idPrefix}-code-error`}
-                    role="alert"
-                  >
-                    {fieldErrors.code}
-                  </span>
-                )}
-              </div>
+              <AdminGeneratedCodeField id={`${idPrefix}-code`} label="Mã chuyến xe" code={codePreview.code} placeholder={codePreview.placeholder} error={codePreview.error} onRetry={codePreview.retry} />
 
               <div className="admin-crud-form-field">
                 <label htmlFor={`${idPrefix}-route`}>

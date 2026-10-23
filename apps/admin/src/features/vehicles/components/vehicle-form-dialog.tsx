@@ -2,6 +2,7 @@
 
 import { LoaderCircle, X } from 'lucide-react';
 import { useRef, useState, type FormEvent } from 'react';
+import { useAdminSession } from '@/features/admin-auth/hooks/use-admin-session';
 import { AdminFormDialog } from '@/components/admin/admin-form-dialog';
 import { Button } from '@/components/ui/button';
 import type { VehicleFilterOptionState } from '../hooks/use-vehicle-filter-options';
@@ -27,7 +28,6 @@ type VehicleFormDialogProps = {
 
 type FormValues = {
   licensePlate: string;
-  busCompanyId: string;
   vehicleTypeId: string;
   status: VehicleStatus;
 };
@@ -35,20 +35,15 @@ type FormValues = {
 type FormField = keyof FormValues;
 type FieldErrors = Partial<Record<FormField, string>>;
 
-function optionText(state: VehicleFilterOptionState, resource: string) {
-  if (state.status === 'loading') return `Đang tải ${resource}…`;
-  if (state.status === 'error') return `Không tải được ${resource}`;
-  return `Chọn ${resource}`;
-}
-
 export function VehicleFormDialog({
   vehicle,
-  busCompanies,
   vehicleTypes,
   onRetryOptions,
   onClose,
   onSaved,
 }: VehicleFormDialogProps) {
+  const authState = useAdminSession();
+  const tenantId = authState.status === 'authenticated' ? authState.session.busCompanyId : null;
   const editing = vehicle !== undefined;
   const idPrefix = editing
     ? `edit-vehicle-${vehicle.vehicleId}`
@@ -57,7 +52,6 @@ export function VehicleFormDialog({
   const submittingRef = useRef(false);
   const [values, setValues] = useState<FormValues>(() => ({
     licensePlate: vehicle?.licensePlate ?? '',
-    busCompanyId: String(vehicle?.busCompany.busCompanyId ?? ''),
     vehicleTypeId: String(vehicle?.vehicleType.vehicleTypeId ?? ''),
     status: 'HOAT_DONG',
   }));
@@ -65,9 +59,8 @@ export function VehicleFormDialog({
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const optionsReady =
-    busCompanies.status === 'success' && vehicleTypes.status === 'success';
+    Boolean(tenantId) && vehicleTypes.status === 'success';
   const optionErrors = [
-    busCompanies.status === 'error' ? `Nhà xe: ${busCompanies.message}` : null,
     vehicleTypes.status === 'error' ? `Loại xe: ${vehicleTypes.message}` : null,
   ].filter((message): message is string => message !== null);
 
@@ -87,7 +80,6 @@ export function VehicleFormDialog({
   function validate(): FieldErrors {
     const errors: FieldErrors = {};
     const licensePlate = values.licensePlate.trim();
-    const busCompanyId = Number(values.busCompanyId);
     const vehicleTypeId = Number(values.vehicleTypeId);
 
     if (!licensePlate) errors.licensePlate = 'Vui lòng nhập biển số xe.';
@@ -95,9 +87,6 @@ export function VehicleFormDialog({
       errors.licensePlate = 'Biển số xe không được vượt quá 15 ký tự.';
     }
 
-    if (!Number.isSafeInteger(busCompanyId) || busCompanyId < 1) {
-      errors.busCompanyId = 'Vui lòng chọn nhà xe.';
-    }
     if (!Number.isSafeInteger(vehicleTypeId) || vehicleTypeId < 1) {
       errors.vehicleTypeId = 'Vui lòng chọn loại xe.';
     }
@@ -114,7 +103,7 @@ export function VehicleFormDialog({
 
     setFormError(null);
     if (!optionsReady) {
-      setFormError('Cần tải đủ Nhà xe và Loại xe trước khi lưu.');
+      setFormError('Không xác định được nhà xe hoặc chưa tải được loại xe.');
       return;
     }
 
@@ -128,7 +117,7 @@ export function VehicleFormDialog({
     try {
       const editableFields = {
         licensePlate: values.licensePlate.trim(),
-        busCompanyId: Number(values.busCompanyId),
+        busCompanyId: tenantId!,
         vehicleTypeId: Number(values.vehicleTypeId),
       };
       const savedVehicle = editing
@@ -177,7 +166,7 @@ export function VehicleFormDialog({
             </h2>
             <p id={`${idPrefix}-description`}>
               {editing
-                ? 'Cập nhật biển số, nhà xe và loại xe.'
+                ? 'Cập nhật biển số và loại xe.'
                 : 'Nhập thông tin xe mới vào hệ thống.'}
             </p>
           </div>
@@ -243,46 +232,6 @@ export function VehicleFormDialog({
                 id={`${idPrefix}-license-plate-error`}
               >
                 {fieldErrors.licensePlate}
-              </span>
-            )}
-          </div>
-
-          <div className="vehicle-form-field">
-            <label htmlFor={`${idPrefix}-bus-company`}>Nhà xe *</label>
-            <select
-              aria-describedby={
-                fieldErrors.busCompanyId
-                  ? `${idPrefix}-bus-company-error`
-                  : undefined
-              }
-              aria-invalid={Boolean(fieldErrors.busCompanyId)}
-              disabled={submitting || !optionsReady}
-              id={`${idPrefix}-bus-company`}
-              onChange={(event) =>
-                updateField('busCompanyId', event.target.value)
-              }
-              required
-              value={values.busCompanyId}
-            >
-              <option value="">{optionText(busCompanies, 'nhà xe')}</option>
-              {busCompanies.status === 'success' &&
-                busCompanies.options.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.label}
-                  </option>
-                ))}
-              {busCompanies.status !== 'success' && vehicle && (
-                <option value={vehicle.busCompany.busCompanyId}>
-                  {vehicle.busCompany.name}
-                </option>
-              )}
-            </select>
-            {fieldErrors.busCompanyId && (
-              <span
-                className="vehicle-form-field-error"
-                id={`${idPrefix}-bus-company-error`}
-              >
-                {fieldErrors.busCompanyId}
               </span>
             )}
           </div>

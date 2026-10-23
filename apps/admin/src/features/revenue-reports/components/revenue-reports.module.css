@@ -361,50 +361,6 @@
   text-align: right;
 }
 
-.chartEmpty {
-  display: flex;
-  min-height: 250px;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--admin-space-3);
-  padding: var(--admin-space-6);
-  border: 1px dashed var(--admin-border);
-  border-radius: var(--admin-radius-panel);
-  background: var(--admin-surface-muted);
-  color: var(--admin-text-muted);
-  text-align: center;
-}
-
-.emptyIcon {
-  display: flex;
-  padding: var(--admin-space-3);
-  border: 1px solid var(--admin-border);
-  border-radius: var(--admin-radius-panel);
-  background: var(--admin-surface);
-  color: var(--admin-blue);
-}
-
-.chartEmpty h3 {
-  margin: 0;
-  color: var(--admin-text-strong);
-  font-size: var(--admin-type-component-title-size);
-  font-weight: var(--admin-type-component-title-weight);
-  line-height: var(--admin-type-component-title-line-height);
-}
-
-.chartEmpty p {
-  max-width: 420px;
-  margin: 0;
-  font-size: var(--admin-type-secondary-body-size);
-  line-height: var(--admin-type-secondary-body-line-height);
-}
-
-.emptyHint {
-  font-size: var(--admin-type-helper-size);
-  line-height: var(--admin-type-helper-line-height);
-}
-
 .tableScroll {
   width: 100%;
   overflow-x: auto;
@@ -629,8 +585,22 @@
     grid-template-rows: 220px 34px;
   }
 
-  .chartEmpty {
-    min-height: 254px;
+  .chartPeriodTick[data-edge='center']:not([data-single='true']) {
+    display: none;
+  }
+
+  .chartPoint {
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .chartPoint::after {
+    position: absolute;
+    inset: 4px;
+    border-radius: 50%;
+    background: var(--admin-blue);
+    content: '';
   }
 
   .chartSkeleton {

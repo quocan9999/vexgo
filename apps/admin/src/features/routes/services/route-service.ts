@@ -80,7 +80,7 @@ async function writeRoute(path: string, method: 'POST' | 'PATCH', input: unknown
 }
 
 export type CreateRouteInput = {
-  code: string;
+  code?: string;
   origin: string;
   destination: string;
   durationMinutes: number;

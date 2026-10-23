@@ -1,7 +1,6 @@
 'use client';
 
 import { useRef, useState, type KeyboardEvent } from 'react';
-import { ChartNoAxesCombined } from 'lucide-react';
 import type {
   RevenueReportGroupBy,
   RevenueReportSeriesItem,
@@ -15,7 +14,6 @@ import styles from './revenue-reports.module.css';
 
 type RevenueReportChartProps = {
   groupBy: RevenueReportGroupBy;
-  noData: boolean;
   series: RevenueReportSeriesItem[];
 };
 
@@ -59,22 +57,10 @@ function plotY(value: bigint, minimum: bigint, maximum: bigint): number {
 
 export function RevenueReportChart({
   groupBy,
-  noData,
   series,
 }: RevenueReportChartProps) {
   const pointRefs = useRef<Array<HTMLSpanElement | null>>([]);
   const [activePointIndex, setActivePointIndex] = useState(0);
-
-  if (noData || series.length === 0) {
-    return (
-      <div className={styles.chartEmpty} role="status">
-        <span className={styles.emptyIcon}><ChartNoAxesCombined aria-hidden="true" size={28} /></span>
-        <h3>Chưa có doanh thu trong kỳ này</h3>
-        <p>Biểu đồ sẽ hiển thị khi có giao dịch thu hoặc hoàn tiền được ghi nhận.</p>
-        <span className={styles.emptyHint}>Bạn có thể chọn khoảng ngày khác ở bộ lọc phía trên.</span>
-      </div>
-    );
-  }
 
   const amounts = series.map(({ netRevenue }) => BigInt(netRevenue));
   let minimum = amounts.reduce(
@@ -86,8 +72,8 @@ export function RevenueReportChart({
     BigInt(0),
   );
   if (minimum === maximum) {
-    minimum -= BigInt(1);
-    maximum += BigInt(1);
+    minimum = BigInt(0);
+    maximum = BigInt(1_000_000);
   }
 
   const ticks = getTickValues(minimum, maximum);
@@ -96,7 +82,11 @@ export function RevenueReportChart({
     x: series.length === 1 ? 50 : 4 + (index / (series.length - 1)) * 92,
     y: plotY(amounts[index], minimum, maximum),
   }));
-  const polyline = points
+  const polyline = points.length === 0
+    ? '4,95 96,95'
+    : points.length === 1
+    ? `4,${points[0].y} 96,${points[0].y}`
+    : points
     .map(({ x, y }) => `${x.toFixed(3)},${y.toFixed(3)}`)
     .join(' ');
   const periodLabels = getPeriodLabelIndices(series.length);
@@ -188,6 +178,7 @@ export function RevenueReportChart({
         {periodLabels.map((index) => (
           <span
             className={styles.chartPeriodTick}
+            data-single={series.length === 1}
             data-edge={
               series.length === 1
                 ? 'center'

@@ -301,7 +301,7 @@ function RevenueReportContent({
             Doanh thu ròng
           </span>
         </div>
-        <RevenueReportChart groupBy={groupBy} noData={noData} series={series} />
+        <RevenueReportChart groupBy={groupBy} series={series} />
       </section>
 
       <section aria-labelledby="service-breakdown-title" className={`panel ${styles.tablePanel}`}>

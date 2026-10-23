@@ -1,3 +1,4 @@
+import { businessCode } from '../common/business-code.js';
 import {
   ConflictException,
   ForbiddenException,
@@ -183,6 +184,10 @@ function isRouteCodeUniqueViolation(error: unknown): boolean {
 export class RoutesService {
   constructor(private readonly prisma: PrismaService) {}
 
+  async previewCode(principal: AuthPrincipal) {
+    return { data: { code: await businessCode(this.prisma, requireTenantPrincipal(principal), 'TX') } };
+  }
+
   async create(input: CreateRouteDto, principal?: AuthPrincipal) {
     const nhaXeId = requireTenantPrincipal(principal);
     if (input.busCompanyId !== nhaXeId) {
@@ -199,6 +204,7 @@ export class RoutesService {
 
     try {
       return await runRouteWriteTransaction(this.prisma, async (transaction) => {
+        const code = await businessCode(transaction, nhaXeId, 'TX', undefined, true);
         await assertRouteEndpointsAvailable(
           transaction,
           nhaXeId,
@@ -207,7 +213,7 @@ export class RoutesService {
         );
         const route = await transaction.tuyenXe.create({
           data: {
-            maTuyenXe: input.code,
+            maTuyenXe: code,
             diemDi: input.origin,
             diemDen: input.destination,
             thoiGianChayPhut: input.durationMinutes,
