@@ -74,6 +74,8 @@ Tên class ở trên chỉ là ví dụ. Rule áp dụng cho mọi feature mới
 
 ### CRUD consistency rules
 
+- Thông báo kết quả thao tác MUST dùng toast góc dưới bên phải qua host dùng chung `src/components/ui/sonner.tsx` và `toast` từ `sonner`; không thêm banner thành công vào nội dung trang/sheet hoặc bắn trùng cùng một kết quả ở nhiều tầng. Áp dụng cho code mới và các màn được migrate. Validation vẫn giữ lỗi inline liên kết field; lỗi tải dữ liệu/empty/permission vẫn hiển thị tại vùng nội dung phù hợp.
+
 Với CRUD management có interaction tương đương, MUST dùng cùng shared pattern cho:
 
 - create action;

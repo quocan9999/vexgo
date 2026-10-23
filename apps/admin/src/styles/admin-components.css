@@ -14,11 +14,11 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-button {
+button:not([data-slot]) {
   font: inherit;
 }
 
-input {
+input:not([data-slot]) {
   font: inherit;
 }
 
@@ -30,11 +30,11 @@ code {
   font-variant-numeric: tabular-nums;
 }
 
-button {
+button:not([data-slot]) {
   color: inherit;
 }
 
-button:focus-visible {
+button:not([data-slot]):focus-visible {
   outline: 3px solid #8cb5ff;
   outline-offset: 3px;
 }
@@ -44,7 +44,7 @@ a:focus-visible {
   outline-offset: 3px;
 }
 
-input:focus-visible {
+input:not([data-slot]):focus-visible {
   outline: 3px solid #8cb5ff;
   outline-offset: 3px;
 }

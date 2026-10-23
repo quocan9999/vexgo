@@ -187,7 +187,7 @@ Keep the typography/spacing roles above. Size variants express context; using th
 | Table/cards | Shared headers/sort/state/action styles; `aria-sort`; same labels, status mapping and authorized actions in desktop and mobile views |
 | Pagination | One result summary per list context; current page/range/total, accessible previous/next actions; no independent feature visual variants |
 | Status | Feature maps real API enum to Vietnamese label/tone. Never assume an unknown enum is a known successful or failed state |
-| Feedback | Reuse Alert/Skeleton/state patterns; separate empty dataset, no filter matches, request failure and lack of permission; toast is supplementary for field errors |
+| Feedback | Operation results use the shared Sonner host at bottom-right, once per result; no success banners in page/sheet flow. Keep linked inline field validation and contextual loading/error/empty/permission states. New and migrated screens follow this rule; legacy consumers move per migration ledger |
 | Tooltip/chart | Hover/focus/touch access as appropriate; Escape dismiss; tooltip remains within viewport; retain keyboard and tabular alternatives for charts |
 | Workspace | One intentional scroll owner per pane; short/mobile viewport and virtual keyboard must not hide essential actions |
 
@@ -216,7 +216,7 @@ Registry states:
 - **migrating**: canonical replacement is in progress; list actual migrated consumers and remaining adapters.
 - **approved**: implementation meets contract and has evidence for affected consumers, responsive states and keyboard behavior. Record evidence and approval; package installation alone is insufficient.
 
-Initial registry — no existing implementation is declared newly approved by this documentation change:
+Initial baseline registry (before the pilot implementation below):
 
 | Pattern | Current owner | Status | Target / pilot consumer |
 | --- | --- | --- | --- |
@@ -234,6 +234,10 @@ Initial registry — no existing implementation is declared newly approved by th
 | Chat / chart / seat map / RBAC matrix | Feature workspaces | legacy | Keep domain layout; migrate primitives in their phase |
 
 For each pattern entering `migrating`, add canonical path, migrated and remaining consumer paths, adapter (if any), evidence and removal condition to this registry or its linked ledger. Adapter removal requires zero remaining consumers and verified replacement behavior. Do not maintain two styling or focus engines for the same migrated component.
+
+### Vehicles pilot — implementation in progress
+
+Current migration ledger: [UI_MIGRATION.md](./UI_MIGRATION.md). `/vehicles` and `VehicleFormDialog` use canonical shadcn primitives and shared Resource patterns. Their status is **migrating / pending user review**, not globally approved. Existing `ui/button.tsx`, `ui/badge.tsx`, Admin dialog/filter/pagination patterns remain legacy for their other consumers; do not copy them into new features. New consumers use the canonical paths in the ledger. No endpoint date-only contract is switched by the vehicles pilot; its API timestamps remain ISO and the visible date portion uses `DD-MM-YYYY`.
 
 ## Rollout and completion gates
 
