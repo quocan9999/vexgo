@@ -12,18 +12,22 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 ### Source of truth
 
-- MUST đọc `DESIGN.md` trước khi sửa Admin UI.
-- Typography, line-height và spacing MUST theo semantic roles/aliases trong `DESIGN.md` và `src/styles/admin-tokens.css`; table body mặc định 13px.
+- MUST đọc `apps/admin/DESIGN.md` trước khi sửa Admin UI.
+- Typography, line-height, spacing, màu, radius và control sizes MUST theo contract trong `DESIGN.md`; table body mặc định 13px. Giá trị CSS hiện tại chưa khớp target được xem là legacy, không tự động là chuẩn thiết kế.
 - Line-height MUST theo các role ratios trong `DESIGN.md`; các mức chính là 1.2, 1.35 và 1.5.
-- UI migration MUST đi theo thứ tự token → shared primitive → shared component → feature styles.
+- Trong từng lát cắt migration, MUST đi theo token mapping → shared primitive → shared pattern → feature styles → kiểm tra consumer → dọn legacy. Không đổi toàn bộ token runtime của Admin trước khi kiểm chứng màn mẫu.
 - Feature-specific spacing exception MUST được ghi trong `DESIGN.md` và chỉ dùng cho data visualization hoặc workflow có layout đặc thù.
 - Chỉ map undefined custom property khi xác định được intended existing value.
 - MUST inspect `src/components/admin/`, `src/components/ui/`, `src/components/data-filters/` và `src/styles/admin-components.css` trước khi tạo hoặc sửa UI pattern dùng lại được.
 - Thứ tự ưu tiên khi quyết định UI:
   1. `DESIGN.md`
-  2. Shared Admin components / shared UI primitives
-  3. Feature-specific UI khi interaction model thực sự khác
-  4. UI/UX skills dùng để review consistency/accessibility/responsive
+  2. Contract và component registry trong `DESIGN.md`
+  3. Shared components đã đạt contract; adapter migration được ghi rõ
+  4. Feature-specific UI khi interaction model thực sự khác
+  5. UI/UX skills để audit và đề xuất cải tiến; thay đổi chuẩn phải cập nhật tài liệu trước khi nhân rộng
+
+- Target là shadcn/ui theo cấu hình `base-nova`/Base UI hiện có, custom theo nhận diện VexGo; không mặc định đổi sang Radix hoặc thêm hệ primitive khác.
+- Không route nào là golden reference. Màn mẫu dùng để nghiệm thu contract, không thay thế `DESIGN.md`.
 
 ### Mandatory shared-first workflow
 
@@ -45,11 +49,13 @@ Trước khi tạo **bất kỳ** component hoặc CSS mới cho CRUD action/sta
 - create/edit form dialog;
 - status/destructive confirmation.
 
-Nếu shared equivalent tồn tại:
+Nếu shared equivalent tồn tại và đã đạt contract (`approved`):
 
 - MUST reuse nó;
 - MUST NOT tạo bản sao theo feature;
 - MUST NOT tạo class visual riêng chỉ để đổi cùng một pattern.
+
+Nếu equivalent là `legacy` hoặc `migrating`, MUST kiểm tra registry trong `DESIGN.md`: sửa canonical component hoặc dùng adapter đã ghi rõ, không nhân bản theo feature. Việc tồn tại implementation cũ không bắt buộc tiếp tục dùng behavior sai. Chỉ chuyển trạng thái sang `approved` sau khi có bằng chứng nghiệm thu; cài package hoặc sinh file bằng CLI chưa đủ.
 
 Ví dụ các pattern kiểu sau là không được phép nếu shared equivalent đã có:
 
@@ -96,24 +102,28 @@ Domain callback, label resource, API call, validation và business state vẫn n
 
 ### Shared component ownership
 
-- MUST reuse shared component khi use case tương đương.
+- MUST reuse shared contract đã đạt chuẩn khi use case tương đương; component legacy chuyển theo registry.
 - MUST NOT tạo feature-specific Button, Dialog, Table, Pagination, Badge hoặc CRUD action khi shared equivalent tồn tại.
 - Nếu shared component chưa đáp ứng use case tương đương, SHOULD mở rộng API của shared component trước.
 - Chỉ tạo component feature-specific khi interaction model thực sự khác; code review/report MUST nêu lý do rõ ràng.
+- `src/components/ui/` sở hữu primitive shadcn, variants và accessibility cơ bản; `src/components/admin/` sở hữu pattern Admin; `src/components/data-filters/` sở hữu filter composition. Feature giữ API, permissions, validation và domain state.
+- Adapter chỉ chuyển API cũ sang canonical implementation mới, có consumer list và điều kiện xóa; không duy trì hai bộ style/focus engine độc lập cho cùng component đã migrate.
 
 ### Date filter reuse
 
 - Với filter một ngày, MUST tìm và dùng shared component `SingleDateFilter` trong `src/components/data-filters/single-date-filter.tsx`.
 - Với filter khoảng ngày bắt đầu–kết thúc, MUST tìm và dùng shared component `DateRangeFilter` trong `src/components/data-filters/data-filters.tsx`; cấu hình label qua props hiện có hoặc mở rộng API dùng chung nếu cần.
-- Source of truth là implementation và styles của các shared component trong codebase. Các màn hình đang dùng chúng chỉ là ví dụ; MUST NOT sao chép hoặc tự thiết kế date picker theo một route cụ thể.
+- Source of truth là date contract trong `DESIGN.md`; API composition hiện có là điểm xuất phát, implementation/styles bên trong được thay trong migration. Các màn hình sử dụng chỉ là ví dụ; MUST NOT sao chép date picker theo route.
 - MUST NOT tạo date filter riêng theo feature khi interaction tương đương với hai shared component trên.
+- Target date-only UI và DTO/API là `DD-MM-YYYY` theo root `AGENTS.md`. Khi endpoint còn legacy `YYYY-MM-DD`, service giữ wire contract cũ và ghi migration pending; chuyển UI/DTO/consumers theo cùng endpoint, không gửi format mới vào DTO cũ. Timestamp ISO có offset không đổi. Không parse bằng `new Date('DD-MM-YYYY')`.
 
 ### CSS ownership
 
-- CSS của Admin shell và shared component MUST nằm trong `src/styles/admin-components.css` hoặc stylesheet colocated của shared component theo convention project.
+- Primitive shadcn sở hữu styling tại component; theme semantic mapping ở `src/app/globals.css`/`src/styles/admin-tokens.css` theo `DESIGN.md`. Shell/pattern dùng stylesheet của owner; `admin-components.css` là nơi chuyển tiếp, không tiếp tục gom mọi feature vào đó.
 - Stylesheet của dashboard/feature chỉ được chứa style riêng cho layout/domain của feature đó.
 - MUST NOT để shared component phụ thuộc vào CSS của một feature.
 - Khi extract shared component, MUST xóa dead/duplicate feature CSS tương ứng.
+- Chỉ xóa selector/token/adapter sau khi kiểm kê consumer. Không dùng global selector `.button`, `input`, `select`, `dialog` để ép style của primitive mới; không thêm `!important` để che xung đột legacy.
 
 ### Visual regression
 
@@ -146,11 +156,13 @@ Không được kết luận UI READY nếu chưa kiểm tra visual ở hai view
 - Focus MUST không thoát khỏi modal dialog khi mở; Tab/Shift+Tab, Escape và backdrop behavior phải đúng theo shared dialog contract.
 - Loading/success/error state phải dùng semantic phù hợp (`role="status"`, `role="alert"`, `aria-busy` khi cần).
 - Animation không thiết yếu MUST tôn trọng `prefers-reduced-motion`.
+- Tabs MUST có tab–panel linkage, roving focus và phím mũi tên/Home/End; inputs MUST có label bền vững, placeholder không thay label.
+- Form validation MUST giữ inline errors liên kết field và điều hướng focus tới lỗi đầu tiên hoặc error summary có liên kết khi submit thất bại. Loading khác disabled; badge label/tone phải map đúng enum thật trong feature.
 
 ### UI/UX skills
 
-- UI/UX skills chỉ dùng để review consistency, accessibility, responsive và usability.
-- MUST NOT để UI/UX skill override `DESIGN.md` hoặc shared component contract.
+- UI/UX skills dùng để audit, thiết kế và review consistency, accessibility, responsive, usability trong scope người dùng yêu cầu.
+- Có thể đề xuất sửa chuẩn chưa hợp lý bằng bằng chứng; cập nhật `DESIGN.md` và registry cùng thay đổi. Không âm thầm override contract theo từng feature.
 - Sử dụng ui-ux-pro-max skill khi làm việc với frontend UI/UX
 
 ### Admin tenancy / operational scope
@@ -166,4 +178,4 @@ Không được kết luận UI READY nếu chưa kiểm tra visual ở hai view
 
 - Khi cần select filter có label hiển thị phía trên, MUST tái sử dụng `LabeledSelectFilter` từ `src/components/data-filters/data-filters.tsx` (implementation: `src/components/data-filters/labeled-select-filter.tsx`).
 - Cấu hình `label`, `accessibleLabel` khi cần, `options`, `value`, `onChange` và `disabled` theo use case; không sao chép markup/CSS sang feature hoặc tự tạo pattern tương đương.
-- Component và stylesheet dùng chung là nguồn sự thật cho chiều cao control, khoảng cách label và căn hàng khi toolbar wrap; dùng bên trong `FilterToolbar` để giữ alignment với search/date/status filters.
+- Size và spacing theo contract `DESIGN.md`; implementation chung thực thi contract và có thể thay trong migration. Dùng trong `FilterToolbar` cho CRUD; dashboard/workspace có thể composition khác khi nghiệp vụ cần, vẫn reuse primitives và size variants.
