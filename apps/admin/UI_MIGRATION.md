@@ -1,5 +1,24 @@
 # Admin UI migration ledger
 
+## Admin shell — 23/10/2026
+
+Status: **MIGRATING — implementation and representative browser review; pending user review**.
+
+- Owner: `features/super-admin-layout/components/super-admin-layout.tsx` and `features/super-admin-layout/admin-shell.css`; removed shell-only legacy rules from `styles/admin-components.css`.
+- All existing SuperAdminLayout consumers receive the shell presentation. Navigation permission predicates, tenant/platform scope, link destinations, authentication and collapse preference storage are preserved. Desktop and mobile render the same permission-filtered navigation composition.
+- Canonical Button for shell actions; canonical Sheet for mobile navigation (focus containment, Escape/backdrop, return focus, body scroll lock). Desktop fixed sidebar and mobile Sheet share one navigation composition. Desktop breakpoint closes any mobile overlay.
+- Header shows authenticated scope, section and account; logout executes immediately without confirmation, with pending state, duplicate-request guard and bottom-right error toast. Added skip link. No backend, API, env, database, seed or feature DTO changes.
+- Geometry: 252px desktop / 76px rail, mobile Sheet 320px maximum; header 76px desktop / 64px mobile; scroll region 16px below divider, 44px navigation rows. Content grid children can shrink so wide tables scroll within their own container.
+- Pre-edit GitNexus impact: CRITICAL, 22 direct consumers / 49 impacted symbols / 42 flows. The index remains stale and contains incomplete file paths; source inspection corroborated shell consumers. Graph results are not runtime verification.
+- Browser review using the existing tenant session: desktop 1440×900, mobile 375×667; /vehicles and /vehicle-types load, /revenue-reports navigation updates header and closes mobile menu. Sidebar collapse persists after reload. Mobile Sheet Tab wraps inside, Escape returns focus to Mở menu; the earlier logout confirmation was reviewed before the user requested its removal. Resizing an open mobile menu to desktop closes it. No logout or domain mutation was executed.
+- Remaining checks: platform Super Admin / restricted staff sessions, actual logout success/failure and pending behavior are not runtime verified. No integration/E2E/UI/component test suites run by request. Final scoped checks and screenshot evidence recorded at handoff.
+
+Final checks: Admin TypeScript, scoped ESLint, production build and `git diff --check` PASS. Browser tablet 1024×768: sidebar/main offset 76px, document width 1009px within the 1024px viewport; wide vehicle table scrolls inside its container. Mobile navigation End key reaches the final permission item (scrollTop approximately 126px). Temporary viewport override reset after review.
+
+GitNexus detect_changes returned zero mapped symbols for four tracked changed files before the final documentation update; the stale index and untracked shell stylesheet prevent treating that as proof of no impact. Pre-edit CRITICAL impact and inspected consumers remain the relevant scope evidence.
+
+Evidence folder: `C:/Users/trinh/.codex/visualizations/admin-shadcn-shell/` (desktop.jpg, tablet.jpg, mobile.jpg, mobile-navigation.jpg). The final build is running at Admin 3005. Changes remain uncommitted for user review.
+
 ## Feedback decision — 23/10/2026
 
 - User approved the pilot direction with operation notifications changed to bottom-right toast. Shared host: `src/components/ui/sonner.tsx`, mounted once in the root layout; features call `toast` from `sonner`.
@@ -9,7 +28,7 @@
 
 ## Vehicles pilot — 23/10/2026
 
-Status: **MIGRATING — pending user visual review**. This is a complete presentation slice for `/vehicles`, not a claim that all Admin routes or mutation flows have been verified.
+Status: **USER APPROVED — presentation and bottom-right toast**. This is a complete presentation slice for `/vehicles`, not a claim that all Admin routes or mutation flows have been verified.
 
 ### Canonical components and consumers
 
@@ -71,3 +90,16 @@ Test suites: **unit/integration/E2E/UI component suites not run** for this prese
 8. Visit an unmigrated CRUD screen and the vehicle seat workspace to inspect legacy presentation after moving between routes.
 
 Next: user reviews the pilot, then migrate shell/equivalent CRUD groups. Do not roll this presentation out to all routes merely because build passes.
+
+## Header revision — 23/10/2026
+
+- User requested a header redesign and removal of logout confirmation. Desktop now uses a workspace icon and horizontal scope/section breadcrumb; account identity has a navy avatar and a labeled outline logout action. Mobile retains two-line context and 44px icon action. No decorative search/notification controls were added.
+- Logout calls the existing signOutAdmin directly; a ref prevents duplicate requests, pending state disables the button, and failure restores the action and shows the shared bottom-right toast. No auth API contract changed.
+- Browser visual review: desktop and mobile; mobile actual CSS viewport 375×668 due browser zoom rounding, no horizontal overflow. Actual logout has not been executed against the shared user session. No test suites run. Production rebuild for this revision has not been run while the user's Next dev server is active.
+
+## Header layout correction — 23/10/2026
+
+- User screenshot showed the desktop breadcrumb stacked vertically and an unnecessarily tall header. Rebuilt header presentation in `components/admin-header.module.css` to isolate it from global shell/feature selectors. Removed superseded global header rules from `admin-shell.css`.
+- Desktop: compact tenant badge, horizontal navigation breadcrumb, account identity and a separated ghost logout action. Header and page share the centered 1510px content width and inline padding. Mobile keeps two-line context with 44px menu/logout targets. Direct logout remains unchanged.
+- Browser: desktop 1440×900 and wide 1920×900; header height 69px, breadcrumb flex direction row, and wide header scope/page title both start at x=363px. Mobile CSS viewport 375×668 (zoom rounding), header 65px, document width 356px with no horizontal overflow. Screenshots in `C:/Users/trinh/.codex/visualizations/admin-header-redesign/`: desktop-v2.png, wide-v2.png, mobile-v2.png.
+- No domain mutation or real logout executed; production rebuild not run while the user's dev server is active. Earlier production build evidence predates the header revisions. No integration/E2E/UI/component test suites run.

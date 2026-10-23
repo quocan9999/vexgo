@@ -230,14 +230,22 @@ Initial baseline registry (before the pilot implementation below):
 | Alert/Skeleton/empty/success | Shared skeleton + feature styles | legacy | Canonical state compositions; vehicle states |
 | Money/generated code field | `AdminMoneyInput`, `AdminGeneratedCodeField` | legacy | Keep domain behavior, migrate underlying Input/Field/Button when consumed |
 | Tabs / Tooltip | Feature implementations | planned replacement | Canonical primitives; customer/booking tabs and shared help |
-| Shell/sidebar | `SuperAdminLayout` | legacy | Migrate after pilot; preserve permission/tenant/navigation preference behavior |
+| Shell/sidebar | `SuperAdminLayout` + `features/super-admin-layout/admin-shell.css` | migrating | Canonical Button, Sheet mobile navigation and ResourceConfirmation; preserve permission/tenant/navigation preference behavior; evidence in UI_MIGRATION.md |
 | Chat / chart / seat map / RBAC matrix | Feature workspaces | legacy | Keep domain layout; migrate primitives in their phase |
 
 For each pattern entering `migrating`, add canonical path, migrated and remaining consumer paths, adapter (if any), evidence and removal condition to this registry or its linked ledger. Adapter removal requires zero remaining consumers and verified replacement behavior. Do not maintain two styling or focus engines for the same migrated component.
 
-### Vehicles pilot — implementation in progress
+### Vehicles pilot — user approved
 
-Current migration ledger: [UI_MIGRATION.md](./UI_MIGRATION.md). `/vehicles` and `VehicleFormDialog` use canonical shadcn primitives and shared Resource patterns. Their status is **migrating / pending user review**, not globally approved. Existing `ui/button.tsx`, `ui/badge.tsx`, Admin dialog/filter/pagination patterns remain legacy for their other consumers; do not copy them into new features. New consumers use the canonical paths in the ledger. No endpoint date-only contract is switched by the vehicles pilot; its API timestamps remain ISO and the visible date portion uses `DD-MM-YYYY`.
+Current migration ledger: [UI_MIGRATION.md](./UI_MIGRATION.md). `/vehicles` and `VehicleFormDialog` use canonical shadcn primitives and shared Resource patterns. The user approved the pilot presentation and bottom-right toast on 23/10/2026; remaining runtime verification limits are recorded in the ledger. This approval does not approve every Admin route. Existing `ui/button.tsx`, `ui/badge.tsx`, Admin dialog/filter/pagination patterns remain legacy for their other consumers; do not copy them into new features. New consumers use the canonical paths in the ledger. No endpoint date-only contract is switched by the vehicles pilot; its API timestamps remain ISO and the visible date portion uses `DD-MM-YYYY`.
+
+### Shell geometry and navigation
+
+- Desktop sidebar width 252px, collapsed/tablet rail 76px; tablet rail applies from 701–1180px. Mobile ≤700px uses a left Sheet up to 320px wide, leaving at least 32px of backdrop.
+- Sidebar padding 24px top / 16px inline; 24px between brand and divider, then 16px before the scroll region. Navigation rows have a minimum 44px height, 8px control radius and 4px row gap. Navigation owns vertical scrolling; the brand remains visible.
+- Header inner minimum height 68px desktop / 64px mobile, plus the 1px border; its centered 1510px maximum container and page-inline padding align with page content. Header styling is isolated in `features/super-admin-layout/components/admin-header.module.css`. Show authenticated scope, current section and account identity; truncate long text. Do not add a tenant switcher to tenant scope.
+- Mobile Sheet uses the canonical focus/scroll-lock engine, closes on link selection, Escape/backdrop, and returns focus to the menu trigger. Returning to desktop closes the mobile overlay. Desktop collapse preference keeps its existing storage behavior.
+- Logout executes immediately without confirmation (user decision). Disable the action while pending, guard repeated requests and use bottom-right error toast. No feature content or API authorization rules are changed by the shell migration.
 
 ## Rollout and completion gates
 
