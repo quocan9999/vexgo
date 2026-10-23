@@ -102,6 +102,7 @@ Shared components under `src/components/admin/`, `src/components/ui/`, and `src/
 - Search and filters precede the result count; display the count in one location.
 - Pagination communicates range, total, and current page. Navigation controls have accessible names.
 - The desktop sidebar can collapse to a centered icon rail; preserve its preference across routes and keep compact navigation labels available to assistive technology. Tablet stays compact, and mobile uses the navigation drawer.
+- Keep the sidebar brand and divider fixed above an independently scrollable menu. Use the 24px sidebar navigation offset below the divider; long menus must remain reachable by wheel, touch and keyboard on short viewports.
 - Status labels use the shared badge pattern and map domain state in the feature.
 - Forms have associated labels, invalid state, linked error descriptions, and clear submit feedback.
 - Dialogs and sheets have an accessible title, contain focus while open, and support the shared Escape/backdrop behavior.

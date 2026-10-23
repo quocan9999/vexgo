@@ -33,7 +33,10 @@ const record = {
   updatedAt: new Date('2026-09-23T07:34:00.000Z'),
   nhaXe: { nhaXeId: 3, maNhaXe: 'FUTA', tenNhaXe: 'Phương Trang' },
 };
+let issuedSequence = 99;
 const prisma = {
+  $queryRaw: vi.fn(),
+  $executeRaw: vi.fn(),
   nhaXe: { findUnique: vi.fn() },
   $transaction: vi.fn((operation: (transaction: Prisma.TransactionClient) => Promise<unknown>) =>
     operation(prisma as unknown as Prisma.TransactionClient),
@@ -107,8 +110,20 @@ describe('Route write HTTP pipeline with real service and mocked Prisma', () => 
   });
   beforeEach(() => {
     vi.clearAllMocks();
+    issuedSequence = 99;
+    prisma.$queryRaw.mockImplementation(async (parts: TemplateStringsArray, ...values: unknown[]) => {
+      const sql = parts.join('?');
+      if (sql.includes('FROM NhaXe')) return values[0] === 3 ? [{ maNhaXe: 'FUTA' }] : [];
+      if (sql.includes('FROM TuyenXe')) return [{ code: 'FUTA-TX-0099' }];
+      if (sql.includes('FROM BoDemMaNghiepVu')) return [{ soCuoi: issuedSequence }];
+      throw new Error(`Unexpected business code SQL: ${sql}`);
+    });
+    prisma.$executeRaw.mockImplementation(async (_parts: TemplateStringsArray, _prefix: string, sequence: number) => {
+      issuedSequence = sequence;
+      return 1;
+    });
     prisma.nhaXe.findUnique.mockResolvedValue({ nhaXeId: 3 });
-    prisma.tuyenXe.create.mockResolvedValue(record);
+    prisma.tuyenXe.create.mockImplementation(async (args: Prisma.TuyenXeCreateArgs) => ({ ...record, maTuyenXe: args.data.maTuyenXe }));
     prisma.tuyenXe.update.mockResolvedValue(record);
     prisma.tuyenXe.updateMany.mockResolvedValue({ count: 1 });
     prisma.tuyenXe.findUnique.mockResolvedValue(record);
@@ -206,7 +221,7 @@ describe('Route write HTTP pipeline with real service and mocked Prisma', () => 
       .post('/api/v1/routes')
       .send({
         ...createInput,
-        code: '  FUTA-TX-0100  ',
+        code: '  CLIENT-CANNOT-CHOOSE  ',
         origin: '  TP.HCM ',
         destination: ' Đà Lạt  ',
       })
@@ -242,11 +257,17 @@ describe('Route write HTTP pipeline with real service and mocked Prisma', () => 
     expect(detail.body.data).toEqual(response.body.data);
   });
 
+  it('allocates distinct server codes when clients omit code, without using row counts', async () => {
+    const { code: _ignored, ...body } = createInput;
+    const first = await request(app.getHttpServer()).post('/api/v1/routes').send(body).expect(201);
+    const second = await request(app.getHttpServer()).post('/api/v1/routes').send({ ...body, destination: 'Nha Trang' }).expect(201);
+    expect(first.body.data.code).toBe('FUTA-TX-0100');
+    expect(second.body.data.code).toBe('FUTA-TX-0101');
+    expect(prisma.$executeRaw.mock.calls.map((call) => call[2])).toEqual([100, 101]);
+    expect(prisma.$queryRaw.mock.calls[0][0].join('?')).toContain('FOR UPDATE');
+  });
+
   it.each([
-    [
-      'missing code',
-      { origin: 'A', destination: 'B', durationMinutes: 420, busCompanyId: 3, status: 'HOAT_DONG' },
-    ],
     ['blank code', { ...createInput, code: '   ' }],
     ['long code', { ...createInput, code: 'X'.repeat(51) }],
     ['nonstring code', { ...createInput, code: 1 }],

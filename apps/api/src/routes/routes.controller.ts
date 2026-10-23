@@ -28,6 +28,13 @@ import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
 export class RoutesController {
   constructor(private readonly routesService: RoutesService) {}
 
+  @Get('code-preview')
+  @RequireRoles(...TENANT_PRINCIPAL_ROLES)
+  @RequirePermissions('route:create')
+  previewCode(@CurrentPrincipal() principal: AuthPrincipal) {
+    return this.routesService.previewCode(principal);
+  }
+
   @Post()
   @RequireRoles(...TENANT_PRINCIPAL_ROLES)
   @RequirePermissions('route:create')

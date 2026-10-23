@@ -18,12 +18,12 @@ export class CreateTripDto {
   @IsBoolean()
   acceptsShipments?: boolean;
 
-  @IsDefined()
+  @IsOptional()
   @IsString()
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsNotEmpty()
   @MaxLength(50)
-  code!: string;
+  code?: string;
 
   @IsDefined()
   @IsInt()

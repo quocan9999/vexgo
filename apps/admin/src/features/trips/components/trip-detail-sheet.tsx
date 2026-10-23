@@ -104,7 +104,7 @@ export function TripDetailSheet({
 
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [statusTarget, setStatusTarget] = useState<
-    'DANG_CHAY' | 'HOAN_THANH' | null
+    'HOAN_THANH' | null
   >(null);
   const [statusSubmitting, setStatusSubmitting] = useState(false);
   const [statusError, setStatusError] = useState<string | null>(null);
@@ -113,7 +113,7 @@ export function TripDetailSheet({
   const [cancelSubmitting, setCancelSubmitting] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
 
-  function openStatusDialog(target: 'DANG_CHAY' | 'HOAN_THANH') {
+  function openStatusDialog(target: 'HOAN_THANH') {
     setStatusTarget(target);
     setStatusError(null);
     setStatusDialogOpen(true);
@@ -216,6 +216,14 @@ export function TripDetailSheet({
 
     return () => controller.abort();
   }, [tripId, retryCount, onNotFound]);
+
+  useEffect(() => {
+    if (editOpen || statusDialogOpen || cancelDialogOpen) return;
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') setRetryCount((count) => count + 1);
+    }, 5_000);
+    return () => window.clearInterval(timer);
+  }, [editOpen, statusDialogOpen, cancelDialogOpen]);
 
   return (
     <>
@@ -441,14 +449,7 @@ export function TripDetailSheet({
                     Chỉnh sửa
                   </Button>
                 )}
-                {canUpdate && detail.trip.status === 'CHUA_KHOI_HANH' && (
-                  <Button
-                    onClick={() => openStatusDialog('DANG_CHAY')}
-                    type="button"
-                  >
-                    Bắt đầu chạy
-                  </Button>
-                )}
+
                 {canUpdate && detail.trip.status === 'DANG_CHAY' && (
                   <Button
                     onClick={() => openStatusDialog('HOAN_THANH')}
@@ -504,9 +505,7 @@ export function TripDetailSheet({
               <div className="admin-dialog-header__copy">
                 <p className="eyebrow">XÁC NHẬN TRẠNG THÁI</p>
                 <h3 id="trip-status-confirm-title">
-                  {statusTarget === 'DANG_CHAY'
-                    ? 'Bắt đầu chuyến xe?'
-                    : 'Hoàn thành chuyến xe?'}
+                  Hoàn thành chuyến xe?
                 </h3>
               </div>
             </div>
@@ -514,9 +513,7 @@ export function TripDetailSheet({
               className="admin-confirm-dialog__description"
               id="trip-status-confirm-desc"
             >
-              {statusTarget === 'DANG_CHAY'
-                ? `Chuyến xe ${detail.trip.code} sẽ chuyển sang trạng thái Đang chạy.`
-                : `Chuyến xe ${detail.trip.code} sẽ chuyển sang trạng thái Hoàn thành và kết thúc hành trình.`}
+              {`Chuyến xe ${detail.trip.code} sẽ chuyển sang trạng thái Hoàn thành và kết thúc hành trình.`}
             </p>
             {statusError && (
               <p className="admin-confirm-dialog__error" role="alert">
@@ -546,9 +543,7 @@ export function TripDetailSheet({
                 )}
                 {statusSubmitting
                   ? 'Đang cập nhật…'
-                  : statusTarget === 'DANG_CHAY'
-                    ? 'Bắt đầu chạy'
-                    : 'Hoàn thành chuyến'}
+                  : 'Hoàn thành chuyến'}
               </Button>
             </div>
           </>

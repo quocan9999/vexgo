@@ -1,3 +1,4 @@
+import { businessCode } from '../common/business-code.js';
 import {
   ConflictException,
   Injectable,
@@ -899,6 +900,10 @@ export class TripsService {
     };
   }
 
+  async previewCode(date: string, principal: AuthPrincipal) {
+    return { data: { code: await businessCode(this.prisma, requireTenantPrincipal(principal), 'CX', date) } };
+  }
+
   async create(dto: CreateTripDto, principal: AuthPrincipal) {
     const nhaXeId = requireTenantPrincipal(principal);
 
@@ -960,19 +965,10 @@ export class TripsService {
       route.thoiGianChayPhut,
     );
 
-    const existingCode = await this.prisma.chuyenXe.findFirst({
-      where: { maChuyenXe: dto.code },
-    });
-    if (existingCode) {
-      throw new ConflictException({
-        error: 'TRIP_CODE_EXISTS',
-        message: 'Mã chuyến xe đã tồn tại.',
-      });
-    }
-
     try {
       const trip = await this.prisma.$transaction(
         async (tx) => {
+          const code = await businessCode(tx, nhaXeId, 'CX', dto.departureDate, true);
           const lockedVehicles = await tx.$queryRaw<Array<{ xeId: number }>>`
             SELECT xeId
             FROM Xe
@@ -1005,7 +1001,7 @@ export class TripsService {
 
           return tx.chuyenXe.create({
             data: {
-              maChuyenXe: dto.code,
+              maChuyenXe: code,
               ngayKhoiHanh: departureDate,
               gioKhoiHanh: departureTime,
               gioDen: arrivalTime,

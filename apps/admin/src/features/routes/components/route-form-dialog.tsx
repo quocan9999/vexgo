@@ -2,6 +2,8 @@
 
 import { LoaderCircle, X } from 'lucide-react';
 import { useRef, useState, type FormEvent } from 'react';
+import { AdminGeneratedCodeField } from '@/components/admin/admin-generated-code-field';
+import { useBusinessCodePreview } from '@/hooks/use-business-code-preview';
 import { AdminFormDialog } from '@/components/admin/admin-form-dialog';
 import { Button } from '@/components/ui/button';
 import {
@@ -19,7 +21,6 @@ type RouteFormDialogProps = {
 };
 
 type Values = {
-  code: string;
   origin: string;
   destination: string;
   durationMinutes: string;
@@ -31,7 +32,7 @@ type FieldErrors = Partial<Record<Field, string>>;
 function mappedErrors(details: RouteApiErrorDetail[]): FieldErrors {
   const errors: FieldErrors = {};
   for (const detail of details) {
-    if (detail.field === 'code' || detail.field === 'origin' || detail.field === 'destination' || detail.field === 'durationMinutes' ||
+    if (detail.field === 'origin' || detail.field === 'destination' || detail.field === 'durationMinutes' ||
         detail.field === 'status') {
       errors[detail.field] = detail.message;
     }
@@ -41,11 +42,11 @@ function mappedErrors(details: RouteApiErrorDetail[]): FieldErrors {
 
 export function RouteFormDialog({ tenantBusCompanyId, onClose, onSaved, route }: RouteFormDialogProps) {
   const editing = route !== undefined;
+  const codePreview = useBusinessCodePreview('routes', !editing);
   const idPrefix = editing ? `edit-route-${route.routeId}` : 'create-route';
   const dialogRef = useRef<HTMLDialogElement>(null);
   const submittingRef = useRef(false);
   const [values, setValues] = useState<Values>(() => ({
-    code: route?.code ?? '',
     origin: route?.origin ?? '',
     destination: route?.destination ?? '',
     durationMinutes: route?.durationMinutes == null ? '' : String(route.durationMinutes),
@@ -68,9 +69,6 @@ export function RouteFormDialog({ tenantBusCompanyId, onClose, onSaved, route }:
   function validate(): FieldErrors {
     const errors: FieldErrors = {};
     if (!editing) {
-      const code = values.code.trim();
-      if (!code) errors.code = 'Vui lòng nhập mã tuyến.';
-      else if (code.length > 50) errors.code = 'Mã tuyến không được vượt quá 50 ký tự.';
       if (values.status !== 'HOAT_DONG' && values.status !== 'TAM_NGUNG') {
         errors.status = 'Vui lòng chọn trạng thái.';
       }
@@ -107,7 +105,6 @@ export function RouteFormDialog({ tenantBusCompanyId, onClose, onSaved, route }:
         ? await updateRoute(route.routeId, input)
         : await createRoute({
             ...input,
-            code: values.code.trim(),
             busCompanyId: tenantBusCompanyId!,
             status: values.status as RouteStatus,
           });
@@ -116,7 +113,7 @@ export function RouteFormDialog({ tenantBusCompanyId, onClose, onSaved, route }:
     } catch (requestError: unknown) {
       if (requestError instanceof RouteApiError) {
         if (requestError.code === 'ROUTE_CODE_EXISTS') {
-          setFieldErrors({ code: 'Mã tuyến đã tồn tại trong nhà xe này.' });
+          setFormError('Không thể cấp mã tuyến. Vui lòng thử tạo lại.');
         } else if (requestError.code === 'ROUTE_DUPLICATE_ENDPOINTS') {
           setFormError(requestError.message);
         } else {
@@ -137,7 +134,7 @@ export function RouteFormDialog({ tenantBusCompanyId, onClose, onSaved, route }:
     }
   }
 
-  function textField(field: 'code' | 'origin' | 'destination', label: string, maxLength: number) {
+  function textField(field: 'origin' | 'destination', label: string, maxLength: number) {
     return (
       <div className="admin-crud-form-field">
         <label htmlFor={`${idPrefix}-${field}`}>{label} *</label>
@@ -145,7 +142,6 @@ export function RouteFormDialog({ tenantBusCompanyId, onClose, onSaved, route }:
           aria-describedby={fieldErrors[field] ? `${idPrefix}-${field}-error` : undefined}
           aria-invalid={Boolean(fieldErrors[field])}
           autoComplete="off"
-          className={field === 'code' ? 'admin-data-mono' : undefined}
           disabled={submitting}
           id={`${idPrefix}-${field}`}
           maxLength={maxLength}
@@ -180,7 +176,7 @@ export function RouteFormDialog({ tenantBusCompanyId, onClose, onSaved, route }:
         <form className="admin-crud-form" noValidate onSubmit={handleSubmit}>
           {formError && <p className="admin-crud-form-error" role="alert">{formError}</p>}
           {editing && <div className="admin-crud-form-context"><strong className="admin-data-mono">{route.code}</strong><span>{route.busCompany.name} · {route.status === 'HOAT_DONG' ? 'Đang hoạt động' : 'Tạm ngưng'}</span></div>}
-          {!editing && textField('code', 'Mã tuyến', 50)}
+          {!editing && <AdminGeneratedCodeField id={`${idPrefix}-code`} label="Mã tuyến" code={codePreview.code} placeholder={codePreview.placeholder} error={codePreview.error} onRetry={codePreview.retry} />}
           {textField('origin', 'Điểm đi', 100)}
           {textField('destination', 'Điểm đến', 100)}
           <div className="admin-crud-form-field">

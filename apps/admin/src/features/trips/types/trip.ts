@@ -86,7 +86,7 @@ export type PaginatedTrips = {
 };
 
 export type CreateTripInput = {
-  code: string;
+  code?: string;
   routeId: number;
   vehicleId: number;
   departureDate: string;

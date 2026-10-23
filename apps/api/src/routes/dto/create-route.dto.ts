@@ -1,5 +1,5 @@
 import { Transform } from 'class-transformer';
-import { IsDefined, IsIn, IsInt, IsNotEmpty, IsString, Max, MaxLength, Min } from 'class-validator';
+import { IsOptional, IsDefined, IsIn, IsInt, IsNotEmpty, IsString, Max, MaxLength, Min } from 'class-validator';
 import { ROUTE_STATUSES } from './route-query.dto.js';
 
 function trimString(value: unknown) {
@@ -13,11 +13,11 @@ function strictPositiveInteger(value: unknown) {
 
 export class CreateRouteDto {
   @Transform(({ value }) => trimString(value))
-  @IsDefined()
+  @IsOptional()
   @IsString()
   @IsNotEmpty()
   @MaxLength(50)
-  code!: string;
+  code?: string;
 
   @Transform(({ value }) => trimString(value))
   @IsDefined()

@@ -4,6 +4,7 @@ import {
   Bus,
   Building2,
   CalendarDays,
+  ChartNoAxesCombined,
   Database,
   Headphones,
   LogOut,
@@ -53,6 +54,7 @@ type SuperAdminLayoutProps = {
     | 'booking-management'
     | 'promotions'
     | 'shipments'
+    | 'revenue-reports'
     | 'admin-accounts'
     | 'rbac'
     | 'tenant-rbac'
@@ -170,6 +172,10 @@ const OPERATION_NAVIGATION_DETAILS: Record<
   },
   promotions: { label: 'Khuyến mãi', icon: () => <Tag size={18} /> },
   shipments: { label: 'Gửi hàng', icon: () => <Package size={18} /> },
+  'revenue-reports': {
+    label: 'Báo cáo doanh thu',
+    icon: () => <ChartNoAxesCombined size={18} />,
+  },
 };
 
 export function SuperAdminLayout({
@@ -299,134 +305,140 @@ export function SuperAdminLayout({
           </button>
         </div>
         <div aria-hidden="true" className="sidebar-divider" />
-
-        {(platformScope ||
-          (tenantScope && accessibleOperationSections.length > 0)) && (
-          <div className="sidebar-nav-group">
-            <p className="sidebar-label">
-              {tenantScope ? 'VẬN HÀNH' : 'QUẢN TRỊ NỀN TẢNG'}
-            </p>
-            <nav aria-label={tenantScope ? 'Vận hành' : 'Quản trị nền tảng'}>
-              {tenantScope
-                ? accessibleOperationSections.map((item) => {
-                    const { icon, label } =
-                      OPERATION_NAVIGATION_DETAILS[item.section];
-                    return (
-                      <Link
-                        aria-label={label}
-                        aria-current={
-                          activeSection === item.section ? 'page' : undefined
-                        }
-                        className={`sidebar-link${activeSection === item.section ? ' is-active' : ''}`}
-                        href={item.href}
-                        key={item.section}
-                        onClick={closeMobileNavigation}
-                        title={label}
-                      >
-                        <span className="sidebar-link-icon">{icon()}</span>
-                        <span>{label}</span>
-                      </Link>
-                    );
-                  })
-                : platformScope && (
-                    <>
-                      <Link
-                        aria-label="Tổng quan"
-                        aria-current={
-                          activeSection === 'overview' ? 'page' : undefined
-                        }
-                        className={`sidebar-link${activeSection === 'overview' ? ' is-active' : ''}`}
-                        href="/"
-                        onClick={closeMobileNavigation}
-                        title="Tổng quan"
-                      >
-                        <span className="sidebar-link-icon">
-                          <Database size={18} />
-                        </span>
-                        <span>Tổng quan</span>
-                      </Link>
-                      {canReadBusCompanies && (
+        <div
+          className="sidebar-scroll"
+          role="region"
+          aria-label="Các mục điều hướng quản trị"
+          tabIndex={0}
+        >
+          {(platformScope ||
+            (tenantScope && accessibleOperationSections.length > 0)) && (
+            <div className="sidebar-nav-group">
+              <p className="sidebar-label">
+                {tenantScope ? 'VẬN HÀNH' : 'QUẢN TRỊ NỀN TẢNG'}
+              </p>
+              <nav aria-label={tenantScope ? 'Vận hành' : 'Quản trị nền tảng'}>
+                {tenantScope
+                  ? accessibleOperationSections.map((item) => {
+                      const { icon, label } =
+                        OPERATION_NAVIGATION_DETAILS[item.section];
+                      return (
                         <Link
-                          aria-label="Nhà xe"
+                          aria-label={label}
                           aria-current={
-                            activeSection === 'bus-companies'
-                              ? 'page'
-                              : undefined
+                            activeSection === item.section ? 'page' : undefined
                           }
-                          className={`sidebar-link${activeSection === 'bus-companies' ? ' is-active' : ''}`}
-                          href="/bus-companies"
+                          className={`sidebar-link${activeSection === item.section ? ' is-active' : ''}`}
+                          href={item.href}
+                          key={item.section}
                           onClick={closeMobileNavigation}
-                          title="Nhà xe"
+                          title={label}
+                        >
+                          <span className="sidebar-link-icon">{icon()}</span>
+                          <span>{label}</span>
+                        </Link>
+                      );
+                    })
+                  : platformScope && (
+                      <>
+                        <Link
+                          aria-label="Tổng quan"
+                          aria-current={
+                            activeSection === 'overview' ? 'page' : undefined
+                          }
+                          className={`sidebar-link${activeSection === 'overview' ? ' is-active' : ''}`}
+                          href="/"
+                          onClick={closeMobileNavigation}
+                          title="Tổng quan"
                         >
                           <span className="sidebar-link-icon">
-                            <Building2 size={18} />
+                            <Database size={18} />
                           </span>
-                          <span>Nhà xe</span>
+                          <span>Tổng quan</span>
                         </Link>
-                      )}
-                      {canReadAdminAccounts && (
-                        <Link
-                          aria-label="Tài khoản Admin"
-                          aria-current={
-                            activeSection === 'admin-accounts'
-                              ? 'page'
-                              : undefined
-                          }
-                          className={`sidebar-link${activeSection === 'admin-accounts' ? ' is-active' : ''}`}
-                          href="/admin-accounts"
-                          onClick={closeMobileNavigation}
-                          title="Tài khoản Admin"
-                        >
-                          <span className="sidebar-link-icon">
-                            <UsersRound size={18} />
-                          </span>
-                          <span>Tài khoản Admin</span>
-                        </Link>
-                      )}
-                      {canManageRbac && (
-                        <Link
-                          aria-label="Phân quyền"
-                          aria-current={
-                            activeSection === 'rbac' ? 'page' : undefined
-                          }
-                          className={`sidebar-link${activeSection === 'rbac' ? ' is-active' : ''}`}
-                          href="/rbac"
-                          onClick={closeMobileNavigation}
-                          title="Phân quyền"
-                        >
-                          <span className="sidebar-link-icon">
-                            <ShieldCheck size={18} />
-                          </span>
-                          <span>Phân quyền</span>
-                        </Link>
-                      )}
-                    </>
-                  )}
-            </nav>
-          </div>
-        )}
-        {tenantScope && canReadTenantRolePermissions && (
-          <div className="sidebar-nav-group">
-            <p className="sidebar-label">QUẢN TRỊ NHÀ XE</p>
-            <nav aria-label="Quản trị nhà xe">
-              <Link
-                aria-label="Phân quyền"
-                aria-current={
-                  activeSection === 'tenant-rbac' ? 'page' : undefined
-                }
-                className={`sidebar-link${activeSection === 'tenant-rbac' ? ' is-active' : ''}`}
-                href="/tenant-rbac"
-                onClick={closeMobileNavigation}
-                title="Phân quyền"
-              >
-                <span className="sidebar-link-icon">
-                  <ShieldCheck size={18} />
-                </span>
-                <span>Phân quyền</span>
-              </Link>
-            </nav>
-          </div>
-        )}
+                        {canReadBusCompanies && (
+                          <Link
+                            aria-label="Nhà xe"
+                            aria-current={
+                              activeSection === 'bus-companies'
+                                ? 'page'
+                                : undefined
+                            }
+                            className={`sidebar-link${activeSection === 'bus-companies' ? ' is-active' : ''}`}
+                            href="/bus-companies"
+                            onClick={closeMobileNavigation}
+                            title="Nhà xe"
+                          >
+                            <span className="sidebar-link-icon">
+                              <Building2 size={18} />
+                            </span>
+                            <span>Nhà xe</span>
+                          </Link>
+                        )}
+                        {canReadAdminAccounts && (
+                          <Link
+                            aria-label="Tài khoản Admin"
+                            aria-current={
+                              activeSection === 'admin-accounts'
+                                ? 'page'
+                                : undefined
+                            }
+                            className={`sidebar-link${activeSection === 'admin-accounts' ? ' is-active' : ''}`}
+                            href="/admin-accounts"
+                            onClick={closeMobileNavigation}
+                            title="Tài khoản Admin"
+                          >
+                            <span className="sidebar-link-icon">
+                              <UsersRound size={18} />
+                            </span>
+                            <span>Tài khoản Admin</span>
+                          </Link>
+                        )}
+                        {canManageRbac && (
+                          <Link
+                            aria-label="Phân quyền"
+                            aria-current={
+                              activeSection === 'rbac' ? 'page' : undefined
+                            }
+                            className={`sidebar-link${activeSection === 'rbac' ? ' is-active' : ''}`}
+                            href="/rbac"
+                            onClick={closeMobileNavigation}
+                            title="Phân quyền"
+                          >
+                            <span className="sidebar-link-icon">
+                              <ShieldCheck size={18} />
+                            </span>
+                            <span>Phân quyền</span>
+                          </Link>
+                        )}
+                      </>
+                    )}
+              </nav>
+            </div>
+          )}
+          {tenantScope && canReadTenantRolePermissions && (
+            <div className="sidebar-nav-group">
+              <p className="sidebar-label">QUẢN TRỊ NHÀ XE</p>
+              <nav aria-label="Quản trị nhà xe">
+                <Link
+                  aria-label="Phân quyền"
+                  aria-current={
+                    activeSection === 'tenant-rbac' ? 'page' : undefined
+                  }
+                  className={`sidebar-link${activeSection === 'tenant-rbac' ? ' is-active' : ''}`}
+                  href="/tenant-rbac"
+                  onClick={closeMobileNavigation}
+                  title="Phân quyền"
+                >
+                  <span className="sidebar-link-icon">
+                    <ShieldCheck size={18} />
+                  </span>
+                  <span>Phân quyền</span>
+                </Link>
+              </nav>
+            </div>
+          )}
+        </div>
       </aside>
 
       <main className="admin-main" id={activeSection}>

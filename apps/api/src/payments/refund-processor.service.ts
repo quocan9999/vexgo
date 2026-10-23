@@ -93,13 +93,18 @@ export class RefundProcessorService
     if (
       !refund ||
       refund.loaiGiaoDich !== 'HOAN_TIEN' ||
-      refund.trangThai !== 'DANG_XU_LY'
+      refund.trangThai !== 'DANG_XU_LY' ||
+      refund.thoiDiemHoanTat !== null
     ) {
       return;
     }
 
     const claimed = await this.prisma.thanhToan.updateMany({
-      where: { thanhToanId: refundId, trangThai: 'DANG_XU_LY' },
+      where: {
+        thanhToanId: refundId,
+        trangThai: 'DANG_XU_LY',
+        thoiDiemHoanTat: null,
+      },
       data: { trangThai: 'DANG_GUI' },
     });
     if (claimed.count !== 1) return;
@@ -131,8 +136,15 @@ export class RefundProcessorService
       }
 
       await this.prisma.thanhToan.updateMany({
-        where: { thanhToanId: refundId, trangThai: 'DANG_GUI' },
-        data: { trangThai: 'THANH_CONG' },
+        where: {
+          thanhToanId: refundId,
+          trangThai: 'DANG_GUI',
+          thoiDiemHoanTat: null,
+        },
+        data: {
+          trangThai: 'THANH_CONG',
+          thoiDiemHoanTat: new Date(),
+        },
       });
     } catch (error) {
       await this.prisma.thanhToan.updateMany({

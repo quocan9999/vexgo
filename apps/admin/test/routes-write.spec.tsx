@@ -23,9 +23,12 @@ describe('Route form composition', () => {
       tenantBusCompanyId={3} onClose={vi.fn()} onSaved={vi.fn()}
     />);
     expect(html).toContain('admin-form-dialog');
-    for (const label of ['Mã tuyến *', 'Điểm đi *', 'Điểm đến *', 'Thời gian chạy (phút) *', 'Trạng thái *']) {
+    for (const label of ['Điểm đi *', 'Điểm đến *', 'Thời gian chạy (phút) *', 'Trạng thái *']) {
       expect(html).toContain(label);
     }
+    expect(html).toContain('Mã tuyến');
+    expect(html).toContain('(tự động)');
+    expect(html).toMatch(/<input[^>]*id="create-route-code"[^>]*disabled=""/);
     expect(html).toContain('Chọn trạng thái');
     expect(html).not.toContain('Chọn nhà xe');
   });
@@ -68,14 +71,14 @@ describe('Route write service', () => {
   it('sends explicit create payload and returns the API route', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ data: route }), { status: 201 }));
     await expect(createRoute({
-      code: route.code, origin: route.origin, destination: route.destination, durationMinutes: 420,
+      origin: route.origin, destination: route.destination, durationMinutes: 420,
       busCompanyId: 3, status: 'HOAT_DONG',
     })).resolves.toEqual(route);
     const [url, init] = fetchMock.mock.calls[0];
     expect(new URL(url as string).pathname).toBe('/api/v1/routes');
     expect(init?.method).toBe('POST');
     expect(JSON.parse(init?.body as string)).toEqual({
-      code: route.code, origin: route.origin, destination: route.destination, durationMinutes: 420,
+      origin: route.origin, destination: route.destination, durationMinutes: 420,
       busCompanyId: 3, status: 'HOAT_DONG',
     });
   });
@@ -85,7 +88,7 @@ describe('Route write service', () => {
       statusCode: 409, error: 'ROUTE_CODE_EXISTS', message: 'Mã tuyến đã tồn tại trong nhà xe này.',
     }), { status: 409 }));
     const error = await createRoute({
-      code: route.code, origin: route.origin, destination: route.destination, durationMinutes: 420,
+      origin: route.origin, destination: route.destination, durationMinutes: 420,
       busCompanyId: 3, status: 'HOAT_DONG',
     }).catch((caught: unknown) => caught);
     expect(error).toBeInstanceOf(RouteApiError);

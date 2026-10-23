@@ -1,0 +1,60 @@
+# F12 — Phase 02 Handoff: Admin Dashboard doanh thu
+
+- Phase: 02 — Admin Dashboard doanh thu theo từng nhà xe
+- Status: DONE
+- Repo root (không worktree): E:\Huit_Local\KhoaLuanCuNhan\SourceCode\vexgo
+- Branch/HEAD/actual origin/develop SHA: feature/tenant-revenue-reporting / c64501c / bc863de26fe9787f91e2078475f97c16d2f6423f
+- Commits:
+  - c64501c feat(f12): thêm dashboard doanh thu theo nhà xe
+  - Handoff/progress commit được tạo sau code commit này.
+- Files / API / Prisma schema & migrations changed:
+  - Thêm route Admin /revenue-reports, dashboard client, API service có kiểm tra response, hook hủy/stale-guard request, formatter, SVG chart và responsive CSS.
+  - Thêm revenue:read vào Admin path gate, operation navigation và loại quyền; tái sử dụng AdminSessionGuard, adminApiFetch, SuperAdminLayout, shared filters/table/button và design tokens.
+  - Không đổi API endpoint, backend contract, Prisma schema hoặc migration trong Phase 02.
+  - Sửa API service để bảng cơ cấu tách giá vé khỏi phí gửi hàng ở đơn kết hợp; hoàn tiền thành công giảm dòng vé.
+- Money source, eligibility, timestamps, refund rules verified:
+  - Giữ nguồn sale và thời điểm đủ điều kiện từ Phase 01: thanh toán sale hoàn tất hợp lệ; không tính pending, failed, late, duplicate hoặc CAN_DOI_SOAT; discount snapshot không trừ lần hai.
+  - Refund chỉ giảm doanh thu khi hoàn thành công và theo thoiDiemHoanTat.
+  - Bảng cơ cấu sau sửa: toàn bộ giá vé vào ticket; phí gửi hàng vào standaloneShipment hoặc accompaniedShipment; refund vé ở dòng ticket, kể cả đơn có hàng gửi.
+  - Dashboard gọi API thật; không có fixture/fake data runtime. Backend vẫn lấy tenant ID từ authenticated principal.
+- Decimal/reconciliation invariant evidence:
+  - Kỳ vọng unit test regression ban đầu thất bại khi breakdown phân loại sai; sau sửa targeted suite PASS.
+  - Backend kiểm tra tổng gross/refund và net của breakdown theo từng nguồn khớp netTicketRevenue và netShipmentRevenue.
+  - Tiền tiếp tục được tính bằng Prisma.Decimal ở API và trả dưới dạng chuỗi VND nguyên; UI không tính lại business totals.
+- Tenant isolation / RBAC implications:
+  - Route mới yêu cầu revenue:read; frontend không gửi nhaXeId; API tiếp tục tenant-scope theo principal như Phase 01.
+  - 401/403, lỗi API, dữ liệu response sai schema, retry, loading và empty states được thể hiện riêng; range query được bảo vệ stale-response và hủy khi đổi filter.
+  - GitNexus detect-changes --scope all trước code commit: 6 files, 7 symbols, 8 affected flows, HIGH risk. Các flow thay đổi gồm getReport và các kiểm tra tenant/role trong service; resolver Admin dùng chung cũng nhận thêm một route/quyền. Source review cho thấy thay đổi Admin là additive. Impact của getReport là lower-bound vì 3 call sites không được resolve do receiver typing; text search đã xác nhận controller là caller runtime trực tiếp. Tên hai helper Admin không được index nhận diện theo file nên impact là UNKNOWN; rg xác nhận các call sites hiện hữu ở AdminSessionGuard, login form và layout. Giữ cảnh báo này để review ở phase sau; không xem số 0/UNKNOWN là không ảnh hưởng.
+- Database target confirmed (vexgo_feature12 + vexgo_feature12_shadow; không để lộ secrets):
+  - Env được kiểm tra chỉ đọc: vexgo_feature12, shadow vexgo_feature12_shadow; API local port 4019, Admin 3018, Admin data source api.
+  - Không sửa env, không kết nối/reset/reseed database trong Phase 02.
+- Targeted UNIT test commands and PASS/FAIL/SKIPPED (no fabricated results):
+  - PASS — npm run test --workspace=@vexgo/api -- test/unit/revenue-reports/revenue-reports.service.spec.ts test/unit/revenue-reports/revenue-reports.authorization.spec.ts — 2 files, 17 tests.
+  - Admin unit/component tests: SKIPPED BY REQUEST; spec/user policy prohibits UI/component tests.
+  - Integration/E2E/API runtime/browser/UI automation: NOT RUN BY REQUEST.
+- Typecheck/lint/build/diff checks with outcomes:
+  - PASS — npm run typecheck --workspace=@vexgo/admin
+  - PASS — ESLint scoped to the new Admin route/feature and the changed Admin access/layout files.
+  - PASS — npm run build --workspace=@vexgo/admin; Next production build generated /revenue-reports.
+  - PASS — npm run typecheck --workspace=@vexgo/api
+  - PASS — npm run lint --workspace=@vexgo/api
+  - PASS — npm run build --workspace=@vexgo/api
+  - PASS — git diff --check and staged diff check; Git printed LF-to-CRLF notices only.
+  - Graph rebuild completed with 15,697 nodes, 40,462 edges and 951 flows; GitNexus warned its process candidate list was truncated. detect-changes output for the implementation was complete and showed HIGH risk as recorded above.
+- Integration/E2E/browser/UI automation: NOT RUN (requested)
+- Static self-review findings and fixes:
+  - Corrected mixed-order breakdown: ticket gross and refund had been incorrectly assigned to accompanied shipment; added net reconciliation invariants and updated targeted backend unit expectations.
+  - Confirmed six KPI cards (last card contains ticket and shipment counts), one chart, two tables, date-range filter, day/month/quarter grouping, CSV placeholder toast, and responsive horizontal table scrolling.
+  - No mock data, API call in a React component, new dependency, Prisma import in Admin, generated file, DB dump or secret staged.
+- Manual UI smoke items handed to user (user will execute, do not report PASS):
+  - Admin at http://localhost:3018/revenue-reports: tenant account with revenue:read sees report; account without it is denied/redirected; verify loading, API error/retry, empty period, six KPIs, one chart, two tables, day/month/quarter grouping, date range, mobile table scroll and exact CSV placeholder toast.
+  - API at http://localhost:4019/api/v1/revenue-reports: verify authenticated tenant response, date/groupBy filters, and 401/403 for unauthenticated/unauthorized principals. Do not treat unit tests/build as runtime API or database evidence.
+- Open gaps / risks / blockers:
+  - No verified runtime UI/API/database smoke yet; user will perform UI smoke after Phase 03.
+  - HIGH GitNexus impact and unresolved/lower-bound edges are documented above; do not waive the warning based on the riskSharedAxes field.
+  - Current source has no shipment-refund or cash-payment writer; keep existing Phase 01 eligibility contract and revisit if those writers change.
+  - Shared phpMyAdmin is on port 9090, not requested 8091; shared stack was left untouched.
+  - No blocker for the Phase 02 scope.
+- Git status after implementation commit: code commit c64501c; only the Phase 01 handoff correction and Phase 02 handoff/progress docs were pending the documentation commit.
+- Next phase (chỉ nếu DONE): 03 — first reread MASTER_SPEC.md, handoff/PROGRESS.md, this latest completed handoff and only spec/PHASE_03_*.md; then implement that phase. Do not read Phase 00/01 specs.
+- Resume instructions after compaction: verify branch/status/HEAD; read MASTER_SPEC.md, handoff/PROGRESS.md, handoff/PHASE_02_HANDOFF.md and only the current Phase 03 spec; do not run integration/E2E/browser/UI automation; preserve local commits and database boundaries.

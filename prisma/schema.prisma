@@ -7,6 +7,11 @@ datasource db {
   provider = "mysql"
 }
 
+model BoDemMaNghiepVu {
+  tienTo String @id @db.VarChar(50)
+  soCuoi Int
+}
+
 model NhaXe {
   nhaXeId                  Int                       @id @default(autoincrement()) @db.Int
   maNhaXe                  String                    @unique @db.VarChar(50)
@@ -154,6 +159,8 @@ model ChuyenXe {
   giuChos             GiuCho[]
   phieuGuiHangs       PhieuGuiHang[]
   phanHois            PhanHoi[]
+
+  @@index([trangThai, ngayKhoiHanh, gioKhoiHanh], map: "ChuyenXe_departure_due_idx")
 }
 
 model GheChuyenXe {
@@ -285,13 +292,13 @@ model KhachHang {
 }
 
 model NhanVien {
-  nhanVienId       Int      @id @default(autoincrement()) @db.Int
-  maNhanVien       String   @db.VarChar(50)
-  trangThaiLamViec String   @db.VarChar(30)
-  nhaXeId          Int      @db.Int
-  taiKhoanId       Int      @unique @db.Int
-  createdAt        DateTime @default(now()) @db.DateTime(0)
-  updatedAt        DateTime @default(now()) @updatedAt @db.DateTime(0)
+  nhanVienId       Int             @id @default(autoincrement()) @db.Int
+  maNhanVien       String          @db.VarChar(50)
+  trangThaiLamViec String          @db.VarChar(30)
+  nhaXeId          Int             @db.Int
+  taiKhoanId       Int             @unique @db.Int
+  createdAt        DateTime        @default(now()) @db.DateTime(0)
+  updatedAt        DateTime        @default(now()) @updatedAt @db.DateTime(0)
   nhaXe            NhaXe           @relation(fields: [nhaXeId], references: [nhaXeId], onDelete: Restrict, onUpdate: Restrict)
   taiKhoan         TaiKhoan        @relation(fields: [taiKhoanId], references: [taiKhoanId], onDelete: Restrict, onUpdate: Restrict)
   cuocTroChuyens   CuocTroChuyen[]
@@ -672,19 +679,23 @@ model HinhAnhHangHoa {
 }
 
 model ThanhToan {
-  thanhToanId     Int         @id @default(autoincrement()) @db.Int
-  soTien          Decimal     @db.Decimal(18, 2)
-  phuongThuc      String      @db.VarChar(30)
-  maGiaoDichSePay String?     @unique(map: "ThanhToan_maGiaoDichSePay_key") @db.VarChar(100)
-  loaiGiaoDich    String      @db.VarChar(30)
-  thoiGian        DateTime    @db.DateTime(0)
-  trangThai       String      @db.VarChar(30)
-  donGiaoDichId   Int         @db.Int
-  veId            Int?        @db.Int
-  createdAt       DateTime    @default(now()) @db.DateTime(0)
-  updatedAt       DateTime    @default(now()) @updatedAt @db.DateTime(0)
-  donGiaoDich     DonGiaoDich @relation(fields: [donGiaoDichId], references: [donGiaoDichId], onDelete: Restrict, onUpdate: Restrict)
-  ve              Ve?         @relation(fields: [veId], references: [veId], onDelete: Restrict, onUpdate: Restrict)
+  thanhToanId      Int         @id @default(autoincrement()) @db.Int
+  soTien           Decimal     @db.Decimal(18, 2)
+  phuongThuc       String      @db.VarChar(30)
+  maGiaoDichSePay  String?     @unique(map: "ThanhToan_maGiaoDichSePay_key") @db.VarChar(100)
+  loaiGiaoDich     String      @db.VarChar(30)
+  thoiGian         DateTime    @db.DateTime(0)
+  thoiDiemHoanTat  DateTime?   @db.DateTime(0)
+  trangThai        String      @db.VarChar(30)
+  laQuyetToanHopLe Boolean     @default(false)
+  donGiaoDichId    Int         @db.Int
+  veId             Int?        @db.Int
+  createdAt        DateTime    @default(now()) @db.DateTime(0)
+  updatedAt        DateTime    @default(now()) @updatedAt @db.DateTime(0)
+  donGiaoDich      DonGiaoDich @relation(fields: [donGiaoDichId], references: [donGiaoDichId], onDelete: Restrict, onUpdate: Restrict)
+  ve               Ve?         @relation(fields: [veId], references: [veId], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([loaiGiaoDich, trangThai, laQuyetToanHopLe, thoiDiemHoanTat], map: "ThanhToan_revenue_report_idx")
 }
 
 model HoaDon {

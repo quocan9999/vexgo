@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import bcrypt from 'bcrypt';
+import { ensureDemoPayment } from './demo-revenue.mjs';
 import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import { PrismaClient } from '../apps/api/dist/generated/prisma/client.js';
 import {
@@ -891,15 +892,9 @@ async function ensureImage(db, hangHoa, url, order) {
 }
 
 async function ensurePayment(db, data) {
-  const existing = await db.thanhToan.findFirst({ where: { donGiaoDichId: data.donGiaoDichId, loaiGiaoDich: data.loaiGiaoDich, veId: data.veId ?? null } });
-  if (existing) {
-    const updated = await db.thanhToan.update({ where: byId('ThanhToan', existing.thanhToanId), data });
-    count('ThanhToan', 'update');
-    return updated;
-  }
-  const created = await db.thanhToan.create({ data });
-  count('ThanhToan', 'create');
-  return created;
+  const { payment, operation } = await ensureDemoPayment(db, data);
+  if (operation !== 'preserve') count('ThanhToan', operation);
+  return payment;
 }
 
 async function ensureCargo(db, shipment, cargoType, itemIndex, operatorCode) {

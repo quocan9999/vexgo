@@ -17,6 +17,7 @@ import {
   RefreshCw,
   ArrowLeft,
   RotateCw,
+  X,
 } from 'lucide-react';
 import {
   getAdminAccessToken,
@@ -990,7 +991,7 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
   const isPending = selectedConv?.trangThai === 'CHO_TIEP_NHAN';
 
   return (
-    <div className="flex h-[calc(100vh-120px)] bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+    <div className="flex h-[calc(100vh-175px)] min-h-[600px] bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden">
       {/* ============================================================== */}
       {/* CỘT TRÁI: DANH SÁCH CUỘC TRÒ CHUYỆN (MASTER PANE - F-05 RESPONSIVE) */}
       {/* Trên mobile: ẩn khi đang chọn cuộc trò chuyện (selectedConv !== null) */}
@@ -998,16 +999,23 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
       <div
         className={`${
           selectedConv ? 'hidden md:flex' : 'flex'
-        } w-full md:w-96 border-r border-slate-200 flex-col bg-slate-50 shrink-0`}
+        } w-full md:w-[380px] lg:w-[420px] xl:w-[450px] border-r border-slate-200 flex-col bg-slate-50/70 shrink-0`}
       >
         {/* Header danh sách & Tab lọc */}
-        <div className="p-3 border-b border-slate-200 bg-white space-y-2.5">
+        <div className="p-3.5 md:p-4 border-b border-slate-200 bg-white space-y-3 shrink-0">
           <div className="flex items-center justify-between">
-            <h2 className="font-bold text-sm text-slate-800 flex items-center gap-2">
-              <MessageSquare className="w-4 h-4 text-[var(--admin-blue)]" /> Hộp
-              thư hỗ trợ
-            </h2>
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-2">
+              <h2 className="font-bold text-sm text-slate-900 flex items-center gap-2">
+                <MessageSquare className="w-4 h-4 text-[var(--admin-blue)]" /> Hộp
+                thư hỗ trợ
+              </h2>
+              {totalItems > 0 && (
+                <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+                  {totalItems}
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => {
@@ -1015,18 +1023,20 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                   setRefreshTrigger((k) => k + 1);
                 }}
                 title="Làm mới danh sách"
-                className="p-1 text-slate-400 hover:text-slate-600 rounded transition-colors"
+                aria-label="Làm mới danh sách"
+                className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
               >
                 <RefreshCw
-                  className={`w-3.5 h-3.5 ${loadingConversations ? 'animate-spin' : ''}`}
+                  className={`w-3.5 h-3.5 ${loadingConversations ? 'animate-spin text-[var(--admin-blue)]' : ''}`}
                 />
               </button>
               <span
-                className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${
+                className={`text-xs px-2.5 py-1 rounded-full font-semibold border flex items-center gap-1.5 ${
                   socketConnected
-                    ? 'bg-emerald-50 text-emerald-600'
-                    : 'bg-slate-100 text-slate-500'
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                    : 'bg-slate-100 text-slate-600 border-slate-200'
                 }`}
+                title={socketConnected ? 'Hệ thống realtime đang hoạt động bình thường' : 'Chưa kết nối realtime'}
               >
                 {socketConnected ? '● Trực tuyến' : '○ Ngoại tuyến'}
               </span>
@@ -1035,18 +1045,28 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
 
           {/* Ô tìm kiếm */}
           <div className="relative">
-            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
               placeholder="Tìm khách hàng, số điện thoại..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full text-xs pl-8 pr-3 py-1.5 border border-slate-200 rounded-lg bg-slate-50 focus:bg-white focus:outline-none focus:border-[var(--admin-blue)]"
+              className="w-full text-xs pl-9 pr-8 py-2 border border-slate-200 rounded-xl bg-slate-50/70 focus:bg-white focus:outline-none focus:ring-1 focus:ring-[var(--admin-blue)] focus:border-[var(--admin-blue)] transition-all placeholder:text-slate-400 text-slate-800"
             />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-full cursor-pointer"
+                title="Xóa tìm kiếm"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
 
           {/* Filter Tabs */}
-          <div className="grid grid-cols-4 gap-1 p-0.5 bg-slate-100 rounded-lg text-[11px] font-medium">
+          <div className="grid grid-cols-4 gap-1 p-1 bg-slate-100 rounded-xl text-xs font-semibold">
             {(
               [
                 { key: 'ALL', label: 'Tất cả' },
@@ -1054,32 +1074,59 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                 { key: 'DANG_XU_LY', label: 'Đang chat' },
                 { key: 'DA_DONG', label: 'Đã đóng' },
               ] as const
-            ).map((tab) => (
-              <button
-                key={tab.key}
-                onClick={() => setActiveTab(tab.key)}
-                className={`py-1 rounded-md text-center transition-all ${
-                  activeTab === tab.key
-                    ? 'bg-white text-[var(--admin-blue)] shadow-sm font-semibold'
-                    : 'text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
+            ).map((tab) => {
+              const tabCount =
+                tab.key === 'CHO_TIEP_NHAN'
+                  ? conversations.filter((c) => c.trangThai === 'CHO_TIEP_NHAN').length
+                  : tab.key === 'DANG_XU_LY'
+                    ? conversations.filter((c) => c.trangThai === 'DANG_XU_LY').length
+                    : tab.key === 'DA_DONG'
+                      ? conversations.filter((c) => c.trangThai === 'DA_DONG').length
+                      : 0;
+
+              return (
+                <button
+                  key={tab.key}
+                  aria-label={tab.label}
+                  onClick={() => setActiveTab(tab.key)}
+                  className={`py-1.5 px-1 rounded-lg text-center transition-all flex items-center justify-center gap-1 cursor-pointer ${
+                    activeTab === tab.key
+                      ? 'bg-white text-[var(--admin-blue)] shadow-xs font-bold'
+                      : 'text-slate-600 hover:text-slate-900 font-medium'
+                  }`}
+                >
+                  <span>{tab.label}</span>
+                  {tabCount > 0 && (
+                    <span
+                      aria-hidden="true"
+                      className={`text-[11px] px-1.5 py-0.2 rounded-full font-bold ${
+                        activeTab === tab.key
+                          ? 'bg-blue-100 text-[var(--admin-blue)]'
+                          : 'bg-slate-200 text-slate-700'
+                      }`}
+                    >
+                      {tabCount}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
         </div>
 
         {/* Danh sách các cuộc trò chuyện */}
         <div className="flex-1 overflow-y-auto divide-y divide-slate-100">
           {loadingConversations ? (
-            <div className="flex flex-col items-center justify-center py-12 text-slate-400 gap-2 text-xs">
-              <Loader2 className="w-4 h-4 animate-spin text-[var(--admin-blue)]" />
-              <span>Đang tải danh sách...</span>
+            <div className="flex flex-col items-center justify-center py-16 text-slate-500 gap-2.5 text-xs">
+              <Loader2 className="w-5 h-5 animate-spin text-[var(--admin-blue)]" />
+              <span className="font-medium">Đang tải danh sách cuộc trò chuyện...</span>
             </div>
           ) : conversations.length === 0 ? (
-            <div className="p-8 text-center text-slate-400 text-xs">
-              Không có cuộc trò chuyện nào phù hợp.
+            <div className="p-8 text-center text-slate-500 text-xs flex flex-col items-center justify-center gap-2">
+              <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
+                <MessageSquare className="w-5 h-5" />
+              </div>
+              <p className="font-medium">Không có cuộc trò chuyện nào phù hợp.</p>
             </div>
           ) : (
             <>
@@ -1087,6 +1134,8 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                 const isSelected =
                   selectedConv?.cuocTroChuyenId === c.cuocTroChuyenId;
                 const isWaiting = c.trangThai === 'CHO_TIEP_NHAN';
+                const hasUnread =
+                  c.soTinChuaDoc !== undefined && c.soTinChuaDoc > 0;
 
                 return (
                   <button
@@ -1095,37 +1144,61 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                       adminReconnectRequestIdRef.current++;
                       setSelectedConv(c);
                     }}
-                    className={`w-full text-left p-3 flex items-start gap-3 transition-colors ${
+                    className={`w-full text-left p-3.5 flex items-start gap-3 transition-colors border-l-4 cursor-pointer relative ${
                       isSelected
-                        ? 'bg-[var(--admin-blue)]/5 border-l-4 border-l-[var(--admin-blue)]'
-                        : 'hover:bg-slate-100/60'
+                        ? 'bg-blue-50/80 border-l-[var(--admin-blue)] shadow-2xs'
+                        : hasUnread
+                          ? 'bg-blue-50/30 hover:bg-slate-100/80 border-l-blue-400'
+                          : 'hover:bg-slate-100/70 border-l-transparent'
                     }`}
                   >
-                    <div className="relative shrink-0">
-                      <div className="w-10 h-10 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-xs">
+                    <div className="relative shrink-0 mt-0.5">
+                      <div
+                        className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-xs ${
+                          isSelected
+                            ? 'bg-[var(--admin-blue)] text-white shadow-xs'
+                            : hasUnread
+                              ? 'bg-blue-100 text-[var(--admin-blue)] font-bold'
+                              : 'bg-slate-200 text-slate-700'
+                        }`}
+                      >
                         {c.khachHang.taiKhoan.hoTen.charAt(0).toUpperCase()}
                       </div>
-                      {isWaiting && (
-                        <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-amber-500 rounded-full border-2 border-white animate-pulse" />
-                      )}
+                      {isWaiting ? (
+                        <span
+                          className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-amber-500 rounded-full border-2 border-white animate-pulse"
+                          title="Chờ tiếp nhận"
+                        />
+                      ) : c.trangThai === 'DANG_XU_LY' ? (
+                        <span
+                          className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-white"
+                          title="Đang xử lý"
+                        />
+                      ) : null}
                     </div>
 
                     <div className="flex-1 min-w-0">
+                      {/* Row 1: Tên khách hàng & Thời gian & Badge unread */}
                       <div className="flex items-center justify-between gap-1 mb-0.5">
-                        <span className="font-semibold text-xs text-slate-800 truncate">
+                        <span
+                          className={`text-xs truncate ${
+                            hasUnread
+                              ? 'font-bold text-slate-900'
+                              : 'font-semibold text-slate-800'
+                          }`}
+                        >
                           {c.khachHang.taiKhoan.hoTen}
                         </span>
                         <div className="flex items-center gap-1.5 shrink-0">
-                          {c.soTinChuaDoc !== undefined &&
-                            c.soTinChuaDoc > 0 && (
-                              <span
-                                data-testid="unread-badge"
-                                className="bg-[var(--admin-blue)] text-white text-[10px] font-bold px-1.5 py-0.2 rounded-full"
-                              >
-                                {c.soTinChuaDoc}
-                              </span>
-                            )}
-                          <span className="text-[10px] text-slate-400">
+                          {hasUnread && (
+                            <span
+                              data-testid="unread-badge"
+                              className="bg-[var(--admin-blue)] text-white text-[11px] font-bold px-1.5 py-0.2 rounded-full shadow-2xs"
+                            >
+                              {c.soTinChuaDoc}
+                            </span>
+                          )}
+                          <span className="text-xs text-slate-500 font-mono">
                             {new Date(c.updatedAt).toLocaleTimeString('vi-VN', {
                               hour: '2-digit',
                               minute: '2-digit',
@@ -1134,31 +1207,47 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                         </div>
                       </div>
 
-                      <div className="text-[11px] text-slate-500 truncate mb-1">
+                      {/* Row 2: Số điện thoại + Mã cuộc trò chuyện */}
+                      <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
+                        <span className="font-mono flex items-center gap-1 text-slate-500">
+                          <Phone className="w-3 h-3 text-slate-400 shrink-0" />
+                          {c.khachHang.taiKhoan.soDienThoai}
+                        </span>
+                        <span className="text-[11px] font-mono text-slate-400">
+                          #{c.maCuocTroChuyen}
+                        </span>
+                      </div>
+
+                      {/* Row 3: Tin nhắn xem trước (2 dòng line-clamp-2) */}
+                      <div
+                        className={`text-xs leading-relaxed mb-2 line-clamp-2 ${
+                          hasUnread
+                            ? 'font-medium text-slate-900'
+                            : 'text-slate-600'
+                        }`}
+                      >
                         {c.tinNhanCuoi
                           ? c.tinNhanCuoi.noiDung
                           : 'Cuộc trò chuyện mới'}
                       </div>
 
+                      {/* Row 4: Trạng thái nghiệp vụ */}
                       <div className="flex items-center gap-1.5">
                         {c.trangThai === 'CHO_TIEP_NHAN' && (
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200">
-                            <Clock className="w-2.5 h-2.5" /> Chờ tiếp nhận
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-300">
+                            <Clock className="w-3 h-3 text-amber-600" /> Chờ tiếp nhận
                           </span>
                         )}
                         {c.trangThai === 'DANG_XU_LY' && (
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
-                            <CheckCircle2 className="w-2.5 h-2.5" /> Đang xử lý
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-300">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Đang xử lý
                           </span>
                         )}
                         {c.trangThai === 'DA_DONG' && (
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600">
-                            <Archive className="w-2.5 h-2.5" /> Đã đóng
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-700 border border-slate-300">
+                            <Archive className="w-3 h-3 text-slate-500" /> Đã đóng
                           </span>
                         )}
-                        <span className="text-[10px] text-slate-400 truncate">
-                          {c.khachHang.taiKhoan.soDienThoai}
-                        </span>
                       </div>
                     </div>
                   </button>
@@ -1172,7 +1261,7 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                     type="button"
                     onClick={handleLoadMore}
                     disabled={loadingMore}
-                    className="w-full py-2 px-3 text-xs font-semibold text-[var(--admin-blue)] hover:bg-[var(--admin-blue)]/5 rounded-lg border border-[var(--admin-blue)]/20 transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50"
+                    className="w-full py-2.5 px-3 text-xs font-semibold text-[var(--admin-blue)] hover:bg-[var(--admin-blue)]/5 rounded-xl border border-[var(--admin-blue)]/20 transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
                   >
                     {loadingMore ? (
                       <>
@@ -1203,54 +1292,104 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
         } flex-1 flex-col bg-white overflow-hidden`}
       >
         {!selectedConv ? (
-          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-slate-50">
-            <div className="w-16 h-16 bg-white rounded-2xl shadow-sm border border-slate-200 flex items-center justify-center text-slate-400 mb-3">
-              <MessageSquare className="w-8 h-8" />
+          <div className="flex-1 flex flex-col items-center justify-center p-6 md:p-10 text-center bg-gradient-to-b from-slate-50/40 to-white overflow-y-auto">
+            <div className="max-w-md w-full flex flex-col items-center">
+              <div className="w-16 h-16 md:w-20 md:h-20 bg-blue-50/80 rounded-3xl border border-blue-100 flex items-center justify-center text-[var(--admin-blue)] shadow-xs mb-4">
+                <MessageSquare className="w-8 h-8 md:w-10 md:h-10" />
+              </div>
+              <h3 className="font-bold text-base md:text-lg text-slate-900">
+                Chọn cuộc trò chuyện
+              </h3>
+              <p className="text-xs md:text-sm text-slate-500 mt-1.5 max-w-sm leading-relaxed">
+                Chọn một khách hàng từ danh sách bên trái để xem nội dung và trả
+                lời hỗ trợ.
+              </p>
+
+              {/* Quick Metrics Cards */}
+              <div className="grid grid-cols-3 gap-3 w-full mt-6">
+                <div className="p-3 bg-white border border-slate-200/80 rounded-xl text-center shadow-2xs">
+                  <div className="text-lg font-bold text-amber-600 font-mono">
+                    {conversations.filter((c) => c.trangThai === 'CHO_TIEP_NHAN').length}
+                  </div>
+                  <div className="text-[11px] font-semibold text-slate-600 mt-0.5">Chờ nhận</div>
+                </div>
+                <div className="p-3 bg-white border border-slate-200/80 rounded-xl text-center shadow-2xs">
+                  <div className="text-lg font-bold text-emerald-600 font-mono">
+                    {conversations.filter((c) => c.trangThai === 'DANG_XU_LY').length}
+                  </div>
+                  <div className="text-[11px] font-semibold text-slate-600 mt-0.5">Đang chat</div>
+                </div>
+                <div className="p-3 bg-white border border-slate-200/80 rounded-xl text-center shadow-2xs">
+                  <div className="text-lg font-bold text-slate-700 font-mono">
+                    {conversations.filter((c) => c.trangThai === 'DA_DONG').length}
+                  </div>
+                  <div className="text-[11px] font-semibold text-slate-600 mt-0.5">Đã đóng</div>
+                </div>
+              </div>
+
+              {/* Quick action button */}
+              {conversations.some((c) => c.trangThai === 'CHO_TIEP_NHAN') && (
+                <div className="mt-6 w-full">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const firstWaiting = conversations.find((c) => c.trangThai === 'CHO_TIEP_NHAN');
+                      if (firstWaiting) {
+                        adminReconnectRequestIdRef.current++;
+                        setSelectedConv(firstWaiting);
+                      }
+                    }}
+                    className="w-full py-2.5 px-4 bg-[var(--admin-blue)] hover:bg-[var(--admin-blue-hover)] text-white font-semibold text-xs rounded-xl shadow-xs transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    <span>Tiếp nhận hội thoại chờ gần nhất</span>
+                  </button>
+                </div>
+              )}
+
             </div>
-            <h3 className="font-bold text-sm text-slate-700">
-              Chọn cuộc trò chuyện
-            </h3>
-            <p className="text-xs text-slate-400 mt-1 max-w-sm">
-              Chọn một khách hàng từ danh sách bên trái để xem nội dung và trả
-              lời hỗ trợ.
-            </p>
           </div>
         ) : (
           <>
             {/* Topbar cuộc trò chuyện */}
-            <div className="p-3 border-b border-slate-200 flex items-center justify-between bg-white shrink-0">
-              <div className="flex items-center gap-2 md:gap-3 min-w-0">
+            <div className="p-3.5 md:p-4 border-b border-slate-200 flex items-center justify-between bg-white shrink-0">
+              <div className="flex items-center gap-2.5 md:gap-3.5 min-w-0">
                 {/* Nút quay lại danh sách trên mobile (F-05) */}
                 <button
                   type="button"
                   onClick={() => setSelectedConv(null)}
-                  className="md:hidden p-1.5 text-slate-600 hover:text-[var(--admin-blue)] hover:bg-slate-100 rounded-lg shrink-0"
+                  className="md:hidden p-2 text-slate-600 hover:text-[var(--admin-blue)] hover:bg-slate-100 rounded-lg shrink-0 cursor-pointer"
                   title="Quay lại danh sách"
+                  aria-label="Quay lại danh sách"
                 >
-                  <ArrowLeft className="w-4 h-4" />
+                  <ArrowLeft className="w-5 h-5" />
                 </button>
 
-                <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-slate-700 font-bold text-xs shrink-0">
+                <div className="w-10 h-10 rounded-full bg-blue-100 text-[var(--admin-blue)] flex items-center justify-center font-bold text-sm shrink-0 shadow-2xs">
                   {selectedConv.khachHang.taiKhoan.hoTen
                     .charAt(0)
                     .toUpperCase()}
                 </div>
                 <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-bold text-xs text-slate-800 truncate">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="font-bold text-sm text-slate-900 truncate">
                       {selectedConv.khachHang.taiKhoan.hoTen}
                     </h3>
-                    <span className="text-[11px] text-slate-500 flex items-center gap-1 font-mono truncate">
+                    <a
+                      href={`tel:${selectedConv.khachHang.taiKhoan.soDienThoai}`}
+                      className="text-xs text-slate-600 hover:text-[var(--admin-blue)] flex items-center gap-1 font-mono transition-colors"
+                      title="Gọi điện cho khách hàng"
+                    >
                       <Phone className="w-3 h-3 text-slate-400 shrink-0" />
                       {selectedConv.khachHang.taiKhoan.soDienThoai}
-                    </span>
+                    </a>
                   </div>
-                  <div className="text-[10px] text-slate-400 flex items-center gap-2 mt-0.5 truncate">
-                    <span>Mã: {selectedConv.maCuocTroChuyen}</span>
+                  <div className="text-xs text-slate-500 flex items-center gap-2 mt-0.5 truncate">
+                    <span className="font-mono">Mã: {selectedConv.maCuocTroChuyen}</span>
                     <span>•</span>
                     <span className="truncate">
                       Người xử lý:{' '}
-                      <strong className="text-slate-600">
+                      <strong className="text-slate-700 font-semibold">
                         {selectedConv.nhanVien?.taiKhoan.hoTen ||
                           'Chưa tiếp nhận'}
                       </strong>
@@ -1265,7 +1404,7 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                   <button
                     onClick={handleClaim}
                     disabled={actionLoading}
-                    className="px-3 py-1.5 bg-[var(--admin-blue)] text-white rounded-lg text-xs font-semibold hover:bg-[var(--admin-blue-hover)] transition-colors flex items-center gap-1.5 shadow-sm disabled:opacity-50"
+                    className="px-3.5 py-2 bg-[var(--admin-blue)] text-white rounded-xl text-xs font-semibold hover:bg-[var(--admin-blue-hover)] transition-all flex items-center gap-1.5 shadow-xs disabled:opacity-50 cursor-pointer"
                   >
                     {actionLoading ? (
                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -1281,7 +1420,7 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                   <button
                     onClick={handleClose}
                     disabled={actionLoading}
-                    className="px-3 py-1.5 border border-slate-200 text-slate-600 rounded-lg text-xs font-medium hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 transition-colors flex items-center gap-1 disabled:opacity-50"
+                    className="px-3.5 py-2 border border-slate-200 text-slate-700 rounded-xl text-xs font-medium hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 transition-all flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
                   >
                     <XCircle className="w-3.5 h-3.5" />
                     <span className="hidden sm:inline">Kết thúc</span>
@@ -1291,7 +1430,7 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
             </div>
 
             {errorMessage && (
-              <div className="px-3 py-2 bg-rose-50 border-b border-rose-100 text-rose-700 text-xs flex items-center gap-2">
+              <div className="px-3.5 py-2 bg-rose-50 border-b border-rose-100 text-rose-700 text-xs flex items-center gap-2 font-medium">
                 <AlertCircle className="w-4 h-4 shrink-0" />
                 <span>{errorMessage}</span>
               </div>
@@ -1301,12 +1440,12 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
             <div
               ref={transcriptRef}
               data-testid="admin-chat-transcript"
-              className="flex-1 overflow-y-auto p-4 bg-slate-50/50 space-y-3"
+              className="flex-1 overflow-y-auto p-4 md:p-5 bg-slate-50/50 space-y-3.5"
             >
               {loadingMessages ? (
-                <div className="flex items-center justify-center py-12 text-slate-400 gap-2 text-xs">
-                  <Loader2 className="w-4 h-4 animate-spin" /> Đang tải lịch sử
-                  tin nhắn...
+                <div className="flex items-center justify-center py-16 text-slate-500 gap-2.5 text-xs font-medium">
+                  <Loader2 className="w-5 h-5 animate-spin text-[var(--admin-blue)]" />
+                  <span>Đang tải lịch sử tin nhắn...</span>
                 </div>
               ) : (
                 <>
@@ -1316,12 +1455,12 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                         type="button"
                         onClick={handleLoadOlderMessages}
                         disabled={loadingOlderMessages}
-                        className="inline-flex items-center gap-1.5 px-3 py-1 bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-full text-xs font-medium shadow-2xs transition-colors disabled:opacity-50"
+                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-full text-xs font-medium shadow-2xs transition-colors disabled:opacity-50 cursor-pointer"
                       >
                         {loadingOlderMessages ? (
-                          <Loader2 className="w-3 h-3 animate-spin" />
+                          <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--admin-blue)]" />
                         ) : (
-                          <Clock className="w-3 h-3 text-slate-400" />
+                          <Clock className="w-3.5 h-3.5 text-slate-400" />
                         )}
                         <span>
                           {loadingOlderMessages
@@ -1339,8 +1478,8 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
 
                     if (isSystem) {
                       return (
-                        <div key={msg.tinNhanId} className="text-center my-2">
-                          <span className="inline-block text-[10px] text-slate-500 bg-slate-200/60 px-3 py-1 rounded-full font-medium">
+                        <div key={msg.tinNhanId} className="text-center my-2.5">
+                          <span className="inline-block text-xs text-slate-600 bg-slate-200/70 border border-slate-200/80 px-3.5 py-1 rounded-full font-medium">
                             {msg.noiDung}
                           </span>
                         </div>
@@ -1350,40 +1489,42 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                     return (
                       <div
                         key={msg.tinNhanId}
-                        className={`flex gap-2.5 ${isStaff ? 'flex-row-reverse' : 'flex-row'}`}
+                        className={`flex gap-2.5 md:gap-3 ${isStaff ? 'flex-row-reverse' : 'flex-row'}`}
                       >
                         <div
-                          className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-xs font-semibold ${
+                          className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-xs font-semibold shadow-2xs ${
                             isStaff
                               ? 'bg-[var(--admin-blue)] text-white'
-                              : 'bg-slate-200 text-slate-700'
+                              : 'bg-white border border-slate-200 text-slate-700'
                           }`}
                         >
-                          {isStaff ? 'NV' : <User className="w-4 h-4" />}
+                          {isStaff ? 'NV' : <User className="w-4 h-4 text-slate-500" />}
                         </div>
 
                         <div
-                          className={`flex flex-col gap-0.5 max-w-[70%] ${
+                          className={`flex flex-col gap-1 max-w-[75%] ${
                             isStaff ? 'items-end' : 'items-start'
                           }`}
                         >
-                          <div className="flex items-center gap-1">
-                            <span className="text-[10px] text-slate-400">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs text-slate-500">
                               {isStaff
                                 ? msg.taiKhoanGui?.hoTen || 'Nhân viên'
                                 : 'Khách hàng'}{' '}
                               •{' '}
-                              {new Date(msg.createdAt).toLocaleTimeString(
-                                'vi-VN',
-                                {
-                                  hour: '2-digit',
-                                  minute: '2-digit',
-                                },
-                              )}
+                              <span className="font-mono">
+                                {new Date(msg.createdAt).toLocaleTimeString(
+                                  'vi-VN',
+                                  {
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                  },
+                                )}
+                              </span>
                             </span>
                             {isPendingMsg && (
-                              <span className="text-[9px] text-slate-400 flex items-center gap-0.5">
-                                <Clock className="w-2.5 h-2.5 animate-spin" />{' '}
+                              <span className="text-[11px] text-slate-500 flex items-center gap-1 font-medium">
+                                <Clock className="w-3 h-3 animate-spin text-[var(--admin-blue)]" />{' '}
                                 Đang gửi
                               </span>
                             )}
@@ -1401,12 +1542,12 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                                   msg.tinNhanId,
                                 );
                             }}
-                            className={`p-3 rounded-2xl text-xs leading-relaxed shadow-sm break-words transition-opacity ${
+                            className={`p-3.5 rounded-2xl text-xs leading-relaxed shadow-2xs break-words transition-opacity ${
                               isStaff
                                 ? isFailedMsg
                                   ? 'bg-rose-50 border border-rose-300 text-rose-800 rounded-tr-none'
                                   : isPendingMsg
-                                    ? 'bg-[var(--admin-blue)]/75 text-white rounded-tr-none'
+                                    ? 'bg-[var(--admin-blue)]/80 text-white rounded-tr-none'
                                     : 'bg-[var(--admin-blue)] text-white rounded-tr-none'
                                 : 'bg-white border border-slate-200 text-slate-800 rounded-tl-none'
                             }`}
@@ -1414,21 +1555,21 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                             {msg.noiDung}
                           </div>
                           {isStaff && !isPendingMsg && !isFailedMsg && (
-                            <span className="text-xs text-[var(--admin-text-muted)]">
+                            <span className="text-xs text-slate-500 font-medium">
                               {msg.trangThai === 'DA_DOC' ? 'Đã đọc' : 'Đã gửi'}
                             </span>
                           )}
                           {isFailedMsg && (
-                            <div className="flex items-center gap-1 mt-0.5 text-[10px] text-rose-600">
-                              <AlertCircle className="w-3 h-3" />
+                            <div className="flex items-center gap-1.5 mt-0.5 text-xs text-rose-600 font-medium">
+                              <AlertCircle className="w-3.5 h-3.5" />
                               <span>Gửi thất bại</span>
                               <button
                                 type="button"
                                 onClick={() => handleRetryMessage(msg)}
                                 disabled={sending}
-                                className="font-semibold underline hover:text-rose-700 flex items-center gap-0.5 ml-1"
+                                className="font-semibold underline hover:text-rose-700 flex items-center gap-1 ml-1 cursor-pointer"
                               >
-                                <RotateCw className="w-2.5 h-2.5" /> Thử lại
+                                <RotateCw className="w-3 h-3" /> Thử lại
                               </button>
                             </div>
                           )}
@@ -1438,8 +1579,8 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                   })}
 
                   {customerTyping && (
-                    <div className="flex items-center gap-2 text-xs text-slate-400 italic">
-                      <User className="w-3.5 h-3.5 animate-pulse" />
+                    <div className="flex items-center gap-2 text-xs text-slate-500 italic p-1 bg-white/60 rounded-lg inline-flex">
+                      <User className="w-3.5 h-3.5 animate-pulse text-[var(--admin-blue)]" />
                       <span>Khách hàng đang nhập...</span>
                     </div>
                   )}
@@ -1450,18 +1591,20 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
             </div>
 
             {/* Ô nhập tin nhắn */}
-            <div className="p-3 bg-white border-t border-slate-200 shrink-0">
+            <div className="p-3.5 md:p-4 bg-white border-t border-slate-200 shrink-0">
               {isClosed ? (
-                <div className="p-2.5 bg-slate-100 text-slate-500 text-xs rounded-xl text-center font-medium">
+                <div className="p-3 bg-slate-100 text-slate-600 text-xs rounded-xl text-center font-medium border border-slate-200">
                   Cuộc trò chuyện này đã kết thúc. Không thể gửi thêm tin nhắn.
                 </div>
               ) : isPending ? (
-                <div className="p-2.5 bg-amber-50 text-amber-700 border border-amber-200 text-xs rounded-xl text-center flex items-center justify-center gap-2 font-medium">
-                  <AlertCircle className="w-4 h-4" /> Vui lòng bấm &quot;Tiếp
-                  nhận hỗ trợ&quot; ở trên để bắt đầu phản hồi cho khách hàng.
+                <div className="p-3 bg-amber-50 text-amber-800 border border-amber-200 text-xs rounded-xl text-center flex items-center justify-center gap-2 font-medium">
+                  <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>
+                    Vui lòng bấm &quot;Tiếp nhận hỗ trợ&quot; ở trên để bắt đầu phản hồi cho khách hàng.
+                  </span>
                 </div>
               ) : (
-                <div className="flex gap-2">
+                <div className="flex gap-2.5 items-center">
                   <input
                     type="text"
                     value={inputValue}
@@ -1469,12 +1612,12 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
                     onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
                     placeholder="Nhập nội dung phản hồi khách hàng..."
                     disabled={sending}
-                    className="flex-1 h-11 px-4 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:border-[var(--admin-blue)] text-xs"
+                    className="flex-1 h-11 px-4 rounded-xl border border-slate-200 bg-slate-50/70 focus:bg-white focus:outline-none focus:ring-1 focus:ring-[var(--admin-blue)] focus:border-[var(--admin-blue)] text-xs text-slate-800 transition-colors"
                   />
                   <button
                     onClick={handleSendMessage}
                     disabled={!inputValue.trim() || sending}
-                    className="px-5 h-11 rounded-xl bg-[var(--admin-blue)] text-white text-xs font-semibold flex items-center justify-center gap-1.5 hover:bg-[var(--admin-blue-hover)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                    className="px-5 h-11 rounded-xl bg-[var(--admin-blue)] text-white text-xs font-semibold flex items-center justify-center gap-1.5 hover:bg-[var(--admin-blue-hover)] transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-xs shrink-0 cursor-pointer"
                   >
                     {sending ? (
                       <Loader2 className="w-4 h-4 animate-spin" />

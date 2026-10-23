@@ -218,17 +218,17 @@ describe('Trip Form Composition & Validation', () => {
   ])(
     'when the create checkbox is %s, submits acceptsShipments=%s',
     async (state, acceptsShipments) => {
-      const fetchMock = vi
-        .spyOn(globalThis, 'fetch')
-        .mockResolvedValue(
-          new Response(JSON.stringify({ data: mockTrip }), { status: 201 }),
-        );
+      const onSaved = vi.fn();
+      const savedTrip = { ...mockTrip, acceptsShipments };
+      const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) =>
+        new Response(JSON.stringify({ data: String(url).includes('/code-preview') ? { code: 'FUTA-CX-10102026-0001' } : savedTrip }), { status: init?.method === 'POST' ? 201 : 200 }),
+      );
       render(
         <TripFormDialog
           onClose={vi.fn()}
           onRetryRouteOptions={vi.fn()}
           onRetryVehicleOptions={vi.fn()}
-          onSaved={vi.fn()}
+          onSaved={onSaved}
           routeOptions={routeOptionsSuccess}
           vehicleOptions={vehicleOptionsSuccess}
         />,
@@ -243,9 +243,7 @@ describe('Trip Form Composition & Validation', () => {
       expect(checkbox.checked).toBe(false);
       if (state === 'selected') fireEvent.click(checkbox);
 
-      fireEvent.change(within(dialog).getByLabelText(/Mã chuyến xe/), {
-        target: { value: 'FUTA-CX-001' },
-      });
+      expect((within(dialog).getByLabelText(/Mã chuyến xe/) as HTMLInputElement).disabled).toBe(true);
       fireEvent.change(within(dialog).getByLabelText(/Tuyến xe/), {
         target: { value: '1' },
       });
@@ -262,10 +260,14 @@ describe('Trip Form Composition & Validation', () => {
         within(dialog).getByRole('button', { name: 'Tạo chuyến xe' }),
       );
 
-      await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
-      const [, init] = fetchMock.mock.calls[0];
+      await waitFor(() => expect(onSaved).toHaveBeenCalledWith(savedTrip));
+      expect((within(dialog).getByLabelText(/Mã chuyến xe/) as HTMLInputElement).value).toBe('FUTA-CX-10102026-0001');
+      const createRequests = () => fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST');
+      await waitFor(() => expect(createRequests()).toHaveLength(1));
+      const [createUrl, init] = createRequests()[0];
+      expect(new URL(String(createUrl)).pathname).toBe('/api/v1/trips');
+      expect(fetchMock.mock.calls.filter(([url]) => String(url).includes('/code-preview'))).toHaveLength(1);
       expect(JSON.parse(init?.body as string)).toEqual({
-        code: 'FUTA-CX-001',
         routeId: 1,
         vehicleId: 8,
         departureDate: '2026-10-10',
@@ -693,7 +695,7 @@ describe('Trip write service API contracts', () => {
 });
 
 describe('Trip lifecycle & cancellation action gates in detail sheet', () => {
-  it('renders "Chỉnh sửa", "Bắt đầu chạy", and "Hủy chuyến" for CHUA_KHOI_HANH with full write permissions', () => {
+  it('renders edit and cancel, but never manual start, for pending trips with full permissions', () => {
     setEmployeeAdminTestSession(['trip:read', 'trip:update', 'trip:cancel']);
     const html = renderToStaticMarkup(
       <TripDetailSheet
@@ -703,7 +705,7 @@ describe('Trip lifecycle & cancellation action gates in detail sheet', () => {
       />,
     );
     expect(html).toContain('Chỉnh sửa');
-    expect(html).toContain('Bắt đầu chạy');
+    expect(html).not.toContain('Bắt đầu chạy');
     expect(html).toContain('Hủy chuyến');
     expect(html).not.toContain('Hoàn thành chuyến');
   });
@@ -762,6 +764,8 @@ describe('Trip lifecycle & cancellation action gates in detail sheet', () => {
     expect(readOnlyHtml).not.toContain('Chỉnh sửa');
     expect(readOnlyHtml).not.toContain('Bắt đầu chạy');
     expect(readOnlyHtml).not.toContain('Hủy chuyến');
+    const readOnlyRunningHtml = renderToStaticMarkup(<TripDetailSheet initialTrip={{ ...mockTrip, status: 'DANG_CHAY' }} onClose={vi.fn()} tripId={101} />);
+    expect(readOnlyRunningHtml).not.toContain('Hoàn thành chuyến');
 
     setEmployeeAdminTestSession(['trip:read', 'trip:update']);
     const updateOnlyHtml = renderToStaticMarkup(
@@ -772,8 +776,11 @@ describe('Trip lifecycle & cancellation action gates in detail sheet', () => {
       />,
     );
     expect(updateOnlyHtml).toContain('Chỉnh sửa');
-    expect(updateOnlyHtml).toContain('Bắt đầu chạy');
+    expect(updateOnlyHtml).not.toContain('Bắt đầu chạy');
     expect(updateOnlyHtml).not.toContain('Hủy chuyến');
+    const updateRunningHtml = renderToStaticMarkup(<TripDetailSheet initialTrip={{ ...mockTrip, status: 'DANG_CHAY' }} onClose={vi.fn()} tripId={101} />);
+    expect(updateRunningHtml).toContain('Hoàn thành chuyến');
+    expect(updateRunningHtml).not.toContain('Bắt đầu chạy');
 
     setEmployeeAdminTestSession(['trip:read', 'trip:cancel']);
     const cancelOnlyHtml = renderToStaticMarkup(

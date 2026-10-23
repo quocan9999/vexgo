@@ -32,6 +32,13 @@ const company = {
   updatedAt: new Date('2026-09-22T07:34:00.000Z'),
 };
 const prisma = {
+  $queryRaw: vi.fn(async (parts: TemplateStringsArray) => {
+    const sql = parts.join('?');
+    if (sql.includes('FROM NhaXe')) return [{ maNhaXe: 'FUTA' }];
+    if (sql.includes('FROM TuyenXe')) return [{ code: 'FUTA-TX-0099' }];
+    return [];
+  }),
+  $executeRaw: vi.fn().mockResolvedValue(1),
   nhaXe: { findUnique: vi.fn() },
   $transaction: vi.fn((operation: (transaction: Prisma.TransactionClient) => Promise<unknown>) =>
     operation(prisma as unknown as Prisma.TransactionClient),
@@ -49,7 +56,7 @@ const prisma = {
 } as unknown as PrismaService;
 const service = new RoutesService(prisma);
 const createInput = {
-  code: 'FUTA-TX-0100',
+  code: 'CLIENT-CANNOT-CHOOSE',
   origin: 'TP.HCM',
   destination: 'Đà Lạt',
   durationMinutes: 420,

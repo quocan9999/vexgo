@@ -81,7 +81,10 @@ export function useTrips() {
       controller.signal,
     )
       .then((data) => {
-        if (current) setResult({ key, page: data });
+        if (current) {
+          setResult({ key, page: data });
+          setError(null);
+        }
       })
       .catch((requestError: unknown) => {
         if (current && !controller.signal.aborted) {
@@ -111,6 +114,13 @@ export function useTrips() {
     departureDate,
     refreshCount,
   ]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') setRefreshCount((count) => count + 1);
+    }, 5_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   function updateSearch(value: string) {
     setLoading(value.trim() !== search);

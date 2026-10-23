@@ -69,7 +69,14 @@ function createService() {
     hangHoa: { findMany: vi.fn() },
     tuyenXe: { findFirst: vi.fn() },
     xe: { findFirst: vi.fn() },
-    $queryRaw: vi.fn().mockResolvedValue([{ xeId: 1 }]),
+    $queryRaw: vi.fn(async (parts: TemplateStringsArray) => {
+      const sql = parts.join('?');
+      if (sql.includes('FROM NhaXe')) return [{ maNhaXe: 'FUTA' }];
+      if (sql.includes('FROM ChuyenXe')) return [{ code: 'FUTA-CX-20102026-0098' }];
+      if (sql.includes('FROM BoDemMaNghiepVu')) return [];
+      return [{ xeId: 1 }];
+    }),
+    $executeRaw: vi.fn().mockResolvedValue(1),
     $transaction: vi.fn(),
   };
   prisma.$transaction.mockImplementation(
@@ -718,32 +725,6 @@ describe('TripsService create (05.2)', () => {
     });
   });
 
-  it('throws 409 TRIP_CODE_EXISTS when trip code already exists', async () => {
-    const { prisma, service } = createService();
-    prisma.tuyenXe.findFirst.mockResolvedValue({
-      tuyenXeId: 8,
-      nhaXeId: 3,
-      trangThai: 'HOAT_DONG',
-    });
-    prisma.xe.findFirst.mockResolvedValue({
-      xeId: 4,
-      nhaXeId: 3,
-      trangThai: 'HOAT_DONG',
-      ghes: [{ gheId: 1 }, { gheId: 2 }],
-    });
-    prisma.chuyenXe.findFirst.mockResolvedValue({ chuyenXeId: 10 });
-
-    await expect(
-      service.create(createDto, tenantPrincipal as never),
-    ).rejects.toMatchObject({
-      status: 409,
-      response: {
-        error: 'TRIP_CODE_EXISTS',
-        message: 'Mã chuyến xe đã tồn tại.',
-      },
-    });
-  });
-
   it('throws 409 TRIP_VEHICLE_SCHEDULE_CONFLICT when vehicle has schedule conflict in create', async () => {
     const { prisma, service } = createService();
     prisma.tuyenXe.findFirst.mockResolvedValue({
@@ -757,9 +738,7 @@ describe('TripsService create (05.2)', () => {
       trangThai: 'HOAT_DONG',
       ghes: [{ gheId: 1 }, { gheId: 2 }],
     });
-    prisma.chuyenXe.findFirst
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce({ chuyenXeId: 88 });
+    prisma.chuyenXe.findFirst.mockResolvedValueOnce({ chuyenXeId: 88 });
 
     await expect(
       service.create(createDto, tenantPrincipal as never),
@@ -797,7 +776,7 @@ describe('TripsService create (05.2)', () => {
     const createdTrip = {
       ...firstTrip,
       chuyenXeId: 99,
-      maChuyenXe: 'FUTA-CX-99',
+      maChuyenXe: 'FUTA-CX-20102026-0099',
       gioDen: new Date('1970-01-01T05:00:00.000Z'),
       nhanGuiHang: false,
       sucChuaXeMay: 2,
@@ -813,7 +792,7 @@ describe('TripsService create (05.2)', () => {
     expect(prisma.$queryRaw).toHaveBeenCalled();
     expect(prisma.chuyenXe.create).toHaveBeenCalledWith({
       data: {
-        maChuyenXe: 'FUTA-CX-99',
+        maChuyenXe: 'FUTA-CX-20102026-0099',
         ngayKhoiHanh: new Date('2026-10-20T00:00:00.000Z'),
         gioKhoiHanh: new Date('1970-01-01T08:00:00.000Z'),
         gioDen: new Date('1970-01-01T05:00:00.000Z'),
