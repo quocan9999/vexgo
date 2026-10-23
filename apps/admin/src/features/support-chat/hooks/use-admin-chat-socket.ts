@@ -2,14 +2,12 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
+import { getApiBaseUrl } from '@/lib/api-url';
 import {
   getAdminAccessToken,
   refreshAdminAccessToken,
 } from '@/features/admin-auth/services/admin-auth';
 import { AdminSupportConversation, AdminSupportMessage } from '../types';
-
-const SOCKET_SERVER_URL =
-  process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:4000';
 
 export interface UseAdminChatSocketProps {
   token: string | null;
@@ -38,7 +36,6 @@ export function useAdminChatSocket({
   onReconnected,
 }: UseAdminChatSocketProps) {
   const socketRef = useRef<Socket | null>(null);
-  const wasConnectedRef = useRef(false);
   const [isConnected, setIsConnected] = useState(false);
   const [connectionRevision, setConnectionRevision] = useState(0);
   const [customerTyping, setCustomerTyping] = useState(false);
@@ -64,7 +61,6 @@ export function useAdminChatSocket({
 
   useEffect(() => {
     if (!token) {
-      wasConnectedRef.current = false;
       if (socketRef.current) {
         socketRef.current.disconnect();
         socketRef.current = null;
@@ -72,7 +68,11 @@ export function useAdminChatSocket({
       return;
     }
 
-    const socket = io(`${SOCKET_SERVER_URL}/chat`, {
+    // REST and realtime must reach the same backend unless explicitly split.
+    const socketOrigin = new URL(
+      process.env.NEXT_PUBLIC_SOCKET_URL?.trim() || getApiBaseUrl(),
+    ).origin;
+    const socket = io(`${socketOrigin}/chat`, {
       auth: { token },
       transports: ['websocket', 'polling'],
       reconnectionAttempts: 5,
@@ -104,10 +104,9 @@ export function useAdminChatSocket({
       if (!isCurrentSocket()) return;
       setIsConnected(true);
       setConnectionRevision((value) => value + 1);
-      if (wasConnectedRef.current || activeConversationIdRef.current !== null) {
-        onReconnectedRef.current?.();
-      }
-      wasConnectedRef.current = true;
+      // Inbox REST may finish before the first authenticated socket connection.
+      // Resync then too, including conversations created during that gap.
+      onReconnectedRef.current?.();
     });
 
     socket.on('disconnect', () => {
@@ -169,7 +168,6 @@ export function useAdminChatSocket({
 
     return () => {
       disposed = true;
-      wasConnectedRef.current = false;
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
       socket.disconnect();
       socketRef.current = null;
