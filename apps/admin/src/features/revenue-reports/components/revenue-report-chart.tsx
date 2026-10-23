@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState, type KeyboardEvent } from 'react';
+import { useId, useRef, useState, type KeyboardEvent } from 'react';
 import type {
   RevenueReportGroupBy,
   RevenueReportSeriesItem,
@@ -59,8 +59,12 @@ export function RevenueReportChart({
   groupBy,
   series,
 }: RevenueReportChartProps) {
-  const pointRefs = useRef<Array<HTMLSpanElement | null>>([]);
+  const pointRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const [activePointIndex, setActivePointIndex] = useState(0);
+  const [hoveredPointIndex, setHoveredPointIndex] = useState<number | null>(null);
+  const [focusedPointIndex, setFocusedPointIndex] = useState<number | null>(null);
+  const [tooltipDismissed, setTooltipDismissed] = useState(false);
+  const tooltipId = useId();
 
   const amounts = series.map(({ netRevenue }) => BigInt(netRevenue));
   let minimum = amounts.reduce(
@@ -92,6 +96,9 @@ export function RevenueReportChart({
   const periodLabels = getPeriodLabelIndices(series.length);
   const focusablePointIndex = Math.min(activePointIndex, points.length - 1);
 
+  const tooltipIndex = hoveredPointIndex ?? focusedPointIndex;
+  const tooltipPoint = !tooltipDismissed && tooltipIndex !== null ? points[tooltipIndex] : undefined;
+
   function focusPoint(index: number) {
     const nextIndex = Math.max(0, Math.min(points.length - 1, index));
     setActivePointIndex(nextIndex);
@@ -99,10 +106,12 @@ export function RevenueReportChart({
   }
 
   function handlePointKeyDown(
-    event: KeyboardEvent<HTMLSpanElement>,
+    event: KeyboardEvent<HTMLButtonElement>,
     index: number,
   ) {
-    if (event.key === 'ArrowLeft') {
+    if (event.key === 'Escape') {
+      setTooltipDismissed(true);
+    } else if (event.key === 'ArrowLeft') {
       event.preventDefault();
       focusPoint(index - 1);
     } else if (event.key === 'ArrowRight') {
@@ -133,7 +142,7 @@ export function RevenueReportChart({
           );
         })}
       </div>
-      <div className={styles.chartPlot}>
+      <div className={styles.chartPlot} onPointerLeave={() => setHoveredPointIndex(null)}>
         {ticks.map((tick) => {
           const top = plotY(tick, minimum, maximum);
           return (
@@ -156,23 +165,51 @@ export function RevenueReportChart({
         {points.map(({ item, x, y }, index) => {
           const tooltip = `${formatPeriod(item.period, groupBy)}: ${formatRevenueVnd(item.netRevenue)}`;
           return (
-            <span
+            <button
               aria-label={tooltip}
+              aria-describedby={tooltipPoint?.item.period === item.period ? tooltipId : undefined}
               className={styles.chartPoint}
               key={item.period}
-              onFocus={() => setActivePointIndex(index)}
+              onFocus={() => {
+                setActivePointIndex(index);
+                setFocusedPointIndex(index);
+                setTooltipDismissed(false);
+              }}
+              onBlur={() => setFocusedPointIndex(null)}
               onKeyDown={(event) => handlePointKeyDown(event, index)}
-              onMouseEnter={() => setActivePointIndex(index)}
+              onPointerEnter={() => {
+                setHoveredPointIndex(index);
+                setTooltipDismissed(false);
+              }}
               ref={(element) => {
                 pointRefs.current[index] = element;
               }}
-              role="img"
+              type="button"
               style={{ left: `${x}%`, top: `${y}%` }}
               tabIndex={focusablePointIndex === index ? 0 : -1}
-              title={tooltip}
             />
           );
         })}
+        {tooltipPoint && (
+          <div
+            className={styles.chartTooltip}
+            id={tooltipId}
+            role="tooltip"
+            style={{
+              left: `clamp(0px, ${tooltipPoint.x}%, max(0px, calc(100% - 260px)))`,
+              ...(tooltipPoint.y >= 50
+                ? { bottom: `${100 - tooltipPoint.y}%`, transform: 'translateY(-16px)' }
+                : { top: `${tooltipPoint.y}%`, transform: 'translateY(16px)' }),
+            }}
+          >
+            <strong>{groupBy === 'day' ? 'Ngày ' : groupBy === 'month' ? 'Tháng ' : ''}{formatPeriod(tooltipPoint.item.period, groupBy)}</strong>
+            <dl>
+              <div><dt>Doanh thu ròng</dt><dd>{formatRevenueVnd(tooltipPoint.item.netRevenue)}</dd></div>
+              <div><dt>Tiền đã thu</dt><dd>{formatRevenueVnd(tooltipPoint.item.grossReceipts)}</dd></div>
+              <div><dt>Tiền hoàn</dt><dd>{formatRevenueVnd(tooltipPoint.item.refundAmount)}</dd></div>
+            </dl>
+          </div>
+        )}
       </div>
       <div aria-hidden="true" className={styles.chartXAxis}>
         {periodLabels.map((index) => (

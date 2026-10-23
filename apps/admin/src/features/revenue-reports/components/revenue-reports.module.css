@@ -68,7 +68,8 @@
   border-radius: var(--admin-radius-control);
   color: var(--admin-text-muted);
   vertical-align: middle;
-  cursor: help;
+  cursor: pointer;
+  padding: 0;
 }
 
 .definitionHint:focus-visible {
@@ -319,7 +320,8 @@
   border-radius: 50%;
   background: var(--admin-blue);
   box-shadow: 0 0 0 1px var(--admin-blue);
-  cursor: help;
+  cursor: pointer;
+  padding: 0;
 }
 
 .chartPoint:hover {
@@ -330,6 +332,50 @@
 .chartPoint:focus-visible {
   outline: 3px solid var(--admin-ink);
   outline-offset: 3px;
+}
+
+.chartTooltip {
+  position: absolute;
+  z-index: 3;
+  width: min(260px, 100%);
+  box-sizing: border-box;
+  padding: var(--admin-space-3);
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius-panel);
+  background: var(--admin-surface);
+  color: var(--admin-text-strong);
+  box-shadow: 0 4px 16px rgb(15 23 42 / 12%);
+  font-size: var(--admin-type-helper-size);
+  line-height: var(--admin-type-helper-line-height);
+  overflow-wrap: anywhere;
+}
+
+.chartTooltip strong {
+  display: block;
+  margin-bottom: var(--admin-space-3);
+}
+
+.chartTooltip dl {
+  display: grid;
+  gap: var(--admin-space-2);
+  margin: 0;
+}
+
+.chartTooltip dl > div {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--admin-space-1) var(--admin-space-2);
+}
+
+.chartTooltip dt {
+  color: var(--admin-text-muted);
+}
+
+.chartTooltip dd {
+  margin: 0;
+  font-weight: var(--admin-type-label-weight);
+  font-variant-numeric: tabular-nums;
 }
 
 .chartXAxis {
@@ -402,7 +448,7 @@
 
 .dataTable td:last-child {
   color: var(--admin-text-strong);
-  font-weight: var(--admin-weight-semibold);
+  font-weight: var(--admin-type-label-weight);
 }
 
 .dataTable td.emptyTableCell {
@@ -436,7 +482,7 @@
 .totalRow td {
   border-top: 2px solid var(--admin-border);
   color: var(--admin-text-strong);
-  font-weight: var(--admin-weight-semibold);
+  font-weight: var(--admin-type-label-weight);
   background: var(--admin-surface-muted);
 }
 
