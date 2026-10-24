@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -113,9 +114,7 @@ describe('shared Admin CRUD patterns', () => {
 
   it('runs Admin tests in CI alongside its existing quality gates', () => {
     const workflow = readFileSync(
-      fileURLToPath(
-        new URL('../../../.github/workflows/ci.yml', import.meta.url),
-      ),
+      resolve(dirname(fileURLToPath(import.meta.url)), '../../../.github/workflows/ci.yml'),
       'utf8',
     ).replace(/\r\n/g, '\n');
     const adminJob = workflow.split('\n  admin:\n')[1]?.split('\n  web:\n')[0];

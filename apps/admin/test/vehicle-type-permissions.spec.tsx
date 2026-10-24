@@ -22,9 +22,11 @@ const vehicleType = {
   updatedAt: '2026-09-26T10:00:00.000Z',
 };
 
-vi.mock('lucide-react', () => {
+vi.mock('lucide-react', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('lucide-react')>();
   const Icon = () => null;
   return {
+    ...actual,
     ArrowDown: Icon,
     ArrowUp: Icon,
     ArrowUpDown: Icon,

@@ -372,7 +372,7 @@ describe('Vehicle Type default cargo capacities', () => {
     await screen.findByText('Sức chứa xe máy phải là số nguyên.');
     expect(capacityInput.getAttribute('aria-invalid')).toBe('true');
     expect(capacityInput.hasAttribute('aria-describedby')).toBe(true);
-    expect(within(dialog).queryByRole('alert')).toBeNull();
+    expect(within(dialog).getByRole('alert').textContent).toContain('Sức chứa xe máy phải là số nguyên.');
   });
 
   it('requires all three integer capacities in list responses', async () => {

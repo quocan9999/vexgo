@@ -6,7 +6,8 @@ import { getRouteById, updateRouteStatus } from '../src/features/routes/services
 import type { Route } from '../src/features/routes/types/route';
 import { setEmployeeAdminTestSession } from './admin-auth-test-session';
 
-vi.mock('lucide-react', () => ({
+vi.mock('lucide-react', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('lucide-react')>()),
   ArrowDown: () => null, ArrowUp: () => null, ArrowUpDown: () => null,
   CheckCircle2: () => null, LoaderCircle: () => null, Search: () => null, X: () => null,
 }));
@@ -54,7 +55,7 @@ describe('Route status interaction', () => {
     renderDetails();
     const detail = await screen.findByRole('dialog', { name: 'Thông tin tuyến xe' });
     fireEvent.click(await within(detail).findByRole('button', { name: 'Tạm ngưng tuyến' }));
-    const confirm = await screen.findByRole('dialog', { name: 'Tạm ngưng tuyến xe?' });
+    const confirm = await screen.findByRole('alertdialog', { name: 'Tạm ngưng tuyến xe?' });
     const confirmButton = within(confirm).getByRole('button', { name: 'Tạm ngưng tuyến' });
     await act(async () => {
       confirmButton.click();
@@ -71,7 +72,7 @@ describe('Route status interaction', () => {
     renderDetails();
     const detail = await screen.findByRole('dialog', { name: 'Thông tin tuyến xe' });
     fireEvent.click(await within(detail).findByRole('button', { name: 'Tạm ngưng tuyến' }));
-    const confirm = await screen.findByRole('dialog', { name: 'Tạm ngưng tuyến xe?' });
+    const confirm = await screen.findByRole('alertdialog', { name: 'Tạm ngưng tuyến xe?' });
     fireEvent.click(within(confirm).getByRole('button', { name: 'Tạm ngưng tuyến' }));
     expect(await within(confirm).findByRole('alert')).toHaveProperty('textContent', 'Máy chủ từ chối cập nhật.');
     expect(screen.getByText('Đang hoạt động')).toBeTruthy();
@@ -83,9 +84,9 @@ describe('Route status interaction', () => {
     const { onUpdated } = renderDetails();
     const detail = await screen.findByRole('dialog', { name: 'Thông tin tuyến xe' });
     fireEvent.click(await within(detail).findByRole('button', { name: 'Tạm ngưng tuyến' }));
-    const confirm = await screen.findByRole('dialog', { name: 'Tạm ngưng tuyến xe?' });
+    const confirm = await screen.findByRole('alertdialog', { name: 'Tạm ngưng tuyến xe?' });
     fireEvent.click(within(confirm).getByRole('button', { name: 'Tạm ngưng tuyến' }));
-    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Tạm ngưng tuyến xe?' })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole('alertdialog', { name: 'Tạm ngưng tuyến xe?' })).toBeNull());
     expect(screen.getByRole('dialog', { name: 'Thông tin tuyến xe' })).toBeTruthy();
     expect(within(screen.getByRole('dialog', { name: 'Thông tin tuyến xe' })).getByText('Tạm ngưng')).toBeTruthy();
     expect(onUpdated).toHaveBeenCalledWith({ ...activeRoute, status: 'TAM_NGUNG' });

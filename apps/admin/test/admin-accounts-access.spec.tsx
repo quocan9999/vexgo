@@ -53,7 +53,8 @@ vi.mock('next/link', () => ({
   ),
 }));
 
-vi.mock('lucide-react', () => {
+vi.mock('lucide-react', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('lucide-react')>();
   const icon = (name: string) =>
     function MockIcon({
       className,
@@ -72,6 +73,7 @@ vi.mock('lucide-react', () => {
     };
 
   return {
+    ...actual,
     Bus: icon('bus'),
     Building2: icon('building-2'),
     Database: icon('database'),

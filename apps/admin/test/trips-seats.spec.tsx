@@ -13,12 +13,14 @@ import type {
 } from '../src/features/trips/types/trip';
 import { setEmployeeAdminTestSession } from './admin-auth-test-session';
 
-vi.mock('lucide-react', () => {
+vi.mock('lucide-react', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('lucide-react')>();
   const icon = (name: string) =>
     function MockIcon(props: React.SVGProps<SVGSVGElement>) {
       return <svg {...props} data-icon={name} />;
     };
   return {
+    ...actual,
     CheckCircle2: icon('check'),
     LoaderCircle: icon('loader'),
     RefreshCw: icon('refresh'),
@@ -127,19 +129,19 @@ describe('TripSeatStatusBadge', () => {
       <TripSeatStatusBadge status="TRONG" />,
     );
     expect(availableHtml).toContain('Trống');
-    expect(availableHtml).toContain('trip-seat-badge--available');
+    expect(availableHtml).toContain('data-variant="success"');
 
     const heldHtml = renderToStaticMarkup(
       <TripSeatStatusBadge status="DANG_GIU" />,
     );
     expect(heldHtml).toContain('Đang giữ');
-    expect(heldHtml).toContain('trip-seat-badge--held');
+    expect(heldHtml).toContain('data-variant="warning"');
 
     const bookedHtml = renderToStaticMarkup(
       <TripSeatStatusBadge status="DA_DAT" />,
     );
     expect(bookedHtml).toContain('Đã đặt');
-    expect(bookedHtml).toContain('trip-seat-badge--booked');
+    expect(bookedHtml).toContain('data-variant="destructive"');
   });
 });
 

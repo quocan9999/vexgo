@@ -26,12 +26,14 @@ import type {
 } from '../src/features/trips/types/trip';
 import { setEmployeeAdminTestSession } from './admin-auth-test-session';
 
-vi.mock('lucide-react', () => {
+vi.mock('lucide-react', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('lucide-react')>();
   const icon = (name: string) =>
     function MockIcon(props: React.SVGProps<SVGSVGElement>) {
       return <svg {...props} data-icon={name} />;
     };
   return {
+    ...actual,
     ArrowDown: icon('down'),
     ArrowUp: icon('up'),
     ArrowUpDown: icon('sort'),

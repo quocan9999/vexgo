@@ -16,12 +16,14 @@ const validRoute = {
   createdAt: '2026-09-22T07:34:00.000Z', updatedAt: '2026-09-23T07:34:00.000Z',
 };
 
-vi.mock('lucide-react', () => {
+vi.mock('lucide-react', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('lucide-react')>();
   const icon = (name: string) =>
     function MockIcon(props: React.SVGProps<SVGSVGElement>) {
       return <svg {...props} data-icon={name} />;
     };
   return {
+    ...actual,
     ArrowDown: icon('down'), ArrowUp: icon('up'), ArrowUpDown: icon('sort'),
     Search: icon('search'), X: icon('close'), ChevronLeft: icon('previous'),
     ChevronRight: icon('next'), Eye: icon('eye'), RefreshCw: icon('refresh'),

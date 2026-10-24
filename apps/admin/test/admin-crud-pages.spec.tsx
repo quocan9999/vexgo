@@ -151,6 +151,7 @@ function populatePages() {
         contactInfo: '',
         status: 'HOAT_DONG',
         createdAt: timestamp,
+        updatedAt: timestamp,
       },
     ],
     meta: { page: 1, pageSize: 10, totalItems: 42, totalPages: 5 },

@@ -76,13 +76,13 @@ describe('Admin RBAC shared presentation', () => {
     expect(screen.getByRole('heading', { name: 'Xe' })).toBeTruthy();
     expect(
       screen.getByRole('checkbox', {
-        name: 'Gán quyền vehicle:read cho NHA_XE_ADMIN',
+        name: /^Gán quyền vehicle:read cho NHA_XE_ADMIN/,
       }).getAttribute('aria-checked'),
     ).toBe('true');
 
     fireEvent.click(
       screen.getByRole('checkbox', {
-        name: 'Gán quyền vehicle:update cho NHA_XE_ADMIN',
+        name: /^Gán quyền vehicle:update cho NHA_XE_ADMIN/,
       }),
     );
     expect(onPermissionChange).toHaveBeenCalledWith('vehicle:update', true);

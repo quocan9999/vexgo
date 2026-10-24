@@ -52,9 +52,11 @@ const exhaustedSuspendedPromotion = {
   effectiveState: 'SUSPENDED' as const,
 };
 
-vi.mock('lucide-react', () => {
+vi.mock('lucide-react', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('lucide-react')>();
   const Icon = () => null;
   return {
+    ...actual,
     ArrowDown: Icon,
     ArrowUp: Icon,
     ArrowUpDown: Icon,

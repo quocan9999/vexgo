@@ -42,3 +42,7 @@ Unit dashboard dùng service/guard thật với dependency Prisma được mock.
 ## Điểm bàn giao
 
 Phần triển khai UI được duyệt và kiểm tra kỹ thuật local được phép đã hoàn tất. PR ở trạng thái draft để reviewer đọc diff và kết quả CI; không cần mở vòng redesign mới cho các route đã duyệt. Các kiểm chứng runtime hoặc suite bị loại trừ ở trên vẫn phải được ghi nhận riêng trước khi kết luận release-ready.
+
+## CI follow-up — 25/10/2026
+
+CI ban đầu trên bdeb1b8: API CI và Web CI PASS; Admin CI FAIL do môi trường JSDOM/mocks và assertion markup legacy. Đã cập nhật media-query API test setup, partial icon mocks, timestamp fixture, file path resolution và các role/label/variant assertions theo canonical contract; giữ business/callback/permission assertions. Không đổi workflow hoặc chạy UI suite local. Kết quả rerun CI được cập nhật trên PR #43.

@@ -167,7 +167,8 @@ function fillRequiredCreateFields(dialog: HTMLElement) {
   );
 }
 
-vi.mock('lucide-react', () => {
+vi.mock('lucide-react', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('lucide-react')>();
   const icon = (name: string) =>
     function MockIcon({
       className,
@@ -186,6 +187,7 @@ vi.mock('lucide-react', () => {
     };
 
   return {
+    ...actual,
     ArrowDown: icon('arrow-down'),
     ArrowUp: icon('arrow-up'),
     ArrowUpDown: icon('arrow-up-down'),

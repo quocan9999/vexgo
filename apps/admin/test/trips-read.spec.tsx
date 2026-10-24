@@ -56,12 +56,14 @@ const mockTrip: Trip = {
   updatedAt: '2026-10-01T10:00:00.000Z',
 };
 
-vi.mock('lucide-react', () => {
+vi.mock('lucide-react', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('lucide-react')>();
   const icon = (name: string) =>
     function MockIcon(props: React.SVGProps<SVGSVGElement>) {
       return <svg {...props} data-icon={name} />;
     };
   return {
+    ...actual,
     ArrowDown: icon('down'),
     ArrowUp: icon('up'),
     ArrowUpDown: icon('sort'),
@@ -202,12 +204,12 @@ describe('Admin trips read page and components', () => {
     const badgeActive = renderToStaticMarkup(
       <TripStatusBadge status="DANG_CHAY" />,
     );
-    expect(badgeActive).toContain('is-active');
+    expect(badgeActive).toContain('data-variant="success"');
 
     const badgeMuted = renderToStaticMarkup(
       <TripStatusBadge status="CHUA_KHOI_HANH" />,
     );
-    expect(badgeMuted).not.toContain('is-active');
+    expect(badgeMuted).toContain('data-variant="secondary"');
   });
 });
 
