@@ -31,7 +31,10 @@ import {
   type ReactNode,
 } from 'react';
 import { Button } from '@/components/ui/action-button';
+import { AdminSidebarLink } from '@/components/admin/admin-sidebar-link';
+import { AdminAccountPopover } from '@/components/admin/admin-account-popover';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { toast } from 'sonner';
 import '../admin-shell.css';
 import headerStyles from './admin-header.module.css';
@@ -88,6 +91,29 @@ const ADMIN_SIDEBAR_COLLAPSED_CHANGE_EVENT =
   'vexgo-admin-sidebar-collapsed-change';
 let sidebarCollapsedFallback = false;
 let sidebarCollapsedStorageUnavailable = false;
+
+const SIDEBAR_TABLET_QUERY = '(min-width: 701px) and (max-width: 1180px)';
+const SIDEBAR_DESKTOP_QUERY = '(min-width: 1181px)';
+
+function getSidebarViewportSnapshot() {
+  if (window.matchMedia(SIDEBAR_TABLET_QUERY).matches) return 'rail';
+  if (window.matchMedia(SIDEBAR_DESKTOP_QUERY).matches) return 'desktop';
+  return 'mobile';
+}
+
+function getServerSidebarViewportSnapshot() {
+  return 'mobile';
+}
+
+function subscribeToSidebarViewport(onStoreChange: () => void) {
+  const queries = [SIDEBAR_TABLET_QUERY, SIDEBAR_DESKTOP_QUERY].map((query) =>
+    window.matchMedia(query),
+  );
+  queries.forEach((query) => query.addEventListener('change', onStoreChange));
+  return () => {
+    queries.forEach((query) => query.removeEventListener('change', onStoreChange));
+  };
+}
 
 function getSidebarCollapsedSnapshot() {
   if (sidebarCollapsedStorageUnavailable) return sidebarCollapsedFallback;
@@ -200,6 +226,14 @@ export function SuperAdminLayout({
     getSidebarCollapsedSnapshot,
     getServerSidebarCollapsedSnapshot,
   );
+  const sidebarViewport = useSyncExternalStore(
+    subscribeToSidebarViewport,
+    getSidebarViewportSnapshot,
+    getServerSidebarViewportSnapshot,
+  );
+  const sidebarTooltipEnabled =
+    sidebarViewport === 'rail' ||
+    (sidebarViewport === 'desktop' && sidebarCollapsed);
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const signingOutRef = useRef(false);
@@ -282,7 +316,7 @@ export function SuperAdminLayout({
           } as Record<string, string>
         )[activeSection];
   const sidebarContent = (
-    <>
+    <TooltipProvider>
       <div className="sidebar-header">
         <Link
           aria-label={`VexGo ${brandContextLines.join(' ')}`}
@@ -345,104 +379,56 @@ export function SuperAdminLayout({
                     const { icon, label } =
                       OPERATION_NAVIGATION_DETAILS[item.section];
                     return (
-                      <Link
-                        aria-label={label}
-                        aria-current={
-                          activeSection === item.section ? 'page' : undefined
-                        }
-                        className={`sidebar-link${activeSection === item.section ? ' is-active' : ''}`}
+                      <AdminSidebarLink
+                        active={activeSection === item.section}
                         href={item.href}
+                        icon={icon()}
                         key={item.section}
+                        label={label}
                         onClick={closeMobileNavigation}
-                        title={label}
-                      >
-                        <span aria-hidden="true" className="sidebar-link-icon">
-                          {icon()}
-                        </span>
-                        <span>{label}</span>
-                      </Link>
+                        tooltipEnabled={sidebarTooltipEnabled}
+                      />
                     );
                   })
                 : platformScope && (
                     <>
-                      <Link
-                        aria-label="Tổng quan"
-                        aria-current={
-                          activeSection === 'overview' ? 'page' : undefined
-                        }
-                        className={`sidebar-link${activeSection === 'overview' ? ' is-active' : ''}`}
+                      <AdminSidebarLink
+                        active={activeSection === 'overview'}
                         href="/"
+                        icon={<Database size={18} />}
+                        label="Tổng quan"
                         onClick={closeMobileNavigation}
-                        title="Tổng quan"
-                      >
-                        <span aria-hidden="true" className="sidebar-link-icon">
-                          <Database size={18} />
-                        </span>
-                        <span>Tổng quan</span>
-                      </Link>
+                        tooltipEnabled={sidebarTooltipEnabled}
+                      />
                       {canReadBusCompanies && (
-                        <Link
-                          aria-label="Nhà xe"
-                          aria-current={
-                            activeSection === 'bus-companies'
-                              ? 'page'
-                              : undefined
-                          }
-                          className={`sidebar-link${activeSection === 'bus-companies' ? ' is-active' : ''}`}
+                        <AdminSidebarLink
+                          active={activeSection === 'bus-companies'}
                           href="/bus-companies"
+                          icon={<Building2 size={18} />}
+                          label="Nhà xe"
                           onClick={closeMobileNavigation}
-                          title="Nhà xe"
-                        >
-                          <span
-                            aria-hidden="true"
-                            className="sidebar-link-icon"
-                          >
-                            <Building2 size={18} />
-                          </span>
-                          <span>Nhà xe</span>
-                        </Link>
+                          tooltipEnabled={sidebarTooltipEnabled}
+                        />
                       )}
                       {canReadAdminAccounts && (
-                        <Link
-                          aria-label="Tài khoản Admin"
-                          aria-current={
-                            activeSection === 'admin-accounts'
-                              ? 'page'
-                              : undefined
-                          }
-                          className={`sidebar-link${activeSection === 'admin-accounts' ? ' is-active' : ''}`}
+                        <AdminSidebarLink
+                          active={activeSection === 'admin-accounts'}
                           href="/admin-accounts"
+                          icon={<UsersRound size={18} />}
+                          label="Tài khoản Admin"
                           onClick={closeMobileNavigation}
-                          title="Tài khoản Admin"
-                        >
-                          <span
-                            aria-hidden="true"
-                            className="sidebar-link-icon"
-                          >
-                            <UsersRound size={18} />
-                          </span>
-                          <span>Tài khoản Admin</span>
-                        </Link>
+                          tooltipEnabled={sidebarTooltipEnabled}
+                        />
                       )}
                       {canManageRbac && (
-                        <Link
-                          aria-label="Phân quyền"
-                          aria-current={
-                            activeSection === 'rbac' ? 'page' : undefined
-                          }
-                          className={`sidebar-link${activeSection === 'rbac' ? ' is-active' : ''}`}
+                        <AdminSidebarLink
+                          active={activeSection === 'rbac'}
                           href="/rbac"
+                          icon={<ShieldCheck size={18} />}
+                          label="Phân quyền"
                           onClick={closeMobileNavigation}
-                          title="Phân quyền"
-                        >
-                          <span
-                            aria-hidden="true"
-                            className="sidebar-link-icon"
-                          >
-                            <ShieldCheck size={18} />
-                          </span>
-                          <span>Phân quyền</span>
-                        </Link>
+                          tooltipEnabled={sidebarTooltipEnabled}
+                        />
                       )}
                     </>
                   )}
@@ -453,26 +439,19 @@ export function SuperAdminLayout({
           <div className="sidebar-nav-group">
             <p className="sidebar-label">QUẢN TRỊ NHÀ XE</p>
             <nav aria-label="Quản trị nhà xe">
-              <Link
-                aria-label="Phân quyền"
-                aria-current={
-                  activeSection === 'tenant-rbac' ? 'page' : undefined
-                }
-                className={`sidebar-link${activeSection === 'tenant-rbac' ? ' is-active' : ''}`}
+              <AdminSidebarLink
+                active={activeSection === 'tenant-rbac'}
                 href="/tenant-rbac"
+                icon={<ShieldCheck size={18} />}
+                label="Phân quyền"
                 onClick={closeMobileNavigation}
-                title="Phân quyền"
-              >
-                <span aria-hidden="true" className="sidebar-link-icon">
-                  <ShieldCheck size={18} />
-                </span>
-                <span>Phân quyền</span>
-              </Link>
+                tooltipEnabled={sidebarTooltipEnabled}
+              />
             </nav>
           </div>
         )}
       </div>
-    </>
+    </TooltipProvider>
   );
 
   return (
@@ -545,6 +524,13 @@ export function SuperAdminLayout({
               </div>
             </div>
             <div className={headerStyles.account}>
+              {sidebarViewport === 'mobile' && (
+                <AdminAccountPopover
+                  className={headerStyles.mobileAccount}
+                  fullName={session.fullName}
+                  roleLabel={roleLabel}
+                />
+              )}
               <span
                 role="img"
                 aria-label={`Tài khoản ${session.fullName}`}

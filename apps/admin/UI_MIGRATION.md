@@ -345,3 +345,25 @@ Status: **MIGRATING — shared presentation updated; pending user visual review*
 - Pre-edit GitNexus impact was exact CRITICAL (3 direct route callers and 5 affected processes); callers and navigation destinations were inspected before the shared component change.
 - TypeScript, ESLint, build and `git diff --check` skipped per user preference. No tests or browser checks run; integration/E2E/UI/component suites NOT RUN BY REQUEST. Runtime behavior is not claimed as verified.
 - Pending user smoke: inspect active scope styling and navigation between `/rbac` and `/rbac/tenants` at desktop and mobile widths; verify tenant detail retains its active tenant scope.
+
+## Sidebar focus and rail Tooltip — 24/10/2026
+
+Status: **MIGRATING — implementation complete; pending user keyboard/visual smoke**.
+
+- `SuperAdminLayout` now composes `AdminSidebarLink` with the canonical `ui/tooltip.tsx` primitive adapted from shadcn base-nova and the installed Base UI Tooltip engine. Provider shares hover delay; hover/focus/Escape and portal positioning remain primitive-owned.
+- Tooltip is enabled for tablet rail and collapsed desktop, disabled for expanded desktop/mobile where labels are already visible. matchMedia subscriptions mirror the existing CSS breakpoints and clean up listeners. Native navigation-link title attributes were removed to avoid duplicate hover labels. Links retain their existing destinations, permission conditions, active state and mobile-close callback.
+- Sidebar link focus outline now sits inside the link bounds, addressing clipping by the scroll container. Sidebar widths, row sizes and vertical scroll ownership are retained.
+- Pre-edit GitNexus impact for the exact feature `SuperAdminLayout` was CRITICAL with 22 direct dependents and 19 affected processes. Index freshness remains limited as recorded in SHELL_AUDIT.md; direct source/diff review was used alongside the graph.
+- No tests or browser checks run. TypeScript, ESLint, build and `git diff --check` skipped per user preference; integration/E2E/UI/component suites NOT RUN BY REQUEST. No package, backend, API, env or database changes. No runtime behavior is claimed as verified.
+- Pending user smoke: hover/Tab/Escape and Enter/click navigation on desktop rail/tablet; scroll to the last item in a short viewport; resize while a Tooltip is open; inspect expanded sidebar/mobile for visible labels without tooltips. Full audit and remaining mobile-account/typography tasks: SHELL_AUDIT.md.
+
+## Mobile account information — 24/10/2026
+
+Status: **MIGRATING — implementation complete; pending user mobile visual/keyboard smoke**.
+
+- Header avatar on mobile <=700px is a 44px account-info button. `AdminAccountPopover` shows the full name and role label supplied from the existing authenticated session. Title, description, a visible Close button, Escape/outside dismissal and focus return use the new canonical `ui/popover.tsx` composed over installed Base UI.
+- Popup content wraps and scrolls within available viewport bounds. Existing viewport subscription unmounts the mobile composition on tablet/desktop; CSS hides the mobile trigger during initial desktop rendering. Desktop avatar/name/role and direct logout remain as before.
+- Added Popover primitive/consumer ownership to DESIGN.md and registry source notice. Existing filter Popovers continue using their existing Base UI compositions until separately reviewed; no alternative interaction engine or new dependency was added.
+- Pre-edit GitNexus impact for the exact feature SuperAdminLayout was CRITICAL with 22 direct dependents and 19 processes. The stale index limitation recorded in SHELL_AUDIT.md remains; this slice used direct source/diff review. No auth, permission, API, backend, DB or env changes.
+- TypeScript, ESLint, build and `git diff --check` skipped per user preference. No tests or browser checks run; integration/E2E/UI/component suites NOT RUN BY REQUEST. Runtime behavior is not claimed as verified.
+- Pending user smoke: open mobile Admin and tap the avatar next to Logout; read full name/roles; close using Close/Escape/outside press and reopen. Check keyboard focus return, long names/multiple roles, short viewport scrolling and resize to desktop while open. This review does not require executing Logout.

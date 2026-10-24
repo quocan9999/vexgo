@@ -131,7 +131,8 @@
   background: #fff5f4;
   color: var(--admin-danger);
 }
-.menu {
+.menu,
+.mobileAccount {
   display: none;
 }
 
@@ -163,6 +164,9 @@
     display: inline-flex;
     flex-shrink: 0;
   }
+  .mobileAccount {
+    display: inline-flex;
+  }
   .context {
     flex-direction: column;
     align-items: flex-start;
@@ -180,6 +184,7 @@
   .workspace > svg,
   .group,
   .breadcrumb > svg,
+  .avatar,
   .identity,
   .divider {
     display: none;
@@ -192,11 +197,6 @@
   }
   .account {
     gap: 4px;
-  }
-  .avatar {
-    width: 32px;
-    height: 32px;
-    flex-basis: 32px;
   }
   .logout {
     width: 44px;

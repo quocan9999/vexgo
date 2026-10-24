@@ -131,6 +131,10 @@
   background: rgb(255 255 255 / 7%);
   color: #fff;
 }
+.sidebar-link:focus-visible {
+  outline: 3px solid #8cb5ff;
+  outline-offset: -3px;
+}
 .sidebar-link.is-active {
   background: #243a5d;
   color: #fff;

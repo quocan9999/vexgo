@@ -2,7 +2,11 @@
 
 The base-nova components in this directory were adapted from the official shadcn/ui registry on 23 October 2026. VexGo changes include theme scoping, sizes, labels, icons and overlay behavior.
 
-Source: https://ui.shadcn.com/r/styles/base-nova/ (components: button, input, textarea, select, sheet, alert-dialog, table, tabs, checkbox, radio-group, badge, field, label, separator, skeleton, alert, card).
+The Tooltip primitive was added from the same registry on 24 October 2026, with VexGo theme scoping, bounded popup width, collision padding and a 300ms shared hover delay. Base UI owns focus, hover and Escape behavior.
+
+The Popover primitive was added from the same registry on 24 October 2026, with VexGo theme scoping, viewport width/height bounds, collision padding and a Close composition over Base UI. Base UI owns trigger semantics, focus and dismissal.
+
+Source: https://ui.shadcn.com/r/styles/base-nova/ (components: button, input, textarea, select, sheet, alert-dialog, table, tabs, checkbox, radio-group, badge, field, label, separator, skeleton, alert, card, tooltip, popover).
 
 MIT License
 
