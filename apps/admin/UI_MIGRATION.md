@@ -1,5 +1,26 @@
 # Admin UI migration ledger
 
+## Platform dashboard density and hierarchy refinement — 24/10/2026
+
+- User screenshot shows repeated totals/active counts, a zero-work follow-up panel, excess descriptive copy and bottom links duplicating navigation. Replaced four equal cards with one divided three-group summary, a subtly emphasized company total/status group, and action emphasis only for positive missing-admin counts.
+- Follow-up detail now renders only for a positive need count; zero retains a short summary instead of a separate empty card. Positive metric links to the follow-up section; the existing account-management action remains available there.
+- Recent-company table is beside the compact onboarding chart, with mobile cards. Removed the low-priority desktop creation timestamp column, repeated body introduction, raw timezone string and bottom navigation. Full snapshot date/timezone remains in the semantic time element and its accessible label/title; exact chart counts and period remain visible.
+- Reused canonical patterns/tokens. Auth, request lifecycle, snapshot binding, API/metric definitions, backend and data remain unchanged. New OnboardingChart is a feature data-visualization composition, not a new primitive.
+- Pre-edit exact dashboard symbol impact LOW (one route/process); file impact LOW, index remains six commits behind HEAD. Direct source review supplements the stale graph. No tests/browser, TypeScript, ESLint, build or git diff --check run per request. No new runtime/visual PASS claimed; user smoke pending at desktop/mobile, zero need and positive need.
+
+## Real Super Admin dashboard — 24/10/2026
+
+Status: **READY_FOR_USER_SMOKE — implementation/source review complete; runtime unverified**.
+
+- User explicitly authorized the platform dashboard after confirming the old version was fake. Scope chosen: platform company footprint, administrator eligibility/coverage, onboarding and follow-up work. No tenant revenue, ticket/shipment/dispatch metrics, platform commission or invented uptime/health indicator.
+- Added platform-dashboard backend module and GET /api/v1/super-admin/dashboard/overview. Reused global auth/principal-scope/permission guards, existing tenant-role catalog, business timezone utilities, Prisma/MySQL models and response envelope. Requires pure SUPER_ADMIN plus bus-company:read AND admin-account:read. No schema/migration/seed/env change.
+- Read-only RepeatableRead transaction computes counts, six business-calendar-month company onboarding buckets and bounded lists. One account per employee, some NHA_XE_ADMIN and every role tenant-scoped avoid duplicate assignments and scope-conflicting admins. Account HOAT_DONG plus employment DANG_LAM_VIEC defines an active administrator; the missing-admin population includes only active companies. Same predicate reused across counters/list/relation counts.
+- Frontend is API-only with response shape validation, authorized account/permission-bound snapshot state, aborted stale requests, explicit initial loading/empty/error and labeled stale snapshot on failed refresh. Four KPI cards, readable six-month bars with exact labels, follow-up companies, recent company Table/mobile cards and permission-aware platform shortcuts use canonical components.
+- Removed overview fixture and dashboard.css/root import after direct consumer review; shared layout styles remain in admin-components.css. No fake growth, customer PII or unsupported record navigation. PLATFORM_DASHBOARD.md is the API/metric contract; prior audit notes marked historical.
+- Pre-edit graph: dashboard/service/AppModule LOW; RootLayout and stylesheet UNKNOWN (framework/CSS edges); direct source confirmed root import ownership, all old class consumers and existing app module registration. Index remains six commits behind HEAD. Consulted Context7 Prisma/NestJS docs and ui-ux-pro-max chart guidance; retained the existing design contract.
+- Source self-review checked month/year rollover, business timezone boundaries, current-month cutoff, no-data zero buckets, complete count versus top-five list, unknown statuses, permission denial and stale refresh semantics. These are source checks, not executed tests. No tests/browser, TypeScript, ESLint, build or git diff --check run per standing user request; integration/E2E/UI/component: NOT RUN BY REQUEST. No runtime PASS claimed.
+- User smoke: Super Admin at / with both read permissions; compare company/account counts with management pages, inspect zero/attention/recent populations, refresh and follow platform links; inspect desktop/mobile, long company names and short height. Permission denial, timezone boundaries and API/DB correctness remain unverified automatically.
+
 ## Login/session presentation and dashboard audit — 24/10/2026
 
 - User reported smoke successful for eleven forms. New auth slice uses canonical Input/Field/Button on login and canonical Button plus bottom-right logout-error toast in restricted-account state. Inline login errors gain keyboard focus. Removed obsolete login control CSS; branded layout remains.

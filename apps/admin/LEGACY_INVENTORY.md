@@ -1,5 +1,7 @@
 # Admin legacy inventory — 24/10/2026
 
+Dashboard follow-up: after user authorization, the platform prototype was replaced with API-only company/administrator governance metrics. The old dashboard stylesheet/fixture were removed after source consumer inventory; shared page/header/panel/skeleton styles remain owned by admin-components.css. PLATFORM_DASHBOARD.md records the new scope and pending runtime verification. Historical inventory rows below describe the original baseline.
+
 ## Evidence and limits
 
 - Baseline: `e330259`, after the user reported completing shell/header UI smoke. Individual scenario results were not supplied.

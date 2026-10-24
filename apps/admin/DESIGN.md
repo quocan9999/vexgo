@@ -4,7 +4,11 @@
 
 ## Migration status — 23/10/2026
 
-Auth follow-up (24/10/2026): login uses canonical Field/Input/Button, retains its branded layout and inline authentication errors; restricted-account logout uses canonical Button and operation-error toast. Pending user smoke; see AUTH_DASHBOARD_AUDIT.md. The platform dashboard is an unfinished fixture-backed prototype confirmed by the user and is excluded from functional completion of this migration.
+Auth follow-up (24/10/2026): login uses canonical Field/Input/Button, retains its branded layout and inline authentication errors; restricted-account logout uses canonical Button and operation-error toast. See AUTH_DASHBOARD_AUDIT.md for the historical audit.
+
+Platform dashboard implementation (24/10/2026): the user subsequently authorized replacing the prototype. `/` now uses real platform-only company/administrator aggregates through the guarded overview API, four KPIs, six-month onboarding bars, a missing-administrator action list and recent company table/mobile cards. Canonical Card/Button/Table/Badge/Resource states; no new primitive/chart engine. Counts are current snapshot values; only onboarding is time-bucketed. Fixed bar plot geometry is a data-visualization exception. Fixture fallback, fixture file, old global dashboard stylesheet and unmeasured health label were removed. Contract and verification limits: PLATFORM_DASHBOARD.md. Status: implemented, pending user smoke; API/DB/browser runtime not verified.
+
+Platform overview refinement: use one divided summary surface with three metric groups (companies with status breakdown, administrators, companies needing administration), rather than four equal cards. Follow-up detail is conditional on a positive need count; zero does not get an extra empty panel. Recent companies and onboarding share the main row; dates/account eligibility details remain available where useful without repeating explanatory paragraphs. Keep snapshot time beside Refresh; remove repeated bottom navigation. This is a presentation refinement over the initial four-KPI composition above; API semantics are unchanged.
 
 Current source consumer inventory (24/10/2026): see [LEGACY_INVENTORY.md](LEGACY_INVENTORY.md). Historical baseline registry rows below do not establish current usage or approval. Mounted legacy primitives, unconsumed branches, disconnected files and test dependencies are listed separately in that report.
 

@@ -1,5 +1,7 @@
 # Auth and platform dashboard audit — 24/10/2026
 
+Historical audit: the user later authorized implementation of the platform dashboard. The fixture-backed service described below has since been replaced by the platform-only API and canonical presentation. Current contract/evidence is in PLATFORM_DASHBOARD.md; this document retains the original audit findings.
+
 ## Scope and acceptance
 
 - User reported successful smoke of all eleven sheet forms after ed47733 and requested the next migration slice.
