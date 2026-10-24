@@ -174,6 +174,9 @@ export function FarePriceFormDialog({
   }
 
   function updateField(field: FormField, value: string) {
+    // Lookup refreshes may re-announce the controlled Select value. A no-op
+    // change must not erase the server validation error for that selection.
+    if (values[field] === value) return;
     setValues((current) => ({ ...current, [field]: value }));
     setFieldErrors((current) => ({
       ...current,

@@ -169,6 +169,7 @@ describe('Admin trips read page and components', () => {
     expect(html).not.toContain('Còn lại');
     expect(html).toContain('aria-label="Xem chi tiết chuyến FUTA-CX-001"');
     expect(html).toContain('data-slot="card"');
+    expect(html.match(/aria-label="Xem chi tiết chuyến FUTA-CX-001"/g)).toHaveLength(2);
     expect(html).not.toContain('Đang tải danh sách chuyến xe');
   });
 

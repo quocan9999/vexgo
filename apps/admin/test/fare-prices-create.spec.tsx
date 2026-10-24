@@ -468,6 +468,12 @@ describe('Fare Price create dialog behavior', () => {
           ).length,
         ).toBeGreaterThan(1);
       });
+      const relation = within(dialog).getByRole('combobox', {
+        name: _name === 'route' ? 'Tuyến xe' : 'Loại xe',
+      });
+      await waitFor(() => expect(relation.hasAttribute('disabled')).toBe(false));
+      expect(relation.getAttribute('aria-invalid')).toBe('true');
+      expect(document.getElementById(relation.getAttribute('aria-describedby') ?? '')?.textContent).toBe(message);
     },
   );
 });
