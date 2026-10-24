@@ -281,36 +281,43 @@ export function SuperAdminDashboard() {
     'admin-account:read',
   ]);
   const [data, setData] = useState<DashboardOverview | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [completedRequest, setCompletedRequest] = useState<{
+    identity: string;
+    refresh: number;
+    error: string | null;
+  } | null>(null);
   const [refresh, setRefresh] = useState(0);
   const identity = session
     ? `${session.accountId}:${[...session.permissions].sort().join(',')}`
     : '';
   const [loadedIdentity, setLoadedIdentity] = useState('');
   const overview = canRead && loadedIdentity === identity ? data : null;
+  const requestCompleted =
+    completedRequest?.identity === identity &&
+    completedRequest.refresh === refresh;
+  const loading = canRead && !requestCompleted;
+  const error = requestCompleted ? completedRequest.error : null;
 
   useEffect(() => {
     if (!canRead) return;
     const controller = new AbortController();
     let current = true;
-    setLoading(true);
-    setError(null);
     getDashboardOverview(controller.signal)
       .then((result) => {
         if (current) {
           setData(result);
           setLoadedIdentity(identity);
+          setCompletedRequest({ identity, refresh, error: null });
         }
       })
       .catch((cause: unknown) => {
         if (current && !controller.signal.aborted)
-          setError(
-            cause instanceof Error ? cause.message : 'Không thể tải tổng quan.',
-          );
-      })
-      .finally(() => {
-        if (current) setLoading(false);
+          setCompletedRequest({
+            identity,
+            refresh,
+            error:
+              cause instanceof Error ? cause.message : 'Không thể tải tổng quan.',
+          });
       });
     return () => {
       current = false;

@@ -26,6 +26,8 @@ export function AdminMoneyInput({
   appearance: _appearance,
   ...props
 }: AdminMoneyInputProps) {
+  // Consume the compatibility prop without forwarding it to the native input.
+  void _appearance;
   function handleChange(event: ChangeEvent<HTMLInputElement>) {
     const input = event.currentTarget;
     const entered = input.value;

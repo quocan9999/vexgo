@@ -7,7 +7,6 @@ import type {
   ShipmentQuery,
   ShipmentSortDirection,
   ShipmentStatus,
-  ShipmentSummary,
   ShipmentsResponse,
 } from '../types/shipment';
 

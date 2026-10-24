@@ -183,7 +183,11 @@ describe('Feature 02 Admin UI regressions', () => {
       },
     );
     render(
-      <ResourceSheet title="Focus boundary" onClose={vi.fn()}>
+      <ResourceSheet
+        title="Focus boundary"
+        description="Kiểm tra điều hướng focus trong sheet."
+        onClose={vi.fn()}
+      >
         <label htmlFor="focus-first">Trường đầu</label>
         <Input id="focus-first" />
         <Button>Thao tác cuối nội dung</Button>

@@ -2,6 +2,8 @@
 
 ## Bàn giao hiện tại — 25/10/2026
 
+**Cập nhật cuối:** các đoạn chưa chạy kiểm tra bên dưới là lịch sử checkpoint cleanup. Bước chốt đã PASS typecheck/lint/build Admin và API, 116 backend unit tests được chọn và git diff --check. Local UI/component/integration/E2E/browser và HTTP/SQL runtime chưa chạy. Bàn giao hiện hành: [ADMIN_UI_HANDOFF.md](ADMIN_UI_HANDOFF.md).
+
 - Phần triển khai chuyển hệ component Admin đã hoàn tất trong scope các màn được người dùng duyệt: primitives shadcn base-nova/Base UI, Resource patterns, shell/header, forms và dashboard Super Admin dùng dữ liệu API thật.
 - Người dùng đã báo smoke 11 form, smoke RBAC và duyệt dashboard Super Admin. Không suy rộng thành PASS mọi viewport, API, DB hoặc toàn bộ regression suite.
 - Cleanup cuối xóa 13 file component legacy và stylesheet filter không còn consumer trực tiếp; giữ các layout styles còn được sử dụng. Các test liên quan đã đổi sang contract canonical, chưa chạy.

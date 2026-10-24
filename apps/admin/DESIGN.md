@@ -4,6 +4,8 @@
 
 ## Migration status — 23/10/2026
 
+Final technical checkpoint (25/10/2026): Admin/API typecheck, lint and build PASS; selected backend unit regression 116 tests PASS. Local UI/component/integration/E2E/browser and HTTP/SQL runtime remain unverified. Current handoff and acceptance boundaries: [ADMIN_UI_HANDOFF.md](ADMIN_UI_HANDOFF.md). Deferred-check statements below describe earlier checkpoints.
+
 Current acceptance (25/10/2026): the user approved the platform dashboard and reported smoke of all eleven migrated forms and RBAC. Presentation acceptance does not establish API/DB or complete regression verification. Implementation cleanup is complete for this scope; deferred checks remain NOT RUN BY REQUEST. See the current handoff at the top of LEGACY_INVENTORY.md; older pending/retained notes below describe previous checkpoints.
 
 Canonical ownership checkpoint: ui/action-button.tsx and ui/status-badge.tsx are the only Admin Button/Badge primitive owners; old ui/button.tsx and ui/badge.tsx were retired. Resource actions/pagination/states/sheets, resource-filters and ResourceSheetForm are the active patterns. Legacy wrapper/focus-engine/toolbar implementations were removed after updating their direct test contracts. Initial registry tables below remain historical; current cleanup limits are at the top of LEGACY_INVENTORY.md. Deferred automated checks have not run.

@@ -30,4 +30,4 @@ Loading never displays fake zero totals. Empty records show true zero/empty stat
 
 ## Verification status
 
-Implementation/source review only. Tests, browser, TypeScript, ESLint, build and git diff --check are skipped per standing user request. No API/DB/browser runtime PASS is claimed. User smoke required with Super Admin and relevant permissions, empty data, refresh/error, long names, mobile and short viewport. Automatic security/timezone regression verification remains outstanding.
+Updated 25/10/2026: user approved presentation. Admin/API typecheck, lint and build PASS. Selected backend unit regression: 9 files / 116 tests PASS, including dashboard authorization/query/mapping/calendar boundaries and existing auth/revenue/admin-account regressions. Dashboard unit dependencies are mocked: no HTTP or SQL runtime PASS is claimed. Local integration/E2E/UI/component/browser automation NOT RUN BY REQUEST. Final commands, limits and handoff: ADMIN_UI_HANDOFF.md. Existing CI gates remain unchanged and their results must be read separately on the PR.

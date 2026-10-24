@@ -1,5 +1,24 @@
 # Admin UI migration ledger
 
+## Chốt migration và bàn giao — 25/10/2026
+
+- Người dùng yêu cầu hoàn tất bước kiểm chứng, commit và đưa branch lên review trong một lượt.
+- Sửa fixture ResourceSheet thiếu description, sửa trạng thái request dashboard và hai warning unused; không thay contract nghiệp vụ, CI hoặc dữ liệu.
+- Admin/API typecheck, lint và build PASS. Admin lint không còn warning. Backend unit regression được chọn: 9 files / 116 tests PASS. git diff --check PASS.
+- Bổ sung unit dashboard cho RBAC platform-only, đủ hai permission, scope conflict, eligibility filters, query limits/projection, snapshot mapping, timezone/year rollover, zero và propagation lỗi DB.
+- Local integration/E2E/UI/component/browser: NOT RUN BY REQUEST. HTTP/SQL runtime chưa kiểm chứng; không gán PASS từ unit/build. Test UI chỉ cập nhật source, chưa chạy.
+- Bản bàn giao hiện hành: ADMIN_UI_HANDOFF.md; các đoạn chưa kiểm chứng/ chưa commit bên dưới giữ lại làm lịch sử. GitNexus index cũ được ghi rõ là giới hạn và được đối chiếu source references.
+
+## Kiểm chứng kỹ thuật Admin — 25/10/2026
+
+- Người dùng yêu cầu tiếp tục bước kiểm chứng đã hoãn. Chỉ chạy TypeScript, ESLint, build và git diff --check; không chạy test suite hoặc browser automation.
+- TypeScript ban đầu FAIL vì fixture ResourceSheet trong feature-02-ui-regressions thiếu description bắt buộc; bổ sung prop tại fixture, không nới contract component.
+- ESLint ban đầu FAIL vì dashboard đặt loading/error đồng bộ trong effect. Chuyển sang trạng thái hoàn tất request gắn identity và refresh; loading/error được suy ra khi render. Giữ AbortController/current guard, binding snapshot theo identity và dữ liệu cũ khi refresh thất bại. Không disable rule hay thêm timer để lách lint.
+- Sau sửa: npm run typecheck --workspace=@vexgo/admin PASS; npm run lint --workspace=@vexgo/admin PASS (0 errors, 2 unused warnings tại admin-money-input và use-shipments); npm run build --workspace=@vexgo/admin PASS; git diff --check PASS.
+- GitNexus pre-edit dashboard LOW, một caller Home; test file UNKNOWN được đối chiếu source và lỗi compiler. Index cũ vẫn là giới hạn phân tích.
+- Tests/unit/component/integration/E2E/browser: NOT RUN. API/DB runtime và keyboard/visual behavior không được suy ra PASS từ build/typecheck. Backend dashboard chưa được kiểm chứng trong lát cắt Admin này.
+- Hai sửa chữa và bản ghi này chưa commit/push. Không đổi dependency, CI gate, API, env, database hoặc schema.
+
 ## Canonical test contracts and final legacy engine retirement — 24/10/2026
 
 - Updated existing shared CRUD, page composition, Feature 02 regressions, route form, shipment confirmation and sidebar-size source tests to canonical contracts. No CI gate disabled and no test case removed solely to delete a dependency.
