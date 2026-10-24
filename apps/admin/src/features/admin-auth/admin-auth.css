@@ -250,102 +250,12 @@
   margin-top: var(--admin-space-7);
 }
 
-.login-field {
-  display: grid;
-  gap: var(--admin-space-label-control-gap);
-  color: #26344a;
-  font-size: var(--admin-type-label-size);
-  font-weight: var(--admin-type-label-weight);
-  line-height: var(--admin-type-label-line-height);
-}
-
-.login-field input {
-  width: 100%;
-  height: 46px;
-  box-sizing: border-box;
-  padding: 0 var(--admin-space-3);
-  border: 1px solid #dfe5ee;
-  border-radius: 8px;
-  background: #fff;
-  color: #17243b;
-  font-size: var(--admin-type-body-size);
-  font-weight: var(--admin-type-body-weight);
-  line-height: var(--admin-type-body-line-height);
-  transition:
-    border-color 150ms ease,
-    box-shadow 150ms ease;
-}
-
-.login-field input:focus {
-  border-color: #5a7ee0;
-  box-shadow: 0 0 0 3px rgb(90 126 224 / 13%);
-  outline: none;
-}
-
-.login-field input::placeholder {
-  color: #9aa5b6;
-}
-
-.password-input-wrap {
-  position: relative;
-  display: block;
-}
-
-.password-input-wrap input {
-  padding-right: var(--admin-space-9);
-}
-
-.password-visibility-button {
-  position: absolute;
-  top: 50%;
-  right: var(--admin-space-2);
-  display: grid;
-  width: 32px;
-  height: 32px;
-  place-items: center;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: #7a879b;
-  cursor: pointer;
-  transform: translateY(-50%);
-}
-
-.password-visibility-button:hover {
-  background: #f1f4f8;
-  color: #243a5d;
-}
-
 .login-error {
   margin: calc(-1 * var(--admin-space-2)) 0 0;
   color: #b63838;
   font-size: var(--admin-type-error-size);
   font-weight: var(--admin-type-error-weight);
   line-height: var(--admin-type-error-line-height);
-}
-
-.login-submit-button {
-  display: flex;
-  min-height: 46px;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 var(--admin-space-4);
-  border: 0;
-  border-radius: 8px;
-  background: #1e40af;
-  color: #fff;
-  cursor: pointer;
-  font-size: var(--admin-type-button-size);
-  font-weight: var(--admin-type-button-weight);
-  line-height: var(--admin-type-button-line-height);
-  transition:
-    background-color 150ms ease,
-    transform 150ms ease;
-}
-
-.login-submit-button:hover {
-  background: #193995;
-  transform: translateY(-1px);
 }
 
 .auth-loading {
@@ -605,9 +515,3 @@
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .login-field input,
-  .login-submit-button {
-    transition: none;
-  }
-}

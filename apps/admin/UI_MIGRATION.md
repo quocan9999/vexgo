@@ -1,5 +1,13 @@
 # Admin UI migration ledger
 
+## Login/session presentation and dashboard audit — 24/10/2026
+
+- User reported smoke successful for eleven forms. New auth slice uses canonical Input/Field/Button on login and canonical Button plus bottom-right logout-error toast in restricted-account state. Inline login errors gain keyboard focus. Removed obsolete login control CSS; branded layout remains.
+- Preserved session initialization, sign-in/out services, scope/permissions, redirects, validation details and native form submission. Audit and smoke checklist: AUTH_DASHBOARD_AUDIT.md.
+- Pre-edit graph: AdminLoginForm LOW; RestrictedAccount CRITICAL (23 affected processes); logout UNKNOWN, confirmed as the restricted-state button callback by source. Index remains five commits behind HEAD; graph is supplementary evidence.
+- User confirms platform dashboard is unfinished/fake. Source confirms default fixture data plus optional API switch. Dashboard excluded from functional completion; no dashboard/API/env/DB changes made.
+- No browser/tests, TypeScript, ESLint, build or git diff --check run per user request. Auth smoke pending; no runtime PASS claimed.
+
 ## Cross-form footer overlap audit — 24/10/2026
 
 - Source inventory found ten additional form action bars with the same sticky-within-scrolling-content composition: Admin account create/edit, account role assignment, bus company create/edit, fare price, route, trip, vehicle type, vehicle and vehicle seat. These share the structural risk from the reported promotion screenshot; they were not individually reproduced in a browser.

@@ -4,6 +4,8 @@
 
 ## Migration status — 23/10/2026
 
+Auth follow-up (24/10/2026): login uses canonical Field/Input/Button, retains its branded layout and inline authentication errors; restricted-account logout uses canonical Button and operation-error toast. Pending user smoke; see AUTH_DASHBOARD_AUDIT.md. The platform dashboard is an unfinished fixture-backed prototype confirmed by the user and is excluded from functional completion of this migration.
+
 Current source consumer inventory (24/10/2026): see [LEGACY_INVENTORY.md](LEGACY_INVENTORY.md). Historical baseline registry rows below do not establish current usage or approval. Mounted legacy primitives, unconsumed branches, disconnected files and test dependencies are listed separately in that report.
 
 RBAC cleanup (24/10/2026): shared role selector and permission matrix now use canonical presentation exclusively; their legacy branches and exclusive stylesheet were removed. Optional resource appearance props remain for existing callers. Existing presentation tests were adapted but not executed; this cleanup does not establish runtime approval.
