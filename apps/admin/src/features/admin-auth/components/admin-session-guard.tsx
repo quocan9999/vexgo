@@ -3,7 +3,7 @@
 import { useRouter, usePathname } from 'next/navigation';
 import { useEffect, useState, type ReactNode } from 'react';
 import { CircleAlert } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/components/ui/action-button';
 import { useAdminSession } from '../hooks/use-admin-session';
 import {
   getAdminAuthErrorMessage,
@@ -141,7 +141,7 @@ export function AdminSessionGuard({ children }: { children: ReactNode }) {
 
   if (authState.status === 'error') {
     return (
-      <main className="session-error-page">
+      <main className="admin-ui session-error-page">
         <section
           className="session-error-card panel"
           aria-labelledby="session-error-title"

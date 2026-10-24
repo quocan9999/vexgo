@@ -4,6 +4,10 @@
 
 ## Migration status — 23/10/2026
 
+Current source consumer inventory (24/10/2026): see [LEGACY_INVENTORY.md](LEGACY_INVENTORY.md). Historical baseline registry rows below do not establish current usage or approval. Mounted legacy primitives, unconsumed branches, disconnected files and test dependencies are listed separately in that report.
+
+RBAC cleanup (24/10/2026): shared role selector and permission matrix now use canonical presentation exclusively; their legacy branches and exclusive stylesheet were removed. Optional resource appearance props remain for existing callers. Existing presentation tests were adapted but not executed; this cleanup does not establish runtime approval.
+
 The target is a unified shadcn/ui system using the existing `base-nova` configuration and Base UI foundation, customized for VexGo. This document defines the target contract; it does not claim existing CSS/components already implement it. The first complete migration slice is `/vehicles`. Review that slice before expanding to other routes.
 
 Light theme is the initial migration scope. Existing `.dark` variables do not establish dark-mode support. Keep Inter, JetBrains Mono for exact identifiers, Lucide icons, blue primary actions and navy navigation. Do not add another primitive engine or replace working domain behavior just to match a library example.
@@ -324,7 +328,7 @@ Within each implementation slice: inspect consumers/impact before edits, impleme
 
 ### Promotions — user approved
 
-`/promotions` composes canonical list/filter/Table/Card/Sheet/confirmation patterns. Operation feedback uses bottom-right toast. AdminMoneyInput opts into canonical Input via appearance=resource, retaining one formatting/caret engine; legacy remains compatibility default until final consumer review. Existing DateRangeFilter resource adapter reused. PromotionDetailSheet has no current mounted consumer and remains legacy; its CSS is retained after removing unused list selectors. Booking/ticket details approved by user on 24/10/2026. See migration ledger for browser evidence and skipped checks.
+`/promotions` composes canonical list/filter/Table/Card/Sheet/confirmation patterns. Operation feedback uses bottom-right toast. AdminMoneyInput opts into canonical Input via appearance=resource, retaining one formatting/caret engine; legacy remains compatibility default until final consumer review. Existing DateRangeFilter resource adapter reused. The disconnected legacy PromotionDetailSheet and its exclusive stylesheet were removed on 24/10/2026 after checking source/test references; the live route remains unchanged. Booking/ticket details approved by user on 24/10/2026. See migration ledger for browser evidence and skipped checks.
 
 ### Shipments — user approved
 

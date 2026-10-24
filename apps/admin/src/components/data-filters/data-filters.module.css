@@ -19,8 +19,7 @@
 }
 
 .search,
-.selectTrigger,
-.dateTrigger {
+.selectTrigger {
   min-height: 44px;
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -44,9 +43,7 @@
 }
 
 .search:focus-within,
-.selectTrigger:focus-visible,
-.dateTrigger:focus-visible,
-.dateField input:focus-visible {
+.selectTrigger:focus-visible {
   border-color: #8da8e7;
   outline: 0;
   box-shadow: 0 0 0 3px rgb(55 96 194 / 12%);
@@ -122,8 +119,7 @@
   white-space: nowrap;
 }
 
-.selectTrigger,
-.dateTrigger {
+.selectTrigger {
   display: flex;
   box-sizing: border-box;
   width: 100%;
@@ -139,20 +135,17 @@
   cursor: pointer;
 }
 
-.selectTrigger:hover,
-.dateTrigger:hover {
+.selectTrigger:hover {
   border-color: #c6d0df;
   background: #fcfdff;
 }
 
-.selectTrigger :global([data-slot='select-icon']),
-.dateTrigger > svg:last-child {
+.selectTrigger :global([data-slot='select-icon']) {
   flex: 0 0 auto;
   color: var(--muted-foreground);
 }
 
-.selectPositioner,
-.datePositioner {
+.selectPositioner {
   z-index: 100;
   max-width: calc(100vw - 20px);
 }
@@ -197,149 +190,6 @@
 .selectItem :global([data-slot='select-item-indicator']) {
   display: flex;
   color: #315cc5;
-}
-
-.dateFilter {
-  box-sizing: border-box;
-  width: 240px;
-  min-width: 0;
-  flex: 0 0 240px;
-}
-
-.singleDateFilter {
-  width: 180px;
-  min-width: 0;
-  flex: 0 0 180px;
-}
-
-.dateTrigger {
-  justify-content: flex-start;
-  color: #52627a;
-}
-
-.dateTrigger > svg:first-child {
-  flex: 0 0 auto;
-  color: #637897;
-}
-
-.dateTrigger[data-active='true'] {
-  border-color: #b8c8ee;
-  background: #f7f9ff;
-  color: #284da7;
-}
-
-.dateTrigger[data-active='true'] > svg:first-child {
-  color: #315cc5;
-}
-
-.dateTriggerText {
-  overflow: hidden;
-  flex: 1 1 auto;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.datePopup {
-  width: min(350px, calc(100vw - 24px));
-  max-height: calc(100dvh - 24px);
-  overflow: auto;
-  padding: var(--admin-space-card-padding);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  background: var(--popover);
-  color: var(--popover-foreground);
-  box-shadow: 0 16px 42px rgb(25 38 58 / 18%);
-}
-
-.dateTitle {
-  margin: 0;
-  color: var(--foreground);
-  font-size: var(--admin-type-component-title-size);
-  font-weight: var(--admin-type-component-title-weight);
-  line-height: var(--admin-type-component-title-line-height);
-  letter-spacing: -0.02em;
-}
-
-.dateDescription {
-  margin: var(--admin-space-1) 0 var(--admin-space-component-gap);
-  color: var(--muted-foreground);
-  font-size: var(--admin-type-helper-size);
-  line-height: var(--admin-type-helper-line-height);
-}
-
-.dateFields {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--admin-space-field-gap);
-}
-
-.dateField {
-  display: grid;
-  min-width: 0;
-  gap: var(--admin-space-label-control-gap);
-  color: #55647a;
-  font-size: var(--admin-type-label-size);
-  font-weight: var(--admin-type-label-weight);
-  line-height: var(--admin-type-label-line-height);
-}
-
-.dateField input {
-  width: 100%;
-  min-width: 0;
-  min-height: 42px;
-  padding: 0 var(--admin-space-2);
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  background: var(--background);
-  color: var(--foreground);
-  font: inherit;
-  font-size: var(--admin-type-body-size);
-  line-height: var(--admin-type-body-line-height);
-}
-
-.dateActions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--admin-space-toolbar-gap);
-  margin-top: var(--admin-space-section-gap);
-  padding-top: var(--admin-space-table-cell-y);
-  border-top: 1px solid #edf0f5;
-}
-
-.clearDateButton,
-.applyDateButton {
-  min-height: 42px;
-  padding: 0 var(--admin-space-3);
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  font: inherit;
-  font-size: var(--admin-type-button-size);
-  font-weight: var(--admin-type-button-weight);
-  line-height: var(--admin-type-button-line-height);
-  cursor: pointer;
-}
-
-.clearDateButton {
-  background: var(--background);
-  color: #53627a;
-}
-
-.applyDateButton {
-  border-color: #315cc5;
-  background: #315cc5;
-  color: #fff;
-}
-
-.applyDateButton:hover:not(:disabled) {
-  border-color: #254ba9;
-  background: #254ba9;
-}
-
-.clearDateButton:disabled,
-.applyDateButton:disabled {
-  cursor: not-allowed;
-  opacity: 0.46;
 }
 
 .summary {
@@ -401,8 +251,7 @@
     width: 100%;
   }
 
-  .selectFilter,
-  .dateFilter {
+  .selectFilter {
     width: 100%;
     min-width: 0;
   }
@@ -432,71 +281,7 @@
   }
 
   .search,
-  .selectFilter,
-  .dateFilter {
+  .selectFilter {
     grid-column: 1;
   }
-
-  .dateFields {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-.controls:has(> .labeledSelectFilter) {
-  align-items: flex-end;
-}
-
-.labeledSelectFilter {
-  display: grid;
-  min-width: 0;
-  gap: var(--admin-space-1);
-  color: var(--admin-text-muted);
-  font-size: var(--admin-type-helper-size);
-}
-
-.labeledSelectFilter select {
-  box-sizing: border-box;
-  height: 44px;
-  min-height: 44px;
-  min-width: 135px;
-  padding: 0 var(--admin-space-2);
-  border: 1px solid var(--admin-border);
-  border-radius: var(--admin-radius-control);
-  background: #fff;
-  color: var(--admin-text-strong);
-  font: inherit;
-}
-
-@media (max-width: 760px) {
-  .labeledSelectFilter select {
-    min-width: 125px;
-  }
-}
-
-.labeledSortTrigger {
-  width: 135px;
-  min-width: 135px;
-  max-width: 135px;
-}
-
-.labeledSortTrigger > svg {
-  flex-shrink: 0;
-}
-
-.sortOption {
-  width: 100%;
-  border: 0;
-  background: transparent;
-  font: inherit;
-  text-align: left;
-}
-
-.sortOption:hover,
-.sortOption:focus-visible {
-  background: var(--accent);
-  color: var(--accent-foreground);
-}
-
-.sortOption[aria-pressed='true'] {
-  font-weight: var(--admin-type-label-weight);
 }

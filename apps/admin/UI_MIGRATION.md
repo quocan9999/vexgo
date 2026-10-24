@@ -1,5 +1,59 @@
 # Admin UI migration ledger
 
+## User acceptance checkpoint — 24/10/2026
+
+- User reported the RBAC smoke checklist completed successfully and requested continuation. This is user-reported acceptance; no automated/browser PASS is inferred.
+- Commit checkpoint includes the source inventory, canonical remaining primitives, orphan promotion cleanup, filter branch/CSS cleanup and RBAC branch/test-source cleanup documented below. Automated checks remain skipped as recorded.
+
+## RBAC legacy retirement — 24/10/2026
+
+- Shared role selector and permission matrix now have only the existing canonical presentation. Existing appearance=resource callers remain compatible; omitting the prop also uses canonical UI. Removed their exclusive admin-rbac-presentation.module.css after checking its two importers and source/test references.
+- Preserved role lookup/selection, mobile select, desktop radio group, disabled state, dirty/protected indicators, permission scope filtering, selected keys, protected-role edit lock, callbacks and actions slot. Consolidated labels to the exact mapping already used by live resource-mode consumers.
+- Updated the existing admin-rbac-presentation test's checked/disabled assertions to ARIA state exposed by the installed Base UI primitives. Removed its obsolete lucide module mock so canonical controls use real icons. Retained role-selection and permission-change expectations; protected case also checks a click cannot trigger the callback. No component/primitive is mocked to replace the behavior under assertion.
+- Pre-edit impact: both components HIGH (three direct feature callers/processes each: platform RBAC, tenant RBAC, platform tenant RBAC detail); label helpers LOW. Index remains three commits behind HEAD. Source confirmed every live feature already opted into canonical appearance. Test file impact UNKNOWN was supplemented with direct reference review.
+- Existing test source updated but NOT EXECUTED. Tests/browser, TypeScript, ESLint, build and git diff --check NOT RUN BY REQUEST; integration/E2E/UI/component: NOT RUN BY REQUEST. No runtime PASS claimed.
+- Pending user smoke on /rbac, /tenant-rbac and /rbac/tenants/[nhaXeId]: select roles on desktop/mobile; inspect selected permissions and protected role; toggle an editable permission and inspect dirty state. Existing save/reset/confirmation flows remain feature-owned.
+
+## Filter CSS cleanup — 24/10/2026
+
+- Removed 30 unused rules (41 selector arms) for retired legacy date-range/single-date/labeled-select/sort presentation from data-filters.module.css, including obsolete responsive rules. Mixed selector groups retain their search/select arms and existing declarations.
+- Kept toolbar/search/select/result-summary/visually-hidden styles and their responsive behavior: retained exports and test consumers still depend on these. No component behavior or global token changed.
+- GitNexus stylesheet impact returned UNKNOWN with a stale index. Direct reference inventory confirmed data-filters.tsx is the only remaining importer and enumerated every styles property; removed classes have no remaining source/test consumer. No zero-impact claim inferred from graph.
+- Source/diff review only. Tests/browser, TypeScript, ESLint, build and git diff --check NOT RUN BY REQUEST. No runtime PASS claimed.
+
+## Filter legacy appearance retirement — 24/10/2026
+
+- DateRangeFilter and LabeledSelectFilter now retain only their existing canonical presentation. The optional appearance prop accepts resource for compatibility with current callers; omission also uses canonical presentation. Removed legacy-only imports/state and slash-formatted legacy date helper.
+- Date range draft/open/apply/clear handling, native internal date values, validation, callbacks, labels and selection/sort behavior are preserved. No endpoint/date DTO migration performed.
+- Direct source inventory: six date-range invocations across five features, three labeled-select invocations in booking/revenue plus the RBAC role selector; all explicitly used resource. No direct test rendering of either filter found; existing mocks remain untouched.
+- Pre-edit GitNexus: exact DateRangeFilter CRITICAL (5 direct callers/processes), LabeledSelectFilter LOW, displayDate LOW. Index remains three commits behind HEAD; source review also found the newer RBAC consumer omitted from its filter graph.
+- RBAC legacy defaults remain because admin-rbac-presentation.spec.tsx directly consumes them. Shared filter CSS remains pending selector-level cleanup; it also serves retained legacy toolbar/select exports and cannot be deleted wholesale.
+- Source/diff review only; tests/browser, TypeScript, ESLint, build and git diff --check NOT RUN BY REQUEST. Pending user smoke: apply/clear date range in migrated routes and change labeled selections, including mobile RBAC role selector. No runtime PASS claimed.
+
+## Disconnected promotion detail cleanup — 24/10/2026
+
+- Removed the unmounted promotion-detail-sheet.tsx and its exclusive promotions.module.css import. Repository reference searches found no component importer or test reference; the live /promotions route imports PromotionsManagement and remains unchanged.
+- GitNexus impact for both PromotionDetailSheet and its file returned UNKNOWN/no resolved callers with an index three commits behind HEAD. This was not treated as a safety verdict: source/import/test references were checked directly before deletion.
+- Retained shared legacy dialog/Button/Badge wrappers because other legacy wrappers or tests still reference them. No test assertions were removed or relaxed.
+- Source review only. Tests/browser, TypeScript, ESLint, build and git diff --check NOT RUN BY REQUEST. No runtime PASS claimed.
+
+## Remaining mounted primitives — 24/10/2026
+
+Status: **IMPLEMENTED — pending user smoke**.
+
+- Session verification error Retry now uses canonical action-button. Added admin-ui scope to the error page for shared focus/cursor presentation. Retry callback, session checks, redirects and technical error details are unchanged.
+- TripStatusBadge now composes ResourceStatusBadge; the trip seat workspace keeps all four existing domain labels and its active/muted mapping. No status transition or service changed.
+- Pre-edit GitNexus impact: AdminSessionGuard CRITICAL (23 direct dependents, 23 processes); TripStatusBadge HIGH (3 direct dependents, 3 processes). Index is three commits behind HEAD; direct source confirmed the current seat consumer and canonical component contracts.
+- Source/diff review only. No tests/browser checks, TypeScript, ESLint, build or git diff --check run per user preference; integration/E2E/UI/component: NOT RUN BY REQUEST. No runtime PASS inferred.
+- User smoke targets: session verification error Retry appearance/focus and retry behavior when that error occurs; trip seat workspace status badge. Do not force a session failure by editing local configuration.
+
+## Legacy consumer inventory — 24/10/2026
+
+- Shell/header typography committed as `e330259` after user-reported UI smoke; individual scenario results were not supplied.
+- LEGACY_INVENTORY.md records direct imports, route reachability, branch-level JSX consumers and remaining test references. Two mounted old primitives remain in session-error Retry and trip-seat status badge; auth/platform dashboard presentation requires separate review.
+- Unconsumed branches and disconnected files are cleanup candidates, not automatically safe deletions. Existing test imports/mocks and selector ownership must be addressed before removal.
+- Source audit only; no runtime PASS inferred. Tests/browser, TypeScript, ESLint, build and `git diff --check` not run per user preference. GitNexus index remains stale; direct source evidence supplements graph queries.
+
 ## Vehicle seat workspace — 24/10/2026
 
 Status: **MIGRATING — user approved the presentation on 24/10/2026; responsive and keyboard review pending**.

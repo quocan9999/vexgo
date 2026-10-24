@@ -161,7 +161,7 @@ export function SelectFilter({
 
 type DateRangeFilterProps = {
   emptyValueLabel?: string;
-  appearance?: 'legacy' | 'resource';
+  appearance?: 'resource';
   fromLabel?: string;
   title?: string;
   label: string;
@@ -170,13 +170,8 @@ type DateRangeFilterProps = {
   value: Partial<DateRangeValue> | null;
 };
 
-function displayDate(date: string) {
-  return date.split('-').reverse().join('/');
-}
-
 export function DateRangeFilter({
   emptyValueLabel = 'Tất cả ngày',
-  appearance = 'legacy',
   fromLabel = 'Từ ngày',
   label,
   title = 'Khoảng ngày tạo',
@@ -211,172 +206,84 @@ export function DateRangeFilter({
     setOpen(false);
   }
 
-  if (appearance === 'resource') {
-    const showDate = (date: string) => date.split('-').reverse().join('-');
-    const selection =
-      value?.from && value.to
-        ? `${showDate(value.from)} – ${showDate(value.to)}`
-        : value?.from
-          ? `${fromLabel}: ${showDate(value.from)}`
-          : value?.to
-            ? `${toLabel}: ${showDate(value.to)}`
-            : emptyValueLabel;
-    return (
-      <div className="min-w-0 flex-[1_1_200px]">
-        <label
-          htmlFor={`${id}-trigger`}
-          className="mb-2 block text-[13px] font-semibold"
-        >
-          {label}
-        </label>
-        <Popover.Root onOpenChange={handleOpenChange} open={open}>
-          <Popover.Trigger
-            id={`${id}-trigger`}
-            render={
-              <Button
-                variant="outline"
-                className="w-full justify-between font-normal"
-              />
-            }
-            aria-label={`${label}: ${selection}`}
-          >
-            <span className="flex min-w-0 items-center gap-2">
-              <CalendarDays aria-hidden className="size-4" />
-              <span className="truncate">{selection}</span>
-            </span>
-            <ChevronDown aria-hidden className="size-4" />
-          </Popover.Trigger>
-          <Popover.Portal>
-            <Popover.Positioner
-              align="end"
-              sideOffset={8}
-              className="z-50 outline-none"
-            >
-              <Popover.Popup className="admin-ui w-80 max-w-[calc(100vw-2rem)] space-y-4 rounded-xl border bg-popover p-4 text-popover-foreground shadow-md outline-none">
-                <Popover.Title className="text-base font-semibold">
-                  {title}
-                </Popover.Title>
-                <Popover.Description className="text-xs text-muted-foreground">
-                  Chọn ngày bắt đầu và kết thúc để lọc danh sách.
-                </Popover.Description>
-                <Field>
-                  <FieldLabel htmlFor={`${id}-from`}>{fromLabel}</FieldLabel>
-                  <Input
-                    id={`${id}-from`}
-                    type="date"
-                    max={draftTo || undefined}
-                    value={draftFrom}
-                    onChange={(event) => setDraftFrom(event.target.value)}
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor={`${id}-to`}>{toLabel}</FieldLabel>
-                  <Input
-                    id={`${id}-to`}
-                    type="date"
-                    min={draftFrom || undefined}
-                    value={draftTo}
-                    onChange={(event) => setDraftTo(event.target.value)}
-                  />
-                </Field>
-                <div className="flex justify-end gap-3 border-t pt-4">
-                  <Button
-                    variant="outline"
-                    disabled={!value && !draftFrom && !draftTo}
-                    onClick={clearRange}
-                  >
-                    Xóa lọc
-                  </Button>
-                  <Button disabled={!rangeIsValid} onClick={applyRange}>
-                    Áp dụng
-                  </Button>
-                </div>
-              </Popover.Popup>
-            </Popover.Positioner>
-          </Popover.Portal>
-        </Popover.Root>
-      </div>
-    );
-  }
-
+  const showDate = (date: string) => date.split('-').reverse().join('-');
+  const selection =
+    value?.from && value.to
+      ? `${showDate(value.from)} – ${showDate(value.to)}`
+      : value?.from
+        ? `${fromLabel}: ${showDate(value.from)}`
+        : value?.to
+          ? `${toLabel}: ${showDate(value.to)}`
+          : emptyValueLabel;
   return (
-    <div className={styles.dateFilter}>
+    <div className="min-w-0 flex-[1_1_200px]">
+      <label
+        htmlFor={`${id}-trigger`}
+        className="mb-2 block text-[13px] font-semibold"
+      >
+        {label}
+      </label>
       <Popover.Root onOpenChange={handleOpenChange} open={open}>
         <Popover.Trigger
-          aria-label={
-            value?.from && value.to
-              ? `${label}: ${displayDate(value.from)} đến ${displayDate(value.to)}`
-              : value?.from
-                ? `${label}: ${fromLabel.toLocaleLowerCase()} ${displayDate(value.from)}`
-                : value?.to
-                  ? `${label}: ${toLabel.toLocaleLowerCase()} ${displayDate(value.to)}`
-                  : `Lọc theo ${label.toLocaleLowerCase()}`
+          id={`${id}-trigger`}
+          render={
+            <Button
+              variant="outline"
+              className="w-full justify-between font-normal"
+            />
           }
-          className={styles.dateTrigger}
-          data-active={Boolean(value)}
+          aria-label={`${label}: ${selection}`}
         >
-          <CalendarDays aria-hidden="true" size={16} />
-          <span className={styles.dateTriggerText}>
-            {value?.from && value.to
-              ? `${displayDate(value.from)} – ${displayDate(value.to)}`
-              : value?.from
-                ? `${fromLabel}: ${displayDate(value.from)}`
-                : value?.to
-                  ? `${toLabel}: ${displayDate(value.to)}`
-                  : label}
+          <span className="flex min-w-0 items-center gap-2">
+            <CalendarDays aria-hidden className="size-4" />
+            <span className="truncate">{selection}</span>
           </span>
-          <ChevronDown aria-hidden="true" size={15} />
+          <ChevronDown aria-hidden className="size-4" />
         </Popover.Trigger>
         <Popover.Portal>
           <Popover.Positioner
             align="end"
-            className={styles.datePositioner}
-            sideOffset={7}
+            sideOffset={8}
+            className="z-50 outline-none"
           >
-            <Popover.Popup className={styles.datePopup}>
-              <Popover.Title className={styles.dateTitle}>
+            <Popover.Popup className="admin-ui w-80 max-w-[calc(100vw-2rem)] space-y-4 rounded-xl border bg-popover p-4 text-popover-foreground shadow-md outline-none">
+              <Popover.Title className="text-base font-semibold">
                 {title}
               </Popover.Title>
-              <Popover.Description className={styles.dateDescription}>
+              <Popover.Description className="text-xs text-muted-foreground">
                 Chọn ngày bắt đầu và kết thúc để lọc danh sách.
               </Popover.Description>
-              <div className={styles.dateFields}>
-                <label className={styles.dateField}>
-                  <span>{fromLabel}</span>
-                  <input
-                    max={draftTo || undefined}
-                    onChange={(event) => setDraftFrom(event.target.value)}
-                    type="date"
-                    value={draftFrom}
-                  />
-                </label>
-                <label className={styles.dateField}>
-                  <span>{toLabel}</span>
-                  <input
-                    min={draftFrom || undefined}
-                    onChange={(event) => setDraftTo(event.target.value)}
-                    type="date"
-                    value={draftTo}
-                  />
-                </label>
-              </div>
-              <div className={styles.dateActions}>
-                <button
-                  className={styles.clearDateButton}
+              <Field>
+                <FieldLabel htmlFor={`${id}-from`}>{fromLabel}</FieldLabel>
+                <Input
+                  id={`${id}-from`}
+                  type="date"
+                  max={draftTo || undefined}
+                  value={draftFrom}
+                  onChange={(event) => setDraftFrom(event.target.value)}
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor={`${id}-to`}>{toLabel}</FieldLabel>
+                <Input
+                  id={`${id}-to`}
+                  type="date"
+                  min={draftFrom || undefined}
+                  value={draftTo}
+                  onChange={(event) => setDraftTo(event.target.value)}
+                />
+              </Field>
+              <div className="flex justify-end gap-3 border-t pt-4">
+                <Button
+                  variant="outline"
                   disabled={!value && !draftFrom && !draftTo}
                   onClick={clearRange}
-                  type="button"
                 >
                   Xóa lọc
-                </button>
-                <button
-                  className={styles.applyDateButton}
-                  disabled={!rangeIsValid}
-                  onClick={applyRange}
-                  type="button"
-                >
+                </Button>
+                <Button disabled={!rangeIsValid} onClick={applyRange}>
                   Áp dụng
-                </button>
+                </Button>
               </div>
             </Popover.Popup>
           </Popover.Positioner>

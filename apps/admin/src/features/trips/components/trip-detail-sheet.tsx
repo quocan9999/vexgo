@@ -10,7 +10,6 @@ import {
   ResourceState,
 } from '@/components/admin/resource-ui';
 import { toast } from 'sonner';
-import { AdminStatusBadge } from '@/components/admin/admin-status-badge';
 import { Button, buttonVariants } from '@/components/ui/action-button';
 import {
   cancelTrip,
@@ -39,9 +38,9 @@ export function tripStatusLabel(status: TripStatus) {
 
 export function TripStatusBadge({ status }: { status: TripStatus }) {
   return (
-    <AdminStatusBadge tone={status === 'DANG_CHAY' ? 'active' : 'muted'}>
+    <ResourceStatusBadge tone={status === 'DANG_CHAY' ? 'active' : 'muted'}>
       {tripStatusLabel(status)}
-    </AdminStatusBadge>
+    </ResourceStatusBadge>
   );
 }
 
