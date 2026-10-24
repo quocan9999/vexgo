@@ -5,6 +5,8 @@ import {
   Building2,
   CalendarDays,
   ChartNoAxesCombined,
+  ChevronRight,
+  LoaderCircle,
   Database,
   Headphones,
   LogOut,
@@ -18,12 +20,24 @@ import {
   Ticket,
   Truck,
   UsersRound,
-  X,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState, useSyncExternalStore, type ReactNode } from 'react';
-import { AdminDialogPrimitive } from '@/components/admin/admin-dialog-primitive';
+import {
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from 'react';
+import { Button } from '@/components/ui/action-button';
+import { AdminSidebarLink } from '@/components/admin/admin-sidebar-link';
+import { AdminAccountPopover } from '@/components/admin/admin-account-popover';
+import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
+import { TooltipProvider } from '@/components/ui/tooltip';
+import { toast } from 'sonner';
+import '../admin-shell.css';
+import headerStyles from './admin-header.module.css';
 import { useAdminSession } from '@/features/admin-auth/hooks/use-admin-session';
 import {
   ADMIN_OPERATION_SECTIONS,
@@ -77,6 +91,29 @@ const ADMIN_SIDEBAR_COLLAPSED_CHANGE_EVENT =
   'vexgo-admin-sidebar-collapsed-change';
 let sidebarCollapsedFallback = false;
 let sidebarCollapsedStorageUnavailable = false;
+
+const SIDEBAR_TABLET_QUERY = '(min-width: 701px) and (max-width: 1180px)';
+const SIDEBAR_DESKTOP_QUERY = '(min-width: 1181px)';
+
+function getSidebarViewportSnapshot() {
+  if (window.matchMedia(SIDEBAR_TABLET_QUERY).matches) return 'rail';
+  if (window.matchMedia(SIDEBAR_DESKTOP_QUERY).matches) return 'desktop';
+  return 'mobile';
+}
+
+function getServerSidebarViewportSnapshot() {
+  return 'mobile';
+}
+
+function subscribeToSidebarViewport(onStoreChange: () => void) {
+  const queries = [SIDEBAR_TABLET_QUERY, SIDEBAR_DESKTOP_QUERY].map((query) =>
+    window.matchMedia(query),
+  );
+  queries.forEach((query) => query.addEventListener('change', onStoreChange));
+  return () => {
+    queries.forEach((query) => query.removeEventListener('change', onStoreChange));
+  };
+}
 
 function getSidebarCollapsedSnapshot() {
   if (sidebarCollapsedStorageUnavailable) return sidebarCollapsedFallback;
@@ -189,10 +226,27 @@ export function SuperAdminLayout({
     getSidebarCollapsedSnapshot,
     getServerSidebarCollapsedSnapshot,
   );
+  const sidebarViewport = useSyncExternalStore(
+    subscribeToSidebarViewport,
+    getSidebarViewportSnapshot,
+    getServerSidebarViewportSnapshot,
+  );
+  const sidebarTooltipEnabled =
+    sidebarViewport === 'rail' ||
+    (sidebarViewport === 'desktop' && sidebarCollapsed);
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
-  const [logoutError, setLogoutError] = useState<string | null>(null);
-  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
+  const signingOutRef = useRef(false);
+
+  const menuTriggerRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    const desktop = window.matchMedia('(min-width: 701px)');
+    const closeOnDesktop = () => {
+      if (desktop.matches) setMobileNavigationOpen(false);
+    };
+    desktop.addEventListener('change', closeOnDesktop);
+    return () => desktop.removeEventListener('change', closeOnDesktop);
+  }, []);
 
   if (authState.status !== 'authenticated') return null;
 
@@ -223,7 +277,7 @@ export function SuperAdminLayout({
   const tenantBusCompanyName =
     session.employee?.busCompanyName?.trim() || 'NHÀ XE';
   const brandContextLines = platformScope
-    ? ['SUPER ADMIN', 'NHÀ XE: NONE']
+    ? ['Quản trị nền tảng']
     : [tenantBusCompanyName.toLocaleUpperCase('vi-VN'), roleLabel];
   function closeMobileNavigation() {
     setMobileNavigationOpen(false);
@@ -235,287 +289,290 @@ export function SuperAdminLayout({
   }
 
   async function logout() {
+    if (signingOutRef.current) return;
+    signingOutRef.current = true;
     setSigningOut(true);
-    setLogoutError(null);
     try {
       await signOutAdmin();
       router.replace('/login');
     } catch (error) {
-      setLogoutError(getAdminAuthErrorMessage(error));
+      toast.error(getAdminAuthErrorMessage(error));
+      signingOutRef.current = false;
       setSigningOut(false);
     }
   }
+
+  const sectionLabel =
+    activeSection in OPERATION_NAVIGATION_DETAILS
+      ? OPERATION_NAVIGATION_DETAILS[activeSection as AdminOperationSection]
+          .label
+      : (
+          {
+            overview: 'Tổng quan',
+            'bus-companies': 'Nhà xe',
+            'admin-accounts': 'Tài khoản Admin',
+            rbac: 'Phân quyền',
+            'tenant-rbac': 'Phân quyền',
+          } as Record<string, string>
+        )[activeSection];
+  const sidebarContent = (
+    <TooltipProvider>
+      <div className="sidebar-header">
+        <Link
+          aria-label={`VexGo ${brandContextLines.join(' ')}`}
+          className="brand-lockup"
+          href={tenantScope ? (firstAccessibleTenantPath ?? '/') : '/'}
+          onClick={closeMobileNavigation}
+        >
+          <span className="brand-mark" aria-hidden="true">
+            V
+          </span>
+          <span className="brand-copy">
+            <strong>VexGo</strong>{' '}
+            {brandContextLines.map((line, index) => (
+              <small key={`${line}-${index}`}>{line}</small>
+            ))}
+          </span>
+        </Link>
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-controls="admin-navigation"
+          aria-expanded={!sidebarCollapsed}
+          aria-label={
+            sidebarCollapsed
+              ? 'Mở rộng thanh điều hướng'
+              : 'Thu gọn thanh điều hướng'
+          }
+          className="sidebar-collapse-button"
+          onClick={toggleSidebar}
+          title={
+            sidebarCollapsed
+              ? 'Mở rộng thanh điều hướng'
+              : 'Thu gọn thanh điều hướng'
+          }
+          type="button"
+        >
+          {sidebarCollapsed ? (
+            <PanelLeftOpen aria-hidden="true" size={18} />
+          ) : (
+            <PanelLeftClose aria-hidden="true" size={18} />
+          )}
+        </Button>
+      </div>
+      <div aria-hidden="true" className="sidebar-divider" />
+      <div
+        className="sidebar-scroll"
+        role="region"
+        aria-label="Các mục điều hướng quản trị"
+        tabIndex={0}
+      >
+        {(platformScope ||
+          (tenantScope && accessibleOperationSections.length > 0)) && (
+          <div className="sidebar-nav-group">
+            <p className="sidebar-label">
+              {tenantScope ? 'VẬN HÀNH' : 'QUẢN TRỊ NỀN TẢNG'}
+            </p>
+            <nav aria-label={tenantScope ? 'Vận hành' : 'Quản trị nền tảng'}>
+              {tenantScope
+                ? accessibleOperationSections.map((item) => {
+                    const { icon, label } =
+                      OPERATION_NAVIGATION_DETAILS[item.section];
+                    return (
+                      <AdminSidebarLink
+                        active={activeSection === item.section}
+                        href={item.href}
+                        icon={icon()}
+                        key={item.section}
+                        label={label}
+                        onClick={closeMobileNavigation}
+                        tooltipEnabled={sidebarTooltipEnabled}
+                      />
+                    );
+                  })
+                : platformScope && (
+                    <>
+                      <AdminSidebarLink
+                        active={activeSection === 'overview'}
+                        href="/"
+                        icon={<Database size={18} />}
+                        label="Tổng quan"
+                        onClick={closeMobileNavigation}
+                        tooltipEnabled={sidebarTooltipEnabled}
+                      />
+                      {canReadBusCompanies && (
+                        <AdminSidebarLink
+                          active={activeSection === 'bus-companies'}
+                          href="/bus-companies"
+                          icon={<Building2 size={18} />}
+                          label="Nhà xe"
+                          onClick={closeMobileNavigation}
+                          tooltipEnabled={sidebarTooltipEnabled}
+                        />
+                      )}
+                      {canReadAdminAccounts && (
+                        <AdminSidebarLink
+                          active={activeSection === 'admin-accounts'}
+                          href="/admin-accounts"
+                          icon={<UsersRound size={18} />}
+                          label="Tài khoản Admin"
+                          onClick={closeMobileNavigation}
+                          tooltipEnabled={sidebarTooltipEnabled}
+                        />
+                      )}
+                      {canManageRbac && (
+                        <AdminSidebarLink
+                          active={activeSection === 'rbac'}
+                          href="/rbac"
+                          icon={<ShieldCheck size={18} />}
+                          label="Phân quyền"
+                          onClick={closeMobileNavigation}
+                          tooltipEnabled={sidebarTooltipEnabled}
+                        />
+                      )}
+                    </>
+                  )}
+            </nav>
+          </div>
+        )}
+        {tenantScope && canReadTenantRolePermissions && (
+          <div className="sidebar-nav-group">
+            <p className="sidebar-label">QUẢN TRỊ NHÀ XE</p>
+            <nav aria-label="Quản trị nhà xe">
+              <AdminSidebarLink
+                active={activeSection === 'tenant-rbac'}
+                href="/tenant-rbac"
+                icon={<ShieldCheck size={18} />}
+                label="Phân quyền"
+                onClick={closeMobileNavigation}
+                tooltipEnabled={sidebarTooltipEnabled}
+              />
+            </nav>
+          </div>
+        )}
+      </div>
+    </TooltipProvider>
+  );
 
   return (
     <div
       className={`admin-shell${sidebarCollapsed ? ' is-sidebar-collapsed' : ''}`}
     >
-      {mobileNavigationOpen && (
-        <button
-          aria-label="Đóng điều hướng"
-          className="mobile-nav-backdrop"
-          onClick={closeMobileNavigation}
-          type="button"
-        />
-      )}
+      <a className="admin-skip-link" href="#admin-content">
+        Bỏ qua điều hướng
+      </a>
       <aside
         aria-label="Điều hướng quản trị"
-        className={`admin-sidebar${sidebarCollapsed ? ' is-collapsed' : ''}${mobileNavigationOpen ? ' is-open' : ''}`}
+        className="admin-sidebar admin-ui"
         id="admin-navigation"
       >
-        <div className="sidebar-header">
-          <Link
-            aria-label={`VexGo ${brandContextLines.join(' ')}`}
-            className="brand-lockup"
-            href={tenantScope ? (firstAccessibleTenantPath ?? '/') : '/'}
-            onClick={closeMobileNavigation}
-          >
-            <span className="brand-mark" aria-hidden="true">
-              V
-            </span>
-            <span className="brand-copy">
-              <strong>VexGo</strong>{' '}
-              {brandContextLines.map((line, index) => (
-                <small key={`${line}-${index}`}>{line}</small>
-              ))}
-            </span>
-          </Link>
-          <button
-            aria-controls="admin-navigation"
-            aria-expanded={!sidebarCollapsed}
-            aria-label={
-              sidebarCollapsed
-                ? 'Mở rộng thanh điều hướng'
-                : 'Thu gọn thanh điều hướng'
-            }
-            className="icon-button sidebar-collapse-button"
-            onClick={toggleSidebar}
-            title={
-              sidebarCollapsed
-                ? 'Mở rộng thanh điều hướng'
-                : 'Thu gọn thanh điều hướng'
-            }
-            type="button"
-          >
-            {sidebarCollapsed ? (
-              <PanelLeftOpen aria-hidden="true" size={18} />
-            ) : (
-              <PanelLeftClose aria-hidden="true" size={18} />
-            )}
-          </button>
-        </div>
-        <div aria-hidden="true" className="sidebar-divider" />
-        <div
-          className="sidebar-scroll"
-          role="region"
-          aria-label="Các mục điều hướng quản trị"
-          tabIndex={0}
-        >
-          {(platformScope ||
-            (tenantScope && accessibleOperationSections.length > 0)) && (
-            <div className="sidebar-nav-group">
-              <p className="sidebar-label">
-                {tenantScope ? 'VẬN HÀNH' : 'QUẢN TRỊ NỀN TẢNG'}
-              </p>
-              <nav aria-label={tenantScope ? 'Vận hành' : 'Quản trị nền tảng'}>
-                {tenantScope
-                  ? accessibleOperationSections.map((item) => {
-                      const { icon, label } =
-                        OPERATION_NAVIGATION_DETAILS[item.section];
-                      return (
-                        <Link
-                          aria-label={label}
-                          aria-current={
-                            activeSection === item.section ? 'page' : undefined
-                          }
-                          className={`sidebar-link${activeSection === item.section ? ' is-active' : ''}`}
-                          href={item.href}
-                          key={item.section}
-                          onClick={closeMobileNavigation}
-                          title={label}
-                        >
-                          <span className="sidebar-link-icon">{icon()}</span>
-                          <span>{label}</span>
-                        </Link>
-                      );
-                    })
-                  : platformScope && (
-                      <>
-                        <Link
-                          aria-label="Tổng quan"
-                          aria-current={
-                            activeSection === 'overview' ? 'page' : undefined
-                          }
-                          className={`sidebar-link${activeSection === 'overview' ? ' is-active' : ''}`}
-                          href="/"
-                          onClick={closeMobileNavigation}
-                          title="Tổng quan"
-                        >
-                          <span className="sidebar-link-icon">
-                            <Database size={18} />
-                          </span>
-                          <span>Tổng quan</span>
-                        </Link>
-                        {canReadBusCompanies && (
-                          <Link
-                            aria-label="Nhà xe"
-                            aria-current={
-                              activeSection === 'bus-companies'
-                                ? 'page'
-                                : undefined
-                            }
-                            className={`sidebar-link${activeSection === 'bus-companies' ? ' is-active' : ''}`}
-                            href="/bus-companies"
-                            onClick={closeMobileNavigation}
-                            title="Nhà xe"
-                          >
-                            <span className="sidebar-link-icon">
-                              <Building2 size={18} />
-                            </span>
-                            <span>Nhà xe</span>
-                          </Link>
-                        )}
-                        {canReadAdminAccounts && (
-                          <Link
-                            aria-label="Tài khoản Admin"
-                            aria-current={
-                              activeSection === 'admin-accounts'
-                                ? 'page'
-                                : undefined
-                            }
-                            className={`sidebar-link${activeSection === 'admin-accounts' ? ' is-active' : ''}`}
-                            href="/admin-accounts"
-                            onClick={closeMobileNavigation}
-                            title="Tài khoản Admin"
-                          >
-                            <span className="sidebar-link-icon">
-                              <UsersRound size={18} />
-                            </span>
-                            <span>Tài khoản Admin</span>
-                          </Link>
-                        )}
-                        {canManageRbac && (
-                          <Link
-                            aria-label="Phân quyền"
-                            aria-current={
-                              activeSection === 'rbac' ? 'page' : undefined
-                            }
-                            className={`sidebar-link${activeSection === 'rbac' ? ' is-active' : ''}`}
-                            href="/rbac"
-                            onClick={closeMobileNavigation}
-                            title="Phân quyền"
-                          >
-                            <span className="sidebar-link-icon">
-                              <ShieldCheck size={18} />
-                            </span>
-                            <span>Phân quyền</span>
-                          </Link>
-                        )}
-                      </>
-                    )}
-              </nav>
-            </div>
-          )}
-          {tenantScope && canReadTenantRolePermissions && (
-            <div className="sidebar-nav-group">
-              <p className="sidebar-label">QUẢN TRỊ NHÀ XE</p>
-              <nav aria-label="Quản trị nhà xe">
-                <Link
-                  aria-label="Phân quyền"
-                  aria-current={
-                    activeSection === 'tenant-rbac' ? 'page' : undefined
-                  }
-                  className={`sidebar-link${activeSection === 'tenant-rbac' ? ' is-active' : ''}`}
-                  href="/tenant-rbac"
-                  onClick={closeMobileNavigation}
-                  title="Phân quyền"
-                >
-                  <span className="sidebar-link-icon">
-                    <ShieldCheck size={18} />
-                  </span>
-                  <span>Phân quyền</span>
-                </Link>
-              </nav>
-            </div>
-          )}
-        </div>
+        {sidebarContent}
       </aside>
-
+      <Sheet open={mobileNavigationOpen} onOpenChange={setMobileNavigationOpen}>
+        <SheetContent
+          side="left"
+          className="admin-mobile-navigation"
+          finalFocus={menuTriggerRef}
+        >
+          <SheetTitle className="sr-only">Điều hướng quản trị</SheetTitle>
+          {sidebarContent}
+        </SheetContent>
+      </Sheet>
       <main className="admin-main" id={activeSection}>
-        <header className="topbar">
-          <div className="topbar-left">
-            <button
-              aria-controls="admin-navigation"
-              aria-expanded={mobileNavigationOpen}
-              aria-label={mobileNavigationOpen ? 'Đóng menu' : 'Mở menu'}
-              className="icon-button mobile-menu-button"
-              onClick={() => setMobileNavigationOpen((open) => !open)}
-              type="button"
-            >
-              {mobileNavigationOpen ? <X size={20} /> : <Menu size={20} />}
-            </button>
-          </div>
-          <div className="topbar-account">
-            <span
-              aria-label={`Tài khoản ${session.fullName}`}
-              className="topbar-profile-avatar"
-              role="img"
-            >
-              {session.fullName.trim().charAt(0).toLocaleUpperCase('vi-VN') ||
-                'V'}
-            </span>
-            <button
-              aria-label="Đăng xuất"
-              className="topbar-profile-logout"
-              onClick={() => setLogoutConfirmOpen(true)}
-              title={signingOut ? 'Đang đăng xuất…' : 'Đăng xuất'}
-              type="button"
-            >
-              <LogOut aria-hidden="true" size={18} />
-            </button>
-            {logoutError && (
-              <p className="topbar-profile-error" role="alert">
-                {logoutError}
-              </p>
-            )}
-          </div>
-        </header>
-        {logoutConfirmOpen && (
-          <AdminDialogPrimitive
-            ariaLabelledBy="logout-confirm-title"
-            className="admin-dialog logout-confirm-dialog"
-            contentClassName="logout-confirm-dialog__panel"
-            onClose={() => setLogoutConfirmOpen(false)}
-            preventDismiss={signingOut}
-          >
-            <div className="logout-confirm-dialog__content">
-              <span aria-hidden="true" className="logout-confirm-dialog__icon">
-                <LogOut size={20} />
-              </span>
-              <h2 id="logout-confirm-title">Xác nhận đăng xuất</h2>
-              <p>Bạn có chắc chắn muốn đăng xuất khỏi tài khoản này không?</p>
-              <div className="logout-confirm-dialog__actions">
-                <button
-                  className="logout-confirm-dialog__cancel"
-                  disabled={signingOut}
-                  onClick={() => setLogoutConfirmOpen(false)}
-                  type="button"
+        <header className={`admin-ui ${headerStyles.header}`}>
+          <div className={headerStyles.inner}>
+            <div className={headerStyles.navigation}>
+              <Button
+                ref={menuTriggerRef}
+                aria-expanded={mobileNavigationOpen}
+                aria-label="Mở menu"
+                className={headerStyles.menu}
+                variant="ghost"
+                size="icon"
+                onClick={() => setMobileNavigationOpen(true)}
+              >
+                <Menu aria-hidden="true" size={20} />
+              </Button>
+              <div className={headerStyles.context}>
+                <span
+                  className={headerStyles.workspace}
+                  title={
+                    tenantScope ? tenantBusCompanyName : 'Quản trị nền tảng'
+                  }
                 >
-                  Hủy
-                </button>
-                <button
-                  className="logout-confirm-dialog__confirm"
-                  disabled={signingOut}
-                  onClick={() => void logout()}
-                  type="button"
+                  <Building2 aria-hidden="true" size={15} />
+                  <span>
+                    {tenantScope ? tenantBusCompanyName : 'Nền tảng VexGo'}
+                  </span>
+                </span>
+                <nav
+                  className={headerStyles.breadcrumb}
+                  aria-label="Vị trí hiện tại"
                 >
-                  {signingOut ? 'Đang đăng xuất…' : 'Đăng xuất'}
-                </button>
+                  <span className={headerStyles.group}>
+                    {tenantScope
+                      ? activeSection === 'tenant-rbac'
+                        ? 'Quản trị'
+                        : 'Vận hành'
+                      : 'Quản trị'}
+                  </span>
+                  <ChevronRight aria-hidden="true" size={14} />
+                  <span className={headerStyles.current} aria-current="page">
+                    {sectionLabel}
+                  </span>
+                </nav>
               </div>
             </div>
-          </AdminDialogPrimitive>
-        )}
-        {children}
+            <div className={headerStyles.account}>
+              {sidebarViewport === 'mobile' && (
+                <AdminAccountPopover
+                  className={headerStyles.mobileAccount}
+                  fullName={session.fullName}
+                  roleLabel={roleLabel}
+                />
+              )}
+              <span
+                role="img"
+                aria-label={`Tài khoản ${session.fullName}`}
+                className={headerStyles.avatar}
+              >
+                {session.fullName.trim().charAt(0).toLocaleUpperCase('vi-VN') ||
+                  'V'}
+              </span>
+              <div className={headerStyles.identity}>
+                <span className={headerStyles.name} title={session.fullName}>
+                  {session.fullName}
+                </span>
+                <span className={headerStyles.role} title={roleLabel}>
+                  {roleLabel}
+                </span>
+              </div>
+              <span className={headerStyles.divider} aria-hidden="true" />
+              <Button
+                aria-label="Đăng xuất"
+                variant="ghost"
+                disabled={signingOut}
+                aria-busy={signingOut}
+                className={headerStyles.logout}
+                onClick={() => void logout()}
+              >
+                {signingOut ? (
+                  <LoaderCircle
+                    aria-hidden="true"
+                    size={18}
+                    className="motion-safe:animate-spin"
+                  />
+                ) : (
+                  <LogOut aria-hidden="true" size={18} />
+                )}
+                <span>{signingOut ? 'Đang thoát…' : 'Đăng xuất'}</span>
+              </Button>
+            </div>
+          </div>
+        </header>
+        <div id="admin-content" tabIndex={-1}>
+          {children}
+        </div>
       </main>
     </div>
   );

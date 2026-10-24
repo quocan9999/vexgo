@@ -21,9 +21,11 @@ const route = {
   updatedAt: '2026-09-23T07:34:00.000Z',
 };
 
-vi.mock('lucide-react', () => {
+vi.mock('lucide-react', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('lucide-react')>();
   const Icon = () => null;
   return {
+    ...actual,
     ArrowDown: Icon,
     ArrowUp: Icon,
     ArrowUpDown: Icon,
@@ -160,7 +162,7 @@ describe('Admin route action permissions', () => {
     const { rerender } = renderRouteDetails();
     const detail = await screen.findByRole('dialog', { name: 'Thông tin tuyến xe' });
     fireEvent.click(within(detail).getByRole('button', { name: 'Tạm ngưng tuyến' }));
-    expect(await screen.findByRole('dialog', { name: 'Tạm ngưng tuyến xe?' })).toBeTruthy();
+    expect(await screen.findByRole('alertdialog', { name: 'Tạm ngưng tuyến xe?' })).toBeTruthy();
 
     setEmployeeAdminTestSession(['route:read']);
     rerender(<RouteDetails
@@ -168,7 +170,7 @@ describe('Admin route action permissions', () => {
       onClose={vi.fn()}
       onUpdated={vi.fn()}
     />);
-    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Tạm ngưng tuyến xe?' })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole('alertdialog', { name: 'Tạm ngưng tuyến xe?' })).toBeNull());
     expect(state.updateRouteStatus).not.toHaveBeenCalled();
   });
 });

@@ -27,26 +27,6 @@ vi.mock('@/features/super-admin-layout/components/super-admin-layout', () => ({
   SuperAdminLayout: ({ children }: { children: React.ReactNode }) => <main>{children}</main>,
 }));
 
-vi.mock('@/components/admin/admin-detail-sheet', () => ({
-  AdminDetailSheet: ({
-    ariaLabelledBy,
-    children,
-  }: {
-    ariaLabelledBy: string;
-    children: React.ReactNode;
-  }) => <section aria-labelledby={ariaLabelledBy} role="dialog">{children}</section>,
-}));
-
-vi.mock('@/components/admin/admin-confirm-dialog', () => ({
-  AdminConfirmDialog: ({
-    ariaLabelledBy,
-    children,
-  }: {
-    ariaLabelledBy: string;
-    children: React.ReactNode;
-  }) => <section aria-labelledby={ariaLabelledBy} role="alertdialog">{children}</section>,
-}));
-
 vi.mock('@/features/bus-companies/hooks/use-bus-companies', () => ({
   useBusCompanies: () => ({
     companyPage: state.companyPage,

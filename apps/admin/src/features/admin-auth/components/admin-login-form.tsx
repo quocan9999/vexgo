@@ -3,7 +3,7 @@
 import { ArrowRight, BusFront, Eye, EyeOff, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useAdminSession } from '../hooks/use-admin-session';
 import {
   AdminAuthError,
@@ -12,6 +12,9 @@ import {
   signInAdmin,
 } from '../services/admin-auth';
 import { getFirstAccessibleAdminPath } from '../services/admin-access';
+import { Button } from '@/components/ui/action-button';
+import { Input } from '@/components/ui/input';
+import { Field, FieldLabel } from '@/components/ui/field';
 
 export function AdminLoginForm() {
   const router = useRouter();
@@ -21,11 +24,16 @@ export function AdminLoginForm() {
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const errorRef = useRef<HTMLDivElement>(null);
   const [validationDetails, setValidationDetails] = useState<
     Array<{ field: string; message: string }>
   >([]);
   const hasFieldError = (field: string) =>
     validationDetails.some((detail) => detail.field === field);
+
+  useEffect(() => {
+    if (error) errorRef.current?.focus();
+  }, [error]);
 
   useEffect(() => {
     void initializeAdminSession().catch(() => undefined);
@@ -71,7 +79,7 @@ export function AdminLoginForm() {
   }
 
   return (
-    <main className="login-layout">
+    <main className="admin-ui login-layout">
       <section className="login-showcase" aria-label="VexGo Admin">
         <Link aria-label="VexGo Admin" className="login-brand" href="/login">
           <span className="login-brand-mark" aria-hidden="true">V</span>
@@ -125,9 +133,9 @@ export function AdminLoginForm() {
                 Chưa kiểm tra được phiên trước đó. Bạn có thể thử đăng nhập lại.
               </p>
             )}
-            <label className="login-field" htmlFor="admin-identifier">
-              <span>Email hoặc số điện thoại</span>
-              <input
+            <Field>
+              <FieldLabel htmlFor="admin-identifier">Email hoặc số điện thoại</FieldLabel>
+              <Input
                 autoComplete="username"
                 autoCapitalize="none"
                 autoCorrect="off"
@@ -146,12 +154,13 @@ export function AdminLoginForm() {
                 type="text"
                 value={identifier}
               />
-            </label>
+            </Field>
 
-            <label className="login-field" htmlFor="admin-password">
-              <span>Mật khẩu</span>
-              <span className="password-input-wrap">
-                <input
+            <Field>
+              <FieldLabel htmlFor="admin-password">Mật khẩu</FieldLabel>
+              <div className="relative">
+                <Input
+                  className="pr-12"
                   autoComplete="current-password"
                   id="admin-password"
                   aria-describedby={hasFieldError('password') ? 'admin-login-error' : undefined}
@@ -167,10 +176,12 @@ export function AdminLoginForm() {
                   type={passwordVisible ? 'text' : 'password'}
                   value={password}
                 />
-                <button
+                <Button
                   aria-label={passwordVisible ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
                   aria-pressed={passwordVisible}
-                  className="password-visibility-button"
+                  className="absolute right-0 top-0 text-muted-foreground"
+                  variant="ghost"
+                  size="icon"
                   onClick={() => setPasswordVisible((visible) => !visible)}
                   type="button"
                 >
@@ -179,12 +190,18 @@ export function AdminLoginForm() {
                   ) : (
                     <Eye aria-hidden="true" size={17} />
                   )}
-                </button>
-              </span>
-            </label>
+                </Button>
+              </div>
+            </Field>
 
             {error && (
-              <div className="login-error" id="admin-login-error" role="alert">
+              <div
+                className="login-error rounded-md focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-4"
+                id="admin-login-error"
+                role="alert"
+                ref={errorRef}
+                tabIndex={-1}
+              >
                 <p>{error}</p>
                 {validationDetails.length > 0 && (
                   <ul>
@@ -198,14 +215,14 @@ export function AdminLoginForm() {
               </div>
             )}
 
-            <button
-              className="login-submit-button"
+            <Button
+              className="w-full justify-between"
               disabled={submitting}
               type="submit"
             >
               <span>{submitting ? 'Đang xác thực…' : 'Đăng nhập'}</span>
               <ArrowRight aria-hidden="true" size={17} />
-            </button>
+            </Button>
           </form>
         </div>
       </section>

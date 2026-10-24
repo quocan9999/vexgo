@@ -1,18 +1,18 @@
 'use client';
 
-import {
-  AlertTriangle,
-  Check,
-  LoaderCircle,
-  RotateCcw,
-} from 'lucide-react';
+import { RotateCcw } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { AdminConfirmDialog } from '@/components/admin/admin-confirm-dialog';
+import {
+  ResourceConfirmation,
+  ResourceNotice,
+  ResourceRefreshAction,
+  ResourceState,
+} from '@/components/admin/resource-ui';
 import { AdminPageHeader } from '@/components/admin/admin-page-header';
-import { AdminRefreshAction } from '@/components/admin/admin-page-actions';
 import { AdminRbacPermissionMatrix } from '@/components/admin/rbac/admin-rbac-permission-matrix';
 import { AdminRbacRoleSelector } from '@/components/admin/rbac/admin-rbac-role-selector';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/components/ui/action-button';
+import { Card } from '@/components/ui/card';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
 import { PlatformRbacScopeNavigation } from './platform-rbac-scope-navigation';
 import {
@@ -23,10 +23,9 @@ import type {
   AdminRbacRoleName,
   DefaultAdminRbacConfig,
 } from '../types/platform-rbac';
-import styles from './platform-rbac-management.module.css';
+import { toast } from 'sonner';
 
 type RoleDrafts = Partial<Record<AdminRbacRoleName, string[]>>;
-type Feedback = { type: 'success'; message: string };
 
 function getErrorMessage(error: unknown, fallback: string): string {
   return error instanceof Error && error.message ? error.message : fallback;
@@ -50,7 +49,6 @@ export function PlatformRbacManagement() {
   const [saving, setSaving] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [feedback, setFeedback] = useState<Feedback | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -71,7 +69,6 @@ export function PlatformRbacManagement() {
             ? current
             : loadedConfig.roles[0].roleName,
         );
-        setFeedback(null);
       })
       .catch((error: unknown) => {
         if (controller.signal.aborted) return;
@@ -86,7 +83,6 @@ export function PlatformRbacManagement() {
   function retryLoading() {
     setLoading(true);
     setLoadError(null);
-    setFeedback(null);
     setLoadAttempt((attempt) => attempt + 1);
   }
 
@@ -101,7 +97,6 @@ export function PlatformRbacManagement() {
 
   function changePermission(permissionKey: string, checked: boolean) {
     if (!selectedRole || selectedRole.isProtected) return;
-    setFeedback(null);
     setDrafts((current) => {
       const currentKeys = new Set(
         current[selectedRole.roleName] ?? selectedRole.permissionKeys,
@@ -128,7 +123,6 @@ export function PlatformRbacManagement() {
       [selectedRole.roleName]: [...selectedRole.permissionKeys],
     }));
     setSaveError(null);
-    setFeedback(null);
   }
 
   async function saveSelectedRole() {
@@ -171,11 +165,7 @@ export function PlatformRbacManagement() {
         [savedRole.roleName]: [...savedRole.permissionKeys],
       }));
       setConfirmOpen(false);
-      setFeedback({
-        type: 'success',
-        message: `Quyền mặc định của ${savedRole.roleName} đã được lưu.`,
-      });
-
+      toast.success(`Quyền mặc định của ${savedRole.roleName} đã được lưu.`);
     } catch (error) {
       setSaveError(getErrorMessage(error, 'Không thể lưu cấu hình quyền.'));
     } finally {
@@ -194,14 +184,17 @@ export function PlatformRbacManagement() {
 
   return (
     <SuperAdminLayout activeSection="rbac">
-      <div className="admin-page-content">
+      <div
+        aria-busy={loading || saving}
+        className="admin-page-content admin-ui space-y-6 [&>nav]:mt-0"
+      >
         <AdminPageHeader
           eyebrow="QUẢN TRỊ NỀN TẢNG"
           title="Phân quyền vai trò"
           titleId="platform-rbac-title"
           actions={
-            <AdminRefreshAction
-              loading={loading}
+            <ResourceRefreshAction
+              loading={loading || saving}
               onClick={retryLoading}
             />
           }
@@ -209,35 +202,33 @@ export function PlatformRbacManagement() {
 
         <PlatformRbacScopeNavigation activeScope="platform" />
 
-        {feedback?.type === 'success' && (
-          <p className={styles.successMessage} role="status">
-            <Check aria-hidden="true" size={16} />
-            {feedback.message}
-          </p>
-        )}
         {loading && (
-          <div aria-live="polite" className={styles.loading} role="status">
-            <LoaderCircle aria-hidden="true" className={styles.spinner} size={20} />
-            Đang tải danh mục quyền…
-          </div>
+          <Card>
+            <ResourceState loading>Đang tải danh mục quyền…</ResourceState>
+          </Card>
         )}
 
         {!loading && loadError && (
-          <section aria-labelledby="rbac-load-error-title" className={styles.errorPanel}>
-            <h2 id="rbac-load-error-title">Không thể tải cấu hình quyền</h2>
-            <p role="alert">{loadError}</p>
-            <Button
-              onClick={retryLoading}
-              variant="secondary"
-            >
-              Thử tải lại
-            </Button>
-          </section>
+          <Card>
+            <ResourceState error>
+              <div className="grid justify-items-center gap-3">
+                <h2 className="text-base font-semibold">
+                  Không thể tải cấu hình quyền
+                </h2>
+                <p>{loadError}</p>
+                <Button onClick={retryLoading} variant="outline">
+                  Thử tải lại
+                </Button>
+              </div>
+            </ResourceState>
+          </Card>
         )}
 
         {!loading && !loadError && config && (
           <>
             <AdminRbacRoleSelector
+              appearance="resource"
+              disabled={saving}
               dirtyRoleNames={roleDraftsDirty}
               onSelect={setSelectedRoleName}
               radioName="platform-rbac-role"
@@ -249,16 +240,20 @@ export function PlatformRbacManagement() {
 
             {selectedRole && (
               <AdminRbacPermissionMatrix
+                appearance="resource"
                 actions={!selectedRole.isProtected && (
-                  <div className={styles.formActions}>
-                    <p aria-live="polite" className={styles.draftStatus}>
+                  <div className="flex flex-wrap items-center justify-between gap-4 border-t pt-5 [&>div]:flex [&>div]:flex-wrap [&>div]:gap-3">
+                    <p
+                      aria-live="polite"
+                      className="text-xs text-muted-foreground"
+                    >
                       {isDirty ? 'Có thay đổi chưa lưu cho vai trò này.' : 'Cấu hình đã đồng bộ.'}
                     </p>
                     <div>
                       <Button
                         disabled={!isDirty || saving}
                         onClick={resetSelectedRole}
-                        variant="secondary"
+                        variant="outline"
                       >
                         <RotateCcw aria-hidden="true" size={16} />
                         Hoàn tác
@@ -288,44 +283,28 @@ export function PlatformRbacManagement() {
         )}
 
         {confirmOpen && selectedRole && (
-          <AdminConfirmDialog
-            ariaDescribedBy="rbac-confirm-description"
-            ariaLabelledBy="rbac-confirm-title"
-            ariaBusy={saving}
+          <ResourceConfirmation
+            title="Xác nhận thay thế quyền mặc định"
+            description={`Bạn sắp thay thế toàn bộ quyền mặc định của vai trò ${selectedRole.roleName}. Thay đổi sẽ áp dụng cho mọi tài khoản mang vai trò này, trên toàn hệ thống; thao tác này không tạo cấu hình riêng cho từng nhà xe.`}
+            busy={saving}
             onClose={() => setConfirmOpen(false)}
-            preventDismiss={saving}
           >
-            <div className={styles.confirmContent}>
-              <span className={styles.confirmIcon} aria-hidden="true">
-                <AlertTriangle size={19} />
-              </span>
-              <h2 id="rbac-confirm-title">Xác nhận thay thế quyền mặc định</h2>
-              <p id="rbac-confirm-description">
-                Bạn sắp thay thế toàn bộ quyền mặc định của vai trò{' '}
-                <strong>{selectedRole.roleName}</strong>. Thay đổi sẽ áp dụng cho
-                mọi tài khoản mang vai trò này, trên toàn hệ thống; thao tác này
-                không tạo cấu hình riêng cho từng nhà xe.
-              </p>
-              {selectedDraft.length === 0 && (
-                <p className={styles.emptyReplacementWarning}>
-                  Vai trò sẽ không còn quyền nào sau khi lưu.
-                </p>
-              )}
-              {saveError && <p className={styles.dialogError} role="alert">{saveError}</p>}
-              <div className={styles.confirmActions}>
-                <Button
-                  disabled={saving}
-                  onClick={() => setConfirmOpen(false)}
-                  variant="secondary"
-                >
-                  Hủy
-                </Button>
-                <Button disabled={saving} onClick={() => void saveSelectedRole()}>
-                  {saving ? 'Đang lưu…' : 'Xác nhận lưu'}
-                </Button>
-              </div>
-            </div>
-          </AdminConfirmDialog>
+            {saveError && (
+              <ResourceNotice kind="error">{saveError}</ResourceNotice>
+            )}
+            {selectedDraft.length === 0 && (
+              <ResourceNotice kind="info">
+                Vai trò sẽ không còn quyền nào sau khi lưu.
+              </ResourceNotice>
+            )}
+            <Button
+              aria-busy={saving}
+              disabled={saving}
+              onClick={() => void saveSelectedRole()}
+            >
+              {saving ? 'Đang lưu…' : 'Xác nhận lưu'}
+            </Button>
+          </ResourceConfirmation>
         )}
       </div>
     </SuperAdminLayout>

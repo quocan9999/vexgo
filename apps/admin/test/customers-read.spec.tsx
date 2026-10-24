@@ -143,7 +143,7 @@ describe('Customer Directory & Detail (/customers)', () => {
     expect(screen.getAllByText('Đang hoạt động').length).toBeGreaterThan(0);
 
     // Verify result count summary
-    expect(screen.getByText('1 kết quả')).toBeTruthy();
+    expect(document.querySelector('[aria-live="polite"]')?.textContent).toMatch(/1–1.*1/);
 
     // Verify Read-Management boundary: NO create button, NO edit button, NO status toggle
     expect(screen.queryByRole('button', { name: /thêm/i })).toBeNull();
@@ -210,7 +210,7 @@ describe('Customer Directory & Detail (/customers)', () => {
     expect(within(sheet).getByText('Đã xác thực')).toBeTruthy();
 
     // Close detail sheet
-    const closeButton = within(sheet).getByRole('button', { name: 'Đóng thông tin khách hàng' });
+    const closeButton = within(sheet).getByRole('button', { name: 'Đóng' });
     fireEvent.click(closeButton);
 
     await waitFor(() => {

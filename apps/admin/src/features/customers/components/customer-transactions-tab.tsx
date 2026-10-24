@@ -1,22 +1,41 @@
 'use client';
 
 import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react';
-import { AdminPagination } from '@/components/admin/admin-pagination';
-import { AdminStatusBadge } from '@/components/admin/admin-status-badge';
-import { AdminTableSkeleton } from '@/components/admin/admin-table-skeleton';
+import {
+  ResourcePagination,
+  ResourceStatusBadge,
+  ResourceTableSkeleton,
+  ResourceState,
+} from '@/components/admin/resource-ui';
 import {
   FilterToolbar,
   SearchInput,
-} from '@/components/data-filters/data-filters';
-import { Button } from '@/components/ui/button';
+} from '@/components/data-filters/resource-filters';
+import { ResourceSortControls } from '@/components/data-filters/resource-sort';
+import { Button } from '@/components/ui/action-button';
+import { Card } from '@/components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { useCustomerTransactions } from '../hooks/use-customer-transactions';
 
 function formatDateTime(value?: string | null) {
   if (!value) return '—';
   return new Intl.DateTimeFormat('vi-VN', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(value));
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+    .format(new Date(value))
+    .replaceAll('/', '-');
 }
 
 function renderLinkedDoc(tx: {
@@ -33,7 +52,8 @@ function renderLinkedDoc(tx: {
   if (tx.shipment) {
     return (
       <span>
-        Gửi hàng: <strong className="admin-data-mono">{tx.shipment.code}</strong>
+        Gửi hàng:{' '}
+        <strong className="admin-data-mono">{tx.shipment.code}</strong>
       </span>
     );
   }
@@ -41,12 +61,19 @@ function renderLinkedDoc(tx: {
 }
 
 function statusTone(status: string): 'active' | 'muted' {
-  if (status === 'THANH_CONG' || status === 'HOAN_TAT') return 'active';
+  if (
+    status === 'DA_THANH_TOAN' ||
+    status === 'THANH_CONG' ||
+    status === 'HOAN_TAT'
+  )
+    return 'active';
   return 'muted';
 }
 
 function formatStatus(status: string): string {
   switch (status) {
+    case 'DA_THANH_TOAN':
+      return 'Đã thanh toán';
     case 'THANH_CONG':
       return 'Thành công';
     case 'CHO_THANH_TOAN':
@@ -82,16 +109,11 @@ export function CustomerTransactionsTab({
   } = useCustomerTransactions(customerId);
 
   return (
-    <div className="panel admin-resource-panel">
-      <FilterToolbar
-        totalItems={
-          error
-            ? null
-            : loading && transactions.length === 0
-              ? null
-              : meta.totalItems
-        }
-      >
+    <div
+      className="min-w-0 overflow-hidden rounded-xl border bg-card shadow-sm"
+      aria-busy={loading || refreshing}
+    >
+      <FilterToolbar>
         <SearchInput
           label="Tìm kiếm giao dịch"
           onChange={setSearchInput}
@@ -99,168 +121,197 @@ export function CustomerTransactionsTab({
           value={searchInput}
         />
       </FilterToolbar>
+      <ResourceSortControls
+        label="Sắp xếp giao dịch"
+        value={sortBy}
+        options={[
+          { value: 'createdDate', label: 'Ngày tạo' },
+          { value: 'totalAmount', label: 'Tổng tiền' },
+        ]}
+        direction={sortDirection}
+        onFieldChange={(value) =>
+          handleSort(value as 'createdDate' | 'totalAmount')
+        }
+        onDirectionChange={() => handleSort(sortBy)}
+      />
 
       {error && (
-        <div className="customers-state-panel" role="alert">
+        <ResourceState error>
           <p>{error}</p>
-          <Button onClick={refresh} type="button" variant="secondary">
+          <Button onClick={refresh} type="button" variant="outline">
             Thử lại
           </Button>
-        </div>
+        </ResourceState>
       )}
 
-      {loading && transactions.length === 0 ? (
-        <AdminTableSkeleton resourceLabel="giao dịch" />
-      ) : transactions.length === 0 ? (
-        <div className="customers-state-panel">
-          <p>Chưa có giao dịch với nhà xe này.</p>
-        </div>
-      ) : (
-        <>
-          <div
-            className="admin-resource-table-wrap"
-            aria-busy={loading || refreshing}
-          >
-            <table className="admin-resource-table">
-              <caption className="sr-only">Lịch sử giao dịch</caption>
-              <thead>
-                <tr>
-                  <th scope="col">Mã giao dịch</th>
-                  <th
-                    aria-sort={
-                      sortBy === 'createdDate'
-                        ? sortDirection === 'asc'
-                          ? 'ascending'
-                          : 'descending'
-                        : 'none'
-                    }
-                    scope="col"
-                  >
-                    <button
-                      className="admin-resource-sort-button"
-                      onClick={() => handleSort('createdDate')}
-                      type="button"
+      {!error &&
+        (loading && transactions.length === 0 ? (
+          <ResourceTableSkeleton resourceLabel="giao dịch" />
+        ) : transactions.length === 0 ? (
+          <ResourceState>
+            <p>
+              {searchInput.trim()
+                ? 'Không tìm thấy giao dịch phù hợp.'
+                : 'Chưa có giao dịch với nhà xe này.'}
+            </p>
+            {searchInput && (
+              <Button variant="outline" onClick={() => setSearchInput('')}>
+                Xóa tìm kiếm
+              </Button>
+            )}
+          </ResourceState>
+        ) : (
+          <>
+            <div
+              className="hidden min-[901px]:block"
+              aria-busy={loading || refreshing}
+            >
+              <Table className="text-[13px]">
+                <TableCaption className="sr-only">
+                  Lịch sử giao dịch
+                </TableCaption>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead scope="col">Mã giao dịch</TableHead>
+                    <TableHead
+                      aria-sort={
+                        sortBy === 'createdDate'
+                          ? sortDirection === 'asc'
+                            ? 'ascending'
+                            : 'descending'
+                          : 'none'
+                      }
+                      scope="col"
                     >
-                      <span>Ngày tạo</span>
-                      <span aria-hidden="true">
-                        {sortBy === 'createdDate' ? (
-                          sortDirection === 'asc' ? (
-                            <ArrowUp size={14} />
+                      <Button
+                        className="-ml-3 font-semibold"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleSort('createdDate')}
+                        type="button"
+                      >
+                        <span>Ngày tạo</span>
+                        <span aria-hidden="true">
+                          {sortBy === 'createdDate' ? (
+                            sortDirection === 'asc' ? (
+                              <ArrowUp size={14} />
+                            ) : (
+                              <ArrowDown size={14} />
+                            )
                           ) : (
-                            <ArrowDown size={14} />
-                          )
-                        ) : (
-                          <ArrowUpDown size={14} />
-                        )}
-                      </span>
-                    </button>
-                  </th>
-                  <th
-                    aria-sort={
-                      sortBy === 'totalAmount'
-                        ? sortDirection === 'asc'
-                          ? 'ascending'
-                          : 'descending'
-                        : 'none'
-                    }
-                    scope="col"
-                  >
-                    <button
-                      className="admin-resource-sort-button"
-                      onClick={() => handleSort('totalAmount')}
-                      type="button"
+                            <ArrowUpDown size={14} />
+                          )}
+                        </span>
+                      </Button>
+                    </TableHead>
+                    <TableHead
+                      aria-sort={
+                        sortBy === 'totalAmount'
+                          ? sortDirection === 'asc'
+                            ? 'ascending'
+                            : 'descending'
+                          : 'none'
+                      }
+                      scope="col"
                     >
-                      <span>Tổng tiền</span>
-                      <span aria-hidden="true">
-                        {sortBy === 'totalAmount' ? (
-                          sortDirection === 'asc' ? (
-                            <ArrowUp size={14} />
+                      <Button
+                        className="-ml-3 font-semibold"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleSort('totalAmount')}
+                        type="button"
+                      >
+                        <span>Tổng tiền</span>
+                        <span aria-hidden="true">
+                          {sortBy === 'totalAmount' ? (
+                            sortDirection === 'asc' ? (
+                              <ArrowUp size={14} />
+                            ) : (
+                              <ArrowDown size={14} />
+                            )
                           ) : (
-                            <ArrowDown size={14} />
-                          )
-                        ) : (
-                          <ArrowUpDown size={14} />
-                        )}
-                      </span>
-                    </button>
-                  </th>
-                  <th scope="col">Trạng thái</th>
-                  <th scope="col">Chứng từ liên kết</th>
-                </tr>
-              </thead>
-              <tbody>
-                {transactions.map((tx) => (
-                  <tr key={tx.transactionId}>
-                    <td>
-                      <span className="customer-code admin-data-mono">
+                            <ArrowUpDown size={14} />
+                          )}
+                        </span>
+                      </Button>
+                    </TableHead>
+                    <TableHead scope="col">Trạng thái</TableHead>
+                    <TableHead scope="col">Chứng từ liên kết</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {transactions.map((tx) => (
+                    <TableRow key={tx.transactionId}>
+                      <TableCell>
+                        <span className="admin-data-mono text-xs text-muted-foreground">
+                          {tx.code}
+                        </span>
+                      </TableCell>
+                      <TableCell>{formatDateTime(tx.createdDate)}</TableCell>
+                      <TableCell>
+                        <strong>
+                          {tx.totalAmount.toLocaleString('vi-VN')} đ
+                        </strong>
+                      </TableCell>
+                      <TableCell>
+                        <ResourceStatusBadge tone={statusTone(tx.status)}>
+                          {formatStatus(tx.status)}
+                        </ResourceStatusBadge>
+                      </TableCell>
+                      <TableCell>{renderLinkedDoc(tx)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+
+            <div
+              className="grid gap-4 p-4 min-[901px]:hidden"
+              aria-label="Danh sách giao dịch dạng thẻ"
+              aria-busy={loading || refreshing}
+            >
+              {transactions.map((tx) => (
+                <Card key={tx.transactionId} className="gap-4 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <span className="admin-data-mono text-xs text-muted-foreground">
                         {tx.code}
                       </span>
-                    </td>
-                    <td>{formatDateTime(tx.createdDate)}</td>
-                    <td>
-                      <strong>
+                      <h3 className="mt-1 text-base font-semibold">
                         {tx.totalAmount.toLocaleString('vi-VN')} đ
-                      </strong>
-                    </td>
-                    <td>
-                      <AdminStatusBadge tone={statusTone(tx.status)}>
-                        {formatStatus(tx.status)}
-                      </AdminStatusBadge>
-                    </td>
-                    <td>{renderLinkedDoc(tx)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                      </h3>
+                    </div>
+                    <ResourceStatusBadge tone={statusTone(tx.status)}>
+                      {formatStatus(tx.status)}
+                    </ResourceStatusBadge>
+                  </div>
+                  <dl className="grid grid-cols-2 gap-4 text-[13px] [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-1 [&_dd]:break-words">
+                    <div>
+                      <dt>Ngày tạo</dt>
+                      <dd>{formatDateTime(tx.createdDate)}</dd>
+                    </div>
+                    <div>
+                      <dt>Chứng từ liên kết</dt>
+                      <dd>{renderLinkedDoc(tx)}</dd>
+                    </div>
+                  </dl>
+                </Card>
+              ))}
+            </div>
 
-          <div
-            className="customers-mobile-list"
-            aria-label="Danh sách giao dịch dạng thẻ"
-            aria-busy={loading || refreshing}
-          >
-            {transactions.map((tx) => (
-              <article key={tx.transactionId} className="customers-mobile-card">
-                <div className="customers-mobile-card-header">
-                  <div>
-                      <span className="customer-code admin-data-mono">
-                        {tx.code}
-                      </span>
-                    <h3 className="customers-mobile-card-title">
-                      {tx.totalAmount.toLocaleString('vi-VN')} đ
-                    </h3>
-                  </div>
-                  <AdminStatusBadge tone={statusTone(tx.status)}>
-                    {formatStatus(tx.status)}
-                  </AdminStatusBadge>
-                </div>
-                <dl className="customers-mobile-fields">
-                  <div>
-                    <dt>Ngày tạo</dt>
-                    <dd>{formatDateTime(tx.createdDate)}</dd>
-                  </div>
-                  <div>
-                    <dt>Chứng từ liên kết</dt>
-                    <dd>{renderLinkedDoc(tx)}</dd>
-                  </div>
-                </dl>
-              </article>
-            ))}
-          </div>
-
-          {meta.totalPages > 1 && (
-            <AdminPagination
-              currentPage={page}
-              disabled={loading}
-              onPageChange={setPage}
-              pageSize={meta.pageSize}
-              summaryLabel="giao dịch"
-              totalItems={meta.totalItems}
-              totalPages={meta.totalPages}
-            />
-          )}
-        </>
-      )}
+            {
+              <ResourcePagination
+                currentPage={page}
+                disabled={loading}
+                onPageChange={setPage}
+                pageSize={meta.pageSize}
+                summaryLabel="giao dịch"
+                totalItems={meta.totalItems}
+                totalPages={meta.totalPages}
+              />
+            }
+          </>
+        ))}
     </div>
   );
 }

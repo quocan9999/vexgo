@@ -1,3 +1,35 @@
+/* Opt-in theme for migrated pages and their portaled overlays. */
+.admin-ui {
+  --background: var(--admin-canvas);
+  --foreground: var(--admin-ink);
+  --card: #fff;
+  --card-foreground: var(--admin-text-strong);
+  --popover: var(--card);
+  --popover-foreground: var(--card-foreground);
+  --primary: var(--admin-blue);
+  --primary-foreground: #fff;
+  --secondary: var(--card);
+  --secondary-foreground: var(--card-foreground);
+  --muted: #f1f5f9;
+  --muted-foreground: var(--admin-text-muted);
+  --accent: var(--admin-blue-soft);
+  --accent-foreground: var(--admin-blue);
+  --border: var(--admin-border);
+  --input: #738096;
+  --ring: var(--admin-blue);
+  --destructive: var(--admin-danger);
+  --destructive-foreground: #fff;
+  --radius: 0.75rem;
+  --admin-surface: var(--card);
+  --admin-radius-panel: 12px;
+  --admin-status-success: #166534;
+  --admin-status-success-soft: #f0f8f3;
+  --admin-status-warning: #92400e;
+  --admin-status-warning-soft: #fffbeb;
+  --chart-1: var(--admin-blue);
+  color: var(--foreground);
+}
+
 :root {
   --admin-navy: #14233d;
   --admin-blue: #1e40af;

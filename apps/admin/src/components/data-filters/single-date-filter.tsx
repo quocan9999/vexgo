@@ -2,8 +2,10 @@
 
 import { Popover } from '@base-ui/react/popover';
 import { CalendarDays, ChevronDown } from 'lucide-react';
-import { useState } from 'react';
-import styles from './data-filters.module.css';
+import { useId, useState } from 'react';
+import { Button } from '@/components/ui/action-button';
+import { Input } from '@/components/ui/input';
+import { Field, FieldLabel } from '@/components/ui/field';
 
 type SingleDateFilterProps = {
   label: string;
@@ -17,64 +19,76 @@ export function SingleDateFilter({
   value,
 }: SingleDateFilterProps) {
   const [open, setOpen] = useState(false);
-  const formattedDate = value.split('-').reverse().join('/');
-
+  const id = useId();
+  const formattedDate = value.split('-').reverse().join('-');
   return (
-    <div className={`${styles.dateFilter} ${styles.singleDateFilter}`}>
+    <div className="min-w-0 flex-[1_1_180px]">
+      <label
+        htmlFor={`${id}-trigger`}
+        className="mb-2 block text-[13px] font-semibold"
+      >
+        {label}
+      </label>
       <Popover.Root onOpenChange={setOpen} open={open}>
         <Popover.Trigger
+          id={`${id}-trigger`}
+          render={
+            <Button
+              variant="outline"
+              className="w-full justify-between font-normal"
+            />
+          }
           aria-label={
             value
               ? `${label}: ${formattedDate}`
               : `Lọc theo ${label.toLocaleLowerCase()}`
           }
-          className={styles.dateTrigger}
-          data-active={Boolean(value)}
         >
-          <CalendarDays aria-hidden="true" size={16} />
-          <span className={styles.dateTriggerText}>
-            {value ? formattedDate : label}
+          <span className="flex min-w-0 items-center gap-2">
+            <CalendarDays aria-hidden className="size-4" />
+            <span className="truncate">
+              {value ? formattedDate : 'Tất cả ngày'}
+            </span>
           </span>
-          <ChevronDown aria-hidden="true" size={15} />
+          <ChevronDown aria-hidden className="size-4 text-muted-foreground" />
         </Popover.Trigger>
         <Popover.Portal>
           <Popover.Positioner
             align="end"
-            className={styles.datePositioner}
-            sideOffset={7}
+            sideOffset={8}
+            className="z-50 outline-none"
           >
-            <Popover.Popup className={styles.datePopup}>
-              <Popover.Title className={styles.dateTitle}>
+            <Popover.Popup className="admin-ui w-72 max-w-[calc(100vw-2rem)] space-y-4 rounded-xl border bg-popover p-4 text-popover-foreground shadow-md outline-none">
+              <Popover.Title className="text-sm font-semibold">
                 {label}
               </Popover.Title>
-              <Popover.Description className={styles.dateDescription}>
+              <Popover.Description className="sr-only">
                 Chọn một ngày để lọc danh sách.
               </Popover.Description>
-              <label className={styles.dateField}>
-                <span>{label}</span>
-                <input
-                  onChange={(event) => {
-                    const nextValue = event.target.value;
-                    onChange(nextValue);
-                    if (nextValue) setOpen(false);
-                  }}
+              <Field>
+                <FieldLabel htmlFor={`${id}-date`}>{label}</FieldLabel>
+                <Input
+                  id={`${id}-date`}
                   type="date"
                   value={value}
-                />
-              </label>
-              <div className={styles.dateActions}>
-                <button
-                  className={styles.clearDateButton}
-                  disabled={!value}
-                  onClick={() => {
-                    onChange('');
-                    setOpen(false);
+                  onChange={(event) => {
+                    const next = event.target.value;
+                    onChange(next);
+                    if (next) setOpen(false);
                   }}
-                  type="button"
-                >
-                  Xóa lọc
-                </button>
-              </div>
+                />
+              </Field>
+              <Button
+                variant="outline"
+                className="w-full"
+                disabled={!value}
+                onClick={() => {
+                  onChange('');
+                  setOpen(false);
+                }}
+              >
+                Xóa lọc
+              </Button>
             </Popover.Popup>
           </Popover.Positioner>
         </Popover.Portal>

@@ -1,3 +1,5 @@
+import { expectOperationToast } from './canonical-test-helpers';
+import { selectCanonicalOption } from './canonical-test-helpers';
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -52,9 +54,11 @@ const exhaustedSuspendedPromotion = {
   effectiveState: 'SUSPENDED' as const,
 };
 
-vi.mock('lucide-react', () => {
+vi.mock('lucide-react', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('lucide-react')>();
   const Icon = () => null;
   return {
+    ...actual,
     ArrowDown: Icon,
     ArrowUp: Icon,
     ArrowUpDown: Icon,
@@ -194,7 +198,7 @@ describe('Admin promotion management permissions and actions', () => {
 
     fireEvent.change(within(dialog).getByLabelText('Tên chương trình *'), { target: { value: 'Tết 2027' } });
     fireEvent.change(within(dialog).getByLabelText('Mã khuyến mãi *'), { target: { value: 'tet2027' } });
-    fireEvent.change(within(dialog).getByLabelText('Loại giảm giá *'), { target: { value: 'PHAN_TRAM' } });
+    await selectCanonicalOption(within(dialog).getByLabelText('Loại giảm giá *'), "Phần trăm");
     fireEvent.change(within(dialog).getByLabelText(/Mức giảm/), { target: { value: '10' } });
     fireEvent.change(within(dialog).getByLabelText('Giảm tối đa (VND) *'), { target: { value: '50000' } });
     fireEvent.change(within(dialog).getByLabelText('Bắt đầu *'), { target: { value: '2026-12-01' } });
@@ -213,7 +217,7 @@ describe('Admin promotion management permissions and actions', () => {
       usageLimit: 200,
     }));
     expect(state.refresh).toHaveBeenCalled();
-    expect(await screen.findByRole('status')).toBeTruthy();
+    await expectOperationToast('success', /Đã tạo khuyến mãi/);
   });
 
   it('supports fixed-amount promotions without a percentage cap field', async () => {
@@ -224,7 +228,7 @@ describe('Admin promotion management permissions and actions', () => {
 
     fireEvent.change(within(dialog).getByLabelText('Tên chương trình *'), { target: { value: 'Vé đầu năm' } });
     fireEvent.change(within(dialog).getByLabelText('Mã khuyến mãi *'), { target: { value: 'DAUNAM' } });
-    fireEvent.change(within(dialog).getByLabelText('Loại giảm giá *'), { target: { value: 'SO_TIEN' } });
+    await selectCanonicalOption(within(dialog).getByLabelText('Loại giảm giá *'), "Số tiền cố định");
     fireEvent.change(within(dialog).getByLabelText(/Mức giảm/), { target: { value: '25000' } });
     fireEvent.change(within(dialog).getByLabelText('Bắt đầu *'), { target: { value: '2026-12-01' } });
     fireEvent.change(within(dialog).getByLabelText('Kết thúc *'), { target: { value: '2027-01-31' } });
@@ -256,7 +260,7 @@ describe('Admin promotion management permissions and actions', () => {
     setEmployeeAdminTestSession(['promotion:read', 'promotion:update']);
     render(<PromotionsManagement />);
     fireEvent.click(screen.getAllByRole('button', { name: 'Tạm ngưng SUMMER10' })[0]!);
-    const confirm = await screen.findByRole('dialog', { name: 'Tạm ngưng khuyến mãi?' });
+    const confirm = await screen.findByRole('alertdialog', { name: 'Tạm ngưng khuyến mãi?' });
     fireEvent.click(within(confirm).getByRole('button', { name: 'Hủy' }));
     expect(state.updatePromotionStatus).not.toHaveBeenCalled();
   });
@@ -266,7 +270,7 @@ describe('Admin promotion management permissions and actions', () => {
     render(<PromotionsManagement />);
     expect(screen.queryByRole('button', { name: 'Thêm khuyến mãi' })).toBeNull();
     fireEvent.click(screen.getAllByRole('button', { name: 'Tạm ngưng SUMMER10' })[0]!);
-    const confirm = await screen.findByRole('dialog', { name: 'Tạm ngưng khuyến mãi?' });
+    const confirm = await screen.findByRole('alertdialog', { name: 'Tạm ngưng khuyến mãi?' });
     fireEvent.click(within(confirm).getByRole('button', { name: 'Tạm ngưng' }));
 
     await waitFor(() => expect(state.updatePromotionStatus).toHaveBeenCalledWith(15, 'TAM_NGUNG'));
@@ -280,10 +284,10 @@ describe('Admin promotion management permissions and actions', () => {
     ));
     render(<PromotionsManagement />);
     fireEvent.click(screen.getAllByRole('button', { name: 'Tạm ngưng SUMMER10' })[0]!);
-    const confirm = await screen.findByRole('dialog', { name: 'Tạm ngưng khuyến mãi?' });
+    const confirm = await screen.findByRole('alertdialog', { name: 'Tạm ngưng khuyến mãi?' });
     fireEvent.click(within(confirm).getByRole('button', { name: 'Tạm ngưng' }));
 
-    expect((await screen.findByRole('alert')).textContent).toContain('Khuyến mãi vừa thay đổi.');
+    await expectOperationToast('error', 'Khuyến mãi vừa thay đổi.');
     expect(state.refresh).toHaveBeenCalled();
   });
 
@@ -308,7 +312,7 @@ describe('Admin promotion management permissions and actions', () => {
 
     fireEvent.change(within(dialog).getByLabelText('Tên chương trình *'), { target: { value: 'Tết 2027' } });
     fireEvent.change(within(dialog).getByLabelText('Mã khuyến mãi *'), { target: { value: 'TET2027' } });
-    fireEvent.change(within(dialog).getByLabelText('Loại giảm giá *'), { target: { value: 'PHAN_TRAM' } });
+    await selectCanonicalOption(within(dialog).getByLabelText('Loại giảm giá *'), "Phần trăm");
     fireEvent.change(within(dialog).getByLabelText(/Mức giảm/), { target: { value: '10' } });
     fireEvent.change(within(dialog).getByLabelText('Giảm tối đa (VND) *'), { target: { value: '50000' } });
     fireEvent.change(within(dialog).getByLabelText('Bắt đầu *'), { target: { value: '2026-12-01' } });

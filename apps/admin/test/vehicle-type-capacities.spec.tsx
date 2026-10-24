@@ -123,7 +123,7 @@ afterEach(() => {
 
 describe('Vehicle Type default cargo capacities', () => {
   it('keeps the dialog description and description textarea on unique accessible IDs', async () => {
-    const dialogDescriptionText = 'Nhập tên và mô tả cho loại xe mới.';
+    const dialogDescriptionText = 'Nhập thông tin và sức chứa hàng mặc định cho loại xe mới.';
     render(<VehicleTypeFormDialog onClose={vi.fn()} onSaved={vi.fn()} />);
 
     const dialog = await screen.findByRole('dialog', {
@@ -372,7 +372,7 @@ describe('Vehicle Type default cargo capacities', () => {
     await screen.findByText('Sức chứa xe máy phải là số nguyên.');
     expect(capacityInput.getAttribute('aria-invalid')).toBe('true');
     expect(capacityInput.hasAttribute('aria-describedby')).toBe(true);
-    expect(within(dialog).queryByRole('alert')).toBeNull();
+    expect(within(dialog).getByRole('alert').textContent).toContain('Sức chứa xe máy phải là số nguyên.');
   });
 
   it('requires all three integer capacities in list responses', async () => {

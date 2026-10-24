@@ -1,21 +1,24 @@
-export type AccountStatus = 'ACTIVE' | 'INACTIVE';
+export type PlatformCompanySummary = {
+  id: number;
+  code: string;
+  name: string;
+  status: string;
+  createdAt: string;
+  activeAdministratorCount: number;
+};
 
 export type DashboardOverview = {
   generatedAt: string;
-  totals: {
-    busCompanies: number;
-    operatorAdminAccounts: number;
-    customerAccounts: number;
-    accounts: number;
+  timeZone: string;
+  companies: {
+    total: number;
+    active: number;
+    suspended: number;
+    other: number;
+    needingAdministrator: number;
   };
-  accountsByRole: Array<{
-    roleId: string;
-    roleName: string;
-    assignedAccountCount: number;
-  }>;
-  accountsByStatus: Array<{
-    status: AccountStatus;
-    label: string;
-    count: number;
-  }>;
+  administrators: { total: number; active: number };
+  onboarding: Array<{ label: string; count: number; currentMonth: boolean }>;
+  attentionCompanies: PlatformCompanySummary[];
+  recentCompanies: PlatformCompanySummary[];
 };

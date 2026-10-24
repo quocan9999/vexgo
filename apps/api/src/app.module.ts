@@ -24,6 +24,7 @@ import { NotificationsModule } from './notifications/notifications.module.js';
 import { ReviewsModule } from './reviews/reviews.module.js';
 import { SupportChatModule } from './support-chat/support-chat.module.js';
 import { RevenueReportsModule } from './revenue-reports/revenue-reports.module.js';
+import { PlatformDashboardModule } from './platform-dashboard/platform-dashboard.module.js';
 
 @Module({
   imports: [
@@ -57,6 +58,7 @@ import { RevenueReportsModule } from './revenue-reports/revenue-reports.module.j
     ReviewsModule,
     SupportChatModule,
     RevenueReportsModule,
+    PlatformDashboardModule,
   ],
 })
 export class AppModule {}

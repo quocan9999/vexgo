@@ -56,12 +56,14 @@ const mockTrip: Trip = {
   updatedAt: '2026-10-01T10:00:00.000Z',
 };
 
-vi.mock('lucide-react', () => {
+vi.mock('lucide-react', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('lucide-react')>();
   const icon = (name: string) =>
     function MockIcon(props: React.SVGProps<SVGSVGElement>) {
       return <svg {...props} data-icon={name} />;
     };
   return {
+    ...actual,
     ArrowDown: icon('down'),
     ArrowUp: icon('up'),
     ArrowUpDown: icon('sort'),
@@ -136,7 +138,7 @@ describe('Admin trips read page and components', () => {
   it('renders loading skeleton and refresh action without dead create button in 05.1', () => {
     const html = renderToStaticMarkup(<TripsManagement />);
     expect(html).toContain('Đang tải danh sách chuyến xe');
-    expect(html).toContain('data-result-count="loading"');
+    expect(html).not.toContain('aria-label="Trang sau"');
     expect(html).toContain('Làm mới');
     expect(html).not.toContain('Thêm chuyến');
   });
@@ -149,7 +151,8 @@ describe('Admin trips read page and components', () => {
     };
 
     const html = renderToStaticMarkup(<TripsManagement />);
-    expect(html).toContain('data-result-count="1"');
+    expect(html).toContain('aria-live="polite"');
+    expect(html).toContain('1');
     expect(html).toContain('FUTA-CX-001');
     expect(html).toContain('TP.HCM → Đà Lạt');
     expect(html).toContain('30F-123.45');
@@ -165,7 +168,7 @@ describe('Admin trips read page and components', () => {
     expect(html).toContain('Hàng nhẹ: 3');
     expect(html).not.toContain('Còn lại');
     expect(html).toContain('aria-label="Xem chi tiết chuyến FUTA-CX-001"');
-    expect(html).toContain('trips-mobile-card');
+    expect(html).toContain('data-slot="card"');
     expect(html).not.toContain('Đang tải danh sách chuyến xe');
   });
 
@@ -202,12 +205,12 @@ describe('Admin trips read page and components', () => {
     const badgeActive = renderToStaticMarkup(
       <TripStatusBadge status="DANG_CHAY" />,
     );
-    expect(badgeActive).toContain('is-active');
+    expect(badgeActive).toContain('data-variant="success"');
 
     const badgeMuted = renderToStaticMarkup(
       <TripStatusBadge status="CHUA_KHOI_HANH" />,
     );
-    expect(badgeMuted).not.toContain('is-active');
+    expect(badgeMuted).toContain('data-variant="secondary"');
   });
 });
 

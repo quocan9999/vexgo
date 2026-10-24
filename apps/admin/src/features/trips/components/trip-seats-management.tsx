@@ -2,10 +2,29 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { LoaderCircle, RefreshCw } from 'lucide-react';
+import {
+  Armchair,
+  ArrowLeft,
+  BusFront,
+  CalendarDays,
+  CheckCircle2,
+  Clock3,
+  RefreshCw,
+  Route,
+  Ticket,
+} from 'lucide-react';
+import { ResourceState } from '@/components/admin/resource-ui';
 import { AdminPageHeader } from '@/components/admin/admin-page-header';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/status-badge';
+import { Button } from '@/components/ui/action-button';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useAdminPermissions } from '@/features/admin-auth/hooks/use-admin-permissions';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
 import { getTripById, getTripSeats, isTripNotFoundError } from '../services/trip-service';
@@ -16,16 +35,23 @@ import type {
   TripSeatsResponse,
   TripSeatStatus,
 } from '../types/trip';
-import '../trips.css';
+
+const tripSeatStatusPresentation = {
+  TRONG: { label: 'Trống', variant: 'success' },
+  DANG_GIU: { label: 'Đang giữ', variant: 'warning' },
+  DA_DAT: { label: 'Đã đặt', variant: 'destructive' },
+} satisfies Record<
+  TripSeatStatus,
+  {
+    label: string;
+    variant: 'success' | 'warning' | 'destructive';
+  }
+>;
 
 function formatDate(dateStr: string) {
-  try {
-    const parts = dateStr.split('-');
-    if (parts.length === 3) {
-      return `${parts[2]}/${parts[1]}/${parts[0]}`;
-    }
-  } catch {
-    // fallback
+  const parts = dateStr.split('-');
+  if (parts.length === 3) {
+    return parts[2] + '-' + parts[1] + '-' + parts[0];
   }
   return dateStr;
 }
@@ -34,18 +60,15 @@ function formatTime(timeStr: string) {
   return timeStr.slice(0, 5);
 }
 
+function formatCount(value: number) {
+  return value.toLocaleString('vi-VN');
+}
+
 export function TripSeatStatusBadge({ status }: { status: TripSeatStatus }) {
-  let label = 'Trống';
-  let statusClass = 'trip-seat-badge--available';
-  if (status === 'DANG_GIU') {
-    label = 'Đang giữ';
-    statusClass = 'trip-seat-badge--held';
-  } else if (status === 'DA_DAT') {
-    label = 'Đã đặt';
-    statusClass = 'trip-seat-badge--booked';
-  }
+  const { label, variant } = tripSeatStatusPresentation[status];
+
   return (
-    <Badge className={`trip-seat-badge ${statusClass}`} data-status={status}>
+    <Badge data-status={status} variant={variant}>
       {label}
     </Badge>
   );
@@ -55,6 +78,45 @@ type WorkspaceState =
   | { status: 'loading' }
   | { status: 'error'; message: string; isNotFound?: boolean }
   | { status: 'success'; trip: Trip; seatsData: TripSeatsResponse };
+
+type TripSeatFilter = '' | TripSeatStatus;
+
+function TripSeatsLoading() {
+  return (
+    <div
+      aria-busy="true"
+      aria-label="Đang tải thông tin ghế chuyến"
+      className="space-y-4"
+      role="status"
+    >
+      <span className="sr-only">Đang tải thông tin chuyến xe và danh sách ghế…</span>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {Array.from({ length: 4 }, (_, index) => (
+          <Card className="h-auto gap-3 py-4" key={index}>
+            <CardContent className="flex items-center gap-3">
+              <Skeleton className="size-10 shrink-0 rounded-lg" />
+              <div className="min-w-0 flex-1 space-y-2">
+                <Skeleton className="h-3 w-24" />
+                <Skeleton className="h-7 w-16" />
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+      <Card className="h-auto gap-4 py-5">
+        <CardHeader className="space-y-3">
+          <Skeleton className="h-5 w-44" />
+          <Skeleton className="h-4 w-72 max-w-full" />
+        </CardHeader>
+        <CardContent className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {Array.from({ length: 8 }, (_, index) => (
+            <Skeleton className="h-16" key={index} />
+          ))}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
 
 export function TripSeatsManagement({
   tripId,
@@ -78,7 +140,7 @@ export function TripSeatsManagement({
     }
     return { status: 'loading' };
   });
-  const [statusFilter, setStatusFilter] = useState<string>('');
+  const [statusFilter, setStatusFilter] = useState<TripSeatFilter>('');
   const [refreshCount, setRefreshCount] = useState(0);
 
   const currentWorkspace: WorkspaceState = !validTripId
@@ -126,20 +188,23 @@ export function TripSeatsManagement({
   if (!canRead) {
     return (
       <SuperAdminLayout activeSection="trips">
-        <div className="admin-page-content trip-seats-page">
+        <div className="admin-page-content space-y-5">
           <AdminPageHeader
             actions={
-              <Link className="button button-secondary" href="/trips">
-                Quay lại danh sách chuyến
-              </Link>
+              <Button render={<Link href="/trips" />} variant="secondary">
+                <ArrowLeft aria-hidden="true" />
+                Danh sách chuyến
+              </Button>
             }
             eyebrow="QUẢN LÝ VẬN HÀNH"
             title="Ghế chuyến xe"
             titleId="trip-seats-title"
           />
-          <section className="trips-list-state" role="alert">
-            <p>Bạn không có quyền xem thông tin ghế chuyến xe.</p>
-          </section>
+          <Card className="h-auto gap-0 py-0">
+            <ResourceState error>
+              Bạn không có quyền xem thông tin ghế chuyến xe.
+            </ResourceState>
+          </Card>
         </div>
       </SuperAdminLayout>
     );
@@ -160,22 +225,27 @@ export function TripSeatsManagement({
         )
       : new Map<string, TripSeat[]>();
 
+  const backAction = (
+    <Button render={<Link href="/trips" />} variant="secondary">
+      <ArrowLeft aria-hidden="true" />
+      Danh sách chuyến
+    </Button>
+  );
+
   return (
     <SuperAdminLayout activeSection="trips">
-      <div className="admin-page-content trip-seats-page">
+      <div className="admin-page-content space-y-5">
         <AdminPageHeader
           actions={
-            <div className="trip-seats-header-actions">
-              <Link className="button button-secondary" href="/trips">
-                Quay lại danh sách chuyến
-              </Link>
+            <div className="flex flex-wrap items-center gap-2">
+              {backAction}
               <Button
                 disabled={currentWorkspace.status === 'loading'}
                 onClick={refresh}
                 type="button"
-                variant="secondary"
+                variant="outline"
               >
-                <RefreshCw aria-hidden="true" size={15} />
+                <RefreshCw aria-hidden="true" />
                 Làm mới
               </Button>
             </div>
@@ -183,229 +253,325 @@ export function TripSeatsManagement({
           eyebrow="QUẢN LÝ VẬN HÀNH"
           title={
             currentWorkspace.status === 'success'
-              ? `Ghế chuyến ${currentWorkspace.trip.code}`
+              ? 'Ghế chuyến ' + currentWorkspace.trip.code
               : 'Ghế chuyến xe'
           }
           titleId="trip-seats-title"
         />
 
-        {currentWorkspace.status === 'loading' && (
-          <section
-            aria-busy="true"
-            className="trips-list-state"
-            role="status"
-          >
-            <LoaderCircle
-              aria-hidden="true"
-              className="admin-crud-form-spinner"
-              size={24}
-            />
-            <p>Đang tải dữ liệu ghế chuyến…</p>
-          </section>
-        )}
+        {currentWorkspace.status === 'loading' && <TripSeatsLoading />}
 
         {currentWorkspace.status === 'error' && (
-          <section className="trips-list-state" role="alert">
-            <p>
-              {currentWorkspace.isNotFound
-                ? 'Không tìm thấy chuyến xe hoặc bạn không có quyền truy cập.'
-                : currentWorkspace.message}
-            </p>
-            {currentWorkspace.isNotFound ? (
-              <Link className="button button-secondary" href="/trips">
-                Quay lại danh sách chuyến
-              </Link>
-            ) : (
-              <Button onClick={refresh} type="button" variant="secondary">
-                <RefreshCw aria-hidden="true" size={15} />
-                Thử lại
-              </Button>
-            )}
-          </section>
+          <Card className="h-auto gap-0 py-0">
+            <ResourceState error>
+              <div className="grid justify-items-center gap-4">
+                <p className="m-0">
+                  {currentWorkspace.isNotFound
+                    ? 'Không tìm thấy chuyến xe hoặc bạn không có quyền truy cập.'
+                    : currentWorkspace.message}
+                </p>
+                {currentWorkspace.isNotFound ? (
+                  backAction
+                ) : (
+                  <Button onClick={refresh} type="button" variant="secondary">
+                    <RefreshCw aria-hidden="true" />
+                    Thử lại
+                  </Button>
+                )}
+              </div>
+            </ResourceState>
+          </Card>
         )}
 
         {currentWorkspace.status === 'success' && (
           <>
-            <section
-              aria-label="Thông tin chuyến xe"
-              className="trip-seats-context"
-            >
-              <div className="trip-seats-context__item">
-                <span className="trip-seats-context__label">Tuyến xe</span>
-                <strong className="trip-seats-context__value">
-                  <span className="admin-data-mono">
-                    {currentWorkspace.trip.route.code}
-                  </span>{' '}
-                  ({currentWorkspace.trip.route.origin} →{' '}
-                  {currentWorkspace.trip.route.destination})
-                </strong>
-              </div>
-              <div className="trip-seats-context__item">
-                <span className="trip-seats-context__label">Thời gian</span>
-                <strong className="trip-seats-context__value">
-                  {formatTime(currentWorkspace.trip.departureTime)} -{' '}
-                  {formatDate(currentWorkspace.trip.departureDate)}
-                </strong>
-              </div>
-              <div className="trip-seats-context__item">
-                <span className="trip-seats-context__label">Xe phục vụ</span>
-                <strong className="trip-seats-context__value">
-                  <span className="admin-data-mono">
-                    {currentWorkspace.trip.vehicle.licensePlate}
-                  </span>{' '}
-                  (
-                  {currentWorkspace.trip.vehicle.vehicleType.name})
-                </strong>
-              </div>
-              <div className="trip-seats-context__item">
-                <span className="trip-seats-context__label">Trạng thái chuyến</span>
-                <div className="trip-seats-context__value">
-                  <TripStatusBadge status={currentWorkspace.trip.status} />
+            <Card className="h-auto gap-0 py-0">
+              <CardHeader className="border-b p-4 sm:p-5">
+                <CardTitle className="text-base">Thông tin chuyến xe</CardTitle>
+                <CardDescription>
+                  Thông tin tuyến, thời gian khởi hành và phương tiện phục vụ.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-4 p-4 sm:grid-cols-2 sm:p-5 xl:grid-cols-4">
+                <div className="flex min-w-0 items-start gap-3">
+                  <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground">
+                    <Route aria-hidden="true" size={17} />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="mb-1 text-xs text-muted-foreground">Tuyến xe</p>
+                    <p className="m-0 break-words text-sm font-semibold text-foreground">
+                      <span className="font-mono">
+                        {currentWorkspace.trip.route.code}
+                      </span>
+                    </p>
+                    <p className="mt-1 mb-0 break-words text-xs text-muted-foreground">
+                      {currentWorkspace.trip.route.origin} →{' '}
+                      {currentWorkspace.trip.route.destination}
+                    </p>
+                  </div>
                 </div>
-              </div>
-            </section>
+                <div className="flex min-w-0 items-start gap-3">
+                  <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground">
+                    <CalendarDays aria-hidden="true" size={17} />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="mb-1 text-xs text-muted-foreground">
+                      Khởi hành
+                    </p>
+                    <p className="m-0 text-sm font-semibold text-foreground">
+                      {formatTime(currentWorkspace.trip.departureTime)}
+                    </p>
+                    <p className="mt-1 mb-0 text-xs text-muted-foreground">
+                      {formatDate(currentWorkspace.trip.departureDate)}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex min-w-0 items-start gap-3">
+                  <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground">
+                    <BusFront aria-hidden="true" size={17} />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="mb-1 text-xs text-muted-foreground">Xe phục vụ</p>
+                    <p className="m-0 break-all font-mono text-sm font-semibold text-foreground">
+                      {currentWorkspace.trip.vehicle.licensePlate}
+                    </p>
+                    <p className="mt-1 mb-0 break-words text-xs text-muted-foreground">
+                      {currentWorkspace.trip.vehicle.vehicleType.name}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex min-w-0 items-start gap-3">
+                  <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground">
+                    <Clock3 aria-hidden="true" size={17} />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="mb-2 text-xs text-muted-foreground">
+                      Trạng thái chuyến
+                    </p>
+                    <TripStatusBadge status={currentWorkspace.trip.status} />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
 
             <section
               aria-label="Tổng quan số lượng ghế"
-              className="trips-seat-summary-grid"
+              className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
             >
-              <div className="trips-seat-card">
-                <span className="trips-seat-card__count">
-                  {currentWorkspace.seatsData.meta.total}
-                </span>
-                <span className="trips-seat-card__label">Tổng số ghế</span>
-              </div>
-              <div className="trips-seat-card trips-seat-card--available">
-                <span className="trips-seat-card__count">
-                  {currentWorkspace.seatsData.meta.available}
-                </span>
-                <span className="trips-seat-card__label">Ghế trống</span>
-              </div>
-              <div className="trips-seat-card trips-seat-card--held">
-                <span className="trips-seat-card__count">
-                  {currentWorkspace.seatsData.meta.held}
-                </span>
-                <span className="trips-seat-card__label">Đang giữ</span>
-              </div>
-              <div className="trips-seat-card trips-seat-card--booked">
-                <span className="trips-seat-card__count">
-                  {currentWorkspace.seatsData.meta.booked}
-                </span>
-                <span className="trips-seat-card__label">Đã đặt</span>
-              </div>
+              {[
+                {
+                  label: 'Tổng số ghế',
+                  value: currentWorkspace.seatsData.meta.total,
+                  icon: Armchair,
+                  tone: 'primary',
+                  detail: 'Theo cấu hình chuyến',
+                },
+                {
+                  label: 'Ghế trống',
+                  value: currentWorkspace.seatsData.meta.available,
+                  icon: CheckCircle2,
+                  tone: 'success',
+                  detail: 'Có thể đặt',
+                },
+                {
+                  label: 'Đang giữ',
+                  value: currentWorkspace.seatsData.meta.held,
+                  icon: Clock3,
+                  tone: 'warning',
+                  detail: 'Đang được giữ tạm thời',
+                },
+                {
+                  label: 'Đã đặt',
+                  value: currentWorkspace.seatsData.meta.booked,
+                  icon: Ticket,
+                  tone: 'destructive',
+                  detail: 'Đã có lượt đặt',
+                },
+              ].map((metric) => {
+                const Icon = metric.icon;
+                const isPrimary = metric.tone === 'primary';
+                const iconTone =
+                  metric.tone === 'success'
+                    ? 'bg-[var(--admin-status-success-soft)] text-[var(--admin-status-success)]'
+                    : metric.tone === 'warning'
+                      ? 'bg-[var(--admin-status-warning-soft)] text-[var(--admin-status-warning)]'
+                      : metric.tone === 'destructive'
+                        ? 'bg-destructive/10 text-destructive'
+                        : 'bg-white/15 text-white';
+                return (
+                  <Card
+                    className={
+                      isPrimary
+                        ? 'h-auto gap-0 border-primary bg-primary py-0 text-primary-foreground'
+                        : 'h-auto gap-0 py-0'
+                    }
+                    key={metric.label}
+                  >
+                    <CardContent className="flex min-h-28 items-start gap-4 p-4 sm:p-5">
+                      <span
+                        className={
+                          'grid size-10 shrink-0 place-items-center rounded-lg ' +
+                          iconTone
+                        }
+                      >
+                        <Icon aria-hidden="true" size={19} />
+                      </span>
+                      <div className="min-w-0">
+                        <p
+                          className={
+                            'mb-1 text-xs font-medium ' +
+                            (isPrimary
+                              ? 'text-white/75'
+                              : 'text-muted-foreground')
+                          }
+                        >
+                          {metric.label}
+                        </p>
+                        <p
+                          className={
+                            'm-0 text-3xl font-semibold leading-none ' +
+                            (isPrimary ? 'text-white' : 'text-foreground')
+                          }
+                        >
+                          {formatCount(metric.value)}
+                        </p>
+                        <p
+                          className={
+                            'mt-2 mb-0 text-xs ' +
+                            (isPrimary
+                              ? 'text-white/75'
+                              : 'text-muted-foreground')
+                          }
+                        >
+                          {metric.detail}
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </section>
 
-            <section
-              aria-labelledby="trip-seat-inventory-heading"
-              className="trip-seats-panel"
-            >
-              <div className="trip-seats-panel-header">
-                <div>
-                  <h2 id="trip-seat-inventory-heading">Sơ đồ danh sách ghế</h2>
-                  <p className="trip-seats-panel-desc">
-                    Danh sách ghế chuyến được tạo tự động từ cấu hình xe và hiển thị theo nhóm vị trí (read-only).
-                  </p>
+            <Card className="h-auto gap-0 py-0">
+              <CardHeader className="flex flex-col gap-4 border-b p-4 sm:p-5 xl:flex-row xl:items-start xl:justify-between">
+                <div className="min-w-0 space-y-1">
+                  <CardTitle className="text-base">Danh sách ghế chuyến</CardTitle>
+                  <CardDescription className="max-w-3xl leading-relaxed">
+                    Ghế được nhóm theo vị trí đã lưu. Đây là danh sách trạng thái,
+                    không thể hiện sơ đồ bố trí vật lý.
+                  </CardDescription>
                 </div>
-                <div className="trip-seats-legend" aria-label="Chú thích trạng thái">
-                  <div className="trip-seats-legend__item">
-                    <TripSeatStatusBadge status="TRONG" />
-                    <span>Có thể đặt</span>
-                  </div>
-                  <div className="trip-seats-legend__item">
-                    <TripSeatStatusBadge status="DANG_GIU" />
-                    <span>Tạm thời giữ</span>
-                  </div>
-                  <div className="trip-seats-legend__item">
-                    <TripSeatStatusBadge status="DA_DAT" />
-                    <span>Đã đặt</span>
-                  </div>
+                <div
+                  aria-label="Lọc theo trạng thái ghế"
+                  className="flex flex-wrap gap-2"
+                  role="group"
+                >
+                  <Button
+                    aria-pressed={statusFilter === ''}
+                    onClick={() => setStatusFilter('')}
+                    size="sm"
+                    type="button"
+                    variant={statusFilter === '' ? 'default' : 'outline'}
+                  >
+                    Tất cả ({formatCount(currentWorkspace.seatsData.meta.total)})
+                  </Button>
+                  <Button
+                    aria-pressed={statusFilter === 'TRONG'}
+                    onClick={() => setStatusFilter('TRONG')}
+                    size="sm"
+                    type="button"
+                    variant={statusFilter === 'TRONG' ? 'default' : 'outline'}
+                  >
+                    Trống ({formatCount(currentWorkspace.seatsData.meta.available)})
+                  </Button>
+                  <Button
+                    aria-pressed={statusFilter === 'DANG_GIU'}
+                    onClick={() => setStatusFilter('DANG_GIU')}
+                    size="sm"
+                    type="button"
+                    variant={
+                      statusFilter === 'DANG_GIU' ? 'default' : 'outline'
+                    }
+                  >
+                    Đang giữ ({formatCount(currentWorkspace.seatsData.meta.held)})
+                  </Button>
+                  <Button
+                    aria-pressed={statusFilter === 'DA_DAT'}
+                    onClick={() => setStatusFilter('DA_DAT')}
+                    size="sm"
+                    type="button"
+                    variant={statusFilter === 'DA_DAT' ? 'default' : 'outline'}
+                  >
+                    Đã đặt ({formatCount(currentWorkspace.seatsData.meta.booked)})
+                  </Button>
                 </div>
-              </div>
+              </CardHeader>
+              <CardContent className="space-y-4 p-4 sm:p-5">
+                <p className="m-0 text-xs text-muted-foreground" aria-live="polite">
+                  Đang hiển thị {formatCount(currentWorkspace.seatsData.data.length)} ghế
+                </p>
 
-              <div
-                aria-label="Lọc theo trạng thái ghế"
-                className="trip-seats-filter-group"
-                role="group"
-              >
-                <Button
-                  aria-pressed={statusFilter === ''}
-                  onClick={() => setStatusFilter('')}
-                  type="button"
-                  variant={statusFilter === '' ? 'primary' : 'secondary'}
-                >
-                  Tất cả ({currentWorkspace.seatsData.meta.total})
-                </Button>
-                <Button
-                  aria-pressed={statusFilter === 'TRONG'}
-                  onClick={() => setStatusFilter('TRONG')}
-                  type="button"
-                  variant={statusFilter === 'TRONG' ? 'primary' : 'secondary'}
-                >
-                  Trống ({currentWorkspace.seatsData.meta.available})
-                </Button>
-                <Button
-                  aria-pressed={statusFilter === 'DANG_GIU'}
-                  onClick={() => setStatusFilter('DANG_GIU')}
-                  type="button"
-                  variant={statusFilter === 'DANG_GIU' ? 'primary' : 'secondary'}
-                >
-                  Đang giữ ({currentWorkspace.seatsData.meta.held})
-                </Button>
-                <Button
-                  aria-pressed={statusFilter === 'DA_DAT'}
-                  onClick={() => setStatusFilter('DA_DAT')}
-                  type="button"
-                  variant={statusFilter === 'DA_DAT' ? 'primary' : 'secondary'}
-                >
-                  Đã đặt ({currentWorkspace.seatsData.meta.booked})
-                </Button>
-              </div>
-
-              {currentWorkspace.seatsData.data.length === 0 ? (
-                <div className="trip-seats-empty" role="status">
-                  <p>
+                {currentWorkspace.seatsData.data.length === 0 ? (
+                  <ResourceState>
                     {statusFilter
                       ? 'Không có ghế nào ở trạng thái này.'
-                      : 'Không có dữ liệu ghế chuyến.'}
-                  </p>
-                </div>
-              ) : (
-                <div className="trip-seat-groups">
-                  {[...seatGroups.entries()].map(([groupName, seats], groupIndex) => {
-                    const groupId = `trip-seat-group-${groupIndex}`;
-                    return (
-                      <section
-                        aria-labelledby={groupId}
-                        className="trip-seat-group"
-                        key={groupName}
-                      >
-                        <h3
-                          className="trip-seat-group__title"
-                          id={groupId}
-                        >
-                          {groupName} ({seats.length})
-                        </h3>
-                      <div className="trip-seat-grid">
-                        {seats.map((seat) => (
-                          <div
-                            className="trip-seat-token"
-                            data-seat-code={seat.seat.code}
-                            data-status={seat.status}
-                            key={seat.tripSeatId}
+                      : 'Chuyến xe chưa có dữ liệu ghế.'}
+                  </ResourceState>
+                ) : (
+                  <div className="space-y-4">
+                    {[...seatGroups.entries()].map(
+                      ([groupName, seats], groupIndex) => {
+                        const groupId = 'trip-seat-group-' + groupIndex;
+                        return (
+                          <section
+                            aria-labelledby={groupId}
+                            className="overflow-hidden rounded-lg border"
+                            key={groupName}
                           >
-                            <span className="trip-seat-token__code admin-data-mono">
-                              {seat.seat.code}
-                            </span>
-                            <TripSeatStatusBadge status={seat.status} />
-                          </div>
-                        ))}
-                      </div>
-                    </section>
-                  );
-                })}
-              </div>
-              )}
-            </section>
+                            <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-muted/40 px-4 py-3">
+                              <h3
+                                className="m-0 break-words text-sm font-semibold text-foreground"
+                                id={groupId}
+                              >
+                                {groupName}
+                              </h3>
+                              <Badge variant="secondary">
+                                {formatCount(seats.length)} ghế
+                              </Badge>
+                            </div>
+                            <div className="grid gap-3 p-3 sm:grid-cols-2 sm:p-4 xl:grid-cols-3">
+                              {seats.map((seat) => (
+                                <Card
+                                  className="h-auto gap-0 py-0"
+                                  data-seat-code={seat.seat.code}
+                                  data-status={seat.status}
+                                  key={seat.tripSeatId}
+                                >
+                                  <CardContent className="flex min-w-0 items-center justify-between gap-3 p-3">
+                                    <span className="flex min-w-0 items-center gap-3">
+                                      <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground">
+                                        <Armchair
+                                          aria-hidden="true"
+                                          size={17}
+                                        />
+                                      </span>
+                                      <span className="break-all font-mono text-sm font-semibold text-foreground">
+                                        {seat.seat.code}
+                                      </span>
+                                    </span>
+                                    <TripSeatStatusBadge status={seat.status} />
+                                  </CardContent>
+                                </Card>
+                              ))}
+                            </div>
+                          </section>
+                        );
+                      },
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </>
         )}
       </div>

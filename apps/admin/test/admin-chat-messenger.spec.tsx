@@ -379,7 +379,7 @@ describe('AdminChatMessenger Component & Flow Regression Tests', () => {
       expect(await screen.findByText('Em cần kiểm tra vé ạ')).toBeTruthy();
 
       // Nút quay lại danh sách trên mobile (F-05) phải có trong document
-      const backButton = screen.getByTitle('Quay lại danh sách');
+      const backButton = screen.getByRole('button', { name: 'Quay lại danh sách' });
       expect(backButton).toBeTruthy();
 
       // Click nút quay lại danh sách trên mobile
@@ -423,7 +423,7 @@ describe('AdminChatMessenger Component & Flow Regression Tests', () => {
 
       // Nút Tải thêm cuộc trò chuyện (20/55) phải xuất hiện vì còn trang tiếp theo
       const loadMoreBtn = await screen.findByRole('button', {
-        name: /Tải thêm cuộc trò chuyện \(20\/55\)/i,
+        name: /Tải thêm hội thoại/i,
       });
       expect(loadMoreBtn).toBeTruthy();
 
@@ -450,7 +450,7 @@ describe('AdminChatMessenger Component & Flow Regression Tests', () => {
 
       render(<AdminChatMessenger session={mockSession} />);
 
-      const searchInput = screen.getByPlaceholderText('Tìm khách hàng, số điện thoại...');
+      const searchInput = screen.getByRole('searchbox', { name: 'Tìm cuộc trò chuyện' });
       fireEvent.change(searchInput, { target: { value: 'Khách Tìm Kiếm' } });
 
       // Chờ debounce 400ms kích hoạt gọi API với search param
@@ -509,7 +509,7 @@ describe('AdminChatMessenger Component & Flow Regression Tests', () => {
       // Chọn cuộc trò chuyện
       fireEvent.click(await screen.findByText('Khách hàng Cần Hỗ Trợ'));
 
-      const input = await screen.findByPlaceholderText('Nhập nội dung phản hồi khách hàng...');
+      const input = await screen.findByPlaceholderText('Nhập tin nhắn…');
       const sendBtn = screen.getByRole('button', { name: /Gửi/i });
 
       // Nhập nội dung và gửi lần 1 -> gặp lỗi
@@ -605,7 +605,7 @@ describe('AdminChatMessenger Component & Flow Regression Tests', () => {
 
       // Chọn cuộc trò chuyện
       fireEvent.click(await screen.findByText('Trần Khách'));
-      await screen.findByPlaceholderText('Nhập nội dung phản hồi khách hàng...');
+      await screen.findByPlaceholderText('Nhập tin nhắn…');
 
       // Giả lập socket nhận tin nhắn mới từ khách hàng
       expect(capturedSocketProps.onNewMessage).toBeDefined();
@@ -811,8 +811,12 @@ describe('AdminChatMessenger Component & Flow Regression Tests', () => {
       });
       render(<AdminChatMessenger session={mockSession} />);
       await waitFor(() => expect(listSpy).toHaveBeenCalled());
-      fireEvent.click(screen.getByRole('button', { name: 'Chờ nhận' }));
-      fireEvent.change(screen.getByPlaceholderText('Tìm khách hàng, số điện thoại...'), { target: { value: 'Khớp' } });
+      fireEvent.click(screen.getByRole('combobox', { name: 'Trạng thái hội thoại' }));
+      const pendingOption = await screen.findByRole('option', { name: 'Chờ tiếp nhận' });
+      fireEvent.pointerDown(pendingOption, { button: 0, pointerType: 'mouse' });
+      fireEvent.pointerUp(pendingOption, { button: 0, pointerType: 'mouse' });
+      fireEvent.click(pendingOption);
+      fireEvent.change(screen.getByRole('searchbox', { name: 'Tìm cuộc trò chuyện' }), { target: { value: 'Khớp' } });
       await waitFor(() => expect(listSpy).toHaveBeenLastCalledWith(
         expect.objectContaining({ search: 'Khớp', trangThai: 'CHO_TIEP_NHAN', page: 1 }),
         'mock-admin-token-123',
@@ -874,7 +878,7 @@ describe('AdminChatMessenger Component & Flow Regression Tests', () => {
       });
       render(<AdminChatMessenger session={mockSession} />);
       await waitFor(() => expect(listSpy).toHaveBeenCalled());
-      const input = screen.getByPlaceholderText('Tìm khách hàng, số điện thoại...');
+      const input = screen.getByRole('searchbox', { name: 'Tìm cuộc trò chuyện' });
       fireEvent.change(input, { target: { value: 'cũ' } });
       await waitFor(() => expect(listSpy).toHaveBeenCalledWith(
         expect.objectContaining({ search: 'cũ' }), 'mock-admin-token-123',

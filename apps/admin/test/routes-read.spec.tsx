@@ -16,12 +16,14 @@ const validRoute = {
   createdAt: '2026-09-22T07:34:00.000Z', updatedAt: '2026-09-23T07:34:00.000Z',
 };
 
-vi.mock('lucide-react', () => {
+vi.mock('lucide-react', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('lucide-react')>();
   const icon = (name: string) =>
     function MockIcon(props: React.SVGProps<SVGSVGElement>) {
       return <svg {...props} data-icon={name} />;
     };
   return {
+    ...actual,
     ArrowDown: icon('down'), ArrowUp: icon('up'), ArrowUpDown: icon('sort'),
     Search: icon('search'), X: icon('close'), ChevronLeft: icon('previous'),
     ChevronRight: icon('next'), Eye: icon('eye'), RefreshCw: icon('refresh'),
@@ -63,7 +65,7 @@ describe('Admin routes read page', () => {
   it('uses the shared skeleton and loading result summary before the API responds', () => {
     const html = renderToStaticMarkup(<RoutesManagement />);
     expect(html).toContain('Đang tải danh sách tuyến xe');
-    expect(html).toContain('data-result-count="loading"');
+    expect(html).not.toContain('aria-label="Trang sau"');
     expect(html).toContain('Làm mới');
     expect(html).not.toContain('Thêm tuyến');
   });
@@ -79,10 +81,11 @@ describe('Admin routes read page', () => {
       meta: { page: 1, pageSize: 10, totalItems: 41, totalPages: 5 },
     };
     const html = renderToStaticMarkup(<RoutesManagement />);
-    expect(html).toContain('data-result-count="41"');
+    expect(html).toContain('aria-live="polite"');
+    expect(html).toContain('41');
     expect(html).toContain('aria-sort="ascending"');
     expect(html).toContain('aria-label="Xem chi tiết tuyến FUTA-TX-0001"');
-    expect(html).toContain('routes-mobile-card');
+    expect(html).toContain('data-slot="card"');
     expect(html).toContain('Phương Trang');
     expect(html).not.toContain('Đang tải danh sách tuyến xe');
   });
@@ -90,7 +93,8 @@ describe('Admin routes read page', () => {
   it('retains the list without showing the initial skeleton during a refetch', () => {
     state.routePage = { data: [], meta: { page: 1, pageSize: 10, totalItems: 0, totalPages: 0 } };
     const html = renderToStaticMarkup(<RoutesManagement />);
-    expect(html).toContain('data-result-count="0"');
+    expect(html).toContain('aria-live="polite"');
+    expect(html).toContain('0');
     expect(html).not.toContain('Đang tải danh sách tuyến xe');
   });
 

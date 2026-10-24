@@ -3,22 +3,32 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   MessageSquare,
-  Search,
   User,
   Phone,
   Send,
   Loader2,
   AlertCircle,
-  CheckCircle2,
   Clock,
-  Sparkles,
   XCircle,
-  Archive,
   RefreshCw,
   ArrowLeft,
   RotateCw,
-  X,
 } from 'lucide-react';
+import { toast } from 'sonner';
+import { Button } from '@/components/ui/action-button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/status-badge';
+import {
+  ResourceConfirmation,
+  ResourceNotice,
+  ResourceState,
+  ResourceStatusBadge,
+} from '@/components/admin/resource-ui';
+import {
+  SearchInput,
+  SelectFilter,
+} from '@/components/data-filters/resource-filters';
+import styles from './admin-chat-messenger.module.css';
 import {
   getAdminAccessToken,
   type AdminSession,
@@ -136,6 +146,7 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
   const [inputValue, setInputValue] = useState('');
   const [sending, setSending] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+  const [closeOpen, setCloseOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -791,8 +802,9 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
         );
         handleConversationClaimed(restConv);
       }
+      toast.success('Đã tiếp nhận cuộc trò chuyện.');
     } catch (err: unknown) {
-      setErrorMessage(
+      toast.error(
         err instanceof Error
           ? err.message
           : 'Không thể tiếp nhận cuộc trò chuyện.',
@@ -805,7 +817,6 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
   // Đóng cuộc trò chuyện (Close)
   const handleClose = async () => {
     if (!selectedConv || !token || actionLoading) return;
-    if (!confirm('Bạn có chắc chắn muốn kết thúc cuộc trò chuyện này?')) return;
 
     setActionLoading(true);
     setErrorMessage(null);
@@ -830,8 +841,10 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
         );
         handleConversationClosed(restConv);
       }
+      setCloseOpen(false);
+      toast.success('Đã kết thúc cuộc trò chuyện.');
     } catch (err: unknown) {
-      setErrorMessage(
+      toast.error(
         err instanceof Error
           ? err.message
           : 'Không thể kết thúc cuộc trò chuyện.',
@@ -906,7 +919,7 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
             : m,
         ),
       );
-      setErrorMessage(
+      toast.error(
         err instanceof Error
           ? err.message
           : 'Gửi tin nhắn thất bại. Vui lòng bấm Thử lại.',
@@ -967,7 +980,7 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
             : m,
         ),
       );
-      setErrorMessage(
+      toast.error(
         err instanceof Error ? err.message : 'Gửi lại tin nhắn thất bại.',
       );
     } finally {
@@ -991,648 +1004,465 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
   const isPending = selectedConv?.trangThai === 'CHO_TIEP_NHAN';
 
   return (
-    <div className="flex h-[calc(100vh-175px)] min-h-[600px] bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden">
-      {/* ============================================================== */}
-      {/* CỘT TRÁI: DANH SÁCH CUỘC TRÒ CHUYỆN (MASTER PANE - F-05 RESPONSIVE) */}
-      {/* Trên mobile: ẩn khi đang chọn cuộc trò chuyện (selectedConv !== null) */}
-      {/* ============================================================== */}
-      <div
-        className={`${
-          selectedConv ? 'hidden md:flex' : 'flex'
-        } w-full md:w-[380px] lg:w-[420px] xl:w-[450px] border-r border-slate-200 flex-col bg-slate-50/70 shrink-0`}
-      >
-        {/* Header danh sách & Tab lọc */}
-        <div className="p-3.5 md:p-4 border-b border-slate-200 bg-white space-y-3 shrink-0">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <h2 className="font-bold text-sm text-slate-900 flex items-center gap-2">
-                <MessageSquare className="w-4 h-4 text-[var(--admin-blue)]" /> Hộp
-                thư hỗ trợ
+    <>
+      {errorMessage && (
+        <ResourceNotice kind="error">{errorMessage}</ResourceNotice>
+      )}
+      <div className={styles.workspace}>
+        <aside
+          aria-label="Hộp thư hỗ trợ"
+          className={`${styles.inbox} ${selectedConv ? 'hidden md:flex' : 'flex'}`}
+        >
+          <div className="shrink-0 space-y-4 border-b bg-card p-4">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="flex items-center gap-2 text-base font-semibold">
+                <MessageSquare aria-hidden className="size-4 text-primary" />
+                Hộp thư <Badge variant="secondary">{totalItems}</Badge>
               </h2>
-              {totalItems > 0 && (
-                <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
-                  {totalItems}
-                </span>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
+              <Button
+                variant="ghost"
+                size="icon"
+                disabled={loadingConversations}
+                aria-label="Làm mới danh sách"
                 onClick={() => {
                   setLoadingConversations(true);
                   setRefreshTrigger((k) => k + 1);
                 }}
-                title="Làm mới danh sách"
-                aria-label="Làm mới danh sách"
-                className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
               >
                 <RefreshCw
-                  className={`w-3.5 h-3.5 ${loadingConversations ? 'animate-spin text-[var(--admin-blue)]' : ''}`}
+                  aria-hidden
+                  className={
+                    loadingConversations
+                      ? 'motion-safe:animate-spin'
+                      : undefined
+                  }
                 />
-              </button>
-              <span
-                className={`text-xs px-2.5 py-1 rounded-full font-semibold border flex items-center gap-1.5 ${
-                  socketConnected
-                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                    : 'bg-slate-100 text-slate-600 border-slate-200'
-                }`}
-                title={socketConnected ? 'Hệ thống realtime đang hoạt động bình thường' : 'Chưa kết nối realtime'}
-              >
-                {socketConnected ? '● Trực tuyến' : '○ Ngoại tuyến'}
-              </span>
+              </Button>
             </div>
-          </div>
-
-          {/* Ô tìm kiếm */}
-          <div className="relative">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-            <input
-              type="text"
-              placeholder="Tìm khách hàng, số điện thoại..."
+            <SearchInput
+              label="Tìm cuộc trò chuyện"
+              placeholder="Tên khách hàng, số điện thoại…"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full text-xs pl-9 pr-8 py-2 border border-slate-200 rounded-xl bg-slate-50/70 focus:bg-white focus:outline-none focus:ring-1 focus:ring-[var(--admin-blue)] focus:border-[var(--admin-blue)] transition-all placeholder:text-slate-400 text-slate-800"
+              onChange={setSearchQuery}
             />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-full cursor-pointer"
-                title="Xóa tìm kiếm"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
+            <SelectFilter
+              label="Trạng thái hội thoại"
+              allLabel="Tất cả hội thoại"
+              value={activeTab === 'ALL' ? '' : activeTab}
+              options={[
+                { value: 'CHO_TIEP_NHAN', label: 'Chờ tiếp nhận' },
+                { value: 'DANG_XU_LY', label: 'Đang xử lý' },
+                { value: 'DA_DONG', label: 'Đã đóng' },
+              ]}
+              onChange={(value) => setActiveTab((value || 'ALL') as FilterTab)}
+            />
+          </div>
+          <div
+            className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
+            aria-busy={loadingConversations}
+          >
+            {loadingConversations ? (
+              <ResourceState loading>Đang tải cuộc trò chuyện…</ResourceState>
+            ) : conversations.length === 0 ? (
+              <ResourceState>Không có cuộc trò chuyện phù hợp.</ResourceState>
+            ) : (
+              <ul className="space-y-2 p-3">
+                {conversations.map((c) => {
+                  const selected =
+                    selectedConv?.cuocTroChuyenId === c.cuocTroChuyenId;
+                  const unread =
+                    c.soTinChuaDoc !== undefined && c.soTinChuaDoc > 0;
+                  return (
+                    <li key={c.cuocTroChuyenId}>
+                      <Button
+                        variant="ghost"
+                        aria-pressed={selected}
+                        className={`h-auto sm:h-auto w-full items-start justify-start gap-3 whitespace-normal rounded-lg border p-3 text-left font-normal ${selected ? 'border-primary bg-accent' : unread ? 'border-primary/30 bg-accent/40' : 'border-transparent'}`}
+                        onClick={() => {
+                          adminReconnectRequestIdRef.current++;
+                          setSelectedConv(c);
+                        }}
+                      >
+                        <span
+                          aria-hidden
+                          className="flex size-10 shrink-0 items-center justify-center rounded-full bg-secondary text-sm font-semibold text-primary"
+                        >
+                          {c.khachHang.taiKhoan.hoTen.charAt(0).toUpperCase()}
+                        </span>
+                        <span className="min-w-0 flex-1 space-y-2">
+                          <span className="flex items-start justify-between gap-2">
+                            <span
+                              className={`truncate text-[13px] ${unread ? 'font-bold' : 'font-semibold'}`}
+                            >
+                              {c.khachHang.taiKhoan.hoTen}
+                            </span>
+                            {unread && (
+                              <Badge
+                                data-testid="unread-badge"
+                                aria-label={`${c.soTinChuaDoc} tin chưa đọc`}
+                              >
+                                {c.soTinChuaDoc}
+                              </Badge>
+                            )}
+                          </span>
+                          <span className="block text-xs text-muted-foreground">
+                            {c.khachHang.taiKhoan.soDienThoai}
+                          </span>
+                          <span className="line-clamp-2 text-[13px] text-muted-foreground">
+                            {c.tinNhanCuoi?.noiDung || 'Cuộc trò chuyện mới'}
+                          </span>
+                          <span className="flex flex-wrap items-center justify-between gap-2">
+                            <ResourceStatusBadge
+                              tone={
+                                c.trangThai === 'CHO_TIEP_NHAN'
+                                  ? 'warning'
+                                  : c.trangThai === 'DANG_XU_LY'
+                                    ? 'active'
+                                    : 'muted'
+                              }
+                            >
+                              {c.trangThai === 'CHO_TIEP_NHAN'
+                                ? 'Chờ tiếp nhận'
+                                : c.trangThai === 'DANG_XU_LY'
+                                  ? 'Đang xử lý'
+                                  : 'Đã đóng'}
+                            </ResourceStatusBadge>
+                            <time
+                              className="text-xs text-muted-foreground"
+                              dateTime={c.updatedAt}
+                            >
+                              {new Date(c.updatedAt).toLocaleTimeString(
+                                'vi-VN',
+                                { hour: '2-digit', minute: '2-digit' },
+                              )}
+                            </time>
+                          </span>
+                          <span className="admin-data-mono block truncate text-xs text-muted-foreground">
+                            {c.maCuocTroChuyen}
+                          </span>
+                        </span>
+                      </Button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+            {!loadingConversations && page < totalPages && (
+              <div className="p-4">
+                <Button
+                  className="w-full"
+                  variant="outline"
+                  disabled={loadingMore}
+                  onClick={handleLoadMore}
+                >
+                  {loadingMore && (
+                    <Loader2 aria-hidden className="motion-safe:animate-spin" />
+                  )}
+                  {loadingMore ? 'Đang tải…' : 'Tải thêm hội thoại'}
+                </Button>
+              </div>
             )}
           </div>
-
-          {/* Filter Tabs */}
-          <div className="grid grid-cols-4 gap-1 p-1 bg-slate-100 rounded-xl text-xs font-semibold">
-            {(
-              [
-                { key: 'ALL', label: 'Tất cả' },
-                { key: 'CHO_TIEP_NHAN', label: 'Chờ nhận' },
-                { key: 'DANG_XU_LY', label: 'Đang chat' },
-                { key: 'DA_DONG', label: 'Đã đóng' },
-              ] as const
-            ).map((tab) => {
-              const tabCount =
-                tab.key === 'CHO_TIEP_NHAN'
-                  ? conversations.filter((c) => c.trangThai === 'CHO_TIEP_NHAN').length
-                  : tab.key === 'DANG_XU_LY'
-                    ? conversations.filter((c) => c.trangThai === 'DANG_XU_LY').length
-                    : tab.key === 'DA_DONG'
-                      ? conversations.filter((c) => c.trangThai === 'DA_DONG').length
-                      : 0;
-
-              return (
-                <button
-                  key={tab.key}
-                  aria-label={tab.label}
-                  onClick={() => setActiveTab(tab.key)}
-                  className={`py-1.5 px-1 rounded-lg text-center transition-all flex items-center justify-center gap-1 cursor-pointer ${
-                    activeTab === tab.key
-                      ? 'bg-white text-[var(--admin-blue)] shadow-xs font-bold'
-                      : 'text-slate-600 hover:text-slate-900 font-medium'
-                  }`}
-                >
-                  <span>{tab.label}</span>
-                  {tabCount > 0 && (
-                    <span
-                      aria-hidden="true"
-                      className={`text-[11px] px-1.5 py-0.2 rounded-full font-bold ${
-                        activeTab === tab.key
-                          ? 'bg-blue-100 text-[var(--admin-blue)]'
-                          : 'bg-slate-200 text-slate-700'
-                      }`}
-                    >
-                      {tabCount}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
+        </aside>
+        <section
+          aria-label="Nội dung hội thoại"
+          className={`${styles.detail} ${selectedConv ? 'flex' : 'hidden md:flex'}`}
+        >
+          <div className="flex shrink-0 items-center justify-between gap-3 border-b px-4 py-3 text-xs text-muted-foreground">
+            <span>Hỗ trợ khách hàng</span>
+            <ResourceStatusBadge tone={socketConnected ? 'active' : 'muted'}>
+              {socketConnected
+                ? 'Đã kết nối realtime'
+                : 'Chưa kết nối realtime'}
+            </ResourceStatusBadge>
           </div>
-        </div>
-
-        {/* Danh sách các cuộc trò chuyện */}
-        <div className="flex-1 overflow-y-auto divide-y divide-slate-100">
-          {loadingConversations ? (
-            <div className="flex flex-col items-center justify-center py-16 text-slate-500 gap-2.5 text-xs">
-              <Loader2 className="w-5 h-5 animate-spin text-[var(--admin-blue)]" />
-              <span className="font-medium">Đang tải danh sách cuộc trò chuyện...</span>
-            </div>
-          ) : conversations.length === 0 ? (
-            <div className="p-8 text-center text-slate-500 text-xs flex flex-col items-center justify-center gap-2">
-              <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
-                <MessageSquare className="w-5 h-5" />
+          {!selectedConv ? (
+            <div className="flex min-h-0 flex-1 items-center justify-center p-6">
+              <div className="max-w-sm space-y-4 text-center">
+                <MessageSquare
+                  aria-hidden
+                  className="mx-auto size-10 text-primary/60"
+                />
+                <h2 className="text-lg font-semibold">Chọn cuộc trò chuyện</h2>
+                <p className="text-sm text-muted-foreground">
+                  Chọn khách hàng trong hộp thư để xem nội dung và phản hồi hỗ
+                  trợ.
+                </p>
               </div>
-              <p className="font-medium">Không có cuộc trò chuyện nào phù hợp.</p>
             </div>
           ) : (
             <>
-              {conversations.map((c) => {
-                const isSelected =
-                  selectedConv?.cuocTroChuyenId === c.cuocTroChuyenId;
-                const isWaiting = c.trangThai === 'CHO_TIEP_NHAN';
-                const hasUnread =
-                  c.soTinChuaDoc !== undefined && c.soTinChuaDoc > 0;
-
-                return (
-                  <button
-                    key={c.cuocTroChuyenId}
-                    onClick={() => {
-                      adminReconnectRequestIdRef.current++;
-                      setSelectedConv(c);
-                    }}
-                    className={`w-full text-left p-3.5 flex items-start gap-3 transition-colors border-l-4 cursor-pointer relative ${
-                      isSelected
-                        ? 'bg-blue-50/80 border-l-[var(--admin-blue)] shadow-2xs'
-                        : hasUnread
-                          ? 'bg-blue-50/30 hover:bg-slate-100/80 border-l-blue-400'
-                          : 'hover:bg-slate-100/70 border-l-transparent'
-                    }`}
+              <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b p-4">
+                <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
+                  <Button
+                    className="md:hidden"
+                    size="icon"
+                    variant="ghost"
+                    aria-label="Quay lại danh sách"
+                    onClick={() => setSelectedConv(null)}
                   >
-                    <div className="relative shrink-0 mt-0.5">
-                      <div
-                        className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-xs ${
-                          isSelected
-                            ? 'bg-[var(--admin-blue)] text-white shadow-xs'
-                            : hasUnread
-                              ? 'bg-blue-100 text-[var(--admin-blue)] font-bold'
-                              : 'bg-slate-200 text-slate-700'
-                        }`}
-                      >
-                        {c.khachHang.taiKhoan.hoTen.charAt(0).toUpperCase()}
-                      </div>
-                      {isWaiting ? (
-                        <span
-                          className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-amber-500 rounded-full border-2 border-white animate-pulse"
-                          title="Chờ tiếp nhận"
-                        />
-                      ) : c.trangThai === 'DANG_XU_LY' ? (
-                        <span
-                          className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-white"
-                          title="Đang xử lý"
-                        />
-                      ) : null}
-                    </div>
-
-                    <div className="flex-1 min-w-0">
-                      {/* Row 1: Tên khách hàng & Thời gian & Badge unread */}
-                      <div className="flex items-center justify-between gap-1 mb-0.5">
-                        <span
-                          className={`text-xs truncate ${
-                            hasUnread
-                              ? 'font-bold text-slate-900'
-                              : 'font-semibold text-slate-800'
-                          }`}
-                        >
-                          {c.khachHang.taiKhoan.hoTen}
-                        </span>
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          {hasUnread && (
-                            <span
-                              data-testid="unread-badge"
-                              className="bg-[var(--admin-blue)] text-white text-[11px] font-bold px-1.5 py-0.2 rounded-full shadow-2xs"
-                            >
-                              {c.soTinChuaDoc}
-                            </span>
-                          )}
-                          <span className="text-xs text-slate-500 font-mono">
-                            {new Date(c.updatedAt).toLocaleTimeString('vi-VN', {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Row 2: Số điện thoại + Mã cuộc trò chuyện */}
-                      <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
-                        <span className="font-mono flex items-center gap-1 text-slate-500">
-                          <Phone className="w-3 h-3 text-slate-400 shrink-0" />
-                          {c.khachHang.taiKhoan.soDienThoai}
-                        </span>
-                        <span className="text-[11px] font-mono text-slate-400">
-                          #{c.maCuocTroChuyen}
-                        </span>
-                      </div>
-
-                      {/* Row 3: Tin nhắn xem trước (2 dòng line-clamp-2) */}
-                      <div
-                        className={`text-xs leading-relaxed mb-2 line-clamp-2 ${
-                          hasUnread
-                            ? 'font-medium text-slate-900'
-                            : 'text-slate-600'
-                        }`}
-                      >
-                        {c.tinNhanCuoi
-                          ? c.tinNhanCuoi.noiDung
-                          : 'Cuộc trò chuyện mới'}
-                      </div>
-
-                      {/* Row 4: Trạng thái nghiệp vụ */}
-                      <div className="flex items-center gap-1.5">
-                        {c.trangThai === 'CHO_TIEP_NHAN' && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-300">
-                            <Clock className="w-3 h-3 text-amber-600" /> Chờ tiếp nhận
-                          </span>
-                        )}
-                        {c.trangThai === 'DANG_XU_LY' && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-300">
-                            <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Đang xử lý
-                          </span>
-                        )}
-                        {c.trangThai === 'DA_DONG' && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-700 border border-slate-300">
-                            <Archive className="w-3 h-3 text-slate-500" /> Đã đóng
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
-
-              {/* Nút tải thêm cuộc trò chuyện (F-06 Pagination) */}
-              {conversations.length < totalItems && (
-                <div className="p-3 bg-white text-center border-t border-slate-200">
-                  <button
-                    type="button"
-                    onClick={handleLoadMore}
-                    disabled={loadingMore}
-                    className="w-full py-2.5 px-3 text-xs font-semibold text-[var(--admin-blue)] hover:bg-[var(--admin-blue)]/5 rounded-xl border border-[var(--admin-blue)]/20 transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
-                  >
-                    {loadingMore ? (
-                      <>
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" /> Đang
-                        tải thêm...
-                      </>
-                    ) : (
-                      <>
-                        Tải thêm cuộc trò chuyện ({conversations.length}/
-                        {totalItems})
-                      </>
-                    )}
-                  </button>
-                </div>
-              )}
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* ============================================================== */}
-      {/* CỘT PHẢI: KHUNG CHAT CHI TIẾT (DETAIL PANE - F-05 RESPONSIVE)   */}
-      {/* Trên mobile: chỉ hiển thị khi đã chọn cuộc trò chuyện (selectedConv !== null) */}
-      {/* ============================================================== */}
-      <div
-        className={`${
-          selectedConv ? 'flex' : 'hidden md:flex'
-        } flex-1 flex-col bg-white overflow-hidden`}
-      >
-        {!selectedConv ? (
-          <div className="flex-1 flex flex-col items-center justify-center p-6 md:p-10 text-center bg-gradient-to-b from-slate-50/40 to-white overflow-y-auto">
-            <div className="max-w-md w-full flex flex-col items-center">
-              <div className="w-16 h-16 md:w-20 md:h-20 bg-blue-50/80 rounded-3xl border border-blue-100 flex items-center justify-center text-[var(--admin-blue)] shadow-xs mb-4">
-                <MessageSquare className="w-8 h-8 md:w-10 md:h-10" />
-              </div>
-              <h3 className="font-bold text-base md:text-lg text-slate-900">
-                Chọn cuộc trò chuyện
-              </h3>
-              <p className="text-xs md:text-sm text-slate-500 mt-1.5 max-w-sm leading-relaxed">
-                Chọn một khách hàng từ danh sách bên trái để xem nội dung và trả
-                lời hỗ trợ.
-              </p>
-
-              {/* Quick Metrics Cards */}
-              <div className="grid grid-cols-3 gap-3 w-full mt-6">
-                <div className="p-3 bg-white border border-slate-200/80 rounded-xl text-center shadow-2xs">
-                  <div className="text-lg font-bold text-amber-600 font-mono">
-                    {conversations.filter((c) => c.trangThai === 'CHO_TIEP_NHAN').length}
-                  </div>
-                  <div className="text-[11px] font-semibold text-slate-600 mt-0.5">Chờ nhận</div>
-                </div>
-                <div className="p-3 bg-white border border-slate-200/80 rounded-xl text-center shadow-2xs">
-                  <div className="text-lg font-bold text-emerald-600 font-mono">
-                    {conversations.filter((c) => c.trangThai === 'DANG_XU_LY').length}
-                  </div>
-                  <div className="text-[11px] font-semibold text-slate-600 mt-0.5">Đang chat</div>
-                </div>
-                <div className="p-3 bg-white border border-slate-200/80 rounded-xl text-center shadow-2xs">
-                  <div className="text-lg font-bold text-slate-700 font-mono">
-                    {conversations.filter((c) => c.trangThai === 'DA_DONG').length}
-                  </div>
-                  <div className="text-[11px] font-semibold text-slate-600 mt-0.5">Đã đóng</div>
-                </div>
-              </div>
-
-              {/* Quick action button */}
-              {conversations.some((c) => c.trangThai === 'CHO_TIEP_NHAN') && (
-                <div className="mt-6 w-full">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const firstWaiting = conversations.find((c) => c.trangThai === 'CHO_TIEP_NHAN');
-                      if (firstWaiting) {
-                        adminReconnectRequestIdRef.current++;
-                        setSelectedConv(firstWaiting);
-                      }
-                    }}
-                    className="w-full py-2.5 px-4 bg-[var(--admin-blue)] hover:bg-[var(--admin-blue-hover)] text-white font-semibold text-xs rounded-xl shadow-xs transition-colors flex items-center justify-center gap-2 cursor-pointer"
-                  >
-                    <Sparkles className="w-4 h-4" />
-                    <span>Tiếp nhận hội thoại chờ gần nhất</span>
-                  </button>
-                </div>
-              )}
-
-            </div>
-          </div>
-        ) : (
-          <>
-            {/* Topbar cuộc trò chuyện */}
-            <div className="p-3.5 md:p-4 border-b border-slate-200 flex items-center justify-between bg-white shrink-0">
-              <div className="flex items-center gap-2.5 md:gap-3.5 min-w-0">
-                {/* Nút quay lại danh sách trên mobile (F-05) */}
-                <button
-                  type="button"
-                  onClick={() => setSelectedConv(null)}
-                  className="md:hidden p-2 text-slate-600 hover:text-[var(--admin-blue)] hover:bg-slate-100 rounded-lg shrink-0 cursor-pointer"
-                  title="Quay lại danh sách"
-                  aria-label="Quay lại danh sách"
-                >
-                  <ArrowLeft className="w-5 h-5" />
-                </button>
-
-                <div className="w-10 h-10 rounded-full bg-blue-100 text-[var(--admin-blue)] flex items-center justify-center font-bold text-sm shrink-0 shadow-2xs">
-                  {selectedConv.khachHang.taiKhoan.hoTen
-                    .charAt(0)
-                    .toUpperCase()}
-                </div>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="font-bold text-sm text-slate-900 truncate">
+                    <ArrowLeft aria-hidden />
+                  </Button>
+                  <div className="min-w-0 space-y-1">
+                    <h2 className="break-words text-base font-semibold">
                       {selectedConv.khachHang.taiKhoan.hoTen}
-                    </h3>
+                    </h2>
                     <a
+                      className="flex items-center gap-1 text-[13px] text-muted-foreground hover:text-primary"
                       href={`tel:${selectedConv.khachHang.taiKhoan.soDienThoai}`}
-                      className="text-xs text-slate-600 hover:text-[var(--admin-blue)] flex items-center gap-1 font-mono transition-colors"
-                      title="Gọi điện cho khách hàng"
                     >
-                      <Phone className="w-3 h-3 text-slate-400 shrink-0" />
+                      <Phone aria-hidden className="size-3" />
                       {selectedConv.khachHang.taiKhoan.soDienThoai}
                     </a>
-                  </div>
-                  <div className="text-xs text-slate-500 flex items-center gap-2 mt-0.5 truncate">
-                    <span className="font-mono">Mã: {selectedConv.maCuocTroChuyen}</span>
-                    <span>•</span>
-                    <span className="truncate">
+                    <p
+                      className="truncate text-xs text-muted-foreground"
+                      title={
+                        selectedConv.nhanVien?.taiKhoan.hoTen ||
+                        'Chưa tiếp nhận'
+                      }
+                    >
                       Người xử lý:{' '}
-                      <strong className="text-slate-700 font-semibold">
-                        {selectedConv.nhanVien?.taiKhoan.hoTen ||
-                          'Chưa tiếp nhận'}
-                      </strong>
-                    </span>
+                      {selectedConv.nhanVien?.taiKhoan.hoTen ||
+                        'Chưa tiếp nhận'}
+                    </p>
+                    <p className="admin-data-mono hidden break-all text-xs text-muted-foreground sm:block">
+                      {selectedConv.maCuocTroChuyen}
+                    </p>
                   </div>
                 </div>
-              </div>
-
-              {/* Action buttons */}
-              <div className="flex items-center gap-2 shrink-0">
-                {isPending && canManageChat && (
-                  <button
-                    onClick={handleClaim}
-                    disabled={actionLoading}
-                    className="px-3.5 py-2 bg-[var(--admin-blue)] text-white rounded-xl text-xs font-semibold hover:bg-[var(--admin-blue-hover)] transition-all flex items-center gap-1.5 shadow-xs disabled:opacity-50 cursor-pointer"
-                  >
-                    {actionLoading ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    ) : (
-                      <Sparkles className="w-3.5 h-3.5" />
-                    )}
-                    <span className="hidden sm:inline">Tiếp nhận hỗ trợ</span>
-                    <span className="sm:hidden">Nhận</span>
-                  </button>
-                )}
-
-                {!isClosed && canManageChat && (
-                  <button
-                    onClick={handleClose}
-                    disabled={actionLoading}
-                    className="px-3.5 py-2 border border-slate-200 text-slate-700 rounded-xl text-xs font-medium hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 transition-all flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
-                  >
-                    <XCircle className="w-3.5 h-3.5" />
-                    <span className="hidden sm:inline">Kết thúc</span>
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {errorMessage && (
-              <div className="px-3.5 py-2 bg-rose-50 border-b border-rose-100 text-rose-700 text-xs flex items-center gap-2 font-medium">
-                <AlertCircle className="w-4 h-4 shrink-0" />
-                <span>{errorMessage}</span>
-              </div>
-            )}
-
-            {/* Khung tin nhắn */}
-            <div
-              ref={transcriptRef}
-              data-testid="admin-chat-transcript"
-              className="flex-1 overflow-y-auto p-4 md:p-5 bg-slate-50/50 space-y-3.5"
-            >
-              {loadingMessages ? (
-                <div className="flex items-center justify-center py-16 text-slate-500 gap-2.5 text-xs font-medium">
-                  <Loader2 className="w-5 h-5 animate-spin text-[var(--admin-blue)]" />
-                  <span>Đang tải lịch sử tin nhắn...</span>
-                </div>
-              ) : (
-                <>
-                  {hasOlderMessages && (
-                    <div className="text-center py-1">
-                      <button
-                        type="button"
-                        onClick={handleLoadOlderMessages}
-                        disabled={loadingOlderMessages}
-                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-full text-xs font-medium shadow-2xs transition-colors disabled:opacity-50 cursor-pointer"
-                      >
-                        {loadingOlderMessages ? (
-                          <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--admin-blue)]" />
-                        ) : (
-                          <Clock className="w-3.5 h-3.5 text-slate-400" />
-                        )}
-                        <span>
-                          {loadingOlderMessages
-                            ? 'Đang tải tin cũ...'
-                            : 'Tải tin nhắn cũ hơn'}
-                        </span>
-                      </button>
-                    </div>
+                <div className="flex flex-wrap gap-2">
+                  {isPending && canManageChat && (
+                    <Button disabled={actionLoading} onClick={handleClaim}>
+                      {actionLoading && (
+                        <Loader2
+                          aria-hidden
+                          className="motion-safe:animate-spin"
+                        />
+                      )}
+                      Tiếp nhận hỗ trợ
+                    </Button>
                   )}
-                  {messages.map((msg) => {
-                    const isStaff = msg.loaiNguoiGui === 'NHAN_VIEN';
-                    const isSystem = msg.loaiNguoiGui === 'HE_THONG';
-                    const isPendingMsg = msg.deliveryStatus === 'DANG_GUI';
-                    const isFailedMsg = msg.deliveryStatus === 'THAT_BAI';
-
-                    if (isSystem) {
-                      return (
-                        <div key={msg.tinNhanId} className="text-center my-2.5">
-                          <span className="inline-block text-xs text-slate-600 bg-slate-200/70 border border-slate-200/80 px-3.5 py-1 rounded-full font-medium">
-                            {msg.noiDung}
-                          </span>
-                        </div>
-                      );
-                    }
-
-                    return (
-                      <div
-                        key={msg.tinNhanId}
-                        className={`flex gap-2.5 md:gap-3 ${isStaff ? 'flex-row-reverse' : 'flex-row'}`}
-                      >
-                        <div
-                          className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-xs font-semibold shadow-2xs ${
-                            isStaff
-                              ? 'bg-[var(--admin-blue)] text-white'
-                              : 'bg-white border border-slate-200 text-slate-700'
-                          }`}
+                  {!isClosed && canManageChat && (
+                    <Button
+                      disabled={actionLoading}
+                      variant="outline"
+                      aria-label="Kết thúc"
+                      className="w-11 px-0 sm:w-auto sm:px-4"
+                      onClick={() => setCloseOpen(true)}
+                    >
+                      <XCircle aria-hidden />
+                      <span className="hidden sm:inline">Kết thúc</span>
+                    </Button>
+                  )}
+                </div>
+              </header>
+              <div
+                ref={transcriptRef}
+                data-testid="admin-chat-transcript"
+                className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain bg-muted/30 p-4 sm:p-5"
+                aria-label="Lịch sử tin nhắn"
+                aria-busy={loadingMessages}
+              >
+                {loadingMessages ? (
+                  <ResourceState loading>
+                    Đang tải lịch sử tin nhắn…
+                  </ResourceState>
+                ) : (
+                  <>
+                    {hasOlderMessages && (
+                      <div className="text-center">
+                        <Button
+                          variant="outline"
+                          disabled={loadingOlderMessages}
+                          onClick={handleLoadOlderMessages}
                         >
-                          {isStaff ? 'NV' : <User className="w-4 h-4 text-slate-500" />}
-                        </div>
-
-                        <div
-                          className={`flex flex-col gap-1 max-w-[75%] ${
-                            isStaff ? 'items-end' : 'items-start'
-                          }`}
-                        >
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-xs text-slate-500">
-                              {isStaff
-                                ? msg.taiKhoanGui?.hoTen || 'Nhân viên'
-                                : 'Khách hàng'}{' '}
-                              •{' '}
-                              <span className="font-mono">
-                                {new Date(msg.createdAt).toLocaleTimeString(
-                                  'vi-VN',
-                                  {
-                                    hour: '2-digit',
-                                    minute: '2-digit',
-                                  },
-                                )}
-                              </span>
-                            </span>
-                            {isPendingMsg && (
-                              <span className="text-[11px] text-slate-500 flex items-center gap-1 font-medium">
-                                <Clock className="w-3 h-3 animate-spin text-[var(--admin-blue)]" />{' '}
-                                Đang gửi
-                              </span>
-                            )}
-                          </div>
-                          <div
-                            data-chat-message-id={msg.tinNhanId}
-                            ref={(element) => {
-                              if (element)
-                                messageElementsRef.current.set(
-                                  msg.tinNhanId,
-                                  element,
-                                );
-                              else
-                                messageElementsRef.current.delete(
-                                  msg.tinNhanId,
-                                );
-                            }}
-                            className={`p-3.5 rounded-2xl text-xs leading-relaxed shadow-2xs break-words transition-opacity ${
-                              isStaff
-                                ? isFailedMsg
-                                  ? 'bg-rose-50 border border-rose-300 text-rose-800 rounded-tr-none'
-                                  : isPendingMsg
-                                    ? 'bg-[var(--admin-blue)]/80 text-white rounded-tr-none'
-                                    : 'bg-[var(--admin-blue)] text-white rounded-tr-none'
-                                : 'bg-white border border-slate-200 text-slate-800 rounded-tl-none'
-                            }`}
+                          {loadingOlderMessages && (
+                            <Loader2
+                              aria-hidden
+                              className="motion-safe:animate-spin"
+                            />
+                          )}
+                          {loadingOlderMessages
+                            ? 'Đang tải…'
+                            : 'Tải tin nhắn cũ hơn'}
+                        </Button>
+                      </div>
+                    )}
+                    {messages.map((msg) => {
+                      const staff = msg.loaiNguoiGui === 'NHAN_VIEN';
+                      const pending = msg.deliveryStatus === 'DANG_GUI';
+                      const failed = msg.deliveryStatus === 'THAT_BAI';
+                      if (msg.loaiNguoiGui === 'HE_THONG')
+                        return (
+                          <p
+                            key={msg.tinNhanId}
+                            className="mx-auto w-fit max-w-full rounded-lg bg-muted px-3 py-2 text-center text-xs text-muted-foreground"
                           >
                             {msg.noiDung}
-                          </div>
-                          {isStaff && !isPendingMsg && !isFailedMsg && (
-                            <span className="text-xs text-slate-500 font-medium">
-                              {msg.trangThai === 'DA_DOC' ? 'Đã đọc' : 'Đã gửi'}
-                            </span>
-                          )}
-                          {isFailedMsg && (
-                            <div className="flex items-center gap-1.5 mt-0.5 text-xs text-rose-600 font-medium">
-                              <AlertCircle className="w-3.5 h-3.5" />
-                              <span>Gửi thất bại</span>
-                              <button
-                                type="button"
-                                onClick={() => handleRetryMessage(msg)}
-                                disabled={sending}
-                                className="font-semibold underline hover:text-rose-700 flex items-center gap-1 ml-1 cursor-pointer"
-                              >
-                                <RotateCw className="w-3 h-3" /> Thử lại
-                              </button>
+                          </p>
+                        );
+                      return (
+                        <div
+                          key={msg.tinNhanId}
+                          className={`flex gap-2 ${staff ? 'flex-row-reverse' : ''}`}
+                        >
+                          <span
+                            aria-hidden
+                            className="flex size-8 shrink-0 items-center justify-center rounded-full bg-secondary text-xs font-semibold"
+                          >
+                            {staff ? 'NV' : <User className="size-4" />}
+                          </span>
+                          <div
+                            className={`flex min-w-0 max-w-[85%] flex-col gap-1 sm:max-w-[75%] ${staff ? 'items-end' : 'items-start'}`}
+                          >
+                            <p className="text-xs text-muted-foreground">
+                              {staff
+                                ? msg.taiKhoanGui?.hoTen || 'Nhân viên'
+                                : 'Khách hàng'}{' '}
+                              ·{' '}
+                              <time dateTime={msg.createdAt}>
+                                {new Date(msg.createdAt).toLocaleTimeString(
+                                  'vi-VN',
+                                  { hour: '2-digit', minute: '2-digit' },
+                                )}
+                              </time>
+                            </p>
+                            <div
+                              data-chat-message-id={msg.tinNhanId}
+                              ref={(element) => {
+                                if (element)
+                                  messageElementsRef.current.set(
+                                    msg.tinNhanId,
+                                    element,
+                                  );
+                                else
+                                  messageElementsRef.current.delete(
+                                    msg.tinNhanId,
+                                  );
+                              }}
+                              className={`max-w-full whitespace-pre-wrap break-words rounded-xl border px-4 py-3 text-sm leading-normal ${staff ? (failed ? 'border-destructive/40 bg-destructive/10 text-destructive' : 'border-primary bg-primary text-primary-foreground') : 'border-border bg-card'} ${pending ? 'opacity-70' : ''}`}
+                            >
+                              {msg.noiDung}
                             </div>
-                          )}
+                            {pending ? (
+                              <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                                <Clock aria-hidden className="size-3" />
+                                Đang gửi
+                              </span>
+                            ) : failed ? (
+                              <div className="flex flex-wrap items-center gap-2 text-xs text-destructive">
+                                <AlertCircle aria-hidden className="size-3" />
+                                Gửi thất bại
+                                <Button
+                                  size="sm"
+                                  variant="link"
+                                  disabled={sending}
+                                  onClick={() => handleRetryMessage(msg)}
+                                >
+                                  <RotateCw aria-hidden />
+                                  Thử lại
+                                </Button>
+                              </div>
+                            ) : staff ? (
+                              <span className="text-xs text-muted-foreground">
+                                {msg.trangThai === 'DA_DOC'
+                                  ? 'Đã đọc'
+                                  : 'Đã gửi'}
+                              </span>
+                            ) : null}
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
-
-                  {customerTyping && (
-                    <div className="flex items-center gap-2 text-xs text-slate-500 italic p-1 bg-white/60 rounded-lg inline-flex">
-                      <User className="w-3.5 h-3.5 animate-pulse text-[var(--admin-blue)]" />
-                      <span>Khách hàng đang nhập...</span>
-                    </div>
-                  )}
-
-                  <div ref={messagesEndRef} />
-                </>
-              )}
-            </div>
-
-            {/* Ô nhập tin nhắn */}
-            <div className="p-3.5 md:p-4 bg-white border-t border-slate-200 shrink-0">
-              {isClosed ? (
-                <div className="p-3 bg-slate-100 text-slate-600 text-xs rounded-xl text-center font-medium border border-slate-200">
-                  Cuộc trò chuyện này đã kết thúc. Không thể gửi thêm tin nhắn.
-                </div>
-              ) : isPending ? (
-                <div className="p-3 bg-amber-50 text-amber-800 border border-amber-200 text-xs rounded-xl text-center flex items-center justify-center gap-2 font-medium">
-                  <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-                  <span>
-                    Vui lòng bấm &quot;Tiếp nhận hỗ trợ&quot; ở trên để bắt đầu phản hồi cho khách hàng.
-                  </span>
-                </div>
-              ) : (
-                <div className="flex gap-2.5 items-center">
-                  <input
-                    type="text"
-                    value={inputValue}
-                    onChange={handleInputChange}
-                    onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-                    placeholder="Nhập nội dung phản hồi khách hàng..."
-                    disabled={sending}
-                    className="flex-1 h-11 px-4 rounded-xl border border-slate-200 bg-slate-50/70 focus:bg-white focus:outline-none focus:ring-1 focus:ring-[var(--admin-blue)] focus:border-[var(--admin-blue)] text-xs text-slate-800 transition-colors"
-                  />
-                  <button
-                    onClick={handleSendMessage}
-                    disabled={!inputValue.trim() || sending}
-                    className="px-5 h-11 rounded-xl bg-[var(--admin-blue)] text-white text-xs font-semibold flex items-center justify-center gap-1.5 hover:bg-[var(--admin-blue-hover)] transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-xs shrink-0 cursor-pointer"
-                  >
-                    {sending ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <>
-                        <Send className="w-4 h-4" /> Gửi
-                      </>
+                      );
+                    })}
+                    {customerTyping && (
+                      <p
+                        role="status"
+                        className="text-xs italic text-muted-foreground"
+                      >
+                        Khách hàng đang nhập…
+                      </p>
                     )}
-                  </button>
-                </div>
-              )}
-            </div>
-          </>
-        )}
+                    <div ref={messagesEndRef} />
+                  </>
+                )}
+              </div>
+              <div className="shrink-0 border-t bg-card p-4">
+                {!canManageChat ? (
+                  <ResourceNotice kind="info">
+                    Bạn đang xem hội thoại với quyền chỉ đọc.
+                  </ResourceNotice>
+                ) : isClosed ? (
+                  <ResourceNotice kind="info">
+                    Cuộc trò chuyện đã kết thúc. Không thể gửi thêm tin nhắn.
+                  </ResourceNotice>
+                ) : isPending ? (
+                  <ResourceNotice kind="info">
+                    Tiếp nhận hỗ trợ để bắt đầu phản hồi khách hàng.
+                  </ResourceNotice>
+                ) : (
+                  <div className="space-y-2">
+                    <label
+                      htmlFor="support-chat-reply"
+                      className="block text-[13px] font-semibold"
+                    >
+                      Nội dung phản hồi
+                    </label>
+                    <div className="flex items-end gap-2">
+                      <Input
+                        id="support-chat-reply"
+                        value={inputValue}
+                        onChange={handleInputChange}
+                        onKeyDown={(event) =>
+                          event.key === 'Enter' &&
+                          !event.nativeEvent.isComposing &&
+                          handleSendMessage()
+                        }
+                        placeholder="Nhập tin nhắn…"
+                        disabled={sending}
+                        className="min-w-0 flex-1"
+                      />
+                      <Button
+                        onClick={handleSendMessage}
+                        disabled={!inputValue.trim() || sending}
+                        aria-label="Gửi tin nhắn"
+                      >
+                        {sending ? (
+                          <Loader2
+                            aria-hidden
+                            className="motion-safe:animate-spin"
+                          />
+                        ) : (
+                          <Send aria-hidden />
+                        )}
+                        <span className="hidden sm:inline">Gửi</span>
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </section>
       </div>
-    </div>
+      {closeOpen && selectedConv && (
+        <ResourceConfirmation
+          title="Kết thúc cuộc trò chuyện?"
+          description={`Kết thúc hỗ trợ ${selectedConv.khachHang.taiKhoan.hoTen}. Lịch sử tin nhắn vẫn được giữ lại.`}
+          busy={actionLoading}
+          onClose={() => setCloseOpen(false)}
+        >
+          <Button
+            variant="destructive"
+            disabled={actionLoading}
+            onClick={handleClose}
+          >
+            {actionLoading && (
+              <Loader2 aria-hidden className="motion-safe:animate-spin" />
+            )}
+            Kết thúc hội thoại
+          </Button>
+        </ResourceConfirmation>
+      )}
+    </>
   );
 }
