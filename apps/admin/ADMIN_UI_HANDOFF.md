@@ -30,7 +30,7 @@ Lệnh unit regression, chạy từ root:
 npm run test --workspace=@vexgo/api -- test/unit/platform-dashboard test/unit/auth/access-token.guard.spec.ts test/unit/auth/tenant-scope.spec.ts test/unit/auth/permission-resolver.spec.ts test/unit/auth/permission-catalog.spec.ts test/unit/revenue-reports/revenue-reports.authorization.spec.ts test/unit/revenue-reports/revenue-reports.service.spec.ts test/unit/admin-accounts/admin-accounts.service.spec.ts
 ```
 
-Unit dashboard dùng service/guard thật với dependency Prisma được mock. Assertions kiểm tra phân quyền, query filters, projection/mapping, transaction isolation và boundary tháng/timezone; không chứng minh hành vi SQL thật. Test UI đã cập nhật source nhưng chưa thực thi. CI hiện có được giữ nguyên; kết quả CI phải đọc riêng trên PR.
+Unit dashboard dùng service/guard thật với dependency Prisma được mock. Assertions kiểm tra phân quyền, query filters, projection/mapping, transaction isolation và boundary tháng/timezone; không chứng minh hành vi SQL thật. Test UI không chạy local; workflow CI hiện có đã thực thi các suite đầy đủ và được giữ nguyên. Kết quả từng revision phải đọc riêng trên PR #43.
 
 ## Nghiệm thu và giới hạn
 
@@ -46,3 +46,12 @@ Phần triển khai UI được duyệt và kiểm tra kỹ thuật local đư�
 ## CI follow-up — 25/10/2026
 
 CI ban đầu trên bdeb1b8: API CI và Web CI PASS; Admin CI FAIL do môi trường JSDOM/mocks và assertion markup legacy. Đã cập nhật media-query API test setup, partial icon mocks, timestamp fixture, file path resolution và các role/label/variant assertions theo canonical contract; giữ business/callback/permission assertions. Không đổi workflow hoặc chạy UI suite local. Kết quả rerun CI được cập nhật trên PR #43.
+
+## Khép các regression sau migration
+
+- Các vòng CI trên branch giữ nguyên 481 test Admin; không skip test hoặc nới CI gates. Đã sửa mock icon thiếu export, media-query API của JSDOM, fixture thiếu timestamp, đọc file Node trong JSDOM, và assertion theo contract UI được duyệt.
+- Select được thao tác qua popup; checkbox native và primitive được kiểm tra theo đúng contract; portal được render trên DOM. Modal đang mở phải ẩn phần nền khỏi accessibility tree. Toast thao tác được tách khỏi lỗi tải/validation inline.
+- Regression cuối ở form bảng giá: Base UI SelectPositioner.onMapChange phát giá trị null với reason none khi các option tạm unmount để reload. Callback này từng xóa lựa chọn/lỗi server. Form nay hủy callback đồng bộ đó; các thay đổi do người dùng vẫn được xử lý. Test cũ được giữ và siết thêm selected label, aria-invalid và aria-describedby sau reload.
+- Các assertion danh sách/thẻ mobile giữ kiểm tra cả hai detail actions, không chỉ kiểm tra một Card bất kỳ.
+- Typecheck/lint/build Admin sau sửa PASS; trạng thái CI mới nhất và lịch sử kết quả nằm tại https://github.com/quocan9999/vexgo/pull/43. Không suy rộng thành PASS dashboard authenticated HTTP/SQL runtime.
+- Lệnh refresh GitNexus tiếp tục dừng tiến triển tại Analyzer, đã ngắt đúng invocation sau khi chờ; index cũ vẫn là giới hạn được đối chiếu bằng source và diff.

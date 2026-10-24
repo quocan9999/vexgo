@@ -472,6 +472,7 @@ describe('Fare Price create dialog behavior', () => {
         name: _name === 'route' ? 'Tuyến xe' : 'Loại xe',
       });
       await waitFor(() => expect(relation.hasAttribute('disabled')).toBe(false));
+      expect(relation.textContent).toContain(_name === 'route' ? 'TP.HCM → Đà Lạt' : 'Limousine');
       expect(relation.getAttribute('aria-invalid')).toBe('true');
       expect(document.getElementById(relation.getAttribute('aria-describedby') ?? '')?.textContent).toBe(message);
     },

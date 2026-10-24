@@ -307,7 +307,16 @@ export function FarePriceFormDialog({
         <Select
           disabled={disabled}
           value={values[field] || null}
-          onValueChange={(value) => updateField(field, String(value ?? ''))}
+          onValueChange={(value, details) => {
+            // Base UI clears an unmatched selection while lookup items unmount.
+            // That synchronization is not a user edit and must retain the
+            // selected ID and its server error until another option is chosen.
+            if (value === null && details.reason === 'none') {
+              details.cancel();
+              return;
+            }
+            updateField(field, String(value ?? ''));
+          }}
         >
           <SelectTrigger
             id={`${idPrefix}-${field}`}
