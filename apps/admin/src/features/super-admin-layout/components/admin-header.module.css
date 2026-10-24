@@ -41,9 +41,9 @@
   border-radius: var(--admin-radius-control);
   background: var(--admin-canvas);
   color: var(--admin-text-strong);
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 1.4;
+  font-size: var(--admin-type-label-size);
+  font-weight: var(--admin-type-label-weight);
+  line-height: var(--admin-type-label-line-height);
 }
 .workspace svg {
   flex-shrink: 0;
@@ -58,8 +58,9 @@
   flex-direction: row;
   flex-wrap: nowrap;
   gap: 10px;
-  font-size: 13px;
-  line-height: 1.4;
+  font-size: var(--admin-type-secondary-body-size);
+  font-weight: var(--admin-type-secondary-body-weight);
+  line-height: var(--admin-type-secondary-body-line-height);
 }
 .breadcrumb > svg {
   flex-shrink: 0;
@@ -72,7 +73,7 @@
 .current {
   overflow: hidden;
   color: var(--admin-text-strong);
-  font-weight: 600;
+  font-weight: var(--admin-weight-semibold);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -90,8 +91,9 @@
   border-radius: 50%;
   background: var(--admin-blue-soft);
   color: var(--admin-blue);
-  font-size: 13px;
-  font-weight: 600;
+  font-size: var(--admin-type-label-size);
+  font-weight: var(--admin-type-label-weight);
+  line-height: var(--admin-type-label-line-height);
 }
 .identity {
   display: flex;
@@ -107,14 +109,15 @@
   white-space: nowrap;
 }
 .name {
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 1.35;
+  font-size: var(--admin-type-label-size);
+  font-weight: var(--admin-type-label-weight);
+  line-height: var(--admin-type-label-line-height);
 }
 .role {
   color: var(--admin-text-muted);
-  font-size: 12px;
-  line-height: 1.35;
+  font-size: var(--admin-type-helper-size);
+  font-weight: var(--admin-type-helper-weight);
+  line-height: var(--admin-type-helper-line-height);
 }
 .divider {
   width: 1px;
@@ -126,6 +129,9 @@
   gap: 8px;
   padding-inline: 12px;
   color: var(--admin-text-muted);
+  font-size: var(--admin-type-button-size);
+  font-weight: var(--admin-type-button-weight);
+  line-height: var(--admin-type-button-line-height);
 }
 .logout:hover {
   background: #fff5f4;
@@ -177,8 +183,9 @@
     padding: 0;
     border: 0;
     background: none;
-    font-size: 12px;
-    font-weight: 400;
+    font-size: var(--admin-type-helper-size);
+    font-weight: var(--admin-type-helper-weight);
+    line-height: var(--admin-type-helper-line-height);
     color: var(--admin-text-muted);
   }
   .workspace > svg,
@@ -191,9 +198,6 @@
   }
   .breadcrumb {
     max-width: 100%;
-  }
-  .current {
-    font-size: 13px;
   }
   .account {
     gap: 4px;

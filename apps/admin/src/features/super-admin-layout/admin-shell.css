@@ -49,7 +49,8 @@
   border-radius: 12px;
   background: #2e5ee8;
   font-size: 22px;
-  font-weight: 700;
+  font-weight: var(--admin-weight-bold);
+  line-height: var(--admin-type-display-line-height);
 }
 .brand-copy {
   display: flex;
@@ -59,13 +60,15 @@
 }
 .brand-copy strong {
   font-size: 18px;
-  line-height: 1.2;
+  font-weight: var(--admin-weight-bold);
+  line-height: var(--admin-type-display-line-height);
 }
 .brand-copy small {
   overflow: hidden;
   color: #bcc8d9;
-  font-size: 12px;
-  line-height: 1.4;
+  font-size: var(--admin-type-helper-size);
+  font-weight: var(--admin-type-helper-weight);
+  line-height: var(--admin-type-helper-line-height);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -104,9 +107,9 @@
 .sidebar-label {
   margin: 0 12px 8px;
   color: #aebbd0;
-  font-size: 12px;
-  line-height: 1.35;
-  font-weight: 600;
+  font-size: var(--admin-type-badge-size);
+  line-height: var(--admin-type-badge-line-height);
+  font-weight: var(--admin-type-badge-weight);
   letter-spacing: 0.04em;
 }
 .sidebar-nav-group nav {
@@ -122,9 +125,9 @@
   padding: 8px 12px;
   border-radius: 8px;
   color: #bcc8d9;
-  font-size: 13px;
-  font-weight: 500;
-  line-height: 1.45;
+  font-size: var(--admin-type-secondary-body-size);
+  font-weight: var(--admin-weight-medium);
+  line-height: var(--admin-type-secondary-body-line-height);
   text-decoration: none;
 }
 .sidebar-link:hover {
@@ -167,6 +170,9 @@
 }
 .admin-skip-link {
   position: fixed;
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
   top: 8px;
   left: 8px;
   z-index: 80;
@@ -174,6 +180,9 @@
   border-radius: 8px;
   background: #fff;
   color: var(--admin-blue);
+  font-size: var(--admin-type-button-size);
+  font-weight: var(--admin-type-button-weight);
+  line-height: var(--admin-type-button-line-height);
   transform: translateY(-160%);
 }
 .admin-skip-link:focus {

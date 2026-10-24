@@ -8,7 +8,7 @@ GitNexus `detect_changes(scope:all)` trước commit trả 339 symbol thay đổ
 
 ## Kết quả và ưu tiên
 
-Trạng thái sau các lát cắt tiếp theo: mục 1, 2 và 3 đã có thay đổi code, chờ người dùng smoke; mục 4 chưa triển khai. Bằng chứng dòng dưới đây tham chiếu mốc audit ban đầu, trước thay đổi.
+Trạng thái sau các lát cắt tiếp theo: cả 4 mục đã có thay đổi code. Người dùng báo đã smoke UI và yêu cầu chuyển sang công việc tiếp theo; không cung cấp kết quả chi tiết theo từng kịch bản. Mục 4 được đính chính theo bảng semantic role thực tế, không coi các tỷ lệ 1.4/1.45 là lỗi. Bằng chứng dòng dưới đây tham chiếu mốc audit ban đầu, trước thay đổi.
 
 ### 1. P2 — Viền focus của link sidebar bị giới hạn bởi vùng cuộn
 
@@ -69,4 +69,14 @@ Trạng thái sau các lát cắt tiếp theo: mục 1, 2 và 3 đã có thay đ
 - Pre-edit impact cho feature `SuperAdminLayout` vẫn là CRITICAL với 22 direct dependents và 19 processes theo index hiện có. Đã review source/diff; không chạy test, browser, lint, typecheck, build hoặc `git diff --check`. Chưa xác minh runtime.
 - Người dùng smoke: ở mobile, bấm avatar bên cạnh Đăng xuất để xem tên và vai trò; thử Đóng, Escape, bấm ngoài và mở lại. Kiểm tra Tab/focus return, nội dung tên dài/nhiều vai trò ở viewport thấp, resize sang desktop khi popup đang mở, và menu mobile. Không cần thực hiện logout để review thông tin tài khoản.
 
-Các vấn đề hình học như overflow khi tenant/tên tài khoản rất dài và focus return sau đổi breakpoint vẫn cần quan sát runtime, không được ghi nhận là đã PASS hoặc là bug đã tái hiện. Typography shell/header là lát cắt tiếp theo.
+## Cập nhật triển khai — semantic typography shell/header
+
+- Phần focus, Tooltip và thông tin tài khoản mobile được commit riêng tại `948bfa1`, sau mốc migration `d9642f8`. Commit mới qua hook định dạng Conventional tiếng Việt; việc đó không chứng minh runtime UI đã PASS.
+- Thêm bảng mapping shell/header vào DESIGN.md trước khi thay CSS. Brand context/role/mobile workspace dùng helper; group label dùng badge; menu/breadcrumb dùng secondary body; workspace desktop/name/avatar dùng label; logout/skip link dùng button. Mức nhấn medium của menu và semibold của current breadcrumb được ghi rõ.
+- Kích thước wordmark 18px và brand mark 22px giữ như ngoại lệ brand; weight và line-height dùng token hiện có. Navigation vẫn dùng 1.45 và helper vẫn dùng 1.4 theo bảng role. Không sửa giá trị global tokens hoặc typography của các màn nghiệp vụ.
+- Chỉ thay `admin-shell.css` và `admin-header.module.css`. Workspace desktop đổi từ line-height 1.4 sang label 1.35; breadcrumb đổi từ 1.4 sang secondary body 1.45; dòng role tài khoản dùng helper 1.4. Các width, breakpoint, padding và min-height header/menu giữ nguyên. Skip link được đặt min-height 44px để vẫn đạt kích thước thao tác khi dùng button line-height.
+- Pre-edit impact của SuperAdminLayout: CRITICAL, 22 direct dependents, 19 processes theo index cũ; hai file CSS được import bởi shell. Đã review diff và tên token so với source. Không chạy browser, test, TypeScript, ESLint, build hoặc `git diff --check`; agent chưa tự xác minh runtime.
+- Đã thử lại refresh bằng lệnh pnpm được GitNexus đề xuất (`pnpm --allow-build=@ladybugdb/core --allow-build=gitnexus --allow-build=tree-sitter dlx gitnexus@latest analyze --index-only`). Sau thông báo Analyzer, tiến trình không phát sinh tiến độ trong thời gian thực hiện lát cắt; đã dừng riêng cây tiến trình của lần chạy này. Không khẳng định refresh thành công hoặc index đã mới.
+- Người dùng smoke: xem brand/sidebar/header desktop, rail tablet và mobile; tên dài phải tiếp tục truncate trong header, tên/vai trò đầy đủ vẫn đọc được trong account popover. Tab tới skip link để kiểm tra chữ/viền focus; xác nhận menu và header không tăng chiều cao bất thường.
+
+Người dùng đã báo hoàn thành smoke UI trước khi chuyển sang kiểm kê legacy. Không suy ra từng kịch bản tên dài, focus sau resize hoặc mọi vai trò đều PASS khi chưa có kết quả cụ thể; agent không thực hiện browser/runtime test. Cả bốn mục audit có implementation và phạm vi được chuyển sang công việc tiếp theo theo yêu cầu người dùng.

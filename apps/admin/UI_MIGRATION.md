@@ -367,3 +367,15 @@ Status: **MIGRATING — implementation complete; pending user mobile visual/keyb
 - Pre-edit GitNexus impact for the exact feature SuperAdminLayout was CRITICAL with 22 direct dependents and 19 processes. The stale index limitation recorded in SHELL_AUDIT.md remains; this slice used direct source/diff review. No auth, permission, API, backend, DB or env changes.
 - TypeScript, ESLint, build and `git diff --check` skipped per user preference. No tests or browser checks run; integration/E2E/UI/component suites NOT RUN BY REQUEST. Runtime behavior is not claimed as verified.
 - Pending user smoke: open mobile Admin and tap the avatar next to Logout; read full name/roles; close using Close/Escape/outside press and reopen. Check keyboard focus return, long names/multiple roles, short viewport scrolling and resize to desktop while open. This review does not require executing Logout.
+
+## Shell/header semantic typography — 24/10/2026
+
+Status: **USER SMOKE REPORTED — user completed UI smoke and requested the next work; individual scenario results were not supplied**.
+
+- Previous sidebar focus/Tooltip/mobile account slices were committed as `948bfa1` before this typography work.
+- Corrected the initial audit's overly broad line-height claim: DESIGN.md explicitly permits 1.4 for helper, 1.45 for secondary/table body and 1.3 for section headings. The implementation maps shell/header elements to the actual role table; it does not flatten all text to the three primary ratios.
+- Sidebar context, navigation, group labels, header workspace/breadcrumb, account identity/avatar and logout/skip actions now consume existing semantic size/weight/line-height tokens. Navigation keeps medium emphasis, current breadcrumb keeps semibold, and brand wordmark/mark retain their 18px/22px size exceptions. Role mapping is recorded in DESIGN.md.
+- Changes are confined to the two shell/header stylesheets and mapping/audit docs. Global token values, feature typography, breakpoints, sidebar widths, padding and existing header/menu minimum heights are retained. Skip link has a 44px minimum to preserve its action target after mapping to button typography.
+- Pre-edit graph impact for the exact SuperAdminLayout feature was CRITICAL (22 direct dependents, 19 processes) with the previously recorded stale-index limitation. Both stylesheet imports were traced to the shell; source/diff review checked the token mapping. No auth, API, backend, env or DB changes.
+- TypeScript, ESLint, build and `git diff --check` skipped per user preference. No tests or browser checks run; integration/E2E/UI/component suites NOT RUN BY REQUEST. No runtime PASS is claimed.
+- The user reported UI smoke complete before moving to legacy inventory. The prior checklist covers desktop/tablet/mobile, long tenant/account text, full account popover details and skip-link focus; no per-scenario results were supplied, so no complete runtime PASS is inferred. SHELL_AUDIT.md records the implementation and this user acknowledgment.

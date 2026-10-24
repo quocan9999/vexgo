@@ -300,6 +300,18 @@ Current migration ledger: [UI_MIGRATION.md](./UI_MIGRATION.md). `/vehicles` and 
 - Mobile Sheet uses the canonical focus/scroll-lock engine, closes on link selection, Escape/backdrop, and returns focus to the menu trigger. Returning to desktop closes the mobile overlay. Desktop collapse preference keeps its existing storage behavior.
 - Logout executes immediately without confirmation (user decision). Disable the action while pending, guard repeated requests and use bottom-right error toast. No feature content or API authorization rules are changed by the shell migration.
 
+Shell/header typography maps to the existing role table above. Ratios 1.4 and 1.45 are valid for helper and secondary body; the three primary ratios are not an exclusive list. This mapping uses existing semantic tokens without changing their global values:
+
+| Shell/header element | Typography role |
+| --- | --- |
+| Brand context, mobile workspace context, account role | Helper (12px / 1.4 / 400) |
+| Sidebar group label | Badge (12px / 1.35 / 600), uppercase tracking retained |
+| Sidebar link | Secondary body (13px / 1.45), with medium 500 navigation emphasis |
+| Desktop workspace label, account name, avatar identifying letter | Form label (13px / 1.35 / 600) |
+| Breadcrumb | Secondary body (13px / 1.45 / 400); current section uses semibold 600 emphasis |
+| Logout and skip-navigation link | Button (14px / 1.2 / 600) |
+| VexGo wordmark and brand mark | Deliberate brand-size exceptions: 18px and 22px; display line-height 1.2 and bold 700 |
+
 ## Rollout and completion gates
 
 1. Documentation/contract foundation: this step; no runtime tokens or DTOs are changed by documentation alone.
