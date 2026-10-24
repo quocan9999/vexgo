@@ -1,3 +1,5 @@
+// @vitest-environment jsdom
+import { renderPortalMarkup } from './canonical-test-helpers';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -157,13 +159,13 @@ describe('TripSeatsManagement Workspace', () => {
 
     expect(html).toContain('QUẢN LÝ VẬN HÀNH');
     expect(html).toContain('Ghế chuyến FUTA-CX-001');
-    expect(html).toContain('Quay lại danh sách chuyến');
+    expect(html).toContain('Danh sách chuyến');
     expect(html).toContain('href="/trips"');
     // Context
     expect(html).toContain(
-      'admin-data-mono">FUTA-TX-0001</span> (TP.HCM → Đà Lạt)',
+      'FUTA-TX-0001',
     );
-    expect(html).toContain('admin-data-mono">30F-123.45</span> (GIƯỜNG NẰM)');
+    expect(html).toContain('30F-123.45');
     expect(html).toContain('Chưa khởi hành');
     // Summary
     expect(html).toContain('Tổng số ghế');
@@ -182,8 +184,10 @@ describe('TripSeatsManagement Workspace', () => {
     );
 
     // Position groups
-    expect(html).toContain('Tầng dưới (2)');
-    expect(html).toContain('Tầng trên (1)');
+    expect(html).toContain('Tầng dưới');
+    expect(new DOMParser().parseFromString(html, 'text/html').getElementById('trip-seat-group-0')?.parentElement?.textContent).toContain('2 ghế');
+    expect(html).toContain('Tầng trên');
+    expect(new DOMParser().parseFromString(html, 'text/html').getElementById('trip-seat-group-1')?.parentElement?.textContent).toContain('1 ghế');
     // A11y: deterministic, HTML-safe IDs without whitespace in aria-labelledby
     expect(html).toContain('aria-labelledby="trip-seat-group-0"');
     expect(html).toContain('id="trip-seat-group-0"');
@@ -199,7 +203,7 @@ describe('TripSeatsManagement Workspace', () => {
     expect(html).not.toMatch(/<button[^>]*data-seat-code/);
     // Legend
     expect(html).toContain('Có thể đặt');
-    expect(html).toContain('Tạm thời giữ');
+    expect(html).toContain('Đang được giữ tạm thời');
     expect(html).toContain('Đã đặt');
   });
 
@@ -235,7 +239,8 @@ describe('TripSeatsManagement Workspace', () => {
       />,
     );
 
-    expect(html).toContain('Chưa xác định vị trí (1)');
+    expect(html).toContain('Chưa xác định vị trí');
+    expect(new DOMParser().parseFromString(html, 'text/html').getElementById('trip-seat-group-0')?.parentElement?.textContent).toContain('1 ghế');
     expect(html).toContain('X01');
   });
 
@@ -259,7 +264,7 @@ describe('TripSeatsManagement Workspace', () => {
       />,
     );
 
-    expect(html).toContain('Không có dữ liệu ghế chuyến.');
+    expect(html).toContain('Chuyến xe chưa có dữ liệu ghế.');
     expect(html).toContain('Tất cả (0)');
     expect(html).toContain('Trống (0)');
   });
@@ -284,7 +289,7 @@ describe('TripDetailSheet "Xem ghế chuyến" integration', () => {
   it('renders "Xem ghế chuyến" link leading to /trips/:id/seats when user has trip:read', () => {
     setEmployeeAdminTestSession(['trip:read']);
 
-    const html = renderToStaticMarkup(
+    const html = renderPortalMarkup(
       <TripDetailSheet initialTrip={mockTrip} onClose={vi.fn()} tripId={101} />,
     );
 

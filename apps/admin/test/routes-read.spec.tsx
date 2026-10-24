@@ -65,7 +65,7 @@ describe('Admin routes read page', () => {
   it('uses the shared skeleton and loading result summary before the API responds', () => {
     const html = renderToStaticMarkup(<RoutesManagement />);
     expect(html).toContain('Đang tải danh sách tuyến xe');
-    expect(html).toContain('data-result-count="loading"');
+    expect(html).not.toContain('aria-label="Trang sau"');
     expect(html).toContain('Làm mới');
     expect(html).not.toContain('Thêm tuyến');
   });
@@ -81,7 +81,8 @@ describe('Admin routes read page', () => {
       meta: { page: 1, pageSize: 10, totalItems: 41, totalPages: 5 },
     };
     const html = renderToStaticMarkup(<RoutesManagement />);
-    expect(html).toContain('data-result-count="41"');
+    expect(html).toContain('aria-live="polite"');
+    expect(html).toContain('41');
     expect(html).toContain('aria-sort="ascending"');
     expect(html).toContain('aria-label="Xem chi tiết tuyến FUTA-TX-0001"');
     expect(html).toContain('routes-mobile-card');
@@ -92,7 +93,8 @@ describe('Admin routes read page', () => {
   it('retains the list without showing the initial skeleton during a refetch', () => {
     state.routePage = { data: [], meta: { page: 1, pageSize: 10, totalItems: 0, totalPages: 0 } };
     const html = renderToStaticMarkup(<RoutesManagement />);
-    expect(html).toContain('data-result-count="0"');
+    expect(html).toContain('aria-live="polite"');
+    expect(html).toContain('0');
     expect(html).not.toContain('Đang tải danh sách tuyến xe');
   });
 

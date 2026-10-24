@@ -1,3 +1,4 @@
+import { selectCanonicalOption, inspectCanonicalOption } from './canonical-test-helpers';
 // @vitest-environment jsdom
 import {
   cleanup,
@@ -179,22 +180,16 @@ function installApi(options: ApiOptions = {}) {
   };
 }
 
-function fillValidForm(dialog: HTMLElement) {
-  fireEvent.change(within(dialog).getByLabelText(/Tuyến xe/), {
-    target: { value: '3' },
-  });
-  fireEvent.change(within(dialog).getByLabelText(/Loại xe/), {
-    target: { value: '2' },
-  });
+async function fillValidForm(dialog: HTMLElement) {
+  await selectCanonicalOption(within(dialog).getByLabelText(/Tuyến xe/), "TP.HCM → Đà Lạt");
+  await selectCanonicalOption(within(dialog).getByLabelText(/Loại xe/), "Limousine");
   fireEvent.change(within(dialog).getByLabelText(/Giá niêm yết/), {
     target: { value: '250000' },
   });
   fireEvent.change(within(dialog).getByLabelText(/Hiệu lực từ/), {
     target: { value: '2099-09-01' },
   });
-  fireEvent.change(within(dialog).getByLabelText(/Trạng thái/), {
-    target: { value: 'HOAT_DONG' },
-  });
+  await selectCanonicalOption(within(dialog).getByLabelText(/Trạng thái/), "Hoạt động");
 }
 
 afterEach(() => {
@@ -230,12 +225,10 @@ describe('Fare Price create dialog behavior', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Thêm bảng giá' });
 
     expect(
-      await within(dialog).findByRole('option', {
-        name: 'TP.HCM → Đà Lạt',
-      }),
+      await inspectCanonicalOption(within(dialog).getByRole('combobox', { name: /Tuyến xe/ }), 'TP.HCM → Đà Lạt'),
     ).toBeTruthy();
     expect(
-      await within(dialog).findByRole('option', { name: 'Limousine' }),
+      await inspectCanonicalOption(within(dialog).getByRole('combobox', { name: /Loại xe/ }), 'Limousine'),
     ).toBeTruthy();
     expect(within(dialog).getByLabelText(/Hiệu lực đến/)).toHaveProperty(
       'value',
@@ -277,8 +270,8 @@ describe('Fare Price create dialog behavior', () => {
       await screen.findByRole('button', { name: 'Thêm bảng giá' }),
     );
     const dialog = await screen.findByRole('dialog', { name: 'Thêm bảng giá' });
-    await within(dialog).findByRole('option', { name: 'Limousine' });
-    fillValidForm(dialog);
+    await inspectCanonicalOption(within(dialog).getByRole('combobox', { name: /Loại xe/ }), 'Limousine');
+    await fillValidForm(dialog);
 
     const submit = within(dialog).getByRole('button', { name: 'Tạo bảng giá' });
     fireEvent.click(submit);
@@ -326,8 +319,8 @@ describe('Fare Price create dialog behavior', () => {
       await screen.findByRole('button', { name: 'Thêm bảng giá' }),
     );
     const dialog = await screen.findByRole('dialog', { name: 'Thêm bảng giá' });
-    await within(dialog).findByRole('option', { name: 'Limousine' });
-    fillValidForm(dialog);
+    await inspectCanonicalOption(within(dialog).getByRole('combobox', { name: /Loại xe/ }), 'Limousine');
+    await fillValidForm(dialog);
     fireEvent.click(
       within(dialog).getByRole('button', { name: 'Tạo bảng giá' }),
     );
@@ -353,8 +346,8 @@ describe('Fare Price create dialog behavior', () => {
       await screen.findByRole('button', { name: 'Thêm bảng giá' }),
     );
     const dialog = await screen.findByRole('dialog', { name: 'Thêm bảng giá' });
-    await within(dialog).findByRole('option', { name: 'Limousine' });
-    fillValidForm(dialog);
+    await inspectCanonicalOption(within(dialog).getByRole('combobox', { name: /Loại xe/ }), 'Limousine');
+    await fillValidForm(dialog);
     fireEvent.change(within(dialog).getByLabelText(/Giá niêm yết/), {
       target: { value: '250000.5' },
     });
@@ -401,9 +394,7 @@ describe('Fare Price create dialog behavior', () => {
       within(dialog).getByRole('button', { name: /thử lại tuyến xe/i }),
     );
     expect(
-      await within(dialog).findByRole('option', {
-        name: 'TP.HCM → Đà Lạt',
-      }),
+      await inspectCanonicalOption(within(dialog).getByRole('combobox', { name: /Tuyến xe/ }), 'TP.HCM → Đà Lạt'),
     ).toBeTruthy();
   });
 
@@ -422,7 +413,7 @@ describe('Fare Price create dialog behavior', () => {
       within(dialog).getByRole('button', { name: /thử lại loại xe/i }),
     );
     expect(
-      await within(dialog).findByRole('option', { name: 'Limousine' }),
+      await inspectCanonicalOption(within(dialog).getByRole('combobox', { name: /Loại xe/ }), 'Limousine'),
     ).toBeTruthy();
   });
 
@@ -462,8 +453,8 @@ describe('Fare Price create dialog behavior', () => {
       const dialog = await screen.findByRole('dialog', {
         name: 'Thêm bảng giá',
       });
-      await within(dialog).findByRole('option', { name: 'Limousine' });
-      fillValidForm(dialog);
+      await inspectCanonicalOption(within(dialog).getByRole('combobox', { name: /Loại xe/ }), 'Limousine');
+      await fillValidForm(dialog);
       fireEvent.click(
         within(dialog).getByRole('button', { name: 'Tạo bảng giá' }),
       );

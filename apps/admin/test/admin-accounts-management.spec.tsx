@@ -1,3 +1,4 @@
+import { selectCanonicalOption } from './canonical-test-helpers';
 // @vitest-environment jsdom
 import {
   cleanup,
@@ -146,7 +147,7 @@ function setAdminPermissions(permissions: string[]) {
   };
 }
 
-function fillRequiredCreateFields(dialog: HTMLElement) {
+async function fillRequiredCreateFields(dialog: HTMLElement) {
   fireEvent.change(within(dialog).getByLabelText('Họ và tên *'), {
     target: { value: 'Trần Minh Anh' },
   });
@@ -156,9 +157,7 @@ function fillRequiredCreateFields(dialog: HTMLElement) {
   fireEvent.change(within(dialog).getByLabelText('Mật khẩu *'), {
     target: { value: 'VexGo@123' },
   });
-  fireEvent.change(within(dialog).getByLabelText('Nhà xe *'), {
-    target: { value: '7' },
-  });
+  await selectCanonicalOption(within(dialog).getByLabelText('Nhà xe *'), /Phương Trang/);
   fireEvent.change(within(dialog).getByLabelText('Mã nhân viên *'), {
     target: { value: 'FUTA-NV-1234' },
   });
@@ -327,7 +326,7 @@ describe('Admin accounts management page', () => {
       within(table).getByRole('row', { name: /Nguyễn Minh Anh/ }),
     ).toBeTruthy();
     expect(
-      screen.getByRole('article', { name: 'Tài khoản Nguyễn Minh Anh' }),
+      screen.getAllByText('Nguyễn Minh Anh').find((node) => node.closest('[data-slot="card"]')),
     ).toBeTruthy();
   });
 
@@ -336,11 +335,11 @@ describe('Admin accounts management page', () => {
 
     render(<AdminAccountsManagement />);
 
-    const actions = document.querySelector('.page-intro-actions');
+    const actions = screen.getByRole('button', { name: 'Thêm tài khoản' }).parentElement;
     expect(actions).toBeTruthy();
     expect(
       within(actions as HTMLElement).getByRole('button', {
-        name: /thêm mới/i,
+        name: /thêm tài khoản/i,
       }),
     ).toBeTruthy();
     expect(
@@ -351,10 +350,8 @@ describe('Admin accounts management page', () => {
   it('matches CRUD section spacing and offers company, role and creation-date filters', async () => {
     render(<AdminAccountsManagement />);
 
-    const section = document.querySelector(
-      '[data-testid="admin-accounts-spacing"]',
-    );
-    expect(section?.className).toContain('accountsSection');
+    const section = document.querySelector('.admin-page-content');
+    expect(section?.className).toContain('gap-[var(--admin-space-section-gap)]');
     expect(
       await screen.findByRole('combobox', { name: 'Lọc theo nhà xe' }),
     ).toBeTruthy();
@@ -362,7 +359,7 @@ describe('Admin accounts management page', () => {
       screen.getByRole('combobox', { name: 'Lọc theo vai trò' }),
     ).toBeTruthy();
     expect(
-      screen.getByRole('button', { name: 'Lọc theo ngày tạo' }),
+      screen.getByRole('button', { name: /^Ngày tạo:/ }),
     ).toBeTruthy();
 
     fireEvent.click(screen.getByRole('combobox', { name: 'Lọc theo nhà xe' }));
@@ -383,7 +380,7 @@ describe('Admin accounts management page', () => {
     fireEvent.click(roleOption);
     expect(state.hook.updateRole).toHaveBeenCalledWith('NHAN_VIEN_BAN_VE');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Lọc theo ngày tạo' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Ngày tạo:/ }));
     fireEvent.change(screen.getByLabelText('Từ ngày'), {
       target: { value: '2026-09-01' },
     });
@@ -448,7 +445,7 @@ describe('Admin accounts management page', () => {
 
     render(<AdminAccountsManagement />);
 
-    expect(screen.getByText('Không tìm thấy tài khoản Admin')).toBeTruthy();
+    expect(screen.getByText('Chưa có tài khoản Admin')).toBeTruthy();
   });
 
   it('shows a retry action when loading the account list fails', () => {
@@ -479,7 +476,7 @@ describe('Admin accounts management page', () => {
 
     render(<AdminAccountsManagement />);
 
-    expect(screen.getByRole('button', { name: 'Thêm mới' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Thêm tài khoản' })).toBeTruthy();
   });
 
   it('creates an account with the selected tenant role and never offers a platform role', async () => {
@@ -494,7 +491,7 @@ describe('Admin accounts management page', () => {
     };
 
     render(<AdminAccountsManagement />);
-    fireEvent.click(screen.getByRole('button', { name: 'Thêm mới' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Thêm tài khoản' }));
 
     const dialog = await screen.findByRole('dialog', {
       name: 'Thêm tài khoản Admin',
@@ -515,9 +512,7 @@ describe('Admin accounts management page', () => {
     fireEvent.change(within(dialog).getByLabelText('Mật khẩu *'), {
       target: { value: 'VexGo@123' },
     });
-    fireEvent.change(within(dialog).getByLabelText('Nhà xe *'), {
-      target: { value: '7' },
-    });
+    await selectCanonicalOption(within(dialog).getByLabelText('Nhà xe *'), /Phương Trang/);
     fireEvent.change(within(dialog).getByLabelText('Mã nhân viên *'), {
       target: { value: 'FUTA-NV-1234' },
     });
@@ -556,7 +551,7 @@ describe('Admin accounts management page', () => {
   it('rejects invalid phone, password and an empty role set before sending create', async () => {
     setAdminPermissions(['admin-account:read', 'admin-account:create']);
     render(<AdminAccountsManagement />);
-    fireEvent.click(screen.getByRole('button', { name: 'Thêm mới' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Thêm tài khoản' }));
 
     const dialog = await screen.findByRole('dialog', {
       name: 'Thêm tài khoản Admin',
@@ -570,9 +565,7 @@ describe('Admin accounts management page', () => {
     fireEvent.change(within(dialog).getByLabelText('Mật khẩu *'), {
       target: { value: 'short' },
     });
-    fireEvent.change(within(dialog).getByLabelText('Nhà xe *'), {
-      target: { value: '7' },
-    });
+    await selectCanonicalOption(within(dialog).getByLabelText('Nhà xe *'), /Phương Trang/);
     fireEvent.change(within(dialog).getByLabelText('Mã nhân viên *'), {
       target: { value: 'FUTA-NV-1234' },
     });
@@ -605,12 +598,12 @@ describe('Admin accounts management page', () => {
     );
 
     render(<AdminAccountsManagement />);
-    fireEvent.click(screen.getByRole('button', { name: 'Thêm mới' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Thêm tài khoản' }));
     const dialog = await screen.findByRole('dialog', {
       name: 'Thêm tài khoản Admin',
     });
     await within(dialog).findByRole('checkbox', { name: 'Nhân viên bán vé' });
-    fillRequiredCreateFields(dialog);
+    await fillRequiredCreateFields(dialog);
     fireEvent.click(
       within(dialog).getByRole('button', { name: 'Tạo tài khoản' }),
     );
@@ -636,12 +629,12 @@ describe('Admin accounts management page', () => {
     );
 
     render(<AdminAccountsManagement />);
-    fireEvent.click(screen.getByRole('button', { name: 'Thêm mới' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Thêm tài khoản' }));
     const dialog = await screen.findByRole('dialog', {
       name: 'Thêm tài khoản Admin',
     });
     await within(dialog).findByRole('checkbox', { name: 'Nhân viên bán vé' });
-    fillRequiredCreateFields(dialog);
+    await fillRequiredCreateFields(dialog);
     const submit = within(dialog).getByRole('button', {
       name: 'Tạo tài khoản',
     });
@@ -676,7 +669,7 @@ describe('Admin accounts management page', () => {
     });
     fireEvent.click(
       within(detailSheet).getByRole('button', {
-        name: 'Chỉnh sửa thông tin tài khoản',
+        name: 'Chỉnh sửa',
       }),
     );
 
@@ -757,8 +750,7 @@ describe('Admin accounts management page', () => {
       within(detailSheet).getByRole('button', { name: 'Khóa tài khoản' }),
     );
 
-    const confirmation = await screen.findByRole('dialog', {
-      name: 'Khóa tài khoản này?',
+    const confirmation = await screen.findByRole('alertdialog', { name: 'Khóa tài khoản này?',
     });
     expect(confirmation.textContent).toContain(
       'các phiên đăng nhập đang hoạt động sẽ bị thu hồi',
@@ -789,8 +781,7 @@ describe('Admin accounts management page', () => {
     fireEvent.click(
       within(detailSheet).getByRole('button', { name: 'Khóa tài khoản' }),
     );
-    const confirmation = await screen.findByRole('dialog', {
-      name: 'Khóa tài khoản này?',
+    const confirmation = await screen.findByRole('alertdialog', { name: 'Khóa tài khoản này?',
     });
     fireEvent.click(
       within(confirmation).getByRole('button', { name: 'Khóa tài khoản' }),
@@ -833,8 +824,7 @@ describe('Admin accounts management page', () => {
         name: 'Mở khóa tài khoản',
       }),
     );
-    const confirmation = await screen.findByRole('dialog', {
-      name: 'Mở khóa tài khoản này?',
+    const confirmation = await screen.findByRole('alertdialog', { name: 'Mở khóa tài khoản này?',
     });
     expect(confirmation.textContent).toContain('không tạo phiên đăng nhập mới');
     fireEvent.click(
@@ -877,8 +867,7 @@ describe('Admin accounts management page', () => {
     fireEvent.click(
       within(detailSheet).getByRole('button', { name: 'Khóa tài khoản' }),
     );
-    const confirmation = await screen.findByRole('dialog', {
-      name: 'Khóa tài khoản này?',
+    const confirmation = await screen.findByRole('alertdialog', { name: 'Khóa tài khoản này?',
     });
     fireEvent.click(
       within(confirmation).getByRole('button', { name: 'Khóa tài khoản' }),
@@ -922,8 +911,7 @@ describe('Admin accounts management page', () => {
     fireEvent.click(
       within(detailSheet).getByRole('button', { name: 'Khóa tài khoản' }),
     );
-    const confirmation = await screen.findByRole('dialog', {
-      name: 'Khóa tài khoản này?',
+    const confirmation = await screen.findByRole('alertdialog', { name: 'Khóa tài khoản này?',
     });
     const submit = within(confirmation).getByRole('button', {
       name: 'Khóa tài khoản',
@@ -958,7 +946,7 @@ describe('Admin accounts management page', () => {
 
     expect(
       within(detailSheet).queryByRole('button', {
-        name: 'Chỉnh sửa thông tin tài khoản',
+        name: 'Chỉnh sửa',
       }),
     ).toBeNull();
     expect(
@@ -1010,15 +998,15 @@ describe('Admin accounts management page', () => {
         within(roleDialog).getByRole('checkbox', {
           name: 'Quản trị nhà xe',
         }) as HTMLInputElement
-      ).checked,
-    ).toBe(true);
+      ).getAttribute('aria-checked'),
+    ).toBe("true");
     expect(
       (
         within(roleDialog).getByRole('checkbox', {
           name: 'Nhân viên bán vé',
         }) as HTMLInputElement
-      ).checked,
-    ).toBe(false);
+      ).getAttribute('aria-checked'),
+    ).toBe("false");
     expect(
       within(roleDialog).queryByRole('checkbox', { name: 'Super Admin' }),
     ).toBeNull();
@@ -1080,8 +1068,7 @@ describe('Admin accounts management page', () => {
       within(roleDialog).getByRole('button', { name: 'Lưu vai trò' }),
     );
 
-    const confirmation = await screen.findByRole('dialog', {
-      name: 'Thu hồi toàn bộ vai trò?',
+    const confirmation = await screen.findByRole('alertdialog', { name: 'Thu hồi toàn bộ vai trò?',
     });
     expect(confirmation.textContent).toContain(
       'tài khoản sẽ không còn quyền quản trị',
@@ -1089,7 +1076,7 @@ describe('Admin accounts management page', () => {
     expect(state.replaceAdminAccountRoles).not.toHaveBeenCalled();
     fireEvent.click(within(confirmation).getByRole('button', { name: 'Hủy' }));
     expect(
-      screen.queryByRole('dialog', { name: 'Thu hồi toàn bộ vai trò?' }),
+      screen.queryByRole('alertdialog', { name: 'Thu hồi toàn bộ vai trò?' }),
     ).toBeNull();
     expect(
       screen.getByRole('dialog', { name: 'Gán vai trò tài khoản' }),
@@ -1099,8 +1086,7 @@ describe('Admin accounts management page', () => {
     fireEvent.click(
       within(roleDialog).getByRole('button', { name: 'Lưu vai trò' }),
     );
-    const secondConfirmation = await screen.findByRole('dialog', {
-      name: 'Thu hồi toàn bộ vai trò?',
+    const secondConfirmation = await screen.findByRole('alertdialog', { name: 'Thu hồi toàn bộ vai trò?',
     });
     fireEvent.click(
       within(secondConfirmation).getByRole('button', {

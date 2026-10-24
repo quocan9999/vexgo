@@ -1,3 +1,4 @@
+import { expectOperationToast } from './canonical-test-helpers';
 // @vitest-environment jsdom
 import {
   cleanup,
@@ -199,11 +200,9 @@ describe('Fare Prices list and detail behavior', () => {
     ).toBeTruthy();
     expect((await screen.findAllByText('Limousine')).length).toBeGreaterThan(0);
     expect(screen.queryByRole('button', { name: 'Thêm bảng giá' })).toBeNull();
-    const mobileList = screen.getByRole('list', {
-      name: 'Danh sách bảng giá dạng thẻ',
-    });
-    expect(mobileList.tagName).toBe('UL');
-    expect(within(mobileList).getAllByRole('listitem')).toHaveLength(1);
+    const mobileList = screen.getByLabelText('Danh sách bảng giá dạng thẻ');
+    expect(mobileList.className).toContain('min-[901px]:hidden');
+    expect(mobileList.querySelectorAll('[data-slot="card"]')).toHaveLength(1);
 
     const trigger = screen.getAllByRole('button', {
       name: 'Xem chi tiết SG-DL-01',
@@ -215,7 +214,7 @@ describe('Fare Prices list and detail behavior', () => {
     expect(api.requests).toContain('/api/v1/fare-prices/15');
 
     const closeButton = within(detail).getByRole('button', {
-      name: 'Đóng chi tiết bảng giá',
+      name: 'Đóng',
     });
     closeButton.focus();
     fireEvent.click(closeButton);
@@ -258,9 +257,7 @@ describe('Fare Prices list and detail behavior', () => {
       expect(screen.queryByRole('dialog')).toBeNull();
       expect(api.getFareListRequests()).toBeGreaterThan(1);
     });
-    expect(screen.getByRole('alert').textContent).toContain(
-      'Bảng giá không còn tồn tại.',
-    );
+    await expectOperationToast('error', 'Bảng giá không còn tồn tại.');
   });
 
   it('sends search to the API instead of filtering only the current page', async () => {

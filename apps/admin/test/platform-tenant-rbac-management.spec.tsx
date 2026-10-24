@@ -1,3 +1,4 @@
+import { expectOperationToast } from './canonical-test-helpers';
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -172,7 +173,7 @@ describe('Super Admin tenant RBAC editor', () => {
     render(await pageFor('12'));
 
     expect(await screen.findByRole('heading', { name: 'Phân quyền vai trò' })).toBeTruthy();
-    expect(screen.getByRole('region', { name: 'Phạm vi cấu hình quyền' }).textContent)
+    expect(screen.getByRole('navigation', { name: 'Phạm vi phân quyền' }).textContent)
       .toContain('Nhà xe (12)');
     expect(tenantRbac.getPlatformTenantRolePermissions.mock.calls[0][0]).toBe(12);
     expect(tenantRbac.getTenantRolePermissions).not.toHaveBeenCalled();
@@ -234,17 +235,17 @@ describe('Super Admin tenant RBAC editor', () => {
     expect(heading).toBeTruthy();
     const applied = screen.getByRole('region', { name: 'Quyền đang áp dụng' });
     const routeRead = screen.getByRole('checkbox', {
-      name: 'Gán quyền route:read cho NHA_XE_ADMIN',
+      name: /^Gán quyền route:read cho NHA_XE_ADMIN/,
     });
     fireEvent.click(routeRead);
-    expect((routeRead as HTMLInputElement).checked).toBe(true);
+    expect((routeRead as HTMLInputElement).getAttribute('aria-checked')).toBe("true");
     expect(within(applied).queryByText('route:read')).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Lưu thay đổi' }));
     fireEvent.click(screen.getByRole('button', { name: 'Xác nhận lưu' }));
 
-    expect((await screen.findByRole('alert')).textContent).toContain('Máy chủ từ chối thay đổi.');
-    expect((routeRead as HTMLInputElement).checked).toBe(true);
+    await expectOperationToast('error', 'Máy chủ từ chối thay đổi.');
+    expect((routeRead as HTMLInputElement).getAttribute('aria-checked')).toBe("true");
     expect(within(applied).queryByText('route:read')).toBeNull();
     expect(tenantRbac.replacePlatformTenantRolePermissions).toHaveBeenCalledWith(
       12,
@@ -280,7 +281,7 @@ describe('Super Admin tenant RBAC editor', () => {
       overriddenRole,
       permissions,
     ));
-    expect(await screen.findByText(/đã khôi phục quyền mặc định/i)).toBeTruthy();
+    await expectOperationToast('success', /đã khôi phục quyền mặc định/i);
     expect(screen.getByText('Kế thừa mặc định')).toBeTruthy();
     expect(reloadAdminSession).not.toHaveBeenCalled();
   });
@@ -302,7 +303,7 @@ describe('Super Admin tenant RBAC editor', () => {
 
     navigation.pathname = '/rbac/tenants/23';
     rerender(await pageFor('23'));
-    expect(await screen.findByText('Dữ liệu nhà xe 23 · NHA_XE_ADMIN')).toBeTruthy();
+    expect((await screen.findAllByText('Dữ liệu nhà xe 23 · NHA_XE_ADMIN')).length).toBeGreaterThan(0);
     expect(firstSignal?.aborted).toBe(true);
 
     resolveFirst?.(makeConfig('Dữ liệu cũ nhà xe 12'));

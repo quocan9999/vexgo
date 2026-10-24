@@ -1,3 +1,4 @@
+import { expectOperationToast } from './canonical-test-helpers';
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -200,9 +201,9 @@ describe('tenant RBAC management', () => {
     expect(screen.getByText(/Quyền đang áp dụng/)).toBeTruthy();
     expect(
       (screen.getByRole('checkbox', {
-        name: 'Gán quyền role:read cho NHA_XE_ADMIN',
-      }) as HTMLInputElement).checked,
-    ).toBe(true);
+        name: /^Gán quyền role:read cho NHA_XE_ADMIN/,
+      }) as HTMLInputElement).getAttribute('aria-checked'),
+    ).toBe("true");
   });
 
   it('keeps the applied summary on persisted permissions while the matrix has an unsaved draft', async () => {
@@ -213,13 +214,13 @@ describe('tenant RBAC management', () => {
       name: 'Quyền đang áp dụng',
     });
     const readCheckbox = screen.getByRole('checkbox', {
-      name: 'Gán quyền role:read cho NHA_XE_ADMIN',
+      name: /^Gán quyền role:read cho NHA_XE_ADMIN/,
     });
     expect(within(appliedPermissions).getByText('role:read')).toBeTruthy();
 
     fireEvent.click(readCheckbox);
 
-    expect((readCheckbox as HTMLInputElement).checked).toBe(false);
+    expect((readCheckbox as HTMLInputElement).getAttribute('aria-checked')).toBe("false");
     expect(within(appliedPermissions).getByText('role:read')).toBeTruthy();
     expect(service.replaceTenantRolePermissions).not.toHaveBeenCalled();
   });
@@ -242,9 +243,9 @@ describe('tenant RBAC management', () => {
     renderManagement();
 
     const checkbox = await screen.findByRole('checkbox', {
-      name: 'Gán quyền role:read cho NHA_XE_ADMIN',
+      name: /^Gán quyền role:read cho NHA_XE_ADMIN/,
     });
-    expect((checkbox as HTMLInputElement).disabled).toBe(true);
+    expect((checkbox as HTMLInputElement).hasAttribute('data-disabled')).toBe(true);
     expect(screen.getByText(/chỉ có quyền xem/i)).toBeTruthy();
     expect(
       (screen.getByRole('button', { name: 'Lưu thay đổi' }) as HTMLButtonElement)
@@ -265,8 +266,8 @@ describe('tenant RBAC management', () => {
     renderManagement();
     await screen.findByRole('heading', { name: 'Phân quyền vai trò' });
 
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Gán quyền role:read cho NHA_XE_ADMIN' }));
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Gán quyền permission:assign cho NHA_XE_ADMIN' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /^Gán quyền role:read cho NHA_XE_ADMIN/ }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /^Gán quyền permission:assign cho NHA_XE_ADMIN/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Lưu thay đổi' }));
     fireEvent.click(screen.getByRole('button', { name: 'Xác nhận lưu' }));
 
@@ -294,7 +295,7 @@ describe('tenant RBAC management', () => {
       name: 'Quyền đang áp dụng',
     });
     fireEvent.click(screen.getByRole('checkbox', {
-      name: 'Gán quyền route:read cho NHA_XE_ADMIN',
+      name: /^Gán quyền route:read cho NHA_XE_ADMIN/,
     }));
     expect(within(appliedPermissions).queryByText('route:read')).toBeNull();
 
@@ -339,24 +340,24 @@ describe('tenant RBAC management', () => {
       permissions,
     ));
     await waitFor(() => expect(reloadAdminSession).toHaveBeenCalledTimes(1));
-    expect(await screen.findByText(/đã khôi phục quyền mặc định/i)).toBeTruthy();
+    await expectOperationToast('success', /đã khôi phục quyền mặc định/i);
   });
 
   it('keeps the draft and shows the API error when save fails', async () => {
     service.replaceTenantRolePermissions.mockRejectedValueOnce(new Error('Máy chủ từ chối.'));
     renderManagement();
-    fireEvent.click(await screen.findByRole('checkbox', { name: 'Gán quyền route:read cho NHA_XE_ADMIN' }));
+    fireEvent.click(await screen.findByRole('checkbox', { name: /^Gán quyền route:read cho NHA_XE_ADMIN/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Lưu thay đổi' }));
     fireEvent.click(screen.getByRole('button', { name: 'Xác nhận lưu' }));
 
-    expect((await screen.findByRole('alert')).textContent).toContain('Máy chủ từ chối.');
+    await expectOperationToast('error', 'Máy chủ từ chối.');
     expect(
       (
         screen.getByRole('checkbox', {
-          name: 'Gán quyền route:read cho NHA_XE_ADMIN',
+          name: /^Gán quyền route:read cho NHA_XE_ADMIN/,
         }) as HTMLInputElement
-      ).checked,
-    ).toBe(true);
+      ).getAttribute('aria-checked'),
+    ).toBe("true");
     expect(
       within(
         screen.getByRole('region', { name: 'Quyền đang áp dụng' }),
@@ -373,7 +374,7 @@ describe('tenant RBAC management', () => {
   it('warns before saving a change that removes the current account role:read permission', async () => {
     renderManagement();
     await screen.findByRole('heading', { name: 'Phân quyền vai trò' });
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Gán quyền role:read cho NHA_XE_ADMIN' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /^Gán quyền role:read cho NHA_XE_ADMIN/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Lưu thay đổi' }));
 
     expect(screen.getByText(/mất quyền mở trang phân quyền nhà xe/i)).toBeTruthy();
@@ -384,11 +385,11 @@ describe('tenant RBAC management', () => {
     reloadAdminSession.mockRejectedValueOnce(new Error('Phiên chưa đồng bộ.'));
     renderManagement();
     await screen.findByRole('heading', { name: 'Phân quyền vai trò' });
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Gán quyền route:read cho NHA_XE_ADMIN' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /^Gán quyền route:read cho NHA_XE_ADMIN/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Lưu thay đổi' }));
     fireEvent.click(screen.getByRole('button', { name: 'Xác nhận lưu' }));
 
-    expect((await screen.findByRole('alert')).textContent).toMatch(/đã được lưu.*phiên chưa đồng bộ/i);
+    await expectOperationToast('warning', /đã được lưu.*phiên chưa đồng bộ/i);
     expect(service.replaceTenantRolePermissions).toHaveBeenCalledTimes(1);
     expect(reloadAdminSession).toHaveBeenCalledTimes(1);
     expect(
@@ -396,10 +397,10 @@ describe('tenant RBAC management', () => {
         within(
           screen.getByRole('region', { name: 'Quyền của NHA_XE_ADMIN' }),
         ).getByRole('checkbox', {
-          name: 'Gán quyền route:read cho NHA_XE_ADMIN',
+          name: /^Gán quyền route:read cho NHA_XE_ADMIN/,
         }) as HTMLInputElement
-      ).checked,
-    ).toBe(true);
+      ).getAttribute('aria-checked'),
+    ).toBe("true");
   });
 
   it('removes the tenant RBAC page after refresh removes the session role:read permission', async () => {
@@ -412,7 +413,7 @@ describe('tenant RBAC management', () => {
     await screen.findByRole('heading', { name: 'Phân quyền vai trò' });
 
     fireEvent.click(screen.getByRole('checkbox', {
-      name: 'Gán quyền role:read cho NHA_XE_ADMIN',
+      name: /^Gán quyền role:read cho NHA_XE_ADMIN/,
     }));
     fireEvent.click(screen.getByRole('button', { name: 'Lưu thay đổi' }));
     fireEvent.click(screen.getByRole('button', { name: 'Xác nhận lưu' }));
@@ -436,15 +437,15 @@ describe('tenant RBAC management', () => {
     await screen.findByRole('heading', { name: 'Phân quyền vai trò' });
 
     fireEvent.click(screen.getByRole('checkbox', {
-      name: 'Gán quyền permission:assign cho NHA_XE_ADMIN',
+      name: /^Gán quyền permission:assign cho NHA_XE_ADMIN/,
     }));
     fireEvent.click(screen.getByRole('button', { name: 'Lưu thay đổi' }));
     fireEvent.click(screen.getByRole('button', { name: 'Xác nhận lưu' }));
 
     expect(await screen.findByText(/chỉ có quyền xem/i)).toBeTruthy();
     expect((screen.getByRole('checkbox', {
-      name: 'Gán quyền role:read cho NHA_XE_ADMIN',
-    }) as HTMLInputElement).disabled).toBe(true);
+      name: /^Gán quyền role:read cho NHA_XE_ADMIN/,
+    }) as HTMLInputElement).hasAttribute('data-disabled')).toBe(true);
     expect((screen.getByRole('button', {
       name: 'Lưu thay đổi',
     }) as HTMLButtonElement).disabled).toBe(true);

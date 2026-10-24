@@ -1,3 +1,4 @@
+import { expectOperationToast } from './canonical-test-helpers';
 // @vitest-environment jsdom
 import {
   cleanup,
@@ -366,6 +367,7 @@ describe('Shipment Status Actions UI (Phase 05)', () => {
     )[0];
     fireEvent.click(detailButton);
 
+    const underlyingDetail = await screen.findByRole('dialog', { name: 'Chi tiết phiếu gửi' });
     const acceptButton = await screen.findByRole('button', {
       name: 'Xác nhận đã tiếp nhận hàng',
     });
@@ -381,9 +383,7 @@ describe('Shipment Status Actions UI (Phase 05)', () => {
         '[role="dialog"], [role="alertdialog"]',
       ),
     ).toBeNull();
-    expect(
-      screen.getByRole('dialog', { name: 'Chi tiết phiếu gửi' }),
-    ).toBeTruthy();
+    expect(underlyingDetail.isConnected).toBe(true);
 
     const noteTextarea = screen.getByLabelText(/Ghi chú trạng thái/i);
     fireEvent.change(noteTextarea, {
@@ -674,8 +674,7 @@ describe('Shipment Status Actions UI (Phase 05)', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: 'Xác nhận tiếp nhận' }));
 
-    const statusError = await screen.findByRole('alert');
-    expect(statusError.textContent).toMatch(/Trạng thái phiếu gửi/i);
+    await expectOperationToast('error', /Trạng thái phiếu gửi/i);
 
     await waitFor(() => {
       expect(detailReadCount).toBe(2);
@@ -818,9 +817,7 @@ describe('Shipment Status Actions UI (Phase 05)', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: 'Làm mới' }));
 
-    expect((await screen.findByRole('alert')).textContent).toContain(
-      'Không thể làm mới danh sách.',
-    );
+    await expectOperationToast('error', 'Không thể làm mới danh sách.');
     expect(screen.getAllByText('VD20261009001')).toHaveLength(2);
     expect(screen.getByRole('button', { name: 'Thử lại' })).toBeTruthy();
     expect(requestCount).toBe(2);

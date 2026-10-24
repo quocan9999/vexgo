@@ -123,7 +123,7 @@ afterEach(() => {
 
 describe('Vehicle Type default cargo capacities', () => {
   it('keeps the dialog description and description textarea on unique accessible IDs', async () => {
-    const dialogDescriptionText = 'Nhập tên và mô tả cho loại xe mới.';
+    const dialogDescriptionText = 'Nhập thông tin và sức chứa hàng mặc định cho loại xe mới.';
     render(<VehicleTypeFormDialog onClose={vi.fn()} onSaved={vi.fn()} />);
 
     const dialog = await screen.findByRole('dialog', {

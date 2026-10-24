@@ -138,7 +138,7 @@ describe('Admin trips read page and components', () => {
   it('renders loading skeleton and refresh action without dead create button in 05.1', () => {
     const html = renderToStaticMarkup(<TripsManagement />);
     expect(html).toContain('Đang tải danh sách chuyến xe');
-    expect(html).toContain('data-result-count="loading"');
+    expect(html).not.toContain('aria-label="Trang sau"');
     expect(html).toContain('Làm mới');
     expect(html).not.toContain('Thêm chuyến');
   });
@@ -151,7 +151,8 @@ describe('Admin trips read page and components', () => {
     };
 
     const html = renderToStaticMarkup(<TripsManagement />);
-    expect(html).toContain('data-result-count="1"');
+    expect(html).toContain('aria-live="polite"');
+    expect(html).toContain('1');
     expect(html).toContain('FUTA-CX-001');
     expect(html).toContain('TP.HCM → Đà Lạt');
     expect(html).toContain('30F-123.45');

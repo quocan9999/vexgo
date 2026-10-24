@@ -239,19 +239,19 @@ describe('Customer Shipment History Tab (Feature 06.4)', () => {
     expect(deliveredBadges.length).toBe(2);
     expect(cancelledBadges.length).toBe(2);
     for (const badge of createdBadges) {
-      expect(badge.className).not.toContain('is-active');
+      expect(badge.getAttribute('data-variant')).toBe('secondary');
     }
     for (const badge of acceptedBadges) {
-      expect(badge.className).toContain('is-active');
+      expect(badge.getAttribute('data-variant')).toBe('success');
     }
     for (const badge of transportingBadges) {
-      expect(badge.className).toContain('is-active');
+      expect(badge.getAttribute('data-variant')).toBe('success');
     }
     for (const badge of deliveredBadges) {
-      expect(badge.className).toContain('is-active');
+      expect(badge.getAttribute('data-variant')).toBe('success');
     }
     for (const badge of cancelledBadges) {
-      expect(badge.className).not.toContain('is-active');
+      expect(badge.getAttribute('data-variant')).toBe('secondary');
     }
   });
 

@@ -1,3 +1,4 @@
+import { expectOperationToast } from './canonical-test-helpers';
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -74,7 +75,7 @@ describe('Route status interaction', () => {
     fireEvent.click(await within(detail).findByRole('button', { name: 'Tạm ngưng tuyến' }));
     const confirm = await screen.findByRole('alertdialog', { name: 'Tạm ngưng tuyến xe?' });
     fireEvent.click(within(confirm).getByRole('button', { name: 'Tạm ngưng tuyến' }));
-    expect(await within(confirm).findByRole('alert')).toHaveProperty('textContent', 'Máy chủ từ chối cập nhật.');
+    await expectOperationToast('error', 'Máy chủ từ chối cập nhật.');
     expect(screen.getByText('Đang hoạt động')).toBeTruthy();
     expect(screen.getByRole('dialog', { name: 'Thông tin tuyến xe' })).toBeTruthy();
   });

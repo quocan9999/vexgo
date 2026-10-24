@@ -1,3 +1,4 @@
+import { expectOperationToast } from './canonical-test-helpers';
 // @vitest-environment jsdom
 import {
   act,
@@ -223,8 +224,7 @@ describe('Fare Price status lifecycle behavior', () => {
     const detail = await openDetail();
     fireEvent.click(within(detail).getByRole('button', { name: 'Tạm ngưng' }));
 
-    const confirm = await screen.findByRole('dialog', {
-      name: 'Tạm ngưng bảng giá?',
+    const confirm = await screen.findByRole('alertdialog', { name: 'Tạm ngưng bảng giá?',
     });
     expect(
       within(confirm).getByText(/không còn được dùng để xác định giá áp dụng/i),
@@ -233,7 +233,7 @@ describe('Fare Price status lifecycle behavior', () => {
 
     await waitFor(() =>
       expect(
-        screen.queryByRole('dialog', { name: 'Tạm ngưng bảng giá?' }),
+        screen.queryByRole('alertdialog', { name: 'Tạm ngưng bảng giá?' }),
       ).toBeNull(),
     );
     expect(screen.getByRole('dialog', { name: 'Chi tiết bảng giá' })).toBe(
@@ -257,8 +257,7 @@ describe('Fare Price status lifecycle behavior', () => {
     render(<FarePricesManagement />);
     const detail = await openDetail();
     fireEvent.click(within(detail).getByRole('button', { name: 'Tạm ngưng' }));
-    const confirm = await screen.findByRole('dialog', {
-      name: 'Tạm ngưng bảng giá?',
+    const confirm = await screen.findByRole('alertdialog', { name: 'Tạm ngưng bảng giá?',
     });
     const confirmButton = within(confirm).getByRole('button', {
       name: 'Tạm ngưng bảng giá',
@@ -288,7 +287,7 @@ describe('Fare Price status lifecycle behavior', () => {
     );
     await waitFor(() =>
       expect(
-        screen.queryByRole('dialog', { name: 'Tạm ngưng bảng giá?' }),
+        screen.queryByRole('alertdialog', { name: 'Tạm ngưng bảng giá?' }),
       ).toBeNull(),
     );
     expect(screen.getByRole('dialog', { name: 'Chi tiết bảng giá' })).toBe(
@@ -320,16 +319,13 @@ describe('Fare Price status lifecycle behavior', () => {
     render(<FarePricesManagement />);
     const detail = await openDetail();
     fireEvent.click(within(detail).getByRole('button', { name: 'Kích hoạt' }));
-    const confirm = await screen.findByRole('dialog', {
-      name: 'Kích hoạt bảng giá?',
+    const confirm = await screen.findByRole('alertdialog', { name: 'Kích hoạt bảng giá?',
     });
     fireEvent.click(
       within(confirm).getByRole('button', { name: 'Kích hoạt bảng giá' }),
     );
 
-    expect((await within(confirm).findByRole('alert')).textContent).toContain(
-      'Không thể kích hoạt vì khoảng hiệu lực bị trùng với một bảng giá đang hoạt động của cùng tuyến và loại xe.',
-    );
+    await expectOperationToast('error', 'Không thể kích hoạt vì khoảng hiệu lực bị trùng với một bảng giá đang hoạt động của cùng tuyến và loại xe.');
     expect(
       within(detail).getByText('Trạng thái cấu hình').nextElementSibling
         ?.textContent,
@@ -355,8 +351,7 @@ describe('Fare Price status lifecycle behavior', () => {
     render(<FarePricesManagement />);
     const detail = await openDetail();
     fireEvent.click(within(detail).getByRole('button', { name: 'Tạm ngưng' }));
-    const confirm = await screen.findByRole('dialog', {
-      name: 'Tạm ngưng bảng giá?',
+    const confirm = await screen.findByRole('alertdialog', { name: 'Tạm ngưng bảng giá?',
     });
     fireEvent.click(
       within(confirm).getByRole('button', { name: 'Tạm ngưng bảng giá' }),
@@ -389,19 +384,16 @@ describe('Fare Price status lifecycle behavior', () => {
     render(<FarePricesManagement />);
     let detail = await openDetail();
     fireEvent.click(within(detail).getByRole('button', { name: 'Kích hoạt' }));
-    let confirm = await screen.findByRole('dialog', {
-      name: 'Kích hoạt bảng giá?',
+    let confirm = await screen.findByRole('alertdialog', { name: 'Kích hoạt bảng giá?',
     });
     fireEvent.click(
       within(confirm).getByRole('button', { name: 'Kích hoạt bảng giá' }),
     );
-    expect((await within(confirm).findByRole('alert')).textContent).toContain(
-      'Dữ liệu bảng giá vừa thay đổi đồng thời. Vui lòng tải lại và thử lại.',
-    );
+    await expectOperationToast('error', 'Dữ liệu bảng giá vừa thay đổi đồng thời. Vui lòng tải lại và thử lại.');
     fireEvent.click(within(confirm).getByRole('button', { name: 'Hủy' }));
     await waitFor(() =>
       expect(
-        screen.queryByRole('dialog', { name: 'Kích hoạt bảng giá?' }),
+        screen.queryByRole('alertdialog', { name: 'Kích hoạt bảng giá?' }),
       ).toBeNull(),
     );
     expect(
@@ -424,8 +416,7 @@ describe('Fare Price status lifecycle behavior', () => {
     render(<FarePricesManagement />);
     detail = await openDetail();
     fireEvent.click(within(detail).getByRole('button', { name: 'Kích hoạt' }));
-    confirm = await screen.findByRole('dialog', {
-      name: 'Kích hoạt bảng giá?',
+    confirm = await screen.findByRole('alertdialog', { name: 'Kích hoạt bảng giá?',
     });
     fireEvent.click(
       within(confirm).getByRole('button', { name: 'Kích hoạt bảng giá' }),
@@ -433,7 +424,7 @@ describe('Fare Price status lifecycle behavior', () => {
 
     await waitFor(() =>
       expect(
-        screen.queryByRole('dialog', { name: 'Kích hoạt bảng giá?' }),
+        screen.queryByRole('alertdialog', { name: 'Kích hoạt bảng giá?' }),
       ).toBeNull(),
     );
     expect(within(detail).getByText('Hoạt động')).toBeTruthy();
