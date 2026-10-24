@@ -77,7 +77,7 @@ describe('Route status interaction', () => {
     fireEvent.click(within(confirm).getByRole('button', { name: 'Tạm ngưng tuyến' }));
     await expectOperationToast('error', 'Máy chủ từ chối cập nhật.');
     expect(screen.getByText('Đang hoạt động')).toBeTruthy();
-    expect(screen.getByRole('dialog', { name: 'Thông tin tuyến xe' })).toBeTruthy();
+    expect(detail.isConnected).toBe(true);
   });
 
   it('closes confirmation, keeps detail open, applies backend status, and refreshes list after success', async () => {

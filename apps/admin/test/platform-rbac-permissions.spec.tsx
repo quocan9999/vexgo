@@ -244,11 +244,11 @@ describe('platform role permission management', () => {
     fireEvent.click(await screen.findByRole('checkbox', { name: /vehicle:read/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Lưu thay đổi' }));
 
-    expect(await screen.findByRole('dialog')).toBeTruthy();
+    expect(await screen.findByRole('alertdialog')).toBeTruthy();
     expect(screen.getByText(/thay thế toàn bộ quyền mặc định/)).toBeTruthy();
     expect(service.replaceDefaultRolePermissions).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Hủy' }));
-    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.queryByRole('alertdialog')).toBeNull();
   });
 
   it('keeps SUPER_ADMIN permissions read-only and never attempts a save', async () => {
@@ -274,7 +274,7 @@ describe('platform role permission management', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Lưu thay đổi' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Xác nhận lưu' }));
 
-    await expectOperationToast('error', 'Không đủ quyền.');
+    expect((await screen.findByRole('alert')).textContent).toContain('Không đủ quyền.');
     expect(permission.getAttribute('aria-checked')).toBe('false');
     expect(reloadAdminSession).not.toHaveBeenCalled();
   });

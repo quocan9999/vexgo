@@ -1,4 +1,4 @@
-import { selectCanonicalOption, inspectCanonicalOption } from './canonical-test-helpers';
+import { selectCanonicalOption, inspectCanonicalOption, expectOperationToast } from './canonical-test-helpers';
 // @vitest-environment jsdom
 import {
   cleanup,
@@ -292,9 +292,7 @@ describe('Fare Price create dialog behavior', () => {
     });
 
     resolvePost?.(response({ data: fare }));
-    expect((await screen.findByRole('status')).textContent).toContain(
-      'Đã tạo bảng giá',
-    );
+    await expectOperationToast('success', 'Đã tạo bảng giá');
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     await waitFor(() => expect(api.getFareListRequests()).toBeGreaterThan(1));
   });
@@ -325,9 +323,7 @@ describe('Fare Price create dialog behavior', () => {
       within(dialog).getByRole('button', { name: 'Tạo bảng giá' }),
     );
 
-    expect((await within(dialog).findByRole('alert')).textContent).toContain(
-      'Khoảng hiệu lực này bị trùng với một bảng giá đang hoạt động của cùng tuyến và loại xe.',
-    );
+    await expectOperationToast('error', 'Khoảng hiệu lực này bị trùng với một bảng giá đang hoạt động của cùng tuyến và loại xe.');
     expect(within(dialog).getByLabelText(/Giá niêm yết/)).toHaveProperty(
       'value',
       '250000',
@@ -459,7 +455,8 @@ describe('Fare Price create dialog behavior', () => {
         within(dialog).getByRole('button', { name: 'Tạo bảng giá' }),
       );
 
-      expect(await within(dialog).findByText(message)).toBeTruthy();
+      await waitFor(() => expect(api.requests.filter((request) => request.method === 'POST')).toHaveLength(1));
+      expect(await screen.findByText(message)).toBeTruthy();
       expect(within(dialog).getByLabelText(/Giá niêm yết/)).toHaveProperty(
         'value',
         '250000',

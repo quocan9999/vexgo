@@ -85,7 +85,7 @@ describe('Admin routes read page', () => {
     expect(html).toContain('41');
     expect(html).toContain('aria-sort="ascending"');
     expect(html).toContain('aria-label="Xem chi tiết tuyến FUTA-TX-0001"');
-    expect(html).toContain('routes-mobile-card');
+    expect(html).toContain('data-slot="card"');
     expect(html).toContain('Phương Trang');
     expect(html).not.toContain('Đang tải danh sách tuyến xe');
   });

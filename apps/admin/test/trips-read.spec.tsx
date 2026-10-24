@@ -168,7 +168,7 @@ describe('Admin trips read page and components', () => {
     expect(html).toContain('Hàng nhẹ: 3');
     expect(html).not.toContain('Còn lại');
     expect(html).toContain('aria-label="Xem chi tiết chuyến FUTA-CX-001"');
-    expect(html).toContain('trips-mobile-card');
+    expect(html).toContain('data-slot="card"');
     expect(html).not.toContain('Đang tải danh sách chuyến xe');
   });
 

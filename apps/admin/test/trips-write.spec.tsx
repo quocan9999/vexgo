@@ -207,8 +207,8 @@ describe('Trip Form Composition & Validation', () => {
     expect(html).not.toContain('id="edit-trip-101-route"');
     expect(html).not.toContain('id="edit-trip-101-vehicle"');
     // Date and time inputs are present
-    expect(html).toContain('id="edit-trip-101-departure-date"');
-    expect(html).toContain('id="edit-trip-101-departure-time"');
+    expect(html).toContain('id="edit-trip-101-departureDate"');
+    expect(html).toContain('id="edit-trip-101-departureTime"');
     expect(html).toContain('2026-10-10');
     expect(html).toContain('07:30');
     expect(html).not.toContain('Nhận gửi hàng');
@@ -242,7 +242,7 @@ describe('Trip Form Composition & Validation', () => {
       const checkbox = within(dialog).getByRole('checkbox', {
         name: 'Nhận gửi hàng',
       }) as HTMLInputElement;
-      expect(checkbox.getAttribute('aria-checked')).toBe("false");
+      expect(checkbox.checked).toBe(false);
       if (state === 'selected') fireEvent.click(checkbox);
 
       expect((within(dialog).getByLabelText(/Mã chuyến xe/) as HTMLInputElement).disabled).toBe(true);

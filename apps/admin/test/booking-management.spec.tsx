@@ -678,6 +678,8 @@ describe('Admin booking and ticket lists', () => {
     fireEvent.click(trigger);
     const priceOption = await screen.findByRole('option', { name: 'Giá thực tế' });
     expect(priceOption.getAttribute('aria-selected')).toBe('false');
+    fireEvent.pointerDown(priceOption, { button: 0, pointerType: 'mouse' });
+    fireEvent.pointerUp(priceOption, { button: 0, pointerType: 'mouse' });
     fireEvent.click(priceOption);
 
     await waitFor(() => {
@@ -691,7 +693,7 @@ describe('Admin booking and ticket lists', () => {
       ).toBe(true);
     });
     expect(screen.getByRole('combobox', { name: 'Sắp xếp theo' }).textContent).toContain('Giá thực tế');
-    expect(screen.getByRole('button', { name: 'Đổi thứ tự sắp xếp, hiện tại giảm dần' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Đổi chiều sắp xếp, hiện tại giảm dần' })).toBeTruthy();
     expect(new URLSearchParams(navigation.getSnapshot()).get('tSortDirection')).toBeNull();
   });
 
@@ -702,7 +704,7 @@ describe('Admin booking and ticket lists', () => {
     await screen.findAllByText('VE-0044');
 
     fireEvent.click(screen.getByRole('button', {
-      name: 'Đổi thứ tự sắp xếp, hiện tại giảm dần',
+      name: 'Đổi chiều sắp xếp, hiện tại giảm dần',
     }));
 
     await waitFor(() => {
@@ -717,7 +719,7 @@ describe('Admin booking and ticket lists', () => {
     });
     expect(screen.getByRole('combobox', { name: 'Sắp xếp theo' }).textContent).toContain('Ngày đặt');
     expect(screen.getByRole('button', {
-      name: 'Đổi thứ tự sắp xếp, hiện tại tăng dần',
+      name: 'Đổi chiều sắp xếp, hiện tại tăng dần',
     })).toBeTruthy();
     expect(new URLSearchParams(navigation.getSnapshot()).get('tSortDirection')).toBe('asc');
   });

@@ -812,7 +812,10 @@ describe('AdminChatMessenger Component & Flow Regression Tests', () => {
       render(<AdminChatMessenger session={mockSession} />);
       await waitFor(() => expect(listSpy).toHaveBeenCalled());
       fireEvent.click(screen.getByRole('combobox', { name: 'Trạng thái hội thoại' }));
-      fireEvent.click(await screen.findByRole('option', { name: 'Chờ tiếp nhận' }));
+      const pendingOption = await screen.findByRole('option', { name: 'Chờ tiếp nhận' });
+      fireEvent.pointerDown(pendingOption, { button: 0, pointerType: 'mouse' });
+      fireEvent.pointerUp(pendingOption, { button: 0, pointerType: 'mouse' });
+      fireEvent.click(pendingOption);
       fireEvent.change(screen.getByRole('searchbox', { name: 'Tìm cuộc trò chuyện' }), { target: { value: 'Khớp' } });
       await waitFor(() => expect(listSpy).toHaveBeenLastCalledWith(
         expect.objectContaining({ search: 'Khớp', trangThai: 'CHO_TIEP_NHAN', page: 1 }),

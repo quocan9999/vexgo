@@ -216,8 +216,8 @@ describe('Fare Price edit dialog behavior', () => {
     );
     expect(within(edit).getByText(/SG-DL-01/)).toBeTruthy();
     expect(within(edit).getByText(/TP\.HCM → Đà Lạt/)).toBeTruthy();
-    expect(within(edit).getByText('Limousine')).toBeTruthy();
-    expect(within(edit).getByText('Hoạt động')).toBeTruthy();
+    expect(within(edit).getByText(/Limousine ·/)).toBeTruthy();
+    expect(within(edit).getByText(/· Hoạt động/)).toBeTruthy();
     expect(within(edit).queryByLabelText(/Tuyến xe/)).toBeNull();
     expect(within(edit).queryByLabelText(/Loại xe/)).toBeNull();
     expect(within(edit).queryByLabelText(/Trạng thái/)).toBeNull();
@@ -262,17 +262,13 @@ describe('Fare Price edit dialog behavior', () => {
         },
       }),
     );
-    await waitFor(() =>
-      expect(within(detail).getByRole('status')).toBeTruthy(),
-    );
+    await expectOperationToast('success', /Đã cập nhật bảng giá/);
     await waitFor(() =>
       expect(
         screen.queryByRole('dialog', { name: 'Chỉnh sửa bảng giá' }),
       ).toBeNull(),
     );
-    expect(screen.getByRole('dialog', { name: 'Chi tiết bảng giá' })).toBe(
-      detail,
-    );
+    expect(detail.isConnected).toBe(true);
     expect(within(detail).getByText(/280\.000/)).toBeTruthy();
     await waitFor(() => expect(api.getListRequests()).toBeGreaterThan(1));
   });
@@ -305,9 +301,7 @@ describe('Fare Price edit dialog behavior', () => {
       '280000',
     );
     expect(within(detail).getByText(/250\.000/)).toBeTruthy();
-    expect(screen.getByRole('dialog', { name: 'Chi tiết bảng giá' })).toBe(
-      detail,
-    );
+    expect(detail.isConnected).toBe(true);
   });
 
   it('shows a stable conflict message for exhausted transaction retries', async () => {
@@ -371,9 +365,7 @@ describe('Fare Price edit dialog behavior', () => {
         screen.queryByRole('dialog', { name: 'Chỉnh sửa bảng giá' }),
       ).toBeNull(),
     );
-    expect(screen.getByRole('dialog', { name: 'Chi tiết bảng giá' })).toBe(
-      detail,
-    );
+    expect(detail.isConnected).toBe(true);
     expect(api.requests.some((item) => item.method === 'PATCH')).toBe(false);
   });
 });

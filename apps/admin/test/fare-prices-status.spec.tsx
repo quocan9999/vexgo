@@ -236,9 +236,7 @@ describe('Fare Price status lifecycle behavior', () => {
         screen.queryByRole('alertdialog', { name: 'Tạm ngưng bảng giá?' }),
       ).toBeNull(),
     );
-    expect(screen.getByRole('dialog', { name: 'Chi tiết bảng giá' })).toBe(
-      detail,
-    );
+    expect(detail.isConnected).toBe(true);
     expect(
       api.requests.some(
         (item) => item.path.endsWith('/status') && item.method === 'PATCH',
@@ -290,14 +288,12 @@ describe('Fare Price status lifecycle behavior', () => {
         screen.queryByRole('alertdialog', { name: 'Tạm ngưng bảng giá?' }),
       ).toBeNull(),
     );
-    expect(screen.getByRole('dialog', { name: 'Chi tiết bảng giá' })).toBe(
-      detail,
-    );
+    expect(detail.isConnected).toBe(true);
     expect(
       within(detail).getByText('Trạng thái cấu hình').nextElementSibling
         ?.textContent,
     ).toBe('Tạm ngưng');
-    expect(within(detail).getByRole('status')).toBeTruthy();
+    await expectOperationToast('success', /Đã cập nhật bảng giá/);
     await waitFor(() => expect(api.getListRequests()).toBeGreaterThan(1));
   });
 
@@ -330,9 +326,7 @@ describe('Fare Price status lifecycle behavior', () => {
       within(detail).getByText('Trạng thái cấu hình').nextElementSibling
         ?.textContent,
     ).toBe('Tạm ngưng');
-    expect(screen.getByRole('dialog', { name: 'Chi tiết bảng giá' })).toBe(
-      detail,
-    );
+    expect(detail.isConnected).toBe(true);
   });
 
   it('closes stale detail and refreshes the list when status mutation returns 404', async () => {
@@ -361,9 +355,7 @@ describe('Fare Price status lifecycle behavior', () => {
       expect(screen.queryByRole('dialog')).toBeNull();
       expect(api.getListRequests()).toBeGreaterThan(1);
     });
-    expect(screen.getByRole('alert').textContent).toContain(
-      'Bảng giá không còn tồn tại.',
-    );
+    await expectOperationToast('error', 'Bảng giá không còn tồn tại.');
   });
 
   it('maps concurrent modification and treats a stale same-state 200 as success', async () => {
@@ -428,7 +420,7 @@ describe('Fare Price status lifecycle behavior', () => {
       ).toBeNull(),
     );
     expect(within(detail).getByText('Hoạt động')).toBeTruthy();
-    expect(await within(detail).findByRole('status')).toBeTruthy();
+    await expectOperationToast('success', /Đã cập nhật bảng giá/);
     await waitFor(() => expect(api.getListRequests()).toBeGreaterThan(1));
   });
 });

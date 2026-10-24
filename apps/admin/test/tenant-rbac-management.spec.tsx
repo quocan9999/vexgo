@@ -277,7 +277,7 @@ describe('tenant RBAC management', () => {
       permissions,
     ));
     await waitFor(() => expect(reloadAdminSession).toHaveBeenCalledTimes(1));
-    expect(await screen.findByText(/đã lưu override rỗng/i)).toBeTruthy();
+    await expectOperationToast('success', /đã lưu override rỗng/i);
     expect(screen.getByText('Override riêng')).toBeTruthy();
   });
 
@@ -351,6 +351,8 @@ describe('tenant RBAC management', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Xác nhận lưu' }));
 
     await expectOperationToast('error', 'Máy chủ từ chối.');
+    fireEvent.click(screen.getByRole('button', { name: 'Hủy' }));
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
     expect(
       (
         screen.getByRole('checkbox', {

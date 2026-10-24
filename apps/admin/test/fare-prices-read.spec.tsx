@@ -201,7 +201,7 @@ describe('Fare Prices list and detail behavior', () => {
     expect((await screen.findAllByText('Limousine')).length).toBeGreaterThan(0);
     expect(screen.queryByRole('button', { name: 'Thêm bảng giá' })).toBeNull();
     const mobileList = screen.getByLabelText('Danh sách bảng giá dạng thẻ');
-    expect(mobileList.className).toContain('min-[901px]:hidden');
+    expect(mobileList.className).toContain('md:hidden');
     expect(mobileList.querySelectorAll('[data-slot="card"]')).toHaveLength(1);
 
     const trigger = screen.getAllByRole('button', {

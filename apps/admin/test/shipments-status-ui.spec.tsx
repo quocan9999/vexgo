@@ -6,6 +6,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from '@testing-library/react';
 import type { AnchorHTMLAttributes } from 'react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -687,7 +688,10 @@ describe('Shipment Status Actions UI (Phase 05)', () => {
     expect(
       screen.queryByRole('button', { name: 'Xác nhận tiếp nhận' }),
     ).toBeNull();
-    expect(screen.getByRole('button', { name: 'Đóng' })).toBeTruthy();
+    const lockedConfirmation = screen.getByRole('alertdialog');
+    fireEvent.click(within(lockedConfirmation).getByRole('button', { name: 'Hủy' }));
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+    expect(screen.getByRole('dialog', { name: 'Chi tiết phiếu gửi' })).toBeTruthy();
     expect(patchCount).toBe(1);
   });
 
@@ -817,7 +821,7 @@ describe('Shipment Status Actions UI (Phase 05)', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: 'Làm mới' }));
 
-    await expectOperationToast('error', 'Không thể làm mới danh sách.');
+    expect((await screen.findByRole('alert')).textContent).toContain('Không thể làm mới danh sách.');
     expect(screen.getAllByText('VD20261009001')).toHaveLength(2);
     expect(screen.getByRole('button', { name: 'Thử lại' })).toBeTruthy();
     expect(requestCount).toBe(2);

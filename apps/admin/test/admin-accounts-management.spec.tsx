@@ -148,17 +148,17 @@ function setAdminPermissions(permissions: string[]) {
 }
 
 async function fillRequiredCreateFields(dialog: HTMLElement) {
-  fireEvent.change(within(dialog).getByLabelText('Họ và tên *'), {
+  fireEvent.change(within(dialog).getByLabelText(/^Họ và tên/), {
     target: { value: 'Trần Minh Anh' },
   });
-  fireEvent.change(within(dialog).getByLabelText('Số điện thoại *'), {
+  fireEvent.change(within(dialog).getByLabelText(/^Số điện thoại/), {
     target: { value: '+84912345678' },
   });
-  fireEvent.change(within(dialog).getByLabelText('Mật khẩu *'), {
+  fireEvent.change(within(dialog).getByLabelText(/^Mật khẩu/), {
     target: { value: 'VexGo@123' },
   });
-  await selectCanonicalOption(within(dialog).getByLabelText('Nhà xe *'), /Phương Trang/);
-  fireEvent.change(within(dialog).getByLabelText('Mã nhân viên *'), {
+  await selectCanonicalOption(within(dialog).getByLabelText(/^Nhà xe/), /Phương Trang/);
+  fireEvent.change(within(dialog).getByLabelText(/^Mã nhân viên/), {
     target: { value: 'FUTA-NV-1234' },
   });
   fireEvent.click(
@@ -503,17 +503,17 @@ describe('Admin accounts management page', () => {
       within(dialog).getByRole('checkbox', { name: 'Nhân viên bán vé' }),
     ).toBeTruthy();
 
-    fireEvent.change(within(dialog).getByLabelText('Họ và tên *'), {
+    fireEvent.change(within(dialog).getByLabelText(/^Họ và tên/), {
       target: { value: 'Trần Minh Anh' },
     });
-    fireEvent.change(within(dialog).getByLabelText('Số điện thoại *'), {
+    fireEvent.change(within(dialog).getByLabelText(/^Số điện thoại/), {
       target: { value: '+84912345678' },
     });
-    fireEvent.change(within(dialog).getByLabelText('Mật khẩu *'), {
+    fireEvent.change(within(dialog).getByLabelText(/^Mật khẩu/), {
       target: { value: 'VexGo@123' },
     });
-    await selectCanonicalOption(within(dialog).getByLabelText('Nhà xe *'), /Phương Trang/);
-    fireEvent.change(within(dialog).getByLabelText('Mã nhân viên *'), {
+    await selectCanonicalOption(within(dialog).getByLabelText(/^Nhà xe/), /Phương Trang/);
+    fireEvent.change(within(dialog).getByLabelText(/^Mã nhân viên/), {
       target: { value: 'FUTA-NV-1234' },
     });
     fireEvent.click(
@@ -556,17 +556,17 @@ describe('Admin accounts management page', () => {
     const dialog = await screen.findByRole('dialog', {
       name: 'Thêm tài khoản Admin',
     });
-    fireEvent.change(within(dialog).getByLabelText('Họ và tên *'), {
+    fireEvent.change(within(dialog).getByLabelText(/^Họ và tên/), {
       target: { value: 'Trần Minh Anh' },
     });
-    fireEvent.change(within(dialog).getByLabelText('Số điện thoại *'), {
+    fireEvent.change(within(dialog).getByLabelText(/^Số điện thoại/), {
       target: { value: '0912345678' },
     });
-    fireEvent.change(within(dialog).getByLabelText('Mật khẩu *'), {
+    fireEvent.change(within(dialog).getByLabelText(/^Mật khẩu/), {
       target: { value: 'short' },
     });
-    await selectCanonicalOption(within(dialog).getByLabelText('Nhà xe *'), /Phương Trang/);
-    fireEvent.change(within(dialog).getByLabelText('Mã nhân viên *'), {
+    await selectCanonicalOption(within(dialog).getByLabelText(/^Nhà xe/), /Phương Trang/);
+    fireEvent.change(within(dialog).getByLabelText(/^Mã nhân viên/), {
       target: { value: 'FUTA-NV-1234' },
     });
     fireEvent.click(
@@ -613,7 +613,7 @@ describe('Admin accounts management page', () => {
     ).toBeTruthy();
     expect(
       within(dialog)
-        .getByLabelText('Số điện thoại *')
+        .getByLabelText(/^Số điện thoại/)
         .getAttribute('aria-invalid'),
     ).toBe('true');
   });
@@ -676,13 +676,13 @@ describe('Admin accounts management page', () => {
     const editDialog = await screen.findByRole('dialog', {
       name: 'Chỉnh sửa tài khoản Admin',
     });
-    expect(within(editDialog).getByLabelText('Họ và tên *')).toBeTruthy();
+    expect(within(editDialog).getByLabelText(/^Họ và tên/)).toBeTruthy();
     expect(within(editDialog).getByLabelText('Email')).toBeTruthy();
     expect(within(editDialog).queryByLabelText('Số điện thoại')).toBeNull();
     expect(within(editDialog).queryByLabelText('Mã nhân viên')).toBeNull();
     expect(within(editDialog).queryByLabelText('Mật khẩu')).toBeNull();
 
-    fireEvent.change(within(editDialog).getByLabelText('Họ và tên *'), {
+    fireEvent.change(within(editDialog).getByLabelText(/^Họ và tên/), {
       target: { value: 'Nguyễn Minh Anh mới' },
     });
     fireEvent.click(

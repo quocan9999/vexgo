@@ -217,7 +217,7 @@ describe('Admin promotion management permissions and actions', () => {
       usageLimit: 200,
     }));
     expect(state.refresh).toHaveBeenCalled();
-    expect(await screen.findByRole('status')).toBeTruthy();
+    await expectOperationToast('success', /Đã tạo khuyến mãi/);
   });
 
   it('supports fixed-amount promotions without a percentage cap field', async () => {
