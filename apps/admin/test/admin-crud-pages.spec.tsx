@@ -8,6 +8,31 @@ import {
   setEmployeeAdminTestSession,
 } from './admin-auth-test-session';
 
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
+vi.mock('@/components/data-filters/data-filters', () => ({
+  DateRangeFilter: () => null,
+}));
+vi.mock('@/components/admin/resource-ui', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/components/admin/resource-ui')>()),
+  ResourceCreateAction: ({ label }: { label: string }) => (
+    <button data-shared-create="true">{label}</button>
+  ),
+  ResourceRefreshAction: ({ loading }: { loading: boolean }) => (
+    <button data-shared-refresh="true" aria-busy={loading}>
+      Làm mới
+    </button>
+  ),
+  ResourceDetailAction: ({ resourceName }: { resourceName: string }) => (
+    <button data-shared-detail-action={resourceName}>Xem chi tiết</button>
+  ),
+  ResourceTableSkeleton: ({ resourceLabel }: { resourceLabel: string }) => (
+    <div data-shared-skeleton={resourceLabel} role="status" />
+  ),
+  ResourcePagination: ({ totalItems }: { totalItems: number }) => (
+    <div data-result-count={totalItems} />
+  ),
+}));
+
 const state = vi.hoisted(() => ({
   loading: true,
   companyPage: null as unknown,
@@ -15,75 +40,10 @@ const state = vi.hoisted(() => ({
   vehiclePage: null as unknown,
 }));
 
-vi.mock('lucide-react', () => {
-  const icon = (name: string) =>
-    function MockIcon({ className, size, ...props }: React.SVGProps<SVGSVGElement> & { size?: number }) {
-      return (
-        <svg
-          {...props}
-          className={`lucide lucide-${name}${className ? ` ${className}` : ''}`}
-          height={size}
-          width={size}
-        />
-      );
-    };
-
-  return {
-    ArrowDown: icon('arrow-down'),
-    ArrowUp: icon('arrow-up'),
-    ArrowUpDown: icon('arrow-up-down'),
-    Building2: icon('building-2'),
-    CheckCircle2: icon('check-circle-2'),
-    ChevronLeft: icon('chevron-left'),
-    ChevronRight: icon('chevron-right'),
-    LoaderCircle: icon('loader-circle'),
-    Pencil: icon('pencil'),
-    Search: icon('search'),
-    Truck: icon('truck'),
-    X: icon('x'),
-  };
-});
-
 vi.mock('@/features/super-admin-layout/components/super-admin-layout', () => ({
   SuperAdminLayout: ({ children }: { children: React.ReactNode }) => (
     <main>{children}</main>
   ),
-}));
-
-vi.mock('@/components/admin/admin-page-actions', () => ({
-  AdminCreateAction: ({ label }: { label: string }) => (
-    <button data-shared-create="true">{label}</button>
-  ),
-  AdminRefreshAction: () => <button data-shared-refresh="true">Làm mới</button>,
-}));
-
-vi.mock('@/components/admin/admin-detail-action', () => ({
-  AdminDetailAction: ({ resourceName }: { resourceName: string }) => (
-    <button data-shared-detail-action={resourceName}>Xem chi tiết</button>
-  ),
-}));
-
-vi.mock('@/components/admin/admin-table-skeleton', () => ({
-  AdminTableSkeleton: ({ resourceLabel }: { resourceLabel: string }) => (
-    <div data-shared-skeleton={resourceLabel} role="status" />
-  ),
-}));
-
-vi.mock('@/components/data-filters/data-filters', () => ({
-  FilterToolbar: ({
-    children,
-    totalItems,
-  }: {
-    children: React.ReactNode;
-    totalItems: number | null;
-  }) => (
-    <div data-result-count={totalItems === null ? 'loading' : totalItems}>
-      {children}
-    </div>
-  ),
-  SearchInput: () => null,
-  SelectFilter: () => null,
-  DateRangeFilter: () => null,
 }));
 
 vi.mock('@/features/bus-companies/hooks/use-bus-companies', () => ({
@@ -180,6 +140,49 @@ function setPlatformPermissions(permissions: string[]) {
   });
 }
 
+function populatePages() {
+  const timestamp = '2026-09-26T10:00:00.000Z';
+  state.companyPage = {
+    data: [
+      {
+        busCompanyId: 1,
+        name: 'Nhà xe An Bình',
+        code: 'AB',
+        contactInfo: '',
+        status: 'HOAT_DONG',
+        createdAt: timestamp,
+      },
+    ],
+    meta: { page: 1, pageSize: 10, totalItems: 42, totalPages: 5 },
+  };
+  state.vehicleTypePage = {
+    data: [
+      {
+        vehicleTypeId: 2,
+        name: 'Limousine',
+        description: '',
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      },
+    ],
+    meta: { page: 1, pageSize: 10, totalItems: 24, totalPages: 3 },
+  };
+  state.vehiclePage = {
+    data: [
+      {
+        vehicleId: 3,
+        licensePlate: '29A-123.45',
+        status: 'HOAT_DONG',
+        busCompany: { name: 'Nhà xe An Bình', code: 'AB' },
+        vehicleType: { name: 'Limousine' },
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      },
+    ],
+    meta: { page: 1, pageSize: 10, totalItems: 12, totalPages: 2 },
+  };
+}
+
 describe('Admin CRUD page composition', () => {
   it('uses the same page actions and skeleton on each initial list load', () => {
     setPlatformPermissions(['bus-company:read', 'bus-company:create']);
@@ -201,48 +204,15 @@ describe('Admin CRUD page composition', () => {
 
     for (const [resource, markup] of pages) {
       expect(markup).toContain(`data-shared-skeleton="${resource}"`);
-      expect(markup).toContain('data-result-count="loading"');
+      expect(markup).not.toContain('data-result-count=');
       expect(markup).toContain('data-shared-create="true"');
       expect(markup).toContain('data-shared-refresh="true"');
     }
   });
 
   it('passes backend totalItems and named detail actions through the shared UI', () => {
-    const timestamp = '2026-09-26T10:00:00.000Z';
     state.loading = false;
-    state.companyPage = {
-      data: [{
-        busCompanyId: 1,
-        name: 'Nhà xe An Bình',
-        code: 'AB',
-        contactInfo: '',
-        status: 'HOAT_DONG',
-        createdAt: timestamp,
-      }],
-      meta: { page: 1, pageSize: 10, totalItems: 42, totalPages: 5 },
-    };
-    state.vehicleTypePage = {
-      data: [{
-        vehicleTypeId: 2,
-        name: 'Limousine',
-        description: '',
-        createdAt: timestamp,
-        updatedAt: timestamp,
-      }],
-      meta: { page: 1, pageSize: 10, totalItems: 24, totalPages: 3 },
-    };
-    state.vehiclePage = {
-      data: [{
-        vehicleId: 3,
-        licensePlate: '29A-123.45',
-        status: 'HOAT_DONG',
-        busCompany: { name: 'Nhà xe An Bình', code: 'AB' },
-        vehicleType: { name: 'Limousine' },
-        createdAt: timestamp,
-        updatedAt: timestamp,
-      }],
-      meta: { page: 1, pageSize: 10, totalItems: 12, totalPages: 2 },
-    };
+    populatePages();
 
     setPlatformPermissions(['bus-company:read']);
     const busCompanyMarkup = renderToStaticMarkup(<BusCompaniesManagement />);
@@ -256,7 +226,11 @@ describe('Admin CRUD page composition', () => {
     ]);
     const cases = [
       [busCompanyMarkup, 42, 'Nhà xe An Bình'],
-      [renderToStaticMarkup(<VehicleTypesManagement />), 24, 'loại xe Limousine'],
+      [
+        renderToStaticMarkup(<VehicleTypesManagement />),
+        24,
+        'loại xe Limousine',
+      ],
       [renderToStaticMarkup(<VehiclesManagement />), 12, 'xe 29A-123.45'],
     ] as const;
 
@@ -267,28 +241,22 @@ describe('Admin CRUD page composition', () => {
     }
   });
 
-  it('keeps populated tables visible without restoring the initial skeleton on refresh', () => {
-    state.companyPage = {
-      data: [],
-      meta: { page: 1, pageSize: 10, totalItems: 0, totalPages: 0 },
-    };
-    state.vehicleTypePage = {
-      data: [],
-      meta: { page: 1, pageSize: 10, totalItems: 0, totalPages: 0 },
-    };
-    state.vehiclePage = {
-      data: [],
-      meta: { page: 1, pageSize: 10, totalItems: 0, totalPages: 0 },
-    };
-
-    for (const page of [
-      <BusCompaniesManagement key="companies" />,
-      <VehicleTypesManagement key="types" />,
-      <VehiclesManagement key="vehicles" />,
-    ]) {
-      const markup = renderToStaticMarkup(page);
+  it('keeps populated results and backend totals visible while refreshing', () => {
+    populatePages();
+    state.loading = true;
+    setPlatformPermissions(['bus-company:read']);
+    const companyMarkup = renderToStaticMarkup(<BusCompaniesManagement />);
+    setEmployeeAdminTestSession(['vehicle-type:read', 'vehicle:read']);
+    const cases = [
+      [companyMarkup, 42],
+      [renderToStaticMarkup(<VehicleTypesManagement />), 24],
+      [renderToStaticMarkup(<VehiclesManagement />), 12],
+    ] as const;
+    for (const [markup, total] of cases) {
       expect(markup).not.toContain('data-shared-skeleton');
-      expect(markup).toContain('data-result-count="0"');
+      expect(markup).toContain('data-result-count="' + total + '"');
+      expect(markup).toContain('aria-busy="true"');
+      expect(markup).toContain('data-shared-detail-action=');
     }
   });
 });

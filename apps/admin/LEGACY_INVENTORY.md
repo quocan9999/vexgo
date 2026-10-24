@@ -1,5 +1,41 @@
 # Admin legacy inventory — 24/10/2026
 
+## Bàn giao hiện tại — 25/10/2026
+
+- Phần triển khai chuyển hệ component Admin đã hoàn tất trong scope các màn được người dùng duyệt: primitives shadcn base-nova/Base UI, Resource patterns, shell/header, forms và dashboard Super Admin dùng dữ liệu API thật.
+- Người dùng đã báo smoke 11 form, smoke RBAC và duyệt dashboard Super Admin. Không suy rộng thành PASS mọi viewport, API, DB hoặc toàn bộ regression suite.
+- Cleanup cuối xóa 13 file component legacy và stylesheet filter không còn consumer trực tiếp; giữ các layout styles còn được sử dụng. Các test liên quan đã đổi sang contract canonical, chưa chạy.
+- Graph trước commit: 153 symbols, 10 processes, risk HIGH; kết quả đầy đủ (không partial/truncated). Index cũ vẫn nối đến implementation trước migration; đối chiếu source/test hiện tại không còn import module đã xóa. Đây là phân tích ảnh hưởng, không phải kiểm chứng runtime.
+- Tests, browser automation, TypeScript, ESLint, build và git diff --check: NOT RUN BY REQUEST. Chưa đủ bằng chứng chốt technical verification hoặc không có regression.
+- Không cần mở thêm vòng redesign cho các route đã duyệt. Việc tiếp theo là chạy các kiểm tra đã hoãn khi người dùng yêu cầu, sửa lỗi thực tế nếu có, rồi cập nhật kết quả tại đây. Migration date-only DTO/API legacy là hạng mục riêng, không tự thay wire contract trong cleanup UI.
+## Latest checkpoint — canonical test contracts
+
+- Migrated shared CRUD tests to real Resource actions/skeleton/pagination; preserved CI gate assertions. Replaced the old toolbar-total assumption with the canonical pagination total/range contract, including first/last/empty page behavior.
+- Page composition tests now target canonical Resource exports. Refresh fixtures contain actual loaded rows so they can detect a regression that hides populated results, rather than using empty lists under a populated-test name.
+- Feature 02 tests use real Sheets for close, vehicle detail typography and modal focus-boundary wrapping; role-based queries replace legacy markup/CSS assertions. JSDOM guard focus simulates browser Tab traversal and is explicitly not a browser keyboard test. No primitive/focus engine is mocked; geometry is supplied for the DOM environment.
+- Route form tests use real dialog controls, preserve generated-code/tenant/edit-context expectations and leave write-service assertions in place. Shipment confirmation asserts canonical alertdialog semantics and excludes any parent modal ancestor.
+- Sidebar sizing source-contract test now inspects the actual canonical Button size and its mobile/desktop variants, rather than an obsolete global CSS owner. Its source assertions are not viewport measurements.
+- Removed the six remaining test-dependent legacy files (actions, skeleton, summary, dialog focus engine and ui/button), old FilterToolbar and its stylesheet. Pruned 57 additional global legacy CSS rules and four unused animation definitions. Live page/header/panel/native-focus/sr-only/reduced-motion styles remain.
+- Direct import/reference review finds no source/test imports of deleted legacy modules. Other historical tests may still require migration; this source cleanup does not establish a passing complete suite. Tests/browser, TypeScript, ESLint, build and git diff --check remain NOT RUN BY REQUEST.
+
+Next completion gate: review the changed test source, then run the deferred checks only when requested. No further route redesign is needed for this cleanup.
+
+## Earlier cleanup checkpoint
+
+### Wrapper and filter retirement
+
+- User approved the platform dashboard after 5565f3d and requested legacy cleanup. This is UI acceptance, not automatic API/DB/test verification.
+- Removed seven unconsumed files: admin-generated-code-field, admin-form-dialog, admin-pagination, admin-status-badge, admin-confirm-dialog, admin-detail-sheet and legacy ui/badge. Removed two obsolete mocks of those sheet/confirmation wrappers from bus-company-permissions; no assertions changed.
+- Removed unused SearchInput and SelectFilter implementations from data-filters.tsx. Live feature controls continue to import resource-filters.tsx; DateRangeFilter, SingleDateFilter/LabeledSelectFilter re-exports and date/types remain.
+- Pruned 30 filter CSS rules and 40 global CSS rules tied to removed owners, preserving selector arms for retained owners. Shared page/header/panel styles, canonical primitives and their tokens are unchanged.
+- Retained test-dependent legacy code: admin-dialog-primitive (focus-trap test), admin-detail-action/admin-page-actions/admin-table-skeleton plus ui/button (shared CRUD tests), admin-result-summary and old FilterToolbar/CSS (shared result-summary test). These are test-only dependency chains, not mounted route requirements. Do not delete/relax these tests merely to erase legacy files.
+- Known test migration debt: routes-write still asserts the historical admin-form-dialog class; feature-02-ui-regressions still targets legacy focus-trap implementation and historical markup/CSS. No test execution or PASS is claimed. This cleanup does not fix all historical test drift.
+- Graph snapshots still describe pre-migration consumers (including HIGH/CRITICAL results for old badge/search/select). Direct repository source/test references were the deletion gate; no graph zero was treated as proof of no impact.
+
+Remaining work: migrate retained test contracts to canonical behaviors, then retire the remaining test-only implementations and review the rest of global legacy resource/dialog CSS. Do not remove live layout styles or claim migration technically verified before the deferred checks are requested and run.
+
+## Historical baseline and earlier follow-ups
+
 Dashboard follow-up: after user authorization, the platform prototype was replaced with API-only company/administrator governance metrics. The old dashboard stylesheet/fixture were removed after source consumer inventory; shared page/header/panel/skeleton styles remain owned by admin-components.css. PLATFORM_DASHBOARD.md records the new scope and pending runtime verification. Historical inventory rows below describe the original baseline.
 
 ## Evidence and limits

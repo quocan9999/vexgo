@@ -4,6 +4,12 @@
 
 ## Migration status — 23/10/2026
 
+Current acceptance (25/10/2026): the user approved the platform dashboard and reported smoke of all eleven migrated forms and RBAC. Presentation acceptance does not establish API/DB or complete regression verification. Implementation cleanup is complete for this scope; deferred checks remain NOT RUN BY REQUEST. See the current handoff at the top of LEGACY_INVENTORY.md; older pending/retained notes below describe previous checkpoints.
+
+Canonical ownership checkpoint: ui/action-button.tsx and ui/status-badge.tsx are the only Admin Button/Badge primitive owners; old ui/button.tsx and ui/badge.tsx were retired. Resource actions/pagination/states/sheets, resource-filters and ResourceSheetForm are the active patterns. Legacy wrapper/focus-engine/toolbar implementations were removed after updating their direct test contracts. Initial registry tables below remain historical; current cleanup limits are at the top of LEGACY_INVENTORY.md. Deferred automated checks have not run.
+
+Legacy retirement checkpoint (24/10/2026): platform dashboard presentation was approved by the user. Seven disconnected legacy wrappers/Badge and old SearchInput/SelectFilter exports were removed with exclusive CSS. Remaining legacy Button/actions/dialog-focus helper/skeleton/toolbar-summary code is retained for direct test consumers; it is not a route design standard. Current ownership and test migration debt are listed at the top of LEGACY_INVENTORY.md. Runtime/automated verification limits remain unchanged.
+
 Auth follow-up (24/10/2026): login uses canonical Field/Input/Button, retains its branded layout and inline authentication errors; restricted-account logout uses canonical Button and operation-error toast. See AUTH_DASHBOARD_AUDIT.md for the historical audit.
 
 Platform dashboard implementation (24/10/2026): the user subsequently authorized replacing the prototype. `/` now uses real platform-only company/administrator aggregates through the guarded overview API, four KPIs, six-month onboarding bars, a missing-administrator action list and recent company table/mobile cards. Canonical Card/Button/Table/Badge/Resource states; no new primitive/chart engine. Counts are current snapshot values; only onboarding is time-bucketed. Fixed bar plot geometry is a data-visualization exception. Fixture fallback, fixture file, old global dashboard stylesheet and unmeasured health label were removed. Contract and verification limits: PLATFORM_DASHBOARD.md. Status: implemented, pending user smoke; API/DB/browser runtime not verified.

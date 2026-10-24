@@ -1,5 +1,22 @@
 # Admin UI migration ledger
 
+## Canonical test contracts and final legacy engine retirement — 24/10/2026
+
+- Updated existing shared CRUD, page composition, Feature 02 regressions, route form, shipment confirmation and sidebar-size source tests to canonical contracts. No CI gate disabled and no test case removed solely to delete a dependency.
+- Shared actions assert accessible names, callbacks, variants and disabled/busy behavior; skeleton preserves exact five-row/twenty-five-cell expectation. Pagination asserts complete backend totals and first/last/empty boundaries. Page composition mocks only verify pattern wiring; separate shared tests exercise actual implementations.
+- Replaced the synthetic legacy focus helper test with real Sheet boundary guards. JSDOM cannot perform native Tab navigation, so the test advances to guards after dispatching keys and asserts Base UI's actual wrap destinations; this does not replace browser smoke. Used Context7 Base UI v1.8 docs plus installed engine source. Auth/API hooks are controlled test inputs; the tested components/engine remain real.
+- Removed six legacy dependency files, old FilterToolbar/result-summary stylesheet, 57 global CSS rules and four unused keyframes after source/test reference review. Kept live global typography/layout/focus/reduced-motion behavior.
+- Pre-edit graph reported old Button/FilterToolbar CRITICAL and action/skeleton files MEDIUM due to stale consumers; test files UNKNOWN. Direct reference inventory confirmed current callers before removal. Index remains seven commits behind HEAD; no graph zero treated as safety proof.
+- Test source updated and formatted but NOT EXECUTED. Tests/browser, TypeScript, ESLint, build and git diff --check NOT RUN BY REQUEST; integration/E2E/UI/component: NOT RUN BY REQUEST. No runtime or full-suite PASS claimed. LEGACY_INVENTORY.md records current completion limits.
+
+## Remaining wrapper/filter/CSS cleanup — 24/10/2026
+
+- User approved Super Admin dashboard and requested continuation. Removed seven wrapper/primitive files with no current source consumer: generated-code field, form dialog, pagination, status badge, confirmation dialog, detail sheet and old ui/badge. Removed their two unused test mocks without changing assertions.
+- Deleted old SearchInput/SelectFilter exports and exclusive CSS. Existing canonical resource filters and live DateRangeFilter behavior remain unchanged. Kept old FilterToolbar/result summary because the shared CRUD test directly consumes them.
+- Removed 30 filter and 40 global CSS rules for retired owners, including corresponding selector arms inside shared groups/media queries. Preserved global page/header/panel and test-dependent action/dialog/skeleton styles.
+- Pre-edit graph: old badge HIGH, search/select CRITICAL; several wrappers MEDIUM/LOW, stylesheet/test file UNKNOWN. Index is stale and reflects earlier consumers. Direct repository reference inventory found no current source imports to removed wrappers; remaining test class assertions were recorded as historical migration debt, not weakened.
+- Retained direct-tested legacy primitive focus helper/actions/skeleton/summary and their dependencies. Source review only; tests/browser, TypeScript, ESLint, build and git diff --check NOT RUN BY REQUEST. No runtime PASS claimed. Current remaining dependency list is at the top of LEGACY_INVENTORY.md.
+
 ## Platform dashboard density and hierarchy refinement — 24/10/2026
 
 - User screenshot shows repeated totals/active counts, a zero-work follow-up panel, excess descriptive copy and bottom links duplicating navigation. Replaced four equal cards with one divided three-group summary, a subtly emphasized company total/status group, and action emphasis only for positive missing-admin counts.

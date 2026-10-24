@@ -167,7 +167,9 @@ describe('Shipment Status Actions UI (Phase 05)', () => {
     const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
       const url = String(input);
       if (url.includes('/api/v1/shipments/10')) {
-        return Promise.resolve(jsonResponse({ data: mockShipmentDetailMoiTao }));
+        return Promise.resolve(
+          jsonResponse({ data: mockShipmentDetailMoiTao }),
+        );
       }
       if (url.includes('/api/v1/shipments')) {
         return Promise.resolve(
@@ -177,15 +179,19 @@ describe('Shipment Status Actions UI (Phase 05)', () => {
           }),
         );
       }
-      return Promise.resolve(jsonResponse({ message: 'Not found' }, false, 404));
+      return Promise.resolve(
+        jsonResponse({ message: 'Not found' }, false, 404),
+      );
     });
     vi.stubGlobal('fetch', fetchMock);
 
     render(<ShipmentsManagement />);
 
-    const detailButton = (await screen.findAllByRole('button', {
-      name: /Xem chi tiết phiếu gửi VD20261009001/i,
-    }))[0];
+    const detailButton = (
+      await screen.findAllByRole('button', {
+        name: /Xem chi tiết phiếu gửi VD20261009001/i,
+      })
+    )[0];
     fireEvent.click(detailButton);
 
     expect(
@@ -206,7 +212,9 @@ describe('Shipment Status Actions UI (Phase 05)', () => {
     const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
       const url = String(input);
       if (url.includes('/api/v1/shipments/10')) {
-        return Promise.resolve(jsonResponse({ data: mockShipmentDetailMoiTao }));
+        return Promise.resolve(
+          jsonResponse({ data: mockShipmentDetailMoiTao }),
+        );
       }
       if (url.includes('/api/v1/shipments')) {
         return Promise.resolve(
@@ -216,15 +224,19 @@ describe('Shipment Status Actions UI (Phase 05)', () => {
           }),
         );
       }
-      return Promise.resolve(jsonResponse({ message: 'Not found' }, false, 404));
+      return Promise.resolve(
+        jsonResponse({ message: 'Not found' }, false, 404),
+      );
     });
     vi.stubGlobal('fetch', fetchMock);
 
     render(<ShipmentsManagement />);
 
-    const detailButton = (await screen.findAllByRole('button', {
-      name: /Xem chi tiết phiếu gửi VD20261009001/i,
-    }))[0];
+    const detailButton = (
+      await screen.findAllByRole('button', {
+        name: /Xem chi tiết phiếu gửi VD20261009001/i,
+      })
+    )[0];
     fireEvent.click(detailButton);
 
     expect(
@@ -257,15 +269,19 @@ describe('Shipment Status Actions UI (Phase 05)', () => {
           }),
         );
       }
-      return Promise.resolve(jsonResponse({ message: 'Not found' }, false, 404));
+      return Promise.resolve(
+        jsonResponse({ message: 'Not found' }, false, 404),
+      );
     });
     vi.stubGlobal('fetch', fetchMock);
 
     render(<ShipmentsManagement />);
     fireEvent.click(
-      (await screen.findAllByRole('button', {
-        name: /Xem chi tiết phiếu gửi VD20261009001/i,
-      }))[0],
+      (
+        await screen.findAllByRole('button', {
+          name: /Xem chi tiết phiếu gửi VD20261009001/i,
+        })
+      )[0],
     );
 
     expect(await screen.findByText('Chờ thanh toán')).toBeTruthy();
@@ -300,45 +316,54 @@ describe('Shipment Status Actions UI (Phase 05)', () => {
     let patchCalled = false;
     let patchPayload: unknown = null;
 
-    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input);
-      if (url.includes('/api/v1/shipments/10/status') && init?.method === 'PATCH') {
-        patchCalled = true;
-        patchPayload = JSON.parse(String(init.body));
+    const fetchMock = vi
+      .fn()
+      .mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (
+          url.includes('/api/v1/shipments/10/status') &&
+          init?.method === 'PATCH'
+        ) {
+          patchCalled = true;
+          patchPayload = JSON.parse(String(init.body));
+          return Promise.resolve(
+            jsonResponse({
+              data: {
+                shipmentId: 10,
+                status: 'DA_TIEP_NHAN',
+                updatedAt: '2026-10-09T09:00:00.000Z',
+              },
+            }),
+          );
+        }
+        if (url.includes('/api/v1/shipments/10')) {
+          return Promise.resolve(
+            jsonResponse({
+              data: patchCalled ? updatedDetail : mockShipmentDetailMoiTao,
+            }),
+          );
+        }
+        if (url.includes('/api/v1/shipments')) {
+          return Promise.resolve(
+            jsonResponse({
+              data: [mockShipmentSummary],
+              meta: { page: 1, pageSize: 10, totalItems: 1, totalPages: 1 },
+            }),
+          );
+        }
         return Promise.resolve(
-          jsonResponse({
-            data: {
-              shipmentId: 10,
-              status: 'DA_TIEP_NHAN',
-              updatedAt: '2026-10-09T09:00:00.000Z',
-            },
-          }),
+          jsonResponse({ message: 'Not found' }, false, 404),
         );
-      }
-      if (url.includes('/api/v1/shipments/10')) {
-        return Promise.resolve(
-          jsonResponse({
-            data: patchCalled ? updatedDetail : mockShipmentDetailMoiTao,
-          }),
-        );
-      }
-      if (url.includes('/api/v1/shipments')) {
-        return Promise.resolve(
-          jsonResponse({
-            data: [mockShipmentSummary],
-            meta: { page: 1, pageSize: 10, totalItems: 1, totalPages: 1 },
-          }),
-        );
-      }
-      return Promise.resolve(jsonResponse({ message: 'Not found' }, false, 404));
-    });
+      });
     vi.stubGlobal('fetch', fetchMock);
 
     render(<ShipmentsManagement />);
 
-    const detailButton = (await screen.findAllByRole('button', {
-      name: /Xem chi tiết phiếu gửi VD20261009001/i,
-    }))[0];
+    const detailButton = (
+      await screen.findAllByRole('button', {
+        name: /Xem chi tiết phiếu gửi VD20261009001/i,
+      })
+    )[0];
     fireEvent.click(detailButton);
 
     const acceptButton = await screen.findByRole('button', {
@@ -348,10 +373,14 @@ describe('Shipment Status Actions UI (Phase 05)', () => {
 
     // The confirmation must stay a top-level dialog so Escape only dismisses it.
     expect(await screen.findByText('Tiếp nhận hàng gửi?')).toBeTruthy();
-    const confirmationDialog = screen.getByRole('dialog', {
+    const confirmationDialog = screen.getByRole('alertdialog', {
       name: 'Tiếp nhận hàng gửi?',
     });
-    expect(confirmationDialog.closest('dialog.admin-detail-sheet')).toBeNull();
+    expect(
+      confirmationDialog.parentElement?.closest(
+        '[role="dialog"], [role="alertdialog"]',
+      ),
+    ).toBeNull();
     expect(
       screen.getByRole('dialog', { name: 'Chi tiết phiếu gửi' }),
     ).toBeTruthy();
@@ -385,56 +414,70 @@ describe('Shipment Status Actions UI (Phase 05)', () => {
     setEmployeeAdminTestSession(['shipment:read', 'shipment:update']);
 
     let detailReadCount = 0;
-    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input);
-      if (url.includes('/api/v1/shipments/10/status') && init?.method === 'PATCH') {
+    const fetchMock = vi
+      .fn()
+      .mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (
+          url.includes('/api/v1/shipments/10/status') &&
+          init?.method === 'PATCH'
+        ) {
+          return Promise.resolve(
+            jsonResponse(
+              {
+                statusCode: 409,
+                error: 'SHIPMENT_PAYMENT_NOT_CONFIRMED',
+                message: 'Payment not confirmed.',
+              },
+              false,
+              409,
+            ),
+          );
+        }
+        if (url.includes('/api/v1/shipments/10')) {
+          detailReadCount += 1;
+          return Promise.resolve(
+            jsonResponse({
+              data:
+                detailReadCount > 1
+                  ? {
+                      ...mockShipmentDetailMoiTao,
+                      paymentStatus: 'CHO_THANH_TOAN',
+                    }
+                  : mockShipmentDetailMoiTao,
+            }),
+          );
+        }
+        if (url.includes('/api/v1/shipments')) {
+          return Promise.resolve(
+            jsonResponse({
+              data: [mockShipmentSummary],
+              meta: { page: 1, pageSize: 10, totalItems: 1, totalPages: 1 },
+            }),
+          );
+        }
         return Promise.resolve(
-          jsonResponse(
-            {
-              statusCode: 409,
-              error: 'SHIPMENT_PAYMENT_NOT_CONFIRMED',
-              message: 'Payment not confirmed.',
-            },
-            false,
-            409,
-          ),
+          jsonResponse({ message: 'Not found' }, false, 404),
         );
-      }
-      if (url.includes('/api/v1/shipments/10')) {
-        detailReadCount += 1;
-        return Promise.resolve(
-          jsonResponse({
-            data:
-              detailReadCount > 1
-                ? { ...mockShipmentDetailMoiTao, paymentStatus: 'CHO_THANH_TOAN' }
-                : mockShipmentDetailMoiTao,
-          }),
-        );
-      }
-      if (url.includes('/api/v1/shipments')) {
-        return Promise.resolve(
-          jsonResponse({
-            data: [mockShipmentSummary],
-            meta: { page: 1, pageSize: 10, totalItems: 1, totalPages: 1 },
-          }),
-        );
-      }
-      return Promise.resolve(jsonResponse({ message: 'Not found' }, false, 404));
-    });
+      });
     vi.stubGlobal('fetch', fetchMock);
 
     render(<ShipmentsManagement />);
 
-    const detailButton = (await screen.findAllByRole('button', {
-      name: /Xem chi tiết phiếu gửi VD20261009001/i,
-    }))[0];
+    const detailButton = (
+      await screen.findAllByRole('button', {
+        name: /Xem chi tiết phiếu gửi VD20261009001/i,
+      })
+    )[0];
     fireEvent.click(detailButton);
 
     const acceptButton = await screen.findByRole('button', {
       name: 'Xác nhận đã tiếp nhận hàng',
     });
     fireEvent.click(acceptButton);
-    const confirmButton = screen.getByRole('button', { name: 'Xác nhận tiếp nhận' });
+    const confirmButton = screen.getByRole('button', {
+      name: 'Xác nhận tiếp nhận',
+    });
     fireEvent.click(confirmButton);
 
     expect(
@@ -471,34 +514,45 @@ describe('Shipment Status Actions UI (Phase 05)', () => {
       releasePatch = resolve;
     });
 
-    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input);
-      if (url.includes('/api/v1/shipments/10/status') && init?.method === 'PATCH') {
-        patchCount += 1;
-        return patchResponse;
-      }
-      if (url.includes('/api/v1/shipments/10')) {
+    const fetchMock = vi
+      .fn()
+      .mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (
+          url.includes('/api/v1/shipments/10/status') &&
+          init?.method === 'PATCH'
+        ) {
+          patchCount += 1;
+          return patchResponse;
+        }
+        if (url.includes('/api/v1/shipments/10')) {
+          return Promise.resolve(
+            jsonResponse({
+              data: patchCount > 0 ? updatedDetail : mockShipmentDetailMoiTao,
+            }),
+          );
+        }
+        if (url.includes('/api/v1/shipments')) {
+          return Promise.resolve(
+            jsonResponse({
+              data: [mockShipmentSummary],
+              meta: { page: 1, pageSize: 10, totalItems: 1, totalPages: 1 },
+            }),
+          );
+        }
         return Promise.resolve(
-          jsonResponse({ data: patchCount > 0 ? updatedDetail : mockShipmentDetailMoiTao }),
+          jsonResponse({ message: 'Not found' }, false, 404),
         );
-      }
-      if (url.includes('/api/v1/shipments')) {
-        return Promise.resolve(
-          jsonResponse({
-            data: [mockShipmentSummary],
-            meta: { page: 1, pageSize: 10, totalItems: 1, totalPages: 1 },
-          }),
-        );
-      }
-      return Promise.resolve(jsonResponse({ message: 'Not found' }, false, 404));
-    });
+      });
     vi.stubGlobal('fetch', fetchMock);
 
     render(<ShipmentsManagement />);
 
-    const detailButton = (await screen.findAllByRole('button', {
-      name: /Xem chi tiết phiếu gửi VD20261009001/i,
-    }))[0];
+    const detailButton = (
+      await screen.findAllByRole('button', {
+        name: /Xem chi tiết phiếu gửi VD20261009001/i,
+      })
+    )[0];
     fireEvent.click(detailButton);
     fireEvent.click(
       await screen.findByRole('button', {
@@ -558,48 +612,59 @@ describe('Shipment Status Actions UI (Phase 05)', () => {
     let listReadCount = 0;
     let patchCount = 0;
 
-    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input);
-      if (url.includes('/api/v1/shipments/10/status') && init?.method === 'PATCH') {
-        patchCount += 1;
+    const fetchMock = vi
+      .fn()
+      .mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (
+          url.includes('/api/v1/shipments/10/status') &&
+          init?.method === 'PATCH'
+        ) {
+          patchCount += 1;
+          return Promise.resolve(
+            jsonResponse(
+              {
+                statusCode: 409,
+                error: 'CONCURRENT_STATUS_UPDATE',
+                message:
+                  'Trạng thái phiếu gửi đã bị thay đổi bởi thao tác khác.',
+              },
+              false,
+              409,
+            ),
+          );
+        }
+        if (url.includes('/api/v1/shipments/10')) {
+          detailReadCount += 1;
+          return Promise.resolve(
+            jsonResponse({
+              data:
+                detailReadCount > 1 ? latestDetail : mockShipmentDetailMoiTao,
+            }),
+          );
+        }
+        if (url.includes('/api/v1/shipments')) {
+          listReadCount += 1;
+          return Promise.resolve(
+            jsonResponse({
+              data: [latestSummary],
+              meta: { page: 1, pageSize: 10, totalItems: 1, totalPages: 1 },
+            }),
+          );
+        }
         return Promise.resolve(
-          jsonResponse(
-            {
-              statusCode: 409,
-              error: 'CONCURRENT_STATUS_UPDATE',
-              message: 'Trạng thái phiếu gửi đã bị thay đổi bởi thao tác khác.',
-            },
-            false,
-            409,
-          ),
+          jsonResponse({ message: 'Not found' }, false, 404),
         );
-      }
-      if (url.includes('/api/v1/shipments/10')) {
-        detailReadCount += 1;
-        return Promise.resolve(
-          jsonResponse({
-            data: detailReadCount > 1 ? latestDetail : mockShipmentDetailMoiTao,
-          }),
-        );
-      }
-      if (url.includes('/api/v1/shipments')) {
-        listReadCount += 1;
-        return Promise.resolve(
-          jsonResponse({
-            data: [latestSummary],
-            meta: { page: 1, pageSize: 10, totalItems: 1, totalPages: 1 },
-          }),
-        );
-      }
-      return Promise.resolve(jsonResponse({ message: 'Not found' }, false, 404));
-    });
+      });
     vi.stubGlobal('fetch', fetchMock);
 
     render(<ShipmentsManagement />);
 
-    const detailButton = (await screen.findAllByRole('button', {
-      name: /Xem chi tiết phiếu gửi VD20261009001/i,
-    }))[0];
+    const detailButton = (
+      await screen.findAllByRole('button', {
+        name: /Xem chi tiết phiếu gửi VD20261009001/i,
+      })
+    )[0];
     fireEvent.click(detailButton);
 
     fireEvent.click(
@@ -607,9 +672,7 @@ describe('Shipment Status Actions UI (Phase 05)', () => {
         name: 'Xác nhận đã tiếp nhận hàng',
       }),
     );
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Xác nhận tiếp nhận' }),
-    );
+    fireEvent.click(screen.getByRole('button', { name: 'Xác nhận tiếp nhận' }));
 
     const statusError = await screen.findByRole('alert');
     expect(statusError.textContent).toMatch(/Trạng thái phiếu gửi/i);
@@ -635,11 +698,17 @@ describe('Shipment Status Actions UI (Phase 05)', () => {
     const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
       const url = new URL(String(input));
       if (url.pathname !== '/api/v1/shipments') {
-        return Promise.resolve(jsonResponse({ message: 'Not found' }, false, 404));
+        return Promise.resolve(
+          jsonResponse({ message: 'Not found' }, false, 404),
+        );
       }
       if (url.searchParams.get('status') === 'DA_HUY') {
         return Promise.resolve(
-          jsonResponse({ message: 'Không thể tải dữ liệu theo bộ lọc.' }, false, 503),
+          jsonResponse(
+            { message: 'Không thể tải dữ liệu theo bộ lọc.' },
+            false,
+            503,
+          ),
         );
       }
       return Promise.resolve(
@@ -656,8 +725,12 @@ describe('Shipment Status Actions UI (Phase 05)', () => {
       expect(screen.getAllByText('VD20261009001')).toHaveLength(2);
     });
 
-    fireEvent.click(screen.getByRole('combobox', { name: 'Trạng thái phiếu gửi' }));
-    const cancelledOption = await screen.findByRole('option', { name: 'Đã hủy' });
+    fireEvent.click(
+      screen.getByRole('combobox', { name: 'Trạng thái phiếu gửi' }),
+    );
+    const cancelledOption = await screen.findByRole('option', {
+      name: 'Đã hủy',
+    });
     fireEvent.pointerDown(cancelledOption, { button: 0, pointerType: 'mouse' });
     fireEvent.pointerUp(cancelledOption, { button: 0, pointerType: 'mouse' });
     fireEvent.click(cancelledOption);
@@ -667,7 +740,9 @@ describe('Shipment Status Actions UI (Phase 05)', () => {
     );
     expect(screen.queryAllByText('VD20261009001')).toHaveLength(0);
     expect(screen.queryByText('Trang 1 / 2')).toBeNull();
-    expect(screen.queryByText('Không tìm thấy phiếu gửi hàng phù hợp với bộ lọc.')).toBeNull();
+    expect(
+      screen.queryByText('Không tìm thấy phiếu gửi hàng phù hợp với bộ lọc.'),
+    ).toBeNull();
   });
 
   it('hides previous page results and pagination when the new page request fails', async () => {
@@ -676,11 +751,17 @@ describe('Shipment Status Actions UI (Phase 05)', () => {
     const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
       const url = new URL(String(input));
       if (url.pathname !== '/api/v1/shipments') {
-        return Promise.resolve(jsonResponse({ message: 'Not found' }, false, 404));
+        return Promise.resolve(
+          jsonResponse({ message: 'Not found' }, false, 404),
+        );
       }
       if (url.searchParams.get('page') === '2') {
         return Promise.resolve(
-          jsonResponse({ message: 'Không thể tải trang tiếp theo.' }, false, 503),
+          jsonResponse(
+            { message: 'Không thể tải trang tiếp theo.' },
+            false,
+            503,
+          ),
         );
       }
       return Promise.resolve(
@@ -712,7 +793,9 @@ describe('Shipment Status Actions UI (Phase 05)', () => {
     const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
       const url = new URL(String(input));
       if (url.pathname !== '/api/v1/shipments') {
-        return Promise.resolve(jsonResponse({ message: 'Not found' }, false, 404));
+        return Promise.resolve(
+          jsonResponse({ message: 'Not found' }, false, 404),
+        );
       }
       requestCount += 1;
       if (requestCount > 1) {

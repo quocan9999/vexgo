@@ -1,14 +1,11 @@
 'use client';
 
 import { Popover } from '@base-ui/react/popover';
-import { Select } from '@base-ui/react/select';
-import { CalendarDays, Check, ChevronDown, Search, X } from 'lucide-react';
-import { useId, useState, type ReactNode } from 'react';
+import { CalendarDays, ChevronDown } from 'lucide-react';
+import { useId, useState } from 'react';
 import { Button } from '@/components/ui/action-button';
 import { Input } from '@/components/ui/input';
 import { Field, FieldLabel } from '@/components/ui/field';
-import { AdminResultSummary } from '@/components/admin/admin-result-summary';
-import styles from './data-filters.module.css';
 
 export { SingleDateFilter } from './single-date-filter';
 export { LabeledSelectFilter } from './labeled-select-filter';
@@ -22,142 +19,6 @@ export type DateRangeValue = {
   from: string;
   to: string;
 };
-
-type FilterToolbarProps = {
-  children: ReactNode;
-  density?: 'compact' | 'default';
-  totalItems: number | null;
-};
-
-export function FilterToolbar({
-  children,
-  density = 'default',
-  totalItems,
-}: FilterToolbarProps) {
-  return (
-    <div className={styles.toolbar}>
-      <div className={styles.controls} data-density={density}>
-        {children}
-      </div>
-      <span aria-live="polite" className={styles.summary}>
-        <AdminResultSummary totalItems={totalItems} />
-      </span>
-    </div>
-  );
-}
-
-type SearchInputProps = {
-  label: string;
-  onChange: (value: string) => void;
-  placeholder: string;
-  value: string;
-};
-
-export function SearchInput({
-  label,
-  onChange,
-  placeholder,
-  value,
-}: SearchInputProps) {
-  const inputId = useId();
-
-  return (
-    <div className={styles.search}>
-      <Search aria-hidden="true" className={styles.searchIcon} size={17} />
-      <label className={styles.visuallyHidden} htmlFor={inputId}>
-        {label}
-      </label>
-      <input
-        id={inputId}
-        onChange={(event) => onChange(event.target.value)}
-        placeholder={placeholder}
-        type="search"
-        value={value}
-      />
-      {value && (
-        <button
-          aria-label="Xóa nội dung tìm kiếm"
-          className={styles.clearSearch}
-          onClick={() => onChange('')}
-          type="button"
-        >
-          <X aria-hidden="true" size={15} />
-        </button>
-      )}
-    </div>
-  );
-}
-
-type SelectFilterProps = {
-  allLabel?: string;
-  label: string;
-  onChange: (value: string) => void;
-  options: FilterOption[];
-  value: string;
-};
-
-const ALL_VALUE = '__all_filters__';
-
-export function SelectFilter({
-  allLabel = 'Tất cả',
-  label,
-  onChange,
-  options,
-  value,
-}: SelectFilterProps) {
-  return (
-    <div className={styles.selectFilter}>
-      <Select.Root
-        onValueChange={(nextValue) =>
-          onChange(nextValue === ALL_VALUE ? '' : String(nextValue ?? ''))
-        }
-        value={value || ALL_VALUE}
-      >
-        <Select.Trigger aria-label={label} className={styles.selectTrigger}>
-          <Select.Value className={styles.selectValue}>
-            {value
-              ? (options.find((option) => option.value === value)?.label ??
-                'Không xác định')
-              : allLabel}
-          </Select.Value>
-          <Select.Icon>
-            <ChevronDown aria-hidden="true" size={15} />
-          </Select.Icon>
-        </Select.Trigger>
-        <Select.Portal>
-          <Select.Positioner
-            align="start"
-            className={styles.selectPositioner}
-            sideOffset={5}
-          >
-            <Select.Popup className={styles.selectPopup}>
-              <Select.List>
-                <Select.Item className={styles.selectItem} value={ALL_VALUE}>
-                  <Select.ItemText>{allLabel}</Select.ItemText>
-                  <Select.ItemIndicator>
-                    <Check aria-hidden="true" size={14} />
-                  </Select.ItemIndicator>
-                </Select.Item>
-                {options.map((option) => (
-                  <Select.Item
-                    className={styles.selectItem}
-                    key={option.value}
-                    value={option.value}
-                  >
-                    <Select.ItemText>{option.label}</Select.ItemText>
-                    <Select.ItemIndicator>
-                      <Check aria-hidden="true" size={14} />
-                    </Select.ItemIndicator>
-                  </Select.Item>
-                ))}
-              </Select.List>
-            </Select.Popup>
-          </Select.Positioner>
-        </Select.Portal>
-      </Select.Root>
-    </div>
-  );
-}
 
 type DateRangeFilterProps = {
   emptyValueLabel?: string;
