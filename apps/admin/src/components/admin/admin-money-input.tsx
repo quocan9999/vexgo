@@ -1,19 +1,31 @@
 'use client';
 
 import type { ChangeEvent, ComponentProps } from 'react';
+import { Input } from '@/components/ui/input';
 
-type AdminMoneyInputProps = Omit<ComponentProps<'input'>, 'type' | 'value' | 'onChange' | 'inputMode'> & {
+type AdminMoneyInputProps = Omit<
+  ComponentProps<'input'>,
+  'type' | 'value' | 'onChange' | 'inputMode'
+> & {
+  appearance?: 'legacy' | 'resource';
   value: string;
   onValueChange: (value: string) => void;
 };
 
 function formatValue(value: string): string {
   const [whole = '', fraction] = value.split('.');
-  return whole.replace(/\B(?=(\d{3})+(?!\d))/g, '.') +
-    (fraction === undefined ? '' : `,${fraction}`);
+  return (
+    whole.replace(/\B(?=(\d{3})+(?!\d))/g, '.') +
+    (fraction === undefined ? '' : `,${fraction}`)
+  );
 }
 
-export function AdminMoneyInput({ value, onValueChange, ...props }: AdminMoneyInputProps) {
+export function AdminMoneyInput({
+  value,
+  onValueChange,
+  appearance = 'legacy',
+  ...props
+}: AdminMoneyInputProps) {
   function handleChange(event: ChangeEvent<HTMLInputElement>) {
     const input = event.currentTarget;
     const entered = input.value;
@@ -22,7 +34,8 @@ export function AdminMoneyInput({ value, onValueChange, ...props }: AdminMoneyIn
 
     const canonical = ungrouped.replace(/^0+(?=\d)/, '').replace(',', '.');
     const normalized = canonical.startsWith('.') ? `0${canonical}` : canonical;
-    const significantBeforeCaret = entered.slice(0, input.selectionStart ?? entered.length)
+    const significantBeforeCaret = entered
+      .slice(0, input.selectionStart ?? entered.length)
       .replace(/[^\d,]/g, '').length;
     const formatted = formatValue(normalized);
     let caret = 0;
@@ -40,5 +53,23 @@ export function AdminMoneyInput({ value, onValueChange, ...props }: AdminMoneyIn
     });
   }
 
-  return <input {...props} inputMode="decimal" onChange={handleChange} type="text" value={formatValue(value)} />;
+  if (appearance === 'resource')
+    return (
+      <Input
+        {...props}
+        inputMode="decimal"
+        onChange={handleChange}
+        type="text"
+        value={formatValue(value)}
+      />
+    );
+  return (
+    <input
+      {...props}
+      inputMode="decimal"
+      onChange={handleChange}
+      type="text"
+      value={formatValue(value)}
+    />
+  );
 }

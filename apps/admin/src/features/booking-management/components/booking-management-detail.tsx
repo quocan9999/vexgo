@@ -5,9 +5,16 @@ import { useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { AdminPageHeader } from '@/components/admin/admin-page-header';
-import { AdminPagination } from '@/components/admin/admin-pagination';
-import { AdminStatusBadge } from '@/components/admin/admin-status-badge';
-import { AdminTableSkeleton } from '@/components/admin/admin-table-skeleton';
+import {
+  ResourcePagination,
+  ResourceStatusBadge,
+  ResourceTableSkeleton,
+  ResourceState,
+  ResourceNotice,
+  ResourceRefreshAction,
+} from '@/components/admin/resource-ui';
+import { Button, buttonVariants } from '@/components/ui/action-button';
+import { Card } from '@/components/ui/card';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
 import { useAdminSession } from '@/features/admin-auth/hooks/use-admin-session';
 import {
@@ -32,7 +39,6 @@ import type {
   AdminPage,
   AdminTicketDetail,
 } from '../types/booking-management';
-import styles from './booking-management-detail.module.css';
 
 type DetailKind = 'bookings' | 'tickets';
 type DetailRecord = AdminBookingDetail | AdminTicketDetail;
@@ -82,24 +88,36 @@ function sourceLabel(source: string) {
   return statusLabel(source);
 }
 
-function InfoCard({ title, children }: { title: string; children: ReactNode }) {
+function InfoCard({
+  title,
+  children,
+  className = '',
+}: {
+  title: string;
+  children: ReactNode;
+  className?: string;
+}) {
   return (
-    <section aria-label={title} className={styles.card}>
-      <h2>{title}</h2>
+    <Card
+      role="region"
+      aria-label={title}
+      className={`min-w-0 gap-5 p-4 sm:p-5 ${className}`}
+    >
+      <h2 className="text-base font-semibold">{title}</h2>
       {children}
-    </section>
+    </Card>
   );
 }
 
 function InfoRows({ children }: { children: ReactNode }) {
-  return <dl className={styles.infoRows}>{children}</dl>;
+  return <dl className="space-y-4 text-[13px]">{children}</dl>;
 }
 
 function InfoRow({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div>
-      <dt>{label}</dt>
-      <dd>{children}</dd>
+    <div className="grid min-w-0 gap-1 border-b pb-3 last:border-0 last:pb-0 sm:grid-cols-[minmax(120px,0.8fr)_minmax(0,1.2fr)] sm:gap-4">
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className="min-w-0 break-words">{children}</dd>
     </div>
   );
 }
@@ -169,9 +187,7 @@ export function BookingManagementDetail({
     historyAuthorizationError?.viewKey === viewKey
       ? historyAuthorizationError.error
       : null;
-  const visibleDetail = currentHistoryAuthorizationError
-    ? null
-    : currentDetail;
+  const visibleDetail = currentHistoryAuthorizationError ? null : currentDetail;
   const visibleDetailError =
     currentDetailError ?? currentHistoryAuthorizationError;
   const detailLoading =
@@ -264,12 +280,24 @@ export function BookingManagementDetail({
 
   return (
     <SuperAdminLayout activeSection="booking-management">
-      <div className="admin-page-content">
+      <div className="admin-page-content admin-ui space-y-6">
         <AdminPageHeader
           actions={
-            <Link className={styles.backLink} href={backHref}>
-              Quay lại danh sách
-            </Link>
+            <div className="page-intro-actions">
+              <Link
+                className={buttonVariants({ variant: 'outline' })}
+                href={backHref}
+              >
+                Quay lại danh sách
+              </Link>
+              <ResourceRefreshAction
+                loading={detailLoading}
+                onClick={() => {
+                  setDetailRetry((retry) => retry + 1);
+                  setHistoryRetry((retry) => retry + 1);
+                }}
+              />
+            </div>
           }
           eyebrow="QUẢN LÝ VẬN HÀNH"
           title={pageTitle}
@@ -277,20 +305,21 @@ export function BookingManagementDetail({
         />
 
         {detailLoading && !visibleDetail && !visibleDetailError && (
-          <AdminTableSkeleton
+          <ResourceTableSkeleton
             resourceLabel={kind === 'bookings' ? 'phiếu đặt vé' : 'vé'}
           />
         )}
         {Boolean(visibleDetailError) && (
-          <div className={styles.detailError} role="alert">
+          <ResourceState error>
             <p>{detailErrorMessage(visibleDetailError, kind)}</p>
-            <button
+            <Button
+              variant="outline"
               onClick={() => setDetailRetry((retry) => retry + 1)}
               type="button"
             >
               Thử lại
-            </button>
-          </div>
+            </Button>
+          </ResourceState>
         )}
 
         {kind === 'bookings' && visibleDetail && (
@@ -319,9 +348,6 @@ export function BookingManagementDetail({
             }
           />
         )}
-        <footer className="admin-page-footer">
-          <span>© 2026 VexGo Platform</span>
-        </footer>
       </div>
     </SuperAdminLayout>
   );
@@ -347,24 +373,28 @@ function BookingDetailContent({
   return (
     <section
       aria-labelledby="booking-management-detail-title"
-      className={styles.detailGrid}
+      className="grid min-w-0 items-start gap-6 lg:grid-cols-2"
     >
-      <header className={styles.recordHeader}>
+      <header className="col-span-full flex min-w-0 flex-wrap items-center justify-between gap-4 rounded-xl border bg-card p-4 shadow-sm sm:p-5 [&_h2]:break-all [&_h2]:text-base [&_h2]:font-semibold">
         <div>
-          <p className={styles.recordEyebrow}>PHIẾU ĐẶT VÉ</p>
+          <p className="mb-2 text-xs font-medium text-muted-foreground">
+            PHIẾU ĐẶT VÉ
+          </p>
           <h2 className="admin-data-mono">{booking.bookingCode}</h2>
         </div>
-        <AdminStatusBadge
+        <ResourceStatusBadge
           tone={statusIsActive(booking.status) ? 'active' : 'muted'}
         >
           {statusLabel(booking.status)}
-        </AdminStatusBadge>
+        </ResourceStatusBadge>
       </header>
 
       {booking.tripIntegrity !== 'CONSISTENT' && (
-        <p className={styles.warning} role="status">
-          {tripIntegrityMessage(booking.tripIntegrity)}
-        </p>
+        <div className="col-span-full">
+          <ResourceNotice kind="info">
+            {tripIntegrityMessage(booking.tripIntegrity)}
+          </ResourceNotice>
+        </div>
       )}
 
       <InfoCard title="Thông tin phiếu">
@@ -404,13 +434,16 @@ function BookingDetailContent({
 
       <InfoCard title="Vé trong phiếu">
         {booking.tickets.length === 0 ? (
-          <p className={styles.emptyText}>Phiếu chưa có vé để hiển thị.</p>
+          <p className="text-[13px] text-muted-foreground">
+            Phiếu chưa có vé để hiển thị.
+          </p>
         ) : (
-          <ul className={styles.ticketList}>
+          <ul className="grid gap-3 [&>li]:flex [&>li]:min-w-0 [&>li]:flex-wrap [&>li]:items-start [&>li]:justify-between [&>li]:gap-3 [&>li]:border-b [&>li]:pb-3 [&>li:last-child]:border-0 [&>li:last-child]:pb-0 [&>li>div]:min-w-0 [&>li>div]:flex-1 [&>li>div]:space-y-2 [&>li>div>span]:block [&>li>div>span]:text-[13px] [&>li>div>span]:text-muted-foreground">
             {booking.tickets.map((ticket) => (
               <li key={ticket.ticketId}>
                 <div>
                   <Link
+                    className="admin-data-mono block min-h-11 break-all text-[13px] font-semibold text-primary underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring"
                     href={`/booking-management/tickets/${ticket.ticketId}?from=${encodeURIComponent(backHref)}`}
                   >
                     {ticket.ticketCode}
@@ -419,11 +452,11 @@ function BookingDetailContent({
                     {ticket.seatNumber ?? '—'} · {formatVnd(ticket.actualPrice)}
                   </span>
                 </div>
-                <AdminStatusBadge
+                <ResourceStatusBadge
                   tone={statusIsActive(ticket.status) ? 'active' : 'muted'}
                 >
                   {statusLabel(ticket.status)}
-                </AdminStatusBadge>
+                </ResourceStatusBadge>
               </li>
             ))}
           </ul>
@@ -431,12 +464,14 @@ function BookingDetailContent({
       </InfoCard>
 
       <InfoCard title="Thanh toán và hoàn tiền">
-        <div className={styles.moneyGroup}>
+        <div className="space-y-3 border-b pb-4 last:border-0 last:pb-0 [&_h3]:text-[13px] [&_h3]:font-semibold">
           <h3>Giao dịch thanh toán</h3>
           {booking.paymentSummary.originalPayments.length === 0 ? (
-            <p className={styles.emptyText}>Chưa có thông tin thanh toán.</p>
+            <p className="text-[13px] text-muted-foreground">
+              Chưa có thông tin thanh toán.
+            </p>
           ) : (
-            <ul className={styles.paymentList}>
+            <ul className="grid gap-3 [&>li]:flex [&>li]:min-w-0 [&>li]:flex-wrap [&>li]:items-start [&>li]:justify-between [&>li]:gap-3 [&>li]:rounded-lg [&>li]:border [&>li]:p-3 [&>li>div]:grid [&>li>div]:min-w-0 [&>li>div]:gap-1 [&>li>div>span]:break-words [&>li>div>span]:text-xs [&>li>div>span]:text-muted-foreground">
               {booking.paymentSummary.originalPayments.map((payment) => (
                 <li key={payment.paymentId}>
                   <div>
@@ -448,11 +483,11 @@ function BookingDetailContent({
                       · {formatTimestamp(payment.occurredAt)}
                     </span>
                   </div>
-                  <AdminStatusBadge
+                  <ResourceStatusBadge
                     tone={statusIsActive(payment.status) ? 'active' : 'muted'}
                   >
                     {statusLabel(payment.status)}
-                  </AdminStatusBadge>
+                  </ResourceStatusBadge>
                 </li>
               ))}
             </ul>
@@ -467,12 +502,17 @@ function BookingDetailContent({
                 ? 'Hoàn tiền đã thành công'
                 : 'Hoàn tiền trạng thái khác';
           return (
-            <div className={styles.moneyGroup} key={group}>
+            <div
+              className="space-y-3 border-b pb-4 last:border-0 last:pb-0 [&_h3]:text-[13px] [&_h3]:font-semibold"
+              key={group}
+            >
               <h3>{groupLabel}</h3>
               {refunds.length === 0 ? (
-                <p className={styles.emptyText}>Không có giao dịch.</p>
+                <p className="text-[13px] text-muted-foreground">
+                  Không có giao dịch.
+                </p>
               ) : (
-                <ul className={styles.paymentList}>
+                <ul className="grid gap-3 [&>li]:flex [&>li]:min-w-0 [&>li]:flex-wrap [&>li]:items-start [&>li]:justify-between [&>li]:gap-3 [&>li]:rounded-lg [&>li]:border [&>li]:p-3 [&>li>div]:grid [&>li>div]:min-w-0 [&>li>div]:gap-1 [&>li>div>span]:break-words [&>li>div>span]:text-xs [&>li>div>span]:text-muted-foreground">
                   {refunds.map((refund) => (
                     <li key={refund.paymentId}>
                       <div>
@@ -484,13 +524,13 @@ function BookingDetailContent({
                           · {formatTimestamp(refund.occurredAt)}
                         </span>
                       </div>
-                      <AdminStatusBadge
+                      <ResourceStatusBadge
                         tone={
                           statusIsActive(refund.status) ? 'active' : 'muted'
                         }
                       >
                         {statusLabel(refund.status)}
-                      </AdminStatusBadge>
+                      </ResourceStatusBadge>
                     </li>
                   ))}
                 </ul>
@@ -503,22 +543,26 @@ function BookingDetailContent({
       {booking.shipment && (
         <InfoCard title="Phiếu gửi hàng cùng giao dịch">
           {booking.shipment.tripIntegrity !== 'CONSISTENT' && (
-            <p className={styles.warning} role="status">
-              {tripIntegrityMessage(booking.shipment.tripIntegrity)}
-            </p>
+            <div className="col-span-full">
+              <ResourceNotice kind="info">
+                {tripIntegrityMessage(booking.shipment.tripIntegrity)}
+              </ResourceNotice>
+            </div>
           )}
           <InfoRows>
             <InfoRow label="Mã vận đơn">
-              {booking.shipment.trackingCode}
+              <span className="admin-data-mono">
+                {booking.shipment.trackingCode}
+              </span>
             </InfoRow>
             <InfoRow label="Trạng thái gửi hàng">
-              <AdminStatusBadge
+              <ResourceStatusBadge
                 tone={
                   statusIsActive(booking.shipment.status) ? 'active' : 'muted'
                 }
               >
                 {statusLabel(booking.shipment.status)}
-              </AdminStatusBadge>
+              </ResourceStatusBadge>
             </InfoRow>
             <InfoRow label="Chuyến xe">
               {booking.shipment.tripId !== null
@@ -571,30 +615,33 @@ function TicketDetailContent({
   return (
     <section
       aria-labelledby="booking-management-detail-title"
-      className={styles.detailGrid}
+      className="grid min-w-0 items-start gap-6 lg:grid-cols-2"
     >
-      <header className={styles.recordHeader}>
+      <header className="col-span-full flex min-w-0 flex-wrap items-center justify-between gap-4 rounded-xl border bg-card p-4 shadow-sm sm:p-5 [&_h2]:break-all [&_h2]:text-base [&_h2]:font-semibold">
         <div>
-          <p className={styles.recordEyebrow}>VÉ</p>
+          <p className="mb-2 text-xs font-medium text-muted-foreground">VÉ</p>
           <h2 className="admin-data-mono">{ticket.ticketCode}</h2>
         </div>
-        <AdminStatusBadge
+        <ResourceStatusBadge
           tone={statusIsActive(ticket.status) ? 'active' : 'muted'}
         >
           {statusLabel(ticket.status)}
-        </AdminStatusBadge>
+        </ResourceStatusBadge>
       </header>
 
       {ticket.tripIntegrity !== 'CONSISTENT' && (
-        <p className={styles.warning} role="status">
-          {tripIntegrityMessage(ticket.tripIntegrity)}
-        </p>
+        <div className="col-span-full">
+          <ResourceNotice kind="info">
+            {tripIntegrityMessage(ticket.tripIntegrity)}
+          </ResourceNotice>
+        </div>
       )}
 
       <InfoCard title="Thông tin vé">
         <InfoRows>
           <InfoRow label="Phiếu đặt">
             <Link
+              className="admin-data-mono inline-flex min-h-11 items-center break-all text-primary underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring"
               href={`/booking-management/bookings/${ticket.booking.bookingId}?from=${encodeURIComponent(backHref)}`}
             >
               {ticket.booking.bookingCode}
@@ -607,11 +654,17 @@ function TicketDetailContent({
               ? `${ticket.trip.origin} → ${ticket.trip.destination}`
               : 'Chưa xác định'}
           </InfoRow>
-          <InfoRow label="Chuyến xe">{ticket.trip?.tripCode ?? '—'}</InfoRow>
+          <InfoRow label="Chuyến xe">
+            <span className="admin-data-mono">
+              {ticket.trip?.tripCode ?? '—'}
+            </span>
+          </InfoRow>
           <InfoRow label="Khởi hành">
             {formatTimestamp(ticket.trip?.departureAt)}
           </InfoRow>
-          <InfoRow label="Ghế">{ticket.seatNumber ?? '—'}</InfoRow>
+          <InfoRow label="Ghế">
+            <span className="admin-data-mono">{ticket.seatNumber ?? '—'}</span>
+          </InfoRow>
           <InfoRow label="Điểm đón">{ticket.pickup ?? '—'}</InfoRow>
           <InfoRow label="Giá thực tế">{formatVnd(ticket.actualPrice)}</InfoRow>
           <InfoRow label="Giá niêm yết">
@@ -628,11 +681,11 @@ function TicketDetailContent({
 
       <InfoCard title="Hoàn tiền gắn với vé">
         {ticket.refunds.length === 0 ? (
-          <p className={styles.emptyText}>
+          <p className="text-[13px] text-muted-foreground">
             Chưa có thông tin hoàn tiền gắn với vé này.
           </p>
         ) : (
-          <ul className={styles.paymentList}>
+          <ul className="grid gap-3 [&>li]:flex [&>li]:min-w-0 [&>li]:flex-wrap [&>li]:items-start [&>li]:justify-between [&>li]:gap-3 [&>li]:rounded-lg [&>li]:border [&>li]:p-3 [&>li>div]:grid [&>li>div]:min-w-0 [&>li>div]:gap-1 [&>li>div>span]:break-words [&>li>div>span]:text-xs [&>li>div>span]:text-muted-foreground">
             {ticket.refunds.map((refund) => (
               <li key={refund.refundId}>
                 <div>
@@ -644,11 +697,11 @@ function TicketDetailContent({
                     · {formatTimestamp(refund.occurredAt)}
                   </span>
                 </div>
-                <AdminStatusBadge
+                <ResourceStatusBadge
                   tone={statusIsActive(refund.status) ? 'active' : 'muted'}
                 >
                   {statusLabel(refund.status)}
-                </AdminStatusBadge>
+                </ResourceStatusBadge>
               </li>
             ))}
           </ul>
@@ -683,35 +736,44 @@ function HistorySection({
   onPageChange: (page: number) => void;
 }) {
   return (
-    <InfoCard title={`Lịch sử trạng thái ${kind}`}>
+    <InfoCard title={`Lịch sử trạng thái ${kind}`} className="lg:col-span-2">
       {loading && !history && (
-        <p aria-live="polite" className={styles.emptyText} role="status">
+        <p
+          aria-live="polite"
+          className="text-[13px] text-muted-foreground"
+          role="status"
+        >
           Đang tải lịch sử…
         </p>
       )}
       {Boolean(error) && (
-        <div className={styles.historyError} role="alert">
+        <ResourceState error>
           <p>
             {detailErrorMessage(
               error,
               kind === 'phiếu' ? 'bookings' : 'tickets',
             )}
           </p>
-          <button onClick={onRetry} type="button">
+          <Button variant="outline" onClick={onRetry} type="button">
             Tải lại lịch sử
-          </button>
-        </div>
+          </Button>
+        </ResourceState>
       )}
       {!loading && !error && history && history.data.length === 0 && (
-        <p className={styles.emptyText}>Chưa có lịch sử trạng thái.</p>
+        <p className="text-[13px] text-muted-foreground">
+          Chưa có lịch sử trạng thái.
+        </p>
       )}
       {!error && history && history.data.length > 0 && (
         <>
-          <ol className={styles.timeline}>
+          <ol className="grid gap-5">
             {history.data.map((entry) => (
-              <li key={entry.historyId}>
-                <span aria-hidden="true" className={styles.timelineMarker} />
-                <div className={styles.timelineContent}>
+              <li key={entry.historyId} className="flex min-w-0 gap-3">
+                <span
+                  aria-hidden="true"
+                  className="mt-1 size-2.5 shrink-0 rounded-full border-2 border-primary bg-card"
+                />
+                <div className="grid min-w-0 gap-1 text-[13px] [&_strong]:break-words [&_strong]:font-semibold [&_time]:text-xs [&_time]:text-muted-foreground [&>span]:text-xs [&>span]:text-muted-foreground [&_p]:mt-1 [&_p]:break-words">
                   <strong>
                     {historyStatusText(entry.oldStatus, entry.newStatus)}
                   </strong>
@@ -731,7 +793,7 @@ function HistorySection({
             ))}
           </ol>
           {history.meta.totalPages > 1 && (
-            <AdminPagination
+            <ResourcePagination
               currentPage={history.meta.page}
               disabled={loading}
               onPageChange={onPageChange}

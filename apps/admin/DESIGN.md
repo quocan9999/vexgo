@@ -22,21 +22,21 @@ Authority: current user scope and repository security/API rules → this design 
 - Use weight primitives 400, 500, 600, and 700. Prefer the role weight token when applying a semantic type role.
 - Keep interface copy at 12px or larger. Brand wordmarks, compact identifying marks, and standalone icon glyphs may keep deliberate sizes.
 
-| Role | Size | Line height | Weight |
-| --- | ---: | ---: | ---: |
-| Display | 32px; 28px at ≤900px; 24px at ≤700px | 1.2 | 700 |
-| Page title | 28px; 24px at ≤700px | 1.2 | 700 |
-| Section heading | 20px | 1.3 | 600 |
-| Component title | 16px | 1.35 | 600 |
-| Body | 14px | 1.5 | 400 |
-| Secondary body | 13px | 1.45 | 400 |
-| Form label | 13px | 1.35 | 600 |
-| Helper / error | 12px | 1.4 | 400 / 500 |
-| Table header | 12px | 1.35 | 600 |
-| Table body | 13px | 1.45 | 400 |
-| Button | 14px | 1.2 | 600 |
-| Badge / caption | 12px | 1.35 | 600 / 500 |
-| Dashboard metric | 24–32px by hierarchy | 1.2 | 600 / 700 |
+| Role             |                                 Size | Line height |    Weight |
+| ---------------- | -----------------------------------: | ----------: | --------: |
+| Display          | 32px; 28px at ≤900px; 24px at ≤700px |         1.2 |       700 |
+| Page title       |                 28px; 24px at ≤700px |         1.2 |       700 |
+| Section heading  |                                 20px |         1.3 |       600 |
+| Component title  |                                 16px |        1.35 |       600 |
+| Body             |                                 14px |         1.5 |       400 |
+| Secondary body   |                                 13px |        1.45 |       400 |
+| Form label       |                                 13px |        1.35 |       600 |
+| Helper / error   |                                 12px |         1.4 | 400 / 500 |
+| Table header     |                                 12px |        1.35 |       600 |
+| Table body       |                                 13px |        1.45 |       400 |
+| Button           |                                 14px |         1.2 |       600 |
+| Badge / caption  |                                 12px |        1.35 | 600 / 500 |
+| Dashboard metric |                 24–32px by hierarchy |         1.2 | 600 / 700 |
 
 Semantic typography variables live in `src/styles/admin-tokens.css` with the `--admin-type-<role>-size`, `-line-height`, and `-weight` pattern. The display role supports the login showcase heading. Brand wordmarks and identifying marks may keep a smaller deliberate size.
 
@@ -46,29 +46,29 @@ Letter spacing is reserved for optical heading tightening and uppercase labels. 
 
 Use the 4px spacing scale in rem units:
 
-| Token | Value | Token | Value |
-| --- | ---: | --- | ---: |
-| `--admin-space-1` | 4px | `--admin-space-6` | 24px |
-| `--admin-space-2` | 8px | `--admin-space-7` | 32px |
-| `--admin-space-3` | 12px | `--admin-space-8` | 40px |
-| `--admin-space-4` | 16px | `--admin-space-9` | 48px |
-| `--admin-space-5` | 20px | `--admin-space-10` | 64px |
+| Token             | Value | Token              | Value |
+| ----------------- | ----: | ------------------ | ----: |
+| `--admin-space-1` |   4px | `--admin-space-6`  |  24px |
+| `--admin-space-2` |   8px | `--admin-space-7`  |  32px |
+| `--admin-space-3` |  12px | `--admin-space-8`  |  40px |
+| `--admin-space-4` |  16px | `--admin-space-9`  |  48px |
+| `--admin-space-5` |  20px | `--admin-space-10` |  64px |
 
 Semantic aliases map common Admin spacing to the scale:
 
-| Alias | Desktop | Mobile |
-| --- | ---: | ---: |
-| Page inline | 32px | 16px |
-| Page block | 32px | 24px |
-| Section gap | 24px | 20px |
-| Component gap | 16px | 16px |
-| Field gap | 12px | 12px |
-| Label–control gap | 8px | 8px |
-| Toolbar / control gap | 12px | 8px |
-| Page action padding | 8px / 16px | 8px / 16px |
-| Card padding | 20px | 16px |
-| Dialog padding | 24px | 16px |
-| Table cell X / Y | 16px / 12px | Card fallback, 16px padding |
+| Alias                 |     Desktop |                      Mobile |
+| --------------------- | ----------: | --------------------------: |
+| Page inline           |        32px |                        16px |
+| Page block            |        32px |                        24px |
+| Section gap           |        24px |                        20px |
+| Component gap         |        16px |                        16px |
+| Field gap             |        12px |                        12px |
+| Label–control gap     |         8px |                         8px |
+| Toolbar / control gap |        12px |                         8px |
+| Page action padding   |  8px / 16px |                  8px / 16px |
+| Card padding          |        20px |                        16px |
+| Dialog padding        |        24px |                        16px |
+| Table cell X / Y      | 16px / 12px | Card fallback, 16px padding |
 
 Aliases also cover summary, state, notice, control, sheet, form, and sidebar spacing. Use these aliases instead of adding new per-feature spacing values. Shared page action buttons use 8px vertical and 16px horizontal padding with content-sized width. Page-specific spacing exceptions are reserved for data visualization or a workspace with a distinct layout. The dashboard status chart keeps its responsive donut-to-legend composition gap; seat assignment keeps seat dimensions and grid geometry specific to that workflow.
 
@@ -130,29 +130,29 @@ Review affected routes at 1440×900 and 375×667. Check header hierarchy, action
 
 The following values are the light-theme target for the pilot, not a claim that runtime has already changed. Foreground/background pairs must be checked in their actual component states; ordinary text needs 4.5:1 contrast and meaningful control/focus boundaries need 3:1 where applicable.
 
-| Role / shadcn semantic name | Target | Existing Admin alias / migration action |
-| --- | --- | --- |
-| `background` | `#f6f8fb` canvas | `--admin-canvas`; keep app canvas separate from cards |
-| `foreground` | `#17243b` | `--admin-ink` |
-| `card`, `popover` | `#ffffff` | `--admin-surface` becomes a surface alias, not canvas |
-| `card-foreground`, `popover-foreground` | `#1c2e48` | `--admin-text-strong` |
-| `primary` / `primary-foreground` | `#1e40af` / `#ffffff` | `--admin-blue`; hover `#18368f` |
-| `secondary` / `secondary-foreground` | `#ffffff` / `#1c2e48` | Secondary/outline actions keep a visible border |
-| `muted` / `muted-foreground` | `#f1f5f9` / `#5d6d84` | Muted surface and readable secondary copy |
-| `accent` / `accent-foreground` | `#eff5ff` / `#1e40af` | `--admin-blue-soft`; hover/selection |
-| `border` | `#e4e9f1` | `--admin-border`, separators |
-| `input` | `#738096` | Visible interactive boundary; distinct from decorative separators |
-| `ring` | `#1e40af` | 2px visible focus indicator with 2px offset where layout allows |
-| `destructive` / `destructive-foreground` | `#a63732` / `#ffffff` | `--admin-danger` |
-| `sidebar` / `sidebar-foreground` | `#14233d` / `#e2e8f0` | `--admin-navy` |
-| `sidebar-accent` / foreground | `#263f64` / `#ffffff` | Active item also has marker/`aria-current` |
-| `sidebar-primary` / foreground | `#1e40af` / `#ffffff` | Brand/action accent |
-| `sidebar-border` / `sidebar-ring` | `#334155` / `#93c5fd` | Divider and focus on dark surface |
-| `chart-1` | `#1e40af` | Revenue series; distinguish series with labels/line styles as needed |
-| Success foreground / soft / border | `#166534` / `#f0f8f3` / `#d3eadc` | Explicit success tokens; do not reuse a low-contrast decorative green as small text |
-| Warning foreground / soft / border | `#92400e` / `#fffbeb` / `#fde68a` | Explicit warning tokens |
-| Danger foreground / soft / border | `#a63732` / `#fef2f2` / `#fecaca` | Error/critical state |
-| Neutral foreground / soft / border | `#475569` / `#f1f5f9` / `#cbd5e1` | Neutral state, not every unrecognized domain enum |
+| Role / shadcn semantic name              | Target                            | Existing Admin alias / migration action                                             |
+| ---------------------------------------- | --------------------------------- | ----------------------------------------------------------------------------------- |
+| `background`                             | `#f6f8fb` canvas                  | `--admin-canvas`; keep app canvas separate from cards                               |
+| `foreground`                             | `#17243b`                         | `--admin-ink`                                                                       |
+| `card`, `popover`                        | `#ffffff`                         | `--admin-surface` becomes a surface alias, not canvas                               |
+| `card-foreground`, `popover-foreground`  | `#1c2e48`                         | `--admin-text-strong`                                                               |
+| `primary` / `primary-foreground`         | `#1e40af` / `#ffffff`             | `--admin-blue`; hover `#18368f`                                                     |
+| `secondary` / `secondary-foreground`     | `#ffffff` / `#1c2e48`             | Secondary/outline actions keep a visible border                                     |
+| `muted` / `muted-foreground`             | `#f1f5f9` / `#5d6d84`             | Muted surface and readable secondary copy                                           |
+| `accent` / `accent-foreground`           | `#eff5ff` / `#1e40af`             | `--admin-blue-soft`; hover/selection                                                |
+| `border`                                 | `#e4e9f1`                         | `--admin-border`, separators                                                        |
+| `input`                                  | `#738096`                         | Visible interactive boundary; distinct from decorative separators                   |
+| `ring`                                   | `#1e40af`                         | 2px visible focus indicator with 2px offset where layout allows                     |
+| `destructive` / `destructive-foreground` | `#a63732` / `#ffffff`             | `--admin-danger`                                                                    |
+| `sidebar` / `sidebar-foreground`         | `#14233d` / `#e2e8f0`             | `--admin-navy`                                                                      |
+| `sidebar-accent` / foreground            | `#263f64` / `#ffffff`             | Active item also has marker/`aria-current`                                          |
+| `sidebar-primary` / foreground           | `#1e40af` / `#ffffff`             | Brand/action accent                                                                 |
+| `sidebar-border` / `sidebar-ring`        | `#334155` / `#93c5fd`             | Divider and focus on dark surface                                                   |
+| `chart-1`                                | `#1e40af`                         | Revenue series; distinguish series with labels/line styles as needed                |
+| Success foreground / soft / border       | `#166534` / `#f0f8f3` / `#d3eadc` | Explicit success tokens; do not reuse a low-contrast decorative green as small text |
+| Warning foreground / soft / border       | `#92400e` / `#fffbeb` / `#fde68a` | Explicit warning tokens                                                             |
+| Danger foreground / soft / border        | `#a63732` / `#fef2f2` / `#fecaca` | Error/critical state                                                                |
+| Neutral foreground / soft / border       | `#475569` / `#f1f5f9` / `#cbd5e1` | Neutral state, not every unrecognized domain enum                                   |
 
 Unneeded chart colors are added when a real chart needs multiple series, rather than inventing data or categories. Unknown CSS names such as `--admin-text-default` must be resolved by intended role; do not introduce an alias merely to silence an undefined-variable search.
 
@@ -160,12 +160,12 @@ Unneeded chart colors are added when a real chart needs multiple series, rather 
 
 Keep the typography/spacing roles above. Size variants express context; using the same variant gives the same geometry across Button, Input, Select and date triggers.
 
-| Variant | Control height | Text | Use |
-| --- | ---: | ---: | --- |
-| `sm` | 32px | 13px | Compact desktop row actions; preserve a usable hit target |
-| `default` | 40px | 14px | Forms, page actions and ordinary desktop toolbars |
-| `comfortable` | 44px | 14px | Touch-oriented controls and mobile main actions |
-| Icon control | Same height and width as its size variant | Icon 16–20px | Accessible name required; no shrinking button to the glyph bounds |
+| Variant       |                            Control height |         Text | Use                                                               |
+| ------------- | ----------------------------------------: | -----------: | ----------------------------------------------------------------- |
+| `sm`          |                                      32px |         13px | Compact desktop row actions; preserve a usable hit target         |
+| `default`     |                                      40px |         14px | Forms, page actions and ordinary desktop toolbars                 |
+| `comfortable` |                                      44px |         14px | Touch-oriented controls and mobile main actions                   |
+| Icon control  | Same height and width as its size variant | Icon 16–20px | Accessible name required; no shrinking button to the glyph bounds |
 
 - Control radius: 8px; card/panel and dialog/sheet inner corners: 12px; badge: pill. The existing 10px panel value is legacy until migrated.
 - Default control horizontal padding: 12px; page actions: 16px. No arbitrary `min-width: 120px` for all actions; width follows label/content except explicit full-width mobile actions.
@@ -177,19 +177,19 @@ Keep the typography/spacing roles above. Size variants express context; using th
 
 ## Shared interaction contracts
 
-| Pattern | Required behavior |
-| --- | --- |
-| Fields | Persistent label, required state, helper/error linkage, invalid state, compatible autocomplete; preserve values on failed submit |
-| Validation | Keep inline errors; after failed submit focus the first invalid field or linked error summary for long forms; do not steal focus on every change |
-| Select/filters | Label and selected value are clear; consistent sizes; support keyboard; no feature-specific copies; loading/options errors remain explicit |
-| Tabs | IDs and tab–panel linkage, selected state, roving focus, ArrowLeft/Right and Home/End; keep API/data loading in feature |
-| Dialog/Sheet/AlertDialog | Accessible title, focus containment/return, Escape/backdrop policy, scroll ownership, pending-dismiss protection; nested popup remains usable |
-| Table/cards | Shared headers/sort/state/action styles; `aria-sort`; same labels, status mapping and authorized actions in desktop and mobile views |
-| Pagination | One result summary per list context; current page/range/total, accessible previous/next actions; no independent feature visual variants |
-| Status | Feature maps real API enum to Vietnamese label/tone. Never assume an unknown enum is a known successful or failed state |
-| Feedback | Operation results use the shared Sonner host at bottom-right, once per result; no success banners in page/sheet flow. Keep linked inline field validation and contextual loading/error/empty/permission states. New and migrated screens follow this rule; legacy consumers move per migration ledger |
-| Tooltip/chart | Hover/focus/touch access as appropriate; Escape dismiss; tooltip remains within viewport; retain keyboard and tabular alternatives for charts |
-| Workspace | One intentional scroll owner per pane; short/mobile viewport and virtual keyboard must not hide essential actions |
+| Pattern                  | Required behavior                                                                                                                                                                                                                                                                                     |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Fields                   | Persistent label, required state, helper/error linkage, invalid state, compatible autocomplete; preserve values on failed submit                                                                                                                                                                      |
+| Validation               | Keep inline errors; after failed submit focus the first invalid field or linked error summary for long forms; do not steal focus on every change                                                                                                                                                      |
+| Select/filters           | Label and selected value are clear; consistent sizes; support keyboard; no feature-specific copies; loading/options errors remain explicit                                                                                                                                                            |
+| Tabs                     | IDs and tab–panel linkage, selected state, roving focus, ArrowLeft/Right and Home/End; keep API/data loading in feature                                                                                                                                                                               |
+| Dialog/Sheet/AlertDialog | Accessible title, focus containment/return, Escape/backdrop policy, scroll ownership, pending-dismiss protection; nested popup remains usable                                                                                                                                                         |
+| Table/cards              | Shared headers/sort/state/action styles; `aria-sort`; same labels, status mapping and authorized actions in desktop and mobile views                                                                                                                                                                  |
+| Pagination               | One result summary per list context; current page/range/total, accessible previous/next actions; no independent feature visual variants                                                                                                                                                               |
+| Status                   | Feature maps real API enum to Vietnamese label/tone. Never assume an unknown enum is a known successful or failed state                                                                                                                                                                               |
+| Feedback                 | Operation results use the shared Sonner host at bottom-right, once per result; no success banners in page/sheet flow. Keep linked inline field validation and contextual loading/error/empty/permission states. New and migrated screens follow this rule; legacy consumers move per migration ledger |
+| Tooltip/chart            | Hover/focus/touch access as appropriate; Escape dismiss; tooltip remains within viewport; retain keyboard and tabular alternatives for charts                                                                                                                                                         |
+| Workspace                | One intentional scroll owner per pane; short/mobile viewport and virtual keyboard must not hide essential actions                                                                                                                                                                                     |
 
 Opening a create form is not a reason to change tenant scope, code generation, departure scheduling, settlement or refund rules. Preserve current behavior and fix domain issues only with their actual contract/evidence.
 
@@ -218,26 +218,76 @@ Registry states:
 
 Initial baseline registry (before the pilot implementation below):
 
-| Pattern | Current owner | Status | Target / pilot consumer |
-| --- | --- | --- | --- |
-| Button / Badge | `components/ui/button.tsx`, `badge.tsx` | legacy | Canonical shadcn variants; `/vehicles` |
-| Input / Field / Label / Textarea / Select | Native markup in features | planned replacement | Canonical primitives + error contract; vehicle form/filter |
-| Dialog engine | `admin-dialog-primitive.tsx` | legacy | Dialog/Sheet/AlertDialog primitives; verify close refs, pending state and nested filters |
-| Form/detail/confirmation patterns | `AdminFormDialog`, `AdminDetailSheet`, `AdminConfirmDialog` | legacy | Shared compositions over the new engine; vehicle create/edit/detail/status actions |
-| Filter toolbar/search/select/date | `components/data-filters/` | legacy | Keep appropriate composition API; implement new theme/size/keyboard contracts |
-| Page header/create/refresh/detail actions | `components/admin/` | legacy | Preserve role and labels; use new primitives |
-| Table/cards/sort/pagination | Shared CSS and feature markup + `AdminPagination` | legacy | Shared presentation contracts, feature columns/actions |
-| Alert/Skeleton/empty/success | Shared skeleton + feature styles | legacy | Canonical state compositions; vehicle states |
-| Money/generated code field | `AdminMoneyInput`, `AdminGeneratedCodeField` | legacy | Keep domain behavior, migrate underlying Input/Field/Button when consumed |
-| Tabs / Tooltip | Feature implementations | planned replacement | Canonical primitives; customer/booking tabs and shared help |
-| Shell/sidebar | `SuperAdminLayout` + `features/super-admin-layout/admin-shell.css` | migrating | Canonical Button, Sheet mobile navigation and ResourceConfirmation; preserve permission/tenant/navigation preference behavior; evidence in UI_MIGRATION.md |
-| Chat / chart / seat map / RBAC matrix | Feature workspaces | legacy | Keep domain layout; migrate primitives in their phase |
+| Pattern                                   | Current owner                                                      | Status              | Target / pilot consumer                                                                                                                                    |
+| ----------------------------------------- | ------------------------------------------------------------------ | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Button / Badge                            | `components/ui/button.tsx`, `badge.tsx`                            | legacy              | Canonical shadcn variants; `/vehicles`                                                                                                                     |
+| Input / Field / Label / Textarea / Select | Native markup in features                                          | planned replacement | Canonical primitives + error contract; vehicle form/filter                                                                                                 |
+| Dialog engine                             | `admin-dialog-primitive.tsx`                                       | legacy              | Dialog/Sheet/AlertDialog primitives; verify close refs, pending state and nested filters                                                                   |
+| Form/detail/confirmation patterns         | `AdminFormDialog`, `AdminDetailSheet`, `AdminConfirmDialog`        | legacy              | Shared compositions over the new engine; vehicle create/edit/detail/status actions                                                                         |
+| Filter toolbar/search/select/date         | `components/data-filters/`                                         | legacy              | Keep appropriate composition API; implement new theme/size/keyboard contracts                                                                              |
+| Page header/create/refresh/detail actions | `components/admin/`                                                | legacy              | Preserve role and labels; use new primitives                                                                                                               |
+| Table/cards/sort/pagination               | Shared CSS and feature markup + `AdminPagination`                  | legacy              | Shared presentation contracts, feature columns/actions                                                                                                     |
+| Alert/Skeleton/empty/success              | Shared skeleton + feature styles                                   | legacy              | Canonical state compositions; vehicle states                                                                                                               |
+| Money/generated code field                | `AdminMoneyInput`, `AdminGeneratedCodeField`                       | legacy              | Keep domain behavior, migrate underlying Input/Field/Button when consumed                                                                                  |
+| Tabs                                      | `components/ui/tabs.tsx`                                           | migrating           | Customer, booking and vehicle-seat views use canonical Tabs; migrate remaining tabs by route slice                                                         |
+| Tooltip                                   | Feature implementations                                            | planned replacement | Shared help primitive; keep existing behavior until its canonical replacement is reviewed                                                                  |
+| Shell/sidebar                             | `SuperAdminLayout` + `features/super-admin-layout/admin-shell.css` | migrating           | Canonical Button, Sheet mobile navigation and ResourceConfirmation; preserve permission/tenant/navigation preference behavior; evidence in UI_MIGRATION.md |
+| Support chat / revenue chart              | Feature workspaces                                                 | approved            | Presentation approved; retain domain data/layout; see UI_MIGRATION.md                                                                                       |
+| Tenant RBAC matrix                        | `features/tenant-rbac/` + shared RBAC components                   | approved            | All tenant and platform RBAC routes use the shared Resource role selector, matrix and scope navigation                                                      |
+| Vehicle seat workspace                    | `features/vehicles/components/vehicle-seats-management.tsx`        | migrating           | User approved presentation; responsive and keyboard review remains pending; see UI_MIGRATION.md                                                         |
+| Trip seat workspace                       | `features/trips/components/trip-seats-management.tsx`              | migrating           | User approved presentation; responsive and keyboard review remains pending; see UI_MIGRATION.md                                                          |
+| Bus companies                              | `features/bus-companies/components/`                              | migrating           | Resource list/detail/create/edit/status controls; responsive and keyboard review pending                                                               |
+| Platform RBAC                             | Platform RBAC feature workspaces                                   | migrating           | All three routes use the shared Resource scope navigation; latest shared navigation slice awaits user visual review; see UI_MIGRATION.md                     |
 
 For each pattern entering `migrating`, add canonical path, migrated and remaining consumer paths, adapter (if any), evidence and removal condition to this registry or its linked ledger. Adapter removal requires zero remaining consumers and verified replacement behavior. Do not maintain two styling or focus engines for the same migrated component.
 
 ### Vehicles pilot — user approved
 
 Current migration ledger: [UI_MIGRATION.md](./UI_MIGRATION.md). `/vehicles` and `VehicleFormDialog` use canonical shadcn primitives and shared Resource patterns. The user approved the pilot presentation and bottom-right toast on 23/10/2026; remaining runtime verification limits are recorded in the ledger. This approval does not approve every Admin route. Existing `ui/button.tsx`, `ui/badge.tsx`, Admin dialog/filter/pagination patterns remain legacy for their other consumers; do not copy them into new features. New consumers use the canonical paths in the ledger. No endpoint date-only contract is switched by the vehicles pilot; its API timestamps remain ISO and the visible date portion uses `DD-MM-YYYY`.
+
+### Vehicle types — user approved
+
+`/vehicle-types` now consumes the canonical Resource actions/states/pagination/Sheet, resource filters, Table/Card, Field/Input and the new `components/ui/textarea.tsx` primitive. Textarea follows the same control radius, font and focus/error contract; it is adapted from the official base-nova registry. Feature-native `vehicle-types.css` has no remaining consumers and is removed. The user approved the presentation on 23/10/2026; verification and remaining runtime limits are recorded in the migration ledger. Existing API, permissions, tenant principal and capacity validation remain unchanged.
+
+### Routes — user approved
+
+`/routes` uses canonical Resource patterns, filters, Table/Card, Field/Input/Select and nested Sheet/confirmation. Generated codes use `components/admin/resource-generated-code-field.tsx`: disabled Input and existing preview hook, without changing code allocation or submit contracts. `AdminGeneratedCodeField` remains legacy only for trips until that consumer migrates. New generated-code consumers use the canonical Resource field. Feature-native `routes.css` is removed after its last consumer migrated. Route permissions, tenant scope, positive duration parsing and status confirmation rules remain unchanged; see the ledger for evidence and remaining runtime checks.
+
+### Fare prices — user approved
+
+`/fare-prices` uses canonical Resource patterns, resource filters, Table/Card, Field/Input/Select and nested Sheet/confirmation. Price remains a positive integer VND input; effective state remains backend-owned. Removed feature-native CSS after migrating all consumers. Date-only API remains legacy YYYY-MM-DD pending coordinated migration; list/detail labels use DD-MM-YYYY. See UI_MIGRATION.md for evidence and runtime limits. Routes presentation was approved by the user on 23/10/2026.
+
+### Trips — user approved
+
+`/trips` uses canonical Resource patterns, Table/Card, resource filters, nested Sheet/confirmation, generated-code Field and the migrated shared SingleDateFilter. Existing domain services and legacy date-only API contracts are retained. `/trips/[tripId]/seats` is a separate read-only workspace migration; see UI_MIGRATION.md for its approval and verification state. Shared seat-summary styles remain for the trip detail sheet. Removed unused trip CRUD styles; see ledger for scope and skipped checks. Fare-price presentation approved by the user on 23/10/2026.
+
+### Trip seat workspace — migrating
+
+`/trips/[tripId]/seats` uses canonical Button, Badge, Card, Skeleton and ResourceState with the shared Admin page header. The read-only view retains trip context, seat totals, backend status filtering and stored-position grouping. Its empty copy distinguishes an empty trip inventory from a filter with no matches. Position groups are not presented as physical seat coordinates. User approved the presentation on 24/10/2026; responsive/keyboard verification is pending in UI_MIGRATION.md.
+
+### Bus companies — user approved
+
+`/bus-companies` uses shared Resource actions/states/pagination, resource filters, Table/Card, ResourceSheet for detail/create/edit, AlertDialog, Field/Input/Select and bottom-right toast. Existing platform-owned Super Admin permissions, services, request behavior and create/edit/status rules remain unchanged. Pending submissions prevent dismissal. Responsive/keyboard review is pending because the Admin server was stopped. `bus-companies.css` was removed after its `.table-error` style was temporarily retained for `/admin-accounts`; that final legacy consumer and the global rule were removed in the admin-accounts migration. See UI_MIGRATION.md for checks not run and review status.
+
+### Admin accounts — user approved
+
+`/admin-accounts` uses canonical Resource actions, states, pagination, filters, sort controls, Table/Card, Sheet, AlertDialog, Field/Input/Select/Checkbox and bottom-right toast. Super Admin permission checks, platform scope, services, API payloads, tenant-role filtering, validation and pending-submit guards remain unchanged. Removed `admin-accounts-management.module.css` after moving route presentation to canonical components and utilities. Review and verification limits are recorded in UI_MIGRATION.md.
+
+### Customers — user approved
+
+`/customers` list and CustomerDetails use canonical Resource patterns, Table/Card, filters, pagination and Sheet. Existing read-only operational use case, tenant scope and API remain unchanged. The linked activity workspace /customers/[id] and its tabs remain legacy; shared customer CSS is retained for those consumers. Trips presentation approved by the user on 23/10/2026. See migration ledger for evidence and skipped checks.
+
+### Customer activity workspace — user approved
+
+`/customers/[id]` and its four tabs consume canonical components; `ui/tabs.tsx` is the canonical Tabs primitive adapted from official base-nova with the Admin sizing/focus contract. Other legacy tabs migrate to this primitive in their own slice. `data-filters/resource-sort.tsx` owns mobile sort composition shared across the three history tabs. All customer CSS consumers have migrated; customers.css is removed. API/domain rules remain unchanged. See ledger for evidence and skipped checks.
+
+### Support chat — user approved
+
+`/support-chat` uses canonical controls/states/confirmation and retains its domain two-pane messaging layout in admin-chat-messenger.module.css. Unlike CRUD, the workspace owns bounded viewport height (100dvh minus 248px, minimum 30rem mobile / 28rem desktop) and independently scrolling inbox/transcript; mobile shows one pane at a time. No status aggregates are inferred from one loaded page. Read-only accounts retain read-only presentation. Customer activity workspace approved by the user on 24/10/2026; see ledger for chat evidence and limits.
+
+### Booking management list and details — approved
+
+`/booking-management` booking/ticket lists use canonical Tabs, Table/Card and Resource patterns. Shared DateRangeFilter and LabeledSelectFilter now expose opt-in appearance=resource; legacy remains default for unmigrated consumers. These adapters share state/callbacks and existing Base UI engine, and are removed after the last legacy consumer migrates. List and detail CSS removed after consumer inventory. Booking/ticket detail routes now compose canonical information cards, linked records, refund groups and history; presentation approved on 24/10/2026. Booking list approved on 24/10/2026. Support chat presentation approved by the user on 24/10/2026. See ledger for evidence and skipped checks.
 
 ### Shell geometry and navigation
 
@@ -256,3 +306,23 @@ Current migration ledger: [UI_MIGRATION.md](./UI_MIGRATION.md). `/vehicles` and 
 5. Remove legacy only after consumer inventory and review. Update this registry with actual status, not intended progress.
 
 Within each implementation slice: inspect consumers/impact before edits, implement, run permitted scoped checks, review responsive and keyboard behavior, self-review, then report evidence and remaining limits. Test types follow current user authorization; this document does not authorize integration/E2E/UI test suites by itself. Do not claim unobserved role/runtime states passed. Date contract migration is separately tracked across both clients before any affected endpoint is switched.
+
+### Promotions — user approved
+
+`/promotions` composes canonical list/filter/Table/Card/Sheet/confirmation patterns. Operation feedback uses bottom-right toast. AdminMoneyInput opts into canonical Input via appearance=resource, retaining one formatting/caret engine; legacy remains compatibility default until final consumer review. Existing DateRangeFilter resource adapter reused. PromotionDetailSheet has no current mounted consumer and remains legacy; its CSS is retained after removing unused list selectors. Booking/ticket details approved by user on 24/10/2026. See migration ledger for browser evidence and skipped checks.
+
+### Shipments — user approved
+
+`/shipments` composes canonical Resource patterns for list, search/status filter, Table/mobile Card, detail Sheet and nested confirmation. Cargo, fee breakdown and history retain their domain data in canonical cards/table; mobile fee cells use 8px inline padding (16px from sm) to keep the three-column breakdown readable in a 375px Sheet. Removed unreferenced shipments.css. Payment gate and tenant/backend rules are unchanged. Promotions approved by user on 24/10/2026. See migration ledger for evidence and skipped checks.
+
+### Revenue reports — user approved
+
+`/revenue-reports` uses canonical Card/Table/Skeleton, Resource state/notice/actions and resource filter adapters. Six KPI hierarchy and domain chart geometry/tooltip remain feature-owned; tables retain horizontal scrolling on mobile for financial column comparison, bounded vertical scrolling (480px) and sticky headers. DateRangeFilter emptyValueLabel defaults to existing copy and supports accurate current-month presentation here. CSV placeholder uses shared bottom-right toast; no new export implementation. Shared daily display formatter uses DD-MM-YYYY; API date wire format unchanged. Shipments approved by user on 24/10/2026. See ledger for evidence and skipped checks.
+
+### Tenant RBAC — migrating
+
+`/tenant-rbac`, `/rbac`, `/rbac/tenants`, and `/rbac/tenants/[nhaXeId]` use the shared resource-mode role selector and permission matrix. Tenant and platform-tenant detail routes use canonical Card/Badge, Resource states/notices/actions/confirmation and bottom-right toast; the tenant picker uses real API data with shared Card/Field/Input patterns. Canonical checkbox.tsx and radio-group.tsx use the official shadcn base-nova/Base UI primitives and VexGo focus contract. Desktop role cards use RadioGroup; mobile reuses LabeledSelectFilter. Matrix scope and exact permission keys remain unchanged. Feature CSS was removed only from migrated route consumers; scope navigation uses the same Resource presentation on all platform RBAC routes. `/rbac`, `/rbac/tenants`, and `/rbac/tenants/[nhaXeId]` were approved by the user; the latest scope-navigation refinement awaits review. See ledger for evidence and skipped checks.
+
+### Platform RBAC — migrating
+
+`/rbac` uses the shared resource-mode role selector and permission matrix, Resource loading/error/confirmation patterns, and bottom-right success toast. `/rbac/tenants` uses canonical Card, Field/Input, Badge and Resource states for the real searchable tenant list. `/rbac/tenants/[nhaXeId]` uses those same Resource patterns for tenant identity, role selection, default/override/effective permission summaries, editing and confirmation. `PlatformRbacScopeNavigation` now uses the Resource presentation on all three routes; its previous legacy branch and feature CSS were removed after consumer inventory. Global role scope, permission keys, confirmation copy, service calls and API requests remain unchanged. All three platform RBAC routes have user-approved presentation; the latest shared navigation refinement awaits review. See the migration ledger for verification limits.

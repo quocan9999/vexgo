@@ -1,22 +1,36 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { ArrowDown, ArrowUp, ArrowUpDown, CheckCircle2, Search } from 'lucide-react';
-import {
-  AdminDetailAction,
-} from '@/components/admin/admin-detail-action';
+import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react';
+import { toast } from 'sonner';
 import { AdminPageHeader } from '@/components/admin/admin-page-header';
-import { AdminPagination } from '@/components/admin/admin-pagination';
-import { AdminCreateAction, AdminRefreshAction } from '@/components/admin/admin-page-actions';
-import { AdminStatusBadge } from '@/components/admin/admin-status-badge';
-import { AdminTableSkeleton } from '@/components/admin/admin-table-skeleton';
+import {
+  ResourceCreateAction,
+  ResourceRefreshAction,
+  ResourceDetailAction,
+  ResourceStatusBadge,
+  ResourcePagination,
+  ResourceTableSkeleton,
+  ResourceState,
+  ResourceNotice,
+} from '@/components/admin/resource-ui';
 import {
   FilterToolbar,
   SearchInput,
   SelectFilter,
   type FilterOption,
-} from '@/components/data-filters/data-filters';
-import { Button } from '@/components/ui/button';
+} from '@/components/data-filters/resource-filters';
+import { Button } from '@/components/ui/action-button';
+import { Card } from '@/components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { useAdminPermissions } from '@/features/admin-auth/hooks/use-admin-permissions';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
 import {
@@ -33,7 +47,6 @@ import type {
 import { useFarePrices } from '../hooks/use-fare-prices';
 import { FarePriceDetailSheet } from './fare-price-detail-sheet';
 import { FarePriceFormDialog } from './fare-price-form-dialog';
-import styles from '../fare-prices.module.css';
 
 const STATUS_OPTIONS: FilterOption[] = [
   { value: 'HOAT_DONG', label: 'Hoạt động' },
@@ -54,8 +67,6 @@ const EFFECTIVE_STATE_LABELS: Record<FarePriceEffectiveState, string> = {
   TAM_NGUNG: 'Tạm ngưng',
 };
 
-type FarePriceNotice = { tone: 'success' | 'error'; message: string };
-
 function formatPrice(value: number) {
   return `${new Intl.NumberFormat('vi-VN').format(value)} ₫`;
 }
@@ -67,7 +78,9 @@ function formatDateOnly(value: string | null) {
     month: '2-digit',
     year: 'numeric',
     timeZone: 'UTC',
-  }).format(new Date(`${value}T00:00:00.000Z`));
+  })
+    .format(new Date(`${value}T00:00:00.000Z`))
+    .replaceAll('/', '-');
 }
 
 function statusLabel(status: FarePrice['status']) {
@@ -113,11 +126,15 @@ export function FarePricesManagement() {
     resetFilters,
     refresh,
   } = useFarePrices();
-  const [selectedFarePriceId, setSelectedFarePriceId] = useState<number | null>(null);
+  const [selectedFarePriceId, setSelectedFarePriceId] = useState<number | null>(
+    null,
+  );
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [notice, setNotice] = useState<FarePriceNotice | null>(null);
-  const [routeOptions, setRouteOptions] = useState<FarePriceOptionsState>({ status: 'loading' });
-  const [vehicleTypeOptions, setVehicleTypeOptions] = useState<FarePriceOptionsState>({ status: 'loading' });
+  const [routeOptions, setRouteOptions] = useState<FarePriceOptionsState>({
+    status: 'loading',
+  });
+  const [vehicleTypeOptions, setVehicleTypeOptions] =
+    useState<FarePriceOptionsState>({ status: 'loading' });
   const [routeOptionsRetry, setRouteOptionsRetry] = useState(0);
   const [vehicleTypeOptionsRetry, setVehicleTypeOptionsRetry] = useState(0);
 
@@ -167,24 +184,23 @@ export function FarePricesManagement() {
   }
 
   function openCreateDialog() {
-    setNotice(null);
     setCreateDialogOpen(true);
   }
 
   function handleFarePriceCreated(farePrice: FarePrice) {
     setCreateDialogOpen(false);
-    setNotice({ tone: 'success', message: `Đã tạo bảng giá vé ${farePrice.route.code}.` });
+    toast.success(`Đã tạo bảng giá vé ${farePrice.route.code}.`);
     refresh();
   }
 
   function handleFarePriceUpdated(farePrice: FarePrice) {
-    setNotice({ tone: 'success', message: `Đã cập nhật bảng giá vé ${farePrice.route.code}.` });
+    toast.success(`Đã cập nhật bảng giá vé ${farePrice.route.code}.`);
     refresh();
   }
 
   function handleFarePriceNotFound() {
     setSelectedFarePriceId(null);
-    setNotice({ tone: 'error', message: 'Bảng giá không còn tồn tại. Danh sách đã được làm mới.' });
+    toast.error('Bảng giá không còn tồn tại. Danh sách đã được làm mới.');
     refresh();
   }
 
@@ -199,273 +215,346 @@ export function FarePricesManagement() {
   }
 
   function sortButton(label: string, field: FarePriceSortKey) {
-    const selected = sortBy === field;
     return (
-      <button
+      <Button
+        className="-ml-3"
         aria-label={`Sắp xếp theo ${label}`}
-        className="admin-resource-sort-button"
+        size="sm"
+        variant="ghost"
         onClick={() => sortFarePrices(field)}
-        type="button"
       >
         {label}
-        {selected ? (
+        {sortBy === field ? (
           sortDirection === 'asc' ? (
-            <ArrowUp aria-hidden="true" size={14} />
+            <ArrowUp aria-hidden />
           ) : (
-            <ArrowDown aria-hidden="true" size={14} />
+            <ArrowDown aria-hidden />
           )
         ) : (
-          <ArrowUpDown aria-hidden="true" size={14} />
+          <ArrowUpDown aria-hidden />
         )}
-      </button>
+      </Button>
     );
   }
-
-  function tableHeader(label: string, field?: FarePriceSortKey) {
-    const selected = field !== undefined && sortBy === field;
+  function fareStatus(item: FarePrice) {
     return (
-      <th
-        aria-sort={
-          selected
-            ? sortDirection === 'asc'
-              ? 'ascending'
-              : 'descending'
-            : 'none'
-        }
-        scope="col"
-      >
-        {field ? sortButton(label, field) : label}
-      </th>
+      <ResourceStatusBadge tone={statusTone(item.status)}>
+        {statusLabel(item.status)}
+      </ResourceStatusBadge>
     );
   }
-
-  function fareStatus(farePrice: FarePrice) {
+  function effectiveStateBadge(item: FarePrice) {
     return (
-      <AdminStatusBadge tone={statusTone(farePrice.status)}>
-        {statusLabel(farePrice.status)}
-      </AdminStatusBadge>
+      <ResourceStatusBadge tone={stateTone(item.effectiveState)}>
+        {EFFECTIVE_STATE_LABELS[item.effectiveState]}
+      </ResourceStatusBadge>
     );
   }
-
-  function effectiveStateBadge(farePrice: FarePrice) {
-    return (
-      <AdminStatusBadge tone={stateTone(farePrice.effectiveState)}>
-        {EFFECTIVE_STATE_LABELS[farePrice.effectiveState]}
-      </AdminStatusBadge>
-    );
-  }
-
   return (
     <SuperAdminLayout activeSection="fare-prices">
-      <div className="admin-page-content">
-        <AdminPageHeader
-          actions={
-            <div className="page-intro-actions">
-              {canCreate && <AdminCreateAction label="Thêm bảng giá" onClick={openCreateDialog} />}
-              <AdminRefreshAction loading={loading} onClick={refresh} />
-            </div>
-          }
-          eyebrow="QUẢN LÝ VẬN HÀNH"
-          title="Quản lý bảng giá vé"
-          titleId="fare-prices-title"
-        />
-        <p className={styles.description}>
-          Theo dõi giá vé theo tuyến, loại xe và thời gian hiệu lực.
-        </p>
-        <section
-          aria-busy={loading}
-          aria-labelledby="fare-prices-title"
-          className="panel admin-resource-panel"
-        >
-          {notice && (
-            <p
-              className={notice.tone === 'success' ? styles.successNotice : styles.errorNotice}
-              role={notice.tone === 'success' ? 'status' : 'alert'}
-            >
-              {notice.tone === 'success' && <CheckCircle2 aria-hidden="true" size={16} />}
-              <span>{notice.message}</span>
-            </p>
-          )}
-          <FilterToolbar
-            density="compact"
-            totalItems={error ? null : farePricePage?.meta.totalItems ?? null}
-          >
-            <SearchInput
-              label="Tìm bảng giá"
-              onChange={updateSearch}
-              placeholder="Tìm theo tuyến hoặc loại xe..."
-              value={searchInput}
-            />
-            {routeOptions.status === 'success' && (
-              <SelectFilter
-                allLabel="Tất cả tuyến xe"
-                label="Lọc theo tuyến xe"
-                onChange={updateRoute}
-                options={optionFilters(routeOptions.options)}
-                value={routeId}
-              />
-            )}
-            {vehicleTypeOptions.status === 'success' && (
-              <SelectFilter
-                allLabel="Tất cả loại xe"
-                label="Lọc theo loại xe"
-                onChange={updateVehicleType}
-                options={optionFilters(vehicleTypeOptions.options)}
-                value={vehicleTypeId}
-              />
-            )}
-            <SelectFilter
-              allLabel="Tất cả trạng thái"
-              label="Lọc theo trạng thái"
-              onChange={updateStatus}
-              options={STATUS_OPTIONS}
-              value={status}
-            />
-            <SelectFilter
-              allLabel="Tất cả hiệu lực"
-              label="Lọc theo hiệu lực"
-              onChange={updateEffectiveState}
-              options={EFFECTIVE_STATE_OPTIONS}
-              value={effectiveState}
-            />
-          </FilterToolbar>
-
-          {(routeOptions.status === 'loading' || vehicleTypeOptions.status === 'loading') && (
-            <p className={styles.optionState} role="status">
-              Đang tải bộ lọc tuyến xe và loại xe…
-            </p>
-          )}
-          {(routeOptions.status === 'error' || vehicleTypeOptions.status === 'error') && (
-            <div className={styles.optionError} role="alert">
-              <span>Không thể tải bộ lọc tuyến xe hoặc loại xe.</span>
-              {routeOptions.status === 'error' && (
-                <Button
-                  onClick={retryRouteOptions}
-                  type="button"
-                  variant="secondary"
-                >
-                  Thử tải lại tuyến xe
-                </Button>
-              )}
-              {vehicleTypeOptions.status === 'error' && (
-                <Button
-                  onClick={retryVehicleTypeOptions}
-                  type="button"
-                  variant="secondary"
-                >
-                  Thử tải lại loại xe
-                </Button>
-              )}
-            </div>
-          )}
-
-          {loading && !farePricePage && (
-            <AdminTableSkeleton resourceLabel="bảng giá" />
-          )}
-          {error && (
-            <div className={styles.listError} role="alert">
-              <p>{error}</p>
-              <Button onClick={refresh} type="button" variant="secondary">
-                Thử lại
-              </Button>
-            </div>
-          )}
-          {!loading && !error && farePricePage && items.length === 0 && (
-            <div className={styles.emptyState}>
-              <span className={styles.emptyIcon}>
-                <Search aria-hidden="true" size={21} />
-              </span>
-              <h2>{hasFilters ? 'Không tìm thấy bảng giá phù hợp với bộ lọc.' : 'Chưa có bảng giá nào.'}</h2>
-              {hasFilters && (
-                <Button onClick={resetFilters} type="button" variant="secondary">
-                  Xóa bộ lọc
-                </Button>
-              )}
-            </div>
-          )}
-          {farePricePage && items.length > 0 && (
-            <>
-              <div
-                aria-busy={loading}
-                className={`admin-resource-table-wrap${loading ? ' is-loading' : ''}`}
-              >
-                <table className="admin-resource-table">
-                  <thead>
-                    <tr>
-                      {tableHeader('Tuyến')}
-                      {tableHeader('Loại xe')}
-                      {tableHeader('Giá niêm yết', 'listedPrice')}
-                      {tableHeader('Hiệu lực từ', 'validFrom')}
-                      {tableHeader('Hiệu lực đến', 'validTo')}
-                      {tableHeader('Trạng thái', 'status')}
-                      {tableHeader('Hiệu lực hiện tại')}
-                      {tableHeader('Thao tác')}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {items.map((farePrice) => (
-                      <tr key={farePrice.farePriceId}>
-                        <th scope="row">
-                          <span className={styles.routeEndpoints}>
-                            {farePrice.route.origin} → {farePrice.route.destination}
-                          </span>
-                          <small className={`${styles.routeCode} admin-data-mono`}>
-                            {farePrice.route.code}
-                          </small>
-                        </th>
-                        <td>{farePrice.vehicleType.name}</td>
-                        <td>{formatPrice(farePrice.listedPrice)}</td>
-                        <td>{formatDateOnly(farePrice.validFrom)}</td>
-                        <td>{formatDateOnly(farePrice.validTo)}</td>
-                        <td>{fareStatus(farePrice)}</td>
-                        <td>{effectiveStateBadge(farePrice)}</td>
-                        <td>
-                          <AdminDetailAction
-                            onClick={() => openDetails(farePrice)}
-                            resourceName={farePrice.route.code}
-                          />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+      <div className="admin-ui admin-page-content grid gap-[var(--admin-space-section-gap)]">
+        <div>
+          <AdminPageHeader
+            eyebrow="QUẢN LÝ VẬN HÀNH"
+            title="Quản lý bảng giá vé"
+            titleId="fare-prices-title"
+            actions={
+              <div className="flex flex-wrap items-center gap-2">
+                {canCreate && (
+                  <ResourceCreateAction
+                    label="Thêm bảng giá"
+                    onClick={openCreateDialog}
+                  />
+                )}
+                <ResourceRefreshAction loading={loading} onClick={refresh} />
               </div>
-              <ul aria-label="Danh sách bảng giá dạng thẻ" className={styles.mobileCards}>
-                {items.map((farePrice) => (
-                  <li className={styles.mobileCard} key={farePrice.farePriceId}>
-                    <div className={styles.mobileCardHeader}>
-                      <div>
-                        <h2>{farePrice.route.origin} → {farePrice.route.destination}</h2>
-                        <span className={`${styles.routeCode} admin-data-mono`}>
-                          {farePrice.route.code}
-                        </span>
-                      </div>
-                      <strong>{formatPrice(farePrice.listedPrice)}</strong>
-                    </div>
-                    <dl className={styles.mobileCardDetails}>
-                      <div><dt>Loại xe</dt><dd>{farePrice.vehicleType.name}</dd></div>
-                      <div><dt>Hiệu lực</dt><dd>{formatDateOnly(farePrice.validFrom)} – {formatDateOnly(farePrice.validTo)}</dd></div>
-                      <div><dt>Trạng thái</dt><dd>{fareStatus(farePrice)}</dd></div>
-                      <div><dt>Hiệu lực hiện tại</dt><dd>{effectiveStateBadge(farePrice)}</dd></div>
-                    </dl>
-                    <AdminDetailAction
-                      onClick={() => openDetails(farePrice)}
-                      resourceName={farePrice.route.code}
-                    />
-                  </li>
-                ))}
-              </ul>
-              <AdminPagination
-                currentPage={farePricePage.meta.page}
-                disabled={loading}
-                onPageChange={changePage}
-                pageSize={farePricePage.meta.pageSize}
-                summaryLabel="bảng giá"
-                totalItems={farePricePage.meta.totalItems}
-                totalPages={farePricePage.meta.totalPages}
+            }
+          />
+          <p className="mt-2 text-[13px] text-muted-foreground">
+            Theo dõi giá vé theo tuyến, loại xe và thời gian hiệu lực.
+          </p>
+        </div>
+        <section aria-busy={loading} aria-labelledby="fare-prices-title">
+          <Card className="gap-0 py-0 ring-0">
+            <FilterToolbar>
+              <SearchInput
+                label="Tìm bảng giá"
+                value={searchInput}
+                onChange={updateSearch}
+                placeholder="Tìm theo tuyến hoặc loại xe…"
               />
-            </>
-          )}
+              {routeOptions.status === 'success' && (
+                <SelectFilter
+                  label="Tuyến xe"
+                  allLabel="Tất cả tuyến xe"
+                  value={routeId}
+                  options={optionFilters(routeOptions.options)}
+                  onChange={updateRoute}
+                />
+              )}
+              {vehicleTypeOptions.status === 'success' && (
+                <SelectFilter
+                  label="Loại xe"
+                  allLabel="Tất cả loại xe"
+                  value={vehicleTypeId}
+                  options={optionFilters(vehicleTypeOptions.options)}
+                  onChange={updateVehicleType}
+                />
+              )}
+              <SelectFilter
+                label="Trạng thái"
+                allLabel="Tất cả trạng thái"
+                value={status}
+                options={STATUS_OPTIONS}
+                onChange={updateStatus}
+              />
+              <SelectFilter
+                label="Hiệu lực"
+                allLabel="Tất cả hiệu lực"
+                value={effectiveState}
+                options={EFFECTIVE_STATE_OPTIONS}
+                onChange={updateEffectiveState}
+              />
+            </FilterToolbar>
+            {(routeOptions.status === 'loading' ||
+              vehicleTypeOptions.status === 'loading') && (
+              <p
+                className="px-5 py-3 text-xs text-muted-foreground"
+                role="status"
+              >
+                Đang tải bộ lọc tuyến xe và loại xe…
+              </p>
+            )}
+            {(routeOptions.status === 'error' ||
+              vehicleTypeOptions.status === 'error') && (
+              <div className="p-4">
+                <ResourceNotice kind="error">
+                  <p>Không thể tải bộ lọc tuyến xe hoặc loại xe.</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {routeOptions.status === 'error' && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={retryRouteOptions}
+                      >
+                        Thử tải lại tuyến xe
+                      </Button>
+                    )}
+                    {vehicleTypeOptions.status === 'error' && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={retryVehicleTypeOptions}
+                      >
+                        Thử tải lại loại xe
+                      </Button>
+                    )}
+                  </div>
+                </ResourceNotice>
+              </div>
+            )}
+            <div className="border-b p-4 md:hidden">
+              <div className="flex items-end gap-3">
+                <SelectFilter
+                  label="Sắp xếp theo"
+                  allLabel="Giá niêm yết"
+                  value={sortBy === 'listedPrice' ? '' : sortBy}
+                  options={[
+                    { value: 'validFrom', label: 'Hiệu lực từ' },
+                    { value: 'validTo', label: 'Hiệu lực đến' },
+                    { value: 'status', label: 'Trạng thái' },
+                  ]}
+                  onChange={(value) => {
+                    const field = (value || 'listedPrice') as FarePriceSortKey;
+                    if (field !== sortBy) sortFarePrices(field);
+                  }}
+                />
+                <Button
+                  variant="outline"
+                  aria-label={`Đổi thứ tự sắp xếp, hiện tại ${sortDirection === 'asc' ? 'tăng dần' : 'giảm dần'}`}
+                  onClick={() => sortFarePrices(sortBy)}
+                >
+                  {sortDirection === 'asc' ? (
+                    <ArrowUp aria-hidden />
+                  ) : (
+                    <ArrowDown aria-hidden />
+                  )}
+                  {sortDirection === 'asc' ? 'Tăng dần' : 'Giảm dần'}
+                </Button>
+              </div>
+            </div>
+            {loading && !farePricePage && (
+              <ResourceTableSkeleton resourceLabel="bảng giá" />
+            )}
+            {error && (
+              <ResourceState error>
+                <p>{error}</p>
+                <Button variant="outline" onClick={refresh}>
+                  Thử lại
+                </Button>
+              </ResourceState>
+            )}
+            {!loading && !error && farePricePage && items.length === 0 && (
+              <ResourceState>
+                <p>
+                  {hasFilters
+                    ? 'Không tìm thấy bảng giá phù hợp với bộ lọc.'
+                    : 'Chưa có bảng giá nào.'}
+                </p>
+                {hasFilters && (
+                  <Button variant="outline" onClick={resetFilters}>
+                    Xóa bộ lọc
+                  </Button>
+                )}
+              </ResourceState>
+            )}
+            {!error && farePricePage && (
+              <>
+                {items.length > 0 && (
+                  <>
+                    <div className="hidden md:block">
+                      <Table className="min-w-[1080px]">
+                        <TableCaption className="sr-only">
+                          Danh sách bảng giá vé
+                        </TableCaption>
+                        <TableHeader>
+                          <TableRow>
+                            {(
+                              [
+                                { key: null, label: 'Tuyến' },
+                                { key: null, label: 'Loại xe' },
+                                { key: 'listedPrice', label: 'Giá niêm yết' },
+                                { key: 'validFrom', label: 'Hiệu lực từ' },
+                                { key: 'validTo', label: 'Hiệu lực đến' },
+                                { key: 'status', label: 'Trạng thái' },
+                                { key: null, label: 'Hiệu lực hiện tại' },
+                              ] as const
+                            ).map((column) => (
+                              <TableHead
+                                key={column.label}
+                                scope="col"
+                                aria-sort={
+                                  column.key
+                                    ? sortBy === column.key
+                                      ? sortDirection === 'asc'
+                                        ? 'ascending'
+                                        : 'descending'
+                                      : 'none'
+                                    : undefined
+                                }
+                              >
+                                {column.key
+                                  ? sortButton(column.label, column.key)
+                                  : column.label}
+                              </TableHead>
+                            ))}
+                            <TableHead scope="col">
+                              <span className="sr-only">Thao tác</span>
+                            </TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {items.map((item) => (
+                            <TableRow key={item.farePriceId}>
+                              <TableHead
+                                scope="row"
+                                className="min-w-44 max-w-56 whitespace-normal bg-transparent py-3 text-[13px]"
+                              >
+                                <span className="block break-words">
+                                  {item.route.origin} → {item.route.destination}
+                                </span>
+                                <span className="admin-data-mono mt-1 block text-xs font-normal text-muted-foreground">
+                                  {item.route.code}
+                                </span>
+                              </TableHead>
+                              <TableCell>{item.vehicleType.name}</TableCell>
+                              <TableCell className="font-semibold tabular-nums">
+                                {formatPrice(item.listedPrice)}
+                              </TableCell>
+                              <TableCell>
+                                {formatDateOnly(item.validFrom)}
+                              </TableCell>
+                              <TableCell>
+                                {formatDateOnly(item.validTo)}
+                              </TableCell>
+                              <TableCell>{fareStatus(item)}</TableCell>
+                              <TableCell>{effectiveStateBadge(item)}</TableCell>
+                              <TableCell>
+                                <ResourceDetailAction
+                                  resourceName={item.route.code}
+                                  onClick={() => openDetails(item)}
+                                />
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                    <div
+                      className="grid gap-4 p-4 md:hidden"
+                      aria-label="Danh sách bảng giá dạng thẻ"
+                    >
+                      {items.map((item) => (
+                        <Card
+                          key={item.farePriceId}
+                          className="gap-4 p-4 ring-0"
+                        >
+                          <div>
+                            <h2 className="break-words text-base font-semibold">
+                              {item.route.origin} → {item.route.destination}
+                            </h2>
+                            <p className="admin-data-mono mt-1 text-xs text-muted-foreground">
+                              {item.route.code}
+                            </p>
+                          </div>
+                          <p className="text-xl font-semibold tabular-nums">
+                            {formatPrice(item.listedPrice)}
+                          </p>
+                          <dl className="grid grid-cols-2 gap-3 text-[13px] [&_dt]:mb-1 [&_dt]:text-xs [&_dt]:text-muted-foreground">
+                            <div className="col-span-2">
+                              <dt>Loại xe</dt>
+                              <dd>{item.vehicleType.name}</dd>
+                            </div>
+                            <div>
+                              <dt>Hiệu lực từ</dt>
+                              <dd>{formatDateOnly(item.validFrom)}</dd>
+                            </div>
+                            <div>
+                              <dt>Hiệu lực đến</dt>
+                              <dd>{formatDateOnly(item.validTo)}</dd>
+                            </div>
+                            <div>
+                              <dt>Trạng thái</dt>
+                              <dd>{fareStatus(item)}</dd>
+                            </div>
+                            <div>
+                              <dt>Hiệu lực hiện tại</dt>
+                              <dd>{effectiveStateBadge(item)}</dd>
+                            </div>
+                          </dl>
+                          <div className="flex justify-end border-t pt-3">
+                            <ResourceDetailAction
+                              resourceName={item.route.code}
+                              onClick={() => openDetails(item)}
+                            />
+                          </div>
+                        </Card>
+                      ))}
+                    </div>
+                  </>
+                )}
+                <ResourcePagination
+                  currentPage={farePricePage.meta.page}
+                  disabled={loading}
+                  onPageChange={changePage}
+                  pageSize={farePricePage.meta.pageSize}
+                  summaryLabel="bảng giá"
+                  totalItems={farePricePage.meta.totalItems}
+                  totalPages={farePricePage.meta.totalPages}
+                />
+              </>
+            )}
+          </Card>
         </section>
       </div>
       {selectedFarePriceId !== null && (

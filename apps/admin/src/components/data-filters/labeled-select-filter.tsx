@@ -2,10 +2,19 @@
 
 import { Popover } from '@base-ui/react/popover';
 import { ArrowDown, ArrowUp, ChevronDown } from 'lucide-react';
-import { useState } from 'react';
+import { useId, useState } from 'react';
+import { Button } from '@/components/ui/action-button';
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from '@/components/ui/select';
 import styles from './data-filters.module.css';
 
 type LabeledSelectFilterProps = {
+  appearance?: 'legacy' | 'resource';
   label: string;
   accessibleLabel?: string;
   value: string;
@@ -16,6 +25,7 @@ type LabeledSelectFilterProps = {
 };
 
 export function LabeledSelectFilter({
+  appearance = 'legacy',
   label,
   accessibleLabel,
   value,
@@ -24,9 +34,57 @@ export function LabeledSelectFilter({
   disabled,
   sortDirection,
 }: LabeledSelectFilterProps) {
+  const id = useId();
   const [open, setOpen] = useState(false);
   const DirectionIcon = sortDirection === 'asc' ? ArrowUp : ArrowDown;
   const directionLabel = sortDirection === 'asc' ? 'Tăng dần' : 'Giảm dần';
+
+  if (appearance === 'resource')
+    return (
+      <div className="min-w-0 flex-[1_1_140px]">
+        <label htmlFor={id} className="mb-2 block text-[13px] font-semibold">
+          {label}
+        </label>
+        <div className="flex items-center gap-2">
+          <Select
+            value={value}
+            onValueChange={(next) => {
+              if (next !== null) onChange(String(next));
+            }}
+          >
+            <SelectTrigger
+              id={id}
+              disabled={disabled}
+              aria-label={accessibleLabel ?? label}
+              className="min-w-0 flex-1"
+            >
+              <SelectValue>
+                {options.find((option) => option.value === value)?.label ??
+                  value}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {options.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {sortDirection && (
+            <Button
+              size="icon"
+              variant="outline"
+              disabled={disabled}
+              aria-label={`Đổi chiều sắp xếp, hiện tại ${directionLabel.toLocaleLowerCase()}`}
+              onClick={() => onChange(value)}
+            >
+              <DirectionIcon aria-hidden />
+            </Button>
+          )}
+        </div>
+      </div>
+    );
 
   if (sortDirection) {
     return (

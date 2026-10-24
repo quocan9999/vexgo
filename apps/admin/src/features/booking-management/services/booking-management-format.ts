@@ -1,10 +1,15 @@
 export function formatTimestamp(value: string | null | undefined) {
   if (!value || !Number.isFinite(Date.parse(value))) return '—';
   return new Intl.DateTimeFormat('vi-VN', {
-    dateStyle: 'short',
-    timeStyle: 'short',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
     timeZone: 'Asia/Ho_Chi_Minh',
-  }).format(new Date(value));
+  })
+    .format(new Date(value))
+    .replaceAll('/', '-');
 }
 
 export function formatVnd(value: string | null | undefined) {
@@ -18,6 +23,7 @@ export function formatVnd(value: string | null | undefined) {
 export function statusLabel(status: string) {
   const known: Record<string, string> = {
     CHO_THANH_TOAN: 'Chờ thanh toán',
+    CHO_THAN_TOAN: 'Chờ thanh toán',
     DA_THANH_TOAN: 'Đã thanh toán',
     HOAN_THANH: 'Hoàn thành',
     DA_HUY: 'Đã hủy',

@@ -1,10 +1,22 @@
 'use client';
 
-import { LoaderCircle, X } from 'lucide-react';
+import { LoaderCircle } from 'lucide-react';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { AdminConfirmDialog } from '@/components/admin/admin-confirm-dialog';
-import { AdminFormDialog } from '@/components/admin/admin-form-dialog';
-import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
+import {
+  ResourceConfirmation,
+  ResourceNotice,
+  ResourceSheet,
+  ResourceState,
+} from '@/components/admin/resource-ui';
+import { Button } from '@/components/ui/action-button';
+import {
+  FieldLabel,
+  FieldLegend,
+  FieldSet,
+  Field,
+} from '@/components/ui/field';
+import { Checkbox } from '@/components/ui/checkbox';
 import { getDefaultRolePermissions } from '@/features/platform-rbac/services/platform-rbac-service';
 import {
   TENANT_RBAC_ROLE_NAMES,
@@ -16,7 +28,6 @@ import {
 } from '../services/admin-account-service';
 import type { AdminAccount } from '../types/admin-account';
 import type { AdminRbacRole } from '@/features/platform-rbac/types/platform-rbac';
-import styles from './admin-accounts-management.module.css';
 
 type TenantRoleOption = {
   roleName: TenantRbacRoleName;
@@ -73,7 +84,6 @@ export function AdminAccountRolesDialog({
   onClose: () => void;
   onSaved: (account: AdminAccount) => void;
 }) {
-  const dialogRef = useRef<HTMLDialogElement>(null);
   const submittingRef = useRef(false);
   const [roles, setRoles] = useState<RoleOptionsState>({ status: 'loading' });
   const [selectedRoleNames, setSelectedRoleNames] = useState<
@@ -149,7 +159,11 @@ export function AdminAccountRolesDialog({
         account.accountId,
         roleNames,
       );
-      dialogRef.current?.close();
+      toast.success(
+        roleNames.length === 0
+          ? 'Đã thu hồi toàn bộ vai trò tài khoản.'
+          : 'Đã cập nhật vai trò tài khoản.',
+      );
       onSaved(updatedAccount);
     } catch (requestError: unknown) {
       setError(requestErrorMessage(requestError));
@@ -173,68 +187,55 @@ export function AdminAccountRolesDialog({
 
   return (
     <>
-      <AdminFormDialog
-        ariaBusy={submitting || roles.status === 'loading'}
-        ariaDescribedBy="admin-account-roles-description"
-        ariaLabelledBy="admin-account-roles-title"
-        dialogRef={dialogRef}
-        onClose={onClose}
+      <ResourceSheet
+        busy={submitting || roles.status === 'loading'}
+        description={`Chọn các vai trò nhà xe từ danh mục hiện tại cho ${account.fullName}.`}
         preventDismiss={submitting}
+        title="Gán vai trò tài khoản"
+        onClose={onClose}
       >
-        <>
-          <div className="admin-dialog-header">
-            <div className="admin-dialog-header__copy">
-              <p className="eyebrow">QUẢN LÝ TÀI KHOẢN ADMIN</p>
-              <h2 id="admin-account-roles-title">Gán vai trò tài khoản</h2>
-              <p id="admin-account-roles-description">
-                Chọn các vai trò nhà xe từ danh mục hiện tại cho{' '}
-                <strong>{account.fullName}</strong>.
-              </p>
-            </div>
-            <Button
-              aria-label="Đóng quản lý vai trò"
-              className={`${styles.roleDialogClose} icon-button`}
-              disabled={submitting}
-              onClick={() => dialogRef.current?.close()}
-              type="button"
-              variant="secondary"
-            >
-              <X aria-hidden="true" size={19} />
-            </Button>
-          </div>
-
-          <form className="admin-crud-form" noValidate onSubmit={handleSubmit}>
-            {error && (
-              <p className="admin-crud-form-error" role="alert">
-                {error}
-              </p>
+          <form className="flex min-h-full flex-col gap-5" noValidate onSubmit={handleSubmit}>
+            {error && <ResourceNotice kind="error">{error}</ResourceNotice>}
+            {roles.status === 'loading' && (
+              <ResourceState loading>Đang tải danh mục vai trò…</ResourceState>
             )}
-            <fieldset className={styles.roleOptions} disabled={submitting}>
-              <legend>Vai trò nhà xe</legend>
-              {roles.status === 'loading' && (
-                <p aria-live="polite" role="status">
-                  Đang tải danh mục vai trò…
-                </p>
-              )}
-              {roles.status === 'success' &&
-                roles.roles.map((role) => (
-                  <label className={styles.roleOption} key={role.roleName}>
-                    <input
-                      checked={selectedRoleNames.includes(role.roleName)}
-                      onChange={() => toggleRole(role.roleName)}
-                      type="checkbox"
-                      value={role.roleName}
-                    />
-                    <span>{role.label}</span>
-                  </label>
-                ))}
-              {roles.status === 'success' && roles.roles.length === 0 && (
-                <p className="admin-crud-form-error" role="alert">
-                  Danh mục hiện không có vai trò nhà xe hợp lệ.
-                </p>
-              )}
+            <FieldSet
+              className="gap-3"
+              disabled={submitting}
+            >
+              <FieldLegend>Vai trò nhà xe</FieldLegend>
+              <div className="grid gap-2">
+                {roles.status === 'success' &&
+                  roles.roles.map((role) => {
+                    const checkboxId = `admin-account-role-${account.accountId}-${role.roleName}`;
+                    return (
+                      <Field
+                        className="items-center rounded-lg border p-3"
+                        key={role.roleName}
+                        orientation="horizontal"
+                      >
+                        <Checkbox
+                          checked={selectedRoleNames.includes(role.roleName)}
+                          id={checkboxId}
+                          onCheckedChange={() => toggleRole(role.roleName)}
+                          value={role.roleName}
+                        />
+                        <FieldLabel
+                          className="cursor-pointer"
+                          htmlFor={checkboxId}
+                        >
+                          {role.label}
+                        </FieldLabel>
+                      </Field>
+                    );
+                  })}
+                {roles.status === 'success' && roles.roles.length === 0 && (
+                  <ResourceNotice kind="error">
+                    Danh mục hiện không có vai trò nhà xe hợp lệ.
+                  </ResourceNotice>
+                )}
               {roles.status === 'error' && (
-                <div className="admin-crud-form-error" role="alert">
+                <ResourceNotice kind="error">
                   <p>{roles.message}</p>
                   <Button
                     onClick={() => {
@@ -242,22 +243,21 @@ export function AdminAccountRolesDialog({
                       setRetryCount((count) => count + 1);
                     }}
                     type="button"
-                    variant="secondary"
+                    variant="outline"
                   >
                     Tải lại danh mục
                   </Button>
-                </div>
+                </ResourceNotice>
               )}
-            </fieldset>
+              </div>
+            </FieldSet>
 
-            <div
-              className={`${styles.roleDialogActions} admin-crud-form-actions`}
-            >
+            <div className="sticky bottom-0 -mx-4 mt-auto flex justify-end gap-3 border-t bg-popover px-4 py-4 sm:-mx-6 sm:px-6">
               <Button
                 disabled={submitting}
-                onClick={() => dialogRef.current?.close()}
+                onClick={onClose}
                 type="button"
-                variant="secondary"
+                variant="outline"
               >
                 Hủy
               </Button>
@@ -265,7 +265,7 @@ export function AdminAccountRolesDialog({
                 {submitting && (
                   <LoaderCircle
                     aria-hidden="true"
-                    className="admin-crud-form-spinner"
+                    className="motion-safe:animate-spin"
                     size={16}
                   />
                 )}
@@ -273,60 +273,36 @@ export function AdminAccountRolesDialog({
               </Button>
             </div>
           </form>
-        </>
-      </AdminFormDialog>
+      </ResourceSheet>
 
       {revokeConfirmationOpen && (
-        <AdminConfirmDialog
-          ariaBusy={submitting}
-          ariaDescribedBy="admin-account-revoke-roles-description"
-          ariaLabelledBy="admin-account-revoke-roles-title"
+        <ResourceConfirmation
+          busy={submitting}
           onClose={() => {
             if (!submittingRef.current) setRevokeConfirmationOpen(false);
           }}
-          preventDismiss={submitting}
+          title="Thu hồi toàn bộ vai trò?"
+          description="Sau thao tác này, tài khoản sẽ không còn quyền quản trị và có thể không đăng nhập được vào Admin cho đến khi được gán lại vai trò."
         >
-          <>
-            <h2 id="admin-account-revoke-roles-title">
-              Thu hồi toàn bộ vai trò?
-            </h2>
-            <p id="admin-account-revoke-roles-description">
-              Sau thao tác này, tài khoản sẽ không còn quyền quản trị và có thể
-              không đăng nhập được vào Admin cho đến khi được gán lại vai trò.
-            </p>
             {error && (
-              <p className="admin-confirm-dialog__error" role="alert">
-                {error}
-              </p>
+              <ResourceNotice kind="error">{error}</ResourceNotice>
             )}
-            <div
-              className={`${styles.roleDialogActions} admin-confirm-dialog__actions`}
+            <Button
+              aria-busy={submitting}
+              disabled={submitting}
+              onClick={() => void saveRoles([])}
+              type="button"
             >
-              <Button
-                disabled={submitting}
-                onClick={() => setRevokeConfirmationOpen(false)}
-                type="button"
-                variant="secondary"
-              >
-                Hủy
-              </Button>
-              <Button
-                disabled={submitting}
-                onClick={() => void saveRoles([])}
-                type="button"
-              >
                 {submitting && (
                   <LoaderCircle
                     aria-hidden="true"
-                    className="admin-crud-form-spinner"
+                    className="motion-safe:animate-spin"
                     size={15}
                   />
                 )}
                 {submitting ? 'Đang thu hồi…' : 'Thu hồi vai trò'}
-              </Button>
-            </div>
-          </>
-        </AdminConfirmDialog>
+            </Button>
+        </ResourceConfirmation>
       )}
     </>
   );

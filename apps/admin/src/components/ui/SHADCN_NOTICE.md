@@ -2,7 +2,7 @@
 
 The base-nova components in this directory were adapted from the official shadcn/ui registry on 23 October 2026. VexGo changes include theme scoping, sizes, labels, icons and overlay behavior.
 
-Source: https://ui.shadcn.com/r/styles/base-nova/ (components: button, input, select, sheet, alert-dialog, table, badge, field, label, separator, skeleton, alert, card).
+Source: https://ui.shadcn.com/r/styles/base-nova/ (components: button, input, textarea, select, sheet, alert-dialog, table, tabs, checkbox, radio-group, badge, field, label, separator, skeleton, alert, card).
 
 MIT License
 

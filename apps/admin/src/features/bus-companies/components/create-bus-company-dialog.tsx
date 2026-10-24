@@ -1,9 +1,18 @@
 'use client';
 
-import { LoaderCircle, X } from 'lucide-react';
+import { LoaderCircle } from 'lucide-react';
 import { useRef, useState, type FormEvent } from 'react';
-import { AdminFormDialog } from '@/components/admin/admin-form-dialog';
-import { Button } from '@/components/ui/button';
+import { ResourceNotice, ResourceSheet } from '@/components/admin/resource-ui';
+import { Button } from '@/components/ui/action-button';
+import { Field, FieldError, FieldLabel } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   BusCompanyApiError,
   createBusCompany,
@@ -54,7 +63,6 @@ export function CreateBusCompanyDialog({
   onClose,
   onCreated,
 }: CreateBusCompanyDialogProps) {
-  const dialogRef = useRef<HTMLDialogElement>(null);
   const submittingRef = useRef(false);
   const [values, setValues] = useState<FormValues>(INITIAL_VALUES);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
@@ -62,7 +70,7 @@ export function CreateBusCompanyDialog({
   const [submitting, setSubmitting] = useState(false);
 
   function closeDialog() {
-    if (!submittingRef.current) dialogRef.current?.close();
+    if (!submittingRef.current) onClose();
   }
 
   function updateField(field: FormField, value: string) {
@@ -142,178 +150,151 @@ export function CreateBusCompanyDialog({
   }
 
   return (
-    <AdminFormDialog
-      ariaLabelledBy="create-company-title"
-      dialogRef={dialogRef}
-      onClose={onClose}
+    <ResourceSheet
+      title="Thêm nhà xe"
+      description="Nhập thông tin cơ bản để thêm đối tác vào hệ thống."
+      busy={submitting}
       preventDismiss={submitting}
+      onClose={onClose}
     >
-      <>
-        <div className="admin-dialog-header">
-          <div className="admin-dialog-header__copy">
-            <p className="eyebrow">ĐỐI TÁC NỀN TẢNG</p>
-            <h2 id="create-company-title">Thêm nhà xe</h2>
-          </div>
-          <button
-            aria-label="Đóng biểu mẫu thêm nhà xe"
-            className="icon-button"
+      <form
+        className="flex min-h-full flex-col gap-5"
+        noValidate
+        onSubmit={handleSubmit}
+      >
+
+        {formError && (
+          <ResourceNotice kind="error">{formError}</ResourceNotice>
+        )}
+
+        <Field data-invalid={Boolean(fieldErrors.code)}>
+          <FieldLabel htmlFor="create-company-code">Mã nhà xe</FieldLabel>
+          <Input
+            autoComplete="off"
+            className="admin-data-mono"
+            id="create-company-code"
+            maxLength={50}
+            onChange={(event) => updateField('code', event.target.value)}
+            placeholder="Ví dụ: NX001"
+            required
+            type="text"
+            value={values.code}
+            aria-invalid={Boolean(fieldErrors.code)}
+            aria-describedby={
+              fieldErrors.code ? 'create-company-code-error' : undefined
+            }
+          />
+          <FieldError id="create-company-code-error">
+            {fieldErrors.code}
+          </FieldError>
+        </Field>
+
+        <Field data-invalid={Boolean(fieldErrors.name)}>
+          <FieldLabel htmlFor="create-company-name">Tên nhà xe</FieldLabel>
+          <Input
+            autoComplete="organization"
+            id="create-company-name"
+            maxLength={150}
+            onChange={(event) => updateField('name', event.target.value)}
+            placeholder="Nhập tên nhà xe"
+            required
+            type="text"
+            value={values.name}
+            aria-invalid={Boolean(fieldErrors.name)}
+            aria-describedby={
+              fieldErrors.name ? 'create-company-name-error' : undefined
+            }
+          />
+          <FieldError id="create-company-name-error">
+            {fieldErrors.name}
+          </FieldError>
+        </Field>
+
+        <Field data-invalid={Boolean(fieldErrors.contactInfo)}>
+          <FieldLabel htmlFor="create-company-contact">
+            Thông tin liên hệ{' '}
+            <span className="text-xs font-normal text-muted-foreground">
+              (Tùy chọn)
+            </span>
+          </FieldLabel>
+          <Input
+            autoComplete="tel"
+            id="create-company-contact"
+            onChange={(event) =>
+              updateField('contactInfo', event.target.value)
+            }
+            placeholder="Số điện thoại hoặc thông tin liên hệ"
+            type="text"
+            value={values.contactInfo}
+            aria-invalid={Boolean(fieldErrors.contactInfo)}
+            aria-describedby={
+              fieldErrors.contactInfo
+                ? 'create-company-contact-error'
+                : undefined
+            }
+          />
+          <FieldError id="create-company-contact-error">
+            {fieldErrors.contactInfo}
+          </FieldError>
+        </Field>
+
+        <Field data-invalid={Boolean(fieldErrors.status)}>
+          <FieldLabel htmlFor="create-company-status-trigger">
+            Trạng thái
+          </FieldLabel>
+          <Select
+            onValueChange={(value) => {
+              if (value === 'HOAT_DONG' || value === 'TAM_NGUNG') {
+                updateField('status', value);
+              }
+            }}
+            value={values.status}
+          >
+            <SelectTrigger
+              aria-describedby={
+                fieldErrors.status
+                  ? 'create-company-status-error'
+                  : undefined
+              }
+              aria-invalid={Boolean(fieldErrors.status)}
+              id="create-company-status-trigger"
+            >
+              <SelectValue>
+                {values.status === 'HOAT_DONG'
+                  ? 'Đang hoạt động'
+                  : 'Tạm ngưng'}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="HOAT_DONG">Đang hoạt động</SelectItem>
+              <SelectItem value="TAM_NGUNG">Tạm ngưng</SelectItem>
+            </SelectContent>
+          </Select>
+          <FieldError id="create-company-status-error">
+            {fieldErrors.status}
+          </FieldError>
+        </Field>
+
+        <div className="sticky bottom-0 -mx-4 mt-auto flex justify-end gap-2 border-t bg-popover px-4 py-4 sm:-mx-6 sm:px-6">
+          <Button
             disabled={submitting}
             onClick={closeDialog}
             type="button"
+            variant="outline"
           >
-            <X size={19} />
-          </button>
+            Hủy
+          </Button>
+            <Button disabled={submitting} type="submit">
+            {submitting && (
+              <LoaderCircle
+                aria-hidden="true"
+                className="size-4 motion-safe:animate-spin"
+              />
+            )}
+            {submitting ? 'Đang tạo…' : 'Tạo nhà xe'}
+          </Button>
         </div>
-
-        <form
-          className="bus-company-form"
-          noValidate
-          onSubmit={handleSubmit}
-        >
-          <p className="bus-company-form-intro">
-            Nhập thông tin cơ bản để thêm đối tác vào hệ thống.
-          </p>
-
-          {formError && (
-            <div className="bus-company-form-error" role="alert">
-              {formError}
-            </div>
-          )}
-
-          <div className="bus-company-form-field">
-            <label htmlFor="create-company-code">Mã nhà xe</label>
-            <input
-              autoComplete="off"
-              className="admin-data-mono"
-              id="create-company-code"
-              maxLength={50}
-              onChange={(event) => updateField('code', event.target.value)}
-              placeholder="Ví dụ: NX001"
-              required
-              type="text"
-              value={values.code}
-              aria-invalid={Boolean(fieldErrors.code)}
-              aria-describedby={
-                fieldErrors.code ? 'create-company-code-error' : undefined
-              }
-            />
-            {fieldErrors.code && (
-              <span
-                className="bus-company-form-field-error"
-                id="create-company-code-error"
-              >
-                {fieldErrors.code}
-              </span>
-            )}
-          </div>
-
-          <div className="bus-company-form-field">
-            <label htmlFor="create-company-name">Tên nhà xe</label>
-            <input
-              autoComplete="organization"
-              id="create-company-name"
-              maxLength={150}
-              onChange={(event) => updateField('name', event.target.value)}
-              placeholder="Nhập tên nhà xe"
-              required
-              type="text"
-              value={values.name}
-              aria-invalid={Boolean(fieldErrors.name)}
-              aria-describedby={
-                fieldErrors.name ? 'create-company-name-error' : undefined
-              }
-            />
-            {fieldErrors.name && (
-              <span
-                className="bus-company-form-field-error"
-                id="create-company-name-error"
-              >
-                {fieldErrors.name}
-              </span>
-            )}
-          </div>
-
-          <div className="bus-company-form-field">
-            <label htmlFor="create-company-contact">
-              Thông tin liên hệ <span>(Tùy chọn)</span>
-            </label>
-            <input
-              autoComplete="tel"
-              id="create-company-contact"
-              onChange={(event) =>
-                updateField('contactInfo', event.target.value)
-              }
-              placeholder="Số điện thoại hoặc thông tin liên hệ"
-              type="text"
-              value={values.contactInfo}
-              aria-invalid={Boolean(fieldErrors.contactInfo)}
-              aria-describedby={
-                fieldErrors.contactInfo
-                  ? 'create-company-contact-error'
-                  : undefined
-              }
-            />
-            {fieldErrors.contactInfo && (
-              <span
-                className="bus-company-form-field-error"
-                id="create-company-contact-error"
-              >
-                {fieldErrors.contactInfo}
-              </span>
-            )}
-          </div>
-
-          <div className="bus-company-form-field">
-            <label htmlFor="create-company-status">Trạng thái</label>
-            <select
-              id="create-company-status"
-              onChange={(event) =>
-                updateField('status', event.target.value as BusCompanyStatus)
-              }
-              value={values.status}
-              aria-invalid={Boolean(fieldErrors.status)}
-              aria-describedby={
-                fieldErrors.status ? 'create-company-status-error' : undefined
-              }
-            >
-              <option value="HOAT_DONG">Đang hoạt động</option>
-              <option value="TAM_NGUNG">Tạm ngưng</option>
-            </select>
-            {fieldErrors.status && (
-              <span
-                className="bus-company-form-field-error"
-                id="create-company-status-error"
-              >
-                {fieldErrors.status}
-              </span>
-            )}
-          </div>
-
-          <div className="bus-company-form-actions">
-            <Button
-              disabled={submitting}
-              onClick={closeDialog}
-              type="button"
-              variant="secondary"
-            >
-              Hủy
-            </Button>
-            <Button
-              disabled={submitting}
-              type="submit"
-            >
-              {submitting && (
-                <LoaderCircle
-                  aria-hidden="true"
-                  className="bus-company-form-spinner"
-                  size={16}
-                />
-              )}
-              {submitting ? 'Đang tạo…' : 'Tạo nhà xe'}
-            </Button>
-          </div>
-        </form>
-      </>
-    </AdminFormDialog>
+      </form>
+    </ResourceSheet>
   );
 }

@@ -4,44 +4,59 @@ import {
   ArrowDown,
   ArrowUp,
   ArrowUpDown,
+  Building2,
   LoaderCircle,
-  Search,
-  X,
+  Pencil,
+  ShieldCheck,
+  UserRound,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { AdminConfirmDialog } from '@/components/admin/admin-confirm-dialog';
-import { AdminDetailAction } from '@/components/admin/admin-detail-action';
-import { AdminDetailSheet } from '@/components/admin/admin-detail-sheet';
+import { toast } from 'sonner';
 import {
-  AdminCreateAction,
-  AdminRefreshAction,
-} from '@/components/admin/admin-page-actions';
+  ResourceConfirmation,
+  ResourceCreateAction,
+  ResourceDetailAction,
+  ResourceNotice,
+  ResourcePagination,
+  ResourceRefreshAction,
+  ResourceSheet,
+  ResourceState,
+  ResourceStatusBadge,
+  ResourceTableSkeleton,
+} from '@/components/admin/resource-ui';
 import { AdminPageHeader } from '@/components/admin/admin-page-header';
-import { AdminPagination } from '@/components/admin/admin-pagination';
-import { AdminStatusBadge } from '@/components/admin/admin-status-badge';
-import { AdminTableSkeleton } from '@/components/admin/admin-table-skeleton';
-import { Button } from '@/components/ui/button';
 import {
-  DateRangeFilter,
   FilterToolbar,
   SearchInput,
   SelectFilter,
   type FilterOption,
-} from '@/components/data-filters/data-filters';
+} from '@/components/data-filters/resource-filters';
+import { ResourceSortControls } from '@/components/data-filters/resource-sort';
+import { DateRangeFilter } from '@/components/data-filters/data-filters';
+import { Button } from '@/components/ui/action-button';
+import { Card } from '@/components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { useAdminSession } from '@/features/admin-auth/hooks/use-admin-session';
 import { hasPlatformAdminPermission } from '@/features/admin-auth/services/admin-access';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
-import {
-  getAdminAccountById,
-  updateAdminAccountStatus,
-} from '../services/admin-account-service';
-import { useAdminAccounts } from '../hooks/use-admin-accounts';
 import { getBusCompanyFilterOptions } from '@/features/bus-companies/services/bus-company-service';
 import { getDefaultRolePermissions } from '@/features/platform-rbac/services/platform-rbac-service';
 import {
   TENANT_RBAC_ROLE_NAMES,
   type TenantRbacRoleName,
 } from '@/features/tenant-rbac/types/tenant-rbac';
+import { useAdminAccounts } from '../hooks/use-admin-accounts';
+import {
+  getAdminAccountById,
+  updateAdminAccountStatus,
+} from '../services/admin-account-service';
 import type {
   AdminAccount,
   AdminAccountSortKey,
@@ -49,11 +64,18 @@ import type {
 } from '../types/admin-account';
 import { AdminAccountFormDialog } from './admin-account-form-dialog';
 import { AdminAccountRolesDialog } from './admin-account-roles-dialog';
-import styles from './admin-accounts-management.module.css';
 
-const STATUS_OPTIONS = [
+const STATUS_OPTIONS: FilterOption[] = [
   { value: 'HOAT_DONG', label: 'Đang hoạt động' },
   { value: 'TAM_KHOA', label: 'Đang khóa' },
+];
+
+const SORT_OPTIONS: FilterOption[] = [
+  { value: 'createdAt', label: 'Ngày tạo' },
+  { value: 'fullName', label: 'Họ và tên' },
+  { value: 'phoneNumber', label: 'Số điện thoại' },
+  { value: 'status', label: 'Trạng thái' },
+  { value: 'updatedAt', label: 'Cập nhật' },
 ];
 
 type FilterOptionsState =
@@ -82,16 +104,43 @@ function formatTimestamp(value: string) {
   const timestamp = new Date(value);
   if (Number.isNaN(timestamp.getTime())) return 'Chưa có thông tin';
   return new Intl.DateTimeFormat('vi-VN', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(timestamp);
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+    .format(timestamp)
+    .replaceAll('/', '-');
 }
 
 function formatDate(value: string | null) {
   if (!value) return 'Chưa cập nhật';
-  const date = new Date(`${value.slice(0, 10)}T00:00:00`);
-  if (Number.isNaN(date.getTime())) return 'Chưa cập nhật';
-  return new Intl.DateTimeFormat('vi-VN', { dateStyle: 'medium' }).format(date);
+  const parts = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  return parts ? `${parts[3]}-${parts[2]}-${parts[1]}` : 'Chưa cập nhật';
+}
+
+function RoleBadges({ roles }: { roles: readonly string[] }) {
+  if (roles.length === 0) {
+    return <span className="text-muted-foreground">Chưa được gán vai trò</span>;
+  }
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {roles.map((role) => (
+        <ResourceStatusBadge key={role} tone="muted">
+          {roleLabel(role)}
+        </ResourceStatusBadge>
+      ))}
+    </div>
+  );
+}
+
+function AccountStatusBadge({ status }: { status: AdminAccountStatus }) {
+  return (
+    <ResourceStatusBadge tone={status === 'HOAT_DONG' ? 'active' : 'muted'}>
+      {statusLabel(status)}
+    </ResourceStatusBadge>
+  );
 }
 
 type AccountDetailState =
@@ -123,11 +172,9 @@ function AccountDetailSheet({
 
   useEffect(() => {
     const controller = new AbortController();
-
     getAdminAccountById(accountId, controller.signal)
       .then((account) => {
-        if (!controller.signal.aborted)
-          setDetail({ status: 'success', account });
+        if (!controller.signal.aborted) setDetail({ status: 'success', account });
       })
       .catch((error: unknown) => {
         if (controller.signal.aborted) return;
@@ -139,24 +186,16 @@ function AccountDetailSheet({
               : 'Không thể tải thông tin tài khoản.',
         });
       });
-
     return () => controller.abort();
   }, [accountId, retryCount]);
 
-  function retry() {
-    setDetail({ status: 'loading' });
-    setRetryCount((count) => count + 1);
-  }
-
   async function confirmStatusChange() {
     if (statusSubmittingRef.current || detail.status !== 'success') return;
-
     const nextStatus =
       detail.account.status === 'HOAT_DONG' ? 'TAM_KHOA' : 'HOAT_DONG';
     statusSubmittingRef.current = true;
     setStatusSubmitting(true);
     setStatusError(null);
-
     try {
       const updatedAccount = await updateAdminAccountStatus(
         detail.account.accountId,
@@ -164,6 +203,11 @@ function AccountDetailSheet({
       );
       setDetail({ status: 'success', account: updatedAccount });
       setStatusDialogOpen(false);
+      toast.success(
+        nextStatus === 'TAM_KHOA'
+          ? 'Đã khóa tài khoản Admin.'
+          : 'Đã mở khóa tài khoản Admin.',
+      );
       onAccountUpdated(updatedAccount);
     } catch (requestError: unknown) {
       setStatusError(
@@ -181,164 +225,82 @@ function AccountDetailSheet({
 
   return (
     <>
-      <AdminDetailSheet
-        ariaLabelledBy="admin-account-detail-title"
+      <ResourceSheet
+        busy={detail.status === 'loading'}
+        description="Thông tin định danh, nhà xe, vai trò và trạng thái tài khoản."
         onClose={onClose}
+        title="Thông tin tài khoản"
       >
-        <div className="admin-dialog-header">
-          <div className="admin-dialog-header__copy">
-            <h2 id="admin-account-detail-title">Thông tin tài khoản</h2>
-          </div>
-          <form method="dialog">
-            <button
-              aria-label="Đóng thông tin tài khoản"
-              className="icon-button"
-              type="submit"
-            >
-              <X aria-hidden="true" size={19} />
-            </button>
-          </form>
-        </div>
-
         {detail.status === 'loading' && (
-          <p aria-live="polite" role="status">
-            Đang tải thông tin tài khoản…
-          </p>
+          <ResourceState loading>Đang tải thông tin tài khoản…</ResourceState>
         )}
         {detail.status === 'error' && (
-          <div role="alert">
+          <ResourceState error>
             <p>{detail.message}</p>
-            <Button onClick={retry} type="button" variant="secondary">
+            <Button
+              onClick={() => {
+                setDetail({ status: 'loading' });
+                setRetryCount((count) => count + 1);
+              }}
+              variant="outline"
+            >
               Thử lại
             </Button>
-          </div>
+          </ResourceState>
         )}
         {detail.status === 'success' && (
-          <>
-            <div className={styles.detailHero}>
-              <span aria-hidden="true" className={styles.avatar}>
-                {detail.account.fullName
-                  .trim()
-                  .charAt(0)
-                  .toLocaleUpperCase('vi-VN') || 'A'}
+          <div className="space-y-5">
+            <div className="flex min-w-0 items-center gap-4 border-b pb-5">
+              <span
+                aria-hidden
+                className="grid size-12 shrink-0 place-items-center rounded-full bg-accent text-primary"
+              >
+                <UserRound aria-hidden size={23} />
               </span>
-              <div>
-                <h3>{detail.account.fullName}</h3>
-                <span>
+              <div className="min-w-0 flex-1">
+                <h3 className="break-words text-base font-semibold text-foreground">
+                  {detail.account.fullName}
+                </h3>
+                <p className="mt-1 break-all text-[13px] text-muted-foreground">
                   {detail.account.email ?? detail.account.phoneNumber}
-                </span>
+                </p>
               </div>
+              <AccountStatusBadge status={detail.account.status} />
             </div>
 
-            <section
-              aria-labelledby="account-identity-heading"
-              className="detail-section"
-            >
-              <h3 id="account-identity-heading">Thông tin định danh</h3>
-              <dl className={styles.detailGrid}>
-                <div>
-                  <dt>Số điện thoại</dt>
-                  <dd>{detail.account.phoneNumber}</dd>
-                </div>
-                <div>
-                  <dt>Email</dt>
-                  <dd>{detail.account.email ?? 'Chưa cập nhật'}</dd>
-                </div>
-                <div>
-                  <dt>Ngày sinh</dt>
-                  <dd>{formatDate(detail.account.dateOfBirth)}</dd>
-                </div>
-                <div>
-                  <dt>CCCD</dt>
-                  <dd>
-                    {detail.account.citizenId ? (
-                      <span className="admin-data-mono">
-                        {detail.account.citizenId}
-                      </span>
-                    ) : (
-                      'Chưa cập nhật'
-                    )}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Mã nhân viên</dt>
-                  <dd className="admin-data-mono">
-                    {detail.account.employee.employeeCode}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Trạng thái nhân viên</dt>
-                  <dd>{detail.account.employee.employmentStatus}</dd>
-                </div>
+            <section aria-labelledby="account-identity-heading" className="space-y-3 rounded-xl border p-4">
+              <h3 className="text-sm font-semibold" id="account-identity-heading">Thông tin định danh</h3>
+              <dl className="grid grid-cols-2 gap-x-4 gap-y-4 text-[13px] [&_dd]:mt-1 [&_dd]:break-words [&_dt]:text-xs [&_dt]:text-muted-foreground">
+                <div><dt>Số điện thoại</dt><dd>{detail.account.phoneNumber}</dd></div>
+                <div><dt>Email</dt><dd>{detail.account.email ?? 'Chưa cập nhật'}</dd></div>
+                <div><dt>Ngày sinh</dt><dd>{formatDate(detail.account.dateOfBirth)}</dd></div>
+                <div><dt>CCCD</dt><dd className="admin-data-mono">{detail.account.citizenId ?? 'Chưa cập nhật'}</dd></div>
+                <div><dt>Mã nhân viên</dt><dd className="admin-data-mono">{detail.account.employee.employeeCode}</dd></div>
+                <div><dt>Trạng thái nhân viên</dt><dd>{detail.account.employee.employmentStatus}</dd></div>
               </dl>
             </section>
 
-            <section
-              aria-labelledby="account-scope-heading"
-              className="detail-section"
-            >
-              <h3 id="account-scope-heading">Phạm vi và vai trò</h3>
-              <dl className={styles.detailGrid}>
-                <div>
+            <section aria-labelledby="account-scope-heading" className="space-y-3 rounded-xl border p-4">
+              <h3 className="text-sm font-semibold" id="account-scope-heading">Phạm vi và vai trò</h3>
+              <dl className="grid grid-cols-2 gap-x-4 gap-y-4 text-[13px] [&_dd]:mt-1 [&_dd]:break-words [&_dt]:text-xs [&_dt]:text-muted-foreground">
+                <div className="col-span-2">
                   <dt>Nhà xe</dt>
-                  <dd>
-                    {detail.account.busCompany.name} ·{' '}
-                    <span className="admin-data-mono">
-                      {detail.account.busCompany.code}
-                    </span>
-                  </dd>
+                  <dd className="flex items-center gap-2"><Building2 aria-hidden className="size-4 text-muted-foreground" />{detail.account.busCompany.name} · <span className="admin-data-mono">{detail.account.busCompany.code}</span></dd>
                 </div>
-                <div>
-                  <dt>Trạng thái tài khoản</dt>
-                  <dd>
-                    <AdminStatusBadge
-                      tone={
-                        detail.account.status === 'HOAT_DONG'
-                          ? 'active'
-                          : 'muted'
-                      }
-                    >
-                      {statusLabel(detail.account.status)}
-                    </AdminStatusBadge>
-                  </dd>
-                </div>
-                <div className={styles.detailWide}>
+                <div className="col-span-2">
                   <dt>Vai trò</dt>
-                  <dd>
-                    {detail.account.roles.length > 0
-                      ? detail.account.roles.map((role) => (
-                          <AdminStatusBadge key={role} tone="muted">
-                            {roleLabel(role)}
-                          </AdminStatusBadge>
-                        ))
-                      : 'Chưa được gán vai trò'}
-                  </dd>
+                  <dd><RoleBadges roles={detail.account.roles} /></dd>
                 </div>
-                <div>
-                  <dt>Số điện thoại đã xác minh</dt>
-                  <dd>
-                    {detail.account.phoneVerified
-                      ? 'Đã xác minh'
-                      : 'Chưa xác minh'}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Ngày tạo</dt>
-                  <dd>{formatTimestamp(detail.account.createdAt)}</dd>
-                </div>
-                <div>
-                  <dt>Cập nhật lần cuối</dt>
-                  <dd>{formatTimestamp(detail.account.updatedAt)}</dd>
-                </div>
+                <div><dt>Số điện thoại</dt><dd>{detail.account.phoneVerified ? 'Đã xác minh' : 'Chưa xác minh'}</dd></div>
+                <div><dt>Ngày tạo</dt><dd>{formatTimestamp(detail.account.createdAt)}</dd></div>
+                <div className="col-span-2"><dt>Cập nhật lần cuối</dt><dd>{formatTimestamp(detail.account.updatedAt)}</dd></div>
               </dl>
             </section>
+
             {canUpdate && (
-              <div className="detail-edit-actions">
-                <Button
-                  onClick={() => setRoleDialogOpen(true)}
-                  type="button"
-                  variant="secondary"
-                >
+              <div className="flex flex-wrap justify-end gap-2 border-t pt-4">
+                <Button onClick={() => setRoleDialogOpen(true)} variant="outline">
+                  <ShieldCheck aria-hidden />
                   Gán vai trò
                 </Button>
                 <Button
@@ -346,25 +308,20 @@ function AccountDetailSheet({
                     setStatusError(null);
                     setStatusDialogOpen(true);
                   }}
-                  type="button"
-                  variant="secondary"
+                  variant="outline"
                 >
-                  {detail.account.status === 'HOAT_DONG'
-                    ? 'Khóa tài khoản'
-                    : 'Mở khóa tài khoản'}
+                  {detail.account.status === 'HOAT_DONG' ? 'Khóa tài khoản' : 'Mở khóa tài khoản'}
                 </Button>
-                <Button
-                  aria-label="Chỉnh sửa thông tin tài khoản"
-                  onClick={() => setEditOpen(true)}
-                  type="button"
-                >
+                <Button onClick={() => setEditOpen(true)}>
+                  <Pencil aria-hidden />
                   Chỉnh sửa
                 </Button>
               </div>
             )}
-          </>
+          </div>
         )}
-      </AdminDetailSheet>
+      </ResourceSheet>
+
       {editOpen && detail.status === 'success' && (
         <AdminAccountFormDialog
           account={detail.account}
@@ -388,61 +345,30 @@ function AccountDetailSheet({
         />
       )}
       {canUpdate && statusDialogOpen && detail.status === 'success' && (
-        <AdminConfirmDialog
-          ariaBusy={statusSubmitting}
-          ariaDescribedBy="admin-account-status-confirmation-description"
-          ariaLabelledBy="admin-account-status-confirmation-title"
+        <ResourceConfirmation
+          busy={statusSubmitting}
           onClose={() => {
             if (!statusSubmittingRef.current) setStatusDialogOpen(false);
           }}
-          preventDismiss={statusSubmitting}
+          title={detail.account.status === 'HOAT_DONG' ? 'Khóa tài khoản này?' : 'Mở khóa tài khoản này?'}
+          description={
+            detail.account.status === 'HOAT_DONG'
+              ? 'Tài khoản sẽ chuyển sang trạng thái Đang khóa và các phiên đăng nhập đang hoạt động sẽ bị thu hồi.'
+              : 'Tài khoản sẽ được mở khóa. Thao tác này không tạo phiên đăng nhập mới.'
+          }
         >
-          <>
-            <h2 id="admin-account-status-confirmation-title">
-              {detail.account.status === 'HOAT_DONG'
-                ? 'Khóa tài khoản này?'
-                : 'Mở khóa tài khoản này?'}
-            </h2>
-            <p id="admin-account-status-confirmation-description">
-              {detail.account.status === 'HOAT_DONG'
-                ? 'Tài khoản sẽ chuyển sang trạng thái Đang khóa và các phiên đăng nhập đang hoạt động sẽ bị thu hồi.'
-                : 'Tài khoản sẽ được mở khóa. Thao tác này không tạo phiên đăng nhập mới.'}
-            </p>
-            {statusError && (
-              <p className="admin-confirm-dialog__error" role="alert">
-                {statusError}
-              </p>
-            )}
-            <div className="admin-confirm-dialog__actions">
-              <Button
-                disabled={statusSubmitting}
-                onClick={() => setStatusDialogOpen(false)}
-                type="button"
-                variant="secondary"
-              >
-                Hủy
-              </Button>
-              <Button
-                disabled={statusSubmitting}
-                onClick={() => void confirmStatusChange()}
-                type="button"
-              >
-                {statusSubmitting && (
-                  <LoaderCircle
-                    aria-hidden="true"
-                    className="status-confirmation-spinner"
-                    size={15}
-                  />
-                )}
-                {statusSubmitting
-                  ? 'Đang cập nhật…'
-                  : detail.account.status === 'HOAT_DONG'
-                    ? 'Khóa tài khoản'
-                    : 'Mở khóa tài khoản'}
-              </Button>
-            </div>
-          </>
-        </AdminConfirmDialog>
+          <div className="space-y-3">
+            {statusError && <ResourceNotice kind="error">{statusError}</ResourceNotice>}
+            <Button
+              aria-busy={statusSubmitting}
+              disabled={statusSubmitting}
+              onClick={() => void confirmStatusChange()}
+            >
+              {statusSubmitting && <LoaderCircle aria-hidden className="motion-safe:animate-spin" />}
+              {statusSubmitting ? 'Đang cập nhật…' : detail.account.status === 'HOAT_DONG' ? 'Khóa tài khoản' : 'Mở khóa tài khoản'}
+            </Button>
+          </div>
+        </ResourceConfirmation>
       )}
     </>
   );
@@ -471,22 +397,20 @@ export function AdminAccountsManagement() {
     updateStatus,
   } = useAdminAccounts();
   const authState = useAdminSession();
-  const session =
-    authState.status === 'authenticated' ? authState.session : null;
+  const session = authState.status === 'authenticated' ? authState.session : null;
   const canCreate = hasPlatformAdminPermission(session, 'admin-account:create');
   const canUpdate = hasPlatformAdminPermission(session, 'admin-account:update');
   const [createOpen, setCreateOpen] = useState(false);
-  const [filterOptions, setFilterOptions] = useState<FilterOptionsState>({
-    status: 'loading',
-  });
+  const [filterOptions, setFilterOptions] = useState<FilterOptionsState>({ status: 'loading' });
   const [filterOptionsRetry, setFilterOptionsRetry] = useState(0);
-  const [selectedAccountId, setSelectedAccountId] = useState<number | null>(
-    null,
+  const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
+  const accounts = accountPage?.data ?? [];
+  const hasFilters = Boolean(
+    searchInput.trim() || status || busCompanyId !== undefined || roleName || createdDateRange,
   );
 
   useEffect(() => {
     const controller = new AbortController();
-
     Promise.all([
       getBusCompanyFilterOptions(controller.signal),
       getDefaultRolePermissions(controller.signal),
@@ -495,19 +419,10 @@ export function AdminAccountsManagement() {
         if (controller.signal.aborted) return;
         setFilterOptions({
           status: 'success',
-          companies: companies.map((company) => ({
-            value: String(company.id),
-            label: company.label,
-          })),
+          companies: companies.map((company) => ({ value: String(company.id), label: company.label })),
           roles: catalog.roles.flatMap((role) =>
-            role.scope === 'tenant' &&
-            TENANT_RBAC_ROLE_NAMES.includes(role.roleName as TenantRbacRoleName)
-              ? [
-                  {
-                    value: role.roleName,
-                    label: roleLabel(role.roleName),
-                  },
-                ]
+            role.scope === 'tenant' && TENANT_RBAC_ROLE_NAMES.includes(role.roleName as TenantRbacRoleName)
+              ? [{ value: role.roleName, label: roleLabel(role.roleName) }]
               : [],
           ),
         });
@@ -516,322 +431,220 @@ export function AdminAccountsManagement() {
         if (controller.signal.aborted) return;
         setFilterOptions({
           status: 'error',
-          message:
-            requestError instanceof Error
-              ? requestError.message
-              : 'Không thể tải bộ lọc nhà xe và vai trò.',
+          message: requestError instanceof Error ? requestError.message : 'Không thể tải bộ lọc nhà xe và vai trò.',
         });
       });
-
     return () => controller.abort();
   }, [filterOptionsRetry]);
 
   function sortableHeader(label: string, key: AdminAccountSortKey) {
     const selected = sortBy === key;
     return (
-      <th
-        aria-sort={
-          selected
-            ? sortDirection === 'asc'
-              ? 'ascending'
-              : 'descending'
-            : 'none'
-        }
+      <TableHead
+        aria-sort={selected ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
         scope="col"
       >
-        <button
-          className={styles.sortButton}
-          onClick={() => sortAccounts(key)}
-          type="button"
-        >
+        <Button className="-ml-3" onClick={() => sortAccounts(key)} size="sm" variant="ghost">
           {label}
-          {selected ? (
-            sortDirection === 'asc' ? (
-              <ArrowUp aria-hidden="true" size={14} />
-            ) : (
-              <ArrowDown aria-hidden="true" size={14} />
-            )
-          ) : (
-            <ArrowUpDown aria-hidden="true" size={14} />
-          )}
-        </button>
-      </th>
+          {selected ? sortDirection === 'asc' ? <ArrowUp aria-hidden /> : <ArrowDown aria-hidden /> : <ArrowUpDown aria-hidden />}
+        </Button>
+      </TableHead>
     );
   }
 
   return (
     <SuperAdminLayout activeSection="admin-accounts">
-      <div className={`admin-page-content ${styles.page}`}>
+      <div className="admin-ui admin-page-content grid gap-[var(--admin-space-section-gap)]">
         <AdminPageHeader
           actions={
-            <div className="page-intro-actions">
-              {canCreate && (
-                <AdminCreateAction
-                  label="Thêm mới"
-                  onClick={() => setCreateOpen(true)}
-                />
-              )}
-              <AdminRefreshAction loading={loading} onClick={refresh} />
+            <div className="flex flex-wrap items-center gap-2">
+              {canCreate && <ResourceCreateAction label="Thêm tài khoản" onClick={() => setCreateOpen(true)} />}
+              <ResourceRefreshAction loading={loading} onClick={refresh} />
             </div>
           }
           eyebrow="QUẢN TRỊ NỀN TẢNG"
           title="Quản lý tài khoản Admin"
-          titleId="page-title"
+          titleId="admin-accounts-title"
         />
 
-        <section
-          aria-labelledby="admin-accounts-heading"
-          className={`panel ${styles.panel} ${styles.accountsSection}`}
-          data-testid="admin-accounts-spacing"
-        >
-          <h2 className="sr-only" id="admin-accounts-heading">
-            Danh sách tài khoản Admin
-          </h2>
-          <FilterToolbar
-            totalItems={error ? null : (accountPage?.meta.totalItems ?? null)}
-          >
-            <SearchInput
-              label="Tìm tài khoản Admin"
-              onChange={updateSearch}
-              placeholder="Tìm theo tên, số điện thoại, email hoặc nhà xe"
-              value={searchInput}
-            />
-            <SelectFilter
-              allLabel="Tất cả trạng thái"
-              label="Lọc theo trạng thái tài khoản"
-              onChange={updateStatus}
-              options={STATUS_OPTIONS}
-              value={status}
-            />
-            <SelectFilter
-              allLabel="Tất cả nhà xe"
-              label="Lọc theo nhà xe"
-              onChange={updateBusCompany}
-              options={
-                filterOptions.status === 'success'
-                  ? filterOptions.companies
-                  : []
-              }
-              value={busCompanyId === undefined ? '' : String(busCompanyId)}
-            />
-            <SelectFilter
-              allLabel="Tất cả vai trò"
-              label="Lọc theo vai trò"
-              onChange={updateRole}
-              options={
-                filterOptions.status === 'success' ? filterOptions.roles : []
-              }
-              value={roleName}
-            />
-            <DateRangeFilter
-              label="Ngày tạo"
-              onApply={updateCreatedDateRange}
-              value={createdDateRange}
-            />
-          </FilterToolbar>
-
-          {filterOptions.status === 'loading' && (
-            <p className={styles.filterOptionsMessage} role="status">
-              Đang tải tùy chọn bộ lọc…
-            </p>
-          )}
-          {filterOptions.status === 'error' && (
-            <div className={styles.filterOptionsError} role="alert">
-              <span>
-                Không tải được danh sách nhà xe và vai trò lọc:{' '}
-                {filterOptions.message}
-              </span>
-              <Button
-                onClick={() => {
-                  setFilterOptions({ status: 'loading' });
-                  setFilterOptionsRetry((count) => count + 1);
-                }}
-                type="button"
-                variant="secondary"
-              >
-                Tải lại bộ lọc
-              </Button>
-            </div>
-          )}
-
-          {error && (
-            <div className="table-error" role="alert">
-              <div>
-                <strong>Chưa tải được danh sách tài khoản Admin</strong>
-                <p>{error}</p>
-              </div>
-              <Button onClick={refresh} type="button" variant="secondary">
-                Thử lại
-              </Button>
-            </div>
-          )}
-
-          {loading && !accountPage && !error && (
-            <AdminTableSkeleton resourceLabel="tài khoản Admin" />
-          )}
-
-          {!loading && !error && accountPage?.data.length === 0 && (
-            <div className={styles.emptyState}>
-              <span aria-hidden="true" className={styles.emptyIcon}>
-                <Search size={21} />
-              </span>
-              <h3>Không tìm thấy tài khoản Admin</h3>
-              <p>Thử thay đổi từ khóa hoặc trạng thái lọc.</p>
-            </div>
-          )}
-
-          {accountPage && accountPage.data.length > 0 && (
-            <>
-              <div
-                aria-busy={loading}
-                className={`${styles.tableScroll}${loading ? ` ${styles.isLoading}` : ''}`}
-              >
-                <table className={styles.table}>
-                  <thead>
-                    <tr>
-                      {sortableHeader('Họ và tên', 'fullName')}
-                      {sortableHeader('Số điện thoại', 'phoneNumber')}
-                      <th scope="col">Nhà xe</th>
-                      <th scope="col">Vai trò</th>
-                      {sortableHeader('Trạng thái', 'status')}
-                      {sortableHeader('Ngày tạo', 'createdAt')}
-                      <th scope="col">
-                        <span className="sr-only">Thao tác</span>
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {accountPage.data.map((account) => (
-                      <tr key={account.accountId}>
-                        <th className={styles.identityCell} scope="row">
-                          <span className={styles.accountIdentity}>
-                            <span aria-hidden="true" className={styles.avatar}>
-                              {account.fullName
-                                .trim()
-                                .charAt(0)
-                                .toLocaleUpperCase('vi-VN') || 'A'}
-                            </span>
-                            <span className={styles.identityCopy}>
-                              <span>{account.fullName}</span>
-                              <small className="admin-data-mono">
-                                {account.employee.employeeCode}
-                              </small>
-                            </span>
-                          </span>
-                        </th>
-                        <td className={styles.contactCell}>
-                          <span>{account.phoneNumber}</span>
-                          {account.email && <small>{account.email}</small>}
-                        </td>
-                        <td>{account.busCompany.name}</td>
-                        <td>
-                          <div className={styles.roleList}>
-                            {account.roles.length > 0
-                              ? account.roles.map((role) => (
-                                  <AdminStatusBadge key={role} tone="muted">
-                                    {roleLabel(role)}
-                                  </AdminStatusBadge>
-                                ))
-                              : 'Chưa được gán vai trò'}
-                          </div>
-                        </td>
-                        <td>
-                          <AdminStatusBadge
-                            tone={
-                              account.status === 'HOAT_DONG'
-                                ? 'active'
-                                : 'muted'
-                            }
-                          >
-                            {statusLabel(account.status)}
-                          </AdminStatusBadge>
-                        </td>
-                        <td>{formatTimestamp(account.createdAt)}</td>
-                        <td>
-                          <AdminDetailAction
-                            onClick={() =>
-                              setSelectedAccountId(account.accountId)
-                            }
-                            resourceName={`tài khoản ${account.fullName}`}
-                          />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <div aria-busy={loading} className={styles.mobileList}>
-                {accountPage.data.map((account) => (
-                  <article
-                    aria-label={`Tài khoản ${account.fullName}`}
-                    className={styles.accountCard}
-                    key={account.accountId}
-                  >
-                    <div className={styles.accountIdentity}>
-                      <span aria-hidden="true" className={styles.avatar}>
-                        {account.fullName
-                          .trim()
-                          .charAt(0)
-                          .toLocaleUpperCase('vi-VN') || 'A'}
-                      </span>
-                      <div className={styles.identityCopy}>
-                        <h3>{account.fullName}</h3>
-                        <p>{account.phoneNumber}</p>
-                        {account.email && <p>{account.email}</p>}
-                      </div>
-                    </div>
-                    <dl className={styles.accountMeta}>
-                      <div>
-                        <dt>Nhà xe</dt>
-                        <dd>{account.busCompany.name}</dd>
-                      </div>
-                      <div>
-                        <dt>Vai trò</dt>
-                        <dd>
-                          {account.roles.length > 0
-                            ? account.roles.map((role) => (
-                                <AdminStatusBadge key={role} tone="muted">
-                                  {roleLabel(role)}
-                                </AdminStatusBadge>
-                              ))
-                            : 'Chưa được gán vai trò'}
-                        </dd>
-                      </div>
-                      <div>
-                        <dt>Trạng thái</dt>
-                        <dd>
-                          <AdminStatusBadge
-                            tone={
-                              account.status === 'HOAT_DONG'
-                                ? 'active'
-                                : 'muted'
-                            }
-                          >
-                            {statusLabel(account.status)}
-                          </AdminStatusBadge>
-                        </dd>
-                      </div>
-                    </dl>
-                    <div className={styles.cardActions}>
-                      <AdminDetailAction
-                        onClick={() => setSelectedAccountId(account.accountId)}
-                        resourceName={`tài khoản ${account.fullName}`}
-                      />
-                    </div>
-                  </article>
-                ))}
-              </div>
-              <AdminPagination
-                currentPage={page}
-                disabled={loading}
-                onPageChange={changePage}
-                pageSize={accountPage.meta.pageSize}
-                summaryLabel="tài khoản"
-                totalItems={accountPage.meta.totalItems}
-                totalPages={accountPage.meta.totalPages}
+        <section aria-busy={loading} aria-labelledby="admin-accounts-title">
+          <Card className="gap-0 py-0 ring-0">
+            <FilterToolbar>
+              <SearchInput
+                label="Tìm tài khoản Admin"
+                onChange={updateSearch}
+                placeholder="Tìm theo tên, số điện thoại, email hoặc nhà xe"
+                value={searchInput}
               />
-            </>
-          )}
+              <SelectFilter allLabel="Tất cả trạng thái" label="Lọc theo trạng thái tài khoản" onChange={updateStatus} options={STATUS_OPTIONS} value={status} />
+              <SelectFilter
+                allLabel="Tất cả nhà xe"
+                label="Lọc theo nhà xe"
+                onChange={updateBusCompany}
+                options={filterOptions.status === 'success' ? filterOptions.companies : []}
+                value={busCompanyId === undefined ? '' : String(busCompanyId)}
+              />
+              <SelectFilter
+                allLabel="Tất cả vai trò"
+                label="Lọc theo vai trò"
+                onChange={updateRole}
+                options={filterOptions.status === 'success' ? filterOptions.roles : []}
+                value={roleName}
+              />
+              <DateRangeFilter
+                appearance="resource"
+                label="Ngày tạo"
+                onApply={updateCreatedDateRange}
+                value={createdDateRange}
+              />
+            </FilterToolbar>
+
+            {filterOptions.status === 'loading' && (
+              <p className="border-b px-5 py-3 text-xs text-muted-foreground" role="status">Đang tải tùy chọn bộ lọc…</p>
+            )}
+            {filterOptions.status === 'error' && (
+              <div className="border-b p-4">
+                <ResourceNotice kind="error">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <span>Không tải được danh sách nhà xe và vai trò lọc: {filterOptions.message}</span>
+                    <Button
+                      onClick={() => {
+                        setFilterOptions({ status: 'loading' });
+                        setFilterOptionsRetry((count) => count + 1);
+                      }}
+                      variant="outline"
+                    >
+                      Tải lại bộ lọc
+                    </Button>
+                  </div>
+                </ResourceNotice>
+              </div>
+            )}
+
+            {error && (
+              <div className="border-b p-4">
+                <ResourceNotice kind="error">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div><strong>Chưa tải được danh sách tài khoản Admin</strong><p className="mt-1">{error}</p></div>
+                    <Button onClick={refresh} variant="outline">Thử lại</Button>
+                  </div>
+                </ResourceNotice>
+              </div>
+            )}
+
+            {loading && !accountPage && !error && <ResourceTableSkeleton resourceLabel="tài khoản Admin" />}
+
+            <ResourceSortControls
+              direction={sortDirection}
+              label="Sắp xếp theo"
+              onDirectionChange={() => sortAccounts(sortBy)}
+              onFieldChange={(value) => sortAccounts(value as AdminAccountSortKey)}
+              options={SORT_OPTIONS}
+              value={sortBy}
+            />
+
+            {!loading && !error && accountPage && accounts.length === 0 && (
+              <ResourceState>
+                <div className="space-y-1">
+                  <h3 className="font-semibold text-foreground">
+                    {hasFilters ? 'Không tìm thấy tài khoản Admin phù hợp' : 'Chưa có tài khoản Admin'}
+                  </h3>
+                  <p>{hasFilters ? 'Thử đổi từ khóa hoặc điều chỉnh bộ lọc.' : 'Tài khoản nhân viên sẽ xuất hiện ở đây sau khi được tạo.'}</p>
+                </div>
+              </ResourceState>
+            )}
+
+            {accountPage && accounts.length > 0 && (
+              <>
+                <div
+                  aria-busy={loading}
+                  className={`hidden transition-opacity min-[901px]:block ${loading ? 'opacity-60' : ''}`}
+                >
+                  <Table className="min-w-[1120px]">
+                    <TableHeader>
+                      <TableRow>
+                        {sortableHeader('Họ và tên', 'fullName')}
+                        {sortableHeader('Số điện thoại', 'phoneNumber')}
+                        <TableHead scope="col">Nhà xe</TableHead>
+                        <TableHead scope="col">Vai trò</TableHead>
+                        {sortableHeader('Trạng thái', 'status')}
+                        {sortableHeader('Ngày tạo', 'createdAt')}
+                        <TableHead scope="col"><span className="sr-only">Thao tác</span></TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {accounts.map((account) => (
+                        <TableRow key={account.accountId}>
+                          <TableHead className="min-w-52" scope="row">
+                            <div className="flex items-center gap-3">
+                              <span aria-hidden className="grid size-9 shrink-0 place-items-center rounded-full bg-accent font-semibold text-primary">
+                                {account.fullName.trim().charAt(0).toLocaleUpperCase('vi-VN') || 'A'}
+                              </span>
+                              <span className="grid min-w-0">
+                                <span className="truncate font-medium">{account.fullName}</span>
+                                <small className="admin-data-mono mt-0.5 text-xs font-normal text-muted-foreground">{account.employee.employeeCode}</small>
+                              </span>
+                            </div>
+                          </TableHead>
+                          <TableCell className="min-w-44">
+                            <span className="block">{account.phoneNumber}</span>
+                            {account.email && <small className="mt-0.5 block text-xs text-muted-foreground">{account.email}</small>}
+                          </TableCell>
+                          <TableCell>{account.busCompany.name}</TableCell>
+                          <TableCell className="min-w-52"><RoleBadges roles={account.roles} /></TableCell>
+                          <TableCell><AccountStatusBadge status={account.status} /></TableCell>
+                          <TableCell>{formatTimestamp(account.createdAt)}</TableCell>
+                          <TableCell className="text-right">
+                            <ResourceDetailAction onClick={() => setSelectedAccountId(account.accountId)} resourceName={`tài khoản ${account.fullName}`} />
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+
+                <div
+                  aria-busy={loading}
+                  className={`grid gap-3 p-4 transition-opacity min-[901px]:hidden ${loading ? 'opacity-60' : ''}`}
+                >
+                  {accounts.map((account) => (
+                    <Card className="gap-4 p-4" key={account.accountId}>
+                      <div className="flex min-w-0 items-start gap-3">
+                        <span aria-hidden className="grid size-10 shrink-0 place-items-center rounded-full bg-accent font-semibold text-primary">
+                          {account.fullName.trim().charAt(0).toLocaleUpperCase('vi-VN') || 'A'}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <h3 className="break-words text-sm font-semibold">{account.fullName}</h3>
+                          <p className="mt-1 break-all text-[13px] text-muted-foreground">{account.phoneNumber}</p>
+                          {account.email && <p className="mt-0.5 break-all text-xs text-muted-foreground">{account.email}</p>}
+                          <p className="admin-data-mono mt-1 text-xs text-muted-foreground">{account.employee.employeeCode}</p>
+                        </div>
+                        <AccountStatusBadge status={account.status} />
+                      </div>
+                      <dl className="grid min-w-0 grid-cols-2 gap-4 border-t pt-3 text-[13px] [&_dd]:mt-1 [&_dd]:break-words [&_dt]:text-xs [&_dt]:text-muted-foreground">
+                        <div><dt>Nhà xe</dt><dd>{account.busCompany.name}</dd></div>
+                        <div><dt>Ngày tạo</dt><dd>{formatTimestamp(account.createdAt)}</dd></div>
+                        <div className="col-span-2"><dt>Vai trò</dt><dd className="mt-2"><RoleBadges roles={account.roles} /></dd></div>
+                      </dl>
+                      <div className="border-t pt-3">
+                        <ResourceDetailAction onClick={() => setSelectedAccountId(account.accountId)} resourceName={`tài khoản ${account.fullName}`} />
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+
+                <ResourcePagination
+                  currentPage={page}
+                  disabled={loading}
+                  onPageChange={changePage}
+                  pageSize={accountPage.meta.pageSize}
+                  summaryLabel="tài khoản"
+                  totalItems={accountPage.meta.totalItems}
+                  totalPages={accountPage.meta.totalPages}
+                />
+              </>
+            )}
+          </Card>
         </section>
       </div>
 
@@ -847,7 +660,10 @@ export function AdminAccountsManagement() {
       {createOpen && (
         <AdminAccountFormDialog
           onClose={() => setCreateOpen(false)}
-          onSaved={() => refresh()}
+          onSaved={() => {
+            setCreateOpen(false);
+            refresh();
+          }}
         />
       )}
     </SuperAdminLayout>

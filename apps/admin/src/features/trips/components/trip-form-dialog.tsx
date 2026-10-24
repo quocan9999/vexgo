@@ -1,11 +1,25 @@
 'use client';
 
-import { LoaderCircle, X } from 'lucide-react';
+import { LoaderCircle } from 'lucide-react';
 import { useRef, useState, type FormEvent } from 'react';
-import { AdminGeneratedCodeField } from '@/components/admin/admin-generated-code-field';
+import { ResourceGeneratedCodeField } from '@/components/admin/resource-generated-code-field';
 import { useBusinessCodePreview } from '@/hooks/use-business-code-preview';
-import { AdminFormDialog } from '@/components/admin/admin-form-dialog';
-import { Button } from '@/components/ui/button';
+import { ResourceSheet, ResourceNotice } from '@/components/admin/resource-ui';
+import {
+  Field as FormField,
+  FieldLabel,
+  FieldError,
+} from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from '@/components/ui/select';
+import { toast } from 'sonner';
+import { Button } from '@/components/ui/action-button';
 import {
   createTrip,
   TripApiError,
@@ -68,7 +82,7 @@ export function TripFormDialog({
 }: TripFormDialogProps) {
   const editing = trip !== undefined;
   const idPrefix = editing ? `edit-trip-${trip.tripId}` : 'create-trip';
-  const dialogRef = useRef<HTMLDialogElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
   const submittingRef = useRef(false);
 
   const [values, setValues] = useState<Values>(() => ({
@@ -79,10 +93,13 @@ export function TripFormDialog({
     acceptsShipments: false,
   }));
 
-  const codePreview = useBusinessCodePreview('trips', !editing, values.departureDate);
+  const codePreview = useBusinessCodePreview(
+    'trips',
+    !editing,
+    values.departureDate,
+  );
 
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
-  const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const isOptionsLoading =
@@ -94,14 +111,13 @@ export function TripFormDialog({
 
   function closeDialog() {
     if (!submittingRef.current) {
-      dialogRef.current?.close();
+      onClose();
     }
   }
 
   function updateField(field: Field, value: string) {
     setValues((current) => ({ ...current, [field]: value }));
     setFieldErrors((current) => ({ ...current, [field]: undefined }));
-    setFormError(null);
   }
 
   function validate(): FieldErrors {
@@ -154,10 +170,16 @@ export function TripFormDialog({
       return;
     }
 
-    setFormError(null);
     const errors = validate();
     setFieldErrors(errors);
-    if (Object.keys(errors).length > 0) return;
+    if (Object.keys(errors).length > 0) {
+      requestAnimationFrame(() =>
+        formRef.current
+          ?.querySelector<HTMLElement>('[aria-invalid="true"]')
+          ?.focus(),
+      );
+      return;
+    }
 
     submittingRef.current = true;
     setSubmitting(true);
@@ -181,12 +203,11 @@ export function TripFormDialog({
         });
       }
 
-      dialogRef.current?.close();
       onSaved(saved);
     } catch (error: unknown) {
       if (error instanceof TripApiError) {
         if (error.code === 'TRIP_CODE_EXISTS') {
-          setFormError('Không thể cấp mã chuyến. Vui lòng thử tạo lại.');
+          toast.error('Không thể cấp mã chuyến. Vui lòng thử tạo lại.');
         } else if (error.code === 'ROUTE_NOT_ACTIVE') {
           setFieldErrors((curr) => ({
             ...curr,
@@ -203,12 +224,15 @@ export function TripFormDialog({
             vehicleId: 'Xe chưa được cấu hình ghế nên chưa thể lập chuyến xe.',
           }));
         } else if (error.details.length > 0) {
-          setFieldErrors(mappedErrors(error.details));
+          const mapped = mappedErrors(error.details);
+          setFieldErrors(mapped);
+          if (error.details.some((detail) => !(detail.field in mapped)))
+            toast.error(error.message);
         } else {
-          setFormError(error.message);
+          toast.error(error.message);
         }
       } else {
-        setFormError(
+        toast.error(
           error instanceof TypeError
             ? 'Không thể kết nối đến máy chủ API. Vui lòng thử lại.'
             : error instanceof Error
@@ -219,324 +243,206 @@ export function TripFormDialog({
     } finally {
       submittingRef.current = false;
       setSubmitting(false);
+      requestAnimationFrame(() =>
+        formRef.current
+          ?.querySelector<HTMLElement>('[aria-invalid="true"]')
+          ?.focus(),
+      );
     }
   }
 
-  return (
-    <AdminFormDialog
-      ariaBusy={submitting}
-      ariaDescribedBy={`${idPrefix}-description`}
-      ariaLabelledBy={`${idPrefix}-title`}
-      dialogRef={dialogRef}
-      onClose={onClose}
-      preventDismiss={submitting}
-    >
-      <>
-        <div className="admin-dialog-header">
-          <div className="admin-dialog-header__copy">
-            <p className="eyebrow">
-              {editing ? 'CHỈNH SỬA CHUYẾN' : 'TẠO MỚI CHUYẾN'}
-            </p>
-            <h2 id={`${idPrefix}-title`}>
-              {editing ? 'Chỉnh sửa chuyến xe' : 'Thêm chuyến xe mới'}
-            </h2>
-          </div>
-          <form method="dialog">
-            <button
-              aria-label={
-                editing
-                  ? 'Đóng hộp thoại chỉnh sửa chuyến'
-                  : 'Đóng hộp thoại thêm chuyến'
-              }
-              className="icon-button"
-              disabled={submitting}
-              onClick={closeDialog}
-              type="button"
-            >
-              <X aria-hidden="true" size={19} />
-            </button>
-          </form>
-        </div>
-
-        <form className="admin-crud-form" noValidate onSubmit={handleSubmit}>
-          <p
-            className="admin-form-dialog__description"
-            id={`${idPrefix}-description`}
-          >
-            {editing
-              ? 'Cập nhật ngày và giờ khởi hành của chuyến xe.'
-              : 'Nhập thông tin chuyến xe, chọn tuyến và xe phục vụ để tạo chuyến và khởi tạo ghế.'}
+  function relationField(
+    field: 'routeId' | 'vehicleId',
+    label: string,
+    options: TripLookupOptionsState,
+    retry: () => void,
+  ) {
+    return (
+      <FormField data-invalid={Boolean(fieldErrors[field])}>
+        <FieldLabel htmlFor={`${idPrefix}-${field}`}>{label}</FieldLabel>
+        {options.status === 'loading' && (
+          <p role="status" className="text-sm text-muted-foreground">
+            Đang tải {label.toLocaleLowerCase()}…
           </p>
-
-          {editing ? (
-            <div className="admin-crud-form-field">
-              <label>Thông tin chuyến hiện tại</label>
-              <div
-                className="trips-detail-fields"
-                style={{
-                  background: 'var(--admin-surface)',
-                  padding: 'var(--admin-space-field-gap)',
-                  borderRadius: 'var(--admin-radius-card)',
-                  border: '1px solid var(--admin-border)',
-                }}
-              >
-                <div>
-                  <dt>Mã chuyến</dt>
-                  <dd>
-                    <strong className="admin-data-mono">{trip.code}</strong>
-                  </dd>
-                </div>
-                <div>
-                  <dt>Tuyến</dt>
-                  <dd>
-                    {trip.route.origin} → {trip.route.destination}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Xe</dt>
-                  <dd>
-                    <span className="admin-data-mono">
-                      {trip.vehicle.licensePlate}
-                    </span>{' '}
-                    ({trip.vehicle.vehicleType.name})
-                  </dd>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <>
-              <AdminGeneratedCodeField id={`${idPrefix}-code`} label="Mã chuyến xe" code={codePreview.code} placeholder={codePreview.placeholder} error={codePreview.error} onRetry={codePreview.retry} />
-
-              <div className="admin-crud-form-field">
-                <label htmlFor={`${idPrefix}-route`}>
-                  Tuyến xe <span aria-hidden="true">*</span>
-                </label>
-                {routeOptions.status === 'loading' && (
-                  <p className="routes-option-state" role="status">
-                    Đang tải danh sách tuyến xe…
-                  </p>
-                )}
-                {routeOptions.status === 'error' && (
-                  <div className="routes-option-state" role="alert">
-                    <span>{routeOptions.message}</span>
-                    <Button
-                      onClick={onRetryRouteOptions}
-                      type="button"
-                      variant="secondary"
-                    >
-                      Thử tải lại
-                    </Button>
-                  </div>
-                )}
-                {routeOptions.status === 'success' && (
-                  <select
-                    aria-describedby={
-                      fieldErrors.routeId
-                        ? `${idPrefix}-route-error`
-                        : undefined
-                    }
-                    aria-invalid={Boolean(fieldErrors.routeId)}
-                    aria-required="true"
-                    disabled={submitting || routeOptions.options.length === 0}
-                    id={`${idPrefix}-route`}
-                    onChange={(e) => updateField('routeId', e.target.value)}
-                    value={values.routeId}
-                  >
-                    <option value="">
-                      {routeOptions.options.length === 0
-                        ? 'Chưa có tuyến xe nào'
-                        : '-- Chọn tuyến xe --'}
-                    </option>
-                    {routeOptions.options.map((option) => (
-                      <option key={option.id} value={option.id}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                )}
-                {fieldErrors.routeId && (
-                  <span
-                    className="admin-crud-form-field-error"
-                    id={`${idPrefix}-route-error`}
-                    role="alert"
-                  >
-                    {fieldErrors.routeId}
-                  </span>
-                )}
-              </div>
-
-              <div className="admin-crud-form-field">
-                <label htmlFor={`${idPrefix}-vehicle`}>
-                  Xe phục vụ <span aria-hidden="true">*</span>
-                </label>
-                {vehicleOptions.status === 'loading' && (
-                  <p className="routes-option-state" role="status">
-                    Đang tải danh sách xe…
-                  </p>
-                )}
-                {vehicleOptions.status === 'error' && (
-                  <div className="routes-option-state" role="alert">
-                    <span>{vehicleOptions.message}</span>
-                    <Button
-                      onClick={onRetryVehicleOptions}
-                      type="button"
-                      variant="secondary"
-                    >
-                      Thử tải lại
-                    </Button>
-                  </div>
-                )}
-                {vehicleOptions.status === 'success' && (
-                  <select
-                    aria-describedby={
-                      fieldErrors.vehicleId
-                        ? `${idPrefix}-vehicle-error`
-                        : undefined
-                    }
-                    aria-invalid={Boolean(fieldErrors.vehicleId)}
-                    aria-required="true"
-                    disabled={submitting || vehicleOptions.options.length === 0}
-                    id={`${idPrefix}-vehicle`}
-                    onChange={(e) => updateField('vehicleId', e.target.value)}
-                    value={values.vehicleId}
-                  >
-                    <option value="">
-                      {vehicleOptions.options.length === 0
-                        ? 'Chưa có xe nào'
-                        : '-- Chọn xe phục vụ --'}
-                    </option>
-                    {vehicleOptions.options.map((option) => (
-                      <option key={option.id} value={option.id}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                )}
-                {fieldErrors.vehicleId && (
-                  <span
-                    className="admin-crud-form-field-error"
-                    id={`${idPrefix}-vehicle-error`}
-                    role="alert"
-                  >
-                    {fieldErrors.vehicleId}
-                  </span>
-                )}
-              </div>
-              <label
-                className="trips-shipment-checkbox-field"
-                htmlFor={`${idPrefix}-accepts-shipments`}
-              >
-                <input
-                  checked={values.acceptsShipments}
-                  className="trips-shipment-checkbox"
-                  disabled={submitting}
-                  id={`${idPrefix}-accepts-shipments`}
-                  onChange={(event) => {
-                    setValues((current) => ({
-                      ...current,
-                      acceptsShipments: event.target.checked,
-                    }));
-                    setFormError(null);
-                  }}
-                  type="checkbox"
-                />
-                <span>Nhận gửi hàng</span>
-              </label>
-            </>
-          )}
-
-          <div className="admin-crud-form-field">
-            <label htmlFor={`${idPrefix}-departure-date`}>
-              Ngày khởi hành <span aria-hidden="true">*</span>
-            </label>
-            <input
-              aria-describedby={
-                fieldErrors.departureDate ? `${idPrefix}-date-error` : undefined
-              }
-              aria-invalid={Boolean(fieldErrors.departureDate)}
+        )}
+        {options.status === 'error' && (
+          <ResourceNotice kind="error">
+            <span>{options.message}</span>
+            <Button disabled={submitting} onClick={retry} variant="outline">
+              Thử tải lại
+            </Button>
+          </ResourceNotice>
+        )}
+        {options.status === 'success' && (
+          <Select
+            value={values[field] || null}
+            onValueChange={(value) => updateField(field, String(value ?? ''))}
+          >
+            <SelectTrigger
+              id={`${idPrefix}-${field}`}
+              disabled={submitting || !options.options.length}
               aria-required="true"
-              disabled={submitting}
-              id={`${idPrefix}-departure-date`}
-              onChange={(e) => updateField('departureDate', e.target.value)}
-              type="date"
-              value={values.departureDate}
-            />
-            {fieldErrors.departureDate && (
-              <span
-                className="admin-crud-form-field-error"
-                id={`${idPrefix}-date-error`}
-                role="alert"
-              >
-                {fieldErrors.departureDate}
-              </span>
-            )}
-          </div>
-
-          <div className="admin-crud-form-field">
-            <label htmlFor={`${idPrefix}-departure-time`}>
-              Giờ khởi hành <span aria-hidden="true">*</span>
-            </label>
-            <input
+              aria-invalid={Boolean(fieldErrors[field])}
               aria-describedby={
-                fieldErrors.departureTime ? `${idPrefix}-time-error` : undefined
+                fieldErrors[field] ? `${idPrefix}-${field}-error` : undefined
               }
-              aria-invalid={Boolean(fieldErrors.departureTime)}
-              aria-required="true"
-              disabled={submitting}
-              id={`${idPrefix}-departure-time`}
-              onChange={(e) => updateField('departureTime', e.target.value)}
-              placeholder="HH:mm (ví dụ 07:30)"
-              type="time"
-              value={values.departureTime}
-            />
-            {fieldErrors.departureTime && (
-              <span
-                className="admin-crud-form-field-error"
-                id={`${idPrefix}-time-error`}
-                role="alert"
-              >
-                {fieldErrors.departureTime}
-              </span>
-            )}
-          </div>
+            >
+              <SelectValue>
+                {options.options.find(
+                  (option) => String(option.id) === values[field],
+                )?.label ??
+                  (options.options.length
+                    ? `Chọn ${label.toLocaleLowerCase()}`
+                    : `Chưa có ${label.toLocaleLowerCase()}`)}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {options.options.map((option) => (
+                <SelectItem key={option.id} value={String(option.id)}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+        {fieldErrors[field] && (
+          <FieldError id={`${idPrefix}-${field}-error`}>
+            {fieldErrors[field]}
+          </FieldError>
+        )}
+      </FormField>
+    );
+  }
 
-          {formError && (
-            <p className="admin-crud-form-error" role="alert">
-              {formError}
+  return (
+    <ResourceSheet
+      title={editing ? 'Chỉnh sửa chuyến xe' : 'Thêm chuyến xe'}
+      description={
+        editing
+          ? 'Cập nhật ngày và giờ khởi hành của chuyến xe.'
+          : 'Chọn tuyến, xe phục vụ và thời gian khởi hành để tạo chuyến và khởi tạo ghế.'
+      }
+      busy={submitting}
+      preventDismiss={submitting}
+      onClose={onClose}
+    >
+      <form
+        ref={formRef}
+        className="space-y-5"
+        noValidate
+        onSubmit={handleSubmit}
+      >
+        {editing ? (
+          <div className="space-y-2 rounded-lg border bg-muted/40 p-4 text-[13px]">
+            <p className="admin-data-mono font-semibold">{trip.code}</p>
+            <p>
+              {trip.route.origin} → {trip.route.destination}
             </p>
-          )}
-
-          <div className="admin-crud-form-actions">
-            <Button
-              disabled={submitting}
-              onClick={closeDialog}
-              type="button"
-              variant="secondary"
-            >
-              Hủy
-            </Button>
-            <Button
-              disabled={submitting || isOptionsLoading || isOptionsError}
-              type="submit"
-            >
-              {submitting && (
-                <LoaderCircle
-                  aria-hidden="true"
-                  className="admin-crud-form-spinner"
-                  size={15}
-                />
-              )}
-              {submitting
-                ? editing
-                  ? 'Đang lưu…'
-                  : 'Đang tạo…'
-                : editing
-                  ? 'Cập nhật chuyến'
-                  : 'Tạo chuyến xe'}
-            </Button>
+            <p>
+              <span className="admin-data-mono">
+                {trip.vehicle.licensePlate}
+              </span>{' '}
+              · {trip.vehicle.vehicleType.name}
+            </p>
           </div>
-        </form>
-      </>
-    </AdminFormDialog>
+        ) : (
+          <>
+            <ResourceGeneratedCodeField
+              id={`${idPrefix}-code`}
+              label="Mã chuyến xe"
+              code={codePreview.code}
+              placeholder={codePreview.placeholder}
+              error={codePreview.error}
+              onRetry={codePreview.retry}
+              busy={submitting}
+            />
+            {relationField(
+              'routeId',
+              'Tuyến xe',
+              routeOptions,
+              onRetryRouteOptions,
+            )}
+            {relationField(
+              'vehicleId',
+              'Xe phục vụ',
+              vehicleOptions,
+              onRetryVehicleOptions,
+            )}
+            <label
+              className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg border p-3 text-[13px] font-semibold"
+              htmlFor={`${idPrefix}-accepts-shipments`}
+            >
+              <input
+                className="size-4 accent-primary focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
+                id={`${idPrefix}-accepts-shipments`}
+                type="checkbox"
+                checked={values.acceptsShipments}
+                disabled={submitting}
+                onChange={(event) =>
+                  setValues((current) => ({
+                    ...current,
+                    acceptsShipments: event.target.checked,
+                  }))
+                }
+              />
+              Nhận gửi hàng
+            </label>
+          </>
+        )}
+        <div className="grid gap-5 sm:grid-cols-2">
+          {(['departureDate', 'departureTime'] as const).map((field) => (
+            <FormField key={field} data-invalid={Boolean(fieldErrors[field])}>
+              <FieldLabel htmlFor={`${idPrefix}-${field}`}>
+                {field === 'departureDate' ? 'Ngày khởi hành' : 'Giờ khởi hành'}
+              </FieldLabel>
+              <Input
+                id={`${idPrefix}-${field}`}
+                type={field === 'departureDate' ? 'date' : 'time'}
+                value={values[field]}
+                disabled={submitting}
+                aria-required="true"
+                aria-invalid={Boolean(fieldErrors[field])}
+                aria-describedby={
+                  fieldErrors[field] ? `${idPrefix}-${field}-error` : undefined
+                }
+                onChange={(event) => updateField(field, event.target.value)}
+              />
+              {fieldErrors[field] && (
+                <FieldError id={`${idPrefix}-${field}-error`}>
+                  {fieldErrors[field]}
+                </FieldError>
+              )}
+            </FormField>
+          ))}
+        </div>
+        <div className="sticky -bottom-4 -mx-4 flex justify-end gap-3 border-t bg-card px-4 py-4 sm:-bottom-6 sm:-mx-6 sm:px-6">
+          <Button disabled={submitting} onClick={closeDialog} variant="outline">
+            Hủy
+          </Button>
+          <Button
+            disabled={
+              submitting ||
+              isOptionsLoading ||
+              isOptionsError ||
+              (!editing &&
+                (routeOptions.status !== 'success' ||
+                  !routeOptions.options.length ||
+                  vehicleOptions.status !== 'success' ||
+                  !vehicleOptions.options.length))
+            }
+            type="submit"
+          >
+            {submitting && (
+              <LoaderCircle aria-hidden className="motion-safe:animate-spin" />
+            )}
+            {submitting
+              ? 'Đang lưu…'
+              : editing
+                ? 'Lưu thay đổi'
+                : 'Tạo chuyến xe'}
+          </Button>
+        </div>
+      </form>
+    </ResourceSheet>
   );
 }

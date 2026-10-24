@@ -1,0 +1,36 @@
+.workspace {
+  display: flex;
+  min-width: 0;
+  height: calc(100dvh - 248px);
+  min-height: 30rem;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--admin-radius-panel, 12px);
+  background: var(--card);
+  box-shadow: 0 2px 5px rgb(21 40 75 / 3%);
+}
+.inbox {
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+}
+.detail {
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+@media (min-width: 768px) {
+  .workspace {
+    min-height: 28rem;
+  }
+  .inbox {
+    width: 320px;
+    flex-shrink: 0;
+    border-right: 1px solid var(--border);
+  }
+}
+@media (min-width: 1440px) {
+  .inbox {
+    width: 360px;
+  }
+}

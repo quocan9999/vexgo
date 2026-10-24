@@ -1,11 +1,15 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { CheckCircle2, LoaderCircle, Pencil, X } from 'lucide-react';
-import { AdminConfirmDialog } from '@/components/admin/admin-confirm-dialog';
-import { AdminDetailSheet } from '@/components/admin/admin-detail-sheet';
-import { AdminStatusBadge } from '@/components/admin/admin-status-badge';
-import { Button } from '@/components/ui/button';
+import { LoaderCircle, Pencil, Ticket } from 'lucide-react';
+import { toast } from 'sonner';
+import {
+  ResourceConfirmation,
+  ResourceSheet,
+  ResourceState,
+  ResourceStatusBadge,
+} from '@/components/admin/resource-ui';
+import { Button } from '@/components/ui/action-button';
 import { useAdminPermissions } from '@/features/admin-auth/hooks/use-admin-permissions';
 import {
   FarePriceApiError,
@@ -18,7 +22,6 @@ import type {
   FarePriceStatus,
 } from '../types/fare-price';
 import { FarePriceFormDialog } from './fare-price-form-dialog';
-import styles from '../fare-prices.module.css';
 
 function formatPrice(listedPrice: number) {
   return `${new Intl.NumberFormat('vi-VN').format(listedPrice)} ₫`;
@@ -31,14 +34,21 @@ function formatDateOnly(value: string | null) {
     month: '2-digit',
     year: 'numeric',
     timeZone: 'UTC',
-  }).format(new Date(`${value}T00:00:00.000Z`));
+  })
+    .format(new Date(`${value}T00:00:00.000Z`))
+    .replaceAll('/', '-');
 }
 
 function formatTimestamp(value: string) {
   return new Intl.DateTimeFormat('vi-VN', {
-    dateStyle: 'short',
-    timeStyle: 'short',
-  }).format(new Date(value));
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+    .format(new Date(value))
+    .replaceAll('/', '-');
 }
 
 function statusLabel(status: FarePrice['status']) {
@@ -86,13 +96,10 @@ export function FarePriceDetailSheet({
   }>({ key: '', status: 'loading' });
   const [retryCount, setRetryCount] = useState(0);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [updateNotice, setUpdateNotice] = useState<string | null>(null);
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [statusSubmitting, setStatusSubmitting] = useState(false);
-  const [statusError, setStatusError] = useState<string | null>(null);
   const statusSubmittingRef = useRef(false);
   const onNotFoundRef = useRef(onNotFound);
-  const dialogRef = useRef<HTMLDialogElement>(null);
   const requestKey = `${farePriceId}:${retryCount}`;
   const requestMatches = request.key === requestKey;
   const loading = !requestMatches || request.status === 'loading';
@@ -112,7 +119,6 @@ export function FarePriceDetailSheet({
   function handleFarePriceUpdated(updated: FarePrice) {
     setRequest({ key: requestKey, status: 'success', farePrice: updated });
     setEditDialogOpen(false);
-    setUpdateNotice('Đã cập nhật bảng giá vé.');
     onUpdated(updated);
   }
 
@@ -123,8 +129,6 @@ export function FarePriceDetailSheet({
     : null;
 
   function openStatusDialog() {
-    setUpdateNotice(null);
-    setStatusError(null);
     setStatusDialogOpen(true);
   }
 
@@ -133,17 +137,11 @@ export function FarePriceDetailSheet({
 
     statusSubmittingRef.current = true;
     setStatusSubmitting(true);
-    setStatusError(null);
 
     try {
       const updated = await updateFarePriceStatus(farePriceId, targetStatus);
       setRequest({ key: requestKey, status: 'success', farePrice: updated });
       setStatusDialogOpen(false);
-      setUpdateNotice(
-        targetStatus === 'HOAT_DONG'
-          ? 'Đã kích hoạt bảng giá vé.'
-          : 'Đã tạm ngưng bảng giá vé.',
-      );
       onUpdated(updated);
     } catch (requestError: unknown) {
       if (
@@ -156,18 +154,18 @@ export function FarePriceDetailSheet({
         requestError.code === 'FARE_PRICE_OVERLAP' &&
         targetStatus === 'HOAT_DONG'
       ) {
-        setStatusError(
+        toast.error(
           'Không thể kích hoạt vì khoảng hiệu lực bị trùng với một bảng giá đang hoạt động của cùng tuyến và loại xe.',
         );
       } else if (
         requestError instanceof FarePriceApiError &&
         requestError.code === 'FARE_PRICE_CONCURRENT_MODIFICATION'
       ) {
-        setStatusError(
+        toast.error(
           'Dữ liệu bảng giá vừa thay đổi đồng thời. Vui lòng tải lại và thử lại.',
         );
       } else {
-        setStatusError(
+        toast.error(
           requestError instanceof TypeError
             ? 'Không thể kết nối đến máy chủ API. Vui lòng thử lại.'
             : requestError instanceof Error
@@ -209,150 +207,122 @@ export function FarePriceDetailSheet({
   }, [farePriceId, retryCount]);
 
   return (
-    <>
-      <AdminDetailSheet
-        ariaBusy={loading}
-        ariaDescribedBy="fare-price-detail-description"
-        ariaLabelledBy="fare-price-detail-title"
-        dialogRef={dialogRef}
-        onClose={onClose}
-      >
-        <div className="admin-dialog-header">
-          <div>
-            <h2 id="fare-price-detail-title">Chi tiết bảng giá</h2>
-          </div>
-          <button
-            aria-label="Đóng chi tiết bảng giá"
-            className="icon-button"
-            onClick={() => dialogRef.current?.close()}
-            type="button"
+    <ResourceSheet
+      busy={loading}
+      title="Chi tiết bảng giá"
+      description="Thông tin giá vé theo tuyến, loại xe và thời gian hiệu lực."
+      onClose={onClose}
+    >
+      {loading && (
+        <ResourceState loading>Đang tải thông tin bảng giá…</ResourceState>
+      )}
+      {error && (
+        <ResourceState error>
+          <p>{error}</p>
+          <Button
+            variant="outline"
+            onClick={() => setRetryCount((count) => count + 1)}
           >
-            <X aria-hidden="true" size={18} />
-          </button>
-        </div>
-        <p
-          className={styles.detailDescription}
-          id="fare-price-detail-description"
-        >
-          Thông tin giá vé theo tuyến, loại xe và thời gian hiệu lực.
-        </p>
-        {updateNotice && (
-          <p className={styles.successNotice} role="status">
-            <CheckCircle2 aria-hidden="true" size={16} />
-            <span>{updateNotice}</span>
-          </p>
-        )}
-        {loading && (
-          <p className={styles.detailState} role="status">
-            Đang tải thông tin bảng giá…
-          </p>
-        )}
-        {error && (
-          <div className={styles.detailError} role="alert">
-            <p>{error}</p>
-            <Button
-              onClick={() => setRetryCount((count) => count + 1)}
-              type="button"
-              variant="secondary"
+            Thử lại
+          </Button>
+        </ResourceState>
+      )}
+      {farePrice && (
+        <div className="space-y-6">
+          <div className="flex items-center gap-4 border-b pb-6">
+            <span
+              aria-hidden
+              className="grid size-12 shrink-0 place-items-center rounded-[var(--admin-radius-panel)] bg-accent text-primary"
             >
-              Thử lại
-            </Button>
+              <Ticket size={24} />
+            </span>
+            <div className="min-w-0">
+              <h3 className="break-words text-base font-semibold">
+                {farePrice.route.origin} → {farePrice.route.destination}
+              </h3>
+              <p className="mt-1 text-xs text-muted-foreground">
+                <span className="admin-data-mono">{farePrice.route.code}</span>{' '}
+                · {farePrice.vehicleType.name}
+              </p>
+            </div>
           </div>
-        )}
-        {farePrice && (
-          <>
-            <dl className={styles.detailList}>
-              <div className={styles.detailItem}>
-                <dt>Tuyến xe</dt>
-                <dd>
-                  {farePrice.route.origin} → {farePrice.route.destination}
-                </dd>
-              </div>
-              <div className={styles.detailItem}>
-                <dt>Mã tuyến</dt>
-                <dd className="admin-data-mono">{farePrice.route.code}</dd>
-              </div>
-              <div className={styles.detailItem}>
-                <dt>Điểm đi</dt>
-                <dd>{farePrice.route.origin}</dd>
-              </div>
-              <div className={styles.detailItem}>
-                <dt>Điểm đến</dt>
-                <dd>{farePrice.route.destination}</dd>
-              </div>
-              <div className={styles.detailItem}>
-                <dt>Loại xe</dt>
-                <dd>{farePrice.vehicleType.name}</dd>
-              </div>
-              <div className={styles.detailItem}>
-                <dt>Giá niêm yết</dt>
-                <dd>{formatPrice(farePrice.listedPrice)}</dd>
-              </div>
-              <div className={styles.detailItem}>
-                <dt>Đơn vị tiền</dt>
-                <dd>{farePrice.currency}</dd>
-              </div>
-              <div className={styles.detailItem}>
-                <dt>Hiệu lực từ</dt>
-                <dd>{formatDateOnly(farePrice.validFrom)}</dd>
-              </div>
-              <div className={styles.detailItem}>
-                <dt>Hiệu lực đến</dt>
-                <dd>{formatDateOnly(farePrice.validTo)}</dd>
-              </div>
-              <div className={styles.detailItem}>
-                <dt>Trạng thái cấu hình</dt>
-                <dd>
-                  <AdminStatusBadge
-                    tone={farePrice.status === 'HOAT_DONG' ? 'active' : 'muted'}
-                  >
-                    {statusLabel(farePrice.status)}
-                  </AdminStatusBadge>
-                </dd>
-              </div>
-              <div className={styles.detailItem}>
-                <dt>Hiệu lực hiện tại</dt>
-                <dd>
-                  <AdminStatusBadge
-                    tone={
-                      farePrice.effectiveState === 'DANG_HIEU_LUC'
-                        ? 'active'
-                        : 'muted'
-                    }
-                  >
-                    {effectiveStateLabel(farePrice.effectiveState)}
-                  </AdminStatusBadge>
-                </dd>
-              </div>
-              <div className={styles.detailItem}>
-                <dt>Ngày tạo</dt>
-                <dd>{formatTimestamp(farePrice.createdAt)}</dd>
-              </div>
-              <div className={styles.detailItem}>
-                <dt>Cập nhật lần cuối</dt>
-                <dd>{formatTimestamp(farePrice.updatedAt)}</dd>
-              </div>
-            </dl>
-            {canUpdate && (
-              <div className={`${styles.detailActions} admin-detail-sheet__actions`}>
-                <Button
-                  onClick={() => {
-                    setUpdateNotice(null);
-                    setEditDialogOpen(true);
-                  }}
-                  type="button"
+          <div className="rounded-[var(--admin-radius-panel)] border bg-muted/40 p-4">
+            <p className="text-xs text-muted-foreground">Giá niêm yết</p>
+            <p className="mt-2 text-2xl font-semibold tabular-nums">
+              {formatPrice(farePrice.listedPrice)}
+            </p>
+          </div>
+          <dl className="grid grid-cols-2 gap-4 text-[13px] [&_dt]:mb-1 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:break-words">
+            <div>
+              <dt>Điểm đi</dt>
+              <dd>{farePrice.route.origin}</dd>
+            </div>
+            <div>
+              <dt>Điểm đến</dt>
+              <dd>{farePrice.route.destination}</dd>
+            </div>
+            <div>
+              <dt>Loại xe</dt>
+              <dd>{farePrice.vehicleType.name}</dd>
+            </div>
+            <div>
+              <dt>Đơn vị tiền</dt>
+              <dd>{farePrice.currency}</dd>
+            </div>
+            <div>
+              <dt>Hiệu lực từ</dt>
+              <dd>{formatDateOnly(farePrice.validFrom)}</dd>
+            </div>
+            <div>
+              <dt>Hiệu lực đến</dt>
+              <dd>{formatDateOnly(farePrice.validTo)}</dd>
+            </div>
+            <div>
+              <dt>Trạng thái cấu hình</dt>
+              <dd>
+                <ResourceStatusBadge
+                  tone={farePrice.status === 'HOAT_DONG' ? 'active' : 'muted'}
                 >
-                  <Pencil aria-hidden="true" size={15} />
-                  Chỉnh sửa
-                </Button>
-                <Button onClick={openStatusDialog} type="button" variant="secondary">
-                  {farePrice.status === 'HOAT_DONG' ? 'Tạm ngưng' : 'Kích hoạt'}
-                </Button>
-              </div>
-            )}
-          </>
-        )}
-      </AdminDetailSheet>
+                  {statusLabel(farePrice.status)}
+                </ResourceStatusBadge>
+              </dd>
+            </div>
+            <div>
+              <dt>Hiệu lực hiện tại</dt>
+              <dd>
+                <ResourceStatusBadge
+                  tone={
+                    farePrice.effectiveState === 'DANG_HIEU_LUC'
+                      ? 'active'
+                      : 'muted'
+                  }
+                >
+                  {effectiveStateLabel(farePrice.effectiveState)}
+                </ResourceStatusBadge>
+              </dd>
+            </div>
+            <div>
+              <dt>Ngày tạo</dt>
+              <dd>{formatTimestamp(farePrice.createdAt)}</dd>
+            </div>
+            <div>
+              <dt>Cập nhật lần cuối</dt>
+              <dd>{formatTimestamp(farePrice.updatedAt)}</dd>
+            </div>
+          </dl>
+          {canUpdate && (
+            <div className="flex flex-wrap justify-end gap-3 border-t pt-4">
+              <Button variant="outline" onClick={openStatusDialog}>
+                {farePrice.status === 'HOAT_DONG' ? 'Tạm ngưng' : 'Kích hoạt'}
+              </Button>
+              <Button onClick={() => setEditDialogOpen(true)}>
+                <Pencil aria-hidden />
+                Chỉnh sửa
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
       {editDialogOpen && canUpdate && farePrice && (
         <FarePriceFormDialog
           farePrice={farePrice}
@@ -366,62 +336,38 @@ export function FarePriceDetailSheet({
         />
       )}
       {statusDialogOpen && canUpdate && targetStatus && (
-        <AdminConfirmDialog
-          ariaBusy={statusSubmitting}
-          ariaDescribedBy="fare-price-status-confirmation-description"
-          ariaLabelledBy="fare-price-status-confirmation-title"
+        <ResourceConfirmation
+          busy={statusSubmitting}
           onClose={() => {
             if (!statusSubmittingRef.current) setStatusDialogOpen(false);
           }}
-          preventDismiss={statusSubmitting}
+          title={
+            targetStatus === 'TAM_NGUNG'
+              ? 'Tạm ngưng bảng giá?'
+              : 'Kích hoạt bảng giá?'
+          }
+          description={
+            targetStatus === 'TAM_NGUNG'
+              ? 'Bảng giá này sẽ không còn được dùng để xác định giá áp dụng cho các vé mới. Lịch sử vé hiện có được giữ nguyên.'
+              : 'Bảng giá sẽ được kích hoạt nếu khoảng hiệu lực không trùng với bảng giá đang hoạt động khác.'
+          }
         >
-          <>
-            <h2 id="fare-price-status-confirmation-title">
-              {targetStatus === 'TAM_NGUNG'
-                ? 'Tạm ngưng bảng giá?'
-                : 'Kích hoạt bảng giá?'}
-            </h2>
-            <p id="fare-price-status-confirmation-description">
-              {targetStatus === 'TAM_NGUNG'
-                ? 'Bảng giá này sẽ không còn được dùng để xác định giá áp dụng cho các vé mới. Lịch sử vé hiện có được giữ nguyên.'
-                : 'Bảng giá sẽ được kích hoạt nếu khoảng hiệu lực không trùng với bảng giá đang hoạt động khác.'}
-            </p>
-            {statusError && (
-              <p className="admin-confirm-dialog__error" role="alert">
-                {statusError}
-              </p>
+          <Button
+            disabled={statusSubmitting}
+            aria-busy={statusSubmitting}
+            onClick={confirmStatusChange}
+          >
+            {statusSubmitting && (
+              <LoaderCircle aria-hidden className="motion-safe:animate-spin" />
             )}
-            <div className="admin-confirm-dialog__actions">
-              <Button
-                disabled={statusSubmitting}
-                onClick={() => setStatusDialogOpen(false)}
-                type="button"
-                variant="secondary"
-              >
-                Hủy
-              </Button>
-              <Button
-                disabled={statusSubmitting}
-                onClick={confirmStatusChange}
-                type="button"
-              >
-                {statusSubmitting && (
-                  <LoaderCircle
-                    aria-hidden="true"
-                    className="status-confirmation-spinner"
-                    size={15}
-                  />
-                )}
-                {statusSubmitting
-                  ? 'Đang cập nhật…'
-                  : targetStatus === 'TAM_NGUNG'
-                    ? 'Tạm ngưng bảng giá'
-                    : 'Kích hoạt bảng giá'}
-              </Button>
-            </div>
-          </>
-        </AdminConfirmDialog>
+            {statusSubmitting
+              ? 'Đang cập nhật…'
+              : targetStatus === 'TAM_NGUNG'
+                ? 'Tạm ngưng bảng giá'
+                : 'Kích hoạt bảng giá'}
+          </Button>
+        </ResourceConfirmation>
       )}
-    </>
+    </ResourceSheet>
   );
 }

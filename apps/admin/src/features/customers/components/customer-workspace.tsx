@@ -3,25 +3,34 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { AdminPageHeader } from '@/components/admin/admin-page-header';
-import { AdminRefreshAction } from '@/components/admin/admin-page-actions';
-import { AdminStatusBadge } from '@/components/admin/admin-status-badge';
-import { Button } from '@/components/ui/button';
+import {
+  ResourceRefreshAction,
+  ResourceStatusBadge,
+  ResourceState,
+  ResourceNotice,
+} from '@/components/admin/resource-ui';
+import { Button, buttonVariants } from '@/components/ui/action-button';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
 import { getCustomerById } from '../services/customer-service';
 import type { CustomerDetail } from '../types/customer';
 import { CustomerTransactionsTab } from './customer-transactions-tab';
 import { CustomerTicketsTab } from './customer-tickets-tab';
 import { CustomerShipmentsTab } from './customer-shipments-tab';
-import '../customers.css';
 
 type WorkspaceTab = 'overview' | 'transactions' | 'tickets' | 'shipments';
 
 function formatDateTime(value?: string | null) {
   if (!value) return '—';
   return new Intl.DateTimeFormat('vi-VN', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(value));
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+    .format(new Date(value))
+    .replaceAll('/', '-');
 }
 
 export function CustomerWorkspace({ customerId }: { customerId: number }) {
@@ -43,6 +52,7 @@ export function CustomerWorkspace({ customerId }: { customerId: number }) {
     const controller = new AbortController();
     getCustomerById(customerId, controller.signal)
       .then((data) => {
+        if (controller.signal.aborted) return;
         setCustomer(data);
         setError(null);
       })
@@ -56,6 +66,7 @@ export function CustomerWorkspace({ customerId }: { customerId: number }) {
         }
       })
       .finally(() => {
+        if (controller.signal.aborted) return;
         setLoading(false);
         setRefreshing(false);
       });
@@ -70,14 +81,17 @@ export function CustomerWorkspace({ customerId }: { customerId: number }) {
 
   return (
     <SuperAdminLayout activeSection="customers">
-      <div className="admin-page-content">
+      <div className="admin-page-content admin-ui space-y-6">
         <AdminPageHeader
           actions={
             <div className="page-intro-actions">
-              <Link className="button button-secondary" href="/customers">
+              <Link
+                className={buttonVariants({ variant: 'outline' })}
+                href="/customers"
+              >
                 Quay lại danh sách
               </Link>
-              <AdminRefreshAction
+              <ResourceRefreshAction
                 loading={loading || refreshing}
                 onClick={refresh}
               />
@@ -89,61 +103,62 @@ export function CustomerWorkspace({ customerId }: { customerId: number }) {
         />
 
         {loading && !customer && (
-          <div className="panel customer-workspace-hero" role="status">
-            <div className="customers-state-panel">
-              <p>Đang tải thông tin khách hàng…</p>
-            </div>
-          </div>
+          <ResourceState loading>
+            <p>Đang tải thông tin khách hàng…</p>
+          </ResourceState>
         )}
 
         {error && !customer && (
-          <div className="panel customer-workspace-hero" role="alert">
-            <div className="customers-state-panel">
-              <p>{error}</p>
-              <div className="customers-error-actions">
-                {isValidId && (
-                  <Button onClick={refresh} type="button" variant="secondary">
-                    Thử lại
-                  </Button>
-                )}
-                <Link className="button button-primary" href="/customers">
-                  Về danh sách khách hàng
-                </Link>
-              </div>
+          <ResourceState error>
+            <p>{error}</p>
+            <div className="flex flex-wrap justify-center gap-3">
+              {isValidId && (
+                <Button onClick={refresh} type="button" variant="outline">
+                  Thử lại
+                </Button>
+              )}
+              <Link className={buttonVariants()} href="/customers">
+                Về danh sách khách hàng
+              </Link>
             </div>
-          </div>
+          </ResourceState>
+        )}
+
+        {error && customer && (
+          <ResourceNotice kind="error">{error}</ResourceNotice>
         )}
 
         {customer && (
           <>
             <section
               aria-label="Tóm tắt thông tin khách hàng"
-              className="panel customer-workspace-hero"
+              className="space-y-5 rounded-xl border bg-card p-4 shadow-sm sm:p-5"
+              aria-busy={refreshing}
             >
-              <div className="customer-hero-meta">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-4">
                 <div>
-                  <span className="customer-code">
+                  <span className="text-xs text-muted-foreground">
                     Mã khách hàng:{' '}
                     <strong className="admin-data-mono">
                       {customer.customerCode}
                     </strong>
                   </span>
-                  <h2 className="customer-hero-name">{customer.fullName}</h2>
+                  <h2 className="mt-1 text-base font-semibold">
+                    {customer.fullName}
+                  </h2>
                 </div>
-                <AdminStatusBadge
+                <ResourceStatusBadge
                   tone={
-                    customer.account.status === 'HOAT_DONG'
-                      ? 'active'
-                      : 'muted'
+                    customer.account.status === 'HOAT_DONG' ? 'active' : 'muted'
                   }
                 >
                   {customer.account.status === 'HOAT_DONG'
                     ? 'Đang hoạt động'
                     : 'Tạm khóa'}
-                </AdminStatusBadge>
+                </ResourceStatusBadge>
               </div>
 
-              <dl className="customer-hero-stats">
+              <dl className="grid grid-cols-2 gap-5 text-[13px] lg:grid-cols-4 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-2 [&_dd]:break-words">
                 <div>
                   <dt>Số điện thoại</dt>
                   <dd>{customer.phoneNumber}</dd>
@@ -168,114 +183,89 @@ export function CustomerWorkspace({ customerId }: { customerId: number }) {
               </dl>
             </section>
 
-            <div
-              aria-label="Các phân hệ hồ sơ khách hàng"
-              className="customer-workspace-nav"
-              role="tablist"
+            <Tabs
+              value={activeTab}
+              onValueChange={(value) => setActiveTab(value as WorkspaceTab)}
+              className="min-w-0 gap-5"
             >
-              <button
-                aria-selected={activeTab === 'transactions'}
-                className={`customer-workspace-tab-btn${activeTab === 'transactions' ? ' is-active' : ''}`}
-                onClick={() => setActiveTab('transactions')}
-                role="tab"
-                type="button"
-              >
-                Lịch sử giao dịch
-              </button>
-              <button
-                aria-selected={activeTab === 'tickets'}
-                className={`customer-workspace-tab-btn${activeTab === 'tickets' ? ' is-active' : ''}`}
-                onClick={() => setActiveTab('tickets')}
-                role="tab"
-                type="button"
-              >
-                Vé
-              </button>
-              <button
-                aria-selected={activeTab === 'shipments'}
-                className={`customer-workspace-tab-btn${activeTab === 'shipments' ? ' is-active' : ''}`}
-                onClick={() => setActiveTab('shipments')}
-                role="tab"
-                type="button"
-              >
-                Gửi hàng
-              </button>
-              <button
-                aria-selected={activeTab === 'overview'}
-                className={`customer-workspace-tab-btn${activeTab === 'overview' ? ' is-active' : ''}`}
-                onClick={() => setActiveTab('overview')}
-                role="tab"
-                type="button"
-              >
-                Tổng quan
-              </button>
-            </div>
-
-            <div className="customer-workspace-tab-content">
-              {activeTab === 'overview' && (
-                <div className="panel customer-overview-card">
-                  <h4>Chi tiết tài khoản liên kết</h4>
-                  <dl className="customers-detail-dl">
-                    <div className="customers-detail-row">
-                      <dt>Mã tài khoản</dt>
-                      <dd className="admin-data-mono">
-                        #{customer.account.accountId}
-                      </dd>
-                    </div>
-                    <div className="customers-detail-row">
-                      <dt>Trạng thái tài khoản</dt>
-                      <dd>
-                        <AdminStatusBadge
-                          tone={
-                            customer.account.status === 'HOAT_DONG'
-                              ? 'active'
-                              : 'muted'
-                          }
-                        >
-                          {customer.account.status === 'HOAT_DONG'
-                            ? 'Đang hoạt động'
-                            : 'Tạm khóa'}
-                        </AdminStatusBadge>
-                      </dd>
-                    </div>
-                    <div className="customers-detail-row">
-                      <dt>Xác thực số điện thoại</dt>
-                      <dd>
-                        {customer.account.phoneVerified
-                          ? 'Đã xác thực'
-                          : 'Chưa xác thực'}
-                      </dd>
-                    </div>
-                    <div className="customers-detail-row">
-                      <dt>Thời gian đăng ký</dt>
-                      <dd>{formatDateTime(customer.account.createdAt)}</dd>
-                    </div>
-                    <div className="customers-detail-row">
-                      <dt>Cập nhật lần cuối</dt>
-                      <dd>{formatDateTime(customer.account.updatedAt)}</dd>
-                    </div>
-                  </dl>
-                </div>
-              )}
-
-              {activeTab === 'transactions' && (
-                <CustomerTransactionsTab customerId={customerId} />
-              )}
-
-              {activeTab === 'tickets' && (
-                <CustomerTicketsTab customerId={customerId} />
-              )}
-
-              {activeTab === 'shipments' && (
-                <CustomerShipmentsTab customerId={customerId} />
-              )}
-            </div>
+              <div className="max-w-full">
+                <TabsList
+                  aria-label="Các phân hệ hồ sơ khách hàng"
+                  className="grid w-full grid-cols-2 sm:inline-flex sm:w-fit"
+                >
+                  <TabsTrigger value="transactions">
+                    Lịch sử giao dịch
+                  </TabsTrigger>
+                  <TabsTrigger value="tickets">Vé</TabsTrigger>
+                  <TabsTrigger value="shipments">Gửi hàng</TabsTrigger>
+                  <TabsTrigger value="overview">Tổng quan</TabsTrigger>
+                </TabsList>
+              </div>
+              <TabsContent value="overview">
+                {activeTab === 'overview' && (
+                  <div className="space-y-5 rounded-xl border bg-card p-4 sm:p-5 [&_h4]:text-base [&_h4]:font-semibold">
+                    <h4>Chi tiết tài khoản liên kết</h4>
+                    <dl className="grid gap-5 text-[13px] sm:grid-cols-2">
+                      <div className="min-w-0 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-2 [&_dd]:break-words">
+                        <dt>Mã tài khoản</dt>
+                        <dd className="admin-data-mono">
+                          #{customer.account.accountId}
+                        </dd>
+                      </div>
+                      <div className="min-w-0 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-2 [&_dd]:break-words">
+                        <dt>Trạng thái tài khoản</dt>
+                        <dd>
+                          <ResourceStatusBadge
+                            tone={
+                              customer.account.status === 'HOAT_DONG'
+                                ? 'active'
+                                : 'muted'
+                            }
+                          >
+                            {customer.account.status === 'HOAT_DONG'
+                              ? 'Đang hoạt động'
+                              : 'Tạm khóa'}
+                          </ResourceStatusBadge>
+                        </dd>
+                      </div>
+                      <div className="min-w-0 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-2 [&_dd]:break-words">
+                        <dt>Xác thực số điện thoại</dt>
+                        <dd>
+                          {customer.account.phoneVerified
+                            ? 'Đã xác thực'
+                            : 'Chưa xác thực'}
+                        </dd>
+                      </div>
+                      <div className="min-w-0 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-2 [&_dd]:break-words">
+                        <dt>Thời gian đăng ký</dt>
+                        <dd>{formatDateTime(customer.account.createdAt)}</dd>
+                      </div>
+                      <div className="min-w-0 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-2 [&_dd]:break-words">
+                        <dt>Cập nhật lần cuối</dt>
+                        <dd>{formatDateTime(customer.account.updatedAt)}</dd>
+                      </div>
+                    </dl>
+                  </div>
+                )}
+              </TabsContent>
+              <TabsContent value="transactions">
+                {activeTab === 'transactions' && (
+                  <CustomerTransactionsTab customerId={customerId} />
+                )}
+              </TabsContent>
+              <TabsContent value="tickets">
+                {activeTab === 'tickets' && (
+                  <CustomerTicketsTab customerId={customerId} />
+                )}
+              </TabsContent>
+              <TabsContent value="shipments">
+                {activeTab === 'shipments' && (
+                  <CustomerShipmentsTab customerId={customerId} />
+                )}
+              </TabsContent>
+            </Tabs>
           </>
         )}
-
-        <footer className="admin-page-footer">
-          <span>© 2026 VexGo Platform</span>
-        </footer>
       </div>
     </SuperAdminLayout>
   );
