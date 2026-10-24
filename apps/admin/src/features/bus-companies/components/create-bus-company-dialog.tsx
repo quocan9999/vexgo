@@ -1,5 +1,7 @@
 'use client';
 
+import { ResourceSheetForm } from '@/components/admin/resource-sheet-form';
+
 import { LoaderCircle } from 'lucide-react';
 import { useRef, useState, type FormEvent } from 'react';
 import { ResourceNotice, ResourceSheet } from '@/components/admin/resource-ui';
@@ -157,16 +159,35 @@ export function CreateBusCompanyDialog({
       preventDismiss={submitting}
       onClose={onClose}
     >
-      <form
-        className="flex min-h-full flex-col gap-5"
+      <ResourceSheetForm
         noValidate
         onSubmit={handleSubmit}
+        footer={
+          <div className="-mx-4 flex justify-end gap-2 border-t bg-popover px-4 py-4 sm:-mx-6 sm:px-6 shrink-0">
+            <Button
+              disabled={submitting}
+              onClick={closeDialog}
+              type="button"
+              variant="outline"
+            >
+              Hủy
+            </Button>
+              <Button disabled={submitting} type="submit">
+              {submitting && (
+                <LoaderCircle
+                  aria-hidden="true"
+                  className="size-4 motion-safe:animate-spin"
+                />
+              )}
+              {submitting ? 'Đang tạo…' : 'Tạo nhà xe'}
+            </Button>
+          </div>
+        }
       >
-
         {formError && (
           <ResourceNotice kind="error">{formError}</ResourceNotice>
         )}
-
+        
         <Field data-invalid={Boolean(fieldErrors.code)}>
           <FieldLabel htmlFor="create-company-code">Mã nhà xe</FieldLabel>
           <Input
@@ -188,7 +209,7 @@ export function CreateBusCompanyDialog({
             {fieldErrors.code}
           </FieldError>
         </Field>
-
+        
         <Field data-invalid={Boolean(fieldErrors.name)}>
           <FieldLabel htmlFor="create-company-name">Tên nhà xe</FieldLabel>
           <Input
@@ -209,7 +230,7 @@ export function CreateBusCompanyDialog({
             {fieldErrors.name}
           </FieldError>
         </Field>
-
+        
         <Field data-invalid={Boolean(fieldErrors.contactInfo)}>
           <FieldLabel htmlFor="create-company-contact">
             Thông tin liên hệ{' '}
@@ -237,7 +258,7 @@ export function CreateBusCompanyDialog({
             {fieldErrors.contactInfo}
           </FieldError>
         </Field>
-
+        
         <Field data-invalid={Boolean(fieldErrors.status)}>
           <FieldLabel htmlFor="create-company-status-trigger">
             Trạng thái
@@ -274,27 +295,7 @@ export function CreateBusCompanyDialog({
             {fieldErrors.status}
           </FieldError>
         </Field>
-
-        <div className="sticky bottom-0 -mx-4 mt-auto flex justify-end gap-2 border-t bg-popover px-4 py-4 sm:-mx-6 sm:px-6">
-          <Button
-            disabled={submitting}
-            onClick={closeDialog}
-            type="button"
-            variant="outline"
-          >
-            Hủy
-          </Button>
-            <Button disabled={submitting} type="submit">
-            {submitting && (
-              <LoaderCircle
-                aria-hidden="true"
-                className="size-4 motion-safe:animate-spin"
-              />
-            )}
-            {submitting ? 'Đang tạo…' : 'Tạo nhà xe'}
-          </Button>
-        </div>
-      </form>
+      </ResourceSheetForm>
     </ResourceSheet>
   );
 }

@@ -7,7 +7,7 @@ type AdminMoneyInputProps = Omit<
   ComponentProps<'input'>,
   'type' | 'value' | 'onChange' | 'inputMode'
 > & {
-  appearance?: 'legacy' | 'resource';
+  appearance?: 'resource';
   value: string;
   onValueChange: (value: string) => void;
 };
@@ -23,7 +23,7 @@ function formatValue(value: string): string {
 export function AdminMoneyInput({
   value,
   onValueChange,
-  appearance = 'legacy',
+  appearance: _appearance,
   ...props
 }: AdminMoneyInputProps) {
   function handleChange(event: ChangeEvent<HTMLInputElement>) {
@@ -53,18 +53,8 @@ export function AdminMoneyInput({
     });
   }
 
-  if (appearance === 'resource')
-    return (
-      <Input
-        {...props}
-        inputMode="decimal"
-        onChange={handleChange}
-        type="text"
-        value={formatValue(value)}
-      />
-    );
   return (
-    <input
+    <Input
       {...props}
       inputMode="decimal"
       onChange={handleChange}

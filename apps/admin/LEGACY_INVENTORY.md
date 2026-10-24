@@ -24,6 +24,8 @@ The first two rows form the smallest next slice. Session guard is shared by prot
 
 ## Retained legacy branches
 
+Money-input follow-up: AdminMoneyInput now always uses canonical Input and retains its optional resource prop only for caller compatibility. The single formatting/caret engine is unchanged; this follow-up awaits user smoke.
+
 RBAC follow-up: the role selector and permission matrix legacy branches and their exclusive stylesheet have now been removed. Existing shared-presentation test assertions were adapted to canonical ARIA state, retaining behavioral expectations; the tests were not run. Optional resource appearance props remain compatible with feature callers. Earlier notes about retaining RBAC for test consumers describe the prior audit stage.
 
 Follow-up: DateRangeFilter and LabeledSelectFilter legacy appearance branches have been removed; resource presentation is now their only implementation, retaining the optional resource prop for existing callers. The baseline table below describes the original audit. RBAC legacy defaults remain due to direct component-test consumers; shared filter CSS still requires selector-level cleanup.

@@ -8,6 +8,8 @@ Current source consumer inventory (24/10/2026): see [LEGACY_INVENTORY.md](LEGACY
 
 RBAC cleanup (24/10/2026): shared role selector and permission matrix now use canonical presentation exclusively; their legacy branches and exclusive stylesheet were removed. Optional resource appearance props remain for existing callers. Existing presentation tests were adapted but not executed; this cleanup does not establish runtime approval.
 
+Sheet form layout (24/10/2026): `components/admin/resource-sheet-form.tsx` owns bounded form height, independently scrolling fields and a non-shrinking footer outside the field viewport. Use it inside ResourceSheet for form actions that must remain visible; do not put sticky/fixed action bars over the field scroll area. It retains a native form element, form refs, submit semantics and feature-owned footer content. Eleven current forms use it; user visual verification is pending.
+
 The target is a unified shadcn/ui system using the existing `base-nova` configuration and Base UI foundation, customized for VexGo. This document defines the target contract; it does not claim existing CSS/components already implement it. The first complete migration slice is `/vehicles`. Review that slice before expanding to other routes.
 
 Light theme is the initial migration scope. Existing `.dark` variables do not establish dark-mode support. Keep Inter, JetBrains Mono for exact identifiers, Lucide icons, blue primary actions and navy navigation. Do not add another primitive engine or replace working domain behavior just to match a library example.

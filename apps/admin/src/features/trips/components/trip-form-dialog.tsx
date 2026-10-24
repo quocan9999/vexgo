@@ -1,5 +1,7 @@
 'use client';
 
+import { ResourceSheetForm } from '@/components/admin/resource-sheet-form';
+
 import { LoaderCircle } from 'lucide-react';
 import { useRef, useState, type FormEvent } from 'react';
 import { ResourceGeneratedCodeField } from '@/components/admin/resource-generated-code-field';
@@ -326,11 +328,39 @@ export function TripFormDialog({
       preventDismiss={submitting}
       onClose={onClose}
     >
-      <form
+      <ResourceSheetForm
         ref={formRef}
-        className="space-y-5"
         noValidate
         onSubmit={handleSubmit}
+        footer={
+          <div className="-mx-4 flex justify-end gap-3 border-t bg-card px-4 py-4 sm:-mx-6 sm:px-6 shrink-0">
+            <Button disabled={submitting} onClick={closeDialog} variant="outline">
+              Hủy
+            </Button>
+            <Button
+              disabled={
+                submitting ||
+                isOptionsLoading ||
+                isOptionsError ||
+                (!editing &&
+                  (routeOptions.status !== 'success' ||
+                    !routeOptions.options.length ||
+                    vehicleOptions.status !== 'success' ||
+                    !vehicleOptions.options.length))
+              }
+              type="submit"
+            >
+              {submitting && (
+                <LoaderCircle aria-hidden className="motion-safe:animate-spin" />
+              )}
+              {submitting
+                ? 'Đang lưu…'
+                : editing
+                  ? 'Lưu thay đổi'
+                  : 'Tạo chuyến xe'}
+            </Button>
+          </div>
+        }
       >
         {editing ? (
           <div className="space-y-2 rounded-lg border bg-muted/40 p-4 text-[13px]">
@@ -415,34 +445,7 @@ export function TripFormDialog({
             </FormField>
           ))}
         </div>
-        <div className="sticky -bottom-4 -mx-4 flex justify-end gap-3 border-t bg-card px-4 py-4 sm:-bottom-6 sm:-mx-6 sm:px-6">
-          <Button disabled={submitting} onClick={closeDialog} variant="outline">
-            Hủy
-          </Button>
-          <Button
-            disabled={
-              submitting ||
-              isOptionsLoading ||
-              isOptionsError ||
-              (!editing &&
-                (routeOptions.status !== 'success' ||
-                  !routeOptions.options.length ||
-                  vehicleOptions.status !== 'success' ||
-                  !vehicleOptions.options.length))
-            }
-            type="submit"
-          >
-            {submitting && (
-              <LoaderCircle aria-hidden className="motion-safe:animate-spin" />
-            )}
-            {submitting
-              ? 'Đang lưu…'
-              : editing
-                ? 'Lưu thay đổi'
-                : 'Tạo chuyến xe'}
-          </Button>
-        </div>
-      </form>
+      </ResourceSheetForm>
     </ResourceSheet>
   );
 }

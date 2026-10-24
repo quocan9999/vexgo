@@ -1,5 +1,29 @@
 # Admin UI migration ledger
 
+## Cross-form footer overlap audit — 24/10/2026
+
+- Source inventory found ten additional form action bars with the same sticky-within-scrolling-content composition: Admin account create/edit, account role assignment, bus company create/edit, fare price, route, trip, vehicle type, vehicle and vehicle seat. These share the structural risk from the reported promotion screenshot; they were not individually reproduced in a browser.
+- Added ResourceSheetForm as the shared bounded native-form composition. Field content owns scrolling; footer content remains a non-shrinking sibling, so actions do not overlay fields. Migrated all ten forms and the previously fixed promotion form (eleven consumers total), preserving feature footer markup, refs, callbacks, validation, inputs and pending states. ResourceSheet itself and detail-only sheets are unchanged.
+- All eleven pre-edit symbol impact queries resolved LOW, with one or two direct callers each. Index remains stale; direct source review checked native form refs/submit and all sticky action compositions.
+- Remaining source sticky/fixed owners are shell/header, canonical Sheet positioning and the revenue table header. They are not form footer overlays and were retained. No other sticky form action bar remains in Admin TSX source.
+- No tests/browser, TypeScript, ESLint, build or git diff --check run per user preference. No runtime PASS claimed. Smoke pending: long create/edit form and short viewport, reach last field/error, keyboard Tab/Shift+Tab, submit first-invalid focus, cancel/save/busy states and mobile role list.
+
+## Promotion form footer overlap — 24/10/2026
+
+- User screenshot shows the sticky action bar covering the usage-limit field. Source places the sticky footer in the same long scrolling content flow as all form fields.
+- PromotionFormDialog now fills the available body height with a bounded, independently scrolling field region and a non-shrinking action row outside that region. Removed sticky positioning; fields can scroll above the buttons instead of underneath them. Kept a small inset for focus rings.
+- Preserved inputs, validation, first-invalid focus, submit/cancel callbacks and busy/dismiss behavior. ResourceSheet and other consumers were not changed. Pre-edit graph impact LOW with one direct caller, with the previously recorded stale-index limitation.
+- Source/diff review only; no browser/tests, TypeScript, ESLint, build or git diff --check run. User smoke pending: create/edit promotion, scroll to usage limit, inspect last field/help/error and action row at desktop/mobile/short heights, and focus the first invalid field. No runtime PASS claimed.
+
+## Money input legacy retirement — 24/10/2026
+
+- Cleanup acceptance checkpoint committed as f0d0428. User reported RBAC smoke successful; automated checks remain skipped.
+- AdminMoneyInput now always renders canonical Input. The optional resource appearance prop is consumed for compatibility and is not forwarded to the DOM. All three promotion-form invocations already used resource appearance.
+- Preserved formatting, decimal parsing, leading-zero normalization, rejected-input behavior, requestAnimationFrame caret restoration, props and onValueChange callback. No money business rule or API changed.
+- Pre-edit GitNexus impact LOW (one direct caller/process: PromotionFormDialog); index was four commits behind HEAD, supplemented by direct source/reference review.
+- Retried the prescribed pnpm index-only refresh; it emitted only the analyzer banner with no progress. Stopped that invocation's verified process; index remains stale. No application/server process was stopped.
+- Source/diff review only. Tests/browser, TypeScript, ESLint, build and git diff --check NOT RUN BY REQUEST. No runtime PASS claimed. User smoke target: promotion form money entry, editing in the middle, decimal separator, clearing and disabled state.
+
 ## User acceptance checkpoint — 24/10/2026
 
 - User reported the RBAC smoke checklist completed successfully and requested continuation. This is user-reported acceptance; no automated/browser PASS is inferred.

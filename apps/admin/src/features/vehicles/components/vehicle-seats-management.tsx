@@ -1,5 +1,7 @@
 'use client';
 
+import { ResourceSheetForm } from '@/components/admin/resource-sheet-form';
+
 import {
   Armchair,
   ArrowLeft,
@@ -165,11 +167,28 @@ function VehicleSeatFormDialog({
       preventDismiss={submitting}
       title={editing ? 'Chỉnh sửa ghế' : 'Thêm ghế'}
     >
-      <form
+      <ResourceSheetForm
         ref={formRef}
-        className="flex min-h-full flex-col gap-5"
         noValidate
         onSubmit={submit}
+        footer={
+          <div className="flex justify-end gap-2 border-t bg-background/95 px-4 py-4 sm:px-6 shrink-0">
+            <Button
+              disabled={submitting}
+              onClick={closeDialog}
+              type="button"
+              variant="outline"
+            >
+              Hủy
+            </Button>
+            <Button disabled={submitting} type="submit">
+              {submitting && (
+                <LoaderCircle aria-hidden className="motion-safe:animate-spin" />
+              )}
+              {submitting ? 'Đang lưu…' : editing ? 'Lưu thay đổi' : 'Thêm ghế'}
+            </Button>
+          </div>
+        }
       >
         <Field data-invalid={Boolean(seatNumberError)}>
           <FieldLabel htmlFor={`${idPrefix}-number`}>
@@ -222,23 +241,7 @@ function VehicleSeatFormDialog({
           Nhóm vị trí chỉ dùng để phân loại danh sách. Xe chưa lưu sơ đồ hàng và
           cột ghế.
         </p>
-        <div className="sticky bottom-0 mt-auto flex justify-end gap-2 border-t bg-background/95 px-4 py-4 sm:px-6">
-          <Button
-            disabled={submitting}
-            onClick={closeDialog}
-            type="button"
-            variant="outline"
-          >
-            Hủy
-          </Button>
-          <Button disabled={submitting} type="submit">
-            {submitting && (
-              <LoaderCircle aria-hidden className="motion-safe:animate-spin" />
-            )}
-            {submitting ? 'Đang lưu…' : editing ? 'Lưu thay đổi' : 'Thêm ghế'}
-          </Button>
-        </div>
-      </form>
+      </ResourceSheetForm>
     </ResourceSheet>
   );
 }

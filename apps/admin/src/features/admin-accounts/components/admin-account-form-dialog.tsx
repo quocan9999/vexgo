@@ -1,5 +1,7 @@
 'use client';
 
+import { ResourceSheetForm } from '@/components/admin/resource-sheet-form';
+
 import { LoaderCircle } from 'lucide-react';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { toast } from 'sonner';
@@ -382,154 +384,11 @@ export function AdminAccountFormDialog({
       title={editing ? 'Chỉnh sửa tài khoản Admin' : 'Thêm tài khoản Admin'}
       onClose={closeDialog}
     >
-      <form
-        className="flex min-h-full flex-col gap-5"
+      <ResourceSheetForm
         noValidate
         onSubmit={handleSubmit}
-      >
-          {formError && <ResourceNotice kind="error">{formError}</ResourceNotice>}
-          {textField('fullName', 'Họ và tên', 'text', true)}
-          {!editing && (
-            <>
-              {textField('phoneNumber', 'Số điện thoại', 'tel', true)}
-              {textField('password', 'Mật khẩu', 'password', true)}
-              <UiField data-invalid={Boolean(fieldErrors.busCompanyId)}>
-                <FieldLabel htmlFor={`${idPrefix}-busCompanyId`}>
-                  Nhà xe <span aria-hidden>*</span>
-                </FieldLabel>
-                <Select
-                  disabled={
-                    submitting ||
-                    options.status !== 'success' ||
-                    options.companies.length === 0
-                  }
-                  onValueChange={(value) =>
-                    updateField('busCompanyId', String(value ?? ''))
-                  }
-                  value={values.busCompanyId || null}
-                >
-                  <SelectTrigger
-                    aria-label="Nhà xe"
-                    aria-required="true"
-                    aria-invalid={Boolean(fieldErrors.busCompanyId)}
-                    aria-describedby={
-                      fieldErrors.busCompanyId
-                        ? `${idPrefix}-busCompanyId-error`
-                        : undefined
-                    }
-                    id={`${idPrefix}-busCompanyId`}
-                  >
-                    <SelectValue placeholder="Chọn nhà xe">
-                      {options.status === 'success'
-                        ? (options.companies.find(
-                            (company) =>
-                              String(company.id) === values.busCompanyId,
-                          )?.label ?? 'Chọn nhà xe')
-                        : 'Chọn nhà xe'}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      {options.status === 'success' &&
-                        options.companies.map((company) => (
-                          <SelectItem
-                            key={company.id}
-                            value={String(company.id)}
-                          >
-                            {company.label}
-                          </SelectItem>
-                        ))}
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-                <FieldError id={`${idPrefix}-busCompanyId-error`}>
-                  {fieldErrors.busCompanyId}
-                </FieldError>
-                {options.status === 'loading' && (
-                  <p
-                    aria-live="polite"
-                    className="text-xs text-muted-foreground"
-                    role="status"
-                  >
-                    Đang tải danh sách nhà xe…
-                  </p>
-                )}
-              </UiField>
-              {textField('employeeCode', 'Mã nhân viên', 'text', true)}
-              <FieldSet
-                aria-invalid={Boolean(fieldErrors.roleNames)}
-                className="gap-3"
-              >
-                <FieldLegend>
-                  Vai trò nhà xe <span aria-hidden>*</span>
-                </FieldLegend>
-                <FieldGroup className="gap-2">
-                  {options.status === 'success' &&
-                    options.roles.map((role) => {
-                      const checkboxId = `${idPrefix}-role-${role.roleName}`;
-                      return (
-                        <UiField
-                          className="items-center rounded-lg border p-3"
-                          key={role.roleName}
-                          orientation="horizontal"
-                        >
-                          <Checkbox
-                            aria-describedby={
-                              fieldErrors.roleNames
-                                ? `${idPrefix}-roleNames-error`
-                                : undefined
-                            }
-                            aria-invalid={Boolean(fieldErrors.roleNames)}
-                            checked={values.roleNames.includes(role.roleName)}
-                            disabled={submitting}
-                            id={checkboxId}
-                            onCheckedChange={() => toggleRole(role.roleName)}
-                            value={role.roleName}
-                          />
-                          <FieldLabel
-                            className="cursor-pointer"
-                            htmlFor={checkboxId}
-                          >
-                            {role.description ?? role.roleName}
-                          </FieldLabel>
-                        </UiField>
-                      );
-                    })}
-                </FieldGroup>
-                <FieldError id={`${idPrefix}-roleNames-error`}>
-                  {fieldErrors.roleNames}
-                </FieldError>
-              </FieldSet>
-              {options.status === 'success' && options.roles.length === 0 && (
-                <ResourceNotice kind="error">
-                  Danh mục chưa có vai trò nhà xe hợp lệ.
-                </ResourceNotice>
-              )}
-              {options.status === 'success' && options.companies.length === 0 && (
-                <ResourceNotice kind="error">
-                  Chưa có nhà xe để tạo tài khoản.
-                </ResourceNotice>
-              )}
-              {options.status === 'error' && (
-                <ResourceNotice kind="error">
-                  <div className="space-y-3">
-                    <p>{options.message}</p>
-                    <Button
-                      onClick={retryOptions}
-                      type="button"
-                      variant="outline"
-                    >
-                      Tải lại danh mục
-                    </Button>
-                  </div>
-                </ResourceNotice>
-              )}
-            </>
-          )}
-          {textField('dateOfBirth', 'Ngày sinh', 'date')}
-          {textField('email', 'Email', 'email')}
-          {textField('citizenId', 'CCCD')}
-          <div className="sticky bottom-0 -mx-4 mt-auto flex justify-end gap-3 border-t bg-popover px-4 py-4 sm:-mx-6 sm:px-6">
+        footer={
+          <div className="-mx-4 flex justify-end gap-3 border-t bg-popover px-4 py-4 sm:-mx-6 sm:px-6 shrink-0">
             <Button
               disabled={submitting}
               onClick={closeDialog}
@@ -562,7 +421,151 @@ export function AdminAccountFormDialog({
                   : 'Tạo tài khoản'}
             </Button>
           </div>
-      </form>
+        }
+      >
+        {formError && <ResourceNotice kind="error">{formError}</ResourceNotice>}
+        {textField('fullName', 'Họ và tên', 'text', true)}
+        {!editing && (
+          <>
+            {textField('phoneNumber', 'Số điện thoại', 'tel', true)}
+            {textField('password', 'Mật khẩu', 'password', true)}
+            <UiField data-invalid={Boolean(fieldErrors.busCompanyId)}>
+              <FieldLabel htmlFor={`${idPrefix}-busCompanyId`}>
+                Nhà xe <span aria-hidden>*</span>
+              </FieldLabel>
+              <Select
+                disabled={
+                  submitting ||
+                  options.status !== 'success' ||
+                  options.companies.length === 0
+                }
+                onValueChange={(value) =>
+                  updateField('busCompanyId', String(value ?? ''))
+                }
+                value={values.busCompanyId || null}
+              >
+                <SelectTrigger
+                  aria-label="Nhà xe"
+                  aria-required="true"
+                  aria-invalid={Boolean(fieldErrors.busCompanyId)}
+                  aria-describedby={
+                    fieldErrors.busCompanyId
+                      ? `${idPrefix}-busCompanyId-error`
+                      : undefined
+                  }
+                  id={`${idPrefix}-busCompanyId`}
+                >
+                  <SelectValue placeholder="Chọn nhà xe">
+                    {options.status === 'success'
+                      ? (options.companies.find(
+                          (company) =>
+                            String(company.id) === values.busCompanyId,
+                        )?.label ?? 'Chọn nhà xe')
+                      : 'Chọn nhà xe'}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    {options.status === 'success' &&
+                      options.companies.map((company) => (
+                        <SelectItem
+                          key={company.id}
+                          value={String(company.id)}
+                        >
+                          {company.label}
+                        </SelectItem>
+                      ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+              <FieldError id={`${idPrefix}-busCompanyId-error`}>
+                {fieldErrors.busCompanyId}
+              </FieldError>
+              {options.status === 'loading' && (
+                <p
+                  aria-live="polite"
+                  className="text-xs text-muted-foreground"
+                  role="status"
+                >
+                  Đang tải danh sách nhà xe…
+                </p>
+              )}
+            </UiField>
+            {textField('employeeCode', 'Mã nhân viên', 'text', true)}
+            <FieldSet
+              aria-invalid={Boolean(fieldErrors.roleNames)}
+              className="gap-3"
+            >
+              <FieldLegend>
+                Vai trò nhà xe <span aria-hidden>*</span>
+              </FieldLegend>
+              <FieldGroup className="gap-2">
+                {options.status === 'success' &&
+                  options.roles.map((role) => {
+                    const checkboxId = `${idPrefix}-role-${role.roleName}`;
+                    return (
+                      <UiField
+                        className="items-center rounded-lg border p-3"
+                        key={role.roleName}
+                        orientation="horizontal"
+                      >
+                        <Checkbox
+                          aria-describedby={
+                            fieldErrors.roleNames
+                              ? `${idPrefix}-roleNames-error`
+                              : undefined
+                          }
+                          aria-invalid={Boolean(fieldErrors.roleNames)}
+                          checked={values.roleNames.includes(role.roleName)}
+                          disabled={submitting}
+                          id={checkboxId}
+                          onCheckedChange={() => toggleRole(role.roleName)}
+                          value={role.roleName}
+                        />
+                        <FieldLabel
+                          className="cursor-pointer"
+                          htmlFor={checkboxId}
+                        >
+                          {role.description ?? role.roleName}
+                        </FieldLabel>
+                      </UiField>
+                    );
+                  })}
+              </FieldGroup>
+              <FieldError id={`${idPrefix}-roleNames-error`}>
+                {fieldErrors.roleNames}
+              </FieldError>
+            </FieldSet>
+            {options.status === 'success' && options.roles.length === 0 && (
+              <ResourceNotice kind="error">
+                Danh mục chưa có vai trò nhà xe hợp lệ.
+              </ResourceNotice>
+            )}
+            {options.status === 'success' && options.companies.length === 0 && (
+              <ResourceNotice kind="error">
+                Chưa có nhà xe để tạo tài khoản.
+              </ResourceNotice>
+            )}
+            {options.status === 'error' && (
+              <ResourceNotice kind="error">
+                <div className="space-y-3">
+                  <p>{options.message}</p>
+                  <Button
+                    onClick={retryOptions}
+                    type="button"
+                    variant="outline"
+                  >
+                    Tải lại danh mục
+                  </Button>
+                </div>
+              </ResourceNotice>
+            )}
+          </>
+        )}
+        {textField('dateOfBirth', 'Ngày sinh', 'date')}
+        {textField('email', 'Email', 'email')}
+        {textField('citizenId', 'CCCD')}
+      </ResourceSheetForm>
     </ResourceSheet>
   );
 }

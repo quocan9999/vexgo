@@ -1,5 +1,7 @@
 'use client';
 
+import { ResourceSheetForm } from '@/components/admin/resource-sheet-form';
+
 import { LoaderCircle } from 'lucide-react';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { toast } from 'sonner';
@@ -194,7 +196,32 @@ export function AdminAccountRolesDialog({
         title="Gán vai trò tài khoản"
         onClose={onClose}
       >
-          <form className="flex min-h-full flex-col gap-5" noValidate onSubmit={handleSubmit}>
+          <ResourceSheetForm
+            noValidate
+            onSubmit={handleSubmit}
+            footer={
+              <div className="-mx-4 flex justify-end gap-3 border-t bg-popover px-4 py-4 sm:-mx-6 sm:px-6 shrink-0">
+                <Button
+                  disabled={submitting}
+                  onClick={onClose}
+                  type="button"
+                  variant="outline"
+                >
+                  Hủy
+                </Button>
+                <Button disabled={!canSubmit} type="submit">
+                  {submitting && (
+                    <LoaderCircle
+                      aria-hidden="true"
+                      className="motion-safe:animate-spin"
+                      size={16}
+                    />
+                  )}
+                  {submitting ? 'Đang lưu…' : 'Lưu vai trò'}
+                </Button>
+              </div>
+            }
+          >
             {error && <ResourceNotice kind="error">{error}</ResourceNotice>}
             {roles.status === 'loading' && (
               <ResourceState loading>Đang tải danh mục vai trò…</ResourceState>
@@ -251,28 +278,7 @@ export function AdminAccountRolesDialog({
               )}
               </div>
             </FieldSet>
-
-            <div className="sticky bottom-0 -mx-4 mt-auto flex justify-end gap-3 border-t bg-popover px-4 py-4 sm:-mx-6 sm:px-6">
-              <Button
-                disabled={submitting}
-                onClick={onClose}
-                type="button"
-                variant="outline"
-              >
-                Hủy
-              </Button>
-              <Button disabled={!canSubmit} type="submit">
-                {submitting && (
-                  <LoaderCircle
-                    aria-hidden="true"
-                    className="motion-safe:animate-spin"
-                    size={16}
-                  />
-                )}
-                {submitting ? 'Đang lưu…' : 'Lưu vai trò'}
-              </Button>
-            </div>
-          </form>
+          </ResourceSheetForm>
       </ResourceSheet>
 
       {revokeConfirmationOpen && (

@@ -1,5 +1,7 @@
 'use client';
 
+import { ResourceSheetForm } from '@/components/admin/resource-sheet-form';
+
 import { LoaderCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useRef, useState, type FormEvent } from 'react';
@@ -346,11 +348,33 @@ export function FarePriceFormDialog({
       preventDismiss={submitting}
       onClose={closeDialog}
     >
-      <form
+      <ResourceSheetForm
         ref={formRef}
-        className="flex min-h-full flex-col gap-5"
         noValidate
         onSubmit={handleSubmit}
+        footer={
+          <div className="-mx-4 flex justify-end gap-3 border-t bg-popover px-4 py-4 sm:-mx-6 sm:px-6 shrink-0">
+            <Button disabled={submitting} variant="outline" onClick={closeDialog}>
+              Hủy
+            </Button>
+            <Button
+              disabled={submitting || routeUnavailable || vehicleTypeUnavailable}
+              aria-busy={submitting}
+              type="submit"
+            >
+              {submitting && (
+                <LoaderCircle aria-hidden className="motion-safe:animate-spin" />
+              )}
+              {submitting
+                ? editing
+                  ? 'Đang lưu…'
+                  : 'Đang tạo…'
+                : editing
+                  ? 'Lưu thay đổi'
+                  : 'Tạo bảng giá'}
+            </Button>
+          </div>
+        }
       >
         {editing && (
           <div className="space-y-1 rounded-[var(--admin-radius-panel)] border bg-muted/40 p-4 text-[13px]">
@@ -528,28 +552,7 @@ export function FarePriceFormDialog({
             ],
             submitting,
           )}
-        <div className="sticky bottom-0 -mx-4 mt-auto flex justify-end gap-3 border-t bg-popover px-4 py-4 sm:-mx-6 sm:px-6">
-          <Button disabled={submitting} variant="outline" onClick={closeDialog}>
-            Hủy
-          </Button>
-          <Button
-            disabled={submitting || routeUnavailable || vehicleTypeUnavailable}
-            aria-busy={submitting}
-            type="submit"
-          >
-            {submitting && (
-              <LoaderCircle aria-hidden className="motion-safe:animate-spin" />
-            )}
-            {submitting
-              ? editing
-                ? 'Đang lưu…'
-                : 'Đang tạo…'
-              : editing
-                ? 'Lưu thay đổi'
-                : 'Tạo bảng giá'}
-          </Button>
-        </div>
-      </form>
+      </ResourceSheetForm>
     </ResourceSheet>
   );
 }

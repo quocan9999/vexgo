@@ -1,5 +1,7 @@
 'use client';
 
+import { ResourceSheetForm } from '@/components/admin/resource-sheet-form';
+
 import { LoaderCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useRef, useState, type FormEvent } from 'react';
@@ -184,11 +186,27 @@ export function VehicleFormDialog({
       preventDismiss={submitting}
       onClose={closeDialog}
     >
-      <form
+      <ResourceSheetForm
         ref={formRef}
-        className="flex min-h-full flex-col gap-5"
         noValidate
         onSubmit={handleSubmit}
+        footer={
+          <div className="-mx-4 flex flex-wrap justify-end gap-2 border-t bg-card p-4 sm:-mx-6 sm:p-6 shrink-0">
+            <Button disabled={submitting} onClick={closeDialog} variant="outline">
+              Hủy
+            </Button>
+            <Button
+              aria-busy={submitting}
+              disabled={submitting || !optionsReady}
+              type="submit"
+            >
+              {submitting && (
+                <LoaderCircle aria-hidden className="motion-safe:animate-spin" />
+              )}
+              {submitting ? 'Đang lưu…' : editing ? 'Lưu thay đổi' : 'Tạo xe'}
+            </Button>
+          </div>
+        }
       >
         {formError && <ResourceNotice kind="error">{formError}</ResourceNotice>}
         {optionErrors.length > 0 && (
@@ -316,22 +334,7 @@ export function VehicleFormDialog({
             </FieldError>
           </Field>
         )}
-        <div className="sticky -bottom-4 -mx-4 mt-auto flex flex-wrap justify-end gap-2 border-t bg-card p-4 sm:-bottom-6 sm:-mx-6 sm:p-6">
-          <Button disabled={submitting} onClick={closeDialog} variant="outline">
-            Hủy
-          </Button>
-          <Button
-            aria-busy={submitting}
-            disabled={submitting || !optionsReady}
-            type="submit"
-          >
-            {submitting && (
-              <LoaderCircle aria-hidden className="motion-safe:animate-spin" />
-            )}
-            {submitting ? 'Đang lưu…' : editing ? 'Lưu thay đổi' : 'Tạo xe'}
-          </Button>
-        </div>
-      </form>
+      </ResourceSheetForm>
     </ResourceSheet>
   );
 }
