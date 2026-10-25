@@ -81,6 +81,9 @@ const mockSeats: TripSeat[] = [
       seatId: 501,
       code: 'A01',
       position: 'Tầng dưới',
+      floor: 1,
+      x: 160,
+      y: 1000,
     },
     createdAt: '2026-10-01T10:00:00.000Z',
     updatedAt: '2026-10-01T10:00:00.000Z',
@@ -92,6 +95,9 @@ const mockSeats: TripSeat[] = [
       seatId: 502,
       code: 'A02',
       position: 'Tầng dưới',
+      floor: 1,
+      x: 360,
+      y: 1000,
     },
     createdAt: '2026-10-01T10:00:00.000Z',
     updatedAt: '2026-10-01T10:00:00.000Z',
@@ -103,6 +109,9 @@ const mockSeats: TripSeat[] = [
       seatId: 503,
       code: 'B01',
       position: 'Tầng trên',
+      floor: 2,
+      x: 640,
+      y: 1000,
     },
     createdAt: '2026-10-01T10:00:00.000Z',
     updatedAt: '2026-10-01T10:00:00.000Z',
@@ -174,7 +183,7 @@ describe('TripSeatsManagement Workspace', () => {
     expect(html).toContain('Đã đặt');
   });
 
-  it('groups seats by position, displays non-interactive seat tokens and accessible legend', () => {
+  it('renders a 2D floor map from saved seat coordinates with status and accessible labels', () => {
     const html = renderToStaticMarkup(
       <TripSeatsManagement
         initialSeats={mockSeatsResponse}
@@ -183,22 +192,45 @@ describe('TripSeatsManagement Workspace', () => {
       />,
     );
 
-    // Position groups
-    expect(html).toContain('Tầng dưới');
-    expect(new DOMParser().parseFromString(html, 'text/html').getElementById('trip-seat-group-0')?.parentElement?.textContent).toContain('2 ghế');
-    expect(html).toContain('Tầng trên');
-    expect(new DOMParser().parseFromString(html, 'text/html').getElementById('trip-seat-group-1')?.parentElement?.textContent).toContain('1 ghế');
-    // A11y: deterministic, HTML-safe IDs without whitespace in aria-labelledby
-    expect(html).toContain('aria-labelledby="trip-seat-group-0"');
-    expect(html).toContain('id="trip-seat-group-0"');
-    expect(html).toContain('aria-labelledby="trip-seat-group-1"');
-    expect(html).toContain('id="trip-seat-group-1"');
-    expect(html).not.toContain('group-Tầng dưới');
-    expect(html).not.toContain('group-Tầng trên');
-    // Tokens
+    const document = new DOMParser().parseFromString(html, 'text/html');
+    const lowerFloor = document.querySelector(
+      '[aria-labelledby="trip-seat-floor-1"]',
+    );
+    const upperFloor = document.querySelector(
+      '[aria-labelledby="trip-seat-floor-2"]',
+    );
+
+    expect(lowerFloor?.textContent).toContain('Tầng dưới');
+    expect(lowerFloor?.textContent).toContain('2 ghế');
+    expect(upperFloor?.textContent).toContain('Tầng trên');
+    expect(upperFloor?.textContent).toContain('1 ghế');
+    expect(html).toContain('aria-label="Sơ đồ ghế tầng dưới"');
+    expect(html).toContain('aria-label="Sơ đồ ghế tầng trên"');
+    // Seat tokens preserve each saved 2D position and remain non-interactive.
     expect(html).toContain('data-seat-code="A01"');
     expect(html).toContain('data-seat-code="A02"');
     expect(html).toContain('data-seat-code="B01"');
+    const lowerLeftStyle = document
+      .querySelector('[data-seat-code="A01"]')
+      ?.getAttribute('style');
+    const lowerRightStyle = document
+      .querySelector('[data-seat-code="A02"]')
+      ?.getAttribute('style');
+    const upperSeatStyle = document
+      .querySelector('[data-seat-code="B01"]')
+      ?.getAttribute('style');
+    expect(lowerLeftStyle).toContain('left:16%');
+    expect(lowerLeftStyle).toContain('top:64px');
+    expect(lowerRightStyle).toContain('left:36%');
+    expect(lowerRightStyle).toContain('top:64px');
+    expect(upperSeatStyle).toContain('left:64%');
+    expect(upperSeatStyle).toContain('top:64px');
+    expect(
+      document.querySelector('[data-seat-code="A02"]')?.getAttribute('aria-label'),
+    ).toContain('đang giữ');
+    expect(
+      document.querySelector('[data-seat-code="B01"]')?.getAttribute('aria-label'),
+    ).toContain('đã đặt');
     // Read-only: no button tag used for seat tokens
     expect(html).not.toMatch(/<button[^>]*data-seat-code/);
     // Legend
@@ -207,7 +239,7 @@ describe('TripSeatsManagement Workspace', () => {
     expect(html).toContain('Đã đặt');
   });
 
-  it('handles null position by grouping under "Chưa xác định vị trí"', () => {
+  it('places seats without saved coordinates in a visible fallback slot', () => {
     const seatsWithNullPos: TripSeatsResponse = {
       data: [
         {
@@ -217,6 +249,9 @@ describe('TripSeatsManagement Workspace', () => {
             seatId: 504,
             code: 'X01',
             position: null,
+            floor: 1,
+            x: null,
+            y: null,
           },
           createdAt: '2026-10-01T10:00:00.000Z',
           updatedAt: '2026-10-01T10:00:00.000Z',
@@ -239,8 +274,15 @@ describe('TripSeatsManagement Workspace', () => {
       />,
     );
 
-    expect(html).toContain('Chưa xác định vị trí');
-    expect(new DOMParser().parseFromString(html, 'text/html').getElementById('trip-seat-group-0')?.parentElement?.textContent).toContain('1 ghế');
+    const document = new DOMParser().parseFromString(html, 'text/html');
+    expect(
+      document.querySelector('[aria-labelledby="trip-seat-floor-1"]')?.textContent,
+    ).toContain('1 ghế');
+    const fallbackStyle = document
+      .querySelector('[data-seat-code="X01"]')
+      ?.getAttribute('style');
+    expect(fallbackStyle).toContain('left:16%');
+    expect(fallbackStyle).toContain('top:64px');
     expect(html).toContain('X01');
   });
 
@@ -290,7 +332,12 @@ describe('TripDetailSheet "Xem ghế chuyến" integration', () => {
     setEmployeeAdminTestSession(['trip:read']);
 
     const html = renderPortalMarkup(
-      <TripDetailSheet initialTrip={mockTrip} onClose={vi.fn()} tripId={101} />,
+      <TripDetailSheet
+        initialTrip={mockTrip}
+        onClose={vi.fn()}
+        onDeleted={vi.fn()}
+        tripId={101}
+      />,
     );
 
     expect(html).toContain('Xem ghế chuyến');

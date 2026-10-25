@@ -288,7 +288,7 @@ Current migration ledger: [UI_MIGRATION.md](./UI_MIGRATION.md). `/vehicles` and 
 
 ### Trip seat workspace — migrating
 
-`/trips/[tripId]/seats` uses canonical Button, Badge, Card, Skeleton and ResourceState with the shared Admin page header. The read-only view retains trip context, seat totals, backend status filtering and stored-position grouping. Its empty copy distinguishes an empty trip inventory from a filter with no matches. Position groups are not presented as physical seat coordinates. User approved the presentation on 24/10/2026; responsive/keyboard verification is pending in UI_MIGRATION.md.
+`/trips/[tripId]/seats` uses canonical Button, Badge, Card, Skeleton and ResourceState with the shared Admin page header. The read-only view retains trip context, seat totals and backend status filtering, and renders saved 2D coordinates grouped by floor with an accessible status legend. Legacy seats without coordinates receive a deterministic display-only fallback grid. Its empty copy distinguishes an empty trip inventory from a filter with no matches. Responsive/keyboard review for the map is pending in UI_MIGRATION.md.
 
 ### Bus companies — user approved
 

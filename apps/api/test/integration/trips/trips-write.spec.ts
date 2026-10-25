@@ -46,8 +46,8 @@ const mockVehicle = {
     sucChuaHangNheMacDinh: 3,
   },
   ghes: [
-    { gheId: 101, soGhe: 'A01' },
-    { gheId: 102, soGhe: 'A02' },
+    { gheId: 101, soGhe: 'A01', tang: 1, toaDoX: 100, toaDoY: 100 },
+    { gheId: 102, soGhe: 'A02', tang: 1, toaDoX: 200, toaDoY: 100 },
   ],
 };
 
@@ -89,6 +89,7 @@ const prisma = {
   },
   tuyenXe: { findFirst: vi.fn() },
   xe: { findFirst: vi.fn() },
+  ghe: { findMany: vi.fn() },
   phienDangNhap: { findUnique: vi.fn() },
   vaiTroQuyen: { findMany: vi.fn().mockResolvedValue([]) },
   cauHinhQuyenVaiTroNhaXe: { findMany: vi.fn().mockResolvedValue([]) },
@@ -158,6 +159,7 @@ describe('Trips write HTTP contract (05.2)', () => {
       async (callback: (tx: typeof prisma) => Promise<unknown>) =>
         callback(prisma),
     );
+    prisma.ghe.findMany.mockResolvedValue(mockVehicle.ghes);
     currentPrincipal = {
       taiKhoanId: 10,
       sessionId: 'test-session',
@@ -257,8 +259,8 @@ describe('Trips write HTTP contract (05.2)', () => {
           sucChuaHangNhe: 3,
           gheChuyenXes: {
             create: [
-              { gheId: 101, trangThai: 'TRONG' },
-              { gheId: 102, trangThai: 'TRONG' },
+              { gheId: 101, trangThai: 'TRONG', tang: 1, toaDoX: 100, toaDoY: 100 },
+              { gheId: 102, trangThai: 'TRONG', tang: 1, toaDoX: 200, toaDoY: 100 },
             ],
           },
         },
@@ -481,6 +483,7 @@ describe('Trips write HTTP contract (05.2)', () => {
         ...mockVehicle,
         ghes: [],
       });
+      prisma.ghe.findMany.mockResolvedValueOnce([]);
 
       const res = await request(app.getHttpServer())
         .post('/api/v1/trips')

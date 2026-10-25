@@ -453,6 +453,10 @@ export function TripsManagement() {
             setSelectedTripId(null);
             refresh();
           }}
+          onDeleted={() => {
+            setSelectedTripId(null);
+            refresh();
+          }}
           onRetryRouteOptions={retryRoutes}
           onRetryVehicleOptions={retryVehicles}
           onUpdated={(updated, options) => {

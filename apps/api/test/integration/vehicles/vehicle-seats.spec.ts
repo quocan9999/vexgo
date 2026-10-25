@@ -36,6 +36,9 @@ const seatRecord = {
   gheId: 101,
   soGhe: 'A01',
   viTri: 'Tầng dưới',
+  tang: 1,
+  toaDoX: 10,
+  toaDoY: 20,
   xeId: 12,
   createdAt: new Date('2026-09-25T10:00:00.000Z'),
   updatedAt: new Date('2026-09-25T11:00:00.000Z'),
@@ -51,6 +54,8 @@ const prisma = {
     delete: vi.fn(),
   },
   gheChuyenXe: { count: vi.fn() },
+  $queryRaw: vi.fn(),
+  $transaction: vi.fn(),
 };
 
 describe('Vehicles seat API request-pipeline integration', () => {
@@ -75,10 +80,14 @@ describe('Vehicles seat API request-pipeline integration', () => {
 
   beforeEach(() => {
     vi.resetAllMocks();
+    prisma.$queryRaw.mockResolvedValue([{ xeId: 12 }]);
+    prisma.$transaction.mockImplementation(
+      async (callback: (tx: typeof prisma) => Promise<unknown>) => callback(prisma),
+    );
     prisma.xe.findFirst.mockResolvedValue({ xeId: 12, nhaXeId: 1 });
     prisma.ghe.findMany.mockResolvedValue([seatRecord]);
     prisma.ghe.create.mockResolvedValue(seatRecord);
-    prisma.ghe.findFirst.mockResolvedValue({ gheId: 101 });
+    prisma.ghe.findFirst.mockResolvedValue({ gheId: 101, soGhe: 'A01', tang: 1 });
     prisma.ghe.update.mockResolvedValue({
       ...seatRecord,
       soGhe: 'A02',
@@ -108,6 +117,9 @@ describe('Vehicles seat API request-pipeline integration', () => {
           seatNumber: 'A01',
           position: 'Tầng dưới',
           vehicleId: 12,
+          floor: 1,
+          x: 10,
+          y: 20,
           createdAt: '2026-09-25T10:00:00.000Z',
           updatedAt: '2026-09-25T11:00:00.000Z',
         },
@@ -143,6 +155,7 @@ describe('Vehicles seat API request-pipeline integration', () => {
       message: 'Không tìm thấy xe.',
     });
 
+    prisma.$queryRaw.mockResolvedValueOnce([]);
     const createResponse = await request(app.getHttpServer())
       .post('/api/v1/vehicles/999/seats')
       .send({ seatNumber: 'A01' })
@@ -198,9 +211,24 @@ describe('Vehicles seat API request-pipeline integration', () => {
       .send({ seatNumber: ' A01 ', position: ' Tầng dưới ' })
       .expect(201);
 
-    expect(response.body.data).toMatchObject({ seatNumber: 'A01', position: 'Tầng dưới' });
+    expect(response.body.data).toMatchObject({
+      seatNumber: 'A01',
+      position: 'Tầng dưới',
+      floor: 1,
+      x: 10,
+      y: 20,
+    });
     expect(prisma.ghe.create).toHaveBeenCalledWith(
-      expect.objectContaining({ data: { xeId: 12, soGhe: 'A01', viTri: 'Tầng dưới' } }),
+      expect.objectContaining({
+        data: {
+          xeId: 12,
+          soGhe: 'A01',
+          viTri: 'Tầng dưới',
+          tang: 1,
+          toaDoX: null,
+          toaDoY: null,
+        },
+      }),
     );
     expect(prisma.gheChuyenXe.count).not.toHaveBeenCalled();
   });
@@ -252,7 +280,7 @@ describe('Vehicles seat API request-pipeline integration', () => {
       message: 'Số ghế đã tồn tại trên xe này.',
     });
 
-    prisma.xe.findFirst.mockResolvedValueOnce({ xeId: 13, nhaXeId: 1 });
+    prisma.$queryRaw.mockResolvedValueOnce([{ xeId: 13 }]);
     await request(app.getHttpServer())
       .post('/api/v1/vehicles/13/seats')
       .send({ seatNumber: 'A01' })

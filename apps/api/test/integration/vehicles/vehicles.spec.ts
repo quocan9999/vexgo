@@ -59,6 +59,7 @@ const prisma = {
   nhaXe: { findUnique: vi.fn() },
   loaiXe: { findFirst: vi.fn() },
   chuyenXe: { count: vi.fn() },
+  $transaction: vi.fn(),
 };
 
 describe('Vehicles API request-pipeline integration', () => {
@@ -91,6 +92,9 @@ describe('Vehicles API request-pipeline integration', () => {
       nhaXeId: 1,
     };
     vi.resetAllMocks();
+    prisma.$transaction.mockImplementation(
+      async (callback: (tx: typeof prisma) => Promise<unknown>) => callback(prisma),
+    );
     prisma.xe.findMany.mockResolvedValue([vehicleListRecord]);
     prisma.xe.count.mockResolvedValue(1);
     prisma.xe.findFirst.mockResolvedValue(vehicleDetailRecord);

@@ -1,5 +1,11 @@
 # Khởi hành tự động
 
+## Xóa chuyến chưa phát sinh giao dịch
+
+`DELETE /api/v1/trips/:id` yêu cầu vai trò nhà xe và quyền `trip:delete`. Xóa được phép với chuyến `CHUA_KHOI_HANH` hoặc `DA_HUY` khi chưa phát sinh vé, giữ chỗ còn hiệu lực, vận đơn hay đánh giá. Vé từng được tạo và mọi vận đơn đều được giữ lại trong lịch sử, kể cả khi đã hủy/hoàn tất; chuyến đang chạy hoặc đã hoàn thành không thể xóa. Giữ chỗ đã hết hạn/được giải phóng được dọn cùng chuyến. Các dòng ghế chuyến cũng được xóa trong cùng transaction.
+
+Thành công trả `{ "data": { "tripId": 1, "code": "..." } }`. Các lỗi nghiệp vụ trả HTTP 409 với mã `TRIP_DELETE_STATUS_NOT_ALLOWED`, `TRIP_HAS_TICKET_HISTORY`, `TRIP_HAS_ACTIVE_BOOKINGS`, `TRIP_HAS_SHIPMENT_HISTORY`, `TRIP_HAS_REVIEW_HISTORY` hoặc `TRIP_DELETE_CONFLICT`. Quyền mới được gán mặc định cho `NHA_XE_ADMIN` và `NHAN_VIEN_DIEU_HANH` bằng migration `20261025140000_add_trip_delete_permission`.
+
 `TripDepartureService` kiểm tra mỗi 30 giây khi API chạy, đồng thời kiểm tra ngay sau bootstrap để xử lý các chuyến quá giờ trong lúc API tắt.
 
 - Dùng `BUSINESS_TIME_ZONE` (mặc định `Asia/Ho_Chi_Minh`), so sánh ngày và giờ nghiệp vụ lưu riêng trong Prisma/MySQL.

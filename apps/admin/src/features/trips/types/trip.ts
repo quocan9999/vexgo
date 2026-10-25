@@ -118,6 +118,9 @@ export type TripSeat = {
     seatId: number;
     code: string;
     position: string | null;
+    floor?: number | null;
+    x?: number | null;
+    y?: number | null;
   };
   createdAt: string;
   updatedAt: string;

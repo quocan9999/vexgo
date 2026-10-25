@@ -65,6 +65,7 @@ function createService() {
     },
     bangGia: { findMany: vi.fn(), findFirst: vi.fn() },
     gheChuyenXe: { findMany: vi.fn(), findFirst: vi.fn() },
+    ghe: { findMany: vi.fn() },
     phieuGuiHang: { findFirst: vi.fn() },
     hangHoa: { findMany: vi.fn() },
     tuyenXe: { findFirst: vi.fn() },
@@ -83,6 +84,10 @@ function createService() {
     async (callback: (tx: typeof prisma) => Promise<unknown>) =>
       callback(prisma),
   );
+  prisma.ghe.findMany.mockResolvedValue([
+    { gheId: 1, tang: 1, toaDoX: 100, toaDoY: 100 },
+    { gheId: 2, tang: 1, toaDoX: 200, toaDoY: 100 },
+  ]);
   return {
     prisma,
     service: new TripsService(
@@ -730,6 +735,7 @@ describe('TripsService create (05.2)', () => {
       trangThai: 'HOAT_DONG',
       ghes: [],
     });
+    prisma.ghe.findMany.mockResolvedValueOnce([]);
 
     await expect(
       service.create(createDto, tenantPrincipal as never),
@@ -823,8 +829,8 @@ describe('TripsService create (05.2)', () => {
         sucChuaHangNhe: 80,
         gheChuyenXes: {
           create: [
-            { gheId: 1, trangThai: 'TRONG' },
-            { gheId: 2, trangThai: 'TRONG' },
+            { gheId: 1, trangThai: 'TRONG', tang: 1, toaDoX: 100, toaDoY: 100 },
+            { gheId: 2, trangThai: 'TRONG', tang: 1, toaDoX: 200, toaDoY: 100 },
           ],
         },
       },
@@ -837,7 +843,6 @@ describe('TripsService create (05.2)', () => {
     expect(prisma.xe.findFirst).toHaveBeenCalledWith({
       where: { xeId: 4, nhaXeId: 3 },
       include: {
-        ghes: true,
         loaiXe: {
           select: {
             sucChuaXeMayMacDinh: true,

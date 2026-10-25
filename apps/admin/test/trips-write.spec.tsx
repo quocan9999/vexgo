@@ -371,7 +371,12 @@ describe('Trip shipment snapshot details', () => {
   it('shows the shipment flag and total snapshot capacities in the detail sheet', () => {
     setEmployeeAdminTestSession(['trip:read']);
     const html = renderPortalMarkup(
-      <TripDetailSheet initialTrip={mockTrip} onClose={vi.fn()} tripId={101} />,
+      <TripDetailSheet
+        initialTrip={mockTrip}
+        onClose={vi.fn()}
+        onDeleted={vi.fn()}
+        tripId={101}
+      />,
     );
 
     expect(html).toContain('Nhận gửi hàng');
@@ -389,6 +394,7 @@ describe('Trip shipment snapshot details', () => {
       <TripDetailSheet
         initialTrip={{ ...mockTrip, acceptsShipments: false }}
         onClose={vi.fn()}
+        onDeleted={vi.fn()}
         tripId={101}
       />,
     );
@@ -699,6 +705,7 @@ describe('Trip lifecycle & cancellation action gates in detail sheet', () => {
       <TripDetailSheet
         initialTrip={{ ...mockTrip, status: 'CHUA_KHOI_HANH' }}
         onClose={vi.fn()}
+        onDeleted={vi.fn()}
         tripId={101}
       />,
     );
@@ -714,6 +721,7 @@ describe('Trip lifecycle & cancellation action gates in detail sheet', () => {
       <TripDetailSheet
         initialTrip={{ ...mockTrip, status: 'DANG_CHAY' }}
         onClose={vi.fn()}
+        onDeleted={vi.fn()}
         tripId={101}
       />,
     );
@@ -729,6 +737,7 @@ describe('Trip lifecycle & cancellation action gates in detail sheet', () => {
       <TripDetailSheet
         initialTrip={{ ...mockTrip, status: 'HOAN_THANH' }}
         onClose={vi.fn()}
+        onDeleted={vi.fn()}
         tripId={101}
       />,
     );
@@ -741,6 +750,7 @@ describe('Trip lifecycle & cancellation action gates in detail sheet', () => {
       <TripDetailSheet
         initialTrip={{ ...mockTrip, status: 'DA_HUY' }}
         onClose={vi.fn()}
+        onDeleted={vi.fn()}
         tripId={101}
       />,
     );
@@ -756,13 +766,21 @@ describe('Trip lifecycle & cancellation action gates in detail sheet', () => {
       <TripDetailSheet
         initialTrip={{ ...mockTrip, status: 'CHUA_KHOI_HANH' }}
         onClose={vi.fn()}
+        onDeleted={vi.fn()}
         tripId={101}
       />,
     );
     expect(readOnlyHtml).not.toContain('Chỉnh sửa');
     expect(readOnlyHtml).not.toContain('Bắt đầu chạy');
     expect(readOnlyHtml).not.toContain('Hủy chuyến');
-    const readOnlyRunningHtml = renderPortalMarkup(<TripDetailSheet initialTrip={{ ...mockTrip, status: 'DANG_CHAY' }} onClose={vi.fn()} tripId={101} />);
+    const readOnlyRunningHtml = renderPortalMarkup(
+      <TripDetailSheet
+        initialTrip={{ ...mockTrip, status: 'DANG_CHAY' }}
+        onClose={vi.fn()}
+        onDeleted={vi.fn()}
+        tripId={101}
+      />,
+    );
     expect(readOnlyRunningHtml).not.toContain('Hoàn thành chuyến');
 
     setEmployeeAdminTestSession(['trip:read', 'trip:update']);
@@ -770,13 +788,21 @@ describe('Trip lifecycle & cancellation action gates in detail sheet', () => {
       <TripDetailSheet
         initialTrip={{ ...mockTrip, status: 'CHUA_KHOI_HANH' }}
         onClose={vi.fn()}
+        onDeleted={vi.fn()}
         tripId={101}
       />,
     );
     expect(updateOnlyHtml).toContain('Chỉnh sửa');
     expect(updateOnlyHtml).not.toContain('Bắt đầu chạy');
     expect(updateOnlyHtml).not.toContain('Hủy chuyến');
-    const updateRunningHtml = renderPortalMarkup(<TripDetailSheet initialTrip={{ ...mockTrip, status: 'DANG_CHAY' }} onClose={vi.fn()} tripId={101} />);
+    const updateRunningHtml = renderPortalMarkup(
+      <TripDetailSheet
+        initialTrip={{ ...mockTrip, status: 'DANG_CHAY' }}
+        onClose={vi.fn()}
+        onDeleted={vi.fn()}
+        tripId={101}
+      />,
+    );
     expect(updateRunningHtml).toContain('Hoàn thành chuyến');
     expect(updateRunningHtml).not.toContain('Bắt đầu chạy');
 
@@ -785,6 +811,7 @@ describe('Trip lifecycle & cancellation action gates in detail sheet', () => {
       <TripDetailSheet
         initialTrip={{ ...mockTrip, status: 'CHUA_KHOI_HANH' }}
         onClose={vi.fn()}
+        onDeleted={vi.fn()}
         tripId={101}
       />,
     );

@@ -57,6 +57,13 @@ export interface StopPointPayload {
   isDefault: boolean;
 }
 
+function getLegacySeatFloor(seatNumber: string, position: string | null) {
+  return position?.toLocaleLowerCase('vi-VN').includes('trên') ||
+    seatNumber.toLocaleUpperCase('vi-VN').startsWith('B')
+    ? 2
+    : 1;
+}
+
 const PASSENGER_STATIONS_BY_CITY: Record<
   string,
   Array<{ name: string; address: string; type: 'station' | 'point' }>
@@ -823,6 +830,10 @@ export class TripsService {
       tripSeatId: gx.gheChuyenXeId,
       seatNumber: gx.ghe.soGhe,
       position: gx.ghe.viTri,
+      floor:
+        gx.ghe.tang ?? gx.tang ?? getLegacySeatFloor(gx.ghe.soGhe, gx.ghe.viTri),
+      x: gx.ghe.toaDoX,
+      y: gx.ghe.toaDoY,
       status: gx.trangThai,
       ...(defaultPrice !== undefined ? { price: defaultPrice } : {}),
     }));
@@ -860,6 +871,9 @@ export class TripsService {
             gheId: true,
             soGhe: true,
             viTri: true,
+            tang: true,
+            toaDoX: true,
+            toaDoY: true,
           },
         },
       },
@@ -896,6 +910,12 @@ export class TripsService {
         seatId: item.ghe.gheId,
         code: item.ghe.soGhe,
         position: item.ghe.viTri,
+        floor:
+          item.ghe.tang ??
+          item.tang ??
+          getLegacySeatFloor(item.ghe.soGhe, item.ghe.viTri),
+        x: item.ghe.toaDoX,
+        y: item.ghe.toaDoY,
       },
       createdAt: item.createdAt.toISOString(),
       updatedAt: item.updatedAt.toISOString(),
@@ -1059,7 +1079,6 @@ export class TripsService {
     const vehicle = await this.prisma.xe.findFirst({
       where: { xeId: dto.vehicleId, nhaXeId },
       include: {
-        ghes: true,
         loaiXe: {
           select: {
             sucChuaXeMayMacDinh: true,
@@ -1080,13 +1099,6 @@ export class TripsService {
       throw new ConflictException({
         error: 'VEHICLE_NOT_ACTIVE',
         message: 'Xe đang không hoạt động, không thể phân công vào chuyến.',
-      });
-    }
-
-    if (vehicle.ghes.length === 0) {
-      throw new ConflictException({
-        error: 'VEHICLE_HAS_NO_SEATS',
-        message: 'Xe chưa được cấu hình ghế nên chưa thể lập chuyến.',
       });
     }
 
@@ -1111,6 +1123,22 @@ export class TripsService {
             throw new NotFoundException({
               error: 'VEHICLE_NOT_FOUND',
               message: 'Không tìm thấy xe trong nhà xe.',
+            });
+          }
+
+          const vehicleSeats = await tx.ghe.findMany({
+            where: { xeId: dto.vehicleId },
+            select: {
+              gheId: true,
+              tang: true,
+              toaDoX: true,
+              toaDoY: true,
+            },
+          });
+          if (vehicleSeats.length === 0) {
+            throw new ConflictException({
+              error: 'VEHICLE_HAS_NO_SEATS',
+              message: 'Xe chưa được cấu hình ghế nên chưa thể lập chuyến.',
             });
           }
 
@@ -1146,9 +1174,12 @@ export class TripsService {
               sucChuaHangCongKenh: vehicle.loaiXe.sucChuaHangCongKenhMacDinh,
               sucChuaHangNhe: vehicle.loaiXe.sucChuaHangNheMacDinh,
               gheChuyenXes: {
-                create: vehicle.ghes.map((ghe) => ({
+                create: vehicleSeats.map((ghe) => ({
                   gheId: ghe.gheId,
                   trangThai: 'TRONG',
+                  tang: ghe.tang,
+                  toaDoX: ghe.toaDoX,
+                  toaDoY: ghe.toaDoY,
                 })),
               },
             },

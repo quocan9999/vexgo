@@ -1,19 +1,6 @@
 'use client';
 
-import { ResourceSheetForm } from '@/components/admin/resource-sheet-form';
-
-import {
-  Armchair,
-  ArrowLeft,
-  BusFront,
-  Layers3,
-  List,
-  LoaderCircle,
-  PencilLine,
-  Plus,
-  RefreshCw,
-  Trash2,
-} from 'lucide-react';
+import { Armchair, ArrowLeft, BusFront, Layers3, LoaderCircle, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { toast } from 'sonner';
@@ -23,34 +10,29 @@ import {
   ResourceSheet,
   ResourceState,
 } from '@/components/admin/resource-ui';
+import { ResourceSheetForm } from '@/components/admin/resource-sheet-form';
 import { AdminPageHeader } from '@/components/admin/admin-page-header';
-import { Badge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/action-button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Field, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from '@/components/ui/tabs';
 import { useAdminPermissions } from '@/features/admin-auth/hooks/use-admin-permissions';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
+import { SeatLayoutEditor } from './seat-layout-editor';
+import {
+  normalizeVehicleSeatLayout,
+  toVehicleSeatLayoutUpdate,
+  type SeatLayoutItem,
+} from './seat-layout-utils';
 import {
   createVehicleSeat,
   deleteVehicleSeat,
+  deleteVehicleSeatFloor,
   getVehicleById,
   getVehicleSeats,
   updateVehicleSeat,
-  VehicleApiError,
+  updateVehicleSeatLayout,
 } from '../services/vehicle-service';
 import type {
   VehicleDetail,
@@ -63,8 +45,6 @@ type WorkspaceState =
   | { status: 'error'; message: string }
   | { status: 'success'; vehicle: VehicleDetail; seats: VehicleSeat[] };
 
-type SeatView = 'list' | 'groups';
-
 function requestErrorMessage(error: unknown, fallback: string) {
   if (error instanceof TypeError) {
     return 'Không thể kết nối đến máy chủ API. Vui lòng thử lại.';
@@ -72,28 +52,26 @@ function requestErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
 }
 
-function VehicleSeatFormDialog({
+function VehicleSeatEditDialog({
   vehicleId,
   seat,
   onClose,
   onSaved,
 }: {
   vehicleId: number;
-  seat?: VehicleSeat;
+  seat: VehicleSeat;
   onClose: () => void;
-  onSaved: (action: 'created' | 'updated') => Promise<void>;
+  onSaved: () => Promise<void>;
 }) {
-  const editing = seat !== undefined;
   const formRef = useRef<HTMLFormElement>(null);
   const submittingRef = useRef(false);
-  const [seatNumber, setSeatNumber] = useState(seat?.seatNumber ?? '');
-  const [position, setPosition] = useState(seat?.position ?? '');
+  const [seatNumber, setSeatNumber] = useState(seat.seatNumber);
+  const [position, setPosition] = useState(seat.position ?? '');
   const [seatNumberError, setSeatNumberError] = useState<string | null>(null);
   const [positionError, setPositionError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const idPrefix = editing
-    ? `edit-vehicle-seat-${seat.seatId}`
-    : 'create-vehicle-seat';
+  const idPrefix = 'edit-vehicle-seat-' + seat.seatId;
 
   function closeDialog() {
     if (!submittingRef.current) onClose();
@@ -123,6 +101,7 @@ function VehicleSeatFormDialog({
       : null;
     setSeatNumberError(nextSeatNumberError);
     setPositionError(nextPositionError);
+    setFormError(null);
 
     if (nextSeatNumberError || nextPositionError) {
       focusFirstInvalid();
@@ -136,19 +115,10 @@ function VehicleSeatFormDialog({
     submittingRef.current = true;
     setSubmitting(true);
     try {
-      if (seat) await updateVehicleSeat(vehicleId, seat.seatId, input);
-      else await createVehicleSeat(vehicleId, input);
-      await onSaved(editing ? 'updated' : 'created');
+      await updateVehicleSeat(vehicleId, seat.seatId, input);
+      await onSaved();
     } catch (error: unknown) {
-      if (
-        error instanceof VehicleApiError &&
-        error.code === 'VEHICLE_SEAT_NUMBER_EXISTS'
-      ) {
-        setSeatNumberError(error.message);
-        focusFirstInvalid();
-      } else {
-        toast.error(requestErrorMessage(error, 'Không thể lưu thông tin ghế.'));
-      }
+      setFormError(requestErrorMessage(error, 'Không thể cập nhật thông tin ghế.'));
     } finally {
       submittingRef.current = false;
       setSubmitting(false);
@@ -158,21 +128,17 @@ function VehicleSeatFormDialog({
   return (
     <ResourceSheet
       busy={submitting}
-      description={
-        editing
-          ? 'Cập nhật số ghế và nhóm vị trí đã lưu cho xe.'
-          : 'Thêm số ghế và nhóm vị trí đã lưu cho xe.'
-      }
+      description="Cập nhật số ghế và ghi chú vị trí đã lưu cho xe."
       onClose={closeDialog}
       preventDismiss={submitting}
-      title={editing ? 'Chỉnh sửa ghế' : 'Thêm ghế'}
+      title={'Chỉnh sửa ghế ' + seat.seatNumber}
     >
       <ResourceSheetForm
         ref={formRef}
         noValidate
         onSubmit={submit}
         footer={
-          <div className="flex justify-end gap-2 border-t bg-background/95 px-4 py-4 sm:px-6 shrink-0">
+          <div className="flex shrink-0 justify-end gap-2 border-t bg-background/95 px-4 py-4 sm:px-6">
             <Button
               disabled={submitting}
               onClick={closeDialog}
@@ -185,24 +151,24 @@ function VehicleSeatFormDialog({
               {submitting && (
                 <LoaderCircle aria-hidden className="motion-safe:animate-spin" />
               )}
-              {submitting ? 'Đang lưu…' : editing ? 'Lưu thay đổi' : 'Thêm ghế'}
+              {submitting ? 'Đang lưu…' : 'Lưu thay đổi'}
             </Button>
           </div>
         }
       >
         <Field data-invalid={Boolean(seatNumberError)}>
-          <FieldLabel htmlFor={`${idPrefix}-number`}>
+          <FieldLabel htmlFor={idPrefix + '-number'}>
             Số ghế <span aria-hidden="true">*</span>
           </FieldLabel>
           <Input
             autoComplete="off"
             autoFocus
             aria-describedby={
-              seatNumberError ? `${idPrefix}-number-error` : undefined
+              seatNumberError ? idPrefix + '-number-error' : undefined
             }
             aria-invalid={Boolean(seatNumberError)}
             disabled={submitting}
-            id={`${idPrefix}-number`}
+            id={idPrefix + '-number'}
             maxLength={10}
             onChange={(event) => {
               setSeatNumber(event.target.value);
@@ -211,138 +177,46 @@ function VehicleSeatFormDialog({
             required
             value={seatNumber}
           />
-          <FieldError id={`${idPrefix}-number-error`}>
+          <FieldError id={idPrefix + '-number-error'}>
             {seatNumberError}
           </FieldError>
         </Field>
         <Field data-invalid={Boolean(positionError)}>
-          <FieldLabel htmlFor={`${idPrefix}-position`}>Nhóm vị trí</FieldLabel>
+          <FieldLabel htmlFor={idPrefix + '-position'}>Vị trí</FieldLabel>
           <Input
             autoComplete="off"
             aria-describedby={
-              positionError ? `${idPrefix}-position-error` : undefined
+              positionError ? idPrefix + '-position-error' : undefined
             }
             aria-invalid={Boolean(positionError)}
             disabled={submitting}
-            id={`${idPrefix}-position`}
+            id={idPrefix + '-position'}
             maxLength={50}
             onChange={(event) => {
               setPosition(event.target.value);
               setPositionError(null);
             }}
-            placeholder="Ví dụ: Tầng dưới, Dãy trái"
+            placeholder="Ví dụ: Dãy trái, gần cửa"
             value={position}
           />
-          <FieldError id={`${idPrefix}-position-error`}>
+          <FieldError id={idPrefix + '-position-error'}>
             {positionError}
           </FieldError>
         </Field>
-        <p className="m-0 rounded-lg border bg-muted/40 p-3 text-xs leading-relaxed text-muted-foreground">
-          Nhóm vị trí chỉ dùng để phân loại danh sách. Xe chưa lưu sơ đồ hàng và
-          cột ghế.
-        </p>
+        {formError && <ResourceNotice kind="error">{formError}</ResourceNotice>}
       </ResourceSheetForm>
     </ResourceSheet>
-  );
-}
-
-function SeatActions({
-  seat,
-  onEdit,
-  onDelete,
-  canEdit,
-  canDelete,
-  compact = false,
-}: {
-  seat: VehicleSeat;
-  onEdit: (seat: VehicleSeat) => void;
-  onDelete: (seat: VehicleSeat) => void;
-  canEdit: boolean;
-  canDelete: boolean;
-  compact?: boolean;
-}) {
-  if (!canEdit && !canDelete) return null;
-
-  return (
-    <div className="flex shrink-0 items-center gap-1.5">
-      {canEdit && (
-        <Button
-          aria-label={`Chỉnh sửa ghế ${seat.seatNumber}`}
-          onClick={() => onEdit(seat)}
-          size={compact ? 'icon-sm' : 'sm'}
-          type="button"
-          variant={compact ? 'ghost' : 'outline'}
-        >
-          <PencilLine aria-hidden="true" />
-          {!compact && <span>Chỉnh sửa</span>}
-        </Button>
-      )}
-      {canDelete && (
-        <Button
-          aria-label={`Xóa ghế ${seat.seatNumber}`}
-          className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-          onClick={() => onDelete(seat)}
-          size={compact ? 'icon-sm' : 'sm'}
-          type="button"
-          variant={compact ? 'ghost' : 'outline'}
-        >
-          <Trash2 aria-hidden="true" />
-          {!compact && <span>Xóa</span>}
-        </Button>
-      )}
-    </div>
-  );
-}
-
-function SeatListCard({
-  seat,
-  canEdit,
-  canDelete,
-  onEdit,
-  onDelete,
-}: {
-  seat: VehicleSeat;
-  canEdit: boolean;
-  canDelete: boolean;
-  onEdit: (seat: VehicleSeat) => void;
-  onDelete: (seat: VehicleSeat) => void;
-}) {
-  return (
-    <Card className="h-auto gap-0 py-0">
-      <CardContent className="flex min-w-0 flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between sm:p-4">
-        <div className="flex min-w-0 items-center gap-3">
-          <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
-            <Armchair aria-hidden="true" size={19} />
-          </span>
-          <div className="min-w-0">
-            <h3 className="m-0 break-all font-mono text-sm font-semibold text-foreground">
-              {seat.seatNumber}
-            </h3>
-            <p className="mt-1 mb-0 break-words text-xs text-muted-foreground">
-              {seat.position?.trim() || 'Chưa xác định vị trí'}
-            </p>
-          </div>
-        </div>
-        <SeatActions
-          canDelete={canDelete}
-          canEdit={canEdit}
-          onDelete={onDelete}
-          onEdit={onEdit}
-          seat={seat}
-        />
-      </CardContent>
-    </Card>
   );
 }
 
 function VehicleSummary({
   vehicle,
   seatCount,
-  groupCount,
+  floorCount,
 }: {
   vehicle: VehicleDetail;
   seatCount: number;
-  groupCount: number;
+  floorCount: number;
 }) {
   return (
     <section aria-label="Tóm tắt xe và cấu hình ghế" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -362,6 +236,7 @@ function VehicleSummary({
           </div>
         </CardContent>
       </Card>
+
       <Card className="h-auto gap-0 py-0">
         <CardContent className="flex min-h-28 items-start gap-4 p-4 sm:p-5">
           <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground">
@@ -376,6 +251,7 @@ function VehicleSummary({
           </div>
         </CardContent>
       </Card>
+
       <Card className="h-auto gap-0 border-primary bg-primary py-0 text-primary-foreground sm:col-span-2 xl:col-span-1">
         <CardContent className="flex min-h-28 items-start gap-4 p-4 sm:p-5">
           <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-white/15 text-white">
@@ -387,7 +263,7 @@ function VehicleSummary({
               {seatCount.toLocaleString('vi-VN')}
             </p>
             <p className="mt-2 mb-0 text-xs text-white/75">
-              {groupCount.toLocaleString('vi-VN')} nhóm vị trí đã lưu
+              {floorCount.toLocaleString('vi-VN')} tầng có ghế
             </p>
           </div>
         </CardContent>
@@ -399,7 +275,7 @@ function VehicleSummary({
 function VehicleSeatsLoading() {
   return (
     <div aria-busy="true" aria-label="Đang tải cấu hình ghế xe" className="space-y-4" role="status">
-      <span className="sr-only">Đang tải thông tin xe và danh sách ghế…</span>
+      <span className="sr-only">Đang tải thông tin xe và sơ đồ ghế…</span>
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {Array.from({ length: 3 }, (_, index) => (
           <Card className="h-auto gap-3 py-4" key={index}>
@@ -433,11 +309,13 @@ export function VehicleSeatsManagement({ vehicleId }: { vehicleId: number }) {
   const canDelete = can('seat:delete');
   const validVehicleId = Number.isSafeInteger(vehicleId) && vehicleId > 0;
   const [workspace, setWorkspace] = useState<WorkspaceState>({ status: 'loading' });
+  const [layoutDraft, setLayoutDraft] = useState<SeatLayoutItem[]>([]);
+  const [layoutDirty, setLayoutDirty] = useState(false);
+  const [layoutSaving, setLayoutSaving] = useState(false);
+  const [layoutError, setLayoutError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
   const [refreshCount, setRefreshCount] = useState(0);
-  const [view, setView] = useState<SeatView>('list');
   const [editingSeat, setEditingSeat] = useState<VehicleSeat | null>(null);
-  const [creatingSeat, setCreatingSeat] = useState(false);
   const [deletingSeat, setDeletingSeat] = useState<VehicleSeat | null>(null);
   const [deleteSubmitting, setDeleteSubmitting] = useState(false);
   const deleteSubmittingRef = useRef(false);
@@ -452,7 +330,12 @@ export function VehicleSeatsManagement({ vehicleId }: { vehicleId: number }) {
       getVehicleSeats(vehicleId, controller.signal),
     ])
       .then(([vehicle, seats]) => {
-        if (current) setWorkspace({ status: 'success', vehicle, seats });
+        if (current) {
+          setWorkspace({ status: 'success', vehicle, seats });
+          setLayoutDraft(normalizeVehicleSeatLayout(seats));
+          setLayoutDirty(false);
+          setLayoutError(null);
+        }
       })
       .catch((error: unknown) => {
         if (current && !controller.signal.aborted) {
@@ -473,15 +356,91 @@ export function VehicleSeatsManagement({ vehicleId }: { vehicleId: number }) {
     setRetryCount((count) => count + 1);
   }
 
-  async function handleSeatSaved(action: 'created' | 'updated') {
-    setCreatingSeat(false);
+  async function handleSeatUpdated() {
     setEditingSeat(null);
-    toast.success(action === 'created' ? 'Đã thêm ghế.' : 'Đã cập nhật ghế.');
+    toast.success('Đã cập nhật thông tin ghế.');
     setWorkspace({ status: 'loading' });
     setRefreshCount((count) => count + 1);
   }
 
-  async function confirmDelete() {
+  async function addSeatToLayout(seat: SeatLayoutItem) {
+    const savedSeat = await createVehicleSeat(vehicleId, {
+      seatNumber: seat.seatNumber,
+      position: seat.position,
+      floor: seat.floor,
+      x: seat.x,
+      y: seat.y,
+    });
+    setWorkspace((current) =>
+      current.status === 'success'
+        ? { ...current, seats: [...current.seats, savedSeat] }
+        : current,
+    );
+    return {
+      seatId: savedSeat.seatId,
+      seatNumber: savedSeat.seatNumber,
+      position: savedSeat.position,
+      floor: savedSeat.floor,
+      x: savedSeat.x ?? seat.x,
+      y: savedSeat.y ?? seat.y,
+    };
+  }
+
+  async function saveSeatLayout() {
+    if (!canUpdate || layoutSaving || !layoutDirty) return;
+    setLayoutSaving(true);
+    setLayoutError(null);
+    try {
+      const savedSeats = await updateVehicleSeatLayout(
+        vehicleId,
+        toVehicleSeatLayoutUpdate(layoutDraft),
+      );
+      setLayoutDraft(normalizeVehicleSeatLayout(savedSeats));
+      setLayoutDirty(false);
+      setWorkspace((current) =>
+        current.status === 'success'
+          ? { ...current, seats: savedSeats }
+          : current,
+      );
+      toast.success('Đã lưu sơ đồ ghế.');
+    } catch (error: unknown) {
+      const message = requestErrorMessage(error, 'Không thể lưu sơ đồ ghế.');
+      setLayoutError(message);
+      toast.error(message);
+    } finally {
+      setLayoutSaving(false);
+    }
+  }
+
+  async function deleteUpperFloor() {
+    if (!canDelete) throw new Error('Bạn không có quyền xóa tầng ghế.');
+    try {
+      const deletedSeatCount = await deleteVehicleSeatFloor(vehicleId, 2);
+      setWorkspace((current) =>
+        current.status === 'success'
+          ? {
+              ...current,
+              seats: current.seats.filter((seat) => seat.floor !== 2),
+            }
+          : current,
+      );
+      setLayoutDraft((current) => current.filter((seat) => seat.floor !== 2));
+      setLayoutDirty(false);
+      setLayoutError(null);
+      setRefreshCount((count) => count + 1);
+      toast.success(
+        deletedSeatCount > 0
+          ? 'Đã xóa tầng trên và ' + deletedSeatCount + ' ghế.'
+          : 'Đã xóa tầng trên.',
+      );
+    } catch (error: unknown) {
+      const message = requestErrorMessage(error, 'Không thể xóa tầng trên.');
+      toast.error(message);
+      throw new Error(message);
+    }
+  }
+
+  async function confirmDeleteSeat() {
     if (!canDelete || !deletingSeat || deleteSubmittingRef.current) return;
     deleteSubmittingRef.current = true;
     setDeleteSubmitting(true);
@@ -489,9 +448,23 @@ export function VehicleSeatsManagement({ vehicleId }: { vehicleId: number }) {
     try {
       await deleteVehicleSeat(vehicleId, deletingSeat.seatId);
       setDeletingSeat(null);
-      toast.success(`Đã xóa ghế ${deletingSeat.seatNumber}.`);
-      setWorkspace({ status: 'loading' });
+      setWorkspace((current) =>
+        current.status === 'success'
+          ? {
+              ...current,
+              seats: current.seats.filter(
+                (seat) => seat.seatId !== deletingSeat.seatId,
+              ),
+            }
+          : current,
+      );
+      setLayoutDraft((current) =>
+        current.filter((seat) => seat.seatId !== deletingSeat.seatId),
+      );
+      setLayoutDirty(false);
+      setLayoutError(null);
       setRefreshCount((count) => count + 1);
+      toast.success('Đã xóa ghế ' + deletingSeat.seatNumber + '.');
     } catch (error: unknown) {
       setDeleteError(requestErrorMessage(error, 'Không thể xóa ghế.'));
     } finally {
@@ -500,56 +473,24 @@ export function VehicleSeatsManagement({ vehicleId }: { vehicleId: number }) {
     }
   }
 
-  const seatGroups =
+  const floorCount =
     workspace.status === 'success'
-      ? workspace.seats.reduce<Map<string, VehicleSeat[]>>((groups, seat) => {
-          const groupName = seat.position?.trim() || 'Chưa xác định vị trí';
-          const group = groups.get(groupName) ?? [];
-          group.push(seat);
-          groups.set(groupName, group);
-          return groups;
-        }, new Map())
-      : new Map<string, VehicleSeat[]>();
-
-  function renderSeatActions(seat: VehicleSeat, compact = false) {
-    return (
-      <SeatActions
-        canDelete={canDelete}
-        canEdit={canUpdate}
-        compact={compact}
-        onDelete={(selectedSeat) => {
-          setDeleteError(null);
-          setDeletingSeat(selectedSeat);
-        }}
-        onEdit={setEditingSeat}
-        seat={seat}
-      />
-    );
-  }
+      ? Math.max(1, new Set(workspace.seats.map((seat) => seat.floor)).size)
+      : 1;
 
   return (
     <SuperAdminLayout activeSection="vehicles">
       <div className="admin-page-content admin-ui space-y-6 vehicle-seats-page">
         <AdminPageHeader
           actions={
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                render={<Link href="/vehicles" />}
-                variant="outline"
-              >
-                <ArrowLeft aria-hidden="true" />
-                Danh sách xe
-              </Button>
-              {canCreate && (
-                <Button
-                  disabled={workspace.status !== 'success'}
-                  onClick={() => setCreatingSeat(true)}
-                >
-                  <Plus aria-hidden="true" />
-                  Thêm ghế
-                </Button>
-              )}
-            </div>
+            <Button
+              nativeButton={false}
+              render={<Link href="/vehicles" />}
+              variant="outline"
+            >
+              <ArrowLeft aria-hidden="true" />
+              Danh sách xe
+            </Button>
           }
           eyebrow="QUẢN LÝ PHƯƠNG TIỆN"
           title="Cấu hình ghế xe"
@@ -576,148 +517,62 @@ export function VehicleSeatsManagement({ vehicleId }: { vehicleId: number }) {
         {workspace.status === 'success' && (
           <>
             <VehicleSummary
-              groupCount={seatGroups.size}
+              floorCount={floorCount}
               seatCount={workspace.seats.length}
               vehicle={workspace.vehicle}
             />
 
-            <Tabs
-              className="min-w-0 gap-4"
-              onValueChange={(value) => {
-                if (value === 'list' || value === 'groups') setView(value);
+            <SeatLayoutEditor
+              key={vehicleId}
+              canAdd={canCreate}
+              canEditSelected={canUpdate && !layoutDirty}
+              canDeleteSelected={canDelete && !layoutDirty}
+              deletingSeat={deleteSubmitting}
+              disabled={!canUpdate}
+              dirty={layoutDirty}
+              error={layoutError}
+              onAddSeat={canCreate ? addSeatToLayout : undefined}
+              onChange={(nextSeats) => {
+                setLayoutDraft(nextSeats);
+                setLayoutDirty(true);
+                setLayoutError(null);
               }}
-              value={view}
-            >
-              {workspace.seats.length > 0 && (
-                <TabsList
-                  activateOnFocus
-                  aria-label="Kiểu hiển thị danh sách ghế"
-                  className="grid w-full grid-cols-2 sm:w-fit"
-                >
-                  <TabsTrigger value="list">
-                    <List aria-hidden="true" />
-                    Danh sách
-                  </TabsTrigger>
-                  <TabsTrigger value="groups">
-                    <Layers3 aria-hidden="true" />
-                    Nhóm vị trí
-                  </TabsTrigger>
-                </TabsList>
-              )}
+              onDeleteUpperFloor={canDelete ? deleteUpperFloor : undefined}
+              onRequestEditSeat={(selectedSeat) => {
+                if (selectedSeat.seatId === undefined || !canUpdate) return;
+                const persistedSeat = workspace.seats.find(
+                  (seat) => seat.seatId === selectedSeat.seatId,
+                );
+                if (persistedSeat) setEditingSeat(persistedSeat);
+              }}
+              onRequestDeleteSeat={(selectedSeat) => {
+                if (selectedSeat.seatId === undefined || !canDelete) return;
+                const persistedSeat = workspace.seats.find(
+                  (seat) => seat.seatId === selectedSeat.seatId,
+                );
+                if (!persistedSeat) return;
+                setDeleteError(null);
+                setDeletingSeat(persistedSeat);
+              }}
+              onSave={canUpdate ? () => void saveSeatLayout() : undefined}
+              saving={layoutSaving}
+              seats={layoutDraft}
+            />
 
-              <Card className="h-auto gap-0 py-0">
-                <CardHeader className="flex flex-col gap-3 border-b p-4 sm:flex-row sm:items-start sm:justify-between sm:p-5">
-                  <div className="min-w-0 space-y-1">
-                    <CardTitle className="text-base">
-                      Danh sách ghế của xe
-                    </CardTitle>
-                    <CardDescription className="max-w-2xl text-xs leading-relaxed">
-                      Nhóm theo trường vị trí đã lưu. Dữ liệu hiện tại không có
-                      tọa độ hàng và cột ghế.
-                    </CardDescription>
-                  </div>
-                  <Badge className="shrink-0" variant="outline">
-                    {workspace.seats.length.toLocaleString('vi-VN')} ghế
-                  </Badge>
-                </CardHeader>
-
-                <CardContent className="p-4 sm:p-5">
-                  {workspace.seats.length === 0 ? (
-                    <div className="grid min-h-64 place-content-center justify-items-center gap-4 rounded-xl border border-dashed bg-muted/20 p-6 text-center">
-                      <span className="grid size-12 place-items-center rounded-xl bg-primary/10 text-primary">
-                        <Armchair aria-hidden="true" size={22} />
-                      </span>
-                      <div className="space-y-1">
-                        <h3 className="m-0 text-sm font-semibold text-foreground">
-                          Chưa có ghế trong cấu hình xe
-                        </h3>
-                        <p className="m-0 max-w-sm text-xs leading-relaxed text-muted-foreground">
-                          Thêm các ghế gốc để hệ thống có thể dùng chúng khi tạo
-                          chuyến xe.
-                        </p>
-                      </div>
-                      {canCreate && (
-                        <Button onClick={() => setCreatingSeat(true)}>
-                          <Plus aria-hidden="true" />
-                          Thêm ghế đầu tiên
-                        </Button>
-                      )}
-                    </div>
-                  ) : (
-                    <>
-                      <TabsContent className="min-w-0 space-y-2" value="list">
-                        {workspace.seats.map((seat) => (
-                          <SeatListCard
-                            canDelete={canDelete}
-                            canEdit={canUpdate}
-                            key={seat.seatId}
-                            onDelete={(selectedSeat) => {
-                              setDeleteError(null);
-                              setDeletingSeat(selectedSeat);
-                            }}
-                            onEdit={setEditingSeat}
-                            seat={seat}
-                          />
-                        ))}
-                      </TabsContent>
-                      <TabsContent className="min-w-0 space-y-4" value="groups">
-                        {[...seatGroups.entries()].map(([groupName, seats]) => (
-                          <section
-                            aria-label={`${groupName}, ${seats.length} ghế`}
-                            className="rounded-xl border bg-muted/20 p-3 sm:p-4"
-                            key={groupName}
-                          >
-                            <header className="mb-3 flex min-w-0 items-center justify-between gap-3">
-                              <h3 className="m-0 break-words text-sm font-semibold text-foreground">
-                                {groupName}
-                              </h3>
-                              <Badge className="shrink-0" variant="secondary">
-                                {seats.length.toLocaleString('vi-VN')} ghế
-                              </Badge>
-                            </header>
-                            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-                              {seats.map((seat) => (
-                                <article
-                                  className="flex min-w-0 items-center justify-between gap-1 rounded-lg border bg-card px-2 py-2 sm:px-3"
-                                  key={seat.seatId}
-                                >
-                                  <span className="flex min-w-0 items-center gap-2">
-                                    <Armchair
-                                      aria-hidden="true"
-                                      className="shrink-0 text-muted-foreground"
-                                      size={15}
-                                    />
-                                    <strong className="min-w-0 break-all font-mono text-xs font-semibold text-foreground">
-                                      {seat.seatNumber}
-                                    </strong>
-                                  </span>
-                                  {renderSeatActions(seat, true)}
-                                </article>
-                              ))}
-                            </div>
-                          </section>
-                        ))}
-                      </TabsContent>
-                    </>
-                  )}
-                </CardContent>
-              </Card>
-            </Tabs>
+            {layoutDirty && (
+              <ResourceNotice kind="info">
+                Lưu sơ đồ ghế trước khi xóa ghế hoặc tầng để giữ lại vị trí vừa
+                thay đổi.
+              </ResourceNotice>
+            )}
           </>
         )}
       </div>
 
-      {workspace.status === 'success' && creatingSeat && canCreate && (
-        <VehicleSeatFormDialog
-          onClose={() => setCreatingSeat(false)}
-          onSaved={handleSeatSaved}
-          vehicleId={vehicleId}
-        />
-      )}
       {workspace.status === 'success' && editingSeat && canUpdate && (
-        <VehicleSeatFormDialog
+        <VehicleSeatEditDialog
           onClose={() => setEditingSeat(null)}
-          onSaved={handleSeatSaved}
+          onSaved={handleSeatUpdated}
           seat={editingSeat}
           vehicleId={vehicleId}
         />
@@ -732,13 +587,13 @@ export function VehicleSeatsManagement({ vehicleId }: { vehicleId: number }) {
               setDeleteError(null);
             }
           }}
-          title={`Xóa ghế ${deletingSeat.seatNumber}?`}
+          title={'Xóa ghế ' + deletingSeat.seatNumber + '?'}
         >
           {deleteError && <ResourceNotice kind="error">{deleteError}</ResourceNotice>}
           <Button
             aria-busy={deleteSubmitting}
             disabled={deleteSubmitting}
-            onClick={confirmDelete}
+            onClick={() => void confirmDeleteSeat()}
             variant="destructive"
           >
             {deleteSubmitting && (

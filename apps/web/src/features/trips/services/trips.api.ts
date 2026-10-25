@@ -40,6 +40,9 @@ export type ApiTripSeat = {
   tripSeatId: number;
   seatNumber: string;
   position: string | null;
+  floor?: number | null;
+  x?: number | null;
+  y?: number | null;
   status: string;
 };
 

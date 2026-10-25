@@ -73,9 +73,14 @@ describe('Vehicle seat action permissions', () => {
     await renderSeatWorkspace();
 
     expect(screen.getByText('A1')).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Thêm ghế' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Chỉnh sửa ghế A1' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Xóa ghế A1' })).toBeNull();
+    expect(
+      screen.getByRole('button', { name: 'Thêm ghế' }).hasAttribute('disabled'),
+    ).toBe(true);
+    expect(screen.queryByRole('button', { name: 'Lưu sơ đồ' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: /A1, tầng dưới/ }));
+    expect(screen.queryByRole('button', { name: 'Chỉnh sửa ghế đang chọn' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Xóa ghế đang chọn' })).toBeNull();
   });
 
   it('renders only actions whose exact seat permission is present', async () => {
@@ -83,15 +88,20 @@ describe('Vehicle seat action permissions', () => {
     const { rerender } = render(<VehicleSeatsManagement vehicleId={12} />);
     await screen.findByRole('heading', { name: 'Cấu hình ghế xe' });
 
-    expect(screen.getByRole('button', { name: 'Thêm ghế' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Chỉnh sửa ghế A1' })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Xóa ghế A1' })).toBeNull();
+    expect(
+      screen.getByRole('button', { name: 'Thêm ghế' }).hasAttribute('disabled'),
+    ).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: /A1, tầng dưới/ }));
+    expect(screen.getByRole('button', { name: 'Chỉnh sửa ghế đang chọn' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Xóa ghế đang chọn' })).toBeNull();
 
     setEmployeeAdminTestSession(['vehicle:read', 'seat:read', 'seat:delete']);
     rerender(<VehicleSeatsManagement vehicleId={12} />);
-    expect(screen.queryByRole('button', { name: 'Thêm ghế' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Chỉnh sửa ghế A1' })).toBeNull();
-    expect(screen.getByRole('button', { name: 'Xóa ghế A1' })).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: 'Thêm ghế' }).hasAttribute('disabled'),
+    ).toBe(true);
+    expect(screen.queryByRole('button', { name: 'Chỉnh sửa ghế đang chọn' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Xóa ghế đang chọn' })).toBeTruthy();
   });
 
   it('unmounts an open edit form when seat:update is revoked', async () => {
@@ -99,12 +109,13 @@ describe('Vehicle seat action permissions', () => {
     const { rerender } = render(<VehicleSeatsManagement vehicleId={12} />);
     await screen.findByRole('heading', { name: 'Cấu hình ghế xe' });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Chỉnh sửa ghế A1' }));
-    expect(await screen.findByRole('dialog', { name: 'Chỉnh sửa ghế' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /A1, tầng dưới/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Chỉnh sửa ghế đang chọn' }));
+    expect(await screen.findByRole('dialog', { name: 'Chỉnh sửa ghế A1' })).toBeTruthy();
 
     setEmployeeAdminTestSession(['vehicle:read', 'seat:read']);
     rerender(<VehicleSeatsManagement vehicleId={12} />);
-    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Chỉnh sửa ghế' })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Chỉnh sửa ghế A1' })).toBeNull());
   });
 
   it('unmounts an open delete confirmation when seat:delete is revoked', async () => {
@@ -112,7 +123,8 @@ describe('Vehicle seat action permissions', () => {
     const { rerender } = render(<VehicleSeatsManagement vehicleId={12} />);
     await screen.findByRole('heading', { name: 'Cấu hình ghế xe' });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Xóa ghế A1' }));
+    fireEvent.click(screen.getByRole('button', { name: /A1, tầng dưới/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Xóa ghế đang chọn' }));
     const confirm = await screen.findByRole('alertdialog', { name: 'Xóa ghế A1?' });
     expect(within(confirm).getByRole('button', { name: 'Xóa ghế' })).toBeTruthy();
 

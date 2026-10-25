@@ -12,6 +12,9 @@ const seatRecord = {
   gheId: 101,
   soGhe: 'A01',
   viTri: 'Tầng dưới',
+  tang: 1,
+  toaDoX: 10,
+  toaDoY: 20,
   xeId: 12,
   createdAt: new Date('2026-09-25T10:00:00.000Z'),
   updatedAt: new Date('2026-09-25T11:00:00.000Z'),
@@ -27,6 +30,8 @@ const prisma = {
     delete: vi.fn(),
   },
   gheChuyenXe: { count: vi.fn() },
+  $queryRaw: vi.fn(),
+  $transaction: vi.fn(),
 } as unknown as PrismaService;
 
 const tenantAdmin: AuthPrincipal = {
@@ -90,10 +95,18 @@ function updateInput(overrides: Partial<UpdateVehicleSeatDto> = {}) {
 describe('VehiclesService vehicle seats', () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    vi.mocked(prisma.$transaction).mockImplementation(
+      async (callback) => callback(prisma as never),
+    );
+    vi.mocked(prisma.$queryRaw).mockResolvedValue([{ xeId: 12 }] as never);
     vi.mocked(prisma.xe.findFirst).mockResolvedValue({ xeId: 12 } as never);
     vi.mocked(prisma.ghe.findMany).mockResolvedValue([seatRecord] as never);
     vi.mocked(prisma.ghe.create).mockResolvedValue(seatRecord as never);
-    vi.mocked(prisma.ghe.findFirst).mockResolvedValue({ gheId: 101 } as never);
+    vi.mocked(prisma.ghe.findFirst).mockResolvedValue({
+      gheId: 101,
+      soGhe: 'A01',
+      tang: 1,
+    } as never);
     vi.mocked(prisma.ghe.update).mockResolvedValue({
       ...seatRecord,
       soGhe: 'A02',
@@ -122,6 +135,9 @@ describe('VehiclesService vehicle seats', () => {
           seatNumber: 'A01',
           position: 'Tầng dưới',
           vehicleId: 12,
+          floor: 1,
+          x: 10,
+          y: 20,
           createdAt: '2026-09-25T10:00:00.000Z',
           updatedAt: '2026-09-25T11:00:00.000Z',
         },
@@ -168,7 +184,14 @@ describe('VehiclesService vehicle seats', () => {
     const result = await service.createSeat(12, createInput());
 
     expect(prisma.ghe.create).toHaveBeenCalledWith({
-      data: { xeId: 12, soGhe: 'A01', viTri: 'Tầng dưới' },
+      data: {
+        xeId: 12,
+        soGhe: 'A01',
+        viTri: 'Tầng dưới',
+        tang: 1,
+        toaDoX: null,
+        toaDoY: null,
+      },
       select: expect.any(Object),
     });
     expect(result.data).toMatchObject({ seatId: 101, vehicleId: 12 });
@@ -177,12 +200,19 @@ describe('VehiclesService vehicle seats', () => {
   it('validates employee seat writes against the trusted tenant vehicle', async () => {
     await service.createSeat(12, createInput(), tenantEmployee);
 
-    expect(prisma.xe.findFirst).toHaveBeenCalledWith({
-      where: { xeId: 12, nhaXeId: 1 },
-      select: { xeId: true },
-    });
+    expect(prisma.$queryRaw).toHaveBeenCalledOnce();
+    expect(vi.mocked(prisma.$queryRaw).mock.calls[0]?.slice(1)).toEqual([12, 1]);
     expect(prisma.ghe.create).toHaveBeenCalledWith(
-      expect.objectContaining({ data: { xeId: 12, soGhe: 'A01', viTri: 'Tầng dưới' } }),
+      expect.objectContaining({
+        data: {
+          xeId: 12,
+          soGhe: 'A01',
+          viTri: 'Tầng dưới',
+          tang: 1,
+          toaDoX: null,
+          toaDoY: null,
+        },
+      }),
     );
   });
 
@@ -191,13 +221,20 @@ describe('VehiclesService vehicle seats', () => {
 
     expect(prisma.ghe.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: { xeId: 12, soGhe: 'A01', viTri: null },
+        data: {
+          xeId: 12,
+          soGhe: 'A01',
+          viTri: null,
+          tang: 1,
+          toaDoX: null,
+          toaDoY: null,
+        },
       }),
     );
   });
 
   it('returns VEHICLE_NOT_FOUND before creating a seat', async () => {
-    vi.mocked(prisma.xe.findFirst).mockResolvedValueOnce(null);
+    vi.mocked(prisma.$queryRaw).mockResolvedValueOnce([] as never);
 
     await expect(service.createSeat(999, createInput())).rejects.toMatchObject({
       response: { error: 'VEHICLE_NOT_FOUND' },

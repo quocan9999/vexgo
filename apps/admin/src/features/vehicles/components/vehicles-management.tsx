@@ -5,6 +5,7 @@ import {
   ArrowUp,
   ArrowUpDown,
   LoaderCircle,
+  Trash2,
   Truck,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -43,6 +44,7 @@ import {
 import { useAdminPermissions } from '@/features/admin-auth/hooks/use-admin-permissions';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
 import {
+  deleteVehicle,
   getVehicleById,
   updateVehicleStatus,
 } from '../services/vehicle-service';
@@ -110,18 +112,22 @@ function VehicleDetails({
   vehicleId,
   options,
   onClose,
+  onDeleted,
   onUpdated,
 }: {
   vehicleId: number;
   options: ReturnType<typeof useVehicleFilterOptions>;
   onClose: () => void;
+  onDeleted: (vehicle: VehicleDetail) => void;
   onUpdated: (action: 'edit' | 'status', vehicle: VehicleDetail) => void;
 }) {
   const { can, canAll } = useAdminPermissions();
   const canUpdate = can('vehicle:update');
+  const canDelete = can('vehicle:delete');
   const canConfigureSeats = canAll(['vehicle:read', 'seat:read']);
   const router = useRouter();
   const statusSubmittingRef = useRef(false);
+  const deleteSubmittingRef = useRef(false);
   const [detailState, setDetailState] = useState<DetailState>({
     status: 'loading',
   });
@@ -129,6 +135,8 @@ function VehicleDetails({
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [statusSubmitting, setStatusSubmitting] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteSubmitting, setDeleteSubmitting] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -200,6 +208,32 @@ function VehicleDetails({
     }
   }
 
+  async function confirmVehicleDelete() {
+    if (detailState.status !== 'success' || deleteSubmittingRef.current) {
+      return;
+    }
+
+    deleteSubmittingRef.current = true;
+    setDeleteSubmitting(true);
+
+    try {
+      await deleteVehicle(vehicleId);
+      setDeleteDialogOpen(false);
+      onDeleted(detailState.vehicle);
+    } catch (requestError: unknown) {
+      toast.error(
+        requestError instanceof TypeError
+          ? 'Không thể kết nối đến máy chủ API. Vui lòng thử lại.'
+          : requestError instanceof Error
+            ? requestError.message
+            : 'Không thể xóa xe. Vui lòng thử lại.',
+      );
+    } finally {
+      deleteSubmittingRef.current = false;
+      setDeleteSubmitting(false);
+    }
+  }
+
   const nextStatus: VehicleStatus | null =
     detailState.status === 'success'
       ? detailState.vehicle.status === 'HOAT_DONG'
@@ -209,8 +243,9 @@ function VehicleDetails({
 
   return (
     <ResourceSheet
-      busy={detailState.status === 'loading'}
+      busy={detailState.status === 'loading' || deleteSubmitting}
       onClose={onClose}
+      preventDismiss={deleteSubmitting}
       title="Chi tiết xe"
       description="Thông tin xe và các danh mục liên kết."
     >
@@ -323,6 +358,15 @@ function VehicleDetails({
             {canUpdate && (
               <Button onClick={() => setEditDialogOpen(true)}>Chỉnh sửa</Button>
             )}
+            {canDelete && (
+              <Button
+                onClick={() => setDeleteDialogOpen(true)}
+                variant="destructive"
+              >
+                <Trash2 aria-hidden />
+                Xóa xe
+              </Button>
+            )}
           </div>
         </div>
       )}
@@ -373,6 +417,28 @@ function VehicleDetails({
             </Button>
           </ResourceConfirmation>
         )}
+      {deleteDialogOpen && canDelete && detailState.status === 'success' && (
+        <ResourceConfirmation
+          busy={deleteSubmitting}
+          onClose={() => setDeleteDialogOpen(false)}
+          title={`Xóa xe ${detailState.vehicle.licensePlate}?`}
+          description="Xe cùng sơ đồ ghế sẽ bị xóa vĩnh viễn. Chỉ xe chưa từng gắn với chuyến nào mới xóa được; xe đã có chuyến, kể cả chuyến đã hủy, sẽ được giữ lại."
+        >
+          <Button
+            aria-busy={deleteSubmitting}
+            disabled={deleteSubmitting}
+            onClick={confirmVehicleDelete}
+            variant="destructive"
+          >
+            {deleteSubmitting ? (
+              <LoaderCircle aria-hidden className="motion-safe:animate-spin" />
+            ) : (
+              <Trash2 aria-hidden />
+            )}
+            {deleteSubmitting ? 'Đang xóa…' : 'Xóa xe'}
+          </Button>
+        </ResourceConfirmation>
+      )}
     </ResourceSheet>
   );
 }
@@ -728,6 +794,11 @@ export function VehiclesManagement() {
       {selectedVehicleId !== null && (
         <VehicleDetails
           key={selectedVehicleId}
+          onDeleted={(vehicle) => {
+            setSelectedVehicleId(null);
+            toast.success(`Đã xóa xe ${vehicle.licensePlate}.`);
+            refresh();
+          }}
           onUpdated={(action, vehicle) => {
             toast.success(
               action === 'edit'

@@ -285,6 +285,29 @@ export function cancelTrip(tripId: number): Promise<Trip> {
   return writeTrip(`/${tripId}/cancel`, 'POST', {});
 }
 
+export async function deleteTrip(
+  tripId: number,
+): Promise<{ tripId: number; code: string }> {
+  const body = await readResponse(
+    await adminApiFetch(`${getApiBaseUrl()}/api/v1/trips/${tripId}`, {
+      method: 'DELETE',
+      cache: 'no-store',
+    }),
+    'chuyến xe',
+  );
+
+  if (
+    !isRecord(body) ||
+    !isRecord(body.data) ||
+    !isPositiveInteger(body.data.tripId) ||
+    typeof body.data.code !== 'string'
+  ) {
+    throw new Error('API trả về thông tin xóa chuyến xe không hợp lệ.');
+  }
+
+  return { tripId: body.data.tripId, code: body.data.code };
+}
+
 export async function getTripRouteOptions(
   signal?: AbortSignal,
 ): Promise<TripLookupOption[]> {
@@ -390,6 +413,25 @@ function isTripSeat(value: unknown): value is TripSeat {
     value.seat.position !== undefined
   ) {
     return false;
+  }
+  if (
+    value.seat.floor !== undefined &&
+    value.seat.floor !== null &&
+    value.seat.floor !== 1 &&
+    value.seat.floor !== 2
+  ) {
+    return false;
+  }
+  for (const coordinate of [value.seat.x, value.seat.y]) {
+    if (
+      coordinate !== undefined &&
+      coordinate !== null &&
+      (typeof coordinate !== 'number' ||
+        !Number.isSafeInteger(coordinate) ||
+        coordinate < 0)
+    ) {
+      return false;
+    }
   }
   return true;
 }
