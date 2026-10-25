@@ -1,5 +1,11 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, within } from '@testing-library/react';
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RouteFormDialog } from '@/features/routes/components/route-form-dialog';
 import {
@@ -21,6 +27,28 @@ vi.mock('@/hooks/use-business-code-preview', () => ({
     placeholder: 'Đang sinh mã…',
     retry: vi.fn(),
   }),
+}));
+vi.mock('@/features/locations/services/location-service', () => ({
+  getLocations: vi.fn().mockResolvedValue([
+    {
+      id: 'current:province:79',
+      name: 'Hồ Chí Minh',
+      value: 'TP.HCM',
+      aliases: ['TP.HCM', 'Hồ Chí Minh'],
+      versions: ['current'],
+      kind: 'province',
+      province: null,
+    },
+    {
+      id: 'legacy:city:672',
+      name: 'Đà Lạt',
+      value: 'Đà Lạt',
+      aliases: ['Đà Lạt'],
+      versions: ['legacy'],
+      kind: 'city',
+      province: 'Lâm Đồng',
+    },
+  ]),
 }));
 
 const route: Route = {
@@ -54,14 +82,16 @@ describe('Route form composition', () => {
     );
     const dialog = await screen.findByRole('dialog', { name: 'Thêm tuyến xe' });
     const view = within(dialog);
-    expect(view.getByRole('textbox', { name: /Điểm đi/ })).toHaveProperty(
-      'required',
-      true,
-    );
-    expect(view.getByRole('textbox', { name: /Điểm đến/ })).toHaveProperty(
-      'required',
-      true,
-    );
+    expect(
+      view
+        .getByRole('combobox', { name: /Điểm đi/ })
+        .getAttribute('aria-required'),
+    ).toBe('true');
+    expect(
+      view
+        .getByRole('combobox', { name: /Điểm đến/ })
+        .getAttribute('aria-required'),
+    ).toBe('true');
     expect(
       view.getByRole('spinbutton', { name: /Thời gian chạy/ }),
     ).toHaveProperty('required', true);
@@ -85,11 +115,13 @@ describe('Route form composition', () => {
     expect(view.getByText('FUTA-TX-0100')).toBeTruthy();
     expect(view.getByText(/Phương Trang/)).toBeTruthy();
     expect(view.getByText(/Đang hoạt động/)).toBeTruthy();
-    expect(view.getByRole('textbox', { name: /Điểm đi/ })).toHaveProperty(
-      'value',
-      route.origin,
+    await waitFor(() =>
+      expect(view.getByRole('combobox', { name: /Điểm đi/ })).toHaveProperty(
+        'value',
+        'Hồ Chí Minh',
+      ),
     );
-    expect(view.getByRole('textbox', { name: /Điểm đến/ })).toHaveProperty(
+    expect(view.getByRole('combobox', { name: /Điểm đến/ })).toHaveProperty(
       'value',
       route.destination,
     );
