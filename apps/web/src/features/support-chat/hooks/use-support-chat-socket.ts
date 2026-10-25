@@ -4,9 +4,6 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { SupportMessage, SupportConversation } from '../types';
 
-const SOCKET_SERVER_URL =
-  process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:4000';
-
 interface UseSupportChatSocketProps {
   token: string | null;
   activeConversationId: number | null;
@@ -68,7 +65,13 @@ export function useSupportChatSocket({
       return;
     }
 
-    const socket = io(`${SOCKET_SERVER_URL}/chat`, {
+    // The Web REST URL includes /api/v1; Socket.IO uses the backend origin.
+    const socketOrigin = new URL(
+      process.env.NEXT_PUBLIC_SOCKET_URL?.trim() ||
+        process.env.NEXT_PUBLIC_API_URL ||
+        'http://localhost:4000/api/v1',
+    ).origin;
+    const socket = io(`${socketOrigin}/chat`, {
       auth: { token },
       transports: ['websocket', 'polling'],
       reconnectionAttempts: 5,
