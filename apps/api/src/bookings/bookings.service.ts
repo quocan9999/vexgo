@@ -90,6 +90,13 @@ export class BookingsService {
       });
     }
 
+    if (seatIds.length > 5) {
+      throw new BadRequestException({
+        error: 'MAX_SEATS_EXCEEDED',
+        message: 'Mỗi chuyến xe chỉ được đặt tối đa 5 ghế.',
+      });
+    }
+
     const tripSeats = await this.prisma.gheChuyenXe.findMany({
       where: {
         chuyenXeId: validTripId,
@@ -229,6 +236,13 @@ export class BookingsService {
       throw new BadRequestException({
         error: 'INVALID_SEATS',
         message: 'Danh sách seatIds phải gồm các mã ghế chuyến xe hợp lệ, không trùng.',
+      });
+    }
+
+    if (dto.seatIds.length > 5) {
+      throw new BadRequestException({
+        error: 'MAX_SEATS_EXCEEDED',
+        message: 'Mỗi chuyến xe chỉ được đặt tối đa 5 ghế.',
       });
     }
 
@@ -1297,6 +1311,25 @@ export class BookingsService {
       .map((v: any) => v.gheChuyenXe?.ghe?.soGhe)
       .filter(Boolean);
 
+    const activeSeatNumbers = (booking.ves ?? [])
+      .filter((v: any) => v.trangThai !== 'HUY')
+      .map((v: any) => v.gheChuyenXe?.ghe?.soGhe)
+      .filter(Boolean);
+
+    const cancelledSeatNumbers = (booking.ves ?? [])
+      .filter((v: any) => v.trangThai === 'HUY')
+      .map((v: any) => v.gheChuyenXe?.ghe?.soGhe)
+      .filter(Boolean);
+
+    const tickets = (booking.ves ?? []).map((v: any) => ({
+      ticketId: v.veId,
+      ticketCode: v.maVe,
+      seatNumber: v.gheChuyenXe?.ghe?.soGhe ?? null,
+      seatPosition: v.gheChuyenXe?.ghe?.viTri ?? null,
+      price: Number(v.giaThucTe ?? v.giaNiemYet ?? 0),
+      status: v.trangThai,
+    }));
+
     const latestPayment = booking.donGiaoDich?.thanhToans?.[0];
 
     const shipment = booking.donGiaoDich?.phieuGuiHang;
@@ -1327,6 +1360,7 @@ export class BookingsService {
       orderCode: booking.donGiaoDich?.maDonGiaoDich ?? null,
       tripId: chuyenXe?.chuyenXeId ?? null,
       ticketCount: booking.ves?.length || booking.soLuongVeBanDau || 0,
+      activeTicketCount: activeSeatNumbers.length,
       route,
       origin: tuyenXe?.diemDi ?? null,
       destination: tuyenXe?.diemDen ?? null,
@@ -1334,6 +1368,8 @@ export class BookingsService {
       busCompanyName: nhaXe?.tenNhaXe ?? null,
       vehicleType: loaiXe?.tenLoai ?? null,
       seatNumbers,
+      activeSeatNumbers,
+      cancelledSeatNumbers,
       passenger: {
         fullName: booking.donGiaoDich?.tenKhachHang || booking.donGiaoDich?.khachHang?.hoTen || null,
         phoneNumber: booking.donGiaoDich?.soDienThoaiKhachHang || null,

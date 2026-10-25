@@ -141,7 +141,7 @@ describe('ShipmentsService', () => {
         chuyenXeId: 1,
         trangThai: 'CHUA_KHOI_HANH',
         nhanGuiHang: false,
-        ngayKhoiHanh: new Date('2026-10-20T00:00:00.000Z'),
+        ngayKhoiHanh: new Date(Date.now() + 86400000),
         gioKhoiHanh: new Date('1970-01-01T07:00:00.000Z'),
         tuyenXe: {
           tuyenXeId: 1,
@@ -167,7 +167,7 @@ describe('ShipmentsService', () => {
         chuyenXeId: 1,
         trangThai: 'CHUA_KHOI_HANH',
         nhanGuiHang: true,
-        ngayKhoiHanh: new Date('2026-10-20T00:00:00.000Z'),
+        ngayKhoiHanh: new Date(Date.now() + 86400000),
         gioKhoiHanh: new Date('1970-01-01T07:00:00.000Z'),
         nhaXeId: 1,
         tuyenXeId: 1,
@@ -215,7 +215,7 @@ describe('ShipmentsService', () => {
         maChuyenXe: 'FUTA-CX-20102026-01',
         trangThai: 'CHUA_KHOI_HANH',
         nhanGuiHang: true,
-        ngayKhoiHanh: new Date('2099-10-20T00:00:00.000Z'),
+        ngayKhoiHanh: new Date('2026-10-20T00:00:00.000Z'),
         gioKhoiHanh: new Date('1970-01-01T07:00:00.000Z'),
         nhaXeId: 1,
         tuyenXeId: 1,
@@ -372,7 +372,8 @@ describe('ShipmentsService', () => {
         }),
       );
       const paymentAttempt = transactionMock.thanhToan.create.mock.calls[0][0];
-      const orderCreatedAt = transactionMock.donGiaoDich.create.mock.calls[0][0].data.ngayTao;
+      const orderCreatedAt =
+        transactionMock.donGiaoDich.create.mock.calls[0][0].data.ngayTao;
       expect(paymentAttempt.data).toMatchObject({
         phuongThuc: 'SEPAY',
         loaiGiaoDich: 'THANH_TOAN',
@@ -384,7 +385,9 @@ describe('ShipmentsService', () => {
       expect(result.paymentExpiresAt).toBe(
         new Date(orderCreatedAt.getTime() + 10 * 60_000).toISOString(),
       );
-      expect(shipmentPersistenceServiceMock.persistInTransaction).toHaveBeenCalledWith(
+      expect(
+        shipmentPersistenceServiceMock.persistInTransaction,
+      ).toHaveBeenCalledWith(
         transactionMock,
         expect.objectContaining({
           tripId: 1,
@@ -418,21 +421,48 @@ describe('ShipmentsService', () => {
         chuyenXeId: 1,
         trangThai: 'CHUA_KHOI_HANH',
         nhanGuiHang: true,
-        ngayKhoiHanh: new Date('2026-10-20T00:00:00.000Z'),
+        ngayKhoiHanh: new Date(Date.now() + 86400000),
         gioKhoiHanh: new Date('1970-01-01T07:00:00.000Z'),
         nhaXeId: 1,
         tuyenXeId: 1,
         tuyenXe: { nhaXe: { maNhaXe: 'FUTA' } },
       });
       prismaMock.diemGiaoNhanTuyenXe.findMany.mockResolvedValue([
-        { vaiTro: 'GUI_HANG', diemGiaoNhanHangId: 1, diemGiaoNhanHang: { diemGiaoNhanHangId: 1, nhaXeId: 1, trangThai: 'HOAT_DONG' } },
-        { vaiTro: 'NHAN_HANG', diemGiaoNhanHangId: 2, diemGiaoNhanHang: { diemGiaoNhanHangId: 2, nhaXeId: 1, trangThai: 'HOAT_DONG' } },
+        {
+          vaiTro: 'GUI_HANG',
+          diemGiaoNhanHangId: 1,
+          diemGiaoNhanHang: {
+            diemGiaoNhanHangId: 1,
+            nhaXeId: 1,
+            trangThai: 'HOAT_DONG',
+          },
+        },
+        {
+          vaiTro: 'NHAN_HANG',
+          diemGiaoNhanHangId: 2,
+          diemGiaoNhanHang: {
+            diemGiaoNhanHangId: 2,
+            nhaXeId: 1,
+            trangThai: 'HOAT_DONG',
+          },
+        },
       ]);
       prismaMock.loaiHangHoa.findMany.mockResolvedValue([
-        { loaiHangHoaId: 1, tenLoai: 'BƯU PHẨM', nhomSucChua: 'HANG_NHE', trangThai: 'HOAT_DONG' },
+        {
+          loaiHangHoaId: 1,
+          tenLoai: 'BƯU PHẨM',
+          nhomSucChua: 'HANG_NHE',
+          trangThai: 'HOAT_DONG',
+        },
       ]);
       prismaMock.bangCuocGuiHang.findMany.mockResolvedValue([
-        { bangCuocGuiHangId: 55, loaiHangHoaId: 1, khoiLuongTu: 1, khoiLuongDen: 5, mucCuoc: 50000 },
+        {
+          bangCuocGuiHangId: 55,
+          loaiHangHoaId: 1,
+          khoiLuongTu: 1,
+          khoiLuongDen: 5,
+          mucCuoc: 50000,
+        },
       ]);
 
       await expect(
@@ -464,12 +494,15 @@ describe('ShipmentsService', () => {
 
     it('does not grant SUPER_ADMIN an implicit shipment data scope', async () => {
       await expect(
-        service.listShipments({} as any, {
-          taiKhoanId: 1,
-          roles: ['SUPER_ADMIN'],
-          nhanVienId: null,
-          nhaXeId: null,
-        } as any),
+        service.listShipments(
+          {} as any,
+          {
+            taiKhoanId: 1,
+            roles: ['SUPER_ADMIN'],
+            nhanVienId: null,
+            nhaXeId: null,
+          } as any,
+        ),
       ).rejects.toThrow(ForbiddenException);
       expect(prismaMock.phieuGuiHang.findMany).not.toHaveBeenCalled();
       expect(prismaMock.phieuGuiHang.count).not.toHaveBeenCalled();
@@ -512,12 +545,15 @@ describe('ShipmentsService', () => {
       prismaMock.phieuGuiHang.count.mockResolvedValue(0);
       prismaMock.phieuGuiHang.findMany.mockResolvedValue([]);
 
-      await service.listShipments({} as any, {
-        taiKhoanId: 7,
-        nhanVienId: null,
-        nhaXeId: null,
-        roles: ['KHACH_HANG'],
-      } as any);
+      await service.listShipments(
+        {} as any,
+        {
+          taiKhoanId: 7,
+          nhanVienId: null,
+          nhaXeId: null,
+          roles: ['KHACH_HANG'],
+        } as any,
+      );
 
       expect(prismaMock.phieuGuiHang.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -532,12 +568,15 @@ describe('ShipmentsService', () => {
       prismaMock.phieuGuiHang.count.mockResolvedValue(0);
       prismaMock.phieuGuiHang.findMany.mockResolvedValue([]);
 
-      await service.listShipments({} as any, {
-        taiKhoanId: 7,
-        nhanVienId: 7,
-        nhaXeId: 2,
-        roles: ['NHA_XE_ADMIN'],
-      } as any);
+      await service.listShipments(
+        {} as any,
+        {
+          taiKhoanId: 7,
+          nhanVienId: 7,
+          nhaXeId: 2,
+          roles: ['NHA_XE_ADMIN'],
+        } as any,
+      );
 
       expect(prismaMock.phieuGuiHang.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -594,16 +633,22 @@ describe('ShipmentsService', () => {
           tenKhachHang: 'PII_SENDER_NAME',
           soDienThoaiKhachHang: '0901234567',
           emailKhachHang: 'PII_SENDER_EMAIL',
-          thanhToans: [
-            { phuongThuc: 'SEPAY', trangThai: 'THANH_CONG' },
-          ],
+          thanhToans: [{ phuongThuc: 'SEPAY', trangThai: 'THANH_CONG' }],
         },
-        diemGui: { diemGiaoNhanHangId: 3, tenDiem: 'Bến gửi', diaChi: 'Địa chỉ gửi' },
-        diemNhan: { diemGiaoNhanHangId: 4, tenDiem: 'Bến nhận', diaChi: 'Địa chỉ nhận' },
+        diemGui: {
+          diemGiaoNhanHangId: 3,
+          tenDiem: 'Bến gửi',
+          diaChi: 'Địa chỉ gửi',
+        },
+        diemNhan: {
+          diemGiaoNhanHangId: 4,
+          tenDiem: 'Bến nhận',
+          diaChi: 'Địa chỉ nhận',
+        },
         chuyenXe: {
           chuyenXeId: 5,
           maChuyenXe: 'TRIP-5',
-          ngayKhoiHanh: new Date('2026-10-20T00:00:00.000Z'),
+          ngayKhoiHanh: new Date(Date.now() + 86400000),
           gioKhoiHanh: new Date('1970-01-01T08:00:00.000Z'),
           gioDen: new Date('1970-01-01T12:00:00.000Z'),
           tuyenXe: {
@@ -689,62 +734,111 @@ describe('ShipmentsService', () => {
     });
 
     it.each([
-      { code: 'SAVE50', linked: true, paid: true, expired: false, lookupPhone: '0901234567' },
-      { code: null, linked: true, paid: false, expired: false, lookupPhone: '+84907654321' },
-      { code: null, linked: false, paid: false, expired: true, lookupPhone: '0901234567' },
-    ])('projects ticket-only coupon $code and payment for linked=$linked expired=$expired', async ({ code, linked, paid, expired, lookupPhone }) => {
-      const orderCreatedAt = new Date(Date.now() - (expired ? 11 : 1) * 60_000);
-      prismaMock.phieuGuiHang.findFirst.mockResolvedValue({
-        maVanDon: 'FUTA-VD-LINKED-12',
-        trangThai: 'DANG_VAN_CHUYEN',
-        soDienThoaiNguoiNhan: '0907654321',
-        donGiaoDich: {
-          donGiaoDichId: 22,
-          maDonGiaoDich: 'ORDER-LINKED-22',
-          ngayTao: orderCreatedAt,
-          tongTien: 60000,
-          trangThai: paid ? 'DA_THANH_TOAN' : 'CHO_THANH_TOAN',
-          thanhToans: [{ phuongThuc: 'SEPAY', trangThai: paid ? 'THANH_CONG' : 'DANG_XU_LY' }],
-          soDienThoaiKhachHang: '0901234567',
-          phieuDatVe: linked ? { khuyenMai: code ? { maKhuyenMai: code } : null } : null,
-        },
-        diemGui: { tenDiem: 'Bến gửi', diaChi: 'Địa chỉ gửi' },
-        diemNhan: { tenDiem: 'Bến nhận', diaChi: 'Địa chỉ nhận' },
-        chuyenXe: {
-          ngayKhoiHanh: new Date('2026-10-20T00:00:00.000Z'),
-          gioKhoiHanh: new Date('1970-01-01T08:00:00.000Z'),
-          gioDen: new Date('1970-01-01T12:00:00.000Z'),
-          tuyenXe: {
-            diemDi: 'TP.HCM',
-            diemDen: 'Đà Lạt',
-            thoiGianChayPhut: 240,
-            nhaXe: { tenNhaXe: 'Nhà xe công khai' },
+      {
+        code: 'SAVE50',
+        linked: true,
+        paid: true,
+        expired: false,
+        lookupPhone: '0901234567',
+      },
+      {
+        code: null,
+        linked: true,
+        paid: false,
+        expired: false,
+        lookupPhone: '+84907654321',
+      },
+      {
+        code: null,
+        linked: false,
+        paid: false,
+        expired: true,
+        lookupPhone: '0901234567',
+      },
+    ])(
+      'projects ticket-only coupon $code and payment for linked=$linked expired=$expired',
+      async ({ code, linked, paid, expired, lookupPhone }) => {
+        const orderCreatedAt = new Date(
+          Date.now() - (expired ? 11 : 1) * 60_000,
+        );
+        prismaMock.phieuGuiHang.findFirst.mockResolvedValue({
+          maVanDon: 'FUTA-VD-LINKED-12',
+          trangThai: 'DANG_VAN_CHUYEN',
+          soDienThoaiNguoiNhan: '0907654321',
+          donGiaoDich: {
+            donGiaoDichId: 22,
+            maDonGiaoDich: 'ORDER-LINKED-22',
+            ngayTao: orderCreatedAt,
+            tongTien: 60000,
+            trangThai: paid ? 'DA_THANH_TOAN' : 'CHO_THANH_TOAN',
+            thanhToans: [
+              {
+                phuongThuc: 'SEPAY',
+                trangThai: paid ? 'THANH_CONG' : 'DANG_XU_LY',
+              },
+            ],
+            soDienThoaiKhachHang: '0901234567',
+            phieuDatVe: linked
+              ? { khuyenMai: code ? { maKhuyenMai: code } : null }
+              : null,
           },
-        },
-        hangHoas: [],
-        lichSuTrangThais: [],
-      });
+          diemGui: { tenDiem: 'Bến gửi', diaChi: 'Địa chỉ gửi' },
+          diemNhan: { tenDiem: 'Bến nhận', diaChi: 'Địa chỉ nhận' },
+          chuyenXe: {
+            ngayKhoiHanh: new Date(Date.now() + 86400000),
+            gioKhoiHanh: new Date('1970-01-01T08:00:00.000Z'),
+            gioDen: new Date('1970-01-01T12:00:00.000Z'),
+            tuyenXe: {
+              diemDi: 'TP.HCM',
+              diemDen: 'Đà Lạt',
+              thoiGianChayPhut: 240,
+              nhaXe: { tenNhaXe: 'Nhà xe công khai' },
+            },
+          },
+          hangHoas: [],
+          lichSuTrangThais: [],
+        });
 
-      const result = await service.lookupShipment({
-        waybillCode: 'FUTA-VD-LINKED-12',
-        phoneNumber: lookupPhone,
-      });
+        const result = await service.lookupShipment({
+          waybillCode: 'FUTA-VD-LINKED-12',
+          phoneNumber: lookupPhone,
+        });
 
-      expect(result.bookingPromotionCode).toBe(code);
-      expect(result.amount).toBe(60000);
-      expect(result.paymentExpiresAt).toBe(new Date(orderCreatedAt.getTime() + 600_000).toISOString());
-      expect(result.paymentStatus).toBe(paid ? 'THANH_CONG' : expired ? 'HET_HAN' : 'DANG_XU_LY');
-      expect(result.requiresReconciliation).toBe(false);
-      expect(prismaMock.phieuGuiHang.findFirst).toHaveBeenCalledWith(expect.objectContaining({ select: expect.objectContaining({
-        donGiaoDich: { select: expect.objectContaining({
-          ngayTao: true, tongTien: true, trangThai: true,
-          phieuDatVe: { select: { khuyenMai: { select: { maKhuyenMai: true } } } },
-          thanhToans: { where: { loaiGiaoDich: 'THANH_TOAN' }, orderBy: [{ thoiGian: 'desc' }, { thanhToanId: 'desc' }], take: 1, select: { phuongThuc: true, trangThai: true } },
-        }) },
-      }) }));
-      expect(result).not.toHaveProperty('shipmentPromotionCode');
-      expect(result).not.toHaveProperty('discountAmount');
-    });
+        expect(result.bookingPromotionCode).toBe(code);
+        expect(result.amount).toBe(60000);
+        expect(result.paymentExpiresAt).toBe(
+          new Date(orderCreatedAt.getTime() + 600_000).toISOString(),
+        );
+        expect(result.paymentStatus).toBe(
+          paid ? 'THANH_CONG' : expired ? 'HET_HAN' : 'DANG_XU_LY',
+        );
+        expect(result.requiresReconciliation).toBe(false);
+        expect(prismaMock.phieuGuiHang.findFirst).toHaveBeenCalledWith(
+          expect.objectContaining({
+            select: expect.objectContaining({
+              donGiaoDich: {
+                select: expect.objectContaining({
+                  ngayTao: true,
+                  tongTien: true,
+                  trangThai: true,
+                  phieuDatVe: {
+                    select: { khuyenMai: { select: { maKhuyenMai: true } } },
+                  },
+                  thanhToans: {
+                    where: { loaiGiaoDich: 'THANH_TOAN' },
+                    orderBy: [{ thoiGian: 'desc' }, { thanhToanId: 'desc' }],
+                    take: 1,
+                    select: { phuongThuc: true, trangThai: true },
+                  },
+                }),
+              },
+            }),
+          }),
+        );
+        expect(result).not.toHaveProperty('shipmentPromotionCode');
+        expect(result).not.toHaveProperty('discountAmount');
+      },
+    );
 
     it('returns reconciliation status without exposing the additional SePay transfer', async () => {
       prismaMock.phieuGuiHang.findFirst.mockResolvedValue({
@@ -763,7 +857,7 @@ describe('ShipmentsService', () => {
         diemGui: { tenDiem: 'Bến gửi', diaChi: 'Địa chỉ gửi' },
         diemNhan: { tenDiem: 'Bến nhận', diaChi: 'Địa chỉ nhận' },
         chuyenXe: {
-          ngayKhoiHanh: new Date('2026-10-20T00:00:00.000Z'),
+          ngayKhoiHanh: new Date(Date.now() + 86400000),
           gioKhoiHanh: new Date('1970-01-01T08:00:00.000Z'),
           gioDen: new Date('1970-01-01T12:00:00.000Z'),
           tuyenXe: {
@@ -906,7 +1000,9 @@ describe('ShipmentsService', () => {
         orderBy: { diemGiaoNhanHangId: 'asc' },
       });
       expect(result.senderPoints.map((point) => point.id)).toEqual([101, 103]);
-      expect(result.receiverPoints.map((point) => point.id)).toEqual([102, 103]);
+      expect(result.receiverPoints.map((point) => point.id)).toEqual([
+        102, 103,
+      ]);
       expect(result.senderPoints[0]).toEqual({
         id: 101,
         name: 'Điểm gửi A',
@@ -960,4 +1056,3 @@ describe('ShipmentsService', () => {
     });
   });
 });
-

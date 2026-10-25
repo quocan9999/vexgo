@@ -198,10 +198,10 @@ describe('Customer invoice page', () => {
     await renderInvoice();
 
     expect(await screen.findByText('Vé xe điện tử (E-Ticket)')).toBeTruthy();
-    expect(screen.getByText('Nhà xe kiểm thử')).toBeTruthy();
-    expect(screen.getByText(/FUTAGD0123456789ABCDEF0123456789ABCD/)).toBeTruthy();
-    expect(screen.getByText('Nguyễn Minh Anh')).toBeTruthy();
-    expect(screen.getByText('125.000đ')).toBeTruthy();
+    expect(screen.getAllByText('Nhà xe kiểm thử').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/FUTAGD0123456789ABCDEF0123456789ABCD/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Nguyễn Minh Anh').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('125.000đ').length).toBeGreaterThan(0);
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining(`/bookings/${bookingId}/detail`),
       expect.objectContaining({
@@ -308,5 +308,72 @@ describe('Customer invoice page', () => {
     unmount();
 
     expect(requestSignal?.aborted).toBe(true);
+  });
+
+  it('renders a round-trip e-ticket when both outbound and return bookings are verified', async () => {
+    window.sessionStorage.setItem(
+      `${PAYMENT_DRAFT_STORAGE_PREFIX}rt-test`,
+      JSON.stringify({
+        bookingId,
+        bookingCode,
+        tripType: 'round-trip',
+        passenger: { phoneNumber },
+        legs: [
+          { bookingId, bookingCode },
+          { bookingId: 4202, bookingCode: 'PDV-TEST-RET-4202' },
+        ],
+      }),
+    );
+
+    const outboundData = paidBooking({
+      bookingId,
+      bookingCode,
+      orderCode: 'FUTAGD01',
+      route: 'TP.HCM - Đà Lạt',
+      seatNumbers: ['A01'],
+      totalAmount: 150000,
+      tickets: [
+        {
+          ticketId: 501,
+          ticketCode: 'VE-501',
+          seatNumber: 'A01',
+          price: 150000,
+          status: 'DA_THANH_TOAN',
+        },
+      ],
+    });
+
+    const returnData = paidBooking({
+      bookingId: 4202,
+      bookingCode: 'PDV-TEST-RET-4202',
+      orderCode: 'FUTAGD02',
+      route: 'Đà Lạt - TP.HCM',
+      seatNumbers: ['B02'],
+      totalAmount: 160000,
+      tickets: [
+        {
+          ticketId: 502,
+          ticketCode: 'VE-502',
+          seatNumber: 'B02',
+          price: 160000,
+          status: 'DA_THANH_TOAN',
+        },
+      ],
+    });
+
+    fetchMock.mockImplementation((url: string) => {
+      if (url.includes('/4201/detail')) return Promise.resolve(jsonResponse(outboundData));
+      if (url.includes('/4202/detail')) return Promise.resolve(jsonResponse(returnData));
+      return Promise.reject(new Error('Not found'));
+    });
+
+    await renderInvoice('4201');
+
+    expect(await screen.findByText(/Vé xe khứ hồi điện tử/i)).toBeTruthy();
+    expect(screen.getByText('Chặng 1: Lượt đi')).toBeTruthy();
+    expect(screen.getByText('Chặng 2: Lượt về')).toBeTruthy();
+    expect(screen.getByText('TP.HCM - Đà Lạt')).toBeTruthy();
+    expect(screen.getByText('Đà Lạt - TP.HCM')).toBeTruthy();
+    expect(screen.getByText('310.000đ')).toBeTruthy();
   });
 });

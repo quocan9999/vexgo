@@ -2,6 +2,7 @@ import { Type } from 'class-transformer';
 import {
   IsArray,
   ArrayNotEmpty,
+  ArrayMaxSize,
   ArrayUnique,
   IsDefined,
   IsEmail,
@@ -121,6 +122,7 @@ export class CreateBookingDto {
 
   @IsArray({ message: 'seatIds phải là mảng số nguyên.' })
   @ArrayNotEmpty({ message: 'Phải chọn ít nhất một ghế.' })
+  @ArrayMaxSize(5, { message: 'Mỗi chuyến xe chỉ được đặt tối đa 5 ghế.' })
   @ArrayUnique({ message: 'Danh sách ghế không được trùng.' })
   @Type(() => Number)
   @IsInt({ each: true, message: 'Mỗi seatId phải là số nguyên.' })

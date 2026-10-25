@@ -8,6 +8,7 @@
   "type": "module",
   "scripts": {
     "prebuild": "cd ../.. && npm exec -- prisma generate",
+    "predev": "npm run prebuild",
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\"",
     "start": "nest start",

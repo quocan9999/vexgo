@@ -209,4 +209,71 @@ describe('PromotionsService booking validation', () => {
     ).rejects.toBeInstanceOf(GoneException);
     expect(prisma.khuyenMai.findFirst).not.toHaveBeenCalled();
   });
+
+  describe('findAvailablePromotions', () => {
+    it('returns active promotions with remaining quota for a bus company', async () => {
+      prisma.khuyenMai.findMany = vi.fn().mockResolvedValue([
+        activePercentPromotion(),
+        {
+          ...activePercentPromotion(),
+          khuyenMaiId: 2,
+          maKhuyenMai: 'FIX30K',
+          loaiGiamGia: 'SO_TIEN',
+          giaTriGiam: new Prisma.Decimal(30_000),
+          giamToiDa: null,
+          soLuotToiDa: 10,
+          soLuotDaSuDung: 2,
+        },
+        {
+          ...activePercentPromotion(),
+          khuyenMaiId: 3,
+          maKhuyenMai: 'EXHAUSTED',
+          soLuotToiDa: 5,
+          soLuotDaSuDung: 5, // Exhausted
+        },
+      ]);
+
+      const result = await service.findAvailablePromotions({ nhaXeId: 5 });
+      expect(result.data).toHaveLength(2);
+      expect(result.data[0].code).toBe('SAVE20');
+      expect(result.data[0].remainingUses).toBe(2);
+      expect(result.data[1].code).toBe('FIX30K');
+      expect(result.data[1].remainingUses).toBe(8);
+    });
+
+    it('resolves nhaXeId from tripId when provided', async () => {
+      prisma.chuyenXe = {
+        findUnique: vi.fn().mockResolvedValue({ nhaXeId: 5 }),
+      };
+      prisma.khuyenMai.findMany = vi.fn().mockResolvedValue([activePercentPromotion()]);
+
+      const result = await service.findAvailablePromotions({ tripId: 101 });
+      expect(prisma.chuyenXe.findUnique).toHaveBeenCalledWith({
+        where: { chuyenXeId: 101 },
+        select: { nhaXeId: true },
+      });
+      expect(result.data).toHaveLength(1);
+    });
+
+    it('throws when trip is not found', async () => {
+      prisma.chuyenXe = {
+        findUnique: vi.fn().mockResolvedValue(null),
+      };
+
+      await expect(
+        service.findAvailablePromotions({ tripId: 999 }),
+      ).rejects.toMatchObject({
+        response: expect.objectContaining({ error: 'TRIP_NOT_FOUND' }),
+      });
+    });
+
+    it('throws when neither tripId nor nhaXeId is provided', async () => {
+      await expect(
+        service.findAvailablePromotions({}),
+      ).rejects.toMatchObject({
+        response: expect.objectContaining({ error: 'VALIDATION_ERROR' }),
+      });
+    });
+  });
 });
+

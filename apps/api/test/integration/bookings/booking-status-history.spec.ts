@@ -1014,7 +1014,7 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
     });
     expect(tickets).toHaveLength(2);
 
-    const departureSoon = new Date(Date.now() + 10 * 60 * 60 * 1000);
+    const departureSoon = new Date(Date.now() + 2 * 60 * 60 * 1000);
     const localParts = new Intl.DateTimeFormat('en-CA', {
       timeZone: process.env.BUSINESS_TIME_ZONE || 'Asia/Ho_Chi_Minh',
       year: 'numeric',

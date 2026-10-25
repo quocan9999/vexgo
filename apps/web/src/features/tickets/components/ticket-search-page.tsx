@@ -21,6 +21,7 @@ import {
   Printer,
   RotateCcw,
   ShieldCheck,
+  Star,
   Ticket,
   User,
   XCircle,
@@ -31,6 +32,7 @@ import { AlertModal } from '@/components/ui/alert-modal';
 import { ticketsApi, type TicketItem } from '@/features/account/services/tickets.api';
 import { checkTicketCancelEligibility } from '@/features/tickets/services/cancel-eligibility';
 import { saveCancelSession } from '@/features/tickets/services/cancel-session';
+import { ReviewDialog } from '@/features/tickets/components/review-dialog';
 
 const VIETNAM_PHONE_REGEX = /^(?:\+84|0)(?:3[2-9]|5[689]|7[06-9]|8[1-9]|9\d)\d{7}$/;
 
@@ -137,6 +139,7 @@ function TicketSearchForm() {
   const [generalError, setGeneralError] = useState<string | null>(null);
   const [ticket, setTicket] = useState<TicketItem | null>(null);
   const [copied, setCopied] = useState(false);
+  const [showReviewModal, setShowReviewModal] = useState(false);
   const [ineligibleModal, setIneligibleModal] = useState<{
     isOpen: boolean;
     title: string;
@@ -151,20 +154,37 @@ function TicketSearchForm() {
 
   const handleCancelClick = () => {
     if (!ticket) return;
-    const eligibility = checkTicketCancelEligibility(ticket);
+    const allTickets =
+      ticket.bookingTickets && ticket.bookingTickets.length > 0
+        ? ticket.bookingTickets
+        : [ticket];
+    const cancellable = allTickets.filter(
+      (t) =>
+        (t.status || '').toUpperCase() !== 'HUY' &&
+        (t.status || '').toUpperCase() !== 'CANCELLED',
+    );
+    const repTicket = cancellable.length > 0 ? cancellable[0] : ticket;
+    const eligibility = checkTicketCancelEligibility(repTicket);
     if (!eligibility.eligible) {
       setIneligibleModal({
         isOpen: true,
         title: eligibility.title,
-        message: eligibility.message,
+        message:
+          cancellable.length === 0 &&
+          (eligibility.reason === 'ALREADY_CANCELLED' || !eligibility.reason)
+            ? 'Tất cả các vé trong đơn đặt vé này đã hoàn tất thủ tục hủy trước đó.'
+            : eligibility.message,
         variant: 'warning',
       });
       return;
     }
     saveCancelSession({
-      ticketCode: ticket.ticketCode,
-      phoneNumber: ticket.passengerPhone || phone,
-      ticket,
+      ticketCode: repTicket.ticketCode,
+      phoneNumber: repTicket.passengerPhone || phone,
+      ticket: {
+        ...repTicket,
+        bookingTickets: allTickets,
+      },
     });
     router.push('/cancel-ticket');
   };
@@ -205,7 +225,24 @@ function TicketSearchForm() {
 
     try {
       const response = await ticketsApi.lookupTicket(trimmedCode, trimmedPhone);
-      setTicket(response.data);
+      const allTickets =
+        response.data.bookingTickets && response.data.bookingTickets.length > 0
+          ? response.data.bookingTickets
+          : [response.data];
+      const cancellable = allTickets.filter(
+        (t) =>
+          (t.status || '').toUpperCase() !== 'HUY' &&
+          (t.status || '').toUpperCase() !== 'CANCELLED',
+      );
+      const isDirectTicketCode = allTickets.some((t) => t.ticketCode === trimmedCode);
+      const selected =
+        (isDirectTicketCode ? response.data : null) ||
+        (cancellable.length > 0 ? cancellable[0] : response.data);
+
+      setTicket({
+        ...selected,
+        bookingTickets: allTickets,
+      });
     } catch (err: any) {
       setTicket(null);
       if (err.status === 404) {
@@ -595,6 +632,107 @@ function TicketSearchForm() {
             </div>
           )}
 
+          {/* Review Prompt when trip is completed/departed */}
+          {ticket.departureTime &&
+            new Date(ticket.departureTime).getTime() <= Date.now() &&
+            !isCancelled &&
+            payment.isPaid && (
+              <div className="mx-6 sm:mx-8 mb-5 p-4 rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/80 flex flex-wrap items-center justify-between gap-3 shadow-2xs">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center text-amber-600 shrink-0">
+                    <Star className="w-5 h-5 fill-amber-500 text-amber-500" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-slate-900 text-sm">
+                      Chuyến đi đã hoàn tất! Hãy chia sẻ trải nghiệm của bạn
+                    </h4>
+                    <p className="text-xs text-slate-600">
+                      Đánh giá chất lượng phục vụ của {ticket.busCompanyName || 'nhà xe'} giúp hành khách khác có thêm thông tin tham khảo.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowReviewModal(true)}
+                  className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-bold text-xs transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
+                >
+                  <Star className="w-3.5 h-3.5 fill-white text-white" />
+                  Đánh giá chuyến đi
+                </button>
+              </div>
+            )}
+          {/* Danh sách tất cả các vé thuộc cùng đơn đặt chỗ */}
+          {ticket.bookingTickets && ticket.bookingTickets.length > 1 && (
+            <div className="mx-6 sm:mx-8 mb-5 p-4 rounded-2xl bg-slate-50 border border-slate-200">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                  <Ticket className="w-4 h-4 text-[#0060c4]" />
+                  Tất cả vé trong đơn ({ticket.bookingTickets.length} vé)
+                </span>
+                <span className="text-xs text-slate-500 font-medium">
+                  Đang xem: Ghế {ticket.seatNumber}
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {ticket.bookingTickets.map((sibling) => {
+                  const isCurrent = sibling.ticketCode === ticket.ticketCode;
+                  const isSiblingCancelled =
+                    (sibling.status || '').toUpperCase() === 'HUY' ||
+                    (sibling.status || '').toUpperCase() === 'CANCELLED';
+                  return (
+                    <div
+                      key={sibling.ticketCode}
+                      onClick={() =>
+                        setTicket({
+                          ...sibling,
+                          bookingTickets: ticket.bookingTickets,
+                        })
+                      }
+                      className={`p-3 rounded-xl border transition-all cursor-pointer ${
+                        isCurrent
+                          ? 'bg-blue-50/80 border-[#0060c4] shadow-xs'
+                          : isSiblingCancelled
+                            ? 'bg-white/60 border-rose-200 hover:bg-rose-50/40 text-slate-500'
+                            : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span
+                          className={`text-sm font-black ${
+                            isSiblingCancelled
+                              ? 'line-through text-slate-400'
+                              : isCurrent
+                                ? 'text-[#0060c4]'
+                                : 'text-slate-800'
+                          }`}
+                        >
+                          Ghế {sibling.seatNumber}
+                        </span>
+                        {isSiblingCancelled ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700">
+                            <XCircle className="w-2.5 h-2.5" /> Đã hủy
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                            <CheckCircle2 className="w-2.5 h-2.5" /> Hợp lệ
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center justify-between text-xs text-slate-500 font-mono">
+                        <span className="truncate">{sibling.ticketCode}</span>
+                        {isCurrent && (
+                          <span className="text-[10px] font-sans font-bold text-[#0060c4] shrink-0">
+                            (Đang chọn)
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Bottom Action Footer */}
           <div className="px-6 sm:px-8 py-5 bg-slate-50/90 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3">
             <button
@@ -636,6 +774,20 @@ function TicketSearchForm() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Review Modal Dialog */}
+      {ticket && (
+        <ReviewDialog
+          isOpen={showReviewModal}
+          onClose={() => setShowReviewModal(false)}
+          tripId={ticket.tripId ?? undefined}
+          tripInfo={{
+            route: ticket.route || `${ticket.origin || ''} → ${ticket.destination || ''}`,
+            date: `${departureInfo.time}, ${departureInfo.date}`,
+            busBrand: ticket.busCompanyName || 'Nhà xe VexGo',
+          }}
+        />
       )}
 
       {/* Ineligibility Alert Modal */}

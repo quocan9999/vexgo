@@ -778,6 +778,68 @@ export class PromotionsService {
     });
   }
 
+  async findAvailablePromotions(query: { tripId?: number; nhaXeId?: number }) {
+    let nhaXeId = query.nhaXeId;
+    if (query.tripId) {
+      const trip = await this.prisma.chuyenXe.findUnique({
+        where: { chuyenXeId: query.tripId },
+        select: { nhaXeId: true },
+      });
+      if (!trip) {
+        throw new NotFoundException({
+          error: 'TRIP_NOT_FOUND',
+          message: 'Không tìm thấy chuyến xe.',
+        });
+      }
+      nhaXeId = trip.nhaXeId;
+    }
+
+    if (!nhaXeId) {
+      throw new BadRequestException({
+        error: 'VALIDATION_ERROR',
+        message: 'Vui lòng cung cấp tripId hoặc nhaXeId.',
+      });
+    }
+
+    const businessDate = getBusinessDate();
+    const nowUtc = dateOnlyToUtc(businessDate);
+
+    const promotions = await this.prisma.khuyenMai.findMany({
+      where: {
+        nhaXeId,
+        trangThai: 'HOAT_DONG',
+        phamViApDung: 'DAT_VE',
+        hinhThucApDung: 'NHAP_MA',
+        tuNgay: { lte: nowUtc },
+        denNgay: { gte: nowUtc },
+      },
+      orderBy: [
+        { giaTriGiam: 'desc' },
+        { createdAt: 'desc' },
+      ],
+    });
+
+    const validPromotions = promotions
+      .filter((p) => {
+        if (!hasValidPromotionConfiguration(p)) return false;
+        return p.soLuotDaSuDung < p.soLuotToiDa;
+      })
+      .map((p) => ({
+        id: p.khuyenMaiId,
+        name: p.tenChuongTrinh,
+        code: p.maKhuyenMai,
+        discountType: p.loaiGiamGia,
+        discountValue: p.giaTriGiam.toFixed(2),
+        maxDiscount: decimalString(p.giamToiDa),
+        minimumTicketAmount: decimalString(p.giaTriDonToiThieu),
+        startsOn: dateOnly(p.tuNgay),
+        endsOn: dateOnly(p.denNgay),
+        remainingUses: Math.max(0, p.soLuotToiDa - p.soLuotDaSuDung),
+      }));
+
+    return { data: validPromotions };
+  }
+
   private promotionCodeExists(): ConflictException {
     return new ConflictException({
       error: 'PROMOTION_CODE_EXISTS',
@@ -785,3 +847,4 @@ export class PromotionsService {
     });
   }
 }
+

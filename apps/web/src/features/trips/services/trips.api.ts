@@ -1,3 +1,5 @@
+import { fetchWithRetry } from '../../../lib/fetch-with-retry.ts';
+
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
 
@@ -84,7 +86,7 @@ export const tripsApi = {
       if (value !== undefined && value !== '') query.set(key, String(value));
     }
 
-    const response = await fetch(
+    const response = await fetchWithRetry(
       `${API_BASE_URL}/trips/search?${query.toString()}`,
     );
     if (!response.ok)
@@ -93,7 +95,7 @@ export const tripsApi = {
   },
 
   async getTripDetails(tripId: number): Promise<ApiTrip | null> {
-    const response = await fetch(`${API_BASE_URL}/trips/${tripId}`);
+    const response = await fetchWithRetry(`${API_BASE_URL}/trips/${tripId}`);
     if (response.status === 404) return null;
     if (!response.ok)
       throw await parseError(response, 'Không thể tải chi tiết chuyến xe');
@@ -102,7 +104,7 @@ export const tripsApi = {
   },
 
   async getTripSeats(tripId: number): Promise<ApiTripSeat[]> {
-    const response = await fetch(`${API_BASE_URL}/trips/${tripId}/seats`);
+    const response = await fetchWithRetry(`${API_BASE_URL}/trips/${tripId}/seats`);
     if (!response.ok)
       throw await parseError(response, 'Không thể tải sơ đồ ghế');
     const body: { data: ApiTripSeat[] } = await response.json();
@@ -117,13 +119,68 @@ export const tripsApi = {
       parcels: { total: number; used: number; remaining: number };
     };
   }> {
-    const response = await fetch(`${API_BASE_URL}/trips/${tripId}/cargo-capacity`);
+    const response = await fetchWithRetry(`${API_BASE_URL}/trips/${tripId}/cargo-capacity`);
     if (!response.ok)
       throw await parseError(response, 'Không thể tải sức chứa hàng hóa');
     const body = await response.json();
     return body.data ?? body;
   },
 
+  async getTripAlternatives(
+    tripId: number,
+    options?: { otherOperatorsOnly?: boolean; maxPrice?: number; limit?: number },
+  ): Promise<AlternativeTripItem[]> {
+    const params = new URLSearchParams();
+    if (options?.limit) params.set('limit', String(options.limit));
+    if (options?.otherOperatorsOnly !== undefined) {
+      params.set('otherOperatorsOnly', String(options.otherOperatorsOnly));
+    } else {
+      params.set('otherOperatorsOnly', 'true');
+    }
+    if (options?.maxPrice !== undefined) {
+      params.set('maxPrice', String(options.maxPrice));
+    }
+    const queryString = params.toString();
+    const response = await fetchWithRetry(
+      `${API_BASE_URL}/trips/${tripId}/alternatives${queryString ? `?${queryString}` : ''}`,
+    );
+    if (!response.ok) return [];
+    const body = await response.json();
+    return body.data ?? body ?? [];
+  },
+};
+
+export type AlternativeTripItem = {
+  tripId: number;
+  id: string;
+  routeId: string;
+  busCompanyId: number;
+  busCompanyName: string;
+  operatorName: string;
+  vehicleTypeName: string;
+  vehicleType: string;
+  fromCityId: string;
+  fromCityName: string;
+  toCityId: string;
+  toCityName: string;
+  departureTime: string;
+  arrivalTime: string;
+  duration: string;
+  price: number;
+  originalPrice: number;
+  discountPrice: number;
+  availableSeats: number;
+  totalSeats: number;
+  seatLayoutType: string;
+  rating: number | null;
+  reviewCount: number;
+  pickupPoint: string;
+  pickupAddress: string | null;
+  dropoffPoint: string;
+  dropoffAddress: string | null;
+  amenities: string[];
+  recommendationReason: string;
+  matchScore: number;
 };
 
 export type ApiBusCompany = {

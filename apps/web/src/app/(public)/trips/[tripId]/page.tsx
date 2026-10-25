@@ -1,6 +1,7 @@
 import { OneWayBooking } from '@/features/booking/components/one-way-booking';
 import { RoundTripBooking } from '@/features/booking/components/round-trip-booking';
 import { resolveRoundTripDepartureDate } from '@/features/booking/utils/round-trip-booking';
+import { AlternativeTripsSection } from '@/features/trips/components/alternative-trips';
 import { mapTripToBookingPost } from '@/features/trips/services/trip-booking-adapter';
 import type { ApiTrip, ApiTripSeat } from '@/features/trips/services/trips.api';
 
@@ -103,17 +104,27 @@ export default async function TripDetailPage({
   }
 
   const outboundPost = mapTripToBookingPost(outboundTrip);
-  if (tripType === 'round-trip' && inboundTrip) {
-    return (
-      <RoundTripBooking
-        outboundPost={outboundPost}
-        returnPost={mapTripToBookingPost(inboundTrip)}
-        outboundTripSeats={outboundSeats}
-        returnTripSeats={inboundSeats}
-        departureDate={resolveRoundTripDepartureDate(sp)}
-        returnDate={typeof sp?.returnDate === 'string' ? sp.returnDate : ''}
-      />
-    );
-  }
-  return <OneWayBooking post={outboundPost} tripSeats={outboundSeats} />;
+  return (
+    <div className="space-y-6">
+      {tripType === 'round-trip' && inboundTrip ? (
+        <RoundTripBooking
+          outboundPost={outboundPost}
+          returnPost={mapTripToBookingPost(inboundTrip)}
+          outboundTripSeats={outboundSeats}
+          returnTripSeats={inboundSeats}
+          departureDate={resolveRoundTripDepartureDate(sp)}
+          returnDate={typeof sp?.returnDate === 'string' ? sp.returnDate : ''}
+        />
+      ) : (
+        <OneWayBooking post={outboundPost} tripSeats={outboundSeats} />
+      )}
+
+      <div className="max-w-[1160px] mx-auto px-4 sm:px-6 lg:px-8 pb-12">
+        <AlternativeTripsSection
+          tripId={outboundId}
+          currentPrice={outboundTrip.price ?? undefined}
+        />
+      </div>
+    </div>
+  );
 }

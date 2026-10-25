@@ -87,6 +87,7 @@ type CancellationReason =
   | 'ALREADY_CANCELLED'
   | 'ACTIVE_SHIPMENT'
   | 'ALREADY_DEPARTED'
+  | 'LESS_THAN_4_HOURS'
   | 'LESS_THAN_12_HOURS'
   | 'DEPARTURE_TIME_UNAVAILABLE';
 
@@ -145,10 +146,10 @@ function getCancellationQuote(
     };
   }
 
-  if (hoursUntilDeparture < 12) {
+  if (hoursUntilDeparture < 4) {
     return {
       eligible: false,
-      reason: 'LESS_THAN_12_HOURS',
+      reason: 'LESS_THAN_4_HOURS',
       cancelFeeRate: 0,
       cancelFee: zero,
       refundAmount: zero,
@@ -384,15 +385,26 @@ export class TicketsService {
     });
 
     if (!ticket && typeof this.prisma.ve.findFirst === 'function') {
-      ticket = await this.prisma.ve.findFirst({
-        where: {
-          OR: [
-            { phieuDatVe: { maPhieuDatVe: rawCode } },
-            { phieuDatVe: { donGiaoDich: { maDonGiaoDich: rawCode } } },
-          ],
-        },
-        include: TICKET_INCLUDE,
-      });
+      ticket =
+        (await this.prisma.ve.findFirst({
+          where: {
+            OR: [
+              { phieuDatVe: { maPhieuDatVe: rawCode } },
+              { phieuDatVe: { donGiaoDich: { maDonGiaoDich: rawCode } } },
+            ],
+            trangThai: { not: 'HUY' },
+          },
+          include: TICKET_INCLUDE,
+        })) ||
+        (await this.prisma.ve.findFirst({
+          where: {
+            OR: [
+              { phieuDatVe: { maPhieuDatVe: rawCode } },
+              { phieuDatVe: { donGiaoDich: { maDonGiaoDich: rawCode } } },
+            ],
+          },
+          include: TICKET_INCLUDE,
+        }));
     }
 
     if (!ticket) {
@@ -411,7 +423,27 @@ export class TicketsService {
       });
     }
 
-    return { data: this.mapTicket(ticket) };
+    const siblingTickets =
+      typeof this.prisma.ve.findMany === 'function' && ticket.phieuDatVeId
+        ? await this.prisma.ve.findMany({
+            where: { phieuDatVeId: ticket.phieuDatVeId },
+            include: TICKET_INCLUDE,
+            orderBy: { veId: 'asc' },
+          })
+        : [ticket];
+
+    const mappedTicket = this.mapTicket(ticket);
+    const bookingTickets =
+      Array.isArray(siblingTickets) && siblingTickets.length > 0
+        ? siblingTickets.map((t) => this.mapTicket(t))
+        : [mappedTicket];
+
+    return {
+      data: {
+        ...mappedTicket,
+        bookingTickets,
+      },
+    };
   }
 
   async cancelTicket(dto: CancelTicketDto) {
@@ -453,23 +485,51 @@ export class TicketsService {
               message: 'Không tìm thấy vé hoặc thông tin xác minh không khớp.',
             });
           }
-          const ticket = await tx.ve.findUnique({
-            where: { veId: reference.veId },
-            include: TICKET_INCLUDE,
-          });
-          if (
-            !ticket ||
-            ticket.phieuDatVe.donGiaoDichId !==
-              reference.phieuDatVe.donGiaoDichId
-          ) {
-            throw new NotFoundException({
-              error: 'TICKET_NOT_FOUND',
-              message: 'Không tìm thấy vé hoặc thông tin xác minh không khớp.',
+          const isBatch =
+            Array.isArray(dto.ticketCodes) && dto.ticketCodes.length > 0;
+          let ticketsToCancel: TicketRecord[] = [];
+
+          if (isBatch) {
+            const rawTargetCodes = Array.from(
+              new Set(dto.ticketCodes!.map((c) => c.trim()).filter(Boolean)),
+            );
+            ticketsToCancel = await tx.ve.findMany({
+              where: {
+                maVe: { in: rawTargetCodes },
+                phieuDatVe: {
+                  donGiaoDichId: reference.phieuDatVe.donGiaoDichId,
+                },
+              },
+              include: TICKET_INCLUDE,
             });
+            if (ticketsToCancel.length === 0) {
+              throw new NotFoundException({
+                error: 'TICKET_NOT_FOUND',
+                message:
+                  'Không tìm thấy vé hoặc thông tin xác minh không khớp.',
+              });
+            }
+          } else {
+            const ticket = await tx.ve.findUnique({
+              where: { veId: reference.veId },
+              include: TICKET_INCLUDE,
+            });
+            if (
+              !ticket ||
+              ticket.phieuDatVe.donGiaoDichId !==
+                reference.phieuDatVe.donGiaoDichId
+            ) {
+              throw new NotFoundException({
+                error: 'TICKET_NOT_FOUND',
+                message:
+                  'Không tìm thấy vé hoặc thông tin xác minh không khớp.',
+              });
+            }
+            ticketsToCancel = [ticket];
           }
 
           const customerPhone =
-            ticket.phieuDatVe.donGiaoDich.soDienThoaiKhachHang || '';
+            ticketsToCancel[0].phieuDatVe.donGiaoDich.soDienThoaiKhachHang || '';
           if (!phonesMatch(customerPhone, dto.phoneNumber)) {
             throw new NotFoundException({
               error: 'TICKET_NOT_FOUND',
@@ -477,60 +537,70 @@ export class TicketsService {
             });
           }
 
-          const quote = getCancellationQuote(
-            ticket,
-            this.businessTimeZone,
-            new Date(),
-          );
-          if (!quote.eligible) {
-            if (quote.reason === 'ACTIVE_SHIPMENT') {
+          for (const t of ticketsToCancel) {
+            const quote = getCancellationQuote(
+              t,
+              this.businessTimeZone,
+              new Date(),
+            );
+            if (!quote.eligible) {
+              if (quote.reason === 'ACTIVE_SHIPMENT') {
+                throw new ConflictException({
+                  error: 'TICKET_CANCELLATION_ACTIVE_SHIPMENT',
+                  message:
+                    'Đơn có hàng gửi kèm còn hiệu lực. Vui lòng liên hệ nhà xe để được hỗ trợ hủy vé.',
+                });
+              }
+              const errors: Record<
+                Exclude<CancellationReason, 'ACTIVE_SHIPMENT'>,
+                { error: string; message: string }
+              > = {
+                ALREADY_CANCELLED: {
+                  error: 'TICKET_ALREADY_CANCELLED',
+                  message: isBatch
+                    ? `Vé ${t.maVe} đã được hủy trước đó.`
+                    : 'Vé này đã được hủy trước đó.',
+                },
+                ALREADY_DEPARTED: {
+                  error: 'TRIP_ALREADY_DEPARTED',
+                  message:
+                    'Không thể hủy vé sau khi chuyến xe đã khởi hành.',
+                },
+                LESS_THAN_4_HOURS: {
+                  error: 'CANCELLATION_CUTOFF_PASSED',
+                  message:
+                    'Chỉ có thể hủy vé trước giờ khởi hành ít nhất 4 tiếng.',
+                },
+                LESS_THAN_12_HOURS: {
+                  error: 'CANCELLATION_CUTOFF_PASSED',
+                  message:
+                    'Chỉ có thể hủy vé trước giờ khởi hành ít nhất 4 tiếng.',
+                },
+                DEPARTURE_TIME_UNAVAILABLE: {
+                  error: 'DEPARTURE_TIME_UNAVAILABLE',
+                  message: 'Không thể xác định giờ khởi hành để hủy vé.',
+                },
+              };
+              throw new BadRequestException(errors[quote.reason!]);
+            }
+
+            if (quote.cancelFeeRate !== dto.expectedCancelFeeRate) {
               throw new ConflictException({
-                error: 'TICKET_CANCELLATION_ACTIVE_SHIPMENT',
-                message:
-                  'Đơn có hàng gửi kèm còn hiệu lực. Vui lòng liên hệ nhà xe để được hỗ trợ hủy vé.',
+                error: 'CANCELLATION_QUOTE_EXPIRED',
+                message: `Mức phí hủy vé đã thay đổi (từ ${Math.round(dto.expectedCancelFeeRate * 100)}% thành ${Math.round(quote.cancelFeeRate * 100)}%) do thời gian đến lúc khởi hành đã thay đổi. Vui lòng xác nhận lại mức hoàn tiền mới.`,
+                details: {
+                  previousRate: dto.expectedCancelFeeRate,
+                  currentQuote: serializeCancellationQuote(quote),
+                },
               });
             }
-            const errors: Record<
-              Exclude<CancellationReason, 'ACTIVE_SHIPMENT'>,
-              { error: string; message: string }
-            > = {
-              ALREADY_CANCELLED: {
-                error: 'TICKET_ALREADY_CANCELLED',
-                message: 'Vé này đã được hủy trước đó.',
-              },
-              ALREADY_DEPARTED: {
-                error: 'TRIP_ALREADY_DEPARTED',
-                message: 'Không thể hủy vé sau khi chuyến xe đã khởi hành.',
-              },
-              LESS_THAN_12_HOURS: {
-                error: 'CANCELLATION_CUTOFF_PASSED',
-                message:
-                  'Chỉ có thể hủy vé trước giờ khởi hành ít nhất 12 tiếng.',
-              },
-              DEPARTURE_TIME_UNAVAILABLE: {
-                error: 'DEPARTURE_TIME_UNAVAILABLE',
-                message: 'Không thể xác định giờ khởi hành để hủy vé.',
-              },
-            };
-            throw new BadRequestException(errors[quote.reason!]);
           }
 
-          if (quote.cancelFeeRate !== dto.expectedCancelFeeRate) {
-            throw new ConflictException({
-              error: 'CANCELLATION_QUOTE_EXPIRED',
-              message: `Mức phí hủy vé đã thay đổi (từ ${Math.round(dto.expectedCancelFeeRate * 100)}% thành ${Math.round(quote.cancelFeeRate * 100)}%) do thời gian đến lúc khởi hành đã thay đổi. Vui lòng xác nhận lại mức hoàn tiền mới.`,
-              details: {
-                previousRate: dto.expectedCancelFeeRate,
-                currentQuote: serializeCancellationQuote(quote),
-              },
-            });
-          }
-
-          const order = ticket.phieuDatVe.donGiaoDich;
+          const order = ticketsToCancel[0].phieuDatVe.donGiaoDich;
           const originalPayment = order.thanhToans[0];
           const isFreeSettledBooking =
             !originalPayment &&
-            ticket.phieuDatVe.trangThai === 'DA_THANH_TOAN' &&
+            ticketsToCancel[0].phieuDatVe.trangThai === 'DA_THANH_TOAN' &&
             order.trangThai === 'DA_THANH_TOAN' &&
             order.tongTien !== null &&
             order.tongTien !== undefined &&
@@ -543,60 +613,97 @@ export class TicketsService {
             });
           }
 
-          const updateResult = await tx.ve.updateMany({
-            where: { veId: ticket.veId, trangThai: { not: 'HUY' } },
-            data: { trangThai: 'HUY' },
-          });
-          if (updateResult.count !== 1) {
-            throw new ConflictException({
-              error: 'TICKET_ALREADY_CANCELLED',
-              message: 'Vé đã được hủy bởi một yêu cầu khác.',
-            });
-          }
-
-          await tx.gheChuyenXe.update({
-            where: { gheChuyenXeId: ticket.gheChuyenXeId },
-            data: { trangThai: 'TRONG' },
-          });
-
           const operationId = generateUuidV1();
           const changedAt = new Date();
           const reason =
             dto.reason?.trim().slice(0, 255) || 'Khách yêu cầu hủy vé';
-          await tx.lichSuTrangThaiVe.create({
-            data: {
-              veId: ticket.veId,
-              trangThaiCu: ticket.trangThai,
-              trangThaiMoi: 'HUY',
-              thoiDiem: changedAt,
-              nguonThayDoi: 'SYSTEM',
-              taiKhoanId: null,
-              lyDo: reason,
-              laOverride: false,
-              maThaoTac: operationId,
-            },
-          });
+          const refundIds: number[] = [];
+          const cancelledTicketCodes: string[] = [];
+          const cancelledSeatNumbers: string[] = [];
+          let totalCancelFee = new Prisma.Decimal(0);
+          let totalRefundAmount = new Prisma.Decimal(0);
+
+          for (const t of ticketsToCancel) {
+            const updateResult = await tx.ve.updateMany({
+              where: { veId: t.veId, trangThai: { not: 'HUY' } },
+              data: { trangThai: 'HUY' },
+            });
+            if (updateResult.count !== 1) {
+              throw new ConflictException({
+                error: 'TICKET_ALREADY_CANCELLED',
+                message: `Vé ${t.maVe} đã được hủy bởi một yêu cầu khác.`,
+              });
+            }
+
+            await tx.gheChuyenXe.update({
+              where: { gheChuyenXeId: t.gheChuyenXeId },
+              data: { trangThai: 'TRONG' },
+            });
+
+            await tx.lichSuTrangThaiVe.create({
+              data: {
+                veId: t.veId,
+                trangThaiCu: t.trangThai,
+                trangThaiMoi: 'HUY',
+                thoiDiem: changedAt,
+                nguonThayDoi: 'SYSTEM',
+                taiKhoanId: null,
+                lyDo: reason,
+                laOverride: false,
+                maThaoTac: operationId,
+              },
+            });
+
+            const quote = getCancellationQuote(
+              t,
+              this.businessTimeZone,
+              changedAt,
+            );
+            totalCancelFee = totalCancelFee.plus(quote.cancelFee);
+            totalRefundAmount = totalRefundAmount.plus(quote.refundAmount);
+            cancelledTicketCodes.push(t.maVe);
+            if (t.gheChuyenXe?.ghe?.soGhe) {
+              cancelledSeatNumbers.push(t.gheChuyenXe.ghe.soGhe);
+            }
+
+            if (originalPayment && !quote.refundAmount.isZero()) {
+              const refund = await tx.thanhToan.create({
+                data: {
+                  soTien: quote.refundAmount,
+                  phuongThuc: originalPayment.phuongThuc,
+                  loaiGiaoDich: 'HOAN_TIEN',
+                  thoiGian: changedAt,
+                  trangThai: 'DANG_XU_LY',
+                  donGiaoDichId: t.phieuDatVe.donGiaoDichId,
+                  veId: t.veId,
+                },
+              });
+              refundIds.push(refund.thanhToanId);
+            }
+          }
 
           const remainingActiveTickets = await tx.ve.count({
             where: {
-              phieuDatVeId: ticket.phieuDatVeId,
+              phieuDatVeId: ticketsToCancel[0].phieuDatVeId,
               trangThai: { not: 'HUY' },
             },
           });
 
           if (remainingActiveTickets === 0) {
             await tx.phieuDatVe.update({
-              where: { phieuDatVeId: ticket.phieuDatVeId },
+              where: { phieuDatVeId: ticketsToCancel[0].phieuDatVeId },
               data: { trangThai: 'DA_HUY' },
             });
             await tx.donGiaoDich.update({
-              where: { donGiaoDichId: ticket.phieuDatVe.donGiaoDichId },
+              where: {
+                donGiaoDichId: ticketsToCancel[0].phieuDatVe.donGiaoDichId,
+              },
               data: { trangThai: 'DA_HUY' },
             });
             await tx.lichSuTrangThaiPhieuDatVe.create({
               data: {
-                phieuDatVeId: ticket.phieuDatVeId,
-                trangThaiCu: ticket.phieuDatVe.trangThai,
+                phieuDatVeId: ticketsToCancel[0].phieuDatVeId,
+                trangThaiCu: ticketsToCancel[0].phieuDatVe.trangThai,
                 trangThaiMoi: 'DA_HUY',
                 thoiDiem: changedAt,
                 nguonThayDoi: 'SYSTEM',
@@ -608,33 +715,19 @@ export class TicketsService {
             });
           }
 
-          const refund =
-            originalPayment && !quote.refundAmount.isZero()
-              ? await tx.thanhToan.create({
-                  data: {
-                    soTien: quote.refundAmount,
-                    phuongThuc: originalPayment.phuongThuc,
-                    loaiGiaoDich: 'HOAN_TIEN',
-                    thoiGian: changedAt,
-                    trangThai: 'DANG_XU_LY',
-                    donGiaoDichId: ticket.phieuDatVe.donGiaoDichId,
-                    veId: ticket.veId,
-                  },
-                })
-              : null;
-
-          const serializedQuote = serializeCancellationQuote(quote);
           return {
-            refundId: refund?.thanhToanId ?? null,
+            refundIds,
             response: {
               data: {
-                ticketId: ticket.veId,
-                ticketCode: ticket.maVe,
+                ticketId: ticketsToCancel[0].veId,
+                ticketCode: ticketsToCancel[0].maVe,
+                cancelledTicketCodes,
+                cancelledSeatNumbers,
                 status: 'HUY',
-                cancelFeeRate: serializedQuote.cancelFeeRate,
-                cancelFee: serializedQuote.cancelFee,
-                refundAmount: serializedQuote.refundAmount,
-                message: quote.refundAmount.isZero()
+                cancelFeeRate: dto.expectedCancelFeeRate,
+                cancelFee: Number(totalCancelFee.toString()),
+                refundAmount: Number(totalRefundAmount.toString()),
+                message: totalRefundAmount.isZero()
                   ? 'Hủy vé thành công. Không phát sinh khoản hoàn tiền.'
                   : 'Hủy vé thành công. Yêu cầu hoàn tiền đang được xử lý.',
               },
@@ -643,8 +736,10 @@ export class TicketsService {
         },
         { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
       );
-      if (result.refundId !== null) {
-        this.refundProcessor.enqueueRefund(result.refundId);
+      if (Array.isArray(result.refundIds) && result.refundIds.length > 0) {
+        for (const refundId of result.refundIds) {
+          this.refundProcessor.enqueueRefund(refundId);
+        }
       }
       return result.response;
     } catch (error) {
@@ -738,8 +833,9 @@ export class TicketsService {
     return {
       ticketId: ticket.veId,
       ticketCode: ticket.maVe,
-      bookingId: ticket.phieuDatVeId,
       tripId: chuyenXe?.chuyenXeId ?? null,
+      busCompanyId: nhaXe?.nhaXeId ?? null,
+      bookingId: ticket.phieuDatVeId,
       review,
       bookingCode: ticket.phieuDatVe?.maPhieuDatVe ?? null,
       promotionCode: ticket.phieuDatVe?.khuyenMai?.maKhuyenMai ?? null,

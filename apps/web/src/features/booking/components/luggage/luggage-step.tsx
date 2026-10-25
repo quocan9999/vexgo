@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { Package, PackageX, Info } from 'lucide-react';
 
 import { LuggageForm } from './luggage-form';
+import { resolveCargoCategoryId } from './luggage-item';
 import { shipmentsApi, type CargoCategory } from '@/features/shipments/services/shipments.api';
 import {
   findOverweightRegularCargoItem,
@@ -22,6 +23,7 @@ interface CargoCapacityInfo {
 }
 
 interface LuggageStepProps {
+  title?: string;
   route: string;
   time: string;
   seat: string;
@@ -30,7 +32,72 @@ interface LuggageStepProps {
   onFeeChange: (fee: number, weight: number, items: ILuggageItem[]) => void;
 }
 
-export const LuggageStep: React.FC<LuggageStepProps> = ({ route, time, seat, passenger, cargoCapacity, onFeeChange }) => {
+export function calculateLuggageFee(items: ILuggageItem[]): number {
+  let total = 0;
+  for (const item of items) {
+    const qty = item.quantity || 1;
+    const isMotorbike = item.type === 'Xe máy';
+    const isBicycle = item.type === 'Xe đạp';
+
+    let itemBaseFee = 0;
+    if (isMotorbike) {
+      if (item.motorbikeType === 'Xe tay ga lớn / SH' || item.motorbikeType === 'Xe côn tay / Moto') {
+        itemBaseFee = 250_000;
+      } else if (item.motorbikeType === 'Xe tay ga') {
+        itemBaseFee = 220_000;
+      } else {
+        itemBaseFee = 180_000;
+      }
+    } else if (isBicycle) {
+      itemBaseFee = 80_000;
+    } else {
+      const actualWeight = item.weight || 0;
+      const volumetricWeight =
+        item.length && item.width && item.height
+          ? (item.length * item.width * item.height) / 5000
+          : 0;
+      const effectiveUnitWeight = Math.max(actualWeight, volumetricWeight);
+
+      if (effectiveUnitWeight <= 0) {
+        itemBaseFee = 0;
+      } else if (effectiveUnitWeight <= 1) {
+        itemBaseFee = 30_000;
+      } else if (effectiveUnitWeight <= 5) {
+        itemBaseFee = 50_000;
+      } else if (effectiveUnitWeight <= 10) {
+        itemBaseFee = 80_000;
+      } else if (effectiveUnitWeight <= 20) {
+        itemBaseFee = 120_000;
+      } else if (effectiveUnitWeight <= 50) {
+        itemBaseFee = 180_000;
+      } else {
+        itemBaseFee = 250_000;
+      }
+    }
+
+    let surcharge = 0;
+    if (item.category === 'fragile') {
+      surcharge = 20_000;
+    } else if (item.category === 'valuable') {
+      surcharge = 50_000;
+    }
+
+    if (itemBaseFee > 0 || isMotorbike || isBicycle) {
+      total += (itemBaseFee + surcharge) * qty;
+    }
+  }
+  return total;
+}
+
+export const LuggageStep: React.FC<LuggageStepProps> = ({
+  title = 'HÀNH LÝ CỦA CHUYẾN ĐI',
+  route,
+  time,
+  seat,
+  passenger,
+  cargoCapacity,
+  onFeeChange,
+}) => {
   const [hasExtraLuggage, setHasExtraLuggage] = useState(false);
   const [items, setItems] = useState<ILuggageItem[]>([]);
   const [cargoCategories, setCargoCategories] = useState<CargoCategory[]>([]);
@@ -43,7 +110,24 @@ export const LuggageStep: React.FC<LuggageStepProps> = ({ route, time, seat, pas
     shipmentsApi
       .getCargoCategories()
       .then((response) => {
-        if (isMounted) setCargoCategories(response.data);
+        if (isMounted) {
+          setCargoCategories(response.data);
+          setItems((current) =>
+            current.map((item) => ({
+              ...item,
+              loaiHangHoaId:
+                item.loaiHangHoaId ??
+                resolveCargoCategoryId(
+                  item.type,
+                  item.weight,
+                  item.length,
+                  item.width,
+                  item.height,
+                  response.data,
+                ),
+            })),
+          );
+        }
       })
       .catch((error: unknown) => {
         if (isMounted) {
@@ -79,13 +163,14 @@ export const LuggageStep: React.FC<LuggageStepProps> = ({ route, time, seat, pas
         }, 0)
         .toFixed(2),
     );
-    onFeeChange(0, totalWeight, items);
+    const estimatedFee = calculateLuggageFee(items);
+    onFeeChange(estimatedFee, totalWeight, items);
   }, [hasExtraLuggage, items, onFeeChange]);
 
   return (
     <div className="p-4 md:p-5 border-b border-slate-200">
       <div className="mb-5 pb-4 border-b border-slate-100">
-        <h2 className="text-base font-black text-slate-950 mb-3">HÀNH LÝ CỦA CHUYẾN ĐI</h2>
+        <h2 className="text-base font-black text-slate-950 mb-3">{title}</h2>
         <div className="bg-slate-50 rounded-lg p-3 text-sm flex flex-col gap-1.5 border border-slate-200">
           <div className="flex justify-between">
             <span className="text-slate-500">Tuyến:</span>
@@ -134,6 +219,7 @@ export const LuggageStep: React.FC<LuggageStepProps> = ({ route, time, seat, pas
                 quantity: 1,
                 weight: 0,
                 category: 'normal',
+                loaiHangHoaId: resolveCargoCategoryId('Vali', 0, undefined, undefined, undefined, cargoCategories),
               }]);
             }
           }}

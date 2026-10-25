@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Filter, ChevronDown, MapPin, X, Bus, Loader2 } from 'lucide-react';
+import { Filter, ChevronDown, MapPin, X, Bus, Loader2, RotateCcw, AlertCircle } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { TripCard } from '@/features/trips/components/trip-card';
 import type { Trip } from '@/types/customer';
@@ -216,6 +216,10 @@ export function TripList() {
   const [operator, setOperator] = useState('all');
   const [busCompanies, setBusCompanies] = useState<string[]>([]);
   const [sort, setSort] = useState('departure');
+  const [retryCount, setRetryCount] = useState(0);
+  const handleRetry = () => {
+    setRetryCount((prev) => prev + 1);
+  };
 
   useEffect(() => {
     let ignore = false;
@@ -351,6 +355,7 @@ export function TripList() {
     vehicleType,
     timeRange,
     operator,
+    retryCount,
   ]);
 
   // Fetch return trips if round-trip
@@ -405,6 +410,7 @@ export function TripList() {
     vehicleType,
     timeRange,
     operator,
+    retryCount,
   ]);
 
   const effectiveActiveTab = isRoundTrip ? activeTab : 'outbound';
@@ -802,11 +808,28 @@ export function TripList() {
                   </p>
                 </div>
               ) : error ? (
-                <div className="bg-white rounded-xl p-12 text-center text-red-600 border border-red-100 shadow-sm">
-                  <p className="font-semibold text-sm">{error}</p>
-                  <p className="text-xs mt-1 text-slate-500">
-                    Vui lòng thử lại sau.
+                <div className="bg-white rounded-2xl p-8 sm:p-12 text-center border border-rose-100 shadow-sm flex flex-col items-center">
+                  <div className="w-12 h-12 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center mb-3">
+                    <AlertCircle className="w-6 h-6" />
+                  </div>
+                  <p className="font-bold text-sm text-slate-900 mb-1">
+                    {error.toLowerCase().includes('fetch')
+                      ? 'Không thể kết nối đến máy chủ'
+                      : error}
                   </p>
+                  <p className="text-xs text-slate-500 mb-4 max-w-sm">
+                    {error.toLowerCase().includes('fetch')
+                      ? 'Máy chủ có thể đang khởi động lại hoặc đường truyền mạng bị gián đoạn. Vui lòng bấm thử lại.'
+                      : 'Vui lòng kiểm tra lại thông tin hoặc thử lại.'}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleRetry}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#f05123] text-white text-xs font-bold shadow-xs hover:bg-[#d94419] active:scale-95 transition-all cursor-pointer"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Thử lại</span>
+                  </button>
                 </div>
               ) : filteredTrips.length > 0 ? (
                 filteredTrips.map((trip) => (

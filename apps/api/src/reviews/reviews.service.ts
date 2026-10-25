@@ -154,4 +154,100 @@ export class ReviewsService {
       throw err;
     }
   }
+
+  async getBusCompanyReviews(busCompanyId: number) {
+    if (!this.prisma?.phanHoi || typeof this.prisma.phanHoi.findMany !== 'function') {
+      return {
+        busCompanyId,
+        rating: null,
+        reviewsCount: 0,
+        reviews: [],
+      };
+    }
+
+    const reviews = await this.prisma.phanHoi.findMany({
+      where: {
+        trangThai: 'HIEN_THI',
+        chuyenXe: { nhaXeId: busCompanyId },
+      },
+      include: {
+        khachHang: {
+          include: {
+            taiKhoan: { select: { hoTen: true } },
+          },
+        },
+      },
+      orderBy: { thoiGian: 'desc' },
+      take: 50,
+    });
+
+    const count = reviews.length;
+    const avg =
+      count > 0
+        ? Math.round(
+            (reviews.reduce((sum, r) => sum + r.mucDanhGia, 0) / count) * 10,
+          ) / 10
+        : null;
+
+    return {
+      busCompanyId,
+      rating: avg,
+      reviewsCount: count,
+      reviews: reviews.map((r) => ({
+        id: r.phanHoiId,
+        rating: r.mucDanhGia,
+        comment: r.noiDung,
+        customerName: r.khachHang?.taiKhoan?.hoTen || 'Khách hàng VexGo',
+        createdAt: r.thoiGian.toISOString(),
+      })),
+    };
+  }
+
+  async getTripReviews(tripId: number) {
+    if (!this.prisma?.phanHoi || typeof this.prisma.phanHoi.findMany !== 'function') {
+      return {
+        tripId,
+        rating: null,
+        reviewsCount: 0,
+        reviews: [],
+      };
+    }
+
+    const reviews = await this.prisma.phanHoi.findMany({
+      where: {
+        trangThai: 'HIEN_THI',
+        chuyenXeId: tripId,
+      },
+      include: {
+        khachHang: {
+          include: {
+            taiKhoan: { select: { hoTen: true } },
+          },
+        },
+      },
+      orderBy: { thoiGian: 'desc' },
+      take: 50,
+    });
+
+    const count = reviews.length;
+    const avg =
+      count > 0
+        ? Math.round(
+            (reviews.reduce((sum, r) => sum + r.mucDanhGia, 0) / count) * 10,
+          ) / 10
+        : null;
+
+    return {
+      tripId,
+      rating: avg,
+      reviewsCount: count,
+      reviews: reviews.map((r) => ({
+        id: r.phanHoiId,
+        rating: r.mucDanhGia,
+        comment: r.noiDung,
+        customerName: r.khachHang?.taiKhoan?.hoTen || 'Khách hàng VexGo',
+        createdAt: r.thoiGian.toISOString(),
+      })),
+    };
+  }
 }

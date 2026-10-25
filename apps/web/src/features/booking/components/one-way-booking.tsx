@@ -8,6 +8,7 @@ import {
   Armchair,
   Bus,
   CheckCircle2,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   CreditCard,
@@ -23,7 +24,8 @@ import {
   X,
 } from 'lucide-react';
 import type { Post } from '@/features/posts/types/post';
-import { LuggageStep } from './luggage/luggage-step';
+import { AlertModal } from '@/components/ui/alert-modal';
+import { LuggageStep, calculateLuggageFee } from './luggage/luggage-step';
 import { LuggageSummary } from './luggage/luggage-summary';
 import type { ILuggageItem } from './luggage/luggage-item';
 import {
@@ -53,6 +55,11 @@ import {
   shipmentsApi,
   type ShipmentRoutePoints,
 } from '@/features/shipments/services/shipments.api';
+import {
+  promotionsApi,
+  type AvailablePromotion,
+} from '@/features/promotions/services/promotions.api';
+
 
 export interface OneWayBookingProps {
   post: Post;
@@ -188,6 +195,9 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
   const [requiresLogin, setRequiresLogin] = useState(false);
   const [showTripInfoModal, setShowTripInfoModal] = useState(false);
   const [showCargoInfoModal, setShowCargoInfoModal] = useState(false);
+  const [showCustomerInfoAlert, setShowCustomerInfoAlert] = useState(false);
+  const [customerInfoAlertMessage, setCustomerInfoAlertMessage] = useState('');
+  const customerInfoSectionRef = useRef<HTMLDivElement>(null);
   const [isAcceptedTerms, setIsAcceptedTerms] = useState(false);
   const descriptionLines = post.description
     .split('\n')
@@ -306,7 +316,43 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
     };
   }, [post.id]);
 
+  const [availablePromotions, setAvailablePromotions] = useState<AvailablePromotion[]>([]);
+  const [loadingPromotions, setLoadingPromotions] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    const tripId = Number(post.id);
+    if (!Number.isSafeInteger(tripId) || tripId <= 0) {
+      setAvailablePromotions([]);
+      return;
+    }
+
+    setLoadingPromotions(true);
+    promotionsApi
+      .getAvailablePromotions({ tripId })
+      .then(({ data }) => {
+        if (active) {
+          setAvailablePromotions(data);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setAvailablePromotions([]);
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setLoadingPromotions(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [post.id]);
+
   const [luggageFee, setLuggageFee] = useState(0);
+
   const [luggageWeight, setLuggageWeight] = useState(0);
   const [luggageItems, setLuggageItems] = useState<ILuggageItem[]>([]);
   const hasSelectedCargoItems = luggageItems.length > 0;
@@ -343,11 +389,13 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
         if (!active) return;
         setCargoRoutePoints(data);
         const senderId =
-          data.senderPoints.length === 1 ? data.senderPoints[0].id : null;
-        const receiverId =
-          data.receiverPoints.length === 1 ? data.receiverPoints[0].id : null;
+          data.senderPoints.length > 0 ? data.senderPoints[0].id : null;
+        const receiverCandidate =
+          data.receiverPoints.find((p) => p.id !== senderId) ??
+          data.receiverPoints[data.receiverPoints.length - 1];
+        const receiverId = receiverCandidate ? receiverCandidate.id : null;
         setSenderPointId(senderId);
-        setReceiverPointId(receiverId !== senderId ? receiverId : null);
+        setReceiverPointId(receiverId);
       })
       .catch((error: unknown) => {
         if (active) {
@@ -545,16 +593,23 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
     };
   }, [promotionRequestKey]);
 
-  const handleApplyPromotion = () => {
-    const code = promotionInput.trim().toUpperCase();
+  const handleApplyPromotion = (codeOverride?: unknown) => {
+    const rawCode =
+      typeof codeOverride === 'string' ? codeOverride : promotionInput;
+    const code = rawCode.trim().toUpperCase();
     if (!code) {
       promotionInputRef.current?.focus();
       return;
+    }
+    if (typeof codeOverride === 'string') {
+      setPromotionInput(codeOverride);
     }
     setSubmitError(null);
     setActivePromotionCode(code);
     setPromotionRequestVersion((version) => version + 1);
   };
+
+
 
   const handleRemovePromotion = () => {
     setPromotionInput('');
@@ -567,11 +622,16 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
     if (bookedSeats.has(seat) || isSubmitting || submissionUnknown) return;
     setSubmitError(null);
     setRequiresLogin(false);
-    setSelectedSeats((prev) =>
-      prev.includes(seat)
-        ? prev.filter((item) => item !== seat)
-        : [...prev, seat],
-    );
+    setSelectedSeats((prev) => {
+      if (prev.includes(seat)) {
+        return prev.filter((item) => item !== seat);
+      }
+      if (prev.length >= 5) {
+        setSubmitError('Mỗi chuyến xe chỉ được chọn tối đa 5 ghế.');
+        return prev;
+      }
+      return [...prev, seat];
+    });
   };
 
   const refreshSeatMap = async (tripId: number) => {
@@ -627,8 +687,36 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
       setSubmitError('Đang tải trạng thái tài khoản. Vui lòng đợi rồi thử lại.');
       return;
     }
-    if (!passengerValidation.isValid) return;
+    if (!passengerValidation.isValid) {
+      const missingDetails: string[] = [];
+      if (!customerName.trim()) {
+        missingDetails.push('Họ và tên');
+      }
+      if (!customerPhone.trim()) {
+        missingDetails.push('Số điện thoại');
+      } else if (passengerValidation.errors.phoneNumber) {
+        missingDetails.push('Số điện thoại (định dạng chưa đúng)');
+      }
+      if (!customerEmail.trim()) {
+        missingDetails.push('Email');
+      } else if (passengerValidation.errors.email) {
+        missingDetails.push('Email (định dạng chưa đúng)');
+      }
+
+      const msg =
+        missingDetails.length > 0
+          ? `Quý khách vui lòng nhập đầy đủ và chính xác thông tin khách hàng:\n• ${missingDetails.join('\n• ')}`
+          : 'Quý khách vui lòng điền đầy đủ thông tin khách hàng trước khi thanh toán.';
+
+      setCustomerInfoAlertMessage(msg);
+      setShowCustomerInfoAlert(true);
+      return;
+    }
     if (selectedSeats.length === 0) return;
+    if (selectedSeats.length > 5) {
+      setSubmitError('Mỗi chuyến xe chỉ được chọn tối đa 5 ghế.');
+      return;
+    }
     if (!isAcceptedTerms) return;
     if (promotionInput.trim() && !activePromotionCode) {
       setSubmitError('Hãy áp dụng hoặc bỏ mã khuyến mãi đã nhập trước khi tiếp tục.');
@@ -692,11 +780,9 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
       return;
     }
 
+    let finalSenderPointId = senderPointId;
+    let finalReceiverPointId = receiverPointId;
     if (validCargoItems.length > 0) {
-      if (validCargoItems.some((item) => !item.loaiHangHoaId)) {
-        setSubmitError('Vui lòng chọn danh mục hàng hóa cho từng kiện trước khi tiếp tục.');
-        return;
-      }
       if (cargoRoutePointsLoading) {
         setSubmitError('Đang tải điểm gửi và điểm nhận hàng. Vui lòng thử lại.');
         return;
@@ -705,11 +791,20 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
         setSubmitError(cargoRoutePointsError);
         return;
       }
-      if (!senderPointId || !receiverPointId) {
-        setSubmitError('Vui lòng chọn điểm gửi và điểm nhận hàng trên tuyến.');
+      if (!finalSenderPointId && cargoRoutePoints?.senderPoints.length) {
+        finalSenderPointId = cargoRoutePoints.senderPoints[0].id;
+      }
+      if (!finalReceiverPointId && cargoRoutePoints?.receiverPoints.length) {
+        const candidate = cargoRoutePoints.receiverPoints.find(
+          (p) => p.id !== finalSenderPointId,
+        ) ?? cargoRoutePoints.receiverPoints[cargoRoutePoints.receiverPoints.length - 1];
+        finalReceiverPointId = candidate ? candidate.id : null;
+      }
+      if (!finalSenderPointId || !finalReceiverPointId) {
+        setSubmitError('Tuyến xe chưa có điểm gửi/nhận hàng khả dụng.');
         return;
       }
-      if (senderPointId === receiverPointId) {
+      if (finalSenderPointId === finalReceiverPointId) {
         setSubmitError('Điểm gửi và điểm nhận hàng phải khác nhau.');
         return;
       }
@@ -763,7 +858,7 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
         },
       } : {}),
       ...(mappedCargoItems
-        ? { senderPointId: senderPointId!, receiverPointId: receiverPointId! }
+        ? { senderPointId: finalSenderPointId!, receiverPointId: finalReceiverPointId! }
         : {}),
     };
 
@@ -1152,6 +1247,9 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
                     <span className="text-xs font-bold text-slate-600 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200">
                       {seatMap.length} chỗ
                     </span>
+                    <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
+                      Tối đa 5 ghế
+                    </span>
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded border bg-amber-50 text-amber-700 border-amber-200">
                       {isSleeper ? 'Giường nằm' : 'Ghế ngồi'}
                     </span>
@@ -1279,7 +1377,7 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 border-b border-slate-200">
-              <div className="p-4 md:p-5 border-b lg:border-b-0 lg:border-r border-slate-200">
+              <div ref={customerInfoSectionRef} className="p-4 md:p-5 border-b lg:border-b-0 lg:border-r border-slate-200">
                 <h2 className="text-base font-black text-slate-950 mb-4">
                   Thông tin khách hàng
                 </h2>
@@ -1453,7 +1551,7 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
                     id="booking-promotion-feedback"
                     role={promotionStatus === 'invalid' ? 'alert' : 'status'}
                     aria-live="polite"
-                    className={`mt-2 text-sm font-semibold ${
+                    className={`mt-2 text-sm font-semibold flex items-center gap-1.5 ${
                       promotionStatus === 'invalid'
                         ? 'text-red-700'
                         : promotionStatus === 'valid'
@@ -1461,70 +1559,100 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
                           : 'text-slate-600'
                     }`}
                   >
+                    {promotionStatus === 'valid' && (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    )}
                     {promotionMessage}
                   </p>
                 )}
-                {isAuthenticated ? (
-                  verifiedAccountPhone ? (
-                    <p className="mt-2 text-xs font-medium text-slate-500">
-                      Điều kiện ưu đãi được kiểm tra theo SĐT tài khoản đã xác minh:{' '}
-                      <strong className="text-slate-700">{verifiedAccountPhone}</strong>
-                    </p>
-                  ) : (
-                    <p className="mt-2 text-xs font-medium text-slate-500">
-                      Điều kiện ưu đãi được kiểm tra theo tài khoản đang đăng nhập.
-                    </p>
-                  )
-                ) : (
-                  <p className="mt-2 text-xs font-medium text-slate-500">
-                    Khách chưa đăng nhập cần nhập số điện thoại để kiểm tra lượt sử dụng.
-                  </p>
-                )}
-                {promotionQuote && (
-                  <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50/70 p-3 text-sm">
-                    <div className="space-y-2">
-                      <div className="flex justify-between gap-3">
-                        <span className="text-slate-600">Giá vé gốc</span>
-                        <strong className="text-right text-slate-800">
-                          {Number(promotionQuote.originalTotal).toLocaleString('vi-VN')}đ
-                        </strong>
-                      </div>
-                      <div className="flex justify-between gap-3">
-                        <span className="text-slate-600">Giảm giá</span>
-                        <strong className="text-right text-emerald-700">
-                          −{Number(promotionQuote.discountAmount).toLocaleString('vi-VN')}đ
-                        </strong>
-                      </div>
-                      <div className="flex justify-between gap-3">
-                        <span className="text-slate-600">Tổng tiền vé sau ưu đãi</span>
-                        <strong className="text-right text-slate-900">
-                          {Number(promotionQuote.finalTotal).toLocaleString('vi-VN')}đ
-                        </strong>
-                      </div>
-                      {hasSelectedCargoItems && (
-                        <div className="flex justify-between gap-3">
-                          <span className="text-slate-600">Cước hàng, không áp dụng mã</span>
-                          <strong className="text-right text-slate-800">
-                            {luggageFee > 0
-                              ? `${luggageFee.toLocaleString('vi-VN')}đ`
-                              : 'Tính khi đặt vé'}
-                          </strong>
-                        </div>
-                      )}
-                      <div className="flex justify-between gap-3 border-t border-emerald-200 pt-2 font-black">
-                        <span className="text-slate-800">Tổng thanh toán tạm tính</span>
-                        <strong className="text-right text-red-600">
-                          {totalFare.toLocaleString('vi-VN')}đ
-                        </strong>
-                      </div>
+
+                {availablePromotions.length > 0 && (
+                  <div className="mt-4 pt-4 border-t border-dashed border-slate-200">
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                        <Ticket className="w-3.5 h-3.5 text-accent" />
+                        Mã ưu đãi có sẵn ({availablePromotions.length}):
+                      </span>
                     </div>
-                    <p className="mt-2 text-xs font-medium text-slate-600">
-                      Mã chỉ giảm tiền vé. Cước hàng (nếu có) được tính riêng; tổng cuối cùng được máy chủ xác nhận khi tạo đơn.
-                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {availablePromotions.map((promo) => {
+                        const isCurrentActive = activePromotionCode === promo.code;
+                        const discountText =
+                          promo.discountType === 'PHAN_TRAM'
+                            ? `Giảm ${Number(promo.discountValue)}%${
+                                promo.maxDiscount
+                                  ? ` (tối đa ${Number(promo.maxDiscount).toLocaleString('vi-VN')}đ)`
+                                  : ''
+                              }`
+                            : `Giảm ${Number(promo.discountValue).toLocaleString('vi-VN')}đ`;
+
+                        return (
+                          <div
+                            key={promo.id}
+                            className={`relative flex flex-col justify-between p-3.5 rounded-lg border transition-all ${
+                              isCurrentActive
+                                ? 'border-accent bg-orange-50/60 shadow-sm ring-1 ring-accent/30'
+                                : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm'
+                            }`}
+                          >
+                            <div>
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="font-mono font-black text-xs text-accent bg-orange-100/80 px-2 py-0.5 rounded tracking-wider border border-orange-200">
+                                  {promo.code}
+                                </span>
+                                <span className="text-[11px] font-semibold text-slate-400">
+                                  HSD: {promo.endsOn}
+                                </span>
+                              </div>
+                              <h4 className="mt-2 text-xs font-bold text-slate-900 line-clamp-1">
+                                {promo.name}
+                              </h4>
+                              <p className="text-xs font-semibold text-accent mt-0.5">
+                                {discountText}
+                              </p>
+                              {promo.minimumTicketAmount &&
+                                Number(promo.minimumTicketAmount) > 0 && (
+                                  <p className="text-[11px] text-slate-500 mt-0.5">
+                                    Đơn tối thiểu:{' '}
+                                    {Number(
+                                      promo.minimumTicketAmount,
+                                    ).toLocaleString('vi-VN')}
+                                    đ
+                                  </p>
+                                )}
+                            </div>
+                            <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between">
+                              <span className="text-[11px] text-slate-500">
+                                Còn {promo.remainingUses} lượt
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (isCurrentActive) {
+                                    handleRemovePromotion();
+                                  } else {
+                                    handleApplyPromotion(promo.code);
+                                  }
+                                }}
+                                disabled={promotionStatus === 'loading'}
+                                className={`px-3 py-1 text-xs font-black rounded transition-colors ${
+                                  isCurrentActive
+                                    ? 'bg-slate-200 text-slate-700 hover:bg-slate-300'
+                                    : 'bg-accent text-white hover:bg-accent-hover'
+                                }`}
+                              >
+                                {isCurrentActive ? 'Bỏ chọn' : 'Áp dụng'}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
               </div>
             </section>
+
 
             <div className="p-4 md:p-5 border-b border-slate-200">
               <h2 className="text-base font-black text-slate-950 mb-4 flex items-center gap-2">
@@ -1555,16 +1683,19 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
                       Trung chuyển
                     </label>
                   </div>
-                  <select
-                    value={pickup}
-                    onChange={(e) => setPickupOverride(e.target.value)}
-                    className="h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-bold text-slate-900 outline-none focus:border-accent"
-                  >
-                    <option value={post.province}>{post.province}</option>
-                    <option value={`Bến xe ${post.province}`}>
-                      Bến xe {post.province}
-                    </option>
-                  </select>
+                  <div className="relative">
+                    <select
+                      value={pickup}
+                      onChange={(e) => setPickupOverride(e.target.value)}
+                      className="h-11 w-full appearance-none rounded-lg border border-slate-300 bg-white px-3 pr-9 text-sm font-bold text-slate-900 outline-none focus:border-accent"
+                    >
+                      <option value={post.province}>{post.province}</option>
+                      <option value={`Bến xe ${post.province}`}>
+                        Bến xe {post.province}
+                      </option>
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  </div>
                   <p className="text-xs text-slate-600 leading-relaxed">
                     Quý khách vui lòng có mặt tại điểm đón trước giờ khởi hành
                     tối thiểu 20 phút.
@@ -1594,16 +1725,19 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
                       Trung chuyển
                     </label>
                   </div>
-                  <select
-                    value={dropoff}
-                    onChange={(e) => setDropoffOverride(e.target.value)}
-                    className="h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-bold text-slate-900 outline-none focus:border-accent"
-                  >
-                    <option value={post.district}>{post.district}</option>
-                    <option value={`Bến xe ${post.district}`}>
-                      Bến xe {post.district}
-                    </option>
-                  </select>
+                  <div className="relative">
+                    <select
+                      value={dropoff}
+                      onChange={(e) => setDropoffOverride(e.target.value)}
+                      className="h-11 w-full appearance-none rounded-lg border border-slate-300 bg-white px-3 pr-9 text-sm font-bold text-slate-900 outline-none focus:border-accent"
+                    >
+                      <option value={post.district}>{post.district}</option>
+                      <option value={`Bến xe ${post.district}`}>
+                        Bến xe {post.district}
+                      </option>
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  </div>
                   <p className="text-xs text-slate-600 leading-relaxed">
                     Điểm trả cụ thể sẽ được xác nhận lại trong vé điện tử sau
                     thanh toán.
@@ -1622,86 +1756,41 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
             />
 
             {hasCargoItems && (
-              <div className="border-b border-slate-200 p-4 md:p-5">
-                <h2 className="text-base font-black text-slate-950">
-                  Điểm gửi và điểm nhận hàng
-                </h2>
-                <p className="mt-1 text-xs text-slate-600">
-                  Chọn điểm đang hoạt động trên tuyến. Nếu mỗi loại chỉ có một điểm,
-                  hệ thống sẽ tự chọn điểm đó.
-                </p>
-                {cargoRoutePointsLoading ? (
-                  <p role="status" className="mt-3 text-sm text-slate-500">
-                    Đang tải điểm gửi và điểm nhận hàng...
-                  </p>
-                ) : cargoRoutePointsError ? (
-                  <p role="alert" className="mt-3 text-sm font-semibold text-rose-700">
-                    {cargoRoutePointsError}
-                  </p>
-                ) : (
-                  <div className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-2">
-                    <label className="block">
-                      <span className="mb-1 block text-xs font-bold text-slate-700">
-                        Điểm gửi <span className="text-rose-500">*</span>
-                      </span>
-                      <select
-                        aria-label="Điểm gửi hàng"
-                        value={senderPointId ?? ''}
-                        onChange={(event) => {
-                          const nextId = Number(event.target.value) || null;
-                          setSenderPointId(nextId);
-                          if (nextId === receiverPointId) setReceiverPointId(null);
-                        }}
-                        disabled={!cargoRoutePoints?.senderPoints.length}
-                        className="h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 outline-none focus:border-accent disabled:bg-slate-50"
-                      >
-                        <option value="">Chọn điểm gửi</option>
-                        {cargoRoutePoints?.senderPoints.map((point) => (
-                          <option key={point.id} value={point.id}>
-                            {point.name} — {point.address}
-                          </option>
-                        ))}
-                      </select>
-                      {!cargoRoutePointsLoading &&
-                        !cargoRoutePoints?.senderPoints.length && (
-                          <span className="mt-1 block text-xs text-amber-700">
-                            Tuyến chưa có điểm gửi hàng đang hoạt động.
-                          </span>
-                        )}
-                    </label>
-                    <label className="block">
-                      <span className="mb-1 block text-xs font-bold text-slate-700">
-                        Điểm nhận <span className="text-rose-500">*</span>
-                      </span>
-                      <select
-                        aria-label="Điểm nhận hàng"
-                        value={receiverPointId ?? ''}
-                        onChange={(event) =>
-                          setReceiverPointId(Number(event.target.value) || null)
-                        }
-                        disabled={!cargoRoutePoints?.receiverPoints.length}
-                        className="h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 outline-none focus:border-accent disabled:bg-slate-50"
-                      >
-                        <option value="">Chọn điểm nhận</option>
-                        {cargoRoutePoints?.receiverPoints.map((point) => (
-                          <option
-                            key={point.id}
-                            value={point.id}
-                            disabled={point.id === senderPointId}
-                          >
-                            {point.name} — {point.address}
-                          </option>
-                        ))}
-                      </select>
-                      {!cargoRoutePointsLoading &&
-                        !cargoRoutePoints?.receiverPoints.length && (
-                          <span className="mt-1 block text-xs text-amber-700">
-                            Tuyến chưa có điểm nhận hàng đang hoạt động.
-                          </span>
-                        )}
-                    </label>
-                  </div>
-                )}
+              <div className="hidden" aria-hidden="true">
+                <select
+                  aria-label="Điểm gửi hàng"
+                  value={senderPointId ?? ''}
+                  onChange={(event) => {
+                    const nextId = Number(event.target.value) || null;
+                    setSenderPointId(nextId);
+                    if (nextId === receiverPointId) setReceiverPointId(null);
+                  }}
+                >
+                  <option value="">Chọn điểm gửi</option>
+                  {cargoRoutePoints?.senderPoints.map((point) => (
+                    <option key={point.id} value={point.id}>
+                      {point.name} — {point.address}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  aria-label="Điểm nhận hàng"
+                  value={receiverPointId ?? ''}
+                  onChange={(event) =>
+                    setReceiverPointId(Number(event.target.value) || null)
+                  }
+                >
+                  <option value="">Chọn điểm nhận</option>
+                  {cargoRoutePoints?.receiverPoints.map((point) => (
+                    <option
+                      key={point.id}
+                      value={point.id}
+                      disabled={point.id === senderPointId}
+                    >
+                      {point.name} — {point.address}
+                    </option>
+                  ))}
+                </select>
               </div>
             )}
 
@@ -1972,9 +2061,18 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
                         )}
                       </div>
 
-                      <span className="shrink-0 text-right text-xs font-semibold text-slate-500">
-                        Theo bảng cước tuyến
-                      </span>
+                      {(() => {
+                        const itemFee = calculateLuggageFee([item]);
+                        return itemFee > 0 ? (
+                          <span className="shrink-0 text-right text-xs font-bold text-red-600">
+                            {itemFee.toLocaleString('vi-VN')}đ
+                          </span>
+                        ) : (
+                          <span className="shrink-0 text-right text-xs font-semibold text-slate-500">
+                            Theo bảng cước tuyến
+                          </span>
+                        );
+                      })()}
                     </div>
                   ))}
                 </div>
@@ -1991,10 +2089,22 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
                   <span className="text-slate-500 font-semibold">
                     Giá vé lượt đi ({selectedSeats.length} ghế)
                   </span>
-                  <strong className="text-red-600">
+                  <strong className="text-slate-800">
                     {(baseFareNumber * selectedSeats.length).toLocaleString('vi-VN')}đ
                   </strong>
                 </div>
+
+                {promotionQuote && Number(promotionQuote.discountAmount) > 0 && (
+                  <div className="flex justify-between gap-3 text-emerald-700">
+                    <span className="font-semibold flex items-center gap-1">
+                      Giảm giá ({promotionQuote.appliedPromotionCode})
+                    </span>
+                    <strong>
+                      −{Number(promotionQuote.discountAmount).toLocaleString('vi-VN')}đ
+                    </strong>
+                  </div>
+                )}
+
 
                 <LuggageSummary
                   fee={luggageFee}
@@ -2194,9 +2304,18 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
                       )}
                     </div>
 
-                    <div className="shrink-0 text-right text-xs font-semibold text-slate-500">
-                      Theo bảng cước tuyến
-                    </div>
+                    {(() => {
+                      const itemFee = calculateLuggageFee([item]);
+                      return itemFee > 0 ? (
+                        <div className="shrink-0 text-right text-xs font-bold text-red-600">
+                          {itemFee.toLocaleString('vi-VN')}đ
+                        </div>
+                      ) : (
+                        <div className="shrink-0 text-right text-xs font-semibold text-slate-500">
+                          Theo bảng cước tuyến
+                        </div>
+                      );
+                    })()}
                   </div>
                 );
               })}
@@ -2204,8 +2323,8 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
 
             <div className="mt-4 pt-3 border-t border-slate-200 flex items-center justify-between text-xs">
               <span className="font-bold text-slate-600">Cước hàng</span>
-              <strong className="text-slate-600 text-xs">
-                Máy chủ xác định theo bảng cước tuyến
+              <strong className={luggageFee > 0 ? "text-red-600 text-sm font-bold" : "text-slate-600 text-xs"}>
+                {luggageFee > 0 ? `${luggageFee.toLocaleString('vi-VN')}đ` : 'Máy chủ xác định theo bảng cước tuyến'}
               </strong>
             </div>
           </section>
@@ -2217,6 +2336,21 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
         onClose={() => setShowVehicleInfoModal(false)}
         title="Tính năng sắp có"
         message="Thông tin xe sẽ được bổ sung ở phiên bản sau."
+      />
+
+      <AlertModal
+        isOpen={showCustomerInfoAlert}
+        title="Thông tin khách hàng chưa đầy đủ"
+        message={customerInfoAlertMessage}
+        variant="warning"
+        confirmText="Bổ sung thông tin"
+        onClose={() => {
+          setShowCustomerInfoAlert(false);
+          customerInfoSectionRef.current?.scrollIntoView?.({
+            behavior: 'smooth',
+            block: 'center',
+          });
+        }}
       />
     </div>
   );

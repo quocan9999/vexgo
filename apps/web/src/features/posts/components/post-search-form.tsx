@@ -18,13 +18,14 @@ export const PostSearchForm: React.FC = () => {
   );
   const [selectedProvince, setSelectedProvince] = useState(searchParams?.get('province') || '');
   const [selectedDistrict, setSelectedDistrict] = useState(searchParams?.get('district') || '');
+  const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date());
   const [selectedType] = useState(searchParams?.get('type') || '');
-  const [selectedPrice, setSelectedPrice] = useState(searchParams?.get('price') || ''); 
+  const [selectedPrice, setSelectedPrice] = useState(searchParams?.get('price') || todayStr); 
   const [returnDate, setReturnDate] = useState(searchParams?.get('returnDate') || '');
   const [ticketCount, setTicketCount] = useState(Number(searchParams?.get('tickets')) || 1);
 
   // Freight states
-  const [freightDate, setFreightDate] = useState('');
+  const [freightDate, setFreightDate] = useState(todayStr);
   const [freightType, setFreightType] = useState('Hàng thường');
   const [freightWeight, setFreightWeight] = useState('Dưới 5kg');
 
@@ -132,8 +133,21 @@ export const PostSearchForm: React.FC = () => {
                 </label>
                 <input
                   type="date"
+                  min={todayStr}
                   value={selectedPrice}
-                  onChange={(e) => setSelectedPrice(e.target.value)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val && val < todayStr) {
+                      setSelectedPrice(todayStr);
+                    } else {
+                      setSelectedPrice(val);
+                    }
+                  }}
+                  onBlur={(e) => {
+                    if (e.target.value && e.target.value < todayStr) {
+                      setSelectedPrice(todayStr);
+                    }
+                  }}
                   className="h-12 w-full border border-slate-300 rounded-lg px-3 text-sm font-bold text-slate-900 outline-none focus:border-brand"
                 />
               </div>
@@ -146,8 +160,23 @@ export const PostSearchForm: React.FC = () => {
                   </label>
                   <input
                     type="date"
+                    min={selectedPrice && selectedPrice >= todayStr ? selectedPrice : todayStr}
                     value={returnDate}
-                    onChange={(e) => setReturnDate(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      const minAllowed = selectedPrice && selectedPrice >= todayStr ? selectedPrice : todayStr;
+                      if (val && val < minAllowed) {
+                        setReturnDate(minAllowed);
+                      } else {
+                        setReturnDate(val);
+                      }
+                    }}
+                    onBlur={(e) => {
+                      const minAllowed = selectedPrice && selectedPrice >= todayStr ? selectedPrice : todayStr;
+                      if (e.target.value && e.target.value < minAllowed) {
+                        setReturnDate(minAllowed);
+                      }
+                    }}
                     className="h-12 w-full border border-slate-300 rounded-lg px-3 text-sm font-bold text-slate-900 outline-none focus:border-brand"
                   />
                 </div>
@@ -227,8 +256,21 @@ export const PostSearchForm: React.FC = () => {
               </label>
               <input
                 type="date"
+                min={todayStr}
                 value={freightDate}
-                onChange={(e) => setFreightDate(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val && val < todayStr) {
+                    setFreightDate(todayStr);
+                  } else {
+                    setFreightDate(val);
+                  }
+                }}
+                onBlur={(e) => {
+                  if (e.target.value && e.target.value < todayStr) {
+                    setFreightDate(todayStr);
+                  }
+                }}
                 className="h-12 w-full border border-slate-300 rounded-lg px-3 text-sm font-bold text-slate-900 outline-none focus:border-brand"
               />
             </div>

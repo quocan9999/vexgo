@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -14,7 +14,6 @@ import {
 } from 'lucide-react';
 import { AlertModal } from '@/components/ui/alert-modal';
 import { LocationPicker } from '@/features/locations/components/location-picker';
-
 
 export interface HeroSectionProps {
   activeSearchTab: 'BUY' | 'RENT';
@@ -69,30 +68,82 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
     title: string;
   }>({ isOpen: false, title: '' });
 
+  const todayStr = useMemo(
+    () =>
+      new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Ho_Chi_Minh',
+      }).format(new Date()),
+    [],
+  );
+
   const handleDepartureDateChange = (newDate: string) => {
     setSelectedPrice(newDate);
-    if (tripType === 'round-trip' && returnDate && newDate > returnDate) {
-      setReturnDate(newDate);
+  };
+
+  const handleDepartureDateBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    if (val && val < todayStr) {
+      setReturnDateAlert({
+        isOpen: true,
+        title: 'Ngày đi không được nhỏ hơn ngày hiện tại',
+      });
+      setSelectedPrice(todayStr);
     }
   };
 
   const handleReturnDateChange = (newDate: string) => {
-    if (selectedPrice && newDate && selectedPrice > newDate) {
+    setReturnDate(newDate);
+  };
+
+  const handleReturnDateBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    const minAllowed =
+      selectedPrice && selectedPrice >= todayStr ? selectedPrice : todayStr;
+    if (val && val < todayStr) {
+      setReturnDateAlert({
+        isOpen: true,
+        title: 'Ngày về không được nhỏ hơn ngày hiện tại',
+      });
+      setReturnDate(minAllowed);
+      return;
+    }
+    if (selectedPrice && val && selectedPrice > val) {
       setReturnDateAlert({
         isOpen: true,
         title: 'Ngày đi không được lớn hơn ngày về',
       });
-      setReturnDate(selectedPrice);
-      return;
+      setReturnDate(minAllowed);
     }
-    setReturnDate(newDate);
+  };
+
+  const handleFreightDateChange = (newDate: string) => {
+    setFreightDate(newDate);
   };
 
   const handleSearchSubmit = (e?: React.MouseEvent) => {
+    if (!selectedPrice || selectedPrice < todayStr) {
+      if (e) e.preventDefault();
+      setReturnDateAlert({
+        isOpen: true,
+        title: 'Ngày đi không được nhỏ hơn ngày hiện tại',
+      });
+      setSelectedPrice(todayStr);
+      return;
+    }
+
     if (tripType === 'round-trip') {
       if (!returnDate) {
         if (e) e.preventDefault();
         setReturnDateAlert({ isOpen: true, title: 'Vui lòng chọn ngày về' });
+        return;
+      }
+      if (returnDate < todayStr) {
+        if (e) e.preventDefault();
+        setReturnDateAlert({
+          isOpen: true,
+          title: 'Ngày về không được nhỏ hơn ngày hiện tại',
+        });
+        setReturnDate(selectedPrice || todayStr);
         return;
       }
       if (selectedPrice && returnDate && selectedPrice > returnDate) {
@@ -118,7 +169,6 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
     }
   };
 
-
   // Freight states
   const [freightDate, setFreightDate] = useState(
     new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(
@@ -131,7 +181,6 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
     setSelectedProvince(selectedDistrict);
     setSelectedDistrict(currentProvince);
   };
-
 
   return (
     <section className="relative w-full bg-[#F5F5F5] flex flex-col items-center pb-12">
@@ -215,11 +264,15 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                 {/* Vùng Điểm đi & Điểm đến */}
                 <div className="flex flex-col md:flex-row gap-3 lg:contents">
                   <div className="flex-1 space-y-1.5">
-                    <label htmlFor="hero-origin" className="text-[11px] font-extrabold text-slate-500 uppercase flex items-center gap-1.5">
+                    <label
+                      htmlFor="hero-origin"
+                      className="text-[11px] font-extrabold text-slate-500 uppercase flex items-center gap-1.5"
+                    >
                       <MapPin className="w-3.5 h-3.5 text-brand" />
                       Điểm đi
                     </label>
-                    <LocationPicker id="hero-origin"
+                    <LocationPicker
+                      id="hero-origin"
                       value={selectedProvince}
                       onChange={setSelectedProvince}
                       placeholder="Chọn điểm đi"
@@ -238,11 +291,15 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                   </div>
 
                   <div className="flex-1 space-y-1.5">
-                    <label htmlFor="hero-destination" className="text-[11px] font-extrabold text-slate-500 uppercase flex items-center gap-1.5">
+                    <label
+                      htmlFor="hero-destination"
+                      className="text-[11px] font-extrabold text-slate-500 uppercase flex items-center gap-1.5"
+                    >
                       <MapPin className="w-3.5 h-3.5 text-rose-500" />
                       Điểm đến
                     </label>
-                    <LocationPicker id="hero-destination"
+                    <LocationPicker
+                      id="hero-destination"
                       value={selectedDistrict}
                       onChange={setSelectedDistrict}
                       placeholder="Chọn điểm đến"
@@ -259,11 +316,12 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                     </label>
                     <input
                       type="date"
-                      min={new Intl.DateTimeFormat('en-CA', {
-                        timeZone: 'Asia/Ho_Chi_Minh',
-                      }).format(new Date())}
+                      min={todayStr}
                       value={selectedPrice}
-                      onChange={(e) => handleDepartureDateChange(e.target.value)}
+                      onChange={(e) =>
+                        handleDepartureDateChange(e.target.value)
+                      }
+                      onBlur={handleDepartureDateBlur}
                       className="h-12 w-full border border-slate-300 rounded-lg px-3 text-sm font-bold text-slate-900 outline-none focus:border-brand"
                     />
                   </div>
@@ -277,13 +335,13 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                       <input
                         type="date"
                         min={
-                          selectedPrice ||
-                          new Intl.DateTimeFormat('en-CA', {
-                            timeZone: 'Asia/Ho_Chi_Minh',
-                          }).format(new Date())
+                          selectedPrice && selectedPrice >= todayStr
+                            ? selectedPrice
+                            : todayStr
                         }
                         value={returnDate}
                         onChange={(e) => handleReturnDateChange(e.target.value)}
+                        onBlur={handleReturnDateBlur}
                         className="h-12 w-full border border-slate-300 rounded-lg px-3 text-sm font-bold text-slate-900 outline-none focus:border-brand"
                       />
                     </div>
@@ -332,11 +390,15 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
               {/* Row 1 */}
               <div className="flex flex-col md:flex-row gap-3">
                 <div className="flex-1 space-y-1.5">
-                  <label htmlFor="hero-origin" className="text-[11px] font-extrabold text-slate-500 uppercase flex items-center gap-1.5">
+                  <label
+                    htmlFor="hero-origin"
+                    className="text-[11px] font-extrabold text-slate-500 uppercase flex items-center gap-1.5"
+                  >
                     <MapPin className="w-3.5 h-3.5 text-brand" />
                     Nơi gửi
                   </label>
-                  <LocationPicker id="hero-origin"
+                  <LocationPicker
+                    id="hero-origin"
                     value={selectedProvince}
                     onChange={setSelectedProvince}
                     placeholder="Chọn nơi gửi"
@@ -355,11 +417,15 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                 </div>
 
                 <div className="flex-1 space-y-1.5">
-                  <label htmlFor="hero-destination" className="text-[11px] font-extrabold text-slate-500 uppercase flex items-center gap-1.5">
+                  <label
+                    htmlFor="hero-destination"
+                    className="text-[11px] font-extrabold text-slate-500 uppercase flex items-center gap-1.5"
+                  >
                     <MapPin className="w-3.5 h-3.5 text-rose-500" />
                     Nơi nhận
                   </label>
-                  <LocationPicker id="hero-destination"
+                  <LocationPicker
+                    id="hero-destination"
                     value={selectedDistrict}
                     onChange={setSelectedDistrict}
                     placeholder="Chọn nơi nhận"
@@ -372,8 +438,18 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                   </label>
                   <input
                     type="date"
+                    min={todayStr}
                     value={freightDate}
-                    onChange={(e) => setFreightDate(e.target.value)}
+                    onChange={(e) => handleFreightDateChange(e.target.value)}
+                    onBlur={(e) => {
+                      if (e.target.value && e.target.value < todayStr) {
+                        setReturnDateAlert({
+                          isOpen: true,
+                          title: 'Ngày gửi không được nhỏ hơn ngày hiện tại',
+                        });
+                        setFreightDate(todayStr);
+                      }
+                    }}
                     className="h-12 w-full border border-slate-300 rounded-lg px-3 text-sm font-bold text-slate-900 outline-none focus:border-brand"
                   />
                 </div>
@@ -387,13 +463,27 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                   Hướng dẫn gửi hàng
                 </Link>
                 <div>
-                  <Link
-                    href={`/shipments/new?origin=${selectedProvince}&destination=${selectedDistrict}&date=${freightDate}`}
-                    className="flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-accent px-7 text-sm font-black text-white shadow-sm hover:bg-accent-hover sm:w-[170px]"
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      if (!freightDate || freightDate < todayStr) {
+                        e.preventDefault();
+                        setReturnDateAlert({
+                          isOpen: true,
+                          title: 'Ngày gửi không được nhỏ hơn ngày hiện tại',
+                        });
+                        setFreightDate(todayStr);
+                        return;
+                      }
+                      router.push(
+                        `/shipments/new?origin=${selectedProvince}&destination=${selectedDistrict}&date=${freightDate}`,
+                      );
+                    }}
+                    className="flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-accent px-7 text-sm font-black text-white shadow-sm hover:bg-accent-hover sm:w-[170px] cursor-pointer"
                   >
                     <Search className="w-4 h-4 shrink-0" />
                     Tìm nhà xe
-                  </Link>
+                  </button>
                 </div>
               </div>
             </div>

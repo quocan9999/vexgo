@@ -214,6 +214,12 @@ export class CargoPricingService {
     let hasValuable = Boolean(input.isValuable);
 
     for (const item of input.items) {
+      if (item.serviceType === 'FRAGILE') {
+        hasFragile = true;
+      } else if (item.serviceType === 'VALUABLE') {
+        hasValuable = true;
+      }
+
       if (!Number.isInteger(item.quantity) || item.quantity < 1) {
         throw new BadRequestException({
           error: 'CARGO_QUANTITY_INVALID',

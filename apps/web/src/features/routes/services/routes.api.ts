@@ -1,3 +1,5 @@
+import { fetchWithRetry } from '../../../lib/fetch-with-retry.ts';
+
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
 
@@ -36,14 +38,19 @@ export type RouteListResponse = {
 };
 
 export const routesApi = {
-  async listRoutes(params: RouteListParams = {}, signal?: AbortSignal): Promise<RouteListResponse> {
+  async listRoutes(
+    params: RouteListParams = {},
+    signal?: AbortSignal,
+  ): Promise<RouteListResponse> {
     const query = new URLSearchParams();
     for (const [key, value] of Object.entries(params)) {
       if (value !== undefined && value !== '') query.set(key, String(value));
     }
 
     const suffix = query.size > 0 ? `?${query.toString()}` : '';
-    const response = await fetch(`${API_BASE_URL}/routes${suffix}`, { signal });
+    const response = await fetchWithRetry(`${API_BASE_URL}/routes${suffix}`, {
+      signal,
+    });
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
       throw new Error(error.message || 'Không thể tải danh sách tuyến xe');

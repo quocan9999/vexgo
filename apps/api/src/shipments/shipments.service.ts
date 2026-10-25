@@ -176,24 +176,64 @@ export class ShipmentsService {
       address: point.diemGiaoNhanHang.diaChi,
     });
 
+    const senderPoints = routePoints
+      .filter(
+        (point) =>
+          point.diemGiaoNhanHang.trangThai === 'HOAT_DONG' &&
+          point.diemGiaoNhanHang.nhaXeId === trip.nhaXeId &&
+          (point.vaiTro === 'GUI_HANG' || point.vaiTro === 'CA_HAI'),
+      )
+      .map(toOption);
+    const receiverPoints = routePoints
+      .filter(
+        (point) =>
+          point.diemGiaoNhanHang.trangThai === 'HOAT_DONG' &&
+          point.diemGiaoNhanHang.nhaXeId === trip.nhaXeId &&
+          (point.vaiTro === 'NHAN_HANG' || point.vaiTro === 'CA_HAI'),
+      )
+      .map(toOption);
+
+    let rates: Array<{
+      senderPointId: number;
+      receiverPointId: number;
+      categoryId: number;
+      minWeight: number;
+      maxWeight: number | null;
+      fee: number;
+    }> = [];
+    if (
+      senderPoints.length > 0 &&
+      receiverPoints.length > 0 &&
+      typeof this.prisma.bangCuocGuiHang?.findMany === 'function'
+    ) {
+      const rawRates =
+        (await this.prisma.bangCuocGuiHang.findMany({
+          where: {
+            diemGuiId: { in: senderPoints.map((p) => p.id) },
+            diemNhanId: { in: receiverPoints.map((p) => p.id) },
+            trangThai: 'HOAT_DONG',
+          },
+          orderBy: [{ khoiLuongTu: 'asc' }, { loaiHangHoaId: 'asc' }],
+        })) ?? [];
+      rates = rawRates.map((r) => ({
+        senderPointId: r.diemGuiId,
+        receiverPointId: r.diemNhanId,
+        categoryId: r.loaiHangHoaId,
+        minWeight: Number(r.khoiLuongTu),
+        maxWeight: r.khoiLuongDen !== null ? Number(r.khoiLuongDen) : null,
+        fee: Number(r.mucCuoc),
+      }));
+    }
+
+    const minFee =
+      rates.length > 0 ? Math.min(...rates.map((r) => r.fee)) : null;
+
     return {
       tripId: trip.chuyenXeId,
-      senderPoints: routePoints
-        .filter(
-          (point) =>
-            point.diemGiaoNhanHang.trangThai === 'HOAT_DONG' &&
-            point.diemGiaoNhanHang.nhaXeId === trip.nhaXeId &&
-            (point.vaiTro === 'GUI_HANG' || point.vaiTro === 'CA_HAI'),
-        )
-        .map(toOption),
-      receiverPoints: routePoints
-        .filter(
-          (point) =>
-            point.diemGiaoNhanHang.trangThai === 'HOAT_DONG' &&
-            point.diemGiaoNhanHang.nhaXeId === trip.nhaXeId &&
-            (point.vaiTro === 'NHAN_HANG' || point.vaiTro === 'CA_HAI'),
-        )
-        .map(toOption),
+      senderPoints,
+      receiverPoints,
+      rates,
+      minFee,
     };
   }
 
@@ -263,8 +303,12 @@ export class ShipmentsService {
         {
           senderPointId: dto.senderPointId,
           receiverPointId: dto.receiverPointId,
-          isFragile: dto.isFragile,
-          isValuable: dto.isValuable,
+          isFragile:
+            dto.isFragile ??
+            dto.items.some((i) => i.serviceType === 'FRAGILE'),
+          isValuable:
+            dto.isValuable ??
+            dto.items.some((i) => i.serviceType === 'VALUABLE'),
           items: dto.items.map((item) => ({
             name: item.name,
             quantity: item.quantity,
@@ -274,6 +318,7 @@ export class ShipmentsService {
             length: item.length,
             width: item.width,
             height: item.height,
+            serviceType: item.serviceType,
           })),
         },
       );

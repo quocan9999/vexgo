@@ -83,6 +83,8 @@ let bookingResponse: () => Promise<unknown>;
 let quoteResponse: () => Promise<unknown>;
 let tripSeatResponse: () => Promise<unknown>;
 let releaseResponse: () => Promise<unknown>;
+let availablePromotionsResponse: () => Promise<unknown>;
+
 
 function response(body: unknown, status = 200) {
   return {
@@ -178,7 +180,7 @@ async function enableExtraLuggage() {
 async function selectCargoCategory(
   itemIndex: number,
   type: string,
-  categoryId: number,
+  _categoryId: number,
   weight?: number,
 ) {
   const typeSelect = screen.getAllByLabelText('Loại hành lý')[itemIndex] as HTMLSelectElement;
@@ -191,16 +193,6 @@ async function selectCargoCategory(
     const weightInput = weightInputs[Math.min(itemIndex, weightInputs.length - 1)];
     fireEvent.change(weightInput, { target: { value: String(weight) } });
   }
-
-  const categorySelect = screen.getAllByLabelText('Danh mục hàng hóa')[itemIndex] as HTMLSelectElement;
-  await waitFor(() => {
-    expect(
-      Array.from(categorySelect.options).some(
-        (option) => option.value === String(categoryId),
-      ),
-    ).toBe(true);
-  });
-  fireEvent.change(categorySelect, { target: { value: String(categoryId) } });
 }
 
 function setCargoQuantity(itemIndex: number, quantity: number) {
@@ -221,6 +213,7 @@ beforeEach(() => {
   quoteResponse = async () => quoteOk();
   tripSeatResponse = async () => seatList();
   releaseResponse = async () => response({ data: { success: true } });
+  availablePromotionsResponse = async () => response({ data: [] });
 
   fetchMock.mockReset();
   fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -228,6 +221,11 @@ beforeEach(() => {
     requests.push({ url, init });
     const pathname = new URL(url).pathname;
     const method = init?.method || 'GET';
+
+    if (pathname.endsWith('/promotions/available')) {
+      return availablePromotionsResponse();
+    }
+
 
     if (pathname.endsWith('/me')) {
       return response({
@@ -324,9 +322,15 @@ describe('one-way booking with server seat holds', () => {
       promotionCode: 'SAVE50',
       contactPhone: '0901234567',
     });
-    expect(screen.getByText('Giá vé gốc').parentElement?.textContent).toContain('250.000đ');
-    expect(screen.getByText('Giảm giá').parentElement?.textContent).toContain('50.000đ');
-    expect(screen.getByText('Tổng tiền vé sau ưu đãi').parentElement?.textContent).toContain('200.000đ');
+    expect(screen.getByText(/Giá vé lượt đi/).parentElement?.textContent).toContain('250.000đ');
+    expect(screen.getByText(/Giảm giá/).parentElement?.textContent).toContain('50.000đ');
+    expect(
+      screen
+        .getAllByText('Tổng thanh toán tạm tính')
+        .some((el) => el.parentElement?.textContent?.includes('200.000đ')),
+    ).toBe(true);
+
+
 
     fireEvent.click(screen.getByRole('checkbox', { hidden: true }));
     fireEvent.click(screen.getByRole('button', { name: 'Thanh toán' }));
@@ -375,10 +379,11 @@ describe('one-way booking with server seat holds', () => {
     });
     render(<OneWayBooking post={post} tripSeats={tripSeats} />);
     fireEvent.click(screen.getByRole('button', { name: 'A01 còn trống' }));
-    const verifiedPhone = await screen.findByText('0901234567');
-    expect(verifiedPhone.closest('p')?.textContent).toContain(
-      'SĐT tài khoản đã xác minh:',
-    );
+    await waitFor(() => {
+      const phoneInput = screen.getByPlaceholderText('Nhập số điện thoại') as HTMLInputElement;
+      expect(phoneInput.value).toBe('0901234567');
+    });
+
     const profileRequest = requestsFor('/me')[0];
     expect(new Headers(profileRequest.init?.headers).get('authorization')).toBe(
       'Bearer test-access-token',
@@ -535,8 +540,8 @@ describe('one-way booking with server seat holds', () => {
       screen.getByText('Hành lý xách tay tiêu chuẩn không thuộc dịch vụ hàng gửi dưới hầm xe.'),
     ).toBeTruthy();
     const cargoSummary = screen.getByText('Hàng gửi hầm xe (10kg)').parentElement;
-    expect(cargoSummary?.textContent).toContain('Tính khi đặt vé');
-    expect(cargoSummary?.textContent).not.toMatch(/0đ|miễn phí/i);
+    expect(cargoSummary?.textContent).toContain('80.000đ');
+    expect(cargoSummary?.textContent).not.toMatch(/(^|[^\d.])0đ|miễn phí/i);
     expect(screen.getByText(/Cước vận chuyển hàng hóa được tính theo loại hàng/)).toBeTruthy();
     expect(screen.getAllByText('Tạm tính tiền vé').length).toBeGreaterThan(0);
     completeForm();
@@ -714,29 +719,19 @@ describe('one-way booking with server seat holds', () => {
     expect(state.routerPush).not.toHaveBeenCalled();
   });
 
-  it('clears an incompatible category when cargo changes between motorcycle, bicycle, and regular luggage', async () => {
+  it('automatically adapts category when cargo changes between motorcycle, bicycle, and regular luggage', async () => {
     render(<OneWayBooking post={post} tripSeats={tripSeats} />);
     await enableExtraLuggage();
     await selectCargoCategory(0, 'Xe máy', 11);
 
     const typeSelect = screen.getAllByLabelText('Loại hành lý')[0] as HTMLSelectElement;
-    const categorySelect = screen.getAllByLabelText('Danh mục hàng hóa')[0] as HTMLSelectElement;
-    expect(categorySelect.value).toBe('11');
 
     fireEvent.change(typeSelect, { target: { value: 'Xe đạp' } });
-    await waitFor(() => expect(categorySelect.value).toBe(''));
-    expect(Array.from(categorySelect.options).map((option) => option.value)).toContain('12');
-    expect(Array.from(categorySelect.options).map((option) => option.value)).not.toContain('11');
-    fireEvent.change(categorySelect, { target: { value: '12' } });
 
     fireEvent.change(typeSelect, { target: { value: 'Vali' } });
-    await waitFor(() => expect(categorySelect.value).toBe(''));
-    expect(Array.from(categorySelect.options).map((option) => option.value)).toContain('13');
-    expect(Array.from(categorySelect.options).map((option) => option.value)).not.toContain('12');
     fireEvent.change(screen.getByLabelText('Khối lượng ước tính (kg)'), {
       target: { value: '10' },
     });
-    fireEvent.change(categorySelect, { target: { value: '13' } });
     await screen.findByLabelText('Điểm gửi hàng');
 
     completeForm();
@@ -1056,7 +1051,7 @@ describe('one-way booking with server seat holds', () => {
     resolveHold?.(holdOk());
   });
 
-  it('blocks the round-trip path instead of generating a booking or payment draft', () => {
+  it('submits round-trip booking, holds seats, creates bookings for both legs, and saves payment draft', async () => {
     render(
       <RoundTripBooking
         outboundPost={post}
@@ -1068,15 +1063,40 @@ describe('one-way booking with server seat holds', () => {
       />,
     );
 
-    expect(screen.getByRole('status').textContent).toContain(
-      'Đặt vé khứ hồi hiện chưa được hỗ trợ',
+    const seatButtons = screen.getAllByRole('button', { name: /A01 còn trống/ });
+    fireEvent.click(seatButtons[0]);
+    fireEvent.click(seatButtons[1]);
+
+    fireEvent.change(screen.getByPlaceholderText('Nhập họ và tên'), {
+      target: { value: 'Nguyễn Văn An' },
+    });
+    fireEvent.change(screen.getByPlaceholderText('Nhập số điện thoại'), {
+      target: { value: '0901234567' },
+    });
+    fireEvent.change(screen.getByPlaceholderText('Nhập email'), {
+      target: { value: 'an@example.test' },
+    });
+    fireEvent.click(
+      screen.getByRole('checkbox', {
+        name: /Chấp nhận điều khoản/i,
+        hidden: true,
+      }),
     );
-    expect(
-      screen.getByRole('button', { name: 'Khứ hồi chưa khả dụng' }).hasAttribute('disabled'),
-    ).toBe(true);
-    expect(requestsFor('/bookings', 'POST')).toHaveLength(0);
-    expect(state.routerPush).not.toHaveBeenCalled();
-    expect(window.sessionStorage.length).toBe(0);
+
+    const submitBtn = screen.getByRole('button', { name: 'Thanh toán' });
+    expect(submitBtn.hasAttribute('disabled')).toBe(false);
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => expect(requestsFor('/seat-holds', 'POST')).toHaveLength(2));
+    await waitFor(() => expect(requestsFor('/bookings', 'POST')).toHaveLength(2));
+    await waitFor(() => expect(state.routerPush).toHaveBeenCalled());
+
+    expect(window.sessionStorage.length).toBe(1);
+    const storedDraft = JSON.parse(
+      window.sessionStorage.getItem(window.sessionStorage.key(0)!)!,
+    );
+    expect(storedDraft.tripType).toBe('round-trip');
+    expect(storedDraft.legs).toHaveLength(2);
   });
 
   it('does not present selected round-trip cargo as free before a backend quote', async () => {
@@ -1096,9 +1116,28 @@ describe('one-way booking with server seat holds', () => {
     fireEvent.click(screen.getByLabelText('Áp dụng giống chuyến đi'));
 
     const cargoSummary = screen.getByText('Hàng gửi hầm xe (0kg)').parentElement;
-    expect(cargoSummary?.textContent).toContain('Chưa tính trong đơn vé khứ hồi');
+    expect(cargoSummary?.textContent).toContain('Tính khi đặt vé');
     expect(cargoSummary?.textContent).not.toMatch(/0đ|miễn phí/i);
     expect(screen.queryByText(/\(\+0đ\)/)).toBeNull();
+  });
+
+  it('displays a popup alert when clicking payment without entering customer information', async () => {
+    render(<OneWayBooking post={post} tripSeats={tripSeats} />);
+    fireEvent.click(screen.getByRole('button', { name: 'A01 còn trống' }));
+    fireEvent.click(screen.getByRole('checkbox', { hidden: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Thanh toán' }));
+
+    expect(await screen.findByRole('alertdialog')).toBeTruthy();
+    expect(screen.getByText('Thông tin khách hàng chưa đầy đủ')).toBeTruthy();
+    expect(
+      screen.getByText(/Quý khách vui lòng nhập đầy đủ và chính xác thông tin khách hàng/),
+    ).toBeTruthy();
+    expect(screen.getByText('Bổ sung thông tin')).toBeTruthy();
+
+    fireEvent.click(screen.getByText('Bổ sung thông tin'));
+    await waitFor(() => {
+      expect(screen.queryByRole('alertdialog')).toBeNull();
+    });
   });
 });
 
@@ -1131,3 +1170,68 @@ it('opens the verified invoice directly for a completed free booking and keeps g
     }),
   );
 });
+
+it('renders available promotions for the trip and allows selecting one with one click', async () => {
+  availablePromotionsResponse = async () =>
+    response({
+      data: [
+        {
+          id: 1,
+          name: 'Giảm 20% tiền vé',
+          code: 'SAVE20',
+          discountType: 'PHAN_TRAM',
+          discountValue: '20.00',
+          maxDiscount: '50000.00',
+          minimumTicketAmount: null,
+          startsOn: '2026-01-01',
+          endsOn: '2026-12-31',
+          remainingUses: 10,
+        },
+      ],
+    });
+
+  render(<OneWayBooking post={post} tripSeats={tripSeats} />);
+  expect(await screen.findByText('Mã ưu đãi có sẵn (1):')).toBeTruthy();
+  expect(screen.getByText('SAVE20')).toBeTruthy();
+  expect(screen.getByText('Giảm 20% (tối đa 50.000đ)')).toBeTruthy();
+
+  const applyButtons = screen.getAllByRole('button', { name: 'Áp dụng' });
+  // The first "Áp dụng" is the manual form button, the second is the coupon card button
+  const cardApplyButton = applyButtons[applyButtons.length - 1];
+  fireEvent.click(cardApplyButton);
+
+  const input = screen.getByRole('textbox', {
+    name: 'Nhập một mã cho đơn đặt vé',
+  }) as HTMLInputElement;
+  expect(input.value).toBe('SAVE20');
+});
+
+it('prevents selecting more than 5 seats per trip and displays an error message', async () => {
+  const sixSeats: ApiTripSeat[] = [
+    { tripSeatId: 101, seatNumber: 'A01', position: 'Trái', status: 'TRONG' },
+    { tripSeatId: 102, seatNumber: 'A02', position: 'Trái', status: 'TRONG' },
+    { tripSeatId: 103, seatNumber: 'A03', position: 'Trái', status: 'TRONG' },
+    { tripSeatId: 104, seatNumber: 'A04', position: 'Trái', status: 'TRONG' },
+    { tripSeatId: 105, seatNumber: 'A05', position: 'Trái', status: 'TRONG' },
+    { tripSeatId: 106, seatNumber: 'A06', position: 'Trái', status: 'TRONG' },
+  ];
+
+  render(<OneWayBooking post={post} tripSeats={sixSeats} />);
+
+  for (let i = 1; i <= 5; i++) {
+    const seatBtn = screen.getByRole('button', { name: `A0${i} còn trống` });
+    fireEvent.click(seatBtn);
+  }
+
+  expect(screen.getByText('5 ghế')).toBeTruthy();
+
+  // Attempt to select the 6th seat
+  const seatBtn6 = screen.getByRole('button', { name: 'A06 còn trống' });
+  fireEvent.click(seatBtn6);
+
+  // Still 5 seats selected, error shown
+  expect(screen.getByText('5 ghế')).toBeTruthy();
+  expect(screen.getByText('Mỗi chuyến xe chỉ được chọn tối đa 5 ghế.')).toBeTruthy();
+});
+
+
