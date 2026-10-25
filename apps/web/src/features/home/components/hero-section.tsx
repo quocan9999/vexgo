@@ -77,21 +77,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
   );
 
   const handleDepartureDateChange = (newDate: string) => {
-    if (newDate && newDate < todayStr) {
-      setReturnDateAlert({
-        isOpen: true,
-        title: 'Ngày đi không được nhỏ hơn ngày hiện tại',
-      });
-      setSelectedPrice(todayStr);
-      if (tripType === 'round-trip' && returnDate && returnDate < todayStr) {
-        setReturnDate(todayStr);
-      }
-      return;
-    }
     setSelectedPrice(newDate);
-    if (tripType === 'round-trip' && returnDate && newDate > returnDate) {
-      setReturnDate(newDate);
-    }
   };
 
   const handleDepartureDateBlur = (e: React.FocusEvent<HTMLInputElement>) => {
@@ -106,24 +92,6 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
   };
 
   const handleReturnDateChange = (newDate: string) => {
-    const minAllowed =
-      selectedPrice && selectedPrice >= todayStr ? selectedPrice : todayStr;
-    if (newDate && newDate < todayStr) {
-      setReturnDateAlert({
-        isOpen: true,
-        title: 'Ngày về không được nhỏ hơn ngày hiện tại',
-      });
-      setReturnDate(minAllowed);
-      return;
-    }
-    if (selectedPrice && newDate && selectedPrice > newDate) {
-      setReturnDateAlert({
-        isOpen: true,
-        title: 'Ngày đi không được lớn hơn ngày về',
-      });
-      setReturnDate(minAllowed);
-      return;
-    }
     setReturnDate(newDate);
   };
 
@@ -149,14 +117,6 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
   };
 
   const handleFreightDateChange = (newDate: string) => {
-    if (newDate && newDate < todayStr) {
-      setReturnDateAlert({
-        isOpen: true,
-        title: 'Ngày gửi không được nhỏ hơn ngày hiện tại',
-      });
-      setFreightDate(todayStr);
-      return;
-    }
     setFreightDate(newDate);
   };
 

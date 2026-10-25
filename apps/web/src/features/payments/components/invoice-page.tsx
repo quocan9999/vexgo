@@ -1017,17 +1017,17 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
                   Quét mã để tra cứu trạng thái đơn hàng, mở lại phiếu đặt vé và hóa đơn bất cứ lúc nào.
                 </p>
 
-                {/* Mã đặt chỗ & Copy button */}
+                {/* Mã phiếu đặt vé & Copy button */}
                 {isRoundTrip && invoice.returnBookingCode && invoice.returnBookingCode !== invoice.bookingCode ? (
                   <div className="w-full space-y-2.5 pt-3 border-t border-slate-200/70">
                     <CopyCodeBlock
-                      label="Mã đặt chỗ Lượt đi"
+                      label="Mã phiếu đặt vé Lượt đi"
                       code={invoice.bookingCode}
                       copiedCode={copiedCode}
                       onCopy={handleCopyCode}
                     />
                     <CopyCodeBlock
-                      label="Mã đặt chỗ Lượt về"
+                      label="Mã phiếu đặt vé Lượt về"
                       code={invoice.returnBookingCode}
                       copiedCode={copiedCode}
                       onCopy={handleCopyCode}
@@ -1036,7 +1036,7 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
                 ) : (
                   <div className="w-full pt-3 border-t border-slate-200/70">
                     <CopyCodeBlock
-                      label="Mã đặt chỗ"
+                      label="Mã phiếu đặt vé"
                       code={invoice.bookingCode}
                       copiedCode={copiedCode}
                       onCopy={handleCopyCode}

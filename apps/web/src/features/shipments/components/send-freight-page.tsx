@@ -1059,14 +1059,7 @@ function SendFreightContent() {
                           type="date"
                           min={todayStr}
                           value={date}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            if (val && val < todayStr) {
-                              setDate(todayStr);
-                            } else {
-                              setDate(val);
-                            }
-                          }}
+                          onChange={(e) => setDate(e.target.value)}
                           onBlur={(e) => {
                             if (e.target.value && e.target.value < todayStr) {
                               setDate(todayStr);
