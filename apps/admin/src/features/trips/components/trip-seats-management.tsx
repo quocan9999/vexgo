@@ -48,6 +48,36 @@ const tripSeatStatusPresentation = {
   }
 >;
 
+const tripSeatMapStatusPresentation = {
+  TRONG: {
+    label: 'Trống',
+    icon: CheckCircle2,
+    className: 'border-primary/40 bg-primary/5 text-primary',
+    badgeVariant: 'outline',
+  },
+  DANG_GIU: {
+    label: 'Đang giữ',
+    icon: Clock3,
+    className:
+      'border-amber-200 bg-[var(--admin-status-warning-soft)] text-[var(--admin-status-warning)]',
+    badgeVariant: 'warning',
+  },
+  DA_DAT: {
+    label: 'Đã đặt',
+    icon: Ticket,
+    className: 'border-border bg-muted text-muted-foreground',
+    badgeVariant: 'secondary',
+  },
+} satisfies Record<
+  TripSeatStatus,
+  {
+    label: string;
+    icon: typeof CheckCircle2;
+    className: string;
+    badgeVariant: 'outline' | 'warning' | 'secondary';
+  }
+>;
+
 function formatDate(dateStr: string) {
   const parts = dateStr.split('-');
   if (parts.length === 3) {
@@ -80,6 +110,78 @@ type WorkspaceState =
   | { status: 'success'; trip: Trip; seatsData: TripSeatsResponse };
 
 type TripSeatFilter = '' | TripSeatStatus;
+
+type PositionedTripSeat = {
+  seat: TripSeat;
+  floor: number;
+  x: number;
+  y: number;
+};
+
+type TripSeatFloorMap = {
+  floor: number;
+  seats: PositionedTripSeat[];
+  height: number;
+};
+
+const SEAT_MAP_VERTICAL_UNIT_PX = 0.064;
+const SEAT_MAP_FALLBACK_COLUMNS = [160, 360, 640, 840];
+
+function getTripSeatFloorMaps(seats: TripSeat[]): TripSeatFloorMap[] {
+  const seatsByFloor = new Map<number, TripSeat[]>();
+
+  for (const seat of seats) {
+    const floor = seat.seat.floor === 2 ? 2 : 1;
+    const floorSeats = seatsByFloor.get(floor) ?? [];
+    floorSeats.push(seat);
+    seatsByFloor.set(floor, floorSeats);
+  }
+
+  return [...seatsByFloor.entries()]
+    .sort(([left], [right]) => left - right)
+    .map(([floor, floorSeats]) => {
+      const occupied = floorSeats.flatMap((seat) =>
+        typeof seat.seat.x === 'number' && typeof seat.seat.y === 'number'
+          ? [{ x: seat.seat.x, y: seat.seat.y }]
+          : [],
+      );
+      const positionedSeats = floorSeats.map((seat) => {
+        if (
+          typeof seat.seat.x === 'number' &&
+          typeof seat.seat.y === 'number'
+        ) {
+          return { seat, floor, x: seat.seat.x, y: seat.seat.y };
+        }
+
+        let fallback: { x: number; y: number } | undefined;
+        let row = 0;
+        while (!fallback) {
+          fallback = SEAT_MAP_FALLBACK_COLUMNS.map((x) => ({
+            x,
+            y: 1000 + row * 1000,
+          })).find(
+            (candidate) =>
+              !occupied.some(
+                (other) =>
+                  Math.abs(other.x - candidate.x) < 180 &&
+                  Math.abs(other.y - candidate.y) < 875,
+              ),
+          );
+          row += 1;
+        }
+        occupied.push(fallback);
+        return { seat, floor, ...fallback };
+      });
+
+      const maxY = Math.max(1000, ...positionedSeats.map((seat) => seat.y));
+      const height = Math.max(
+        320,
+        (Math.floor(maxY / 1000) + 2) * 64,
+      );
+
+      return { floor, seats: positionedSeats, height };
+    });
+}
 
 function TripSeatsLoading() {
   return (
@@ -191,7 +293,11 @@ export function TripSeatsManagement({
         <div className="admin-page-content space-y-5">
           <AdminPageHeader
             actions={
-              <Button render={<Link href="/trips" />} variant="secondary">
+              <Button
+                nativeButton={false}
+                render={<Link href="/trips" />}
+                variant="secondary"
+              >
                 <ArrowLeft aria-hidden="true" />
                 Danh sách chuyến
               </Button>
@@ -210,23 +316,17 @@ export function TripSeatsManagement({
     );
   }
 
-  const seatGroups =
+  const seatFloorMaps =
     currentWorkspace.status === 'success'
-      ? currentWorkspace.seatsData.data.reduce<Map<string, TripSeat[]>>(
-          (groups, seat) => {
-            const groupName =
-              seat.seat.position?.trim() || 'Chưa xác định vị trí';
-            const group = groups.get(groupName) ?? [];
-            group.push(seat);
-            groups.set(groupName, group);
-            return groups;
-          },
-          new Map(),
-        )
-      : new Map<string, TripSeat[]>();
+      ? getTripSeatFloorMaps(currentWorkspace.seatsData.data)
+      : [];
 
   const backAction = (
-    <Button render={<Link href="/trips" />} variant="secondary">
+    <Button
+      nativeButton={false}
+      render={<Link href="/trips" />}
+      variant="secondary"
+    >
       <ArrowLeft aria-hidden="true" />
       Danh sách chuyến
     </Button>
@@ -455,10 +555,9 @@ export function TripSeatsManagement({
             <Card className="h-auto gap-0 py-0">
               <CardHeader className="flex flex-col gap-4 border-b p-4 sm:p-5 xl:flex-row xl:items-start xl:justify-between">
                 <div className="min-w-0 space-y-1">
-                  <CardTitle className="text-base">Danh sách ghế chuyến</CardTitle>
+                  <CardTitle className="text-base">Sơ đồ ghế chuyến</CardTitle>
                   <CardDescription className="max-w-3xl leading-relaxed">
-                    Ghế được nhóm theo vị trí đã lưu. Đây là danh sách trạng thái,
-                    không thể hiện sơ đồ bố trí vật lý.
+                    Vị trí ghế theo sơ đồ 2D đã lưu của xe, kèm trạng thái trên chuyến.
                   </CardDescription>
                 </div>
                 <div
@@ -519,55 +618,121 @@ export function TripSeatsManagement({
                   </ResourceState>
                 ) : (
                   <div className="space-y-4">
-                    {[...seatGroups.entries()].map(
-                      ([groupName, seats], groupIndex) => {
-                        const groupId = 'trip-seat-group-' + groupIndex;
+                    <div
+                      aria-label="Chú thích trạng thái ghế"
+                      className="flex flex-wrap gap-2"
+                      role="list"
+                    >
+                      {(Object.keys(
+                        tripSeatMapStatusPresentation,
+                      ) as TripSeatStatus[]).map((status) => {
+                        const presentation =
+                          tripSeatMapStatusPresentation[status];
+                        const StatusIcon = presentation.icon;
+                        return (
+                          <Badge
+                            data-status={status}
+                            key={status}
+                            role="listitem"
+                            variant={presentation.badgeVariant}
+                          >
+                            <StatusIcon aria-hidden="true" />
+                            {presentation.label}
+                          </Badge>
+                        );
+                      })}
+                    </div>
+
+                    <div className="grid gap-4 xl:grid-cols-2">
+                      {seatFloorMaps.map(({ floor, seats, height }) => {
+                        const floorLabel =
+                          floor === 2 ? 'Tầng trên' : 'Tầng dưới';
+                        const headingId = `trip-seat-floor-${floor}`;
+
                         return (
                           <section
-                            aria-labelledby={groupId}
-                            className="overflow-hidden rounded-lg border"
-                            key={groupName}
+                            aria-labelledby={headingId}
+                            className="min-w-0 space-y-2"
+                            key={floor}
                           >
-                            <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-muted/40 px-4 py-3">
+                            <div className="flex items-center justify-between gap-3">
                               <h3
-                                className="m-0 break-words text-sm font-semibold text-foreground"
-                                id={groupId}
+                                className="m-0 text-sm font-semibold text-foreground"
+                                id={headingId}
                               >
-                                {groupName}
+                                {floorLabel}
                               </h3>
                               <Badge variant="secondary">
                                 {formatCount(seats.length)} ghế
                               </Badge>
                             </div>
-                            <div className="grid gap-3 p-3 sm:grid-cols-2 sm:p-4 xl:grid-cols-3">
-                              {seats.map((seat) => (
-                                <Card
-                                  className="h-auto gap-0 py-0"
-                                  data-seat-code={seat.seat.code}
-                                  data-status={seat.status}
-                                  key={seat.tripSeatId}
+
+                            <div className="overflow-x-auto rounded-xl border bg-muted/30 p-2 sm:p-3">
+                              <div className="mx-auto min-w-[340px] max-w-[460px]">
+                                <div className="grid h-11 grid-cols-3 items-center rounded-t-xl border-x border-t bg-background px-3 text-[11px] text-muted-foreground">
+                                  <Badge
+                                    className="justify-self-start"
+                                    variant="outline"
+                                  >
+                                    <BusFront aria-hidden="true" />
+                                    Tài xế
+                                  </Badge>
+                                  <span className="justify-self-center font-medium tracking-wide">
+                                    ĐẦU XE
+                                  </span>
+                                  <span className="justify-self-end whitespace-nowrap">
+                                    Cửa lên
+                                  </span>
+                                </div>
+                                <div
+                                  aria-label={`Sơ đồ ghế ${floorLabel.toLowerCase()}`}
+                                  className="relative overflow-hidden rounded-b-xl border-x border-b bg-background"
+                                  role="list"
+                                  style={{ height }}
                                 >
-                                  <CardContent className="flex min-w-0 items-center justify-between gap-3 p-3">
-                                    <span className="flex min-w-0 items-center gap-3">
-                                      <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground">
+                                  {seats.map(({ seat, x, y }) => {
+                                    const presentation =
+                                      tripSeatMapStatusPresentation[seat.status];
+                                    const StatusIcon = presentation.icon;
+                                    const accessibleLabel = `${seat.seat.code}, ${floorLabel.toLowerCase()}, ${presentation.label.toLowerCase()}`;
+
+                                    return (
+                                      <div
+                                        aria-label={accessibleLabel}
+                                        className={`absolute z-10 flex h-[54px] w-[62px] -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center gap-0.5 rounded-xl border shadow-sm ${presentation.className}`}
+                                        data-seat-code={seat.seat.code}
+                                        data-status={seat.status}
+                                        key={seat.tripSeatId}
+                                        role="listitem"
+                                        style={{
+                                          left: `${x / 10}%`,
+                                          top: `${y * SEAT_MAP_VERTICAL_UNIT_PX}px`,
+                                        }}
+                                        title={accessibleLabel}
+                                      >
+                                        <span className="absolute -top-1 -right-1 grid size-4 place-items-center rounded-full border bg-background">
+                                          <StatusIcon
+                                            aria-hidden="true"
+                                            className="size-2.5"
+                                          />
+                                        </span>
                                         <Armchair
                                           aria-hidden="true"
-                                          size={17}
+                                          className="size-[17px]"
                                         />
-                                      </span>
-                                      <span className="break-all font-mono text-sm font-semibold text-foreground">
-                                        {seat.seat.code}
-                                      </span>
-                                    </span>
-                                    <TripSeatStatusBadge status={seat.status} />
-                                  </CardContent>
-                                </Card>
-                              ))}
+                                        <span className="max-w-full truncate px-1 font-mono text-[10px] font-semibold leading-none">
+                                          {seat.seat.code}
+                                        </span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
                             </div>
                           </section>
                         );
-                      },
-                    )}
+                      })}
+                    </div>
                   </div>
                 )}
               </CardContent>

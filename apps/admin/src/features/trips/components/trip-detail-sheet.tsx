@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { LoaderCircle } from 'lucide-react';
+import { LoaderCircle, Trash2 } from 'lucide-react';
 import {
   ResourceSheet,
   ResourceConfirmation,
@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import { Button, buttonVariants } from '@/components/ui/action-button';
 import {
   cancelTrip,
+  deleteTrip,
   getTripById,
   isTripNotFoundError,
   TripApiError,
@@ -87,6 +88,7 @@ export function TripDetailSheet({
   onClose,
   onNotFound,
   onUpdated,
+  onDeleted,
 }: {
   tripId: number;
   initialTrip?: Trip;
@@ -97,11 +99,13 @@ export function TripDetailSheet({
   onClose: () => void;
   onNotFound?: () => void;
   onUpdated?: (trip: Trip, options?: { silent?: boolean }) => void;
+  onDeleted: () => void;
 }) {
   const { can } = useAdminPermissions();
   const canRead = can('trip:read');
   const canUpdate = can('trip:update');
   const canCancel = can('trip:cancel');
+  const canDelete = can('trip:delete');
   const [detail, setDetail] = useState<DetailState>(
     initialTrip
       ? { status: 'success', trip: initialTrip }
@@ -111,6 +115,7 @@ export function TripDetailSheet({
   const [editOpen, setEditOpen] = useState(false);
   const statusPending = useRef(false);
   const cancelPending = useRef(false);
+  const deletePending = useRef(false);
 
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [statusTarget, setStatusTarget] = useState<'HOAN_THANH' | null>(null);
@@ -118,6 +123,8 @@ export function TripDetailSheet({
 
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [cancelSubmitting, setCancelSubmitting] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteSubmitting, setDeleteSubmitting] = useState(false);
 
   function openStatusDialog(target: 'HOAN_THANH') {
     setStatusTarget(target);
@@ -192,6 +199,29 @@ export function TripDetailSheet({
     } finally {
       cancelPending.current = false;
       setCancelSubmitting(false);
+    }
+  }
+
+  async function handleConfirmDelete() {
+    if (deletePending.current) return;
+    deletePending.current = true;
+    setDeleteSubmitting(true);
+    try {
+      const deleted = await deleteTrip(tripId);
+      setDeleteDialogOpen(false);
+      toast.success(`Đã xóa chuyến ${deleted.code}.`);
+      onDeleted();
+    } catch (err: unknown) {
+      if (isTripNotFoundError(err)) {
+        onNotFound?.();
+      } else {
+        toast.error(
+          err instanceof Error ? err.message : 'Không thể xóa chuyến xe.',
+        );
+      }
+    } finally {
+      deletePending.current = false;
+      setDeleteSubmitting(false);
     }
   }
 
@@ -449,6 +479,18 @@ export function TripDetailSheet({
                   Hủy chuyến
                 </Button>
               )}
+              {canDelete &&
+                (detail.trip.status === 'CHUA_KHOI_HANH' ||
+                  detail.trip.status === 'DA_HUY') && (
+                  <Button
+                    onClick={() => setDeleteDialogOpen(true)}
+                    type="button"
+                    variant="destructive"
+                  >
+                    <Trash2 aria-hidden="true" size={15} />
+                    Xóa chuyến
+                  </Button>
+                )}
             </div>
           )}
         </div>
@@ -501,6 +543,25 @@ export function TripDetailSheet({
               <LoaderCircle aria-hidden className="motion-safe:animate-spin" />
             )}
             {cancelSubmitting ? 'Đang hủy…' : 'Hủy chuyến'}
+          </Button>
+        </ResourceConfirmation>
+      )}
+      {deleteDialogOpen && detail.status === 'success' && (
+        <ResourceConfirmation
+          title={`Xóa chuyến ${detail.trip.code}?`}
+          description="Chỉ chuyến chưa khởi hành hoặc đã hủy và chưa từng phát sinh vé, vận đơn hay đánh giá mới xóa được; giữ chỗ còn hiệu lực cũng sẽ chặn thao tác. Ghế chuyến và giữ chỗ đã hết hạn sẽ bị xóa cùng chuyến. Thao tác này không thể hoàn tác."
+          busy={deleteSubmitting}
+          onClose={() => setDeleteDialogOpen(false)}
+        >
+          <Button
+            variant="destructive"
+            disabled={deleteSubmitting}
+            onClick={handleConfirmDelete}
+          >
+            {deleteSubmitting && (
+              <LoaderCircle aria-hidden className="motion-safe:animate-spin" />
+            )}
+            {deleteSubmitting ? 'Đang xóa…' : 'Xóa chuyến'}
           </Button>
         </ResourceConfirmation>
       )}

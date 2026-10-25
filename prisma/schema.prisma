@@ -110,12 +110,16 @@ model Ghe {
   soGhe        String        @db.VarChar(10)
   viTri        String?       @db.VarChar(50)
   xeId         Int           @db.Int
+  tang         Int           @default(1) @db.Int
+  toaDoX       Int?          @db.Int
+  toaDoY       Int?          @db.Int
   createdAt    DateTime      @default(now()) @db.DateTime(0)
   updatedAt    DateTime      @default(now()) @updatedAt @db.DateTime(0)
   xe           Xe            @relation(fields: [xeId], references: [xeId], onDelete: Restrict, onUpdate: Restrict)
   gheChuyenXes GheChuyenXe[]
 
   @@unique([xeId, soGhe], map: "Ghe_index_1")
+  @@unique([xeId, tang, toaDoX, toaDoY], map: "Ghe_xeId_tang_toaDoX_toaDoY_key")
 }
 
 model TuyenXe {
@@ -168,6 +172,9 @@ model GheChuyenXe {
   trangThai     String   @db.VarChar(30)
   chuyenXeId    Int      @db.Int
   gheId         Int      @db.Int
+  tang          Int?     @db.Int
+  toaDoX        Int?     @db.Int
+  toaDoY        Int?     @db.Int
   giuChoId      Int?     @db.Int
   createdAt     DateTime @default(now()) @db.DateTime(0)
   updatedAt     DateTime @default(now()) @updatedAt @db.DateTime(0)

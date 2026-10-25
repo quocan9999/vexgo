@@ -156,14 +156,14 @@ Status: **MIGRATING — user approved the presentation on 24/10/2026; responsive
 
 ## Trip seat workspace — 24/10/2026
 
-Status: **MIGRATING — user approved the presentation on 24/10/2026; responsive and keyboard review pending**.
+Status: **MIGRATING — 2D floor map implemented; responsive and keyboard review pending**.
 
-- The /trips/[tripId]/seats page now composes the shared Admin page header, Button, Badge, Card, Skeleton and ResourceState. It presents trip context, four seat-count metrics, backend status filters and the read-only grouped inventory in a responsive layout.
+- The /trips/[tripId]/seats page composes the shared Admin page header, Button, Badge, Card, Skeleton and ResourceState. It presents trip context, four seat-count metrics, backend status filters and a read-only 2D map grouped by floor in a responsive layout.
 - Existing getTripById/getTripSeats calls, trip:read permission, status query, response counts, retry behavior and seat status mapping are preserved. No trip or seat mutation action was added.
-- Grouping uses only the stored seat position. Copy identifies this as a grouped list, not a physical layout; no row or column coordinates are inferred. Date-only display uses DD-MM-YYYY while the API contract remains unchanged.
+- Seat positions use the stored floor/x/y coordinates returned by the trip seat inventory API. Legacy seats missing coordinates receive deterministic display-only positions; no server data is changed. The map includes explicit status labels and icons so state is not conveyed by color alone. Date-only display uses DD-MM-YYYY while the API contract remains unchanged.
 - Removed the seat-workspace CSS rules and import. Retained the shared trip-seat summary styles because trip-detail-sheet.tsx still consumes them.
-- GitNexus impact was exact LOW for TripSeatsManagement and TripSeatStatusBadge; callers are the trip seat page and its existing unit test. The Admin server remains stopped and was not restarted, so desktop/mobile visual and keyboard review are pending.
-- TypeScript, ESLint, build and git diff --check were skipped per user request. No tests were added or run; integration/E2E/UI/component tests NOT RUN BY REQUEST. No backend, API, DB, env, schema or seed changes. The user approved the presentation on 24/10/2026; responsive and keyboard review remain pending because Admin was stopped. Changes remain uncommitted.
+- GitNexus pre-edit impact was exact LOW for TripSeatsManagement and TripSeatStatusBadge; the direct route consumer is the trip seat page. Desktop/mobile visual and keyboard review remain pending.
+- No tests were added or run. No backend, database, environment, schema or seed changes were needed. The API already provides floor and coordinates in the trip seat inventory response. Changes remain uncommitted.
 
 ## Bus companies — 24/10/2026
 

@@ -1,11 +1,28 @@
 export const VEHICLE_STATUSES = ['HOAT_DONG', 'BAO_TRI'] as const;
 
 export type VehicleStatus = (typeof VEHICLE_STATUSES)[number];
+
+export type VehicleSeatLayoutInput = {
+  seatNumber: string;
+  position: string | null;
+  floor: number;
+  x: number;
+  y: number;
+};
+
+export type VehicleSeatLayoutUpdate = {
+  seatId: number;
+  floor: number;
+  x: number;
+  y: number;
+};
+
 export type CreateVehicleInput = {
   licensePlate: string;
   busCompanyId: number;
   vehicleTypeId: number;
   status: VehicleStatus;
+  seats?: VehicleSeatLayoutInput[];
 };
 
 export type UpdateVehicleInput = Omit<CreateVehicleInput, 'status'>;
@@ -67,6 +84,9 @@ export type VehicleSeat = {
   seatId: number;
   seatNumber: string;
   position: string | null;
+  floor: number;
+  x: number | null;
+  y: number | null;
   vehicleId: number;
   createdAt: string;
   updatedAt: string;
@@ -75,4 +95,7 @@ export type VehicleSeat = {
 export type VehicleSeatInput = {
   seatNumber: string;
   position: string | null;
+  floor?: number;
+  x?: number;
+  y?: number;
 };

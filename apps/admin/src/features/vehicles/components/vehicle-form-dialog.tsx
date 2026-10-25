@@ -27,8 +27,12 @@ import {
 import {
   VEHICLE_STATUSES,
   type VehicleDetail,
+  type VehicleSeatLayoutInput,
   type VehicleStatus,
 } from '../types/vehicle';
+import { SeatLayoutEditor } from './seat-layout-editor';
+import { compactSeatNumbersAfterRemoval } from './seat-layout-utils';
+import type { SeatLayoutItem } from './seat-layout-utils';
 
 type VehicleFormDialogProps = {
   vehicle?: VehicleDetail;
@@ -46,7 +50,7 @@ type FormValues = {
 };
 
 type FormField = keyof FormValues;
-type FieldErrors = Partial<Record<FormField, string>>;
+type FieldErrors = Partial<Record<FormField | 'seats', string>>;
 
 export function VehicleFormDialog({
   vehicle,
@@ -74,6 +78,7 @@ export function VehicleFormDialog({
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [layoutSeats, setLayoutSeats] = useState<SeatLayoutItem[]>([]);
   const optionsReady = Boolean(tenantId) && vehicleTypes.status === 'success';
   const optionErrors = [
     vehicleTypes.status === 'error' ? `Loại xe: ${vehicleTypes.message}` : null,
@@ -107,6 +112,9 @@ export function VehicleFormDialog({
     }
     if (!editing && !VEHICLE_STATUSES.includes(values.status)) {
       errors.status = 'Vui lòng chọn trạng thái xe.';
+    }
+    if (!editing && layoutSeats.length === 0) {
+      errors.seats = 'Vui lòng thêm ít nhất một ghế vào sơ đồ xe.';
     }
 
     return errors;
@@ -144,7 +152,25 @@ export function VehicleFormDialog({
       };
       const savedVehicle = editing
         ? await updateVehicle(vehicle.vehicleId, editableFields)
-        : await createVehicle({ ...editableFields, status: values.status });
+        : await createVehicle({
+            ...editableFields,
+            status: values.status,
+            seats: layoutSeats.map(
+              ({
+                seatNumber,
+                position,
+                floor,
+                x,
+                y,
+              }): VehicleSeatLayoutInput => ({
+                seatNumber,
+                position,
+                floor,
+                x,
+                y,
+              }),
+            ),
+          });
       onSaved(savedVehicle);
     } catch (requestError: unknown) {
       if (
@@ -180,7 +206,7 @@ export function VehicleFormDialog({
       description={
         editing
           ? 'Cập nhật biển số và loại xe.'
-          : 'Nhập thông tin xe mới vào hệ thống.'
+          : 'Nhập thông tin xe và tạo sơ đồ ghế riêng cho phương tiện này.'
       }
       busy={submitting}
       preventDismiss={submitting}
@@ -192,7 +218,11 @@ export function VehicleFormDialog({
         onSubmit={handleSubmit}
         footer={
           <div className="-mx-4 flex flex-wrap justify-end gap-2 border-t bg-card p-4 sm:-mx-6 sm:p-6 shrink-0">
-            <Button disabled={submitting} onClick={closeDialog} variant="outline">
+            <Button
+              disabled={submitting}
+              onClick={closeDialog}
+              variant="outline"
+            >
               Hủy
             </Button>
             <Button
@@ -201,7 +231,10 @@ export function VehicleFormDialog({
               type="submit"
             >
               {submitting && (
-                <LoaderCircle aria-hidden className="motion-safe:animate-spin" />
+                <LoaderCircle
+                  aria-hidden
+                  className="motion-safe:animate-spin"
+                />
               )}
               {submitting ? 'Đang lưu…' : editing ? 'Lưu thay đổi' : 'Tạo xe'}
             </Button>
@@ -333,6 +366,23 @@ export function VehicleFormDialog({
               {fieldErrors.status}
             </FieldError>
           </Field>
+        )}
+        {!editing && (
+          <SeatLayoutEditor
+            canRemoveDraft
+            disabled={submitting}
+            error={fieldErrors.seats}
+            onChange={(nextSeats) => {
+              setLayoutSeats(nextSeats);
+              setFieldErrors((current) => ({ ...current, seats: undefined }));
+            }}
+            onRemoveSeat={(seatNumber) =>
+              setLayoutSeats((current) =>
+                compactSeatNumbersAfterRemoval(current, seatNumber),
+              )
+            }
+            seats={layoutSeats}
+          />
         )}
       </ResourceSheetForm>
     </ResourceSheet>

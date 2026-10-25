@@ -11,6 +11,7 @@ import {
   calculateRoundTripFare,
   getReturnTripLocations,
 } from '../utils/round-trip-booking';
+import { getTripSeatFloorLayouts } from '../utils/seat-layout';
 import { formatTripDateTime } from '../utils/one-way-booking';
 import { validatePassengerInfo } from '../utils/passenger-validation';
 import { FeaturePlaceholderModal } from './feature-placeholder-modal';
@@ -69,6 +70,7 @@ interface SeatButtonProps {
   booked: boolean;
   selected: boolean;
   onToggle: (seat: string) => void;
+  style?: React.CSSProperties;
 }
 
 const SeatButton = ({
@@ -76,6 +78,7 @@ const SeatButton = ({
   booked,
   selected,
   onToggle,
+  style,
 }: SeatButtonProps) => {
   const seatClass = booked
     ? 'fill-slate-200 stroke-slate-300'
@@ -95,7 +98,8 @@ const SeatButton = ({
       aria-label={`${seat}${booked ? ' đã bán' : selected ? ' đang chọn' : ' còn trống'}`}
       aria-pressed={selected}
       onClick={() => onToggle(seat)}
-      className="group relative min-h-11 min-w-11 inline-flex items-center justify-center rounded-md disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+      className="group absolute min-h-11 min-w-11 -translate-x-1/2 -translate-y-1/2 inline-flex items-center justify-center rounded-md disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+      style={style}
     >
       <ChairIcon className={`w-7 h-9 transition-colors ${seatClass}`} />
       <span
@@ -126,74 +130,11 @@ const SeatGrid = ({
   onToggle,
   onVehicleInfoClick,
 }: SeatGridProps) => {
+  const seatFloorLayouts = getTripSeatFloorLayouts(tripSeats);
   const isSleeper =
     vehicleType?.toUpperCase().includes('GIƯỜNG') ||
-    tripSeats.some((s) => s.position?.includes('Tầng'));
-
-  const seatGroups = Object.entries(
-    tripSeats.reduce<Record<string, ApiTripSeat[]>>((groups, seat) => {
-      let label = seat.position?.trim() || 'Sơ đồ ghế';
-      if (isSleeper) {
-        if (
-          seat.seatNumber?.toUpperCase().startsWith('B') ||
-          seat.position?.toLowerCase().includes('trên')
-        ) {
-          label = 'Tầng trên';
-        } else {
-          label = 'Tầng dưới';
-        }
-      }
-      (groups[label] ??= []).push(seat);
-      return groups;
-    }, {}),
-  );
-
-  seatGroups.forEach(([, seats]) => {
-    seats.sort((a, b) => a.seatNumber.localeCompare(b.seatNumber, undefined, { numeric: true }));
-  });
-  seatGroups.sort(([a], [b]) => {
-    if (a.toLowerCase().includes('dưới')) return -1;
-    if (b.toLowerCase().includes('dưới')) return 1;
-    return a.localeCompare(b);
-  });
-
-  const leftSeats: ApiTripSeat[] = [];
-  const rightSeats: ApiTripSeat[] = [];
-  if (!isSleeper) {
-    const unassigned: ApiTripSeat[] = [];
-    tripSeats.forEach((seat) => {
-      const pos = seat.position?.toLowerCase() || '';
-      if (pos.includes('trái')) {
-        leftSeats.push(seat);
-      } else if (pos.includes('phải')) {
-        rightSeats.push(seat);
-      } else {
-        unassigned.push(seat);
-      }
-    });
-
-    if (leftSeats.length === 0 && rightSeats.length === 0) {
-      const sorted = [...tripSeats].sort((a, b) =>
-        a.seatNumber.localeCompare(b.seatNumber, undefined, { numeric: true }),
-      );
-      for (let i = 0; i < sorted.length; i += 4) {
-        if (i < sorted.length) leftSeats.push(sorted[i]);
-        if (i + 1 < sorted.length) leftSeats.push(sorted[i + 1]);
-        if (i + 2 < sorted.length) rightSeats.push(sorted[i + 2]);
-        if (i + 3 < sorted.length) rightSeats.push(sorted[i + 3]);
-      }
-    } else if (unassigned.length > 0) {
-      unassigned.forEach((seat) => {
-        if (leftSeats.length <= rightSeats.length) {
-          leftSeats.push(seat);
-        } else {
-          rightSeats.push(seat);
-        }
-      });
-    }
-    leftSeats.sort((a, b) => a.seatNumber.localeCompare(b.seatNumber, undefined, { numeric: true }));
-    rightSeats.sort((a, b) => a.seatNumber.localeCompare(b.seatNumber, undefined, { numeric: true }));
-  }
+    seatFloorLayouts.some((layout) => layout.floor > 1) ||
+    tripSeats.some((seat) => seat.position?.toLocaleLowerCase('vi-VN').includes('tầng'));
 
   return (
     <div className="min-w-0 flex-1 p-4 md:p-5">
@@ -221,106 +162,48 @@ const SeatGrid = ({
         </button>
       </div>
 
-      {isSleeper ? (
-        /* XE GIƯỜNG NẰM: 2 TẦNG */
-        <div className="grid grid-cols-2 gap-3 sm:gap-4">
-          {seatGroups.map(([label, seats]) => (
-            <div
-              key={label}
-              className="bg-slate-50/80 border border-slate-200 rounded-xl p-3 flex flex-col items-center"
-            >
-              <div className="w-full flex items-center justify-between pb-2 mb-3 border-b border-dashed border-slate-200 px-1">
-                <span className="text-[10px] font-bold text-slate-400">Tài xế</span>
-                <h3 className="text-[11px] font-black text-[#0060c4] uppercase">
-                  {label}
-                </h3>
-                <span className="text-[9px] font-bold text-slate-400 bg-white px-1.5 py-0.5 rounded border border-slate-200">
-                  Cửa lên
-                </span>
-              </div>
-              <div className="grid grid-cols-3 gap-1 sm:gap-2 justify-items-center">
-                {seats.map((seat) => (
-                  <SeatButton
-                    key={seat.tripSeatId}
-                    seat={seat.seatNumber}
-                    booked={seat.status !== 'TRONG'}
-                    selected={selectedSeats.includes(seat.seatNumber)}
-                    onToggle={onToggle}
-                  />
-                ))}
-              </div>
-              <div className="w-full text-center pt-2 mt-3 border-t border-dashed border-slate-200 text-[9px] font-bold text-slate-400 uppercase tracking-widest">
-                Cuối xe
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        /* XE GHẾ NGỒI: 1 TẦNG VỚI LỐI ĐI Ở GIỮA */
-        <div className="bg-slate-50/80 border border-slate-200 rounded-xl p-3.5 max-w-[420px] mx-auto">
-          {/* Đầu xe */}
-          <div className="flex items-center justify-between pb-2 mb-3 border-b border-dashed border-slate-200 px-1">
-            <span className="text-[10px] font-bold text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200">
-              Tài xế
-            </span>
-            <span className="text-[10px] font-bold text-slate-400 uppercase">
-              Đầu xe
-            </span>
-            <span className="text-[10px] font-bold text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200">
-              Cửa lên
-            </span>
-          </div>
-
-          {/* Dãy trái | Lối đi | Dãy phải */}
-          <div className="grid grid-cols-[1fr_36px_1fr] gap-1.5 items-start">
-            <div>
-              <p className="text-[10px] font-black text-center text-slate-600 uppercase mb-2">
-                Dãy trái
-              </p>
-              <div className="grid grid-cols-2 gap-1.5 justify-items-center">
-                {leftSeats.map((seat) => (
-                  <SeatButton
-                    key={seat.tripSeatId}
-                    seat={seat.seatNumber}
-                    booked={seat.status !== 'TRONG'}
-                    selected={selectedSeats.includes(seat.seatNumber)}
-                    onToggle={onToggle}
-                  />
-                ))}
-              </div>
-            </div>
-
-            {/* Lối đi */}
-            <div className="h-full min-h-[140px] flex flex-col items-center justify-center py-2 border-x border-dashed border-slate-200 bg-slate-100/50 rounded">
-              <span className="text-[8px] font-black uppercase text-slate-400 tracking-widest [writing-mode:vertical-lr] my-auto">
-                Lối đi
+      <div
+        className={
+          seatFloorLayouts.length > 1
+            ? 'grid grid-cols-2 gap-3 sm:gap-4'
+            : 'mx-auto w-full max-w-[420px]'
+        }
+      >
+        {seatFloorLayouts.map((floorLayout) => (
+          <div
+            key={floorLayout.floor}
+            className={`bg-slate-50/80 border border-slate-200 rounded-xl ${isSleeper ? 'p-3' : 'p-3.5'} flex flex-col items-center`}
+          >
+            <div className="w-full flex items-center justify-between pb-2 mb-3 border-b border-dashed border-slate-200 px-1">
+              <span className="text-[10px] font-bold text-slate-400">Tài xế</span>
+              <h3 className="text-[11px] font-black text-[#0060c4] uppercase">
+                {floorLayout.label}
+              </h3>
+              <span className="text-[9px] font-bold text-slate-400 bg-white px-1.5 py-0.5 rounded border border-slate-200">
+                Cửa lên
               </span>
             </div>
-
-            <div>
-              <p className="text-[10px] font-black text-center text-slate-600 uppercase mb-2">
-                Dãy phải
-              </p>
-              <div className="grid grid-cols-2 gap-1.5 justify-items-center">
-                {rightSeats.map((seat) => (
-                  <SeatButton
-                    key={seat.tripSeatId}
-                    seat={seat.seatNumber}
-                    booked={seat.status !== 'TRONG'}
-                    selected={selectedSeats.includes(seat.seatNumber)}
-                    onToggle={onToggle}
-                  />
-                ))}
-              </div>
+            <div
+              className="relative w-full"
+              style={{ height: `${floorLayout.heightPx}px` }}
+            >
+              {floorLayout.seats.map(({ seat, leftPercent, topPx }) => (
+                <SeatButton
+                  key={seat.tripSeatId}
+                  seat={seat.seatNumber}
+                  booked={seat.status !== 'TRONG'}
+                  selected={selectedSeats.includes(seat.seatNumber)}
+                  onToggle={onToggle}
+                  style={{ left: `${leftPercent}%`, top: `${topPx}px` }}
+                />
+              ))}
+            </div>
+            <div className="w-full text-center pt-2 mt-3 border-t border-dashed border-slate-200 text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+              Cuối xe
             </div>
           </div>
-
-          {/* Cuối xe */}
-          <div className="text-center pt-2 mt-3 border-t border-dashed border-slate-200 text-[9px] font-bold text-slate-400 uppercase tracking-widest">
-            Cuối xe
-          </div>
-        </div>
-      )}
+        ))}
+      </div>
     </div>
   );
 };

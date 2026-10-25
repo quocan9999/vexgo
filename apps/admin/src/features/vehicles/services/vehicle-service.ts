@@ -17,6 +17,7 @@ import type {
   VehicleStatus,
   VehicleSeat,
   VehicleSeatInput,
+  VehicleSeatLayoutUpdate,
 } from '../types/vehicle';
 
 export class VehicleApiError extends Error {
@@ -31,6 +32,10 @@ export class VehicleApiError extends Error {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isSafeInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value);
 }
 
 function isVehicleStatus(value: unknown) {
@@ -160,6 +165,17 @@ export async function updateVehicleStatus(
   return parseVehicleResponse(body);
 }
 
+export async function deleteVehicle(vehicleId: number): Promise<void> {
+  const response = await adminApiFetch(
+    `${getApiBaseUrl()}/api/v1/vehicles/${vehicleId}`,
+    { method: 'DELETE', cache: 'no-store' },
+  );
+  if (!response.ok) {
+    const body: unknown = await response.json().catch(() => null);
+    throw getWriteError(body, response.status, 'xóa');
+  }
+}
+
 export async function getVehicles(
   query: VehicleListQuery,
   signal?: AbortSignal,
@@ -262,12 +278,26 @@ export async function getVehicleTypeFilterOptions(
 }
 
 function isVehicleSeat(value: unknown): value is VehicleSeat {
+  if (!isRecord(value)) return false;
+  const coordinatesAreValid =
+    (isSafeInteger(value.x) && isSafeInteger(value.y)) ||
+    (value.x === null && value.y === null);
+  const xIsValid =
+    value.x === null ||
+    (isSafeInteger(value.x) && value.x >= 110 && value.x <= 890);
+  const yIsValid =
+    value.y === null ||
+    (isSafeInteger(value.y) && value.y >= 1000 && value.y <= 30000);
   return (
-    isRecord(value) &&
-    Number.isSafeInteger(value.seatId) &&
+    isSafeInteger(value.seatId) &&
     typeof value.seatNumber === 'string' &&
     (typeof value.position === 'string' || value.position === null) &&
-    Number.isSafeInteger(value.vehicleId) &&
+    isSafeInteger(value.floor) &&
+    (value.floor === 1 || value.floor === 2) &&
+    coordinatesAreValid &&
+    xIsValid &&
+    yIsValid &&
+    isSafeInteger(value.vehicleId) &&
     typeof value.createdAt === 'string' &&
     typeof value.updatedAt === 'string'
   );
@@ -357,6 +387,36 @@ export async function updateVehicleSeat(
   return parseVehicleSeatResponse(body);
 }
 
+export async function updateVehicleSeatLayout(
+  vehicleId: number,
+  seats: VehicleSeatLayoutUpdate[],
+): Promise<VehicleSeat[]> {
+  const response = await adminApiFetch(
+    `${getApiBaseUrl()}/api/v1/vehicles/${vehicleId}/seats/layout`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ seats }),
+      cache: 'no-store',
+    },
+  );
+  const body: unknown = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw getVehicleSeatWriteError(body, response.status, 'lưu sơ đồ ghế');
+  }
+  if (
+    !isRecord(body) ||
+    !Array.isArray(body.data) ||
+    !body.data.every(isVehicleSeat) ||
+    !isRecord(body.meta) ||
+    !isSafeInteger(body.meta.totalItems) ||
+    body.meta.totalItems !== body.data.length
+  ) {
+    throw new Error('API trả về sơ đồ ghế không hợp lệ.');
+  }
+  return body.data;
+}
+
 export async function deleteVehicleSeat(
   vehicleId: number,
   seatId: number,
@@ -369,4 +429,28 @@ export async function deleteVehicleSeat(
     const body: unknown = await response.json().catch(() => null);
     throw getVehicleSeatWriteError(body, response.status, 'xóa');
   }
+}
+
+export async function deleteVehicleSeatFloor(
+  vehicleId: number,
+  floor: 2,
+): Promise<number> {
+  const response = await adminApiFetch(
+    `${getApiBaseUrl()}/api/v1/vehicles/${vehicleId}/seats/floors/${floor}`,
+    { method: 'DELETE', cache: 'no-store' },
+  );
+  const body: unknown = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw getVehicleSeatWriteError(body, response.status, 'xóa tầng ghế');
+  }
+  if (
+    !isRecord(body) ||
+    !isRecord(body.data) ||
+    body.data.floor !== floor ||
+    !isSafeInteger(body.data.deletedSeats) ||
+    body.data.deletedSeats < 0
+  ) {
+    throw new Error('API trả về kết quả xóa tầng không hợp lệ.');
+  }
+  return body.data.deletedSeats;
 }

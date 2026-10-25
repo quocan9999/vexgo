@@ -21,6 +21,8 @@ import {
   VehicleSeatParamsDto,
 } from './dto/vehicle-seat-params.dto.js';
 import { UpdateVehicleSeatDto } from './dto/update-vehicle-seat.dto.js';
+import { UpdateVehicleSeatLayoutDto } from './dto/vehicle-seat-layout.dto.js';
+import { VehicleSeatFloorParamsDto } from './dto/vehicle-seat-floor-params.dto.js';
 import { VehiclesService } from './vehicles.service.js';
 import { CurrentPrincipal } from '../auth/decorators/current-principal.decorator.js';
 import { RequirePermissions } from '../auth/decorators/require-permissions.decorator.js';
@@ -62,6 +64,16 @@ export class VehiclesController {
     return this.vehiclesService.updateStatus(params.id, body, principal);
   }
 
+  @Delete(':id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @RequirePermissions('vehicle:delete')
+  delete(
+    @Param() params: VehicleIdParamsDto,
+    @CurrentPrincipal() principal: AuthPrincipal,
+  ) {
+    return this.vehiclesService.delete(params.id, principal);
+  }
+
   @Get()
   @RequirePermissions('vehicle:read')
   findAll(
@@ -97,6 +109,34 @@ export class VehiclesController {
     @CurrentPrincipal() principal: AuthPrincipal,
   ) {
     return this.vehiclesService.createSeat(params.vehicleId, body, principal);
+  }
+
+  @Patch(':vehicleId/seats/layout')
+  @RequirePermissions('seat:update')
+  updateSeatLayout(
+    @Param() params: VehicleSeatCollectionParamsDto,
+    @Body() body: UpdateVehicleSeatLayoutDto,
+    @CurrentPrincipal() principal: AuthPrincipal,
+  ) {
+    return this.vehiclesService.updateSeatLayout(
+      params.vehicleId,
+      body,
+      principal,
+    );
+  }
+
+  @Delete(':vehicleId/seats/floors/:floor')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions('seat:delete')
+  deleteSeatFloor(
+    @Param() params: VehicleSeatFloorParamsDto,
+    @CurrentPrincipal() principal: AuthPrincipal,
+  ) {
+    return this.vehiclesService.deleteSeatFloor(
+      params.vehicleId,
+      params.floor,
+      principal,
+    );
   }
 
   @Patch(':vehicleId/seats/:seatId')
