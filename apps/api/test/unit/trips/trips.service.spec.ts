@@ -105,6 +105,23 @@ afterEach(() => {
 });
 
 describe('TripsService search', () => {
+  it('matches HCM spelling aliases in the correct endpoint without broadening a former province', async () => {
+    const { prisma, service } = createService();
+    prisma.chuyenXe.findMany.mockResolvedValue([]);
+    await service.search({ from: 'Thành phố Hồ Chí Minh', to: 'Bình Dương',
+      page: 1, pageSize: 10, sortBy: 'departureTime', sortDirection: 'asc' });
+    expect(prisma.chuyenXe.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ tuyenXe: { AND: [
+        { OR: [
+          { diemDi: { contains: 'TP.HCM' } },
+          { diemDi: { contains: 'Hồ Chí Minh' } },
+          { diemDi: { contains: 'TP HCM' } },
+        ] },
+        { OR: [{ diemDen: { contains: 'Bình Dương' } }] },
+      ] } }),
+    }));
+  });
+
   it('applies keyword and vehicle filters before pagination', async () => {
     const { prisma, service } = createService();
     prisma.chuyenXe.findMany.mockResolvedValue([]);

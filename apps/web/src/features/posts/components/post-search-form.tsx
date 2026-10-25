@@ -3,6 +3,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { LocationPicker } from '@/features/locations/components/location-picker';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { ArrowRight, ArrowRightLeft, Bus, CalendarDays, MapPin, PackageCheck, Search, Users } from 'lucide-react';
@@ -95,26 +96,11 @@ export const PostSearchForm: React.FC = () => {
             {/* Vùng Điểm đi & Điểm đến */}
             <div className="flex flex-col md:flex-row gap-3 lg:contents">
               <div className="flex-1 space-y-1.5">
-                <label className="text-[11px] font-extrabold text-slate-500 uppercase flex items-center gap-1.5">
+                <label htmlFor="post-search-origin" className="text-[11px] font-extrabold text-slate-500 uppercase flex items-center gap-1.5">
                   <MapPin className="w-3.5 h-3.5 text-brand" />
                   Điểm đi
                 </label>
-                <input
-                  type="text"
-                  value={selectedProvince}
-                  onChange={(e) => setSelectedProvince(e.target.value)}
-                  placeholder="Nhập điểm đi"
-                  list="origin-options-search"
-                  className="h-12 w-full bg-white border border-slate-300 rounded-lg px-3 text-sm font-bold text-slate-900 outline-none focus:border-brand"
-                />
-                <datalist id="origin-options-search">
-                  <option value="TP. Hồ Chí Minh" />
-                  <option value="Hà Nội" />
-                  <option value="Đà Nẵng" />
-                  <option value="Cần Thơ" />
-                  <option value="Lâm Đồng" />
-                  <option value="Vũng Tàu" />
-                </datalist>
+                <LocationPicker id="post-search-origin" value={selectedProvince} onChange={setSelectedProvince} placeholder="Chọn điểm đi" />
               </div>
 
               <div className="hidden md:flex items-end pb-1 lg:shrink-0">
@@ -129,26 +115,11 @@ export const PostSearchForm: React.FC = () => {
               </div>
 
               <div className="flex-1 space-y-1.5">
-                <label className="text-[11px] font-extrabold text-slate-500 uppercase flex items-center gap-1.5">
+                <label htmlFor="post-search-destination" className="text-[11px] font-extrabold text-slate-500 uppercase flex items-center gap-1.5">
                   <MapPin className="w-3.5 h-3.5 text-rose-500" />
                   Điểm đến
                 </label>
-                <input
-                  type="text"
-                  value={selectedDistrict}
-                  onChange={(e) => setSelectedDistrict(e.target.value)}
-                  placeholder="Nhập điểm đến"
-                  list="destination-options-search"
-                  className="h-12 w-full bg-white border border-slate-300 rounded-lg px-3 text-sm font-bold text-slate-900 outline-none focus:border-brand"
-                />
-                <datalist id="destination-options-search">
-                  <option value="Đà Lạt" />
-                  <option value="Nha Trang" />
-                  <option value="Đà Nẵng" />
-                  <option value="Huế" />
-                  <option value="Cần Thơ" />
-                  <option value="Vũng Tàu" />
-                </datalist>
+                <LocationPicker id="post-search-destination" value={selectedDistrict} onChange={setSelectedDistrict} placeholder="Chọn điểm đến" />
               </div>
             </div>
 
@@ -224,18 +195,11 @@ export const PostSearchForm: React.FC = () => {
           {/* Row 1 */}
           <div className="flex flex-col md:flex-row gap-3">
             <div className="flex-1 space-y-1.5">
-              <label className="text-[11px] font-extrabold text-slate-500 uppercase flex items-center gap-1.5">
+              <label htmlFor="post-search-origin" className="text-[11px] font-extrabold text-slate-500 uppercase flex items-center gap-1.5">
                 <MapPin className="w-3.5 h-3.5 text-brand" />
                 Nơi gửi
               </label>
-              <input
-                type="text"
-                value={selectedProvince}
-                onChange={(e) => setSelectedProvince(e.target.value)}
-                placeholder="Nhập điểm đi"
-                list="origin-options"
-                className="h-12 w-full bg-white border border-slate-300 rounded-lg px-3 text-sm font-bold text-slate-900 outline-none focus:border-brand"
-              />
+              <LocationPicker id="post-search-origin" value={selectedProvince} onChange={setSelectedProvince} placeholder="Chọn điểm đi" />
             </div>
 
             <div className="hidden md:flex items-end pb-1 lg:shrink-0">
@@ -250,18 +214,11 @@ export const PostSearchForm: React.FC = () => {
             </div>
 
             <div className="flex-1 space-y-1.5">
-              <label className="text-[11px] font-extrabold text-slate-500 uppercase flex items-center gap-1.5">
+              <label htmlFor="post-search-destination" className="text-[11px] font-extrabold text-slate-500 uppercase flex items-center gap-1.5">
                 <MapPin className="w-3.5 h-3.5 text-rose-500" />
                 Nơi nhận
               </label>
-              <input
-                type="text"
-                value={selectedDistrict}
-                onChange={(e) => setSelectedDistrict(e.target.value)}
-                placeholder="Nhập điểm đến"
-                list="destination-options"
-                className="h-12 w-full bg-white border border-slate-300 rounded-lg px-3 text-sm font-bold text-slate-900 outline-none focus:border-brand"
-              />
+              <LocationPicker id="post-search-destination" value={selectedDistrict} onChange={setSelectedDistrict} placeholder="Chọn điểm đến" />
             </div>
             <div className="flex-1 space-y-1.5">
               <label className="text-[11px] font-extrabold text-slate-500 uppercase flex items-center gap-1.5">

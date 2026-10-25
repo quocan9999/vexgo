@@ -43,7 +43,7 @@ import {
 } from '@/features/booking/services/payment-draft';
 import { useAuthSession } from '@/features/auth/auth-session';
 
-const POPULAR_LOCATIONS = ['TP.HCM', 'Đà Lạt', 'Vũng Tàu', 'Nha Trang'];
+import { LocationPicker } from '@/features/locations/components/location-picker';
 
 function SendFreightContent() {
   const router = useRouter();
@@ -54,9 +54,9 @@ function SendFreightContent() {
   const [activeTab, setActiveTab] = useState<'create' | 'lookup'>('create');
 
   // Tuyến & Chuyến
-  const [origin, setOrigin] = useState<string>('Đà Lạt');
-  const [destination, setDestination] = useState<string>('TP.HCM');
-  const [date, setDate] = useState<string>('2026-10-20');
+  const [origin, setOrigin] = useState<string>('');
+  const [destination, setDestination] = useState<string>('');
+  const [date, setDate] = useState<string>(() => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date()));
   const [trips, setTrips] = useState<ApiTrip[]>([]);
   const [loadingTrips, setLoadingTrips] = useState<boolean>(false);
   const [selectedTripId, setSelectedTripId] = useState<number | null>(null);
@@ -208,8 +208,8 @@ function SendFreightContent() {
   // Khởi tạo params từ URL nếu có
   useEffect(() => {
     if (searchParams) {
-      if (searchParams.get('from')) setOrigin(searchParams.get('from') as string);
-      if (searchParams.get('to')) setDestination(searchParams.get('to') as string);
+      setOrigin(searchParams.get('from') || searchParams.get('origin') || '');
+      setDestination(searchParams.get('to') || searchParams.get('destination') || '');
       if (searchParams.get('date')) setDate(searchParams.get('date') as string);
       if (searchParams.get('tab') === 'lookup') setActiveTab('lookup');
       if (searchParams.get('code')) setLookupCode(searchParams.get('code') as string);
@@ -249,6 +249,10 @@ function SendFreightContent() {
 
     if (origin && destination) {
       fetchTrips();
+    } else {
+      setTrips([]);
+      setSelectedTripId(null);
+      setLoadingTrips(false);
     }
     return () => {
       isCancelled = true;
@@ -701,22 +705,12 @@ function SendFreightContent() {
 
                   <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
                     <div className="md:col-span-5">
-                      <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1.5">
+                      <label htmlFor="shipment-origin" className="block text-[11px] font-bold text-slate-400 uppercase mb-1.5">
                         Điểm đi (Nơi gửi)
                       </label>
                       <div className="relative">
-                        <div className="absolute left-3.5 top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full border-2 border-rose-500"></div>
-                        <select
-                          value={origin}
-                          onChange={(e) => setOrigin(e.target.value)}
-                          className="w-full h-12 pl-9 pr-8 rounded-xl border border-slate-200 hover:border-slate-300 focus:outline-none focus:border-[#EF4444] font-bold text-slate-800 bg-white appearance-none cursor-pointer text-sm"
-                        >
-                          {POPULAR_LOCATIONS.map((loc) => (
-                            <option key={`from-${loc}`} value={loc}>
-                              {loc}
-                            </option>
-                          ))}
-                        </select>
+                        
+                        <LocationPicker id="shipment-origin" value={origin} onChange={setOrigin} placeholder="Chọn nơi gửi" />
                       </div>
                     </div>
 
@@ -732,22 +726,12 @@ function SendFreightContent() {
                     </div>
 
                     <div className="md:col-span-3">
-                      <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1.5">
+                      <label htmlFor="shipment-destination" className="block text-[11px] font-bold text-slate-400 uppercase mb-1.5">
                         Điểm đến (Nơi nhận)
                       </label>
                       <div className="relative">
-                        <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-amber-500" />
-                        <select
-                          value={destination}
-                          onChange={(e) => setDestination(e.target.value)}
-                          className="w-full h-12 pl-9 pr-8 rounded-xl border border-slate-200 hover:border-slate-300 focus:outline-none focus:border-[#EF4444] font-bold text-slate-800 bg-white appearance-none cursor-pointer text-sm"
-                        >
-                          {POPULAR_LOCATIONS.map((loc) => (
-                            <option key={`to-${loc}`} value={loc} disabled={loc === origin}>
-                              {loc}
-                            </option>
-                          ))}
-                        </select>
+                        
+                        <LocationPicker id="shipment-destination" value={destination} onChange={setDestination} placeholder="Chọn nơi nhận" excludeValue={origin} />
                       </div>
                     </div>
 

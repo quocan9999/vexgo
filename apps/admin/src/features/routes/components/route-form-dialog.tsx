@@ -1,6 +1,7 @@
 'use client';
 
 import { ResourceSheetForm } from '@/components/admin/resource-sheet-form';
+import { LocationPicker } from '@/features/locations/components/location-picker';
 
 import { LoaderCircle } from 'lucide-react';
 import { toast } from 'sonner';
@@ -193,25 +194,20 @@ export function RouteFormDialog({
   function textField(
     field: 'origin' | 'destination',
     label: string,
-    maxLength: number,
   ) {
     return (
       <FieldRoot data-invalid={Boolean(fieldErrors[field])}>
         <FieldLabel htmlFor={`${idPrefix}-${field}`}>
           {label} <span aria-hidden>*</span>
         </FieldLabel>
-        <Input
-          aria-describedby={
+        <LocationPicker
+          describedBy={
             fieldErrors[field] ? `${idPrefix}-${field}-error` : undefined
           }
-          aria-invalid={Boolean(fieldErrors[field])}
-          autoComplete="off"
+          invalid={Boolean(fieldErrors[field])}
           disabled={submitting}
           id={`${idPrefix}-${field}`}
-          maxLength={maxLength}
-          onChange={(event) => updateField(field, event.target.value)}
-          required
-          type="text"
+          onChange={(value) => updateField(field, value)}
           value={values[field]}
         />
         <FieldError id={`${idPrefix}-${field}-error`}>
@@ -274,8 +270,8 @@ export function RouteFormDialog({
             busy={submitting}
           />
         )}
-        {textField('origin', 'Điểm đi', 100)}
-        {textField('destination', 'Điểm đến', 100)}
+        {textField('origin', 'Điểm đi')}
+        {textField('destination', 'Điểm đến')}
         <FieldRoot data-invalid={Boolean(fieldErrors.durationMinutes)}>
           <FieldLabel htmlFor={`${idPrefix}-durationMinutes`}>
             Thời gian chạy (phút) <span aria-hidden>*</span>
