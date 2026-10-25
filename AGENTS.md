@@ -101,7 +101,9 @@ Các quy tắc này áp dụng cho toàn repository và bổ sung cho hướng d
 
 ## 8. Ngày giờ và tiền
 
-- API MUST dùng format thống nhất: timestamp theo ISO 8601 có `Z` hoặc offset; ngày không có giờ dùng `YYYY-MM-DD`.
+- API MUST dùng format thống nhất: timestamp theo ISO 8601 có `Z` hoặc offset; ngày không có giờ dùng `DD-MM-YYYY`.
+- Quyết định ngày 23/10/2026: `DD-MM-YYYY` là target cho cả date-only DTO/API và UI. DTO hiện còn nhận `YYYY-MM-DD` là legacy cần migration, không phải lý do đổi lại target. Timestamp ISO 8601 không đổi.
+- Khi migration date-only, MUST chuyển đồng bộ DTO validation/parser, query/body/response, tài liệu contract và các consumer Admin/Customer của endpoint đó. Ghi rõ endpoint nào còn legacy; MUST NOT chỉ đổi UI rồi gửi format mới tới DTO cũ hoặc tự đoán format đầu vào. Native date input và database có thể giữ biểu diễn nội bộ phù hợp, với chuyển đổi tường minh tại boundary. MUST validate ngày lịch thật và so sánh theo giá trị ngày, không sort chuỗi `DD-MM-YYYY`.
 - Backend MUST quyết định timezone và logic thời gian nghiệp vụ theo timezone được cấu hình. Frontend chỉ định dạng dữ liệu nhận được, MUST NOT tự suy diễn timezone để quyết định nghiệp vụ.
 - MUST NOT dùng floating-point cho phép tính tiền nghiệp vụ. Dùng `Decimal` tương ứng MySQL `DECIMAL` hoặc số nguyên theo đơn vị tiền nhỏ nhất; quy tắc làm tròn MUST được xác định thống nhất ở backend.
 
@@ -109,7 +111,7 @@ Các quy tắc này áp dụng cho toàn repository và bổ sung cho hướng d
 
 - Authentication xác định ai đăng nhập; authorization xác định người đó được làm gì. Backend MUST kiểm tra quyền và phạm vi dữ liệu; ẩn nút ở frontend không thay thế kiểm tra quyền.
 - Thiết kế quyền phải hỗ trợ Customer chỉ thao tác dữ liệu của mình, Admin nhà xe chỉ thao tác dữ liệu thuộc nhà xe đó, và Super Admin có phạm vi toàn hệ thống.
-- API chạy local tại `http://localhost:4000`; cấu hình CORS phải cho phép Customer `http://localhost:3000` và Admin `http://localhost:3001`. Dùng env khi phù hợp và MUST NOT hard-code production origin.
+- API chạy local tại `http://localhost:4002`; cấu hình CORS phải cho phép Customer `http://localhost:3004` và Admin `http://localhost:3005`. Dùng env khi phù hợp và MUST NOT hard-code production origin.
 
 ## 10. Phối hợp trong team
 

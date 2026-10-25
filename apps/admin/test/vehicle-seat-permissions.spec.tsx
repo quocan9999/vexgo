@@ -64,7 +64,7 @@ beforeAll(() => {
 
 async function renderSeatWorkspace() {
   render(<VehicleSeatsManagement vehicleId={12} />);
-  await screen.findByRole('heading', { name: 'Ghế gốc của xe' });
+  await screen.findByRole('heading', { name: 'Cấu hình ghế xe' });
 }
 
 describe('Vehicle seat action permissions', () => {
@@ -81,7 +81,7 @@ describe('Vehicle seat action permissions', () => {
   it('renders only actions whose exact seat permission is present', async () => {
     setEmployeeAdminTestSession(['vehicle:read', 'seat:read', 'seat:create', 'seat:update']);
     const { rerender } = render(<VehicleSeatsManagement vehicleId={12} />);
-    await screen.findByRole('heading', { name: 'Ghế gốc của xe' });
+    await screen.findByRole('heading', { name: 'Cấu hình ghế xe' });
 
     expect(screen.getByRole('button', { name: 'Thêm ghế' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Chỉnh sửa ghế A1' })).toBeTruthy();
@@ -97,7 +97,7 @@ describe('Vehicle seat action permissions', () => {
   it('unmounts an open edit form when seat:update is revoked', async () => {
     setEmployeeAdminTestSession(['vehicle:read', 'seat:read', 'seat:update']);
     const { rerender } = render(<VehicleSeatsManagement vehicleId={12} />);
-    await screen.findByRole('heading', { name: 'Ghế gốc của xe' });
+    await screen.findByRole('heading', { name: 'Cấu hình ghế xe' });
 
     fireEvent.click(screen.getByRole('button', { name: 'Chỉnh sửa ghế A1' }));
     expect(await screen.findByRole('dialog', { name: 'Chỉnh sửa ghế' })).toBeTruthy();
@@ -110,14 +110,14 @@ describe('Vehicle seat action permissions', () => {
   it('unmounts an open delete confirmation when seat:delete is revoked', async () => {
     setEmployeeAdminTestSession(['vehicle:read', 'seat:read', 'seat:delete']);
     const { rerender } = render(<VehicleSeatsManagement vehicleId={12} />);
-    await screen.findByRole('heading', { name: 'Ghế gốc của xe' });
+    await screen.findByRole('heading', { name: 'Cấu hình ghế xe' });
 
     fireEvent.click(screen.getByRole('button', { name: 'Xóa ghế A1' }));
-    const confirm = await screen.findByRole('dialog', { name: 'Xóa ghế A1?' });
+    const confirm = await screen.findByRole('alertdialog', { name: 'Xóa ghế A1?' });
     expect(within(confirm).getByRole('button', { name: 'Xóa ghế' })).toBeTruthy();
 
     setEmployeeAdminTestSession(['vehicle:read', 'seat:read']);
     rerender(<VehicleSeatsManagement vehicleId={12} />);
-    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Xóa ghế A1?' })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole('alertdialog', { name: 'Xóa ghế A1?' })).toBeNull());
   });
 });

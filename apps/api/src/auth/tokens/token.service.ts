@@ -1,6 +1,7 @@
 import {
   ForbiddenException,
   Injectable,
+  Optional,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -9,6 +10,7 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import type { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { requireAuthSecret } from '../auth-secret.js';
+import { RealtimeSessionInvalidatorService } from '../realtime-session-invalidator.service.js';
 import type { AuthTokenResponse, AuthUserSummary } from './auth-principal.js';
 
 const DEFAULT_ACCESS_TOKEN_TTL_SECONDS = 900;
@@ -24,6 +26,8 @@ export class TokenService {
     private readonly jwtService: JwtService,
     configService: ConfigService,
     private readonly prisma: PrismaService,
+    @Optional()
+    private readonly sessionInvalidator?: RealtimeSessionInvalidatorService,
   ) {
     this.accessSecret = requireAuthSecret(
       configService.get<string>('JWT_ACCESS_SECRET'),
@@ -52,8 +56,9 @@ export class TokenService {
   async rotateRefreshToken(refreshToken: string): Promise<AuthTokenResponse> {
     const refreshTokenHash = this.hashRefreshToken(refreshToken);
     const now = new Date();
+    let revokedSessionId: string | null = null;
 
-    return this.prisma.$transaction(async (tx) => {
+    const response = await this.prisma.$transaction(async (tx) => {
       const current = await tx.phienDangNhap.findUnique({
         where: { refreshTokenHash },
         include: {
@@ -86,6 +91,7 @@ export class TokenService {
         data: { thuHoiLuc: now },
       });
       if (claimed.count !== 1) this.throwInvalidRefreshToken();
+      revokedSessionId = current.sessionId ?? null;
 
       const issued = await this.issueSession(
         tx,
@@ -97,13 +103,19 @@ export class TokenService {
       });
       return issued.response;
     });
+
+    if (revokedSessionId) {
+      await this.sessionInvalidator?.invalidateSession(revokedSessionId, 'SESSION_REVOKED');
+    }
+
+    return response;
   }
 
   async revokeRefreshToken(refreshToken: string): Promise<void> {
     const refreshTokenHash = this.hashRefreshToken(refreshToken);
     const session = await this.prisma.phienDangNhap.findUnique({
       where: { refreshTokenHash },
-      select: { phienDangNhapId: true, thuHoiLuc: true },
+      select: { phienDangNhapId: true, sessionId: true, thuHoiLuc: true },
     });
     if (!session) this.throwInvalidRefreshToken();
     if (session.thuHoiLuc) return;
@@ -112,6 +124,10 @@ export class TokenService {
       where: { phienDangNhapId: session.phienDangNhapId, thuHoiLuc: null },
       data: { thuHoiLuc: new Date() },
     });
+
+    if (session.sessionId) {
+      await this.sessionInvalidator?.invalidateSession(session.sessionId, 'SESSION_REVOKED');
+    }
   }
 
   private async issueSession(

@@ -108,3 +108,30 @@ DTO promotion list/detail không trả Prisma model thẳng; expose các tên AP
 ### Date-range list filter
 
 `fromDate` và `toDate` là ngày `YYYY-MM-DD` tùy chọn. API lọc các khuyến mãi có thời hạn giao với khoảng đã chọn (bao gồm hai đầu): `denNgay >= fromDate` và `tuNgay <= toDate`. Có thể truyền một đầu khoảng. Ngày không hợp lệ hoặc `fromDate > toDate` trả `400 VALIDATION_ERROR`. Bộ lọc áp dụng cùng tenant/search/status trước count và pagination.
+
+
+## Mở rộng chỉnh sửa nội dung — 2026-10-20
+
+Theo yêu cầu UI mới, bổ sung chỉnh sửa thay cho thao tác xem chi tiết trong danh sách. Phần này mở rộng phạm vi list/create/detail/toggle đã chốt ở baseline; giữ nguyên lịch sử sử dụng; bổ sung đối chiếu báo giá khi tạo booking như mô tả dưới đây.
+
+### Cập nhật nội dung khuyến mãi
+
+`PATCH /api/v1/promotions/:id`
+
+- Authentication thật; yêu cầu tenant role và quyền `promotion:update`.
+- Chỉ cập nhật khuyến mãi thuộc nhà xe của principal; ID không tồn tại hoặc thuộc nhà xe khác trả `404 PROMOTION_NOT_FOUND`.
+- Body gửi đầy đủ các trường bắt buộc giống tạo mới: `name`, `code`, `discountType` (`PHAN_TRAM`/`SO_TIEN`), `discountValue` (chuỗi Decimal), `startsOn`, `endsOn` (`YYYY-MM-DD`), `usageLimit` (số nguyên dương).
+- `maxDiscount` là chuỗi Decimal dương bắt buộc cho phần trăm; bỏ/null khi giảm số tiền cố định. `minimumTicketAmount` là chuỗi Decimal không âm hoặc bỏ/null để xóa điều kiện tối thiểu.
+- Dùng chung validation với tạo mới; mã chuẩn hóa viết hoa và unique trong nhà xe. Mã trùng trả `409 PROMOTION_CODE_EXISTS`.
+- `usageLimit` không được nhỏ hơn số lượt đã dùng; điều kiện được kiểm tra atomic tại UPDATE để bảo vệ khi booking đồng thời sử dụng mã. Vi phạm trả `400 VALIDATION_ERROR` với field `usageLimit`.
+- Không cho sửa `usageCount`, lịch sử sử dụng, nhà xe, phạm vi/hình thức áp dụng hoặc các booking/giá đã chốt. Trạng thái tiếp tục cập nhật qua endpoint `PATCH /api/v1/promotions/:id/status` hiện có.
+- Thành công: `200 { "data": Promotion }`, dùng cùng contract response với tạo mới/chi tiết. Admin dùng lại form drawer và gọi refresh danh sách sau khi lưu.
+
+### Khóa mã và xác nhận lại báo giá — 2026-10-20
+
+- Mã không được đổi sau khi đã phát sinh sử dụng (counter lớn hơn 0 hoặc có ledger). UPDATE kiểm tra đồng thời quota và điều kiện khóa mã, đồng bộ với row lock khi booking tiêu thụ lượt. Nếu mã bị khóa trả `409 PROMOTION_CODE_LOCKED`, kèm `details` cho field `code`.
+- Admin giữ mã ở chế độ chỉ đọc khi đã có lượt dùng. Lỗi validation chỉ hiển thị dưới trường; lỗi kết nối/hệ thống không gắn với field hiển thị một lần ở cuối form.
+- Áp mã ở Customer chỉ là báo giá, không giữ quota. Khi khách bấm Thanh toán để tạo booking, payload gửi thêm `expectedPromotionQuote: { originalTotal, discountAmount, finalTotal }`, cả ba là chuỗi Decimal không âm theo báo giá khách vừa xem. Trường này tùy chọn để tương thích API clients hiện có; Customer Web gửi khi dùng mã.
+- Backend tính lại ưu đãi và đối chiếu ba giá trị trong transaction, sau khi khóa promotion, trước khi tạo đơn/payment. Không dùng số tiền client làm giá thu. Nếu khác trả `409 PROMOTION_QUOTE_CHANGED` và rollback; nếu mã hết lượt/tạm ngưng/hết hạn/không còn hợp lệ, trả lỗi promotion tương ứng.
+- Customer hiển thị lỗi ngay khu vực mã, bỏ trạng thái áp dụng thành công và yêu cầu áp lại hoặc bỏ mã trước khi tiếp tục. Không tự chuyển sang thanh toán với số tiền khác, không tự xóa mã rồi tạo booking.
+- Booking đã tạo hợp lệ giữ số tiền snapshot và payment attempt hiện có trong thời hạn thanh toán hiện tại. Sửa promo không tính lại khoản phải trả của booking cũ; hết hạn thanh toán xử lý theo booking/payment lifecycle hiện có.

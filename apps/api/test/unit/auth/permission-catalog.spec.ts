@@ -13,6 +13,7 @@ describe('Admin permission defaults', () => {
     'promotion:read',
     'promotion:create',
     'promotion:update',
+    'revenue:read',
     'shipment:read',
     'shipment:update',
   ] as const)(
@@ -57,11 +58,15 @@ describe('Admin permission defaults', () => {
       'role:read',
       'permission:assign',
       'customer:read',
+      'booking:read',
+      'revenue:read',
       'promotion:read',
       'promotion:create',
       'promotion:update',
       'shipment:read',
       'shipment:update',
+      'chat:read',
+      'chat:manage',
     ]);
   });
 
@@ -92,7 +97,7 @@ describe('Admin permission defaults', () => {
     ]);
   });
 
-  it('defines unique permissions for the current operational and platform APIs', () => {
+  it('defines unique permissions for tenant and platform APIs', () => {
     expect(permissionKeys).toEqual([
       'vehicle-type:read',
       'vehicle-type:create',
@@ -117,6 +122,8 @@ describe('Admin permission defaults', () => {
       'role:read',
       'permission:assign',
       'customer:read',
+      'booking:read',
+      'revenue:read',
       'promotion:read',
       'promotion:create',
       'promotion:update',
@@ -128,6 +135,8 @@ describe('Admin permission defaults', () => {
       'admin-account:read',
       'admin-account:create',
       'admin-account:update',
+      'chat:read',
+      'chat:manage',
     ]);
     expect(new Set(permissionKeys).size).toBe(permissionKeys.length);
   });
@@ -157,11 +166,15 @@ describe('Admin permission defaults', () => {
       'role:read',
       'permission:assign',
       'customer:read',
+      'booking:read',
+      'revenue:read',
       'promotion:read',
       'promotion:create',
       'promotion:update',
       'shipment:read',
       'shipment:update',
+      'chat:read',
+      'chat:manage',
     ];
     const platformPermissionKeys = [
       'bus-company:read',
@@ -200,12 +213,19 @@ describe('Admin permission defaults', () => {
     ]);
   });
 
-  it('leaves employee and customer roles without default permissions', () => {
+  it('leaves ticket-seller, attendant, sales and customer roles without default permissions', () => {
     expect(ADMIN_ROLE_DEFAULT_PERMISSION_KEYS.NHAN_VIEN_BAN_VE).toEqual([]);
-    expect(ADMIN_ROLE_DEFAULT_PERMISSION_KEYS.NHAN_VIEN_CSKH).toEqual([]);
     expect(ADMIN_ROLE_DEFAULT_PERMISSION_KEYS.NHAN_VIEN_PHU_XE).toEqual([]);
     expect(ADMIN_ROLE_DEFAULT_PERMISSION_KEYS.NHAN_VIEN_KINH_DOANH).toEqual([]);
     expect(ADMIN_ROLE_DEFAULT_PERMISSION_KEYS.KHACH_HANG).toEqual([]);
+  });
+
+  it('assigns customer support and chat capabilities to NHAN_VIEN_CSKH by default', () => {
+    expect(ADMIN_ROLE_DEFAULT_PERMISSION_KEYS.NHAN_VIEN_CSKH).toEqual([
+      'chat:read',
+      'chat:manage',
+      'customer:read',
+    ]);
   });
 
   it('references only permissions defined in the catalog', () => {
@@ -238,6 +258,18 @@ describe('Admin permission defaults', () => {
     expect(isPermissionAllowedForRole('NHA_XE_ADMIN', 'vehicle:read')).toBe(
       true,
     );
+    expect(isPermissionAllowedForRole('NHA_XE_ADMIN', 'booking:read')).toBe(
+      true,
+    );
+    expect(isPermissionAllowedForRole('NHA_XE_ADMIN', 'revenue:read')).toBe(
+      true,
+    );
+    expect(
+      isPermissionAllowedForRole('NHAN_VIEN_DIEU_HANH', 'revenue:read'),
+    ).toBe(true);
+    expect(isPermissionAllowedForRole('SUPER_ADMIN', 'revenue:read')).toBe(
+      false,
+    );
     expect(isPermissionAllowedForRole('NHA_XE_ADMIN', 'role:read')).toBe(true);
     expect(isPermissionAllowedForRole('NHA_XE_ADMIN', 'promotion:read')).toBe(
       true,
@@ -255,6 +287,9 @@ describe('Admin permission defaults', () => {
       isPermissionAllowedForRole('NHA_XE_ADMIN', 'permission:assign'),
     ).toBe(true);
     expect(isPermissionAllowedForRole('SUPER_ADMIN', 'role:read')).toBe(false);
+    expect(isPermissionAllowedForRole('SUPER_ADMIN', 'booking:read')).toBe(
+      false,
+    );
     expect(
       isPermissionAllowedForRole('NHAN_VIEN_CSKH', 'permission:assign'),
     ).toBe(true);

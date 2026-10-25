@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -12,12 +12,8 @@ import {
   Search,
   Users,
 } from 'lucide-react';
-import { routesApi } from '@/features/routes/services/routes.api';
 import { AlertModal } from '@/components/ui/alert-modal';
-import { LocationCombobox } from './location-combobox';
-
-const DEFAULT_ORIGINS = ['TP.HCM', 'Hà Nội', 'Đà Nẵng', 'Cần Thơ', 'Vũng Tàu', 'Đà Lạt'];
-const DEFAULT_DESTINATIONS = ['Đà Lạt', 'Nha Trang', 'Đà Nẵng', 'Huế', 'Cần Thơ', 'Vũng Tàu', 'TP.HCM'];
+import { LocationPicker } from '@/features/locations/components/location-picker';
 
 export interface HeroSectionProps {
   activeSearchTab: 'BUY' | 'RENT';
@@ -66,8 +62,6 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
   const returnDate = controlledReturnDate ?? internalReturnDate;
   const setReturnDate = setControlledReturnDate ?? setInternalReturnDate;
   const [ticketCount, setTicketCount] = useState(1);
-  const [originOptions, setOriginOptions] = useState<string[]>([]);
-  const [destinationOptions, setDestinationOptions] = useState<string[]>([]);
   const router = useRouter();
   const [returnDateAlert, setReturnDateAlert] = useState<{
     isOpen: boolean;
@@ -215,34 +209,6 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
     }
   };
 
-  useEffect(() => {
-    async function fetchRoutes() {
-      try {
-        const { data: routes } = await routesApi.listRoutes({
-          pageSize: 100,
-          status: 'HOAT_DONG',
-        });
-
-        const origins = new Set<string>();
-        const destinations = new Set<string>();
-
-        routes.forEach((route) => {
-          if (route.origin) origins.add(route.origin);
-          if (route.destination) destinations.add(route.destination);
-        });
-
-        setOriginOptions(Array.from(origins));
-        setDestinationOptions(Array.from(destinations));
-      } catch (err) {
-        console.warn(
-          'Failed to fetch routes:',
-          err instanceof Error ? err.message : String(err),
-        );
-      }
-    }
-    fetchRoutes();
-  }, []);
-
   // Freight states
   const [freightDate, setFreightDate] = useState(
     new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(
@@ -255,9 +221,6 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
     setSelectedProvince(selectedDistrict);
     setSelectedDistrict(currentProvince);
   };
-
-  const effectiveOrigins = originOptions.length > 0 ? originOptions : DEFAULT_ORIGINS;
-  const effectiveDestinations = destinationOptions.length > 0 ? destinationOptions : DEFAULT_DESTINATIONS;
 
   return (
     <section className="relative w-full bg-[#F5F5F5] flex flex-col items-center pb-12">
@@ -341,14 +304,17 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                 {/* Vùng Điểm đi & Điểm đến */}
                 <div className="flex flex-col md:flex-row gap-3 lg:contents">
                   <div className="flex-1 space-y-1.5">
-                    <label className="text-[11px] font-extrabold text-slate-500 uppercase flex items-center gap-1.5">
+                    <label
+                      htmlFor="hero-origin"
+                      className="text-[11px] font-extrabold text-slate-500 uppercase flex items-center gap-1.5"
+                    >
                       <MapPin className="w-3.5 h-3.5 text-brand" />
                       Điểm đi
                     </label>
-                    <LocationCombobox
+                    <LocationPicker
+                      id="hero-origin"
                       value={selectedProvince}
                       onChange={setSelectedProvince}
-                      options={effectiveOrigins}
                       placeholder="Chọn điểm đi"
                     />
                   </div>
@@ -365,14 +331,17 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                   </div>
 
                   <div className="flex-1 space-y-1.5">
-                    <label className="text-[11px] font-extrabold text-slate-500 uppercase flex items-center gap-1.5">
+                    <label
+                      htmlFor="hero-destination"
+                      className="text-[11px] font-extrabold text-slate-500 uppercase flex items-center gap-1.5"
+                    >
                       <MapPin className="w-3.5 h-3.5 text-rose-500" />
                       Điểm đến
                     </label>
-                    <LocationCombobox
+                    <LocationPicker
+                      id="hero-destination"
                       value={selectedDistrict}
                       onChange={setSelectedDistrict}
-                      options={effectiveDestinations}
                       placeholder="Chọn điểm đến"
                     />
                   </div>
@@ -389,7 +358,9 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                       type="date"
                       min={todayStr}
                       value={selectedPrice}
-                      onChange={(e) => handleDepartureDateChange(e.target.value)}
+                      onChange={(e) =>
+                        handleDepartureDateChange(e.target.value)
+                      }
                       onBlur={handleDepartureDateBlur}
                       className="h-12 w-full border border-slate-300 rounded-lg px-3 text-sm font-bold text-slate-900 outline-none focus:border-brand"
                     />
@@ -459,14 +430,17 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
               {/* Row 1 */}
               <div className="flex flex-col md:flex-row gap-3">
                 <div className="flex-1 space-y-1.5">
-                  <label className="text-[11px] font-extrabold text-slate-500 uppercase flex items-center gap-1.5">
+                  <label
+                    htmlFor="hero-origin"
+                    className="text-[11px] font-extrabold text-slate-500 uppercase flex items-center gap-1.5"
+                  >
                     <MapPin className="w-3.5 h-3.5 text-brand" />
                     Nơi gửi
                   </label>
-                  <LocationCombobox
+                  <LocationPicker
+                    id="hero-origin"
                     value={selectedProvince}
                     onChange={setSelectedProvince}
-                    options={effectiveOrigins}
                     placeholder="Chọn nơi gửi"
                   />
                 </div>
@@ -483,14 +457,17 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                 </div>
 
                 <div className="flex-1 space-y-1.5">
-                  <label className="text-[11px] font-extrabold text-slate-500 uppercase flex items-center gap-1.5">
+                  <label
+                    htmlFor="hero-destination"
+                    className="text-[11px] font-extrabold text-slate-500 uppercase flex items-center gap-1.5"
+                  >
                     <MapPin className="w-3.5 h-3.5 text-rose-500" />
                     Nơi nhận
                   </label>
-                  <LocationCombobox
+                  <LocationPicker
+                    id="hero-destination"
                     value={selectedDistrict}
                     onChange={setSelectedDistrict}
-                    options={effectiveDestinations}
                     placeholder="Chọn nơi nhận"
                   />
                 </div>

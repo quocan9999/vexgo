@@ -1,0 +1,51 @@
+/* Presentation owned by shared Admin patterns, scoped to migrated consumers. */
+.admin-ui {
+  font-family: var(--font-sans), 'Segoe UI', Arial, sans-serif;
+  font-size: var(--admin-type-body-size);
+  line-height: 1.5;
+}
+
+.admin-ui [data-slot='button'] {
+  cursor: pointer;
+}
+.admin-ui [data-slot='button']:disabled {
+  cursor: not-allowed;
+}
+.admin-ui [data-slot='button'][aria-busy='true'] {
+  cursor: progress;
+}
+.admin-ui [data-slot='input'],
+.admin-ui [data-slot='select-trigger'] {
+  background-color: var(--card);
+}
+.admin-ui [data-slot='sheet-content'] {
+  overflow: hidden;
+}
+.admin-ui [data-slot='table-cell'],
+.admin-ui [data-slot='table-head'] {
+  border-color: var(--border);
+}
+.admin-ui [data-slot='table-cell']:last-child {
+  text-align: right;
+}
+.admin-ui [data-slot='table-head'] {
+  font-weight: 600;
+}
+.admin-ui [data-slot='table-row']:hover {
+  background: var(--accent);
+}
+.admin-ui [data-slot='card'] {
+  border: 1px solid var(--border);
+  box-shadow: 0 2px 5px rgb(21 40 75 / 3%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-ui *,
+  .admin-ui *::before,
+  .admin-ui *::after {
+    animation-duration: 0.01ms;
+    animation-iteration-count: 1;
+    transition-duration: 0.01ms;
+    scroll-behavior: auto;
+  }
+}

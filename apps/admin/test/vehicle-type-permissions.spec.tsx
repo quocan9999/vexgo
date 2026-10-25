@@ -22,9 +22,11 @@ const vehicleType = {
   updatedAt: '2026-09-26T10:00:00.000Z',
 };
 
-vi.mock('lucide-react', () => {
+vi.mock('lucide-react', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('lucide-react')>();
   const Icon = () => null;
   return {
+    ...actual,
     ArrowDown: Icon,
     ArrowUp: Icon,
     ArrowUpDown: Icon,
@@ -113,6 +115,8 @@ describe('Vehicle Type action permissions', () => {
       within(detail).queryByRole('button', { name: 'Chỉnh sửa' }),
     ).toBeNull();
 
+    fireEvent.click(within(detail).getByRole('button', { name: 'Đóng' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     setEmployeeAdminTestSession(['vehicle-type:read', 'vehicle-type:create']);
     rerender(<VehicleTypesManagement />);
     fireEvent.click(screen.getByRole('button', { name: 'Thêm loại xe' }));

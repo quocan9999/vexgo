@@ -5,6 +5,10 @@
 - SePay gửi callback vào `POST /api/v1/payments/sepay-webhook`; controller chuyển raw body, `x-sepay-signature` và `x-sepay-timestamp` cho `PaymentsService`.
 - `PaymentsService.handleSepayWebhook` xác minh HMAC/timestamp, thời điểm `transactionDate` theo giờ Việt Nam, tài khoản nhận, mã đơn khớp chính xác, giao dịch tiền vào, số tiền VND và mã giao dịch duy nhất trước khi settlement.
 - Đơn booking và đơn chỉ có shipment đi qua cùng callback và `confirmPaymentSuccess`; không có writer payment riêng cho shipment.
+- `ThanhToan.thoiGian` là lúc tạo attempt/yêu cầu; `thoiDiemHoanTat` là lúc provider xác nhận giao dịch thành công. SePay dùng `transactionDate` đã xác minh; refund dùng thời điểm server nhận xác nhận `SUCCEEDED`.
+- Chỉ khoản `THANH_TOAN` quyết toán đơn đầu tiên thành công mới có `laQuyetToanHopLe = true`. Khoản đến muộn, giao dịch trùng hoặc khoản cần đối soát có thể giữ `THANH_CONG` để phản ánh provider đã thu tiền nhưng không phải doanh thu hợp lệ; chúng không được gắn cờ này.
+- Migration không suy đoán thời điểm hay eligibility của record cũ: payment hiện hữu giữ `thoiDiemHoanTat = null` và `laQuyetToanHopLe = false` cho tới khi có dữ liệu F12 mới được ghi theo contract này.
+- Refund hiện chỉ được tạo từ hủy vé và có `veId`; `DANG_XU_LY`/`DANG_GUI` chưa phải hoàn thành công. Khi provider xác nhận `SUCCEEDED`, processor ghi `THANH_CONG` cùng `thoiDiemHoanTat`. Hiện chưa có writer hoàn tiền gửi hàng.
 
 ## Tạo payment và khóa dùng chung
 

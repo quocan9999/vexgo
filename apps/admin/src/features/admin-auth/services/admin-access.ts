@@ -33,6 +33,16 @@ export const ADMIN_OPERATION_SECTIONS = [
     readPermission: 'customer:read',
   },
   {
+    section: 'support-chat',
+    href: '/support-chat',
+    readPermission: 'chat:read',
+  },
+  {
+    section: 'booking-management',
+    href: '/booking-management',
+    readPermission: 'booking:read',
+  },
+  {
     section: 'promotions',
     href: '/promotions',
     readPermission: 'promotion:read',
@@ -41,6 +51,11 @@ export const ADMIN_OPERATION_SECTIONS = [
     section: 'shipments',
     href: '/shipments',
     readPermission: 'shipment:read',
+  },
+  {
+    section: 'revenue-reports',
+    href: '/revenue-reports',
+    readPermission: 'revenue:read',
   },
 ] as const;
 
@@ -66,13 +81,17 @@ export type AdminPermission =
   | 'trip:update'
   | 'trip:cancel'
   | 'customer:read'
+  | 'booking:read'
   | 'promotion:read'
   | 'promotion:create'
   | 'promotion:update'
   | 'shipment:read'
   | 'shipment:update'
+  | 'revenue:read'
   | 'role:read'
-  | 'permission:assign';
+  | 'permission:assign'
+  | 'chat:read'
+  | 'chat:manage';
 
 export type PlatformAdminPermission =
   | 'bus-company:read'
@@ -85,9 +104,7 @@ export type PlatformAdminPermission =
 export type AdminOperationSection =
   (typeof ADMIN_OPERATION_SECTIONS)[number]['section'];
 
-export function canManagePlatformRbac(
-  session: AdminSession | null,
-): boolean {
+export function canManagePlatformRbac(session: AdminSession | null): boolean {
   return (
     session !== null &&
     session.roles.length === 1 &&
@@ -104,9 +121,7 @@ export function isTenantRbacPath(pathname: string): boolean {
   return matchesPath(pathname, '/tenant-rbac');
 }
 
-export function canReadTenantRbac(
-  session: AdminSession | null,
-): boolean {
+export function canReadTenantRbac(session: AdminSession | null): boolean {
   return (
     session !== null &&
     getAdminAccessScope(session) === 'tenant' &&
@@ -115,9 +130,7 @@ export function canReadTenantRbac(
   );
 }
 
-export function canWriteTenantRbac(
-  session: AdminSession | null,
-): boolean {
+export function canWriteTenantRbac(session: AdminSession | null): boolean {
   return (
     session !== null &&
     canReadTenantRbac(session) &&
@@ -173,6 +186,27 @@ export function hasAllAdminPermissions(
   );
 }
 
+export function canAccessSupportChat(session: AdminSession | null): boolean {
+  return (
+    session !== null &&
+    getAdminAccessScope(session) === 'tenant' &&
+    (session.permissions.includes('chat:read') ||
+      session.permissions.includes('chat:manage'))
+  );
+}
+
+export function canAccessTenantPath(
+  session: AdminSession | null,
+  pathname: string,
+): boolean {
+  if (matchesPath(pathname, '/support-chat')) {
+    return canAccessSupportChat(session);
+  }
+  const requiredPermissions = getRequiredAdminPermissions(pathname);
+  if (requiredPermissions === null) return false;
+  return hasAllAdminPermissions(session, requiredPermissions);
+}
+
 function matchesPath(pathname: string, basePath: string): boolean {
   return pathname === basePath || pathname.startsWith(`${basePath}/`);
 }
@@ -197,8 +231,11 @@ export function getRequiredAdminPermissions(
   if (matchesPath(pathname, '/fare-prices')) return ['fare-price:read'];
   if (matchesPath(pathname, '/trips')) return ['trip:read'];
   if (matchesPath(pathname, '/customers')) return ['customer:read'];
+  if (matchesPath(pathname, '/support-chat')) return ['chat:read'];
+  if (matchesPath(pathname, '/booking-management')) return ['booking:read'];
   if (matchesPath(pathname, '/promotions')) return ['promotion:read'];
   if (matchesPath(pathname, '/shipments')) return ['shipment:read'];
+  if (matchesPath(pathname, '/revenue-reports')) return ['revenue:read'];
   return null;
 }
 
@@ -208,8 +245,11 @@ export function getFirstAccessibleAdminPath(
   if (getAdminAccessScope(session) !== 'tenant') return null;
 
   return (
-    ADMIN_OPERATION_SECTIONS.find((item) =>
-      hasAdminPermission(session, item.readPermission),
-    )?.href ?? (canReadTenantRbac(session) ? '/tenant-rbac' : null)
+    ADMIN_OPERATION_SECTIONS.find((item) => {
+      if (item.section === 'support-chat') {
+        return canAccessSupportChat(session);
+      }
+      return hasAdminPermission(session, item.readPermission);
+    })?.href ?? (canReadTenantRbac(session) ? '/tenant-rbac' : null)
   );
 }

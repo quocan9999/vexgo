@@ -195,6 +195,87 @@ function isPromotionCodeUniqueViolation(error: unknown): boolean {
   );
 }
 
+function promotionWriteData(input: CreatePromotionDto) {
+  const code = input.code.trim().toUpperCase();
+  const discountValue = new Prisma.Decimal(input.discountValue);
+  const maxDiscount =
+    input.maxDiscount == null ? null : new Prisma.Decimal(input.maxDiscount);
+  const minimumTicketAmount =
+    input.minimumTicketAmount == null
+      ? null
+      : new Prisma.Decimal(input.minimumTicketAmount);
+
+  if (!isDateOnly(input.startsOn)) {
+    validationError(
+      'startsOn',
+      'Ngày bắt đầu phải có dạng YYYY-MM-DD hợp lệ.',
+    );
+  }
+  if (!isDateOnly(input.endsOn)) {
+    validationError(
+      'endsOn',
+      'Ngày kết thúc phải có dạng YYYY-MM-DD hợp lệ.',
+    );
+  }
+  if (input.endsOn < input.startsOn) {
+    validationError(
+      'endsOn',
+      'Ngày kết thúc phải bằng hoặc sau ngày bắt đầu.',
+    );
+  }
+  if (!discountValue.isFinite() || !discountValue.gt(0)) {
+    validationError(
+      'discountValue',
+      'Mức giảm phải là số tiền dương hợp lệ.',
+    );
+  }
+  if (input.discountType === 'PHAN_TRAM') {
+    if (discountValue.gt(100)) {
+      validationError(
+        'discountValue',
+        'Phần trăm giảm không được vượt quá 100.',
+      );
+    }
+    if (!maxDiscount?.isFinite() || !maxDiscount.gt(0)) {
+      validationError(
+        'maxDiscount',
+        'Giảm tối đa bắt buộc và phải lớn hơn 0.',
+      );
+    }
+  } else if (input.discountType === 'SO_TIEN') {
+    if (input.maxDiscount != null) {
+      validationError(
+        'maxDiscount',
+        'Không áp dụng giảm tối đa cho loại giảm số tiền.',
+      );
+    }
+  }
+  if (
+    minimumTicketAmount &&
+    (!minimumTicketAmount.isFinite() || minimumTicketAmount.lt(0))
+  ) {
+    validationError(
+      'minimumTicketAmount',
+      'Giá trị tối thiểu không được âm.',
+    );
+  }
+  if (!Number.isSafeInteger(input.usageLimit) || input.usageLimit <= 0) {
+    validationError('usageLimit', 'Số lượt tối đa phải là số nguyên dương.');
+  }
+
+  return {
+    tenChuongTrinh: input.name.trim(),
+    maKhuyenMai: code,
+    loaiGiamGia: input.discountType,
+    giaTriGiam: discountValue,
+    giamToiDa: input.discountType === 'PHAN_TRAM' ? maxDiscount : null,
+    giaTriDonToiThieu: minimumTicketAmount,
+    tuNgay: dateOnlyToUtc(input.startsOn),
+    denNgay: dateOnlyToUtc(input.endsOn),
+    soLuotToiDa: input.usageLimit,
+  };
+}
+
 @Injectable()
 export class PromotionsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -279,72 +360,8 @@ export class PromotionsService {
     principal: AuthPrincipal,
   ): Promise<PromotionResponse> {
     const nhaXeId = requireTenantPrincipal(principal);
-    const code = input.code.trim().toUpperCase();
-    const discountValue = new Prisma.Decimal(input.discountValue);
-    const maxDiscount =
-      input.maxDiscount == null ? null : new Prisma.Decimal(input.maxDiscount);
-    const minimumTicketAmount =
-      input.minimumTicketAmount == null
-        ? null
-        : new Prisma.Decimal(input.minimumTicketAmount);
-
-    if (!isDateOnly(input.startsOn)) {
-      validationError(
-        'startsOn',
-        'Ngày bắt đầu phải có dạng YYYY-MM-DD hợp lệ.',
-      );
-    }
-    if (!isDateOnly(input.endsOn)) {
-      validationError(
-        'endsOn',
-        'Ngày kết thúc phải có dạng YYYY-MM-DD hợp lệ.',
-      );
-    }
-    if (input.endsOn < input.startsOn) {
-      validationError(
-        'endsOn',
-        'Ngày kết thúc phải bằng hoặc sau ngày bắt đầu.',
-      );
-    }
-    if (!discountValue.isFinite() || !discountValue.gt(0)) {
-      validationError(
-        'discountValue',
-        'Mức giảm phải là số tiền dương hợp lệ.',
-      );
-    }
-    if (input.discountType === 'PHAN_TRAM') {
-      if (discountValue.gt(100)) {
-        validationError(
-          'discountValue',
-          'Phần trăm giảm không được vượt quá 100.',
-        );
-      }
-      if (!maxDiscount?.isFinite() || !maxDiscount.gt(0)) {
-        validationError(
-          'maxDiscount',
-          'Giảm tối đa bắt buộc và phải lớn hơn 0.',
-        );
-      }
-    } else if (input.discountType === 'SO_TIEN') {
-      if (input.maxDiscount != null) {
-        validationError(
-          'maxDiscount',
-          'Không áp dụng giảm tối đa cho loại giảm số tiền.',
-        );
-      }
-    }
-    if (
-      minimumTicketAmount &&
-      (!minimumTicketAmount.isFinite() || minimumTicketAmount.lt(0))
-    ) {
-      validationError(
-        'minimumTicketAmount',
-        'Giá trị tối thiểu không được âm.',
-      );
-    }
-    if (!Number.isSafeInteger(input.usageLimit) || input.usageLimit <= 0) {
-      validationError('usageLimit', 'Số lượt tối đa phải là số nguyên dương.');
-    }
+    const data = promotionWriteData(input);
+    const code = data.maKhuyenMai;
 
     const duplicate = await this.prisma.khuyenMai.findFirst({
       where: { nhaXeId, maKhuyenMai: code },
@@ -355,20 +372,12 @@ export class PromotionsService {
     try {
       const promotion = await this.prisma.khuyenMai.create({
         data: {
-          tenChuongTrinh: input.name.trim(),
-          maKhuyenMai: code,
+          ...data,
           phamViApDung: 'DAT_VE',
           hinhThucApDung: 'NHAP_MA',
-          loaiGiamGia: input.discountType,
-          giaTriGiam: discountValue,
-          giamToiDa: input.discountType === 'PHAN_TRAM' ? maxDiscount : null,
-          giaTriDonToiThieu: minimumTicketAmount,
           dieuKienApDung: null,
-          tuNgay: dateOnlyToUtc(input.startsOn),
-          denNgay: dateOnlyToUtc(input.endsOn),
           trangThai: 'HOAT_DONG',
           nhaXeId,
-          soLuotToiDa: input.usageLimit,
           soLuotDaSuDung: 0,
         },
       });
@@ -376,6 +385,53 @@ export class PromotionsService {
     } catch (error) {
       if (isPromotionCodeUniqueViolation(error))
         throw this.promotionCodeExists();
+      throw error;
+    }
+  }
+
+  async update(
+    id: number,
+    input: CreatePromotionDto,
+    principal: AuthPrincipal,
+  ): Promise<PromotionResponse> {
+    const nhaXeId = requireTenantPrincipal(principal);
+    const data = promotionWriteData(input);
+    try {
+      // The quota predicate is checked atomically with the update, including
+      // concurrent bookings incrementing the same promotion's usage counter.
+      const result = await this.prisma.khuyenMai.updateMany({
+        where: {
+          khuyenMaiId: id,
+          nhaXeId,
+          soLuotDaSuDung: { lte: input.usageLimit },
+          OR: [
+            { maKhuyenMai: data.maKhuyenMai },
+            { soLuotDaSuDung: 0, suDungKhuyenMais: { none: {} } },
+          ],
+        },
+        data,
+      });
+      const promotion = await this.prisma.khuyenMai.findFirst({
+        where: { khuyenMaiId: id, nhaXeId },
+      });
+      if (!promotion) throw this.promotionNotFound();
+      if (result.count !== 1) {
+        if (promotion.maKhuyenMai.trim().toUpperCase() !== data.maKhuyenMai) {
+          const message = 'Không thể đổi mã khuyến mãi đã phát sinh sử dụng.';
+          throw new ConflictException({
+            error: 'PROMOTION_CODE_LOCKED',
+            message,
+            details: [{ field: 'code', message }],
+          });
+        }
+        validationError(
+          'usageLimit',
+          'Số lượt tối đa không được nhỏ hơn số lượt đã sử dụng. Vui lòng tải lại dữ liệu.',
+        );
+      }
+      return toPromotionResponse(promotion);
+    } catch (error) {
+      if (isPromotionCodeUniqueViolation(error)) throw this.promotionCodeExists();
       throw error;
     }
   }

@@ -76,6 +76,9 @@ jobs:
         env:
           BOOKING_TICKET_STATUS_HISTORY_HARNESS_ADMIN_DATABASE_URL: mysql://root:ci-root-password@127.0.0.1:3306/vexgo_ci
 
+      - name: Prepare CI shadow database
+        run: node prisma/tests/prepare-ci-shadow-database.mjs
+
       - name: Promotion upgrade from seeded develop database
         run: node prisma/tests/promotion-migration-upgrade.mjs
         env:
@@ -100,6 +103,16 @@ jobs:
         env:
           MIGRATION_URL: mysql://root:ci-root-password@127.0.0.1:3306/vexgo_booking_ticket_status_history_ci_test
 
+      - name: Prepare Feature 07 integration database
+        run: node prisma/tests/prepare-feature07-test-database.mjs
+        env:
+          FEATURE07_ADMIN_DATABASE_URL: mysql://root:ci-root-password@127.0.0.1:3306/vexgo_ci
+
+      - name: Apply migrations to Feature 07 test database
+        run: npm exec -- prisma migrate deploy
+        env:
+          MIGRATION_URL: mysql://root:ci-root-password@127.0.0.1:3306/vexgo_feature07_ci_test
+
       - name: Shipment status cleanup regression (repeat on one isolated DB)
         run: node prisma/tests/run-shipment-integration-isolated.mjs --repeat=2 test/integration/shipments/shipments-status.spec.ts
 
@@ -108,9 +121,11 @@ jobs:
         env:
           SHIPMENT_TEST_DATABASE_URL: mysql://root:ci-root-password@127.0.0.1:3306/vexgo_ci
 
-      - name: Clear booking/ticket history test credentials
+      - name: Clear integration test credentials
         if: always()
-        run: echo "BOOKING_TICKET_STATUS_HISTORY_TEST_DATABASE_URL=" >> "$GITHUB_ENV"
+        run: |
+          echo "BOOKING_TICKET_STATUS_HISTORY_TEST_DATABASE_URL=" >> "$GITHUB_ENV"
+          echo "FEATURE07_TEST_DATABASE_URL=" >> "$GITHUB_ENV"
 
       - name: API e2e tests
         run: npm run test:e2e --workspace=@vexgo/api

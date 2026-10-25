@@ -1,11 +1,27 @@
 'use client';
 
-import { LoaderCircle, X } from 'lucide-react';
+import { LoaderCircle } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { AdminConfirmDialog } from '@/components/admin/admin-confirm-dialog';
-import { AdminDetailSheet } from '@/components/admin/admin-detail-sheet';
-import { AdminStatusBadge } from '@/components/admin/admin-status-badge';
-import { Button } from '@/components/ui/button';
+import {
+  ResourceConfirmation,
+  ResourceSheet,
+  ResourceStatusBadge,
+  ResourceState,
+  ResourceNotice,
+} from '@/components/admin/resource-ui';
+import { Button } from '@/components/ui/action-button';
+import { Card } from '@/components/ui/card';
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from '@/components/ui/table';
+import { Field, FieldLabel } from '@/components/ui/field';
+import { Textarea } from '@/components/ui/textarea';
+import { toast } from 'sonner';
 import { useAdminPermissions } from '@/features/admin-auth/hooks/use-admin-permissions';
 import {
   getShipmentById,
@@ -65,9 +81,14 @@ export function formatDateTime(isoString?: string | null): string {
     const date = new Date(isoString);
     if (Number.isNaN(date.getTime())) return '—';
     return new Intl.DateTimeFormat('vi-VN', {
-      dateStyle: 'medium',
-      timeStyle: 'short',
-    }).format(date);
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+      .format(date)
+      .replaceAll('/', '-');
   } catch {
     return '—';
   }
@@ -96,7 +117,9 @@ export type StatusActionConfig = {
   confirmLabel: string;
 };
 
-export function getAvailableStatusActions(status: ShipmentStatus): StatusActionConfig[] {
+export function getAvailableStatusActions(
+  status: ShipmentStatus,
+): StatusActionConfig[] {
   switch (status) {
     case 'MOI_TAO':
       return [
@@ -141,7 +164,7 @@ export function ShipmentDetails({
   onClose,
   onStatusUpdated,
 }: ShipmentDetailsProps) {
-  const dialogRef = useRef<HTMLDialogElement>(null);
+  const submittingRef = useRef(false);
   const [loadedDetail, setLoadedDetail] = useState<{
     requestKey: string;
     state: DetailState;
@@ -156,11 +179,12 @@ export function ShipmentDetails({
   const { can } = useAdminPermissions();
   const canUpdate = can('shipment:update');
 
-  const [activeAction, setActiveAction] = useState<StatusActionConfig | null>(null);
+  const [activeAction, setActiveAction] = useState<StatusActionConfig | null>(
+    null,
+  );
   const [note, setNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [actionLocked, setActionLocked] = useState(false);
-  const [statusError, setStatusError] = useState<string | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -201,27 +225,28 @@ export function ShipmentDetails({
     setActiveAction(action);
     setNote('');
     setActionLocked(false);
-    setStatusError(null);
   }
 
   function handleCloseDialog() {
     if (!submitting) {
       setActiveAction(null);
       setActionLocked(false);
-      setStatusError(null);
     }
   }
 
   async function handleConfirmStatus() {
-    if (!activeAction || submitting) return;
+    if (!activeAction || submittingRef.current || actionLocked) return;
+    submittingRef.current = true;
     setSubmitting(true);
-    setStatusError(null);
 
     try {
       await updateShipmentStatus(shipmentId, {
         status: activeAction.targetStatus,
         note: note.trim() || undefined,
       });
+      toast.success(
+        `Đã chuyển phiếu gửi sang trạng thái ${SHIPMENT_STATUS_LABELS[activeAction.targetStatus]}.`,
+      );
       setActiveAction(null);
       setNote('');
       setActionLocked(false);
@@ -233,494 +258,473 @@ export function ShipmentDetails({
         setRetryCount((c) => c + 1);
         onStatusUpdated?.();
       }
-      setStatusError(
+      toast.error(
         err instanceof Error
           ? err.message
           : 'Có lỗi xảy ra khi cập nhật trạng thái.',
       );
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   }
 
   return (
     <>
-      <AdminDetailSheet
-        ariaLabelledBy="shipment-detail-title"
-        dialogRef={dialogRef}
+      <ResourceSheet
+        title="Chi tiết phiếu gửi"
+        description="Thông tin giao nhận, cước vận chuyển và lịch sử trạng thái."
+        busy={submitting}
+        preventDismiss={submitting}
         onClose={onClose}
       >
-      <div className="admin-dialog-header">
-        <div className="admin-dialog-header__copy">
-          <p className="eyebrow">PHIẾU GỬI HÀNG</p>
-          <h2 id="shipment-detail-title">Chi tiết phiếu gửi</h2>
-        </div>
-        <button
-          aria-label="Đóng chi tiết phiếu gửi"
-          className="icon-button"
-          onClick={() => dialogRef.current?.close()}
-          type="button"
-        >
-          <X aria-hidden="true" size={19} />
-        </button>
-      </div>
+        {detail.status === 'loading' && (
+          <ResourceState loading>
+            <p>Đang tải thông tin phiếu gửi hàng…</p>
+          </ResourceState>
+        )}
 
-      {detail.status === 'loading' && (
-        <div className="shipments-state-panel" role="status">
-          <p>Đang tải thông tin phiếu gửi hàng…</p>
-        </div>
-      )}
+        {detail.status === 'error' && (
+          <ResourceState error>
+            <p>{detail.message}</p>
+            <Button onClick={retry} type="button" variant="outline">
+              Thử lại
+            </Button>
+          </ResourceState>
+        )}
 
-      {detail.status === 'error' && (
-        <div className="shipments-state-panel" role="alert">
-          <p>{detail.message}</p>
-          <Button onClick={retry} type="button" variant="secondary">
-            Thử lại
-          </Button>
-        </div>
-      )}
-
-      {detail.status === 'success' && (
-        <div className="shipments-detail-content">
-          <div className="shipments-detail-hero">
-            <div>
-              <span className="shipments-waybill-code admin-data-mono">
-                {detail.shipment.waybillCode}
-              </span>
-              <p className="shipments-detail-sent-at">
-                Ngày gửi: {formatDateTime(detail.shipment.sentAt)}
-              </p>
+        {detail.status === 'success' && (
+          <div className="grid min-w-0 gap-6">
+            <div className="flex min-w-0 flex-wrap items-start justify-between gap-3 border-b pb-5 [&>div]:min-w-0">
+              <div>
+                <span className="admin-data-mono break-all text-sm font-semibold">
+                  {detail.shipment.waybillCode}
+                </span>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Ngày gửi: {formatDateTime(detail.shipment.sentAt)}
+                </p>
+              </div>
+              <ResourceStatusBadge
+                tone={getShipmentStatusTone(detail.shipment.status)}
+              >
+                {SHIPMENT_STATUS_LABELS[detail.shipment.status] ??
+                  detail.shipment.status}
+              </ResourceStatusBadge>
             </div>
-            <AdminStatusBadge
-              tone={getShipmentStatusTone(detail.shipment.status)}
-            >
-              {SHIPMENT_STATUS_LABELS[detail.shipment.status] ??
-                detail.shipment.status}
-            </AdminStatusBadge>
-          </div>
 
-          {detail.shipment.note && (
-            <div className="shipments-detail-note">
-              <strong>Ghi chú:</strong> {detail.shipment.note}
-            </div>
-          )}
-
-          {canUpdate && (
-            (() => {
-              const availableActions = getAvailableStatusActions(
-                detail.shipment.status,
-              );
-              if (availableActions.length === 0) return null;
-              const paymentConfirmed =
-                detail.shipment.paymentStatus === 'DA_THANH_TOAN';
-              return (
-                <div className="shipments-detail-actions-panel">
-                  <span className="shipments-detail-actions-label">
-                    Thao tác trạng thái:
-                  </span>
-                  {paymentConfirmed ? (
-                    <div className="admin-detail-sheet__actions">
-                      {availableActions.map((action) => (
-                        <Button
-                          key={action.targetStatus}
-                          disabled={submitting}
-                          onClick={() => handleOpenAction(action)}
-                          type="button"
-                          variant="primary"
-                        >
-                          {action.actionLabel}
-                        </Button>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="shipments-payment-gate" role="status">
-                      Chỉ có thể cập nhật trạng thái vận chuyển sau khi đơn đã
-                      thanh toán.
-                    </p>
-                  )}
-                </div>
-              );
-            })()
-          )}
-
-          {/* Người gửi & Người nhận */}
-          <section
-            className="shipments-detail-section"
-            aria-labelledby="shipment-contacts-heading"
-          >
-            <h3
-              id="shipment-contacts-heading"
-              className="shipments-detail-section-title"
-            >
-              Thông tin giao nhận
-            </h3>
-            <div className="shipments-detail-grid-2">
-              <div className="shipments-detail-card-sub">
-                <h4 className="shipments-detail-sub-title">Người gửi</h4>
-                <dl className="shipments-detail-dl">
-                  <div className="shipments-detail-row">
-                    <dt>Họ và tên</dt>
-                    <dd>{detail.shipment.sender.fullName}</dd>
-                  </div>
-                  <div className="shipments-detail-row">
-                    <dt>Số điện thoại</dt>
-                    <dd className="admin-data-mono">
-                      {detail.shipment.sender.phoneNumber}
-                    </dd>
-                  </div>
-                </dl>
-              </div>
-
-              <div className="shipments-detail-card-sub">
-                <h4 className="shipments-detail-sub-title">Người nhận</h4>
-                <dl className="shipments-detail-dl">
-                  <div className="shipments-detail-row">
-                    <dt>Họ và tên</dt>
-                    <dd>{detail.shipment.receiver.fullName}</dd>
-                  </div>
-                  <div className="shipments-detail-row">
-                    <dt>Số điện thoại</dt>
-                    <dd className="admin-data-mono">
-                      {detail.shipment.receiver.phoneNumber}
-                    </dd>
-                  </div>
-                </dl>
-              </div>
-            </div>
-          </section>
-
-          {/* Lộ trình & Chuyến xe */}
-          <section
-            className="shipments-detail-section"
-            aria-labelledby="shipment-route-heading"
-          >
-            <h3
-              id="shipment-route-heading"
-              className="shipments-detail-section-title"
-            >
-              Chuyến xe & Lộ trình
-            </h3>
-            <dl className="shipments-detail-dl">
-              <div className="shipments-detail-row">
-                <dt>Mã chuyến xe</dt>
-                <dd className="admin-data-mono">
-                  {detail.shipment.trip.code}
-                </dd>
-              </div>
-              <div className="shipments-detail-row">
-                <dt>Khởi hành</dt>
-                <dd>
-                  {detail.shipment.trip.departureTime} ·{' '}
-                  {detail.shipment.trip.departureDate}
-                </dd>
-              </div>
-              <div className="shipments-detail-row">
-                <dt>Điểm gửi (bốc hàng)</dt>
-                <dd>
-                  <strong>{detail.shipment.originPoint.name}</strong>
-                  <br />
-                  <span className="shipments-address-text">
-                    {detail.shipment.originPoint.address}
-                  </span>
-                </dd>
-              </div>
-              <div className="shipments-detail-row">
-                <dt>Điểm nhận (trả hàng)</dt>
-                <dd>
-                  <strong>{detail.shipment.destinationPoint.name}</strong>
-                  <br />
-                  <span className="shipments-address-text">
-                    {detail.shipment.destinationPoint.address}
-                  </span>
-                </dd>
-              </div>
-            </dl>
-          </section>
-
-          {/* Danh sách kiện hàng */}
-          <section
-            className="shipments-detail-section"
-            aria-labelledby="shipment-cargo-heading"
-          >
-            <h3
-              id="shipment-cargo-heading"
-              className="shipments-detail-section-title"
-            >
-              Danh sách kiện hàng ({detail.shipment.cargoItems.length})
-            </h3>
-            <div className="shipments-cargo-list">
-              {detail.shipment.cargoItems.map((item) => (
-                <div key={item.cargoId} className="shipments-cargo-card">
-                  <div className="shipments-cargo-card-header">
-                    <strong>{item.name}</strong>
-                    <span className="shipments-cargo-type">
-                      {item.typeName}
-                    </span>
-                  </div>
-                  <dl className="shipments-cargo-dl">
-                    <div className="shipments-cargo-field">
-                      <dt>Số lượng</dt>
-                      <dd>{item.quantity}</dd>
-                    </div>
-                    <div className="shipments-cargo-field">
-                      <dt>Khối lượng</dt>
-                      <dd>{item.weightKg} kg</dd>
-                    </div>
-                    {item.dimensions && (
-                      <div className="shipments-cargo-field">
-                        <dt>Kích thước (DxRxC)</dt>
-                        <dd>
-                          {item.dimensions.length}×{item.dimensions.width}×
-                          {item.dimensions.height} cm
-                        </dd>
-                      </div>
-                    )}
-                    {item.declaredValue != null && (
-                      <div className="shipments-cargo-field">
-                        <dt>Khai giá</dt>
-                        <dd>{formatCurrency(item.declaredValue)}</dd>
-                      </div>
-                    )}
-                  </dl>
-                  {item.description && (
-                    <p className="shipments-cargo-desc">
-                      <em>Mô tả:</em> {item.description}
-                    </p>
-                  )}
-                </div>
-              ))}
-            </div>
-          </section>
-
-          {/* Chi tiết cước */}
-          <section
-            className="shipments-detail-section"
-            aria-labelledby="shipment-fee-heading"
-          >
-            <h3
-              id="shipment-fee-heading"
-              className="shipments-detail-section-title"
-            >
-              Chi tiết cước vận chuyển
-            </h3>
-
-            {detail.shipment.cargoFeeDetails.length > 0 && (
-              <div className="shipments-fee-table-wrap">
-                <table className="shipments-fee-table">
-                  <thead>
-                    <tr>
-                      <th scope="col">Loại hàng</th>
-                      <th scope="col">Khối lượng tính cước</th>
-                      <th scope="col" className="text-right">
-                        Tiền cước
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {detail.shipment.cargoFeeDetails.map((fee) => (
-                      <tr key={fee.feeDetailId}>
-                        <td>{fee.cargoTypeName}</td>
-                        <td>{fee.chargeableWeightKg} kg</td>
-                        <td className="text-right">
-                          {formatCurrency(fee.fee)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            {detail.shipment.note && (
+              <div className="rounded-lg border bg-muted/40 p-3 text-[13px] break-words">
+                <strong>Ghi chú:</strong> {detail.shipment.note}
               </div>
             )}
 
-            <div className="shipments-fee-summary-card">
-              <dl className="shipments-detail-dl">
-                <div className="shipments-detail-row">
-                  <dt>Cước chính</dt>
-                  <dd>{formatCurrency(detail.shipment.feeSummary.mainFee)}</dd>
+            {canUpdate &&
+              (() => {
+                const availableActions = getAvailableStatusActions(
+                  detail.shipment.status,
+                );
+                if (availableActions.length === 0) return null;
+                const paymentConfirmed =
+                  detail.shipment.paymentStatus === 'DA_THANH_TOAN';
+                return (
+                  <div className="grid gap-3 rounded-lg border bg-muted/30 p-4">
+                    <span className="text-[13px] font-semibold">
+                      Thao tác trạng thái:
+                    </span>
+                    {paymentConfirmed ? (
+                      <div className="flex flex-wrap gap-3">
+                        {availableActions.map((action) => (
+                          <Button
+                            key={action.targetStatus}
+                            disabled={submitting}
+                            onClick={() => handleOpenAction(action)}
+                            type="button"
+                            variant="default"
+                          >
+                            {action.actionLabel}
+                          </Button>
+                        ))}
+                      </div>
+                    ) : (
+                      <p
+                        className="text-xs text-muted-foreground"
+                        role="status"
+                      >
+                        Chỉ có thể cập nhật trạng thái vận chuyển sau khi đơn đã
+                        thanh toán.
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
+
+            {/* Người gửi & Người nhận */}
+            <Card
+              role="region"
+              className="min-w-0 gap-4 p-4"
+              aria-labelledby="shipment-contacts-heading"
+            >
+              <h3
+                id="shipment-contacts-heading"
+                className="text-base font-semibold"
+              >
+                Thông tin giao nhận
+              </h3>
+              <div className="grid min-w-0 gap-5 sm:grid-cols-2">
+                <div className="min-w-0 space-y-3">
+                  <h4 className="text-[13px] font-semibold">Người gửi</h4>
+                  <dl className="grid gap-3 text-[13px]">
+                    <div className="grid min-w-0 gap-1 border-b pb-3 last:border-0 last:pb-0 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:min-w-0 [&_dd]:break-words">
+                      <dt>Họ và tên</dt>
+                      <dd>{detail.shipment.sender.fullName}</dd>
+                    </div>
+                    <div className="grid min-w-0 gap-1 border-b pb-3 last:border-0 last:pb-0 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:min-w-0 [&_dd]:break-words">
+                      <dt>Số điện thoại</dt>
+                      <dd>{detail.shipment.sender.phoneNumber}</dd>
+                    </div>
+                  </dl>
                 </div>
-                {detail.shipment.feeSummary.serviceFee > 0 && (
-                  <div className="shipments-detail-row">
-                    <dt>Phí dịch vụ</dt>
-                    <dd>
-                      {formatCurrency(detail.shipment.feeSummary.serviceFee)}
-                    </dd>
-                  </div>
-                )}
-                {detail.shipment.feeSummary.discountAmount > 0 && (
-                  <div className="shipments-detail-row">
-                    <dt>Giảm giá</dt>
-                    <dd className="shipments-discount-text">
-                      -
-                      {formatCurrency(
-                        detail.shipment.feeSummary.discountAmount,
-                      )}
-                    </dd>
-                  </div>
-                )}
-                <div className="shipments-detail-row shipments-total-fee-row">
-                  <dt>Tổng cước</dt>
-                  <dd className="shipments-total-fee-value">
-                    {formatCurrency(detail.shipment.feeSummary.totalFee)}
+
+                <div className="min-w-0 space-y-3">
+                  <h4 className="text-[13px] font-semibold">Người nhận</h4>
+                  <dl className="grid gap-3 text-[13px]">
+                    <div className="grid min-w-0 gap-1 border-b pb-3 last:border-0 last:pb-0 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:min-w-0 [&_dd]:break-words">
+                      <dt>Họ và tên</dt>
+                      <dd>{detail.shipment.receiver.fullName}</dd>
+                    </div>
+                    <div className="grid min-w-0 gap-1 border-b pb-3 last:border-0 last:pb-0 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:min-w-0 [&_dd]:break-words">
+                      <dt>Số điện thoại</dt>
+                      <dd>{detail.shipment.receiver.phoneNumber}</dd>
+                    </div>
+                  </dl>
+                </div>
+              </div>
+            </Card>
+
+            {/* Lộ trình & Chuyến xe */}
+            <Card
+              role="region"
+              className="min-w-0 gap-4 p-4"
+              aria-labelledby="shipment-route-heading"
+            >
+              <h3
+                id="shipment-route-heading"
+                className="text-base font-semibold"
+              >
+                Chuyến xe & Lộ trình
+              </h3>
+              <dl className="grid gap-3 text-[13px]">
+                <div className="grid min-w-0 gap-1 border-b pb-3 last:border-0 last:pb-0 sm:grid-cols-[minmax(110px,0.8fr)_minmax(0,1.2fr)] sm:gap-3 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:min-w-0 [&_dd]:break-words">
+                  <dt>Mã chuyến xe</dt>
+                  <dd className="admin-data-mono">
+                    {detail.shipment.trip.code}
                   </dd>
                 </div>
-                <div className="shipments-detail-row">
-                  <dt>Bên trả cước</dt>
+                <div className="grid min-w-0 gap-1 border-b pb-3 last:border-0 last:pb-0 sm:grid-cols-[minmax(110px,0.8fr)_minmax(0,1.2fr)] sm:gap-3 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:min-w-0 [&_dd]:break-words">
+                  <dt>Khởi hành</dt>
                   <dd>
-                    <strong>
-                      {FREIGHT_PAYER_LABELS[
-                        detail.shipment.feeSummary.freightPayer
-                      ] ?? detail.shipment.feeSummary.freightPayer}
-                    </strong>
+                    {detail.shipment.trip.departureTime} ·{' '}
+                    {detail.shipment.trip.departureDate.replace(
+                      /^(\d{4})-(\d{2})-(\d{2})$/,
+                      '$3-$2-$1',
+                    )}
                   </dd>
                 </div>
-                <div className="shipments-detail-row">
-                  <dt>Thanh toán</dt>
+                <div className="grid min-w-0 gap-1 border-b pb-3 last:border-0 last:pb-0 sm:grid-cols-[minmax(110px,0.8fr)_minmax(0,1.2fr)] sm:gap-3 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:min-w-0 [&_dd]:break-words">
+                  <dt>Điểm gửi (bốc hàng)</dt>
                   <dd>
-                    {getPaymentStatusLabel(detail.shipment.paymentStatus)}
+                    <strong>{detail.shipment.originPoint.name}</strong>
+                    <br />
+                    <span className="text-xs text-muted-foreground">
+                      {detail.shipment.originPoint.address}
+                    </span>
+                  </dd>
+                </div>
+                <div className="grid min-w-0 gap-1 border-b pb-3 last:border-0 last:pb-0 sm:grid-cols-[minmax(110px,0.8fr)_minmax(0,1.2fr)] sm:gap-3 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:min-w-0 [&_dd]:break-words">
+                  <dt>Điểm nhận (trả hàng)</dt>
+                  <dd>
+                    <strong>{detail.shipment.destinationPoint.name}</strong>
+                    <br />
+                    <span className="text-xs text-muted-foreground">
+                      {detail.shipment.destinationPoint.address}
+                    </span>
                   </dd>
                 </div>
               </dl>
-            </div>
-          </section>
+            </Card>
 
-          {/* Timeline Lịch sử trạng thái */}
-          <section
-            className="shipments-detail-section"
-            aria-labelledby="shipment-history-heading"
-          >
-            <h3
-              id="shipment-history-heading"
-              className="shipments-detail-section-title"
+            {/* Danh sách kiện hàng */}
+            <Card
+              role="region"
+              className="min-w-0 gap-4 p-4"
+              aria-labelledby="shipment-cargo-heading"
             >
-              Lịch sử trạng thái
-            </h3>
+              <h3
+                id="shipment-cargo-heading"
+                className="text-base font-semibold"
+              >
+                Danh sách kiện hàng ({detail.shipment.cargoItems.length})
+              </h3>
+              <div className="grid gap-4">
+                {detail.shipment.cargoItems.map((item) => (
+                  <div
+                    key={item.cargoId}
+                    className="min-w-0 rounded-lg border p-3 space-y-3"
+                  >
+                    <div className="flex flex-wrap justify-between gap-2 text-[13px] [&_strong]:break-words">
+                      <strong>{item.name}</strong>
+                      <span className="text-xs text-muted-foreground">
+                        {item.typeName}
+                      </span>
+                    </div>
+                    <dl className="grid grid-cols-2 gap-3 text-[13px]">
+                      <div className="min-w-0 space-y-1 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:break-words">
+                        <dt>Số lượng</dt>
+                        <dd>{item.quantity}</dd>
+                      </div>
+                      <div className="min-w-0 space-y-1 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:break-words">
+                        <dt>Khối lượng</dt>
+                        <dd>{item.weightKg} kg</dd>
+                      </div>
+                      {item.dimensions && (
+                        <div className="min-w-0 space-y-1 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:break-words">
+                          <dt>Kích thước (DxRxC)</dt>
+                          <dd>
+                            {item.dimensions.length}×{item.dimensions.width}×
+                            {item.dimensions.height} cm
+                          </dd>
+                        </div>
+                      )}
+                      {item.declaredValue != null && (
+                        <div className="min-w-0 space-y-1 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:break-words">
+                          <dt>Khai giá</dt>
+                          <dd>{formatCurrency(item.declaredValue)}</dd>
+                        </div>
+                      )}
+                    </dl>
+                    {item.description && (
+                      <p className="text-xs text-muted-foreground break-words">
+                        <em>Mô tả:</em> {item.description}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </Card>
 
-            {detail.shipment.history.length === 0 ? (
-              <p className="shipments-empty-history">
-                Chưa có lịch sử trạng thái
-              </p>
-            ) : (
-              <ol className="shipments-timeline">
-                {detail.shipment.history.map((item, index) => (
-                  <li key={item.historyId} className="shipments-timeline-item">
-                    <div
-                      className="shipments-timeline-dot"
-                      aria-hidden="true"
-                    />
-                    {index < detail.shipment.history.length - 1 && (
+            {/* Chi tiết cước */}
+            <Card
+              role="region"
+              className="min-w-0 gap-4 p-4"
+              aria-labelledby="shipment-fee-heading"
+            >
+              <h3 id="shipment-fee-heading" className="text-base font-semibold">
+                Chi tiết cước vận chuyển
+              </h3>
+
+              {detail.shipment.cargoFeeDetails.length > 0 && (
+                <div className="min-w-0">
+                  <Table
+                    aria-label="Chi tiết cước vận chuyển"
+                    className="[&_th]:px-2 [&_td]:px-2 sm:[&_th]:px-4 sm:[&_td]:px-4"
+                  >
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead scope="col">Loại hàng</TableHead>
+                        <TableHead scope="col" className="whitespace-normal">
+                          Khối lượng tính cước
+                        </TableHead>
+                        <TableHead scope="col" className="text-right">
+                          Tiền cước
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {detail.shipment.cargoFeeDetails.map((fee) => (
+                        <TableRow key={fee.feeDetailId}>
+                          <TableCell>{fee.cargoTypeName}</TableCell>
+                          <TableCell>{fee.chargeableWeightKg} kg</TableCell>
+                          <TableCell className="text-right">
+                            {formatCurrency(fee.fee)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+
+              <div className="rounded-lg bg-muted/40 p-3">
+                <dl className="grid gap-3 text-[13px]">
+                  <div className="grid min-w-0 gap-1 border-b pb-3 last:border-0 last:pb-0 sm:grid-cols-[minmax(110px,0.8fr)_minmax(0,1.2fr)] sm:gap-3 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:min-w-0 [&_dd]:break-words">
+                    <dt>Cước chính</dt>
+                    <dd>
+                      {formatCurrency(detail.shipment.feeSummary.mainFee)}
+                    </dd>
+                  </div>
+                  {detail.shipment.feeSummary.serviceFee > 0 && (
+                    <div className="grid min-w-0 gap-1 border-b pb-3 last:border-0 last:pb-0 sm:grid-cols-[minmax(110px,0.8fr)_minmax(0,1.2fr)] sm:gap-3 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:min-w-0 [&_dd]:break-words">
+                      <dt>Phí dịch vụ</dt>
+                      <dd>
+                        {formatCurrency(detail.shipment.feeSummary.serviceFee)}
+                      </dd>
+                    </div>
+                  )}
+                  {detail.shipment.feeSummary.discountAmount > 0 && (
+                    <div className="grid min-w-0 gap-1 border-b pb-3 last:border-0 last:pb-0 sm:grid-cols-[minmax(110px,0.8fr)_minmax(0,1.2fr)] sm:gap-3 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:min-w-0 [&_dd]:break-words">
+                      <dt>Giảm giá</dt>
+                      <dd className="text-emerald-700">
+                        -
+                        {formatCurrency(
+                          detail.shipment.feeSummary.discountAmount,
+                        )}
+                      </dd>
+                    </div>
+                  )}
+                  <div className="grid grid-cols-[1fr_auto] items-center gap-3 border-t pt-3 [&_dt]:font-semibold">
+                    <dt>Tổng cước</dt>
+                    <dd className="text-lg font-semibold">
+                      {formatCurrency(detail.shipment.feeSummary.totalFee)}
+                    </dd>
+                  </div>
+                  <div className="grid min-w-0 gap-1 border-b pb-3 last:border-0 last:pb-0 sm:grid-cols-[minmax(110px,0.8fr)_minmax(0,1.2fr)] sm:gap-3 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:min-w-0 [&_dd]:break-words">
+                    <dt>Bên trả cước</dt>
+                    <dd>
+                      <strong>
+                        {FREIGHT_PAYER_LABELS[
+                          detail.shipment.feeSummary.freightPayer
+                        ] ?? detail.shipment.feeSummary.freightPayer}
+                      </strong>
+                    </dd>
+                  </div>
+                  <div className="grid min-w-0 gap-1 border-b pb-3 last:border-0 last:pb-0 sm:grid-cols-[minmax(110px,0.8fr)_minmax(0,1.2fr)] sm:gap-3 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:min-w-0 [&_dd]:break-words">
+                    <dt>Thanh toán</dt>
+                    <dd>
+                      {getPaymentStatusLabel(detail.shipment.paymentStatus)}
+                    </dd>
+                  </div>
+                </dl>
+              </div>
+            </Card>
+
+            {/* Timeline Lịch sử trạng thái */}
+            <Card
+              role="region"
+              className="min-w-0 gap-4 p-4"
+              aria-labelledby="shipment-history-heading"
+            >
+              <h3
+                id="shipment-history-heading"
+                className="text-base font-semibold"
+              >
+                Lịch sử trạng thái
+              </h3>
+
+              {detail.shipment.history.length === 0 ? (
+                <p className="text-[13px] text-muted-foreground">
+                  Chưa có lịch sử trạng thái
+                </p>
+              ) : (
+                <ol className="grid gap-5">
+                  {detail.shipment.history.map((item, index) => (
+                    <li
+                      key={item.historyId}
+                      className="relative flex min-w-0 gap-3"
+                    >
                       <div
-                        className="shipments-timeline-line"
+                        className="mt-1.5 size-2.5 shrink-0 rounded-full border-2 border-primary bg-card"
                         aria-hidden="true"
                       />
-                    )}
-                    <div className="shipments-timeline-body">
-                      <div className="shipments-timeline-header">
-                        <AdminStatusBadge
-                          tone={getShipmentStatusTone(item.status)}
-                        >
-                          {SHIPMENT_STATUS_LABELS[item.status] ?? item.status}
-                        </AdminStatusBadge>
-                        <time className="shipments-timeline-time">
-                          {formatDateTime(item.time)}
-                        </time>
-                      </div>
-                      <p className="shipments-timeline-actor">
-                        Người cập nhật:{' '}
-                        <strong>
-                          {item.actor?.fullName || 'Hệ thống'}
-                        </strong>
-                      </p>
-                      {item.note && (
-                        <p className="shipments-timeline-note">
-                          Ghi chú: {item.note}
-                        </p>
+                      {index < detail.shipment.history.length - 1 && (
+                        <div
+                          className="absolute left-1 top-5 bottom-[-12px] border-l"
+                          aria-hidden="true"
+                        />
                       )}
-                    </div>
-                  </li>
-                ))}
-              </ol>
-            )}
-          </section>
-        </div>
-      )}
-
-      </AdminDetailSheet>
+                      <div className="min-w-0 flex-1 space-y-2 text-[13px]">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <ResourceStatusBadge
+                            tone={getShipmentStatusTone(item.status)}
+                          >
+                            {SHIPMENT_STATUS_LABELS[item.status] ?? item.status}
+                          </ResourceStatusBadge>
+                          <time
+                            dateTime={item.time}
+                            className="text-xs text-muted-foreground"
+                          >
+                            {formatDateTime(item.time)}
+                          </time>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Người cập nhật:{' '}
+                          <strong>{item.actor?.fullName || 'Hệ thống'}</strong>
+                        </p>
+                        {item.note && (
+                          <p className="text-xs text-muted-foreground break-words">
+                            Ghi chú: {item.note}
+                          </p>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </Card>
+          </div>
+        )}
+      </ResourceSheet>
 
       {activeAction && (
-        <AdminConfirmDialog
-          ariaBusy={submitting}
-          ariaDescribedBy="shipment-status-confirm-desc"
-          ariaLabelledBy="shipment-status-confirm-title"
+        <ResourceConfirmation
+          title={activeAction.title}
+          description={activeAction.description}
+          busy={submitting}
           onClose={handleCloseDialog}
-          preventDismiss={submitting}
         >
-          <div className="admin-dialog-header">
-            <div className="admin-dialog-header__copy">
-              <p className="eyebrow">XÁC NHẬN TRẠNG THÁI</p>
-              <h3 id="shipment-status-confirm-title">{activeAction.title}</h3>
-            </div>
-          </div>
-          <p
-            className="admin-confirm-dialog__description"
-            id="shipment-status-confirm-desc"
-          >
-            {activeAction.description}
-          </p>
-
-          <div className="shipments-confirm-form">
-            <div className="shipments-confirm-field">
-              <label htmlFor="shipment-status-note">
-                Ghi chú trạng thái (tùy chọn)
-              </label>
-              <textarea
-                className="shipments-confirm-textarea"
-                disabled={submitting || actionLocked}
-                id="shipment-status-note"
-                maxLength={500}
-                onChange={(e) => setNote(e.target.value)}
-                placeholder="Nhập ghi chú hoặc lý do nếu có..."
-                rows={3}
-                value={note}
-              />
-              <div className="shipments-confirm-field-footer">
-                <span className="shipments-char-count">{note.length}/500</span>
-              </div>
-            </div>
-          </div>
-
-          {statusError && (
-            <p className="admin-confirm-dialog__error" role="alert">
-              {statusError}
+          <Field>
+            <FieldLabel htmlFor="shipment-status-note">
+              Ghi chú trạng thái (tùy chọn)
+            </FieldLabel>
+            <Textarea
+              disabled={submitting || actionLocked}
+              id="shipment-status-note"
+              maxLength={500}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="Nhập ghi chú hoặc lý do nếu có..."
+              rows={3}
+              value={note}
+              aria-describedby="shipment-status-note-count"
+            />
+            <p
+              className="text-right text-xs text-muted-foreground"
+              id="shipment-status-note-count"
+            >
+              {note.length}/500
             </p>
+          </Field>
+          {actionLocked && (
+            <ResourceNotice kind="info">
+              Dữ liệu phiếu gửi đã thay đổi. Đóng hộp xác nhận và kiểm tra trạng
+              thái mới trước khi thao tác tiếp.
+            </ResourceNotice>
           )}
-
-          <div className="admin-confirm-dialog__actions">
+          {!actionLocked && (
             <Button
               disabled={submitting}
-              onClick={handleCloseDialog}
+              aria-busy={submitting}
+              onClick={handleConfirmStatus}
               type="button"
-              variant="secondary"
             >
-              Đóng
+              {submitting && (
+                <LoaderCircle
+                  aria-hidden
+                  className="motion-safe:animate-spin"
+                />
+              )}
+              {submitting ? 'Đang cập nhật…' : activeAction.confirmLabel}
             </Button>
-            {!actionLocked && (
-              <Button
-                disabled={submitting}
-                onClick={handleConfirmStatus}
-                type="button"
-                variant="primary"
-              >
-                {submitting && (
-                  <LoaderCircle
-                    aria-hidden="true"
-                    className="admin-crud-form-spinner"
-                    size={15}
-                  />
-                )}
-                {submitting ? 'Đang cập nhật…' : activeAction.confirmLabel}
-              </Button>
-            )}
-          </div>
-        </AdminConfirmDialog>
+          )}
+        </ResourceConfirmation>
       )}
     </>
   );

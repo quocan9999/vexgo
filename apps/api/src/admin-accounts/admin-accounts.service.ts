@@ -4,6 +4,7 @@ import {
   Injectable,
   InternalServerErrorException,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { ConfigService } from '@nestjs/config';
@@ -15,6 +16,7 @@ import {
   resolveBusinessTimeZone,
 } from '../common/time/business-date.js';
 import { TENANT_PRINCIPAL_ROLES } from '../auth/principal-scope.js';
+import { RealtimeSessionInvalidatorService } from '../auth/realtime-session-invalidator.service.js';
 import type { AdminAccountQueryDto } from './dto/admin-account-query.dto.js';
 import type { CreateAdminAccountDto } from './dto/create-admin-account.dto.js';
 import type { UpdateAdminAccountDto } from './dto/update-admin-account.dto.js';
@@ -224,6 +226,8 @@ export class AdminAccountsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
+    @Optional()
+    private readonly sessionInvalidator?: RealtimeSessionInvalidatorService,
   ) {}
 
   async findAll(query: AdminAccountQueryDto) {
@@ -466,7 +470,7 @@ export class AdminAccountsService {
   }
 
   async updateStatus(taiKhoanId: number, input: UpdateAdminAccountStatusDto) {
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const current = await tx.taiKhoan.findFirst({
         where: managedAdminAccountWhere(taiKhoanId),
         select: { taiKhoanId: true, trangThai: true },
@@ -501,12 +505,20 @@ export class AdminAccountsService {
 
       return { data: mapAdminAccount(account) };
     });
+
+    if (input.status !== 'HOAT_DONG') {
+      await this.sessionInvalidator?.invalidateAccount(taiKhoanId, 'SESSION_REVOKED');
+    } else {
+      await this.sessionInvalidator?.revalidateAccount(taiKhoanId);
+    }
+
+    return result;
   }
 
   async replaceRoles(taiKhoanId: number, roleNames: unknown) {
     const requestedRoleNames = replacementRoleNames(roleNames);
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const lockedAccounts = await tx.$queryRaw<Array<{ taiKhoanId: number }>>`
         SELECT taiKhoanId
         FROM TaiKhoan
@@ -556,5 +568,9 @@ export class AdminAccountsService {
 
       return { data: mapAdminAccount(updated) };
     });
+
+    await this.sessionInvalidator?.revalidateAccount(taiKhoanId);
+
+    return result;
   }
 }

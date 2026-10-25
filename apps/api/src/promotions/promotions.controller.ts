@@ -18,6 +18,7 @@ import { AvailablePromotionsQueryDto } from './dto/available-promotions-query.dt
 import { CreatePromotionDto } from './dto/create-promotion.dto.js';
 import { PromotionIdParamsDto } from './dto/promotion-id-params.dto.js';
 import { PromotionListQueryDto } from './dto/promotion-list-query.dto.js';
+import { UpdatePromotionDto } from './dto/update-promotion.dto.js';
 import { UpdatePromotionStatusDto } from './dto/update-promotion-status.dto.js';
 
 @Controller('promotions')
@@ -58,6 +59,16 @@ export class PromotionsController {
     @CurrentPrincipal() principal: AuthPrincipal,
   ) {
     return this.promotionsService.create(body, principal);
+  }
+
+  @Patch(':id')
+  @RequirePermissions('promotion:update')
+  update(
+    @Param() params: PromotionIdParamsDto,
+    @Body() body: UpdatePromotionDto,
+    @CurrentPrincipal() principal: AuthPrincipal,
+  ) {
+    return this.promotionsService.update(params.id, body, principal);
   }
 
   @Patch(':id/status')

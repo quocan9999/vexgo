@@ -16,6 +16,7 @@ import {
   it,
   vi,
 } from 'vitest';
+import { setAdminTestSession } from './admin-auth-test-session';
 import { VehicleTypeFormDialog } from '@/features/vehicle-types/components/vehicle-type-form-dialog';
 import { getVehicleTypes } from '@/features/vehicle-types/services/vehicle-type-service';
 
@@ -62,9 +63,6 @@ function apiResponse(body: unknown, status = 200): Response {
 }
 
 function fillCreateBasics(dialog: HTMLElement) {
-  fireEvent.change(within(dialog).getByLabelText('Nhà xe *'), {
-    target: { value: '4' },
-  });
   fireEvent.change(within(dialog).getByLabelText('Tên loại xe *'), {
     target: { value: 'Xe du lịch' },
   });
@@ -74,7 +72,7 @@ function fillCreateBasics(dialog: HTMLElement) {
 }
 
 async function fillCreateBasicsWhenReady(dialog: HTMLElement) {
-  await within(dialog).findByRole('option', { name: 'Nhà xe ABC' });
+  expect(within(dialog).queryByLabelText('Nhà xe *')).toBeNull();
   fillCreateBasics(dialog);
 }
 
@@ -107,6 +105,10 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
+  setAdminTestSession({ status: 'authenticated', session: {
+    accountId: 2, roles: ['NHA_XE_ADMIN'], permissions: ['vehicle-type:create', 'vehicle-type:update'], busCompanyId: 4,
+    employee: { employeeId: 2, busCompanyId: 4, busCompanyCode: 'ABC', busCompanyName: 'Nhà xe ABC' },
+  } });
   mocks.adminApiFetch.mockReset();
   mocks.getBusCompanyFilterOptions.mockReset();
   mocks.getBusCompanyFilterOptions.mockResolvedValue([
@@ -121,7 +123,7 @@ afterEach(() => {
 
 describe('Vehicle Type default cargo capacities', () => {
   it('keeps the dialog description and description textarea on unique accessible IDs', async () => {
-    const dialogDescriptionText = 'Nhập tên và mô tả cho loại xe mới.';
+    const dialogDescriptionText = 'Nhập thông tin và sức chứa hàng mặc định cho loại xe mới.';
     render(<VehicleTypeFormDialog onClose={vi.fn()} onSaved={vi.fn()} />);
 
     const dialog = await screen.findByRole('dialog', {
@@ -370,7 +372,7 @@ describe('Vehicle Type default cargo capacities', () => {
     await screen.findByText('Sức chứa xe máy phải là số nguyên.');
     expect(capacityInput.getAttribute('aria-invalid')).toBe('true');
     expect(capacityInput.hasAttribute('aria-describedby')).toBe(true);
-    expect(within(dialog).queryByRole('alert')).toBeNull();
+    expect(within(dialog).getByRole('alert').textContent).toContain('Sức chứa xe máy phải là số nguyên.');
   });
 
   it('requires all three integer capacities in list responses', async () => {

@@ -1,120 +1,120 @@
+// @vitest-environment jsdom
 import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { renderToStaticMarkup } from 'react-dom/server';
-import postcss from 'postcss';
-import { describe, expect, it, vi } from 'vitest';
-import { AdminDetailAction } from '../src/components/admin/admin-detail-action';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
-  AdminCreateAction,
-  AdminRefreshAction,
-} from '../src/components/admin/admin-page-actions';
-import { AdminResultSummary } from '../src/components/admin/admin-result-summary';
-import { AdminTableSkeleton } from '../src/components/admin/admin-table-skeleton';
-import { FilterToolbar } from '../src/components/data-filters/data-filters';
+  ResourceCreateAction,
+  ResourceRefreshAction,
+  ResourceDetailAction,
+  ResourceTableSkeleton,
+  ResourcePagination,
+} from '@/components/admin/resource-ui';
 
-vi.mock('lucide-react', () => {
-  const icon = (name: string) =>
-    function MockIcon({ className, size, ...props }: React.SVGProps<SVGSVGElement> & { size?: number }) {
-      return (
-        <svg
-          {...props}
-          className={`lucide lucide-${name}${className ? ` ${className}` : ''}`}
-          height={size}
-          width={size}
-        />
-      );
-    };
-
-  return {
-    CalendarDays: icon('calendar-days'),
-    Check: icon('check'),
-    ChevronDown: icon('chevron-down'),
-    Eye: icon('eye'),
-    Plus: icon('plus'),
-    RefreshCw: icon('refresh-cw'),
-    Search: icon('search'),
-    X: icon('x'),
-  };
-});
+afterEach(cleanup);
 
 describe('shared Admin CRUD patterns', () => {
-  it('renders a named Eye detail action with the approved color', () => {
-    const markup = renderToStaticMarkup(
-      <AdminDetailAction
-        onClick={vi.fn()}
-        resourceName="nhà xe An Bình"
-      />,
+  it('renders a named canonical detail action and invokes its callback', () => {
+    const onClick = vi.fn();
+    render(
+      <ResourceDetailAction resourceName="nhà xe An Bình" onClick={onClick} />,
     );
-    const styles = postcss.parse(
-      readFileSync(
-        fileURLToPath(new URL('../src/styles/admin-components.css', import.meta.url)),
-        'utf8',
-      ),
-    );
-    let color: string | undefined;
-    styles.walkRules('.admin-detail-action', (rule) => {
-      rule.walkDecls('color', (declaration) => {
-        color = declaration.value;
-      });
+    const button = screen.getByRole('button', {
+      name: 'Xem chi tiết nhà xe An Bình',
     });
-
-    expect(markup).toContain('aria-label="Xem chi tiết nhà xe An Bình"');
-    expect(markup).toContain('Xem chi tiết');
-    expect(markup).toMatch(/<svg[^>]*lucide-eye/);
-    expect(color?.toLowerCase()).toBe('#3155b6');
+    expect(button.getAttribute('data-slot')).toBe('button');
+    expect(button.textContent).toContain('Xem chi tiết');
+    expect(button.querySelector('svg')).not.toBeNull();
+    fireEvent.click(button);
+    expect(onClick).toHaveBeenCalledOnce();
   });
 
-  it('renders matching create and refresh actions with a disabled loading state', () => {
-    const create = renderToStaticMarkup(
-      <AdminCreateAction label="Thêm nhà xe" onClick={vi.fn()} />,
+  it('uses canonical create/refresh variants and prevents refresh while loading', () => {
+    const create = vi.fn();
+    const refresh = vi.fn();
+    render(
+      <>
+        <ResourceCreateAction label="Thêm nhà xe" onClick={create} />
+        <ResourceRefreshAction loading onClick={refresh} />
+      </>,
     );
-    const refresh = renderToStaticMarkup(
-      <AdminRefreshAction loading onClick={vi.fn()} />,
-    );
-
-    expect(create).toContain('Thêm nhà xe');
-    expect(create).toMatch(/<svg[^>]*lucide-plus/);
-    expect(refresh).toContain('Làm mới');
-    expect(refresh).toMatch(/<svg[^>]*lucide-refresh-cw/);
-    expect(refresh).toContain('disabled=""');
-    expect(refresh).toContain('aria-busy="true"');
-    expect(refresh).toContain('admin-refresh-spinner');
+    const createButton = screen.getByRole('button', { name: 'Thêm nhà xe' });
+    const refreshButton = screen.getByRole('button', { name: 'Làm mới' });
+    expect(createButton.classList.contains('bg-primary')).toBe(true);
+    expect(refreshButton.classList.contains('border-border')).toBe(true);
+    expect(refreshButton).toHaveProperty('disabled', true);
+    expect(refreshButton.getAttribute('aria-busy')).toBe('true');
+    expect(
+      refreshButton
+        .querySelector('svg')
+        ?.classList.contains('motion-safe:animate-spin'),
+    ).toBe(true);
+    fireEvent.click(createButton);
+    fireEvent.click(refreshButton);
+    expect(create).toHaveBeenCalledOnce();
+    expect(refresh).not.toHaveBeenCalled();
   });
 
-  it('renders five accessible shimmer rows for initial list loading', () => {
-    const markup = renderToStaticMarkup(
-      <AdminTableSkeleton resourceLabel="loại xe" />,
+  it('renders five accessible skeleton rows with twenty-five cells', () => {
+    render(<ResourceTableSkeleton resourceLabel="loại xe" />);
+    const status = screen.getByRole('status', {
+      name: 'Đang tải danh sách loại xe',
+    });
+    expect(status.querySelectorAll('[data-slot="skeleton"]')).toHaveLength(25);
+    const rows = [...status.children].filter((row) =>
+      row.hasAttribute('aria-hidden'),
     );
-
-    expect(markup).toContain('role="status"');
-    expect(markup).toContain('aria-label="Đang tải danh sách loại xe"');
-    expect(markup.match(/class="admin-table-skeleton-row"/g)).toHaveLength(5);
-    expect(markup.match(/class="skeleton /g)).toHaveLength(25);
+    expect(rows).toHaveLength(5);
+    for (const row of rows)
+      expect(row.querySelectorAll('[data-slot="skeleton"]')).toHaveLength(5);
   });
 
-  it('shows backend totals through the filter toolbar and loading copy before data', () => {
-    expect(renderToStaticMarkup(<AdminResultSummary totalItems={0} />)).toBe(
-      '0 kết quả',
+  it('announces backend totals and keeps pagination within the available range', () => {
+    const onPageChange = vi.fn();
+    const props = {
+      currentPage: 1,
+      onPageChange,
+      pageSize: 10,
+      summaryLabel: 'xe',
+      totalItems: 1234,
+      totalPages: 124,
+    };
+    const { container, rerender } = render(<ResourcePagination {...props} />);
+    const summary = container.querySelector('[aria-live="polite"]');
+    expect(summary?.textContent).toContain('1–10');
+    expect(summary?.textContent).toContain('1.234');
+    expect(screen.getByRole('button', { name: 'Trang trước' })).toHaveProperty(
+      'disabled',
+      true,
     );
-    const loaded = renderToStaticMarkup(
-      <FilterToolbar totalItems={1234}>
-        <input aria-label="Tìm kiếm" />
-      </FilterToolbar>,
+    fireEvent.click(screen.getByRole('button', { name: 'Trang sau' }));
+    expect(onPageChange).toHaveBeenLastCalledWith(2);
+    rerender(<ResourcePagination {...props} currentPage={124} />);
+    expect(
+      container.querySelector('[aria-live="polite"]')?.textContent,
+    ).toContain('1231–1234');
+    expect(screen.getByRole('button', { name: 'Trang sau' })).toHaveProperty(
+      'disabled',
+      true,
     );
-    const loading = renderToStaticMarkup(
-      <FilterToolbar totalItems={null}>
-        <input aria-label="Tìm kiếm" />
-      </FilterToolbar>,
+    rerender(<ResourcePagination {...props} totalItems={0} totalPages={0} />);
+    expect(
+      container.querySelector('[aria-live="polite"]')?.textContent,
+    ).toContain('0–0');
+    expect(screen.getByRole('button', { name: 'Trang trước' })).toHaveProperty(
+      'disabled',
+      true,
     );
-
-    expect(loaded).toContain('1.234 kết quả');
-    expect(loading).toContain('Đang tải kết quả');
-    expect(loaded).toContain('aria-live="polite"');
+    expect(screen.getByRole('button', { name: 'Trang sau' })).toHaveProperty(
+      'disabled',
+      true,
+    );
   });
 
   it('runs Admin tests in CI alongside its existing quality gates', () => {
     const workflow = readFileSync(
-      fileURLToPath(new URL('../../../.github/workflows/ci.yml', import.meta.url)),
+      resolve(dirname(fileURLToPath(import.meta.url)), '../../../.github/workflows/ci.yml'),
       'utf8',
     ).replace(/\r\n/g, '\n');
     const adminJob = workflow.split('\n  admin:\n')[1]?.split('\n  web:\n')[0];

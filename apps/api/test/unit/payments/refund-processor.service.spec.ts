@@ -11,7 +11,9 @@ const refund = {
   phuongThuc: 'MOMO',
   loaiGiaoDich: 'HOAN_TIEN',
   thoiGian: new Date('2026-10-04T09:00:00.000Z'),
+  thoiDiemHoanTat: null,
   trangThai: 'DANG_XU_LY',
+  laQuyetToanHopLe: false,
   donGiaoDichId: 201,
   veId: 1,
   createdAt: new Date('2026-10-04T09:00:00.000Z'),
@@ -44,11 +46,15 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.useRealTimers();
   vi.restoreAllMocks();
 });
 
 describe('RefundProcessorService', () => {
   it('dispatches a pending refund after commit with a stable idempotency key', async () => {
+    const completedAt = new Date('2026-10-16T00:03:00.000+07:00');
+    vi.useFakeTimers();
+    vi.setSystemTime(completedAt);
     const { prisma, service } = createService({
       REFUND_PROVIDER_URL: 'https://payments.example/refunds',
       REFUND_PROVIDER_TOKEN: 'provider-secret',
@@ -81,8 +87,15 @@ describe('RefundProcessorService', () => {
       }),
     );
     expect(prisma.thanhToan.updateMany).toHaveBeenLastCalledWith({
-      where: { thanhToanId: 77, trangThai: 'DANG_GUI' },
-      data: { trangThai: 'THANH_CONG' },
+      where: {
+        thanhToanId: 77,
+        trangThai: 'DANG_GUI',
+        thoiDiemHoanTat: null,
+      },
+      data: {
+        trangThai: 'THANH_CONG',
+        thoiDiemHoanTat: completedAt,
+      },
     });
   });
 
@@ -101,5 +114,22 @@ describe('RefundProcessorService', () => {
       where: { thanhToanId: 77, trangThai: 'DANG_GUI' },
       data: { trangThai: 'DANG_XU_LY' },
     });
+  });
+
+  it('does not overwrite a previously recorded refund completion timestamp', async () => {
+    const { prisma, service } = createService({
+      REFUND_PROVIDER_URL: 'https://payments.example/refunds',
+    });
+    prisma.thanhToan.findUnique.mockResolvedValue({
+      ...refund,
+      thoiDiemHoanTat: new Date('2026-10-16T00:03:00.000+07:00'),
+    });
+    const providerFetch = vi.fn();
+    vi.stubGlobal('fetch', providerFetch);
+
+    await service.processRefund(77);
+
+    expect(providerFetch).not.toHaveBeenCalled();
+    expect(prisma.thanhToan.updateMany).not.toHaveBeenCalled();
   });
 });

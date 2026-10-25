@@ -47,6 +47,31 @@ vi.mock('@/features/shipments/services/shipments.api', () => ({
 vi.mock('@/features/auth/auth-session', () => ({
   useAuthSession: () => api.auth,
 }));
+vi.mock('@/features/locations/services/locations.api', () => ({
+  getLocations: vi.fn().mockResolvedValue({
+    data: [
+      {
+        id: 'current:province:79',
+        name: 'Hồ Chí Minh',
+        value: 'TP.HCM',
+        aliases: ['TP.HCM', 'Hồ Chí Minh'],
+        versions: ['current'],
+        kind: 'province',
+        province: null,
+      },
+      {
+        id: 'legacy:city:672',
+        name: 'Đà Lạt',
+        value: 'Đà Lạt',
+        aliases: ['Đà Lạt'],
+        versions: ['legacy'],
+        kind: 'city',
+        province: 'Lâm Đồng',
+      },
+    ],
+    warning: '',
+  }),
+}));
 
 const createdShipment = {
   shipmentId: 601,
@@ -91,16 +116,24 @@ const publicShipmentLookup = {
   carrier: { name: 'Nhà xe công khai' },
   route: { origin: 'Đà Lạt', destination: 'TP.HCM' },
   pickupPoint: { name: 'Điểm gửi công khai', address: 'Địa chỉ gửi công khai' },
-  dropoffPoint: { name: 'Điểm nhận công khai', address: 'Địa chỉ nhận công khai' },
+  dropoffPoint: {
+    name: 'Điểm nhận công khai',
+    address: 'Địa chỉ nhận công khai',
+  },
   scheduledDepartureAt: '2026-10-20T08:00:00.000Z',
   estimatedArrivalAt: '2026-10-20T12:00:00.000Z',
   packageCount: 3,
-  timeline: [
-    { status: 'DA_TIEP_NHAN', time: '2026-10-15T10:00:00.000Z' },
-  ],
+  timeline: [{ status: 'DA_TIEP_NHAN', time: '2026-10-15T10:00:00.000Z' }],
 };
 
 beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date('2026-10-19T00:00:00.000Z'));
+  api.searchParams = new URLSearchParams({
+    from: 'Đà Lạt',
+    to: 'TP.HCM',
+    date: '2026-10-20',
+  });
   window.sessionStorage.clear();
   api.routerPush.mockReset();
   api.auth.isAuthenticated = false;
@@ -146,15 +179,14 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   vi.restoreAllMocks();
 });
 
 describe('independent shipment flow', () => {
   it('routes a newly created shipment to a server-verified payment draft instead of reporting success', async () => {
     render(<SendFreightPage />);
-    expect(
-      await screen.findByText('30.000đ', { exact: true }),
-    ).toBeTruthy();
+    expect(await screen.findByText('30.000đ', { exact: true })).toBeTruthy();
 
     fireEvent.change(screen.getByPlaceholderText('Ví dụ: Nguyễn Văn A'), {
       target: { value: 'Nguyễn An' },
@@ -180,13 +212,20 @@ describe('independent shipment flow', () => {
     );
 
     await waitFor(() => expect(api.getRoutePoints).toHaveBeenCalledWith(42));
+    expect(api.searchTrips).toHaveBeenCalledWith({
+      from: 'Đà Lạt',
+      to: 'TP.HCM',
+      departureDate: '2026-10-20',
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Tạo mã vận đơn' }));
 
     await waitFor(() => expect(api.routerPush).toHaveBeenCalledTimes(1));
     expect(api.createShipment).toHaveBeenCalledTimes(1);
     expect(api.createShipment.mock.calls[0]).toHaveLength(1);
     expect(api.routerPush.mock.calls[0][0]).toMatch(/^\/payment\?draftId=/);
-    expect(screen.queryByText('Tạo mã vận đơn gửi hàng thành công!')).toBeNull();
+    expect(
+      screen.queryByText('Tạo mã vận đơn gửi hàng thành công!'),
+    ).toBeNull();
     expect(window.sessionStorage.length).toBe(1);
     const savedDraft = JSON.parse(
       window.sessionStorage.getItem(window.sessionStorage.key(0)!)!,
@@ -208,9 +247,7 @@ describe('independent shipment flow', () => {
   it('creates an authenticated shipment with the active Customer access token', async () => {
     api.auth.isAuthenticated = true;
     render(<SendFreightPage />);
-    expect(
-      await screen.findByText('30.000đ', { exact: true }),
-    ).toBeTruthy();
+    expect(await screen.findByText('30.000đ', { exact: true })).toBeTruthy();
 
     fireEvent.change(screen.getByPlaceholderText('Ví dụ: Nguyễn Văn A'), {
       target: { value: 'Nguyễn An' },
@@ -247,14 +284,18 @@ describe('independent shipment flow', () => {
     api.lookupShipment.mockResolvedValue({ data: publicShipmentLookup });
     render(<SendFreightPage />);
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'Tra cứu vận đơn' })[0]);
+    fireEvent.click(
+      screen.getAllByRole('button', { name: 'Tra cứu vận đơn' })[0],
+    );
     fireEvent.change(screen.getByPlaceholderText('VD: FUTA-VD-09102026...'), {
       target: { value: 'VG-VD-PUBLIC-1' },
     });
     fireEvent.change(screen.getByPlaceholderText('09xxxxxxxx'), {
       target: { value: '0901234567' },
     });
-    fireEvent.click(screen.getAllByRole('button', { name: 'Tra cứu vận đơn' })[1]);
+    fireEvent.click(
+      screen.getAllByRole('button', { name: 'Tra cứu vận đơn' })[1],
+    );
 
     expect(await screen.findByText('VG-VD-PUBLIC-1')).toBeTruthy();
     expect(
@@ -334,18 +375,19 @@ describe('independent shipment flow', () => {
     );
 
     // Click "+ Thêm kiện hàng"
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Thêm kiện hàng' }),
-    );
+    fireEvent.click(screen.getByRole('button', { name: 'Thêm kiện hàng' }));
 
     // Now Kiện #1 and Kiện #2 exist
     expect(screen.getByText('Kiện #1')).toBeTruthy();
     expect(screen.getByText('Kiện #2')).toBeTruthy();
 
     // Select protection service for Item 1 (fragile)
-    fireEvent.change(screen.getByRole('combobox', { name: 'Dịch vụ bảo quản' }), {
-      target: { value: 'fragile' },
-    });
+    fireEvent.change(
+      screen.getByRole('combobox', { name: 'Dịch vụ bảo quản' }),
+      {
+        target: { value: 'fragile' },
+      },
+    );
 
     // Fill Item 2
     fireEvent.change(screen.getByPlaceholderText('Ví dụ: Kiện hàng số 2...'), {

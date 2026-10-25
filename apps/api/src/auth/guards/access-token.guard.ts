@@ -46,6 +46,10 @@ export class AccessTokenGuard implements CanActivate {
   }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
+    // Socket.IO authenticates the handshake and revalidates every command in
+    // SupportChatGateway; its message context is not an Express request.
+    if (context.getType() === 'ws') return true;
+
     const authMode = this.reflector.getAllAndOverride<EndpointAuthMode>(
       AUTH_MODE_KEY,
       [context.getHandler(), context.getClass()],

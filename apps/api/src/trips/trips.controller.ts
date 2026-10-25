@@ -1,3 +1,4 @@
+import { TripCodeQueryDto } from './dto/trip-code-query.dto.js';
 import {
   Body,
   Controller,
@@ -32,6 +33,13 @@ export class TripsController {
   @OptionalAuth()
   search(@Query() query: SearchTripsDto) {
     return this.tripsService.search(query);
+  }
+
+  @Get('code-preview')
+  @RequireRoles(...TENANT_PRINCIPAL_ROLES)
+  @RequirePermissions('trip:create')
+  previewCode(@Query() query: TripCodeQueryDto, @CurrentPrincipal() principal: AuthPrincipal) {
+    return this.tripsService.previewCode(query.departureDate, principal);
   }
 
   @Post()

@@ -4,6 +4,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from '@testing-library/react';
 import type { AnchorHTMLAttributes } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -180,8 +181,9 @@ describe('admin tenant presentation mode', () => {
     );
 
     const brand = screen.getByRole('link', { name: /VexGo/ });
-    expect(brand.textContent).toContain('SUPER ADMIN');
-    expect(brand.textContent).toContain('NHÀ XE: NONE');
+    expect(brand.textContent).toContain('Quản trị nền tảng');
+    expect(brand.textContent).not.toContain('PHƯƠNG TRANG');
+    expect(screen.getByText('SUPER ADMIN')).toBeTruthy();
   });
 
   it('keeps platform RBAC navigation available without any platform permissions', () => {
@@ -321,7 +323,7 @@ describe('admin tenant presentation mode', () => {
     const link = screen.getByRole('link', { name: 'Phân quyền' });
     expect(link.getAttribute('href')).toBe('/tenant-rbac');
     expect(link.getAttribute('aria-current')).toBe('page');
-    expect(screen.getAllByText('QUẢN TRỊ NHÀ XE')).toHaveLength(2);
+    expect(within(screen.getByRole('complementary', { name: 'Điều hướng quản trị' })).getAllByText('QUẢN TRỊ NHÀ XE')).toHaveLength(2);
     expect(screen.getByText('VẬN HÀNH')).toBeTruthy();
   });
 
@@ -348,7 +350,7 @@ describe('admin tenant presentation mode', () => {
     );
 
     expect(screen.getByText('VẬN HÀNH')).toBeTruthy();
-    expect(screen.getAllByText('QUẢN TRỊ NHÀ XE')).toHaveLength(1);
+    expect(within(screen.getByRole('complementary', { name: 'Điều hướng quản trị' })).getAllByText('QUẢN TRỊ NHÀ XE')).toHaveLength(1);
     expect(screen.queryByRole('link', { name: 'Phân quyền' })).toBeNull();
   });
 

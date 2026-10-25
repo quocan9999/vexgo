@@ -18,6 +18,7 @@ const request: { headers: { authorization?: string }; user?: unknown } = {
   headers: {},
 };
 const context = {
+  getType: () => 'http',
   getHandler: () => ({}),
   getClass: () => ({}),
   switchToHttp: () => ({ getRequest: () => request }),
@@ -81,6 +82,18 @@ function activeSession(overrides: Record<string, unknown> = {}) {
 }
 
 describe('AccessTokenGuard', () => {
+  it('leaves WebSocket authentication to the gateway without reading HTTP headers', async () => {
+    const switchToHttp = vi.fn(() => {
+      throw new Error('Not an HTTP context');
+    });
+    const wsContext = {
+      getType: () => 'ws',
+      switchToHttp,
+    } as unknown as ExecutionContext;
+    await expect(guard.canActivate(wsContext)).resolves.toBe(true);
+    expect(switchToHttp).not.toHaveBeenCalled();
+  });
+
   it('fails closed when the JWT secret is missing', () => {
     expect(
       () =>

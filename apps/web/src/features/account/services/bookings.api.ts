@@ -127,6 +127,11 @@ export type CreateBookingPayload = {
   seatIds: number[];
   holdToken: string;
   promotionCode?: string;
+  expectedPromotionQuote?: {
+    originalTotal: string;
+    discountAmount: string;
+    finalTotal: string;
+  };
   senderPointId?: number;
   receiverPointId?: number;
   contact: {

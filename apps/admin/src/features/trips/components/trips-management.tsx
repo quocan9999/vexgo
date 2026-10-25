@@ -1,37 +1,43 @@
 'use client';
 
-import {
-  ArrowDown,
-  ArrowUp,
-  ArrowUpDown,
-  CheckCircle2,
-  Search,
-} from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react';
 import { useState } from 'react';
-import { AdminDetailAction } from '@/components/admin/admin-detail-action';
-import {
-  AdminCreateAction,
-  AdminRefreshAction,
-} from '@/components/admin/admin-page-actions';
+import { toast } from 'sonner';
 import { AdminPageHeader } from '@/components/admin/admin-page-header';
-import { AdminPagination } from '@/components/admin/admin-pagination';
-import { AdminTableSkeleton } from '@/components/admin/admin-table-skeleton';
+import {
+  ResourceCreateAction,
+  ResourceRefreshAction,
+  ResourceDetailAction,
+  ResourcePagination,
+  ResourceTableSkeleton,
+  ResourceState,
+  ResourceStatusBadge,
+} from '@/components/admin/resource-ui';
 import {
   FilterToolbar,
   SearchInput,
   SelectFilter,
-  SingleDateFilter,
   type FilterOption,
-} from '@/components/data-filters/data-filters';
-import { Button } from '@/components/ui/button';
+} from '@/components/data-filters/resource-filters';
+import { SingleDateFilter } from '@/components/data-filters/single-date-filter';
+import { Button } from '@/components/ui/action-button';
+import { Card } from '@/components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { useAdminPermissions } from '@/features/admin-auth/hooks/use-admin-permissions';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
 import { useTripLookupOptions } from '../hooks/use-trip-lookup-options';
 import { useTrips } from '../hooks/use-trips';
 import type { TripSortKey } from '../types/trip';
-import { TripDetailSheet, TripStatusBadge } from './trip-detail-sheet';
+import { TripDetailSheet, tripStatusLabel } from './trip-detail-sheet';
 import { TripFormDialog } from './trip-form-dialog';
-import '../trips.css';
 
 const STATUS_OPTIONS: FilterOption[] = [
   { value: 'CHUA_KHOI_HANH', label: 'Chưa khởi hành' },
@@ -53,7 +59,7 @@ function formatDate(dateStr: string) {
   try {
     const parts = dateStr.split('-');
     if (parts.length === 3) {
-      return `${parts[2]}/${parts[1]}/${parts[0]}`;
+      return `${parts[2]}-${parts[1]}-${parts[0]}`;
     }
   } catch {
     // fallback
@@ -90,14 +96,15 @@ export function TripsManagement() {
 
   const [selectedTripId, setSelectedTripId] = useState<number | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
-  const [successNotice, setSuccessNotice] = useState<string | null>(null);
 
   function sortButton(label: string, field: TripSortKey) {
     const selected = sortBy === field;
     return (
-      <button
+      <Button
         aria-label={`Sắp xếp theo ${label}`}
-        className="admin-resource-sort-button"
+        className="-ml-3 font-semibold"
+        size="sm"
+        variant="ghost"
         onClick={() => sortTrips(field)}
         type="button"
       >
@@ -111,7 +118,7 @@ export function TripsManagement() {
         ) : (
           <ArrowUpDown aria-hidden="true" size={14} />
         )}
-      </button>
+      </Button>
     );
   }
 
@@ -120,20 +127,19 @@ export function TripsManagement() {
 
   return (
     <SuperAdminLayout activeSection="trips">
-      <div className="admin-page-content">
+      <div className="admin-page-content admin-ui space-y-6">
         <AdminPageHeader
           actions={
             <div className="page-intro-actions">
               {canCreate && (
-                <AdminCreateAction
+                <ResourceCreateAction
                   label="Thêm chuyến"
                   onClick={() => {
-                    setSuccessNotice(null);
                     setCreateOpen(true);
                   }}
                 />
               )}
-              <AdminRefreshAction loading={loading} onClick={refresh} />
+              <ResourceRefreshAction loading={loading} onClick={refresh} />
             </div>
           }
           eyebrow="QUẢN LÝ VẬN HÀNH"
@@ -141,22 +147,13 @@ export function TripsManagement() {
           titleId="trips-title"
         />
 
-        {successNotice && (
-          <div className="trips-success-notice" role="status">
-            <CheckCircle2 aria-hidden="true" size={16} />
-            <span>{successNotice}</span>
-          </div>
-        )}
-
         <section
           aria-busy={loading}
           aria-labelledby="trips-title"
-          className="trips-section"
+          className="min-w-0"
         >
-          <div className="panel admin-resource-panel">
-            <FilterToolbar
-              totalItems={error ? null : (tripPage?.meta.totalItems ?? null)}
-            >
+          <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+            <FilterToolbar>
               <SearchInput
                 label="Tìm chuyến xe"
                 onChange={updateSearch}
@@ -165,7 +162,7 @@ export function TripsManagement() {
               />
               <SelectFilter
                 allLabel="Tất cả trạng thái"
-                label="Lọc theo trạng thái"
+                label="Trạng thái"
                 onChange={updateStatus}
                 options={STATUS_OPTIONS}
                 value={status}
@@ -177,7 +174,7 @@ export function TripsManagement() {
               />
             </FilterToolbar>
 
-            <div className="trips-mobile-sort">
+            <div className="flex items-end gap-3 border-b p-4 min-[901px]:hidden">
               <SelectFilter
                 allLabel="Ngày khởi hành (mặc định)"
                 label="Sắp xếp chuyến theo"
@@ -185,7 +182,7 @@ export function TripsManagement() {
                   sortTrips((value || 'departureDate') as TripSortKey)
                 }
                 options={SORT_OPTIONS}
-                value={sortBy === 'departureDate' ? '' : sortBy}
+                value={sortBy}
               />
               <Button
                 aria-label={`Đổi thứ tự sắp xếp, hiện tại ${
@@ -193,7 +190,7 @@ export function TripsManagement() {
                 }`}
                 onClick={() => sortTrips(sortBy)}
                 type="button"
-                variant="secondary"
+                variant="outline"
               >
                 {sortDirection === 'asc' ? (
                   <ArrowUp aria-hidden="true" size={15} />
@@ -205,27 +202,26 @@ export function TripsManagement() {
             </div>
 
             {loading && !tripPage && (
-              <AdminTableSkeleton resourceLabel="chuyến xe" />
+              <ResourceTableSkeleton resourceLabel="chuyến xe" />
             )}
 
             {error && (
-              <div className="trips-list-state" role="alert">
+              <ResourceState error>
                 <p>{error}</p>
-                <Button onClick={refresh} type="button" variant="secondary">
+                <Button onClick={refresh} type="button" variant="outline">
                   Thử lại
                 </Button>
-              </div>
+              </ResourceState>
             )}
 
             {!error && !loading && tripPage && items.length === 0 && (
-              <div className="trips-list-state" role="status">
-                <Search aria-hidden="true" size={21} />
+              <ResourceState>
                 <p>
                   {hasFilters
                     ? 'Không tìm thấy chuyến xe phù hợp.'
                     : 'Chưa có chuyến xe trong hệ thống.'}
                 </p>
-              </div>
+              </ResourceState>
             )}
 
             {!error && tripPage && (
@@ -234,15 +230,15 @@ export function TripsManagement() {
                   <>
                     <div
                       aria-busy={loading}
-                      className="admin-resource-table-wrap"
+                      className="hidden min-[901px]:block"
                     >
-                      <table className="admin-resource-table">
-                        <caption className="sr-only">
+                      <Table className="text-[13px]">
+                        <TableCaption className="sr-only">
                           Danh sách chuyến xe
-                        </caption>
-                        <thead>
-                          <tr>
-                            <th
+                        </TableCaption>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead
                               aria-sort={
                                 sortBy === 'code'
                                   ? sortDirection === 'asc'
@@ -253,8 +249,8 @@ export function TripsManagement() {
                               scope="col"
                             >
                               {sortButton('Mã chuyến', 'code')}
-                            </th>
-                            <th
+                            </TableHead>
+                            <TableHead
                               aria-sort={
                                 sortBy === 'departureDate'
                                   ? sortDirection === 'asc'
@@ -265,8 +261,8 @@ export function TripsManagement() {
                               scope="col"
                             >
                               {sortButton('Ngày khởi hành', 'departureDate')}
-                            </th>
-                            <th
+                            </TableHead>
+                            <TableHead
                               aria-sort={
                                 sortBy === 'departureTime'
                                   ? sortDirection === 'asc'
@@ -277,12 +273,12 @@ export function TripsManagement() {
                               scope="col"
                             >
                               {sortButton('Giờ khởi hành', 'departureTime')}
-                            </th>
-                            <th scope="col">Tuyến xe</th>
-                            <th scope="col">Xe</th>
-                            <th scope="col">Nhận gửi hàng</th>
-                            <th scope="col">Sức chứa hàng</th>
-                            <th
+                            </TableHead>
+                            <TableHead scope="col">Tuyến xe</TableHead>
+                            <TableHead scope="col">Xe</TableHead>
+                            <TableHead scope="col">Nhận gửi hàng</TableHead>
+                            <TableHead scope="col">Sức chứa hàng</TableHead>
+                            <TableHead
                               aria-sort={
                                 sortBy === 'status'
                                   ? sortDirection === 'asc'
@@ -293,35 +289,44 @@ export function TripsManagement() {
                               scope="col"
                             >
                               {sortButton('Trạng thái', 'status')}
-                            </th>
-                            <th scope="col"></th>
-                          </tr>
-                        </thead>
-                        <tbody>
+                            </TableHead>
+                            <TableHead scope="col"></TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
                           {items.map((trip) => (
-                            <tr key={trip.tripId}>
-                              <th className="admin-data-mono" scope="row">
+                            <TableRow key={trip.tripId}>
+                              <TableHead
+                                className="admin-data-mono bg-transparent py-3 text-[13px]"
+                                scope="row"
+                              >
                                 {trip.code}
-                              </th>
-                              <td>{formatDate(trip.departureDate)}</td>
-                              <td>{formatTime(trip.departureTime)}</td>
-                              <td>
+                              </TableHead>
+                              <TableCell>
+                                {formatDate(trip.departureDate)}
+                              </TableCell>
+                              <TableCell>
+                                {formatTime(trip.departureTime)}
+                              </TableCell>
+                              <TableCell>
                                 {trip.route.origin} → {trip.route.destination}
-                                <span className="trips-route-code admin-data-mono">
+                                <span className="admin-data-mono mt-1 block text-xs text-muted-foreground">
                                   {trip.route.code}
                                 </span>
-                              </td>
-                              <td>
+                              </TableCell>
+                              <TableCell>
                                 <span className="admin-data-mono">
                                   {trip.vehicle.licensePlate}
                                 </span>
-                                <span className="trips-vehicle-type">
+                                <span className="mt-1 block text-xs text-muted-foreground">
                                   {trip.vehicle.vehicleType.name}
                                 </span>
-                              </td>
-                              <td>{trip.acceptsShipments ? 'Có' : 'Không'}</td>
-                              <td>
-                                <div className="trips-cargo-capacity">
+                              </TableCell>
+                              <TableCell>
+                                {trip.acceptsShipments ? 'Có' : 'Không'}
+                              </TableCell>
+                              <TableCell>
+                                <div className="grid gap-1 text-xs">
                                   <span>
                                     Xe máy: {trip.cargoCapacity.motorbikes}
                                   </span>
@@ -333,36 +338,49 @@ export function TripsManagement() {
                                     Hàng nhẹ: {trip.cargoCapacity.lightCargo}
                                   </span>
                                 </div>
-                              </td>
-                              <td>
-                                <TripStatusBadge status={trip.status} />
-                              </td>
-                              <td>
-                                <AdminDetailAction
+                              </TableCell>
+                              <TableCell>
+                                <ResourceStatusBadge
+                                  tone={
+                                    trip.status === 'DANG_CHAY'
+                                      ? 'active'
+                                      : 'muted'
+                                  }
+                                >
+                                  {tripStatusLabel(trip.status)}
+                                </ResourceStatusBadge>
+                              </TableCell>
+                              <TableCell>
+                                <ResourceDetailAction
                                   onClick={() => setSelectedTripId(trip.tripId)}
                                   resourceName={`chuyến ${trip.code}`}
                                 />
-                              </td>
-                            </tr>
+                              </TableCell>
+                            </TableRow>
                           ))}
-                        </tbody>
-                      </table>
+                        </TableBody>
+                      </Table>
                     </div>
 
-                    <div className="trips-mobile-list">
+                    <div className="grid gap-4 p-4 min-[901px]:hidden">
                       {items.map((trip) => (
-                        <article
-                          className="trips-mobile-card"
-                          key={trip.tripId}
-                        >
-                          <div className="trips-mobile-card-header">
-                            <h2 className="admin-data-mono">{trip.code}</h2>
-                            <TripStatusBadge status={trip.status} />
+                        <Card className="gap-4 p-4" key={trip.tripId}>
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <h2 className="admin-data-mono text-sm font-semibold break-all">
+                              {trip.code}
+                            </h2>
+                            <ResourceStatusBadge
+                              tone={
+                                trip.status === 'DANG_CHAY' ? 'active' : 'muted'
+                              }
+                            >
+                              {tripStatusLabel(trip.status)}
+                            </ResourceStatusBadge>
                           </div>
-                          <p className="trips-mobile-journey">
+                          <p className="text-sm font-medium">
                             {trip.route.origin} → {trip.route.destination}
                           </p>
-                          <dl className="trips-mobile-fields">
+                          <dl className="grid grid-cols-2 gap-4 text-[13px] [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-1 [&_dd]:break-words">
                             <div>
                               <dt>Khởi hành</dt>
                               <dd>
@@ -383,9 +401,9 @@ export function TripsManagement() {
                               <dt>Nhận gửi hàng</dt>
                               <dd>{trip.acceptsShipments ? 'Có' : 'Không'}</dd>
                             </div>
-                            <div className="trips-mobile-capacity">
+                            <div className="col-span-2">
                               <dt>Sức chứa hàng</dt>
-                              <dd className="trips-cargo-capacity">
+                              <dd className="grid gap-1 text-xs">
                                 <span>
                                   Xe máy: {trip.cargoCapacity.motorbikes}
                                 </span>
@@ -399,19 +417,19 @@ export function TripsManagement() {
                               </dd>
                             </div>
                           </dl>
-                          <div className="trips-mobile-actions">
-                            <AdminDetailAction
+                          <div className="flex justify-end border-t pt-3">
+                            <ResourceDetailAction
                               onClick={() => setSelectedTripId(trip.tripId)}
                               resourceName={`chuyến ${trip.code}`}
                             />
                           </div>
-                        </article>
+                        </Card>
                       ))}
                     </div>
                   </>
                 )}
 
-                <AdminPagination
+                <ResourcePagination
                   currentPage={tripPage.meta.page}
                   disabled={loading}
                   onPageChange={changePage}
@@ -424,9 +442,6 @@ export function TripsManagement() {
             )}
           </div>
         </section>
-        <footer className="admin-page-footer">
-          <span>© 2026 VexGo Platform</span>
-        </footer>
       </div>
 
       {selectedTripId !== null && (
@@ -440,8 +455,9 @@ export function TripsManagement() {
           }}
           onRetryRouteOptions={retryRoutes}
           onRetryVehicleOptions={retryVehicles}
-          onUpdated={(updated) => {
-            setSuccessNotice(`Đã cập nhật chuyến ${updated.code}.`);
+          onUpdated={(updated, options) => {
+            if (!options?.silent)
+              toast.success(`Đã cập nhật chuyến ${updated.code}.`);
             refresh();
           }}
           routeOptions={routeOptions}
@@ -457,7 +473,7 @@ export function TripsManagement() {
           onRetryVehicleOptions={retryVehicles}
           onSaved={(created) => {
             setCreateOpen(false);
-            setSuccessNotice(`Đã tạo chuyến ${created.code}.`);
+            toast.success(`Đã tạo chuyến ${created.code}.`);
             refresh();
           }}
           routeOptions={routeOptions}

@@ -3,7 +3,8 @@
 import { useRouter, usePathname } from 'next/navigation';
 import { useEffect, useState, type ReactNode } from 'react';
 import { CircleAlert } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/components/ui/action-button';
+import { toast } from 'sonner';
 import { useAdminSession } from '../hooks/use-admin-session';
 import {
   getAdminAuthErrorMessage,
@@ -11,11 +12,11 @@ import {
   signOutAdmin,
 } from '../services/admin-auth';
 import {
+  canAccessTenantPath,
   canManagePlatformRbac,
   getFirstAccessibleAdminPath,
   getRequiredAdminPermissions,
   getRequiredPlatformAdminPermissions,
-  hasAllAdminPermissions,
   hasAllPlatformAdminPermissions,
   isPlatformRbacPath,
   isTenantRbacPath,
@@ -36,42 +37,41 @@ function RestrictedAccount({ conflict }: { conflict: boolean }) {
   const router = useRouter();
   const sessionState = useAdminSession();
   const [signingOut, setSigningOut] = useState(false);
-  const [logoutError, setLogoutError] = useState<string | null>(null);
   const session = sessionState.status === 'authenticated'
     ? sessionState.session
     : null;
 
   async function logout() {
     setSigningOut(true);
-    setLogoutError(null);
     try {
       await signOutAdmin();
       router.replace('/login');
     } catch (error) {
-      setLogoutError(getAdminAuthErrorMessage(error));
+      toast.error(getAdminAuthErrorMessage(error));
       setSigningOut(false);
     }
   }
 
   return (
-    <main className="admin-page-content panel" aria-labelledby="admin-access-title">
-      <p className="login-eyebrow">VEXGO · TÀI KHOẢN QUẢN TRỊ</p>
-      <h1 id="admin-access-title">Tài khoản chưa có chức năng quản trị khả dụng</h1>
-      <p>
-        {conflict
-          ? 'Phạm vi vai trò của tài khoản chưa hợp lệ. Hãy liên hệ Super Admin để kiểm tra cấu hình.'
-          : 'Tài khoản đã đăng nhập nhưng hiện chưa được cấp chức năng trong Admin Web.'}
-      </p>
-      {session && <p>Đang đăng nhập: {session.fullName}</p>}
-      {logoutError && <p className="login-error" role="alert">{logoutError}</p>}
-      <button
-        className="login-submit-button"
-        disabled={signingOut}
-        onClick={logout}
-        type="button"
-      >
-        {signingOut ? 'Đang đăng xuất…' : 'Đăng xuất'}
-      </button>
+    <main className="admin-ui session-error-page">
+      <section className="session-error-card panel" aria-labelledby="admin-access-title">
+        <p className="login-eyebrow">VEXGO · TÀI KHOẢN QUẢN TRỊ</p>
+        <h1 id="admin-access-title">Tài khoản chưa có chức năng quản trị khả dụng</h1>
+        <p>
+          {conflict
+            ? 'Phạm vi vai trò của tài khoản chưa hợp lệ. Hãy liên hệ Super Admin để kiểm tra cấu hình.'
+            : 'Tài khoản đã đăng nhập nhưng hiện chưa được cấp chức năng trong Admin Web.'}
+        </p>
+        {session && <p>Đang đăng nhập: {session.fullName}</p>}
+        <Button
+          disabled={signingOut}
+          aria-busy={signingOut}
+          onClick={logout}
+          type="button"
+        >
+          {signingOut ? 'Đang đăng xuất…' : 'Đăng xuất'}
+        </Button>
+      </section>
     </main>
   );
 }
@@ -96,10 +96,10 @@ export function AdminSessionGuard({ children }: { children: ReactNode }) {
     isPlatformRbacPath(pathname) && !canManagePlatformRbac(session);
   const tenantRbacNeedsRedirect =
     isTenantRbacPath(pathname) && !canReadTenantRbac(session);
-  const tenantNeedsRedirect = scope === 'tenant' && !isTenantRbacPath(pathname) && (
-    requiredPermissions === null ||
-    !hasAllAdminPermissions(session, requiredPermissions)
-  );
+  const tenantNeedsRedirect =
+    scope === 'tenant' &&
+    !isTenantRbacPath(pathname) &&
+    !canAccessTenantPath(session, pathname);
   const tenantLandingPath = session
     ? getFirstAccessibleAdminPath(session)
     : null;
@@ -141,7 +141,7 @@ export function AdminSessionGuard({ children }: { children: ReactNode }) {
 
   if (authState.status === 'error') {
     return (
-      <main className="session-error-page">
+      <main className="admin-ui session-error-page">
         <section
           className="session-error-card panel"
           aria-labelledby="session-error-title"

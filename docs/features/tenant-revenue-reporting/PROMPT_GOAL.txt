@@ -1,0 +1,17 @@
+GOAL — VexGo F12: Dashboard & Báo cáo doanh thu theo TỪNG nhà xe.
+
+QUYẾT ĐỊNH MỚI NHẤT: LÀM NGAY TRONG REPO GỐC, KHÔNG TẠO WORKTREE; CHỈ VIẾT/CHẠY UNIT TEST NHẮM LOGIC KHÓ KIỂM CHỨNG TRÊN UI; KHÔNG VIẾT/CHẠY integration, E2E, automated browser, UI/component tests. Người dùng TỰ smoke test UI.
+
+Bạn đang chạy ở repo gốc quocan9999/vexgo. Đọc `git status`, branch, origin; KHÔNG reset/stash/clean/overwrite thay đổi người dùng. `git fetch origin develop`; khi an toàn tạo/checkout branch `feature/tenant-revenue-reporting` từ origin/develop ngay trong repo gốc (không code trên develop). Nếu branch tồn tại, kiểm tra trước, không force. Nếu có file khác khiến switch không an toàn → báo BLOCKED và DỪNG. Nếu ZIP F12 do người dùng cung cấp chưa giải nén, giải nén vào ROOT với prefix `docs/features/tenant-revenue-reporting/`, không ghi đè file đã sửa.
+
+Đọc `AGENTS.md`, `docs/features/tenant-revenue-reporting/SETUP_REPO.md`, `MASTER_SPEC.md`, `handoff/PROGRESS.md` và latest completed handoff. Trước mỗi phase CHỈ đọc một `spec/PHASE_XX_*.md` của phase hiện tại; KHÔNG đọc cả 4 phase cùng lúc. Khi compact/new session: đọc lại MASTER_SPEC + PROGRESS + last handoff + spec phase hiện tại.
+
+Dùng Context7 MCP khi cần tra NestJS, Prisma 7, Next.js/library version. Khi làm UI, bắt buộc dùng skill ui-ux-pro-max, đọc `apps/admin/DESIGN.md`, `apps/admin/AGENTS.md`, xem shared components/tokens. Reuse API/Auth/RBAC/payment settlement/refund/promotion hiện có; không duplicate writer, không hardcode dữ liệu mock ở runtime. Không chạy brainstorming/planning skills để chốt lại nghiệp vụ đã khóa.
+
+DB chỉ thuộc F12: `vexgo_feature12`, shadow `vexgo_feature12_shadow`; dùng MySQL SHARED 3306 và phpMyAdmin SHARED 8091; Web 3017, Admin 3018, API 4019. Kiểm tra/backup env có sẵn an toàn, KHÔNG âm thầm ghi đè local config. Có thể reset/reseed demo CHỈ trong DB F12 sau khi xác minh tên DB từ URL; bảo vệ mọi DB khác và MySQL shared volume.
+
+Làm tuần tự 00 → 01 → 02 → 03. F12 chỉ dashboard doanh thu của tenant: 6 KPI, một chart, hai bảng, filter ngày/tháng/quý/range, CSV placeholder; F13 dashboard vận hành để sau. Phân loại tiền vé/gửi hàng, hoàn tiền thành công đúng thời điểm, discount không trừ hai lần, chống duplicate/late/CAN_DOI_SOAT, tenant scope từ authenticated principal. Nếu thiếu nguồn dữ liệu thật hoặc contract không chứng minh đúng, ghi BLOCKED; không làm đẹp bằng fake/mock hoặc lách tiền.
+
+MỖI PHASE: đọc spec hiện tại → audit code → implement đúng scope → chỉ viết/chạy targeted UNIT TEST thật sự bắt bug backend (tiền, timezone, refund, RBAC, tenant, DTO) khi áp dụng; KHÔNG chạy integration/E2E/UI tests dù dự án có sẵn → scoped typecheck/lint/build, `git diff --check` → self-review tìm bugs/bảo mật/test hời hợt/file rác → sửa và test lại → commit LOCAL Conventional Commits tiếng Việt, body bullet liền dòng nhau (chỉ 1 dòng trống sau header, không có dòng trống giữa bullets) → thay placeholder phase handoff, update PROGRESS, commit handoff. Nếu phase blocked, ghi handoff và DỪNG.
+
+Kết thúc Phase 03: bàn giao người dùng checklist UI smoke (Admin 3018, API 4019), ghi rõ các test tự động đã chạy PASS/FAIL/SKIPPED và `integration/E2E/UI: NOT RUN BY REQUEST`; KHÔNG tuyên bố browser/API/DB runtime đã PASS chỉ từ unit test. Trạng thái `READY_FOR_USER_SMOKE` hoặc `BLOCKED`. Tuyệt đối KHÔNG auto push, tạo PR, merge, làm F13. DỪNG sau handoff.

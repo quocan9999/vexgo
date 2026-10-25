@@ -4,10 +4,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AdminRbacPermissionMatrix } from '@/components/admin/rbac/admin-rbac-permission-matrix';
 import { AdminRbacRoleSelector } from '@/components/admin/rbac/admin-rbac-role-selector';
 
-vi.mock('lucide-react', () => ({
-  ShieldCheck: () => null,
-}));
-
 afterEach(() => cleanup());
 
 const roles = [
@@ -53,10 +49,9 @@ describe('Admin RBAC shared presentation', () => {
       />,
     );
 
-    expect(screen.getByRole('radio', { name: /SUPER_ADMIN/ })).toHaveProperty(
-      'checked',
-      true,
-    );
+    expect(
+      screen.getByRole('radio', { name: /SUPER_ADMIN/ }).getAttribute('aria-checked'),
+    ).toBe('true');
     expect(screen.getByText('Chưa lưu')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('radio', { name: /NHA_XE_ADMIN/ }));
@@ -81,19 +76,20 @@ describe('Admin RBAC shared presentation', () => {
     expect(screen.getByRole('heading', { name: 'Xe' })).toBeTruthy();
     expect(
       screen.getByRole('checkbox', {
-        name: 'Gán quyền vehicle:read cho NHA_XE_ADMIN',
-      }),
-    ).toHaveProperty('checked', true);
+        name: /^Gán quyền vehicle:read cho NHA_XE_ADMIN/,
+      }).getAttribute('aria-checked'),
+    ).toBe('true');
 
     fireEvent.click(
       screen.getByRole('checkbox', {
-        name: 'Gán quyền vehicle:update cho NHA_XE_ADMIN',
+        name: /^Gán quyền vehicle:update cho NHA_XE_ADMIN/,
       }),
     );
     expect(onPermissionChange).toHaveBeenCalledWith('vehicle:update', true);
   });
 
   it('keeps protected-role guidance visible in the shared matrix', () => {
+    const onPermissionChange = vi.fn();
     const protectedPermissions = [{
       key: 'bus-company:read',
       scope: 'platform' as const,
@@ -103,7 +99,7 @@ describe('Admin RBAC shared presentation', () => {
       <AdminRbacPermissionMatrix
         disabled={false}
         isProtected
-        onPermissionChange={vi.fn()}
+        onPermissionChange={onPermissionChange}
         permissions={protectedPermissions}
         roleName="SUPER_ADMIN"
         scope="platform"
@@ -113,6 +109,10 @@ describe('Admin RBAC shared presentation', () => {
 
     expect(screen.getByText(/Vai trò hệ thống được bảo vệ/)).toBeTruthy();
     expect(screen.getByText(/Không thể chỉnh sửa quyền của vai trò hệ thống này/)).toBeTruthy();
-    expect(screen.getByRole('checkbox', { name: /bus-company:read/ })).toHaveProperty('disabled', true);
+    const checkbox = screen.getByRole('checkbox', { name: /bus-company:read/ });
+    expect(checkbox.getAttribute('aria-disabled')).toBe('true');
+    expect(checkbox.getAttribute('aria-checked')).toBe('true');
+    fireEvent.click(checkbox);
+    expect(onPermissionChange).not.toHaveBeenCalled();
   });
 });

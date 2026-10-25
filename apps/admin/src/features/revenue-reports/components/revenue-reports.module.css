@@ -1,0 +1,515 @@
+.page,
+.content,
+.loadingGrid {
+  display: grid;
+  min-width: 0;
+  gap: var(--admin-space-section-gap);
+}
+
+.filterPanel {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--admin-space-4);
+  flex-wrap: wrap;
+  flex-direction: row;
+  padding: var(--admin-space-card-padding);
+}
+
+.filterControls {
+  flex: 1 1 400px;
+  min-width: 0;
+  max-width: 560px;
+  display: flex;
+  align-items: end;
+  gap: var(--admin-space-4);
+  flex-wrap: wrap;
+}
+
+.periodSummary {
+  display: grid;
+  gap: var(--admin-space-2);
+  max-width: 440px;
+  margin: 0;
+  color: var(--admin-text-muted);
+  font-size: var(--admin-type-secondary-body-size);
+  line-height: var(--admin-type-secondary-body-line-height);
+}
+
+.periodLabel {
+  color: var(--admin-text-strong);
+  font-size: var(--admin-type-label-size);
+  font-weight: var(--admin-type-label-weight);
+  line-height: var(--admin-type-label-line-height);
+}
+
+.definitionHint {
+  display: inline-flex;
+  margin-inline-start: var(--admin-space-1);
+  border-radius: var(--admin-radius-control);
+  color: var(--admin-text-muted);
+  vertical-align: middle;
+  cursor: pointer;
+  padding: 0;
+}
+
+.definitionHint:focus-visible {
+  outline: 2px solid var(--admin-blue);
+  outline-offset: 2px;
+}
+
+.metricGrid {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--admin-space-4);
+}
+
+.metricCard,
+.metricSkeleton {
+  display: flex;
+  min-width: 0;
+  min-height: 160px;
+  gap: 0;
+  flex-direction: column;
+  padding: var(--admin-space-card-padding);
+}
+
+.metricHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--admin-space-2);
+  margin-bottom: var(--admin-space-3);
+}
+
+.metricIcon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  padding: var(--admin-space-2);
+  border-radius: var(--admin-radius-control);
+  color: var(--admin-blue);
+  background: var(--admin-blue-soft);
+}
+
+.metricCard[data-primary='true'],
+.metricSkeleton[data-wide='true'],
+.volumeCard {
+  grid-column: span 2;
+}
+
+.metricCard[data-primary='true'] {
+  border-color: var(--admin-blue);
+  background: var(--admin-blue);
+}
+
+.metricCard[data-primary='true'] .metricLabel,
+.metricCard[data-primary='true'] .metricValue,
+.metricCard[data-primary='true'] .metricNote {
+  color: #fff;
+}
+
+.metricCard[data-primary='true'] .metricIcon {
+  background: rgb(255 255 255 / 14%);
+  color: #fff;
+}
+
+.metricCard[data-primary='true'] .metricValue {
+  font-size: var(--admin-type-metric-size);
+}
+
+.metricLabel {
+  margin: 0;
+  color: var(--admin-text-muted);
+  font-size: var(--admin-type-label-size);
+  font-weight: var(--admin-type-label-weight);
+  line-height: var(--admin-type-label-line-height);
+}
+
+.metricValue {
+  margin: 0;
+  color: var(--admin-text-strong);
+  font-size: var(--admin-type-metric-compact-size);
+  font-weight: var(--admin-type-metric-weight);
+  letter-spacing: -0.025em;
+  line-height: var(--admin-type-metric-line-height);
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+
+.metricValue[data-negative='true'] {
+  color: var(--admin-danger);
+}
+
+.metricNote {
+  margin: auto 0 0;
+  padding-top: var(--admin-space-3);
+  color: var(--admin-text-muted);
+  font-size: var(--admin-type-helper-size);
+  line-height: var(--admin-type-helper-line-height);
+}
+
+.countPair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--admin-space-3);
+  margin: auto 0;
+}
+
+.countPair p {
+  display: grid;
+  gap: var(--admin-space-1);
+  margin: 0;
+}
+
+.countPair p + p {
+  border-left: 1px solid var(--admin-border);
+  padding-left: var(--admin-space-4);
+}
+
+.countPair strong {
+  color: var(--admin-text-strong);
+  font-size: var(--admin-type-metric-compact-size);
+  font-weight: var(--admin-type-metric-compact-weight);
+  line-height: var(--admin-type-metric-compact-line-height);
+}
+
+.countPair span {
+  color: var(--admin-text-muted);
+  font-size: var(--admin-type-helper-size);
+  line-height: var(--admin-type-helper-line-height);
+}
+
+.chartPanel,
+.tablePanel {
+  min-width: 0;
+  gap: 0;
+  padding: var(--admin-space-card-padding);
+}
+
+.panelHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--admin-space-4);
+  margin-bottom: var(--admin-space-5);
+}
+
+.panelHeading h2 {
+  margin: 0;
+  color: var(--admin-text-strong);
+  font-size: var(--admin-type-section-heading-size);
+  font-weight: var(--admin-type-section-heading-weight);
+  line-height: var(--admin-type-section-heading-line-height);
+}
+
+.panelEyebrow {
+  margin: 0 0 var(--admin-space-1);
+  color: var(--admin-text-muted);
+  font-size: var(--admin-type-eyebrow-size);
+  font-weight: var(--admin-type-eyebrow-weight);
+  letter-spacing: 0.06em;
+  line-height: var(--admin-type-eyebrow-line-height);
+}
+
+.chartLegend {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--admin-space-2);
+  color: var(--admin-text-muted);
+  font-size: var(--admin-type-secondary-body-size);
+  white-space: nowrap;
+}
+
+.legendLine {
+  width: 22px;
+  height: 0;
+  border-top: 2px solid var(--admin-blue);
+}
+
+.chartFrame {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: clamp(108px, 18vw, 150px) minmax(0, 1fr);
+  grid-template-rows: 250px 32px;
+  column-gap: var(--admin-space-2);
+  padding-top: var(--admin-space-2);
+}
+
+.chartYAxis {
+  position: relative;
+  grid-column: 1;
+  grid-row: 1;
+  color: var(--admin-text-muted);
+  font-size: var(--admin-type-helper-size);
+  line-height: 1.2;
+}
+
+.chartTick {
+  position: absolute;
+  right: 0;
+  max-width: 100%;
+  transform: translateY(-50%);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.chartPlot {
+  position: relative;
+  min-width: 0;
+  grid-column: 2;
+  grid-row: 1;
+  margin-inline: var(--admin-space-2);
+  border-left: 1px solid var(--admin-border);
+}
+
+.chartGridLine {
+  position: absolute;
+  right: 0;
+  left: 0;
+  border-top: 1px solid var(--admin-border);
+}
+
+.chartZeroLine {
+  border-top-color: var(--admin-blue);
+  border-top-style: dashed;
+}
+
+.chartLine {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.chartLine polyline {
+  fill: none;
+  stroke: var(--admin-blue);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.5px;
+  vector-effect: non-scaling-stroke;
+}
+
+.chartPoint {
+  position: absolute;
+  z-index: 1;
+  width: 12px;
+  height: 12px;
+  transform: translate(-50%, -50%);
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: var(--admin-blue);
+  box-shadow: 0 0 0 1px var(--admin-blue);
+  cursor: pointer;
+  padding: 0;
+}
+
+.chartPoint:hover {
+  width: 15px;
+  height: 15px;
+}
+
+.chartPoint:focus-visible {
+  outline: 3px solid var(--admin-ink);
+  outline-offset: 3px;
+}
+
+.chartTooltip {
+  position: absolute;
+  z-index: 3;
+  width: min(260px, 100%);
+  box-sizing: border-box;
+  padding: var(--admin-space-3);
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius-panel);
+  background: var(--admin-surface);
+  color: var(--admin-text-strong);
+  box-shadow: 0 4px 16px rgb(15 23 42 / 12%);
+  font-size: var(--admin-type-helper-size);
+  line-height: var(--admin-type-helper-line-height);
+  overflow-wrap: anywhere;
+}
+
+.chartTooltip strong {
+  display: block;
+  margin-bottom: var(--admin-space-3);
+}
+
+.chartTooltip dl {
+  display: grid;
+  gap: var(--admin-space-2);
+  margin: 0;
+}
+
+.chartTooltip dl > div {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--admin-space-1) var(--admin-space-2);
+}
+
+.chartTooltip dt {
+  color: var(--admin-text-muted);
+}
+
+.chartTooltip dd {
+  margin: 0;
+  font-weight: var(--admin-type-label-weight);
+  font-variant-numeric: tabular-nums;
+}
+
+.chartXAxis {
+  position: relative;
+  grid-column: 2;
+  grid-row: 2;
+  margin-inline: var(--admin-space-2);
+  color: var(--admin-text-muted);
+  font-size: var(--admin-type-helper-size);
+  line-height: var(--admin-type-helper-line-height);
+}
+
+.chartPeriodTick {
+  position: absolute;
+  top: var(--admin-space-2);
+  max-width: 33%;
+  transform: translateX(-50%);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.chartPeriodTick[data-edge='start'] {
+  transform: translateX(0);
+  text-align: left;
+}
+
+.chartPeriodTick[data-edge='end'] {
+  transform: translateX(-100%);
+  text-align: right;
+}
+
+.tableScroll {
+  width: 100%;
+}
+
+.metricSkeleton {
+  justify-content: flex-start;
+}
+
+.labelSkeleton,
+.valueSkeleton,
+.noteSkeleton {
+  border-radius: 5px;
+}
+
+.labelSkeleton {
+  width: 48%;
+  height: 15px;
+}
+
+.valueSkeleton {
+  width: 76%;
+  height: 35px;
+  margin-top: var(--admin-space-4);
+}
+
+.noteSkeleton {
+  width: 92%;
+  height: 12px;
+  margin-top: auto;
+}
+
+.chartSkeleton {
+  width: 100%;
+  height: 280px;
+}
+
+@media (max-width: 1100px) {
+  .metricGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .metricCard[data-primary='true'],
+  .metricSkeleton[data-wide='true'],
+  .volumeCard {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 600px) {
+  .filterPanel,
+  .filterControls {
+    align-items: stretch;
+  }
+
+  .filterPanel {
+    gap: var(--admin-space-5);
+  }
+
+  .filterControls {
+    width: 100%;
+    flex-direction: column;
+    gap: var(--admin-space-3);
+  }
+
+  .filterControls > div {
+    flex: initial;
+    width: 100%;
+  }
+
+  .periodSummary {
+    font-size: var(--admin-type-helper-size);
+  }
+
+  .metricGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .metricCard {
+    min-height: 136px;
+  }
+
+  .panelHeading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .chartFrame {
+    grid-template-columns: 108px minmax(0, 1fr);
+    grid-template-rows: 220px 34px;
+  }
+
+  .chartPeriodTick[data-edge='center']:not([data-single='true']) {
+    display: none;
+  }
+
+  .chartPoint {
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .chartPoint::after {
+    position: absolute;
+    inset: 4px;
+    border-radius: 50%;
+    background: var(--admin-blue);
+    content: '';
+  }
+
+  .chartSkeleton {
+    height: 254px;
+  }
+}
+
+.tableScroll > div {
+  max-height: 480px;
+}
+.tableScroll thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}

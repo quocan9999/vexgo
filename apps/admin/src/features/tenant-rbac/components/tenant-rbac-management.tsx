@@ -1,18 +1,20 @@
 'use client';
 
+import { RotateCcw } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import {
-  AlertTriangle,
-  Check,
-  LoaderCircle,
-  RotateCcw,
-} from 'lucide-react';
-import { useEffect, useState } from 'react';
-import { AdminConfirmDialog } from '@/components/admin/admin-confirm-dialog';
+  ResourceConfirmation,
+  ResourceRefreshAction,
+  ResourceState,
+  ResourceNotice,
+} from '@/components/admin/resource-ui';
+import { Card } from '@/components/ui/card';
+import { Badge } from '@/components/ui/status-badge';
+import { toast } from 'sonner';
 import { AdminPageHeader } from '@/components/admin/admin-page-header';
-import { AdminRefreshAction } from '@/components/admin/admin-page-actions';
 import { AdminRbacPermissionMatrix } from '@/components/admin/rbac/admin-rbac-permission-matrix';
 import { AdminRbacRoleSelector } from '@/components/admin/rbac/admin-rbac-role-selector';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/components/ui/action-button';
 import { useAdminSession } from '@/features/admin-auth/hooks/use-admin-session';
 import {
   canReadTenantRbac,
@@ -31,18 +33,22 @@ import {
   type TenantRbacRole,
   type TenantRbacRoleName,
 } from '../types/tenant-rbac';
-import styles from './tenant-rbac-management.module.css';
 
 type RoleDrafts = Partial<Record<TenantRbacRoleName, string[]>>;
-type Feedback = { type: 'success' | 'warning'; message: string };
+
 type Confirmation = 'save' | 'reset' | null;
 
 function getErrorMessage(error: unknown, fallback: string): string {
   return error instanceof Error && error.message ? error.message : fallback;
 }
 
-function hasSameKeys(left: readonly string[], right: readonly string[]): boolean {
-  return left.length === right.length && left.every((key) => right.includes(key));
+function hasSameKeys(
+  left: readonly string[],
+  right: readonly string[],
+): boolean {
+  return (
+    left.length === right.length && left.every((key) => right.includes(key))
+  );
 }
 
 function getSelfLockoutWarning(
@@ -60,9 +66,10 @@ function getSelfLockoutWarning(
       (candidate) => candidate.roleName === currentRoleName,
     );
     if (!currentRole) continue;
-    const effectiveKeys = currentRole.roleName === role.roleName
-      ? nextPermissionKeys
-      : currentRole.effectivePermissionKeys;
+    const effectiveKeys =
+      currentRole.roleName === role.roleName
+        ? nextPermissionKeys
+        : currentRole.effectivePermissionKeys;
     effectiveKeys.forEach((key) => nextEffectivePermissions.add(key));
   }
 
@@ -91,31 +98,36 @@ function PermissionKeyList({
   if (permissionKeys.length === 0) return <p>0 quyền</p>;
 
   return (
-    <ul>
-      {permissionKeys.map((key) => <li key={key}><code>{key}</code></li>)}
+    <ul
+      tabIndex={0}
+      aria-label="Danh sách mã quyền"
+      className="max-h-40 space-y-2 overflow-y-auto rounded-md text-xs focus-visible:outline-2 focus-visible:outline-ring"
+    >
+      {permissionKeys.map((key) => (
+        <li key={key}>
+          <code className="admin-data-mono break-all">{key}</code>
+        </li>
+      ))}
     </ul>
   );
 }
 
 export function TenantRbacManagement() {
   const authState = useAdminSession();
-  const session = authState.status === 'authenticated'
-    ? authState.session
-    : null;
+  const session =
+    authState.status === 'authenticated' ? authState.session : null;
   const canRead = canReadTenantRbac(session);
   const canEdit = canWriteTenantRbac(session);
   const [config, setConfig] = useState<TenantRbacConfig | null>(null);
   const [drafts, setDrafts] = useState<RoleDrafts>({});
-  const [selectedRoleName, setSelectedRoleName] = useState<TenantRbacRoleName>(
-    'NHA_XE_ADMIN',
-  );
+  const [selectedRoleName, setSelectedRoleName] =
+    useState<TenantRbacRoleName>('NHA_XE_ADMIN');
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [saving, setSaving] = useState(false);
   const [confirmation, setConfirmation] = useState<Confirmation>(null);
-  const [saveError, setSaveError] = useState<string | null>(null);
-  const [feedback, setFeedback] = useState<Feedback | null>(null);
+  const savingRef = useRef(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -137,7 +149,6 @@ export function TenantRbacManagement() {
             : loadedConfig.roles[0].roleName,
         );
         setLoadError(null);
-        setFeedback(null);
       })
       .catch((error: unknown) => {
         if (controller.signal.aborted) return;
@@ -152,38 +163,38 @@ export function TenantRbacManagement() {
   function retryLoading() {
     setLoading(true);
     setLoadError(null);
-    setFeedback(null);
     setLoadAttempt((attempt) => attempt + 1);
   }
 
   const selectedRole =
     config?.roles.find((role) => role.roleName === selectedRoleName) ?? null;
   const selectedDraft = selectedRole
-    ? drafts[selectedRole.roleName] ?? selectedRole.effectivePermissionKeys
+    ? (drafts[selectedRole.roleName] ?? selectedRole.effectivePermissionKeys)
     : [];
   const isDirty = selectedRole
     ? !hasSameKeys(selectedRole.effectivePermissionKeys, selectedDraft)
     : false;
-  const selectedSelfLockoutWarning = selectedRole && session
-    ? getSelfLockoutWarning(
-        config!,
-        selectedRole,
-        selectedDraft,
-        session.roles,
-      )
-    : null;
-  const resetSelfLockoutWarning = selectedRole && session && config
-    ? getSelfLockoutWarning(
-        config,
-        selectedRole,
-        selectedRole.defaultPermissionKeys,
-        session.roles,
-      )
-    : null;
+  const selectedSelfLockoutWarning =
+    selectedRole && session
+      ? getSelfLockoutWarning(
+          config!,
+          selectedRole,
+          selectedDraft,
+          session.roles,
+        )
+      : null;
+  const resetSelfLockoutWarning =
+    selectedRole && session && config
+      ? getSelfLockoutWarning(
+          config,
+          selectedRole,
+          selectedRole.defaultPermissionKeys,
+          session.roles,
+        )
+      : null;
 
   function changePermission(permissionKey: string, checked: boolean) {
-    if (!selectedRole || !config || !canEdit || saving) return;
-    setFeedback(null);
+    if (!selectedRole || !config || !canEdit || savingRef.current) return;
     setDrafts((current) => {
       const currentKeys = new Set(
         current[selectedRole.roleName] ?? selectedRole.effectivePermissionKeys,
@@ -200,13 +211,11 @@ export function TenantRbacManagement() {
   }
 
   function undoSelectedRole() {
-    if (!selectedRole || !canEdit || saving) return;
+    if (!selectedRole || !canEdit || savingRef.current) return;
     setDrafts((current) => ({
       ...current,
       [selectedRole.roleName]: [...selectedRole.effectivePermissionKeys],
     }));
-    setSaveError(null);
-    setFeedback(null);
   }
 
   function updateConfigRole(savedRole: TenantRbacRole) {
@@ -230,18 +239,17 @@ export function TenantRbacManagement() {
     try {
       await reloadAdminSession();
     } catch {
-      setFeedback({
-        type: 'warning',
-        message:
-          'Thay đổi đã được lưu nhưng phiên chưa đồng bộ. Hãy tải lại trang để cập nhật quyền đang dùng.',
-      });
+      toast.warning(
+        'Thay đổi đã được lưu nhưng phiên chưa đồng bộ. Hãy tải lại trang để cập nhật quyền đang dùng.',
+      );
     }
   }
 
   async function saveSelectedRole() {
-    if (!selectedRole || !config || !isDirty || !canEdit || saving) return;
+    if (!selectedRole || !config || !isDirty || !canEdit || savingRef.current)
+      return;
+    savingRef.current = true;
     setSaving(true);
-    setSaveError(null);
     const permissionKeys = config.permissions
       .filter((permission) => selectedDraft.includes(permission.key))
       .map(({ key }) => key);
@@ -254,24 +262,24 @@ export function TenantRbacManagement() {
       );
       updateConfigRole(savedRole);
       setConfirmation(null);
-      setFeedback({
-        type: 'success',
-        message: permissionKeys.length === 0
+      toast.success(
+        permissionKeys.length === 0
           ? `Đã lưu override rỗng cho ${savedRole.roleName}.`
           : `Đã lưu override cho ${savedRole.roleName}.`,
-      });
+      );
       await syncTrustedSession();
     } catch (error) {
-      setSaveError(getErrorMessage(error, 'Không thể lưu cấu hình quyền.'));
+      toast.error(getErrorMessage(error, 'Không thể lưu cấu hình quyền.'));
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   }
 
   async function restoreDefaultPermissions() {
-    if (!selectedRole || !config || !canEdit || saving) return;
+    if (!selectedRole || !config || !canEdit || savingRef.current) return;
+    savingRef.current = true;
     setSaving(true);
-    setSaveError(null);
     try {
       const restoredRole = await resetTenantRolePermissions(
         selectedRole,
@@ -279,27 +287,28 @@ export function TenantRbacManagement() {
       );
       updateConfigRole(restoredRole);
       setConfirmation(null);
-      setFeedback({
-        type: 'success',
-        message: `Đã khôi phục quyền mặc định cho ${restoredRole.roleName}.`,
-      });
+      toast.success(
+        `Đã khôi phục quyền mặc định cho ${restoredRole.roleName}.`,
+      );
       await syncTrustedSession();
     } catch (error) {
-      setSaveError(
+      toast.error(
         getErrorMessage(error, 'Không thể khôi phục quyền mặc định.'),
       );
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   }
 
   const dirtyRoleNames = new Set(
     config?.roles
-      .filter((role) =>
-        !hasSameKeys(
-          role.effectivePermissionKeys,
-          drafts[role.roleName] ?? role.effectivePermissionKeys,
-        ),
+      .filter(
+        (role) =>
+          !hasSameKeys(
+            role.effectivePermissionKeys,
+            drafts[role.roleName] ?? role.effectivePermissionKeys,
+          ),
       )
       .map(({ roleName }) => roleName) ?? [],
   );
@@ -315,69 +324,61 @@ export function TenantRbacManagement() {
 
   return (
     <SuperAdminLayout activeSection="tenant-rbac">
-      <div aria-busy={loading || saving} className="admin-page-content">
+      <div
+        aria-busy={loading || saving}
+        className="admin-page-content admin-ui space-y-6"
+      >
         <AdminPageHeader
           eyebrow="QUẢN TRỊ NHÀ XE"
           title="Phân quyền vai trò"
           titleId="tenant-rbac-title"
-          actions={(
-            <AdminRefreshAction
+          actions={
+            <ResourceRefreshAction
               loading={loading || saving}
               onClick={retryLoading}
             />
-          )}
+          }
         />
 
         {!canEdit && canRead && (
-          <p className={styles.readOnlyNotice} role="status">
-            Tài khoản hiện chỉ có quyền xem; cần quyền <code>permission:assign</code>{' '}
-            để lưu hoặc khôi phục cấu hình.
-          </p>
+          <ResourceNotice kind="info">
+            Tài khoản hiện chỉ có quyền xem; cần quyền{' '}
+            <code className="admin-data-mono">permission:assign</code> để lưu
+            hoặc khôi phục cấu hình.
+          </ResourceNotice>
         )}
-
-        {feedback?.type === 'success' && (
-          <p className={styles.successMessage} role="status">
-            <Check aria-hidden="true" size={16} />
-            {feedback.message}
-          </p>
-        )}
-        {feedback?.type === 'warning' && (
-          <p className={styles.warningMessage} role="alert">
-            <AlertTriangle aria-hidden="true" size={17} />
-            {feedback.message}
-          </p>
-        )}
-
         {loading && !config && (
-          <div className={styles.loading} role="status" aria-live="polite">
-            <LoaderCircle aria-hidden="true" className={styles.spinner} size={20} />
-            Đang tải cấu hình phân quyền…
-          </div>
+          <Card>
+            <ResourceState loading>Đang tải cấu hình phân quyền…</ResourceState>
+          </Card>
         )}
-
         {!loading && !config && loadError && (
-          <section aria-labelledby="tenant-rbac-load-error-title" className={styles.errorPanel}>
-            <h2 id="tenant-rbac-load-error-title">Không thể tải cấu hình quyền</h2>
-            <p role="alert">{loadError}</p>
-            <Button onClick={retryLoading} variant="secondary">Thử tải lại</Button>
-          </section>
+          <Card>
+            <ResourceState error>
+              <h2 className="text-base font-semibold">
+                Không thể tải cấu hình quyền
+              </h2>
+              <p>{loadError}</p>
+              <Button onClick={retryLoading} variant="outline">
+                Thử tải lại
+              </Button>
+            </ResourceState>
+          </Card>
         )}
-
         {config && loadError && (
-          <p className={styles.warningMessage} role="alert">
-            <AlertTriangle aria-hidden="true" size={17} />
+          <ResourceNotice kind="error">
             Không thể làm mới; đang giữ cấu hình đã tải trước đó. {loadError}
-          </p>
+          </ResourceNotice>
         )}
 
         {config && selectedRole && (
           <>
             <AdminRbacRoleSelector
+              appearance="resource"
+              disabled={saving}
               dirtyRoleNames={dirtyRoleNames}
               onSelect={(roleName) => {
                 setSelectedRoleName(roleName);
-                setSaveError(null);
-                setFeedback(null);
               }}
               radioName="tenant-rbac-role"
               roles={config.roles}
@@ -386,17 +387,27 @@ export function TenantRbacManagement() {
               titleId="tenant-rbac-roles-title"
             />
 
-            <section aria-label="Trạng thái cấu hình quyền" className={styles.configurationSummary}>
-              <div className={styles.summaryHeader}>
+            <Card
+              role="region"
+              aria-label="Trạng thái cấu hình quyền"
+              className="min-w-0 gap-5 p-4 sm:p-5"
+            >
+              <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 [&_h2]:text-base [&_h2]:font-semibold [&_h2]:break-all">
                 <div>
                   <p className="eyebrow">PHẠM VI NHÀ XE</p>
-                  <h2>{selectedRole.roleName}</h2>
+                  <h2 className="admin-data-mono">{selectedRole.roleName}</h2>
                 </div>
-                <span className={selectedRole.source === 'global' ? styles.inheritedBadge : styles.overrideBadge}>
-                  {selectedRole.source === 'global' ? 'Kế thừa mặc định' : 'Override riêng'}
-                </span>
+                <Badge
+                  variant={
+                    selectedRole.source === 'global' ? 'secondary' : 'outline'
+                  }
+                >
+                  {selectedRole.source === 'global'
+                    ? 'Kế thừa mặc định'
+                    : 'Override riêng'}
+                </Badge>
               </div>
-              <div className={styles.summaryGrid}>
+              <div className="grid min-w-0 gap-4 lg:grid-cols-3 [&>section]:min-w-0 [&>section]:space-y-3 [&>section]:rounded-lg [&>section]:border [&>section]:p-4 [&_h3]:text-[13px] [&_h3]:font-semibold [&_p]:text-xs [&_p]:text-muted-foreground">
                 <section aria-labelledby="tenant-rbac-default-title">
                   <h3 id="tenant-rbac-default-title">Quyền mặc định</h3>
                   <PermissionKeyList
@@ -423,12 +434,16 @@ export function TenantRbacManagement() {
                   />
                 </section>
               </div>
-            </section>
+            </Card>
 
             <AdminRbacPermissionMatrix
-              actions={(
-                <div className={styles.formActions}>
-                  <p aria-live="polite" className={styles.draftStatus}>
+              appearance="resource"
+              actions={
+                <div className="flex flex-wrap items-center justify-between gap-4 border-t pt-5 [&>div]:flex [&>div]:flex-wrap [&>div]:gap-3">
+                  <p
+                    aria-live="polite"
+                    className="text-xs text-muted-foreground"
+                  >
                     {isDirty
                       ? `Có thay đổi chưa lưu cho ${selectedRole.roleName}.`
                       : 'Cấu hình đã đồng bộ.'}
@@ -437,7 +452,7 @@ export function TenantRbacManagement() {
                     <Button
                       disabled={!canEdit || !isDirty || saving}
                       onClick={undoSelectedRole}
-                      variant="secondary"
+                      variant="outline"
                     >
                       <RotateCcw aria-hidden="true" size={16} />
                       Hoàn tác
@@ -446,10 +461,9 @@ export function TenantRbacManagement() {
                       <Button
                         disabled={!canEdit || saving}
                         onClick={() => {
-                          setSaveError(null);
                           setConfirmation('reset');
                         }}
-                        variant="secondary"
+                        variant="outline"
                       >
                         Khôi phục mặc định
                       </Button>
@@ -457,7 +471,6 @@ export function TenantRbacManagement() {
                     <Button
                       disabled={!canEdit || !isDirty || saving}
                       onClick={() => {
-                        setSaveError(null);
                         setConfirmation('save');
                       }}
                     >
@@ -465,7 +478,7 @@ export function TenantRbacManagement() {
                     </Button>
                   </div>
                 </div>
-              )}
+              }
               disabled={!canEdit || saving}
               isProtected={false}
               onPermissionChange={changePermission}
@@ -478,64 +491,52 @@ export function TenantRbacManagement() {
         )}
 
         {confirmation && selectedRole && config && (
-          <AdminConfirmDialog
-            ariaDescribedBy="tenant-rbac-confirm-description"
-            ariaLabelledBy="tenant-rbac-confirm-title"
-            ariaBusy={saving}
-            onClose={() => setConfirmation(null)}
-            preventDismiss={saving}
+          <ResourceConfirmation
+            title={
+              confirmation === 'save'
+                ? 'Xác nhận thay thế quyền tenant'
+                : 'Xác nhận khôi phục quyền mặc định'
+            }
+            description={
+              confirmation === 'save'
+                ? `Bạn sắp thay thế toàn bộ quyền áp dụng cho vai trò ${selectedRole.roleName} trong nhà xe này. Thay đổi không ảnh hưởng nhà xe khác hoặc quyền mặc định toàn hệ thống.`
+                : `Cấu hình riêng của vai trò ${selectedRole.roleName} sẽ bị xóa để vai trò này kế thừa quyền mặc định toàn hệ thống.`
+            }
+            busy={saving}
+            onClose={() => {
+              if (!savingRef.current) setConfirmation(null);
+            }}
           >
-            <div className={styles.confirmContent}>
-              <span className={styles.confirmIcon} aria-hidden="true">
-                <AlertTriangle size={19} />
-              </span>
-              <h2 id="tenant-rbac-confirm-title">
+            {confirmation === 'save' && selectedDraft.length === 0 && (
+              <ResourceNotice kind="info">
+                Vai trò sẽ có override rỗng, không nhận quyền nào trong nhà xe
+                này.
+              </ResourceNotice>
+            )}
+            {((confirmation === 'save' && selectedSelfLockoutWarning) ||
+              (confirmation === 'reset' && resetSelfLockoutWarning)) && (
+              <ResourceNotice kind="info">
                 {confirmation === 'save'
-                  ? 'Xác nhận thay thế quyền tenant'
-                  : 'Xác nhận khôi phục quyền mặc định'}
-              </h2>
-              <p id="tenant-rbac-confirm-description">
-                {confirmation === 'save'
-                  ? <>Bạn sắp thay thế toàn bộ quyền áp dụng cho vai trò <strong>{selectedRole.roleName}</strong> trong nhà xe này. Thay đổi không ảnh hưởng nhà xe khác hoặc quyền mặc định toàn hệ thống.</>
-                  : <>Cấu hình riêng của vai trò <strong>{selectedRole.roleName}</strong> sẽ bị xóa để vai trò này kế thừa quyền mặc định toàn hệ thống.</>}
-              </p>
-              {confirmation === 'save' && selectedDraft.length === 0 && (
-                <p className={styles.emptyReplacementWarning}>
-                  Vai trò sẽ có override rỗng, không nhận quyền nào trong nhà xe này.
-                </p>
-              )}
-              {((confirmation === 'save' && selectedSelfLockoutWarning) ||
-                (confirmation === 'reset' && resetSelfLockoutWarning)) && (
-                <p className={styles.selfLockoutWarning} role="note">
-                  {confirmation === 'save'
-                    ? selectedSelfLockoutWarning
-                    : resetSelfLockoutWarning}
-                </p>
-              )}
-              {saveError && <p className={styles.dialogError} role="alert">{saveError}</p>}
-              <div className={styles.confirmActions}>
-                <Button
-                  disabled={saving}
-                  onClick={() => setConfirmation(null)}
-                  variant="secondary"
-                >
-                  Hủy
-                </Button>
-                <Button
-                  disabled={saving}
-                  onClick={() => void (confirmation === 'save'
-                    ? saveSelectedRole()
-                    : restoreDefaultPermissions())}
-                >
-                  {saving
-                    ? 'Đang lưu…'
-                    : confirmation === 'save'
-                      ? 'Xác nhận lưu'
-                      : 'Xác nhận khôi phục'}
-                </Button>
-              </div>
-            </div>
-          </AdminConfirmDialog>
+                  ? selectedSelfLockoutWarning
+                  : resetSelfLockoutWarning}
+              </ResourceNotice>
+            )}
+            <Button
+              disabled={saving}
+              aria-busy={saving}
+              onClick={() =>
+                void (confirmation === 'save'
+                  ? saveSelectedRole()
+                  : restoreDefaultPermissions())
+              }
+            >
+              {saving
+                ? 'Đang lưu…'
+                : confirmation === 'save'
+                  ? 'Xác nhận lưu'
+                  : 'Xác nhận khôi phục'}
+            </Button>
+          </ResourceConfirmation>
         )}
       </div>
     </SuperAdminLayout>

@@ -7,7 +7,7 @@ import {
   waitFor,
   within,
 } from '@testing-library/react';
-import { renderToStaticMarkup } from 'react-dom/server';
+import { renderPortalMarkup, selectCanonicalOption } from './canonical-test-helpers';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { TripFormDialog } from '../src/features/trips/components/trip-form-dialog';
 import { TripDetailSheet } from '../src/features/trips/components/trip-detail-sheet';
@@ -26,12 +26,14 @@ import type {
 } from '../src/features/trips/types/trip';
 import { setEmployeeAdminTestSession } from './admin-auth-test-session';
 
-vi.mock('lucide-react', () => {
+vi.mock('lucide-react', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('lucide-react')>();
   const icon = (name: string) =>
     function MockIcon(props: React.SVGProps<SVGSVGElement>) {
       return <svg {...props} data-icon={name} />;
     };
   return {
+    ...actual,
     ArrowDown: icon('down'),
     ArrowUp: icon('up'),
     ArrowUpDown: icon('sort'),
@@ -160,7 +162,7 @@ afterEach(() => {
 
 describe('Trip Form Composition & Validation', () => {
   it('renders create mode with all required fields and options', () => {
-    const html = renderToStaticMarkup(
+    const html = renderPortalMarkup(
       <TripFormDialog
         onClose={vi.fn()}
         onRetryRouteOptions={vi.fn()}
@@ -171,20 +173,20 @@ describe('Trip Form Composition & Validation', () => {
       />,
     );
 
-    expect(html).toContain('Thêm chuyến xe mới');
+    expect(html).toContain('Thêm chuyến xe');
     expect(html).toContain('Mã chuyến xe');
     expect(html).toContain('Tuyến xe');
     expect(html).toContain('Xe phục vụ');
     expect(html).toContain('Nhận gửi hàng');
     expect(html).toContain('Ngày khởi hành');
     expect(html).toContain('Giờ khởi hành');
-    expect(html).toContain('FUTA-TX-0001 (TP.HCM → Đà Lạt)');
-    expect(html).toContain('30F-123.45 (GIƯỜNG NẰM)');
+    expect(screen.getByRole('combobox', { name: /Tuyến xe/ })).toBeTruthy();
+    expect(screen.getByRole('combobox', { name: /Xe phục vụ/ })).toBeTruthy();
     expect(html).toContain('Tạo chuyến xe');
   });
 
   it('renders edit mode with immutable code, route, and vehicle', () => {
-    const html = renderToStaticMarkup(
+    const html = renderPortalMarkup(
       <TripFormDialog
         onClose={vi.fn()}
         onRetryRouteOptions={vi.fn()}
@@ -205,8 +207,8 @@ describe('Trip Form Composition & Validation', () => {
     expect(html).not.toContain('id="edit-trip-101-route"');
     expect(html).not.toContain('id="edit-trip-101-vehicle"');
     // Date and time inputs are present
-    expect(html).toContain('id="edit-trip-101-departure-date"');
-    expect(html).toContain('id="edit-trip-101-departure-time"');
+    expect(html).toContain('id="edit-trip-101-departureDate"');
+    expect(html).toContain('id="edit-trip-101-departureTime"');
     expect(html).toContain('2026-10-10');
     expect(html).toContain('07:30');
     expect(html).not.toContain('Nhận gửi hàng');
@@ -218,24 +220,24 @@ describe('Trip Form Composition & Validation', () => {
   ])(
     'when the create checkbox is %s, submits acceptsShipments=%s',
     async (state, acceptsShipments) => {
-      const fetchMock = vi
-        .spyOn(globalThis, 'fetch')
-        .mockResolvedValue(
-          new Response(JSON.stringify({ data: mockTrip }), { status: 201 }),
-        );
+      const onSaved = vi.fn();
+      const savedTrip = { ...mockTrip, acceptsShipments };
+      const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) =>
+        new Response(JSON.stringify({ data: String(url).includes('/code-preview') ? { code: 'FUTA-CX-10102026-0001' } : savedTrip }), { status: init?.method === 'POST' ? 201 : 200 }),
+      );
       render(
         <TripFormDialog
           onClose={vi.fn()}
           onRetryRouteOptions={vi.fn()}
           onRetryVehicleOptions={vi.fn()}
-          onSaved={vi.fn()}
+          onSaved={onSaved}
           routeOptions={routeOptionsSuccess}
           vehicleOptions={vehicleOptionsSuccess}
         />,
       );
 
       const dialog = await screen.findByRole('dialog', {
-        name: 'Thêm chuyến xe mới',
+        name: 'Thêm chuyến xe',
       });
       const checkbox = within(dialog).getByRole('checkbox', {
         name: 'Nhận gửi hàng',
@@ -243,15 +245,9 @@ describe('Trip Form Composition & Validation', () => {
       expect(checkbox.checked).toBe(false);
       if (state === 'selected') fireEvent.click(checkbox);
 
-      fireEvent.change(within(dialog).getByLabelText(/Mã chuyến xe/), {
-        target: { value: 'FUTA-CX-001' },
-      });
-      fireEvent.change(within(dialog).getByLabelText(/Tuyến xe/), {
-        target: { value: '1' },
-      });
-      fireEvent.change(within(dialog).getByLabelText(/Xe phục vụ/), {
-        target: { value: '8' },
-      });
+      expect((within(dialog).getByLabelText(/Mã chuyến xe/) as HTMLInputElement).disabled).toBe(true);
+      await selectCanonicalOption(within(dialog).getByLabelText(/Tuyến xe/), /FUTA-TX-0001/);
+      await selectCanonicalOption(within(dialog).getByLabelText(/Xe phục vụ/), /30F-123.45/);
       fireEvent.change(within(dialog).getByLabelText(/Ngày khởi hành/), {
         target: { value: '2026-10-10' },
       });
@@ -262,10 +258,14 @@ describe('Trip Form Composition & Validation', () => {
         within(dialog).getByRole('button', { name: 'Tạo chuyến xe' }),
       );
 
-      await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
-      const [, init] = fetchMock.mock.calls[0];
+      await waitFor(() => expect(onSaved).toHaveBeenCalledWith(savedTrip));
+      expect((within(dialog).getByLabelText(/Mã chuyến xe/) as HTMLInputElement).value).toBe('FUTA-CX-10102026-0001');
+      const createRequests = () => fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST');
+      await waitFor(() => expect(createRequests()).toHaveLength(1));
+      const [createUrl, init] = createRequests()[0];
+      expect(new URL(String(createUrl)).pathname).toBe('/api/v1/trips');
+      expect(fetchMock.mock.calls.filter(([url]) => String(url).includes('/code-preview'))).toHaveLength(1);
       expect(JSON.parse(init?.body as string)).toEqual({
-        code: 'FUTA-CX-001',
         routeId: 1,
         vehicleId: 8,
         departureDate: '2026-10-10',
@@ -306,7 +306,7 @@ describe('Trip Form Composition & Validation', () => {
       target: { value: '08:00' },
     });
     fireEvent.click(
-      within(dialog).getByRole('button', { name: 'Cập nhật chuyến' }),
+      within(dialog).getByRole('button', { name: 'Lưu thay đổi' }),
     );
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
@@ -318,7 +318,7 @@ describe('Trip Form Composition & Validation', () => {
   });
 
   it('shows loading state for route and vehicle options', () => {
-    const html = renderToStaticMarkup(
+    const html = renderPortalMarkup(
       <TripFormDialog
         onClose={vi.fn()}
         onRetryRouteOptions={vi.fn()}
@@ -329,13 +329,13 @@ describe('Trip Form Composition & Validation', () => {
       />,
     );
 
-    expect(html).toContain('Đang tải danh sách tuyến xe…');
-    expect(html).toContain('Đang tải danh sách xe…');
+    expect(html).toContain('Đang tải tuyến xe…');
+    expect(html).toContain('Đang tải xe phục vụ…');
     expect(html).toMatch(/<button[^>]*type="submit"[^>]*disabled=""/);
   });
 
   it('shows error state with retry buttons when lookup options fail', () => {
-    const html = renderToStaticMarkup(
+    const html = renderPortalMarkup(
       <TripFormDialog
         onClose={vi.fn()}
         onRetryRouteOptions={vi.fn()}
@@ -356,13 +356,13 @@ describe('Trip Form Composition & Validation', () => {
 describe('Trip permission gates', () => {
   it('renders "Thêm chuyến" button when user has trip:create permission', () => {
     setEmployeeAdminTestSession(['trip:read', 'trip:create']);
-    const html = renderToStaticMarkup(<TripsManagement />);
+    const html = renderPortalMarkup(<TripsManagement />);
     expect(html).toContain('Thêm chuyến');
   });
 
   it('hides "Thêm chuyến" button when user only has trip:read', () => {
     setEmployeeAdminTestSession(['trip:read']);
-    const html = renderToStaticMarkup(<TripsManagement />);
+    const html = renderPortalMarkup(<TripsManagement />);
     expect(html).not.toContain('Thêm chuyến');
   });
 });
@@ -370,7 +370,7 @@ describe('Trip permission gates', () => {
 describe('Trip shipment snapshot details', () => {
   it('shows the shipment flag and total snapshot capacities in the detail sheet', () => {
     setEmployeeAdminTestSession(['trip:read']);
-    const html = renderToStaticMarkup(
+    const html = renderPortalMarkup(
       <TripDetailSheet initialTrip={mockTrip} onClose={vi.fn()} tripId={101} />,
     );
 
@@ -385,7 +385,7 @@ describe('Trip shipment snapshot details', () => {
     expect(html).toMatch(/<dt>Hàng nhẹ<\/dt><dd>3<\/dd>/);
     expect(html).not.toContain('Còn lại');
 
-    const nonShipmentHtml = renderToStaticMarkup(
+    const nonShipmentHtml = renderPortalMarkup(
       <TripDetailSheet
         initialTrip={{ ...mockTrip, acceptsShipments: false }}
         onClose={vi.fn()}
@@ -693,9 +693,9 @@ describe('Trip write service API contracts', () => {
 });
 
 describe('Trip lifecycle & cancellation action gates in detail sheet', () => {
-  it('renders "Chỉnh sửa", "Bắt đầu chạy", and "Hủy chuyến" for CHUA_KHOI_HANH with full write permissions', () => {
+  it('renders edit and cancel, but never manual start, for pending trips with full permissions', () => {
     setEmployeeAdminTestSession(['trip:read', 'trip:update', 'trip:cancel']);
-    const html = renderToStaticMarkup(
+    const html = renderPortalMarkup(
       <TripDetailSheet
         initialTrip={{ ...mockTrip, status: 'CHUA_KHOI_HANH' }}
         onClose={vi.fn()}
@@ -703,14 +703,14 @@ describe('Trip lifecycle & cancellation action gates in detail sheet', () => {
       />,
     );
     expect(html).toContain('Chỉnh sửa');
-    expect(html).toContain('Bắt đầu chạy');
+    expect(html).not.toContain('Bắt đầu chạy');
     expect(html).toContain('Hủy chuyến');
     expect(html).not.toContain('Hoàn thành chuyến');
   });
 
   it('renders "Hoàn thành chuyến" and hides "Chỉnh sửa" for DANG_CHAY with trip:update', () => {
     setEmployeeAdminTestSession(['trip:read', 'trip:update', 'trip:cancel']);
-    const html = renderToStaticMarkup(
+    const html = renderPortalMarkup(
       <TripDetailSheet
         initialTrip={{ ...mockTrip, status: 'DANG_CHAY' }}
         onClose={vi.fn()}
@@ -725,7 +725,7 @@ describe('Trip lifecycle & cancellation action gates in detail sheet', () => {
 
   it('hides edit and all lifecycle actions for terminal statuses HOAN_THANH and DA_HUY', () => {
     setEmployeeAdminTestSession(['trip:read', 'trip:update', 'trip:cancel']);
-    const htmlCompleted = renderToStaticMarkup(
+    const htmlCompleted = renderPortalMarkup(
       <TripDetailSheet
         initialTrip={{ ...mockTrip, status: 'HOAN_THANH' }}
         onClose={vi.fn()}
@@ -737,7 +737,7 @@ describe('Trip lifecycle & cancellation action gates in detail sheet', () => {
     expect(htmlCompleted).not.toContain('Hoàn thành chuyến');
     expect(htmlCompleted).not.toContain('Hủy chuyến');
 
-    const htmlCancelled = renderToStaticMarkup(
+    const htmlCancelled = renderPortalMarkup(
       <TripDetailSheet
         initialTrip={{ ...mockTrip, status: 'DA_HUY' }}
         onClose={vi.fn()}
@@ -752,7 +752,7 @@ describe('Trip lifecycle & cancellation action gates in detail sheet', () => {
 
   it('respects granular permissions: hides status and edit without trip:update, hides cancel without trip:cancel', () => {
     setEmployeeAdminTestSession(['trip:read']);
-    const readOnlyHtml = renderToStaticMarkup(
+    const readOnlyHtml = renderPortalMarkup(
       <TripDetailSheet
         initialTrip={{ ...mockTrip, status: 'CHUA_KHOI_HANH' }}
         onClose={vi.fn()}
@@ -762,9 +762,11 @@ describe('Trip lifecycle & cancellation action gates in detail sheet', () => {
     expect(readOnlyHtml).not.toContain('Chỉnh sửa');
     expect(readOnlyHtml).not.toContain('Bắt đầu chạy');
     expect(readOnlyHtml).not.toContain('Hủy chuyến');
+    const readOnlyRunningHtml = renderPortalMarkup(<TripDetailSheet initialTrip={{ ...mockTrip, status: 'DANG_CHAY' }} onClose={vi.fn()} tripId={101} />);
+    expect(readOnlyRunningHtml).not.toContain('Hoàn thành chuyến');
 
     setEmployeeAdminTestSession(['trip:read', 'trip:update']);
-    const updateOnlyHtml = renderToStaticMarkup(
+    const updateOnlyHtml = renderPortalMarkup(
       <TripDetailSheet
         initialTrip={{ ...mockTrip, status: 'CHUA_KHOI_HANH' }}
         onClose={vi.fn()}
@@ -772,11 +774,14 @@ describe('Trip lifecycle & cancellation action gates in detail sheet', () => {
       />,
     );
     expect(updateOnlyHtml).toContain('Chỉnh sửa');
-    expect(updateOnlyHtml).toContain('Bắt đầu chạy');
+    expect(updateOnlyHtml).not.toContain('Bắt đầu chạy');
     expect(updateOnlyHtml).not.toContain('Hủy chuyến');
+    const updateRunningHtml = renderPortalMarkup(<TripDetailSheet initialTrip={{ ...mockTrip, status: 'DANG_CHAY' }} onClose={vi.fn()} tripId={101} />);
+    expect(updateRunningHtml).toContain('Hoàn thành chuyến');
+    expect(updateRunningHtml).not.toContain('Bắt đầu chạy');
 
     setEmployeeAdminTestSession(['trip:read', 'trip:cancel']);
-    const cancelOnlyHtml = renderToStaticMarkup(
+    const cancelOnlyHtml = renderPortalMarkup(
       <TripDetailSheet
         initialTrip={{ ...mockTrip, status: 'CHUA_KHOI_HANH' }}
         onClose={vi.fn()}

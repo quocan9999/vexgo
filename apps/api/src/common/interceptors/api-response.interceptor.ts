@@ -19,6 +19,10 @@ function isResponseEnvelope(value: unknown): value is { data: unknown } {
 @Injectable()
 export class ApiResponseInterceptor implements NestInterceptor {
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
+    if (context.getType() !== 'http') {
+      return next.handle();
+    }
+
     const response = context
       .switchToHttp()
       .getResponse<{ statusCode: number }>();

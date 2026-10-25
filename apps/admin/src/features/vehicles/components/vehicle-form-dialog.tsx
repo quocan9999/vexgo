@@ -1,9 +1,23 @@
 'use client';
 
-import { LoaderCircle, X } from 'lucide-react';
+import { ResourceSheetForm } from '@/components/admin/resource-sheet-form';
+
+import { LoaderCircle } from 'lucide-react';
+import { toast } from 'sonner';
 import { useRef, useState, type FormEvent } from 'react';
-import { AdminFormDialog } from '@/components/admin/admin-form-dialog';
-import { Button } from '@/components/ui/button';
+import { useAdminSession } from '@/features/admin-auth/hooks/use-admin-session';
+import { ResourceNotice, ResourceSheet } from '@/components/admin/resource-ui';
+import { Input } from '@/components/ui/input';
+import { Field, FieldError, FieldLabel } from '@/components/ui/field';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Button } from '@/components/ui/action-button';
 import type { VehicleFilterOptionState } from '../hooks/use-vehicle-filter-options';
 import {
   createVehicle,
@@ -27,7 +41,6 @@ type VehicleFormDialogProps = {
 
 type FormValues = {
   licensePlate: string;
-  busCompanyId: string;
   vehicleTypeId: string;
   status: VehicleStatus;
 };
@@ -35,44 +48,39 @@ type FormValues = {
 type FormField = keyof FormValues;
 type FieldErrors = Partial<Record<FormField, string>>;
 
-function optionText(state: VehicleFilterOptionState, resource: string) {
-  if (state.status === 'loading') return `Đang tải ${resource}…`;
-  if (state.status === 'error') return `Không tải được ${resource}`;
-  return `Chọn ${resource}`;
-}
-
 export function VehicleFormDialog({
   vehicle,
-  busCompanies,
   vehicleTypes,
   onRetryOptions,
   onClose,
   onSaved,
 }: VehicleFormDialogProps) {
+  const authState = useAdminSession();
+  const tenantId =
+    authState.status === 'authenticated'
+      ? authState.session.busCompanyId
+      : null;
   const editing = vehicle !== undefined;
   const idPrefix = editing
     ? `edit-vehicle-${vehicle.vehicleId}`
     : 'create-vehicle';
-  const dialogRef = useRef<HTMLDialogElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
   const submittingRef = useRef(false);
   const [values, setValues] = useState<FormValues>(() => ({
     licensePlate: vehicle?.licensePlate ?? '',
-    busCompanyId: String(vehicle?.busCompany.busCompanyId ?? ''),
     vehicleTypeId: String(vehicle?.vehicleType.vehicleTypeId ?? ''),
     status: 'HOAT_DONG',
   }));
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const optionsReady =
-    busCompanies.status === 'success' && vehicleTypes.status === 'success';
+  const optionsReady = Boolean(tenantId) && vehicleTypes.status === 'success';
   const optionErrors = [
-    busCompanies.status === 'error' ? `Nhà xe: ${busCompanies.message}` : null,
     vehicleTypes.status === 'error' ? `Loại xe: ${vehicleTypes.message}` : null,
   ].filter((message): message is string => message !== null);
 
   function closeDialog() {
-    if (!submittingRef.current) dialogRef.current?.close();
+    if (!submittingRef.current) onClose();
   }
 
   function updateField<Field extends FormField>(
@@ -87,7 +95,6 @@ export function VehicleFormDialog({
   function validate(): FieldErrors {
     const errors: FieldErrors = {};
     const licensePlate = values.licensePlate.trim();
-    const busCompanyId = Number(values.busCompanyId);
     const vehicleTypeId = Number(values.vehicleTypeId);
 
     if (!licensePlate) errors.licensePlate = 'Vui lòng nhập biển số xe.';
@@ -95,9 +102,6 @@ export function VehicleFormDialog({
       errors.licensePlate = 'Biển số xe không được vượt quá 15 ký tự.';
     }
 
-    if (!Number.isSafeInteger(busCompanyId) || busCompanyId < 1) {
-      errors.busCompanyId = 'Vui lòng chọn nhà xe.';
-    }
     if (!Number.isSafeInteger(vehicleTypeId) || vehicleTypeId < 1) {
       errors.vehicleTypeId = 'Vui lòng chọn loại xe.';
     }
@@ -114,13 +118,20 @@ export function VehicleFormDialog({
 
     setFormError(null);
     if (!optionsReady) {
-      setFormError('Cần tải đủ Nhà xe và Loại xe trước khi lưu.');
+      setFormError('Không xác định được nhà xe hoặc chưa tải được loại xe.');
       return;
     }
 
     const errors = validate();
     setFieldErrors(errors);
-    if (Object.keys(errors).length > 0) return;
+    if (Object.keys(errors).length > 0) {
+      requestAnimationFrame(() =>
+        formRef.current
+          ?.querySelector<HTMLElement>('[aria-invalid="true"]')
+          ?.focus(),
+      );
+      return;
+    }
 
     submittingRef.current = true;
     setSubmitting(true);
@@ -128,13 +139,12 @@ export function VehicleFormDialog({
     try {
       const editableFields = {
         licensePlate: values.licensePlate.trim(),
-        busCompanyId: Number(values.busCompanyId),
+        busCompanyId: tenantId!,
         vehicleTypeId: Number(values.vehicleTypeId),
       };
       const savedVehicle = editing
         ? await updateVehicle(vehicle.vehicleId, editableFields)
         : await createVehicle({ ...editableFields, status: values.status });
-      dialogRef.current?.close();
       onSaved(savedVehicle);
     } catch (requestError: unknown) {
       if (
@@ -142,10 +152,15 @@ export function VehicleFormDialog({
         requestError.code === 'VEHICLE_LICENSE_PLATE_EXISTS'
       ) {
         setFieldErrors({ licensePlate: 'Biển số xe đã tồn tại.' });
+        requestAnimationFrame(() =>
+          formRef.current
+            ?.querySelector<HTMLElement>('[aria-invalid="true"]')
+            ?.focus(),
+        );
       } else if (requestError instanceof TypeError) {
-        setFormError('Không thể kết nối đến máy chủ API. Vui lòng thử lại.');
+        toast.error('Không thể kết nối đến máy chủ API. Vui lòng thử lại.');
       } else {
-        setFormError(
+        toast.error(
           requestError instanceof Error
             ? requestError.message
             : editing
@@ -160,225 +175,166 @@ export function VehicleFormDialog({
   }
 
   return (
-    <AdminFormDialog
-      ariaBusy={submitting}
-      ariaDescribedBy={`${idPrefix}-description`}
-      ariaLabelledBy={`${idPrefix}-title`}
-      dialogRef={dialogRef}
-      onClose={onClose}
+    <ResourceSheet
+      title={editing ? 'Chỉnh sửa xe' : 'Thêm xe'}
+      description={
+        editing
+          ? 'Cập nhật biển số và loại xe.'
+          : 'Nhập thông tin xe mới vào hệ thống.'
+      }
+      busy={submitting}
       preventDismiss={submitting}
+      onClose={closeDialog}
     >
-      <>
-        <div className="admin-dialog-header">
-          <div className="admin-dialog-header__copy">
-            <p className="eyebrow">QUẢN LÝ PHƯƠNG TIỆN</p>
-            <h2 id={`${idPrefix}-title`}>
-              {editing ? 'Chỉnh sửa xe' : 'Thêm xe'}
-            </h2>
-            <p id={`${idPrefix}-description`}>
-              {editing
-                ? 'Cập nhật biển số, nhà xe và loại xe.'
-                : 'Nhập thông tin xe mới vào hệ thống.'}
-            </p>
-          </div>
-          <button
-            aria-label={
-              editing ? 'Đóng biểu mẫu chỉnh sửa xe' : 'Đóng biểu mẫu thêm xe'
-            }
-            className="icon-button"
-            disabled={submitting}
-            onClick={closeDialog}
-            type="button"
-          >
-            <X aria-hidden="true" size={19} />
-          </button>
-        </div>
-
-        <form className="vehicle-form" noValidate onSubmit={handleSubmit}>
-          {formError && (
-            <div className="vehicle-form-error" role="alert">
-              {formError}
-            </div>
-          )}
-
-          {optionErrors.length > 0 && (
-            <div className="vehicle-form-options-error" role="alert">
-              <span>{optionErrors.join(' ')}</span>
-              <Button
-                disabled={submitting}
-                onClick={onRetryOptions}
-                type="button"
-                variant="secondary"
-              >
-                Tải lại tùy chọn
-              </Button>
-            </div>
-          )}
-
-          <div className="vehicle-form-field">
-            <label htmlFor={`${idPrefix}-license-plate`}>Biển số xe *</label>
-            <input
-              aria-describedby={
-                fieldErrors.licensePlate
-                  ? `${idPrefix}-license-plate-error`
-                  : undefined
-              }
-              aria-invalid={Boolean(fieldErrors.licensePlate)}
-              autoComplete="off"
-              className="admin-data-mono"
-              disabled={submitting}
-              id={`${idPrefix}-license-plate`}
-              maxLength={15}
-              onChange={(event) =>
-                updateField('licensePlate', event.target.value)
-              }
-              placeholder="Ví dụ: 51B-123.45"
-              required
-              type="text"
-              value={values.licensePlate}
-            />
-            {fieldErrors.licensePlate && (
-              <span
-                className="vehicle-form-field-error"
-                id={`${idPrefix}-license-plate-error`}
-              >
-                {fieldErrors.licensePlate}
-              </span>
-            )}
-          </div>
-
-          <div className="vehicle-form-field">
-            <label htmlFor={`${idPrefix}-bus-company`}>Nhà xe *</label>
-            <select
-              aria-describedby={
-                fieldErrors.busCompanyId
-                  ? `${idPrefix}-bus-company-error`
-                  : undefined
-              }
-              aria-invalid={Boolean(fieldErrors.busCompanyId)}
+      <ResourceSheetForm
+        ref={formRef}
+        noValidate
+        onSubmit={handleSubmit}
+        footer={
+          <div className="-mx-4 flex flex-wrap justify-end gap-2 border-t bg-card p-4 sm:-mx-6 sm:p-6 shrink-0">
+            <Button disabled={submitting} onClick={closeDialog} variant="outline">
+              Hủy
+            </Button>
+            <Button
+              aria-busy={submitting}
               disabled={submitting || !optionsReady}
-              id={`${idPrefix}-bus-company`}
-              onChange={(event) =>
-                updateField('busCompanyId', event.target.value)
-              }
-              required
-              value={values.busCompanyId}
+              type="submit"
             >
-              <option value="">{optionText(busCompanies, 'nhà xe')}</option>
-              {busCompanies.status === 'success' &&
-                busCompanies.options.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.label}
-                  </option>
-                ))}
-              {busCompanies.status !== 'success' && vehicle && (
-                <option value={vehicle.busCompany.busCompanyId}>
-                  {vehicle.busCompany.name}
-                </option>
+              {submitting && (
+                <LoaderCircle aria-hidden className="motion-safe:animate-spin" />
               )}
-            </select>
-            {fieldErrors.busCompanyId && (
-              <span
-                className="vehicle-form-field-error"
-                id={`${idPrefix}-bus-company-error`}
-              >
-                {fieldErrors.busCompanyId}
-              </span>
-            )}
+              {submitting ? 'Đang lưu…' : editing ? 'Lưu thay đổi' : 'Tạo xe'}
+            </Button>
           </div>
-
-          <div className="vehicle-form-field">
-            <label htmlFor={`${idPrefix}-vehicle-type`}>Loại xe *</label>
-            <select
+        }
+      >
+        {formError && <ResourceNotice kind="error">{formError}</ResourceNotice>}
+        {optionErrors.length > 0 && (
+          <ResourceNotice kind="error">
+            <p>{optionErrors.join(' ')}</p>
+            <Button
+              className="mt-3"
+              disabled={submitting}
+              onClick={onRetryOptions}
+              variant="outline"
+            >
+              Tải lại tùy chọn
+            </Button>
+          </ResourceNotice>
+        )}
+        <Field data-invalid={Boolean(fieldErrors.licensePlate)}>
+          <FieldLabel htmlFor={`${idPrefix}-license-plate`}>
+            Biển số xe <span aria-hidden>*</span>
+          </FieldLabel>
+          <Input
+            aria-describedby={
+              fieldErrors.licensePlate
+                ? `${idPrefix}-license-plate-error`
+                : undefined
+            }
+            aria-invalid={Boolean(fieldErrors.licensePlate)}
+            autoComplete="off"
+            className="admin-data-mono"
+            disabled={submitting}
+            id={`${idPrefix}-license-plate`}
+            maxLength={15}
+            onChange={(event) =>
+              updateField('licensePlate', event.target.value)
+            }
+            placeholder="Ví dụ: 51B-123.45"
+            required
+            value={values.licensePlate}
+          />
+          <FieldError id={`${idPrefix}-license-plate-error`}>
+            {fieldErrors.licensePlate}
+          </FieldError>
+        </Field>
+        <Field data-invalid={Boolean(fieldErrors.vehicleTypeId)}>
+          <FieldLabel htmlFor={`${idPrefix}-vehicle-type`}>
+            Loại xe <span aria-hidden>*</span>
+          </FieldLabel>
+          <Select
+            disabled={submitting || !optionsReady}
+            onValueChange={(value) =>
+              updateField('vehicleTypeId', String(value ?? ''))
+            }
+            value={values.vehicleTypeId || null}
+          >
+            <SelectTrigger
               aria-describedby={
                 fieldErrors.vehicleTypeId
                   ? `${idPrefix}-vehicle-type-error`
                   : undefined
               }
               aria-invalid={Boolean(fieldErrors.vehicleTypeId)}
-              disabled={submitting || !optionsReady}
+              aria-required
               id={`${idPrefix}-vehicle-type`}
-              onChange={(event) =>
-                updateField('vehicleTypeId', event.target.value)
-              }
-              required
-              value={values.vehicleTypeId}
             >
-              <option value="">Chọn loại xe</option>
-              {vehicleTypes.status === 'success' &&
-                vehicleTypes.options.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.label}
-                  </option>
-                ))}
-              {vehicleTypes.status !== 'success' && vehicle && (
-                <option value={vehicle.vehicleType.vehicleTypeId}>
-                  {vehicle.vehicleType.name}
-                </option>
-              )}
-            </select>
-            {fieldErrors.vehicleTypeId && (
-              <span
-                className="vehicle-form-field-error"
-                id={`${idPrefix}-vehicle-type-error`}
-              >
-                {fieldErrors.vehicleTypeId}
-              </span>
-            )}
-          </div>
-
-          {!editing && (
-            <div className="vehicle-form-field">
-              <label htmlFor={`${idPrefix}-status`}>Trạng thái *</label>
-              <select
+              <SelectValue placeholder="Chọn loại xe">
+                {vehicleTypes.status === 'success'
+                  ? vehicleTypes.options.find(
+                      (option) => String(option.id) === values.vehicleTypeId,
+                    )?.label
+                  : vehicle?.vehicleType.name}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent align="start">
+              <SelectGroup>
+                {vehicleTypes.status === 'success' &&
+                  vehicleTypes.options.map((option) => (
+                    <SelectItem key={option.id} value={String(option.id)}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                {vehicleTypes.status !== 'success' && vehicle && (
+                  <SelectItem value={String(vehicle.vehicleType.vehicleTypeId)}>
+                    {vehicle.vehicleType.name}
+                  </SelectItem>
+                )}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+          <FieldError id={`${idPrefix}-vehicle-type-error`}>
+            {fieldErrors.vehicleTypeId}
+          </FieldError>
+        </Field>
+        {!editing && (
+          <Field data-invalid={Boolean(fieldErrors.status)}>
+            <FieldLabel htmlFor={`${idPrefix}-status`}>
+              Trạng thái <span aria-hidden>*</span>
+            </FieldLabel>
+            <Select
+              disabled={submitting}
+              onValueChange={(value) =>
+                updateField('status', value as VehicleStatus)
+              }
+              value={values.status}
+            >
+              <SelectTrigger
                 aria-describedby={
                   fieldErrors.status ? `${idPrefix}-status-error` : undefined
                 }
                 aria-invalid={Boolean(fieldErrors.status)}
-                disabled={submitting}
+                aria-required
                 id={`${idPrefix}-status`}
-                onChange={(event) =>
-                  updateField('status', event.target.value as VehicleStatus)
-                }
-                required
-                value={values.status}
               >
-                <option value="HOAT_DONG">Đang hoạt động</option>
-                <option value="BAO_TRI">Bảo trì</option>
-              </select>
-              {fieldErrors.status && (
-                <span
-                  className="vehicle-form-field-error"
-                  id={`${idPrefix}-status-error`}
-                >
-                  {fieldErrors.status}
-                </span>
-              )}
-            </div>
-          )}
-
-          <div className="vehicle-form-actions">
-            <Button
-              disabled={submitting}
-              onClick={closeDialog}
-              type="button"
-              variant="secondary"
-            >
-              Hủy
-            </Button>
-            <Button disabled={submitting || !optionsReady} type="submit">
-              {submitting && (
-                <LoaderCircle
-                  aria-hidden="true"
-                  className="vehicle-form-spinner"
-                  size={16}
-                />
-              )}
-              {submitting ? 'Đang lưu…' : editing ? 'Lưu thay đổi' : 'Tạo xe'}
-            </Button>
-          </div>
-        </form>
-      </>
-    </AdminFormDialog>
+                <SelectValue>
+                  {values.status === 'HOAT_DONG' ? 'Đang hoạt động' : 'Bảo trì'}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent align="start">
+                <SelectGroup>
+                  <SelectItem value="HOAT_DONG">Đang hoạt động</SelectItem>
+                  <SelectItem value="BAO_TRI">Bảo trì</SelectItem>
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+            <FieldError id={`${idPrefix}-status-error`}>
+              {fieldErrors.status}
+            </FieldError>
+          </Field>
+        )}
+      </ResourceSheetForm>
+    </ResourceSheet>
   );
 }

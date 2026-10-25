@@ -1,3 +1,4 @@
+import { expectOperationToast } from './canonical-test-helpers';
 // @vitest-environment jsdom
 import {
   cleanup,
@@ -215,8 +216,8 @@ describe('Fare Price edit dialog behavior', () => {
     );
     expect(within(edit).getByText(/SG-DL-01/)).toBeTruthy();
     expect(within(edit).getByText(/TP\.HCM → Đà Lạt/)).toBeTruthy();
-    expect(within(edit).getByText('Loại xe: Limousine')).toBeTruthy();
-    expect(within(edit).getByText('Trạng thái: Hoạt động')).toBeTruthy();
+    expect(within(edit).getByText(/Limousine ·/)).toBeTruthy();
+    expect(within(edit).getByText(/· Hoạt động/)).toBeTruthy();
     expect(within(edit).queryByLabelText(/Tuyến xe/)).toBeNull();
     expect(within(edit).queryByLabelText(/Loại xe/)).toBeNull();
     expect(within(edit).queryByLabelText(/Trạng thái/)).toBeNull();
@@ -261,17 +262,13 @@ describe('Fare Price edit dialog behavior', () => {
         },
       }),
     );
-    await waitFor(() =>
-      expect(within(detail).getByRole('status')).toBeTruthy(),
-    );
+    await expectOperationToast('success', /Đã cập nhật bảng giá/);
     await waitFor(() =>
       expect(
         screen.queryByRole('dialog', { name: 'Chỉnh sửa bảng giá' }),
       ).toBeNull(),
     );
-    expect(screen.getByRole('dialog', { name: 'Chi tiết bảng giá' })).toBe(
-      detail,
-    );
+    expect(detail.isConnected).toBe(true);
     expect(within(detail).getByText(/280\.000/)).toBeTruthy();
     await waitFor(() => expect(api.getListRequests()).toBeGreaterThan(1));
   });
@@ -298,17 +295,13 @@ describe('Fare Price edit dialog behavior', () => {
     });
     fireEvent.click(within(edit).getByRole('button', { name: 'Lưu thay đổi' }));
 
-    expect((await within(edit).findByRole('alert')).textContent).toContain(
-      'Khoảng hiệu lực này bị trùng với một bảng giá đang hoạt động của cùng tuyến và loại xe.',
-    );
+    await expectOperationToast('error', 'Khoảng hiệu lực này bị trùng với một bảng giá đang hoạt động của cùng tuyến và loại xe.');
     expect(within(edit).getByLabelText('Giá niêm yết (VND) *')).toHaveProperty(
       'value',
       '280000',
     );
     expect(within(detail).getByText(/250\.000/)).toBeTruthy();
-    expect(screen.getByRole('dialog', { name: 'Chi tiết bảng giá' })).toBe(
-      detail,
-    );
+    expect(detail.isConnected).toBe(true);
   });
 
   it('shows a stable conflict message for exhausted transaction retries', async () => {
@@ -332,9 +325,7 @@ describe('Fare Price edit dialog behavior', () => {
     });
     fireEvent.click(within(edit).getByRole('button', { name: 'Lưu thay đổi' }));
 
-    expect((await within(edit).findByRole('alert')).textContent).toContain(
-      'Dữ liệu bảng giá vừa thay đổi đồng thời. Vui lòng tải lại và thử lại.',
-    );
+    await expectOperationToast('error', 'Dữ liệu bảng giá vừa thay đổi đồng thời. Vui lòng tải lại và thử lại.');
     expect(within(edit).getByLabelText('Giá niêm yết (VND) *')).toHaveProperty(
       'value',
       '280000',
@@ -358,9 +349,7 @@ describe('Fare Price edit dialog behavior', () => {
     const { edit } = await openEditDialog();
     fireEvent.click(within(edit).getByRole('button', { name: 'Lưu thay đổi' }));
 
-    expect((await screen.findByRole('alert')).textContent).toContain(
-      'Bảng giá không còn tồn tại.',
-    );
+    await expectOperationToast('error', 'Bảng giá không còn tồn tại.');
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     await waitFor(() => expect(api.getListRequests()).toBeGreaterThan(1));
   });
@@ -376,9 +365,7 @@ describe('Fare Price edit dialog behavior', () => {
         screen.queryByRole('dialog', { name: 'Chỉnh sửa bảng giá' }),
       ).toBeNull(),
     );
-    expect(screen.getByRole('dialog', { name: 'Chi tiết bảng giá' })).toBe(
-      detail,
-    );
+    expect(detail.isConnected).toBe(true);
     expect(api.requests.some((item) => item.method === 'PATCH')).toBe(false);
   });
 });

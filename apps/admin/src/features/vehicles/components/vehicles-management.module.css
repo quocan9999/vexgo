@@ -1,0 +1,47 @@
+.page {
+  display: grid;
+  gap: var(--admin-space-section-gap);
+}
+.detailHero {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--border);
+}
+.vehicleMark {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  border-radius: 12px;
+  background: var(--accent);
+  color: var(--primary);
+}
+.sectionTitle {
+  margin: 0 0 16px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.detailFields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin: 0;
+}
+.detailFields dt {
+  margin-bottom: 4px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.detailFields dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+@media (max-width: 390px) {
+  .detailFields {
+    column-gap: 12px;
+  }
+}

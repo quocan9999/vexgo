@@ -1,7 +1,11 @@
+import { businessCode } from '../common/business-code.js';
+import { locationSearchTerms } from '../locations/location-search.js';
+import { LocationsService } from '../locations/locations.service.js';
 import {
   ConflictException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
@@ -451,6 +455,7 @@ export class TripsService {
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
     private readonly cargoCapacityService: CargoCapacityService,
+    @Optional() private readonly locations?: LocationsService,
   ) {}
 
   async getBusCompanyRatingMap(
@@ -501,6 +506,8 @@ export class TripsService {
   }
 
   async search(dto: SearchTripsDto) {
+    const catalogue = (dto.from || dto.to) && this.locations
+      ? (await this.locations.list()).data : [];
     const businessTimeZone = resolveBusinessTimeZone(
       this.config.get<string>('BUSINESS_TIME_ZONE'),
     );
@@ -512,10 +519,21 @@ export class TripsService {
     if (dto.from || dto.to || dto.busCompanyId || dto.operator) {
       where.tuyenXe = {};
       if (dto.from) {
-        where.tuyenXe.diemDi = { contains: codeToCity(dto.from) };
+        where.tuyenXe.AND = [{
+          OR: locationSearchTerms(codeToCity(dto.from)!, catalogue).map((term) => ({
+            diemDi: { contains: term },
+          })),
+        }];
       }
       if (dto.to) {
-        where.tuyenXe.diemDen = { contains: codeToCity(dto.to) };
+        const originFilter = where.tuyenXe.AND as
+          | Prisma.TuyenXeWhereInput[]
+          | undefined;
+        where.tuyenXe.AND = [...(originFilter ?? []), {
+          OR: locationSearchTerms(codeToCity(dto.to)!, catalogue).map((term) => ({
+            diemDen: { contains: term },
+          })),
+        }];
       }
       if (dto.busCompanyId) {
         where.tuyenXe.nhaXeId = dto.busCompanyId;
@@ -1014,6 +1032,10 @@ export class TripsService {
     };
   }
 
+  async previewCode(date: string, principal: AuthPrincipal) {
+    return { data: { code: await businessCode(this.prisma, requireTenantPrincipal(principal), 'CX', date) } };
+  }
+
   async create(dto: CreateTripDto, principal: AuthPrincipal) {
     const nhaXeId = requireTenantPrincipal(principal);
 
@@ -1075,19 +1097,10 @@ export class TripsService {
       route.thoiGianChayPhut,
     );
 
-    const existingCode = await this.prisma.chuyenXe.findFirst({
-      where: { maChuyenXe: dto.code },
-    });
-    if (existingCode) {
-      throw new ConflictException({
-        error: 'TRIP_CODE_EXISTS',
-        message: 'Mã chuyến xe đã tồn tại.',
-      });
-    }
-
     try {
       const trip = await this.prisma.$transaction(
         async (tx) => {
+          const code = await businessCode(tx, nhaXeId, 'CX', dto.departureDate, true);
           const lockedVehicles = await tx.$queryRaw<Array<{ xeId: number }>>`
             SELECT xeId
             FROM Xe
@@ -1120,7 +1133,7 @@ export class TripsService {
 
           return tx.chuyenXe.create({
             data: {
-              maChuyenXe: dto.code,
+              maChuyenXe: code,
               ngayKhoiHanh: departureDate,
               gioKhoiHanh: departureTime,
               gioDen: arrivalTime,

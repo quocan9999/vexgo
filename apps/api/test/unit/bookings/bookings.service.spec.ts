@@ -170,6 +170,55 @@ describe('BookingsService', () => {
   });
 
   describe('findCustomerBookings', () => {
+    it.each([50, 902])(
+      'returns the booked tripId %i in every booking reader',
+      async (tripId) => {
+        const booking = {
+          ...sampleBooking,
+          ves: sampleBooking.ves.map((ticket) => ({
+            ...ticket,
+            gheChuyenXe: {
+              ...ticket.gheChuyenXe,
+              chuyenXe: { ...ticket.gheChuyenXe.chuyenXe, chuyenXeId: tripId },
+            },
+          })),
+        };
+        prisma.khachHang.findUnique.mockResolvedValue(mockCustomer);
+        prisma.phieuDatVe.count.mockResolvedValue(1);
+        prisma.phieuDatVe.findMany.mockResolvedValue([booking]);
+        prisma.phieuDatVe.findUnique.mockResolvedValue(booking);
+
+        const list = await service.findCustomerBookings(1, {
+          page: 1,
+          pageSize: 10,
+        });
+        const detail = await service.findCustomerBookingById(
+          1,
+          booking.phieuDatVeId,
+        );
+        const publicDetail = await service.findPublicBookingById(
+          booking.phieuDatVeId,
+          { taiKhoanId: 1 } as any,
+        );
+        for (const mapped of [list.data[0], detail.data, publicDetail]) {
+          expect(mapped).toMatchObject({ bookingId: 101, tripId });
+        }
+      },
+    );
+
+    it('returns null rather than a fabricated tripId when a booking has no tickets', async () => {
+      prisma.phieuDatVe.findUnique.mockResolvedValue({
+        ...sampleBooking,
+        ves: [],
+      });
+
+      const result = await service.findCustomerBookingById(
+        1,
+        sampleBooking.phieuDatVeId,
+      );
+      expect(result.data.tripId).toBeNull();
+    });
+
     it('throws NotFoundException when customer profile does not exist', async () => {
       prisma.khachHang.findUnique.mockResolvedValue(null);
 

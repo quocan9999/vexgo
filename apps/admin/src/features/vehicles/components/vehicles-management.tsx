@@ -4,31 +4,42 @@ import {
   ArrowDown,
   ArrowUp,
   ArrowUpDown,
-  CheckCircle2,
   LoaderCircle,
   Truck,
-  X,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 import { useEffect, useRef, useState } from 'react';
-import { AdminConfirmDialog } from '@/components/admin/admin-confirm-dialog';
-import { AdminDetailAction } from '@/components/admin/admin-detail-action';
-import { AdminDetailSheet } from '@/components/admin/admin-detail-sheet';
-import {
-  AdminCreateAction,
-  AdminRefreshAction,
-} from '@/components/admin/admin-page-actions';
 import { AdminPageHeader } from '@/components/admin/admin-page-header';
-import { AdminPagination } from '@/components/admin/admin-pagination';
-import { AdminStatusBadge } from '@/components/admin/admin-status-badge';
-import { AdminTableSkeleton } from '@/components/admin/admin-table-skeleton';
+import {
+  ResourceConfirmation,
+  ResourceCreateAction,
+  ResourceDetailAction,
+  ResourceNotice,
+  ResourcePagination,
+  ResourceRefreshAction,
+  ResourceSheet,
+  ResourceState,
+  ResourceStatusBadge,
+  ResourceTableSkeleton,
+} from '@/components/admin/resource-ui';
 import {
   FilterToolbar,
   SearchInput,
   SelectFilter,
   type FilterOption,
-} from '@/components/data-filters/data-filters';
-import { Button } from '@/components/ui/button';
+} from '@/components/data-filters/resource-filters';
+import { Button } from '@/components/ui/action-button';
+import { Card } from '@/components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { useAdminPermissions } from '@/features/admin-auth/hooks/use-admin-permissions';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
 import {
@@ -46,13 +57,18 @@ import {
 import { useVehicleFilterOptions } from '../hooks/use-vehicle-filter-options';
 import { useVehicles } from '../hooks/use-vehicles';
 import { VehicleFormDialog } from './vehicle-form-dialog';
-import '../vehicles.css';
+import styles from './vehicles-management.module.css';
 
 function timestampFormat(value: string) {
   return new Intl.DateTimeFormat('vi-VN', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(value));
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+    .format(new Date(value))
+    .replaceAll('/', '-');
 }
 
 function statusLabel(status: VehicleStatus) {
@@ -65,7 +81,7 @@ function statusLabel(status: VehicleStatus) {
 }
 
 function statusTone(status: VehicleStatus) {
-  return status === 'HOAT_DONG' ? 'active' : 'muted';
+  return status === 'HOAT_DONG' ? 'active' : 'warning';
 }
 
 const VEHICLE_STATUS_OPTIONS: FilterOption[] = VEHICLE_STATUSES.map(
@@ -113,8 +129,6 @@ function VehicleDetails({
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [statusSubmitting, setStatusSubmitting] = useState(false);
-  const [statusError, setStatusError] = useState<string | null>(null);
-  const [updateNotice, setUpdateNotice] = useState<string | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -152,7 +166,6 @@ function VehicleDetails({
   function handleVehicleSaved(vehicle: VehicleDetail) {
     setDetailState({ status: 'success', vehicle });
     setEditDialogOpen(false);
-    setUpdateNotice(`Đã cập nhật xe ${vehicle.licensePlate}.`);
     onUpdated('edit', vehicle);
   }
 
@@ -167,18 +180,14 @@ function VehicleDetails({
 
     statusSubmittingRef.current = true;
     setStatusSubmitting(true);
-    setStatusError(null);
 
     try {
       const updatedVehicle = await updateVehicleStatus(vehicleId, nextStatus);
       setDetailState({ status: 'success', vehicle: updatedVehicle });
-      setUpdateNotice(
-        `Đã chuyển xe ${updatedVehicle.licensePlate} sang trạng thái ${statusLabel(updatedVehicle.status)}.`,
-      );
       setStatusDialogOpen(false);
       onUpdated('status', updatedVehicle);
     } catch (requestError: unknown) {
-      setStatusError(
+      toast.error(
         requestError instanceof TypeError
           ? 'Không thể kết nối đến máy chủ API. Vui lòng thử lại.'
           : requestError instanceof Error
@@ -199,153 +208,124 @@ function VehicleDetails({
       : null;
 
   return (
-    <>
-      <AdminDetailSheet
-        ariaBusy={detailState.status === 'loading'}
-        ariaDescribedBy="vehicle-detail-description"
-        ariaLabelledBy="vehicle-detail-title"
-        onClose={onClose}
-      >
-        <div className="admin-dialog-header">
-          <div className="admin-dialog-header__copy">
-            <h2 id="vehicle-detail-title">Chi tiết xe</h2>
-            <p id="vehicle-detail-description">
-              Thông tin xe và các danh mục liên kết.
-            </p>
-          </div>
-          <form method="dialog">
-            <Button
-              aria-label="Đóng chi tiết xe"
-              className="vehicle-detail-close"
-              type="submit"
-              variant="secondary"
-            >
-              <X aria-hidden="true" size={17} />
-            </Button>
-          </form>
-        </div>
-
-        {detailState.status === 'loading' && (
-          <p className="vehicles-state" role="status">
-            <LoaderCircle
-              aria-hidden="true"
-              className="vehicles-spinner"
-              size={17}
-            />
-            Đang tải thông tin xe…
-          </p>
-        )}
-
-        {detailState.status === 'error' && (
-          <div className="vehicles-state" role="alert">
-            <p>{detailState.message}</p>
-            <Button onClick={retry} type="button" variant="secondary">
-              Thử lại
-            </Button>
-          </div>
-        )}
-
-        {detailState.status === 'success' && (
-          <div className="vehicle-detail-content">
-            {updateNotice && (
-              <div className="vehicles-success-notice" role="status">
-                <CheckCircle2 aria-hidden="true" size={16} />
-                <span>{updateNotice}</span>
-              </div>
-            )}
-            <div className="vehicle-detail-hero">
-              <span className="vehicle-detail-mark" aria-hidden="true">
-                <Truck size={21} />
-              </span>
-              <div>
-                <h3 className="admin-data-mono">
-                  {detailState.vehicle.licensePlate}
-                </h3>
-                <p>
-                  Xe #<span className="admin-data-mono">{detailState.vehicle.vehicleId}</span>
-                </p>
-              </div>
-              <AdminStatusBadge tone={statusTone(detailState.vehicle.status)}>
-                {statusLabel(detailState.vehicle.status)}
-              </AdminStatusBadge>
+    <ResourceSheet
+      busy={detailState.status === 'loading'}
+      onClose={onClose}
+      title="Chi tiết xe"
+      description="Thông tin xe và các danh mục liên kết."
+    >
+      {detailState.status === 'loading' && (
+        <ResourceState loading>Đang tải thông tin xe…</ResourceState>
+      )}
+      {detailState.status === 'error' && (
+        <ResourceState error>
+          <p>{detailState.message}</p>
+          <Button onClick={retry} variant="outline">
+            Thử lại
+          </Button>
+        </ResourceState>
+      )}
+      {detailState.status === 'success' && (
+        <div className="space-y-6">
+          <div className={styles.detailHero}>
+            <span className={styles.vehicleMark} aria-hidden>
+              <Truck size={24} />
+            </span>
+            <div className="min-w-0">
+              <h3 className="admin-data-mono text-xl font-semibold">
+                {detailState.vehicle.licensePlate}
+              </h3>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Xe #
+                <span className="admin-data-mono">
+                  {detailState.vehicle.vehicleId}
+                </span>
+              </p>
             </div>
-
-            <section
-              aria-labelledby="vehicle-detail-company-heading"
-              className="vehicle-detail-section"
+            <ResourceStatusBadge tone={statusTone(detailState.vehicle.status)}>
+              {statusLabel(detailState.vehicle.status)}
+            </ResourceStatusBadge>
+          </div>
+          <section aria-labelledby="vehicle-detail-company-heading">
+            <h3
+              className={styles.sectionTitle}
+              id="vehicle-detail-company-heading"
             >
-              <h3 id="vehicle-detail-company-heading">Đơn vị và loại xe</h3>
-              <dl className="vehicle-detail-fields">
-                <div>
-                  <dt>Nhà xe</dt>
-                  <dd>{detailState.vehicle.busCompany.name}</dd>
-                </div>
-                <div>
-                  <dt>Mã nhà xe</dt>
-                  <dd className="admin-data-mono">
-                    {detailState.vehicle.busCompany.code}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Loại xe</dt>
-                  <dd>{detailState.vehicle.vehicleType.name}</dd>
-                </div>
-                <div>
-                  <dt>Mô tả loại xe</dt>
-                  <dd>
-                    {detailState.vehicle.vehicleType.description ||
-                      'Chưa có mô tả'}
-                  </dd>
-                </div>
-              </dl>
-            </section>
-
-            <section
-              aria-labelledby="vehicle-detail-record-heading"
-              className="vehicle-detail-section"
+              Đơn vị và loại xe
+            </h3>
+            <dl className={styles.detailFields}>
+              <div>
+                <dt>Nhà xe</dt>
+                <dd>{detailState.vehicle.busCompany.name}</dd>
+              </div>
+              <div>
+                <dt>Mã nhà xe</dt>
+                <dd className="admin-data-mono">
+                  {detailState.vehicle.busCompany.code}
+                </dd>
+              </div>
+              <div>
+                <dt>Loại xe</dt>
+                <dd>{detailState.vehicle.vehicleType.name}</dd>
+              </div>
+              <div>
+                <dt>Mô tả loại xe</dt>
+                <dd>
+                  {detailState.vehicle.vehicleType.description ||
+                    'Chưa có mô tả'}
+                </dd>
+              </div>
+            </dl>
+          </section>
+          <section aria-labelledby="vehicle-detail-record-heading">
+            <h3
+              className={styles.sectionTitle}
+              id="vehicle-detail-record-heading"
             >
-              <h3 id="vehicle-detail-record-heading">Thông tin hồ sơ</h3>
-              <dl className="vehicle-detail-fields">
-                <div>
-                  <dt>Ngày tạo</dt>
-                  <dd>{timestampFormat(detailState.vehicle.createdAt)}</dd>
-                </div>
-                <div>
-                  <dt>Cập nhật lần cuối</dt>
-                  <dd>{timestampFormat(detailState.vehicle.updatedAt)}</dd>
-                </div>
-              </dl>
-            </section>
-
-            <div className="vehicle-detail-actions admin-detail-sheet__actions">
-              {canConfigureSeats && <Button
+              Thông tin hồ sơ
+            </h3>
+            <dl className={styles.detailFields}>
+              <div>
+                <dt>Ngày tạo</dt>
+                <dd>{timestampFormat(detailState.vehicle.createdAt)}</dd>
+              </div>
+              <div>
+                <dt>Cập nhật lần cuối</dt>
+                <dd>{timestampFormat(detailState.vehicle.updatedAt)}</dd>
+              </div>
+            </dl>
+          </section>
+          <div className="flex flex-wrap justify-end gap-2 border-t pt-5">
+            {canConfigureSeats && (
+              <Button
                 onClick={() =>
-                  router.push(`/vehicles/${detailState.vehicle.vehicleId}/seats`)
+                  router.push(
+                    `/vehicles/${detailState.vehicle.vehicleId}/seats`,
+                  )
                 }
-                type="button"
-                variant="secondary"
+                variant="outline"
               >
                 Cấu hình ghế
-              </Button>}
-              {canUpdate && <Button
+              </Button>
+            )}
+            {canUpdate && (
+              <Button
                 onClick={() => {
-                  setStatusError(null);
                   setStatusDialogOpen(true);
                 }}
-                type="button"
-                variant="secondary"
+                variant="outline"
               >
                 {detailState.vehicle.status === 'HOAT_DONG'
                   ? 'Chuyển sang bảo trì'
                   : 'Đưa vào hoạt động'}
-              </Button>}
-              {canUpdate && <Button onClick={() => setEditDialogOpen(true)} type="button">
-                Chỉnh sửa
-              </Button>}
-            </div>
+              </Button>
+            )}
+            {canUpdate && (
+              <Button onClick={() => setEditDialogOpen(true)}>Chỉnh sửa</Button>
+            )}
           </div>
-        )}
-      </AdminDetailSheet>
+        </div>
+      )}
       {editDialogOpen && canUpdate && detailState.status === 'success' && (
         <VehicleFormDialog
           busCompanies={options.busCompanies}
@@ -356,62 +336,44 @@ function VehicleDetails({
           vehicleTypes={options.vehicleTypes}
         />
       )}
-      {statusDialogOpen && canUpdate && detailState.status === 'success' && nextStatus && (
-        <AdminConfirmDialog
-          ariaBusy={statusSubmitting}
-          ariaDescribedBy="vehicle-status-confirmation-description"
-          ariaLabelledBy="vehicle-status-confirmation-title"
-          onClose={() => setStatusDialogOpen(false)}
-          preventDismiss={statusSubmitting}
-        >
-          <>
-            <h2 id="vehicle-status-confirmation-title">
-              {nextStatus === 'BAO_TRI'
+      {statusDialogOpen &&
+        canUpdate &&
+        detailState.status === 'success' &&
+        nextStatus && (
+          <ResourceConfirmation
+            busy={statusSubmitting}
+            onClose={() => setStatusDialogOpen(false)}
+            title={
+              nextStatus === 'BAO_TRI'
                 ? 'Chuyển xe sang bảo trì?'
-                : 'Đưa xe vào hoạt động?'}
-            </h2>
-            <p id="vehicle-status-confirmation-description">
-              {nextStatus === 'BAO_TRI'
+                : 'Đưa xe vào hoạt động?'
+            }
+            description={
+              nextStatus === 'BAO_TRI'
                 ? 'Xe sẽ được chuyển sang trạng thái Bảo trì. Thao tác này không xóa dữ liệu và có thể đưa xe hoạt động lại sau.'
-                : 'Xe sẽ được chuyển sang trạng thái Đang hoạt động.'}
-            </p>
-            {statusError && (
-              <p className="admin-confirm-dialog__error" role="alert">
-                {statusError}
-              </p>
-            )}
-            <div className="admin-confirm-dialog__actions">
-              <Button
-                disabled={statusSubmitting}
-                onClick={() => setStatusDialogOpen(false)}
-                type="button"
-                variant="secondary"
-              >
-                Hủy
-              </Button>
-              <Button
-                disabled={statusSubmitting}
-                onClick={confirmStatusChange}
-                type="button"
-              >
-                {statusSubmitting && (
-                  <LoaderCircle
-                    aria-hidden="true"
-                    className="vehicles-spinner"
-                    size={15}
-                  />
-                )}
-                {statusSubmitting
-                  ? 'Đang cập nhật…'
-                  : nextStatus === 'BAO_TRI'
-                    ? 'Chuyển sang bảo trì'
-                    : 'Đưa vào hoạt động'}
-              </Button>
-            </div>
-          </>
-        </AdminConfirmDialog>
-      )}
-    </>
+                : 'Xe sẽ được chuyển sang trạng thái Đang hoạt động.'
+            }
+          >
+            <Button
+              aria-busy={statusSubmitting}
+              disabled={statusSubmitting}
+              onClick={confirmStatusChange}
+            >
+              {statusSubmitting && (
+                <LoaderCircle
+                  aria-hidden
+                  className="motion-safe:animate-spin"
+                />
+              )}
+              {statusSubmitting
+                ? 'Đang cập nhật…'
+                : nextStatus === 'BAO_TRI'
+                  ? 'Chuyển sang bảo trì'
+                  : 'Đưa vào hoạt động'}
+            </Button>
+          </ResourceConfirmation>
+        )}
+    </ResourceSheet>
   );
 }
 
@@ -431,9 +393,9 @@ function sortIcon(
 
 function vehicleStatusBadge(vehicle: VehicleListItem) {
   return (
-    <AdminStatusBadge tone={statusTone(vehicle.status)}>
+    <ResourceStatusBadge tone={statusTone(vehicle.status)}>
       {statusLabel(vehicle.status)}
-    </AdminStatusBadge>
+    </ResourceStatusBadge>
   );
 }
 
@@ -461,12 +423,9 @@ export function VehiclesManagement() {
     null,
   );
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [successNotice, setSuccessNotice] = useState<string | null>(null);
 
   const items = vehiclePage?.data ?? [];
-  const hasActiveFilters = Boolean(
-    filters.vehicleTypeId || filters.status,
-  );
+  const hasActiveFilters = Boolean(filters.vehicleTypeId || filters.status);
   const optionErrors = [
     options.busCompanies.status === 'error'
       ? `Nhà xe: ${options.busCompanies.message}`
@@ -478,54 +437,46 @@ export function VehiclesManagement() {
 
   function sortButton(label: string, field: VehicleSortKey) {
     return (
-      <button
+      <Button
         aria-label={`Sắp xếp theo ${label}`}
-        className="vehicles-sort-button"
+        className="-ml-3"
+        size="sm"
+        variant="ghost"
         onClick={() => sortVehicles(field)}
         type="button"
       >
         {label}
         {sortIcon(field, sortBy, sortDirection)}
-      </button>
+      </Button>
     );
   }
 
   return (
     <SuperAdminLayout activeSection="vehicles">
-      <div className="admin-page-content vehicles-page">
+      <div className={`admin-ui admin-page-content ${styles.page}`}>
         <AdminPageHeader
-          actions={
-            <div className="page-intro-actions">
-              {canCreate && <AdminCreateAction
-                label="Thêm xe"
-                onClick={() => setCreateDialogOpen(true)}
-              />}
-              <AdminRefreshAction loading={loading} onClick={refresh} />
-            </div>
-          }
           eyebrow="QUẢN LÝ PHƯƠNG TIỆN"
           title="Danh sách xe"
           titleId="vehicles-title"
+          actions={
+            <div className="flex flex-wrap items-center gap-2">
+              {canCreate && (
+                <ResourceCreateAction
+                  label="Thêm xe"
+                  onClick={() => setCreateDialogOpen(true)}
+                />
+              )}
+              <ResourceRefreshAction loading={loading} onClick={refresh} />
+            </div>
+          }
         />
-
-        {successNotice && (
-          <div className="vehicles-success-notice" role="status">
-            <CheckCircle2 aria-hidden="true" size={16} />
-            <span>{successNotice}</span>
-          </div>
-        )}
-
-        <section
-          aria-busy={loading}
-          aria-labelledby="vehicles-title"
-          className="vehicles-section"
-        >
-          <div className="panel vehicles-panel">
-            <FilterToolbar totalItems={vehiclePage?.meta.totalItems ?? null}>
+        <section aria-busy={loading} aria-labelledby="vehicles-title">
+          <Card className="gap-0 py-0 ring-0">
+            <FilterToolbar>
               <SearchInput
-                label="Tìm biển số hoặc loại xe"
+                label="Tìm kiếm xe"
                 onChange={updateSearch}
-                placeholder="Tìm biển số hoặc loại xe..."
+                placeholder="Tìm biển số hoặc loại xe…"
                 value={searchInput}
               />
               {options.vehicleTypes.status === 'success' && (
@@ -547,11 +498,10 @@ export function VehiclesManagement() {
                 value={filters.status}
               />
             </FilterToolbar>
-
-            <div className="vehicles-mobile-sort">
+            <div className="flex flex-wrap items-end gap-3 border-b p-4 md:hidden">
               <SelectFilter
-                allLabel="Biển số xe (mặc định)"
-                label="Sắp xếp xe theo"
+                allLabel="Biển số xe"
+                label="Sắp xếp theo"
                 onChange={(value) =>
                   sortVehicles((value || 'licensePlate') as VehicleSortKey)
                 }
@@ -561,172 +511,176 @@ export function VehiclesManagement() {
               <Button
                 aria-label={`Đổi thứ tự sắp xếp, hiện tại ${sortDirection === 'asc' ? 'tăng dần' : 'giảm dần'}`}
                 onClick={() => sortVehicles(sortBy)}
-                type="button"
-                variant="secondary"
+                variant="outline"
               >
                 {sortDirection === 'asc' ? (
-                  <ArrowUp aria-hidden="true" size={15} />
+                  <ArrowUp aria-hidden />
                 ) : (
-                  <ArrowDown aria-hidden="true" size={15} />
+                  <ArrowDown aria-hidden />
                 )}
                 {sortDirection === 'asc' ? 'Tăng dần' : 'Giảm dần'}
               </Button>
             </div>
-
             {(options.busCompanies.status === 'loading' ||
               options.vehicleTypes.status === 'loading') && (
-              <p className="vehicles-option-loading" role="status">
+              <p
+                className="px-5 py-3 text-xs text-muted-foreground"
+                role="status"
+              >
                 Đang tải tùy chọn bộ lọc…
               </p>
             )}
-
             {optionErrors.length > 0 && (
-              <div className="vehicles-filter-notice" role="alert">
-                <div>
-                  <strong>Một số bộ lọc chưa khả dụng</strong>
+              <div className="p-4">
+                <ResourceNotice kind="error">
                   <p>{optionErrors.join(' ')}</p>
-                </div>
-                <Button
-                  onClick={options.retry}
-                  type="button"
-                  variant="secondary"
-                >
-                  Thử tải lại bộ lọc
-                </Button>
+                  <Button
+                    className="mt-3"
+                    onClick={options.retry}
+                    size="sm"
+                    variant="outline"
+                  >
+                    Thử tải lại bộ lọc
+                  </Button>
+                </ResourceNotice>
               </div>
             )}
-
             {loading && !vehiclePage && (
-              <AdminTableSkeleton resourceLabel="xe" />
+              <ResourceTableSkeleton resourceLabel="xe" />
             )}
-
             {error && (
-              <div className="vehicles-state" role="alert">
+              <ResourceState error>
                 <p>{error}</p>
-                <Button onClick={retry} type="button" variant="secondary">
+                <Button onClick={retry} variant="outline">
                   Thử lại
                 </Button>
-              </div>
+              </ResourceState>
             )}
-
             {!error && vehiclePage && items.length === 0 && !loading && (
-              <p className="vehicles-state" role="status">
-                {searchInput.trim() || hasActiveFilters
-                  ? 'Không tìm thấy xe phù hợp với tìm kiếm hoặc bộ lọc.'
-                  : 'Chưa có xe trong hệ thống.'}
-              </p>
+              <ResourceState>
+                <p>
+                  {searchInput.trim() || hasActiveFilters
+                    ? 'Không tìm thấy xe phù hợp với tìm kiếm hoặc bộ lọc.'
+                    : 'Chưa có xe trong hệ thống.'}
+                </p>
+                {(searchInput.trim() || hasActiveFilters) && (
+                  <Button
+                    onClick={() => {
+                      updateSearch('');
+                      updateFilters({ status: '', vehicleTypeId: '' });
+                    }}
+                    variant="outline"
+                  >
+                    Xóa bộ lọc
+                  </Button>
+                )}
+              </ResourceState>
             )}
-
             {!error && vehiclePage && (
               <>
                 {items.length > 0 && (
                   <>
-                    <div className="vehicles-table-wrap">
-                      <table className="vehicles-table">
-                        <caption className="sr-only">Danh sách xe</caption>
-                        <thead>
-                          <tr>
-                            <th
-                              aria-sort={
-                                sortBy === 'licensePlate'
-                                  ? sortDirection === 'asc'
-                                    ? 'ascending'
-                                    : 'descending'
-                                  : 'none'
-                              }
-                              scope="col"
-                            >
-                              {sortButton('Biển số xe', 'licensePlate')}
-                            </th>
-                            <th scope="col">Nhà xe</th>
-                            <th scope="col">Loại xe</th>
-                            <th
-                              aria-sort={
-                                sortBy === 'status'
-                                  ? sortDirection === 'asc'
-                                    ? 'ascending'
-                                    : 'descending'
-                                  : 'none'
-                              }
-                              scope="col"
-                            >
-                              {sortButton('Trạng thái', 'status')}
-                            </th>
-                            <th
-                              aria-sort={
-                                sortBy === 'createdAt'
-                                  ? sortDirection === 'asc'
-                                    ? 'ascending'
-                                    : 'descending'
-                                  : 'none'
-                              }
-                              scope="col"
-                            >
-                              {sortButton('Ngày tạo', 'createdAt')}
-                            </th>
-                            <th
-                              aria-sort={
-                                sortBy === 'updatedAt'
-                                  ? sortDirection === 'asc'
-                                    ? 'ascending'
-                                    : 'descending'
-                                  : 'none'
-                              }
-                              scope="col"
-                            >
-                              {sortButton('Cập nhật', 'updatedAt')}
-                            </th>
-                            <th scope="col"></th>
-                          </tr>
-                        </thead>
-                        <tbody>
+                    <div className="hidden md:block">
+                      <Table className="min-w-[960px]">
+                        <TableCaption className="sr-only">
+                          Danh sách xe
+                        </TableCaption>
+                        <TableHeader>
+                          <TableRow>
+                            {(
+                              [
+                                { key: 'licensePlate', label: 'Biển số xe' },
+                                { key: null, label: 'Nhà xe' },
+                                { key: null, label: 'Loại xe' },
+                                { key: 'status', label: 'Trạng thái' },
+                                { key: 'createdAt', label: 'Ngày tạo' },
+                                { key: 'updatedAt', label: 'Cập nhật' },
+                              ] as const
+                            ).map((column) => (
+                              <TableHead
+                                aria-sort={
+                                  column.key
+                                    ? sortBy === column.key
+                                      ? sortDirection === 'asc'
+                                        ? 'ascending'
+                                        : 'descending'
+                                      : 'none'
+                                    : undefined
+                                }
+                                key={column.label}
+                                scope="col"
+                              >
+                                {column.key
+                                  ? sortButton(column.label, column.key)
+                                  : column.label}
+                              </TableHead>
+                            ))}
+                            <TableHead scope="col">
+                              <span className="sr-only">Thao tác</span>
+                            </TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
                           {items.map((vehicle) => (
-                            <tr key={vehicle.vehicleId}>
-                              <th className="admin-data-mono" scope="row">
+                            <TableRow key={vehicle.vehicleId}>
+                              <th
+                                className="admin-data-mono whitespace-nowrap px-4 py-3 text-left font-semibold"
+                                scope="row"
+                              >
                                 {vehicle.licensePlate}
                               </th>
-                              <td>
-                                <span className="vehicle-company-name">
+                              <TableCell>
+                                <span className="block">
                                   {vehicle.busCompany.name}
                                 </span>
-                                <span className="vehicle-company-code admin-data-mono">
+                                <span className="admin-data-mono text-xs text-muted-foreground">
                                   {vehicle.busCompany.code}
                                 </span>
-                              </td>
-                              <td>{vehicle.vehicleType.name}</td>
-                              <td>{vehicleStatusBadge(vehicle)}</td>
-                              <td>{timestampFormat(vehicle.createdAt)}</td>
-                              <td>{timestampFormat(vehicle.updatedAt)}</td>
-                              <td>
-                                <AdminDetailAction
-                                  onClick={() => setSelectedVehicleId(vehicle.vehicleId)}
+                              </TableCell>
+                              <TableCell>{vehicle.vehicleType.name}</TableCell>
+                              <TableCell>
+                                {vehicleStatusBadge(vehicle)}
+                              </TableCell>
+                              <TableCell className="text-muted-foreground tabular-nums">
+                                {timestampFormat(vehicle.createdAt)}
+                              </TableCell>
+                              <TableCell className="text-muted-foreground tabular-nums">
+                                {timestampFormat(vehicle.updatedAt)}
+                              </TableCell>
+                              <TableCell>
+                                <ResourceDetailAction
+                                  onClick={() =>
+                                    setSelectedVehicleId(vehicle.vehicleId)
+                                  }
                                   resourceName={`xe ${vehicle.licensePlate}`}
                                 />
-                              </td>
-                            </tr>
+                              </TableCell>
+                            </TableRow>
                           ))}
-                        </tbody>
-                      </table>
+                        </TableBody>
+                      </Table>
                     </div>
-
-                    <div className="vehicles-mobile-list">
+                    <div className="grid gap-4 bg-background p-4 md:hidden">
                       {items.map((vehicle) => (
-                        <article
-                          className="vehicle-mobile-card"
+                        <Card
+                          className="gap-4 p-4 ring-0"
                           key={vehicle.vehicleId}
                         >
-                          <div className="vehicle-mobile-heading">
+                          <div className="flex flex-wrap items-start justify-between gap-3">
                             <div>
-                              <h2 className="admin-data-mono">
+                              <h2 className="admin-data-mono text-base font-semibold">
                                 {vehicle.licensePlate}
                               </h2>
-                              <span>
-                                Xe #<span className="admin-data-mono">{vehicle.vehicleId}</span>
-                              </span>
+                              <p className="mt-1 text-xs text-muted-foreground">
+                                Xe #
+                                <span className="admin-data-mono">
+                                  {vehicle.vehicleId}
+                                </span>
+                              </p>
                             </div>
                             {vehicleStatusBadge(vehicle)}
                           </div>
-                          <dl className="vehicle-mobile-fields">
+                          <dl className={styles.detailFields}>
                             <div>
                               <dt>Nhà xe</dt>
                               <dd>{vehicle.busCompany.name}</dd>
@@ -744,19 +698,20 @@ export function VehiclesManagement() {
                               <dd>{timestampFormat(vehicle.updatedAt)}</dd>
                             </div>
                           </dl>
-                          <div className="vehicle-mobile-actions">
-                            <AdminDetailAction
-                              onClick={() => setSelectedVehicleId(vehicle.vehicleId)}
+                          <div className="flex justify-end border-t pt-3">
+                            <ResourceDetailAction
+                              onClick={() =>
+                                setSelectedVehicleId(vehicle.vehicleId)
+                              }
                               resourceName={`xe ${vehicle.licensePlate}`}
                             />
                           </div>
-                        </article>
+                        </Card>
                       ))}
                     </div>
                   </>
                 )}
-
-                <AdminPagination
+                <ResourcePagination
                   currentPage={page}
                   disabled={loading}
                   onPageChange={changePage}
@@ -767,15 +722,14 @@ export function VehiclesManagement() {
                 />
               </>
             )}
-          </div>
+          </Card>
         </section>
       </div>
-
       {selectedVehicleId !== null && (
         <VehicleDetails
           key={selectedVehicleId}
           onUpdated={(action, vehicle) => {
-            setSuccessNotice(
+            toast.success(
               action === 'edit'
                 ? `Đã cập nhật xe ${vehicle.licensePlate}.`
                 : `Đã chuyển xe ${vehicle.licensePlate} sang trạng thái ${statusLabel(vehicle.status)}.`,
@@ -794,7 +748,7 @@ export function VehiclesManagement() {
           onRetryOptions={options.retry}
           onSaved={(vehicle) => {
             setCreateDialogOpen(false);
-            setSuccessNotice(`Đã thêm xe ${vehicle.licensePlate}.`);
+            toast.success(`Đã thêm xe ${vehicle.licensePlate}.`);
             refresh();
           }}
           vehicleTypes={options.vehicleTypes}

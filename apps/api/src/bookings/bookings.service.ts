@@ -533,6 +533,27 @@ export class BookingsService {
       const discountAmount =
         promotionQuote?.discountAmount ?? new Prisma.Decimal(0);
       const finalTicketTotal = originalTotal.sub(discountAmount);
+      // Check under the promotion row lock before persisting any order/payment.
+      // The client's quote is an expectation, never a source for charged amounts.
+      if (promotionQuote) {
+        const expected = dto.expectedPromotionQuote;
+        if (!expected) {
+          throw new BadRequestException({
+            error: 'PROMOTION_QUOTE_REQUIRED',
+            message: 'Vui lòng kiểm tra báo giá khuyến mãi trước khi đặt vé.',
+          });
+        }
+        if (
+          !originalTotal.eq(new Prisma.Decimal(expected.originalTotal)) ||
+          !discountAmount.eq(new Prisma.Decimal(expected.discountAmount)) ||
+          !finalTicketTotal.eq(new Prisma.Decimal(expected.finalTotal))
+        ) {
+          throw new ConflictException({
+            error: 'PROMOTION_QUOTE_CHANGED',
+            message: 'Ưu đãi hoặc giá vé vừa thay đổi. Vui lòng áp dụng lại mã và kiểm tra tổng tiền trước khi thanh toán.',
+          });
+        }
+      }
       const totalOrderAmount = finalTicketTotal.add(shippingFee);
 
       const requiresPayment = totalOrderAmount.gt(0);
@@ -1337,6 +1358,7 @@ export class BookingsService {
       bookingCode: booking.maPhieuDatVe,
       orderId: booking.donGiaoDichId,
       orderCode: booking.donGiaoDich?.maDonGiaoDich ?? null,
+      tripId: chuyenXe?.chuyenXeId ?? null,
       ticketCount: booking.ves?.length || booking.soLuongVeBanDau || 0,
       activeTicketCount: activeSeatNumbers.length,
       route,

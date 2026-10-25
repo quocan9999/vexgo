@@ -69,7 +69,14 @@ function createService() {
     hangHoa: { findMany: vi.fn() },
     tuyenXe: { findFirst: vi.fn() },
     xe: { findFirst: vi.fn() },
-    $queryRaw: vi.fn().mockResolvedValue([{ xeId: 1 }]),
+    $queryRaw: vi.fn(async (parts: TemplateStringsArray) => {
+      const sql = parts.join('?');
+      if (sql.includes('FROM NhaXe')) return [{ maNhaXe: 'FUTA' }];
+      if (sql.includes('FROM ChuyenXe')) return [{ code: 'FUTA-CX-20102026-0098' }];
+      if (sql.includes('FROM BoDemMaNghiepVu')) return [];
+      return [{ xeId: 1 }];
+    }),
+    $executeRaw: vi.fn().mockResolvedValue(1),
     $transaction: vi.fn(),
   };
   prisma.$transaction.mockImplementation(
@@ -98,6 +105,23 @@ afterEach(() => {
 });
 
 describe('TripsService search', () => {
+  it('matches HCM spelling aliases in the correct endpoint without broadening a former province', async () => {
+    const { prisma, service } = createService();
+    prisma.chuyenXe.findMany.mockResolvedValue([]);
+    await service.search({ from: 'Thành phố Hồ Chí Minh', to: 'Bình Dương',
+      page: 1, pageSize: 10, sortBy: 'departureTime', sortDirection: 'asc' });
+    expect(prisma.chuyenXe.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ tuyenXe: { AND: [
+        { OR: [
+          { diemDi: { contains: 'TP.HCM' } },
+          { diemDi: { contains: 'Hồ Chí Minh' } },
+          { diemDi: { contains: 'TP HCM' } },
+        ] },
+        { OR: [{ diemDen: { contains: 'Bình Dương' } }] },
+      ] } }),
+    }));
+  });
+
   it('applies keyword and vehicle filters before pagination', async () => {
     const { prisma, service } = createService();
     prisma.chuyenXe.findMany.mockResolvedValue([]);
@@ -413,9 +437,21 @@ describe('TripsService detail', () => {
 
     const result = await service.getCargoCapacity(21);
     expect(result.data.acceptsShipments).toBe(true);
-    expect(result.data.capacities.motorcycles).toEqual({ total: 3, used: 1, remaining: 2 });
-    expect(result.data.capacities.bulkyGoods).toEqual({ total: 10, used: 4, remaining: 6 });
-    expect(result.data.capacities.parcels).toEqual({ total: 10, used: 2, remaining: 8 });
+    expect(result.data.capacities.motorcycles).toEqual({
+      total: 3,
+      used: 1,
+      remaining: 2,
+    });
+    expect(result.data.capacities.bulkyGoods).toEqual({
+      total: 10,
+      used: 4,
+      remaining: 6,
+    });
+    expect(result.data.capacities.parcels).toEqual({
+      total: 10,
+      used: 2,
+      remaining: 8,
+    });
   });
 
   it('returns acceptsShipments: false when trip does not accept cargo', async () => {
@@ -706,32 +742,6 @@ describe('TripsService create (05.2)', () => {
     });
   });
 
-  it('throws 409 TRIP_CODE_EXISTS when trip code already exists', async () => {
-    const { prisma, service } = createService();
-    prisma.tuyenXe.findFirst.mockResolvedValue({
-      tuyenXeId: 8,
-      nhaXeId: 3,
-      trangThai: 'HOAT_DONG',
-    });
-    prisma.xe.findFirst.mockResolvedValue({
-      xeId: 4,
-      nhaXeId: 3,
-      trangThai: 'HOAT_DONG',
-      ghes: [{ gheId: 1 }, { gheId: 2 }],
-    });
-    prisma.chuyenXe.findFirst.mockResolvedValue({ chuyenXeId: 10 });
-
-    await expect(
-      service.create(createDto, tenantPrincipal as never),
-    ).rejects.toMatchObject({
-      status: 409,
-      response: {
-        error: 'TRIP_CODE_EXISTS',
-        message: 'Mã chuyến xe đã tồn tại.',
-      },
-    });
-  });
-
   it('throws 409 TRIP_VEHICLE_SCHEDULE_CONFLICT when vehicle has schedule conflict in create', async () => {
     const { prisma, service } = createService();
     prisma.tuyenXe.findFirst.mockResolvedValue({
@@ -745,9 +755,7 @@ describe('TripsService create (05.2)', () => {
       trangThai: 'HOAT_DONG',
       ghes: [{ gheId: 1 }, { gheId: 2 }],
     });
-    prisma.chuyenXe.findFirst
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce({ chuyenXeId: 88 });
+    prisma.chuyenXe.findFirst.mockResolvedValueOnce({ chuyenXeId: 88 });
 
     await expect(
       service.create(createDto, tenantPrincipal as never),
@@ -785,7 +793,7 @@ describe('TripsService create (05.2)', () => {
     const createdTrip = {
       ...firstTrip,
       chuyenXeId: 99,
-      maChuyenXe: 'FUTA-CX-99',
+      maChuyenXe: 'FUTA-CX-20102026-0099',
       gioDen: new Date('1970-01-01T05:00:00.000Z'),
       nhanGuiHang: false,
       sucChuaXeMay: 2,
@@ -801,7 +809,7 @@ describe('TripsService create (05.2)', () => {
     expect(prisma.$queryRaw).toHaveBeenCalled();
     expect(prisma.chuyenXe.create).toHaveBeenCalledWith({
       data: {
-        maChuyenXe: 'FUTA-CX-99',
+        maChuyenXe: 'FUTA-CX-20102026-0099',
         ngayKhoiHanh: new Date('2026-10-20T00:00:00.000Z'),
         gioKhoiHanh: new Date('1970-01-01T08:00:00.000Z'),
         gioDen: new Date('1970-01-01T05:00:00.000Z'),

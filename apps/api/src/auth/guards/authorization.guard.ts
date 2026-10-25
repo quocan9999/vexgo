@@ -10,10 +10,7 @@ import type { Request } from 'express';
 import { ALLOW_ROLE_SCOPE_CONFLICT_KEY } from '../decorators/allow-role-scope-conflict.decorator.js';
 import { REQUIRED_PERMISSIONS_KEY } from '../decorators/require-permissions.decorator.js';
 import { REQUIRED_ROLES_KEY } from '../decorators/require-roles.decorator.js';
-import {
-  assertPrincipalScope,
-  hasTenantRole,
-} from '../principal-scope.js';
+import { assertPrincipalScope, hasTenantRole } from '../principal-scope.js';
 import { TENANT_PERMISSIONS_IF_AUTHENTICATED_KEY } from '../decorators/require-tenant-permissions-if-authenticated.decorator.js';
 import type { AdminPermissionKey } from '../permissions/permission-catalog.js';
 import type { AuthPrincipal } from '../tokens/auth-principal.js';
@@ -25,6 +22,9 @@ export class AuthorizationGuard implements CanActivate {
   constructor(private readonly reflector: Reflector) {}
 
   canActivate(context: ExecutionContext): boolean {
+    // Gateway commands enforce fresh session, tenant and conversation scope.
+    if (context.getType() === 'ws') return true;
+
     const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
     const requiredRoles = this.reflector.getAllAndOverride<string[]>(
       REQUIRED_ROLES_KEY,

@@ -1,7 +1,14 @@
 /* eslint-disable */
 'use client';
 
-import React, { useState, useEffect, useMemo, useCallback, Suspense } from 'react';
+import React, {
+  useState,
+  useEffect,
+  useMemo,
+  useCallback,
+  useRef,
+  Suspense,
+} from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Package,
@@ -35,7 +42,7 @@ import {
   ArrowUpDown,
   Trash2,
 } from 'lucide-react';
-import { LocationCombobox } from '@/features/home/components/location-combobox';
+import { LocationPicker } from '@/features/locations/components/location-picker';
 import { tripsApi, type ApiTrip } from '@/features/trips/services/trips.api';
 import {
   shipmentsApi,
@@ -49,19 +56,6 @@ import {
   getPaymentDraft,
 } from '@/features/booking/services/payment-draft';
 import { useAuthSession } from '@/features/auth/auth-session';
-
-const POPULAR_LOCATIONS = [
-  'Đà Lạt',
-  'TP.HCM',
-  'Hà Nội',
-  'Đà Nẵng',
-  'Nha Trang',
-  'Cần Thơ',
-  'Vũng Tàu',
-  'Phan Thiết',
-  'Bảo Lộc',
-  'Buôn Ma Thuột',
-];
 
 function formatCategoryName(name: string): string {
   if (!name) return '';
@@ -86,21 +80,23 @@ function SendFreightContent() {
       }).format(new Date()),
     [],
   );
-  const [origin, setOrigin] = useState<string>('Đà Lạt');
-  const [destination, setDestination] = useState<string>('TP.HCM');
-  const [date, setDate] = useState<string>(
-    () =>
-      new Intl.DateTimeFormat('en-CA', {
-        timeZone: 'Asia/Ho_Chi_Minh',
-      }).format(new Date()),
+  const [origin, setOrigin] = useState<string>('');
+  const [destination, setDestination] = useState<string>('');
+  const [date, setDate] = useState<string>(() =>
+    new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Ho_Chi_Minh',
+    }).format(new Date()),
   );
   const [trips, setTrips] = useState<ApiTrip[]>([]);
   const [loadingTrips, setLoadingTrips] = useState<boolean>(false);
   const [selectedTripId, setSelectedTripId] = useState<number | null>(null);
-  const [selectedCompanyFilter, setSelectedCompanyFilter] = useState<string>('all');
+  const [selectedCompanyFilter, setSelectedCompanyFilter] =
+    useState<string>('all');
   const [selectedTimeFilter, setSelectedTimeFilter] = useState<string>('all'); // 'all' | 'morning' | 'afternoon' | 'evening' | 'night'
   const [visibleTripCount, setVisibleTripCount] = useState<number>(8);
-  const [routePoints, setRoutePoints] = useState<ShipmentRoutePoints | null>(null);
+  const [routePoints, setRoutePoints] = useState<ShipmentRoutePoints | null>(
+    null,
+  );
   const [routePointsLoading, setRoutePointsLoading] = useState(false);
   const [routePointsError, setRoutePointsError] = useState<string | null>(null);
   const [senderPointId, setSenderPointId] = useState<number | null>(null);
@@ -116,7 +112,10 @@ function SendFreightContent() {
     const map = new Map<number, { id: number; name: string }>();
     trips.forEach((t) => {
       if (t.busCompany?.id) {
-        map.set(t.busCompany.id, { id: t.busCompany.id, name: t.busCompany.name });
+        map.set(t.busCompany.id, {
+          id: t.busCompany.id,
+          name: t.busCompany.name,
+        });
       }
     });
     return Array.from(map.values());
@@ -128,7 +127,9 @@ function SendFreightContent() {
 
     // 1. Lọc theo nhà xe
     if (selectedCompanyFilter !== 'all') {
-      result = result.filter((t) => String(t.busCompany?.id) === selectedCompanyFilter);
+      result = result.filter(
+        (t) => String(t.busCompany?.id) === selectedCompanyFilter,
+      );
     }
 
     // 2. Lọc theo khung giờ khởi hành
@@ -138,7 +139,8 @@ function SendFreightContent() {
           const d = new Date(t.departureTime);
           const hour = d.getHours();
           if (selectedTimeFilter === 'morning') return hour >= 6 && hour < 12; // Sáng 06:00 - 12:00
-          if (selectedTimeFilter === 'afternoon') return hour >= 12 && hour < 18; // Chiều 12:00 - 18:00
+          if (selectedTimeFilter === 'afternoon')
+            return hour >= 12 && hour < 18; // Chiều 12:00 - 18:00
           if (selectedTimeFilter === 'evening') return hour >= 18 && hour < 22; // Tối 18:00 - 22:00
           if (selectedTimeFilter === 'night') return hour >= 22 || hour < 6; // Đêm 22:00 - 06:00
           return true;
@@ -180,7 +182,9 @@ function SendFreightContent() {
     }>
   >([]);
   const [cargoCategoriesLoading, setCargoCategoriesLoading] = useState(true);
-  const [cargoCategoriesError, setCargoCategoriesError] = useState<string | null>(null);
+  const [cargoCategoriesError, setCargoCategoriesError] = useState<
+    string | null
+  >(null);
   const [cargoItems, setCargoItems] = useState<
     Array<{
       id: string;
@@ -221,7 +225,8 @@ function SendFreightContent() {
 
   const cargoCategoryId = cargoItems[0]?.categoryId;
   const cargoCategory =
-    cargoCategories.find((category) => category.categoryId === cargoCategoryId)?.name || '';
+    cargoCategories.find((category) => category.categoryId === cargoCategoryId)
+      ?.name || '';
 
   const handleAddCargoItem = () => {
     setCargoItems((prev) => [
@@ -248,15 +253,9 @@ function SendFreightContent() {
     });
   };
 
-  const handleUpdateCargoItem = (
-    id: string,
-    field: string,
-    value: unknown,
-  ) => {
+  const handleUpdateCargoItem = (id: string, field: string, value: unknown) => {
     setCargoItems((prev) =>
-      prev.map((item) =>
-        item.id === id ? { ...item, [field]: value } : item,
-      ),
+      prev.map((item) => (item.id === id ? { ...item, [field]: value } : item)),
     );
   };
 
@@ -395,58 +394,68 @@ function SendFreightContent() {
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [missingFieldsModal, setMissingFieldsModal] = useState<boolean>(false);
-  const [createdShipment, setCreatedShipment] = useState<ShipmentResponseData | null>(null);
+  const [createdShipment, setCreatedShipment] =
+    useState<ShipmentResponseData | null>(null);
   const [copiedCode, setCopiedCode] = useState<boolean>(false);
 
   // Tra cứu vận đơn
   const [lookupCode, setLookupCode] = useState<string>('');
   const [lookupPhone, setLookupPhone] = useState<string>('');
   const [isLookingUp, setIsLookingUp] = useState<boolean>(false);
-  const [lookupResult, setLookupResult] = useState<PublicShipmentLookupData | null>(null);
+  const [lookupResult, setLookupResult] =
+    useState<PublicShipmentLookupData | null>(null);
   const [lookupError, setLookupError] = useState<string | null>(null);
 
   // Khởi tạo params từ URL nếu có
   useEffect(() => {
     if (searchParams) {
-      const fromParam = searchParams.get('from') || searchParams.get('origin');
-      const toParam = searchParams.get('to') || searchParams.get('destination');
-      const dateParam = searchParams.get('date');
-      if (fromParam) setOrigin(fromParam);
-      if (toParam) setDestination(toParam);
-      if (dateParam) setDate(dateParam);
+      setOrigin(searchParams.get('from') || searchParams.get('origin') || '');
+      setDestination(
+        searchParams.get('to') || searchParams.get('destination') || '',
+      );
+      if (searchParams.get('date')) setDate(searchParams.get('date') as string);
       if (searchParams.get('tab') === 'lookup') setActiveTab('lookup');
-      if (searchParams.get('code')) setLookupCode(searchParams.get('code') as string);
-      if (searchParams.get('phone')) setLookupPhone(searchParams.get('phone') as string);
+      if (searchParams.get('code'))
+        setLookupCode(searchParams.get('code') as string);
+      if (searchParams.get('phone'))
+        setLookupPhone(searchParams.get('phone') as string);
     }
   }, [searchParams]);
 
-  // Hàm tải danh sách chuyến xe
+  // Each search invalidates older requests, including manual refresh and clearing the route.
+  const tripRequestId = useRef(0);
   const fetchTrips = useCallback(async () => {
-    if (!origin || !destination) return;
-    setLoadingTrips(true);
+    const requestId = ++tripRequestId.current;
+    setTrips([]);
     setSelectedTripId(null);
     setCompanyPricingMap({});
+    if (!origin || !destination || !date || date < todayStr) {
+      setLoadingTrips(false);
+      return;
+    }
+    setLoadingTrips(true);
     try {
       const res = await tripsApi.searchTrips({
         from: origin,
         to: destination,
         departureDate: date,
       });
+      if (tripRequestId.current !== requestId) return;
       const loadedTrips = res.data || [];
       setTrips(loadedTrips);
-      if (loadedTrips.length > 0) {
-        setSelectedTripId(loadedTrips[0].id);
-      }
+      setSelectedTripId(loadedTrips[0]?.id ?? null);
     } catch {
-      setTrips([]);
+      if (tripRequestId.current === requestId) setTrips([]);
     } finally {
-      setLoadingTrips(false);
+      if (tripRequestId.current === requestId) setLoadingTrips(false);
     }
-  }, [origin, destination, date]);
+  }, [origin, destination, date, todayStr]);
 
-  // Tự động tải danh sách chuyến xe khi thay đổi tuyến hoặc ngày
   useEffect(() => {
-    fetchTrips();
+    void fetchTrips();
+    return () => {
+      tripRequestId.current += 1;
+    };
   }, [fetchTrips]);
 
   const selectedTrip = useMemo(() => {
@@ -504,7 +513,8 @@ function SendFreightContent() {
       .then(({ data }) => {
         if (!active) return;
         setRoutePoints(data);
-        const compId = trips.find((t) => t.id === selectedTripId)?.busCompany.id;
+        const compId = trips.find((t) => t.id === selectedTripId)?.busCompany
+          .id;
         if (compId) {
           setCompanyPricingMap((prev) => ({
             ...prev,
@@ -544,7 +554,9 @@ function SendFreightContent() {
     setErrorMessage(null);
 
     if (!isHydrated) {
-      setErrorMessage('Đang xác minh phiên đăng nhập. Vui lòng thử lại sau giây lát.');
+      setErrorMessage(
+        'Đang xác minh phiên đăng nhập. Vui lòng thử lại sau giây lát.',
+      );
       return;
     }
 
@@ -625,7 +637,8 @@ function SendFreightContent() {
         },
         items: cargoItems.map((item) => {
           const categoryName =
-            cargoCategories.find((cat) => cat.categoryId === item.categoryId)?.name || '';
+            cargoCategories.find((cat) => cat.categoryId === item.categoryId)
+              ?.name || '';
           return {
             name: item.name.trim(),
             category: categoryName,
@@ -707,7 +720,10 @@ function SendFreightContent() {
 
       router.push(`/payment?draftId=${encodeURIComponent(paymentDraft.id)}`);
     } catch (err: any) {
-      setErrorMessage(err.message || 'Không thể tạo đơn gửi hàng. Vui lòng kiểm tra lại thông tin.');
+      setErrorMessage(
+        err.message ||
+          'Không thể tạo đơn gửi hàng. Vui lòng kiểm tra lại thông tin.',
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -736,7 +752,10 @@ function SendFreightContent() {
       });
       setLookupResult(res.data);
     } catch (err: any) {
-      setLookupError(err.message || 'Không tìm thấy thông tin vận đơn khớp với thông tin đã nhập.');
+      setLookupError(
+        err.message ||
+          'Không tìm thấy thông tin vận đơn khớp với thông tin đã nhập.',
+      );
     } finally {
       setIsLookingUp(false);
     }
@@ -789,7 +808,8 @@ function SendFreightContent() {
               <span className="text-[#FF7D42]">nhanh – gọn – an toàn</span>
             </h1>
             <p className="text-xs sm:text-sm text-slate-300 max-w-xl leading-relaxed">
-              Giao nhận hàng trực tiếp tại bến xe và văn phòng nhà xe. Nhanh chóng, tiết kiệm và an toàn.
+              Giao nhận hàng trực tiếp tại bến xe và văn phòng nhà xe. Nhanh
+              chóng, tiết kiệm và an toàn.
             </p>
           </div>
 
@@ -839,7 +859,9 @@ function SendFreightContent() {
                     Tạo mã vận đơn gửi hàng thành công!
                   </h2>
                   <p className="text-sm text-slate-600 mb-6 leading-relaxed">
-                    Đơn gửi hàng của bạn đã được tiếp nhận vào hệ thống. Bạn chỉ cần mang kiện hàng ra bến xe trước giờ xuất bến và đọc mã vận đơn bên dưới cho nhân viên nhà xe.
+                    Đơn gửi hàng của bạn đã được tiếp nhận vào hệ thống. Bạn chỉ
+                    cần mang kiện hàng ra bến xe trước giờ xuất bến và đọc mã
+                    vận đơn bên dưới cho nhân viên nhà xe.
                   </p>
 
                   {/* Mã vận đơn nổi bật */}
@@ -850,7 +872,9 @@ function SendFreightContent() {
                     <div className="text-2xl md:text-3xl font-black text-[#0060c4] tracking-wide flex items-center justify-center gap-3">
                       <span>{createdShipment.waybillCode}</span>
                       <button
-                        onClick={() => copyToClipboard(createdShipment.waybillCode)}
+                        onClick={() =>
+                          copyToClipboard(createdShipment.waybillCode)
+                        }
                         className="p-2 hover:bg-slate-200 rounded-lg text-slate-600 transition-colors"
                         title="Sao chép mã"
                       >
@@ -858,10 +882,15 @@ function SendFreightContent() {
                       </button>
                     </div>
                     {copiedCode && (
-                      <div className="text-xs text-emerald-600 font-bold mt-1">Đã sao chép vào bộ nhớ tạm!</div>
+                      <div className="text-xs text-emerald-600 font-bold mt-1">
+                        Đã sao chép vào bộ nhớ tạm!
+                      </div>
                     )}
                     <div className="text-xs text-slate-500 mt-2">
-                      Mã đơn giao dịch: <strong className="text-slate-700">{createdShipment.orderCode}</strong>
+                      Mã đơn giao dịch:{' '}
+                      <strong className="text-slate-700">
+                        {createdShipment.orderCode}
+                      </strong>
                     </div>
                   </div>
                 </div>
@@ -870,23 +899,37 @@ function SendFreightContent() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-slate-100 pt-6 max-w-2xl mx-auto text-sm">
                   <div className="bg-slate-50 p-4 rounded-xl">
                     <div className="font-bold text-slate-800 flex items-center gap-2 mb-2">
-                      <MapPin className="w-4 h-4 text-rose-500" /> Điểm gửi (Nơi bạn mang hàng ra):
+                      <MapPin className="w-4 h-4 text-rose-500" /> Điểm gửi (Nơi
+                      bạn mang hàng ra):
                     </div>
-                    <div className="font-extrabold text-slate-900">{createdShipment.pickupPoint.name}</div>
-                    <div className="text-xs text-slate-600 mt-1">{createdShipment.pickupPoint.address}</div>
+                    <div className="font-extrabold text-slate-900">
+                      {createdShipment.pickupPoint.name}
+                    </div>
+                    <div className="text-xs text-slate-600 mt-1">
+                      {createdShipment.pickupPoint.address}
+                    </div>
                     <div className="text-xs text-blue-600 font-semibold mt-2">
-                      Khởi hành lúc: {formatIsoTime(createdShipment.trip.departureTime)} - {formatIsoDate(createdShipment.trip.departureTime)}
+                      Khởi hành lúc:{' '}
+                      {formatIsoTime(createdShipment.trip.departureTime)} -{' '}
+                      {formatIsoDate(createdShipment.trip.departureTime)}
                     </div>
                   </div>
 
                   <div className="bg-slate-50 p-4 rounded-xl">
                     <div className="font-bold text-slate-800 flex items-center gap-2 mb-2">
-                      <MapPin className="w-4 h-4 text-emerald-500" /> Điểm nhận (Nơi người nhận đến lấy):
+                      <MapPin className="w-4 h-4 text-emerald-500" /> Điểm nhận
+                      (Nơi người nhận đến lấy):
                     </div>
-                    <div className="font-extrabold text-slate-900">{createdShipment.dropoffPoint.name}</div>
-                    <div className="text-xs text-slate-600 mt-1">{createdShipment.dropoffPoint.address}</div>
+                    <div className="font-extrabold text-slate-900">
+                      {createdShipment.dropoffPoint.name}
+                    </div>
+                    <div className="text-xs text-slate-600 mt-1">
+                      {createdShipment.dropoffPoint.address}
+                    </div>
                     <div className="text-xs text-slate-600 font-semibold mt-2">
-                      Người nhận: <strong>{createdShipment.receiver.fullName}</strong> ({createdShipment.receiver.phoneNumber})
+                      Người nhận:{' '}
+                      <strong>{createdShipment.receiver.fullName}</strong> (
+                      {createdShipment.receiver.phoneNumber})
                     </div>
                   </div>
                 </div>
@@ -896,13 +939,16 @@ function SendFreightContent() {
                   <div>
                     <span className="text-slate-600">Kiện hàng: </span>
                     <strong className="text-slate-900">
-                      {createdShipment.items.map((i) => `${i.name} (${i.weight}kg)`).join(', ')}
+                      {createdShipment.items
+                        .map((i) => `${i.name} (${i.weight}kg)`)
+                        .join(', ')}
                     </strong>
                   </div>
                   <div className="text-right">
                     <div className="text-xs text-slate-500">Tổng cước phí</div>
                     <div className="text-lg font-black text-rose-600">
-                      {createdShipment.pricing.totalFee.toLocaleString('vi-VN')}đ
+                      {createdShipment.pricing.totalFee.toLocaleString('vi-VN')}
+                      đ
                     </div>
                   </div>
                 </div>
@@ -958,14 +1004,17 @@ function SendFreightContent() {
                     <div className="flex flex-col md:flex-row gap-3">
                       {/* Nơi gửi */}
                       <div className="flex-1 space-y-1.5">
-                        <label className="text-[11px] font-extrabold text-slate-500 uppercase flex items-center gap-1.5">
+                        <label
+                          htmlFor="shipment-origin"
+                          className="text-[11px] font-extrabold text-slate-500 uppercase flex items-center gap-1.5"
+                        >
                           <MapPin className="w-3.5 h-3.5 text-brand" />
                           Nơi gửi
                         </label>
-                        <LocationCombobox
+                        <LocationPicker
+                          id="shipment-origin"
                           value={origin}
                           onChange={setOrigin}
-                          options={POPULAR_LOCATIONS}
                           placeholder="Chọn nơi gửi"
                         />
                       </div>
@@ -984,14 +1033,18 @@ function SendFreightContent() {
 
                       {/* Nơi nhận */}
                       <div className="flex-1 space-y-1.5">
-                        <label className="text-[11px] font-extrabold text-slate-500 uppercase flex items-center gap-1.5">
+                        <label
+                          htmlFor="shipment-destination"
+                          className="text-[11px] font-extrabold text-slate-500 uppercase flex items-center gap-1.5"
+                        >
                           <MapPin className="w-3.5 h-3.5 text-rose-500" />
                           Nơi nhận
                         </label>
-                        <LocationCombobox
+                        <LocationPicker
+                          id="shipment-destination"
                           value={destination}
+                          excludeValue={origin}
                           onChange={setDestination}
-                          options={POPULAR_LOCATIONS}
                           placeholder="Chọn nơi nhận"
                         />
                       </div>
@@ -1039,7 +1092,8 @@ function SendFreightContent() {
                           disabled={loadingTrips}
                           onClick={() => {
                             fetchTrips();
-                            const step2El = document.getElementById('step-select-trip');
+                            const step2El =
+                              document.getElementById('step-select-trip');
                             if (step2El) {
                               step2El.scrollIntoView({ behavior: 'smooth' });
                             }
@@ -1067,7 +1121,10 @@ function SendFreightContent() {
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
                   <div className="lg:col-span-8 space-y-6">
                     {/* STEP 2: CHỌN NHÀ XE VẬN CHUYỂN */}
-                    <div id="step-select-trip" className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+                    <div
+                      id="step-select-trip"
+                      className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200"
+                    >
                       <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center gap-2.5">
                           <div className="w-6 h-6 rounded-full bg-[#EF4444] text-white flex items-center justify-center text-xs font-bold">
@@ -1078,13 +1135,16 @@ function SendFreightContent() {
                               Chọn nhà xe nhận vận chuyển
                             </h2>
                             <p className="text-xs text-slate-400 mt-0.5">
-                              Gửi hàng linh hoạt trong ngày theo tuyến đường đã chọn
+                              Gửi hàng linh hoạt trong ngày theo tuyến đường đã
+                              chọn
                             </p>
                           </div>
                         </div>
 
                         <span className="px-3 py-1 bg-blue-50 text-blue-600 font-bold text-xs rounded-full">
-                          {loadingTrips ? 'Đang tải...' : `${filteredTrips.length} lựa chọn`}
+                          {loadingTrips
+                            ? 'Đang tải...'
+                            : `${filteredTrips.length} lựa chọn`}
                         </span>
                       </div>
 
@@ -1121,7 +1181,9 @@ function SendFreightContent() {
                             <div className="relative">
                               <select
                                 value={selectedCompanyFilter}
-                                onChange={(e) => setSelectedCompanyFilter(e.target.value)}
+                                onChange={(e) =>
+                                  setSelectedCompanyFilter(e.target.value)
+                                }
                                 className="w-full h-10 pl-3 pr-8 rounded-xl border border-slate-200 hover:border-slate-300 focus:outline-none focus:border-[#0060c4] font-medium text-slate-800 bg-white appearance-none cursor-pointer text-xs"
                               >
                                 <option value="all">Tất cả nhà xe</option>
@@ -1144,14 +1206,24 @@ function SendFreightContent() {
                             <div className="relative">
                               <select
                                 value={selectedTimeFilter}
-                                onChange={(e) => setSelectedTimeFilter(e.target.value)}
+                                onChange={(e) =>
+                                  setSelectedTimeFilter(e.target.value)
+                                }
                                 className="w-full h-10 pl-3 pr-8 rounded-xl border border-slate-200 hover:border-slate-300 focus:outline-none focus:border-[#0060c4] font-medium text-slate-800 bg-white appearance-none cursor-pointer text-xs"
                               >
                                 <option value="all">Tất cả giờ xuất bến</option>
-                                <option value="morning">Sáng (06:00 – 12:00)</option>
-                                <option value="afternoon">Chiều (12:00 – 18:00)</option>
-                                <option value="evening">Tối (18:00 – 22:00)</option>
-                                <option value="night">Đêm (22:00 – 06:00)</option>
+                                <option value="morning">
+                                  Sáng (06:00 – 12:00)
+                                </option>
+                                <option value="afternoon">
+                                  Chiều (12:00 – 18:00)
+                                </option>
+                                <option value="evening">
+                                  Tối (18:00 – 22:00)
+                                </option>
+                                <option value="night">
+                                  Đêm (22:00 – 06:00)
+                                </option>
                               </select>
                               <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                             </div>
@@ -1174,93 +1246,119 @@ function SendFreightContent() {
                             /* Khung cuộn cố định chiều cao kèm nút Xem thêm */
                             <div className="flex flex-col gap-2.5 w-full max-h-[400px] sm:max-h-[440px] overflow-y-auto pr-1 sm:pr-1.5 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-slate-100 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-300 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-slate-400">
                               {visibleTrips.map((trip) => {
-                                  const isSelected = selectedTripId === trip.id;
-                                  const depTime = formatIsoTime(trip.departureTime);
+                                const isSelected = selectedTripId === trip.id;
+                                const depTime = formatIsoTime(
+                                  trip.departureTime,
+                                );
 
-                                  return (
-                                    <div
-                                      key={trip.id}
-                                      id={`trip-card-${trip.id}`}
-                                      onClick={() => setSelectedTripId(trip.id)}
-                                      className={`py-2 px-3 sm:px-3.5 rounded-xl border-2 cursor-pointer transition-all flex items-center justify-between gap-2 sm:gap-3 w-full shrink-0 ${
-                                        isSelected
-                                          ? 'border-orange-500 bg-white ring-2 ring-orange-100 shadow-xs'
-                                          : 'border-slate-200 bg-white hover:border-slate-300'
-                                      }`}
-                                    >
-                                      {/* Cột 1: Thông tin nhà xe - cố định độ rộng để căn thẳng hàng dọc */}
-                                      <div className="w-28 sm:w-32 shrink-0 min-w-0">
-                                        <div className="font-extrabold text-slate-900 text-xs sm:text-sm leading-tight truncate">
-                                          {trip.busCompany.name}
-                                        </div>
-                                        <div className="flex items-center gap-1 text-[10px] sm:text-[11px] text-emerald-600 font-semibold mt-0.5 truncate">
-                                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>
-                                          <span className="truncate">Nhận tại bến</span>
-                                        </div>
+                                return (
+                                  <div
+                                    key={trip.id}
+                                    id={`trip-card-${trip.id}`}
+                                    onClick={() => setSelectedTripId(trip.id)}
+                                    className={`py-2 px-3 sm:px-3.5 rounded-xl border-2 cursor-pointer transition-all flex items-center justify-between gap-2 sm:gap-3 w-full shrink-0 ${
+                                      isSelected
+                                        ? 'border-orange-500 bg-white ring-2 ring-orange-100 shadow-xs'
+                                        : 'border-slate-200 bg-white hover:border-slate-300'
+                                    }`}
+                                  >
+                                    {/* Cột 1: Thông tin nhà xe - cố định độ rộng để căn thẳng hàng dọc */}
+                                    <div className="w-28 sm:w-32 shrink-0 min-w-0">
+                                      <div className="font-extrabold text-slate-900 text-xs sm:text-sm leading-tight truncate">
+                                        {trip.busCompany.name}
                                       </div>
-
-                                      {/* Cột 2: Thời gian xuất bến & Địa điểm - căn thẳng cột dọc qua tất cả các card */}
-                                      <div className="flex-1 min-w-0 px-1 sm:px-2">
-                                        <div className="flex items-baseline gap-1">
-                                          <span className="text-sm sm:text-base font-black text-slate-900 font-mono tracking-tight">
-                                            {depTime}
-                                          </span>
-                                          <span className="text-[10px] text-slate-400">xuất bến</span>
-                                        </div>
-                                        <div className="flex items-center gap-1 text-[10px] sm:text-[11px] text-slate-500 mt-0.5 truncate">
-                                          <span className="shrink-0">Trong ngày</span>
-                                          <span className="text-slate-300 shrink-0">·</span>
-                                          <span className="flex items-center gap-0.5 truncate">
-                                            <MapPin className="w-2.5 h-2.5 text-rose-400 shrink-0" />
-                                            <span className="truncate">Bến {origin}</span>
-                                          </span>
-                                        </div>
-                                      </div>
-
-                                      {/* Cột 3: Giá cước khởi điểm và ước tính theo bảng cước từng nhà xe */}
-                                      <div className="text-right shrink-0">
-                                        <div>
-                                          <span className="text-[10px] text-slate-400 mr-1 font-medium">Từ</span>
-                                          <span className="text-xs sm:text-sm font-black text-orange-600">
-                                            {(companyPricingMap[trip.busCompany.id]?.minFee ?? 30_000).toLocaleString('vi-VN')}đ
-                                          </span>
-                                        </div>
-                                        {companyPricingMap[trip.busCompany.id]?.rates?.length ? (
-                                          <div className="text-[10px] text-slate-500 font-semibold mt-0.5">
-                                            {calculatedPricing.totalWeight}kg:{' '}
-                                            {resolveFeeFromRates(
-                                              companyPricingMap[trip.busCompany.id].rates,
-                                              calculatedPricing.totalWeight,
-                                              undefined,
-                                              undefined,
-                                              cargoCategoryId,
-                                            ).toLocaleString('vi-VN')}
-                                            đ
-                                          </div>
-                                        ) : null}
+                                      <div className="flex items-center gap-1 text-[10px] sm:text-[11px] text-emerald-600 font-semibold mt-0.5 truncate">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>
+                                        <span className="truncate">
+                                          Nhận tại bến
+                                        </span>
                                       </div>
                                     </div>
-                                  );
-                                })}
+
+                                    {/* Cột 2: Thời gian xuất bến & Địa điểm - căn thẳng cột dọc qua tất cả các card */}
+                                    <div className="flex-1 min-w-0 px-1 sm:px-2">
+                                      <div className="flex items-baseline gap-1">
+                                        <span className="text-sm sm:text-base font-black text-slate-900 font-mono tracking-tight">
+                                          {depTime}
+                                        </span>
+                                        <span className="text-[10px] text-slate-400">
+                                          xuất bến
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center gap-1 text-[10px] sm:text-[11px] text-slate-500 mt-0.5 truncate">
+                                        <span className="shrink-0">
+                                          Trong ngày
+                                        </span>
+                                        <span className="text-slate-300 shrink-0">
+                                          ·
+                                        </span>
+                                        <span className="flex items-center gap-0.5 truncate">
+                                          <MapPin className="w-2.5 h-2.5 text-rose-400 shrink-0" />
+                                          <span className="truncate">
+                                            Bến {origin}
+                                          </span>
+                                        </span>
+                                      </div>
+                                    </div>
+
+                                    {/* Cột 3: Giá cước khởi điểm và ước tính theo bảng cước từng nhà xe */}
+                                    <div className="text-right shrink-0">
+                                      <div>
+                                        <span className="text-[10px] text-slate-400 mr-1 font-medium">
+                                          Từ
+                                        </span>
+                                        <span className="text-xs sm:text-sm font-black text-orange-600">
+                                          {(
+                                            companyPricingMap[
+                                              trip.busCompany.id
+                                            ]?.minFee ?? 30_000
+                                          ).toLocaleString('vi-VN')}
+                                          đ
+                                        </span>
+                                      </div>
+                                      {companyPricingMap[trip.busCompany.id]
+                                        ?.rates?.length ? (
+                                        <div className="text-[10px] text-slate-500 font-semibold mt-0.5">
+                                          {calculatedPricing.totalWeight}kg:{' '}
+                                          {resolveFeeFromRates(
+                                            companyPricingMap[
+                                              trip.busCompany.id
+                                            ].rates,
+                                            calculatedPricing.totalWeight,
+                                            undefined,
+                                            undefined,
+                                            cargoCategoryId,
+                                          ).toLocaleString('vi-VN')}
+                                          đ
+                                        </div>
+                                      ) : null}
+                                    </div>
+                                  </div>
+                                );
+                              })}
 
                               {/* Nút Xem thêm chuyến xe khi còn chuyến chưa hiển thị */}
                               {visibleTripCount < filteredTrips.length ? (
                                 <div className="pt-2 pb-1 flex flex-col items-center gap-1 shrink-0">
                                   <button
                                     type="button"
-                                    onClick={() => setVisibleTripCount((prev) => prev + 8)}
+                                    onClick={() =>
+                                      setVisibleTripCount((prev) => prev + 8)
+                                    }
                                     className="w-full py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-orange-50 hover:border-orange-300 hover:text-orange-600 font-extrabold text-xs text-slate-700 shadow-2xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                                   >
                                     <span>Xem thêm chuyến xe</span>
                                     <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
                                   </button>
                                   <p className="text-[10px] text-slate-400">
-                                    Đang hiển thị {visibleTrips.length} / {filteredTrips.length} chuyến
+                                    Đang hiển thị {visibleTrips.length} /{' '}
+                                    {filteredTrips.length} chuyến
                                   </p>
                                 </div>
                               ) : filteredTrips.length > 8 ? (
                                 <div className="text-center pt-2 pb-1 text-[11px] text-slate-400 font-medium shrink-0">
-                                  ✓ Đã hiển thị tất cả {filteredTrips.length} chuyến xe
+                                  ✓ Đã hiển thị tất cả {filteredTrips.length}{' '}
+                                  chuyến xe
                                 </div>
                               ) : null}
                             </div>
@@ -1291,8 +1389,12 @@ function SendFreightContent() {
                               <User className="w-4 h-4" />
                             </div>
                             <div>
-                              <div className="font-extrabold text-slate-900 text-sm">Người gửi</div>
-                              <div className="text-[11px] text-slate-400">Bạn là người gửi hàng</div>
+                              <div className="font-extrabold text-slate-900 text-sm">
+                                Người gửi
+                              </div>
+                              <div className="text-[11px] text-slate-400">
+                                Bạn là người gửi hàng
+                              </div>
                             </div>
                           </div>
 
@@ -1311,7 +1413,8 @@ function SendFreightContent() {
 
                           <div>
                             <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1">
-                              Số điện thoại <span className="text-rose-500">*</span>
+                              Số điện thoại{' '}
+                              <span className="text-rose-500">*</span>
                             </label>
                             <input
                               type="tel"
@@ -1324,7 +1427,10 @@ function SendFreightContent() {
 
                           <div>
                             <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1">
-                              Email <span className="text-slate-400 font-normal lowercase">(không bắt buộc)</span>
+                              Email{' '}
+                              <span className="text-slate-400 font-normal lowercase">
+                                (không bắt buộc)
+                              </span>
                             </label>
                             <input
                               type="email"
@@ -1343,14 +1449,19 @@ function SendFreightContent() {
                               <Users className="w-4 h-4" />
                             </div>
                             <div>
-                              <div className="font-extrabold text-slate-900 text-sm">Người nhận</div>
-                              <div className="text-[11px] text-slate-400">Ra bến nhận hàng</div>
+                              <div className="font-extrabold text-slate-900 text-sm">
+                                Người nhận
+                              </div>
+                              <div className="text-[11px] text-slate-400">
+                                Ra bến nhận hàng
+                              </div>
                             </div>
                           </div>
 
                           <div>
                             <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1">
-                              Họ và tên người nhận <span className="text-rose-500">*</span>
+                              Họ và tên người nhận{' '}
+                              <span className="text-rose-500">*</span>
                             </label>
                             <input
                               type="text"
@@ -1363,7 +1474,8 @@ function SendFreightContent() {
 
                           <div>
                             <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1">
-                              Số điện thoại người nhận <span className="text-rose-500">*</span>
+                              Số điện thoại người nhận{' '}
+                              <span className="text-rose-500">*</span>
                             </label>
                             <input
                               type="tel"
@@ -1381,26 +1493,35 @@ function SendFreightContent() {
                           Điểm gửi và điểm nhận hàng
                         </h3>
                         <p className="mt-1 text-xs text-slate-500">
-                          Chọn điểm đang hoạt động trên tuyến của chuyến xe đã chọn.
+                          Chọn điểm đang hoạt động trên tuyến của chuyến xe đã
+                          chọn.
                         </p>
                         {routePointsLoading ? (
-                          <p role="status" className="mt-3 text-sm text-slate-500">
+                          <p
+                            role="status"
+                            className="mt-3 text-sm text-slate-500"
+                          >
                             Đang tải danh sách điểm gửi và điểm nhận...
                           </p>
                         ) : routePointsError ? (
-                          <p role="alert" className="mt-3 text-sm font-semibold text-rose-700">
+                          <p
+                            role="alert"
+                            className="mt-3 text-sm font-semibold text-rose-700"
+                          >
                             {routePointsError}
                           </p>
                         ) : (
                           <div className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-2">
                             <label className="block">
                               <span className="mb-1 block text-[11px] font-bold uppercase text-slate-500">
-                                Điểm gửi <span className="text-rose-500">*</span>
+                                Điểm gửi{' '}
+                                <span className="text-rose-500">*</span>
                               </span>
                               <select
                                 value={senderPointId ?? ''}
                                 onChange={(event) => {
-                                  const nextId = Number(event.target.value) || null;
+                                  const nextId =
+                                    Number(event.target.value) || null;
                                   setSenderPointId(nextId);
                                   if (nextId === receiverPointId) {
                                     setReceiverPointId(null);
@@ -1418,18 +1539,22 @@ function SendFreightContent() {
                               </select>
                               {!routePoints?.senderPoints.length && (
                                 <span className="mt-1 block text-xs text-amber-700">
-                                  Chuyến xe chưa có điểm gửi hàng đang hoạt động.
+                                  Chuyến xe chưa có điểm gửi hàng đang hoạt
+                                  động.
                                 </span>
                               )}
                             </label>
                             <label className="block">
                               <span className="mb-1 block text-[11px] font-bold uppercase text-slate-500">
-                                Điểm nhận <span className="text-rose-500">*</span>
+                                Điểm nhận{' '}
+                                <span className="text-rose-500">*</span>
                               </span>
                               <select
                                 value={receiverPointId ?? ''}
                                 onChange={(event) =>
-                                  setReceiverPointId(Number(event.target.value) || null)
+                                  setReceiverPointId(
+                                    Number(event.target.value) || null,
+                                  )
                                 }
                                 disabled={!routePoints?.receiverPoints.length}
                                 className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 focus:border-orange-500 focus:outline-none disabled:bg-slate-50"
@@ -1447,7 +1572,8 @@ function SendFreightContent() {
                               </select>
                               {!routePoints?.receiverPoints.length && (
                                 <span className="mt-1 block text-xs text-amber-700">
-                                  Chuyến xe chưa có điểm nhận hàng đang hoạt động.
+                                  Chuyến xe chưa có điểm nhận hàng đang hoạt
+                                  động.
                                 </span>
                               )}
                             </label>
@@ -1463,11 +1589,15 @@ function SendFreightContent() {
                           3
                         </div>
                         <h2 className="text-base font-extrabold text-slate-900">
-                          Thông tin kiện hàng {cargoItems.length > 1 ? `(${cargoItems.length} kiện)` : ''}
+                          Thông tin kiện hàng{' '}
+                          {cargoItems.length > 1
+                            ? `(${cargoItems.length} kiện)`
+                            : ''}
                         </h2>
                       </div>
                       <p className="text-xs text-slate-400 mb-5 pl-8.5">
-                        Khai báo chính xác giúp nhà xe bảo quản hàng và tính cước chuẩn xác
+                        Khai báo chính xác giúp nhà xe bảo quản hàng và tính
+                        cước chuẩn xác
                       </p>
 
                       <div className="space-y-4">
@@ -1497,7 +1627,9 @@ function SendFreightContent() {
                                   </div>
                                   <button
                                     type="button"
-                                    onClick={() => handleRemoveCargoItem(item.id)}
+                                    onClick={() =>
+                                      handleRemoveCargoItem(item.id)
+                                    }
                                     className="text-xs text-rose-500 hover:text-rose-700 font-bold flex items-center gap-1 px-2 py-1 rounded hover:bg-rose-50 cursor-pointer transition-colors"
                                     title="Xóa kiện này"
                                   >
@@ -1509,13 +1641,19 @@ function SendFreightContent() {
                               {/* Tên hàng hóa */}
                               <label className="block">
                                 <span className="text-xs font-bold text-slate-700">
-                                  Tên hàng hóa {isMulti ? `(Kiện #${index + 1})` : ''} <span className="text-rose-500">*</span>
+                                  Tên hàng hóa{' '}
+                                  {isMulti ? `(Kiện #${index + 1})` : ''}{' '}
+                                  <span className="text-rose-500">*</span>
                                 </span>
                                 <input
                                   type="text"
                                   value={item.name}
                                   onChange={(e) =>
-                                    handleUpdateCargoItem(item.id, 'name', e.target.value)
+                                    handleUpdateCargoItem(
+                                      item.id,
+                                      'name',
+                                      e.target.value,
+                                    )
                                   }
                                   placeholder={
                                     index === 0
@@ -1531,30 +1669,52 @@ function SendFreightContent() {
                                 {/* Danh mục loại hàng hóa */}
                                 <label className="block md:col-span-6">
                                   <span className="text-xs font-bold text-slate-700">
-                                    Danh mục hàng hóa <span className="text-rose-500">*</span>
+                                    Danh mục hàng hóa{' '}
+                                    <span className="text-rose-500">*</span>
                                   </span>
                                   {cargoCategoriesLoading ? (
-                                    <p role="status" className="mt-2 text-xs text-slate-500">
+                                    <p
+                                      role="status"
+                                      className="mt-2 text-xs text-slate-500"
+                                    >
                                       Đang tải danh mục loại hàng...
                                     </p>
                                   ) : cargoCategoriesError ? (
-                                    <p role="alert" className="mt-2 text-xs font-semibold text-rose-700">
+                                    <p
+                                      role="alert"
+                                      className="mt-2 text-xs font-semibold text-rose-700"
+                                    >
                                       {cargoCategoriesError}
                                     </p>
                                   ) : (
                                     <div className="relative mt-1">
                                       <select
-                                        aria-label={index === 0 ? 'Loại hàng hóa' : `Loại hàng hóa kiện #${index + 1}`}
+                                        aria-label={
+                                          index === 0
+                                            ? 'Loại hàng hóa'
+                                            : `Loại hàng hóa kiện #${index + 1}`
+                                        }
                                         value={item.categoryId ?? ''}
                                         onChange={(e) => {
-                                          const val = e.target.value ? Number(e.target.value) : undefined;
-                                          handleUpdateCargoItem(item.id, 'categoryId', val);
+                                          const val = e.target.value
+                                            ? Number(e.target.value)
+                                            : undefined;
+                                          handleUpdateCargoItem(
+                                            item.id,
+                                            'categoryId',
+                                            val,
+                                          );
                                         }}
                                         className="h-10 w-full appearance-none rounded-lg border border-slate-300 bg-white px-3 pr-9 text-sm font-semibold text-slate-800 outline-none focus:border-accent cursor-pointer"
                                       >
-                                        <option value="">-- Chọn danh mục --</option>
+                                        <option value="">
+                                          -- Chọn danh mục --
+                                        </option>
                                         {cargoCategories.map((category) => (
-                                          <option key={category.categoryId} value={category.categoryId}>
+                                          <option
+                                            key={category.categoryId}
+                                            value={category.categoryId}
+                                          >
                                             {formatCategoryName(category.name)}
                                           </option>
                                         ))}
@@ -1566,7 +1726,9 @@ function SendFreightContent() {
 
                                 {/* Số lượng */}
                                 <label className="block md:col-span-3">
-                                  <span className="text-xs font-bold text-slate-700">Số lượng kiện</span>
+                                  <span className="text-xs font-bold text-slate-700">
+                                    Số lượng kiện
+                                  </span>
                                   <input
                                     type="number"
                                     min="1"
@@ -1576,7 +1738,10 @@ function SendFreightContent() {
                                       handleUpdateCargoItem(
                                         item.id,
                                         'quantity',
-                                        Math.max(1, parseInt(e.target.value, 10) || 1),
+                                        Math.max(
+                                          1,
+                                          parseInt(e.target.value, 10) || 1,
+                                        ),
                                       )
                                     }
                                   />
@@ -1596,7 +1761,10 @@ function SendFreightContent() {
                                       handleUpdateCargoItem(
                                         item.id,
                                         'weight',
-                                        Math.max(0, parseFloat(e.target.value) || 0),
+                                        Math.max(
+                                          0,
+                                          parseFloat(e.target.value) || 0,
+                                        ),
                                       )
                                     }
                                     placeholder="Ví dụ: 15"
@@ -1608,11 +1776,25 @@ function SendFreightContent() {
                               <div>
                                 <div className="flex items-center justify-between mb-1">
                                   <span className="text-xs font-bold text-slate-700">
-                                    Kích thước (cm) <span className="font-normal text-slate-400">(Không bắt buộc – nhập nếu hàng cồng kềnh)</span>
+                                    Kích thước (cm){' '}
+                                    <span className="font-normal text-slate-400">
+                                      (Không bắt buộc – nhập nếu hàng cồng kềnh)
+                                    </span>
                                   </span>
-                                  {Number(item.length) > 0 && Number(item.width) > 0 && Number(item.height) > 0 ? (
+                                  {Number(item.length) > 0 &&
+                                  Number(item.width) > 0 &&
+                                  Number(item.height) > 0 ? (
                                     <span className="text-[11px] font-semibold text-[#0060c4]">
-                                      Quy đổi: {Number(((Number(item.length) * Number(item.width) * Number(item.height)) / 5000).toFixed(2))} kg
+                                      Quy đổi:{' '}
+                                      {Number(
+                                        (
+                                          (Number(item.length) *
+                                            Number(item.width) *
+                                            Number(item.height)) /
+                                          5000
+                                        ).toFixed(2),
+                                      )}{' '}
+                                      kg
                                     </span>
                                   ) : null}
                                 </div>
@@ -1623,7 +1805,13 @@ function SendFreightContent() {
                                     placeholder="Dài (cm)"
                                     className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm font-semibold outline-none focus:border-accent bg-white text-slate-800"
                                     value={item.length}
-                                    onChange={(e) => handleUpdateCargoItem(item.id, 'length', e.target.value)}
+                                    onChange={(e) =>
+                                      handleUpdateCargoItem(
+                                        item.id,
+                                        'length',
+                                        e.target.value,
+                                      )
+                                    }
                                   />
                                   <input
                                     type="number"
@@ -1631,7 +1819,13 @@ function SendFreightContent() {
                                     placeholder="Rộng (cm)"
                                     className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm font-semibold outline-none focus:border-accent bg-white text-slate-800"
                                     value={item.width}
-                                    onChange={(e) => handleUpdateCargoItem(item.id, 'width', e.target.value)}
+                                    onChange={(e) =>
+                                      handleUpdateCargoItem(
+                                        item.id,
+                                        'width',
+                                        e.target.value,
+                                      )
+                                    }
                                   />
                                   <input
                                     type="number"
@@ -1639,13 +1833,27 @@ function SendFreightContent() {
                                     placeholder="Cao (cm)"
                                     className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm font-semibold outline-none focus:border-accent bg-white text-slate-800"
                                     value={item.height}
-                                    onChange={(e) => handleUpdateCargoItem(item.id, 'height', e.target.value)}
+                                    onChange={(e) =>
+                                      handleUpdateCargoItem(
+                                        item.id,
+                                        'height',
+                                        e.target.value,
+                                      )
+                                    }
                                   />
                                 </div>
-                                {(item.length.trim() || item.width.trim() || item.height.trim()) &&
-                                  !(Number(item.length) > 0 && Number(item.width) > 0 && Number(item.height) > 0) && (
+                                {(item.length.trim() ||
+                                  item.width.trim() ||
+                                  item.height.trim()) &&
+                                  !(
+                                    Number(item.length) > 0 &&
+                                    Number(item.width) > 0 &&
+                                    Number(item.height) > 0
+                                  ) && (
                                     <p className="mt-1.5 text-[11px] text-amber-600 font-semibold">
-                                      Vui lòng nhập đủ cả 3 chiều Dài, Rộng, Cao để tính khối lượng quy đổi (hoặc để trống cả 3 ô).
+                                      Vui lòng nhập đủ cả 3 chiều Dài, Rộng, Cao
+                                      để tính khối lượng quy đổi (hoặc để trống
+                                      cả 3 ô).
                                     </p>
                                   )}
                               </div>
@@ -1653,23 +1861,36 @@ function SendFreightContent() {
                               {/* Dịch vụ bảo quản & Ghi chú riêng từng kiện */}
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <label className="block">
-                                  <span className="text-xs font-bold text-slate-700">Dịch vụ bảo quản</span>
+                                  <span className="text-xs font-bold text-slate-700">
+                                    Dịch vụ bảo quản
+                                  </span>
                                   <div className="relative mt-1">
                                     <select
-                                      aria-label={index === 0 ? 'Dịch vụ bảo quản' : `Dịch vụ bảo quản kiện #${index + 1}`}
+                                      aria-label={
+                                        index === 0
+                                          ? 'Dịch vụ bảo quản'
+                                          : `Dịch vụ bảo quản kiện #${index + 1}`
+                                      }
                                       className="h-10 w-full appearance-none rounded-lg border border-slate-300 bg-white px-3 pr-9 text-sm font-semibold text-slate-800 outline-none focus:border-accent cursor-pointer"
                                       value={item.serviceType}
                                       onChange={(e) =>
                                         handleUpdateCargoItem(
                                           item.id,
                                           'serviceType',
-                                          e.target.value as 'normal' | 'fragile' | 'valuable',
+                                          e.target.value as
+                                            'normal' | 'fragile' | 'valuable',
                                         )
                                       }
                                     >
-                                      <option value="normal">Hàng thường</option>
-                                      <option value="fragile">Dễ vỡ (+20.000đ phụ phí)</option>
-                                      <option value="valuable">Giá trị cao (+50.000đ phụ phí)</option>
+                                      <option value="normal">
+                                        Hàng thường
+                                      </option>
+                                      <option value="fragile">
+                                        Dễ vỡ (+20.000đ phụ phí)
+                                      </option>
+                                      <option value="valuable">
+                                        Giá trị cao (+50.000đ phụ phí)
+                                      </option>
                                     </select>
                                     <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                                   </div>
@@ -1681,10 +1902,20 @@ function SendFreightContent() {
                                   </span>
                                   <input
                                     type="text"
-                                    aria-label={index === 0 ? 'Lưu ý kiện' : `Lưu ý kiện #${index + 1}`}
+                                    aria-label={
+                                      index === 0
+                                        ? 'Lưu ý kiện'
+                                        : `Lưu ý kiện #${index + 1}`
+                                    }
                                     className="mt-1 h-10 w-full rounded-lg border border-slate-300 px-3 text-sm font-semibold outline-none focus:border-accent bg-white text-slate-800"
                                     value={item.note}
-                                    onChange={(e) => handleUpdateCargoItem(item.id, 'note', e.target.value)}
+                                    onChange={(e) =>
+                                      handleUpdateCargoItem(
+                                        item.id,
+                                        'note',
+                                        e.target.value,
+                                      )
+                                    }
                                     placeholder="Ví dụ: Để đứng, tránh va đập..."
                                   />
                                 </label>
@@ -1708,7 +1939,10 @@ function SendFreightContent() {
                         <div className="pt-3 border-t border-slate-100">
                           <label className="block">
                             <span className="text-xs font-bold text-slate-700">
-                              Ghi chú vận chuyển & giao nhận <span className="font-normal text-slate-400">(Chung cho toàn đơn)</span>
+                              Ghi chú vận chuyển & giao nhận{' '}
+                              <span className="font-normal text-slate-400">
+                                (Chung cho toàn đơn)
+                              </span>
                             </span>
                             <input
                               type="text"
@@ -1721,15 +1955,19 @@ function SendFreightContent() {
                         </div>
                       </div>
 
-                        {/* Quy định giao nhận */}
-                        <div className="bg-amber-50/70 rounded-xl p-4 text-xs text-amber-900 border border-amber-200/50 flex items-start gap-2.5">
-                          <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                          <div className="leading-relaxed">
-                            <strong>Quy định giao nhận:</strong> Người gửi tự mang kiện hàng ra bến xe trước giờ xe chạy 15–30 phút. Người nhận mang CCCD/SĐT ra bến xe đích để nhận hàng. Nhà xe không nhận vận chuyển hàng cấm, vũ khí, chất cháy nổ.
-                          </div>
+                      {/* Quy định giao nhận */}
+                      <div className="bg-amber-50/70 rounded-xl p-4 text-xs text-amber-900 border border-amber-200/50 flex items-start gap-2.5">
+                        <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                        <div className="leading-relaxed">
+                          <strong>Quy định giao nhận:</strong> Người gửi tự mang
+                          kiện hàng ra bến xe trước giờ xe chạy 15–30 phút.
+                          Người nhận mang CCCD/SĐT ra bến xe đích để nhận hàng.
+                          Nhà xe không nhận vận chuyển hàng cấm, vũ khí, chất
+                          cháy nổ.
                         </div>
                       </div>
                     </div>
+                  </div>
 
                   {/* CỘT PHẢI: DỰ TÍNH CƯỚC PHÍ & VẬN ĐƠN STICKY */}
                   <div className="lg:col-span-4 sticky top-6 space-y-4">
@@ -1743,7 +1981,9 @@ function SendFreightContent() {
                         <div className="flex items-center justify-between">
                           <div>
                             <div className="text-xl font-black">{origin}</div>
-                            <div className="text-[11px] text-slate-400">Nơi gửi</div>
+                            <div className="text-[11px] text-slate-400">
+                              Nơi gửi
+                            </div>
                           </div>
 
                           <div className="flex items-center px-4 flex-1 max-w-[120px] justify-center">
@@ -1751,8 +1991,12 @@ function SendFreightContent() {
                           </div>
 
                           <div className="text-right">
-                            <div className="text-xl font-black">{destination}</div>
-                            <div className="text-[11px] text-slate-400">Nơi nhận</div>
+                            <div className="text-xl font-black">
+                              {destination}
+                            </div>
+                            <div className="text-[11px] text-slate-400">
+                              Nơi nhận
+                            </div>
                           </div>
                         </div>
 
@@ -1763,9 +2007,13 @@ function SendFreightContent() {
                               {selectedTrip.busCompany.name.charAt(0)}
                             </div>
                             <div className="text-xs">
-                              <div className="font-extrabold">{selectedTrip.busCompany.name}</div>
+                              <div className="font-extrabold">
+                                {selectedTrip.busCompany.name}
+                              </div>
                               <div className="text-[11px] text-slate-300">
-                                Khởi hành {formatIsoTime(selectedTrip.departureTime)} · {date}
+                                Khởi hành{' '}
+                                {formatIsoTime(selectedTrip.departureTime)} ·{' '}
+                                {date}
                               </div>
                             </div>
                           </div>
@@ -1789,44 +2037,64 @@ function SendFreightContent() {
 
                         {hasFragile && calculatedPricing.fragileFee > 0 && (
                           <div className="flex justify-between items-center text-xs">
-                            <span className="text-slate-500">Phí hàng dễ vỡ</span>
+                            <span className="text-slate-500">
+                              Phí hàng dễ vỡ
+                            </span>
                             <span className="font-bold text-slate-900">
-                              +{calculatedPricing.fragileFee.toLocaleString('vi-VN')}đ
+                              +
+                              {calculatedPricing.fragileFee.toLocaleString(
+                                'vi-VN',
+                              )}
+                              đ
                             </span>
                           </div>
                         )}
 
                         {hasValuable && calculatedPricing.valuableFee > 0 && (
                           <div className="flex justify-between items-center text-xs">
-                            <span className="text-slate-500">Phí hàng giá trị cao</span>
+                            <span className="text-slate-500">
+                              Phí hàng giá trị cao
+                            </span>
                             <span className="font-bold text-slate-900">
-                              +{calculatedPricing.valuableFee.toLocaleString('vi-VN')}đ
+                              +
+                              {calculatedPricing.valuableFee.toLocaleString(
+                                'vi-VN',
+                              )}
+                              đ
                             </span>
                           </div>
                         )}
 
                         <div className="pt-3 border-t border-slate-100 flex items-baseline justify-between">
-                          <span className="text-sm font-extrabold text-slate-900">Tổng cước phí:</span>
+                          <span className="text-sm font-extrabold text-slate-900">
+                            Tổng cước phí:
+                          </span>
                           <span className="text-xl font-black text-[#EF4444]">
-                            {calculatedPricing.totalFee.toLocaleString('vi-VN')}đ
+                            {calculatedPricing.totalFee.toLocaleString('vi-VN')}
+                            đ
                           </span>
                         </div>
                         <p className="text-xs leading-relaxed text-slate-500">
-                          Cước được tính theo bậc khối lượng quy chuẩn (từ 30.000đ) và xác thực lại khi tạo vận đơn.
+                          Cước được tính theo bậc khối lượng quy chuẩn (từ
+                          30.000đ) và xác thực lại khi tạo vận đơn.
                         </p>
 
                         {/* Progress */}
                         <div className="pt-3">
                           <div className="flex justify-between items-center text-xs mb-1">
-                            <span className="text-slate-400">Hoàn thiện thông tin</span>
+                            <span className="text-slate-400">
+                              Hoàn thiện thông tin
+                            </span>
                             <span className="font-bold text-slate-600">
-                              {[
-                                selectedTripId,
-                                senderName.trim(),
-                                senderPhone.trim(),
-                                receiverName.trim(),
-                                cargoItems[0]?.name.trim(),
-                              ].filter(Boolean).length}
+                              {
+                                [
+                                  selectedTripId,
+                                  senderName.trim(),
+                                  senderPhone.trim(),
+                                  receiverName.trim(),
+                                  cargoItems[0]?.name.trim(),
+                                ].filter(Boolean).length
+                              }
                               /5
                             </span>
                           </div>
@@ -1836,12 +2104,15 @@ function SendFreightContent() {
                             disabled={isSubmitting}
                             className="w-full h-12 mt-3 bg-[#FF7D42] hover:bg-[#F06A2D] text-white font-extrabold rounded-xl transition-all flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed text-sm cursor-pointer"
                           >
-                            <span>{isSubmitting ? 'Đang tạo...' : 'Tạo mã vận đơn'}</span>
+                            <span>
+                              {isSubmitting ? 'Đang tạo...' : 'Tạo mã vận đơn'}
+                            </span>
                             <ArrowRight className="w-4 h-4" />
                           </button>
 
                           <p className="text-[11px] text-center text-slate-400 mt-2.5 leading-tight">
-                            Sau khi tạo, mang kiện hàng ra bến xe gửi trước giờ xuất bến.
+                            Sau khi tạo, mang kiện hàng ra bến xe gửi trước giờ
+                            xuất bến.
                           </p>
                         </div>
                       </div>
@@ -1851,7 +2122,9 @@ function SendFreightContent() {
                     <div className="grid grid-cols-2 gap-3">
                       <div className="p-3.5 bg-white rounded-xl border border-slate-200">
                         <ShieldCheck className="w-5 h-5 text-orange-500 mb-1" />
-                        <div className="font-extrabold text-slate-900 text-xs">An toàn</div>
+                        <div className="font-extrabold text-slate-900 text-xs">
+                          An toàn
+                        </div>
                         <div className="text-[10px] text-slate-400 mt-0.5">
                           Hỗ trợ bảo hiểm hàng giá trị cao
                         </div>
@@ -1859,7 +2132,9 @@ function SendFreightContent() {
 
                       <div className="p-3.5 bg-white rounded-xl border border-slate-200">
                         <Clock className="w-5 h-5 text-orange-500 mb-1" />
-                        <div className="font-extrabold text-slate-900 text-xs">Giao trong ngày</div>
+                        <div className="font-extrabold text-slate-900 text-xs">
+                          Giao trong ngày
+                        </div>
                         <div className="text-[10px] text-slate-400 mt-0.5">
                           Nhận hàng sau 24h – 48h
                         </div>
@@ -1879,10 +2154,12 @@ function SendFreightContent() {
           <div className="max-w-2xl mx-auto space-y-6">
             <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
               <h2 className="text-lg font-black text-slate-800 mb-4 flex items-center gap-2">
-                <Search className="w-5 h-5 text-[#0060c4]" /> Tra cứu trạng thái đơn gửi hàng
+                <Search className="w-5 h-5 text-[#0060c4]" /> Tra cứu trạng thái
+                đơn gửi hàng
               </h2>
               <p className="text-xs text-slate-500 mb-6">
-                Nhập mã vận đơn (VD: FUTA-VD-...) và số điện thoại người gửi hoặc người nhận để xem chi tiết bến nhận và trạng thái đơn hàng.
+                Nhập mã vận đơn (VD: FUTA-VD-...) và số điện thoại người gửi
+                hoặc người nhận để xem chi tiết bến nhận và trạng thái đơn hàng.
               </p>
 
               <form onSubmit={handleLookup} className="space-y-4">
@@ -1900,7 +2177,9 @@ function SendFreightContent() {
                   <input
                     type="text"
                     value={lookupCode}
-                    onChange={(e) => setLookupCode(e.target.value.toUpperCase())}
+                    onChange={(e) =>
+                      setLookupCode(e.target.value.toUpperCase())
+                    }
                     placeholder="VD: FUTA-VD-09102026..."
                     className="w-full h-11 px-4 rounded-xl border border-slate-300 focus:outline-none focus:border-[#0060c4] font-semibold text-slate-800 uppercase"
                   />
@@ -1908,7 +2187,8 @@ function SendFreightContent() {
 
                 <div>
                   <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-1.5">
-                    Số điện thoại người gửi hoặc người nhận <span className="text-rose-500">*</span>
+                    Số điện thoại người gửi hoặc người nhận{' '}
+                    <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="tel"
@@ -1935,8 +2215,12 @@ function SendFreightContent() {
               <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 space-y-5 animate-in fade-in duration-300">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-100 gap-2">
                   <div>
-                    <span className="text-xs font-bold text-slate-400 uppercase">Mã vận đơn</span>
-                    <div className="text-xl font-black text-[#0060c4]">{lookupResult.waybillCode}</div>
+                    <span className="text-xs font-bold text-slate-400 uppercase">
+                      Mã vận đơn
+                    </span>
+                    <div className="text-xl font-black text-[#0060c4]">
+                      {lookupResult.waybillCode}
+                    </div>
                   </div>
                   <div>
                     <span
@@ -1964,32 +2248,51 @@ function SendFreightContent() {
                 {/* Điểm giao & nhận */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
                   <div className="p-3 bg-slate-50 rounded-xl">
-                    <span className="font-bold text-slate-500 uppercase block mb-1">Điểm gửi</span>
-                    <div className="font-extrabold text-slate-900">{lookupResult.pickupPoint.name}</div>
-                    <div className="text-slate-600 mt-0.5">{lookupResult.pickupPoint.address}</div>
+                    <span className="font-bold text-slate-500 uppercase block mb-1">
+                      Điểm gửi
+                    </span>
+                    <div className="font-extrabold text-slate-900">
+                      {lookupResult.pickupPoint.name}
+                    </div>
+                    <div className="text-slate-600 mt-0.5">
+                      {lookupResult.pickupPoint.address}
+                    </div>
                   </div>
 
                   <div className="p-3 bg-slate-50 rounded-xl">
-                    <span className="font-bold text-slate-500 uppercase block mb-1">Điểm nhận</span>
-                    <div className="font-extrabold text-slate-900">{lookupResult.dropoffPoint.name}</div>
-                    <div className="text-slate-600 mt-0.5">{lookupResult.dropoffPoint.address}</div>
+                    <span className="font-bold text-slate-500 uppercase block mb-1">
+                      Điểm nhận
+                    </span>
+                    <div className="font-extrabold text-slate-900">
+                      {lookupResult.dropoffPoint.name}
+                    </div>
+                    <div className="text-slate-600 mt-0.5">
+                      {lookupResult.dropoffPoint.address}
+                    </div>
                   </div>
                 </div>
 
                 {/* Chuyến xe */}
                 <div className="p-3 bg-blue-50/50 rounded-xl border border-blue-100 text-xs">
                   <div>
-                    <span className="text-slate-500">Chuyến xe vận chuyển:</span>
+                    <span className="text-slate-500">
+                      Chuyến xe vận chuyển:
+                    </span>
                     <div className="font-bold text-slate-900">
-                      {lookupResult.carrier.name} • {lookupResult.route.origin} → {lookupResult.route.destination}
+                      {lookupResult.carrier.name} • {lookupResult.route.origin}{' '}
+                      → {lookupResult.route.destination}
                     </div>
                     <div className="text-slate-500 mt-0.5">
-                      Khởi hành: {formatIsoTime(lookupResult.scheduledDepartureAt)} ngày {formatIsoDate(lookupResult.scheduledDepartureAt)}
+                      Khởi hành:{' '}
+                      {formatIsoTime(lookupResult.scheduledDepartureAt)} ngày{' '}
+                      {formatIsoDate(lookupResult.scheduledDepartureAt)}
                     </div>
                   </div>
                   {lookupResult.estimatedArrivalAt && (
                     <div className="mt-1 text-slate-500">
-                      Dự kiến đến: {formatIsoTime(lookupResult.estimatedArrivalAt)} ngày {formatIsoDate(lookupResult.estimatedArrivalAt)}
+                      Dự kiến đến:{' '}
+                      {formatIsoTime(lookupResult.estimatedArrivalAt)} ngày{' '}
+                      {formatIsoDate(lookupResult.estimatedArrivalAt)}
                     </div>
                   )}
                 </div>
@@ -2012,7 +2315,8 @@ function SendFreightContent() {
                       </strong>
                     </div>
                     <p className="mt-1 text-slate-600">
-                      Mã chỉ giảm tiền vé của đơn đặt chỗ; không giảm cước gửi hàng.
+                      Mã chỉ giảm tiền vé của đơn đặt chỗ; không giảm cước gửi
+                      hàng.
                     </p>
                   </div>
                 )}
@@ -2020,10 +2324,15 @@ function SendFreightContent() {
                 {/* Timeline */}
                 {lookupResult.timeline && lookupResult.timeline.length > 0 && (
                   <div>
-                    <span className="text-xs font-bold text-slate-500 uppercase block mb-2">Lịch sử xử lý:</span>
+                    <span className="text-xs font-bold text-slate-500 uppercase block mb-2">
+                      Lịch sử xử lý:
+                    </span>
                     <div className="space-y-2 border-l-2 border-slate-200 ml-2 pl-3">
                       {lookupResult.timeline.map((log) => (
-                        <div key={`${log.status}-${log.time}`} className="text-xs">
+                        <div
+                          key={`${log.status}-${log.time}`}
+                          className="text-xs"
+                        >
                           <span className="font-bold text-slate-800">
                             {log.status === 'MOI_TAO'
                               ? 'Tạo đơn gửi hàng'
@@ -2035,7 +2344,10 @@ function SendFreightContent() {
                                     ? 'Đã trả hàng cho người nhận'
                                     : log.status}
                           </span>
-                          <span className="text-slate-400 ml-2">({formatIsoTime(log.time)} {formatIsoDate(log.time)})</span>
+                          <span className="text-slate-400 ml-2">
+                            ({formatIsoTime(log.time)} {formatIsoDate(log.time)}
+                            )
+                          </span>
                         </div>
                       ))}
                     </div>
@@ -2063,31 +2375,51 @@ function SendFreightContent() {
               </h3>
               <div className="space-y-3.5 text-sm text-slate-600">
                 <div className="flex gap-3">
-                  <span className="w-6 h-6 rounded-full bg-blue-50 text-brand font-bold text-xs flex items-center justify-center shrink-0">1</span>
+                  <span className="w-6 h-6 rounded-full bg-blue-50 text-brand font-bold text-xs flex items-center justify-center shrink-0">
+                    1
+                  </span>
                   <div>
-                    <strong className="text-slate-900 block">Chọn tuyến & nhà xe:</strong>
-                    Chọn nơi gửi, nơi nhận và ngày gửi phù hợp. Chọn nhà xe vận chuyển trong danh sách.
+                    <strong className="text-slate-900 block">
+                      Chọn tuyến & nhà xe:
+                    </strong>
+                    Chọn nơi gửi, nơi nhận và ngày gửi phù hợp. Chọn nhà xe vận
+                    chuyển trong danh sách.
                   </div>
                 </div>
                 <div className="flex gap-3">
-                  <span className="w-6 h-6 rounded-full bg-blue-50 text-brand font-bold text-xs flex items-center justify-center shrink-0">2</span>
+                  <span className="w-6 h-6 rounded-full bg-blue-50 text-brand font-bold text-xs flex items-center justify-center shrink-0">
+                    2
+                  </span>
                   <div>
-                    <strong className="text-slate-900 block">Nhập thông tin người gửi & nhận:</strong>
-                    Điền chính xác họ tên và số điện thoại để nhà xe liên hệ khi nhận/giao hàng.
+                    <strong className="text-slate-900 block">
+                      Nhập thông tin người gửi & nhận:
+                    </strong>
+                    Điền chính xác họ tên và số điện thoại để nhà xe liên hệ khi
+                    nhận/giao hàng.
                   </div>
                 </div>
                 <div className="flex gap-3">
-                  <span className="w-6 h-6 rounded-full bg-blue-50 text-brand font-bold text-xs flex items-center justify-center shrink-0">3</span>
+                  <span className="w-6 h-6 rounded-full bg-blue-50 text-brand font-bold text-xs flex items-center justify-center shrink-0">
+                    3
+                  </span>
                   <div>
-                    <strong className="text-slate-900 block">Khai báo kiện hàng & dịch vụ:</strong>
-                    Chọn loại hàng, trọng lượng và tùy chọn hàng dễ vỡ / giá trị cao nếu cần bảo hiểm.
+                    <strong className="text-slate-900 block">
+                      Khai báo kiện hàng & dịch vụ:
+                    </strong>
+                    Chọn loại hàng, trọng lượng và tùy chọn hàng dễ vỡ / giá trị
+                    cao nếu cần bảo hiểm.
                   </div>
                 </div>
                 <div className="flex gap-3">
-                  <span className="w-6 h-6 rounded-full bg-blue-50 text-brand font-bold text-xs flex items-center justify-center shrink-0">4</span>
+                  <span className="w-6 h-6 rounded-full bg-blue-50 text-brand font-bold text-xs flex items-center justify-center shrink-0">
+                    4
+                  </span>
                   <div>
-                    <strong className="text-slate-900 block">Tạo vận đơn & thanh toán:</strong>
-                    Kiểm tra dự tính cước phí và nhấn Tạo mã vận đơn để chuyển sang bước thanh toán.
+                    <strong className="text-slate-900 block">
+                      Tạo vận đơn & thanh toán:
+                    </strong>
+                    Kiểm tra dự tính cước phí và nhấn Tạo mã vận đơn để chuyển
+                    sang bước thanh toán.
                   </div>
                 </div>
               </div>
@@ -2122,7 +2454,8 @@ function SendFreightContent() {
                 </h3>
               </div>
               <p className="text-xs text-slate-600 mb-5 leading-relaxed">
-                Vui lòng điền đầy đủ các thông tin bắt buộc trước khi tạo mã vận đơn.
+                Vui lòng điền đầy đủ các thông tin bắt buộc trước khi tạo mã vận
+                đơn.
               </p>
               <div className="flex justify-end">
                 <button
@@ -2143,7 +2476,13 @@ function SendFreightContent() {
 
 export default function SendFreightPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Gửi hàng theo nhà xe - Đang tải...</div>}>
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center">
+          Gửi hàng theo nhà xe - Đang tải...
+        </div>
+      }
+    >
       <SendFreightContent />
     </Suspense>
   );

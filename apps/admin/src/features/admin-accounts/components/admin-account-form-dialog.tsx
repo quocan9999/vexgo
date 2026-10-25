@@ -1,9 +1,30 @@
 'use client';
 
-import { LoaderCircle, X } from 'lucide-react';
+import { ResourceSheetForm } from '@/components/admin/resource-sheet-form';
+
+import { LoaderCircle } from 'lucide-react';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { AdminFormDialog } from '@/components/admin/admin-form-dialog';
-import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
+import { ResourceNotice, ResourceSheet } from '@/components/admin/resource-ui';
+import {
+  Field as UiField,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+  FieldSet,
+  FieldLegend,
+} from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Button } from '@/components/ui/action-button';
 import { getBusCompanyFilterOptions } from '@/features/bus-companies/services/bus-company-service';
 import { getDefaultRolePermissions } from '@/features/platform-rbac/services/platform-rbac-service';
 import type { AdminRbacRole } from '@/features/platform-rbac/types/platform-rbac';
@@ -22,7 +43,6 @@ import type {
   CreateAdminAccountInput,
   UpdateAdminAccountInput,
 } from '../types/admin-account';
-import styles from './admin-accounts-management.module.css';
 
 type TenantRoleOption = Pick<AdminRbacRole, 'roleName' | 'description'> & {
   roleName: TenantRbacRoleName;
@@ -115,7 +135,6 @@ export function AdminAccountFormDialog({
   const idPrefix = editing
     ? `edit-admin-account-${account.accountId}`
     : 'create-admin-account';
-  const dialogRef = useRef<HTMLDialogElement>(null);
   const submittingRef = useRef(false);
   const [values, setValues] = useState<Values>(() => initialValues(account));
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
@@ -160,7 +179,7 @@ export function AdminAccountFormDialog({
   }, [editing, retryCount]);
 
   function closeDialog() {
-    if (!submittingRef.current) dialogRef.current?.close();
+    if (!submittingRef.current) onClose();
   }
 
   function retryOptions() {
@@ -279,7 +298,11 @@ export function AdminAccountFormDialog({
             employeeCode: values.employeeCode.trim(),
             roleNames: values.roleNames,
           } satisfies CreateAdminAccountInput);
-      dialogRef.current?.close();
+      toast.success(
+        editing
+          ? 'Đã cập nhật thông tin tài khoản Admin.'
+          : 'Đã tạo tài khoản Admin.',
+      );
       onSaved(saved);
     } catch (requestError: unknown) {
       if (requestError instanceof AdminAccountApiError) {
@@ -320,20 +343,16 @@ export function AdminAccountFormDialog({
   ) {
     const fieldId = `${idPrefix}-${field}`;
     return (
-      <div className="admin-crud-form-field">
-        <label htmlFor={fieldId}>
+      <UiField data-invalid={Boolean(fieldErrors[field])}>
+        <FieldLabel htmlFor={fieldId}>
           {label}
-          {required ? ' *' : ''}
-        </label>
-        <input
+          {required && <span aria-hidden>*</span>}
+        </FieldLabel>
+        <Input
           aria-describedby={fieldErrors[field] ? `${fieldId}-error` : undefined}
           aria-invalid={Boolean(fieldErrors[field])}
           autoComplete={field === 'password' ? 'new-password' : 'off'}
-          className={
-            field === 'employeeCode' || field === 'citizenId'
-              ? 'admin-data-mono'
-              : undefined
-          }
+          className={field === 'employeeCode' || field === 'citizenId' ? 'admin-data-mono' : undefined}
           disabled={submitting}
           id={fieldId}
           maxLength={
@@ -348,163 +367,33 @@ export function AdminAccountFormDialog({
           type={type}
           value={values[field]}
         />
-        {fieldErrors[field] && (
-          <span className="admin-crud-form-field-error" id={`${fieldId}-error`}>
-            {fieldErrors[field]}
-          </span>
-        )}
-      </div>
+        <FieldError id={`${fieldId}-error`}>{fieldErrors[field]}</FieldError>
+      </UiField>
     );
   }
 
   return (
-    <AdminFormDialog
-      ariaBusy={submitting}
-      ariaDescribedBy={`${idPrefix}-description`}
-      ariaLabelledBy={`${idPrefix}-title`}
-      dialogRef={dialogRef}
-      onClose={onClose}
+    <ResourceSheet
+      busy={submitting}
+      description={
+        editing
+          ? 'Cập nhật thông tin cá nhân. Số điện thoại, nhà xe, mã nhân viên và vai trò được quản lý riêng.'
+          : 'Tạo tài khoản nhân viên gắn với một nhà xe và ít nhất một vai trò nhà xe.'
+      }
       preventDismiss={submitting}
+      title={editing ? 'Chỉnh sửa tài khoản Admin' : 'Thêm tài khoản Admin'}
+      onClose={closeDialog}
     >
-      <>
-        <div className="admin-dialog-header">
-          <div className="admin-dialog-header__copy">
-            <p className="eyebrow">QUẢN LÝ TÀI KHOẢN ADMIN</p>
-            <h2 id={`${idPrefix}-title`}>
-              {editing ? 'Chỉnh sửa tài khoản Admin' : 'Thêm tài khoản Admin'}
-            </h2>
-            <p id={`${idPrefix}-description`}>
-              {editing
-                ? 'Cập nhật thông tin cá nhân. Số điện thoại, nhà xe, mã nhân viên và vai trò được quản lý riêng.'
-                : 'Tạo tài khoản nhân viên gắn với một nhà xe và ít nhất một vai trò nhà xe.'}
-            </p>
-          </div>
-          <Button
-            aria-label={
-              editing
-                ? 'Đóng biểu mẫu chỉnh sửa tài khoản'
-                : 'Đóng biểu mẫu thêm tài khoản'
-            }
-            className="icon-button"
-            disabled={submitting}
-            onClick={closeDialog}
-            type="button"
-            variant="secondary"
-          >
-            <X aria-hidden="true" size={19} />
-          </Button>
-        </div>
-
-        <form className="admin-crud-form" noValidate onSubmit={handleSubmit}>
-          {formError && (
-            <p className="admin-crud-form-error" role="alert">
-              {formError}
-            </p>
-          )}
-          {textField('fullName', 'Họ và tên', 'text', true)}
-          {!editing && (
-            <>
-              {textField('phoneNumber', 'Số điện thoại', 'tel', true)}
-              {textField('password', 'Mật khẩu', 'password', true)}
-              <div className="admin-crud-form-field">
-                <label htmlFor={`${idPrefix}-busCompanyId`}>Nhà xe *</label>
-                <select
-                  aria-describedby={
-                    fieldErrors.busCompanyId
-                      ? `${idPrefix}-busCompanyId-error`
-                      : undefined
-                  }
-                  aria-invalid={Boolean(fieldErrors.busCompanyId)}
-                  disabled={
-                    submitting ||
-                    options.status !== 'success' ||
-                    options.companies.length === 0
-                  }
-                  id={`${idPrefix}-busCompanyId`}
-                  onChange={(event) =>
-                    updateField('busCompanyId', event.target.value)
-                  }
-                  required
-                  value={values.busCompanyId}
-                >
-                  <option value="">Chọn nhà xe</option>
-                  {options.status === 'success' &&
-                    options.companies.map((company) => (
-                      <option key={company.id} value={company.id}>
-                        {company.label}
-                      </option>
-                    ))}
-                </select>
-                {fieldErrors.busCompanyId && (
-                  <span
-                    className="admin-crud-form-field-error"
-                    id={`${idPrefix}-busCompanyId-error`}
-                  >
-                    {fieldErrors.busCompanyId}
-                  </span>
-                )}
-                {options.status === 'loading' && (
-                  <p aria-live="polite" role="status">
-                    Đang tải danh sách nhà xe…
-                  </p>
-                )}
-              </div>
-              {textField('employeeCode', 'Mã nhân viên', 'text', true)}
-              <fieldset className={styles.roleOptions}>
-                <legend>Vai trò nhà xe *</legend>
-                {options.status === 'success' &&
-                  options.roles.map((role) => (
-                    <label className={styles.roleOption} key={role.roleName}>
-                      <input
-                        checked={values.roleNames.includes(role.roleName)}
-                        disabled={submitting}
-                        onChange={() => toggleRole(role.roleName)}
-                        type="checkbox"
-                        value={role.roleName}
-                      />
-                      <span>{role.description ?? role.roleName}</span>
-                    </label>
-                  ))}
-                {fieldErrors.roleNames && (
-                  <span className="admin-crud-form-field-error">
-                    {fieldErrors.roleNames}
-                  </span>
-                )}
-                {options.status === 'success' && options.roles.length === 0 && (
-                  <p className="admin-crud-form-error" role="alert">
-                    Danh mục chưa có vai trò nhà xe hợp lệ.
-                  </p>
-                )}
-              </fieldset>
-              {options.status === 'success' &&
-                options.companies.length === 0 && (
-                  <p className="admin-crud-form-error" role="alert">
-                    Chưa có nhà xe để tạo tài khoản.
-                  </p>
-                )}
-              {options.status === 'error' && (
-                <div className="admin-crud-form-error" role="alert">
-                  <p>{options.message}</p>
-                  <Button
-                    onClick={retryOptions}
-                    type="button"
-                    variant="secondary"
-                  >
-                    Tải lại danh mục
-                  </Button>
-                </div>
-              )}
-            </>
-          )}
-          {textField('dateOfBirth', 'Ngày sinh', 'date')}
-          {textField('email', 'Email', 'email')}
-          {textField('citizenId', 'CCCD')}
-          <div className="admin-crud-form-actions">
+      <ResourceSheetForm
+        noValidate
+        onSubmit={handleSubmit}
+        footer={
+          <div className="-mx-4 flex justify-end gap-3 border-t bg-popover px-4 py-4 sm:-mx-6 sm:px-6 shrink-0">
             <Button
               disabled={submitting}
               onClick={closeDialog}
               type="button"
-              variant="secondary"
+              variant="outline"
             >
               Hủy
             </Button>
@@ -521,7 +410,7 @@ export function AdminAccountFormDialog({
               {submitting && (
                 <LoaderCircle
                   aria-hidden="true"
-                  className="admin-crud-form-spinner"
+                  className="motion-safe:animate-spin"
                   size={16}
                 />
               )}
@@ -532,8 +421,151 @@ export function AdminAccountFormDialog({
                   : 'Tạo tài khoản'}
             </Button>
           </div>
-        </form>
-      </>
-    </AdminFormDialog>
+        }
+      >
+        {formError && <ResourceNotice kind="error">{formError}</ResourceNotice>}
+        {textField('fullName', 'Họ và tên', 'text', true)}
+        {!editing && (
+          <>
+            {textField('phoneNumber', 'Số điện thoại', 'tel', true)}
+            {textField('password', 'Mật khẩu', 'password', true)}
+            <UiField data-invalid={Boolean(fieldErrors.busCompanyId)}>
+              <FieldLabel htmlFor={`${idPrefix}-busCompanyId`}>
+                Nhà xe <span aria-hidden>*</span>
+              </FieldLabel>
+              <Select
+                disabled={
+                  submitting ||
+                  options.status !== 'success' ||
+                  options.companies.length === 0
+                }
+                onValueChange={(value) =>
+                  updateField('busCompanyId', String(value ?? ''))
+                }
+                value={values.busCompanyId || null}
+              >
+                <SelectTrigger
+                  aria-label="Nhà xe"
+                  aria-required="true"
+                  aria-invalid={Boolean(fieldErrors.busCompanyId)}
+                  aria-describedby={
+                    fieldErrors.busCompanyId
+                      ? `${idPrefix}-busCompanyId-error`
+                      : undefined
+                  }
+                  id={`${idPrefix}-busCompanyId`}
+                >
+                  <SelectValue placeholder="Chọn nhà xe">
+                    {options.status === 'success'
+                      ? (options.companies.find(
+                          (company) =>
+                            String(company.id) === values.busCompanyId,
+                        )?.label ?? 'Chọn nhà xe')
+                      : 'Chọn nhà xe'}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    {options.status === 'success' &&
+                      options.companies.map((company) => (
+                        <SelectItem
+                          key={company.id}
+                          value={String(company.id)}
+                        >
+                          {company.label}
+                        </SelectItem>
+                      ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+              <FieldError id={`${idPrefix}-busCompanyId-error`}>
+                {fieldErrors.busCompanyId}
+              </FieldError>
+              {options.status === 'loading' && (
+                <p
+                  aria-live="polite"
+                  className="text-xs text-muted-foreground"
+                  role="status"
+                >
+                  Đang tải danh sách nhà xe…
+                </p>
+              )}
+            </UiField>
+            {textField('employeeCode', 'Mã nhân viên', 'text', true)}
+            <FieldSet
+              aria-invalid={Boolean(fieldErrors.roleNames)}
+              className="gap-3"
+            >
+              <FieldLegend>
+                Vai trò nhà xe <span aria-hidden>*</span>
+              </FieldLegend>
+              <FieldGroup className="gap-2">
+                {options.status === 'success' &&
+                  options.roles.map((role) => {
+                    const checkboxId = `${idPrefix}-role-${role.roleName}`;
+                    return (
+                      <UiField
+                        className="items-center rounded-lg border p-3"
+                        key={role.roleName}
+                        orientation="horizontal"
+                      >
+                        <Checkbox
+                          aria-describedby={
+                            fieldErrors.roleNames
+                              ? `${idPrefix}-roleNames-error`
+                              : undefined
+                          }
+                          aria-invalid={Boolean(fieldErrors.roleNames)}
+                          checked={values.roleNames.includes(role.roleName)}
+                          disabled={submitting}
+                          id={checkboxId}
+                          onCheckedChange={() => toggleRole(role.roleName)}
+                          value={role.roleName}
+                        />
+                        <FieldLabel
+                          className="cursor-pointer"
+                          htmlFor={checkboxId}
+                        >
+                          {role.description ?? role.roleName}
+                        </FieldLabel>
+                      </UiField>
+                    );
+                  })}
+              </FieldGroup>
+              <FieldError id={`${idPrefix}-roleNames-error`}>
+                {fieldErrors.roleNames}
+              </FieldError>
+            </FieldSet>
+            {options.status === 'success' && options.roles.length === 0 && (
+              <ResourceNotice kind="error">
+                Danh mục chưa có vai trò nhà xe hợp lệ.
+              </ResourceNotice>
+            )}
+            {options.status === 'success' && options.companies.length === 0 && (
+              <ResourceNotice kind="error">
+                Chưa có nhà xe để tạo tài khoản.
+              </ResourceNotice>
+            )}
+            {options.status === 'error' && (
+              <ResourceNotice kind="error">
+                <div className="space-y-3">
+                  <p>{options.message}</p>
+                  <Button
+                    onClick={retryOptions}
+                    type="button"
+                    variant="outline"
+                  >
+                    Tải lại danh mục
+                  </Button>
+                </div>
+              </ResourceNotice>
+            )}
+          </>
+        )}
+        {textField('dateOfBirth', 'Ngày sinh', 'date')}
+        {textField('email', 'Email', 'email')}
+        {textField('citizenId', 'CCCD')}
+      </ResourceSheetForm>
+    </ResourceSheet>
   );
 }
