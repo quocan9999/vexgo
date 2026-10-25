@@ -1,23 +1,40 @@
 'use client';
 
-import { ArrowDown, ArrowUp, ArrowUpDown, Search } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { KeyboardEvent } from 'react';
 import { AdminPageHeader } from '@/components/admin/admin-page-header';
-import { AdminPagination } from '@/components/admin/admin-pagination';
-import { AdminStatusBadge } from '@/components/admin/admin-status-badge';
-import { AdminDetailAction } from '@/components/admin/admin-detail-action';
-import { AdminTableSkeleton } from '@/components/admin/admin-table-skeleton';
+import {
+  ResourcePagination,
+  ResourceStatusBadge,
+  ResourceDetailAction,
+  ResourceTableSkeleton,
+  ResourceState,
+  ResourceRefreshAction,
+} from '@/components/admin/resource-ui';
 import {
   DateRangeFilter,
-  FilterToolbar,
   LabeledSelectFilter,
-  SearchInput,
-  SelectFilter,
   type DateRangeValue,
 } from '@/components/data-filters/data-filters';
+import {
+  FilterToolbar,
+  SearchInput,
+  SelectFilter,
+} from '@/components/data-filters/resource-filters';
+import { Button } from '@/components/ui/action-button';
+import { Card } from '@/components/ui/card';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import {
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
 import { useAdminSession } from '@/features/admin-auth/hooks/use-admin-session';
 import {
@@ -46,7 +63,6 @@ import type {
   AdminPage,
   AdminTicketListItem,
 } from '../types/booking-management';
-import styles from './booking-management.module.css';
 
 type BookingPage = AdminPage<AdminBookingListItem>;
 type TicketPage = AdminPage<AdminTicketListItem>;
@@ -57,6 +73,24 @@ type OpenDetail = (
   id: number,
   state: BookingManagementUrlState,
 ) => void;
+
+function formatDisplayTimestamp(value: string | null | undefined) {
+  if (!value || formatTimestamp(value) === '—') return '—';
+  return new Intl.DateTimeFormat('vi-VN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'Asia/Ho_Chi_Minh',
+  })
+    .format(new Date(value))
+    .replaceAll('/', '-');
+}
+
+function displayStatusLabel(status: string) {
+  return status === 'CHO_THAN_TOAN' ? 'Chờ thanh toán' : statusLabel(status);
+}
 
 function dateRangeValue(
   from?: string,
@@ -135,6 +169,7 @@ export function BookingManagement() {
     error: unknown;
   } | null>(null);
   const [retryKey, setRetryKey] = useState(0);
+  const [extraFiltersOpen, setExtraFiltersOpen] = useState(false);
   const requestKey = JSON.stringify([queryKey, retryKey]);
   const loading =
     authState.status === 'authenticated' && loadState?.key !== requestKey;
@@ -268,24 +303,6 @@ export function BookingManagement() {
     router.push(detailHref(kind, id, state));
   }
 
-  function handleTabKeyDown(
-    event: KeyboardEvent<HTMLButtonElement>,
-    currentTab: BookingManagementTab,
-  ) {
-    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
-    event.preventDefault();
-    const nextTab =
-      event.key === 'Home'
-        ? 'bookings'
-        : event.key === 'End'
-          ? 'tickets'
-          : currentTab === 'bookings'
-            ? 'tickets'
-            : 'bookings';
-    switchTab(nextTab);
-    document.getElementById(`booking-management-${nextTab}-tab`)?.focus();
-  }
-
   function changeDateRange(
     key: 'booked' | 'departure',
     value: DateRangeValue | null,
@@ -332,14 +349,7 @@ export function BookingManagement() {
     }));
   }
 
-
-
   const items = resultPage?.data ?? [];
-  const totalItems = requestError
-    ? null
-    : loading
-      ? null
-      : (resultPage?.meta.totalItems ?? null);
   const hasFilters = Boolean(
     activeState.search ||
     activeState.status ||
@@ -370,60 +380,50 @@ export function BookingManagement() {
 
   return (
     <SuperAdminLayout activeSection="booking-management">
-      <div className="admin-page-content">
+      <div className="admin-page-content admin-ui space-y-6">
         <AdminPageHeader
           eyebrow="QUẢN LÝ VẬN HÀNH"
           title="Quản lý phiếu đặt vé & vé"
           titleId="booking-management-title"
+          actions={
+            <ResourceRefreshAction
+              loading={loading}
+              onClick={() => setRetryKey((key) => key + 1)}
+            />
+          }
         />
 
         <section
           aria-labelledby="booking-management-title"
           aria-busy={loading}
-          className={styles.section}
+          className="min-w-0"
         >
-          <div className="panel admin-resource-panel">
-            <div
+          <Tabs
+            value={urlState.tab}
+            onValueChange={(value) => switchTab(value as BookingManagementTab)}
+            className="min-w-0 gap-4"
+          >
+            <TabsList
               aria-label="Loại dữ liệu đặt vé"
-              className={styles.tabs}
-              role="tablist"
+              activateOnFocus
+              className="w-full sm:w-fit"
             >
-              <button
-                aria-controls="booking-management-panel"
-                aria-selected={urlState.tab === 'bookings'}
-                className={styles.tab}
+              <TabsTrigger
                 id="booking-management-bookings-tab"
-                onClick={() => switchTab('bookings')}
-                onKeyDown={(event) => handleTabKeyDown(event, 'bookings')}
-                role="tab"
-                tabIndex={urlState.tab === 'bookings' ? 0 : -1}
-                type="button"
+                value="bookings"
               >
                 Phiếu đặt vé
-              </button>
-              <button
-                aria-controls="booking-management-panel"
-                aria-selected={urlState.tab === 'tickets'}
-                className={styles.tab}
-                id="booking-management-tickets-tab"
-                onClick={() => switchTab('tickets')}
-                onKeyDown={(event) => handleTabKeyDown(event, 'tickets')}
-                role="tab"
-                tabIndex={urlState.tab === 'tickets' ? 0 : -1}
-                type="button"
-              >
+              </TabsTrigger>
+              <TabsTrigger id="booking-management-tickets-tab" value="tickets">
                 Vé
-              </button>
-            </div>
-
-            <div
-              aria-labelledby={`booking-management-${urlState.tab}-tab`}
-              className={styles.panel}
+              </TabsTrigger>
+            </TabsList>
+            <TabsContent
+              value={urlState.tab}
+              className="min-w-0 overflow-hidden rounded-xl border bg-card shadow-sm"
               id="booking-management-panel"
-              role="tabpanel"
-              tabIndex={0}
             >
-              <FilterToolbar totalItems={totalItems}>
+              <FilterToolbar>
                 <SearchInput
                   label={
                     urlState.tab === 'bookings' ? 'Tìm phiếu đặt vé' : 'Tìm vé'
@@ -437,7 +437,7 @@ export function BookingManagement() {
                 />
                 <SelectFilter
                   allLabel="Tất cả trạng thái"
-                  label="Lọc theo trạng thái"
+                  label="Trạng thái"
                   onChange={(value) =>
                     updateListState((current) => ({
                       ...current,
@@ -451,66 +451,90 @@ export function BookingManagement() {
                   }))}
                   value={activeState.status ?? ''}
                 />
-                <DateRangeFilter
-                  fromLabel="Ngày đặt từ"
-                  label="Ngày đặt"
-                  onApply={(value) => changeDateRange('booked', value)}
-                  title="Ngày đặt"
-                  toLabel="Ngày đặt đến"
-                  value={dateRangeValue(
-                    activeState.bookedFrom,
-                    activeState.bookedTo,
-                  )}
-                />
-                <DateRangeFilter
-                  fromLabel="Khởi hành từ"
-                  label="Ngày khởi hành"
-                  onApply={(value) => changeDateRange('departure', value)}
-                  title="Ngày khởi hành"
-                  toLabel="Khởi hành đến"
-                  value={dateRangeValue(
-                    activeState.departureFrom,
-                    activeState.departureTo,
-                  )}
-                />
-                <LabeledSelectFilter
-                  accessibleLabel="Số dòng mỗi trang"
-                  label="Số dòng"
-                  onChange={(value) =>
-                    updateListState((current) => ({
-                      ...current,
-                      pageSize: Number(value),
-                      page: 1,
-                    }))
-                  }
-                  options={[10, 25, 50, 100].map((size) => ({
-                    value: String(size),
-                    label: String(size),
-                  }))}
-                  value={String(activeState.pageSize)}
-                />
-                <LabeledSelectFilter
-                  label="Sắp xếp theo"
-                  onChange={(value) =>
-                    changeSort(value as BookingManagementSortKey)
-                  }
-                  options={sortOptions}
-                  sortDirection={activeState.sortDirection}
-                  value={activeState.sortBy}
-                />
+                <Button
+                  variant="outline"
+                  className="min-[901px]:hidden"
+                  aria-expanded={extraFiltersOpen}
+                  aria-controls="booking-extra-filters"
+                  onClick={() => setExtraFiltersOpen((open) => !open)}
+                >
+                  {extraFiltersOpen ? 'Thu gọn' : 'Lọc nâng cao'}
+                  {activeState.bookedFrom ||
+                  activeState.bookedTo ||
+                  activeState.departureFrom ||
+                  activeState.departureTo
+                    ? ' · Có lọc ngày'
+                    : ''}
+                </Button>
+                <div
+                  id="booking-extra-filters"
+                  className={`${extraFiltersOpen ? 'flex' : 'hidden'} w-full flex-wrap items-end gap-3 min-[901px]:flex`}
+                >
+                  <DateRangeFilter
+                    appearance="resource"
+                    fromLabel="Ngày đặt từ"
+                    label="Ngày đặt"
+                    onApply={(value) => changeDateRange('booked', value)}
+                    title="Ngày đặt"
+                    toLabel="Ngày đặt đến"
+                    value={dateRangeValue(
+                      activeState.bookedFrom,
+                      activeState.bookedTo,
+                    )}
+                  />
+                  <DateRangeFilter
+                    appearance="resource"
+                    fromLabel="Khởi hành từ"
+                    label="Ngày khởi hành"
+                    onApply={(value) => changeDateRange('departure', value)}
+                    title="Ngày khởi hành"
+                    toLabel="Khởi hành đến"
+                    value={dateRangeValue(
+                      activeState.departureFrom,
+                      activeState.departureTo,
+                    )}
+                  />
+                  <LabeledSelectFilter
+                    appearance="resource"
+                    accessibleLabel="Số dòng mỗi trang"
+                    label="Số dòng"
+                    onChange={(value) =>
+                      updateListState((current) => ({
+                        ...current,
+                        pageSize: Number(value),
+                        page: 1,
+                      }))
+                    }
+                    options={[10, 25, 50, 100].map((size) => ({
+                      value: String(size),
+                      label: String(size),
+                    }))}
+                    value={String(activeState.pageSize)}
+                  />
+                  <LabeledSelectFilter
+                    appearance="resource"
+                    label="Sắp xếp theo"
+                    onChange={(value) =>
+                      changeSort(value as BookingManagementSortKey)
+                    }
+                    options={sortOptions}
+                    sortDirection={activeState.sortDirection}
+                    value={activeState.sortBy}
+                  />
+                </div>
                 {hasFilters && (
-                  <button
-                    className={styles.resetButton}
+                  <Button
+                    variant="outline"
                     onClick={resetFilters}
                     type="button"
                   >
                     Xóa bộ lọc
-                  </button>
+                  </Button>
                 )}
               </FilterToolbar>
 
               {loading && !resultPage && (
-                <AdminTableSkeleton
+                <ResourceTableSkeleton
                   resourceLabel={
                     urlState.tab === 'bookings' ? 'phiếu đặt vé' : 'vé'
                   }
@@ -518,24 +542,23 @@ export function BookingManagement() {
               )}
 
               {Boolean(requestError) && (
-                <div className={styles.error} role="alert">
+                <ResourceState error>
                   <p>{getErrorMessage(requestError)}</p>
-                  <button
-                    className={styles.retryButton}
+                  <Button
+                    variant="outline"
                     onClick={() => setRetryKey((key) => key + 1)}
                     type="button"
                   >
                     Thử lại
-                  </button>
-                </div>
+                  </Button>
+                </ResourceState>
               )}
 
               {!requestError &&
                 !loading &&
                 resultPage &&
                 items.length === 0 && (
-                  <div className={styles.empty} role="status">
-                    <Search aria-hidden="true" size={21} />
+                  <ResourceState>
                     <p>
                       {resultPage.meta.totalItems > 0
                         ? 'Trang hiện tại không có dữ liệu. Hãy quay về trang trước.'
@@ -546,20 +569,20 @@ export function BookingManagement() {
                             : 'Chưa có vé trong nhà xe.'}
                     </p>
                     {hasFilters && (
-                      <button
-                        className={styles.resetButton}
+                      <Button
+                        variant="outline"
                         onClick={resetFilters}
                         type="button"
                       >
                         Xóa bộ lọc
-                      </button>
+                      </Button>
                     )}
-                  </div>
+                  </ResourceState>
                 )}
 
               {resultPage && items.length > 0 && (
                 <>
-                  <div aria-busy={loading} className={styles.tableWrap}>
+                  <div aria-busy={loading} className="hidden min-[901px]:block">
                     {urlState.tab === 'bookings' ? (
                       <BookingTable
                         items={(resultPage as BookingPage).data}
@@ -592,7 +615,7 @@ export function BookingManagement() {
                 </>
               )}
               {resultPage && resultPage.meta.totalItems > 0 && (
-                <AdminPagination
+                <ResourcePagination
                   currentPage={resultPage.meta.page}
                   disabled={loading}
                   onPageChange={(page) =>
@@ -606,12 +629,9 @@ export function BookingManagement() {
                   totalPages={resultPage.meta.totalPages}
                 />
               )}
-            </div>
-          </div>
+            </TabsContent>
+          </Tabs>
         </section>
-        <footer className="admin-page-footer">
-          <span>© 2026 VexGo Platform</span>
-        </footer>
       </div>
     </SuperAdminLayout>
   );
@@ -629,8 +649,10 @@ function SortHeader({
   onClick: () => void;
 }) {
   return (
-    <button
-      className="admin-resource-sort-button"
+    <Button
+      className="-ml-3 font-semibold"
+      variant="ghost"
+      size="sm"
       onClick={onClick}
       type="button"
     >
@@ -644,7 +666,7 @@ function SortHeader({
       ) : (
         <ArrowUpDown aria-hidden="true" size={14} />
       )}
-    </button>
+    </Button>
   );
 }
 
@@ -661,11 +683,11 @@ function BookingTable({
 }) {
   const sortState = state.bookings;
   return (
-    <table className="admin-resource-table">
-      <caption className="sr-only">Danh sách phiếu đặt vé</caption>
-      <thead>
-        <tr>
-          <th
+    <Table className="text-[13px]">
+      <TableCaption className="sr-only">Danh sách phiếu đặt vé</TableCaption>
+      <TableHeader>
+        <TableRow>
+          <TableHead
             aria-sort={
               sortState.sortBy === 'bookedAt'
                 ? sortState.sortDirection === 'asc'
@@ -682,9 +704,9 @@ function BookingTable({
             >
               Mã phiếu / Ngày đặt
             </SortHeader>
-          </th>
-          <th scope="col">Khách hàng</th>
-          <th
+          </TableHead>
+          <TableHead scope="col">Khách hàng</TableHead>
+          <TableHead
             aria-sort={
               sortState.sortBy === 'departureTime'
                 ? sortState.sortDirection === 'asc'
@@ -701,9 +723,9 @@ function BookingTable({
             >
               Chuyến xe
             </SortHeader>
-          </th>
-          <th scope="col">Số vé</th>
-          <th
+          </TableHead>
+          <TableHead scope="col">Số vé</TableHead>
+          <TableHead
             aria-sort={
               sortState.sortBy === 'totalTicketAmount'
                 ? sortState.sortDirection === 'asc'
@@ -720,71 +742,71 @@ function BookingTable({
             >
               Tiền vé ban đầu
             </SortHeader>
-          </th>
-          <th scope="col">Trạng thái phiếu</th>
-          <th scope="col">
+          </TableHead>
+          <TableHead scope="col">Trạng thái phiếu</TableHead>
+          <TableHead scope="col">
             <span className="sr-only">Chi tiết</span>
-          </th>
-        </tr>
-      </thead>
-      <tbody>
+          </TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
         {items.map((item) => (
-          <tr key={item.bookingId}>
-            <th scope="row">
+          <TableRow key={item.bookingId}>
+            <TableHead scope="row" className="bg-transparent py-3 text-[13px]">
               <Link
                 className="admin-data-mono"
                 href={detailHref('bookings', item.bookingId, state)}
               >
                 {item.bookingCode}
               </Link>
-              <small className={styles.secondary}>
-                {formatTimestamp(item.bookedAt)}
+              <small className="mt-1 block text-xs text-muted-foreground">
+                {formatDisplayTimestamp(item.bookedAt)}
               </small>
-            </th>
-            <td>
+            </TableHead>
+            <TableCell>
               {item.customer.name}
-              <small className={styles.secondary}>
+              <small className="mt-1 block text-xs text-muted-foreground">
                 {item.customer.phoneNumber}
               </small>
-            </td>
-            <td>
+            </TableCell>
+            <TableCell>
               {item.trip ? (
                 <>
                   {item.trip.origin} → {item.trip.destination}
-                  <small className={styles.secondary}>
-                    {formatTimestamp(item.trip.departureAt)}
+                  <small className="mt-1 block text-xs text-muted-foreground">
+                    {formatDisplayTimestamp(item.trip.departureAt)}
                   </small>
                 </>
               ) : (
                 <span title={item.tripIntegrity}>Chuyến chưa xác định</span>
               )}
-            </td>
-            <td>
+            </TableCell>
+            <TableCell>
               {item.activeTicketCount}/{item.ticketCount} còn hiệu lực
               {item.isPartiallyCancelled && (
-                <small className={styles.partial}>
+                <small className="mt-1 block text-xs text-destructive">
                   Hủy {item.cancelledTicketCount}/{item.ticketCount} vé
                 </small>
               )}
-            </td>
-            <td>{formatVnd(item.initialTicketAmount)}</td>
-            <td>
-              <AdminStatusBadge
+            </TableCell>
+            <TableCell>{formatVnd(item.initialTicketAmount)}</TableCell>
+            <TableCell>
+              <ResourceStatusBadge
                 tone={statusIsActive(item.status) ? 'active' : 'muted'}
               >
-                {statusLabel(item.status)}
-              </AdminStatusBadge>
-            </td>
-            <td>
-              <AdminDetailAction
+                {displayStatusLabel(item.status)}
+              </ResourceStatusBadge>
+            </TableCell>
+            <TableCell>
+              <ResourceDetailAction
                 onClick={() => onOpenDetail('bookings', item.bookingId, state)}
                 resourceName={`phiếu ${item.bookingCode}`}
               />
-            </td>
-          </tr>
+            </TableCell>
+          </TableRow>
         ))}
-      </tbody>
-    </table>
+      </TableBody>
+    </Table>
   );
 }
 
@@ -801,14 +823,14 @@ function TicketTable({
 }) {
   const sortState = state.tickets;
   return (
-    <table className="admin-resource-table">
-      <caption className="sr-only">Danh sách vé</caption>
-      <thead>
-        <tr>
-          <th scope="col">Mã vé</th>
-          <th scope="col">Phiếu đặt</th>
-          <th scope="col">Khách hàng</th>
-          <th
+    <Table className="text-[13px]">
+      <TableCaption className="sr-only">Danh sách vé</TableCaption>
+      <TableHeader>
+        <TableRow>
+          <TableHead scope="col">Mã vé</TableHead>
+          <TableHead scope="col">Phiếu đặt</TableHead>
+          <TableHead scope="col">Khách hàng</TableHead>
+          <TableHead
             aria-sort={
               sortState.sortBy === 'departureTime'
                 ? sortState.sortDirection === 'asc'
@@ -825,9 +847,9 @@ function TicketTable({
             >
               Chuyến / Khởi hành
             </SortHeader>
-          </th>
-          <th scope="col">Ghế</th>
-          <th
+          </TableHead>
+          <TableHead scope="col">Ghế</TableHead>
+          <TableHead
             aria-sort={
               sortState.sortBy === 'ticketPrice'
                 ? sortState.sortDirection === 'asc'
@@ -844,29 +866,30 @@ function TicketTable({
             >
               Giá thực tế
             </SortHeader>
-          </th>
-          <th scope="col">Trạng thái vé</th>
-          <th scope="col">
+          </TableHead>
+          <TableHead scope="col">Trạng thái vé</TableHead>
+          <TableHead scope="col">
             <span className="sr-only">Chi tiết</span>
-          </th>
-        </tr>
-      </thead>
-      <tbody>
+          </TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
         {items.map((item) => (
-          <tr key={item.ticketId}>
-            <th scope="row">
+          <TableRow key={item.ticketId}>
+            <TableHead scope="row" className="bg-transparent py-3 text-[13px]">
               <Link
                 className="admin-data-mono"
                 href={detailHref('tickets', item.ticketId, state)}
               >
                 {item.ticketCode}
               </Link>
-              <small className={styles.secondary}>
-                Đặt {formatTimestamp(item.bookedAt)}
+              <small className="mt-1 block text-xs text-muted-foreground">
+                Đặt {formatDisplayTimestamp(item.bookedAt)}
               </small>
-            </th>
-            <td>
+            </TableHead>
+            <TableCell>
               <Link
+                className="admin-data-mono"
                 href={detailHref('bookings', item.bookingId, {
                   ...state,
                   tab: 'bookings',
@@ -874,44 +897,46 @@ function TicketTable({
               >
                 {item.bookingCode}
               </Link>
-            </td>
-            <td>
+            </TableCell>
+            <TableCell>
               {item.customer.name}
-              <small className={styles.secondary}>
+              <small className="mt-1 block text-xs text-muted-foreground">
                 {item.customer.phoneNumber}
               </small>
-            </td>
-            <td>
+            </TableCell>
+            <TableCell>
               {item.trip ? (
                 <>
                   {item.trip.origin} → {item.trip.destination}
-                  <small className={styles.secondary}>
-                    {formatTimestamp(item.trip.departureAt)}
+                  <small className="mt-1 block text-xs text-muted-foreground">
+                    {formatDisplayTimestamp(item.trip.departureAt)}
                   </small>
                 </>
               ) : (
                 <span title={item.tripIntegrity}>Chuyến chưa xác định</span>
               )}
-            </td>
-            <td>{item.seatNumber ?? '—'}</td>
-            <td>{formatVnd(item.actualPrice)}</td>
-            <td>
-              <AdminStatusBadge
+            </TableCell>
+            <TableCell className="admin-data-mono">
+              {item.seatNumber ?? '—'}
+            </TableCell>
+            <TableCell>{formatVnd(item.actualPrice)}</TableCell>
+            <TableCell>
+              <ResourceStatusBadge
                 tone={statusIsActive(item.status) ? 'active' : 'muted'}
               >
-                {statusLabel(item.status)}
-              </AdminStatusBadge>
-            </td>
-            <td>
-              <AdminDetailAction
+                {displayStatusLabel(item.status)}
+              </ResourceStatusBadge>
+            </TableCell>
+            <TableCell>
+              <ResourceDetailAction
                 onClick={() => onOpenDetail('tickets', item.ticketId, state)}
                 resourceName={`vé ${item.ticketCode}`}
               />
-            </td>
-          </tr>
+            </TableCell>
+          </TableRow>
         ))}
-      </tbody>
-    </table>
+      </TableBody>
+    </Table>
   );
 }
 
@@ -927,61 +952,63 @@ function BookingCards({
   return (
     <ul
       aria-label="Danh sách phiếu đặt vé dạng thẻ"
-      className={styles.mobileCards}
+      className="grid gap-4 p-4 min-[901px]:hidden"
     >
       {items.map((item) => (
-        <li className={styles.mobileCard} key={item.bookingId}>
-          <div className={styles.cardHeader}>
-            <div>
-              <Link
-                className="admin-data-mono"
-                href={detailHref('bookings', item.bookingId, state)}
+        <li key={item.bookingId}>
+          <Card className="gap-4 p-4">
+            <div className="flex min-w-0 flex-wrap items-start justify-between gap-3 [&>div]:min-w-0 [&_a]:break-all [&_p]:mt-1 [&_p]:text-sm [&_p]:font-semibold">
+              <div>
+                <Link
+                  className="admin-data-mono"
+                  href={detailHref('bookings', item.bookingId, state)}
+                >
+                  {item.bookingCode}
+                </Link>
+                <p>{item.customer.name}</p>
+              </div>
+              <ResourceStatusBadge
+                tone={statusIsActive(item.status) ? 'active' : 'muted'}
               >
-                {item.bookingCode}
-              </Link>
-              <p>{item.customer.name}</p>
+                {displayStatusLabel(item.status)}
+              </ResourceStatusBadge>
             </div>
-            <AdminStatusBadge
-              tone={statusIsActive(item.status) ? 'active' : 'muted'}
-            >
-              {statusLabel(item.status)}
-            </AdminStatusBadge>
-          </div>
-          <dl className={styles.cardDetails}>
-            <div>
-              <dt>Điện thoại</dt>
-              <dd>{item.customer.phoneNumber}</dd>
-            </div>
-            <div>
-              <dt>Ngày đặt</dt>
-              <dd>{formatTimestamp(item.bookedAt)}</dd>
-            </div>
-            <div>
-              <dt>Chuyến xe</dt>
-              <dd>
-                {item.trip
-                  ? `${item.trip.origin} → ${item.trip.destination}`
-                  : 'Chuyến chưa xác định'}
-              </dd>
-            </div>
-            <div>
-              <dt>Vé còn hiệu lực</dt>
-              <dd>
-                {item.activeTicketCount}/{item.ticketCount}
-                {item.isPartiallyCancelled
-                  ? ` · Hủy ${item.cancelledTicketCount}/${item.ticketCount}`
-                  : ''}
-              </dd>
-            </div>
-            <div>
-              <dt>Tiền vé ban đầu</dt>
-              <dd>{formatVnd(item.initialTicketAmount)}</dd>
-            </div>
-          </dl>
-          <AdminDetailAction
-            onClick={() => onOpenDetail('bookings', item.bookingId, state)}
-            resourceName={`phiếu ${item.bookingCode}`}
-          />
+            <dl className="grid grid-cols-2 gap-4 text-[13px] [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-1 [&_dd]:break-words [&_a]:break-all">
+              <div>
+                <dt>Điện thoại</dt>
+                <dd>{item.customer.phoneNumber}</dd>
+              </div>
+              <div>
+                <dt>Ngày đặt</dt>
+                <dd>{formatDisplayTimestamp(item.bookedAt)}</dd>
+              </div>
+              <div>
+                <dt>Chuyến xe</dt>
+                <dd>
+                  {item.trip
+                    ? `${item.trip.origin} → ${item.trip.destination}`
+                    : 'Chuyến chưa xác định'}
+                </dd>
+              </div>
+              <div>
+                <dt>Vé còn hiệu lực</dt>
+                <dd>
+                  {item.activeTicketCount}/{item.ticketCount}
+                  {item.isPartiallyCancelled
+                    ? ` · Hủy ${item.cancelledTicketCount}/${item.ticketCount}`
+                    : ''}
+                </dd>
+              </div>
+              <div>
+                <dt>Tiền vé ban đầu</dt>
+                <dd>{formatVnd(item.initialTicketAmount)}</dd>
+              </div>
+            </dl>
+            <ResourceDetailAction
+              onClick={() => onOpenDetail('bookings', item.bookingId, state)}
+              resourceName={`phiếu ${item.bookingCode}`}
+            />
+          </Card>
         </li>
       ))}
     </ul>
@@ -998,68 +1025,74 @@ function TicketCards({
   state: BookingManagementUrlState;
 }) {
   return (
-    <ul aria-label="Danh sách vé dạng thẻ" className={styles.mobileCards}>
+    <ul
+      aria-label="Danh sách vé dạng thẻ"
+      className="grid gap-4 p-4 min-[901px]:hidden"
+    >
       {items.map((item) => (
-        <li className={styles.mobileCard} key={item.ticketId}>
-          <div className={styles.cardHeader}>
-            <div>
-              <Link
-                className="admin-data-mono"
-                href={detailHref('tickets', item.ticketId, state)}
-              >
-                {item.ticketCode}
-              </Link>
-              <p>{item.customer.name}</p>
-            </div>
-            <AdminStatusBadge
-              tone={statusIsActive(item.status) ? 'active' : 'muted'}
-            >
-              {statusLabel(item.status)}
-            </AdminStatusBadge>
-          </div>
-          <dl className={styles.cardDetails}>
-            <div>
-              <dt>Phiếu đặt</dt>
-              <dd>
+        <li key={item.ticketId}>
+          <Card className="gap-4 p-4">
+            <div className="flex min-w-0 flex-wrap items-start justify-between gap-3 [&>div]:min-w-0 [&_a]:break-all [&_p]:mt-1 [&_p]:text-sm [&_p]:font-semibold">
+              <div>
                 <Link
-                  href={detailHref('bookings', item.bookingId, {
-                    ...state,
-                    tab: 'bookings',
-                  })}
+                  className="admin-data-mono"
+                  href={detailHref('tickets', item.ticketId, state)}
                 >
-                  {item.bookingCode}
+                  {item.ticketCode}
                 </Link>
-              </dd>
+                <p>{item.customer.name}</p>
+              </div>
+              <ResourceStatusBadge
+                tone={statusIsActive(item.status) ? 'active' : 'muted'}
+              >
+                {displayStatusLabel(item.status)}
+              </ResourceStatusBadge>
             </div>
-            <div>
-              <dt>Điện thoại</dt>
-              <dd>{item.customer.phoneNumber}</dd>
-            </div>
-            <div>
-              <dt>Chuyến xe</dt>
-              <dd>
-                {item.trip
-                  ? `${item.trip.origin} → ${item.trip.destination}`
-                  : 'Chuyến chưa xác định'}
-              </dd>
-            </div>
-            <div>
-              <dt>Khởi hành</dt>
-              <dd>{formatTimestamp(item.trip?.departureAt)}</dd>
-            </div>
-            <div>
-              <dt>Ghế</dt>
-              <dd>{item.seatNumber ?? '—'}</dd>
-            </div>
-            <div>
-              <dt>Giá thực tế</dt>
-              <dd>{formatVnd(item.actualPrice)}</dd>
-            </div>
-          </dl>
-          <AdminDetailAction
-            onClick={() => onOpenDetail('tickets', item.ticketId, state)}
-            resourceName={`vé ${item.ticketCode}`}
-          />
+            <dl className="grid grid-cols-2 gap-4 text-[13px] [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-1 [&_dd]:break-words [&_a]:break-all">
+              <div>
+                <dt>Phiếu đặt</dt>
+                <dd>
+                  <Link
+                    className="admin-data-mono"
+                    href={detailHref('bookings', item.bookingId, {
+                      ...state,
+                      tab: 'bookings',
+                    })}
+                  >
+                    {item.bookingCode}
+                  </Link>
+                </dd>
+              </div>
+              <div>
+                <dt>Điện thoại</dt>
+                <dd>{item.customer.phoneNumber}</dd>
+              </div>
+              <div>
+                <dt>Chuyến xe</dt>
+                <dd>
+                  {item.trip
+                    ? `${item.trip.origin} → ${item.trip.destination}`
+                    : 'Chuyến chưa xác định'}
+                </dd>
+              </div>
+              <div>
+                <dt>Khởi hành</dt>
+                <dd>{formatDisplayTimestamp(item.trip?.departureAt)}</dd>
+              </div>
+              <div>
+                <dt>Ghế</dt>
+                <dd className="admin-data-mono">{item.seatNumber ?? '—'}</dd>
+              </div>
+              <div>
+                <dt>Giá thực tế</dt>
+                <dd>{formatVnd(item.actualPrice)}</dd>
+              </div>
+            </dl>
+            <ResourceDetailAction
+              onClick={() => onOpenDetail('tickets', item.ticketId, state)}
+              resourceName={`vé ${item.ticketCode}`}
+            />
+          </Card>
         </li>
       ))}
     </ul>

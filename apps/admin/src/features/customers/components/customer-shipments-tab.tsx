@@ -1,22 +1,41 @@
 'use client';
 
 import { ArrowDown, ArrowUp } from 'lucide-react';
-import { AdminPagination } from '@/components/admin/admin-pagination';
-import { AdminStatusBadge } from '@/components/admin/admin-status-badge';
-import { AdminTableSkeleton } from '@/components/admin/admin-table-skeleton';
+import {
+  ResourcePagination,
+  ResourceStatusBadge,
+  ResourceTableSkeleton,
+  ResourceState,
+} from '@/components/admin/resource-ui';
 import {
   FilterToolbar,
   SearchInput,
-} from '@/components/data-filters/data-filters';
-import { Button } from '@/components/ui/button';
+} from '@/components/data-filters/resource-filters';
+import { ResourceSortControls } from '@/components/data-filters/resource-sort';
+import { Button } from '@/components/ui/action-button';
+import { Card } from '@/components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { useCustomerShipments } from '../hooks/use-customer-shipments';
 
 function formatDateTime(value?: string | null) {
   if (!value) return '—';
   return new Intl.DateTimeFormat('vi-VN', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(value));
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+    .format(new Date(value))
+    .replaceAll('/', '-');
 }
 
 function shipmentStatusTone(status: string): 'active' | 'muted' {
@@ -64,16 +83,11 @@ export function CustomerShipmentsTab({ customerId }: { customerId: number }) {
   } = useCustomerShipments(customerId);
 
   return (
-    <div className="panel admin-resource-panel">
-      <FilterToolbar
-        totalItems={
-          error
-            ? null
-            : loading && shipments.length === 0
-              ? null
-              : meta.totalItems
-        }
-      >
+    <div
+      className="min-w-0 overflow-hidden rounded-xl border bg-card shadow-sm"
+      aria-busy={loading || refreshing}
+    >
+      <FilterToolbar>
         <SearchInput
           label="Tìm kiếm đơn gửi hàng"
           onChange={setSearchInput}
@@ -81,183 +95,206 @@ export function CustomerShipmentsTab({ customerId }: { customerId: number }) {
           value={searchInput}
         />
       </FilterToolbar>
+      <ResourceSortControls
+        label="Sắp xếp đơn gửi hàng"
+        value="sentAt"
+        options={[{ value: 'sentAt', label: 'Ngày gửi' }]}
+        direction={sortDirection}
+        onDirectionChange={() =>
+          setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
+        }
+      />
 
       {error && (
-        <div className="customers-state-panel" role="alert">
+        <ResourceState error>
           <p>{error}</p>
-          <Button onClick={refresh} type="button" variant="secondary">
+          <Button onClick={refresh} type="button" variant="outline">
             Thử lại
           </Button>
-        </div>
+        </ResourceState>
       )}
 
-      {loading && shipments.length === 0 ? (
-        <AdminTableSkeleton resourceLabel="đơn gửi hàng" />
-      ) : shipments.length === 0 ? (
-        <div className="customers-state-panel">
-          <p>Khách hàng chưa có đơn gửi hàng tại nhà xe này.</p>
-        </div>
-      ) : (
-        <>
-          <div
-            className="admin-resource-table-wrap"
-            aria-busy={loading || refreshing}
-          >
-            <table className="admin-resource-table">
-              <caption className="sr-only">
-                Lịch sử gửi hàng của khách hàng
-              </caption>
-              <thead>
-                <tr>
-                  <th scope="col">Mã vận đơn</th>
-                  <th
-                    aria-sort={
-                      sortDirection === 'asc' ? 'ascending' : 'descending'
-                    }
-                    scope="col"
-                  >
-                    <button
-                      className="admin-resource-sort-button"
-                      onClick={() =>
-                        setSortDirection(
-                          sortDirection === 'asc' ? 'desc' : 'asc',
-                        )
+      {!error &&
+        (loading && shipments.length === 0 ? (
+          <ResourceTableSkeleton resourceLabel="đơn gửi hàng" />
+        ) : shipments.length === 0 ? (
+          <ResourceState>
+            <p>
+              {searchInput.trim()
+                ? 'Không tìm thấy đơn gửi hàng phù hợp.'
+                : 'Khách hàng chưa có đơn gửi hàng tại nhà xe này.'}
+            </p>
+            {searchInput && (
+              <Button variant="outline" onClick={() => setSearchInput('')}>
+                Xóa tìm kiếm
+              </Button>
+            )}
+          </ResourceState>
+        ) : (
+          <>
+            <div
+              className="hidden min-[901px]:block"
+              aria-busy={loading || refreshing}
+            >
+              <Table className="text-[13px]">
+                <TableCaption className="sr-only">
+                  Lịch sử gửi hàng của khách hàng
+                </TableCaption>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead scope="col">Mã vận đơn</TableHead>
+                    <TableHead
+                      aria-sort={
+                        sortDirection === 'asc' ? 'ascending' : 'descending'
                       }
-                      type="button"
+                      scope="col"
                     >
-                      <span>Ngày gửi</span>
-                      <span aria-hidden="true">
-                        {sortDirection === 'asc' ? (
-                          <ArrowUp size={14} />
-                        ) : (
-                          <ArrowDown size={14} />
-                        )}
-                      </span>
-                    </button>
-                  </th>
-                  <th scope="col">Người nhận</th>
-                  <th scope="col">Điểm gửi</th>
-                  <th scope="col">Điểm nhận</th>
-                  <th scope="col">Tổng phí</th>
-                  <th scope="col">Trạng thái</th>
-                </tr>
-              </thead>
-              <tbody>
-                {shipments.map((s) => (
-                  <tr key={s.shipmentId}>
-                    <td>
-                      <span className="customer-code admin-data-mono">
+                      <Button
+                        className="-ml-3 font-semibold"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() =>
+                          setSortDirection(
+                            sortDirection === 'asc' ? 'desc' : 'asc',
+                          )
+                        }
+                        type="button"
+                      >
+                        <span>Ngày gửi</span>
+                        <span aria-hidden="true">
+                          {sortDirection === 'asc' ? (
+                            <ArrowUp size={14} />
+                          ) : (
+                            <ArrowDown size={14} />
+                          )}
+                        </span>
+                      </Button>
+                    </TableHead>
+                    <TableHead scope="col">Người nhận</TableHead>
+                    <TableHead scope="col">Điểm gửi</TableHead>
+                    <TableHead scope="col">Điểm nhận</TableHead>
+                    <TableHead scope="col">Tổng phí</TableHead>
+                    <TableHead scope="col">Trạng thái</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {shipments.map((s) => (
+                    <TableRow key={s.shipmentId}>
+                      <TableCell>
+                        <span className="admin-data-mono text-xs text-muted-foreground">
+                          {s.waybillCode}
+                        </span>
+                      </TableCell>
+                      <TableCell>{formatDateTime(s.sentAt)}</TableCell>
+                      <TableCell>
+                        <strong>{s.receiver.fullName}</strong>
+                        <div className="text-xs text-muted-foreground">
+                          {s.receiver.phoneNumber}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <strong>{s.originPoint.name}</strong>
+                        <div className="mt-1 text-xs text-muted-foreground">
+                          {s.originPoint.address}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <strong>{s.destinationPoint.name}</strong>
+                        <div className="mt-1 text-xs text-muted-foreground">
+                          {s.destinationPoint.address}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <strong>{s.totalFee.toLocaleString('vi-VN')} đ</strong>
+                      </TableCell>
+                      <TableCell>
+                        <ResourceStatusBadge
+                          tone={shipmentStatusTone(s.status)}
+                        >
+                          {formatShipmentStatus(s.status)}
+                        </ResourceStatusBadge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+
+            <div
+              className="grid gap-4 p-4 min-[901px]:hidden"
+              aria-label="Danh sách đơn gửi hàng dạng thẻ"
+              aria-busy={loading || refreshing}
+            >
+              {shipments.map((s) => (
+                <Card key={s.shipmentId} className="gap-4 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <span className="admin-data-mono text-xs text-muted-foreground">
                         {s.waybillCode}
                       </span>
-                    </td>
-                    <td>{formatDateTime(s.sentAt)}</td>
-                    <td>
-                      <strong>{s.receiver.fullName}</strong>
-                      <div className="customer-code">
-                        {s.receiver.phoneNumber}
-                      </div>
-                    </td>
-                    <td>
-                      <strong>{s.originPoint.name}</strong>
-                      <div className="ticket-seat-pos">
-                        {s.originPoint.address}
-                      </div>
-                    </td>
-                    <td>
-                      <strong>{s.destinationPoint.name}</strong>
-                      <div className="ticket-seat-pos">
-                        {s.destinationPoint.address}
-                      </div>
-                    </td>
-                    <td>
-                      <strong>{s.totalFee.toLocaleString('vi-VN')} đ</strong>
-                    </td>
-                    <td>
-                      <AdminStatusBadge tone={shipmentStatusTone(s.status)}>
-                        {formatShipmentStatus(s.status)}
-                      </AdminStatusBadge>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                      <h3 className="mt-1 text-base font-semibold">
+                        {s.totalFee.toLocaleString('vi-VN')} đ
+                      </h3>
+                    </div>
+                    <ResourceStatusBadge tone={shipmentStatusTone(s.status)}>
+                      {formatShipmentStatus(s.status)}
+                    </ResourceStatusBadge>
+                  </div>
+                  <dl className="grid grid-cols-2 gap-4 text-[13px] [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-1 [&_dd]:break-words">
+                    <div>
+                      <dt>Người nhận</dt>
+                      <dd>
+                        {s.receiver.fullName} ({s.receiver.phoneNumber})
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Ngày gửi</dt>
+                      <dd>{formatDateTime(s.sentAt)}</dd>
+                    </div>
+                    <div>
+                      <dt>Điểm gửi</dt>
+                      <dd>
+                        <strong>{s.originPoint.name}</strong>
+                        <div className="mt-1 text-xs text-muted-foreground">
+                          {s.originPoint.address}
+                        </div>
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Điểm nhận</dt>
+                      <dd>
+                        <strong>{s.destinationPoint.name}</strong>
+                        <div className="mt-1 text-xs text-muted-foreground">
+                          {s.destinationPoint.address}
+                        </div>
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Người thanh toán</dt>
+                      <dd>
+                        {s.freightPayer === 'NGUOI_GUI'
+                          ? 'Người gửi thanh toán'
+                          : 'Người nhận thanh toán'}
+                      </dd>
+                    </div>
+                  </dl>
+                </Card>
+              ))}
+            </div>
 
-          <div
-            className="customers-mobile-list"
-            aria-label="Danh sách đơn gửi hàng dạng thẻ"
-            aria-busy={loading || refreshing}
-          >
-            {shipments.map((s) => (
-              <article key={s.shipmentId} className="customers-mobile-card">
-                <div className="customers-mobile-card-header">
-                  <div>
-                    <span className="customer-code admin-data-mono">
-                      {s.waybillCode}
-                    </span>
-                    <h3 className="customers-mobile-card-title">
-                      {s.totalFee.toLocaleString('vi-VN')} đ
-                    </h3>
-                  </div>
-                  <AdminStatusBadge tone={shipmentStatusTone(s.status)}>
-                    {formatShipmentStatus(s.status)}
-                  </AdminStatusBadge>
-                </div>
-                <dl className="customers-mobile-fields">
-                  <div>
-                    <dt>Người nhận</dt>
-                    <dd>
-                      {s.receiver.fullName} ({s.receiver.phoneNumber})
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>Ngày gửi</dt>
-                    <dd>{formatDateTime(s.sentAt)}</dd>
-                  </div>
-                  <div>
-                    <dt>Điểm gửi</dt>
-                    <dd>
-                      <strong>{s.originPoint.name}</strong>
-                      <div className="ticket-seat-pos">
-                        {s.originPoint.address}
-                      </div>
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>Điểm nhận</dt>
-                    <dd>
-                      <strong>{s.destinationPoint.name}</strong>
-                      <div className="ticket-seat-pos">
-                        {s.destinationPoint.address}
-                      </div>
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>Người thanh toán</dt>
-                    <dd>
-                      {s.freightPayer === 'NGUOI_GUI'
-                        ? 'Người gửi thanh toán'
-                        : 'Người nhận thanh toán'}
-                    </dd>
-                  </div>
-                </dl>
-              </article>
-            ))}
-          </div>
-
-          {meta.totalPages > 1 && (
-            <AdminPagination
-              currentPage={page}
-              disabled={loading}
-              onPageChange={setPage}
-              pageSize={meta.pageSize}
-              summaryLabel="đơn gửi hàng"
-              totalItems={meta.totalItems}
-              totalPages={meta.totalPages}
-            />
-          )}
-        </>
-      )}
+            {
+              <ResourcePagination
+                currentPage={page}
+                disabled={loading}
+                onPageChange={setPage}
+                pageSize={meta.pageSize}
+                summaryLabel="đơn gửi hàng"
+                totalItems={meta.totalItems}
+                totalPages={meta.totalPages}
+              />
+            }
+          </>
+        ))}
     </div>
   );
 }

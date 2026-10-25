@@ -478,7 +478,7 @@ describe('Admin booking and ticket lists', () => {
         );
         expect(
           screen.getByRole('button', {
-            name: 'Ngày đặt: 05/10/2026 đến 10/10/2026',
+            name: 'Ngày đặt: 05-10-2026 – 10-10-2026',
           }),
         ).toBeTruthy();
       } else {
@@ -487,7 +487,7 @@ describe('Admin booking and ticket lists', () => {
         );
         expect(
           screen.getByRole('button', {
-            name: 'Ngày khởi hành: 01/11/2026 đến 05/11/2026',
+            name: 'Ngày khởi hành: 01-11-2026 – 05-11-2026',
           }),
         ).toBeTruthy();
       }
@@ -553,7 +553,7 @@ describe('Admin booking and ticket lists', () => {
     render(<BookingManagement />);
     await screen.findAllByText('PD-0012');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Lọc theo ngày đặt' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Ngày đặt:/ }));
     fireEvent.change(await screen.findByLabelText('Ngày đặt từ'), {
       target: { value: '2026-10-01' },
     });
@@ -577,7 +577,7 @@ describe('Admin booking and ticket lists', () => {
     });
 
     fireEvent.click(
-      screen.getByRole('button', { name: 'Lọc theo ngày khởi hành' }),
+      screen.getByRole('button', { name: /^Ngày khởi hành:/ }),
     );
     fireEvent.change(await screen.findByLabelText('Khởi hành từ'), {
       target: { value: '2026-10-10' },
@@ -612,7 +612,7 @@ describe('Admin booking and ticket lists', () => {
       ).toBe(true);
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Lọc theo ngày đặt' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Ngày đặt:/ }));
     fireEvent.change(await screen.findByLabelText('Ngày đặt từ'), {
       target: { value: '2026-10-01' },
     });
@@ -670,16 +670,16 @@ describe('Admin booking and ticket lists', () => {
     render(<BookingManagement />);
 
     await screen.findAllByText('VE-0044');
-    const trigger = screen.getByRole('button', {
-      name: 'Sắp xếp theo: Ngày đặt, Giảm dần',
+    const trigger = screen.getByRole('combobox', {
+      name: 'Sắp xếp theo',
     });
     trigger.focus();
     expect(document.activeElement).toBe(trigger);
     fireEvent.click(trigger);
-    const priceOption = (await screen.findAllByRole('button', { name: 'Giá thực tế' }))
-      .find((option) => option.hasAttribute('aria-pressed'));
-    if (!priceOption) throw new Error('Không tìm thấy tùy chọn giá vé.');
-    expect(priceOption.getAttribute('aria-pressed')).toBe('false');
+    const priceOption = await screen.findByRole('option', { name: 'Giá thực tế' });
+    expect(priceOption.getAttribute('aria-selected')).toBe('false');
+    fireEvent.pointerDown(priceOption, { button: 0, pointerType: 'mouse' });
+    fireEvent.pointerUp(priceOption, { button: 0, pointerType: 'mouse' });
     fireEvent.click(priceOption);
 
     await waitFor(() => {
@@ -692,9 +692,8 @@ describe('Admin booking and ticket lists', () => {
         ),
       ).toBe(true);
     });
-    expect(screen.getByRole('button', {
-      name: 'Sắp xếp theo: Giá thực tế, Giảm dần',
-    })).toBeTruthy();
+    expect(screen.getByRole('combobox', { name: 'Sắp xếp theo' }).textContent).toContain('Giá thực tế');
+    expect(screen.getByRole('button', { name: 'Đổi chiều sắp xếp, hiện tại giảm dần' })).toBeTruthy();
     expect(new URLSearchParams(navigation.getSnapshot()).get('tSortDirection')).toBeNull();
   });
 
@@ -704,15 +703,9 @@ describe('Admin booking and ticket lists', () => {
     render(<BookingManagement />);
     await screen.findAllByText('VE-0044');
 
-    const trigger = screen.getByRole('button', {
-      name: 'Sắp xếp theo: Ngày đặt, Giảm dần',
-    });
-    fireEvent.click(trigger);
-    const selectedDateOption = await screen.findByRole('button', {
-      name: /Ngày đặt/,
-      pressed: true,
-    });
-    fireEvent.click(selectedDateOption);
+    fireEvent.click(screen.getByRole('button', {
+      name: 'Đổi chiều sắp xếp, hiện tại giảm dần',
+    }));
 
     await waitFor(() => {
       expect(
@@ -724,8 +717,9 @@ describe('Admin booking and ticket lists', () => {
         ),
       ).toBe(true);
     });
+    expect(screen.getByRole('combobox', { name: 'Sắp xếp theo' }).textContent).toContain('Ngày đặt');
     expect(screen.getByRole('button', {
-      name: 'Sắp xếp theo: Ngày đặt, Tăng dần',
+      name: 'Đổi chiều sắp xếp, hiện tại tăng dần',
     })).toBeTruthy();
     expect(new URLSearchParams(navigation.getSnapshot()).get('tSortDirection')).toBe('asc');
   });
@@ -849,7 +843,7 @@ describe('Admin booking and ticket lists', () => {
     navigation.reset('tab=tickets');
     render(<BookingManagement />);
     await screen.findAllByText('VE-0044');
-    const statusFilter = screen.getByRole('combobox', { name: 'Lọc theo trạng thái' });
+    const statusFilter = screen.getByRole('combobox', { name: 'Trạng thái' });
     fireEvent.click(statusFilter);
     const paidStatusOption = await screen.findByRole('option', { name: 'Đã thanh toán' });
     fireEvent.pointerDown(paidStatusOption, { button: 0, pointerType: 'mouse' });
@@ -883,7 +877,7 @@ describe('Admin booking and ticket lists', () => {
 
     fireEvent.click(
       screen.getByRole('button', {
-        name: 'Ngày đặt: 05/10/2026 đến 10/10/2026',
+        name: 'Ngày đặt: 05-10-2026 – 10-10-2026',
       }),
     );
     const fromInput = (await screen.findByLabelText(
@@ -922,7 +916,7 @@ describe('Admin booking and ticket lists', () => {
 
     fireEvent.click(
       screen.getByRole('button', {
-        name: 'Ngày đặt: 05/10/2026 đến 10/10/2026',
+        name: 'Ngày đặt: 05-10-2026 – 10-10-2026',
       }),
     );
     await screen.findByLabelText('Ngày đặt từ');
@@ -984,18 +978,18 @@ describe('Admin booking and ticket lists', () => {
     await screen.findAllByText('PD-0012');
     expect(
       screen.getByRole('button', {
-        name: 'Ngày đặt: 05/10/2026 đến 10/10/2026',
+        name: 'Ngày đặt: 05-10-2026 – 10-10-2026',
       }),
     ).toBeTruthy();
 
     fireEvent.click(screen.getByRole('tab', { name: 'Vé' }));
     await screen.findAllByText('VE-0044');
     expect(
-      screen.getByRole('button', { name: 'Lọc theo ngày đặt' }),
+      screen.getByRole('button', { name: /^Ngày đặt:/ }),
     ).toBeTruthy();
     expect(
       screen.getByRole('button', {
-        name: 'Ngày khởi hành: 01/11/2026 đến 05/11/2026',
+        name: 'Ngày khởi hành: 01-11-2026 – 05-11-2026',
       }),
     ).toBeTruthy();
 
@@ -1003,11 +997,11 @@ describe('Admin booking and ticket lists', () => {
     await screen.findAllByText('PD-0012');
     expect(
       screen.getByRole('button', {
-        name: 'Ngày đặt: 05/10/2026 đến 10/10/2026',
+        name: 'Ngày đặt: 05-10-2026 – 10-10-2026',
       }),
     ).toBeTruthy();
     expect(
-      screen.getByRole('button', { name: 'Lọc theo ngày khởi hành' }),
+      screen.getByRole('button', { name: /^Ngày khởi hành:/ }),
     ).toBeTruthy();
   });
 
@@ -1016,7 +1010,7 @@ describe('Admin booking and ticket lists', () => {
     render(<BookingManagement />);
     await screen.findAllByText('PD-0012');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Lọc theo ngày đặt' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Ngày đặt:/ }));
     fireEvent.change(await screen.findByLabelText('Ngày đặt từ'), {
       target: { value: '2026-10-05' },
     });
@@ -1030,7 +1024,7 @@ describe('Admin booking and ticket lists', () => {
     });
     fireEvent.click(
       screen.getByRole('button', {
-        name: 'Ngày đặt: 05/10/2026 đến 10/10/2026',
+        name: 'Ngày đặt: 05-10-2026 – 10-10-2026',
       }),
     );
     fireEvent.change(await screen.findByLabelText('Ngày đặt từ'), {
@@ -1050,7 +1044,7 @@ describe('Admin booking and ticket lists', () => {
     await waitFor(() => {
       expect(
         screen.getByRole('button', {
-          name: 'Ngày đặt: 05/10/2026 đến 10/10/2026',
+          name: 'Ngày đặt: 05-10-2026 – 10-10-2026',
         }),
       ).toBeTruthy();
     });
@@ -1066,7 +1060,7 @@ describe('Admin booking and ticket lists', () => {
     await waitFor(() => {
       expect(
         screen.getByRole('button', {
-          name: 'Ngày đặt: 08/10/2026 đến 15/10/2026',
+          name: 'Ngày đặt: 08-10-2026 – 15-10-2026',
         }),
       ).toBeTruthy();
     });
@@ -1087,7 +1081,7 @@ describe('Admin booking and ticket lists', () => {
       );
     });
     const bookedFilter = screen.getByRole('button', {
-      name: 'Ngày đặt: ngày đặt từ 15/10/2026',
+      name: 'Ngày đặt: Ngày đặt từ: 15-10-2026',
     });
     expect(bookedFilter).toBeTruthy();
     fireEvent.click(bookedFilter);

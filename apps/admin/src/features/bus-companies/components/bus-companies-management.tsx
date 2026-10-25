@@ -5,31 +5,48 @@ import {
   ArrowUp,
   ArrowUpDown,
   Building2,
-  CheckCircle2,
   LoaderCircle,
-  Search,
-  X,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { AdminConfirmDialog } from '@/components/admin/admin-confirm-dialog';
-import { AdminDetailAction } from '@/components/admin/admin-detail-action';
-import { AdminDetailSheet } from '@/components/admin/admin-detail-sheet';
+import { toast } from 'sonner';
 import {
-  AdminCreateAction,
-  AdminRefreshAction,
-} from '@/components/admin/admin-page-actions';
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
+  ResourceCreateAction,
+  ResourceDetailAction,
+  ResourcePagination,
+  ResourceRefreshAction,
+  ResourceSheet,
+  ResourceState,
+  ResourceStatusBadge,
+  ResourceTableSkeleton,
+} from '@/components/admin/resource-ui';
+import { Button } from '@/components/ui/action-button';
+import { Card } from '@/components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { AdminPageHeader } from '@/components/admin/admin-page-header';
-import { AdminPagination } from '@/components/admin/admin-pagination';
-import { AdminStatusBadge } from '@/components/admin/admin-status-badge';
-import { AdminTableSkeleton } from '@/components/admin/admin-table-skeleton';
+import { DateRangeFilter } from '@/components/data-filters/data-filters';
 import {
-  DateRangeFilter,
   FilterToolbar,
   SearchInput,
   SelectFilter,
   type FilterOption,
-} from '@/components/data-filters/data-filters';
-import { Button } from '@/components/ui/button';
+} from '@/components/data-filters/resource-filters';
 import { useAdminSession } from '@/features/admin-auth/hooks/use-admin-session';
 import { hasPlatformAdminPermission } from '@/features/admin-auth/services/admin-access';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
@@ -79,7 +96,10 @@ function statusLabel(status: BusCompanyStatus) {
 
 function CompanyMark({ name }: { name: string }) {
   return (
-    <span className="company-mark" aria-hidden="true">
+    <span
+      aria-hidden="true"
+      className="grid size-10 shrink-0 place-items-center rounded-lg border bg-muted text-xs font-semibold text-foreground"
+    >
       {initials(name)}
     </span>
   );
@@ -109,7 +129,6 @@ function CompanyDetails({
   });
   const [retryCount, setRetryCount] = useState(0);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [updateNotice, setUpdateNotice] = useState<string | null>(null);
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [statusSubmitting, setStatusSubmitting] = useState(false);
   const [statusError, setStatusError] = useState<string | null>(null);
@@ -145,13 +164,18 @@ function CompanyDetails({
 
   function handleCompanyUpdated(company: BusCompany) {
     setDetailState({ status: 'success', company });
-    setUpdateNotice(`Đã cập nhật nhà xe ${company.name}.`);
     setEditDialogOpen(false);
     onUpdated(company);
   }
 
   async function confirmStatusChange() {
-    if (!canUpdate || detailState.status !== 'success' || statusSubmittingRef.current) return;
+    if (
+      !canUpdate ||
+      detailState.status !== 'success' ||
+      statusSubmittingRef.current
+    ) {
+      return;
+    }
 
     const targetStatus: BusCompanyStatus =
       detailState.company.status === 'HOAT_DONG' ? 'TAM_NGUNG' : 'HOAT_DONG';
@@ -165,9 +189,6 @@ function CompanyDetails({
         targetStatus,
       );
       setDetailState({ status: 'success', company: updatedCompany });
-      setUpdateNotice(
-        `Đã chuyển nhà xe ${updatedCompany.name} sang trạng thái ${statusLabel(updatedCompany.status)}.`,
-      );
       setStatusDialogOpen(false);
       onStatusUpdated(updatedCompany);
     } catch (requestError: unknown) {
@@ -193,140 +214,107 @@ function CompanyDetails({
 
   return (
     <>
-      <AdminDetailSheet
-        ariaLabelledBy="company-detail-title"
+      <ResourceSheet
+        title="Thông tin nhà xe"
+        description="Thông tin liên hệ, hồ sơ và trạng thái hoạt động."
         onClose={onClose}
       >
-        <>
-          <div className="admin-dialog-header">
-            <div className="admin-dialog-header__copy">
-              <h2 id="company-detail-title">Thông tin nhà xe</h2>
-            </div>
-            <form method="dialog">
-              <button
-                aria-label="Đóng thông tin nhà xe"
-                className="icon-button"
-                type="submit"
-              >
-                <X size={19} />
-              </button>
-            </form>
-          </div>
-
-          {updateNotice && (
-            <div
-              className="company-success-notice detail-success-notice"
-              role="status"
-            >
-              <CheckCircle2 aria-hidden="true" size={17} />
-              <span>{updateNotice}</span>
-            </div>
-          )}
-
+        <div className="space-y-4">
           {detailState.status === 'loading' && (
-            <p role="status">Đang tải thông tin nhà xe…</p>
+            <ResourceState loading>Đang tải thông tin nhà xe…</ResourceState>
           )}
 
           {detailState.status === 'error' && (
-            <div role="alert">
+            <ResourceState error>
               <p>{detailState.message}</p>
-              <Button
-                onClick={retry}
-                type="button"
-                variant="secondary"
-              >
+              <Button onClick={retry} type="button" variant="outline">
                 Thử lại
               </Button>
-            </div>
+            </ResourceState>
           )}
 
           {detailState.status === 'success' && (
             <>
-              <div className="detail-company-hero">
-                <CompanyMark name={detailState.company.name} />
-                <div>
-                  <h3>{detailState.company.name}</h3>
-                  <span className="detail-company-id">
-                    Mã nhà xe ·{' '}
-                    <span className="admin-data-mono">
+              <Card className="gap-3 p-4 ring-0">
+                <div className="flex items-start gap-3">
+                  <CompanyMark name={detailState.company.name} />
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <h3 className="break-words text-base font-semibold">
+                      {detailState.company.name}
+                    </h3>
+                    <p className="admin-data-mono text-xs text-muted-foreground">
                       {detailState.company.code}
-                    </span>
-                  </span>
+                    </p>
+                  </div>
+                  <ResourceStatusBadge
+                    tone={
+                      detailState.company.status === 'HOAT_DONG'
+                        ? 'active'
+                        : 'muted'
+                    }
+                  >
+                    {statusLabel(detailState.company.status)}
+                  </ResourceStatusBadge>
                 </div>
-              </div>
+              </Card>
 
-              <section
-                className="detail-section"
-                aria-labelledby="detail-contact-heading"
-              >
-                <h3 id="detail-contact-heading">Thông tin liên hệ</h3>
-                <div className="detail-field">
-                  <span className="detail-field-icon" aria-hidden="true">
-                    <Building2 size={17} />
-                  </span>
-                  <div>
-                    <span className="detail-field-label">Đầu mối liên hệ</span>
-                    <span className="detail-field-value">
+              <Card className="gap-3 p-4 ring-0">
+                <h3 className="text-sm font-semibold">Thông tin liên hệ</h3>
+                <div className="flex items-start gap-3">
+                  <Building2
+                    aria-hidden
+                    className="mt-0.5 size-4 text-muted-foreground"
+                  />
+                  <div className="min-w-0 space-y-1">
+                    <p className="text-xs text-muted-foreground">Đầu mối liên hệ</p>
+                    <p className="break-words text-sm">
                       {detailState.company.contactInfo || 'Chưa cập nhật'}
-                    </span>
+                    </p>
                   </div>
                 </div>
-              </section>
+              </Card>
 
-              <section
-                className="detail-section"
-                aria-labelledby="detail-record-heading"
-              >
-                <h3 id="detail-record-heading">Thông tin hồ sơ</h3>
-                <dl className="detail-stats">
-                  <div>
-                    <dt>Trạng thái</dt>
-                    <dd>
-                      <AdminStatusBadge
-                        tone={
-                          detailState.company.status === 'HOAT_DONG'
-                            ? 'active'
-                            : 'muted'
-                        }
-                      >
-                        {statusLabel(detailState.company.status)}
-                      </AdminStatusBadge>
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>Ngày tạo</dt>
+              <Card className="gap-3 p-4 ring-0">
+                <h3 className="text-sm font-semibold">Thông tin hồ sơ</h3>
+                <dl className="grid gap-3 text-[13px] sm:grid-cols-2">
+                  <div className="space-y-1">
+                    <dt className="text-xs text-muted-foreground">Ngày tạo</dt>
                     <dd>{timestampFormat(detailState.company.createdAt)}</dd>
                   </div>
-                  <div>
-                    <dt>Cập nhật lần cuối</dt>
+                  <div className="space-y-1">
+                    <dt className="text-xs text-muted-foreground">
+                      Cập nhật lần cuối
+                    </dt>
                     <dd>{timestampFormat(detailState.company.updatedAt)}</dd>
                   </div>
                 </dl>
-              </section>
-              {canUpdate && <div className="detail-edit-actions">
-                <Button
-                  onClick={() => {
-                    setStatusError(null);
-                    setStatusDialogOpen(true);
-                  }}
-                  type="button"
-                  variant="secondary"
-                >
-                  {detailState.company.status === 'HOAT_DONG'
-                    ? 'Tạm ngưng nhà xe'
-                    : 'Kích hoạt lại'}
-                </Button>
-                <Button
-                  onClick={() => setEditDialogOpen(true)}
-                  type="button"
-                >
-                  Chỉnh sửa
-                </Button>
-              </div>}
+              </Card>
+              {canUpdate && (
+                <div className="flex flex-wrap justify-end gap-2 border-t pt-4">
+                  <Button
+                    onClick={() => {
+                      setStatusError(null);
+                      setStatusDialogOpen(true);
+                    }}
+                    type="button"
+                    variant="outline"
+                  >
+                    {detailState.company.status === 'HOAT_DONG'
+                      ? 'Tạm ngưng nhà xe'
+                      : 'Kích hoạt lại'}
+                  </Button>
+                  <Button
+                    onClick={() => setEditDialogOpen(true)}
+                    type="button"
+                  >
+                    Chỉnh sửa
+                  </Button>
+                </div>
+              )}
             </>
           )}
-        </>
-      </AdminDetailSheet>
+        </div>
+      </ResourceSheet>
       {canUpdate && editDialogOpen && detailState.status === 'success' && (
         <EditBusCompanyDialog
           company={detailState.company}
@@ -334,57 +322,57 @@ function CompanyDetails({
           onUpdated={handleCompanyUpdated}
         />
       )}
-      {canUpdate && statusDialogOpen && detailState.status === 'success' && nextStatus && (
-        <AdminConfirmDialog
-          ariaBusy={statusSubmitting}
-          ariaDescribedBy="status-confirmation-description"
-          ariaLabelledBy="status-confirmation-title"
-          onClose={() => setStatusDialogOpen(false)}
-          preventDismiss={statusSubmitting}
-        >
-          <>
-            <h2 id="status-confirmation-title">
-              {nextStatus === 'TAM_NGUNG'
-                ? 'Tạm ngưng nhà xe này?'
-                : 'Kích hoạt lại nhà xe này?'}
-            </h2>
-            <p id="status-confirmation-description">
-              {nextStatus === 'TAM_NGUNG'
-                ? 'Nhà xe sẽ được chuyển sang trạng thái Tạm ngưng. Thao tác này không xóa dữ liệu và có thể kích hoạt lại sau.'
-                : 'Nhà xe sẽ được chuyển sang trạng thái Đang hoạt động.'}
-            </p>
-            {statusError && <p className="admin-confirm-dialog__error" role="alert">{statusError}</p>}
-            <div className="admin-confirm-dialog__actions">
-              <Button
-                disabled={statusSubmitting}
-                onClick={() => setStatusDialogOpen(false)}
-                type="button"
-                variant="secondary"
-              >
-                Hủy
-              </Button>
-              <Button
-                disabled={statusSubmitting}
-                onClick={confirmStatusChange}
-                type="button"
-              >
-                {statusSubmitting && (
-                  <LoaderCircle
-                    aria-hidden="true"
-                    className="status-confirmation-spinner"
-                    size={15}
-                  />
-                )}
-                {statusSubmitting
-                  ? 'Đang cập nhật…'
-                  : nextStatus === 'TAM_NGUNG'
-                    ? 'Tạm ngưng nhà xe'
-                    : 'Kích hoạt lại'}
-              </Button>
-            </div>
-          </>
-        </AdminConfirmDialog>
-      )}
+      {canUpdate &&
+        statusDialogOpen &&
+        detailState.status === 'success' &&
+        nextStatus && (
+          <AlertDialog
+            open
+            onOpenChange={(open, event) => {
+              if (!open && statusSubmitting) event.cancel();
+              else if (!open) setStatusDialogOpen(false);
+            }}
+          >
+            <AlertDialogContent aria-busy={statusSubmitting}>
+              <AlertDialogTitle>
+                {nextStatus === 'TAM_NGUNG'
+                  ? 'Tạm ngưng nhà xe này?'
+                  : 'Kích hoạt lại nhà xe này?'}
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                {nextStatus === 'TAM_NGUNG'
+                  ? 'Nhà xe sẽ được chuyển sang trạng thái Tạm ngưng. Thao tác này không xóa dữ liệu và có thể kích hoạt lại sau.'
+                  : 'Nhà xe sẽ được chuyển sang trạng thái Đang hoạt động.'}
+              </AlertDialogDescription>
+              {statusError && (
+                <p className="text-sm text-destructive" role="alert">
+                  {statusError}
+                </p>
+              )}
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={statusSubmitting}>
+                  Hủy
+                </AlertDialogCancel>
+                <AlertDialogAction
+                  disabled={statusSubmitting}
+                  onClick={confirmStatusChange}
+                >
+                  {statusSubmitting && (
+                    <LoaderCircle
+                      aria-hidden="true"
+                      className="size-4 motion-safe:animate-spin"
+                    />
+                  )}
+                  {statusSubmitting
+                    ? 'Đang cập nhật…'
+                    : nextStatus === 'TAM_NGUNG'
+                      ? 'Tạm ngưng nhà xe'
+                      : 'Kích hoạt lại'}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        )}
     </>
   );
 }
@@ -420,27 +408,25 @@ export function BusCompaniesManagement() {
     null,
   );
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   function openCreateDialog() {
     if (!canCreateCompany) return;
-    setSuccessMessage(null);
     setCreateDialogOpen(true);
   }
 
   function handleCompanyCreated(company: BusCompany) {
     setCreateDialogOpen(false);
-    setSuccessMessage(`Đã thêm nhà xe ${company.name}.`);
+    toast.success(`Đã thêm nhà xe ${company.name}.`);
     refresh();
   }
 
   function handleCompanyUpdated(company: BusCompany) {
-    setSuccessMessage(`Đã cập nhật nhà xe ${company.name}.`);
+    toast.success(`Đã cập nhật nhà xe ${company.name}.`);
     refresh();
   }
 
   function handleCompanyStatusUpdated(company: BusCompany) {
-    setSuccessMessage(
+    toast.success(
       `Đã chuyển nhà xe ${company.name} sang trạng thái ${statusLabel(company.status)}.`,
     );
     refresh();
@@ -449,64 +435,66 @@ export function BusCompaniesManagement() {
   function sortButton(label: string, column: BusCompanySortKey) {
     const selected = sortBy === column;
     return (
-      <button
-        className="sort-button"
+      <Button
+        aria-label={`${label}, ${
+          selected
+            ? sortDirection === 'asc'
+              ? 'tăng dần'
+              : 'giảm dần'
+            : 'chưa sắp xếp'
+        }`}
+        className="-ml-3 h-8 px-2"
         onClick={() => sortCompanies(column)}
-        type="button"
+        size="sm"
+        variant="ghost"
       >
         {label}
         {selected ? (
           sortDirection === 'asc' ? (
-            <ArrowUp aria-hidden="true" size={14} />
+            <ArrowUp aria-hidden className="size-4" />
           ) : (
-            <ArrowDown aria-hidden="true" size={14} />
+            <ArrowDown aria-hidden className="size-4" />
           )
         ) : (
-          <ArrowUpDown aria-hidden="true" size={14} />
+          <ArrowUpDown aria-hidden className="size-4" />
         )}
-      </button>
+      </Button>
     );
   }
 
   function openCompanyDetails(company: BusCompany) {
-    setSuccessMessage(null);
     setSelectedCompanyId(company.busCompanyId);
   }
 
+  const hasFilters = Boolean(
+    searchInput.trim() ||
+      status ||
+      createdDateRange?.from ||
+      createdDateRange?.to,
+  );
+
   return (
     <SuperAdminLayout activeSection="bus-companies">
-      <div className="admin-page-content">
+      <div className="admin-ui admin-page-content grid gap-[var(--admin-space-section-gap)]">
         <AdminPageHeader
           actions={
-            <div className="page-intro-actions">
+            <div className="flex flex-wrap items-center gap-2">
               {canCreateCompany && (
-                <AdminCreateAction label="Thêm nhà xe" onClick={openCreateDialog} />
+                <ResourceCreateAction
+                  label="Thêm nhà xe"
+                  onClick={openCreateDialog}
+                />
               )}
-              <AdminRefreshAction loading={loading} onClick={refresh} />
+              <ResourceRefreshAction loading={loading} onClick={refresh} />
             </div>
           }
           eyebrow="ĐỐI TÁC NỀN TẢNG"
           title="Quản lý nhà xe"
           titleId="page-title"
         />
-
-        {successMessage && (
-          <div className="company-success-notice" role="status">
-            <CheckCircle2 aria-hidden="true" size={17} />
-            <span>{successMessage}</span>
-          </div>
-        )}
-
-        <section
-          aria-labelledby="companies-heading"
-          className="companies-section"
-        >
-          <h2 className="sr-only" id="companies-heading">
-            Danh sách nhà xe
-          </h2>
-
-          <div className="panel companies-panel">
-            <FilterToolbar totalItems={companyPage?.meta.totalItems ?? null}>
+        <section aria-label="Danh sách nhà xe" aria-busy={loading}>
+          <Card className="gap-0 py-0 ring-0">
+            <FilterToolbar>
               <SearchInput
                 label="Tìm nhà xe"
                 onChange={updateSearch}
@@ -521,125 +509,144 @@ export function BusCompaniesManagement() {
                 value={status}
               />
               <DateRangeFilter
+                appearance="resource"
+                emptyValueLabel="Tất cả ngày"
                 label="Ngày tạo"
                 onApply={updateCreatedDateRange}
                 value={createdDateRange}
               />
             </FilterToolbar>
 
-            {error && (
-              <div className="table-error" role="alert">
-                <div>
-                  <strong>Chưa tải được danh sách nhà xe</strong>
-                  <p>{error}</p>
-                </div>
+            {!error && companyPage && companyPage.data.length > 0 && (
+              <div className="flex items-end gap-3 border-b p-4 md:hidden">
+                <SelectFilter
+                  allLabel="Tên nhà xe"
+                  label="Sắp xếp theo"
+                  onChange={(value) => {
+                    const field = (value || 'name') as BusCompanySortKey;
+                    if (field !== sortBy) sortCompanies(field);
+                  }}
+                  options={[
+                    { value: 'code', label: 'Mã nhà xe' },
+                    { value: 'status', label: 'Trạng thái' },
+                    { value: 'createdAt', label: 'Ngày tạo' },
+                  ]}
+                  value={sortBy === 'name' ? '' : sortBy}
+                />
                 <Button
-                  onClick={refresh}
-                  type="button"
-                  variant="secondary"
+                  aria-label={`Đổi thứ tự sắp xếp, hiện tại ${sortDirection === 'asc' ? 'tăng dần' : 'giảm dần'}`}
+                  onClick={() => sortCompanies(sortBy)}
+                  variant="outline"
                 >
-                  Thử lại
+                  {sortDirection === 'asc' ? (
+                    <ArrowUp aria-hidden className="size-4" />
+                  ) : (
+                    <ArrowDown aria-hidden className="size-4" />
+                  )}
+                  {sortDirection === 'asc' ? 'Tăng dần' : 'Giảm dần'}
                 </Button>
               </div>
             )}
 
-            {loading && !companyPage ? (
-              <AdminTableSkeleton resourceLabel="nhà xe" />
-            ) : null}
-            {!loading && !error && companyPage?.data.length === 0 && (
-              <div className="empty-state">
-                <span className="empty-state-icon">
-                  <Search size={21} />
-                </span>
-                <h3>Không tìm thấy nhà xe</h3>
-                <p>Thử tìm bằng mã, tên hoặc thông tin liên hệ khác.</p>
-              </div>
+            {loading && !companyPage && (
+              <ResourceTableSkeleton resourceLabel="nhà xe" />
             )}
+            {error && (
+              <ResourceState error>
+                <p>{error}</p>
+                <Button onClick={refresh} variant="outline">
+                  Thử lại
+                </Button>
+              </ResourceState>
+            )}
+            {!error &&
+              companyPage &&
+              companyPage.data.length === 0 &&
+              !loading && (
+                <ResourceState>
+                  <p>
+                    {hasFilters
+                      ? 'Không tìm thấy nhà xe phù hợp.'
+                      : 'Chưa có nhà xe trong hệ thống.'}
+                  </p>
+                  {hasFilters && (
+                    <Button
+                      onClick={() => {
+                        updateSearch('');
+                        updateFilters('');
+                        updateCreatedDateRange(null);
+                      }}
+                      variant="outline"
+                    >
+                      Xóa bộ lọc
+                    </Button>
+                  )}
+                </ResourceState>
+              )}
 
-            {companyPage && companyPage.data.length > 0 && (
+            {!error && companyPage && companyPage.data.length > 0 && (
               <>
-                <div
-                  aria-busy={loading}
-                  className={`company-table-scroll${loading ? ' is-loading' : ''}`}
-                >
-                  <table className="company-table">
-                    <thead>
-                      <tr>
-                        <th
-                          aria-sort={
-                            sortBy === 'name'
-                              ? sortDirection === 'asc'
-                                ? 'ascending'
-                                : 'descending'
-                              : 'none'
-                          }
-                          scope="col"
-                        >
-                          {sortButton('Nhà xe', 'name')}
-                        </th>
-                        <th
-                          aria-sort={
-                            sortBy === 'code'
-                              ? sortDirection === 'asc'
-                                ? 'ascending'
-                                : 'descending'
-                              : 'none'
-                          }
-                          scope="col"
-                        >
-                          {sortButton('Mã nhà xe', 'code')}
-                        </th>
-                        <th scope="col">Thông tin liên hệ</th>
-                        <th
-                          aria-sort={
-                            sortBy === 'status'
-                              ? sortDirection === 'asc'
-                                ? 'ascending'
-                                : 'descending'
-                              : 'none'
-                          }
-                          scope="col"
-                        >
-                          {sortButton('Trạng thái', 'status')}
-                        </th>
-                        <th
-                          aria-sort={
-                            sortBy === 'createdAt'
-                              ? sortDirection === 'asc'
-                                ? 'ascending'
-                                : 'descending'
-                              : 'none'
-                          }
-                          scope="col"
-                        >
-                          {sortButton('Ngày tạo', 'createdAt')}
-                        </th>
-                        <th scope="col">
-                          <span className="sr-only">Thao tác</span>
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {companyPage.data.map((company) => (
-                        <tr key={company.busCompanyId}>
-                          <th className="company-name-cell" scope="row">
-                            <span className="company-name-content">
-                              <CompanyMark name={company.name} />
-                              <span>{company.name}</span>
-                            </span>
-                          </th>
-                          <td className="table-number admin-data-mono">
-                            {company.code}
-                          </td>
-                          <td
-                            className="company-contact-cell"
-                            tabIndex={company.contactInfo ? 0 : undefined}
-                            title={company.contactInfo || undefined}
+                <div className="hidden md:block" aria-busy={loading}>
+                  <Table className="min-w-[920px]">
+                    <TableCaption className="sr-only">
+                      Danh sách nhà xe
+                    </TableCaption>
+                    <TableHeader>
+                      <TableRow>
+                        {(
+                          [
+                            { key: 'name', label: 'Nhà xe' },
+                            { key: 'code', label: 'Mã nhà xe' },
+                            { key: null, label: 'Thông tin liên hệ' },
+                            { key: 'status', label: 'Trạng thái' },
+                            { key: 'createdAt', label: 'Ngày tạo' },
+                          ] as const
+                        ).map((column) => (
+                          <TableHead
+                            key={column.label}
+                            scope="col"
+                            aria-sort={
+                              column.key
+                                ? sortBy === column.key
+                                  ? sortDirection === 'asc'
+                                    ? 'ascending'
+                                    : 'descending'
+                                  : 'none'
+                                : undefined
+                            }
                           >
-                            {company.contactInfo || '—'}
-                          </td>
-                          <td>
-                            <AdminStatusBadge
+                            {column.key
+                              ? sortButton(column.label, column.key)
+                              : column.label}
+                          </TableHead>
+                        ))}
+                        <TableHead scope="col">
+                          <span className="sr-only">Thao tác</span>
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {companyPage.data.map((company) => (
+                        <TableRow key={company.busCompanyId}>
+                          <TableHead
+                            scope="row"
+                            className="max-w-64 whitespace-normal break-words bg-transparent text-[13px]"
+                          >
+                            <span className="flex items-center gap-3">
+                              <CompanyMark name={company.name} />
+                              <span className="font-semibold">
+                                {company.name}
+                              </span>
+                            </span>
+                          </TableHead>
+                          <TableCell className="admin-data-mono">
+                            {company.code}
+                          </TableCell>
+                          <TableCell className="max-w-64 whitespace-normal break-words text-muted-foreground">
+                            {company.contactInfo || 'Chưa cập nhật'}
+                          </TableCell>
+                          <TableCell>
+                            <ResourceStatusBadge
                               tone={
                                 company.status === 'HOAT_DONG'
                                   ? 'active'
@@ -647,58 +654,77 @@ export function BusCompaniesManagement() {
                               }
                             >
                               {statusLabel(company.status)}
-                            </AdminStatusBadge>
-                          </td>
-                          <td>{timestampFormat(company.createdAt)}</td>
-                          <td>
-                            <AdminDetailAction
+                            </ResourceStatusBadge>
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap text-muted-foreground">
+                            {timestampFormat(company.createdAt)}
+                          </TableCell>
+                          <TableCell>
+                            <ResourceDetailAction
                               onClick={() => openCompanyDetails(company)}
                               resourceName={company.name}
                             />
-                          </td>
-                        </tr>
+                          </TableCell>
+                        </TableRow>
                       ))}
-                    </tbody>
-                  </table>
+                    </TableBody>
+                  </Table>
                 </div>
-                <div className="company-mobile-list">
+
+                <div className="grid gap-3 p-4 md:hidden">
                   {companyPage.data.map((company) => (
-                    <article
-                      className="company-mobile-card"
+                    <Card
+                      className="gap-4 p-4 ring-0"
                       key={company.busCompanyId}
                     >
-                      <div className="company-mobile-head">
+                      <div className="flex flex-wrap items-start gap-3">
                         <CompanyMark name={company.name} />
-                        <div>
-                          <h3>{company.name}</h3>
-                          <p>
-                            {company.contactInfo || 'Chưa cập nhật liên hệ'}
+                        <div className="min-w-0 flex-1 space-y-1">
+                          <h2 className="break-words text-sm font-semibold">
+                            {company.name}
+                          </h2>
+                          <p className="admin-data-mono text-xs text-muted-foreground">
+                            {company.code}
                           </p>
                         </div>
+                        <ResourceStatusBadge
+                          tone={
+                            company.status === 'HOAT_DONG'
+                              ? 'active'
+                              : 'muted'
+                          }
+                        >
+                          {statusLabel(company.status)}
+                        </ResourceStatusBadge>
                       </div>
-                      <div className="company-mobile-stats">
-                        <span>
-                          Mã <strong className="admin-data-mono">{company.code}</strong>
-                        </span>
-                        <span>
-                          Trạng thái{' '}
-                          <strong>{statusLabel(company.status)}</strong>
-                        </span>
-                        <span>
-                          Ngày tạo{' '}
-                          <strong>{timestampFormat(company.createdAt)}</strong>
-                        </span>
-                      </div>
-                      <div className="company-mobile-actions">
-                        <AdminDetailAction
+                      <p className="break-words text-[13px] text-muted-foreground">
+                        {company.contactInfo || 'Chưa cập nhật liên hệ'}
+                      </p>
+                      <dl className="grid grid-cols-2 gap-3 border-t pt-3 text-[13px]">
+                        <div className="space-y-1">
+                          <dt className="text-xs text-muted-foreground">
+                            Ngày tạo
+                          </dt>
+                          <dd>{timestampFormat(company.createdAt)}</dd>
+                        </div>
+                        <div className="space-y-1">
+                          <dt className="text-xs text-muted-foreground">
+                            Cập nhật
+                          </dt>
+                          <dd>{timestampFormat(company.updatedAt)}</dd>
+                        </div>
+                      </dl>
+                      <div className="flex justify-end border-t pt-3">
+                        <ResourceDetailAction
                           onClick={() => openCompanyDetails(company)}
                           resourceName={company.name}
                         />
                       </div>
-                    </article>
+                    </Card>
                   ))}
                 </div>
-                <AdminPagination
+
+                <ResourcePagination
                   currentPage={companyPage.meta.page}
                   disabled={loading}
                   onPageChange={changePage}
@@ -709,12 +735,8 @@ export function BusCompaniesManagement() {
                 />
               </>
             )}
-          </div>
+          </Card>
         </section>
-
-        <footer className="admin-page-footer">
-          <span>© 2026 VexGo Platform</span>
-        </footer>
       </div>
       {selectedCompanyId !== null && (
         <CompanyDetails

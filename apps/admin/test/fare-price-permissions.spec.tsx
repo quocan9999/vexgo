@@ -31,9 +31,11 @@ const farePrice = {
   updatedAt: '2026-09-02T08:30:00.000Z',
 };
 
-vi.mock('lucide-react', () => {
+vi.mock('lucide-react', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('lucide-react')>();
   const Icon = () => null;
   return {
+    ...actual,
     ArrowDown: Icon,
     ArrowUp: Icon,
     ArrowUpDown: Icon,
@@ -190,11 +192,11 @@ describe('Admin fare price action permissions', () => {
     const { rerender } = render(<FarePricesManagement />);
     const detail = await openDetail();
     fireEvent.click(within(detail).getByRole('button', { name: 'Tạm ngưng' }));
-    expect(await screen.findByRole('dialog', { name: 'Tạm ngưng bảng giá?' })).toBeTruthy();
+    expect(await screen.findByRole('alertdialog', { name: 'Tạm ngưng bảng giá?' })).toBeTruthy();
 
     setEmployeeAdminTestSession(['fare-price:read']);
     rerender(<FarePricesManagement />);
-    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Tạm ngưng bảng giá?' })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole('alertdialog', { name: 'Tạm ngưng bảng giá?' })).toBeNull());
     expect(state.updateFarePriceStatus).not.toHaveBeenCalled();
   });
 });

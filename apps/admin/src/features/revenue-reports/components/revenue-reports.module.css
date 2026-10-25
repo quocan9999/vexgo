@@ -6,12 +6,6 @@
   gap: var(--admin-space-section-gap);
 }
 
-.exportButton {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--admin-space-2);
-}
-
 .filterPanel {
   display: flex;
   min-width: 0;
@@ -19,24 +13,18 @@
   justify-content: space-between;
   gap: var(--admin-space-4);
   flex-wrap: wrap;
+  flex-direction: row;
   padding: var(--admin-space-card-padding);
 }
 
 .filterControls {
+  flex: 1 1 400px;
+  min-width: 0;
+  max-width: 560px;
   display: flex;
   align-items: end;
   gap: var(--admin-space-4);
   flex-wrap: wrap;
-}
-
-.filterExplanation {
-  flex-basis: 100%;
-  margin: 0;
-  padding-top: var(--admin-space-3);
-  border-top: 1px solid var(--admin-border);
-  color: var(--admin-text-muted);
-  font-size: var(--admin-type-helper-size);
-  line-height: var(--admin-type-helper-line-height);
 }
 
 .periodSummary {
@@ -49,12 +37,6 @@
   line-height: var(--admin-type-secondary-body-line-height);
 }
 
-.dateField {
-  display: grid;
-  gap: var(--admin-space-label-control-gap, var(--admin-space-2));
-}
-
-.filterLabel,
 .periodLabel {
   color: var(--admin-text-strong);
   font-size: var(--admin-type-label-size);
@@ -89,6 +71,7 @@
   display: flex;
   min-width: 0;
   min-height: 160px;
+  gap: 0;
   flex-direction: column;
   padding: var(--admin-space-card-padding);
 }
@@ -201,6 +184,7 @@
 .chartPanel,
 .tablePanel {
   min-width: 0;
+  gap: 0;
   padding: var(--admin-space-card-padding);
 }
 
@@ -258,7 +242,7 @@
   grid-column: 1;
   grid-row: 1;
   color: var(--admin-text-muted);
-  font-size: 0.6875rem;
+  font-size: var(--admin-type-helper-size);
   line-height: 1.2;
 }
 
@@ -409,81 +393,6 @@
 
 .tableScroll {
   width: 100%;
-  overflow-x: auto;
-  max-height: 480px;
-}
-
-.dataTable {
-  width: 100%;
-  min-width: 680px;
-  border-collapse: collapse;
-  text-align: left;
-}
-
-.dataTable th,
-.dataTable td {
-  padding: var(--admin-space-3) var(--admin-space-4);
-  border-top: 1px solid var(--admin-border);
-  color: var(--admin-text-muted);
-  font-size: var(--admin-type-table-body-size);
-  font-weight: var(--admin-type-table-body-weight);
-  line-height: var(--admin-type-table-body-line-height);
-  white-space: nowrap;
-}
-
-.dataTable thead th {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  background: var(--admin-surface-muted);
-  border-top: 0;
-  color: var(--admin-text-strong);
-  font-size: var(--admin-type-table-header-size);
-  font-weight: var(--admin-type-table-header-weight);
-}
-
-.dataTable td {
-  font-variant-numeric: tabular-nums;
-}
-
-.dataTable td:last-child {
-  color: var(--admin-text-strong);
-  font-weight: var(--admin-type-label-weight);
-}
-
-.dataTable td.emptyTableCell {
-  padding: var(--admin-space-7) var(--admin-space-4);
-  text-align: center;
-  white-space: normal;
-}
-
-.emptyTableCell strong,
-.emptyTableCell span {
-  display: block;
-}
-
-.emptyTableCell span {
-  margin-top: var(--admin-space-2);
-  color: var(--admin-text-muted);
-  font-weight: var(--admin-weight-regular);
-}
-
-.dataTable tbody th {
-  color: var(--admin-text-strong);
-  font-weight: var(--admin-type-table-header-weight);
-}
-
-.dataTable td:not(:first-child),
-.dataTable th:not(:first-child) {
-  text-align: right;
-}
-
-.totalRow th,
-.totalRow td {
-  border-top: 2px solid var(--admin-border);
-  color: var(--admin-text-strong);
-  font-weight: var(--admin-type-label-weight);
-  background: var(--admin-surface-muted);
 }
 
 .metricSkeleton {
@@ -518,69 +427,6 @@
   height: 280px;
 }
 
-.errorPanel {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--admin-space-4);
-  padding: var(--admin-space-6);
-  border-color: var(--admin-danger);
-  color: var(--admin-danger);
-}
-
-.reconciliationNotice {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--admin-space-component-gap);
-  color: var(--admin-blue);
-  background: var(--admin-blue-soft);
-}
-
-.reconciliationNotice > svg { flex: 0 0 auto; }
-
-.reconciliationNotice h2 {
-  margin: 0 0 var(--admin-space-2);
-  color: var(--admin-text-strong);
-  font-size: var(--admin-type-component-title-size);
-  font-weight: var(--admin-type-component-title-weight);
-  line-height: var(--admin-type-component-title-line-height);
-}
-
-.reconciliationNotice p {
-  margin: 0;
-  color: var(--admin-text-muted);
-  font-size: var(--admin-type-secondary-body-size);
-  line-height: var(--admin-type-secondary-body-line-height);
-}
-
-.errorPanel h2 {
-  margin: 0 0 var(--admin-space-2);
-  color: var(--admin-text-strong);
-  font-size: var(--admin-type-section-heading-size);
-  line-height: var(--admin-type-section-heading-line-height);
-}
-
-.errorPanel p {
-  margin: 0 0 var(--admin-space-4);
-  color: var(--admin-text-muted);
-  line-height: var(--admin-type-body-line-height);
-}
-
-.toast {
-  position: fixed;
-  z-index: 2000;
-  top: var(--admin-space-5);
-  right: var(--admin-space-5);
-  max-width: min(440px, calc(100vw - 32px));
-  padding: var(--admin-space-4) var(--admin-space-5);
-  border: 1px solid var(--admin-success-border);
-  border-radius: var(--admin-radius-panel);
-  background: var(--admin-surface);
-  color: var(--admin-text-strong);
-  box-shadow: 0 8px 28px rgb(20 35 61 / 16%);
-  font-size: var(--admin-type-body-size);
-  line-height: var(--admin-type-body-line-height);
-}
-
 @media (max-width: 1100px) {
   .metricGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -607,6 +453,11 @@
     width: 100%;
     flex-direction: column;
     gap: var(--admin-space-3);
+  }
+
+  .filterControls > div {
+    flex: initial;
+    width: 100%;
   }
 
   .periodSummary {
@@ -652,11 +503,13 @@
   .chartSkeleton {
     height: 254px;
   }
+}
 
-  .toast {
-    top: var(--admin-space-3);
-    right: var(--admin-space-3);
-    left: var(--admin-space-3);
-    max-width: none;
-  }
+.tableScroll > div {
+  max-height: 480px;
+}
+.tableScroll thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
 }

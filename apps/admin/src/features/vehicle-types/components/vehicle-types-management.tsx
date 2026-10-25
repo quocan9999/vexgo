@@ -1,42 +1,51 @@
 'use client';
 
-import {
-  ArrowDown,
-  ArrowUp,
-  ArrowUpDown,
-  CheckCircle2,
-  LoaderCircle,
-  Pencil,
-  X,
-} from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, Bus, Pencil } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { AdminDetailSheet } from '@/components/admin/admin-detail-sheet';
-import { AdminDetailAction } from '@/components/admin/admin-detail-action';
-import {
-  AdminCreateAction,
-  AdminRefreshAction,
-} from '@/components/admin/admin-page-actions';
+import { toast } from 'sonner';
 import { AdminPageHeader } from '@/components/admin/admin-page-header';
-import { AdminPagination } from '@/components/admin/admin-pagination';
-import { AdminTableSkeleton } from '@/components/admin/admin-table-skeleton';
+import {
+  ResourceSheet,
+  ResourceState,
+  ResourceCreateAction,
+  ResourceRefreshAction,
+  ResourceDetailAction,
+  ResourcePagination,
+  ResourceTableSkeleton,
+} from '@/components/admin/resource-ui';
 import {
   FilterToolbar,
   SearchInput,
-} from '@/components/data-filters/data-filters';
-import { Button } from '@/components/ui/button';
+  SelectFilter,
+} from '@/components/data-filters/resource-filters';
+import { Button } from '@/components/ui/action-button';
+import { Card } from '@/components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { useAdminPermissions } from '@/features/admin-auth/hooks/use-admin-permissions';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
 import { getVehicleTypeById } from '../services/vehicle-type-service';
 import type { VehicleType, VehicleTypeSortKey } from '../types/vehicle-type';
 import { useVehicleTypes } from '../hooks/use-vehicle-types';
 import { VehicleTypeFormDialog } from './vehicle-type-form-dialog';
-import '../vehicle-types.css';
 
 function timestampFormat(value: string) {
   return new Intl.DateTimeFormat('vi-VN', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(value));
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+    .format(new Date(value))
+    .replaceAll('/', '-');
 }
 
 type DetailState =
@@ -60,7 +69,6 @@ function VehicleTypeDetails({
   });
   const [retryCount, setRetryCount] = useState(0);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [updateNotice, setUpdateNotice] = useState<string | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -91,124 +99,112 @@ function VehicleTypeDetails({
 
   function handleVehicleTypeUpdated(vehicleType: VehicleType) {
     setDetailState({ status: 'success', vehicleType });
-    setUpdateNotice(`Đã cập nhật loại xe ${vehicleType.name}.`);
     setEditDialogOpen(false);
     onUpdated(vehicleType);
   }
 
   return (
-    <>
-      <AdminDetailSheet
-        ariaBusy={detailState.status === 'loading'}
-        ariaDescribedBy="vehicle-type-detail-description"
-        ariaLabelledBy="vehicle-type-detail-title"
-        onClose={onClose}
-      >
-        <div className="admin-dialog-header">
-          <div className="admin-dialog-header__copy">
-            <h2 id="vehicle-type-detail-title">Chi tiết loại xe</h2>
-            <p id="vehicle-type-detail-description">
-              Thông tin loại xe dùng chung trong hệ thống.
-            </p>
-          </div>
-          <form method="dialog">
-            <Button
-              aria-label="Đóng chi tiết loại xe"
-              className="vehicle-type-detail-close"
-              type="submit"
-              variant="secondary"
-            >
-              <X aria-hidden="true" size={17} />
-            </Button>
-          </form>
-        </div>
-
-        {updateNotice && (
-          <div
-            className="vehicle-types-success vehicle-type-detail-success"
-            role="status"
+    <ResourceSheet
+      busy={detailState.status === 'loading'}
+      onClose={onClose}
+      title="Chi tiết loại xe"
+      description="Thông tin loại xe và sức chứa hàng mặc định."
+    >
+      {detailState.status === 'loading' && (
+        <ResourceState loading>Đang tải thông tin loại xe…</ResourceState>
+      )}
+      {detailState.status === 'error' && (
+        <ResourceState error>
+          <p>{detailState.message}</p>
+          <Button
+            variant="outline"
+            onClick={() => {
+              setDetailState({ status: 'loading' });
+              setRetryCount((count) => count + 1);
+            }}
           >
-            <CheckCircle2 aria-hidden="true" size={16} />
-            <span>{updateNotice}</span>
-          </div>
-        )}
-
-        {detailState.status === 'loading' && (
-          <p className="vehicle-types-state" role="status">
-            <LoaderCircle
-              aria-hidden="true"
-              className="vehicle-types-spinner"
-              size={17}
-            />
-            Đang tải thông tin loại xe…
-          </p>
-        )}
-
-        {detailState.status === 'error' && (
-          <div className="vehicle-types-state" role="alert">
-            <p>{detailState.message}</p>
-            <Button
-              onClick={() => {
-                setDetailState({ status: 'loading' });
-                setRetryCount((count) => count + 1);
-              }}
-              type="button"
-              variant="secondary"
+            Thử lại
+          </Button>
+        </ResourceState>
+      )}
+      {detailState.status === 'success' && (
+        <div className="space-y-6">
+          <div className="flex items-center gap-4 border-b pb-6">
+            <span
+              aria-hidden
+              className="grid size-12 shrink-0 place-items-center rounded-[var(--admin-radius-panel)] bg-accent text-primary"
             >
-              Thử lại
-            </Button>
-          </div>
-        )}
-
-        {detailState.status === 'success' && (
-          <div className="vehicle-type-detail-content">
-            <div className="vehicle-type-detail-hero">
-              <span className="vehicle-type-detail-mark" aria-hidden="true">
-                {detailState.vehicleType.name
-                  .slice(0, 1)
-                  .toLocaleUpperCase('vi')}
-              </span>
-              <div>
-                <h3>{detailState.vehicleType.name}</h3>
-                <p>
-                  Loại xe #
-                  <span className="admin-data-mono">
-                    {detailState.vehicleType.vehicleTypeId}
-                  </span>
-                </p>
-              </div>
+              <Bus size={24} />
+            </span>
+            <div className="min-w-0">
+              <h3 className="break-words text-base font-semibold">
+                {detailState.vehicleType.name}
+              </h3>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Loại xe{' '}
+                <span className="admin-data-mono">
+                  #{detailState.vehicleType.vehicleTypeId}
+                </span>
+              </p>
             </div>
-            <dl className="vehicle-type-detail-fields">
-              <div>
-                <dt>Mô tả</dt>
-                <dd>
-                  {detailState.vehicleType.description || 'Chưa có mô tả'}
-                </dd>
-              </div>
-              <div>
-                <dt>Ngày tạo</dt>
-                <dd>{timestampFormat(detailState.vehicleType.createdAt)}</dd>
-              </div>
-              <div>
-                <dt>Cập nhật lần cuối</dt>
-                <dd>{timestampFormat(detailState.vehicleType.updatedAt)}</dd>
-              </div>
+          </div>
+          <dl className="grid grid-cols-2 gap-4 text-[13px]">
+            <div className="col-span-2">
+              <dt className="mb-1 text-xs text-muted-foreground">Mô tả</dt>
+              <dd className="whitespace-pre-wrap break-words">
+                {detailState.vehicleType.description || 'Chưa có mô tả'}
+              </dd>
+            </div>
+            <div>
+              <dt className="mb-1 text-xs text-muted-foreground">Ngày tạo</dt>
+              <dd>{timestampFormat(detailState.vehicleType.createdAt)}</dd>
+            </div>
+            <div>
+              <dt className="mb-1 text-xs text-muted-foreground">
+                Cập nhật lần cuối
+              </dt>
+              <dd>{timestampFormat(detailState.vehicleType.updatedAt)}</dd>
+            </div>
+          </dl>
+          <section aria-label="Sức chứa hàng mặc định">
+            <h3 className="mb-4 text-sm font-semibold">
+              Sức chứa hàng mặc định
+            </h3>
+            <dl className="grid grid-cols-3 gap-3 rounded-[var(--admin-radius-panel)] border bg-muted/40 p-4">
+              {(
+                [
+                  ['Xe máy', detailState.vehicleType.motorbikeCapacityDefault],
+                  [
+                    'Hàng cồng kềnh',
+                    detailState.vehicleType.bulkyCargoCapacityDefault,
+                  ],
+                  [
+                    'Hàng nhẹ',
+                    detailState.vehicleType.lightCargoCapacityDefault,
+                  ],
+                ] as const
+              ).map(([label, value]) => (
+                <div key={label}>
+                  <dt className="mb-2 text-xs text-muted-foreground">
+                    {label}
+                  </dt>
+                  <dd className="text-lg font-semibold tabular-nums">
+                    {value.toLocaleString('vi-VN')}
+                  </dd>
+                </div>
+              ))}
             </dl>
-            {canUpdate && <div className="vehicle-type-detail-actions admin-detail-sheet__actions">
-              <Button
-                onClick={() => {
-                  setUpdateNotice(null);
-                  setEditDialogOpen(true);
-                }}
-                type="button"
-              >
-                <Pencil aria-hidden="true" size={15} />
+          </section>
+          {canUpdate && (
+            <div className="flex justify-end border-t pt-4">
+              <Button onClick={() => setEditDialogOpen(true)}>
+                <Pencil aria-hidden />
                 Chỉnh sửa
               </Button>
-            </div>}
-          </div>
-        )}
-      </AdminDetailSheet>
+            </div>
+          )}
+        </div>
+      )}
       {editDialogOpen && canUpdate && detailState.status === 'success' && (
         <VehicleTypeFormDialog
           key={vehicleTypeId}
@@ -217,7 +213,7 @@ function VehicleTypeDetails({
           vehicleType={detailState.vehicleType}
         />
       )}
-    </>
+    </ResourceSheet>
   );
 }
 
@@ -256,221 +252,223 @@ export function VehicleTypesManagement() {
     number | null
   >(null);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
-
   const items = vehicleTypePage?.data ?? [];
-
-  function openCreateDialog() {
-    setSuccessMessage(null);
-    setCreateDialogOpen(true);
-  }
-
-  function handleVehicleTypeCreated(vehicleType: VehicleType) {
-    setCreateDialogOpen(false);
-    setSuccessMessage(`Đã tạo loại xe ${vehicleType.name}.`);
-    refresh();
-  }
-
-  function handleVehicleTypeUpdated(vehicleType: VehicleType) {
-    setSuccessMessage(`Đã cập nhật loại xe ${vehicleType.name}.`);
-    refresh();
-  }
-
-  function openVehicleTypeDetails(vehicleType: VehicleType) {
-    setSuccessMessage(null);
-    setSelectedVehicleTypeId(vehicleType.vehicleTypeId);
-  }
-
   function sortButton(label: string, field: VehicleTypeSortKey) {
     return (
-      <button
-        aria-label={`Sắp xếp theo ${label}${
-          sortBy === field
-            ? `, ${sortDirection === 'asc' ? 'tăng dần' : 'giảm dần'}`
-            : ''
-        }`}
-        aria-pressed={sortBy === field}
-        className="vehicle-type-sort"
+      <Button
+        aria-label={`Sắp xếp theo ${label}`}
+        className="-ml-3"
+        variant="ghost"
+        size="sm"
         onClick={() => sortVehicleTypes(field)}
-        type="button"
       >
         {label}
         {sortLabel(field, sortBy, sortDirection)}
-      </button>
+      </Button>
     );
   }
-
   return (
     <SuperAdminLayout activeSection="vehicle-types">
-      <div className="admin-page-content vehicle-types-page">
+      <div className="admin-ui admin-page-content grid gap-[var(--admin-space-section-gap)]">
         <AdminPageHeader
-          actions={
-            <div className="page-intro-actions">
-              {canCreate && <AdminCreateAction label="Thêm loại xe" onClick={openCreateDialog} />}
-              <AdminRefreshAction loading={loading} onClick={refresh} />
-            </div>
-          }
           eyebrow="DANH MỤC PHƯƠNG TIỆN"
           title="Quản lý loại xe"
           titleId="vehicle-types-title"
+          actions={
+            <div className="flex flex-wrap items-center gap-2">
+              {canCreate && (
+                <ResourceCreateAction
+                  label="Thêm loại xe"
+                  onClick={() => setCreateDialogOpen(true)}
+                />
+              )}
+              <ResourceRefreshAction loading={loading} onClick={refresh} />
+            </div>
+          }
         />
-
-        <section
-          aria-labelledby="vehicle-types-title"
-          aria-busy={loading}
-          className="vehicle-types-section"
-        >
-          {successMessage && (
-            <p className="vehicle-types-success" role="status">
-              <CheckCircle2 aria-hidden="true" size={16} />
-              <span>{successMessage}</span>
-            </p>
-          )}
-          <div className="panel vehicle-types-panel">
-            <FilterToolbar totalItems={vehicleTypePage?.meta.totalItems ?? null}>
+        <section aria-labelledby="vehicle-types-title" aria-busy={loading}>
+          <Card className="gap-0 py-0 ring-0">
+            <FilterToolbar>
               <SearchInput
-                label="Tìm theo tên loại xe hoặc mô tả"
-                onChange={updateSearch}
+                label="Tìm kiếm loại xe"
                 placeholder="Tìm tên loại xe, mô tả…"
                 value={searchInput}
+                onChange={updateSearch}
               />
             </FilterToolbar>
-
             {loading && !vehicleTypePage && (
-              <AdminTableSkeleton resourceLabel="loại xe" />
+              <ResourceTableSkeleton resourceLabel="loại xe" />
             )}
-
             {error && (
-              <div className="vehicle-types-state" role="alert">
+              <ResourceState error>
                 <p>{error}</p>
-                <Button onClick={retry} type="button" variant="secondary">
+                <Button variant="outline" onClick={retry}>
                   Thử lại
                 </Button>
-              </div>
+              </ResourceState>
             )}
-
             {!error && vehicleTypePage && items.length === 0 && !loading && (
-              <p className="vehicle-types-state" role="status">
-                {searchInput.trim()
-                  ? 'Không tìm thấy loại xe phù hợp.'
-                  : 'Chưa có loại xe trong danh mục.'}
-              </p>
+              <ResourceState>
+                <p>
+                  {searchInput.trim()
+                    ? 'Không tìm thấy loại xe phù hợp.'
+                    : 'Chưa có loại xe trong danh mục.'}
+                </p>
+                {searchInput.trim() && (
+                  <Button variant="outline" onClick={() => updateSearch('')}>
+                    Xóa tìm kiếm
+                  </Button>
+                )}
+              </ResourceState>
             )}
-
             {!error && vehicleTypePage && (
               <>
                 {items.length > 0 && (
                   <>
-                    <div className="vehicle-types-table-wrap">
-                      <table className="vehicle-types-table">
-                        <thead>
-                          <tr>
-                            <th
-                              aria-sort={
-                                sortBy === 'name'
-                                  ? sortDirection === 'asc'
-                                    ? 'ascending'
-                                    : 'descending'
-                                  : 'none'
-                              }
-                              scope="col"
-                            >
-                              {sortButton('Tên loại xe', 'name')}
-                            </th>
-                            <th scope="col">Mô tả</th>
-                            <th
-                              aria-sort={
-                                sortBy === 'createdAt'
-                                  ? sortDirection === 'asc'
-                                    ? 'ascending'
-                                    : 'descending'
-                                  : 'none'
-                              }
-                              scope="col"
-                            >
-                              {sortButton('Ngày tạo', 'createdAt')}
-                            </th>
-                            <th
-                              aria-sort={
-                                sortBy === 'updatedAt'
-                                  ? sortDirection === 'asc'
-                                    ? 'ascending'
-                                    : 'descending'
-                                  : 'none'
-                              }
-                              scope="col"
-                            >
-                              {sortButton('Cập nhật lần cuối', 'updatedAt')}
-                            </th>
-                            <th scope="col"></th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {items.map((vehicleType) => (
-                            <tr key={vehicleType.vehicleTypeId}>
-                              <th scope="row">{vehicleType.name}</th>
-                              <td>
-                                {vehicleType.description || 'Chưa có mô tả'}
-                              </td>
-                              <td>{timestampFormat(vehicleType.createdAt)}</td>
-                              <td>{timestampFormat(vehicleType.updatedAt)}</td>
-                              <td>
-                                <AdminDetailAction
-                                  onClick={() => openVehicleTypeDetails(vehicleType)}
-                                  resourceName={`loại xe ${vehicleType.name}`}
+                    <div className="hidden md:block">
+                      <Table className="min-w-[820px]">
+                        <TableCaption className="sr-only">
+                          Danh sách loại xe
+                        </TableCaption>
+                        <TableHeader>
+                          <TableRow>
+                            {(
+                              [
+                                { key: 'name', label: 'Tên loại xe' },
+                                { key: null, label: 'Mô tả' },
+                                { key: 'createdAt', label: 'Ngày tạo' },
+                                { key: 'updatedAt', label: 'Cập nhật' },
+                              ] as const
+                            ).map((column) => (
+                              <TableHead
+                                key={column.label}
+                                scope="col"
+                                aria-sort={
+                                  column.key
+                                    ? sortBy === column.key
+                                      ? sortDirection === 'asc'
+                                        ? 'ascending'
+                                        : 'descending'
+                                      : 'none'
+                                    : undefined
+                                }
+                              >
+                                {column.key
+                                  ? sortButton(column.label, column.key)
+                                  : column.label}
+                              </TableHead>
+                            ))}
+                            <TableHead scope="col">
+                              <span className="sr-only">Thao tác</span>
+                            </TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {items.map((item) => (
+                            <TableRow key={item.vehicleTypeId}>
+                              <TableHead
+                                scope="row"
+                                className="max-w-60 whitespace-normal break-words bg-transparent text-[13px]"
+                              >
+                                {item.name}
+                              </TableHead>
+                              <TableCell className="max-w-80 whitespace-normal break-words text-muted-foreground">
+                                {item.description || 'Chưa có mô tả'}
+                              </TableCell>
+                              <TableCell className="whitespace-nowrap text-muted-foreground">
+                                {timestampFormat(item.createdAt)}
+                              </TableCell>
+                              <TableCell className="whitespace-nowrap text-muted-foreground">
+                                {timestampFormat(item.updatedAt)}
+                              </TableCell>
+                              <TableCell>
+                                <ResourceDetailAction
+                                  resourceName={`loại xe ${item.name}`}
+                                  onClick={() =>
+                                    setSelectedVehicleTypeId(item.vehicleTypeId)
+                                  }
                                 />
-                              </td>
-                            </tr>
+                              </TableCell>
+                            </TableRow>
                           ))}
-                        </tbody>
-                      </table>
+                        </TableBody>
+                      </Table>
                     </div>
-
-                    <div
-                      aria-label="Sắp xếp danh sách loại xe"
-                      className="vehicle-types-mobile-sort"
-                      role="group"
-                    >
-                      {sortButton('Tên loại xe', 'name')}
-                      {sortButton('Ngày tạo', 'createdAt')}
-                      {sortButton('Cập nhật lần cuối', 'updatedAt')}
-                    </div>
-
-                    <div className="vehicle-types-mobile-list">
-                      {items.map((vehicleType) => (
-                        <article
-                          className="vehicle-type-mobile-card"
-                          key={vehicleType.vehicleTypeId}
+                    <div className="border-b p-4 md:hidden">
+                      <div className="flex items-end gap-3">
+                        <SelectFilter
+                          label="Sắp xếp theo"
+                          value={sortBy === 'name' ? '' : sortBy}
+                          allLabel="Tên loại xe"
+                          options={[
+                            { value: 'createdAt', label: 'Ngày tạo' },
+                            { value: 'updatedAt', label: 'Cập nhật' },
+                          ]}
+                          onChange={(value) => {
+                            const field = (value ||
+                              'name') as VehicleTypeSortKey;
+                            if (field !== sortBy) sortVehicleTypes(field);
+                          }}
+                        />
+                        <Button
+                          variant="outline"
+                          onClick={() => sortVehicleTypes(sortBy)}
+                          aria-label={`Đổi thứ tự sắp xếp, hiện tại ${sortDirection === 'asc' ? 'tăng dần' : 'giảm dần'}`}
                         >
-                          <div className="vehicle-type-mobile-heading">
-                            <h2>{vehicleType.name}</h2>
-                            <span>
-                              #
-                              <span className="admin-data-mono">
-                                {vehicleType.vehicleTypeId}
-                              </span>
-                            </span>
+                          {sortDirection === 'asc' ? (
+                            <ArrowUp aria-hidden />
+                          ) : (
+                            <ArrowDown aria-hidden />
+                          )}
+                          {sortDirection === 'asc' ? 'Tăng dần' : 'Giảm dần'}
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="grid gap-4 p-4 md:hidden">
+                      {items.map((item) => (
+                        <Card
+                          key={item.vehicleTypeId}
+                          className="gap-4 p-4 ring-0"
+                        >
+                          <div>
+                            <h2 className="break-words text-base font-semibold">
+                              {item.name}
+                            </h2>
+                            <p className="admin-data-mono mt-1 text-xs text-muted-foreground">
+                              #{item.vehicleTypeId}
+                            </p>
                           </div>
-                          <p>{vehicleType.description || 'Chưa có mô tả'}</p>
-                          <div className="vehicle-type-mobile-footer">
-                            <span>
-                              Ngày tạo: {timestampFormat(vehicleType.createdAt)}
-                            </span>
-                            <span>
-                              Cập nhật: {timestampFormat(vehicleType.updatedAt)}
-                            </span>
-                            <AdminDetailAction
-                              onClick={() => openVehicleTypeDetails(vehicleType)}
-                              resourceName={`loại xe ${vehicleType.name}`}
+                          <p className="whitespace-pre-wrap break-words text-[13px] text-muted-foreground">
+                            {item.description || 'Chưa có mô tả'}
+                          </p>
+                          <dl className="grid grid-cols-2 gap-3 text-[13px]">
+                            <div>
+                              <dt className="mb-1 text-xs text-muted-foreground">
+                                Ngày tạo
+                              </dt>
+                              <dd>{timestampFormat(item.createdAt)}</dd>
+                            </div>
+                            <div>
+                              <dt className="mb-1 text-xs text-muted-foreground">
+                                Cập nhật
+                              </dt>
+                              <dd>{timestampFormat(item.updatedAt)}</dd>
+                            </div>
+                          </dl>
+                          <div className="flex justify-end border-t pt-3">
+                            <ResourceDetailAction
+                              resourceName={`loại xe ${item.name}`}
+                              onClick={() =>
+                                setSelectedVehicleTypeId(item.vehicleTypeId)
+                              }
                             />
                           </div>
-                        </article>
+                        </Card>
                       ))}
                     </div>
                   </>
                 )}
-
-                <AdminPagination
+                <ResourcePagination
                   currentPage={page}
                   disabled={loading}
                   onPageChange={changePage}
@@ -481,22 +479,28 @@ export function VehicleTypesManagement() {
                 />
               </>
             )}
-          </div>
+          </Card>
         </section>
       </div>
-
       {selectedVehicleTypeId !== null && (
         <VehicleTypeDetails
           key={selectedVehicleTypeId}
-          onClose={() => setSelectedVehicleTypeId(null)}
-          onUpdated={handleVehicleTypeUpdated}
           vehicleTypeId={selectedVehicleTypeId}
+          onClose={() => setSelectedVehicleTypeId(null)}
+          onUpdated={(item) => {
+            toast.success(`Đã cập nhật loại xe ${item.name}.`);
+            refresh();
+          }}
         />
       )}
       {createDialogOpen && canCreate && (
         <VehicleTypeFormDialog
           onClose={() => setCreateDialogOpen(false)}
-          onSaved={handleVehicleTypeCreated}
+          onSaved={(item) => {
+            setCreateDialogOpen(false);
+            toast.success(`Đã tạo loại xe ${item.name}.`);
+            refresh();
+          }}
         />
       )}
     </SuperAdminLayout>

@@ -1,0 +1,209 @@
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  border-bottom: 1px solid var(--admin-border);
+  background: #fff;
+}
+
+.inner {
+  display: flex;
+  width: min(100%, 1510px);
+  min-height: 68px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin-inline: auto;
+  padding: 12px var(--admin-space-page-inline);
+}
+
+.navigation,
+.context,
+.breadcrumb,
+.workspace,
+.account {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+}
+.navigation {
+  gap: 8px;
+}
+.context {
+  gap: 20px;
+}
+.workspace {
+  flex-shrink: 1;
+  gap: 8px;
+  max-width: 240px;
+  padding: 6px 10px;
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius-control);
+  background: var(--admin-canvas);
+  color: var(--admin-text-strong);
+  font-size: var(--admin-type-label-size);
+  font-weight: var(--admin-type-label-weight);
+  line-height: var(--admin-type-label-line-height);
+}
+.workspace svg {
+  flex-shrink: 0;
+  color: var(--admin-text-muted);
+}
+.workspace > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.breadcrumb {
+  flex-direction: row;
+  flex-wrap: nowrap;
+  gap: 10px;
+  font-size: var(--admin-type-secondary-body-size);
+  font-weight: var(--admin-type-secondary-body-weight);
+  line-height: var(--admin-type-secondary-body-line-height);
+}
+.breadcrumb > svg {
+  flex-shrink: 0;
+  color: var(--admin-muted);
+}
+.group {
+  color: var(--admin-text-muted);
+  white-space: nowrap;
+}
+.current {
+  overflow: hidden;
+  color: var(--admin-text-strong);
+  font-weight: var(--admin-weight-semibold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.account {
+  flex-shrink: 0;
+  gap: 12px;
+}
+.avatar {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  place-items: center;
+  border: 1px solid #dce6fb;
+  border-radius: 50%;
+  background: var(--admin-blue-soft);
+  color: var(--admin-blue);
+  font-size: var(--admin-type-label-size);
+  font-weight: var(--admin-type-label-weight);
+  line-height: var(--admin-type-label-line-height);
+}
+.identity {
+  display: flex;
+  max-width: 180px;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+.name,
+.role {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.name {
+  font-size: var(--admin-type-label-size);
+  font-weight: var(--admin-type-label-weight);
+  line-height: var(--admin-type-label-line-height);
+}
+.role {
+  color: var(--admin-text-muted);
+  font-size: var(--admin-type-helper-size);
+  font-weight: var(--admin-type-helper-weight);
+  line-height: var(--admin-type-helper-line-height);
+}
+.divider {
+  width: 1px;
+  height: 28px;
+  margin-inline: 4px;
+  background: var(--admin-border);
+}
+.logout {
+  gap: 8px;
+  padding-inline: 12px;
+  color: var(--admin-text-muted);
+  font-size: var(--admin-type-button-size);
+  font-weight: var(--admin-type-button-weight);
+  line-height: var(--admin-type-button-line-height);
+}
+.logout:hover {
+  background: #fff5f4;
+  color: var(--admin-danger);
+}
+.menu,
+.mobileAccount {
+  display: none;
+}
+
+@media (max-width: 1100px) {
+  .context {
+    gap: 12px;
+  }
+  .identity {
+    max-width: 140px;
+  }
+  .logout > span {
+    display: none;
+  }
+  .logout {
+    width: 40px;
+    padding: 0;
+  }
+}
+@media (max-width: 700px) {
+  .inner {
+    min-height: 64px;
+    gap: 8px;
+    padding-block: 8px;
+  }
+  .navigation {
+    flex: 1;
+  }
+  .menu {
+    display: inline-flex;
+    flex-shrink: 0;
+  }
+  .mobileAccount {
+    display: inline-flex;
+  }
+  .context {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+  .workspace {
+    max-width: 100%;
+    padding: 0;
+    border: 0;
+    background: none;
+    font-size: var(--admin-type-helper-size);
+    font-weight: var(--admin-type-helper-weight);
+    line-height: var(--admin-type-helper-line-height);
+    color: var(--admin-text-muted);
+  }
+  .workspace > svg,
+  .group,
+  .breadcrumb > svg,
+  .avatar,
+  .identity,
+  .divider {
+    display: none;
+  }
+  .breadcrumb {
+    max-width: 100%;
+  }
+  .account {
+    gap: 4px;
+  }
+  .logout {
+    width: 44px;
+    height: 44px;
+  }
+}

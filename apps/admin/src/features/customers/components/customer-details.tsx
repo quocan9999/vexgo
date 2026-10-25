@@ -1,20 +1,27 @@
 'use client';
 
-import { X } from 'lucide-react';
 import Link from 'next/link';
-import { useEffect, useRef, useState } from 'react';
-import { AdminDetailSheet } from '@/components/admin/admin-detail-sheet';
-import { AdminStatusBadge } from '@/components/admin/admin-status-badge';
-import { Button } from '@/components/ui/button';
+import { useEffect, useState } from 'react';
+import {
+  ResourceSheet,
+  ResourceStatusBadge,
+  ResourceState,
+} from '@/components/admin/resource-ui';
+import { Button, buttonVariants } from '@/components/ui/action-button';
 import { getCustomerById } from '../services/customer-service';
 import type { CustomerDetail } from '../types/customer';
 
 function timestampFormat(value?: string | null) {
   if (!value) return '—';
   return new Intl.DateTimeFormat('vi-VN', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(value));
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+    .format(new Date(value))
+    .replaceAll('/', '-');
 }
 
 type DetailState =
@@ -28,7 +35,6 @@ interface CustomerDetailsProps {
 }
 
 export function CustomerDetails({ customerId, onClose }: CustomerDetailsProps) {
-  const dialogRef = useRef<HTMLDialogElement>(null);
   const [detail, setDetail] = useState<DetailState>({ status: 'loading' });
   const [retryCount, setRetryCount] = useState(0);
 
@@ -61,45 +67,31 @@ export function CustomerDetails({ customerId, onClose }: CustomerDetailsProps) {
   }
 
   return (
-    <AdminDetailSheet
-      ariaLabelledBy="customer-detail-title"
-      dialogRef={dialogRef}
+    <ResourceSheet
+      title="Chi tiết khách hàng"
+      description="Thông tin liên hệ, điểm tích lũy và tài khoản liên kết."
       onClose={onClose}
     >
-      <div className="admin-dialog-header">
-        <div className="admin-dialog-header__copy">
-          <h2 id="customer-detail-title">Chi tiết khách hàng</h2>
-        </div>
-        <button
-          aria-label="Đóng thông tin khách hàng"
-          className="icon-button"
-          onClick={() => dialogRef.current?.close()}
-          type="button"
-        >
-          <X aria-hidden="true" size={19} />
-        </button>
-      </div>
-
       {detail.status === 'loading' && (
-        <div className="customers-state-panel" role="status">
+        <ResourceState loading>
           <p>Đang tải thông tin khách hàng…</p>
-        </div>
+        </ResourceState>
       )}
 
       {detail.status === 'error' && (
-        <div className="customers-state-panel" role="alert">
+        <ResourceState error>
           <p>{detail.message}</p>
-          <Button onClick={retry} type="button" variant="secondary">
+          <Button onClick={retry} type="button" variant="outline">
             Thử lại
           </Button>
-        </div>
+        </ResourceState>
       )}
 
       {detail.status === 'success' && (
-        <div className="customers-detail-content">
-          <div className="customers-detail-hero">
+        <div className="space-y-6">
+          <div className="space-y-2 [&_h3]:text-lg [&_h3]:font-semibold [&_h3]:break-words">
             <h3>{detail.customer.fullName}</h3>
-            <span className="customer-code">
+            <span className="block text-xs text-muted-foreground">
               Mã khách hàng ·{' '}
               <span className="admin-data-mono">
                 {detail.customer.customerCode}
@@ -108,25 +100,22 @@ export function CustomerDetails({ customerId, onClose }: CustomerDetailsProps) {
           </div>
 
           <section
-            className="customers-detail-section"
+            className="space-y-4 border-t pt-5"
             aria-labelledby="customer-info-heading"
           >
-            <h4
-              id="customer-info-heading"
-              className="customers-detail-section-title"
-            >
+            <h4 id="customer-info-heading" className="text-base font-semibold">
               Thông tin liên hệ
             </h4>
-            <dl className="customers-detail-dl">
-              <div className="customers-detail-row">
+            <dl className="grid grid-cols-2 gap-4 text-[13px]">
+              <div className="min-w-0 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-1 [&_dd]:break-words">
                 <dt>Số điện thoại</dt>
                 <dd>{detail.customer.phoneNumber}</dd>
               </div>
-              <div className="customers-detail-row">
+              <div className="min-w-0 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-1 [&_dd]:break-words">
                 <dt>Email</dt>
                 <dd>{detail.customer.email || '—'}</dd>
               </div>
-              <div className="customers-detail-row">
+              <div className="min-w-0 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-1 [&_dd]:break-words">
                 <dt>Điểm tích lũy</dt>
                 <dd>
                   <strong>
@@ -139,26 +128,26 @@ export function CustomerDetails({ customerId, onClose }: CustomerDetailsProps) {
           </section>
 
           <section
-            className="customers-detail-section"
+            className="space-y-4 border-t pt-5"
             aria-labelledby="customer-account-heading"
           >
             <h4
               id="customer-account-heading"
-              className="customers-detail-section-title"
+              className="text-base font-semibold"
             >
               Tài khoản liên kết
             </h4>
-            <dl className="customers-detail-dl">
-              <div className="customers-detail-row">
+            <dl className="grid grid-cols-2 gap-4 text-[13px]">
+              <div className="min-w-0 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-1 [&_dd]:break-words">
                 <dt>Mã tài khoản</dt>
                 <dd className="admin-data-mono">
                   #{detail.customer.account.accountId}
                 </dd>
               </div>
-              <div className="customers-detail-row">
+              <div className="min-w-0 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-1 [&_dd]:break-words">
                 <dt>Trạng thái tài khoản</dt>
                 <dd>
-                  <AdminStatusBadge
+                  <ResourceStatusBadge
                     tone={
                       detail.customer.account.status === 'HOAT_DONG'
                         ? 'active'
@@ -168,10 +157,10 @@ export function CustomerDetails({ customerId, onClose }: CustomerDetailsProps) {
                     {detail.customer.account.status === 'HOAT_DONG'
                       ? 'Đang hoạt động'
                       : 'Tạm khóa'}
-                  </AdminStatusBadge>
+                  </ResourceStatusBadge>
                 </dd>
               </div>
-              <div className="customers-detail-row">
+              <div className="min-w-0 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-1 [&_dd]:break-words">
                 <dt>Xác thực số điện thoại</dt>
                 <dd>
                   {detail.customer.account.phoneVerified
@@ -179,11 +168,11 @@ export function CustomerDetails({ customerId, onClose }: CustomerDetailsProps) {
                     : 'Chưa xác thực'}
                 </dd>
               </div>
-              <div className="customers-detail-row">
+              <div className="min-w-0 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-1 [&_dd]:break-words">
                 <dt>Ngày tạo tài khoản</dt>
                 <dd>{timestampFormat(detail.customer.account.createdAt)}</dd>
               </div>
-              <div className="customers-detail-row">
+              <div className="min-w-0 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-1 [&_dd]:break-words">
                 <dt>Cập nhật tài khoản</dt>
                 <dd>{timestampFormat(detail.customer.account.updatedAt)}</dd>
               </div>
@@ -191,30 +180,27 @@ export function CustomerDetails({ customerId, onClose }: CustomerDetailsProps) {
           </section>
 
           <section
-            className="customers-detail-section"
+            className="space-y-4 border-t pt-5"
             aria-labelledby="customer-meta-heading"
           >
-            <h4
-              id="customer-meta-heading"
-              className="customers-detail-section-title"
-            >
+            <h4 id="customer-meta-heading" className="text-base font-semibold">
               Thông tin hệ thống
             </h4>
-            <dl className="customers-detail-dl">
-              <div className="customers-detail-row">
+            <dl className="grid grid-cols-2 gap-4 text-[13px]">
+              <div className="min-w-0 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-1 [&_dd]:break-words">
                 <dt>Ngày tạo hồ sơ</dt>
                 <dd>{timestampFormat(detail.customer.createdAt)}</dd>
               </div>
-              <div className="customers-detail-row">
+              <div className="min-w-0 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-1 [&_dd]:break-words">
                 <dt>Cập nhật hồ sơ</dt>
                 <dd>{timestampFormat(detail.customer.updatedAt)}</dd>
               </div>
             </dl>
           </section>
 
-          <div className="customers-detail-footer">
+          <div className="flex justify-end border-t pt-4">
             <Link
-              className="button button-primary"
+              className={buttonVariants()}
               href={`/customers/${detail.customer.customerId}`}
             >
               Xem lịch sử hoạt động
@@ -222,6 +208,6 @@ export function CustomerDetails({ customerId, onClose }: CustomerDetailsProps) {
           </div>
         </div>
       )}
-    </AdminDetailSheet>
+    </ResourceSheet>
   );
 }

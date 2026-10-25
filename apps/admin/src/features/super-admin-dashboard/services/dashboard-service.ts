@@ -1,60 +1,88 @@
 import { adminApiFetch } from '@/lib/admin-api-client';
-import overviewFixture from '../data/overview.json';
 import { getApiBaseUrl } from '@/lib/api-url';
-import type { DashboardOverview } from '../types/dashboard';
+import type {
+  DashboardOverview,
+  PlatformCompanySummary,
+} from '../types/dashboard';
 
-const apiPrefix = '/api/v1/super-admin/dashboard';
-
-function getDataSource() {
-  return process.env.NEXT_PUBLIC_ADMIN_DATA_SOURCE?.toLowerCase() === 'api'
-    ? 'api'
-    : 'mock';
+function record(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-async function readApiResponse<T>(
-  url: string,
-  signal?: AbortSignal,
-): Promise<T> {
-  const response = await adminApiFetch(url, { cache: 'no-store', signal });
-  const body = (await response.json().catch(() => null)) as
-    | { data?: T; payload?: T; message?: string; error?: { message?: string } }
-    | T
-    | null;
+function count(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+}
 
-  if (!response.ok) {
-    const errorMessage =
-      body && typeof body === 'object' && 'error' in body
-        ? body.error?.message
-        : body && typeof body === 'object' && 'message' in body
-          ? body.message
-          : undefined;
-    throw new Error(
-      errorMessage || `Không thể tải dữ liệu (HTTP ${response.status}).`,
-    );
-  }
+function company(value: unknown): value is PlatformCompanySummary {
+  return (
+    record(value) &&
+    count(value.id) &&
+    value.id > 0 &&
+    typeof value.code === 'string' &&
+    typeof value.name === 'string' &&
+    typeof value.status === 'string' &&
+    typeof value.createdAt === 'string' &&
+    Number.isFinite(Date.parse(value.createdAt)) &&
+    count(value.activeAdministratorCount)
+  );
+}
 
-  if (!body) throw new Error('API trả về dữ liệu không hợp lệ.');
-  if (typeof body === 'object' && ('data' in body || 'payload' in body)) {
-    const envelope = body as { data?: T; payload?: T };
-    const payload = envelope.data ?? envelope.payload;
-    if (payload === undefined) throw new Error('API không có payload hợp lệ.');
-    return payload;
+function overview(value: unknown): value is DashboardOverview {
+  if (
+    !record(value) ||
+    typeof value.generatedAt !== 'string' ||
+    !Number.isFinite(Date.parse(value.generatedAt)) ||
+    typeof value.timeZone !== 'string' ||
+    !record(value.companies) ||
+    !record(value.administrators)
+  )
+    return false;
+  try {
+    new Intl.DateTimeFormat('vi-VN', { timeZone: value.timeZone });
+  } catch {
+    return false;
   }
-  return body as T;
+  const companies = value.companies;
+  return (
+    ['total', 'active', 'suspended', 'other', 'needingAdministrator'].every(
+      (key) => count(companies[key]),
+    ) &&
+    count(value.administrators.total) &&
+    count(value.administrators.active) &&
+    Array.isArray(value.onboarding) &&
+    value.onboarding.length === 6 &&
+    value.onboarding.every(
+      (item: unknown) =>
+        record(item) &&
+        typeof item.label === 'string' &&
+        /^(0[1-9]|1[0-2])-\d{4}$/.test(item.label) &&
+        count(item.count) &&
+        typeof item.currentMonth === 'boolean',
+    ) &&
+    Array.isArray(value.attentionCompanies) &&
+    value.attentionCompanies.every(company) &&
+    Array.isArray(value.recentCompanies) &&
+    value.recentCompanies.every(company)
+  );
 }
 
 export async function getDashboardOverview(
   signal?: AbortSignal,
 ): Promise<DashboardOverview> {
-  if (getDataSource() === 'api') {
-    return readApiResponse<DashboardOverview>(
-      `${getApiBaseUrl()}${apiPrefix}/overview`,
-      signal,
+  const response = await adminApiFetch(
+    `${getApiBaseUrl()}/api/v1/super-admin/dashboard/overview`,
+    { cache: 'no-store', signal },
+  );
+  const body: unknown = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(
+      record(body) && typeof body.message === 'string'
+        ? body.message
+        : `Không thể tải tổng quan (HTTP ${response.status}).`,
     );
   }
-
-  return {
-    ...(overviewFixture as DashboardOverview),
-    generatedAt: new Date().toISOString(),
-  };
+  if (!record(body) || !overview(body.data)) {
+    throw new Error('Dữ liệu tổng quan trả về không hợp lệ. Vui lòng thử lại.');
+  }
+  return body.data;
 }

@@ -142,12 +142,12 @@ describe('Vehicle action permissions', () => {
     const detail = await openVehicleDetails();
 
     fireEvent.click(within(detail).getByRole('button', { name: 'Chuyển sang bảo trì' }));
-    expect(await screen.findByRole('dialog', { name: 'Chuyển xe sang bảo trì?' })).toBeTruthy();
+    expect(await screen.findByRole('alertdialog', { name: 'Chuyển xe sang bảo trì?' })).toBeTruthy();
 
     setEmployeeAdminTestSession(['vehicle:read']);
     rerender(<VehiclesManagement />);
     await waitFor(() => {
-      expect(screen.queryByRole('dialog', { name: 'Chuyển xe sang bảo trì?' })).toBeNull();
+      expect(screen.queryByRole('alertdialog', { name: 'Chuyển xe sang bảo trì?' })).toBeNull();
       expect(within(screen.getByRole('dialog', { name: 'Chi tiết xe' }))
         .queryByRole('button', { name: 'Chuyển sang bảo trì' })).toBeNull();
     });

@@ -1,19 +1,31 @@
 'use client';
 
 import { useState } from 'react';
-import { AdminDetailAction } from '@/components/admin/admin-detail-action';
-import { AdminRefreshAction } from '@/components/admin/admin-page-actions';
 import { AdminPageHeader } from '@/components/admin/admin-page-header';
-import { AdminPagination } from '@/components/admin/admin-pagination';
-import { AdminStatusBadge } from '@/components/admin/admin-status-badge';
-import { AdminTableSkeleton } from '@/components/admin/admin-table-skeleton';
+import {
+  ResourceDetailAction,
+  ResourceRefreshAction,
+  ResourcePagination,
+  ResourceStatusBadge,
+  ResourceTableSkeleton,
+  ResourceState,
+} from '@/components/admin/resource-ui';
 import {
   FilterToolbar,
   SearchInput,
   SelectFilter,
   type FilterOption,
-} from '@/components/data-filters/data-filters';
-import { Button } from '@/components/ui/button';
+} from '@/components/data-filters/resource-filters';
+import { Button } from '@/components/ui/action-button';
+import { Card } from '@/components/ui/card';
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from '@/components/ui/table';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
 import { useShipments } from '../hooks/use-shipments';
 import type { ShipmentStatus } from '../types/shipment';
@@ -23,7 +35,6 @@ import {
   SHIPMENT_STATUS_LABELS,
   ShipmentDetails,
 } from './shipment-details';
-import '../shipments.css';
 
 const STATUS_FILTER_OPTIONS: FilterOption[] = [
   { value: 'MOI_TAO', label: 'Mới tạo' },
@@ -57,26 +68,23 @@ export function ShipmentsManagement() {
 
   return (
     <SuperAdminLayout activeSection="shipments">
-      <div className="admin-page-content">
+      <div className="admin-page-content admin-ui space-y-6">
         <AdminPageHeader
-          actions={<AdminRefreshAction loading={refreshing} onClick={refresh} />}
+          actions={
+            <ResourceRefreshAction loading={refreshing} onClick={refresh} />
+          }
           eyebrow="QUẢN LÝ GỬI HÀNG"
           title="Danh sách phiếu gửi hàng"
           titleId="shipments-page-title"
         />
 
-        <section
-          className="shipments-section"
-          aria-labelledby="shipments-table-heading"
-        >
+        <section className="min-w-0" aria-labelledby="shipments-table-heading">
           <h2 id="shipments-table-heading" className="sr-only">
             Bảng danh sách phiếu gửi hàng
           </h2>
 
-          <div className="panel admin-resource-panel">
-            <FilterToolbar
-              totalItems={error ? null : loading ? null : meta.totalItems}
-            >
+          <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+            <FilterToolbar>
               <SearchInput
                 label="Tìm kiếm phiếu gửi hàng"
                 onChange={setSearchInput}
@@ -93,141 +101,141 @@ export function ShipmentsManagement() {
             </FilterToolbar>
 
             {error && (
-              <div className="shipments-state-panel" role="alert">
+              <ResourceState error>
                 <p>{error}</p>
-                <Button onClick={refresh} type="button" variant="secondary">
+                <Button onClick={refresh} type="button" variant="outline">
                   Thử lại
                 </Button>
-              </div>
+              </ResourceState>
             )}
 
             {loading && shipments.length === 0 ? (
-              <AdminTableSkeleton resourceLabel="phiếu gửi hàng" />
+              <ResourceTableSkeleton resourceLabel="phiếu gửi hàng" />
             ) : shipments.length === 0 ? (
               error ? null : (
-                <div className="shipments-state-panel">
+                <ResourceState>
                   <p>
                     {isFiltered
                       ? 'Không tìm thấy phiếu gửi hàng phù hợp với bộ lọc.'
                       : 'Chưa có phiếu gửi hàng nào trong hệ thống nhà xe.'}
                   </p>
                   {isFiltered && (
-                    <Button onClick={resetFilters} type="button" variant="secondary">
+                    <Button
+                      onClick={resetFilters}
+                      type="button"
+                      variant="outline"
+                    >
                       Đặt lại bộ lọc
                     </Button>
                   )}
-                </div>
+                </ResourceState>
               )
             ) : (
               <>
                 <div
-                  className="admin-resource-table-wrap"
+                  className="hidden min-[901px]:block"
                   aria-busy={loading || refreshing}
                 >
-                  <table className="admin-resource-table">
+                  <Table>
                     <caption className="sr-only">
                       Danh sách phiếu gửi hàng
                     </caption>
-                    <thead>
-                      <tr>
-                        <th scope="col">Mã vận đơn</th>
-                        <th scope="col">Người gửi</th>
-                        <th scope="col">Điểm gửi</th>
-                        <th scope="col">Điểm nhận</th>
-                        <th scope="col">Trạng thái</th>
-                        <th scope="col">Ngày gửi</th>
-                        <th scope="col">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead scope="col">Mã vận đơn</TableHead>
+                        <TableHead scope="col">Người gửi</TableHead>
+                        <TableHead scope="col">Điểm gửi</TableHead>
+                        <TableHead scope="col">Điểm nhận</TableHead>
+                        <TableHead scope="col">Trạng thái</TableHead>
+                        <TableHead scope="col">Ngày gửi</TableHead>
+                        <TableHead scope="col">
                           <span className="sr-only">Thao tác</span>
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
                       {shipments.map((shipment) => (
-                        <tr key={shipment.shipmentId}>
-                          <td>
-                            <span className="shipments-waybill-code admin-data-mono">
+                        <TableRow key={shipment.shipmentId}>
+                          <TableCell>
+                            <span className="admin-data-mono break-all text-[13px] font-semibold">
                               {shipment.waybillCode}
                             </span>
-                          </td>
-                          <td>
+                          </TableCell>
+                          <TableCell>
                             <div>
                               <strong>{shipment.sender.fullName}</strong>
                               <br />
-                              <span className="shipments-phone admin-data-mono">
+                              <span className="text-xs text-muted-foreground">
                                 {shipment.sender.phoneNumber}
                               </span>
                             </div>
-                          </td>
-                          <td>
-                            <span className="shipments-route-point">
+                          </TableCell>
+                          <TableCell>
+                            <span className="block max-w-40 whitespace-normal">
                               {shipment.originPoint.name}
                             </span>
-                          </td>
-                          <td>
-                            <span className="shipments-route-point">
+                          </TableCell>
+                          <TableCell>
+                            <span className="block max-w-40 whitespace-normal">
                               {shipment.destinationPoint.name}
                             </span>
-                          </td>
-                          <td>
-                            <AdminStatusBadge
+                          </TableCell>
+                          <TableCell>
+                            <ResourceStatusBadge
                               tone={getShipmentStatusTone(shipment.status)}
                             >
                               {SHIPMENT_STATUS_LABELS[shipment.status] ??
                                 shipment.status}
-                            </AdminStatusBadge>
-                          </td>
-                          <td>{formatDateTime(shipment.sentAt)}</td>
-                          <td>
-                            <AdminDetailAction
+                            </ResourceStatusBadge>
+                          </TableCell>
+                          <TableCell>
+                            {formatDateTime(shipment.sentAt)}
+                          </TableCell>
+                          <TableCell>
+                            <ResourceDetailAction
                               resourceName={`phiếu gửi ${shipment.waybillCode}`}
                               onClick={() =>
                                 setSelectedShipmentId(shipment.shipmentId)
                               }
                             />
-                          </td>
-                        </tr>
+                          </TableCell>
+                        </TableRow>
                       ))}
-                    </tbody>
-                  </table>
+                    </TableBody>
+                  </Table>
                 </div>
 
                 {/* Mobile Card Fallback */}
                 <div
-                  className="shipments-mobile-list"
+                  className="grid gap-4 p-4 min-[901px]:hidden"
                   aria-label="Danh sách phiếu gửi hàng dạng thẻ"
                   aria-busy={loading || refreshing}
                 >
                   {shipments.map((shipment) => (
-                    <article
-                      key={shipment.shipmentId}
-                      className="shipments-mobile-card"
-                    >
-                      <div className="shipments-mobile-card-header">
+                    <Card key={shipment.shipmentId} className="gap-4 p-4">
+                      <div className="flex min-w-0 flex-wrap items-start justify-between gap-3 [&>div]:min-w-0">
                         <div>
-                          <span className="shipments-waybill-code admin-data-mono">
+                          <span className="admin-data-mono break-all text-[13px] font-semibold">
                             {shipment.waybillCode}
                           </span>
-                          <p className="shipments-mobile-date">
+                          <p className="mt-2 text-xs text-muted-foreground">
                             {formatDateTime(shipment.sentAt)}
                           </p>
                         </div>
-                        <AdminStatusBadge
+                        <ResourceStatusBadge
                           tone={getShipmentStatusTone(shipment.status)}
                         >
                           {SHIPMENT_STATUS_LABELS[shipment.status] ??
                             shipment.status}
-                        </AdminStatusBadge>
+                        </ResourceStatusBadge>
                       </div>
 
-                      <dl className="shipments-mobile-fields">
+                      <dl className="grid gap-3 text-[13px] [&>div]:grid [&>div]:grid-cols-[90px_minmax(0,1fr)] [&>div]:gap-3 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:min-w-0 [&_dd]:break-words">
                         <div>
                           <dt>Người gửi</dt>
                           <dd>
                             {shipment.sender.fullName} (
-                            <span className="admin-data-mono">
-                              {shipment.sender.phoneNumber}
-                            </span>
-                            )
+                            <span>{shipment.sender.phoneNumber}</span>)
                           </dd>
                         </div>
                         <div>
@@ -240,19 +248,19 @@ export function ShipmentsManagement() {
                         </div>
                       </dl>
 
-                      <div className="shipments-mobile-actions">
-                        <AdminDetailAction
+                      <div className="flex justify-end border-t pt-3">
+                        <ResourceDetailAction
                           resourceName={`phiếu gửi ${shipment.waybillCode}`}
                           onClick={() =>
                             setSelectedShipmentId(shipment.shipmentId)
                           }
                         />
                       </div>
-                    </article>
+                    </Card>
                   ))}
                 </div>
 
-                <AdminPagination
+                <ResourcePagination
                   currentPage={meta.page}
                   disabled={loading || refreshing}
                   onPageChange={setPage}

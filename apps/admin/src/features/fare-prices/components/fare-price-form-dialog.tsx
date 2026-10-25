@@ -1,9 +1,22 @@
 'use client';
 
-import { LoaderCircle, X } from 'lucide-react';
+import { ResourceSheetForm } from '@/components/admin/resource-sheet-form';
+
+import { LoaderCircle } from 'lucide-react';
+import { toast } from 'sonner';
 import { useRef, useState, type FormEvent } from 'react';
-import { AdminFormDialog } from '@/components/admin/admin-form-dialog';
-import { Button } from '@/components/ui/button';
+import { ResourceNotice, ResourceSheet } from '@/components/admin/resource-ui';
+import { Field, FieldLabel, FieldError } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Button } from '@/components/ui/action-button';
 import {
   createFarePrice,
   updateFarePrice,
@@ -17,7 +30,6 @@ import type {
   FarePriceOptionsState,
   FarePriceStatus,
 } from '../types/fare-price';
-import styles from '../fare-prices.module.css';
 
 type FarePriceFormDialogProps = {
   farePrice?: FarePrice;
@@ -54,7 +66,9 @@ const FIELD_NAMES: readonly FormField[] = [
 function isDateOnly(value: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const date = new Date(`${value}T00:00:00.000Z`);
-  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
+  return (
+    Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value
+  );
 }
 
 function mapServerFieldErrors(details: FarePriceApiErrorDetail[]): FieldErrors {
@@ -78,13 +92,26 @@ function validate(
   const vehicleTypeId = Number(values.vehicleTypeId);
   const listedPrice = Number(values.listedPrice);
 
-  if (!editing && (!Number.isSafeInteger(routeId) || routeId < 1 || routeOptions.status !== 'success' || routeOptions.options.length === 0)) {
+  if (
+    !editing &&
+    (!Number.isSafeInteger(routeId) ||
+      routeId < 1 ||
+      routeOptions.status !== 'success' ||
+      routeOptions.options.length === 0)
+  ) {
     errors.routeId = 'Vui lòng chọn tuyến xe.';
   }
-  if (!editing && (!Number.isSafeInteger(vehicleTypeId) || vehicleTypeId < 1 || vehicleTypeOptions.status !== 'success' || vehicleTypeOptions.options.length === 0)) {
+  if (
+    !editing &&
+    (!Number.isSafeInteger(vehicleTypeId) ||
+      vehicleTypeId < 1 ||
+      vehicleTypeOptions.status !== 'success' ||
+      vehicleTypeOptions.options.length === 0)
+  ) {
     errors.vehicleTypeId = 'Vui lòng chọn loại xe.';
   }
-  if (!values.listedPrice.trim()) errors.listedPrice = 'Vui lòng nhập giá niêm yết.';
+  if (!values.listedPrice.trim())
+    errors.listedPrice = 'Vui lòng nhập giá niêm yết.';
   else if (!Number.isSafeInteger(listedPrice) || listedPrice <= 0) {
     errors.listedPrice = 'Giá niêm yết phải là số nguyên VND lớn hơn 0.';
   }
@@ -93,10 +120,18 @@ function validate(
   }
   if (values.validTo && !isDateOnly(values.validTo)) {
     errors.validTo = 'Ngày kết thúc không hợp lệ.';
-  } else if (values.validTo && isDateOnly(values.validFrom) && values.validTo < values.validFrom) {
+  } else if (
+    values.validTo &&
+    isDateOnly(values.validFrom) &&
+    values.validTo < values.validFrom
+  ) {
     errors.validTo = 'Ngày kết thúc phải bằng hoặc sau ngày bắt đầu.';
   }
-  if (!editing && values.status !== 'HOAT_DONG' && values.status !== 'TAM_NGUNG') {
+  if (
+    !editing &&
+    values.status !== 'HOAT_DONG' &&
+    values.status !== 'TAM_NGUNG'
+  ) {
     errors.status = 'Vui lòng chọn trạng thái.';
   }
 
@@ -118,8 +153,10 @@ export function FarePriceFormDialog({
   onNotFound,
 }: FarePriceFormDialogProps) {
   const editing = farePrice !== undefined;
-  const idPrefix = editing ? `edit-fare-price-${farePrice.farePriceId}` : 'create-fare-price';
-  const dialogRef = useRef<HTMLDialogElement>(null);
+  const idPrefix = editing
+    ? `edit-fare-price-${farePrice.farePriceId}`
+    : 'create-fare-price';
+  const formRef = useRef<HTMLFormElement>(null);
   const submittingRef = useRef(false);
   const [values, setValues] = useState<FormValues>({
     routeId: farePrice ? String(farePrice.route.routeId) : '',
@@ -130,36 +167,42 @@ export function FarePriceFormDialog({
     status: farePrice?.status ?? '',
   });
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
-  const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   function closeDialog() {
-    if (!submittingRef.current) dialogRef.current?.close();
+    if (!submittingRef.current) onClose();
   }
 
   function updateField(field: FormField, value: string) {
+    // Lookup refreshes may re-announce the controlled Select value. A no-op
+    // change must not erase the server validation error for that selection.
+    if (values[field] === value) return;
     setValues((current) => ({ ...current, [field]: value }));
     setFieldErrors((current) => ({
       ...current,
       [field]: undefined,
       ...(field === 'validFrom' ? { validTo: undefined } : {}),
     }));
-    setFormError(null);
   }
 
-  function setRelationError(field: 'routeId' | 'vehicleTypeId', message: string) {
+  function setRelationError(
+    field: 'routeId' | 'vehicleTypeId',
+    message: string,
+  ) {
     setFieldErrors((current) => ({ ...current, [field]: message }));
-    setFormError(null);
+    focusFirstInvalid();
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (submittingRef.current) return;
 
-    setFormError(null);
     const errors = validate(values, routeOptions, vehicleTypeOptions, editing);
     setFieldErrors(errors);
-    if (Object.keys(errors).length > 0) return;
+    if (Object.keys(errors).length > 0) {
+      focusFirstInvalid();
+      return;
+    }
 
     submittingRef.current = true;
     setSubmitting(true);
@@ -183,35 +226,50 @@ export function FarePriceFormDialog({
         };
         savedFarePrice = await createFarePrice(input);
       }
-      dialogRef.current?.close();
       onSaved(savedFarePrice);
     } catch (requestError: unknown) {
       if (requestError instanceof FarePriceApiError) {
         if (requestError.code === 'FARE_PRICE_OVERLAP') {
-          setFormError(
+          toast.error(
             'Khoảng hiệu lực này bị trùng với một bảng giá đang hoạt động của cùng tuyến và loại xe.',
           );
         } else if (requestError.code === 'ROUTE_NOT_FOUND') {
-          setRelationError('routeId', 'Tuyến xe không còn tồn tại. Vui lòng chọn lại.');
+          setRelationError(
+            'routeId',
+            'Tuyến xe không còn tồn tại. Vui lòng chọn lại.',
+          );
           onRetryRouteOptions();
         } else if (requestError.code === 'VEHICLE_TYPE_NOT_FOUND') {
-          setRelationError('vehicleTypeId', 'Loại xe không còn tồn tại. Vui lòng chọn lại.');
+          setRelationError(
+            'vehicleTypeId',
+            'Loại xe không còn tồn tại. Vui lòng chọn lại.',
+          );
           onRetryVehicleTypeOptions();
         } else if (requestError.code === 'FARE_PRICE_CONCURRENT_MODIFICATION') {
-          setFormError('Dữ liệu bảng giá vừa thay đổi đồng thời. Vui lòng tải lại và thử lại.');
+          toast.error(
+            'Dữ liệu bảng giá vừa thay đổi đồng thời. Vui lòng tải lại và thử lại.',
+          );
         } else if (requestError.code === 'FARE_PRICE_NOT_FOUND' && editing) {
           onNotFound?.();
         } else {
           const serverErrors = mapServerFieldErrors(requestError.details);
           setFieldErrors(serverErrors);
-          if (Object.keys(serverErrors).length === 0 || Object.keys(serverErrors).length !== requestError.details.length) {
-            setFormError(requestError.message);
+          focusFirstInvalid();
+          if (
+            Object.keys(serverErrors).length === 0 ||
+            Object.keys(serverErrors).length !== requestError.details.length
+          ) {
+            toast.error(requestError.message);
           }
         }
       } else if (requestError instanceof TypeError) {
-        setFormError('Không thể kết nối đến máy chủ API. Vui lòng thử lại.');
+        toast.error('Không thể kết nối đến máy chủ API. Vui lòng thử lại.');
       } else {
-        setFormError(editing ? 'Không thể cập nhật bảng giá. Vui lòng thử lại.' : 'Không thể tạo bảng giá. Vui lòng thử lại.');
+        toast.error(
+          editing
+            ? 'Không thể cập nhật bảng giá. Vui lòng thử lại.'
+            : 'Không thể tạo bảng giá. Vui lòng thử lại.',
+        );
       }
     } finally {
       submittingRef.current = false;
@@ -219,198 +277,294 @@ export function FarePriceFormDialog({
     }
   }
 
-  function fieldError(field: FormField, id: string) {
-    return fieldErrors[field]
-      ? <span className="admin-crud-form-field-error" id={id}>{fieldErrors[field]}</span>
-      : null;
+  function focusFirstInvalid() {
+    requestAnimationFrame(() =>
+      formRef.current
+        ?.querySelector<HTMLElement>('[aria-invalid="true"]:not(:disabled)')
+        ?.focus(),
+    );
   }
-
   const routeRows = optionRows(routeOptions);
   const vehicleTypeRows = optionRows(vehicleTypeOptions);
-  const routeUnavailable = !editing && (routeOptions.status !== 'success' || routeRows.length === 0);
-  const vehicleTypeUnavailable = !editing && (vehicleTypeOptions.status !== 'success' || vehicleTypeRows.length === 0);
+  const routeUnavailable =
+    !editing && (routeOptions.status !== 'success' || routeRows.length === 0);
+  const vehicleTypeUnavailable =
+    !editing &&
+    (vehicleTypeOptions.status !== 'success' || vehicleTypeRows.length === 0);
 
+  function selectField(
+    field: 'routeId' | 'vehicleTypeId' | 'status',
+    label: string,
+    placeholder: string,
+    rows: { value: string; label: string }[],
+    disabled: boolean,
+  ) {
+    return (
+      <Field data-invalid={Boolean(fieldErrors[field])}>
+        <FieldLabel htmlFor={`${idPrefix}-${field}`}>
+          {label} <span aria-hidden>*</span>
+        </FieldLabel>
+        <Select
+          disabled={disabled}
+          value={values[field] || null}
+          onValueChange={(value, details) => {
+            // Base UI clears an unmatched selection while lookup items unmount.
+            // That synchronization is not a user edit and must retain the
+            // selected ID and its server error until another option is chosen.
+            if (value === null && details.reason === 'none') {
+              details.cancel();
+              return;
+            }
+            updateField(field, String(value ?? ''));
+          }}
+        >
+          <SelectTrigger
+            id={`${idPrefix}-${field}`}
+            aria-label={label}
+            aria-required="true"
+            aria-invalid={Boolean(fieldErrors[field])}
+            aria-describedby={
+              fieldErrors[field] ? `${idPrefix}-${field}-error` : undefined
+            }
+          >
+            <SelectValue placeholder={placeholder}>
+              {rows.find((row) => row.value === values[field])?.label ??
+                placeholder}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectGroup>
+              {rows.map((row) => (
+                <SelectItem value={row.value} key={row.value}>
+                  {row.label}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          </SelectContent>
+        </Select>
+        <FieldError id={`${idPrefix}-${field}-error`}>
+          {fieldErrors[field]}
+        </FieldError>
+      </Field>
+    );
+  }
   return (
-    <AdminFormDialog
-      ariaBusy={submitting}
-      ariaDescribedBy={`${idPrefix}-description`}
-      ariaLabelledBy={`${idPrefix}-title`}
-      dialogRef={dialogRef}
-      onClose={onClose}
+    <ResourceSheet
+      title={editing ? 'Chỉnh sửa bảng giá' : 'Thêm bảng giá'}
+      description={
+        editing
+          ? 'Cập nhật giá niêm yết và thời gian hiệu lực của bảng giá.'
+          : 'Thiết lập giá vé theo tuyến, loại xe và thời gian hiệu lực.'
+      }
+      busy={submitting}
       preventDismiss={submitting}
+      onClose={closeDialog}
     >
-      <>
-        <div className="admin-dialog-header">
-          <div className="admin-dialog-header__copy">
-            <p className="eyebrow">BẢNG GIÁ VÉ</p>
-            <h2 id={`${idPrefix}-title`}>{editing ? 'Chỉnh sửa bảng giá' : 'Thêm bảng giá'}</h2>
-            <p id={`${idPrefix}-description`}>
-              {editing
-                ? 'Cập nhật giá niêm yết và thời gian hiệu lực của bảng giá.'
-                : 'Thiết lập giá vé theo tuyến, loại xe và thời gian hiệu lực.'}
+      <ResourceSheetForm
+        ref={formRef}
+        noValidate
+        onSubmit={handleSubmit}
+        footer={
+          <div className="-mx-4 flex justify-end gap-3 border-t bg-popover px-4 py-4 sm:-mx-6 sm:px-6 shrink-0">
+            <Button disabled={submitting} variant="outline" onClick={closeDialog}>
+              Hủy
+            </Button>
+            <Button
+              disabled={submitting || routeUnavailable || vehicleTypeUnavailable}
+              aria-busy={submitting}
+              type="submit"
+            >
+              {submitting && (
+                <LoaderCircle aria-hidden className="motion-safe:animate-spin" />
+              )}
+              {submitting
+                ? editing
+                  ? 'Đang lưu…'
+                  : 'Đang tạo…'
+                : editing
+                  ? 'Lưu thay đổi'
+                  : 'Tạo bảng giá'}
+            </Button>
+          </div>
+        }
+      >
+        {editing && (
+          <div className="space-y-1 rounded-[var(--admin-radius-panel)] border bg-muted/40 p-4 text-[13px]">
+            <strong className="admin-data-mono">{farePrice.route.code}</strong>
+            <p className="break-words">
+              {farePrice.route.origin} → {farePrice.route.destination}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {farePrice.vehicleType.name} ·{' '}
+              {farePrice.status === 'HOAT_DONG' ? 'Hoạt động' : 'Tạm ngưng'}
             </p>
           </div>
-          <Button
-            aria-label={editing ? 'Đóng biểu mẫu chỉnh sửa bảng giá' : 'Đóng biểu mẫu thêm bảng giá'}
-            className="icon-button"
+        )}
+        {!editing && (
+          <>
+            {selectField(
+              'routeId',
+              'Tuyến xe',
+              'Chọn tuyến xe',
+              routeRows.map((row) => ({
+                value: String(row.id),
+                label: row.label,
+              })),
+              submitting || routeUnavailable,
+            )}
+            {routeOptions.status === 'loading' && (
+              <p className="text-xs text-muted-foreground" role="status">
+                Đang tải danh sách tuyến xe…
+              </p>
+            )}
+            {routeOptions.status === 'error' && (
+              <ResourceNotice kind="error">
+                <p>Không thể tải danh sách tuyến xe.</p>
+                <Button
+                  disabled={submitting}
+                  className="mt-2"
+                  variant="outline"
+                  size="sm"
+                  onClick={onRetryRouteOptions}
+                >
+                  Thử lại tuyến xe
+                </Button>
+              </ResourceNotice>
+            )}
+            {routeOptions.status === 'success' && routeRows.length === 0 && (
+              <ResourceNotice kind="error">
+                Chưa có tuyến xe để tạo bảng giá.
+              </ResourceNotice>
+            )}
+            {selectField(
+              'vehicleTypeId',
+              'Loại xe',
+              'Chọn loại xe',
+              vehicleTypeRows.map((row) => ({
+                value: String(row.id),
+                label: row.label,
+              })),
+              submitting || vehicleTypeUnavailable,
+            )}
+            {vehicleTypeOptions.status === 'loading' && (
+              <p className="text-xs text-muted-foreground" role="status">
+                Đang tải danh sách loại xe…
+              </p>
+            )}
+            {vehicleTypeOptions.status === 'error' && (
+              <ResourceNotice kind="error">
+                <p>Không thể tải danh sách loại xe.</p>
+                <Button
+                  disabled={submitting}
+                  className="mt-2"
+                  variant="outline"
+                  size="sm"
+                  onClick={onRetryVehicleTypeOptions}
+                >
+                  Thử lại loại xe
+                </Button>
+              </ResourceNotice>
+            )}
+            {vehicleTypeOptions.status === 'success' &&
+              vehicleTypeRows.length === 0 && (
+                <ResourceNotice kind="error">
+                  Chưa có loại xe để tạo bảng giá.
+                </ResourceNotice>
+              )}
+          </>
+        )}
+        <Field data-invalid={Boolean(fieldErrors.listedPrice)}>
+          <FieldLabel htmlFor={`${idPrefix}-listedPrice`}>
+            Giá niêm yết (VND) <span aria-hidden>*</span>
+          </FieldLabel>
+          <Input
+            id={`${idPrefix}-listedPrice`}
+            aria-describedby={
+              fieldErrors.listedPrice
+                ? `${idPrefix}-listedPrice-error`
+                : undefined
+            }
+            aria-invalid={Boolean(fieldErrors.listedPrice)}
+            autoComplete="off"
             disabled={submitting}
-            onClick={closeDialog}
-            type="button"
-            variant="secondary"
-          >
-            <X aria-hidden="true" size={19} />
-          </Button>
-        </div>
-
-        <form className="admin-crud-form" noValidate onSubmit={handleSubmit}>
-          {formError && <p className="admin-crud-form-error" role="alert">{formError}</p>}
-
-          {editing && (
-            <div className="admin-crud-form-context">
-              <strong>
-                <span className="admin-data-mono">{farePrice.route.code}</span>{' '}
-                — {farePrice.route.origin} → {farePrice.route.destination}
-              </strong>
-              <span>Loại xe: {farePrice.vehicleType.name}</span>
-              <span>Trạng thái: {farePrice.status === 'HOAT_DONG' ? 'Hoạt động' : 'Tạm ngưng'}</span>
-            </div>
-          )}
-
-          {!editing && <div className="admin-crud-form-field">
-            <label htmlFor={`${idPrefix}-routeId`}>Tuyến xe *</label>
-            <select
-              aria-describedby={fieldErrors.routeId ? `${idPrefix}-routeId-error` : undefined}
-              aria-invalid={Boolean(fieldErrors.routeId)}
-              disabled={submitting || routeUnavailable}
-              id={`${idPrefix}-routeId`}
-              onChange={(event) => updateField('routeId', event.target.value)}
-              required
-              value={values.routeId}
-            >
-              <option value="">Chọn tuyến xe</option>
-              {routeRows.map((option) => (
-                <option key={option.id} value={option.id}>{option.label}</option>
-              ))}
-            </select>
-            {fieldError('routeId', `${idPrefix}-routeId-error`)}
-          </div>}
-          {!editing && routeOptions.status === 'loading' && <p role="status">Đang tải danh sách tuyến xe…</p>}
-          {!editing && routeOptions.status === 'error' && (
-            <div className="admin-crud-form-error" role="alert">
-              <p>Không thể tải danh sách tuyến xe.</p>
-              <Button onClick={onRetryRouteOptions} type="button" variant="secondary">Thử lại tuyến xe</Button>
-            </div>
-          )}
-          {!editing && routeOptions.status === 'success' && routeRows.length === 0 && (
-            <p className="admin-crud-form-error" role="alert">Chưa có tuyến xe để tạo bảng giá.</p>
-          )}
-
-          {!editing && <div className="admin-crud-form-field">
-            <label htmlFor={`${idPrefix}-vehicleTypeId`}>Loại xe *</label>
-            <select
-              aria-describedby={fieldErrors.vehicleTypeId ? `${idPrefix}-vehicleTypeId-error` : undefined}
-              aria-invalid={Boolean(fieldErrors.vehicleTypeId)}
-              disabled={submitting || vehicleTypeUnavailable}
-              id={`${idPrefix}-vehicleTypeId`}
-              onChange={(event) => updateField('vehicleTypeId', event.target.value)}
-              required
-              value={values.vehicleTypeId}
-            >
-              <option value="">Chọn loại xe</option>
-              {vehicleTypeRows.map((option) => (
-                <option key={option.id} value={option.id}>{option.label}</option>
-              ))}
-            </select>
-            {fieldError('vehicleTypeId', `${idPrefix}-vehicleTypeId-error`)}
-          </div>}
-          {!editing && vehicleTypeOptions.status === 'loading' && <p role="status">Đang tải danh sách loại xe…</p>}
-          {!editing && vehicleTypeOptions.status === 'error' && (
-            <div className="admin-crud-form-error" role="alert">
-              <p>Không thể tải danh sách loại xe.</p>
-              <Button onClick={onRetryVehicleTypeOptions} type="button" variant="secondary">Thử lại loại xe</Button>
-            </div>
-          )}
-          {!editing && vehicleTypeOptions.status === 'success' && vehicleTypeRows.length === 0 && (
-            <p className="admin-crud-form-error" role="alert">Chưa có loại xe để tạo bảng giá.</p>
-          )}
-
-          <div className="admin-crud-form-field">
-            <label htmlFor={`${idPrefix}-listedPrice`}>Giá niêm yết (VND) *</label>
-            <input
-              aria-describedby={fieldErrors.listedPrice ? `${idPrefix}-listedPrice-error` : undefined}
-              aria-invalid={Boolean(fieldErrors.listedPrice)}
-              autoComplete="off"
-              disabled={submitting}
-              id={`${idPrefix}-listedPrice`}
-              inputMode="numeric"
-              min="1"
-              onChange={(event) => updateField('listedPrice', event.target.value)}
-              required
-              step="1"
-              type="number"
-              value={values.listedPrice}
-            />
-            {fieldError('listedPrice', `${idPrefix}-listedPrice-error`)}
-          </div>
-
-          <div className="admin-crud-form-field">
-            <label htmlFor={`${idPrefix}-validFrom`}>Hiệu lực từ *</label>
-            <input
-              aria-describedby={fieldErrors.validFrom ? `${idPrefix}-validFrom-error` : undefined}
+            inputMode="numeric"
+            min="1"
+            step="1"
+            required
+            type="number"
+            value={values.listedPrice}
+            onChange={(event) => updateField('listedPrice', event.target.value)}
+          />
+          <FieldError id={`${idPrefix}-listedPrice-error`}>
+            {fieldErrors.listedPrice}
+          </FieldError>
+        </Field>
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+          <Field data-invalid={Boolean(fieldErrors.validFrom)}>
+            <FieldLabel htmlFor={`${idPrefix}-validFrom`}>
+              Hiệu lực từ <span aria-hidden>*</span>
+            </FieldLabel>
+            <Input
+              id={`${idPrefix}-validFrom`}
+              aria-describedby={
+                fieldErrors.validFrom
+                  ? `${idPrefix}-validFrom-error`
+                  : undefined
+              }
               aria-invalid={Boolean(fieldErrors.validFrom)}
               disabled={submitting}
-              id={`${idPrefix}-validFrom`}
-              onChange={(event) => updateField('validFrom', event.target.value)}
               required
               type="date"
               value={values.validFrom}
+              onChange={(event) => updateField('validFrom', event.target.value)}
             />
-            {fieldError('validFrom', `${idPrefix}-validFrom-error`)}
-          </div>
-
-          <div className="admin-crud-form-field">
-            <label htmlFor={`${idPrefix}-validTo`}>Hiệu lực đến</label>
-            <input
-              aria-describedby={fieldErrors.validTo ? `${idPrefix}-validTo-error` : `${idPrefix}-validTo-hint`}
+            <FieldError id={`${idPrefix}-validFrom-error`}>
+              {fieldErrors.validFrom}
+            </FieldError>
+          </Field>
+          <Field data-invalid={Boolean(fieldErrors.validTo)}>
+            <FieldLabel htmlFor={`${idPrefix}-validTo`}>
+              Hiệu lực đến
+            </FieldLabel>
+            <Input
+              id={`${idPrefix}-validTo`}
+              aria-describedby={
+                fieldErrors.validTo
+                  ? `${idPrefix}-validTo-error`
+                  : `${idPrefix}-validTo-hint`
+              }
               aria-invalid={Boolean(fieldErrors.validTo)}
               disabled={submitting}
-              id={`${idPrefix}-validTo`}
               min={values.validFrom || undefined}
-              onChange={(event) => updateField('validTo', event.target.value)}
               type="date"
               value={values.validTo}
+              onChange={(event) => updateField('validTo', event.target.value)}
             />
-            {fieldError('validTo', `${idPrefix}-validTo-error`)}
-            {!fieldErrors.validTo && <span className={styles.fieldHint} id={`${idPrefix}-validTo-hint`}>Để trống nếu không giới hạn ngày kết thúc.</span>}
-          </div>
-
-          {!editing && <div className="admin-crud-form-field">
-            <label htmlFor={`${idPrefix}-status`}>Trạng thái *</label>
-            <select
-              aria-describedby={fieldErrors.status ? `${idPrefix}-status-error` : undefined}
-              aria-invalid={Boolean(fieldErrors.status)}
-              disabled={submitting}
-              id={`${idPrefix}-status`}
-              onChange={(event) => updateField('status', event.target.value)}
-              required
-              value={values.status}
-            >
-              <option value="">Chọn trạng thái</option>
-              <option value="HOAT_DONG">Hoạt động</option>
-              <option value="TAM_NGUNG">Tạm ngưng</option>
-            </select>
-            {fieldError('status', `${idPrefix}-status-error`)}
-          </div>}
-
-          <div className="admin-crud-form-actions">
-            <Button disabled={submitting} onClick={closeDialog} type="button" variant="secondary">Hủy</Button>
-            <Button disabled={submitting || routeUnavailable || vehicleTypeUnavailable} type="submit">
-              {submitting && <LoaderCircle aria-hidden="true" className="admin-crud-form-spinner" size={16} />}
-              {submitting ? (editing ? 'Đang lưu…' : 'Đang tạo…') : (editing ? 'Lưu thay đổi' : 'Tạo bảng giá')}
-            </Button>
-          </div>
-        </form>
-      </>
-    </AdminFormDialog>
+            <FieldError id={`${idPrefix}-validTo-error`}>
+              {fieldErrors.validTo}
+            </FieldError>
+            {!fieldErrors.validTo && (
+              <p
+                className="text-xs text-muted-foreground"
+                id={`${idPrefix}-validTo-hint`}
+              >
+                Để trống nếu không giới hạn ngày kết thúc.
+              </p>
+            )}
+          </Field>
+        </div>
+        {!editing &&
+          selectField(
+            'status',
+            'Trạng thái',
+            'Chọn trạng thái',
+            [
+              { value: 'HOAT_DONG', label: 'Hoạt động' },
+              { value: 'TAM_NGUNG', label: 'Tạm ngưng' },
+            ],
+            submitting,
+          )}
+      </ResourceSheetForm>
+    </ResourceSheet>
   );
 }

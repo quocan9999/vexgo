@@ -29,7 +29,7 @@ export function formatCompactRevenueVnd(value: bigint): string {
   for (const unit of units) {
     if (absolute >= unit.divisor) {
       const whole = absolute / unit.divisor;
-      const tenth = (absolute % unit.divisor) * BigInt(10) / unit.divisor;
+      const tenth = ((absolute % unit.divisor) * BigInt(10)) / unit.divisor;
       const amount = `${vietnameseInteger.format(whole)}${tenth > BigInt(0) ? `,${tenth}` : ''}`;
       return `${sign}${amount} ${unit.label} ₫`;
     }
@@ -40,7 +40,7 @@ export function formatCompactRevenueVnd(value: bigint): string {
 
 export function formatDateOnly(value: string): string {
   const [year, month, day] = value.split('-');
-  return year && month && day ? `${day}/${month}/${year}` : value;
+  return year && month && day ? `${day}-${month}-${year}` : value;
 }
 
 export function formatPeriod(

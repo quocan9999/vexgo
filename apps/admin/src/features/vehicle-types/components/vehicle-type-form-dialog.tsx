@@ -1,9 +1,15 @@
 'use client';
 
-import { LoaderCircle, X } from 'lucide-react';
+import { ResourceSheetForm } from '@/components/admin/resource-sheet-form';
+
+import { LoaderCircle } from 'lucide-react';
+import { toast } from 'sonner';
 import { useRef, useState, type FormEvent } from 'react';
-import { AdminFormDialog } from '@/components/admin/admin-form-dialog';
-import { Button } from '@/components/ui/button';
+import { ResourceNotice, ResourceSheet } from '@/components/admin/resource-ui';
+import { Field, FieldLabel, FieldError } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Button } from '@/components/ui/action-button';
 import { useAdminSession } from '@/features/admin-auth/hooks/use-admin-session';
 import {
   createVehicleType,
@@ -57,7 +63,7 @@ export function VehicleTypeFormDialog({
   const idPrefix = editing
     ? `edit-vehicle-type-${vehicleType.vehicleTypeId}`
     : 'create-vehicle-type';
-  const dialogRef = useRef<HTMLDialogElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
   const submittingRef = useRef(false);
   const [values, setValues] = useState<FormValues>(() => ({
     name: vehicleType?.name ?? '',
@@ -76,10 +82,13 @@ export function VehicleTypeFormDialog({
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const authState = useAdminSession();
-  const tenantId = authState.status === 'authenticated' ? authState.session.busCompanyId : null;
+  const tenantId =
+    authState.status === 'authenticated'
+      ? authState.session.busCompanyId
+      : null;
 
   function closeDialog() {
-    if (!submittingRef.current) dialogRef.current?.close();
+    if (!submittingRef.current) onClose();
   }
 
   function updateField(field: FormField, value: string) {
@@ -127,12 +136,17 @@ export function VehicleTypeFormDialog({
 
     setFormError(null);
     if (!editing && !tenantId) {
-      setFormError('Không xác định được nhà xe của tài khoản. Vui lòng đăng nhập lại.');
+      setFormError(
+        'Không xác định được nhà xe của tài khoản. Vui lòng đăng nhập lại.',
+      );
       return;
     }
     const errors = validate();
     setFieldErrors(errors);
-    if (Object.keys(errors).length > 0) return;
+    if (Object.keys(errors).length > 0) {
+      focusFirstInvalid();
+      return;
+    }
 
     submittingRef.current = true;
     setSubmitting(true);
@@ -151,32 +165,33 @@ export function VehicleTypeFormDialog({
             ...editableFields,
             busCompanyId: tenantId!,
           });
-      dialogRef.current?.close();
       onSaved(savedVehicleType);
     } catch (requestError: unknown) {
       if (requestError instanceof VehicleTypeApiError) {
         if (requestError.code === 'VEHICLE_TYPE_NAME_EXISTS') {
           setFieldErrors({ name: requestError.message });
           setFormError(null);
+          focusFirstInvalid();
         } else {
           const serverErrors = fieldErrorsFromDetails(requestError.details);
           const detailsAreMapped =
             requestError.details.length > 0 &&
             requestError.details.every(
               (detail) =>
-                          detail.field === 'name' ||
+                detail.field === 'name' ||
                 detail.field === 'description' ||
                 detail.field === 'motorbikeCapacityDefault' ||
                 detail.field === 'bulkyCargoCapacityDefault' ||
                 detail.field === 'lightCargoCapacityDefault',
             );
           setFieldErrors(serverErrors);
-          setFormError(detailsAreMapped ? null : requestError.message);
+          if (!detailsAreMapped) toast.error(requestError.message);
+          focusFirstInvalid();
         }
       } else if (requestError instanceof TypeError) {
-        setFormError('Không thể kết nối đến máy chủ API. Vui lòng thử lại.');
+        toast.error('Không thể kết nối đến máy chủ API. Vui lòng thử lại.');
       } else {
-        setFormError(
+        toast.error(
           requestError instanceof Error
             ? requestError.message
             : editing
@@ -190,216 +205,38 @@ export function VehicleTypeFormDialog({
     }
   }
 
+  function focusFirstInvalid() {
+    requestAnimationFrame(() =>
+      formRef.current
+        ?.querySelector<HTMLElement>('[aria-invalid="true"]')
+        ?.focus(),
+    );
+  }
+
   return (
-    <AdminFormDialog
-      ariaBusy={submitting}
-      ariaDescribedBy={`${idPrefix}-dialog-description`}
-      ariaLabelledBy={`${idPrefix}-title`}
-      dialogRef={dialogRef}
-      onClose={onClose}
+    <ResourceSheet
+      title={editing ? 'Chỉnh sửa loại xe' : 'Thêm loại xe'}
+      description={
+        editing
+          ? 'Cập nhật thông tin và sức chứa hàng mặc định.'
+          : 'Nhập thông tin và sức chứa hàng mặc định cho loại xe mới.'
+      }
+      busy={submitting}
       preventDismiss={submitting}
+      onClose={closeDialog}
     >
-      <>
-        <div className="admin-dialog-header">
-          <div className="admin-dialog-header__copy">
-            <p className="eyebrow">DANH MỤC PHƯƠNG TIỆN</p>
-            <h2 id={`${idPrefix}-title`}>
-              {editing ? 'Chỉnh sửa loại xe' : 'Thêm loại xe'}
-            </h2>
-            <p id={`${idPrefix}-dialog-description`}>
-              {editing
-                ? 'Cập nhật tên và mô tả của loại xe.'
-                : 'Nhập tên và mô tả cho loại xe mới.'}
-            </p>
-          </div>
-          <Button
-            aria-label={
-              editing
-                ? 'Đóng biểu mẫu chỉnh sửa loại xe'
-                : 'Đóng biểu mẫu thêm loại xe'
-            }
-            className="icon-button"
-            disabled={submitting}
-            onClick={closeDialog}
-            type="button"
-            variant="secondary"
-          >
-            <X aria-hidden="true" size={19} />
-          </Button>
-        </div>
-
-        <form className="vehicle-type-form" noValidate onSubmit={handleSubmit}>
-          {formError && (
-            <div className="vehicle-type-form-error" role="alert">
-              {formError}
-            </div>
-          )}
-
-          <div className="vehicle-type-form-field">
-            <label htmlFor={`${idPrefix}-name`}>Tên loại xe *</label>
-            <input
-              autoComplete="off"
-              aria-describedby={
-                fieldErrors.name ? `${idPrefix}-name-error` : undefined
-              }
-              aria-invalid={Boolean(fieldErrors.name)}
-              disabled={submitting}
-              id={`${idPrefix}-name`}
-              maxLength={100}
-              onChange={(event) => updateField('name', event.target.value)}
-              required
-              type="text"
-              value={values.name}
-            />
-            {fieldErrors.name && (
-              <span
-                className="vehicle-type-form-field-error"
-                id={`${idPrefix}-name-error`}
-              >
-                {fieldErrors.name}
-              </span>
-            )}
-          </div>
-
-          <div className="vehicle-type-form-field">
-            <label htmlFor={`${idPrefix}-description`}>Mô tả</label>
-            <textarea
-              aria-describedby={
-                fieldErrors.description
-                  ? `${idPrefix}-description-error`
-                  : undefined
-              }
-              aria-invalid={Boolean(fieldErrors.description)}
-              disabled={submitting}
-              id={`${idPrefix}-description`}
-              maxLength={500}
-              onChange={(event) =>
-                updateField('description', event.target.value)
-              }
-              rows={4}
-              value={values.description}
-            />
-            {fieldErrors.description && (
-              <span
-                className="vehicle-type-form-field-error"
-                id={`${idPrefix}-description-error`}
-              >
-                {fieldErrors.description}
-              </span>
-            )}
-          </div>
-
-          <fieldset className="vehicle-type-capacity-group">
-            <legend>Sức chứa hàng mặc định</legend>
-            <p
-              className="vehicle-type-capacity-help"
-              id={`${idPrefix}-capacity-help`}
-            >
-              Các giá trị này được dùng làm sức chứa mặc định khi tạo chuyến
-              mới. Thay đổi tại đây không cập nhật sức chứa của các chuyến đã
-              tồn tại.
-            </p>
-            <div className="vehicle-type-capacity-fields">
-              <div className="vehicle-type-form-field">
-                <label htmlFor={`${idPrefix}-motorbikeCapacityDefault`}>
-                  Xe máy
-                </label>
-                <input
-                  aria-describedby={`${idPrefix}-capacity-help${fieldErrors.motorbikeCapacityDefault ? ` ${idPrefix}-motorbikeCapacityDefault-error` : ''}`}
-                  aria-invalid={Boolean(fieldErrors.motorbikeCapacityDefault)}
-                  disabled={submitting}
-                  id={`${idPrefix}-motorbikeCapacityDefault`}
-                  max={2_147_483_647}
-                  min={0}
-                  onChange={(event) =>
-                    updateField('motorbikeCapacityDefault', event.target.value)
-                  }
-                  step={1}
-                  type="number"
-                  value={values.motorbikeCapacityDefault}
-                />
-                {fieldErrors.motorbikeCapacityDefault && (
-                  <span
-                    className="vehicle-type-form-field-error"
-                    id={`${idPrefix}-motorbikeCapacityDefault-error`}
-                  >
-                    {fieldErrors.motorbikeCapacityDefault}
-                  </span>
-                )}
-              </div>
-              <div className="vehicle-type-form-field">
-                <label htmlFor={`${idPrefix}-bulkyCargoCapacityDefault`}>
-                  Hàng cồng kềnh
-                </label>
-                <input
-                  aria-describedby={`${idPrefix}-capacity-help${fieldErrors.bulkyCargoCapacityDefault ? ` ${idPrefix}-bulkyCargoCapacityDefault-error` : ''}`}
-                  aria-invalid={Boolean(fieldErrors.bulkyCargoCapacityDefault)}
-                  disabled={submitting}
-                  id={`${idPrefix}-bulkyCargoCapacityDefault`}
-                  max={2_147_483_647}
-                  min={0}
-                  onChange={(event) =>
-                    updateField('bulkyCargoCapacityDefault', event.target.value)
-                  }
-                  step={1}
-                  type="number"
-                  value={values.bulkyCargoCapacityDefault}
-                />
-                {fieldErrors.bulkyCargoCapacityDefault && (
-                  <span
-                    className="vehicle-type-form-field-error"
-                    id={`${idPrefix}-bulkyCargoCapacityDefault-error`}
-                  >
-                    {fieldErrors.bulkyCargoCapacityDefault}
-                  </span>
-                )}
-              </div>
-              <div className="vehicle-type-form-field">
-                <label htmlFor={`${idPrefix}-lightCargoCapacityDefault`}>
-                  Hàng nhẹ
-                </label>
-                <input
-                  aria-describedby={`${idPrefix}-capacity-help${fieldErrors.lightCargoCapacityDefault ? ` ${idPrefix}-lightCargoCapacityDefault-error` : ''}`}
-                  aria-invalid={Boolean(fieldErrors.lightCargoCapacityDefault)}
-                  disabled={submitting}
-                  id={`${idPrefix}-lightCargoCapacityDefault`}
-                  max={2_147_483_647}
-                  min={0}
-                  onChange={(event) =>
-                    updateField('lightCargoCapacityDefault', event.target.value)
-                  }
-                  step={1}
-                  type="number"
-                  value={values.lightCargoCapacityDefault}
-                />
-                {fieldErrors.lightCargoCapacityDefault && (
-                  <span
-                    className="vehicle-type-form-field-error"
-                    id={`${idPrefix}-lightCargoCapacityDefault-error`}
-                  >
-                    {fieldErrors.lightCargoCapacityDefault}
-                  </span>
-                )}
-              </div>
-            </div>
-          </fieldset>
-
-          <div className="vehicle-type-form-actions">
-            <Button
-              disabled={submitting}
-              onClick={closeDialog}
-              type="button"
-              variant="secondary"
-            >
+      <ResourceSheetForm
+        ref={formRef}
+        noValidate
+        onSubmit={handleSubmit}
+        footer={
+          <div className="-mx-4 flex justify-end gap-3 border-t bg-popover px-4 py-4 sm:-mx-6 sm:px-6 shrink-0">
+            <Button disabled={submitting} onClick={closeDialog} variant="outline">
               Hủy
             </Button>
-            <Button disabled={submitting} type="submit">
+            <Button aria-busy={submitting} disabled={submitting} type="submit">
               {submitting && (
-                <LoaderCircle
-                  aria-hidden="true"
-                  className="vehicle-type-form-spinner"
-                  size={16}
-                />
+                <LoaderCircle aria-hidden className="motion-safe:animate-spin" />
               )}
               {submitting
                 ? 'Đang lưu…'
@@ -408,8 +245,95 @@ export function VehicleTypeFormDialog({
                   : 'Tạo loại xe'}
             </Button>
           </div>
-        </form>
-      </>
-    </AdminFormDialog>
+        }
+      >
+        {formError && <ResourceNotice kind="error">{formError}</ResourceNotice>}
+        <Field data-invalid={Boolean(fieldErrors.name)}>
+          <FieldLabel htmlFor={`${idPrefix}-name`}>
+            Tên loại xe <span aria-hidden>*</span>
+          </FieldLabel>
+          <Input
+            autoComplete="off"
+            aria-describedby={
+              fieldErrors.name ? `${idPrefix}-name-error` : undefined
+            }
+            aria-invalid={Boolean(fieldErrors.name)}
+            disabled={submitting}
+            id={`${idPrefix}-name`}
+            maxLength={100}
+            onChange={(event) => updateField('name', event.target.value)}
+            required
+            type="text"
+            value={values.name}
+          />
+          <FieldError id={`${idPrefix}-name-error`}>
+            {fieldErrors.name}
+          </FieldError>
+        </Field>
+        <Field data-invalid={Boolean(fieldErrors.description)}>
+          <FieldLabel htmlFor={`${idPrefix}-description`}>Mô tả</FieldLabel>
+          <Textarea
+            aria-describedby={
+              fieldErrors.description
+                ? `${idPrefix}-description-error`
+                : undefined
+            }
+            aria-invalid={Boolean(fieldErrors.description)}
+            disabled={submitting}
+            id={`${idPrefix}-description`}
+            maxLength={500}
+            onChange={(event) => updateField('description', event.target.value)}
+            rows={4}
+            value={values.description}
+          />
+          <FieldError id={`${idPrefix}-description-error`}>
+            {fieldErrors.description}
+          </FieldError>
+        </Field>
+        <fieldset className="min-w-0 space-y-4 rounded-[var(--admin-radius-panel)] border border-border p-4">
+          <legend className="px-1 text-[13px] font-semibold">
+            Sức chứa hàng mặc định
+          </legend>
+          <p
+            className="text-xs leading-relaxed text-muted-foreground"
+            id={`${idPrefix}-capacity-help`}
+          >
+            Các giá trị này được dùng làm sức chứa mặc định khi tạo chuyến mới.
+            Thay đổi tại đây không cập nhật sức chứa của các chuyến đã tồn tại.
+          </p>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            {(
+              [
+                { field: 'motorbikeCapacityDefault', label: 'Xe máy' },
+                { field: 'bulkyCargoCapacityDefault', label: 'Hàng cồng kềnh' },
+                { field: 'lightCargoCapacityDefault', label: 'Hàng nhẹ' },
+              ] as const
+            ).map(({ field, label }) => (
+              <Field key={field} data-invalid={Boolean(fieldErrors[field])}>
+                <FieldLabel htmlFor={`${idPrefix}-${field}`}>
+                  {label}
+                </FieldLabel>
+                <Input
+                  aria-describedby={`${idPrefix}-capacity-help${fieldErrors[field] ? ` ${idPrefix}-${field}-error` : ''}`}
+                  aria-invalid={Boolean(fieldErrors[field])}
+                  disabled={submitting}
+                  id={`${idPrefix}-${field}`}
+                  min={0}
+                  max={2_147_483_647}
+                  step={1}
+                  type="number"
+                  inputMode="numeric"
+                  value={values[field]}
+                  onChange={(event) => updateField(field, event.target.value)}
+                />
+                <FieldError id={`${idPrefix}-${field}-error`}>
+                  {fieldErrors[field]}
+                </FieldError>
+              </Field>
+            ))}
+          </div>
+        </fieldset>
+      </ResourceSheetForm>
+    </ResourceSheet>
   );
 }

@@ -1,17 +1,43 @@
 'use client';
-
-import { ArrowDown, ArrowUp, ArrowUpDown, CheckCircle2, LoaderCircle, Search, X } from 'lucide-react';
+import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  LoaderCircle,
+  MapPinned,
+  Pencil,
+} from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { AdminConfirmDialog } from '@/components/admin/admin-confirm-dialog';
-import { AdminDetailAction } from '@/components/admin/admin-detail-action';
-import { AdminDetailSheet } from '@/components/admin/admin-detail-sheet';
-import { AdminCreateAction, AdminRefreshAction } from '@/components/admin/admin-page-actions';
+import { toast } from 'sonner';
 import { AdminPageHeader } from '@/components/admin/admin-page-header';
-import { AdminPagination } from '@/components/admin/admin-pagination';
-import { AdminStatusBadge } from '@/components/admin/admin-status-badge';
-import { AdminTableSkeleton } from '@/components/admin/admin-table-skeleton';
-import { FilterToolbar, SearchInput, SelectFilter, type FilterOption } from '@/components/data-filters/data-filters';
-import { Button } from '@/components/ui/button';
+import {
+  ResourceConfirmation,
+  ResourceCreateAction,
+  ResourceRefreshAction,
+  ResourceDetailAction,
+  ResourceSheet,
+  ResourceState,
+  ResourceStatusBadge,
+  ResourceTableSkeleton,
+  ResourcePagination,
+} from '@/components/admin/resource-ui';
+import {
+  FilterToolbar,
+  SearchInput,
+  SelectFilter,
+  type FilterOption,
+} from '@/components/data-filters/resource-filters';
+import { Button } from '@/components/ui/action-button';
+import { Card } from '@/components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { useAdminPermissions } from '@/features/admin-auth/hooks/use-admin-permissions';
 import { useAdminSession } from '@/features/admin-auth/hooks/use-admin-session';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
@@ -19,7 +45,6 @@ import { useRoutes } from '../hooks/use-routes';
 import { getRouteById, updateRouteStatus } from '../services/route-service';
 import type { Route, RouteSortKey, RouteStatus } from '../types/route';
 import { RouteFormDialog } from './route-form-dialog';
-import '../routes.css';
 
 const STATUS_OPTIONS: FilterOption[] = [
   { value: 'HOAT_DONG', label: 'Đang hoạt động' },
@@ -39,11 +64,23 @@ function statusLabel(status: RouteStatus) {
 }
 
 function timestampFormat(value: string) {
-  return new Intl.DateTimeFormat('vi-VN', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
+  return new Intl.DateTimeFormat('vi-VN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+    .format(new Date(value))
+    .replaceAll('/', '-');
 }
 
 function RouteBadge({ status }: { status: RouteStatus }) {
-  return <AdminStatusBadge tone={status === 'HOAT_DONG' ? 'active' : 'muted'}>{statusLabel(status)}</AdminStatusBadge>;
+  return (
+    <ResourceStatusBadge tone={status === 'HOAT_DONG' ? 'active' : 'muted'}>
+      {statusLabel(status)}
+    </ResourceStatusBadge>
+  );
 }
 
 type DetailState =
@@ -51,7 +88,11 @@ type DetailState =
   | { status: 'error'; message: string }
   | { status: 'success'; route: Route };
 
-export function RouteDetails({ routeId, onClose, onUpdated }: {
+export function RouteDetails({
+  routeId,
+  onClose,
+  onUpdated,
+}: {
   routeId: number;
   onClose: () => void;
   onUpdated: (route: Route) => void;
@@ -63,31 +104,33 @@ export function RouteDetails({ routeId, onClose, onUpdated }: {
   const [editOpen, setEditOpen] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
   const [statusSubmitting, setStatusSubmitting] = useState(false);
-  const [statusError, setStatusError] = useState<string | null>(null);
   const statusSubmittingRef = useRef(false);
-  const statusDialogRef = useRef<HTMLDialogElement>(null);
-  const [updateNotice, setUpdateNotice] = useState<string | null>(null);
 
-  const nextStatus = detail.status === 'success'
-    ? detail.route.status === 'HOAT_DONG' ? 'TAM_NGUNG' : 'HOAT_DONG'
-    : null;
+  const nextStatus =
+    detail.status === 'success'
+      ? detail.route.status === 'HOAT_DONG'
+        ? 'TAM_NGUNG'
+        : 'HOAT_DONG'
+      : null;
 
   async function confirmStatusChange() {
-    if (!canUpdate || statusSubmittingRef.current || nextStatus === null) return;
+    if (!canUpdate || statusSubmittingRef.current || nextStatus === null)
+      return;
     statusSubmittingRef.current = true;
     setStatusSubmitting(true);
-    setStatusError(null);
     try {
       const saved = await updateRouteStatus(routeId, { status: nextStatus });
-      statusDialogRef.current?.close();
       setStatusOpen(false);
       setDetail({ status: 'success', route: saved });
-      setUpdateNotice(`Đã ${saved.status === 'TAM_NGUNG' ? 'tạm ngưng' : 'kích hoạt'} tuyến ${saved.code}.`);
       onUpdated(saved);
     } catch (error: unknown) {
-      setStatusError(error instanceof TypeError
-        ? 'Không thể kết nối đến máy chủ API. Vui lòng thử lại.'
-        : error instanceof Error ? error.message : 'Không thể cập nhật trạng thái tuyến xe.');
+      toast.error(
+        error instanceof TypeError
+          ? 'Không thể kết nối đến máy chủ API. Vui lòng thử lại.'
+          : error instanceof Error
+            ? error.message
+            : 'Không thể cập nhật trạng thái tuyến xe.',
+      );
     } finally {
       statusSubmittingRef.current = false;
       setStatusSubmitting(false);
@@ -97,221 +140,479 @@ export function RouteDetails({ routeId, onClose, onUpdated }: {
   useEffect(() => {
     const controller = new AbortController();
     getRouteById(routeId, controller.signal)
-      .then((route) => { if (!controller.signal.aborted) setDetail({ status: 'success', route }); })
+      .then((route) => {
+        if (!controller.signal.aborted) setDetail({ status: 'success', route });
+      })
       .catch((error: unknown) => {
-        if (!controller.signal.aborted) setDetail({
-          status: 'error',
-          message: error instanceof Error ? error.message : 'Không thể tải thông tin tuyến xe.',
-        });
+        if (!controller.signal.aborted)
+          setDetail({
+            status: 'error',
+            message:
+              error instanceof Error
+                ? error.message
+                : 'Không thể tải thông tin tuyến xe.',
+          });
       });
     return () => controller.abort();
   }, [routeId, retryCount]);
 
   return (
-    <>
-    <AdminDetailSheet ariaLabelledBy="route-detail-title" onClose={onClose}>
-      <>
-        <div className="admin-dialog-header">
-          <div className="admin-dialog-header__copy">
-            <h2 id="route-detail-title">Thông tin tuyến xe</h2>
-          </div>
-          <form method="dialog">
-            <button aria-label="Đóng thông tin tuyến xe" className="icon-button" type="submit"><X aria-hidden="true" size={19} /></button>
-          </form>
-        </div>
-        {updateNotice && <p className="routes-update-notice" role="status">{updateNotice}</p>}
-        {detail.status === 'loading' && <p className="routes-detail-state" role="status">Đang tải thông tin tuyến xe…</p>}
-        {detail.status === 'error' && (
-          <div className="routes-detail-state" role="alert">
-            <p>{detail.message}</p>
-            <Button onClick={() => { setDetail({ status: 'loading' }); setRetryCount((count) => count + 1); }} type="button" variant="secondary">Thử lại</Button>
-          </div>
-        )}
-        {detail.status === 'success' && (
-          <div className="routes-detail-content">
-            <h3 className="admin-data-mono">{detail.route.code}</h3>
-            <p>{detail.route.origin} → {detail.route.destination}</p>
-            <dl className="routes-detail-fields">
-              <div><dt>Mã tuyến</dt><dd className="admin-data-mono">{detail.route.code}</dd></div>
-              <div><dt>Điểm đi</dt><dd>{detail.route.origin}</dd></div>
-              <div><dt>Điểm đến</dt><dd>{detail.route.destination}</dd></div>
-              <div><dt>Nhà xe</dt><dd>{detail.route.busCompany.name} (<span className="admin-data-mono">{detail.route.busCompany.code}</span>)</dd></div>
-              <div><dt>Trạng thái</dt><dd><RouteBadge status={detail.route.status} /></dd></div>
-              <div><dt>Ngày tạo</dt><dd>{timestampFormat(detail.route.createdAt)}</dd></div>
-              <div><dt>Cập nhật lần cuối</dt><dd>{timestampFormat(detail.route.updatedAt)}</dd></div>
-            </dl>
-            <div className="routes-detail-actions admin-detail-sheet__actions">
-              {canUpdate && (
-                <>
-                  <Button onClick={() => { setStatusError(null); setStatusOpen(true); }} type="button" variant="secondary">
-                    {detail.route.status === 'HOAT_DONG' ? 'Tạm ngưng tuyến' : 'Kích hoạt tuyến'}
-                  </Button>
-                  <Button onClick={() => setEditOpen(true)} type="button">Chỉnh sửa</Button>
-                </>
-              )}
+    <ResourceSheet
+      busy={detail.status === 'loading'}
+      title="Thông tin tuyến xe"
+      description="Thông tin hành trình, thời gian chạy và trạng thái tuyến."
+      onClose={onClose}
+    >
+      {detail.status === 'loading' && (
+        <ResourceState loading>Đang tải thông tin tuyến xe…</ResourceState>
+      )}
+      {detail.status === 'error' && (
+        <ResourceState error>
+          <p>{detail.message}</p>
+          <Button
+            variant="outline"
+            onClick={() => {
+              setDetail({ status: 'loading' });
+              setRetryCount((count) => count + 1);
+            }}
+          >
+            Thử lại
+          </Button>
+        </ResourceState>
+      )}
+      {detail.status === 'success' && (
+        <div className="space-y-6">
+          <div className="flex items-center gap-4 border-b pb-6">
+            <span
+              aria-hidden
+              className="grid size-12 shrink-0 place-items-center rounded-[var(--admin-radius-panel)] bg-accent text-primary"
+            >
+              <MapPinned size={24} />
+            </span>
+            <div className="min-w-0">
+              <h3 className="admin-data-mono break-words text-base font-semibold">
+                {detail.route.code}
+              </h3>
+              <p className="mt-1 break-words text-[13px] text-muted-foreground">
+                {detail.route.origin} → {detail.route.destination}
+              </p>
             </div>
           </div>
-        )}
-      </>
-    </AdminDetailSheet>
-    {editOpen && canUpdate && detail.status === 'success' && (
-      <RouteFormDialog
-        onClose={() => setEditOpen(false)}
-        onSaved={(saved) => {
-          setEditOpen(false);
-          setDetail({ status: 'success', route: saved });
-          setUpdateNotice(`Đã cập nhật tuyến ${saved.code}.`);
-          onUpdated(saved);
-        }}
-        route={detail.route}
-      />
-    )}
-    {statusOpen && canUpdate && detail.status === 'success' && nextStatus && (
-      <AdminConfirmDialog
-        ariaBusy={statusSubmitting}
-        ariaDescribedBy="route-status-confirmation-description"
-        ariaLabelledBy="route-status-confirmation-title"
-        dialogRef={statusDialogRef}
-        onClose={() => setStatusOpen(false)}
-        preventDismiss={statusSubmitting}
-      >
-        <>
-          <h2 id="route-status-confirmation-title">{nextStatus === 'TAM_NGUNG' ? 'Tạm ngưng tuyến xe?' : 'Kích hoạt tuyến xe?'}</h2>
-          <p id="route-status-confirmation-description">
-            {nextStatus === 'TAM_NGUNG'
+          <dl className="grid grid-cols-2 gap-4 text-[13px] [&_dt]:mb-1 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:break-words">
+            <div>
+              <dt>Điểm đi</dt>
+              <dd>{detail.route.origin}</dd>
+            </div>
+            <div>
+              <dt>Điểm đến</dt>
+              <dd>{detail.route.destination}</dd>
+            </div>
+            <div>
+              <dt>Thời gian chạy</dt>
+              <dd>
+                {detail.route.durationMinutes === null
+                  ? 'Chưa thiết lập'
+                  : `${detail.route.durationMinutes} phút`}
+              </dd>
+            </div>
+            <div>
+              <dt>Trạng thái</dt>
+              <dd>
+                <RouteBadge status={detail.route.status} />
+              </dd>
+            </div>
+            <div className="col-span-2">
+              <dt>Nhà xe</dt>
+              <dd>
+                {detail.route.busCompany.name} (
+                <span className="admin-data-mono">
+                  {detail.route.busCompany.code}
+                </span>
+                )
+              </dd>
+            </div>
+            <div>
+              <dt>Ngày tạo</dt>
+              <dd>{timestampFormat(detail.route.createdAt)}</dd>
+            </div>
+            <div>
+              <dt>Cập nhật lần cuối</dt>
+              <dd>{timestampFormat(detail.route.updatedAt)}</dd>
+            </div>
+          </dl>
+          {canUpdate && (
+            <div className="flex flex-wrap justify-end gap-3 border-t pt-4">
+              <Button variant="outline" onClick={() => setStatusOpen(true)}>
+                {detail.route.status === 'HOAT_DONG'
+                  ? 'Tạm ngưng tuyến'
+                  : 'Kích hoạt tuyến'}
+              </Button>
+              <Button onClick={() => setEditOpen(true)}>
+                <Pencil aria-hidden />
+                Chỉnh sửa
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+      {editOpen && canUpdate && detail.status === 'success' && (
+        <RouteFormDialog
+          route={detail.route}
+          onClose={() => setEditOpen(false)}
+          onSaved={(saved) => {
+            setEditOpen(false);
+            setDetail({ status: 'success', route: saved });
+            onUpdated(saved);
+          }}
+        />
+      )}
+      {statusOpen && canUpdate && detail.status === 'success' && nextStatus && (
+        <ResourceConfirmation
+          busy={statusSubmitting}
+          onClose={() => setStatusOpen(false)}
+          title={
+            nextStatus === 'TAM_NGUNG'
+              ? 'Tạm ngưng tuyến xe?'
+              : 'Kích hoạt tuyến xe?'
+          }
+          description={
+            nextStatus === 'TAM_NGUNG'
               ? 'Tuyến sẽ được chuyển sang trạng thái Tạm ngưng. Thao tác này không xóa dữ liệu tuyến và có thể kích hoạt lại sau.'
-              : 'Tuyến sẽ được chuyển sang trạng thái Đang hoạt động.'}
-          </p>
-          {statusError && <p className="admin-confirm-dialog__error" role="alert">{statusError}</p>}
-          <div className="admin-confirm-dialog__actions">
-            <Button disabled={statusSubmitting} onClick={() => statusDialogRef.current?.close()} type="button" variant="secondary">Hủy</Button>
-            <Button disabled={statusSubmitting} onClick={confirmStatusChange} type="button">
-              {statusSubmitting && <LoaderCircle aria-hidden="true" className="admin-crud-form-spinner" size={15} />}
-              {statusSubmitting ? 'Đang cập nhật…' : nextStatus === 'TAM_NGUNG' ? 'Tạm ngưng tuyến' : 'Kích hoạt tuyến'}
-            </Button>
-          </div>
-        </>
-      </AdminConfirmDialog>
-    )}
-    </>
+              : 'Tuyến sẽ được chuyển sang trạng thái Đang hoạt động.'
+          }
+        >
+          <Button
+            disabled={statusSubmitting}
+            aria-busy={statusSubmitting}
+            onClick={confirmStatusChange}
+          >
+            {statusSubmitting && (
+              <LoaderCircle aria-hidden className="motion-safe:animate-spin" />
+            )}
+            {statusSubmitting
+              ? 'Đang cập nhật…'
+              : nextStatus === 'TAM_NGUNG'
+                ? 'Tạm ngưng tuyến'
+                : 'Kích hoạt tuyến'}
+          </Button>
+        </ResourceConfirmation>
+      )}
+    </ResourceSheet>
   );
 }
 
 export function RoutesManagement() {
   const { can } = useAdminPermissions();
   const authState = useAdminSession();
-  const tenantBusCompanyId = authState.status === 'authenticated'
-    ? authState.session.busCompanyId
-    : null;
+  const tenantBusCompanyId =
+    authState.status === 'authenticated'
+      ? authState.session.busCompanyId
+      : null;
   const canCreate = can('route:create') && tenantBusCompanyId !== null;
   const {
-    routePage, error, loading, searchInput, status, sortBy, sortDirection,
-    changePage, updateSearch, updateStatus, sortRoutes, refresh,
+    routePage,
+    error,
+    loading,
+    searchInput,
+    status,
+    sortBy,
+    sortDirection,
+    changePage,
+    updateSearch,
+    updateStatus,
+    sortRoutes,
+    refresh,
   } = useRoutes();
   const [selectedRouteId, setSelectedRouteId] = useState<number | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
-  const [successNotice, setSuccessNotice] = useState<string | null>(null);
+  const items = routePage?.data ?? [];
+  const hasFilters = Boolean(searchInput.trim() || status);
   function sortButton(label: string, field: RouteSortKey) {
-    const selected = sortBy === field;
     return (
-      <button aria-label={`Sắp xếp theo ${label}`} className="admin-resource-sort-button" onClick={() => sortRoutes(field)} type="button">
+      <Button
+        aria-label={`Sắp xếp theo ${label}`}
+        className="-ml-3"
+        size="sm"
+        variant="ghost"
+        onClick={() => sortRoutes(field)}
+      >
         {label}
-        {selected ? sortDirection === 'asc' ? <ArrowUp aria-hidden="true" size={14} /> : <ArrowDown aria-hidden="true" size={14} /> : <ArrowUpDown aria-hidden="true" size={14} />}
-      </button>
+        {sortBy === field ? (
+          sortDirection === 'asc' ? (
+            <ArrowUp aria-hidden />
+          ) : (
+            <ArrowDown aria-hidden />
+          )
+        ) : (
+          <ArrowUpDown aria-hidden />
+        )}
+      </Button>
     );
   }
-
-  const hasFilters = Boolean(searchInput.trim() || status);
-  const items = routePage?.data ?? [];
   return (
     <SuperAdminLayout activeSection="routes">
-      <div className="admin-page-content">
+      <div className="admin-ui admin-page-content grid gap-[var(--admin-space-section-gap)]">
         <AdminPageHeader
-          actions={<div className="page-intro-actions">{canCreate && <AdminCreateAction label="Thêm tuyến" onClick={() => { setSuccessNotice(null); setCreateOpen(true); }} />}<AdminRefreshAction loading={loading} onClick={refresh} /></div>}
-          eyebrow="QUẢN LÝ VẬN HÀNH" title="Quản lý tuyến xe" titleId="routes-title"
-        />
-        {successNotice && <div className="routes-update-notice" role="status"><CheckCircle2 aria-hidden="true" size={16} />{successNotice}</div>}
-        <section aria-busy={loading} aria-labelledby="routes-title" className="routes-section">
-          <div className="panel admin-resource-panel">
-            <FilterToolbar totalItems={error ? null : routePage?.meta.totalItems ?? null}>
-              <SearchInput label="Tìm tuyến xe" onChange={updateSearch} placeholder="Tìm mã tuyến, điểm đi, điểm đến..." value={searchInput} />
-              <SelectFilter allLabel="Tất cả trạng thái" label="Lọc theo trạng thái" onChange={updateStatus} options={STATUS_OPTIONS} value={status} />
-            </FilterToolbar>
-            <div className="routes-mobile-sort">
-              <SelectFilter allLabel="Mã tuyến (mặc định)" label="Sắp xếp tuyến theo" onChange={(value) => sortRoutes((value || 'code') as RouteSortKey)} options={SORT_OPTIONS} value={sortBy === 'code' ? '' : sortBy} />
-              <Button aria-label={`Đổi thứ tự sắp xếp, hiện tại ${sortDirection === 'asc' ? 'tăng dần' : 'giảm dần'}`} onClick={() => sortRoutes(sortBy)} type="button" variant="secondary">
-                {sortDirection === 'asc' ? <ArrowUp aria-hidden="true" size={15} /> : <ArrowDown aria-hidden="true" size={15} />}
-                {sortDirection === 'asc' ? 'Tăng dần' : 'Giảm dần'}
-              </Button>
+          eyebrow="QUẢN LÝ VẬN HÀNH"
+          title="Quản lý tuyến xe"
+          titleId="routes-title"
+          actions={
+            <div className="flex flex-wrap items-center gap-2">
+              {canCreate && (
+                <ResourceCreateAction
+                  label="Thêm tuyến"
+                  onClick={() => setCreateOpen(true)}
+                />
+              )}
+              <ResourceRefreshAction loading={loading} onClick={refresh} />
             </div>
-            {loading && !routePage && <AdminTableSkeleton resourceLabel="tuyến xe" />}
+          }
+        />
+        <section aria-busy={loading} aria-labelledby="routes-title">
+          <Card className="gap-0 py-0 ring-0">
+            <FilterToolbar>
+              <SearchInput
+                label="Tìm tuyến xe"
+                value={searchInput}
+                onChange={updateSearch}
+                placeholder="Tìm mã tuyến, điểm đi, điểm đến…"
+              />
+              <SelectFilter
+                label="Trạng thái tuyến"
+                allLabel="Tất cả trạng thái"
+                value={status}
+                options={STATUS_OPTIONS}
+                onChange={updateStatus}
+              />
+            </FilterToolbar>
+            <div className="border-b p-4 md:hidden">
+              <div className="flex items-end gap-3">
+                <SelectFilter
+                  label="Sắp xếp theo"
+                  allLabel="Mã tuyến"
+                  value={sortBy === 'code' ? '' : sortBy}
+                  options={SORT_OPTIONS.filter(
+                    (option) => option.value !== 'code',
+                  )}
+                  onChange={(value) => {
+                    const field = (value || 'code') as RouteSortKey;
+                    if (field !== sortBy) sortRoutes(field);
+                  }}
+                />
+                <Button
+                  variant="outline"
+                  aria-label={`Đổi thứ tự sắp xếp, hiện tại ${sortDirection === 'asc' ? 'tăng dần' : 'giảm dần'}`}
+                  onClick={() => sortRoutes(sortBy)}
+                >
+                  {sortDirection === 'asc' ? (
+                    <ArrowUp aria-hidden />
+                  ) : (
+                    <ArrowDown aria-hidden />
+                  )}
+                  {sortDirection === 'asc' ? 'Tăng dần' : 'Giảm dần'}
+                </Button>
+              </div>
+            </div>
+            {loading && !routePage && (
+              <ResourceTableSkeleton resourceLabel="tuyến xe" />
+            )}
             {error && (
-              <div className="routes-list-state" role="alert"><p>{error}</p><Button onClick={refresh} type="button" variant="secondary">Thử lại</Button></div>
+              <ResourceState error>
+                <p>{error}</p>
+                <Button variant="outline" onClick={refresh}>
+                  Thử lại
+                </Button>
+              </ResourceState>
             )}
             {!error && !loading && routePage && items.length === 0 && (
-              <div className="routes-list-state" role="status"><Search aria-hidden="true" size={21} /><p>{hasFilters ? 'Không tìm thấy tuyến xe phù hợp.' : 'Chưa có tuyến xe trong hệ thống.'}</p></div>
+              <ResourceState>
+                <p>
+                  {hasFilters
+                    ? 'Không tìm thấy tuyến xe phù hợp.'
+                    : 'Chưa có tuyến xe trong hệ thống.'}
+                </p>
+                {hasFilters && (
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      updateSearch('');
+                      updateStatus('');
+                    }}
+                  >
+                    Xóa bộ lọc
+                  </Button>
+                )}
+              </ResourceState>
             )}
             {!error && routePage && (
               <>
                 {items.length > 0 && (
                   <>
-                    <div aria-busy={loading} className="admin-resource-table-wrap">
-                      <table className="admin-resource-table">
-                        <caption className="sr-only">Danh sách tuyến xe</caption>
-                        <thead><tr>
-                          {([['Mã tuyến', 'code'], ['Điểm đi', 'origin'], ['Điểm đến', 'destination']] as const).map(([label, field]) => (
-                            <th aria-sort={sortBy === field ? sortDirection === 'asc' ? 'ascending' : 'descending' : 'none'} key={field} scope="col">{sortButton(label, field)}</th>
+                    <div className="hidden md:block">
+                      <Table className="min-w-[1080px]">
+                        <TableCaption className="sr-only">
+                          Danh sách tuyến xe
+                        </TableCaption>
+                        <TableHeader>
+                          <TableRow>
+                            {(
+                              [
+                                { key: 'code', label: 'Mã tuyến' },
+                                { key: 'origin', label: 'Điểm đi' },
+                                { key: 'destination', label: 'Điểm đến' },
+                                { key: null, label: 'Nhà xe' },
+                                { key: 'status', label: 'Trạng thái' },
+                                { key: 'createdAt', label: 'Ngày tạo' },
+                                { key: 'updatedAt', label: 'Cập nhật' },
+                              ] as const
+                            ).map((column) => (
+                              <TableHead
+                                key={column.label}
+                                scope="col"
+                                aria-sort={
+                                  column.key
+                                    ? sortBy === column.key
+                                      ? sortDirection === 'asc'
+                                        ? 'ascending'
+                                        : 'descending'
+                                      : 'none'
+                                    : undefined
+                                }
+                              >
+                                {column.key
+                                  ? sortButton(column.label, column.key)
+                                  : column.label}
+                              </TableHead>
+                            ))}
+                            <TableHead scope="col">
+                              <span className="sr-only">Thao tác</span>
+                            </TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {items.map((route) => (
+                            <TableRow key={route.routeId}>
+                              <TableHead
+                                scope="row"
+                                className="admin-data-mono bg-transparent text-[13px]"
+                              >
+                                {route.code}
+                              </TableHead>
+                              <TableCell className="max-w-44 whitespace-normal break-words">
+                                {route.origin}
+                              </TableCell>
+                              <TableCell className="max-w-44 whitespace-normal break-words">
+                                {route.destination}
+                              </TableCell>
+                              <TableCell>
+                                {route.busCompany.name}
+                                <span className="admin-data-mono mt-1 block text-xs text-muted-foreground">
+                                  {route.busCompany.code}
+                                </span>
+                              </TableCell>
+                              <TableCell>
+                                <RouteBadge status={route.status} />
+                              </TableCell>
+                              <TableCell className="whitespace-nowrap text-muted-foreground">
+                                {timestampFormat(route.createdAt)}
+                              </TableCell>
+                              <TableCell className="whitespace-nowrap text-muted-foreground">
+                                {timestampFormat(route.updatedAt)}
+                              </TableCell>
+                              <TableCell>
+                                <ResourceDetailAction
+                                  resourceName={`tuyến ${route.code}`}
+                                  onClick={() =>
+                                    setSelectedRouteId(route.routeId)
+                                  }
+                                />
+                              </TableCell>
+                            </TableRow>
                           ))}
-                          <th scope="col">Nhà xe</th>
-                          <th aria-sort={sortBy === 'status' ? sortDirection === 'asc' ? 'ascending' : 'descending' : 'none'} scope="col">{sortButton('Trạng thái', 'status')}</th>
-                          <th aria-sort={sortBy === 'createdAt' ? sortDirection === 'asc' ? 'ascending' : 'descending' : 'none'} scope="col">{sortButton('Ngày tạo', 'createdAt')}</th>
-                          <th scope="col"></th>
-                        </tr></thead>
-                        <tbody>{items.map((route) => (
-                          <tr key={route.routeId}>
-                            <th className="admin-data-mono" scope="row">{route.code}</th>
-                            <td>{route.origin}</td><td>{route.destination}</td>
-                            <td>{route.busCompany.name}<span className="routes-company-code admin-data-mono">{route.busCompany.code}</span></td>
-                            <td><RouteBadge status={route.status} /></td>
-                            <td>{timestampFormat(route.createdAt)}</td>
-                            <td><AdminDetailAction onClick={() => setSelectedRouteId(route.routeId)} resourceName={`tuyến ${route.code}`} /></td>
-                          </tr>
-                        ))}</tbody>
-                      </table>
+                        </TableBody>
+                      </Table>
                     </div>
-                    <div className="routes-mobile-list">
+                    <div className="grid gap-4 p-4 md:hidden">
                       {items.map((route) => (
-                        <article className="routes-mobile-card" key={route.routeId}>
-                          <div className="routes-mobile-card-header"><h2 className="admin-data-mono">{route.code}</h2><RouteBadge status={route.status} /></div>
-                          <p className="routes-mobile-journey">{route.origin} → {route.destination}</p>
-                          <dl className="routes-mobile-fields">
-                            <div><dt>Nhà xe</dt><dd>{route.busCompany.name}</dd></div>
-                            <div><dt>Ngày tạo</dt><dd>{timestampFormat(route.createdAt)}</dd></div>
+                        <Card key={route.routeId} className="gap-4 p-4 ring-0">
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <h2 className="admin-data-mono break-all text-[13px] font-semibold">
+                              {route.code}
+                            </h2>
+                            <RouteBadge status={route.status} />
+                          </div>
+                          <p className="break-words text-sm font-semibold">
+                            {route.origin} → {route.destination}
+                          </p>
+                          <dl className="grid grid-cols-2 gap-3 text-[13px] [&_dt]:mb-1 [&_dt]:text-xs [&_dt]:text-muted-foreground">
+                            <div>
+                              <dt>Nhà xe</dt>
+                              <dd>{route.busCompany.name}</dd>
+                            </div>
+                            <div>
+                              <dt>Thời gian chạy</dt>
+                              <dd>
+                                {route.durationMinutes === null
+                                  ? 'Chưa thiết lập'
+                                  : `${route.durationMinutes} phút`}
+                              </dd>
+                            </div>
+                            <div>
+                              <dt>Ngày tạo</dt>
+                              <dd>{timestampFormat(route.createdAt)}</dd>
+                            </div>
+                            <div>
+                              <dt>Cập nhật</dt>
+                              <dd>{timestampFormat(route.updatedAt)}</dd>
+                            </div>
                           </dl>
-                          <div className="routes-mobile-actions"><AdminDetailAction onClick={() => setSelectedRouteId(route.routeId)} resourceName={`tuyến ${route.code}`} /></div>
-                        </article>
+                          <div className="flex justify-end border-t pt-3">
+                            <ResourceDetailAction
+                              resourceName={`tuyến ${route.code}`}
+                              onClick={() => setSelectedRouteId(route.routeId)}
+                            />
+                          </div>
+                        </Card>
                       ))}
                     </div>
                   </>
                 )}
-                <AdminPagination currentPage={routePage.meta.page} disabled={loading} onPageChange={changePage} pageSize={routePage.meta.pageSize} summaryLabel="tuyến xe" totalItems={routePage.meta.totalItems} totalPages={routePage.meta.totalPages} />
+                <ResourcePagination
+                  currentPage={routePage.meta.page}
+                  disabled={loading}
+                  onPageChange={changePage}
+                  pageSize={routePage.meta.pageSize}
+                  summaryLabel="tuyến xe"
+                  totalItems={routePage.meta.totalItems}
+                  totalPages={routePage.meta.totalPages}
+                />
               </>
             )}
-          </div>
+          </Card>
         </section>
-        <footer className="admin-page-footer"><span>© 2026 VexGo Platform</span></footer>
       </div>
-      {selectedRouteId !== null && <RouteDetails
-        key={selectedRouteId}
-        onClose={() => setSelectedRouteId(null)}
-        onUpdated={(route) => { setSuccessNotice(`Đã cập nhật tuyến ${route.code}.`); refresh(); }}
-        routeId={selectedRouteId}
-      />}
-      {createOpen && canCreate && tenantBusCompanyId !== null && <RouteFormDialog
-        tenantBusCompanyId={tenantBusCompanyId}
-        onClose={() => setCreateOpen(false)}
-        onSaved={(route) => { setCreateOpen(false); setSuccessNotice(`Đã thêm tuyến ${route.code}.`); refresh(); }}
-      />}
+      {selectedRouteId !== null && (
+        <RouteDetails
+          key={selectedRouteId}
+          routeId={selectedRouteId}
+          onClose={() => setSelectedRouteId(null)}
+          onUpdated={(route) => {
+            toast.success(`Đã cập nhật tuyến ${route.code}.`);
+            refresh();
+          }}
+        />
+      )}
+      {createOpen && canCreate && tenantBusCompanyId !== null && (
+        <RouteFormDialog
+          tenantBusCompanyId={tenantBusCompanyId}
+          onClose={() => setCreateOpen(false)}
+          onSaved={(route) => {
+            setCreateOpen(false);
+            toast.success(`Đã thêm tuyến ${route.code}.`);
+            refresh();
+          }}
+        />
+      )}
     </SuperAdminLayout>
   );
 }

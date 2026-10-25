@@ -1,424 +1,555 @@
 'use client';
 
+import Link from 'next/link';
+import { useEffect, useState, type ReactNode } from 'react';
 import {
+  ArrowUpRight,
   Building2,
-  Database,
-  RefreshCw,
-  ShieldCheck,
+  CircleCheck,
+  UserRoundCog,
   UsersRound,
 } from 'lucide-react';
-import { type ReactNode, useEffect, useMemo, useState } from 'react';
+import { AdminPageHeader } from '@/components/admin/admin-page-header';
+import {
+  ResourceNotice,
+  ResourceRefreshAction,
+  ResourceState,
+  ResourceStatusBadge,
+} from '@/components/admin/resource-ui';
+import { Button, buttonVariants } from '@/components/ui/action-button';
+import { Card } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { SuperAdminLayout } from '@/features/super-admin-layout/components/super-admin-layout';
+import { useAdminSession } from '@/features/admin-auth/hooks/use-admin-session';
+import { hasAllPlatformAdminPermissions } from '@/features/admin-auth/services/admin-access';
 import { getDashboardOverview } from '../services/dashboard-service';
-import type { DashboardOverview } from '../types/dashboard';
+import type {
+  DashboardOverview,
+  PlatformCompanySummary,
+} from '../types/dashboard';
 
-function numberFormat(value: number) {
-  return new Intl.NumberFormat('vi-VN').format(value);
-}
+const number = (value: number) => value.toLocaleString('vi-VN');
 
-function timestampFormat(value: string) {
-  return new Intl.DateTimeFormat('vi-VN', {
+function displayTimestamp(value: string, timeZone: string) {
+  const parts = new Intl.DateTimeFormat('vi-VN', {
+    timeZone,
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
-  }).format(new Date(value));
-}
-
-function StatCard({
-  label,
-  value,
-  note,
-  icon,
-  tone,
-  loading,
-}: {
-  label: string;
-  value: number | null;
-  note: string;
-  icon: ReactNode;
-  tone: 'blue' | 'amber' | 'violet' | 'slate';
-  loading: boolean;
-}) {
+    hourCycle: 'h23',
+  }).formatToParts(new Date(value));
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((item) => item.type === type)?.value ?? '';
   return (
-    <article className="stat-card">
-      {loading ? (
-        <div className="stat-skeleton" aria-hidden="true">
-          <span className="skeleton skeleton-icon" />
-          <span className="skeleton skeleton-line skeleton-label" />
-          <span className="skeleton skeleton-line skeleton-value" />
-          <span className="skeleton skeleton-line skeleton-note" />
-        </div>
-      ) : (
-        <>
-          <div className={`stat-icon tone-${tone}`} aria-hidden="true">
-            {icon}
-          </div>
-          <div className="stat-copy">
-            <p className="stat-label">{label}</p>
-            <p className="stat-value">
-              {value === null ? '—' : numberFormat(value)}
-            </p>
-            <p className="stat-note">
-              {value === null ? 'Chưa có dữ liệu' : note}
-            </p>
-          </div>
-        </>
-      )}
-    </article>
+    part('hour') +
+    ':' +
+    part('minute') +
+    ' · ' +
+    part('day') +
+    '-' +
+    part('month') +
+    '-' +
+    part('year')
   );
 }
 
+function Metric({
+  label,
+  value,
+  icon,
+  children,
+  primary = false,
+  attention = false,
+}: {
+  label: string;
+  value: number;
+  icon: ReactNode;
+  children?: ReactNode;
+  primary?: boolean;
+  attention?: boolean;
+}) {
+  return (
+    <div
+      className={
+        primary ? 'space-y-4 bg-primary/5 p-5 sm:p-6' : 'space-y-4 p-5 sm:p-6'
+      }
+    >
+      <div className="flex items-center gap-2 text-[13px] font-medium text-muted-foreground">
+        <span
+          aria-hidden
+          className={
+            attention ? 'text-[var(--admin-status-warning)]' : 'text-primary'
+          }
+        >
+          {icon}
+        </span>
+        <h2>{label}</h2>
+      </div>
+      <p
+        className={
+          attention
+            ? 'text-[32px] font-semibold leading-tight tabular-nums text-[var(--admin-status-warning)]'
+            : 'text-[32px] font-semibold leading-tight tabular-nums text-foreground'
+        }
+      >
+        {number(value)}
+      </p>
+      {children && (
+        <div className="text-xs text-muted-foreground">{children}</div>
+      )}
+    </div>
+  );
+}
+
+function CompanyStatus({ status }: { status: string }) {
+  return (
+    <ResourceStatusBadge tone={status === 'HOAT_DONG' ? 'active' : 'muted'}>
+      {status === 'HOAT_DONG'
+        ? 'Đang hoạt động'
+        : status === 'TAM_NGUNG'
+          ? 'Tạm ngưng'
+          : 'Trạng thái khác: ' + status}
+    </ResourceStatusBadge>
+  );
+}
+
+function RecentCompanies({
+  companies,
+  timeZone,
+}: {
+  companies: PlatformCompanySummary[];
+  timeZone: string;
+}) {
+  if (!companies.length)
+    return <ResourceState>Chưa có nhà xe trên nền tảng.</ResourceState>;
+  return (
+    <>
+      <div className="hidden md:block">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Nhà xe</TableHead>
+              <TableHead>Trạng thái</TableHead>
+              <TableHead>Quản trị viên</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {companies.map((company) => (
+              <TableRow key={company.id}>
+                <TableCell className="max-w-64 whitespace-normal">
+                  <p className="break-words font-semibold">{company.name}</p>
+                  <p className="admin-data-mono mt-1 break-all text-xs text-muted-foreground">
+                    {company.code}
+                  </p>
+                </TableCell>
+                <TableCell>
+                  <CompanyStatus status={company.status} />
+                </TableCell>
+                <TableCell>
+                  <span
+                    className="tabular-nums"
+                    title="Tài khoản hoạt động, nhân viên đang làm việc"
+                  >
+                    {number(company.activeAdministratorCount)} hoạt động
+                  </span>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+      <ul className="divide-y md:hidden">
+        {companies.map((company) => (
+          <li key={company.id} className="space-y-3 p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="break-words font-semibold">{company.name}</p>
+                <p className="admin-data-mono mt-1 break-all text-xs text-muted-foreground">
+                  {company.code}
+                </p>
+              </div>
+              <CompanyStatus status={company.status} />
+            </div>
+            <div className="flex flex-wrap justify-between gap-2 text-xs text-muted-foreground">
+              <p>
+                {number(company.activeAdministratorCount)} quản trị viên hoạt
+                động
+              </p>
+              <time dateTime={company.createdAt}>
+                {displayTimestamp(company.createdAt, timeZone).split(' · ')[1]}
+              </time>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
+
+function OnboardingChart({ overview }: { overview: DashboardOverview }) {
+  const maximum = Math.max(1, ...overview.onboarding.map((item) => item.count));
+  const first = overview.onboarding[0];
+  const last = overview.onboarding[overview.onboarding.length - 1];
+  return (
+    <Card className="min-w-0 gap-6 p-5 sm:p-6">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="space-y-1">
+          <h2 className="text-base font-semibold">Nhà xe mới theo tháng</h2>
+          <p className="text-xs text-muted-foreground">
+            {first?.label} — {last?.label}
+          </p>
+        </div>
+        <span className="rounded-md bg-primary/5 px-2 py-1 text-xs font-medium text-primary">
+          6 tháng
+        </span>
+      </div>
+      <ul
+        aria-label="Số nhà xe mới theo tháng, tháng hiện tại tính đến thời điểm cập nhật"
+        className="grid grid-cols-6 gap-3"
+      >
+        {overview.onboarding.map((item) => (
+          <li
+            key={item.label}
+            aria-label={
+              item.label +
+              ': ' +
+              number(item.count) +
+              ' nhà xe mới' +
+              (item.currentMonth ? ', tháng hiện tại chưa kết thúc' : '')
+            }
+            className="min-w-0 text-center"
+          >
+            <div className="flex h-44 flex-col items-center justify-end gap-2 border-b border-border">
+              <span
+                className={
+                  item.count
+                    ? 'text-[13px] font-semibold tabular-nums'
+                    : 'text-xs tabular-nums text-muted-foreground'
+                }
+              >
+                {number(item.count)}
+              </span>
+              <span
+                aria-hidden
+                className={
+                  item.currentMonth
+                    ? 'w-3/4 max-w-10 rounded-t-md bg-primary'
+                    : 'w-3/4 max-w-10 rounded-t-md bg-primary/25'
+                }
+                style={{
+                  height: item.count
+                    ? Math.max(6, (item.count / maximum) * 140) + 'px'
+                    : '0px',
+                }}
+              />
+            </div>
+            <p
+              className={
+                item.currentMonth
+                  ? 'mt-3 text-xs font-semibold text-primary'
+                  : 'mt-3 text-xs text-muted-foreground'
+              }
+            >
+              T{Number(item.label.slice(0, 2))}
+            </p>
+          </li>
+        ))}
+      </ul>
+      <p className="text-xs text-muted-foreground">
+        {overview.onboarding.every((item) => item.count === 0)
+          ? 'Chưa có nhà xe mới trong giai đoạn này.'
+          : 'Tháng hiện tại chưa kết thúc.'}
+      </p>
+    </Card>
+  );
+}
 export function SuperAdminDashboard() {
-  const [overview, setOverview] = useState<DashboardOverview | null>(null);
-  const [overviewError, setOverviewError] = useState<string | null>(null);
-  const [overviewLoading, setOverviewLoading] = useState(true);
-  const [refreshCount, setRefreshCount] = useState(0);
-  const [showRoleTable, setShowRoleTable] = useState(false);
-  const [showStatusTable, setShowStatusTable] = useState(false);
+  const auth = useAdminSession();
+  const session = auth.status === 'authenticated' ? auth.session : null;
+  const canRead = hasAllPlatformAdminPermissions(session, [
+    'bus-company:read',
+    'admin-account:read',
+  ]);
+  const [data, setData] = useState<DashboardOverview | null>(null);
+  const [completedRequest, setCompletedRequest] = useState<{
+    identity: string;
+    refresh: number;
+    error: string | null;
+  } | null>(null);
+  const [refresh, setRefresh] = useState(0);
+  const identity = session
+    ? `${session.accountId}:${[...session.permissions].sort().join(',')}`
+    : '';
+  const [loadedIdentity, setLoadedIdentity] = useState('');
+  const overview = canRead && loadedIdentity === identity ? data : null;
+  const requestCompleted =
+    completedRequest?.identity === identity &&
+    completedRequest.refresh === refresh;
+  const loading = canRead && !requestCompleted;
+  const error = requestCompleted ? completedRequest.error : null;
 
   useEffect(() => {
+    if (!canRead) return;
     const controller = new AbortController();
     let current = true;
-
     getDashboardOverview(controller.signal)
-      .then((data) => {
-        if (current) setOverview(data);
-      })
-      .catch((error: unknown) => {
-        if (current && !controller.signal.aborted) {
-          setOverviewError(
-            error instanceof Error
-              ? error.message
-              : 'Không thể tải tổng quan hệ thống.',
-          );
+      .then((result) => {
+        if (current) {
+          setData(result);
+          setLoadedIdentity(identity);
+          setCompletedRequest({ identity, refresh, error: null });
         }
       })
-      .finally(() => {
-        if (current) setOverviewLoading(false);
+      .catch((cause: unknown) => {
+        if (current && !controller.signal.aborted)
+          setCompletedRequest({
+            identity,
+            refresh,
+            error:
+              cause instanceof Error ? cause.message : 'Không thể tải tổng quan.',
+          });
       });
-
     return () => {
       current = false;
       controller.abort();
     };
-  }, [refreshCount]);
+  }, [canRead, identity, refresh]);
 
-  const roleMaximum = useMemo(
-    () =>
-      Math.max(
-        1,
-        ...(overview?.accountsByRole.map((role) => role.assignedAccountCount) ??
-          []),
-      ),
-    [overview],
-  );
-  const activeAccounts =
-    overview?.accountsByStatus.find((item) => item.status === 'ACTIVE')
-      ?.count ?? 0;
-  const totalStatusAccounts =
-    overview?.accountsByStatus.reduce((total, item) => total + item.count, 0) ??
-    0;
-  const activePercentage = totalStatusAccounts
-    ? (activeAccounts / totalStatusAccounts) * 100
-    : 0;
+  const needing = overview?.companies.needingAdministrator ?? 0;
   return (
     <SuperAdminLayout activeSection="overview">
-      <div className="admin-page-content">
-        <section aria-labelledby="page-title" className="page-intro">
-          <div>
-            <p className="eyebrow">TRUNG TÂM ĐIỀU HÀNH</p>
-            <h1 id="page-title">Tổng quan hệ thống</h1>
-            <p className="page-subtitle">
-              Theo dõi quy mô nhà xe và tài khoản trên toàn nền tảng VexGo.
-            </p>
-          </div>
-          <div className="page-intro-actions">
-            <div className="updated-at" aria-live="polite">
-              <span className="updated-dot" />
-              <span>
-                {overview
-                  ? `Cập nhật lúc ${timestampFormat(overview.generatedAt)}`
-                  : 'Đang đồng bộ dữ liệu'}
-              </span>
-            </div>
-            <button
-              className="button button-primary"
-              disabled={overviewLoading}
-              onClick={() => {
-                setOverviewLoading(true);
-                setOverviewError(null);
-                setRefreshCount((count) => count + 1);
-              }}
-              type="button"
-            >
-              <RefreshCw
-                aria-hidden="true"
-                className={overviewLoading ? 'spin' : ''}
-                size={16}
-              />
-              Làm mới
-            </button>
-          </div>
-        </section>
-
-        {overviewError && (
-          <div className="notice notice-error" role="alert">
-            <div>
-              <strong>Chưa tải được tổng quan</strong>
-              <p>{overviewError}</p>
-            </div>
-            <button
-              className="button button-secondary"
-              onClick={() => {
-                setOverviewLoading(true);
-                setOverviewError(null);
-                setRefreshCount((count) => count + 1);
-              }}
-              type="button"
-            >
-              Thử lại
-            </button>
-          </div>
-        )}
-
-        <section
-          aria-label="Chỉ số toàn hệ thống"
-          aria-busy={overviewLoading}
-          className="stat-grid"
-        >
-          <StatCard
-            icon={<Building2 size={19} />}
-            label="Nhà xe trên nền tảng"
-            loading={overviewLoading && !overview}
-            note="Đơn vị vận tải đã có hồ sơ"
-            tone="blue"
-            value={overview?.totals.busCompanies ?? null}
-          />
-          <StatCard
-            icon={<ShieldCheck size={19} />}
-            label="Tài khoản quản trị nhà xe"
-            loading={overviewLoading && !overview}
-            note="Được gán vai trò quản trị"
-            tone="amber"
-            value={overview?.totals.operatorAdminAccounts ?? null}
-          />
-          <StatCard
-            icon={<UsersRound size={19} />}
-            label="Tài khoản khách hàng"
-            loading={overviewLoading && !overview}
-            note="Khách hàng đã đăng ký"
-            tone="violet"
-            value={overview?.totals.customerAccounts ?? null}
-          />
-          <StatCard
-            icon={<Database size={19} />}
-            label="Tổng tài khoản"
-            loading={overviewLoading && !overview}
-            note="Tài khoản thuộc nền tảng"
-            tone="slate"
-            value={overview?.totals.accounts ?? null}
-          />
-        </section>
-
-        <section
-          aria-labelledby="accounts-heading"
-          className="analytics-section"
-          id="accounts"
-        >
-          <div className="section-heading">
-            <div>
-              <p className="eyebrow">TÀI KHOẢN</p>
-              <h2 id="accounts-heading">Cơ cấu tài khoản</h2>
-            </div>
-            <span className="section-meta">
-              {overview ? numberFormat(overview.totals.accounts) : '—'} tài
-              khoản
-            </span>
-          </div>
-
-          <div className="analytics-grid">
-            <article
-              aria-busy={overviewLoading && !overview}
-              className="panel role-panel"
-            >
-              <div className="panel-heading">
-                <div>
-                  <h3>Phân bố theo vai trò</h3>
-                  <p>Mỗi tài khoản được tính theo vai trò đã gán.</p>
-                </div>
-                <span className="panel-heading-icon">
-                  <UsersRound size={17} />
-                </span>
+      <div className="admin-ui admin-page-content space-y-6">
+        <AdminPageHeader
+          eyebrow="QUẢN TRỊ NỀN TẢNG"
+          title="Tổng quan VexGo"
+          titleId="platform-overview-title"
+          actions={
+            canRead ? (
+              <div className="flex flex-wrap items-center gap-3">
+                {overview && (
+                  <time
+                    className="text-xs text-muted-foreground"
+                    dateTime={overview.generatedAt}
+                    aria-label={
+                      'Cập nhật ' +
+                      displayTimestamp(
+                        overview.generatedAt,
+                        overview.timeZone,
+                      ) +
+                      ' · ' +
+                      overview.timeZone
+                    }
+                    title={
+                      displayTimestamp(
+                        overview.generatedAt,
+                        overview.timeZone,
+                      ) +
+                      ' · ' +
+                      overview.timeZone
+                    }
+                  >
+                    Cập nhật{' '}
+                    {
+                      displayTimestamp(
+                        overview.generatedAt,
+                        overview.timeZone,
+                      ).split(' · ')[0]
+                    }
+                  </time>
+                )}
+                <ResourceRefreshAction
+                  loading={loading}
+                  onClick={() => setRefresh((value) => value + 1)}
+                />
               </div>
-              {overviewLoading && !overview ? (
-                <div className="chart-skeleton" aria-hidden="true">
-                  <span />
-                  <span />
-                  <span />
-                </div>
-              ) : overview ? (
-                <>
-                  <div
-                    className="role-chart"
-                    role="img"
-                    aria-label="Phân bố số lượt gán tài khoản theo vai trò"
-                  >
-                    {overview.accountsByRole.map((role, index) => (
-                      <div className="role-row" key={role.roleId}>
-                        <div className="role-row-label">
-                          <span
-                            className={`legend-dot role-dot-${index % 3}`}
-                          />
-                          {role.roleName}
-                        </div>
-                        <div aria-hidden="true" className="role-track">
-                          <span
-                            className={`role-fill role-fill-${index % 3}`}
-                            style={{
-                              width: `${Math.max(1.5, (role.assignedAccountCount / roleMaximum) * 100)}%`,
-                            }}
-                          />
-                        </div>
-                        <strong className="role-count">
-                          {numberFormat(role.assignedAccountCount)}
-                        </strong>
-                      </div>
-                    ))}
-                  </div>
-                  <p className="chart-footnote">
-                    Một tài khoản có thể được tính ở nhiều vai trò nếu được gán
-                    nhiều quyền.
-                  </p>
-                  <button
-                    aria-expanded={showRoleTable}
-                    className="text-toggle"
-                    onClick={() => setShowRoleTable((show) => !show)}
-                    type="button"
-                  >
-                    {showRoleTable ? 'Ẩn bảng dữ liệu' : 'Xem bảng dữ liệu'}
-                  </button>
-                  {showRoleTable && (
-                    <div className="accessible-table-wrap">
-                      <table className="compact-data-table">
-                        <caption>Phân bố tài khoản theo vai trò</caption>
-                        <thead>
-                          <tr>
-                            <th scope="col">Vai trò</th>
-                            <th scope="col">Số lượt gán</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {overview.accountsByRole.map((role) => (
-                            <tr key={role.roleId}>
-                              <th scope="row">{role.roleName}</th>
-                              <td>{numberFormat(role.assignedAccountCount)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+            ) : undefined
+          }
+        />
+        {!canRead ? (
+          <Card className="p-0">
+            <ResourceState>
+              Bạn cần quyền xem nhà xe và tài khoản quản trị để xem tổng quan
+              nền tảng.
+            </ResourceState>
+          </Card>
+        ) : (
+          <>
+            {error && (
+              <ResourceNotice kind="error">
+                <div className="space-y-3">
+                  <p>{error}</p>
+                  {overview && (
+                    <p>Đang hiển thị bản dữ liệu trước lần làm mới thất bại.</p>
                   )}
-                </>
-              ) : (
-                <p className="panel-empty">
-                  Chưa có dữ liệu phân bố tài khoản.
-                </p>
-              )}
-            </article>
-
-            <article
-              aria-busy={overviewLoading && !overview}
-              className="panel status-panel"
-            >
-              <div className="panel-heading">
-                <div>
-                  <h3>Trạng thái tài khoản</h3>
-                  <p>Tình trạng hiện tại của tài khoản nền tảng.</p>
+                  <Button
+                    variant="outline"
+                    disabled={loading}
+                    onClick={() => setRefresh((value) => value + 1)}
+                  >
+                    Thử lại
+                  </Button>
                 </div>
-                <span className="panel-heading-icon">
-                  <ShieldCheck size={17} />
-                </span>
-              </div>
-              {overviewLoading && !overview ? (
-                <div className="status-skeleton" aria-hidden="true">
-                  <span />
-                  <span />
-                </div>
-              ) : overview ? (
-                <>
-                  <div className="status-chart-row">
-                    <div
-                      aria-label={`${numberFormat(activeAccounts)} tài khoản đang hoạt động trên ${numberFormat(totalStatusAccounts)} tài khoản`}
-                      className="status-donut"
-                      role="img"
-                      style={{
-                        background: `conic-gradient(var(--success) 0 ${activePercentage}%, var(--status-muted) ${activePercentage}% 100%)`,
-                      }}
-                    >
+              </ResourceNotice>
+            )}
+            {loading && !overview && (
+              <Card
+                role="status"
+                aria-label="Đang tải tổng quan nền tảng"
+                className="grid gap-0 divide-y p-0 md:grid-cols-3 md:divide-x md:divide-y-0"
+              >
+                {[0, 1, 2].map((item) => (
+                  <div key={item} className="space-y-4 p-6">
+                    <Skeleton className="h-4 w-32" />
+                    <Skeleton className="h-9 w-20" />
+                    <Skeleton className="h-3 w-40" />
+                  </div>
+                ))}
+              </Card>
+            )}
+            {overview && (
+              <>
+                <Card
+                  role="region"
+                  aria-label="Chỉ số nền tảng hiện tại"
+                  aria-busy={loading}
+                  className="grid gap-0 divide-y p-0 md:grid-cols-3 md:divide-x md:divide-y-0"
+                >
+                  <Metric
+                    label="Nhà xe trên nền tảng"
+                    value={overview.companies.total}
+                    icon={<Building2 className="size-4" />}
+                    primary
+                  >
+                    <span className="inline-flex items-center gap-1.5">
+                      <span
+                        aria-hidden
+                        className="size-1.5 rounded-full bg-[var(--admin-status-success)]"
+                      />
+                      {number(overview.companies.active)} hoạt động
+                    </span>
+                    {overview.companies.suspended > 0 && (
                       <span>
-                        <strong>{Math.round(activePercentage)}%</strong>
-                        <small>hoạt động</small>
+                        {' '}
+                        · {number(overview.companies.suspended)} tạm ngưng
                       </span>
-                    </div>
-                    <div className="status-legend">
-                      {overview.accountsByStatus.map((item) => (
-                        <div className="status-legend-row" key={item.status}>
-                          <span
-                            className={`legend-dot ${item.status === 'ACTIVE' ? 'legend-success' : 'legend-muted'}`}
-                          />
-                          <span className="status-legend-name">
-                            {item.label}
-                          </span>
-                          <strong>{numberFormat(item.count)}</strong>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <button
-                    aria-expanded={showStatusTable}
-                    className="text-toggle status-table-toggle"
-                    onClick={() => setShowStatusTable((show) => !show)}
-                    type="button"
+                    )}
+                    {overview.companies.other > 0 && (
+                      <span>
+                        {' '}
+                        · {number(overview.companies.other)} trạng thái khác
+                      </span>
+                    )}
+                  </Metric>
+                  <Metric
+                    label="Quản trị viên nhà xe"
+                    value={overview.administrators.total}
+                    icon={<UsersRound className="size-4" />}
                   >
-                    {showStatusTable ? 'Ẩn bảng dữ liệu' : 'Xem bảng dữ liệu'}
-                  </button>
-                  {showStatusTable && (
-                    <div className="accessible-table-wrap">
-                      <table className="compact-data-table">
-                        <caption>Phân bố tài khoản theo trạng thái</caption>
-                        <thead>
-                          <tr>
-                            <th scope="col">Trạng thái</th>
-                            <th scope="col">Số tài khoản</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {overview.accountsByStatus.map((item) => (
-                            <tr key={item.status}>
-                              <th scope="row">{item.label}</th>
-                              <td>{numberFormat(item.count)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                    {number(overview.administrators.active)} đang làm việc, tài
+                    khoản hoạt động
+                  </Metric>
+                  <Metric
+                    label="Cần bổ sung quản trị viên"
+                    value={needing}
+                    icon={
+                      needing ? (
+                        <UserRoundCog className="size-4" />
+                      ) : (
+                        <CircleCheck className="size-4" />
+                      )
+                    }
+                    attention={needing > 0}
+                  >
+                    {needing ? (
+                      <a
+                        className="font-medium text-[var(--admin-status-warning)] underline underline-offset-4"
+                        href="#companies-needing-admin"
+                      >
+                        Xem nhà xe cần xử lý
+                      </a>
+                    ) : overview.companies.active ? (
+                      'Nhà xe đang hoạt động đã có quản trị viên'
+                    ) : (
+                      'Chưa có nhà xe cần rà soát'
+                    )}
+                  </Metric>
+                </Card>
+                {needing > 0 && (
+                  <Card
+                    id="companies-needing-admin"
+                    className="scroll-mt-24 gap-0 border-[var(--admin-status-warning)]/20 py-0"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-3 p-5">
+                      <h2 className="text-base font-semibold">
+                        {number(needing)} nhà xe cần bổ sung quản trị viên
+                      </h2>
+                      <Link
+                        className={buttonVariants({
+                          variant: 'outline',
+                          size: 'sm',
+                        })}
+                        href="/admin-accounts"
+                      >
+                        Quản lý tài khoản <ArrowUpRight aria-hidden />
+                      </Link>
                     </div>
-                  )}
-                </>
-              ) : (
-                <p className="panel-empty">
-                  Chưa có dữ liệu trạng thái tài khoản.
-                </p>
-              )}
-            </article>
-          </div>
-        </section>
-
-        <footer className="admin-page-footer">
-          <span>© 2026 VexGo Platform</span>
-          <span>
-            <span className="footer-status-dot" />
-            Trạng thái nền tảng: ổn định
-          </span>
-        </footer>
+                    <ul className="divide-y border-t">
+                      {overview.attentionCompanies.map((company) => (
+                        <li
+                          key={company.id}
+                          className="flex items-center justify-between gap-4 px-5 py-3"
+                        >
+                          <p className="min-w-0 break-words text-[13px] font-medium">
+                            {company.name}
+                          </p>
+                          <span className="admin-data-mono shrink-0 text-xs text-muted-foreground">
+                            {company.code}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="border-t px-5 py-3 text-xs text-muted-foreground">
+                      Tối đa 5 hồ sơ cũ nhất chưa có quản trị viên hoạt động.
+                    </p>
+                  </Card>
+                )}
+                <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
+                  <Card className="min-w-0 gap-0 py-0">
+                    <div className="flex flex-wrap items-center justify-between gap-3 p-5 sm:p-6">
+                      <h2 className="text-base font-semibold">
+                        Nhà xe mới nhất
+                      </h2>
+                      <Link
+                        className={buttonVariants({
+                          variant: 'ghost',
+                          size: 'sm',
+                        })}
+                        href="/bus-companies"
+                      >
+                        Xem tất cả <ArrowUpRight aria-hidden />
+                      </Link>
+                    </div>
+                    <RecentCompanies
+                      companies={overview.recentCompanies}
+                      timeZone={overview.timeZone}
+                    />
+                  </Card>
+                  <OnboardingChart overview={overview} />
+                </div>
+              </>
+            )}
+          </>
+        )}
       </div>
     </SuperAdminLayout>
   );

@@ -5,6 +5,9 @@ import { renderToString } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import RootLayout from '../src/app/layout';
 
+// This test owns document.open()/hydration, not Sonner's document-direction hook.
+vi.mock('@/components/ui/sonner', () => ({ Toaster: () => null }));
+
 const fontConfig = vi.hoisted(() => ({
   inter: undefined as { subsets?: string[] } | undefined,
 }));
