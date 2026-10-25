@@ -246,11 +246,17 @@ async function seedPreMigrationCohort(prisma) {
   });
   const seats = [];
   for (let index = 0; index < 3; index += 1) {
-    const seat = await prisma.ghe.create({
-      data: { soGhe: `H${index + 1}`, xeId: xe.xeId },
-      select: { gheId: true },
-    });
-    seats.push(seat.gheId);
+    const seatNumber = `H${index + 1}`;
+    // This fixture intentionally uses the schema before the seat-layout migration.
+    // The generated client reflects today's schema and would insert its newer `tang` default.
+    await prisma.$executeRaw`
+      INSERT INTO Ghe (soGhe, xeId) VALUES (${seatNumber}, ${xe.xeId})
+    `;
+    const seatRows = await prisma.$queryRaw`
+      SELECT gheId FROM Ghe WHERE xeId = ${xe.xeId} AND soGhe = ${seatNumber}
+    `;
+    assert(seatRows.length === 1, `Could not load pre-layout seat ${seatNumber}.`);
+    seats.push(Number(seatRows[0].gheId));
   }
   const chuyenXe = await prisma.chuyenXe.create({
     data: {
@@ -268,12 +274,18 @@ async function seedPreMigrationCohort(prisma) {
     select: { chuyenXeId: true },
   });
   const tripSeats = [];
+  const tripSeatStatus = 'DA_DAT';
   for (const gheId of seats) {
-    const tripSeat = await prisma.gheChuyenXe.create({
-      data: { trangThai: 'DA_DAT', chuyenXeId: chuyenXe.chuyenXeId, gheId },
-      select: { gheChuyenXeId: true },
-    });
-    tripSeats.push(tripSeat.gheChuyenXeId);
+    await prisma.$executeRaw`
+      INSERT INTO GheChuyenXe (trangThai, chuyenXeId, gheId)
+      VALUES (${tripSeatStatus}, ${chuyenXe.chuyenXeId}, ${gheId})
+    `;
+    const tripSeatRows = await prisma.$queryRaw`
+      SELECT gheChuyenXeId FROM GheChuyenXe
+      WHERE chuyenXeId = ${chuyenXe.chuyenXeId} AND gheId = ${gheId}
+    `;
+    assert(tripSeatRows.length === 1, `Could not load trip seat for seat ${gheId}.`);
+    tripSeats.push(Number(tripSeatRows[0].gheChuyenXeId));
   }
   const bangGia = await prisma.bangGia.create({
     data: {
