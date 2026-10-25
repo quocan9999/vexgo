@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { LocationsModule } from './locations/locations.module.js';
 import { ConfigModule } from '@nestjs/config';
 import { resolve } from 'node:path';
 import { PrismaModule } from './prisma/prisma.module.js';
@@ -28,6 +29,7 @@ import { PlatformDashboardModule } from './platform-dashboard/platform-dashboard
 
 @Module({
   imports: [
+    LocationsModule,
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: [

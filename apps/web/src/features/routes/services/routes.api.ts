@@ -36,14 +36,14 @@ export type RouteListResponse = {
 };
 
 export const routesApi = {
-  async listRoutes(params: RouteListParams = {}): Promise<RouteListResponse> {
+  async listRoutes(params: RouteListParams = {}, signal?: AbortSignal): Promise<RouteListResponse> {
     const query = new URLSearchParams();
     for (const [key, value] of Object.entries(params)) {
       if (value !== undefined && value !== '') query.set(key, String(value));
     }
 
     const suffix = query.size > 0 ? `?${query.toString()}` : '';
-    const response = await fetch(`${API_BASE_URL}/routes${suffix}`);
+    const response = await fetch(`${API_BASE_URL}/routes${suffix}`, { signal });
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
       throw new Error(error.message || 'Không thể tải danh sách tuyến xe');

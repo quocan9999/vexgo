@@ -118,6 +118,8 @@ The mappings above describe legacy compatibility. New components follow the sema
 
 ## Shared Admin patterns
 
+Location selectors use `components/ui/searchable-combobox.tsx` (Base UI Combobox with the existing shadcn theme) through `features/locations/components/location-picker.tsx`. Reuse this primitive for searchable selections; API/catalogue loading stays in the feature. Location options show the current province as the primary line and predecessor names on a smaller muted secondary line, e.g. Tây Ninh / Long An - cũ. Old provinces are searchable aliases rather than separate options. Location IDs/version semantics and consumer inventory: [LOCATION_CATALOG.md](../api/LOCATION_CATALOG.md). This addition is implemented and pending user visual smoke.
+
 Shared components under `src/components/admin/`, `src/components/ui/`, and `src/components/data-filters/` own reusable visual and accessibility behavior. Reuse the shared page header/actions, detail action, table skeleton, result summary, status badge, pagination, filter controls, detail sheet, form dialog, and confirmation dialog when the use case matches.
 
 - Detail sheet action groups align to the end, wrap when needed, and use the shared action gap. Filter searches stop growing at their defined maximum, while select and date triggers keep a stable width as values and result counts change. Toolbars with many controls may use the compact density variant on desktop and wrap on narrower screens.
@@ -127,6 +129,8 @@ Shared components under `src/components/admin/`, `src/components/ui/`, and `src/
 - No route or feature is a visual authority for the rest of Admin.
 
 ## Interaction and accessibility
+
+- Searchable location menus use a small leading location icon, a semibold primary name and muted 12px secondary names. Keep selected rows distinct with a light primary surface and a filled check indicator; hover/keyboard highlight remains visible. Menus are viewport-bounded, scroll independently and may exceed a narrow trigger up to the available viewport width. Retain the existing form control heights and semantic focus/invalid states.
 
 - CRUD lists use a desktop table with a mobile card fallback where a table no longer reads well.
 - Search and filters precede the result count; display the count in one location.

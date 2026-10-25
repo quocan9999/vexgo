@@ -1,8 +1,11 @@
 import { businessCode } from '../common/business-code.js';
+import { locationSearchTerms } from '../locations/location-search.js';
+import { LocationsService } from '../locations/locations.service.js';
 import {
   ConflictException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
@@ -404,9 +407,12 @@ export class TripsService {
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
     private readonly cargoCapacityService: CargoCapacityService,
+    @Optional() private readonly locations?: LocationsService,
   ) {}
 
   async search(dto: SearchTripsDto) {
+    const catalogue = (dto.from || dto.to) && this.locations
+      ? (await this.locations.list()).data : [];
     const businessTimeZone = resolveBusinessTimeZone(
       this.config.get<string>('BUSINESS_TIME_ZONE'),
     );
@@ -418,10 +424,21 @@ export class TripsService {
     if (dto.from || dto.to || dto.busCompanyId || dto.operator) {
       where.tuyenXe = {};
       if (dto.from) {
-        where.tuyenXe.diemDi = { contains: codeToCity(dto.from) };
+        where.tuyenXe.AND = [{
+          OR: locationSearchTerms(codeToCity(dto.from)!, catalogue).map((term) => ({
+            diemDi: { contains: term },
+          })),
+        }];
       }
       if (dto.to) {
-        where.tuyenXe.diemDen = { contains: codeToCity(dto.to) };
+        const originFilter = where.tuyenXe.AND as
+          | Prisma.TuyenXeWhereInput[]
+          | undefined;
+        where.tuyenXe.AND = [...(originFilter ?? []), {
+          OR: locationSearchTerms(codeToCity(dto.to)!, catalogue).map((term) => ({
+            diemDen: { contains: term },
+          })),
+        }];
       }
       if (dto.busCompanyId) {
         where.tuyenXe.nhaXeId = dto.busCompanyId;
