@@ -327,7 +327,7 @@ describe('Admin default role-permission API', () => {
         '/api/v1/admin-rbac/default-role-permissions/NHA_XE_ADMIN',
       ),
     )
-      .send({ permissionKeys: ['vehicle:delete'] })
+      .send({ permissionKeys: ['vehicle:unknown'] })
       .expect(400);
     expect(unknownKey.body.error).toBe('VALIDATION_ERROR');
 

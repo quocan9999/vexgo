@@ -610,6 +610,7 @@ describe('Trips read HTTP contract and authorization', () => {
           tripSeatId: 1001,
           seatNumber: 'A01',
           position: 'Tầng 1',
+          floor: 1,
           status: 'TRONG',
         },
       ]);

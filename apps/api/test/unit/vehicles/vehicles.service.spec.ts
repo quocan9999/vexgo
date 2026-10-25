@@ -37,6 +37,7 @@ const prisma = {
   nhaXe: { findUnique: vi.fn() },
   loaiXe: { findUnique: vi.fn(), findFirst: vi.fn() },
   chuyenXe: { count: vi.fn() },
+  $transaction: vi.fn(),
 } as unknown as PrismaService;
 
 const tenantAdmin: AuthPrincipal = {
@@ -83,6 +84,9 @@ function createQuery(overrides: Partial<VehicleQueryDto> = {}) {
 describe('VehiclesService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(prisma.$transaction).mockImplementation(
+      async (callback) => callback(prisma as never),
+    );
     vi.mocked(prisma.xe.findMany).mockResolvedValue([vehicleListRecord]);
     vi.mocked(prisma.xe.count).mockResolvedValue(1);
     vi.mocked(prisma.xe.findUnique).mockResolvedValue(vehicleDetailRecord);
@@ -330,6 +334,9 @@ function prismaKnownError(code: string, meta: Record<string, unknown> = {}) {
 describe('VehiclesService writes', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(prisma.$transaction).mockImplementation(
+      async (callback) => callback(prisma as never),
+    );
     vi.mocked(prisma.xe.findUnique).mockResolvedValue(vehicleDetailRecord);
     vi.mocked(prisma.xe.findFirst).mockResolvedValue(vehicleDetailRecord);
     vi.mocked(prisma.xe.create).mockResolvedValue(vehicleDetailRecord);
