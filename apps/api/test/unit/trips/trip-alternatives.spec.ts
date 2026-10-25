@@ -177,4 +177,54 @@ describe('TripsService - getTripAlternatives', () => {
     expect(alternatives).toHaveLength(1);
     expect(alternatives[0].tripId).toBe(102);
   });
+
+  it('filters out same-operator trips and trips with higher prices when otherOperatorsOnly=true', async () => {
+    // Chuyến 4: Khác nhà xe (nhaXeId: 3), nhưng giá đắt hơn (300k > 250k)
+    const candidateExpensive = {
+      chuyenXeId: 106,
+      maChuyenXe: 'CX-106',
+      ngayKhoiHanh: baseDate,
+      gioKhoiHanh: baseDate,
+      nhaXeId: 3,
+      tuyenXeId: 5,
+      trangThai: 'CHUA_KHOI_HANH',
+      tuyenXe: mockOriginalTrip.tuyenXe,
+      xe: {
+        nhaXeId: 3,
+        loaiXeId: 2,
+        nhaXe: { tenNhaXe: 'Mai Linh' },
+        loaiXe: { tenLoai: 'Limousine' },
+      },
+      gheChuyenXes: Array.from({ length: 8 }, (_, i) => ({
+        gheChuyenXeId: 70 + i,
+        trangThai: 'TRONG',
+        ghe: { gheId: 70 + i },
+      })),
+    };
+
+    prisma.bangGia.findFirst.mockImplementation(async ({ where }) => {
+      if (where.nhaXeId === 3) {
+        return { bangGiaId: 3, giaNiemYet: 300000 }; // 300k > 250k
+      }
+      if (where.nhaXeId === 2) {
+        return { bangGiaId: 2, giaNiemYet: 200000 }; // 200k <= 250k
+      }
+      return { bangGiaId: 1, giaNiemYet: 250000 }; // 250k
+    });
+
+    prisma.chuyenXe.findMany.mockResolvedValue([
+      candidate1, // nhaXeId: 1 (same operator)
+      candidate2, // nhaXeId: 2 (different operator, 200k <= 250k)
+      candidateExpensive, // nhaXeId: 3 (different operator, 300k > 250k)
+    ]);
+
+    const alternatives = await service.getTripAlternatives(101, 5, true);
+
+    // Only candidate2 should remain
+    expect(alternatives).toHaveLength(1);
+    expect(alternatives[0].tripId).toBe(103);
+    expect(alternatives[0].busCompanyName).toBe('Thành Bưởi');
+    expect(alternatives[0].price).toBe(200000);
+    expect(alternatives[0].price).toBeLessThanOrEqual(250000);
+  });
 });

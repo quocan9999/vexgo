@@ -20,7 +20,7 @@ describe('ReviewsService', () => {
     khachHang: { findUnique: vi.fn() },
     chuyenXe: { findUnique: vi.fn() },
     ve: { findFirst: vi.fn() },
-    phanHoi: { findFirst: vi.fn(), create: vi.fn() },
+    phanHoi: { findFirst: vi.fn(), create: vi.fn(), findMany: vi.fn() },
     $transaction: vi.fn(async (cb) => cb(prisma)),
     $executeRaw: vi.fn().mockResolvedValue(1),
   };
@@ -107,5 +107,51 @@ describe('ReviewsService', () => {
     await expect(
       service.createReview(42, { tripId: 101, rating: 5 }),
     ).rejects.toThrow(ConflictException);
+  });
+
+  it('computes average rating and formats reviews in getBusCompanyReviews', async () => {
+    prisma.phanHoi.findMany.mockResolvedValue([
+      {
+        phanHoiId: 1,
+        mucDanhGia: 5,
+        noiDung: 'Xe tốt',
+        thoiGian: new Date('2026-10-01T10:00:00Z'),
+        khachHang: { taiKhoan: { hoTen: 'Nguyễn Văn A' } },
+      },
+      {
+        phanHoiId: 2,
+        mucDanhGia: 4,
+        noiDung: 'Tài xế cẩn thận',
+        thoiGian: new Date('2026-10-02T10:00:00Z'),
+        khachHang: { taiKhoan: { hoTen: 'Trần Thị B' } },
+      },
+    ]);
+
+    const result = await service.getBusCompanyReviews(1);
+
+    expect(result.busCompanyId).toBe(1);
+    expect(result.reviewsCount).toBe(2);
+    expect(result.rating).toBe(4.5);
+    expect(result.reviews).toHaveLength(2);
+    expect(result.reviews[0].customerName).toBe('Nguyễn Văn A');
+  });
+
+  it('computes average rating and formats reviews in getTripReviews', async () => {
+    prisma.phanHoi.findMany.mockResolvedValue([
+      {
+        phanHoiId: 3,
+        mucDanhGia: 5,
+        noiDung: 'Chuyến đi tuyệt vời',
+        thoiGian: new Date('2026-10-03T10:00:00Z'),
+        khachHang: { taiKhoan: { hoTen: 'Lê Văn C' } },
+      },
+    ]);
+
+    const result = await service.getTripReviews(101);
+
+    expect(result.tripId).toBe(101);
+    expect(result.reviewsCount).toBe(1);
+    expect(result.rating).toBe(5);
+    expect(result.reviews[0].customerName).toBe('Lê Văn C');
   });
 });

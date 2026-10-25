@@ -108,6 +108,16 @@ export type BookingResponseData = {
     phoneNumber?: string;
     email?: string;
   } | null;
+  tickets?: Array<{
+    ticketId: number;
+    ticketCode: string;
+    seatNumber: string | null;
+    seatPosition: string | null;
+    price: number;
+    status: string;
+  }>;
+  activeSeatNumbers?: string[];
+  cancelledSeatNumbers?: string[];
   createdAt?: string;
   [key: string]: unknown;
 };

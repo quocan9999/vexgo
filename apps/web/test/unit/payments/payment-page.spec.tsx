@@ -1321,3 +1321,96 @@ it('uses server clock offset instead of browser time or draft timestamps', async
   expect(screen.getByText(/Thời gian thanh toán còn lại 01:00/)).toBeTruthy();
   expect(screen.getByRole('img', {name: 'Mã QR thanh toán VietQR'})).toBeTruthy();
 });
+
+it('supports round-trip payment with leg switching and redirects when both legs are paid', async () => {
+  configureVietQr();
+  window.sessionStorage.setItem(
+    `${PAYMENT_DRAFT_STORAGE_PREFIX}${draftId}`,
+    JSON.stringify({
+      id: draftId,
+      tripType: 'round-trip',
+      totalFare: 300000,
+      passenger: {
+        fullName: 'Nguyễn Văn A',
+        phoneNumber: '0900000000',
+        email: 'customer@example.test',
+      },
+      bookingId: 4201,
+      bookingCode: 'VG-TEST-4201',
+      orderCode: 'DGD-TEST-4201',
+      legs: [
+        {
+          tripId: 101,
+          route: 'TP.HCM - Đà Lạt',
+          departureTime: '2026-10-25T08:00:00.000Z',
+          seats: ['A01'],
+          pickup: 'Bến xe Miền Đông',
+          dropoff: 'Bến xe Đà Lạt',
+          unitFare: 150000,
+          subtotal: 150000,
+          bookingId: 4201,
+          bookingCode: 'VG-TEST-4201',
+          orderCode: 'DGD-TEST-4201',
+        },
+        {
+          tripId: 102,
+          route: 'Đà Lạt - TP.HCM',
+          departureTime: '2026-10-26T14:00:00.000Z',
+          seats: ['B02'],
+          pickup: 'Bến xe Đà Lạt',
+          dropoff: 'Bến xe Miền Đông',
+          unitFare: 150000,
+          subtotal: 150000,
+          bookingId: 4202,
+          bookingCode: 'VG-TEST-4202',
+          orderCode: 'DGD-TEST-4202',
+        },
+      ],
+    }),
+  );
+
+  const b0 = bookingDetail({
+    bookingId: 4201,
+    bookingCode: 'VG-TEST-4201',
+    orderCode: 'DGD-TEST-4201',
+    totalAmount: 150000,
+    ticketSubtotal: 150000,
+    status: 'CHO_THANH_TOAN',
+    paymentStatus: 'CHO_THANH_TOAN',
+  });
+
+  const b1 = bookingDetail({
+    bookingId: 4202,
+    bookingCode: 'VG-TEST-4202',
+    orderCode: 'DGD-TEST-4202',
+    totalAmount: 150000,
+    ticketSubtotal: 150000,
+    status: 'CHO_THANH_TOAN',
+    paymentStatus: 'CHO_THANH_TOAN',
+  });
+
+  fetchMock.mockImplementation((url: string) => {
+    if (url.includes('/4201/detail')) return Promise.resolve(jsonResponse(b0));
+    if (url.includes('/4202/detail')) return Promise.resolve(jsonResponse(b1));
+    return Promise.reject(new Error('Not found'));
+  });
+
+  render(<PaymentPage />);
+  await flushPromises();
+
+  expect(screen.getByText('Chặng 1: Lượt đi')).toBeTruthy();
+  expect(screen.getByText('Chặng 2: Lượt về')).toBeTruthy();
+
+  fireEvent.click(screen.getByText('Chặng 2: Lượt về'));
+  expect(screen.getByText(/Thanh toán Chặng 2 \(Lượt về\)/i)).toBeTruthy();
+
+  b0.status = 'DA_THANH_TOAN';
+  b0.paymentStatus = 'DA_THANH_TOAN';
+  b1.status = 'DA_THANH_TOAN';
+  b1.paymentStatus = 'DA_THANH_TOAN';
+
+  await advanceTime(2600);
+  await flushPromises();
+
+  expect(routerPush).toHaveBeenCalledWith('/invoice/4201?returnBookingId=4202');
+});

@@ -9,6 +9,12 @@ export type PaymentDraftLeg = {
   subtotal: number;
   busCompanyName?: string;
   vehicleType?: string;
+  bookingId?: number;
+  bookingCode?: string;
+  orderId?: number;
+  orderCode?: string;
+  status?: string;
+  paymentStatus?: string;
 };
 
 type PaymentDraftBase = {

@@ -67,6 +67,10 @@ export class CargoItemInputDto {
 
   @IsOptional()
   @IsString()
+  serviceType?: 'NORMAL' | 'FRAGILE' | 'VALUABLE';
+
+  @IsOptional()
+  @IsString()
   note?: string;
 }
 

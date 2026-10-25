@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback, useSyncExternalStore, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, Info, ScanLine, X } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Info, ScanLine, X } from 'lucide-react';
 import {
   PAYMENT_DRAFT_STORAGE_PREFIX,
   validatePaymentDraft,
@@ -257,25 +257,40 @@ function PaymentContent() {
   }, [rawDraft]);
   const shipmentDraft = draft?.kind === 'shipment' ? draft : null;
   const bookingDraft = draft && draft.kind !== 'shipment' ? draft : null;
+  const isRoundTripBooking = Boolean(
+    bookingDraft &&
+    bookingDraft.tripType === 'round-trip' &&
+    bookingDraft.legs.length > 1,
+  );
   const paymentResourceKey = shipmentDraft
     ? `shipment:${shipmentDraft.shipmentId}:${shipmentDraft.paymentId}:${shipmentDraft.waybillCode}:${shipmentDraft.sender.phoneNumber}`
-    : bookingDraft?.bookingId
-      ? `booking:${bookingDraft.bookingId}:${bookingDraft.bookingCode}:${bookingDraft.passenger.phoneNumber}`
-      : null;
+    : isRoundTripBooking && bookingDraft
+      ? `round-trip:${bookingDraft.id}:${bookingDraft.legs[0]?.bookingId}:${bookingDraft.legs[1]?.bookingId}:${bookingDraft.passenger.phoneNumber}`
+      : bookingDraft?.bookingId
+        ? `booking:${bookingDraft.bookingId}:${bookingDraft.bookingCode}:${bookingDraft.passenger.phoneNumber}`
+        : null;
 
+  const [selectedLegIndex, setSelectedLegIndex] = useState(0);
+  const [legSnapshots, setLegSnapshots] = useState<[PaymentReadSnapshot | null, PaymentReadSnapshot | null]>([null, null]);
   const [clockTick, setClockTick] = useState(0);
   const [paymentReadSnapshot, setPaymentReadSnapshot] =
     useState<PaymentReadSnapshot | null>(null);
   const [showTripDetailModal, setShowTripDetailModal] = useState(false);
   const [showCargoDetailModal, setShowCargoDetailModal] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
-  const activePaymentReadSnapshot =
-    paymentReadSnapshot?.draftId === draft?.id &&
-    paymentReadSnapshot?.resourceKey === paymentResourceKey &&
-    paymentReadSnapshot?.expectedOrderCode === draft?.orderCode?.trim() &&
-    paymentReadSnapshot?.expectedTotalAmount === draft?.totalFare
-      ? paymentReadSnapshot
-      : null;
+
+  const activeLegSnapshot = isRoundTripBooking ? legSnapshots[selectedLegIndex] : null;
+  const activePaymentReadSnapshot = isRoundTripBooking
+    ? (activeLegSnapshot?.draftId === draft?.id &&
+       activeLegSnapshot?.resourceKey === paymentResourceKey
+        ? activeLegSnapshot
+        : null)
+    : (paymentReadSnapshot?.draftId === draft?.id &&
+       paymentReadSnapshot?.resourceKey === paymentResourceKey &&
+       paymentReadSnapshot?.expectedOrderCode === draft?.orderCode?.trim() &&
+       paymentReadSnapshot?.expectedTotalAmount === draft?.totalFare
+        ? paymentReadSnapshot
+        : null);
 
   useEffect(() => {
     if (!showTripDetailModal && !showCargoDetailModal) return;
@@ -287,8 +302,12 @@ function PaymentContent() {
     window.addEventListener('keydown', closeOnEscape);
     return () => window.removeEventListener('keydown', closeOnEscape);
   }, [showTripDetailModal, showCargoDetailModal]);
-  const hasValidBookingId =
-    Number.isSafeInteger(bookingDraft?.bookingId) && (bookingDraft?.bookingId ?? 0) > 0;
+  const hasValidBookingId = isRoundTripBooking && bookingDraft
+    ? Number.isSafeInteger(bookingDraft.legs[0]?.bookingId) &&
+      (bookingDraft.legs[0]?.bookingId ?? 0) > 0 &&
+      Number.isSafeInteger(bookingDraft.legs[1]?.bookingId) &&
+      (bookingDraft.legs[1]?.bookingId ?? 0) > 0
+    : Number.isSafeInteger(bookingDraft?.bookingId) && (bookingDraft?.bookingId ?? 0) > 0;
   const hasValidShipmentPayment = Boolean(
     shipmentDraft &&
     Number.isSafeInteger(shipmentDraft.shipmentId) && shipmentDraft.shipmentId > 0 &&
@@ -314,9 +333,12 @@ function PaymentContent() {
     paymentTerminalStatus ?? (timeLeft === 0 ? 'verification-needed' : null),
   );
 
-  const readBookingDetail = useCallback(
-    (bookingDraft: BookingPaymentDraft, signal?: AbortSignal) => {
-      const bookingId = bookingDraft.bookingId;
+  const readBookingDetailTarget = useCallback(
+    (
+      target: { bookingId?: number; bookingCode?: string; phoneNumber: string },
+      signal?: AbortSignal,
+    ) => {
+      const bookingId = target.bookingId;
       if (!bookingId) {
         throw new Error('Mã đặt vé không hợp lệ.');
       }
@@ -325,18 +347,32 @@ function PaymentContent() {
           bookingsApi.getPublicBookingDetail(bookingId, {
             signal,
             accessToken: token,
-            bookingCode: bookingDraft.bookingCode,
-            phoneNumber: bookingDraft.passenger.phoneNumber,
+            bookingCode: target.bookingCode,
+            phoneNumber: target.phoneNumber,
           }),
         );
       }
       return bookingsApi.getPublicBookingDetail(bookingId, {
         signal,
-        bookingCode: bookingDraft.bookingCode,
-        phoneNumber: bookingDraft.passenger.phoneNumber,
+        bookingCode: target.bookingCode,
+        phoneNumber: target.phoneNumber,
       });
     },
     [executeWithAuth, isAuthenticated],
+  );
+
+  const readBookingDetail = useCallback(
+    (bookingDraft: BookingPaymentDraft, signal?: AbortSignal) => {
+      return readBookingDetailTarget(
+        {
+          bookingId: bookingDraft.bookingId,
+          bookingCode: bookingDraft.bookingCode,
+          phoneNumber: bookingDraft.passenger.phoneNumber,
+        },
+        signal,
+      );
+    },
+    [readBookingDetailTarget],
   );
 
   useEffect(() => {
@@ -382,14 +418,16 @@ function PaymentContent() {
   // Booking and shipment both use API-verified order details before the shared QR is rendered.
   useEffect(() => {
     const currentDraft: PaymentDraft | null = shipmentDraft ?? bookingDraft;
-    const expectedOrderCode = currentDraft?.orderCode?.trim();
+    const expectedOrderCode = isRoundTripBooking
+      ? bookingDraft?.legs[0]?.orderCode?.trim()
+      : currentDraft?.orderCode?.trim();
     const resourceKey = paymentResourceKey;
     if (
       !isHydrated ||
       !currentDraft?.id ||
       (!vietQrConfig && currentDraft.totalFare !== 0) ||
       !hasValidPaymentResource ||
-      !expectedOrderCode ||
+      (!expectedOrderCode && !isRoundTripBooking) ||
       !resourceKey
     ) return;
 
@@ -407,10 +445,46 @@ function PaymentContent() {
       paymentExpiresAt: string | null = null,
     ) => {
       if (!isSubscribed) return;
+      if (isRoundTripBooking && bookingDraft) {
+        setLegSnapshots([
+          {
+            draftId: currentDraft.id,
+            resourceKey,
+            expectedOrderCode: bookingDraft.legs[0]?.orderCode?.trim() || '',
+            expectedTotalAmount: bookingDraft.legs[0]?.subtotal ?? 0,
+            orderCode: null,
+            totalAmount: null,
+            promotionCode: null,
+            originalTicketSubtotal: null,
+            discountAmount: null,
+            ticketSubtotal: null,
+            cargoFee: null,
+            paymentExpiresAt,
+            serverTimeOffsetMs: observedServerTimeOffsetMs,
+            terminalStatus,
+          },
+          {
+            draftId: currentDraft.id,
+            resourceKey,
+            expectedOrderCode: bookingDraft.legs[1]?.orderCode?.trim() || '',
+            expectedTotalAmount: bookingDraft.legs[1]?.subtotal ?? 0,
+            orderCode: null,
+            totalAmount: null,
+            promotionCode: null,
+            originalTicketSubtotal: null,
+            discountAmount: null,
+            ticketSubtotal: null,
+            cargoFee: null,
+            paymentExpiresAt,
+            serverTimeOffsetMs: observedServerTimeOffsetMs,
+            terminalStatus,
+          },
+        ]);
+      }
       setPaymentReadSnapshot({
         draftId: currentDraft.id,
         resourceKey,
-        expectedOrderCode,
+        expectedOrderCode: expectedOrderCode || '',
         expectedTotalAmount: currentDraft.totalFare,
         orderCode: null,
         totalAmount: null,
@@ -458,6 +532,148 @@ function PaymentContent() {
         PAYMENT_STATUS_REQUEST_TIMEOUT_MS,
       );
       try {
+        if (isRoundTripBooking && bookingDraft) {
+          const [res0, res1] = await Promise.all([
+            readBookingDetailTarget(
+              {
+                bookingId: bookingDraft.legs[0].bookingId,
+                bookingCode: bookingDraft.legs[0].bookingCode,
+                phoneNumber: bookingDraft.passenger.phoneNumber,
+              },
+              requestController.signal,
+            ),
+            readBookingDetailTarget(
+              {
+                bookingId: bookingDraft.legs[1].bookingId,
+                bookingCode: bookingDraft.legs[1].bookingCode,
+                phoneNumber: bookingDraft.passenger.phoneNumber,
+              },
+              requestController.signal,
+            ),
+          ]);
+
+          if (!isSubscribed) return;
+          if (requestController.signal.aborted) throw new Error('Payment status request timed out');
+
+          const b0 = res0.data;
+          const b1 = res1.data;
+
+          const amount0 = readNonNegativeAmount(b0.totalAmount);
+          const amount1 = readNonNegativeAmount(b1.totalAmount);
+
+          const isMatching0 =
+            b0.bookingId === bookingDraft.legs[0].bookingId &&
+            (!bookingDraft.legs[0].bookingCode || b0.bookingCode === bookingDraft.legs[0].bookingCode) &&
+            b0.orderCode === bookingDraft.legs[0].orderCode &&
+            amount0 === bookingDraft.legs[0].subtotal;
+
+          const isMatching1 =
+            b1.bookingId === bookingDraft.legs[1].bookingId &&
+            (!bookingDraft.legs[1].bookingCode || b1.bookingCode === bookingDraft.legs[1].bookingCode) &&
+            b1.orderCode === bookingDraft.legs[1].orderCode &&
+            amount1 === bookingDraft.legs[1].subtotal;
+
+          if (!isMatching0 || !isMatching1 || amount0 === null || amount1 === null) {
+            stopWithStatus('verification-needed');
+            return;
+          }
+
+          const getLegTerminalStatus = (b: typeof b0): PaymentReadSnapshot['terminalStatus'] => {
+            if (b.requiresReconciliation === true || b.paymentStatus === 'CAN_DOI_SOAT') return 'reconciliation-required';
+            if (['DA_HUY', 'HUY'].includes(b.status ?? '') || ['DA_HUY', 'HUY'].includes(b.paymentStatus ?? '')) return 'cancelled';
+            if (b.status === 'EXPIRED' || b.status === 'HET_HAN' || b.paymentStatus === 'HET_HAN') return 'expired';
+            if (b.status === 'FAILED' || ['THAT_BAI', 'DA_THAT_BAI', 'FAILED'].includes(b.paymentStatus ?? '')) return 'failed';
+            if (b.paymentStatus === 'DA_THANH_TOAN' && ['DA_THANH_TOAN', 'HOAN_TAT'].includes(b.status ?? '')) return 'paid';
+            return null;
+          };
+
+          const term0 = getLegTerminalStatus(b0);
+          const term1 = getLegTerminalStatus(b1);
+
+          const isPaid0 = term0 === 'paid';
+          const isPaid1 = term1 === 'paid';
+
+          if (isPaid0 && isPaid1 && !hasNavigated) {
+            hasNavigated = true;
+            stopWithStatus('paid');
+            router.push(`/invoice/${bookingDraft.legs[0].bookingId}?returnBookingId=${bookingDraft.legs[1].bookingId}`);
+            return;
+          }
+
+          if (term0 === 'reconciliation-required' || term1 === 'reconciliation-required') {
+            stopWithStatus('reconciliation-required', b0.paymentExpiresAt || b1.paymentExpiresAt || null);
+            return;
+          }
+          if (term0 === 'cancelled' || term1 === 'cancelled') {
+            stopWithStatus('cancelled', b0.paymentExpiresAt || b1.paymentExpiresAt || null);
+            return;
+          }
+          if (term0 === 'expired' && term1 === 'expired') {
+            stopWithStatus('expired', b0.paymentExpiresAt || b1.paymentExpiresAt || null);
+            return;
+          }
+          if (term0 === 'failed' || term1 === 'failed') {
+            stopWithStatus('failed', b0.paymentExpiresAt || b1.paymentExpiresAt || null);
+            return;
+          }
+
+          const serverTimeMs0 = typeof b0.serverTime === 'string' ? Date.parse(b0.serverTime) : NaN;
+          const serverTimeMs1 = typeof b1.serverTime === 'string' ? Date.parse(b1.serverTime) : NaN;
+          const serverOffset0 = Number.isFinite(serverTimeMs0) ? serverTimeMs0 - Date.now() : 0;
+          const serverOffset1 = Number.isFinite(serverTimeMs1) ? serverTimeMs1 - Date.now() : 0;
+
+          const snap0: PaymentReadSnapshot = {
+            draftId: currentDraft.id,
+            resourceKey,
+            expectedOrderCode: bookingDraft.legs[0].orderCode!,
+            expectedTotalAmount: bookingDraft.legs[0].subtotal,
+            orderCode: b0.orderCode!,
+            totalAmount: amount0,
+            promotionCode: typeof b0.promotionCode === 'string' ? b0.promotionCode : null,
+            originalTicketSubtotal: readNonNegativeAmount(b0.originalTicketSubtotal),
+            discountAmount: readNonNegativeAmount(b0.discountAmount),
+            ticketSubtotal: readNonNegativeAmount(b0.ticketSubtotal),
+            cargoFee: readNonNegativeAmount(b0.cargoFee),
+            paymentExpiresAt: b0.paymentExpiresAt ?? null,
+            serverTimeOffsetMs: serverOffset0,
+            terminalStatus: term0,
+          };
+
+          const snap1: PaymentReadSnapshot = {
+            draftId: currentDraft.id,
+            resourceKey,
+            expectedOrderCode: bookingDraft.legs[1].orderCode!,
+            expectedTotalAmount: bookingDraft.legs[1].subtotal,
+            orderCode: b1.orderCode!,
+            totalAmount: amount1,
+            promotionCode: typeof b1.promotionCode === 'string' ? b1.promotionCode : null,
+            originalTicketSubtotal: readNonNegativeAmount(b1.originalTicketSubtotal),
+            discountAmount: readNonNegativeAmount(b1.discountAmount),
+            ticketSubtotal: readNonNegativeAmount(b1.ticketSubtotal),
+            cargoFee: readNonNegativeAmount(b1.cargoFee),
+            paymentExpiresAt: b1.paymentExpiresAt ?? null,
+            serverTimeOffsetMs: serverOffset1,
+            terminalStatus: term1,
+          };
+
+          setLegSnapshots([snap0, snap1]);
+          setClockTick(Date.now());
+          consecutiveFailures = 0;
+
+          const deadline0Ms = typeof b0.paymentExpiresAt === 'string' ? Date.parse(b0.paymentExpiresAt) : NaN;
+          const deadline1Ms = typeof b1.paymentExpiresAt === 'string' ? Date.parse(b1.paymentExpiresAt) : NaN;
+          const validDeadlines = [deadline0Ms, deadline1Ms].filter((d) => Number.isFinite(d));
+          if (validDeadlines.length > 0) {
+            observedDeadlineMs = Math.min(...validDeadlines);
+            observedServerTimeOffsetMs = serverOffset0;
+          }
+
+          if (isPaid0 && !isPaid1) {
+            setSelectedLegIndex((prev) => (prev === 0 ? 1 : prev));
+          } else if (isPaid1 && !isPaid0) {
+            setSelectedLegIndex((prev) => (prev === 1 ? 0 : prev));
+          }
+        } else {
         let payload: PaymentStatusPayload;
         if (shipmentDraft) {
           const readVerifiedShipmentLookup = async (): Promise<PaymentStatusPayload> => {
@@ -595,9 +811,9 @@ function PaymentContent() {
           setPaymentReadSnapshot({
             draftId: currentDraft.id,
             resourceKey,
-            expectedOrderCode,
+            expectedOrderCode: expectedOrderCode || '',
             expectedTotalAmount: currentDraft.totalFare,
-            orderCode: expectedOrderCode,
+            orderCode: expectedOrderCode || null,
             totalAmount: amount,
             promotionCode: null,
             originalTicketSubtotal: null,
@@ -657,7 +873,7 @@ function PaymentContent() {
         setPaymentReadSnapshot({
           draftId: currentDraft.id,
           resourceKey,
-          expectedOrderCode,
+          expectedOrderCode: expectedOrderCode || '',
           expectedTotalAmount: currentDraft.totalFare,
           orderCode: payload.orderCode!,
           totalAmount: amount,
@@ -671,6 +887,7 @@ function PaymentContent() {
           serverTimeOffsetMs: observedServerTimeOffsetMs,
           terminalStatus: null,
         });
+        }
       } catch (error) {
         if (!isSubscribed) return;
         consecutiveFailures += 1;
@@ -723,8 +940,10 @@ function PaymentContent() {
     hasValidPaymentResource,
     isAuthenticated,
     isHydrated,
+    isRoundTripBooking,
     paymentResourceKey,
     readBookingDetail,
+    readBookingDetailTarget,
     router,
     shipmentDraft,
     vietQrConfig,
@@ -914,12 +1133,61 @@ function PaymentContent() {
 
           {/* Cột 2: QR Code & Thông tin chuyển khoản */}
           <div className="flex-1 flex flex-col items-center">
+            {isRoundTripBooking && bookingDraft && (
+              <div className="flex items-center justify-center gap-3 mb-6 w-full max-w-[520px]">
+                {bookingDraft.legs.map((leg, idx) => {
+                  const isSelected = selectedLegIndex === idx;
+                  const snap = legSnapshots[idx];
+                  const isPaid = snap?.terminalStatus === 'paid';
+                  return (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => setSelectedLegIndex(idx)}
+                      className={`flex-1 py-3 px-4 rounded-2xl border text-left transition-all cursor-pointer ${
+                        isSelected
+                          ? 'border-brand bg-brand/5 ring-2 ring-brand/20 shadow-sm'
+                          : 'border-slate-200 bg-white hover:bg-slate-50'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-black uppercase text-accent">
+                          {idx === 0 ? 'Chặng 1: Lượt đi' : 'Chặng 2: Lượt về'}
+                        </span>
+                        {isPaid ? (
+                          <span className="text-[11px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
+                            ✓ Đã thanh toán
+                          </span>
+                        ) : (
+                          <span className="text-[11px] font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">
+                            Chờ thanh toán
+                          </span>
+                        )}
+                      </div>
+                      <div className="font-bold text-slate-800 text-sm truncate">
+                        {leg.route}
+                      </div>
+                      <div className="text-xs font-black text-red-600 mt-1">
+                        {leg.subtotal.toLocaleString('vi-VN')}đ
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
             <p className="text-sm font-semibold text-slate-500 mb-1">
-              Tổng thanh toán
+              {isRoundTripBooking
+                ? `Thanh toán ${selectedLegIndex === 0 ? 'Chặng 1 (Lượt đi)' : 'Chặng 2 (Lượt về)'}`
+                : 'Tổng thanh toán'}
             </p>
-            <h1 className="text-5xl font-bold text-red-600 mb-8 tracking-tight">
+            <h1 className="text-5xl font-bold text-red-600 mb-2 tracking-tight">
               {totalFareText}
             </h1>
+            {isRoundTripBooking && (
+              <p className="text-xs font-semibold text-slate-500 mb-6">
+                Tổng 2 chặng: <strong className="text-slate-700">{bookingDraft?.totalFare.toLocaleString('vi-VN')}đ</strong>
+              </p>
+            )}
 
             <div className="w-full max-w-[520px] bg-white rounded-3xl p-7 shadow-sm border border-slate-200 flex flex-col items-center">
               {paymentExpiresAt && !paymentTerminalStatus && (
@@ -933,6 +1201,33 @@ function PaymentContent() {
               {/* VietQR Image động thật - Kích thước lớn dễ quét */}
               <div className="w-full max-w-[420px] aspect-square border-2 border-slate-200 rounded-3xl p-3 mb-6 bg-white flex items-center justify-center overflow-hidden shadow-2xs">
                 {paymentTerminalStatus ? (
+                  paymentTerminalStatus === 'paid' && isRoundTripBooking ? (
+                    <div className="flex flex-col items-center gap-3 py-6 px-4 text-center">
+                      <div className="w-14 h-14 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center">
+                        <CheckCircle2 className="w-8 h-8" />
+                      </div>
+                      <p className="text-base font-bold text-emerald-800">
+                        {selectedLegIndex === 0 ? 'Chặng 1 (Lượt đi)' : 'Chặng 2 (Lượt về)'} đã được thanh toán thành công!
+                      </p>
+                      {selectedLegIndex === 0 && legSnapshots[1]?.terminalStatus !== 'paid' ? (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedLegIndex(1)}
+                          className="mt-2 h-10 px-5 rounded-xl bg-brand hover:bg-brand-hover text-white text-xs font-bold transition-colors shadow-sm cursor-pointer"
+                        >
+                          Chuyển sang Chặng 2 (Lượt về) để thanh toán
+                        </button>
+                      ) : selectedLegIndex === 1 && legSnapshots[0]?.terminalStatus !== 'paid' ? (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedLegIndex(0)}
+                          className="mt-2 h-10 px-5 rounded-xl bg-brand hover:bg-brand-hover text-white text-xs font-bold transition-colors shadow-sm cursor-pointer"
+                        >
+                          Chuyển sang Chặng 1 (Lượt đi) để thanh toán
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : (
                   <p
                     role={paymentTerminalStatus === 'verification-needed' ? 'alert' : 'status'}
                     aria-live="polite"
@@ -950,6 +1245,7 @@ function PaymentContent() {
                             ? `Thanh toán ${paymentResourceLabel} đã được xác nhận.`
                             : `${shipmentDraft ? 'Phiếu gửi hàng' : 'Đơn đặt vé'} đã hết hạn. Mã QR thanh toán không còn khả dụng.`}
                   </p>
+                  )
                 ) : timeLeft === 0 ? (
                   <p role="status" aria-live="polite" className="px-5 text-center text-sm font-semibold text-amber-800">
                     Đang xác nhận trạng thái đơn sau thời hạn thanh toán.

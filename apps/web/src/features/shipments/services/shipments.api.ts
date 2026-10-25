@@ -29,6 +29,7 @@ export type CargoItemInput = {
   length?: number;
   width?: number;
   height?: number;
+  serviceType?: 'NORMAL' | 'FRAGILE' | 'VALUABLE';
   note?: string;
 };
 
@@ -57,10 +58,21 @@ export type ShipmentRoutePoint = {
   address: string;
 };
 
+export type ShipmentCargoRate = {
+  senderPointId: number;
+  receiverPointId: number;
+  categoryId: number;
+  minWeight: number;
+  maxWeight: number | null;
+  fee: number;
+};
+
 export type ShipmentRoutePoints = {
   tripId: number;
   senderPoints: ShipmentRoutePoint[];
   receiverPoints: ShipmentRoutePoint[];
+  rates?: ShipmentCargoRate[];
+  minFee?: number | null;
 };
 
 export type CargoCategory = {

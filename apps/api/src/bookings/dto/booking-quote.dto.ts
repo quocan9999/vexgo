@@ -1,4 +1,5 @@
 import {
+  ArrayMaxSize,
   ArrayNotEmpty,
   ArrayUnique,
   IsArray,
@@ -21,6 +22,7 @@ export class BookingQuoteDto {
 
   @IsArray({ message: 'seatIds phải là danh sách.' })
   @ArrayNotEmpty({ message: 'seatIds không được rỗng.' })
+  @ArrayMaxSize(5, { message: 'Mỗi chuyến xe chỉ được đặt tối đa 5 ghế.' })
   @ArrayUnique({ message: 'Danh sách ghế không được trùng.' })
   @Type(() => Number)
   @IsInt({ each: true, message: 'Mỗi seatId phải là số nguyên.' })

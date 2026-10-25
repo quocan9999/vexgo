@@ -1,4 +1,5 @@
 import {
+  IsArray,
   IsDefined,
   IsNotEmpty,
   IsNumber,
@@ -14,6 +15,11 @@ export class CancelTicketDto {
   @IsString()
   @IsNotEmpty()
   ticketCode!: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  ticketCodes?: string[];
 
   @IsString()
   @IsNotEmpty()

@@ -1,4 +1,4 @@
-import { IsArray, IsInt, IsNotEmpty, Min } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsInt, IsNotEmpty, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class CreateSeatHoldDto {
@@ -10,6 +10,7 @@ export class CreateSeatHoldDto {
 
   @IsArray({ message: 'seatIds phải là danh sách.' })
   @IsNotEmpty({ message: 'seatIds không được rỗng.' })
+  @ArrayMaxSize(5, { message: 'Mỗi chuyến xe chỉ được giữ tối đa 5 ghế.' })
   @Type(() => Number)
   @IsInt({ each: true, message: 'Mỗi seatId phải là số nguyên.' })
   seatIds!: number[];

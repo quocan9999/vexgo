@@ -121,6 +121,15 @@ function CancelTicketContent() {
   const [ticketCode, setTicketCode] = useState(() => initialSession?.ticketCode || '');
   const [phone, setPhone] = useState(() => initialSession?.phoneNumber || '');
   const [ticket, setTicket] = useState<TicketItem | null>(() => initialSession?.ticket || null);
+  const [selectedTicketCodes, setSelectedTicketCodes] = useState<string[]>(() => {
+    if (initialSession?.ticket) {
+      const tickets = initialSession.ticket.bookingTickets || [initialSession.ticket];
+      return tickets
+        .filter((t) => (t.status || '').toUpperCase() !== 'HUY' && (t.status || '').toUpperCase() !== 'CANCELLED')
+        .map((t) => t.ticketCode);
+    }
+    return [];
+  });
   const [eligibility, setEligibility] = useState<CancelEligibilityResult | null>(() => {
     if (initialSession?.ticket) {
       return checkTicketCancelEligibility(initialSession.ticket, Date.now());
@@ -208,20 +217,40 @@ function CancelTicketContent() {
     try {
       const response = await ticketsApi.lookupTicket(cleanCode, cleanPhone);
       const ticketData = response.data;
-      const result = checkTicketCancelEligibility(ticketData, Date.now());
+      const allTickets =
+        ticketData.bookingTickets && ticketData.bookingTickets.length > 0
+          ? ticketData.bookingTickets
+          : [ticketData];
+      const cancellable = allTickets.filter(
+        (t) =>
+          (t.status || '').toUpperCase() !== 'HUY' &&
+          (t.status || '').toUpperCase() !== 'CANCELLED',
+      );
+
+      const repTicket = cancellable.length > 0 ? cancellable[0] : ticketData;
+      const result = checkTicketCancelEligibility(repTicket, Date.now());
       setEligibility(result);
       setConfirmedFeeRate(result.cancelFeeRate ?? null);
       setFeeRateChangedWarning(null);
+
       if (!result.eligible) {
         setIneligibleModal({
           isOpen: true,
           title: result.title,
-          message: result.message,
+          message:
+            cancellable.length === 0 && (result.reason === 'ALREADY_CANCELLED' || !result.reason)
+              ? 'Tất cả các vé trong đơn đặt vé này đã hoàn tất thủ tục hủy trước đó.'
+              : result.message,
           variant: 'warning',
         });
         return;
       }
-      setTicket(ticketData);
+
+      setTicket({
+        ...repTicket,
+        bookingTickets: allTickets,
+      });
+      setSelectedTicketCodes(cancellable.map((t) => t.ticketCode));
       setStep(2);
     } catch (err: unknown) {
       const apiError = err as { status?: number; message?: string };
@@ -249,20 +278,39 @@ function CancelTicketContent() {
         .then((res) => {
           if (!isMounted) return;
           const ticketData = res.data;
-          const result = checkTicketCancelEligibility(ticketData, Date.now());
+          const allTickets =
+            ticketData.bookingTickets && ticketData.bookingTickets.length > 0
+              ? ticketData.bookingTickets
+              : [ticketData];
+          const cancellable = allTickets.filter(
+            (t) =>
+              (t.status || '').toUpperCase() !== 'HUY' &&
+              (t.status || '').toUpperCase() !== 'CANCELLED',
+          );
+          const repTicket = cancellable.length > 0 ? cancellable[0] : ticketData;
+          const result = checkTicketCancelEligibility(repTicket, Date.now());
           setEligibility(result);
           setConfirmedFeeRate(result.cancelFeeRate ?? null);
           setFeeRateChangedWarning(null);
+
           if (!result.eligible) {
             setIneligibleModal({
               isOpen: true,
               title: result.title,
-              message: result.message,
+              message:
+                cancellable.length === 0 && (result.reason === 'ALREADY_CANCELLED' || !result.reason)
+                  ? 'Tất cả các vé trong đơn đặt vé này đã hoàn tất thủ tục hủy trước đó.'
+                  : result.message,
               variant: 'warning',
             });
             return;
           }
-          setTicket(ticketData);
+
+          setTicket({
+            ...repTicket,
+            bookingTickets: allTickets,
+          });
+          setSelectedTicketCodes(cancellable.map((t) => t.ticketCode));
           setStep(2);
         })
         .catch((err: unknown) => {
@@ -383,6 +431,18 @@ function CancelTicketContent() {
       return;
     }
 
+    const bookingTickets =
+      ticket.bookingTickets && ticket.bookingTickets.length > 0
+        ? ticket.bookingTickets
+        : [ticket];
+    const isMultiTicket = bookingTickets.length > 1;
+
+    if (isMultiTicket && selectedTicketCodes.length === 0) {
+      const msg = 'Vui lòng chọn ít nhất một vé để thực hiện hủy.';
+      setCancelError(msg);
+      return;
+    }
+
     setIsCancelling(true);
     setCancelError(null);
 
@@ -392,6 +452,7 @@ function CancelTicketContent() {
         phone || ticket.passengerPhone || '',
         undefined,
         currentEligibility.cancelFeeRate,
+        isMultiTicket ? selectedTicketCodes : undefined,
       );
       setCancelResult(res.data);
       setStep(3);
@@ -401,7 +462,7 @@ function CancelTicketContent() {
           ...ticket,
           cancellation: {
             eligible: false,
-            reason: err instanceof ApiError && err.error === 'TICKET_CANCELLATION_ACTIVE_SHIPMENT' ? 'ACTIVE_SHIPMENT' : 'LESS_THAN_12_HOURS',
+            reason: err instanceof ApiError && err.error === 'TICKET_CANCELLATION_ACTIVE_SHIPMENT' ? 'ACTIVE_SHIPMENT' : 'LESS_THAN_4_HOURS',
             cancelFeeRate: 0,
             cancelFee: 0,
             refundAmount: 0,
@@ -494,15 +555,69 @@ function CancelTicketContent() {
     }
   };
 
-  const isCancelled = (ticket?.status || '').toUpperCase() === 'HUY' || (ticket?.status || '').toUpperCase() === 'CANCELLED';
+  const bookingTickets =
+    ticket?.bookingTickets && ticket.bookingTickets.length > 0
+      ? ticket.bookingTickets
+      : ticket
+        ? [ticket]
+        : [];
+  const isMultiTicket = bookingTickets.length > 1;
+  const cancellableTickets = bookingTickets.filter(
+    (t) =>
+      (t.status || '').toUpperCase() !== 'HUY' &&
+      (t.status || '').toUpperCase() !== 'CANCELLED',
+  );
+  const selectedTickets = bookingTickets.filter((t) =>
+    selectedTicketCodes.includes(t.ticketCode),
+  );
+
+  const isCancelled = isMultiTicket
+    ? cancellableTickets.length === 0
+    : (ticket?.status || '').toUpperCase() === 'HUY' ||
+      (ticket?.status || '').toUpperCase() === 'CANCELLED';
+
   const departureInfo = formatTimeAndDate(ticket?.departureTime);
 
   const isPastDeparture = eligibility?.reason === 'ALREADY_DEPARTED';
-  const isNearDeparture = eligibility?.reason === 'LESS_THAN_12_HOURS';
+  const isNearDeparture =
+    eligibility?.reason === 'LESS_THAN_4_HOURS' ||
+    eligibility?.reason === 'LESS_THAN_12_HOURS';
 
   const cancelFeeRate = eligibility?.cancelFeeRate ?? 0;
-  const cancelFee = cancelResult?.cancelFee ?? eligibility?.cancelFee ?? 0;
-  const refundAmount = cancelResult?.refundAmount ?? eligibility?.refundAmount ?? 0;
+
+  // Tính toán phí hủy và tiền hoàn theo số vé được tick chọn
+  const selectedSubtotal = isMultiTicket
+    ? selectedTickets.reduce((sum, t) => sum + (t.price || 0), 0)
+    : (ticket?.price ?? 0);
+
+  const calculatedCancelFee = Math.round(selectedSubtotal * cancelFeeRate);
+  const calculatedRefundAmount = Math.max(
+    0,
+    selectedSubtotal - calculatedCancelFee,
+  );
+
+  const cancelFee =
+    cancelResult?.cancelFee ??
+    (isMultiTicket ? calculatedCancelFee : (eligibility?.cancelFee ?? 0));
+  const refundAmount =
+    cancelResult?.refundAmount ??
+    (isMultiTicket
+      ? calculatedRefundAmount
+      : (eligibility?.refundAmount ?? 0));
+
+  const handleToggleSelectAll = () => {
+    if (selectedTicketCodes.length === cancellableTickets.length) {
+      setSelectedTicketCodes([]);
+    } else {
+      setSelectedTicketCodes(cancellableTickets.map((t) => t.ticketCode));
+    }
+  };
+
+  const handleToggleTicket = (code: string) => {
+    setSelectedTicketCodes((prev) =>
+      prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code],
+    );
+  };
 
   return (
     <div className="min-h-screen bg-[#F8FAF9] py-8 font-sans">
@@ -568,7 +683,7 @@ function CancelTicketContent() {
 
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-                    Mã vé xe <span className="text-rose-500">*</span>
+                    Mã vé / Mã phiếu đặt vé <span className="text-rose-500">*</span>
                   </label>
                   <div className="relative">
                     <Ticket
@@ -584,7 +699,7 @@ function CancelTicketContent() {
                         if (ticketCodeError) setTicketCodeError(null);
                         if (generalError) setGeneralError(null);
                       }}
-                      placeholder="Vui lòng nhập mã vé"
+                      placeholder="Nhập mã vé hoặc mã phiếu đặt vé"
                       disabled={isLoading}
                       className={`w-full h-12 pl-12 pr-4 rounded-xl border ${
                         ticketCodeError
@@ -641,8 +756,8 @@ function CancelTicketContent() {
                   <div className="rounded-xl border border-rose-200 bg-rose-50 p-5 flex gap-4 items-start">
                     <XCircle className="w-6 h-6 text-rose-600 shrink-0" />
                     <div>
-                      <h3 className="font-bold text-rose-900 text-[15px]">Vé đã hủy trước đó</h3>
-                      <p className="text-[14px] text-rose-700 mt-1">Vé này đã hoàn tất thủ tục hủy và không thể hủy lại.</p>
+                      <h3 className="font-bold text-rose-900 text-[15px]">Tất cả vé đã được hủy</h3>
+                      <p className="text-[14px] text-rose-700 mt-1">Các vé trong đơn này đã hoàn tất thủ tục hủy trước đó.</p>
                     </div>
                   </div>
                 ) : isPastDeparture ? (
@@ -659,7 +774,7 @@ function CancelTicketContent() {
                     <div>
                       <h3 className="font-bold text-amber-900 text-[15px]">Vé không đủ điều kiện hủy</h3>
                       <p className="text-[14px] text-amber-700 mt-1">
-                        Chuyến xe khởi hành vào lúc {departureInfo.time}, ngày {departureInfo.date} (dưới 12 tiếng). Vui lòng liên hệ tổng đài nhà xe để được hỗ trợ.
+                        Chuyến xe khởi hành vào lúc {departureInfo.time}, ngày {departureInfo.date} (dưới 4 tiếng). Vui lòng liên hệ tổng đài nhà xe để được hỗ trợ.
                       </p>
                     </div>
                   </div>
@@ -667,7 +782,9 @@ function CancelTicketContent() {
                   <div className="rounded-xl border border-[#D1FAE5] bg-[#F0FDF4] p-5 flex gap-4 items-start">
                     <CheckCircle2 className="w-6 h-6 text-[#059669] shrink-0" />
                     <div>
-                      <h3 className="font-bold text-[#065F46] text-[15px]">Vé đủ điều kiện hủy</h3>
+                      <h3 className="font-bold text-[#065F46] text-[15px]">
+                        {isMultiTicket ? 'Đơn đặt vé đủ điều kiện hủy' : 'Vé đủ điều kiện hủy'}
+                      </h3>
                       <p className="text-[14px] text-[#065F46]/80 mt-1">
                         Chuyến xe khởi hành lúc {departureInfo.time} ngày {departureInfo.date}. Bạn đủ điều kiện hủy vé có hoàn tiền.
                       </p>
@@ -689,71 +806,179 @@ function CancelTicketContent() {
                   </div>
                 )}
 
-                {/* Ticket Details Box */}
+                {/* Chuyến xe & Đơn đặt vé Header Box */}
                 <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                  <div className="flex items-center justify-between p-5 border-b border-slate-100 bg-slate-50/50">
+                  <div className="flex items-center justify-between p-4 sm:p-5 border-b border-slate-100 bg-slate-50/50">
                     <div>
-                      <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
+                      <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
                         Tuyến hành trình
                       </span>
                       <span className="font-black text-[#1D2939] text-base">
                         {ticket.origin} ➔ {ticket.destination}
                       </span>
+                      <p className="text-xs text-slate-500 font-medium mt-0.5">
+                        {ticket.busCompanyName} • {ticket.vehicleType || 'Xe chất lượng cao'}
+                      </p>
                     </div>
-                    <span className="text-xs font-mono font-bold px-3 py-1 bg-white border border-slate-200 rounded-lg text-slate-700 shadow-xs">
-                      {ticket.ticketCode}
-                    </span>
-                  </div>
-
-                  <div className="p-5 space-y-3.5 text-[15px]">
-                    <div className="flex justify-between items-center">
-                      <span className="text-slate-500 flex items-center gap-1.5">
-                        <Clock className="w-4 h-4 text-slate-400" />
-                        Giờ khởi hành:
+                    <div className="text-right">
+                      <span className="text-xs font-mono font-bold px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-slate-700 shadow-xs block">
+                        {ticket.bookingCode ? `Đơn ${ticket.bookingCode}` : ticket.ticketCode}
                       </span>
-                      <span className="font-bold text-[#1D2939]">
-                        {departureInfo.time}, {departureInfo.date}
-                      </span>
-                    </div>
-
-                    <div className="flex justify-between items-center">
-                      <span className="text-slate-500 flex items-center gap-1.5">
-                        <MapPin className="w-4 h-4 text-slate-400" />
-                        Chỗ ngồi:
-                      </span>
-                      <span className="font-bold text-[#0060c4]">
-                        Ghế {ticket.seatNumber} ({ticket.seatPosition || 'Ghế tiêu chuẩn'})
-                      </span>
-                    </div>
-
-                    <div className="flex justify-between items-center">
-                      <span className="text-slate-500 flex items-center gap-1.5">
-                        <User className="w-4 h-4 text-slate-400" />
-                        Hành khách:
-                      </span>
-                      <span className="font-bold text-slate-800">
-                        {ticket.passengerName || 'Hành khách'}
-                      </span>
-                    </div>
-
-                    <div className="flex justify-between items-center pt-2 border-t border-slate-100">
-                      <span className="text-slate-500">Giá trị vé:</span>
-                      <span className="font-bold text-slate-900 text-base">
-                        {formatCurrency(ticket.price)}
+                      <span className="text-[11px] text-slate-500 font-semibold mt-1 block">
+                        Khởi hành: {departureInfo.time}
                       </span>
                     </div>
                   </div>
+
+                  {/* Single Ticket Info (nếu đơn chỉ có 1 vé) */}
+                  {!isMultiTicket && (
+                    <div className="p-5 space-y-3 text-[14px]">
+                      <div className="flex justify-between items-center">
+                        <span className="text-slate-500 flex items-center gap-1.5">
+                          <MapPin className="w-4 h-4 text-slate-400" />
+                          Chỗ ngồi:
+                        </span>
+                        <span className="font-bold text-[#0060c4]">
+                          Ghế {ticket.seatNumber} ({ticket.seatPosition || 'Ghế tiêu chuẩn'})
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-slate-500 flex items-center gap-1.5">
+                          <User className="w-4 h-4 text-slate-400" />
+                          Hành khách:
+                        </span>
+                        <span className="font-bold text-slate-800">
+                          {ticket.passengerName || 'Hành khách'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center pt-2 border-t border-slate-100">
+                        <span className="text-slate-500">Giá trị vé:</span>
+                        <span className="font-bold text-slate-900 text-base">
+                          {formatCurrency(ticket.price)}
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </div>
+
+                {/* Danh sách vé để chọn hủy (khi đơn có nhiều vé) */}
+                {isMultiTicket && (
+                  <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div className="flex flex-wrap items-center justify-between gap-2 p-4 bg-slate-50 border-b border-slate-200">
+                      <div>
+                        <h4 className="font-bold text-slate-900 text-sm">
+                          Chọn vé muốn hủy trong đơn ({bookingTickets.length} vé)
+                        </h4>
+                        <p className="text-xs text-slate-500 font-medium mt-0.5">
+                          Đã chọn: <strong className="text-[#0060c4]">{selectedTicketCodes.length}</strong> / {cancellableTickets.length} vé có thể hủy
+                        </p>
+                      </div>
+                      {cancellableTickets.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={handleToggleSelectAll}
+                          className="text-xs font-bold text-[#0060c4] hover:underline cursor-pointer px-2.5 py-1 rounded-md bg-blue-50 border border-blue-200 transition-colors"
+                        >
+                          {selectedTicketCodes.length === cancellableTickets.length
+                            ? 'Bỏ chọn tất cả'
+                            : 'Chọn tất cả'}
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="divide-y divide-slate-100 max-h-[300px] overflow-y-auto">
+                      {bookingTickets.map((item, idx) => {
+                        const itemCancelled =
+                          (item.status || '').toUpperCase() === 'HUY' ||
+                          (item.status || '').toUpperCase() === 'CANCELLED';
+                        const isChecked = selectedTicketCodes.includes(item.ticketCode);
+
+                        return (
+                          <div
+                            key={item.ticketCode || idx}
+                            onClick={() => {
+                              if (!itemCancelled) handleToggleTicket(item.ticketCode);
+                            }}
+                            className={`p-3.5 sm:p-4 flex items-center justify-between gap-3 transition-colors ${
+                              itemCancelled
+                                ? 'bg-slate-50/70 opacity-60 cursor-not-allowed'
+                                : isChecked
+                                  ? 'bg-blue-50/40 hover:bg-blue-50 cursor-pointer'
+                                  : 'hover:bg-slate-50 cursor-pointer'
+                            }`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                disabled={itemCancelled}
+                                onChange={() => handleToggleTicket(item.ticketCode)}
+                                onClick={(e) => e.stopPropagation()}
+                                className="w-4 h-4 rounded border-slate-300 text-[#0060c4] focus:ring-[#0060c4] cursor-pointer"
+                              />
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-extrabold text-slate-900 text-sm">
+                                    Ghế {item.seatNumber || 'Chưa xếp'}
+                                  </span>
+                                  <span className="text-[11px] font-mono text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
+                                    {item.ticketCode}
+                                  </span>
+                                </div>
+                                <p className="text-xs text-slate-500 font-medium mt-0.5">
+                                  {item.seatPosition || 'Ghế tiêu chuẩn'} • {item.passengerName || ticket.passengerName || 'Hành khách'}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="text-right shrink-0">
+                              <span className="font-bold text-slate-900 text-sm block">
+                                {formatCurrency(item.price)}
+                              </span>
+                              {itemCancelled ? (
+                                <span className="text-[11px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
+                                  Đã hủy
+                                </span>
+                              ) : (
+                                <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                  Có thể hủy
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
 
                 {/* Refund & Fee Policy Box */}
                 <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
-                  <h3 className="font-bold text-slate-900 text-[15px]">Chính sách phí hủy vé</h3>
-                  <div className="space-y-3 text-[15px]">
+                  <h3 className="font-bold text-slate-900 text-[15px]">
+                    Chính sách phí & Số tiền hoàn lại
+                  </h3>
+                  <div className="space-y-3 text-[14px]">
+                    {isMultiTicket && (
+                      <div className="flex justify-between items-center text-slate-600">
+                        <span>Số lượng vé chọn hủy:</span>
+                        <span className="font-bold text-slate-800">
+                          {selectedTicketCodes.length} vé
+                        </span>
+                      </div>
+                    )}
+                    <div className="flex justify-between items-center text-slate-600">
+                      <span>Tổng giá trị vé đã chọn:</span>
+                      <span className="font-bold text-slate-800">
+                        {formatCurrency(selectedSubtotal)}
+                      </span>
+                    </div>
                     <div className="flex justify-between items-center">
                       <span className="text-slate-600">
                         Phí hủy quy định ({Math.round(cancelFeeRate * 100)}%):
                       </span>
-                      <span className="font-bold text-rose-600">-{formatCurrency(cancelFee)}</span>
+                      <span className="font-bold text-rose-600">
+                        -{formatCurrency(cancelFee)}
+                      </span>
                     </div>
                     <div className="flex justify-between items-center text-base pt-3 border-t border-slate-200">
                       <span className="font-bold text-slate-900">Số tiền hoàn lại:</span>
@@ -796,10 +1021,24 @@ function CancelTicketContent() {
                   </button>
                   <button
                     type="button"
-                    disabled={!isConfirmed || isCancelling || isCancelled || isPastDeparture || isNearDeparture || eligibility?.eligible === false}
+                    disabled={
+                      !isConfirmed ||
+                      isCancelling ||
+                      isCancelled ||
+                      isPastDeparture ||
+                      isNearDeparture ||
+                      eligibility?.eligible === false ||
+                      (isMultiTicket && selectedTicketCodes.length === 0)
+                    }
                     onClick={handleConfirmCancel}
                     className={`flex-1 h-12 font-bold rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer ${
-                      isConfirmed && !isCancelling && !isCancelled && !isPastDeparture && !isNearDeparture && eligibility?.eligible !== false
+                      isConfirmed &&
+                      !isCancelling &&
+                      !isCancelled &&
+                      !isPastDeparture &&
+                      !isNearDeparture &&
+                      eligibility?.eligible !== false &&
+                      (!isMultiTicket || selectedTicketCodes.length > 0)
                         ? 'bg-[#E04115] text-white hover:bg-[#c93a12]'
                         : 'bg-slate-200 text-slate-400 cursor-not-allowed'
                     }`}
@@ -810,7 +1049,11 @@ function CancelTicketContent() {
                         <span>Đang xử lý hủy vé...</span>
                       </>
                     ) : (
-                      <span>Xác nhận hủy vé</span>
+                      <span>
+                        {isMultiTicket && selectedTicketCodes.length > 1
+                          ? `Xác nhận hủy ${selectedTicketCodes.length} vé đã chọn`
+                          : 'Xác nhận hủy vé'}
+                      </span>
                     )}
                   </button>
                 </div>
@@ -826,9 +1069,19 @@ function CancelTicketContent() {
                 <div>
                   <h2 className="text-2xl font-black text-slate-900">Hủy vé thành công!</h2>
                   <p className="text-slate-600 mt-2 max-w-md mx-auto text-sm leading-relaxed">
-                    Vé <strong className="font-mono text-slate-800">{ticket?.ticketCode}</strong> đã được hủy và hệ thống đã giải phóng ghế{' '}
-                    <strong className="text-slate-800">{ticket?.seatNumber}</strong>. Số tiền{' '}
-                    <strong className="text-rose-600 font-black">{formatCurrency(refundAmount)}</strong> đang được xử lý hoàn về phương thức thanh toán ban đầu.
+                    {cancelResult?.cancelledTicketCodes && cancelResult.cancelledTicketCodes.length > 1 ? (
+                      <>
+                        Đã hủy thành công <strong className="font-bold text-slate-800">{cancelResult.cancelledTicketCodes.length} vé</strong> (
+                        <span className="font-mono text-xs">{cancelResult.cancelledTicketCodes.join(', ')}</span>) và giải phóng ghế{' '}
+                        <strong className="text-slate-800">{cancelResult.cancelledSeatNumbers?.join(', ') || ticket?.seatNumber}</strong>.
+                      </>
+                    ) : (
+                      <>
+                        Vé <strong className="font-mono text-slate-800">{cancelResult?.ticketCode || ticket?.ticketCode}</strong> đã được hủy và hệ thống đã giải phóng ghế{' '}
+                        <strong className="text-slate-800">{ticket?.seatNumber}</strong>.
+                      </>
+                    )}{' '}
+                    Số tiền <strong className="text-rose-600 font-black">{formatCurrency(refundAmount)}</strong> đang được xử lý hoàn về phương thức thanh toán ban đầu.
                   </p>
                 </div>
                 <div className="pt-6 flex flex-col sm:flex-row items-center justify-center gap-3">
@@ -877,8 +1130,8 @@ function CancelTicketContent() {
                 <p className="font-bold text-sm text-amber-900">Quy định về thời gian hủy:</p>
                 <ul className="list-disc list-inside space-y-1 text-xs sm:text-sm text-amber-800">
                   <li><strong>Trước giờ khởi hành {'>'} 24 tiếng:</strong> Phí hủy 10% giá vé, hoàn lại 90%.</li>
-                  <li><strong>Trước giờ khởi hành từ 12 - 24 tiếng:</strong> Phí hủy 20% giá vé, hoàn lại 80%.</li>
-                  <li><strong>Trước giờ khởi hành {'<'} 12 tiếng:</strong> Không áp dụng hủy trực tuyến.</li>
+                  <li><strong>Trước giờ khởi hành từ 4 - 24 tiếng:</strong> Phí hủy 20% giá vé, hoàn lại 80%.</li>
+                  <li><strong>Trước giờ khởi hành {'<'} 4 tiếng:</strong> Không áp dụng hủy trực tuyến.</li>
                   <li><strong>Sau khi chuyến xe đã khởi hành:</strong> Vé không còn giá trị hủy hoặc hoàn tiền.</li>
                 </ul>
               </div>

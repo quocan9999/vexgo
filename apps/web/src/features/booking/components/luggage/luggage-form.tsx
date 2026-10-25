@@ -5,7 +5,7 @@ import type { ILuggageItem } from "./luggage-item";
 import React from 'react';
 import { Plus } from 'lucide-react';
 
-import { LuggageItemComponent } from './luggage-item';
+import { LuggageItemComponent, resolveCargoCategoryId } from './luggage-item';
 import type { CargoCategory } from '@/features/shipments/services/shipments.api';
 
 interface LuggageFormProps {
@@ -28,6 +28,7 @@ export const LuggageForm: React.FC<LuggageFormProps> = ({ items, cargoCategories
       quantity: 1,
       weight: 0,
       category: 'normal',
+      loaiHangHoaId: resolveCargoCategoryId('Vali', 0, undefined, undefined, undefined, cargoCategories),
     };
     onChange([...items, newItem]);
   };
@@ -37,26 +38,23 @@ export const LuggageForm: React.FC<LuggageFormProps> = ({ items, cargoCategories
   };
 
   const handleChangeItem = (id: string, fieldOrUpdates: keyof ILuggageItem | Partial<ILuggageItem>, value?: any) => {
-    const shouldClearCargoType =
-      typeof fieldOrUpdates === 'string'
-        ? ['type', 'weight', 'length', 'width', 'height'].includes(fieldOrUpdates)
-        : ['type', 'weight', 'length', 'width', 'height'].some((field) =>
-            Object.prototype.hasOwnProperty.call(fieldOrUpdates, field),
-          );
     onChange(
       items.map((item) => {
         if (item.id !== id) return item;
-        if (typeof fieldOrUpdates === 'object') {
-          return {
-            ...item,
-            ...fieldOrUpdates,
-            ...(shouldClearCargoType ? { loaiHangHoaId: undefined } : {}),
-          };
-        }
+        const updated = typeof fieldOrUpdates === 'object'
+          ? { ...item, ...fieldOrUpdates }
+          : { ...item, [fieldOrUpdates]: value };
+        const autoLoaiHangHoaId = resolveCargoCategoryId(
+          updated.type,
+          updated.weight,
+          updated.length,
+          updated.width,
+          updated.height,
+          cargoCategories,
+        );
         return {
-          ...item,
-          [fieldOrUpdates]: value,
-          ...(shouldClearCargoType ? { loaiHangHoaId: undefined } : {}),
+          ...updated,
+          ...(autoLoaiHangHoaId !== undefined ? { loaiHangHoaId: autoLoaiHangHoaId } : {}),
         };
       })
     );

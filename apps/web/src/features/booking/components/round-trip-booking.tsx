@@ -1,6 +1,7 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ChevronRight, Info, Mail, Phone, User, X } from 'lucide-react';
@@ -13,11 +14,28 @@ import {
 import { formatTripDateTime } from '../utils/one-way-booking';
 import { validatePassengerInfo } from '../utils/passenger-validation';
 import { FeaturePlaceholderModal } from './feature-placeholder-modal';
-import { LuggageStep } from './luggage/luggage-step';
+import { LuggageStep, calculateLuggageFee } from './luggage/luggage-step';
+import { LuggageSummary } from './luggage/luggage-summary';
 import type { ILuggageItem } from './luggage/luggage-item';
+import {
+  findOverweightRegularCargoItem,
+  getEffectiveCargoUnitWeightKg,
+  MAX_REGULAR_CARGO_PACKAGE_WEIGHT_KG,
+} from '../utils/cargo-weight';
 import { useAuthSession } from '@/features/auth/auth-session';
 import { customerApi } from '@/features/account/services/customer.api';
 import { hydrateUntouchedProfileField } from '../utils/profile-hydration';
+import {
+  bookingsApi,
+  type CreateBookingPayload,
+  type CreatedBookingData,
+} from '@/features/account/services/bookings.api';
+import { createPaymentDraft } from '@/features/booking/services/payment-draft';
+import {
+  ApiError,
+  shipmentsApi,
+  type ShipmentRoutePoints,
+} from '@/features/shipments/services/shipments.api';
 
 export interface RoundTripBookingProps {
   outboundPost: Post;
@@ -315,6 +333,15 @@ function formatDisplayPhone(phone?: string | null): string {
   return trimmed;
 }
 
+function isValidCargoItem(item: ILuggageItem): boolean {
+  return (
+    item.type === 'Xe máy' ||
+    item.type === 'Xe đạp' ||
+    (item.weight || 0) > 0 ||
+    Boolean(item.length && item.width && item.height)
+  );
+}
+
 export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
   outboundPost,
   returnPost,
@@ -324,14 +351,23 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
   returnTripSeats,
 }) => {
   const router = useRouter();
-  const { user, executeWithAuth, isAuthenticated } = useAuthSession();
+  const { user, executeWithAuth, isAuthenticated, isHydrated } = useAuthSession();
   const [userNameOverride, setUserNameOverride] = useState<string | null>(null);
   const [userPhoneOverride, setUserPhoneOverride] = useState<string | null>(null);
   const [customerEmail, setCustomerEmail] = useState('');
   const [outboundSeats, setOutboundSeats] = useState<string[]>([]);
   const [returnSeats, setReturnSeats] = useState<string[]>([]);
+  const [outboundSeatMap, setOutboundSeatMap] = useState<ApiTripSeat[]>(outboundTripSeats);
+  const [returnSeatMap, setReturnSeatMap] = useState<ApiTripSeat[]>(returnTripSeats);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
-  const validationAttempted = false;
+  const [validationAttempted, setValidationAttempted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [showCustomerInfoAlert, setShowCustomerInfoAlert] = useState(false);
+  const [customerInfoAlertMessage, setCustomerInfoAlertMessage] = useState('');
+  const mountedRef = useRef(true);
+  const submissionLockRef = useRef(false);
+  const activeHoldsRef = useRef<{ outbound: string | null; return: string | null; bookingStarted: boolean } | null>(null);
   const [showVehicleInfoModal, setShowVehicleInfoModal] = useState(false);
   const [showOutboundTripModal, setShowOutboundTripModal] = useState(false);
   const [showReturnTripModal, setShowReturnTripModal] = useState(false);
@@ -453,7 +489,56 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
     ...returnLuggageItems.map((it) => ({ ...it, legTitle: 'Chuyến về' as const })),
   ];
   const hasCargoItems = allLuggageItems.length > 0;
-  const totalFareLabel = hasCargoItems ? 'Tạm tính tiền vé' : 'Tổng tiền';
+  const totalFareLabel = 'Tổng tiền';
+
+  const [outboundCargoRoutePoints, setOutboundCargoRoutePoints] =
+    useState<ShipmentRoutePoints | null>(null);
+  const [returnCargoRoutePoints, setReturnCargoRoutePoints] =
+    useState<ShipmentRoutePoints | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    const tripId = Number(outboundPost.id);
+    if (
+      outboundLuggageItems.filter(isValidCargoItem).length > 0 &&
+      Number.isSafeInteger(tripId) &&
+      tripId > 0
+    ) {
+      shipmentsApi
+        .getRoutePoints(tripId)
+        .then(({ data }) => {
+          if (active) setOutboundCargoRoutePoints(data);
+        })
+        .catch(() => {});
+    } else {
+      setOutboundCargoRoutePoints(null);
+    }
+    return () => {
+      active = false;
+    };
+  }, [outboundLuggageItems, outboundPost.id]);
+
+  useEffect(() => {
+    let active = true;
+    const tripId = Number(returnPost.id);
+    if (
+      returnLuggageItems.filter(isValidCargoItem).length > 0 &&
+      Number.isSafeInteger(tripId) &&
+      tripId > 0
+    ) {
+      shipmentsApi
+        .getRoutePoints(tripId)
+        .then(({ data }) => {
+          if (active) setReturnCargoRoutePoints(data);
+        })
+        .catch(() => {});
+    } else {
+      setReturnCargoRoutePoints(null);
+    }
+    return () => {
+      active = false;
+    };
+  }, [returnLuggageItems, returnPost.id]);
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -484,19 +569,6 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
       ? userPhoneOverride
       : formatDisplayPhone(user?.phoneNumber) || '';
 
-  const handleReloadUserInfo = () => {
-    if (user?.fullName) setUserNameOverride(user.fullName);
-    if (user?.phoneNumber) setUserPhoneOverride(formatDisplayPhone(user.phoneNumber));
-    executeWithAuth((token) => customerApi.getMe(token))
-      .then((res) => {
-        if (res?.data) {
-          if (res.data.fullName) setUserNameOverride(res.data.fullName);
-          if (res.data.phoneNumber) setUserPhoneOverride(formatDisplayPhone(res.data.phoneNumber));
-          if (res.data.email) setCustomerEmail(res.data.email);
-        }
-      })
-      .catch(() => {});
-  };
 
   const passengerValidation = validatePassengerInfo({
     fullName: customerName,
@@ -516,19 +588,481 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
     returnPost.timeAgo || (returnDate ? `${returnDate}` : 'Chưa cập nhật'),
   );
 
+  const releaseSeatHoldSafely = useCallback(async (holdToken: string) => {
+    try {
+      const res = await bookingsApi.releaseSeatHold(holdToken);
+      return res.data?.success === true;
+    } catch {
+      return false;
+    }
+  }, []);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      const active = activeHoldsRef.current;
+      if (active && !active.bookingStarted) {
+        if (active.outbound) void releaseSeatHoldSafely(active.outbound);
+        if (active.return) void releaseSeatHoldSafely(active.return);
+        activeHoldsRef.current = null;
+      }
+    };
+  }, [releaseSeatHoldSafely]);
+
+  useEffect(() => {
+    setOutboundSeatMap(outboundTripSeats);
+  }, [outboundTripSeats]);
+
+  useEffect(() => {
+    setReturnSeatMap(returnTripSeats);
+  }, [returnTripSeats]);
+
+  const refreshSeatMaps = async () => {
+    try {
+      const [outSeats, retSeats] = await Promise.all([
+        tripsApi.getTripSeats(Number(outboundPost.id)),
+        tripsApi.getTripSeats(Number(returnPost.id)),
+      ]);
+      if (mountedRef.current) {
+        setOutboundSeatMap(outSeats);
+        setReturnSeatMap(retSeats);
+        setOutboundSeats((current) =>
+          current.filter((seatNum) =>
+            outSeats.some((s) => s.seatNumber === seatNum && s.status === 'TRONG'),
+          ),
+        );
+        setReturnSeats((current) =>
+          current.filter((seatNum) =>
+            retSeats.some((s) => s.seatNumber === seatNum && s.status === 'TRONG'),
+          ),
+        );
+      }
+    } catch {
+      // Fallback
+    }
+  };
+
   const toggleOutboundSeat = (seat: string) => {
-    setOutboundSeats((current) =>
-      current.includes(seat)
-        ? current.filter((item) => item !== seat)
-        : [...current, seat],
-    );
+    if (isSubmitting) return;
+    setSubmitError(null);
+    setOutboundSeats((current) => {
+      if (current.includes(seat)) {
+        return current.filter((item) => item !== seat);
+      }
+      if (current.length >= 5) {
+        setSubmitError('Chuyến đi chỉ được chọn tối đa 5 ghế.');
+        return current;
+      }
+      return [...current, seat];
+    });
   };
   const toggleReturnSeat = (seat: string) => {
-    setReturnSeats((current) =>
-      current.includes(seat)
-        ? current.filter((item) => item !== seat)
-        : [...current, seat],
+    if (isSubmitting) return;
+    setSubmitError(null);
+    setReturnSeats((current) => {
+      if (current.includes(seat)) {
+        return current.filter((item) => item !== seat);
+      }
+      if (current.length >= 5) {
+        setSubmitError('Chuyến về chỉ được chọn tối đa 5 ghế.');
+        return current;
+      }
+      return [...current, seat];
+    });
+  };
+
+  const handleSubmit = async () => {
+    if (submissionLockRef.current) return;
+
+    setValidationAttempted(true);
+    setSubmitError(null);
+
+    if (!isHydrated) {
+      setSubmitError('Đang tải trạng thái tài khoản. Vui lòng đợi rồi thử lại.');
+      return;
+    }
+
+    if (!passengerValidation.isValid) {
+      const missingDetails: string[] = [];
+      if (!customerName.trim()) {
+        missingDetails.push('Họ và tên');
+      }
+      if (!customerPhone.trim()) {
+        missingDetails.push('Số điện thoại');
+      } else if (passengerValidation.errors.phoneNumber) {
+        missingDetails.push('Số điện thoại (định dạng chưa đúng)');
+      }
+      if (!customerEmail.trim()) {
+        missingDetails.push('Email');
+      } else if (passengerValidation.errors.email) {
+        missingDetails.push('Email (định dạng chưa đúng)');
+      }
+
+      const msg =
+        missingDetails.length > 0
+          ? `Quý khách vui lòng nhập đầy đủ và chính xác thông tin khách hàng:\n• ${missingDetails.join('\n• ')}`
+          : 'Quý khách vui lòng điền đầy đủ thông tin khách hàng trước khi thanh toán.';
+
+      setCustomerInfoAlertMessage(msg);
+      setShowCustomerInfoAlert(true);
+      return;
+    }
+
+    if (outboundSeats.length === 0) {
+      setSubmitError('Vui lòng chọn ít nhất một ghế cho chuyến đi.');
+      return;
+    }
+    if (outboundSeats.length > 5) {
+      setSubmitError('Chuyến đi chỉ được chọn tối đa 5 ghế.');
+      return;
+    }
+    if (returnSeats.length === 0) {
+      setSubmitError('Vui lòng chọn ít nhất một ghế cho chuyến về.');
+      return;
+    }
+    if (returnSeats.length > 5) {
+      setSubmitError('Chuyến về chỉ được chọn tối đa 5 ghế.');
+      return;
+    }
+
+    if (!acceptedTerms) {
+      setSubmitError('Vui lòng chấp nhận điều khoản đặt vé & chính sách bảo mật để tiếp tục.');
+      return;
+    }
+
+    const oversizedItem = allLuggageItems.find(
+      (item) =>
+        item.type !== 'Xe máy' &&
+        item.type !== 'Xe đạp' &&
+        ((item.length && item.length > 150) ||
+          (item.width && item.width > 80) ||
+          (item.height && item.height > 80)),
     );
+    if (oversizedItem) {
+      setSubmitError(
+        `Kiện "${oversizedItem.type}" (${oversizedItem.legTitle}) vượt quá kích thước cho phép của hầm xe khách (Dài ≤ 150cm, Rộng ≤ 80cm, Cao ≤ 80cm).`,
+      );
+      return;
+    }
+
+    if (outboundLuggageWeight > 40 || returnLuggageWeight > 40) {
+      const exceedLeg = outboundLuggageWeight > 40 ? 'chuyến đi' : 'chuyến về';
+      const exceedWeight = outboundLuggageWeight > 40 ? outboundLuggageWeight : returnLuggageWeight;
+      setSubmitError(
+        `Tổng khối lượng hành lý ${exceedLeg} (${exceedWeight}kg) vượt quá hạn mức 40kg/chuyến khi đi kèm vé.`,
+      );
+      return;
+    }
+
+    const outboundTripId = Number(outboundPost.id);
+    const returnTripId = Number(returnPost.id);
+    if (!Number.isSafeInteger(outboundTripId) || outboundTripId <= 0 || !Number.isSafeInteger(returnTripId) || returnTripId <= 0) {
+      setSubmitError('Không xác định được chuyến xe. Vui lòng tải lại trang.');
+      return;
+    }
+
+    const resolvedOutboundSeats = outboundSeats.map((seatNumber) =>
+      outboundSeatMap.find(
+        (seat) => seat.seatNumber === seatNumber && seat.status === 'TRONG',
+      ),
+    );
+    const outboundSeatIds = resolvedOutboundSeats
+      .map((seat) => seat?.tripSeatId)
+      .filter((id): id is number => typeof id === 'number' && Number.isSafeInteger(id) && id > 0);
+
+    const resolvedReturnSeats = returnSeats.map((seatNumber) =>
+      returnSeatMap.find(
+        (seat) => seat.seatNumber === seatNumber && seat.status === 'TRONG',
+      ),
+    );
+    const returnSeatIds = resolvedReturnSeats
+      .map((seat) => seat?.tripSeatId)
+      .filter((id): id is number => typeof id === 'number' && Number.isSafeInteger(id) && id > 0);
+
+    if (
+      resolvedOutboundSeats.some((seat) => !seat) ||
+      outboundSeatIds.length !== outboundSeats.length
+    ) {
+      setSubmitError('Sơ đồ ghế chuyến đi đã thay đổi. Hãy chọn lại ghế còn trống.');
+      await refreshSeatMaps();
+      return;
+    }
+
+    if (
+      resolvedReturnSeats.some((seat) => !seat) ||
+      returnSeatIds.length !== returnSeats.length
+    ) {
+      setSubmitError('Sơ đồ ghế chuyến về đã thay đổi. Hãy chọn lại ghế còn trống.');
+      await refreshSeatMaps();
+      return;
+    }
+
+
+    const overweightRegularCargoItem = findOverweightRegularCargoItem(allLuggageItems);
+    if (overweightRegularCargoItem) {
+      const effectiveUnitWeight = getEffectiveCargoUnitWeightKg(
+        overweightRegularCargoItem,
+      );
+      setSubmitError(
+        `Kiện "${overweightRegularCargoItem.type}" có khối lượng hiệu dụng ${effectiveUnitWeight}kg; mỗi kiện tối đa ${MAX_REGULAR_CARGO_PACKAGE_WEIGHT_KG}kg khi đi kèm vé.`,
+      );
+      return;
+    }
+
+    const mapCargo = (items: ILuggageItem[]) => {
+      const valid = items.filter(isValidCargoItem);
+      if (valid.length === 0) return undefined;
+      return valid.map((item) => ({
+        name:
+          item.type === 'Xe máy'
+            ? `Xe máy (${item.motorbikeType || 'Xe số'})`
+            : item.type === 'Xe đạp'
+              ? `Xe đạp (${item.bicycleType || 'Xe đạp thường'})`
+              : item.type || 'Hành lý gửi kèm',
+        type: item.type,
+        quantity: item.quantity || 1,
+        weight:
+          item.type === 'Xe máy'
+            ? 100
+            : item.type === 'Xe đạp'
+              ? 15
+              : item.weight || 0,
+        length: item.length,
+        width: item.width,
+        height: item.height,
+        loaiHangHoaId: item.loaiHangHoaId,
+        category: item.category,
+        note: item.note,
+        motorbikeModel: item.motorbikeType,
+        bicycleType: item.bicycleType,
+        licensePlate: item.licensePlate,
+      }));
+    };
+
+    const outboundCargo = mapCargo(outboundLuggageItems);
+    const returnCargo = mapCargo(returnLuggageItems);
+
+    let outSenderPointId: number | undefined;
+    let outReceiverPointId: number | undefined;
+    if (outboundCargo && outboundCargoRoutePoints) {
+      if (outboundCargoRoutePoints.senderPoints.length) {
+        outSenderPointId = outboundCargoRoutePoints.senderPoints[0].id;
+      }
+      if (outboundCargoRoutePoints.receiverPoints.length) {
+        const candidate =
+          outboundCargoRoutePoints.receiverPoints.find((p) => p.id !== outSenderPointId) ??
+          outboundCargoRoutePoints.receiverPoints[outboundCargoRoutePoints.receiverPoints.length - 1];
+        outReceiverPointId = candidate?.id;
+      }
+    }
+
+    let retSenderPointId: number | undefined;
+    let retReceiverPointId: number | undefined;
+    if (returnCargo && returnCargoRoutePoints) {
+      if (returnCargoRoutePoints.senderPoints.length) {
+        retSenderPointId = returnCargoRoutePoints.senderPoints[0].id;
+      }
+      if (returnCargoRoutePoints.receiverPoints.length) {
+        const candidate =
+          returnCargoRoutePoints.receiverPoints.find((p) => p.id !== retSenderPointId) ??
+          returnCargoRoutePoints.receiverPoints[returnCargoRoutePoints.receiverPoints.length - 1];
+        retReceiverPointId = candidate?.id;
+      }
+    }
+
+    submissionLockRef.current = true;
+    setIsSubmitting(true);
+
+    let outboundHoldToken: string | null = null;
+    let returnHoldToken: string | null = null;
+
+    try {
+      const outHoldRes = isAuthenticated
+        ? await executeWithAuth((token) =>
+            bookingsApi.createSeatHold({ tripId: outboundTripId, seatIds: outboundSeatIds }, token),
+          )
+        : await bookingsApi.createSeatHold({ tripId: outboundTripId, seatIds: outboundSeatIds });
+      outboundHoldToken = outHoldRes.data.holdToken;
+
+      try {
+        const retHoldRes = isAuthenticated
+          ? await executeWithAuth((token) =>
+              bookingsApi.createSeatHold({ tripId: returnTripId, seatIds: returnSeatIds }, token),
+            )
+          : await bookingsApi.createSeatHold({ tripId: returnTripId, seatIds: returnSeatIds });
+        returnHoldToken = retHoldRes.data.holdToken;
+      } catch (retError) {
+        if (outboundHoldToken) {
+          await releaseSeatHoldSafely(outboundHoldToken);
+          outboundHoldToken = null;
+        }
+        throw retError;
+      }
+
+      activeHoldsRef.current = {
+        outbound: outboundHoldToken,
+        return: returnHoldToken,
+        bookingStarted: false,
+      };
+
+      activeHoldsRef.current.bookingStarted = true;
+
+      const outboundPayload: CreateBookingPayload = {
+        tripId: outboundTripId,
+        seatIds: outboundSeatIds,
+        contact: {
+          fullName: customerName.trim(),
+          phone: customerPhone.trim(),
+          ...(customerEmail.trim() ? { email: customerEmail.trim() } : {}),
+        },
+        pickupPoint: outboundPost.province,
+        dropoffPoint: outboundPost.district,
+        holdToken: outboundHoldToken,
+        cargoItems: outboundCargo,
+        ...(outboundCargo && outSenderPointId && outReceiverPointId
+          ? { senderPointId: outSenderPointId, receiverPointId: outReceiverPointId }
+          : {}),
+      };
+
+      let outboundBookingRes;
+      try {
+        outboundBookingRes = isAuthenticated
+          ? await executeWithAuth((token) =>
+              bookingsApi.createBooking(outboundPayload, token),
+            )
+          : await bookingsApi.createBooking(outboundPayload);
+      } catch (outErr) {
+        if (outboundHoldToken) await releaseSeatHoldSafely(outboundHoldToken);
+        if (returnHoldToken) await releaseSeatHoldSafely(returnHoldToken);
+        activeHoldsRef.current = null;
+        throw outErr;
+      }
+
+      const returnPayload: CreateBookingPayload = {
+        tripId: returnTripId,
+        seatIds: returnSeatIds,
+        contact: {
+          fullName: customerName.trim(),
+          phone: customerPhone.trim(),
+          ...(customerEmail.trim() ? { email: customerEmail.trim() } : {}),
+        },
+        pickupPoint: returnLocations.pickup,
+        dropoffPoint: returnLocations.dropoff,
+        holdToken: returnHoldToken,
+        cargoItems: returnCargo,
+        ...(returnCargo && retSenderPointId && retReceiverPointId
+          ? { senderPointId: retSenderPointId, receiverPointId: retReceiverPointId }
+          : {}),
+      };
+
+      let returnBookingRes;
+      try {
+        returnBookingRes = isAuthenticated
+          ? await executeWithAuth((token) =>
+              bookingsApi.createBooking(returnPayload, token),
+            )
+          : await bookingsApi.createBooking(returnPayload);
+      } catch (retErr) {
+        if (returnHoldToken) await releaseSeatHoldSafely(returnHoldToken);
+        activeHoldsRef.current = null;
+        throw retErr;
+      }
+
+      activeHoldsRef.current = null;
+      if (!mountedRef.current) return;
+
+      const b1 = outboundBookingRes.data as CreatedBookingData;
+      const b2 = returnBookingRes.data as CreatedBookingData;
+
+      const totalOrderAmount = Number(b1.totalAmount) + Number(b2.totalAmount);
+
+      const draft = createPaymentDraft({
+        tripType: 'round-trip',
+        passenger: {
+          fullName: customerName.trim(),
+          phoneNumber: customerPhone.trim(),
+          email: customerEmail.trim(),
+        },
+        legs: [
+          {
+            tripId: outboundTripId,
+            route: outboundRoute,
+            departureTime: outboundDepartureTimeText,
+            seats: outboundSeats,
+            pickup: outboundPost.province,
+            dropoff: outboundPost.district,
+            unitFare: outboundUnitFare,
+            subtotal: Number(b1.totalAmount),
+            busCompanyName: outboundPost.authorName || 'VexGo Transport',
+            vehicleType: outboundPost.propertyType || 'Xe khách chất lượng cao',
+            bookingId: b1.bookingId,
+            bookingCode: b1.bookingCode,
+            orderId: b1.orderId,
+            orderCode: b1.orderCode,
+            status: b1.status,
+          },
+          {
+            tripId: returnTripId,
+            route: returnRoute,
+            departureTime: returnDepartureTimeText,
+            seats: returnSeats,
+            pickup: returnLocations.pickup,
+            dropoff: returnLocations.dropoff,
+            unitFare: returnUnitFare,
+            subtotal: Number(b2.totalAmount),
+            busCompanyName: returnPost.authorName || 'VexGo Transport',
+            vehicleType: returnPost.propertyType || 'Xe khách chất lượng cao',
+            bookingId: b2.bookingId,
+            bookingCode: b2.bookingCode,
+            orderId: b2.orderId,
+            orderCode: b2.orderCode,
+            status: b2.status,
+          },
+        ],
+        luggage:
+          luggageWeight > 0 || luggageFee > 0 || allLuggageItems.length > 0
+            ? {
+                fee: luggageFee,
+                weight: luggageWeight,
+                items: allLuggageItems,
+                info: {
+                  count: allLuggageItems.length,
+                  weight: luggageWeight,
+                  fee: luggageFee,
+                  category: allLuggageItems[0]?.category || 'normal',
+                },
+              }
+            : undefined,
+        totalFare: totalOrderAmount,
+        bookingId: b1.bookingId,
+        bookingCode: b1.bookingCode,
+        orderId: b1.orderId,
+        orderCode: b1.orderCode,
+        status: b1.status,
+      });
+
+      if (totalOrderAmount === 0 && b1.status === 'DA_THANH_TOAN' && b2.status === 'DA_THANH_TOAN') {
+        router.push(`/invoice/${b1.bookingId}?returnBookingId=${b2.bookingId}`);
+      } else {
+        router.push(`/payment?draftId=${encodeURIComponent(draft.id)}`);
+      }
+    } catch (error) {
+      if (mountedRef.current) {
+        submissionLockRef.current = false;
+        setIsSubmitting(false);
+        if (error instanceof ApiError && error.status === 409) {
+          setSubmitError(
+            error.message || 'Ghế vừa được người khác giữ. Sơ đồ ghế đang được cập nhật.',
+          );
+          void refreshSeatMaps();
+          return;
+        }
+        setSubmitError(
+          error instanceof Error ? error.message : 'Không thể tạo đơn đặt vé khứ hồi. Vui lòng thử lại.',
+        );
+      }
+    }
   };
 
   const outboundUnitFare = outboundPost.minPriceNum ?? 0;
@@ -581,7 +1115,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                 title="Chuyến đi"
                 date={departureLabel}
                 vehicleType={outboundPost.propertyType}
-                tripSeats={outboundTripSeats}
+                tripSeats={outboundSeatMap}
                 selectedSeats={outboundSeats}
                 onToggle={toggleOutboundSeat}
                 onVehicleInfoClick={() => setShowVehicleInfoModal(true)}
@@ -590,7 +1124,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                 title="Chuyến về"
                 date={returnLabel}
                 vehicleType={returnPost.propertyType}
-                tripSeats={returnTripSeats}
+                tripSeats={returnSeatMap}
                 selectedSeats={returnSeats}
                 onToggle={toggleReturnSeat}
                 onVehicleInfoClick={() => setShowVehicleInfoModal(true)}
@@ -598,7 +1132,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
             </div>
 
             {/* Chú giải */}
-            <div className="p-3 border-b border-slate-200 bg-slate-50 flex justify-center gap-8 text-[11px] font-bold text-slate-600">
+            <div className="p-3 border-b border-slate-200 bg-slate-50 flex flex-wrap items-center justify-center gap-6 sm:gap-8 text-[11px] font-bold text-slate-600">
               <span className="inline-flex items-center gap-2">
                 <SeatIcon className="w-4 h-5 fill-slate-200 stroke-slate-300" />{' '}
                 Đã bán
@@ -610,6 +1144,9 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
               <span className="inline-flex items-center gap-2">
                 <SeatIcon className="w-4 h-5 fill-[#F5A623] stroke-[#D98A12]" />{' '}
                 Đang chọn
+              </span>
+              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-200/70 text-slate-600 text-[10px] font-bold">
+                Tối đa 5 ghế/chuyến
               </span>
             </div>
 
@@ -889,6 +1426,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                   )}
                 </div>
                 <LuggageStep
+                  title="HÀNH LÝ CỦA CHUYẾN ĐI"
                   route={outboundRoute}
                   time={outboundDepartureTimeText}
                   seat={`Ghế: ${outboundSeats.join(', ') || '-'}`}
@@ -939,6 +1477,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                   </div>
                 ) : (
                   <LuggageStep
+                    title="HÀNH LÝ CỦA CHUYẾN VỀ"
                     route={returnRoute}
                     time={returnDepartureTimeText}
                     seat={`Ghế: ${returnSeats.join(', ') || '-'}`}
@@ -1001,24 +1540,28 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                 </span>
               </div>
               <div className="flex flex-col gap-3 sm:items-end">
-                <div role="status" className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900">
-                  Đặt vé khứ hồi hiện chưa được hỗ trợ. Để tiếp tục, hãy quay lại và chọn chuyến một chiều.
-                </div>
+                {submitError && (
+                  <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">
+                    {submitError}
+                  </div>
+                )}
                 <div className="flex gap-3">
-                <button
-                  type="button"
-                  onClick={() => router.back()}
-                  className="min-h-11 px-6 rounded-lg border border-slate-300 bg-white text-slate-600 font-bold text-sm hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
-                >
-                  Hủy
-                </button>
-                <button
-                  type="button"
-                  disabled
-                  className="min-h-11 px-6 rounded-lg bg-accent text-white font-bold text-sm opacity-60 cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
-                >
-                  Khứ hồi chưa khả dụng
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => router.back()}
+                    disabled={isSubmitting}
+                    className="min-h-11 px-6 rounded-lg border border-slate-300 bg-white text-slate-600 font-bold text-sm hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:opacity-60"
+                  >
+                    Hủy
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSubmit}
+                    disabled={isSubmitting}
+                    className="min-h-11 px-6 rounded-lg bg-accent text-white font-bold text-sm hover:bg-accent-hover shadow-sm disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand transition-colors"
+                  >
+                    {isSubmitting ? 'Đang xử lý…' : 'Thanh toán'}
+                  </button>
                 </div>
               </div>
             </div>
@@ -1242,9 +1785,18 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                         )}
                       </div>
 
-                      <span className="shrink-0 text-right text-xs font-semibold text-slate-500">
-                        Chưa áp dụng cho vé khứ hồi
-                      </span>
+                      {(() => {
+                        const itemFee = calculateLuggageFee([item]);
+                        return itemFee > 0 ? (
+                          <span className="shrink-0 text-right text-xs font-bold text-red-600">
+                            {itemFee.toLocaleString('vi-VN')}đ
+                          </span>
+                        ) : (
+                          <span className="shrink-0 text-right text-xs font-semibold text-slate-500">
+                            Theo bảng cước tuyến
+                          </span>
+                        );
+                      })()}
                     </div>
                   ))}
                 </div>
@@ -1264,12 +1816,11 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                   <span>Giá vé lượt về</span>
                   <span>{returnFare.toLocaleString('vi-VN')}đ</span>
                 </div>
-                {hasCargoItems && (
-                  <div className="flex justify-between gap-3">
-                    <span>Hàng gửi hầm xe ({luggageWeight}kg)</span>
-                    <span className="text-slate-600">Chưa tính trong đơn vé khứ hồi</span>
-                  </div>
-                )}
+                <LuggageSummary
+                  fee={luggageFee}
+                  totalWeight={luggageWeight}
+                  hasCargo={hasCargoItems}
+                />
                 <div className="flex justify-between">
                   <span>Phí thanh toán</span>
                   <span>0đ</span>
@@ -1403,9 +1954,18 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                       )}
                     </div>
 
-                    <div className="shrink-0 text-right text-xs font-semibold text-slate-500">
-                      Chưa áp dụng cho vé khứ hồi
-                    </div>
+                    {(() => {
+                      const itemFee = calculateLuggageFee([item]);
+                      return itemFee > 0 ? (
+                        <span className="font-extrabold text-red-600">
+                          +{itemFee.toLocaleString('vi-VN')}đ
+                        </span>
+                      ) : (
+                        <span className="font-bold text-emerald-600">
+                          Theo bảng cước
+                        </span>
+                      );
+                    })()}
                   </div>
                 );
               })}
@@ -1413,8 +1973,8 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
 
             <div className="mt-4 pt-3 border-t border-slate-200 flex items-center justify-between text-xs">
               <span className="font-bold text-slate-600">Cước hàng</span>
-              <strong className="text-slate-600 text-xs">
-                Chưa tính trong đơn vé khứ hồi
+              <strong className="text-red-600 text-sm">
+                {luggageFee > 0 ? `${luggageFee.toLocaleString('vi-VN')}đ` : 'Miễn phí'}
               </strong>
             </div>
           </section>
@@ -1581,6 +2141,33 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
               </div>
             </div>
           </section>
+        </div>
+      )}
+
+      {/* Customer Info Alert Modal */}
+      {showCustomerInfoAlert && (
+        <div
+          role="alertdialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+        >
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+            <h3 className="text-lg font-bold text-slate-900">
+              Thông tin khách hàng chưa đầy đủ
+            </h3>
+            <p className="mt-3 whitespace-pre-line text-sm text-slate-600">
+              {customerInfoAlertMessage}
+            </p>
+            <div className="mt-6 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowCustomerInfoAlert(false)}
+                className="rounded-xl bg-accent px-5 py-2.5 text-sm font-semibold text-white hover:bg-accent-hover focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 cursor-pointer"
+              >
+                Đã hiểu
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

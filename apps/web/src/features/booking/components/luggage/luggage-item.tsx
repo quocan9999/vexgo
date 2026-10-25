@@ -2,9 +2,79 @@
 'use client';
 
 import React from 'react';
-import { Trash2 } from 'lucide-react';
+import { Trash2, ChevronDown } from 'lucide-react';
 import type { CargoCategory } from '@/features/shipments/services/shipments.api';
 
+
+export function resolveCargoCategoryId(
+  type: string,
+  weight: number = 0,
+  length?: number,
+  width?: number,
+  height?: number,
+  categories: CargoCategory[] = [],
+): number | undefined {
+  if (!categories || categories.length === 0) return undefined;
+
+  const isMotorbike = type === 'Xe máy';
+  const isBicycle = type === 'Xe đạp';
+  const unitWeight = Math.max(
+    weight || 0,
+    length && width && height ? (length * width * height) / 5000 : 0,
+  );
+
+  const capacityGroup = isMotorbike
+    ? 'XE_MAY'
+    : isBicycle || type.toLocaleUpperCase('vi-VN').includes('CỒNG KỀNH') || (unitWeight >= 20 && unitWeight <= 40)
+      ? 'HANG_CONG_KENH'
+      : 'HANG_NHE';
+
+  const isVehicle = isMotorbike || isBicycle;
+
+  const inGroup = categories.filter((c) => c.capacityGroup === capacityGroup);
+  if (inGroup.length > 0) {
+    if (isMotorbike) {
+      const match = inGroup.find((c) => c.name.toLocaleUpperCase('vi-VN').includes('XE MÁY'));
+      if (match) return match.categoryId;
+    }
+    if (isBicycle) {
+      const match = inGroup.find((c) => c.name.toLocaleUpperCase('vi-VN').includes('XE ĐẠP'));
+      if (match) return match.categoryId;
+    }
+    if (!isVehicle) {
+      const nonVehicle = inGroup.find(
+        (c) =>
+          !c.name.toLocaleUpperCase('vi-VN').includes('XE ĐẠP') &&
+          !c.name.toLocaleUpperCase('vi-VN').includes('XE MÁY') &&
+          !c.name.toLocaleUpperCase('vi-VN').includes('BICYCLE') &&
+          !c.name.toLocaleUpperCase('vi-VN').includes('MOTORCYCLE'),
+      );
+      if (nonVehicle) return nonVehicle.categoryId;
+    }
+    return inGroup[0].categoryId;
+  }
+
+  if (isMotorbike) {
+    const moto = categories.find((c) => c.name.toLocaleUpperCase('vi-VN').includes('XE MÁY'));
+    if (moto) return moto.categoryId;
+  }
+  if (isBicycle) {
+    const bike = categories.find((c) => c.name.toLocaleUpperCase('vi-VN').includes('XE ĐẠP'));
+    if (bike) return bike.categoryId;
+  }
+
+  const normalGroup = categories.filter((c) => c.capacityGroup === 'HANG_NHE');
+  if (normalGroup.length > 0) {
+    const buuPham = normalGroup.find(
+      (c) =>
+        c.name.toLocaleUpperCase('vi-VN').includes('BƯU PHẨM') ||
+        c.name.toLocaleUpperCase('vi-VN').includes('THƯỜNG'),
+    );
+    return buuPham?.categoryId || normalGroup[0].categoryId;
+  }
+
+  return categories[0]?.categoryId;
+}
 
 interface LuggageItemProps {
   index: number;
@@ -18,21 +88,32 @@ export const LuggageItemComponent: React.FC<LuggageItemProps> = ({ index, item, 
   const isMotorbike = item.type === 'Xe máy';
   const isBicycle = item.type === 'Xe đạp';
   const isVehicle = isMotorbike || isBicycle;
-  const unitWeight = Math.max(
-    item.weight || 0,
-    item.length && item.width && item.height
-      ? (item.length * item.width * item.height) / 5000
-      : 0,
-  );
-  const capacityGroup = isMotorbike
-    ? 'XE_MAY'
-    : isBicycle || item.type.toLocaleUpperCase('vi-VN').includes('CỒNG KỀNH') ||
-        (unitWeight >= 20 && unitWeight <= 40)
-      ? 'HANG_CONG_KENH'
-      : 'HANG_NHE';
-  const availableCargoCategories = cargoCategories.filter(
-    (category) => category.capacityGroup === capacityGroup,
-  );
+
+  React.useEffect(() => {
+    if (cargoCategories && cargoCategories.length > 0) {
+      const targetId = resolveCargoCategoryId(
+        item.type,
+        item.weight,
+        item.length,
+        item.width,
+        item.height,
+        cargoCategories,
+      );
+      if (targetId && item.loaiHangHoaId !== targetId) {
+        onChange(item.id, 'loaiHangHoaId', targetId);
+      }
+    }
+  }, [
+    item.id,
+    item.type,
+    item.weight,
+    item.length,
+    item.width,
+    item.height,
+    item.loaiHangHoaId,
+    cargoCategories,
+    onChange,
+  ]);
 
   return (
     <div className="p-4 border border-slate-200 rounded-lg bg-slate-50 relative">
@@ -56,74 +137,50 @@ export const LuggageItemComponent: React.FC<LuggageItemProps> = ({ index, item, 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <label className="block">
           <span className="text-xs font-bold text-slate-700">Loại hành lý</span>
-          <select
-            className="mt-1 h-10 w-full rounded-lg border border-slate-300 px-3 text-sm font-semibold outline-none focus:border-accent bg-white"
-            value={item.type}
-            onChange={(e) => {
-              const newType = e.target.value;
-              if (newType === 'Xe máy') {
-                onChange(item.id, {
-                  type: 'Xe máy',
-                  weight: 100,
-                  motorbikeType: item.motorbikeType || 'Xe số',
-                  bicycleType: undefined,
-                  length: undefined,
-                  width: undefined,
-                  height: undefined,
-                });
-              } else if (newType === 'Xe đạp') {
-                onChange(item.id, {
-                  type: 'Xe đạp',
-                  weight: 15,
-                  bicycleType: item.bicycleType || 'Xe đạp thường',
-                  motorbikeType: undefined,
-                  licensePlate: undefined,
-                  length: undefined,
-                  width: undefined,
-                  height: undefined,
-                });
-              } else {
-                onChange(item.id, {
-                  type: newType,
-                  weight: (item.type === 'Xe máy' || item.type === 'Xe đạp') ? 0 : item.weight,
-                });
-              }
-            }}
-          >
-            <option value="Vali">Vali</option>
-            <option value="Balo / Túi du lịch">Balo / Túi du lịch</option>
-            <option value="Thùng xốp / Thùng carton">Thùng xốp / Thùng carton</option>
-            <option value="Xe máy">Xe máy</option>
-            <option value="Xe đạp">Xe đạp</option>
-            <option value="Hành lý / Đồ cồng kềnh khác">Hành lý / Đồ cồng kềnh khác</option>
-          </select>
-        </label>
-
-        <label className="block">
-          <span className="text-xs font-bold text-slate-700">Danh mục hàng hóa</span>
-          <select
-            className="mt-1 h-10 w-full rounded-lg border border-slate-300 px-3 text-sm font-semibold outline-none focus:border-accent bg-white"
-            value={item.loaiHangHoaId?.toString() || ''}
-            onChange={(event) =>
-              onChange(
-                item.id,
-                'loaiHangHoaId',
-                event.target.value ? Number(event.target.value) : undefined,
-              )
-            }
-          >
-            <option value="">Chọn danh mục hàng hóa</option>
-            {availableCargoCategories.map((category) => (
-              <option key={category.categoryId} value={category.categoryId}>
-                {category.name}
-              </option>
-            ))}
-          </select>
-          {availableCargoCategories.length === 0 ? (
-            <span className="mt-1 block text-xs text-amber-700">
-              Chuyến xe chưa có danh mục hàng phù hợp với nhóm này.
-            </span>
-          ) : null}
+          <div className="relative mt-1">
+            <select
+              className="h-10 w-full appearance-none rounded-lg border border-slate-300 bg-white px-3 pr-9 text-sm font-semibold outline-none focus:border-accent"
+              value={item.type}
+              onChange={(e) => {
+                const newType = e.target.value;
+                if (newType === 'Xe máy') {
+                  onChange(item.id, {
+                    type: 'Xe máy',
+                    weight: 100,
+                    motorbikeType: item.motorbikeType || 'Xe số',
+                    bicycleType: undefined,
+                    length: undefined,
+                    width: undefined,
+                    height: undefined,
+                  });
+                } else if (newType === 'Xe đạp') {
+                  onChange(item.id, {
+                    type: 'Xe đạp',
+                    weight: 15,
+                    bicycleType: item.bicycleType || 'Xe đạp thường',
+                    motorbikeType: undefined,
+                    licensePlate: undefined,
+                    length: undefined,
+                    width: undefined,
+                    height: undefined,
+                  });
+                } else {
+                  onChange(item.id, {
+                    type: newType,
+                    weight: (item.type === 'Xe máy' || item.type === 'Xe đạp') ? 0 : item.weight,
+                  });
+                }
+              }}
+            >
+              <option value="Vali">Vali</option>
+              <option value="Balo / Túi du lịch">Balo / Túi du lịch</option>
+              <option value="Thùng xốp / Thùng carton">Thùng xốp / Thùng carton</option>
+              <option value="Xe máy">Xe máy</option>
+              <option value="Xe đạp">Xe đạp</option>
+              <option value="Hành lý / Đồ cồng kềnh khác">Hành lý / Đồ cồng kềnh khác</option>
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          </div>
         </label>
 
         <label className="block">
@@ -141,17 +198,20 @@ export const LuggageItemComponent: React.FC<LuggageItemProps> = ({ index, item, 
           <>
             <label className="block">
               <span className="text-xs font-bold text-slate-700">Dòng xe máy</span>
-              <select
-                className="mt-1 h-10 w-full rounded-lg border border-slate-300 px-3 text-sm font-semibold outline-none focus:border-accent bg-white"
-                value={item.motorbikeType || 'Xe số'}
-                onChange={(e) => onChange(item.id, 'motorbikeType', e.target.value)}
-              >
-                <option value="Xe số">Xe số (Wave, Sirius, Future...)</option>
-                <option value="Xe tay ga">Xe tay ga (Vision, AirBlade, Lead...)</option>
-                <option value="Xe tay ga lớn / SH">Xe tay ga lớn (SH, NVX, Vespa...)</option>
-                <option value="Xe côn tay / Moto">Xe côn tay / Phân khối lớn (Winner, Exciter...)</option>
-                <option value="Xe máy điện">Xe máy điện (VinFast, Dat Bike...)</option>
-              </select>
+              <div className="relative mt-1">
+                <select
+                  className="h-10 w-full appearance-none rounded-lg border border-slate-300 bg-white px-3 pr-9 text-sm font-semibold outline-none focus:border-accent"
+                  value={item.motorbikeType || 'Xe số'}
+                  onChange={(e) => onChange(item.id, 'motorbikeType', e.target.value)}
+                >
+                  <option value="Xe số">Xe số (Wave, Sirius, Future...)</option>
+                  <option value="Xe tay ga">Xe tay ga (Vision, AirBlade, Lead...)</option>
+                  <option value="Xe tay ga lớn / SH">Xe tay ga lớn (SH, NVX, Vespa...)</option>
+                  <option value="Xe côn tay / Moto">Xe côn tay / Phân khối lớn (Winner, Exciter...)</option>
+                  <option value="Xe máy điện">Xe máy điện (VinFast, Dat Bike...)</option>
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              </div>
             </label>
 
             <label className="block">
@@ -169,30 +229,36 @@ export const LuggageItemComponent: React.FC<LuggageItemProps> = ({ index, item, 
           <>
             <label className="block">
               <span className="text-xs font-bold text-slate-700">Loại xe đạp</span>
-              <select
-                className="mt-1 h-10 w-full rounded-lg border border-slate-300 px-3 text-sm font-semibold outline-none focus:border-accent bg-white"
-                value={item.bicycleType || 'Xe đạp thường'}
-                onChange={(e) => onChange(item.id, 'bicycleType', e.target.value)}
-              >
-                <option value="Xe đạp thường">Xe đạp thông thường / mini</option>
-                <option value="Xe đạp thể thao">Xe đạp thể thao / địa hình (MTB)</option>
-                <option value="Xe đạp đua / cuộc">Xe đạp đua / Road bike</option>
-                <option value="Xe đạp điện">Xe đạp điện / Trợ lực điện</option>
-                <option value="Xe đạp gấp">Xe đạp gấp</option>
-              </select>
+              <div className="relative mt-1">
+                <select
+                  className="h-10 w-full appearance-none rounded-lg border border-slate-300 bg-white px-3 pr-9 text-sm font-semibold outline-none focus:border-accent"
+                  value={item.bicycleType || 'Xe đạp thường'}
+                  onChange={(e) => onChange(item.id, 'bicycleType', e.target.value)}
+                >
+                  <option value="Xe đạp thường">Xe đạp thông thường / mini</option>
+                  <option value="Xe đạp thể thao">Xe đạp thể thao / địa hình (MTB)</option>
+                  <option value="Xe đạp đua / cuộc">Xe đạp đua / Road bike</option>
+                  <option value="Xe đạp điện">Xe đạp điện / Trực lực điện</option>
+                  <option value="Xe đạp gấp">Xe đạp gấp</option>
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              </div>
             </label>
 
             <label className="block">
               <span className="text-xs font-bold text-slate-700">Tình trạng xe</span>
-              <select
-                className="mt-1 h-10 w-full rounded-lg border border-slate-300 px-3 text-sm font-semibold outline-none focus:border-accent bg-white"
-                value={item.category}
-                onChange={(e) => onChange(item.id, 'category', e.target.value)}
-              >
-                <option value="normal">Nguyên chiếc (không tháo)</option>
-                <option value="fragile">Dễ vỡ (+20.000đ phụ phí)</option>
-                <option value="valuable">Giá trị cao (+50.000đ phụ phí)</option>
-              </select>
+              <div className="relative mt-1">
+                <select
+                  className="h-10 w-full appearance-none rounded-lg border border-slate-300 bg-white px-3 pr-9 text-sm font-semibold outline-none focus:border-accent"
+                  value={item.category}
+                  onChange={(e) => onChange(item.id, 'category', e.target.value)}
+                >
+                  <option value="normal">Nguyên chiếc (không tháo)</option>
+                  <option value="fragile">Dễ vỡ (+20.000đ phụ phí)</option>
+                  <option value="valuable">Giá trị cao (+50.000đ phụ phí)</option>
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              </div>
             </label>
           </>
         ) : (
@@ -211,15 +277,18 @@ export const LuggageItemComponent: React.FC<LuggageItemProps> = ({ index, item, 
 
             <label className="block">
               <span className="text-xs font-bold text-slate-700">Loại hàng</span>
-              <select
-                className="mt-1 h-10 w-full rounded-lg border border-slate-300 px-3 text-sm font-semibold outline-none focus:border-accent bg-white"
-                value={item.category}
-                onChange={(e) => onChange(item.id, 'category', e.target.value)}
-              >
-                <option value="normal">Hàng thường</option>
-                <option value="fragile">Dễ vỡ (+20.000đ phụ phí)</option>
-                <option value="valuable">Giá trị cao (+50.000đ phụ phí)</option>
-              </select>
+              <div className="relative mt-1">
+                <select
+                  className="h-10 w-full appearance-none rounded-lg border border-slate-300 bg-white px-3 pr-9 text-sm font-semibold outline-none focus:border-accent"
+                  value={item.category}
+                  onChange={(e) => onChange(item.id, 'category', e.target.value)}
+                >
+                  <option value="normal">Hàng thường</option>
+                  <option value="fragile">Dễ vỡ (+20.000đ phụ phí)</option>
+                  <option value="valuable">Giá trị cao (+50.000đ phụ phí)</option>
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              </div>
             </label>
           </>
         )}

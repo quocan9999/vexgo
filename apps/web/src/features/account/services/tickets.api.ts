@@ -1,6 +1,8 @@
 export type TicketItem = {
   ticketId: number;
   ticketCode: string;
+  tripId?: number | null;
+  busCompanyId?: number | null;
   bookingId: number;
   bookingCode: string | null;
   promotionCode?: string | null;
@@ -28,6 +30,7 @@ export type TicketItem = {
   createdAt: string;
   updatedAt: string;
   cancellation?: TicketCancellationQuote;
+  bookingTickets?: TicketItem[];
 };
 
 export type TicketCancellationQuote = {
@@ -36,6 +39,7 @@ export type TicketCancellationQuote = {
     | 'ACTIVE_SHIPMENT'
     | 'ALREADY_CANCELLED'
     | 'ALREADY_DEPARTED'
+    | 'LESS_THAN_4_HOURS'
     | 'LESS_THAN_12_HOURS'
     | 'DEPARTURE_TIME_UNAVAILABLE';
   cancelFeeRate: number;
@@ -197,6 +201,7 @@ export const ticketsApi = {
     phoneNumber: string,
     reason: string | undefined,
     expectedCancelFeeRate: number,
+    ticketCodes?: string[],
   ): Promise<{ data: CancelTicketResult }> {
     const res = await fetch(`${API_BASE_URL}/tickets/cancel`, {
       method: 'POST',
@@ -208,6 +213,7 @@ export const ticketsApi = {
         phoneNumber: phoneNumber.trim(),
         reason,
         expectedCancelFeeRate,
+        ticketCodes: ticketCodes && ticketCodes.length > 0 ? ticketCodes : undefined,
       }),
     });
 
@@ -228,8 +234,10 @@ export const ticketsApi = {
 export interface CancelTicketResult {
   ticketId: number;
   ticketCode: string;
+  cancelledTicketCodes?: string[];
+  cancelledSeatNumbers?: string[];
   status: string;
   cancelFee: number;
   refundAmount: number;
-  message: string;
+  message?: string;
 }

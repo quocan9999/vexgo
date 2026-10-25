@@ -6,6 +6,7 @@ export interface CancelEligibilityResult {
     | 'ACTIVE_SHIPMENT'
     | 'ALREADY_CANCELLED'
     | 'ALREADY_DEPARTED'
+    | 'LESS_THAN_4_HOURS'
     | 'LESS_THAN_12_HOURS'
     | 'DEPARTURE_TIME_UNAVAILABLE';
   title: string;
@@ -98,13 +99,14 @@ export function checkTicketCancelEligibility(
           cancelFee: 0,
           refundAmount: 0,
         };
+      case 'LESS_THAN_4_HOURS':
       case 'LESS_THAN_12_HOURS':
         return {
           eligible: false,
-          reason: 'LESS_THAN_12_HOURS',
+          reason: ticket.cancellation.reason,
           title: 'Vé không đủ điều kiện hủy',
           message:
-            'Vé chỉ được hỗ trợ hủy trước giờ khởi hành tối thiểu 12 tiếng.',
+            'Vé chỉ được hỗ trợ hủy trước giờ khởi hành tối thiểu 4 tiếng.',
           cancelFeeRate: 0,
           cancelFee: 0,
           refundAmount: 0,
@@ -206,12 +208,12 @@ export function checkTicketCancelEligibility(
     };
   }
 
-  if (diffHours < 12) {
+  if (diffHours < 4) {
     return {
       eligible: false,
-      reason: 'LESS_THAN_12_HOURS',
+      reason: 'LESS_THAN_4_HOURS',
       title: 'Vé không đủ điều kiện hủy',
-      message: `Chuyến xe khởi hành vào lúc ${timeStr} (còn dưới 12 tiếng).\n\nTheo quy định của nhà xe, vé chỉ được hỗ trợ hủy trước giờ khởi hành tối thiểu 12 tiếng.\n\nVui lòng liên hệ tổng đài để được hỗ trợ.`,
+      message: `Chuyến xe khởi hành vào lúc ${timeStr} (còn dưới 4 tiếng).\n\nTheo quy định của nhà xe, vé chỉ được hỗ trợ hủy trước giờ khởi hành tối thiểu 4 tiếng.\n\nVui lòng liên hệ tổng đài để được hỗ trợ.`,
       cancelFeeRate: 0,
       cancelFee: 0,
       refundAmount: 0,

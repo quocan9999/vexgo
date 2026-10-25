@@ -47,7 +47,7 @@ test('checkTicketCancelEligibility rejects trip that has already departed', () =
 
 test('checkTicketCancelEligibility rejects trip departing in less than 12 hours', () => {
   const now = new Date('2026-10-05T10:00:00.000Z').getTime();
-  const nearDeparture = '2026-10-05T18:00:00.000Z'; // 8 hours later
+  const nearDeparture = '2026-10-05T12:00:00.000Z'; // 2 hours later
 
   const result = checkTicketCancelEligibility(
     {
@@ -58,9 +58,9 @@ test('checkTicketCancelEligibility rejects trip departing in less than 12 hours'
   );
 
   assert.equal(result.eligible, false);
-  assert.equal(result.reason, 'LESS_THAN_12_HOURS');
+  assert.equal(result.reason, 'LESS_THAN_4_HOURS');
   assert.equal(result.title, 'Vé không đủ điều kiện hủy');
-  assert.match(result.message, /dưới 12 tiếng/);
+  assert.match(result.message, /dưới 4 tiếng/);
 });
 
 test('checkTicketCancelEligibility approves ticket departing in >= 12 hours', () => {

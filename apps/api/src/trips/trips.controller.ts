@@ -92,10 +92,17 @@ export class TripsController {
   getTripAlternatives(
     @Param() params: TripIdParamsDto,
     @Query('limit') limit?: string,
+    @Query('otherOperatorsOnly') otherOperatorsOnly?: string,
+    @Query('maxPrice') maxPrice?: string,
   ) {
+    const onlyOther =
+      otherOperatorsOnly !== undefined ? otherOperatorsOnly === 'true' : true;
+    const maxP = maxPrice ? Number(maxPrice) : undefined;
     return this.tripsService.getTripAlternatives(
       params.id,
       limit ? Number(limit) : 5,
+      onlyOther,
+      maxP,
     );
   }
 

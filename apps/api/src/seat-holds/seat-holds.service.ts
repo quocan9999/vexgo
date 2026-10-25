@@ -213,6 +213,13 @@ export class SeatHoldsService implements OnModuleInit, OnModuleDestroy {
       });
     }
 
+    if (numericIds.length > 5) {
+      throw new ConflictException({
+        error: 'MAX_SEATS_EXCEEDED',
+        message: 'Mỗi chuyến xe chỉ được giữ tối đa 5 ghế.',
+      });
+    }
+
     // 1. Kiểm tra chuyến xe tồn tại, trạng thái CHUA_KHOI_HANH và thời gian chưa qua
     const trip = await this.prisma.chuyenXe.findUnique({
       where: { chuyenXeId: validTripId },

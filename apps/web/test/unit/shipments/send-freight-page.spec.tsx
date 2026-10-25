@@ -4,6 +4,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import SendFreightPage from '../../../src/features/shipments/components/send-freight-page';
@@ -152,9 +153,8 @@ describe('independent shipment flow', () => {
   it('routes a newly created shipment to a server-verified payment draft instead of reporting success', async () => {
     render(<SendFreightPage />);
     expect(
-      await screen.findByText('Theo bảng cước', { exact: true }),
+      await screen.findByText('30.000đ', { exact: true }),
     ).toBeTruthy();
-    expect(screen.queryByText('50.000đ', { exact: true })).toBeNull();
 
     fireEvent.change(screen.getByPlaceholderText('Ví dụ: Nguyễn Văn A'), {
       target: { value: 'Nguyễn An' },
@@ -174,7 +174,10 @@ describe('independent shipment flow', () => {
         target: { value: 'Hồ sơ' },
       },
     );
-    fireEvent.click(await screen.findByRole('button', { name: 'Tài liệu' }));
+    fireEvent.change(
+      await screen.findByRole('combobox', { name: 'Loại hàng hóa' }),
+      { target: { value: '21' } },
+    );
 
     await waitFor(() => expect(api.getRoutePoints).toHaveBeenCalledWith(42));
     fireEvent.click(screen.getByRole('button', { name: 'Tạo mã vận đơn' }));
@@ -206,7 +209,7 @@ describe('independent shipment flow', () => {
     api.auth.isAuthenticated = true;
     render(<SendFreightPage />);
     expect(
-      await screen.findByText('Theo bảng cước', { exact: true }),
+      await screen.findByText('30.000đ', { exact: true }),
     ).toBeTruthy();
 
     fireEvent.change(screen.getByPlaceholderText('Ví dụ: Nguyễn Văn A'), {
@@ -225,7 +228,10 @@ describe('independent shipment flow', () => {
       screen.getByPlaceholderText('Ví dụ: Thùng hoa quả, tài liệu, quần áo...'),
       { target: { value: 'Hồ sơ' } },
     );
-    fireEvent.click(await screen.findByRole('button', { name: 'Tài liệu' }));
+    fireEvent.change(
+      await screen.findByRole('combobox', { name: 'Loại hàng hóa' }),
+      { target: { value: '21' } },
+    );
     await waitFor(() => expect(api.getRoutePoints).toHaveBeenCalledWith(42));
 
     fireEvent.click(screen.getByRole('button', { name: 'Tạo mã vận đơn' }));
@@ -270,5 +276,109 @@ describe('independent shipment flow', () => {
       waybillCode: 'VG-VD-PUBLIC-1',
       phoneNumber: '0901234567',
     });
+  });
+
+  it('displays a popup modal when creating shipment with incomplete form', async () => {
+    render(<SendFreightPage />);
+    expect(await screen.findByText('30.000đ', { exact: true })).toBeTruthy();
+
+    // Click "Tạo mã vận đơn" without filling sender/receiver/cargo details
+    fireEvent.click(screen.getByRole('button', { name: 'Tạo mã vận đơn' }));
+
+    // Popup modal should appear
+    const modalHeading = await screen.findByText('Thông tin chưa hoàn tất');
+    expect(modalHeading).toBeTruthy();
+    const modal = modalHeading.closest('.fixed') as HTMLElement;
+    expect(modal).toBeTruthy();
+
+    const modalScope = within(modal);
+    expect(
+      modalScope.getByText(
+        'Vui lòng điền đầy đủ các thông tin bắt buộc trước khi tạo mã vận đơn.',
+      ),
+    ).toBeTruthy();
+
+    // Clicking "Đóng" dismisses the modal
+    fireEvent.click(modalScope.getByRole('button', { name: 'Đóng' }));
+    await waitFor(() => {
+      expect(screen.queryByText('Thông tin chưa hoàn tất')).toBeNull();
+    });
+  });
+
+  it('supports adding multiple cargo items and submits all items in the payload', async () => {
+    render(<SendFreightPage />);
+    expect(await screen.findByText('30.000đ', { exact: true })).toBeTruthy();
+
+    // Fill sender and receiver details
+    fireEvent.change(screen.getByPlaceholderText('Ví dụ: Nguyễn Văn A'), {
+      target: { value: 'Nguyễn An' },
+    });
+    fireEvent.change(screen.getAllByPlaceholderText('09xxxxxxxx')[0], {
+      target: { value: '0900000001' },
+    });
+    fireEvent.change(screen.getByPlaceholderText('Ví dụ: Lê Thị B'), {
+      target: { value: 'Trần Bình' },
+    });
+    fireEvent.change(screen.getAllByPlaceholderText('09xxxxxxxx')[1], {
+      target: { value: '0900000002' },
+    });
+
+    // Fill Item 1
+    fireEvent.change(
+      screen.getByPlaceholderText('Ví dụ: Thùng hoa quả, tài liệu, quần áo...'),
+      { target: { value: 'Thùng trái cây' } },
+    );
+    fireEvent.change(
+      await screen.findByRole('combobox', { name: 'Loại hàng hóa' }),
+      { target: { value: '21' } },
+    );
+
+    // Click "+ Thêm kiện hàng"
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Thêm kiện hàng' }),
+    );
+
+    // Now Kiện #1 and Kiện #2 exist
+    expect(screen.getByText('Kiện #1')).toBeTruthy();
+    expect(screen.getByText('Kiện #2')).toBeTruthy();
+
+    // Select protection service for Item 1 (fragile)
+    fireEvent.change(screen.getByRole('combobox', { name: 'Dịch vụ bảo quản' }), {
+      target: { value: 'fragile' },
+    });
+
+    // Fill Item 2
+    fireEvent.change(screen.getByPlaceholderText('Ví dụ: Kiện hàng số 2...'), {
+      target: { value: 'Thùng quần áo' },
+    });
+    fireEvent.change(
+      screen.getByRole('combobox', { name: 'Loại hàng hóa kiện #2' }),
+      { target: { value: '21' } },
+    );
+    // Select protection service for Item 2 (valuable)
+    fireEvent.change(
+      screen.getByRole('combobox', { name: 'Dịch vụ bảo quản kiện #2' }),
+      { target: { value: 'valuable' } },
+    );
+
+    // Sidebar reflects both surcharges
+    expect(screen.getByText('Phí hàng dễ vỡ')).toBeTruthy();
+    expect(screen.getByText('+20.000đ')).toBeTruthy();
+    expect(screen.getByText('Phí hàng giá trị cao')).toBeTruthy();
+    expect(screen.getByText('+50.000đ')).toBeTruthy();
+
+    // Click "Tạo mã vận đơn"
+    await waitFor(() => expect(api.getRoutePoints).toHaveBeenCalledWith(42));
+    fireEvent.click(screen.getByRole('button', { name: 'Tạo mã vận đơn' }));
+
+    await waitFor(() => expect(api.createShipment).toHaveBeenCalledTimes(1));
+    const payload = api.createShipment.mock.calls[0][0];
+    expect(payload.items).toHaveLength(2);
+    expect(payload.items[0].name).toBe('Thùng trái cây');
+    expect(payload.items[0].serviceType).toBe('FRAGILE');
+    expect(payload.items[1].name).toBe('Thùng quần áo');
+    expect(payload.items[1].serviceType).toBe('VALUABLE');
+    expect(payload.isFragile).toBe(true);
+    expect(payload.isValuable).toBe(true);
   });
 });
