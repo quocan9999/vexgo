@@ -151,6 +151,34 @@ describe('Route form composition', () => {
       within(dialog).getByRole('button', { name: 'Tạo tuyến' }),
     ).toHaveProperty('disabled', false);
   });
+
+  it('blocks submission and shows error when origin and destination are identical', async () => {
+    const { fireEvent } = await import('@testing-library/react');
+    const onSaved = vi.fn();
+    render(
+      <RouteFormDialog
+        onClose={vi.fn()}
+        onSaved={onSaved}
+        route={{
+          ...route,
+          origin: 'Hồ Chí Minh',
+          destination: 'Hồ Chí Minh',
+        }}
+      />,
+    );
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Chỉnh sửa tuyến xe',
+    });
+    const view = within(dialog);
+
+    const submitBtn = view.getByRole('button', { name: 'Lưu thay đổi' });
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => {
+      expect(view.getByText('Điểm đến không được trùng với điểm đi.')).toBeTruthy();
+    });
+    expect(onSaved).not.toHaveBeenCalled();
+  });
 });
 
 describe('Route write service', () => {

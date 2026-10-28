@@ -1,5 +1,6 @@
 import { businessCode } from '../common/business-code.js';
 import { locationSearchTerms } from '../locations/location-search.js';
+import type { LocationOption } from '../locations/location-catalog.js';
 import { LocationsService } from '../locations/locations.service.js';
 import {
   ConflictException,
@@ -513,8 +514,14 @@ export class TripsService {
   }
 
   async search(dto: SearchTripsDto) {
-    const catalogue = (dto.from || dto.to) && this.locations
-      ? (await this.locations.list()).data : [];
+    let catalogue: LocationOption[] = [];
+    if ((dto.from || dto.to) && this.locations) {
+      try {
+        catalogue = (await this.locations.list()).data;
+      } catch {
+        catalogue = [];
+      }
+    }
     const businessTimeZone = resolveBusinessTimeZone(
       this.config.get<string>('BUSINESS_TIME_ZONE'),
     );

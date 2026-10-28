@@ -1,12 +1,17 @@
+export type LocationKind = 'province' | 'city' | 'district' | 'station';
+
 export type LocationOption = {
   id: string;
   name: string;
   value: string;
   aliases: string[];
   versions: ('current' | 'legacy')[];
-  kind: 'province' | 'city';
+  kind: LocationKind;
   province: string | null;
   legacyNames?: string[];
+  popular?: boolean;
+  address?: string;
+  parentName?: string;
 };
 
 export function normalizeLocation(value: string): string {

@@ -6,9 +6,12 @@ export type LocationOption = {
   value: string;
   aliases: string[];
   versions: ('current' | 'legacy')[];
-  kind: 'province' | 'city';
+  kind: 'province' | 'city' | 'district' | 'station';
   province: string | null;
   legacyNames?: string[];
+  popular?: boolean;
+  address?: string;
+  parentName?: string;
 };
 
 type LocationCatalog = { data: LocationOption[]; warning: string };
@@ -48,15 +51,18 @@ export function getLocations(force = false): Promise<LocationCatalog> {
       totalPages = response.meta.totalPages;
       page += 1;
     } while (page <= totalPages);
-    return [...names].filter(Boolean).map((name) => ({
-      id: `route:${name}`,
-      name,
-      value: name,
-      aliases: [name],
-      versions: [],
-      kind: 'city',
-      province: null,
-    }));
+    return [...names].filter(Boolean).map((name) => {
+      const isStation = /bến xe|bx|văn phòng|trạm/i.test(name);
+      return {
+        id: `route:${name}`,
+        name,
+        value: name,
+        aliases: [name],
+        versions: [],
+        kind: isStation ? 'station' : 'city',
+        province: null,
+      };
+    });
   };
   pending ??= Promise.allSettled([loadCatalogue(), loadRoutePoints()])
     .then(([catalogue, points]) => {

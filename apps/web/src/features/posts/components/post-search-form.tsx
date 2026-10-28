@@ -101,7 +101,7 @@ export const PostSearchForm: React.FC = () => {
                   <MapPin className="w-3.5 h-3.5 text-brand" />
                   Điểm đi
                 </label>
-                <LocationPicker id="post-search-origin" value={selectedProvince} onChange={setSelectedProvince} placeholder="Chọn điểm đi" />
+                <LocationPicker id="post-search-origin" value={selectedProvince} onChange={setSelectedProvince} placeholder="Chọn điểm đi" excludeValue={selectedDistrict} />
               </div>
 
               <div className="hidden md:flex items-end pb-1 lg:shrink-0">
@@ -120,7 +120,7 @@ export const PostSearchForm: React.FC = () => {
                   <MapPin className="w-3.5 h-3.5 text-rose-500" />
                   Điểm đến
                 </label>
-                <LocationPicker id="post-search-destination" value={selectedDistrict} onChange={setSelectedDistrict} placeholder="Chọn điểm đến" />
+                <LocationPicker id="post-search-destination" value={selectedDistrict} onChange={setSelectedDistrict} placeholder="Chọn điểm đến" excludeValue={selectedProvince} />
               </div>
             </div>
 
@@ -228,7 +228,7 @@ export const PostSearchForm: React.FC = () => {
                 <MapPin className="w-3.5 h-3.5 text-brand" />
                 Nơi gửi
               </label>
-              <LocationPicker id="post-search-origin" value={selectedProvince} onChange={setSelectedProvince} placeholder="Chọn điểm đi" />
+              <LocationPicker id="post-search-origin" value={selectedProvince} onChange={setSelectedProvince} placeholder="Chọn điểm đi" excludeValue={selectedDistrict} />
             </div>
 
             <div className="hidden md:flex items-end pb-1 lg:shrink-0">
@@ -247,7 +247,7 @@ export const PostSearchForm: React.FC = () => {
                 <MapPin className="w-3.5 h-3.5 text-rose-500" />
                 Nơi nhận
               </label>
-              <LocationPicker id="post-search-destination" value={selectedDistrict} onChange={setSelectedDistrict} placeholder="Chọn điểm đến" />
+              <LocationPicker id="post-search-destination" value={selectedDistrict} onChange={setSelectedDistrict} placeholder="Chọn điểm đến" excludeValue={selectedProvince} />
             </div>
             <div className="flex-1 space-y-1.5">
               <label className="text-[11px] font-extrabold text-slate-500 uppercase flex items-center gap-1.5">
