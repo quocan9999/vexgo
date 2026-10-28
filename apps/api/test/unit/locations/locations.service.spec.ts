@@ -1,89 +1,58 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { LocationsService } from '../../../src/locations/locations.service.js';
 
-const current = [{ code: 79, name: 'Thành phố Hồ Chí Minh' }];
-const legacy = [{ code: 74, name: 'Tỉnh Bình Dương', districts: [] }];
-const mergers = { data: [{ code: '79', merged_from: ['74'] }] };
-function provider() {
-  return vi.fn(
-    async (url: string) =>
-      new Response(
-        JSON.stringify(
-          url.includes('tinhthanhpho.com')
-            ? mergers
-            : url.includes('/v2/')
-              ? current
-              : legacy,
-        ),
-      ),
-  );
-}
-
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.useRealTimers();
 });
 
 describe('LocationsService', () => {
-  it('coalesces concurrent requests and caches both real source versions', async () => {
-    const fetchMock = provider();
-    vi.stubGlobal('fetch', fetchMock);
+  it('serves authoritative master catalogue including provinces, key districts and major stations', async () => {
+    const service = new LocationsService();
+    const result = await service.list();
+
+    expect(result.data.length).toBeGreaterThan(60);
+    expect(result.meta.stale).toBe(false);
+
+    // Verify TP.HCM is clean, with no fictional merger legacy names
+    const hcm = result.data.find((item) => item.id === 'province:79');
+    expect(hcm).toBeDefined();
+    expect(hcm?.name).toBe('TP. Hồ Chí Minh');
+    expect(hcm?.value).toBe('TP.HCM');
+    expect(hcm?.legacyNames).toBeUndefined();
+
+    // Verify key districts (Thủ Đức, Đà Lạt)
+    const thuDuc = result.data.find((item) => item.name.includes('Thủ Đức'));
+    expect(thuDuc).toBeDefined();
+    expect(thuDuc?.kind).toBe('district');
+    expect(thuDuc?.province).toBe('TP. Hồ Chí Minh');
+
+    const daLat = result.data.find((item) => item.name.includes('Đà Lạt'));
+    expect(daLat).toBeDefined();
+    expect(daLat?.kind).toBe('district');
+    expect(daLat?.province).toBe('Lâm Đồng');
+
+    // Verify major bus stations
+    const bxMienDong = result.data.find((item) => item.id === 'station:bx-mien-dong');
+    expect(bxMienDong).toBeDefined();
+    expect(bxMienDong?.kind).toBe('station');
+    expect(bxMienDong?.province).toBe('TP. Hồ Chí Minh');
+
+    // Verify popular locations
+    const popular = result.data.filter((item) => item.popular);
+    expect(popular.length).toBeGreaterThan(0);
+    expect(popular.some((item) => item.value === 'TP.HCM')).toBe(true);
+  });
+
+  it('coalesces concurrent requests and uses in-memory cache', async () => {
     const service = new LocationsService();
     const [first, concurrent] = await Promise.all([
       service.list(),
       service.list(),
     ]);
     const cached = await service.list();
-    expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(first).toEqual(concurrent);
     expect(cached).toEqual(first);
-    expect(first.data.map((item) => item.value)).toEqual(['TP.HCM']);
-    expect(first.data[0].legacyNames).toEqual(['Bình Dương']);
     expect(first.meta.stale).toBe(false);
-  });
-
-  it('returns a structured 503 and backs off when no valid cached catalogue exists', async () => {
-    const fetchMock = vi.fn().mockRejectedValue(new Error('offline'));
-    vi.stubGlobal('fetch', fetchMock);
-    const service = new LocationsService();
-    await expect(service.list()).rejects.toMatchObject({
-      response: {
-        error: 'LOCATION_CATALOG_UNAVAILABLE',
-        message: expect.any(String),
-      },
-    });
-    await expect(service.list()).rejects.toMatchObject({ status: 503 });
-    expect(fetchMock).toHaveBeenCalledTimes(3);
-  });
-
-  it('keeps the last valid catalogue on refresh failure and marks it stale', async () => {
-    vi.useFakeTimers({ toFake: ['Date'] });
-    const fetchMock = provider();
-    vi.stubGlobal('fetch', fetchMock);
-    const service = new LocationsService();
-    const original = await service.list();
-    vi.setSystemTime(Date.now() + 24 * 60 * 60 * 1000 + 1);
-    fetchMock.mockRejectedValue(new Error('offline'));
-    const stale = await service.list();
-    expect(stale.data).toEqual(original.data);
-    expect(stale.meta).toEqual({
-      updatedAt: original.meta.updatedAt,
-      stale: true,
-    });
-    await service.list();
-    expect(fetchMock).toHaveBeenCalledTimes(6);
-  });
-
-  it('rejects a partial provider response instead of caching only one version', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(
-        async (url: string) =>
-          new Response(JSON.stringify(url.includes('/v2/') ? current : [])),
-      ),
-    );
-    await expect(new LocationsService().list()).rejects.toMatchObject({
-      status: 503,
-    });
   });
 });

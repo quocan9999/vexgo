@@ -110,6 +110,12 @@ export function RouteFormDialog({
       errors.destination = 'Vui lòng nhập điểm đến.';
     else if (values.destination.trim().length > 100)
       errors.destination = 'Điểm đến không được vượt quá 100 ký tự.';
+    else if (
+      values.origin.trim() &&
+      values.origin.trim().toLowerCase() === values.destination.trim().toLowerCase()
+    ) {
+      errors.destination = 'Điểm đến không được trùng với điểm đi.';
+    }
     const duration = parseRouteDuration(values.durationMinutes);
     if ('error' in duration) errors.durationMinutes = duration.error;
     return errors;
@@ -155,8 +161,15 @@ export function RouteFormDialog({
       if (requestError instanceof RouteApiError) {
         if (requestError.code === 'ROUTE_CODE_EXISTS') {
           toast.error('Không thể cấp mã tuyến. Vui lòng thử tạo lại.');
-        } else if (requestError.code === 'ROUTE_DUPLICATE_ENDPOINTS') {
+        } else if (
+          requestError.code === 'ROUTE_DUPLICATE_ENDPOINTS' ||
+          requestError.code === 'ROUTE_SAME_ENDPOINTS'
+        ) {
           toast.error(requestError.message);
+          setFieldErrors((current) => ({
+            ...current,
+            destination: requestError.message,
+          }));
         } else {
           const errors = mappedErrors(requestError.details);
           setFieldErrors(errors);
@@ -195,6 +208,7 @@ export function RouteFormDialog({
     field: 'origin' | 'destination',
     label: string,
   ) {
+    const excludeValue = field === 'origin' ? values.destination : values.origin;
     return (
       <FieldRoot data-invalid={Boolean(fieldErrors[field])}>
         <FieldLabel htmlFor={`${idPrefix}-${field}`}>
@@ -209,6 +223,7 @@ export function RouteFormDialog({
           id={`${idPrefix}-${field}`}
           onChange={(value) => updateField(field, value)}
           value={values[field]}
+          excludeValue={excludeValue}
         />
         <FieldError id={`${idPrefix}-${field}-error`}>
           {fieldErrors[field]}

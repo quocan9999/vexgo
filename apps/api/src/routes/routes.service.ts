@@ -1,5 +1,6 @@
 import { businessCode } from '../common/business-code.js';
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
@@ -75,6 +76,13 @@ async function assertRouteEndpointsAvailable(
   destination: string,
   excludeRouteId?: number,
 ): Promise<void> {
+  if (origin.trim().toLowerCase() === destination.trim().toLowerCase()) {
+    throw new BadRequestException({
+      error: 'ROUTE_SAME_ENDPOINTS',
+      message: 'Điểm đi và điểm đến không được trùng nhau.',
+    });
+  }
+
   const duplicate = await transaction.tuyenXe.findFirst({
     where: {
       nhaXeId,

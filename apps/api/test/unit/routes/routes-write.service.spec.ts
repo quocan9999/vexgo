@@ -182,6 +182,21 @@ describe('RoutesService writes', () => {
     expect(prisma.tuyenXe.create).not.toHaveBeenCalled();
   });
 
+  it('rejects a route where origin is the same as destination', async () => {
+    vi.mocked(prisma.nhaXe.findUnique).mockResolvedValueOnce(company);
+    const error = await service.create(
+      { ...createInput, origin: 'Hà Nội', destination: 'Hà Nội' },
+      tenantAdmin(3),
+    ).catch((caught: unknown) => caught);
+    expect(error).toMatchObject({
+      status: 400,
+      response: {
+        error: 'ROUTE_SAME_ENDPOINTS',
+      },
+    });
+    expect(prisma.tuyenXe.create).not.toHaveBeenCalled();
+  });
+
   it('returns BUS_COMPANY_NOT_FOUND without writing for a missing company', async () => {
     vi.mocked(prisma.nhaXe.findUnique).mockResolvedValueOnce(null);
     const error = await service

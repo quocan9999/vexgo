@@ -1,16 +1,57 @@
 import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 import {
-  mergeLocationCatalog,
-  parseLocationCatalog,
   type LocationOption,
 } from './location-catalog.js';
+import {
+  VIETNAM_PROVINCES,
+  KEY_DISTRICTS,
+  MAJOR_STATIONS,
+  type MasterLocation,
+} from './vietnam-locations.data.js';
 
 const TTL = 24 * 60 * 60 * 1000;
 const RETRY_DELAY = 30_000;
 
+const POPULAR_IDS = new Set([
+  'province:79', // TP.HCM
+  'province:01', // Hà Nội
+  'district:672', // Đà Lạt
+  'province:48', // Đà Nẵng
+  'district:568', // Nha Trang
+  'district:747', // Vũng Tàu
+  'province:92', // Cần Thơ
+  'district:593', // Phan Thiết
+  'station:bx-mien-dong', // Bến xe Miền Đông
+  'station:bx-mien-tay', // Bến xe Miền Tây
+]);
+
+function toLocationOption(item: MasterLocation): LocationOption {
+  return {
+    id: item.id,
+    name: item.name,
+    value: item.value,
+    aliases: item.aliases,
+    versions: ['current'],
+    kind: item.kind,
+    province: item.province,
+    popular: Boolean(item.popular || POPULAR_IDS.has(item.id)),
+    address: item.address,
+    parentName: item.province ?? undefined,
+  };
+}
+
+function buildMasterCatalog(): LocationOption[] {
+  const all: MasterLocation[] = [
+    ...VIETNAM_PROVINCES,
+    ...KEY_DISTRICTS,
+    ...MAJOR_STATIONS,
+  ];
+  return all.map(toLocationOption);
+}
+
 @Injectable()
 export class LocationsService {
-  private cache?: {
+  private cache: {
     data: LocationOption[];
     updatedAt: string;
     expires: number;
@@ -21,6 +62,14 @@ export class LocationsService {
   }>;
   private retryAfter = 0;
 
+  constructor() {
+    this.cache = {
+      data: buildMasterCatalog(),
+      updatedAt: new Date().toISOString(),
+      expires: Date.now() + TTL,
+    };
+  }
+
   async list() {
     if (
       this.cache &&
@@ -28,7 +77,6 @@ export class LocationsService {
     ) {
       return this.response(Date.now() >= this.cache.expires);
     }
-    if (Date.now() < this.retryAfter && !this.cache) throw this.unavailable();
     this.pending ??= this.refresh().finally(() => {
       this.pending = undefined;
     });
@@ -37,8 +85,8 @@ export class LocationsService {
 
   private response(stale: boolean) {
     return {
-      data: this.cache!.data,
-      meta: { updatedAt: this.cache!.updatedAt, stale },
+      data: this.cache.data,
+      meta: { updatedAt: this.cache.updatedAt, stale },
     };
   }
 
@@ -51,35 +99,8 @@ export class LocationsService {
 
   private async refresh() {
     try {
-      const fetchCatalog = async (version: 'current' | 'legacy') => {
-        const path = version === 'current' ? 'v2/?depth=1' : 'v1/?depth=2';
-        const response = await fetch(
-          `https://provinces.open-api.vn/api/${path}`,
-          {
-            signal: AbortSignal.timeout(8_000),
-          },
-        );
-        if (!response.ok) throw new Error('Location provider unavailable');
-        return parseLocationCatalog(await response.json(), version);
-      };
-      const fetchMergers = async () => {
-        const response = await fetch(
-          'https://www.tinhthanhpho.com/api/v1/new-provinces?limit=100',
-          {
-            signal: AbortSignal.timeout(8_000),
-          },
-        );
-        if (!response.ok)
-          throw new Error('Province merger provider unavailable');
-        return response.json() as Promise<unknown>;
-      };
-      const [current, legacy, mergers] = await Promise.all([
-        fetchCatalog('current'),
-        fetchCatalog('legacy'),
-        fetchMergers(),
-      ]);
       this.cache = {
-        data: mergeLocationCatalog([...current, ...legacy], mergers),
+        data: buildMasterCatalog(),
         updatedAt: new Date().toISOString(),
         expires: Date.now() + TTL,
       };

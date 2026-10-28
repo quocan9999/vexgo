@@ -6,9 +6,12 @@ export type LocationOption = {
   value: string;
   aliases: string[];
   versions: ('current' | 'legacy')[];
-  kind: 'province' | 'city';
+  kind: 'province' | 'city' | 'district' | 'station';
   province: string | null;
   legacyNames?: string[];
+  popular?: boolean;
+  address?: string;
+  parentName?: string;
 };
 
 let pending: Promise<LocationOption[]> | undefined;

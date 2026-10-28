@@ -16,6 +16,7 @@ export function LocationPicker({
   disabled,
   invalid,
   describedBy,
+  excludeValue,
 }: {
   id: string;
   value: string;
@@ -23,11 +24,13 @@ export function LocationPicker({
   disabled?: boolean;
   invalid?: boolean;
   describedBy?: string;
+  excludeValue?: string;
 }) {
   const [options, setOptions] = useState<SearchableOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [attempt, setAttempt] = useState(0);
+
   useEffect(() => {
     let active = true;
     getLocations()
@@ -39,9 +42,15 @@ export function LocationPicker({
             value: location.value,
             label: location.name,
             keywords: location.aliases.join(' '),
-            description: location.legacyNames?.length
-              ? location.legacyNames.map((name) => `${name} - cũ`).join(', ')
-              : (location.province ?? undefined),
+            description:
+              location.address ??
+              (location.province ? `Thuộc ${location.province}` : undefined),
+            group:
+              location.kind === 'station'
+                ? 'station'
+                : location.kind === 'district' || location.kind === 'city'
+                  ? 'district'
+                  : 'province',
           })),
         );
       })
@@ -58,6 +67,7 @@ export function LocationPicker({
       active = false;
     };
   }, [attempt]);
+
   return (
     <div className="space-y-2">
       <SearchableCombobox
@@ -72,6 +82,8 @@ export function LocationPicker({
         loading={loading}
         placeholder="Chọn địa điểm"
         icon={<MapPin />}
+        excludeValue={excludeValue}
+        allowCustom={true}
       />
       {error && (
         <div role="alert" className="text-xs text-destructive">

@@ -121,6 +121,15 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
   };
 
   const handleSearchSubmit = (e?: React.MouseEvent) => {
+    if (selectedProvince && selectedDistrict && selectedProvince.trim().toLowerCase() === selectedDistrict.trim().toLowerCase()) {
+      if (e) e.preventDefault();
+      setReturnDateAlert({
+        isOpen: true,
+        title: 'Điểm đi và điểm đến không được trùng nhau',
+      });
+      return;
+    }
+
     if (!selectedPrice || selectedPrice < todayStr) {
       if (e) e.preventDefault();
       setReturnDateAlert({
