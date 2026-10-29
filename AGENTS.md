@@ -131,6 +131,9 @@ Các quy tắc này áp dụng cho toàn repository và bổ sung cho hướng d
 - Unit tests SHOULD cô lập logic đang kiểm tra và xác minh business behavior, mapping hoặc branch quan trọng. Integration tests SHOULD xác minh sự phối hợp giữa các component thật trong phạm vi test; e2e tests SHOULD kiểm tra flow ở mức HTTP/API gần với client thật. Chỉ mock dependency khi phù hợp với cấp test; MUST NOT mock chính logic/component cần được kiểm tra.
 - Số lượng test không phải thước đo chất lượng; MUST NOT tạo test duplicate hoặc trivial chỉ để tăng coverage/test count. MUST NOT đặt business test trong `api-foundation` nếu test thuộc feature riêng.
 - Khi review test, SHOULD tự hỏi: “Một bug thực tế nào sẽ làm test này fail?”. Nếu không có câu trả lời rõ ràng, SHOULD xem lại giá trị của test.
+- **Quy tắc phạm vi chạy test khi code (Targeted Testing):**
+  - Khi sửa đổi hoặc phát triển, MUST chỉ chạy test suite của đúng feature/file được sửa cùng các caller/side effect trực tiếp nếu có (ví dụ: sửa bến bãi chỉ chạy test của bến bãi, sửa tuyến xe chỉ chạy test của tuyến xe; MUST NOT chạy lan sang các module độc lập như khuyến mãi, thanh toán, tài khoản...).
+  - MUST NOT tự ý chạy lại toàn bộ test suite của app hay monorepo trong quá trình sửa đổi thông thường; CHỈ chạy toàn bộ test khi người dùng yêu cầu trực tiếp.
 
 ## 12. Definition of Done
 
