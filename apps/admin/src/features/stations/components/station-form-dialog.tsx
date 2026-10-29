@@ -24,6 +24,12 @@ interface StationFormDialogProps {
   onSaved: (station: Station) => void;
 }
 
+const STATION_TYPE_LABELS: Record<StationType, string> = {
+  BEN_XE: 'Bến xe',
+  VAN_PHONG: 'Văn phòng đón/trả',
+  DIEM_DON_TRA: 'Điểm đón trả dọc đường',
+};
+
 export function StationFormDialog({
   station,
   onClose,
@@ -53,7 +59,7 @@ export function StationFormDialog({
       .catch(() => {
         toast.error('Không thể tải danh mục địa phương.');
       });
-  }, [diaDiemCuId, isEditing]);
+  }, [isEditing]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -156,7 +162,7 @@ export function StationFormDialog({
           </FieldRoot>
 
           <FieldRoot>
-            <FieldLabel>
+            <FieldLabel htmlFor="station-type">
               Loại điểm <span aria-hidden>*</span>
             </FieldLabel>
             <Select
@@ -164,8 +170,10 @@ export function StationFormDialog({
               onValueChange={(val) => setLoaiDiem(val as StationType)}
               disabled={loading}
             >
-              <SelectTrigger>
-                <SelectValue placeholder="Chọn loại điểm" />
+              <SelectTrigger id="station-type">
+                <SelectValue placeholder="Chọn loại điểm">
+                  {STATION_TYPE_LABELS[loaiDiem] ?? 'Chọn loại điểm'}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="BEN_XE">Bến xe</SelectItem>
@@ -176,7 +184,7 @@ export function StationFormDialog({
           </FieldRoot>
 
           <FieldRoot data-invalid={Boolean(errors.diaDiemCuId)}>
-            <FieldLabel>
+            <FieldLabel htmlFor="station-location">
               Khu vực / Tỉnh thành (trước sáp nhập) <span aria-hidden>*</span>
             </FieldLabel>
             <Select
@@ -184,13 +192,33 @@ export function StationFormDialog({
               onValueChange={(val) => setDiaDiemCuId(Number(val))}
               disabled={loading}
             >
-              <SelectTrigger>
-                <SelectValue placeholder="Chọn tỉnh thành cũ" />
+              <SelectTrigger id="station-location">
+                <SelectValue placeholder="Chọn tỉnh thành cũ">
+                  {(() => {
+                    const matchedName =
+                      legacyLocations.find((loc) => loc.diaDiemId === diaDiemCuId)?.name ??
+                      station?.diaDiemCu?.tenDiaDiem;
+                    if (!matchedName) return 'Chọn tỉnh thành cũ';
+                    return (
+                      <span className="flex items-center gap-1.5">
+                        <span>{matchedName}</span>
+                        <span className="inline-flex items-center rounded bg-slate-600 px-1 py-0.2 text-[10px] font-bold uppercase text-white">
+                          CŨ
+                        </span>
+                      </span>
+                    );
+                  })()}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent className="max-h-60">
                 {legacyLocations.map((loc) => (
                   <SelectItem key={loc.id} value={String(loc.diaDiemId)}>
-                    {loc.name} [CŨ]
+                    <span className="flex items-center gap-1.5">
+                      <span>{loc.name}</span>
+                      <span className="inline-flex items-center rounded bg-slate-600 px-1 py-0.2 text-[10px] font-bold uppercase text-white">
+                        CŨ
+                      </span>
+                    </span>
                   </SelectItem>
                 ))}
               </SelectContent>
