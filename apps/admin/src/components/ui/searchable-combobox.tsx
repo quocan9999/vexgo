@@ -13,6 +13,7 @@ export type SearchableOption = {
   description?: string;
   group?: 'province' | 'district' | 'station' | string;
   icon?: ReactNode;
+  badge?: string;
 };
 
 const normalize = (value: string) =>
@@ -141,8 +142,13 @@ export function SearchableCombobox({
           )}
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block font-semibold leading-snug">
-            {item.label}
+          <span className="flex items-center gap-1.5 font-semibold leading-snug">
+            <span>{item.label}</span>
+            {item.badge && (
+              <span className="inline-flex items-center rounded border border-border/70 bg-muted px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-muted-foreground uppercase">
+                {item.badge}
+              </span>
+            )}
           </span>
           {item.description && (
             <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground line-clamp-1">

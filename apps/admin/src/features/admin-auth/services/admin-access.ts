@@ -18,6 +18,11 @@ export const ADMIN_OPERATION_SECTIONS = [
     readPermission: 'route:read',
   },
   {
+    section: 'stations',
+    href: '/stations',
+    readPermission: 'route:read',
+  },
+  {
     section: 'fare-prices',
     href: '/fare-prices',
     readPermission: 'fare-price:read',
