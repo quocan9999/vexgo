@@ -1,4 +1,10 @@
-import { IsEnum, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, MaxLength } from 'class-validator';
+import {
+  STATION_STATUSES,
+  type StationStatus,
+  STATION_TYPES,
+  type StationType,
+} from '../station.constants.js';
 
 export class CreateStationDto {
   @IsString()
@@ -11,10 +17,10 @@ export class CreateStationDto {
   @MaxLength(150)
   tenDiem!: string;
 
-  @IsEnum(['BEN_XE', 'VAN_PHONG', 'DIEM_DON_TRA'], {
-    message: 'loaiDiem phải là BEN_XE, VAN_PHONG hoặc DIEM_DON_TRA',
+  @IsIn(STATION_TYPES, {
+    message: 'loaiDiem phải là một trong các giá trị: BEN_XE, VAN_PHONG, DIEM_DON_TRA',
   })
-  loaiDiem!: 'BEN_XE' | 'VAN_PHONG' | 'DIEM_DON_TRA';
+  loaiDiem!: StationType;
 
   @IsString()
   @IsNotEmpty()
@@ -38,8 +44,10 @@ export class CreateStationDto {
   soDienThoai?: string;
 
   @IsOptional()
-  @IsString()
-  trangThai?: string;
+  @IsIn(STATION_STATUSES, {
+    message: 'trangThai phải là một trong các giá trị: HOAT_DONG, NGUNG_HOAT_DONG',
+  })
+  trangThai?: StationStatus;
 
   @IsOptional()
   @IsInt()

@@ -10,6 +10,13 @@ import { CreateStationDto } from './dto/create-station.dto.js';
 import { UpdateStationDto } from './dto/update-station.dto.js';
 import { StationQueryDto } from './dto/station-query.dto.js';
 import { UpdateTripPassengerPointsDto } from './dto/trip-passenger-points.dto.js';
+import { hasTenantRole } from '../auth/principal-scope.js';
+import {
+  STATION_STATUSES,
+  type StationStatus,
+  STATION_TYPES,
+  type StationType,
+} from './station.constants.js';
 import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
 
 function parseTimeString(timeStr?: string | null): Date | null {
@@ -163,10 +170,31 @@ export class StationsService {
 
     const where: any = {};
 
-    if (principal && !principal.roles?.includes('SUPER_ADMIN')) {
-      where.nhaXeId = principal.nhaXeId;
-    } else if (query.nhaXeId) {
-      where.nhaXeId = query.nhaXeId;
+    const isPrivileged =
+      Boolean(principal) &&
+      (principal!.roles?.includes('SUPER_ADMIN') || hasTenantRole(principal!.roles ?? []));
+
+    if (!isPrivileged) {
+      // Người gọi không phải tenant admin hoặc SUPER_ADMIN (khách, chưa đăng nhập):
+      // Ép trangThai = HOAT_DONG bất kể filter client gửi
+      where.trangThai = 'HOAT_DONG';
+      if (query.nhaXeId) {
+        where.nhaXeId = query.nhaXeId;
+      }
+    } else {
+      // Tenant admin hoặc SUPER_ADMIN:
+      if (principal!.roles?.includes('SUPER_ADMIN')) {
+        if (query.nhaXeId) {
+          where.nhaXeId = query.nhaXeId;
+        }
+      } else {
+        where.nhaXeId = principal!.nhaXeId;
+      }
+
+      // Lọc theo trangThai nếu có truyền; không truyền thì thấy tất cả
+      if (query.trangThai) {
+        where.trangThai = query.trangThai;
+      }
     }
 
     if (query.loaiDiem) {
@@ -237,14 +265,28 @@ export class StationsService {
     if (!station) {
       throw new NotFoundException({
         error: 'STATION_NOT_FOUND',
-        message: 'Không tìm thấy điểm đón trả.',
+        message: 'Không tìm thấy điểm đón/trả.',
       });
     }
 
-    if (principal && !principal.roles?.includes('SUPER_ADMIN') && station.nhaXeId !== principal.nhaXeId) {
+    const isPrivileged =
+      Boolean(principal) &&
+      (principal!.roles?.includes('SUPER_ADMIN') || hasTenantRole(principal!.roles ?? []));
+
+    if (!isPrivileged) {
+      if (station.trangThai === 'NGUNG_HOAT_DONG') {
+        throw new NotFoundException({
+          error: 'STATION_NOT_FOUND',
+          message: 'Không tìm thấy điểm đón/trả.',
+        });
+      }
+      return { data: station };
+    }
+
+    if (!principal!.roles?.includes('SUPER_ADMIN') && station.nhaXeId !== principal!.nhaXeId) {
       throw new ForbiddenException({
         error: 'FORBIDDEN',
-        message: 'Không có quyền truy cập điểm đón trả này.',
+        message: 'Không có quyền truy cập điểm đón/trả của nhà xe khác.',
       });
     }
 
@@ -257,14 +299,14 @@ export class StationsService {
     const data: {
       maDiem?: string;
       tenDiem?: string;
-      loaiDiem?: 'BEN_XE' | 'VAN_PHONG' | 'DIEM_DON_TRA';
+      loaiDiem?: StationType;
       diaChi?: string;
       diaDiemCuId?: number;
       diaDiemMoiId?: number;
       viDo?: number | null;
       kinhDo?: number | null;
       soDienThoai?: string | null;
-      trangThai?: string;
+      trangThai?: StationStatus;
     } = {};
 
     if (dto.maDiem !== undefined) data.maDiem = dto.maDiem;
@@ -319,7 +361,25 @@ export class StationsService {
     return { data: updated };
   }
 
-  async getTripPassengerPoints(tripId: number) {
+  async getTripPassengerPointsForAdmin(tripId: number, principal: AuthPrincipal) {
+    const trip = await this.prisma.chuyenXe.findUnique({
+      where: { chuyenXeId: tripId },
+    });
+
+    if (!trip) {
+      throw new NotFoundException({
+        error: 'TRIP_NOT_FOUND',
+        message: 'Không tìm thấy chuyến xe.',
+      });
+    }
+
+    if (!principal.roles?.includes('SUPER_ADMIN') && trip.nhaXeId !== principal.nhaXeId) {
+      throw new ForbiddenException({
+        error: 'FORBIDDEN',
+        message: 'Không có quyền xem điểm đón/trả chuyến xe của nhà xe khác.',
+      });
+    }
+
     const points = await this.prisma.diemDonTraChuyenXe.findMany({
       where: { chuyenXeId: tripId },
       orderBy: [{ loaiDiem: 'asc' }, { thuTu: 'asc' }],
@@ -334,6 +394,64 @@ export class StationsService {
     });
 
     return { data: points };
+  }
+
+  async getTripPassengerPointsPublic(tripId: number) {
+    const trip = await this.prisma.chuyenXe.findUnique({
+      where: { chuyenXeId: tripId },
+    });
+
+    if (!trip) {
+      throw new NotFoundException({
+        error: 'TRIP_NOT_FOUND',
+        message: 'Không tìm thấy chuyến xe.',
+      });
+    }
+
+    const points = await this.prisma.diemDonTraChuyenXe.findMany({
+      where: {
+        chuyenXeId: tripId,
+        diemDonTra: {
+          trangThai: 'HOAT_DONG',
+        },
+      },
+      orderBy: [{ loaiDiem: 'asc' }, { thuTu: 'asc' }],
+      include: {
+        diemDonTra: {
+          include: {
+            diaDiemCu: true,
+            diaDiemMoi: true,
+          },
+        },
+      },
+    });
+
+    const publicPoints = points.map((p) => ({
+      diemDonTraChuyenXeId: p.diemDonTraChuyenXeId,
+      chuyenXeId: p.chuyenXeId,
+      diemDonTraId: p.diemDonTraId,
+      loaiDiem: p.loaiDiem,
+      thoiGianDuKien: p.thoiGianDuKien,
+      thuTu: p.thuTu,
+      phuPhi: p.phuPhi,
+      diemDonTra: {
+        diemDonTraId: p.diemDonTra.diemDonTraId,
+        maDiem: p.diemDonTra.maDiem,
+        tenDiem: p.diemDonTra.tenDiem,
+        loaiDiem: p.diemDonTra.loaiDiem,
+        diaChi: p.diemDonTra.diaChi,
+        viDo: p.diemDonTra.viDo,
+        kinhDo: p.diemDonTra.kinhDo,
+        diaDiemCu: p.diemDonTra.diaDiemCu,
+        diaDiemMoi: p.diemDonTra.diaDiemMoi,
+      },
+    }));
+
+    return { data: publicPoints };
+  }
+
+  async getTripPassengerPoints(tripId: number) {
+    return this.getTripPassengerPointsPublic(tripId);
   }
 
   async updateTripPassengerPoints(
