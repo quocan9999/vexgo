@@ -235,6 +235,7 @@ export function getRequiredAdminPermissions(
   if (matchesPath(pathname, '/vehicle-types')) return ['vehicle-type:read'];
   if (matchesPath(pathname, '/vehicles')) return ['vehicle:read'];
   if (matchesPath(pathname, '/routes')) return ['route:read'];
+  if (matchesPath(pathname, '/stations')) return ['route:read'];
   if (matchesPath(pathname, '/fare-prices')) return ['fare-price:read'];
   if (matchesPath(pathname, '/trips')) return ['trip:read'];
   if (matchesPath(pathname, '/customers')) return ['customer:read'];

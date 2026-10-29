@@ -77,7 +77,7 @@ export function StationsManagement() {
   };
 
   return (
-    <SuperAdminLayout activeSection={'stations' as any}>
+    <SuperAdminLayout activeSection="stations">
       <div className="space-y-6">
         <AdminPageHeader
           eyebrow="QUẢN LÝ VẬN HÀNH"
