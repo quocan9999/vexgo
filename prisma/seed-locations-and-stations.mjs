@@ -63,8 +63,6 @@ async function main() {
         tenKhongDau: removeVietnameseTones(p2.name),
         capDiaDiem: 'TINH_THANH',
         chuThichSapNhap,
-        noiBat: popularNewCodes.has(p2.code),
-        thuTuHienThi: popularNewCodes.has(p2.code) ? 10 : 0,
       },
       create: {
         maDiaDiem: `VN-P2-${p2.code}`,
@@ -96,8 +94,6 @@ async function main() {
         tenKhongDau: removeVietnameseTones(p1.name),
         capDiaDiem: 'TINH_THANH',
         chuThichSapNhap: null,
-        noiBat: popularOldCodes.has(p1.code),
-        thuTuHienThi: popularOldCodes.has(p1.code) ? 10 : 0,
       },
       create: {
         maDiaDiem: `VN-P1-${p1.code}`,
@@ -113,59 +109,91 @@ async function main() {
     });
   }
 
-  // 3. Seed các Quận/Huyện/TP trực thuộc nổi bật của hệ cũ
-  const keyDistricts = [
-    { code: 769, name: 'Thành phố Thủ Đức', provinceCode: 79, popular: true },
-    { code: 672, name: 'Thành phố Đà Lạt', provinceCode: 68, popular: true },
-    { code: 568, name: 'Thành phố Nha Trang', provinceCode: 56, popular: true },
-    { code: 747, name: 'Thành phố Vũng Tàu', provinceCode: 77, popular: true },
-    { code: 593, name: 'Thành phố Phan Thiết', provinceCode: 60, popular: true },
-    { code: 718, name: 'Thành phố Thủ Dầu Một', provinceCode: 74, popular: true },
-    { code: 540, name: 'Thành phố Quy Nhơn', provinceCode: 52, popular: true },
-    { code: 643, name: 'Thành phố Buôn Ma Thuột', provinceCode: 66, popular: true },
-  ];
-  for (const dist of keyDistricts) {
-    await prisma.danhMucDiaDiem.upsert({
-      where: {
-        code_laDiaDanhCu: {
-          code: dist.code,
-          laDiaDanhCu: true,
-        },
-      },
-      update: {
-        tenDiaDiem: dist.name,
-        tenKhongDau: removeVietnameseTones(dist.name),
-        capDiaDiem: 'QUAN_HUYEN',
-        chuThichSapNhap: null,
-        noiBat: dist.popular,
-        thuTuHienThi: dist.popular ? 5 : 0,
-      },
-      create: {
-        maDiaDiem: `VN-D1-${dist.code}`,
-        code: dist.code,
-        tenDiaDiem: dist.name,
-        tenKhongDau: removeVietnameseTones(dist.name),
-        capDiaDiem: 'QUAN_HUYEN',
-        laDiaDanhCu: true,
-        chuThichSapNhap: null,
-        noiBat: dist.popular,
-        thuTuHienThi: dist.popular ? 5 : 0,
-      },
-    });
-  }
-
-  // 4. Seed BangSapNhapDiaDiem (mapping cũ ↔ mới)
-  console.log('Đang tạo mapping BangSapNhapDiaDiem (dùng diaDiemId nội bộ)...');
-  const allLocations = await prisma.danhMucDiaDiem.findMany();
+  // Dựng mapping tỉnh cũ và mới (CHỈ lấy địa danh có capDiaDiem = 'TINH_THANH')
+  const provinceLocations = await prisma.danhMucDiaDiem.findMany({
+    where: { capDiaDiem: 'TINH_THANH' },
+  });
   const newMap = new Map(); // code -> diaDiemId (laDiaDanhCu = false)
   const oldMap = new Map(); // code -> diaDiemId (laDiaDanhCu = true)
-  for (const loc of allLocations) {
+  for (const loc of provinceLocations) {
     if (loc.laDiaDanhCu) {
       oldMap.set(loc.code, loc.diaDiemId);
     } else {
       newMap.set(loc.code, loc.diaDiemId);
     }
   }
+
+  // 3. Seed các Quận/Huyện/TP trực thuộc nổi bật của hệ cũ (gán diaDiemChaId tới tỉnh CŨ cha)
+  const allDistrictsMap = new Map();
+  for (const p of v1) {
+    if (Array.isArray(p.districts)) {
+      for (const d of p.districts) {
+        allDistrictsMap.set(d.code, {
+          code: d.code,
+          name: d.name,
+          parentProvinceCode: p.code,
+        });
+      }
+    }
+  }
+
+  const keyDistricts = [
+    { code: 769, expectedParentCode: 79, popular: true }, // TP. Thủ Đức -> TP.HCM (79)
+    { code: 672, expectedParentCode: 68, popular: true }, // TP. Đà Lạt -> Lâm Đồng (68)
+    { code: 568, expectedParentCode: 56, popular: true }, // TP. Nha Trang -> Khánh Hòa (56)
+    { code: 747, expectedParentCode: 77, popular: true }, // TP. Vũng Tàu -> Bà Rịa - Vũng Tàu (77)
+    { code: 593, expectedParentCode: 60, popular: true }, // TP. Phan Thiết -> Bình Thuận (60)
+    { code: 718, expectedParentCode: 74, popular: true }, // TP. Thủ Dầu Một -> Bình Dương (74)
+    { code: 540, expectedParentCode: 52, popular: true }, // TP. Quy Nhơn -> Bình Định (52)
+    { code: 643, expectedParentCode: 66, popular: true }, // TP. Buôn Ma Thuột -> Đắk Lắk (66)
+  ];
+
+  console.log(`Đang nạp ${keyDistricts.length} quận/huyện/thị xã (có liên kết diaDiemChaId)...`);
+  for (const item of keyDistricts) {
+    const foundDist = allDistrictsMap.get(item.code);
+    if (!foundDist) {
+      throw new Error(`LỖI SEED: Không tìm thấy quận/huyện code=${item.code} trong docs/features/tinh_thanh/provinces-v1.json`);
+    }
+    if (foundDist.parentProvinceCode !== item.expectedParentCode) {
+      throw new Error(`LỖI SEED: Quận/huyện code=${item.code} (${foundDist.name}) thuộc tỉnh code=${foundDist.parentProvinceCode}, không khớp với tỉnh cha mong đợi ${item.expectedParentCode}`);
+    }
+
+    const diaDiemChaId = oldMap.get(item.expectedParentCode);
+    if (!diaDiemChaId) {
+      throw new Error(`LỖI SEED: Không tìm thấy diaDiemId của tỉnh cha code=${item.expectedParentCode} trong DanhMucDiaDiem`);
+    }
+
+    await prisma.danhMucDiaDiem.upsert({
+      where: {
+        code_laDiaDanhCu: {
+          code: foundDist.code,
+          laDiaDanhCu: true,
+        },
+      },
+      update: {
+        tenDiaDiem: foundDist.name,
+        tenKhongDau: removeVietnameseTones(foundDist.name),
+        capDiaDiem: 'QUAN_HUYEN',
+        diaDiemChaId,
+        chuThichSapNhap: null,
+      },
+      create: {
+        maDiaDiem: `VN-D1-${foundDist.code}`,
+        code: foundDist.code,
+        tenDiaDiem: foundDist.name,
+        tenKhongDau: removeVietnameseTones(foundDist.name),
+        capDiaDiem: 'QUAN_HUYEN',
+        laDiaDanhCu: true,
+        diaDiemChaId,
+        chuThichSapNhap: null,
+        noiBat: item.popular,
+        thuTuHienThi: item.popular ? 5 : 0,
+      },
+    });
+  }
+
+  // 4. Seed BangSapNhapDiaDiem (mapping cũ ↔ mới)
+  console.log('Đang tạo mapping BangSapNhapDiaDiem (dùng diaDiemId nội bộ)...');
 
   let mapCount = 0;
   for (const cluster of clusters) {
@@ -182,12 +210,11 @@ async function main() {
       }
       await prisma.bangSapNhapDiaDiem.upsert({
         where: {
-          diaDiemMoiId_diaDiemCuId: {
-            diaDiemMoiId,
-            diaDiemCuId,
-          },
+          diaDiemCuId,
         },
-        update: {},
+        update: {
+          diaDiemMoiId,
+        },
         create: {
           diaDiemMoiId,
           diaDiemCuId,
@@ -199,8 +226,10 @@ async function main() {
   console.log(`Đã nạp ${mapCount} liên kết ánh xạ sáp nhập.`);
 
   // 5. Seed Bến bãi / Điểm đón trả thuộc Nhà xe (DiemDonTra)
-  const nhaXes = await prisma.nhaXe.findMany({ take: 3 });
-  if (nhaXes.length > 0) {
+  const nhaXes = await prisma.nhaXe.findMany({ take: 3, orderBy: { nhaXeId: 'asc' } });
+  if (nhaXes.length === 0) {
+    console.warn('CẢNH BÁO: Không tìm thấy bất kỳ nhà xe (NhaXe) nào trong cơ sở dữ liệu để tạo DiemDonTra mẫu!');
+  } else {
     const futa = nhaXes.find(nx => nx.maNhaXe === 'FUTA') ?? nhaXes[0];
     const hm = nhaXes.find(nx => nx.maNhaXe === 'HM') ?? futa;
     const tb = nhaXes.find(nx => nx.maNhaXe === 'TB') ?? futa;
@@ -217,6 +246,9 @@ async function main() {
     const vungTauCuId = oldMap.get(77); // Bà Rịa - Vũng Tàu cũ
     const lamDongCuId = oldMap.get(68); // Lâm Đồng cũ
     const haNoiCuId = oldMap.get(1); // Hà Nội cũ
+    const binhDuongCuId = oldMap.get(74); // Bình Dương cũ
+    const binhThuanCuId = oldMap.get(60); // Bình Thuận cũ (Phan Thiết)
+    const dakNongCuId = oldMap.get(67); // Đắk Nông cũ
 
     const sampleStations = [
       {
@@ -273,6 +305,39 @@ async function main() {
         kinhDo: 105.8415,
         soDienThoai: '19006067',
         nhaXeId: futa.nhaXeId,
+      },
+      {
+        maDiem: 'BX-BD',
+        tenDiem: 'Bến xe Bình Dương (Thủ Dầu Một)',
+        loaiDiem: 'BEN_XE',
+        diaChi: 'Đường 30/4, Phường Phú Hòa, TP. Thủ Dầu Một, Bình Dương',
+        diaDiemCuId: binhDuongCuId,
+        viDo: 10.9752,
+        kinhDo: 106.6713,
+        soDienThoai: '19006067',
+        nhaXeId: futa.nhaXeId,
+      },
+      {
+        maDiem: 'BX-PT',
+        tenDiem: 'Bến xe Phan Thiết',
+        loaiDiem: 'BEN_XE',
+        diaChi: '01 Từ Văn Tư, Phường Phú Trinh, TP. Phan Thiết, Bình Thuận',
+        diaDiemCuId: binhThuanCuId,
+        viDo: 10.9321,
+        kinhDo: 108.0988,
+        soDienThoai: '19006067',
+        nhaXeId: hm.nhaXeId,
+      },
+      {
+        maDiem: 'BX-GN',
+        tenDiem: 'Bến xe Gia Nghĩa (Đắk Nông)',
+        loaiDiem: 'BEN_XE',
+        diaChi: 'Phường Nghĩa Thành, TP. Gia Nghĩa, Đắk Nông',
+        diaDiemCuId: dakNongCuId,
+        viDo: 12.0025,
+        kinhDo: 107.6912,
+        soDienThoai: '19006067',
+        nhaXeId: tb.nhaXeId,
       },
       {
         maDiem: 'VP-Q1',

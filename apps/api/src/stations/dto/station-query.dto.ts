@@ -1,4 +1,4 @@
-import { IsEnum, IsInt, IsOptional, IsString } from 'class-validator';
+import { IsEnum, IsIn, IsInt, IsOptional, IsString } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class StationQueryDto {
@@ -36,8 +36,10 @@ export class StationQueryDto {
   nhaXeId?: number;
 
   @IsOptional()
-  @IsString()
-  sortBy?: string;
+  @IsIn(['createdAt', 'updatedAt', 'tenDiem', 'maDiem', 'loaiDiem'], {
+    message: 'sortBy phải là một trong các giá trị: createdAt, updatedAt, tenDiem, maDiem, loaiDiem',
+  })
+  sortBy?: string = 'createdAt';
 
   @IsOptional()
   @IsEnum(['asc', 'desc'])

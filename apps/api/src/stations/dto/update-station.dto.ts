@@ -3,6 +3,11 @@ import { IsEnum, IsInt, IsNumber, IsOptional, IsString, MaxLength } from 'class-
 export class UpdateStationDto {
   @IsOptional()
   @IsString()
+  @MaxLength(50)
+  maDiem?: string;
+
+  @IsOptional()
+  @IsString()
   @MaxLength(150)
   tenDiem?: string;
 
