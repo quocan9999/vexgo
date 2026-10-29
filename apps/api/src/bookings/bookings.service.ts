@@ -1131,6 +1131,13 @@ export class BookingsService {
               orderBy: [{ thoiGian: 'desc' }, { thanhToanId: 'desc' }],
               take: 1,
             },
+            phieuGuiHang: {
+              include: {
+                hangHoas: {
+                  include: { loaiHangHoa: true },
+                },
+              },
+            },
           },
         },
       },
@@ -1263,6 +1270,13 @@ export class BookingsService {
             thanhToans: {
               orderBy: [{ thoiGian: 'desc' }, { thanhToanId: 'desc' }],
               take: 1,
+            },
+            phieuGuiHang: {
+              include: {
+                hangHoas: {
+                  include: { loaiHangHoa: true },
+                },
+              },
             },
           },
         },
