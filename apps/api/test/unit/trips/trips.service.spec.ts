@@ -1498,4 +1498,68 @@ describe('TripsService.getSeats', () => {
       },
     });
   });
+  it('searches old province without broadening and expands new merged province to all constituent provinces', async () => {
+    const { prisma, service } = createService();
+    prisma.chuyenXe.findMany.mockResolvedValue([]);
+
+    const mockLocationsService = {
+      list: vi.fn().mockResolvedValue({
+        data: [
+          {
+            id: 'legacy:province:77',
+            name: 'Bà Rịa - Vũng Tàu',
+            value: 'Bà Rịa - Vũng Tàu',
+            aliases: ['Bà Rịa - Vũng Tàu', 'Vũng Tàu'],
+            versions: ['legacy'],
+            kind: 'province',
+            isLegacy: true,
+          },
+          {
+            id: 'current:province:79',
+            name: 'Hồ Chí Minh',
+            value: 'TP.HCM',
+            aliases: ['TP. Hồ Chí Minh', 'TP.HCM', 'Hồ Chí Minh'],
+            versions: ['current'],
+            kind: 'province',
+            isLegacy: false,
+            mergedFromText: 'Sáp nhập từ Bà Rịa - Vũng Tàu, Bình Dương, TP. Hồ Chí Minh',
+          },
+        ],
+        meta: { stale: false },
+      }),
+    };
+
+    (service as any).locations = mockLocationsService;
+
+    // 1. Search with old province -> strictly only matches Bà Rịa - Vũng Tàu / Vũng Tàu
+    await service.search({
+      from: 'Bà Rịa - Vũng Tàu',
+      to: 'Đà Lạt',
+      page: 1,
+      pageSize: 10,
+      sortBy: 'departureTime',
+      sortDirection: 'asc',
+    });
+
+    const call1Where = prisma.chuyenXe.findMany.mock.calls[0][0].where;
+    const fromTerms1 = call1Where.tuyenXe.AND[0].OR.map((o: any) => o.diemDi.contains);
+    expect(fromTerms1).toContain('Bà Rịa - Vũng Tàu');
+    expect(fromTerms1).not.toContain('Bình Dương');
+
+    // 2. Search with new merged province -> expands to TP.HCM, Bà Rịa - Vũng Tàu, Bình Dương
+    await service.search({
+      from: 'Hồ Chí Minh',
+      to: 'Đà Lạt',
+      page: 1,
+      pageSize: 10,
+      sortBy: 'departureTime',
+      sortDirection: 'asc',
+    });
+
+    const call2Where = prisma.chuyenXe.findMany.mock.calls[1][0].where;
+    const fromTerms2 = call2Where.tuyenXe.AND[0].OR.map((o: any) => o.diemDi.contains);
+    expect(fromTerms2).toContain('Hồ Chí Minh');
+    expect(fromTerms2).toContain('Bà Rịa - Vũng Tàu');
+    expect(fromTerms2).toContain('Bình Dương');
+  });
 });

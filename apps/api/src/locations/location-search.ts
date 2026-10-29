@@ -18,10 +18,59 @@ export function locationSearchTerms(
   }
 
   const normalized = normalizeLocation(trimmed);
-  if (normalized === 'hcm' || normalized === 'ho chi minh') {
-    return ['TP.HCM', 'Hồ Chí Minh', 'TP HCM'];
+
+  // 1. If explicit legacy item in catalogue: STRICTLY return only its own terms and aliases
+  const legacyItem = catalogue.find(
+    (item) =>
+      item.isLegacy === true &&
+      (normalizeLocation(item.value) === normalized ||
+        normalizeLocation(item.name) === normalized),
+  );
+  if (legacyItem) {
+    const terms = [legacyItem.name, legacyItem.value, ...legacyItem.aliases];
+    if (normalized === 'hcm' || normalized === 'ho chi minh') {
+      terms.push('TP.HCM', 'Hồ Chí Minh', 'TP HCM');
+    }
+    const cleanTerms = terms.map((t) =>
+      t.replace(/^(Tỉnh|Thành phố|Thị xã)\s+/i, '').trim(),
+    );
+    return [...new Set(cleanTerms.filter(Boolean))];
   }
 
+  // 2. If explicit current (merged) item in catalogue: include constituent provinces
+  const currentItem = catalogue.find(
+    (item) =>
+      item.isLegacy === false &&
+      (normalizeLocation(item.value) === normalized ||
+        normalizeLocation(item.name) === normalized),
+  );
+  if (currentItem) {
+    const terms = [currentItem.name, currentItem.value, ...currentItem.aliases];
+    if (normalized === 'hcm' || normalized === 'ho chi minh') {
+      terms.push('TP.HCM', 'Hồ Chí Minh', 'TP HCM');
+    }
+    if (currentItem.mergedFromText) {
+      const match = currentItem.mergedFromText.match(/Sáp nhập từ (.+)$/i);
+      if (match) {
+        const constituentNames = match[1].split(',').map((s) => s.trim());
+        for (const cName of constituentNames) {
+          terms.push(cName);
+          const cItem = catalogue.find(
+            (it) => it.isLegacy && normalizeLocation(it.name) === normalizeLocation(cName),
+          );
+          if (cItem) {
+            terms.push(cItem.name, cItem.value, ...cItem.aliases);
+          }
+        }
+      }
+    }
+    const cleanTerms = terms.map((t) =>
+      t.replace(/^(Tỉnh|Thành phố|Thị xã)\s+/i, '').trim(),
+    );
+    return [...new Set(cleanTerms.filter(Boolean))];
+  }
+
+  // 3. Fallback for legacy catalogue format (items with versions: ['current'] and aliases)
   const current = catalogue.find(
     (item) =>
       item.kind === 'province' &&
@@ -36,6 +85,10 @@ export function locationSearchTerms(
     ];
   }
 
+  if (normalized === 'hcm' || normalized === 'ho chi minh') {
+    return ['TP.HCM', 'Hồ Chí Minh', 'TP HCM'];
+  }
+
   const matchedItem = catalogue.find(
     (item) =>
       normalizeLocation(item.value) === normalized ||
@@ -43,7 +96,10 @@ export function locationSearchTerms(
   );
   if (matchedItem) {
     const terms = [matchedItem.name, matchedItem.value, ...matchedItem.aliases];
-    return [...new Set(terms.filter(Boolean))];
+    const cleanTerms = terms.map((t) =>
+      t.replace(/^(Tỉnh|Thành phố|Thị xã)\s+/i, '').trim(),
+    );
+    return [...new Set(cleanTerms.filter(Boolean))];
   }
 
   return [trimmed];
