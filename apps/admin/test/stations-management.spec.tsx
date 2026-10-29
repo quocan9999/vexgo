@@ -37,8 +37,7 @@ describe('StationListTable', () => {
     const html = renderToStaticMarkup(
       <StationListTable
         stations={mockStations}
-        onEdit={vi.fn()}
-        onDelete={vi.fn()}
+        onSelectStation={vi.fn()}
       />,
     );
 
@@ -50,14 +49,17 @@ describe('StationListTable', () => {
     expect(html).toContain('CŨ');
     expect(html).toContain('Hồ Chí Minh');
     expect(html).toContain('19006067');
+    expect(html).toContain('Xem chi tiết');
+    // Both desktop table and mobile card have the detail action
+    expect(html.match(/aria-label="Xem chi tiết điểm Bến xe Vũng Tàu"/g)).toHaveLength(2);
+    expect(html).toContain('grid gap-4 bg-background p-4 md:hidden');
   });
 
   it('renders empty state when no stations are configured', () => {
     const html = renderToStaticMarkup(
       <StationListTable
         stations={[]}
-        onEdit={vi.fn()}
-        onDelete={vi.fn()}
+        onSelectStation={vi.fn()}
       />,
     );
 
