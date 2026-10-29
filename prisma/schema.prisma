@@ -29,6 +29,7 @@ model NhaXe {
   donGiaoDichs             DonGiaoDich[]
   cauHinhQuyenVaiTroNhaXes CauHinhQuyenVaiTroNhaXe[]
   cuocTroChuyens           CuocTroChuyen[]
+  diemDonTras              DiemDonTra[]
 }
 
 model TrangNoiDung {
@@ -164,6 +165,7 @@ model ChuyenXe {
   phieuGuiHangs       PhieuGuiHang[]
   phanHois            PhanHoi[]
 
+  diemDonTraChuyenXes DiemDonTraChuyenXe[]
   @@index([trangThai, ngayKhoiHanh, gioKhoiHanh], map: "ChuyenXe_departure_due_idx")
 }
 
@@ -857,4 +859,83 @@ enum NhomSucChuaHangHoa {
   XE_MAY
   HANG_CONG_KENH
   HANG_NHE
+}
+
+
+model DanhMucDiaDiem {
+  diaDiemId           Int                  @id @default(autoincrement()) @db.Int
+  maDiaDiem           String               @db.VarChar(50)
+  code                Int                  @db.Int
+  tenDiaDiem          String               @db.VarChar(150)
+  tenKhongDau         String               @db.VarChar(150)
+  capDiaDiem          String               @db.VarChar(50)
+  laDiaDanhCu         Boolean              @default(false)
+  chuThichSapNhap     String?              @db.VarChar(255)
+  noiBat              Boolean              @default(false)
+  thuTuHienThi        Int                  @default(0) @db.Int
+  trangThai           String               @default("HOAT_DONG") @db.VarChar(30)
+  createdAt           DateTime             @default(now()) @db.DateTime(0)
+  updatedAt           DateTime             @default(now()) @updatedAt @db.DateTime(0)
+  bangSapNhapMoi      BangSapNhapDiaDiem[] @relation("BangSapNhap_DiaDiemMoi")
+  bangSapNhapCu       BangSapNhapDiaDiem[] @relation("BangSapNhap_DiaDiemCu")
+  diemDonTrasTheoMoi  DiemDonTra[]         @relation("DiemDonTra_DiaDiemMoi")
+  diemDonTrasTheoCu   DiemDonTra[]         @relation("DiemDonTra_DiaDiemCu")
+
+  @@unique([code, laDiaDanhCu], map: "DanhMucDiaDiem_code_laDiaDanhCu_key")
+  @@index([laDiaDanhCu, capDiaDiem], map: "DanhMucDiaDiem_laDiaDanhCu_capDiaDiem_idx")
+  @@index([tenKhongDau], map: "DanhMucDiaDiem_tenKhongDau_idx")
+}
+
+model BangSapNhapDiaDiem {
+  bangSapNhapDiaDiemId Int             @id @default(autoincrement()) @db.Int
+  diaDiemMoiId         Int             @db.Int
+  diaDiemCuId          Int             @db.Int
+  createdAt            DateTime        @default(now()) @db.DateTime(0)
+  diaDiemMoi           DanhMucDiaDiem  @relation("BangSapNhap_DiaDiemMoi", fields: [diaDiemMoiId], references: [diaDiemId], onDelete: Restrict, onUpdate: Restrict)
+  diaDiemCu            DanhMucDiaDiem  @relation("BangSapNhap_DiaDiemCu", fields: [diaDiemCuId], references: [diaDiemId], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([diaDiemMoiId, diaDiemCuId], map: "BangSapNhapDiaDiem_moi_cu_key")
+  @@index([diaDiemCuId], map: "BangSapNhapDiaDiem_diaDiemCuId_idx")
+}
+
+model DiemDonTra {
+  diemDonTraId        Int                  @id @default(autoincrement()) @db.Int
+  maDiem              String               @db.VarChar(50)
+  tenDiem             String               @db.VarChar(150)
+  loaiDiem            String               @db.VarChar(50)
+  diaChi              String               @db.VarChar(255)
+  diaDiemMoiId        Int                  @db.Int
+  diaDiemCuId         Int                  @db.Int
+  viDo                Decimal?             @db.Decimal(10, 7)
+  kinhDo              Decimal?             @db.Decimal(10, 7)
+  soDienThoai         String?              @db.VarChar(20)
+  trangThai           String               @default("HOAT_DONG") @db.VarChar(30)
+  nhaXeId             Int                  @db.Int
+  createdAt           DateTime             @default(now()) @db.DateTime(0)
+  updatedAt           DateTime             @default(now()) @updatedAt @db.DateTime(0)
+  nhaXe               NhaXe                @relation(fields: [nhaXeId], references: [nhaXeId], onDelete: Restrict, onUpdate: Restrict)
+  diaDiemMoi          DanhMucDiaDiem       @relation("DiemDonTra_DiaDiemMoi", fields: [diaDiemMoiId], references: [diaDiemId], onDelete: Restrict, onUpdate: Restrict)
+  diaDiemCu           DanhMucDiaDiem       @relation("DiemDonTra_DiaDiemCu", fields: [diaDiemCuId], references: [diaDiemId], onDelete: Restrict, onUpdate: Restrict)
+  diemDonTraChuyenXes DiemDonTraChuyenXe[]
+
+  @@unique([nhaXeId, maDiem], map: "DiemDonTra_nhaXeId_maDiem_key")
+  @@index([diaDiemMoiId], map: "DiemDonTra_diaDiemMoiId_idx")
+  @@index([diaDiemCuId], map: "DiemDonTra_diaDiemCuId_idx")
+}
+
+model DiemDonTraChuyenXe {
+  diemDonTraChuyenXeId Int         @id @default(autoincrement()) @db.Int
+  chuyenXeId           Int         @db.Int
+  diemDonTraId         Int         @db.Int
+  loaiDiem             String      @db.VarChar(20)
+  thoiGianDuKien       DateTime?   @db.Time(0)
+  thuTu                Int         @default(1) @db.Int
+  phuPhi               Decimal     @default(0.00) @db.Decimal(18, 2)
+  createdAt            DateTime    @default(now()) @db.DateTime(0)
+  updatedAt            DateTime    @default(now()) @updatedAt @db.DateTime(0)
+  chuyenXe             ChuyenXe    @relation(fields: [chuyenXeId], references: [chuyenXeId], onDelete: Restrict, onUpdate: Restrict)
+  diemDonTra           DiemDonTra  @relation(fields: [diemDonTraId], references: [diemDonTraId], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([chuyenXeId, loaiDiem], map: "DiemDonTraChuyenXe_chuyenXeId_loaiDiem_idx")
+  @@index([diemDonTraId], map: "DiemDonTraChuyenXe_diemDonTraId_idx")
 }
