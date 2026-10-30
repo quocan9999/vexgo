@@ -83,6 +83,22 @@ describe('LocationsService', () => {
             noiBat: true,
             thuTuHienThi: 10,
           },
+          {
+            diaDiemId: 103,
+            code: 719,
+            tenDiaDiem: 'Thị xã Dĩ An',
+            tenKhongDau: 'thi xa di an',
+            capDiaDiem: 'QUAN_HUYEN',
+            laDiaDanhCu: true,
+            chuThichSapNhap: 'Không được dùng chuThichSapNhap làm parentName',
+            noiBat: false,
+            thuTuHienThi: 1,
+            diaDiemChaId: 102,
+            diaDiemCha: {
+              diaDiemId: 102,
+              tenDiaDiem: 'Tỉnh Bà Rịa - Vũng Tàu',
+            },
+          },
         ]),
       },
       diemDonTra: {
@@ -103,7 +119,7 @@ describe('LocationsService', () => {
     const service = new LocationsService(mockPrisma);
     const result = await service.list();
 
-    expect(result.data.length).toBe(3);
+    expect(result.data.length).toBe(4);
     const newHcm = result.data.find((item) => item.id === 'current:province:79');
     expect(newHcm).toBeDefined();
     expect(newHcm?.isLegacy).toBe(false);
@@ -114,6 +130,12 @@ describe('LocationsService', () => {
     expect(oldVt).toBeDefined();
     expect(oldVt?.isLegacy).toBe(true);
     expect(oldVt?.diaDiemId).toBe(102);
+
+    const diAn = result.data.find((item) => item.diaDiemId === 103);
+    expect(diAn).toBeDefined();
+    expect(diAn?.name).toBe('Dĩ An');
+    expect(diAn?.parentName).toBe('Bà Rịa - Vũng Tàu');
+    expect(diAn?.province).toBe('Bà Rịa - Vũng Tàu');
 
     const station = result.data.find((item) => item.id === 'station:bx-vt');
     expect(station).toBeDefined();

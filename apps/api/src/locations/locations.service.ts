@@ -118,6 +118,7 @@ export class LocationsService {
           bangSapNhapMoi: {
             include: { diaDiemCu: true },
           },
+          diaDiemCha: true,
         },
         orderBy: [{ thuTuHienThi: 'desc' }, { tenDiaDiem: 'asc' }],
       });
@@ -135,7 +136,10 @@ export class LocationsService {
 
       for (const loc of locations) {
         const isLegacy = loc.laDiaDanhCu;
-        const cleanName = loc.tenDiaDiem.replace(/^(Tỉnh|Thành phố|Thị xã)\s+/i, '').trim();
+        const cleanName =
+          loc.capDiaDiem === 'QUAN_HUYEN'
+            ? loc.tenDiaDiem.replace(/^(Thành phố|Thị xã|Quận|Huyện)\s+/i, '').trim()
+            : loc.tenDiaDiem.replace(/^(Tỉnh|Thành phố|Thị xã)\s+/i, '').trim();
         const value = cleanName.toLowerCase().includes('hồ chí minh') ? 'TP.HCM' : cleanName;
         const kind: LocationOption['kind'] = loc.capDiaDiem === 'TINH_THANH' ? 'province' : 'district';
         const id = isLegacy
@@ -146,12 +150,25 @@ export class LocationsService {
           ? (loc as any).bangSapNhapMoi.map((m: any) => m.diaDiemCu.tenDiaDiem)
           : undefined;
 
-        const masterItem = VIETNAM_PROVINCES.find(
-          (p) =>
-            p.id === `province:${loc.code.toString().padStart(2, '0')}` ||
-            p.name === cleanName,
-        );
-        const masterAliases = masterItem?.aliases ?? [];
+        // Alias master chỉ gộp cho tỉnh CŨ (laDiaDanhCu = true) khớp theo code.
+        // Alias của tỉnh MỚI (laDiaDanhCu = false) lấy từ chính các tỉnh cũ thành phần (legacyNames).
+        let additionalAliases: string[] = [];
+        if (isLegacy && loc.capDiaDiem === 'TINH_THANH') {
+          const masterItem = VIETNAM_PROVINCES.find(
+            (p) =>
+              p.id === `province:${loc.code.toString().padStart(2, '0')}` ||
+              p.name === cleanName,
+          );
+          additionalAliases = masterItem?.aliases ?? [];
+        } else if (!isLegacy && legacyNames && legacyNames.length > 0) {
+          additionalAliases = legacyNames;
+        }
+
+        // Với quận/huyện (capDiaDiem = QUAN_HUYEN), đặt parentName và province bằng tên tỉnh cha lấy qua diaDiemChaId
+        const parentProvinceName =
+          loc.capDiaDiem === 'QUAN_HUYEN' && loc.diaDiemCha
+            ? loc.diaDiemCha.tenDiaDiem.replace(/^(Tỉnh|Thành phố|Thị xã)\s+/i, '').trim()
+            : null;
 
         result.push({
           id,
@@ -163,13 +180,13 @@ export class LocationsService {
               loc.tenKhongDau,
               cleanName,
               value,
-              ...masterAliases,
+              ...additionalAliases,
             ]),
           ],
           versions: [isLegacy ? 'legacy' : 'current'],
           kind,
-          province: loc.capDiaDiem === 'QUAN_HUYEN' ? (loc.chuThichSapNhap ?? null) : null,
-          parentName: loc.capDiaDiem === 'QUAN_HUYEN' ? (loc.chuThichSapNhap ?? undefined) : undefined,
+          province: loc.capDiaDiem === 'QUAN_HUYEN' ? parentProvinceName : null,
+          parentName: loc.capDiaDiem === 'QUAN_HUYEN' ? (parentProvinceName ?? undefined) : undefined,
           isLegacy,
           mergedFromText: loc.chuThichSapNhap,
           legacyNames,

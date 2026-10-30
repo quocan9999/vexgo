@@ -255,6 +255,32 @@ describe('location catalogue', () => {
         legacyNames: ['Lào Cai', 'Yên Bái'],
         diaDiemId: 7,
       },
+
+      // Quận/huyện con
+      {
+        id: 'legacy:district:760',
+        name: 'Thủ Đức',
+        value: 'Thủ Đức',
+        aliases: ['Thành phố Thủ Đức', 'Thủ Đức'],
+        versions: ['legacy'],
+        kind: 'district',
+        province: 'Hồ Chí Minh',
+        parentName: 'Hồ Chí Minh',
+        isLegacy: true,
+        diaDiemId: 760,
+      },
+      {
+        id: 'legacy:district:719',
+        name: 'Dĩ An',
+        value: 'Dĩ An',
+        aliases: ['Thị xã Dĩ An', 'Dĩ An'],
+        versions: ['legacy'],
+        kind: 'district',
+        province: 'Bình Dương',
+        parentName: 'Bình Dương',
+        isLegacy: true,
+        diaDiemId: 719,
+      },
     ];
 
     it('TP.HCM: legacy option returns ONLY TP.HCM terms; new option returns TP.HCM + constituent provinces', () => {
@@ -264,16 +290,20 @@ describe('location catalogue', () => {
       const oldTerms = locationSearchTermsForOption(oldHcm, mixedCatalogue);
       expect(oldTerms).toContain('TP.HCM');
       expect(oldTerms).toContain('Hồ Chí Minh');
+      expect(oldTerms).toContain('Thủ Đức');
       expect(oldTerms).not.toContain('Bình Dương');
       expect(oldTerms).not.toContain('Bà Rịa - Vũng Tàu');
       expect(oldTerms).not.toContain('Thủ Dầu Một');
+      expect(oldTerms).not.toContain('Dĩ An');
 
       const newTerms = locationSearchTermsForOption(newHcm, mixedCatalogue);
       expect(newTerms).toContain('TP.HCM');
       expect(newTerms).toContain('Hồ Chí Minh');
+      expect(newTerms).toContain('Thủ Đức');
       expect(newTerms).toContain('Bình Dương');
       expect(newTerms).toContain('Bà Rịa - Vũng Tàu');
       expect(newTerms).toContain('Thủ Dầu Một');
+      expect(newTerms).toContain('Dĩ An');
     });
 
     it('Tây Ninh: legacy option returns ONLY Tây Ninh; new option returns Tây Ninh + Long An', () => {

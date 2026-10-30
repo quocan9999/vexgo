@@ -6,6 +6,7 @@ import { Test } from '@nestjs/testing';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AppModule } from '../../../src/app.module.js';
 import { configureApi } from '../../../src/common/configure-api.js';
+import { LocationsService } from '../../../src/locations/locations.service.js';
 import { PrismaService } from '../../../src/prisma/prisma.service.js';
 import { TripsService } from '../../../src/trips/trips.service.js';
 
@@ -24,8 +25,12 @@ function readLocalEnvValue(name: string): string | undefined {
   return undefined;
 }
 
-const dbUrl = process.env.DATABASE_URL ?? readLocalEnvValue('DATABASE_URL');
-const describeDb = dbUrl ? describe : describe.skip;
+// Biến môi trường riêng cho test tích hợp Task 4 (giống FEATURE07_TEST_DATABASE_URL ở test khác)
+// Tự động skip khi chưa cấu hình TASK4_TEST_DATABASE_URL
+const testDatabaseUrl =
+  process.env.TASK4_TEST_DATABASE_URL ??
+  readLocalEnvValue('TASK4_TEST_DATABASE_URL');
+const describeDb = testDatabaseUrl ? describe : describe.skip;
 
 describeDb('Task 4 - Location Key-based Search with real MySQL Database', () => {
   let app: INestApplication;
@@ -39,6 +44,8 @@ describeDb('Task 4 - Location Key-based Search with real MySQL Database', () => 
   let routeYenBaiHnId: number;
   let routeLaoCaiHnId: number;
   let routeThuDauMotId: number;
+  let routeDiAnId: number;
+  let routeThuDucId: number;
   let vehicleId: number;
 
   let tripHcmId: number;
@@ -48,6 +55,8 @@ describeDb('Task 4 - Location Key-based Search with real MySQL Database', () => 
   let tripYenBaiId: number;
   let tripLaoCaiId: number;
   let tripNoPointsThuDauMotId: number;
+  let tripNoPointsDiAnId: number;
+  let tripNoPointsThuDucId: number;
 
   // Dynamic IDs queried from DB via unique composite (code, laDiaDanhCu)
   let hcmMoiId: number;
@@ -58,10 +67,17 @@ describeDb('Task 4 - Location Key-based Search with real MySQL Database', () => 
   let laoCaiMoiId: number;
   let bxBinhDuongId: number;
 
+  let diAnDistrictId: number | undefined;
+  let thuDucDistrictId: number | undefined;
+
   const tomorrowDateStr = '2026-11-15';
   const tomorrowDate = new Date(`${tomorrowDateStr}T00:00:00.000Z`);
 
   beforeAll(async () => {
+    if (testDatabaseUrl) {
+      process.env.DATABASE_URL = testDatabaseUrl;
+    }
+
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
@@ -99,6 +115,51 @@ describeDb('Task 4 - Location Key-based Search with real MySQL Database', () => 
     vtCuId = vtCu.diaDiemId;
     yenBaiCuId = yenBaiCu.diaDiemId;
     laoCaiMoiId = laoCaiMoi.diaDiemId;
+
+    // Đảm bảo quận/huyện "Dĩ An" (thuộc Bình Dương cũ, diaDiemChaId = bdCuId) tồn tại
+    // Đây là quận/huyện KHÔNG nằm trong master alias của Bình Dương (master chỉ có Bình Dương, Thủ Dầu Một)
+    const districtDiAn = await prisma.danhMucDiaDiem.upsert({
+      where: { code_laDiaDanhCu: { code: 719, laDiaDanhCu: true } },
+      update: {
+        diaDiemChaId: bdCuId,
+        trangThai: 'HOAT_DONG',
+      },
+      create: {
+        maDiaDiem: `DIST-DIAN-${testSuffix}`,
+        code: 719,
+        tenDiaDiem: 'Thị xã Dĩ An',
+        tenKhongDau: 'di an',
+        capDiaDiem: 'QUAN_HUYEN',
+        laDiaDanhCu: true,
+        diaDiemChaId: bdCuId,
+        trangThai: 'HOAT_DONG',
+      },
+    });
+    diAnDistrictId = districtDiAn.diaDiemId;
+
+    // Đảm bảo quận/huyện "Thủ Đức" (thuộc TP.HCM cũ, diaDiemChaId = hcmCuId) tồn tại
+    const districtThuDuc = await prisma.danhMucDiaDiem.upsert({
+      where: { code_laDiaDanhCu: { code: 769, laDiaDanhCu: true } },
+      update: {
+        diaDiemChaId: hcmCuId,
+        trangThai: 'HOAT_DONG',
+      },
+      create: {
+        maDiaDiem: `DIST-THUDUC-${testSuffix}`,
+        code: 769,
+        tenDiaDiem: 'Thành phố Thủ Đức',
+        tenKhongDau: 'thu duc',
+        capDiaDiem: 'QUAN_HUYEN',
+        laDiaDanhCu: true,
+        diaDiemChaId: hcmCuId,
+        trangThai: 'HOAT_DONG',
+      },
+    });
+    thuDucDistrictId = districtThuDuc.diaDiemId;
+
+    // Nạp lại LocationsService cache để cập nhật các quận/huyện vừa tạo
+    const locationsService = app.get(LocationsService);
+    await (locationsService as any).refresh();
 
     // 2. Tạo Nhà Xe test
     const company = await prisma.nhaXe.create({
@@ -160,6 +221,32 @@ describeDb('Task 4 - Location Key-based Search with real MySQL Database', () => 
       },
     });
     routeThuDauMotId = route4.tuyenXeId;
+
+    // Tuyến đường ghi "Dĩ An" phục vụ kiểm chứng ca 7 (quận/huyện không nằm trong master alias)
+    const route5 = await prisma.tuyenXe.create({
+      data: {
+        nhaXeId,
+        maTuyenXe: `TX-DA-DL-${testSuffix}`,
+        diemDi: 'Dĩ An',
+        diemDen: 'Đà Lạt',
+        thoiGianChayPhut: 360,
+        trangThai: 'HOAT_DONG',
+      },
+    });
+    routeDiAnId = route5.tuyenXeId;
+
+    // Tuyến đường ghi "Thủ Đức" phục vụ kiểm chứng ca 8 (bản CŨ TP.HCM cũng gom quận/huyện con của chính nó)
+    const route6 = await prisma.tuyenXe.create({
+      data: {
+        nhaXeId,
+        maTuyenXe: `TX-TD-DL-${testSuffix}`,
+        diemDi: 'Thủ Đức',
+        diemDen: 'Đà Lạt',
+        thoiGianChayPhut: 360,
+        trangThai: 'HOAT_DONG',
+      },
+    });
+    routeThuDucId = route6.tuyenXeId;
 
     // 4. Tạo Loại Xe và Xe
     const loaiXe = await prisma.loaiXe.create({
@@ -364,6 +451,40 @@ describeDb('Task 4 - Location Key-based Search with real MySQL Database', () => 
       },
     });
     tripNoPointsThuDauMotId = tripTdmNoPoints.chuyenXeId;
+
+    // Chuyến 8 (Ca 7): Tuyến ghi diemDi = "Dĩ An" (quận/huyện KHÔNG nằm trong master alias của Bình Dương)
+    const tripDiAnNoPoints = await prisma.chuyenXe.create({
+      data: {
+        nhaXeId,
+        tuyenXeId: routeDiAnId,
+        xeId: vehicleId,
+        maChuyenXe: `CX-DA-NO-PTS-${testSuffix}`,
+        ngayKhoiHanh: tomorrowDate,
+        gioKhoiHanh: new Date('1970-01-01T15:00:00.000Z'),
+        trangThai: 'CHUA_KHOI_HANH',
+        sucChuaXeMay: 0,
+        sucChuaHangCongKenh: 0,
+        sucChuaHangNhe: 0,
+      },
+    });
+    tripNoPointsDiAnId = tripDiAnNoPoints.chuyenXeId;
+
+    // Chuyến 9 (Ca 8): Tuyến ghi diemDi = "Thủ Đức" (quận/huyện thuộc chính TP.HCM cũ)
+    const tripThuDucNoPoints = await prisma.chuyenXe.create({
+      data: {
+        nhaXeId,
+        tuyenXeId: routeThuDucId,
+        xeId: vehicleId,
+        maChuyenXe: `CX-TD-NO-PTS-${testSuffix}`,
+        ngayKhoiHanh: tomorrowDate,
+        gioKhoiHanh: new Date('1970-01-01T16:00:00.000Z'),
+        trangThai: 'CHUA_KHOI_HANH',
+        sucChuaXeMay: 0,
+        sucChuaHangCongKenh: 0,
+        sucChuaHangNhe: 0,
+      },
+    });
+    tripNoPointsThuDucId = tripThuDucNoPoints.chuyenXeId;
   });
 
   afterAll(async () => {
@@ -394,6 +515,18 @@ describeDb('Task 4 - Location Key-based Search with real MySQL Database', () => 
         where: { nhaXeId },
       });
     }
+
+    if (prisma && diAnDistrictId) {
+      await prisma.danhMucDiaDiem.deleteMany({
+        where: { diaDiemId: diAnDistrictId, maDiaDiem: `DIST-DIAN-${testSuffix}` },
+      });
+    }
+    if (prisma && thuDucDistrictId) {
+      await prisma.danhMucDiaDiem.deleteMany({
+        where: { diaDiemId: thuDucDistrictId, maDiaDiem: `DIST-THUDUC-${testSuffix}` },
+      });
+    }
+
     if (app) await app.close();
   });
 
@@ -528,5 +661,63 @@ describeDb('Task 4 - Location Key-based Search with real MySQL Database', () => 
     expect(returnedTripIds).not.toContain(tripYenBaiId);
     expect(returnedTripIds).not.toContain(tripLaoCaiId);
     expect(returnedTripIds).not.toContain(tripNoPointsThuDauMotId);
+  });
+
+  // Ca 7: Tuyến chưa gán điểm ghi quận/huyện KHÔNG nằm trong master alias ("Dĩ An" thuộc Bình Dương)
+  it('Ca 7 (DB thật): Tuyến chưa gán điểm ghi quận/huyện KHÔNG nằm trong master alias ("Dĩ An" thuộc Bình Dương) -> tìm TP.HCM mới thì RA, tìm TP.HCM cũ thì KHÔNG RA', async () => {
+    // Tìm TP.HCM mới: TP.HCM mới gom Bình Dương cùng quận/huyện Dĩ An từ DB -> PHẢI RA
+    const resultMoi = await tripsService.search({
+      fromLocationId: hcmMoiId,
+      busCompanyId: nhaXeId,
+      departureDate: tomorrowDateStr,
+      page: 1,
+      pageSize: 50,
+      sortBy: 'departureTime',
+      sortDirection: 'asc',
+    });
+    const returnedMoiIds = resultMoi.data.map((t) => t.id);
+    expect(returnedMoiIds).toContain(tripNoPointsDiAnId);
+
+    // Tìm TP.HCM cũ: TP.HCM cũ không gom Bình Dương / Dĩ An -> KHÔNG ĐƯỢC RA
+    const resultCu = await tripsService.search({
+      fromLocationId: hcmCuId,
+      busCompanyId: nhaXeId,
+      departureDate: tomorrowDateStr,
+      page: 1,
+      pageSize: 50,
+      sortBy: 'departureTime',
+      sortDirection: 'asc',
+    });
+    const returnedCuIds = resultCu.data.map((t) => t.id);
+    expect(returnedCuIds).not.toContain(tripNoPointsDiAnId);
+  });
+
+  // Ca 8: Bản CŨ TP.HCM cũng gom quận/huyện của chính nó ("Thủ Đức")
+  it('Ca 8 (DB thật): Tuyến chưa gán điểm ghi "Thủ Đức" (quận/huyện thuộc TP.HCM cũ) -> tìm TP.HCM cũ thì RA, tìm TP.HCM mới cũng RA', async () => {
+    // Tìm TP.HCM cũ: bản cũ cũng gom quận/huyện con của chính nó -> PHẢI RA
+    const resultCu = await tripsService.search({
+      fromLocationId: hcmCuId,
+      busCompanyId: nhaXeId,
+      departureDate: tomorrowDateStr,
+      page: 1,
+      pageSize: 50,
+      sortBy: 'departureTime',
+      sortDirection: 'asc',
+    });
+    const returnedCuIds = resultCu.data.map((t) => t.id);
+    expect(returnedCuIds).toContain(tripNoPointsThuDucId);
+
+    // Tìm TP.HCM mới: bản mới bao trùm cả TP.HCM cũ và quận/huyện của nó -> PHẢI RA
+    const resultMoi = await tripsService.search({
+      fromLocationId: hcmMoiId,
+      busCompanyId: nhaXeId,
+      departureDate: tomorrowDateStr,
+      page: 1,
+      pageSize: 50,
+      sortBy: 'departureTime',
+      sortDirection: 'asc',
+    });
+    const returnedMoiIds = resultMoi.data.map((t) => t.id);
+    expect(returnedMoiIds).toContain(tripNoPointsThuDucId);
   });
 });

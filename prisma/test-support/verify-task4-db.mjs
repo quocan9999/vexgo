@@ -3,8 +3,11 @@ import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import { PrismaClient } from '../../apps/api/dist/generated/prisma/client.js';
 
 function databaseConfig() {
-  const raw = process.env.DATABASE_URL ?? process.env.MIGRATION_URL;
-  if (!raw) throw new Error('MIGRATION_URL or DATABASE_URL is required');
+  const raw =
+    process.env.TASK4_TEST_DATABASE_URL ??
+    process.env.DATABASE_URL ??
+    process.env.MIGRATION_URL;
+  if (!raw) throw new Error('TASK4_TEST_DATABASE_URL, DATABASE_URL or MIGRATION_URL is required');
   const url = new URL(raw);
   return {
     host: url.hostname,

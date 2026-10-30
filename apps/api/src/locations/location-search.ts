@@ -11,15 +11,36 @@ export function locationSearchTermsForOption(
     terms.push('TP.HCM', 'Hồ Chí Minh', 'TP HCM');
   }
 
-  // 1. Bản CŨ (isLegacy === true): CHỈ trả term của chính nó và alias, không gộp tỉnh thành phần
+  // 1. Bản CŨ (isLegacy === true): trả term của chính nó, alias và các quận/huyện trực thuộc chính nó, không gộp tỉnh thành phần
   if (item.isLegacy) {
+    const districts = catalogue.filter(
+      (it) =>
+        it.kind === 'district' &&
+        it.parentName &&
+        (normalizeLocation(it.parentName) === normalized ||
+          normalizeLocation(it.parentName) === normalizeLocation(item.name)),
+    );
+    for (const d of districts) {
+      terms.push(d.name, d.value, ...d.aliases);
+    }
     const cleanTerms = terms.map((t) =>
-      t.replace(/^(Tỉnh|Thành phố|Thị xã)\s+/i, '').trim(),
+      t.replace(/^(Tỉnh|Thành phố|Thị xã|Quận|Huyện)\s+/i, '').trim(),
     );
     return [...new Set(cleanTerms.filter(Boolean))];
   }
 
-  // 2. Bản MỚI (isLegacy === false): bao gồm term của chính nó + các tỉnh cũ thành phần từ legacyNames
+  // 2. Bản MỚI (isLegacy === false): bao gồm term của chính nó + quận/huyện của chính nó + các tỉnh cũ thành phần từ legacyNames và quận/huyện của chúng
+  const selfDistricts = catalogue.filter(
+    (it) =>
+      it.kind === 'district' &&
+      it.parentName &&
+      (normalizeLocation(it.parentName) === normalized ||
+        normalizeLocation(it.parentName) === normalizeLocation(item.name)),
+  );
+  for (const d of selfDistricts) {
+    terms.push(d.name, d.value, ...d.aliases);
+  }
+
   let constituentNames: string[] = [];
   if (item.legacyNames && item.legacyNames.length > 0) {
     constituentNames = item.legacyNames;
@@ -50,7 +71,7 @@ export function locationSearchTermsForOption(
   }
 
   const cleanTerms = terms.map((t) =>
-    t.replace(/^(Tỉnh|Thành phố|Thị xã)\s+/i, '').trim(),
+    t.replace(/^(Tỉnh|Thành phố|Thị xã|Quận|Huyện)\s+/i, '').trim(),
   );
   return [...new Set(cleanTerms.filter(Boolean))];
 }
