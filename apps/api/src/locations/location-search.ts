@@ -49,21 +49,28 @@ export function locationSearchTerms(
     if (normalized === 'hcm' || normalized === 'ho chi minh') {
       terms.push('TP.HCM', 'Hồ Chí Minh', 'TP HCM');
     }
-    if (currentItem.mergedFromText) {
+
+    // Ưu tiên dùng legacyNames được nạp từ BangSapNhapDiaDiem để tránh phụ thuộc regex
+    let constituentNames: string[] = [];
+    if (currentItem.legacyNames && currentItem.legacyNames.length > 0) {
+      constituentNames = currentItem.legacyNames;
+    } else if (currentItem.mergedFromText) {
       const match = currentItem.mergedFromText.match(/Sáp nhập từ (.+)$/i);
       if (match) {
-        const constituentNames = match[1].split(',').map((s) => s.trim());
-        for (const cName of constituentNames) {
-          terms.push(cName);
-          const cItem = catalogue.find(
-            (it) => it.isLegacy && normalizeLocation(it.name) === normalizeLocation(cName),
-          );
-          if (cItem) {
-            terms.push(cItem.name, cItem.value, ...cItem.aliases);
-          }
-        }
+        constituentNames = match[1].split(',').map((s) => s.trim());
       }
     }
+
+    for (const cName of constituentNames) {
+      terms.push(cName);
+      const cItem = catalogue.find(
+        (it) => it.isLegacy && normalizeLocation(it.name) === normalizeLocation(cName),
+      );
+      if (cItem) {
+        terms.push(cItem.name, cItem.value, ...cItem.aliases);
+      }
+    }
+
     const cleanTerms = terms.map((t) =>
       t.replace(/^(Tỉnh|Thành phố|Thị xã)\s+/i, '').trim(),
     );

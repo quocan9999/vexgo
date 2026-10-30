@@ -114,6 +114,11 @@ export class LocationsService {
     try {
       const locations = await this.prisma.danhMucDiaDiem.findMany({
         where: { trangThai: 'HOAT_DONG' },
+        include: {
+          bangSapNhapMoi: {
+            include: { diaDiemCu: true },
+          },
+        },
         orderBy: [{ thuTuHienThi: 'desc' }, { tenDiaDiem: 'asc' }],
       });
       if (!locations || locations.length === 0) return null;
@@ -130,12 +135,16 @@ export class LocationsService {
 
       for (const loc of locations) {
         const isLegacy = loc.laDiaDanhCu;
-        const cleanName = loc.tenDiaDiem.replace(/^(Tỉnh|Thành phố|Thị xã)s+/i, '').trim();
+        const cleanName = loc.tenDiaDiem.replace(/^(Tỉnh|Thành phố|Thị xã)\s+/i, '').trim();
         const value = cleanName.toLowerCase().includes('hồ chí minh') ? 'TP.HCM' : cleanName;
         const kind: LocationOption['kind'] = loc.capDiaDiem === 'TINH_THANH' ? 'province' : 'district';
         const id = isLegacy
           ? `legacy:${kind}:${loc.code}`
           : `current:${kind}:${loc.code}`;
+
+        const legacyNames = (loc as any).bangSapNhapMoi && (loc as any).bangSapNhapMoi.length > 0
+          ? (loc as any).bangSapNhapMoi.map((m: any) => m.diaDiemCu.tenDiaDiem)
+          : undefined;
 
         result.push({
           id,
@@ -148,6 +157,7 @@ export class LocationsService {
           parentName: loc.capDiaDiem === 'QUAN_HUYEN' ? (loc.chuThichSapNhap ?? undefined) : undefined,
           isLegacy,
           mergedFromText: loc.chuThichSapNhap,
+          legacyNames,
           popular: loc.noiBat,
           diaDiemId: loc.diaDiemId,
         });

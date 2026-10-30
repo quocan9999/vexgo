@@ -926,6 +926,7 @@ model DiemDonTra {
   @@unique([nhaXeId, maDiem], map: "DiemDonTra_nhaXeId_maDiem_key")
   @@index([diaDiemMoiId], map: "DiemDonTra_diaDiemMoiId_idx")
   @@index([diaDiemCuId], map: "DiemDonTra_diaDiemCuId_idx")
+  @@index([trangThai], map: "DiemDonTra_trangThai_idx")
 }
 
 model DiemDonTraChuyenXe {
