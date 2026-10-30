@@ -717,13 +717,31 @@ describe('StationsService', () => {
       expect(result.data).toHaveLength(1);
     });
 
-    it('getTripPassengerPointsPublic only returns HOAT_DONG stations and strips internal tenant fields', async () => {
+    it('getTripPassengerPointsPublic throws 404 TRIP_NOT_FOUND when trip is not found or not open for sale', async () => {
+      const mockPrisma = {
+        chuyenXe: {
+          findUnique: vi.fn()
+            .mockResolvedValueOnce(null) // 1. Trip not found
+            .mockResolvedValueOnce({ chuyenXeId: 100, trangThai: 'DA_HUY' }) // 2. Cancelled
+            .mockResolvedValueOnce({ chuyenXeId: 100, trangThai: 'DANG_CHAY' }), // 3. In-transit
+        },
+      } as unknown as PrismaService;
+
+      const service = new StationsService(mockPrisma);
+
+      await expect(service.getTripPassengerPointsPublic(100)).rejects.toThrowError(/Không tìm thấy chuyến xe/i);
+      await expect(service.getTripPassengerPointsPublic(100)).rejects.toThrowError(/Không tìm thấy chuyến xe/i);
+      await expect(service.getTripPassengerPointsPublic(100)).rejects.toThrowError(/Không tìm thấy chuyến xe/i);
+    });
+
+    it('getTripPassengerPointsPublic only returns HOAT_DONG stations, strips tenant fields and internal location fields', async () => {
       let queryCaptured: any = null;
       const mockPrisma = {
         chuyenXe: {
           findUnique: vi.fn().mockResolvedValue({
             chuyenXeId: 100,
             nhaXeId: 10,
+            trangThai: 'CHUA_KHOI_HANH',
           }),
         },
         diemDonTraChuyenXe: {
@@ -749,8 +767,36 @@ describe('StationsService', () => {
                   nhaXeId: 10,
                   soDienThoai: '0901234567',
                   trangThai: 'HOAT_DONG',
-                  diaDiemCu: { tenDiaDiem: 'Hồ Chí Minh' },
-                  diaDiemMoi: { tenDiaDiem: 'TP. Hồ Chí Minh' },
+                  diaDiemCu: {
+                    diaDiemId: 77,
+                    code: 77,
+                    tenDiaDiem: 'Bà Rịa - Vũng Tàu',
+                    tenKhongDau: 'Ba Ria - Vung Tau',
+                    capDiaDiem: 'TINH_THANH',
+                    laDiaDanhCu: true,
+                    chuThichSapNhap: 'Sáp nhập vào TP. Hồ Chí Minh',
+                    noiBat: false,
+                    thuTuHienThi: 0,
+                    trangThai: 'HOAT_DONG',
+                    diaDiemChaId: null,
+                    createdAt: new Date(),
+                    updatedAt: new Date(),
+                  },
+                  diaDiemMoi: {
+                    diaDiemId: 28,
+                    code: 28,
+                    tenDiaDiem: 'TP. Hồ Chí Minh',
+                    tenKhongDau: 'TP. Ho Chi Minh',
+                    capDiaDiem: 'TINH_THANH',
+                    laDiaDanhCu: false,
+                    chuThichSapNhap: null,
+                    noiBat: true,
+                    thuTuHienThi: 1,
+                    trangThai: 'HOAT_DONG',
+                    diaDiemChaId: null,
+                    createdAt: new Date(),
+                    updatedAt: new Date(),
+                  },
                 },
               },
             ]);
@@ -765,10 +811,38 @@ describe('StationsService', () => {
       expect(res.data).toHaveLength(1);
       const item = res.data[0];
       expect(item.diemDonTra.tenDiem).toBe('Bến xe Hoạt Động');
-      // Verify internal fields are omitted
+
+      // Verify internal station fields are omitted
       expect((item.diemDonTra as any).nhaXeId).toBeUndefined();
       expect((item.diemDonTra as any).soDienThoai).toBeUndefined();
       expect((item.diemDonTra as any).trangThai).toBeUndefined();
+
+      // Verify diaDiemCu only has public fields
+      expect(item.diemDonTra.diaDiemCu).toEqual({
+        diaDiemId: 77,
+        code: 77,
+        tenDiaDiem: 'Bà Rịa - Vũng Tàu',
+        laDiaDanhCu: true,
+        chuThichSapNhap: 'Sáp nhập vào TP. Hồ Chí Minh',
+      });
+      expect((item.diemDonTra.diaDiemCu as any).tenKhongDau).toBeUndefined();
+      expect((item.diemDonTra.diaDiemCu as any).capDiaDiem).toBeUndefined();
+      expect((item.diemDonTra.diaDiemCu as any).noiBat).toBeUndefined();
+      expect((item.diemDonTra.diaDiemCu as any).thuTuHienThi).toBeUndefined();
+      expect((item.diemDonTra.diaDiemCu as any).trangThai).toBeUndefined();
+      expect((item.diemDonTra.diaDiemCu as any).diaDiemChaId).toBeUndefined();
+
+      // Verify diaDiemMoi only has public fields
+      expect(item.diemDonTra.diaDiemMoi).toEqual({
+        diaDiemId: 28,
+        code: 28,
+        tenDiaDiem: 'TP. Hồ Chí Minh',
+        laDiaDanhCu: false,
+        chuThichSapNhap: null,
+      });
+      expect((item.diemDonTra.diaDiemMoi as any).tenKhongDau).toBeUndefined();
+      expect((item.diemDonTra.diaDiemMoi as any).capDiaDiem).toBeUndefined();
+      expect((item.diemDonTra.diaDiemMoi as any).noiBat).toBeUndefined();
     });
   });
 });

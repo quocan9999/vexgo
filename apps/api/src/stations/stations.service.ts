@@ -401,7 +401,7 @@ export class StationsService {
       where: { chuyenXeId: tripId },
     });
 
-    if (!trip) {
+    if (!trip || trip.trangThai !== 'CHUA_KHOI_HANH') {
       throw new NotFoundException({
         error: 'TRIP_NOT_FOUND',
         message: 'Không tìm thấy chuyến xe.',
@@ -442,16 +442,28 @@ export class StationsService {
         diaChi: p.diemDonTra.diaChi,
         viDo: p.diemDonTra.viDo,
         kinhDo: p.diemDonTra.kinhDo,
-        diaDiemCu: p.diemDonTra.diaDiemCu,
-        diaDiemMoi: p.diemDonTra.diaDiemMoi,
+        diaDiemCu: p.diemDonTra.diaDiemCu
+          ? {
+              diaDiemId: p.diemDonTra.diaDiemCu.diaDiemId,
+              code: p.diemDonTra.diaDiemCu.code,
+              tenDiaDiem: p.diemDonTra.diaDiemCu.tenDiaDiem,
+              laDiaDanhCu: p.diemDonTra.diaDiemCu.laDiaDanhCu,
+              chuThichSapNhap: p.diemDonTra.diaDiemCu.chuThichSapNhap ?? null,
+            }
+          : null,
+        diaDiemMoi: p.diemDonTra.diaDiemMoi
+          ? {
+              diaDiemId: p.diemDonTra.diaDiemMoi.diaDiemId,
+              code: p.diemDonTra.diaDiemMoi.code,
+              tenDiaDiem: p.diemDonTra.diaDiemMoi.tenDiaDiem,
+              laDiaDanhCu: p.diemDonTra.diaDiemMoi.laDiaDanhCu,
+              chuThichSapNhap: p.diemDonTra.diaDiemMoi.chuThichSapNhap ?? null,
+            }
+          : null,
       },
     }));
 
     return { data: publicPoints };
-  }
-
-  async getTripPassengerPoints(tripId: number) {
-    return this.getTripPassengerPointsPublic(tripId);
   }
 
   async updateTripPassengerPoints(
