@@ -22,6 +22,13 @@ const MERGER_MAPPINGS = [
   { bangSapNhapDiaDiemId: 1, diaDiemMoiId: 28, diaDiemCuId: 79, diaDiemCu: LOCATIONS[0], diaDiemMoi: LOCATIONS[3] },
   { bangSapNhapDiaDiemId: 2, diaDiemMoiId: 28, diaDiemCuId: 74, diaDiemCu: LOCATIONS[1], diaDiemMoi: LOCATIONS[3] },
   { bangSapNhapDiaDiemId: 3, diaDiemMoiId: 28, diaDiemCuId: 77, diaDiemCu: LOCATIONS[2], diaDiemMoi: LOCATIONS[3] },
+  { bangSapNhapDiaDiemId: 4, diaDiemMoiId: 49, diaDiemCuId: 68, diaDiemCu: LOCATIONS[7], diaDiemMoi: LOCATIONS[8] },
+];
+
+const STATIONS = [
+  { diemDonTraId: 10, maDiem: 'BX-MD', tenDiem: 'Bến xe Miền Đông', diaDiemCuId: 79, diaDiemMoiId: 28, trangThai: 'HOAT_DONG' },
+  { diemDonTraId: 20, maDiem: 'BX-BD', tenDiem: 'Bến xe Bình Dương', diaDiemCuId: 74, diaDiemMoiId: 28, trangThai: 'HOAT_DONG' },
+  { diemDonTraId: 30, maDiem: 'BX-DL', tenDiem: 'Bến xe Đà Lạt', diaDiemCuId: 68, diaDiemMoiId: 49, trangThai: 'HOAT_DONG' },
 ];
 
 function createTripFixture(overrides: Record<string, unknown> = {}) {
@@ -69,6 +76,12 @@ function setupTestEnvironment() {
         return LOCATIONS.find((l) => l.diaDiemId === where.diaDiemId) ?? null;
       }),
       findMany: vi.fn(async () => LOCATIONS),
+    },
+    diemDonTra: {
+      findUnique: vi.fn(async ({ where }: { where: { diemDonTraId: number } }) => {
+        return STATIONS.find((s) => s.diemDonTraId === where.diemDonTraId) ?? null;
+      }),
+      findMany: vi.fn(async () => STATIONS),
     },
     bangSapNhapDiaDiem: {
       findUnique: vi.fn(async ({ where }: { where: { diaDiemCuId: number } }) => {
@@ -180,7 +193,7 @@ describe('TripsService - Task 4: Location Key-based Search', () => {
   });
 
   // 2. Tìm theo địa danh mới (TP.HCM mới id 28)
-  it('2. Searches by new province (TP.HCM moi id 28): matches points across all 3 constituent provinces and returns subAreas with counts', async () => {
+  it('2. Searches by new province (TP.HCM moi id 28): matches points across all 3 constituent provinces and returns fromSubAreas with counts', async () => {
     const { prisma, service } = setupTestEnvironment();
 
     const trip1 = createTripFixture({
@@ -214,8 +227,9 @@ describe('TripsService - Task 4: Location Key-based Search', () => {
     });
 
     expect(result.data).toHaveLength(2);
+    expect(result.fromSubAreas).toBeDefined();
     expect(result.subAreas).toBeDefined();
-    expect(result.subAreas).toEqual(
+    expect(result.fromSubAreas).toEqual(
       expect.arrayContaining([
         { diaDiemId: 79, tenDiaDiem: 'Thành phố Hồ Chí Minh', tripCount: 1 },
         { diaDiemId: 74, tenDiaDiem: 'Tỉnh Bình Dương', tripCount: 1 },
@@ -261,8 +275,7 @@ describe('TripsService - Task 4: Location Key-based Search', () => {
 
     expect(result.data).toHaveLength(1);
     expect(result.data[0].id).toBe(2);
-    // subAreas still contains full cluster counts
-    expect(result.subAreas).toEqual(
+    expect(result.fromSubAreas).toEqual(
       expect.arrayContaining([
         { diaDiemId: 79, tenDiaDiem: 'Thành phố Hồ Chí Minh', tripCount: 1 },
         { diaDiemId: 74, tenDiaDiem: 'Tỉnh Bình Dương', tripCount: 1 },
@@ -381,7 +394,6 @@ describe('TripsService - Task 4: Location Key-based Search', () => {
   it('6. Graceful fallback: unassigned trips fall back to string matching; trips with active points in other provinces do NOT match string fallback', async () => {
     const { prisma, service } = setupTestEnvironment();
 
-    // Trip with NO assigned points, but route diemDi is 'Sài Gòn'
     const unassignedTrip = createTripFixture({
       chuyenXeId: 101,
       tuyenXe: {
@@ -406,14 +418,12 @@ describe('TripsService - Task 4: Location Key-based Search', () => {
       sortDirection: 'asc',
     });
 
-    // Verify Prisma query structure for dual branch
     expect(prisma.chuyenXe.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
           AND: expect.arrayContaining([
             expect.objectContaining({
               OR: expect.arrayContaining([
-                // Branch 1: point match
                 expect.objectContaining({
                   diemDonTraChuyenXes: {
                     some: {
@@ -422,7 +432,6 @@ describe('TripsService - Task 4: Location Key-based Search', () => {
                     },
                   },
                 }),
-                // Branch 2: fallback for unassigned
                 expect.objectContaining({
                   diemDonTraChuyenXes: {
                     none: {
@@ -460,7 +469,6 @@ describe('TripsService - Task 4: Location Key-based Search', () => {
       sortDirection: 'asc',
     });
 
-    // Must strictly filter by trangThai: 'HOAT_DONG'
     expect(prisma.chuyenXe.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
@@ -486,11 +494,10 @@ describe('TripsService - Task 4: Location Key-based Search', () => {
     );
   });
 
-  // 8. Gợi ý mở rộng (expandSuggestion) khi chọn địa danh cũ
-  it('8. Expand suggestion: searching Binh Duong cu (id 74) returns expandSuggestion with sibling areas and trip counts without inflating primary results', async () => {
+  // 8. Gợi ý mở rộng (fromExpandSuggestion) khi chọn địa danh cũ
+  it('8. Expand suggestion: searching Binh Duong cu (id 74) returns fromExpandSuggestion with sibling areas and trip counts', async () => {
     const { prisma, service } = setupTestEnvironment();
 
-    // Primary results: only 1 trip in Binh Duong
     const tripBinhDuong = createTripFixture({
       chuyenXeId: 2,
       diemDonTraChuyenXes: [
@@ -501,7 +508,6 @@ describe('TripsService - Task 4: Location Key-based Search', () => {
       ],
     });
 
-    // Sibling trips query returns a trip in TP.HCM (79)
     const tripHcm = createTripFixture({
       chuyenXeId: 1,
       diemDonTraChuyenXes: [
@@ -512,7 +518,6 @@ describe('TripsService - Task 4: Location Key-based Search', () => {
       ],
     });
 
-    // First call: primary query; Second call: sibling query for expandSuggestion
     prisma.chuyenXe.findMany
       .mockResolvedValueOnce([tripBinhDuong])
       .mockResolvedValueOnce([tripHcm]);
@@ -526,13 +531,12 @@ describe('TripsService - Task 4: Location Key-based Search', () => {
       sortDirection: 'asc',
     });
 
-    // Primary results only have 1 trip (Binh Duong)
     expect(result.data).toHaveLength(1);
     expect(result.data[0].id).toBe(2);
 
-    // expandSuggestion is structured correctly
+    expect(result.fromExpandSuggestion).toBeDefined();
     expect(result.expandSuggestion).toBeDefined();
-    expect(result.expandSuggestion).toEqual({
+    expect(result.fromExpandSuggestion).toEqual({
       currentLocation: {
         diaDiemId: 74,
         tenDiaDiem: 'Tỉnh Bình Dương',
@@ -579,43 +583,12 @@ describe('TripsService - Task 4: Location Key-based Search', () => {
       sortDirection: 'asc',
     });
 
-    expect(prisma.chuyenXe.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({
-          AND: expect.arrayContaining([
-            // Departure condition for DON (cu: 79)
-            expect.objectContaining({
-              OR: expect.arrayContaining([
-                expect.objectContaining({
-                  diemDonTraChuyenXes: {
-                    some: {
-                      loaiDiem: 'DON',
-                      diemDonTra: { diaDiemCuId: 79, trangThai: 'HOAT_DONG' },
-                    },
-                  },
-                }),
-              ]),
-            }),
-            // Arrival condition for TRA (moi: 49)
-            expect.objectContaining({
-              OR: expect.arrayContaining([
-                expect.objectContaining({
-                  diemDonTraChuyenXes: {
-                    some: {
-                      loaiDiem: 'TRA',
-                      diemDonTra: { diaDiemMoiId: 49, trangThai: 'HOAT_DONG' },
-                    },
-                  },
-                }),
-              ]),
-            }),
-          ]),
-        }),
-      }),
-    );
-
     expect(result.data).toHaveLength(1);
     expect(result.data[0].id).toBe(99);
+    // from is legacy -> fromExpandSuggestion
+    expect(result.fromExpandSuggestion).toBeDefined();
+    // to is new -> toSubAreas
+    expect(result.toSubAreas).toBeDefined();
   });
 
   // 10. Tương thích ngược: request không truyền id mới vẫn chạy đúng 100% logic cũ
@@ -656,6 +629,92 @@ describe('TripsService - Task 4: Location Key-based Search', () => {
     );
   });
 
+  // 11. Tìm kiếm theo fromStationId (bến xe cụ thể)
+  it('11. Searches by specific station (fromStationId=10): filters directly by diemDonTraId', async () => {
+    const { prisma, service } = setupTestEnvironment();
+
+    const tripStation10 = createTripFixture({
+      chuyenXeId: 55,
+      diemDonTraChuyenXes: [
+        {
+          loaiDiem: 'DON',
+          diemDonTraId: 10,
+          diemDonTra: { diemDonTraId: 10, tenDiem: 'Bến xe Miền Đông', trangThai: 'HOAT_DONG' },
+        },
+      ],
+    });
+
+    prisma.chuyenXe.findMany.mockResolvedValueOnce([tripStation10]);
+
+    const result = await service.search({
+      fromStationId: 10,
+      departureDate: '2026-11-01',
+      page: 1,
+      pageSize: 10,
+      sortBy: 'departureTime',
+      sortDirection: 'asc',
+    });
+
+    expect(prisma.chuyenXe.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          AND: expect.arrayContaining([
+            expect.objectContaining({
+              OR: expect.arrayContaining([
+                expect.objectContaining({
+                  diemDonTraChuyenXes: {
+                    some: {
+                      loaiDiem: 'DON',
+                      diemDonTraId: 10,
+                      diemDonTra: { trangThai: 'HOAT_DONG' },
+                    },
+                  },
+                }),
+              ]),
+            }),
+          ]),
+        }),
+      }),
+    );
+    expect(result.data).toHaveLength(1);
+    expect(result.data[0].id).toBe(55);
+  });
+
+  // 12. Cả hai đầu đều chọn địa danh MỚI: trả cả fromSubAreas và toSubAreas
+  it('12. Both ends choose NEW locations: returns both fromSubAreas and toSubAreas', async () => {
+    const { prisma, service } = setupTestEnvironment();
+
+    const tripBothNew = createTripFixture({
+      chuyenXeId: 77,
+      diemDonTraChuyenXes: [
+        {
+          loaiDiem: 'DON',
+          diemDonTra: { diemDonTraId: 10, diaDiemCuId: 79, diaDiemMoiId: 28, trangThai: 'HOAT_DONG' },
+        },
+        {
+          loaiDiem: 'TRA',
+          diemDonTra: { diemDonTraId: 30, diaDiemCuId: 68, diaDiemMoiId: 49, trangThai: 'HOAT_DONG' },
+        },
+      ],
+    });
+
+    prisma.chuyenXe.findMany.mockResolvedValue([tripBothNew]);
+
+    const result = await service.search({
+      fromLocationId: 28, // TP.HCM mới
+      toLocationId: 49,   // Lâm Đồng mới
+      departureDate: '2026-11-01',
+      page: 1,
+      pageSize: 10,
+      sortBy: 'departureTime',
+      sortDirection: 'asc',
+    });
+
+    expect(result.data).toHaveLength(1);
+    expect(result.fromSubAreas).toBeDefined();
+    expect(result.toSubAreas).toBeDefined();
+  });
+
   // Validation: non-existent location ID throws 400 LOCATION_NOT_FOUND
   it('throws 400 LOCATION_NOT_FOUND when fromLocationId does not exist', async () => {
     const { service } = setupTestEnvironment();
@@ -671,11 +730,25 @@ describe('TripsService - Task 4: Location Key-based Search', () => {
     ).rejects.toThrow(BadRequestException);
   });
 
+  // Validation: non-existent station ID throws 400 STATION_NOT_FOUND
+  it('throws 400 STATION_NOT_FOUND when fromStationId does not exist', async () => {
+    const { service } = setupTestEnvironment();
+
+    await expect(
+      service.search({
+        fromStationId: 999999,
+        page: 1,
+        pageSize: 10,
+        sortBy: 'departureTime',
+        sortDirection: 'asc',
+      }),
+    ).rejects.toThrow(BadRequestException);
+  });
+
   // Validation: invalid area filter throws 400 AREA_NOT_FOUND
   it('throws 400 AREA_NOT_FOUND when fromAreaId does not belong to fromLocationId', async () => {
     const { service } = setupTestEnvironment();
 
-    // 101 (Yen Bai) does not belong to 28 (TP.HCM moi)
     await expect(
       service.search({
         fromLocationId: 28,

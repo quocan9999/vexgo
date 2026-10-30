@@ -15,6 +15,7 @@ export type LocationOption = {
   isLegacy?: boolean;
   mergedFromText?: string | null;
   diaDiemId?: number;
+  diemDonTraId?: number;
 };
 
 export function normalizeLocation(value: string): string {

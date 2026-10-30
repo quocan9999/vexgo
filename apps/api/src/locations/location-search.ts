@@ -1,5 +1,51 @@
 import { normalizeLocation, type LocationOption } from './location-catalog.js';
 
+/** Trích xuất search terms cho một LocationOption cụ thể, tôn trọng triệt để cờ isLegacy của mục đó */
+export function locationSearchTermsForOption(
+  item: LocationOption,
+  catalogue: LocationOption[] = [],
+): string[] {
+  const normalized = normalizeLocation(item.value || item.name);
+  const terms = [item.name, item.value, ...item.aliases];
+  if (normalized === 'hcm' || normalized === 'ho chi minh') {
+    terms.push('TP.HCM', 'Hồ Chí Minh', 'TP HCM');
+  }
+
+  // 1. Bản CŨ (isLegacy === true): CHỈ trả term của chính nó và alias, không gộp tỉnh thành phần
+  if (item.isLegacy) {
+    const cleanTerms = terms.map((t) =>
+      t.replace(/^(Tỉnh|Thành phố|Thị xã)\s+/i, '').trim(),
+    );
+    return [...new Set(cleanTerms.filter(Boolean))];
+  }
+
+  // 2. Bản MỚI (isLegacy === false): bao gồm term của chính nó + các tỉnh cũ thành phần từ legacyNames
+  let constituentNames: string[] = [];
+  if (item.legacyNames && item.legacyNames.length > 0) {
+    constituentNames = item.legacyNames;
+  } else if (item.mergedFromText) {
+    const match = item.mergedFromText.match(/Sáp nhập từ (.+)$/i);
+    if (match) {
+      constituentNames = match[1].split(',').map((s) => s.trim());
+    }
+  }
+
+  for (const cName of constituentNames) {
+    terms.push(cName);
+    const cItem = catalogue.find(
+      (it) => it.isLegacy && normalizeLocation(it.name) === normalizeLocation(cName),
+    );
+    if (cItem) {
+      terms.push(cItem.name, cItem.value, ...cItem.aliases);
+    }
+  }
+
+  const cleanTerms = terms.map((t) =>
+    t.replace(/^(Tỉnh|Thành phố|Thị xã)\s+/i, '').trim(),
+  );
+  return [...new Set(cleanTerms.filter(Boolean))];
+}
+
 /** Expand current provinces, districts, and stations for trip search. */
 export function locationSearchTerms(
   value: string,
@@ -27,14 +73,7 @@ export function locationSearchTerms(
         normalizeLocation(item.name) === normalized),
   );
   if (legacyItem) {
-    const terms = [legacyItem.name, legacyItem.value, ...legacyItem.aliases];
-    if (normalized === 'hcm' || normalized === 'ho chi minh') {
-      terms.push('TP.HCM', 'Hồ Chí Minh', 'TP HCM');
-    }
-    const cleanTerms = terms.map((t) =>
-      t.replace(/^(Tỉnh|Thành phố|Thị xã)\s+/i, '').trim(),
-    );
-    return [...new Set(cleanTerms.filter(Boolean))];
+    return locationSearchTermsForOption(legacyItem, catalogue);
   }
 
   // 2. If explicit current (merged) item in catalogue: include constituent provinces
@@ -45,36 +84,7 @@ export function locationSearchTerms(
         normalizeLocation(item.name) === normalized),
   );
   if (currentItem) {
-    const terms = [currentItem.name, currentItem.value, ...currentItem.aliases];
-    if (normalized === 'hcm' || normalized === 'ho chi minh') {
-      terms.push('TP.HCM', 'Hồ Chí Minh', 'TP HCM');
-    }
-
-    // Ưu tiên dùng legacyNames được nạp từ BangSapNhapDiaDiem để tránh phụ thuộc regex
-    let constituentNames: string[] = [];
-    if (currentItem.legacyNames && currentItem.legacyNames.length > 0) {
-      constituentNames = currentItem.legacyNames;
-    } else if (currentItem.mergedFromText) {
-      const match = currentItem.mergedFromText.match(/Sáp nhập từ (.+)$/i);
-      if (match) {
-        constituentNames = match[1].split(',').map((s) => s.trim());
-      }
-    }
-
-    for (const cName of constituentNames) {
-      terms.push(cName);
-      const cItem = catalogue.find(
-        (it) => it.isLegacy && normalizeLocation(it.name) === normalizeLocation(cName),
-      );
-      if (cItem) {
-        terms.push(cItem.name, cItem.value, ...cItem.aliases);
-      }
-    }
-
-    const cleanTerms = terms.map((t) =>
-      t.replace(/^(Tỉnh|Thành phố|Thị xã)\s+/i, '').trim(),
-    );
-    return [...new Set(cleanTerms.filter(Boolean))];
+    return locationSearchTermsForOption(currentItem, catalogue);
   }
 
   // 3. Fallback for legacy catalogue format (items with versions: ['current'] and aliases)

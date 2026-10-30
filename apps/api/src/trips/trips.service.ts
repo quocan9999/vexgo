@@ -1,5 +1,8 @@
 import { businessCode } from '../common/business-code.js';
-import { locationSearchTerms } from '../locations/location-search.js';
+import {
+  locationSearchTerms,
+  locationSearchTermsForOption,
+} from '../locations/location-search.js';
 import type { LocationOption } from '../locations/location-catalog.js';
 import { LocationsService } from '../locations/locations.service.js';
 import {
@@ -718,7 +721,12 @@ export class TripsService {
       trangThai: 'CHUA_KHOI_HANH',
     };
 
-    const hasLocationId = Boolean(dto.fromLocationId || dto.toLocationId);
+    const hasLocationOrStation = Boolean(
+      dto.fromLocationId ||
+        dto.toLocationId ||
+        dto.fromStationId ||
+        dto.toStationId,
+    );
 
     // Variables for location resolution
     let effectiveFromOldId: number | null = null;
@@ -730,6 +738,35 @@ export class TripsService {
     let effectiveToNewId: number | null = null;
     let toLocation: { diaDiemId: number; tenDiaDiem: string } | null = null;
     let validatedToAreaId: number | null = null;
+
+    let fromStation: { diemDonTraId: number; tenDiem: string } | null = null;
+    let toStation: { diemDonTraId: number; tenDiem: string } | null = null;
+
+    if (dto.fromStationId) {
+      const st = await this.prisma.diemDonTra.findUnique({
+        where: { diemDonTraId: dto.fromStationId },
+      });
+      if (!st) {
+        throw new BadRequestException({
+          error: 'STATION_NOT_FOUND',
+          message: 'Điểm đón (bến xe/văn phòng) không tồn tại.',
+        });
+      }
+      fromStation = { diemDonTraId: st.diemDonTraId, tenDiem: st.tenDiem };
+    }
+
+    if (dto.toStationId) {
+      const st = await this.prisma.diemDonTra.findUnique({
+        where: { diemDonTraId: dto.toStationId },
+      });
+      if (!st) {
+        throw new BadRequestException({
+          error: 'STATION_NOT_FOUND',
+          message: 'Điểm trả (bến xe/văn phòng) không tồn tại.',
+        });
+      }
+      toStation = { diemDonTraId: st.diemDonTraId, tenDiem: st.tenDiem };
+    }
 
     if (dto.fromLocationId) {
       const loc = await this.prisma.danhMucDiaDiem.findUnique({
@@ -837,7 +874,7 @@ export class TripsService {
       });
     }
 
-    if (!hasLocationId) {
+    if (!hasLocationOrStation) {
       if (dto.from || dto.to || dto.busCompanyId || dto.operator) {
         where.tuyenXe = {};
         if (dto.from) {
@@ -867,16 +904,73 @@ export class TripsService {
     } else {
       const andConditions: Prisma.ChuyenXeWhereInput[] = [];
 
-      if (dto.fromLocationId && fromLocation) {
+      if (dto.fromStationId && fromStation) {
+        andConditions.push({
+          OR: [
+            {
+              diemDonTraChuyenXes: {
+                some: {
+                  loaiDiem: 'DON',
+                  diemDonTraId: dto.fromStationId,
+                  diemDonTra: { trangThai: 'HOAT_DONG' },
+                },
+              },
+            },
+            {
+              diemDonTraChuyenXes: {
+                none: {
+                  loaiDiem: 'DON',
+                  diemDonTra: { trangThai: 'HOAT_DONG' },
+                },
+              },
+              tuyenXe: {
+                diemDi: { contains: fromStation.tenDiem },
+              },
+            },
+          ],
+        });
+      } else if (dto.fromLocationId && fromLocation) {
         const fromPointWhere: Prisma.DiemDonTraWhereInput = effectiveFromOldId
           ? { diaDiemCuId: effectiveFromOldId, trangThai: 'HOAT_DONG' }
           : { diaDiemMoiId: effectiveFromNewId!, trangThai: 'HOAT_DONG' };
 
-        // Dự phòng so khớp chuỗi cho chuyến chưa gán điểm đón/trả. Sẽ loại bỏ khi toàn bộ nhà xe gán điểm đầy đủ.
-        const fromTerms = locationSearchTerms(
-          dto.from ? codeToCity(dto.from)! : fromLocation.tenDiaDiem,
-          catalogue,
+        // Lấy terms theo option cụ thể trong catalogue (khớp diaDiemId, đúng isLegacy của mục đó)
+        let fromTerms: string[];
+        const fromOption = catalogue.find(
+          (c) => c.diaDiemId === dto.fromLocationId,
         );
+        if (fromOption) {
+          fromTerms = locationSearchTermsForOption(fromOption, catalogue);
+        } else if (effectiveFromNewId) {
+          const mappings = await this.prisma.bangSapNhapDiaDiem.findMany({
+            where: { diaDiemMoiId: effectiveFromNewId },
+            include: { diaDiemCu: true },
+          });
+          fromTerms = [
+            fromLocation.tenDiaDiem,
+            fromLocation.tenDiaDiem
+              .replace(/^(Tỉnh|Thành phố|Thị xã)\s+/i, '')
+              .trim(),
+            ...mappings.map((m) => m.diaDiemCu.tenDiaDiem),
+            ...mappings.map((m) =>
+              m.diaDiemCu.tenDiaDiem
+                .replace(/^(Tỉnh|Thành phố|Thị xã)\s+/i, '')
+                .trim(),
+            ),
+          ];
+          if (fromLocation.tenDiaDiem.toLowerCase().includes('hồ chí minh')) {
+            fromTerms.push('TP.HCM', 'Hồ Chí Minh', 'TP HCM');
+          }
+        } else {
+          const clean = fromLocation.tenDiaDiem
+            .replace(/^(Tỉnh|Thành phố|Thị xã)\s+/i, '')
+            .trim();
+          fromTerms = [fromLocation.tenDiaDiem, clean];
+          if (clean.toLowerCase().includes('hồ chí minh')) {
+            fromTerms.push('TP.HCM', 'Hồ Chí Minh', 'TP HCM');
+          }
+        }
+        fromTerms = [...new Set(fromTerms.filter(Boolean))];
 
         andConditions.push({
           OR: [
@@ -910,16 +1004,73 @@ export class TripsService {
         });
       }
 
-      if (dto.toLocationId && toLocation) {
+      if (dto.toStationId && toStation) {
+        andConditions.push({
+          OR: [
+            {
+              diemDonTraChuyenXes: {
+                some: {
+                  loaiDiem: 'TRA',
+                  diemDonTraId: dto.toStationId,
+                  diemDonTra: { trangThai: 'HOAT_DONG' },
+                },
+              },
+            },
+            {
+              diemDonTraChuyenXes: {
+                none: {
+                  loaiDiem: 'TRA',
+                  diemDonTra: { trangThai: 'HOAT_DONG' },
+                },
+              },
+              tuyenXe: {
+                diemDen: { contains: toStation.tenDiem },
+              },
+            },
+          ],
+        });
+      } else if (dto.toLocationId && toLocation) {
         const toPointWhere: Prisma.DiemDonTraWhereInput = effectiveToOldId
           ? { diaDiemCuId: effectiveToOldId, trangThai: 'HOAT_DONG' }
           : { diaDiemMoiId: effectiveToNewId!, trangThai: 'HOAT_DONG' };
 
-        // Dự phòng so khớp chuỗi cho chuyến chưa gán điểm đón/trả. Sẽ loại bỏ khi toàn bộ nhà xe gán điểm đầy đủ.
-        const toTerms = locationSearchTerms(
-          dto.to ? codeToCity(dto.to)! : toLocation.tenDiaDiem,
-          catalogue,
+        // Lấy terms theo option cụ thể trong catalogue (khớp diaDiemId, đúng isLegacy của mục đó)
+        let toTerms: string[];
+        const toOption = catalogue.find(
+          (c) => c.diaDiemId === dto.toLocationId,
         );
+        if (toOption) {
+          toTerms = locationSearchTermsForOption(toOption, catalogue);
+        } else if (effectiveToNewId) {
+          const mappings = await this.prisma.bangSapNhapDiaDiem.findMany({
+            where: { diaDiemMoiId: effectiveToNewId },
+            include: { diaDiemCu: true },
+          });
+          toTerms = [
+            toLocation.tenDiaDiem,
+            toLocation.tenDiaDiem
+              .replace(/^(Tỉnh|Thành phố|Thị xã)\s+/i, '')
+              .trim(),
+            ...mappings.map((m) => m.diaDiemCu.tenDiaDiem),
+            ...mappings.map((m) =>
+              m.diaDiemCu.tenDiaDiem
+                .replace(/^(Tỉnh|Thành phố|Thị xã)\s+/i, '')
+                .trim(),
+            ),
+          ];
+          if (toLocation.tenDiaDiem.toLowerCase().includes('hồ chí minh')) {
+            toTerms.push('TP.HCM', 'Hồ Chí Minh', 'TP HCM');
+          }
+        } else {
+          const clean = toLocation.tenDiaDiem
+            .replace(/^(Tỉnh|Thành phố|Thị xã)\s+/i, '')
+            .trim();
+          toTerms = [toLocation.tenDiaDiem, clean];
+          if (clean.toLowerCase().includes('hồ chí minh')) {
+            toTerms.push('TP.HCM', 'Hồ Chí Minh', 'TP HCM');
+          }
+        }
+        toTerms = [...new Set(toTerms.filter(Boolean))];
 
         andConditions.push({
           OR: [
@@ -1017,16 +1168,18 @@ export class TripsService {
     );
 
     // Tính subAreas nếu khách chọn địa danh MỚI
-    let subAreas: SubAreaItem[] | undefined;
+    let fromSubAreas: SubAreaItem[] | undefined;
+    let toSubAreas: SubAreaItem[] | undefined;
     if (effectiveFromNewId) {
-      subAreas = await this.buildSubAreas(
+      fromSubAreas = await this.buildSubAreas(
         effectiveFromNewId,
         'DON',
         chuyenXes,
         catalogue,
       );
-    } else if (effectiveToNewId) {
-      subAreas = await this.buildSubAreas(
+    }
+    if (effectiveToNewId) {
+      toSubAreas = await this.buildSubAreas(
         effectiveToNewId,
         'TRA',
         chuyenXes,
@@ -1078,20 +1231,50 @@ export class TripsService {
     }
 
     // Tính expandSuggestion nếu khách chọn địa danh CŨ
-    let expandSuggestion: ExpandSuggestion | undefined;
+    let fromExpandSuggestion: ExpandSuggestion | undefined;
+    let toExpandSuggestion: ExpandSuggestion | undefined;
+
     if (effectiveFromOldId && fromLocation) {
       const baseSiblingWhere: Prisma.ChuyenXeWhereInput = {
         trangThai: 'CHUA_KHOI_HANH',
         ngayKhoiHanh: where.ngayKhoiHanh,
       };
-      if (dto.toLocationId && toLocation) {
+      if (dto.toStationId && toStation) {
+        baseSiblingWhere.OR = [
+          {
+            diemDonTraChuyenXes: {
+              some: {
+                loaiDiem: 'TRA',
+                diemDonTraId: dto.toStationId,
+                diemDonTra: { trangThai: 'HOAT_DONG' },
+              },
+            },
+          },
+          {
+            diemDonTraChuyenXes: {
+              none: {
+                loaiDiem: 'TRA',
+                diemDonTra: { trangThai: 'HOAT_DONG' },
+              },
+            },
+            tuyenXe: {
+              diemDen: { contains: toStation.tenDiem },
+            },
+          },
+        ];
+      } else if (dto.toLocationId && toLocation) {
         const toPointWhere: Prisma.DiemDonTraWhereInput = effectiveToOldId
           ? { diaDiemCuId: effectiveToOldId, trangThai: 'HOAT_DONG' }
           : { diaDiemMoiId: effectiveToNewId!, trangThai: 'HOAT_DONG' };
-        const toTerms = locationSearchTerms(
-          dto.to ? codeToCity(dto.to)! : toLocation.tenDiaDiem,
-          catalogue,
+        const toOption = catalogue.find(
+          (c) => c.diaDiemId === dto.toLocationId,
         );
+        const toTerms = toOption
+          ? locationSearchTermsForOption(toOption, catalogue)
+          : locationSearchTerms(
+              dto.to ? codeToCity(dto.to)! : toLocation.tenDiaDiem,
+              catalogue,
+            );
         baseSiblingWhere.OR = [
           {
             diemDonTraChuyenXes: {
@@ -1123,7 +1306,7 @@ export class TripsService {
         };
       }
 
-      expandSuggestion = await this.buildExpandSuggestion(
+      fromExpandSuggestion = await this.buildExpandSuggestion(
         fromLocation,
         effectiveFromOldId,
         'DON',
@@ -1133,19 +1316,49 @@ export class TripsService {
         now,
         dto.timeRange,
       );
-    } else if (effectiveToOldId && toLocation) {
+    }
+
+    if (effectiveToOldId && toLocation) {
       const baseSiblingWhere: Prisma.ChuyenXeWhereInput = {
         trangThai: 'CHUA_KHOI_HANH',
         ngayKhoiHanh: where.ngayKhoiHanh,
       };
-      if (dto.fromLocationId && fromLocation) {
+      if (dto.fromStationId && fromStation) {
+        baseSiblingWhere.OR = [
+          {
+            diemDonTraChuyenXes: {
+              some: {
+                loaiDiem: 'DON',
+                diemDonTraId: dto.fromStationId,
+                diemDonTra: { trangThai: 'HOAT_DONG' },
+              },
+            },
+          },
+          {
+            diemDonTraChuyenXes: {
+              none: {
+                loaiDiem: 'DON',
+                diemDonTra: { trangThai: 'HOAT_DONG' },
+              },
+            },
+            tuyenXe: {
+              diemDi: { contains: fromStation.tenDiem },
+            },
+          },
+        ];
+      } else if (dto.fromLocationId && fromLocation) {
         const fromPointWhere: Prisma.DiemDonTraWhereInput = effectiveFromOldId
           ? { diaDiemCuId: effectiveFromOldId, trangThai: 'HOAT_DONG' }
           : { diaDiemMoiId: effectiveFromNewId!, trangThai: 'HOAT_DONG' };
-        const fromTerms = locationSearchTerms(
-          dto.from ? codeToCity(dto.from)! : fromLocation.tenDiaDiem,
-          catalogue,
+        const fromOption = catalogue.find(
+          (c) => c.diaDiemId === dto.fromLocationId,
         );
+        const fromTerms = fromOption
+          ? locationSearchTermsForOption(fromOption, catalogue)
+          : locationSearchTerms(
+              dto.from ? codeToCity(dto.from)! : fromLocation.tenDiaDiem,
+              catalogue,
+            );
         baseSiblingWhere.OR = [
           {
             diemDonTraChuyenXes: {
@@ -1177,7 +1390,7 @@ export class TripsService {
         };
       }
 
-      expandSuggestion = await this.buildExpandSuggestion(
+      toExpandSuggestion = await this.buildExpandSuggestion(
         toLocation,
         effectiveToOldId,
         'TRA',
@@ -1265,6 +1478,10 @@ export class TripsService {
         totalItems: number;
         totalPages: number;
       };
+      fromSubAreas?: SubAreaItem[];
+      toSubAreas?: SubAreaItem[];
+      fromExpandSuggestion?: ExpandSuggestion;
+      toExpandSuggestion?: ExpandSuggestion;
       subAreas?: SubAreaItem[];
       expandSuggestion?: ExpandSuggestion;
     } = {
@@ -1277,11 +1494,16 @@ export class TripsService {
       },
     };
 
-    if (subAreas) {
-      response.subAreas = subAreas;
+    if (fromSubAreas) response.fromSubAreas = fromSubAreas;
+    if (toSubAreas) response.toSubAreas = toSubAreas;
+    if (fromExpandSuggestion) response.fromExpandSuggestion = fromExpandSuggestion;
+    if (toExpandSuggestion) response.toExpandSuggestion = toExpandSuggestion;
+
+    if (fromSubAreas || toSubAreas) {
+      response.subAreas = fromSubAreas ?? toSubAreas;
     }
-    if (expandSuggestion) {
-      response.expandSuggestion = expandSuggestion;
+    if (fromExpandSuggestion || toExpandSuggestion) {
+      response.expandSuggestion = fromExpandSuggestion ?? toExpandSuggestion;
     }
 
     return response;

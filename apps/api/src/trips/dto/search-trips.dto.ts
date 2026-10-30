@@ -66,6 +66,18 @@ export class SearchTripsDto extends PaginationQueryDto {
   toAreaId?: number;
 
   @IsOptional()
+  @Transform(({ value }) => optionalInteger(value))
+  @IsInt({ message: 'fromStationId phải là số nguyên dương.' })
+  @Min(1)
+  fromStationId?: number;
+
+  @IsOptional()
+  @Transform(({ value }) => optionalInteger(value))
+  @IsInt({ message: 'toStationId phải là số nguyên dương.' })
+  @Min(1)
+  toStationId?: number;
+
+  @IsOptional()
   @IsString()
   vehicleType?: string;
 

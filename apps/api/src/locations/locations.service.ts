@@ -177,7 +177,7 @@ export class LocationsService {
           address: st.diaChi,
           isLegacy: false,
           popular: Boolean(st.maDiem.startsWith('BX-')),
-          diaDiemId: st.diemDonTraId,
+          diemDonTraId: st.diemDonTraId,
         });
       }
 

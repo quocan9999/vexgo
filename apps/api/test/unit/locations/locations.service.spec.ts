@@ -119,6 +119,7 @@ describe('LocationsService', () => {
     expect(station).toBeDefined();
     expect(station?.kind).toBe('station');
     expect(station?.parentName).toBe('Bà Rịa - Vũng Tàu');
-    expect(station?.diaDiemId).toBe(201);
+    expect(station?.diemDonTraId).toBe(201);
+    expect(station?.diaDiemId).toBeUndefined();
   });
 });
