@@ -1,6 +1,7 @@
 import { Injectable, Optional, ServiceUnavailableException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import {
+  stripLocationPrefix,
   type LocationOption,
 } from './location-catalog.js';
 import {
@@ -136,10 +137,10 @@ export class LocationsService {
 
       for (const loc of locations) {
         const isLegacy = loc.laDiaDanhCu;
-        const cleanName =
-          loc.capDiaDiem === 'QUAN_HUYEN'
-            ? loc.tenDiaDiem.replace(/^(Thành phố|Thị xã|Quận|Huyện)\s+/i, '').trim()
-            : loc.tenDiaDiem.replace(/^(Tỉnh|Thành phố|Thị xã)\s+/i, '').trim();
+        const cleanName = stripLocationPrefix(
+          loc.tenDiaDiem,
+          loc.capDiaDiem === 'QUAN_HUYEN',
+        );
         const value = cleanName.toLowerCase().includes('hồ chí minh') ? 'TP.HCM' : cleanName;
         const kind: LocationOption['kind'] = loc.capDiaDiem === 'TINH_THANH' ? 'province' : 'district';
         const id = isLegacy
@@ -167,7 +168,7 @@ export class LocationsService {
         // Với quận/huyện (capDiaDiem = QUAN_HUYEN), đặt parentName và province bằng tên tỉnh cha lấy qua diaDiemChaId
         const parentProvinceName =
           loc.capDiaDiem === 'QUAN_HUYEN' && loc.diaDiemCha
-            ? loc.diaDiemCha.tenDiaDiem.replace(/^(Tỉnh|Thành phố|Thị xã)\s+/i, '').trim()
+            ? stripLocationPrefix(loc.diaDiemCha.tenDiaDiem, false)
             : null;
 
         result.push({
@@ -192,6 +193,7 @@ export class LocationsService {
           legacyNames,
           popular: loc.noiBat,
           diaDiemId: loc.diaDiemId,
+          tenKhongDau: loc.tenKhongDau,
         });
       }
 

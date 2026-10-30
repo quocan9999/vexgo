@@ -488,46 +488,51 @@ describeDb('Task 4 - Location Key-based Search with real MySQL Database', () => 
   });
 
   afterAll(async () => {
-    // Dọn dẹp dữ liệu test
-    if (prisma && nhaXeId) {
-      await prisma.diemDonTraChuyenXe.deleteMany({
-        where: { chuyenXe: { nhaXeId } },
-      });
-      await prisma.gheChuyenXe.deleteMany({
-        where: { chuyenXe: { nhaXeId } },
-      });
-      await prisma.chuyenXe.deleteMany({
-        where: { nhaXeId },
-      });
-      await prisma.diemDonTra.deleteMany({
-        where: { nhaXeId },
-      });
-      await prisma.xe.deleteMany({
-        where: { nhaXeId },
-      });
-      await prisma.loaiXe.deleteMany({
-        where: { nhaXeId },
-      });
-      await prisma.tuyenXe.deleteMany({
-        where: { nhaXeId },
-      });
-      await prisma.nhaXe.deleteMany({
-        where: { nhaXeId },
-      });
+    try {
+      // Dọn dẹp dữ liệu chuyến, xe, tuyến của nhà xe test
+      if (prisma && nhaXeId) {
+        await prisma.diemDonTraChuyenXe.deleteMany({
+          where: { chuyenXe: { nhaXeId } },
+        });
+        await prisma.gheChuyenXe.deleteMany({
+          where: { chuyenXe: { nhaXeId } },
+        });
+        await prisma.chuyenXe.deleteMany({
+          where: { nhaXeId },
+        });
+        await prisma.diemDonTra.deleteMany({
+          where: { nhaXeId },
+        });
+        await prisma.xe.deleteMany({
+          where: { nhaXeId },
+        });
+        await prisma.loaiXe.deleteMany({
+          where: { nhaXeId },
+        });
+        await prisma.tuyenXe.deleteMany({
+          where: { nhaXeId },
+        });
+        await prisma.nhaXe.deleteMany({
+          where: { nhaXeId },
+        });
+      }
+    } finally {
+      // Đảm bảo dọn dẹp các quận/huyện test cả khi có lỗi giữa chừng
+      try {
+        if (prisma && diAnDistrictId) {
+          await prisma.danhMucDiaDiem.deleteMany({
+            where: { diaDiemId: diAnDistrictId, maDiaDiem: `DIST-DIAN-${testSuffix}` },
+          });
+        }
+        if (prisma && thuDucDistrictId) {
+          await prisma.danhMucDiaDiem.deleteMany({
+            where: { diaDiemId: thuDucDistrictId, maDiaDiem: `DIST-THUDUC-${testSuffix}` },
+          });
+        }
+      } finally {
+        if (app) await app.close();
+      }
     }
-
-    if (prisma && diAnDistrictId) {
-      await prisma.danhMucDiaDiem.deleteMany({
-        where: { diaDiemId: diAnDistrictId, maDiaDiem: `DIST-DIAN-${testSuffix}` },
-      });
-    }
-    if (prisma && thuDucDistrictId) {
-      await prisma.danhMucDiaDiem.deleteMany({
-        where: { diaDiemId: thuDucDistrictId, maDiaDiem: `DIST-THUDUC-${testSuffix}` },
-      });
-    }
-
-    if (app) await app.close();
   });
 
   // Ca 1: Tìm TP.HCM cũ: Trả về chuyến TP.HCM; KHÔNG ra chuyến Bình Dương/Vũng Tàu

@@ -5,6 +5,7 @@ import {
   parseLocationCatalog,
   type LocationOption,
 } from '../../../src/locations/location-catalog.js';
+import { LocationsService } from '../../../src/locations/locations.service.js';
 import {
   locationSearchTerms,
   locationSearchTermsForOption,
@@ -258,10 +259,22 @@ describe('location catalogue', () => {
 
       // Quận/huyện con
       {
-        id: 'legacy:district:760',
+        id: 'legacy:district:769',
         name: 'Thủ Đức',
         value: 'Thủ Đức',
         aliases: ['Thành phố Thủ Đức', 'Thủ Đức'],
+        versions: ['legacy'],
+        kind: 'district',
+        province: 'Hồ Chí Minh',
+        parentName: 'Hồ Chí Minh',
+        isLegacy: true,
+        diaDiemId: 769,
+      },
+      {
+        id: 'legacy:district:760',
+        name: 'Quận 1',
+        value: 'Quận 1 (TP.HCM)',
+        aliases: ['Quận 1', 'Q1', 'Quan 1'],
         versions: ['legacy'],
         kind: 'district',
         province: 'Hồ Chí Minh',
@@ -335,6 +348,40 @@ describe('location catalogue', () => {
       const newLaoCaiTerms = locationSearchTermsForOption(newLaoCai, mixedCatalogue);
       expect(newLaoCaiTerms).toContain('Lào Cai');
       expect(newLaoCaiTerms).toContain('Yên Bái');
+    });
+
+    it('Quận 1 (parent TP.HCM): TP.HCM mới KHÔNG chứa "1" hay "Q1" riêng lẻ, giữ nguyên "Quận 1", và không có term nào < 3 ký tự hay chỉ toàn số', () => {
+      const newHcm = mixedCatalogue.find((c) => c.diaDiemId === 28)!;
+      const terms = locationSearchTermsForOption(newHcm, mixedCatalogue);
+
+      expect(terms).toContain('Quận 1');
+      expect(terms).not.toContain('1');
+      expect(terms).not.toContain('Q1');
+      expect(terms).not.toContain('Quan 1');
+
+      for (const t of terms) {
+        expect(t.length).toBeGreaterThanOrEqual(3);
+        expect(/^\d+$/.test(t)).toBe(false);
+      }
+    });
+
+    it('Danh mục tĩnh dự phòng (có KEY_DISTRICTS): kiểm tra TP.HCM không sinh term số hay term < 3 ký tự', async () => {
+      const service = new LocationsService();
+      const staticCatalogue = (await service.list()).data;
+      const hcmItem = staticCatalogue.find((item) => item.id === 'province:79')!;
+      expect(hcmItem).toBeDefined();
+
+      const terms = locationSearchTermsForOption(hcmItem, staticCatalogue);
+      expect(terms).toContain('TP.HCM');
+      expect(terms).toContain('Hồ Chí Minh');
+      expect(terms).toContain('Quận 1');
+      expect(terms).not.toContain('1');
+      expect(terms).not.toContain('Q1');
+
+      for (const t of terms) {
+        expect(t.length).toBeGreaterThanOrEqual(3);
+        expect(/^\d+$/.test(t)).toBe(false);
+      }
     });
   });
 });

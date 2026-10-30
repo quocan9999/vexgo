@@ -1,4 +1,63 @@
-import { normalizeLocation, type LocationOption } from './location-catalog.js';
+import {
+  normalizeLocation,
+  stripLocationPrefix,
+  type LocationOption,
+} from './location-catalog.js';
+
+function hasDiacritics(text: string): boolean {
+  return /[àáảãạăắằẳẵặâấầẩẫậèéẻẽẹêếềểễệìíỉĩịòóỏõọôốồổỗộơớờởỡợùúủũụưứừửữựỳýỷỹỵđ]/i.test(
+    text,
+  );
+}
+
+function getOptionAliasesForSearch(option: LocationOption): string[] {
+  return (option.aliases || []).filter((alias) => {
+    if (!alias) return false;
+    // Bỏ tenKhongDau trực tiếp từ DB nếu trùng
+    if (
+      option.tenKhongDau &&
+      alias.toLowerCase() === option.tenKhongDau.toLowerCase()
+    ) {
+      return false;
+    }
+    // Giữ lại các từ viết tắt phổ biến như TP.HCM, TP HCM
+    if (/^TP\.?\s*HCM$/i.test(alias)) {
+      return true;
+    }
+    // Nếu option.name có dấu nhưng alias không có dấu (ví dụ "Quan 1" cho "Quận 1", "Thu Duc" cho "Thủ Đức")
+    if (hasDiacritics(option.name) && !hasDiacritics(alias)) {
+      return false;
+    }
+    // Nếu alias toàn bộ là chữ không dấu viết thường (tenKhongDau)
+    if (alias === alias.toLowerCase() && !hasDiacritics(alias)) {
+      return false;
+    }
+    return true;
+  });
+}
+
+function cleanAndFilterTerms(rawTerms: string[]): string[] {
+  const result: string[] = [];
+  for (const raw of rawTerms) {
+    if (!raw) continue;
+    const noParent = raw.replace(/\s*\([^)]*\)$/, '').trim();
+    // Làm sạch tên: bỏ tiền tố nhưng KHÔNG bỏ nếu phần còn lại là số (ví dụ giữ nguyên "Quận 1", "Quận 12")
+    const cleaned = stripLocationPrefix(noParent, true);
+
+    // Loại các term chỉ gồm chữ số hoặc ngắn hơn 3 ký tự sau khi làm sạch
+    if (cleaned.length >= 3 && !/^\d+$/.test(cleaned)) {
+      result.push(cleaned);
+    }
+    if (
+      noParent !== cleaned &&
+      noParent.length >= 3 &&
+      !/^\d+$/.test(noParent)
+    ) {
+      result.push(noParent);
+    }
+  }
+  return [...new Set(result)];
+}
 
 /** Trích xuất search terms cho một LocationOption cụ thể, tôn trọng triệt để cờ isLegacy của mục đó */
 export function locationSearchTermsForOption(
@@ -6,7 +65,11 @@ export function locationSearchTermsForOption(
   catalogue: LocationOption[] = [],
 ): string[] {
   const normalized = normalizeLocation(item.value || item.name);
-  const terms = [item.name, item.value, ...item.aliases];
+  const terms: string[] = [
+    item.name,
+    item.value,
+    ...getOptionAliasesForSearch(item),
+  ];
   if (normalized === 'hcm' || normalized === 'ho chi minh') {
     terms.push('TP.HCM', 'Hồ Chí Minh', 'TP HCM');
   }
@@ -21,12 +84,9 @@ export function locationSearchTermsForOption(
           normalizeLocation(it.parentName) === normalizeLocation(item.name)),
     );
     for (const d of districts) {
-      terms.push(d.name, d.value, ...d.aliases);
+      terms.push(d.name, d.value, ...getOptionAliasesForSearch(d));
     }
-    const cleanTerms = terms.map((t) =>
-      t.replace(/^(Tỉnh|Thành phố|Thị xã|Quận|Huyện)\s+/i, '').trim(),
-    );
-    return [...new Set(cleanTerms.filter(Boolean))];
+    return cleanAndFilterTerms(terms);
   }
 
   // 2. Bản MỚI (isLegacy === false): bao gồm term của chính nó + quận/huyện của chính nó + các tỉnh cũ thành phần từ legacyNames và quận/huyện của chúng
@@ -38,7 +98,7 @@ export function locationSearchTermsForOption(
         normalizeLocation(it.parentName) === normalizeLocation(item.name)),
   );
   for (const d of selfDistricts) {
-    terms.push(d.name, d.value, ...d.aliases);
+    terms.push(d.name, d.value, ...getOptionAliasesForSearch(d));
   }
 
   let constituentNames: string[] = [];
@@ -57,7 +117,7 @@ export function locationSearchTermsForOption(
       (it) => it.isLegacy && normalizeLocation(it.name) === normalizeLocation(cName),
     );
     if (cItem) {
-      terms.push(cItem.name, cItem.value, ...cItem.aliases);
+      terms.push(cItem.name, cItem.value, ...getOptionAliasesForSearch(cItem));
     }
     const districts = catalogue.filter(
       (it) =>
@@ -66,14 +126,11 @@ export function locationSearchTermsForOption(
         normalizeLocation(it.parentName) === normalizeLocation(cName),
     );
     for (const d of districts) {
-      terms.push(d.name, d.value, ...d.aliases);
+      terms.push(d.name, d.value, ...getOptionAliasesForSearch(d));
     }
   }
 
-  const cleanTerms = terms.map((t) =>
-    t.replace(/^(Tỉnh|Thành phố|Thị xã|Quận|Huyện)\s+/i, '').trim(),
-  );
-  return [...new Set(cleanTerms.filter(Boolean))];
+  return cleanAndFilterTerms(terms);
 }
 
 /** Expand current provinces, districts, and stations for trip search. */

@@ -16,7 +16,27 @@ export type LocationOption = {
   mergedFromText?: string | null;
   diaDiemId?: number;
   diemDonTraId?: number;
+  tenKhongDau?: string;
 };
+
+/**
+ * Làm sạch tên địa danh (bỏ tiền tố Tỉnh/Thành phố/Thị xã/Quận/Huyện).
+ * KHÔNG bỏ tiền tố nếu phần còn lại là số (ví dụ giữ nguyên "Quận 1", "Quận 12", "Huyện 8").
+ */
+export function stripLocationPrefix(name: string, isDistrict = false): string {
+  if (!name) return '';
+  const trimmed = name.trim();
+  const pattern = isDistrict
+    ? /^(Thành phố|Thanh pho|Thị xã|Thi xa|Quận|Quan|Huyện|Huyen|TP\.?)\s+/i
+    : /^(Tỉnh|Tinh|Thành phố|Thanh pho|Thị xã|Thi xa|TP\.?)\s+/i;
+  const match = trimmed.match(pattern);
+  if (!match) return trimmed;
+  const remainder = trimmed.slice(match[0].length).trim();
+  if (/^\d+$/.test(remainder)) {
+    return trimmed;
+  }
+  return remainder;
+}
 
 export function normalizeLocation(value: string): string {
   const normalized = value
