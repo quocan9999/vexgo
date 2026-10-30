@@ -141,6 +141,16 @@ Các quy tắc này áp dụng cho toàn repository và bổ sung cho hướng d
 
 - PR MUST pass các GitHub Actions CI checks bắt buộc trước khi merge. MUST NOT bypass, disable hoặc weaken test/lint/typecheck/build chỉ để đạt trạng thái xanh.
 
+## 13. Quản lý dependencies và Monorepo Workspaces
+
+- Dự án sử dụng npm workspaces (`apps/*`). Toàn bộ việc cài đặt, gỡ bỏ, cập nhật dependency hoặc chạy script MUST được thực hiện từ thư mục gốc của repository (root).
+- Cài đặt dependency cho một app cụ thể MUST dùng cờ `--workspace`, ví dụ:
+  - `npm --workspace=@vexgo/api install <package>`
+  - `npm --workspace=@vexgo/web install <package>`
+  - `npm --workspace=@vexgo/admin install <package>`
+- MUST NOT `cd` vào các thư mục con `apps/api`, `apps/web`, `apps/admin` để chạy `npm install` đơn lẻ. Hành động này sẽ tạo ra `package-lock.json` và `node_modules` cục bộ lồng nhau, dẫn đến hiện tượng split-brain dependencies và xung đột phiên bản/kiểu TypeScript (`TS2345`).
+- Tệp `package-lock.json` và thư mục `node_modules` CHỈ ĐƯỢC PHÉP tồn tại duy nhất ở thư mục gốc của repository.
+
 ## Nguyên tắc cốt lõi
 
 **ONE DATABASE · ONE BACKEND · ONE BUSINESS RULE · ONE API CONVENTION**
