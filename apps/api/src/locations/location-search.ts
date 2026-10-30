@@ -38,6 +38,15 @@ export function locationSearchTermsForOption(
     if (cItem) {
       terms.push(cItem.name, cItem.value, ...cItem.aliases);
     }
+    const districts = catalogue.filter(
+      (it) =>
+        it.kind === 'district' &&
+        it.parentName &&
+        normalizeLocation(it.parentName) === normalizeLocation(cName),
+    );
+    for (const d of districts) {
+      terms.push(d.name, d.value, ...d.aliases);
+    }
   }
 
   const cleanTerms = terms.map((t) =>

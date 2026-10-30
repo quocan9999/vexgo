@@ -15,6 +15,7 @@ export type LocationOption = {
   isLegacy?: boolean;
   mergedFromText?: string;
   diaDiemId?: number;
+  diemDonTraId?: number;
 };
 
 type LocationCatalog = { data: LocationOption[]; warning: string };

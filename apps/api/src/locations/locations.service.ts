@@ -146,11 +146,26 @@ export class LocationsService {
           ? (loc as any).bangSapNhapMoi.map((m: any) => m.diaDiemCu.tenDiaDiem)
           : undefined;
 
+        const masterItem = VIETNAM_PROVINCES.find(
+          (p) =>
+            p.id === `province:${loc.code.toString().padStart(2, '0')}` ||
+            p.name === cleanName,
+        );
+        const masterAliases = masterItem?.aliases ?? [];
+
         result.push({
           id,
           name: cleanName,
           value,
-          aliases: [loc.tenDiaDiem, loc.tenKhongDau, cleanName, value],
+          aliases: [
+            ...new Set([
+              loc.tenDiaDiem,
+              loc.tenKhongDau,
+              cleanName,
+              value,
+              ...masterAliases,
+            ]),
+          ],
           versions: [isLegacy ? 'legacy' : 'current'],
           kind,
           province: loc.capDiaDiem === 'QUAN_HUYEN' ? (loc.chuThichSapNhap ?? null) : null,

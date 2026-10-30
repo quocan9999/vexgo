@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto';
+import { existsSync, readFileSync } from 'node:fs';
+import path from 'node:path';
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -7,7 +9,25 @@ import { configureApi } from '../../../src/common/configure-api.js';
 import { PrismaService } from '../../../src/prisma/prisma.service.js';
 import { TripsService } from '../../../src/trips/trips.service.js';
 
-describe('Task 4 - Location Key-based Search with real MySQL Database', () => {
+function readLocalEnvValue(name: string): string | undefined {
+  const candidates = [
+    path.resolve(process.cwd(), '../../.env'),
+    path.resolve(process.cwd(), '.env'),
+  ];
+  for (const envPath of candidates) {
+    if (!existsSync(envPath)) continue;
+    const line = readFileSync(envPath, 'utf8')
+      .split(/\r?\n/)
+      .find((entry) => entry.startsWith(`${name}=`));
+    if (line) return line.slice(name.length + 1).trim();
+  }
+  return undefined;
+}
+
+const dbUrl = process.env.DATABASE_URL ?? readLocalEnvValue('DATABASE_URL');
+const describeDb = dbUrl ? describe : describe.skip;
+
+describeDb('Task 4 - Location Key-based Search with real MySQL Database', () => {
   let app: INestApplication;
   let prisma: PrismaService;
   let tripsService: TripsService;
@@ -18,6 +38,7 @@ describe('Task 4 - Location Key-based Search with real MySQL Database', () => {
   let routeHcmDlId: number;
   let routeYenBaiHnId: number;
   let routeLaoCaiHnId: number;
+  let routeThuDauMotId: number;
   let vehicleId: number;
 
   let tripHcmId: number;
@@ -26,14 +47,16 @@ describe('Task 4 - Location Key-based Search with real MySQL Database', () => {
   let tripHcmStringOnlyWithBdStationId: number;
   let tripYenBaiId: number;
   let tripLaoCaiId: number;
+  let tripNoPointsThuDauMotId: number;
 
-  // DB IDs from master seed
-  const HCM_MOI_ID = 28; // diaDiemId của TP.HCM mới (code 79, laDiaDanhCu: false)
-  const HCM_CU_ID = 84;  // diaDiemId của TP.HCM cũ (code 79, laDiaDanhCu: true)
-  const BD_CU_ID = 81;   // diaDiemId của Bình Dương cũ (code 74, laDiaDanhCu: true)
-  const VT_CU_ID = 83;   // diaDiemId của Bà Rịa - Vũng Tàu cũ (code 77, laDiaDanhCu: true)
-  const YEN_BAI_CU_ID = 44; // diaDiemId của Yên Bái cũ (code 15, laDiaDanhCu: true)
-  const LAO_CAI_MOI_ID = 7; // diaDiemId của Lào Cai mới (code 15, laDiaDanhCu: false)
+  // Dynamic IDs queried from DB via unique composite (code, laDiaDanhCu)
+  let hcmMoiId: number;
+  let hcmCuId: number;
+  let bdCuId: number;
+  let vtCuId: number;
+  let yenBaiCuId: number;
+  let laoCaiMoiId: number;
+  let bxBinhDuongId: number;
 
   const tomorrowDateStr = '2026-11-15';
   const tomorrowDate = new Date(`${tomorrowDateStr}T00:00:00.000Z`);
@@ -50,7 +73,34 @@ describe('Task 4 - Location Key-based Search with real MySQL Database', () => {
     prisma = app.get(PrismaService);
     tripsService = app.get(TripsService);
 
-    // 1. Tạo Nhà Xe test
+    // 1. Tra cứu động các địa danh theo (code, laDiaDanhCu) - không phụ thuộc auto-increment ID
+    const hcmCu = await prisma.danhMucDiaDiem.findUniqueOrThrow({
+      where: { code_laDiaDanhCu: { code: 79, laDiaDanhCu: true } },
+    });
+    const hcmMoi = await prisma.danhMucDiaDiem.findUniqueOrThrow({
+      where: { code_laDiaDanhCu: { code: 79, laDiaDanhCu: false } },
+    });
+    const bdCu = await prisma.danhMucDiaDiem.findUniqueOrThrow({
+      where: { code_laDiaDanhCu: { code: 74, laDiaDanhCu: true } },
+    });
+    const vtCu = await prisma.danhMucDiaDiem.findUniqueOrThrow({
+      where: { code_laDiaDanhCu: { code: 77, laDiaDanhCu: true } },
+    });
+    const yenBaiCu = await prisma.danhMucDiaDiem.findUniqueOrThrow({
+      where: { code_laDiaDanhCu: { code: 15, laDiaDanhCu: true } },
+    });
+    const laoCaiMoi = await prisma.danhMucDiaDiem.findUniqueOrThrow({
+      where: { code_laDiaDanhCu: { code: 15, laDiaDanhCu: false } },
+    });
+
+    hcmCuId = hcmCu.diaDiemId;
+    hcmMoiId = hcmMoi.diaDiemId;
+    bdCuId = bdCu.diaDiemId;
+    vtCuId = vtCu.diaDiemId;
+    yenBaiCuId = yenBaiCu.diaDiemId;
+    laoCaiMoiId = laoCaiMoi.diaDiemId;
+
+    // 2. Tạo Nhà Xe test
     const company = await prisma.nhaXe.create({
       data: {
         maNhaXe: companyCode,
@@ -61,7 +111,7 @@ describe('Task 4 - Location Key-based Search with real MySQL Database', () => {
     });
     nhaXeId = company.nhaXeId;
 
-    // 2. Tạo Tuyến Xe
+    // 3. Tạo Tuyến Xe
     const route1 = await prisma.tuyenXe.create({
       data: {
         nhaXeId,
@@ -98,7 +148,20 @@ describe('Task 4 - Location Key-based Search with real MySQL Database', () => {
     });
     routeLaoCaiHnId = route3.tuyenXeId;
 
-    // 3. Tạo Loại Xe và Xe
+    // Tuyến đường ghi "Thủ Dầu Một" phục vụ kiểm chứng ca 5 (dự phòng chuỗi theo mục danh mục)
+    const route4 = await prisma.tuyenXe.create({
+      data: {
+        nhaXeId,
+        maTuyenXe: `TX-TDM-DL-${testSuffix}`,
+        diemDi: 'Thủ Dầu Một',
+        diemDen: 'Đà Lạt',
+        thoiGianChayPhut: 360,
+        trangThai: 'HOAT_DONG',
+      },
+    });
+    routeThuDauMotId = route4.tuyenXeId;
+
+    // 4. Tạo Loại Xe và Xe
     const loaiXe = await prisma.loaiXe.create({
       data: {
         nhaXeId,
@@ -115,15 +178,17 @@ describe('Task 4 - Location Key-based Search with real MySQL Database', () => {
     });
     vehicleId = vehicle.xeId;
 
-    // 4. Tìm các điểm đón trả có sẵn trong DB
+    // 5. Tìm các điểm đón trả có sẵn trong DB theo ID động
     const bxMienDong = await prisma.diemDonTra.findFirstOrThrow({
-      where: { diaDiemCuId: HCM_CU_ID, diaDiemMoiId: HCM_MOI_ID, trangThai: 'HOAT_DONG' },
+      where: { diaDiemCuId: hcmCuId, diaDiemMoiId: hcmMoiId, trangThai: 'HOAT_DONG' },
     });
     const bxBinhDuong = await prisma.diemDonTra.findFirstOrThrow({
-      where: { diaDiemCuId: BD_CU_ID, diaDiemMoiId: HCM_MOI_ID, trangThai: 'HOAT_DONG' },
+      where: { diaDiemCuId: bdCuId, diaDiemMoiId: hcmMoiId, trangThai: 'HOAT_DONG' },
     });
+    bxBinhDuongId = bxBinhDuong.diemDonTraId;
+
     const bxVungTau = await prisma.diemDonTra.findFirstOrThrow({
-      where: { diaDiemCuId: VT_CU_ID, diaDiemMoiId: HCM_MOI_ID, trangThai: 'HOAT_DONG' },
+      where: { diaDiemCuId: vtCuId, diaDiemMoiId: hcmMoiId, trangThai: 'HOAT_DONG' },
     });
 
     // Tạo thêm 2 điểm cho Yên Bái và Lào Cai
@@ -136,11 +201,16 @@ describe('Task 4 - Location Key-based Search with real MySQL Database', () => {
         tenDiem: 'Bến xe Yên Bái',
         loaiDiem: 'BEN_XE',
         diaChi: 'TP. Yên Bái',
-        diaDiemCuId: YEN_BAI_CU_ID,
-        diaDiemMoiId: LAO_CAI_MOI_ID,
+        diaDiemCuId: yenBaiCuId,
+        diaDiemMoiId: laoCaiMoiId,
         trangThai: 'HOAT_DONG',
       },
     });
+
+    const laoCaiCu = await prisma.danhMucDiaDiem.findFirst({
+      where: { tenDiaDiem: { contains: 'Lào Cai' }, laDiaDanhCu: true },
+    });
+    const laoCaiCuId = laoCaiCu?.diaDiemId ?? laoCaiMoiId;
 
     const pointLaoCai = await prisma.diemDonTra.upsert({
       where: { nhaXeId_maDiem: { nhaXeId, maDiem: `BX-LC-${testSuffix}` } },
@@ -151,13 +221,13 @@ describe('Task 4 - Location Key-based Search with real MySQL Database', () => {
         tenDiem: 'Bến xe Trung tâm Lào Cai',
         loaiDiem: 'BEN_XE',
         diaChi: 'TP. Lào Cai',
-        diaDiemCuId: 40, // Lào Cai cũ
-        diaDiemMoiId: LAO_CAI_MOI_ID,
+        diaDiemCuId: laoCaiCuId,
+        diaDiemMoiId: laoCaiMoiId,
         trangThai: 'HOAT_DONG',
       },
     });
 
-    // 5. Tạo các chuyến xe test
+    // 6. Tạo các chuyến xe test
     // Chuyến 1: Đón tại TP.HCM cũ (BX Miền Đông)
     const tripHcm = await prisma.chuyenXe.create({
       data: {
@@ -218,7 +288,7 @@ describe('Task 4 - Location Key-based Search with real MySQL Database', () => {
     });
     tripVungTauId = tripVt.chuyenXeId;
 
-    // Chuyến 4: Tuyến đường ghi "TP.HCM - Đà Lạt" (tuyenXe.diemDi = 'TP.HCM'), NHƯNG đã gán điểm đón BX Bình Dương
+    // Chuyến 4: Tuyến đường ghi "TP.HCM - Đà Lạt", NHƯNG đã gán điểm đón BX Bình Dương
     const tripBdWithStringHcm = await prisma.chuyenXe.create({
       data: {
         nhaXeId,
@@ -277,6 +347,23 @@ describe('Task 4 - Location Key-based Search with real MySQL Database', () => {
       },
     });
     tripLaoCaiId = tripLc.chuyenXeId;
+
+    // Chuyến 7 (Ca 5): Tuyến ghi diemDi = "Thủ Dầu Một", CHƯA GÁN BẤT KỲ ĐIỂM ĐÓN NÀO
+    const tripTdmNoPoints = await prisma.chuyenXe.create({
+      data: {
+        nhaXeId,
+        tuyenXeId: routeThuDauMotId,
+        xeId: vehicleId,
+        maChuyenXe: `CX-TDM-NO-PTS-${testSuffix}`,
+        ngayKhoiHanh: tomorrowDate,
+        gioKhoiHanh: new Date('1970-01-01T14:00:00.000Z'),
+        trangThai: 'CHUA_KHOI_HANH',
+        sucChuaXeMay: 0,
+        sucChuaHangCongKenh: 0,
+        sucChuaHangNhe: 0,
+      },
+    });
+    tripNoPointsThuDauMotId = tripTdmNoPoints.chuyenXeId;
   });
 
   afterAll(async () => {
@@ -310,10 +397,10 @@ describe('Task 4 - Location Key-based Search with real MySQL Database', () => {
     if (app) await app.close();
   });
 
-  // Ca 1: Tìm TP.HCM cũ (id 84): Trả về chuyến TP.HCM; KHÔNG ra chuyến Bình Dương/Vũng Tàu
-  it('Ca 1 (DB thật): Tìm TP.HCM cũ (id 84) -> MySQL chỉ trả về chuyến TP.HCM cũ, KHÔNG ra chuyến Bình Dương hay Vũng Tàu', async () => {
+  // Ca 1: Tìm TP.HCM cũ: Trả về chuyến TP.HCM; KHÔNG ra chuyến Bình Dương/Vũng Tàu
+  it('Ca 1 (DB thật): Tìm TP.HCM cũ -> MySQL chỉ trả về chuyến TP.HCM cũ, KHÔNG ra chuyến Bình Dương hay Vũng Tàu', async () => {
     const result = await tripsService.search({
-      fromLocationId: HCM_CU_ID,
+      fromLocationId: hcmCuId,
       busCompanyId: nhaXeId,
       departureDate: tomorrowDateStr,
       page: 1,
@@ -328,10 +415,10 @@ describe('Task 4 - Location Key-based Search with real MySQL Database', () => {
     expect(returnedTripIds).not.toContain(tripVungTauId);
   });
 
-  // Ca 2: Tìm TP.HCM mới (id 28): Trả về cả ba chuyến cùng subAreas
-  it('Ca 2 (DB thật): Tìm TP.HCM mới (id 28) -> MySQL trả về cả 3 chuyến thuộc cụm sáp nhập cùng fromSubAreas', async () => {
+  // Ca 2: Tìm TP.HCM mới: Trả về cả ba chuyến cùng subAreas
+  it('Ca 2 (DB thật): Tìm TP.HCM mới -> MySQL trả về cả 3 chuyến thuộc cụm sáp nhập cùng fromSubAreas', async () => {
     const result = await tripsService.search({
-      fromLocationId: HCM_MOI_ID,
+      fromLocationId: hcmMoiId,
       busCompanyId: nhaXeId,
       departureDate: tomorrowDateStr,
       page: 1,
@@ -347,19 +434,19 @@ describe('Task 4 - Location Key-based Search with real MySQL Database', () => {
 
     // fromSubAreas đếm đúng các chuyến của từng tỉnh thành phần
     expect(result.fromSubAreas).toBeDefined();
-    const hcmSub = result.fromSubAreas?.find((s) => s.diaDiemId === HCM_CU_ID);
-    const bdSub = result.fromSubAreas?.find((s) => s.diaDiemId === BD_CU_ID);
-    const vtSub = result.fromSubAreas?.find((s) => s.diaDiemId === VT_CU_ID);
+    const hcmSub = result.fromSubAreas?.find((s) => s.diaDiemId === hcmCuId);
+    const bdSub = result.fromSubAreas?.find((s) => s.diaDiemId === bdCuId);
+    const vtSub = result.fromSubAreas?.find((s) => s.diaDiemId === vtCuId);
 
     expect(hcmSub?.tripCount).toBeGreaterThanOrEqual(1);
     expect(bdSub?.tripCount).toBeGreaterThanOrEqual(1);
     expect(vtSub?.tripCount).toBeGreaterThanOrEqual(1);
   });
 
-  // Ca 3: Mã 15 Yên Bái cũ (id 44) không ra chuyến Lào Cai mới (id 7)
-  it('Ca 3 (DB thật): Mã 15 Yên Bái cũ (id 44) -> MySQL chỉ trả về chuyến Yên Bái cũ, KHÔNG ra chuyến Lào Cai mới', async () => {
+  // Ca 3: Mã 15 Yên Bái cũ không ra chuyến Lào Cai mới
+  it('Ca 3 (DB thật): Mã 15 Yên Bái cũ -> MySQL chỉ trả về chuyến Yên Bái cũ, KHÔNG ra chuyến Lào Cai mới', async () => {
     const result = await tripsService.search({
-      fromLocationId: YEN_BAI_CU_ID,
+      fromLocationId: yenBaiCuId,
       busCompanyId: nhaXeId,
       departureDate: tomorrowDateStr,
       page: 1,
@@ -376,7 +463,7 @@ describe('Task 4 - Location Key-based Search with real MySQL Database', () => {
   // Ca 4: Chuyến đã gán điểm không bị dự phòng chuỗi làm sai
   it('Ca 4 (DB thật): Chuyến có tuyến đường ghi "TP.HCM" nhưng đã gán điểm đón tại Bình Dương -> KHÔNG bị khớp sai vào TP.HCM cũ', async () => {
     const result = await tripsService.search({
-      fromLocationId: HCM_CU_ID,
+      fromLocationId: hcmCuId,
       busCompanyId: nhaXeId,
       departureDate: tomorrowDateStr,
       page: 1,
@@ -386,9 +473,60 @@ describe('Task 4 - Location Key-based Search with real MySQL Database', () => {
     });
 
     const returnedTripIds = result.data.map((t) => t.id);
-    // Chuyến 4 có diemDi = 'TP.HCM', nhưng đã gán điểm tại Bình Dương (BD_CU_ID)
-    // Khi search TP.HCM cũ, nhánh none { loaiDiem: 'DON', diemDonTra: { trangThai: 'HOAT_DONG' } } không thỏa mãn
-    // vì chuyến 4 ĐÃ CÓ điểm đón hoạt động -> MySQL loại bỏ chuyến này!
     expect(returnedTripIds).not.toContain(tripHcmStringOnlyWithBdStationId);
+  });
+
+  // Ca 5: Chuyến CHƯA gán điểm đón, tuyến ghi diemDi = 'Thủ Dầu Một'
+  it('Ca 5 (DB thật): Chuyến CHƯA gán điểm đón, tuyến ghi diemDi = "Thủ Dầu Một" -> tìm TP.HCM mới thì RA, tìm TP.HCM cũ thì KHÔNG RA', async () => {
+    // Tìm TP.HCM mới: terms chứa "Thủ Dầu Một" (sáp nhập Bình Dương) -> PHẢI RA
+    const resultMoi = await tripsService.search({
+      fromLocationId: hcmMoiId,
+      busCompanyId: nhaXeId,
+      departureDate: tomorrowDateStr,
+      page: 1,
+      pageSize: 50,
+      sortBy: 'departureTime',
+      sortDirection: 'asc',
+    });
+    const returnedMoiIds = resultMoi.data.map((t) => t.id);
+    expect(returnedMoiIds).toContain(tripNoPointsThuDauMotId);
+
+    // Tìm TP.HCM cũ: terms chỉ gồm TP.HCM -> KHÔNG ĐƯỢC RA
+    const resultCu = await tripsService.search({
+      fromLocationId: hcmCuId,
+      busCompanyId: nhaXeId,
+      departureDate: tomorrowDateStr,
+      page: 1,
+      pageSize: 50,
+      sortBy: 'departureTime',
+      sortDirection: 'asc',
+    });
+    const returnedCuIds = resultCu.data.map((t) => t.id);
+    expect(returnedCuIds).not.toContain(tripNoPointsThuDauMotId);
+  });
+
+  // Ca 6: Tìm fromStationId = bến Bình Dương -> chỉ ra chuyến đã gán đúng bến đó
+  it('Ca 6 (DB thật): Tìm fromStationId = bến Bình Dương -> CHỈ ra các chuyến đã gán đúng bến đó', async () => {
+    const result = await tripsService.search({
+      fromStationId: bxBinhDuongId,
+      busCompanyId: nhaXeId,
+      departureDate: tomorrowDateStr,
+      page: 1,
+      pageSize: 50,
+      sortBy: 'departureTime',
+      sortDirection: 'asc',
+    });
+
+    const returnedTripIds = result.data.map((t) => t.id);
+    // Chuyến 2 và chuyến 4 gán BX Bình Dương
+    expect(returnedTripIds).toContain(tripBinhDuongId);
+    expect(returnedTripIds).toContain(tripHcmStringOnlyWithBdStationId);
+
+    // Các chuyến khác không được có
+    expect(returnedTripIds).not.toContain(tripHcmId);
+    expect(returnedTripIds).not.toContain(tripVungTauId);
+    expect(returnedTripIds).not.toContain(tripYenBaiId);
+    expect(returnedTripIds).not.toContain(tripLaoCaiId);
+    expect(returnedTripIds).not.toContain(tripNoPointsThuDauMotId);
   });
 });

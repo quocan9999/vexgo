@@ -153,7 +153,7 @@ describe('location catalogue', () => {
         id: 'legacy:province:74',
         name: 'Bình Dương',
         value: 'Bình Dương',
-        aliases: ['Tỉnh Bình Dương', 'Bình Dương'],
+        aliases: ['Tỉnh Bình Dương', 'Bình Dương', 'Thủ Dầu Một'],
         versions: ['legacy'],
         kind: 'province',
         province: null,
@@ -266,12 +266,14 @@ describe('location catalogue', () => {
       expect(oldTerms).toContain('Hồ Chí Minh');
       expect(oldTerms).not.toContain('Bình Dương');
       expect(oldTerms).not.toContain('Bà Rịa - Vũng Tàu');
+      expect(oldTerms).not.toContain('Thủ Dầu Một');
 
       const newTerms = locationSearchTermsForOption(newHcm, mixedCatalogue);
       expect(newTerms).toContain('TP.HCM');
       expect(newTerms).toContain('Hồ Chí Minh');
       expect(newTerms).toContain('Bình Dương');
       expect(newTerms).toContain('Bà Rịa - Vũng Tàu');
+      expect(newTerms).toContain('Thủ Dầu Một');
     });
 
     it('Tây Ninh: legacy option returns ONLY Tây Ninh; new option returns Tây Ninh + Long An', () => {
