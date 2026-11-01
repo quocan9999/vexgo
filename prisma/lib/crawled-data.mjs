@@ -131,15 +131,75 @@ export function generateRoutePointMaDiem(nhaXeCode, tenDiem, viDo, kinhDo) {
   return code.slice(0, 50);
 }
 
-export function buildRouteTemplates(routePoints, resolvedMaDiemLookup, defaultNhaXeCode = 'FUTA') {
+export function validateRouteTemplate(template) {
+  const reasons = [];
+  const stops = template?.stops || [];
+  const dons = stops.filter(s => s.loaiDiem === 'DON');
+  const tras = stops.filter(s => s.loaiDiem === 'TRA');
+
+  // (a) không có điểm ĐÓN
+  if (dons.length === 0) {
+    reasons.push('Khuôn lộ trình không có điểm ĐÓN');
+  }
+
+  // (b) không có điểm TRẢ
+  if (tras.length === 0) {
+    reasons.push('Khuôn lộ trình không có điểm TRẢ');
+  }
+
+  // (c) điểm TRẢ cuối cùng có phutLech nhỏ hơn hoặc bằng phutLech của điểm ĐÓN đầu tiên hoặc cuối cùng
+  if (dons.length > 0 && tras.length > 0) {
+    const firstDon = dons[0];
+    const lastDon = dons[dons.length - 1];
+    const lastTra = tras[tras.length - 1];
+
+    if (lastTra.phutLech <= firstDon.phutLech) {
+      reasons.push(
+        `Điểm TRẢ cuối cùng có phutLech (${lastTra.phutLech}) nhỏ hơn hoặc bằng phutLech của điểm ĐÓN đầu tiên (${firstDon.phutLech})`,
+      );
+    } else if (lastTra.phutLech <= lastDon.phutLech) {
+      reasons.push(
+        `Điểm TRẢ cuối cùng có phutLech (${lastTra.phutLech}) nhỏ hơn hoặc bằng phutLech của điểm ĐÓN cuối cùng (${lastDon.phutLech}); không có điểm trả hợp lệ sau lộ trình đón`,
+      );
+    }
+  }
+
+  // (d) trùng (maDiem, loaiDiem)
+  const seen = new Set();
+  const duplicates = new Set();
+  for (const s of stops) {
+    const key = `${s.maDiem}|||${s.loaiDiem}`;
+    if (seen.has(key)) {
+      duplicates.add(`${s.maDiem} (${s.loaiDiem})`);
+    } else {
+      seen.add(key);
+    }
+  }
+  if (duplicates.size > 0) {
+    reasons.push(`Trùng điểm dừng có cùng (maDiem, loaiDiem): ${Array.from(duplicates).join(', ')}`);
+  }
+
+  return reasons;
+}
+
+export function buildRouteTemplates(routePoints, resolvedMaDiemLookup, onUnknownOperator) {
   const routeGroups = new Map();
 
   for (const p of routePoints) {
-    const nhaXeCode = p.nhaXeThamChieu?.includes('Phương Trang')
-      ? 'FUTA'
-      : p.nhaXeThamChieu?.includes('Hoa Mai')
-        ? 'HM'
-        : defaultNhaXeCode;
+    let nhaXeCode = null;
+    if (p.nhaXeThamChieu?.includes('Phương Trang')) {
+      nhaXeCode = 'FUTA';
+    } else if (p.nhaXeThamChieu?.includes('Hoa Mai')) {
+      nhaXeCode = 'HM';
+    }
+
+    if (!nhaXeCode) {
+      if (typeof onUnknownOperator === 'function') {
+        onUnknownOperator(p);
+      }
+      continue;
+    }
+
     const tuyen = p.tuyenThamChieu;
     const key = `${nhaXeCode}|||${tuyen}`;
 
@@ -157,7 +217,8 @@ export function buildRouteTemplates(routePoints, resolvedMaDiemLookup, defaultNh
 
     const opLookup = resolvedMaDiemLookup[group.nhaXeCode] || resolvedMaDiemLookup;
 
-    const stops = group.points.map((p, idx) => {
+    // Map to stops
+    const mappedStops = group.points.map(p => {
       const normName = normalizeName(p.tenDiem);
       const maDiem =
         opLookup[p.tenDiem] ||
@@ -170,14 +231,39 @@ export function buildRouteTemplates(routePoints, resolvedMaDiemLookup, defaultNh
         maDiem,
         loaiDiem,
         phutLech: p.khoangCachPhutSoVoiXuatBen,
-        thuTu: idx + 1,
       };
     });
+
+    // Deduplicate (maDiem, loaiDiem) keeping smallest phutLech (first seen since sorted ascending)
+    const uniqueStops = [];
+    const seenStopKeys = new Set();
+    for (const stop of mappedStops) {
+      const key = `${stop.maDiem}|||${stop.loaiDiem}`;
+      if (seenStopKeys.has(key)) {
+        continue;
+      }
+      seenStopKeys.add(key);
+      uniqueStops.push(stop);
+    }
+
+    // Assign thuTu 1, 2, 3...
+    const finalStops = uniqueStops.map((stop, idx) => ({
+      ...stop,
+      thuTu: idx + 1,
+    }));
+
+    // Validation
+    const reasons = validateRouteTemplate({ stops: finalStops });
+    const incomplete = reasons.length > 0;
+    const thin = finalStops.length < 6;
 
     templates.push({
       nhaXeCode: group.nhaXeCode,
       tuyenThamChieu: group.tuyenThamChieu,
-      stops,
+      incomplete,
+      thin,
+      reasons,
+      stops: finalStops,
     });
   }
 

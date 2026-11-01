@@ -2,6 +2,9 @@
   {
     "nhaXeCode": "FUTA",
     "tuyenThamChieu": "Sài Gòn - Cần Thơ / Tiền Giang",
+    "incomplete": false,
+    "thin": false,
+    "reasons": [],
     "stops": [
       {
         "maDiem": "FUTA-RP-quang-trung-3DC936",
@@ -218,6 +221,9 @@
   {
     "nhaXeCode": "FUTA",
     "tuyenThamChieu": "Cần Thơ - Sài Gòn",
+    "incomplete": false,
+    "thin": false,
+    "reasons": [],
     "stops": [
       {
         "maDiem": "FUTA-RP-nga-ba-lo-te-117CB2",
@@ -278,6 +284,9 @@
   {
     "nhaXeCode": "FUTA",
     "tuyenThamChieu": "Sài Gòn - Vũng Tàu",
+    "incomplete": false,
+    "thin": true,
+    "reasons": [],
     "stops": [
       {
         "maDiem": "FUTA-BEN-XE-MIEN-DONG-CU-11263",
@@ -308,6 +317,9 @@
   {
     "nhaXeCode": "HM",
     "tuyenThamChieu": "Sài Gòn - Vũng Tàu",
+    "incomplete": false,
+    "thin": false,
+    "reasons": [],
     "stops": [
       {
         "maDiem": "HM-RP-van-phong-mien-dong-E04669",
@@ -380,18 +392,17 @@
         "loaiDiem": "TRA",
         "phutLech": 125,
         "thuTu": 12
-      },
-      {
-        "maDiem": "HM-RP-noi-thanh-vung-tau-6D1155",
-        "loaiDiem": "TRA",
-        "phutLech": 140,
-        "thuTu": 13
       }
     ]
   },
   {
     "nhaXeCode": "HM",
     "tuyenThamChieu": "Vũng Tàu - Sài Gòn",
+    "incomplete": true,
+    "thin": false,
+    "reasons": [
+      "Điểm TRẢ cuối cùng có phutLech (0) nhỏ hơn hoặc bằng phutLech của điểm ĐÓN cuối cùng (65); không có điểm trả hợp lệ sau lộ trình đón"
+    ],
     "stops": [
       {
         "maDiem": "HM-RP-noi-thanh-vung-tau-6D1155",

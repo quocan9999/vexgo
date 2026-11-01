@@ -189,3 +189,132 @@ test('buildRouteTemplates: preserves negative and positive minutes, sorts ascend
   const t2 = templates.find(t => t.nhaXeCode === 'HM');
   assert.equal(t2.stops[0].maDiem, 'BX-VT');
 });
+
+test('buildRouteTemplates: deduplicates (maDiem, loaiDiem) keeping smallest phutLech', () => {
+  const routePoints = [
+    {
+      nhaXeThamChieu: 'Hoa Mai',
+      tuyenThamChieu: 'Sài Gòn - Vũng Tàu',
+      tenDiem: 'Nội thành Vũng Tàu',
+      vaiTroMacDinh: 'DIEM_TRA',
+      khoangCachPhutSoVoiXuatBen: 140,
+    },
+    {
+      nhaXeThamChieu: 'Hoa Mai',
+      tuyenThamChieu: 'Sài Gòn - Vũng Tàu',
+      tenDiem: 'Nội thành Vũng Tàu',
+      vaiTroMacDinh: 'DIEM_TRA',
+      khoangCachPhutSoVoiXuatBen: 107,
+    },
+    {
+      nhaXeThamChieu: 'Hoa Mai',
+      tuyenThamChieu: 'Sài Gòn - Vũng Tàu',
+      tenDiem: 'Văn phòng Quận 5',
+      vaiTroMacDinh: 'DIEM_DON',
+      khoangCachPhutSoVoiXuatBen: 0,
+    },
+  ];
+
+  const lookup = {
+    HM: {
+      'Nội thành Vũng Tàu': 'HM-RP-noi-thanh-vung-tau-6D1155',
+      'Văn phòng Quận 5': 'HM-RP-van-phong-quan-5-42130E',
+    },
+  };
+
+  const templates = buildRouteTemplates(routePoints, lookup);
+  assert.equal(templates.length, 1);
+  const t = templates[0];
+  // 3 points reduced to 2 because 'HM-RP-noi-thanh-vung-tau-6D1155' (TRA) duplicate was removed
+  assert.equal(t.stops.length, 2);
+  const traPoint = t.stops.find(s => s.maDiem === 'HM-RP-noi-thanh-vung-tau-6D1155');
+  assert.equal(traPoint?.phutLech, 107, 'Must keep the smaller phutLech 107 instead of 140');
+  assert.equal(t.thin, true, 'Less than 6 stops must be thin = true');
+});
+
+test('buildRouteTemplates: skips points with unknown operator and triggers callback', () => {
+  const unknownPoints = [];
+  const routePoints = [
+    {
+      nhaXeThamChieu: 'Nhà Xe Lạ Không Xác Định',
+      tuyenThamChieu: 'Hà Nội - Hải Phòng',
+      tenDiem: 'Bến xe Gia Lâm',
+      vaiTroMacDinh: 'DIEM_DON',
+      khoangCachPhutSoVoiXuatBen: 0,
+    },
+    {
+      nhaXeThamChieu: 'Phương Trang',
+      tuyenThamChieu: 'Sài Gòn - Vũng Tàu',
+      tenDiem: 'Bến xe Miền Tây',
+      vaiTroMacDinh: 'DIEM_DON',
+      khoangCachPhutSoVoiXuatBen: 0,
+    },
+  ];
+
+  const lookup = {
+    FUTA: { 'Bến xe Miền Tây': 'BX-MT' },
+  };
+
+  const templates = buildRouteTemplates(routePoints, lookup, p => unknownPoints.push(p));
+  assert.equal(templates.length, 1);
+  assert.equal(templates[0].nhaXeCode, 'FUTA');
+  assert.equal(unknownPoints.length, 1);
+  assert.equal(unknownPoints[0].nhaXeThamChieu, 'Nhà Xe Lạ Không Xác Định');
+});
+
+test('validateRouteTemplate: identifies missing DON, missing TRA, and duplicate (maDiem, loaiDiem)', async () => {
+  const { validateRouteTemplate } = await import('../lib/crawled-data.mjs');
+
+  // Missing DON
+  const noDon = validateRouteTemplate({
+    stops: [{ maDiem: 'S1', loaiDiem: 'TRA', phutLech: 100 }],
+  });
+  assert.ok(noDon.some(r => r.includes('ĐÓN')));
+
+  // Missing TRA
+  const noTra = validateRouteTemplate({
+    stops: [{ maDiem: 'S1', loaiDiem: 'DON', phutLech: 0 }],
+  });
+  assert.ok(noTra.some(r => r.includes('TRẢ')));
+
+  // Duplicate (maDiem, loaiDiem)
+  const dup = validateRouteTemplate({
+    stops: [
+      { maDiem: 'S1', loaiDiem: 'DON', phutLech: 0 },
+      { maDiem: 'S1', loaiDiem: 'DON', phutLech: 10 },
+      { maDiem: 'S2', loaiDiem: 'TRA', phutLech: 100 },
+    ],
+  });
+  assert.ok(dup.some(r => r.includes('Trùng')));
+});
+
+test('validateRouteTemplate: detects last drop-off not after first pick-up', async () => {
+  const { validateRouteTemplate } = await import('../lib/crawled-data.mjs');
+
+  const invalid = validateRouteTemplate({
+    stops: [
+      { maDiem: 'S1', loaiDiem: 'DON', phutLech: 10 },
+      { maDiem: 'S2', loaiDiem: 'TRA', phutLech: 5 },
+    ],
+  });
+  assert.ok(invalid.some(r => r.includes('nhỏ hơn hoặc bằng phutLech của điểm ĐÓN đầu tiên')));
+});
+
+test('validateRouteTemplate: detects invalid drop-off for HM Vũng Tàu - Sài Gòn case', async () => {
+  const { validateRouteTemplate } = await import('../lib/crawled-data.mjs');
+
+  // Case HM Vũng Tàu - Sài Gòn:
+  // Pick-ups from -15 up to +65, but drop-offs only at 0 (before pick-ups finish)
+  const hmVtSg = validateRouteTemplate({
+    stops: [
+      { maDiem: 'HM-DON-1', loaiDiem: 'DON', phutLech: -15 },
+      { maDiem: 'HM-TRA-1', loaiDiem: 'TRA', phutLech: 0 },
+      { maDiem: 'HM-DON-2', loaiDiem: 'DON', phutLech: 65 },
+    ],
+  });
+  assert.ok(hmVtSg.length > 0, 'Must flag HM Vũng Tàu - Sài Gòn case as invalid');
+  assert.ok(
+    hmVtSg.some(r => r.includes('nhỏ hơn hoặc bằng') && r.includes('điểm ĐÓN')),
+    `Reason must mention last TRA <= DON: ${JSON.stringify(hmVtSg)}`
+  );
+});

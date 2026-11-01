@@ -120,6 +120,8 @@ export async function runSeed({ apply = false } = {}) {
       vpBenXeAsBenXeList: [],
       sampleReusedList: [],
       truncatedFieldsList: [],
+      templatesSummary: [],
+      unknownOperatorRoutePoints: [],
     };
 
     for (const code of targetOperators) {
@@ -483,7 +485,23 @@ export async function runSeed({ apply = false } = {}) {
       }
     }
 
-    const templates = buildRouteTemplates(allRelevantRoutePoints, templatesLookup);
+    const templates = buildRouteTemplates(allRelevantRoutePoints, templatesLookup, p => {
+      report.unknownOperatorRoutePoints.push({
+        tenDiem: p.tenDiem,
+        nhaXeThamChieu: p.nhaXeThamChieu,
+        tuyenThamChieu: p.tuyenThamChieu,
+      });
+    });
+
+    report.templatesSummary = templates.map(t => ({
+      nhaXeCode: t.nhaXeCode,
+      tuyenThamChieu: t.tuyenThamChieu,
+      incomplete: t.incomplete,
+      thin: t.thin,
+      reasons: t.reasons,
+      stopsCount: t.stops.length,
+    }));
+
     const templatesPath = path.resolve('prisma/data/route-templates.json');
     fs.writeFileSync(templatesPath, JSON.stringify(templates, null, 2), 'utf8');
     console.log(`[INFO] Đã ghi khuôn lộ trình vào: ${templatesPath} (${templates.length} lộ trình)`);
@@ -564,6 +582,24 @@ function printReport(report, isApply) {
         console.log(`     * Phần thông tin bị lược bỏ: "${t.lostValue}"`);
       }
     }
+  }
+
+  console.log(`\n7. DANH SÁCH KHUÔN LỘ TRÌNH (${report.templatesSummary.length} khuôn):`);
+  for (const t of report.templatesSummary) {
+    const flags = [];
+    if (t.incomplete) flags.push('INCOMPLETE');
+    if (t.thin) flags.push(`THIN (${t.stopsCount} điểm)`);
+    if (flags.length === 0) flags.push('HỢP LỆ');
+
+    console.log(`   - [${t.nhaXeCode}] "${t.tuyenThamChieu}": [${flags.join(' | ')}] - ${t.stopsCount} điểm dừng`);
+    if (t.reasons.length > 0) {
+      for (const r of t.reasons) {
+        console.log(`     * Lý do incomplete: ${r}`);
+      }
+    }
+  }
+  if (report.unknownOperatorRoutePoints.length > 0) {
+    console.log(`   - [CẢNH BÁO] Có ${report.unknownOperatorRoutePoints.length} điểm dọc tuyến bị bỏ qua do không rõ nhà xe.`);
   }
   console.log(`===============================================================\n`);
 }
