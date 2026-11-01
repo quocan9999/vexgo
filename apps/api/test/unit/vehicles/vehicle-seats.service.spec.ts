@@ -10,6 +10,8 @@ import { VehiclesService } from '../../../src/vehicles/vehicles.service.js';
 
 const seatRecord = {
   gheId: 101,
+  maGhe: 'f6393ceced3348a98bcb0711319d1fa1',
+  tenGhe: 'A01',
   soGhe: 'A01',
   viTri: 'Tầng dưới',
   tang: 1,
@@ -104,11 +106,14 @@ describe('VehiclesService vehicle seats', () => {
     vi.mocked(prisma.ghe.create).mockResolvedValue(seatRecord as never);
     vi.mocked(prisma.ghe.findFirst).mockResolvedValue({
       gheId: 101,
+      maGhe: 'f6393ceced3348a98bcb0711319d1fa1',
+      tenGhe: 'A01',
       soGhe: 'A01',
       tang: 1,
     } as never);
     vi.mocked(prisma.ghe.update).mockResolvedValue({
       ...seatRecord,
+      tenGhe: 'A02',
       soGhe: 'A02',
       viTri: 'Tầng trên',
     } as never);
@@ -125,13 +130,14 @@ describe('VehiclesService vehicle seats', () => {
     });
     expect(prisma.ghe.findMany).toHaveBeenCalledWith({
       where: { xeId: 12 },
-      orderBy: { soGhe: 'asc' },
+      orderBy: { tenGhe: 'asc' },
       select: expect.any(Object),
     });
     expect(result).toEqual({
       data: [
         {
           seatId: 101,
+          seatCode: 'f6393ceced3348a98bcb0711319d1fa1',
           seatNumber: 'A01',
           position: 'Tầng dưới',
           vehicleId: 12,
@@ -186,7 +192,8 @@ describe('VehiclesService vehicle seats', () => {
     expect(prisma.ghe.create).toHaveBeenCalledWith({
       data: {
         xeId: 12,
-        soGhe: 'A01',
+        maGhe: expect.any(String),
+        tenGhe: 'A01',
         viTri: 'Tầng dưới',
         tang: 1,
         toaDoX: null,
@@ -206,7 +213,8 @@ describe('VehiclesService vehicle seats', () => {
       expect.objectContaining({
         data: {
           xeId: 12,
-          soGhe: 'A01',
+          maGhe: expect.any(String),
+          tenGhe: 'A01',
           viTri: 'Tầng dưới',
           tang: 1,
           toaDoX: null,
@@ -223,7 +231,8 @@ describe('VehiclesService vehicle seats', () => {
       expect.objectContaining({
         data: {
           xeId: 12,
-          soGhe: 'A01',
+          maGhe: expect.any(String),
+          tenGhe: 'A01',
           viTri: null,
           tang: 1,
           toaDoX: null,
@@ -243,7 +252,7 @@ describe('VehiclesService vehicle seats', () => {
   });
 
   it.each([
-    { target: ['xeId', 'soGhe'] },
+    { target: ['xeId', 'tenGhe'] },
     { target: 'Ghe_index_1' },
     {
       driverAdapterError: {
@@ -290,7 +299,7 @@ describe('VehiclesService vehicle seats', () => {
           xeId: 12,
           gheChuyenXes: { none: {} },
         },
-        data: { soGhe: 'A02', viTri: 'Tầng trên' },
+        data: { tenGhe: 'A02', viTri: 'Tầng trên' },
       }),
     );
     expect(vi.mocked(prisma.ghe.update).mock.calls[0][0].data).not.toHaveProperty(
@@ -320,13 +329,13 @@ describe('VehiclesService vehicle seats', () => {
     await service.updateSeat(12, 101, updateInput({ seatNumber: 'A01' }));
 
     expect(prisma.ghe.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: { soGhe: 'A01', viTri: 'Tầng trên' } }),
+      expect.objectContaining({ data: { tenGhe: 'A01', viTri: 'Tầng trên' } }),
     );
   });
 
   it('maps duplicate seat numbers during update to VEHICLE_SEAT_NUMBER_EXISTS', async () => {
     vi.mocked(prisma.ghe.update).mockRejectedValueOnce(
-      prismaKnownError('P2002', { target: ['xeId', 'soGhe'] }),
+      prismaKnownError('P2002', { target: ['xeId', 'tenGhe'] }),
     );
 
     await expect(service.updateSeat(12, 101, updateInput())).rejects.toMatchObject({

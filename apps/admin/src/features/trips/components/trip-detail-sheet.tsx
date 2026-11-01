@@ -237,7 +237,7 @@ export function TripDetailSheet({
   }
 
   const loadTripStops = () => {
-    setLoadingStops(true);
+    void Promise.resolve().then(() => setLoadingStops(true));
     getTripStops(tripId)
       .then(setTripStops)
       .catch(() => {})
@@ -285,7 +285,7 @@ export function TripDetailSheet({
         }
       });
 
-    setLoadingStops(true);
+    void Promise.resolve().then(() => setLoadingStops(true));
     getTripStops(tripId)
       .then((stops) => {
         if (!controller.signal.aborted) setTripStops(stops);

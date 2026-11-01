@@ -86,7 +86,6 @@ export function TripsManagement() {
     changePage,
     updateSearch,
     updateStatus,
-    updateDepartureDate,
     sortTrips,
     refresh,
   } = useTrips();

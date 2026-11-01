@@ -37,7 +37,7 @@ import {
   updateTripStops,
   StopApiError,
 } from '../services/stop-service';
-import type { RouteStopItem, TripPassengerPointItem, StopPointRole } from '../types/stop';
+import type { StopPointRole } from '../types/stop';
 
 interface EditableStopRow {
   key: string;
@@ -110,7 +110,7 @@ export function StopListEditor({
 
   // 2. Tải danh sách điểm dừng hiện tại của Tuyến hoặc Chuyến
   useEffect(() => {
-    setLoading(true);
+    void Promise.resolve().then(() => setLoading(true));
     if (mode === 'route') {
       getRouteStops(targetId)
         .then((data) => {
@@ -451,7 +451,7 @@ export function StopListEditor({
             <div className="p-8 text-center text-muted-foreground border rounded-[var(--admin-radius-panel)] border-dashed border-border">
               <Clock className="size-8 mx-auto mb-2 text-muted-foreground/60" />
               <p className="text-sm font-medium">Chưa có điểm dừng nào trong lộ trình.</p>
-              <p className="text-xs mt-1">Chọn điểm ở ô phía trên và nhấn "Thêm điểm dừng".</p>
+              <p className="text-xs mt-1">Chọn điểm ở ô phía trên và nhấn &quot;Thêm điểm dừng&quot;.</p>
             </div>
           ) : (
             <div className="space-y-3">

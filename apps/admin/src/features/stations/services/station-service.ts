@@ -138,7 +138,7 @@ export async function getTripPassengerPoints(tripId: number) {
   return body.data;
 }
 
-export async function updateTripPassengerPoints(tripId: number, points: any[]) {
+export async function updateTripPassengerPoints(tripId: number, points: Record<string, unknown>[]) {
   const response = await adminApiFetch(`${getApiBaseUrl()}/api/v1/trips/${tripId}/passenger-points`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },

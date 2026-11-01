@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { LoaderCircle, Trash2 } from 'lucide-react';
 import { AdminPageHeader } from '@/components/admin/admin-page-header';
@@ -36,14 +36,6 @@ const TYPE_FILTER_OPTIONS: FilterOption[] = [
   { value: 'TRAM_NGHI', label: 'Trạm nghỉ' },
 ];
 
-const TYPE_LABELS: Record<string, string> = {
-  BEN_XE: 'Bến xe',
-  VAN_PHONG: 'Văn phòng',
-  DIEM_DON_TRA: 'Điểm đón/trả',
-  TRUNG_CHUYEN: 'Trung chuyển',
-  TRAM_NGHI: 'Trạm nghỉ',
-};
-
 export function StationsManagement() {
   const { can } = useAdminPermissions();
   const canCreate = can('route:create');
@@ -65,7 +57,7 @@ export function StationsManagement() {
   const [deletingStation, setDeletingStation] = useState<Station | undefined>();
   const [deleting, setDeleting] = useState(false);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -84,11 +76,11 @@ export function StationsManagement() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [page, search, typeFilter]);
 
   useEffect(() => {
-    loadData();
-  }, [page, search, typeFilter]);
+    void Promise.resolve().then(() => loadData());
+  }, [loadData]);
 
   const handleDeleteConfirm = async () => {
     if (!deletingStation) return;

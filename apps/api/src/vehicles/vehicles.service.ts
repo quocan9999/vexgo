@@ -728,7 +728,7 @@ export class VehiclesService {
         });
         if (targetTripSeatCount > 0) throw vehicleSeatInUse();
 
-        const labelMatch = targetSeat.tenGhe.match(/^([a-z]+)(\d+)$/i);
+        const labelMatch = targetSeat.tenGhe?.match(/^([a-z]+)(\d+)$/i);
         const seatsToRename: Array<{ gheId: number; tenGhe: string }> = [];
         if (labelMatch) {
           const [, prefix, targetSuffix] = labelMatch;

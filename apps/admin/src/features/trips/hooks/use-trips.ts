@@ -120,6 +120,8 @@ export function useTrips() {
     routeId,
     vehicleId,
     departureDate,
+    departureDateRange?.from,
+    departureDateRange?.to,
     refreshCount,
   ]);
 

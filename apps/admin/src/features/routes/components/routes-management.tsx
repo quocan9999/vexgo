@@ -161,7 +161,7 @@ export function RouteDetails({
           });
       });
 
-    setLoadingStops(true);
+    void Promise.resolve().then(() => setLoadingStops(true));
     getRouteStops(routeId)
       .then((stops) => {
         if (!controller.signal.aborted) setRouteStops(stops);
@@ -284,7 +284,7 @@ export function RouteDetails({
               <p className="text-xs text-muted-foreground">Đang tải điểm dừng…</p>
             ) : routeStops.length === 0 ? (
               <p className="text-xs text-amber-600 dark:text-amber-400 font-medium">
-                Chưa thiết lập khuôn lộ trình. Nhấn "Cấu hình" để thêm điểm đón/trả.
+                Chưa thiết lập khuôn lộ trình. Nhấn &quot;Cấu hình&quot; để thêm điểm đón/trả.
               </p>
             ) : (
               <div className="flex flex-wrap gap-2 text-xs">

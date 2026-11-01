@@ -46,7 +46,7 @@ export function TripManifestView({ tripId }: TripManifestViewProps) {
   const [search, setSearch] = useState('');
 
   useEffect(() => {
-    setLoading(true);
+    void Promise.resolve().then(() => setLoading(true));
     getTripManifest(tripId)
       .then((res) => {
         setData(res);

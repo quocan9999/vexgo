@@ -4,8 +4,6 @@ import { ResourceSheetForm } from '@/components/admin/resource-sheet-form';
 
 import { LoaderCircle } from 'lucide-react';
 import { useRef, useState, type FormEvent } from 'react';
-import { ResourceGeneratedCodeField } from '@/components/admin/resource-generated-code-field';
-import { useBusinessCodePreview } from '@/hooks/use-business-code-preview';
 import { ResourceSheet, ResourceNotice } from '@/components/admin/resource-ui';
 import {
   Field as FormField,
@@ -97,12 +95,6 @@ export function TripFormDialog({
     acceptsShipments: false,
     copyRouteStops: true,
   }));
-
-  const codePreview = useBusinessCodePreview(
-    'trips',
-    !editing,
-    values.departureDate,
-  );
 
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [submitting, setSubmitting] = useState(false);

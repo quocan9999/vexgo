@@ -41,7 +41,7 @@ export function StationListTable({
         <Building2 className="mb-2 size-8 text-muted-foreground/60" />
         <p className="text-sm font-medium">Chưa có điểm đón trả nào được cấu hình.</p>
         <p className="mt-1 text-xs text-muted-foreground/80">
-          Nhấn vào nút "Thêm điểm đón trả" để tạo bến bãi hoặc văn phòng mới.
+          Nhấn vào nút &quot;Thêm điểm đón trả&quot; để tạo bến bãi hoặc văn phòng mới.
         </p>
       </div>
     );
