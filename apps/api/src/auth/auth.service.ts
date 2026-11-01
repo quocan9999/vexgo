@@ -1,3 +1,4 @@
+import { generateBusinessUuid } from '../common/business-uuid.js';
 import {
   BadRequestException,
   Injectable,
@@ -72,7 +73,7 @@ export class AuthService {
         }
         const customer = await tx.khachHang.create({
           data: {
-            maKhachHang: `KH${account.taiKhoanId.toString().padStart(8, '0')}`,
+            maKhachHang: generateBusinessUuid(),
             diemTichLuy: 0,
             taiKhoanId: account.taiKhoanId,
           },

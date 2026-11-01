@@ -108,7 +108,8 @@ model Xe {
 
 model Ghe {
   gheId        Int           @id @default(autoincrement()) @db.Int
-  soGhe        String        @db.VarChar(10)
+  maGhe        String        @unique @db.VarChar(50)
+  tenGhe       String        @db.VarChar(50)
   viTri        String?       @db.VarChar(50)
   xeId         Int           @db.Int
   tang         Int           @default(1) @db.Int
@@ -119,7 +120,7 @@ model Ghe {
   xe           Xe            @relation(fields: [xeId], references: [xeId], onDelete: Restrict, onUpdate: Restrict)
   gheChuyenXes GheChuyenXe[]
 
-  @@unique([xeId, soGhe], map: "Ghe_index_1")
+  @@unique([xeId, tenGhe], map: "Ghe_index_1")
   @@unique([xeId, tang, toaDoX, toaDoY], map: "Ghe_xeId_tang_toaDoX_toaDoY_key")
 }
 

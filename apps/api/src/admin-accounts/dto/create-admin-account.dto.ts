@@ -66,14 +66,14 @@ export class CreateAdminAccountDto {
   @Max(2_147_483_647)
   busCompanyId!: number;
 
-  @ApiProperty({
-    description: 'Mã số nhân viên nội bộ',
-    example: 'NV-2026-001',
+  @ApiPropertyOptional({
+    description: 'Mã số nhân viên nội bộ (tự sinh nếu không truyền)',
+    example: '550e8400e29b41d4a716446655440000',
   })
+  @ValidateIf((_object, value) => value !== undefined && value !== null && value !== '')
   @IsString()
-  @IsNotEmpty()
   @MaxLength(50)
-  employeeCode!: string;
+  employeeCode?: string;
 
   @ApiPropertyOptional({
     description: 'Danh sách các vai trò được phân quyền cho tài khoản này trong nhà xe',

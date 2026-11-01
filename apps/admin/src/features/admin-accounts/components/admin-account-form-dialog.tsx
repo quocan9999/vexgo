@@ -233,8 +233,7 @@ export function AdminAccountFormDialog({
         errors.busCompanyId = 'Vui lòng chọn nhà xe hợp lệ.';
       }
       const employeeCode = values.employeeCode.trim();
-      if (!employeeCode) errors.employeeCode = 'Vui lòng nhập mã nhân viên.';
-      else if (employeeCode.length > 50) {
+      if (employeeCode && employeeCode.length > 50) {
         errors.employeeCode = 'Mã nhân viên không được vượt quá 50 ký tự.';
       }
       if (options.status !== 'success' || options.roles.length === 0) {
@@ -295,7 +294,9 @@ export function AdminAccountFormDialog({
             phoneNumber: values.phoneNumber.trim(),
             password: values.password,
             busCompanyId: Number(values.busCompanyId),
-            employeeCode: values.employeeCode.trim(),
+            ...(values.employeeCode.trim()
+              ? { employeeCode: values.employeeCode.trim() }
+              : {}),
             roleNames: values.roleNames,
           } satisfies CreateAdminAccountInput);
       toast.success(
@@ -491,7 +492,7 @@ export function AdminAccountFormDialog({
                 </p>
               )}
             </UiField>
-            {textField('employeeCode', 'Mã nhân viên', 'text', true)}
+            {/* Mã nhân viên được hệ thống tự sinh UUID v4 */}
             <FieldSet
               aria-invalid={Boolean(fieldErrors.roleNames)}
               className="gap-3"

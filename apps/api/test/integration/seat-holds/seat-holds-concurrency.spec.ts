@@ -95,8 +95,8 @@ describe('SeatHolds Concurrency & Isolation with MySQL (Integration)', () => {
         loaiXeId: vehicleTypeId,
         ghes: {
           create: [
-            { soGhe: 'S01', viTri: 'Tầng 1' },
-            { soGhe: 'S02', viTri: 'Tầng 1' },
+            { maGhe: `seat-s01-${suffix}`.padEnd(32, '0').slice(0, 32), tenGhe: 'S01', viTri: 'Tầng 1' },
+            { maGhe: `seat-s02-${suffix}`.padEnd(32, '0').slice(0, 32), tenGhe: 'S02', viTri: 'Tầng 1' },
           ],
         },
       },

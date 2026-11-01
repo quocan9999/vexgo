@@ -1,3 +1,4 @@
+import { generateBusinessUuid } from '../common/business-uuid.js';
 import {
   BadRequestException,
   ConflictException,
@@ -398,13 +399,13 @@ export class BookingsService {
     }
 
     const resolvedSeatIds = tripSeats.map((s) => s.gheChuyenXeId);
-    const seatNames = tripSeats.map((s) => s.ghe.soGhe);
+    const seatNames = tripSeats.map((s) => s.ghe.tenGhe);
 
     for (const seat of tripSeats) {
       if (seat.trangThai !== 'DANG_GIU') {
         throw new ConflictException({
           error: 'SEAT_UNAVAILABLE',
-          message: `Ghế ${seat.ghe.soGhe} không còn được giữ hợp lệ.`,
+          message: `Ghế ${seat.ghe.tenGhe} không còn được giữ hợp lệ.`,
         });
       }
     }
@@ -702,8 +703,8 @@ export class BookingsService {
       const codePrefix = opCode.slice(0, 8);
       // Nội dung chuyển khoản cần giữ nguyên qua ngân hàng; tránh dấu phân cách.
       const paymentCodePrefix = (codePrefix.replace(/[^A-Za-z0-9]/g, '') || 'VXG').toUpperCase();
-      const maDonGiaoDich = `${paymentCodePrefix}GD${uniqueSuffix}`;
-      const maPhieuDatVe = `${codePrefix}-PDV-${uniqueSuffix}`;
+      const maDonGiaoDich = generateBusinessUuid();
+      const maPhieuDatVe = generateBusinessUuid();
 
       // 5. Create DonGiaoDich
       const donGiaoDich = await tx.donGiaoDich.create({
@@ -751,7 +752,7 @@ export class BookingsService {
       const createdTickets: Array<{
         veId: number;
         maVe: string;
-        soGhe: string;
+        tenGhe: string;
         seatNumber: string;
         seatName: string;
         gia: number;
@@ -766,7 +767,7 @@ export class BookingsService {
       for (let i = 0; i < orderedSeats.length; i++) {
         const seat = orderedSeats[i];
         const ticketSeq = String(i + 1).padStart(2, '0');
-        const ticketCode = `${maPhieuDatVe}-VE-${ticketSeq}`;
+        const ticketCode = generateBusinessUuid();
         const ticketDiscount =
           i === orderedSeats.length - 1
             ? discountAmount.sub(allocatedDiscount)
@@ -840,9 +841,9 @@ export class BookingsService {
         createdTickets.push({
           veId: newVe.veId,
           maVe: ticketCode,
-          soGhe: seat.ghe.soGhe,
-          seatNumber: seat.ghe.soGhe,
-          seatName: seat.ghe.soGhe,
+          tenGhe: seat.ghe.tenGhe,
+          seatNumber: seat.ghe.tenGhe,
+          seatName: seat.ghe.tenGhe,
           gia: actualTicketPrice.toNumber(),
           price: actualTicketPrice.toNumber(),
           status: 'DA_DAT',
@@ -922,7 +923,7 @@ export class BookingsService {
           });
         }
 
-        const maVanDon = `${codePrefix}-VD-${uniqueSuffix}`;
+        const maVanDon = generateBusinessUuid();
         const cargoPersistence = await this.shipmentPersistenceService.persistInTransaction(
           tx,
           {
@@ -1143,7 +1144,7 @@ export class BookingsService {
 
     const firstTicket = booking.ves[0];
     const chuyenXe = firstTicket?.gheChuyenXe?.chuyenXe;
-    const seatNames = booking.ves.map((v) => v.gheChuyenXe.ghe.soGhe);
+    const seatNames = booking.ves.map((v) => v.gheChuyenXe.ghe.tenGhe);
     const seatIds = booking.ves.map((v) => v.gheChuyenXe.gheId);
 
     return {
@@ -1165,7 +1166,7 @@ export class BookingsService {
       tickets: booking.ves.map((v) => ({
         ticketId: v.veId,
         ticketCode: v.maVe,
-        seatName: v.gheChuyenXe.ghe.soGhe,
+        seatName: v.gheChuyenXe.ghe.tenGhe,
         price: Number(v.giaThucTe),
         status: v.trangThai,
       })),
@@ -1495,23 +1496,23 @@ export class BookingsService {
         : null;
 
     const seatNumbers = (booking.ves ?? [])
-      .map((v: any) => v.gheChuyenXe?.ghe?.soGhe)
+      .map((v: any) => v.gheChuyenXe?.ghe?.tenGhe)
       .filter(Boolean);
 
     const activeSeatNumbers = (booking.ves ?? [])
       .filter((v: any) => v.trangThai !== 'HUY')
-      .map((v: any) => v.gheChuyenXe?.ghe?.soGhe)
+      .map((v: any) => v.gheChuyenXe?.ghe?.tenGhe)
       .filter(Boolean);
 
     const cancelledSeatNumbers = (booking.ves ?? [])
       .filter((v: any) => v.trangThai === 'HUY')
-      .map((v: any) => v.gheChuyenXe?.ghe?.soGhe)
+      .map((v: any) => v.gheChuyenXe?.ghe?.tenGhe)
       .filter(Boolean);
 
     const tickets = (booking.ves ?? []).map((v: any) => ({
       ticketId: v.veId,
       ticketCode: v.maVe,
-      seatNumber: v.gheChuyenXe?.ghe?.soGhe ?? null,
+      seatNumber: v.gheChuyenXe?.ghe?.tenGhe ?? null,
       seatPosition: v.gheChuyenXe?.ghe?.viTri ?? null,
       price: Number(v.giaThucTe ?? v.giaNiemYet ?? 0),
       status: v.trangThai,
@@ -1583,7 +1584,7 @@ export class BookingsService {
       tickets: (booking.ves ?? []).map((v: any) => ({
         ticketId: v.veId,
         ticketCode: v.maVe,
-        seatNumber: v.gheChuyenXe?.ghe?.soGhe ?? null,
+        seatNumber: v.gheChuyenXe?.ghe?.tenGhe ?? null,
         seatPosition: v.gheChuyenXe?.ghe?.viTri ?? null,
         price: Number(v.giaThucTe ?? v.giaNiemYet ?? 0),
         status: v.trangThai,

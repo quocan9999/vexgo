@@ -25,7 +25,7 @@ export type AdminAccount = {
   roles: TenantRbacRoleName[];
   employee: {
     employeeId: number;
-    employeeCode: string;
+    employeeCode?: string;
     employmentStatus: string;
   };
   busCompany: {
@@ -66,7 +66,7 @@ export type CreateAdminAccountInput = {
   phoneNumber: string;
   password: string;
   busCompanyId: number;
-  employeeCode: string;
+  employeeCode?: string;
   roleNames: readonly TenantRbacRoleName[];
   dateOfBirth?: string | null;
   email?: string | null;

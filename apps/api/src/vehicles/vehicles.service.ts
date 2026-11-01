@@ -1,3 +1,4 @@
+import { generateBusinessUuid } from '../common/business-uuid.js';
 import {
   ConflictException,
   Injectable,
@@ -270,7 +271,8 @@ export class VehiclesService {
               ? {
                   ghes: {
                     create: input.seats.map((seat) => ({
-                      soGhe: seat.seatNumber,
+                      maGhe: generateBusinessUuid(),
+                      tenGhe: seat.seatNumber,
                       viTri: seat.position?.trim() || null,
                       tang: seat.floor,
                       toaDoX: seat.x,
@@ -431,7 +433,7 @@ export class VehiclesService {
 
     const seats = await this.prisma.ghe.findMany({
       where: { xeId: vehicleId },
-      orderBy: { soGhe: 'asc' },
+      orderBy: { tenGhe: 'asc' },
       select: VEHICLE_SEAT_SELECT,
     });
 
@@ -478,7 +480,8 @@ export class VehiclesService {
         return tx.ghe.create({
           data: {
             xeId: vehicleId,
-            soGhe: input.seatNumber,
+            maGhe: generateBusinessUuid(),
+            tenGhe: input.seatNumber,
             viTri: input.position?.trim() || null,
             tang: floor,
             toaDoX: input.x ?? null,
@@ -552,7 +555,7 @@ export class VehiclesService {
 
       return tx.ghe.findMany({
         where: { xeId: vehicleId },
-        orderBy: { soGhe: 'asc' },
+        orderBy: { tenGhe: 'asc' },
         select: VEHICLE_SEAT_SELECT,
       });
     });
@@ -670,7 +673,7 @@ export class VehiclesService {
           gheChuyenXes: { none: {} },
         },
         data: {
-          soGhe: input.seatNumber,
+          tenGhe: input.seatNumber,
           viTri: input.position?.trim() || null,
           ...(input.floor !== undefined ? { tang: input.floor } : {}),
           ...(input.x !== undefined ? { toaDoX: input.x } : {}),
@@ -716,7 +719,7 @@ export class VehiclesService {
 
         const targetSeat = await tx.ghe.findFirst({
           where: { gheId: seatId, xeId: vehicleId },
-          select: { gheId: true, soGhe: true, tang: true },
+          select: { gheId: true, tenGhe: true, tang: true },
         });
         if (!targetSeat) throw vehicleSeatNotFound();
 
@@ -725,8 +728,8 @@ export class VehiclesService {
         });
         if (targetTripSeatCount > 0) throw vehicleSeatInUse();
 
-        const labelMatch = targetSeat.soGhe.match(/^([a-z]+)(\d+)$/i);
-        const seatsToRename: Array<{ gheId: number; soGhe: string }> = [];
+        const labelMatch = targetSeat.tenGhe.match(/^([a-z]+)(\d+)$/i);
+        const seatsToRename: Array<{ gheId: number; tenGhe: string }> = [];
         if (labelMatch) {
           const [, prefix, targetSuffix] = labelMatch;
           const targetNumber = Number(targetSuffix);
@@ -734,13 +737,13 @@ export class VehiclesService {
             where: {
               xeId: vehicleId,
               tang: targetSeat.tang,
-              soGhe: { startsWith: prefix },
+              tenGhe: { startsWith: prefix },
             },
-            select: { gheId: true, soGhe: true },
+            select: { gheId: true, tenGhe: true },
           });
           const numberedSeats = sameSeries
             .flatMap((seat) => {
-              const match = seat.soGhe.match(/^([a-z]+)(\d+)$/i);
+              const match = seat.tenGhe.match(/^([a-z]+)(\d+)$/i);
               if (
                 !match ||
                 match[1].toLocaleUpperCase('vi-VN') !==
@@ -764,8 +767,8 @@ export class VehiclesService {
             const nextNumber = `${prefix}${String(
               seat.numericSuffix - 1,
             ).padStart(seat.suffixWidth, '0')}`;
-            if (seat.soGhe !== nextNumber) {
-              seatsToRename.push({ gheId: seat.gheId, soGhe: nextNumber });
+            if (seat.tenGhe !== nextNumber) {
+              seatsToRename.push({ gheId: seat.gheId, tenGhe: nextNumber });
             }
           }
         }
@@ -784,7 +787,7 @@ export class VehiclesService {
         for (const seat of seatsToRename) {
           await tx.ghe.update({
             where: { gheId: seat.gheId },
-            data: { soGhe: seat.soGhe },
+            data: { tenGhe: seat.tenGhe },
           });
         }
       });
@@ -798,7 +801,8 @@ export class VehiclesService {
 
 const VEHICLE_SEAT_SELECT = {
   gheId: true,
-  soGhe: true,
+  maGhe: true,
+  tenGhe: true,
   viTri: true,
   xeId: true,
   tang: true,
@@ -815,7 +819,8 @@ type VehicleSeatRecord = Prisma.GheGetPayload<{
 function mapVehicleSeat(seat: VehicleSeatRecord) {
   return {
     seatId: seat.gheId,
-    seatNumber: seat.soGhe,
+    seatCode: seat.maGhe,
+    seatNumber: seat.tenGhe,
     position: seat.viTri,
     vehicleId: seat.xeId,
     floor: seat.tang,
@@ -843,12 +848,12 @@ function isVehicleSeatNumberUniqueViolation(error: unknown): boolean {
 
   const target = error.meta?.target;
   const isSeatTarget = (value: unknown) =>
-    value === 'Ghe_index_1' || value === 'xeId_soGhe';
+    value === 'Ghe_index_1' || value === 'xeId_tenGhe';
   if (
     Array.isArray(target)
       ? target.length === 2 &&
         target.includes('xeId') &&
-        target.includes('soGhe')
+        target.includes('tenGhe')
       : isSeatTarget(target)
   ) {
     return true;

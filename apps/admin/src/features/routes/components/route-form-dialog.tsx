@@ -274,17 +274,6 @@ export function RouteFormDialog({
             </p>
           </div>
         )}
-        {!editing && (
-          <ResourceGeneratedCodeField
-            id={`${idPrefix}-code`}
-            label="Mã tuyến"
-            code={codePreview.code}
-            placeholder={codePreview.placeholder}
-            error={codePreview.error}
-            onRetry={codePreview.retry}
-            busy={submitting}
-          />
-        )}
         {textField('origin', 'Điểm đi')}
         {textField('destination', 'Điểm đến')}
         <FieldRoot data-invalid={Boolean(fieldErrors.durationMinutes)}>

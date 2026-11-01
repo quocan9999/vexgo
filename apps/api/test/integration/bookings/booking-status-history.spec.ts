@@ -530,9 +530,9 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
           loaiXeId: vehicleTypeId,
           ghes: {
             create: [
-              { soGhe: 'A01', viTri: 'Tầng 1' },
-              { soGhe: 'A02', viTri: 'Tầng 1' },
-              { soGhe: 'A03', viTri: 'Tầng 1' },
+              { maGhe: `seat-a01-${suffix}`.padEnd(32, '0').slice(0, 32), tenGhe: 'A01', viTri: 'Tầng 1' },
+              { maGhe: `seat-a02-${suffix}`.padEnd(32, '0').slice(0, 32), tenGhe: 'A02', viTri: 'Tầng 1' },
+              { maGhe: `seat-a03-${suffix}`.padEnd(32, '0').slice(0, 32), tenGhe: 'A03', viTri: 'Tầng 1' },
             ],
           },
         },
@@ -826,7 +826,7 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
         // Create a new future trip with 3 seats
         const seats = await fixtureTx.ghe.findMany({
           where: { xeId: vehicleId },
-          orderBy: { soGhe: 'asc' },
+          orderBy: { tenGhe: 'asc' },
         });
         const trip = await fixtureTx.chuyenXe.create({
           data: {

@@ -1782,7 +1782,7 @@ export class TripsService {
     const gheChuyenXes = await this.prisma.gheChuyenXe.findMany({
       where: { chuyenXeId: id },
       include: { ghe: true },
-      orderBy: { ghe: { soGhe: 'asc' } },
+      orderBy: { ghe: { tenGhe: 'asc' } },
     });
 
     if (gheChuyenXes.length === 0) {
@@ -1794,10 +1794,10 @@ export class TripsService {
 
     return gheChuyenXes.map((gx) => ({
       tripSeatId: gx.gheChuyenXeId,
-      seatNumber: gx.ghe.soGhe,
+      seatNumber: gx.ghe.tenGhe,
       position: gx.ghe.viTri,
       floor:
-        gx.ghe.tang ?? gx.tang ?? getLegacySeatFloor(gx.ghe.soGhe, gx.ghe.viTri),
+        gx.ghe.tang ?? gx.tang ?? getLegacySeatFloor(gx.ghe.tenGhe, gx.ghe.viTri),
       x: gx.ghe.toaDoX,
       y: gx.ghe.toaDoY,
       status: gx.trangThai,
@@ -1835,7 +1835,7 @@ export class TripsService {
         ghe: {
           select: {
             gheId: true,
-            soGhe: true,
+            tenGhe: true,
             viTri: true,
             tang: true,
             toaDoX: true,
@@ -1846,7 +1846,7 @@ export class TripsService {
     });
 
     allSeats.sort((a, b) => {
-      const codeCompare = a.ghe.soGhe.localeCompare(b.ghe.soGhe, undefined, {
+      const codeCompare = a.ghe.tenGhe.localeCompare(b.ghe.tenGhe, undefined, {
         numeric: true,
         sensitivity: 'base',
       });
@@ -1874,12 +1874,12 @@ export class TripsService {
       status: item.trangThai,
       seat: {
         seatId: item.ghe.gheId,
-        code: item.ghe.soGhe,
+        code: item.ghe.tenGhe,
         position: item.ghe.viTri,
         floor:
           item.ghe.tang ??
           item.tang ??
-          getLegacySeatFloor(item.ghe.soGhe, item.ghe.viTri),
+          getLegacySeatFloor(item.ghe.tenGhe, item.ghe.viTri),
         x: item.ghe.toaDoX,
         y: item.ghe.toaDoY,
       },
@@ -1934,12 +1934,12 @@ export class TripsService {
         diemDonChuyenXe: { include: { diemDonTra: true } },
         diemTraChuyenXe: { include: { diemDonTra: true } },
       },
-      orderBy: { gheChuyenXe: { ghe: { soGhe: 'asc' } } },
+      orderBy: { gheChuyenXe: { ghe: { tenGhe: 'asc' } } },
     });
 
     const mappedPassengers = tickets.map((t) => {
       const order = t.phieuDatVe?.donGiaoDich;
-      const seatCode = t.gheChuyenXe?.ghe?.soGhe ?? '—';
+      const seatCode = t.gheChuyenXe?.ghe?.tenGhe ?? '—';
       const pickupSnapshot = t.diemDonSnapshot as any;
       const dropoffSnapshot = t.diemTraSnapshot as any;
 

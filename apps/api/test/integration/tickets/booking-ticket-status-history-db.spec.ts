@@ -206,7 +206,7 @@ async function createFixture(
   const gheIds: number[] = [];
   for (let index = 0; index < ticketCount; index += 1) {
     const ghe = await client.ghe.create({
-      data: { soGhe: `T${index + 1}`, xeId: xe.xeId },
+      data: { maGhe: `seat-t${index + 1}-${suffix}`.padEnd(32, '0').slice(0, 32), tenGhe: `T${index + 1}`, xeId: xe.xeId },
       select: { gheId: true },
     });
     gheIds.push(ghe.gheId);

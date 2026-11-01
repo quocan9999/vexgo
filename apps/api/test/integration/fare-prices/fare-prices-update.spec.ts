@@ -305,7 +305,7 @@ describe('Fare Price update HTTP and database behavior', () => {
         select: { xeId: true },
       });
       const seat = await transaction.ghe.create({
-        data: { soGhe: 'T1', viTri: 'A1', xeId: vehicle.xeId },
+        data: { maGhe: `seat-t1-${suffix}`.padEnd(32, '0').slice(0, 32), tenGhe: 'T1', viTri: 'A1', xeId: vehicle.xeId },
         select: { gheId: true },
       });
       const trip = await transaction.chuyenXe.create({

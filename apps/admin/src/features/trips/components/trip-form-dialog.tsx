@@ -381,15 +381,7 @@ export function TripFormDialog({
           </div>
         ) : (
           <>
-            <ResourceGeneratedCodeField
-              id={`${idPrefix}-code`}
-              label="Mã chuyến xe"
-              code={codePreview.code}
-              placeholder={codePreview.placeholder}
-              error={codePreview.error}
-              onRetry={codePreview.retry}
-              busy={submitting}
-            />
+
             {relationField(
               'routeId',
               'Tuyến xe',
