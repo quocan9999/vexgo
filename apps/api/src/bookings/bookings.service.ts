@@ -1363,7 +1363,6 @@ export class BookingsService {
         });
       }
     } else if (
-      !/-PDV-[A-F\d]{30}$/i.test(booking.maPhieuDatVe) ||
       !bookingCode?.trim() ||
       booking.maPhieuDatVe !== bookingCode.trim() ||
       !phoneNumber?.trim() ||

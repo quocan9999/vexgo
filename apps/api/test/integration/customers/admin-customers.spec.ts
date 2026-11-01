@@ -664,6 +664,7 @@ describe('Admin Customers API (Feature 06.1)', () => {
         gheId: 501,
         ghe: {
           gheId: 501,
+          tenGhe: 'A01',
           soGhe: 'A01',
           viTri: 'Tầng dưới',
         },
