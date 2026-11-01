@@ -34,4 +34,15 @@ export class UpdateAdminAccountDto {
   @ValidateIf((_object, value) => value !== undefined && value !== null)
   @Matches(CCCD_PATTERN, { message: 'CCCD phải gồm đúng 12 chữ số.' })
   citizenId?: string | null;
+
+  @ApiPropertyOptional({ description: 'Chức vụ của nhân viên trong nhà xe', example: 'Nhân viên bán vé' })
+  @ValidateIf((_object, value) => value !== undefined && value !== null && value !== '')
+  @IsString()
+  @MaxLength(50)
+  position?: string | null;
+
+  @ApiPropertyOptional({ description: 'Ngày vào làm (định dạng DD-MM-YYYY hoặc YYYY-MM-DD)', example: '01-11-2026' })
+  @ValidateIf((_object, value) => value !== undefined && value !== null)
+  @IsDateOnly({ message: 'Ngày vào làm phải là ngày hợp lệ dạng DD-MM-YYYY.' })
+  joinedAt?: string | null;
 }

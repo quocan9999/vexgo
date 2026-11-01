@@ -230,7 +230,7 @@ model BangGia {
 
 model TaiKhoan {
   taiKhoanId                   Int                           @id @default(autoincrement()) @db.Int
-  hoTen                        String                        @db.VarChar(100)
+  hoTen                        String?                       @db.VarChar(100)
   soDienThoai                  String                        @unique @db.VarChar(16)
   matKhau                      String                        @db.VarChar(255)
   ngaySinh                     DateTime?                     @db.Date
@@ -289,6 +289,10 @@ model YeuCauOtp {
 model KhachHang {
   khachHangId        Int                 @id @default(autoincrement()) @db.Int
   maKhachHang        String              @unique @db.VarChar(50)
+  hoTen              String?             @db.VarChar(100)
+  ngaySinh           DateTime?           @db.Date
+  gioiTinh           String?             @db.VarChar(10)
+  diaChi             String?             @db.VarChar(255)
   diemTichLuy        Int                 @default(0) @db.Int
   taiKhoanId         Int                 @unique @db.Int
   createdAt          DateTime            @default(now()) @db.DateTime(0)
@@ -305,6 +309,13 @@ model KhachHang {
 model NhanVien {
   nhanVienId       Int             @id @default(autoincrement()) @db.Int
   maNhanVien       String          @db.VarChar(50)
+  hoTen            String?         @db.VarChar(100)
+  cccd             String?         @db.Char(12)
+  ngaySinh         DateTime?       @db.Date
+  gioiTinh         String?         @db.VarChar(10)
+  chucVu           String?         @db.VarChar(50)
+  ngayVaoLam       DateTime?       @db.Date
+  ngayNghiViec     DateTime?       @db.Date
   trangThaiLamViec String          @db.VarChar(30)
   nhaXeId          Int             @db.Int
   taiKhoanId       Int             @unique @db.Int

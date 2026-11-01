@@ -916,7 +916,7 @@ export class ShipmentsService {
           actor: history.taiKhoan
             ? {
                 accountId: history.taiKhoan.taiKhoanId,
-                fullName: history.taiKhoan.hoTen,
+                fullName: history.taiKhoan.hoTen ?? 'Người dùng',
               }
             : null,
         }),

@@ -375,11 +375,22 @@ async function seedAccounts(db, operators, roles) {
       'NHAN_VIEN_KINH_DOANH',
       'NHAN_VIEN_BAN_VE',
     ];
+    const employeePositions = [
+      'Quản lý điều hành',
+      'Nhân viên bán vé',
+      'Nhân viên bán vé',
+      'Chăm sóc khách hàng',
+      'Phụ xe tuyến',
+      'Nhân viên kinh doanh',
+      'Nhân viên bán vé',
+    ];
     for (let employeeIndex = 0; employeeIndex < employeeRoles.length; employeeIndex += 1) {
       const employeeCode = deterministicUuid('NV', definition.code, employeeIndex);
       const phone = `+8491${pad(opIndex * 100 + employeeIndex + 1, 7)}`;
       const roleName = employeeRoles[employeeIndex];
       const isFormer = employeeIndex === 6;
+      const birthDate = dateOnly(1985 + employeeIndex, 2 + opIndex, 3 + employeeIndex);
+      const cccd = `00000000${pad(opIndex * 10 + employeeIndex + 1, 4)}`;
       const account = await upsertBy(
         db,
         'TaiKhoan',
@@ -388,8 +399,8 @@ async function seedAccounts(db, operators, roles) {
           hoTen: employeeNames[employeeIndex],
           soDienThoai: phone,
           matKhau: hash,
-          ngaySinh: dateOnly(1985 + employeeIndex, 2 + opIndex, 3 + employeeIndex),
-          cccd: `00000000${pad(opIndex * 10 + employeeIndex + 1, 4)}`,
+          ngaySinh: birthDate,
+          cccd: cccd,
           email: `${employeeCode.toLowerCase()}@vexgo.test`,
           daXacThucSoDienThoai: !isFormer,
           trangThai: isFormer ? 'TAM_KHOA' : 'HOAT_DONG',
@@ -402,11 +413,24 @@ async function seedAccounts(db, operators, roles) {
         { nhaXeId_maNhanVien: { nhaXeId: operator.nhaXeId, maNhanVien: employeeCode } },
         {
           maNhanVien: employeeCode,
+          hoTen: employeeNames[employeeIndex],
+          cccd: cccd,
+          ngaySinh: birthDate,
+          chucVu: employeePositions[employeeIndex],
+          ngayVaoLam: dateOnly(2025, 1, 15),
           trangThaiLamViec: isFormer ? 'DA_NGHI_VIEC' : 'DANG_LAM_VIEC',
           nhaXeId: operator.nhaXeId,
           taiKhoanId: account.taiKhoanId,
         },
-        { trangThaiLamViec: isFormer ? 'DA_NGHI_VIEC' : 'DANG_LAM_VIEC', taiKhoanId: account.taiKhoanId },
+        {
+          hoTen: employeeNames[employeeIndex],
+          cccd: cccd,
+          ngaySinh: birthDate,
+          chucVu: employeePositions[employeeIndex],
+          ngayVaoLam: dateOnly(2025, 1, 15),
+          trangThaiLamViec: isFormer ? 'DA_NGHI_VIEC' : 'DANG_LAM_VIEC',
+          taiKhoanId: account.taiKhoanId,
+        },
       );
       await upsertBy(
         db,
@@ -440,8 +464,8 @@ async function seedAccounts(db, operators, roles) {
       db,
       'KhachHang',
       { maKhachHang: code },
-      { maKhachHang: code, diemTichLuy: index * 10, taiKhoanId: account.taiKhoanId },
-      { diemTichLuy: index * 10, taiKhoanId: account.taiKhoanId },
+      { maKhachHang: code, hoTen: customerNames[index], ngaySinh: accountData.ngaySinh, diemTichLuy: index * 10, taiKhoanId: account.taiKhoanId },
+      { hoTen: customerNames[index], ngaySinh: accountData.ngaySinh, diemTichLuy: index * 10, taiKhoanId: account.taiKhoanId },
     );
     await upsertBy(
       db,

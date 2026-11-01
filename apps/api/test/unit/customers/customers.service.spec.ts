@@ -29,8 +29,14 @@ const account = {
   },
   taiKhoanVaiTros: [{ vaiTro: { tenVaiTro: 'KHACH_HANG' } }],
 };
+const tx = {
+  khachHang: { update: vi.fn() },
+  taiKhoan: { update: vi.fn() },
+};
 const prisma = {
+  $transaction: vi.fn(async (cb: (t: typeof tx) => unknown) => cb(tx)),
   taiKhoan: { findUnique: vi.fn(), update: vi.fn() },
+  khachHang: { update: vi.fn() },
 };
 const service = new CustomersService(prisma as unknown as PrismaService);
 
@@ -39,6 +45,8 @@ describe('CustomersService', () => {
     vi.clearAllMocks();
     prisma.taiKhoan.findUnique.mockResolvedValue(account);
     prisma.taiKhoan.update.mockResolvedValue(account);
+    tx.taiKhoan.update.mockResolvedValue(account);
+    tx.khachHang.update.mockResolvedValue(account.khachHang);
   });
 
   it('maps the authenticated customer profile without sensitive fields', async () => {
@@ -86,12 +94,17 @@ describe('CustomersService', () => {
   });
 
   it('updates only the authenticated account and supports clearing optional fields', async () => {
-    prisma.taiKhoan.update.mockResolvedValueOnce({
+    tx.taiKhoan.update.mockResolvedValueOnce({
       ...account,
       hoTen: 'Nguyễn Văn Bình',
       ngaySinh: null,
       cccd: null,
       email: null,
+      khachHang: {
+        ...account.khachHang,
+        hoTen: 'Nguyễn Văn Bình',
+        ngaySinh: null,
+      },
     });
 
     const result = await service.updateMe(42, {
@@ -101,7 +114,15 @@ describe('CustomersService', () => {
       email: null,
     });
 
-    expect(prisma.taiKhoan.update).toHaveBeenCalledWith({
+    expect(prisma.$transaction).toHaveBeenCalledOnce();
+    expect(tx.khachHang.update).toHaveBeenCalledWith({
+      where: { taiKhoanId: 42 },
+      data: {
+        hoTen: 'Nguyễn Văn Bình',
+        ngaySinh: null,
+      },
+    });
+    expect(tx.taiKhoan.update).toHaveBeenCalledWith({
       where: { taiKhoanId: 42 },
       data: {
         hoTen: 'Nguyễn Văn Bình',
@@ -122,13 +143,13 @@ describe('CustomersService', () => {
 
   it('normalizes profile email and returns a conflict for duplicate email', async () => {
     await service.updateMe(42, { email: '  NEW@EXAMPLE.COM ' });
-    expect(prisma.taiKhoan.update).toHaveBeenCalledWith(
+    expect(tx.taiKhoan.update).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ email: 'new@example.com' }),
       }),
     );
 
-    prisma.taiKhoan.update.mockRejectedValueOnce(
+    tx.taiKhoan.update.mockRejectedValueOnce(
       new Prisma.PrismaClientKnownRequestError('duplicate', {
         code: 'P2002',
         clientVersion: 'test',

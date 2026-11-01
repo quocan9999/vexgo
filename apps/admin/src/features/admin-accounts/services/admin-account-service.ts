@@ -96,6 +96,10 @@ function parseAccount(value: unknown): AdminAccount {
     !isPositiveInteger(value.employee.employeeId) ||
     typeof value.employee.employeeCode !== 'string' ||
     typeof value.employee.employmentStatus !== 'string' ||
+    (value.employee.position !== undefined &&
+      !isNullableString(value.employee.position)) ||
+    (value.employee.joinedAt !== undefined &&
+      !isNullableString(value.employee.joinedAt)) ||
     !isRecord(value.busCompany) ||
     !isPositiveInteger(value.busCompany.busCompanyId) ||
     typeof value.busCompany.code !== 'string' ||
