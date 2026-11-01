@@ -1,3 +1,4 @@
+import { ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsDateString,
   IsIn,
@@ -60,16 +61,30 @@ class IsValidRevenueReportRangeConstraint implements ValidatorConstraintInterfac
 }
 
 export class RevenueReportQueryDto {
+  @ApiPropertyOptional({
+    description: 'Báo cáo từ ngày (định dạng YYYY-MM-DD)',
+    example: '2026-10-01',
+  })
   @IsOptional()
   @IsDateString({ strict: true, strictSeparator: true })
   @Matches(/^\d{4}-\d{2}-\d{2}$/)
   fromDate?: string;
 
+  @ApiPropertyOptional({
+    description: 'Báo cáo đến ngày (định dạng YYYY-MM-DD)',
+    example: '2026-10-31',
+  })
   @IsOptional()
   @IsDateString({ strict: true, strictSeparator: true })
   @Matches(/^\d{4}-\d{2}-\d{2}$/)
   toDate?: string;
 
+  @ApiPropertyOptional({
+    description: 'Nhóm dữ liệu doanh thu theo: ngày (day), tháng (month) hoặc quý (quarter)',
+    enum: ['day', 'month', 'quarter'],
+    default: 'day',
+    example: 'day',
+  })
   @IsIn(['day', 'month', 'quarter'])
   @Validate(IsValidRevenueReportRangeConstraint)
   groupBy: RevenueReportGroupBy = 'day';

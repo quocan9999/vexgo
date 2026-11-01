@@ -1,3 +1,4 @@
+import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import {
   IsDateString,
@@ -35,14 +36,26 @@ function optionalInteger(value: unknown): number {
 }
 
 export class TripQueryDto extends PaginationQueryDto {
+  @ApiPropertyOptional({
+    description: 'Trường sắp xếp danh sách chuyến xe',
+    enum: TRIP_SORT_FIELDS,
+    default: 'departureDate',
+    example: 'departureDate',
+  })
   @IsOptional()
   @IsIn(TRIP_SORT_FIELDS)
   override sortBy: TripSortField = 'departureDate';
 
+  @ApiPropertyOptional({
+    description: 'Lọc theo trạng thái chuyến xe',
+    enum: TRIP_STATUSES,
+    example: 'CHUA_KHOI_HANH',
+  })
   @IsOptional()
   @IsIn(TRIP_STATUSES)
   status?: TripStatus;
 
+  @ApiPropertyOptional({ description: 'Lọc theo ID tuyến xe', example: 1 })
   @IsOptional()
   @Transform(({ value }) => optionalInteger(value))
   @IsInt()
@@ -50,6 +63,7 @@ export class TripQueryDto extends PaginationQueryDto {
   @Max(2_147_483_647)
   routeId?: number;
 
+  @ApiPropertyOptional({ description: 'Lọc theo ID xe phục vụ', example: 1 })
   @IsOptional()
   @Transform(({ value }) => optionalInteger(value))
   @IsInt()
@@ -57,6 +71,10 @@ export class TripQueryDto extends PaginationQueryDto {
   @Max(2_147_483_647)
   vehicleId?: number;
 
+  @ApiPropertyOptional({
+    description: 'Lọc theo ngày khởi hành (YYYY-MM-DD)',
+    example: '2026-11-20',
+  })
   @IsOptional()
   @IsDateString()
   @Matches(/^\d{4}-\d{2}-\d{2}$/)

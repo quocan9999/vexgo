@@ -1,3 +1,4 @@
+import { ApiProperty } from '@nestjs/swagger';
 import {
   ArrayMaxSize,
   ArrayUnique,
@@ -14,6 +15,11 @@ const TENANT_PERMISSION_KEYS = ADMIN_PERMISSION_CATALOG.filter(
 ).map(({ key }) => key);
 
 export class UpdateTenantRolePermissionsDto {
+  @ApiProperty({
+    description: 'Danh sách các mã quyền thuộc phạm vi nhà xe (tenant scope) cần gán',
+    example: ['trip:create', 'trip:read', 'ticket:read'],
+    isArray: true,
+  })
   @IsDefined()
   @IsArray()
   @ArrayUnique()

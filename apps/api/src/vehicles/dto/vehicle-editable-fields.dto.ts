@@ -1,3 +1,4 @@
+import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import {
   IsDefined,
@@ -20,6 +21,7 @@ function strictPositiveInteger(value: unknown) {
 }
 
 export class VehicleEditableFieldsDto {
+  @ApiProperty({ description: 'Biển số đăng ký xe (ví dụ: 51B-123.45)', example: '51B-123.45' })
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsDefined()
   @IsString()
@@ -27,6 +29,7 @@ export class VehicleEditableFieldsDto {
   @MaxLength(15)
   licensePlate!: string;
 
+  @ApiProperty({ description: 'ID nhà xe sở hữu xe này', example: 1 })
   @Transform(({ value }) => strictPositiveInteger(value))
   @IsDefined()
   @IsInt({ message: 'ID nhà xe phải là số nguyên.' })
@@ -34,6 +37,7 @@ export class VehicleEditableFieldsDto {
   @Max(2_147_483_647, { message: 'ID nhà xe vượt giới hạn.' })
   busCompanyId!: number;
 
+  @ApiProperty({ description: 'ID loại phương tiện (dòng xe)', example: 1 })
   @Transform(({ value }) => strictPositiveInteger(value))
   @IsDefined()
   @IsInt({ message: 'ID loại xe phải là số nguyên.' })

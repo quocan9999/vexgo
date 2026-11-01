@@ -1,3 +1,4 @@
+import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import {
   IsDateString,
@@ -49,13 +50,28 @@ function strictInteger(value: unknown) {
 }
 
 export class AdminAccountQueryDto extends PaginationQueryDto {
+  @ApiPropertyOptional({
+    description: 'Trường dùng để sắp xếp',
+    enum: ADMIN_ACCOUNT_SORT_FIELDS,
+    default: 'createdAt',
+    example: 'createdAt',
+  })
   @IsIn(ADMIN_ACCOUNT_SORT_FIELDS)
   sortBy: AdminAccountSortField = 'createdAt';
 
+  @ApiPropertyOptional({
+    description: 'Lọc theo trạng thái tài khoản',
+    enum: ADMIN_ACCOUNT_STATUSES,
+    example: 'HOAT_DONG',
+  })
   @IsOptional()
   @IsIn(ADMIN_ACCOUNT_STATUSES)
   status?: AdminAccountStatus;
 
+  @ApiPropertyOptional({
+    description: 'Lọc theo ID nhà xe trực thuộc',
+    example: 1,
+  })
   @IsOptional()
   @Transform(({ value }) => strictInteger(value))
   @IsInt()
@@ -63,10 +79,19 @@ export class AdminAccountQueryDto extends PaginationQueryDto {
   @Max(2_147_483_647)
   busCompanyId?: number;
 
+  @ApiPropertyOptional({
+    description: 'Lọc theo vai trò của tài khoản',
+    enum: TENANT_PRINCIPAL_ROLES,
+    example: 'ADMIN_NHA_XE',
+  })
   @IsOptional()
   @IsIn(TENANT_PRINCIPAL_ROLES)
   roleName?: AdminAccountFilterRole;
 
+  @ApiPropertyOptional({
+    description: 'Lọc tài khoản tạo từ ngày (YYYY-MM-DD)',
+    example: '2026-01-01',
+  })
   @IsOptional()
   @IsDateString({ strict: true })
   @Matches(DATE_ONLY_PATTERN, {
@@ -74,6 +99,10 @@ export class AdminAccountQueryDto extends PaginationQueryDto {
   })
   createdFrom?: string;
 
+  @ApiPropertyOptional({
+    description: 'Lọc tài khoản tạo đến ngày (YYYY-MM-DD)',
+    example: '2026-12-31',
+  })
   @IsOptional()
   @IsDateString({ strict: true })
   @Matches(DATE_ONLY_PATTERN, {
