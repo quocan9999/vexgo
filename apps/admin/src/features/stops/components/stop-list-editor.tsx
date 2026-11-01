@@ -15,6 +15,9 @@ import {
 import { ResourceSheet } from '@/components/admin/resource-ui';
 import { ResourceSheetForm } from '@/components/admin/resource-sheet-form';
 import { Button } from '@/components/ui/action-button';
+import { Card } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Field, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -23,6 +26,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/status-badge';
 import { getStations } from '@/features/stations/services/station-service';
 import type { Station } from '@/features/stations/types/station';
 import {
@@ -383,7 +388,7 @@ export function StopListEditor({
       >
         <div className="space-y-4">
           {/* Vùng thêm điểm dừng mới */}
-          <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center bg-muted/40 p-3 rounded-lg border">
+          <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center bg-muted/30 p-3 rounded-[var(--admin-radius-panel)] border border-border">
             <div className="flex-1">
               <Select
                 value={selectedStationToAdd}
@@ -397,8 +402,8 @@ export function StopListEditor({
                     <SelectItem key={s.diemDonTraId} value={String(s.diemDonTraId)}>
                       <div className="flex items-center gap-2">
                         <span className="font-medium">{s.tenDiem}</span>
-                        <span className="text-xs text-muted-foreground">({s.maDiem})</span>
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted">
+                        <span className="font-mono text-xs text-muted-foreground">({s.maDiem})</span>
+                        <Badge variant="secondary" className="text-[10px]">
                           {s.loaiDiem === 'BEN_XE'
                             ? 'Bến xe'
                             : s.loaiDiem === 'VAN_PHONG'
@@ -408,7 +413,7 @@ export function StopListEditor({
                                 : s.loaiDiem === 'TRAM_NGHI'
                                   ? 'Trạm nghỉ'
                                   : 'Dọc đường'}
-                        </span>
+                        </Badge>
                       </div>
                     </SelectItem>
                   ))}
@@ -421,29 +426,29 @@ export function StopListEditor({
               disabled={!selectedStationToAdd}
               className="shrink-0"
             >
-              <Plus className="size-4 mr-1" />
+              <Plus className="size-4 mr-1.5" />
               Thêm điểm dừng
             </Button>
           </div>
 
           {/* Cảnh báo validation nếu có */}
           {validationErrors.length > 0 && (
-            <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-900 dark:text-amber-200 space-y-1">
-              <div className="flex items-center gap-1.5 font-semibold">
-                <AlertTriangle className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
-                <span>Cần điều chỉnh trước khi lưu:</span>
-              </div>
-              <ul className="list-disc list-inside space-y-0.5 pl-1">
-                {validationErrors.map((err, i) => (
-                  <li key={i}>{err}</li>
-                ))}
-              </ul>
-            </div>
+            <Alert variant="destructive">
+              <AlertTriangle className="size-4" />
+              <AlertTitle>Cần điều chỉnh trước khi lưu</AlertTitle>
+              <AlertDescription>
+                <ul className="list-disc list-inside space-y-1 text-xs">
+                  {validationErrors.map((err, i) => (
+                    <li key={i}>{err}</li>
+                  ))}
+                </ul>
+              </AlertDescription>
+            </Alert>
           )}
 
           {/* Danh sách các điểm dừng */}
           {rows.length === 0 ? (
-            <div className="p-8 text-center text-muted-foreground border rounded-lg border-dashed">
+            <div className="p-8 text-center text-muted-foreground border rounded-[var(--admin-radius-panel)] border-dashed border-border">
               <Clock className="size-8 mx-auto mb-2 text-muted-foreground/60" />
               <p className="text-sm font-medium">Chưa có điểm dừng nào trong lộ trình.</p>
               <p className="text-xs mt-1">Chọn điểm ở ô phía trên và nhấn "Thêm điểm dừng".</p>
@@ -457,65 +462,64 @@ export function StopListEditor({
                 const clockPreview = calculateClockTimePreview(departureTime, row.phutLech);
 
                 return (
-                  <div
+                  <Card
                     key={row.key}
-                    className="p-3.5 rounded-lg border bg-card hover:border-primary/40 transition-colors space-y-2.5"
+                    size="sm"
+                    className="space-y-3 p-3.5 transition-colors hover:border-primary/40"
                   >
-                    <div className="flex items-center justify-between gap-2 border-b pb-2">
+                    <div className="flex items-center justify-between gap-2 border-b border-border pb-2.5">
                       <div className="flex items-center gap-2 min-w-0">
-                        <span className="grid size-6 place-items-center rounded-full bg-muted text-xs font-bold text-muted-foreground shrink-0">
+                        <span className="grid size-6 place-items-center rounded-full bg-muted text-xs font-semibold text-muted-foreground shrink-0">
                           {index + 1}
                         </span>
-                        <span className="font-semibold text-sm truncate">
+                        <span className="font-semibold text-[13px] truncate">
                           {station?.tenDiem ?? `Điểm #${row.diemDonTraId}`}
                         </span>
-                        <span className="text-xs text-muted-foreground shrink-0">
+                        <span className="font-mono text-xs text-muted-foreground shrink-0">
                           ({station?.maDiem ?? '—'})
                         </span>
                         {station?.loaiDiem === 'TRUNG_CHUYEN' && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-600 font-medium shrink-0">
+                          <Badge variant="secondary" className="text-[10px]">
                             Trung chuyển
-                          </span>
+                          </Badge>
                         )}
                         {hasTickets && (
-                          <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-700 font-semibold shrink-0">
+                          <Badge variant="warning" className="text-[10px] gap-1">
                             <Lock className="size-3" />
                             {row.veCount} vé đã chọn
-                          </span>
+                          </Badge>
                         )}
                       </div>
 
                       <div className="flex items-center gap-1 shrink-0">
                         <Button
                           variant="ghost"
-                          size="sm"
+                          size="icon-sm"
                           type="button"
-                          className="size-7 p-0"
                           onClick={() => handleMoveRow(index, 'up')}
                           disabled={index === 0}
-                          title="Di chuyển lên"
+                          aria-label="Di chuyển lên"
                         >
                           <ArrowUp className="size-3.5" />
                         </Button>
                         <Button
                           variant="ghost"
-                          size="sm"
+                          size="icon-sm"
                           type="button"
-                          className="size-7 p-0"
                           onClick={() => handleMoveRow(index, 'down')}
                           disabled={index === rows.length - 1}
-                          title="Di chuyển xuống"
+                          aria-label="Di chuyển xuống"
                         >
                           <ArrowDown className="size-3.5" />
                         </Button>
                         <Button
                           variant="ghost"
-                          size="sm"
+                          size="icon-sm"
                           type="button"
-                          className="size-7 p-0 text-destructive hover:bg-destructive/10"
+                          className="text-destructive hover:bg-destructive/10"
                           onClick={() => handleDeleteRow(index)}
                           disabled={hasTickets}
-                          title={hasTickets ? 'Không thể xóa điểm đã có vé đặt' : 'Xóa điểm này'}
+                          aria-label={hasTickets ? 'Không thể xóa điểm đã có vé đặt' : 'Xóa điểm này'}
                         >
                           <Trash2 className="size-3.5" />
                         </Button>
@@ -524,8 +528,8 @@ export function StopListEditor({
 
                     <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
                       {/* Cột 1: Vai trò */}
-                      <div>
-                        <label className="block text-muted-foreground mb-1 font-medium">Vai trò</label>
+                      <Field>
+                        <FieldLabel className="text-xs text-muted-foreground font-medium">Vai trò</FieldLabel>
                         <Select
                           value={row.loaiDiem}
                           onValueChange={(val) =>
@@ -546,78 +550,82 @@ export function StopListEditor({
                             <SelectItem value="NGHI">Trạm nghỉ</SelectItem>
                           </SelectContent>
                         </Select>
-                      </div>
+                      </Field>
 
                       {/* Cột 2: Phút lệch & Giờ thực tế */}
-                      <div>
-                        <div className="flex justify-between items-center mb-1">
-                          <label className="text-muted-foreground font-medium">Lệch (phút)</label>
-                          <span className="font-semibold text-primary">{clockPreview}</span>
+                      <Field>
+                        <div className="flex justify-between items-center">
+                          <FieldLabel className="text-xs text-muted-foreground font-medium">Lệch (phút)</FieldLabel>
+                          <span className="font-semibold text-primary font-mono">{clockPreview}</span>
                         </div>
                         <Input
                           type="number"
-                          className="h-8 text-xs"
+                          className="h-8 text-xs font-mono"
                           value={row.phutLech}
                           onChange={(e) => handleUpdateRow(index, { phutLech: Number(e.target.value) })}
                           disabled={hasTickets}
                           placeholder="Số phút"
                         />
-                      </div>
+                      </Field>
 
                       {/* Cột 3: Phụ phí (VNĐ) */}
-                      <div>
-                        <label className="block text-muted-foreground mb-1 font-medium">Phụ phí (đ)</label>
+                      <Field>
+                        <FieldLabel className="text-xs text-muted-foreground font-medium">Phụ phí (đ)</FieldLabel>
                         <Input
                           type="number"
                           min="0"
                           step="1000"
-                          className="h-8 text-xs"
+                          className="h-8 text-xs font-mono"
                           value={row.phuPhi}
                           onChange={(e) => handleUpdateRow(index, { phuPhi: Math.max(0, Number(e.target.value)) })}
                           disabled={row.loaiDiem === 'NGHI'}
                           placeholder="0"
                         />
-                      </div>
+                      </Field>
 
                       {/* Cột 4: Có mặt trước (phút) */}
-                      <div>
-                        <label className="block text-muted-foreground mb-1 font-medium">Có mặt trước (phút)</label>
+                      <Field>
+                        <FieldLabel className="text-xs text-muted-foreground font-medium">Có mặt trước (phút)</FieldLabel>
                         <Input
                           type="number"
                           min="0"
-                          className="h-8 text-xs"
+                          className="h-8 text-xs font-mono"
                           value={row.phutCoMatTruoc}
                           onChange={(e) =>
                             handleUpdateRow(index, { phutCoMatTruoc: Math.max(0, Number(e.target.value)) })
                           }
                           placeholder="15"
                         />
-                      </div>
+                      </Field>
                     </div>
 
                     {/* Dòng ghi chú & nhận khách */}
-                    <div className="flex items-center gap-4 text-xs pt-1">
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-1">
                       <div className="flex-1">
                         <Input
                           type="text"
-                          className="h-7 text-xs"
+                          className="h-8 text-xs"
                           placeholder="Ghi chú đón trả (VD: Cột B1 ga quốc tế, cổng bến xe...)"
                           value={row.ghiChu}
                           onChange={(e) => handleUpdateRow(index, { ghiChu: e.target.value })}
                         />
                       </div>
-                      <label className="flex items-center gap-1.5 text-muted-foreground cursor-pointer shrink-0">
-                        <input
-                          type="checkbox"
-                          className="rounded size-3.5 text-primary"
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Checkbox
+                          id={`nhan-khach-${row.key}`}
                           checked={row.nhanKhach}
                           disabled={row.loaiDiem === 'NGHI'}
-                          onChange={(e) => handleUpdateRow(index, { nhanKhach: e.target.checked })}
+                          onCheckedChange={(checked) => handleUpdateRow(index, { nhanKhach: Boolean(checked) })}
                         />
-                        <span>Mở nhận khách</span>
-                      </label>
+                        <label
+                          htmlFor={`nhan-khach-${row.key}`}
+                          className="text-xs text-muted-foreground cursor-pointer select-none font-medium"
+                        >
+                          Mở nhận khách
+                        </label>
+                      </div>
                     </div>
-                  </div>
+                  </Card>
                 );
               })}
             </div>

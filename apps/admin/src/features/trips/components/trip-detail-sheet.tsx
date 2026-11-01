@@ -11,6 +11,8 @@ import {
 } from '@/components/admin/resource-ui';
 import { toast } from 'sonner';
 import { Button, buttonVariants } from '@/components/ui/action-button';
+import { Badge } from '@/components/ui/status-badge';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
   cancelTrip,
   deleteTrip,
@@ -508,10 +510,13 @@ export function TripDetailSheet({
             </div>
 
             {detail.trip.thieuDiem && (
-              <div className="flex items-center gap-2 rounded-md bg-amber-500/15 p-2.5 text-xs font-semibold text-amber-700 dark:text-amber-300">
-                <AlertCircle className="size-4 shrink-0" />
-                <span>Chuyến xe đang thiếu điểm đón hoặc điểm trả! Vui lòng cập nhật lộ trình.</span>
-              </div>
+              <Alert variant="destructive">
+                <AlertCircle className="size-4" />
+                <AlertTitle>Thiếu điểm đón / trả</AlertTitle>
+                <AlertDescription className="text-xs">
+                  Chuyến xe đang thiếu điểm đón hoặc điểm trả! Vui lòng cấu hình lộ trình.
+                </AlertDescription>
+              </Alert>
             )}
 
             {loadingStops ? (
@@ -525,36 +530,37 @@ export function TripDetailSheet({
                 {tripStops.map((stop, idx) => (
                   <div
                     key={stop.diemDonTraChuyenXeId ?? idx}
-                    className="flex items-center justify-between text-xs p-2 rounded border bg-card/60"
+                    className="flex items-center justify-between text-xs p-2 rounded-[var(--admin-radius-panel)] border border-border bg-card"
                   >
                     <div className="flex items-center gap-2 min-w-0">
-                      <span
-                        className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                      <Badge
+                        variant={
                           stop.loaiDiem === 'DON'
-                            ? 'bg-blue-500/10 text-blue-600'
+                            ? 'secondary'
                             : stop.loaiDiem === 'TRA'
-                              ? 'bg-green-500/10 text-green-600'
-                              : 'bg-amber-500/10 text-amber-600'
-                        }`}
+                              ? 'outline'
+                              : 'warning'
+                        }
+                        className="text-[10px] font-semibold"
                       >
                         {stop.loaiDiem === 'DON'
                           ? 'ĐÓN'
                           : stop.loaiDiem === 'TRA'
                             ? 'TRẢ'
                             : 'NGHỈ'}
-                      </span>
+                      </Badge>
                       <span className="font-medium truncate">
                         {stop.diemDonTra?.tenDiem ?? `Điểm #${stop.diemDonTraId}`}
                       </span>
                       {stop.phuPhi > 0 && (
-                        <span className="text-[10px] text-muted-foreground">
+                        <span className="text-[10px] text-muted-foreground font-mono">
                           (+{Number(stop.phuPhi).toLocaleString('vi-VN')}đ)
                         </span>
                       )}
                       {(stop.veCount ?? 0) > 0 && (
-                        <span className="text-[10px] px-1 rounded bg-amber-500/15 text-amber-700 font-semibold">
+                        <Badge variant="warning" className="text-[10px] font-semibold">
                           {stop.veCount} vé
-                        </span>
+                        </Badge>
                       )}
                     </div>
                     <div className="font-mono text-primary font-semibold shrink-0">

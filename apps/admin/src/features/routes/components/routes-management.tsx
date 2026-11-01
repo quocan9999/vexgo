@@ -28,6 +28,7 @@ import {
   type FilterOption,
 } from '@/components/data-filters/resource-filters';
 import { Button } from '@/components/ui/action-button';
+import { Badge } from '@/components/ui/status-badge';
 import { Card } from '@/components/ui/card';
 import {
   Table,
@@ -287,16 +288,16 @@ export function RouteDetails({
               </p>
             ) : (
               <div className="flex flex-wrap gap-2 text-xs">
-                <span className="inline-flex items-center px-2 py-1 rounded bg-blue-500/10 text-blue-600 font-medium">
+                <Badge variant="secondary">
                   {routeStops.filter((s) => s.loaiDiem === 'DON').length} điểm đón
-                </span>
-                <span className="inline-flex items-center px-2 py-1 rounded bg-green-500/10 text-green-600 font-medium">
+                </Badge>
+                <Badge variant="outline">
                   {routeStops.filter((s) => s.loaiDiem === 'TRA').length} điểm trả
-                </span>
+                </Badge>
                 {routeStops.some((s) => s.loaiDiem === 'NGHI') && (
-                  <span className="inline-flex items-center px-2 py-1 rounded bg-amber-500/10 text-amber-600 font-medium">
+                  <Badge variant="warning">
                     {routeStops.filter((s) => s.loaiDiem === 'NGHI').length} trạm nghỉ
-                  </span>
+                  </Badge>
                 )}
               </div>
             )}

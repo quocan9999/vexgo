@@ -2,6 +2,7 @@
 
 import { Building2 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
+import { Badge } from '@/components/ui/status-badge';
 import {
   Table,
   TableBody,
@@ -90,9 +91,9 @@ export function StationListTable({
                   <div className="flex flex-col gap-0.5">
                     <div className="flex items-center gap-1.5 font-medium text-foreground">
                       <span>{st.diaDiemCu?.tenDiaDiem ?? '—'}</span>
-                      <span className="inline-flex items-center rounded bg-slate-600 px-1.5 py-0.2 text-[10px] font-bold uppercase text-white">
+                      <Badge variant="secondary" className="text-[10px] uppercase font-bold px-1.5 py-0">
                         CŨ
-                      </span>
+                      </Badge>
                     </div>
                     {st.diaDiemMoi && (
                       <span className="text-xs text-muted-foreground">

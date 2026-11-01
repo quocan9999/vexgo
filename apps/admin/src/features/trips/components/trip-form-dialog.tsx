@@ -13,6 +13,7 @@ import {
   FieldError,
 } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
   SelectTrigger,
@@ -421,19 +422,17 @@ export function TripFormDialog({
               Nhận gửi hàng
             </label>
             <label
-              className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg border p-3 text-[13px] font-semibold"
+              className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg border border-border p-3 text-[13px] font-semibold hover:bg-muted/50 transition-colors"
               htmlFor={`${idPrefix}-copy-route-stops`}
             >
-              <input
-                className="size-4 accent-primary focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
+              <Checkbox
                 id={`${idPrefix}-copy-route-stops`}
-                type="checkbox"
                 checked={values.copyRouteStops}
                 disabled={submitting}
-                onChange={(event) =>
+                onCheckedChange={(checked) =>
                   setValues((current) => ({
                     ...current,
-                    copyRouteStops: event.target.checked,
+                    copyRouteStops: Boolean(checked),
                   }))
                 }
               />

@@ -4,7 +4,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { toast } from 'sonner';
 import { ResourceSheetForm } from '@/components/admin/resource-sheet-form';
 import { ResourceSheet } from '@/components/admin/resource-ui';
-import { Field as FieldRoot, FieldLabel, FieldError } from '@/components/ui/field';
+import { Field, FieldLabel, FieldError, FieldDescription } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -13,6 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Badge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/action-button';
 import { getLocations, type LocationOption } from '@/features/locations/services/location-service';
 import { createStation, updateStation, getStations, StationApiError } from '../services/station-service';
@@ -155,35 +156,37 @@ export function StationFormDialog({
         }
       >
         <div className="space-y-4">
-          <FieldRoot data-invalid={Boolean(errors.maDiem)}>
+          <Field data-invalid={Boolean(errors.maDiem)}>
             <FieldLabel htmlFor="station-code">
               Mã điểm <span aria-hidden>*</span>
             </FieldLabel>
             <Input
               id="station-code"
+              className="font-mono text-[13px]"
               value={maDiem}
               onChange={(e) => setMaDiem(e.target.value)}
               placeholder="VD: BX-MD, VP-Q1..."
               disabled={isEditing || loading}
             />
             {errors.maDiem && <FieldError>{errors.maDiem}</FieldError>}
-          </FieldRoot>
+          </Field>
 
-          <FieldRoot data-invalid={Boolean(errors.tenDiem)}>
+          <Field data-invalid={Boolean(errors.tenDiem)}>
             <FieldLabel htmlFor="station-name">
               Tên điểm đón / trả <span aria-hidden>*</span>
             </FieldLabel>
             <Input
               id="station-name"
+              className="text-[13px]"
               value={tenDiem}
               onChange={(e) => setTenDiem(e.target.value)}
               placeholder="VD: Bến xe Miền Đông mới, Văn phòng Quận 1..."
               disabled={loading}
             />
             {errors.tenDiem && <FieldError>{errors.tenDiem}</FieldError>}
-          </FieldRoot>
+          </Field>
 
-          <FieldRoot>
+          <Field>
             <FieldLabel htmlFor="station-type">
               Loại điểm <span aria-hidden>*</span>
             </FieldLabel>
@@ -192,7 +195,7 @@ export function StationFormDialog({
               onValueChange={(val) => setLoaiDiem(val as StationType)}
               disabled={loading}
             >
-              <SelectTrigger id="station-type">
+              <SelectTrigger id="station-type" className="text-[13px]">
                 <SelectValue placeholder="Chọn loại điểm">
                   {STATION_TYPE_LABELS[loaiDiem] ?? 'Chọn loại điểm'}
                 </SelectValue>
@@ -205,10 +208,10 @@ export function StationFormDialog({
                 <SelectItem value="TRAM_NGHI">Trạm nghỉ</SelectItem>
               </SelectContent>
             </Select>
-          </FieldRoot>
+          </Field>
 
           {loaiDiem === 'TRUNG_CHUYEN' && (
-            <FieldRoot data-invalid={Boolean(errors.benTrungChuyenId)}>
+            <Field data-invalid={Boolean(errors.benTrungChuyenId)}>
               <FieldLabel htmlFor="station-target">
                 Bến đích trung chuyển <span aria-hidden>*</span>
               </FieldLabel>
@@ -217,7 +220,7 @@ export function StationFormDialog({
                 onValueChange={(val) => setBenTrungChuyenId(Number(val))}
                 disabled={loading}
               >
-                <SelectTrigger id="station-target">
+                <SelectTrigger id="station-target" className="text-[13px]">
                   <SelectValue placeholder="Chọn bến xe hoặc văn phòng đích">
                     {(() => {
                       const matched = targetStationOptions.find(
@@ -235,14 +238,14 @@ export function StationFormDialog({
                   ))}
                 </SelectContent>
               </Select>
-              <p className="mt-1 text-[12px] text-muted-foreground">
+              <FieldDescription className="text-xs">
                 * Xe trung chuyển sẽ đưa đón hành khách kết nối giữa điểm này và bến đích đã chọn.
-              </p>
+              </FieldDescription>
               {errors.benTrungChuyenId && <FieldError>{errors.benTrungChuyenId}</FieldError>}
-            </FieldRoot>
+            </Field>
           )}
 
-          <FieldRoot data-invalid={Boolean(errors.diaDiemCuId)}>
+          <Field data-invalid={Boolean(errors.diaDiemCuId)}>
             <FieldLabel htmlFor="station-location">
               Khu vực / Tỉnh thành (trước sáp nhập) <span aria-hidden>*</span>
             </FieldLabel>
@@ -251,7 +254,7 @@ export function StationFormDialog({
               onValueChange={(val) => setDiaDiemCuId(Number(val))}
               disabled={loading}
             >
-              <SelectTrigger id="station-location">
+              <SelectTrigger id="station-location" className="text-[13px]">
                 <SelectValue placeholder="Chọn tỉnh thành (trước sáp nhập)">
                   {(() => {
                     const matchedName =
@@ -261,9 +264,9 @@ export function StationFormDialog({
                     return (
                       <span className="flex items-center gap-1.5">
                         <span>{matchedName}</span>
-                        <span className="inline-flex items-center rounded bg-slate-600 px-1 py-0.2 text-[10px] font-bold uppercase text-white">
+                        <Badge variant="secondary" className="text-[10px] uppercase font-bold px-1.5 py-0">
                           CŨ
-                        </span>
+                        </Badge>
                       </span>
                     );
                   })()}
@@ -274,44 +277,46 @@ export function StationFormDialog({
                   <SelectItem key={loc.id} value={String(loc.diaDiemId)}>
                     <span className="flex items-center gap-1.5">
                       <span>{loc.name}</span>
-                      <span className="inline-flex items-center rounded bg-slate-600 px-1 py-0.2 text-[10px] font-bold uppercase text-white">
+                      <Badge variant="secondary" className="text-[10px] uppercase font-bold px-1.5 py-0">
                         CŨ
-                      </span>
+                      </Badge>
                     </span>
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            <p className="mt-1 text-[12px] text-muted-foreground">
+            <FieldDescription className="text-xs">
               * Hệ thống sẽ tự động liên kết tỉnh thành sáp nhập tương ứng từ bảng master sáp nhập.
-            </p>
+            </FieldDescription>
             {errors.diaDiemCuId && <FieldError>{errors.diaDiemCuId}</FieldError>}
-          </FieldRoot>
+          </Field>
 
-          <FieldRoot data-invalid={Boolean(errors.diaChi)}>
+          <Field data-invalid={Boolean(errors.diaChi)}>
             <FieldLabel htmlFor="station-address">
               Địa chỉ chi tiết <span aria-hidden>*</span>
             </FieldLabel>
             <Input
               id="station-address"
+              className="text-[13px]"
               value={diaChi}
               onChange={(e) => setDiaChi(e.target.value)}
               placeholder="Số nhà, tên đường, phường/xã..."
               disabled={loading}
             />
             {errors.diaChi && <FieldError>{errors.diaChi}</FieldError>}
-          </FieldRoot>
+          </Field>
 
-          <FieldRoot>
+          <Field>
             <FieldLabel htmlFor="station-phone">Số điện thoại liên hệ</FieldLabel>
             <Input
               id="station-phone"
+              className="font-mono text-[13px]"
               value={soDienThoai}
               onChange={(e) => setSoDienThoai(e.target.value)}
               placeholder="VD: 19006067 hoặc 028..."
               disabled={loading}
             />
-          </FieldRoot>
+          </Field>
         </div>
       </ResourceSheetForm>
     </ResourceSheet>

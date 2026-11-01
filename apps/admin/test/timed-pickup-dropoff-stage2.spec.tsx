@@ -49,8 +49,8 @@ const mockStationsWithNewTypes: Station[] = [
   },
 ];
 
-describe('Stage 2: Admin Timed Pickup/Dropoff & Manifest', () => {
-  it('renders TRUNG_CHUYEN and TRAM_NGHI badges in StationListTable', () => {
+describe('Stage 2: Admin Timed Pickup/Dropoff & Manifest with shadcn/ui components', () => {
+  it('renders TRUNG_CHUYEN and TRAM_NGHI badges in StationListTable using shadcn status badges', () => {
     const html = renderToStaticMarkup(
       <StationListTable
         stations={mockStationsWithNewTypes}
@@ -65,6 +65,10 @@ describe('Stage 2: Admin Timed Pickup/Dropoff & Manifest', () => {
     expect(html).toContain('TN-TG');
     expect(html).toContain('Trạm dừng chân Tiền Giang');
     expect(html).toContain('Trạm nghỉ');
+
+    // Kiểm tra badge CŨ sử dụng shadcn Badge
+    expect(html).toContain('CŨ');
+    expect(html).toContain('group/badge');
   });
 
   it('renders loading state for TripManifestView before API resolves', () => {

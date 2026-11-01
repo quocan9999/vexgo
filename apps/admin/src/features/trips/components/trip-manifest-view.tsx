@@ -11,6 +11,8 @@ import {
   Clock,
   Bus,
   Search,
+  X,
+  AlertCircle,
 } from 'lucide-react';
 import { Button, buttonVariants } from '@/components/ui/action-button';
 import { Card } from '@/components/ui/card';
@@ -23,12 +25,13 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Badge } from '@/components/ui/status-badge';
 import { ResourceStatusBadge, ResourceState } from '@/components/admin/resource-ui';
 import { getTripManifest } from '../services/trip-service';
 import type {
   TripManifestData,
   ManifestPassenger,
-  ManifestStopGroup,
 } from '../types/trip';
 
 interface TripManifestViewProps {
@@ -174,11 +177,13 @@ export function TripManifestView({ tripId }: TripManifestViewProps) {
   }
 
   const { trip, pickupGroups, dropoffGroups, unassignedPassengers } = data;
+  const pickupTotalCount = pickupGroups.reduce((acc, g) => acc + g.passengers.length, 0);
+  const dropoffTotalCount = dropoffGroups.reduce((acc, g) => acc + g.passengers.length, 0);
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto p-4 sm:p-6 print:p-0 print:max-w-none print:m-0">
       {/* Header chỉ hiển thị trên màn hình, ẩn khi in */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-4 print:hidden">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border pb-4 print:hidden">
         <div className="flex items-center gap-3">
           <Link
             className={buttonVariants({ variant: 'outline', size: 'sm' })}
@@ -209,9 +214,9 @@ export function TripManifestView({ tripId }: TripManifestViewProps) {
         </div>
       </div>
 
-      {/* Card tóm tắt chuyến xe (hiển thị cả khi in) */}
-      <Card className="p-4 sm:p-6 border bg-card print:border-none print:shadow-none print:p-0">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b pb-4">
+      {/* Card tóm tắt chuyến xe */}
+      <Card className="p-4 sm:p-5 border border-border bg-card print:border-none print:shadow-none print:p-0">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border pb-4">
           <div>
             <div className="flex items-center gap-2">
               <span className="text-lg font-bold font-mono text-primary">
@@ -238,329 +243,320 @@ export function TripManifestView({ tripId }: TripManifestViewProps) {
             <div className="flex items-center gap-1.5">
               <Clock className="size-4 text-primary" />
               <span>
-                Khởi hành: <strong>{trip.gioKhoiHanh}</strong> ({trip.ngayKhoiHanh})
+                Khởi hành: <strong className="text-foreground">{trip.gioKhoiHanh}</strong> ({trip.ngayKhoiHanh})
               </span>
             </div>
             <div className="flex items-center gap-1.5">
               <Bus className="size-4 text-primary" />
               <span>
-                Xe: <strong>{trip.xe.bienSoXe}</strong> ({trip.xe.tenLoaiXe})
+                Xe: <strong className="text-foreground">{trip.xe.bienSoXe}</strong> ({trip.xe.tenLoaiXe})
               </span>
             </div>
             <div className="flex items-center gap-1.5">
               <Users className="size-4 text-primary" />
               <span>
-                Hành khách: <strong>{allPassengers.length}</strong> người
+                Hành khách: <strong className="text-foreground">{allPassengers.length}</strong> người
               </span>
             </div>
           </div>
         </div>
 
-        {/* Thanh tìm kiếm & chuyển Tab (chỉ hiển thị trên màn hình) */}
-        <div className="mt-4 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 print:hidden">
-          <div className="flex items-center gap-1 bg-muted p-1 rounded-lg">
-            <button
-              type="button"
-              onClick={() => setActiveTab('pickup')}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
-                activeTab === 'pickup'
-                  ? 'bg-background text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              Chiều Đón ({pickupGroups.reduce((acc, g) => acc + g.passengers.length, 0)})
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('dropoff')}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
-                activeTab === 'dropoff'
-                  ? 'bg-background text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              Chiều Trả ({dropoffGroups.reduce((acc, g) => acc + g.passengers.length, 0)})
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('all')}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
-                activeTab === 'all'
-                  ? 'bg-background text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              Tất cả hành khách ({allPassengers.length})
-            </button>
-          </div>
+        {/* Tabs và Thanh tìm kiếm */}
+        <Tabs
+          value={activeTab}
+          onValueChange={(val) => setActiveTab(val as 'pickup' | 'dropoff' | 'all')}
+          className="mt-4 print:hidden"
+        >
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+            <TabsList>
+              <TabsTrigger value="pickup">
+                Chiều Đón ({pickupTotalCount})
+              </TabsTrigger>
+              <TabsTrigger value="dropoff">
+                Chiều Trả ({dropoffTotalCount})
+              </TabsTrigger>
+              <TabsTrigger value="all">
+                Tất cả hành khách ({allPassengers.length})
+              </TabsTrigger>
+            </TabsList>
 
-          <div className="relative w-full sm:w-64">
-            <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
-            <Input
-              type="text"
-              placeholder="Tìm theo tên, SĐT, số ghế..."
-              className="pl-8 text-xs h-9"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-        </div>
-      </Card>
-
-      {/* Nội dung danh sách theo Tab */}
-
-      {/* 1. Tab Chiều Đón */}
-      {(activeTab === 'pickup' || typeof window !== 'undefined') && (
-        <div className={`space-y-6 ${activeTab !== 'pickup' ? 'print:block hidden' : ''}`}>
-          <h2 className="text-base font-bold flex items-center gap-2 border-l-4 border-blue-500 pl-2">
-            <span>CHIỀU ĐÓN HÀNH KHÁCH</span>
-            <span className="text-xs font-normal text-muted-foreground">
-              (Sắp theo giờ xe đến đón)
-            </span>
-          </h2>
-
-          {pickupGroups.length === 0 ? (
-            <p className="text-xs text-muted-foreground italic">Chưa cấu hình điểm đón cho chuyến xe.</p>
-          ) : (
-            pickupGroups.map((group) => {
-              const filteredList = group.passengers.filter(filterPass);
-              if (filteredList.length === 0 && search) return null;
-
-              return (
-                <div
-                  key={group.diemDonTraChuyenXeId}
-                  className="rounded-lg border bg-card overflow-hidden print:border-black print:mb-4"
+            <div className="relative w-full sm:w-72">
+              <Search
+                aria-hidden
+                className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+              />
+              <Input
+                type="search"
+                placeholder="Tìm tên, SĐT, số ghế..."
+                className="pl-9 pr-9 text-xs h-9"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+              {search && (
+                <Button
+                  aria-label="Xóa nội dung tìm kiếm"
+                  className="absolute right-1 top-1/2 -translate-y-1/2 size-7 p-0"
+                  onClick={() => setSearch('')}
+                  size="icon-sm"
+                  variant="ghost"
                 >
-                  <div className="bg-muted/40 p-3 flex flex-wrap items-center justify-between gap-2 border-b print:bg-gray-100">
-                    <div className="flex items-center gap-2">
-                      <MapPin className="size-4 text-blue-600 print:text-black" />
-                      <span className="font-bold text-sm">{group.tenDiem}</span>
-                      <span className="text-xs text-muted-foreground print:text-black">
-                        ({group.diaChi})
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-3 text-xs">
-                      <span className="font-mono font-bold text-blue-600 print:text-black">
-                        Giờ đón: {group.gioThucTe}
-                      </span>
-                      <span className="font-semibold px-2 py-0.5 rounded bg-blue-500/10 text-blue-700 print:bg-transparent print:border">
-                        {group.passengers.length} khách
-                      </span>
-                    </div>
-                  </div>
+                  <X className="size-3.5" />
+                </Button>
+              )}
+            </div>
+          </div>
 
-                  {filteredList.length === 0 ? (
-                    <div className="p-4 text-center text-xs text-muted-foreground">
-                      Không có khách đón tại điểm này.
+          {/* 1. Tab Chiều Đón */}
+          <TabsContent value="pickup" className="mt-6 space-y-6">
+            <h2 className="text-sm font-semibold flex items-center gap-2 border-l-2 border-primary pl-2.5">
+              <span>CHIỀU ĐÓN HÀNH KHÁCH</span>
+              <span className="text-xs font-normal text-muted-foreground">
+                (Sắp theo giờ xe đến đón)
+              </span>
+            </h2>
+
+            {pickupGroups.length === 0 ? (
+              <p className="text-xs text-muted-foreground italic">Chưa cấu hình điểm đón cho chuyến xe.</p>
+            ) : (
+              pickupGroups.map((group) => {
+                const filteredList = group.passengers.filter(filterPass);
+                if (filteredList.length === 0 && search) return null;
+
+                return (
+                  <Card
+                    key={group.diemDonTraChuyenXeId}
+                    size="sm"
+                    className="overflow-hidden border border-border"
+                  >
+                    <div className="bg-muted/30 p-3.5 flex flex-wrap items-center justify-between gap-2 border-b border-border">
+                      <div className="flex items-center gap-2">
+                        <MapPin className="size-4 text-primary" />
+                        <span className="font-semibold text-sm">{group.tenDiem}</span>
+                        <span className="text-xs text-muted-foreground">
+                          ({group.diaChi})
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3 text-xs">
+                        <span className="font-mono font-semibold text-primary">
+                          Giờ đón: {group.gioThucTe}
+                        </span>
+                        <Badge variant="secondary" className="text-xs font-semibold">
+                          {group.passengers.length} khách
+                        </Badge>
+                      </div>
                     </div>
-                  ) : (
-                    <Table className="text-xs">
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="w-16">Số ghế</TableHead>
-                          <TableHead>Họ tên hành khách</TableHead>
-                          <TableHead>Số điện thoại</TableHead>
-                          <TableHead>Điểm trả dự kiến</TableHead>
-                          <TableHead className="w-28 text-right">Giá vé</TableHead>
-                          <TableHead className="w-24 text-center">Trạng thái</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {filteredList.map((pass) => (
-                          <TableRow key={pass.veId}>
-                            <TableCell className="font-bold font-mono text-primary print:text-black">
-                              {pass.soGhe}
-                            </TableCell>
-                            <TableCell className="font-medium">{pass.hoTen}</TableCell>
-                            <TableCell className="font-mono">{pass.soDienThoai}</TableCell>
-                            <TableCell>{pass.diemTraTen}</TableCell>
-                            <TableCell className="text-right font-mono">
-                              {pass.giaThucTe.toLocaleString('vi-VN')}đ
-                            </TableCell>
-                            <TableCell className="text-center">
-                              <span className="px-1.5 py-0.5 rounded bg-muted text-[10px] font-semibold">
-                                {pass.trangThai}
-                              </span>
-                            </TableCell>
+
+                    {filteredList.length === 0 ? (
+                      <div className="p-4 text-center text-xs text-muted-foreground">
+                        Không có khách đón tại điểm này.
+                      </div>
+                    ) : (
+                      <Table className="text-[13px]">
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="w-20">Số ghế</TableHead>
+                            <TableHead>Họ tên hành khách</TableHead>
+                            <TableHead>Số điện thoại</TableHead>
+                            <TableHead>Điểm trả dự kiến</TableHead>
+                            <TableHead className="w-32 text-right">Giá vé</TableHead>
+                            <TableHead className="w-28 text-center">Trạng thái</TableHead>
                           </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  )}
-                </div>
-              );
-            })
-          )}
+                        </TableHeader>
+                        <TableBody>
+                          {filteredList.map((pass) => (
+                            <TableRow key={pass.veId}>
+                              <TableCell className="font-semibold font-mono text-primary">
+                                {pass.soGhe}
+                              </TableCell>
+                              <TableCell className="font-medium">{pass.hoTen}</TableCell>
+                              <TableCell className="font-mono text-xs">{pass.soDienThoai}</TableCell>
+                              <TableCell>{pass.diemTraTen}</TableCell>
+                              <TableCell className="text-right font-mono text-xs">
+                                {pass.giaThucTe.toLocaleString('vi-VN')}đ
+                              </TableCell>
+                              <TableCell className="text-center">
+                                <Badge variant="secondary" className="text-[10px] font-mono">
+                                  {pass.trangThai}
+                                </Badge>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    )}
+                  </Card>
+                );
+              })
+            )}
 
-          {/* Khách chưa chọn điểm đón cụ thể */}
-          {unassignedPassengers.length > 0 && (
-            <div className="rounded-lg border border-amber-500/40 bg-card overflow-hidden">
-              <div className="bg-amber-500/10 p-3 flex items-center justify-between border-b">
-                <span className="font-bold text-sm text-amber-800 dark:text-amber-200">
-                  Khách chưa gán điểm đón cụ thể ({unassignedPassengers.length})
-                </span>
-              </div>
-              <Table className="text-xs">
+            {/* Khách chưa chọn điểm đón cụ thể */}
+            {unassignedPassengers.length > 0 && (
+              <Card size="sm" className="overflow-hidden border border-border">
+                <div className="bg-muted/50 p-3.5 flex items-center justify-between border-b border-border">
+                  <span className="font-semibold text-sm flex items-center gap-2">
+                    <AlertCircle className="size-4 text-amber-600" />
+                    Khách chưa gán điểm đón cụ thể ({unassignedPassengers.length})
+                  </span>
+                </div>
+                <Table className="text-[13px]">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-20">Số ghế</TableHead>
+                      <TableHead>Họ tên hành khách</TableHead>
+                      <TableHead>Số điện thoại</TableHead>
+                      <TableHead>Điểm đón ghi chú</TableHead>
+                      <TableHead>Điểm trả</TableHead>
+                      <TableHead className="w-32 text-right">Giá vé</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {unassignedPassengers.filter(filterPass).map((pass) => (
+                      <TableRow key={pass.veId}>
+                        <TableCell className="font-semibold font-mono">{pass.soGhe}</TableCell>
+                        <TableCell className="font-medium">{pass.hoTen}</TableCell>
+                        <TableCell className="font-mono text-xs">{pass.soDienThoai}</TableCell>
+                        <TableCell className="text-muted-foreground">{pass.diemDonTen}</TableCell>
+                        <TableCell>{pass.diemTraTen}</TableCell>
+                        <TableCell className="text-right font-mono text-xs">
+                          {pass.giaThucTe.toLocaleString('vi-VN')}đ
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </Card>
+            )}
+          </TabsContent>
+
+          {/* 2. Tab Chiều Trả */}
+          <TabsContent value="dropoff" className="mt-6 space-y-6">
+            <h2 className="text-sm font-semibold flex items-center gap-2 border-l-2 border-primary pl-2.5">
+              <span>CHIỀU TRẢ HÀNH KHÁCH</span>
+              <span className="text-xs font-normal text-muted-foreground">
+                (Sắp theo giờ xe đến điểm trả)
+              </span>
+            </h2>
+
+            {dropoffGroups.length === 0 ? (
+              <p className="text-xs text-muted-foreground italic">Chưa cấu hình điểm trả cho chuyến xe.</p>
+            ) : (
+              dropoffGroups.map((group) => {
+                const filteredList = group.passengers.filter(filterPass);
+                if (filteredList.length === 0 && search) return null;
+
+                return (
+                  <Card
+                    key={group.diemDonTraChuyenXeId}
+                    size="sm"
+                    className="overflow-hidden border border-border"
+                  >
+                    <div className="bg-muted/30 p-3.5 flex flex-wrap items-center justify-between gap-2 border-b border-border">
+                      <div className="flex items-center gap-2">
+                        <MapPin className="size-4 text-primary" />
+                        <span className="font-semibold text-sm">{group.tenDiem}</span>
+                        <span className="text-xs text-muted-foreground">({group.diaChi})</span>
+                      </div>
+                      <div className="flex items-center gap-3 text-xs">
+                        <span className="font-mono font-semibold text-primary">
+                          Giờ đến: {group.gioThucTe}
+                        </span>
+                        <Badge variant="secondary" className="text-xs font-semibold">
+                          {group.passengers.length} khách xuống
+                        </Badge>
+                      </div>
+                    </div>
+
+                    {filteredList.length === 0 ? (
+                      <div className="p-4 text-center text-xs text-muted-foreground">
+                        Không có khách xuống tại điểm này.
+                      </div>
+                    ) : (
+                      <Table className="text-[13px]">
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="w-20">Số ghế</TableHead>
+                            <TableHead>Họ tên hành khách</TableHead>
+                            <TableHead>Số điện thoại</TableHead>
+                            <TableHead>Điểm đón đã lên xe</TableHead>
+                            <TableHead className="w-32 text-right">Giá vé</TableHead>
+                            <TableHead className="w-28 text-center">Trạng thái</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {filteredList.map((pass) => (
+                            <TableRow key={pass.veId}>
+                              <TableCell className="font-semibold font-mono text-primary">
+                                {pass.soGhe}
+                              </TableCell>
+                              <TableCell className="font-medium">{pass.hoTen}</TableCell>
+                              <TableCell className="font-mono text-xs">{pass.soDienThoai}</TableCell>
+                              <TableCell>{pass.diemDonTen}</TableCell>
+                              <TableCell className="text-right font-mono text-xs">
+                                {pass.giaThucTe.toLocaleString('vi-VN')}đ
+                              </TableCell>
+                              <TableCell className="text-center">
+                                <Badge variant="secondary" className="text-[10px] font-mono">
+                                  {pass.trangThai}
+                                </Badge>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    )}
+                  </Card>
+                );
+              })
+            )}
+          </TabsContent>
+
+          {/* 3. Tab Tất cả hành khách */}
+          <TabsContent value="all" className="mt-6 space-y-4">
+            <Card size="sm" className="overflow-hidden border border-border">
+              <Table className="text-[13px]">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-16">Số ghế</TableHead>
+                    <TableHead className="w-12">STT</TableHead>
+                    <TableHead className="w-20">Số ghế</TableHead>
                     <TableHead>Họ tên hành khách</TableHead>
                     <TableHead>Số điện thoại</TableHead>
-                    <TableHead>Điểm đón ghi chú</TableHead>
+                    <TableHead>Điểm đón</TableHead>
                     <TableHead>Điểm trả</TableHead>
-                    <TableHead className="w-28 text-right">Giá vé</TableHead>
+                    <TableHead className="w-32 text-right">Giá vé</TableHead>
+                    <TableHead className="w-32">Mã vé</TableHead>
+                    <TableHead className="w-28 text-center">Trạng thái</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {unassignedPassengers.filter(filterPass).map((pass) => (
+                  {allPassengers.filter(filterPass).map((pass, idx) => (
                     <TableRow key={pass.veId}>
-                      <TableCell className="font-bold font-mono">{pass.soGhe}</TableCell>
+                      <TableCell className="text-muted-foreground text-xs">{idx + 1}</TableCell>
+                      <TableCell className="font-semibold font-mono text-primary">
+                        {pass.soGhe}
+                      </TableCell>
                       <TableCell className="font-medium">{pass.hoTen}</TableCell>
-                      <TableCell className="font-mono">{pass.soDienThoai}</TableCell>
-                      <TableCell className="text-amber-700">{pass.diemDonTen}</TableCell>
+                      <TableCell className="font-mono text-xs">{pass.soDienThoai}</TableCell>
+                      <TableCell>{pass.diemDonTen}</TableCell>
                       <TableCell>{pass.diemTraTen}</TableCell>
-                      <TableCell className="text-right font-mono">
+                      <TableCell className="text-right font-mono text-xs">
                         {pass.giaThucTe.toLocaleString('vi-VN')}đ
+                      </TableCell>
+                      <TableCell className="font-mono text-xs text-muted-foreground">
+                        {pass.maVe}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant="secondary" className="text-[10px] font-mono">
+                          {pass.trangThai}
+                        </Badge>
                       </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* 2. Tab Chiều Trả */}
-      {activeTab === 'dropoff' && (
-        <div className="space-y-6">
-          <h2 className="text-base font-bold flex items-center gap-2 border-l-4 border-green-500 pl-2">
-            <span>CHIỀU TRẢ HÀNH KHÁCH</span>
-            <span className="text-xs font-normal text-muted-foreground">
-              (Sắp theo giờ xe đến điểm trả)
-            </span>
-          </h2>
-
-          {dropoffGroups.length === 0 ? (
-            <p className="text-xs text-muted-foreground italic">Chưa cấu hình điểm trả cho chuyến xe.</p>
-          ) : (
-            dropoffGroups.map((group) => {
-              const filteredList = group.passengers.filter(filterPass);
-              if (filteredList.length === 0 && search) return null;
-
-              return (
-                <div
-                  key={group.diemDonTraChuyenXeId}
-                  className="rounded-lg border bg-card overflow-hidden"
-                >
-                  <div className="bg-muted/40 p-3 flex flex-wrap items-center justify-between gap-2 border-b">
-                    <div className="flex items-center gap-2">
-                      <MapPin className="size-4 text-green-600" />
-                      <span className="font-bold text-sm">{group.tenDiem}</span>
-                      <span className="text-xs text-muted-foreground">({group.diaChi})</span>
-                    </div>
-                    <div className="flex items-center gap-3 text-xs">
-                      <span className="font-mono font-bold text-green-600">
-                        Giờ đến: {group.gioThucTe}
-                      </span>
-                      <span className="font-semibold px-2 py-0.5 rounded bg-green-500/10 text-green-700">
-                        {group.passengers.length} khách xuống
-                      </span>
-                    </div>
-                  </div>
-
-                  {filteredList.length === 0 ? (
-                    <div className="p-4 text-center text-xs text-muted-foreground">
-                      Không có khách xuống tại điểm này.
-                    </div>
-                  ) : (
-                    <Table className="text-xs">
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="w-16">Số ghế</TableHead>
-                          <TableHead>Họ tên hành khách</TableHead>
-                          <TableHead>Số điện thoại</TableHead>
-                          <TableHead>Điểm đón đã lên xe</TableHead>
-                          <TableHead className="w-28 text-right">Giá vé</TableHead>
-                          <TableHead className="w-24 text-center">Trạng thái</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {filteredList.map((pass) => (
-                          <TableRow key={pass.veId}>
-                            <TableCell className="font-bold font-mono text-primary">
-                              {pass.soGhe}
-                            </TableCell>
-                            <TableCell className="font-medium">{pass.hoTen}</TableCell>
-                            <TableCell className="font-mono">{pass.soDienThoai}</TableCell>
-                            <TableCell>{pass.diemDonTen}</TableCell>
-                            <TableCell className="text-right font-mono">
-                              {pass.giaThucTe.toLocaleString('vi-VN')}đ
-                            </TableCell>
-                            <TableCell className="text-center">
-                              <span className="px-1.5 py-0.5 rounded bg-muted text-[10px] font-semibold">
-                                {pass.trangThai}
-                              </span>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  )}
-                </div>
-              );
-            })
-          )}
-        </div>
-      )}
-
-      {/* 3. Tab Tất cả hành khách */}
-      {activeTab === 'all' && (
-        <div className="space-y-4">
-          <div className="rounded-lg border bg-card overflow-hidden">
-            <Table className="text-xs">
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-12">STT</TableHead>
-                  <TableHead className="w-16">Số ghế</TableHead>
-                  <TableHead>Họ tên hành khách</TableHead>
-                  <TableHead>Số điện thoại</TableHead>
-                  <TableHead>Điểm đón</TableHead>
-                  <TableHead>Điểm trả</TableHead>
-                  <TableHead className="w-28 text-right">Giá vé</TableHead>
-                  <TableHead className="w-32">Mã vé</TableHead>
-                  <TableHead className="w-24 text-center">Trạng thái</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {allPassengers.filter(filterPass).map((pass, idx) => (
-                  <TableRow key={pass.veId}>
-                    <TableCell className="text-muted-foreground">{idx + 1}</TableCell>
-                    <TableCell className="font-bold font-mono text-primary">
-                      {pass.soGhe}
-                    </TableCell>
-                    <TableCell className="font-medium">{pass.hoTen}</TableCell>
-                    <TableCell className="font-mono">{pass.soDienThoai}</TableCell>
-                    <TableCell>{pass.diemDonTen}</TableCell>
-                    <TableCell>{pass.diemTraTen}</TableCell>
-                    <TableCell className="text-right font-mono">
-                      {pass.giaThucTe.toLocaleString('vi-VN')}đ
-                    </TableCell>
-                    <TableCell className="font-mono text-muted-foreground">
-                      {pass.maVe}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <span className="px-1.5 py-0.5 rounded bg-muted text-[10px] font-semibold">
-                        {pass.trangThai}
-                      </span>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        </div>
-      )}
+            </Card>
+          </TabsContent>
+        </Tabs>
+      </Card>
     </div>
   );
 }
