@@ -61,7 +61,7 @@ type SuperAdminLayoutProps = {
     | 'bus-companies'
     | 'vehicle-types'
     | 'vehicles'
-    | 'routes'
+    | 'routes' | 'stations'
     | 'fare-prices'
     | 'trips'
     | 'customers'
@@ -196,6 +196,7 @@ const OPERATION_NAVIGATION_DETAILS: Record<
   'vehicle-types': { label: 'Loại xe', icon: () => <Bus size={18} /> },
   vehicles: { label: 'Xe', icon: () => <Truck size={18} /> },
   routes: { label: 'Tuyến xe', icon: () => <MapPinned size={18} /> },
+  stations: { label: 'Bến bãi & Điểm đón trả', icon: () => <Building2 size={18} /> },
   'fare-prices': { label: 'Bảng giá vé', icon: () => <Ticket size={18} /> },
   trips: { label: 'Chuyến xe', icon: () => <CalendarDays size={18} /> },
   customers: { label: 'Khách hàng', icon: () => <UsersRound size={18} /> },

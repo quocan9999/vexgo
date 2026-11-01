@@ -60,7 +60,7 @@ const BOOKING_DETAIL_SELECT = {
       trangThai: true,
       gheChuyenXe: {
         select: {
-          ghe: { select: { soGhe: true } },
+          ghe: { select: { tenGhe: true } },
           chuyenXe: {
             select: {
               chuyenXeId: true,
@@ -526,7 +526,7 @@ export class AdminBookingsService {
           ticketCode: ticket.maVe,
           seatNumber:
             ticket.gheChuyenXe.chuyenXe.nhaXeId === nhaXeId
-              ? ticket.gheChuyenXe.ghe.soGhe
+              ? ticket.gheChuyenXe.ghe.tenGhe
               : null,
           status: ticket.trangThai,
           listedPrice: ticket.giaNiemYet.toString(),

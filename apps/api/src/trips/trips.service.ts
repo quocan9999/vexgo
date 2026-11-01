@@ -1,8 +1,12 @@
 import { businessCode } from '../common/business-code.js';
-import { locationSearchTerms } from '../locations/location-search.js';
+import {
+  locationSearchTerms,
+  locationSearchTermsForOption,
+} from '../locations/location-search.js';
 import type { LocationOption } from '../locations/location-catalog.js';
 import { LocationsService } from '../locations/locations.service.js';
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -35,7 +39,42 @@ const TRIP_INCLUDE = {
   tuyenXe: { include: { nhaXe: true } },
   xe: { include: { loaiXe: true } },
   gheChuyenXes: { select: { trangThai: true } },
+  diemDonTraChuyenXes: {
+    include: {
+      diemDonTra: {
+        include: {
+          benTrungChuyen: true,
+        },
+      },
+    },
+    orderBy: [{ phutLech: 'asc' }, { thuTu: 'asc' }],
+  },
 } satisfies Prisma.ChuyenXeInclude;
+
+export interface SubAreaItem {
+  diaDiemId: number;
+  tenDiaDiem: string;
+  tripCount: number;
+}
+
+export interface SiblingAreaSuggestion {
+  diaDiemId: number;
+  tenDiaDiem: string;
+  additionalTripCount: number;
+}
+
+export interface ExpandSuggestion {
+  currentLocation: {
+    diaDiemId: number;
+    tenDiaDiem: string;
+  };
+  parentLocation: {
+    diaDiemId: number;
+    tenDiaDiem: string;
+  };
+  siblingAreas: SiblingAreaSuggestion[];
+  totalAdditionalTrips: number;
+}
 
 type TripRecord = Prisma.ChuyenXeGetPayload<{ include: typeof TRIP_INCLUDE }>;
 
@@ -54,13 +93,25 @@ export interface StopPointPayload {
   name: string;
   time: string;
   address: string;
-  type: 'station' | 'office' | 'transfer' | 'point';
+  type: 'station' | 'office' | 'transfer' | 'point' | 'rest';
   isDefault: boolean;
+  phutLech?: number;
+  phuPhi?: number;
+  phutCoMatTruoc?: number;
+  diemDonTraChuyenXeId?: number;
+  benTrungChuyen?: {
+    id: number;
+    name: string;
+    address: string;
+  } | null;
+  role?: 'DON' | 'TRA' | 'NGHI';
+  ghiChu?: string | null;
+  thoiGianDuKienIso?: string | null;
 }
 
-function getLegacySeatFloor(seatNumber: string, position: string | null) {
+function getLegacySeatFloor(seatNumber: string | undefined, position: string | null | undefined) {
   return position?.toLocaleLowerCase('vi-VN').includes('trên') ||
-    seatNumber.toLocaleUpperCase('vi-VN').startsWith('B')
+    Boolean(seatNumber?.toLocaleUpperCase('vi-VN').startsWith('B'))
     ? 2
     : 1;
 }
@@ -156,11 +207,107 @@ function formatClockTime(d: Date): string {
   return `${h}:${m}`;
 }
 
+function mapStationType(loaiDiem: string): 'station' | 'office' | 'transfer' | 'point' | 'rest' {
+  switch (loaiDiem) {
+    case 'BEN_XE':
+      return 'station';
+    case 'VAN_PHONG':
+      return 'office';
+    case 'TRUNG_CHUYEN':
+      return 'transfer';
+    case 'TRAM_NGHI':
+      return 'rest';
+    default:
+      return 'point';
+  }
+}
+
 function computePickupAndDropoffPoints(
   trip: TripRecord,
   departureTimeIso: string,
   arrivalTimeIso: string | null,
+  businessTimeZone: string,
 ) {
+  const customPoints = (trip.diemDonTraChuyenXes ?? []).filter(
+    (p) =>
+      p &&
+      p.diemDonTra &&
+      typeof p.diemDonTra.tenDiem === 'string' &&
+      typeof p.phutLech === 'number',
+  );
+
+  if (customPoints.length > 0) {
+    const sortedPoints = [...customPoints].sort((a, b) => {
+      if (a.phutLech !== b.phutLech) return a.phutLech - b.phutLech;
+      return (a.thuTu ?? 0) - (b.thuTu ?? 0);
+    });
+
+    const baseDepartureDate = combineDeparture(
+      trip.ngayKhoiHanh,
+      trip.gioKhoiHanh,
+      businessTimeZone,
+    );
+
+    const allStops: StopPointPayload[] = sortedPoints.map((p, idx) => {
+      let timeFormatted: string;
+      if (p.thoiGianDuKien) {
+        timeFormatted = formatClockTime(new Date(p.thoiGianDuKien));
+      } else {
+        const calculated = calculateClockTime(trip.gioKhoiHanh, p.phutLech);
+        timeFormatted = calculated
+          ? formatClockTime(calculated)
+          : formatClockTime(new Date(trip.gioKhoiHanh));
+      }
+      const actualTime = new Date(
+        baseDepartureDate.getTime() + p.phutLech * 60 * 1000,
+      );
+      const timeIso = actualTime.toISOString();
+
+      return {
+        id: String(p.diemDonTraChuyenXeId ?? idx),
+        name: p.diemDonTra.tenDiem,
+        time: timeFormatted,
+        address: p.diemDonTra.diaChi ?? '',
+        type: mapStationType(p.diemDonTra.loaiDiem),
+        isDefault: idx === 0,
+        phutLech: p.phutLech,
+        phuPhi: Number(p.phuPhi ?? 0),
+        phutCoMatTruoc: p.phutCoMatTruoc ?? 15,
+        diemDonTraChuyenXeId: p.diemDonTraChuyenXeId,
+        benTrungChuyen: p.diemDonTra.benTrungChuyen
+          ? {
+              id: p.diemDonTra.benTrungChuyen.diemDonTraId,
+              name: p.diemDonTra.benTrungChuyen.tenDiem,
+              address: p.diemDonTra.benTrungChuyen.diaChi ?? '',
+            }
+          : null,
+        role: p.loaiDiem as 'DON' | 'TRA' | 'NGHI',
+        ghiChu: p.ghiChu ?? null,
+        thoiGianDuKienIso: timeIso,
+      };
+    });
+
+    const pickupPoints = allStops.filter((p) => p.role === 'DON');
+    const dropoffPoints = allStops.filter((p) => p.role === 'TRA');
+
+    const firstPickup = pickupPoints[0] || allStops[0];
+    const lastDropoff =
+      dropoffPoints[dropoffPoints.length - 1] || allStops[allStops.length - 1];
+
+    return {
+      pickupPoints: pickupPoints.length > 0 ? pickupPoints : allStops.slice(0, 1),
+      dropoffPoints:
+        dropoffPoints.length > 0 ? dropoffPoints : allStops.slice(-1),
+      stops: allStops,
+      pickupPoint: firstPickup?.name ?? trip.tuyenXe?.diemDi ?? '',
+      pickupAddress: firstPickup?.address ?? '',
+      dropoffPoint: lastDropoff?.name ?? trip.tuyenXe?.diemDen ?? '',
+      dropoffAddress: lastDropoff?.address ?? '',
+      firstPickupTimeIso: firstPickup?.thoiGianDuKienIso ?? null,
+      lastDropoffTimeIso: lastDropoff?.thoiGianDuKienIso ?? null,
+    };
+  }
+
   const originCity = trip.tuyenXe?.diemDi || 'TP.HCM';
   const destCity = trip.tuyenXe?.diemDen || 'Đà Lạt';
 
@@ -180,7 +327,10 @@ function computePickupAndDropoffPoints(
   ];
 
   const pickupPoints: StopPointPayload[] = originStations.map((st, idx) => ({
-    id: idx === 0 ? `PU_STATION_${trip.chuyenXeId}` : `PU_${trip.chuyenXeId}_${idx + 1}`,
+    id:
+      idx === 0
+        ? `PU_STATION_${trip.chuyenXeId}`
+        : `PU_${trip.chuyenXeId}_${idx + 1}`,
     name: st.name,
     time: depTimeFormatted,
     address: st.address,
@@ -197,7 +347,10 @@ function computePickupAndDropoffPoints(
   ];
 
   const dropoffPoints: StopPointPayload[] = destStations.map((st, idx) => ({
-    id: idx === 0 ? `DO_STATION_${trip.chuyenXeId}` : `DO_${trip.chuyenXeId}_${idx + 1}`,
+    id:
+      idx === 0
+        ? `DO_STATION_${trip.chuyenXeId}`
+        : `DO_${trip.chuyenXeId}_${idx + 1}`,
     name: st.name,
     time: arrTimeFormatted,
     address: st.address,
@@ -208,10 +361,13 @@ function computePickupAndDropoffPoints(
   return {
     pickupPoints,
     dropoffPoints,
+    stops: undefined,
     pickupPoint: pickupPoints[0].name,
     pickupAddress: pickupPoints[0].address,
     dropoffPoint: dropoffPoints[0].name,
     dropoffAddress: dropoffPoints[0].address,
+    firstPickupTimeIso: null,
+    lastDropoffTimeIso: null,
   };
 }
 
@@ -284,13 +440,13 @@ function mapTrip(
   fare?: FareRecord,
   companyRating?: { rating: number | null; reviewsCount: number | null },
 ) {
-  const departureTime = combineDeparture(
+  let departureTime = combineDeparture(
     trip.ngayKhoiHanh,
     trip.gioKhoiHanh,
     businessTimeZone,
   ).toISOString();
 
-  const arrivalTime = computeArrival(
+  let arrivalTime = computeArrival(
     trip.ngayKhoiHanh,
     trip.gioKhoiHanh,
     trip.tuyenXe.thoiGianChayPhut,
@@ -302,7 +458,15 @@ function mapTrip(
     trip,
     departureTime,
     arrivalTime,
+    businessTimeZone,
   );
+
+  if (stopPoints.firstPickupTimeIso) {
+    departureTime = stopPoints.firstPickupTimeIso;
+  }
+  if (stopPoints.lastDropoffTimeIso) {
+    arrivalTime = stopPoints.lastDropoffTimeIso;
+  }
 
   const ratingData = resolveBusCompanyRating(
     trip.tuyenXe.nhaXe.tenNhaXe,
@@ -344,6 +508,7 @@ function mapTrip(
     ).length,
     pickupPoints: stopPoints.pickupPoints,
     dropoffPoints: stopPoints.dropoffPoints,
+    ...(stopPoints.stops ? { stops: stopPoints.stops } : {}),
     pickupPoint: stopPoints.pickupPoint,
     pickupAddress: stopPoints.pickupAddress,
     dropoffPoint: stopPoints.dropoffPoint,
@@ -513,9 +678,166 @@ export class TripsService {
     return result;
   }
 
+  private async buildSubAreas(
+    newLocationId: number,
+    direction: 'DON' | 'TRA',
+    trips: Array<TripRecord>,
+    catalogue: LocationOption[],
+  ): Promise<SubAreaItem[]> {
+    if (!this.prisma?.bangSapNhapDiaDiem?.findMany) return [];
+    const mappings = await this.prisma.bangSapNhapDiaDiem.findMany({
+      where: { diaDiemMoiId: newLocationId },
+      include: { diaDiemCu: true },
+      orderBy: { diaDiemCu: { thuTuHienThi: 'desc' } },
+    });
+
+    if (!mappings.length) return [];
+
+    const tripSets = new Map<number, Set<number>>();
+    for (const m of mappings) {
+      tripSets.set(m.diaDiemCuId, new Set());
+    }
+
+    for (const m of mappings) {
+      const areaTerms = locationSearchTerms(m.diaDiemCu.tenDiaDiem, catalogue);
+      for (const trip of trips) {
+        const points = (trip.diemDonTraChuyenXes ?? []).filter(
+          (p) =>
+            p.loaiDiem === direction &&
+            p.diemDonTra?.trangThai === 'HOAT_DONG',
+        );
+        if (points.length > 0) {
+          if (points.some((p) => p.diemDonTra?.diaDiemCuId === m.diaDiemCuId)) {
+            tripSets.get(m.diaDiemCuId)!.add(trip.chuyenXeId);
+          }
+        } else {
+          // Dự phòng so khớp chuỗi cho chuyến chưa gán điểm đón/trả. Sẽ loại bỏ khi toàn bộ nhà xe gán điểm đầy đủ.
+          const routeCity =
+            direction === 'DON' ? trip.tuyenXe.diemDi : trip.tuyenXe.diemDen;
+          if (areaTerms.some((term) => routeCity.includes(term))) {
+            tripSets.get(m.diaDiemCuId)!.add(trip.chuyenXeId);
+          }
+        }
+      }
+    }
+
+    return mappings.map((m) => ({
+      diaDiemId: m.diaDiemCuId,
+      tenDiaDiem: m.diaDiemCu.tenDiaDiem,
+      tripCount: tripSets.get(m.diaDiemCuId)?.size ?? 0,
+    }));
+  }
+
+  private async buildExpandSuggestion(
+    currentLocation: { diaDiemId: number; tenDiaDiem: string },
+    effectiveOldId: number,
+    direction: 'DON' | 'TRA',
+    baseWhere: Prisma.ChuyenXeWhereInput,
+    primaryTripIds: Set<number>,
+    businessTimeZone: string,
+    now: Date,
+    timeRange?: string,
+  ): Promise<ExpandSuggestion | undefined> {
+    if (
+      !this.prisma?.bangSapNhapDiaDiem?.findUnique ||
+      !this.prisma?.bangSapNhapDiaDiem?.findMany
+    ) {
+      return undefined;
+    }
+    const mapping = await this.prisma.bangSapNhapDiaDiem.findUnique({
+      where: { diaDiemCuId: effectiveOldId },
+      include: { diaDiemMoi: true },
+    });
+
+    if (!mapping) return undefined;
+
+    const clusterMappings = await this.prisma.bangSapNhapDiaDiem.findMany({
+      where: { diaDiemMoiId: mapping.diaDiemMoiId },
+      include: { diaDiemCu: true },
+      orderBy: { diaDiemCu: { thuTuHienThi: 'desc' } },
+    });
+
+    const siblingMappings = clusterMappings.filter(
+      (m) => m.diaDiemCuId !== effectiveOldId,
+    );
+    if (!siblingMappings.length) return undefined;
+
+    const siblingCuIds = siblingMappings.map((m) => m.diaDiemCuId);
+
+    const siblingTrips = await this.prisma.chuyenXe.findMany({
+      where: {
+        ...baseWhere,
+        diemDonTraChuyenXes: {
+          some: {
+            loaiDiem: direction,
+            diemDonTra: {
+              diaDiemMoiId: mapping.diaDiemMoiId,
+              diaDiemCuId: { in: siblingCuIds },
+              trangThai: 'HOAT_DONG',
+            },
+          },
+        },
+      },
+      include: TRIP_INCLUDE,
+    });
+
+    const validSiblingTrips = siblingTrips.filter(
+      (trip) =>
+        !primaryTripIds.has(trip.chuyenXeId) &&
+        combineDeparture(
+          trip.ngayKhoiHanh,
+          trip.gioKhoiHanh,
+          businessTimeZone,
+        ) > now &&
+        matchesTimeRange(trip.gioKhoiHanh, timeRange),
+    );
+
+    const siblingTripSets = new Map<number, Set<number>>();
+    for (const m of siblingMappings) {
+      siblingTripSets.set(m.diaDiemCuId, new Set());
+    }
+    const allAdditionalTripIds = new Set<number>();
+
+    for (const trip of validSiblingTrips) {
+      const points = (trip.diemDonTraChuyenXes ?? []).filter(
+        (p) =>
+          p.loaiDiem === direction &&
+          p.diemDonTra?.trangThai === 'HOAT_DONG',
+      );
+      for (const p of points) {
+        if (p.diemDonTra && siblingTripSets.has(p.diemDonTra.diaDiemCuId)) {
+          siblingTripSets.get(p.diemDonTra.diaDiemCuId)!.add(trip.chuyenXeId);
+          allAdditionalTripIds.add(trip.chuyenXeId);
+        }
+      }
+    }
+
+    const siblingAreas: SiblingAreaSuggestion[] = siblingMappings.map((m) => ({
+      diaDiemId: m.diaDiemCuId,
+      tenDiaDiem: m.diaDiemCu.tenDiaDiem,
+      additionalTripCount: siblingTripSets.get(m.diaDiemCuId)?.size ?? 0,
+    }));
+
+    return {
+      currentLocation: {
+        diaDiemId: currentLocation.diaDiemId,
+        tenDiaDiem: currentLocation.tenDiaDiem,
+      },
+      parentLocation: {
+        diaDiemId: mapping.diaDiemMoi.diaDiemId,
+        tenDiaDiem: mapping.diaDiemMoi.tenDiaDiem,
+      },
+      siblingAreas,
+      totalAdditionalTrips: allAdditionalTripIds.size,
+    };
+  }
+
   async search(dto: SearchTripsDto) {
     let catalogue: LocationOption[] = [];
-    if ((dto.from || dto.to) && this.locations) {
+    if (
+      (dto.from || dto.to || dto.fromLocationId || dto.toLocationId) &&
+      this.locations
+    ) {
       try {
         catalogue = (await this.locations.list()).data;
       } catch {
@@ -530,31 +852,399 @@ export class TripsService {
       trangThai: 'CHUA_KHOI_HANH',
     };
 
-    if (dto.from || dto.to || dto.busCompanyId || dto.operator) {
-      where.tuyenXe = {};
-      if (dto.from) {
-        where.tuyenXe.AND = [{
-          OR: locationSearchTerms(codeToCity(dto.from)!, catalogue).map((term) => ({
-            diemDi: { contains: term },
-          })),
-        }];
+    const hasLocationOrStation = Boolean(
+      dto.fromLocationId ||
+        dto.toLocationId ||
+        dto.fromStationId ||
+        dto.toStationId,
+    );
+
+    // Variables for location resolution
+    let effectiveFromOldId: number | null = null;
+    let effectiveFromNewId: number | null = null;
+    let fromLocation: { diaDiemId: number; tenDiaDiem: string } | null = null;
+    let validatedFromAreaId: number | null = null;
+
+    let effectiveToOldId: number | null = null;
+    let effectiveToNewId: number | null = null;
+    let toLocation: { diaDiemId: number; tenDiaDiem: string } | null = null;
+    let validatedToAreaId: number | null = null;
+
+    let fromStation: { diemDonTraId: number; tenDiem: string } | null = null;
+    let toStation: { diemDonTraId: number; tenDiem: string } | null = null;
+
+    if (dto.fromStationId) {
+      const st = await this.prisma.diemDonTra.findUnique({
+        where: { diemDonTraId: dto.fromStationId },
+      });
+      if (!st) {
+        throw new BadRequestException({
+          error: 'STATION_NOT_FOUND',
+          message: 'Điểm đón (bến xe/văn phòng) không tồn tại.',
+        });
       }
-      if (dto.to) {
-        const originFilter = where.tuyenXe.AND as
-          | Prisma.TuyenXeWhereInput[]
-          | undefined;
-        where.tuyenXe.AND = [...(originFilter ?? []), {
-          OR: locationSearchTerms(codeToCity(dto.to)!, catalogue).map((term) => ({
-            diemDen: { contains: term },
-          })),
-        }];
+      fromStation = { diemDonTraId: st.diemDonTraId, tenDiem: st.tenDiem };
+    }
+
+    if (dto.toStationId) {
+      const st = await this.prisma.diemDonTra.findUnique({
+        where: { diemDonTraId: dto.toStationId },
+      });
+      if (!st) {
+        throw new BadRequestException({
+          error: 'STATION_NOT_FOUND',
+          message: 'Điểm trả (bến xe/văn phòng) không tồn tại.',
+        });
       }
+      toStation = { diemDonTraId: st.diemDonTraId, tenDiem: st.tenDiem };
+    }
+
+    if (dto.fromLocationId) {
+      const loc = await this.prisma.danhMucDiaDiem.findUnique({
+        where: { diaDiemId: dto.fromLocationId },
+      });
+      if (!loc) {
+        throw new BadRequestException({
+          error: 'LOCATION_NOT_FOUND',
+          message: 'Địa điểm xuất phát không tồn tại.',
+        });
+      }
+      fromLocation = { diaDiemId: loc.diaDiemId, tenDiaDiem: loc.tenDiaDiem };
+      if (loc.capDiaDiem === 'QUAN_HUYEN') {
+        if (!loc.diaDiemChaId) {
+          throw new BadRequestException({
+            error: 'LOCATION_INVALID',
+            message: 'Quận/huyện không có tỉnh trực thuộc.',
+          });
+        }
+        effectiveFromOldId = loc.diaDiemChaId;
+      } else if (loc.laDiaDanhCu) {
+        effectiveFromOldId = loc.diaDiemId;
+      } else {
+        effectiveFromNewId = loc.diaDiemId;
+      }
+
+      if (dto.fromAreaId) {
+        if (!effectiveFromNewId) {
+          throw new BadRequestException({
+            error: 'INVALID_AREA_FILTER',
+            message: 'Chỉ có thể lọc khu vực khi tìm kiếm theo địa danh mới.',
+          });
+        }
+        const mapping = await this.prisma.bangSapNhapDiaDiem.findFirst({
+          where: {
+            diaDiemMoiId: effectiveFromNewId,
+            diaDiemCuId: dto.fromAreaId,
+          },
+        });
+        if (!mapping) {
+          throw new BadRequestException({
+            error: 'AREA_NOT_FOUND',
+            message: 'Khu vực không hợp lệ hoặc không thuộc địa danh đã chọn.',
+          });
+        }
+        validatedFromAreaId = dto.fromAreaId;
+      }
+    } else if (dto.fromAreaId) {
+      throw new BadRequestException({
+        error: 'INVALID_AREA_FILTER',
+        message: 'fromAreaId yêu cầu phải có fromLocationId.',
+      });
+    }
+
+    if (dto.toLocationId) {
+      const loc = await this.prisma.danhMucDiaDiem.findUnique({
+        where: { diaDiemId: dto.toLocationId },
+      });
+      if (!loc) {
+        throw new BadRequestException({
+          error: 'LOCATION_NOT_FOUND',
+          message: 'Địa điểm đến không tồn tại.',
+        });
+      }
+      toLocation = { diaDiemId: loc.diaDiemId, tenDiaDiem: loc.tenDiaDiem };
+      if (loc.capDiaDiem === 'QUAN_HUYEN') {
+        if (!loc.diaDiemChaId) {
+          throw new BadRequestException({
+            error: 'LOCATION_INVALID',
+            message: 'Quận/huyện không có tỉnh trực thuộc.',
+          });
+        }
+        effectiveToOldId = loc.diaDiemChaId;
+      } else if (loc.laDiaDanhCu) {
+        effectiveToOldId = loc.diaDiemId;
+      } else {
+        effectiveToNewId = loc.diaDiemId;
+      }
+
+      if (dto.toAreaId) {
+        if (!effectiveToNewId) {
+          throw new BadRequestException({
+            error: 'INVALID_AREA_FILTER',
+            message: 'Chỉ có thể lọc khu vực khi tìm kiếm theo địa danh mới.',
+          });
+        }
+        const mapping = await this.prisma.bangSapNhapDiaDiem.findFirst({
+          where: {
+            diaDiemMoiId: effectiveToNewId,
+            diaDiemCuId: dto.toAreaId,
+          },
+        });
+        if (!mapping) {
+          throw new BadRequestException({
+            error: 'AREA_NOT_FOUND',
+            message: 'Khu vực không hợp lệ hoặc không thuộc địa danh đã chọn.',
+          });
+        }
+        validatedToAreaId = dto.toAreaId;
+      }
+    } else if (dto.toAreaId) {
+      throw new BadRequestException({
+        error: 'INVALID_AREA_FILTER',
+        message: 'toAreaId yêu cầu phải có toLocationId.',
+      });
+    }
+
+    if (!hasLocationOrStation) {
+      if (dto.from || dto.to || dto.busCompanyId || dto.operator) {
+        where.tuyenXe = {};
+        if (dto.from) {
+          where.tuyenXe.AND = [{
+            OR: locationSearchTerms(codeToCity(dto.from)!, catalogue).map((term) => ({
+              diemDi: { contains: term },
+            })),
+          }];
+        }
+        if (dto.to) {
+          const originFilter = where.tuyenXe.AND as
+            | Prisma.TuyenXeWhereInput[]
+            | undefined;
+          where.tuyenXe.AND = [...(originFilter ?? []), {
+            OR: locationSearchTerms(codeToCity(dto.to)!, catalogue).map((term) => ({
+              diemDen: { contains: term },
+            })),
+          }];
+        }
+        if (dto.busCompanyId) {
+          where.tuyenXe.nhaXeId = dto.busCompanyId;
+        }
+        if (dto.operator) {
+          where.tuyenXe.nhaXe = { tenNhaXe: { contains: dto.operator } };
+        }
+      }
+    } else {
+      const andConditions: Prisma.ChuyenXeWhereInput[] = [];
+
+      if (dto.fromStationId && fromStation) {
+        andConditions.push({
+          OR: [
+            {
+              diemDonTraChuyenXes: {
+                some: {
+                  loaiDiem: 'DON',
+                  diemDonTraId: dto.fromStationId,
+                  diemDonTra: { trangThai: 'HOAT_DONG' },
+                },
+              },
+            },
+            {
+              diemDonTraChuyenXes: {
+                none: {
+                  loaiDiem: 'DON',
+                  diemDonTra: { trangThai: 'HOAT_DONG' },
+                },
+              },
+              tuyenXe: {
+                diemDi: { contains: fromStation.tenDiem },
+              },
+            },
+          ],
+        });
+      } else if (dto.fromLocationId && fromLocation) {
+        const fromPointWhere: Prisma.DiemDonTraWhereInput = effectiveFromOldId
+          ? { diaDiemCuId: effectiveFromOldId, trangThai: 'HOAT_DONG' }
+          : { diaDiemMoiId: effectiveFromNewId!, trangThai: 'HOAT_DONG' };
+
+        // Lấy terms theo option cụ thể trong catalogue (khớp diaDiemId, đúng isLegacy của mục đó)
+        let fromTerms: string[];
+        const fromOption = catalogue.find(
+          (c) => c.diaDiemId === dto.fromLocationId,
+        );
+        if (fromOption) {
+          fromTerms = locationSearchTermsForOption(fromOption, catalogue);
+        } else if (effectiveFromNewId) {
+          const mappings = await this.prisma.bangSapNhapDiaDiem.findMany({
+            where: { diaDiemMoiId: effectiveFromNewId },
+            include: { diaDiemCu: true },
+          });
+          fromTerms = [
+            fromLocation.tenDiaDiem,
+            fromLocation.tenDiaDiem
+              .replace(/^(Tỉnh|Thành phố|Thị xã)\s+/i, '')
+              .trim(),
+            ...mappings.map((m) => m.diaDiemCu.tenDiaDiem),
+            ...mappings.map((m) =>
+              m.diaDiemCu.tenDiaDiem
+                .replace(/^(Tỉnh|Thành phố|Thị xã)\s+/i, '')
+                .trim(),
+            ),
+          ];
+          if (fromLocation.tenDiaDiem.toLowerCase().includes('hồ chí minh')) {
+            fromTerms.push('TP.HCM', 'Hồ Chí Minh', 'TP HCM');
+          }
+        } else {
+          const clean = fromLocation.tenDiaDiem
+            .replace(/^(Tỉnh|Thành phố|Thị xã)\s+/i, '')
+            .trim();
+          fromTerms = [fromLocation.tenDiaDiem, clean];
+          if (clean.toLowerCase().includes('hồ chí minh')) {
+            fromTerms.push('TP.HCM', 'Hồ Chí Minh', 'TP HCM');
+          }
+        }
+        fromTerms = [...new Set(fromTerms.filter(Boolean))];
+
+        andConditions.push({
+          OR: [
+            {
+              diemDonTraChuyenXes: {
+                some: {
+                  loaiDiem: 'DON',
+                  diemDonTra: fromPointWhere,
+                },
+              },
+            },
+            {
+              diemDonTraChuyenXes: {
+                none: {
+                  loaiDiem: 'DON',
+                  diemDonTra: { trangThai: 'HOAT_DONG' },
+                },
+              },
+              tuyenXe: {
+                OR: fromTerms.map((term) => ({ diemDi: { contains: term } })),
+              },
+            },
+          ],
+        });
+      } else if (dto.from) {
+        const fromTerms = locationSearchTerms(codeToCity(dto.from)!, catalogue);
+        andConditions.push({
+          tuyenXe: {
+            OR: fromTerms.map((term) => ({ diemDi: { contains: term } })),
+          },
+        });
+      }
+
+      if (dto.toStationId && toStation) {
+        andConditions.push({
+          OR: [
+            {
+              diemDonTraChuyenXes: {
+                some: {
+                  loaiDiem: 'TRA',
+                  diemDonTraId: dto.toStationId,
+                  diemDonTra: { trangThai: 'HOAT_DONG' },
+                },
+              },
+            },
+            {
+              diemDonTraChuyenXes: {
+                none: {
+                  loaiDiem: 'TRA',
+                  diemDonTra: { trangThai: 'HOAT_DONG' },
+                },
+              },
+              tuyenXe: {
+                diemDen: { contains: toStation.tenDiem },
+              },
+            },
+          ],
+        });
+      } else if (dto.toLocationId && toLocation) {
+        const toPointWhere: Prisma.DiemDonTraWhereInput = effectiveToOldId
+          ? { diaDiemCuId: effectiveToOldId, trangThai: 'HOAT_DONG' }
+          : { diaDiemMoiId: effectiveToNewId!, trangThai: 'HOAT_DONG' };
+
+        // Lấy terms theo option cụ thể trong catalogue (khớp diaDiemId, đúng isLegacy của mục đó)
+        let toTerms: string[];
+        const toOption = catalogue.find(
+          (c) => c.diaDiemId === dto.toLocationId,
+        );
+        if (toOption) {
+          toTerms = locationSearchTermsForOption(toOption, catalogue);
+        } else if (effectiveToNewId) {
+          const mappings = await this.prisma.bangSapNhapDiaDiem.findMany({
+            where: { diaDiemMoiId: effectiveToNewId },
+            include: { diaDiemCu: true },
+          });
+          toTerms = [
+            toLocation.tenDiaDiem,
+            toLocation.tenDiaDiem
+              .replace(/^(Tỉnh|Thành phố|Thị xã)\s+/i, '')
+              .trim(),
+            ...mappings.map((m) => m.diaDiemCu.tenDiaDiem),
+            ...mappings.map((m) =>
+              m.diaDiemCu.tenDiaDiem
+                .replace(/^(Tỉnh|Thành phố|Thị xã)\s+/i, '')
+                .trim(),
+            ),
+          ];
+          if (toLocation.tenDiaDiem.toLowerCase().includes('hồ chí minh')) {
+            toTerms.push('TP.HCM', 'Hồ Chí Minh', 'TP HCM');
+          }
+        } else {
+          const clean = toLocation.tenDiaDiem
+            .replace(/^(Tỉnh|Thành phố|Thị xã)\s+/i, '')
+            .trim();
+          toTerms = [toLocation.tenDiaDiem, clean];
+          if (clean.toLowerCase().includes('hồ chí minh')) {
+            toTerms.push('TP.HCM', 'Hồ Chí Minh', 'TP HCM');
+          }
+        }
+        toTerms = [...new Set(toTerms.filter(Boolean))];
+
+        andConditions.push({
+          OR: [
+            {
+              diemDonTraChuyenXes: {
+                some: {
+                  loaiDiem: 'TRA',
+                  diemDonTra: toPointWhere,
+                },
+              },
+            },
+            {
+              diemDonTraChuyenXes: {
+                none: {
+                  loaiDiem: 'TRA',
+                  diemDonTra: { trangThai: 'HOAT_DONG' },
+                },
+              },
+              tuyenXe: {
+                OR: toTerms.map((term) => ({ diemDen: { contains: term } })),
+              },
+            },
+          ],
+        });
+      } else if (dto.to) {
+        const toTerms = locationSearchTerms(codeToCity(dto.to)!, catalogue);
+        andConditions.push({
+          tuyenXe: {
+            OR: toTerms.map((term) => ({ diemDen: { contains: term } })),
+          },
+        });
+      }
+
       if (dto.busCompanyId) {
-        where.tuyenXe.nhaXeId = dto.busCompanyId;
+        andConditions.push({ tuyenXe: { nhaXeId: dto.busCompanyId } });
       }
       if (dto.operator) {
-        where.tuyenXe.nhaXe = { tenNhaXe: { contains: dto.operator } };
+        andConditions.push({
+          tuyenXe: { nhaXe: { tenNhaXe: { contains: dto.operator } } },
+        });
       }
+
+      where.AND = andConditions;
     }
 
     if (dto.vehicleTypeId) {
@@ -577,7 +1267,13 @@ export class TripsService {
         xe: { loaiXe: { tenLoai: { contains: dto.vehicleType } } },
       });
     }
-    if (additionalFilters.length > 0) where.AND = additionalFilters;
+    if (additionalFilters.length > 0) {
+      if (Array.isArray(where.AND)) {
+        where.AND.push(...additionalFilters);
+      } else {
+        where.AND = additionalFilters;
+      }
+    }
 
     if (dto.departureDate) {
       where.ngayKhoiHanh = new Date(`${dto.departureDate}T00:00:00.000Z`);
@@ -593,7 +1289,7 @@ export class TripsService {
       where,
       include: TRIP_INCLUDE,
     });
-    const chuyenXes = queriedTrips.filter(
+    let chuyenXes = queriedTrips.filter(
       (trip) =>
         combineDeparture(
           trip.ngayKhoiHanh,
@@ -601,6 +1297,241 @@ export class TripsService {
           businessTimeZone,
         ) > now && matchesTimeRange(trip.gioKhoiHanh, dto.timeRange),
     );
+
+    // Tính subAreas nếu khách chọn địa danh MỚI
+    let fromSubAreas: SubAreaItem[] | undefined;
+    let toSubAreas: SubAreaItem[] | undefined;
+    if (effectiveFromNewId) {
+      fromSubAreas = await this.buildSubAreas(
+        effectiveFromNewId,
+        'DON',
+        chuyenXes,
+        catalogue,
+      );
+    }
+    if (effectiveToNewId) {
+      toSubAreas = await this.buildSubAreas(
+        effectiveToNewId,
+        'TRA',
+        chuyenXes,
+        catalogue,
+      );
+    }
+
+    // Thu hẹp theo areaId nếu khách truyền fromAreaId / toAreaId
+    if (validatedFromAreaId) {
+      const fromAreaLoc = await this.prisma.danhMucDiaDiem.findUnique({
+        where: { diaDiemId: validatedFromAreaId },
+      });
+      const areaTerms = fromAreaLoc
+        ? locationSearchTerms(fromAreaLoc.tenDiaDiem, catalogue)
+        : [];
+      chuyenXes = chuyenXes.filter((trip) => {
+        const points = (trip.diemDonTraChuyenXes ?? []).filter(
+          (p) =>
+            p.loaiDiem === 'DON' && p.diemDonTra?.trangThai === 'HOAT_DONG',
+        );
+        if (points.length > 0) {
+          return points.some(
+            (p) => p.diemDonTra?.diaDiemCuId === validatedFromAreaId,
+          );
+        }
+        return areaTerms.some((term) => trip.tuyenXe.diemDi.includes(term));
+      });
+    }
+
+    if (validatedToAreaId) {
+      const toAreaLoc = await this.prisma.danhMucDiaDiem.findUnique({
+        where: { diaDiemId: validatedToAreaId },
+      });
+      const areaTerms = toAreaLoc
+        ? locationSearchTerms(toAreaLoc.tenDiaDiem, catalogue)
+        : [];
+      chuyenXes = chuyenXes.filter((trip) => {
+        const points = (trip.diemDonTraChuyenXes ?? []).filter(
+          (p) =>
+            p.loaiDiem === 'TRA' && p.diemDonTra?.trangThai === 'HOAT_DONG',
+        );
+        if (points.length > 0) {
+          return points.some(
+            (p) => p.diemDonTra?.diaDiemCuId === validatedToAreaId,
+          );
+        }
+        return areaTerms.some((term) => trip.tuyenXe.diemDen.includes(term));
+      });
+    }
+
+    // Tính expandSuggestion nếu khách chọn địa danh CŨ
+    let fromExpandSuggestion: ExpandSuggestion | undefined;
+    let toExpandSuggestion: ExpandSuggestion | undefined;
+
+    if (effectiveFromOldId && fromLocation) {
+      const baseSiblingWhere: Prisma.ChuyenXeWhereInput = {
+        trangThai: 'CHUA_KHOI_HANH',
+        ngayKhoiHanh: where.ngayKhoiHanh,
+      };
+      if (dto.toStationId && toStation) {
+        baseSiblingWhere.OR = [
+          {
+            diemDonTraChuyenXes: {
+              some: {
+                loaiDiem: 'TRA',
+                diemDonTraId: dto.toStationId,
+                diemDonTra: { trangThai: 'HOAT_DONG' },
+              },
+            },
+          },
+          {
+            diemDonTraChuyenXes: {
+              none: {
+                loaiDiem: 'TRA',
+                diemDonTra: { trangThai: 'HOAT_DONG' },
+              },
+            },
+            tuyenXe: {
+              diemDen: { contains: toStation.tenDiem },
+            },
+          },
+        ];
+      } else if (dto.toLocationId && toLocation) {
+        const toPointWhere: Prisma.DiemDonTraWhereInput = effectiveToOldId
+          ? { diaDiemCuId: effectiveToOldId, trangThai: 'HOAT_DONG' }
+          : { diaDiemMoiId: effectiveToNewId!, trangThai: 'HOAT_DONG' };
+        const toOption = catalogue.find(
+          (c) => c.diaDiemId === dto.toLocationId,
+        );
+        const toTerms = toOption
+          ? locationSearchTermsForOption(toOption, catalogue)
+          : locationSearchTerms(
+              dto.to ? codeToCity(dto.to)! : toLocation.tenDiaDiem,
+              catalogue,
+            );
+        baseSiblingWhere.OR = [
+          {
+            diemDonTraChuyenXes: {
+              some: { loaiDiem: 'TRA', diemDonTra: toPointWhere },
+            },
+          },
+          {
+            diemDonTraChuyenXes: {
+              none: {
+                loaiDiem: 'TRA',
+                diemDonTra: { trangThai: 'HOAT_DONG' },
+              },
+            },
+            tuyenXe: {
+              OR: toTerms.map((term) => ({ diemDen: { contains: term } })),
+            },
+          },
+        ];
+      } else if (dto.to) {
+        const toTerms = locationSearchTerms(codeToCity(dto.to)!, catalogue);
+        baseSiblingWhere.tuyenXe = {
+          OR: toTerms.map((term) => ({ diemDen: { contains: term } })),
+        };
+      }
+      if (dto.busCompanyId) {
+        baseSiblingWhere.tuyenXe = {
+          ...(baseSiblingWhere.tuyenXe as Prisma.TuyenXeWhereInput),
+          nhaXeId: dto.busCompanyId,
+        };
+      }
+
+      fromExpandSuggestion = await this.buildExpandSuggestion(
+        fromLocation,
+        effectiveFromOldId,
+        'DON',
+        baseSiblingWhere,
+        new Set(chuyenXes.map((c) => c.chuyenXeId)),
+        businessTimeZone,
+        now,
+        dto.timeRange,
+      );
+    }
+
+    if (effectiveToOldId && toLocation) {
+      const baseSiblingWhere: Prisma.ChuyenXeWhereInput = {
+        trangThai: 'CHUA_KHOI_HANH',
+        ngayKhoiHanh: where.ngayKhoiHanh,
+      };
+      if (dto.fromStationId && fromStation) {
+        baseSiblingWhere.OR = [
+          {
+            diemDonTraChuyenXes: {
+              some: {
+                loaiDiem: 'DON',
+                diemDonTraId: dto.fromStationId,
+                diemDonTra: { trangThai: 'HOAT_DONG' },
+              },
+            },
+          },
+          {
+            diemDonTraChuyenXes: {
+              none: {
+                loaiDiem: 'DON',
+                diemDonTra: { trangThai: 'HOAT_DONG' },
+              },
+            },
+            tuyenXe: {
+              diemDi: { contains: fromStation.tenDiem },
+            },
+          },
+        ];
+      } else if (dto.fromLocationId && fromLocation) {
+        const fromPointWhere: Prisma.DiemDonTraWhereInput = effectiveFromOldId
+          ? { diaDiemCuId: effectiveFromOldId, trangThai: 'HOAT_DONG' }
+          : { diaDiemMoiId: effectiveFromNewId!, trangThai: 'HOAT_DONG' };
+        const fromOption = catalogue.find(
+          (c) => c.diaDiemId === dto.fromLocationId,
+        );
+        const fromTerms = fromOption
+          ? locationSearchTermsForOption(fromOption, catalogue)
+          : locationSearchTerms(
+              dto.from ? codeToCity(dto.from)! : fromLocation.tenDiaDiem,
+              catalogue,
+            );
+        baseSiblingWhere.OR = [
+          {
+            diemDonTraChuyenXes: {
+              some: { loaiDiem: 'DON', diemDonTra: fromPointWhere },
+            },
+          },
+          {
+            diemDonTraChuyenXes: {
+              none: {
+                loaiDiem: 'DON',
+                diemDonTra: { trangThai: 'HOAT_DONG' },
+              },
+            },
+            tuyenXe: {
+              OR: fromTerms.map((term) => ({ diemDi: { contains: term } })),
+            },
+          },
+        ];
+      } else if (dto.from) {
+        const fromTerms = locationSearchTerms(codeToCity(dto.from)!, catalogue);
+        baseSiblingWhere.tuyenXe = {
+          OR: fromTerms.map((term) => ({ diemDi: { contains: term } })),
+        };
+      }
+      if (dto.busCompanyId) {
+        baseSiblingWhere.tuyenXe = {
+          ...(baseSiblingWhere.tuyenXe as Prisma.TuyenXeWhereInput),
+          nhaXeId: dto.busCompanyId,
+        };
+      }
+
+      toExpandSuggestion = await this.buildExpandSuggestion(
+        toLocation,
+        effectiveToOldId,
+        'TRA',
+        baseSiblingWhere,
+        new Set(chuyenXes.map((c) => c.chuyenXeId)),
+        businessTimeZone,
+        now,
+        dto.timeRange,
+      );
+    }
 
     const tripDates = chuyenXes.map(({ ngayKhoiHanh }) => ngayKhoiHanh);
     const earliestTripDate = new Date(
@@ -670,7 +1601,21 @@ export class TripsService {
 
     const totalItems = mapped.length;
     const start = (dto.page - 1) * dto.pageSize;
-    return {
+    const response: {
+      data: typeof mapped;
+      meta: {
+        page: number;
+        pageSize: number;
+        totalItems: number;
+        totalPages: number;
+      };
+      fromSubAreas?: SubAreaItem[];
+      toSubAreas?: SubAreaItem[];
+      fromExpandSuggestion?: ExpandSuggestion;
+      toExpandSuggestion?: ExpandSuggestion;
+      subAreas?: SubAreaItem[];
+      expandSuggestion?: ExpandSuggestion;
+    } = {
       data: mapped.slice(start, start + dto.pageSize),
       meta: {
         page: dto.page,
@@ -679,6 +1624,20 @@ export class TripsService {
         totalPages: Math.ceil(totalItems / dto.pageSize),
       },
     };
+
+    if (fromSubAreas) response.fromSubAreas = fromSubAreas;
+    if (toSubAreas) response.toSubAreas = toSubAreas;
+    if (fromExpandSuggestion) response.fromExpandSuggestion = fromExpandSuggestion;
+    if (toExpandSuggestion) response.toExpandSuggestion = toExpandSuggestion;
+
+    if (fromSubAreas || toSubAreas) {
+      response.subAreas = fromSubAreas ?? toSubAreas;
+    }
+    if (fromExpandSuggestion || toExpandSuggestion) {
+      response.expandSuggestion = fromExpandSuggestion ?? toExpandSuggestion;
+    }
+
+    return response;
   }
 
   async getDetails(id: number) {
@@ -823,7 +1782,7 @@ export class TripsService {
     const gheChuyenXes = await this.prisma.gheChuyenXe.findMany({
       where: { chuyenXeId: id },
       include: { ghe: true },
-      orderBy: { ghe: { soGhe: 'asc' } },
+      orderBy: { ghe: { tenGhe: 'asc' } },
     });
 
     if (gheChuyenXes.length === 0) {
@@ -835,10 +1794,10 @@ export class TripsService {
 
     return gheChuyenXes.map((gx) => ({
       tripSeatId: gx.gheChuyenXeId,
-      seatNumber: gx.ghe.soGhe,
+      seatNumber: gx.ghe.tenGhe ?? (gx.ghe as any).soGhe,
       position: gx.ghe.viTri,
       floor:
-        gx.ghe.tang ?? gx.tang ?? getLegacySeatFloor(gx.ghe.soGhe, gx.ghe.viTri),
+        gx.ghe.tang ?? gx.tang ?? getLegacySeatFloor(gx.ghe.tenGhe ?? (gx.ghe as any).soGhe, gx.ghe.viTri),
       x: gx.ghe.toaDoX,
       y: gx.ghe.toaDoY,
       status: gx.trangThai,
@@ -876,7 +1835,7 @@ export class TripsService {
         ghe: {
           select: {
             gheId: true,
-            soGhe: true,
+            tenGhe: true,
             viTri: true,
             tang: true,
             toaDoX: true,
@@ -887,7 +1846,9 @@ export class TripsService {
     });
 
     allSeats.sort((a, b) => {
-      const codeCompare = a.ghe.soGhe.localeCompare(b.ghe.soGhe, undefined, {
+      const aName = a.ghe.tenGhe ?? (a.ghe as any).soGhe ?? (a.ghe as any).maGhe ?? '';
+      const bName = b.ghe.tenGhe ?? (b.ghe as any).soGhe ?? (b.ghe as any).maGhe ?? '';
+      const codeCompare = aName.localeCompare(bName, undefined, {
         numeric: true,
         sensitivity: 'base',
       });
@@ -915,12 +1876,12 @@ export class TripsService {
       status: item.trangThai,
       seat: {
         seatId: item.ghe.gheId,
-        code: item.ghe.soGhe,
+        code: item.ghe.tenGhe ?? (item.ghe as any).soGhe ?? (item.ghe as any).maGhe ?? '',
         position: item.ghe.viTri,
         floor:
           item.ghe.tang ??
           item.tang ??
-          getLegacySeatFloor(item.ghe.soGhe, item.ghe.viTri),
+          getLegacySeatFloor(item.ghe.tenGhe ?? (item.ghe as any).soGhe ?? '', item.ghe.viTri),
         x: item.ghe.toaDoX,
         y: item.ghe.toaDoY,
       },
@@ -936,6 +1897,144 @@ export class TripsService {
         available,
         held,
         booked,
+      },
+    };
+  }
+
+  async getManifest(id: number, principal: AuthPrincipal) {
+    const nhaXeId = requireTenantPrincipal(principal);
+
+    const trip = await this.prisma.chuyenXe.findFirst({
+      where: { chuyenXeId: id, nhaXeId },
+      include: {
+        tuyenXe: true,
+        xe: { include: { loaiXe: true } },
+      },
+    });
+
+    if (!trip) {
+      throw new NotFoundException({
+        error: 'TRIP_NOT_FOUND',
+        message: 'Không tìm thấy chuyến xe.',
+      });
+    }
+
+    const tripPoints = await this.prisma.diemDonTraChuyenXe.findMany({
+      where: { chuyenXeId: id },
+      include: { diemDonTra: true },
+      orderBy: [{ phutLech: 'asc' }, { thuTu: 'asc' }],
+    });
+
+    const tickets = await this.prisma.ve.findMany({
+      where: {
+        gheChuyenXe: { chuyenXeId: id },
+        trangThai: { not: 'HUY' },
+      },
+      include: {
+        gheChuyenXe: { include: { ghe: true } },
+        phieuDatVe: { include: { donGiaoDich: true } },
+        diemDonChuyenXe: { include: { diemDonTra: true } },
+        diemTraChuyenXe: { include: { diemDonTra: true } },
+      },
+      orderBy: { gheChuyenXe: { ghe: { tenGhe: 'asc' } } },
+    });
+
+    const mappedPassengers = tickets.map((t) => {
+      const order = t.phieuDatVe?.donGiaoDich;
+      const seatCode = t.gheChuyenXe?.ghe?.tenGhe ?? '—';
+      const pickupSnapshot = t.diemDonSnapshot as any;
+      const dropoffSnapshot = t.diemTraSnapshot as any;
+
+      return {
+        veId: t.veId,
+        maVe: t.maVe,
+        soGhe: seatCode,
+        hoTen: order?.tenKhachHang ?? 'Khách lẻ',
+        soDienThoai: order?.soDienThoaiKhachHang ?? '—',
+        email: order?.emailKhachHang ?? null,
+        diemDonChuyenXeId: t.diemDonChuyenXeId,
+        diemDonTen:
+          t.diemDonChuyenXe?.diemDonTra?.tenDiem ??
+          pickupSnapshot?.tenDiem ??
+          t.diemDon ??
+          'Chưa xác định',
+        diemTraChuyenXeId: t.diemTraChuyenXeId,
+        diemTraTen:
+          t.diemTraChuyenXe?.diemDonTra?.tenDiem ??
+          dropoffSnapshot?.tenDiem ??
+          'Chưa xác định',
+        trangThai: t.trangThai,
+        giaThucTe: Number(t.giaThucTe),
+      };
+    });
+
+    const pickupGroups = tripPoints
+      .filter((p) => p.loaiDiem === 'DON')
+      .map((p) => ({
+        diemDonTraChuyenXeId: p.diemDonTraChuyenXeId,
+        diemDonTraId: p.diemDonTraId,
+        tenDiem: p.diemDonTra.tenDiem,
+        diaChi: p.diemDonTra.diaChi,
+        loaiDiem: p.loaiDiem,
+        phutLech: p.phutLech,
+        gioThucTe: p.thoiGianDuKien
+          ? formatClockTime(p.thoiGianDuKien)
+          : `${p.phutLech >= 0 ? '+' : ''}${p.phutLech}p`,
+        passengers: mappedPassengers.filter(
+          (pass) => pass.diemDonChuyenXeId === p.diemDonTraChuyenXeId,
+        ),
+      }));
+
+    const dropoffGroups = tripPoints
+      .filter((p) => p.loaiDiem === 'TRA')
+      .map((p) => ({
+        diemDonTraChuyenXeId: p.diemDonTraChuyenXeId,
+        diemDonTraId: p.diemDonTraId,
+        tenDiem: p.diemDonTra.tenDiem,
+        diaChi: p.diemDonTra.diaChi,
+        loaiDiem: p.loaiDiem,
+        phutLech: p.phutLech,
+        gioThucTe: p.thoiGianDuKien
+          ? formatClockTime(p.thoiGianDuKien)
+          : `${p.phutLech >= 0 ? '+' : ''}${p.phutLech}p`,
+        passengers: mappedPassengers.filter(
+          (pass) => pass.diemTraChuyenXeId === p.diemDonTraChuyenXeId,
+        ),
+      }));
+
+    const unassignedPassengers = mappedPassengers.filter(
+      (pass) =>
+        !pass.diemDonChuyenXeId ||
+        !pickupGroups.some((g) => g.diemDonTraChuyenXeId === pass.diemDonChuyenXeId),
+    );
+
+    const depDateStr = trip.ngayKhoiHanh ? trip.ngayKhoiHanh.toISOString().slice(0, 10) : '';
+
+    return {
+      data: {
+        trip: {
+          chuyenXeId: trip.chuyenXeId,
+          maChuyenXe: trip.maChuyenXe,
+          ngayKhoiHanh: depDateStr,
+          gioKhoiHanh: formatClockTime(trip.gioKhoiHanh),
+          gioDen: trip.gioDen ? formatClockTime(trip.gioDen) : null,
+          trangThai: trip.trangThai,
+          tuyenXe: {
+            tuyenXeId: trip.tuyenXe.tuyenXeId,
+            maTuyenXe: trip.tuyenXe.maTuyenXe,
+            diemDi: trip.tuyenXe.diemDi,
+            diemDen: trip.tuyenXe.diemDen,
+          },
+          xe: {
+            xeId: trip.xe.xeId,
+            bienSoXe: trip.xe.bienSoXe,
+            tenLoaiXe: trip.xe.loaiXe.tenLoai,
+          },
+        },
+        pickupGroups,
+        dropoffGroups,
+        unassignedPassengers,
+        totalPassengers: mappedPassengers.length,
       },
     };
   }
@@ -958,7 +2057,19 @@ export class TripsService {
       where.xeId = query.vehicleId;
     }
 
-    if (query.departureDate) {
+    const fromDateStr = query.fromDepartureDate ?? query.fromDate;
+    const toDateStr = query.toDepartureDate ?? query.toDate;
+
+    if (fromDateStr || toDateStr) {
+      const dateFilter: Prisma.DateTimeFilter = {};
+      if (fromDateStr) {
+        dateFilter.gte = new Date(`${fromDateStr}T00:00:00.000Z`);
+      }
+      if (toDateStr) {
+        dateFilter.lte = new Date(`${toDateStr}T23:59:59.999Z`);
+      }
+      where.ngayKhoiHanh = dateFilter;
+    } else if (query.departureDate) {
       where.ngayKhoiHanh = new Date(`${query.departureDate}T00:00:00.000Z`);
     }
 
@@ -1025,6 +2136,7 @@ export class TripsService {
         tuyenXe: true,
         xe: { include: { loaiXe: true } },
         gheChuyenXes: { select: { trangThai: true } },
+        diemDonTraChuyenXes: { select: { loaiDiem: true } },
       },
     });
 
@@ -1046,6 +2158,17 @@ export class TripsService {
       (g) => g.trangThai === 'DA_DAT',
     ).length;
 
+    const donCount = (trip.diemDonTraChuyenXes ?? []).filter(
+      (p) => p.loaiDiem === 'DON',
+    ).length;
+    const traCount = (trip.diemDonTraChuyenXes ?? []).filter(
+      (p) => p.loaiDiem === 'TRA',
+    ).length;
+    const nghiCount = (trip.diemDonTraChuyenXes ?? []).filter(
+      (p) => p.loaiDiem === 'NGHI',
+    ).length;
+    const thieuDiem = donCount === 0 || traCount === 0;
+
     return {
       data: {
         ...mapTripItem(trip),
@@ -1055,6 +2178,10 @@ export class TripsService {
           held,
           booked,
         },
+        donCount,
+        traCount,
+        nghiCount,
+        thieuDiem,
       },
     };
   }
@@ -1166,7 +2293,7 @@ export class TripsService {
             });
           }
 
-          return tx.chuyenXe.create({
+          const createdTrip = await tx.chuyenXe.create({
             data: {
               maChuyenXe: code,
               ngayKhoiHanh: departureDate,
@@ -1196,6 +2323,35 @@ export class TripsService {
               gheChuyenXes: { select: { trangThai: true } },
             },
           });
+
+          if (dto.copyRouteStops !== false && tx.tuyenXeDiemDung) {
+            const templateStops = await tx.tuyenXeDiemDung.findMany({
+              where: { tuyenXeId: dto.routeId },
+              orderBy: [{ phutLech: 'asc' }, { thuTu: 'asc' }],
+            });
+
+            for (const stop of templateStops) {
+              const thoiGianDuKien = calculateClockTime(departureTime, stop.phutLech);
+              if (tx.diemDonTraChuyenXe) {
+                await tx.diemDonTraChuyenXe.create({
+                  data: {
+                    chuyenXeId: createdTrip.chuyenXeId,
+                    diemDonTraId: stop.diemDonTraId,
+                    loaiDiem: stop.loaiDiem,
+                    thoiGianDuKien,
+                    phutLech: stop.phutLech,
+                    thuTu: stop.thuTu,
+                    phuPhi: stop.phuPhi,
+                    phutCoMatTruoc: stop.phutCoMatTruoc,
+                    nhanKhach: stop.nhanKhach,
+                    ghiChu: stop.ghiChu,
+                  },
+                });
+              }
+            }
+          }
+
+          return createdTrip;
         },
         {
           isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted,
@@ -1213,6 +2369,17 @@ export class TripsService {
         (g) => g.trangThai === 'DA_DAT',
       ).length;
 
+      const points = this.prisma.diemDonTraChuyenXe
+        ? await this.prisma.diemDonTraChuyenXe.findMany({
+            where: { chuyenXeId: trip.chuyenXeId },
+            select: { loaiDiem: true },
+          })
+        : [];
+      const donCount = points.filter((p) => p.loaiDiem === 'DON').length;
+      const traCount = points.filter((p) => p.loaiDiem === 'TRA').length;
+      const nghiCount = points.filter((p) => p.loaiDiem === 'NGHI').length;
+      const thieuDiem = donCount === 0 || traCount === 0;
+
       return {
         data: {
           ...mapTripItem(trip),
@@ -1222,6 +2389,10 @@ export class TripsService {
             held,
             booked,
           },
+          donCount,
+          traCount,
+          nghiCount,
+          thieuDiem,
         },
       };
     } catch (err: unknown) {

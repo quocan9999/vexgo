@@ -28,6 +28,7 @@ import {
   type FilterOption,
 } from '@/components/data-filters/resource-filters';
 import { Button } from '@/components/ui/action-button';
+import { Badge } from '@/components/ui/status-badge';
 import { Card } from '@/components/ui/card';
 import {
   Table,
@@ -45,6 +46,9 @@ import { useRoutes } from '../hooks/use-routes';
 import { getRouteById, updateRouteStatus } from '../services/route-service';
 import type { Route, RouteSortKey, RouteStatus } from '../types/route';
 import { RouteFormDialog } from './route-form-dialog';
+import { StopListEditor } from '@/features/stops/components/stop-list-editor';
+import { getRouteStops } from '@/features/stops/services/stop-service';
+import type { RouteStopItem } from '@/features/stops/types/stop';
 
 const STATUS_OPTIONS: FilterOption[] = [
   { value: 'HOAT_DONG', label: 'Đang hoạt động' },
@@ -102,6 +106,9 @@ export function RouteDetails({
   const [detail, setDetail] = useState<DetailState>({ status: 'loading' });
   const [retryCount, setRetryCount] = useState(0);
   const [editOpen, setEditOpen] = useState(false);
+  const [stopsEditorOpen, setStopsEditorOpen] = useState(false);
+  const [routeStops, setRouteStops] = useState<RouteStopItem[]>([]);
+  const [loadingStops, setLoadingStops] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
   const [statusSubmitting, setStatusSubmitting] = useState(false);
   const statusSubmittingRef = useRef(false);
@@ -153,6 +160,17 @@ export function RouteDetails({
                 : 'Không thể tải thông tin tuyến xe.',
           });
       });
+
+    void Promise.resolve().then(() => setLoadingStops(true));
+    getRouteStops(routeId)
+      .then((stops) => {
+        if (!controller.signal.aborted) setRouteStops(stops);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!controller.signal.aborted) setLoadingStops(false);
+      });
+
     return () => controller.abort();
   }, [routeId, retryCount]);
 
@@ -240,6 +258,51 @@ export function RouteDetails({
               <dd>{timestampFormat(detail.route.updatedAt)}</dd>
             </div>
           </dl>
+
+          {/* Section Lộ trình mẫu */}
+          <div className="rounded-lg border p-4 space-y-3 bg-muted/20">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="text-sm font-semibold">Lộ trình mẫu (Khuôn điểm dừng)</h4>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Điểm đón, trả và trạm nghỉ được áp dụng cho chuyến xe mới
+                </p>
+              </div>
+              {canUpdate && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  type="button"
+                  onClick={() => setStopsEditorOpen(true)}
+                >
+                  Cấu hình ({routeStops.length} điểm)
+                </Button>
+              )}
+            </div>
+
+            {loadingStops ? (
+              <p className="text-xs text-muted-foreground">Đang tải điểm dừng…</p>
+            ) : routeStops.length === 0 ? (
+              <p className="text-xs text-amber-600 dark:text-amber-400 font-medium">
+                Chưa thiết lập khuôn lộ trình. Nhấn &quot;Cấu hình&quot; để thêm điểm đón/trả.
+              </p>
+            ) : (
+              <div className="flex flex-wrap gap-2 text-xs">
+                <Badge variant="secondary">
+                  {routeStops.filter((s) => s.loaiDiem === 'DON').length} điểm đón
+                </Badge>
+                <Badge variant="outline">
+                  {routeStops.filter((s) => s.loaiDiem === 'TRA').length} điểm trả
+                </Badge>
+                {routeStops.some((s) => s.loaiDiem === 'NGHI') && (
+                  <Badge variant="warning">
+                    {routeStops.filter((s) => s.loaiDiem === 'NGHI').length} trạm nghỉ
+                  </Badge>
+                )}
+              </div>
+            )}
+          </div>
+
           {canUpdate && (
             <div className="flex flex-wrap justify-end gap-3 border-t pt-4">
               <Button variant="outline" onClick={() => setStatusOpen(true)}>
@@ -263,6 +326,17 @@ export function RouteDetails({
             setEditOpen(false);
             setDetail({ status: 'success', route: saved });
             onUpdated(saved);
+          }}
+        />
+      )}
+      {stopsEditorOpen && canUpdate && detail.status === 'success' && (
+        <StopListEditor
+          mode="route"
+          targetId={routeId}
+          title={`Khuôn lộ trình: ${detail.route.code} (${detail.route.origin} - ${detail.route.destination})`}
+          onClose={() => setStopsEditorOpen(false)}
+          onSaved={() => {
+            getRouteStops(routeId).then(setRouteStops).catch(() => {});
           }}
         />
       )}

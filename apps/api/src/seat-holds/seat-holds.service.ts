@@ -321,7 +321,7 @@ export class SeatHoldsService implements OnModuleInit, OnModuleDestroy {
       if (occupiedSeat) {
         throw new ConflictException({
           error: 'SEAT_UNAVAILABLE',
-          message: `Ghế ${occupiedSeat.ghe.soGhe} hiện không còn trống (đã được đặt hoặc đang giữ).`,
+          message: `Ghế ${occupiedSeat.ghe.tenGhe} hiện không còn trống (đã được đặt hoặc đang giữ).`,
         });
       }
 

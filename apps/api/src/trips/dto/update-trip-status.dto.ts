@@ -1,3 +1,4 @@
+import { ApiProperty } from '@nestjs/swagger';
 import { IsDefined, IsIn, IsString } from 'class-validator';
 
 export const TRIP_MUTABLE_STATUSES = [
@@ -9,6 +10,11 @@ export const TRIP_MUTABLE_STATUSES = [
 export type TripMutableStatus = (typeof TRIP_MUTABLE_STATUSES)[number];
 
 export class UpdateTripStatusDto {
+  @ApiProperty({
+    description: 'Trạng thái vận hành mới của chuyến xe (CHUA_KHOI_HANH, DANG_CHAY, HOAN_THANH)',
+    enum: TRIP_MUTABLE_STATUSES,
+    example: 'DANG_CHAY',
+  })
   @IsDefined()
   @IsString()
   @IsIn(TRIP_MUTABLE_STATUSES, {

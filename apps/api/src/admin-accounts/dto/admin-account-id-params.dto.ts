@@ -1,3 +1,4 @@
+import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import { IsInt, Max, Min } from 'class-validator';
 
@@ -8,6 +9,7 @@ function strictInteger(value: unknown) {
 }
 
 export class AdminAccountIdParamsDto {
+  @ApiProperty({ description: 'ID định danh tài khoản quản trị viên', example: 1 })
   @Transform(({ value }) => strictInteger(value))
   @IsInt()
   @Min(1)

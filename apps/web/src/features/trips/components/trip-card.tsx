@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
-import { MapPin, Star } from 'lucide-react';
+import { Clock, MapPin, Star } from 'lucide-react';
+import { TripScheduleModal } from './trip-schedule-modal';
 import type { Trip } from '@/types/customer';
 import { AlternativeTripsModal } from './alternative-trips';
 
@@ -19,6 +20,7 @@ export function TripCard({
   onChoose,
 }: TripCardProps) {
   const [showAlternatives, setShowAlternatives] = useState(false);
+  const [showSchedule, setShowSchedule] = useState(false);
   const operatorName = trip.operator.replace(/^Nhà xe\s+/i, '');
 
   return (
@@ -50,27 +52,40 @@ export function TripCard({
               )}
             </div>
 
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowAlternatives(true);
-              }}
-              className="inline-flex items-center px-3 py-1 rounded-lg text-xs font-bold text-[#0060c4] hover:bg-blue-50 border border-blue-200/80 transition-colors cursor-pointer"
-            >
-              Gợi ý chuyến thay thế
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowSchedule(true);
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold text-slate-700 hover:text-[#f05123] hover:bg-orange-50 border border-slate-200 hover:border-orange-200 transition-colors cursor-pointer"
+              >
+                <Clock size={13} className="text-[#f05123]" />
+                Lịch trình
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowAlternatives(true);
+                }}
+                className="inline-flex items-center px-3 py-1 rounded-lg text-xs font-bold text-[#0060c4] hover:bg-blue-50 border border-blue-200/80 transition-colors cursor-pointer"
+              >
+                Gợi ý chuyến thay thế
+              </button>
+            </div>
           </div>
 
           {/* Row 1: Times + Route info + Price */}
           <div className="flex items-start justify-between gap-4">
-            {/* Left: departure time + origin */}
-            <div className="w-14 shrink-0">
+            {/* Left: departure time + origin/pickupPoint */}
+            <div className="min-w-16 max-w-28 shrink-0">
               <span className="text-xl font-bold text-slate-800">
                 {trip.departureTime}
               </span>
-              <p className="text-[12px] font-bold text-slate-700 mt-0.5">
-                {trip.origin}
+              <p className="text-[12px] font-bold text-slate-700 mt-0.5 leading-snug line-clamp-2" title={trip.pickupPoint || trip.origin}>
+                {trip.pickupPoint || trip.origin}
               </p>
             </div>
 
@@ -96,13 +111,13 @@ export function TripCard({
               </div>
             </div>
 
-            {/* Arrival time + destination */}
-            <div className="w-14 shrink-0 text-center">
+            {/* Arrival time + destination/dropoffPoint */}
+            <div className="min-w-16 max-w-28 shrink-0 text-center">
               <span className="text-xl font-bold text-slate-800">
                 {trip.arrivalTime}
               </span>
-              <p className="text-[12px] font-bold text-slate-700 mt-0.5">
-                {trip.destination}
+              <p className="text-[12px] font-bold text-slate-700 mt-0.5 leading-snug line-clamp-2" title={trip.dropoffPoint || trip.destination}>
+                {trip.dropoffPoint || trip.destination}
               </p>
             </div>
 
@@ -145,6 +160,12 @@ export function TripCard({
         tripId={Number(trip.id)}
         currentPrice={Number.isFinite(trip.price) ? trip.price : undefined}
         tripName={`Nhà xe ${trip.operator} (${trip.origin} → ${trip.destination})`}
+      />
+
+      <TripScheduleModal
+        isOpen={showSchedule}
+        onClose={() => setShowSchedule(false)}
+        trip={trip}
       />
     </>
   );

@@ -17,6 +17,8 @@ import type { CreateRouteDto } from './dto/create-route.dto.js';
 import type { RouteQueryDto, RouteSortField } from './dto/route-query.dto.js';
 import type { UpdateRouteDto } from './dto/update-route.dto.js';
 import type { UpdateRouteStatusDto } from './dto/update-route-status.dto.js';
+import type { UpdateRouteStopsDto } from './dto/route-stops.dto.js';
+import { validateStopList } from '../stations/stop-list-validator.js';
 import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
 
 const ROUTE_SELECT = {
@@ -371,6 +373,116 @@ export class RoutesService {
         totalPages: Math.ceil(totalItems / query.pageSize),
       },
     };
+  }
+
+  async getStops(id: number, principal?: AuthPrincipal) {
+    const nhaXeId = tenantIdForOptionalRead(principal);
+    const route = await this.prisma.tuyenXe.findFirst({
+      where: nhaXeId === undefined ? { tuyenXeId: id } : { tuyenXeId: id, nhaXeId },
+      select: { tuyenXeId: true, nhaXeId: true },
+    });
+    if (!route) {
+      throw routeNotFound();
+    }
+
+    const stops = await this.prisma.tuyenXeDiemDung.findMany({
+      where: { tuyenXeId: id },
+      orderBy: [{ phutLech: 'asc' }, { thuTu: 'asc' }],
+      include: {
+        diemDonTra: {
+          include: {
+            diaDiemCu: true,
+            diaDiemMoi: true,
+            benTrungChuyen: {
+              select: {
+                diemDonTraId: true,
+                tenDiem: true,
+                maDiem: true,
+                diaChi: true,
+                loaiDiem: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    return {
+      data: stops.map((s) => ({
+        tuyenXeDiemDungId: s.tuyenXeDiemDungId,
+        tuyenXeId: s.tuyenXeId,
+        diemDonTraId: s.diemDonTraId,
+        loaiDiem: s.loaiDiem,
+        phutLech: s.phutLech,
+        thuTu: s.thuTu,
+        phuPhi: Number(s.phuPhi),
+        phutCoMatTruoc: s.phutCoMatTruoc,
+        nhanKhach: s.nhanKhach,
+        ghiChu: s.ghiChu,
+        diemDonTra: s.diemDonTra,
+      })),
+    };
+  }
+
+  async updateStops(id: number, dto: UpdateRouteStopsDto, principal?: AuthPrincipal) {
+    const nhaXeId = requireTenantPrincipal(principal);
+    const route = await this.prisma.tuyenXe.findFirst({
+      where: { tuyenXeId: id, nhaXeId },
+      select: { tuyenXeId: true, nhaXeId: true },
+    });
+    if (!route) {
+      throw routeNotFound();
+    }
+
+    if (dto.stops && dto.stops.length > 0) {
+      const stationIds = [...new Set(dto.stops.map((s) => s.diemDonTraId))];
+      const stations = await this.prisma.diemDonTra.findMany({
+        where: { diemDonTraId: { in: stationIds } },
+        select: {
+          diemDonTraId: true,
+          tenDiem: true,
+          loaiDiem: true,
+          trangThai: true,
+          nhaXeId: true,
+          benTrungChuyenId: true,
+        },
+      });
+      const stationsMap = new Map(stations.map((s) => [s.diemDonTraId, s]));
+      const validationErrors = validateStopList(dto.stops, stationsMap, route.nhaXeId);
+      if (validationErrors.length > 0) {
+        throw new BadRequestException({
+          error: 'VALIDATION_ERROR',
+          message: 'Dữ liệu khuôn lộ trình không hợp lệ.',
+          details: validationErrors,
+        });
+      }
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.tuyenXeDiemDung.deleteMany({
+        where: { tuyenXeId: id },
+      });
+
+      if (dto.stops && dto.stops.length > 0) {
+        for (const stop of dto.stops) {
+          await tx.tuyenXeDiemDung.create({
+            data: {
+              tuyenXeId: id,
+              diemDonTraId: stop.diemDonTraId,
+              loaiDiem: stop.loaiDiem,
+              phutLech: stop.phutLech,
+              thuTu: stop.thuTu ?? 1,
+              phuPhi: stop.phuPhi ?? 0,
+              phutCoMatTruoc: stop.phutCoMatTruoc ?? 15,
+              nhanKhach: stop.nhanKhach ?? true,
+              ghiChu: stop.ghiChu ?? null,
+            },
+          });
+        }
+      }
+    });
+
+    return this.getStops(id, principal);
   }
 
   async findOne(id: number, principal?: AuthPrincipal) {

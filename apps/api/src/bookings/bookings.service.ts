@@ -1,3 +1,4 @@
+import { generateBusinessUuid } from '../common/business-uuid.js';
 import {
   BadRequestException,
   ConflictException,
@@ -61,7 +62,23 @@ export class BookingsService {
     promotionCode?: string,
     contactPhone?: string,
     principal?: AuthPrincipal,
-  ) {
+    diemDonChuyenXeId?: number,
+    diemTraChuyenXeId?: number,
+  ): Promise<{
+    unitPrice: string;
+    baseUnitPrice?: string;
+    pickupSurcharge?: string;
+    dropoffSurcharge?: string;
+    seatCount: number;
+    originalTotal: string;
+    discountAmount: string;
+    finalTotal: string;
+    currency: string;
+    appliedPromotionCode: string | null;
+    identityChecked: boolean;
+    phoneEligibilityChecked: boolean;
+    requiresPhoneBeforeBooking: boolean;
+  }> {
     const validTripId = Number(tripId);
     if (!validTripId || isNaN(validTripId) || validTripId <= 0) {
       throw new NotFoundException('Mã chuyến xe không hợp lệ.');
@@ -149,7 +166,61 @@ export class BookingsService {
       throw new NotFoundException('Không tìm thấy bảng giá áp dụng cho chuyến xe.');
     }
 
-    const unitPrice = new Prisma.Decimal(fare.giaNiemYet.toString());
+    let pickupSurcharge = new Prisma.Decimal(0);
+    let dropoffSurcharge = new Prisma.Decimal(0);
+    let diemDon: any = null;
+    let diemTra: any = null;
+
+    if (diemDonChuyenXeId) {
+      diemDon = await this.prisma.diemDonTraChuyenXe.findFirst({
+        where: {
+          diemDonTraChuyenXeId: diemDonChuyenXeId,
+          chuyenXeId: validTripId,
+          loaiDiem: 'DON',
+          nhanKhach: true,
+        },
+        include: { diemDonTra: { include: { benTrungChuyen: true } } },
+      });
+      if (!diemDon) {
+        throw new ConflictException({
+          error: 'PICKUP_POINT_INVALID',
+          message: 'Điểm đón không hợp lệ hoặc không thuộc chuyến xe đã chọn.',
+        });
+      }
+      pickupSurcharge = new Prisma.Decimal(diemDon.phuPhi.toString());
+    }
+
+    if (diemTraChuyenXeId) {
+      diemTra = await this.prisma.diemDonTraChuyenXe.findFirst({
+        where: {
+          diemDonTraChuyenXeId: diemTraChuyenXeId,
+          chuyenXeId: validTripId,
+          loaiDiem: 'TRA',
+          nhanKhach: true,
+        },
+        include: { diemDonTra: { include: { benTrungChuyen: true } } },
+      });
+      if (!diemTra) {
+        throw new ConflictException({
+          error: 'DROPOFF_POINT_INVALID',
+          message: 'Điểm trả không hợp lệ hoặc không thuộc chuyến xe đã chọn.',
+        });
+      }
+      dropoffSurcharge = new Prisma.Decimal(diemTra.phuPhi.toString());
+    }
+
+    if (diemDon && diemTra) {
+      if (diemDon.phutLech >= diemTra.phutLech && (diemDon.thuTu ?? 0) >= (diemTra.thuTu ?? 0)) {
+        throw new BadRequestException({
+          error: 'INVALID_STOP_ORDER',
+          message: 'Điểm trả phải diễn ra sau điểm đón trong lộ trình chuyến xe.',
+        });
+      }
+    }
+
+    const baseUnitPrice = new Prisma.Decimal(fare.giaNiemYet.toString());
+    const totalSurchargesPerSeat = pickupSurcharge.add(dropoffSurcharge);
+    const unitPrice = baseUnitPrice.add(totalSurchargesPerSeat);
     const seatCount = (seatIds || []).length;
     const originalTotal = unitPrice.mul(seatCount);
 
@@ -203,6 +274,9 @@ export class BookingsService {
 
     return {
       unitPrice: unitPrice.toFixed(2),
+      baseUnitPrice: baseUnitPrice.toFixed(2),
+      pickupSurcharge: pickupSurcharge.toFixed(2),
+      dropoffSurcharge: dropoffSurcharge.toFixed(2),
       seatCount,
       originalTotal: originalTotal.toFixed(2),
       discountAmount: discountAmount.toFixed(2),
@@ -325,13 +399,13 @@ export class BookingsService {
     }
 
     const resolvedSeatIds = tripSeats.map((s) => s.gheChuyenXeId);
-    const seatNames = tripSeats.map((s) => s.ghe.soGhe);
+    const seatNames = tripSeats.map((s) => s.ghe.tenGhe);
 
     for (const seat of tripSeats) {
       if (seat.trangThai !== 'DANG_GIU') {
         throw new ConflictException({
           error: 'SEAT_UNAVAILABLE',
-          message: `Ghế ${seat.ghe.soGhe} không còn được giữ hợp lệ.`,
+          message: `Ghế ${seat.ghe.tenGhe} không còn được giữ hợp lệ.`,
         });
       }
     }
@@ -343,6 +417,64 @@ export class BookingsService {
       customer?.khachHangId ?? null,
     );
 
+    // Validate custom pickup & dropoff points if provided
+    let diemDon: any = null;
+    let diemTra: any = null;
+    if (dto.diemDonChuyenXeId) {
+      diemDon = await this.prisma.diemDonTraChuyenXe.findFirst({
+        where: {
+          diemDonTraChuyenXeId: dto.diemDonChuyenXeId,
+          chuyenXeId: trip.chuyenXeId,
+          loaiDiem: 'DON',
+          nhanKhach: true,
+        },
+        include: { diemDonTra: { include: { benTrungChuyen: true } } },
+      });
+      if (!diemDon) {
+        throw new ConflictException({
+          error: 'PICKUP_POINT_INVALID',
+          message: 'Điểm đón không hợp lệ hoặc không thuộc chuyến xe đã chọn.',
+        });
+      }
+      const pickupActualTime = new Date(
+        departureDateTime.getTime() + diemDon.phutLech * 60 * 1000,
+      );
+      const cutoffTime = new Date(Date.now() + 30 * 60 * 1000);
+      if (pickupActualTime <= cutoffTime) {
+        throw new ConflictException({
+          error: 'PICKUP_CUTOFF_EXCEEDED',
+          message: 'Điểm đón này đã quá hạn đặt vé (yêu cầu đặt trước ít nhất 30 phút).',
+        });
+      }
+    }
+
+    if (dto.diemTraChuyenXeId) {
+      diemTra = await this.prisma.diemDonTraChuyenXe.findFirst({
+        where: {
+          diemDonTraChuyenXeId: dto.diemTraChuyenXeId,
+          chuyenXeId: trip.chuyenXeId,
+          loaiDiem: 'TRA',
+          nhanKhach: true,
+        },
+        include: { diemDonTra: { include: { benTrungChuyen: true } } },
+      });
+      if (!diemTra) {
+        throw new ConflictException({
+          error: 'DROPOFF_POINT_INVALID',
+          message: 'Điểm trả không hợp lệ hoặc không thuộc chuyến xe đã chọn.',
+        });
+      }
+    }
+
+    if (diemDon && diemTra) {
+      if (diemDon.phutLech >= diemTra.phutLech && (diemDon.thuTu ?? 0) >= (diemTra.thuTu ?? 0)) {
+        throw new BadRequestException({
+          error: 'INVALID_STOP_ORDER',
+          message: 'Điểm trả phải diễn ra sau điểm đón trong lộ trình chuyến xe.',
+        });
+      }
+    }
+
     // Calculate fare & promotions quote
     const quote = await this.getBookingQuote(
       trip.chuyenXeId,
@@ -350,6 +482,8 @@ export class BookingsService {
       dto.promotionCode,
       dto.contact.phone,
       principal,
+      dto.diemDonChuyenXeId,
+      dto.diemTraChuyenXeId,
     );
     const unitPrice = new Prisma.Decimal(quote.unitPrice);
     const originalTotal = new Prisma.Decimal(quote.originalTotal);
@@ -374,7 +508,8 @@ export class BookingsService {
         message: 'Chưa có cấu hình giá vé áp dụng cho chuyến xe này.',
       });
     }
-    if (!unitPrice.eq(fare.giaNiemYet)) {
+    const baseFarePrice = new Prisma.Decimal(quote.baseUnitPrice || quote.unitPrice);
+    if (!baseFarePrice.eq(fare.giaNiemYet)) {
       throw new ConflictException({
         error: 'FARE_CHANGED',
         message: 'Giá vé vừa thay đổi. Vui lòng kiểm tra lại báo giá.',
@@ -568,8 +703,8 @@ export class BookingsService {
       const codePrefix = opCode.slice(0, 8);
       // Nội dung chuyển khoản cần giữ nguyên qua ngân hàng; tránh dấu phân cách.
       const paymentCodePrefix = (codePrefix.replace(/[^A-Za-z0-9]/g, '') || 'VXG').toUpperCase();
-      const maDonGiaoDich = `${paymentCodePrefix}GD${uniqueSuffix}`;
-      const maPhieuDatVe = `${codePrefix}-PDV-${uniqueSuffix}`;
+      const maDonGiaoDich = generateBusinessUuid();
+      const maPhieuDatVe = generateBusinessUuid();
 
       // 5. Create DonGiaoDich
       const donGiaoDich = await tx.donGiaoDich.create({
@@ -617,18 +752,22 @@ export class BookingsService {
       const createdTickets: Array<{
         veId: number;
         maVe: string;
-        soGhe: string;
+        tenGhe: string;
         seatNumber: string;
         seatName: string;
         gia: number;
         price: number;
         status: string;
+        diemDon?: string;
+        diemTra?: string;
+        diemDonSnapshot?: any;
+        diemTraSnapshot?: any;
       }> = [];
 
       for (let i = 0; i < orderedSeats.length; i++) {
         const seat = orderedSeats[i];
         const ticketSeq = String(i + 1).padStart(2, '0');
-        const ticketCode = `${maPhieuDatVe}-VE-${ticketSeq}`;
+        const ticketCode = generateBusinessUuid();
         const ticketDiscount =
           i === orderedSeats.length - 1
             ? discountAmount.sub(allocatedDiscount)
@@ -641,10 +780,55 @@ export class BookingsService {
         allocatedDiscount = allocatedDiscount.add(ticketDiscount);
         const actualTicketPrice = unitPrice.sub(ticketDiscount);
 
+        const diemDonSnapshot = diemDon
+          ? {
+              diemDonTraChuyenXeId: diemDon.diemDonTraChuyenXeId,
+              maDiem: diemDon.diemDonTra.maDiem,
+              tenDiem: diemDon.diemDonTra.tenDiem,
+              diaChi: diemDon.diemDonTra.diaChi,
+              soDienThoai: diemDon.diemDonTra.soDienThoai,
+              loaiDiem: diemDon.diemDonTra.loaiDiem,
+              phutLech: diemDon.phutLech,
+              phuPhi: diemDon.phuPhi ? Number(diemDon.phuPhi) : 0,
+              phutCoMatTruoc: diemDon.phutCoMatTruoc,
+              benTrungChuyen: diemDon.diemDonTra.benTrungChuyen
+                ? {
+                    id: diemDon.diemDonTra.benTrungChuyen.diemDonTraId,
+                    tenDiem: diemDon.diemDonTra.benTrungChuyen.tenDiem,
+                    diaChi: diemDon.diemDonTra.benTrungChuyen.diaChi,
+                  }
+                : null,
+            }
+          : { tenDiem: pickupPoint, diaChi: pickupPoint };
+
+        const diemTraSnapshot = diemTra
+          ? {
+              diemDonTraChuyenXeId: diemTra.diemDonTraChuyenXeId,
+              maDiem: diemTra.diemDonTra.maDiem,
+              tenDiem: diemTra.diemDonTra.tenDiem,
+              diaChi: diemTra.diemDonTra.diaChi,
+              soDienThoai: diemTra.diemDonTra.soDienThoai,
+              loaiDiem: diemTra.diemDonTra.loaiDiem,
+              phutLech: diemTra.phutLech,
+              phuPhi: diemTra.phuPhi ? Number(diemTra.phuPhi) : 0,
+              benTrungChuyen: diemTra.diemDonTra.benTrungChuyen
+                ? {
+                    id: diemTra.diemDonTra.benTrungChuyen.diemDonTraId,
+                    tenDiem: diemTra.diemDonTra.benTrungChuyen.tenDiem,
+                    diaChi: diemTra.diemDonTra.benTrungChuyen.diaChi,
+                  }
+                : null,
+            }
+          : { tenDiem: dropoffPoint, diaChi: dropoffPoint };
+
         const newVe = await tx.ve.create({
           data: {
             maVe: ticketCode,
-            diemDon: pickupPoint,
+            diemDon: diemDon ? diemDon.diemDonTra.tenDiem : pickupPoint,
+            diemDonChuyenXeId: diemDon?.diemDonTraChuyenXeId ?? null,
+            diemTraChuyenXeId: diemTra?.diemDonTraChuyenXeId ?? null,
+            diemDonSnapshot: diemDonSnapshot as any,
+            diemTraSnapshot: diemTraSnapshot as any,
             giaNiemYet: unitPrice,
             giaThucTe: actualTicketPrice,
             trangThai: 'DA_DAT',
@@ -657,12 +841,16 @@ export class BookingsService {
         createdTickets.push({
           veId: newVe.veId,
           maVe: ticketCode,
-          soGhe: seat.ghe.soGhe,
-          seatNumber: seat.ghe.soGhe,
-          seatName: seat.ghe.soGhe,
+          tenGhe: seat.ghe.tenGhe,
+          seatNumber: seat.ghe.tenGhe,
+          seatName: seat.ghe.tenGhe,
           gia: actualTicketPrice.toNumber(),
           price: actualTicketPrice.toNumber(),
           status: 'DA_DAT',
+          diemDon: diemDon ? diemDon.diemDonTra.tenDiem : pickupPoint,
+          diemTra: diemTra ? diemTra.diemDonTra.tenDiem : dropoffPoint,
+          diemDonSnapshot,
+          diemTraSnapshot,
         });
       }
 
@@ -735,7 +923,7 @@ export class BookingsService {
           });
         }
 
-        const maVanDon = `${codePrefix}-VD-${uniqueSuffix}`;
+        const maVanDon = generateBusinessUuid();
         const cargoPersistence = await this.shipmentPersistenceService.persistInTransaction(
           tx,
           {
@@ -956,7 +1144,7 @@ export class BookingsService {
 
     const firstTicket = booking.ves[0];
     const chuyenXe = firstTicket?.gheChuyenXe?.chuyenXe;
-    const seatNames = booking.ves.map((v) => v.gheChuyenXe.ghe.soGhe);
+    const seatNames = booking.ves.map((v) => v.gheChuyenXe.ghe.tenGhe);
     const seatIds = booking.ves.map((v) => v.gheChuyenXe.gheId);
 
     return {
@@ -978,7 +1166,7 @@ export class BookingsService {
       tickets: booking.ves.map((v) => ({
         ticketId: v.veId,
         ticketCode: v.maVe,
-        seatName: v.gheChuyenXe.ghe.soGhe,
+        seatName: v.gheChuyenXe.ghe.tenGhe,
         price: Number(v.giaThucTe),
         status: v.trangThai,
       })),
@@ -1175,7 +1363,6 @@ export class BookingsService {
         });
       }
     } else if (
-      !/-PDV-[A-F\d]{30}$/i.test(booking.maPhieuDatVe) ||
       !bookingCode?.trim() ||
       booking.maPhieuDatVe !== bookingCode.trim() ||
       !phoneNumber?.trim() ||
@@ -1322,23 +1509,23 @@ export class BookingsService {
         : null;
 
     const seatNumbers = (booking.ves ?? [])
-      .map((v: any) => v.gheChuyenXe?.ghe?.soGhe)
+      .map((v: any) => v.gheChuyenXe?.ghe?.tenGhe)
       .filter(Boolean);
 
     const activeSeatNumbers = (booking.ves ?? [])
       .filter((v: any) => v.trangThai !== 'HUY')
-      .map((v: any) => v.gheChuyenXe?.ghe?.soGhe)
+      .map((v: any) => v.gheChuyenXe?.ghe?.tenGhe)
       .filter(Boolean);
 
     const cancelledSeatNumbers = (booking.ves ?? [])
       .filter((v: any) => v.trangThai === 'HUY')
-      .map((v: any) => v.gheChuyenXe?.ghe?.soGhe)
+      .map((v: any) => v.gheChuyenXe?.ghe?.tenGhe)
       .filter(Boolean);
 
     const tickets = (booking.ves ?? []).map((v: any) => ({
       ticketId: v.veId,
       ticketCode: v.maVe,
-      seatNumber: v.gheChuyenXe?.ghe?.soGhe ?? null,
+      seatNumber: v.gheChuyenXe?.ghe?.tenGhe ?? null,
       seatPosition: v.gheChuyenXe?.ghe?.viTri ?? null,
       price: Number(v.giaThucTe ?? v.giaNiemYet ?? 0),
       status: v.trangThai,
@@ -1390,7 +1577,9 @@ export class BookingsService {
         email: booking.donGiaoDich?.emailKhachHang || null,
       },
       pickup: firstTicket?.diemDon || tuyenXe?.diemDi || null,
-      dropoff: tuyenXe?.diemDen || null,
+      dropoff: firstTicket?.diemTraSnapshot?.tenDiem || tuyenXe?.diemDen || null,
+      diemDonSnapshot: firstTicket?.diemDonSnapshot ?? null,
+      diemTraSnapshot: firstTicket?.diemTraSnapshot ?? null,
       totalAmount: Number(booking.donGiaoDich?.tongTien ?? 0),
       ticketSubtotal,
       originalTicketSubtotal,
@@ -1408,7 +1597,7 @@ export class BookingsService {
       tickets: (booking.ves ?? []).map((v: any) => ({
         ticketId: v.veId,
         ticketCode: v.maVe,
-        seatNumber: v.gheChuyenXe?.ghe?.soGhe ?? null,
+        seatNumber: v.gheChuyenXe?.ghe?.tenGhe ?? null,
         seatPosition: v.gheChuyenXe?.ghe?.viTri ?? null,
         price: Number(v.giaThucTe ?? v.giaNiemYet ?? 0),
         status: v.trangThai,

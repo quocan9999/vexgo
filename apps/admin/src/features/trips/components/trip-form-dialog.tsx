@@ -4,8 +4,6 @@ import { ResourceSheetForm } from '@/components/admin/resource-sheet-form';
 
 import { LoaderCircle } from 'lucide-react';
 import { useRef, useState, type FormEvent } from 'react';
-import { ResourceGeneratedCodeField } from '@/components/admin/resource-generated-code-field';
-import { useBusinessCodePreview } from '@/hooks/use-business-code-preview';
 import { ResourceSheet, ResourceNotice } from '@/components/admin/resource-ui';
 import {
   Field as FormField,
@@ -13,6 +11,7 @@ import {
   FieldError,
 } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
   SelectTrigger,
@@ -46,8 +45,9 @@ type Values = {
   departureDate: string;
   departureTime: string;
   acceptsShipments: boolean;
+  copyRouteStops: boolean;
 };
-type Field = Exclude<keyof Values, 'acceptsShipments'>;
+type Field = Exclude<keyof Values, 'acceptsShipments' | 'copyRouteStops'>;
 type FieldErrors = Partial<Record<Field, string>>;
 
 function mappedErrors(details: TripApiErrorDetail[]): FieldErrors {
@@ -93,13 +93,8 @@ export function TripFormDialog({
     departureDate: trip?.departureDate ?? '',
     departureTime: trip?.departureTime ? trip.departureTime.slice(0, 5) : '',
     acceptsShipments: false,
+    copyRouteStops: true,
   }));
-
-  const codePreview = useBusinessCodePreview(
-    'trips',
-    !editing,
-    values.departureDate,
-  );
 
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [submitting, setSubmitting] = useState(false);
@@ -202,6 +197,7 @@ export function TripFormDialog({
           departureDate: values.departureDate.trim(),
           departureTime: formattedTime,
           acceptsShipments: values.acceptsShipments,
+          ...(values.copyRouteStops === false ? { copyRouteStops: false } : {}),
         });
       }
 
@@ -377,15 +373,7 @@ export function TripFormDialog({
           </div>
         ) : (
           <>
-            <ResourceGeneratedCodeField
-              id={`${idPrefix}-code`}
-              label="Mã chuyến xe"
-              code={codePreview.code}
-              placeholder={codePreview.placeholder}
-              error={codePreview.error}
-              onRetry={codePreview.retry}
-              busy={submitting}
-            />
+
             {relationField(
               'routeId',
               'Tuyến xe',
@@ -416,6 +404,23 @@ export function TripFormDialog({
                 }
               />
               Nhận gửi hàng
+            </label>
+            <label
+              className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg border border-border p-3 text-[13px] font-semibold hover:bg-muted/50 transition-colors"
+              htmlFor={`${idPrefix}-copy-route-stops`}
+            >
+              <Checkbox
+                id={`${idPrefix}-copy-route-stops`}
+                checked={values.copyRouteStops}
+                disabled={submitting}
+                onCheckedChange={(checked) =>
+                  setValues((current) => ({
+                    ...current,
+                    copyRouteStops: Boolean(checked),
+                  }))
+                }
+              />
+              Tự động sao chép lộ trình từ khuôn tuyến xe
             </label>
           </>
         )}

@@ -1,7 +1,9 @@
+import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import { IsInt, Max, Min } from 'class-validator';
 
 export class FarePriceIdParamsDto {
+  @ApiProperty({ description: 'ID định danh bảng giá vé', example: 1 })
   @Transform(({ value }) =>
     typeof value === 'string' && /^\d+$/.test(value)
       ? Number(value)

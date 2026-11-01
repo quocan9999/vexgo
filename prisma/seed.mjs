@@ -1,3 +1,9 @@
+import crypto from 'node:crypto';
+
+function deterministicUuid(...parts) {
+  const hash = crypto.createHash('md5').update(parts.map(String).join(':')).digest('hex');
+  return `${hash.slice(0, 12)}4${hash.slice(13, 16)}a${hash.slice(17, 32)}`;
+}
 import 'dotenv/config';
 import bcrypt from 'bcrypt';
 import { ensureDemoPayment } from './demo-revenue.mjs';
@@ -370,7 +376,7 @@ async function seedAccounts(db, operators, roles) {
       'NHAN_VIEN_BAN_VE',
     ];
     for (let employeeIndex = 0; employeeIndex < employeeRoles.length; employeeIndex += 1) {
-      const employeeCode = `${definition.code}-NV-${pad(employeeIndex + 1, 4)}`;
+      const employeeCode = deterministicUuid('NV', definition.code, employeeIndex);
       const phone = `+8491${pad(opIndex * 100 + employeeIndex + 1, 7)}`;
       const roleName = employeeRoles[employeeIndex];
       const isFormer = employeeIndex === 6;
@@ -413,7 +419,7 @@ async function seedAccounts(db, operators, roles) {
   }
 
   for (let index = 0; index < customerNames.length; index += 1) {
-    const code = `KH-${pad(index + 1, 6)}`;
+    const code = deterministicUuid('KH', index);
     const phone = `+8492${pad(index + 1, 7)}`;
     const existingCustomer = await db.khachHang.findUnique({ where: { maKhachHang: code }, include: { taiKhoan: true } });
     const accountData = {
@@ -491,8 +497,8 @@ async function seedVehiclesAndRoutes(db, operators, vehicleTypes) {
         const seat = await findOrCreate(
           db,
           'Ghe',
-          { xeId: vehicle.xeId, soGhe: code },
-          { soGhe: code, viTri, xeId: vehicle.xeId },
+          { xeId_tenGhe: { xeId: vehicle.xeId, tenGhe: code } },
+          { maGhe: deterministicUuid('GHE', vehicle.bienSoXe, code), tenGhe: code, viTri, xeId: vehicle.xeId },
           { viTri },
         );
         seats.push(seat);
@@ -504,7 +510,7 @@ async function seedVehiclesAndRoutes(db, operators, vehicleTypes) {
     routes[definition.code] = [];
     for (let routeIndex = 0; routeIndex < routeDefs.length; routeIndex += 1) {
       const [from, to, status, durationMinutes] = routeDefs[routeIndex];
-      const code = `${definition.code}-TX-${pad(routeIndex + 1, 4)}`;
+      const code = deterministicUuid('TX', definition.code, routeIndex);
       const route = await findOrCreate(
         db,
         'TuyenXe',
@@ -526,7 +532,7 @@ async function seedVehiclesAndRoutes(db, operators, vehicleTypes) {
           const duration = route.thoiGianChayPhut ?? 420;
           const arrHour = (hour + Math.floor(duration / 60)) % 24;
           const arrMin = duration % 60;
-          const code = `${definition.code}-CX-${pad(day, 2)}092026-${pad(sequence, 4)}`;
+          const code = deterministicUuid('CX', definition.code, day, sequence);
           sequence += 1;
           const trip = await upsertBy(
             db,
@@ -978,7 +984,7 @@ async function seedTransactions(db, operators, accounts, fleet, prices, logistic
       const minute = (txIndex % 5) * 10;
       const stamp = `${pad(day, 2)}092026${pad(10 + Math.floor(txIndex / 5), 2)}${pad(minute, 2)}`;
       const sequence = pad(txIndex + 1, 4);
-      const transactionCode = `${definition.code}-GD-${stamp}-${sequence}`;
+      const transactionCode = deterministicUuid('GD', definition.code, txIndex);
       const transactionTime = localDate(2026, 9, day, 10 + Math.floor(txIndex / 5), minute);
       if (txIndex === 4 || txIndex === 13) {
         const staleTransaction = await db.donGiaoDich.findUnique({ where: { maDonGiaoDich: transactionCode } });
@@ -1013,7 +1019,7 @@ async function seedTransactions(db, operators, accounts, fleet, prices, logistic
             priceAmount,
             cancelled,
             ticketIndex,
-            code: `${definition.code}-PDV-${stamp}-${sequence}-VE-${pad(ticketIndex + 1, 2)}`,
+            code: deterministicUuid('VE', definition.code, txIndex, ticketIndex),
           });
         }
       }
@@ -1077,7 +1083,7 @@ async function seedTransactions(db, operators, accounts, fleet, prices, logistic
       let booking = null;
       let tickets = [];
       if (hasTicket) {
-        const bookingCode = `${definition.code}-PDV-${stamp}-${sequence}`;
+        const bookingCode = deterministicUuid('PDV', definition.code, txIndex);
         booking = await upsertBy(
           db,
           'PhieuDatVe',
@@ -1109,7 +1115,7 @@ async function seedTransactions(db, operators, accounts, fleet, prices, logistic
 
       let shipment = null;
       if (shippingData) {
-        const shipmentCode = `${definition.code}-VD-${stamp}-${sequence}`;
+        const shipmentCode = deterministicUuid('VD', definition.code, txIndex);
         const shipmentData = {
           maVanDon: shipmentCode,
           tenNguoiNhan: `Người nhận ${definition.code}-${shippingOrdinal + 1}`,
@@ -1164,8 +1170,8 @@ async function seedTransactions(db, operators, accounts, fleet, prices, logistic
         await upsertBy(
           db,
           'HoaDon',
-          { maHoaDon: `${definition.code}-HD-${stamp}-${sequence}` },
-          { maHoaDon: `${definition.code}-HD-${stamp}-${sequence}`, ngayLap: transactionTime, tongTien: decimal(total), trangThai: 'DA_PHAT_HANH', donGiaoDichId: transaction.donGiaoDichId },
+          { maHoaDon: deterministicUuid('HD', definition.code, txIndex) },
+          { maHoaDon: deterministicUuid('HD', definition.code, txIndex), ngayLap: transactionTime, tongTien: decimal(total), trangThai: 'DA_PHAT_HANH', donGiaoDichId: transaction.donGiaoDichId },
           { ngayLap: transactionTime, tongTien: decimal(total), trangThai: 'DA_PHAT_HANH' },
         );
       }
@@ -1197,9 +1203,9 @@ async function seedOctoberTrips(db, operators, vehicles, vehicleTypes, routes) {
   const hmOutbound = await findOrCreate(
     db,
     'TuyenXe',
-    { nhaXeId: operators.HM.nhaXeId, maTuyenXe: 'HM-TX-0004' },
+    { nhaXeId: operators.HM.nhaXeId, maTuyenXe: deterministicUuid('TX', 'HM', 3) },
     {
-      maTuyenXe: 'HM-TX-0004',
+      maTuyenXe: deterministicUuid('TX', 'HM', 3),
       diemDi: 'TP.HCM',
       diemDen: 'Đà Lạt',
       thoiGianChayPhut: 420,
@@ -1212,9 +1218,9 @@ async function seedOctoberTrips(db, operators, vehicles, vehicleTypes, routes) {
   const hmInbound = await findOrCreate(
     db,
     'TuyenXe',
-    { nhaXeId: operators.HM.nhaXeId, maTuyenXe: 'HM-TX-0005' },
+    { nhaXeId: operators.HM.nhaXeId, maTuyenXe: deterministicUuid('TX', 'HM', 4) },
     {
-      maTuyenXe: 'HM-TX-0005',
+      maTuyenXe: deterministicUuid('TX', 'HM', 4),
       diemDi: 'Đà Lạt',
       diemDen: 'TP.HCM',
       thoiGianChayPhut: 420,
@@ -1271,25 +1277,25 @@ async function seedOctoberTrips(db, operators, vehicles, vehicleTypes, routes) {
   };
 
   const tripsDef = [
-    { op: 'FUTA', code: 'FUTA-CX-07102026-0001', route: futaOutbound, hour: 8, min: 0, arrHour: 15, arrMin: 0, type: 'GIƯỜNG NẰM', seats: 22 },
-    { op: 'TB', code: 'TB-CX-07102026-0001', route: tbOutbound, hour: 8, min: 0, arrHour: 15, arrMin: 0, type: 'GHẾ NGỒI', seats: 29 },
-    { op: 'HM', code: 'HM-CX-07102026-0001', route: hmOutbound, hour: 8, min: 0, arrHour: 15, arrMin: 0, type: 'GIƯỜNG NẰM', seats: 22 },
+    { op: 'FUTA', code: deterministicUuid('CX', 'FUTA', '1007', '0001'), route: futaOutbound, hour: 8, min: 0, arrHour: 15, arrMin: 0, type: 'GIƯỜNG NẰM', seats: 22 },
+    { op: 'TB', code: deterministicUuid('CX', 'TB', '1007', '0001'), route: tbOutbound, hour: 8, min: 0, arrHour: 15, arrMin: 0, type: 'GHẾ NGỒI', seats: 29 },
+    { op: 'HM', code: deterministicUuid('CX', 'HM', '1007', '0001'), route: hmOutbound, hour: 8, min: 0, arrHour: 15, arrMin: 0, type: 'GIƯỜNG NẰM', seats: 22 },
 
-    { op: 'FUTA', code: 'FUTA-CX-07102026-0002', route: futaOutbound, hour: 14, min: 0, arrHour: 21, arrMin: 0, type: 'GHẾ NGỒI', seats: 29 },
-    { op: 'TB', code: 'TB-CX-07102026-0002', route: tbOutbound, hour: 14, min: 0, arrHour: 21, arrMin: 0, type: 'GIƯỜNG NẰM', seats: 22 },
-    { op: 'HM', code: 'HM-CX-07102026-0002', route: hmOutbound, hour: 14, min: 0, arrHour: 21, arrMin: 0, type: 'GHẾ NGỒI', seats: 29 },
+    { op: 'FUTA', code: deterministicUuid('CX', 'FUTA', '1007', '0002'), route: futaOutbound, hour: 14, min: 0, arrHour: 21, arrMin: 0, type: 'GHẾ NGỒI', seats: 29 },
+    { op: 'TB', code: deterministicUuid('CX', 'TB', '1007', '0002'), route: tbOutbound, hour: 14, min: 0, arrHour: 21, arrMin: 0, type: 'GIƯỜNG NẰM', seats: 22 },
+    { op: 'HM', code: deterministicUuid('CX', 'HM', '1007', '0002'), route: hmOutbound, hour: 14, min: 0, arrHour: 21, arrMin: 0, type: 'GHẾ NGỒI', seats: 29 },
 
-    { op: 'FUTA', code: 'FUTA-CX-07102026-0003', route: futaOutbound, hour: 20, min: 0, arrHour: 3, arrMin: 0, type: 'GIƯỜNG NẰM', seats: 34 },
-    { op: 'TB', code: 'TB-CX-07102026-0003', route: tbOutbound, hour: 20, min: 0, arrHour: 3, arrMin: 0, type: 'GHẾ NGỒI', seats: 45 },
-    { op: 'HM', code: 'HM-CX-07102026-0003', route: hmOutbound, hour: 20, min: 0, arrHour: 3, arrMin: 0, type: 'LIMOUSINE', seats: 16 },
+    { op: 'FUTA', code: deterministicUuid('CX', 'FUTA', '1007', '0003'), route: futaOutbound, hour: 20, min: 0, arrHour: 3, arrMin: 0, type: 'GIƯỜNG NẰM', seats: 34 },
+    { op: 'TB', code: deterministicUuid('CX', 'TB', '1007', '0003'), route: tbOutbound, hour: 20, min: 0, arrHour: 3, arrMin: 0, type: 'GHẾ NGỒI', seats: 45 },
+    { op: 'HM', code: deterministicUuid('CX', 'HM', '1007', '0003'), route: hmOutbound, hour: 20, min: 0, arrHour: 3, arrMin: 0, type: 'LIMOUSINE', seats: 16 },
 
-    { op: 'FUTA', code: 'FUTA-CX-07102026-0004', route: futaInbound, hour: 9, min: 0, arrHour: 16, arrMin: 0, type: 'GHẾ NGỒI', seats: 45 },
-    { op: 'TB', code: 'TB-CX-07102026-0004', route: tbInbound, hour: 9, min: 0, arrHour: 16, arrMin: 0, type: 'GIƯỜNG NẰM', seats: 34 },
-    { op: 'HM', code: 'HM-CX-07102026-0004', route: hmInbound, hour: 9, min: 0, arrHour: 16, arrMin: 0, type: 'GIƯỜNG NẰM', seats: 34 },
+    { op: 'FUTA', code: deterministicUuid('CX', 'FUTA', '1007', '0004'), route: futaInbound, hour: 9, min: 0, arrHour: 16, arrMin: 0, type: 'GHẾ NGỒI', seats: 45 },
+    { op: 'TB', code: deterministicUuid('CX', 'TB', '1007', '0004'), route: tbInbound, hour: 9, min: 0, arrHour: 16, arrMin: 0, type: 'GIƯỜNG NẰM', seats: 34 },
+    { op: 'HM', code: deterministicUuid('CX', 'HM', '1007', '0004'), route: hmInbound, hour: 9, min: 0, arrHour: 16, arrMin: 0, type: 'GIƯỜNG NẰM', seats: 34 },
 
-    { op: 'FUTA', code: 'FUTA-CX-07102026-0005', route: futaInbound, hour: 15, min: 0, arrHour: 22, arrMin: 0, type: 'GIƯỜNG NẰM', seats: 22 },
-    { op: 'TB', code: 'TB-CX-07102026-0005', route: tbInbound, hour: 15, min: 0, arrHour: 22, arrMin: 0, type: 'GHẾ NGỒI', seats: 29 },
-    { op: 'HM', code: 'HM-CX-07102026-0005', route: hmInbound, hour: 15, min: 0, arrHour: 22, arrMin: 0, type: 'GHẾ NGỒI', seats: 29 },
+    { op: 'FUTA', code: deterministicUuid('CX', 'FUTA', '1007', '0005'), route: futaInbound, hour: 15, min: 0, arrHour: 22, arrMin: 0, type: 'GIƯỜNG NẰM', seats: 22 },
+    { op: 'TB', code: deterministicUuid('CX', 'TB', '1007', '0005'), route: tbInbound, hour: 15, min: 0, arrHour: 22, arrMin: 0, type: 'GHẾ NGỒI', seats: 29 },
+    { op: 'HM', code: deterministicUuid('CX', 'HM', '1007', '0005'), route: hmInbound, hour: 15, min: 0, arrHour: 22, arrMin: 0, type: 'GHẾ NGỒI', seats: 29 },
   ];
 
   for (const def of tripsDef) {

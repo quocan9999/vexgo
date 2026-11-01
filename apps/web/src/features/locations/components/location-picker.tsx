@@ -22,6 +22,7 @@ export function LocationPicker({
   className = '',
   disabled = false,
   excludeValue,
+  onSelectOption,
 }: {
   id?: string;
   value: string;
@@ -30,6 +31,7 @@ export function LocationPicker({
   className?: string;
   disabled?: boolean;
   excludeValue?: string;
+  onSelectOption?: (item: LocationOption | null) => void;
 }) {
   const generatedId = useId();
   const inputId = id ?? generatedId;
@@ -94,7 +96,7 @@ export function LocationPicker({
     if (!normalizedQuery) return allItems;
     return allItems.filter((item) =>
       normalize(
-        `${item.name} ${item.value} ${item.aliases.join(' ')} ${item.province ?? ''} ${item.address ?? ''}`,
+        `${item.name} ${item.value} ${item.aliases.join(' ')} ${item.province ?? ''} ${item.address ?? ''} ${item.mergedFromText ?? ''}`,
       ).includes(normalizedQuery),
     );
   }, [allItems, normalizedQuery]);
@@ -149,14 +151,25 @@ export function LocationPicker({
           )}
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block font-semibold leading-snug">
-            {item.name}
+          <span className="flex items-center gap-2">
+            <span className="block font-semibold leading-snug">
+              {item.name}
+            </span>
+            {item.isLegacy && (
+              <span className="inline-flex items-center rounded bg-slate-600 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
+                CŨ
+              </span>
+            )}
           </span>
-          {(item.address || item.province) && (
+          {item.mergedFromText ? (
+            <span className="mt-0.5 block text-xs leading-relaxed text-slate-500 line-clamp-1">
+              {item.mergedFromText}
+            </span>
+          ) : (item.address || item.province) ? (
             <span className="mt-0.5 block text-xs leading-relaxed text-slate-500 line-clamp-1">
               {item.address ?? (item.province ? `Thuộc ${item.province}` : '')}
             </span>
-          )}
+          ) : null}
         </span>
         <Combobox.ItemIndicator className="grid size-5 shrink-0 place-items-center rounded-full bg-brand text-white">
           <Check aria-hidden className="size-3.5" strokeWidth={2.5} />
@@ -176,6 +189,7 @@ export function LocationPicker({
         onValueChange={(item) => {
           setSelectedId(item?.id ?? '');
           onChange(item?.value ?? '');
+          onSelectOption?.(item ?? null);
           setSearchQuery('');
         }}
       >
@@ -206,6 +220,7 @@ export function LocationPicker({
                 onClick={() => {
                   setSelectedId('');
                   onChange('');
+                  onSelectOption?.(null);
                   setSearchQuery('');
                 }}
                 className="grid size-8 place-items-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
@@ -230,7 +245,7 @@ export function LocationPicker({
             collisionPadding={8}
             className="isolate z-[80]"
           >
-            <Combobox.Popup className="max-h-[min(380px,var(--available-height))] w-(--anchor-width) min-w-[min(320px,calc(100vw-24px))] max-w-[calc(100vw-24px)] overflow-y-auto overscroll-contain rounded-2xl border border-slate-200/80 bg-white p-2 text-slate-900 shadow-xl ring-1 ring-slate-900/5 motion-safe:data-open:animate-in motion-safe:data-open:fade-in-0 motion-safe:data-open:slide-in-from-top-1">
+            <Combobox.Popup className="max-h-[min(380px,var(--available-height))] w-(--anchor-width) min-w-[min(320px,calc(100vw-24px))] max-w-[calc(100vw-24px)] overflow-y-auto overscroll-contain rounded-2xl border border-slate-200/80 bg-white p-1.5 text-slate-900 shadow-xl ring-1 ring-slate-900/5 motion-safe:data-open:animate-in motion-safe:data-open:fade-in-0 motion-safe:data-open:slide-in-from-top-1">
               <Combobox.Empty className="empty:hidden text-center text-sm leading-relaxed text-slate-500">
                 <div className="px-4 py-6">
                   {loading
@@ -238,15 +253,15 @@ export function LocationPicker({
                     : 'Không tìm thấy. Thử tên tỉnh, thành phố hoặc bến xe khác.'}
                 </div>
               </Combobox.Empty>
-              <Combobox.List className="space-y-3">
+              <Combobox.List className="space-y-2.5">
                 {/* 1. Popular Locations (only when no search query) */}
                 {popularGroup.length > 0 && (
                   <Combobox.Group>
-                    <Combobox.GroupLabel className="flex items-center gap-2 px-3 pt-2 pb-1 text-[13px] font-bold uppercase tracking-wider text-brand">
-                      <MapPin className="size-3.5" />
+                    <Combobox.GroupLabel className="flex items-center gap-2 px-3 pt-1.5 pb-1 text-sm font-bold text-brand">
+                      <MapPin className="size-4" />
                       Địa điểm nổi bật
                     </Combobox.GroupLabel>
-                    <div className="mt-1 space-y-1">
+                    <div className="mt-0.5 space-y-1">
                       {popularGroup.map((item) => renderOption(item, true))}
                     </div>
                   </Combobox.Group>
@@ -255,10 +270,10 @@ export function LocationPicker({
                 {/* 2. Provinces / Cities */}
                 {provinceGroup.length > 0 && (
                   <Combobox.Group>
-                    <Combobox.GroupLabel className="px-3 pt-2 pb-1 text-[13px] font-bold uppercase tracking-wider text-slate-600">
+                    <Combobox.GroupLabel className="px-3 pt-1.5 pb-1 text-sm font-bold text-slate-600">
                       Tỉnh / Thành phố
                     </Combobox.GroupLabel>
-                    <div className="mt-1 space-y-1">
+                    <div className="mt-0.5 space-y-1">
                       {provinceGroup.map((item) => renderOption(item))}
                     </div>
                   </Combobox.Group>
@@ -267,10 +282,10 @@ export function LocationPicker({
                 {/* 3. Key Districts / Towns */}
                 {districtGroup.length > 0 && (
                   <Combobox.Group>
-                    <Combobox.GroupLabel className="px-3 pt-2 pb-1 text-[13px] font-bold uppercase tracking-wider text-slate-600">
+                    <Combobox.GroupLabel className="px-3 pt-2 pb-1 text-sm font-bold text-slate-600">
                       Quận / Huyện / TP trực thuộc
                     </Combobox.GroupLabel>
-                    <div className="mt-1 space-y-1">
+                    <div className="mt-0.5 space-y-1">
                       {districtGroup.map((item) => renderOption(item))}
                     </div>
                   </Combobox.Group>
@@ -279,11 +294,11 @@ export function LocationPicker({
                 {/* 4. Major Stations */}
                 {stationGroup.length > 0 && (
                   <Combobox.Group>
-                    <Combobox.GroupLabel className="flex items-center gap-2 px-3 pt-2 pb-1 text-[13px] font-bold uppercase tracking-wider text-amber-600">
-                      <Bus className="size-3.5" />
+                    <Combobox.GroupLabel className="flex items-center gap-2 px-3 pt-2 pb-1 text-sm font-bold text-amber-600">
+                      <Bus className="size-4" />
                       Bến xe / Điểm đón trả
                     </Combobox.GroupLabel>
-                    <div className="mt-1 space-y-1">
+                    <div className="mt-0.5 space-y-1">
                       {stationGroup.map((item) => renderOption(item))}
                     </div>
                   </Combobox.Group>

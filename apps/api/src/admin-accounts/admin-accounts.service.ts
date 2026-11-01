@@ -1,3 +1,4 @@
+import { generateBusinessUuid } from '../common/business-uuid.js';
 import {
   BadRequestException,
   ConflictException,
@@ -388,7 +389,7 @@ export class AdminAccountsService {
       try {
         await tx.nhanVien.create({
           data: {
-            maNhanVien: input.employeeCode,
+            maNhanVien: input.employeeCode?.trim() || generateBusinessUuid(),
             trangThaiLamViec: 'DANG_LAM_VIEC',
             nhaXeId: busCompany.nhaXeId,
             taiKhoanId: accountId,

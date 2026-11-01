@@ -3,6 +3,26 @@ import { fetchWithRetry } from '../../../lib/fetch-with-retry.ts';
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
 
+export type ApiTripStopPoint = {
+  id: string;
+  name: string;
+  time: string;
+  address: string;
+  type: 'station' | 'office' | 'transfer' | 'point' | 'rest';
+  isDefault?: boolean;
+  phutLech?: number;
+  phuPhi?: number;
+  phutCoMatTruoc?: number;
+  diemDonTraChuyenXeId?: number;
+  benTrungChuyen?: {
+    id: number;
+    name: string;
+    address: string;
+  } | null;
+  role?: 'DON' | 'TRA' | 'NGHI';
+  ghiChu?: string | null;
+};
+
 export type ApiTrip = {
   id: number;
   code: string;
@@ -34,6 +54,13 @@ export type ApiTrip = {
   };
   price: number | null;
   availableSeats: number;
+  pickupPoints?: ApiTripStopPoint[];
+  dropoffPoints?: ApiTripStopPoint[];
+  stops?: ApiTripStopPoint[];
+  pickupPoint?: string;
+  pickupAddress?: string | null;
+  dropoffPoint?: string;
+  dropoffAddress?: string | null;
 };
 
 export type ApiTripSeat = {
@@ -47,6 +74,12 @@ export type ApiTripSeat = {
 };
 
 export type SearchTripsParams = {
+  fromLocationId?: number;
+  toLocationId?: number;
+  fromStationId?: number;
+  toStationId?: number;
+  fromAreaId?: number;
+  toAreaId?: number;
   from?: string;
   to?: string;
   search?: string;
@@ -72,6 +105,21 @@ export type TripSearchResponse = {
     totalItems: number;
     totalPages: number;
   };
+  fromSubAreas?: Array<{ diaDiemId: number; tenDiaDiem: string; tripCount: number }>;
+  toSubAreas?: Array<{ diaDiemId: number; tenDiaDiem: string; tripCount: number }>;
+  fromExpandSuggestion?: {
+    currentLocation: { diaDiemId: number; tenDiaDiem: string };
+    parentLocation: { diaDiemId: number; tenDiaDiem: string };
+    siblingAreas: Array<{ diaDiemId: number; tenDiaDiem: string; additionalTripCount: number }>;
+    totalAdditionalTrips: number;
+  };
+  toExpandSuggestion?: {
+    currentLocation: { diaDiemId: number; tenDiaDiem: string };
+    parentLocation: { diaDiemId: number; tenDiaDiem: string };
+    siblingAreas: Array<{ diaDiemId: number; tenDiaDiem: string; additionalTripCount: number }>;
+    totalAdditionalTrips: number;
+  };
+  subAreas?: Array<{ diaDiemId: number; tenDiaDiem: string; tripCount: number }>;
 };
 
 async function parseError(

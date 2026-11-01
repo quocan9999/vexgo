@@ -1,0 +1,493 @@
+[
+  {
+    "nhaXeCode": "FUTA",
+    "tuyenThamChieu": "Sài Gòn - Cần Thơ / Tiền Giang",
+    "incomplete": false,
+    "thin": false,
+    "reasons": [],
+    "stops": [
+      {
+        "maDiem": "FUTA-RP-quang-trung-3DC936",
+        "loaiDiem": "DON",
+        "phutLech": -105,
+        "thuTu": 1
+      },
+      {
+        "maDiem": "FUTA-RP-benh-vien-ung-buou-8D3A44",
+        "loaiDiem": "DON",
+        "phutLech": -90,
+        "thuTu": 2
+      },
+      {
+        "maDiem": "FUTA-RP-le-van-luong-920621",
+        "loaiDiem": "DON",
+        "phutLech": -90,
+        "thuTu": 3
+      },
+      {
+        "maDiem": "FUTA-RP-benh-vien-ung-buou-binh-th-6FB6F5",
+        "loaiDiem": "DON",
+        "phutLech": -90,
+        "thuTu": 4
+      },
+      {
+        "maDiem": "FUTA-RP-202-le-hong-phong-EF6F51",
+        "loaiDiem": "DON",
+        "phutLech": -60,
+        "thuTu": 5
+      },
+      {
+        "maDiem": "FUTA-BEN-XE-AN-SUONG-54238",
+        "loaiDiem": "DON",
+        "phutLech": -60,
+        "thuTu": 6
+      },
+      {
+        "maDiem": "FUTA-RP-luy-ban-bich-8588DA",
+        "loaiDiem": "DON",
+        "phutLech": -60,
+        "thuTu": 7
+      },
+      {
+        "maDiem": "FUTA-RP-ben-xe-quan-8-C28FB7",
+        "loaiDiem": "DON",
+        "phutLech": -60,
+        "thuTu": 8
+      },
+      {
+        "maDiem": "FUTA-RP-205-pham-ngu-lao-D7654A",
+        "loaiDiem": "DON",
+        "phutLech": -60,
+        "thuTu": 9
+      },
+      {
+        "maDiem": "FUTA-RP-43-nguyen-cu-trinh-80D87E",
+        "loaiDiem": "DON",
+        "phutLech": -60,
+        "thuTu": 10
+      },
+      {
+        "maDiem": "FUTA-RP-vinh-loc-F9398B",
+        "loaiDiem": "DON",
+        "phutLech": -60,
+        "thuTu": 11
+      },
+      {
+        "maDiem": "FUTA-RP-benh-vien-thong-nhat-E8BB61",
+        "loaiDiem": "DON",
+        "phutLech": -60,
+        "thuTu": 12
+      },
+      {
+        "maDiem": "FUTA-RP-benh-vien-binh-dan-F9FD5C",
+        "loaiDiem": "DON",
+        "phutLech": -60,
+        "thuTu": 13
+      },
+      {
+        "maDiem": "FUTA-RP-bach-khoa-6DEF69",
+        "loaiDiem": "DON",
+        "phutLech": -60,
+        "thuTu": 14
+      },
+      {
+        "maDiem": "FUTA-RP-le-van-quoi-231EC3",
+        "loaiDiem": "DON",
+        "phutLech": -60,
+        "thuTu": 15
+      },
+      {
+        "maDiem": "FUTA-RP-lac-long-quan-CC891C",
+        "loaiDiem": "DON",
+        "phutLech": -60,
+        "thuTu": 16
+      },
+      {
+        "maDiem": "FUTA-RP-dong-den-CB1BDD",
+        "loaiDiem": "DON",
+        "phutLech": -60,
+        "thuTu": 17
+      },
+      {
+        "maDiem": "FUTA-RP-231-233-le-hong-phong-AD280F",
+        "loaiDiem": "DON",
+        "phutLech": -45,
+        "thuTu": 18
+      },
+      {
+        "maDiem": "FUTA-RP-benh-vien-nhi-hcm-206798",
+        "loaiDiem": "DON",
+        "phutLech": -45,
+        "thuTu": 19
+      },
+      {
+        "maDiem": "FUTA-RP-nguyen-cuu-phu-A906DB",
+        "loaiDiem": "DON",
+        "phutLech": -45,
+        "thuTu": 20
+      },
+      {
+        "maDiem": "FUTA-RP-thanh-thai-CF85D6",
+        "loaiDiem": "DON",
+        "phutLech": -45,
+        "thuTu": 21
+      },
+      {
+        "maDiem": "FUTA-RP-y-duoc-43D726",
+        "loaiDiem": "DON",
+        "phutLech": -45,
+        "thuTu": 22
+      },
+      {
+        "maDiem": "FUTA-RP-cho-ray-5E2F86",
+        "loaiDiem": "DON",
+        "phutLech": -45,
+        "thuTu": 23
+      },
+      {
+        "maDiem": "BX-MT",
+        "loaiDiem": "DON",
+        "phutLech": 0,
+        "thuTu": 24
+      },
+      {
+        "maDiem": "FUTA-RP-than-cuu-nghia-9DD74F",
+        "loaiDiem": "DON",
+        "phutLech": 60,
+        "thuTu": 25
+      },
+      {
+        "maDiem": "FUTA-RP-bot-23-tien-giang-CAA89E",
+        "loaiDiem": "DON",
+        "phutLech": 140,
+        "thuTu": 26
+      },
+      {
+        "maDiem": "FUTA-RP-ben-xe-can-tho-C3942F",
+        "loaiDiem": "TRA",
+        "phutLech": 150,
+        "thuTu": 27
+      },
+      {
+        "maDiem": "FUTA-RP-phuc-loc-cai-be-E86745",
+        "loaiDiem": "DON",
+        "phutLech": 150,
+        "thuTu": 28
+      },
+      {
+        "maDiem": "FUTA-RP-an-huu-756660",
+        "loaiDiem": "DON",
+        "phutLech": 160,
+        "thuTu": 29
+      },
+      {
+        "maDiem": "FUTA-RP-ben-xe-binh-minh-5C5A54",
+        "loaiDiem": "DON",
+        "phutLech": 180,
+        "thuTu": 30
+      },
+      {
+        "maDiem": "FUTA-RP-phong-dien-27DD06",
+        "loaiDiem": "TRA",
+        "phutLech": 210,
+        "thuTu": 31
+      },
+      {
+        "maDiem": "FUTA-RP-ba-se-E80366",
+        "loaiDiem": "TRA",
+        "phutLech": 210,
+        "thuTu": 32
+      },
+      {
+        "maDiem": "FUTA-RP-ba-lang-9004B2",
+        "loaiDiem": "TRA",
+        "phutLech": 210,
+        "thuTu": 33
+      },
+      {
+        "maDiem": "FUTA-BEN-XE-O-MON-54233",
+        "loaiDiem": "TRA",
+        "phutLech": 240,
+        "thuTu": 34
+      },
+      {
+        "maDiem": "FUTA-RP-co-do-AF5E15",
+        "loaiDiem": "TRA",
+        "phutLech": 270,
+        "thuTu": 35
+      }
+    ]
+  },
+  {
+    "nhaXeCode": "FUTA",
+    "tuyenThamChieu": "Cần Thơ - Sài Gòn",
+    "incomplete": false,
+    "thin": false,
+    "reasons": [],
+    "stops": [
+      {
+        "maDiem": "FUTA-RP-nga-ba-lo-te-117CB2",
+        "loaiDiem": "DON",
+        "phutLech": 15,
+        "thuTu": 1
+      },
+      {
+        "maDiem": "FUTA-RP-lap-vo-02E442",
+        "loaiDiem": "DON",
+        "phutLech": 30,
+        "thuTu": 2
+      },
+      {
+        "maDiem": "FUTA-RP-lai-vung-5F5D5C",
+        "loaiDiem": "DON",
+        "phutLech": 50,
+        "thuTu": 3
+      },
+      {
+        "maDiem": "FUTA-RP-ben-xe-sa-dec-25B07C",
+        "loaiDiem": "DON",
+        "phutLech": 75,
+        "thuTu": 4
+      },
+      {
+        "maDiem": "FUTA-RP-cai-tau-ha-4C98CD",
+        "loaiDiem": "DON",
+        "phutLech": 85,
+        "thuTu": 5
+      },
+      {
+        "maDiem": "FUTA-RP-cai-lay-1C70C0",
+        "loaiDiem": "DON",
+        "phutLech": 150,
+        "thuTu": 6
+      },
+      {
+        "maDiem": "BX-MD-MOI",
+        "loaiDiem": "TRA",
+        "phutLech": 300,
+        "thuTu": 7
+      },
+      {
+        "maDiem": "FUTA-XA-LO-HA-NOI-11266",
+        "loaiDiem": "TRA",
+        "phutLech": 360,
+        "thuTu": 8
+      },
+      {
+        "maDiem": "FUTA-RP-hang-xanh-671FFA",
+        "loaiDiem": "TRA",
+        "phutLech": 360,
+        "thuTu": 9
+      }
+    ]
+  },
+  {
+    "nhaXeCode": "FUTA",
+    "tuyenThamChieu": "Sài Gòn - Vũng Tàu",
+    "incomplete": false,
+    "thin": true,
+    "reasons": [],
+    "stops": [
+      {
+        "maDiem": "FUTA-BEN-XE-MIEN-DONG-CU-11263",
+        "loaiDiem": "DON",
+        "phutLech": -15,
+        "thuTu": 1
+      },
+      {
+        "maDiem": "FUTA-RP-mai-chi-tho-don-tra-khach-41E92B",
+        "loaiDiem": "DON",
+        "phutLech": 30,
+        "thuTu": 2
+      },
+      {
+        "maDiem": "FUTA-BEN-XE-BA-RIA-11272",
+        "loaiDiem": "TRA",
+        "phutLech": 210,
+        "thuTu": 3
+      },
+      {
+        "maDiem": "FUTA-BEN-XE-VUNG-TAU-11270",
+        "loaiDiem": "TRA",
+        "phutLech": 240,
+        "thuTu": 4
+      }
+    ]
+  },
+  {
+    "nhaXeCode": "HM",
+    "tuyenThamChieu": "Sài Gòn - Vũng Tàu",
+    "incomplete": false,
+    "thin": false,
+    "reasons": [],
+    "stops": [
+      {
+        "maDiem": "HM-RP-van-phong-mien-dong-E04669",
+        "loaiDiem": "DON",
+        "phutLech": 0,
+        "thuTu": 1
+      },
+      {
+        "maDiem": "HM-RP-van-phong-quan-5-42130E",
+        "loaiDiem": "DON",
+        "phutLech": 0,
+        "thuTu": 2
+      },
+      {
+        "maDiem": "HM-RP-thi-tran-phu-my-doc-quoc-l-952B52",
+        "loaiDiem": "TRA",
+        "phutLech": 45,
+        "thuTu": 3
+      },
+      {
+        "maDiem": "HM-RP-cong-chao-ba-ria-2BA333",
+        "loaiDiem": "TRA",
+        "phutLech": 75,
+        "thuTu": 4
+      },
+      {
+        "maDiem": "HM-RP-nga-3-nui-dinh-ql51-DBEA4A",
+        "loaiDiem": "TRA",
+        "phutLech": 75,
+        "thuTu": 5
+      },
+      {
+        "maDiem": "HM-RP-ben-xe-ba-ria-02A7BC",
+        "loaiDiem": "TRA",
+        "phutLech": 80,
+        "thuTu": 6
+      },
+      {
+        "maDiem": "HM-RP-co-opmart-ba-ria-09DD5F",
+        "loaiDiem": "TRA",
+        "phutLech": 82,
+        "thuTu": 7
+      },
+      {
+        "maDiem": "HM-RP-eo-ong-tu-87B54B",
+        "loaiDiem": "TRA",
+        "phutLech": 90,
+        "thuTu": 8
+      },
+      {
+        "maDiem": "HM-RP-cang-cat-lo-9083F9",
+        "loaiDiem": "TRA",
+        "phutLech": 95,
+        "thuTu": 9
+      },
+      {
+        "maDiem": "BX-VT",
+        "loaiDiem": "TRA",
+        "phutLech": 102,
+        "thuTu": 10
+      },
+      {
+        "maDiem": "HM-RP-noi-thanh-vung-tau-6D1155",
+        "loaiDiem": "TRA",
+        "phutLech": 107,
+        "thuTu": 11
+      },
+      {
+        "maDiem": "HM-RP-van-phong-hoa-mai-vung-tau-AC5032",
+        "loaiDiem": "TRA",
+        "phutLech": 125,
+        "thuTu": 12
+      }
+    ]
+  },
+  {
+    "nhaXeCode": "HM",
+    "tuyenThamChieu": "Vũng Tàu - Sài Gòn",
+    "incomplete": true,
+    "thin": false,
+    "reasons": [
+      "Điểm TRẢ cuối cùng có phutLech (0) nhỏ hơn hoặc bằng phutLech của điểm ĐÓN cuối cùng (65); không có điểm trả hợp lệ sau lộ trình đón"
+    ],
+    "stops": [
+      {
+        "maDiem": "HM-RP-noi-thanh-vung-tau-6D1155",
+        "loaiDiem": "DON",
+        "phutLech": -15,
+        "thuTu": 1
+      },
+      {
+        "maDiem": "HM-RP-cao-toc-37DA22",
+        "loaiDiem": "TRA",
+        "phutLech": 0,
+        "thuTu": 2
+      },
+      {
+        "maDiem": "HM-RP-n3-vung-tau-186A0E",
+        "loaiDiem": "TRA",
+        "phutLech": 0,
+        "thuTu": 3
+      },
+      {
+        "maDiem": "HM-RP-nha-tho-phuoc-thanh-CAF135",
+        "loaiDiem": "DON",
+        "phutLech": 12,
+        "thuTu": 4
+      },
+      {
+        "maDiem": "HM-RP-hai-doan-128-B914BC",
+        "loaiDiem": "DON",
+        "phutLech": 16,
+        "thuTu": 5
+      },
+      {
+        "maDiem": "HM-RP-nha-tho-giao-xu-nam-binh-471982",
+        "loaiDiem": "DON",
+        "phutLech": 18,
+        "thuTu": 6
+      },
+      {
+        "maDiem": "HM-RP-cay-xang-petrolimex-so-4-3AAF37",
+        "loaiDiem": "DON",
+        "phutLech": 22,
+        "thuTu": 7
+      },
+      {
+        "maDiem": "HM-RP-co-opmart-ba-ria-09DD5F",
+        "loaiDiem": "DON",
+        "phutLech": 25,
+        "thuTu": 8
+      },
+      {
+        "maDiem": "HM-RP-trung-tam-thuong-mai-ba-ri-8B24FA",
+        "loaiDiem": "DON",
+        "phutLech": 27,
+        "thuTu": 9
+      },
+      {
+        "maDiem": "HM-RP-ben-xe-ba-ria-02A7BC",
+        "loaiDiem": "DON",
+        "phutLech": 30,
+        "thuTu": 10
+      },
+      {
+        "maDiem": "HM-RP-phuoc-9-ghe-43C77A",
+        "loaiDiem": "DON",
+        "phutLech": 31,
+        "thuTu": 11
+      },
+      {
+        "maDiem": "HM-RP-banh-canh-long-huong-3A323E",
+        "loaiDiem": "DON",
+        "phutLech": 32,
+        "thuTu": 12
+      },
+      {
+        "maDiem": "HM-RP-cho-kim-hai-D7285B",
+        "loaiDiem": "DON",
+        "phutLech": 33,
+        "thuTu": 13
+      },
+      {
+        "maDiem": "HM-RP-nga-3-my-xuan-124530",
+        "loaiDiem": "DON",
+        "phutLech": 65,
+        "thuTu": 14
+      }
+    ]
+  }
+]

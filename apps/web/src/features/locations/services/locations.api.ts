@@ -12,6 +12,10 @@ export type LocationOption = {
   popular?: boolean;
   address?: string;
   parentName?: string;
+  isLegacy?: boolean;
+  mergedFromText?: string;
+  diaDiemId?: number;
+  diemDonTraId?: number;
 };
 
 type LocationCatalog = { data: LocationOption[]; warning: string };

@@ -131,12 +131,25 @@ Các quy tắc này áp dụng cho toàn repository và bổ sung cho hướng d
 - Unit tests SHOULD cô lập logic đang kiểm tra và xác minh business behavior, mapping hoặc branch quan trọng. Integration tests SHOULD xác minh sự phối hợp giữa các component thật trong phạm vi test; e2e tests SHOULD kiểm tra flow ở mức HTTP/API gần với client thật. Chỉ mock dependency khi phù hợp với cấp test; MUST NOT mock chính logic/component cần được kiểm tra.
 - Số lượng test không phải thước đo chất lượng; MUST NOT tạo test duplicate hoặc trivial chỉ để tăng coverage/test count. MUST NOT đặt business test trong `api-foundation` nếu test thuộc feature riêng.
 - Khi review test, SHOULD tự hỏi: “Một bug thực tế nào sẽ làm test này fail?”. Nếu không có câu trả lời rõ ràng, SHOULD xem lại giá trị của test.
+- **Quy tắc phạm vi chạy test khi code (Targeted Testing):**
+  - Khi sửa đổi hoặc phát triển, MUST chỉ chạy test suite của đúng feature/file được sửa cùng các caller/side effect trực tiếp nếu có (ví dụ: sửa bến bãi chỉ chạy test của bến bãi, sửa tuyến xe chỉ chạy test của tuyến xe; MUST NOT chạy lan sang các module độc lập như khuyến mãi, thanh toán, tài khoản...).
+  - MUST NOT tự ý chạy lại toàn bộ test suite của app hay monorepo trong quá trình sửa đổi thông thường; CHỈ chạy toàn bộ test khi người dùng yêu cầu trực tiếp.
 
 ## 12. Definition of Done
 
 - Một feature full-stack chỉ hoàn thành khi có các phần phù hợp với scope: UI/UX; frontend service gọi API thật; NestJS controller/service; DTO và validation; Prisma/MySQL; business rules được kiểm tra ở backend; loading, error, empty (nếu phù hợp) và success feedback; test cho logic quan trọng; không còn mock làm nguồn dữ liệu chính; và cập nhật tài liệu nếu API contract thay đổi.
 
 - PR MUST pass các GitHub Actions CI checks bắt buộc trước khi merge. MUST NOT bypass, disable hoặc weaken test/lint/typecheck/build chỉ để đạt trạng thái xanh.
+
+## 13. Quản lý dependencies và Monorepo Workspaces
+
+- Dự án sử dụng npm workspaces (`apps/*`). Toàn bộ việc cài đặt, gỡ bỏ, cập nhật dependency hoặc chạy script MUST được thực hiện từ thư mục gốc của repository (root).
+- Cài đặt dependency cho một app cụ thể MUST dùng cờ `--workspace`, ví dụ:
+  - `npm --workspace=@vexgo/api install <package>`
+  - `npm --workspace=@vexgo/web install <package>`
+  - `npm --workspace=@vexgo/admin install <package>`
+- MUST NOT `cd` vào các thư mục con `apps/api`, `apps/web`, `apps/admin` để chạy `npm install` đơn lẻ. Hành động này sẽ tạo ra `package-lock.json` và `node_modules` cục bộ lồng nhau, dẫn đến hiện tượng split-brain dependencies và xung đột phiên bản/kiểu TypeScript (`TS2345`).
+- Tệp `package-lock.json` và thư mục `node_modules` CHỈ ĐƯỢC PHÉP tồn tại duy nhất ở thư mục gốc của repository.
 
 ## Nguyên tắc cốt lõi
 

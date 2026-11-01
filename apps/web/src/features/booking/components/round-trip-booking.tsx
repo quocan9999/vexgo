@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ChevronRight, Info, Mail, Phone, User, X } from 'lucide-react';
 import type { Post } from '@/features/posts/types/post';
-import { tripsApi, type ApiTripSeat } from '@/features/trips/services/trips.api';
+import { tripsApi, type ApiTrip, type ApiTripSeat, type ApiTripStopPoint } from '@/features/trips/services/trips.api';
 import {
   calculateRoundTripFare,
   getReturnTripLocations,
@@ -45,6 +45,8 @@ export interface RoundTripBookingProps {
   returnDate: string;
   outboundTripSeats: ApiTripSeat[];
   returnTripSeats: ApiTripSeat[];
+  outboundApiTrip?: ApiTrip;
+  returnApiTrip?: ApiTrip;
 }
 
 const ChairIcon = ({ className = 'w-7 h-9' }: { className?: string }) => (
@@ -232,6 +234,8 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
   returnDate,
   outboundTripSeats,
   returnTripSeats,
+  outboundApiTrip,
+  returnApiTrip,
 }) => {
   const router = useRouter();
   const { user, executeWithAuth, isAuthenticated, isHydrated } = useAuthSession();
@@ -461,6 +465,238 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
   const passengerErrors = validationAttempted ? passengerValidation.errors : {};
 
   const returnLocations = getReturnTripLocations(returnPost);
+
+  // Outbound stop points
+  const outboundPickupPoints = React.useMemo(() => outboundApiTrip?.pickupPoints ?? [], [outboundApiTrip]);
+  const outboundDropoffPoints = React.useMemo(() => outboundApiTrip?.dropoffPoints ?? [], [outboundApiTrip]);
+
+  const outboundPickupStations = React.useMemo(
+    () => outboundPickupPoints.filter((p) => p.type !== 'transfer'),
+    [outboundPickupPoints],
+  );
+  const outboundPickupTransfers = React.useMemo(
+    () => outboundPickupPoints.filter((p) => p.type === 'transfer'),
+    [outboundPickupPoints],
+  );
+
+  const outboundDropoffStations = React.useMemo(
+    () => outboundDropoffPoints.filter((p) => p.type !== 'transfer'),
+    [outboundDropoffPoints],
+  );
+  const outboundDropoffTransfers = React.useMemo(
+    () => outboundDropoffPoints.filter((p) => p.type === 'transfer'),
+    [outboundDropoffPoints],
+  );
+
+  const [outboundPickupMode, setOutboundPickupMode] = useState<'station' | 'transfer'>('station');
+  const [outboundDropoffMode, setOutboundDropoffMode] = useState<'station' | 'transfer'>('station');
+
+  const [selectedOutboundPickupPointId, setSelectedOutboundPickupPointId] = useState<number | null>(() => {
+    const defaultPoint = outboundPickupStations.find((p) => p.isDefault) || outboundPickupStations[0] || outboundPickupTransfers[0];
+    return defaultPoint?.diemDonTraChuyenXeId ?? null;
+  });
+
+  const [selectedOutboundDropoffPointId, setSelectedOutboundDropoffPointId] = useState<number | null>(() => {
+    const defaultPoint = outboundDropoffStations.find((p) => p.isDefault) || outboundDropoffStations[0] || outboundDropoffTransfers[0];
+    return defaultPoint?.diemDonTraChuyenXeId ?? null;
+  });
+
+  const [outboundPickupOverride, setOutboundPickupOverride] = useState<string | null>(null);
+  const [outboundDropoffOverride, setOutboundDropoffOverride] = useState<string | null>(null);
+
+  // Return stop points
+  const returnPickupPoints = React.useMemo(() => returnApiTrip?.pickupPoints ?? [], [returnApiTrip]);
+  const returnDropoffPoints = React.useMemo(() => returnApiTrip?.dropoffPoints ?? [], [returnApiTrip]);
+
+  const returnPickupStations = React.useMemo(
+    () => returnPickupPoints.filter((p) => p.type !== 'transfer'),
+    [returnPickupPoints],
+  );
+  const returnPickupTransfers = React.useMemo(
+    () => returnPickupPoints.filter((p) => p.type === 'transfer'),
+    [returnPickupPoints],
+  );
+
+  const returnDropoffStations = React.useMemo(
+    () => returnDropoffPoints.filter((p) => p.type !== 'transfer'),
+    [returnDropoffPoints],
+  );
+  const returnDropoffTransfers = React.useMemo(
+    () => returnDropoffPoints.filter((p) => p.type === 'transfer'),
+    [returnDropoffPoints],
+  );
+
+  const [returnPickupMode, setReturnPickupMode] = useState<'station' | 'transfer'>('station');
+  const [returnDropoffMode, setReturnDropoffMode] = useState<'station' | 'transfer'>('station');
+
+  const [selectedReturnPickupPointId, setSelectedReturnPickupPointId] = useState<number | null>(() => {
+    const defaultPoint = returnPickupStations.find((p) => p.isDefault) || returnPickupStations[0] || returnPickupTransfers[0];
+    return defaultPoint?.diemDonTraChuyenXeId ?? null;
+  });
+
+  const [selectedReturnDropoffPointId, setSelectedReturnDropoffPointId] = useState<number | null>(() => {
+    const defaultPoint = returnDropoffStations.find((p) => p.isDefault) || returnDropoffStations[0] || returnDropoffTransfers[0];
+    return defaultPoint?.diemDonTraChuyenXeId ?? null;
+  });
+
+  const [returnPickupOverride, setReturnPickupOverride] = useState<string | null>(null);
+  const [returnDropoffOverride, setReturnDropoffOverride] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (outboundPickupPoints.length > 0 && selectedOutboundPickupPointId === null) {
+      const defaultPoint = outboundPickupStations.find((p) => p.isDefault) || outboundPickupStations[0] || outboundPickupTransfers[0];
+      if (defaultPoint?.diemDonTraChuyenXeId) {
+        setSelectedOutboundPickupPointId(defaultPoint.diemDonTraChuyenXeId);
+        setOutboundPickupMode(defaultPoint.type === 'transfer' ? 'transfer' : 'station');
+      }
+    }
+  }, [outboundPickupPoints, outboundPickupStations, outboundPickupTransfers, selectedOutboundPickupPointId]);
+
+  useEffect(() => {
+    if (outboundDropoffPoints.length > 0 && selectedOutboundDropoffPointId === null) {
+      const defaultPoint = outboundDropoffStations.find((p) => p.isDefault) || outboundDropoffStations[0] || outboundDropoffTransfers[0];
+      if (defaultPoint?.diemDonTraChuyenXeId) {
+        setSelectedOutboundDropoffPointId(defaultPoint.diemDonTraChuyenXeId);
+        setOutboundDropoffMode(defaultPoint.type === 'transfer' ? 'transfer' : 'station');
+      }
+    }
+  }, [outboundDropoffPoints, outboundDropoffStations, outboundDropoffTransfers, selectedOutboundDropoffPointId]);
+
+  useEffect(() => {
+    if (returnPickupPoints.length > 0 && selectedReturnPickupPointId === null) {
+      const defaultPoint = returnPickupStations.find((p) => p.isDefault) || returnPickupStations[0] || returnPickupTransfers[0];
+      if (defaultPoint?.diemDonTraChuyenXeId) {
+        setSelectedReturnPickupPointId(defaultPoint.diemDonTraChuyenXeId);
+        setReturnPickupMode(defaultPoint.type === 'transfer' ? 'transfer' : 'station');
+      }
+    }
+  }, [returnPickupPoints, returnPickupStations, returnPickupTransfers, selectedReturnPickupPointId]);
+
+  useEffect(() => {
+    if (returnDropoffPoints.length > 0 && selectedReturnDropoffPointId === null) {
+      const defaultPoint = returnDropoffStations.find((p) => p.isDefault) || returnDropoffStations[0] || returnDropoffTransfers[0];
+      if (defaultPoint?.diemDonTraChuyenXeId) {
+        setSelectedReturnDropoffPointId(defaultPoint.diemDonTraChuyenXeId);
+        setReturnDropoffMode(defaultPoint.type === 'transfer' ? 'transfer' : 'station');
+      }
+    }
+  }, [returnDropoffPoints, returnDropoffStations, returnDropoffTransfers, selectedReturnDropoffPointId]);
+
+  const selectedOutboundPickupStop = React.useMemo(() => {
+    if (!selectedOutboundPickupPointId) return null;
+    return outboundPickupPoints.find((p) => p.diemDonTraChuyenXeId === selectedOutboundPickupPointId) ?? null;
+  }, [outboundPickupPoints, selectedOutboundPickupPointId]);
+
+  const selectedOutboundDropoffStop = React.useMemo(() => {
+    if (!selectedOutboundDropoffPointId) return null;
+    return outboundDropoffPoints.find((p) => p.diemDonTraChuyenXeId === selectedOutboundDropoffPointId) ?? null;
+  }, [outboundDropoffPoints, selectedOutboundDropoffPointId]);
+
+  const selectedReturnPickupStop = React.useMemo(() => {
+    if (!selectedReturnPickupPointId) return null;
+    return returnPickupPoints.find((p) => p.diemDonTraChuyenXeId === selectedReturnPickupPointId) ?? null;
+  }, [returnPickupPoints, selectedReturnPickupPointId]);
+
+  const selectedReturnDropoffStop = React.useMemo(() => {
+    if (!selectedReturnDropoffPointId) return null;
+    return returnDropoffPoints.find((p) => p.diemDonTraChuyenXeId === selectedReturnDropoffPointId) ?? null;
+  }, [returnDropoffPoints, selectedReturnDropoffPointId]);
+
+  const outboundPickupSurcharge = Number(selectedOutboundPickupStop?.phuPhi ?? 0);
+  const outboundDropoffSurcharge = Number(selectedOutboundDropoffStop?.phuPhi ?? 0);
+  const outboundTotalSurcharge = outboundPickupSurcharge + outboundDropoffSurcharge;
+
+  const returnPickupSurcharge = Number(selectedReturnPickupStop?.phuPhi ?? 0);
+  const returnDropoffSurcharge = Number(selectedReturnDropoffStop?.phuPhi ?? 0);
+  const returnTotalSurcharge = returnPickupSurcharge + returnDropoffSurcharge;
+
+  const handleOutboundPickupModeChange = (mode: 'station' | 'transfer') => {
+    setOutboundPickupMode(mode);
+    const pool = mode === 'transfer' ? outboundPickupTransfers : outboundPickupStations;
+    if (pool.length > 0) {
+      const first = pool[0];
+      setSelectedOutboundPickupPointId(first.diemDonTraChuyenXeId ?? null);
+      setOutboundPickupOverride(first.name);
+    }
+  };
+
+  const handleOutboundDropoffModeChange = (mode: 'station' | 'transfer') => {
+    setOutboundDropoffMode(mode);
+    const pool = mode === 'transfer' ? outboundDropoffTransfers : outboundDropoffStations;
+    if (pool.length > 0) {
+      const first = pool[0];
+      setSelectedOutboundDropoffPointId(first.diemDonTraChuyenXeId ?? null);
+      setOutboundDropoffOverride(first.name);
+    }
+  };
+
+  const handleReturnPickupModeChange = (mode: 'station' | 'transfer') => {
+    setReturnPickupMode(mode);
+    const pool = mode === 'transfer' ? returnPickupTransfers : returnPickupStations;
+    if (pool.length > 0) {
+      const first = pool[0];
+      setSelectedReturnPickupPointId(first.diemDonTraChuyenXeId ?? null);
+      setReturnPickupOverride(first.name);
+    }
+  };
+
+  const handleReturnDropoffModeChange = (mode: 'station' | 'transfer') => {
+    setReturnDropoffMode(mode);
+    const pool = mode === 'transfer' ? returnDropoffTransfers : returnDropoffStations;
+    if (pool.length > 0) {
+      const first = pool[0];
+      setSelectedReturnDropoffPointId(first.diemDonTraChuyenXeId ?? null);
+      setReturnDropoffOverride(first.name);
+    }
+  };
+
+  const handleOutboundPickupSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const val = e.target.value;
+    const numId = Number(val);
+    if (!Number.isNaN(numId) && numId > 0) {
+      setSelectedOutboundPickupPointId(numId);
+      const stop = outboundPickupPoints.find((p) => p.diemDonTraChuyenXeId === numId);
+      if (stop) setOutboundPickupOverride(stop.name);
+    } else {
+      setOutboundPickupOverride(val);
+    }
+  };
+
+  const handleOutboundDropoffSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const val = e.target.value;
+    const numId = Number(val);
+    if (!Number.isNaN(numId) && numId > 0) {
+      setSelectedOutboundDropoffPointId(numId);
+      const stop = outboundDropoffPoints.find((p) => p.diemDonTraChuyenXeId === numId);
+      if (stop) setOutboundDropoffOverride(stop.name);
+    } else {
+      setOutboundDropoffOverride(val);
+    }
+  };
+
+  const handleReturnPickupSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const val = e.target.value;
+    const numId = Number(val);
+    if (!Number.isNaN(numId) && numId > 0) {
+      setSelectedReturnPickupPointId(numId);
+      const stop = returnPickupPoints.find((p) => p.diemDonTraChuyenXeId === numId);
+      if (stop) setReturnPickupOverride(stop.name);
+    } else {
+      setReturnPickupOverride(val);
+    }
+  };
+
+  const handleReturnDropoffSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const val = e.target.value;
+    const numId = Number(val);
+    if (!Number.isNaN(numId) && numId > 0) {
+      setSelectedReturnDropoffPointId(numId);
+      const stop = returnDropoffPoints.find((p) => p.diemDonTraChuyenXeId === numId);
+      if (stop) setReturnDropoffOverride(stop.name);
+    } else {
+      setReturnDropoffOverride(val);
+    }
+  };
 
   const outboundDepartureTimeText = formatTripDateTime(
     outboundPost.createdAt,
@@ -799,8 +1035,10 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
           phone: customerPhone.trim(),
           ...(customerEmail.trim() ? { email: customerEmail.trim() } : {}),
         },
-        pickupPoint: outboundPost.province,
-        dropoffPoint: outboundPost.district,
+        pickupPoint: selectedOutboundPickupStop?.name || outboundPickupOverride || outboundPost.province,
+        dropoffPoint: selectedOutboundDropoffStop?.name || outboundDropoffOverride || outboundPost.district,
+        diemDonChuyenXeId: selectedOutboundPickupPointId ?? undefined,
+        diemTraChuyenXeId: selectedOutboundDropoffPointId ?? undefined,
         holdToken: outboundHoldToken,
         cargoItems: outboundCargo,
         ...(outboundCargo && outSenderPointId && outReceiverPointId
@@ -830,8 +1068,10 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
           phone: customerPhone.trim(),
           ...(customerEmail.trim() ? { email: customerEmail.trim() } : {}),
         },
-        pickupPoint: returnLocations.pickup,
-        dropoffPoint: returnLocations.dropoff,
+        pickupPoint: selectedReturnPickupStop?.name || returnPickupOverride || returnLocations.pickup,
+        dropoffPoint: selectedReturnDropoffStop?.name || returnDropoffOverride || returnLocations.dropoff,
+        diemDonChuyenXeId: selectedReturnPickupPointId ?? undefined,
+        diemTraChuyenXeId: selectedReturnDropoffPointId ?? undefined,
         holdToken: returnHoldToken,
         cargoItems: returnCargo,
         ...(returnCargo && retSenderPointId && retReceiverPointId
@@ -948,8 +1188,8 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
     }
   };
 
-  const outboundUnitFare = outboundPost.minPriceNum ?? 0;
-  const returnUnitFare = returnPost.minPriceNum ?? 0;
+  const outboundUnitFare = (outboundPost.minPriceNum ?? 0) + outboundTotalSurcharge;
+  const returnUnitFare = (returnPost.minPriceNum ?? 0) + returnTotalSurcharge;
   const outboundFare = outboundUnitFare * outboundSeats.length;
   const returnFare = returnUnitFare * returnSeats.length;
   const totalFare =
@@ -1152,66 +1392,122 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
 
                 <div className="space-y-4">
                   <div>
-                    <h3 className="text-xs font-black text-slate-700 uppercase mb-3">
-                      Điểm đón
-                    </h3>
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-xs font-black text-slate-700 uppercase">
+                        Điểm đón
+                      </h3>
+                      {outboundPickupSurcharge > 0 && (
+                        <span className="text-xs font-bold text-accent">
+                          +{outboundPickupSurcharge.toLocaleString('vi-VN')}đ / vé
+                        </span>
+                      )}
+                    </div>
                     <div className="flex items-center gap-4 text-xs font-bold text-slate-600 mb-2">
-                      <label className="inline-flex items-center gap-1.5 text-accent">
+                      <label className={`inline-flex items-center gap-1.5 cursor-pointer ${outboundPickupMode === 'station' ? 'text-accent' : ''}`}>
                         <input
                           type="radio"
                           name="pickupOut"
-                          defaultChecked
+                          checked={outboundPickupMode === 'station'}
+                          onChange={() => handleOutboundPickupModeChange('station')}
                           className="accent-accent"
                         />{' '}
-                        Bến xe/VP
+                        Bến xe/VP {outboundPickupStations.length > 0 ? `(${outboundPickupStations.length})` : ''}
                       </label>
-                      <label className="inline-flex items-center gap-1.5">
+                      <label className={`inline-flex items-center gap-1.5 cursor-pointer ${outboundPickupMode === 'transfer' ? 'text-accent' : ''} ${outboundPickupTransfers.length === 0 ? 'opacity-40 cursor-not-allowed' : ''}`}>
                         <input
                           type="radio"
                           name="pickupOut"
+                          checked={outboundPickupMode === 'transfer'}
+                          disabled={outboundPickupTransfers.length === 0}
+                          onChange={() => handleOutboundPickupModeChange('transfer')}
                           className="accent-accent"
                         />{' '}
-                        Trung chuyển
+                        Trung chuyển {outboundPickupTransfers.length > 0 ? `(${outboundPickupTransfers.length})` : ''}
                       </label>
                     </div>
-                    <select className="w-full h-10 px-3 rounded-lg border border-slate-300 text-sm font-semibold outline-none focus:border-brand">
-                      <option>{outboundPost.province}</option>
+                    <select
+                      value={selectedOutboundPickupPointId ?? (outboundPickupOverride || outboundPost.province)}
+                      onChange={handleOutboundPickupSelect}
+                      className="w-full h-10 px-3 rounded-lg border border-slate-300 text-sm font-semibold outline-none focus:border-brand bg-white"
+                    >
+                      {(outboundPickupMode === 'transfer' ? outboundPickupTransfers : outboundPickupStations).length > 0 ? (
+                        (outboundPickupMode === 'transfer' ? outboundPickupTransfers : outboundPickupStations).map((p) => (
+                          <option key={p.diemDonTraChuyenXeId ?? p.id} value={p.diemDonTraChuyenXeId ?? p.name}>
+                            {p.time ? `${p.time} - ` : ''}{p.name}{p.phuPhi && p.phuPhi > 0 ? ` (+${p.phuPhi.toLocaleString('vi-VN')}đ)` : ''}
+                          </option>
+                        ))
+                      ) : (
+                        <option value={outboundPost.province}>{outboundPost.province}</option>
+                      )}
                     </select>
+                    {selectedOutboundPickupStop?.address && (
+                      <p className="text-[11px] text-slate-500 mt-1.5">
+                        {selectedOutboundPickupStop.address}
+                      </p>
+                    )}
                     <p className="text-[11px] font-semibold text-slate-600 mt-2">
                       Quý khách vui lòng có mặt tại điểm đón{' '}
                       <strong className="text-accent">
-                        trước giờ khởi hành ({outboundDepartureTimeText})
+                        trước {selectedOutboundPickupStop?.phutCoMatTruoc ?? 20} phút ({outboundDepartureTimeText})
                       </strong>{' '}
                       để kiểm tra thông tin trước khi lên xe.
                     </p>
                   </div>
 
                   <div>
-                    <h3 className="text-xs font-black text-slate-700 uppercase mb-3">
-                      Điểm trả
-                    </h3>
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-xs font-black text-slate-700 uppercase">
+                        Điểm trả
+                      </h3>
+                      {outboundDropoffSurcharge > 0 && (
+                        <span className="text-xs font-bold text-accent">
+                          +{outboundDropoffSurcharge.toLocaleString('vi-VN')}đ / vé
+                        </span>
+                      )}
+                    </div>
                     <div className="flex items-center gap-4 text-xs font-bold text-slate-600 mb-2">
-                      <label className="inline-flex items-center gap-1.5 text-accent">
+                      <label className={`inline-flex items-center gap-1.5 cursor-pointer ${outboundDropoffMode === 'station' ? 'text-accent' : ''}`}>
                         <input
                           type="radio"
                           name="dropoffOut"
-                          defaultChecked
+                          checked={outboundDropoffMode === 'station'}
+                          onChange={() => handleOutboundDropoffModeChange('station')}
                           className="accent-accent"
                         />{' '}
-                        Bến xe/VP
+                        Bến xe/VP {outboundDropoffStations.length > 0 ? `(${outboundDropoffStations.length})` : ''}
                       </label>
-                      <label className="inline-flex items-center gap-1.5">
+                      <label className={`inline-flex items-center gap-1.5 cursor-pointer ${outboundDropoffMode === 'transfer' ? 'text-accent' : ''} ${outboundDropoffTransfers.length === 0 ? 'opacity-40 cursor-not-allowed' : ''}`}>
                         <input
                           type="radio"
                           name="dropoffOut"
+                          checked={outboundDropoffMode === 'transfer'}
+                          disabled={outboundDropoffTransfers.length === 0}
+                          onChange={() => handleOutboundDropoffModeChange('transfer')}
                           className="accent-accent"
                         />{' '}
-                        Trung chuyển
+                        Trung chuyển {outboundDropoffTransfers.length > 0 ? `(${outboundDropoffTransfers.length})` : ''}
                       </label>
                     </div>
-                    <select className="w-full h-10 px-3 rounded-lg border border-slate-300 text-sm font-semibold outline-none focus:border-brand">
-                      <option>{outboundPost.district}</option>
+                    <select
+                      value={selectedOutboundDropoffPointId ?? (outboundDropoffOverride || outboundPost.district)}
+                      onChange={handleOutboundDropoffSelect}
+                      className="w-full h-10 px-3 rounded-lg border border-slate-300 text-sm font-semibold outline-none focus:border-brand bg-white"
+                    >
+                      {(outboundDropoffMode === 'transfer' ? outboundDropoffTransfers : outboundDropoffStations).length > 0 ? (
+                        (outboundDropoffMode === 'transfer' ? outboundDropoffTransfers : outboundDropoffStations).map((p) => (
+                          <option key={p.diemDonTraChuyenXeId ?? p.id} value={p.diemDonTraChuyenXeId ?? p.name}>
+                            {p.time ? `${p.time} - ` : ''}{p.name}{p.phuPhi && p.phuPhi > 0 ? ` (+${p.phuPhi.toLocaleString('vi-VN')}đ)` : ''}
+                          </option>
+                        ))
+                      ) : (
+                        <option value={outboundPost.district}>{outboundPost.district}</option>
+                      )}
                     </select>
+                    {selectedOutboundDropoffStop?.address && (
+                      <p className="text-[11px] text-slate-500 mt-1.5">
+                        {selectedOutboundDropoffStop.address}
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1226,66 +1522,122 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
 
                 <div className="space-y-4">
                   <div>
-                    <h3 className="text-xs font-black text-slate-700 uppercase mb-3">
-                      Điểm đón
-                    </h3>
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-xs font-black text-slate-700 uppercase">
+                        Điểm đón
+                      </h3>
+                      {returnPickupSurcharge > 0 && (
+                        <span className="text-xs font-bold text-accent">
+                          +{returnPickupSurcharge.toLocaleString('vi-VN')}đ / vé
+                        </span>
+                      )}
+                    </div>
                     <div className="flex items-center gap-4 text-xs font-bold text-slate-600 mb-2">
-                      <label className="inline-flex items-center gap-1.5 text-accent">
+                      <label className={`inline-flex items-center gap-1.5 cursor-pointer ${returnPickupMode === 'station' ? 'text-accent' : ''}`}>
                         <input
                           type="radio"
                           name="pickupIn"
-                          defaultChecked
+                          checked={returnPickupMode === 'station'}
+                          onChange={() => handleReturnPickupModeChange('station')}
                           className="accent-accent"
                         />{' '}
-                        Bến xe/VP
+                        Bến xe/VP {returnPickupStations.length > 0 ? `(${returnPickupStations.length})` : ''}
                       </label>
-                      <label className="inline-flex items-center gap-1.5">
+                      <label className={`inline-flex items-center gap-1.5 cursor-pointer ${returnPickupMode === 'transfer' ? 'text-accent' : ''} ${returnPickupTransfers.length === 0 ? 'opacity-40 cursor-not-allowed' : ''}`}>
                         <input
                           type="radio"
                           name="pickupIn"
+                          checked={returnPickupMode === 'transfer'}
+                          disabled={returnPickupTransfers.length === 0}
+                          onChange={() => handleReturnPickupModeChange('transfer')}
                           className="accent-accent"
                         />{' '}
-                        Trung chuyển
+                        Trung chuyển {returnPickupTransfers.length > 0 ? `(${returnPickupTransfers.length})` : ''}
                       </label>
                     </div>
-                    <select className="w-full h-10 px-3 rounded-lg border border-slate-300 text-sm font-semibold outline-none focus:border-brand">
-                      <option>{returnLocations.pickup}</option>
+                    <select
+                      value={selectedReturnPickupPointId ?? (returnPickupOverride || returnLocations.pickup)}
+                      onChange={handleReturnPickupSelect}
+                      className="w-full h-10 px-3 rounded-lg border border-slate-300 text-sm font-semibold outline-none focus:border-brand bg-white"
+                    >
+                      {(returnPickupMode === 'transfer' ? returnPickupTransfers : returnPickupStations).length > 0 ? (
+                        (returnPickupMode === 'transfer' ? returnPickupTransfers : returnPickupStations).map((p) => (
+                          <option key={p.diemDonTraChuyenXeId ?? p.id} value={p.diemDonTraChuyenXeId ?? p.name}>
+                            {p.time ? `${p.time} - ` : ''}{p.name}{p.phuPhi && p.phuPhi > 0 ? ` (+${p.phuPhi.toLocaleString('vi-VN')}đ)` : ''}
+                          </option>
+                        ))
+                      ) : (
+                        <option value={returnLocations.pickup}>{returnLocations.pickup}</option>
+                      )}
                     </select>
+                    {selectedReturnPickupStop?.address && (
+                      <p className="text-[11px] text-slate-500 mt-1.5">
+                        {selectedReturnPickupStop.address}
+                      </p>
+                    )}
                     <p className="text-[11px] font-semibold text-slate-600 mt-2">
                       Quý khách vui lòng có mặt tại điểm đón{' '}
                       <strong className="text-accent">
-                        trước giờ khởi hành ({returnDepartureTimeText})
+                        trước {selectedReturnPickupStop?.phutCoMatTruoc ?? 20} phút ({returnDepartureTimeText})
                       </strong>{' '}
                       để kiểm tra thông tin trước khi lên xe.
                     </p>
                   </div>
 
                   <div>
-                    <h3 className="text-xs font-black text-slate-700 uppercase mb-3">
-                      Điểm trả
-                    </h3>
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-xs font-black text-slate-700 uppercase">
+                        Điểm trả
+                      </h3>
+                      {returnDropoffSurcharge > 0 && (
+                        <span className="text-xs font-bold text-accent">
+                          +{returnDropoffSurcharge.toLocaleString('vi-VN')}đ / vé
+                        </span>
+                      )}
+                    </div>
                     <div className="flex items-center gap-4 text-xs font-bold text-slate-600 mb-2">
-                      <label className="inline-flex items-center gap-1.5 text-accent">
+                      <label className={`inline-flex items-center gap-1.5 cursor-pointer ${returnDropoffMode === 'station' ? 'text-accent' : ''}`}>
                         <input
                           type="radio"
                           name="dropoffIn"
-                          defaultChecked
+                          checked={returnDropoffMode === 'station'}
+                          onChange={() => handleReturnDropoffModeChange('station')}
                           className="accent-accent"
                         />{' '}
-                        Bến xe/VP
+                        Bến xe/VP {returnDropoffStations.length > 0 ? `(${returnDropoffStations.length})` : ''}
                       </label>
-                      <label className="inline-flex items-center gap-1.5">
+                      <label className={`inline-flex items-center gap-1.5 cursor-pointer ${returnDropoffMode === 'transfer' ? 'text-accent' : ''} ${returnDropoffTransfers.length === 0 ? 'opacity-40 cursor-not-allowed' : ''}`}>
                         <input
                           type="radio"
                           name="dropoffIn"
+                          checked={returnDropoffMode === 'transfer'}
+                          disabled={returnDropoffTransfers.length === 0}
+                          onChange={() => handleReturnDropoffModeChange('transfer')}
                           className="accent-accent"
                         />{' '}
-                        Trung chuyển
+                        Trung chuyển {returnDropoffTransfers.length > 0 ? `(${returnDropoffTransfers.length})` : ''}
                       </label>
                     </div>
-                    <select className="w-full h-10 px-3 rounded-lg border border-slate-300 text-sm font-semibold outline-none focus:border-brand">
-                      <option>{returnLocations.dropoff}</option>
+                    <select
+                      value={selectedReturnDropoffPointId ?? (returnDropoffOverride || returnLocations.dropoff)}
+                      onChange={handleReturnDropoffSelect}
+                      className="w-full h-10 px-3 rounded-lg border border-slate-300 text-sm font-semibold outline-none focus:border-brand bg-white"
+                    >
+                      {(returnDropoffMode === 'transfer' ? returnDropoffTransfers : returnDropoffStations).length > 0 ? (
+                        (returnDropoffMode === 'transfer' ? returnDropoffTransfers : returnDropoffStations).map((p) => (
+                          <option key={p.diemDonTraChuyenXeId ?? p.id} value={p.diemDonTraChuyenXeId ?? p.name}>
+                            {p.time ? `${p.time} - ` : ''}{p.name}{p.phuPhi && p.phuPhi > 0 ? ` (+${p.phuPhi.toLocaleString('vi-VN')}đ)` : ''}
+                          </option>
+                        ))
+                      ) : (
+                        <option value={returnLocations.dropoff}>{returnLocations.dropoff}</option>
+                      )}
                     </select>
+                    {selectedReturnDropoffStop?.address && (
+                      <p className="text-[11px] text-slate-500 mt-1.5">
+                        {selectedReturnDropoffStop.address}
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>

@@ -91,8 +91,8 @@ describe('Trips concurrent schedule conflict integrity with MySQL', () => {
         loaiXeId: vehicleTypeId,
         ghes: {
           create: [
-            { soGhe: 'A01', viTri: 'Tầng 1' },
-            { soGhe: 'A02', viTri: 'Tầng 1' },
+            { maGhe: `seat-a01-${suffix}`.padEnd(32, '0').slice(0, 32), tenGhe: 'A01', viTri: 'Tầng 1' },
+            { maGhe: `seat-a02-${suffix}`.padEnd(32, '0').slice(0, 32), tenGhe: 'A02', viTri: 'Tầng 1' },
           ],
         },
       },
@@ -108,8 +108,8 @@ describe('Trips concurrent schedule conflict integrity with MySQL', () => {
         loaiXeId: vehicleTypeId,
         ghes: {
           create: [
-            { soGhe: 'B01', viTri: 'Tầng 1' },
-            { soGhe: 'B02', viTri: 'Tầng 1' },
+            { maGhe: `seat-b01-${suffix}`.padEnd(32, '0').slice(0, 32), tenGhe: 'B01', viTri: 'Tầng 1' },
+            { maGhe: `seat-b02-${suffix}`.padEnd(32, '0').slice(0, 32), tenGhe: 'B02', viTri: 'Tầng 1' },
           ],
         },
       },

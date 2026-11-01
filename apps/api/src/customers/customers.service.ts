@@ -550,7 +550,7 @@ export class CustomersService {
         },
         seat: {
           seatId: t.gheChuyenXe.ghe.gheId,
-          code: t.gheChuyenXe.ghe.soGhe,
+          code: t.gheChuyenXe.ghe.tenGhe ?? (t.gheChuyenXe.ghe as any).soGhe,
           position: t.gheChuyenXe.ghe.viTri ?? null,
         },
       })),

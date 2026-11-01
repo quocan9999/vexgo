@@ -3,8 +3,13 @@ import {
   mergeLocationCatalog,
   normalizeLocation,
   parseLocationCatalog,
+  type LocationOption,
 } from '../../../src/locations/location-catalog.js';
-import { locationSearchTerms } from '../../../src/locations/location-search.js';
+import { LocationsService } from '../../../src/locations/locations.service.js';
+import {
+  locationSearchTerms,
+  locationSearchTermsForOption,
+} from '../../../src/locations/location-search.js';
 
 describe('location catalogue', () => {
   it('shows Tây Ninh once with Long An as a secondary legacy name and searchable alias', () => {
@@ -129,5 +134,254 @@ describe('location catalogue', () => {
     expect(locationSearchTerms('Bình Dương')).toEqual(['Bình Dương']);
     expect(locationSearchTerms('Thành phố Đà Lạt')).toEqual(['Đà Lạt']);
     expect(locationSearchTerms('Thành phố Hồ Chí Minh')).toContain('TP.HCM');
+  });
+
+  describe('locationSearchTermsForOption with coexisting old and new records', () => {
+    const mixedCatalogue: LocationOption[] = [
+      // TP.HCM
+      {
+        id: 'legacy:province:79',
+        name: 'Hồ Chí Minh',
+        value: 'TP.HCM',
+        aliases: ['Thành phố Hồ Chí Minh', 'TP.HCM', 'Hồ Chí Minh'],
+        versions: ['legacy'],
+        kind: 'province',
+        province: null,
+        isLegacy: true,
+        diaDiemId: 84,
+      },
+      {
+        id: 'legacy:province:74',
+        name: 'Bình Dương',
+        value: 'Bình Dương',
+        aliases: ['Tỉnh Bình Dương', 'Bình Dương', 'Thủ Dầu Một'],
+        versions: ['legacy'],
+        kind: 'province',
+        province: null,
+        isLegacy: true,
+        diaDiemId: 81,
+      },
+      {
+        id: 'legacy:province:77',
+        name: 'Bà Rịa - Vũng Tàu',
+        value: 'Bà Rịa - Vũng Tàu',
+        aliases: ['Tỉnh Bà Rịa - Vũng Tàu', 'Bà Rịa - Vũng Tàu'],
+        versions: ['legacy'],
+        kind: 'province',
+        province: null,
+        isLegacy: true,
+        diaDiemId: 83,
+      },
+      {
+        id: 'current:province:79',
+        name: 'Hồ Chí Minh',
+        value: 'TP.HCM',
+        aliases: ['Thành phố Hồ Chí Minh', 'TP.HCM', 'Hồ Chí Minh'],
+        versions: ['current'],
+        kind: 'province',
+        province: null,
+        isLegacy: false,
+        legacyNames: ['Bình Dương', 'Bà Rịa - Vũng Tàu'],
+        diaDiemId: 28,
+      },
+
+      // Tây Ninh & Long An
+      {
+        id: 'legacy:province:72',
+        name: 'Tây Ninh',
+        value: 'Tây Ninh',
+        aliases: ['Tỉnh Tây Ninh', 'Tây Ninh'],
+        versions: ['legacy'],
+        kind: 'province',
+        province: null,
+        isLegacy: true,
+        diaDiemId: 80,
+      },
+      {
+        id: 'legacy:province:80',
+        name: 'Long An',
+        value: 'Long An',
+        aliases: ['Tỉnh Long An', 'Long An'],
+        versions: ['legacy'],
+        kind: 'province',
+        province: null,
+        isLegacy: true,
+        diaDiemId: 85,
+      },
+      {
+        id: 'current:province:80',
+        name: 'Tây Ninh',
+        value: 'Tây Ninh',
+        aliases: ['Tỉnh Tây Ninh', 'Tây Ninh'],
+        versions: ['current'],
+        kind: 'province',
+        province: null,
+        isLegacy: false,
+        legacyNames: ['Tây Ninh', 'Long An'],
+        diaDiemId: 29,
+      },
+
+      // Lào Cai & Yên Bái (code 15)
+      {
+        id: 'legacy:province:15',
+        name: 'Yên Bái',
+        value: 'Yên Bái',
+        aliases: ['Tỉnh Yên Bái', 'Yên Bái'],
+        versions: ['legacy'],
+        kind: 'province',
+        province: null,
+        isLegacy: true,
+        diaDiemId: 44,
+      },
+      {
+        id: 'legacy:province:10',
+        name: 'Lào Cai',
+        value: 'Lào Cai',
+        aliases: ['Tỉnh Lào Cai', 'Lào Cai'],
+        versions: ['legacy'],
+        kind: 'province',
+        province: null,
+        isLegacy: true,
+        diaDiemId: 40,
+      },
+      {
+        id: 'current:province:15',
+        name: 'Lào Cai',
+        value: 'Lào Cai',
+        aliases: ['Tỉnh Lào Cai', 'Lào Cai'],
+        versions: ['current'],
+        kind: 'province',
+        province: null,
+        isLegacy: false,
+        legacyNames: ['Lào Cai', 'Yên Bái'],
+        diaDiemId: 7,
+      },
+
+      // Quận/huyện con
+      {
+        id: 'legacy:district:769',
+        name: 'Thủ Đức',
+        value: 'Thủ Đức',
+        aliases: ['Thành phố Thủ Đức', 'Thủ Đức'],
+        versions: ['legacy'],
+        kind: 'district',
+        province: 'Hồ Chí Minh',
+        parentName: 'Hồ Chí Minh',
+        isLegacy: true,
+        diaDiemId: 769,
+      },
+      {
+        id: 'legacy:district:760',
+        name: 'Quận 1',
+        value: 'Quận 1 (TP.HCM)',
+        aliases: ['Quận 1', 'Q1', 'Quan 1'],
+        versions: ['legacy'],
+        kind: 'district',
+        province: 'Hồ Chí Minh',
+        parentName: 'Hồ Chí Minh',
+        isLegacy: true,
+        diaDiemId: 760,
+      },
+      {
+        id: 'legacy:district:719',
+        name: 'Dĩ An',
+        value: 'Dĩ An',
+        aliases: ['Thị xã Dĩ An', 'Dĩ An'],
+        versions: ['legacy'],
+        kind: 'district',
+        province: 'Bình Dương',
+        parentName: 'Bình Dương',
+        isLegacy: true,
+        diaDiemId: 719,
+      },
+    ];
+
+    it('TP.HCM: legacy option returns ONLY TP.HCM terms; new option returns TP.HCM + constituent provinces', () => {
+      const oldHcm = mixedCatalogue.find((c) => c.diaDiemId === 84)!;
+      const newHcm = mixedCatalogue.find((c) => c.diaDiemId === 28)!;
+
+      const oldTerms = locationSearchTermsForOption(oldHcm, mixedCatalogue);
+      expect(oldTerms).toContain('TP.HCM');
+      expect(oldTerms).toContain('Hồ Chí Minh');
+      expect(oldTerms).toContain('Thủ Đức');
+      expect(oldTerms).not.toContain('Bình Dương');
+      expect(oldTerms).not.toContain('Bà Rịa - Vũng Tàu');
+      expect(oldTerms).not.toContain('Thủ Dầu Một');
+      expect(oldTerms).not.toContain('Dĩ An');
+
+      const newTerms = locationSearchTermsForOption(newHcm, mixedCatalogue);
+      expect(newTerms).toContain('TP.HCM');
+      expect(newTerms).toContain('Hồ Chí Minh');
+      expect(newTerms).toContain('Thủ Đức');
+      expect(newTerms).toContain('Bình Dương');
+      expect(newTerms).toContain('Bà Rịa - Vũng Tàu');
+      expect(newTerms).toContain('Thủ Dầu Một');
+      expect(newTerms).toContain('Dĩ An');
+    });
+
+    it('Tây Ninh: legacy option returns ONLY Tây Ninh; new option returns Tây Ninh + Long An', () => {
+      const oldTayNinh = mixedCatalogue.find((c) => c.diaDiemId === 80)!;
+      const newTayNinh = mixedCatalogue.find((c) => c.diaDiemId === 29)!;
+
+      const oldTerms = locationSearchTermsForOption(oldTayNinh, mixedCatalogue);
+      expect(oldTerms).toContain('Tây Ninh');
+      expect(oldTerms).not.toContain('Long An');
+
+      const newTerms = locationSearchTermsForOption(newTayNinh, mixedCatalogue);
+      expect(newTerms).toContain('Tây Ninh');
+      expect(newTerms).toContain('Long An');
+    });
+
+    it('Lào Cai & Yên Bái (code 15): legacy Yên Bái (id 44) returns ONLY Yên Bái; new Lào Cai (id 7) returns both Lào Cai & Yên Bái', () => {
+      const oldYenBai = mixedCatalogue.find((c) => c.diaDiemId === 44)!;
+      const oldLaoCai = mixedCatalogue.find((c) => c.diaDiemId === 40)!;
+      const newLaoCai = mixedCatalogue.find((c) => c.diaDiemId === 7)!;
+
+      const yenBaiTerms = locationSearchTermsForOption(oldYenBai, mixedCatalogue);
+      expect(yenBaiTerms).toContain('Yên Bái');
+      expect(yenBaiTerms).not.toContain('Lào Cai');
+
+      const oldLaoCaiTerms = locationSearchTermsForOption(oldLaoCai, mixedCatalogue);
+      expect(oldLaoCaiTerms).toContain('Lào Cai');
+      expect(oldLaoCaiTerms).not.toContain('Yên Bái');
+
+      const newLaoCaiTerms = locationSearchTermsForOption(newLaoCai, mixedCatalogue);
+      expect(newLaoCaiTerms).toContain('Lào Cai');
+      expect(newLaoCaiTerms).toContain('Yên Bái');
+    });
+
+    it('Quận 1 (parent TP.HCM): TP.HCM mới KHÔNG chứa "1" hay "Q1" riêng lẻ, giữ nguyên "Quận 1", và không có term nào < 3 ký tự hay chỉ toàn số', () => {
+      const newHcm = mixedCatalogue.find((c) => c.diaDiemId === 28)!;
+      const terms = locationSearchTermsForOption(newHcm, mixedCatalogue);
+
+      expect(terms).toContain('Quận 1');
+      expect(terms).not.toContain('1');
+      expect(terms).not.toContain('Q1');
+      expect(terms).not.toContain('Quan 1');
+
+      for (const t of terms) {
+        expect(t.length).toBeGreaterThanOrEqual(3);
+        expect(/^\d+$/.test(t)).toBe(false);
+      }
+    });
+
+    it('Danh mục tĩnh dự phòng (có KEY_DISTRICTS): kiểm tra TP.HCM không sinh term số hay term < 3 ký tự', async () => {
+      const service = new LocationsService();
+      const staticCatalogue = (await service.list()).data;
+      const hcmItem = staticCatalogue.find((item) => item.id === 'province:79')!;
+      expect(hcmItem).toBeDefined();
+
+      const terms = locationSearchTermsForOption(hcmItem, staticCatalogue);
+      expect(terms).toContain('TP.HCM');
+      expect(terms).toContain('Hồ Chí Minh');
+      expect(terms).toContain('Quận 1');
+      expect(terms).not.toContain('1');
+      expect(terms).not.toContain('Q1');
+
+      for (const t of terms) {
+        expect(t.length).toBeGreaterThanOrEqual(3);
+        expect(/^\d+$/.test(t)).toBe(false);
+      }
+    });
   });
 });

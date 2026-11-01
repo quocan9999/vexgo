@@ -1,5 +1,7 @@
-import { Injectable, ServiceUnavailableException } from '@nestjs/common';
+import { Injectable, Optional, ServiceUnavailableException } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service.js';
 import {
+  stripLocationPrefix,
   type LocationOption,
 } from './location-catalog.js';
 import {
@@ -37,6 +39,7 @@ function toLocationOption(item: MasterLocation): LocationOption {
     popular: Boolean(item.popular || POPULAR_IDS.has(item.id)),
     address: item.address,
     parentName: item.province ?? undefined,
+    isLegacy: false,
   };
 }
 
@@ -61,8 +64,9 @@ export class LocationsService {
     meta: { updatedAt: string; stale: boolean };
   }>;
   private retryAfter = 0;
+  private initialLoaded = false;
 
-  constructor() {
+  constructor(@Optional() private readonly prisma?: PrismaService) {
     this.cache = {
       data: buildMasterCatalog(),
       updatedAt: new Date().toISOString(),
@@ -71,6 +75,15 @@ export class LocationsService {
   }
 
   async list() {
+    if (this.prisma && !this.initialLoaded) {
+      try {
+        await this.refresh();
+        this.initialLoaded = true;
+      } catch {
+        // Fallback to in-memory catalogue
+      }
+    }
+
     if (
       this.cache &&
       (Date.now() < this.cache.expires || Date.now() < this.retryAfter)
@@ -97,10 +110,122 @@ export class LocationsService {
     });
   }
 
+  async loadFromDatabase(): Promise<LocationOption[] | null> {
+    if (!this.prisma) return null;
+    try {
+      const locations = await this.prisma.danhMucDiaDiem.findMany({
+        where: { trangThai: 'HOAT_DONG' },
+        include: {
+          bangSapNhapMoi: {
+            include: { diaDiemCu: true },
+          },
+          diaDiemCha: true,
+        },
+        orderBy: [{ thuTuHienThi: 'desc' }, { tenDiaDiem: 'asc' }],
+      });
+      if (!locations || locations.length === 0) return null;
+
+      const stations = await this.prisma.diemDonTra.findMany({
+        where: { trangThai: 'HOAT_DONG' },
+        include: {
+          diaDiemCu: true,
+          diaDiemMoi: true,
+        },
+      });
+
+      const result: LocationOption[] = [];
+
+      for (const loc of locations) {
+        const isLegacy = loc.laDiaDanhCu;
+        const cleanName = stripLocationPrefix(
+          loc.tenDiaDiem,
+          loc.capDiaDiem === 'QUAN_HUYEN',
+        );
+        const value = cleanName.toLowerCase().includes('hồ chí minh') ? 'TP.HCM' : cleanName;
+        const kind: LocationOption['kind'] = loc.capDiaDiem === 'TINH_THANH' ? 'province' : 'district';
+        const id = isLegacy
+          ? `legacy:${kind}:${loc.code}`
+          : `current:${kind}:${loc.code}`;
+
+        const legacyNames = (loc as any).bangSapNhapMoi && (loc as any).bangSapNhapMoi.length > 0
+          ? (loc as any).bangSapNhapMoi.map((m: any) => m.diaDiemCu.tenDiaDiem)
+          : undefined;
+
+        // Alias master chỉ gộp cho tỉnh CŨ (laDiaDanhCu = true) khớp theo code.
+        // Alias của tỉnh MỚI (laDiaDanhCu = false) lấy từ chính các tỉnh cũ thành phần (legacyNames).
+        let additionalAliases: string[] = [];
+        if (isLegacy && loc.capDiaDiem === 'TINH_THANH') {
+          const masterItem = VIETNAM_PROVINCES.find(
+            (p) =>
+              p.id === `province:${loc.code.toString().padStart(2, '0')}` ||
+              p.name === cleanName,
+          );
+          additionalAliases = masterItem?.aliases ?? [];
+        } else if (!isLegacy && legacyNames && legacyNames.length > 0) {
+          additionalAliases = legacyNames;
+        }
+
+        // Với quận/huyện (capDiaDiem = QUAN_HUYEN), đặt parentName và province bằng tên tỉnh cha lấy qua diaDiemChaId
+        const parentProvinceName =
+          loc.capDiaDiem === 'QUAN_HUYEN' && loc.diaDiemCha
+            ? stripLocationPrefix(loc.diaDiemCha.tenDiaDiem, false)
+            : null;
+
+        result.push({
+          id,
+          name: cleanName,
+          value,
+          aliases: [
+            ...new Set([
+              loc.tenDiaDiem,
+              loc.tenKhongDau,
+              cleanName,
+              value,
+              ...additionalAliases,
+            ]),
+          ],
+          versions: [isLegacy ? 'legacy' : 'current'],
+          kind,
+          province: loc.capDiaDiem === 'QUAN_HUYEN' ? parentProvinceName : null,
+          parentName: loc.capDiaDiem === 'QUAN_HUYEN' ? (parentProvinceName ?? undefined) : undefined,
+          isLegacy,
+          mergedFromText: loc.chuThichSapNhap,
+          legacyNames,
+          popular: loc.noiBat,
+          diaDiemId: loc.diaDiemId,
+          tenKhongDau: loc.tenKhongDau,
+        });
+      }
+
+      for (const st of stations) {
+        const parentName = st.diaDiemCu?.tenDiaDiem ?? st.diaDiemMoi?.tenDiaDiem ?? undefined;
+        result.push({
+          id: `station:${st.maDiem.toLowerCase()}`,
+          name: st.tenDiem,
+          value: st.tenDiem,
+          aliases: [st.tenDiem, st.maDiem],
+          versions: ['current'],
+          kind: 'station',
+          province: parentName ?? null,
+          parentName,
+          address: st.diaChi,
+          isLegacy: false,
+          popular: Boolean(st.maDiem.startsWith('BX-')),
+          diemDonTraId: st.diemDonTraId,
+        });
+      }
+
+      return result;
+    } catch {
+      return null;
+    }
+  }
+
   private async refresh() {
     try {
+      const dbData = await this.loadFromDatabase();
       this.cache = {
-        data: buildMasterCatalog(),
+        data: dbData && dbData.length > 0 ? dbData : buildMasterCatalog(),
         updatedAt: new Date().toISOString(),
         expires: Date.now() + TTL,
       };

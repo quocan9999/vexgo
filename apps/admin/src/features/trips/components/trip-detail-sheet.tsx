@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { LoaderCircle, Trash2 } from 'lucide-react';
+import { LoaderCircle, Trash2, Users, Route as RouteIcon, AlertCircle } from 'lucide-react';
 import {
   ResourceSheet,
   ResourceConfirmation,
@@ -11,6 +11,8 @@ import {
 } from '@/components/admin/resource-ui';
 import { toast } from 'sonner';
 import { Button, buttonVariants } from '@/components/ui/action-button';
+import { Badge } from '@/components/ui/status-badge';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
   cancelTrip,
   deleteTrip,
@@ -21,6 +23,9 @@ import {
 } from '../services/trip-service';
 import { useAdminPermissions } from '@/features/admin-auth/hooks/use-admin-permissions';
 import { TripFormDialog } from './trip-form-dialog';
+import { StopListEditor } from '@/features/stops/components/stop-list-editor';
+import { getTripStops, applyRouteTemplate } from '@/features/stops/services/stop-service';
+import type { TripPassengerPointItem } from '@/features/stops/types/stop';
 import type { Trip, TripLookupOptionsState, TripStatus } from '../types/trip';
 import '../trips.css';
 
@@ -126,6 +131,12 @@ export function TripDetailSheet({
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteSubmitting, setDeleteSubmitting] = useState(false);
 
+  const [stopsEditorOpen, setStopsEditorOpen] = useState(false);
+  const [tripStops, setTripStops] = useState<TripPassengerPointItem[]>([]);
+  const [loadingStops, setLoadingStops] = useState(false);
+  const [applyTemplateOpen, setApplyTemplateOpen] = useState(false);
+  const [applyingTemplate, setApplyingTemplate] = useState(false);
+
   function openStatusDialog(target: 'HOAN_THANH') {
     setStatusTarget(target);
     setStatusDialogOpen(true);
@@ -225,6 +236,31 @@ export function TripDetailSheet({
     }
   }
 
+  const loadTripStops = () => {
+    void Promise.resolve().then(() => setLoadingStops(true));
+    getTripStops(tripId)
+      .then(setTripStops)
+      .catch(() => {})
+      .finally(() => setLoadingStops(false));
+  };
+
+  async function handleConfirmApplyTemplate() {
+    setApplyingTemplate(true);
+    try {
+      const res = await applyRouteTemplate(tripId);
+      toast.success(res.message);
+      setApplyTemplateOpen(false);
+      loadTripStops();
+      setRetryCount((c) => c + 1);
+    } catch (err: unknown) {
+      toast.error(
+        err instanceof Error ? err.message : 'Không thể áp dụng khuôn lộ trình.',
+      );
+    } finally {
+      setApplyingTemplate(false);
+    }
+  }
+
   useEffect(() => {
     const controller = new AbortController();
     getTripById(tripId, controller.signal)
@@ -247,6 +283,16 @@ export function TripDetailSheet({
             message,
           });
         }
+      });
+
+    void Promise.resolve().then(() => setLoadingStops(true));
+    getTripStops(tripId)
+      .then((stops) => {
+        if (!controller.signal.aborted) setTripStops(stops);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!controller.signal.aborted) setLoadingStops(false);
       });
 
     return () => controller.abort();
@@ -428,6 +474,104 @@ export function TripDetailSheet({
             </section>
           )}
 
+          {/* Section Lộ trình đón / trả */}
+          <section className="space-y-3 rounded-lg border p-4 bg-muted/20">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h4 className="text-base font-semibold flex items-center gap-2">
+                  <RouteIcon className="size-4 text-primary" />
+                  Điểm đón / trả theo giờ ({tripStops.length})
+                </h4>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Lộ trình đón, trả và trạm nghỉ của chuyến xe
+                </p>
+              </div>
+
+              {canUpdate && detail.trip.status === 'CHUA_KHOI_HANH' && (
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    type="button"
+                    onClick={() => setApplyTemplateOpen(true)}
+                  >
+                    Áp dụng khuôn mẫu
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    type="button"
+                    onClick={() => setStopsEditorOpen(true)}
+                  >
+                    Chỉnh sửa lộ trình
+                  </Button>
+                </div>
+              )}
+            </div>
+
+            {detail.trip.thieuDiem && (
+              <Alert variant="destructive">
+                <AlertCircle className="size-4" />
+                <AlertTitle>Thiếu điểm đón / trả</AlertTitle>
+                <AlertDescription className="text-xs">
+                  Chuyến xe đang thiếu điểm đón hoặc điểm trả! Vui lòng cấu hình lộ trình.
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {loadingStops ? (
+              <p className="text-xs text-muted-foreground">Đang tải điểm đón trả…</p>
+            ) : tripStops.length === 0 ? (
+              <p className="text-xs text-muted-foreground italic">
+                Chưa có điểm đón/trả nào được gán cho chuyến này.
+              </p>
+            ) : (
+              <div className="space-y-2 pt-1 max-h-60 overflow-y-auto pr-1">
+                {tripStops.map((stop, idx) => (
+                  <div
+                    key={stop.diemDonTraChuyenXeId ?? idx}
+                    className="flex items-center justify-between text-xs p-2 rounded-[var(--admin-radius-panel)] border border-border bg-card"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Badge
+                        variant={
+                          stop.loaiDiem === 'DON'
+                            ? 'secondary'
+                            : stop.loaiDiem === 'TRA'
+                              ? 'outline'
+                              : 'warning'
+                        }
+                        className="text-[10px] font-semibold"
+                      >
+                        {stop.loaiDiem === 'DON'
+                          ? 'ĐÓN'
+                          : stop.loaiDiem === 'TRA'
+                            ? 'TRẢ'
+                            : 'NGHỈ'}
+                      </Badge>
+                      <span className="font-medium truncate">
+                        {stop.diemDonTra?.tenDiem ?? `Điểm #${stop.diemDonTraId}`}
+                      </span>
+                      {stop.phuPhi > 0 && (
+                        <span className="text-[10px] text-muted-foreground font-mono">
+                          (+{Number(stop.phuPhi).toLocaleString('vi-VN')}đ)
+                        </span>
+                      )}
+                      {(stop.veCount ?? 0) > 0 && (
+                        <Badge variant="warning" className="text-[10px] font-semibold">
+                          {stop.veCount} vé
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="font-mono text-primary font-semibold shrink-0">
+                      {stop.gioThucTe ?? `${stop.phutLech >= 0 ? '+' : ''}${stop.phutLech}p`}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
           <section className="space-y-4">
             <h4 className="text-base font-semibold">Thông tin hệ thống</h4>
             <dl className="grid grid-cols-2 gap-4 text-[13px] [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-1 [&_dd]:break-words">
@@ -450,6 +594,15 @@ export function TripDetailSheet({
                   href={`/trips/${detail.trip.tripId}/seats`}
                 >
                   Xem ghế chuyến
+                </Link>
+              )}
+              {canRead && (
+                <Link
+                  className={buttonVariants({ variant: 'outline' })}
+                  href={`/trips/${detail.trip.tripId}/manifest`}
+                >
+                  <Users className="size-3.5 mr-1" />
+                  Hành khách (Manifest)
                 </Link>
               )}
               {canUpdate && detail.trip.status === 'CHUA_KHOI_HANH' && (
@@ -510,6 +663,36 @@ export function TripDetailSheet({
           trip={detail.trip}
           vehicleOptions={vehicleOptions ?? { status: 'success', options: [] }}
         />
+      )}
+
+      {stopsEditorOpen && canUpdate && detail.status === 'success' && (
+        <StopListEditor
+          mode="trip"
+          targetId={tripId}
+          departureTime={detail.trip.departureTime}
+          title={`Điểm đón / trả chuyến: ${detail.trip.code}`}
+          onClose={() => setStopsEditorOpen(false)}
+          onSaved={() => {
+            loadTripStops();
+            setRetryCount((c) => c + 1);
+          }}
+        />
+      )}
+
+      {applyTemplateOpen && detail.status === 'success' && (
+        <ResourceConfirmation
+          title={`Áp dụng khuôn lộ trình cho chuyến ${detail.trip.code}?`}
+          description="Hệ thống sẽ sao chép toàn bộ điểm đón, trả và trạm nghỉ từ khuôn mẫu tuyến xe tương ứng và tính toán giờ dự kiến theo giờ khởi hành chuyến. Các điểm hiện tại chưa có vé đặt sẽ được thay thế."
+          busy={applyingTemplate}
+          onClose={() => setApplyTemplateOpen(false)}
+        >
+          <Button disabled={applyingTemplate} onClick={handleConfirmApplyTemplate}>
+            {applyingTemplate && (
+              <LoaderCircle aria-hidden className="motion-safe:animate-spin" />
+            )}
+            {applyingTemplate ? 'Đang áp dụng…' : 'Áp dụng khuôn mẫu'}
+          </Button>
+        </ResourceConfirmation>
       )}
 
       {statusDialogOpen && statusTarget && detail.status === 'success' && (

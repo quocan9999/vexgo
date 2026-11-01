@@ -66,6 +66,7 @@ vi.mock('@/components/data-filters/data-filters', () => ({
   SearchInput: () => null,
   SelectFilter: () => null,
   SingleDateFilter: () => null,
+  DateRangeFilter: () => null,
 }));
 
 vi.mock('../src/features/trips/hooks/use-trips', () => ({
@@ -79,6 +80,8 @@ vi.mock('../src/features/trips/hooks/use-trips', () => ({
     searchInput: '',
     status: '',
     departureDate: '',
+    departureDateRange: null,
+    updateDepartureDateRange: vi.fn(),
     sortBy: 'departureDate',
     sortDirection: 'asc',
     changePage: vi.fn(),
@@ -174,7 +177,6 @@ describe('Trip Form Composition & Validation', () => {
     );
 
     expect(html).toContain('Thêm chuyến xe');
-    expect(html).toContain('Mã chuyến xe');
     expect(html).toContain('Tuyến xe');
     expect(html).toContain('Xe phục vụ');
     expect(html).toContain('Nhận gửi hàng');
@@ -245,7 +247,6 @@ describe('Trip Form Composition & Validation', () => {
       expect(checkbox.checked).toBe(false);
       if (state === 'selected') fireEvent.click(checkbox);
 
-      expect((within(dialog).getByLabelText(/Mã chuyến xe/) as HTMLInputElement).disabled).toBe(true);
       await selectCanonicalOption(within(dialog).getByLabelText(/Tuyến xe/), /FUTA-TX-0001/);
       await selectCanonicalOption(within(dialog).getByLabelText(/Xe phục vụ/), /30F-123.45/);
       fireEvent.change(within(dialog).getByLabelText(/Ngày khởi hành/), {
@@ -259,12 +260,10 @@ describe('Trip Form Composition & Validation', () => {
       );
 
       await waitFor(() => expect(onSaved).toHaveBeenCalledWith(savedTrip));
-      expect((within(dialog).getByLabelText(/Mã chuyến xe/) as HTMLInputElement).value).toBe('FUTA-CX-10102026-0001');
       const createRequests = () => fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST');
       await waitFor(() => expect(createRequests()).toHaveLength(1));
       const [createUrl, init] = createRequests()[0];
       expect(new URL(String(createUrl)).pathname).toBe('/api/v1/trips');
-      expect(fetchMock.mock.calls.filter(([url]) => String(url).includes('/code-preview'))).toHaveLength(1);
       expect(JSON.parse(init?.body as string)).toEqual({
         routeId: 1,
         vehicleId: 8,
