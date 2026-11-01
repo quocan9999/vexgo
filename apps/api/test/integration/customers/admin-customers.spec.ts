@@ -44,6 +44,7 @@ const mockCustomer = {
 };
 
 const mockPrisma = {
+  $transaction: vi.fn(),
   khachHang: {
     findMany: vi.fn(),
     count: vi.fn(),
@@ -396,6 +397,10 @@ describe('Admin Customers API (Feature 06.1)', () => {
           fullName: 'Nguyễn Văn A',
           phoneNumber: '+84901234567',
           email: 'nguyenvana@example.com',
+          dateOfBirth: '15-05-1995',
+          gender: null,
+          address: null,
+          citizenId: '079195000001',
           loyaltyPoints: 150,
           account: {
             accountId: 201,
@@ -1166,6 +1171,76 @@ describe('Admin Customers API (Feature 06.1)', () => {
           },
         }),
       );
+    });
+  });
+
+  describe('PATCH /api/v1/customers/:id/status (Update Account Status)', () => {
+    it('updates customer account status to TAM_KHOA successfully', async () => {
+      mockPrisma.khachHang.findFirst.mockResolvedValue(mockCustomer);
+      mockPrisma.$transaction.mockImplementation(async (cb: (tx: any) => unknown) =>
+        cb({
+          taiKhoan: {
+            update: vi.fn().mockResolvedValue(mockCustomer.taiKhoan),
+            findUnique: vi.fn().mockResolvedValue({
+              taiKhoanId: 201,
+              trangThai: 'TAM_KHOA',
+              updatedAt: NOW,
+            }),
+          },
+          phienDangNhap: {
+            updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+          },
+        }),
+      );
+
+      const response = await request(app.getHttpServer())
+        .patch('/api/v1/customers/101/status')
+        .send({
+          status: 'TAM_KHOA',
+          reason: 'Khách hàng có hành vi gian lận mã giảm giá',
+        })
+        .expect(200);
+
+      expect(response.body).toEqual({
+        data: {
+          customerId: 101,
+          accountStatus: 'TAM_KHOA',
+          updatedAt: NOW.toISOString(),
+          message: 'Cập nhật trạng thái tài khoản thành công.',
+        },
+      });
+    });
+
+    it('rejects invalid status with 400', async () => {
+      await request(app.getHttpServer())
+        .patch('/api/v1/customers/101/status')
+        .send({
+          status: 'INVALID_STATUS',
+          reason: 'Lý do hợp lệ dài hơn 5 ký tự',
+        })
+        .expect(400);
+    });
+
+    it('rejects missing or too short reason with 400', async () => {
+      await request(app.getHttpServer())
+        .patch('/api/v1/customers/101/status')
+        .send({
+          status: 'TAM_KHOA',
+          reason: 'abc',
+        })
+        .expect(400);
+    });
+
+    it('returns 404 when customer does not exist in tenant scope', async () => {
+      mockPrisma.khachHang.findFirst.mockResolvedValue(null);
+
+      await request(app.getHttpServer())
+        .patch('/api/v1/customers/999/status')
+        .send({
+          status: 'TAM_KHOA',
+          reason: 'Khách hàng không tồn tại trong hệ thống',
+        })
+        .expect(404);
     });
   });
 });

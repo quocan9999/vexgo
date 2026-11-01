@@ -1,4 +1,4 @@
-export type CustomerAccountStatus = 'HOAT_DONG' | 'TAM_KHOA';
+export type CustomerAccountStatus = 'HOAT_DONG' | 'TAM_KHOA' | 'BI_KHOA';
 
 export interface CustomerAccount {
   accountId: number;
@@ -21,9 +21,27 @@ export interface CustomerSummary {
 }
 
 export interface CustomerDetail extends CustomerSummary {
+  dateOfBirth?: string | null;
+  gender?: 'NAM' | 'NU' | 'KHAC' | string | null;
+  address?: string | null;
+  citizenId?: string | null;
   account: CustomerAccount & {
     createdAt: string;
     updatedAt: string;
+  };
+}
+
+export interface UpdateCustomerStatusInput {
+  status: CustomerAccountStatus;
+  reason: string;
+}
+
+export interface UpdateCustomerStatusResponse {
+  data: {
+    customerId: number;
+    accountStatus: CustomerAccountStatus;
+    updatedAt: string;
+    message: string;
   };
 }
 

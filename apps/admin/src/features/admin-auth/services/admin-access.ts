@@ -88,6 +88,7 @@ export type AdminPermission =
   | 'trip:cancel'
   | 'trip:delete'
   | 'customer:read'
+  | 'customer:update_status'
   | 'booking:read'
   | 'promotion:read'
   | 'promotion:create'
