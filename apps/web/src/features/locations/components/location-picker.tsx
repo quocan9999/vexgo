@@ -22,6 +22,7 @@ export function LocationPicker({
   className = '',
   disabled = false,
   excludeValue,
+  onSelectOption,
 }: {
   id?: string;
   value: string;
@@ -30,6 +31,7 @@ export function LocationPicker({
   className?: string;
   disabled?: boolean;
   excludeValue?: string;
+  onSelectOption?: (item: LocationOption | null) => void;
 }) {
   const generatedId = useId();
   const inputId = id ?? generatedId;
@@ -187,6 +189,7 @@ export function LocationPicker({
         onValueChange={(item) => {
           setSelectedId(item?.id ?? '');
           onChange(item?.value ?? '');
+          onSelectOption?.(item ?? null);
           setSearchQuery('');
         }}
       >
@@ -217,6 +220,7 @@ export function LocationPicker({
                 onClick={() => {
                   setSelectedId('');
                   onChange('');
+                  onSelectOption?.(null);
                   setSearchQuery('');
                 }}
                 className="grid size-8 place-items-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"

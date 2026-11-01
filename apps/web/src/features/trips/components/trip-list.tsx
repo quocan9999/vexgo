@@ -25,6 +25,8 @@ type TripPage = {
     totalItems: number;
     totalPages: number;
   };
+  fromSubAreas?: Array<{ diaDiemId: number; tenDiaDiem: string; tripCount: number }>;
+  toSubAreas?: Array<{ diaDiemId: number; tenDiaDiem: string; tripCount: number }>;
 };
 
 const EMPTY_META = {
@@ -68,6 +70,13 @@ function mapApiToTrip(item: ApiTrip): Trip {
         : item.availableSeats <= 5
           ? 'nearly-full'
           : 'open',
+    pickupPoints: item.pickupPoints,
+    dropoffPoints: item.dropoffPoints,
+    stops: item.stops,
+    pickupPoint: item.pickupPoint,
+    pickupAddress: item.pickupAddress ?? undefined,
+    dropoffPoint: item.dropoffPoint,
+    dropoffAddress: item.dropoffAddress ?? undefined,
   };
 }
 
@@ -81,8 +90,18 @@ async function fetchTripsByRoute(
   vehicleType: string,
   timeRange: string,
   operator: string,
+  options?: {
+    fromLocationId?: number;
+    toLocationId?: number;
+    fromStationId?: number;
+    toStationId?: number;
+    fromAreaId?: number;
+    toAreaId?: number;
+  },
 ): Promise<TripPage> {
-  if (!origin && !destination) return { trips: [], meta: EMPTY_META };
+  if (!origin && !destination && !options?.fromLocationId && !options?.toLocationId) {
+    return { trips: [], meta: EMPTY_META };
+  }
   const response = await tripsApi.searchTrips(
     buildTripListSearchParams({
       origin,
@@ -94,9 +113,20 @@ async function fetchTripsByRoute(
       vehicleType,
       timeRange,
       operator,
+      fromLocationId: options?.fromLocationId,
+      toLocationId: options?.toLocationId,
+      fromStationId: options?.fromStationId,
+      toStationId: options?.toStationId,
+      fromAreaId: options?.fromAreaId,
+      toAreaId: options?.toAreaId,
     }),
   );
-  return { trips: response.data.map(mapApiToTrip), meta: response.meta };
+  return {
+    trips: response.data.map(mapApiToTrip),
+    meta: response.meta,
+    fromSubAreas: response.fromSubAreas,
+    toSubAreas: response.toSubAreas,
+  };
 }
 
 function formatDateLabel(dateStr: string): string {
@@ -250,6 +280,34 @@ export function TripList() {
     searchParams.get('departureDate') || searchParams.get('date') || '';
   const returnDate = searchParams.get('returnDate') || '';
   const tripType = searchParams.get('tripType') || '';
+
+  const fromLocationId = searchParams.get('fromLocationId')
+    ? Number(searchParams.get('fromLocationId'))
+    : undefined;
+  const toLocationId = searchParams.get('toLocationId')
+    ? Number(searchParams.get('toLocationId'))
+    : undefined;
+  const fromStationId = searchParams.get('fromStationId')
+    ? Number(searchParams.get('fromStationId'))
+    : undefined;
+  const toStationId = searchParams.get('toStationId')
+    ? Number(searchParams.get('toStationId'))
+    : undefined;
+
+  const [fromAreaId, setFromAreaId] = useState<number | undefined>(
+    searchParams.get('fromAreaId') ? Number(searchParams.get('fromAreaId')) : undefined,
+  );
+  const [toAreaId, setToAreaId] = useState<number | undefined>(
+    searchParams.get('toAreaId') ? Number(searchParams.get('toAreaId')) : undefined,
+  );
+
+  const [subAreas, setSubAreas] = useState<{
+    from?: Array<{ diaDiemId: number; tenDiaDiem: string; tripCount: number }>;
+    to?: Array<{ diaDiemId: number; tenDiaDiem: string; tripCount: number }>;
+  }>({});
+
+  const [pickupPointFilter, setPickupPointFilter] = useState('all');
+  const [dropoffPointFilter, setDropoffPointFilter] = useState('all');
   // Round-trip nếu tripType=round-trip HOẶC có returnDate
   const isRoundTrip = tripType === 'round-trip' || !!returnDate;
 
@@ -264,7 +322,7 @@ export function TripList() {
     : 'Ngày về';
 
   // Route key: changes when from/to/date change → used to auto-reset selections
-  const routeKey = `${origin}|${destination}|${date}|${returnDate || ''}|${tripType || 'one-way'}`;
+  const routeKey = `${origin}|${destination}|${date}|${returnDate || ''}|${tripType || 'one-way'}|${fromAreaId || ''}|${toAreaId || ''}`;
 
   // Selected trips keyed by routeKey (auto-resets when search criteria change)
   const [selectedOutboundKeyed, setSelectedOutboundKeyed] = useState<{
@@ -300,7 +358,7 @@ export function TripList() {
     setActiveTabKeyed({ key: routeKey, tab });
   }
 
-  const outboundSearchKey = `${origin}\u0000${destination}\u0000${date}\u0000${query}\u0000${vehicleType}\u0000${timeRange}\u0000${operator}`;
+  const outboundSearchKey = `${origin}\u0000${destination}\u0000${date}\u0000${query}\u0000${vehicleType}\u0000${timeRange}\u0000${operator}\u0000${fromAreaId || ''}\u0000${toAreaId || ''}`;
   const returnSearchKey = `${destination}\u0000${origin}\u0000${returnDate}\u0000${query}\u0000${vehicleType}\u0000${timeRange}\u0000${operator}`;
   const outboundPage =
     outboundPageState.searchKey === outboundSearchKey
@@ -326,10 +384,24 @@ export function TripList() {
           vehicleType,
           timeRange,
           operator,
+          {
+            fromLocationId,
+            toLocationId,
+            fromStationId,
+            toStationId,
+            fromAreaId,
+            toAreaId,
+          },
         );
         if (ignore) return;
         setOutboundTrips(response.trips);
         setOutboundMeta(response.meta);
+        if (response.fromSubAreas || response.toSubAreas) {
+          setSubAreas({
+            from: response.fromSubAreas,
+            to: response.toSubAreas,
+          });
+        }
         setOutboundPageState({ searchKey: outboundSearchKey, page: 1 });
       } catch (error) {
         if (ignore) return;
@@ -356,6 +428,12 @@ export function TripList() {
     timeRange,
     operator,
     retryCount,
+    fromLocationId,
+    toLocationId,
+    fromStationId,
+    toStationId,
+    fromAreaId,
+    toAreaId,
   ]);
 
   // Fetch return trips if round-trip
@@ -439,7 +517,39 @@ export function TripList() {
   const currentPage =
     effectiveActiveTab === 'outbound' ? outboundPage : returnPage;
 
-  const filteredTrips = activeTrips;
+  const allPickupPoints = Array.from(
+    new Set(
+      activeTrips.flatMap((t) => [
+        t.pickupPoint,
+        ...(t.pickupPoints || []).map((p) => p.name),
+      ]).filter(Boolean) as string[],
+    ),
+  );
+
+  const allDropoffPoints = Array.from(
+    new Set(
+      activeTrips.flatMap((t) => [
+        t.dropoffPoint,
+        ...(t.dropoffPoints || []).map((p) => p.name),
+      ]).filter(Boolean) as string[],
+    ),
+  );
+
+  const filteredTrips = activeTrips.filter((t) => {
+    if (pickupPointFilter !== 'all') {
+      const match =
+        t.pickupPoint === pickupPointFilter ||
+        (t.pickupPoints || []).some((p) => p.name === pickupPointFilter);
+      if (!match) return false;
+    }
+    if (dropoffPointFilter !== 'all') {
+      const match =
+        t.dropoffPoint === dropoffPointFilter ||
+        (t.dropoffPoints || []).some((p) => p.name === dropoffPointFilter);
+      if (!match) return false;
+    }
+    return true;
+  });
 
   const totalResults = activeMeta.totalItems;
   const summaryCardStates = getTripSummaryCardStates(effectiveActiveTab);
@@ -646,6 +756,10 @@ export function TripList() {
                     setVehicleType('all');
                     setTimeRange('all');
                     setOperator('all');
+                    setPickupPointFilter('all');
+                    setDropoffPointFilter('all');
+                    setFromAreaId(undefined);
+                    setToAreaId(undefined);
                   }}
                   className="text-[11px] font-medium text-slate-500 hover:text-[#f05123] transition-colors"
                 >
@@ -737,12 +851,154 @@ export function TripList() {
                     />
                   </div>
                 </div>
+
+                {allPickupPoints.length > 0 && (
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-600 block mb-2">
+                      Điểm đón ({allPickupPoints.length})
+                    </label>
+                    <div className="relative">
+                      <select
+                        value={pickupPointFilter}
+                        onChange={(e) => setPickupPointFilter(e.target.value)}
+                        className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2.5 outline-none focus:border-[#f05123] appearance-none bg-white"
+                      >
+                        <option value="all">Tất cả điểm đón</option>
+                        {allPickupPoints.map((name) => (
+                          <option key={name} value={name}>
+                            {name}
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown
+                        size={16}
+                        className="absolute right-3 top-3 text-slate-400 pointer-events-none"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {allDropoffPoints.length > 0 && (
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-600 block mb-2">
+                      Điểm trả ({allDropoffPoints.length})
+                    </label>
+                    <div className="relative">
+                      <select
+                        value={dropoffPointFilter}
+                        onChange={(e) => setDropoffPointFilter(e.target.value)}
+                        className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2.5 outline-none focus:border-[#f05123] appearance-none bg-white"
+                      >
+                        <option value="all">Tất cả điểm trả</option>
+                        {allDropoffPoints.map((name) => (
+                          <option key={name} value={name}>
+                            {name}
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown
+                        size={16}
+                        className="absolute right-3 top-3 text-slate-400 pointer-events-none"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
 
           {/* ===== RIGHT CONTENT ===== */}
           <div className="flex flex-col gap-4">
+            {/* Sub-areas chips filter */}
+            {((subAreas.from && subAreas.from.length > 0) ||
+              (subAreas.to && subAreas.to.length > 0)) && (
+              <div className="bg-white rounded-xl p-4 shadow-xs border border-slate-200 space-y-3">
+                {subAreas.from && subAreas.from.length > 0 && (
+                  <div className="space-y-1.5">
+                    <p className="text-xs font-bold text-slate-600 flex items-center gap-1.5">
+                      <span className="size-2 rounded-full bg-[#00b14f]" />
+                      Khu vực đón tại {origin || 'nơi đi'}:
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setFromAreaId(undefined)}
+                        className={`px-3 py-1 rounded-full text-xs font-bold transition-colors cursor-pointer ${
+                          !fromAreaId
+                            ? 'bg-slate-900 text-white'
+                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        }`}
+                      >
+                        Tất cả
+                      </button>
+                      {subAreas.from.map((area) => (
+                        <button
+                          key={area.diaDiemId}
+                          type="button"
+                          onClick={() =>
+                            setFromAreaId(
+                              fromAreaId === area.diaDiemId
+                                ? undefined
+                                : area.diaDiemId,
+                            )
+                          }
+                          className={`px-3 py-1 rounded-full text-xs font-bold transition-colors cursor-pointer ${
+                            fromAreaId === area.diaDiemId
+                              ? 'bg-[#00b14f] text-white shadow-2xs'
+                              : 'bg-green-50 text-green-800 border border-green-200 hover:bg-green-100'
+                          }`}
+                        >
+                          {area.tenDiaDiem} ({area.tripCount})
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {subAreas.to && subAreas.to.length > 0 && (
+                  <div className="space-y-1.5">
+                    <p className="text-xs font-bold text-slate-600 flex items-center gap-1.5">
+                      <span className="size-2 rounded-full bg-[#f05123]" />
+                      Khu vực trả tại {destination || 'nơi đến'}:
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setToAreaId(undefined)}
+                        className={`px-3 py-1 rounded-full text-xs font-bold transition-colors cursor-pointer ${
+                          !toAreaId
+                            ? 'bg-slate-900 text-white'
+                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        }`}
+                      >
+                        Tất cả
+                      </button>
+                      {subAreas.to.map((area) => (
+                        <button
+                          key={area.diaDiemId}
+                          type="button"
+                          onClick={() =>
+                            setToAreaId(
+                              toAreaId === area.diaDiemId
+                                ? undefined
+                                : area.diaDiemId,
+                            )
+                          }
+                          className={`px-3 py-1 rounded-full text-xs font-bold transition-colors cursor-pointer ${
+                            toAreaId === area.diaDiemId
+                              ? 'bg-[#f05123] text-white shadow-2xs'
+                              : 'bg-red-50 text-red-800 border border-red-200 hover:bg-red-100'
+                          }`}
+                        >
+                          {area.tenDiaDiem} ({area.tripCount})
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Tabs (round-trip only) */}
             {isRoundTrip && (
               <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">

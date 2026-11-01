@@ -24,6 +24,12 @@ export function buildTripListSearchParams({
   vehicleType = 'all',
   timeRange = 'all',
   operator = 'all',
+  fromLocationId,
+  toLocationId,
+  fromStationId,
+  toStationId,
+  fromAreaId,
+  toAreaId,
 }: {
   origin: string;
   destination: string;
@@ -34,10 +40,22 @@ export function buildTripListSearchParams({
   vehicleType?: string;
   timeRange?: string;
   operator?: string;
+  fromLocationId?: number;
+  toLocationId?: number;
+  fromStationId?: number;
+  toStationId?: number;
+  fromAreaId?: number;
+  toAreaId?: number;
 }): SearchTripsParams {
   return {
     from: origin,
     to: destination,
+    ...(fromLocationId !== undefined ? { fromLocationId } : {}),
+    ...(toLocationId !== undefined ? { toLocationId } : {}),
+    ...(fromStationId !== undefined ? { fromStationId } : {}),
+    ...(toStationId !== undefined ? { toStationId } : {}),
+    ...(fromAreaId !== undefined ? { fromAreaId } : {}),
+    ...(toAreaId !== undefined ? { toAreaId } : {}),
     departureDate: date || undefined,
     ...(search.trim() ? { search: search.trim() } : {}),
     ...(vehicleType !== 'all' ? { vehicleType } : {}),

@@ -41,8 +41,13 @@ const TRIP_INCLUDE = {
   gheChuyenXes: { select: { trangThai: true } },
   diemDonTraChuyenXes: {
     include: {
-      diemDonTra: true,
+      diemDonTra: {
+        include: {
+          benTrungChuyen: true,
+        },
+      },
     },
+    orderBy: [{ phutLech: 'asc' }, { thuTu: 'asc' }],
   },
 } satisfies Prisma.ChuyenXeInclude;
 
@@ -88,8 +93,20 @@ export interface StopPointPayload {
   name: string;
   time: string;
   address: string;
-  type: 'station' | 'office' | 'transfer' | 'point';
+  type: 'station' | 'office' | 'transfer' | 'point' | 'rest';
   isDefault: boolean;
+  phutLech?: number;
+  phuPhi?: number;
+  phutCoMatTruoc?: number;
+  diemDonTraChuyenXeId?: number;
+  benTrungChuyen?: {
+    id: number;
+    name: string;
+    address: string;
+  } | null;
+  role?: 'DON' | 'TRA' | 'NGHI';
+  ghiChu?: string | null;
+  thoiGianDuKienIso?: string | null;
 }
 
 function getLegacySeatFloor(seatNumber: string, position: string | null) {
@@ -190,11 +207,107 @@ function formatClockTime(d: Date): string {
   return `${h}:${m}`;
 }
 
+function mapStationType(loaiDiem: string): 'station' | 'office' | 'transfer' | 'point' | 'rest' {
+  switch (loaiDiem) {
+    case 'BEN_XE':
+      return 'station';
+    case 'VAN_PHONG':
+      return 'office';
+    case 'TRUNG_CHUYEN':
+      return 'transfer';
+    case 'TRAM_NGHI':
+      return 'rest';
+    default:
+      return 'point';
+  }
+}
+
 function computePickupAndDropoffPoints(
   trip: TripRecord,
   departureTimeIso: string,
   arrivalTimeIso: string | null,
+  businessTimeZone: string,
 ) {
+  const customPoints = (trip.diemDonTraChuyenXes ?? []).filter(
+    (p) =>
+      p &&
+      p.diemDonTra &&
+      typeof p.diemDonTra.tenDiem === 'string' &&
+      typeof p.phutLech === 'number',
+  );
+
+  if (customPoints.length > 0) {
+    const sortedPoints = [...customPoints].sort((a, b) => {
+      if (a.phutLech !== b.phutLech) return a.phutLech - b.phutLech;
+      return (a.thuTu ?? 0) - (b.thuTu ?? 0);
+    });
+
+    const baseDepartureDate = combineDeparture(
+      trip.ngayKhoiHanh,
+      trip.gioKhoiHanh,
+      businessTimeZone,
+    );
+
+    const allStops: StopPointPayload[] = sortedPoints.map((p, idx) => {
+      let timeFormatted: string;
+      if (p.thoiGianDuKien) {
+        timeFormatted = formatClockTime(new Date(p.thoiGianDuKien));
+      } else {
+        const calculated = calculateClockTime(trip.gioKhoiHanh, p.phutLech);
+        timeFormatted = calculated
+          ? formatClockTime(calculated)
+          : formatClockTime(new Date(trip.gioKhoiHanh));
+      }
+      const actualTime = new Date(
+        baseDepartureDate.getTime() + p.phutLech * 60 * 1000,
+      );
+      const timeIso = actualTime.toISOString();
+
+      return {
+        id: String(p.diemDonTraChuyenXeId ?? idx),
+        name: p.diemDonTra.tenDiem,
+        time: timeFormatted,
+        address: p.diemDonTra.diaChi ?? '',
+        type: mapStationType(p.diemDonTra.loaiDiem),
+        isDefault: idx === 0,
+        phutLech: p.phutLech,
+        phuPhi: Number(p.phuPhi ?? 0),
+        phutCoMatTruoc: p.phutCoMatTruoc ?? 15,
+        diemDonTraChuyenXeId: p.diemDonTraChuyenXeId,
+        benTrungChuyen: p.diemDonTra.benTrungChuyen
+          ? {
+              id: p.diemDonTra.benTrungChuyen.diemDonTraId,
+              name: p.diemDonTra.benTrungChuyen.tenDiem,
+              address: p.diemDonTra.benTrungChuyen.diaChi ?? '',
+            }
+          : null,
+        role: p.loaiDiem as 'DON' | 'TRA' | 'NGHI',
+        ghiChu: p.ghiChu ?? null,
+        thoiGianDuKienIso: timeIso,
+      };
+    });
+
+    const pickupPoints = allStops.filter((p) => p.role === 'DON');
+    const dropoffPoints = allStops.filter((p) => p.role === 'TRA');
+
+    const firstPickup = pickupPoints[0] || allStops[0];
+    const lastDropoff =
+      dropoffPoints[dropoffPoints.length - 1] || allStops[allStops.length - 1];
+
+    return {
+      pickupPoints: pickupPoints.length > 0 ? pickupPoints : allStops.slice(0, 1),
+      dropoffPoints:
+        dropoffPoints.length > 0 ? dropoffPoints : allStops.slice(-1),
+      stops: allStops,
+      pickupPoint: firstPickup?.name ?? trip.tuyenXe?.diemDi ?? '',
+      pickupAddress: firstPickup?.address ?? '',
+      dropoffPoint: lastDropoff?.name ?? trip.tuyenXe?.diemDen ?? '',
+      dropoffAddress: lastDropoff?.address ?? '',
+      firstPickupTimeIso: firstPickup?.thoiGianDuKienIso ?? null,
+      lastDropoffTimeIso: lastDropoff?.thoiGianDuKienIso ?? null,
+    };
+  }
+
   const originCity = trip.tuyenXe?.diemDi || 'TP.HCM';
   const destCity = trip.tuyenXe?.diemDen || 'Đà Lạt';
 
@@ -214,7 +327,10 @@ function computePickupAndDropoffPoints(
   ];
 
   const pickupPoints: StopPointPayload[] = originStations.map((st, idx) => ({
-    id: idx === 0 ? `PU_STATION_${trip.chuyenXeId}` : `PU_${trip.chuyenXeId}_${idx + 1}`,
+    id:
+      idx === 0
+        ? `PU_STATION_${trip.chuyenXeId}`
+        : `PU_${trip.chuyenXeId}_${idx + 1}`,
     name: st.name,
     time: depTimeFormatted,
     address: st.address,
@@ -231,7 +347,10 @@ function computePickupAndDropoffPoints(
   ];
 
   const dropoffPoints: StopPointPayload[] = destStations.map((st, idx) => ({
-    id: idx === 0 ? `DO_STATION_${trip.chuyenXeId}` : `DO_${trip.chuyenXeId}_${idx + 1}`,
+    id:
+      idx === 0
+        ? `DO_STATION_${trip.chuyenXeId}`
+        : `DO_${trip.chuyenXeId}_${idx + 1}`,
     name: st.name,
     time: arrTimeFormatted,
     address: st.address,
@@ -242,10 +361,13 @@ function computePickupAndDropoffPoints(
   return {
     pickupPoints,
     dropoffPoints,
+    stops: undefined,
     pickupPoint: pickupPoints[0].name,
     pickupAddress: pickupPoints[0].address,
     dropoffPoint: dropoffPoints[0].name,
     dropoffAddress: dropoffPoints[0].address,
+    firstPickupTimeIso: null,
+    lastDropoffTimeIso: null,
   };
 }
 
@@ -318,13 +440,13 @@ function mapTrip(
   fare?: FareRecord,
   companyRating?: { rating: number | null; reviewsCount: number | null },
 ) {
-  const departureTime = combineDeparture(
+  let departureTime = combineDeparture(
     trip.ngayKhoiHanh,
     trip.gioKhoiHanh,
     businessTimeZone,
   ).toISOString();
 
-  const arrivalTime = computeArrival(
+  let arrivalTime = computeArrival(
     trip.ngayKhoiHanh,
     trip.gioKhoiHanh,
     trip.tuyenXe.thoiGianChayPhut,
@@ -336,7 +458,15 @@ function mapTrip(
     trip,
     departureTime,
     arrivalTime,
+    businessTimeZone,
   );
+
+  if (stopPoints.firstPickupTimeIso) {
+    departureTime = stopPoints.firstPickupTimeIso;
+  }
+  if (stopPoints.lastDropoffTimeIso) {
+    arrivalTime = stopPoints.lastDropoffTimeIso;
+  }
 
   const ratingData = resolveBusCompanyRating(
     trip.tuyenXe.nhaXe.tenNhaXe,
@@ -378,6 +508,7 @@ function mapTrip(
     ).length,
     pickupPoints: stopPoints.pickupPoints,
     dropoffPoints: stopPoints.dropoffPoints,
+    ...(stopPoints.stops ? { stops: stopPoints.stops } : {}),
     pickupPoint: stopPoints.pickupPoint,
     pickupAddress: stopPoints.pickupAddress,
     dropoffPoint: stopPoints.dropoffPoint,

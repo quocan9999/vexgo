@@ -1,3 +1,5 @@
+import type { ApiTripStopPoint } from '@/features/trips/services/trips.api';
+
 export type TripStatus = 'open' | 'nearly-full' | 'sold-out';
 
 export type Trip = {
@@ -16,6 +18,13 @@ export type Trip = {
   image: string;
   amenities: string[];
   status: TripStatus;
+  pickupPoints?: ApiTripStopPoint[];
+  dropoffPoints?: ApiTripStopPoint[];
+  stops?: ApiTripStopPoint[];
+  pickupPoint?: string;
+  pickupAddress?: string;
+  dropoffPoint?: string;
+  dropoffAddress?: string;
 };
 
 export type SeatStatus = 'available' | 'selected' | 'held' | 'sold';
