@@ -58,4 +58,13 @@ export class CreateTripDto {
   @IsDefined()
   @Matches(/^([01]\d|2[0-3]):[0-5]\d:[0-5]\d$/)
   departureTime!: string;
+
+  @ApiPropertyOptional({
+    description: 'Tự động sao chép các điểm đón/trả từ khuôn lộ trình của tuyến xe (mặc định bật)',
+    default: true,
+    example: true,
+  })
+  @IsOptional()
+  @IsBoolean()
+  copyRouteStops?: boolean;
 }

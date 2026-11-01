@@ -5,6 +5,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
 } from '@nestjs/common';
 import {
@@ -19,6 +20,7 @@ import { RouteIdParamsDto } from './dto/route-id-params.dto.js';
 import { RouteQueryDto } from './dto/route-query.dto.js';
 import { UpdateRouteDto } from './dto/update-route.dto.js';
 import { UpdateRouteStatusDto } from './dto/update-route-status.dto.js';
+import { UpdateRouteStopsDto } from './dto/route-stops.dto.js';
 import { RoutesService } from './routes.service.js';
 import { OptionalAuth } from '../auth/decorators/public.decorator.js';
 import {
@@ -141,5 +143,45 @@ export class RoutesController {
     @OptionalPrincipal() principal: AuthPrincipal | undefined,
   ) {
     return this.routesService.findOne(params.id, principal);
+  }
+
+  @Get(':id/stops')
+  @ApiBearerAuth('JWT-auth')
+  @RequireRoles(...TENANT_PRINCIPAL_ROLES)
+  @RequirePermissions('route:read')
+  @ApiOperation({
+    summary: 'Lấy khuôn lộ trình điểm dừng của tuyến xe',
+    description:
+      'Xem danh sách các điểm đón, trả khách và trạm nghỉ mẫu được định hình sẵn cho tuyến xe.\n\n- **Quyền hạn yêu cầu**: Quyền `route:read`.',
+  })
+  @ApiParam({ name: 'id', description: 'ID tuyến xe', example: 1 })
+  @ApiResponse({ status: 200, description: 'Danh sách điểm dừng khuôn lộ trình.' })
+  @ApiResponse({ status: 404, description: 'Không tìm thấy tuyến xe.', type: ApiErrorResponseDto })
+  getStops(
+    @Param() params: RouteIdParamsDto,
+    @CurrentPrincipal() principal: AuthPrincipal,
+  ) {
+    return this.routesService.getStops(params.id, principal);
+  }
+
+  @Put(':id/stops')
+  @ApiBearerAuth('JWT-auth')
+  @RequireRoles(...TENANT_PRINCIPAL_ROLES)
+  @RequirePermissions('route:update')
+  @ApiOperation({
+    summary: 'Thiết lập toàn bộ khuôn lộ trình điểm dừng cho tuyến xe',
+    description:
+      'Cập nhật hoặc thay thế toàn bộ danh sách điểm đón, trả khách và trạm nghỉ của tuyến xe trong một giao dịch an toàn.\n\n- **Quyền hạn yêu cầu**: Quyền `route:update`.',
+  })
+  @ApiParam({ name: 'id', description: 'ID tuyến xe', example: 1 })
+  @ApiResponse({ status: 200, description: 'Cập nhật khuôn lộ trình thành công.' })
+  @ApiResponse({ status: 400, description: 'Dữ liệu khuôn điểm dừng không hợp lệ.', type: ApiErrorResponseDto })
+  @ApiResponse({ status: 404, description: 'Không tìm thấy tuyến xe.', type: ApiErrorResponseDto })
+  updateStops(
+    @Param() params: RouteIdParamsDto,
+    @Body() body: UpdateRouteStopsDto,
+    @CurrentPrincipal() principal: AuthPrincipal,
+  ) {
+    return this.routesService.updateStops(params.id, body, principal);
   }
 }

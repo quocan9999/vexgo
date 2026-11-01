@@ -5,6 +5,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateStationDto } from './dto/create-station.dto.js';
 import { UpdateStationDto } from './dto/update-station.dto.js';
@@ -12,11 +13,18 @@ import { StationQueryDto } from './dto/station-query.dto.js';
 import { UpdateTripPassengerPointsDto } from './dto/trip-passenger-points.dto.js';
 import { hasTenantRole } from '../auth/principal-scope.js';
 import {
+  POINT_CUTOFF_MINUTES,
   STATION_STATUSES,
   type StationStatus,
   STATION_TYPES,
   type StationType,
 } from './station.constants.js';
+import {
+  calculateClockTime,
+  combineDeparture,
+  resolveBusinessTimeZone,
+} from '../common/time/business-date.js';
+import { validateStopList } from './stop-list-validator.js';
 import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
 
 function parseTimeString(timeStr?: string | null): Date | null {
@@ -39,7 +47,16 @@ function parseTimeString(timeStr?: string | null): Date | null {
 
 @Injectable()
 export class StationsService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly businessTimeZone: string;
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly configService?: ConfigService,
+  ) {
+    this.businessTimeZone = resolveBusinessTimeZone(
+      this.configService?.get('BUSINESS_TIME_ZONE'),
+    );
+  }
 
   private resolveTenantNhaXeId(principal?: AuthPrincipal, requestedNhaXeId?: number): number {
     if (!principal) {
@@ -104,6 +121,53 @@ export class StationsService {
     return mapping.diaDiemMoiId;
   }
 
+  private async validateBenTrungChuyenTarget(
+    benTrungChuyenId: number,
+    nhaXeId: number,
+    currentStationId?: number,
+  ) {
+    if (currentStationId && benTrungChuyenId === currentStationId) {
+      throw new BadRequestException({
+        error: 'TRANSFER_STATION_SELF_REFERENCE',
+        message: 'Điểm trung chuyển không thể trỏ tới chính nó.',
+      });
+    }
+
+    const target = await this.prisma.diemDonTra.findUnique({
+      where: { diemDonTraId: benTrungChuyenId },
+    });
+
+    if (!target) {
+      throw new NotFoundException({
+        error: 'TRANSFER_STATION_NOT_FOUND',
+        message: 'Không tìm thấy bến xe/văn phòng trung chuyển đích.',
+      });
+    }
+
+    if (target.nhaXeId !== nhaXeId) {
+      throw new BadRequestException({
+        error: 'TRANSFER_STATION_TENANT_MISMATCH',
+        message: 'Bến trung chuyển đích phải thuộc cùng nhà xe.',
+      });
+    }
+
+    if (target.trangThai !== 'HOAT_DONG') {
+      throw new BadRequestException({
+        error: 'TRANSFER_STATION_INACTIVE',
+        message: 'Bến trung chuyển đích đang ngưng hoạt động.',
+      });
+    }
+
+    if (target.loaiDiem !== 'BEN_XE' && target.loaiDiem !== 'VAN_PHONG') {
+      throw new BadRequestException({
+        error: 'TRANSFER_STATION_INVALID_TYPE',
+        message: 'Bến trung chuyển đích phải là Bến xe hoặc Văn phòng.',
+      });
+    }
+
+    return target;
+  }
+
   async create(dto: CreateStationDto, principal?: AuthPrincipal) {
     const nhaXeId = this.resolveTenantNhaXeId(principal, dto.nhaXeId);
 
@@ -127,6 +191,19 @@ export class StationsService {
       });
     }
 
+    // Validate trung chuyển
+    let benTrungChuyenId: number | null = null;
+    if (dto.loaiDiem === 'TRUNG_CHUYEN') {
+      if (!dto.benTrungChuyenId) {
+        throw new BadRequestException({
+          error: 'TRANSFER_STATION_REQUIRED',
+          message: 'Điểm trung chuyển bắt buộc phải chọn bến xe hoặc văn phòng kết nối.',
+        });
+      }
+      await this.validateBenTrungChuyenTarget(dto.benTrungChuyenId, nhaXeId);
+      benTrungChuyenId = dto.benTrungChuyenId;
+    }
+
     try {
       const station = await this.prisma.diemDonTra.create({
         data: {
@@ -139,12 +216,22 @@ export class StationsService {
           viDo: dto.viDo,
           kinhDo: dto.kinhDo,
           soDienThoai: dto.soDienThoai,
+          benTrungChuyenId,
           trangThai: dto.trangThai ?? 'HOAT_DONG',
           nhaXeId,
         },
         include: {
           diaDiemCu: true,
           diaDiemMoi: true,
+          benTrungChuyen: {
+            select: {
+              diemDonTraId: true,
+              tenDiem: true,
+              maDiem: true,
+              diaChi: true,
+              loaiDiem: true,
+            },
+          },
           nhaXe: {
             select: { nhaXeId: true, tenNhaXe: true, maNhaXe: true },
           },
@@ -175,14 +262,11 @@ export class StationsService {
       (principal!.roles?.includes('SUPER_ADMIN') || hasTenantRole(principal!.roles ?? []));
 
     if (!isPrivileged) {
-      // Người gọi không phải tenant admin hoặc SUPER_ADMIN (khách, chưa đăng nhập):
-      // Ép trangThai = HOAT_DONG bất kể filter client gửi
       where.trangThai = 'HOAT_DONG';
       if (query.nhaXeId) {
         where.nhaXeId = query.nhaXeId;
       }
     } else {
-      // Tenant admin hoặc SUPER_ADMIN:
       if (principal!.roles?.includes('SUPER_ADMIN')) {
         if (query.nhaXeId) {
           where.nhaXeId = query.nhaXeId;
@@ -191,7 +275,6 @@ export class StationsService {
         where.nhaXeId = principal!.nhaXeId;
       }
 
-      // Lọc theo trangThai nếu có truyền; không truyền thì thấy tất cả
       if (query.trangThai) {
         where.trangThai = query.trangThai;
       }
@@ -230,6 +313,15 @@ export class StationsService {
         include: {
           diaDiemCu: true,
           diaDiemMoi: true,
+          benTrungChuyen: {
+            select: {
+              diemDonTraId: true,
+              tenDiem: true,
+              maDiem: true,
+              diaChi: true,
+              loaiDiem: true,
+            },
+          },
           nhaXe: {
             select: { nhaXeId: true, tenNhaXe: true, maNhaXe: true },
           },
@@ -256,6 +348,15 @@ export class StationsService {
       include: {
         diaDiemCu: true,
         diaDiemMoi: true,
+        benTrungChuyen: {
+          select: {
+            diemDonTraId: true,
+            tenDiem: true,
+            maDiem: true,
+            diaChi: true,
+            loaiDiem: true,
+          },
+        },
         nhaXe: {
           select: { nhaXeId: true, tenNhaXe: true, maNhaXe: true },
         },
@@ -280,21 +381,38 @@ export class StationsService {
           message: 'Không tìm thấy điểm đón/trả.',
         });
       }
-      return { data: station };
-    }
-
-    if (!principal!.roles?.includes('SUPER_ADMIN') && station.nhaXeId !== principal!.nhaXeId) {
-      throw new ForbiddenException({
-        error: 'FORBIDDEN',
-        message: 'Không có quyền truy cập điểm đón/trả của nhà xe khác.',
-      });
+    } else {
+      if (!principal!.roles?.includes('SUPER_ADMIN') && station.nhaXeId !== principal!.nhaXeId) {
+        throw new ForbiddenException({
+          error: 'FORBIDDEN',
+          message: 'Không có quyền truy cập điểm đón/trả của nhà xe khác.',
+        });
+      }
     }
 
     return { data: station };
   }
 
   async update(id: number, dto: UpdateStationDto, principal?: AuthPrincipal) {
-    await this.findById(id, principal);
+    const current = await this.findById(id, principal);
+    const nhaXeId = current.data.nhaXeId;
+
+    // Chặn ngưng hoạt động nếu đang có điểm trung chuyển hoạt động trỏ tới
+    if (dto.trangThai === 'NGUNG_HOAT_DONG' && current.data.trangThai !== 'NGUNG_HOAT_DONG') {
+      const dependents = await this.prisma.diemDonTra.findMany({
+        where: { benTrungChuyenId: id, trangThai: 'HOAT_DONG' },
+        select: { diemDonTraId: true, tenDiem: true, maDiem: true },
+      });
+      if (dependents.length > 0) {
+        throw new ConflictException({
+          error: 'STATION_HAS_DEPENDENT_TRANSFERS',
+          message: `Không thể ngưng hoạt động bến đang là đích của ${dependents.length} điểm trung chuyển đang hoạt động.`,
+          details: dependents,
+        });
+      }
+    }
+
+    const effectiveLoaiDiem = dto.loaiDiem ?? (current.data.loaiDiem as StationType);
 
     const data: {
       maDiem?: string;
@@ -303,6 +421,7 @@ export class StationsService {
       diaChi?: string;
       diaDiemCuId?: number;
       diaDiemMoiId?: number;
+      benTrungChuyenId?: number | null;
       viDo?: number | null;
       kinhDo?: number | null;
       soDienThoai?: string | null;
@@ -318,6 +437,23 @@ export class StationsService {
     if (dto.soDienThoai !== undefined) data.soDienThoai = dto.soDienThoai;
     if (dto.trangThai !== undefined) data.trangThai = dto.trangThai;
 
+    if (effectiveLoaiDiem === 'TRUNG_CHUYEN') {
+      const targetId =
+        dto.benTrungChuyenId !== undefined ? dto.benTrungChuyenId : current.data.benTrungChuyenId;
+      if (!targetId) {
+        throw new BadRequestException({
+          error: 'TRANSFER_STATION_REQUIRED',
+          message: 'Điểm trung chuyển bắt buộc phải chọn bến xe hoặc văn phòng kết nối.',
+        });
+      }
+      await this.validateBenTrungChuyenTarget(targetId, nhaXeId, id);
+      data.benTrungChuyenId = targetId;
+    } else if (dto.loaiDiem !== undefined) {
+      data.benTrungChuyenId = null;
+    } else if (dto.benTrungChuyenId !== undefined) {
+      data.benTrungChuyenId = dto.benTrungChuyenId;
+    }
+
     // Khi sửa diaDiemCuId của bến đã có thì cập nhật lại diaDiemMoiId cho khớp
     if (dto.diaDiemCuId !== undefined && dto.diaDiemCuId !== null) {
       data.diaDiemCuId = dto.diaDiemCuId;
@@ -331,6 +467,15 @@ export class StationsService {
         include: {
           diaDiemCu: true,
           diaDiemMoi: true,
+          benTrungChuyen: {
+            select: {
+              diemDonTraId: true,
+              tenDiem: true,
+              maDiem: true,
+              diaChi: true,
+              loaiDiem: true,
+            },
+          },
           nhaXe: {
             select: { nhaXeId: true, tenNhaXe: true, maNhaXe: true },
           },
@@ -351,6 +496,19 @@ export class StationsService {
 
   async delete(id: number, principal?: AuthPrincipal) {
     await this.findById(id, principal);
+
+    // Chặn xóa/ngưng nếu đang có điểm trung chuyển hoạt động trỏ tới
+    const dependents = await this.prisma.diemDonTra.findMany({
+      where: { benTrungChuyenId: id, trangThai: 'HOAT_DONG' },
+      select: { diemDonTraId: true, tenDiem: true, maDiem: true },
+    });
+    if (dependents.length > 0) {
+      throw new ConflictException({
+        error: 'STATION_HAS_DEPENDENT_TRANSFERS',
+        message: `Không thể xóa hoặc ngưng bến đang là đích của ${dependents.length} điểm trung chuyển đang hoạt động.`,
+        details: dependents,
+      });
+    }
 
     // Soft delete: chuyển sang trạng thái NGUNG_HOAT_DONG
     const updated = await this.prisma.diemDonTra.update({
@@ -382,18 +540,54 @@ export class StationsService {
 
     const points = await this.prisma.diemDonTraChuyenXe.findMany({
       where: { chuyenXeId: tripId },
-      orderBy: [{ loaiDiem: 'asc' }, { thuTu: 'asc' }],
+      orderBy: [{ phutLech: 'asc' }, { thuTu: 'asc' }],
       include: {
         diemDonTra: {
           include: {
             diaDiemCu: true,
             diaDiemMoi: true,
+            benTrungChuyen: {
+              select: {
+                diemDonTraId: true,
+                tenDiem: true,
+                maDiem: true,
+                diaChi: true,
+                loaiDiem: true,
+              },
+            },
           },
+        },
+        vesDon: {
+          where: { trangThai: { not: 'DA_HUY' } },
+          select: { veId: true },
+        },
+        vesTra: {
+          where: { trangThai: { not: 'DA_HUY' } },
+          select: { veId: true },
         },
       },
     });
 
-    return { data: points };
+    const data = points.map((p) => {
+      const ticketCount = (p.vesDon?.length ?? 0) + (p.vesTra?.length ?? 0);
+      return {
+        diemDonTraChuyenXeId: p.diemDonTraChuyenXeId,
+        chuyenXeId: p.chuyenXeId,
+        diemDonTraId: p.diemDonTraId,
+        loaiDiem: p.loaiDiem,
+        thoiGianDuKien: p.thoiGianDuKien,
+        phutLech: p.phutLech,
+        thuTu: p.thuTu,
+        phuPhi: Number(p.phuPhi),
+        phutCoMatTruoc: p.phutCoMatTruoc,
+        nhanKhach: p.nhanKhach,
+        ghiChu: p.ghiChu,
+        veCount: ticketCount,
+        diemDonTra: p.diemDonTra,
+      };
+    });
+
+    return { data };
   }
 
   async getTripPassengerPointsPublic(tripId: number) {
@@ -411,57 +605,91 @@ export class StationsService {
     const points = await this.prisma.diemDonTraChuyenXe.findMany({
       where: {
         chuyenXeId: tripId,
+        loaiDiem: { in: ['DON', 'TRA'] }, // Không trả loại NGHI
         diemDonTra: {
           trangThai: 'HOAT_DONG',
         },
       },
-      orderBy: [{ loaiDiem: 'asc' }, { thuTu: 'asc' }],
+      orderBy: [{ phutLech: 'asc' }, { thuTu: 'asc' }],
       include: {
         diemDonTra: {
           include: {
             diaDiemCu: true,
             diaDiemMoi: true,
+            benTrungChuyen: {
+              select: {
+                diemDonTraId: true,
+                tenDiem: true,
+                maDiem: true,
+                diaChi: true,
+                loaiDiem: true,
+              },
+            },
           },
         },
       },
     });
 
-    const publicPoints = points.map((p) => ({
-      diemDonTraChuyenXeId: p.diemDonTraChuyenXeId,
-      chuyenXeId: p.chuyenXeId,
-      diemDonTraId: p.diemDonTraId,
-      loaiDiem: p.loaiDiem,
-      thoiGianDuKien: p.thoiGianDuKien,
-      thuTu: p.thuTu,
-      phuPhi: p.phuPhi,
-      diemDonTra: {
-        diemDonTraId: p.diemDonTra.diemDonTraId,
-        maDiem: p.diemDonTra.maDiem,
-        tenDiem: p.diemDonTra.tenDiem,
-        loaiDiem: p.diemDonTra.loaiDiem,
-        diaChi: p.diemDonTra.diaChi,
-        viDo: p.diemDonTra.viDo,
-        kinhDo: p.diemDonTra.kinhDo,
-        diaDiemCu: p.diemDonTra.diaDiemCu
+    const baseDeparture =
+      trip.ngayKhoiHanh && trip.gioKhoiHanh
+        ? combineDeparture(trip.ngayKhoiHanh, trip.gioKhoiHanh, this.businessTimeZone)
+        : new Date('1970-01-01T00:00:00.000Z');
+    const nowTime = Date.now();
+
+    const publicPoints = points.map((p) => {
+      const realDateTime = new Date(baseDeparture.getTime() + (p.phutLech ?? 0) * 60 * 1000);
+      const cutoffThreshold = new Date(realDateTime.getTime() - POINT_CUTOFF_MINUTES * 60 * 1000);
+      const khoaDoQuaGio = nowTime >= cutoffThreshold.getTime();
+
+      return {
+        diemDonTraChuyenXeId: p.diemDonTraChuyenXeId,
+        chuyenXeId: p.chuyenXeId,
+        diemDonTraId: p.diemDonTraId,
+        loaiDiem: p.loaiDiem,
+        thoiGianDuKien: p.thoiGianDuKien,
+        phutLech: p.phutLech,
+        gioThucTe: realDateTime.toISOString(),
+        thuTu: p.thuTu,
+        phuPhi: Number(p.phuPhi),
+        phutCoMatTruoc: p.phutCoMatTruoc,
+        nhanKhach: p.nhanKhach,
+        khoaDoQuaGio,
+        ghiChu: p.ghiChu,
+        benTrungChuyen: p.diemDonTra.benTrungChuyen
           ? {
-              diaDiemId: p.diemDonTra.diaDiemCu.diaDiemId,
-              code: p.diemDonTra.diaDiemCu.code,
-              tenDiaDiem: p.diemDonTra.diaDiemCu.tenDiaDiem,
-              laDiaDanhCu: p.diemDonTra.diaDiemCu.laDiaDanhCu,
-              chuThichSapNhap: p.diemDonTra.diaDiemCu.chuThichSapNhap ?? null,
+              diemDonTraId: p.diemDonTra.benTrungChuyen.diemDonTraId,
+              tenDiem: p.diemDonTra.benTrungChuyen.tenDiem,
             }
           : null,
-        diaDiemMoi: p.diemDonTra.diaDiemMoi
-          ? {
-              diaDiemId: p.diemDonTra.diaDiemMoi.diaDiemId,
-              code: p.diemDonTra.diaDiemMoi.code,
-              tenDiaDiem: p.diemDonTra.diaDiemMoi.tenDiaDiem,
-              laDiaDanhCu: p.diemDonTra.diaDiemMoi.laDiaDanhCu,
-              chuThichSapNhap: p.diemDonTra.diaDiemMoi.chuThichSapNhap ?? null,
-            }
-          : null,
-      },
-    }));
+        diemDonTra: {
+          diemDonTraId: p.diemDonTra.diemDonTraId,
+          maDiem: p.diemDonTra.maDiem,
+          tenDiem: p.diemDonTra.tenDiem,
+          loaiDiem: p.diemDonTra.loaiDiem,
+          diaChi: p.diemDonTra.diaChi,
+          viDo: p.diemDonTra.viDo,
+          kinhDo: p.diemDonTra.kinhDo,
+          diaDiemCu: p.diemDonTra.diaDiemCu
+            ? {
+                diaDiemId: p.diemDonTra.diaDiemCu.diaDiemId,
+                code: p.diemDonTra.diaDiemCu.code,
+                tenDiaDiem: p.diemDonTra.diaDiemCu.tenDiaDiem,
+                laDiaDanhCu: p.diemDonTra.diaDiemCu.laDiaDanhCu,
+                chuThichSapNhap: p.diemDonTra.diaDiemCu.chuThichSapNhap ?? null,
+              }
+            : null,
+          diaDiemMoi: p.diemDonTra.diaDiemMoi
+            ? {
+                diaDiemId: p.diemDonTra.diaDiemMoi.diaDiemId,
+                code: p.diemDonTra.diaDiemMoi.code,
+                tenDiaDiem: p.diemDonTra.diaDiemMoi.tenDiaDiem,
+                laDiaDanhCu: p.diemDonTra.diaDiemMoi.laDiaDanhCu,
+                chuThichSapNhap: p.diemDonTra.diaDiemMoi.chuThichSapNhap ?? null,
+              }
+            : null,
+        },
+      };
+    });
 
     return { data: publicPoints };
   }
@@ -490,50 +718,68 @@ export class StationsService {
     }
 
     if (dto.points && dto.points.length > 0) {
-      const seen = new Set<string>();
-      for (const p of dto.points) {
-        const key = `${p.diemDonTraId}_${p.loaiDiem}`;
-        if (seen.has(key)) {
-          throw new ConflictException({
-            error: 'DUPLICATE_TRIP_POINT',
-            message: `Điểm đón/trả #${p.diemDonTraId} đã tồn tại trong danh sách ${p.loaiDiem === 'DON' ? 'điểm đón' : 'điểm trả'} của chuyến này.`,
-          });
-        }
-        seen.add(key);
-      }
-
-      // Kiểm tra tất cả điểm đón trả: tồn tại, HOAT_DONG, và nhaXeId trùng với trip.nhaXeId
       const pointIds = [...new Set(dto.points.map((p) => p.diemDonTraId))];
       const stations = await this.prisma.diemDonTra.findMany({
         where: { diemDonTraId: { in: pointIds } },
-        select: { diemDonTraId: true, trangThai: true, nhaXeId: true },
+        select: {
+          diemDonTraId: true,
+          tenDiem: true,
+          loaiDiem: true,
+          trangThai: true,
+          nhaXeId: true,
+          benTrungChuyenId: true,
+        },
       });
 
       const stationMap = new Map(stations.map((s) => [s.diemDonTraId, s]));
+      const validationErrors = validateStopList(dto.points, stationMap, trip.nhaXeId);
+      if (validationErrors.length > 0) {
+        const first = validationErrors[0];
+        throw new BadRequestException({
+          error: first.code,
+          message: first.message,
+          details: validationErrors,
+        });
+      }
+    }
 
-      for (const pointId of pointIds) {
-        const st = stationMap.get(pointId);
-        if (!st) {
-          throw new BadRequestException({
-            error: 'STATION_NOT_FOUND',
-            message: `Không tìm thấy điểm đón/trả #${pointId}.`,
-            details: [{ field: 'diemDonTraId', id: pointId }],
+    // Bảo vệ điểm dừng đã có vé bán
+    const existingPoints = await this.prisma.diemDonTraChuyenXe.findMany({
+      where: { chuyenXeId: tripId },
+      include: {
+        diemDonTra: { select: { diemDonTraId: true, tenDiem: true } },
+        vesDon: {
+          where: { trangThai: { not: 'DA_HUY' } },
+          select: { veId: true },
+        },
+        vesTra: {
+          where: { trangThai: { not: 'DA_HUY' } },
+          select: { veId: true },
+        },
+      },
+    });
+
+    for (const ep of existingPoints) {
+      const ticketCount = ep.vesDon.length + ep.vesTra.length;
+      if (ticketCount > 0) {
+        const match = dto.points?.find(
+          (p) => p.diemDonTraId === ep.diemDonTraId && p.loaiDiem === ep.loaiDiem,
+        );
+        if (!match) {
+          throw new ConflictException({
+            error: 'POINT_HAS_TICKETS',
+            message: `Không thể xóa điểm dừng '${ep.diemDonTra.tenDiem}' (${ep.loaiDiem}) vì đang có ${ticketCount} vé đã chọn điểm này.`,
+            affectedTicketsCount: ticketCount,
+            diemDonTraId: ep.diemDonTraId,
           });
         }
-
-        if (st.trangThai !== 'HOAT_DONG') {
-          throw new BadRequestException({
-            error: 'STATION_INACTIVE',
-            message: `Điểm đón/trả #${pointId} đang ngưng hoạt động hoặc không khả dụng.`,
-            details: [{ field: 'diemDonTraId', id: pointId }],
-          });
-        }
-
-        if (st.nhaXeId !== trip.nhaXeId) {
-          throw new BadRequestException({
-            error: 'STATION_TENANT_MISMATCH',
-            message: `Điểm đón/trả #${pointId} không thuộc nhà xe của chuyến xe này.`,
-            details: [{ field: 'diemDonTraId', id: pointId }],
+        const effectivePhutLech = match.phutLech ?? 0;
+        if (effectivePhutLech !== ep.phutLech) {
+          throw new ConflictException({
+            error: 'POINT_HAS_TICKETS',
+            message: `Không thể thay đổi giờ/phút lệch của điểm dừng '${ep.diemDonTra.tenDiem}' (${ep.loaiDiem}) vì đang có ${ticketCount} vé đã chọn điểm này.`,
+            affectedTicketsCount: ticketCount,
+            diemDonTraId: ep.diemDonTraId,
           });
         }
       }
@@ -541,37 +787,103 @@ export class StationsService {
 
     try {
       const updatedPoints = await this.prisma.$transaction(async (tx) => {
-        await tx.diemDonTraChuyenXe.deleteMany({
-          where: { chuyenXeId: tripId },
-        });
+        const incomingKeys = new Set(
+          (dto.points ?? []).map((p) => `${p.diemDonTraId}_${p.loaiDiem}`),
+        );
+
+        // 1. Xóa các điểm cũ không còn trong danh sách mới (đã kiểm tra ticketCount === 0 ở trên)
+        for (const ep of existingPoints) {
+          const key = `${ep.diemDonTraId}_${ep.loaiDiem}`;
+          if (!incomingKeys.has(key)) {
+            await tx.diemDonTraChuyenXe.delete({
+              where: { diemDonTraChuyenXeId: ep.diemDonTraChuyenXeId },
+            });
+          }
+        }
 
         if (!dto.points || dto.points.length === 0) {
           return [];
         }
 
-        const created = [];
+        // 2. Cập nhật các điểm giữ lại và tạo mới các điểm chưa có
+        const existingByKey = new Map(
+          existingPoints.map((ep) => [`${ep.diemDonTraId}_${ep.loaiDiem}`, ep]),
+        );
+
+        const createdOrUpdated = [];
         for (const p of dto.points) {
-          const item = await tx.diemDonTraChuyenXe.create({
-            data: {
-              chuyenXeId: tripId,
-              diemDonTraId: p.diemDonTraId,
-              loaiDiem: p.loaiDiem,
-              thoiGianDuKien: parseTimeString(p.thoiGianDuKien),
-              thuTu: p.thuTu,
-              phuPhi: p.phuPhi ?? 0,
-            },
-            include: {
-              diemDonTra: {
-                include: {
-                  diaDiemCu: true,
-                  diaDiemMoi: true,
+          const key = `${p.diemDonTraId}_${p.loaiDiem}`;
+          const existingRecord = existingByKey.get(key);
+          const phutLech = p.phutLech ?? 0;
+          const thoiGianDuKien = calculateClockTime(trip.gioKhoiHanh, phutLech);
+
+          if (existingRecord) {
+            const updated = await tx.diemDonTraChuyenXe.update({
+              where: { diemDonTraChuyenXeId: existingRecord.diemDonTraChuyenXeId },
+              data: {
+                thoiGianDuKien,
+                phutLech,
+                thuTu: p.thuTu,
+                phuPhi: p.phuPhi ?? 0,
+                phutCoMatTruoc: p.phutCoMatTruoc ?? 15,
+                nhanKhach: p.nhanKhach ?? true,
+                ghiChu: p.ghiChu ?? null,
+              },
+              include: {
+                diemDonTra: {
+                  include: {
+                    diaDiemCu: true,
+                    diaDiemMoi: true,
+                    benTrungChuyen: {
+                      select: {
+                        diemDonTraId: true,
+                        tenDiem: true,
+                        maDiem: true,
+                        diaChi: true,
+                        loaiDiem: true,
+                      },
+                    },
+                  },
                 },
               },
-            },
-          });
-          created.push(item);
+            });
+            createdOrUpdated.push(updated);
+          } else {
+            const created = await tx.diemDonTraChuyenXe.create({
+              data: {
+                chuyenXeId: tripId,
+                diemDonTraId: p.diemDonTraId,
+                loaiDiem: p.loaiDiem,
+                thoiGianDuKien,
+                phutLech,
+                thuTu: p.thuTu,
+                phuPhi: p.phuPhi ?? 0,
+                phutCoMatTruoc: p.phutCoMatTruoc ?? 15,
+                nhanKhach: p.nhanKhach ?? true,
+                ghiChu: p.ghiChu ?? null,
+              },
+              include: {
+                diemDonTra: {
+                  include: {
+                    diaDiemCu: true,
+                    diaDiemMoi: true,
+                    benTrungChuyen: {
+                      select: {
+                        diemDonTraId: true,
+                        tenDiem: true,
+                        maDiem: true,
+                        diaChi: true,
+                        loaiDiem: true,
+                      },
+                    },
+                  },
+                },
+              },
+            });
+            createdOrUpdated.push(created);
+          }
         }
-        return created;
+        return createdOrUpdated;
       });
 
       return { data: updatedPoints };
@@ -598,5 +910,50 @@ export class StationsService {
       }
       throw error;
     }
+  }
+
+  async applyRouteTemplateToTrip(tripId: number, principal: AuthPrincipal) {
+    const trip = await this.prisma.chuyenXe.findUnique({
+      where: { chuyenXeId: tripId },
+    });
+
+    if (!trip) {
+      throw new NotFoundException({
+        error: 'TRIP_NOT_FOUND',
+        message: 'Không tìm thấy chuyến xe.',
+      });
+    }
+
+    if (!principal.roles?.includes('SUPER_ADMIN') && trip.nhaXeId !== principal.nhaXeId) {
+      throw new ForbiddenException({
+        error: 'FORBIDDEN',
+        message: 'Không có quyền cập nhật chuyến xe của nhà xe khác.',
+      });
+    }
+
+    const templateStops = await this.prisma.tuyenXeDiemDung.findMany({
+      where: { tuyenXeId: trip.tuyenXeId },
+      orderBy: [{ phutLech: 'asc' }, { thuTu: 'asc' }],
+    });
+
+    if (templateStops.length === 0) {
+      throw new ConflictException({
+        error: 'ROUTE_TEMPLATE_EMPTY',
+        message: 'Tuyến xe chưa có khuôn lộ trình để áp dụng.',
+      });
+    }
+
+    const points = templateStops.map((s) => ({
+      diemDonTraId: s.diemDonTraId,
+      loaiDiem: s.loaiDiem as 'DON' | 'TRA' | 'NGHI',
+      phutLech: s.phutLech,
+      thuTu: s.thuTu,
+      phuPhi: Number(s.phuPhi),
+      phutCoMatTruoc: s.phutCoMatTruoc,
+      nhanKhach: s.nhanKhach,
+      ghiChu: s.ghiChu ?? undefined,
+    }));
+
+    return this.updateTripPassengerPoints(tripId, { points }, principal);
   }
 }

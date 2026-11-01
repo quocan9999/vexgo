@@ -1853,6 +1853,7 @@ export class TripsService {
         tuyenXe: true,
         xe: { include: { loaiXe: true } },
         gheChuyenXes: { select: { trangThai: true } },
+        diemDonTraChuyenXes: { select: { loaiDiem: true } },
       },
     });
 
@@ -1874,6 +1875,17 @@ export class TripsService {
       (g) => g.trangThai === 'DA_DAT',
     ).length;
 
+    const donCount = (trip.diemDonTraChuyenXes ?? []).filter(
+      (p) => p.loaiDiem === 'DON',
+    ).length;
+    const traCount = (trip.diemDonTraChuyenXes ?? []).filter(
+      (p) => p.loaiDiem === 'TRA',
+    ).length;
+    const nghiCount = (trip.diemDonTraChuyenXes ?? []).filter(
+      (p) => p.loaiDiem === 'NGHI',
+    ).length;
+    const thieuDiem = donCount === 0 || traCount === 0;
+
     return {
       data: {
         ...mapTripItem(trip),
@@ -1883,6 +1895,10 @@ export class TripsService {
           held,
           booked,
         },
+        donCount,
+        traCount,
+        nghiCount,
+        thieuDiem,
       },
     };
   }
@@ -1994,7 +2010,7 @@ export class TripsService {
             });
           }
 
-          return tx.chuyenXe.create({
+          const createdTrip = await tx.chuyenXe.create({
             data: {
               maChuyenXe: code,
               ngayKhoiHanh: departureDate,
@@ -2024,6 +2040,35 @@ export class TripsService {
               gheChuyenXes: { select: { trangThai: true } },
             },
           });
+
+          if (dto.copyRouteStops !== false && tx.tuyenXeDiemDung) {
+            const templateStops = await tx.tuyenXeDiemDung.findMany({
+              where: { tuyenXeId: dto.routeId },
+              orderBy: [{ phutLech: 'asc' }, { thuTu: 'asc' }],
+            });
+
+            for (const stop of templateStops) {
+              const thoiGianDuKien = calculateClockTime(departureTime, stop.phutLech);
+              if (tx.diemDonTraChuyenXe) {
+                await tx.diemDonTraChuyenXe.create({
+                  data: {
+                    chuyenXeId: createdTrip.chuyenXeId,
+                    diemDonTraId: stop.diemDonTraId,
+                    loaiDiem: stop.loaiDiem,
+                    thoiGianDuKien,
+                    phutLech: stop.phutLech,
+                    thuTu: stop.thuTu,
+                    phuPhi: stop.phuPhi,
+                    phutCoMatTruoc: stop.phutCoMatTruoc,
+                    nhanKhach: stop.nhanKhach,
+                    ghiChu: stop.ghiChu,
+                  },
+                });
+              }
+            }
+          }
+
+          return createdTrip;
         },
         {
           isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted,
@@ -2041,6 +2086,17 @@ export class TripsService {
         (g) => g.trangThai === 'DA_DAT',
       ).length;
 
+      const points = this.prisma.diemDonTraChuyenXe
+        ? await this.prisma.diemDonTraChuyenXe.findMany({
+            where: { chuyenXeId: trip.chuyenXeId },
+            select: { loaiDiem: true },
+          })
+        : [];
+      const donCount = points.filter((p) => p.loaiDiem === 'DON').length;
+      const traCount = points.filter((p) => p.loaiDiem === 'TRA').length;
+      const nghiCount = points.filter((p) => p.loaiDiem === 'NGHI').length;
+      const thieuDiem = donCount === 0 || traCount === 0;
+
       return {
         data: {
           ...mapTripItem(trip),
@@ -2050,6 +2106,10 @@ export class TripsService {
             held,
             booked,
           },
+          donCount,
+          traCount,
+          nghiCount,
+          thieuDiem,
         },
       };
     } catch (err: unknown) {

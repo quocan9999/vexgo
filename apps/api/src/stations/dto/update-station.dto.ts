@@ -21,13 +21,13 @@ export class UpdateStationDto {
   tenDiem?: string;
 
   @ApiPropertyOptional({
-    description: 'Phân loại điểm đón trả',
+    description: 'Phân loại điểm đón trả: BEN_XE, VAN_PHONG, DIEM_DON_TRA, TRUNG_CHUYEN, TRAM_NGHI',
     enum: STATION_TYPES,
     example: 'BEN_XE',
   })
   @IsOptional()
   @IsIn(STATION_TYPES, {
-    message: 'loaiDiem phải là một trong các giá trị: BEN_XE, VAN_PHONG, DIEM_DON_TRA',
+    message: 'loaiDiem phải là một trong các giá trị: BEN_XE, VAN_PHONG, DIEM_DON_TRA, TRUNG_CHUYEN, TRAM_NGHI',
   })
   loaiDiem?: StationType;
 
@@ -41,6 +41,14 @@ export class UpdateStationDto {
   @IsOptional()
   @IsInt()
   diaDiemCuId?: number;
+
+  @ApiPropertyOptional({
+    description: 'ID của bến xe hoặc văn phòng mà xe trung chuyển đưa đón khách (bắt buộc khi loaiDiem là TRUNG_CHUYEN, null nếu loại khác)',
+    example: 5,
+  })
+  @IsOptional()
+  @IsInt()
+  benTrungChuyenId?: number | null;
 
   @ApiPropertyOptional({ description: 'Vĩ độ (GPS Latitude)', example: 10.8752 })
   @IsOptional()

@@ -179,4 +179,22 @@ export class StationsController {
   ) {
     return this.stationsService.updateTripPassengerPoints(tripId, body, principal);
   }
+
+  @Post('trips/:id/passenger-points/apply-route-template')
+  @ApiBearerAuth('JWT-auth')
+  @RequireRoles(...TENANT_PRINCIPAL_ROLES)
+  @RequirePermissions('trip:update')
+  @ApiOperation({
+    summary: 'Áp dụng khuôn lộ trình tuyến xe cho chuyến xe',
+    description:
+      'Sao chép toàn bộ các điểm dừng đón/trả từ khuôn lộ trình của tuyến xe sang chuyến xe hiện tại.\n\n- **Quyền hạn yêu cầu**: Quyền `trip:update`.',
+  })
+  @ApiParam({ name: 'id', description: 'ID chuyến xe', example: 101 })
+  @ApiResponse({ status: 200, description: 'Áp dụng khuôn lộ trình thành công.' })
+  applyRouteTemplate(
+    @Param('id', ParseIntPipe) tripId: number,
+    @CurrentPrincipal() principal: AuthPrincipal,
+  ) {
+    return this.stationsService.applyRouteTemplateToTrip(tripId, principal);
+  }
 }

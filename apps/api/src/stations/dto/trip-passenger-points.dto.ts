@@ -1,5 +1,16 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsArray, IsEnum, IsInt, IsNumber, IsOptional, IsString, Matches, ValidateNested } from 'class-validator';
+import {
+  IsArray,
+  IsBoolean,
+  IsEnum,
+  IsInt,
+  IsNumber,
+  IsOptional,
+  IsString,
+  Matches,
+  MaxLength,
+  ValidateNested,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class TripPassengerPointItemDto {
@@ -8,15 +19,26 @@ export class TripPassengerPointItemDto {
   diemDonTraId!: number;
 
   @ApiProperty({
-    description: 'Tính chất điểm trên chuyến: DON (điểm đón) hoặc TRA (điểm trả)',
-    enum: ['DON', 'TRA'],
+    description: 'Tính chất điểm trên chuyến: DON (điểm đón), TRA (điểm trả), NGHI (trạm nghỉ)',
+    enum: ['DON', 'TRA', 'NGHI'],
     example: 'DON',
   })
-  @IsEnum(['DON', 'TRA'])
-  loaiDiem!: 'DON' | 'TRA';
+  @IsEnum(['DON', 'TRA', 'NGHI'], {
+    message: 'loaiDiem phải là một trong các giá trị: DON, TRA, NGHI',
+  })
+  loaiDiem!: 'DON' | 'TRA' | 'NGHI';
 
   @ApiPropertyOptional({
-    description: 'Giờ dự kiến đón/trả khách tại điểm này (định dạng HH:mm hoặc HH:mm:ss)',
+    description: 'Số phút lệch so với giờ khởi hành của chuyến (âm, 0 hoặc dương)',
+    example: -30,
+    default: 0,
+  })
+  @IsOptional()
+  @IsInt()
+  phutLech?: number;
+
+  @ApiPropertyOptional({
+    description: 'Giờ dự kiến đón/trả khách tại điểm này (định dạng HH:mm hoặc HH:mm:ss). Nếu không truyền sẽ tự động tính từ gioKhoiHanh + phutLech.',
     example: '08:30',
   })
   @IsOptional()
@@ -34,11 +56,27 @@ export class TripPassengerPointItemDto {
   @IsOptional()
   @IsNumber()
   phuPhi?: number;
+
+  @ApiPropertyOptional({ description: 'Số phút khách cần có mặt trước', example: 15, default: 15 })
+  @IsOptional()
+  @IsInt()
+  phutCoMatTruoc?: number;
+
+  @ApiPropertyOptional({ description: 'Công tắc nhận khách tại điểm này', example: true, default: true })
+  @IsOptional()
+  @IsBoolean()
+  nhanKhach?: boolean;
+
+  @ApiPropertyOptional({ description: 'Ghi chú thêm về điểm đón trả', example: 'Đón tại cổng số 2', maxLength: 255 })
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  ghiChu?: string;
 }
 
 export class UpdateTripPassengerPointsDto {
   @ApiProperty({
-    description: 'Danh sách các điểm đón và trả khách cấu hình cho chuyến xe',
+    description: 'Danh sách các điểm đón, trả khách và trạm nghỉ cấu hình cho chuyến xe',
     type: [TripPassengerPointItemDto],
   })
   @IsArray()
