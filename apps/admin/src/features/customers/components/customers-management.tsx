@@ -36,8 +36,18 @@ import { CustomerDetails } from './customer-details';
 const STATUS_OPTIONS: FilterOption[] = [
   { value: 'HOAT_DONG', label: 'Đang hoạt động' },
   { value: 'TAM_KHOA', label: 'Tạm khóa' },
+  { value: 'BI_KHOA', label: 'Bị khóa' },
 ];
 
+function getCustomerStatusBadgeConfig(status: string) {
+  if (status === 'HOAT_DONG') {
+    return { tone: 'active' as const, label: 'Đang hoạt động' };
+  }
+  if (status === 'BI_KHOA') {
+    return { tone: 'muted' as const, label: 'Bị khóa' };
+  }
+  return { tone: 'muted' as const, label: 'Tạm khóa' };
+}
 export function CustomersManagement() {
   const {
     customers,
@@ -279,17 +289,14 @@ export function CustomersManagement() {
                               </strong>
                             </TableCell>
                             <TableCell>
-                              <ResourceStatusBadge
-                                tone={
-                                  customer.account.status === 'HOAT_DONG'
-                                    ? 'active'
-                                    : 'muted'
-                                }
-                              >
-                                {customer.account.status === 'HOAT_DONG'
-                                  ? 'Đang hoạt động'
-                                  : 'Tạm khóa'}
-                              </ResourceStatusBadge>
+                              {(() => {
+                                const { tone, label } = getCustomerStatusBadgeConfig(customer.account.status);
+                                return (
+                                  <ResourceStatusBadge tone={tone}>
+                                    {label}
+                                  </ResourceStatusBadge>
+                                );
+                              })()}
                             </TableCell>
                             <TableCell>
                               <ResourceDetailAction
@@ -321,17 +328,14 @@ export function CustomersManagement() {
                               {customer.fullName}
                             </h3>
                           </div>
-                          <ResourceStatusBadge
-                            tone={
-                              customer.account.status === 'HOAT_DONG'
-                                ? 'active'
-                                : 'muted'
-                            }
-                          >
-                            {customer.account.status === 'HOAT_DONG'
-                              ? 'Đang hoạt động'
-                              : 'Tạm khóa'}
-                          </ResourceStatusBadge>
+                          {(() => {
+                            const { tone, label } = getCustomerStatusBadgeConfig(customer.account.status);
+                            return (
+                              <ResourceStatusBadge tone={tone}>
+                                {label}
+                              </ResourceStatusBadge>
+                            );
+                          })()}
                         </div>
                         <dl className="grid grid-cols-2 gap-4 text-[13px] [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-1 [&_dd]:break-words">
                           <div>
@@ -384,6 +388,7 @@ export function CustomersManagement() {
           key={selectedCustomerId}
           customerId={selectedCustomerId}
           onClose={() => setSelectedCustomerId(null)}
+          onCustomerUpdated={() => refresh()}
         />
       )}
     </SuperAdminLayout>
