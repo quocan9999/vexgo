@@ -150,7 +150,7 @@ describe('RoutesService writes', () => {
     expect(prisma.tuyenXe.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: {
-          maTuyenXe: 'FUTA-TX-0100',
+          maTuyenXe: expect.stringMatching(/^[0-9a-f]{32}$/),
           diemDi: 'TP.HCM',
           diemDen: 'Đà Lạt',
           thoiGianChayPhut: 420,

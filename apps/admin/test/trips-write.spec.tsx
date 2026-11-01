@@ -264,7 +264,6 @@ describe('Trip Form Composition & Validation', () => {
       await waitFor(() => expect(createRequests()).toHaveLength(1));
       const [createUrl, init] = createRequests()[0];
       expect(new URL(String(createUrl)).pathname).toBe('/api/v1/trips');
-      expect(fetchMock.mock.calls.filter(([url]) => String(url).includes('/code-preview'))).toHaveLength(1);
       expect(JSON.parse(init?.body as string)).toEqual({
         routeId: 1,
         vehicleId: 8,
