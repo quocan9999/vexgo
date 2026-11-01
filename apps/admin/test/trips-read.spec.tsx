@@ -12,6 +12,7 @@ import {
   TripApiError,
 } from '../src/features/trips/services/trip-service';
 import type { Trip } from '../src/features/trips/types/trip';
+import type { DateRangeValue } from '@/components/data-filters/data-filters';
 import { setEmployeeAdminTestSession } from './admin-auth-test-session';
 
 const state = vi.hoisted(() => ({
@@ -21,7 +22,7 @@ const state = vi.hoisted(() => ({
   searchInput: '',
   status: '',
   departureDate: '',
-  departureDateRange: null as { from: string; to: string } | null,
+  departureDateRange: null as DateRangeValue | null,
 }));
 
 const mockTrip: Trip = {
@@ -196,6 +197,14 @@ describe('Admin trips read page and components', () => {
     state.departureDateRange = { from: '2026-10-01', to: '2026-10-31' };
     const rangeFilteredHtml = renderToStaticMarkup(<TripsManagement />);
     expect(rangeFilteredHtml).toContain('Không tìm thấy chuyến xe phù hợp.');
+
+    state.departureDateRange = { from: '2026-10-01' };
+    const fromOnlyFilteredHtml = renderToStaticMarkup(<TripsManagement />);
+    expect(fromOnlyFilteredHtml).toContain('Không tìm thấy chuyến xe phù hợp.');
+
+    state.departureDateRange = { to: '2026-10-31' };
+    const toOnlyFilteredHtml = renderToStaticMarkup(<TripsManagement />);
+    expect(toOnlyFilteredHtml).toContain('Không tìm thấy chuyến xe phù hợp.');
   });
 
   it('renders error state and retry button on fetch failure', () => {

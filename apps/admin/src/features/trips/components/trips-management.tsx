@@ -124,7 +124,13 @@ export function TripsManagement() {
     );
   }
 
-  const hasFilters = Boolean(searchInput.trim() || status || departureDate || (departureDateRange?.from && departureDateRange?.to));
+  const hasFilters = Boolean(
+    searchInput.trim() ||
+      status ||
+      departureDate ||
+      departureDateRange?.from ||
+      departureDateRange?.to,
+  );
   const items = tripPage?.data ?? [];
 
   return (
