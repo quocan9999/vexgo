@@ -1170,8 +1170,8 @@ async function seedTransactions(db, operators, accounts, fleet, prices, logistic
         await upsertBy(
           db,
           'HoaDon',
-          { maHoaDon: `${definition.code}-HD-${stamp}-${sequence}` },
-          { maHoaDon: `${definition.code}-HD-${stamp}-${sequence}`, ngayLap: transactionTime, tongTien: decimal(total), trangThai: 'DA_PHAT_HANH', donGiaoDichId: transaction.donGiaoDichId },
+          { maHoaDon: deterministicUuid('HD', definition.code, txIndex) },
+          { maHoaDon: deterministicUuid('HD', definition.code, txIndex), ngayLap: transactionTime, tongTien: decimal(total), trangThai: 'DA_PHAT_HANH', donGiaoDichId: transaction.donGiaoDichId },
           { ngayLap: transactionTime, tongTien: decimal(total), trangThai: 'DA_PHAT_HANH' },
         );
       }
@@ -1203,9 +1203,9 @@ async function seedOctoberTrips(db, operators, vehicles, vehicleTypes, routes) {
   const hmOutbound = await findOrCreate(
     db,
     'TuyenXe',
-    { nhaXeId: operators.HM.nhaXeId, maTuyenXe: 'HM-TX-0004' },
+    { nhaXeId: operators.HM.nhaXeId, maTuyenXe: deterministicUuid('TX', 'HM', 3) },
     {
-      maTuyenXe: 'HM-TX-0004',
+      maTuyenXe: deterministicUuid('TX', 'HM', 3),
       diemDi: 'TP.HCM',
       diemDen: 'Đà Lạt',
       thoiGianChayPhut: 420,
@@ -1218,9 +1218,9 @@ async function seedOctoberTrips(db, operators, vehicles, vehicleTypes, routes) {
   const hmInbound = await findOrCreate(
     db,
     'TuyenXe',
-    { nhaXeId: operators.HM.nhaXeId, maTuyenXe: 'HM-TX-0005' },
+    { nhaXeId: operators.HM.nhaXeId, maTuyenXe: deterministicUuid('TX', 'HM', 4) },
     {
-      maTuyenXe: 'HM-TX-0005',
+      maTuyenXe: deterministicUuid('TX', 'HM', 4),
       diemDi: 'Đà Lạt',
       diemDen: 'TP.HCM',
       thoiGianChayPhut: 420,
@@ -1277,25 +1277,25 @@ async function seedOctoberTrips(db, operators, vehicles, vehicleTypes, routes) {
   };
 
   const tripsDef = [
-    { op: 'FUTA', code: 'FUTA-CX-07102026-0001', route: futaOutbound, hour: 8, min: 0, arrHour: 15, arrMin: 0, type: 'GIƯỜNG NẰM', seats: 22 },
-    { op: 'TB', code: 'TB-CX-07102026-0001', route: tbOutbound, hour: 8, min: 0, arrHour: 15, arrMin: 0, type: 'GHẾ NGỒI', seats: 29 },
-    { op: 'HM', code: 'HM-CX-07102026-0001', route: hmOutbound, hour: 8, min: 0, arrHour: 15, arrMin: 0, type: 'GIƯỜNG NẰM', seats: 22 },
+    { op: 'FUTA', code: deterministicUuid('CX', 'FUTA', '1007', '0001'), route: futaOutbound, hour: 8, min: 0, arrHour: 15, arrMin: 0, type: 'GIƯỜNG NẰM', seats: 22 },
+    { op: 'TB', code: deterministicUuid('CX', 'TB', '1007', '0001'), route: tbOutbound, hour: 8, min: 0, arrHour: 15, arrMin: 0, type: 'GHẾ NGỒI', seats: 29 },
+    { op: 'HM', code: deterministicUuid('CX', 'HM', '1007', '0001'), route: hmOutbound, hour: 8, min: 0, arrHour: 15, arrMin: 0, type: 'GIƯỜNG NẰM', seats: 22 },
 
-    { op: 'FUTA', code: 'FUTA-CX-07102026-0002', route: futaOutbound, hour: 14, min: 0, arrHour: 21, arrMin: 0, type: 'GHẾ NGỒI', seats: 29 },
-    { op: 'TB', code: 'TB-CX-07102026-0002', route: tbOutbound, hour: 14, min: 0, arrHour: 21, arrMin: 0, type: 'GIƯỜNG NẰM', seats: 22 },
-    { op: 'HM', code: 'HM-CX-07102026-0002', route: hmOutbound, hour: 14, min: 0, arrHour: 21, arrMin: 0, type: 'GHẾ NGỒI', seats: 29 },
+    { op: 'FUTA', code: deterministicUuid('CX', 'FUTA', '1007', '0002'), route: futaOutbound, hour: 14, min: 0, arrHour: 21, arrMin: 0, type: 'GHẾ NGỒI', seats: 29 },
+    { op: 'TB', code: deterministicUuid('CX', 'TB', '1007', '0002'), route: tbOutbound, hour: 14, min: 0, arrHour: 21, arrMin: 0, type: 'GIƯỜNG NẰM', seats: 22 },
+    { op: 'HM', code: deterministicUuid('CX', 'HM', '1007', '0002'), route: hmOutbound, hour: 14, min: 0, arrHour: 21, arrMin: 0, type: 'GHẾ NGỒI', seats: 29 },
 
-    { op: 'FUTA', code: 'FUTA-CX-07102026-0003', route: futaOutbound, hour: 20, min: 0, arrHour: 3, arrMin: 0, type: 'GIƯỜNG NẰM', seats: 34 },
-    { op: 'TB', code: 'TB-CX-07102026-0003', route: tbOutbound, hour: 20, min: 0, arrHour: 3, arrMin: 0, type: 'GHẾ NGỒI', seats: 45 },
-    { op: 'HM', code: 'HM-CX-07102026-0003', route: hmOutbound, hour: 20, min: 0, arrHour: 3, arrMin: 0, type: 'LIMOUSINE', seats: 16 },
+    { op: 'FUTA', code: deterministicUuid('CX', 'FUTA', '1007', '0003'), route: futaOutbound, hour: 20, min: 0, arrHour: 3, arrMin: 0, type: 'GIƯỜNG NẰM', seats: 34 },
+    { op: 'TB', code: deterministicUuid('CX', 'TB', '1007', '0003'), route: tbOutbound, hour: 20, min: 0, arrHour: 3, arrMin: 0, type: 'GHẾ NGỒI', seats: 45 },
+    { op: 'HM', code: deterministicUuid('CX', 'HM', '1007', '0003'), route: hmOutbound, hour: 20, min: 0, arrHour: 3, arrMin: 0, type: 'LIMOUSINE', seats: 16 },
 
-    { op: 'FUTA', code: 'FUTA-CX-07102026-0004', route: futaInbound, hour: 9, min: 0, arrHour: 16, arrMin: 0, type: 'GHẾ NGỒI', seats: 45 },
-    { op: 'TB', code: 'TB-CX-07102026-0004', route: tbInbound, hour: 9, min: 0, arrHour: 16, arrMin: 0, type: 'GIƯỜNG NẰM', seats: 34 },
-    { op: 'HM', code: 'HM-CX-07102026-0004', route: hmInbound, hour: 9, min: 0, arrHour: 16, arrMin: 0, type: 'GIƯỜNG NẰM', seats: 34 },
+    { op: 'FUTA', code: deterministicUuid('CX', 'FUTA', '1007', '0004'), route: futaInbound, hour: 9, min: 0, arrHour: 16, arrMin: 0, type: 'GHẾ NGỒI', seats: 45 },
+    { op: 'TB', code: deterministicUuid('CX', 'TB', '1007', '0004'), route: tbInbound, hour: 9, min: 0, arrHour: 16, arrMin: 0, type: 'GIƯỜNG NẰM', seats: 34 },
+    { op: 'HM', code: deterministicUuid('CX', 'HM', '1007', '0004'), route: hmInbound, hour: 9, min: 0, arrHour: 16, arrMin: 0, type: 'GIƯỜNG NẰM', seats: 34 },
 
-    { op: 'FUTA', code: 'FUTA-CX-07102026-0005', route: futaInbound, hour: 15, min: 0, arrHour: 22, arrMin: 0, type: 'GIƯỜNG NẰM', seats: 22 },
-    { op: 'TB', code: 'TB-CX-07102026-0005', route: tbInbound, hour: 15, min: 0, arrHour: 22, arrMin: 0, type: 'GHẾ NGỒI', seats: 29 },
-    { op: 'HM', code: 'HM-CX-07102026-0005', route: hmInbound, hour: 15, min: 0, arrHour: 22, arrMin: 0, type: 'GHẾ NGỒI', seats: 29 },
+    { op: 'FUTA', code: deterministicUuid('CX', 'FUTA', '1007', '0005'), route: futaInbound, hour: 15, min: 0, arrHour: 22, arrMin: 0, type: 'GIƯỜNG NẰM', seats: 22 },
+    { op: 'TB', code: deterministicUuid('CX', 'TB', '1007', '0005'), route: tbInbound, hour: 15, min: 0, arrHour: 22, arrMin: 0, type: 'GHẾ NGỒI', seats: 29 },
+    { op: 'HM', code: deterministicUuid('CX', 'HM', '1007', '0005'), route: hmInbound, hour: 15, min: 0, arrHour: 22, arrMin: 0, type: 'GHẾ NGỒI', seats: 29 },
   ];
 
   for (const def of tripsDef) {
