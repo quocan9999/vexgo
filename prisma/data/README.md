@@ -89,6 +89,31 @@ Bộ dữ liệu hợp nhất toàn diện, phân nhóm `BEN_XE_VAN_PHONG_BUU_CU
 
 ---
 
+## ⚠️ Bản quyền và Mục đích sử dụng
+
+- **Nguồn dữ liệu**: Dữ liệu vị trí và lộ trình được thu thập tham khảo từ **VeXeRe**.
+- **Mục đích**: Toàn bộ dữ liệu này **chỉ dùng làm dữ liệu mẫu phục vụ nghiên cứu và thực hiện Khóa luận tốt nghiệp cử nhân (đồ án)**, tuyệt đối **không sử dụng cho bất kỳ mục đích thương mại nào**.
+
+---
+
+## 🛠️ Hướng dẫn nạp dữ liệu vào Database Dev
+
+Script `seed-crawled-operator-data.mjs` hỗ trợ nạp dữ liệu của 3 nhà xe **Phương Trang (FUTA)**, **Hoa Mai (HM)** và **Thành Bưởi (TB)**:
+
+1. **Chạy kiểm tra thử (Dry-run, không ghi vào DB):**
+```bash
+node prisma/seed-crawled-operator-data.mjs
+```
+
+2. **Chạy nạp dữ liệu thực tế (Ghi vào DB dev):**
+```bash
+node prisma/seed-crawled-operator-data.mjs --apply
+```
+
+> **Lưu ý:** Script có tính chất idempotent (chạy nhiều lần không sinh bản ghi trùng nhờ cơ chế upsert theo `(nhaXeId, maDiem)`). Không chạy trên môi trường production.
+
+---
+
 ## 🚀 Cách chạy cập nhật crawler lại bất cứ lúc nào
 
 ```bash
