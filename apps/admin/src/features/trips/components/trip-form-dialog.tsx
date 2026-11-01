@@ -46,8 +46,9 @@ type Values = {
   departureDate: string;
   departureTime: string;
   acceptsShipments: boolean;
+  copyRouteStops: boolean;
 };
-type Field = Exclude<keyof Values, 'acceptsShipments'>;
+type Field = Exclude<keyof Values, 'acceptsShipments' | 'copyRouteStops'>;
 type FieldErrors = Partial<Record<Field, string>>;
 
 function mappedErrors(details: TripApiErrorDetail[]): FieldErrors {
@@ -93,6 +94,7 @@ export function TripFormDialog({
     departureDate: trip?.departureDate ?? '',
     departureTime: trip?.departureTime ? trip.departureTime.slice(0, 5) : '',
     acceptsShipments: false,
+    copyRouteStops: true,
   }));
 
   const codePreview = useBusinessCodePreview(
@@ -202,6 +204,7 @@ export function TripFormDialog({
           departureDate: values.departureDate.trim(),
           departureTime: formattedTime,
           acceptsShipments: values.acceptsShipments,
+          ...(values.copyRouteStops === false ? { copyRouteStops: false } : {}),
         });
       }
 
@@ -416,6 +419,25 @@ export function TripFormDialog({
                 }
               />
               Nhận gửi hàng
+            </label>
+            <label
+              className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg border p-3 text-[13px] font-semibold"
+              htmlFor={`${idPrefix}-copy-route-stops`}
+            >
+              <input
+                className="size-4 accent-primary focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
+                id={`${idPrefix}-copy-route-stops`}
+                type="checkbox"
+                checked={values.copyRouteStops}
+                disabled={submitting}
+                onChange={(event) =>
+                  setValues((current) => ({
+                    ...current,
+                    copyRouteStops: event.target.checked,
+                  }))
+                }
+              />
+              Tự động sao chép lộ trình từ khuôn tuyến xe
             </label>
           </>
         )}

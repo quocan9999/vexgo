@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/action-button';
 import { getLocations, type LocationOption } from '@/features/locations/services/location-service';
-import { createStation, updateStation, StationApiError } from '../services/station-service';
+import { createStation, updateStation, getStations, StationApiError } from '../services/station-service';
 import type { Station, StationType } from '../types/station';
 
 interface StationFormDialogProps {
@@ -28,6 +28,8 @@ const STATION_TYPE_LABELS: Record<StationType, string> = {
   BEN_XE: 'Bến xe',
   VAN_PHONG: 'Văn phòng đón/trả',
   DIEM_DON_TRA: 'Điểm đón trả dọc đường',
+  TRUNG_CHUYEN: 'Điểm trung chuyển',
+  TRAM_NGHI: 'Trạm nghỉ',
 };
 
 export function StationFormDialog({
@@ -41,6 +43,10 @@ export function StationFormDialog({
   const [loaiDiem, setLoaiDiem] = useState<StationType>(station?.loaiDiem ?? 'BEN_XE');
   const [diaChi, setDiaChi] = useState(station?.diaChi ?? '');
   const [diaDiemCuId, setDiaDiemCuId] = useState<number | undefined>(station?.diaDiemCuId);
+  const [benTrungChuyenId, setBenTrungChuyenId] = useState<number | undefined>(
+    station?.benTrungChuyenId ?? undefined,
+  );
+  const [targetStationOptions, setTargetStationOptions] = useState<Station[]>([]);
   const [soDienThoai, setSoDienThoai] = useState(station?.soDienThoai ?? '');
   const [legacyLocations, setLegacyLocations] = useState<LocationOption[]>([]);
   const [loading, setLoading] = useState(false);
@@ -52,14 +58,25 @@ export function StationFormDialog({
         // Chỉ lấy các địa danh cũ để Admin chọn theo đúng chỉ đạo
         const legacyOnly = items.filter((item) => item.isLegacy);
         setLegacyLocations(legacyOnly);
-        if (!diaDiemCuId && legacyOnly.length > 0 && !isEditing) {
-          setDiaDiemCuId(legacyOnly[0].diaDiemId);
-        }
       })
       .catch(() => {
         toast.error('Không thể tải danh mục địa phương.');
       });
-  }, [isEditing]);
+  }, []);
+
+  useEffect(() => {
+    getStations({ pageSize: 100 })
+      .then((res) => {
+        const validTargets = res.data.filter(
+          (s) =>
+            s.trangThai === 'HOAT_DONG' &&
+            (s.loaiDiem === 'BEN_XE' || s.loaiDiem === 'VAN_PHONG') &&
+            (!station || s.diemDonTraId !== station.diemDonTraId),
+        );
+        setTargetStationOptions(validTargets);
+      })
+      .catch(() => {});
+  }, [station]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -69,6 +86,9 @@ export function StationFormDialog({
     if (!tenDiem.trim()) newErrors.tenDiem = 'Vui lòng nhập tên điểm.';
     if (!diaChi.trim()) newErrors.diaChi = 'Vui lòng nhập địa chỉ.';
     if (!diaDiemCuId) newErrors.diaDiemCuId = 'Vui lòng chọn địa phương (cũ).';
+    if (loaiDiem === 'TRUNG_CHUYEN' && !benTrungChuyenId) {
+      newErrors.benTrungChuyenId = 'Vui lòng chọn bến đích trung chuyển.';
+    }
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
@@ -83,6 +103,7 @@ export function StationFormDialog({
           loaiDiem,
           diaChi: diaChi.trim(),
           diaDiemCuId,
+          benTrungChuyenId: loaiDiem === 'TRUNG_CHUYEN' ? benTrungChuyenId : null,
           soDienThoai: soDienThoai.trim() || undefined,
         });
         toast.success('Cập nhật điểm đón trả thành công.');
@@ -94,6 +115,7 @@ export function StationFormDialog({
           loaiDiem,
           diaChi: diaChi.trim(),
           diaDiemCuId: diaDiemCuId!,
+          benTrungChuyenId: loaiDiem === 'TRUNG_CHUYEN' ? benTrungChuyenId : null,
           soDienThoai: soDienThoai.trim() || undefined,
         });
         toast.success('Thêm mới điểm đón trả thành công.');
@@ -179,9 +201,46 @@ export function StationFormDialog({
                 <SelectItem value="BEN_XE">Bến xe</SelectItem>
                 <SelectItem value="VAN_PHONG">Văn phòng đón/trả</SelectItem>
                 <SelectItem value="DIEM_DON_TRA">Điểm đón trả dọc đường</SelectItem>
+                <SelectItem value="TRUNG_CHUYEN">Điểm trung chuyển</SelectItem>
+                <SelectItem value="TRAM_NGHI">Trạm nghỉ</SelectItem>
               </SelectContent>
             </Select>
           </FieldRoot>
+
+          {loaiDiem === 'TRUNG_CHUYEN' && (
+            <FieldRoot data-invalid={Boolean(errors.benTrungChuyenId)}>
+              <FieldLabel htmlFor="station-target">
+                Bến đích trung chuyển <span aria-hidden>*</span>
+              </FieldLabel>
+              <Select
+                value={benTrungChuyenId ? String(benTrungChuyenId) : ''}
+                onValueChange={(val) => setBenTrungChuyenId(Number(val))}
+                disabled={loading}
+              >
+                <SelectTrigger id="station-target">
+                  <SelectValue placeholder="Chọn bến xe hoặc văn phòng đích">
+                    {(() => {
+                      const matched = targetStationOptions.find(
+                        (t) => t.diemDonTraId === benTrungChuyenId,
+                      );
+                      return matched ? `${matched.tenDiem} (${matched.maDiem})` : 'Chọn bến xe hoặc văn phòng đích';
+                    })()}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent className="max-h-60">
+                  {targetStationOptions.map((st) => (
+                    <SelectItem key={st.diemDonTraId} value={String(st.diemDonTraId)}>
+                      {st.tenDiem} ({st.maDiem}) - {st.loaiDiem === 'BEN_XE' ? 'Bến xe' : 'Văn phòng'}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="mt-1 text-[12px] text-muted-foreground">
+                * Xe trung chuyển sẽ đưa đón hành khách kết nối giữa điểm này và bến đích đã chọn.
+              </p>
+              {errors.benTrungChuyenId && <FieldError>{errors.benTrungChuyenId}</FieldError>}
+            </FieldRoot>
+          )}
 
           <FieldRoot data-invalid={Boolean(errors.diaDiemCuId)}>
             <FieldLabel htmlFor="station-location">
@@ -193,12 +252,12 @@ export function StationFormDialog({
               disabled={loading}
             >
               <SelectTrigger id="station-location">
-                <SelectValue placeholder="Chọn tỉnh thành cũ">
+                <SelectValue placeholder="Chọn tỉnh thành (trước sáp nhập)">
                   {(() => {
                     const matchedName =
                       legacyLocations.find((loc) => loc.diaDiemId === diaDiemCuId)?.name ??
                       station?.diaDiemCu?.tenDiaDiem;
-                    if (!matchedName) return 'Chọn tỉnh thành cũ';
+                    if (!matchedName) return 'Chọn tỉnh thành (trước sáp nhập)';
                     return (
                       <span className="flex items-center gap-1.5">
                         <span>{matchedName}</span>

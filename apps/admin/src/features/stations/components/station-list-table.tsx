@@ -21,6 +21,8 @@ const TYPE_LABELS: Record<string, string> = {
   BEN_XE: 'Bến xe',
   VAN_PHONG: 'Văn phòng',
   DIEM_DON_TRA: 'Điểm đón/trả',
+  TRUNG_CHUYEN: 'Trung chuyển',
+  TRAM_NGHI: 'Trạm nghỉ',
 };
 
 interface StationListTableProps {

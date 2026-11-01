@@ -129,3 +129,32 @@
     @apply font-sans;
   }
 }
+
+@media print {
+  aside,
+  header,
+  nav,
+  [data-sidebar="sidebar"],
+  .admin-page-header {
+    display: none !important;
+  }
+
+  body {
+    background: white !important;
+    color: black !important;
+  }
+
+  @page {
+    size: A4 portrait;
+    margin: 10mm;
+  }
+
+  table {
+    page-break-inside: auto;
+  }
+
+  tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+  }
+}

@@ -1,4 +1,9 @@
-export type StationType = 'BEN_XE' | 'VAN_PHONG' | 'DIEM_DON_TRA';
+export type StationType =
+  | 'BEN_XE'
+  | 'VAN_PHONG'
+  | 'DIEM_DON_TRA'
+  | 'TRUNG_CHUYEN'
+  | 'TRAM_NGHI';
 
 export interface Station {
   diemDonTraId: number;
@@ -13,6 +18,13 @@ export interface Station {
   soDienThoai: string | null;
   trangThai: string;
   nhaXeId: number;
+  benTrungChuyenId?: number | null;
+  benTrungChuyen?: {
+    diemDonTraId: number;
+    maDiem: string;
+    tenDiem: string;
+    loaiDiem: StationType;
+  } | null;
   createdAt: string;
   updatedAt: string;
   diaDiemCu?: {
@@ -39,6 +51,7 @@ export interface CreateStationInput {
   loaiDiem: StationType;
   diaChi: string;
   diaDiemCuId: number;
+  benTrungChuyenId?: number | null;
   soDienThoai?: string;
   viDo?: number;
   kinhDo?: number;
@@ -49,6 +62,7 @@ export interface UpdateStationInput {
   loaiDiem?: StationType;
   diaChi?: string;
   diaDiemCuId?: number;
+  benTrungChuyenId?: number | null;
   soDienThoai?: string;
   viDo?: number;
   kinhDo?: number;

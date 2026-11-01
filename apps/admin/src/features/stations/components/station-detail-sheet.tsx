@@ -9,6 +9,8 @@ const TYPE_LABELS: Record<string, string> = {
   BEN_XE: 'Bến xe',
   VAN_PHONG: 'Văn phòng',
   DIEM_DON_TRA: 'Điểm đón/trả',
+  TRUNG_CHUYEN: 'Trung chuyển',
+  TRAM_NGHI: 'Trạm nghỉ',
 };
 
 function timestampFormat(value: string) {
@@ -77,6 +79,14 @@ export function StationDetailSheet({
               </ResourceStatusBadge>
             </dd>
           </div>
+          {station.loaiDiem === 'TRUNG_CHUYEN' && station.benTrungChuyen && (
+            <div className="col-span-2">
+              <dt>Bến đích trung chuyển</dt>
+              <dd className="font-medium text-foreground">
+                {station.benTrungChuyen.tenDiem} ({station.benTrungChuyen.maDiem})
+              </dd>
+            </div>
+          )}
           <div>
             <dt>Khu vực (trước sáp nhập)</dt>
             <dd className="flex items-center gap-1.5">

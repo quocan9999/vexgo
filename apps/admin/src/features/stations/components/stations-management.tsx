@@ -32,12 +32,16 @@ const TYPE_FILTER_OPTIONS: FilterOption[] = [
   { value: 'BEN_XE', label: 'Bến xe' },
   { value: 'VAN_PHONG', label: 'Văn phòng' },
   { value: 'DIEM_DON_TRA', label: 'Điểm đón trả' },
+  { value: 'TRUNG_CHUYEN', label: 'Điểm trung chuyển' },
+  { value: 'TRAM_NGHI', label: 'Trạm nghỉ' },
 ];
 
 const TYPE_LABELS: Record<string, string> = {
   BEN_XE: 'Bến xe',
   VAN_PHONG: 'Văn phòng',
   DIEM_DON_TRA: 'Điểm đón/trả',
+  TRUNG_CHUYEN: 'Trung chuyển',
+  TRAM_NGHI: 'Trạm nghỉ',
 };
 
 export function StationsManagement() {

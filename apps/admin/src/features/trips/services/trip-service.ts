@@ -14,6 +14,7 @@ import {
   type TripSeatsResponse,
   type TripStatus,
   type UpdateTripInput,
+  type TripManifestData,
 } from '../types/trip';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -483,4 +484,30 @@ export async function getTripSeats(
   }
 
   return body;
+}
+
+export async function getTripManifest(
+  tripId: number,
+  signal?: AbortSignal,
+): Promise<TripManifestData> {
+  const url = `${getApiBaseUrl()}/api/v1/trips/${tripId}/manifest`;
+  const response = await adminApiFetch(url, {
+    method: 'GET',
+    headers: { Accept: 'application/json' },
+    signal,
+    cache: 'no-store',
+  });
+
+  const body = (await response.json().catch(() => null)) as unknown;
+
+  if (!response.ok) {
+    throw new TripApiError(
+      isRecord(body) && typeof body.message === 'string'
+        ? body.message
+        : `Không thể tải danh sách hành khách chuyến xe (HTTP ${response.status}).`,
+      isRecord(body) && typeof body.error === 'string' ? body.error : undefined,
+    );
+  }
+
+  return (body as { data: TripManifestData }).data;
 }

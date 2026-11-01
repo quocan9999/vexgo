@@ -138,6 +138,24 @@ export class TripsController {
     return this.tripsService.getSeats(params.id, query, principal);
   }
 
+  @Get(':id/manifest')
+  @ApiBearerAuth('JWT-auth')
+  @RequireRoles(...TENANT_PRINCIPAL_ROLES)
+  @RequirePermissions('trip:read')
+  @ApiOperation({
+    summary: 'Danh sách hành khách đón / trả của chuyến xe (Manifest)',
+    description:
+      'Lấy danh sách hành khách theo chuyến xe, nhóm theo từng điểm đón (chiều đi) và điểm trả (chiều đến) phục vụ tài xế, phụ xe và in danh sách hành khách.\n\n- **Quyền hạn yêu cầu**: Quyền `trip:read`.',
+  })
+  @ApiParam({ name: 'id', description: 'ID chuyến xe', example: 101 })
+  @ApiResponse({ status: 200, description: 'Danh sách hành khách phân theo điểm đón trả.' })
+  getManifest(
+    @Param() params: TripIdParamsDto,
+    @CurrentPrincipal() principal: AuthPrincipal,
+  ) {
+    return this.tripsService.getManifest(params.id, principal);
+  }
+
   @Get(':id/cargo-capacity')
   @OptionalAuth()
   @ApiOperation({

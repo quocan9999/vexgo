@@ -1768,6 +1768,144 @@ export class TripsService {
     };
   }
 
+  async getManifest(id: number, principal: AuthPrincipal) {
+    const nhaXeId = requireTenantPrincipal(principal);
+
+    const trip = await this.prisma.chuyenXe.findFirst({
+      where: { chuyenXeId: id, nhaXeId },
+      include: {
+        tuyenXe: true,
+        xe: { include: { loaiXe: true } },
+      },
+    });
+
+    if (!trip) {
+      throw new NotFoundException({
+        error: 'TRIP_NOT_FOUND',
+        message: 'Không tìm thấy chuyến xe.',
+      });
+    }
+
+    const tripPoints = await this.prisma.diemDonTraChuyenXe.findMany({
+      where: { chuyenXeId: id },
+      include: { diemDonTra: true },
+      orderBy: [{ phutLech: 'asc' }, { thuTu: 'asc' }],
+    });
+
+    const tickets = await this.prisma.ve.findMany({
+      where: {
+        gheChuyenXe: { chuyenXeId: id },
+        trangThai: { not: 'HUY' },
+      },
+      include: {
+        gheChuyenXe: { include: { ghe: true } },
+        phieuDatVe: { include: { donGiaoDich: true } },
+        diemDonChuyenXe: { include: { diemDonTra: true } },
+        diemTraChuyenXe: { include: { diemDonTra: true } },
+      },
+      orderBy: { gheChuyenXe: { ghe: { soGhe: 'asc' } } },
+    });
+
+    const mappedPassengers = tickets.map((t) => {
+      const order = t.phieuDatVe?.donGiaoDich;
+      const seatCode = t.gheChuyenXe?.ghe?.soGhe ?? '—';
+      const pickupSnapshot = t.diemDonSnapshot as any;
+      const dropoffSnapshot = t.diemTraSnapshot as any;
+
+      return {
+        veId: t.veId,
+        maVe: t.maVe,
+        soGhe: seatCode,
+        hoTen: order?.tenKhachHang ?? 'Khách lẻ',
+        soDienThoai: order?.soDienThoaiKhachHang ?? '—',
+        email: order?.emailKhachHang ?? null,
+        diemDonChuyenXeId: t.diemDonChuyenXeId,
+        diemDonTen:
+          t.diemDonChuyenXe?.diemDonTra?.tenDiem ??
+          pickupSnapshot?.tenDiem ??
+          t.diemDon ??
+          'Chưa xác định',
+        diemTraChuyenXeId: t.diemTraChuyenXeId,
+        diemTraTen:
+          t.diemTraChuyenXe?.diemDonTra?.tenDiem ??
+          dropoffSnapshot?.tenDiem ??
+          'Chưa xác định',
+        trangThai: t.trangThai,
+        giaThucTe: Number(t.giaThucTe),
+      };
+    });
+
+    const pickupGroups = tripPoints
+      .filter((p) => p.loaiDiem === 'DON')
+      .map((p) => ({
+        diemDonTraChuyenXeId: p.diemDonTraChuyenXeId,
+        diemDonTraId: p.diemDonTraId,
+        tenDiem: p.diemDonTra.tenDiem,
+        diaChi: p.diemDonTra.diaChi,
+        loaiDiem: p.loaiDiem,
+        phutLech: p.phutLech,
+        gioThucTe: p.thoiGianDuKien
+          ? formatClockTime(p.thoiGianDuKien)
+          : `${p.phutLech >= 0 ? '+' : ''}${p.phutLech}p`,
+        passengers: mappedPassengers.filter(
+          (pass) => pass.diemDonChuyenXeId === p.diemDonTraChuyenXeId,
+        ),
+      }));
+
+    const dropoffGroups = tripPoints
+      .filter((p) => p.loaiDiem === 'TRA')
+      .map((p) => ({
+        diemDonTraChuyenXeId: p.diemDonTraChuyenXeId,
+        diemDonTraId: p.diemDonTraId,
+        tenDiem: p.diemDonTra.tenDiem,
+        diaChi: p.diemDonTra.diaChi,
+        loaiDiem: p.loaiDiem,
+        phutLech: p.phutLech,
+        gioThucTe: p.thoiGianDuKien
+          ? formatClockTime(p.thoiGianDuKien)
+          : `${p.phutLech >= 0 ? '+' : ''}${p.phutLech}p`,
+        passengers: mappedPassengers.filter(
+          (pass) => pass.diemTraChuyenXeId === p.diemDonTraChuyenXeId,
+        ),
+      }));
+
+    const unassignedPassengers = mappedPassengers.filter(
+      (pass) =>
+        !pass.diemDonChuyenXeId ||
+        !pickupGroups.some((g) => g.diemDonTraChuyenXeId === pass.diemDonChuyenXeId),
+    );
+
+    const depDateStr = trip.ngayKhoiHanh ? trip.ngayKhoiHanh.toISOString().slice(0, 10) : '';
+
+    return {
+      data: {
+        trip: {
+          chuyenXeId: trip.chuyenXeId,
+          maChuyenXe: trip.maChuyenXe,
+          ngayKhoiHanh: depDateStr,
+          gioKhoiHanh: formatClockTime(trip.gioKhoiHanh),
+          gioDen: trip.gioDen ? formatClockTime(trip.gioDen) : null,
+          trangThai: trip.trangThai,
+          tuyenXe: {
+            tuyenXeId: trip.tuyenXe.tuyenXeId,
+            maTuyenXe: trip.tuyenXe.maTuyenXe,
+            diemDi: trip.tuyenXe.diemDi,
+            diemDen: trip.tuyenXe.diemDen,
+          },
+          xe: {
+            xeId: trip.xe.xeId,
+            bienSoXe: trip.xe.bienSoXe,
+            tenLoaiXe: trip.xe.loaiXe.tenLoai,
+          },
+        },
+        pickupGroups,
+        dropoffGroups,
+        unassignedPassengers,
+        totalPassengers: mappedPassengers.length,
+      },
+    };
+  }
+
   async findAll(query: TripQueryDto, principal: AuthPrincipal) {
     const nhaXeId = requireTenantPrincipal(principal);
     const where: Prisma.ChuyenXeWhereInput = {

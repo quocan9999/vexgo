@@ -59,6 +59,10 @@ export type Trip = {
   route: TripRoute;
   vehicle: TripVehicle;
   seatSummary?: TripSeatSummary;
+  donCount?: number;
+  traCount?: number;
+  nghiCount?: number;
+  thieuDiem?: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -92,6 +96,7 @@ export type CreateTripInput = {
   departureDate: string;
   departureTime: string;
   acceptsShipments: boolean;
+  copyRouteStops?: boolean;
 };
 
 export type UpdateTripInput = {
@@ -138,3 +143,55 @@ export type TripSeatsResponse = {
   data: TripSeat[];
   meta: TripSeatsMeta;
 };
+
+export interface ManifestPassenger {
+  veId: number;
+  maVe: string;
+  soGhe: string;
+  hoTen: string;
+  soDienThoai: string;
+  email: string | null;
+  diemDonChuyenXeId?: number | null;
+  diemDonTen: string;
+  diemTraChuyenXeId?: number | null;
+  diemTraTen: string;
+  trangThai: string;
+  giaThucTe: number;
+}
+
+export interface ManifestStopGroup {
+  diemDonTraChuyenXeId: number;
+  diemDonTraId: number;
+  tenDiem: string;
+  diaChi: string;
+  loaiDiem: string;
+  phutLech: number;
+  gioThucTe: string;
+  passengers: ManifestPassenger[];
+}
+
+export interface TripManifestData {
+  trip: {
+    chuyenXeId: number;
+    maChuyenXe: string;
+    ngayKhoiHanh: string;
+    gioKhoiHanh: string;
+    gioDen: string | null;
+    trangThai: string;
+    tuyenXe: {
+      tuyenXeId: number;
+      maTuyenXe: string;
+      diemDi: string;
+      diemDen: string;
+    };
+    xe: {
+      xeId: number;
+      bienSoXe: string;
+      tenLoaiXe: string;
+    };
+  };
+  pickupGroups: ManifestStopGroup[];
+  dropoffGroups: ManifestStopGroup[];
+  unassignedPassengers: ManifestPassenger[];
+  totalPassengers: number;
+}
