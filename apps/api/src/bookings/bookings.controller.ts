@@ -52,6 +52,8 @@ export class BookingsController {
       dto.promotionCode,
       dto.contactPhone,
       principal,
+      dto.diemDonChuyenXeId,
+      dto.diemTraChuyenXeId,
     );
     return { data };
   }

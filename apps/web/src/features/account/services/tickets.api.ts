@@ -25,6 +25,8 @@ export type TicketItem = {
   paymentMethod: string | null;
   pickup: string | null;
   dropoff: string | null;
+  diemDonSnapshot?: any;
+  diemTraSnapshot?: any;
   passengerName: string | null;
   passengerPhone: string | null;
   createdAt: string;

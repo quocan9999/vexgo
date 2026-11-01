@@ -48,4 +48,24 @@ export class BookingQuoteDto {
     message: 'Số điện thoại không hợp lệ.',
   })
   contactPhone?: string;
+
+  @ApiPropertyOptional({
+    description: 'Mã định danh điểm đón chuyến xe (DiemDonTraChuyenXeId)',
+    example: 10,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: 'diemDonChuyenXeId phải là số nguyên.' })
+  @Min(1)
+  diemDonChuyenXeId?: number;
+
+  @ApiPropertyOptional({
+    description: 'Mã định danh điểm trả chuyến xe (DiemDonTraChuyenXeId)',
+    example: 20,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: 'diemTraChuyenXeId phải là số nguyên.' })
+  @Min(1)
+  diemTraChuyenXeId?: number;
 }
