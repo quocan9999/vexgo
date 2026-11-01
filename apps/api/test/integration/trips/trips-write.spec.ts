@@ -245,7 +245,7 @@ describe('Trips write HTTP contract (05.2)', () => {
       expect(prisma.$transaction).toHaveBeenCalled();
       expect(prisma.chuyenXe.create).toHaveBeenCalledWith({
         data: {
-          maChuyenXe: 'FUTA-CX-10102026-0001',
+          maChuyenXe: expect.stringMatching(/^[0-9a-f]{32}$/),
           ngayKhoiHanh: new Date('2026-10-10T00:00:00.000Z'),
           gioKhoiHanh: new Date('1970-01-01T07:30:00.000Z'),
           gioDen: new Date('1970-01-01T14:30:00.000Z'),
@@ -301,6 +301,10 @@ describe('Trips write HTTP contract (05.2)', () => {
             held: 0,
             booked: 0,
           },
+          donCount: 0,
+          traCount: 0,
+          nghiCount: 0,
+          thieuDiem: true,
           createdAt: '2026-10-01T10:00:00.000Z',
           updatedAt: '2026-10-01T10:00:00.000Z',
         },
@@ -497,13 +501,11 @@ describe('Trips write HTTP contract (05.2)', () => {
       });
     });
 
-    it('allocates after legacy codes and ignores the client code while keeping tenant ownership', async () => {
-      existingCodes = ['FUTA-CX-10102026-0007', 'TB-CX-10102026-9999', 'FUTA-CX-09102026-9999'];
+    it('generates a uuid v4 code and ignores the client code while keeping tenant ownership', async () => {
       prisma.chuyenXe.create.mockImplementationOnce(async (args: Prisma.ChuyenXeCreateArgs) => ({ ...mockTripCreated, maChuyenXe: args.data.maChuyenXe }));
       const res = await request(app.getHttpServer()).post('/api/v1/trips').send({ ...validBody, code: 'CLIENT-CANNOT-CHOOSE' }).expect(201);
-      expect(res.body.data.code).toBe('FUTA-CX-10102026-0008');
-      expect(prisma.chuyenXe.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ maChuyenXe: 'FUTA-CX-10102026-0008', nhaXeId: 5 }) }));
-      expect(prisma.$executeRaw.mock.calls[0].slice(1)).toEqual(['FUTA-CX-10102026-', 8, 8]);
+      expect(res.body.data.code).toMatch(/^[0-9a-f]{32}$/);
+      expect(prisma.chuyenXe.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ maChuyenXe: expect.stringMatching(/^[0-9a-f]{32}$/), nhaXeId: 5 }) }));
     });
 
     it('rejects with 409 TRIP_VEHICLE_SCHEDULE_CONFLICT when same vehicle already assigned to another active trip on same date and time', async () => {
