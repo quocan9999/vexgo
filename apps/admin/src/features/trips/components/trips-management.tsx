@@ -19,7 +19,7 @@ import {
   SelectFilter,
   type FilterOption,
 } from '@/components/data-filters/resource-filters';
-import { SingleDateFilter } from '@/components/data-filters/single-date-filter';
+import { DateRangeFilter } from '@/components/data-filters/data-filters';
 import { Button } from '@/components/ui/action-button';
 import { Card } from '@/components/ui/card';
 import {
@@ -79,6 +79,8 @@ export function TripsManagement() {
     searchInput,
     status,
     departureDate,
+    departureDateRange,
+    updateDepartureDateRange,
     sortBy,
     sortDirection,
     changePage,
@@ -122,7 +124,7 @@ export function TripsManagement() {
     );
   }
 
-  const hasFilters = Boolean(searchInput.trim() || status || departureDate);
+  const hasFilters = Boolean(searchInput.trim() || status || departureDate || (departureDateRange?.from && departureDateRange?.to));
   const items = tripPage?.data ?? [];
 
   return (
@@ -167,10 +169,14 @@ export function TripsManagement() {
                 options={STATUS_OPTIONS}
                 value={status}
               />
-              <SingleDateFilter
+              <DateRangeFilter
                 label="Ngày khởi hành"
-                onChange={updateDepartureDate}
-                value={departureDate}
+                title="Khoảng ngày khởi hành"
+                emptyValueLabel="Tất cả ngày"
+                fromLabel="Từ ngày"
+                toLabel="Đến ngày"
+                value={departureDateRange}
+                onApply={updateDepartureDateRange}
               />
             </FilterToolbar>
 

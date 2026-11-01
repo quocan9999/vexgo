@@ -1846,7 +1846,9 @@ export class TripsService {
     });
 
     allSeats.sort((a, b) => {
-      const codeCompare = a.ghe.tenGhe.localeCompare(b.ghe.tenGhe, undefined, {
+      const aName = a.ghe.tenGhe ?? (a.ghe as any).soGhe ?? (a.ghe as any).maGhe ?? '';
+      const bName = b.ghe.tenGhe ?? (b.ghe as any).soGhe ?? (b.ghe as any).maGhe ?? '';
+      const codeCompare = aName.localeCompare(bName, undefined, {
         numeric: true,
         sensitivity: 'base',
       });
@@ -1874,12 +1876,12 @@ export class TripsService {
       status: item.trangThai,
       seat: {
         seatId: item.ghe.gheId,
-        code: item.ghe.tenGhe,
+        code: item.ghe.tenGhe ?? (item.ghe as any).soGhe ?? (item.ghe as any).maGhe ?? '',
         position: item.ghe.viTri,
         floor:
           item.ghe.tang ??
           item.tang ??
-          getLegacySeatFloor(item.ghe.tenGhe, item.ghe.viTri),
+          getLegacySeatFloor(item.ghe.tenGhe ?? (item.ghe as any).soGhe ?? '', item.ghe.viTri),
         x: item.ghe.toaDoX,
         y: item.ghe.toaDoY,
       },
@@ -2055,7 +2057,19 @@ export class TripsService {
       where.xeId = query.vehicleId;
     }
 
-    if (query.departureDate) {
+    const fromDateStr = query.fromDepartureDate ?? query.fromDate;
+    const toDateStr = query.toDepartureDate ?? query.toDate;
+
+    if (fromDateStr || toDateStr) {
+      const dateFilter: Prisma.DateTimeFilter = {};
+      if (fromDateStr) {
+        dateFilter.gte = new Date(`${fromDateStr}T00:00:00.000Z`);
+      }
+      if (toDateStr) {
+        dateFilter.lte = new Date(`${toDateStr}T23:59:59.999Z`);
+      }
+      where.ngayKhoiHanh = dateFilter;
+    } else if (query.departureDate) {
       where.ngayKhoiHanh = new Date(`${query.departureDate}T00:00:00.000Z`);
     }
 

@@ -79,4 +79,40 @@ export class TripQueryDto extends PaginationQueryDto {
   @IsDateString()
   @Matches(/^\d{4}-\d{2}-\d{2}$/)
   departureDate?: string;
+
+  @ApiPropertyOptional({
+    description: 'Lọc từ ngày khởi hành (YYYY-MM-DD)',
+    example: '2026-10-01',
+  })
+  @IsOptional()
+  @IsDateString()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  fromDepartureDate?: string;
+
+  @ApiPropertyOptional({
+    description: 'Lọc đến ngày khởi hành (YYYY-MM-DD)',
+    example: '2026-10-31',
+  })
+  @IsOptional()
+  @IsDateString()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  toDepartureDate?: string;
+
+  @ApiPropertyOptional({
+    description: 'Lọc từ ngày khởi hành alias (YYYY-MM-DD)',
+    example: '2026-10-01',
+  })
+  @IsOptional()
+  @IsDateString()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  fromDate?: string;
+
+  @ApiPropertyOptional({
+    description: 'Lọc đến ngày khởi hành alias (YYYY-MM-DD)',
+    example: '2026-10-31',
+  })
+  @IsOptional()
+  @IsDateString()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  toDate?: string;
 }

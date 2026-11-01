@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import type { DateRangeValue } from '@/components/data-filters/data-filters';
 import { getTrips } from '../services/trip-service';
 import type {
   PaginatedTrips,
@@ -27,6 +28,7 @@ export function useTrips() {
   const [routeId, setRouteId] = useState('');
   const [vehicleId, setVehicleId] = useState('');
   const [departureDate, setDepartureDate] = useState('');
+  const [departureDateRange, setDepartureDateRange] = useState<DateRangeValue | null>(null);
   const [refreshCount, setRefreshCount] = useState(0);
 
   const requestKey = JSON.stringify([
@@ -38,6 +40,8 @@ export function useTrips() {
     routeId,
     vehicleId,
     departureDate,
+    departureDateRange?.from ?? '',
+    departureDateRange?.to ?? '',
   ]);
   const tripPage = result?.key === requestKey ? result.page : null;
 
@@ -64,6 +68,8 @@ export function useTrips() {
       routeId,
       vehicleId,
       departureDate,
+      departureDateRange?.from ?? '',
+      departureDateRange?.to ?? '',
     ]);
 
     getTrips(
@@ -77,6 +83,8 @@ export function useTrips() {
         routeId: routeId ? Number(routeId) : undefined,
         vehicleId: vehicleId ? Number(vehicleId) : undefined,
         departureDate: departureDate || undefined,
+        fromDepartureDate: departureDateRange?.from || undefined,
+        toDepartureDate: departureDateRange?.to || undefined,
       },
       controller.signal,
     )
@@ -174,6 +182,13 @@ export function useTrips() {
     setDepartureDate(value);
   }
 
+  function updateDepartureDateRange(value: DateRangeValue | null) {
+    setLoading(true);
+    setError(null);
+    setPage(1);
+    setDepartureDateRange(value);
+  }
+
   function sortTrips(key: TripSortKey) {
     setLoading(true);
     setError(null);
@@ -209,6 +224,8 @@ export function useTrips() {
     updateRouteId,
     updateVehicleId,
     updateDepartureDate,
+    departureDateRange,
+    updateDepartureDateRange,
     sortTrips,
     refresh,
   };

@@ -77,6 +77,8 @@ export type TripListQuery = {
   routeId?: number;
   vehicleId?: number;
   departureDate?: string;
+  fromDepartureDate?: string;
+  toDepartureDate?: string;
 };
 
 export type PaginatedTrips = {

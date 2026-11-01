@@ -189,6 +189,12 @@ export async function getTrips(
   if (query.departureDate) {
     params.set('departureDate', query.departureDate);
   }
+  if (query.fromDepartureDate) {
+    params.set('fromDepartureDate', query.fromDepartureDate);
+  }
+  if (query.toDepartureDate) {
+    params.set('toDepartureDate', query.toDepartureDate);
+  }
 
   const body = await readResponse(
     await adminApiFetch(
