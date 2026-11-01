@@ -109,9 +109,9 @@ export interface StopPointPayload {
   thoiGianDuKienIso?: string | null;
 }
 
-function getLegacySeatFloor(seatNumber: string, position: string | null) {
+function getLegacySeatFloor(seatNumber: string | undefined, position: string | null | undefined) {
   return position?.toLocaleLowerCase('vi-VN').includes('trên') ||
-    seatNumber.toLocaleUpperCase('vi-VN').startsWith('B')
+    Boolean(seatNumber?.toLocaleUpperCase('vi-VN').startsWith('B'))
     ? 2
     : 1;
 }
@@ -1794,10 +1794,10 @@ export class TripsService {
 
     return gheChuyenXes.map((gx) => ({
       tripSeatId: gx.gheChuyenXeId,
-      seatNumber: gx.ghe.tenGhe,
+      seatNumber: gx.ghe.tenGhe ?? (gx.ghe as any).soGhe,
       position: gx.ghe.viTri,
       floor:
-        gx.ghe.tang ?? gx.tang ?? getLegacySeatFloor(gx.ghe.tenGhe, gx.ghe.viTri),
+        gx.ghe.tang ?? gx.tang ?? getLegacySeatFloor(gx.ghe.tenGhe ?? (gx.ghe as any).soGhe, gx.ghe.viTri),
       x: gx.ghe.toaDoX,
       y: gx.ghe.toaDoY,
       status: gx.trangThai,

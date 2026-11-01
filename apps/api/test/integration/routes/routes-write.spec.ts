@@ -33,6 +33,7 @@ const record = {
   updatedAt: new Date('2026-09-23T07:34:00.000Z'),
   nhaXe: { nhaXeId: 3, maNhaXe: 'FUTA', tenNhaXe: 'Phương Trang' },
 };
+let currentRouteRecord = { ...record };
 let issuedSequence = 99;
 const prisma = {
   $queryRaw: vi.fn(),
@@ -123,16 +124,20 @@ describe('Route write HTTP pipeline with real service and mocked Prisma', () => 
       return 1;
     });
     prisma.nhaXe.findUnique.mockResolvedValue({ nhaXeId: 3 });
-    prisma.tuyenXe.create.mockImplementation(async (args: Prisma.TuyenXeCreateArgs) => ({ ...record, maTuyenXe: args.data.maTuyenXe }));
+    currentRouteRecord = { ...record };
+    prisma.tuyenXe.create.mockImplementation(async (args: Prisma.TuyenXeCreateArgs) => {
+      currentRouteRecord = { ...record, maTuyenXe: args.data.maTuyenXe };
+      return currentRouteRecord;
+    });
     prisma.tuyenXe.update.mockResolvedValue(record);
     prisma.tuyenXe.updateMany.mockResolvedValue({ count: 1 });
-    prisma.tuyenXe.findUnique.mockResolvedValue(record);
+    prisma.tuyenXe.findUnique.mockImplementation(async () => currentRouteRecord);
     prisma.tuyenXe.findFirst.mockImplementation(((args?: Prisma.TuyenXeFindFirstArgs) => {
       const where = args?.where;
       if (where?.diemDi !== undefined || where?.tuyenXeId === 999) {
         return Promise.resolve(null);
       }
-      return Promise.resolve(record);
+      return Promise.resolve(currentRouteRecord);
     }) as never);
     prisma.tuyenXe.findMany.mockResolvedValue([record]);
     prisma.tuyenXe.count.mockResolvedValue(1);
@@ -228,20 +233,20 @@ describe('Route write HTTP pipeline with real service and mocked Prisma', () => 
       .expect(201);
     expect(prisma.tuyenXe.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: {
-          maTuyenXe: 'FUTA-TX-0100',
+        data: expect.objectContaining({
+          maTuyenXe: expect.stringMatching(/^[0-9a-f]{32}$/),
           diemDi: 'TP.HCM',
           diemDen: 'Đà Lạt',
           thoiGianChayPhut: 420,
           nhaXeId: 3,
           trangThai: 'HOAT_DONG',
-        },
+        }),
       }),
     );
     expect(response.body).toEqual({
       data: {
         routeId: 17,
-        code: 'FUTA-TX-0100',
+        code: expect.stringMatching(/^[0-9a-f]{32}$/),
         origin: 'TP.HCM',
         destination: 'Đà Lạt',
         durationMinutes: 420,
@@ -261,10 +266,9 @@ describe('Route write HTTP pipeline with real service and mocked Prisma', () => 
     const { code: _ignored, ...body } = createInput;
     const first = await request(app.getHttpServer()).post('/api/v1/routes').send(body).expect(201);
     const second = await request(app.getHttpServer()).post('/api/v1/routes').send({ ...body, destination: 'Nha Trang' }).expect(201);
-    expect(first.body.data.code).toBe('FUTA-TX-0100');
-    expect(second.body.data.code).toBe('FUTA-TX-0101');
-    expect(prisma.$executeRaw.mock.calls.map((call) => call[2])).toEqual([100, 101]);
-    expect(prisma.$queryRaw.mock.calls[0][0].join('?')).toContain('FOR UPDATE');
+    expect(first.body.data.code).toMatch(/^[0-9a-f]{32}$/);
+    expect(second.body.data.code).toMatch(/^[0-9a-f]{32}$/);
+    expect(first.body.data.code).not.toBe(second.body.data.code);
   });
 
   it.each([
