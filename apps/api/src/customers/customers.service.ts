@@ -67,23 +67,32 @@ export class CustomersService {
     await this.findCustomerAccount(taiKhoanId);
     let account: CustomerAccount;
     try {
-      account = await this.prisma.taiKhoan.update({
-        where: { taiKhoanId },
-        data: {
-          ...(dto.fullName !== undefined ? { hoTen: dto.fullName } : {}),
-          ...(dto.dateOfBirth !== undefined
-            ? {
-                ngaySinh: dto.dateOfBirth
-                  ? new Date(`${dto.dateOfBirth}T00:00:00.000Z`)
-                  : null,
-              }
-            : {}),
-          ...(dto.email !== undefined
-            ? { email: normalizeEmail(dto.email) }
-            : {}),
-          ...(dto.citizenId !== undefined ? { cccd: dto.citizenId } : {}),
-        },
-        include: customerProfileInclude,
+      const birthDate = dto.dateOfBirth !== undefined
+        ? dto.dateOfBirth
+          ? new Date(`${dto.dateOfBirth}T00:00:00.000Z`)
+          : null
+        : undefined;
+
+      account = await this.prisma.$transaction(async (tx) => {
+        await tx.khachHang.update({
+          where: { taiKhoanId },
+          data: {
+            ...(dto.fullName !== undefined ? { hoTen: dto.fullName } : {}),
+            ...(birthDate !== undefined ? { ngaySinh: birthDate } : {}),
+          },
+        });
+        return tx.taiKhoan.update({
+          where: { taiKhoanId },
+          data: {
+            ...(dto.fullName !== undefined ? { hoTen: dto.fullName } : {}),
+            ...(birthDate !== undefined ? { ngaySinh: birthDate } : {}),
+            ...(dto.email !== undefined
+              ? { email: normalizeEmail(dto.email) }
+              : {}),
+            ...(dto.citizenId !== undefined ? { cccd: dto.citizenId } : {}),
+          },
+          include: customerProfileInclude,
+        });
       });
     } catch (error) {
       if (
@@ -141,9 +150,9 @@ export class CustomersService {
       customerId: customer.khachHangId,
       customerCode: customer.maKhachHang,
       loyaltyPoints: customer.diemTichLuy,
-      fullName: account.hoTen,
+      fullName: customer.hoTen ?? account.hoTen ?? '',
       phoneNumber: account.soDienThoai,
-      dateOfBirth: account.ngaySinh?.toISOString().slice(0, 10) ?? null,
+      dateOfBirth: (customer.ngaySinh ?? account.ngaySinh)?.toISOString().slice(0, 10) ?? null,
       citizenId: account.cccd,
       email: account.email,
       phoneVerified: account.daXacThucSoDienThoai,
@@ -178,6 +187,7 @@ export class CustomersService {
       andConditions.push({
         OR: [
           { maKhachHang: { contains: trimmedSearch } },
+          { hoTen: { contains: trimmedSearch } },
           { taiKhoan: { hoTen: { contains: trimmedSearch } } },
           { taiKhoan: { soDienThoai: { contains: trimmedSearch } } },
           { taiKhoan: { email: { contains: trimmedSearch } } },
@@ -240,7 +250,7 @@ export class CustomersService {
       data: items.map((item) => ({
         customerId: item.khachHangId,
         customerCode: item.maKhachHang,
-        fullName: item.taiKhoan.hoTen,
+        fullName: item.hoTen ?? item.taiKhoan.hoTen ?? '',
         phoneNumber: item.taiKhoan.soDienThoai,
         email: item.taiKhoan.email,
         loyaltyPoints: item.diemTichLuy,
@@ -289,7 +299,7 @@ export class CustomersService {
       data: {
         customerId: customer.khachHangId,
         customerCode: customer.maKhachHang,
-        fullName: customer.taiKhoan.hoTen,
+        fullName: customer.hoTen ?? customer.taiKhoan.hoTen ?? '',
         phoneNumber: customer.taiKhoan.soDienThoai,
         email: customer.taiKhoan.email,
         loyaltyPoints: customer.diemTichLuy,

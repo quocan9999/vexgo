@@ -46,6 +46,13 @@ describe('GET/PATCH /api/v1/me', () => {
   const jwtService = { verifyAsync: vi.fn() };
   const phienDangNhap = { findUnique: vi.fn() };
   const taiKhoan = { findUnique: vi.fn(), update: vi.fn() };
+  const khachHang = { update: vi.fn() };
+  const mockPrisma = {
+    phienDangNhap,
+    taiKhoan,
+    khachHang,
+    $transaction: vi.fn(async (cb) => cb({ taiKhoan, khachHang })),
+  };
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
@@ -66,7 +73,7 @@ describe('GET/PATCH /api/v1/me', () => {
       ],
     })
       .overrideProvider(PrismaService)
-      .useValue({ phienDangNhap, taiKhoan })
+      .useValue(mockPrisma)
       .overrideProvider(JwtService)
       .useValue(jwtService)
       .overrideProvider(SMS_SENDER)
@@ -113,6 +120,8 @@ describe('GET/PATCH /api/v1/me', () => {
     });
     taiKhoan.findUnique.mockResolvedValue(account);
     taiKhoan.update.mockResolvedValue(account);
+    khachHang.update.mockResolvedValue(account.khachHang);
+    mockPrisma.$transaction.mockImplementation(async (cb) => cb({ taiKhoan, khachHang }));
   });
 
   it('returns the authenticated customer profile', async () => {
@@ -187,6 +196,16 @@ describe('GET/PATCH /api/v1/me', () => {
       ngaySinh: null,
       email: null,
       cccd: null,
+      khachHang: {
+        ...account.khachHang,
+        hoTen: 'Nguyễn Văn Bình',
+        ngaySinh: null,
+      },
+    });
+    khachHang.update.mockResolvedValueOnce({
+      ...account.khachHang,
+      hoTen: 'Nguyễn Văn Bình',
+      ngaySinh: null,
     });
 
     const response = await request(app.getHttpServer())
@@ -208,6 +227,9 @@ describe('GET/PATCH /api/v1/me', () => {
       citizenId: null,
     });
     expect(taiKhoan.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { taiKhoanId: 42 } }),
+    );
+    expect(khachHang.update).toHaveBeenCalledWith(
       expect.objectContaining({ where: { taiKhoanId: 42 } }),
     );
   });

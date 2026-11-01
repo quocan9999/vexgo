@@ -319,6 +319,7 @@ describe('Admin Customers API (Feature 06.1)', () => {
               {
                 OR: [
                   { maKhachHang: { contains: '090123' } },
+                  { hoTen: { contains: '090123' } },
                   { taiKhoan: { hoTen: { contains: '090123' } } },
                   { taiKhoan: { soDienThoai: { contains: '090123' } } },
                   { taiKhoan: { email: { contains: '090123' } } },

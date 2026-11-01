@@ -64,7 +64,8 @@ export class TokenService {
         include: {
           taiKhoan: {
             include: {
-              khachHang: { select: { khachHangId: true } },
+              khachHang: { select: { khachHangId: true, hoTen: true } },
+              nhanVien: { select: { nhanVienId: true, hoTen: true } },
               taiKhoanVaiTros: {
                 include: { vaiTro: { select: { tenVaiTro: true } } },
               },
@@ -175,15 +176,16 @@ export class TokenService {
 
   private mapAccountToUser(account: {
     taiKhoanId: number;
-    hoTen: string;
+    hoTen: string | null;
     soDienThoai: string;
-    khachHang: { khachHangId: number } | null;
+    khachHang: { khachHangId: number; hoTen?: string | null } | null;
+    nhanVien?: { nhanVienId: number; hoTen?: string | null } | null;
     taiKhoanVaiTros: Array<{ vaiTro: { tenVaiTro: string } }>;
   }): AuthUserSummary {
     return {
       accountId: account.taiKhoanId,
       customerId: account.khachHang?.khachHangId ?? null,
-      fullName: account.hoTen,
+      fullName: account.nhanVien?.hoTen ?? account.khachHang?.hoTen ?? account.hoTen ?? '',
       phoneNumber: account.soDienThoai,
       roles: account.taiKhoanVaiTros.map(({ vaiTro }) => vaiTro.tenVaiTro),
     };

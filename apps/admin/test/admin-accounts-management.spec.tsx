@@ -23,6 +23,8 @@ const account = {
   employee: {
     employeeId: 81,
     employeeCode: 'PT-081',
+    position: 'Nhân viên kinh doanh',
+    joinedAt: '2024-02-01',
     employmentStatus: 'DANG_LAM_VIEC',
   },
   busCompany: {
@@ -536,6 +538,8 @@ describe('Admin accounts management page', () => {
         dateOfBirth: '1998-05-14',
         email: 'minhanh@example.test',
         citizenId: '079098001234',
+        position: null,
+        joinedAt: null,
       }),
     );
     expect(state.hook.refresh).toHaveBeenCalledOnce();
@@ -685,6 +689,8 @@ describe('Admin accounts management page', () => {
         dateOfBirth: '1998-05-14',
         email: 'minhanh@example.test',
         citizenId: '079098001234',
+        position: 'Nhân viên kinh doanh',
+        joinedAt: '2024-02-01',
       }),
     );
     expect(state.hook.refresh).toHaveBeenCalledOnce();

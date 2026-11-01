@@ -74,6 +74,10 @@ export class AuthService {
         const customer = await tx.khachHang.create({
           data: {
             maKhachHang: generateBusinessUuid(),
+            hoTen: dto.fullName,
+            ngaySinh: dto.dateOfBirth
+              ? new Date(`${dto.dateOfBirth}T00:00:00.000Z`)
+              : null,
             diemTichLuy: 0,
             taiKhoanId: account.taiKhoanId,
           },
@@ -88,7 +92,7 @@ export class AuthService {
         return this.tokenService.createSession(tx, {
           accountId: account.taiKhoanId,
           customerId: customer.khachHangId,
-          fullName: account.hoTen,
+          fullName: customer.hoTen ?? account.hoTen ?? dto.fullName,
           phoneNumber: account.soDienThoai,
           roles: [customerRole.tenVaiTro],
         });
@@ -135,7 +139,8 @@ export class AuthService {
     const account = await this.prisma.taiKhoan.findUnique({
       where,
       include: {
-        khachHang: { select: { khachHangId: true } },
+        khachHang: { select: { khachHangId: true, hoTen: true } },
+        nhanVien: { select: { nhanVienId: true, hoTen: true } },
         taiKhoanVaiTros: {
           include: { vaiTro: { select: { tenVaiTro: true } } },
         },
@@ -162,7 +167,7 @@ export class AuthService {
       this.tokenService.createSession(tx, {
         accountId: account.taiKhoanId,
         customerId: account.khachHang?.khachHangId ?? null,
-        fullName: account.hoTen,
+        fullName: account.nhanVien?.hoTen ?? account.khachHang?.hoTen ?? account.hoTen ?? '',
         phoneNumber: account.soDienThoai,
         roles: account.taiKhoanVaiTros.map(({ vaiTro }) => vaiTro.tenVaiTro),
       }),
@@ -188,9 +193,18 @@ export class AuthService {
             },
           },
         },
+        khachHang: {
+          select: {
+            khachHangId: true,
+            hoTen: true,
+          },
+        },
         nhanVien: {
           select: {
             nhanVienId: true,
+            hoTen: true,
+            chucVu: true,
+            ngayVaoLam: true,
             nhaXeId: true,
             nhaXe: {
               select: { maNhaXe: true, tenNhaXe: true },

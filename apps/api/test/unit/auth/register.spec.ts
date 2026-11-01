@@ -130,6 +130,8 @@ describe('AuthService register', () => {
     expect(tx.khachHang.create).toHaveBeenCalledWith({
       data: {
         maKhachHang: expect.stringMatching(/^[0-9a-f]{32}$/),
+        hoTen: dto.fullName,
+        ngaySinh: new Date('2000-02-29T00:00:00.000Z'),
         diemTichLuy: 0,
         taiKhoanId: 42,
       },

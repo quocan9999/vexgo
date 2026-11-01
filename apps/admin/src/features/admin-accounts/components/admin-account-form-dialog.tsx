@@ -63,6 +63,8 @@ type Values = {
   password: string;
   busCompanyId: string;
   employeeCode: string;
+  position: string;
+  joinedAt: string;
   dateOfBirth: string;
   email: string;
   citizenId: string;
@@ -90,6 +92,8 @@ function fieldErrorsFromDetails(details: AdminAccountApiErrorDetail[]) {
     'password',
     'busCompanyId',
     'employeeCode',
+    'position',
+    'joinedAt',
     'dateOfBirth',
     'email',
     'citizenId',
@@ -115,6 +119,8 @@ function initialValues(account?: AdminAccount): Values {
     password: '',
     busCompanyId: '',
     employeeCode: '',
+    position: account?.employee?.position ?? '',
+    joinedAt: account?.employee?.joinedAt?.slice(0, 10) ?? '',
     dateOfBirth: account?.dateOfBirth?.slice(0, 10) ?? '',
     email: account?.email ?? '',
     citizenId: account?.citizenId ?? '',
@@ -250,6 +256,12 @@ export function AdminAccountFormDialog({
       }
     }
 
+    if (values.position.trim().length > 100) {
+      errors.position = 'Chức vụ không được vượt quá 100 ký tự.';
+    }
+    if (values.joinedAt && !isValidDate(values.joinedAt)) {
+      errors.joinedAt = 'Ngày vào làm không hợp lệ.';
+    }
     if (values.dateOfBirth && !isValidDate(values.dateOfBirth)) {
       errors.dateOfBirth = 'Ngày sinh không hợp lệ.';
     }
@@ -280,6 +292,8 @@ export function AdminAccountFormDialog({
     try {
       const commonInput = {
         fullName: values.fullName.trim(),
+        position: values.position.trim() || null,
+        joinedAt: values.joinedAt || null,
         dateOfBirth: values.dateOfBirth || null,
         email: values.email.trim() || null,
         citizenId: values.citizenId.trim() || null,
@@ -563,6 +577,8 @@ export function AdminAccountFormDialog({
             )}
           </>
         )}
+        {textField('position', 'Chức vụ')}
+        {textField('joinedAt', 'Ngày vào làm', 'date')}
         {textField('dateOfBirth', 'Ngày sinh', 'date')}
         {textField('email', 'Email', 'email')}
         {textField('citizenId', 'CCCD')}

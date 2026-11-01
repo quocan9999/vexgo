@@ -51,6 +51,11 @@ const ADMIN_ACCOUNT_SELECT = {
     select: {
       nhanVienId: true,
       maNhanVien: true,
+      hoTen: true,
+      cccd: true,
+      ngaySinh: true,
+      chucVu: true,
+      ngayVaoLam: true,
       trangThaiLamViec: true,
       nhaXe: {
         select: {
@@ -198,10 +203,10 @@ function mapAdminAccount(account: AdminAccountRecord) {
 
   return {
     accountId: account.taiKhoanId,
-    fullName: account.hoTen,
+    fullName: employee.hoTen ?? account.hoTen ?? '',
     phoneNumber: account.soDienThoai,
-    dateOfBirth: account.ngaySinh?.toISOString().slice(0, 10) ?? null,
-    citizenId: account.cccd,
+    dateOfBirth: (employee.ngaySinh ?? account.ngaySinh)?.toISOString().slice(0, 10) ?? null,
+    citizenId: employee.cccd ?? account.cccd,
     email: account.email,
     phoneVerified: account.daXacThucSoDienThoai,
     status: account.trangThai,
@@ -210,6 +215,8 @@ function mapAdminAccount(account: AdminAccountRecord) {
       employeeId: employee.nhanVienId,
       employeeCode: employee.maNhanVien,
       employmentStatus: employee.trangThaiLamViec,
+      position: employee.chucVu ?? null,
+      joinedAt: employee.ngayVaoLam?.toISOString().slice(0, 10) ?? null,
     },
     busCompany: {
       busCompanyId: employee.nhaXe.nhaXeId,
@@ -272,6 +279,8 @@ export class AdminAccountsService {
       conditions.push({
         OR: [
           { hoTen: { contains: search } },
+          { nhanVien: { is: { hoTen: { contains: search } } } },
+          { nhanVien: { is: { chucVu: { contains: search } } } },
           { soDienThoai: { contains: search } },
           { email: { contains: search } },
           { nhanVien: { is: { maNhanVien: { contains: search } } } },
@@ -390,6 +399,11 @@ export class AdminAccountsService {
         await tx.nhanVien.create({
           data: {
             maNhanVien: input.employeeCode?.trim() || generateBusinessUuid(),
+            hoTen: input.fullName,
+            cccd: input.citizenId ?? null,
+            ngaySinh: toDateOnly(input.dateOfBirth),
+            chucVu: input.position?.trim() || null,
+            ngayVaoLam: toDateOnly(input.joinedAt),
             trangThaiLamViec: 'DANG_LAM_VIEC',
             nhaXeId: busCompany.nhaXeId,
             taiKhoanId: accountId,
@@ -436,30 +450,54 @@ export class AdminAccountsService {
     });
     if (!existing) throw accountNotFound();
 
-    const data: Prisma.TaiKhoanUpdateManyMutationInput = {
+    const accountData: Prisma.TaiKhoanUpdateManyMutationInput = {
       ...(input.fullName !== undefined ? { hoTen: input.fullName } : {}),
       ...(input.dateOfBirth !== undefined
         ? { ngaySinh: toDateOnly(input.dateOfBirth) }
         : {}),
-      ...(input.email !== undefined ? { email: input.email } : {}),
+      ...(input.email !== undefined
+        ? { email: input.email ? normalizeEmail(input.email) : null }
+        : {}),
       ...(input.citizenId !== undefined ? { cccd: input.citizenId } : {}),
     };
 
-    if (Object.keys(data).length === 0) {
+    const employeeData: Prisma.NhanVienUpdateManyMutationInput = {
+      ...(input.fullName !== undefined ? { hoTen: input.fullName } : {}),
+      ...(input.citizenId !== undefined ? { cccd: input.citizenId } : {}),
+      ...(input.dateOfBirth !== undefined
+        ? { ngaySinh: toDateOnly(input.dateOfBirth) }
+        : {}),
+      ...(input.position !== undefined
+        ? { chucVu: input.position?.trim() || null }
+        : {}),
+      ...(input.joinedAt !== undefined
+        ? { ngayVaoLam: toDateOnly(input.joinedAt) }
+        : {}),
+    };
+
+    const hasAccountUpdates = Object.keys(accountData).length > 0;
+    const hasEmployeeUpdates = Object.keys(employeeData).length > 0;
+
+    if (!hasAccountUpdates && !hasEmployeeUpdates) {
       return { data: mapAdminAccount(existing) };
     }
 
     try {
-      const result = await this.prisma.taiKhoan.updateMany({
-        where: managedAdminAccountWhere(taiKhoanId),
-        data: {
-          ...data,
-          ...(input.email !== undefined
-            ? { email: normalizeEmail(input.email) }
-            : {}),
-        },
+      await this.prisma.$transaction(async (tx) => {
+        if (hasAccountUpdates) {
+          const result = await tx.taiKhoan.updateMany({
+            where: managedAdminAccountWhere(taiKhoanId),
+            data: accountData,
+          });
+          if (result.count !== 1) throw accountNotFound();
+        }
+        if (hasEmployeeUpdates) {
+          await tx.nhanVien.updateMany({
+            where: { taiKhoanId },
+            data: employeeData,
+          });
+        }
       });
-      if (result.count !== 1) throw accountNotFound();
     } catch (error) {
       if (isUniqueConstraintOn(error, 'email')) {
         throw emailAlreadyRegistered();
