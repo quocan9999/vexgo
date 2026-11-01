@@ -506,7 +506,7 @@ async function addValidTransitionsAndRunVerifier(prisma, adminUrl, database) {
     data: { ...transition, phieuDatVeId: cohortBookingId },
   });
   for (const { veId } of cohortTicketIds) {
-    await prisma.ve.update({ where: { veId }, data: { trangThai: transition.trangThaiMoi } });
+    await prisma.$executeRaw`UPDATE Ve SET trangThai = ${transition.trangThaiMoi} WHERE veId = ${veId}`;
     await prisma.lichSuTrangThaiVe.create({ data: { ...transition, veId } });
   }
 

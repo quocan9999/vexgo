@@ -77,8 +77,8 @@ export type BookingResponseData = {
   route?: string | null;
   pickup?: string | null;
   dropoff?: string | null;
-  diemDonSnapshot?: any;
-  diemTraSnapshot?: any;
+  diemDonSnapshot?: Record<string, unknown> | null;
+  diemTraSnapshot?: Record<string, unknown> | null;
   seats?: string[];
   cargoItems?: Array<{
     name?: string;

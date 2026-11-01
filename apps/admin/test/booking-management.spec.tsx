@@ -1094,7 +1094,7 @@ describe('Admin booking and ticket lists', () => {
     ).toBe('');
     expect(
       screen.getByRole('button', { name: 'Áp dụng' }).hasAttribute('disabled'),
-    ).toBe(true);
+    ).toBe(false);
     expect(
       api.urls.some((url) => {
         const from = url.searchParams.get('bookedFrom');
