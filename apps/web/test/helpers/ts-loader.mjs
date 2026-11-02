@@ -11,6 +11,7 @@ const sharedReactPath = rtlReq.resolve('react');
 const sharedReactDomPath = rtlReq.resolve('react-dom');
 const sharedJsxRuntimePath = rtlReq.resolve('react/jsx-runtime');
 const sharedJsxDevRuntimePath = rtlReq.resolve('react/jsx-dev-runtime');
+const sharedNextNavigationPath = req.resolve('next/navigation');
 
 const webSrcDir = path.resolve(fileURLToPath(import.meta.url), '../../../src');
 
@@ -33,6 +34,9 @@ export async function resolve(specifier, context, nextResolve) {
   }
   if (specifier === 'next/link') {
     return nextResolve('next/link.js', context);
+  }
+  if (specifier === 'next/navigation') {
+    return { url: pathToFileURL(sharedNextNavigationPath).href, shortCircuit: true };
   }
   if (specifier.startsWith('@/')) {
     const relPath = specifier.slice(2);
