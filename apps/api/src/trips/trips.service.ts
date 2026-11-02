@@ -32,7 +32,25 @@ import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
 import { Prisma } from '../generated/prisma/client.js';
 
 const TRIP_INCLUDE = {
-  tuyenXe: { include: { nhaXe: true } },
+  tuyenXe: {
+    include: {
+      nhaXe: {
+        include: {
+          diemGiaoNhanHangs: {
+            where: { trangThai: 'HOAT_DONG' },
+            orderBy: { diemGiaoNhanHangId: 'asc' },
+          },
+        },
+      },
+      diemGiaoNhanTuyenXes: {
+        where: {
+          diemGiaoNhanHang: { trangThai: 'HOAT_DONG' },
+        },
+        include: { diemGiaoNhanHang: true },
+        orderBy: { diemGiaoNhanHangId: 'asc' },
+      },
+    },
+  },
   xe: { include: { loaiXe: true } },
   gheChuyenXes: { select: { trangThai: true } },
 } satisfies Prisma.ChuyenXeInclude;
@@ -156,6 +174,48 @@ function formatClockTime(d: Date): string {
   return `${h}:${m}`;
 }
 
+function doesCompanyPointMatchCity(
+  point: {
+    tenDiem: string;
+    diaChi: string;
+    tinhThanh?: string | null;
+    quanHuyen?: string | null;
+    phuongXa?: string | null;
+  },
+  city: string,
+): boolean {
+  const haystack = `${point.tenDiem} ${point.diaChi} ${point.phuongXa ?? ''} ${point.quanHuyen ?? ''} ${point.tinhThanh ?? ''}`.toLowerCase();
+  const normalizedCity = city.trim().toLowerCase();
+  if (!normalizedCity) return false;
+  if (
+    normalizedCity === 'tp.hcm' ||
+    normalizedCity === 'hồ chí minh' ||
+    normalizedCity === 'sài gòn'
+  ) {
+    if (haystack.includes('vũng tàu')) return false;
+    return (
+      haystack.includes('tp.hcm') ||
+      haystack.includes('hồ chí minh') ||
+      haystack.includes('sài gòn')
+    );
+  }
+  return haystack.includes(normalizedCity);
+}
+
+function formatCompanyOfficeName(rawName: string): string {
+  const trimmed = rawName.trim();
+  const lower = trimmed.toLowerCase();
+  if (
+    lower.startsWith('vp') ||
+    lower.startsWith('văn phòng') ||
+    lower.startsWith('bến') ||
+    lower.startsWith('chi nhánh')
+  ) {
+    return trimmed;
+  }
+  return `VP ${trimmed}`;
+}
+
 function computePickupAndDropoffPoints(
   trip: TripRecord,
   departureTimeIso: string,
@@ -171,12 +231,79 @@ function computePickupAndDropoffPoints(
       ? `${String(arrDate.getHours()).padStart(2, '0')}:${String(arrDate.getMinutes()).padStart(2, '0')}`
       : depTimeFormatted;
 
-  const originStations = PASSENGER_STATIONS_BY_CITY[originCity] ?? [
-    {
-      name: `Bến xe trung tâm ${originCity}`,
-      address: `Trung tâm ${originCity}`,
-      type: 'station' as const,
-    },
+  const routeLinks = Array.isArray(trip.tuyenXe?.diemGiaoNhanTuyenXes)
+    ? trip.tuyenXe.diemGiaoNhanTuyenXes
+    : [];
+  const companyBranches = Array.isArray(trip.tuyenXe?.nhaXe?.diemGiaoNhanHangs)
+    ? trip.tuyenXe.nhaXe.diemGiaoNhanHangs
+    : [];
+
+  const collectCompanyPoints = (
+    city: string,
+    allowedRoles: ReadonlyArray<string>,
+  ): Array<{ name: string; address: string; type: 'office' }> => {
+    const seenIds = new Set<number>();
+    const results: Array<{ name: string; address: string; type: 'office' }> = [];
+
+    for (const link of routeLinks) {
+      const pt = link?.diemGiaoNhanHang;
+      if (
+        !pt ||
+        pt.trangThai !== 'HOAT_DONG' ||
+        pt.nhaXeId !== trip.nhaXeId ||
+        !allowedRoles.includes(link.vaiTro) ||
+        !doesCompanyPointMatchCity(pt, city)
+      ) {
+        continue;
+      }
+      if (seenIds.has(pt.diemGiaoNhanHangId)) continue;
+      seenIds.add(pt.diemGiaoNhanHangId);
+      results.push({
+        name: formatCompanyOfficeName(pt.tenDiem),
+        address: pt.diaChi,
+        type: 'office',
+      });
+    }
+
+    for (const pt of companyBranches) {
+      if (
+        !pt ||
+        pt.trangThai !== 'HOAT_DONG' ||
+        pt.nhaXeId !== trip.nhaXeId ||
+        !doesCompanyPointMatchCity(pt, city)
+      ) {
+        continue;
+      }
+      if (seenIds.has(pt.diemGiaoNhanHangId)) continue;
+      seenIds.add(pt.diemGiaoNhanHangId);
+      results.push({
+        name: formatCompanyOfficeName(pt.tenDiem),
+        address: pt.diaChi,
+        type: 'office',
+      });
+    }
+
+    return results;
+  };
+
+  const companyPickupOffices = collectCompanyPoints(originCity, [
+    'GUI_HANG',
+    'CA_HAI',
+  ]);
+  const companyDropoffOffices = collectCompanyPoints(destCity, [
+    'NHAN_HANG',
+    'CA_HAI',
+  ]);
+
+  const originStations = [
+    ...companyPickupOffices,
+    ...(PASSENGER_STATIONS_BY_CITY[originCity] ?? [
+      {
+        name: `Bến xe trung tâm ${originCity}`,
+        address: `Trung tâm ${originCity}`,
+        type: 'station' as const,
+      },
+    ]),
   ];
 
   const pickupPoints: StopPointPayload[] = originStations.map((st, idx) => ({
@@ -188,12 +315,15 @@ function computePickupAndDropoffPoints(
     isDefault: idx === 0,
   }));
 
-  const destStations = PASSENGER_STATIONS_BY_CITY[destCity] ?? [
-    {
-      name: `Bến xe trung tâm ${destCity}`,
-      address: `Trung tâm ${destCity}`,
-      type: 'station' as const,
-    },
+  const destStations = [
+    ...companyDropoffOffices,
+    ...(PASSENGER_STATIONS_BY_CITY[destCity] ?? [
+      {
+        name: `Bến xe trung tâm ${destCity}`,
+        address: `Trung tâm ${destCity}`,
+        type: 'station' as const,
+      },
+    ]),
   ];
 
   const dropoffPoints: StopPointPayload[] = destStations.map((st, idx) => ({

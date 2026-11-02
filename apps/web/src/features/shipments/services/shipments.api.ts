@@ -45,11 +45,14 @@ export type CreateShipmentPayload = {
   receiver: {
     fullName: string;
     phoneNumber: string;
+    cccd?: string;
   };
   items: CargoItemInput[];
   isFragile?: boolean;
   isValuable?: boolean;
   note?: string;
+  freightPayer?: 'NGUOI_GUI' | 'NGUOI_NHAN';
+  paymentMethod?: 'TAI_BEN' | 'ONLINE';
 };
 
 export type ShipmentRoutePoint = {
@@ -91,6 +94,8 @@ export type ShipmentResponseData = {
   orderCode: string;
   status: string;
   paymentStatus: string;
+  paymentMethod?: string;
+  freightPayer?: 'NGUOI_GUI' | 'NGUOI_NHAN';
   sentAt: string;
   pricing: {
     baseFee: number;
@@ -106,6 +111,7 @@ export type ShipmentResponseData = {
   receiver: {
     fullName: string;
     phoneNumber: string;
+    cccd?: string | null;
   };
   pickupPoint: {
     id: number;
@@ -172,7 +178,78 @@ export type PublicShipmentLookupData = {
   timeline: Array<{ status: string; time: string }>;
 };
 
+export type CustomerShipmentListItem = {
+  shipmentId: number;
+  waybillCode: string;
+  orderCode: string;
+  sentAt: string;
+  status: string;
+  paymentStatus: string;
+  paymentExpiresAt?: string;
+  totalFee: number;
+  sender: {
+    fullName: string;
+    phoneNumber: string;
+  };
+  receiver: {
+    fullName: string;
+    phoneNumber: string;
+  };
+  trip: {
+    tripId: number;
+    code: string;
+    route: string;
+    busCompany: string;
+  };
+  itemsCount: number;
+};
+
+export type CustomerShipmentListResponse = {
+  data: CustomerShipmentListItem[];
+  meta: {
+    page: number;
+    pageSize: number;
+    totalItems: number;
+    totalPages: number;
+  };
+};
+
 export const shipmentsApi = {
+  async getCustomerShipments(
+    accessToken: string,
+    query?: {
+      page?: number;
+      pageSize?: number;
+      search?: string;
+      status?: string;
+    },
+  ): Promise<CustomerShipmentListResponse> {
+    const params = new URLSearchParams();
+    if (query?.page) params.set('page', String(query.page));
+    if (query?.pageSize) params.set('pageSize', String(query.pageSize));
+    if (query?.search) params.set('search', query.search);
+    if (query?.status) params.set('status', query.status);
+
+    const qs = params.toString();
+    const url = `${API_BASE_URL}/shipments${qs ? `?${qs}` : ''}`;
+
+    const res = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new ApiError(
+        err.message || 'Không thể tải danh sách vận đơn gửi hàng.',
+        res.status,
+      );
+    }
+
+    return res.json();
+  },
+
   async getRoutePoints(tripId: number): Promise<{ data: ShipmentRoutePoints }> {
     const res = await fetch(
       `${API_BASE_URL}/shipments/trips/${tripId}/route-points`,

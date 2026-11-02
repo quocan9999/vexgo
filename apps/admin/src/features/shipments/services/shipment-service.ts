@@ -5,6 +5,7 @@ import type {
   ShipmentDetailResponse,
   ShipmentOperationalStatus,
   ShipmentQuery,
+  ShipmentStatus,
   ShipmentsResponse,
 } from '../types/shipment';
 
@@ -97,7 +98,7 @@ export async function getShipmentById(
 }
 
 export interface UpdateShipmentStatusPayload {
-  status: ShipmentOperationalStatus;
+  status: ShipmentStatus;
   note?: string;
 }
 

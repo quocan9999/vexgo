@@ -110,11 +110,12 @@ interface ShipmentDetailsProps {
 }
 
 export type StatusActionConfig = {
-  targetStatus: Exclude<ShipmentStatus, 'DA_HUY'>;
+  targetStatus: ShipmentStatus;
   title: string;
   description: string;
   actionLabel: string;
   confirmLabel: string;
+  variant?: 'default' | 'destructive' | 'outline';
 };
 
 export function getAvailableStatusActions(
@@ -236,6 +237,10 @@ export function ShipmentDetails({
 
   async function handleConfirmStatus() {
     if (!activeAction || submittingRef.current || actionLocked) return;
+    if (activeAction.targetStatus === 'DA_HUY' && !note.trim()) {
+      toast.error('Vui lòng nhập lý do từ chối / hủy phiếu gửi hàng.');
+      return;
+    }
     submittingRef.current = true;
     setSubmitting(true);
 
@@ -323,17 +328,35 @@ export function ShipmentDetails({
                 const availableActions = getAvailableStatusActions(
                   detail.shipment.status,
                 );
-                if (availableActions.length === 0) return null;
+                const canCancel =
+                  detail.shipment.status === 'MOI_TAO' ||
+                  detail.shipment.status === 'DA_TIEP_NHAN';
+                if (availableActions.length === 0 && !canCancel) return null;
+
+                const isRecipientPaying =
+                  detail.shipment.feeSummary?.freightPayer === 'NGUOI_NHAN';
                 const paymentConfirmed =
-                  detail.shipment.paymentStatus === 'DA_THANH_TOAN';
+                  detail.shipment.paymentStatus === 'DA_THANH_TOAN' ||
+                  (isRecipientPaying && detail.shipment.status !== 'DA_GIAO');
+
+                const cancelAction: StatusActionConfig = {
+                  targetStatus: 'DA_HUY',
+                  title: 'Từ chối / Hủy đơn gửi hàng?',
+                  description:
+                    'Phiếu gửi sẽ chuyển sang trạng thái Đã hủy. Vui lòng nhập lý do bên dưới.',
+                  actionLabel: 'Từ chối / Hủy đơn',
+                  confirmLabel: 'Xác nhận hủy',
+                  variant: 'destructive',
+                };
+
                 return (
                   <div className="grid gap-3 rounded-lg border bg-muted/30 p-4">
                     <span className="text-[13px] font-semibold">
                       Thao tác trạng thái:
                     </span>
-                    {paymentConfirmed ? (
-                      <div className="flex flex-wrap gap-3">
-                        {availableActions.map((action) => (
+                    <div className="flex flex-wrap items-center gap-3">
+                      {paymentConfirmed ? (
+                        availableActions.map((action) => (
                           <Button
                             key={action.targetStatus}
                             disabled={submitting}
@@ -343,17 +366,28 @@ export function ShipmentDetails({
                           >
                             {action.actionLabel}
                           </Button>
-                        ))}
-                      </div>
-                    ) : (
-                      <p
-                        className="text-xs text-muted-foreground"
-                        role="status"
-                      >
-                        Chỉ có thể cập nhật trạng thái vận chuyển sau khi đơn đã
-                        thanh toán.
-                      </p>
-                    )}
+                        ))
+                      ) : (
+                        <p
+                          className="text-xs text-muted-foreground"
+                          role="status"
+                        >
+                          Chỉ có thể cập nhật trạng thái vận chuyển sau khi đơn đã
+                          thanh toán.
+                        </p>
+                      )}
+                      {canCancel && (
+                        <Button
+                          disabled={submitting}
+                          onClick={() => handleOpenAction(cancelAction)}
+                          type="button"
+                          variant="outline"
+                          className="border-destructive/30 text-destructive hover:bg-destructive/10"
+                        >
+                          {cancelAction.actionLabel}
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 );
               })()}
@@ -683,14 +717,20 @@ export function ShipmentDetails({
         >
           <Field>
             <FieldLabel htmlFor="shipment-status-note">
-              Ghi chú trạng thái (tùy chọn)
+              {activeAction.targetStatus === 'DA_HUY'
+                ? 'Lý do từ chối / hủy (bắt buộc)'
+                : 'Ghi chú trạng thái (tùy chọn)'}
             </FieldLabel>
             <Textarea
               disabled={submitting || actionLocked}
               id="shipment-status-note"
               maxLength={500}
               onChange={(e) => setNote(e.target.value)}
-              placeholder="Nhập ghi chú hoặc lý do nếu có..."
+              placeholder={
+                activeAction.targetStatus === 'DA_HUY'
+                  ? 'Ví dụ: Hàng cấm gửi, khách hàng không mang hàng ra bến...'
+                  : 'Nhập ghi chú hoặc lý do nếu có...'
+              }
               rows={3}
               value={note}
               aria-describedby="shipment-status-note-count"
@@ -710,10 +750,18 @@ export function ShipmentDetails({
           )}
           {!actionLocked && (
             <Button
-              disabled={submitting}
+              disabled={
+                submitting ||
+                (activeAction.targetStatus === 'DA_HUY' && !note.trim())
+              }
               aria-busy={submitting}
               onClick={handleConfirmStatus}
               type="button"
+              variant={
+                activeAction.variant === 'destructive'
+                  ? 'destructive'
+                  : 'default'
+              }
             >
               {submitting && (
                 <LoaderCircle

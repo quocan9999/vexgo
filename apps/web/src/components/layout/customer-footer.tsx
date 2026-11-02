@@ -12,21 +12,21 @@ import {
 
 export const CustomerFooter: React.FC = () => {
   return (
-    <footer className="bg-red-600 text-slate-300 pt-14 pb-8 border-t border-red-700 font-sans">
+    <footer className="bg-[#E60012] text-white/80 pt-14 pb-8 border-t border-[#CC0010] font-sans">
       <div className="max-w-[1360px] mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10 pb-12 border-b border-red-700">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10 pb-12 border-b border-white/15">
           {/* Cột 1: Thông tin thương hiệu */}
           <div className="space-y-4">
             <Link href="/" className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-white/10 border border-white/20 flex items-center justify-center text-brand-light">
-                <Bus className="w-5 h-5 text-brand-light" />
+              <div className="w-8 h-8 rounded-lg bg-white/10 border border-white/20 flex items-center justify-center text-white">
+                <Bus className="w-5 h-5 text-white" />
               </div>
               <div className="text-xl font-extrabold tracking-tight">
-                <span className="text-white">Bus</span>{' '}
-                <span className="text-amber-400">Way</span>
+                <span className="text-white">Vex</span>
+                <span className="text-amber-400">Go</span>
               </div>
             </Link>
-            <p className="text-xs text-slate-300 leading-relaxed">
+            <p className="text-xs text-white/80 leading-relaxed">
               Hệ thống đặt vé xe khách trực tuyến, chọn ghế, thanh toán điện tử, tra cứu vé và gửi hàng theo tuyến xe.
             </p>
             <div className="flex items-center gap-3 pt-1">
@@ -35,7 +35,7 @@ export const CustomerFooter: React.FC = () => {
                 href="https://facebook.com"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="w-8 h-8 rounded-lg bg-emerald-950/60 border border-emerald-800/40 flex items-center justify-center text-slate-300 hover:text-white hover:bg-emerald-900"
+                className="w-8 h-8 rounded-lg bg-white/10 border border-white/20 flex items-center justify-center text-white/90 hover:text-white hover:bg-white/20 transition-colors"
                 aria-label="Facebook"
               >
                 <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
@@ -48,7 +48,7 @@ export const CustomerFooter: React.FC = () => {
                 href="https://youtube.com"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="w-8 h-8 rounded-lg bg-emerald-950/60 border border-emerald-800/40 flex items-center justify-center text-slate-300 hover:text-white hover:bg-emerald-900"
+                className="w-8 h-8 rounded-lg bg-white/10 border border-white/20 flex items-center justify-center text-white/90 hover:text-white hover:bg-white/20 transition-colors"
                 aria-label="YouTube"
               >
                 <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
@@ -65,23 +65,33 @@ export const CustomerFooter: React.FC = () => {
             </h4>
             <ul className="space-y-2 text-xs">
               <li>
-                <Link href="/trips" className="hover:text-amber-400">
-                  Chuyến xe
+                <Link href="/trips" className="hover:text-white transition-colors">
+                  Lịch trình & Đặt vé
                 </Link>
               </li>
               <li>
-                <Link href="/shipments/new" className="hover:text-amber-400">
-                  Gửi hàng
+                <Link href="/shipments/new" className="hover:text-white transition-colors">
+                  Gửi hàng liên tỉnh
                 </Link>
               </li>
               <li>
-                <Link href="/account/tickets" className="hover:text-amber-400">
+                <Link href="/promotions" className="hover:text-white transition-colors">
+                  Khuyến mãi nổi bật
+                </Link>
+              </li>
+              <li>
+                <Link href="/news" className="hover:text-white transition-colors">
+                  Tin tức & Cẩm nang
+                </Link>
+              </li>
+              <li>
+                <Link href="/account/tickets" className="hover:text-white transition-colors">
                   Vé của tôi
                 </Link>
               </li>
               <li>
-                <Link href="/trips?type=Limousine" className="hover:text-amber-400">
-                  Limousine
+                <Link href="/trips?type=Limousine" className="hover:text-white transition-colors">
+                  Xe Limousine cao cấp
                 </Link>
               </li>
             </ul>
@@ -94,17 +104,27 @@ export const CustomerFooter: React.FC = () => {
             </h4>
             <ul className="space-y-2 text-xs">
               <li>
-                <Link href="/about" className="hover:text-amber-400">
+                <Link href="/about" className="hover:text-white transition-colors">
                   Về VexGo
                 </Link>
               </li>
               <li>
-                <Link href="/contact" className="hover:text-amber-400">
+                <Link href="/tickets/lookup" className="hover:text-white transition-colors">
+                  Tra cứu thông tin vé
+                </Link>
+              </li>
+              <li>
+                <Link href="/cancel-ticket" className="hover:text-white transition-colors">
+                  Hủy vé & Hoàn tiền
+                </Link>
+              </li>
+              <li>
+                <Link href="/contact" className="hover:text-white transition-colors">
                   Liên hệ hỗ trợ
                 </Link>
               </li>
               <li>
-                <Link href="/donate" className="hover:text-amber-400">
+                <Link href="/donate" className="hover:text-white transition-colors">
                   Quỹ đóng góp phát triển hội
                 </Link>
               </li>
@@ -116,17 +136,17 @@ export const CustomerFooter: React.FC = () => {
             <h4 className="text-xs font-bold text-white uppercase tracking-wider">
               Trụ sở hoạt động
             </h4>
-            <div className="space-y-2.5 text-xs text-slate-300">
+            <div className="space-y-2.5 text-xs text-white/80">
               <p className="flex items-start gap-2">
-                <MapPin className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
+                <MapPin className="w-4 h-4 text-amber-300 flex-shrink-0 mt-0.5" />
                 <span>TP. Hồ Chí Minh & các tuyến liên tỉnh</span>
               </p>
               <p className="flex items-center gap-2">
-                <Phone className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                <Phone className="w-4 h-4 text-amber-300 flex-shrink-0" />
                 <span>Hotline: 1900 6789</span>
               </p>
               <p className="flex items-center gap-2">
-                <Mail className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                <Mail className="w-4 h-4 text-amber-300 flex-shrink-0" />
                 <span>support@vexgo.vn</span>
               </p>
             </div>
@@ -134,9 +154,9 @@ export const CustomerFooter: React.FC = () => {
         </div>
 
         {/* Bản quyền */}
-        <div className="pt-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-400">
+        <div className="pt-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-white/60">
           <p>© {new Date().getFullYear()} VexGo. Tất cả quyền được bảo lưu.</p>
-          <div className="flex items-center gap-4 text-slate-400">
+          <div className="flex items-center gap-4 text-white/60">
             <span>Bảo mật dữ liệu</span>
             <span>·</span>
             <span>Quy chế hoạt động</span>

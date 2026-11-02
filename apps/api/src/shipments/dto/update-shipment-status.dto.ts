@@ -6,6 +6,7 @@ const MANUALLY_UPDATABLE_SHIPMENT_STATUSES = [
   TrangThaiPhieuGuiHang.DA_TIEP_NHAN,
   TrangThaiPhieuGuiHang.DANG_VAN_CHUYEN,
   TrangThaiPhieuGuiHang.DA_GIAO,
+  TrangThaiPhieuGuiHang.DA_HUY,
 ] as const;
 
 type ManuallyUpdatableShipmentStatus =

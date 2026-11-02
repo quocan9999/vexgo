@@ -3,6 +3,15 @@ import { fetchWithRetry } from '../../../lib/fetch-with-retry.ts';
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
 
+export type TripStopPoint = {
+  id: string;
+  name: string;
+  time: string;
+  address: string;
+  type: 'station' | 'office' | 'transfer' | 'point';
+  isDefault: boolean;
+};
+
 export type ApiTrip = {
   id: number;
   code: string;
@@ -34,6 +43,12 @@ export type ApiTrip = {
   };
   price: number | null;
   availableSeats: number;
+  pickupPoint?: string;
+  pickupAddress?: string | null;
+  dropoffPoint?: string;
+  dropoffAddress?: string | null;
+  pickupPoints?: TripStopPoint[];
+  dropoffPoints?: TripStopPoint[];
 };
 
 export type ApiTripSeat = {

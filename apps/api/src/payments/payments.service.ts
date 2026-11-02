@@ -504,16 +504,33 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
 
     const shipment = await tx.phieuGuiHang.findUnique({
       where: { phieuGuiHangId: shipmentId },
-      include: { donGiaoDich: { include: { phieuDatVe: true } } },
+      include: {
+        donGiaoDich: {
+          include: {
+            phieuDatVe: true,
+            thanhToans: { select: { phuongThuc: true } },
+          },
+        },
+      },
     });
     const order = shipment?.donGiaoDich;
     if (
       !shipment ||
       !order ||
       order.phieuDatVe ||
-      order.trangThai !== BOOKING_ORDER_PENDING_STATUS ||
-      getBookingPaymentDeadline(order.ngayTao) > deadlineCheckTime
+      order.trangThai !== BOOKING_ORDER_PENDING_STATUS
     ) {
+      return false;
+    }
+
+    const isCounterPayment =
+      shipment.nguoiTraCuoc === 'NGUOI_NHAN' ||
+      order.thanhToans?.some((p) => p.phuongThuc === 'TAI_BEN');
+    const deadline = isCounterPayment
+      ? new Date(order.ngayTao.getTime() + 48 * 60 * 60 * 1000)
+      : getBookingPaymentDeadline(order.ngayTao);
+
+    if (deadline > deadlineCheckTime) {
       return false;
     }
 
@@ -569,7 +586,9 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
           phieuGuiHangId: shipment.phieuGuiHangId,
           trangThai: 'DA_HUY',
           thoiGian: historyTimestamp,
-          ghiChu: 'Hết thời hạn thanh toán 10 phút.',
+          ghiChu: isCounterPayment
+            ? 'Hết thời hạn gửi hàng tại bến (48 giờ).'
+            : 'Hết thời hạn thanh toán 10 phút.',
           taiKhoanId: null,
         },
       });

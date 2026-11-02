@@ -226,11 +226,14 @@ export function LocationPicker({
         </div>
         <Combobox.Portal>
           <Combobox.Positioner
+            side="bottom"
+            align="start"
             sideOffset={8}
             collisionPadding={8}
+            collisionAvoidance={{ side: 'none' }}
             className="isolate z-[80]"
           >
-            <Combobox.Popup className="max-h-[min(380px,var(--available-height))] w-(--anchor-width) min-w-[min(320px,calc(100vw-24px))] max-w-[calc(100vw-24px)] overflow-y-auto overscroll-contain rounded-2xl border border-slate-200/80 bg-white p-2 text-slate-900 shadow-xl ring-1 ring-slate-900/5 motion-safe:data-open:animate-in motion-safe:data-open:fade-in-0 motion-safe:data-open:slide-in-from-top-1">
+            <Combobox.Popup className="max-h-[min(380px,calc(100vh-120px))] w-(--anchor-width) min-w-[min(320px,calc(100vw-24px))] max-w-[calc(100vw-24px)] overflow-y-auto overscroll-contain rounded-2xl border border-slate-200/80 bg-white p-2 text-slate-900 shadow-xl ring-1 ring-slate-900/5 motion-safe:data-open:animate-in motion-safe:data-open:fade-in-0 motion-safe:data-open:slide-in-from-top-1">
               <Combobox.Empty className="empty:hidden text-center text-sm leading-relaxed text-slate-500">
                 <div className="px-4 py-6">
                   {loading

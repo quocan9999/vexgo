@@ -325,6 +325,7 @@ describe('Public shipment lookup HTTP contract (MySQL integration)', () => {
       amount: 120_000,
       paymentStatus: 'DANG_XU_LY',
       requiresReconciliation: false,
+      freightPayer: 'NGUOI_GUI',
       paymentMethod: 'SEPAY',
       paymentExpiresAt: new Date(orderCreatedAt.getTime() + 10 * 60_000).toISOString(),
       serverTime: expect.any(String),

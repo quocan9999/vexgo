@@ -52,6 +52,7 @@ const authScreens = [
   { path: '/account/profile/password', marker: 'Đặt lại mật khẩu' },
   { path: '/my-posts', marker: 'Lịch sử mua vé' },
   { path: '/account/tickets', marker: 'Lịch sử mua vé' },
+  { path: '/account/shipments', marker: 'Đơn gửi hàng' },
   { path: '/loyalty', marker: 'Hạng hiện tại' },
   { path: '/account/loyalty', marker: 'Hạng hiện tại' },
 ];
@@ -72,6 +73,7 @@ for (const screen of authScreens) {
 for (const accountRoute of [
   '/account/profile',
   '/account/tickets',
+  '/account/shipments',
   '/account/profile/password',
 ]) {
   test(`${accountRoute} marks its canonical sidebar link as the current page`, async () => {

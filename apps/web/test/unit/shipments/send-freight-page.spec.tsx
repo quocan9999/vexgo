@@ -7,7 +7,9 @@ import {
   within,
 } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import SendFreightPage from '../../../src/features/shipments/components/send-freight-page';
+import SendFreightPage, {
+  getCarrierDeliveryEstimate,
+} from '../../../src/features/shipments/components/send-freight-page';
 
 const api = vi.hoisted(() => ({
   searchTrips: vi.fn(),
@@ -217,6 +219,7 @@ describe('independent shipment flow', () => {
       to: 'TP.HCM',
       departureDate: '2026-10-20',
     });
+    fireEvent.click(screen.getByLabelText(/Thanh toán online trước/i));
     fireEvent.click(screen.getByRole('button', { name: 'Tạo mã vận đơn' }));
 
     await waitFor(() => expect(api.routerPush).toHaveBeenCalledTimes(1));
@@ -271,6 +274,7 @@ describe('independent shipment flow', () => {
     );
     await waitFor(() => expect(api.getRoutePoints).toHaveBeenCalledWith(42));
 
+    fireEvent.click(screen.getByLabelText(/Thanh toán online trước/i));
     fireEvent.click(screen.getByRole('button', { name: 'Tạo mã vận đơn' }));
 
     await waitFor(() => expect(api.routerPush).toHaveBeenCalledTimes(1));
@@ -344,6 +348,19 @@ describe('independent shipment flow', () => {
     await waitFor(() => {
       expect(screen.queryByText('Thông tin chưa hoàn tất')).toBeNull();
     });
+
+    // Inline field-level errors are displayed directly at input fields
+    expect(screen.getByText('Vui lòng nhập họ và tên người gửi')).toBeTruthy();
+    expect(screen.getByText('Vui lòng nhập số điện thoại người gửi')).toBeTruthy();
+    expect(screen.getByText('Vui lòng nhập họ và tên người nhận')).toBeTruthy();
+    expect(screen.getByText('Vui lòng nhập số điện thoại người nhận')).toBeTruthy();
+    expect(screen.getByText('Vui lòng nhập tên món hàng / kiện hàng')).toBeTruthy();
+
+    // When typing into an invalid field, its error is cleared
+    fireEvent.change(screen.getByPlaceholderText('Ví dụ: Nguyễn Văn A'), {
+      target: { value: 'Nguyễn Văn A' },
+    });
+    expect(screen.queryByText('Vui lòng nhập họ và tên người gửi')).toBeNull();
   });
 
   it('supports adding multiple cargo items and submits all items in the payload', async () => {
@@ -422,5 +439,102 @@ describe('independent shipment flow', () => {
     expect(payload.items[1].serviceType).toBe('VALUABLE');
     expect(payload.isFragile).toBe(true);
     expect(payload.isValuable).toBe(true);
+  });
+
+  it('supports entering receiver CCCD and displays carrier delivery estimates without Linh hoạt trong ngày', async () => {
+    render(<SendFreightPage />);
+    expect(await screen.findByText('30.000đ', { exact: true })).toBeTruthy();
+
+    // Verify 'Linh hoạt trong ngày' is removed and replaced by delivery estimate
+    expect(screen.queryByText('Linh hoạt trong ngày')).toBeNull();
+    expect(screen.getAllByText('Giao trong ngày').length).toBeGreaterThan(0);
+
+    // Verify helper calculation for long and short duration routes
+    expect(getCarrierDeliveryEstimate({ route: { durationMinutes: 1080 } })).toBe('Giao 2 – 3 ngày');
+    expect(getCarrierDeliveryEstimate({ route: { durationMinutes: 420 } })).toBe('Giao trong ngày');
+    expect(getCarrierDeliveryEstimate(null)).toBe('Giao trong ngày');
+
+    // Fill sender and receiver details including CCCD
+    fireEvent.change(screen.getByPlaceholderText('Ví dụ: Nguyễn Văn A'), {
+      target: { value: 'Nguyễn An' },
+    });
+    fireEvent.change(screen.getAllByPlaceholderText('09xxxxxxxx')[0], {
+      target: { value: '0900000001' },
+    });
+    fireEvent.change(screen.getByPlaceholderText('Ví dụ: Lê Thị B'), {
+      target: { value: 'Trần Bình' },
+    });
+    fireEvent.change(screen.getAllByPlaceholderText('09xxxxxxxx')[1], {
+      target: { value: '0900000002' },
+    });
+    fireEvent.change(screen.getByPlaceholderText('Ví dụ: 079xxxxxxxxxx'), {
+      target: { value: '079123456789' },
+    });
+    fireEvent.change(
+      screen.getByPlaceholderText('Ví dụ: Thùng hoa quả, tài liệu, quần áo...'),
+      { target: { value: 'Hồ sơ pháp lý' } },
+    );
+    fireEvent.change(
+      await screen.findByRole('combobox', { name: 'Loại hàng hóa' }),
+      { target: { value: '21' } },
+    );
+
+    // Sidebar reflects receiver CCCD
+    expect(screen.getByText('079123456789')).toBeTruthy();
+
+    await waitFor(() => expect(api.getRoutePoints).toHaveBeenCalledWith(42));
+    fireEvent.click(screen.getByLabelText(/Thanh toán online trước/i));
+    fireEvent.click(screen.getByRole('button', { name: 'Tạo mã vận đơn' }));
+
+    await waitFor(() => expect(api.createShipment).toHaveBeenCalledTimes(1));
+    const payload = api.createShipment.mock.calls[0][0];
+    expect(payload.receiver.cccd).toBe('079123456789');
+
+    const savedDraft = JSON.parse(
+      window.sessionStorage.getItem(window.sessionStorage.key(0)!)!,
+    );
+    expect(savedDraft.receiver.cccd).toBe('079123456789');
+  });
+
+  it('creates a counter shipment and displays the waybill QR success modal when sender pays at counter', async () => {
+    render(<SendFreightPage />);
+    expect(await screen.findByText('30.000đ', { exact: true })).toBeTruthy();
+
+    fireEvent.change(screen.getByPlaceholderText('Ví dụ: Nguyễn Văn A'), {
+      target: { value: 'Nguyễn An' },
+    });
+    fireEvent.change(screen.getAllByPlaceholderText('09xxxxxxxx')[0], {
+      target: { value: '0900000001' },
+    });
+    fireEvent.change(screen.getByPlaceholderText('Ví dụ: Lê Thị B'), {
+      target: { value: 'Trần Bình' },
+    });
+    fireEvent.change(screen.getAllByPlaceholderText('09xxxxxxxx')[1], {
+      target: { value: '0900000002' },
+    });
+    fireEvent.change(
+      screen.getByPlaceholderText('Ví dụ: Thùng hoa quả, tài liệu, quần áo...'),
+      { target: { value: 'Hồ sơ' } },
+    );
+    fireEvent.change(
+      await screen.findByRole('combobox', { name: 'Loại hàng hóa' }),
+      { target: { value: '21' } },
+    );
+
+    // Default payment option is SENDER_COUNTER
+    await waitFor(() => expect(api.getRoutePoints).toHaveBeenCalledWith(42));
+    fireEvent.click(screen.getByRole('button', { name: 'Tạo mã vận đơn' }));
+
+    await waitFor(() => expect(api.createShipment).toHaveBeenCalledTimes(1));
+    expect(api.createShipment.mock.calls[0][0].freightPayer).toBe('NGUOI_GUI');
+    expect(api.createShipment.mock.calls[0][0].paymentMethod).toBe('TAI_BEN');
+    expect(api.routerPush).not.toHaveBeenCalled();
+
+    // Success modal appears with waybill code
+    expect(await screen.findByText('Tạo đơn gửi hàng thành công!')).toBeTruthy();
+    expect(screen.getByText('VG-VD-TEST-601')).toBeTruthy();
+    expect(
+      screen.getAllByText('Người gửi thanh toán tại bến').length,
+    ).toBeGreaterThanOrEqual(1);
   });
 });

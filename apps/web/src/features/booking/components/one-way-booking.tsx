@@ -150,8 +150,74 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
       })
       .catch(() => {});
   };
-  const pickup = pickupOverride !== null ? pickupOverride : post.province;
-  const dropoff = dropoffOverride !== null ? dropoffOverride : post.district;
+  const pickupOptions = React.useMemo(() => {
+    if (post.pickupPoints && post.pickupPoints.length > 0) {
+      return post.pickupPoints.map((pt) => ({
+        value: pt.name,
+        label: `${pt.time ? `${pt.time} - ` : ''}${pt.name}${pt.address ? ` (${pt.address})` : ''}`,
+        address: pt.address || '',
+        type: pt.type || 'station',
+      }));
+    }
+    const fallbackPickup = post.province.startsWith('Bến xe')
+      ? post.province
+      : `Bến xe ${post.province}`;
+    const list = [{ value: fallbackPickup, label: fallbackPickup, address: '', type: 'station' }];
+    if (post.province !== fallbackPickup) {
+      list.push({ value: post.province, label: post.province, address: '', type: 'station' });
+    }
+    return list;
+  }, [post.pickupPoints, post.province]);
+
+  const dropoffOptions = React.useMemo(() => {
+    if (post.dropoffPoints && post.dropoffPoints.length > 0) {
+      return post.dropoffPoints.map((pt) => ({
+        value: pt.name,
+        label: `${pt.time ? `${pt.time} - ` : ''}${pt.name}${pt.address ? ` (${pt.address})` : ''}`,
+        address: pt.address || '',
+        type: pt.type || 'station',
+      }));
+    }
+    const fallbackDropoff = post.district.startsWith('Bến xe')
+      ? post.district
+      : `Bến xe ${post.district}`;
+    const list = [{ value: fallbackDropoff, label: fallbackDropoff, address: '', type: 'station' }];
+    if (post.district !== fallbackDropoff) {
+      list.push({ value: post.district, label: post.district, address: '', type: 'station' });
+    }
+    return list;
+  }, [post.dropoffPoints, post.district]);
+
+  const defaultPickup = pickupOptions[0]?.value || post.province;
+  const defaultDropoff = dropoffOptions[0]?.value || post.district;
+  const [pickupMode, setPickupMode] = useState<'station' | 'transfer'>('station');
+  const [dropoffMode, setDropoffMode] = useState<'station' | 'transfer'>('station');
+  const [transferPickupAddress, setTransferPickupAddress] = useState('');
+  const [transferDropoffAddress, setTransferDropoffAddress] = useState('');
+
+  const selectedStationPickup =
+    pickupOverride !== null && pickupOptions.some((opt) => opt.value === pickupOverride)
+      ? pickupOverride
+      : defaultPickup;
+  const selectedStationDropoff =
+    dropoffOverride !== null && dropoffOptions.some((opt) => opt.value === dropoffOverride)
+      ? dropoffOverride
+      : defaultDropoff;
+  const selectedPickupOption = pickupOptions.find((opt) => opt.value === selectedStationPickup);
+  const selectedDropoffOption = dropoffOptions.find((opt) => opt.value === selectedStationDropoff);
+
+  const pickup =
+    pickupMode === 'transfer'
+      ? transferPickupAddress.trim()
+        ? `Trung chuyển: ${transferPickupAddress.trim()}`
+        : ''
+      : selectedStationPickup;
+  const dropoff =
+    dropoffMode === 'transfer'
+      ? transferDropoffAddress.trim()
+        ? `Trung chuyển: ${transferDropoffAddress.trim()}`
+        : ''
+      : selectedStationDropoff;
 
   const [validationAttempted, setValidationAttempted] = useState(false);
   const [showVehicleInfoModal, setShowVehicleInfoModal] = useState(false);
@@ -696,6 +762,14 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
       return;
     }
     if (!isAcceptedTerms) return;
+    if (pickupMode === 'transfer' && !transferPickupAddress.trim()) {
+      setSubmitError(`Vui lòng nhập địa chỉ đón trung chuyển tại ${post.province}.`);
+      return;
+    }
+    if (dropoffMode === 'transfer' && !transferDropoffAddress.trim()) {
+      setSubmitError(`Vui lòng nhập địa chỉ trả trung chuyển tại ${post.district}.`);
+      return;
+    }
     if (promotionInput.trim() && !activePromotionCode) {
       setSubmitError('Hãy áp dụng hoặc bỏ mã khuyến mãi đã nhập trước khi tiếp tục.');
       promotionInputRef.current?.focus();
@@ -1041,6 +1115,8 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
         bookingCode: booking.bookingCode,
         orderCode: booking.orderCode,
         status: booking.status,
+        paymentExpiresAt: booking.paymentExpiresAt,
+        createdAt: booking.createdAt,
       });
 
       setHoldExpiresAt(null);
@@ -1558,93 +1634,188 @@ export const OneWayBooking: React.FC<OneWayBookingProps> = ({
 
 
             <div className="p-4 md:p-5 border-b border-slate-200">
-              <h2 className="text-base font-black text-slate-950 mb-4 flex items-center gap-2">
-                Thông đón trả
-                <Info className="w-4 h-4 text-accent" />
-              </h2>
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+                <h2 className="text-base font-black text-slate-950 flex items-center gap-2">
+                  Thông tin đón trả
+                  <Info className="w-4 h-4 text-accent" />
+                </h2>
+                {post.authorName && (
+                  <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200">
+                    <Bus className="w-3.5 h-3.5 text-accent" />
+                    Hệ thống điểm đón/trả: <strong className="text-slate-900">{post.authorName}</strong>
+                  </span>
+                )}
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div className="space-y-3">
-                  <h3 className="text-xs font-black text-slate-700 uppercase">
-                    Điểm đón
-                  </h3>
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className="text-xs font-black text-slate-700 uppercase">
+                      Điểm đón ({post.province})
+                    </h3>
+                  </div>
                   <div className="flex items-center gap-4 text-xs font-bold text-slate-600">
-                    <label className="inline-flex items-center gap-1.5 text-accent">
+                    <label
+                      className={`inline-flex items-center gap-1.5 cursor-pointer ${
+                        pickupMode === 'station' ? 'text-accent' : 'text-slate-600'
+                      }`}
+                    >
                       <input
                         type="radio"
                         name="pickup"
-                        defaultChecked
+                        checked={pickupMode === 'station'}
+                        onChange={() => setPickupMode('station')}
                         className="accent-[#EF5222]"
                       />
                       Bến xe/VP
                     </label>
-                    <label className="inline-flex items-center gap-1.5">
+                    <label
+                      className={`inline-flex items-center gap-1.5 cursor-pointer ${
+                        pickupMode === 'transfer' ? 'text-accent' : 'text-slate-600'
+                      }`}
+                    >
                       <input
                         type="radio"
                         name="pickup"
+                        checked={pickupMode === 'transfer'}
+                        onChange={() => setPickupMode('transfer')}
                         className="accent-[#EF5222]"
                       />
                       Trung chuyển
                     </label>
                   </div>
-                  <div className="relative">
-                    <select
-                      value={pickup}
-                      onChange={(e) => setPickupOverride(e.target.value)}
-                      className="h-11 w-full appearance-none rounded-lg border border-slate-300 bg-white px-3 pr-9 text-sm font-bold text-slate-900 outline-none focus:border-accent"
-                    >
-                      <option value={post.province}>{post.province}</option>
-                      <option value={`Bến xe ${post.province}`}>
-                        Bến xe {post.province}
-                      </option>
-                    </select>
-                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  </div>
-                  <p className="text-xs text-slate-600 leading-relaxed">
-                    Quý khách vui lòng có mặt tại điểm đón trước giờ khởi hành
-                    tối thiểu 20 phút.
-                  </p>
+                  {pickupMode === 'station' ? (
+                    <>
+                      <div className="relative">
+                        <select
+                          aria-label="Điểm đón bến xe hoặc văn phòng"
+                          value={selectedStationPickup}
+                          onChange={(e) => setPickupOverride(e.target.value)}
+                          className="h-11 w-full appearance-none rounded-lg border border-slate-300 bg-white px-3 pr-9 text-sm font-bold text-slate-900 outline-none focus:border-accent"
+                        >
+                          {pickupOptions.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                        <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      </div>
+                      {selectedPickupOption?.address && (
+                        <p className="text-xs font-medium text-slate-600 bg-slate-50 border border-slate-200/80 rounded-lg px-3 py-2 flex items-start gap-1.5">
+                          <MapPin className="w-3.5 h-3.5 text-accent shrink-0 mt-0.5" />
+                          <span>
+                            <strong className="text-slate-800">Địa chỉ:</strong>{' '}
+                            {selectedPickupOption.address}
+                          </span>
+                        </p>
+                      )}
+                      <p className="text-xs text-slate-600 leading-relaxed">
+                        Quý khách vui lòng có mặt tại Bến xe/Văn phòng đã chọn trước giờ khởi hành
+                        tối thiểu 20 phút.
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <div className="relative">
+                        <MapPin className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="text"
+                          value={transferPickupAddress}
+                          onChange={(e) => setTransferPickupAddress(e.target.value)}
+                          placeholder={`Nhập số nhà, tên đường, phường/xã tại ${post.province}...`}
+                          className="h-11 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-sm font-semibold text-slate-900 outline-none focus:border-accent"
+                        />
+                      </div>
+                      <p className="text-xs text-slate-600 leading-relaxed">
+                        Xe trung chuyển của <strong className="text-slate-800">{post.authorName || 'nhà xe'}</strong> sẽ liên hệ đón tận nơi trong khu vực nội thành {post.province} trước giờ xuất bến 30–60 phút.
+                      </p>
+                    </>
+                  )}
                 </div>
 
                 <div className="space-y-3">
-                  <h3 className="text-xs font-black text-slate-700 uppercase">
-                    Điểm trả
-                  </h3>
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className="text-xs font-black text-slate-700 uppercase">
+                      Điểm trả ({post.district})
+                    </h3>
+                  </div>
                   <div className="flex items-center gap-4 text-xs font-bold text-slate-600">
-                    <label className="inline-flex items-center gap-1.5 text-accent">
+                    <label
+                      className={`inline-flex items-center gap-1.5 cursor-pointer ${
+                        dropoffMode === 'station' ? 'text-accent' : 'text-slate-600'
+                      }`}
+                    >
                       <input
                         type="radio"
                         name="dropoff"
-                        defaultChecked
+                        checked={dropoffMode === 'station'}
+                        onChange={() => setDropoffMode('station')}
                         className="accent-[#EF5222]"
                       />
                       Bến xe/VP
                     </label>
-                    <label className="inline-flex items-center gap-1.5">
+                    <label
+                      className={`inline-flex items-center gap-1.5 cursor-pointer ${
+                        dropoffMode === 'transfer' ? 'text-accent' : 'text-slate-600'
+                      }`}
+                    >
                       <input
                         type="radio"
                         name="dropoff"
+                        checked={dropoffMode === 'transfer'}
+                        onChange={() => setDropoffMode('transfer')}
                         className="accent-[#EF5222]"
                       />
                       Trung chuyển
                     </label>
                   </div>
-                  <div className="relative">
-                    <select
-                      value={dropoff}
-                      onChange={(e) => setDropoffOverride(e.target.value)}
-                      className="h-11 w-full appearance-none rounded-lg border border-slate-300 bg-white px-3 pr-9 text-sm font-bold text-slate-900 outline-none focus:border-accent"
-                    >
-                      <option value={post.district}>{post.district}</option>
-                      <option value={`Bến xe ${post.district}`}>
-                        Bến xe {post.district}
-                      </option>
-                    </select>
-                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  </div>
-                  <p className="text-xs text-slate-600 leading-relaxed">
-                    Điểm trả cụ thể sẽ được xác nhận lại trong vé điện tử sau
-                    thanh toán.
-                  </p>
+                  {dropoffMode === 'station' ? (
+                    <>
+                      <div className="relative">
+                        <select
+                          aria-label="Điểm trả bến xe hoặc văn phòng"
+                          value={selectedStationDropoff}
+                          onChange={(e) => setDropoffOverride(e.target.value)}
+                          className="h-11 w-full appearance-none rounded-lg border border-slate-300 bg-white px-3 pr-9 text-sm font-bold text-slate-900 outline-none focus:border-accent"
+                        >
+                          {dropoffOptions.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                        <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      </div>
+                      {selectedDropoffOption?.address && (
+                        <p className="text-xs font-medium text-slate-600 bg-slate-50 border border-slate-200/80 rounded-lg px-3 py-2 flex items-start gap-1.5">
+                          <MapPin className="w-3.5 h-3.5 text-accent shrink-0 mt-0.5" />
+                          <span>
+                            <strong className="text-slate-800">Địa chỉ:</strong>{' '}
+                            {selectedDropoffOption.address}
+                          </span>
+                        </p>
+                      )}
+                      <p className="text-xs text-slate-600 leading-relaxed">
+                        Điểm trả cụ thể sẽ được xác nhận trong vé điện tử sau khi thanh toán.
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <div className="relative">
+                        <MapPin className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="text"
+                          value={transferDropoffAddress}
+                          onChange={(e) => setTransferDropoffAddress(e.target.value)}
+                          placeholder={`Nhập số nhà, tên đường, phường/xã tại ${post.district}...`}
+                          className="h-11 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-sm font-semibold text-slate-900 outline-none focus:border-accent"
+                        />
+                      </div>
+                      <p className="text-xs text-slate-600 leading-relaxed">
+                        Xe trung chuyển của <strong className="text-slate-800">{post.authorName || 'nhà xe'}</strong> hỗ trợ trả khách tận nơi trong khu vực nội thành {post.district}.
+                      </p>
+                    </>
+                  )}
                 </div>
               </div>
             </div>

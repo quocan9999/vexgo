@@ -87,6 +87,7 @@ type CancellationReason =
   | 'ALREADY_CANCELLED'
   | 'ACTIVE_SHIPMENT'
   | 'ALREADY_DEPARTED'
+  | 'LESS_THAN_2_HOURS_30_MINUTES'
   | 'LESS_THAN_4_HOURS'
   | 'LESS_THAN_12_HOURS'
   | 'DEPARTURE_TIME_UNAVAILABLE';
@@ -146,7 +147,8 @@ function getCancellationQuote(
     };
   }
 
-  if (hoursUntilDeparture < 4) {
+  // Cutoff quy định: trước 2 giờ 30 phút (2.5 tiếng) được hủy online; dưới 2:30 liên hệ nhà xe
+  if (hoursUntilDeparture < 2.5) {
     return {
       eligible: false,
       reason: 'LESS_THAN_4_HOURS',
@@ -566,15 +568,20 @@ export class TicketsService {
                   message:
                     'Không thể hủy vé sau khi chuyến xe đã khởi hành.',
                 },
+                LESS_THAN_2_HOURS_30_MINUTES: {
+                  error: 'CANCELLATION_CUTOFF_PASSED',
+                  message:
+                    'Chỉ có thể hủy vé trực tuyến trước giờ khởi hành ít nhất 2 giờ 30 phút. Quá thời gian này, vui lòng liên hệ nhà xe để được hỗ trợ.',
+                },
                 LESS_THAN_4_HOURS: {
                   error: 'CANCELLATION_CUTOFF_PASSED',
                   message:
-                    'Chỉ có thể hủy vé trước giờ khởi hành ít nhất 4 tiếng.',
+                    'Chỉ có thể hủy vé trực tuyến trước giờ khởi hành ít nhất 2 giờ 30 phút. Quá thời gian này, vui lòng liên hệ nhà xe để được hỗ trợ.',
                 },
                 LESS_THAN_12_HOURS: {
                   error: 'CANCELLATION_CUTOFF_PASSED',
                   message:
-                    'Chỉ có thể hủy vé trước giờ khởi hành ít nhất 4 tiếng.',
+                    'Chỉ có thể hủy vé trực tuyến trước giờ khởi hành ít nhất 2 giờ 30 phút. Quá thời gian này, vui lòng liên hệ nhà xe để được hỗ trợ.',
                 },
                 DEPARTURE_TIME_UNAVAILABLE: {
                   error: 'DEPARTURE_TIME_UNAVAILABLE',

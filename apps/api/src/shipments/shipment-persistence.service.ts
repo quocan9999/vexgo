@@ -31,6 +31,7 @@ export interface ShipmentPersistenceInput {
   serviceFee: DecimalInput;
   discount: DecimalInput;
   totalFee: DecimalInput;
+  payer?: 'NGUOI_GUI' | 'NGUOI_NHAN';
   note?: string | null;
   tripId: number;
   senderPointId: number;
@@ -71,7 +72,7 @@ export class ShipmentPersistenceService {
         phiDichVu: new Prisma.Decimal(input.serviceFee),
         soTienGiam: new Prisma.Decimal(input.discount),
         tongPhi: new Prisma.Decimal(input.totalFee),
-        nguoiTraCuoc: 'NGUOI_GUI',
+        nguoiTraCuoc: input.payer ?? 'NGUOI_GUI',
         ghiChu: input.note ?? null,
         trangThai: 'MOI_TAO',
         chuyenXeId: input.tripId,

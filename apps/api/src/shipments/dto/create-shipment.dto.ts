@@ -3,6 +3,7 @@ import {
   IsArray,
   IsBoolean,
   IsEmail,
+  IsIn,
   IsInt,
   IsNotEmpty,
   IsNumber,
@@ -96,6 +97,10 @@ export class ShipmentReceiverDto {
   @IsString()
   @IsNotEmpty({ message: 'Số điện thoại người nhận không được để trống.' })
   phoneNumber!: string;
+
+  @IsOptional()
+  @IsString()
+  cccd?: string;
 }
 
 export class CreateShipmentDto {
@@ -134,4 +139,16 @@ export class CreateShipmentDto {
   @IsOptional()
   @IsInt()
   receiverPointId?: number;
+
+  @IsOptional()
+  @IsIn(['NGUOI_GUI', 'NGUOI_NHAN'], {
+    message: 'Người trả cước phải là NGUOI_GUI hoặc NGUOI_NHAN.',
+  })
+  freightPayer?: 'NGUOI_GUI' | 'NGUOI_NHAN';
+
+  @IsOptional()
+  @IsIn(['TAI_BEN', 'ONLINE'], {
+    message: 'Hình thức thanh toán phải là TAI_BEN hoặc ONLINE.',
+  })
+  paymentMethod?: 'TAI_BEN' | 'ONLINE';
 }

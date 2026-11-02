@@ -63,6 +63,12 @@ function normalizePhone(phone: string): string {
   return digits;
 }
 
+function extractReceiverCccd(note: string | null | undefined): string | null {
+  if (!note) return null;
+  const match = note.match(/\[CCCD người nhận:\s*([^\]]+)\]/);
+  return match ? match[1].trim() : null;
+}
+
 function formatTripDate(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
@@ -93,7 +99,15 @@ const SHIPMENT_LIST_INCLUDE = {
 } satisfies Prisma.PhieuGuiHangInclude;
 
 const SHIPMENT_DETAIL_INCLUDE = {
-  donGiaoDich: true,
+  donGiaoDich: {
+    include: {
+      thanhToans: {
+        where: { loaiGiaoDich: 'THANH_TOAN' },
+        orderBy: [{ thoiGian: 'desc' }, { thanhToanId: 'desc' }],
+        take: 1,
+      },
+    },
+  },
   diemGui: true,
   diemNhan: true,
   chuyenXe: {
@@ -386,11 +400,48 @@ export class ShipmentsService {
           nhaXeId: trip.nhaXeId,
         },
       });
-      const paymentAttempt = await createSepayPaymentAttempt(tx, {
-        donGiaoDichId: donGiaoDich.donGiaoDichId,
-        amount: tongPhi,
-        createdAt: now,
-      });
+
+      const freightPayer = dto.freightPayer ?? 'NGUOI_GUI';
+      const paymentMethod =
+        dto.paymentMethod ??
+        (freightPayer === 'NGUOI_NHAN' ? 'TAI_BEN' : 'ONLINE');
+      const isOnlinePayment =
+        paymentMethod === 'ONLINE' && freightPayer !== 'NGUOI_NHAN';
+
+      let paymentAttempt: { thanhToanId: number; trangThai: string };
+      let paymentExpiresAt: Date;
+
+      if (isOnlinePayment) {
+        paymentAttempt = await createSepayPaymentAttempt(tx, {
+          donGiaoDichId: donGiaoDich.donGiaoDichId,
+          amount: tongPhi,
+          createdAt: now,
+        });
+        paymentExpiresAt = getBookingPaymentDeadline(donGiaoDich.ngayTao);
+      } else {
+        paymentAttempt = await tx.thanhToan.create({
+          data: {
+            soTien: tongPhi,
+            phuongThuc: 'TAI_BEN',
+            loaiGiaoDich: 'THANH_TOAN',
+            thoiGian: now,
+            trangThai:
+              freightPayer === 'NGUOI_NHAN' ? 'CHO_THANH_TOAN' : 'DANG_XU_LY',
+            donGiaoDichId: donGiaoDich.donGiaoDichId,
+          },
+          select: { thanhToanId: true, trangThai: true },
+        });
+        paymentExpiresAt = new Date(now.getTime() + 48 * 60 * 60 * 1000);
+      }
+
+      const receiverCccd = dto.receiver.cccd?.trim() || null;
+      const combinedNote =
+        [
+          receiverCccd ? `[CCCD người nhận: ${receiverCccd}]` : '',
+          dto.note?.trim() || '',
+        ]
+          .filter(Boolean)
+          .join(' ') || null;
 
       const { shipment: phieuGui, items: createdItems } =
         await this.shipmentPersistenceService.persistInTransaction(tx, {
@@ -402,7 +453,8 @@ export class ShipmentsService {
           serviceFee: phiDichVu,
           discount: 0,
           totalFee: tongPhi,
-          note: dto.note?.trim() || null,
+          payer: freightPayer,
+          note: combinedNote,
           tripId: trip.chuyenXeId,
           senderPointId: diemGuiId,
           receiverPointId: diemNhanId,
@@ -434,7 +486,9 @@ export class ShipmentsService {
         shipmentId: phieuGui.phieuGuiHangId,
         orderId: donGiaoDich.donGiaoDichId,
         paymentId: paymentAttempt.thanhToanId,
-        paymentExpiresAt: getBookingPaymentDeadline(donGiaoDich.ngayTao).toISOString(),
+        paymentExpiresAt: paymentExpiresAt.toISOString(),
+        paymentMethod: isOnlinePayment ? 'ONLINE' : 'TAI_BEN',
+        freightPayer,
         waybillCode: phieuGui.maVanDon,
         orderCode: donGiaoDich.maDonGiaoDich,
         status: phieuGui.trangThai,
@@ -454,6 +508,7 @@ export class ShipmentsService {
         receiver: {
           fullName: dto.receiver.fullName,
           phoneNumber: receiverPhone,
+          cccd: receiverCccd,
         },
         pickupPoint: {
           id: phieuGui.diemGui.diemGiaoNhanHangId,
@@ -513,6 +568,7 @@ export class ShipmentsService {
         maVanDon: true,
         trangThai: true,
         soDienThoaiNguoiNhan: true,
+        nguoiTraCuoc: true,
         donGiaoDich: {
           select: {
             donGiaoDichId: true,
@@ -603,10 +659,14 @@ export class ShipmentsService {
       select: { phuongThuc: true, trangThai: true },
       orderBy: [{ thoiGian: 'desc' }, { thanhToanId: 'desc' }],
     });
-    const paymentExpiresAt = getBookingPaymentDeadline(
-      shipment.donGiaoDich.ngayTao,
-    );
+    const isCounterPayment =
+      shipment.nguoiTraCuoc === 'NGUOI_NHAN' ||
+      latestPayment?.phuongThuc === 'TAI_BEN';
+    const paymentExpiresAt = isCounterPayment
+      ? new Date(shipment.donGiaoDich.ngayTao.getTime() + 48 * 60 * 60 * 1000)
+      : getBookingPaymentDeadline(shipment.donGiaoDich.ngayTao);
     const paymentExpired =
+      !isCounterPayment &&
       shipment.donGiaoDich.trangThai === 'CHO_THANH_TOAN' &&
       latestPayment?.trangThai === 'DANG_XU_LY' &&
       paymentExpiresAt <= new Date();
@@ -614,6 +674,7 @@ export class ShipmentsService {
     return {
       waybillCode: shipment.maVanDon,
       status: shipment.trangThai,
+      freightPayer: shipment.nguoiTraCuoc,
       orderCode: shipment.donGiaoDich.maDonGiaoDich,
       amount: Number(shipment.donGiaoDich.tongTien),
       orderStatus: shipment.donGiaoDich.trangThai,
@@ -674,10 +735,22 @@ export class ShipmentsService {
       shipment.chuyenXe.gioKhoiHanh,
       this.businessTimeZone,
     );
+    const latestPayment = shipment.donGiaoDich.thanhToans?.[0] ?? null;
+    const isCounterPayment =
+      shipment.nguoiTraCuoc === 'NGUOI_NHAN' ||
+      latestPayment?.phuongThuc === 'TAI_BEN';
+    const paymentExpiresAt = isCounterPayment
+      ? new Date(shipment.donGiaoDich.ngayTao.getTime() + 48 * 60 * 60 * 1000)
+      : getBookingPaymentDeadline(shipment.donGiaoDich.ngayTao);
 
     return {
       shipmentId: shipment.phieuGuiHangId,
       orderId: shipment.donGiaoDich.donGiaoDichId,
+      paymentId: latestPayment?.thanhToanId ?? 0,
+      paymentExpiresAt: paymentExpiresAt.toISOString(),
+      paymentMethod:
+        latestPayment?.phuongThuc ?? (isCounterPayment ? 'TAI_BEN' : 'ONLINE'),
+      freightPayer: shipment.nguoiTraCuoc,
       waybillCode: shipment.maVanDon,
       orderCode: shipment.donGiaoDich.maDonGiaoDich,
       status: shipment.trangThai,
@@ -697,6 +770,7 @@ export class ShipmentsService {
       receiver: {
         fullName: shipment.tenNguoiNhan,
         phoneNumber: shipment.soDienThoaiNguoiNhan,
+        cccd: extractReceiverCccd(shipment.ghiChu),
       },
       pickupPoint: {
         id: shipment.diemGui.diemGiaoNhanHangId,
@@ -807,6 +881,9 @@ export class ShipmentsService {
         sentAt: shipment.ngayGui.toISOString(),
         status: shipment.trangThai,
         paymentStatus: shipment.donGiaoDich.trangThai,
+        paymentExpiresAt: getBookingPaymentDeadline(
+          shipment.donGiaoDich.ngayTao,
+        ).toISOString(),
         totalFee: toVnd(shipment.tongPhi),
         sender: {
           fullName: shipment.donGiaoDich.tenKhachHang,
@@ -1043,10 +1120,10 @@ export class ShipmentsService {
     };
   }> {
     const tenantId = requireTenantPrincipal(principal);
-    if ((dto.status as string) === 'DA_HUY') {
-      throw new ConflictException({
-        error: 'INVALID_STATUS_TRANSITION',
-        message: 'Không hỗ trợ hủy thủ công phiếu gửi hàng.',
+    if (dto.status === 'DA_HUY' && !dto.note?.trim()) {
+      throw new BadRequestException({
+        error: 'CANCELLATION_REASON_REQUIRED',
+        message: 'Vui lòng nhập lý do từ chối / hủy phiếu gửi hàng.',
       });
     }
 
@@ -1075,10 +1152,15 @@ export class ShipmentsService {
         include: {
           donGiaoDich: {
             select: {
+              donGiaoDichId: true,
               nhaXeId: true,
               trangThai: true,
               thanhToans: {
-                select: { loaiGiaoDich: true, trangThai: true },
+                select: {
+                  loaiGiaoDich: true,
+                  trangThai: true,
+                  phuongThuc: true,
+                },
               },
             },
           },
@@ -1100,8 +1182,8 @@ export class ShipmentsService {
         TrangThaiPhieuGuiHang,
         TrangThaiPhieuGuiHang[]
       > = {
-        MOI_TAO: ['DA_TIEP_NHAN'],
-        DA_TIEP_NHAN: ['DANG_VAN_CHUYEN'],
+        MOI_TAO: ['DA_TIEP_NHAN', 'DA_HUY'],
+        DA_TIEP_NHAN: ['DANG_VAN_CHUYEN', 'DA_HUY'],
         DANG_VAN_CHUYEN: ['DA_GIAO'],
         DA_GIAO: [],
         DA_HUY: [],
@@ -1113,24 +1195,96 @@ export class ShipmentsService {
         });
       }
 
-      const hasSuccessfulCharge = shipment.donGiaoDich.thanhToans.some(
-        (payment) =>
-          payment.loaiGiaoDich !== 'HOAN_TIEN' &&
-          (payment.trangThai === 'THANH_CONG' ||
-            payment.trangThai === 'DA_THANH_TOAN'),
-      );
-      if (
-        shipment.donGiaoDich.trangThai !== 'DA_THANH_TOAN' ||
-        !hasSuccessfulCharge
-      ) {
-        throw new ConflictException({
-          error: 'SHIPMENT_PAYMENT_NOT_CONFIRMED',
-          message:
-            'Chỉ được cập nhật trạng thái vận chuyển sau khi đơn đã thanh toán.',
-        });
-      }
-
       const now = new Date();
+
+      if (targetStatus === 'DA_HUY') {
+        await tx.donGiaoDich.updateMany({
+          where: {
+            donGiaoDichId: shipment.donGiaoDich.donGiaoDichId,
+            trangThai: { in: ['CHO_THANH_TOAN', 'DANG_XU_LY'] },
+          },
+          data: { trangThai: 'DA_HUY' },
+        });
+        await tx.thanhToan.updateMany({
+          where: {
+            donGiaoDichId: shipment.donGiaoDich.donGiaoDichId,
+            trangThai: { in: ['DANG_XU_LY', 'CHO_THANH_TOAN'] },
+          },
+          data: { trangThai: 'THAT_BAI' },
+        });
+      } else {
+        const hasSuccessfulCharge = shipment.donGiaoDich.thanhToans.some(
+          (payment) =>
+            payment.loaiGiaoDich !== 'HOAN_TIEN' &&
+            (payment.trangThai === 'THANH_CONG' ||
+              payment.trangThai === 'DA_THANH_TOAN'),
+        );
+        const isRecipientPaying = shipment.nguoiTraCuoc === 'NGUOI_NHAN';
+
+        if (targetStatus === 'DA_TIEP_NHAN') {
+          if (!isRecipientPaying) {
+            if (
+              !hasSuccessfulCharge ||
+              shipment.donGiaoDich.trangThai !== 'DA_THANH_TOAN'
+            ) {
+              await tx.donGiaoDich.update({
+                where: { donGiaoDichId: shipment.donGiaoDich.donGiaoDichId },
+                data: { trangThai: 'DA_THANH_TOAN' },
+              });
+              await tx.thanhToan.updateMany({
+                where: {
+                  donGiaoDichId: shipment.donGiaoDich.donGiaoDichId,
+                  trangThai: { in: ['DANG_XU_LY', 'CHO_THANH_TOAN'] },
+                },
+                data: {
+                  trangThai: 'THANH_CONG',
+                  thoiDiemHoanTat: now,
+                  laQuyetToanHopLe: true,
+                },
+              });
+            }
+          }
+        } else if (targetStatus === 'DANG_VAN_CHUYEN') {
+          if (
+            !isRecipientPaying &&
+            (shipment.donGiaoDich.trangThai !== 'DA_THANH_TOAN' ||
+              !hasSuccessfulCharge)
+          ) {
+            throw new ConflictException({
+              error: 'SHIPMENT_PAYMENT_NOT_CONFIRMED',
+              message:
+                'Chỉ được cập nhật trạng thái vận chuyển sau khi đơn đã thanh toán.',
+            });
+          }
+        } else if (targetStatus === 'DA_GIAO') {
+          if (isRecipientPaying) {
+            await tx.donGiaoDich.update({
+              where: { donGiaoDichId: shipment.donGiaoDich.donGiaoDichId },
+              data: { trangThai: 'DA_THANH_TOAN' },
+            });
+            await tx.thanhToan.updateMany({
+              where: {
+                donGiaoDichId: shipment.donGiaoDich.donGiaoDichId,
+                trangThai: { in: ['DANG_XU_LY', 'CHO_THANH_TOAN'] },
+              },
+              data: {
+                trangThai: 'THANH_CONG',
+                thoiDiemHoanTat: now,
+                laQuyetToanHopLe: true,
+              },
+            });
+          } else if (
+            shipment.donGiaoDich.trangThai !== 'DA_THANH_TOAN' ||
+            !hasSuccessfulCharge
+          ) {
+            throw new ConflictException({
+              error: 'SHIPMENT_PAYMENT_NOT_CONFIRMED',
+              message:
+                'Chỉ được cập nhật trạng thái vận chuyển sau khi đơn đã thanh toán.',
+            });
+          }
+        }
+      }
       const updated = await tx.phieuGuiHang.updateMany({
         where: {
           phieuGuiHangId: id,

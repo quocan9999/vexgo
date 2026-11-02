@@ -20,9 +20,15 @@ import {
   Mail,
   CreditCard,
 } from 'lucide-react';
-import { bookingsApi } from '@/features/account/services/bookings.api';
+import {
+  bookingsApi,
+  type BookingResponseData,
+} from '@/features/account/services/bookings.api';
 import { useAuthSession } from '@/features/auth/auth-session';
-import { PAYMENT_DRAFT_STORAGE_PREFIX } from '@/features/booking/services/payment-draft';
+import {
+  createPaymentDraftFromBooking,
+  PAYMENT_DRAFT_STORAGE_PREFIX,
+} from '@/features/booking/services/payment-draft';
 
 interface InvoiceLeg {
   bookingCode?: string;
@@ -440,6 +446,8 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
   const numericBookingId = Number(rawId);
 
   const [invoice, setInvoice] = useState<InvoiceModel | null>(null);
+  const [pendingBookingForPayment, setPendingBookingForPayment] =
+    useState<BookingResponseData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [loadedKey, setLoadedKey] = useState<string | null>(null);
@@ -470,6 +478,7 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
     };
 
     const loadInvoice = async () => {
+      setPendingBookingForPayment(null);
       if (!Number.isSafeInteger(numericBookingId) || numericBookingId <= 0) {
         setError('Mã đặt vé không hợp lệ nên chưa thể xác minh vé.');
         setLoading(false);
@@ -747,6 +756,12 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
             throw new Error('Đơn đặt vé đã hết hạn nên không thể xuất vé điện tử.');
           }
           if (statuses.some((status) => status === 'CHO_THANH_TOAN')) {
+            if (
+              booking.status === 'CHO_THANH_TOAN' &&
+              booking.paymentStatus === 'CHO_THANH_TOAN'
+            ) {
+              setPendingBookingForPayment(booking);
+            }
             throw new Error('Thanh toán chưa được hệ thống xác nhận. Vé sẽ xuất hiện sau khi ngân hàng xác nhận giao dịch.');
           }
           throw new Error('Chưa thể xác minh trạng thái thanh toán của đơn đặt vé.');
@@ -874,9 +889,33 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
           <p role="alert" className="text-sm leading-relaxed text-slate-600">
             {error || 'Chưa thể xác minh trạng thái thanh toán của đơn đặt vé.'}
           </p>
-          <Link href="/" className="mt-5 inline-flex h-10 items-center justify-center rounded-xl bg-slate-900 px-4 text-sm font-bold text-white hover:bg-slate-800">
-            Về trang chủ
-          </Link>
+          <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
+            {pendingBookingForPayment && (
+              <button
+                type="button"
+                onClick={() => {
+                  const draft = createPaymentDraftFromBooking(
+                    pendingBookingForPayment,
+                  );
+                  if (draft && typeof window !== 'undefined') {
+                    window.location.assign(
+                      `/payment?draftId=${encodeURIComponent(draft.id)}`,
+                    );
+                  }
+                }}
+                className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl bg-accent px-4 text-sm font-bold text-white hover:bg-accent-hover cursor-pointer shadow-xs"
+              >
+                <CreditCard className="h-4 w-4" />
+                <span>Thanh toán ngay</span>
+              </button>
+            )}
+            <Link
+              href="/"
+              className="inline-flex h-10 items-center justify-center rounded-xl bg-slate-900 px-4 text-sm font-bold text-white hover:bg-slate-800"
+            >
+              Về trang chủ
+            </Link>
+          </div>
         </div>
       </div>
     );
