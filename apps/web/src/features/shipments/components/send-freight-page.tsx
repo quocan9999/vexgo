@@ -2069,18 +2069,11 @@ function SendFreightContent() {
                                         </select>
                                         <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                                       </div>
-                                      {fieldErrors[`itemCategory_${item.id}`] ? (
+                                      {fieldErrors[`itemCategory_${item.id}`] && (
                                         <p className="mt-1 text-xs text-rose-600 font-medium flex items-center gap-1 animate-in fade-in">
                                           <AlertCircle className="w-3.5 h-3.5 shrink-0" />
                                           <span>{fieldErrors[`itemCategory_${item.id}`]}</span>
                                         </p>
-                                      ) : (
-                                        <span className="mt-1 block text-[11px] text-slate-400">
-                                          Mặt hàng khác ngoài danh mục vui lòng chọn{' '}
-                                          <strong className="text-slate-600">
-                                            Bưu Phẩm / Hàng Hóa Khác
-                                          </strong>
-                                        </span>
                                       )}
                                     </div>
                                   )}
@@ -2557,7 +2550,7 @@ function SendFreightContent() {
                               />
                               <div>
                                 <span className="font-bold text-slate-900">
-                                  Người gửi thanh toán tại bến
+                                  Người gửi thanh toán
                                 </span>
                                 <p className="text-[11px] text-slate-500 font-normal mt-0.5">
                                   Thanh toán trực tiếp tại quầy khi bàn giao kiện hàng.
@@ -2582,7 +2575,7 @@ function SendFreightContent() {
                               />
                               <div>
                                 <span className="font-bold text-slate-900">
-                                  Người nhận thanh toán khi nhận hàng
+                                  Người nhận thanh toán
                                 </span>
                                 <p className="text-[11px] text-slate-500 font-normal mt-0.5">
                                   Thu cước tại bến đích khi người nhận đến lấy hàng.
@@ -2607,7 +2600,7 @@ function SendFreightContent() {
                               />
                               <div>
                                 <span className="font-bold text-slate-900">
-                                  Thanh toán trực tuyến ngay
+                                  Thanh toán trực tuyến
                                 </span>
                                 <p className="text-[11px] text-slate-500 font-normal mt-0.5">
                                   Chuyển khoản qua mã QR ngay sau khi tạo vận đơn.
@@ -3089,10 +3082,10 @@ function SendFreightContent() {
                   <span className="text-slate-500">Hình thức thanh toán:</span>
                   <span className="font-bold text-slate-800">
                     {paymentOption === 'RECEIVER_COUNTER'
-                      ? 'Người nhận thanh toán khi nhận hàng'
+                      ? 'Người nhận thanh toán'
                       : paymentOption === 'ONLINE'
-                      ? 'Thanh toán trực tuyến ngay'
-                      : 'Người gửi thanh toán tại bến'}
+                      ? 'Thanh toán trực tuyến'
+                      : 'Người gửi thanh toán'}
                   </span>
                 </div>
                 <div className="flex justify-between py-1 border-b border-dashed border-slate-100">
