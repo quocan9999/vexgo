@@ -2537,7 +2537,7 @@ function SendFreightContent() {
                         {/* Hình thức thanh toán cước */}
                         <div className="pt-3 border-t border-slate-100 space-y-2">
                           <span className="text-xs font-bold text-slate-800 block">
-                            Hình thức thanh toán cước:
+                            Hình thức thanh toán cước
                           </span>
                           <div className="space-y-1.5">
                             <label
@@ -2560,7 +2560,7 @@ function SendFreightContent() {
                                   Người gửi thanh toán tại bến
                                 </span>
                                 <p className="text-[11px] text-slate-500 font-normal mt-0.5">
-                                  Cân đo và thanh toán cước khi mang hàng ra bến gửi.
+                                  Thanh toán trực tiếp tại quầy khi bàn giao kiện hàng.
                                 </p>
                               </div>
                             </label>
@@ -2585,7 +2585,7 @@ function SendFreightContent() {
                                   Người nhận thanh toán khi nhận hàng
                                 </span>
                                 <p className="text-[11px] text-slate-500 font-normal mt-0.5">
-                                  Người nhận thanh toán cước khi ra bến nhận hàng.
+                                  Thu cước tại bến đích khi người nhận đến lấy hàng.
                                 </p>
                               </div>
                             </label>
@@ -2607,10 +2607,10 @@ function SendFreightContent() {
                               />
                               <div>
                                 <span className="font-bold text-slate-900">
-                                  Thanh toán online trước
+                                  Thanh toán trực tuyến ngay
                                 </span>
                                 <p className="text-[11px] text-slate-500 font-normal mt-0.5">
-                                  Chuyển khoản trực tuyến ngay sau khi tạo đơn.
+                                  Chuyển khoản qua mã QR ngay sau khi tạo vận đơn.
                                 </p>
                               </div>
                             </label>
@@ -3091,7 +3091,7 @@ function SendFreightContent() {
                     {paymentOption === 'RECEIVER_COUNTER'
                       ? 'Người nhận thanh toán khi nhận hàng'
                       : paymentOption === 'ONLINE'
-                      ? 'Thanh toán online trước'
+                      ? 'Thanh toán trực tuyến ngay'
                       : 'Người gửi thanh toán tại bến'}
                   </span>
                 </div>

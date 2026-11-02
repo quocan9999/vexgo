@@ -219,7 +219,7 @@ describe('independent shipment flow', () => {
       to: 'TP.HCM',
       departureDate: '2026-10-20',
     });
-    fireEvent.click(screen.getByLabelText(/Thanh toán online trước/i));
+    fireEvent.click(screen.getByLabelText(/Thanh toán trực tuyến ngay/i));
     fireEvent.click(screen.getByRole('button', { name: 'Tạo mã vận đơn' }));
 
     await waitFor(() => expect(api.routerPush).toHaveBeenCalledTimes(1));
@@ -274,7 +274,7 @@ describe('independent shipment flow', () => {
     );
     await waitFor(() => expect(api.getRoutePoints).toHaveBeenCalledWith(42));
 
-    fireEvent.click(screen.getByLabelText(/Thanh toán online trước/i));
+    fireEvent.click(screen.getByLabelText(/Thanh toán trực tuyến ngay/i));
     fireEvent.click(screen.getByRole('button', { name: 'Tạo mã vận đơn' }));
 
     await waitFor(() => expect(api.routerPush).toHaveBeenCalledTimes(1));
@@ -483,7 +483,7 @@ describe('independent shipment flow', () => {
     expect(screen.getByText('079123456789')).toBeTruthy();
 
     await waitFor(() => expect(api.getRoutePoints).toHaveBeenCalledWith(42));
-    fireEvent.click(screen.getByLabelText(/Thanh toán online trước/i));
+    fireEvent.click(screen.getByLabelText(/Thanh toán trực tuyến ngay/i));
     fireEvent.click(screen.getByRole('button', { name: 'Tạo mã vận đơn' }));
 
     await waitFor(() => expect(api.createShipment).toHaveBeenCalledTimes(1));
