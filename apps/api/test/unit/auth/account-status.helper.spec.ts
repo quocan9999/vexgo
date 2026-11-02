@@ -70,7 +70,7 @@ describe('account-status.helper', () => {
         expect(err.getResponse()).toEqual({
           error: 'ACCOUNT_LOCKED',
           message:
-            'Tài khoản của bạn đã bị khóa vĩnh viễn. (Lý do: Vi phạm quy định nghiêm trọng) Vui lòng liên hệ nhà xe hoặc tổng đài hỗ trợ.',
+            'Tài khoản của bạn đã bị khóa vĩnh viễn. Vui lòng liên hệ nhà xe hoặc tổng đài hỗ trợ.',
         });
       }
     });
@@ -96,6 +96,7 @@ describe('account-status.helper', () => {
         expect(resp.error).toBe('ACCOUNT_SUSPENDED');
         expect(resp.lockedUntil).toBe(formatDateOnly(futureDate));
         expect(resp.message).toContain('Tài khoản của bạn đang bị tạm khóa');
+        expect(resp.message).not.toContain('Lý do');
       }
     });
 

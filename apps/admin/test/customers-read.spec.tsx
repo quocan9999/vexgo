@@ -288,11 +288,7 @@ describe('Customer Directory & Detail (/customers)', () => {
     const dateInput = within(confirmDialog).getByLabelText(/Tạm khóa đến ngày/i);
     fireEvent.change(dateInput, { target: { value: '2026-11-20' } });
 
-    // Submit with empty reason
-    fireEvent.click(submitBtn);
-    expect(await within(confirmDialog).findByText('Lý do phải có tối thiểu 5 ký tự.')).toBeTruthy();
-
-    // Enter valid reason and submit
+    // Enter optional reason and submit
     const reasonTextarea = within(confirmDialog).getByLabelText(/Lý do khóa/i);
     fireEvent.change(reasonTextarea, { target: { value: 'Gian lận mã giảm giá nhiều lần' } });
     fireEvent.click(submitBtn);

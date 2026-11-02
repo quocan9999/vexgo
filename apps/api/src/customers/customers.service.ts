@@ -397,12 +397,13 @@ export class CustomersService {
     const taiKhoanId = customer.taiKhoanId;
 
     const updatedAccount = await this.prisma.$transaction(async (tx) => {
+      const reasonTrimmed = dto.reason?.trim() || null;
       await tx.taiKhoan.update({
         where: { taiKhoanId },
         data: {
           trangThai: dto.status,
           khoaDenNgay: dto.status === TrangThaiTaiKhoan.TAM_KHOA ? khoaDenNgay : null,
-          lyDoKhoa: dto.status !== TrangThaiTaiKhoan.HOAT_DONG ? dto.reason.trim() : null,
+          lyDoKhoa: dto.status !== TrangThaiTaiKhoan.HOAT_DONG ? reasonTrimmed : null,
         },
       });
 
@@ -441,7 +442,7 @@ export class CustomersService {
         customerId: customer.khachHangId,
         accountStatus: dto.status,
         lockedUntil: dto.status === TrangThaiTaiKhoan.TAM_KHOA ? formatDateOnly(khoaDenNgay) : null,
-        lockReason: dto.status !== TrangThaiTaiKhoan.HOAT_DONG ? dto.reason.trim() : null,
+        lockReason: dto.status !== TrangThaiTaiKhoan.HOAT_DONG ? (dto.reason?.trim() || null) : null,
         updatedAt: updatedAccount?.updatedAt.toISOString() ?? new Date().toISOString(),
         message: 'Cập nhật trạng thái tài khoản thành công.',
       },

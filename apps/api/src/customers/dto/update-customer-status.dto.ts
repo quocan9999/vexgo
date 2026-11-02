@@ -4,8 +4,8 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
-  Length,
   Matches,
+  MaxLength,
   ValidateIf,
 } from 'class-validator';
 import { TrangThaiTaiKhoan } from '../../generated/prisma/enums.js';
@@ -21,17 +21,17 @@ export class UpdateCustomerStatusDto {
   })
   status!: TrangThaiTaiKhoan;
 
-  @ApiProperty({
-    description: 'Lý do thay đổi trạng thái tài khoản',
+  @ApiPropertyOptional({
+    description: 'Lý do thay đổi trạng thái tài khoản (tùy chọn)',
     example: 'Khách hàng vi phạm chính sách giữ chỗ nhiều lần.',
-    minLength: 5,
     maxLength: 255,
   })
+  @IsOptional()
   @IsString({ message: 'Lý do thay đổi trạng thái phải là chuỗi ký tự.' })
-  @Length(5, 255, {
-    message: 'Lý do thay đổi trạng thái phải từ 5 đến 255 ký tự.',
+  @MaxLength(255, {
+    message: 'Lý do thay đổi trạng thái tối đa 255 ký tự.',
   })
-  reason!: string;
+  reason?: string;
 
   @ApiPropertyOptional({
     description: 'Ngày hết hạn tạm khóa (định dạng DD-MM-YYYY), bắt buộc khi tạm khóa',

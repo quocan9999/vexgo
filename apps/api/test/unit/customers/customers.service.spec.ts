@@ -393,10 +393,18 @@ describe('UpdateCustomerStatusDto', () => {
     expect(errors.some((e) => e.property === 'status')).toBe(true);
   });
 
-  it('rejects short reason (less than 5 chars)', async () => {
+  it('allows optional reason or omitted reason', async () => {
     const dto = plainToInstance(UpdateCustomerStatusDto, {
-      status: 'TAM_KHOA',
-      reason: 'abc',
+      status: 'BI_KHOA',
+    });
+    const errors = await validate(dto, options);
+    expect(errors.length).toBe(0);
+  });
+
+  it('rejects reason exceeding 255 chars', async () => {
+    const dto = plainToInstance(UpdateCustomerStatusDto, {
+      status: 'BI_KHOA',
+      reason: 'a'.repeat(256),
     });
     const errors = await validate(dto, options);
     expect(errors.some((e) => e.property === 'reason')).toBe(true);

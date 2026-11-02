@@ -16,7 +16,8 @@ import {
   type AuthState,
   type AuthUser,
 } from './auth-session-state';
-import { authApi } from './services/auth.api';
+import { usePathname } from 'next/navigation';
+import { authApi, API_BASE_URL, ApiError } from './services/auth.api';
 import { runWithAuthRetry, type TokenPair } from './services/auth-retry';
 
 export type { AuthState, AuthUser } from './auth-session-state';
@@ -33,6 +34,57 @@ type AuthSessionContextValue = AuthState & {
 };
 
 const AuthSessionContext = createContext<AuthSessionContextValue | null>(null);
+
+
+function SessionWatcher({
+  onValidate,
+  isAuthenticated,
+}: {
+  onValidate: () => void;
+  isAuthenticated: boolean;
+}) {
+  let pathname: string | null = null;
+  try {
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    pathname = usePathname();
+  } catch {
+    pathname = null;
+  }
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      void onValidate();
+    }
+  }, [pathname, isAuthenticated, onValidate]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const handleFocus = () => {
+      void onValidate();
+    };
+
+    const handleVisibilityChange = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        void onValidate();
+      }
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('focus', handleFocus);
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+    }
+
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('focus', handleFocus);
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      }
+    };
+  }, [isAuthenticated, onValidate]);
+
+  return null;
+}
 
 export function AuthSessionProvider({
   children,
@@ -195,6 +247,43 @@ export function AuthSessionProvider({
     [refreshTokens, signOut],
   );
 
+  const lastValidated = useRef<number>(0);
+
+  const validateSession = useCallback(async () => {
+    if (!current.current.isAuthenticated || !current.current.accessToken) {
+      return;
+    }
+
+    const now = Date.now();
+    if (now - lastValidated.current < 1000) {
+      return;
+    }
+    lastValidated.current = now;
+
+    try {
+      await executeWithAuth(async (token) => {
+        const res = await fetch(`${API_BASE_URL}/me`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({}));
+          throw new ApiError(
+            res.status,
+            errorData.error || 'UNAUTHORIZED',
+            errorData.message || 'Phiên đăng nhập không hợp lệ',
+          );
+        }
+
+        return res.json();
+      });
+    } catch {
+      // executeWithAuth và runWithAuthRetry tự động gọi onAuthFailed() -> signOut() khi gặp 403 ACCOUNT_LOCKED / ACCOUNT_SUSPENDED
+    }
+  }, [executeWithAuth]);
+
   const value = useMemo(
     () => ({
       ...state,
@@ -208,6 +297,10 @@ export function AuthSessionProvider({
 
   return (
     <AuthSessionContext.Provider value={value}>
+      <SessionWatcher
+        onValidate={validateSession}
+        isAuthenticated={state.isAuthenticated}
+      />
       {children}
     </AuthSessionContext.Provider>
   );

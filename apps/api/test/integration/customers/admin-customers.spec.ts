@@ -1226,12 +1226,42 @@ describe('Admin Customers API (Feature 06.1)', () => {
         .expect(400);
     });
 
-    it('rejects missing or too short reason with 400', async () => {
+    it('allows updating status without reason (reason is optional)', async () => {
+      mockPrisma.khachHang.findFirst.mockResolvedValue(mockCustomer);
+      mockPrisma.$transaction.mockImplementation(async (cb: (tx: any) => unknown) =>
+        cb({
+          taiKhoan: {
+            update: vi.fn().mockResolvedValue(mockCustomer.taiKhoan),
+            findUnique: vi.fn().mockResolvedValue({
+              taiKhoanId: 201,
+              trangThai: 'TAM_KHOA',
+              updatedAt: NOW,
+            }),
+          },
+          phienDangNhap: {
+            updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+          },
+        }),
+      );
+
+      const response = await request(app.getHttpServer())
+        .patch('/api/v1/customers/101/status')
+        .send({
+          status: 'TAM_KHOA',
+          lockedUntil: '20-11-2026',
+        })
+        .expect(200);
+
+      expect(response.body.data.lockReason).toBeNull();
+    });
+
+    it('rejects reason exceeding 255 characters with 400', async () => {
       await request(app.getHttpServer())
         .patch('/api/v1/customers/101/status')
         .send({
           status: 'TAM_KHOA',
-          reason: 'abc',
+          reason: 'a'.repeat(256),
+          lockedUntil: '20-11-2026',
         })
         .expect(400);
     });

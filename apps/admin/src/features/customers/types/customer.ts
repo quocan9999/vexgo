@@ -35,7 +35,7 @@ export interface CustomerDetail extends CustomerSummary {
 
 export interface UpdateCustomerStatusInput {
   status: CustomerAccountStatus;
-  reason: string;
+  reason?: string;
   lockedUntil?: string;
 }
 

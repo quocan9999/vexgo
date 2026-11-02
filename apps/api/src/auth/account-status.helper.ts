@@ -74,19 +74,17 @@ export async function assertAccountActive(
 
     const formattedDate = formatDateOnly(account.khoaDenNgay);
     const dateMessage = formattedDate ? ` đến ngày ${formattedDate}` : '';
-    const reasonMessage = account.lyDoKhoa ? ` (Lý do: ${account.lyDoKhoa})` : '';
     throw new ForbiddenException({
       error: 'ACCOUNT_SUSPENDED',
-      message: `Tài khoản của bạn đang bị tạm khóa${dateMessage}.${reasonMessage} Vui lòng liên hệ nhà xe hoặc tổng đài hỗ trợ.`,
+      message: `Tài khoản của bạn đang bị tạm khóa${dateMessage}. Vui lòng liên hệ nhà xe hoặc tổng đài hỗ trợ.`,
       lockedUntil: formattedDate,
     });
   }
 
   if (account.trangThai === TrangThaiTaiKhoan.BI_KHOA) {
-    const reasonMessage = account.lyDoKhoa ? ` (Lý do: ${account.lyDoKhoa})` : '';
     throw new ForbiddenException({
       error: 'ACCOUNT_LOCKED',
-      message: `Tài khoản của bạn đã bị khóa vĩnh viễn.${reasonMessage} Vui lòng liên hệ nhà xe hoặc tổng đài hỗ trợ.`,
+      message: 'Tài khoản của bạn đã bị khóa vĩnh viễn. Vui lòng liên hệ nhà xe hoặc tổng đài hỗ trợ.',
     });
   }
 

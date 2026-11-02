@@ -168,10 +168,7 @@ export function CustomerDetails({
     }
 
     const trimmedReason = statusReason.trim();
-    if (!trimmedReason || trimmedReason.length < 5) {
-      setStatusReasonError('Lý do phải có tối thiểu 5 ký tự.');
-      hasError = true;
-    } else if (trimmedReason.length > 255) {
+    if (trimmedReason.length > 255) {
       setStatusReasonError('Lý do không được vượt quá 255 ký tự.');
       hasError = true;
     } else {
@@ -185,9 +182,9 @@ export function CustomerDetails({
 
     try {
       const targetStatus = isLocking ? lockMode : 'HOAT_DONG';
-      const payload: { status: 'HOAT_DONG' | 'TAM_KHOA' | 'BI_KHOA'; reason: string; lockedUntil?: string } = {
+      const payload: { status: 'HOAT_DONG' | 'TAM_KHOA' | 'BI_KHOA'; reason?: string; lockedUntil?: string } = {
         status: targetStatus,
-        reason: trimmedReason,
+        ...(trimmedReason ? { reason: trimmedReason } : {}),
       };
 
       if (isLocking && lockMode === 'TAM_KHOA') {
@@ -521,9 +518,8 @@ export function CustomerDetails({
               <div className="flex justify-between items-center">
                 <FieldLabel htmlFor="customer-status-reason">
                   {detail.customer.account.status === 'HOAT_DONG'
-                    ? 'Lý do khóa'
-                    : 'Lý do mở khóa'}{' '}
-                  <span className="text-destructive">*</span>
+                    ? 'Lý do khóa (tùy chọn)'
+                    : 'Lý do mở khóa (tùy chọn)'}
                 </FieldLabel>
                 <span className="text-xs text-muted-foreground">
                   {statusReason.length}/255
@@ -539,8 +535,8 @@ export function CustomerDetails({
                 }}
                 placeholder={
                   detail.customer.account.status === 'HOAT_DONG'
-                    ? 'Nhập lý do khóa tài khoản (tối thiểu 5 ký tự, tối đa 255 ký tự)...'
-                    : 'Nhập lý do mở khóa tài khoản (tối thiểu 5 ký tự, tối đa 255 ký tự)...'
+                    ? 'Nhập lý do khóa nếu có (tối đa 255 ký tự)...'
+                    : 'Nhập lý do mở khóa nếu có (tối đa 255 ký tự)...'
                 }
                 rows={3}
                 disabled={statusSubmitting}
