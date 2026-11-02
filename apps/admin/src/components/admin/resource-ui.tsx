@@ -18,6 +18,7 @@ import {
   AlertDialog,
   AlertDialogContent,
   AlertDialogDescription,
+  AlertDialogFooter,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/status-badge';
@@ -70,12 +71,14 @@ export function ResourceConfirmation({
   title,
   description,
   children,
+  footer,
   busy = false,
   onClose,
 }: {
   title: string;
   description: string;
   children: ReactNode;
+  footer?: ReactNode;
   busy?: boolean;
   onClose: () => void;
 }) {
@@ -92,14 +95,18 @@ export function ResourceConfirmation({
         <AlertDialogTitle>{title}</AlertDialogTitle>
         <AlertDialogDescription>{description}</AlertDialogDescription>
         {children}
-        <Button
-          disabled={busy}
-          onClick={onClose}
-          ref={cancelRef}
-          variant="outline"
-        >
-          Hủy
-        </Button>
+        {footer ? (
+          <AlertDialogFooter>{footer}</AlertDialogFooter>
+        ) : (
+          <Button
+            disabled={busy}
+            onClick={onClose}
+            ref={cancelRef}
+            variant="outline"
+          >
+            Hủy
+          </Button>
+        )}
       </AlertDialogContent>
     </AlertDialog>
   );

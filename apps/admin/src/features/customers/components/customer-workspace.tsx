@@ -501,6 +501,46 @@ export function CustomerWorkspace({ customerId }: { customerId: number }) {
               ? 'Tài khoản khách hàng sẽ bị vô hiệu hóa. Khách hàng sẽ không thể đăng nhập hoặc đặt vé, và các phiên đăng nhập đang hoạt động sẽ bị thu hồi ngay lập tức.'
               : 'Tài khoản khách hàng sẽ được kích hoạt trở lại và có thể đăng nhập, đặt vé bình thường.'
           }
+          footer={
+            <>
+              <Button
+                disabled={statusSubmitting}
+                onClick={() => {
+                  if (!statusSubmitting) {
+                    setStatusDialogOpen(false);
+                    setStatusError(null);
+                    setStatusReasonError(null);
+                    setLockedUntilError(null);
+                  }
+                }}
+                variant="outline"
+              >
+                Hủy
+              </Button>
+              <Button
+                aria-busy={statusSubmitting}
+                disabled={statusSubmitting}
+                variant={
+                  customer.account.status === 'HOAT_DONG'
+                    ? 'destructive'
+                    : 'default'
+                }
+                onClick={() => void handleConfirmStatusChange()}
+              >
+                {statusSubmitting && (
+                  <LoaderCircle
+                    aria-hidden
+                    className="motion-safe:animate-spin"
+                  />
+                )}
+                {statusSubmitting
+                  ? 'Đang cập nhật…'
+                  : customer.account.status === 'HOAT_DONG'
+                    ? 'Xác nhận khóa tài khoản'
+                    : 'Xác nhận mở khóa'}
+              </Button>
+            </>
+          }
         >
           <div className="space-y-4">
             {customer.account.status === 'HOAT_DONG' && (
@@ -584,29 +624,6 @@ export function CustomerWorkspace({ customerId }: { customerId: number }) {
             {statusError && (
               <ResourceNotice kind="error">{statusError}</ResourceNotice>
             )}
-
-            <Button
-              aria-busy={statusSubmitting}
-              disabled={statusSubmitting}
-              variant={
-                customer.account.status === 'HOAT_DONG'
-                  ? 'destructive'
-                  : 'default'
-              }
-              onClick={() => void handleConfirmStatusChange()}
-            >
-              {statusSubmitting && (
-                <LoaderCircle
-                  aria-hidden
-                  className="motion-safe:animate-spin"
-                />
-              )}
-              {statusSubmitting
-                ? 'Đang cập nhật…'
-                : customer.account.status === 'HOAT_DONG'
-                  ? 'Xác nhận khóa tài khoản'
-                  : 'Xác nhận mở khóa'}
-            </Button>
           </div>
         </ResourceConfirmation>
       )}
