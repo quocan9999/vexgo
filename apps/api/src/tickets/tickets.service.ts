@@ -688,7 +688,7 @@ export class TicketsService {
               bookingId: t.phieuDatVeId,
               ticketId: t.veId,
               title: 'Hủy vé thành công',
-              content: `Vé ${t.maVe} đã được hủy. Phí hủy: ${quote.cancelFee.toString()} VND. ${quote.refundAmount.isZero() ? 'Không phát sinh khoản hoàn tiền.' : `Yêu cầu hoàn ${quote.refundAmount.toString()} VND đang được xử lý; đây chưa phải xác nhận tiền đã hoàn tất.`}`,
+              content: `Vé ${t.maVe} đã được hủy. Phí hủy: ${quote.cancelFee.toString()} VND. ${quote.refundAmount.isZero() ? 'Không phát sinh khoản hoàn tiền.' : `Số tiền dự kiến hoàn: ${quote.refundAmount.toString()} VND. Vui lòng liên hệ hỗ trợ và cung cấp mã vé để yêu cầu hoàn tiền; hệ thống không hoàn tiền online.`}`,
             });
           }
 
@@ -739,7 +739,7 @@ export class TicketsService {
                 refundAmount: Number(totalRefundAmount.toString()),
                 message: totalRefundAmount.isZero()
                   ? 'Hủy vé thành công. Không phát sinh khoản hoàn tiền.'
-                  : 'Hủy vé thành công. Yêu cầu hoàn tiền đang được xử lý.',
+                  : 'Hủy vé thành công. Vui lòng liên hệ hỗ trợ và cung cấp mã vé để yêu cầu hoàn tiền; hệ thống không hoàn tiền online.',
               },
             },
           };

@@ -1540,7 +1540,7 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
         status: 'HUY',
         cancelFee: 15_000,
         refundAmount: 135_000,
-        message: 'Hủy vé thành công. Yêu cầu hoàn tiền đang được xử lý.',
+        message: 'Hủy vé thành công. Vui lòng liên hệ hỗ trợ và cung cấp mã vé để yêu cầu hoàn tiền; hệ thống không hoàn tiền online.',
       });
 
       const payments = await prisma.thanhToan.findMany({

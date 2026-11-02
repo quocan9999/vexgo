@@ -1,162 +1,54 @@
 import type { ConfigService } from '@nestjs/config';
 import { Logger } from '@nestjs/common';
-import { Prisma } from '../../../src/generated/prisma/client.js';
 import type { PrismaService } from '../../../src/prisma/prisma.service.js';
 import { RefundProcessorService } from '../../../src/payments/refund-processor.service.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const refund = {
-  thanhToanId: 77,
-  soTien: new Prisma.Decimal('225000'),
-  phuongThuc: 'MOMO',
-  loaiGiaoDich: 'HOAN_TIEN',
-  thoiGian: new Date('2026-10-04T09:00:00.000Z'),
-  thoiDiemHoanTat: null,
-  trangThai: 'DANG_XU_LY',
-  laQuyetToanHopLe: false,
-  donGiaoDichId: 201,
-  veId: 1,
-  createdAt: new Date('2026-10-04T09:00:00.000Z'),
-  updatedAt: new Date('2026-10-04T09:00:00.000Z'),
-};
-
-function createService(configValues: Record<string, string | undefined> = {}) {
-  const prisma = {
-    thongBao: { upsert: vi.fn().mockResolvedValue({ thongBaoId: 1 }) },
-    emailThongBao: { upsert: vi.fn() },
-    thietBiThongBao: { findMany: vi.fn().mockResolvedValue([]) },
-    pushThongBao: { upsert: vi.fn() },
-    thanhToan: {
-      findUniqueOrThrow: vi
-        .fn()
-        .mockResolvedValue({
-          ...refund,
-          trangThai: 'THANH_CONG',
-          thoiDiemHoanTat: new Date(),
-          ve: {
-            veId: 1,
-            maVe: 'TICKET-1',
-            phieuDatVeId: 1,
-            phieuDatVe: {
-              donGiaoDich: {
-                khachHangId: 1,
-                emailKhachHang: 'owner@example.test',
-              },
-            },
-          },
-        }),
-      findUnique: vi.fn().mockResolvedValue(refund),
-      findMany: vi.fn().mockResolvedValue([]),
-      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
-    },
-  };
-  Object.assign(prisma, {
-    $transaction: vi.fn(async (cb: (tx: typeof prisma) => unknown) =>
-      cb(prisma),
-    ),
-  });
-  const config = {
-    get: vi.fn((key: string) => configValues[key]),
-  };
-  return {
-    prisma,
-    service: new RefundProcessorService(
-      prisma as unknown as PrismaService,
-      config as unknown as ConfigService,
-    ),
-  };
-}
-
 beforeEach(() => {
-  vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+  vi.useFakeTimers();
+  vi.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
 });
-
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.useRealTimers();
   vi.restoreAllMocks();
 });
 
-describe('RefundProcessorService', () => {
-  it('dispatches a pending refund after commit with a stable idempotency key', async () => {
-    const completedAt = new Date('2026-10-16T00:03:00.000+07:00');
-    vi.useFakeTimers();
-    vi.setSystemTime(completedAt);
-    const { prisma, service } = createService({
-      REFUND_PROVIDER_URL: 'https://payments.example/refunds',
-      REFUND_PROVIDER_TOKEN: 'provider-secret',
-    });
-    const providerFetch = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ status: 'SUCCEEDED' }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      }),
-    );
-    vi.stubGlobal('fetch', providerFetch);
-
-    await service.processRefund(77);
-
-    expect(providerFetch).toHaveBeenCalledWith(
-      'https://payments.example/refunds',
-      expect.objectContaining({
-        method: 'POST',
-        headers: expect.objectContaining({
-          Authorization: 'Bearer provider-secret',
-          'Idempotency-Key': 'refund-77',
-        }),
-        body: JSON.stringify({
-          refundId: 77,
-          transactionId: 201,
-          ticketId: 1,
-          amount: '225000',
-          paymentMethod: 'MOMO',
-        }),
-      }),
-    );
-    expect(prisma.thanhToan.updateMany).toHaveBeenLastCalledWith({
-      where: {
-        thanhToanId: 77,
-        trangThai: 'DANG_GUI',
-        thoiDiemHoanTat: null,
-      },
-      data: {
-        trangThai: 'THANH_CONG',
-        thoiDiemHoanTat: completedAt,
-      },
-    });
-  });
-
-  it('returns a failed provider request to the durable pending queue for retry', async () => {
-    const { prisma, service } = createService({
-      REFUND_PROVIDER_URL: 'https://payments.example/refunds',
-    });
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockRejectedValue(new Error('network down')),
-    );
-
-    await service.processRefund(77);
-
-    expect(prisma.thanhToan.updateMany).toHaveBeenLastCalledWith({
-      where: { thanhToanId: 77, trangThai: 'DANG_GUI' },
-      data: { trangThai: 'DANG_XU_LY' },
-    });
-  });
-
-  it('does not overwrite a previously recorded refund completion timestamp', async () => {
-    const { prisma, service } = createService({
-      REFUND_PROVIDER_URL: 'https://payments.example/refunds',
-    });
-    prisma.thanhToan.findUnique.mockResolvedValue({
-      ...refund,
-      thoiDiemHoanTat: new Date('2026-10-16T00:03:00.000+07:00'),
-    });
-    const providerFetch = vi.fn();
-    vi.stubGlobal('fetch', providerFetch);
-
-    await service.processRefund(77);
-
-    expect(providerFetch).not.toHaveBeenCalled();
-    expect(prisma.thanhToan.updateMany).not.toHaveBeenCalled();
-  });
+describe('Support-only refunds', () => {
+  it.each([
+    {},
+    {
+      REFUND_PROVIDER_URL: 'https://provider.example.test/refunds',
+      REFUND_PROVIDER_TOKEN: 'old-config',
+      REFUND_PROCESS_INTERVAL_MS: '1000',
+    },
+  ])(
+    'never dispatches or settles refunds despite legacy provider settings: %j',
+    async (settings) => {
+      const databaseAccess = vi.fn(() => {
+        throw new Error('Manual refunds must not touch the DB');
+      });
+      const prisma = new Proxy({}, { get: databaseAccess }) as PrismaService;
+      const config = {
+        get: vi.fn((key: string) => (settings as Record<string, string>)[key]),
+      };
+      const fetch = vi.fn();
+      vi.stubGlobal('fetch', fetch);
+      const service = new RefundProcessorService(
+        prisma,
+        config as unknown as ConfigService,
+      );
+      service.onApplicationBootstrap();
+      service.enqueueRefund(77);
+      await service.processPendingRefunds();
+      await service.processRefund(77);
+      await service.processRefund(77);
+      await vi.advanceTimersByTimeAsync(120000);
+      service.onApplicationShutdown();
+      expect(fetch).not.toHaveBeenCalled();
+      expect(databaseAccess).not.toHaveBeenCalled();
+      expect(config.get).not.toHaveBeenCalled();
+      expect(vi.getTimerCount()).toBe(0);
+    },
+  );
 });

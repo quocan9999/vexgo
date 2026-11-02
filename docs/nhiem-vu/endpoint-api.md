@@ -437,14 +437,13 @@ phí cũ và `details.currentQuote` chứa quote mới đã được filter ki�
 Frontend phải hiển thị quote mới từ server và yêu cầu khách xác nhận lại, không
 được tự ghi đè quote bằng clock của thiết bị. Khi thành công, backend hủy vé và
 giải phóng ghế trong transaction, đồng thời tạo giao dịch `HOAN_TIEN` ở trạng
-thái `DANG_XU_LY`; response chỉ xác nhận yêu cầu hoàn tiền đã được ghi nhận,
-không khẳng định tiền đã hoàn tất.
+thái `DANG_XU_LY` để đối soát thủ công. Response xác nhận vé đã hủy,
+không xác nhận tiền đã hoàn. `refundAmount` là số tiền dự kiến theo chính sách.
 
-Sau khi transaction commit, refund processor gửi yêu cầu tới
-`REFUND_PROVIDER_URL` với idempotency key ổn định theo `thanhToanId`. Record
-`DANG_XU_LY` là hàng đợi bền vững và được quét lại định kỳ; request thành công
-chuyển sang `THANH_CONG`, lỗi mạng/provider được trả lại `DANG_XU_LY` để retry.
-Không cấu hình provider thì API giữ refund ở trạng thái pending và ghi cảnh báo.
+Hệ thống không hoàn tiền online. Khách cần liên hệ hỗ trợ và cung cấp mã vé
+sau khi hủy để yêu cầu hoàn tiền. Refund processor không gửi request, không quét
+retry và không chuyển bản ghi sang `THANH_CONG`, kể cả khi biến cấu hình provider
+cũ còn tồn tại. Giữ nguyên lịch sử hoàn tiền đã hoàn tất; không tự đổi dữ liệu cũ.
 
 ## Flow 3 — Tra cứu hóa đơn (MEDIUM)
 
