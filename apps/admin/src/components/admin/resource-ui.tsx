@@ -109,7 +109,7 @@ export function ResourceStatusBadge({
   tone,
   children,
 }: {
-  tone: 'active' | 'muted' | 'warning';
+  tone: 'active' | 'muted' | 'warning' | 'danger';
   children: ReactNode;
 }) {
   return (
@@ -119,7 +119,9 @@ export function ResourceStatusBadge({
           ? 'success'
           : tone === 'warning'
             ? 'warning'
-            : 'secondary'
+            : tone === 'danger'
+              ? 'destructive'
+              : 'secondary'
       }
     >
       <span aria-hidden className="size-1.5 rounded-full bg-current" />

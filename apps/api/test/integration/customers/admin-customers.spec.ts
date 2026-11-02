@@ -405,6 +405,8 @@ describe('Admin Customers API (Feature 06.1)', () => {
           account: {
             accountId: 201,
             status: 'HOAT_DONG',
+              lockedUntil: null,
+              lockReason: null,
             phoneVerified: true,
             createdAt: NOW.toISOString(),
             updatedAt: NOW.toISOString(),
@@ -1198,6 +1200,7 @@ describe('Admin Customers API (Feature 06.1)', () => {
         .send({
           status: 'TAM_KHOA',
           reason: 'Khách hàng có hành vi gian lận mã giảm giá',
+          lockedUntil: '20-11-2026',
         })
         .expect(200);
 
@@ -1205,6 +1208,8 @@ describe('Admin Customers API (Feature 06.1)', () => {
         data: {
           customerId: 101,
           accountStatus: 'TAM_KHOA',
+          lockedUntil: '20-11-2026',
+          lockReason: 'Khách hàng có hành vi gian lận mã giảm giá',
           updatedAt: NOW.toISOString(),
           message: 'Cập nhật trạng thái tài khoản thành công.',
         },
@@ -1231,6 +1236,28 @@ describe('Admin Customers API (Feature 06.1)', () => {
         .expect(400);
     });
 
+    it('rejects TAM_KHOA without lockedUntil with 400', async () => {
+      await request(app.getHttpServer())
+        .patch('/api/v1/customers/101/status')
+        .send({
+          status: 'TAM_KHOA',
+          reason: 'Lý do hợp lệ nhưng thiếu ngày tạm khóa',
+        })
+        .expect(400);
+    });
+
+    it('rejects lockedUntil in the past with 400', async () => {
+      mockPrisma.khachHang.findFirst.mockResolvedValue(mockCustomer);
+      await request(app.getHttpServer())
+        .patch('/api/v1/customers/101/status')
+        .send({
+          status: 'TAM_KHOA',
+          reason: 'Lý do hợp lệ nhưng ngày trong quá khứ',
+          lockedUntil: '01-01-2020',
+        })
+        .expect(400);
+    });
+
     it('returns 404 when customer does not exist in tenant scope', async () => {
       mockPrisma.khachHang.findFirst.mockResolvedValue(null);
 
@@ -1239,6 +1266,7 @@ describe('Admin Customers API (Feature 06.1)', () => {
         .send({
           status: 'TAM_KHOA',
           reason: 'Khách hàng không tồn tại trong hệ thống',
+          lockedUntil: '20-11-2026',
         })
         .expect(404);
     });

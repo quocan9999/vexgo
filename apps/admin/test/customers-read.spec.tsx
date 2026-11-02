@@ -259,7 +259,7 @@ describe('Customer Directory & Detail (/customers)', () => {
     });
   });
 
-  it('allows locking customer account with reason validation from detail sheet', async () => {
+  it('allows locking customer account with reason and date validation from detail sheet', async () => {
     const { requests } = installApi();
     render(<CustomersManagement />);
 
@@ -278,14 +278,22 @@ describe('Customer Directory & Detail (/customers)', () => {
     expect(confirmDialog).toBeTruthy();
     expect(within(confirmDialog).getByText('Khóa tài khoản khách hàng?')).toBeTruthy();
 
-    // Try submitting without reason
+    // Try submitting without date/reason when default is TAM_KHOA
     const submitBtn = within(confirmDialog).getByRole('button', { name: 'Xác nhận khóa tài khoản' });
     fireEvent.click(submitBtn);
 
+    expect(await within(confirmDialog).findByText('Vui lòng chọn ngày hết hạn tạm khóa.')).toBeTruthy();
+
+    // Select future date for temporary lock
+    const dateInput = within(confirmDialog).getByLabelText(/Tạm khóa đến ngày/i);
+    fireEvent.change(dateInput, { target: { value: '2026-11-20' } });
+
+    // Submit with empty reason
+    fireEvent.click(submitBtn);
     expect(await within(confirmDialog).findByText('Lý do phải có tối thiểu 5 ký tự.')).toBeTruthy();
 
     // Enter valid reason and submit
-    const reasonTextarea = within(confirmDialog).getByLabelText(/Lý do thay đổi trạng thái/i);
+    const reasonTextarea = within(confirmDialog).getByLabelText(/Lý do khóa/i);
     fireEvent.change(reasonTextarea, { target: { value: 'Gian lận mã giảm giá nhiều lần' } });
     fireEvent.click(submitBtn);
 
@@ -293,9 +301,44 @@ describe('Customer Directory & Detail (/customers)', () => {
       expect(screen.queryByRole('alertdialog')).toBeNull();
     });
 
-    // Verify PATCH request was made
+    // Verify PATCH request was made with correct payload
     const patchReq = requests.find((r) => r.method === 'PATCH');
     expect(patchReq).toBeTruthy();
     expect(patchReq?.url).toContain('/api/v1/customers/101/status');
+  });
+
+  it('allows permanent lock without date input', async () => {
+    const { requests } = installApi();
+    render(<CustomersManagement />);
+
+    const detailButtons = await screen.findAllByRole('button', { name: /xem chi tiết/i });
+    fireEvent.click(detailButtons[0]);
+
+    const sheet = await screen.findByRole('dialog', { name: 'Chi tiết khách hàng' });
+    const lockBtn = within(sheet).getByRole('button', { name: 'Khóa tài khoản' });
+    fireEvent.click(lockBtn);
+
+    const confirmDialog = await screen.findByRole('alertdialog');
+
+    // Switch to permanent lock
+    const permanentRadio = within(confirmDialog).getByRole('radio', { name: 'Khóa vĩnh viễn' });
+    fireEvent.click(permanentRadio);
+
+    // Date input should not be visible
+    expect(within(confirmDialog).queryByLabelText(/Tạm khóa đến ngày/i)).toBeNull();
+
+    // Enter reason and submit
+    const reasonTextarea = within(confirmDialog).getByLabelText(/Lý do khóa/i);
+    fireEvent.change(reasonTextarea, { target: { value: 'Vi phạm nghiêm trọng chính sách bảo mật' } });
+
+    const submitBtn = within(confirmDialog).getByRole('button', { name: 'Xác nhận khóa tài khoản' });
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => {
+      expect(screen.queryByRole('alertdialog')).toBeNull();
+    });
+
+    const patchReq = requests.find((r) => r.method === 'PATCH');
+    expect(patchReq).toBeTruthy();
   });
 });

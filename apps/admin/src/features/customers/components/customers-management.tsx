@@ -44,9 +44,9 @@ function getCustomerStatusBadgeConfig(status: string) {
     return { tone: 'active' as const, label: 'Đang hoạt động' };
   }
   if (status === 'BI_KHOA') {
-    return { tone: 'muted' as const, label: 'Bị khóa' };
+    return { tone: 'danger' as const, label: 'Bị khóa' };
   }
-  return { tone: 'muted' as const, label: 'Tạm khóa' };
+  return { tone: 'warning' as const, label: 'Tạm khóa' };
 }
 export function CustomersManagement() {
   const {

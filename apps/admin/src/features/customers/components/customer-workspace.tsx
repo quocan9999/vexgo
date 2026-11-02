@@ -14,6 +14,8 @@ import {
 } from '@/components/admin/resource-ui';
 import { Button, buttonVariants } from '@/components/ui/action-button';
 import { Field, FieldLabel, FieldError } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Textarea } from '@/components/ui/textarea';
 import { useAdminSession } from '@/features/admin-auth/hooks/use-admin-session';
 import { hasAdminPermission } from '@/features/admin-auth/services/admin-access';
@@ -64,10 +66,22 @@ function formatGender(gender?: string | null) {
   }
 }
 
-function getStatusBadgeConfig(status: string) {
+function getStatusBadgeConfig(status: string, lockedUntil?: string | null) {
   if (status === 'HOAT_DONG') return { tone: 'active' as const, label: 'Đang hoạt động' };
-  if (status === 'BI_KHOA') return { tone: 'muted' as const, label: 'Bị khóa' };
-  return { tone: 'muted' as const, label: 'Tạm khóa' };
+  if (status === 'BI_KHOA') return { tone: 'danger' as const, label: 'Bị khóa' };
+  return {
+    tone: 'warning' as const,
+    label: lockedUntil ? `Tạm khóa đến ${lockedUntil}` : 'Tạm khóa',
+  };
+}
+
+function getTomorrowDateString() {
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const year = tomorrow.getFullYear();
+  const month = String(tomorrow.getMonth() + 1).padStart(2, '0');
+  const day = String(tomorrow.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 export function CustomerWorkspace({ customerId }: { customerId: number }) {
   const authState = useAdminSession();
@@ -84,6 +98,9 @@ export function CustomerWorkspace({ customerId }: { customerId: number }) {
 
   // Status dialog state
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
+  const [lockMode, setLockMode] = useState<'TAM_KHOA' | 'BI_KHOA'>('TAM_KHOA');
+  const [lockedUntilDate, setLockedUntilDate] = useState('');
+  const [lockedUntilError, setLockedUntilError] = useState<string | null>(null);
   const [statusReason, setStatusReason] = useState('');
   const [statusReasonError, setStatusReasonError] = useState<string | null>(null);
   const [statusSubmitting, setStatusSubmitting] = useState(false);
@@ -131,22 +148,55 @@ export function CustomerWorkspace({ customerId }: { customerId: number }) {
 
   async function handleConfirmStatusChange() {
     if (!customer) return;
-    if (!statusReason.trim() || statusReason.trim().length < 5) {
-      setStatusReasonError('Lý do phải có tối thiểu 5 ký tự.');
-      return;
+    const isLocking = customer.account.status === 'HOAT_DONG';
+
+    let hasError = false;
+    if (isLocking && lockMode === 'TAM_KHOA') {
+      if (!lockedUntilDate) {
+        setLockedUntilError('Vui lòng chọn ngày hết hạn tạm khóa.');
+        hasError = true;
+      } else {
+        const selected = new Date(`${lockedUntilDate}T00:00:00Z`);
+        const today = new Date();
+        today.setUTCHours(0, 0, 0, 0);
+        if (selected <= today) {
+          setLockedUntilError('Ngày hết hạn tạm khóa phải là ngày trong tương lai.');
+          hasError = true;
+        } else {
+          setLockedUntilError(null);
+        }
+      }
     }
-    setStatusReasonError(null);
+
+    const trimmedReason = statusReason.trim();
+    if (!trimmedReason || trimmedReason.length < 5) {
+      setStatusReasonError('Lý do phải có tối thiểu 5 ký tự.');
+      hasError = true;
+    } else if (trimmedReason.length > 255) {
+      setStatusReasonError('Lý do không được vượt quá 255 ký tự.');
+      hasError = true;
+    } else {
+      setStatusReasonError(null);
+    }
+
+    if (hasError) return;
+
     setStatusSubmitting(true);
     setStatusError(null);
 
     try {
-      const isLocking = customer.account.status === 'HOAT_DONG';
-      const targetStatus = isLocking ? 'TAM_KHOA' : 'HOAT_DONG';
-
-      const response = await updateCustomerStatus(customerId, {
+      const targetStatus = isLocking ? lockMode : 'HOAT_DONG';
+      const payload: { status: 'HOAT_DONG' | 'TAM_KHOA' | 'BI_KHOA'; reason: string; lockedUntil?: string } = {
         status: targetStatus,
-        reason: statusReason.trim(),
-      });
+        reason: trimmedReason,
+      };
+
+      if (isLocking && lockMode === 'TAM_KHOA') {
+        const [y, m, d] = lockedUntilDate.split('-');
+        payload.lockedUntil = `${d}-${m}-${y}`;
+      }
+
+      const response = await updateCustomerStatus(customerId, payload);
 
       toast.success(response.message || 'Cập nhật trạng thái tài khoản thành công.');
       setCustomer((prev) =>
@@ -156,6 +206,8 @@ export function CustomerWorkspace({ customerId }: { customerId: number }) {
               account: {
                 ...prev.account,
                 status: response.accountStatus,
+                lockedUntil: response.lockedUntil,
+                lockReason: response.lockReason,
                 updatedAt: response.updatedAt,
               },
             }
@@ -163,6 +215,7 @@ export function CustomerWorkspace({ customerId }: { customerId: number }) {
       );
       setStatusDialogOpen(false);
       setStatusReason('');
+      setLockedUntilDate('');
     } catch (err) {
       setStatusError(
         err instanceof Error ? err.message : 'Không thể cập nhật trạng thái.',
@@ -200,6 +253,9 @@ export function CustomerWorkspace({ customerId }: { customerId: number }) {
                     setStatusReason('');
                     setStatusError(null);
                     setStatusReasonError(null);
+                    setLockMode('TAM_KHOA');
+                    setLockedUntilDate('');
+                    setLockedUntilError(null);
                     setStatusDialogOpen(true);
                   }}
                 >
@@ -265,7 +321,10 @@ export function CustomerWorkspace({ customerId }: { customerId: number }) {
                   </h2>
                 </div>
                 {(() => {
-                  const { tone, label } = getStatusBadgeConfig(customer.account.status);
+                  const { tone, label } = getStatusBadgeConfig(
+                    customer.account.status,
+                    customer.account.lockedUntil,
+                  );
                   return (
                     <ResourceStatusBadge tone={tone}>
                       {label}
@@ -355,7 +414,10 @@ export function CustomerWorkspace({ customerId }: { customerId: number }) {
                           <dt>Trạng thái tài khoản</dt>
                           <dd>
                             {(() => {
-                              const { tone, label } = getStatusBadgeConfig(customer.account.status);
+                              const { tone, label } = getStatusBadgeConfig(
+                                customer.account.status,
+                                customer.account.lockedUntil,
+                              );
                               return (
                                 <ResourceStatusBadge tone={tone}>
                                   {label}
@@ -364,6 +426,22 @@ export function CustomerWorkspace({ customerId }: { customerId: number }) {
                             })()}
                           </dd>
                         </div>
+                        {customer.account.lockedUntil && customer.account.status === 'TAM_KHOA' && (
+                          <div className="min-w-0 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-2 [&_dd]:break-words">
+                            <dt>Hạn tạm khóa</dt>
+                            <dd className="admin-data-mono font-medium text-amber-600 dark:text-amber-400">
+                              {customer.account.lockedUntil}
+                            </dd>
+                          </div>
+                        )}
+                        {customer.account.lockReason && customer.account.status !== 'HOAT_DONG' && (
+                          <div className="min-w-0 col-span-2 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-2 [&_dd]:break-words">
+                            <dt>Lý do khóa</dt>
+                            <dd className="text-destructive font-medium">
+                              {customer.account.lockReason}
+                            </dd>
+                          </div>
+                        )}
                         <div className="min-w-0 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-2 [&_dd]:break-words">
                           <dt>Xác thực số điện thoại</dt>
                           <dd>
@@ -413,6 +491,7 @@ export function CustomerWorkspace({ customerId }: { customerId: number }) {
               setStatusDialogOpen(false);
               setStatusError(null);
               setStatusReasonError(null);
+              setLockedUntilError(null);
             }
           }}
           title={
@@ -422,23 +501,84 @@ export function CustomerWorkspace({ customerId }: { customerId: number }) {
           }
           description={
             customer.account.status === 'HOAT_DONG'
-              ? 'Tài khoản khách hàng sẽ chuyển sang trạng thái tạm khóa. Khách hàng sẽ không thể đăng nhập hoặc đặt vé, và các phiên đăng nhập đang hoạt động sẽ bị thu hồi.'
+              ? 'Tài khoản khách hàng sẽ bị vô hiệu hóa. Khách hàng sẽ không thể đăng nhập hoặc đặt vé, và các phiên đăng nhập đang hoạt động sẽ bị thu hồi ngay lập tức.'
               : 'Tài khoản khách hàng sẽ được kích hoạt trở lại và có thể đăng nhập, đặt vé bình thường.'
           }
         >
           <div className="space-y-4">
+            {customer.account.status === 'HOAT_DONG' && (
+              <>
+                <Field>
+                  <FieldLabel id="workspace-lock-mode-label">
+                    Hình thức khóa <span className="text-destructive">*</span>
+                  </FieldLabel>
+                  <RadioGroup
+                    aria-labelledby="workspace-lock-mode-label"
+                    value={lockMode}
+                    onValueChange={(val) => {
+                      setLockMode(val as 'TAM_KHOA' | 'BI_KHOA');
+                      if (lockedUntilError) setLockedUntilError(null);
+                    }}
+                    className="flex flex-wrap gap-6 pt-1"
+                  >
+                    <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
+                      <RadioGroupItem value="TAM_KHOA" id="workspace-radio-tam-khoa" />
+                      <span>Tạm khóa</span>
+                    </label>
+                    <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
+                      <RadioGroupItem value="BI_KHOA" id="workspace-radio-bi-khoa" />
+                      <span>Khóa vĩnh viễn</span>
+                    </label>
+                  </RadioGroup>
+                </Field>
+
+                {lockMode === 'TAM_KHOA' && (
+                  <Field>
+                    <FieldLabel htmlFor="workspace-locked-until">
+                      Tạm khóa đến ngày <span className="text-destructive">*</span>
+                    </FieldLabel>
+                    <Input
+                      id="workspace-locked-until"
+                      type="date"
+                      min={getTomorrowDateString()}
+                      value={lockedUntilDate}
+                      onChange={(e) => {
+                        setLockedUntilDate(e.target.value);
+                        if (lockedUntilError) setLockedUntilError(null);
+                      }}
+                      disabled={statusSubmitting}
+                    />
+                    {lockedUntilError && <FieldError>{lockedUntilError}</FieldError>}
+                  </Field>
+                )}
+              </>
+            )}
+
             <Field>
-              <FieldLabel htmlFor="workspace-status-reason">
-                Lý do thay đổi trạng thái <span className="text-destructive">*</span>
-              </FieldLabel>
+              <div className="flex justify-between items-center">
+                <FieldLabel htmlFor="workspace-status-reason">
+                  {customer.account.status === 'HOAT_DONG'
+                    ? 'Lý do khóa'
+                    : 'Lý do mở khóa'}{' '}
+                  <span className="text-destructive">*</span>
+                </FieldLabel>
+                <span className="text-xs text-muted-foreground">
+                  {statusReason.length}/255
+                </span>
+              </div>
               <Textarea
                 id="workspace-status-reason"
+                maxLength={255}
                 value={statusReason}
                 onChange={(e) => {
                   setStatusReason(e.target.value);
                   if (statusReasonError) setStatusReasonError(null);
                 }}
-                placeholder="Nhập lý do khóa hoặc mở khóa tài khoản (tối thiểu 5 ký tự)..."
+                placeholder={
+                  customer.account.status === 'HOAT_DONG'
+                    ? 'Nhập lý do khóa tài khoản (tối thiểu 5 ký tự, tối đa 255 ký tự)...'
+                    : 'Nhập lý do mở khóa tài khoản (tối thiểu 5 ký tự, tối đa 255 ký tự)...'
+                }
                 rows={3}
                 disabled={statusSubmitting}
               />

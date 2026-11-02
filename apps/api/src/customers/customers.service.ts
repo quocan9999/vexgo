@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
@@ -16,6 +17,8 @@ import type { AdminCustomerTicketsQueryDto } from './dto/admin-customer-tickets-
 import type { AdminCustomerShipmentsQueryDto } from './dto/admin-customer-shipments-query.dto.js';
 import { RealtimeSessionInvalidatorService } from '../auth/realtime-session-invalidator.service.js';
 import type { UpdateCustomerStatusDto } from './dto/update-customer-status.dto.js';
+import { TrangThaiTaiKhoan } from '../generated/prisma/enums.js';
+import { parseDateOnly } from '../auth/account-status.helper.js';
 
 const customerProfileInclude = {
   khachHang: true,
@@ -324,6 +327,8 @@ export class CustomersService {
         account: {
           accountId: customer.taiKhoan.taiKhoanId,
           status: customer.taiKhoan.trangThai,
+          lockedUntil: formatDateOnly(customer.taiKhoan.khoaDenNgay),
+          lockReason: customer.taiKhoan.lyDoKhoa ?? null,
           phoneVerified: customer.taiKhoan.daXacThucSoDienThoai,
           createdAt: customer.taiKhoan.createdAt.toISOString(),
           updatedAt: customer.taiKhoan.updatedAt.toISOString(),
@@ -341,6 +346,32 @@ export class CustomersService {
     dto: UpdateCustomerStatusDto,
   ) {
     const nhaXeId = this.requireTenantId(principal);
+
+    let khoaDenNgay: Date | null = null;
+    if (dto.status === TrangThaiTaiKhoan.TAM_KHOA) {
+      if (!dto.lockedUntil) {
+        throw new BadRequestException({
+          error: 'LOCKED_UNTIL_REQUIRED',
+          message: 'Vui lòng chọn ngày hết hạn tạm khóa.',
+        });
+      }
+      const parsed = parseDateOnly(dto.lockedUntil);
+      if (!parsed) {
+        throw new BadRequestException({
+          error: 'INVALID_LOCKED_UNTIL_DATE',
+          message: 'Ngày hết hạn tạm khóa không phải là ngày hợp lệ trong lịch.',
+        });
+      }
+      const today = new Date();
+      today.setUTCHours(0, 0, 0, 0);
+      if (parsed <= today) {
+        throw new BadRequestException({
+          error: 'LOCKED_UNTIL_MUST_BE_IN_FUTURE',
+          message: 'Ngày hết hạn tạm khóa phải lớn hơn ngày hiện tại.',
+        });
+      }
+      khoaDenNgay = parsed;
+    }
 
     const customer = await this.prisma.khachHang.findFirst({
       where: {
@@ -366,14 +397,16 @@ export class CustomersService {
     const taiKhoanId = customer.taiKhoanId;
 
     const updatedAccount = await this.prisma.$transaction(async (tx) => {
-      if (customer.taiKhoan.trangThai !== dto.status) {
-        await tx.taiKhoan.update({
-          where: { taiKhoanId },
-          data: { trangThai: dto.status },
-        });
-      }
+      await tx.taiKhoan.update({
+        where: { taiKhoanId },
+        data: {
+          trangThai: dto.status,
+          khoaDenNgay: dto.status === TrangThaiTaiKhoan.TAM_KHOA ? khoaDenNgay : null,
+          lyDoKhoa: dto.status !== TrangThaiTaiKhoan.HOAT_DONG ? dto.reason.trim() : null,
+        },
+      });
 
-      if (dto.status !== 'HOAT_DONG') {
+      if (dto.status !== TrangThaiTaiKhoan.HOAT_DONG) {
         const lockedAt = new Date();
         await tx.phienDangNhap.updateMany({
           where: {
@@ -390,12 +423,14 @@ export class CustomersService {
         select: {
           taiKhoanId: true,
           trangThai: true,
+          khoaDenNgay: true,
+          lyDoKhoa: true,
           updatedAt: true,
         },
       });
     });
 
-    if (dto.status !== 'HOAT_DONG') {
+    if (dto.status !== TrangThaiTaiKhoan.HOAT_DONG) {
       await this.sessionInvalidator?.invalidateAccount(taiKhoanId, 'SESSION_REVOKED');
     } else {
       await this.sessionInvalidator?.revalidateAccount(taiKhoanId);
@@ -405,6 +440,8 @@ export class CustomersService {
       data: {
         customerId: customer.khachHangId,
         accountStatus: dto.status,
+        lockedUntil: dto.status === TrangThaiTaiKhoan.TAM_KHOA ? formatDateOnly(khoaDenNgay) : null,
+        lockReason: dto.status !== TrangThaiTaiKhoan.HOAT_DONG ? dto.reason.trim() : null,
         updatedAt: updatedAccount?.updatedAt.toISOString() ?? new Date().toISOString(),
         message: 'Cập nhật trạng thái tài khoản thành công.',
       },

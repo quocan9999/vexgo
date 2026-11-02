@@ -4,6 +4,8 @@ export interface CustomerAccount {
   accountId: number;
   status: CustomerAccountStatus;
   phoneVerified: boolean;
+  lockedUntil?: string | null;
+  lockReason?: string | null;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -34,12 +36,15 @@ export interface CustomerDetail extends CustomerSummary {
 export interface UpdateCustomerStatusInput {
   status: CustomerAccountStatus;
   reason: string;
+  lockedUntil?: string;
 }
 
 export interface UpdateCustomerStatusResponse {
   data: {
     customerId: number;
     accountStatus: CustomerAccountStatus;
+    lockedUntil?: string | null;
+    lockReason?: string | null;
     updatedAt: string;
     message: string;
   };

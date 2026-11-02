@@ -259,6 +259,8 @@ describe('CustomersService - Admin operations', () => {
           account: {
             accountId: 42,
             status: 'HOAT_DONG',
+            lockedUntil: null,
+            lockReason: null,
             phoneVerified: true,
             createdAt: '2026-09-28T10:00:00.000Z',
             updatedAt: '2026-09-28T10:05:00.000Z',
@@ -289,12 +291,17 @@ describe('CustomersService - Admin operations', () => {
       const result = await service.updateCustomerStatus(tenantPrincipal, 12, {
         status: 'TAM_KHOA',
         reason: 'Khách hàng có dấu hiệu đặt chỗ ảo nhiều lần',
+        lockedUntil: '20-11-2026',
       });
 
       expect(prisma.$transaction).toHaveBeenCalledOnce();
       expect(tx.taiKhoan.update).toHaveBeenCalledWith({
         where: { taiKhoanId: 42 },
-        data: { trangThai: 'TAM_KHOA' },
+        data: {
+          trangThai: 'TAM_KHOA',
+          khoaDenNgay: expect.any(Date),
+          lyDoKhoa: 'Khách hàng có dấu hiệu đặt chỗ ảo nhiều lần',
+        },
       });
       expect(tx.phienDangNhap.updateMany).toHaveBeenCalledWith({
         where: {
@@ -335,7 +342,11 @@ describe('CustomersService - Admin operations', () => {
 
       expect(tx.taiKhoan.update).toHaveBeenCalledWith({
         where: { taiKhoanId: 42 },
-        data: { trangThai: 'HOAT_DONG' },
+        data: {
+          trangThai: 'HOAT_DONG',
+          khoaDenNgay: null,
+          lyDoKhoa: null,
+        },
       });
       expect(tx.phienDangNhap.updateMany).not.toHaveBeenCalled();
       expect(sessionInvalidator.revalidateAccount).toHaveBeenCalledWith(42);
@@ -355,6 +366,7 @@ describe('CustomersService - Admin operations', () => {
         service.updateCustomerStatus(tenantPrincipal, 999, {
           status: 'TAM_KHOA',
           reason: 'Lý do khóa tài khoản',
+          lockedUntil: '20-11-2026',
         }),
       ).rejects.toBeInstanceOf(NotFoundException);
     });
