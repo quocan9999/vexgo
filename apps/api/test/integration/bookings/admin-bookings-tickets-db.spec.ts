@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { cleanupCustomerNotices } from '../../helpers/cleanup-customer-notices.js';
 import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
@@ -783,6 +784,7 @@ featureDescribe(
               where: { nhaXeId: { in: companyIds } },
             });
             if (customerId !== undefined) {
+              await cleanupCustomerNotices(tx, [customerId]);
               await tx.khachHang.deleteMany({
                 where: { khachHangId: customerId },
               });

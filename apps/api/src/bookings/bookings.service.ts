@@ -1,4 +1,5 @@
 import { generateBusinessUuid } from '../common/business-uuid.js';
+import { enqueueCustomerNotice } from '../notifications/customer-notice.js';
 import {
   BadRequestException,
   ConflictException,
@@ -1056,6 +1057,15 @@ export class BookingsService {
         }
         donGiaoDich.trangThai = 'DA_THANH_TOAN';
         phieuDatVe.trangThai = 'DA_THANH_TOAN';
+        await enqueueCustomerNotice(tx, {
+          eventKey: `booking-paid:${phieuDatVe.phieuDatVeId}`,
+          customerId: customer?.khachHangId ?? null,
+          email: dto.contact.email,
+          bookingId: phieuDatVe.phieuDatVeId,
+          ticketId: createdTickets[0].veId,
+          title: 'Đặt vé thành công',
+          content: `Đơn ${phieuDatVe.maPhieuDatVe} giá trị 0đ đã được xác nhận, không cần thanh toán ngân hàng. Vé: ${createdTickets.map(ticket => ticket.maVe).join(', ')}.`,
+        });
       }
 
       return {

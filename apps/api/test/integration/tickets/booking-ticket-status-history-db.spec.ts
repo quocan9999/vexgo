@@ -1,4 +1,5 @@
 import { resolve } from 'node:path';
+import { cleanupCustomerNotices } from '../../helpers/cleanup-customer-notices.js';
 import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import { config as loadDotenv } from 'dotenv';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -312,6 +313,7 @@ async function cleanupFixture(
   client: Prisma.TransactionClient,
   fixture: TestFixture,
 ): Promise<void> {
+  await cleanupCustomerNotices(client, [fixture.khachHangId]);
   await client.lichSuTrangThaiPhieuDatVe.deleteMany({
     where: { phieuDatVeId: fixture.phieuDatVeId },
   });

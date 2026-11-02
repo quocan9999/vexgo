@@ -18,7 +18,9 @@ export class NotificationsService {
     });
 
     if (!customer) {
-      throw new ForbiddenException('Tài khoản không phải là khách hàng hợp lệ.');
+      throw new ForbiddenException(
+        'Tài khoản không phải là khách hàng hợp lệ.',
+      );
     }
 
     return customer;
@@ -70,6 +72,9 @@ export class NotificationsService {
       isRead: item.daDoc,
       readAt: item.thoiGianDoc ? item.thoiGianDoc.toISOString() : null,
       type: item.thongBao.trangThai,
+      category: item.thongBao.category,
+      bookingId: item.thongBao.bookingId,
+      ticketId: item.thongBao.ticketId,
     }));
 
     return {

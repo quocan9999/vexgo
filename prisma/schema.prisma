@@ -742,6 +742,10 @@ model HoaDon {
 }
 
 model ThongBao {
+  eventKey   String?             @unique @db.VarChar(100)
+  category   String              @default("SYSTEM") @db.VarChar(30)
+  bookingId  Int?
+  ticketId   Int?
   thongBaoId Int                 @id @default(autoincrement()) @db.Int
   tieuDe     String              @db.VarChar(150)
   noiDung    String              @db.Text
@@ -884,6 +888,7 @@ enum NhomSucChuaHangHoa {
 }
 
 
+
 model DanhMucDiaDiem {
   diaDiemId           Int                  @id @default(autoincrement()) @db.Int
   maDiaDiem           String               @unique(map: "DanhMucDiaDiem_maDiaDiem_key") @db.VarChar(50)
@@ -999,4 +1004,53 @@ model TuyenXeDiemDung {
   @@unique([tuyenXeId, diemDonTraId, loaiDiem], map: "TuyenXeDiemDung_tuyen_diem_loai_key")
   @@index([tuyenXeId, loaiDiem], map: "TuyenXeDiemDung_tuyenXeId_loaiDiem_idx")
   @@index([diemDonTraId], map: "TuyenXeDiemDung_diemDonTraId_idx")
+}
+
+// Durable email work; delivery never runs inside payment transactions.
+model EmailThongBao {
+  emailThongBaoId Int       @id @default(autoincrement())
+  eventKey        String    @unique @db.VarChar(100)
+  nguoiNhan       String    @db.VarChar(150)
+  tieuDe          String    @db.VarChar(150)
+  noiDung         String    @db.Text
+  trangThai       String    @default("PENDING") @db.VarChar(30)
+  soLanThu        Int       @default(0)
+  thuLaiLuc       DateTime  @default(now()) @db.DateTime(3)
+  leaseToken      String?   @db.VarChar(36)
+  leaseUntil      DateTime? @db.DateTime(3)
+  createdAt       DateTime  @default(now()) @db.DateTime(3)
+  updatedAt       DateTime  @updatedAt @db.DateTime(3)
+
+  @@index([trangThai, thuLaiLuc])
+
+}
+
+// Session-bound Android registration. Tokens never leave the backend API.
+model ThietBiThongBao {
+  thietBiThongBaoId Int @id @default(autoincrement())
+  tokenHash String @unique @db.Char(64)
+  token String @db.Text
+  khachHangId Int
+  taiKhoanId Int
+  sessionId String @db.Char(36)
+  hoatDong Boolean @default(true)
+  createdAt DateTime @default(now()) @db.DateTime(3)
+  updatedAt DateTime @updatedAt @db.DateTime(3)
+  @@index([khachHangId, hoatDong])
+}
+
+model PushThongBao {
+  pushThongBaoId Int @id @default(autoincrement())
+  eventKey String @unique @db.VarChar(180)
+  thongBaoId Int
+  khachHangId Int
+  thietBiThongBaoId Int
+  sessionId String @db.Char(36)
+  tokenHash String @db.Char(64)
+  trangThai String @default("PENDING") @db.VarChar(30)
+  leaseToken String? @db.Char(36)
+  leaseUntil DateTime? @db.DateTime(3)
+  createdAt DateTime @default(now()) @db.DateTime(3)
+  updatedAt DateTime @updatedAt @db.DateTime(3)
+  @@index([trangThai, createdAt])
 }
