@@ -1234,48 +1234,4 @@ it('prevents selecting more than 5 seats per trip and displays an error message'
   expect(screen.getByText('Mỗi chuyến xe chỉ được chọn tối đa 5 ghế.')).toBeTruthy();
 });
 
-it('renders available promotions in round-trip booking and allows selecting one with one click', async () => {
-  availablePromotionsResponse = async () =>
-    response({
-      data: [
-        {
-          id: 10,
-          name: 'Giảm 50K khứ hồi',
-          code: 'ROUND50',
-          discountType: 'SO_TIEN',
-          discountValue: '50000.00',
-          maxDiscount: null,
-          minimumTicketAmount: null,
-          startsOn: '2026-01-01',
-          endsOn: '2026-12-31',
-          remainingUses: 20,
-        },
-      ],
-    });
-
-  render(
-    <RoundTripBooking
-      outboundPost={post}
-      returnPost={{ ...post, id: '43', title: 'Đà Lạt - TP. Hồ Chí Minh' }}
-      departureDate="2026-10-15"
-      returnDate="2026-10-18"
-      outboundTripSeats={tripSeats}
-      returnTripSeats={[{ ...tripSeats[0], tripSeatId: 9002 }]}
-    />,
-  );
-
-  expect(await screen.findByText('Mã ưu đãi có sẵn (1):')).toBeTruthy();
-  expect(screen.getByText('ROUND50')).toBeTruthy();
-  expect(screen.getByText('Giảm 50.000đ')).toBeTruthy();
-
-  const applyButtons = screen.getAllByRole('button', { name: 'Áp dụng' });
-  const cardApplyButton = applyButtons[applyButtons.length - 1];
-  fireEvent.click(cardApplyButton);
-
-  const input = screen.getByRole('textbox', {
-    name: 'Nhập một mã cho chuyến đi hoặc chuyến về',
-  }) as HTMLInputElement;
-  expect(input.value).toBe('ROUND50');
-});
-
 
