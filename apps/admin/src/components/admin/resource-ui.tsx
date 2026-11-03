@@ -18,6 +18,7 @@ import {
   AlertDialog,
   AlertDialogContent,
   AlertDialogDescription,
+  AlertDialogFooter,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/status-badge';
@@ -70,12 +71,14 @@ export function ResourceConfirmation({
   title,
   description,
   children,
+  footer,
   busy = false,
   onClose,
 }: {
   title: string;
   description: string;
   children: ReactNode;
+  footer?: ReactNode;
   busy?: boolean;
   onClose: () => void;
 }) {
@@ -92,14 +95,18 @@ export function ResourceConfirmation({
         <AlertDialogTitle>{title}</AlertDialogTitle>
         <AlertDialogDescription>{description}</AlertDialogDescription>
         {children}
-        <Button
-          disabled={busy}
-          onClick={onClose}
-          ref={cancelRef}
-          variant="outline"
-        >
-          Hủy
-        </Button>
+        {footer ? (
+          <AlertDialogFooter>{footer}</AlertDialogFooter>
+        ) : (
+          <Button
+            disabled={busy}
+            onClick={onClose}
+            ref={cancelRef}
+            variant="outline"
+          >
+            Hủy
+          </Button>
+        )}
       </AlertDialogContent>
     </AlertDialog>
   );
@@ -109,7 +116,7 @@ export function ResourceStatusBadge({
   tone,
   children,
 }: {
-  tone: 'active' | 'muted' | 'warning';
+  tone: 'active' | 'muted' | 'warning' | 'danger';
   children: ReactNode;
 }) {
   return (
@@ -119,7 +126,9 @@ export function ResourceStatusBadge({
           ? 'success'
           : tone === 'warning'
             ? 'warning'
-            : 'secondary'
+            : tone === 'danger'
+              ? 'destructive'
+              : 'secondary'
       }
     >
       <span aria-hidden className="size-1.5 rounded-full bg-current" />

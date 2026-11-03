@@ -138,7 +138,7 @@ describe('AuthService login', () => {
     },
   );
 
-  it('rejects a locked account with ACCOUNT_INACTIVE', async () => {
+  it('rejects a locked account with ACCOUNT_SUSPENDED', async () => {
     prisma.taiKhoan.findUnique.mockResolvedValueOnce({
       ...customerAccount,
       matKhau: passwordHash,
@@ -151,7 +151,7 @@ describe('AuthService login', () => {
     });
     await expect(login).rejects.toBeInstanceOf(ForbiddenException);
     await expect(login).rejects.toMatchObject({
-      response: { error: 'ACCOUNT_INACTIVE' },
+      response: { error: 'ACCOUNT_SUSPENDED' },
     });
   });
 
@@ -378,7 +378,7 @@ describe('TokenService refresh rotation and logout', () => {
     await expect(
       service.rotateRefreshToken('old-refresh-token'),
     ).rejects.toMatchObject({
-      response: { error: 'ACCOUNT_INACTIVE' },
+      response: { error: 'ACCOUNT_SUSPENDED' },
     });
     expect(tx.phienDangNhap.updateMany).not.toHaveBeenCalled();
     expect(tx.phienDangNhap.create).not.toHaveBeenCalled();

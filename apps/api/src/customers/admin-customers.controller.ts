@@ -1,7 +1,9 @@
 import {
   BadRequestException,
+  Body,
   Controller,
   Get,
+  Patch,
   Param,
   ParseIntPipe,
   Query,
@@ -21,6 +23,7 @@ import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
 import { ApiErrorResponseDto } from '../common/swagger/api-response-envelope.dto.js';
 import { CustomersService } from './customers.service.js';
 import { AdminCustomerQueryDto } from './dto/admin-customer-query.dto.js';
+import { UpdateCustomerStatusDto } from './dto/update-customer-status.dto.js';
 import { AdminCustomerShipmentsQueryDto } from './dto/admin-customer-shipments-query.dto.js';
 import { AdminCustomerTicketsQueryDto } from './dto/admin-customer-tickets-query.dto.js';
 import { AdminCustomerTransactionsQueryDto } from './dto/admin-customer-transactions-query.dto.js';
@@ -97,6 +100,47 @@ export class AdminCustomersController {
       });
     }
     return this.customersService.getAdminCustomerById(principal, id);
+  }
+
+  @Patch(':id/status')
+  @RequirePermissions('customer:update_status')
+  @ApiOperation({
+    summary: 'Cập nhật trạng thái tài khoản khách hàng',
+    description:
+      'Khóa hoặc mở khóa tài khoản khách hàng trong hệ thống kèm lý do bắt buộc.',
+  })
+  @ApiParam({
+    name: 'id',
+    type: Number,
+    description: 'ID tài khoản khách hàng',
+    example: 1,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Cập nhật trạng thái tài khoản khách hàng thành công.',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Dữ liệu không hợp lệ hoặc mã khách hàng không hợp lệ.',
+    type: ApiErrorResponseDto,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Không tìm thấy khách hàng.',
+    type: ApiErrorResponseDto,
+  })
+  updateStatus(
+    @CurrentPrincipal() principal: AuthPrincipal,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateCustomerStatusDto,
+  ) {
+    if (id <= 0) {
+      throw new BadRequestException({
+        error: 'INVALID_CUSTOMER_ID',
+        message: 'Mã khách hàng không hợp lệ.',
+      });
+    }
+    return this.customersService.updateCustomerStatus(principal, id, dto);
   }
 
   @Get(':id/transactions')

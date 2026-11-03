@@ -1,5 +1,4 @@
 import {
-  ForbiddenException,
   Injectable,
   Optional,
   UnauthorizedException,
@@ -10,6 +9,7 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import type { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { requireAuthSecret } from '../auth-secret.js';
+import { assertAccountActive } from '../account-status.helper.js';
 import { RealtimeSessionInvalidatorService } from '../realtime-session-invalidator.service.js';
 import type { AuthTokenResponse, AuthUserSummary } from './auth-principal.js';
 
@@ -73,14 +73,11 @@ export class TokenService {
           },
         },
       });
+      if (current) {
+        await assertAccountActive(tx, current.taiKhoan);
+      }
       if (!current || current.thuHoiLuc || current.hetHanLuc <= now) {
         this.throwInvalidRefreshToken();
-      }
-      if (current.taiKhoan.trangThai !== 'HOAT_DONG') {
-        throw new ForbiddenException({
-          error: 'ACCOUNT_INACTIVE',
-          message: 'Tài khoản không hoạt động.',
-        });
       }
 
       const claimed = await tx.phienDangNhap.updateMany({

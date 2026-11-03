@@ -11,7 +11,11 @@ export const CUSTOMER_SORT_FIELDS = [
 ] as const;
 export type CustomerSortField = (typeof CUSTOMER_SORT_FIELDS)[number];
 
-export const CUSTOMER_ACCOUNT_STATUSES = ['HOAT_DONG', 'TAM_KHOA'] as const;
+export const CUSTOMER_ACCOUNT_STATUSES = [
+  'HOAT_DONG',
+  'TAM_KHOA',
+  'BI_KHOA',
+] as const;
 export type CustomerAccountStatus = (typeof CUSTOMER_ACCOUNT_STATUSES)[number];
 
 export class AdminCustomerQueryDto extends PaginationQueryDto {
