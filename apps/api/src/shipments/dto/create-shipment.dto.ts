@@ -234,7 +234,7 @@ export class CreateShipmentDto {
     description: 'Ngày dự kiến gửi (DD-MM-YYYY, cho vận đơn độc lập)',
     example: '15-11-2026',
   })
-  @ValidateIf((dto: CreateShipmentDto) => dto.tripId === undefined)
+  @IsOptional()
   @Validate(StandaloneDateConstraint)
   sendDate?: string;
 

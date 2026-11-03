@@ -97,8 +97,7 @@ describe('CargoPricingService', () => {
     expect(tx.bangCuocGuiHang.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
-          diemGuiId: 11,
-          diemNhanId: 12,
+          tuyenXeId: trip.tuyenXeId,
           trangThai: 'HOAT_DONG',
           tuNgay: { lte: trip.ngayKhoiHanh },
         }),

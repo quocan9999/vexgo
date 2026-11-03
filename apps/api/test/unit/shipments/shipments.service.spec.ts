@@ -408,8 +408,7 @@ describe('ShipmentsService', () => {
       expect(prismaMock.bangCuocGuiHang.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
-            diemGuiId: 1,
-            diemNhanId: 2,
+            tuyenXeId: 1,
             trangThai: 'HOAT_DONG',
           }),
         }),

@@ -108,6 +108,16 @@ describe('standalone shipment route and calendar day', () => {
     });
     expect(await validate(dto)).toEqual([]);
   });
+
+  it('accepts a route without trip and without sendDate (flexible hub-to-hub dropoff)', async () => {
+    const dto = createDto();
+    Object.assign(dto, {
+      tripId: undefined,
+      routeId: 7,
+      sendDate: undefined,
+    });
+    expect(await validate(dto)).toEqual([]);
+  });
   it('rejects an impossible calendar day', async () => {
     const dto = createDto();
     Object.assign(dto, {

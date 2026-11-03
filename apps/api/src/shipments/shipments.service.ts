@@ -208,24 +208,24 @@ export class ShipmentsService {
     };
   }
 
-  private validateSendDate(value: string, now = new Date()): Date {
-    const day = parseShipmentDate(value);
+  private validateSendDate(value?: string | null, now = new Date()): Date {
     const today = new Date(
       `${getBusinessDate(this.businessTimeZone, now)}T00:00:00Z`,
     );
-    const deadlineDay = new Date(
-      `${getBusinessDate(this.businessTimeZone, new Date(now.getTime() + 48 * 3600000))}T00:00:00Z`,
-    );
-    if (day < today || day > deadlineDay)
+    if (!value) {
+      return today;
+    }
+    const day = parseShipmentDate(value);
+    if (day < today)
       throw new BadRequestException({
-        error: 'SHIPMENT_SEND_DATE_OUTSIDE_WINDOW',
-        message:
-          'Ngày dự kiến gửi phải nằm trong thời hạn 48 giờ từ lúc tạo đơn.',
+        error: 'SHIPMENT_SEND_DATE_INVALID',
+        message: 'Ngày dự kiến gửi không thể ở trong quá khứ.',
       });
     return day;
   }
 
   private async requireAvailableRoute(routeId: number, sendDate: Date) {
+    void sendDate;
     const route = await this.prisma.tuyenXe.findUnique({
       where: { tuyenXeId: routeId },
       include: { nhaXe: true },
@@ -234,29 +234,6 @@ export class ShipmentsService {
       throw new NotFoundException({
         error: 'SHIPMENT_ROUTE_NOT_FOUND',
         message: 'Không tìm thấy tuyến nhận hàng.',
-      });
-    const trips = await this.prisma.chuyenXe.findMany({
-      where: {
-        tuyenXeId: routeId,
-        nhaXeId: route.nhaXeId,
-        nhanGuiHang: true,
-        trangThai: 'CHUA_KHOI_HANH',
-        ngayKhoiHanh: sendDate,
-      },
-    });
-    if (
-      !trips.some(
-        (trip) =>
-          combineDeparture(
-            trip.ngayKhoiHanh,
-            trip.gioKhoiHanh,
-            this.businessTimeZone,
-          ) > new Date(),
-      )
-    )
-      throw new ConflictException({
-        error: 'SHIPMENT_ROUTE_UNAVAILABLE',
-        message: 'Nhà xe chưa có chuyến mở nhận hàng trong ngày dự kiến.',
       });
     return route;
   }
@@ -279,99 +256,32 @@ export class ShipmentsService {
             })),
           },
         ],
-        chuyenXes: {
-          some: {
-            ngayKhoiHanh: date,
-            nhanGuiHang: true,
-            trangThai: 'CHUA_KHOI_HANH',
-          },
-        },
       },
       include: {
         nhaXe: true,
-        chuyenXes: {
-          where: {
-            ngayKhoiHanh: date,
-            nhanGuiHang: true,
-            trangThai: 'CHUA_KHOI_HANH',
-          },
-        },
       },
       orderBy: { tuyenXeId: 'asc' },
     });
-    const available = routes.filter((route) =>
-      route.chuyenXes.some(
-        (trip) =>
-          combineDeparture(
-            trip.ngayKhoiHanh,
-            trip.gioKhoiHanh,
-            this.businessTimeZone,
-          ) > new Date(),
-      ),
-    );
+    const available = routes;
     const availableRouteIds = available.map((route) => route.tuyenXeId);
     const minimumFeeByRouteId = new Map<number, Prisma.Decimal>();
     if (availableRouteIds.length > 0) {
       const rates = await this.prisma.bangCuocGuiHang.findMany({
         where: {
+          tuyenXeId: { in: availableRouteIds },
           trangThai: 'HOAT_DONG',
           tuNgay: { lte: date },
           OR: [{ denNgay: null }, { denNgay: { gte: date } }],
-          diemGui: {
-            trangThai: 'HOAT_DONG',
-            tuyenXeDiemGiaoNhaps: {
-              some: {
-                tuyenXeId: { in: availableRouteIds },
-                vaiTro: { in: ['GUI_HANG', 'CA_HAI'] },
-              },
-            },
-          },
-          diemNhan: {
-            trangThai: 'HOAT_DONG',
-            tuyenXeDiemGiaoNhaps: {
-              some: {
-                tuyenXeId: { in: availableRouteIds },
-                vaiTro: { in: ['NHAN_HANG', 'CA_HAI'] },
-              },
-            },
-          },
         },
         select: {
+          tuyenXeId: true,
           mucCuoc: true,
-          diemGui: {
-            select: {
-              tuyenXeDiemGiaoNhaps: {
-                where: {
-                  tuyenXeId: { in: availableRouteIds },
-                  vaiTro: { in: ['GUI_HANG', 'CA_HAI'] },
-                },
-                select: { tuyenXeId: true },
-              },
-            },
-          },
-          diemNhan: {
-            select: {
-              tuyenXeDiemGiaoNhaps: {
-                where: {
-                  tuyenXeId: { in: availableRouteIds },
-                  vaiTro: { in: ['NHAN_HANG', 'CA_HAI'] },
-                },
-                select: { tuyenXeId: true },
-              },
-            },
-          },
         },
       });
       for (const rate of rates) {
-        const receiverRouteIds = new Set(
-          rate.diemNhan.tuyenXeDiemGiaoNhaps.map((point) => point.tuyenXeId),
-        );
-        for (const senderRoute of rate.diemGui.tuyenXeDiemGiaoNhaps) {
-          if (!receiverRouteIds.has(senderRoute.tuyenXeId)) continue;
-          const current = minimumFeeByRouteId.get(senderRoute.tuyenXeId);
-          if (!current || rate.mucCuoc.lessThan(current)) {
-            minimumFeeByRouteId.set(senderRoute.tuyenXeId, rate.mucCuoc);
-          }
+        const current = minimumFeeByRouteId.get(rate.tuyenXeId);
+        if (!current || rate.mucCuoc.lessThan(current)) {
+          minimumFeeByRouteId.set(rate.tuyenXeId, rate.mucCuoc);
         }
       }
     }
@@ -1067,22 +977,19 @@ export class ShipmentsService {
       fee: number;
     }> = [];
     if (
-      senderPoints.length > 0 &&
-      receiverPoints.length > 0 &&
       typeof this.prisma.bangCuocGuiHang?.findMany === 'function'
     ) {
       const rawRates =
         (await this.prisma.bangCuocGuiHang.findMany({
           where: {
-            diemGuiId: { in: senderPoints.map((p) => p.id) },
-            diemNhanId: { in: receiverPoints.map((p) => p.id) },
+            tuyenXeId: trip.tuyenXeId,
             trangThai: 'HOAT_DONG',
           },
           orderBy: [{ khoiLuongTu: 'asc' }, { loaiHangHoaId: 'asc' }],
         })) ?? [];
       rates = rawRates.map((r) => ({
-        senderPointId: r.diemGuiId,
-        receiverPointId: r.diemNhanId,
+        senderPointId: 0,
+        receiverPointId: 0,
         categoryId: r.loaiHangHoaId,
         minWeight: Number(r.khoiLuongTu),
         maxWeight: r.khoiLuongDen !== null ? Number(r.khoiLuongDen) : null,
@@ -1157,7 +1064,9 @@ export class ShipmentsService {
     const now = new Date();
     const sendDate =
       dto.tripId === undefined
-        ? this.validateSendDate(dto.sendDate!, now)
+        ? dto.sendDate
+          ? this.validateSendDate(dto.sendDate, now)
+          : null
         : null;
     const legacyTrip =
       dto.tripId === undefined
@@ -1176,7 +1085,10 @@ export class ShipmentsService {
       });
     const route =
       legacyTrip?.tuyenXe ??
-      (await this.requireAvailableRoute(dto.routeId!, sendDate!));
+      (await this.requireAvailableRoute(
+        dto.routeId!,
+        sendDate ?? this.validateSendDate(undefined, now),
+      ));
     const trip = legacyTrip ?? {
       chuyenXeId: null,
       tuyenXeId: route.tuyenXeId,
@@ -1233,7 +1145,10 @@ export class ShipmentsService {
             chuyenXeId: trip.chuyenXeId ?? undefined,
             tuyenXeId: trip.tuyenXeId,
             nhaXeId: trip.nhaXeId,
-            ngayKhoiHanh: legacyTrip?.ngayKhoiHanh ?? sendDate!,
+            ngayKhoiHanh:
+              legacyTrip?.ngayKhoiHanh ??
+              sendDate ??
+              this.validateSendDate(undefined, now),
           },
           {
             senderPointId: dto.senderPointId,
@@ -1352,7 +1267,7 @@ export class ShipmentsService {
             },
             select: { thanhToanId: true, trangThai: true },
           });
-          paymentExpiresAt = new Date(now.getTime() + 48 * 60 * 60 * 1000);
+          paymentExpiresAt = new Date(now.getTime() + 72 * 60 * 60 * 1000);
         }
 
         const receiverCccd = dto.receiver.cccd?.trim() || null;
@@ -1381,7 +1296,7 @@ export class ShipmentsService {
             expectedSendDate: sendDate,
             dropoffDeadline: legacyTrip
               ? null
-              : new Date(now.getTime() + 48 * 3600000),
+              : new Date(now.getTime() + 72 * 3600000),
             senderPointId: diemGuiId,
             receiverPointId: diemNhanId,
             orderId: donGiaoDich.donGiaoDichId,
@@ -1412,7 +1327,7 @@ export class ShipmentsService {
         const result = {
           dropoffDeadline: legacyTrip
             ? null
-            : new Date(now.getTime() + 48 * 3600000).toISOString(),
+            : new Date(now.getTime() + 72 * 3600000).toISOString(),
           expectedSendDate: sendDate ? dto.sendDate! : null,
           shipmentId: phieuGui.phieuGuiHangId,
           orderId: donGiaoDich.donGiaoDichId,

@@ -404,8 +404,7 @@ export class CargoPricingService {
 
     const activeRates = await tx.bangCuocGuiHang.findMany({
       where: {
-        diemGuiId: senderPointId,
-        diemNhanId: receiverPointId,
+        tuyenXeId: trip.tuyenXeId,
         trangThai: 'HOAT_DONG',
         tuNgay: { lte: trip.ngayKhoiHanh },
         OR: [{ denNgay: null }, { denNgay: { gte: trip.ngayKhoiHanh } }],
@@ -429,16 +428,44 @@ export class CargoPricingService {
           (maximum === null || maximum.greaterThanOrEqualTo(totalWeight))
         );
       });
-      if (matches.length !== 1) {
+      let rate: (typeof activeRates)[number];
+      if (matches.length === 1) {
+        rate = matches[0];
+      } else if (matches.length > 1) {
+        const allSameFee = matches.every((m) =>
+          new Prisma.Decimal(m.mucCuoc).equals(matches[0].mucCuoc),
+        );
+        if (allSameFee) {
+          rate = [...matches].sort(
+            (a, b) => b.bangCuocGuiHangId - a.bangCuocGuiHangId,
+          )[0];
+        } else {
+          const sortedByDate = [...matches].sort((a, b) => {
+            const timeA = a.tuNgay ? new Date(a.tuNgay).getTime() : 0;
+            const timeB = b.tuNgay ? new Date(b.tuNgay).getTime() : 0;
+            return timeB - timeA;
+          });
+          const newestTime = sortedByDate[0].tuNgay
+            ? new Date(sortedByDate[0].tuNgay).getTime()
+            : 0;
+          const secondTime = sortedByDate[1].tuNgay
+            ? new Date(sortedByDate[1].tuNgay).getTime()
+            : 0;
+          if (newestTime > secondTime) {
+            rate = sortedByDate[0];
+          } else {
+            return throwConflict(
+              'CARGO_RATE_AMBIGUOUS',
+              'Có nhiều mức cước phù hợp cho loại hàng và tổng khối lượng này.',
+            );
+          }
+        }
+      } else {
         return throwConflict(
-          matches.length > 1 ? 'CARGO_RATE_AMBIGUOUS' : 'CARGO_RATE_NOT_FOUND',
-          matches.length > 1
-            ? 'Có nhiều mức cước phù hợp cho loại hàng và tổng khối lượng này.'
-            : 'Chưa có mức cước phù hợp cho loại hàng, điểm gửi/nhận và tổng khối lượng này.',
+          'CARGO_RATE_NOT_FOUND',
+          'Chưa có mức cước phù hợp cho loại hàng, tuyến xe và tổng khối lượng này.',
         );
       }
-
-      const rate = matches[0];
       const fee = new Prisma.Decimal(rate.mucCuoc);
       if (
         !fee.isFinite() ||

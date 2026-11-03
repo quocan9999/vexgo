@@ -34,6 +34,7 @@ describe('Shipment Read APIs (Phase 02)', () => {
 
   type TenantFixture = {
     nhaXeId: number;
+    tuyenXeId: number;
     chuyenXeId: number;
     diemGuiId: number;
     diemNhanId: number;
@@ -206,8 +207,7 @@ describe('Shipment Read APIs (Phase 02)', () => {
         mucCuoc: 45_000,
         tuNgay: new Date('2026-01-01T00:00:00.000Z'),
         trangThai: 'HOAT_DONG',
-        diemGuiId: tenantOne.diemGuiId,
-        diemNhanId: tenantOne.diemNhanId,
+        tuyenXeId: tenantOne.tuyenXeId,
         loaiHangHoaId: shipmentCreationTypeId,
       },
     });
@@ -478,6 +478,7 @@ describe('Shipment Read APIs (Phase 02)', () => {
 
     return {
       nhaXeId: company.nhaXeId,
+      tuyenXeId: route.tuyenXeId,
       chuyenXeId: trip.chuyenXeId,
       diemGuiId: origin.diemGiaoNhanHangId,
       diemNhanId: destination.diemGiaoNhanHangId,
@@ -588,8 +589,7 @@ describe('Shipment Read APIs (Phase 02)', () => {
           mucCuoc: cargo.fee,
           tuNgay: new Date('2026-01-01T00:00:00.000Z'),
           trangThai: 'HOAT_DONG',
-          diemGuiId: tenant.diemGuiId,
-          diemNhanId: tenant.diemNhanId,
+          tuyenXeId: tenant.tuyenXeId,
           loaiHangHoaId: cargo.cargoTypeId,
         },
       });
