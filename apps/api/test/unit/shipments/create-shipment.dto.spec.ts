@@ -3,6 +3,7 @@ import { plainToInstance } from 'class-transformer';
 import { validate, type ValidationError } from 'class-validator';
 import { describe, expect, it } from 'vitest';
 import { CreateShipmentDto } from '../../../src/shipments/dto/create-shipment.dto.js';
+import { ResolveShipmentMoneyCaseDto } from '../../../src/shipments/dto/shipment-operations.dto.js';
 
 function createDto(dimensions: Record<string, unknown> = {}) {
   return plainToInstance(CreateShipmentDto, {
@@ -24,6 +25,19 @@ function flattenErrors(errors: ValidationError[], parent = ''): string[] {
 }
 
 describe('CreateShipmentDto cargo dimensions', () => {
+  it('rejects missing contacts and invalid phone numbers at the API boundary', async () => {
+    const missing = createDto();
+    Reflect.deleteProperty(missing, 'sender');
+    expect(flattenErrors(await validate(missing)).join(' ')).toContain(
+      'sender',
+    );
+    const invalid = createDto();
+    invalid.receiver.phoneNumber = 'abc';
+    expect(flattenErrors(await validate(invalid)).join(' ')).toContain(
+      'receiver.phoneNumber',
+    );
+  });
+
   it.each([
     ['negative', { length: -150, width: 50, height: 50 }],
     ['zero', { length: 150, width: 0, height: 50 }],
@@ -66,5 +80,62 @@ describe('CreateShipmentDto cargo dimensions', () => {
     );
 
     expect(errors).toEqual([]);
+  });
+});
+
+describe('standalone shipment route and calendar day', () => {
+  it('rejects a null trip instead of passing it to the legacy trip flow', async () => {
+    const dto = createDto();
+    Object.assign(dto, {
+      tripId: null,
+      routeId: 7,
+      sendDate: '03-11-2026',
+    });
+
+    expect(
+      flattenErrors(await validate(dto)).some((error) =>
+        error.startsWith('tripId:'),
+      ),
+    ).toBe(true);
+  });
+
+  it('accepts a route and DD-MM-YYYY without a trip', async () => {
+    const dto = createDto();
+    Object.assign(dto, {
+      tripId: undefined,
+      routeId: 7,
+      sendDate: '03-11-2026',
+    });
+    expect(await validate(dto)).toEqual([]);
+  });
+  it('rejects an impossible calendar day', async () => {
+    const dto = createDto();
+    Object.assign(dto, {
+      tripId: undefined,
+      routeId: 7,
+      sendDate: '31-02-2026',
+    });
+    expect(
+      flattenErrors(await validate(dto)).some((error) =>
+        error.startsWith('sendDate:'),
+      ),
+    ).toBe(true);
+  });
+});
+
+describe('manual money case contract', () => {
+  it('rejects recording a refund liability as a new collection', async () => {
+    const dto = plainToInstance(ResolveShipmentMoneyCaseDto, {
+      outcome: 'COLLECTED',
+      amount: 50000,
+      reference: 'REF-01',
+      note: 'Không được chuyển thành khoản thu',
+    });
+
+    expect(
+      flattenErrors(await validate(dto)).some((error) =>
+        error.startsWith('outcome:'),
+      ),
+    ).toBe(true);
   });
 });

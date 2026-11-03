@@ -63,6 +63,7 @@ export type BookingPaymentDraft = PaymentDraftBase & {
 
 export type ShipmentPaymentDraft = PaymentDraftBase & {
   kind: 'shipment';
+  dropoffDeadline?: string | null;
   shipmentId: number;
   paymentId: number;
   waybillCode: string;
@@ -80,7 +81,7 @@ export type ShipmentPaymentDraft = PaymentDraftBase & {
   route: {
     origin: string;
     destination: string;
-    departureTime: string;
+    departureTime: string | null;
   };
   pickupPoint: {
     name: string;
@@ -183,7 +184,9 @@ export function validatePaymentDraft(data: unknown): PaymentDraft | null {
       !route ||
       !isValidString(route.origin) ||
       !isValidString(route.destination) ||
-      !isValidString(route.departureTime) ||
+      (route.departureTime !== null &&
+        route.departureTime !== undefined &&
+        !isValidString(route.departureTime)) ||
       !isValidShipmentPoint(d.pickupPoint) ||
       !isValidShipmentPoint(d.dropoffPoint)
     ) {
@@ -612,6 +615,7 @@ export function createPaymentDraftFromBooking(booking: {
 }
 
 export function createPaymentDraftFromShipment(shipment: {
+  dropoffDeadline?: string | null;
   shipmentId: number;
   orderId: number;
   paymentId: number;
@@ -632,7 +636,7 @@ export function createPaymentDraftFromShipment(shipment: {
     cccd?: string | null;
   };
   trip: {
-    departureTime: string;
+    departureTime: string | null;
     route: {
       origin: string;
       destination: string;
@@ -670,6 +674,7 @@ export function createPaymentDraftFromShipment(shipment: {
 
   return createPaymentDraft({
     kind: 'shipment',
+    dropoffDeadline: shipment.dropoffDeadline,
     shipmentId: shipment.shipmentId,
     paymentId: shipment.paymentId,
     orderId: shipment.orderId,
@@ -702,4 +707,3 @@ export function createPaymentDraftFromShipment(shipment: {
     },
   });
 }
-

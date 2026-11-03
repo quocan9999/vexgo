@@ -19,7 +19,6 @@ globalThis.window = globalThis;
 beforeEach(() => {
   mockStorage.clear();
 });
-
 test('createPaymentDraft creates an opaque id and stores the draft in sessionStorage', () => {
   const draft = createPaymentDraft({
     tripType: 'one-way',
@@ -261,4 +260,27 @@ test('payment URL constructed from draft contains only draftId without passenger
   assert.equal(paymentUrl.includes('customerName'), false, 'URL must not have customerName param');
   assert.equal(paymentUrl.includes('customerPhone'), false, 'URL must not have customerPhone param');
   assert.equal(paymentUrl.includes('customerEmail'), false, 'URL must not have customerEmail param');
+});
+
+test('unassigned shipment payment draft accepts a nullable departure and retains dropoff deadline', () => {
+  const draft = createPaymentDraft({
+    kind: 'shipment',
+    shipmentId: 1,
+    paymentId: 2,
+    orderId: 3,
+    waybillCode: 'VG-1',
+    orderCode: 'ORDER-1',
+    totalFare: 50000,
+    dropoffDeadline: '2026-11-05T10:00:00Z',
+    sender: { fullName: 'Người gửi', phoneNumber: '0900000001' },
+    receiver: { fullName: 'Người nhận', phoneNumber: '0900000002' },
+    route: { origin: 'Đà Lạt', destination: 'TP.HCM', departureTime: null },
+    pickupPoint: { name: 'Bưu cục gửi', address: 'Địa chỉ gửi' },
+    dropoffPoint: { name: 'Bưu cục nhận', address: 'Địa chỉ nhận' },
+  });
+  assert.equal(
+    getPaymentDraft(draft.id)?.dropoffDeadline,
+    '2026-11-05T10:00:00Z',
+  );
+  assert.equal(getPaymentDraft(draft.id)?.route.departureTime, null);
 });

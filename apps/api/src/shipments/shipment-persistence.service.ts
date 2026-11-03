@@ -8,6 +8,7 @@ export interface ShipmentPersistenceItemInput {
   name: string;
   quantity: number;
   unitWeight: DecimalInput;
+  declaredWeight?: DecimalInput;
   length?: DecimalInput | null;
   width?: DecimalInput | null;
   height?: DecimalInput | null;
@@ -33,7 +34,10 @@ export interface ShipmentPersistenceInput {
   totalFee: DecimalInput;
   payer?: 'NGUOI_GUI' | 'NGUOI_NHAN';
   note?: string | null;
-  tripId: number;
+  tripId: number | null;
+  routeId?: number;
+  expectedSendDate?: Date | null;
+  dropoffDeadline?: Date | null;
   senderPointId: number;
   receiverPointId: number;
   orderId: number;
@@ -76,6 +80,11 @@ export class ShipmentPersistenceService {
         ghiChu: input.note ?? null,
         trangThai: 'MOI_TAO',
         chuyenXeId: input.tripId,
+        tuyenXeId: input.routeId,
+        ngayDuKienGui: input.expectedSendDate,
+        hanMangHangDen: input.dropoffDeadline,
+        cuocDuTinh:
+          input.tripId === null ? new Prisma.Decimal(input.totalFee) : null,
         diemGuiId: input.senderPointId,
         diemNhanId: input.receiverPointId,
         donGiaoDichId: input.orderId,
@@ -99,6 +108,16 @@ export class ShipmentPersistenceService {
           tenHang: item.name,
           soLuong: item.quantity,
           khoiLuong: new Prisma.Decimal(item.unitWeight),
+          khoiLuongKhaiBao:
+            item.declaredWeight === undefined
+              ? null
+              : new Prisma.Decimal(item.declaredWeight),
+          chieuDaiKhaiBao:
+            item.length == null ? null : new Prisma.Decimal(item.length),
+          chieuRongKhaiBao:
+            item.width == null ? null : new Prisma.Decimal(item.width),
+          chieuCaoKhaiBao:
+            item.height == null ? null : new Prisma.Decimal(item.height),
           chieuDai:
             item.length == null ? null : new Prisma.Decimal(item.length),
           chieuRong: item.width == null ? null : new Prisma.Decimal(item.width),
@@ -135,6 +154,25 @@ export class ShipmentPersistenceService {
       },
     });
 
+    if (input.tripId === null)
+      await tx.lichSuDieuChinhCuocGuiHang.create({
+        data: {
+          phieuGuiHangId: shipment.phieuGuiHangId,
+          taiKhoanId: input.actorAccountId,
+          loaiThaoTac: 'BAO_GIA',
+          cuocSau: new Prisma.Decimal(input.totalFee),
+          snapshotSau: JSON.parse(
+            JSON.stringify({
+              items: input.items,
+              rates: input.rates,
+              baseFee: input.baseFee,
+              serviceFee: input.serviceFee,
+              discount: input.discount,
+            }),
+          ) as Prisma.InputJsonValue,
+          thoiGian: input.sentAt,
+        },
+      });
     return { shipment, items };
   }
 }

@@ -4,19 +4,23 @@ import {
   IsBoolean,
   IsEmail,
   IsIn,
+  IsDefined,
   IsInt,
   IsNotEmpty,
   IsNumber,
   IsOptional,
   IsString,
   Min,
+  Matches,
+  MaxLength,
   Validate,
   ValidationArguments,
   ValidatorConstraint,
   ValidatorConstraintInterface,
   ValidateNested,
+  ValidateIf,
 } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   CARGO_DIMENSIONS_INVALID_MESSAGE,
   hasValidCargoDimensions,
@@ -67,7 +71,7 @@ export class CargoItemInputDto {
   height?: number;
 
   @IsOptional()
-  @IsString()
+  @IsIn(['NORMAL', 'FRAGILE', 'VALUABLE'])
   serviceType?: 'NORMAL' | 'FRAGILE' | 'VALUABLE';
 
   @IsOptional()
@@ -76,12 +80,19 @@ export class CargoItemInputDto {
 }
 
 export class ShipmentSenderDto {
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
   @IsString()
   @IsNotEmpty({ message: 'Họ tên người gửi không được để trống.' })
+  @MaxLength(100)
   fullName!: string;
 
   @IsString()
   @IsNotEmpty({ message: 'Số điện thoại người gửi không được để trống.' })
+  @Matches(/^(?:0\d{9,10}|\+?84\d{9,10})$/, {
+    message: 'Số điện thoại người gửi không hợp lệ.',
+  })
   phoneNumber!: string;
 
   @IsOptional()
@@ -90,27 +101,71 @@ export class ShipmentSenderDto {
 }
 
 export class ShipmentReceiverDto {
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
   @IsString()
   @IsNotEmpty({ message: 'Họ tên người nhận không được để trống.' })
+  @MaxLength(100)
   fullName!: string;
 
   @IsString()
   @IsNotEmpty({ message: 'Số điện thoại người nhận không được để trống.' })
+  @Matches(/^(?:0\d{9,10}|\+?84\d{9,10})$/, {
+    message: 'Số điện thoại người nhận không hợp lệ.',
+  })
   phoneNumber!: string;
 
   @IsOptional()
   @IsString()
+  @Matches(/^(?:\d{9}|\d{12})$/, {
+    message: 'CCCD/CMND phải có 9 hoặc 12 chữ số.',
+  })
   cccd?: string;
 }
 
-export class CreateShipmentDto {
-  @IsInt({ message: 'Mã chuyến xe không hợp lệ.' })
-  tripId!: number;
+@ValidatorConstraint({ name: 'standaloneDate', async: false })
+class StandaloneDateConstraint implements ValidatorConstraintInterface {
+  validate(value: unknown): boolean {
+    if (typeof value !== 'string') return false;
+    const match = /^(\d{2})-(\d{2})-(\d{4})$/.exec(value);
+    if (!match) return false;
+    const [, day, month, year] = match;
+    const date = new Date(
+      Date.UTC(Number(year), Number(month) - 1, Number(day)),
+    );
+    return (
+      date.getUTCFullYear() === Number(year) &&
+      date.getUTCMonth() + 1 === Number(month) &&
+      date.getUTCDate() === Number(day)
+    );
+  }
+  defaultMessage(): string {
+    return 'Ngày gửi phải là ngày lịch hợp lệ theo DD-MM-YYYY.';
+  }
+}
 
+export class CreateShipmentDto {
+  @ValidateIf((_dto: CreateShipmentDto, value: unknown) => value !== undefined)
+  @IsInt({ message: 'Mã chuyến xe không hợp lệ.' })
+  @Min(1, { message: 'Mã chuyến xe không hợp lệ.' })
+  tripId?: number;
+
+  @ValidateIf((dto: CreateShipmentDto) => dto.tripId === undefined)
+  @IsInt()
+  @Min(1)
+  routeId?: number;
+
+  @ValidateIf((dto: CreateShipmentDto) => dto.tripId === undefined)
+  @Validate(StandaloneDateConstraint)
+  sendDate?: string;
+
+  @IsDefined()
   @ValidateNested()
   @Type(() => ShipmentSenderDto)
   sender!: ShipmentSenderDto;
 
+  @IsDefined()
   @ValidateNested()
   @Type(() => ShipmentReceiverDto)
   receiver!: ShipmentReceiverDto;

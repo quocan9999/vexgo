@@ -445,12 +445,11 @@ export class AdminBookingsService {
     const shipment = booking.donGiaoDich.phieuGuiHang;
     const resolvedBookingTripId =
       tripIntegrity === 'CONSISTENT'
-        ? tickets[0]?.gheChuyenXe.chuyenXe.chuyenXeId ?? null
+        ? (tickets[0]?.gheChuyenXe.chuyenXe.chuyenXeId ?? null)
         : null;
     const shipmentSummary = shipment
       ? (() => {
-          const isShipmentTripInTenant =
-            shipment.chuyenXe.nhaXeId === nhaXeId;
+          const isShipmentTripInTenant = shipment.chuyenXe?.nhaXeId === nhaXeId;
           const hasKnownBookingTrip = resolvedBookingTripId !== null;
           const hasMatchingTrip =
             hasKnownBookingTrip &&

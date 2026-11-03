@@ -250,6 +250,18 @@ describe('Shipment Status Transition APIs (Phase 04)', () => {
 
     await prisma.$transaction(async (tx) => {
       if (shipmentIds.length > 0) {
+        await tx.xuLyTienGuiHang.deleteMany({
+          where: { phieuGuiHangId: { in: shipmentIds } },
+        });
+        await tx.yeuCauTaoPhieuGuiHang.deleteMany({
+          where: { phieuGuiHangId: { in: shipmentIds } },
+        });
+        await tx.lichSuDieuChinhCuocGuiHang.deleteMany({
+          where: { phieuGuiHangId: { in: shipmentIds } },
+        });
+        await tx.lichSuPhanChuyenGuiHang.deleteMany({
+          where: { phieuGuiHangId: { in: shipmentIds } },
+        });
         const cargoItems = await tx.hangHoa.findMany({
           where: { phieuGuiHangId: { in: shipmentIds } },
           select: { hangHoaId: true },
@@ -704,7 +716,10 @@ describe('Shipment Status Transition APIs (Phase 04)', () => {
 
       const response = await request(app.getHttpServer())
         .patch(`/api/v1/shipments/${shipment.phieuGuiHangId}/status`)
-        .send({ status: 'DA_TIEP_NHAN', note: 'Không được nhận khi chưa thu tiền' });
+        .send({
+          status: 'DA_TIEP_NHAN',
+          note: 'Không được nhận khi chưa thu tiền',
+        });
 
       expect(response.status).toBe(409);
       expect(response.body.error).toBe('SHIPMENT_PAYMENT_NOT_CONFIRMED');
@@ -722,7 +737,7 @@ describe('Shipment Status Transition APIs (Phase 04)', () => {
   });
 
   describe('Cancellation Rules (MOI_TAO -> DA_HUY)', () => {
-    it('rejects manual cancellation for an unpaid shipment without changing status or history', async () => {
+    it('cancels an unpaid shipment and records a reason without creating a refund', async () => {
       const shipment = await createTestShipment({
         nhaXeId: tenantOneId,
         initialStatus: 'MOI_TAO',
@@ -734,18 +749,30 @@ describe('Shipment Status Transition APIs (Phase 04)', () => {
         .patch(`/api/v1/shipments/${shipment.phieuGuiHangId}/status`)
         .send({ status: 'DA_HUY', note: 'Khách hàng hủy gửi' });
 
-      expect(response.status).toBe(400);
-      expect(response.body.error).toBe('VALIDATION_ERROR');
+      expect(response.status).toBe(200);
 
-      const db = await prisma.phieuGuiHang.findUniqueOrThrow({
-        where: { phieuGuiHangId: shipment.phieuGuiHangId },
-        include: { lichSuTrangThais: true },
-      });
-      expect(db.trangThai).toBe('MOI_TAO');
-      expect(db.lichSuTrangThais).toHaveLength(1);
+      const [db, moneyCases, refunds] = await Promise.all([
+        prisma.phieuGuiHang.findUniqueOrThrow({
+          where: { phieuGuiHangId: shipment.phieuGuiHangId },
+          include: { lichSuTrangThais: true },
+        }),
+        prisma.xuLyTienGuiHang.findMany({
+          where: { phieuGuiHangId: shipment.phieuGuiHangId },
+        }),
+        prisma.thanhToan.findMany({
+          where: {
+            donGiaoDichId: shipment.donGiaoDichId,
+            loaiGiaoDich: 'HOAN_TIEN',
+          },
+        }),
+      ]);
+      expect(db.trangThai).toBe('DA_HUY');
+      expect(db.lichSuTrangThais).toHaveLength(2);
+      expect(moneyCases).toEqual([]);
+      expect(refunds).toEqual([]);
     });
 
-    it('rejects manual cancellation for a paid shipment before settlement or refund logic', async () => {
+    it('cancels a paid shipment and opens a manual case without refunding automatically', async () => {
       const shipment = await createTestShipment({
         nhaXeId: tenantOneId,
         initialStatus: 'MOI_TAO',
@@ -757,15 +784,32 @@ describe('Shipment Status Transition APIs (Phase 04)', () => {
         .patch(`/api/v1/shipments/${shipment.phieuGuiHangId}/status`)
         .send({ status: 'DA_HUY', note: 'Muốn hủy nhưng đã thanh toán' });
 
-      expect(response.status).toBe(400);
-      expect(response.body.error).toBe('VALIDATION_ERROR');
+      expect(response.status).toBe(200);
 
-      const db = await prisma.phieuGuiHang.findUniqueOrThrow({
-        where: { phieuGuiHangId: shipment.phieuGuiHangId },
-        include: { lichSuTrangThais: true },
-      });
-      expect(db.trangThai).toBe('MOI_TAO'); // Unchanged
-      expect(db.lichSuTrangThais).toHaveLength(1);
+      const [db, moneyCases, refunds] = await Promise.all([
+        prisma.phieuGuiHang.findUniqueOrThrow({
+          where: { phieuGuiHangId: shipment.phieuGuiHangId },
+          include: { lichSuTrangThais: true },
+        }),
+        prisma.xuLyTienGuiHang.findMany({
+          where: { phieuGuiHangId: shipment.phieuGuiHangId },
+        }),
+        prisma.thanhToan.findMany({
+          where: {
+            donGiaoDichId: shipment.donGiaoDichId,
+            loaiGiaoDich: 'HOAN_TIEN',
+          },
+        }),
+      ]);
+      expect(db.trangThai).toBe('DA_HUY');
+      expect(db.lichSuTrangThais).toHaveLength(2);
+      expect(moneyCases).toEqual([
+        expect.objectContaining({
+          lyDo: 'HUY_DA_THANH_TOAN',
+          trangThai: 'CHO_XU_LY',
+        }),
+      ]);
+      expect(refunds).toEqual([]);
     });
 
     it.each(['DANG_XU_LY', 'PROVIDER_RESPONSE_UNKNOWN'])(
@@ -792,7 +836,7 @@ describe('Shipment Status Transition APIs (Phase 04)', () => {
           .send({ status: 'DA_HUY' });
 
         expect(response.status).toBe(400);
-        expect(response.body.error).toBe('VALIDATION_ERROR');
+        expect(response.body.error).toBe('CANCELLATION_REASON_REQUIRED');
         const updatedShipment = await prisma.phieuGuiHang.findUniqueOrThrow({
           where: { phieuGuiHangId: shipment.phieuGuiHangId },
         });
@@ -924,10 +968,10 @@ describe('Shipment Status Transition APIs (Phase 04)', () => {
       });
       expect(result).toEqual({ success: true });
       const replayResult = await paymentsService.confirmPaymentSuccess({
-          paymentId: payment.thanhToanId,
-          provider: 'VNPAY',
-          amount: 100000,
-        });
+        paymentId: payment.thanhToanId,
+        provider: 'VNPAY',
+        amount: 100000,
+      });
       expect(replayResult).toMatchObject({ success: true });
       const [settledPayment, settledOrder] = await Promise.all([
         prisma.thanhToan.findUniqueOrThrow({
@@ -1048,7 +1092,9 @@ describe('Shipment Status Transition APIs (Phase 04)', () => {
 
       expect(responseBeforePaymentCommit).toBeDefined();
       expect(responseBeforePaymentCommit?.status).toBe(400);
-      expect(responseBeforePaymentCommit?.body.error).toBe('VALIDATION_ERROR');
+      expect(responseBeforePaymentCommit?.body.error).toBe(
+        'CANCELLATION_REASON_REQUIRED',
+      );
 
       const [updatedShipment, updatedOrder, payments] = await Promise.all([
         prisma.phieuGuiHang.findUniqueOrThrow({
@@ -1068,35 +1114,54 @@ describe('Shipment Status Transition APIs (Phase 04)', () => {
     });
 
     it('rolls back the real status update when writing its history fails', async () => {
-      const shipment = await createTestShipment({ initialStatus: 'MOI_TAO', isPaid: true });
+      const shipment = await createTestShipment({
+        initialStatus: 'MOI_TAO',
+        isPaid: true,
+      });
       setTenantAdmin();
       const before = await prisma.phieuGuiHang.findUniqueOrThrow({
         where: { phieuGuiHangId: shipment.phieuGuiHangId },
-        include: { lichSuTrangThais: true, donGiaoDich: { include: { thanhToans: true } } },
+        include: {
+          lichSuTrangThais: true,
+          donGiaoDich: { include: { thanhToans: true } },
+        },
       });
       const transaction = prisma.$transaction.bind(prisma);
       let wroteHistory = false;
       const fault = vi.spyOn(prisma, '$transaction').mockImplementation(((
-        callback: (tx: unknown) => Promise<unknown>, options: unknown,
-      ) => transaction(async (tx) => {
-        const create = tx.lichSuTrangThaiPhieuGuiHang.create.bind(tx.lichSuTrangThaiPhieuGuiHang);
-        tx.lichSuTrangThaiPhieuGuiHang.create = (async (args: Parameters<typeof create>[0]) => {
-          await create(args);
-          wroteHistory = true;
-          throw new Error('Injected failure after real shipment history insert');
-        }) as unknown as typeof tx.lichSuTrangThaiPhieuGuiHang.create;
-        return callback(tx);
-      }, options as never)) as typeof prisma.$transaction);
+        callback: (tx: unknown) => Promise<unknown>,
+        options: unknown,
+      ) =>
+        transaction(async (tx) => {
+          const create = tx.lichSuTrangThaiPhieuGuiHang.create.bind(
+            tx.lichSuTrangThaiPhieuGuiHang,
+          );
+          tx.lichSuTrangThaiPhieuGuiHang.create = (async (
+            args: Parameters<typeof create>[0],
+          ) => {
+            await create(args);
+            wroteHistory = true;
+            throw new Error(
+              'Injected failure after real shipment history insert',
+            );
+          }) as unknown as typeof tx.lichSuTrangThaiPhieuGuiHang.create;
+          return callback(tx);
+        }, options as never)) as typeof prisma.$transaction);
       try {
         const response = await request(app.getHttpServer())
           .patch(`/api/v1/shipments/${shipment.phieuGuiHangId}/status`)
           .send({ status: 'DA_TIEP_NHAN', note: 'rollback regression' });
         expect(response.status).toBe(500);
         expect(wroteHistory).toBe(true);
-      } finally { fault.mockRestore(); }
+      } finally {
+        fault.mockRestore();
+      }
       const after = await prisma.phieuGuiHang.findUniqueOrThrow({
         where: { phieuGuiHangId: shipment.phieuGuiHangId },
-        include: { lichSuTrangThais: true, donGiaoDich: { include: { thanhToans: true } } },
+        include: {
+          lichSuTrangThais: true,
+          donGiaoDich: { include: { thanhToans: true } },
+        },
       });
       expect(after).toEqual(before);
     });

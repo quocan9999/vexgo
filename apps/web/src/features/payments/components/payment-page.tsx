@@ -31,7 +31,6 @@ function useIsClient(): boolean {
     () => false,
   );
 }
-
 function useRawPaymentDraft(draftId: string | null): string | null {
   return useSyncExternalStore(
     emptySubscribe,
@@ -1406,6 +1405,20 @@ function PaymentContent() {
                   <h3 className="font-bold text-slate-900 text-base mb-4">
                     Thông tin phiếu gửi
                   </h3>
+                  {shipmentDraft.dropoffDeadline && (
+                    <p className="mb-3 text-sm text-amber-800">
+                      Hạn mang hàng đến:{' '}
+                      {new Date(shipmentDraft.dropoffDeadline).toLocaleString(
+                        'vi-VN',
+                      )}
+                      . Hạn gửi hàng tách riêng hạn thanh toán.
+                    </p>
+                  )}
+                  <p className="mb-3 text-sm text-slate-600">
+                    Chuyến được nhà xe điều phối sau tiếp nhận. Quá 48 giờ chưa
+                    mang hàng đến, vận đơn sẽ bị hủy; tiền đã trả không tự hoàn.
+                    Liên hệ nhà xe qua bưu cục gửi để xử lý.
+                  </p>
                   <div className="space-y-3 text-sm">
                     <div>
                       <span className="block text-xs font-semibold text-slate-500 mb-1">

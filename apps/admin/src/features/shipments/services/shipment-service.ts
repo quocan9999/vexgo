@@ -3,7 +3,6 @@ import { getApiBaseUrl } from '@/lib/api-url';
 import type {
   ShipmentDetail,
   ShipmentDetailResponse,
-  ShipmentOperationalStatus,
   ShipmentQuery,
   ShipmentStatus,
   ShipmentsResponse,
@@ -66,13 +65,16 @@ export async function getShipmentById(
   id: number,
   signal?: AbortSignal,
 ): Promise<ShipmentDetail> {
-  const response = await adminApiFetch(`${getApiBaseUrl()}/api/v1/shipments/${id}`, {
-    method: 'GET',
-    headers: {
-      Accept: 'application/json',
+  const response = await adminApiFetch(
+    `${getApiBaseUrl()}/api/v1/shipments/${id}`,
+    {
+      method: 'GET',
+      headers: {
+        Accept: 'application/json',
+      },
+      signal,
     },
-    signal,
-  });
+  );
 
   if (!response.ok) {
     let errorMessage = 'Không thể tải thông tin chi tiết phiếu gửi hàng.';

@@ -18,7 +18,7 @@ export class ApiError extends Error {
 }
 
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
+  process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4002/api/v1';
 
 export type CargoItemInput = {
   name: string;
@@ -34,7 +34,8 @@ export type CargoItemInput = {
 };
 
 export type CreateShipmentPayload = {
-  tripId: number;
+  routeId: number;
+  sendDate: string;
   senderPointId: number;
   receiverPointId: number;
   sender: {
@@ -71,7 +72,8 @@ export type ShipmentCargoRate = {
 };
 
 export type ShipmentRoutePoints = {
-  tripId: number;
+  routeId?: number;
+  tripId?: number;
   senderPoints: ShipmentRoutePoint[];
   receiverPoints: ShipmentRoutePoint[];
   rates?: ShipmentCargoRate[];
@@ -90,6 +92,8 @@ export type ShipmentResponseData = {
   orderId: number;
   paymentId: number;
   paymentExpiresAt: string;
+  dropoffDeadline?: string | null;
+  expectedSendDate?: string | null;
   waybillCode: string;
   orderCode: string;
   status: string;
@@ -124,9 +128,9 @@ export type ShipmentResponseData = {
     address: string;
   };
   trip: {
-    tripId: number;
-    code: string;
-    departureTime: string;
+    tripId: number | null;
+    code: string | null;
+    departureTime: string | null;
     route: {
       origin: string;
       destination: string;
@@ -137,7 +141,7 @@ export type ShipmentResponseData = {
     };
     vehicle: {
       licensePlate: string;
-    };
+    } | null;
   };
   items: Array<{
     id: number;
@@ -171,7 +175,8 @@ export type PublicShipmentLookupData = {
   dropoffPoint: { name: string; address: string };
   carrier: { name: string };
   route: { origin: string; destination: string };
-  scheduledDepartureAt: string;
+  dropoffDeadline?: string | null;
+  scheduledDepartureAt: string | null;
   estimatedArrivalAt: string | null;
   packageCount: number;
   bookingPromotionCode?: string | null;
@@ -186,6 +191,7 @@ export type CustomerShipmentListItem = {
   status: string;
   paymentStatus: string;
   paymentExpiresAt?: string;
+  dropoffDeadline?: string | null;
   totalFee: number;
   sender: {
     fullName: string;
@@ -196,8 +202,8 @@ export type CustomerShipmentListItem = {
     phoneNumber: string;
   };
   trip: {
-    tripId: number;
-    code: string;
+    tripId: number | null;
+    code: string | null;
     route: string;
     busCompany: string;
   };
@@ -214,7 +220,84 @@ export type CustomerShipmentListResponse = {
   };
 };
 
+export type ShipmentOption = {
+  routeId: number;
+  busCompany: { id: number; name: string };
+  route: { origin: string; destination: string };
+  minimumEstimatedFee: number | null;
+};
+
+export type ShipmentQuote = {
+  baseFee: number;
+  serviceFee: number;
+  totalFee: number;
+};
+
+// Native date inputs use ISO internally; the shipment API uses DD-MM-YYYY.
+export function shipmentApiDate(value: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) throw new Error('Ngày gửi không hợp lệ.');
+  return `${match[3]}-${match[2]}-${match[1]}`;
+}
+
 export const shipmentsApi = {
+  async getOptions(query: {
+    from: string;
+    to: string;
+    sendDate: string;
+    page: number;
+    pageSize: number;
+  }) {
+    const params = new URLSearchParams({
+      ...query,
+      sendDate: shipmentApiDate(query.sendDate),
+      page: String(query.page),
+      pageSize: String(query.pageSize),
+    });
+    const res = await fetch(`${API_BASE_URL}/shipments/options?${params}`);
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      throw new ApiError(
+        error.message || 'Không thể tải nhà xe nhận hàng.',
+        res.status,
+      );
+    }
+    return res.json() as Promise<{
+      data: ShipmentOption[];
+      meta: CustomerShipmentListResponse['meta'];
+    }>;
+  },
+
+  async getQuote(
+    payload: Pick<
+      CreateShipmentPayload,
+      | 'routeId'
+      | 'sendDate'
+      | 'senderPointId'
+      | 'receiverPointId'
+      | 'items'
+      | 'isFragile'
+      | 'isValuable'
+    >,
+  ): Promise<{ data: ShipmentQuote }> {
+    const res = await fetch(`${API_BASE_URL}/shipments/quotes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...payload,
+        sendDate: shipmentApiDate(payload.sendDate),
+      }),
+    });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      throw new ApiError(
+        error.message || 'Không thể báo cước. Vui lòng thử lại.',
+        res.status,
+        error.details,
+      );
+    }
+    return res.json();
+  },
   async getCustomerShipments(
     accessToken: string,
     query?: {
@@ -257,6 +340,22 @@ export const shipmentsApi = {
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new ApiError(
+        err.message || 'Không thể tải điểm gửi/nhận của chuyến xe.',
+        res.status,
+      );
+    }
+    return res.json();
+  },
+
+  async getRoutePointsByRoute(
+    routeId: number,
+  ): Promise<{ data: ShipmentRoutePoints }> {
+    const res = await fetch(
+      `${API_BASE_URL}/shipments/routes/${routeId}/route-points`,
+    );
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new ApiError(
         err.message || 'Không thể tải điểm gửi và điểm nhận của chuyến xe.',
         res.status,
       );
@@ -267,10 +366,12 @@ export const shipmentsApi = {
   async createShipment(
     payload: CreateShipmentPayload,
     accessToken?: string,
+    idempotencyKey?: string,
   ): Promise<{ data: ShipmentResponseData }> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
+    if (idempotencyKey) headers['Idempotency-Key'] = idempotencyKey;
     if (accessToken) {
       headers.Authorization = `Bearer ${accessToken}`;
     }
@@ -278,7 +379,10 @@ export const shipmentsApi = {
     const res = await fetch(`${API_BASE_URL}/shipments`, {
       method: 'POST',
       headers,
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        ...payload,
+        sendDate: shipmentApiDate(payload.sendDate),
+      }),
     });
 
     if (!res.ok) {
@@ -293,10 +397,13 @@ export const shipmentsApi = {
     return res.json();
   },
 
-  async lookupShipment(params: {
-    waybillCode: string;
-    phoneNumber: string;
-  }, options: { signal?: AbortSignal } = {}): Promise<{ data: PublicShipmentLookupData }> {
+  async lookupShipment(
+    params: {
+      waybillCode: string;
+      phoneNumber: string;
+    },
+    options: { signal?: AbortSignal } = {},
+  ): Promise<{ data: PublicShipmentLookupData }> {
     const res = await fetch(`${API_BASE_URL}/shipments/lookup`, {
       method: 'POST',
       headers: {
@@ -353,4 +460,3 @@ export const shipmentsApi = {
     return res.json();
   },
 };
-

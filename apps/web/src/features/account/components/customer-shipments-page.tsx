@@ -140,7 +140,7 @@ function renderPaymentStatusBadge(status: string) {
 function formatShipmentStatusLabel(status: string) {
   switch (status) {
     case 'MOI_TAO':
-      return 'Mới tạo';
+      return 'Chờ mang hàng đến gửi';
     case 'DA_TIEP_NHAN':
       return 'Đã tiếp nhận';
     case 'DANG_VAN_CHUYEN':
@@ -214,7 +214,9 @@ export default function CustomerShipmentsPage() {
     useState<ShipmentResponseData | null>(null);
   const [isLoadingShipmentDetail, setIsLoadingShipmentDetail] = useState(false);
   const [shipmentDetailError, setShipmentDetailError] = useState('');
-  const [copiedWaybillCode, setCopiedWaybillCode] = useState<string | null>(null);
+  const [copiedWaybillCode, setCopiedWaybillCode] = useState<string | null>(
+    null,
+  );
   const [resumingPaymentShipmentId, setResumingPaymentShipmentId] = useState<
     number | null
   >(null);
@@ -234,7 +236,10 @@ export default function CustomerShipmentsPage() {
   );
 
   const handleResumeShipmentPayment = useCallback(
-    async (shipmentId: number, existingDetail?: ShipmentResponseData | null) => {
+    async (
+      shipmentId: number,
+      existingDetail?: ShipmentResponseData | null,
+    ) => {
       setResumingPaymentShipmentId(shipmentId);
       setShipmentsError('');
       try {
@@ -336,7 +341,14 @@ export default function CustomerShipmentsPage() {
     return () => {
       ignore = true;
     };
-  }, [accessToken, isHydrated, activeShipmentQuery, retryKey, router, executeWithAuth]);
+  }, [
+    accessToken,
+    isHydrated,
+    activeShipmentQuery,
+    retryKey,
+    router,
+    executeWithAuth,
+  ]);
 
   const handleOpenShipmentDetail = useCallback(
     async (shipmentId: number) => {
@@ -409,7 +421,8 @@ export default function CustomerShipmentsPage() {
       if (!canResumeShipmentPayment(s, nowMs)) {
         markPaymentDraftsTerminalByOrder(
           { shipmentId: s.shipmentId, orderCode: s.orderCode },
-          s.paymentStatus === 'DA_THANH_TOAN' || s.paymentStatus === 'THANH_CONG'
+          s.paymentStatus === 'DA_THANH_TOAN' ||
+            s.paymentStatus === 'THANH_CONG'
             ? 'paid'
             : 'cancelled',
         );
@@ -445,7 +458,8 @@ export default function CustomerShipmentsPage() {
                     Đơn gửi hàng
                   </h2>
                   <p className="text-sm text-slate-500 mt-1 font-medium">
-                    Theo dõi trạng thái vận chuyển và lịch sử các kiện hàng bạn đã gửi
+                    Theo dõi trạng thái vận chuyển và lịch sử các kiện hàng bạn
+                    đã gửi
                   </p>
                 </div>
                 <Link
@@ -467,7 +481,8 @@ export default function CustomerShipmentsPage() {
                       <div className="text-xs sm:text-sm">
                         <div className="font-extrabold text-amber-950 flex flex-wrap items-center gap-2">
                           <span>
-                            Bạn đang có {pendingPaymentShipments.length} đơn gửi hàng chờ thanh toán
+                            Bạn đang có {pendingPaymentShipments.length} đơn gửi
+                            hàng chờ thanh toán
                           </span>
                           {formatCountdown(
                             pendingPaymentShipments[0].paymentExpiresAt,
@@ -549,7 +564,7 @@ export default function CustomerShipmentsPage() {
                     className="w-full text-sm px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-accent bg-white text-slate-600 transition-colors"
                   >
                     <option value="">Tất cả trạng thái</option>
-                    <option value="MOI_TAO">Mới tạo</option>
+                    <option value="MOI_TAO">Chờ mang hàng đến gửi</option>
                     <option value="DA_TIEP_NHAN">Đã tiếp nhận</option>
                     <option value="DANG_VAN_CHUYEN">Đang vận chuyển</option>
                     <option value="DA_GIAO">Đã giao hàng</option>
@@ -634,9 +649,8 @@ export default function CustomerShipmentsPage() {
                               Bạn chưa có đơn gửi hàng nào
                             </h3>
                             <p className="text-xs text-slate-500 mb-5 leading-relaxed">
-                              Các vận đơn gửi hàng bạn tạo khi đăng nhập sẽ
-                              hiển thị tại đây để tiện theo dõi hành trình
-                              giao nhận.
+                              Các vận đơn gửi hàng bạn tạo khi đăng nhập sẽ hiển
+                              thị tại đây để tiện theo dõi hành trình giao nhận.
                             </p>
                             <Link
                               href="/send-freight"
@@ -707,6 +721,19 @@ export default function CustomerShipmentsPage() {
                               </span>
                               <span className="text-[11px] text-slate-500 block">
                                 {item.trip.busCompany}
+                                {!item.trip.tripId && (
+                                  <span className="block">
+                                    Chưa phân chuyến
+                                  </span>
+                                )}
+                                {item.dropoffDeadline && (
+                                  <span className="block">
+                                    Hạn gửi:{' '}
+                                    {new Date(
+                                      item.dropoffDeadline,
+                                    ).toLocaleString('vi-VN')}
+                                  </span>
+                                )}
                               </span>
                             </td>
                             <td className="px-3 sm:px-4 py-3 sm:py-3.5 font-medium text-slate-700 border-l border-slate-100 whitespace-nowrap">
@@ -729,9 +756,7 @@ export default function CustomerShipmentsPage() {
                               )}
                             </td>
                             <td className="px-3 sm:px-4 py-3 sm:py-3.5 border-l border-slate-100 whitespace-nowrap">
-                              {renderPaymentStatusBadge(
-                                effectivePaymentStatus,
-                              )}
+                              {renderPaymentStatusBadge(effectivePaymentStatus)}
                             </td>
                             <td className="px-3 sm:px-4 py-3 sm:py-3.5 border-l border-slate-100 whitespace-nowrap">
                               <div className="flex items-center justify-center gap-1.5">
@@ -923,6 +948,19 @@ export default function CustomerShipmentsPage() {
                     </div>
                     <div className="text-xs text-slate-500 mt-0.5">
                       Nhà xe: {selectedShipmentDetail.trip.busCompany.name}
+                      <div>
+                        {selectedShipmentDetail.trip.tripId
+                          ? `Chuyến ${selectedShipmentDetail.trip.code}`
+                          : 'Chưa phân chuyến'}
+                      </div>
+                      {selectedShipmentDetail.dropoffDeadline && (
+                        <div>
+                          Hạn mang hàng đến:{' '}
+                          {new Date(
+                            selectedShipmentDetail.dropoffDeadline,
+                          ).toLocaleString('vi-VN')}
+                        </div>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -930,10 +968,7 @@ export default function CustomerShipmentsPage() {
                     {renderPaymentStatusBadge(
                       selectedShipmentDetail.paymentStatus ===
                         'CHO_THANH_TOAN' &&
-                        !canResumeShipmentPayment(
-                          selectedShipmentDetail,
-                          nowMs,
-                        )
+                        !canResumeShipmentPayment(selectedShipmentDetail, nowMs)
                         ? 'HET_HAN'
                         : selectedShipmentDetail.paymentStatus,
                     )}

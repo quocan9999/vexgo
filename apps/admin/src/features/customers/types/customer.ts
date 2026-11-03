@@ -182,7 +182,7 @@ export interface CustomerShipment {
   discountAmount: number;
   totalFee: number;
   freightPayer: string;
-  trip: CustomerShipmentTripSummary;
+  trip: CustomerShipmentTripSummary | null;
   originPoint: CustomerShipmentPointSummary;
   destinationPoint: CustomerShipmentPointSummary;
 }

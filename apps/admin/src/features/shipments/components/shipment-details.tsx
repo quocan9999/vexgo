@@ -1,5 +1,7 @@
 'use client';
 
+import { ShipmentOperations } from './shipment-operations';
+import { canDispatchShipment } from '../services/shipment-operations';
 import { LoaderCircle } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -35,7 +37,7 @@ import type {
 } from '../types/shipment';
 
 export const SHIPMENT_STATUS_LABELS: Record<ShipmentStatus, string> = {
-  MOI_TAO: 'Mới tạo',
+  MOI_TAO: 'Chờ mang hàng đến gửi',
   DA_TIEP_NHAN: 'Đã tiếp nhận',
   DANG_VAN_CHUYEN: 'Đang vận chuyển',
   DA_GIAO: 'Đã giao',
@@ -327,17 +329,16 @@ export function ShipmentDetails({
               (() => {
                 const availableActions = getAvailableStatusActions(
                   detail.shipment.status,
-                );
+                ).filter((action) => action.targetStatus !== 'DA_TIEP_NHAN');
                 const canCancel =
                   detail.shipment.status === 'MOI_TAO' ||
                   detail.shipment.status === 'DA_TIEP_NHAN';
                 if (availableActions.length === 0 && !canCancel) return null;
 
-                const isRecipientPaying =
-                  detail.shipment.feeSummary?.freightPayer === 'NGUOI_NHAN';
                 const paymentConfirmed =
-                  detail.shipment.paymentStatus === 'DA_THANH_TOAN' ||
-                  (isRecipientPaying && detail.shipment.status !== 'DA_GIAO');
+                  detail.shipment.status === 'DA_TIEP_NHAN'
+                    ? canDispatchShipment(detail.shipment)
+                    : detail.shipment.paymentStatus === 'DA_THANH_TOAN';
 
                 const cancelAction: StatusActionConfig = {
                   targetStatus: 'DA_HUY',
@@ -372,8 +373,8 @@ export function ShipmentDetails({
                           className="text-xs text-muted-foreground"
                           role="status"
                         >
-                          Chỉ có thể cập nhật trạng thái vận chuyển sau khi đơn đã
-                          thanh toán.
+                          Cần phân chuyến và hoàn tất điều kiện thanh toán trước
+                          khi vận chuyển / giao hàng.
                         </p>
                       )}
                       {canCancel && (
@@ -391,6 +392,16 @@ export function ShipmentDetails({
                   </div>
                 );
               })()}
+
+            {canUpdate && (
+              <ShipmentOperations
+                shipment={detail.shipment}
+                onUpdated={() => {
+                  retry();
+                  onStatusUpdated?.();
+                }}
+              />
+            )}
 
             {/* Người gửi & Người nhận */}
             <Card
@@ -448,17 +459,29 @@ export function ShipmentDetails({
                 Chuyến xe & Lộ trình
               </h3>
               <dl className="grid gap-3 text-[13px]">
+                <div>
+                  <dt className="text-xs text-muted-foreground">Nhà xe</dt>
+                  <dd>{detail.shipment.carrier?.name ?? '—'}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted-foreground">Tuyến</dt>
+                  <dd>
+                    {detail.shipment.route
+                      ? `${detail.shipment.route.origin} → ${detail.shipment.route.destination}`
+                      : '—'}
+                  </dd>
+                </div>
                 <div className="grid min-w-0 gap-1 border-b pb-3 last:border-0 last:pb-0 sm:grid-cols-[minmax(110px,0.8fr)_minmax(0,1.2fr)] sm:gap-3 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:min-w-0 [&_dd]:break-words">
                   <dt>Mã chuyến xe</dt>
                   <dd className="admin-data-mono">
-                    {detail.shipment.trip.code}
+                    {detail.shipment.trip?.code ?? 'Chưa phân chuyến'}
                   </dd>
                 </div>
                 <div className="grid min-w-0 gap-1 border-b pb-3 last:border-0 last:pb-0 sm:grid-cols-[minmax(110px,0.8fr)_minmax(0,1.2fr)] sm:gap-3 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:min-w-0 [&_dd]:break-words">
                   <dt>Khởi hành</dt>
                   <dd>
-                    {detail.shipment.trip.departureTime} ·{' '}
-                    {detail.shipment.trip.departureDate.replace(
+                    {detail.shipment.trip?.departureTime ?? '—'} ·{' '}
+                    {detail.shipment.trip?.departureDate.replace(
                       /^(\d{4})-(\d{2})-(\d{2})$/,
                       '$3-$2-$1',
                     )}
@@ -517,8 +540,13 @@ export function ShipmentDetails({
                         <dd>{item.quantity}</dd>
                       </div>
                       <div className="min-w-0 space-y-1 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:break-words">
-                        <dt>Khối lượng</dt>
-                        <dd>{item.weightKg} kg</dd>
+                        <dt>Khai báo / thực tế</dt>
+                        <dd>
+                          {item.declaredWeightKg ?? item.weightKg} kg /{' '}
+                          {item.actualWeightKg == null
+                            ? 'Chưa cân'
+                            : `${item.actualWeightKg} kg`}
+                        </dd>
                       </div>
                       {item.dimensions && (
                         <div className="min-w-0 space-y-1 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:break-words">
@@ -641,6 +669,38 @@ export function ShipmentDetails({
               </div>
             </Card>
 
+            {((detail.shipment.pricingHistory?.length ?? 0) > 0 ||
+              (detail.shipment.assignmentHistory?.length ?? 0) > 0) && (
+              <Card className="gap-4 p-4">
+                <h3 className="text-base font-semibold">
+                  Lịch sử cước và phân chuyến
+                </h3>
+                <ol className="grid gap-3 text-[13px]">
+                  {detail.shipment.pricingHistory?.map((item) => (
+                    <li key={`price-${item.id}`} className="border-t pt-3">
+                      {formatDateTime(item.time)} ·{' '}
+                      {item.actor?.fullName ?? 'Hệ thống'}
+                      <p>
+                        Cước {formatCurrency(item.beforeFee)} →{' '}
+                        {formatCurrency(item.afterFee)}
+                      </p>
+                      <p>{item.note}</p>
+                    </li>
+                  ))}
+                  {detail.shipment.assignmentHistory?.map((item) => (
+                    <li key={`trip-${item.id}`} className="border-t pt-3">
+                      {formatDateTime(item.time)} ·{' '}
+                      {item.actor?.fullName ?? 'Hệ thống'}
+                      <p>
+                        Chuyến {item.previousTripId ?? 'Chưa phân'} →{' '}
+                        {item.tripId ?? 'Chưa phân'}
+                      </p>
+                      <p>{item.note}</p>
+                    </li>
+                  ))}
+                </ol>
+              </Card>
+            )}
             {/* Timeline Lịch sử trạng thái */}
             <Card
               role="region"

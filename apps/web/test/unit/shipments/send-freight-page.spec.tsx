@@ -13,8 +13,10 @@ import SendFreightPage, {
 
 const api = vi.hoisted(() => ({
   searchTrips: vi.fn(),
+  getOptions: vi.fn(),
+  getQuote: vi.fn(),
   getCargoCategories: vi.fn(),
-  getRoutePoints: vi.fn(),
+  getRoutePointsByRoute: vi.fn(),
   createShipment: vi.fn(),
   lookupShipment: vi.fn(),
   routerPush: vi.fn(),
@@ -39,8 +41,10 @@ vi.mock('@/features/trips/services/trips.api', () => ({
 
 vi.mock('@/features/shipments/services/shipments.api', () => ({
   shipmentsApi: {
+    getOptions: api.getOptions,
+    getQuote: api.getQuote,
     getCargoCategories: api.getCargoCategories,
-    getRoutePoints: api.getRoutePoints,
+    getRoutePointsByRoute: api.getRoutePointsByRoute,
     createShipment: api.createShipment,
     lookupShipment: api.lookupShipment,
   },
@@ -91,9 +95,9 @@ const createdShipment = {
   pickupPoint: { id: 901, name: 'Điểm gửi', address: 'Địa chỉ gửi' },
   dropoffPoint: { id: 902, name: 'Điểm nhận', address: 'Địa chỉ nhận' },
   trip: {
-    tripId: 42,
-    code: 'TRIP-42',
-    departureTime: '2026-10-20T08:00:00.000Z',
+    tripId: null,
+    code: null,
+    departureTime: null,
     route: { origin: 'Đà Lạt', destination: 'TP.HCM' },
     busCompany: { id: 4, name: 'Nhà xe kiểm thử' },
     vehicle: { licensePlate: '51A-00000' },
@@ -142,14 +146,17 @@ beforeEach(() => {
   api.auth.isHydrated = true;
   api.auth.executeWithAuth.mockClear();
   vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
-  api.searchTrips.mockReset().mockResolvedValue({
+  api.getOptions.mockReset().mockResolvedValue({
+    meta: { page: 1, pageSize: 8, totalItems: 1, totalPages: 1 },
     data: [
       {
+        routeId: 42,
         id: 42,
         code: 'TRIP-42',
         status: 'DANG_MO_BAN',
         busCompany: { id: 4, name: 'Nhà xe kiểm thử' },
         route: { origin: 'Đà Lạt', destination: 'TP.HCM' },
+        minimumEstimatedFee: 30_000,
         departureTime: '2026-10-20T08:00:00.000Z',
         arrivalTime: null,
         vehicle: { licensePlate: '51A-00000' },
@@ -157,6 +164,9 @@ beforeEach(() => {
         availableSeats: 20,
       },
     ],
+  });
+  api.getQuote.mockReset().mockResolvedValue({
+    data: { baseFee: 50000, serviceFee: 0, totalFee: 50000 },
   });
   api.getCargoCategories.mockReset().mockResolvedValue({
     data: [
@@ -168,7 +178,7 @@ beforeEach(() => {
       },
     ],
   });
-  api.getRoutePoints.mockReset().mockResolvedValue({
+  api.getRoutePointsByRoute.mockReset().mockResolvedValue({
     data: {
       tripId: 42,
       senderPoints: [{ id: 901, name: 'Điểm gửi', address: 'Địa chỉ gửi' }],
@@ -186,9 +196,37 @@ afterEach(() => {
 });
 
 describe('independent shipment flow', () => {
+  it('shows the lowest reference fee without presenting it as the final quote', async () => {
+    render(<SendFreightPage />);
+
+    expect(await screen.findByText('Cước từ 30.000 đ')).toBeTruthy();
+    expect(screen.getByText('Giá chính xác sau khi chọn bưu cục')).toBeTruthy();
+    expect(screen.queryByText('Tổng cước phí: 30.000 đ')).toBeNull();
+  });
+
+  it('shows an honest fallback when a carrier has no reference fee', async () => {
+    api.getOptions.mockResolvedValueOnce({
+      meta: { page: 1, pageSize: 8, totalItems: 1, totalPages: 1 },
+      data: [
+        {
+          routeId: 42,
+          busCompany: { id: 4, name: 'Nhà xe kiểm thử' },
+          route: { origin: 'Đà Lạt', destination: 'TP.HCM' },
+          minimumEstimatedFee: null,
+        },
+      ],
+    });
+
+    render(<SendFreightPage />);
+
+    expect(await screen.findByText('Chưa có giá tham khảo')).toBeTruthy();
+  });
+
   it('routes a newly created shipment to a server-verified payment draft instead of reporting success', async () => {
     render(<SendFreightPage />);
-    expect(await screen.findByText('30.000đ', { exact: true })).toBeTruthy();
+    expect(
+      (await screen.findAllByText('Nhà xe kiểm thử', { exact: true })).length,
+    ).toBeGreaterThan(0);
 
     fireEvent.change(screen.getByPlaceholderText('Ví dụ: Nguyễn Văn A'), {
       target: { value: 'Nguyễn An' },
@@ -213,18 +251,27 @@ describe('independent shipment flow', () => {
       { target: { value: '21' } },
     );
 
-    await waitFor(() => expect(api.getRoutePoints).toHaveBeenCalledWith(42));
-    expect(api.searchTrips).toHaveBeenCalledWith({
+    await waitFor(() =>
+      expect(api.getRoutePointsByRoute).toHaveBeenCalledWith(42),
+    );
+    expect(api.getOptions).toHaveBeenCalledWith({
       from: 'Đà Lạt',
       to: 'TP.HCM',
-      departureDate: '2026-10-20',
+      sendDate: '2026-10-20',
+      page: 1,
+      pageSize: 8,
     });
     fireEvent.click(screen.getByLabelText(/Thanh toán trực tuyến/i));
     fireEvent.click(screen.getByRole('button', { name: 'Tạo mã vận đơn' }));
 
     await waitFor(() => expect(api.routerPush).toHaveBeenCalledTimes(1));
     expect(api.createShipment).toHaveBeenCalledTimes(1);
-    expect(api.createShipment.mock.calls[0]).toHaveLength(1);
+    expect(api.createShipment.mock.calls[0][0]).toMatchObject({
+      routeId: 42,
+      sendDate: '2026-10-20',
+    });
+    expect(api.createShipment.mock.calls[0][0]).not.toHaveProperty('tripId');
+    expect(api.createShipment.mock.calls[0][2]).toEqual(expect.any(String));
     expect(api.routerPush.mock.calls[0][0]).toMatch(/^\/payment\?draftId=/);
     expect(
       screen.queryByText('Tạo mã vận đơn gửi hàng thành công!'),
@@ -250,7 +297,9 @@ describe('independent shipment flow', () => {
   it('creates an authenticated shipment with the active Customer access token', async () => {
     api.auth.isAuthenticated = true;
     render(<SendFreightPage />);
-    expect(await screen.findByText('30.000đ', { exact: true })).toBeTruthy();
+    expect(
+      (await screen.findAllByText('Nhà xe kiểm thử', { exact: true })).length,
+    ).toBeGreaterThan(0);
 
     fireEvent.change(screen.getByPlaceholderText('Ví dụ: Nguyễn Văn A'), {
       target: { value: 'Nguyễn An' },
@@ -272,7 +321,9 @@ describe('independent shipment flow', () => {
       await screen.findByRole('combobox', { name: 'Loại hàng hóa' }),
       { target: { value: '21' } },
     );
-    await waitFor(() => expect(api.getRoutePoints).toHaveBeenCalledWith(42));
+    await waitFor(() =>
+      expect(api.getRoutePointsByRoute).toHaveBeenCalledWith(42),
+    );
 
     fireEvent.click(screen.getByLabelText(/Thanh toán trực tuyến/i));
     fireEvent.click(screen.getByRole('button', { name: 'Tạo mã vận đơn' }));
@@ -325,7 +376,9 @@ describe('independent shipment flow', () => {
 
   it('displays a popup modal when creating shipment with incomplete form', async () => {
     render(<SendFreightPage />);
-    expect(await screen.findByText('30.000đ', { exact: true })).toBeTruthy();
+    expect(
+      (await screen.findAllByText('Nhà xe kiểm thử', { exact: true })).length,
+    ).toBeGreaterThan(0);
 
     // Click "Tạo mã vận đơn" without filling sender/receiver/cargo details
     fireEvent.click(screen.getByRole('button', { name: 'Tạo mã vận đơn' }));
@@ -351,10 +404,16 @@ describe('independent shipment flow', () => {
 
     // Inline field-level errors are displayed directly at input fields
     expect(screen.getByText('Vui lòng nhập họ và tên người gửi')).toBeTruthy();
-    expect(screen.getByText('Vui lòng nhập số điện thoại người gửi')).toBeTruthy();
+    expect(
+      screen.getByText('Vui lòng nhập số điện thoại người gửi'),
+    ).toBeTruthy();
     expect(screen.getByText('Vui lòng nhập họ và tên người nhận')).toBeTruthy();
-    expect(screen.getByText('Vui lòng nhập số điện thoại người nhận')).toBeTruthy();
-    expect(screen.getByText('Vui lòng nhập tên món hàng / kiện hàng')).toBeTruthy();
+    expect(
+      screen.getByText('Vui lòng nhập số điện thoại người nhận'),
+    ).toBeTruthy();
+    expect(
+      screen.getByText('Vui lòng nhập tên món hàng / kiện hàng'),
+    ).toBeTruthy();
 
     // When typing into an invalid field, its error is cleared
     fireEvent.change(screen.getByPlaceholderText('Ví dụ: Nguyễn Văn A'), {
@@ -365,7 +424,9 @@ describe('independent shipment flow', () => {
 
   it('supports adding multiple cargo items and submits all items in the payload', async () => {
     render(<SendFreightPage />);
-    expect(await screen.findByText('30.000đ', { exact: true })).toBeTruthy();
+    expect(
+      (await screen.findAllByText('Nhà xe kiểm thử', { exact: true })).length,
+    ).toBeGreaterThan(0);
 
     // Fill sender and receiver details
     fireEvent.change(screen.getByPlaceholderText('Ví dụ: Nguyễn Văn A'), {
@@ -421,13 +482,18 @@ describe('independent shipment flow', () => {
     );
 
     // Sidebar reflects both surcharges
-    expect(screen.getByText('Phí hàng dễ vỡ')).toBeTruthy();
-    expect(screen.getByText('+20.000đ')).toBeTruthy();
-    expect(screen.getByText('Phí hàng giá trị cao')).toBeTruthy();
-    expect(screen.getByText('+50.000đ')).toBeTruthy();
+    await waitFor(() =>
+      expect(api.getQuote).toHaveBeenLastCalledWith(
+        expect.objectContaining({ isFragile: true, isValuable: true }),
+      ),
+    );
+    expect(screen.queryByText('+20.000đ')).toBeNull();
+    expect(screen.queryByText('+50.000đ')).toBeNull();
 
     // Click "Tạo mã vận đơn"
-    await waitFor(() => expect(api.getRoutePoints).toHaveBeenCalledWith(42));
+    await waitFor(() =>
+      expect(api.getRoutePointsByRoute).toHaveBeenCalledWith(42),
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Tạo mã vận đơn' }));
 
     await waitFor(() => expect(api.createShipment).toHaveBeenCalledTimes(1));
@@ -443,16 +509,26 @@ describe('independent shipment flow', () => {
 
   it('supports entering receiver CCCD and displays carrier delivery estimates without Linh hoạt trong ngày', async () => {
     render(<SendFreightPage />);
-    expect(await screen.findByText('30.000đ', { exact: true })).toBeTruthy();
+    expect(
+      (await screen.findAllByText('Nhà xe kiểm thử', { exact: true })).length,
+    ).toBeGreaterThan(0);
 
     // Verify 'Linh hoạt trong ngày' is removed and replaced by delivery estimate
     expect(screen.queryByText('Linh hoạt trong ngày')).toBeNull();
-    expect(screen.getAllByText('Giao trong ngày').length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText('Nhà xe điều phối sau khi tiếp nhận').length,
+    ).toBeGreaterThan(0);
 
     // Verify helper calculation for long and short duration routes
-    expect(getCarrierDeliveryEstimate({ route: { durationMinutes: 1080 } })).toBe('Giao 2 – 3 ngày');
-    expect(getCarrierDeliveryEstimate({ route: { durationMinutes: 420 } })).toBe('Giao trong ngày');
-    expect(getCarrierDeliveryEstimate(null)).toBe('Giao trong ngày');
+    expect(
+      getCarrierDeliveryEstimate({ route: { durationMinutes: 1080 } }),
+    ).toBe('Nhà xe điều phối sau khi tiếp nhận');
+    expect(
+      getCarrierDeliveryEstimate({ route: { durationMinutes: 420 } }),
+    ).toBe('Nhà xe điều phối sau khi tiếp nhận');
+    expect(getCarrierDeliveryEstimate(null)).toBe(
+      'Nhà xe điều phối sau khi tiếp nhận',
+    );
 
     // Fill sender and receiver details including CCCD
     fireEvent.change(screen.getByPlaceholderText('Ví dụ: Nguyễn Văn A'), {
@@ -482,7 +558,9 @@ describe('independent shipment flow', () => {
     // Sidebar reflects receiver CCCD
     expect(screen.getByText('079123456789')).toBeTruthy();
 
-    await waitFor(() => expect(api.getRoutePoints).toHaveBeenCalledWith(42));
+    await waitFor(() =>
+      expect(api.getRoutePointsByRoute).toHaveBeenCalledWith(42),
+    );
     fireEvent.click(screen.getByLabelText(/Thanh toán trực tuyến/i));
     fireEvent.click(screen.getByRole('button', { name: 'Tạo mã vận đơn' }));
 
@@ -498,7 +576,9 @@ describe('independent shipment flow', () => {
 
   it('creates a counter shipment and displays the waybill QR success modal when sender pays at counter', async () => {
     render(<SendFreightPage />);
-    expect(await screen.findByText('30.000đ', { exact: true })).toBeTruthy();
+    expect(
+      (await screen.findAllByText('Nhà xe kiểm thử', { exact: true })).length,
+    ).toBeGreaterThan(0);
 
     fireEvent.change(screen.getByPlaceholderText('Ví dụ: Nguyễn Văn A'), {
       target: { value: 'Nguyễn An' },
@@ -522,7 +602,12 @@ describe('independent shipment flow', () => {
     );
 
     // Default payment option is SENDER_COUNTER
-    await waitFor(() => expect(api.getRoutePoints).toHaveBeenCalledWith(42));
+    await waitFor(() =>
+      expect(api.getRoutePointsByRoute).toHaveBeenCalledWith(42),
+    );
+    await waitFor(() =>
+      expect(screen.getAllByText('50.000đ').length).toBeGreaterThan(0),
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Tạo mã vận đơn' }));
 
     await waitFor(() => expect(api.createShipment).toHaveBeenCalledTimes(1));
@@ -531,7 +616,9 @@ describe('independent shipment flow', () => {
     expect(api.routerPush).not.toHaveBeenCalled();
 
     // Success modal appears with waybill code
-    expect(await screen.findByText('Tạo đơn gửi hàng thành công!')).toBeTruthy();
+    expect(
+      await screen.findByText('Tạo đơn gửi hàng thành công!'),
+    ).toBeTruthy();
     expect(screen.getByText('VG-VD-TEST-601')).toBeTruthy();
     expect(
       screen.getAllByText('Người gửi thanh toán').length,

@@ -583,7 +583,7 @@ describe('ShipmentsService', () => {
           where: {
             AND: [
               { donGiaoDich: { nhaXeId: 2 } },
-              { chuyenXe: { nhaXeId: 2 } },
+              { OR: [{ chuyenXeId: null }, { chuyenXe: { nhaXeId: 2 } }] },
               { diemGui: { nhaXeId: 2 } },
               { diemNhan: { nhaXeId: 2 } },
             ],
@@ -709,6 +709,8 @@ describe('ShipmentsService', () => {
         estimatedArrivalAt: expect.any(String),
         packageCount: 3,
         bookingPromotionCode: null,
+        dropoffDeadline: null,
+        expectedSendDate: null,
         timeline: [
           {
             status: 'DA_TIEP_NHAN',

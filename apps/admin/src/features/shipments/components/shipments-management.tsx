@@ -37,7 +37,7 @@ import {
 } from './shipment-details';
 
 const STATUS_FILTER_OPTIONS: FilterOption[] = [
-  { value: 'MOI_TAO', label: 'Mới tạo' },
+  { value: 'MOI_TAO', label: 'Chờ mang hàng đến gửi' },
   { value: 'DA_TIEP_NHAN', label: 'Đã tiếp nhận' },
   { value: 'DANG_VAN_CHUYEN', label: 'Đang vận chuyển' },
   { value: 'DA_GIAO', label: 'Đã giao' },
@@ -144,6 +144,7 @@ export function ShipmentsManagement() {
                       <TableRow>
                         <TableHead scope="col">Mã vận đơn</TableHead>
                         <TableHead scope="col">Người gửi</TableHead>
+                        <TableHead scope="col">Tuyến / chuyến</TableHead>
                         <TableHead scope="col">Điểm gửi</TableHead>
                         <TableHead scope="col">Điểm nhận</TableHead>
                         <TableHead scope="col">Trạng thái</TableHead>
@@ -169,6 +170,17 @@ export function ShipmentsManagement() {
                                 {shipment.sender.phoneNumber}
                               </span>
                             </div>
+                          </TableCell>
+                          <TableCell>
+                            <span className="block max-w-40 whitespace-normal">
+                              {shipment.route
+                                ? `${shipment.route.origin} → ${shipment.route.destination}`
+                                : '—'}
+                            </span>
+                            <span className="block text-xs text-muted-foreground">
+                              {shipment.carrier?.name} ·{' '}
+                              {shipment.trip?.code ?? 'Chưa phân chuyến'}
+                            </span>
                           </TableCell>
                           <TableCell>
                             <span className="block max-w-40 whitespace-normal">
@@ -236,6 +248,15 @@ export function ShipmentsManagement() {
                           <dd>
                             {shipment.sender.fullName} (
                             <span>{shipment.sender.phoneNumber}</span>)
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>Tuyến / chuyến</dt>
+                          <dd>
+                            {shipment.route
+                              ? `${shipment.route.origin} → ${shipment.route.destination}`
+                              : '—'}
+                            <p>{shipment.trip?.code ?? 'Chưa phân chuyến'}</p>
                           </dd>
                         </div>
                         <div>

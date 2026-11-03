@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   HttpCode,
   HttpStatus,
   Param,
@@ -31,6 +32,14 @@ import { LookupShipmentDto } from './dto/lookup-shipment.dto.js';
 import { ShipmentQueryDto } from './dto/shipment-query.dto.js';
 import { UpdateShipmentStatusDto } from './dto/update-shipment-status.dto.js';
 import { ShipmentsService } from './shipments.service.js';
+import {
+  ShipmentOptionsQueryDto,
+  ShipmentQuoteDto,
+  AcceptShipmentDto,
+  AssignShipmentDto,
+  CollectShipmentPaymentDto,
+  ResolveShipmentMoneyCaseDto,
+} from './dto/shipment-operations.dto.js';
 
 @Controller('shipments')
 export class ShipmentsController {
@@ -42,12 +51,88 @@ export class ShipmentsController {
   async createShipment(
     @Body() dto: CreateShipmentDto,
     @CurrentPrincipal() principal?: AuthPrincipal,
+    @Headers('idempotency-key') idempotencyKey?: string,
   ) {
     const data = await this.shipmentsService.createShipment(
       dto,
       principal?.taiKhoanId,
+      idempotencyKey,
     );
     return { data };
+  }
+
+  @Get('options')
+  @OptionalAuth()
+  getShipmentOptions(@Query() query: ShipmentOptionsQueryDto) {
+    return this.shipmentsService.getShipmentOptions(query);
+  }
+
+  @Get('routes/:routeId/route-points')
+  @OptionalAuth()
+  async getRoutePointsByRoute(@Param('routeId', ParseIntPipe) routeId: number) {
+    return { data: await this.shipmentsService.getRoutePointsByRoute(routeId) };
+  }
+
+  @Post('quotes')
+  @OptionalAuth()
+  @HttpCode(HttpStatus.OK)
+  async quoteShipment(@Body() dto: ShipmentQuoteDto) {
+    return { data: await this.shipmentsService.quoteShipment(dto) };
+  }
+
+  @Post(':id/accept')
+  @RequireRoles(...TENANT_PRINCIPAL_ROLES)
+  @RequirePermissions('shipment:update')
+  acceptShipment(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: AcceptShipmentDto,
+    @CurrentPrincipal() principal: AuthPrincipal,
+  ) {
+    return this.shipmentsService.acceptShipment(id, dto, principal);
+  }
+
+  @Get(':id/available-trips')
+  @RequireRoles(...TENANT_PRINCIPAL_ROLES)
+  @RequirePermissions('shipment:read')
+  availableTrips(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentPrincipal() principal: AuthPrincipal,
+  ) {
+    return this.shipmentsService.availableTrips(id, principal);
+  }
+
+  @Patch(':id/assignment')
+  @RequireRoles(...TENANT_PRINCIPAL_ROLES)
+  @RequirePermissions('shipment:update')
+  assignShipment(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: AssignShipmentDto,
+    @CurrentPrincipal() principal: AuthPrincipal,
+  ) {
+    return this.shipmentsService.assignShipment(id, dto, principal);
+  }
+
+  @Post(':id/collect-payment')
+  @RequireRoles(...TENANT_PRINCIPAL_ROLES)
+  @RequirePermissions('shipment:update')
+  collectPayment(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: CollectShipmentPaymentDto,
+    @CurrentPrincipal() principal: AuthPrincipal,
+  ) {
+    return this.shipmentsService.collectPayment(id, dto, principal);
+  }
+
+  @Post(':id/money-cases/:caseId/resolve')
+  @RequireRoles(...TENANT_PRINCIPAL_ROLES)
+  @RequirePermissions('shipment:update')
+  resolveMoneyCase(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('caseId', ParseIntPipe) caseId: number,
+    @Body() dto: ResolveShipmentMoneyCaseDto,
+    @CurrentPrincipal() principal: AuthPrincipal,
+  ) {
+    return this.shipmentsService.resolveMoneyCase(id, caseId, dto, principal);
   }
 
   @Post('lookup')
