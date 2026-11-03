@@ -140,6 +140,7 @@ model TuyenXe {
   bangGias             BangGia[]
   diemGiaoNhanTuyenXes DiemGiaoNhanTuyenXe[]
   tuyenXeDiemDungs     TuyenXeDiemDung[]
+  bangCuocGuiHangs     BangCuocGuiHang[]
 
   @@unique([nhaXeId, maTuyenXe], map: "TuyenXe_index_2")
   @@unique([nhaXeId, tuyenXeId], map: "TuyenXe_nhaXeId_tuyenXeId_key")
@@ -562,8 +563,6 @@ model DiemGiaoNhanHang {
   nhaXe                     NhaXe                     @relation(fields: [nhaXeId], references: [nhaXeId], onDelete: Restrict, onUpdate: Restrict)
   phieuGuiHangsTheoDiemGui  PhieuGuiHang[]            @relation("DiemGiaoNhanGuiPhieu")
   phieuGuiHangsTheoDiemNhan PhieuGuiHang[]            @relation("DiemGiaoNhanNhanPhieu")
-  bangCuocGuiTheoDiemGui    BangCuocGuiHang[]         @relation("DiemGiaoNhanGuiCuoc")
-  bangCuocGuiTheoDiemNhan   BangCuocGuiHang[]         @relation("DiemGiaoNhanNhanCuoc")
   tuyenXeDiemGiaoNhaps      DiemGiaoNhanTuyenXe[]
 
   @@unique([nhaXeId, maDiem], map: "DiemGiaoNhanHang_nhaXeId_maDiem_key")
@@ -585,25 +584,22 @@ model DiemGiaoNhanTuyenXe {
 
 model BangCuocGuiHang {
   bangCuocGuiHangId   Int                  @id @default(autoincrement()) @db.Int
+  tuyenXeId           Int                  @db.Int
+  loaiHangHoaId       Int                  @db.Int
   khoiLuongTu         Decimal              @db.Decimal(10, 2)
   khoiLuongDen        Decimal?             @db.Decimal(10, 2)
   mucCuoc             Decimal              @db.Decimal(18, 2)
   tuNgay              DateTime             @db.Date
   denNgay             DateTime?            @db.Date
   trangThai           TrangThaiBangCuoc
-  diemGuiId           Int                  @db.Int
-  diemNhanId          Int                  @db.Int
-  loaiHangHoaId       Int                  @db.Int
   createdAt           DateTime             @default(now()) @db.DateTime(0)
   updatedAt           DateTime             @default(now()) @updatedAt @db.DateTime(0)
-  diemGui             DiemGiaoNhanHang     @relation("DiemGiaoNhanGuiCuoc", fields: [diemGuiId], references: [diemGiaoNhanHangId], onDelete: Restrict, onUpdate: Restrict)
-  diemNhan            DiemGiaoNhanHang     @relation("DiemGiaoNhanNhanCuoc", fields: [diemNhanId], references: [diemGiaoNhanHangId], onDelete: Restrict, onUpdate: Restrict)
+  tuyenXe             TuyenXe              @relation(fields: [tuyenXeId], references: [tuyenXeId], onDelete: Restrict, onUpdate: Restrict)
   loaiHangHoa         LoaiHangHoa          @relation(fields: [loaiHangHoaId], references: [loaiHangHoaId], onDelete: Restrict, onUpdate: Restrict)
   chiTietCuocGuiHangs ChiTietCuocGuiHang[]
 
   @@unique([bangCuocGuiHangId, loaiHangHoaId], map: "BangCuocGuiHang_rate_type_key")
-  @@index([diemGuiId], map: "BangCuocGuiHang_diemGuiId_idx")
-  @@index([diemNhanId], map: "BangCuocGuiHang_diemNhanId_idx")
+  @@index([tuyenXeId], map: "BangCuocGuiHang_tuyenXeId_idx")
   @@index([loaiHangHoaId], map: "BangCuocGuiHang_loaiHangHoaId_idx")
 }
 
