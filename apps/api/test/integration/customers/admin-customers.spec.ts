@@ -44,6 +44,7 @@ const mockCustomer = {
 };
 
 const mockPrisma = {
+  $transaction: vi.fn(),
   khachHang: {
     findMany: vi.fn(),
     count: vi.fn(),
@@ -396,10 +397,16 @@ describe('Admin Customers API (Feature 06.1)', () => {
           fullName: 'Nguyễn Văn A',
           phoneNumber: '+84901234567',
           email: 'nguyenvana@example.com',
+          dateOfBirth: '15-05-1995',
+          gender: null,
+          address: null,
+          citizenId: '079195000001',
           loyaltyPoints: 150,
           account: {
             accountId: 201,
             status: 'HOAT_DONG',
+              lockedUntil: null,
+              lockReason: null,
             phoneVerified: true,
             createdAt: NOW.toISOString(),
             updatedAt: NOW.toISOString(),
@@ -1166,6 +1173,132 @@ describe('Admin Customers API (Feature 06.1)', () => {
           },
         }),
       );
+    });
+  });
+
+  describe('PATCH /api/v1/customers/:id/status (Update Account Status)', () => {
+    it('updates customer account status to TAM_KHOA successfully', async () => {
+      mockPrisma.khachHang.findFirst.mockResolvedValue(mockCustomer);
+      mockPrisma.$transaction.mockImplementation(async (cb: (tx: any) => unknown) =>
+        cb({
+          taiKhoan: {
+            update: vi.fn().mockResolvedValue(mockCustomer.taiKhoan),
+            findUnique: vi.fn().mockResolvedValue({
+              taiKhoanId: 201,
+              trangThai: 'TAM_KHOA',
+              updatedAt: NOW,
+            }),
+          },
+          phienDangNhap: {
+            updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+          },
+        }),
+      );
+
+      const response = await request(app.getHttpServer())
+        .patch('/api/v1/customers/101/status')
+        .send({
+          status: 'TAM_KHOA',
+          reason: 'Khách hàng có hành vi gian lận mã giảm giá',
+          lockedUntil: '20-11-2026',
+        })
+        .expect(200);
+
+      expect(response.body).toEqual({
+        data: {
+          customerId: 101,
+          accountStatus: 'TAM_KHOA',
+          lockedUntil: '20-11-2026',
+          lockReason: 'Khách hàng có hành vi gian lận mã giảm giá',
+          updatedAt: NOW.toISOString(),
+          message: 'Cập nhật trạng thái tài khoản thành công.',
+        },
+      });
+    });
+
+    it('rejects invalid status with 400', async () => {
+      await request(app.getHttpServer())
+        .patch('/api/v1/customers/101/status')
+        .send({
+          status: 'INVALID_STATUS',
+          reason: 'Lý do hợp lệ dài hơn 5 ký tự',
+        })
+        .expect(400);
+    });
+
+    it('allows updating status without reason (reason is optional)', async () => {
+      mockPrisma.khachHang.findFirst.mockResolvedValue(mockCustomer);
+      mockPrisma.$transaction.mockImplementation(async (cb: (tx: any) => unknown) =>
+        cb({
+          taiKhoan: {
+            update: vi.fn().mockResolvedValue(mockCustomer.taiKhoan),
+            findUnique: vi.fn().mockResolvedValue({
+              taiKhoanId: 201,
+              trangThai: 'TAM_KHOA',
+              updatedAt: NOW,
+            }),
+          },
+          phienDangNhap: {
+            updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+          },
+        }),
+      );
+
+      const response = await request(app.getHttpServer())
+        .patch('/api/v1/customers/101/status')
+        .send({
+          status: 'TAM_KHOA',
+          lockedUntil: '20-11-2026',
+        })
+        .expect(200);
+
+      expect(response.body.data.lockReason).toBeNull();
+    });
+
+    it('rejects reason exceeding 255 characters with 400', async () => {
+      await request(app.getHttpServer())
+        .patch('/api/v1/customers/101/status')
+        .send({
+          status: 'TAM_KHOA',
+          reason: 'a'.repeat(256),
+          lockedUntil: '20-11-2026',
+        })
+        .expect(400);
+    });
+
+    it('rejects TAM_KHOA without lockedUntil with 400', async () => {
+      await request(app.getHttpServer())
+        .patch('/api/v1/customers/101/status')
+        .send({
+          status: 'TAM_KHOA',
+          reason: 'Lý do hợp lệ nhưng thiếu ngày tạm khóa',
+        })
+        .expect(400);
+    });
+
+    it('rejects lockedUntil in the past with 400', async () => {
+      mockPrisma.khachHang.findFirst.mockResolvedValue(mockCustomer);
+      await request(app.getHttpServer())
+        .patch('/api/v1/customers/101/status')
+        .send({
+          status: 'TAM_KHOA',
+          reason: 'Lý do hợp lệ nhưng ngày trong quá khứ',
+          lockedUntil: '01-01-2020',
+        })
+        .expect(400);
+    });
+
+    it('returns 404 when customer does not exist in tenant scope', async () => {
+      mockPrisma.khachHang.findFirst.mockResolvedValue(null);
+
+      await request(app.getHttpServer())
+        .patch('/api/v1/customers/999/status')
+        .send({
+          status: 'TAM_KHOA',
+          reason: 'Khách hàng không tồn tại trong hệ thống',
+          lockedUntil: '20-11-2026',
+        })
+        .expect(404);
     });
   });
 });

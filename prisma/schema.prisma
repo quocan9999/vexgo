@@ -237,7 +237,9 @@ model TaiKhoan {
   cccd                         String?                       @db.Char(12)
   email                        String?                       @unique(map: "TaiKhoan_email_key") @db.VarChar(150)
   daXacThucSoDienThoai         Boolean
-  trangThai                    String                        @db.VarChar(30)
+  trangThai                    TrangThaiTaiKhoan             @default(HOAT_DONG)
+  khoaDenNgay                  DateTime?                     @db.Date
+  lyDoKhoa                     String?                       @db.VarChar(255)
   createdAt                    DateTime                      @default(now()) @db.DateTime(0)
   updatedAt                    DateTime                      @default(now()) @updatedAt @db.DateTime(0)
   khachHang                    KhachHang?
@@ -849,6 +851,12 @@ model LienHe {
   trangThai   String   @default("CHO_XU_LY") @db.VarChar(30)
   createdAt   DateTime @default(now()) @db.DateTime(0)
   updatedAt   DateTime @default(now()) @updatedAt @db.DateTime(0)
+}
+
+enum TrangThaiTaiKhoan {
+  HOAT_DONG
+  TAM_KHOA
+  BI_KHOA
 }
 
 enum TrangThaiDiemGiaoNhanHang {
