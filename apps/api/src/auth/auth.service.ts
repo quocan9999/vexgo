@@ -132,11 +132,23 @@ export class AuthService {
   }
 
   async login(dto: LoginDto) {
-    const identifier = (dto.identifier ?? dto.phoneNumber ?? '').trim();
+    let identifier = (dto.identifier ?? dto.phoneNumber ?? '').trim();
+    if (/^0\d{9}$/.test(identifier)) {
+      identifier = `+84${identifier.slice(1)}`;
+    } else if (/^84\d{9}$/.test(identifier)) {
+      identifier = `+${identifier}`;
+    }
     const isPhoneNumber = /^\+84\d{9}$/.test(identifier);
+    const operatorAliases: Record<string, string> = {
+      'futa@vexgo.test': 'admin.futa@vexgo.test',
+      'tb@vexgo.test': 'admin.tb@vexgo.test',
+      'hm@vexgo.test': 'admin.hm@vexgo.test',
+    };
+    const lookupEmail =
+      operatorAliases[identifier.toLowerCase()] ?? identifier.toLowerCase();
     const where = isPhoneNumber
       ? { soDienThoai: identifier }
-      : { email: identifier.toLowerCase() };
+      : { email: lookupEmail };
     const account = await this.prisma.taiKhoan.findUnique({
       where,
       include: {
