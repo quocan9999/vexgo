@@ -317,6 +317,8 @@ describe('Public shipment lookup HTTP contract (MySQL integration)', () => {
         name: `Điểm nhận công khai ${suffix}`,
         address: `Địa chỉ nhận công khai ${suffix}`,
       },
+      dropoffDeadline: null,
+      expectedSendDate: null,
       scheduledDepartureAt: expect.any(String),
       estimatedArrivalAt: expect.any(String),
       packageCount: 3,

@@ -110,11 +110,16 @@ export const CustomerHeader: React.FC = () => {
 
   useEffect(() => {
     if (shouldHidePaymentBar) return;
-    setNowMs(Date.now());
+    const initialTimer = setTimeout(() => {
+      setNowMs(Date.now());
+    }, 0);
     const timer = setInterval(() => {
       setNowMs(Date.now());
     }, 1000);
-    return () => clearInterval(timer);
+    return () => {
+      clearTimeout(initialTimer);
+      clearInterval(timer);
+    };
   }, [shouldHidePaymentBar, pathname]);
 
   const activeDraftInfo =

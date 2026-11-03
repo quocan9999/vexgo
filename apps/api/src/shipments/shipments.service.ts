@@ -1192,16 +1192,23 @@ export class ShipmentsService {
           this.businessTimeZone,
         )
       : null;
-    if (
-      legacyTrip &&
-      (legacyTrip.trangThai !== 'CHUA_KHOI_HANH' ||
-        !legacyTrip.nhanGuiHang ||
-        departureAt! <= now)
-    )
-      throw new ConflictException({
-        error: 'TRIP_NOT_AVAILABLE',
-        message: 'Chuyến xe không mở nhận hàng hoặc đã khởi hành.',
-      });
+    if (legacyTrip) {
+      if (!legacyTrip.nhanGuiHang) {
+        throw new ConflictException({
+          error: 'TRIP_DOES_NOT_ACCEPT_CARGO',
+          message: 'Chuyến xe không hỗ trợ nhận gửi hàng.',
+        });
+      }
+      if (
+        legacyTrip.trangThai !== 'CHUA_KHOI_HANH' ||
+        departureAt! <= now
+      ) {
+        throw new ConflictException({
+          error: 'TRIP_NOT_AVAILABLE',
+          message: 'Chuyến xe không mở nhận hàng hoặc đã khởi hành.',
+        });
+      }
+    }
 
     const senderPhone = normalizePhone(dto.sender.phoneNumber);
     const receiverPhone = normalizePhone(dto.receiver.phoneNumber);
