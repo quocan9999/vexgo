@@ -154,25 +154,7 @@ export class ShipmentPersistenceService {
       },
     });
 
-    if (input.tripId === null)
-      await tx.lichSuDieuChinhCuocGuiHang.create({
-        data: {
-          phieuGuiHangId: shipment.phieuGuiHangId,
-          taiKhoanId: input.actorAccountId,
-          loaiThaoTac: 'BAO_GIA',
-          cuocSau: new Prisma.Decimal(input.totalFee),
-          snapshotSau: JSON.parse(
-            JSON.stringify({
-              items: input.items,
-              rates: input.rates,
-              baseFee: input.baseFee,
-              serviceFee: input.serviceFee,
-              discount: input.discount,
-            }),
-          ) as Prisma.InputJsonValue,
-          thoiGian: input.sentAt,
-        },
-      });
+    
     return { shipment, items };
   }
 }

@@ -570,42 +570,7 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
         data: { trangThai: 'DA_HUY' },
       });
       if (updated.count !== 1) return false;
-      const received = await tx.thanhToan.aggregate({
-        where: {
-          donGiaoDichId: order.donGiaoDichId,
-          loaiGiaoDich: 'THANH_TOAN',
-          trangThai: { in: ['THANH_CONG', 'DA_THANH_TOAN', 'CAN_DOI_SOAT'] },
-          thoiDiemHoanTat: { not: null },
-        },
-        _sum: { soTien: true },
-      });
-      const refunded = await tx.thanhToan.aggregate({
-        where: {
-          donGiaoDichId: order.donGiaoDichId,
-          loaiGiaoDich: 'HOAN_TIEN',
-          trangThai: { in: ['THANH_CONG', 'DA_THANH_TOAN'] },
-        },
-        _sum: { soTien: true },
-      });
-      const paidAmount = Prisma.Decimal.max(
-        0,
-        new Prisma.Decimal(received._sum.soTien ?? 0).minus(
-          refunded._sum.soTien ?? 0,
-        ),
-      );
-      if (paidAmount.greaterThan(0)) {
-        await tx.xuLyTienGuiHang.upsert({
-          where: { khoaSuKien: `shipment:${shipmentId}:expired` },
-          create: {
-            phieuGuiHangId: shipmentId,
-            khoaSuKien: `shipment:${shipmentId}:expired`,
-            lyDo: 'HUY_DA_THANH_TOAN',
-            soTien: paidAmount,
-            trangThai: 'CHO_XU_LY',
-          },
-          update: {},
-        });
-      }
+
       await tx.donGiaoDich.updateMany({
         where: { donGiaoDichId: order.donGiaoDichId },
         data: { trangThai: 'DA_HUY' },
@@ -1464,7 +1429,7 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
               order.trangThai === 'DA_THANH_TOAN')
           ) {
             // Incoming late money is real, but is not a settlement of this order.
-            const recorded = await tx.thanhToan.updateMany({
+            await tx.thanhToan.updateMany({
               where: {
                 thanhToanId: payment.thanhToanId,
                 trangThai: { not: 'THANH_CONG' },
@@ -1479,25 +1444,7 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
                   : {}),
               },
             });
-            if (recorded.count === 1) {
-              await tx.xuLyTienGuiHang.upsert({
-                where: {
-                  khoaSuKien: `shipment:${shipment.phieuGuiHangId}:late-payment:${payment.thanhToanId}`,
-                },
-                create: {
-                  phieuGuiHangId: shipment.phieuGuiHangId,
-                  khoaSuKien: `shipment:${shipment.phieuGuiHangId}:late-payment:${payment.thanhToanId}`,
-                  lyDo:
-                    order.trangThai === 'DA_THANH_TOAN'
-                      ? 'THANH_TOAN_TRUNG'
-                      : 'THANH_TOAN_MUON',
-                  soTien: payment.soTien,
-                  trangThai: 'CHO_XU_LY',
-                  thanhToanId: payment.thanhToanId,
-                },
-                update: {},
-              });
-            }
+            
             return 'late-shipment';
           }
 
@@ -1870,21 +1817,7 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
               where: { thanhToanId: payment.thanhToanId },
               data: { laQuyetToanHopLe: true },
             });
-            if (totalPaid.greaterThan(due)) {
-              await tx.xuLyTienGuiHang.upsert({
-                where: {
-                  khoaSuKien: `shipment:${shipment.phieuGuiHangId}:payment-overpaid:${payment.thanhToanId}`,
-                },
-                create: {
-                  phieuGuiHangId: shipment.phieuGuiHangId,
-                  khoaSuKien: `shipment:${shipment.phieuGuiHangId}:payment-overpaid:${payment.thanhToanId}`,
-                  lyDo: 'CHENH_LECH_CUOC',
-                  soTien: totalPaid.minus(due),
-                  trangThai: 'CHO_XU_LY',
-                },
-                update: {},
-              });
-            }
+            
             return 'settled';
           }
 

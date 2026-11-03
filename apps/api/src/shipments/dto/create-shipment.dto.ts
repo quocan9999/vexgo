@@ -312,8 +312,8 @@ export class CreateShipmentDto {
   freightPayer?: 'NGUOI_GUI' | 'NGUOI_NHAN';
 
   @IsOptional()
-  @IsIn(['TAI_BEN', 'ONLINE'], {
-    message: 'Hình thức thanh toán phải là TAI_BEN hoặc ONLINE.',
+  @IsIn(['TAI_BEN'], {
+    message: 'Hình thức thanh toán phải là TAI_BEN.',
   })
-  paymentMethod?: 'TAI_BEN' | 'ONLINE';
+  paymentMethod?: 'TAI_BEN';
 }

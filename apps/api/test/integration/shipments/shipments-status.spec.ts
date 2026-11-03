@@ -250,13 +250,7 @@ describe('Shipment Status Transition APIs (Phase 04)', () => {
 
     await prisma.$transaction(async (tx) => {
       if (shipmentIds.length > 0) {
-        await tx.xuLyTienGuiHang.deleteMany({
-          where: { phieuGuiHangId: { in: shipmentIds } },
-        });
         await tx.yeuCauTaoPhieuGuiHang.deleteMany({
-          where: { phieuGuiHangId: { in: shipmentIds } },
-        });
-        await tx.lichSuDieuChinhCuocGuiHang.deleteMany({
           where: { phieuGuiHangId: { in: shipmentIds } },
         });
         await tx.lichSuPhanChuyenGuiHang.deleteMany({
@@ -751,13 +745,10 @@ describe('Shipment Status Transition APIs (Phase 04)', () => {
 
       expect(response.status).toBe(200);
 
-      const [db, moneyCases, refunds] = await Promise.all([
+      const [db, refunds] = await Promise.all([
         prisma.phieuGuiHang.findUniqueOrThrow({
           where: { phieuGuiHangId: shipment.phieuGuiHangId },
           include: { lichSuTrangThais: true },
-        }),
-        prisma.xuLyTienGuiHang.findMany({
-          where: { phieuGuiHangId: shipment.phieuGuiHangId },
         }),
         prisma.thanhToan.findMany({
           where: {
@@ -768,48 +759,28 @@ describe('Shipment Status Transition APIs (Phase 04)', () => {
       ]);
       expect(db.trangThai).toBe('DA_HUY');
       expect(db.lichSuTrangThais).toHaveLength(2);
-      expect(moneyCases).toEqual([]);
       expect(refunds).toEqual([]);
     });
 
-    it('cancels a paid shipment and opens a manual case without refunding automatically', async () => {
+    it('cancels a shipment cleanly without refund liabilities', async () => {
       const shipment = await createTestShipment({
         nhaXeId: tenantOneId,
         initialStatus: 'MOI_TAO',
-        isPaid: true,
       });
       setTenantAdmin();
 
       const response = await request(app.getHttpServer())
         .patch(`/api/v1/shipments/${shipment.phieuGuiHangId}/status`)
-        .send({ status: 'DA_HUY', note: 'Muốn hủy nhưng đã thanh toán' });
+        .send({ status: 'DA_HUY', note: 'Khách muốn hủy gửi hàng' });
 
       expect(response.status).toBe(200);
 
-      const [db, moneyCases, refunds] = await Promise.all([
-        prisma.phieuGuiHang.findUniqueOrThrow({
-          where: { phieuGuiHangId: shipment.phieuGuiHangId },
-          include: { lichSuTrangThais: true },
-        }),
-        prisma.xuLyTienGuiHang.findMany({
-          where: { phieuGuiHangId: shipment.phieuGuiHangId },
-        }),
-        prisma.thanhToan.findMany({
-          where: {
-            donGiaoDichId: shipment.donGiaoDichId,
-            loaiGiaoDich: 'HOAN_TIEN',
-          },
-        }),
-      ]);
+      const db = await prisma.phieuGuiHang.findUniqueOrThrow({
+        where: { phieuGuiHangId: shipment.phieuGuiHangId },
+        include: { lichSuTrangThais: true },
+      });
       expect(db.trangThai).toBe('DA_HUY');
       expect(db.lichSuTrangThais).toHaveLength(2);
-      expect(moneyCases).toEqual([
-        expect.objectContaining({
-          lyDo: 'HUY_DA_THANH_TOAN',
-          trangThai: 'CHO_XU_LY',
-        }),
-      ]);
-      expect(refunds).toEqual([]);
     });
 
     it.each(['DANG_XU_LY', 'PROVIDER_RESPONSE_UNKNOWN'])(

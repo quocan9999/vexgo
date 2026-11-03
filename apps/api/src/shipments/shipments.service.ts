@@ -12,7 +12,6 @@ import { createHash, randomUUID } from 'node:crypto';
 import { Prisma, TrangThaiPhieuGuiHang } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { lockPaymentOrder } from '../payments/payment-order-lock.js';
-import { createSepayPaymentAttempt } from '../payments/payment-attempt.js';
 import { requireTenantPrincipal } from '../auth/tenant-scope.js';
 import { CargoPricingService } from '../cargo-pricing/cargo-pricing.service.js';
 import { CargoCapacityService } from '../cargo-capacity/cargo-capacity.service.js';
@@ -50,7 +49,6 @@ import {
   type AcceptShipmentDto,
   type AssignShipmentDto,
   type CollectShipmentPaymentDto,
-  type ResolveShipmentMoneyCaseDto,
 } from './dto/shipment-operations.dto.js';
 
 function combineDeparture(
@@ -136,12 +134,10 @@ const SHIPMENT_DETAIL_INCLUDE = {
     include: { loaiHangHoa: true },
     orderBy: { chiTietCuocGuiHangId: 'asc' },
   },
-  lichSuCuocs: { include: { taiKhoan: true }, orderBy: { thoiGian: 'asc' } },
   lichSuPhanChuyens: {
     include: { taiKhoan: true },
     orderBy: { thoiGian: 'asc' },
   },
-  xuLyTiens: true,
   lichSuTrangThais: {
     include: {
       taiKhoan: { select: { taiKhoanId: true, hoTen: true } },
@@ -521,12 +517,6 @@ export class ShipmentsService {
           previousFee: shipment.tongPhi.toNumber(),
           totalFee: total.toNumber(),
         });
-      const before = JSON.parse(
-        JSON.stringify({
-          items: shipment.hangHoas,
-          rates: shipment.chiTietCuocGuiHangs,
-        }),
-      ) as Prisma.InputJsonValue;
       for (const item of pricing.items) {
         // Match by persisted cargo order rather than name when names repeat.
         const index = pricing.items.indexOf(item);
@@ -557,27 +547,7 @@ export class ShipmentsService {
             soTienCuoc: rate.fee,
           },
         });
-      await tx.lichSuDieuChinhCuocGuiHang.create({
-        data: {
-          phieuGuiHangId: id,
-          taiKhoanId: principal.taiKhoanId,
-          loaiThaoTac: 'XAC_NHAN_CUOC',
-          cuocTruoc: shipment.tongPhi,
-          cuocSau: total,
-          lyDo: dto.note?.trim() ?? null,
-          snapshotTruoc: before,
-          snapshotSau: JSON.parse(
-            JSON.stringify({
-              measurements: dto.items,
-              rates: pricing.rates,
-              baseFee: pricing.baseFee,
-              serviceFee: shipment.phiDichVu,
-              discount: shipment.soTienGiam,
-            }),
-          ) as Prisma.InputJsonValue,
-          thoiGian: now,
-        },
-      });
+
       const orderTotal = shipment.donGiaoDich.tongTien
         .minus(shipment.tongPhi)
         .plus(total);
@@ -591,17 +561,7 @@ export class ShipmentsService {
             : 'CHO_THANH_TOAN',
         },
       });
-      if (paid.greaterThan(orderTotal))
-        await tx.xuLyTienGuiHang.upsert({
-          where: { khoaSuKien: `shipment:${id}:accept-overpayment` },
-          create: {
-            khoaSuKien: `shipment:${id}:accept-overpayment`,
-            phieuGuiHangId: id,
-            lyDo: 'CHENH_LECH_CUOC',
-            soTien: paid.minus(orderTotal),
-          },
-          update: {},
-        });
+
       await tx.phieuGuiHang.update({
         where: { phieuGuiHangId: id },
         data: {
@@ -612,13 +572,17 @@ export class ShipmentsService {
           taiKhoanXacNhanCuocId: principal.taiKhoanId,
         },
       });
+      const priceChanged = !total.equals(shipment.tongPhi);
+      const historyNote = priceChanged
+        ? `Tiếp nhận tại bến. Cân đo thực tế: cước ${shipment.tongPhi.toString()} -> ${total.toString()} đồng.${dto.note?.trim() ? ` Lý do: ${dto.note.trim()}` : ''}`
+        : `Tiếp nhận tại bến.${dto.note?.trim() ? ` ${dto.note.trim()}` : ''}`;
       await tx.lichSuTrangThaiPhieuGuiHang.create({
         data: {
           phieuGuiHangId: id,
           trangThai: 'DA_TIEP_NHAN',
           thoiGian: now,
           taiKhoanId: principal.taiKhoanId,
-          ghiChu: dto.note?.trim() ?? null,
+          ghiChu: historyNote,
         },
       });
     });
@@ -811,98 +775,6 @@ export class ShipmentsService {
           thoiGian: new Date(),
           taiKhoanId: principal.taiKhoanId,
           ghiChu: `Thu tại bến ${outstanding.toString()} đồng.${dto.note?.trim() ? ` ${dto.note.trim()}` : ''}`,
-        },
-      });
-    });
-    return this.findOne(id, principal);
-  }
-
-  async resolveMoneyCase(
-    id: number,
-    caseId: number,
-    dto: ResolveShipmentMoneyCaseDto,
-    principal: AuthPrincipal,
-  ) {
-    await this.prisma.$transaction(async (tx) => {
-      const shipment = await this.lockScopedShipment(tx, id, principal);
-      const moneyCase = await tx.xuLyTienGuiHang.findUnique({
-        where: { xuLyTienGuiHangId: caseId },
-      });
-      if (!moneyCase || moneyCase.phieuGuiHangId !== id)
-        throw new NotFoundException({
-          error: 'SHIPMENT_MONEY_CASE_NOT_FOUND',
-          message: 'Không tìm thấy hồ sơ tiền.',
-        });
-      if (moneyCase.trangThai === 'DA_XU_LY')
-        throw new ConflictException({
-          error: 'SHIPMENT_MONEY_CASE_RESOLVED',
-          message: 'Hồ sơ đã được xử lý.',
-        });
-      let paymentId: number | null = null;
-      if (dto.outcome !== 'NO_PAYMENT') {
-        if (dto.outcome !== 'REFUNDED') {
-          throw new BadRequestException({
-            error: 'SHIPMENT_MONEY_OUTCOME_INVALID',
-            message:
-              'Hồ sơ khoản dư/chờ hoàn không được ghi nhận thành khoản thu mới.',
-          });
-        }
-        if (!dto.reference?.trim()) {
-          throw new BadRequestException({
-            error: 'SHIPMENT_PAYMENT_PROOF_REQUIRED',
-            message: 'Cần mã chứng từ để ghi nhận hoàn tiền thực tế.',
-          });
-        }
-        if (!dto.amount || !moneyCase.soTien.equals(dto.amount))
-          throw new BadRequestException({
-            error: 'SHIPMENT_MONEY_AMOUNT_MISMATCH',
-            message: 'Số tiền thực tế phải bằng số tiền hồ sơ.',
-          });
-        const received = shipment.donGiaoDich.thanhToans
-          .filter((p) =>
-            ['THANH_CONG', 'DA_THANH_TOAN', 'CAN_DOI_SOAT'].includes(
-              p.trangThai,
-            ),
-          )
-          .reduce(
-            (sum, p) =>
-              p.loaiGiaoDich === 'HOAN_TIEN'
-                ? sum.minus(p.soTien)
-                : sum.plus(p.soTien),
-            new Prisma.Decimal(0),
-          );
-        if (received.lessThan(moneyCase.soTien)) {
-          throw new ConflictException({
-            error: 'SHIPMENT_REFUND_EXCEEDS_RECEIPTS',
-            message:
-              'Số tiền hoàn vượt số tiền còn có thể hoàn theo giao dịch đã ghi nhận.',
-          });
-        }
-        const payment = await tx.thanhToan.create({
-          data: {
-            donGiaoDichId: shipment.donGiaoDichId,
-            soTien: moneyCase.soTien,
-            phuongThuc: 'TAI_BEN',
-            loaiGiaoDich:
-              dto.outcome === 'REFUNDED' ? 'HOAN_TIEN' : 'THANH_TOAN',
-            trangThai: 'THANH_CONG',
-            thoiGian: new Date(),
-            thoiDiemHoanTat: new Date(),
-            laQuyetToanHopLe: !moneyCase.lyDo.startsWith('THANH_TOAN_'),
-            taiKhoanXacNhanId: principal.taiKhoanId,
-          },
-        });
-        paymentId = payment.thanhToanId;
-      }
-      await tx.xuLyTienGuiHang.update({
-        where: { xuLyTienGuiHangId: caseId },
-        data: {
-          trangThai: 'DA_XU_LY',
-          taiKhoanXuLyId: principal.taiKhoanId,
-          thoiDiemXuLy: new Date(),
-          ketQua: `${dto.outcome}: ${dto.note.trim()}`,
-          thamChieu: dto.reference ?? null,
-          thanhToanId: paymentId ?? moneyCase.thanhToanId,
         },
       });
     });
@@ -1238,37 +1110,20 @@ export class ShipmentsService {
         });
 
         const freightPayer = dto.freightPayer ?? 'NGUOI_GUI';
-        const paymentMethod =
-          dto.paymentMethod ??
-          (freightPayer === 'NGUOI_NHAN' ? 'TAI_BEN' : 'ONLINE');
-        const isOnlinePayment =
-          paymentMethod === 'ONLINE' && freightPayer !== 'NGUOI_NHAN';
 
-        let paymentAttempt: { thanhToanId: number; trangThai: string };
-        let paymentExpiresAt: Date;
-
-        if (isOnlinePayment) {
-          paymentAttempt = await createSepayPaymentAttempt(tx, {
+        const paymentAttempt = await tx.thanhToan.create({
+          data: {
+            soTien: tongPhi,
+            phuongThuc: 'TAI_BEN',
+            loaiGiaoDich: 'THANH_TOAN',
+            thoiGian: now,
+            trangThai:
+              freightPayer === 'NGUOI_NHAN' ? 'CHO_THANH_TOAN' : 'DANG_XU_LY',
             donGiaoDichId: donGiaoDich.donGiaoDichId,
-            amount: tongPhi,
-            createdAt: now,
-          });
-          paymentExpiresAt = getBookingPaymentDeadline(donGiaoDich.ngayTao);
-        } else {
-          paymentAttempt = await tx.thanhToan.create({
-            data: {
-              soTien: tongPhi,
-              phuongThuc: 'TAI_BEN',
-              loaiGiaoDich: 'THANH_TOAN',
-              thoiGian: now,
-              trangThai:
-                freightPayer === 'NGUOI_NHAN' ? 'CHO_THANH_TOAN' : 'DANG_XU_LY',
-              donGiaoDichId: donGiaoDich.donGiaoDichId,
-            },
-            select: { thanhToanId: true, trangThai: true },
-          });
-          paymentExpiresAt = new Date(now.getTime() + 72 * 60 * 60 * 1000);
-        }
+          },
+          select: { thanhToanId: true, trangThai: true },
+        });
+        const paymentExpiresAt = new Date(now.getTime() + 72 * 60 * 60 * 1000);
 
         const receiverCccd = dto.receiver.cccd?.trim() || null;
         const combinedNote =
@@ -1333,7 +1188,7 @@ export class ShipmentsService {
           orderId: donGiaoDich.donGiaoDichId,
           paymentId: paymentAttempt.thanhToanId,
           paymentExpiresAt: paymentExpiresAt.toISOString(),
-          paymentMethod: isOnlinePayment ? 'ONLINE' : 'TAI_BEN',
+          paymentMethod: 'TAI_BEN',
           freightPayer,
           waybillCode: phieuGui.maVanDon,
           orderCode: donGiaoDich.maDonGiaoDich,
@@ -1958,17 +1813,6 @@ export class ShipmentsService {
             }
           : null,
       })),
-      pricingHistory: (record.lichSuCuocs ?? []).map((log) => ({
-        id: log.lichSuDieuChinhCuocGuiHangId,
-        action: log.loaiThaoTac,
-        beforeFee: log.cuocTruoc == null ? null : Number(log.cuocTruoc),
-        afterFee: Number(log.cuocSau),
-        note: log.lyDo,
-        time: log.thoiGian.toISOString(),
-        actor: log.taiKhoan
-          ? { accountId: log.taiKhoanId, fullName: log.taiKhoan.hoTen ?? 'Người dùng' }
-          : null,
-      })),
       assignmentHistory: (record.lichSuPhanChuyens ?? []).map((log) => ({
         id: log.lichSuPhanChuyenGuiHangId,
         previousTripId: log.chuyenXeTruocId,
@@ -1979,17 +1823,7 @@ export class ShipmentsService {
           ? { accountId: log.taiKhoanId, fullName: log.taiKhoan.hoTen ?? 'Người dùng' }
           : null,
       })),
-      moneyCases: (record.xuLyTiens ?? []).map((item) => ({
-        id: item.xuLyTienGuiHangId,
-        reason: item.lyDo,
-        amount: Number(item.soTien),
-        status: item.trangThai,
-        outcome: item.ketQua?.split(':')[0] ?? null,
-        note: item.ketQua,
-        reference: item.thamChieu,
-        resolvedAt: item.thoiDiemXuLy?.toISOString() ?? null,
-      })),
-    };
+      };
 
     return { data };
   }
@@ -2195,18 +2029,7 @@ export class ShipmentsService {
             error: 'BOOKING_SHIPMENT_TRIP_FIXED',
             message: 'Vui lòng xử lý hàng kèm vé qua nghiệp vụ đặt vé.',
           });
-        const paid = this.paidAmount(shipment.donGiaoDich.thanhToans);
-        if (paid.greaterThan(0))
-          await tx.xuLyTienGuiHang.upsert({
-            where: { khoaSuKien: `shipment:${id}:cancelled` },
-            create: {
-              khoaSuKien: `shipment:${id}:cancelled`,
-              phieuGuiHangId: id,
-              lyDo: 'HUY_DA_THANH_TOAN',
-              soTien: paid,
-            },
-            update: {},
-          });
+
         await tx.donGiaoDich.updateMany({
           where: {
             donGiaoDichId: shipment.donGiaoDich.donGiaoDichId,

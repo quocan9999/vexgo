@@ -8,7 +8,7 @@ import React, {
   useRef,
   Suspense,
 } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import {
   Package,
   MapPin,
@@ -28,7 +28,6 @@ import {
   ArrowRightLeft,
   PackageCheck,
   X,
-  ShieldCheck,
   Check,
   ChevronDown,
   Filter,
@@ -45,10 +44,7 @@ import {
   type ShipmentRoutePoints,
   type ShipmentResponseData,
 } from '@/features/shipments/services/shipments.api';
-import {
-  createPaymentDraft,
-  getPaymentDraft,
-} from '@/features/booking/services/payment-draft';
+
 import { useAuthSession } from '@/features/auth/auth-session';
 
 function formatDisplayPhone(phone?: string | null): string {
@@ -84,7 +80,6 @@ export function getCarrierDeliveryEstimate(
 }
 
 function SendFreightContent() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const { user, isAuthenticated, isHydrated, executeWithAuth } = useAuthSession();
 
@@ -210,7 +205,7 @@ function SendFreightContent() {
 
   // Hình thức thanh toán cước
   const [paymentOption, setPaymentOption] = useState<
-    'SENDER_COUNTER' | 'RECEIVER_COUNTER' | 'ONLINE'
+    'SENDER_COUNTER' | 'RECEIVER_COUNTER'
   >('SENDER_COUNTER');
   const [createdSuccessShipment, setCreatedSuccessShipment] =
     useState<ShipmentResponseData | null>(null);
@@ -770,8 +765,7 @@ function SendFreightContent() {
     try {
       const freightPayer: 'NGUOI_NHAN' | 'NGUOI_GUI' =
         paymentOption === 'RECEIVER_COUNTER' ? 'NGUOI_NHAN' : 'NGUOI_GUI';
-      const paymentMethod: 'ONLINE' | 'TAI_BEN' =
-        paymentOption === 'ONLINE' ? 'ONLINE' : 'TAI_BEN';
+      const paymentMethod = 'TAI_BEN' as const;
 
       const payload = {
         routeId: selectedTripId,
@@ -847,53 +841,7 @@ function SendFreightContent() {
         );
       }
 
-      if (paymentOption === 'ONLINE') {
-        if (!Number.isSafeInteger(data?.paymentId) || data.paymentId <= 0) {
-          throw new Error(
-            'Chưa nhận đủ thông tin thanh toán online. Vui lòng thử lại hoặc liên hệ hỗ trợ.',
-          );
-        }
-
-        const paymentDraft = createPaymentDraft({
-          kind: 'shipment',
-          shipmentId: data.shipmentId,
-          paymentId: data.paymentId,
-          orderId: data.orderId,
-          waybillCode: data.waybillCode,
-          orderCode: data.orderCode,
-          totalFare,
-          dropoffDeadline: data.dropoffDeadline,
-          paymentExpiresAt: data.paymentExpiresAt,
-          sender: data.sender,
-          receiver: {
-            ...data.receiver,
-            cccd: receiverCccd.trim() || data.receiver?.cccd || null,
-          },
-          route: {
-            origin: data.trip.route.origin,
-            destination: data.trip.route.destination,
-            departureTime: data.trip.departureTime,
-          },
-          pickupPoint: {
-            name: data.pickupPoint.name,
-            address: data.pickupPoint.address,
-          },
-          dropoffPoint: {
-            name: data.dropoffPoint.name,
-            address: data.dropoffPoint.address,
-          },
-        });
-
-        if (!getPaymentDraft(paymentDraft.id)) {
-          throw new Error(
-            'Không thể lưu thông tin thanh toán trên trình duyệt. Vui lòng tra cứu mã vận đơn hoặc liên hệ hỗ trợ trước khi thử tạo lại đơn.',
-          );
-        }
-
-        router.push(`/payment?draftId=${encodeURIComponent(paymentDraft.id)}`);
-      } else {
-        setCreatedSuccessShipment(data);
-      }
+      setCreatedSuccessShipment(data);
     } catch (err: unknown) {
       if (err instanceof ApiError && err.details)
         setFieldErrors(
@@ -2359,7 +2307,7 @@ function SendFreightContent() {
                       </div>
 
                       {/* Quy định giao nhận */}
-                      <div className="bg-amber-50/70 rounded-xl p-4 text-xs text-amber-900 border border-amber-200/50 flex items-start gap-2.5">
+                      <div className="mt-4 bg-amber-50/70 rounded-xl p-4 text-xs text-amber-900 border border-amber-200/50 flex items-start gap-2.5">
                         <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                         <div className="leading-relaxed">
                           <strong>Quy định giao nhận:</strong> Người gửi mang
@@ -2592,31 +2540,9 @@ function SendFreightContent() {
                               </div>
                             </label>
 
-                            <label
-                              className={`flex items-start gap-2.5 p-2.5 rounded-xl border text-xs cursor-pointer transition-all ${
-                                paymentOption === 'ONLINE'
-                                  ? 'border-[#FF7D42] bg-orange-50/70 font-semibold text-slate-900'
-                                  : 'border-slate-200 bg-white hover:border-slate-300 text-slate-700'
-                              }`}
-                            >
-                              <input
-                                type="radio"
-                                name="paymentOption"
-                                value="ONLINE"
-                                checked={paymentOption === 'ONLINE'}
-                                onChange={() => setPaymentOption('ONLINE')}
-                                className="mt-0.5 text-[#FF7D42] focus:ring-[#FF7D42]"
-                              />
-                              <div>
-                                <span className="font-bold text-slate-900">
-                                  Thanh toán trực tuyến
-                                </span>
-                                <p className="text-[11px] text-slate-500 font-normal mt-0.5">
-                                  Chuyển khoản qua mã QR ngay sau khi tạo vận
-                                  đơn.
-                                </p>
-                              </div>
-                            </label>
+                            <div className="p-2.5 rounded-xl bg-amber-50/70 border border-amber-200/60 text-[11px] text-amber-800 leading-relaxed">
+                              <strong>Lưu ý:</strong> Cước phí hiển thị là cước dự kiến theo khối lượng quý khách khai báo. Cước phí chính xác sẽ được nhân viên xác nhận khi cân đo kiện hàng thực tế tại bưu cục.
+                            </div>
                           </div>
                         </div>
 
@@ -2637,29 +2563,6 @@ function SendFreightContent() {
                             Sau khi tạo vận đơn, mang kiện hàng ra bưu cục nhà
                             xe đã chọn để gửi.
                           </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Bottom feature trust badges */}
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="p-3.5 bg-white rounded-xl border border-slate-200">
-                        <ShieldCheck className="w-5 h-5 text-orange-500 mb-1" />
-                        <div className="font-extrabold text-slate-900 text-xs">
-                          An toàn
-                        </div>
-                        <div className="text-[10px] text-slate-400 mt-0.5">
-                          Hỗ trợ bảo hiểm hàng giá trị cao
-                        </div>
-                      </div>
-
-                      <div className="p-3.5 bg-white rounded-xl border border-slate-200">
-                        <Clock className="w-5 h-5 text-orange-500 mb-1" />
-                        <div className="font-extrabold text-slate-900 text-xs">
-                          Giao nhanh đúng hẹn
-                        </div>
-                        <div className="text-[10px] text-slate-400 mt-0.5">
-                          Nhận trong ngày hoặc từ 2 – 3 ngày
                         </div>
                       </div>
                     </div>
@@ -3100,10 +3003,8 @@ function SendFreightContent() {
                   <span className="text-slate-500">Hình thức thanh toán:</span>
                   <span className="font-bold text-slate-800">
                     {paymentOption === 'RECEIVER_COUNTER'
-                      ? 'Người nhận thanh toán'
-                      : paymentOption === 'ONLINE'
-                        ? 'Thanh toán trực tuyến'
-                        : 'Người gửi thanh toán'}
+                      ? 'Người nhận thanh toán khi lấy hàng'
+                      : 'Người gửi thanh toán tại quầy'}
                   </span>
                 </div>
                 <div className="flex justify-between py-1 border-b border-dashed border-slate-100">

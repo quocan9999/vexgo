@@ -375,7 +375,7 @@ describe('ShipmentsService', () => {
       const orderCreatedAt =
         transactionMock.donGiaoDich.create.mock.calls[0][0].data.ngayTao;
       expect(paymentAttempt.data).toMatchObject({
-        phuongThuc: 'SEPAY',
+        phuongThuc: 'TAI_BEN',
         loaiGiaoDich: 'THANH_TOAN',
         thoiGian: orderCreatedAt,
         trangThai: 'DANG_XU_LY',
@@ -383,7 +383,7 @@ describe('ShipmentsService', () => {
       });
       expect(Number(paymentAttempt.data.soTien)).toBe(result.pricing.totalFee);
       expect(result.paymentExpiresAt).toBe(
-        new Date(orderCreatedAt.getTime() + 10 * 60_000).toISOString(),
+        new Date(orderCreatedAt.getTime() + 72 * 60 * 60_000).toISOString(),
       );
       expect(
         shipmentPersistenceServiceMock.persistInTransaction,

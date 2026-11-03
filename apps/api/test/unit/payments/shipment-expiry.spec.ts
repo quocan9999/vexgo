@@ -122,25 +122,15 @@ function paymentFixture(
 }
 
 describe('standalone shipment drop-off deadline', () => {
-  it('does not cancel an accepted recipient-pays shipment after 48 hours', async () => {
+  it('does not cancel an accepted recipient-pays shipment after drop-off deadline', async () => {
     const { tx, expire } = fixture({ status: 'DA_TIEP_NHAN', counter: true });
     expect(await expire(new Date(deadline.getTime() + 1))).toBe(false);
     expect(tx.phieuGuiHang.updateMany).not.toHaveBeenCalled();
     expect(tx.donGiaoDich.updateMany).not.toHaveBeenCalled();
   });
 
-  it('expires an online payment attempt without cancelling the 48-hour waybill', async () => {
+  it('cancels an unreceived waybill at the exact deadline cleanly', async () => {
     const { tx, expire } = fixture();
-    expect(await expire(new Date(created.getTime() + 11 * 60_000))).toBe(false);
-    expect(tx.phieuGuiHang.updateMany).not.toHaveBeenCalled();
-    expect(tx.donGiaoDich.updateMany).not.toHaveBeenCalled();
-    expect(tx.thanhToan.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({ data: { trangThai: 'THAT_BAI' } }),
-    );
-  });
-
-  it('cancels a paid but unreceived waybill at the exact deadline and opens a manual case', async () => {
-    const { tx, expire } = fixture({ paid: true });
     expect(await expire(deadline)).toBe(true);
     expect(tx.phieuGuiHang.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -148,112 +138,12 @@ describe('standalone shipment drop-off deadline', () => {
         data: { trangThai: 'DA_HUY' },
       }),
     );
-    expect(tx.xuLyTienGuiHang.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        create: expect.objectContaining({
-          phieuGuiHangId: 7,
-          lyDo: 'HUY_DA_THANH_TOAN',
-          soTien: new Prisma.Decimal(50000),
-        }),
-      }),
-    );
-    const changes = tx.thanhToan.updateMany.mock.calls;
-    expect(changes.every(([arg]) => arg.where.trangThai !== 'THANH_CONG')).toBe(
-      true,
-    );
   });
 
-  it('does not cancel paid waybills before their drop-off deadline', async () => {
-    const { tx, expire } = fixture({ paid: true });
+  it('does not cancel waybills before their drop-off deadline', async () => {
+    const { tx, expire } = fixture();
     expect(await expire(new Date(deadline.getTime() - 1))).toBe(false);
     expect(tx.phieuGuiHang.updateMany).not.toHaveBeenCalled();
-    expect(tx.xuLyTienGuiHang.upsert).not.toHaveBeenCalled();
-  });
-
-  it('keeps legacy online payment cancellation semantics when no new deadline was stored', async () => {
-    const { tx, expire } = fixture({ legacy: true });
-    expect(await expire(new Date(created.getTime() + 11 * 60_000))).toBe(true);
-    expect(tx.phieuGuiHang.updateMany).toHaveBeenCalled();
   });
 });
 
-describe('late online transfer for a new standalone shipment', () => {
-  it('records incoming money for manual reconciliation without paying or cancelling the waybill', async () => {
-    const { db, service } = paymentFixture();
-    const result = await service.confirmPaymentSuccess({
-      paymentId: 12,
-      provider: 'SEPAY',
-      amount: 50000,
-      providerTransactionId: 'late-unique-1',
-      providerTransactionAt: new Date(created.getTime() + 11 * 60_000),
-    });
-    expect(result).toMatchObject({
-      success: true,
-      requiresReconciliation: true,
-    });
-    expect(db.donGiaoDich.updateMany).not.toHaveBeenCalled();
-    expect(db.phieuGuiHang.updateMany).not.toHaveBeenCalled();
-    expect(db.thanhToan.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          trangThai: 'CAN_DOI_SOAT',
-          laQuyetToanHopLe: false,
-        }),
-      }),
-    );
-    expect(db.xuLyTienGuiHang.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        create: expect.objectContaining({
-          phieuGuiHangId: 7,
-          soTien: new Prisma.Decimal(50000),
-        }),
-      }),
-    );
-  });
-
-  it('keeps the order unpaid when an on-time transfer is below the reweighed fee', async () => {
-    const { db, service } = paymentFixture({ due: 60000 });
-
-    const result = await service.confirmPaymentSuccess({
-      paymentId: 12,
-      provider: 'SEPAY',
-      amount: 50000,
-      providerTransactionId: 'on-time-partial-1',
-      providerTransactionAt: new Date(created.getTime() + 5 * 60_000),
-    });
-
-    expect(result).toEqual({ success: true });
-    expect(db.donGiaoDich.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: { trangThai: 'CHO_THANH_TOAN' },
-      }),
-    );
-    expect(db.thanhToan.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: { laQuyetToanHopLe: true } }),
-    );
-  });
-
-  it('opens one reconciliation case for an on-time transfer above the final fee', async () => {
-    const { db, service } = paymentFixture({ due: 40000 });
-
-    await service.confirmPaymentSuccess({
-      paymentId: 12,
-      provider: 'SEPAY',
-      amount: 50000,
-      providerTransactionId: 'on-time-overpaid-1',
-      providerTransactionAt: new Date(created.getTime() + 5 * 60_000),
-    });
-
-    expect(db.donGiaoDich.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({ data: { trangThai: 'DA_THANH_TOAN' } }),
-    );
-    expect(db.xuLyTienGuiHang.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        create: expect.objectContaining({
-          lyDo: 'CHENH_LECH_CUOC',
-          soTien: new Prisma.Decimal(10000),
-        }),
-      }),
-    );
-  });
-});

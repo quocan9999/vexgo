@@ -265,13 +265,7 @@ describe('Shipment Read APIs (Phase 02)', () => {
     await prisma.$transaction(async (tx) => {
       const shipmentIds = [...fixtureIds.phieuGuiHang];
       if (shipmentIds.length > 0) {
-        await tx.xuLyTienGuiHang.deleteMany({
-          where: { phieuGuiHangId: { in: shipmentIds } },
-        });
         await tx.yeuCauTaoPhieuGuiHang.deleteMany({
-          where: { phieuGuiHangId: { in: shipmentIds } },
-        });
-        await tx.lichSuDieuChinhCuocGuiHang.deleteMany({
           where: { phieuGuiHangId: { in: shipmentIds } },
         });
         await tx.lichSuPhanChuyenGuiHang.deleteMany({

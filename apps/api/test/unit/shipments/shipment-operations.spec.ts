@@ -198,41 +198,6 @@ describe('shipment operational invariants', () => {
     expect(db.thanhToan.create).not.toHaveBeenCalled();
   });
 
-  it('does not turn a refund liability into another cash collection', async () => {
-    const { db, service } = setup();
-    await expect(
-      service.resolveMoneyCase(
-        7,
-        1,
-        {
-          outcome: 'COLLECTED',
-          amount: 50000,
-          note: 'Thu',
-          reference: 'REF1',
-        } as never,
-        principal,
-      ),
-    ).rejects.toMatchObject({
-      response: { error: 'SHIPMENT_MONEY_OUTCOME_INVALID' },
-    });
-    expect(db.thanhToan.create).not.toHaveBeenCalled();
-  });
-
-  it('requires proof before recording a manual refund', async () => {
-    const { db, service } = setup();
-    await expect(
-      service.resolveMoneyCase(
-        7,
-        1,
-        { outcome: 'REFUNDED', amount: 50000, note: 'Đã hoàn' },
-        principal,
-      ),
-    ).rejects.toMatchObject({
-      response: { error: 'SHIPMENT_PAYMENT_PROOF_REQUIRED' },
-    });
-    expect(db.thanhToan.create).not.toHaveBeenCalled();
-  });
-
   it('returns the winning order when two identical create requests race on the idempotency key', async () => {
     const { service, db } = setup();
     const payload = {

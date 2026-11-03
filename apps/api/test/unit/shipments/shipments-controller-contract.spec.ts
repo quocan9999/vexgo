@@ -120,7 +120,6 @@ describe('ShipmentsController route and authorization contract', () => {
         `${RequestMethod.GET}|:id/available-trips`,
         `${RequestMethod.PATCH}|:id/assignment`,
         `${RequestMethod.POST}|:id/collect-payment`,
-        `${RequestMethod.POST}|:id/money-cases/:caseId/resolve`,
         `${RequestMethod.GET}|categories`,
         `${RequestMethod.GET}|trips/:tripId/route-points`,
         `${RequestMethod.GET}|(root)`,

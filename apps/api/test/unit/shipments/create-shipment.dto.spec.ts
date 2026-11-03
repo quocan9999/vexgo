@@ -3,7 +3,6 @@ import { plainToInstance } from 'class-transformer';
 import { validate, type ValidationError } from 'class-validator';
 import { describe, expect, it } from 'vitest';
 import { CreateShipmentDto } from '../../../src/shipments/dto/create-shipment.dto.js';
-import { ResolveShipmentMoneyCaseDto } from '../../../src/shipments/dto/shipment-operations.dto.js';
 
 function createDto(dimensions: Record<string, unknown> = {}) {
   return plainToInstance(CreateShipmentDto, {
@@ -133,19 +132,25 @@ describe('standalone shipment route and calendar day', () => {
   });
 });
 
-describe('manual money case contract', () => {
-  it('rejects recording a refund liability as a new collection', async () => {
-    const dto = plainToInstance(ResolveShipmentMoneyCaseDto, {
-      outcome: 'COLLECTED',
-      amount: 50000,
-      reference: 'REF-01',
-      note: 'Không được chuyển thành khoản thu',
+describe('CreateShipmentDto payment method', () => {
+  it('accepts TAI_BEN and rejects ONLINE payment method for shipments', async () => {
+    const valid = plainToInstance(CreateShipmentDto, {
+      tripId: 1,
+      sender: { fullName: 'Người gửi', phoneNumber: '0900000001' },
+      receiver: { fullName: 'Người nhận', phoneNumber: '0900000002' },
+      items: [{ name: 'Thùng hàng', quantity: 1, weight: 1 }],
+      paymentMethod: 'TAI_BEN',
     });
+    expect(await validate(valid)).toHaveLength(0);
 
-    expect(
-      flattenErrors(await validate(dto)).some((error) =>
-        error.startsWith('outcome:'),
-      ),
-    ).toBe(true);
+    const invalid = plainToInstance(CreateShipmentDto, {
+      tripId: 1,
+      sender: { fullName: 'Người gửi', phoneNumber: '0900000001' },
+      receiver: { fullName: 'Người nhận', phoneNumber: '0900000002' },
+      items: [{ name: 'Thùng hàng', quantity: 1, weight: 1 }],
+      paymentMethod: 'ONLINE',
+    });
+    const errors = await validate(invalid);
+    expect(flattenErrors(errors).some((e) => e.includes('paymentMethod'))).toBe(true);
   });
 });

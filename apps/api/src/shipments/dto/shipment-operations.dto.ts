@@ -3,7 +3,6 @@ import {
   ArrayMinSize,
   IsArray,
   IsBoolean,
-  IsIn,
   IsInt,
   IsNotEmpty,
   IsNumber,
@@ -97,10 +96,4 @@ export class AssignShipmentDto {
 export class CollectShipmentPaymentDto {
   @IsNumber({ maxDecimalPlaces: 0 }) @Min(1) amount!: number;
   @IsOptional() @IsString() @MaxLength(500) note?: string;
-}
-export class ResolveShipmentMoneyCaseDto {
-  @IsString() @IsNotEmpty() @MaxLength(400) note!: string;
-  @IsIn(['REFUNDED', 'NO_PAYMENT']) outcome!: 'REFUNDED' | 'NO_PAYMENT';
-  @IsOptional() @IsNumber({ maxDecimalPlaces: 0 }) @Min(1) amount?: number;
-  @IsOptional() @IsString() @MaxLength(191) reference?: string;
 }

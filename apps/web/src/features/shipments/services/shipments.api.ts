@@ -53,7 +53,7 @@ export type CreateShipmentPayload = {
   isValuable?: boolean;
   note?: string;
   freightPayer?: 'NGUOI_GUI' | 'NGUOI_NHAN';
-  paymentMethod?: 'TAI_BEN' | 'ONLINE';
+  paymentMethod?: 'TAI_BEN';
 };
 
 export type ShipmentRoutePoint = {

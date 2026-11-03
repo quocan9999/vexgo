@@ -22,20 +22,7 @@ import {
 } from '../services/shipment-operations';
 import { formatCurrency, formatDateTime } from './shipment-details';
 
-type Operation =
-  'accept' | 'assignment' | 'collect-payment' | `money-cases/${number}/resolve`;
-
-const MONEY_CASE_REASON_LABELS: Record<string, string> = {
-  CHENH_LECH_CUOC: 'Cước thực tế thấp hơn số tiền đã thu',
-  HUY_DA_THANH_TOAN: 'Đơn đã thu tiền nhưng bị hủy',
-  THANH_TOAN_MUON: 'Thanh toán đến sau thời hạn',
-  THANH_TOAN_TRUNG: 'Giao dịch thanh toán bị lặp',
-};
-
-const MONEY_CASE_STATUS_LABELS: Record<string, string> = {
-  CHO_XU_LY: 'Chờ xử lý',
-  DA_XU_LY: 'Đã xử lý',
-};
+type Operation = 'accept' | 'assignment' | 'collect-payment';
 
 export function ShipmentOperations({
   shipment,
@@ -50,8 +37,6 @@ export function ShipmentOperations({
   const [tripId, setTripId] = useState('');
   const [note, setNote] = useState('');
   const [amount, setAmount] = useState('');
-  const [reference, setReference] = useState('');
-  const [outcome, setOutcome] = useState('REFUNDED');
   const [error, setError] = useState('');
   const [priceChange, setPriceChange] = useState<{
     before: number;
@@ -64,8 +49,6 @@ export function ShipmentOperations({
     setError('');
     setNote('');
     setAmount('');
-    setReference('');
-    setOutcome('REFUNDED');
     setPriceChange(null);
     setTripId('');
     setMeasurements(
@@ -118,26 +101,8 @@ export function ShipmentOperations({
         if (!Number.isSafeInteger(Number(amount)) || Number(amount) <= 0)
           throw new Error('Nhập số tiền thực thu nguyên đồng lớn hơn 0.');
         payload = { amount: Number(amount), note: note.trim() || undefined };
-      } else {
-        if (!note.trim()) throw new Error('Nhập ghi chú đối soát.');
-        if (
-          outcome !== 'NO_PAYMENT' &&
-          (!reference.trim() ||
-            !Number.isSafeInteger(Number(amount)) ||
-            Number(amount) <= 0)
-        )
-          throw new Error(
-            'Nhập số tiền thực tế và mã chứng từ để ghi nhận thu / hoàn.',
-          );
-        payload = {
-          outcome,
-          note: note.trim(),
-          ...(outcome !== 'NO_PAYMENT'
-            ? { amount: Number(amount), reference: reference.trim() }
-            : {}),
-        };
       }
-      locked.current = true;
+locked.current = true;
       setBusy(true);
       await shipmentOperation(
         shipment.shipmentId,
@@ -252,32 +217,7 @@ export function ShipmentOperations({
           </div>
         </dl>
       </Card>
-      {(shipment.moneyCases?.length ?? 0) > 0 && (
-        <Card className="gap-4 p-4">
-          <h3 className="text-base font-semibold">Hồ sơ xử lý tiền thủ công</h3>
-          {shipment.moneyCases?.map((item) => (
-            <div key={item.id} className="grid gap-2 border-t pt-3 text-[13px]">
-              <p>
-                {MONEY_CASE_REASON_LABELS[item.reason] ?? item.reason} ·{' '}
-                {formatCurrency(item.amount)} ·{' '}
-                {MONEY_CASE_STATUS_LABELS[item.status] ?? item.status}
-              </p>
-              <p>
-                {item.note} {item.reference && `· Chứng từ: ${item.reference}`}
-              </p>
-              {!item.resolvedAt && (
-                <Button
-                  variant="outline"
-                  disabled={busy}
-                  onClick={() => void open(`money-cases/${item.id}/resolve`)}
-                >
-                  Ghi nhận kết quả đối soát
-                </Button>
-              )}
-            </div>
-          ))}
-        </Card>
-      )}
+      
       {operation && (
         <ResourceConfirmation
           title={title}
@@ -365,24 +305,7 @@ export function ShipmentOperations({
                 )}
               </>
             )}
-            {operation.startsWith('money-cases') && (
-              <LabeledSelectFilter
-                label="Kết quả thực tế"
-                value={outcome}
-                onChange={setOutcome}
-                disabled={busy}
-                options={[
-                  { value: 'REFUNDED', label: 'Đã thực hoàn tiền' },
-                  {
-                    value: 'NO_PAYMENT',
-                    label: 'Đóng hồ sơ, không phát sinh tiền',
-                  },
-                ]}
-              />
-            )}
-            {(operation === 'collect-payment' ||
-              (operation.startsWith('money-cases') &&
-                outcome !== 'NO_PAYMENT')) && (
+            {operation === 'collect-payment' && (
               <Field>
                 <FieldLabel htmlFor="shipment-actual-amount">
                   Số tiền thực tế (đồng)
@@ -399,34 +322,18 @@ export function ShipmentOperations({
                 />
               </Field>
             )}
-            {operation.startsWith('money-cases') &&
-              outcome !== 'NO_PAYMENT' && (
-                <Field>
-                  <FieldLabel htmlFor="shipment-proof">
-                    Mã chứng từ / bằng chứng giao dịch
-                  </FieldLabel>
-                  <Input
-                    id="shipment-proof"
-                    required
-                    maxLength={191}
-                    value={reference}
-                    disabled={busy}
-                    onChange={(e) => setReference(e.target.value)}
-                  />
-                </Field>
-              )}
             <Field>
               <FieldLabel htmlFor="shipment-operation-note">
                 Ghi chú{' '}
-                {operation.startsWith('money-cases') || Boolean(priceChange)
+                {Boolean(priceChange)
                   ? '(bắt buộc)'
                   : '(tùy chọn)'}
               </FieldLabel>
               <Textarea
                 id="shipment-operation-note"
-                maxLength={operation.startsWith('money-cases') ? 400 : 500}
+                maxLength={500}
                 required={
-                  operation.startsWith('money-cases') || Boolean(priceChange)
+                  Boolean(priceChange)
                 }
                 value={note}
                 disabled={busy}

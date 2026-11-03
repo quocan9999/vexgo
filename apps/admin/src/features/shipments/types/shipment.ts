@@ -110,15 +110,6 @@ export interface ShipmentDetail {
   cargoFeeDetails: CargoFeeDetail[];
   feeSummary: ShipmentFeeSummary;
   history: ShipmentHistoryItem[];
-  pricingHistory?: Array<{
-    id: number;
-    action: string;
-    beforeFee: number;
-    afterFee: number;
-    note: string | null;
-    time: string;
-    actor: ShipmentHistoryActor | null;
-  }>;
   assignmentHistory?: Array<{
     id: number;
     previousTripId: number | null;
@@ -126,16 +117,6 @@ export interface ShipmentDetail {
     note: string | null;
     time: string;
     actor: ShipmentHistoryActor | null;
-  }>;
-  moneyCases?: Array<{
-    id: number;
-    reason: string;
-    amount: number;
-    status: string;
-    outcome: string | null;
-    note: string | null;
-    reference: string | null;
-    resolvedAt: string | null;
   }>;
   totalFee: number;
 }

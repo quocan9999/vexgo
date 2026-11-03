@@ -669,24 +669,12 @@ export function ShipmentDetails({
               </div>
             </Card>
 
-            {((detail.shipment.pricingHistory?.length ?? 0) > 0 ||
-              (detail.shipment.assignmentHistory?.length ?? 0) > 0) && (
+            {(detail.shipment.assignmentHistory?.length ?? 0) > 0 && (
               <Card className="gap-4 p-4">
                 <h3 className="text-base font-semibold">
-                  Lịch sử cước và phân chuyến
+                  Lịch sử phân chuyến
                 </h3>
                 <ol className="grid gap-3 text-[13px]">
-                  {detail.shipment.pricingHistory?.map((item) => (
-                    <li key={`price-${item.id}`} className="border-t pt-3">
-                      {formatDateTime(item.time)} ·{' '}
-                      {item.actor?.fullName ?? 'Hệ thống'}
-                      <p>
-                        Cước {formatCurrency(item.beforeFee)} →{' '}
-                        {formatCurrency(item.afterFee)}
-                      </p>
-                      <p>{item.note}</p>
-                    </li>
-                  ))}
                   {detail.shipment.assignmentHistory?.map((item) => (
                     <li key={`trip-${item.id}`} className="border-t pt-3">
                       {formatDateTime(item.time)} ·{' '}

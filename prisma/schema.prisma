@@ -254,9 +254,7 @@ model TaiKhoan {
   tinNhanHoTros                TinNhanHoTro[]
   phieuGuiHangXacNhanCuocs     PhieuGuiHang[]                @relation("ShipmentPricingActor")
   thanhToanXacNhans            ThanhToan[]                   @relation("ShipmentCashActor")
-  dieuChinhCuocGuiHangs        LichSuDieuChinhCuocGuiHang[]
   phanChuyenGuiHangs           LichSuPhanChuyenGuiHang[]
-  xuLyTienGuiHangs             XuLyTienGuiHang[]
 }
 
 model PhienDangNhap {
@@ -636,9 +634,7 @@ model PhieuGuiHang {
   taiKhoanXacNhanCuocId Int?                          @db.Int
   tuyenXe               TuyenXe?                      @relation(fields: [tuyenXeId], references: [tuyenXeId], onDelete: Restrict, onUpdate: Restrict)
   taiKhoanXacNhanCuoc   TaiKhoan?                     @relation("ShipmentPricingActor", fields: [taiKhoanXacNhanCuocId], references: [taiKhoanId], onDelete: Restrict, onUpdate: Restrict)
-  lichSuCuocs           LichSuDieuChinhCuocGuiHang[]
   lichSuPhanChuyens     LichSuPhanChuyenGuiHang[]
-  xuLyTiens             XuLyTienGuiHang[]
   yeuCauTaos            YeuCauTaoPhieuGuiHang[]
   hangHoas              HangHoa[]
   chiTietCuocGuiHangs   ChiTietCuocGuiHang[]
@@ -752,7 +748,6 @@ model ThanhToan {
   donGiaoDich       DonGiaoDich       @relation(fields: [donGiaoDichId], references: [donGiaoDichId], onDelete: Restrict, onUpdate: Restrict)
   taiKhoanXacNhanId Int?              @db.Int
   taiKhoanXacNhan   TaiKhoan?         @relation("ShipmentCashActor", fields: [taiKhoanXacNhanId], references: [taiKhoanId], onDelete: Restrict, onUpdate: Restrict)
-  xuLyTienGuiHangs  XuLyTienGuiHang[]
   ve                Ve?               @relation(fields: [veId], references: [veId], onDelete: Restrict, onUpdate: Restrict)
 
   @@index([loaiGiaoDich, trangThai, laQuyetToanHopLe, thoiDiemHoanTat], map: "ThanhToan_revenue_report_idx")
@@ -918,23 +913,6 @@ enum NhomSucChuaHangHoa {
   HANG_NHE
 }
 
-model LichSuDieuChinhCuocGuiHang {
-  lichSuDieuChinhCuocGuiHangId Int          @id @default(autoincrement())
-  phieuGuiHangId               Int
-  taiKhoanId                   Int?
-  loaiThaoTac                  String       @db.VarChar(30)
-  cuocTruoc                    Decimal?     @db.Decimal(18, 2)
-  cuocSau                      Decimal      @db.Decimal(18, 2)
-  lyDo                         String?      @db.VarChar(500)
-  snapshotTruoc                Json?
-  snapshotSau                  Json
-  thoiGian                     DateTime     @default(now()) @db.DateTime(0)
-  phieuGuiHang                 PhieuGuiHang @relation(fields: [phieuGuiHangId], references: [phieuGuiHangId], onDelete: Restrict, onUpdate: Restrict)
-  taiKhoan                     TaiKhoan?    @relation(fields: [taiKhoanId], references: [taiKhoanId], onDelete: Restrict, onUpdate: Restrict)
-
-  @@index([phieuGuiHangId, thoiGian])
-}
-
 model LichSuPhanChuyenGuiHang {
   lichSuPhanChuyenGuiHangId Int          @id @default(autoincrement())
   phieuGuiHangId            Int
@@ -947,26 +925,6 @@ model LichSuPhanChuyenGuiHang {
   taiKhoan                  TaiKhoan?    @relation(fields: [taiKhoanId], references: [taiKhoanId], onDelete: Restrict, onUpdate: Restrict)
 
   @@index([phieuGuiHangId, thoiGian])
-}
-
-model XuLyTienGuiHang {
-  xuLyTienGuiHangId Int          @id @default(autoincrement())
-  phieuGuiHangId    Int
-  khoaSuKien        String       @unique @db.VarChar(191)
-  lyDo              String       @db.VarChar(50)
-  soTien            Decimal      @db.Decimal(18, 2)
-  trangThai         String       @default("CHO_XU_LY") @db.VarChar(30)
-  taiKhoanXuLyId    Int?
-  thoiDiemXuLy      DateTime?    @db.DateTime(0)
-  ketQua            String?      @db.VarChar(500)
-  thamChieu         String?      @db.VarChar(191)
-  thanhToanId       Int?
-  createdAt         DateTime     @default(now()) @db.DateTime(0)
-  phieuGuiHang      PhieuGuiHang @relation(fields: [phieuGuiHangId], references: [phieuGuiHangId], onDelete: Restrict, onUpdate: Restrict)
-  taiKhoanXuLy      TaiKhoan?    @relation(fields: [taiKhoanXuLyId], references: [taiKhoanId], onDelete: Restrict, onUpdate: Restrict)
-  thanhToan         ThanhToan?   @relation(fields: [thanhToanId], references: [thanhToanId], onDelete: Restrict, onUpdate: Restrict)
-
-  @@index([phieuGuiHangId, trangThai])
 }
 
 model YeuCauTaoPhieuGuiHang {

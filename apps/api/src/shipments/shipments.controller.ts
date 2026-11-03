@@ -46,7 +46,6 @@ import {
   AcceptShipmentDto,
   AssignShipmentDto,
   CollectShipmentPaymentDto,
-  ResolveShipmentMoneyCaseDto,
 } from './dto/shipment-operations.dto.js';
 
 @ApiTags('Gửi hàng hóa & Bưu kiện (Shipments)')
@@ -146,17 +145,6 @@ export class ShipmentsController {
     return this.shipmentsService.collectPayment(id, dto, principal);
   }
 
-  @Post(':id/money-cases/:caseId/resolve')
-  @RequireRoles(...TENANT_PRINCIPAL_ROLES)
-  @RequirePermissions('shipment:update')
-  resolveMoneyCase(
-    @Param('id', ParseIntPipe) id: number,
-    @Param('caseId', ParseIntPipe) caseId: number,
-    @Body() dto: ResolveShipmentMoneyCaseDto,
-    @CurrentPrincipal() principal: AuthPrincipal,
-  ) {
-    return this.shipmentsService.resolveMoneyCase(id, caseId, dto, principal);
-  }
 
   @Post('lookup')
   @OptionalAuth()
