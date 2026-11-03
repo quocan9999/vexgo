@@ -985,6 +985,7 @@ model YeuCauTaoPhieuGuiHang {
   phieuGuiHang            PhieuGuiHang? @relation(fields: [phieuGuiHangId], references: [phieuGuiHangId], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([phamVi, key])
+}
 
 
 model DanhMucDiaDiem {
