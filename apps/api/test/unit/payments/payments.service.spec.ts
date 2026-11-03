@@ -63,7 +63,14 @@ describe('PaymentsService', () => {
 
   beforeEach(() => {
     prisma = {
-      thongBao: { upsert: vi.fn().mockResolvedValue({ thongBaoId: 1 }) },
+      thongBao: {
+        upsert: vi.fn().mockImplementation(
+          async ({ create }: { create: { thoiGian: Date } }) => ({
+            thongBaoId: 1,
+            thoiGian: create.thoiGian,
+          }),
+        ),
+      },
       thietBiThongBao: { findMany: vi.fn().mockResolvedValue([]) },
       pushThongBao: { upsert: vi.fn() },
       emailThongBao: { upsert: vi.fn() },
