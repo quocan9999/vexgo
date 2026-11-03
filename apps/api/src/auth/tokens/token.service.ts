@@ -1,5 +1,4 @@
 import {
-  ForbiddenException,
   Injectable,
   Optional,
   UnauthorizedException,
@@ -10,6 +9,7 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import type { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { requireAuthSecret } from '../auth-secret.js';
+import { assertAccountActive } from '../account-status.helper.js';
 import { RealtimeSessionInvalidatorService } from '../realtime-session-invalidator.service.js';
 import type { AuthTokenResponse, AuthUserSummary } from './auth-principal.js';
 
@@ -64,7 +64,8 @@ export class TokenService {
         include: {
           taiKhoan: {
             include: {
-              khachHang: { select: { khachHangId: true } },
+              khachHang: { select: { khachHangId: true, hoTen: true } },
+              nhanVien: { select: { nhanVienId: true, hoTen: true } },
               taiKhoanVaiTros: {
                 include: { vaiTro: { select: { tenVaiTro: true } } },
               },
@@ -72,14 +73,11 @@ export class TokenService {
           },
         },
       });
+      if (current) {
+        await assertAccountActive(tx, current.taiKhoan);
+      }
       if (!current || current.thuHoiLuc || current.hetHanLuc <= now) {
         this.throwInvalidRefreshToken();
-      }
-      if (current.taiKhoan.trangThai !== 'HOAT_DONG') {
-        throw new ForbiddenException({
-          error: 'ACCOUNT_INACTIVE',
-          message: 'Tài khoản không hoạt động.',
-        });
       }
 
       const claimed = await tx.phienDangNhap.updateMany({
@@ -175,15 +173,16 @@ export class TokenService {
 
   private mapAccountToUser(account: {
     taiKhoanId: number;
-    hoTen: string;
+    hoTen: string | null;
     soDienThoai: string;
-    khachHang: { khachHangId: number } | null;
+    khachHang: { khachHangId: number; hoTen?: string | null } | null;
+    nhanVien?: { nhanVienId: number; hoTen?: string | null } | null;
     taiKhoanVaiTros: Array<{ vaiTro: { tenVaiTro: string } }>;
   }): AuthUserSummary {
     return {
       accountId: account.taiKhoanId,
       customerId: account.khachHang?.khachHangId ?? null,
-      fullName: account.hoTen,
+      fullName: account.nhanVien?.hoTen ?? account.khachHang?.hoTen ?? account.hoTen ?? '',
       phoneNumber: account.soDienThoai,
       roles: account.taiKhoanVaiTros.map(({ vaiTro }) => vaiTro.tenVaiTro),
     };

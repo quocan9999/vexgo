@@ -16,8 +16,8 @@ export type FilterOption = {
 };
 
 export type DateRangeValue = {
-  from: string;
-  to: string;
+  from?: string;
+  to?: string;
 };
 
 type DateRangeFilterProps = {
@@ -44,7 +44,10 @@ export function DateRangeFilter({
   const [open, setOpen] = useState(false);
   const [draftFrom, setDraftFrom] = useState('');
   const [draftTo, setDraftTo] = useState('');
-  const rangeIsValid = Boolean(draftFrom && draftTo && draftFrom <= draftTo);
+  const hasFrom = Boolean(draftFrom);
+  const hasTo = Boolean(draftTo);
+  const rangeIsValid =
+    (hasFrom || hasTo) && (!hasFrom || !hasTo || draftFrom <= draftTo);
 
   function handleOpenChange(nextOpen: boolean) {
     if (nextOpen) {
@@ -56,7 +59,10 @@ export function DateRangeFilter({
 
   function applyRange() {
     if (!rangeIsValid) return;
-    onApply({ from: draftFrom, to: draftTo });
+    onApply({
+      from: draftFrom || undefined,
+      to: draftTo || undefined,
+    });
     setOpen(false);
   }
 
@@ -69,8 +75,10 @@ export function DateRangeFilter({
 
   const showDate = (date: string) => date.split('-').reverse().join('-');
   const selection =
-    value?.from && value.to
-      ? `${showDate(value.from)} – ${showDate(value.to)}`
+    value?.from && value?.to
+      ? value.from === value.to
+        ? showDate(value.from)
+        : `${showDate(value.from)} – ${showDate(value.to)}`
       : value?.from
         ? `${fromLabel}: ${showDate(value.from)}`
         : value?.to

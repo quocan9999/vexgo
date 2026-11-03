@@ -23,6 +23,8 @@ const account = {
   employee: {
     employeeId: 81,
     employeeCode: 'PT-081',
+    position: 'Nhân viên kinh doanh',
+    joinedAt: '2024-02-01',
     employmentStatus: 'DANG_LAM_VIEC',
   },
   busCompany: {
@@ -158,9 +160,6 @@ async function fillRequiredCreateFields(dialog: HTMLElement) {
     target: { value: 'VexGo@123' },
   });
   await selectCanonicalOption(within(dialog).getByLabelText(/^Nhà xe/), /Phương Trang/);
-  fireEvent.change(within(dialog).getByLabelText(/^Mã nhân viên/), {
-    target: { value: 'FUTA-NV-1234' },
-  });
   fireEvent.click(
     within(dialog).getByRole('checkbox', { name: 'Nhân viên bán vé' }),
   );
@@ -513,9 +512,6 @@ describe('Admin accounts management page', () => {
       target: { value: 'VexGo@123' },
     });
     await selectCanonicalOption(within(dialog).getByLabelText(/^Nhà xe/), /Phương Trang/);
-    fireEvent.change(within(dialog).getByLabelText(/^Mã nhân viên/), {
-      target: { value: 'FUTA-NV-1234' },
-    });
     fireEvent.click(
       within(dialog).getByRole('checkbox', { name: 'Nhân viên bán vé' }),
     );
@@ -538,11 +534,12 @@ describe('Admin accounts management page', () => {
         phoneNumber: '+84912345678',
         password: 'VexGo@123',
         busCompanyId: 7,
-        employeeCode: 'FUTA-NV-1234',
         roleNames: ['NHAN_VIEN_BAN_VE'],
         dateOfBirth: '1998-05-14',
         email: 'minhanh@example.test',
         citizenId: '079098001234',
+        position: null,
+        joinedAt: null,
       }),
     );
     expect(state.hook.refresh).toHaveBeenCalledOnce();
@@ -566,9 +563,6 @@ describe('Admin accounts management page', () => {
       target: { value: 'short' },
     });
     await selectCanonicalOption(within(dialog).getByLabelText(/^Nhà xe/), /Phương Trang/);
-    fireEvent.change(within(dialog).getByLabelText(/^Mã nhân viên/), {
-      target: { value: 'FUTA-NV-1234' },
-    });
     fireEvent.click(
       within(dialog).getByRole('button', { name: 'Tạo tài khoản' }),
     );
@@ -695,6 +689,8 @@ describe('Admin accounts management page', () => {
         dateOfBirth: '1998-05-14',
         email: 'minhanh@example.test',
         citizenId: '079098001234',
+        position: 'Nhân viên kinh doanh',
+        joinedAt: '2024-02-01',
       }),
     );
     expect(state.hook.refresh).toHaveBeenCalledOnce();

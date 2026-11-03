@@ -1,3 +1,4 @@
+import { generateBusinessUuid } from '../common/business-uuid.js';
 import {
   BadRequestException,
   Injectable,
@@ -15,6 +16,7 @@ import { EffectiveRolePermissionLoaderService } from './permissions/effective-ro
 import { PermissionResolverService } from './permissions/permission-resolver.service.js';
 import { Prisma } from '../generated/prisma/client.js';
 import { normalizeEmail } from '../common/normalize-email.js';
+import { assertAccountActive } from './account-status.helper.js';
 
 const DUMMY_PASSWORD_HASH =
   '$2b$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy';
@@ -72,7 +74,11 @@ export class AuthService {
         }
         const customer = await tx.khachHang.create({
           data: {
-            maKhachHang: `KH${account.taiKhoanId.toString().padStart(8, '0')}`,
+            maKhachHang: generateBusinessUuid(),
+            hoTen: dto.fullName,
+            ngaySinh: dto.dateOfBirth
+              ? new Date(`${dto.dateOfBirth}T00:00:00.000Z`)
+              : null,
             diemTichLuy: 0,
             taiKhoanId: account.taiKhoanId,
           },
@@ -87,7 +93,7 @@ export class AuthService {
         return this.tokenService.createSession(tx, {
           accountId: account.taiKhoanId,
           customerId: customer.khachHangId,
-          fullName: account.hoTen,
+          fullName: customer.hoTen ?? account.hoTen ?? dto.fullName,
           phoneNumber: account.soDienThoai,
           roles: [customerRole.tenVaiTro],
         });
@@ -134,7 +140,8 @@ export class AuthService {
     const account = await this.prisma.taiKhoan.findUnique({
       where,
       include: {
-        khachHang: { select: { khachHangId: true } },
+        khachHang: { select: { khachHangId: true, hoTen: true } },
+        nhanVien: { select: { nhanVienId: true, hoTen: true } },
         taiKhoanVaiTros: {
           include: { vaiTro: { select: { tenVaiTro: true } } },
         },
@@ -150,18 +157,13 @@ export class AuthService {
         message: 'Thông tin đăng nhập không chính xác.',
       });
     }
-    if (account.trangThai !== 'HOAT_DONG') {
-      throw new ForbiddenException({
-        error: 'ACCOUNT_INACTIVE',
-        message: 'Tài khoản không hoạt động.',
-      });
-    }
+    await assertAccountActive(this.prisma, account);
 
     return this.prisma.$transaction((tx) =>
       this.tokenService.createSession(tx, {
         accountId: account.taiKhoanId,
         customerId: account.khachHang?.khachHangId ?? null,
-        fullName: account.hoTen,
+        fullName: account.nhanVien?.hoTen ?? account.khachHang?.hoTen ?? account.hoTen ?? '',
         phoneNumber: account.soDienThoai,
         roles: account.taiKhoanVaiTros.map(({ vaiTro }) => vaiTro.tenVaiTro),
       }),
@@ -187,9 +189,18 @@ export class AuthService {
             },
           },
         },
+        khachHang: {
+          select: {
+            khachHangId: true,
+            hoTen: true,
+          },
+        },
         nhanVien: {
           select: {
             nhanVienId: true,
+            hoTen: true,
+            chucVu: true,
+            ngayVaoLam: true,
             nhaXeId: true,
             nhaXe: {
               select: { maNhaXe: true, tenNhaXe: true },

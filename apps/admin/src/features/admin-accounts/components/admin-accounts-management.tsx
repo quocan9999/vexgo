@@ -273,6 +273,8 @@ function AccountDetailSheet({
               <dl className="grid grid-cols-2 gap-x-4 gap-y-4 text-[13px] [&_dd]:mt-1 [&_dd]:break-words [&_dt]:text-xs [&_dt]:text-muted-foreground">
                 <div><dt>Số điện thoại</dt><dd>{detail.account.phoneNumber}</dd></div>
                 <div><dt>Email</dt><dd>{detail.account.email ?? 'Chưa cập nhật'}</dd></div>
+                <div><dt>Chức vụ</dt><dd>{detail.account.employee.position || 'Chưa cập nhật'}</dd></div>
+                <div><dt>Ngày vào làm</dt><dd>{formatDate(detail.account.employee.joinedAt ?? null)}</dd></div>
                 <div><dt>Ngày sinh</dt><dd>{formatDate(detail.account.dateOfBirth)}</dd></div>
                 <div><dt>CCCD</dt><dd className="admin-data-mono">{detail.account.citizenId ?? 'Chưa cập nhật'}</dd></div>
                 <div><dt>Mã nhân viên</dt><dd className="admin-data-mono">{detail.account.employee.employeeCode}</dd></div>
@@ -582,7 +584,9 @@ export function AdminAccountsManagement() {
                               </span>
                               <span className="grid min-w-0">
                                 <span className="truncate font-medium">{account.fullName}</span>
-                                <small className="admin-data-mono mt-0.5 text-xs font-normal text-muted-foreground">{account.employee.employeeCode}</small>
+                                <small className="admin-data-mono mt-0.5 text-xs font-normal text-muted-foreground">
+                                  {account.employee.position ? `${account.employee.position} · ` : ''}{account.employee.employeeCode}
+                                </small>
                               </span>
                             </div>
                           </TableHead>
@@ -617,7 +621,9 @@ export function AdminAccountsManagement() {
                           <h3 className="break-words text-sm font-semibold">{account.fullName}</h3>
                           <p className="mt-1 break-all text-[13px] text-muted-foreground">{account.phoneNumber}</p>
                           {account.email && <p className="mt-0.5 break-all text-xs text-muted-foreground">{account.email}</p>}
-                          <p className="admin-data-mono mt-1 text-xs text-muted-foreground">{account.employee.employeeCode}</p>
+                          <p className="admin-data-mono mt-1 text-xs text-muted-foreground">
+                            {account.employee.position ? `${account.employee.position} · ` : ''}{account.employee.employeeCode}
+                          </p>
                         </div>
                         <AccountStatusBadge status={account.status} />
                       </div>

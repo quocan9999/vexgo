@@ -350,7 +350,7 @@ describe('Payments Webhook & Status Security with MySQL (Integration)', () => {
     const gheChuyenXeIds: number[] = [];
     for (let i = 1; i <= ticketCount; i++) {
       const ghe = await prisma.ghe.create({
-        data: { soGhe: `M${i}`, xeId: xe.xeId },
+        data: { maGhe: `seat-m${i}-${suffix}`.padEnd(32, '0').slice(0, 32), tenGhe: `M${i}`, xeId: xe.xeId },
         select: { gheId: true },
       });
       const gcx = await prisma.gheChuyenXe.create({

@@ -1,8 +1,10 @@
+import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import { IsIn, IsInt, IsString, Max, Min } from 'class-validator';
 import { TENANT_RBAC_ROLE_NAMES } from '../tenant-role-permissions.constants.js';
 
 export class TenantRbacTargetParamsDto {
+  @ApiProperty({ description: 'ID nhà xe cần xem/cấu hình phân quyền', example: 1 })
   @Transform(({ value }) =>
     typeof value === 'string' && /^\d+$/.test(value)
       ? Number(value)
@@ -15,12 +17,22 @@ export class TenantRbacTargetParamsDto {
 }
 
 export class TenantRolePermissionsParamsDto {
+  @ApiProperty({
+    description: 'Tên vai trò nội bộ của nhà xe',
+    enum: TENANT_RBAC_ROLE_NAMES,
+    example: 'DIEU_HANH',
+  })
   @IsString()
   @IsIn(TENANT_RBAC_ROLE_NAMES)
   roleName!: string;
 }
 
 export class TenantRbacTargetRoleParamsDto extends TenantRbacTargetParamsDto {
+  @ApiProperty({
+    description: 'Tên vai trò nội bộ của nhà xe',
+    enum: TENANT_RBAC_ROLE_NAMES,
+    example: 'DIEU_HANH',
+  })
   @IsString()
   @IsIn(TENANT_RBAC_ROLE_NAMES)
   roleName!: string;

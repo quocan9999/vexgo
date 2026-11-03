@@ -81,7 +81,7 @@ describe('Admin account DTO validation', () => {
   it.each([
     ['invalid phone', { phoneNumber: '0901234567' }],
     ['invalid company ID', { busCompanyId: '12.5' }],
-    ['empty employee code', { employeeCode: '' }],
+    ['too long employee code', { employeeCode: 'a'.repeat(51) }],
     ['invalid date', { dateOfBirth: '2026-02-30' }],
     ['invalid email', { email: 'not-an-email' }],
     ['invalid citizen ID', { citizenId: '123' }],

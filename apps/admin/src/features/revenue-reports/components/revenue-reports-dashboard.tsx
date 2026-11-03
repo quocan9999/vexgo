@@ -155,7 +155,15 @@ export function RevenueReportsDashboard() {
   const periodSummary = report
     ? `${formatReportRange(report.meta)}`
     : dateRange
-      ? `${formatDateOnly(dateRange.from)} – ${formatDateOnly(dateRange.to)}`
+      ? dateRange.from && dateRange.to
+        ? dateRange.from === dateRange.to
+          ? formatDateOnly(dateRange.from)
+          : `${formatDateOnly(dateRange.from)} – ${formatDateOnly(dateRange.to)}`
+        : dateRange.from
+          ? `Từ ${formatDateOnly(dateRange.from)}`
+          : dateRange.to
+            ? `Đến ${formatDateOnly(dateRange.to)}`
+            : `Tháng hiện tại`
       : `Tháng hiện tại`;
 
   return (

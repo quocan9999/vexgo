@@ -584,6 +584,36 @@ describe('TripsService findAll (Feature 05)', () => {
       }),
     );
   });
+
+  it('filters by departure date range with fromDepartureDate and toDepartureDate', async () => {
+    const { prisma, service } = createService();
+    prisma.chuyenXe.findMany.mockResolvedValue([]);
+    prisma.chuyenXe.count = vi.fn().mockResolvedValue(0);
+
+    await service.findAll(
+      {
+        page: 1,
+        pageSize: 10,
+        sortBy: 'departureDate',
+        sortDirection: 'asc',
+        fromDepartureDate: '2026-10-01',
+        toDepartureDate: '2026-10-31',
+      },
+      tenantPrincipal as never,
+    );
+
+    expect(prisma.chuyenXe.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          nhaXeId: 3,
+          ngayKhoiHanh: {
+            gte: new Date('2026-10-01T00:00:00.000Z'),
+            lte: new Date('2026-10-31T23:59:59.999Z'),
+          },
+        }),
+      }),
+    );
+  });
 });
 
 describe('TripsService findOne (Feature 05)', () => {
@@ -799,7 +829,7 @@ describe('TripsService create (05.2)', () => {
     const createdTrip = {
       ...firstTrip,
       chuyenXeId: 99,
-      maChuyenXe: 'FUTA-CX-20102026-0099',
+      maChuyenXe: expect.stringMatching(/^[a-f0-9]{32}$/),
       gioDen: new Date('1970-01-01T05:00:00.000Z'),
       nhanGuiHang: false,
       sucChuaXeMay: 2,
@@ -815,7 +845,7 @@ describe('TripsService create (05.2)', () => {
     expect(prisma.$queryRaw).toHaveBeenCalled();
     expect(prisma.chuyenXe.create).toHaveBeenCalledWith({
       data: {
-        maChuyenXe: 'FUTA-CX-20102026-0099',
+        maChuyenXe: expect.stringMatching(/^[a-f0-9]{32}$/),
         ngayKhoiHanh: new Date('2026-10-20T00:00:00.000Z'),
         gioKhoiHanh: new Date('1970-01-01T08:00:00.000Z'),
         gioDen: new Date('1970-01-01T05:00:00.000Z'),
@@ -1404,6 +1434,7 @@ describe('TripsService.getSeats', () => {
       ghe: {
         gheId: 52,
         soGhe: 'A02',
+        tenGhe: 'A02',
         viTri: 'Tầng dưới',
       },
     },
@@ -1417,6 +1448,7 @@ describe('TripsService.getSeats', () => {
       ghe: {
         gheId: 51,
         soGhe: 'A01',
+        tenGhe: 'A01',
         viTri: 'Tầng dưới',
       },
     },
@@ -1430,6 +1462,7 @@ describe('TripsService.getSeats', () => {
       ghe: {
         gheId: 53,
         soGhe: 'B01',
+        tenGhe: 'B01',
         viTri: 'Tầng trên',
       },
     },
@@ -1497,5 +1530,69 @@ describe('TripsService.getSeats', () => {
         message: 'Không tìm thấy chuyến xe.',
       },
     });
+  });
+  it('searches old province without broadening and expands new merged province to all constituent provinces', async () => {
+    const { prisma, service } = createService();
+    prisma.chuyenXe.findMany.mockResolvedValue([]);
+
+    const mockLocationsService = {
+      list: vi.fn().mockResolvedValue({
+        data: [
+          {
+            id: 'legacy:province:77',
+            name: 'Bà Rịa - Vũng Tàu',
+            value: 'Bà Rịa - Vũng Tàu',
+            aliases: ['Bà Rịa - Vũng Tàu', 'Vũng Tàu'],
+            versions: ['legacy'],
+            kind: 'province',
+            isLegacy: true,
+          },
+          {
+            id: 'current:province:79',
+            name: 'Hồ Chí Minh',
+            value: 'TP.HCM',
+            aliases: ['TP. Hồ Chí Minh', 'TP.HCM', 'Hồ Chí Minh'],
+            versions: ['current'],
+            kind: 'province',
+            isLegacy: false,
+            mergedFromText: 'Sáp nhập từ Bà Rịa - Vũng Tàu, Bình Dương, TP. Hồ Chí Minh',
+          },
+        ],
+        meta: { stale: false },
+      }),
+    };
+
+    (service as any).locations = mockLocationsService;
+
+    // 1. Search with old province -> strictly only matches Bà Rịa - Vũng Tàu / Vũng Tàu
+    await service.search({
+      from: 'Bà Rịa - Vũng Tàu',
+      to: 'Đà Lạt',
+      page: 1,
+      pageSize: 10,
+      sortBy: 'departureTime',
+      sortDirection: 'asc',
+    });
+
+    const call1Where = prisma.chuyenXe.findMany.mock.calls[0][0].where;
+    const fromTerms1 = call1Where.tuyenXe.AND[0].OR.map((o: any) => o.diemDi.contains);
+    expect(fromTerms1).toContain('Bà Rịa - Vũng Tàu');
+    expect(fromTerms1).not.toContain('Bình Dương');
+
+    // 2. Search with new merged province -> expands to TP.HCM, Bà Rịa - Vũng Tàu, Bình Dương
+    await service.search({
+      from: 'Hồ Chí Minh',
+      to: 'Đà Lạt',
+      page: 1,
+      pageSize: 10,
+      sortBy: 'departureTime',
+      sortDirection: 'asc',
+    });
+
+    const call2Where = prisma.chuyenXe.findMany.mock.calls[1][0].where;
+    const fromTerms2 = call2Where.tuyenXe.AND[0].OR.map((o: any) => o.diemDi.contains);
+    expect(fromTerms2).toContain('Hồ Chí Minh');
+    expect(fromTerms2).toContain('Bà Rịa - Vũng Tàu');
+    expect(fromTerms2).toContain('Bình Dương');
   });
 });

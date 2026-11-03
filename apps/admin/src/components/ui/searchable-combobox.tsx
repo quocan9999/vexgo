@@ -13,6 +13,7 @@ export type SearchableOption = {
   description?: string;
   group?: 'province' | 'district' | 'station' | string;
   icon?: ReactNode;
+  badge?: string;
 };
 
 const normalize = (value: string) =>
@@ -141,8 +142,13 @@ export function SearchableCombobox({
           )}
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block font-semibold leading-snug">
-            {item.label}
+          <span className="flex items-center gap-1.5 font-semibold leading-snug">
+            <span>{item.label}</span>
+            {item.badge && (
+              <span className="inline-flex items-center rounded border border-border/70 bg-muted px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-muted-foreground uppercase">
+                {item.badge}
+              </span>
+            )}
           </span>
           {item.description && (
             <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground line-clamp-1">
@@ -206,7 +212,7 @@ export function SearchableCombobox({
           collisionPadding={8}
           className="admin-ui isolate z-[80]"
         >
-          <Combobox.Popup className="max-h-[min(380px,var(--available-height))] w-(--anchor-width) min-w-[min(280px,calc(100vw-32px))] max-w-[calc(100vw-32px)] overflow-y-auto overscroll-contain rounded-[var(--admin-radius-panel)] border border-border/80 bg-popover p-2 text-popover-foreground shadow-lg ring-1 ring-foreground/5 motion-safe:data-open:animate-in motion-safe:data-open:fade-in-0 motion-safe:data-open:slide-in-from-top-1">
+          <Combobox.Popup className="max-h-[min(380px,var(--available-height))] w-(--anchor-width) min-w-[min(280px,calc(100vw-32px))] max-w-[calc(100vw-32px)] overflow-y-auto overscroll-contain rounded-[var(--admin-radius-panel)] border border-border/80 bg-popover p-1.5 text-popover-foreground shadow-lg ring-1 ring-foreground/5 motion-safe:data-open:animate-in motion-safe:data-open:fade-in-0 motion-safe:data-open:slide-in-from-top-1">
             <Combobox.Empty className="empty:hidden text-center text-sm leading-relaxed text-muted-foreground">
               <div className="px-4 py-6">
                 {loading
@@ -214,7 +220,7 @@ export function SearchableCombobox({
                   : 'Không tìm thấy. Bạn có thể nhấn để tạo điểm mới.'}
               </div>
             </Combobox.Empty>
-            <Combobox.List className="space-y-3">
+            <Combobox.List className="space-y-2.5">
               {/* Custom New Option */}
               {otherGroup.length > 0 && (
                 <div className="space-y-1">
@@ -225,10 +231,10 @@ export function SearchableCombobox({
               {/* 1. Provinces */}
               {provinceGroup.length > 0 && (
                 <Combobox.Group>
-                  <Combobox.GroupLabel className="px-3 pt-2 pb-1 text-[13px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  <Combobox.GroupLabel className="px-3 pt-1.5 pb-1 text-sm font-bold text-muted-foreground">
                     Tỉnh / Thành phố
                   </Combobox.GroupLabel>
-                  <div className="mt-1 space-y-1">
+                  <div className="mt-0.5 space-y-1">
                     {provinceGroup.map((item) => renderItem(item))}
                   </div>
                 </Combobox.Group>
@@ -237,10 +243,10 @@ export function SearchableCombobox({
               {/* 2. Key Districts */}
               {districtGroup.length > 0 && (
                 <Combobox.Group>
-                  <Combobox.GroupLabel className="px-3 pt-2 pb-1 text-[13px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  <Combobox.GroupLabel className="px-3 pt-2 pb-1 text-sm font-bold text-muted-foreground">
                     Quận / Huyện / TP trực thuộc
                   </Combobox.GroupLabel>
-                  <div className="mt-1 space-y-1">
+                  <div className="mt-0.5 space-y-1">
                     {districtGroup.map((item) => renderItem(item))}
                   </div>
                 </Combobox.Group>
@@ -249,11 +255,11 @@ export function SearchableCombobox({
               {/* 3. Major Stations */}
               {stationGroup.length > 0 && (
                 <Combobox.Group>
-                  <Combobox.GroupLabel className="flex items-center gap-2 px-3 pt-2 pb-1 text-[13px] font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400">
-                    <Bus className="size-3.5" />
+                  <Combobox.GroupLabel className="flex items-center gap-2 px-3 pt-2 pb-1 text-sm font-bold text-amber-600 dark:text-amber-400">
+                    <Bus className="size-4" />
                     Bến xe / Điểm đón trả
                   </Combobox.GroupLabel>
-                  <div className="mt-1 space-y-1">
+                  <div className="mt-0.5 space-y-1">
                     {stationGroup.map((item) => renderItem(item))}
                   </div>
                 </Combobox.Group>

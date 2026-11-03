@@ -60,6 +60,23 @@ describe('demo seed payment evidence', () => {
     expect(db.thanhToan.findFirst).toHaveBeenCalledBefore(db.donGiaoDich.findUnique);
   });
 
+  it('creates a new eligible demo sale for uuid4 transaction code', async () => {
+    const db = harness(null);
+    db.donGiaoDich.findUnique.mockResolvedValueOnce({
+      maDonGiaoDich: '03006cdb7a464f64a6423e02c230287d',
+      ngayTao: fixture.thoiGian,
+      trangThai: 'DA_THANH_TOAN',
+      tongTien: '100',
+      phieuDatVe: { ves: [{ giaThucTe: '100' }] },
+      phieuGuiHang: null,
+      thanhToans: [],
+    });
+    const result = await ensureDemoPayment(db, fixture);
+    expect(result.operation).toBe('create');
+    expect(result.payment).toMatchObject({ laQuyetToanHopLe: true });
+    expect(result.payment.thoiDiemHoanTat).toBeInstanceOf(Date);
+  });
+
   it('does not overwrite evidence added concurrently after the initial seed read', async () => {
     const existing = { ...fixture, thanhToanId: 9, updatedAt: new Date('2026-09-22T03:00:00Z'),
       maGiaoDichSePay: null, thoiDiemHoanTat: null, laQuyetToanHopLe: false };

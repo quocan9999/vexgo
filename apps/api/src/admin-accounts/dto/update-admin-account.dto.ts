@@ -1,3 +1,4 @@
+import { ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsEmail,
   IsNotEmpty,
@@ -11,22 +12,37 @@ import { IsDateOnly } from '../../common/validators/is-date-only.validator.js';
 const CCCD_PATTERN = /^\d{12}$/;
 
 export class UpdateAdminAccountDto {
+  @ApiPropertyOptional({ description: 'Họ và tên nhân viên', example: 'Trần Văn B' })
   @ValidateIf((_object, value) => value !== undefined)
   @IsString()
   @IsNotEmpty()
   @MaxLength(100)
   fullName?: string;
 
+  @ApiPropertyOptional({ description: 'Ngày sinh (DD-MM-YYYY hoặc YYYY-MM-DD)', example: '20-10-1990' })
   @ValidateIf((_object, value) => value !== undefined && value !== null)
   @IsDateOnly({ message: 'Ngày sinh phải là ngày hợp lệ dạng YYYY-MM-DD.' })
   dateOfBirth?: string | null;
 
+  @ApiPropertyOptional({ description: 'Địa chỉ email liên hệ', example: 'b.tran@phuongtrang.vn' })
   @ValidateIf((_object, value) => value !== undefined && value !== null)
   @IsEmail({}, { message: 'Email không hợp lệ.' })
   @MaxLength(150)
   email?: string | null;
 
+  @ApiPropertyOptional({ description: 'Số CCCD (12 chữ số)', example: '079190001234' })
   @ValidateIf((_object, value) => value !== undefined && value !== null)
   @Matches(CCCD_PATTERN, { message: 'CCCD phải gồm đúng 12 chữ số.' })
   citizenId?: string | null;
+
+  @ApiPropertyOptional({ description: 'Chức vụ của nhân viên trong nhà xe', example: 'Nhân viên bán vé' })
+  @ValidateIf((_object, value) => value !== undefined && value !== null && value !== '')
+  @IsString()
+  @MaxLength(50)
+  position?: string | null;
+
+  @ApiPropertyOptional({ description: 'Ngày vào làm (định dạng DD-MM-YYYY hoặc YYYY-MM-DD)', example: '01-11-2026' })
+  @ValidateIf((_object, value) => value !== undefined && value !== null)
+  @IsDateOnly({ message: 'Ngày vào làm phải là ngày hợp lệ dạng DD-MM-YYYY.' })
+  joinedAt?: string | null;
 }

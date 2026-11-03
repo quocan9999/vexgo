@@ -4,23 +4,9 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import {
-  Bus,
-  CheckCircle2,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  Info,
-  Mail,
-  MapPin,
-  Phone,
-  Tag,
-  Ticket,
-  User,
-  X,
-} from 'lucide-react';
+import { ChevronRight, Info, Mail, Phone, User, X } from 'lucide-react';
 import type { Post } from '@/features/posts/types/post';
-import { tripsApi, type ApiTripSeat } from '@/features/trips/services/trips.api';
+import { tripsApi, type ApiTrip, type ApiTripSeat, type ApiTripStopPoint } from '@/features/trips/services/trips.api';
 import {
   calculateRoundTripFare,
   getReturnTripLocations,
@@ -41,21 +27,16 @@ import { useAuthSession } from '@/features/auth/auth-session';
 import { customerApi } from '@/features/account/services/customer.api';
 import { hydrateUntouchedProfileField } from '../utils/profile-hydration';
 import {
-  ApiError,
   bookingsApi,
-  type BookingQuoteData,
   type CreateBookingPayload,
   type CreatedBookingData,
 } from '@/features/account/services/bookings.api';
 import { createPaymentDraft } from '@/features/booking/services/payment-draft';
 import {
+  ApiError,
   shipmentsApi,
   type ShipmentRoutePoints,
 } from '@/features/shipments/services/shipments.api';
-import {
-  promotionsApi,
-  type AvailablePromotion,
-} from '@/features/promotions/services/promotions.api';
 
 export interface RoundTripBookingProps {
   outboundPost: Post;
@@ -64,6 +45,8 @@ export interface RoundTripBookingProps {
   returnDate: string;
   outboundTripSeats: ApiTripSeat[];
   returnTripSeats: ApiTripSeat[];
+  outboundApiTrip?: ApiTrip;
+  returnApiTrip?: ApiTrip;
 }
 
 const ChairIcon = ({ className = 'w-7 h-9' }: { className?: string }) => (
@@ -251,6 +234,8 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
   returnDate,
   outboundTripSeats,
   returnTripSeats,
+  outboundApiTrip,
+  returnApiTrip,
 }) => {
   const router = useRouter();
   const { user, executeWithAuth, isAuthenticated, isHydrated } = useAuthSession();
@@ -391,56 +376,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
     ...returnLuggageItems.map((it) => ({ ...it, legTitle: 'Chuyến về' as const })),
   ];
   const hasCargoItems = allLuggageItems.length > 0;
-
-  const [availablePromotions, setAvailablePromotions] = useState<AvailablePromotion[]>([]);
-  const [promotionInput, setPromotionInput] = useState('');
-  const [activePromotionCode, setActivePromotionCode] = useState<string | null>(null);
-  const [promotionRequestVersion, setPromotionRequestVersion] = useState(0);
-  const [promotionQuoteState, setPromotionQuoteState] = useState<{
-    requestKey: string;
-    status: 'idle' | 'loading' | 'valid' | 'invalid';
-    message: string;
-    quote?: BookingQuoteData;
-    targetLeg?: 'outbound' | 'return';
-  }>({ requestKey: '', status: 'idle', message: '' });
-  const promotionInputRef = useRef<HTMLInputElement | null>(null);
-
-  useEffect(() => {
-    let active = true;
-    const outId = Number(outboundPost.id);
-    const retId = Number(returnPost.id);
-    const validIds = [outId, retId].filter(
-      (id) => Number.isSafeInteger(id) && id > 0,
-    );
-    if (validIds.length === 0) {
-      setAvailablePromotions([]);
-      return;
-    }
-
-    Promise.all(
-      validIds.map((tripId) =>
-        promotionsApi
-          .getAvailablePromotions({ tripId })
-          .then((res) => res.data || [])
-          .catch(() => [] as AvailablePromotion[]),
-      ),
-    ).then((lists) => {
-      if (!active) return;
-      const mergedMap = new Map<string, AvailablePromotion>();
-      for (const list of lists) {
-        for (const promo of list) {
-          if (!mergedMap.has(promo.code)) {
-            mergedMap.set(promo.code, promo);
-          }
-        }
-      }
-      setAvailablePromotions(Array.from(mergedMap.values()));
-    });
-
-    return () => {
-      active = false;
-    };
-  }, [outboundPost.id, returnPost.id]);
+  const totalFareLabel = 'Tổng tiền';
 
   const [outboundCargoRoutePoints, setOutboundCargoRoutePoints] =
     useState<ShipmentRoutePoints | null>(null);
@@ -530,111 +466,237 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
 
   const returnLocations = getReturnTripLocations(returnPost);
 
-  const outboundPickupOptions = React.useMemo(() => {
-    if (outboundPost.pickupPoints && outboundPost.pickupPoints.length > 0) {
-      return outboundPost.pickupPoints.map((pt) => ({
-        value: pt.name,
-        label: `${pt.time ? `${pt.time} - ` : ''}${pt.name}${pt.address ? ` (${pt.address})` : ''}`,
-        address: pt.address || '',
-      }));
-    }
-    return [{ value: outboundPost.province, label: outboundPost.province, address: '' }];
-  }, [outboundPost.pickupPoints, outboundPost.province]);
+  // Outbound stop points
+  const outboundPickupPoints = React.useMemo(() => outboundApiTrip?.pickupPoints ?? [], [outboundApiTrip]);
+  const outboundDropoffPoints = React.useMemo(() => outboundApiTrip?.dropoffPoints ?? [], [outboundApiTrip]);
 
-  const outboundDropoffOptions = React.useMemo(() => {
-    if (outboundPost.dropoffPoints && outboundPost.dropoffPoints.length > 0) {
-      return outboundPost.dropoffPoints.map((pt) => ({
-        value: pt.name,
-        label: `${pt.time ? `${pt.time} - ` : ''}${pt.name}${pt.address ? ` (${pt.address})` : ''}`,
-        address: pt.address || '',
-      }));
-    }
-    return [{ value: outboundPost.district, label: outboundPost.district, address: '' }];
-  }, [outboundPost.dropoffPoints, outboundPost.district]);
+  const outboundPickupStations = React.useMemo(
+    () => outboundPickupPoints.filter((p) => p.type !== 'transfer'),
+    [outboundPickupPoints],
+  );
+  const outboundPickupTransfers = React.useMemo(
+    () => outboundPickupPoints.filter((p) => p.type === 'transfer'),
+    [outboundPickupPoints],
+  );
 
-  const returnPickupOptions = React.useMemo(() => {
-    if (returnPost.pickupPoints && returnPost.pickupPoints.length > 0) {
-      return returnPost.pickupPoints.map((pt) => ({
-        value: pt.name,
-        label: `${pt.time ? `${pt.time} - ` : ''}${pt.name}${pt.address ? ` (${pt.address})` : ''}`,
-        address: pt.address || '',
-      }));
-    }
-    return [{ value: returnLocations.pickup, label: returnLocations.pickup, address: '' }];
-  }, [returnPost.pickupPoints, returnLocations.pickup]);
-
-  const returnDropoffOptions = React.useMemo(() => {
-    if (returnPost.dropoffPoints && returnPost.dropoffPoints.length > 0) {
-      return returnPost.dropoffPoints.map((pt) => ({
-        value: pt.name,
-        label: `${pt.time ? `${pt.time} - ` : ''}${pt.name}${pt.address ? ` (${pt.address})` : ''}`,
-        address: pt.address || '',
-      }));
-    }
-    return [{ value: returnLocations.dropoff, label: returnLocations.dropoff, address: '' }];
-  }, [returnPost.dropoffPoints, returnLocations.dropoff]);
+  const outboundDropoffStations = React.useMemo(
+    () => outboundDropoffPoints.filter((p) => p.type !== 'transfer'),
+    [outboundDropoffPoints],
+  );
+  const outboundDropoffTransfers = React.useMemo(
+    () => outboundDropoffPoints.filter((p) => p.type === 'transfer'),
+    [outboundDropoffPoints],
+  );
 
   const [outboundPickupMode, setOutboundPickupMode] = useState<'station' | 'transfer'>('station');
   const [outboundDropoffMode, setOutboundDropoffMode] = useState<'station' | 'transfer'>('station');
-  const [returnPickupMode, setReturnPickupMode] = useState<'station' | 'transfer'>('station');
-  const [returnDropoffMode, setReturnDropoffMode] = useState<'station' | 'transfer'>('station');
+
+  const [selectedOutboundPickupPointId, setSelectedOutboundPickupPointId] = useState<number | null>(() => {
+    const defaultPoint = outboundPickupStations.find((p) => p.isDefault) || outboundPickupStations[0] || outboundPickupTransfers[0];
+    return defaultPoint?.diemDonTraChuyenXeId ?? null;
+  });
+
+  const [selectedOutboundDropoffPointId, setSelectedOutboundDropoffPointId] = useState<number | null>(() => {
+    const defaultPoint = outboundDropoffStations.find((p) => p.isDefault) || outboundDropoffStations[0] || outboundDropoffTransfers[0];
+    return defaultPoint?.diemDonTraChuyenXeId ?? null;
+  });
 
   const [outboundPickupOverride, setOutboundPickupOverride] = useState<string | null>(null);
   const [outboundDropoffOverride, setOutboundDropoffOverride] = useState<string | null>(null);
+
+  // Return stop points
+  const returnPickupPoints = React.useMemo(() => returnApiTrip?.pickupPoints ?? [], [returnApiTrip]);
+  const returnDropoffPoints = React.useMemo(() => returnApiTrip?.dropoffPoints ?? [], [returnApiTrip]);
+
+  const returnPickupStations = React.useMemo(
+    () => returnPickupPoints.filter((p) => p.type !== 'transfer'),
+    [returnPickupPoints],
+  );
+  const returnPickupTransfers = React.useMemo(
+    () => returnPickupPoints.filter((p) => p.type === 'transfer'),
+    [returnPickupPoints],
+  );
+
+  const returnDropoffStations = React.useMemo(
+    () => returnDropoffPoints.filter((p) => p.type !== 'transfer'),
+    [returnDropoffPoints],
+  );
+  const returnDropoffTransfers = React.useMemo(
+    () => returnDropoffPoints.filter((p) => p.type === 'transfer'),
+    [returnDropoffPoints],
+  );
+
+  const [returnPickupMode, setReturnPickupMode] = useState<'station' | 'transfer'>('station');
+  const [returnDropoffMode, setReturnDropoffMode] = useState<'station' | 'transfer'>('station');
+
+  const [selectedReturnPickupPointId, setSelectedReturnPickupPointId] = useState<number | null>(() => {
+    const defaultPoint = returnPickupStations.find((p) => p.isDefault) || returnPickupStations[0] || returnPickupTransfers[0];
+    return defaultPoint?.diemDonTraChuyenXeId ?? null;
+  });
+
+  const [selectedReturnDropoffPointId, setSelectedReturnDropoffPointId] = useState<number | null>(() => {
+    const defaultPoint = returnDropoffStations.find((p) => p.isDefault) || returnDropoffStations[0] || returnDropoffTransfers[0];
+    return defaultPoint?.diemDonTraChuyenXeId ?? null;
+  });
+
   const [returnPickupOverride, setReturnPickupOverride] = useState<string | null>(null);
   const [returnDropoffOverride, setReturnDropoffOverride] = useState<string | null>(null);
 
-  const [outboundTransferPickup, setOutboundTransferPickup] = useState('');
-  const [outboundTransferDropoff, setOutboundTransferDropoff] = useState('');
-  const [returnTransferPickup, setReturnTransferPickup] = useState('');
-  const [returnTransferDropoff, setReturnTransferDropoff] = useState('');
+  useEffect(() => {
+    if (outboundPickupPoints.length > 0 && selectedOutboundPickupPointId === null) {
+      const defaultPoint = outboundPickupStations.find((p) => p.isDefault) || outboundPickupStations[0] || outboundPickupTransfers[0];
+      if (defaultPoint?.diemDonTraChuyenXeId) {
+        setSelectedOutboundPickupPointId(defaultPoint.diemDonTraChuyenXeId);
+        setOutboundPickupMode(defaultPoint.type === 'transfer' ? 'transfer' : 'station');
+      }
+    }
+  }, [outboundPickupPoints, outboundPickupStations, outboundPickupTransfers, selectedOutboundPickupPointId]);
 
-  const selectedOutboundStationPickup =
-    outboundPickupOverride !== null && outboundPickupOptions.some((o) => o.value === outboundPickupOverride)
-      ? outboundPickupOverride
-      : outboundPickupOptions[0]?.value || outboundPost.province;
-  const selectedOutboundStationDropoff =
-    outboundDropoffOverride !== null && outboundDropoffOptions.some((o) => o.value === outboundDropoffOverride)
-      ? outboundDropoffOverride
-      : outboundDropoffOptions[0]?.value || outboundPost.district;
-  const selectedReturnStationPickup =
-    returnPickupOverride !== null && returnPickupOptions.some((o) => o.value === returnPickupOverride)
-      ? returnPickupOverride
-      : returnPickupOptions[0]?.value || returnLocations.pickup;
-  const selectedReturnStationDropoff =
-    returnDropoffOverride !== null && returnDropoffOptions.some((o) => o.value === returnDropoffOverride)
-      ? returnDropoffOverride
-      : returnDropoffOptions[0]?.value || returnLocations.dropoff;
+  useEffect(() => {
+    if (outboundDropoffPoints.length > 0 && selectedOutboundDropoffPointId === null) {
+      const defaultPoint = outboundDropoffStations.find((p) => p.isDefault) || outboundDropoffStations[0] || outboundDropoffTransfers[0];
+      if (defaultPoint?.diemDonTraChuyenXeId) {
+        setSelectedOutboundDropoffPointId(defaultPoint.diemDonTraChuyenXeId);
+        setOutboundDropoffMode(defaultPoint.type === 'transfer' ? 'transfer' : 'station');
+      }
+    }
+  }, [outboundDropoffPoints, outboundDropoffStations, outboundDropoffTransfers, selectedOutboundDropoffPointId]);
 
-  const selectedOutboundPickupOption = outboundPickupOptions.find((o) => o.value === selectedOutboundStationPickup);
-  const selectedOutboundDropoffOption = outboundDropoffOptions.find((o) => o.value === selectedOutboundStationDropoff);
-  const selectedReturnPickupOption = returnPickupOptions.find((o) => o.value === selectedReturnStationPickup);
-  const selectedReturnDropoffOption = returnDropoffOptions.find((o) => o.value === selectedReturnStationDropoff);
+  useEffect(() => {
+    if (returnPickupPoints.length > 0 && selectedReturnPickupPointId === null) {
+      const defaultPoint = returnPickupStations.find((p) => p.isDefault) || returnPickupStations[0] || returnPickupTransfers[0];
+      if (defaultPoint?.diemDonTraChuyenXeId) {
+        setSelectedReturnPickupPointId(defaultPoint.diemDonTraChuyenXeId);
+        setReturnPickupMode(defaultPoint.type === 'transfer' ? 'transfer' : 'station');
+      }
+    }
+  }, [returnPickupPoints, returnPickupStations, returnPickupTransfers, selectedReturnPickupPointId]);
 
-  const effectiveOutboundPickup =
-    outboundPickupMode === 'transfer'
-      ? outboundTransferPickup.trim()
-        ? `Trung chuyển: ${outboundTransferPickup.trim()}`
-        : ''
-      : selectedOutboundStationPickup;
-  const effectiveOutboundDropoff =
-    outboundDropoffMode === 'transfer'
-      ? outboundTransferDropoff.trim()
-        ? `Trung chuyển: ${outboundTransferDropoff.trim()}`
-        : ''
-      : selectedOutboundStationDropoff;
-  const effectiveReturnPickup =
-    returnPickupMode === 'transfer'
-      ? returnTransferPickup.trim()
-        ? `Trung chuyển: ${returnTransferPickup.trim()}`
-        : ''
-      : selectedReturnStationPickup;
-  const effectiveReturnDropoff =
-    returnDropoffMode === 'transfer'
-      ? returnTransferDropoff.trim()
-        ? `Trung chuyển: ${returnTransferDropoff.trim()}`
-        : ''
-      : selectedReturnStationDropoff;
+  useEffect(() => {
+    if (returnDropoffPoints.length > 0 && selectedReturnDropoffPointId === null) {
+      const defaultPoint = returnDropoffStations.find((p) => p.isDefault) || returnDropoffStations[0] || returnDropoffTransfers[0];
+      if (defaultPoint?.diemDonTraChuyenXeId) {
+        setSelectedReturnDropoffPointId(defaultPoint.diemDonTraChuyenXeId);
+        setReturnDropoffMode(defaultPoint.type === 'transfer' ? 'transfer' : 'station');
+      }
+    }
+  }, [returnDropoffPoints, returnDropoffStations, returnDropoffTransfers, selectedReturnDropoffPointId]);
+
+  const selectedOutboundPickupStop = React.useMemo(() => {
+    if (!selectedOutboundPickupPointId) return null;
+    return outboundPickupPoints.find((p) => p.diemDonTraChuyenXeId === selectedOutboundPickupPointId) ?? null;
+  }, [outboundPickupPoints, selectedOutboundPickupPointId]);
+
+  const selectedOutboundDropoffStop = React.useMemo(() => {
+    if (!selectedOutboundDropoffPointId) return null;
+    return outboundDropoffPoints.find((p) => p.diemDonTraChuyenXeId === selectedOutboundDropoffPointId) ?? null;
+  }, [outboundDropoffPoints, selectedOutboundDropoffPointId]);
+
+  const selectedReturnPickupStop = React.useMemo(() => {
+    if (!selectedReturnPickupPointId) return null;
+    return returnPickupPoints.find((p) => p.diemDonTraChuyenXeId === selectedReturnPickupPointId) ?? null;
+  }, [returnPickupPoints, selectedReturnPickupPointId]);
+
+  const selectedReturnDropoffStop = React.useMemo(() => {
+    if (!selectedReturnDropoffPointId) return null;
+    return returnDropoffPoints.find((p) => p.diemDonTraChuyenXeId === selectedReturnDropoffPointId) ?? null;
+  }, [returnDropoffPoints, selectedReturnDropoffPointId]);
+
+  const outboundPickupSurcharge = Number(selectedOutboundPickupStop?.phuPhi ?? 0);
+  const outboundDropoffSurcharge = Number(selectedOutboundDropoffStop?.phuPhi ?? 0);
+  const outboundTotalSurcharge = outboundPickupSurcharge + outboundDropoffSurcharge;
+
+  const returnPickupSurcharge = Number(selectedReturnPickupStop?.phuPhi ?? 0);
+  const returnDropoffSurcharge = Number(selectedReturnDropoffStop?.phuPhi ?? 0);
+  const returnTotalSurcharge = returnPickupSurcharge + returnDropoffSurcharge;
+
+  const handleOutboundPickupModeChange = (mode: 'station' | 'transfer') => {
+    setOutboundPickupMode(mode);
+    const pool = mode === 'transfer' ? outboundPickupTransfers : outboundPickupStations;
+    if (pool.length > 0) {
+      const first = pool[0];
+      setSelectedOutboundPickupPointId(first.diemDonTraChuyenXeId ?? null);
+      setOutboundPickupOverride(first.name);
+    }
+  };
+
+  const handleOutboundDropoffModeChange = (mode: 'station' | 'transfer') => {
+    setOutboundDropoffMode(mode);
+    const pool = mode === 'transfer' ? outboundDropoffTransfers : outboundDropoffStations;
+    if (pool.length > 0) {
+      const first = pool[0];
+      setSelectedOutboundDropoffPointId(first.diemDonTraChuyenXeId ?? null);
+      setOutboundDropoffOverride(first.name);
+    }
+  };
+
+  const handleReturnPickupModeChange = (mode: 'station' | 'transfer') => {
+    setReturnPickupMode(mode);
+    const pool = mode === 'transfer' ? returnPickupTransfers : returnPickupStations;
+    if (pool.length > 0) {
+      const first = pool[0];
+      setSelectedReturnPickupPointId(first.diemDonTraChuyenXeId ?? null);
+      setReturnPickupOverride(first.name);
+    }
+  };
+
+  const handleReturnDropoffModeChange = (mode: 'station' | 'transfer') => {
+    setReturnDropoffMode(mode);
+    const pool = mode === 'transfer' ? returnDropoffTransfers : returnDropoffStations;
+    if (pool.length > 0) {
+      const first = pool[0];
+      setSelectedReturnDropoffPointId(first.diemDonTraChuyenXeId ?? null);
+      setReturnDropoffOverride(first.name);
+    }
+  };
+
+  const handleOutboundPickupSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const val = e.target.value;
+    const numId = Number(val);
+    if (!Number.isNaN(numId) && numId > 0) {
+      setSelectedOutboundPickupPointId(numId);
+      const stop = outboundPickupPoints.find((p) => p.diemDonTraChuyenXeId === numId);
+      if (stop) setOutboundPickupOverride(stop.name);
+    } else {
+      setOutboundPickupOverride(val);
+    }
+  };
+
+  const handleOutboundDropoffSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const val = e.target.value;
+    const numId = Number(val);
+    if (!Number.isNaN(numId) && numId > 0) {
+      setSelectedOutboundDropoffPointId(numId);
+      const stop = outboundDropoffPoints.find((p) => p.diemDonTraChuyenXeId === numId);
+      if (stop) setOutboundDropoffOverride(stop.name);
+    } else {
+      setOutboundDropoffOverride(val);
+    }
+  };
+
+  const handleReturnPickupSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const val = e.target.value;
+    const numId = Number(val);
+    if (!Number.isNaN(numId) && numId > 0) {
+      setSelectedReturnPickupPointId(numId);
+      const stop = returnPickupPoints.find((p) => p.diemDonTraChuyenXeId === numId);
+      if (stop) setReturnPickupOverride(stop.name);
+    } else {
+      setReturnPickupOverride(val);
+    }
+  };
+
+  const handleReturnDropoffSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const val = e.target.value;
+    const numId = Number(val);
+    if (!Number.isNaN(numId) && numId > 0) {
+      setSelectedReturnDropoffPointId(numId);
+      const stop = returnDropoffPoints.find((p) => p.diemDonTraChuyenXeId === numId);
+      if (stop) setReturnDropoffOverride(stop.name);
+    } else {
+      setReturnDropoffOverride(val);
+    }
+  };
 
   const outboundDepartureTimeText = formatTripDateTime(
     outboundPost.createdAt,
@@ -729,230 +791,6 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
     });
   };
 
-  const outboundUnitFare = outboundPost.minPriceNum ?? 0;
-  const returnUnitFare = returnPost.minPriceNum ?? 0;
-  const outboundFare = outboundUnitFare * outboundSeats.length;
-  const returnFare = returnUnitFare * returnSeats.length;
-
-  const quoteOutboundTripId = Number(outboundPost.id);
-  const quoteReturnTripId = Number(returnPost.id);
-  const quoteOutboundSeatIds = outboundSeats
-    .map((seatNumber) =>
-      outboundSeatMap.find((seat) => seat.seatNumber === seatNumber && seat.status === 'TRONG')?.tripSeatId,
-    )
-    .filter((id): id is number => typeof id === 'number' && Number.isSafeInteger(id) && id > 0);
-  const quoteReturnSeatIds = returnSeats
-    .map((seatNumber) =>
-      returnSeatMap.find((seat) => seat.seatNumber === seatNumber && seat.status === 'TRONG')?.tripSeatId,
-    )
-    .filter((id): id is number => typeof id === 'number' && Number.isSafeInteger(id) && id > 0);
-
-  const promotionIdentityPhone = isAuthenticated ? '' : customerPhone.trim();
-  const promotionRequestKey = JSON.stringify({
-    outboundTripId: quoteOutboundTripId,
-    returnTripId: quoteReturnTripId,
-    outboundSeatIds: quoteOutboundSeatIds,
-    returnSeatIds: quoteReturnSeatIds,
-    outboundSeats,
-    returnSeats,
-    promotionCode: activePromotionCode,
-    identityPhone: promotionIdentityPhone,
-    isAuthenticated,
-    isHydrated,
-    outboundFare: outboundUnitFare,
-    returnFare: returnUnitFare,
-    version: promotionRequestVersion,
-  });
-
-  const currentPromotionState =
-    promotionQuoteState.requestKey === promotionRequestKey
-      ? promotionQuoteState
-      : null;
-  const promotionStatus = activePromotionCode
-    ? currentPromotionState?.status ?? 'loading'
-    : 'idle';
-  const promotionMessage = currentPromotionState?.message ?? '';
-  const promotionQuote =
-    promotionStatus === 'valid' ? currentPromotionState?.quote ?? null : null;
-  const promotionTargetLeg =
-    promotionStatus === 'valid' ? currentPromotionState?.targetLeg ?? 'outbound' : null;
-  const hasCurrentPromotionQuote = Boolean(promotionQuote);
-  const discountAmount = promotionQuote ? Number(promotionQuote.discountAmount) || 0 : 0;
-  const baseTicketTotal = calculateRoundTripFare({
-    outboundUnitFare,
-    outboundSeatCount: outboundSeats.length,
-    returnUnitFare,
-    returnSeatCount: returnSeats.length,
-  });
-  const totalFare = Math.max(0, baseTicketTotal - discountAmount) + luggageFee;
-  const isPromotionQuotePending =
-    Boolean(activePromotionCode) && promotionStatus === 'loading';
-  const totalFareText = isPromotionQuotePending
-    ? 'Đang xác minh…'
-    : `${totalFare.toLocaleString('vi-VN')}đ`;
-  const totalFareLabel = hasCurrentPromotionQuote
-    ? 'Tổng thanh toán tạm tính'
-    : hasCargoItems
-      ? 'Tạm tính tiền vé'
-      : 'Tổng tiền';
-  const hasUnappliedPromotionInput = Boolean(
-    promotionInput.trim() && !activePromotionCode,
-  );
-  const canPayWithPromotion =
-    !hasUnappliedPromotionInput &&
-    (!activePromotionCode || hasCurrentPromotionQuote);
-
-  useEffect(() => {
-    if (!activePromotionCode) {
-      setPromotionQuoteState({
-        requestKey: promotionRequestKey,
-        status: 'idle',
-        message: '',
-      });
-      return;
-    }
-
-    if (!isHydrated) {
-      setPromotionQuoteState({
-        requestKey: promotionRequestKey,
-        status: 'idle',
-        message: 'Đang xác minh trạng thái tài khoản trước khi kiểm tra mã.',
-      });
-      return;
-    }
-
-    if (outboundSeats.length === 0 && returnSeats.length === 0) {
-      setPromotionQuoteState({
-        requestKey: promotionRequestKey,
-        status: 'idle',
-        message: 'Chọn ít nhất một ghế để kiểm tra mã khuyến mãi.',
-      });
-      return;
-    }
-
-    if (!isAuthenticated && !customerPhone.trim()) {
-      setPromotionQuoteState({
-        requestKey: promotionRequestKey,
-        status: 'idle',
-        message: 'Nhập số điện thoại để kiểm tra điều kiện sử dụng mã.',
-      });
-      return;
-    }
-
-    const controller = new AbortController();
-    let isCurrent = true;
-    setPromotionQuoteState({
-      requestKey: promotionRequestKey,
-      status: 'loading',
-      message: 'Đang kiểm tra mã khuyến mãi…',
-    });
-
-    const timeout = setTimeout(async () => {
-      const requestLegQuote = async (tripId: number, seatIds: number[]) => {
-        const payload = {
-          tripId,
-          seatIds: [...seatIds].sort((a, b) => a - b),
-          promotionCode: activePromotionCode,
-          ...(!isAuthenticated ? { contactPhone: customerPhone.trim() } : {}),
-        };
-        const response = isAuthenticated
-          ? await executeWithAuth((token) =>
-              bookingsApi.getBookingQuote(payload, token, controller.signal),
-            )
-          : await bookingsApi.getBookingQuote(payload, undefined, controller.signal);
-        const quote = response.data;
-        const amounts = [quote.originalTotal, quote.discountAmount, quote.finalTotal].map(Number);
-        if (
-          !quote.appliedPromotionCode ||
-          quote.appliedPromotionCode.toUpperCase() !== activePromotionCode ||
-          amounts.some((amount) => !Number.isFinite(amount) || amount < 0)
-        ) {
-          throw new Error('Máy chủ chưa xác nhận được mã khuyến mãi. Hãy kiểm tra lại mã.');
-        }
-        return quote;
-      };
-
-      try {
-        let lastError: unknown = null;
-        if (quoteOutboundSeatIds.length > 0 && Number.isSafeInteger(quoteOutboundTripId) && quoteOutboundTripId > 0) {
-          try {
-            const quote = await requestLegQuote(quoteOutboundTripId, quoteOutboundSeatIds);
-            if (!isCurrent || controller.signal.aborted) return;
-            setPromotionQuoteState({
-              requestKey: promotionRequestKey,
-              status: 'valid',
-              message: `Mã ${quote.appliedPromotionCode} đã được áp dụng.`,
-              quote,
-              targetLeg: 'outbound',
-            });
-            return;
-          } catch (err) {
-            lastError = err;
-          }
-        }
-
-        if (quoteReturnSeatIds.length > 0 && Number.isSafeInteger(quoteReturnTripId) && quoteReturnTripId > 0) {
-          try {
-            const quote = await requestLegQuote(quoteReturnTripId, quoteReturnSeatIds);
-            if (!isCurrent || controller.signal.aborted) return;
-            setPromotionQuoteState({
-              requestKey: promotionRequestKey,
-              status: 'valid',
-              message: `Mã ${quote.appliedPromotionCode} đã được áp dụng.`,
-              quote,
-              targetLeg: 'return',
-            });
-            return;
-          } catch (err) {
-            lastError = lastError ?? err;
-          }
-        }
-
-        throw lastError ?? new Error('Không thể kiểm tra mã khuyến mãi. Vui lòng thử lại.');
-      } catch (error) {
-        if (!isCurrent || controller.signal.aborted) return;
-        setPromotionQuoteState({
-          requestKey: promotionRequestKey,
-          status: 'invalid',
-          message:
-            error instanceof Error
-              ? error.message
-              : 'Không thể kiểm tra mã khuyến mãi. Vui lòng thử lại.',
-        });
-        promotionInputRef.current?.focus();
-      }
-    }, 250);
-
-    return () => {
-      isCurrent = false;
-      clearTimeout(timeout);
-      controller.abort();
-    };
-  }, [promotionRequestKey]);
-
-  const handleApplyPromotion = (codeOverride?: unknown) => {
-    const rawCode =
-      typeof codeOverride === 'string' ? codeOverride : promotionInput;
-    const code = rawCode.trim().toUpperCase();
-    if (!code) {
-      promotionInputRef.current?.focus();
-      return;
-    }
-    if (typeof codeOverride === 'string') {
-      setPromotionInput(codeOverride);
-    }
-    setSubmitError(null);
-    setActivePromotionCode(code);
-    setPromotionRequestVersion((version) => version + 1);
-  };
-
-  const handleRemovePromotion = () => {
-    setPromotionInput('');
-    setActivePromotionCode(null);
-    setPromotionQuoteState({ requestKey: '', status: 'idle', message: '' });
-    setSubmitError(null);
-  };
-
   const handleSubmit = async () => {
     if (submissionLockRef.current) return;
 
@@ -1009,36 +847,6 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
 
     if (!acceptedTerms) {
       setSubmitError('Vui lòng chấp nhận điều khoản đặt vé & chính sách bảo mật để tiếp tục.');
-      return;
-    }
-
-    if (promotionInput.trim() && !activePromotionCode) {
-      setSubmitError('Hãy áp dụng hoặc bỏ mã khuyến mãi đã nhập trước khi tiếp tục.');
-      promotionInputRef.current?.focus();
-      return;
-    }
-    if (activePromotionCode && !hasCurrentPromotionQuote) {
-      setSubmitError(
-        promotionMessage || 'Đang kiểm tra mã khuyến mãi. Vui lòng đợi rồi thử lại.',
-      );
-      promotionInputRef.current?.focus();
-      return;
-    }
-
-    if (outboundPickupMode === 'transfer' && !outboundTransferPickup.trim()) {
-      setSubmitError(`Vui lòng nhập địa chỉ đón trung chuyển cho chuyến đi (${outboundPost.province}).`);
-      return;
-    }
-    if (outboundDropoffMode === 'transfer' && !outboundTransferDropoff.trim()) {
-      setSubmitError(`Vui lòng nhập địa chỉ trả trung chuyển cho chuyến đi (${outboundPost.district}).`);
-      return;
-    }
-    if (returnPickupMode === 'transfer' && !returnTransferPickup.trim()) {
-      setSubmitError(`Vui lòng nhập địa chỉ đón trung chuyển cho chuyến về (${returnLocations.pickup}).`);
-      return;
-    }
-    if (returnDropoffMode === 'transfer' && !returnTransferDropoff.trim()) {
-      setSubmitError(`Vui lòng nhập địa chỉ trả trung chuyển cho chuyến về (${returnLocations.dropoff}).`);
       return;
     }
 
@@ -1227,20 +1035,12 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
           phone: customerPhone.trim(),
           ...(customerEmail.trim() ? { email: customerEmail.trim() } : {}),
         },
-        pickupPoint: effectiveOutboundPickup || outboundPost.province,
-        dropoffPoint: effectiveOutboundDropoff || outboundPost.district,
+        pickupPoint: selectedOutboundPickupStop?.name || outboundPickupOverride || outboundPost.province,
+        dropoffPoint: selectedOutboundDropoffStop?.name || outboundDropoffOverride || outboundPost.district,
+        diemDonChuyenXeId: selectedOutboundPickupPointId ?? undefined,
+        diemTraChuyenXeId: selectedOutboundDropoffPointId ?? undefined,
         holdToken: outboundHoldToken,
         cargoItems: outboundCargo,
-        ...(activePromotionCode && promotionQuote && promotionTargetLeg === 'outbound'
-          ? {
-              promotionCode: activePromotionCode,
-              expectedPromotionQuote: {
-                originalTotal: String(promotionQuote.originalTotal),
-                discountAmount: String(promotionQuote.discountAmount),
-                finalTotal: String(promotionQuote.finalTotal),
-              },
-            }
-          : {}),
         ...(outboundCargo && outSenderPointId && outReceiverPointId
           ? { senderPointId: outSenderPointId, receiverPointId: outReceiverPointId }
           : {}),
@@ -1268,20 +1068,12 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
           phone: customerPhone.trim(),
           ...(customerEmail.trim() ? { email: customerEmail.trim() } : {}),
         },
-        pickupPoint: effectiveReturnPickup || returnLocations.pickup,
-        dropoffPoint: effectiveReturnDropoff || returnLocations.dropoff,
+        pickupPoint: selectedReturnPickupStop?.name || returnPickupOverride || returnLocations.pickup,
+        dropoffPoint: selectedReturnDropoffStop?.name || returnDropoffOverride || returnLocations.dropoff,
+        diemDonChuyenXeId: selectedReturnPickupPointId ?? undefined,
+        diemTraChuyenXeId: selectedReturnDropoffPointId ?? undefined,
         holdToken: returnHoldToken,
         cargoItems: returnCargo,
-        ...(activePromotionCode && promotionQuote && promotionTargetLeg === 'return'
-          ? {
-              promotionCode: activePromotionCode,
-              expectedPromotionQuote: {
-                originalTotal: String(promotionQuote.originalTotal),
-                discountAmount: String(promotionQuote.discountAmount),
-                finalTotal: String(promotionQuote.finalTotal),
-              },
-            }
-          : {}),
         ...(returnCargo && retSenderPointId && retReceiverPointId
           ? { senderPointId: retSenderPointId, receiverPointId: retReceiverPointId }
           : {}),
@@ -1321,8 +1113,8 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
             route: outboundRoute,
             departureTime: outboundDepartureTimeText,
             seats: outboundSeats,
-            pickup: effectiveOutboundPickup || outboundPost.province,
-            dropoff: effectiveOutboundDropoff || outboundPost.district,
+            pickup: outboundPost.province,
+            dropoff: outboundPost.district,
             unitFare: outboundUnitFare,
             subtotal: Number(b1.totalAmount),
             busCompanyName: outboundPost.authorName || 'VexGo Transport',
@@ -1338,8 +1130,8 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
             route: returnRoute,
             departureTime: returnDepartureTimeText,
             seats: returnSeats,
-            pickup: effectiveReturnPickup || returnLocations.pickup,
-            dropoff: effectiveReturnDropoff || returnLocations.dropoff,
+            pickup: returnLocations.pickup,
+            dropoff: returnLocations.dropoff,
             unitFare: returnUnitFare,
             subtotal: Number(b2.totalAmount),
             busCompanyName: returnPost.authorName || 'VexGo Transport',
@@ -1371,7 +1163,6 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
         orderId: b1.orderId,
         orderCode: b1.orderCode,
         status: b1.status,
-        paymentExpiresAt: b1.paymentExpiresAt,
       });
 
       if (totalOrderAmount === 0 && b1.status === 'DA_THANH_TOAN' && b2.status === 'DA_THANH_TOAN') {
@@ -1383,22 +1174,6 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
       if (mountedRef.current) {
         submissionLockRef.current = false;
         setIsSubmitting(false);
-        if (
-          activePromotionCode &&
-          error instanceof ApiError &&
-          error.code?.startsWith('PROMOTION_')
-        ) {
-          setPromotionQuoteState({
-            requestKey: promotionRequestKey,
-            status: 'invalid',
-            message: `${error.message} Hãy áp dụng lại mã hoặc bỏ mã để tiếp tục.`,
-          });
-          setSubmitError(
-            `${error.message} Hãy áp dụng lại mã hoặc bỏ mã để tiếp tục.`,
-          );
-          promotionInputRef.current?.focus();
-          return;
-        }
         if (error instanceof ApiError && error.status === 409) {
           setSubmitError(
             error.message || 'Ghế vừa được người khác giữ. Sơ đồ ghế đang được cập nhật.',
@@ -1413,6 +1188,17 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
     }
   };
 
+  const outboundUnitFare = (outboundPost.minPriceNum ?? 0) + outboundTotalSurcharge;
+  const returnUnitFare = (returnPost.minPriceNum ?? 0) + returnTotalSurcharge;
+  const outboundFare = outboundUnitFare * outboundSeats.length;
+  const returnFare = returnUnitFare * returnSeats.length;
+  const totalFare =
+    calculateRoundTripFare({
+      outboundUnitFare,
+      outboundSeatCount: outboundSeats.length,
+      returnUnitFare,
+      returnSeatCount: returnSeats.length,
+    }) + luggageFee;
   const departureDateLabel = departureDate
     ? departureDate.split('-').reverse().join('/')
     : outboundPost.createdAt;
@@ -1430,26 +1216,16 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
   return (
     <div className="min-h-screen bg-[#F8FAF9] font-sans pb-12">
       <div className="bg-white border-b border-slate-200">
-        <div className="max-w-[1360px] mx-auto px-4 sm:px-6 lg:px-8 py-3 flex flex-wrap items-center justify-between gap-3">
-          <button
-            type="button"
-            onClick={() => router.back()}
-            className="flex items-center gap-1 text-[15px] font-medium text-slate-700 hover:text-[#F05929] transition-colors"
-          >
-            <ChevronLeft className="w-5 h-5" />
-            Quay lại
-          </button>
-          <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-500">
-            <Link href="/" className="hover:text-brand">
-              Trang chủ
-            </Link>
-            <ChevronRight className="w-3.5 h-3.5 text-slate-300" />
-            <Link href="/trips" className="hover:text-brand">
-              Chuyến xe
-            </Link>
-            <ChevronRight className="w-3.5 h-3.5 text-slate-300" />
-            <span className="text-slate-900 font-bold">Đặt vé 2 chiều</span>
-          </div>
+        <div className="max-w-[1360px] mx-auto px-4 sm:px-6 lg:px-8 py-3 flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-500">
+          <Link href="/" className="hover:text-brand">
+            Trang chủ
+          </Link>
+          <ChevronRight className="w-3.5 h-3.5 text-slate-300" />
+          <Link href="/posts" className="hover:text-brand">
+            Khứ hồi
+          </Link>
+          <ChevronRight className="w-3.5 h-3.5 text-slate-300" />
+          <span className="text-slate-900 font-bold">Đặt vé 2 chiều</span>
         </div>
       </div>
 
@@ -1604,524 +1380,263 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
               </div>
             </div>
 
-            {/* Mã khuyến mãi */}
-            <section
-              className="p-4 md:p-5 border-b border-slate-200"
-              aria-labelledby="booking-promotion-heading"
-            >
-              <h2
-                id="booking-promotion-heading"
-                className="text-base font-black text-slate-950 mb-3 flex items-center gap-2"
-              >
-                <Tag className="w-4 h-4 text-accent" />
-                Mã khuyến mãi
-              </h2>
-              <div className="max-w-2xl">
-                <label
-                  htmlFor="booking-promotion-code"
-                  className="block text-xs font-bold text-slate-700 mb-1.5"
-                >
-                  Nhập một mã cho chuyến đi hoặc chuyến về
-                </label>
-                <div className="flex flex-col sm:flex-row gap-2">
-                  <input
-                    ref={promotionInputRef}
-                    id="booking-promotion-code"
-                    type="text"
-                    autoComplete="off"
-                    value={promotionInput}
-                    onChange={(event) => {
-                      const value = event.target.value.toUpperCase();
-                      setPromotionInput(value);
-                      if (activePromotionCode && value.trim() !== activePromotionCode) {
-                        setActivePromotionCode(null);
-                      }
-                    }}
-                    aria-invalid={promotionStatus === 'invalid'}
-                    aria-describedby="booking-promotion-feedback"
-                    className={`h-11 min-w-0 flex-1 rounded-lg border px-3 text-sm font-bold uppercase tracking-wide outline-none focus:ring-2 focus:ring-accent/20 ${
-                      promotionStatus === 'invalid'
-                        ? 'border-red-500 focus:border-red-500'
-                        : promotionStatus === 'valid'
-                          ? 'border-emerald-500 focus:border-emerald-500'
-                          : 'border-slate-300 focus:border-accent'
-                    }`}
-                    placeholder="Ví dụ: VEXGO50"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleApplyPromotion}
-                    disabled={!promotionInput.trim() || promotionStatus === 'loading'}
-                    className="min-h-11 rounded-lg bg-accent px-5 text-sm font-black text-white transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {promotionStatus === 'loading'
-                      ? 'Đang kiểm tra…'
-                      : activePromotionCode
-                        ? 'Kiểm tra lại'
-                        : 'Áp dụng'}
-                  </button>
-                  {(promotionInput || activePromotionCode) && (
-                    <button
-                      type="button"
-                      onClick={handleRemovePromotion}
-                      className="min-h-11 rounded-lg border border-slate-300 px-4 text-sm font-bold text-slate-700 hover:bg-slate-50"
-                    >
-                      Bỏ mã
-                    </button>
-                  )}
-                </div>
-                {promotionMessage && (
-                  <p
-                    id="booking-promotion-feedback"
-                    role={promotionStatus === 'invalid' ? 'alert' : 'status'}
-                    aria-live="polite"
-                    className={`mt-2 text-sm font-semibold flex items-center gap-1.5 ${
-                      promotionStatus === 'invalid'
-                        ? 'text-red-700'
-                        : promotionStatus === 'valid'
-                          ? 'text-emerald-700'
-                          : 'text-slate-600'
-                    }`}
-                  >
-                    {promotionStatus === 'valid' && (
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                    )}
-                    {promotionMessage}
-                  </p>
-                )}
-
-                {availablePromotions.length > 0 && (
-                  <div className="mt-4 pt-4 border-t border-dashed border-slate-200">
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                        <Ticket className="w-3.5 h-3.5 text-accent" />
-                        Mã ưu đãi có sẵn ({availablePromotions.length}):
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {availablePromotions.map((promo) => {
-                        const isCurrentActive = activePromotionCode === promo.code;
-                        const discountText =
-                          promo.discountType === 'PHAN_TRAM'
-                            ? `Giảm ${Number(promo.discountValue)}%${
-                                promo.maxDiscount
-                                  ? ` (tối đa ${Number(promo.maxDiscount).toLocaleString('vi-VN')}đ)`
-                                  : ''
-                              }`
-                            : `Giảm ${Number(promo.discountValue).toLocaleString('vi-VN')}đ`;
-
-                        return (
-                          <div
-                            key={promo.id}
-                            className={`relative flex flex-col justify-between p-3.5 rounded-lg border transition-all ${
-                              isCurrentActive
-                                ? 'border-accent bg-orange-50/60 shadow-sm ring-1 ring-accent/30'
-                                : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm'
-                            }`}
-                          >
-                            <div>
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="font-mono font-black text-xs text-accent bg-orange-100/80 px-2 py-0.5 rounded tracking-wider border border-orange-200">
-                                  {promo.code}
-                                </span>
-                                <span className="text-[11px] font-semibold text-slate-400">
-                                  HSD: {promo.endsOn}
-                                </span>
-                              </div>
-                              <h4 className="mt-2 text-xs font-bold text-slate-900 line-clamp-1">
-                                {promo.name}
-                              </h4>
-                              <p className="text-xs font-semibold text-accent mt-0.5">
-                                {discountText}
-                              </p>
-                              {promo.minimumTicketAmount &&
-                                Number(promo.minimumTicketAmount) > 0 && (
-                                  <p className="text-[11px] text-slate-500 mt-0.5">
-                                    Đơn tối thiểu:{' '}
-                                    {Number(
-                                      promo.minimumTicketAmount,
-                                    ).toLocaleString('vi-VN')}
-                                    đ
-                                  </p>
-                                )}
-                            </div>
-                            <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between">
-                              <span className="text-[11px] text-slate-500">
-                                Còn {promo.remainingUses} lượt
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  if (isCurrentActive) {
-                                    handleRemovePromotion();
-                                  } else {
-                                    handleApplyPromotion(promo.code);
-                                  }
-                                }}
-                                disabled={promotionStatus === 'loading'}
-                                className={`px-3 py-1 text-xs font-black rounded transition-colors ${
-                                  isCurrentActive
-                                    ? 'bg-slate-200 text-slate-700 hover:bg-slate-300'
-                                    : 'bg-accent text-white hover:bg-accent-hover'
-                                }`}
-                              >
-                                {isCurrentActive ? 'Bỏ chọn' : 'Áp dụng'}
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </section>
-
             {/* Thông tin đón trả 2 chiều */}
-            <div className="flex flex-col md:flex-row divide-y md:divide-y-0 md:divide-x divide-slate-200 border-b border-slate-200">
+            <div className="flex flex-col md:flex-row divide-y md:divide-y-0 md:divide-x divide-slate-200">
               <div className="flex-1 p-4 md:p-5">
-                <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-                  <h2 className="text-base font-black text-slate-950 flex items-center gap-2">
-                    Thông tin đón trả <Info className="w-4 h-4 text-accent" />
-                  </h2>
-                  {outboundPost.authorName && (
-                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
-                      <Bus className="w-3 h-3 text-accent" />
-                      {outboundPost.authorName}
-                    </span>
-                  )}
-                </div>
+                <h2 className="text-base font-black text-slate-950 mb-4 flex items-center gap-2">
+                  Thông tin đón trả <Info className="w-4 h-4 text-accent" />
+                </h2>
                 <p className="text-xs font-bold text-slate-500 mb-4 capitalize">
                   Chuyến đi - {departureLabel}
                 </p>
 
                 <div className="space-y-4">
-                  <div className="space-y-2.5">
-                    <h3 className="text-xs font-black text-slate-700 uppercase">
-                      Điểm đón ({outboundPost.province})
-                    </h3>
-                    <div className="flex items-center gap-4 text-xs font-bold text-slate-600">
-                      <label
-                        className={`inline-flex items-center gap-1.5 cursor-pointer ${
-                          outboundPickupMode === 'station' ? 'text-accent' : 'text-slate-600'
-                        }`}
-                      >
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-xs font-black text-slate-700 uppercase">
+                        Điểm đón
+                      </h3>
+                      {outboundPickupSurcharge > 0 && (
+                        <span className="text-xs font-bold text-accent">
+                          +{outboundPickupSurcharge.toLocaleString('vi-VN')}đ / vé
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-4 text-xs font-bold text-slate-600 mb-2">
+                      <label className={`inline-flex items-center gap-1.5 cursor-pointer ${outboundPickupMode === 'station' ? 'text-accent' : ''}`}>
                         <input
                           type="radio"
                           name="pickupOut"
                           checked={outboundPickupMode === 'station'}
-                          onChange={() => setOutboundPickupMode('station')}
+                          onChange={() => handleOutboundPickupModeChange('station')}
                           className="accent-accent"
                         />{' '}
-                        Bến xe/VP
+                        Bến xe/VP {outboundPickupStations.length > 0 ? `(${outboundPickupStations.length})` : ''}
                       </label>
-                      <label
-                        className={`inline-flex items-center gap-1.5 cursor-pointer ${
-                          outboundPickupMode === 'transfer' ? 'text-accent' : 'text-slate-600'
-                        }`}
-                      >
+                      <label className={`inline-flex items-center gap-1.5 cursor-pointer ${outboundPickupMode === 'transfer' ? 'text-accent' : ''} ${outboundPickupTransfers.length === 0 ? 'opacity-40 cursor-not-allowed' : ''}`}>
                         <input
                           type="radio"
                           name="pickupOut"
                           checked={outboundPickupMode === 'transfer'}
-                          onChange={() => setOutboundPickupMode('transfer')}
+                          disabled={outboundPickupTransfers.length === 0}
+                          onChange={() => handleOutboundPickupModeChange('transfer')}
                           className="accent-accent"
                         />{' '}
-                        Trung chuyển
+                        Trung chuyển {outboundPickupTransfers.length > 0 ? `(${outboundPickupTransfers.length})` : ''}
                       </label>
                     </div>
-                    {outboundPickupMode === 'station' ? (
-                      <>
-                        <div className="relative">
-                          <select
-                            value={selectedOutboundStationPickup}
-                            onChange={(e) => setOutboundPickupOverride(e.target.value)}
-                            className="w-full h-10 appearance-none px-3 pr-9 rounded-lg border border-slate-300 bg-white text-sm font-semibold outline-none focus:border-brand"
-                          >
-                            {outboundPickupOptions.map((opt) => (
-                              <option key={opt.value} value={opt.value}>
-                                {opt.label}
-                              </option>
-                            ))}
-                          </select>
-                          <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                        </div>
-                        {selectedOutboundPickupOption?.address && (
-                          <p className="text-[11px] font-medium text-slate-600 bg-slate-50 border border-slate-200/80 rounded-lg px-2.5 py-1.5 flex items-start gap-1.5">
-                            <MapPin className="w-3.5 h-3.5 text-accent shrink-0 mt-0.5" />
-                            <span>
-                              <strong className="text-slate-800">Địa chỉ:</strong>{' '}
-                              {selectedOutboundPickupOption.address}
-                            </span>
-                          </p>
-                        )}
-                      </>
-                    ) : (
-                      <div className="relative">
-                        <MapPin className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                        <input
-                          type="text"
-                          value={outboundTransferPickup}
-                          onChange={(e) => setOutboundTransferPickup(e.target.value)}
-                          placeholder={`Nhập địa chỉ đón trung chuyển tại ${outboundPost.province}...`}
-                          className="w-full h-10 rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-sm font-semibold outline-none focus:border-brand"
-                        />
-                      </div>
+                    <select
+                      value={selectedOutboundPickupPointId ?? (outboundPickupOverride || outboundPost.province)}
+                      onChange={handleOutboundPickupSelect}
+                      className="w-full h-10 px-3 rounded-lg border border-slate-300 text-sm font-semibold outline-none focus:border-brand bg-white"
+                    >
+                      {(outboundPickupMode === 'transfer' ? outboundPickupTransfers : outboundPickupStations).length > 0 ? (
+                        (outboundPickupMode === 'transfer' ? outboundPickupTransfers : outboundPickupStations).map((p) => (
+                          <option key={p.diemDonTraChuyenXeId ?? p.id} value={p.diemDonTraChuyenXeId ?? p.name}>
+                            {p.time ? `${p.time} - ` : ''}{p.name}{p.phuPhi && p.phuPhi > 0 ? ` (+${p.phuPhi.toLocaleString('vi-VN')}đ)` : ''}
+                          </option>
+                        ))
+                      ) : (
+                        <option value={outboundPost.province}>{outboundPost.province}</option>
+                      )}
+                    </select>
+                    {selectedOutboundPickupStop?.address && (
+                      <p className="text-[11px] text-slate-500 mt-1.5">
+                        {selectedOutboundPickupStop.address}
+                      </p>
                     )}
-                    <p className="text-[11px] font-semibold text-slate-600">
+                    <p className="text-[11px] font-semibold text-slate-600 mt-2">
                       Quý khách vui lòng có mặt tại điểm đón{' '}
                       <strong className="text-accent">
-                        trước giờ khởi hành ({outboundDepartureTimeText})
+                        trước {selectedOutboundPickupStop?.phutCoMatTruoc ?? 20} phút ({outboundDepartureTimeText})
                       </strong>{' '}
                       để kiểm tra thông tin trước khi lên xe.
                     </p>
                   </div>
 
-                  <div className="space-y-2.5">
-                    <h3 className="text-xs font-black text-slate-700 uppercase">
-                      Điểm trả ({outboundPost.district})
-                    </h3>
-                    <div className="flex items-center gap-4 text-xs font-bold text-slate-600">
-                      <label
-                        className={`inline-flex items-center gap-1.5 cursor-pointer ${
-                          outboundDropoffMode === 'station' ? 'text-accent' : 'text-slate-600'
-                        }`}
-                      >
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-xs font-black text-slate-700 uppercase">
+                        Điểm trả
+                      </h3>
+                      {outboundDropoffSurcharge > 0 && (
+                        <span className="text-xs font-bold text-accent">
+                          +{outboundDropoffSurcharge.toLocaleString('vi-VN')}đ / vé
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-4 text-xs font-bold text-slate-600 mb-2">
+                      <label className={`inline-flex items-center gap-1.5 cursor-pointer ${outboundDropoffMode === 'station' ? 'text-accent' : ''}`}>
                         <input
                           type="radio"
                           name="dropoffOut"
                           checked={outboundDropoffMode === 'station'}
-                          onChange={() => setOutboundDropoffMode('station')}
+                          onChange={() => handleOutboundDropoffModeChange('station')}
                           className="accent-accent"
                         />{' '}
-                        Bến xe/VP
+                        Bến xe/VP {outboundDropoffStations.length > 0 ? `(${outboundDropoffStations.length})` : ''}
                       </label>
-                      <label
-                        className={`inline-flex items-center gap-1.5 cursor-pointer ${
-                          outboundDropoffMode === 'transfer' ? 'text-accent' : 'text-slate-600'
-                        }`}
-                      >
+                      <label className={`inline-flex items-center gap-1.5 cursor-pointer ${outboundDropoffMode === 'transfer' ? 'text-accent' : ''} ${outboundDropoffTransfers.length === 0 ? 'opacity-40 cursor-not-allowed' : ''}`}>
                         <input
                           type="radio"
                           name="dropoffOut"
                           checked={outboundDropoffMode === 'transfer'}
-                          onChange={() => setOutboundDropoffMode('transfer')}
+                          disabled={outboundDropoffTransfers.length === 0}
+                          onChange={() => handleOutboundDropoffModeChange('transfer')}
                           className="accent-accent"
                         />{' '}
-                        Trung chuyển
+                        Trung chuyển {outboundDropoffTransfers.length > 0 ? `(${outboundDropoffTransfers.length})` : ''}
                       </label>
                     </div>
-                    {outboundDropoffMode === 'station' ? (
-                      <>
-                        <div className="relative">
-                          <select
-                            value={selectedOutboundStationDropoff}
-                            onChange={(e) => setOutboundDropoffOverride(e.target.value)}
-                            className="w-full h-10 appearance-none px-3 pr-9 rounded-lg border border-slate-300 bg-white text-sm font-semibold outline-none focus:border-brand"
-                          >
-                            {outboundDropoffOptions.map((opt) => (
-                              <option key={opt.value} value={opt.value}>
-                                {opt.label}
-                              </option>
-                            ))}
-                          </select>
-                          <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                        </div>
-                        {selectedOutboundDropoffOption?.address && (
-                          <p className="text-[11px] font-medium text-slate-600 bg-slate-50 border border-slate-200/80 rounded-lg px-2.5 py-1.5 flex items-start gap-1.5">
-                            <MapPin className="w-3.5 h-3.5 text-accent shrink-0 mt-0.5" />
-                            <span>
-                              <strong className="text-slate-800">Địa chỉ:</strong>{' '}
-                              {selectedOutboundDropoffOption.address}
-                            </span>
-                          </p>
-                        )}
-                      </>
-                    ) : (
-                      <div className="relative">
-                        <MapPin className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                        <input
-                          type="text"
-                          value={outboundTransferDropoff}
-                          onChange={(e) => setOutboundTransferDropoff(e.target.value)}
-                          placeholder={`Nhập địa chỉ trả trung chuyển tại ${outboundPost.district}...`}
-                          className="w-full h-10 rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-sm font-semibold outline-none focus:border-brand"
-                        />
-                      </div>
+                    <select
+                      value={selectedOutboundDropoffPointId ?? (outboundDropoffOverride || outboundPost.district)}
+                      onChange={handleOutboundDropoffSelect}
+                      className="w-full h-10 px-3 rounded-lg border border-slate-300 text-sm font-semibold outline-none focus:border-brand bg-white"
+                    >
+                      {(outboundDropoffMode === 'transfer' ? outboundDropoffTransfers : outboundDropoffStations).length > 0 ? (
+                        (outboundDropoffMode === 'transfer' ? outboundDropoffTransfers : outboundDropoffStations).map((p) => (
+                          <option key={p.diemDonTraChuyenXeId ?? p.id} value={p.diemDonTraChuyenXeId ?? p.name}>
+                            {p.time ? `${p.time} - ` : ''}{p.name}{p.phuPhi && p.phuPhi > 0 ? ` (+${p.phuPhi.toLocaleString('vi-VN')}đ)` : ''}
+                          </option>
+                        ))
+                      ) : (
+                        <option value={outboundPost.district}>{outboundPost.district}</option>
+                      )}
+                    </select>
+                    {selectedOutboundDropoffStop?.address && (
+                      <p className="text-[11px] text-slate-500 mt-1.5">
+                        {selectedOutboundDropoffStop.address}
+                      </p>
                     )}
                   </div>
                 </div>
               </div>
 
               <div className="flex-1 p-4 md:p-5">
-                <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-                  <h2 className="text-base font-black text-slate-950 flex items-center gap-2">
-                    Thông tin đón trả <Info className="w-4 h-4 text-accent" />
-                  </h2>
-                  {returnPost.authorName && (
-                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
-                      <Bus className="w-3 h-3 text-accent" />
-                      {returnPost.authorName}
-                    </span>
-                  )}
-                </div>
+                <h2 className="text-base font-black text-slate-950 mb-4 flex items-center gap-2">
+                  Thông tin đón trả <Info className="w-4 h-4 text-accent" />
+                </h2>
                 <p className="text-xs font-bold text-slate-500 mb-4 capitalize">
                   Chuyến về - {returnLabel}
                 </p>
 
                 <div className="space-y-4">
-                  <div className="space-y-2.5">
-                    <h3 className="text-xs font-black text-slate-700 uppercase">
-                      Điểm đón ({returnLocations.pickup})
-                    </h3>
-                    <div className="flex items-center gap-4 text-xs font-bold text-slate-600">
-                      <label
-                        className={`inline-flex items-center gap-1.5 cursor-pointer ${
-                          returnPickupMode === 'station' ? 'text-accent' : 'text-slate-600'
-                        }`}
-                      >
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-xs font-black text-slate-700 uppercase">
+                        Điểm đón
+                      </h3>
+                      {returnPickupSurcharge > 0 && (
+                        <span className="text-xs font-bold text-accent">
+                          +{returnPickupSurcharge.toLocaleString('vi-VN')}đ / vé
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-4 text-xs font-bold text-slate-600 mb-2">
+                      <label className={`inline-flex items-center gap-1.5 cursor-pointer ${returnPickupMode === 'station' ? 'text-accent' : ''}`}>
                         <input
                           type="radio"
                           name="pickupIn"
                           checked={returnPickupMode === 'station'}
-                          onChange={() => setReturnPickupMode('station')}
+                          onChange={() => handleReturnPickupModeChange('station')}
                           className="accent-accent"
                         />{' '}
-                        Bến xe/VP
+                        Bến xe/VP {returnPickupStations.length > 0 ? `(${returnPickupStations.length})` : ''}
                       </label>
-                      <label
-                        className={`inline-flex items-center gap-1.5 cursor-pointer ${
-                          returnPickupMode === 'transfer' ? 'text-accent' : 'text-slate-600'
-                        }`}
-                      >
+                      <label className={`inline-flex items-center gap-1.5 cursor-pointer ${returnPickupMode === 'transfer' ? 'text-accent' : ''} ${returnPickupTransfers.length === 0 ? 'opacity-40 cursor-not-allowed' : ''}`}>
                         <input
                           type="radio"
                           name="pickupIn"
                           checked={returnPickupMode === 'transfer'}
-                          onChange={() => setReturnPickupMode('transfer')}
+                          disabled={returnPickupTransfers.length === 0}
+                          onChange={() => handleReturnPickupModeChange('transfer')}
                           className="accent-accent"
                         />{' '}
-                        Trung chuyển
+                        Trung chuyển {returnPickupTransfers.length > 0 ? `(${returnPickupTransfers.length})` : ''}
                       </label>
                     </div>
-                    {returnPickupMode === 'station' ? (
-                      <>
-                        <div className="relative">
-                          <select
-                            value={selectedReturnStationPickup}
-                            onChange={(e) => setReturnPickupOverride(e.target.value)}
-                            className="w-full h-10 appearance-none px-3 pr-9 rounded-lg border border-slate-300 bg-white text-sm font-semibold outline-none focus:border-brand"
-                          >
-                            {returnPickupOptions.map((opt) => (
-                              <option key={opt.value} value={opt.value}>
-                                {opt.label}
-                              </option>
-                            ))}
-                          </select>
-                          <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                        </div>
-                        {selectedReturnPickupOption?.address && (
-                          <p className="text-[11px] font-medium text-slate-600 bg-slate-50 border border-slate-200/80 rounded-lg px-2.5 py-1.5 flex items-start gap-1.5">
-                            <MapPin className="w-3.5 h-3.5 text-accent shrink-0 mt-0.5" />
-                            <span>
-                              <strong className="text-slate-800">Địa chỉ:</strong>{' '}
-                              {selectedReturnPickupOption.address}
-                            </span>
-                          </p>
-                        )}
-                      </>
-                    ) : (
-                      <div className="relative">
-                        <MapPin className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                        <input
-                          type="text"
-                          value={returnTransferPickup}
-                          onChange={(e) => setReturnTransferPickup(e.target.value)}
-                          placeholder={`Nhập địa chỉ đón trung chuyển tại ${returnLocations.pickup}...`}
-                          className="w-full h-10 rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-sm font-semibold outline-none focus:border-brand"
-                        />
-                      </div>
+                    <select
+                      value={selectedReturnPickupPointId ?? (returnPickupOverride || returnLocations.pickup)}
+                      onChange={handleReturnPickupSelect}
+                      className="w-full h-10 px-3 rounded-lg border border-slate-300 text-sm font-semibold outline-none focus:border-brand bg-white"
+                    >
+                      {(returnPickupMode === 'transfer' ? returnPickupTransfers : returnPickupStations).length > 0 ? (
+                        (returnPickupMode === 'transfer' ? returnPickupTransfers : returnPickupStations).map((p) => (
+                          <option key={p.diemDonTraChuyenXeId ?? p.id} value={p.diemDonTraChuyenXeId ?? p.name}>
+                            {p.time ? `${p.time} - ` : ''}{p.name}{p.phuPhi && p.phuPhi > 0 ? ` (+${p.phuPhi.toLocaleString('vi-VN')}đ)` : ''}
+                          </option>
+                        ))
+                      ) : (
+                        <option value={returnLocations.pickup}>{returnLocations.pickup}</option>
+                      )}
+                    </select>
+                    {selectedReturnPickupStop?.address && (
+                      <p className="text-[11px] text-slate-500 mt-1.5">
+                        {selectedReturnPickupStop.address}
+                      </p>
                     )}
-                    <p className="text-[11px] font-semibold text-slate-600">
+                    <p className="text-[11px] font-semibold text-slate-600 mt-2">
                       Quý khách vui lòng có mặt tại điểm đón{' '}
                       <strong className="text-accent">
-                        trước giờ khởi hành ({returnDepartureTimeText})
+                        trước {selectedReturnPickupStop?.phutCoMatTruoc ?? 20} phút ({returnDepartureTimeText})
                       </strong>{' '}
                       để kiểm tra thông tin trước khi lên xe.
                     </p>
                   </div>
 
-                  <div className="space-y-2.5">
-                    <h3 className="text-xs font-black text-slate-700 uppercase">
-                      Điểm trả ({returnLocations.dropoff})
-                    </h3>
-                    <div className="flex items-center gap-4 text-xs font-bold text-slate-600">
-                      <label
-                        className={`inline-flex items-center gap-1.5 cursor-pointer ${
-                          returnDropoffMode === 'station' ? 'text-accent' : 'text-slate-600'
-                        }`}
-                      >
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-xs font-black text-slate-700 uppercase">
+                        Điểm trả
+                      </h3>
+                      {returnDropoffSurcharge > 0 && (
+                        <span className="text-xs font-bold text-accent">
+                          +{returnDropoffSurcharge.toLocaleString('vi-VN')}đ / vé
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-4 text-xs font-bold text-slate-600 mb-2">
+                      <label className={`inline-flex items-center gap-1.5 cursor-pointer ${returnDropoffMode === 'station' ? 'text-accent' : ''}`}>
                         <input
                           type="radio"
                           name="dropoffIn"
                           checked={returnDropoffMode === 'station'}
-                          onChange={() => setReturnDropoffMode('station')}
+                          onChange={() => handleReturnDropoffModeChange('station')}
                           className="accent-accent"
                         />{' '}
-                        Bến xe/VP
+                        Bến xe/VP {returnDropoffStations.length > 0 ? `(${returnDropoffStations.length})` : ''}
                       </label>
-                      <label
-                        className={`inline-flex items-center gap-1.5 cursor-pointer ${
-                          returnDropoffMode === 'transfer' ? 'text-accent' : 'text-slate-600'
-                        }`}
-                      >
+                      <label className={`inline-flex items-center gap-1.5 cursor-pointer ${returnDropoffMode === 'transfer' ? 'text-accent' : ''} ${returnDropoffTransfers.length === 0 ? 'opacity-40 cursor-not-allowed' : ''}`}>
                         <input
                           type="radio"
                           name="dropoffIn"
                           checked={returnDropoffMode === 'transfer'}
-                          onChange={() => setReturnDropoffMode('transfer')}
+                          disabled={returnDropoffTransfers.length === 0}
+                          onChange={() => handleReturnDropoffModeChange('transfer')}
                           className="accent-accent"
                         />{' '}
-                        Trung chuyển
+                        Trung chuyển {returnDropoffTransfers.length > 0 ? `(${returnDropoffTransfers.length})` : ''}
                       </label>
                     </div>
-                    {returnDropoffMode === 'station' ? (
-                      <>
-                        <div className="relative">
-                          <select
-                            value={selectedReturnStationDropoff}
-                            onChange={(e) => setReturnDropoffOverride(e.target.value)}
-                            className="w-full h-10 appearance-none px-3 pr-9 rounded-lg border border-slate-300 bg-white text-sm font-semibold outline-none focus:border-brand"
-                          >
-                            {returnDropoffOptions.map((opt) => (
-                              <option key={opt.value} value={opt.value}>
-                                {opt.label}
-                              </option>
-                            ))}
-                          </select>
-                          <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                        </div>
-                        {selectedReturnDropoffOption?.address && (
-                          <p className="text-[11px] font-medium text-slate-600 bg-slate-50 border border-slate-200/80 rounded-lg px-2.5 py-1.5 flex items-start gap-1.5">
-                            <MapPin className="w-3.5 h-3.5 text-accent shrink-0 mt-0.5" />
-                            <span>
-                              <strong className="text-slate-800">Địa chỉ:</strong>{' '}
-                              {selectedReturnDropoffOption.address}
-                            </span>
-                          </p>
-                        )}
-                      </>
-                    ) : (
-                      <div className="relative">
-                        <MapPin className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                        <input
-                          type="text"
-                          value={returnTransferDropoff}
-                          onChange={(e) => setReturnTransferDropoff(e.target.value)}
-                          placeholder={`Nhập địa chỉ trả trung chuyển tại ${returnLocations.dropoff}...`}
-                          className="w-full h-10 rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-sm font-semibold outline-none focus:border-brand"
-                        />
-                      </div>
+                    <select
+                      value={selectedReturnDropoffPointId ?? (returnDropoffOverride || returnLocations.dropoff)}
+                      onChange={handleReturnDropoffSelect}
+                      className="w-full h-10 px-3 rounded-lg border border-slate-300 text-sm font-semibold outline-none focus:border-brand bg-white"
+                    >
+                      {(returnDropoffMode === 'transfer' ? returnDropoffTransfers : returnDropoffStations).length > 0 ? (
+                        (returnDropoffMode === 'transfer' ? returnDropoffTransfers : returnDropoffStations).map((p) => (
+                          <option key={p.diemDonTraChuyenXeId ?? p.id} value={p.diemDonTraChuyenXeId ?? p.name}>
+                            {p.time ? `${p.time} - ` : ''}{p.name}{p.phuPhi && p.phuPhi > 0 ? ` (+${p.phuPhi.toLocaleString('vi-VN')}đ)` : ''}
+                          </option>
+                        ))
+                      ) : (
+                        <option value={returnLocations.dropoff}>{returnLocations.dropoff}</option>
+                      )}
+                    </select>
+                    {selectedReturnDropoffStop?.address && (
+                      <p className="text-[11px] text-slate-500 mt-1.5">
+                        {selectedReturnDropoffStop.address}
+                      </p>
                     )}
                   </div>
                 </div>
@@ -2256,7 +1771,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                   </span>
                 </div>
                 <span className="text-2xl font-black text-red-600">
-                  {totalFareText}
+                  {totalFare.toLocaleString('vi-VN')}đ
                 </span>
               </div>
               <div className="flex flex-col gap-3 sm:items-end">
@@ -2277,7 +1792,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                   <button
                     type="button"
                     onClick={handleSubmit}
-                    disabled={isSubmitting || !canPayWithPromotion || isPromotionQuotePending}
+                    disabled={isSubmitting}
                     className="min-h-11 px-6 rounded-lg bg-accent text-white font-bold text-sm hover:bg-accent-hover shadow-sm disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand transition-colors"
                   >
                     {isSubmitting ? 'Đang xử lý…' : 'Thanh toán'}
@@ -2536,22 +2051,6 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                   <span>Giá vé lượt về</span>
                   <span>{returnFare.toLocaleString('vi-VN')}đ</span>
                 </div>
-                {promotionQuote && Number(promotionQuote.discountAmount) > 0 && (
-                  <div className="flex justify-between text-emerald-700">
-                    <span className="font-semibold">
-                      Giảm giá ({promotionQuote.appliedPromotionCode}
-                      {promotionTargetLeg === 'outbound'
-                        ? ' - lượt đi'
-                        : promotionTargetLeg === 'return'
-                          ? ' - lượt về'
-                          : ''}
-                      )
-                    </span>
-                    <strong>
-                      −{Number(promotionQuote.discountAmount).toLocaleString('vi-VN')}đ
-                    </strong>
-                  </div>
-                )}
                 <LuggageSummary
                   fee={luggageFee}
                   totalWeight={luggageWeight}
@@ -2566,7 +2065,7 @@ export const RoundTripBooking: React.FC<RoundTripBookingProps> = ({
                     {totalFareLabel}
                   </span>
                   <span className="text-sm font-black text-accent">
-                    {totalFareText}
+                    {totalFare.toLocaleString('vi-VN')}đ
                   </span>
                 </div>
               </div>

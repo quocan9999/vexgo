@@ -215,14 +215,15 @@ featureDescribe(
           loaiXeId: vehicleType.loaiXeId,
           ghes: {
             create: Array.from({ length: 6 }, (_, index) => ({
-              soGhe: `${label}${String(index + 1).padStart(2, '0')}`,
+              maGhe: `seat-${label}-${index + 1}-${suffix}`.padEnd(32, '0').slice(0, 32),
+              tenGhe: `${label}${String(index + 1).padStart(2, '0')}`,
               viTri: 'Tầng 1',
             })),
           },
         },
         select: {
           xeId: true,
-          ghes: { select: { gheId: true, soGhe: true } },
+          ghes: { select: { gheId: true, tenGhe: true } },
         },
       });
       const fares = await prisma.bangGia.create({
@@ -237,7 +238,7 @@ featureDescribe(
         select: { bangGiaId: true },
       });
       const seatMap = new Map(
-        vehicle.ghes.map(({ gheId, soGhe }) => [soGhe, gheId]),
+        vehicle.ghes.map(({ gheId, tenGhe }) => [tenGhe, gheId]),
       );
       const trips = new Map<string, number>();
       const tripDates =
@@ -276,13 +277,13 @@ featureDescribe(
         where: { chuyenXeId: { in: [...trips.values()] } },
         select: {
           gheChuyenXeId: true,
-          ghe: { select: { soGhe: true } },
+          ghe: { select: { tenGhe: true } },
           chuyenXeId: true,
         },
       });
       const tripSeatMap = new Map(
         tripSeats.map(({ gheChuyenXeId, ghe, chuyenXeId }) => [
-          `${chuyenXeId}:${ghe.soGhe}`,
+          `${chuyenXeId}:${ghe.tenGhe}`,
           gheChuyenXeId,
         ]),
       );

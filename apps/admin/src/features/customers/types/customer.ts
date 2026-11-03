@@ -1,9 +1,11 @@
-export type CustomerAccountStatus = 'HOAT_DONG' | 'TAM_KHOA';
+export type CustomerAccountStatus = 'HOAT_DONG' | 'TAM_KHOA' | 'BI_KHOA';
 
 export interface CustomerAccount {
   accountId: number;
   status: CustomerAccountStatus;
   phoneVerified: boolean;
+  lockedUntil?: string | null;
+  lockReason?: string | null;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -21,9 +23,30 @@ export interface CustomerSummary {
 }
 
 export interface CustomerDetail extends CustomerSummary {
+  dateOfBirth?: string | null;
+  gender?: 'NAM' | 'NU' | 'KHAC' | string | null;
+  address?: string | null;
+  citizenId?: string | null;
   account: CustomerAccount & {
     createdAt: string;
     updatedAt: string;
+  };
+}
+
+export interface UpdateCustomerStatusInput {
+  status: CustomerAccountStatus;
+  reason?: string;
+  lockedUntil?: string;
+}
+
+export interface UpdateCustomerStatusResponse {
+  data: {
+    customerId: number;
+    accountStatus: CustomerAccountStatus;
+    lockedUntil?: string | null;
+    lockReason?: string | null;
+    updatedAt: string;
+    message: string;
   };
 }
 

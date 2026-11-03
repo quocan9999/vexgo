@@ -55,7 +55,7 @@ dialog:focus-visible {
 }
 
 .admin-page-content {
-  width: min(100%, 1510px);
+  width: min(100%, 1810px);
   margin: 0 auto;
   padding: var(--admin-space-page-block) var(--admin-space-page-inline);
 }

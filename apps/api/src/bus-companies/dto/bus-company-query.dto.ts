@@ -1,3 +1,4 @@
+import { ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsDateString,
   IsIn,
@@ -35,13 +36,28 @@ class CreatedDateRangeConstraint implements ValidatorConstraintInterface {
 }
 
 export class BusCompanyQueryDto extends PaginationQueryDto {
+  @ApiPropertyOptional({
+    description: 'Trường sắp xếp danh sách nhà xe',
+    enum: BUS_COMPANY_SORT_FIELDS,
+    default: 'name',
+    example: 'name',
+  })
   @IsIn(BUS_COMPANY_SORT_FIELDS)
   sortBy: BusCompanySortField = 'name';
 
+  @ApiPropertyOptional({
+    description: 'Lọc theo trạng thái nhà xe (HOAT_DONG hoặc TAM_NGUNG)',
+    enum: BUS_COMPANY_STATUSES,
+    example: 'HOAT_DONG',
+  })
   @IsOptional()
   @IsIn(BUS_COMPANY_STATUSES)
   status?: BusCompanyStatus;
 
+  @ApiPropertyOptional({
+    description: 'Lọc nhà xe tạo từ ngày (YYYY-MM-DD)',
+    example: '2026-01-01',
+  })
   @IsOptional()
   @IsDateString({ strict: true })
   @Matches(DATE_ONLY_PATTERN, {
@@ -49,6 +65,10 @@ export class BusCompanyQueryDto extends PaginationQueryDto {
   })
   createdFrom?: string;
 
+  @ApiPropertyOptional({
+    description: 'Lọc nhà xe tạo đến ngày (YYYY-MM-DD)',
+    example: '2026-12-31',
+  })
   @IsOptional()
   @IsDateString({ strict: true })
   @Matches(DATE_ONLY_PATTERN, {

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { LocationsService } from '../../../src/locations/locations.service.js';
+import type { PrismaService } from '../../../src/prisma/prisma.service.js';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -54,5 +55,93 @@ describe('LocationsService', () => {
     expect(first).toEqual(concurrent);
     expect(cached).toEqual(first);
     expect(first.meta.stale).toBe(false);
+  });
+
+  it('reads from DanhMucDiaDiem and DiemDonTra when Prisma is available', async () => {
+    const mockPrisma = {
+      danhMucDiaDiem: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            diaDiemId: 101,
+            code: 79,
+            tenDiaDiem: 'Thành phố Hồ Chí Minh',
+            tenKhongDau: 'thanh pho ho chi minh',
+            capDiaDiem: 'TINH_THANH',
+            laDiaDanhCu: false,
+            chuThichSapNhap: 'Sáp nhập từ Bà Rịa - Vũng Tàu, Bình Dương, TP. Hồ Chí Minh',
+            noiBat: true,
+            thuTuHienThi: 10,
+          },
+          {
+            diaDiemId: 102,
+            code: 77,
+            tenDiaDiem: 'Tỉnh Bà Rịa - Vũng Tàu',
+            tenKhongDau: 'tinh ba ria vung tau',
+            capDiaDiem: 'TINH_THANH',
+            laDiaDanhCu: true,
+            chuThichSapNhap: null,
+            noiBat: true,
+            thuTuHienThi: 10,
+          },
+          {
+            diaDiemId: 103,
+            code: 719,
+            tenDiaDiem: 'Thị xã Dĩ An',
+            tenKhongDau: 'thi xa di an',
+            capDiaDiem: 'QUAN_HUYEN',
+            laDiaDanhCu: true,
+            chuThichSapNhap: 'Không được dùng chuThichSapNhap làm parentName',
+            noiBat: false,
+            thuTuHienThi: 1,
+            diaDiemChaId: 102,
+            diaDiemCha: {
+              diaDiemId: 102,
+              tenDiaDiem: 'Tỉnh Bà Rịa - Vũng Tàu',
+            },
+          },
+        ]),
+      },
+      diemDonTra: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            diemDonTraId: 201,
+            maDiem: 'BX-VT',
+            tenDiem: 'Bến xe Vũng Tàu',
+            loaiDiem: 'BEN_XE',
+            diaChi: '192 Nam Kỳ Khởi Nghĩa, Vũng Tàu',
+            diaDiemCu: { tenDiaDiem: 'Bà Rịa - Vũng Tàu' },
+            diaDiemMoi: { tenDiaDiem: 'Hồ Chí Minh' },
+          },
+        ]),
+      },
+    } as unknown as PrismaService;
+
+    const service = new LocationsService(mockPrisma);
+    const result = await service.list();
+
+    expect(result.data.length).toBe(4);
+    const newHcm = result.data.find((item) => item.id === 'current:province:79');
+    expect(newHcm).toBeDefined();
+    expect(newHcm?.isLegacy).toBe(false);
+    expect(newHcm?.mergedFromText).toBe('Sáp nhập từ Bà Rịa - Vũng Tàu, Bình Dương, TP. Hồ Chí Minh');
+    expect(newHcm?.diaDiemId).toBe(101);
+
+    const oldVt = result.data.find((item) => item.id === 'legacy:province:77');
+    expect(oldVt).toBeDefined();
+    expect(oldVt?.isLegacy).toBe(true);
+    expect(oldVt?.diaDiemId).toBe(102);
+
+    const diAn = result.data.find((item) => item.diaDiemId === 103);
+    expect(diAn).toBeDefined();
+    expect(diAn?.name).toBe('Dĩ An');
+    expect(diAn?.parentName).toBe('Bà Rịa - Vũng Tàu');
+    expect(diAn?.province).toBe('Bà Rịa - Vũng Tàu');
+
+    const station = result.data.find((item) => item.id === 'station:bx-vt');
+    expect(station).toBeDefined();
+    expect(station?.kind).toBe('station');
+    expect(station?.parentName).toBe('Bà Rịa - Vũng Tàu');
+    expect(station?.diemDonTraId).toBe(201);
+    expect(station?.diaDiemId).toBeUndefined();
   });
 });

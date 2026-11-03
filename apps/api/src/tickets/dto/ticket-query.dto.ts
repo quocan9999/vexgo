@@ -1,43 +1,53 @@
+import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsIn, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 import { IsDateOnly } from '../../common/validators/is-date-only.validator.js';
 
 export class TicketQueryDto {
+  @ApiPropertyOptional({ description: 'Trang truy vấn', default: 1, example: 1 })
   @Type(() => Number)
   @IsInt()
   @Min(1)
   page = 1;
 
+  @ApiPropertyOptional({ description: 'Số vé trên một trang', default: 10, example: 10 })
   @Type(() => Number)
   @IsInt()
   @Min(1)
   @Max(100)
   pageSize = 10;
 
+  @ApiPropertyOptional({ description: 'Từ khóa tìm kiếm', example: 'Đà Lạt' })
   @IsOptional()
   @IsString()
   search?: string;
 
+  @ApiPropertyOptional({ description: 'Mã vé xe', example: 'TK-202610-001' })
   @IsOptional()
   @IsString()
   code?: string;
 
+  @ApiPropertyOptional({ description: 'Tên tuyến xe', example: 'Sài Gòn - Đà Lạt' })
   @IsOptional()
   @IsString()
   route?: string;
 
+  @ApiPropertyOptional({ description: 'Ngày khởi hành (DD-MM-YYYY hoặc YYYY-MM-DD)', example: '20-11-2026' })
   @IsOptional()
   @IsDateOnly({ message: 'Ngày khởi hành không hợp lệ.' })
   departureDate?: string;
 
+  @ApiPropertyOptional({ description: 'Trạng thái vé: DA_DAT, DA_THANH_TOAN, HUY', example: 'DA_THANH_TOAN' })
   @IsOptional()
   @IsString()
   status?: string;
 
+  @ApiPropertyOptional({ description: 'Trường sắp xếp', enum: ['createdAt', 'departureTime', 'price'], default: 'createdAt' })
   @IsOptional()
   @IsIn(['createdAt', 'departureTime', 'price'])
   sortBy?: 'createdAt' | 'departureTime' | 'price';
 
+  @ApiPropertyOptional({ description: 'Hướng sắp xếp (asc hoặc desc)', enum: ['asc', 'desc'], default: 'desc' })
   @IsOptional()
   @IsIn(['asc', 'desc'])
   sortDirection?: 'asc' | 'desc';

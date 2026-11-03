@@ -23,6 +23,11 @@ const adminRecord = {
   nhanVien: {
     nhanVienId: 201,
     maNhanVien: 'FUTA-NV-0001',
+    hoTen: 'Nguyễn Minh Anh',
+    cccd: '079123456789',
+    ngaySinh: new Date('1990-02-28T00:00:00.000Z'),
+    chucVu: null,
+    ngayVaoLam: null,
     trangThaiLamViec: 'DANG_LAM_VIEC',
     nhaXe: {
       nhaXeId: 12,
@@ -52,7 +57,7 @@ describe('AdminAccountsService', () => {
       create: vi.fn(),
       updateMany: vi.fn(),
     },
-    nhanVien: { create: vi.fn() },
+    nhanVien: { create: vi.fn(), updateMany: vi.fn() },
     taiKhoanVaiTro: { create: vi.fn(), deleteMany: vi.fn() },
     phienDangNhap: { updateMany: vi.fn() },
   };
@@ -91,6 +96,7 @@ describe('AdminAccountsService', () => {
     tx.taiKhoan.findUnique.mockResolvedValue(null);
     tx.taiKhoan.create.mockResolvedValue({ taiKhoanId: 101 });
     tx.nhanVien.create.mockResolvedValue({ nhanVienId: 201 });
+    tx.nhanVien.updateMany.mockResolvedValue({ count: 1 });
     tx.taiKhoanVaiTro.create.mockResolvedValue({});
     tx.taiKhoanVaiTro.deleteMany.mockResolvedValue({ count: 1 });
     tx.$queryRaw.mockResolvedValue([{ taiKhoanId: 101 }]);
@@ -117,6 +123,11 @@ describe('AdminAccountsService', () => {
     expect(tx.nhanVien.create).toHaveBeenCalledWith({
       data: {
         maNhanVien: createInput.employeeCode,
+        hoTen: createInput.fullName,
+        cccd: createInput.citizenId,
+        ngaySinh: new Date('1990-02-28T00:00:00.000Z'),
+        chucVu: null,
+        ngayVaoLam: null,
         trangThaiLamViec: 'DANG_LAM_VIEC',
         nhaXeId: 12,
         taiKhoanId: 101,
@@ -228,7 +239,7 @@ describe('AdminAccountsService', () => {
     });
     expect(tx.nhanVien.create).not.toHaveBeenCalled();
 
-    prisma.taiKhoan.updateMany.mockRejectedValueOnce(
+    tx.taiKhoan.updateMany.mockRejectedValueOnce(
       knownError('P2002', ['email']),
     );
     await expect(
@@ -416,7 +427,6 @@ describe('AdminAccountsService', () => {
   });
 
   it('allows an explicit empty role set to revoke every tenant role', async () => {
-    tx.vaiTro.findMany.mockResolvedValueOnce([]);
     tx.taiKhoan.findFirst
       .mockResolvedValueOnce(adminRecord)
       .mockResolvedValueOnce({ ...adminRecord, taiKhoanVaiTros: [] });
@@ -522,6 +532,11 @@ describe('AdminAccountsService', () => {
         ngaySinh: null,
         cccd: null,
         email: null,
+        nhanVien: {
+          ...adminRecord.nhanVien,
+          ngaySinh: null,
+          cccd: null,
+        },
       });
 
     const response = await service.update(101, {
@@ -530,14 +545,54 @@ describe('AdminAccountsService', () => {
       email: null,
     });
 
-    expect(prisma.taiKhoan.updateMany).toHaveBeenCalledWith({
+    expect(prisma.$transaction).toHaveBeenCalledOnce();
+    expect(tx.taiKhoan.updateMany).toHaveBeenCalledWith({
       where: expect.objectContaining({ taiKhoanId: 101 }),
       data: { ngaySinh: null, cccd: null, email: null },
+    });
+    expect(tx.nhanVien.updateMany).toHaveBeenCalledWith({
+      where: { taiKhoanId: 101 },
+      data: { ngaySinh: null, cccd: null },
     });
     expect(response.data).toMatchObject({
       dateOfBirth: null,
       citizenId: null,
       email: null,
+    });
+  });
+
+  it('saves position and joinedAt to employee record when creating', async () => {
+    await service.create({
+      ...createInput,
+      employeeCode: 'FUTA-NV-0002',
+      position: 'Trưởng phòng điều hành',
+      joinedAt: '2024-03-01',
+    });
+    expect(tx.nhanVien.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        chucVu: 'Trưởng phòng điều hành',
+        ngayVaoLam: new Date('2024-03-01T00:00:00.000Z'),
+      }),
+    });
+  });
+
+  it('updates employee position and joinedAt in transaction', async () => {
+    prisma.taiKhoan.findFirst
+      .mockResolvedValueOnce(adminRecord)
+      .mockResolvedValueOnce(adminRecord);
+
+    await service.update(101, {
+      position: 'Giám đốc vận hành',
+      joinedAt: '2024-05-10',
+    });
+
+    expect(prisma.$transaction).toHaveBeenCalledOnce();
+    expect(tx.nhanVien.updateMany).toHaveBeenCalledWith({
+      where: { taiKhoanId: 101 },
+      data: expect.objectContaining({
+        chucVu: 'Giám đốc vận hành',
+        ngayVaoLam: new Date('2024-05-10T00:00:00.000Z'),
+      }),
     });
   });
 });

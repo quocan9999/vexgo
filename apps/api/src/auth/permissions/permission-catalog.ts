@@ -130,6 +130,11 @@ export const ADMIN_PERMISSION_CATALOG = [
       'Xem danh sách, chi tiết và lịch sử khách hàng có giao dịch trong phạm vi nhà xe.',
   },
   {
+    key: 'customer:update_status',
+    scope: 'tenant',
+    description: 'Khóa hoặc mở khóa trạng thái tài khoản khách hàng.',
+  },
+  {
     key: 'booking:read',
     scope: 'tenant',
     description:
@@ -255,6 +260,7 @@ export const ADMIN_ROLE_DEFAULT_PERMISSION_KEYS = {
     'role:read',
     'permission:assign',
     'customer:read',
+    'customer:update_status',
     'booking:read',
     'revenue:read',
     'promotion:read',

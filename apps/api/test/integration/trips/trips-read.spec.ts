@@ -328,6 +328,10 @@ describe('Trips read HTTP contract and authorization', () => {
           held: 1,
           booked: 1,
         },
+        donCount: 0,
+        traCount: 0,
+        nghiCount: 0,
+        thieuDiem: true,
         createdAt: '2026-10-01T10:00:00.000Z',
         updatedAt: '2026-10-01T10:00:00.000Z',
       },
@@ -336,6 +340,11 @@ describe('Trips read HTTP contract and authorization', () => {
     expect(prisma.chuyenXe.findFirst).toHaveBeenCalledWith({
       where: { chuyenXeId: 101, nhaXeId: 5 },
       include: {
+        diemDonTraChuyenXes: {
+          select: {
+            loaiDiem: true,
+          },
+        },
         tuyenXe: true,
         xe: { include: { loaiXe: true } },
         gheChuyenXes: { select: { trangThai: true } },
@@ -597,7 +606,7 @@ describe('Trips read HTTP contract and authorization', () => {
         {
           gheChuyenXeId: 1001,
           trangThai: 'TRONG',
-          ghe: { soGhe: 'A01', viTri: 'Tầng 1' },
+          ghe: { tenGhe: 'A01', soGhe: 'A01', viTri: 'Tầng 1' },
         },
       ]);
 

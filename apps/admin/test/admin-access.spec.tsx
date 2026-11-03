@@ -76,6 +76,8 @@ describe('admin access scope and permissions', () => {
     ]);
     expect(getRequiredAdminPermissions('/vehicles')).toEqual(['vehicle:read']);
     expect(getRequiredAdminPermissions('/routes/123')).toEqual(['route:read']);
+    expect(getRequiredAdminPermissions('/stations')).toEqual(['route:read']);
+    expect(getRequiredAdminPermissions('/stations/123')).toEqual(['route:read']);
     expect(getRequiredAdminPermissions('/trips')).toEqual(['trip:read']);
     expect(getRequiredAdminPermissions('/trips/456')).toEqual(['trip:read']);
     expect(getRequiredAdminPermissions('/customers')).toEqual(['customer:read']);

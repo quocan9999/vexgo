@@ -12,6 +12,9 @@ export type LocationOption = {
   popular?: boolean;
   address?: string;
   parentName?: string;
+  isLegacy?: boolean;
+  mergedFromText?: string | null;
+  diaDiemId?: number;
 };
 
 let pending: Promise<LocationOption[]> | undefined;

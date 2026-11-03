@@ -190,7 +190,7 @@ describe('AccessTokenGuard', () => {
     const activation = guard.canActivate(context);
     await expect(activation).rejects.toBeInstanceOf(ForbiddenException);
     await expect(activation).rejects.toMatchObject({
-      response: { error: 'ACCOUNT_INACTIVE' },
+      response: { error: 'ACCOUNT_SUSPENDED' },
     });
   });
 

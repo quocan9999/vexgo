@@ -12,6 +12,7 @@ import {
   TripApiError,
 } from '../src/features/trips/services/trip-service';
 import type { Trip } from '../src/features/trips/types/trip';
+import type { DateRangeValue } from '@/components/data-filters/data-filters';
 import { setEmployeeAdminTestSession } from './admin-auth-test-session';
 
 const state = vi.hoisted(() => ({
@@ -21,6 +22,7 @@ const state = vi.hoisted(() => ({
   searchInput: '',
   status: '',
   departureDate: '',
+  departureDateRange: null as DateRangeValue | null,
 }));
 
 const mockTrip: Trip = {
@@ -102,6 +104,7 @@ vi.mock('@/components/data-filters/data-filters', () => ({
   SearchInput: () => null,
   SelectFilter: () => null,
   SingleDateFilter: () => null,
+  DateRangeFilter: () => null,
 }));
 
 vi.mock('@/features/trips/hooks/use-trips', () => ({
@@ -112,6 +115,8 @@ vi.mock('@/features/trips/hooks/use-trips', () => ({
     searchInput: state.searchInput,
     status: state.status,
     departureDate: state.departureDate,
+    departureDateRange: state.departureDateRange,
+    updateDepartureDateRange: vi.fn(),
     sortBy: 'departureDate',
     sortDirection: 'asc',
     changePage: vi.fn(),
@@ -131,6 +136,7 @@ beforeEach(() => {
   state.searchInput = '';
   state.status = '';
   state.departureDate = '';
+  state.departureDateRange = null;
   vi.restoreAllMocks();
 });
 
@@ -186,6 +192,19 @@ describe('Admin trips read page and components', () => {
     state.searchInput = 'Hà Nội';
     const filteredHtml = renderToStaticMarkup(<TripsManagement />);
     expect(filteredHtml).toContain('Không tìm thấy chuyến xe phù hợp.');
+
+    state.searchInput = '';
+    state.departureDateRange = { from: '2026-10-01', to: '2026-10-31' };
+    const rangeFilteredHtml = renderToStaticMarkup(<TripsManagement />);
+    expect(rangeFilteredHtml).toContain('Không tìm thấy chuyến xe phù hợp.');
+
+    state.departureDateRange = { from: '2026-10-01' };
+    const fromOnlyFilteredHtml = renderToStaticMarkup(<TripsManagement />);
+    expect(fromOnlyFilteredHtml).toContain('Không tìm thấy chuyến xe phù hợp.');
+
+    state.departureDateRange = { to: '2026-10-31' };
+    const toOnlyFilteredHtml = renderToStaticMarkup(<TripsManagement />);
+    expect(toOnlyFilteredHtml).toContain('Không tìm thấy chuyến xe phù hợp.');
   });
 
   it('renders error state and retry button on fetch failure', () => {
@@ -216,6 +235,33 @@ describe('Admin trips read page and components', () => {
 });
 
 describe('Trip service API contract validation', () => {
+  it('passes fromDepartureDate and toDepartureDate query params when provided', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        data: [mockTrip],
+        meta: { page: 1, pageSize: 10, totalItems: 1, totalPages: 1 },
+      }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await getTrips({
+      page: 1,
+      pageSize: 10,
+      search: '',
+      sortBy: 'departureDate',
+      sortDirection: 'asc',
+      fromDepartureDate: '2026-10-01',
+      toDepartureDate: '2026-10-31',
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('fromDepartureDate=2026-10-01&toDepartureDate=2026-10-31'),
+      expect.anything(),
+    );
+  });
+
   it('parses valid paginated trip list response', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,

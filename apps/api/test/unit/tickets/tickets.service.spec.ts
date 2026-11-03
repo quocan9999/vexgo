@@ -62,7 +62,7 @@ describe('TicketsService', () => {
     },
     gheChuyenXe: {
       gheChuyenXeId: 11,
-      ghe: { soGhe: 'A01', viTri: 'Tầng dưới' },
+      ghe: { soGhe: 'A01', tenGhe: 'A01', viTri: 'Tầng dưới' },
       chuyenXe: {
         chuyenXeId: 50,
         maChuyenXe: 'CX-50',
@@ -818,7 +818,7 @@ describe('TicketsService', () => {
         gheChuyenXe: {
           ...sampleTicket.gheChuyenXe,
           gheChuyenXeId: 11,
-          ghe: { soGhe: 'A01', viTri: 'Tầng dưới' },
+          ghe: { soGhe: 'A01', tenGhe: 'A01', viTri: 'Tầng dưới' },
           chuyenXe: {
             ...sampleTicket.gheChuyenXe.chuyenXe,
             ngayKhoiHanh: twentyHoursFromNow,
@@ -833,7 +833,7 @@ describe('TicketsService', () => {
         gheChuyenXe: {
           ...sampleTicket.gheChuyenXe,
           gheChuyenXeId: 12,
-          ghe: { soGhe: 'A02', viTri: 'Tầng dưới' },
+          ghe: { soGhe: 'A02', tenGhe: 'A02', viTri: 'Tầng dưới' },
           chuyenXe: {
             ...sampleTicket.gheChuyenXe.chuyenXe,
             ngayKhoiHanh: twentyHoursFromNow,
@@ -871,7 +871,7 @@ describe('TicketsService', () => {
         gheChuyenXe: {
           ...sampleTicket.gheChuyenXe,
           gheChuyenXeId: 11,
-          ghe: { soGhe: 'A01', viTri: 'Tầng dưới' },
+          ghe: { soGhe: 'A01', tenGhe: 'A01', viTri: 'Tầng dưới' },
           chuyenXe: {
             ...sampleTicket.gheChuyenXe.chuyenXe,
             ngayKhoiHanh: twentyHoursFromNow,
@@ -887,7 +887,7 @@ describe('TicketsService', () => {
         gheChuyenXe: {
           ...sampleTicket.gheChuyenXe,
           gheChuyenXeId: 12,
-          ghe: { soGhe: 'A02', viTri: 'Tầng dưới' },
+          ghe: { soGhe: 'A02', tenGhe: 'A02', viTri: 'Tầng dưới' },
           chuyenXe: {
             ...sampleTicket.gheChuyenXe.chuyenXe,
             ngayKhoiHanh: twentyHoursFromNow,

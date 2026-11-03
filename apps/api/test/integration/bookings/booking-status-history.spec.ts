@@ -530,9 +530,9 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
           loaiXeId: vehicleTypeId,
           ghes: {
             create: [
-              { soGhe: 'A01', viTri: 'Tầng 1' },
-              { soGhe: 'A02', viTri: 'Tầng 1' },
-              { soGhe: 'A03', viTri: 'Tầng 1' },
+              { maGhe: `seat-a01-${suffix}`.padEnd(32, '0').slice(0, 32), tenGhe: 'A01', viTri: 'Tầng 1' },
+              { maGhe: `seat-a02-${suffix}`.padEnd(32, '0').slice(0, 32), tenGhe: 'A02', viTri: 'Tầng 1' },
+              { maGhe: `seat-a03-${suffix}`.padEnd(32, '0').slice(0, 32), tenGhe: 'A03', viTri: 'Tầng 1' },
             ],
           },
         },
@@ -826,7 +826,7 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
         // Create a new future trip with 3 seats
         const seats = await fixtureTx.ghe.findMany({
           where: { xeId: vehicleId },
-          orderBy: { soGhe: 'asc' },
+          orderBy: { tenGhe: 'asc' },
         });
         const trip = await fixtureTx.chuyenXe.create({
           data: {
@@ -2320,7 +2320,7 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
     });
     expect(bookingResponse.status, JSON.stringify(bookingResponse.body)).toBe(201);
     const booking = bookingResponse.body.data;
-    expect(booking.orderCode).toMatch(/^[A-Z0-9]{1,8}GD[A-F\d]{30}$/);
+    expect(booking.orderCode).toMatch(/^[0-9a-f]{32}$/);
     const saved = await prisma.phieuDatVe.findUniqueOrThrow({
       where: { phieuDatVeId: booking.bookingId },
       include: { donGiaoDich: { include: { thanhToans: true } } },
@@ -3420,7 +3420,7 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
     expect(new Set(bookings.map((booking) => booking.bookingCode)).size).toBe(2);
     expect(new Set(bookings.map((booking) => booking.orderCode)).size).toBe(2);
     expect(
-      bookings.every((booking) => /^.+-PDV-[A-F\d]{30}$/.test(booking.bookingCode)),
+      bookings.every((booking) => /^[0-9a-f]{32}$/.test(booking.bookingCode)),
     ).toBe(true);
   });
 

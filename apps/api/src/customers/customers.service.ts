@@ -1,8 +1,10 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -13,6 +15,10 @@ import type { AdminCustomerQueryDto } from './dto/admin-customer-query.dto.js';
 import type { AdminCustomerTransactionsQueryDto } from './dto/admin-customer-transactions-query.dto.js';
 import type { AdminCustomerTicketsQueryDto } from './dto/admin-customer-tickets-query.dto.js';
 import type { AdminCustomerShipmentsQueryDto } from './dto/admin-customer-shipments-query.dto.js';
+import { RealtimeSessionInvalidatorService } from '../auth/realtime-session-invalidator.service.js';
+import type { UpdateCustomerStatusDto } from './dto/update-customer-status.dto.js';
+import { TrangThaiTaiKhoan } from '../generated/prisma/enums.js';
+import { parseDateOnly } from '../auth/account-status.helper.js';
 
 const customerProfileInclude = {
   khachHang: true,
@@ -54,9 +60,20 @@ function formatSqlTime(time: Date | string | null | undefined): string {
   }
 }
 
+function formatDateOnly(date: Date | null | undefined): string | null {
+  if (!date) return null;
+  const d = String(date.getUTCDate()).padStart(2, '0');
+  const m = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const y = date.getUTCFullYear();
+  return `${d}-${m}-${y}`;
+}
 @Injectable()
 export class CustomersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional()
+    private readonly sessionInvalidator?: RealtimeSessionInvalidatorService,
+  ) {}
 
   async getMe(taiKhoanId: number) {
     const account = await this.findCustomerAccount(taiKhoanId);
@@ -67,23 +84,32 @@ export class CustomersService {
     await this.findCustomerAccount(taiKhoanId);
     let account: CustomerAccount;
     try {
-      account = await this.prisma.taiKhoan.update({
-        where: { taiKhoanId },
-        data: {
-          ...(dto.fullName !== undefined ? { hoTen: dto.fullName } : {}),
-          ...(dto.dateOfBirth !== undefined
-            ? {
-                ngaySinh: dto.dateOfBirth
-                  ? new Date(`${dto.dateOfBirth}T00:00:00.000Z`)
-                  : null,
-              }
-            : {}),
-          ...(dto.email !== undefined
-            ? { email: normalizeEmail(dto.email) }
-            : {}),
-          ...(dto.citizenId !== undefined ? { cccd: dto.citizenId } : {}),
-        },
-        include: customerProfileInclude,
+      const birthDate = dto.dateOfBirth !== undefined
+        ? dto.dateOfBirth
+          ? new Date(`${dto.dateOfBirth}T00:00:00.000Z`)
+          : null
+        : undefined;
+
+      account = await this.prisma.$transaction(async (tx) => {
+        await tx.khachHang.update({
+          where: { taiKhoanId },
+          data: {
+            ...(dto.fullName !== undefined ? { hoTen: dto.fullName } : {}),
+            ...(birthDate !== undefined ? { ngaySinh: birthDate } : {}),
+          },
+        });
+        return tx.taiKhoan.update({
+          where: { taiKhoanId },
+          data: {
+            ...(dto.fullName !== undefined ? { hoTen: dto.fullName } : {}),
+            ...(birthDate !== undefined ? { ngaySinh: birthDate } : {}),
+            ...(dto.email !== undefined
+              ? { email: normalizeEmail(dto.email) }
+              : {}),
+            ...(dto.citizenId !== undefined ? { cccd: dto.citizenId } : {}),
+          },
+          include: customerProfileInclude,
+        });
       });
     } catch (error) {
       if (
@@ -141,9 +167,9 @@ export class CustomersService {
       customerId: customer.khachHangId,
       customerCode: customer.maKhachHang,
       loyaltyPoints: customer.diemTichLuy,
-      fullName: account.hoTen,
+      fullName: customer.hoTen ?? account.hoTen ?? '',
       phoneNumber: account.soDienThoai,
-      dateOfBirth: account.ngaySinh?.toISOString().slice(0, 10) ?? null,
+      dateOfBirth: (customer.ngaySinh ?? account.ngaySinh)?.toISOString().slice(0, 10) ?? null,
       citizenId: account.cccd,
       email: account.email,
       phoneVerified: account.daXacThucSoDienThoai,
@@ -178,6 +204,7 @@ export class CustomersService {
       andConditions.push({
         OR: [
           { maKhachHang: { contains: trimmedSearch } },
+          { hoTen: { contains: trimmedSearch } },
           { taiKhoan: { hoTen: { contains: trimmedSearch } } },
           { taiKhoan: { soDienThoai: { contains: trimmedSearch } } },
           { taiKhoan: { email: { contains: trimmedSearch } } },
@@ -240,7 +267,7 @@ export class CustomersService {
       data: items.map((item) => ({
         customerId: item.khachHangId,
         customerCode: item.maKhachHang,
-        fullName: item.taiKhoan.hoTen,
+        fullName: item.hoTen ?? item.taiKhoan.hoTen ?? '',
         phoneNumber: item.taiKhoan.soDienThoai,
         email: item.taiKhoan.email,
         loyaltyPoints: item.diemTichLuy,
@@ -289,19 +316,135 @@ export class CustomersService {
       data: {
         customerId: customer.khachHangId,
         customerCode: customer.maKhachHang,
-        fullName: customer.taiKhoan.hoTen,
+        fullName: customer.hoTen ?? customer.taiKhoan.hoTen ?? '',
         phoneNumber: customer.taiKhoan.soDienThoai,
         email: customer.taiKhoan.email,
+        dateOfBirth: formatDateOnly(customer.ngaySinh ?? customer.taiKhoan.ngaySinh),
+        gender: customer.gioiTinh ?? null,
+        address: customer.diaChi ?? null,
+        citizenId: customer.taiKhoan.cccd ?? null,
         loyaltyPoints: customer.diemTichLuy,
         account: {
           accountId: customer.taiKhoan.taiKhoanId,
           status: customer.taiKhoan.trangThai,
+          lockedUntil: formatDateOnly(customer.taiKhoan.khoaDenNgay),
+          lockReason: customer.taiKhoan.lyDoKhoa ?? null,
           phoneVerified: customer.taiKhoan.daXacThucSoDienThoai,
           createdAt: customer.taiKhoan.createdAt.toISOString(),
           updatedAt: customer.taiKhoan.updatedAt.toISOString(),
         },
         createdAt: customer.createdAt.toISOString(),
         updatedAt: customer.updatedAt.toISOString(),
+      },
+    };
+  }
+
+
+  async updateCustomerStatus(
+    principal: AuthPrincipal,
+    customerId: number,
+    dto: UpdateCustomerStatusDto,
+  ) {
+    const nhaXeId = this.requireTenantId(principal);
+
+    let khoaDenNgay: Date | null = null;
+    if (dto.status === TrangThaiTaiKhoan.TAM_KHOA) {
+      if (!dto.lockedUntil) {
+        throw new BadRequestException({
+          error: 'LOCKED_UNTIL_REQUIRED',
+          message: 'Vui lòng chọn ngày hết hạn tạm khóa.',
+        });
+      }
+      const parsed = parseDateOnly(dto.lockedUntil);
+      if (!parsed) {
+        throw new BadRequestException({
+          error: 'INVALID_LOCKED_UNTIL_DATE',
+          message: 'Ngày hết hạn tạm khóa không phải là ngày hợp lệ trong lịch.',
+        });
+      }
+      const today = new Date();
+      today.setUTCHours(0, 0, 0, 0);
+      if (parsed <= today) {
+        throw new BadRequestException({
+          error: 'LOCKED_UNTIL_MUST_BE_IN_FUTURE',
+          message: 'Ngày hết hạn tạm khóa phải lớn hơn ngày hiện tại.',
+        });
+      }
+      khoaDenNgay = parsed;
+    }
+
+    const customer = await this.prisma.khachHang.findFirst({
+      where: {
+        khachHangId: customerId,
+        donGiaoDichs: {
+          some: {
+            nhaXeId,
+          },
+        },
+      },
+      include: {
+        taiKhoan: true,
+      },
+    });
+
+    if (!customer) {
+      throw new NotFoundException({
+        error: 'CUSTOMER_NOT_FOUND',
+        message: 'Không tìm thấy khách hàng.',
+      });
+    }
+
+    const taiKhoanId = customer.taiKhoanId;
+
+    const updatedAccount = await this.prisma.$transaction(async (tx) => {
+      const reasonTrimmed = dto.reason?.trim() || null;
+      await tx.taiKhoan.update({
+        where: { taiKhoanId },
+        data: {
+          trangThai: dto.status,
+          khoaDenNgay: dto.status === TrangThaiTaiKhoan.TAM_KHOA ? khoaDenNgay : null,
+          lyDoKhoa: dto.status !== TrangThaiTaiKhoan.HOAT_DONG ? reasonTrimmed : null,
+        },
+      });
+
+      if (dto.status !== TrangThaiTaiKhoan.HOAT_DONG) {
+        const lockedAt = new Date();
+        await tx.phienDangNhap.updateMany({
+          where: {
+            taiKhoanId,
+            thuHoiLuc: null,
+            hetHanLuc: { gt: lockedAt },
+          },
+          data: { thuHoiLuc: lockedAt },
+        });
+      }
+
+      return tx.taiKhoan.findUnique({
+        where: { taiKhoanId },
+        select: {
+          taiKhoanId: true,
+          trangThai: true,
+          khoaDenNgay: true,
+          lyDoKhoa: true,
+          updatedAt: true,
+        },
+      });
+    });
+
+    if (dto.status !== TrangThaiTaiKhoan.HOAT_DONG) {
+      await this.sessionInvalidator?.invalidateAccount(taiKhoanId, 'SESSION_REVOKED');
+    } else {
+      await this.sessionInvalidator?.revalidateAccount(taiKhoanId);
+    }
+
+    return {
+      data: {
+        customerId: customer.khachHangId,
+        accountStatus: dto.status,
+        lockedUntil: dto.status === TrangThaiTaiKhoan.TAM_KHOA ? formatDateOnly(khoaDenNgay) : null,
+        lockReason: dto.status !== TrangThaiTaiKhoan.HOAT_DONG ? (dto.reason?.trim() || null) : null,
+        updatedAt: updatedAccount?.updatedAt.toISOString() ?? new Date().toISOString(),
+        message: 'Cập nhật trạng thái tài khoản thành công.',
       },
     };
   }
@@ -550,7 +693,7 @@ export class CustomersService {
         },
         seat: {
           seatId: t.gheChuyenXe.ghe.gheId,
-          code: t.gheChuyenXe.ghe.soGhe,
+          code: t.gheChuyenXe.ghe.tenGhe ?? (t.gheChuyenXe.ghe as any).soGhe,
           position: t.gheChuyenXe.ghe.viTri ?? null,
         },
       })),

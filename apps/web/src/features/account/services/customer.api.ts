@@ -22,11 +22,13 @@ export type UpdateProfileDto = {
 
 export class ApiError extends Error {
   status: number;
+  error?: string;
 
-  constructor(message: string, status: number) {
+  constructor(message: string, status: number, error?: string) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
+    this.error = error;
   }
 }
 
@@ -43,7 +45,7 @@ export const customerApi = {
 
     if (!res.ok) {
       const error = await res.json().catch(() => ({}));
-      throw new ApiError(error.message || 'Lấy thông tin thất bại', res.status);
+      throw new ApiError(error.message || 'Lấy thông tin thất bại', res.status, error.error);
     }
 
     return res.json();
@@ -64,7 +66,7 @@ export const customerApi = {
 
     if (!res.ok) {
       const error = await res.json().catch(() => ({}));
-      throw new ApiError(error.message || 'Cập nhật thất bại', res.status);
+      throw new ApiError(error.message || 'Cập nhật thất bại', res.status, error.error);
     }
 
     return res.json();

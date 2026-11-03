@@ -93,8 +93,8 @@ describe('Reviews API Integration with MySQL', () => {
         loaiXeId: vehicleTypeId,
         ghes: {
           create: [
-            { soGhe: 'R01', viTri: 'Tầng 1' },
-            { soGhe: 'R02', viTri: 'Tầng 1' },
+            { maGhe: `seat-r01-${suffix}`.padEnd(32, '0').slice(0, 32), tenGhe: 'R01', viTri: 'Tầng 1' },
+            { maGhe: `seat-r02-${suffix}`.padEnd(32, '0').slice(0, 32), tenGhe: 'R02', viTri: 'Tầng 1' },
           ],
         },
       },

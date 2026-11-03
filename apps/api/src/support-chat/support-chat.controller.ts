@@ -7,10 +7,16 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiParam,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import { CurrentPrincipal } from '../auth/decorators/current-principal.decorator.js';
 import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
-import { SupportChatService } from './support-chat.service.js';
-import { SupportChatGateway } from './support-chat.gateway.js';
+import { ApiErrorResponseDto } from '../common/swagger/api-response-envelope.dto.js';
 import { CHAT_EVENTS } from './constants/chat-events.constants.js';
 import {
   CloseConversationDto,
@@ -21,7 +27,11 @@ import {
   SendChatMessageBodyDto,
   SendMessageDto,
 } from './dto/index.js';
+import { SupportChatGateway } from './support-chat.gateway.js';
+import { SupportChatService } from './support-chat.service.js';
 
+@ApiTags('Chat & Tư vấn trực tuyến (Support Chat)')
+@ApiBearerAuth('JWT-auth')
 @Controller('support-chat')
 export class SupportChatController {
   constructor(
@@ -30,6 +40,25 @@ export class SupportChatController {
   ) {}
 
   @Post('conversations')
+  @ApiOperation({
+    summary: 'Tạo hoặc mở lại cuộc trò chuyện hỗ trợ',
+    description:
+      'Khách hàng bắt đầu phiên trò chuyện với một nhà xe. Nếu đã có cuộc trò chuyện đang hoạt động chưa đóng, hệ thống sẽ trả về cuộc trò chuyện hiện tại.',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Tạo hoặc kết nối cuộc trò chuyện thành công.',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Dữ liệu không hợp lệ.',
+    type: ApiErrorResponseDto,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Chưa đăng nhập.',
+    type: ApiErrorResponseDto,
+  })
   async createConversation(
     @CurrentPrincipal() principal: AuthPrincipal,
     @Body() dto: CreateConversationDto,
@@ -78,6 +107,20 @@ export class SupportChatController {
   }
 
   @Get('conversations')
+  @ApiOperation({
+    summary: 'Danh sách các cuộc trò chuyện',
+    description:
+      'Lấy danh sách các cuộc trò chuyện hỗ trợ có phân trang và lọc theo trạng thái (Khách hàng xem danh sách của mình; Nhân viên nhà xe xem danh sách thuộc nhà xe).',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Lấy danh sách cuộc trò chuyện thành công.',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Chưa đăng nhập.',
+    type: ApiErrorResponseDto,
+  })
   async listConversations(
     @CurrentPrincipal() principal: AuthPrincipal,
     @Query() query: ListConversationsQueryDto,
@@ -86,6 +129,21 @@ export class SupportChatController {
   }
 
   @Get('bus-companies/:nhaXeId/active-conversation')
+  @ApiOperation({
+    summary: 'Lấy cuộc trò chuyện đang hoạt động với nhà xe',
+    description:
+      'Tra cứu cuộc trò chuyện chưa đóng hiện tại của khách hàng với một nhà xe cụ thể (nếu có).',
+  })
+  @ApiParam({
+    name: 'nhaXeId',
+    type: Number,
+    description: 'ID nhà xe',
+    example: 1,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Lấy thông tin cuộc trò chuyện thành công (hoặc null nếu chưa có).',
+  })
   async getActiveConversation(
     @CurrentPrincipal() principal: AuthPrincipal,
     @Param('nhaXeId', ParseIntPipe) nhaXeId: number,
@@ -94,6 +152,25 @@ export class SupportChatController {
   }
 
   @Get('conversations/:id')
+  @ApiOperation({
+    summary: 'Chi tiết cuộc trò chuyện',
+    description: 'Xem thông tin chi tiết một cuộc trò chuyện hỗ trợ.',
+  })
+  @ApiParam({
+    name: 'id',
+    type: Number,
+    description: 'ID cuộc trò chuyện',
+    example: 1,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Lấy chi tiết cuộc trò chuyện thành công.',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Không tìm thấy cuộc trò chuyện.',
+    type: ApiErrorResponseDto,
+  })
   async getConversationById(
     @CurrentPrincipal() principal: AuthPrincipal,
     @Param('id', ParseIntPipe) id: number,
@@ -102,6 +179,25 @@ export class SupportChatController {
   }
 
   @Get('conversations/:id/messages')
+  @ApiOperation({
+    summary: 'Danh sách tin nhắn trong cuộc trò chuyện',
+    description: 'Tải lịch sử tin nhắn trong cuộc trò chuyện theo trang hoặc theo mốc cursor (beforeId).',
+  })
+  @ApiParam({
+    name: 'id',
+    type: Number,
+    description: 'ID cuộc trò chuyện',
+    example: 1,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Lấy danh sách tin nhắn thành công.',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Không tìm thấy cuộc trò chuyện.',
+    type: ApiErrorResponseDto,
+  })
   async getMessages(
     @CurrentPrincipal() principal: AuthPrincipal,
     @Param('id', ParseIntPipe) id: number,
@@ -111,6 +207,25 @@ export class SupportChatController {
   }
 
   @Post('conversations/:id/messages')
+  @ApiOperation({
+    summary: 'Gửi tin nhắn trong cuộc trò chuyện',
+    description: 'Gửi tin nhắn dạng văn bản hoặc hình ảnh vào cuộc trò chuyện và phát realtime tới đối phương.',
+  })
+  @ApiParam({
+    name: 'id',
+    type: Number,
+    description: 'ID cuộc trò chuyện',
+    example: 1,
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Gửi tin nhắn thành công.',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Dữ liệu tin nhắn không hợp lệ.',
+    type: ApiErrorResponseDto,
+  })
   async sendMessage(
     @CurrentPrincipal() principal: AuthPrincipal,
     @Param('id', ParseIntPipe) id: number,
@@ -154,6 +269,20 @@ export class SupportChatController {
   }
 
   @Post('conversations/:id/claim')
+  @ApiOperation({
+    summary: 'Nhân viên nhận xử lý cuộc trò chuyện',
+    description: 'Nhân viên hỗ trợ của nhà xe tiếp nhận cuộc trò chuyện từ trạng thái CHO_TIEP_NHAN sang DANG_XU_LY.',
+  })
+  @ApiParam({
+    name: 'id',
+    type: Number,
+    description: 'ID cuộc trò chuyện',
+    example: 1,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Nhận xử lý cuộc trò chuyện thành công.',
+  })
   async claimConversation(
     @CurrentPrincipal() principal: AuthPrincipal,
     @Param('id', ParseIntPipe) id: number,
@@ -180,6 +309,20 @@ export class SupportChatController {
   }
 
   @Post('conversations/:id/close')
+  @ApiOperation({
+    summary: 'Đóng cuộc trò chuyện',
+    description: 'Kết thúc cuộc trò chuyện hỗ trợ và lưu lý do đóng nếu có.',
+  })
+  @ApiParam({
+    name: 'id',
+    type: Number,
+    description: 'ID cuộc trò chuyện',
+    example: 1,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Đóng cuộc trò chuyện thành công.',
+  })
   async closeConversation(
     @CurrentPrincipal() principal: AuthPrincipal,
     @Param('id', ParseIntPipe) id: number,
@@ -207,6 +350,20 @@ export class SupportChatController {
   }
 
   @Post('conversations/:id/read')
+  @ApiOperation({
+    summary: 'Đánh dấu tin nhắn đã đọc',
+    description: 'Xác nhận đã đọc các tin nhắn trong cuộc trò chuyện và gửi biên nhận (read receipt) tới phía bên kia.',
+  })
+  @ApiParam({
+    name: 'id',
+    type: Number,
+    description: 'ID cuộc trò chuyện',
+    example: 1,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Cập nhật trạng thái đã đọc thành công.',
+  })
   async markAsRead(
     @CurrentPrincipal() principal: AuthPrincipal,
     @Param('id', ParseIntPipe) id: number,

@@ -2039,7 +2039,7 @@ export class ShipmentsService {
         actor: history.taiKhoan
           ? {
               accountId: history.taiKhoan.taiKhoanId,
-              fullName: history.taiKhoan.hoTen,
+              fullName: history.taiKhoan.hoTen ?? 'Người dùng',
             }
           : null,
       })),
@@ -2051,7 +2051,7 @@ export class ShipmentsService {
         note: log.lyDo,
         time: log.thoiGian.toISOString(),
         actor: log.taiKhoan
-          ? { accountId: log.taiKhoanId, fullName: log.taiKhoan.hoTen }
+          ? { accountId: log.taiKhoanId, fullName: log.taiKhoan.hoTen ?? 'Người dùng' }
           : null,
       })),
       assignmentHistory: (record.lichSuPhanChuyens ?? []).map((log) => ({
@@ -2061,7 +2061,7 @@ export class ShipmentsService {
         note: log.lyDo,
         time: log.thoiGian.toISOString(),
         actor: log.taiKhoan
-          ? { accountId: log.taiKhoanId, fullName: log.taiKhoan.hoTen }
+          ? { accountId: log.taiKhoanId, fullName: log.taiKhoan.hoTen ?? 'Người dùng' }
           : null,
       })),
       moneyCases: (record.xuLyTiens ?? []).map((item) => ({
@@ -2074,7 +2074,6 @@ export class ShipmentsService {
         reference: item.thamChieu,
         resolvedAt: item.thoiDiemXuLy?.toISOString() ?? null,
       })),
-      totalFee: toVnd(record.tongPhi),
     };
 
     return { data };

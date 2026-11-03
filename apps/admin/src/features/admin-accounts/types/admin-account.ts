@@ -25,7 +25,9 @@ export type AdminAccount = {
   roles: TenantRbacRoleName[];
   employee: {
     employeeId: number;
-    employeeCode: string;
+    employeeCode?: string;
+    position?: string | null;
+    joinedAt?: string | null;
     employmentStatus: string;
   };
   busCompany: {
@@ -66,7 +68,9 @@ export type CreateAdminAccountInput = {
   phoneNumber: string;
   password: string;
   busCompanyId: number;
-  employeeCode: string;
+  employeeCode?: string;
+  position?: string | null;
+  joinedAt?: string | null;
   roleNames: readonly TenantRbacRoleName[];
   dateOfBirth?: string | null;
   email?: string | null;
@@ -75,6 +79,8 @@ export type CreateAdminAccountInput = {
 
 export type UpdateAdminAccountInput = {
   fullName?: string;
+  position?: string | null;
+  joinedAt?: string | null;
   dateOfBirth?: string | null;
   email?: string | null;
   citizenId?: string | null;

@@ -95,6 +95,8 @@ export type BookingResponseData = {
   route?: string | null;
   pickup?: string | null;
   dropoff?: string | null;
+  diemDonSnapshot?: Record<string, unknown> | null;
+  diemTraSnapshot?: Record<string, unknown> | null;
   seats?: string[];
   cargoItems?: Array<{
     name?: string;
@@ -159,6 +161,8 @@ export type CreateBookingPayload = {
   };
   pickupPoint: string;
   dropoffPoint: string;
+  diemDonChuyenXeId?: number;
+  diemTraChuyenXeId?: number;
   cargoItems?: Array<{
     name: string;
     type?: string;
@@ -195,12 +199,17 @@ export type CreateSeatHoldPayload = {
 export type BookingQuotePayload = {
   tripId: number;
   seatIds: number[];
-  promotionCode: string;
+  promotionCode?: string;
   contactPhone?: string;
+  diemDonChuyenXeId?: number;
+  diemTraChuyenXeId?: number;
 };
 
 export type BookingQuoteData = {
   unitPrice: number | string;
+  baseUnitPrice?: number | string;
+  pickupSurcharge?: number | string;
+  dropoffSurcharge?: number | string;
   seatCount: number;
   originalTotal: number | string;
   discountAmount: number | string;

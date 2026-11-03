@@ -138,7 +138,12 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
 
   const [selectedConv, setSelectedConv] =
     useState<AdminSupportConversation | null>(null);
-  const [messages, setMessages] = useState<AdminSupportMessage[]>([]);
+  const [storedMessages, setMessages] = useState<AdminSupportMessage[]>([]);
+  // Scope every render/read/cursor to the selected conversation, including the
+  // render before its history request completes or fails.
+  const messages = storedMessages.filter(
+    (message) => message.cuocTroChuyenId === selectedConv?.cuocTroChuyenId,
+  );
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [hasOlderMessages, setHasOlderMessages] = useState(false);
   const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
@@ -474,7 +479,12 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
         }
 
         // Chống ghi đè tin nhắn realtime đã nhận trong lúc fetch đang in-flight (F-NEW-03)
-        setMessages((prev) => reconcileAdminMessages(prev, msgs));
+        setMessages((prev) =>
+          reconcileAdminMessages(
+            prev.filter((message) => message.cuocTroChuyenId === targetConvId),
+            msgs.filter((message) => message.cuocTroChuyenId === targetConvId),
+          ),
+        );
       })
       .catch((err: unknown) => {
         if (active && selectedConvIdRef.current === targetConvId) {
@@ -625,7 +635,7 @@ export function AdminChatMessenger({ session }: { session: AdminSession }) {
         setErrorMessage('Chưa đồng bộ đủ tin nhắn. Vui lòng thử kết nối lại.');
       }
     }
-  }, [selectedConvId, token]);
+  }, [selectedConvId, token, setHasOlderMessages, setErrorMessage]);
 
   // Callback khi có tin nhắn mới từ WebSocket
   const handleNewMessage = useCallback((newMsg: AdminSupportMessage) => {

@@ -14,7 +14,8 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "dev": "turbo run dev --ui=stream",
-    "rollout:booking-read": "node prisma/rollouts/add-booking-read-permission.mjs"
+    "rollout:booking-read": "node prisma/rollouts/add-booking-read-permission.mjs",
+    "seed:trips-nov": "node scripts/seed-trips-nov-2026.mjs"
   },
   "devDependencies": {
     "@types/bcrypt": "^6.0.0",

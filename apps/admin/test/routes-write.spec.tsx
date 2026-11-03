@@ -95,9 +95,6 @@ describe('Route form composition', () => {
     expect(
       view.getByRole('spinbutton', { name: /Thời gian chạy/ }),
     ).toHaveProperty('required', true);
-    const code = view.getByRole('textbox', { name: /Mã tuyến/ });
-    expect(code).toHaveProperty('disabled', true);
-    expect(code).toHaveProperty('value', 'FUTA-TX-0101');
     expect(
       view.getByRole('combobox', { name: /Trạng thái/ }).textContent,
     ).toContain('Chọn trạng thái');

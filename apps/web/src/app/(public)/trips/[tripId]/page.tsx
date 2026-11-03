@@ -114,9 +114,11 @@ export default async function TripDetailPage({
           returnTripSeats={inboundSeats}
           departureDate={resolveRoundTripDepartureDate(sp)}
           returnDate={typeof sp?.returnDate === 'string' ? sp.returnDate : ''}
+          outboundApiTrip={outboundTrip}
+          returnApiTrip={inboundTrip}
         />
       ) : (
-        <OneWayBooking post={outboundPost} tripSeats={outboundSeats} />
+        <OneWayBooking post={outboundPost} tripSeats={outboundSeats} apiTrip={outboundTrip} />
       )}
 
       <div className="max-w-[1160px] mx-auto px-4 sm:px-6 lg:px-8 pb-12">

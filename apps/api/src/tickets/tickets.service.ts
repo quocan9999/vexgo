@@ -669,8 +669,8 @@ export class TicketsService {
             totalCancelFee = totalCancelFee.plus(quote.cancelFee);
             totalRefundAmount = totalRefundAmount.plus(quote.refundAmount);
             cancelledTicketCodes.push(t.maVe);
-            if (t.gheChuyenXe?.ghe?.soGhe) {
-              cancelledSeatNumbers.push(t.gheChuyenXe.ghe.soGhe);
+            if (t.gheChuyenXe?.ghe?.tenGhe) {
+              cancelledSeatNumbers.push(t.gheChuyenXe.ghe.tenGhe);
             }
 
             if (originalPayment && !quote.refundAmount.isZero()) {
@@ -856,7 +856,7 @@ export class TicketsService {
       vehicleType: loaiXe?.tenLoai ?? null,
       departureTime,
       arrivalTime,
-      seatNumber: ticket.gheChuyenXe?.ghe?.soGhe ?? null,
+      seatNumber: ticket.gheChuyenXe?.ghe?.tenGhe ?? null,
       seatPosition: ticket.gheChuyenXe?.ghe?.viTri ?? null,
       price: Number(ticket.giaThucTe ?? ticket.giaNiemYet ?? 0),
       status: ticket.trangThai,

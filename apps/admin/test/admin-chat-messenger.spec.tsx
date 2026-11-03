@@ -950,4 +950,26 @@ describe('AdminChatMessenger Component & Flow Regression Tests', () => {
     });
   });
 
+
+  it.each([false, true])('isolates loaded history across conversations (same customer: %s)', async (sameCustomer) => {
+    const a = createMockConversation(1, 'Previous customer', 'DA_DONG');
+    const b = createMockConversation(2, 'Current customer', 'DANG_XU_LY');
+    if (sameCustomer) b.khachHangId = a.khachHangId;
+    vi.spyOn(adminSupportChatApi, 'listConversations').mockResolvedValue({data:[a,b],meta:{page:1,pageSize:20,totalItems:2,totalPages:1}});
+    vi.spyOn(adminSupportChatApi, 'getConversationById').mockImplementation(async id => id === 1 ? a : b);
+    const message = (id: number): AdminSupportMessage => ({...createMockConversation(id, 'fixture').tinNhanCuoi!, noiDung: `TRANSCRIPT-${id}`});
+    let release!: (messages: AdminSupportMessage[]) => void;
+    vi.spyOn(adminSupportChatApi, 'getMessages').mockImplementation(async id => id === 1 ? [message(1)] : new Promise(resolve => {release = resolve;}));
+    render(<AdminChatMessenger session={mockSession} />);
+    fireEvent.click(await screen.findByText('Previous customer'));
+    expect(await screen.findByText('TRANSCRIPT-1')).toBeTruthy();
+    fireEvent.click(screen.getByText('Current customer'));
+    expect(screen.queryByText('TRANSCRIPT-1')).toBeNull();
+    await act(async () => release([message(2)]));
+    expect(await screen.findByText('TRANSCRIPT-2')).toBeTruthy();
+    expect(screen.queryByText('TRANSCRIPT-1')).toBeNull();
+    fireEvent.click(screen.getByText('Previous customer'));
+    expect(await screen.findByText('TRANSCRIPT-1')).toBeTruthy();
+    expect(screen.queryByText('TRANSCRIPT-2')).toBeNull();
+  });
 });

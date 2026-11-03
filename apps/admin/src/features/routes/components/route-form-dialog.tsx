@@ -6,8 +6,6 @@ import { LocationPicker } from '@/features/locations/components/location-picker'
 import { LoaderCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useRef, useState, type FormEvent } from 'react';
-import { ResourceGeneratedCodeField } from '@/components/admin/resource-generated-code-field';
-import { useBusinessCodePreview } from '@/hooks/use-business-code-preview';
 import { ResourceNotice, ResourceSheet } from '@/components/admin/resource-ui';
 import {
   Field as FieldRoot,
@@ -71,7 +69,6 @@ export function RouteFormDialog({
   route,
 }: RouteFormDialogProps) {
   const editing = route !== undefined;
-  const codePreview = useBusinessCodePreview('routes', !editing);
   const idPrefix = editing ? `edit-route-${route.routeId}` : 'create-route';
   const formRef = useRef<HTMLFormElement>(null);
   const submittingRef = useRef(false);
@@ -273,17 +270,6 @@ export function RouteFormDialog({
               {route.status === 'HOAT_DONG' ? 'Đang hoạt động' : 'Tạm ngưng'}
             </p>
           </div>
-        )}
-        {!editing && (
-          <ResourceGeneratedCodeField
-            id={`${idPrefix}-code`}
-            label="Mã tuyến"
-            code={codePreview.code}
-            placeholder={codePreview.placeholder}
-            error={codePreview.error}
-            onRetry={codePreview.retry}
-            busy={submitting}
-          />
         )}
         {textField('origin', 'Điểm đi')}
         {textField('destination', 'Điểm đến')}

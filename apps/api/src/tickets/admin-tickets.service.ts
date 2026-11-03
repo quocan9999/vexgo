@@ -41,7 +41,7 @@ const TICKET_LIST_SELECT = {
   },
   gheChuyenXe: {
     select: {
-      ghe: { select: { soGhe: true } },
+      ghe: { select: { tenGhe: true } },
       chuyenXe: {
         select: {
           chuyenXeId: true,
@@ -95,7 +95,7 @@ const TICKET_DETAIL_SELECT = {
   },
   gheChuyenXe: {
     select: {
-      ghe: { select: { soGhe: true } },
+      ghe: { select: { tenGhe: true } },
       chuyenXe: {
         select: {
           chuyenXeId: true,
@@ -325,7 +325,7 @@ export class AdminTicketsService {
         tripIntegrity: trip ? 'CONSISTENT' : 'TRIP_UNAVAILABLE',
         seatNumber:
           ticket.gheChuyenXe.chuyenXe.nhaXeId === nhaXeId
-            ? ticket.gheChuyenXe.ghe.soGhe
+            ? ticket.gheChuyenXe.ghe.tenGhe
             : null,
         listedPrice: ticket.giaNiemYet.toString(),
         actualPrice: ticket.giaThucTe.toString(),
@@ -409,7 +409,7 @@ export class AdminTicketsService {
       },
       trip,
       tripIntegrity: trip ? 'CONSISTENT' : 'TRIP_UNAVAILABLE',
-      seatNumber: ticket.gheChuyenXe.ghe.soGhe,
+      seatNumber: ticket.gheChuyenXe.ghe.tenGhe,
       actualPrice: ticket.giaThucTe.toString(),
       status: ticket.trangThai,
       bookedAt: ticket.phieuDatVe.ngayDat.toISOString(),

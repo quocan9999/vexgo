@@ -1,6 +1,7 @@
 // Synthetic completion times for the named demo seed only, never provider history.
 export function isDemoRevenueOrder(code) {
-  return /^(FUTA|TB|HM)-GD-\d{12}-\d{4}$/.test(code);
+  if (typeof code !== 'string') return false;
+  return /^[0-9a-f]{32}$/.test(code) || /^(FUTA|TB|HM)-GD-\d{12}-\d{4}$/.test(code);
 }
 
 // Read persisted evidence before considering fixture values. A completed payment
@@ -56,7 +57,9 @@ export async function demoRevenueFields(db, payment) {
   });
   if (!order || !isDemoRevenueOrder(order.maDonGiaoDich)) return empty;
   const successfulSales = order.thanhToans.filter((row) => row.loaiGiaoDich === 'THANH_TOAN' && row.trangThai === 'THANH_CONG');
-  const delay = (Number(order.maDonGiaoDich.slice(-4)) % 2 + 1) * 60_000;
+  const lastFour = order.maDonGiaoDich.slice(-4);
+  const parsedNum = /^\d+$/.test(lastFour) ? Number(lastFour) : parseInt(lastFour, 16);
+  const delay = ((Number.isFinite(parsedNum) ? parsedNum : 1) % 2 + 1) * 60_000;
   const completeAfter = (...dates) => new Date(Math.max(...dates.map((date) => new Date(date).getTime())) + delay);
   if (payment.loaiGiaoDich === 'THANH_TOAN') {
     if (successfulSales.length > 1 || !saleMatchesOrder(order, payment)) return empty;

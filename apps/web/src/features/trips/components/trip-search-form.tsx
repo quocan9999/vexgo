@@ -14,6 +14,7 @@ import {
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { LocationPicker } from '@/features/locations/components/location-picker';
+import type { LocationOption } from '@/features/locations/services/locations.api';
 import { AlertModal } from '@/components/ui/alert-modal';
 
 export function TripSearchForm({ compact = false }: { compact?: boolean }) {
@@ -21,6 +22,8 @@ export function TripSearchForm({ compact = false }: { compact?: boolean }) {
   const [service, setService] = useState<'trip' | 'shipment'>('trip');
   const [origin, setOrigin] = useState('');
   const [destination, setDestination] = useState('');
+  const [fromOption, setFromOption] = useState<LocationOption | null>(null);
+  const [toOption, setToOption] = useState<LocationOption | null>(null);
   const [date, setDate] = useState(
     new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(
       new Date(),
@@ -123,6 +126,16 @@ export function TripSearchForm({ compact = false }: { compact?: boolean }) {
       date,
       passengers: String(passengers),
     });
+    if (fromOption?.kind === 'station' && fromOption.diemDonTraId) {
+      params.set('fromStationId', String(fromOption.diemDonTraId));
+    } else if (fromOption?.diaDiemId) {
+      params.set('fromLocationId', String(fromOption.diaDiemId));
+    }
+    if (toOption?.kind === 'station' && toOption.diemDonTraId) {
+      params.set('toStationId', String(toOption.diemDonTraId));
+    } else if (toOption?.diaDiemId) {
+      params.set('toLocationId', String(toOption.diaDiemId));
+    }
     if (roundTrip && returnDate) params.set('returnDate', returnDate);
     router.push(`/trips?${params.toString()}`);
   };
@@ -181,6 +194,7 @@ export function TripSearchForm({ compact = false }: { compact?: boolean }) {
             <LocationPicker
               value={origin}
               onChange={setOrigin}
+              onSelectOption={setFromOption}
               placeholder="Chọn điểm đi"
             />
           </div>
@@ -189,6 +203,9 @@ export function TripSearchForm({ compact = false }: { compact?: boolean }) {
             onClick={() => {
               setOrigin(destination);
               setDestination(origin);
+              const temp = fromOption;
+              setFromOption(toOption);
+              setToOption(temp);
             }}
             aria-label="Đổi chiều tuyến"
             className="hidden size-11 place-items-center rounded-lg border border-slate-200 bg-slate-50 text-brand transition hover:bg-slate-100 lg:grid"
@@ -202,6 +219,7 @@ export function TripSearchForm({ compact = false }: { compact?: boolean }) {
             <LocationPicker
               value={destination}
               onChange={setDestination}
+              onSelectOption={setToOption}
               placeholder="Chọn điểm đến"
             />
           </div>

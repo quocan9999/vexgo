@@ -34,6 +34,8 @@ const testAccessTokenGuard = {
 
 const seatRecord = {
   gheId: 101,
+  maGhe: 'f6393ceced3348a98bcb0711319d1fa1',
+  tenGhe: 'A01',
   soGhe: 'A01',
   viTri: 'Tầng dưới',
   tang: 1,
@@ -87,9 +89,10 @@ describe('Vehicles seat API request-pipeline integration', () => {
     prisma.xe.findFirst.mockResolvedValue({ xeId: 12, nhaXeId: 1 });
     prisma.ghe.findMany.mockResolvedValue([seatRecord]);
     prisma.ghe.create.mockResolvedValue(seatRecord);
-    prisma.ghe.findFirst.mockResolvedValue({ gheId: 101, soGhe: 'A01', tang: 1 });
+    prisma.ghe.findFirst.mockResolvedValue({ gheId: 101, maGhe: 'f6393ceced3348a98bcb0711319d1fa1', tenGhe: 'A01', soGhe: 'A01', tang: 1 });
     prisma.ghe.update.mockResolvedValue({
       ...seatRecord,
+      tenGhe: 'A02',
       soGhe: 'A02',
       viTri: 'Tầng trên',
     });
@@ -114,6 +117,7 @@ describe('Vehicles seat API request-pipeline integration', () => {
       data: [
         {
           seatId: 101,
+          seatCode: 'f6393ceced3348a98bcb0711319d1fa1',
           seatNumber: 'A01',
           position: 'Tầng dưới',
           vehicleId: 12,
@@ -130,7 +134,7 @@ describe('Vehicles seat API request-pipeline integration', () => {
       expect.objectContaining({ where: { xeId: 12, nhaXeId: 1 } }),
     );
     expect(prisma.ghe.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { xeId: 12 }, orderBy: { soGhe: 'asc' } }),
+      expect.objectContaining({ where: { xeId: 12 }, orderBy: { tenGhe: 'asc' } }),
     );
   });
 
@@ -222,7 +226,8 @@ describe('Vehicles seat API request-pipeline integration', () => {
       expect.objectContaining({
         data: {
           xeId: 12,
-          soGhe: 'A01',
+          maGhe: expect.any(String),
+          tenGhe: 'A01',
           viTri: 'Tầng dưới',
           tang: 1,
           toaDoX: null,
@@ -268,7 +273,7 @@ describe('Vehicles seat API request-pipeline integration', () => {
 
   it('maps duplicate scoped seat numbers and allows the same number on a different vehicle', async () => {
     prisma.ghe.create.mockRejectedValueOnce(
-      prismaKnownError('P2002', { target: ['xeId', 'soGhe'] }),
+      prismaKnownError('P2002', { target: ['xeId', 'tenGhe'] }),
     );
     const duplicate = await request(app.getHttpServer())
       .post('/api/v1/vehicles/12/seats')
@@ -295,7 +300,7 @@ describe('Vehicles seat API request-pipeline integration', () => {
       .expect(200);
     expect(response.body.data).toMatchObject({ seatNumber: 'A02', position: 'Tầng trên' });
     expect(prisma.ghe.update.mock.calls[0][0].data).toEqual({
-      soGhe: 'A02',
+      tenGhe: 'A02',
       viTri: 'Tầng trên',
     });
 
@@ -329,10 +334,10 @@ describe('Vehicles seat API request-pipeline integration', () => {
       .patch('/api/v1/vehicles/12/seats/101')
       .send({ seatNumber: 'A01', position: null })
       .expect(200);
-    expect(prisma.ghe.update.mock.calls[0][0].data).toEqual({ soGhe: 'A01', viTri: null });
+    expect(prisma.ghe.update.mock.calls[0][0].data).toEqual({ tenGhe: 'A01', viTri: null });
 
     prisma.ghe.update.mockRejectedValueOnce(
-      prismaKnownError('P2002', { target: ['xeId', 'soGhe'] }),
+      prismaKnownError('P2002', { target: ['xeId', 'tenGhe'] }),
     );
     const duplicate = await request(app.getHttpServer())
       .patch('/api/v1/vehicles/12/seats/101')

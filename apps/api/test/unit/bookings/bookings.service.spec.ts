@@ -65,7 +65,7 @@ describe('BookingsService', () => {
         diemDon: 'Bến xe Miền Đông',
         gheChuyenXe: {
           gheChuyenXeId: 11,
-          ghe: { soGhe: 'A01', viTri: 'Tầng dưới' },
+          ghe: { maGhe: 'seat-a01'.padEnd(32, '0'), tenGhe: 'A01', viTri: 'Tầng dưới' },
           chuyenXe: {
             chuyenXeId: 50,
             maChuyenXe: 'CX-50',
@@ -91,7 +91,7 @@ describe('BookingsService', () => {
         diemDon: 'Bến xe Miền Đông',
         gheChuyenXe: {
           gheChuyenXeId: 12,
-          ghe: { soGhe: 'A02', viTri: 'Tầng dưới' },
+          ghe: { maGhe: 'seat-a02'.padEnd(32, '0'), tenGhe: 'A02', viTri: 'Tầng dưới' },
           chuyenXe: {
             chuyenXeId: 50,
             maChuyenXe: 'CX-50',
@@ -501,7 +501,7 @@ describe('BookingsService', () => {
       (prisma as any).bangGia = { findFirst: vi.fn().mockResolvedValue({ bangGiaId: 1, giaNiemYet: 250000 }) };
       (prisma as any).gheChuyenXe = {
         findMany: vi.fn().mockResolvedValue([
-          { gheChuyenXeId: 1, trangThai: 'DANG_GIU', giuChoId: 1, ghe: { soGhe: 'A01' } },
+          { gheChuyenXeId: 1, trangThai: 'DANG_GIU', giuChoId: 1, ghe: { maGhe: 'seat-a01'.padEnd(32, '0'), tenGhe: 'A01' } },
         ]),
       };
       let createdOrderData: Record<string, unknown> | undefined;
@@ -517,7 +517,7 @@ describe('BookingsService', () => {
         const txMock = {
           gheChuyenXe: {
             findMany: vi.fn().mockResolvedValue([
-              { gheChuyenXeId: 1, trangThai: 'DANG_GIU', giuChoId: 1, ghe: { soGhe: 'A01' } },
+              { gheChuyenXeId: 1, trangThai: 'DANG_GIU', giuChoId: 1, ghe: { maGhe: 'seat-a01'.padEnd(32, '0'), tenGhe: 'A01' } },
             ]),
             update: vi.fn().mockResolvedValue({}),
             updateMany: vi.fn().mockResolvedValue({ count: 1 }),
@@ -564,8 +564,8 @@ describe('BookingsService', () => {
       expect(res.bookingId).toBe(88);
       expect(res.ticketCount).toBe(1);
       expect(res.totalAmount).toBe(250000);
-      expect(res.tickets[0].soGhe).toBe('A01');
-      expect(createdOrderData?.maDonGiaoDich).toMatch(/^FUTAGD[A-F\d]{30}$/);
+      expect(res.tickets[0].tenGhe).toBe('A01');
+      expect(createdOrderData?.maDonGiaoDich).toMatch(/^[0-9a-f]{32}$/);
       expect(createPaymentAttempt).toHaveBeenCalledOnce();
       expect(createdOrderData).not.toHaveProperty('thanhToans');
       expect(res.paymentExpiresAt).toBe(new Date((createdOrderData?.ngayTao as Date).getTime() + 600000).toISOString());
@@ -578,7 +578,7 @@ describe('BookingsService', () => {
         thoiGian: expect.any(Date),
       });
       expect(Number(createdPaymentData?.soTien)).toBe(250000);
-      expect(createdBookingData?.maPhieuDatVe).toMatch(/^FUTA-PDV-[A-F\d]{30}$/);
+      expect(createdBookingData?.maPhieuDatVe).toMatch(/^[0-9a-f]{32}$/);
     });
   });
 
@@ -930,9 +930,9 @@ describe('BookingsService', () => {
       };
 
       const tripSeats = [
-        { gheChuyenXeId: 101, chuyenXeId: 50, trangThai: 'DANG_GIU', ghe: { soGhe: 'A1' } },
-        { gheChuyenXeId: 102, chuyenXeId: 50, trangThai: 'DANG_GIU', ghe: { soGhe: 'A2' } },
-        { gheChuyenXeId: 103, chuyenXeId: 50, trangThai: 'DANG_GIU', ghe: { soGhe: 'A3' } },
+        { gheChuyenXeId: 101, chuyenXeId: 50, trangThai: 'DANG_GIU', ghe: { maGhe: 'seat-a1'.padEnd(32, '0'), tenGhe: 'A1' } },
+        { gheChuyenXeId: 102, chuyenXeId: 50, trangThai: 'DANG_GIU', ghe: { maGhe: 'seat-a2'.padEnd(32, '0'), tenGhe: 'A2' } },
+        { gheChuyenXeId: 103, chuyenXeId: 50, trangThai: 'DANG_GIU', ghe: { maGhe: 'seat-a3'.padEnd(32, '0'), tenGhe: 'A3' } },
       ];
 
       const createdTickets: any[] = [];

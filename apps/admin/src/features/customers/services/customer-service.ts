@@ -11,6 +11,8 @@ import type {
   CustomerTicketsResponse,
   CustomerShipmentsQuery,
   CustomerShipmentsResponse,
+  UpdateCustomerStatusInput,
+  UpdateCustomerStatusResponse,
 } from '../types/customer';
 
 export class CustomerApiError extends Error {
@@ -93,6 +95,27 @@ export async function getCustomerById(
     ),
     'thông tin khách hàng',
   )) as CustomerDetailResponse;
+
+  return body.data;
+}
+
+export async function updateCustomerStatus(
+  customerId: number,
+  input: UpdateCustomerStatusInput,
+  signal?: AbortSignal,
+): Promise<UpdateCustomerStatusResponse['data']> {
+  const body = (await readResponse(
+    await adminApiFetch(
+      `${getApiBaseUrl()}/api/v1/customers/${customerId}/status`,
+      {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+        signal,
+      },
+    ),
+    'cập nhật trạng thái khách hàng',
+  )) as UpdateCustomerStatusResponse;
 
   return body.data;
 }
