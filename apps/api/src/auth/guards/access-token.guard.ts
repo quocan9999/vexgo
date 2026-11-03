@@ -1,7 +1,6 @@
 import {
   type CanActivate,
   type ExecutionContext,
-  ForbiddenException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -10,6 +9,7 @@ import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import type { Request } from 'express';
 import { requireAuthSecret } from '../auth-secret.js';
+import { assertAccountActive } from '../account-status.helper.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import type { AuthPrincipal } from '../tokens/auth-principal.js';
 import { EffectiveRolePermissionLoaderService } from '../permissions/effective-role-permission-loader.service.js';
@@ -91,6 +91,8 @@ export class AccessTokenGuard implements CanActivate {
           select: {
             taiKhoanId: true,
             trangThai: true,
+            khoaDenNgay: true,
+            lyDoKhoa: true,
             nhanVien: {
               select: {
                 nhanVienId: true,
@@ -111,6 +113,9 @@ export class AccessTokenGuard implements CanActivate {
         },
       },
     });
+    if (session) {
+      await assertAccountActive(this.prisma, session.taiKhoan);
+    }
     if (
       !session ||
       session.taiKhoanId !== payload.sub ||
@@ -118,12 +123,6 @@ export class AccessTokenGuard implements CanActivate {
       session.hetHanLuc <= new Date()
     ) {
       this.throwInvalidAccessToken();
-    }
-    if (session.taiKhoan.trangThai !== 'HOAT_DONG') {
-      throw new ForbiddenException({
-        error: 'ACCOUNT_INACTIVE',
-        message: 'Tài khoản không hoạt động.',
-      });
     }
 
     const roleAssignments = session.taiKhoan.taiKhoanVaiTros;

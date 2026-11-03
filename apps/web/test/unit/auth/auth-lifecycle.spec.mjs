@@ -228,3 +228,75 @@ test('runWithAuthRetry signs out when retry returns 401 again', async () => {
   assert.equal(callCount, 2);
   assert.equal(failedCalled, true, 'must sign out when retry fails with 401');
 });
+
+test('runWithAuthRetry signs out immediately and does not retry on 403 ACCOUNT_LOCKED', async () => {
+  let callCount = 0;
+  let refreshCalled = false;
+  let failedCalled = false;
+
+  await assert.rejects(
+    async () => {
+      await runWithAuthRetry(
+        async () => {
+          callCount++;
+          throw new ApiError('Tài khoản đã bị khóa vĩnh viễn.', 403, 'ACCOUNT_LOCKED');
+        },
+        {
+          getTokens: () => ({
+            accessToken: 'valid-token-but-locked',
+            refreshToken: 'valid-refresh-token',
+          }),
+          refreshFn: async () => {
+            refreshCalled = true;
+            return { data: { accessToken: 'x', refreshToken: 'y' } };
+          },
+          onRefresh: () => {},
+          onAuthFailed: () => {
+            failedCalled = true;
+          },
+        },
+      );
+    },
+    (err) => err instanceof ApiError && err.status === 403 && err.error === 'ACCOUNT_LOCKED',
+  );
+
+  assert.equal(callCount, 1);
+  assert.equal(refreshCalled, false, 'must not attempt refresh when account is locked');
+  assert.equal(failedCalled, true, 'must sign out immediately when account is locked');
+});
+
+test('runWithAuthRetry signs out immediately and does not retry on 403 ACCOUNT_SUSPENDED', async () => {
+  let callCount = 0;
+  let refreshCalled = false;
+  let failedCalled = false;
+
+  await assert.rejects(
+    async () => {
+      await runWithAuthRetry(
+        async () => {
+          callCount++;
+          throw new ApiError('Tài khoản tạm thời bị khóa đến ngày 20-11-2026.', 403, 'ACCOUNT_SUSPENDED');
+        },
+        {
+          getTokens: () => ({
+            accessToken: 'valid-token-but-suspended',
+            refreshToken: 'valid-refresh-token',
+          }),
+          refreshFn: async () => {
+            refreshCalled = true;
+            return { data: { accessToken: 'x', refreshToken: 'y' } };
+          },
+          onRefresh: () => {},
+          onAuthFailed: () => {
+            failedCalled = true;
+          },
+        },
+      );
+    },
+    (err) => err instanceof ApiError && err.status === 403 && err.error === 'ACCOUNT_SUSPENDED',
+  );
+
+  assert.equal(callCount, 1);
+  assert.equal(refreshCalled, false, 'must not attempt refresh when account is suspended');
+  assert.equal(failedCalled, true, 'must sign out immediately when account is suspended');
+});

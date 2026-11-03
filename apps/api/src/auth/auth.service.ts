@@ -16,6 +16,7 @@ import { EffectiveRolePermissionLoaderService } from './permissions/effective-ro
 import { PermissionResolverService } from './permissions/permission-resolver.service.js';
 import { Prisma } from '../generated/prisma/client.js';
 import { normalizeEmail } from '../common/normalize-email.js';
+import { assertAccountActive } from './account-status.helper.js';
 
 const DUMMY_PASSWORD_HASH =
   '$2b$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy';
@@ -156,12 +157,7 @@ export class AuthService {
         message: 'Thông tin đăng nhập không chính xác.',
       });
     }
-    if (account.trangThai !== 'HOAT_DONG') {
-      throw new ForbiddenException({
-        error: 'ACCOUNT_INACTIVE',
-        message: 'Tài khoản không hoạt động.',
-      });
-    }
+    await assertAccountActive(this.prisma, account);
 
     return this.prisma.$transaction((tx) =>
       this.tokenService.createSession(tx, {
