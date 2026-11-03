@@ -27,6 +27,7 @@ import { ReviewsModule } from './reviews/reviews.module.js';
 import { SupportChatModule } from './support-chat/support-chat.module.js';
 import { RevenueReportsModule } from './revenue-reports/revenue-reports.module.js';
 import { PlatformDashboardModule } from './platform-dashboard/platform-dashboard.module.js';
+import { MediaModule } from './media/media.module.js';
 
 @Module({
   imports: [
@@ -63,6 +64,7 @@ import { PlatformDashboardModule } from './platform-dashboard/platform-dashboard
     RevenueReportsModule,
     PlatformDashboardModule,
     StationsModule,
+    MediaModule,
   ],
 })
 export class AppModule {}

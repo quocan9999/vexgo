@@ -1,0 +1,43 @@
+name: Cloudinary media database integration
+
+on:
+  pull_request:
+    paths:
+      - 'apps/api/src/media/**'
+      - 'apps/api/test/**/media/**'
+      - 'prisma/schema.prisma'
+      - 'prisma/migrations/**'
+      - 'scripts/cloudinary/**'
+      - '.github/workflows/media-cloudinary.yml'
+      - 'package-lock.json'
+  push:
+    paths:
+      - 'apps/api/src/media/**'
+      - 'apps/api/test/**/media/**'
+      - 'scripts/cloudinary/**'
+      - '.github/workflows/media-cloudinary.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  isolated-mysql:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --include-workspace-root
+      - name: Generate Prisma client without a live database
+        run: npm exec -- prisma generate
+        env:
+          MIGRATION_URL: mysql://generate:generate@127.0.0.1:3306/generate_only
+          SHADOW_DATABASE_URL: mysql://generate:generate@127.0.0.1:3306/generate_shadow
+      - name: Prepare disposable MySQL
+        run: docker pull mysql:8.4
+      - name: Media schema, tenant isolation and concurrency
+        run: node scripts/cloudinary/test-isolated.mjs
+        # No Cloudinary credentials and no --live. Real cloud checks are opt-in locally.
