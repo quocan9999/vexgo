@@ -414,7 +414,7 @@ describe('Auth login, refresh and logout HTTP contract', () => {
     },
   );
 
-  it('returns ACCOUNT_INACTIVE for a locked account', async () => {
+  it('returns ACCOUNT_SUSPENDED for a locked account', async () => {
     taiKhoan.findUnique.mockResolvedValueOnce(
       account({ trangThai: 'TAM_KHOA' }),
     );
@@ -424,7 +424,7 @@ describe('Auth login, refresh and logout HTTP contract', () => {
       .send({ phoneNumber: PHONE, password: 'VexGo@123' })
       .expect(403);
 
-    expect(response.body.error).toBe('ACCOUNT_INACTIVE');
+    expect(response.body.error).toBe('ACCOUNT_SUSPENDED');
   });
 
   it('rotates refresh tokens and rejects replay of the old token', async () => {
