@@ -22,7 +22,14 @@ const refund = {
 
 function createService(configValues: Record<string, string | undefined> = {}) {
   const prisma = {
-    thongBao: { upsert: vi.fn().mockResolvedValue({ thongBaoId: 1 }) },
+    thongBao: {
+      upsert: vi.fn().mockImplementation(
+        async ({ create }: { create: { thoiGian: Date } }) => ({
+          thongBaoId: 1,
+          thoiGian: create.thoiGian,
+        }),
+      ),
+    },
     emailThongBao: { upsert: vi.fn() },
     thietBiThongBao: { findMany: vi.fn().mockResolvedValue([]) },
     pushThongBao: { upsert: vi.fn() },
