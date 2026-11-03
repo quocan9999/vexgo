@@ -216,7 +216,7 @@ export function ShipmentOperations({
           </div>
           <div>
             <dt className="text-muted-foreground">Ngày dự kiến gửi</dt>
-            <dd>{shipment.expectedSendDate || '—'}</dd>
+            <dd>{shipment.expectedSendDate || 'Gửi linh hoạt (Hạn 72h)'}</dd>
           </div>
           <div>
             <dt className="text-muted-foreground">Cước ước tính</dt>

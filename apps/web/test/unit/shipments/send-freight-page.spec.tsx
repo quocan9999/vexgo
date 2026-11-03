@@ -138,7 +138,6 @@ beforeEach(() => {
   api.searchParams = new URLSearchParams({
     from: 'Đà Lạt',
     to: 'TP.HCM',
-    date: '2026-10-20',
   });
   window.sessionStorage.clear();
   api.routerPush.mockReset();
@@ -257,7 +256,6 @@ describe('independent shipment flow', () => {
     expect(api.getOptions).toHaveBeenCalledWith({
       from: 'Đà Lạt',
       to: 'TP.HCM',
-      sendDate: '2026-10-20',
       page: 1,
       pageSize: 8,
     });
@@ -268,7 +266,6 @@ describe('independent shipment flow', () => {
     expect(api.createShipment).toHaveBeenCalledTimes(1);
     expect(api.createShipment.mock.calls[0][0]).toMatchObject({
       routeId: 42,
-      sendDate: '2026-10-20',
     });
     expect(api.createShipment.mock.calls[0][0]).not.toHaveProperty('tripId');
     expect(api.createShipment.mock.calls[0][2]).toEqual(expect.any(String));

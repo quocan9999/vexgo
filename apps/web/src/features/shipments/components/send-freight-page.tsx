@@ -22,7 +22,6 @@ import {
   Search,
   AlertCircle,
   Info,
-  CalendarDays,
   Building2,
   RotateCcw,
   Plus,
@@ -52,6 +51,14 @@ import {
 } from '@/features/booking/services/payment-draft';
 import { useAuthSession } from '@/features/auth/auth-session';
 
+function formatDisplayPhone(phone?: string | null): string {
+  if (!phone) return '';
+  if (phone.startsWith('+84')) {
+    return '0' + phone.slice(3).replace(/\D/g, '');
+  }
+  return phone.replace(/\D/g, '').slice(0, 11);
+}
+
 function formatCategoryName(name: string): string {
   if (!name) return '';
   const normalized = name.trim().toLocaleUpperCase('vi-VN');
@@ -79,7 +86,7 @@ export function getCarrierDeliveryEstimate(
 function SendFreightContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { isAuthenticated, isHydrated, executeWithAuth } = useAuthSession();
+  const { user, isAuthenticated, isHydrated, executeWithAuth } = useAuthSession();
 
   // Tab: 'create' | 'lookup'
   const [activeTab, setActiveTab] = useState<'create' | 'lookup'>(() =>
@@ -88,25 +95,14 @@ function SendFreightContent() {
   const [showGuideModal, setShowGuideModal] = useState<boolean>(false);
 
   // Tuyến & Chuyến
-  const todayStr = useMemo(
-    () =>
-      new Intl.DateTimeFormat('en-CA', {
-        timeZone: 'Asia/Ho_Chi_Minh',
-      }).format(new Date()),
-    [],
-  );
   const [origin, setOrigin] = useState<string>(
     () => searchParams.get('from') || searchParams.get('origin') || '',
   );
   const [destination, setDestination] = useState<string>(
     () => searchParams.get('to') || searchParams.get('destination') || '',
   );
-  const [date, setDate] = useState<string>(
-    () =>
-      searchParams.get('date') ||
-      new Intl.DateTimeFormat('en-CA', {
-        timeZone: 'Asia/Ho_Chi_Minh',
-      }).format(new Date()),
+  const [date] = useState<string>(
+    () => searchParams.get('date') || '',
   );
   const [trips, setTrips] = useState<ShipmentOption[]>([]);
   const [loadingTrips, setLoadingTrips] = useState<boolean>(false);
@@ -181,6 +177,31 @@ function SendFreightContent() {
   const [senderName, setSenderName] = useState<string>('');
   const [senderPhone, setSenderPhone] = useState<string>('');
   const [senderEmail, setSenderEmail] = useState<string>('');
+  const senderTouchedRef = useRef({ name: false, phone: false, email: false });
+
+  // Tự động điền thông tin người gửi nếu đã đăng nhập
+  useEffect(() => {
+    if (!isAuthenticated || !user) return;
+
+    if (user.fullName && !senderTouchedRef.current.name) {
+      setSenderName((curr) =>
+        !senderTouchedRef.current.name ? user.fullName : curr,
+      );
+    }
+    if (user.phoneNumber && !senderTouchedRef.current.phone) {
+      setSenderPhone((curr) =>
+        !senderTouchedRef.current.phone
+          ? formatDisplayPhone(user.phoneNumber)
+          : curr,
+      );
+    }
+    const userEmail = (user as { email?: string | null }).email;
+    if (userEmail && !senderTouchedRef.current.email) {
+      setSenderEmail((curr) =>
+        !senderTouchedRef.current.email ? userEmail : curr,
+      );
+    }
+  }, [isAuthenticated, user]);
 
   // Người nhận
   const [receiverName, setReceiverName] = useState<string>('');
@@ -367,7 +388,6 @@ function SendFreightContent() {
         !selectedTripId ||
         !senderPointId ||
         !receiverPointId ||
-        !date ||
         quoteItems.some(
           (item) =>
             !item.loaiHangHoaId || !(item.weight > 0) || !(item.quantity > 0),
@@ -380,7 +400,7 @@ function SendFreightContent() {
       shipmentsApi
         .getQuote({
           routeId: selectedTripId,
-          sendDate: date,
+          sendDate: date || undefined,
           senderPointId,
           receiverPointId,
           items: quoteItems,
@@ -455,7 +475,7 @@ function SendFreightContent() {
       setSelectedTripId(null);
     }
     setOptionsError(null);
-    if (!origin || !destination || !date || date < todayStr) {
+    if (!origin || !destination) {
       setLoadingTrips(false);
       return;
     }
@@ -464,7 +484,6 @@ function SendFreightContent() {
       const res = await shipmentsApi.getOptions({
         from: origin,
         to: destination,
-        sendDate: date,
         page: optionsPage,
         pageSize: 8,
       });
@@ -485,7 +504,7 @@ function SendFreightContent() {
     } finally {
       if (tripRequestId.current === requestId) setLoadingTrips(false);
     }
-  }, [origin, destination, date, todayStr, optionsPage]);
+  }, [origin, destination, optionsPage]);
 
   useEffect(() => {
     const timer = setTimeout(() => void fetchTrips(), 0);
@@ -756,7 +775,7 @@ function SendFreightContent() {
 
       const payload = {
         routeId: selectedTripId,
-        sendDate: date,
+        sendDate: date || undefined,
         senderPointId,
         receiverPointId,
         freightPayer,
@@ -1024,9 +1043,10 @@ function SendFreightContent() {
                     Tạo mã vận đơn gửi hàng thành công!
                   </h2>
                   <p className="text-sm text-slate-600 mb-6 leading-relaxed">
-                    Đơn gửi hàng của bạn đã được tiếp nhận vào hệ thống. Bạn chỉ
-                    cần mang kiện hàng ra bưu cục nhà xe đã chọn và đọc mã vận
-                    đơn bên dưới cho nhân viên tiếp nhận.
+                    Đơn gửi hàng của bạn đã được tiếp nhận vào hệ thống. Bạn vui
+                    lòng mang kiện hàng ra bưu cục đã chọn trong vòng{' '}
+                    <strong>72 giờ</strong> (3 ngày) kể từ khi tạo đơn. Sau thời
+                    gian này, mã vận đơn chưa tiếp nhận sẽ tự động hết hạn.
                   </p>
 
                   {/* Mã vận đơn nổi bật */}
@@ -1224,29 +1244,6 @@ function SendFreightContent() {
                             setDestination(value);
                           }}
                           placeholder="Chọn nơi nhận"
-                        />
-                      </div>
-
-                      {/* Ngày gửi */}
-                      <div className="flex-1 space-y-1.5">
-                        <label className="text-[11px] font-extrabold text-slate-500 uppercase flex items-center gap-1.5">
-                          <CalendarDays className="w-3.5 h-3.5 text-brand" />
-                          Ngày gửi
-                        </label>
-                        <input
-                          type="date"
-                          min={todayStr}
-                          value={date}
-                          onChange={(e) => {
-                            setOptionsPage(1);
-                            setDate(e.target.value);
-                          }}
-                          onBlur={(e) => {
-                            if (e.target.value && e.target.value < todayStr) {
-                              setDate(todayStr);
-                            }
-                          }}
-                          className="h-12 w-full border border-slate-300 rounded-lg px-3 text-sm font-bold text-slate-900 outline-none focus:border-brand bg-white"
                         />
                       </div>
                     </div>
@@ -1521,6 +1518,7 @@ function SendFreightContent() {
                               type="text"
                               value={senderName}
                               onChange={(e) => {
+                                senderTouchedRef.current.name = true;
                                 setSenderName(e.target.value);
                                 clearFieldError('senderName');
                               }}
@@ -1550,6 +1548,7 @@ function SendFreightContent() {
                               inputMode="numeric"
                               value={senderPhone}
                               onChange={(e) => {
+                                senderTouchedRef.current.phone = true;
                                 setSenderPhone(
                                   e.target.value
                                     .replace(/\D/g, '')
@@ -1582,7 +1581,10 @@ function SendFreightContent() {
                             <input
                               type="email"
                               value={senderEmail}
-                              onChange={(e) => setSenderEmail(e.target.value)}
+                              onChange={(e) => {
+                                senderTouchedRef.current.email = true;
+                                setSenderEmail(e.target.value);
+                              }}
                               placeholder="email@example.com"
                               className="w-full h-11 px-3.5 rounded-xl border border-slate-200 focus:outline-none focus:border-orange-500 text-slate-800 bg-slate-50/50 text-sm"
                             />
@@ -1719,7 +1721,7 @@ function SendFreightContent() {
                         <p className="mt-0.5 text-xs text-slate-500">
                           {selectedTrip
                             ? `Danh sách bưu cục và văn phòng tiếp nhận của nhà xe ${selectedTrip.busCompany.name}`
-                            : 'Chọn điểm gửi và điểm nhận đang hoạt động trên tuyến'}
+                            : 'Vui lòng chọn nhà xe ở bước trên để chọn bưu cục'}
                         </p>
                         {routePointsLoading ? (
                           <p
@@ -1763,7 +1765,7 @@ function SendFreightContent() {
                                     setReceiverPointId(null);
                                   }
                                 }}
-                                disabled={!routePoints?.senderPoints.length}
+                                disabled={!selectedTripId || !routePoints?.senderPoints.length}
                                 className={`h-11 w-full rounded-xl border bg-white px-3 text-sm font-semibold text-slate-800 focus:outline-none disabled:bg-slate-50 transition-colors ${
                                   fieldErrors.senderPointId
                                     ? 'border-rose-500 bg-rose-50/20 ring-1 ring-rose-500 focus:border-rose-500'
@@ -1771,8 +1773,9 @@ function SendFreightContent() {
                                 }`}
                               >
                                 <option value="">
-                                  Chọn bưu cục / điểm gửi (
-                                  {selectedTrip?.busCompany.name || 'Nhà xe'})
+                                  {selectedTrip
+                                    ? `Chọn bưu cục / điểm gửi (${selectedTrip.busCompany.name})`
+                                    : 'Vui lòng chọn nhà xe trước'}
                                 </option>
                                 {routePoints?.senderPoints.map((point) => (
                                   <option key={point.id} value={point.id}>
@@ -1786,12 +1789,17 @@ function SendFreightContent() {
                                   <span>{fieldErrors.senderPointId}</span>
                                 </p>
                               )}
-                              {!routePoints?.senderPoints.length && (
-                                <span className="mt-1 block text-xs text-amber-700">
-                                  Nhà xe chưa có điểm gửi hàng đang hoạt động
-                                  trên tuyến này.
-                                </span>
-                              )}
+                              {!fieldErrors.senderPointId &&
+                                (!selectedTripId ? (
+                                  <span className="mt-1 block text-xs text-amber-700">
+                                    Vui lòng chọn nhà xe trước.
+                                  </span>
+                                ) : !routePoints?.senderPoints.length ? (
+                                  <span className="mt-1 block text-xs text-amber-700">
+                                    Nhà xe chưa có điểm gửi hàng đang hoạt động
+                                    trên tuyến này.
+                                  </span>
+                                ) : null)}
                             </label>
                             <label className="block">
                               <span className="mb-1 block text-[11px] font-bold uppercase text-slate-500">
@@ -1807,7 +1815,7 @@ function SendFreightContent() {
                                   );
                                   clearFieldError('receiverPointId');
                                 }}
-                                disabled={!routePoints?.receiverPoints.length}
+                                disabled={!selectedTripId || !routePoints?.receiverPoints.length}
                                 className={`h-11 w-full rounded-xl border bg-white px-3 text-sm font-semibold text-slate-800 focus:outline-none disabled:bg-slate-50 transition-colors ${
                                   fieldErrors.receiverPointId
                                     ? 'border-rose-500 bg-rose-50/20 ring-1 ring-rose-500 focus:border-rose-500'
@@ -1815,8 +1823,9 @@ function SendFreightContent() {
                                 }`}
                               >
                                 <option value="">
-                                  Chọn bưu cục / điểm nhận (
-                                  {selectedTrip?.busCompany.name || 'Nhà xe'})
+                                  {selectedTrip
+                                    ? `Chọn bưu cục / điểm nhận (${selectedTrip.busCompany.name})`
+                                    : 'Vui lòng chọn nhà xe trước'}
                                 </option>
                                 {routePoints?.receiverPoints.map((point) => (
                                   <option
@@ -1834,12 +1843,17 @@ function SendFreightContent() {
                                   <span>{fieldErrors.receiverPointId}</span>
                                 </p>
                               )}
-                              {!routePoints?.receiverPoints.length && (
-                                <span className="mt-1 block text-xs text-amber-700">
-                                  Nhà xe chưa có điểm nhận hàng đang hoạt động
-                                  trên tuyến này.
-                                </span>
-                              )}
+                              {!fieldErrors.receiverPointId &&
+                                (!selectedTripId ? (
+                                  <span className="mt-1 block text-xs text-amber-700">
+                                    Vui lòng chọn nhà xe trước.
+                                  </span>
+                                ) : !routePoints?.receiverPoints.length ? (
+                                  <span className="mt-1 block text-xs text-amber-700">
+                                    Nhà xe chưa có điểm nhận hàng đang hoạt động
+                                    trên tuyến này.
+                                  </span>
+                                ) : null)}
                             </label>
                           </div>
                         )}
@@ -2407,9 +2421,11 @@ function SendFreightContent() {
                                 </span>
                                 <span>·</span>
                                 <span>
-                                  {date.includes('-')
-                                    ? date.split('-').reverse().join('/')
-                                    : date}
+                                  {date
+                                    ? date.includes('-')
+                                      ? date.split('-').reverse().join('/')
+                                      : date
+                                    : 'Gửi linh hoạt (Hạn 72h)'}
                                 </span>
                               </div>
                             </div>
@@ -2464,7 +2480,7 @@ function SendFreightContent() {
                         </div>
                         <p className="text-xs leading-relaxed text-slate-500">
                           Cước dự tính do nhà xe báo, được xác nhận sau khi cân
-                          đo thực tế. Mang hàng đến trong 48 giờ theo giờ mở
+                          đo thực tế. Mang hàng đến trong 72 giờ theo giờ mở
                           cửa. Đơn quá hạn chưa tiếp nhận sẽ bị hủy; tiền đã trả
                           không tự hoàn. Liên hệ nhà xe đã chọn qua bưu cục gửi
                           trước khi thanh toán.
@@ -3112,7 +3128,7 @@ function SendFreightContent() {
                 </div>
               </div>
 
-              {/* Alert 48h Dropoff Guide */}
+              {/* Alert 72h Dropoff Guide */}
               <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-2.5 text-amber-800 text-xs mb-5">
                 <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                 <div className="leading-relaxed">
@@ -3121,7 +3137,7 @@ function SendFreightContent() {
                     {formatIsoTime(createdSuccessShipment.dropoffDeadline)}{' '}
                     {formatIsoDate(createdSuccessShipment.dropoffDeadline)}
                   </strong>{' '}
-                  (48 giờ từ lúc tạo). Nhân viên nhà xe sẽ cân đo thực tế và
+                  (72 giờ từ lúc tạo). Nhân viên nhà xe sẽ cân đo thực tế và
                   tiến hành tiếp nhận vận chuyển.
                 </div>
               </div>
@@ -3146,6 +3162,11 @@ function SendFreightContent() {
                   type="button"
                   onClick={() => {
                     setCreatedSuccessShipment(null);
+                    senderTouchedRef.current = {
+                      name: false,
+                      phone: false,
+                      email: false,
+                    };
                     setSenderName('');
                     setSenderPhone('');
                     setSenderEmail('');

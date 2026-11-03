@@ -35,7 +35,7 @@ export type CargoItemInput = {
 
 export type CreateShipmentPayload = {
   routeId: number;
-  sendDate: string;
+  sendDate?: string;
   senderPointId: number;
   receiverPointId: number;
   sender: {
@@ -234,7 +234,9 @@ export type ShipmentQuote = {
 };
 
 // Native date inputs use ISO internally; the shipment API uses DD-MM-YYYY.
-export function shipmentApiDate(value: string): string {
+export function shipmentApiDate(value?: string | null): string | undefined {
+  if (!value) return undefined;
+  if (/^\d{2}-\d{2}-\d{4}$/.test(value)) return value;
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
   if (!match) throw new Error('Ngày gửi không hợp lệ.');
   return `${match[3]}-${match[2]}-${match[1]}`;
@@ -244,16 +246,20 @@ export const shipmentsApi = {
   async getOptions(query: {
     from: string;
     to: string;
-    sendDate: string;
-    page: number;
-    pageSize: number;
+    sendDate?: string;
+    page?: number;
+    pageSize?: number;
   }) {
     const params = new URLSearchParams({
-      ...query,
-      sendDate: shipmentApiDate(query.sendDate),
-      page: String(query.page),
-      pageSize: String(query.pageSize),
+      from: query.from,
+      to: query.to,
+      page: String(query.page ?? 1),
+      pageSize: String(query.pageSize ?? 10),
     });
+    const formattedSendDate = shipmentApiDate(query.sendDate);
+    if (formattedSendDate) {
+      params.set('sendDate', formattedSendDate);
+    }
     const res = await fetch(`${API_BASE_URL}/shipments/options?${params}`);
     if (!res.ok) {
       const error = await res.json().catch(() => ({}));
@@ -280,13 +286,19 @@ export const shipmentsApi = {
       | 'isValuable'
     >,
   ): Promise<{ data: ShipmentQuote }> {
+    const formattedSendDate = shipmentApiDate(payload.sendDate);
+    const body: Record<string, unknown> = {
+      ...payload,
+    };
+    if (formattedSendDate) {
+      body.sendDate = formattedSendDate;
+    } else {
+      delete body.sendDate;
+    }
     const res = await fetch(`${API_BASE_URL}/shipments/quotes`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ...payload,
-        sendDate: shipmentApiDate(payload.sendDate),
-      }),
+      body: JSON.stringify(body),
     });
     if (!res.ok) {
       const error = await res.json().catch(() => ({}));
@@ -376,13 +388,20 @@ export const shipmentsApi = {
       headers.Authorization = `Bearer ${accessToken}`;
     }
 
+    const formattedSendDate = shipmentApiDate(payload.sendDate);
+    const body: Record<string, unknown> = {
+      ...payload,
+    };
+    if (formattedSendDate) {
+      body.sendDate = formattedSendDate;
+    } else {
+      delete body.sendDate;
+    }
+
     const res = await fetch(`${API_BASE_URL}/shipments`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({
-        ...payload,
-        sendDate: shipmentApiDate(payload.sendDate),
-      }),
+      body: JSON.stringify(body),
     });
 
     if (!res.ok) {
