@@ -94,8 +94,10 @@ function formatNhaXe(nx: any) {
 
 function formatTaiKhoan(tk: any) {
   if (!tk) return tk;
+  const fullName = tk.hoTen ?? tk.nhanVien?.hoTen ?? tk.khachHang?.hoTen ?? 'Người dùng';
   return {
     ...tk,
+    hoTen: fullName,
     avatarUrl: tk.avatarUrl ?? null,
   };
 }
@@ -108,13 +110,19 @@ function formatConversation(conv: any) {
     khachHang: conv.khachHang
       ? {
           ...conv.khachHang,
-          taiKhoan: formatTaiKhoan(conv.khachHang.taiKhoan),
+          taiKhoan: formatTaiKhoan({
+            ...(conv.khachHang.taiKhoan ?? {}),
+            hoTen: conv.khachHang.hoTen ?? conv.khachHang.taiKhoan?.hoTen ?? '',
+          }),
         }
       : conv.khachHang,
     nhanVien: conv.nhanVien
       ? {
           ...conv.nhanVien,
-          taiKhoan: formatTaiKhoan(conv.nhanVien.taiKhoan),
+          taiKhoan: formatTaiKhoan({
+            ...(conv.nhanVien.taiKhoan ?? {}),
+            hoTen: conv.nhanVien.hoTen ?? conv.nhanVien.taiKhoan?.hoTen ?? '',
+          }),
         }
       : conv.nhanVien,
   };
@@ -129,6 +137,16 @@ function formatMessage(msg: any) {
       : msg.taiKhoanGui,
   };
 }
+
+const TAI_KHOAN_GUI_INCLUDE = {
+  taiKhoanGui: {
+    select: {
+      taiKhoanId: true,
+      nhanVien: { select: { hoTen: true } },
+      khachHang: { select: { hoTen: true } },
+    },
+  },
+} as const;
 
 @Injectable()
 export class SupportChatService {
@@ -278,20 +296,22 @@ export class SupportChatService {
             select: {
               khachHangId: true,
               maKhachHang: true,
-              taiKhoan: { select: { hoTen: true, soDienThoai: true } },
+              hoTen: true,
+              taiKhoan: { select: { soDienThoai: true } },
             },
           },
           nhanVien: {
             select: {
               nhanVienId: true,
               maNhanVien: true,
-              taiKhoan: { select: { hoTen: true } },
+              hoTen: true,
             },
           },
         },
       });
 
       if (existingConversation) {
+        const activeConversation = existingConversation;
         let firstMessage = null;
         if (dto.tinNhanDauTien) {
           // Xử lý idempotent cho tin nhắn đầu tiên khi cuộc trò chuyện đã tồn tại (BE-04)
@@ -299,7 +319,13 @@ export class SupportChatService {
             const existingMsg = await tx.tinNhanHoTro.findUnique({
               where: { clientMessageId: dto.clientMessageId },
               include: {
-                taiKhoanGui: { select: { taiKhoanId: true, hoTen: true } },
+                taiKhoanGui: {
+            select: {
+              taiKhoanId: true,
+              nhanVien: { select: { hoTen: true } },
+              khachHang: { select: { hoTen: true } },
+            },
+          },
               },
             });
 
@@ -337,7 +363,13 @@ export class SupportChatService {
                     trangThai: 'DA_GUI',
                   },
                   include: {
-                    taiKhoanGui: { select: { taiKhoanId: true, hoTen: true } },
+                    taiKhoanGui: {
+            select: {
+              taiKhoanId: true,
+              nhanVien: { select: { hoTen: true } },
+              khachHang: { select: { hoTen: true } },
+            },
+          },
                   },
                 });
                 existingConversation = await tx.cuocTroChuyen.update({
@@ -357,16 +389,17 @@ export class SupportChatService {
                       select: {
                         khachHangId: true,
                         maKhachHang: true,
+                        hoTen: true,
                         taiKhoan: {
-                          select: { hoTen: true, soDienThoai: true },
+                          select: { soDienThoai: true },
                         },
                       },
                     },
                     nhanVien: {
-                      select: {
-                        nhanVienId: true,
-                        maNhanVien: true,
-                        taiKhoan: { select: { hoTen: true } },
+            select: {
+              nhanVienId: true,
+              maNhanVien: true,
+              hoTen: true,
                       },
                     },
                   },
@@ -380,14 +413,14 @@ export class SupportChatService {
                     where: { clientMessageId: dto.clientMessageId },
                     include: {
                       taiKhoanGui: {
-                        select: { taiKhoanId: true, hoTen: true },
+                        select: { taiKhoanId: true, nhanVien: { select: { hoTen: true } }, khachHang: { select: { hoTen: true } } },
                       },
                     },
                   });
                   if (
                     raceMsg &&
                     raceMsg.cuocTroChuyenId ===
-                      existingConversation.cuocTroChuyenId &&
+                      activeConversation.cuocTroChuyenId &&
                     raceMsg.taiKhoanGuiId === principal.taiKhoanId &&
                     isSameFirstMessagePayload(raceMsg, dto)
                   ) {
@@ -417,7 +450,13 @@ export class SupportChatService {
                 trangThai: 'DA_GUI',
               },
               include: {
-                taiKhoanGui: { select: { taiKhoanId: true, hoTen: true } },
+                taiKhoanGui: {
+            select: {
+              taiKhoanId: true,
+              nhanVien: { select: { hoTen: true } },
+              khachHang: { select: { hoTen: true } },
+            },
+          },
               },
             });
             existingConversation = await tx.cuocTroChuyen.update({
@@ -432,17 +471,18 @@ export class SupportChatService {
                   },
                 },
                 khachHang: {
-                  select: {
-                    khachHangId: true,
-                    maKhachHang: true,
-                    taiKhoan: { select: { hoTen: true, soDienThoai: true } },
+            select: {
+              khachHangId: true,
+              maKhachHang: true,
+              hoTen: true,
+              taiKhoan: { select: { soDienThoai: true } },
                   },
                 },
                 nhanVien: {
-                  select: {
-                    nhanVienId: true,
-                    maNhanVien: true,
-                    taiKhoan: { select: { hoTen: true } },
+            select: {
+              nhanVienId: true,
+              maNhanVien: true,
+              hoTen: true,
                   },
                 },
               },
@@ -476,7 +516,8 @@ export class SupportChatService {
             select: {
               khachHangId: true,
               maKhachHang: true,
-              taiKhoan: { select: { hoTen: true, soDienThoai: true } },
+              hoTen: true,
+              taiKhoan: { select: { soDienThoai: true } },
             },
           },
         },
@@ -496,7 +537,13 @@ export class SupportChatService {
               trangThai: 'DA_GUI',
             },
             include: {
-              taiKhoanGui: { select: { taiKhoanId: true, hoTen: true } },
+              taiKhoanGui: {
+            select: {
+              taiKhoanId: true,
+              nhanVien: { select: { hoTen: true } },
+              khachHang: { select: { hoTen: true } },
+            },
+          },
             },
           });
         } catch (err) {
@@ -508,7 +555,13 @@ export class SupportChatService {
             const existingMsg = await tx.tinNhanHoTro.findUnique({
               where: { clientMessageId: dto.clientMessageId },
               include: {
-                taiKhoanGui: { select: { taiKhoanId: true, hoTen: true } },
+                taiKhoanGui: {
+            select: {
+              taiKhoanId: true,
+              nhanVien: { select: { hoTen: true } },
+              khachHang: { select: { hoTen: true } },
+            },
+          },
               },
             });
             if (
@@ -584,12 +637,10 @@ export class SupportChatService {
         { tieuDe: { contains: s } },
         {
           khachHang: {
-            taiKhoan: {
-              OR: [
-                { hoTen: { contains: s } },
-                { soDienThoai: { contains: s } },
-              ],
-            },
+            OR: [
+              { hoTen: { contains: s } },
+              { taiKhoan: { soDienThoai: { contains: s } } },
+            ],
           },
         },
       ];
@@ -614,14 +665,15 @@ export class SupportChatService {
             select: {
               khachHangId: true,
               maKhachHang: true,
-              taiKhoan: { select: { hoTen: true, soDienThoai: true } },
+              hoTen: true,
+              taiKhoan: { select: { soDienThoai: true } },
             },
           },
           nhanVien: {
             select: {
               nhanVienId: true,
               maNhanVien: true,
-              taiKhoan: { select: { hoTen: true } },
+              hoTen: true,
             },
           },
           tinNhans: {
@@ -689,17 +741,18 @@ export class SupportChatService {
           select: { nhaXeId: true, tenNhaXe: true, thongTinLienHe: true },
         },
         khachHang: {
-          select: {
-            khachHangId: true,
-            maKhachHang: true,
-            taiKhoan: { select: { hoTen: true, soDienThoai: true } },
+            select: {
+              khachHangId: true,
+              maKhachHang: true,
+              hoTen: true,
+              taiKhoan: { select: { soDienThoai: true } },
           },
         },
         nhanVien: {
-          select: {
-            nhanVienId: true,
-            maNhanVien: true,
-            taiKhoan: { select: { hoTen: true } },
+            select: {
+              nhanVienId: true,
+              maNhanVien: true,
+              hoTen: true,
           },
         },
       },
@@ -781,10 +834,10 @@ export class SupportChatService {
           select: { nhaXeId: true, tenNhaXe: true, thongTinLienHe: true },
         },
         nhanVien: {
-          select: {
-            nhanVienId: true,
-            maNhanVien: true,
-            taiKhoan: { select: { hoTen: true } },
+            select: {
+              nhanVienId: true,
+              maNhanVien: true,
+              hoTen: true,
           },
         },
         tinNhans: {
@@ -831,8 +884,7 @@ export class SupportChatService {
         include: {
           taiKhoanGui: {
             select: {
-              taiKhoanId: true,
-              hoTen: true,
+              taiKhoanId: true, nhanVien: { select: { hoTen: true } }, khachHang: { select: { hoTen: true } },
             },
           },
         },
@@ -915,7 +967,7 @@ export class SupportChatService {
         where: { clientMessageId: dto.clientMessageId },
         include: {
           taiKhoanGui: {
-            select: { taiKhoanId: true, hoTen: true },
+            select: { taiKhoanId: true, nhanVien: { select: { hoTen: true } }, khachHang: { select: { hoTen: true } } },
           },
         },
       });
@@ -1025,7 +1077,7 @@ export class SupportChatService {
           },
           include: {
             taiKhoanGui: {
-              select: { taiKhoanId: true, hoTen: true },
+              select: { taiKhoanId: true, nhanVien: { select: { hoTen: true } }, khachHang: { select: { hoTen: true } } },
             },
           },
         });
@@ -1039,7 +1091,7 @@ export class SupportChatService {
             where: { clientMessageId: dto.clientMessageId },
             include: {
               taiKhoanGui: {
-                select: { taiKhoanId: true, hoTen: true },
+                select: { taiKhoanId: true, nhanVien: { select: { hoTen: true } }, khachHang: { select: { hoTen: true } } },
               },
             },
           });
@@ -1161,14 +1213,15 @@ export class SupportChatService {
             select: {
               khachHangId: true,
               maKhachHang: true,
-              taiKhoan: { select: { hoTen: true, soDienThoai: true } },
+              hoTen: true,
+              taiKhoan: { select: { soDienThoai: true } },
             },
           },
           nhanVien: {
             select: {
               nhanVienId: true,
               maNhanVien: true,
-              taiKhoan: { select: { hoTen: true } },
+              hoTen: true,
             },
           },
         },

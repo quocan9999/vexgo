@@ -34,7 +34,7 @@ const expected = {
   BangGia: 27,
   TaiKhoan: 42,
   KhachHang: 20,
-  NhanVien: 21,
+  NhanVien: 22,
   VaiTro: 8,
   TaiKhoanVaiTro: 42,
   KhuyenMai: 15,
@@ -220,7 +220,7 @@ async function main() {
   await assertZero('trip seats from another vehicle', await scalar('SELECT COUNT(*) AS value FROM GheChuyenXe gc JOIN ChuyenXe c ON c.chuyenXeId=gc.chuyenXeId JOIN Ghe g ON g.gheId=gc.gheId WHERE g.xeId <> c.xeId'));
   await assertZero('shipment point crosses operator', await scalar('SELECT COUNT(*) AS value FROM PhieuGuiHang p JOIN DiemGiaoNhanHang ps ON ps.diemGiaoNhanHangId=p.diemGuiId JOIN DiemGiaoNhanHang pr ON pr.diemGiaoNhanHangId=p.diemNhanId JOIN DonGiaoDich d ON d.donGiaoDichId=p.donGiaoDichId WHERE ps.nhaXeId <> pr.nhaXeId OR ps.nhaXeId <> d.nhaXeId'));
   await assertZero('shipment trip crosses operator', await scalar('SELECT COUNT(*) AS value FROM PhieuGuiHang p JOIN ChuyenXe c ON c.chuyenXeId=p.chuyenXeId JOIN Xe x ON x.xeId=c.xeId JOIN DonGiaoDich d ON d.donGiaoDichId=p.donGiaoDichId WHERE x.nhaXeId <> d.nhaXeId'));
-  await assertZero('shipment has missing required references', await scalar('SELECT COUNT(*) AS value FROM PhieuGuiHang WHERE chuyenXeId IS NULL OR diemGuiId IS NULL OR diemNhanId IS NULL OR donGiaoDichId IS NULL'));
+  await assertZero('shipment has missing required references', await scalar('SELECT COUNT(*) AS value FROM PhieuGuiHang WHERE (chuyenXeId IS NULL AND tuyenXeId IS NULL) OR diemGuiId IS NULL OR diemNhanId IS NULL OR donGiaoDichId IS NULL'));
   await assertZero('shipment has no cargo items', await scalar('SELECT COUNT(*) AS value FROM PhieuGuiHang p WHERE NOT EXISTS (SELECT 1 FROM HangHoa h WHERE h.phieuGuiHangId=p.phieuGuiHangId)'));
   await assertAtLeast('multi-type shipment scenario', await scalar('SELECT COUNT(*) AS value FROM (SELECT phieuGuiHangId FROM HangHoa GROUP BY phieuGuiHangId HAVING COUNT(DISTINCT loaiHangHoaId) >= 2) mixed'), 1);
   await assertZero('shipment cargo groups do not have exactly one fee detail', await scalar('SELECT COUNT(*) AS value FROM (SELECT h.phieuGuiHangId, h.loaiHangHoaId FROM HangHoa h LEFT JOIN ChiTietCuocGuiHang d ON d.phieuGuiHangId=h.phieuGuiHangId AND d.loaiHangHoaId=h.loaiHangHoaId GROUP BY h.phieuGuiHangId, h.loaiHangHoaId HAVING COUNT(DISTINCT d.chiTietCuocGuiHangId) <> 1) invalid'));
@@ -243,7 +243,7 @@ async function main() {
   await assertZero('placeholder demo addresses', await scalar("SELECT COUNT(*) AS value FROM DiemGiaoNhanHang WHERE diaChi LIKE '%Đường Demo%'"));
   const snapshotCustomer = await prisma.khachHang.findFirst({ orderBy: { khachHangId: 'asc' } });
   if (!snapshotCustomer) throw new Error('KhachHang was not found');
-  await assertZero('snapshot mismatch absent', await scalar(`SELECT COUNT(*) AS value FROM DonGiaoDich d JOIN KhachHang k ON k.khachHangId=d.khachHangId JOIN TaiKhoan a ON a.taiKhoanId=k.taiKhoanId WHERE d.khachHangId=${snapshotCustomer.khachHangId} AND d.tenKhachHang=a.hoTen AND d.soDienThoaiKhachHang=a.soDienThoai`));
+  await assertZero('snapshot mismatch absent', await scalar(`SELECT COUNT(*) AS value FROM DonGiaoDich d JOIN KhachHang k ON k.khachHangId=d.khachHangId JOIN TaiKhoan a ON a.taiKhoanId=k.taiKhoanId WHERE d.khachHangId=${snapshotCustomer.khachHangId} AND d.tenKhachHang=k.hoTen AND d.soDienThoaiKhachHang=a.soDienThoai`));
   await assertZero('missing successful invoice', await scalar("SELECT COUNT(*) AS value FROM DonGiaoDich d LEFT JOIN HoaDon h ON h.donGiaoDichId=d.donGiaoDichId WHERE d.trangThai='DA_THANH_TOAN' AND h.hoaDonId IS NULL"));
   await assertZero('invoice on unpaid transaction', await scalar("SELECT COUNT(*) AS value FROM DonGiaoDich d JOIN HoaDon h ON h.donGiaoDichId=d.donGiaoDichId WHERE d.trangThai <> 'DA_THANH_TOAN'"));
   await assertZero('invalid image URLs', await scalar("SELECT COUNT(*) AS value FROM HinhAnhHangHoa WHERE duongDan NOT LIKE 'https://%'") );

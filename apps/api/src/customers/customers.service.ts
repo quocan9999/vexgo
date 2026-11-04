@@ -96,17 +96,15 @@ export class CustomersService {
           data: {
             ...(dto.fullName !== undefined ? { hoTen: dto.fullName } : {}),
             ...(birthDate !== undefined ? { ngaySinh: birthDate } : {}),
+            ...(dto.citizenId !== undefined ? { cccd: dto.citizenId } : {}),
           },
         });
         return tx.taiKhoan.update({
           where: { taiKhoanId },
           data: {
-            ...(dto.fullName !== undefined ? { hoTen: dto.fullName } : {}),
-            ...(birthDate !== undefined ? { ngaySinh: birthDate } : {}),
             ...(dto.email !== undefined
               ? { email: normalizeEmail(dto.email) }
               : {}),
-            ...(dto.citizenId !== undefined ? { cccd: dto.citizenId } : {}),
           },
           include: customerProfileInclude,
         });
@@ -167,10 +165,10 @@ export class CustomersService {
       customerId: customer.khachHangId,
       customerCode: customer.maKhachHang,
       loyaltyPoints: customer.diemTichLuy,
-      fullName: customer.hoTen ?? account.hoTen ?? '',
+      fullName: customer.hoTen ?? '',
       phoneNumber: account.soDienThoai,
-      dateOfBirth: (customer.ngaySinh ?? account.ngaySinh)?.toISOString().slice(0, 10) ?? null,
-      citizenId: account.cccd,
+      dateOfBirth: customer.ngaySinh?.toISOString().slice(0, 10) ?? null,
+      citizenId: customer.cccd,
       email: account.email,
       phoneVerified: account.daXacThucSoDienThoai,
       status: account.trangThai,
@@ -205,7 +203,6 @@ export class CustomersService {
         OR: [
           { maKhachHang: { contains: trimmedSearch } },
           { hoTen: { contains: trimmedSearch } },
-          { taiKhoan: { hoTen: { contains: trimmedSearch } } },
           { taiKhoan: { soDienThoai: { contains: trimmedSearch } } },
           { taiKhoan: { email: { contains: trimmedSearch } } },
         ],
@@ -231,7 +228,7 @@ export class CustomersService {
         break;
       case 'fullName':
         orderBy = [
-          { taiKhoan: { hoTen: sortDirection } },
+          { hoTen: sortDirection },
           { khachHangId: 'asc' },
         ];
         break;
@@ -267,7 +264,7 @@ export class CustomersService {
       data: items.map((item) => ({
         customerId: item.khachHangId,
         customerCode: item.maKhachHang,
-        fullName: item.hoTen ?? item.taiKhoan.hoTen ?? '',
+        fullName: item.hoTen ?? '',
         phoneNumber: item.taiKhoan.soDienThoai,
         email: item.taiKhoan.email,
         loyaltyPoints: item.diemTichLuy,
@@ -316,13 +313,13 @@ export class CustomersService {
       data: {
         customerId: customer.khachHangId,
         customerCode: customer.maKhachHang,
-        fullName: customer.hoTen ?? customer.taiKhoan.hoTen ?? '',
+        fullName: customer.hoTen ?? '',
         phoneNumber: customer.taiKhoan.soDienThoai,
         email: customer.taiKhoan.email,
-        dateOfBirth: formatDateOnly(customer.ngaySinh ?? customer.taiKhoan.ngaySinh),
+        dateOfBirth: formatDateOnly(customer.ngaySinh),
         gender: customer.gioiTinh ?? null,
         address: customer.diaChi ?? null,
-        citizenId: customer.taiKhoan.cccd ?? null,
+        citizenId: customer.cccd ?? null,
         loyaltyPoints: customer.diemTichLuy,
         account: {
           accountId: customer.taiKhoan.taiKhoanId,

@@ -119,7 +119,12 @@ const TICKET_HISTORY_SELECT = {
   lyDo: true,
   laOverride: true,
   maThaoTac: true,
-  taiKhoan: { select: { hoTen: true } },
+  taiKhoan: {
+    select: {
+      nhanVien: { select: { hoTen: true } },
+      khachHang: { select: { hoTen: true } },
+    },
+  },
 } satisfies Prisma.LichSuTrangThaiVeSelect;
 
 type TicketListRecord = Prisma.VeGetPayload<{
@@ -385,7 +390,7 @@ export class AdminTicketsService {
         reason: row.lyDo,
         isOverride: row.laOverride,
         operationId: row.maThaoTac,
-        actorName: row.taiKhoan?.hoTen ?? null,
+        actorName: row.taiKhoan?.nhanVien?.hoTen ?? row.taiKhoan?.khachHang?.hoTen ?? null,
       })),
       page,
       pageSize,
