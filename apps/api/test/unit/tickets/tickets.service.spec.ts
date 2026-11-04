@@ -698,6 +698,13 @@ describe('TicketsService', () => {
       expect(result.data.status).toBe('HUY');
       expect(result.data.cancelFee).toBe(25000);
       expect(result.data.refundAmount).toBe(225000);
+      expect(result.data.message).toContain('liên hệ hỗ trợ');
+      expect(result.data.message).toContain('không hoàn tiền online');
+      expect(prisma.thongBao.upsert).toHaveBeenCalledWith(expect.objectContaining({
+        create: expect.objectContaining({
+          noiDung: expect.stringContaining('liên hệ hỗ trợ và cung cấp mã vé'),
+        }),
+      }));
       expect(prisma.thanhToan.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
           phuongThuc: 'MOMO',

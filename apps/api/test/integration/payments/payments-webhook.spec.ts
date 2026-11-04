@@ -509,7 +509,7 @@ describe('Payments Webhook & Status Security with MySQL (Integration)', () => {
     await f.cleanup();
   });
 
-  it('lifecycle notices: reminder, cancellation and provider-confirmed refund persist once in MySQL', async () => {
+  it('lifecycle notices persist while cancellation refunds remain pending for support', async () => {
     const f = await createMultiTicketPayment(customerAId, 1);
     const bookingId = f.phieuDatVe.phieuDatVeId;
     const eventKeys = [`booking-paid:${bookingId}`, `ticket-cancelled:${f.veIds[0]}`, `departure-reminder:${f.veIds[0]}:${new Date('2026-12-01T01:00:00Z').getTime()}`];
@@ -540,10 +540,13 @@ describe('Payments Webhook & Status Security with MySQL (Integration)', () => {
       globalThis.fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({status:'SUCCEEDED'}),{status:200}));
       const processor = new RefundProcessorService(prisma,new ConfigService({REFUND_PROVIDER_URL:'https://fixture.example.test/refund'}));
       await processor.processRefund(refund.thanhToanId);await processor.processRefund(refund.thanhToanId);
-      expect(await prisma.thongBao.count({where:{eventKey:refundKey}})).toBe(1);
-      expect(await prisma.emailThongBao.count({where:{eventKey:refundKey}})).toBe(1);
-      expect(await prisma.pushThongBao.count({where:{thietBiThongBaoId:device.thietBiThongBaoId}})).toBe(4);
-      expect((await prisma.thanhToan.findUniqueOrThrow({where:{thanhToanId:refund.thanhToanId}})).thoiDiemHoanTat).not.toBeNull();
+      expect(await prisma.thongBao.count({where:{eventKey:refundKey}})).toBe(0);
+      expect(await prisma.emailThongBao.count({where:{eventKey:refundKey}})).toBe(0);
+      expect(await prisma.pushThongBao.count({where:{thietBiThongBaoId:device.thietBiThongBaoId}})).toBe(3);
+      expect(globalThis.fetch).not.toHaveBeenCalled();
+      const unchanged = await prisma.thanhToan.findUniqueOrThrow({where:{thanhToanId:refund.thanhToanId}});
+      expect(unchanged.thoiDiemHoanTat).toBeNull();
+      expect(unchanged.trangThai).toBe('DANG_XU_LY');
     } finally {
       globalThis.fetch = oldFetch;
       const notices = await prisma.thongBao.findMany({where:{eventKey:{in:eventKeys}},select:{thongBaoId:true}});

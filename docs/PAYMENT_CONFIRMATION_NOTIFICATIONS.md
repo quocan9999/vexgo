@@ -7,7 +7,7 @@ Base Backend develop `66a2ce8`. Phối hợp với nhánh Mobile
 
 - Thanh toán được quyết toán hợp lệ: `booking-paid:<bookingId>`. Đọc lại vé đã thanh toán, tổng đơn gồm phí hàng và toàn bộ mã vé. Đơn miễn phí dùng cùng event sau khi phát hành vé.
 - Hủy vé: `ticket-cancelled:<ticketId>`. Nội dung phân biệt khoản hoàn đang chờ với hoàn thành công.
-- Hoàn tiền: `refund-succeeded:<paymentId>`, chỉ tạo sau khi provider xác nhận SUCCEEDED và ghi trạng thái hoàn thành.
+- Hoàn tiền: hỗ trợ xử lý ngoài ứng dụng sau khi khách liên hệ. Hủy vé không tự phát sinh xác nhận hoàn tiền thành công. Helper `refund-succeeded:<paymentId>` chỉ chấp nhận bản ghi đã hoàn tất và không được refund processor gọi tự động nữa.
 - Nhắc điểm đón: `departure-reminder:<ticketId>:<pickupMillis>`, trong 2 giờ trước giờ đón theo snapshot và múi giờ nghiệp vụ. Kiểm tra lại vé, đơn, chuyến và giờ đón trước khi gửi; bỏ job đã hết hiệu lực.
 
 Inbox/outbox được tạo trong transaction nghiệp vụ; rollback không để lại thông báo thành công. Unique eventKey chống lặp callback/worker. Không phát lại đơn cũ chỉ vì triển khai tính năng. Khách vãng lai chỉ nhận email hợp lệ; không tự ghép tài khoản theo số điện thoại. Mỗi chiều khứ hồi có booking/event riêng.
@@ -58,7 +58,7 @@ POST/DELETE `/api/v1/notifications/devices`, body `{ "token": "..." }`, yêu c�
 - MySQL riêng: 53/53 test qua, kiểm tra settlement/rollback, dedupe, hủy/hoàn/nhắc và đăng ký thiết bị. Test thiết bị dùng JWT/session thật, gồm 4 request đăng ký đồng thời; phần harness thanh toán còn dùng principal test.
 - Gmail SMTP thật: một thư QA được chấp nhận, người dùng xác nhận nhận trong Inbox. Không gửi vé cũ hàng loạt.
 - Android realme 11 / Android 15: foreground nhận sự kiện và tự tải lại inbox; background hiện thông báo, chạm mở inbox; sau khi kết thúc tiến trình bằng kill (không Force stop), push vẫn hiện, chạm khởi động lại app và tải thông báo mới. Các probe dùng thông báo QA SYSTEM, không tạo booking/thanh toán thật.
-- Chưa có provider hoàn tiền ngân hàng thật ở local: test hoàn tiền dùng provider stub trên DB riêng. Không coi đây là bằng chứng ngân hàng đã hoàn tiền.
+- Luồng hoàn tiền online đã ngừng: processor không gửi request hoặc tự hoàn tất giao dịch, kể cả khi có cấu hình provider cũ. Kiểm thử MySQL riêng xác minh khoản hoàn vẫn pending, không phát sinh notice/email/push hoàn thành. Đây không phải bằng chứng chuyển tiền thật.
 - Ba suite integration booking/history chỉ cập nhật cleanup fixture, chưa chạy local do yêu cầu môi trường riêng; cần CI kiểm tra.
 
 Log, APK, backup và cấu hình riêng nằm ngoài Git. Không chia sẻ nguyên thư mục bằng chứng vì chứa credential và dữ liệu cá nhân.
