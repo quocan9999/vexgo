@@ -203,7 +203,7 @@ describe('Shipment Status Actions UI (Phase 05)', () => {
     // Verify no action buttons are rendered
     expect(screen.queryByText('Thao tác trạng thái:')).toBeNull();
     expect(
-      screen.queryByRole('button', { name: 'Xác nhận đã tiếp nhận hàng' }),
+      screen.queryByRole('button', { name: 'Cân đo và tiếp nhận' }),
     ).toBeNull();
     expect(screen.queryByRole('button', { name: 'Hủy phiếu gửi' })).toBeNull();
   });
@@ -247,12 +247,12 @@ describe('Shipment Status Actions UI (Phase 05)', () => {
 
     expect(await screen.findByText('Thao tác trạng thái:')).toBeTruthy();
     expect(
-      screen.getByRole('button', { name: 'Xác nhận đã tiếp nhận hàng' }),
+      screen.getByRole('button', { name: 'Cân đo và tiếp nhận' }),
     ).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Hủy phiếu gửi' })).toBeNull();
   });
 
-  it('does not expose operational transitions before payment is confirmed', async () => {
+  it('allows actual receiving before payment without starting transport', async () => {
     setEmployeeAdminTestSession(['shipment:read', 'shipment:update']);
     const unpaidDetail = {
       ...mockShipmentDetailMoiTao,
@@ -292,7 +292,7 @@ describe('Shipment Status Actions UI (Phase 05)', () => {
     ).toBeNull();
     expect(
       screen.getByText(
-        'Chỉ có thể cập nhật trạng thái vận chuyển sau khi đơn đã thanh toán.',
+        'Cần phân chuyến và hoàn tất điều kiện thanh toán trước khi vận chuyển / giao hàng.',
       ),
     ).toBeTruthy();
   });
@@ -302,11 +302,11 @@ describe('Shipment Status Actions UI (Phase 05)', () => {
 
     const updatedDetail = {
       ...mockShipmentDetailMoiTao,
-      status: 'DA_TIEP_NHAN',
+      status: 'DANG_VAN_CHUYEN',
       history: [
         {
           historyId: 2,
-          status: 'DA_TIEP_NHAN',
+          status: 'DANG_VAN_CHUYEN',
           time: '2026-10-09T09:00:00.000Z',
           note: 'Hàng đã nhập kho tại Bến xe Miền Đông',
           actor: { accountId: 1, fullName: 'Nhân viên Điều hành' },
@@ -332,7 +332,7 @@ describe('Shipment Status Actions UI (Phase 05)', () => {
             jsonResponse({
               data: {
                 shipmentId: 10,
-                status: 'DA_TIEP_NHAN',
+                status: 'DANG_VAN_CHUYEN',
                 updatedAt: '2026-10-09T09:00:00.000Z',
               },
             }),
@@ -341,7 +341,9 @@ describe('Shipment Status Actions UI (Phase 05)', () => {
         if (url.includes('/api/v1/shipments/10')) {
           return Promise.resolve(
             jsonResponse({
-              data: patchCalled ? updatedDetail : mockShipmentDetailMoiTao,
+              data: patchCalled
+                ? updatedDetail
+                : { ...mockShipmentDetailMoiTao, status: 'DA_TIEP_NHAN' },
             }),
           );
         }
@@ -368,16 +370,18 @@ describe('Shipment Status Actions UI (Phase 05)', () => {
     )[0];
     fireEvent.click(detailButton);
 
-    const underlyingDetail = await screen.findByRole('dialog', { name: 'Chi tiết phiếu gửi' });
+    const underlyingDetail = await screen.findByRole('dialog', {
+      name: 'Chi tiết phiếu gửi',
+    });
     const acceptButton = await screen.findByRole('button', {
-      name: 'Xác nhận đã tiếp nhận hàng',
+      name: 'Bắt đầu vận chuyển',
     });
     fireEvent.click(acceptButton);
 
     // The confirmation must stay a top-level dialog so Escape only dismisses it.
-    expect(await screen.findByText('Tiếp nhận hàng gửi?')).toBeTruthy();
+    expect(await screen.findByText('Bắt đầu vận chuyển hàng?')).toBeTruthy();
     const confirmationDialog = screen.getByRole('alertdialog', {
-      name: 'Tiếp nhận hàng gửi?',
+      name: 'Bắt đầu vận chuyển hàng?',
     });
     expect(
       confirmationDialog.parentElement?.closest(
@@ -392,7 +396,7 @@ describe('Shipment Status Actions UI (Phase 05)', () => {
     });
 
     const confirmButton = screen.getByRole('button', {
-      name: 'Xác nhận tiếp nhận',
+      name: 'Bắt đầu vận chuyển',
     }) as HTMLButtonElement;
     fireEvent.click(confirmButton);
 
@@ -401,7 +405,7 @@ describe('Shipment Status Actions UI (Phase 05)', () => {
     });
 
     expect(patchPayload).toEqual({
-      status: 'DA_TIEP_NHAN',
+      status: 'DANG_VAN_CHUYEN',
       note: 'Hàng đã nhập kho tại Bến xe Miền Đông',
     });
 
@@ -443,9 +447,10 @@ describe('Shipment Status Actions UI (Phase 05)', () => {
                 detailReadCount > 1
                   ? {
                       ...mockShipmentDetailMoiTao,
+                      status: 'DA_TIEP_NHAN',
                       paymentStatus: 'CHO_THANH_TOAN',
                     }
-                  : mockShipmentDetailMoiTao,
+                  : { ...mockShipmentDetailMoiTao, status: 'DA_TIEP_NHAN' },
             }),
           );
         }
@@ -473,22 +478,22 @@ describe('Shipment Status Actions UI (Phase 05)', () => {
     fireEvent.click(detailButton);
 
     const acceptButton = await screen.findByRole('button', {
-      name: 'Xác nhận đã tiếp nhận hàng',
+      name: 'Bắt đầu vận chuyển',
     });
     fireEvent.click(acceptButton);
     const confirmButton = screen.getByRole('button', {
-      name: 'Xác nhận tiếp nhận',
+      name: 'Bắt đầu vận chuyển',
     });
     fireEvent.click(confirmButton);
 
     expect(
       await screen.findByText(
-        'Chỉ có thể cập nhật trạng thái vận chuyển sau khi đơn đã thanh toán.',
+        'Cần phân chuyến và hoàn tất điều kiện thanh toán trước khi vận chuyển / giao hàng.',
       ),
     ).toBeTruthy();
     await waitFor(() => expect(detailReadCount).toBe(2));
     expect(
-      screen.queryByRole('button', { name: 'Xác nhận đã tiếp nhận hàng' }),
+      screen.queryByRole('button', { name: 'Bắt đầu vận chuyển' }),
     ).toBeNull();
   });
 
@@ -497,11 +502,11 @@ describe('Shipment Status Actions UI (Phase 05)', () => {
 
     const updatedDetail = {
       ...mockShipmentDetailMoiTao,
-      status: 'DA_TIEP_NHAN',
+      status: 'DANG_VAN_CHUYEN',
       history: [
         {
           historyId: 2,
-          status: 'DA_TIEP_NHAN',
+          status: 'DANG_VAN_CHUYEN',
           time: '2026-10-09T09:00:00.000Z',
           note: 'Đã tiếp nhận tại quầy',
           actor: { accountId: 1, fullName: 'Nhân viên Điều hành' },
@@ -529,7 +534,10 @@ describe('Shipment Status Actions UI (Phase 05)', () => {
         if (url.includes('/api/v1/shipments/10')) {
           return Promise.resolve(
             jsonResponse({
-              data: patchCount > 0 ? updatedDetail : mockShipmentDetailMoiTao,
+              data:
+                patchCount > 0
+                  ? updatedDetail
+                  : { ...mockShipmentDetailMoiTao, status: 'DA_TIEP_NHAN' },
             }),
           );
         }
@@ -557,12 +565,12 @@ describe('Shipment Status Actions UI (Phase 05)', () => {
     fireEvent.click(detailButton);
     fireEvent.click(
       await screen.findByRole('button', {
-        name: 'Xác nhận đã tiếp nhận hàng',
+        name: 'Bắt đầu vận chuyển',
       }),
     );
 
     const confirmButton = screen.getByRole('button', {
-      name: 'Xác nhận tiếp nhận',
+      name: 'Bắt đầu vận chuyển',
     }) as HTMLButtonElement;
     fireEvent.click(confirmButton);
 
@@ -578,7 +586,7 @@ describe('Shipment Status Actions UI (Phase 05)', () => {
       jsonResponse({
         data: {
           shipmentId: 10,
-          status: 'DA_TIEP_NHAN',
+          status: 'DANG_VAN_CHUYEN',
           updatedAt: '2026-10-09T09:00:00.000Z',
         },
       }),
@@ -593,11 +601,11 @@ describe('Shipment Status Actions UI (Phase 05)', () => {
 
     const latestDetail = {
       ...mockShipmentDetailMoiTao,
-      status: 'DA_TIEP_NHAN',
+      status: 'DANG_VAN_CHUYEN',
       history: [
         {
           historyId: 2,
-          status: 'DA_TIEP_NHAN',
+          status: 'DANG_VAN_CHUYEN',
           time: '2026-10-09T09:00:00.000Z',
           note: 'Đã tiếp nhận bởi nhân viên khác',
           actor: { accountId: 2, fullName: 'Nhân viên khác' },
@@ -607,7 +615,7 @@ describe('Shipment Status Actions UI (Phase 05)', () => {
     };
     const latestSummary = {
       ...mockShipmentSummary,
-      status: 'DA_TIEP_NHAN',
+      status: 'DANG_VAN_CHUYEN',
     };
     let detailReadCount = 0;
     let listReadCount = 0;
@@ -640,7 +648,9 @@ describe('Shipment Status Actions UI (Phase 05)', () => {
           return Promise.resolve(
             jsonResponse({
               data:
-                detailReadCount > 1 ? latestDetail : mockShipmentDetailMoiTao,
+                detailReadCount > 1
+                  ? latestDetail
+                  : { ...mockShipmentDetailMoiTao, status: 'DA_TIEP_NHAN' },
             }),
           );
         }
@@ -670,10 +680,10 @@ describe('Shipment Status Actions UI (Phase 05)', () => {
 
     fireEvent.click(
       await screen.findByRole('button', {
-        name: 'Xác nhận đã tiếp nhận hàng',
+        name: 'Bắt đầu vận chuyển',
       }),
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Xác nhận tiếp nhận' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Bắt đầu vận chuyển' }));
 
     await expectOperationToast('error', /Trạng thái phiếu gửi/i);
 
@@ -686,12 +696,16 @@ describe('Shipment Status Actions UI (Phase 05)', () => {
       await screen.findByText(/Đã tiếp nhận bởi nhân viên khác/),
     ).toBeTruthy();
     expect(
-      screen.queryByRole('button', { name: 'Xác nhận tiếp nhận' }),
+      screen.queryByRole('button', { name: 'Bắt đầu vận chuyển' }),
     ).toBeNull();
     const lockedConfirmation = screen.getByRole('alertdialog');
-    fireEvent.click(within(lockedConfirmation).getByRole('button', { name: 'Hủy' }));
+    fireEvent.click(
+      within(lockedConfirmation).getByRole('button', { name: 'Hủy' }),
+    );
     await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
-    expect(screen.getByRole('dialog', { name: 'Chi tiết phiếu gửi' })).toBeTruthy();
+    expect(
+      screen.getByRole('dialog', { name: 'Chi tiết phiếu gửi' }),
+    ).toBeTruthy();
     expect(patchCount).toBe(1);
   });
 
@@ -821,7 +835,9 @@ describe('Shipment Status Actions UI (Phase 05)', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: 'Làm mới' }));
 
-    expect((await screen.findByRole('alert')).textContent).toContain('Không thể làm mới danh sách.');
+    expect((await screen.findByRole('alert')).textContent).toContain(
+      'Không thể làm mới danh sách.',
+    );
     expect(screen.getAllByText('VD20261009001')).toHaveLength(2);
     expect(screen.getByRole('button', { name: 'Thử lại' })).toBeTruthy();
     expect(requestCount).toBe(2);

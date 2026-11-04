@@ -655,12 +655,12 @@ export function TripList() {
   }
 
   return (
-    <div className="bg-[#F5F5F5] min-h-screen pb-12 pt-6">
+    <div className="bg-[#F8FAFC] min-h-screen pb-12 pt-6">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         {/* Top Header Row */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-white rounded-xl p-4 shadow-sm mb-6 gap-4 border border-slate-100">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-white rounded-2xl p-5 shadow-sm mb-6 gap-4 border border-slate-200/80">
           <div>
-            <h1 className="text-2xl font-bold text-slate-800">
+            <h1 className="text-2xl font-black text-slate-900 tracking-tight">
               Chọn chuyến xe phù hợp
             </h1>
             <p className="text-sm text-slate-500 mt-1">
@@ -669,16 +669,16 @@ export function TripList() {
             </p>
           </div>
           <div className="flex gap-2">
-            <div className="bg-[#e8f6f3] text-[#00b14f] px-3 py-1.5 rounded-lg text-center border border-[#b2e8d3] min-w-[70px]">
-              <p className="font-bold text-lg leading-tight">{totalResults}</p>
+            <div className="bg-[#e8f6f3] text-[#00b14f] px-3.5 py-1.5 rounded-xl text-center border border-[#b2e8d3] min-w-[70px]">
+              <p className="font-extrabold text-lg leading-tight">{totalResults}</p>
               <p className="text-[10px] uppercase font-bold">Kết quả</p>
             </div>
-            <div className="bg-[#fff4e5] text-[#f05123] px-3 py-1.5 rounded-lg text-center border border-[#ffe0b2] min-w-[70px]">
-              <p className="font-bold text-lg leading-tight">10p</p>
+            <div className="bg-[#fff4e5] text-[#FF5722] px-3.5 py-1.5 rounded-xl text-center border border-[#ffe0b2] min-w-[70px]">
+              <p className="font-extrabold text-lg leading-tight">10p</p>
               <p className="text-[10px] uppercase font-bold">Giữ ghế</p>
             </div>
-            <div className="border border-slate-200 text-slate-800 px-3 py-1.5 rounded-lg text-center bg-white min-w-[70px]">
-              <p className="font-bold text-lg leading-tight">QR</p>
+            <div className="border border-slate-200 text-slate-800 px-3.5 py-1.5 rounded-xl text-center bg-white min-w-[70px] shadow-2xs">
+              <p className="font-extrabold text-lg leading-tight">QR</p>
               <p className="text-[10px] uppercase font-bold">Vé điện tử</p>
             </div>
           </div>
@@ -688,7 +688,7 @@ export function TripList() {
           {/* ===== LEFT SIDEBAR ===== */}
           <div className="space-y-4">
             {/* CHUYẾN ĐI CỦA BẠN */}
-            <div className="bg-white rounded-xl shadow-sm overflow-hidden border-2 border-slate-200">
+            <div className="bg-white rounded-2xl shadow-sm overflow-hidden border border-slate-200/90">
               <div className="px-4 py-3 border-b border-slate-200">
                 <h2 className="font-bold text-slate-800 text-[13px] uppercase tracking-wide">
                   CHUYẾN ĐI CỦA BẠN
@@ -744,10 +744,10 @@ export function TripList() {
             </div>
 
             {/* LỌC CHUYẾN */}
-            <div className="bg-white rounded-xl shadow-sm p-5 border border-slate-200">
+            <div className="bg-white rounded-2xl shadow-sm p-5 border border-slate-200/90">
               <div className="flex justify-between items-center mb-5 pb-4 border-b border-slate-100">
-                <h2 className="font-bold text-slate-800 flex items-center gap-2 text-[13px] uppercase">
-                  <Filter size={16} className="text-blue-600" />
+                <h2 className="font-black text-slate-900 flex items-center gap-2 text-[13px] uppercase tracking-wide">
+                  <Filter size={16} className="text-[#2563EB]" />
                   LỌC CHUYẾN
                 </h2>
                 <button
@@ -761,7 +761,7 @@ export function TripList() {
                     setFromAreaId(undefined);
                     setToAreaId(undefined);
                   }}
-                  className="text-[11px] font-medium text-slate-500 hover:text-[#f05123] transition-colors"
+                  className="text-[11px] font-bold text-slate-500 hover:text-[#FF5722] transition-colors cursor-pointer"
                 >
                   ↺ Đặt lại
                 </button>

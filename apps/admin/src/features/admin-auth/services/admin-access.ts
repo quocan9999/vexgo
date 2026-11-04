@@ -203,12 +203,24 @@ export function canAccessSupportChat(session: AdminSession | null): boolean {
   );
 }
 
+export function canAccessShipmentRates(session: AdminSession | null): boolean {
+  return (
+    session !== null &&
+    getAdminAccessScope(session) === 'tenant' &&
+    (session.permissions.includes('shipment:read') ||
+      session.permissions.includes('fare-price:read'))
+  );
+}
+
 export function canAccessTenantPath(
   session: AdminSession | null,
   pathname: string,
 ): boolean {
   if (matchesPath(pathname, '/support-chat')) {
     return canAccessSupportChat(session);
+  }
+  if (matchesPath(pathname, '/shipments/rates')) {
+    return canAccessShipmentRates(session);
   }
   const requiredPermissions = getRequiredAdminPermissions(pathname);
   if (requiredPermissions === null) return false;

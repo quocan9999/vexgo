@@ -97,8 +97,7 @@ describe('CargoPricingService', () => {
     expect(tx.bangCuocGuiHang.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
-          diemGuiId: 11,
-          diemNhanId: 12,
+          tuyenXeId: trip.tuyenXeId,
           trangThai: 'HOAT_DONG',
           tuNgay: { lte: trip.ngayKhoiHanh },
         }),
@@ -162,7 +161,7 @@ describe('CargoPricingService', () => {
     expect(tx.bangCuocGuiHang.findMany).toHaveBeenCalledTimes(1);
   });
 
-  it('fails closed when overlapping rates both include the same boundary weight', async () => {
+  it('fails closed when overlapping rate interiors both include a weight', async () => {
     const tx = makeTransaction({
       rates: [
         {
@@ -175,7 +174,7 @@ describe('CargoPricingService', () => {
         {
           bangCuocGuiHangId: 32,
           loaiHangHoaId: 21,
-          khoiLuongTu: new Prisma.Decimal(2),
+          khoiLuongTu: new Prisma.Decimal(1),
           khoiLuongDen: new Prisma.Decimal(5),
           mucCuoc: new Prisma.Decimal(40000),
         },
@@ -438,5 +437,34 @@ describe('CargoPricingService', () => {
     ]);
     expect(result.baseFee.toNumber()).toBe(90_000);
     expect(result.totalFee.toNumber()).toBe(90_000);
+  });
+});
+describe('CargoPricingService exclusive lower bracket boundary', () => {
+  it('charges the lower bracket at a shared boundary instead of reporting ambiguity', async () => {
+    const tx = makeTransaction({
+      rates: [
+        {
+          bangCuocGuiHangId: 31,
+          loaiHangHoaId: 21,
+          khoiLuongTu: new Prisma.Decimal(0),
+          khoiLuongDen: new Prisma.Decimal(7),
+          mucCuoc: new Prisma.Decimal(60000),
+        },
+        {
+          bangCuocGuiHangId: 32,
+          loaiHangHoaId: 21,
+          khoiLuongTu: new Prisma.Decimal(7),
+          khoiLuongDen: null,
+          mucCuoc: new Prisma.Decimal(90000),
+        },
+      ],
+    });
+    const result = await new CargoPricingService().calculate(tx, trip, {
+      senderPointId: 11,
+      receiverPointId: 12,
+      items: [{ name: 'Máy ảnh', quantity: 1, weight: 7, loaiHangHoaId: 21 }],
+    });
+    expect(result.totalFee.toNumber()).toBe(60000);
+    expect(result.rates[0].bangCuocGuiHangId).toBe(31);
   });
 });

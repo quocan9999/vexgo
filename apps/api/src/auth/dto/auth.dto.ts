@@ -19,7 +19,7 @@ import { IsPasswordByteLength } from '../validators/is-password-byte-length.vali
 
 const CCCD_PATTERN = /^[0-9]{12}$/;
 const EMAIL_MAX_LENGTH = 150;
-const LOGIN_PHONE_PATTERN = VIETNAM_E164_PHONE_PATTERN;
+const LOGIN_PHONE_PATTERN = /^(?:\+84|0|84)\d{9}$/;
 
 @ValidatorConstraint({ name: 'exactlyOneLoginIdentifier', async: false })
 class ExactlyOneLoginIdentifierConstraint

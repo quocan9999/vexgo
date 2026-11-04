@@ -8,6 +8,7 @@ export interface ShipmentPersistenceItemInput {
   name: string;
   quantity: number;
   unitWeight: DecimalInput;
+  declaredWeight?: DecimalInput;
   length?: DecimalInput | null;
   width?: DecimalInput | null;
   height?: DecimalInput | null;
@@ -31,13 +32,18 @@ export interface ShipmentPersistenceInput {
   serviceFee: DecimalInput;
   discount: DecimalInput;
   totalFee: DecimalInput;
+  payer?: 'NGUOI_GUI' | 'NGUOI_NHAN';
   note?: string | null;
-  tripId: number;
+  tripId: number | null;
+  routeId?: number;
+  expectedSendDate?: Date | null;
+  dropoffDeadline?: Date | null;
   senderPointId: number;
   receiverPointId: number;
   orderId: number;
   actorAccountId: number | null;
   historyNote: string;
+  acceptedAtCounter?: boolean;
   items: ShipmentPersistenceItemInput[];
   rates: ShipmentPersistenceRateInput[];
 }
@@ -71,10 +77,17 @@ export class ShipmentPersistenceService {
         phiDichVu: new Prisma.Decimal(input.serviceFee),
         soTienGiam: new Prisma.Decimal(input.discount),
         tongPhi: new Prisma.Decimal(input.totalFee),
-        nguoiTraCuoc: 'NGUOI_GUI',
+        nguoiTraCuoc: input.payer ?? 'NGUOI_GUI',
         ghiChu: input.note ?? null,
-        trangThai: 'MOI_TAO',
+        trangThai: input.acceptedAtCounter ? 'DA_TIEP_NHAN' : 'MOI_TAO',
         chuyenXeId: input.tripId,
+        tuyenXeId: input.routeId,
+        ngayDuKienGui: input.expectedSendDate,
+        hanMangHangDen: input.acceptedAtCounter ? null : input.dropoffDeadline,
+        thoiDiemXacNhanCuoc: input.acceptedAtCounter ? input.sentAt : null,
+        taiKhoanXacNhanCuocId: input.acceptedAtCounter ? input.actorAccountId : null,
+        cuocDuTinh:
+          input.tripId === null ? new Prisma.Decimal(input.totalFee) : null,
         diemGuiId: input.senderPointId,
         diemNhanId: input.receiverPointId,
         donGiaoDichId: input.orderId,
@@ -98,6 +111,31 @@ export class ShipmentPersistenceService {
           tenHang: item.name,
           soLuong: item.quantity,
           khoiLuong: new Prisma.Decimal(item.unitWeight),
+          khoiLuongKhaiBao:
+            item.declaredWeight === undefined
+              ? null
+              : new Prisma.Decimal(item.declaredWeight),
+          khoiLuongThucTe: input.acceptedAtCounter
+            ? new Prisma.Decimal(item.declaredWeight ?? item.unitWeight)
+            : null,
+          chieuDaiThucTe:
+            input.acceptedAtCounter && item.length != null
+              ? new Prisma.Decimal(item.length)
+              : null,
+          chieuRongThucTe:
+            input.acceptedAtCounter && item.width != null
+              ? new Prisma.Decimal(item.width)
+              : null,
+          chieuCaoThucTe:
+            input.acceptedAtCounter && item.height != null
+              ? new Prisma.Decimal(item.height)
+              : null,
+          chieuDaiKhaiBao:
+            item.length == null ? null : new Prisma.Decimal(item.length),
+          chieuRongKhaiBao:
+            item.width == null ? null : new Prisma.Decimal(item.width),
+          chieuCaoKhaiBao:
+            item.height == null ? null : new Prisma.Decimal(item.height),
           chieuDai:
             item.length == null ? null : new Prisma.Decimal(item.length),
           chieuRong: item.width == null ? null : new Prisma.Decimal(item.width),
@@ -126,7 +164,7 @@ export class ShipmentPersistenceService {
 
     await tx.lichSuTrangThaiPhieuGuiHang.create({
       data: {
-        trangThai: 'MOI_TAO',
+        trangThai: input.acceptedAtCounter ? 'DA_TIEP_NHAN' : 'MOI_TAO',
         thoiGian: input.sentAt,
         ghiChu: input.historyNote,
         phieuGuiHangId: shipment.phieuGuiHangId,
@@ -134,6 +172,7 @@ export class ShipmentPersistenceService {
       },
     });
 
+    
     return { shipment, items };
   }
 }

@@ -44,7 +44,7 @@ describe('ShipmentsService', () => {
           phieuGuiHangId: 300,
           maVanDon: input.waybillCode,
           ngayGui: input.sentAt,
-          trangThai: 'MOI_TAO',
+          trangThai: input.acceptedAtCounter ? 'DA_TIEP_NHAN' : 'MOI_TAO',
           ghiChu: input.note,
           diemGui: {
             diemGiaoNhanHangId: input.senderPointId,
@@ -72,6 +72,10 @@ describe('ShipmentsService', () => {
     };
 
     prismaMock = {
+      tuyenXe: {
+        findUnique: vi.fn(),
+        findMany: vi.fn(),
+      },
       chuyenXe: {
         findUnique: vi.fn(),
       },
@@ -95,6 +99,11 @@ describe('ShipmentsService', () => {
         findUnique: vi.fn(),
         count: vi.fn(),
         findMany: vi.fn(),
+      },
+      yeuCauTaoPhieuGuiHang: {
+        findUnique: vi.fn().mockResolvedValue(null),
+        create: vi.fn(),
+        update: vi.fn(),
       },
       thanhToan: {
         findFirst: vi.fn().mockResolvedValue(null),
@@ -300,7 +309,12 @@ describe('ShipmentsService', () => {
               trangThai: 'CHO_THANH_TOAN',
             })),
           },
-          thanhToan: {
+          yeuCauTaoPhieuGuiHang: {
+        findUnique: vi.fn().mockResolvedValue(null),
+        create: vi.fn(),
+        update: vi.fn(),
+      },
+      thanhToan: {
             create: vi.fn().mockResolvedValue({ thanhToanId: 500 }),
           },
           phieuGuiHang: {
@@ -356,7 +370,7 @@ describe('ShipmentsService', () => {
       });
 
       expect(result).toBeDefined();
-      expect(result.waybillCode).toMatch(/^FUTA-VD-\d{12}-[A-F\d]{25}$/);
+      expect(result.waybillCode).toMatch(/^[0-9a-f]{32}$/);
       expect(result.pricing.totalFee).toBe(95000);
       expect(result.paymentId).toBe(500);
       expect(result.sender.phoneNumber).toBe('0901234567');
@@ -375,7 +389,7 @@ describe('ShipmentsService', () => {
       const orderCreatedAt =
         transactionMock.donGiaoDich.create.mock.calls[0][0].data.ngayTao;
       expect(paymentAttempt.data).toMatchObject({
-        phuongThuc: 'SEPAY',
+        phuongThuc: 'TAI_BEN',
         loaiGiaoDich: 'THANH_TOAN',
         thoiGian: orderCreatedAt,
         trangThai: 'DANG_XU_LY',
@@ -383,7 +397,7 @@ describe('ShipmentsService', () => {
       });
       expect(Number(paymentAttempt.data.soTien)).toBe(result.pricing.totalFee);
       expect(result.paymentExpiresAt).toBe(
-        new Date(orderCreatedAt.getTime() + 10 * 60_000).toISOString(),
+        new Date(orderCreatedAt.getTime() + 72 * 60 * 60_000).toISOString(),
       );
       expect(
         shipmentPersistenceServiceMock.persistInTransaction,
@@ -408,8 +422,7 @@ describe('ShipmentsService', () => {
       expect(prismaMock.bangCuocGuiHang.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
-            diemGuiId: 1,
-            diemNhanId: 2,
+            tuyenXeId: 1,
             trangThai: 'HOAT_DONG',
           }),
         }),
@@ -473,6 +486,234 @@ describe('ShipmentsService', () => {
           items: [{ name: 'Hộp bánh', quantity: 1, weight: 7 }],
         }),
       ).rejects.toThrow(ConflictException);
+    });
+
+    it('throws ForbiddenException when non-tenant principal attempts counter acceptance or payment', async () => {
+      await expect(
+        service.createShipment(
+          {
+            routeId: 1,
+            acceptAtCounter: true,
+            sender: { fullName: 'Nguyễn Văn A', phoneNumber: '0901234567' },
+            receiver: { fullName: 'Trần Thị B', phoneNumber: '0912345678' },
+            items: [{ name: 'Thùng hoa quả', quantity: 1, weight: 5 }],
+          },
+          {
+            taiKhoanId: 10,
+            roles: ['KHACH_HANG'],
+            nhanVienId: null,
+            nhaXeId: null,
+          } as any,
+          'idem-key-1',
+        ),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('throws BadRequestException when collectPaymentAtCounter is true but acceptAtCounter is false', async () => {
+      await expect(
+        service.createShipment(
+          {
+            routeId: 1,
+            acceptAtCounter: false,
+            collectPaymentAtCounter: true,
+            sender: { fullName: 'Nguyễn Văn A', phoneNumber: '0901234567' },
+            receiver: { fullName: 'Trần Thị B', phoneNumber: '0912345678' },
+            items: [{ name: 'Thùng hoa quả', quantity: 1, weight: 5 }],
+          },
+          {
+            taiKhoanId: 5,
+            roles: ['NHA_XE_ADMIN'],
+            nhanVienId: 1,
+            nhaXeId: 1,
+          } as any,
+          'idem-key-2',
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('throws NotFoundException when tenant staff creates shipment on route of another operator', async () => {
+      prismaMock.tuyenXe.findUnique.mockResolvedValue({
+        tuyenXeId: 99,
+        trangThai: 'HOAT_DONG',
+        nhaXeId: 2,
+        nhaXe: { maNhaXe: 'TB' },
+      });
+
+      await expect(
+        service.createShipment(
+          {
+            routeId: 99,
+            acceptAtCounter: true,
+            sender: { fullName: 'Nguyễn Văn A', phoneNumber: '0901234567' },
+            receiver: { fullName: 'Trần Thị B', phoneNumber: '0912345678' },
+            items: [{ name: 'Thùng hoa quả', quantity: 1, weight: 5 }],
+          },
+          {
+            taiKhoanId: 5,
+            roles: ['NHA_XE_ADMIN'],
+            nhanVienId: 1,
+            nhaXeId: 1,
+          } as any,
+          'idem-key-3',
+        ),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('allows tenant staff to create, accept and collect payment at counter in one transaction', async () => {
+      const route = {
+        tuyenXeId: 1,
+        trangThai: 'HOAT_DONG',
+        nhaXeId: 1,
+        nhaXe: { maNhaXe: 'FUTA' },
+      };
+      prismaMock.tuyenXe.findUnique.mockResolvedValue(route);
+      prismaMock.diemGiaoNhanTuyenXe.findMany.mockResolvedValue([
+        {
+          vaiTro: 'GUI_HANG',
+          diemGiaoNhanHangId: 1,
+          diemGiaoNhanHang: {
+            diemGiaoNhanHangId: 1,
+            nhaXeId: 1,
+            trangThai: 'HOAT_DONG',
+          },
+        },
+        {
+          vaiTro: 'NHAN_HANG',
+          diemGiaoNhanHangId: 2,
+          diemGiaoNhanHang: {
+            diemGiaoNhanHangId: 2,
+            nhaXeId: 1,
+            trangThai: 'HOAT_DONG',
+          },
+        },
+      ]);
+      prismaMock.loaiHangHoa.findMany.mockResolvedValue([
+        {
+          loaiHangHoaId: 1,
+          tenLoai: 'BƯU PHẨM',
+          nhomSucChua: 'HANG_NHE',
+          trangThai: 'HOAT_DONG',
+        },
+      ]);
+      prismaMock.bangCuocGuiHang.findMany.mockResolvedValue([
+        {
+          bangCuocGuiHangId: 1,
+          loaiHangHoaId: 1,
+          khoiLuongTu: 1,
+          khoiLuongDen: 10,
+          mucCuoc: 50000,
+        },
+      ]);
+
+      let txCapture: any;
+      prismaMock.$transaction.mockImplementation(async (callback: any) => {
+        const txMock = {
+          diemGiaoNhanTuyenXe: { findMany: prismaMock.diemGiaoNhanTuyenXe.findMany },
+          loaiHangHoa: { findMany: prismaMock.loaiHangHoa.findMany },
+          bangCuocGuiHang: { findMany: prismaMock.bangCuocGuiHang.findMany },
+          khachHang: { findUnique: vi.fn(), create: vi.fn() },
+          donGiaoDich: {
+            create: vi.fn().mockImplementation((args: any) => ({
+              donGiaoDichId: 300,
+              ...args.data,
+            })),
+          },
+          yeuCauTaoPhieuGuiHang: {
+            findUnique: vi.fn().mockResolvedValue(null),
+            create: vi.fn(),
+            update: vi.fn(),
+          },
+          thanhToan: {
+            create: vi.fn().mockResolvedValue({ thanhToanId: 777, trangThai: 'THANH_CONG' }),
+          },
+          lichSuTrangThaiPhieuGuiHang: { create: vi.fn() },
+        };
+        txCapture = txMock;
+        return callback(txMock);
+      });
+
+      const staffPrincipal = {
+        taiKhoanId: 88,
+        roles: ['NHA_XE_ADMIN'],
+        nhanVienId: 12,
+        nhaXeId: 1,
+      } as any;
+
+      const result = await service.createShipment(
+        {
+          routeId: 1,
+          acceptAtCounter: true,
+          collectPaymentAtCounter: true,
+          sender: { fullName: 'Lê Văn C', phoneNumber: '0909999999' },
+          receiver: { fullName: 'Phạm Thị D', phoneNumber: '0908888888' },
+          items: [{ name: 'Hộp tài liệu', quantity: 1, weight: 2 }],
+        },
+        staffPrincipal,
+        'idem-counter-key',
+      );
+
+      expect(result).toBeDefined();
+      expect(result.status).toBe('DA_TIEP_NHAN');
+      expect(result.paymentStatus).toBe('DA_THANH_TOAN');
+      expect(txCapture.khachHang.create).not.toHaveBeenCalled();
+      expect(txCapture.donGiaoDich.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            khachHangId: null,
+            trangThai: 'DA_THANH_TOAN',
+          }),
+        }),
+      );
+      expect(txCapture.thanhToan.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            trangThai: 'THANH_CONG',
+            phuongThuc: 'TAI_BEN',
+            taiKhoanXacNhanId: 88,
+          }),
+        }),
+      );
+      expect(shipmentPersistenceServiceMock.persistInTransaction).toHaveBeenCalledWith(
+        txCapture,
+        expect.objectContaining({
+          acceptedAtCounter: true,
+          actorAccountId: 88,
+        }),
+      );
+    });
+
+    it('scopes getShipmentOptions to tenant operator without requiring from and to', async () => {
+      prismaMock.tuyenXe.findMany.mockResolvedValue([
+        {
+          tuyenXeId: 1,
+          nhaXeId: 1,
+          nhaXe: { tenNhaXe: 'Phương Trang' },
+          diemDi: 'Hồ Chí Minh',
+          diemDen: 'Đà Lạt',
+        },
+      ]);
+      prismaMock.bangCuocGuiHang.findMany.mockResolvedValue([]);
+
+      const options = await service.getShipmentOptions(
+        {} as any,
+        {
+          taiKhoanId: 88,
+          roles: ['NHA_XE_ADMIN'],
+          nhanVienId: 12,
+          nhaXeId: 1,
+        } as any,
+      );
+
+      expect(options.data).toHaveLength(1);
+      expect(prismaMock.tuyenXe.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            AND: expect.arrayContaining([
+              expect.objectContaining({ nhaXeId: 1 }),
+            ]),
+          }),
+        }),
+      );
     });
   });
 
@@ -583,7 +824,7 @@ describe('ShipmentsService', () => {
           where: {
             AND: [
               { donGiaoDich: { nhaXeId: 2 } },
-              { chuyenXe: { nhaXeId: 2 } },
+              { OR: [{ chuyenXeId: null }, { chuyenXe: { nhaXeId: 2 } }] },
               { diemGui: { nhaXeId: 2 } },
               { diemNhan: { nhaXeId: 2 } },
             ],
@@ -709,6 +950,8 @@ describe('ShipmentsService', () => {
         estimatedArrivalAt: expect.any(String),
         packageCount: 3,
         bookingPromotionCode: null,
+        dropoffDeadline: null,
+        expectedSendDate: null,
         timeline: [
           {
             status: 'DA_TIEP_NHAN',

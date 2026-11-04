@@ -181,3 +181,10 @@ Không được kết luận UI READY nếu chưa kiểm tra visual ở hai view
 - Khi cần select filter có label hiển thị phía trên, MUST tái sử dụng `LabeledSelectFilter` từ `src/components/data-filters/data-filters.tsx` (implementation: `src/components/data-filters/labeled-select-filter.tsx`).
 - Cấu hình `label`, `accessibleLabel` khi cần, `options`, `value`, `onChange` và `disabled` theo use case; không sao chép markup/CSS sang feature hoặc tự tạo pattern tương đương.
 - Size và spacing theo contract `DESIGN.md`; implementation chung thực thi contract và có thể thay trong migration. Dùng trong `FilterToolbar` cho CRUD; dashboard/workspace có thể composition khác khi nghiệp vụ cần, vẫn reuse primitives và size variants.
+
+### Quy tắc hiển thị dữ liệu & Combobox/Select trong UI Admin
+
+- MUST NOT hiển thị raw ID (ví dụ: `1`, `2`, `101`), database foreign keys hoặc enum/mã kỹ thuật viết hoa (ví dụ: `NGUOI_GUI`, `DA_THANH_TOAN`, `HOAT_DONG`) lên giao diện người dùng. Mọi giá trị hiển thị MUST được map sang nhãn tiếng Việt rõ ràng, thân thiện.
+- Với `@base-ui/react` Select, `<SelectValue>` nếu không có children sẽ tự động render fallback là `value` thô. Do đó, MUST luôn truyền nhãn tiếng Việt tường minh vào bên trong `<SelectValue>{mappedLabel}</SelectValue>`.
+- Với các tập dữ liệu có thể có nhiều mục (tuyến đường, bến xe, văn phòng bưu cục, điểm đón trả hàng), MUST sử dụng `SearchableCombobox` (`src/components/ui/searchable-combobox.tsx`) hỗ trợ gõ tìm kiếm theo từ khóa có dấu/không dấu; MUST NOT ép người dùng cuộn thủ công qua hàng chục hoặc hàng trăm địa chỉ trong một Select tĩnh.
+- Mọi dịch vụ hoặc tùy chọn có phát sinh phụ phí MUST hiển thị rõ ràng số tiền cụ thể (ví dụ: `+20.000 đ`, `+50.000 đ`), không được hiển thị mù mờ `(+phụ phí)`.

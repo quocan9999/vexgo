@@ -208,16 +208,16 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
       </div>
 
       {/* Floating Search Form */}
-      <div className="w-full max-w-[1050px] px-4 sm:px-6 -mt-32 md:-mt-40 relative z-10">
-        <div className="bg-white text-slate-900 rounded-lg border border-slate-200 shadow-xl p-4 md:p-5">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-200 pb-4">
-            <div className="inline-flex w-fit rounded-lg bg-slate-100 p-1">
+      <div className="w-full max-w-[1100px] px-4 sm:px-6 -mt-32 md:-mt-40 relative z-10">
+        <div className="bg-white text-slate-900 rounded-2xl border border-slate-100 shadow-[0_12px_40px_rgba(0,0,0,0.08)] p-5 md:p-6">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+            <div className="inline-flex w-fit rounded-xl bg-slate-100 p-1">
               <button
                 type="button"
                 onClick={() => setActiveSearchTab('BUY')}
-                className={`h-10 px-4 rounded-md text-sm font-extrabold flex items-center gap-2 ${
+                className={`h-10 px-4 rounded-lg text-sm font-extrabold flex items-center gap-2 transition-all ${
                   activeSearchTab === 'BUY'
-                    ? 'bg-brand text-white shadow-sm'
+                    ? 'bg-[#2563EB] text-white shadow-xs'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
@@ -227,9 +227,9 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
               <button
                 type="button"
                 onClick={() => setActiveSearchTab('RENT')}
-                className={`h-10 px-4 rounded-md text-sm font-extrabold flex items-center gap-2 ${
+                className={`h-10 px-4 rounded-lg text-sm font-extrabold flex items-center gap-2 transition-all ${
                   activeSearchTab === 'RENT'
-                    ? 'bg-brand text-white shadow-sm'
+                    ? 'bg-[#2563EB] text-white shadow-xs'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
@@ -239,8 +239,8 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
             </div>
 
             {activeSearchTab === 'BUY' && (
-              <div className="flex items-center gap-6 pr-2 md:pr-4 text-xs font-bold text-slate-500">
-                <label className="inline-flex items-center gap-2 cursor-pointer hover:text-slate-700 transition-colors">
+              <div className="flex items-center gap-6 pr-2 md:pr-4 text-xs font-bold text-slate-600">
+                <label className="inline-flex items-center gap-2 cursor-pointer hover:text-slate-900 transition-colors">
                   <input
                     type="radio"
                     name="tripTypeSearch"
@@ -249,17 +249,17 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                       setTripType('one-way');
                       setReturnDate('');
                     }}
-                    className="accent-brand w-4 h-4 cursor-pointer"
+                    className="accent-[#2563EB] w-4 h-4 cursor-pointer"
                   />
                   Một chiều
                 </label>
-                <label className="inline-flex items-center gap-2 cursor-pointer hover:text-slate-700 transition-colors">
+                <label className="inline-flex items-center gap-2 cursor-pointer hover:text-slate-900 transition-colors">
                   <input
                     type="radio"
                     name="tripTypeSearch"
                     checked={tripType === 'round-trip'}
                     onChange={() => setTripType('round-trip')}
-                    className="accent-brand w-4 h-4 cursor-pointer"
+                    className="accent-[#2563EB] w-4 h-4 cursor-pointer"
                   />
                   Khứ hồi
                 </label>
@@ -277,7 +277,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                       htmlFor="hero-origin"
                       className="text-[11px] font-extrabold text-slate-500 uppercase flex items-center gap-1.5"
                     >
-                      <MapPin className="w-3.5 h-3.5 text-brand" />
+                      <MapPin className="w-3.5 h-3.5 text-[#2563EB]" />
                       Điểm đi
                     </label>
                     <LocationPicker
@@ -292,7 +292,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                     <button
                       type="button"
                       onClick={swapRoute}
-                      className="w-11 h-11 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-brand flex items-center justify-center transition-colors cursor-pointer shrink-0"
+                      className="w-11 h-11 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-[#2563EB] flex items-center justify-center transition-all cursor-pointer shrink-0 shadow-2xs hover:scale-105"
                       title="Đổi chiều tuyến"
                     >
                       <ArrowRightLeft className="w-5 h-5" />
@@ -320,7 +320,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                 <div className="flex flex-col md:flex-row gap-3 lg:contents">
                   <div className="flex-1 space-y-1.5">
                     <label className="text-[11px] font-extrabold text-slate-500 uppercase flex items-center gap-1.5">
-                      <CalendarDays className="w-3.5 h-3.5 text-brand" />
+                      <CalendarDays className="w-3.5 h-3.5 text-[#2563EB]" />
                       Ngày đi
                     </label>
                     <input
@@ -331,14 +331,14 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                         handleDepartureDateChange(e.target.value)
                       }
                       onBlur={handleDepartureDateBlur}
-                      className="h-12 w-full border border-slate-300 rounded-lg px-3 text-sm font-bold text-slate-900 outline-none focus:border-brand"
+                      className="h-12 w-full border border-slate-200 rounded-xl px-3.5 text-sm font-bold text-slate-900 outline-none focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/20 transition-all"
                     />
                   </div>
 
                   {tripType === 'round-trip' && (
                     <div className="flex-1 space-y-1.5">
                       <label className="text-[11px] font-extrabold text-slate-500 uppercase flex items-center gap-1.5">
-                        <CalendarDays className="w-3.5 h-3.5 text-brand" />
+                        <CalendarDays className="w-3.5 h-3.5 text-[#2563EB]" />
                         Ngày về
                       </label>
                       <input
@@ -351,14 +351,14 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                         value={returnDate}
                         onChange={(e) => handleReturnDateChange(e.target.value)}
                         onBlur={handleReturnDateBlur}
-                        className="h-12 w-full border border-slate-300 rounded-lg px-3 text-sm font-bold text-slate-900 outline-none focus:border-brand"
+                        className="h-12 w-full border border-slate-200 rounded-xl px-3.5 text-sm font-bold text-slate-900 outline-none focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/20 transition-all"
                       />
                     </div>
                   )}
 
                   <div className="flex-1 md:w-28 md:flex-none lg:w-28 lg:flex-none space-y-1.5">
                     <label className="text-[11px] font-extrabold text-slate-500 uppercase flex items-center gap-1.5">
-                      <Users className="w-3.5 h-3.5 text-brand" />
+                      <Users className="w-3.5 h-3.5 text-[#2563EB]" />
                       Số ghế
                     </label>
                     <input
@@ -369,16 +369,16 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                       onChange={(e) =>
                         setTicketCount(Math.max(1, Number(e.target.value) || 1))
                       }
-                      className="h-12 w-full bg-white border border-slate-300 rounded-lg px-3 text-sm font-bold text-slate-900 outline-none focus:border-brand"
+                      className="h-12 w-full bg-white border border-slate-200 rounded-xl px-3.5 text-sm font-bold text-slate-900 outline-none focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/20 transition-all"
                     />
                   </div>
                 </div>
               </div>
 
-              <div className="mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="mt-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <Link
                   href="#"
-                  className="text-sm font-bold text-amber-500 hover:text-amber-600 hover:underline"
+                  className="text-sm font-bold text-[#FF5722] hover:text-[#E64A19] hover:underline transition-colors"
                 >
                   Hướng dẫn đặt vé
                 </Link>
@@ -386,7 +386,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                   <button
                     type="button"
                     onClick={handleSearchSubmit}
-                    className="w-full sm:w-[170px] h-12 px-7 rounded-lg bg-accent hover:bg-accent-hover text-white font-black text-sm flex items-center justify-center gap-2 shadow-sm cursor-pointer"
+                    className="w-full sm:w-[170px] h-12 px-7 rounded-xl bg-gradient-to-r from-[#FF5722] to-[#FF7043] hover:from-[#E64A19] hover:to-[#FF5722] text-white font-extrabold text-sm flex items-center justify-center gap-2 shadow-md shadow-[#FF5722]/25 cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98]"
                   >
                     <Search className="w-4 h-4 shrink-0" />
                     Tìm chuyến
@@ -459,15 +459,15 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                         setFreightDate(todayStr);
                       }
                     }}
-                    className="h-12 w-full border border-slate-300 rounded-lg px-3 text-sm font-bold text-slate-900 outline-none focus:border-brand"
+                    className="h-12 w-full border border-slate-200 rounded-xl px-3.5 text-sm font-bold text-slate-900 outline-none focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/20 transition-all"
                   />
                 </div>
               </div>
 
-              <div className="mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="mt-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <Link
                   href="#"
-                  className="text-sm font-bold text-amber-500 hover:text-amber-600 hover:underline"
+                  className="text-sm font-bold text-[#FF5722] hover:text-[#E64A19] hover:underline transition-colors"
                 >
                   Hướng dẫn gửi hàng
                 </Link>
@@ -488,7 +488,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                         `/shipments/new?origin=${selectedProvince}&destination=${selectedDistrict}&date=${freightDate}`,
                       );
                     }}
-                    className="flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-accent px-7 text-sm font-black text-white shadow-sm hover:bg-accent-hover sm:w-[170px] cursor-pointer"
+                    className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#FF5722] to-[#FF7043] px-7 text-sm font-black text-white shadow-md shadow-[#FF5722]/25 hover:from-[#E64A19] hover:to-[#FF5722] sm:w-[170px] cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98]"
                   >
                     <Search className="w-4 h-4 shrink-0" />
                     Tìm nhà xe

@@ -455,10 +455,22 @@ export function reloadAdminSession(): Promise<AdminSession> {
   return sessionReloadInFlight;
 }
 
+export function normalizeAdminIdentifier(raw: string): string {
+  const trimmed = raw.trim();
+  if (/^0\d{9}$/.test(trimmed)) {
+    return `+84${trimmed.slice(1)}`;
+  }
+  if (/^84\d{9}$/.test(trimmed)) {
+    return `+${trimmed}`;
+  }
+  return trimmed;
+}
+
 export async function signInAdmin(
   identifier: string,
   password: string,
 ): Promise<AdminSession> {
+  const normalizedIdentifier = normalizeAdminIdentifier(identifier);
   return withAdminAuthTransportLock(async () => {
     const response = await fetch(apiUrl('/auth/login'), {
       method: 'POST',
@@ -467,7 +479,7 @@ export async function signInAdmin(
         'Content-Type': 'application/json',
         [REFRESH_TRANSPORT_HEADER]: REFRESH_TRANSPORT_VALUE,
       },
-      body: JSON.stringify({ identifier, password }),
+      body: JSON.stringify({ identifier: normalizedIdentifier, password }),
       cache: 'no-store',
     });
     if (!response.ok) throw await makeAuthError(response);

@@ -34,7 +34,7 @@ export interface ShipmentSummary {
   status: TrangThaiPhieuGuiHang;
   sender: ShipmentSender;
   receiver: ShipmentReceiver;
-  trip: ShipmentTripInfo;
+  trip: ShipmentTripInfo | null;
   originPoint: ShipmentPointInfo;
   destinationPoint: ShipmentPointInfo;
   totalFee: number;
@@ -51,6 +51,8 @@ export interface CargoItemDetail {
   name: string;
   typeName: string;
   weightKg: number;
+  declaredWeightKg?: number | null;
+  actualWeightKg?: number | null;
   quantity: number;
   dimensions: CargoDimensions | null;
   declaredValue: number | null;

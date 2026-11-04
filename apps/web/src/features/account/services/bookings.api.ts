@@ -3,6 +3,7 @@ export type BookingItem = {
   bookingCode: string;
   orderId: number;
   orderCode: string | null;
+  tripId?: number | null;
   ticketCount: number;
   route: string | null;
   origin: string | null;
@@ -18,7 +19,24 @@ export type BookingItem = {
   promotionCode?: string | null;
   status: string;
   paymentStatus: string | null;
+  paymentExpiresAt?: string;
   paymentMethod: string | null;
+  pickup?: string | null;
+  dropoff?: string | null;
+  activeSeatNumbers?: string[];
+  cargoFee?: number;
+  cargoItems?: Array<{
+    name?: string;
+    quantity?: number;
+    weight?: number;
+    category?: string;
+    categoryName?: string;
+  }>;
+  passenger?: {
+    fullName: string | null;
+    phoneNumber: string | null;
+    email: string | null;
+  };
   tickets: Array<{
     ticketId: number;
     ticketCode: string;

@@ -34,6 +34,7 @@ describe('Shipment Read APIs (Phase 02)', () => {
 
   type TenantFixture = {
     nhaXeId: number;
+    tuyenXeId: number;
     chuyenXeId: number;
     diemGuiId: number;
     diemNhanId: number;
@@ -92,8 +93,8 @@ describe('Shipment Read APIs (Phase 02)', () => {
           Reflect.getMetadata(AUTH_MODE_KEY, context.getClass());
         const authorization = context
           .switchToHttp()
-          .getRequest<{ headers: { authorization?: string } }>().headers
-          .authorization;
+          .getRequest<{ headers: { authorization?: string } }>()
+          .headers.authorization;
         if (authMode === 'optional' && authorization === undefined) {
           return true;
         }
@@ -206,8 +207,7 @@ describe('Shipment Read APIs (Phase 02)', () => {
         mucCuoc: 45_000,
         tuNgay: new Date('2026-01-01T00:00:00.000Z'),
         trangThai: 'HOAT_DONG',
-        diemGuiId: tenantOne.diemGuiId,
-        diemNhanId: tenantOne.diemNhanId,
+        tuyenXeId: tenantOne.tuyenXeId,
         loaiHangHoaId: shipmentCreationTypeId,
       },
     });
@@ -265,6 +265,12 @@ describe('Shipment Read APIs (Phase 02)', () => {
     await prisma.$transaction(async (tx) => {
       const shipmentIds = [...fixtureIds.phieuGuiHang];
       if (shipmentIds.length > 0) {
+        await tx.yeuCauTaoPhieuGuiHang.deleteMany({
+          where: { phieuGuiHangId: { in: shipmentIds } },
+        });
+        await tx.lichSuPhanChuyenGuiHang.deleteMany({
+          where: { phieuGuiHangId: { in: shipmentIds } },
+        });
         const cargoItems = await tx.hangHoa.findMany({
           where: { phieuGuiHangId: { in: shipmentIds } },
           select: { hangHoaId: true },
@@ -466,6 +472,7 @@ describe('Shipment Read APIs (Phase 02)', () => {
 
     return {
       nhaXeId: company.nhaXeId,
+      tuyenXeId: route.tuyenXeId,
       chuyenXeId: trip.chuyenXeId,
       diemGuiId: origin.diemGiaoNhanHangId,
       diemNhanId: destination.diemGiaoNhanHangId,
@@ -576,8 +583,7 @@ describe('Shipment Read APIs (Phase 02)', () => {
           mucCuoc: cargo.fee,
           tuNgay: new Date('2026-01-01T00:00:00.000Z'),
           trangThai: 'HOAT_DONG',
-          diemGuiId: tenant.diemGuiId,
-          diemNhanId: tenant.diemNhanId,
+          tuyenXeId: tenant.tuyenXeId,
           loaiHangHoaId: cargo.cargoTypeId,
         },
       });
@@ -954,7 +960,13 @@ describe('Shipment Read APIs (Phase 02)', () => {
           data.cargoItems.map((item: { typeName: string }) => item.typeName),
         ).size,
       ).toBe(2);
-      expect(data.cargoItems).toEqual(detailExpectation.cargoItems);
+      expect(data.cargoItems).toEqual(
+        detailExpectation.cargoItems.map((item) => ({
+          ...item,
+          declaredWeightKg: null,
+          actualWeightKg: null,
+        })),
+      );
       expect(
         data.cargoItems.map((item: { cargoId: number }) => item.cargoId),
       ).toEqual(sample.hangHoas.map((item) => item.hangHoaId));
@@ -973,6 +985,10 @@ describe('Shipment Read APIs (Phase 02)', () => {
         sample.chiTietCuocGuiHangs.map((detail) => detail.chiTietCuocGuiHangId),
       );
       expect(data.feeSummary).toEqual({
+        confirmedAt: null,
+        estimatedFee: null,
+        paidAmount: 0,
+        outstandingAmount: 62500,
         mainFee: 60000,
         serviceFee: 5000,
         discountAmount: 2500,
@@ -1170,5 +1186,162 @@ describe('Shipment Read APIs (Phase 02)', () => {
         paymentStatus: 'CHO_THANH_TOAN',
       });
     });
+  });
+  describe('unassigned standalone shipment lifecycle', () => {
+    it('quotes, creates/replays, measures, collects and assigns without a representative trip', async () => {
+      const tenant = tenantFixtures.get(tenantOneId)!;
+      const trip = await prisma.chuyenXe.findUniqueOrThrow({
+        where: { chuyenXeId: tenant.chuyenXeId },
+      });
+      const tomorrow = new Date(Date.now() + 24 * 3600000);
+      const dateIso = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Ho_Chi_Minh',
+      }).format(tomorrow);
+      const sendDate = dateIso.split('-').reverse().join('-');
+      await prisma.chuyenXe.update({
+        where: { chuyenXeId: trip.chuyenXeId },
+        data: { ngayKhoiHanh: new Date(`${dateIso}T00:00:00Z`) },
+      });
+      try {
+        currentPrincipal = null;
+        const expectedMinimumFee = await prisma.bangCuocGuiHang.aggregate({
+          where: {
+            trangThai: 'HOAT_DONG',
+            diemGuiId: tenant.diemGuiId,
+            diemNhanId: tenant.diemNhanId,
+            tuNgay: { lte: new Date(`${dateIso}T00:00:00Z`) },
+            OR: [
+              { denNgay: null },
+              { denNgay: { gte: new Date(`${dateIso}T00:00:00Z`) } },
+            ],
+          },
+          _min: { mucCuoc: true },
+        });
+        const options = await request(app.getHttpServer())
+          .get('/api/v1/shipments/options')
+          .query({
+            from: 'Read test origin',
+            to: 'Read test destination',
+            sendDate,
+          });
+        expect(options.status).toBe(200);
+        expect(options.body.data).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              routeId: trip.tuyenXeId,
+              busCompany: expect.objectContaining({ id: tenantOneId }),
+              minimumEstimatedFee: Number(expectedMinimumFee._min.mucCuoc),
+            }),
+          ]),
+        );
+        const points = await request(app.getHttpServer()).get(
+          `/api/v1/shipments/routes/${trip.tuyenXeId}/route-points`,
+        );
+        expect(points.body.data.senderPoints).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ id: tenant.diemGuiId }),
+          ]),
+        );
+        const cargo = {
+          name: 'Kiện sách độc lập',
+          quantity: 1,
+          weight: 1.23,
+          loaiHangHoaId: shipmentCreationTypeId,
+        };
+        const selection = {
+          routeId: trip.tuyenXeId,
+          sendDate,
+          senderPointId: tenant.diemGuiId,
+          receiverPointId: tenant.diemNhanId,
+          items: [cargo],
+        };
+        const quote = await request(app.getHttpServer())
+          .post('/api/v1/shipments/quotes')
+          .send(selection);
+        expect(quote.status).toBe(200);
+        expect(quote.body.data.totalFee).toBe(45000);
+        const payload = {
+          ...selection,
+          sender: { fullName: 'Người gửi', phoneNumber: '0901234567' },
+          receiver: { fullName: 'Người nhận', phoneNumber: '0907654321' },
+          freightPayer: 'NGUOI_GUI',
+          paymentMethod: 'TAI_BEN',
+        };
+        const key = `integration-${randomUUID()}`;
+        const [first, second] = await Promise.all(
+          [1, 2].map(() =>
+            request(app.getHttpServer())
+              .post('/api/v1/shipments')
+              .set('Idempotency-Key', key)
+              .send(payload),
+          ),
+        );
+        expect(first.status).toBe(201);
+        expect(second.status).toBe(201);
+        expect(first.body.data.shipmentId).toBe(second.body.data.shipmentId);
+        const created = first.body.data;
+        fixtureIds.phieuGuiHang.add(created.shipmentId);
+        fixtureIds.donGiaoDich.add(created.orderId);
+        expect(created.trip.tripId).toBeNull();
+        expect(
+          Date.parse(created.dropoffDeadline) - Date.parse(created.sentAt),
+        ).toBeGreaterThanOrEqual(48 * 3600000 - 1000);
+        expect(
+          await prisma.phieuGuiHang.count({
+            where: { donGiaoDichId: created.orderId },
+          }),
+        ).toBe(1);
+        const stored = await prisma.phieuGuiHang.findUniqueOrThrow({
+          where: { phieuGuiHangId: created.shipmentId },
+          include: { hangHoas: true },
+        });
+        expect(stored.chuyenXeId).toBeNull();
+        expect(Number(stored.hangHoas[0].khoiLuongKhaiBao)).toBe(1.23);
+        const lookup = await request(app.getHttpServer())
+          .post('/api/v1/shipments/lookup')
+          .send({
+            waybillCode: created.waybillCode,
+            phoneNumber: payload.sender.phoneNumber,
+          });
+        expect(lookup.status).toBe(200);
+        expect(lookup.body.data.scheduledDepartureAt).toBeNull();
+        expect(lookup.body.data.carrier.name).toBeTruthy();
+        setTenantAdmin();
+        const accepted = await request(app.getHttpServer())
+          .post(`/api/v1/shipments/${created.shipmentId}/accept`)
+          .send({
+            items: [{ cargoId: stored.hangHoas[0].hangHoaId, weight: 1.27 }],
+            confirmPriceChange: false,
+          });
+        expect(accepted.status).toBe(201);
+        expect(accepted.body.data.status).toBe('DA_TIEP_NHAN');
+        expect(accepted.body.data.trip).toBeNull();
+        expect(accepted.body.data.feeSummary.paidAmount).toBe(0);
+        const collected = await request(app.getHttpServer())
+          .post(`/api/v1/shipments/${created.shipmentId}/collect-payment`)
+          .send({ amount: 45000, note: 'Thu tại quầy' });
+        expect(collected.status).toBe(201);
+        expect(collected.body.data.feeSummary.outstandingAmount).toBe(0);
+        const assigned = await request(app.getHttpServer())
+          .patch(`/api/v1/shipments/${created.shipmentId}/assignment`)
+          .send({ tripId: trip.chuyenXeId });
+        expect(assigned.status).toBe(200);
+        expect(assigned.body.data.trip.tripId).toBe(trip.chuyenXeId);
+        const history = await prisma.lichSuPhanChuyenGuiHang.count({
+          where: { phieuGuiHangId: created.shipmentId },
+        });
+        expect(history).toBe(1);
+        const actual = await prisma.hangHoa.findUniqueOrThrow({
+          where: { hangHoaId: stored.hangHoas[0].hangHoaId },
+        });
+        expect(Number(actual.khoiLuongThucTe)).toBe(1.27);
+        expect(Number(actual.khoiLuongKhaiBao)).toBe(1.23);
+      } finally {
+        await prisma.chuyenXe.update({
+          where: { chuyenXeId: trip.chuyenXeId },
+          data: { ngayKhoiHanh: trip.ngayKhoiHanh },
+        });
+      }
+    }, 30_000);
   });
 });

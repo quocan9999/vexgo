@@ -7,6 +7,7 @@ function deterministicUuid(...parts) {
 import 'dotenv/config';
 import bcrypt from 'bcrypt';
 import { ensureDemoPayment } from './demo-revenue.mjs';
+import { runSeedShipmentsNetwork } from './seed-shipments-network.mjs';
 import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import { PrismaClient } from '../apps/api/dist/generated/prisma/client.js';
 import {
@@ -353,7 +354,7 @@ async function seedAccounts(db, operators, roles) {
       daXacThucSoDienThoai: true,
       trangThai: 'HOAT_DONG',
     },
-    { hoTen: 'Quản trị viên VexGo', matKhau: hash, trangThai: 'HOAT_DONG' },
+    { hoTen: 'Quản trị viên VexGo', matKhau: hash, email: 'superadmin@vexgo.test', trangThai: 'HOAT_DONG' },
   );
   accounts.superAdmin = superAccount;
   await upsertBy(
@@ -391,6 +392,10 @@ async function seedAccounts(db, operators, roles) {
       const isFormer = employeeIndex === 6;
       const birthDate = dateOnly(1985 + employeeIndex, 2 + opIndex, 3 + employeeIndex);
       const cccd = `00000000${pad(opIndex * 10 + employeeIndex + 1, 4)}`;
+      const employeeEmail =
+        employeeIndex === 0
+          ? `admin.${definition.code.toLowerCase()}@vexgo.test`
+          : `${definition.code.toLowerCase()}.nv${pad(employeeIndex + 1, 2)}@vexgo.test`;
       const account = await upsertBy(
         db,
         'TaiKhoan',
@@ -401,16 +406,23 @@ async function seedAccounts(db, operators, roles) {
           matKhau: hash,
           ngaySinh: birthDate,
           cccd: cccd,
-          email: `${employeeCode.toLowerCase()}@vexgo.test`,
+          email: employeeEmail,
           daXacThucSoDienThoai: !isFormer,
           trangThai: isFormer ? 'TAM_KHOA' : 'HOAT_DONG',
         },
-        { hoTen: employeeNames[employeeIndex], matKhau: hash, trangThai: isFormer ? 'TAM_KHOA' : 'HOAT_DONG' },
+        {
+          hoTen: employeeNames[employeeIndex],
+          matKhau: hash,
+          email: employeeEmail,
+          ngaySinh: birthDate,
+          cccd: cccd,
+          trangThai: isFormer ? 'TAM_KHOA' : 'HOAT_DONG',
+        },
       );
       const employee = await upsertBy(
         db,
         'NhanVien',
-        { nhaXeId_maNhanVien: { nhaXeId: operator.nhaXeId, maNhanVien: employeeCode } },
+        { taiKhoanId: account.taiKhoanId },
         {
           maNhanVien: employeeCode,
           hoTen: employeeNames[employeeIndex],
@@ -423,6 +435,7 @@ async function seedAccounts(db, operators, roles) {
           taiKhoanId: account.taiKhoanId,
         },
         {
+          maNhanVien: employeeCode,
           hoTen: employeeNames[employeeIndex],
           cccd: cccd,
           ngaySinh: birthDate,
@@ -521,7 +534,7 @@ async function seedVehiclesAndRoutes(db, operators, vehicleTypes) {
         const seat = await findOrCreate(
           db,
           'Ghe',
-          { xeId_tenGhe: { xeId: vehicle.xeId, tenGhe: code } },
+          { xeId: vehicle.xeId, tenGhe: code },
           { maGhe: deterministicUuid('GHE', vehicle.bienSoXe, code), tenGhe: code, viTri, xeId: vehicle.xeId },
           { viTri },
         );
@@ -678,8 +691,7 @@ async function seedBranchesRatesCargo(db, operators, routes) {
       const [fromWeight, toWeight, base] = weightRanges[weightIndex];
       for (const cargoType of Object.values(cargo)) {
         const rateData = {
-          diemGuiId: sender.diemGiaoNhanHangId,
-          diemNhanId: receiver.diemGiaoNhanHangId,
+          tuyenXeId: route.tuyenXeId,
           loaiHangHoaId: cargoType.loaiHangHoaId,
           khoiLuongTu: decimal(fromWeight),
           khoiLuongDen: toWeight === null ? null : decimal(toWeight),
@@ -812,11 +824,10 @@ function weightIndexForTotal(totalWeight) {
   return index;
 }
 
-async function findUniqueShipmentRate(db, { pointSendId, pointReceiveId, cargoGroup, sendDate }) {
+async function findUniqueShipmentRate(db, { routeId, cargoGroup, sendDate }) {
   const matchingRates = await db.bangCuocGuiHang.findMany({
     where: {
-      diemGuiId: pointSendId,
-      diemNhanId: pointReceiveId,
+      tuyenXeId: routeId,
       loaiHangHoaId: cargoGroup.loaiHangHoaId,
       trangThai: 'HOAT_DONG',
       khoiLuongTu: { lte: cargoGroup.khoiLuongTinhCuoc },
@@ -829,7 +840,7 @@ async function findUniqueShipmentRate(db, { pointSendId, pointReceiveId, cargoGr
     select: { bangCuocGuiHangId: true, mucCuoc: true },
   });
   if (matchingRates.length !== 1) {
-    throw new Error(`Expected exactly one active BangCuocGuiHang for ${pointSendId}->${pointReceiveId}, type ${cargoGroup.loaiHangHoaId}, ${cargoGroup.khoiLuongTinhCuoc}kg on ${sendDate.toISOString().slice(0, 10)}; found ${matchingRates.length}.`);
+    throw new Error(`Expected exactly one active BangCuocGuiHang for route ${routeId}, type ${cargoGroup.loaiHangHoaId}, ${cargoGroup.khoiLuongTinhCuoc}kg on ${sendDate.toISOString().slice(0, 10)}; found ${matchingRates.length}.`);
   }
   return matchingRates[0];
 }
@@ -840,8 +851,7 @@ async function assertNoOverlappingShipmentRates(db) {
     FROM BangCuocGuiHang a
     JOIN BangCuocGuiHang b
       ON a.bangCuocGuiHangId < b.bangCuocGuiHangId
-     AND a.diemGuiId = b.diemGuiId
-     AND a.diemNhanId = b.diemNhanId
+     AND a.tuyenXeId = b.tuyenXeId
      AND a.loaiHangHoaId = b.loaiHangHoaId
      AND a.tuNgay <= COALESCE(b.denNgay, DATE('9999-12-31'))
      AND b.tuNgay <= COALESCE(a.denNgay, DATE('9999-12-31'))
@@ -1061,8 +1071,7 @@ async function seedTransactions(db, operators, accounts, fleet, prices, logistic
           const configuredRate = logistics.rates.get(shippingRateKey(definition.code, weightIndex, group.loaiHangHoaId));
           if (!configuredRate) throw new Error(`Missing BangCuocGuiHang for ${transactionCode} / ${group.cargoTypeName}`);
           const rate = await findUniqueShipmentRate(db, {
-            pointSendId: pointSend.diemGiaoNhanHangId,
-            pointReceiveId: pointReceive.diemGiaoNhanHangId,
+            routeId: fleet.routes[definition.code][0].tuyenXeId,
             cargoGroup: group,
             sendDate,
           });
@@ -1521,6 +1530,7 @@ async function main() {
   await applyCustomerSnapshotChange(prisma, accounts);
   await seedOctoberTrips(prisma, operators, fleet.vehicles, vehicleTypes, fleet.routes);
   await seedSupportChat(prisma, operators, accounts);
+  await runSeedShipmentsNetwork();
   printSummary(transactions);
 }
 

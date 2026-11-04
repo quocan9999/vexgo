@@ -17,6 +17,8 @@ export function LocationPicker({
   invalid,
   describedBy,
   excludeValue,
+  placeholder = 'Chọn địa điểm',
+  allowCustom = true,
 }: {
   id: string;
   value: string;
@@ -25,6 +27,8 @@ export function LocationPicker({
   invalid?: boolean;
   describedBy?: string;
   excludeValue?: string;
+  placeholder?: string;
+  allowCustom?: boolean;
 }) {
   const [options, setOptions] = useState<SearchableOption[]>([]);
   const [loading, setLoading] = useState(true);
@@ -80,10 +84,10 @@ export function LocationPicker({
         aria-describedby={describedBy}
         aria-required="true"
         loading={loading}
-        placeholder="Chọn địa điểm"
+        placeholder={placeholder}
         icon={<MapPin />}
         excludeValue={excludeValue}
-        allowCustom={true}
+        allowCustom={allowCustom}
       />
       {error && (
         <div role="alert" className="text-xs text-destructive">

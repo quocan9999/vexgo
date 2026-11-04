@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo, useCallback, useSyncExternalStore,
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, CheckCircle2, Info, ScanLine, X } from 'lucide-react';
 import {
+  markPaymentDraftTerminal,
   PAYMENT_DRAFT_STORAGE_PREFIX,
   validatePaymentDraft,
   type BookingPaymentDraft,
@@ -30,7 +31,6 @@ function useIsClient(): boolean {
     () => false,
   );
 }
-
 function useRawPaymentDraft(draftId: string | null): string | null {
   return useSyncExternalStore(
     emptySubscribe,
@@ -445,6 +445,9 @@ function PaymentContent() {
       paymentExpiresAt: string | null = null,
     ) => {
       if (!isSubscribed) return;
+      if (terminalStatus !== 'verification-needed') {
+        markPaymentDraftTerminal(currentDraft.id, terminalStatus);
+      }
       if (isRoundTripBooking && bookingDraft) {
         setLegSnapshots([
           {
@@ -802,6 +805,7 @@ function PaymentContent() {
           paymentStatus === 'DA_THANH_TOAN',
         );
         if (isShipmentPaid) {
+          markPaymentDraftTerminal(currentDraft.id, 'paid');
           const serverTimeMs = typeof payload.serverTime === 'string'
             ? Date.parse(payload.serverTime)
             : NaN;
@@ -1031,7 +1035,7 @@ function PaymentContent() {
           </p>
           <button
             type="button"
-            onClick={() => router.push('/posts')}
+            onClick={() => router.push('/trips')}
             className="h-11 px-8 rounded-xl bg-brand hover:bg-brand-hover text-white text-sm font-bold transition-colors shadow-sm cursor-pointer"
           >
             Tìm chuyến xe
@@ -1227,6 +1231,56 @@ function PaymentContent() {
                         </button>
                       ) : null}
                     </div>
+                  ) : paymentTerminalStatus === 'paid' && shipmentDraft ? (
+                    <div className="flex flex-col items-center gap-3.5 py-5 px-4 text-center w-full">
+                      <div className="w-14 h-14 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center shadow-2xs">
+                        <CheckCircle2 className="w-8 h-8" />
+                      </div>
+                      <p
+                        role="status"
+                        aria-live="polite"
+                        className="text-base font-extrabold text-emerald-800"
+                      >
+                        Thanh toán {paymentResourceLabel} đã được xác nhận.
+                      </p>
+                      <div className="w-full rounded-2xl bg-emerald-50/70 border border-emerald-200 px-3.5 py-2.5 text-xs">
+                        <span className="block text-slate-500 font-semibold mb-1">
+                          Mã vận đơn của bạn
+                        </span>
+                        <div className="flex items-center justify-center gap-2 flex-wrap">
+                          <strong className="font-mono text-xs text-slate-900 break-all">
+                            {shipmentDraft.waybillCode}
+                          </strong>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              copyToClipboard(shipmentDraft.waybillCode, 'waybill')
+                            }
+                            className="text-[11px] font-bold text-emerald-700 bg-white border border-emerald-300 hover:bg-emerald-100 px-2.5 py-1 rounded-lg transition-colors cursor-pointer shrink-0"
+                          >
+                            {copiedField === 'waybill' ? 'Đã chép' : 'Sao chép mã'}
+                          </button>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap items-center justify-center gap-2.5 w-full pt-1">
+                        {isAuthenticated && (
+                          <button
+                            type="button"
+                            onClick={() => router.push('/account/shipments')}
+                            className="h-9 px-4 rounded-xl bg-accent hover:bg-accent-hover text-white text-xs font-bold transition-colors shadow-2xs cursor-pointer"
+                          >
+                            Xem đơn gửi hàng
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => router.push('/send-freight')}
+                          className="h-9 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-colors shadow-2xs cursor-pointer"
+                        >
+                          Tra cứu / Gửi đơn mới
+                        </button>
+                      </div>
+                    </div>
                   ) : (
                   <p
                     role={paymentTerminalStatus === 'verification-needed' ? 'alert' : 'status'}
@@ -1351,6 +1405,20 @@ function PaymentContent() {
                   <h3 className="font-bold text-slate-900 text-base mb-4">
                     Thông tin phiếu gửi
                   </h3>
+                  {shipmentDraft.dropoffDeadline && (
+                    <p className="mb-3 text-sm text-amber-800">
+                      Hạn mang hàng đến:{' '}
+                      {new Date(shipmentDraft.dropoffDeadline).toLocaleString(
+                        'vi-VN',
+                      )}
+                      . Hạn gửi hàng tách riêng hạn thanh toán.
+                    </p>
+                  )}
+                  <p className="mb-3 text-sm text-slate-600">
+                    Chuyến được nhà xe điều phối sau tiếp nhận. Quá 48 giờ chưa
+                    mang hàng đến, vận đơn sẽ bị hủy; tiền đã trả không tự hoàn.
+                    Liên hệ nhà xe qua bưu cục gửi để xử lý.
+                  </p>
                   <div className="space-y-3 text-sm">
                     <div>
                       <span className="block text-xs font-semibold text-slate-500 mb-1">
@@ -1404,6 +1472,12 @@ function PaymentContent() {
                       <span className="text-slate-500">Số điện thoại</span>
                       <strong className="min-w-0 max-w-[65%] break-words text-right text-slate-800">{shipmentDraft.receiver.phoneNumber}</strong>
                     </div>
+                    {shipmentDraft.receiver.cccd && (
+                      <div className="flex justify-between gap-3">
+                        <span className="text-slate-500">Số CCCD / CMND</span>
+                        <strong className="min-w-0 max-w-[65%] break-words text-right text-slate-800 font-mono">{shipmentDraft.receiver.cccd}</strong>
+                      </div>
+                    )}
                     <div className="border-t border-slate-100 pt-3">
                       <p className="text-xs font-semibold text-slate-500 mb-1">Điểm gửi</p>
                       <strong className="block break-words text-slate-800">{shipmentDraft.pickupPoint.name}</strong>

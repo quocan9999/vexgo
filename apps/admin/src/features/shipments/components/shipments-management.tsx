@@ -1,8 +1,11 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { ScanLine } from 'lucide-react';
 import { AdminPageHeader } from '@/components/admin/admin-page-header';
 import {
+  ResourceCreateAction,
   ResourceDetailAction,
   ResourceRefreshAction,
   ResourcePagination,
@@ -35,9 +38,11 @@ import {
   SHIPMENT_STATUS_LABELS,
   ShipmentDetails,
 } from './shipment-details';
+import { useAdminPermissions } from '@/features/admin-auth/hooks/use-admin-permissions';
+import { ShipmentScanDialog } from './shipment-scan-dialog';
 
 const STATUS_FILTER_OPTIONS: FilterOption[] = [
-  { value: 'MOI_TAO', label: 'Mới tạo' },
+  { value: 'MOI_TAO', label: 'Chờ mang hàng đến gửi' },
   { value: 'DA_TIEP_NHAN', label: 'Đã tiếp nhận' },
   { value: 'DANG_VAN_CHUYEN', label: 'Đang vận chuyển' },
   { value: 'DA_GIAO', label: 'Đã giao' },
@@ -45,6 +50,7 @@ const STATUS_FILTER_OPTIONS: FilterOption[] = [
 ];
 
 export function ShipmentsManagement() {
+  const router = useRouter();
   const {
     shipments,
     meta,
@@ -64,6 +70,10 @@ export function ShipmentsManagement() {
     null,
   );
 
+  const [scanDialogOpen, setScanDialogOpen] = useState(false);
+  const { can } = useAdminPermissions();
+  const canCreate = can('shipment:update');
+
   const isFiltered = Boolean(searchInput || status);
 
   return (
@@ -71,7 +81,28 @@ export function ShipmentsManagement() {
       <div className="admin-page-content admin-ui space-y-6">
         <AdminPageHeader
           actions={
-            <ResourceRefreshAction loading={refreshing} onClick={refresh} />
+            <div className="flex items-center gap-2 [&>button]:min-w-[120px]">
+              {canCreate && (
+                <ResourceCreateAction
+                  label="Tạo đơn tại quầy"
+                  onClick={() => router.push('/shipments/create')}
+                />
+              )}
+              <Button
+                variant="outline"
+                onClick={() => router.push('/shipments/rates')}
+              >
+                Bảng giá cước
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setScanDialogOpen(true)}
+              >
+                <ScanLine className="size-4" />
+                Quét mã
+              </Button>
+              <ResourceRefreshAction loading={refreshing} onClick={refresh} />
+            </div>
           }
           eyebrow="QUẢN LÝ GỬI HÀNG"
           title="Danh sách phiếu gửi hàng"
@@ -144,6 +175,7 @@ export function ShipmentsManagement() {
                       <TableRow>
                         <TableHead scope="col">Mã vận đơn</TableHead>
                         <TableHead scope="col">Người gửi</TableHead>
+                        <TableHead scope="col">Tuyến / chuyến</TableHead>
                         <TableHead scope="col">Điểm gửi</TableHead>
                         <TableHead scope="col">Điểm nhận</TableHead>
                         <TableHead scope="col">Trạng thái</TableHead>
@@ -169,6 +201,17 @@ export function ShipmentsManagement() {
                                 {shipment.sender.phoneNumber}
                               </span>
                             </div>
+                          </TableCell>
+                          <TableCell>
+                            <span className="block max-w-40 whitespace-normal">
+                              {shipment.route
+                                ? `${shipment.route.origin} → ${shipment.route.destination}`
+                                : '—'}
+                            </span>
+                            <span className="block text-xs text-muted-foreground">
+                              {shipment.carrier?.name} ·{' '}
+                              {shipment.trip?.code ?? 'Chưa phân chuyến'}
+                            </span>
                           </TableCell>
                           <TableCell>
                             <span className="block max-w-40 whitespace-normal">
@@ -239,6 +282,15 @@ export function ShipmentsManagement() {
                           </dd>
                         </div>
                         <div>
+                          <dt>Tuyến / chuyến</dt>
+                          <dd>
+                            {shipment.route
+                              ? `${shipment.route.origin} → ${shipment.route.destination}`
+                              : '—'}
+                            <p>{shipment.trip?.code ?? 'Chưa phân chuyến'}</p>
+                          </dd>
+                        </div>
+                        <div>
                           <dt>Điểm gửi</dt>
                           <dd>{shipment.originPoint.name}</dd>
                         </div>
@@ -273,6 +325,12 @@ export function ShipmentsManagement() {
             )}
           </div>
         </section>
+
+        <ShipmentScanDialog
+          open={scanDialogOpen}
+          onOpenChange={setScanDialogOpen}
+          onSelectShipment={(id) => setSelectedShipmentId(id)}
+        />
 
         {selectedShipmentId !== null && (
           <ShipmentDetails

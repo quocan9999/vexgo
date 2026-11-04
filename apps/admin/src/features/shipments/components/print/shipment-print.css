@@ -1,0 +1,109 @@
+/* Stylesheet chuyên dụng cho in ấn tem nhãn dán kiện và biên nhận bưu cục */
+
+@media print {
+  /* Ẩn toàn bộ thanh công cụ, nút bấm và viền nền khi in */
+  .print-toolbar,
+  .admin-sidebar,
+  header,
+  footer {
+    display: none !important;
+  }
+
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .print-page-container {
+    padding: 0 !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+    background: transparent !important;
+  }
+
+  .print-label-item {
+    page-break-after: always !important;
+    break-after: page !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+    border: 1px dashed #000000 !important;
+  }
+
+  .print-label-item:last-child {
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+  }
+
+  .print-receipt-container {
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+    margin: 0 auto !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+}
+
+/* Định dạng hiển thị xem trước trên màn hình */
+.print-page-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 100vh;
+  background-color: #f1f5f9;
+  padding: 1.5rem;
+}
+
+/* Khổ tem nhãn dán kiện tiêu chuẩn: 100mm x 150mm */
+.print-label-item {
+  width: 100mm;
+  min-height: 148mm;
+  max-height: 150mm;
+  box-sizing: border-box;
+  background: #ffffff;
+  color: #0f172a;
+  border: 1px solid #cbd5e1;
+  padding: 8mm;
+  margin-bottom: 8mm;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+/* Khổ biên nhận nhiệt K80 tiêu chuẩn: 80mm */
+.print-receipt-container {
+  width: 80mm;
+  min-height: 120mm;
+  box-sizing: border-box;
+  background: #ffffff;
+  color: #0f172a;
+  border: 1px solid #cbd5e1;
+  padding: 6mm;
+  margin-bottom: 8mm;
+  position: relative;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+/* Watermark cho đơn chưa tiếp nhận / cước dự kiến */
+.print-watermark {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(-35deg);
+  font-size: 16px;
+  font-weight: 800;
+  color: rgba(220, 38, 38, 0.16);
+  border: 2px dashed rgba(220, 38, 38, 0.25);
+  padding: 8px 16px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 10;
+}

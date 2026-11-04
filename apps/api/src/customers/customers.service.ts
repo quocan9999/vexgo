@@ -819,10 +819,12 @@ export class CustomersService {
         discountAmount: Number(p.soTienGiam),
         totalFee: Number(p.tongPhi),
         freightPayer: p.nguoiTraCuoc,
-        trip: {
-          tripId: p.chuyenXe.chuyenXeId,
-          code: p.chuyenXe.maChuyenXe,
-        },
+        trip: p.chuyenXe
+          ? {
+              tripId: p.chuyenXe.chuyenXeId,
+              code: p.chuyenXe.maChuyenXe,
+            }
+          : null,
         originPoint: {
           pointId: p.diemGui.diemGiaoNhanHangId,
           code: p.diemGui.maDiem,
