@@ -16,8 +16,8 @@ Inbox/outbox được tạo trong transaction nghiệp vụ; rollback không đ�
 
 Sao lưu, migrate deploy, generate Prisma Client rồi build/restart; không reset/seed:
 
-- `20261101080000_payment_confirmation_notifications`: metadata ThongBao và EmailThongBao.
-- `20261102120000_customer_push_notifications`: ThietBiThongBao và PushThongBao.
+- `20261105020000_payment_confirmation_notifications`: metadata ThongBao và EmailThongBao.
+- `20261105021000_customer_push_notifications`: ThietBiThongBao và PushThongBao.
 
 Hai migration đã áp dụng DB test và DB local chính sau khi được đồng ý. Backup chứa dữ liệu cá nhân được giữ ngoài Git. Bảng push lưu ID tham chiếu; worker kiểm tra lại ownership, thiết bị và phiên hiện tại trước khi gửi. Rollback ứng dụng có thể giữ bảng/cột thêm mới; không xóa outbox đang chờ.
 
