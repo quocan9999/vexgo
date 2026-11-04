@@ -142,17 +142,6 @@ async function main() {
   }
   console.log(`✓ Đã chuẩn hoá ${shipments.length} mã vận đơn.`);
 
-  const invoices = await prisma.hoaDon.findMany();
-  for (const iv of invoices) {
-    if (iv.maHoaDon && UUID4_HEX32_REGEX.test(iv.maHoaDon)) continue;
-    const newIvCode = deterministicUuid('HD', iv.hoaDonId);
-    await prisma.hoaDon.update({
-      where: { hoaDonId: iv.hoaDonId },
-      data: { maHoaDon: newIvCode },
-    });
-  }
-  console.log(`✓ Đã chuẩn hoá ${invoices.length} mã hoá đơn.\n`);
-
   // 6. Chuẩn hoá mã Chuyến xe hiện có
   console.log('--- 6. Chuẩn hoá mã các Chuyến xe hiện có sang UUID v4 ---');
   const existingTrips = await prisma.chuyenXe.findMany();

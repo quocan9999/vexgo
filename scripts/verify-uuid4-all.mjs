@@ -47,7 +47,6 @@ async function main() {
   await checkTableField('PhieuDatVe', 'maPhieuDatVe');
   await checkTableField('Ve', 'maVe');
   await checkTableField('PhieuGuiHang', 'maVanDon');
-  await checkTableField('HoaDon', 'maHoaDon');
   await checkTableField('DiemDonTra', 'maDiem');
   await checkTableField('DiemGiaoNhanHang', 'maDiem');
   await checkTableField('CuocTroChuyen', 'maCuocTroChuyen');

@@ -412,7 +412,6 @@ model DonGiaoDich {
   phieuDatVe           PhieuDatVe?
   phieuGuiHang         PhieuGuiHang?
   thanhToans           ThanhToan[]
-  hoaDon               HoaDon?
 }
 
 model PhieuDatVe {
@@ -705,18 +704,6 @@ model ThanhToan {
   ve                Ve?               @relation(fields: [veId], references: [veId], onDelete: Restrict, onUpdate: Restrict)
 
   @@index([loaiGiaoDich, trangThai, laQuyetToanHopLe, thoiDiemHoanTat], map: "ThanhToan_revenue_report_idx")
-}
-
-model HoaDon {
-  hoaDonId      Int         @id @default(autoincrement()) @db.Int
-  maHoaDon      String      @unique @db.VarChar(50)
-  ngayLap       DateTime    @db.DateTime(0)
-  tongTien      Decimal     @db.Decimal(18, 2)
-  trangThai     String      @db.VarChar(30)
-  donGiaoDichId Int         @unique @db.Int
-  createdAt     DateTime    @default(now()) @db.DateTime(0)
-  updatedAt     DateTime    @default(now()) @updatedAt @db.DateTime(0)
-  donGiaoDich   DonGiaoDich @relation(fields: [donGiaoDichId], references: [donGiaoDichId], onDelete: Restrict, onUpdate: Restrict)
 }
 
 model ThongBao {

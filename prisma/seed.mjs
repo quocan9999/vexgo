@@ -1218,13 +1218,6 @@ async function seedTransactions(db, operators, accounts, fleet, prices, logistic
           await ensurePayment(db, { soTien: decimal(Number(cancelledTicket.giaThucTe)), phuongThuc: 'MOMO', loaiGiaoDich: 'HOAN_TIEN', thoiGian: localDate(2026, 9, day, 12, minute), trangThai: 'THANH_CONG', donGiaoDichId: transaction.donGiaoDichId, veId: cancelledTicket.veId });
           scenarios.push({ type: 'huy-rieng-mot-ve-hoan-tien', maDonGiaoDich: transactionCode, maVe: cancelledTicket.maVe });
         }
-        await upsertBy(
-          db,
-          'HoaDon',
-          { maHoaDon: deterministicUuid('HD', definition.code, txIndex) },
-          { maHoaDon: deterministicUuid('HD', definition.code, txIndex), ngayLap: transactionTime, tongTien: decimal(total), trangThai: 'DA_PHAT_HANH', donGiaoDichId: transaction.donGiaoDichId },
-          { ngayLap: transactionTime, tongTien: decimal(total), trangThai: 'DA_PHAT_HANH' },
-        );
       }
       if (ticketPlan.length === 5) scenarios.push({ type: 'booking-5-ve', maDonGiaoDich: transactionCode, maPhieuDatVe: booking.maPhieuDatVe, maVe: tickets.map((ticket) => ticket.maVe) });
       if (shippingData?.shipPlan.status === 'MOI_TAO') scenarios.push({ type: 'gui-hang-moi-tao', maDonGiaoDich: transactionCode, maVanDon: shipment.maVanDon });

@@ -51,7 +51,6 @@ const expected = {
   HangHoa: 42,
   HinhAnhHangHoa: 57,
   ThanhToan: 51,
-  HoaDon: 39,
   CuocTroChuyen: 3,
   TinNhanHoTro: 3,
 };
@@ -142,7 +141,6 @@ async function assertBusinessCodePatterns() {
     ['maPhieuDatVe', "SELECT maPhieuDatVe AS value FROM PhieuDatVe", /^[0-9a-f]{32}$/],
     ['maVe', "SELECT maVe AS value FROM Ve", /^[0-9a-f]{32}$/],
     ['maVanDon', "SELECT maVanDon AS value FROM PhieuGuiHang", /^[0-9a-f]{32}$/],
-    ['maHoaDon', "SELECT maHoaDon AS value FROM HoaDon", /^[0-9a-f]{32}$/],
   ];
   for (const [label, sql, pattern] of checks) {
     const rows = await prisma.$queryRawUnsafe(sql);
@@ -196,7 +194,6 @@ async function main() {
   await assertZero('duplicate maPhieuDatVe', await scalar('SELECT COUNT(*) - COUNT(DISTINCT maPhieuDatVe) AS value FROM PhieuDatVe'));
   await assertZero('duplicate maVe', await scalar('SELECT COUNT(*) - COUNT(DISTINCT maVe) AS value FROM Ve'));
   await assertZero('duplicate maVanDon', await scalar('SELECT COUNT(*) - COUNT(DISTINCT maVanDon) AS value FROM PhieuGuiHang'));
-  await assertZero('duplicate maHoaDon', await scalar('SELECT COUNT(*) - COUNT(DISTINCT maHoaDon) AS value FROM HoaDon'));
   await assertZero('duplicate maKhuyenMai within operator', await scalar("SELECT COUNT(*) - COUNT(DISTINCT CONCAT(nhaXeId, ':', maKhuyenMai)) AS value FROM KhuyenMai"));
   await assertZero('invalid promotion scope, code, date range, or quota', await scalar("SELECT COUNT(*) AS value FROM KhuyenMai WHERE maKhuyenMai IS NULL OR maKhuyenMai <> UPPER(maKhuyenMai) OR phamViApDung <> 'DAT_VE' OR hinhThucApDung <> 'NHAP_MA' OR tuNgay IS NULL OR denNgay IS NULL OR tuNgay > denNgay OR soLuotToiDa <= 0 OR soLuotDaSuDung < 0 OR soLuotDaSuDung > soLuotToiDa"));
   await assertZero('promotion counter differs from usage ledger', await scalar('SELECT COUNT(*) AS value FROM KhuyenMai p LEFT JOIN (SELECT khuyenMaiId, COUNT(*) AS usedCount FROM SuDungKhuyenMai GROUP BY khuyenMaiId) u ON u.khuyenMaiId=p.khuyenMaiId WHERE p.soLuotDaSuDung <> COALESCE(u.usedCount, 0)'));
@@ -244,8 +241,6 @@ async function main() {
   const snapshotCustomer = await prisma.khachHang.findFirst({ orderBy: { khachHangId: 'asc' } });
   if (!snapshotCustomer) throw new Error('KhachHang was not found');
   await assertZero('snapshot mismatch absent', await scalar(`SELECT COUNT(*) AS value FROM DonGiaoDich d JOIN KhachHang k ON k.khachHangId=d.khachHangId JOIN TaiKhoan a ON a.taiKhoanId=k.taiKhoanId WHERE d.khachHangId=${snapshotCustomer.khachHangId} AND d.tenKhachHang=k.hoTen AND d.soDienThoaiKhachHang=a.soDienThoai`));
-  await assertZero('missing successful invoice', await scalar("SELECT COUNT(*) AS value FROM DonGiaoDich d LEFT JOIN HoaDon h ON h.donGiaoDichId=d.donGiaoDichId WHERE d.trangThai='DA_THANH_TOAN' AND h.hoaDonId IS NULL"));
-  await assertZero('invoice on unpaid transaction', await scalar("SELECT COUNT(*) AS value FROM DonGiaoDich d JOIN HoaDon h ON h.donGiaoDichId=d.donGiaoDichId WHERE d.trangThai <> 'DA_THANH_TOAN'"));
   await assertZero('invalid image URLs', await scalar("SELECT COUNT(*) AS value FROM HinhAnhHangHoa WHERE duongDan NOT LIKE 'https://%'") );
   await assertEqual('canceled ticket scenario', await scalar("SELECT COUNT(*) AS value FROM Ve WHERE trangThai='HUY'"), 6);
   await assertEqual('new shipment scenario', await scalar("SELECT COUNT(*) AS value FROM PhieuGuiHang WHERE trangThai='MOI_TAO'"), 6);

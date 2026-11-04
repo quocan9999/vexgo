@@ -483,24 +483,6 @@ async function main() {
         }
       }
 
-      // 6. Create HoaDon
-      const invoiceCode = deterministicUuid('HD', op.code, 'OCT', txIndex);
-      await prisma.hoaDon.upsert({
-        where: { maHoaDon: invoiceCode },
-        create: {
-          maHoaDon: invoiceCode,
-          ngayLap: transactionTime,
-          tongTien: String(totalAmount),
-          trangThai: 'DA_PHAT_HANH',
-          donGiaoDichId: transaction.donGiaoDichId,
-        },
-        update: {
-          ngayLap: transactionTime,
-          tongTien: String(totalAmount),
-          trangThai: 'DA_PHAT_HANH',
-        },
-      });
-
       totalOctoberTransactions++;
     }
   }
