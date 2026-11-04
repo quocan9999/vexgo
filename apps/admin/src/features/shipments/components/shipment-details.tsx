@@ -2,7 +2,7 @@
 
 import { ShipmentOperations } from './shipment-operations';
 import { canDispatchShipment } from '../services/shipment-operations';
-import { LoaderCircle } from 'lucide-react';
+import { LoaderCircle, Receipt, Tag } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import {
   ResourceConfirmation,
@@ -96,7 +96,8 @@ export function formatDateTime(isoString?: string | null): string {
   }
 }
 
-export function formatCurrency(amount: number): string {
+export function formatCurrency(amount?: number | null): string {
+  if (amount == null || Number.isNaN(amount)) return '0 đ';
   return `${amount.toLocaleString('vi-VN')} đ`;
 }
 
@@ -318,6 +319,41 @@ export function ShipmentDetails({
                   detail.shipment.status}
               </ResourceStatusBadge>
             </div>
+
+            {detail.shipment.status !== 'DA_HUY' && (
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    window.open(
+                      `/shipments/${detail.shipment.shipmentId}/print?type=label`,
+                      '_blank',
+                      'noopener,noreferrer',
+                    )
+                  }
+                  className="gap-1.5"
+                >
+                  <Tag className="size-3.5 text-muted-foreground" />
+                  In tem dán kiện
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    window.open(
+                      `/shipments/${detail.shipment.shipmentId}/print?type=receipt`,
+                      '_blank',
+                      'noopener,noreferrer',
+                    )
+                  }
+                  className="gap-1.5"
+                >
+                  <Receipt className="size-3.5 text-muted-foreground" />
+                  In biên nhận
+                </Button>
+              </div>
+            )}
 
             {detail.shipment.note && (
               <div className="rounded-lg border bg-muted/40 p-3 text-[13px] break-words">

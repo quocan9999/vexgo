@@ -34,6 +34,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { LocationPicker } from '@/features/locations/components/location-picker';
+import { QRCodeSVG } from 'qrcode.react';
 
 import {
   shipmentsApi,
@@ -2975,12 +2976,13 @@ function SendFreightContent() {
               {/* QR Code Container */}
               <div className="flex flex-col items-center justify-center p-4 bg-slate-50 rounded-xl border border-slate-200 mb-4 text-center">
                 <div className="p-2 bg-white rounded-xl shadow-xs border border-slate-200 mb-2">
-                  <img
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(
-                      createdSuccessShipment.waybillCode,
-                    )}`}
-                    alt={`Mã QR vận đơn ${createdSuccessShipment.waybillCode}`}
-                    className="w-36 h-36 object-contain"
+                  <QRCodeSVG
+                    value={createdSuccessShipment.waybillCode}
+                    size={144}
+                    level="M"
+                    role="img"
+                    aria-label={`Mã QR vận đơn ${createdSuccessShipment.waybillCode}`}
+                    className="w-36 h-36"
                   />
                 </div>
                 <span className="text-[11px] text-slate-500 font-medium">

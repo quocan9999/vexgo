@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { ScanLine } from 'lucide-react';
 import { AdminPageHeader } from '@/components/admin/admin-page-header';
 import {
   ResourceDetailAction,
@@ -35,6 +36,7 @@ import {
   SHIPMENT_STATUS_LABELS,
   ShipmentDetails,
 } from './shipment-details';
+import { ShipmentScanDialog } from './shipment-scan-dialog';
 
 const STATUS_FILTER_OPTIONS: FilterOption[] = [
   { value: 'MOI_TAO', label: 'Chờ mang hàng đến gửi' },
@@ -64,6 +66,8 @@ export function ShipmentsManagement() {
     null,
   );
 
+  const [scanDialogOpen, setScanDialogOpen] = useState(false);
+
   const isFiltered = Boolean(searchInput || status);
 
   return (
@@ -71,7 +75,18 @@ export function ShipmentsManagement() {
       <div className="admin-page-content admin-ui space-y-6">
         <AdminPageHeader
           actions={
-            <ResourceRefreshAction loading={refreshing} onClick={refresh} />
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setScanDialogOpen(true)}
+                className="gap-1.5"
+              >
+                <ScanLine className="size-4" />
+                Quét mã
+              </Button>
+              <ResourceRefreshAction loading={refreshing} onClick={refresh} />
+            </div>
           }
           eyebrow="QUẢN LÝ GỬI HÀNG"
           title="Danh sách phiếu gửi hàng"
@@ -294,6 +309,12 @@ export function ShipmentsManagement() {
             )}
           </div>
         </section>
+
+        <ShipmentScanDialog
+          open={scanDialogOpen}
+          onOpenChange={setScanDialogOpen}
+          onSelectShipment={(id) => setSelectedShipmentId(id)}
+        />
 
         {selectedShipmentId !== null && (
           <ShipmentDetails
