@@ -90,6 +90,12 @@ export function ShipmentsManagement() {
               )}
               <Button
                 variant="outline"
+                onClick={() => router.push('/shipments/rates')}
+              >
+                Bảng giá cước
+              </Button>
+              <Button
+                variant="outline"
                 onClick={() => setScanDialogOpen(true)}
               >
                 <ScanLine className="size-4" />

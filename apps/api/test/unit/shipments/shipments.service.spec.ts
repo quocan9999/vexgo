@@ -608,7 +608,6 @@ describe('ShipmentsService', () => {
       let txCapture: any;
       prismaMock.$transaction.mockImplementation(async (callback: any) => {
         const txMock = {
-          yeuCauTaoPhieuGuiHang: { create: vi.fn(), update: vi.fn() },
           diemGiaoNhanTuyenXe: { findMany: prismaMock.diemGiaoNhanTuyenXe.findMany },
           loaiHangHoa: { findMany: prismaMock.loaiHangHoa.findMany },
           bangCuocGuiHang: { findMany: prismaMock.bangCuocGuiHang.findMany },
@@ -620,11 +619,11 @@ describe('ShipmentsService', () => {
             })),
           },
           yeuCauTaoPhieuGuiHang: {
-        findUnique: vi.fn().mockResolvedValue(null),
-        create: vi.fn(),
-        update: vi.fn(),
-      },
-      thanhToan: {
+            findUnique: vi.fn().mockResolvedValue(null),
+            create: vi.fn(),
+            update: vi.fn(),
+          },
+          thanhToan: {
             create: vi.fn().mockResolvedValue({ thanhToanId: 777, trangThai: 'THANH_CONG' }),
           },
           lichSuTrangThaiPhieuGuiHang: { create: vi.fn() },

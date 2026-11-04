@@ -7,6 +7,7 @@ import { LocationsModule } from '../locations/locations.module.js';
 import { ShipmentsController } from './shipments.controller.js';
 import { ShipmentsService } from './shipments.service.js';
 import { ShipmentPersistenceService } from './shipment-persistence.service.js';
+import { ShipmentRatesService } from './shipment-rates.service.js';
 
 @Module({
   imports: [
@@ -17,7 +18,15 @@ import { ShipmentPersistenceService } from './shipment-persistence.service.js';
     LocationsModule,
   ],
   controllers: [ShipmentsController],
-  providers: [ShipmentsService, ShipmentPersistenceService],
-  exports: [ShipmentsService, ShipmentPersistenceService],
+  providers: [
+    ShipmentsService,
+    ShipmentPersistenceService,
+    ShipmentRatesService,
+  ],
+  exports: [
+    ShipmentsService,
+    ShipmentPersistenceService,
+    ShipmentRatesService,
+  ],
 })
 export class ShipmentsModule {}
