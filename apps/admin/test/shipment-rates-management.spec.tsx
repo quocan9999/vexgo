@@ -48,8 +48,8 @@ const sampleRate = {
   },
   cargoType: {
     cargoTypeId: 1,
-    code: 'HANG_NHE',
     name: 'Hàng nhẹ',
+    capacityGroup: 'HANG_NHE',
   },
 };
 
@@ -72,16 +72,16 @@ const routePage = {
 const categoriesPayload = {
   data: [
     {
-      id: 1,
-      maLoai: 'HANG_NHE',
-      tenLoai: 'Hàng nhẹ',
-      moTa: 'Bưu phẩm, quần áo nhỏ gọn',
+      categoryId: 1,
+      name: 'Hàng nhẹ',
+      description: 'Bưu phẩm, quần áo nhỏ gọn',
+      capacityGroup: 'HANG_NHE',
     },
     {
-      id: 2,
-      maLoai: 'HANG_CONG_KENH',
-      tenLoai: 'Hàng cồng kềnh',
-      moTa: 'Thùng xốp, thiết bị điện tử',
+      categoryId: 2,
+      name: 'Hàng cồng kềnh',
+      description: 'Thùng xốp, thiết bị điện tử',
+      capacityGroup: 'HANG_CONG_KENH',
     },
   ],
 };
@@ -202,7 +202,7 @@ beforeAll(() => {
 });
 
 describe('ShipmentRatesManagement', () => {
-  it('renders shipment rates with friendly Vietnamese labels and explicit surcharge amounts', async () => {
+  it('renders shipment rates with friendly Vietnamese labels and without redundant surcharge card', async () => {
     installApi();
 
     render(<ShipmentRatesManagement />);
@@ -211,9 +211,8 @@ describe('ShipmentRatesManagement', () => {
       screen.getByRole('heading', { name: 'Quản lý bảng giá cước gửi hàng' }),
     ).toBeTruthy();
 
-    // Check surcharge notice displays explicit amounts
-    expect(screen.getByText(/\+20\.000\s*₫/)).toBeTruthy();
-    expect(screen.getByText(/\+50\.000\s*₫/)).toBeTruthy();
+    // Verify redundant surcharge card in Figure 2 is removed
+    expect(screen.queryByText(/Quy tắc cộng phụ phí cố định/)).toBeNull();
 
     // Wait for rate item to render
     expect((await screen.findAllByText('Hàng nhẹ')).length).toBeGreaterThan(0);

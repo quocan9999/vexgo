@@ -196,10 +196,10 @@ export async function getShipmentRateCargoTypeOptions(
     'Dữ liệu danh mục loại hàng hóa không hợp lệ.',
   )) as {
     data?: Array<{
-      id: number;
-      maLoai: string;
-      tenLoai: string;
-      moTa?: string | null;
+      categoryId: number;
+      name: string;
+      description?: string | null;
+      capacityGroup: string;
     }>;
   };
 
@@ -210,10 +210,10 @@ export async function getShipmentRateCargoTypeOptions(
   }
 
   return payload.data.map((cat) => ({
-    id: cat.id,
-    code: cat.maLoai,
-    label: cat.tenLoai,
-    description: cat.moTa ?? undefined,
+    id: cat.categoryId,
+    code: cat.capacityGroup,
+    label: cat.name,
+    description: cat.description || undefined,
   }));
 }
 
@@ -350,7 +350,10 @@ function isShipmentRate(value: unknown): value is ShipmentRate {
     typeof item.route === 'object' &&
     item.route !== null &&
     typeof item.cargoType === 'object' &&
-    item.cargoType !== null
+    item.cargoType !== null &&
+    typeof (item.cargoType as Record<string, unknown>).cargoTypeId === 'number' &&
+    typeof (item.cargoType as Record<string, unknown>).name === 'string' &&
+    typeof (item.cargoType as Record<string, unknown>).capacityGroup === 'string'
   );
 }
 

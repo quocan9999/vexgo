@@ -23,8 +23,8 @@ export type ShipmentRateRouteSummary = {
 
 export type ShipmentRateCargoTypeSummary = {
   cargoTypeId: number;
-  code: string;
   name: string;
+  capacityGroup: string;
 };
 
 export type ShipmentRate = {

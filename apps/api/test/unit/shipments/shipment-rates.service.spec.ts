@@ -77,7 +77,7 @@ describe('ShipmentRatesService', () => {
     expect(result.meta.totalItems).toBe(1);
     expect(result.data[0]).toEqual(
       expect.objectContaining({
-        shipmentRateId: 21,
+        rateId: 21,
         weightFrom: 0,
         weightTo: 1,
         fee: 30000,
@@ -145,7 +145,7 @@ describe('ShipmentRatesService', () => {
       principal,
     );
 
-    expect(result.data.shipmentRateId).toBe(22);
+    expect(result.data.rateId).toBe(22);
     expect(result.data.weightFrom).toBe(1);
     expect(result.data.weightTo).toBe(5);
     expect(result.data.fee).toBe(50000);

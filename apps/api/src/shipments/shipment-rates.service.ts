@@ -105,7 +105,7 @@ function mapShipmentRate(record: ShipmentRateRecord, businessDate: string) {
   ) as ShipmentRateStatus;
 
   return {
-    shipmentRateId: record.bangCuocGuiHangId,
+    rateId: record.bangCuocGuiHangId,
     weightFrom,
     weightTo,
     fee,

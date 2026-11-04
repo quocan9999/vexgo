@@ -7,7 +7,6 @@ import {
   ArrowLeft,
   ArrowUp,
   ArrowUpDown,
-  Info,
   Package,
   Ticket,
 } from 'lucide-react';
@@ -350,23 +349,6 @@ export function ShipmentRatesManagement() {
             Thiết lập đơn giá gửi hàng theo tuyến xe, loại hàng hóa, nấc khối
             lượng và thời gian hiệu lực.
           </p>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm text-foreground">
-          <Info className="size-4 shrink-0 text-primary" />
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-            <span className="font-medium">
-              Quy tắc cộng phụ phí cố định khi tạo đơn:
-            </span>
-            <span>
-              Hàng dễ vỡ:{' '}
-              <strong className="font-semibold text-primary">+20.000 ₫</strong>
-            </span>
-            <span>
-              Hàng có giá trị cao:{' '}
-              <strong className="font-semibold text-primary">+50.000 ₫</strong>
-            </span>
-          </div>
         </div>
 
         <section
