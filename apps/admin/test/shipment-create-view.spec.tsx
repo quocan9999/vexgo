@@ -7,8 +7,16 @@ import {
   waitFor,
 } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ShipmentCreateSheet } from '@/features/shipments/components/shipment-create-sheet';
+import { ShipmentCreateView } from '@/features/shipments/components/shipment-create-view';
 import * as shipmentService from '@/features/shipments/services/shipment-service';
+
+// Mock Next.js navigation
+const mockPush = vi.fn();
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({
+    push: mockPush,
+  }),
+}));
 
 const mockRoutes: shipmentService.AdminShipmentRouteOption[] = [
   {
@@ -67,7 +75,7 @@ const mockCreateResult: shipmentService.CreateAdminShipmentResult = {
   },
 };
 
-describe('ShipmentCreateSheet', () => {
+describe('ShipmentCreateView', () => {
   beforeEach(() => {
     vi.spyOn(shipmentService, 'getAdminShipmentRouteOptions').mockResolvedValue(mockRoutes);
     vi.spyOn(shipmentService, 'getAdminShipmentCategories').mockResolvedValue(mockCategories);
@@ -81,25 +89,29 @@ describe('ShipmentCreateSheet', () => {
     vi.restoreAllMocks();
   });
 
-  it('renders initial loading then form controls', async () => {
-    render(<ShipmentCreateSheet onClose={vi.fn()} onCreated={vi.fn()} />);
+  it('renders initial loading then form controls and sticky pricing card', async () => {
+    render(<ShipmentCreateView />);
 
     expect(screen.getByText('Tạo đơn gửi hàng tại quầy')).not.toBeNull();
     await waitFor(() => {
       expect(screen.getByText('1. Tuyến vận chuyển & Điểm giao nhận')).not.toBeNull();
       expect(screen.getByText('2. Thông tin khách hàng')).not.toBeNull();
       expect(screen.getByText('3. Danh sách kiện hàng & Cân đo tại quầy')).not.toBeNull();
+      expect(screen.getByText('Tóm tắt cước & Thanh toán')).not.toBeNull();
     });
+
+    const backLink = screen.getByRole('link', { name: /^Quay lại danh sách$/i });
+    expect(backLink.getAttribute('href')).toBe('/shipments');
   });
 
   it('validates empty inputs on submit', async () => {
-    render(<ShipmentCreateSheet onClose={vi.fn()} onCreated={vi.fn()} />);
+    render(<ShipmentCreateView />);
 
     await waitFor(() => {
-      expect(screen.getByText('Tạo phiếu gửi hàng')).not.toBeNull();
+      expect(screen.getByText('Xác nhận tạo đơn tại quầy')).not.toBeNull();
     });
 
-    const submitBtn = screen.getByText('Tạo phiếu gửi hàng');
+    const submitBtn = screen.getByText('Xác nhận tạo đơn tại quầy');
     fireEvent.click(submitBtn);
 
     await waitFor(() => {
@@ -111,9 +123,8 @@ describe('ShipmentCreateSheet', () => {
     });
   });
 
-  it('submits valid data with counter acceptance and payment flags', async () => {
-    const onCreated = vi.fn();
-    render(<ShipmentCreateSheet onClose={vi.fn()} onCreated={onCreated} />);
+  it('submits valid data with counter acceptance and payment flags, displays success dialog with print tools', async () => {
+    render(<ShipmentCreateView />);
 
     await waitFor(() => {
       expect(screen.getByPlaceholderText('Nguyễn Văn A')).not.toBeNull();
@@ -143,7 +154,7 @@ describe('ShipmentCreateSheet', () => {
       target: { value: '5' },
     });
 
-    const submitBtn = screen.getByText('Tạo phiếu gửi hàng');
+    const submitBtn = screen.getByText('Xác nhận tạo đơn tại quầy');
     fireEvent.click(submitBtn);
 
     await waitFor(() => {
@@ -174,7 +185,26 @@ describe('ShipmentCreateSheet', () => {
         }),
         expect.stringMatching(/^counter-/),
       );
-      expect(onCreated).toHaveBeenCalledWith(mockCreateResult);
+    });
+
+    // Verify Success Dialog is open
+    await waitFor(() => {
+      expect(screen.getByText('Tạo đơn gửi hàng thành công!')).not.toBeNull();
+      expect(screen.getByText('0123456789abcdef0123456789abcdef')).not.toBeNull();
+      expect(screen.getByText('In tem kiện (100×150)')).not.toBeNull();
+      expect(screen.getByText('In biên nhận (K80)')).not.toBeNull();
+      expect(screen.getByText('Tạo tiếp đơn mới')).not.toBeNull();
+    });
+
+    // Click "Tạo tiếp đơn mới"
+    const createNextBtn = screen.getByText('Tạo tiếp đơn mới');
+    fireEvent.click(createNextBtn);
+
+    // Dialog should close and inputs should be cleared
+    await waitFor(() => {
+      expect(screen.queryByText('Tạo đơn gửi hàng thành công!')).toBeNull();
+      expect((screen.getByPlaceholderText('Nguyễn Văn A') as HTMLInputElement).value).toBe('');
+      expect((screen.getByPlaceholderText('Trần Thị B') as HTMLInputElement).value).toBe('');
     });
   });
 });

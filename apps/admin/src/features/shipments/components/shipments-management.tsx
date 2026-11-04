@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { ScanLine } from 'lucide-react';
 import { AdminPageHeader } from '@/components/admin/admin-page-header';
 import {
@@ -38,7 +39,6 @@ import {
   ShipmentDetails,
 } from './shipment-details';
 import { useAdminPermissions } from '@/features/admin-auth/hooks/use-admin-permissions';
-import { ShipmentCreateSheet } from './shipment-create-sheet';
 import { ShipmentScanDialog } from './shipment-scan-dialog';
 
 const STATUS_FILTER_OPTIONS: FilterOption[] = [
@@ -50,6 +50,7 @@ const STATUS_FILTER_OPTIONS: FilterOption[] = [
 ];
 
 export function ShipmentsManagement() {
+  const router = useRouter();
   const {
     shipments,
     meta,
@@ -70,7 +71,6 @@ export function ShipmentsManagement() {
   );
 
   const [scanDialogOpen, setScanDialogOpen] = useState(false);
-  const [createOpen, setCreateOpen] = useState(false);
   const { can } = useAdminPermissions();
   const canCreate = can('shipment:update');
 
@@ -85,7 +85,7 @@ export function ShipmentsManagement() {
               {canCreate && (
                 <ResourceCreateAction
                   label="Tạo đơn tại quầy"
-                  onClick={() => setCreateOpen(true)}
+                  onClick={() => router.push('/shipments/create')}
                 />
               )}
               <Button
@@ -319,17 +319,6 @@ export function ShipmentsManagement() {
             )}
           </div>
         </section>
-
-        {createOpen && (
-          <ShipmentCreateSheet
-            onClose={() => setCreateOpen(false)}
-            onCreated={(result) => {
-              setCreateOpen(false);
-              refresh();
-              setSelectedShipmentId(result.shipmentId);
-            }}
-          />
-        )}
 
         <ShipmentScanDialog
           open={scanDialogOpen}

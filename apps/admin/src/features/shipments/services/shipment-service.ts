@@ -280,7 +280,7 @@ export interface CreateAdminShipmentPayload {
   isValuable?: boolean;
   note?: string;
   freightPayer: 'NGUOI_GUI' | 'NGUOI_NHAN';
-  paymentMethod: 'TAI_BEN';
+  paymentMethod?: 'TAI_BEN';
   acceptAtCounter?: boolean;
   collectPaymentAtCounter?: boolean;
 }
