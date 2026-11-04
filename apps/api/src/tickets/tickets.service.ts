@@ -1,3 +1,4 @@
+import { enqueueCustomerNotice } from '../notifications/customer-notice.js';
 import {
   BadRequestException,
   ConflictException,
@@ -531,7 +532,8 @@ export class TicketsService {
           }
 
           const customerPhone =
-            ticketsToCancel[0].phieuDatVe.donGiaoDich.soDienThoaiKhachHang || '';
+            ticketsToCancel[0].phieuDatVe.donGiaoDich.soDienThoaiKhachHang ||
+            '';
           if (!phonesMatch(customerPhone, dto.phoneNumber)) {
             throw new NotFoundException({
               error: 'TICKET_NOT_FOUND',
@@ -565,8 +567,7 @@ export class TicketsService {
                 },
                 ALREADY_DEPARTED: {
                   error: 'TRIP_ALREADY_DEPARTED',
-                  message:
-                    'Không thể hủy vé sau khi chuyến xe đã khởi hành.',
+                  message: 'Không thể hủy vé sau khi chuyến xe đã khởi hành.',
                 },
                 LESS_THAN_2_HOURS_30_MINUTES: {
                   error: 'CANCELLATION_CUTOFF_PASSED',
@@ -687,6 +688,15 @@ export class TicketsService {
               });
               refundIds.push(refund.thanhToanId);
             }
+            await enqueueCustomerNotice(tx, {
+              eventKey: `ticket-cancelled:${t.veId}`,
+              customerId: order.khachHangId,
+              email: order.emailKhachHang,
+              bookingId: t.phieuDatVeId,
+              ticketId: t.veId,
+              title: 'Hủy vé thành công',
+              content: `Vé ${t.maVe} đã được hủy. Phí hủy: ${quote.cancelFee.toString()} VND. ${quote.refundAmount.isZero() ? 'Không phát sinh khoản hoàn tiền.' : `Yêu cầu hoàn ${quote.refundAmount.toString()} VND đang được xử lý; đây chưa phải xác nhận tiền đã hoàn tất.`}`,
+            });
           }
 
           const remainingActiveTickets = await tx.ve.count({

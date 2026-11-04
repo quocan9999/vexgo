@@ -81,6 +81,17 @@ describe('TicketsService', () => {
   };
 
   const prisma = {
+    thongBao: {
+      upsert: vi.fn().mockImplementation(
+        async ({ create }: { create: { thoiGian: Date } }) => ({
+          thongBaoId: 1,
+          thoiGian: create.thoiGian,
+        }),
+      ),
+    },
+    emailThongBao: { upsert: vi.fn() },
+    thietBiThongBao: { findMany: vi.fn().mockResolvedValue([]) },
+    pushThongBao: { upsert: vi.fn() },
     phanHoi: { findMany: vi.fn().mockResolvedValue([]) },
     khachHang: {
       findUnique: vi.fn(),

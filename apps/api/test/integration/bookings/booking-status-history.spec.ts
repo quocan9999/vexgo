@@ -1,4 +1,5 @@
 import { createHmac, randomUUID } from 'node:crypto';
+import { cleanupCustomerNotices } from '../../helpers/cleanup-customer-notices.js';
 import type { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import type { ExecutionContext, INestApplication } from '@nestjs/common';
@@ -706,6 +707,7 @@ describe('Booking API & Ticket Status History Lifecycle with MySQL (Integration)
               });
             }
             if (customerId) {
+              await cleanupCustomerNotices(cleanupTx, [customerId]);
               await cleanupTx.khachHang.deleteMany({
                 where: { khachHangId: customerId },
               });

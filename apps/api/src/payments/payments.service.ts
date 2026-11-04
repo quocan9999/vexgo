@@ -1,3 +1,4 @@
+import { enqueuePaymentConfirmation } from '../notifications/payment-confirmation.js';
 import {
   BadRequestException,
   ConflictException,
@@ -1753,6 +1754,9 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
               where: { thanhToanId: payment.thanhToanId },
               data: { laQuyetToanHopLe: true },
             });
+            if (activeTickets.length > 0) {
+              await enqueuePaymentConfirmation(tx, booking.phieuDatVeId);
+            }
             return 'settled';
           }
 

@@ -63,7 +63,23 @@ describe('PaymentsService', () => {
 
   beforeEach(() => {
     prisma = {
+      thongBao: {
+        upsert: vi.fn().mockImplementation(
+          async ({ create }: { create: { thoiGian: Date } }) => ({
+            thongBaoId: 1,
+            thoiGian: create.thoiGian,
+          }),
+        ),
+      },
+      thietBiThongBao: { findMany: vi.fn().mockResolvedValue([]) },
+      pushThongBao: { upsert: vi.fn() },
+      emailThongBao: { upsert: vi.fn() },
       phieuDatVe: {
+        findUniqueOrThrow: vi.fn().mockResolvedValue({
+          phieuDatVeId: 300, maPhieuDatVe: 'BOOK-300', trangThai: 'DA_THANH_TOAN',
+          donGiaoDich: {trangThai:'DA_THANH_TOAN',khachHangId:10,emailKhachHang:'owner@example.com',tongTien:300000},
+          ves: [{veId:1,maVe:'TICKET-1',gheChuyenXe:{chuyenXe:{tuyenXe:{diemDi:'A',diemDen:'B'},ngayKhoiHanh:new Date('2026-11-05'),gioKhoiHanh:new Date('1970-01-01T08:00:00Z')}}}],
+        }),
         findUnique: vi.fn().mockResolvedValue({
           phieuDatVeId: 300,
           trangThai: 'CHO_THANH_TOAN',
@@ -373,6 +389,19 @@ describe('PaymentsService', () => {
   });
 
   describe('confirmPaymentSuccess', () => {
+    it('does not enqueue another notification or email for a repeated valid callback', async () => {
+      prisma.ve.findMany.mockResolvedValue([{veId:1}]);
+      prisma.thanhToan.findUnique.mockResolvedValue(samplePayment);
+      await service.confirmPaymentSuccess({paymentId:100,provider:'MOMO',amount:300000});
+      expect(prisma.thongBao.upsert).toHaveBeenCalledTimes(1);
+      expect(prisma.emailThongBao.upsert).toHaveBeenCalledTimes(1);
+      prisma.thanhToan.findUnique.mockResolvedValue({...samplePayment,trangThai:'THANH_CONG',laQuyetToanHopLe:true,
+        donGiaoDich:{...samplePayment.donGiaoDich,trangThai:'DA_THANH_TOAN',phieuDatVe:{phieuDatVeId:300,trangThai:'DA_THANH_TOAN'}}});
+      await service.confirmPaymentSuccess({paymentId:100,provider:'MOMO',amount:300000});
+      expect(prisma.thongBao.upsert).toHaveBeenCalledTimes(1);
+      expect(prisma.emailThongBao.upsert).toHaveBeenCalledTimes(1);
+    });
+
     it('returns PAYMENT_ORDER_STATE_CHANGED when a successful payment has an incompatible order status', async () => {
       prisma.thanhToan.findUnique.mockResolvedValue({
         ...samplePayment,
