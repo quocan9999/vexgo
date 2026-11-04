@@ -100,6 +100,25 @@ describe('ShipmentCreateView', () => {
       expect(screen.getByText('Tóm tắt cước & Thanh toán')).not.toBeNull();
     });
 
+    // Verify surcharges display explicit VND amounts matching backend & customer web
+    expect(screen.getByText('Hàng dễ vỡ (+20.000 đ)')).not.toBeNull();
+    expect(screen.getByText('Hàng có giá trị cao (+50.000 đ)')).not.toBeNull();
+
+    // Verify freight payer shows human-readable Vietnamese, NEVER raw enum NGUOI_GUI
+    expect(screen.getByText('Người gửi thanh toán tại quầy')).not.toBeNull();
+    expect(screen.queryByText('NGUOI_GUI')).toBeNull();
+
+    // Verify route and station comboboxes display human-readable names, NEVER raw IDs
+    const routeCombobox = screen.getByRole('combobox', { name: /Tuyến vận chuyển/i }) as HTMLInputElement;
+    expect(routeCombobox.value).toContain('Hồ Chí Minh → Đà Lạt');
+    expect(routeCombobox.value).not.toBe('101');
+
+    const senderPointCombobox = screen.getByRole('combobox', { name: /Điểm gửi hàng/i }) as HTMLInputElement;
+    expect(senderPointCombobox.value).toBe('Bến xe Miền Đông');
+
+    const receiverPointCombobox = screen.getByRole('combobox', { name: /Điểm trả hàng/i }) as HTMLInputElement;
+    expect(receiverPointCombobox.value).toBe('Bến xe Đà Lạt');
+
     const backLink = screen.getByRole('link', { name: /^Quay lại danh sách$/i });
     expect(backLink.getAttribute('href')).toBe('/shipments');
   });

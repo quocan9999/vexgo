@@ -1,10 +1,12 @@
 'use client';
 
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft,
+  Bus,
+  MapPin,
   Plus,
   Trash2,
   PackagePlus,
@@ -59,6 +61,7 @@ import {
   type CreateAdminShipmentResult,
 } from '../services/shipment-service';
 import { formatCurrency } from './shipment-details';
+import { SearchableCombobox, type SearchableOption } from '@/components/ui/searchable-combobox';
 
 interface CargoItemDraft {
   id: string;
@@ -137,6 +140,40 @@ export function ShipmentCreateView() {
   const [createdShipment, setCreatedShipment] = useState<CreateAdminShipmentResult | null>(null);
   const [successDialogOpen, setSuccessDialogOpen] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
+
+  // Searchable options for Routes & Stations
+  const routeOptions: SearchableOption[] = useMemo(() => {
+    return routes.map((r) => ({
+      id: String(r.routeId),
+      value: String(r.routeId),
+      label: `${r.route.origin} → ${r.route.destination}`,
+      description: `${r.busCompany.name} · Cước từ ${formatCurrency(r.minimumEstimatedFee)}`,
+      badge: r.busCompany.name,
+      icon: <Bus className="size-4" />,
+    }));
+  }, [routes]);
+
+  const senderPointOptions: SearchableOption[] = useMemo(() => {
+    return senderPoints.map((p) => ({
+      id: String(p.id),
+      value: String(p.id),
+      label: p.name,
+      description: p.address,
+      group: 'station',
+      icon: <MapPin className="size-4" />,
+    }));
+  }, [senderPoints]);
+
+  const receiverPointOptions: SearchableOption[] = useMemo(() => {
+    return receiverPoints.map((p) => ({
+      id: String(p.id),
+      value: String(p.id),
+      label: p.name,
+      description: p.address,
+      group: 'station',
+      icon: <MapPin className="size-4" />,
+    }));
+  }, [receiverPoints]);
 
   // Load initial routes and cargo categories
   const loadInitialData = async () => {
@@ -561,71 +598,81 @@ export function ShipmentCreateView() {
                 <CardContent className="space-y-4">
                   <div className="grid gap-4 sm:grid-cols-2">
                     <FieldRoot className="sm:col-span-2">
-                      <FieldLabel>Tuyến vận chuyển *</FieldLabel>
-                      <Select
-                        disabled={submitting || routes.length === 0}
-                        onValueChange={(val) => setRouteId(val ?? '')}
+                      <FieldLabel htmlFor="route-combobox">Tuyến vận chuyển *</FieldLabel>
+                      <SearchableCombobox
+                        id="route-combobox"
                         value={routeId}
-                      >
-                        <SelectTrigger aria-label="Tuyến vận chuyển" className="w-full">
-                          <SelectValue placeholder="-- Chọn tuyến đường vận chuyển --" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectGroup>
-                            {routes.map((r) => (
-                              <SelectItem key={r.routeId} value={String(r.routeId)}>
-                                {r.route.origin} → {r.route.destination} ({r.busCompany.name})
-                              </SelectItem>
-                            ))}
-                          </SelectGroup>
-                        </SelectContent>
-                      </Select>
+                        options={routeOptions}
+                        onChange={(val) => {
+                          setRouteId(val);
+                          if (errors.routeId) {
+                            setErrors((prev) => {
+                              const next = { ...prev };
+                              delete next.routeId;
+                              return next;
+                            });
+                          }
+                        }}
+                        disabled={submitting || routes.length === 0}
+                        loading={loadingInitial}
+                        placeholder={loadingInitial ? 'Đang tải tuyến đường…' : '-- Tìm kiếm hoặc chọn tuyến đường --'}
+                        icon={<Bus className="size-4" />}
+                        allowCustom={false}
+                        aria-invalid={Boolean(errors.routeId)}
+                      />
                       {errors.routeId && <FieldError>{errors.routeId}</FieldError>}
                     </FieldRoot>
 
                     <FieldRoot className="sm:col-span-1">
-                      <FieldLabel>Điểm gửi hàng tại quầy *</FieldLabel>
-                      <Select
-                        disabled={submitting || pointsLoading}
-                        onValueChange={(val) => setSenderPointId(val ?? '')}
+                      <FieldLabel htmlFor="sender-point-combobox">Điểm gửi hàng tại quầy *</FieldLabel>
+                      <SearchableCombobox
+                        id="sender-point-combobox"
                         value={senderPointId}
-                      >
-                        <SelectTrigger aria-label="Điểm gửi hàng" className="w-full">
-                          <SelectValue placeholder={pointsLoading ? 'Đang tải…' : '-- Chọn trạm gửi --'} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectGroup>
-                            {senderPoints.map((p) => (
-                              <SelectItem key={p.id} value={String(p.id)}>
-                                {p.name}
-                              </SelectItem>
-                            ))}
-                          </SelectGroup>
-                        </SelectContent>
-                      </Select>
+                        options={senderPointOptions}
+                        onChange={(val) => {
+                          setSenderPointId(val);
+                          if (errors.senderPointId) {
+                            setErrors((prev) => {
+                              const next = { ...prev };
+                              delete next.senderPointId;
+                              return next;
+                            });
+                          }
+                        }}
+                        disabled={submitting || pointsLoading}
+                        loading={pointsLoading}
+                        placeholder={pointsLoading ? 'Đang tải…' : '-- Tìm trạm / văn phòng gửi --'}
+                        icon={<MapPin className="size-4" />}
+                        allowCustom={false}
+                        aria-invalid={Boolean(errors.senderPointId)}
+                      />
                       {errors.senderPointId && <FieldError>{errors.senderPointId}</FieldError>}
                     </FieldRoot>
 
                     <FieldRoot className="sm:col-span-1">
-                      <FieldLabel>Điểm trả hàng cho người nhận *</FieldLabel>
-                      <Select
-                        disabled={submitting || pointsLoading}
-                        onValueChange={(val) => setReceiverPointId(val ?? '')}
+                      <FieldLabel htmlFor="receiver-point-combobox">Điểm trả hàng cho người nhận *</FieldLabel>
+                      <SearchableCombobox
+                        id="receiver-point-combobox"
                         value={receiverPointId}
-                      >
-                        <SelectTrigger aria-label="Điểm nhận hàng" className="w-full">
-                          <SelectValue placeholder={pointsLoading ? 'Đang tải…' : '-- Chọn trạm trả hàng --'} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectGroup>
-                            {receiverPoints.map((p) => (
-                              <SelectItem key={p.id} value={String(p.id)}>
-                                {p.name} ({p.address})
-                              </SelectItem>
-                            ))}
-                          </SelectGroup>
-                        </SelectContent>
-                      </Select>
+                        options={receiverPointOptions}
+                        onChange={(val) => {
+                          setReceiverPointId(val);
+                          if (errors.receiverPointId) {
+                            setErrors((prev) => {
+                              const next = { ...prev };
+                              delete next.receiverPointId;
+                              return next;
+                            });
+                          }
+                        }}
+                        disabled={submitting || pointsLoading}
+                        loading={pointsLoading}
+                        placeholder={pointsLoading ? 'Đang tải…' : '-- Tìm trạm / văn phòng trả hàng --'}
+                        icon={<MapPin className="size-4" />}
+                        excludeValue={senderPointId}
+                        allowCustom={false}
+                        aria-invalid={Boolean(errors.receiverPointId)}
+                      />
                       {errors.receiverPointId && <FieldError>{errors.receiverPointId}</FieldError>}
                     </FieldRoot>
                   </div>
@@ -794,7 +841,9 @@ export function ShipmentCreateView() {
                               value={item.categoryId}
                             >
                               <SelectTrigger className="w-full">
-                                <SelectValue placeholder="Mặc định" />
+                                <SelectValue placeholder="Mặc định">
+                                  {categories.find((c) => String(c.categoryId) === item.categoryId)?.name ?? 'Mặc định'}
+                                </SelectValue>
                               </SelectTrigger>
                               <SelectContent>
                                 <SelectGroup>
@@ -883,7 +932,7 @@ export function ShipmentCreateView() {
                         disabled={submitting}
                         onCheckedChange={(checked) => setIsFragile(Boolean(checked))}
                       />
-                      <span>Hàng dễ vỡ (+phụ phí)</span>
+                      <span>Hàng dễ vỡ (+20.000 đ)</span>
                     </label>
 
                     <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
@@ -892,7 +941,7 @@ export function ShipmentCreateView() {
                         disabled={submitting}
                         onCheckedChange={(checked) => setIsValuable(Boolean(checked))}
                       />
-                      <span>Hàng có giá trị cao (+phụ phí)</span>
+                      <span>Hàng có giá trị cao (+50.000 đ)</span>
                     </label>
                   </div>
                 </CardContent>
@@ -980,7 +1029,11 @@ export function ShipmentCreateView() {
                         value={freightPayer}
                       >
                         <SelectTrigger className="w-full">
-                          <SelectValue />
+                          <SelectValue>
+                            {freightPayer === 'NGUOI_GUI'
+                              ? 'Người gửi thanh toán tại quầy'
+                              : 'Người nhận thanh toán khi lấy hàng'}
+                          </SelectValue>
                         </SelectTrigger>
                         <SelectContent>
                           <SelectGroup>
