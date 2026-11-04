@@ -9,6 +9,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ShipmentCreateView } from '@/features/shipments/components/shipment-create-view';
 import * as shipmentService from '@/features/shipments/services/shipment-service';
+import * as locationService from '@/features/locations/services/location-service';
 
 // Mock Next.js navigation
 const mockPush = vi.fn();
@@ -18,11 +19,38 @@ vi.mock('next/navigation', () => ({
   }),
 }));
 
+const mockLocations: locationService.LocationOption[] = [
+  {
+    id: 'loc-1',
+    name: 'Hồ Chí Minh',
+    value: 'Hồ Chí Minh',
+    aliases: ['TPHCM', 'Sài Gòn'],
+    versions: ['current'],
+    kind: 'province',
+    province: null,
+  },
+  {
+    id: 'loc-2',
+    name: 'Đà Lạt',
+    value: 'Đà Lạt',
+    aliases: ['Lâm Đồng'],
+    versions: ['current'],
+    kind: 'city',
+    province: 'Lâm Đồng',
+  },
+];
+
 const mockRoutes: shipmentService.AdminShipmentRouteOption[] = [
   {
     routeId: 101,
     busCompany: { id: 1, name: 'Phương Trang' },
     route: { origin: 'Hồ Chí Minh', destination: 'Đà Lạt' },
+    minimumEstimatedFee: 50000,
+  },
+  {
+    routeId: 102,
+    busCompany: { id: 1, name: 'Phương Trang' },
+    route: { origin: 'Đà Lạt', destination: 'Hồ Chí Minh' },
     minimumEstimatedFee: 50000,
   },
 ];
@@ -77,6 +105,7 @@ const mockCreateResult: shipmentService.CreateAdminShipmentResult = {
 
 describe('ShipmentCreateView', () => {
   beforeEach(() => {
+    vi.spyOn(locationService, 'getLocations').mockResolvedValue(mockLocations);
     vi.spyOn(shipmentService, 'getAdminShipmentRouteOptions').mockResolvedValue(mockRoutes);
     vi.spyOn(shipmentService, 'getAdminShipmentCategories').mockResolvedValue(mockCategories);
     vi.spyOn(shipmentService, 'getAdminRoutePointsByRoute').mockResolvedValue(mockPoints);
@@ -89,7 +118,7 @@ describe('ShipmentCreateView', () => {
     vi.restoreAllMocks();
   });
 
-  it('renders initial loading then form controls and sticky pricing card', async () => {
+  it('renders initial loading then form controls, 2-point route selection and sticky pricing card', async () => {
     render(<ShipmentCreateView />);
 
     expect(screen.getByText('Tạo đơn gửi hàng tại quầy')).not.toBeNull();
@@ -108,19 +137,56 @@ describe('ShipmentCreateView', () => {
     expect(screen.getByText('Người gửi thanh toán tại quầy')).not.toBeNull();
     expect(screen.queryByText('NGUOI_GUI')).toBeNull();
 
-    // Verify route and station comboboxes display human-readable names, NEVER raw IDs
-    const routeCombobox = screen.getByRole('combobox', { name: /Tuyến vận chuyển/i }) as HTMLInputElement;
-    expect(routeCombobox.value).toContain('Hồ Chí Minh → Đà Lạt');
-    expect(routeCombobox.value).not.toBe('101');
+    // Verify origin and destination are split into 2 separate points with swap button
+    const originCombobox = screen.getByRole('combobox', { name: /Nơi gửi/i }) as HTMLInputElement;
+    expect(originCombobox.value).toBe('Hồ Chí Minh');
 
-    const senderPointCombobox = screen.getByRole('combobox', { name: /Điểm gửi hàng/i }) as HTMLInputElement;
-    expect(senderPointCombobox.value).toBe('Bến xe Miền Đông');
+    const destCombobox = screen.getByRole('combobox', { name: /Nơi nhận/i }) as HTMLInputElement;
+    expect(destCombobox.value).toBe('Đà Lạt');
 
-    const receiverPointCombobox = screen.getByRole('combobox', { name: /Điểm trả hàng/i }) as HTMLInputElement;
-    expect(receiverPointCombobox.value).toBe('Bến xe Đà Lạt');
+    const swapBtn = screen.getByRole('button', { name: /Đổi chiều tuyến/i });
+    expect(swapBtn).not.toBeNull();
+
+    // Verify matched route badge displays human-readable route information
+    await waitFor(() => {
+      expect(screen.getByText(/Tuyến vận chuyển:/)).not.toBeNull();
+      expect(screen.getByText(/Cước tối thiểu: 50.000 đ/)).not.toBeNull();
+    });
+
+    // Verify station comboboxes display human-readable names, NEVER raw IDs
+    await waitFor(() => {
+      const senderPointCombobox = screen.getByRole('combobox', { name: /Điểm gửi hàng/i }) as HTMLInputElement;
+      expect(senderPointCombobox.value).toBe('Bến xe Miền Đông');
+
+      const receiverPointCombobox = screen.getByRole('combobox', { name: /Điểm trả hàng/i }) as HTMLInputElement;
+      expect(receiverPointCombobox.value).toBe('Bến xe Đà Lạt');
+    });
 
     const backLink = screen.getByRole('link', { name: /^Quay lại danh sách$/i });
     expect(backLink.getAttribute('href')).toBe('/shipments');
+  });
+
+  it('swaps origin and destination when clicking swap button', async () => {
+    render(<ShipmentCreateView />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Đổi chiều tuyến/i })).not.toBeNull();
+    });
+
+    const originCombobox = screen.getByRole('combobox', { name: /Nơi gửi/i }) as HTMLInputElement;
+    const destCombobox = screen.getByRole('combobox', { name: /Nơi nhận/i }) as HTMLInputElement;
+    const swapBtn = screen.getByRole('button', { name: /Đổi chiều tuyến/i });
+
+    expect(originCombobox.value).toBe('Hồ Chí Minh');
+    expect(destCombobox.value).toBe('Đà Lạt');
+
+    // Click swap button
+    fireEvent.click(swapBtn);
+
+    await waitFor(() => {
+      expect(originCombobox.value).toBe('Đà Lạt');
+      expect(destCombobox.value).toBe('Hồ Chí Minh');
+    });
   });
 
   it('validates empty inputs on submit', async () => {

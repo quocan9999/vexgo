@@ -301,10 +301,15 @@ export interface CreateAdminShipmentResult {
 }
 
 export async function getAdminShipmentRouteOptions(
+  query?: { from?: string; to?: string },
   signal?: AbortSignal,
 ): Promise<AdminShipmentRouteOption[]> {
+  const params = new URLSearchParams({ page: '1', pageSize: '100' });
+  if (query?.from?.trim()) params.set('from', query.from.trim());
+  if (query?.to?.trim()) params.set('to', query.to.trim());
+
   const response = await adminApiFetch(
-    `${getApiBaseUrl()}/api/v1/shipments/options?page=1&pageSize=100`,
+    `${getApiBaseUrl()}/api/v1/shipments/options?${params.toString()}`,
     {
       method: 'GET',
       headers: { Accept: 'application/json' },

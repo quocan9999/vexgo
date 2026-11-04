@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft,
+  ArrowRightLeft,
   Bus,
   MapPin,
   Plus,
@@ -62,6 +63,7 @@ import {
 } from '../services/shipment-service';
 import { formatCurrency } from './shipment-details';
 import { SearchableCombobox, type SearchableOption } from '@/components/ui/searchable-combobox';
+import { LocationPicker } from '@/features/locations/components/location-picker';
 
 interface CargoItemDraft {
   id: string;
@@ -97,6 +99,9 @@ export function ShipmentCreateView() {
   const [categories, setCategories] = useState<AdminCargoCategory[]>([]);
 
   // Selected route and points
+  const [origin, setOrigin] = useState<string>('');
+  const [destination, setDestination] = useState<string>('');
+  const [matchingRoute, setMatchingRoute] = useState<AdminShipmentRouteOption | null>(null);
   const [routeId, setRouteId] = useState<string>('');
   const [pointsLoading, setPointsLoading] = useState(false);
   const [senderPoints, setSenderPoints] = useState<AdminRoutePointOption[]>([]);
@@ -141,18 +146,7 @@ export function ShipmentCreateView() {
   const [successDialogOpen, setSuccessDialogOpen] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
 
-  // Searchable options for Routes & Stations
-  const routeOptions: SearchableOption[] = useMemo(() => {
-    return routes.map((r) => ({
-      id: String(r.routeId),
-      value: String(r.routeId),
-      label: `${r.route.origin} → ${r.route.destination}`,
-      description: `${r.busCompany.name} · Cước từ ${formatCurrency(r.minimumEstimatedFee)}`,
-      badge: r.busCompany.name,
-      icon: <Bus className="size-4" />,
-    }));
-  }, [routes]);
-
+  // Searchable options for Stations
   const senderPointOptions: SearchableOption[] = useMemo(() => {
     return senderPoints.map((p) => ({
       id: String(p.id),
@@ -175,6 +169,13 @@ export function ShipmentCreateView() {
     }));
   }, [receiverPoints]);
 
+  // Hoán đổi chiều tuyến vận chuyển
+  const handleSwapLocations = () => {
+    const tempOrigin = origin;
+    setOrigin(destination);
+    setDestination(tempOrigin);
+  };
+
   // Load initial routes and cargo categories
   const loadInitialData = async () => {
     try {
@@ -189,7 +190,10 @@ export function ShipmentCreateView() {
 
       if (routesData.length > 0) {
         const firstRoute = routesData[0];
+        setOrigin(firstRoute.route.origin);
+        setDestination(firstRoute.route.destination);
         setRouteId(String(firstRoute.routeId));
+        setMatchingRoute(firstRoute);
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Không thể tải danh sách tuyến hoặc danh mục hàng.';
@@ -202,6 +206,74 @@ export function ShipmentCreateView() {
   useEffect(() => {
     void loadInitialData();
   }, []);
+
+  // Tự động tìm và khớp tuyến xe khi Nơi gửi hoặc Nơi nhận thay đổi
+  useEffect(() => {
+    if (!origin || !destination) {
+      setMatchingRoute(null);
+      setRouteId('');
+      return;
+    }
+
+    const normOrigin = origin.trim().toLowerCase();
+    const normDest = destination.trim().toLowerCase();
+
+    // 1. Kiểm tra trong danh sách routes đã tải
+    const found = routes.find(
+      (r) =>
+        r.route.origin.trim().toLowerCase() === normOrigin &&
+        r.route.destination.trim().toLowerCase() === normDest,
+    );
+
+    if (found) {
+      setMatchingRoute(found);
+      setRouteId(String(found.routeId));
+      if (errors.routeId) {
+        setErrors((prev) => {
+          const next = { ...prev };
+          delete next.routeId;
+          return next;
+        });
+      }
+      return;
+    }
+
+    // 2. Nếu chưa có trong cache cục bộ, truy vấn API theo from/to
+    let active = true;
+    getAdminShipmentRouteOptions({ from: origin, to: destination })
+      .then((results) => {
+        if (!active) return;
+        if (results.length > 0) {
+          const matched = results[0];
+          setMatchingRoute(matched);
+          setRouteId(String(matched.routeId));
+          setRoutes((prev) => {
+            if (prev.some((r) => r.routeId === matched.routeId)) return prev;
+            return [...prev, matched];
+          });
+          if (errors.routeId) {
+            setErrors((prev) => {
+              const next = { ...prev };
+              delete next.routeId;
+              return next;
+            });
+          }
+        } else {
+          setMatchingRoute(null);
+          setRouteId('');
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setMatchingRoute(null);
+          setRouteId('');
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [origin, destination, routes, errors.routeId]);
 
   // When route changes, fetch pickup/dropoff points
   useEffect(() => {
@@ -362,7 +434,12 @@ export function ShipmentCreateView() {
   const validateForm = (): boolean => {
     const errs: Record<string, string> = {};
 
-    if (!routeId) errs.routeId = 'Vui lòng chọn tuyến đường vận chuyển.';
+    if (!origin.trim()) errs.origin = 'Vui lòng chọn nơi gửi hàng.';
+    if (!destination.trim()) errs.destination = 'Vui lòng chọn nơi nhận hàng.';
+    if (origin.trim() && destination.trim() && origin.trim().toLowerCase() === destination.trim().toLowerCase()) {
+      errs.destination = 'Nơi nhận phải khác nơi gửi.';
+    }
+    if (!routeId) errs.routeId = 'Nhà xe chưa có tuyến vận chuyển giữa hai điểm đã chọn.';
     if (!senderPointId) errs.senderPointId = 'Vui lòng chọn điểm gửi hàng tại quầy.';
     if (!receiverPointId) errs.receiverPointId = 'Vui lòng chọn điểm trả hàng cho người nhận.';
     if (senderPointId && receiverPointId && senderPointId === receiverPointId) {
@@ -426,6 +503,18 @@ export function ShipmentCreateView() {
 
   // Reset form to create next shipment
   const handleResetForm = () => {
+    if (routes.length > 0) {
+      const firstRoute = routes[0];
+      setOrigin(firstRoute.route.origin);
+      setDestination(firstRoute.route.destination);
+      setRouteId(String(firstRoute.routeId));
+      setMatchingRoute(firstRoute);
+    } else {
+      setOrigin('');
+      setDestination('');
+      setRouteId('');
+      setMatchingRoute(null);
+    }
     setSenderName('');
     setSenderPhone('');
     setSenderEmail('');
@@ -592,37 +681,108 @@ export function ShipmentCreateView() {
                 <CardHeader>
                   <CardTitle>1. Tuyến vận chuyển & Điểm giao nhận</CardTitle>
                   <CardDescription>
-                    Chọn tuyến xe thuộc nhà xe của bạn và xác định trạm gửi/trả hàng thực tế
+                    Chọn Nơi gửi và Nơi nhận để xác định tuyến xe, sau đó chọn trạm tiếp nhận và trạm trả hàng thực tế
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <FieldRoot className="sm:col-span-2">
-                      <FieldLabel htmlFor="route-combobox">Tuyến vận chuyển *</FieldLabel>
-                      <SearchableCombobox
-                        id="route-combobox"
-                        value={routeId}
-                        options={routeOptions}
+                  {/* 2 điểm Nơi gửi & Nơi nhận kèm nút đổi chiều */}
+                  <div className="grid gap-3 sm:grid-cols-[1fr_auto_1fr] items-end">
+                    <FieldRoot>
+                      <FieldLabel htmlFor="shipment-origin" className="flex items-center gap-1.5 font-semibold">
+                        <MapPin className="size-4 text-primary" />
+                        Nơi gửi (Tỉnh / Thành phố) *
+                      </FieldLabel>
+                      <LocationPicker
+                        id="shipment-origin"
+                        value={origin}
                         onChange={(val) => {
-                          setRouteId(val);
-                          if (errors.routeId) {
+                          setOrigin(val);
+                          if (errors.origin) {
                             setErrors((prev) => {
                               const next = { ...prev };
-                              delete next.routeId;
+                              delete next.origin;
                               return next;
                             });
                           }
                         }}
-                        disabled={submitting || routes.length === 0}
-                        loading={loadingInitial}
-                        placeholder={loadingInitial ? 'Đang tải tuyến đường…' : '-- Tìm kiếm hoặc chọn tuyến đường --'}
-                        icon={<Bus className="size-4" />}
-                        allowCustom={false}
-                        aria-invalid={Boolean(errors.routeId)}
+                        placeholder="Chọn nơi gửi (ví dụ: Hồ Chí Minh)"
+                        disabled={submitting}
+                        invalid={Boolean(errors.origin)}
                       />
-                      {errors.routeId && <FieldError>{errors.routeId}</FieldError>}
+                      {errors.origin && <FieldError>{errors.origin}</FieldError>}
                     </FieldRoot>
 
+                    <div className="pb-2 flex justify-center">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={handleSwapLocations}
+                        title="Đổi chiều tuyến"
+                        aria-label="Đổi chiều tuyến"
+                        className="size-10 shrink-0"
+                        disabled={submitting || (!origin && !destination)}
+                      >
+                        <ArrowRightLeft className="size-4 text-primary" />
+                      </Button>
+                    </div>
+
+                    <FieldRoot>
+                      <FieldLabel htmlFor="shipment-destination" className="flex items-center gap-1.5 font-semibold">
+                        <MapPin className="size-4 text-destructive" />
+                        Nơi nhận (Tỉnh / Thành phố) *
+                      </FieldLabel>
+                      <LocationPicker
+                        id="shipment-destination"
+                        value={destination}
+                        excludeValue={origin}
+                        onChange={(val) => {
+                          setDestination(val);
+                          if (errors.destination) {
+                            setErrors((prev) => {
+                              const next = { ...prev };
+                              delete next.destination;
+                              return next;
+                            });
+                          }
+                        }}
+                        placeholder="Chọn nơi nhận (ví dụ: Đà Lạt)"
+                        disabled={submitting}
+                        invalid={Boolean(errors.destination)}
+                      />
+                      {errors.destination && <FieldError>{errors.destination}</FieldError>}
+                    </FieldRoot>
+                  </div>
+
+                  {/* Thông tin tuyến xe khớp hoặc cảnh báo */}
+                  {origin && destination && (
+                    matchingRoute ? (
+                      <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-primary/5 border border-primary/20 rounded-lg text-sm">
+                        <div className="flex items-center gap-2">
+                          <Bus className="size-4 text-primary shrink-0" />
+                          <span>
+                            Tuyến vận chuyển:{' '}
+                            <strong>{matchingRoute.route.origin} → {matchingRoute.route.destination}</strong>
+                            {' '}({matchingRoute.busCompany.name})
+                          </span>
+                        </div>
+                        <Badge variant="outline" className="bg-background text-xs font-semibold">
+                          Cước tối thiểu: {formatCurrency(matchingRoute.minimumEstimatedFee)}
+                        </Badge>
+                      </div>
+                    ) : (
+                      <Alert variant="destructive">
+                        <AlertCircle className="size-4" />
+                        <AlertTitle>Không tìm thấy tuyến xe</AlertTitle>
+                        <AlertDescription>
+                          Nhà xe chưa khai thác tuyến từ <strong>{origin}</strong> đi <strong>{destination}</strong>. Vui lòng bấm đổi chiều hoặc chọn địa điểm khác.
+                        </AlertDescription>
+                      </Alert>
+                    )
+                  )}
+
+                  {/* 2 Combobox trạm gửi và trạm nhận tại quầy */}
+                  <div className="grid gap-4 sm:grid-cols-2 pt-1">
                     <FieldRoot className="sm:col-span-1">
                       <FieldLabel htmlFor="sender-point-combobox">Điểm gửi hàng tại quầy *</FieldLabel>
                       <SearchableCombobox
@@ -639,7 +799,7 @@ export function ShipmentCreateView() {
                             });
                           }
                         }}
-                        disabled={submitting || pointsLoading}
+                        disabled={submitting || pointsLoading || !routeId}
                         loading={pointsLoading}
                         placeholder={pointsLoading ? 'Đang tải…' : '-- Tìm trạm / văn phòng gửi --'}
                         icon={<MapPin className="size-4" />}
@@ -665,7 +825,7 @@ export function ShipmentCreateView() {
                             });
                           }
                         }}
-                        disabled={submitting || pointsLoading}
+                        disabled={submitting || pointsLoading || !routeId}
                         loading={pointsLoading}
                         placeholder={pointsLoading ? 'Đang tải…' : '-- Tìm trạm / văn phòng trả hàng --'}
                         icon={<MapPin className="size-4" />}
