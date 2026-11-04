@@ -46,17 +46,18 @@ model LoaiXe {
 }
 
 model Xe {
-  xeId      Int        @id @default(autoincrement()) @db.Int
-  bienSoXe  String     @unique @db.VarChar(15)
-  trangThai String     @db.VarChar(30)
-  nhaXeId   Int        @db.Int
-  loaiXeId  Int        @db.Int
-  createdAt DateTime   @default(now()) @db.DateTime(0)
-  updatedAt DateTime   @default(now()) @updatedAt @db.DateTime(0)
-  nhaXe     NhaXe      @relation(fields: [nhaXeId], references: [nhaXeId], onDelete: Restrict, onUpdate: Restrict)
-  loaiXe    LoaiXe     @relation(fields: [nhaXeId, loaiXeId], references: [nhaXeId, loaiXeId], onDelete: Restrict, onUpdate: Restrict)
-  ghes      Ghe[]
-  chuyenXes ChuyenXe[]
+  xeId            Int              @id @default(autoincrement()) @db.Int
+  bienSoXe        String           @unique @db.VarChar(15)
+  trangThai       String           @db.VarChar(30)
+  nhaXeId         Int              @db.Int
+  loaiXeId        Int              @db.Int
+  createdAt       DateTime         @default(now()) @db.DateTime(0)
+  updatedAt       DateTime         @default(now()) @updatedAt @db.DateTime(0)
+  nhaXe           NhaXe            @relation(fields: [nhaXeId], references: [nhaXeId], onDelete: Restrict, onUpdate: Restrict)
+  loaiXe          LoaiXe           @relation(fields: [nhaXeId, loaiXeId], references: [nhaXeId, loaiXeId], onDelete: Restrict, onUpdate: Restrict)
+  ghes            Ghe[]
+  chuyenXes       ChuyenXe[]
+  taiNguyenMedias TaiNguyenMedia[]
 
   @@unique([nhaXeId, xeId], map: "Xe_nhaXeId_xeId_key")
   @@index([nhaXeId, loaiXeId], map: "Xe_nhaXeId_loaiXeId_idx")
@@ -206,6 +207,37 @@ model TaiKhoan {
   lichSuTrangThaiVes           LichSuTrangThaiVe[]
   tinNhanHoTros                TinNhanHoTro[]
   phanChuyenGuiHangs           LichSuPhanChuyenGuiHang[]
+  taiNguyenMediaDaTao          TaiNguyenMedia[]
+}
+
+// Registry for server-owned Cloudinary assets. Phase 1 exposes public vehicle images only.
+model TaiNguyenMedia {
+  taiNguyenMediaId   String    @id @db.VarChar(36)
+  yeuCauId           String    @db.VarChar(36)
+  nhaXeId            Int       @db.Int
+  xeId               Int       @db.Int
+  taiKhoanTaoId      Int       @db.Int
+  mucDich            String    @default("ANH_XE") @db.VarChar(30)
+  trangThai          String    @db.VarChar(30)
+  tenCloud           String    @db.VarChar(128)
+  thuMuc             String    @db.VarChar(255)
+  cloudinaryPublicId String    @unique @db.VarChar(500)
+  cloudinaryAssetId  String?   @unique @db.VarChar(128)
+  sha256             String    @db.Char(64)
+  urlCongKhai        String?   @db.VarChar(1000)
+  phienBan           BigInt?   @db.BigInt
+  kichThuoc          Int?      @db.Int
+  chieuRong          Int?      @db.Int
+  chieuCao           Int?      @db.Int
+  dinhDang           String?   @db.VarChar(20)
+  daGoLuc            DateTime? @db.DateTime(3)
+  createdAt          DateTime  @default(now()) @db.DateTime(3)
+  updatedAt          DateTime  @updatedAt @db.DateTime(3)
+  xe                 Xe        @relation(fields: [nhaXeId, xeId], references: [nhaXeId, xeId], onDelete: Cascade, onUpdate: Restrict)
+  taiKhoanTao        TaiKhoan  @relation(fields: [taiKhoanTaoId], references: [taiKhoanId], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([nhaXeId, yeuCauId], map: "TaiNguyenMedia_tenant_request_key")
+  @@index([nhaXeId, xeId, trangThai], map: "TaiNguyenMedia_vehicle_status_idx")
 }
 
 model PhienDangNhap {
@@ -885,6 +917,9 @@ model YeuCauTaoPhieuGuiHang {
 
   @@unique([phamVi, key])
 }
+
+
+
 
 
 
