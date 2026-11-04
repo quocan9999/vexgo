@@ -25,6 +25,7 @@ import {
   resolveBusinessTimeZone,
 } from '../common/time/business-date.js';
 import { validateStopList } from './stop-list-validator.js';
+import { generateBusinessUuid } from '../common/business-uuid.js';
 import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
 
 function parseTimeString(timeStr?: string | null): Date | null {
@@ -175,11 +176,14 @@ export class StationsService {
     const diaDiemMoiId = await this.resolveDiaDiemMoiId(dto.diaDiemCuId);
 
     // Kiểm tra trùng maDiem trong cùng nhaXe
+    const maDiem = dto.maDiem?.trim() || generateBusinessUuid();
+
+    // Kiểm tra trùng maDiem trong cùng nhaXe
     const existing = await this.prisma.diemDonTra.findUnique({
       where: {
         nhaXeId_maDiem: {
           nhaXeId,
-          maDiem: dto.maDiem,
+          maDiem,
         },
       },
     });
@@ -187,7 +191,7 @@ export class StationsService {
     if (existing) {
       throw new ConflictException({
         error: 'STATION_CODE_EXISTS',
-        message: `Mã điểm đón trả '${dto.maDiem}' đã tồn tại trong nhà xe này.`,
+        message: `Mã điểm đón trả '${maDiem}' đã tồn tại trong nhà xe này.`,
       });
     }
 
@@ -207,7 +211,7 @@ export class StationsService {
     try {
       const station = await this.prisma.diemDonTra.create({
         data: {
-          maDiem: dto.maDiem,
+          maDiem,
           tenDiem: dto.tenDiem,
           loaiDiem: dto.loaiDiem,
           diaChi: dto.diaChi,

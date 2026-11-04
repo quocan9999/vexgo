@@ -300,9 +300,6 @@ describe('Shipment Read APIs (Phase 02)', () => {
       await tx.thanhToan.deleteMany({
         where: { donGiaoDichId: { in: [...fixtureIds.donGiaoDich] } },
       });
-      await tx.hoaDon.deleteMany({
-        where: { donGiaoDichId: { in: [...fixtureIds.donGiaoDich] } },
-      });
       await tx.donGiaoDich.deleteMany({
         where: { donGiaoDichId: { in: [...fixtureIds.donGiaoDich] } },
       });

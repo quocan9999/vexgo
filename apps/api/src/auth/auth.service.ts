@@ -51,14 +51,9 @@ export class AuthService {
 
         const account = await tx.taiKhoan.create({
           data: {
-            hoTen: dto.fullName,
             soDienThoai: dto.phoneNumber,
             matKhau: hashedPassword,
-            ngaySinh: dto.dateOfBirth
-              ? new Date(`${dto.dateOfBirth}T00:00:00.000Z`)
-              : null,
             email: normalizeEmail(dto.email),
-            cccd: dto.citizenId ?? null,
             daXacThucSoDienThoai: true,
             trangThai: 'HOAT_DONG',
           },
@@ -79,6 +74,7 @@ export class AuthService {
             ngaySinh: dto.dateOfBirth
               ? new Date(`${dto.dateOfBirth}T00:00:00.000Z`)
               : null,
+            cccd: dto.citizenId ?? null,
             diemTichLuy: 0,
             taiKhoanId: account.taiKhoanId,
           },
@@ -93,7 +89,7 @@ export class AuthService {
         return this.tokenService.createSession(tx, {
           accountId: account.taiKhoanId,
           customerId: customer.khachHangId,
-          fullName: customer.hoTen ?? account.hoTen ?? dto.fullName,
+          fullName: customer.hoTen ?? dto.fullName,
           phoneNumber: account.soDienThoai,
           roles: [customerRole.tenVaiTro],
         });
@@ -175,7 +171,7 @@ export class AuthService {
       this.tokenService.createSession(tx, {
         accountId: account.taiKhoanId,
         customerId: account.khachHang?.khachHangId ?? null,
-        fullName: account.nhanVien?.hoTen ?? account.khachHang?.hoTen ?? account.hoTen ?? '',
+        fullName: account.nhanVien?.hoTen ?? account.khachHang?.hoTen ?? '',
         phoneNumber: account.soDienThoai,
         roles: account.taiKhoanVaiTros.map(({ vaiTro }) => vaiTro.tenVaiTro),
       }),
@@ -187,7 +183,6 @@ export class AuthService {
       where: { taiKhoanId: accountId },
       select: {
         taiKhoanId: true,
-        hoTen: true,
         soDienThoai: true,
         email: true,
         trangThai: true,
@@ -245,7 +240,7 @@ export class AuthService {
     );
     return {
       accountId: account.taiKhoanId,
-      fullName: account.hoTen,
+      fullName: employee?.hoTen ?? account.khachHang?.hoTen ?? '',
       phoneNumber: account.soDienThoai,
       email: account.email,
       roles,
@@ -256,9 +251,9 @@ export class AuthService {
       employee: employee
         ? {
             employeeId: employee.nhanVienId,
-            busCompanyId: employee.nhaXeId,
-            busCompanyCode: employee.nhaXe.maNhaXe,
-            busCompanyName: employee.nhaXe.tenNhaXe,
+            busCompanyId: employee.nhaXeId ?? null,
+            busCompanyCode: employee.nhaXe?.maNhaXe ?? null,
+            busCompanyName: employee.nhaXe?.tenNhaXe ?? null,
           }
         : null,
       busCompanyId: employee?.nhaXeId ?? null,

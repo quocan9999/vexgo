@@ -181,7 +181,7 @@ describe('shipment operational invariants', () => {
         soTien: decimal(50000),
         phuongThuc: 'TAI_BEN',
         trangThai: 'THANH_CONG',
-        taiKhoanXacNhanId: 11,
+        nhanVienXacNhanId: 3,
         thoiDiemHoanTat: expect.any(Date),
       }),
     });

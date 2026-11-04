@@ -345,16 +345,41 @@ async function seedAccounts(db, operators, roles) {
     'TaiKhoan',
     { soDienThoai: '+84900000000' },
     {
-      hoTen: 'Quản trị viên VexGo',
       soDienThoai: '+84900000000',
       matKhau: hash,
-      ngaySinh: dateOnly(1988, 1, 1),
-      cccd: '000000000000',
       email: 'superadmin@vexgo.test',
       daXacThucSoDienThoai: true,
       trangThai: 'HOAT_DONG',
     },
-    { hoTen: 'Quản trị viên VexGo', matKhau: hash, email: 'superadmin@vexgo.test', trangThai: 'HOAT_DONG' },
+    { matKhau: hash, email: 'superadmin@vexgo.test', trangThai: 'HOAT_DONG' },
+  );
+  const superEmployeeCode = deterministicUuid('NV', 'SYSTEM', 0);
+  const superEmployee = await upsertBy(
+    db,
+    'NhanVien',
+    { taiKhoanId: superAccount.taiKhoanId },
+    {
+      maNhanVien: superEmployeeCode,
+      hoTen: 'Quản trị viên VexGo',
+      cccd: '000000000000',
+      ngaySinh: dateOnly(1988, 1, 1),
+      chucVu: 'Quản trị hệ thống',
+      ngayVaoLam: dateOnly(2024, 1, 1),
+      trangThaiLamViec: 'DANG_LAM_VIEC',
+      nhaXeId: null,
+      taiKhoanId: superAccount.taiKhoanId,
+    },
+    {
+      maNhanVien: superEmployeeCode,
+      hoTen: 'Quản trị viên VexGo',
+      cccd: '000000000000',
+      ngaySinh: dateOnly(1988, 1, 1),
+      chucVu: 'Quản trị hệ thống',
+      ngayVaoLam: dateOnly(2024, 1, 1),
+      trangThaiLamViec: 'DANG_LAM_VIEC',
+      nhaXeId: null,
+      taiKhoanId: superAccount.taiKhoanId,
+    },
   );
   accounts.superAdmin = superAccount;
   await upsertBy(
@@ -401,21 +426,15 @@ async function seedAccounts(db, operators, roles) {
         'TaiKhoan',
         { soDienThoai: phone },
         {
-          hoTen: employeeNames[employeeIndex],
           soDienThoai: phone,
           matKhau: hash,
-          ngaySinh: birthDate,
-          cccd: cccd,
           email: employeeEmail,
           daXacThucSoDienThoai: !isFormer,
           trangThai: isFormer ? 'TAM_KHOA' : 'HOAT_DONG',
         },
         {
-          hoTen: employeeNames[employeeIndex],
           matKhau: hash,
           email: employeeEmail,
-          ngaySinh: birthDate,
-          cccd: cccd,
           trangThai: isFormer ? 'TAM_KHOA' : 'HOAT_DONG',
         },
       );
@@ -459,26 +478,25 @@ async function seedAccounts(db, operators, roles) {
     const code = deterministicUuid('KH', index);
     const phone = `+8492${pad(index + 1, 7)}`;
     const existingCustomer = await db.khachHang.findUnique({ where: { maKhachHang: code }, include: { taiKhoan: true } });
+    const customerBirthDate = dateOnly(1970 + (index % 25), 1 + (index % 12), 1 + (index % 26));
+    const customerCccd = `000000${pad(index + 1, 6)}`;
     const accountData = {
-      hoTen: customerNames[index],
       soDienThoai: phone,
       matKhau: hash,
-      ngaySinh: dateOnly(1970 + (index % 25), 1 + (index % 12), 1 + (index % 26)),
-      cccd: `000000${pad(index + 1, 6)}`,
       email: `kh${pad(index + 1, 6)}@vexgo.test`,
       daXacThucSoDienThoai: index !== 19,
       trangThai: index === 18 ? 'TAM_KHOA' : 'HOAT_DONG',
     };
     const account = existingCustomer
       ? await db.taiKhoan.update({ where: byId('TaiKhoan', existingCustomer.taiKhoanId), data: accountData })
-      : await upsertBy(db, 'TaiKhoan', { soDienThoai: phone }, accountData, { hoTen: accountData.hoTen, matKhau: accountData.matKhau, ngaySinh: accountData.ngaySinh, cccd: accountData.cccd, email: accountData.email, daXacThucSoDienThoai: accountData.daXacThucSoDienThoai, trangThai: accountData.trangThai });
+      : await upsertBy(db, 'TaiKhoan', { soDienThoai: phone }, accountData, { matKhau: accountData.matKhau, email: accountData.email, daXacThucSoDienThoai: accountData.daXacThucSoDienThoai, trangThai: accountData.trangThai });
     count('TaiKhoan', existingCustomer ? 'update' : 'upsert');
     const customer = await upsertBy(
       db,
       'KhachHang',
       { maKhachHang: code },
-      { maKhachHang: code, hoTen: customerNames[index], ngaySinh: accountData.ngaySinh, diemTichLuy: index * 10, taiKhoanId: account.taiKhoanId },
-      { hoTen: customerNames[index], ngaySinh: accountData.ngaySinh, diemTichLuy: index * 10, taiKhoanId: account.taiKhoanId },
+      { maKhachHang: code, hoTen: customerNames[index], cccd: customerCccd, ngaySinh: customerBirthDate, diemTichLuy: index * 10, taiKhoanId: account.taiKhoanId },
+      { hoTen: customerNames[index], cccd: customerCccd, ngaySinh: customerBirthDate, diemTichLuy: index * 10, taiKhoanId: account.taiKhoanId },
     );
     await upsertBy(
       db,
@@ -656,7 +674,7 @@ async function seedBranchesRatesCargo(db, operators, routes) {
     const operator = operators[definition.code];
     points[definition.code] = [];
     for (let index = 0; index < 5; index += 1) {
-      const code = `${definition.code}-BC-${pad(index + 1, 3)}`;
+      const code = deterministicUuid('DGNH-BC', definition.code, index + 1);
       const { routeCity: _routeCity, ...location } = branchDefsByOperator[definition.code][index];
       const pointData = { maDiem: code, tenDiem: `${definition.name} ${index + 1}`, ...location, trangThai: index === 4 ? 'TAM_NGUNG' : 'HOAT_DONG', nhaXeId: operator.nhaXeId };
       const point = await findOrCreate(
@@ -912,7 +930,7 @@ async function replaceShipmentFeeDetails(db, shipment, feeDetails) {
 
 function customerSnapshot(customer) {
   return {
-    tenKhachHang: customer.account.hoTen,
+    tenKhachHang: customer.hoTen,
     soDienThoaiKhachHang: customer.account.soDienThoai,
     emailKhachHang: customer.account.email,
   };
@@ -1200,13 +1218,6 @@ async function seedTransactions(db, operators, accounts, fleet, prices, logistic
           await ensurePayment(db, { soTien: decimal(Number(cancelledTicket.giaThucTe)), phuongThuc: 'MOMO', loaiGiaoDich: 'HOAN_TIEN', thoiGian: localDate(2026, 9, day, 12, minute), trangThai: 'THANH_CONG', donGiaoDichId: transaction.donGiaoDichId, veId: cancelledTicket.veId });
           scenarios.push({ type: 'huy-rieng-mot-ve-hoan-tien', maDonGiaoDich: transactionCode, maVe: cancelledTicket.maVe });
         }
-        await upsertBy(
-          db,
-          'HoaDon',
-          { maHoaDon: deterministicUuid('HD', definition.code, txIndex) },
-          { maHoaDon: deterministicUuid('HD', definition.code, txIndex), ngayLap: transactionTime, tongTien: decimal(total), trangThai: 'DA_PHAT_HANH', donGiaoDichId: transaction.donGiaoDichId },
-          { ngayLap: transactionTime, tongTien: decimal(total), trangThai: 'DA_PHAT_HANH' },
-        );
       }
       if (ticketPlan.length === 5) scenarios.push({ type: 'booking-5-ve', maDonGiaoDich: transactionCode, maPhieuDatVe: booking.maPhieuDatVe, maVe: tickets.map((ticket) => ticket.maVe) });
       if (shippingData?.shipPlan.status === 'MOI_TAO') scenarios.push({ type: 'gui-hang-moi-tao', maDonGiaoDich: transactionCode, maVanDon: shipment.maVanDon });
@@ -1219,7 +1230,9 @@ async function seedTransactions(db, operators, accounts, fleet, prices, logistic
 
 async function applyCustomerSnapshotChange(db, accounts) {
   const customer = accounts.customers[0];
-  await db.taiKhoan.update({ where: byId('TaiKhoan', customer.account.taiKhoanId), data: { hoTen: 'Nguyễn Minh Anh (đã cập nhật)', soDienThoai: '+84929999999', email: 'kh000001.updated@vexgo.test' } });
+  await db.khachHang.update({ where: byId('KhachHang', customer.khachHangId), data: { hoTen: 'Nguyễn Minh Anh (đã cập nhật)' } });
+  await db.taiKhoan.update({ where: byId('TaiKhoan', customer.account.taiKhoanId), data: { soDienThoai: '+84929999999', email: 'kh000001.updated@vexgo.test' } });
+  count('KhachHang', 'snapshot-update');
   count('TaiKhoan', 'snapshot-update');
 }
 
@@ -1394,9 +1407,9 @@ async function seedSupportChat(db, operators, accounts) {
   const conv1 = await upsertBy(
     db,
     'CuocTroChuyen',
-    { maCuocTroChuyen: 'CC-FUTA-20261013-0001' },
+    { maCuocTroChuyen: deterministicUuid('CTC', 1) },
     {
-      maCuocTroChuyen: 'CC-FUTA-20261013-0001',
+      maCuocTroChuyen: deterministicUuid('CTC', 1),
       tieuDe: 'Hỏi về đón trả tận nơi tại Đà Lạt',
       trangThai: 'DANG_XU_LY',
       kenhHoTro: 'WEB',
@@ -1454,9 +1467,9 @@ async function seedSupportChat(db, operators, accounts) {
     const conv2 = await upsertBy(
       db,
       'CuocTroChuyen',
-      { maCuocTroChuyen: 'CC-TB-20261013-0002' },
+      { maCuocTroChuyen: deterministicUuid('CTC', 2) },
       {
-        maCuocTroChuyen: 'CC-TB-20261013-0002',
+        maCuocTroChuyen: deterministicUuid('CTC', 2),
         tieuDe: 'Hỏi về quy định mang thú cưng',
         trangThai: 'CHO_TIEP_NHAN',
         kenhHoTro: 'MOBILE',
@@ -1494,9 +1507,9 @@ async function seedSupportChat(db, operators, accounts) {
     await upsertBy(
       db,
       'CuocTroChuyen',
-      { maCuocTroChuyen: 'CC-FUTA-20261013-0003' },
+      { maCuocTroChuyen: deterministicUuid('CTC', 3) },
       {
-        maCuocTroChuyen: 'CC-FUTA-20261013-0003',
+        maCuocTroChuyen: deterministicUuid('CTC', 3),
         tieuDe: 'Hỏi về hoàn hủy vé',
         trangThai: 'DA_DONG',
         kenhHoTro: 'WEB',

@@ -669,7 +669,7 @@ describe('ShipmentsService', () => {
           data: expect.objectContaining({
             trangThai: 'THANH_CONG',
             phuongThuc: 'TAI_BEN',
-            taiKhoanXacNhanId: 88,
+            nhanVienXacNhanId: 12,
           }),
         }),
       );

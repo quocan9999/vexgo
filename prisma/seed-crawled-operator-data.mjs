@@ -12,6 +12,7 @@ import {
   formatAddress,
   deduplicateFixedPoints,
   generateRoutePointMaDiem,
+  deterministicUuid,
   buildRouteTemplates,
 } from './lib/crawled-data.mjs';
 
@@ -90,8 +91,9 @@ export async function runSeed({ apply = false } = {}) {
       'BX-GN',
       'VP-Q1',
     ];
+    const sampleUuids = sampleStationCodes.map((k) => deterministicUuid('DDT-SAMPLE', k));
     const existingStations = await prisma.diemDonTra.findMany({
-      where: { maDiem: { in: sampleStationCodes } },
+      where: { maDiem: { in: [...sampleStationCodes, ...sampleUuids] } },
       include: { nhaXe: true },
     });
 
@@ -243,7 +245,7 @@ export async function runSeed({ apply = false } = {}) {
         const normalizedPhone = normalizePhone(rawPhone);
         const formattedAddress = formatAddress(p.diaChi, p.quanHuyen, p.tinhThanh);
         const mappedLoaiDiem = mapLoaiDiem(p.loaiDiem);
-        const maDiem = p.maDiem.slice(0, 50);
+        const maDiem = deterministicUuid('DDT', opCode, p.id || p.maDiem);
         const tenDiem = p.tenDiem.slice(0, 150);
 
         if (rawPhone && rawPhone.length > 20) {

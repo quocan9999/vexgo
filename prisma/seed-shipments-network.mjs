@@ -20,6 +20,11 @@ function databaseConfig() {
   };
 }
 
+function deterministicUuid(...parts) {
+  const hash = crypto.createHash('md5').update(parts.map(String).join(':')).digest('hex');
+  return `${hash.slice(0, 12)}4${hash.slice(13, 16)}a${hash.slice(17, 32)}`;
+}
+
 function normalizeCity(name) {
   if (!name) return '';
   const s = name.toLowerCase().trim();
@@ -137,7 +142,7 @@ export async function runSeedShipmentsNetwork() {
       console.log(`   - Nhà xe ${operator.tenNhaXe} (${opCode}): tìm thấy ${shipmentPoints.length} bưu cục/văn phòng nhận hàng.`);
 
       for (const p of shipmentPoints) {
-        const maDiem = p.maDiem.slice(0, 50);
+        const maDiem = deterministicUuid('DGNH', opCode, p.id || p.maDiem);
         const tenDiem = p.tenDiem.slice(0, 150);
         const diaChi = (p.diaChi || p.tenDiem).slice(0, 255);
         const tinhThanh = p.tinhThanh || 'Chưa xác định';

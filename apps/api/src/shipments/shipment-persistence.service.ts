@@ -41,7 +41,8 @@ export interface ShipmentPersistenceInput {
   senderPointId: number;
   receiverPointId: number;
   orderId: number;
-  actorAccountId: number | null;
+  actorAccountId?: number | null;
+  actorEmployeeId?: number | null;
   historyNote: string;
   acceptedAtCounter?: boolean;
   items: ShipmentPersistenceItemInput[];
@@ -85,7 +86,7 @@ export class ShipmentPersistenceService {
         ngayDuKienGui: input.expectedSendDate,
         hanMangHangDen: input.acceptedAtCounter ? null : input.dropoffDeadline,
         thoiDiemXacNhanCuoc: input.acceptedAtCounter ? input.sentAt : null,
-        taiKhoanXacNhanCuocId: input.acceptedAtCounter ? input.actorAccountId : null,
+        nhanVienXacNhanCuocId: input.acceptedAtCounter ? (input.actorEmployeeId ?? null) : null,
         cuocDuTinh:
           input.tripId === null ? new Prisma.Decimal(input.totalFee) : null,
         diemGuiId: input.senderPointId,

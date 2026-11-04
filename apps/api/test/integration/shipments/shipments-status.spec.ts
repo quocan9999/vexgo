@@ -287,9 +287,6 @@ describe('Shipment Status Transition APIs (Phase 04)', () => {
         await tx.thanhToan.deleteMany({
           where: { donGiaoDichId: { in: transactionIds } },
         });
-        await tx.hoaDon.deleteMany({
-          where: { donGiaoDichId: { in: transactionIds } },
-        });
         await tx.donGiaoDich.deleteMany({
           where: { donGiaoDichId: { in: transactionIds } },
         });

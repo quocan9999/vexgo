@@ -136,12 +136,26 @@ const SHIPMENT_DETAIL_INCLUDE = {
     orderBy: { chiTietCuocGuiHangId: 'asc' },
   },
   lichSuPhanChuyens: {
-    include: { taiKhoan: true },
+    include: {
+      taiKhoan: {
+        select: {
+          taiKhoanId: true,
+          nhanVien: { select: { hoTen: true } },
+          khachHang: { select: { hoTen: true } },
+        },
+      },
+    },
     orderBy: { thoiGian: 'asc' },
   },
   lichSuTrangThais: {
     include: {
-      taiKhoan: { select: { taiKhoanId: true, hoTen: true } },
+      taiKhoan: {
+    select: {
+      taiKhoanId: true,
+      nhanVien: { select: { hoTen: true } },
+      khachHang: { select: { hoTen: true } },
+    },
+  },
     },
     orderBy: [{ thoiGian: 'asc' }, { lichSuTrangThaiId: 'asc' }],
   },
@@ -608,7 +622,7 @@ export class ShipmentsService {
           cuocChinh: pricing.baseFee,
           tongPhi: total,
           thoiDiemXacNhanCuoc: now,
-          taiKhoanXacNhanCuocId: principal.taiKhoanId,
+          nhanVienXacNhanCuocId: principal.nhanVienId,
         },
       });
       const priceChanged = !total.equals(shipment.tongPhi);
@@ -792,7 +806,7 @@ export class ShipmentsService {
           thoiGian: new Date(),
           thoiDiemHoanTat: new Date(),
           laQuyetToanHopLe: true,
-          taiKhoanXacNhanId: principal.taiKhoanId,
+          nhanVienXacNhanId: principal.nhanVienId,
         },
       });
       await tx.donGiaoDich.update({
@@ -1203,7 +1217,7 @@ export class ShipmentsService {
             thoiGian: now,
             thoiDiemHoanTat: isCounterPaid ? now : null,
             laQuyetToanHopLe: isCounterPaid ? true : undefined,
-            taiKhoanXacNhanId: isCounterPaid ? (taiKhoanId ?? null) : null,
+            nhanVienXacNhanId: isCounterPaid ? (principal?.nhanVienId ?? null) : null,
             trangThai: isCounterPaid
               ? 'THANH_CONG'
               : freightPayer === 'NGUOI_NHAN'
@@ -1246,6 +1260,7 @@ export class ShipmentsService {
             receiverPointId: diemNhanId,
             orderId: donGiaoDich.donGiaoDichId,
             actorAccountId: taiKhoanId ?? null,
+            actorEmployeeId: dto.acceptAtCounter ? (principal?.nhanVienId ?? null) : null,
             historyNote: dto.acceptAtCounter
               ? 'Tạo và tiếp nhận trực tiếp tại quầy'
               : 'Tạo phiếu gửi hàng độc lập',
@@ -1914,7 +1929,7 @@ export class ShipmentsService {
         actor: history.taiKhoan
           ? {
               accountId: history.taiKhoan.taiKhoanId,
-              fullName: history.taiKhoan.hoTen ?? 'Người dùng',
+              fullName: history.taiKhoan?.nhanVien?.hoTen ?? history.taiKhoan?.khachHang?.hoTen ?? 'Người dùng',
             }
           : null,
       })),
@@ -1925,7 +1940,7 @@ export class ShipmentsService {
         note: log.lyDo,
         time: log.thoiGian.toISOString(),
         actor: log.taiKhoan
-          ? { accountId: log.taiKhoanId, fullName: log.taiKhoan.hoTen ?? 'Người dùng' }
+          ? { accountId: log.taiKhoanId, fullName: log.taiKhoan?.nhanVien?.hoTen ?? log.taiKhoan?.khachHang?.hoTen ?? 'Người dùng' }
           : null,
       })),
       };

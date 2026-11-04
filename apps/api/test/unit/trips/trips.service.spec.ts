@@ -74,7 +74,6 @@ function createService() {
       const sql = parts.join('?');
       if (sql.includes('FROM NhaXe')) return [{ maNhaXe: 'FUTA' }];
       if (sql.includes('FROM ChuyenXe')) return [{ code: 'FUTA-CX-20102026-0098' }];
-      if (sql.includes('FROM BoDemMaNghiepVu')) return [];
       return [{ xeId: 1 }];
     }),
     $executeRaw: vi.fn().mockResolvedValue(1),
