@@ -12,6 +12,7 @@ type ApiErrorDetail = { field: string; message: string };
 type CancellationReason =
   | 'ALREADY_CANCELLED'
   | 'ALREADY_DEPARTED'
+  | 'LESS_THAN_2_HOURS_30_MINUTES'
   | 'LESS_THAN_4_HOURS'
   | 'LESS_THAN_12_HOURS'
   | 'DEPARTURE_TIME_UNAVAILABLE';
@@ -77,6 +78,7 @@ function isErrorDetails(value: unknown): value is ApiErrorDetail[] {
 const CANCELLATION_REASONS = new Set<CancellationReason>([
   'ALREADY_CANCELLED',
   'ALREADY_DEPARTED',
+  'LESS_THAN_2_HOURS_30_MINUTES',
   'LESS_THAN_4_HOURS',
   'LESS_THAN_12_HOURS',
   'DEPARTURE_TIME_UNAVAILABLE',

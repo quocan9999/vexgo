@@ -1,13 +1,14 @@
 // frontend/src/modules/client/common/components/CustomerHeader.tsx
 'use client';
 
-import React, { useState, useSyncExternalStore } from 'react';
+import React, { useState, useRef, useEffect, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { User, Bus, Menu, X, ChevronDown, FileText, Settings, LogOut, Award, Globe } from 'lucide-react';
+import { User, Bus, Menu, X, ChevronDown, FileText, Package, Settings, LogOut, Award, Globe, Clock, QrCode } from 'lucide-react';
 import { useAuthSession } from '@/features/auth/auth-session';
 import { ConfirmModal } from '@/components/ui/confirm-modal';
 import { getMobileMenuLabel, RESET_PASSWORD_PATH } from '@/components/layout/customer-navigation';
+import { getLatestActivePaymentDraft } from '@/features/booking/services/payment-draft';
 
 const emptySubscribe = () => () => {};
 const getClientSearch = () => (typeof window !== 'undefined' ? window.location.search : '');
@@ -24,9 +25,10 @@ const NavLinksList: React.FC<NavLinksNavProps> = ({ onItemClick, isMobile }) => 
   const navLinks = [
     { href: '/', label: 'Trang chủ' },
     { href: '/shipments/new', label: 'Gửi hàng' },
+    { href: '/promotions', label: 'Khuyến mãi' },
+    { href: '/news', label: 'Tin tức' },
     { href: '/tickets/lookup', label: 'Tra cứu vé' },
     { href: '/cancel-ticket', label: 'Hủy vé' },
-    { href: '/about', label: 'Giới thiệu' },
     { href: '/contact', label: 'Liên hệ' },
   ];
 
@@ -50,10 +52,10 @@ const NavLinksList: React.FC<NavLinksNavProps> = ({ onItemClick, isMobile }) => 
               key={link.label}
               href={link.href}
               onClick={onItemClick}
-              className={`block px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+              className={`block px-3 py-2.5 rounded-lg text-sm font-semibold transition-colors ${
                 isActive
-                  ? 'text-amber-400 font-bold bg-white/5'
-                  : 'text-slate-200 hover:bg-white/10 hover:text-white'
+                  ? 'text-amber-300 font-bold bg-black/15 border-l-4 border-amber-400 pl-3'
+                  : 'text-white/90 hover:bg-black/10 hover:text-white'
               }`}
             >
               {link.label}
@@ -65,17 +67,17 @@ const NavLinksList: React.FC<NavLinksNavProps> = ({ onItemClick, isMobile }) => 
   }
 
   return (
-    <nav className="hidden lg:flex items-center gap-6 xl:gap-8 text-base font-semibold">
+    <nav className="hidden lg:flex items-center gap-4 xl:gap-7 text-sm xl:text-[15px] font-semibold">
       {navLinks.map((link) => {
         const isActive = checkIsActive(link.href);
         return (
           <Link
             key={link.label}
             href={link.href}
-            className={`transition-colors cursor-pointer ${
+            className={`relative py-1.5 transition-all duration-200 cursor-pointer ${
               isActive
-                ? 'text-amber-400 font-bold'
-                : 'text-slate-200 hover:text-amber-300'
+                ? 'text-white font-extrabold after:absolute after:bottom-0 after:left-0 after:w-full after:h-0.5 after:bg-amber-400 after:rounded-full'
+                : 'text-white/85 hover:text-white'
             }`}
           >
             {link.label}
@@ -92,8 +94,71 @@ export const CustomerHeader: React.FC = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const [logoutModalOpen, setLogoutModalOpen] = useState(false);
+  const [dismissedDraftId, setDismissedDraftId] = useState<string | null>(null);
+  const [nowMs, setNowMs] = useState<number>(0);
+  const userDropdownRef = useRef<HTMLDivElement>(null);
   const searchQuery = useSyncExternalStore(emptySubscribe, getClientSearch, getServerSearch);
   const { user, signOut } = useAuthSession();
+
+  const shouldHidePaymentBar =
+    !pathname ||
+    pathname.startsWith('/payment') ||
+    pathname.startsWith('/invoice') ||
+    pathname.startsWith('/account/tickets') ||
+    pathname.startsWith('/account/shipments') ||
+    pathname.startsWith('/auth');
+
+  useEffect(() => {
+    if (shouldHidePaymentBar) return;
+    const initialTimer = setTimeout(() => {
+      setNowMs(Date.now());
+    }, 0);
+    const timer = setInterval(() => {
+      setNowMs(Date.now());
+    }, 1000);
+    return () => {
+      clearTimeout(initialTimer);
+      clearInterval(timer);
+    };
+  }, [shouldHidePaymentBar, pathname]);
+
+  const activeDraftInfo =
+    !shouldHidePaymentBar && nowMs > 0
+      ? getLatestActivePaymentDraft(nowMs)
+      : null;
+  const visibleDraftInfo =
+    activeDraftInfo && activeDraftInfo.draft.id !== dismissedDraftId
+      ? activeDraftInfo
+      : null;
+
+  useEffect(() => {
+    if (!userDropdownOpen) return;
+
+    const handleClickOutside = (event: MouseEvent | TouchEvent) => {
+      if (
+        userDropdownRef.current &&
+        !userDropdownRef.current.contains(event.target as Node)
+      ) {
+        setUserDropdownOpen(false);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setUserDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [userDropdownOpen]);
 
   const currentPath =
     pathname && !pathname.startsWith('/auth')
@@ -104,7 +169,7 @@ export const CustomerHeader: React.FC = () => {
     : '/auth/login';
 
   return (
-    <header className="sticky top-0 z-50 bg-red-600 text-white border-b border-red-700 shadow-md font-sans">
+    <header className="sticky top-0 z-50 bg-[#E60012] text-white border-b border-[#CC0010] shadow-md font-sans">
       <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
         {/* Logo bên trái */}
         <Link href="/" className="flex items-center gap-2 sm:gap-3 min-w-0 mr-2">
@@ -129,7 +194,7 @@ export const CustomerHeader: React.FC = () => {
           </button>
           {user ? (
             /* User Avatar Dropdown */
-            <div className="relative">
+            <div ref={userDropdownRef} className="relative">
               <button
                 type="button"
                 onClick={() => setUserDropdownOpen(!userDropdownOpen)}
@@ -181,6 +246,16 @@ export const CustomerHeader: React.FC = () => {
                         <FileText className="w-4 h-4 text-white" />
                       </div>
                       <span className="text-sm font-bold text-slate-700 group-hover:text-sky-500 transition-colors">Vé của tôi</span>
+                    </Link>
+
+                    <Link
+                      href="/account/shipments"
+                      className="flex items-center gap-3 px-4 py-2.5 hover:bg-slate-50 transition-colors group"
+                    >
+                      <div className="w-9 h-9 rounded-full bg-emerald-500 flex items-center justify-center shrink-0">
+                        <Package className="w-4 h-4 text-white" />
+                      </div>
+                      <span className="text-sm font-bold text-slate-700 group-hover:text-emerald-600 transition-colors">Đơn gửi hàng</span>
                     </Link>
 
                     <Link
@@ -237,18 +312,26 @@ export const CustomerHeader: React.FC = () => {
 
       {/* Mobile Drawer */}
       {mobileMenuOpen && (
-        <div id="customer-mobile-menu" className="lg:hidden bg-[#0e2a20] border-t border-emerald-900/60 px-4 py-4 space-y-3">
+        <div id="customer-mobile-menu" className="lg:hidden bg-[#B3000E] border-t border-white/15 px-4 py-4 space-y-3">
           <NavLinksList isMobile onItemClick={() => setMobileMenuOpen(false)} />
-          <div className="pt-2 border-t border-emerald-900/60 space-y-2">
+          <div className="pt-2 border-t border-white/15 space-y-2">
             {user ? (
               <>
                 <Link
                   href="/account/tickets"
                   onClick={() => setMobileMenuOpen(false)}
-                  className="flex items-center gap-2 px-3 py-2 text-sm font-bold text-amber-300 bg-white/5 rounded-lg"
+                  className="flex items-center gap-2 px-3 py-2 text-sm font-bold text-amber-300 bg-white/10 rounded-lg"
                 >
                   <FileText className="w-4 h-4" />
                   <span>Vé của tôi</span>
+                </Link>
+                <Link
+                  href="/account/shipments"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="flex items-center gap-2 px-3 py-2 text-sm font-bold text-emerald-300 bg-white/10 rounded-lg"
+                >
+                  <Package className="w-4 h-4" />
+                  <span>Đơn gửi hàng</span>
                 </Link>
                 <button
                   type="button"
@@ -257,7 +340,7 @@ export const CustomerHeader: React.FC = () => {
                     setMobileMenuOpen(false);
                     router.push('/');
                   }}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-rose-300"
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-white/90 hover:text-white"
                 >
                   <LogOut className="w-4 h-4" />
                   <span>Đăng xuất ({user.fullName})</span>
@@ -267,7 +350,7 @@ export const CustomerHeader: React.FC = () => {
               <Link
                 href={loginHref}
                 onClick={() => setMobileMenuOpen(false)}
-                className="flex items-center gap-2 px-3 py-2 text-sm text-slate-200 hover:text-white"
+                className="flex items-center gap-2 px-3 py-2 text-sm text-white/90 hover:text-white"
               >
                 <User className="w-4 h-4" />
                 <span>Đăng nhập</span>
@@ -276,6 +359,55 @@ export const CustomerHeader: React.FC = () => {
           </div>
         </div>
       )}
+
+      {visibleDraftInfo && (() => {
+        const remainingSec = Math.max(
+          0,
+          Math.ceil((visibleDraftInfo.expiresAtMs - nowMs) / 1000),
+        );
+        const mm = String(Math.floor(remainingSec / 60)).padStart(2, '0');
+        const ss = String(remainingSec % 60).padStart(2, '0');
+        const draft = visibleDraftInfo.draft;
+        const isShipment = draft.kind === 'shipment';
+        const code =
+          draft.kind === 'shipment'
+            ? draft.waybillCode
+            : draft.bookingCode || draft.orderCode || '';
+        return (
+          <div className="bg-amber-50 border-t border-amber-200 text-slate-900">
+            <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-2 flex flex-wrap items-center justify-between gap-2 text-xs sm:text-sm">
+              <div className="flex items-center gap-2 min-w-0">
+                <Clock className="w-4 h-4 text-amber-600 shrink-0" />
+                <span className="font-semibold text-amber-950 truncate">
+                  Bạn đang có {isShipment ? 'đơn gửi hàng' : 'đơn đặt vé'}{' '}
+                  {code ? <strong className="font-mono">{code}</strong> : ''}{' '}
+                  chờ thanh toán
+                </span>
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-black bg-amber-200/80 text-amber-900 shrink-0">
+                  Còn {mm}:{ss}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <Link
+                  href={`/payment?draftId=${encodeURIComponent(visibleDraftInfo.draft.id)}`}
+                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-accent hover:bg-accent-hover text-white text-xs font-extrabold transition-colors shadow-2xs"
+                >
+                  <QrCode className="w-3.5 h-3.5" />
+                  <span>Tiếp tục thanh toán</span>
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => setDismissedDraftId(visibleDraftInfo.draft.id)}
+                  title="Ẩn thông báo này"
+                  className="p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-amber-100 transition-colors cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       <ConfirmModal
         isOpen={logoutModalOpen}

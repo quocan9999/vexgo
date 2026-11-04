@@ -15,7 +15,6 @@ let passwordHash: string;
 
 const customerAccount = {
   taiKhoanId: 42,
-  hoTen: 'Nguyễn Văn An',
   soDienThoai: '+84901234567',
   matKhau: '',
   ngaySinh: null,
@@ -25,7 +24,7 @@ const customerAccount = {
   trangThai: 'HOAT_DONG',
   createdAt: NOW,
   updatedAt: NOW,
-  khachHang: { khachHangId: 12 },
+  khachHang: { khachHangId: 12, hoTen: 'Nguyễn Văn An' },
   taiKhoanVaiTros: [{ vaiTro: { tenVaiTro: 'KHACH_HANG' } }],
 };
 const authResponse = {
@@ -36,7 +35,7 @@ const authResponse = {
   user: {
     accountId: 42,
     customerId: 12,
-    fullName: customerAccount.hoTen,
+    fullName: customerAccount.khachHang.hoTen,
     phoneNumber: customerAccount.soDienThoai,
     roles: ['KHACH_HANG'],
   },
@@ -82,7 +81,7 @@ describe('AuthService login', () => {
     expect(tokenService.createSession).toHaveBeenCalledWith(tx, {
       accountId: 42,
       customerId: 12,
-      fullName: customerAccount.hoTen,
+      fullName: customerAccount.khachHang.hoTen,
       phoneNumber: customerAccount.soDienThoai,
       roles: ['KHACH_HANG'],
     });

@@ -107,8 +107,8 @@ describe('platform bus-company UI permissions', () => {
     fireEvent.click(screen.getAllByRole('button', { name: /Xem chi tiết/ })[0]!);
 
     const detail = await screen.findByRole('dialog', { name: 'Thông tin nhà xe' });
-    expect(within(detail).getByRole('button', { name: 'Chỉnh sửa' })).toBeTruthy();
-    expect(within(detail).getByRole('button', { name: 'Tạm ngưng nhà xe' })).toBeTruthy();
+    expect(await within(detail).findByRole('button', { name: 'Chỉnh sửa' })).toBeTruthy();
+    expect(await within(detail).findByRole('button', { name: 'Tạm ngưng nhà xe' })).toBeTruthy();
   });
 
   it('closes status confirmation when update permission is revoked', async () => {
@@ -117,7 +117,7 @@ describe('platform bus-company UI permissions', () => {
 
     fireEvent.click(screen.getAllByRole('button', { name: /Xem chi tiết/ })[0]!);
     const detail = await screen.findByRole('dialog', { name: 'Thông tin nhà xe' });
-    fireEvent.click(within(detail).getByRole('button', { name: 'Tạm ngưng nhà xe' }));
+    fireEvent.click(await within(detail).findByRole('button', { name: 'Tạm ngưng nhà xe' }));
     expect(await screen.findByRole('heading', { name: 'Tạm ngưng nhà xe này?' })).toBeTruthy();
 
     setPlatformPermissions(['bus-company:read']);

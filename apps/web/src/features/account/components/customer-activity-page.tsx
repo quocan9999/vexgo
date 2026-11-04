@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Ticket } from 'lucide-react';
+import { Ticket, Star, QrCode, Clock } from 'lucide-react';
 import { ProfileSidebar } from '@/features/account/components/profile-sidebar';
 import { useAuthSession } from '@/features/auth/auth-session';
 import {
@@ -11,7 +11,35 @@ import {
   type BookingItem,
   type PaginationMeta,
 } from '@/features/account/services/bookings.api';
+import {
+  createPaymentDraftFromBooking,
+  getLatestActivePaymentDraft,
+  markPaymentDraftsTerminalByOrder,
+} from '@/features/booking/services/payment-draft';
+import { ReviewDialog } from '@/features/tickets/components/review-dialog';
 import { resolveCustomerActivityViewState } from '@/features/account/services/customer-activity-view-state';
+
+function canResumeBookingPayment(row: BookingItem, nowMs: number = Date.now()): boolean {
+  if (
+    row.status !== 'CHO_THANH_TOAN' ||
+    (row.paymentStatus && row.paymentStatus !== 'CHO_THANH_TOAN')
+  ) {
+    return false;
+  }
+  if (!row.paymentExpiresAt) return true;
+  const expiresMs = Date.parse(row.paymentExpiresAt);
+  return !Number.isFinite(expiresMs) || expiresMs > nowMs;
+}
+
+function formatCountdown(expiresAtIso: string | undefined, nowMs: number): string | null {
+  if (!expiresAtIso) return null;
+  const expiresMs = Date.parse(expiresAtIso);
+  if (!Number.isFinite(expiresMs)) return null;
+  const remainingSec = Math.max(0, Math.ceil((expiresMs - nowMs) / 1000));
+  const mm = String(Math.floor(remainingSec / 60)).padStart(2, '0');
+  const ss = String(remainingSec % 60).padStart(2, '0');
+  return `${mm}:${ss}`;
+}
 
 function formatDeparture(isoString: string | null): string {
   if (!isoString) return '--:-- --/--/----';
@@ -50,10 +78,17 @@ function renderStatusBadge(status: string | null) {
       </span>
     );
   }
-  if (s === 'DA_HUY' || s === 'THAT_BAI') {
+  if (s === 'DA_HUY' || s === 'HUY' || s === 'THAT_BAI') {
     return (
       <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700 whitespace-nowrap">
         Đã hủy
+      </span>
+    );
+  }
+  if (s === 'HET_HAN' || s === 'EXPIRED') {
+    return (
+      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 whitespace-nowrap">
+        Hết hạn
       </span>
     );
   }
@@ -80,17 +115,19 @@ export default function CustomerActivityPage() {
   const [retryKey, setRetryKey] = useState(0);
 
   // Tab states: 'upcoming' | 'history' | 'all'
-  const [activeTab, setActiveTab] = useState<'upcoming' | 'history' | 'all'>('upcoming');
+  const [activeTab, setActiveTab] = useState<'upcoming' | 'history' | 'all'>(
+    'upcoming',
+  );
   const [hasInitializedTab, setHasInitializedTab] = useState(false);
   const [referenceTime] = useState(() => Date.now());
 
-  // Filter states
+  // Booking filter states
   const [codeFilter, setCodeFilter] = useState('');
   const [dateFilter, setDateFilter] = useState('');
   const [routeFilter, setRouteFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
 
-  // Applied query params for active search
+  // Applied query params for bookings
   const [activeQuery, setActiveQuery] = useState({
     code: '',
     date: '',
@@ -100,7 +137,24 @@ export default function CustomerActivityPage() {
     pageSize: 10,
   });
 
+  // Trip Review Dialog state
+  const [reviewTarget, setReviewTarget] = useState<{
+    tripId: number;
+    route: string;
+    date: string;
+    busBrand: string;
+  } | null>(null);
+  const [reviewedTripIds, setReviewedTripIds] = useState<number[]>([]);
+
   useEffect(() => {
+    if (
+      typeof window !== 'undefined' &&
+      new URLSearchParams(window.location.search).get('tab') === 'shipments'
+    ) {
+      router.replace('/account/shipments');
+      return;
+    }
+
     let ignore = false;
     if (!isHydrated) return;
     if (!accessToken) {
@@ -128,7 +182,14 @@ export default function CustomerActivityPage() {
 
           if (!hasInitializedTab) {
             const hasUpcoming = res.data.some((b) => {
-              if (b.status === 'DA_HUY' || b.paymentStatus === 'DA_HUY') return false;
+              if (
+                ['DA_HUY', 'HUY', 'HET_HAN', 'EXPIRED'].includes(b.status) ||
+                ['DA_HUY', 'HUY', 'HET_HAN', 'EXPIRED'].includes(
+                  b.paymentStatus ?? '',
+                )
+              ) {
+                return false;
+              }
               if (!b.departureTime) return true;
               try {
                 return (
@@ -147,7 +208,10 @@ export default function CustomerActivityPage() {
         }
       } catch (err: unknown) {
         const isAuthError =
-          (err && typeof err === 'object' && 'status' in err && (err as { status?: number }).status === 401) ||
+          (err &&
+            typeof err === 'object' &&
+            'status' in err &&
+            (err as { status?: number }).status === 401) ||
           (err instanceof Error &&
             (err.message.includes('Refresh token') ||
               err.message.includes('Chưa đăng nhập') ||
@@ -157,59 +221,104 @@ export default function CustomerActivityPage() {
           router.replace('/auth/login?next=/account/tickets');
           return;
         }
-
         if (!ignore) {
-          console.warn('Lỗi khi tải danh sách vé:', err);
+          setBookings([]);
           setErrorMessage(
-            err instanceof Error
+            err instanceof Error && err.message.trim()
               ? err.message
               : 'Không thể tải danh sách vé. Vui lòng thử lại.',
           );
         }
       } finally {
-        if (!ignore) {
-          setIsLoading(false);
-        }
+        if (!ignore) setIsLoading(false);
       }
     };
 
     void fetchBookings();
+
     return () => {
       ignore = true;
     };
   }, [
-    isHydrated,
     accessToken,
+    isHydrated,
+    activeQuery,
+    retryKey,
     router,
     executeWithAuth,
-    activeQuery.page,
-    activeQuery.pageSize,
-    activeQuery.code,
-    activeQuery.date,
-    activeQuery.route,
-    activeQuery.status,
-    retryKey,
     hasInitializedTab,
     referenceTime,
   ]);
 
-  // Phân loại chuyến xe sắp đi và lịch sử chuyến đi
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  const hasAnyPendingBooking = useMemo(
+    () => bookings.some((b) => b.status === 'CHO_THANH_TOAN'),
+    [bookings],
+  );
+
+  useEffect(() => {
+    if (!hasAnyPendingBooking) return;
+    const timer = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [hasAnyPendingBooking]);
+
+  const pendingPaymentBookings = useMemo(
+    () => bookings.filter((b) => canResumeBookingPayment(b, nowMs)),
+    [bookings, nowMs],
+  );
+
+  useEffect(() => {
+    for (const b of bookings) {
+      if (!canResumeBookingPayment(b, nowMs)) {
+        markPaymentDraftsTerminalByOrder(
+          {
+            bookingId: b.bookingId,
+            orderId: b.orderId,
+            orderCode: b.orderCode,
+          },
+          b.status === 'DA_THANH_TOAN' || b.paymentStatus === 'DA_THANH_TOAN'
+            ? 'paid'
+            : 'cancelled',
+        );
+      }
+    }
+    if (
+      pendingPaymentBookings.length > 0 &&
+      !getLatestActivePaymentDraft(nowMs)
+    ) {
+      createPaymentDraftFromBooking(pendingPaymentBookings[0]);
+    }
+  }, [bookings, pendingPaymentBookings, nowMs]);
+
   const isUpcoming = useCallback(
     (b: BookingItem) => {
-      if (b.status === 'DA_HUY' || b.paymentStatus === 'DA_HUY') return false;
+      if (
+        ['DA_HUY', 'HUY', 'HET_HAN', 'EXPIRED'].includes(b.status) ||
+        ['DA_HUY', 'HUY', 'HET_HAN', 'EXPIRED'].includes(b.paymentStatus ?? '')
+      ) {
+        return false;
+      }
+      if (
+        b.status === 'CHO_THANH_TOAN' &&
+        !canResumeBookingPayment(b, nowMs)
+      ) {
+        return false;
+      }
       if (!b.departureTime) return true;
       try {
-        const departure = new Date(b.departureTime);
-        return departure.getTime() >= referenceTime - 2 * 60 * 60 * 1000;
+        return (
+          new Date(b.departureTime).getTime() >=
+          referenceTime - 2 * 60 * 60 * 1000
+        );
       } catch {
         return true;
       }
     },
-    [referenceTime],
+    [referenceTime, nowMs],
   );
 
   const upcomingBookings = useMemo(
-    () => bookings.filter(isUpcoming),
+    () => bookings.filter((b) => isUpcoming(b)),
     [bookings, isUpcoming],
   );
   const pastBookings = useMemo(
@@ -276,10 +385,10 @@ export default function CustomerActivityPage() {
               <div className="flex justify-between items-start mb-6">
                 <div>
                   <h2 className="text-xl md:text-2xl font-black text-slate-900 tracking-tight">
-                    Vé của tôi
+                    Lịch sử mua vé
                   </h2>
                   <p className="text-sm text-slate-500 mt-1 font-medium">
-                    Theo dõi vé xe sắp đi và lịch sử mua vé của bạn
+                    Theo dõi và quản lý lịch sử các chuyến đi của bạn
                   </p>
                 </div>
                 <Link
@@ -290,12 +399,74 @@ export default function CustomerActivityPage() {
                 </Link>
               </div>
 
-              {/* 2 Tabs: Chuyến sắp đi vs Lịch sử mua vé */}
-              <div className="flex items-center gap-2 border-b border-slate-200 mb-6">
+              {/* Banner nhắc đơn đặt vé chờ thanh toán */}
+              {pendingPaymentBookings.length > 0 && (
+                <div className="mb-6 rounded-2xl border border-amber-300 bg-amber-50/90 p-4 shadow-2xs">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-start gap-3">
+                      <div className="w-9 h-9 rounded-full bg-amber-100 border border-amber-300 text-amber-700 flex items-center justify-center shrink-0 mt-0.5">
+                        <Clock className="w-4 h-4" />
+                      </div>
+                      <div className="text-xs sm:text-sm">
+                        <div className="font-extrabold text-amber-950 flex flex-wrap items-center gap-2">
+                          <span>
+                            Bạn đang có {pendingPaymentBookings.length} đơn đặt vé chờ thanh toán
+                          </span>
+                          {formatCountdown(
+                            pendingPaymentBookings[0].paymentExpiresAt,
+                            nowMs,
+                          ) && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-black bg-amber-200/80 text-amber-900">
+                              Còn{' '}
+                              {formatCountdown(
+                                pendingPaymentBookings[0].paymentExpiresAt,
+                                nowMs,
+                              )}{' '}
+                              giữ ghế
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-amber-800 mt-1">
+                          Đơn <strong>{pendingPaymentBookings[0].bookingCode}</strong> (
+                          {pendingPaymentBookings[0].route || 'Chuyến xe'}
+                          {pendingPaymentBookings[0].seatNumbers?.length
+                            ? ` · Ghế: ${pendingPaymentBookings[0].seatNumbers.join(', ')}`
+                            : ''}
+                          ) — Tổng tiền:{' '}
+                          <strong>
+                            {formatPrice(pendingPaymentBookings[0].totalAmount)}
+                          </strong>
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const target = pendingPaymentBookings[0];
+                        const draft = createPaymentDraftFromBooking(target);
+                        if (draft) {
+                          router.push(
+                            `/payment?draftId=${encodeURIComponent(draft.id)}`,
+                          );
+                        } else {
+                          router.push(`/invoice/${target.bookingId}`);
+                        }
+                      }}
+                      className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-accent hover:bg-accent-hover text-white text-xs font-extrabold transition-colors shadow-sm cursor-pointer shrink-0"
+                    >
+                      <QrCode className="w-4 h-4" />
+                      <span>Tiếp tục thanh toán ngay</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Tabs: Chuyến sắp đi | Lịch sử mua vé | Tất cả vé */}
+              <div className="flex items-center gap-2 border-b border-slate-200 mb-6 overflow-x-auto">
                 <button
                   type="button"
                   onClick={() => setActiveTab('upcoming')}
-                  className={`pb-3 px-3 text-sm font-bold border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
+                  className={`pb-3 px-3 text-sm font-bold border-b-2 transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap ${
                     activeTab === 'upcoming'
                       ? 'border-accent text-accent'
                       : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -316,13 +487,13 @@ export default function CustomerActivityPage() {
                 <button
                   type="button"
                   onClick={() => setActiveTab('history')}
-                  className={`pb-3 px-3 text-sm font-bold border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
+                  className={`pb-3 px-3 text-sm font-bold border-b-2 transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap ${
                     activeTab === 'history'
                       ? 'border-accent text-accent'
                       : 'border-transparent text-slate-500 hover:text-slate-800'
                   }`}
                 >
-                  <span>Lịch sử mua vé</span>
+                  <span>Lịch sử chuyến</span>
                   <span
                     className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
                       activeTab === 'history'
@@ -337,13 +508,13 @@ export default function CustomerActivityPage() {
                 <button
                   type="button"
                   onClick={() => setActiveTab('all')}
-                  className={`pb-3 px-3 text-sm font-bold border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
+                  className={`pb-3 px-3 text-sm font-bold border-b-2 transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap ${
                     activeTab === 'all'
                       ? 'border-accent text-accent'
                       : 'border-transparent text-slate-500 hover:text-slate-800'
                   }`}
                 >
-                  <span>Tất cả</span>
+                  <span>Tất cả vé</span>
                   <span
                     className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
                       activeTab === 'all'
@@ -356,7 +527,7 @@ export default function CustomerActivityPage() {
                 </button>
               </div>
 
-              {/* Filters */}
+              {/* Bookings Filters */}
               <form
                 onSubmit={handleSearch}
                 className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[1fr_1.1fr_1.2fr_1fr_auto] gap-3 sm:gap-4 mb-6"
@@ -421,7 +592,7 @@ export default function CustomerActivityPage() {
                 </div>
               </form>
 
-              {/* Table */}
+              {/* Bookings Table */}
               <div className="overflow-x-auto border border-slate-200 rounded-xl">
                 <table className="w-full min-w-[700px] text-sm text-center">
                   <thead className="bg-slate-50 border-b border-slate-200">
@@ -477,10 +648,7 @@ export default function CustomerActivityPage() {
                       </tr>
                     ) : viewState === 'empty' ? (
                       <tr>
-                        <td
-                          colSpan={7}
-                          className="px-4 py-14 text-center"
-                        >
+                        <td colSpan={7} className="px-4 py-14 text-center">
                           <div className="max-w-md mx-auto">
                             <div className="w-14 h-14 rounded-full bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center mx-auto mb-3 shadow-2xs">
                               <Ticket className="w-7 h-7" />
@@ -512,7 +680,9 @@ export default function CustomerActivityPage() {
                                       onClick={() => setActiveTab('history')}
                                       className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full bg-white border border-slate-300 text-slate-700 text-xs font-bold hover:bg-slate-50 transition-colors shadow-2xs cursor-pointer"
                                     >
-                                      <span>Xem lịch sử mua vé ({pastBookings.length})</span>
+                                      <span>
+                                        Xem lịch sử mua vé ({pastBookings.length})
+                                      </span>
                                     </button>
                                   )}
                                 </>
@@ -529,63 +699,138 @@ export default function CustomerActivityPage() {
                         </td>
                       </tr>
                     ) : (
-                      displayedBookings.map((row, idx) => (
-                        <tr
-                          key={row.bookingId}
-                          className={
-                            idx % 2 === 0
-                              ? 'bg-white hover:bg-slate-50/70 transition-colors'
-                              : 'bg-[#FFFBEB] hover:bg-amber-50/80 transition-colors'
-                          }
-                        >
-                          <td className="px-3 sm:px-4 py-3 sm:py-3.5 font-bold text-accent whitespace-nowrap">
-                            <Link
-                              href={`/invoice/${row.bookingId}`}
-                              className="hover:underline flex items-center justify-center gap-1"
-                              title="Bấm để xem chi tiết vé điện tử"
-                            >
-                              {row.bookingCode}
-                            </Link>
-                          </td>
-                          <td className="px-2 sm:px-3 py-3 sm:py-3.5 font-medium text-slate-700 border-l border-slate-100 whitespace-nowrap">
-                            <span className="font-bold">{row.ticketCount}</span>
-                            {row.seatNumbers && row.seatNumbers.length > 0 && (
-                              <span className="text-[11px] text-slate-500 block">
-                                Ghế: {row.seatNumbers.join(', ')}
+                      displayedBookings.map((row, idx) => {
+                        const canPay = canResumeBookingPayment(row, nowMs);
+                        const effectiveBadgeStatus =
+                          row.status === 'CHO_THANH_TOAN' && !canPay
+                            ? 'HET_HAN'
+                            : row.paymentStatus || row.status;
+                        const canReview =
+                          !isUpcoming(row) &&
+                          Boolean(row.tripId) &&
+                          (row.paymentStatus === 'DA_THANH_TOAN' ||
+                            row.paymentStatus === 'THANH_CONG' ||
+                            row.status === 'DA_THANH_TOAN' ||
+                            row.status === 'HOAN_TAT');
+                        const isReviewed =
+                          row.tripId != null &&
+                          reviewedTripIds.includes(row.tripId);
+
+                        return (
+                          <tr
+                            key={row.bookingId}
+                            className={
+                              idx % 2 === 0
+                                ? 'bg-white hover:bg-slate-50/70 transition-colors'
+                                : 'bg-[#FFFBEB] hover:bg-amber-50/80 transition-colors'
+                            }
+                          >
+                            <td className="px-3 sm:px-4 py-3 sm:py-3.5 font-bold text-accent whitespace-nowrap">
+                              <Link
+                                href={`/invoice/${row.bookingId}`}
+                                className="hover:underline flex items-center justify-center gap-1"
+                                title="Bấm để xem chi tiết vé điện tử"
+                              >
+                                {row.bookingCode}
+                              </Link>
+                            </td>
+                            <td className="px-2 sm:px-3 py-3 sm:py-3.5 font-medium text-slate-700 border-l border-slate-100 whitespace-nowrap">
+                              <span className="font-bold">
+                                {row.ticketCount}
                               </span>
-                            )}
-                          </td>
-                          <td className="px-3 sm:px-4 py-3 sm:py-3.5 font-medium text-slate-700 border-l border-slate-100 whitespace-nowrap text-left sm:text-center">
-                            <span className="font-bold text-slate-900 block">
-                              {row.route || 'Đang cập nhật'}
-                            </span>
-                            {row.busCompanyName && (
-                              <span className="text-[11px] text-slate-500 block">
-                                {row.busCompanyName}
+                              {row.seatNumbers &&
+                                row.seatNumbers.length > 0 && (
+                                  <span className="text-[11px] text-slate-500 block">
+                                    Ghế: {row.seatNumbers.join(', ')}
+                                  </span>
+                                )}
+                            </td>
+                            <td className="px-3 sm:px-4 py-3 sm:py-3.5 font-medium text-slate-700 border-l border-slate-100 whitespace-nowrap text-left sm:text-center">
+                              <span className="font-bold text-slate-900 block">
+                                {row.route || 'Đang cập nhật'}
                               </span>
-                            )}
-                          </td>
-                          <td className="px-3 sm:px-4 py-3 sm:py-3.5 font-medium text-slate-700 border-l border-slate-100 whitespace-nowrap">
-                            {formatDeparture(row.departureTime)}
-                          </td>
-                          <td className="px-3 sm:px-4 py-3 sm:py-3.5 font-bold text-slate-900 border-l border-slate-100 whitespace-nowrap">
-                            {formatPrice(row.totalAmount)}
-                          </td>
-                          <td className="px-3 sm:px-4 py-3 sm:py-3.5 font-medium border-l border-slate-100 whitespace-nowrap">
-                            {renderStatusBadge(row.paymentStatus || row.status)}
-                          </td>
-                          <td className="px-3 sm:px-4 py-3 sm:py-3.5 border-l border-slate-100 whitespace-nowrap">
-                            <Link
-                              href={`/invoice/${row.bookingId}`}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-colors shadow-2xs cursor-pointer"
-                              title="Mở cuống vé điện tử"
-                            >
-                              <Ticket className="w-3.5 h-3.5 text-amber-400" />
-                              <span>Xem vé</span>
-                            </Link>
-                          </td>
-                        </tr>
-                      ))
+                              {row.busCompanyName && (
+                                <span className="text-[11px] text-slate-500 block">
+                                  {row.busCompanyName}
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-3 sm:px-4 py-3 sm:py-3.5 font-medium text-slate-700 border-l border-slate-100 whitespace-nowrap">
+                              {formatDeparture(row.departureTime)}
+                            </td>
+                            <td className="px-3 sm:px-4 py-3 sm:py-3.5 font-bold text-slate-900 border-l border-slate-100 whitespace-nowrap">
+                              {formatPrice(row.totalAmount)}
+                            </td>
+                            <td className="px-3 sm:px-4 py-3 sm:py-3.5 font-medium border-l border-slate-100 whitespace-nowrap">
+                              {renderStatusBadge(effectiveBadgeStatus)}
+                            </td>
+                            <td className="px-3 sm:px-4 py-3 sm:py-3.5 border-l border-slate-100 whitespace-nowrap">
+                              <div className="flex items-center justify-center gap-1.5">
+                                {canPay && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const draft =
+                                        createPaymentDraftFromBooking(row);
+                                      if (draft) {
+                                        router.push(
+                                          `/payment?draftId=${encodeURIComponent(draft.id)}`,
+                                        );
+                                      } else {
+                                        router.push(
+                                          `/invoice/${row.bookingId}`,
+                                        );
+                                      }
+                                    }}
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent hover:bg-accent-hover text-white text-xs font-bold transition-colors shadow-2xs cursor-pointer"
+                                    title="Mở lại mã QR để thanh toán đơn đặt vé"
+                                  >
+                                    <QrCode className="w-3.5 h-3.5" />
+                                    <span>Thanh toán</span>
+                                  </button>
+                                )}
+                                <Link
+                                  href={`/invoice/${row.bookingId}`}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-colors shadow-2xs cursor-pointer"
+                                  title="Mở cuống vé điện tử"
+                                >
+                                  <Ticket className="w-3.5 h-3.5 text-amber-400" />
+                                  <span>Xem vé</span>
+                                </Link>
+
+                                {canReview &&
+                                  (isReviewed ? (
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 text-xs font-bold">
+                                      <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                                      <span>Đã đánh giá</span>
+                                    </span>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setReviewTarget({
+                                          tripId: row.tripId!,
+                                          route:
+                                            row.route || 'Chuyến xe đã đi',
+                                          date: formatDeparture(
+                                            row.departureTime,
+                                          ),
+                                          busBrand:
+                                            row.busCompanyName || 'Nhà xe',
+                                        })
+                                      }
+                                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-amber-400 hover:bg-amber-500 text-slate-900 text-xs font-extrabold transition-colors shadow-2xs cursor-pointer"
+                                      title="Đánh giá chất lượng chuyến đi"
+                                    >
+                                      <Star className="w-3.5 h-3.5 fill-slate-900 text-slate-900" />
+                                      <span>Đánh giá</span>
+                                    </button>
+                                  ))}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
                     )}
                   </tbody>
                 </table>
@@ -616,7 +861,10 @@ export default function CustomerActivityPage() {
                   >
                     &lt;
                   </button>
-                  {Array.from({ length: meta.totalPages || 1 }, (_, i) => i + 1)
+                  {Array.from(
+                    { length: meta.totalPages || 1 },
+                    (_, i) => i + 1,
+                  )
                     .filter(
                       (p) =>
                         p === 1 ||
@@ -651,6 +899,31 @@ export default function CustomerActivityPage() {
           </div>
         </div>
       </div>
+
+      {/* Modal Đánh giá chuyến đi */}
+      <ReviewDialog
+        isOpen={Boolean(reviewTarget)}
+        onClose={() => setReviewTarget(null)}
+        tripId={reviewTarget?.tripId}
+        tripInfo={
+          reviewTarget
+            ? {
+                route: reviewTarget.route,
+                date: reviewTarget.date,
+                busBrand: reviewTarget.busBrand,
+              }
+            : undefined
+        }
+        onSuccess={() => {
+          if (reviewTarget?.tripId) {
+            setReviewedTripIds((prev) =>
+              prev.includes(reviewTarget.tripId)
+                ? prev
+                : [...prev, reviewTarget.tripId],
+            );
+          }
+        }}
+      />
     </div>
   );
 }

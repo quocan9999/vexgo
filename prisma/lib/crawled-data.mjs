@@ -117,18 +117,13 @@ export function deduplicateFixedPoints(points) {
   return { uniquePoints, duplicates };
 }
 
-export function generateRoutePointMaDiem(nhaXeCode, tenDiem, viDo, kinhDo) {
-  const norm = normalizeName(tenDiem);
-  const slug = norm.replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '').slice(0, 26).replace(/-+$/, '');
-  const hash = crypto
-    .createHash('md5')
-    .update(`${tenDiem}_${viDo ?? ''}_${kinhDo ?? ''}`)
-    .digest('hex')
-    .slice(0, 6)
-    .toUpperCase();
+export function deterministicUuid(...parts) {
+  const hash = crypto.createHash('md5').update(parts.map(String).join(':')).digest('hex');
+  return `${hash.slice(0, 12)}4${hash.slice(13, 16)}a${hash.slice(17, 32)}`;
+}
 
-  const code = `${nhaXeCode}-RP-${slug}-${hash}`;
-  return code.slice(0, 50);
+export function generateRoutePointMaDiem(nhaXeCode, tenDiem, viDo, kinhDo) {
+  return deterministicUuid('DDT-RP', nhaXeCode, normalizeName(tenDiem), viDo ?? '', kinhDo ?? '');
 }
 
 export function validateRouteTemplate(template) {

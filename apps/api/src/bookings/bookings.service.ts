@@ -696,14 +696,6 @@ export class BookingsService {
 
       // 4. Generate transaction codes
       const now = new Date();
-      const opCode = trip.tuyenXe?.nhaXe?.maNhaXe || (trip.xe as any)?.nhaXe?.maNhaXe || 'VXG';
-      const uniqueSuffix = randomUUID()
-        .replaceAll('-', '')
-        .slice(0, 30)
-        .toUpperCase();
-      const codePrefix = opCode.slice(0, 8);
-      // Nội dung chuyển khoản cần giữ nguyên qua ngân hàng; tránh dấu phân cách.
-      const paymentCodePrefix = (codePrefix.replace(/[^A-Za-z0-9]/g, '') || 'VXG').toUpperCase();
       const maDonGiaoDich = generateBusinessUuid();
       const maPhieuDatVe = generateBusinessUuid();
 
@@ -767,7 +759,6 @@ export class BookingsService {
 
       for (let i = 0; i < orderedSeats.length; i++) {
         const seat = orderedSeats[i];
-        const ticketSeq = String(i + 1).padStart(2, '0');
         const ticketCode = generateBusinessUuid();
         const ticketDiscount =
           i === orderedSeats.length - 1

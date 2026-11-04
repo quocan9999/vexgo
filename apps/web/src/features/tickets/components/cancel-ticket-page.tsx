@@ -580,6 +580,7 @@ function CancelTicketContent() {
 
   const isPastDeparture = eligibility?.reason === 'ALREADY_DEPARTED';
   const isNearDeparture =
+    eligibility?.reason === 'LESS_THAN_2_HOURS_30_MINUTES' ||
     eligibility?.reason === 'LESS_THAN_4_HOURS' ||
     eligibility?.reason === 'LESS_THAN_12_HOURS';
 
@@ -772,9 +773,9 @@ function CancelTicketContent() {
                   <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 flex gap-4 items-start">
                     <ShieldAlert className="w-6 h-6 text-amber-600 shrink-0" />
                     <div>
-                      <h3 className="font-bold text-amber-900 text-[15px]">Vé không đủ điều kiện hủy</h3>
+                      <h3 className="font-bold text-amber-900 text-[15px]">Vé không đủ điều kiện hủy trực tuyến</h3>
                       <p className="text-[14px] text-amber-700 mt-1">
-                        Chuyến xe khởi hành vào lúc {departureInfo.time}, ngày {departureInfo.date} (dưới 4 tiếng). Vui lòng liên hệ tổng đài nhà xe để được hỗ trợ.
+                        Chuyến xe khởi hành vào lúc {departureInfo.time}, ngày {departureInfo.date} (còn dưới 2 giờ 30 phút). Theo quy định, vé không thể hủy trực tuyến. Quý khách vui lòng liên hệ trực tiếp với nhà xe để được hỗ trợ.
                       </p>
                     </div>
                   </div>
@@ -1130,8 +1131,8 @@ function CancelTicketContent() {
                 <p className="font-bold text-sm text-amber-900">Quy định về thời gian hủy:</p>
                 <ul className="list-disc list-inside space-y-1 text-xs sm:text-sm text-amber-800">
                   <li><strong>Trước giờ khởi hành {'>'} 24 tiếng:</strong> Phí hủy 10% giá vé, hoàn lại 90%.</li>
-                  <li><strong>Trước giờ khởi hành từ 4 - 24 tiếng:</strong> Phí hủy 20% giá vé, hoàn lại 80%.</li>
-                  <li><strong>Trước giờ khởi hành {'<'} 4 tiếng:</strong> Không áp dụng hủy trực tuyến.</li>
+                  <li><strong>Trước giờ khởi hành từ 2 giờ 30 phút đến 24 tiếng:</strong> Phí hủy 20% giá vé, hoàn lại 80%.</li>
+                  <li><strong>Trước giờ khởi hành dưới 2 giờ 30 phút:</strong> Không áp dụng hủy trực tuyến. Quý khách vui lòng liên hệ trực tiếp với nhà xe để được hỗ trợ.</li>
                   <li><strong>Sau khi chuyến xe đã khởi hành:</strong> Vé không còn giá trị hủy hoặc hoàn tiền.</li>
                 </ul>
               </div>

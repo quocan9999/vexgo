@@ -39,7 +39,6 @@ export function StationFormDialog({
   onSaved,
 }: StationFormDialogProps) {
   const isEditing = Boolean(station);
-  const [maDiem, setMaDiem] = useState(station?.maDiem ?? '');
   const [tenDiem, setTenDiem] = useState(station?.tenDiem ?? '');
   const [loaiDiem, setLoaiDiem] = useState<StationType>(station?.loaiDiem ?? 'BEN_XE');
   const [diaChi, setDiaChi] = useState(station?.diaChi ?? '');
@@ -83,7 +82,6 @@ export function StationFormDialog({
     e.preventDefault();
     const newErrors: Record<string, string> = {};
 
-    if (!maDiem.trim()) newErrors.maDiem = 'Vui lòng nhập mã điểm.';
     if (!tenDiem.trim()) newErrors.tenDiem = 'Vui lòng nhập tên điểm.';
     if (!diaChi.trim()) newErrors.diaChi = 'Vui lòng nhập địa chỉ.';
     if (!diaDiemCuId) newErrors.diaDiemCuId = 'Vui lòng chọn địa phương (cũ).';
@@ -111,7 +109,6 @@ export function StationFormDialog({
         onSaved(updated);
       } else {
         const created = await createStation({
-          maDiem: maDiem.trim().toUpperCase(),
           tenDiem: tenDiem.trim(),
           loaiDiem,
           diaChi: diaChi.trim(),
@@ -156,20 +153,15 @@ export function StationFormDialog({
         }
       >
         <div className="space-y-4">
-          <Field data-invalid={Boolean(errors.maDiem)}>
-            <FieldLabel htmlFor="station-code">
-              Mã điểm <span aria-hidden>*</span>
-            </FieldLabel>
-            <Input
-              id="station-code"
-              className="font-mono text-[13px]"
-              value={maDiem}
-              onChange={(e) => setMaDiem(e.target.value)}
-              placeholder="VD: BX-MD, VP-Q1..."
-              disabled={isEditing || loading}
-            />
-            {errors.maDiem && <FieldError>{errors.maDiem}</FieldError>}
-          </Field>
+          {isEditing && station && (
+            <div className="space-y-1 rounded-[var(--admin-radius-panel)] border bg-muted/40 p-4">
+              <strong className="admin-data-mono text-[13px]">{station.maDiem}</strong>
+              <p className="text-xs text-muted-foreground">
+                {STATION_TYPE_LABELS[station.loaiDiem] ?? station.loaiDiem} ·{' '}
+                {station.trangThai === 'HOAT_DONG' ? 'Đang hoạt động' : 'Tạm ngưng'}
+              </p>
+            </div>
+          )}
 
           <Field data-invalid={Boolean(errors.tenDiem)}>
             <FieldLabel htmlFor="station-name">

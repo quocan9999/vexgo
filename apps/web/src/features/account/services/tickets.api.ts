@@ -41,6 +41,7 @@ export type TicketCancellationQuote = {
     | 'ACTIVE_SHIPMENT'
     | 'ALREADY_CANCELLED'
     | 'ALREADY_DEPARTED'
+    | 'LESS_THAN_2_HOURS_30_MINUTES'
     | 'LESS_THAN_4_HOURS'
     | 'LESS_THAN_12_HOURS'
     | 'DEPARTURE_TIME_UNAVAILABLE';

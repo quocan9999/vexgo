@@ -15,6 +15,8 @@ const prisma = new PrismaClient({
   }),
 });
 
+const UUID4_HEX32_REGEX = /^[0-9a-f]{32}$/;
+
 export function deterministicUuid(...parts) {
   const hash = crypto.createHash('md5').update(parts.map(String).join(':')).digest('hex');
   return `${hash.slice(0, 12)}4${hash.slice(13, 16)}a${hash.slice(17, 32)}`;
@@ -43,6 +45,7 @@ async function main() {
   console.log('--- 1. Chuẩn hoá mã Tuyến xe (maTuyenXe) ---');
   const routes = await prisma.tuyenXe.findMany();
   for (const r of routes) {
+    if (r.maTuyenXe && UUID4_HEX32_REGEX.test(r.maTuyenXe)) continue;
     const newCode = deterministicUuid('TX', r.tuyenXeId);
     await prisma.tuyenXe.update({
       where: { tuyenXeId: r.tuyenXeId },
@@ -55,6 +58,7 @@ async function main() {
   console.log('--- 2. Chuẩn hoá mã Ghế (maGhe) và tên ghế (tenGhe) ---');
   const seats = await prisma.ghe.findMany();
   for (const s of seats) {
+    if (s.maGhe && UUID4_HEX32_REGEX.test(s.maGhe)) continue;
     const newCode = deterministicUuid('GHE', s.gheId, s.xeId);
     await prisma.ghe.update({
       where: { gheId: s.gheId },
@@ -70,6 +74,7 @@ async function main() {
   console.log('--- 3. Chuẩn hoá mã Nhân viên (maNhanVien) ---');
   const employees = await prisma.nhanVien.findMany();
   for (const e of employees) {
+    if (e.maNhanVien && UUID4_HEX32_REGEX.test(e.maNhanVien)) continue;
     const newCode = deterministicUuid('NV', e.nhanVienId);
     await prisma.nhanVien.update({
       where: { nhanVienId: e.nhanVienId },
@@ -82,6 +87,7 @@ async function main() {
   console.log('--- 4. Chuẩn hoá mã Khách hàng (maKhachHang) ---');
   const customers = await prisma.khachHang.findMany();
   for (const c of customers) {
+    if (c.maKhachHang && UUID4_HEX32_REGEX.test(c.maKhachHang)) continue;
     const newCode = deterministicUuid('KH', c.khachHangId);
     await prisma.khachHang.update({
       where: { khachHangId: c.khachHangId },
@@ -94,6 +100,7 @@ async function main() {
   console.log('--- 5. Chuẩn hoá mã Đơn giao dịch, Phiếu đặt vé, Vé, Vận đơn, Hoá đơn ---');
   const transactions = await prisma.donGiaoDich.findMany();
   for (const tx of transactions) {
+    if (tx.maDonGiaoDich && UUID4_HEX32_REGEX.test(tx.maDonGiaoDich)) continue;
     const newTxCode = deterministicUuid('GD', tx.donGiaoDichId);
     await prisma.donGiaoDich.update({
       where: { donGiaoDichId: tx.donGiaoDichId },
@@ -104,6 +111,7 @@ async function main() {
 
   const bookings = await prisma.phieuDatVe.findMany();
   for (const bk of bookings) {
+    if (bk.maPhieuDatVe && UUID4_HEX32_REGEX.test(bk.maPhieuDatVe)) continue;
     const newBkCode = deterministicUuid('PDV', bk.phieuDatVeId);
     await prisma.phieuDatVe.update({
       where: { phieuDatVeId: bk.phieuDatVeId },
@@ -114,6 +122,7 @@ async function main() {
 
   const tickets = await prisma.ve.findMany();
   for (const tk of tickets) {
+    if (tk.maVe && UUID4_HEX32_REGEX.test(tk.maVe)) continue;
     const newTkCode = deterministicUuid('VE', tk.veId);
     await prisma.ve.update({
       where: { veId: tk.veId },
@@ -124,6 +133,7 @@ async function main() {
 
   const shipments = await prisma.phieuGuiHang.findMany();
   for (const sm of shipments) {
+    if (sm.maVanDon && UUID4_HEX32_REGEX.test(sm.maVanDon)) continue;
     const newSmCode = deterministicUuid('VD', sm.phieuGuiHangId);
     await prisma.phieuGuiHang.update({
       where: { phieuGuiHangId: sm.phieuGuiHangId },
@@ -132,20 +142,11 @@ async function main() {
   }
   console.log(`✓ Đã chuẩn hoá ${shipments.length} mã vận đơn.`);
 
-  const invoices = await prisma.hoaDon.findMany();
-  for (const iv of invoices) {
-    const newIvCode = deterministicUuid('HD', iv.hoaDonId);
-    await prisma.hoaDon.update({
-      where: { hoaDonId: iv.hoaDonId },
-      data: { maHoaDon: newIvCode },
-    });
-  }
-  console.log(`✓ Đã chuẩn hoá ${invoices.length} mã hoá đơn.\n`);
-
   // 6. Chuẩn hoá mã Chuyến xe hiện có
   console.log('--- 6. Chuẩn hoá mã các Chuyến xe hiện có sang UUID v4 ---');
   const existingTrips = await prisma.chuyenXe.findMany();
   for (const tr of existingTrips) {
+    if (tr.maChuyenXe && UUID4_HEX32_REGEX.test(tr.maChuyenXe)) continue;
     const newTripCode = deterministicUuid('CX', tr.chuyenXeId);
     await prisma.chuyenXe.update({
       where: { chuyenXeId: tr.chuyenXeId },
@@ -153,6 +154,58 @@ async function main() {
     });
   }
   console.log(`✓ Đã chuẩn hoá ${existingTrips.length} chuyến xe hiện có sang UUID v4.\n`);
+
+  // 6.1. Chuẩn hoá mã Điểm đón trả (DiemDonTra)
+  console.log('--- 6.1. Chuẩn hoá mã Điểm đón trả (maDiem) ---');
+  const pickDropPoints = await prisma.diemDonTra.findMany();
+  for (const p of pickDropPoints) {
+    if (p.maDiem && UUID4_HEX32_REGEX.test(p.maDiem)) continue;
+    const newCode = deterministicUuid('DDT', p.diemDonTraId);
+    await prisma.diemDonTra.update({
+      where: { diemDonTraId: p.diemDonTraId },
+      data: { maDiem: newCode },
+    });
+  }
+  console.log(`✓ Đã chuẩn hoá ${pickDropPoints.length} mã điểm đón trả sang UUID v4.\n`);
+
+  // 6.2. Chuẩn hoá mã Điểm giao nhận hàng (DiemGiaoNhanHang)
+  console.log('--- 6.2. Chuẩn hoá mã Điểm giao nhận hàng (maDiem) ---');
+  const cargoPoints = await prisma.diemGiaoNhanHang.findMany();
+  for (const c of cargoPoints) {
+    if (c.maDiem && UUID4_HEX32_REGEX.test(c.maDiem)) continue;
+    const newCode = deterministicUuid('DGNH', c.diemGiaoNhanHangId);
+    await prisma.diemGiaoNhanHang.update({
+      where: { diemGiaoNhanHangId: c.diemGiaoNhanHangId },
+      data: { maDiem: newCode },
+    });
+  }
+  console.log(`✓ Đã chuẩn hoá ${cargoPoints.length} mã điểm giao nhận hàng sang UUID v4.\n`);
+
+  // 6.3. Chuẩn hoá mã Cuộc trò chuyện (CuocTroChuyen)
+  console.log('--- 6.3. Chuẩn hoá mã Cuộc trò chuyện (maCuocTroChuyen) ---');
+  const chatSessions = await prisma.cuocTroChuyen.findMany();
+  for (const cs of chatSessions) {
+    if (cs.maCuocTroChuyen && UUID4_HEX32_REGEX.test(cs.maCuocTroChuyen)) continue;
+    const newCode = deterministicUuid('CTC', cs.cuocTroChuyenId);
+    await prisma.cuocTroChuyen.update({
+      where: { cuocTroChuyenId: cs.cuocTroChuyenId },
+      data: { maCuocTroChuyen: newCode },
+    });
+  }
+  console.log(`✓ Đã chuẩn hoá ${chatSessions.length} mã cuộc trò chuyện sang UUID v4.\n`);
+
+  // 6.4. Chuẩn hoá mã Danh mục địa điểm (DanhMucDiaDiem)
+  console.log('--- 6.4. Chuẩn hoá mã Danh mục địa điểm (maDiaDiem) ---');
+  const locations = await prisma.danhMucDiaDiem.findMany();
+  for (const loc of locations) {
+    if (loc.maDiaDiem && UUID4_HEX32_REGEX.test(loc.maDiaDiem)) continue;
+    const newCode = deterministicUuid('DMDD', loc.diaDiemId);
+    await prisma.danhMucDiaDiem.update({
+      where: { diaDiemId: loc.diaDiemId },
+      data: { maDiaDiem: newCode },
+    });
+  }
+  console.log(`✓ Đã chuẩn hoá ${locations.length} mã danh mục địa điểm sang UUID v4.\n`);
 
   // 7. Seed mở rộng Chuyến xe Tháng 11 (12/11 -> 30/11) và Tháng 12 (1/12 -> 31/12)
   console.log('--- 7. Seed thêm Chuyến xe Tháng 11 & Tháng 12 năm 2026 chuẩn UUID v4 ---');

@@ -1,6 +1,15 @@
 /* eslint-disable */
 export type NeedType = 'BUY' | 'RENT';
 
+export interface PostStopPoint {
+  id: string;
+  name: string;
+  time?: string;
+  address: string;
+  type?: string;
+  isDefault?: boolean;
+}
+
 export interface Post {
   id: string;
   title: string;
@@ -24,6 +33,8 @@ export interface Post {
   authorCode: string;
   authorPhone: string;
   isVerified?: boolean;
+  pickupPoints?: PostStopPoint[];
+  dropoffPoints?: PostStopPoint[];
 }
 
 export interface PostFilterState {

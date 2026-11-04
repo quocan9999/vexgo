@@ -1,9 +1,5 @@
 export type ShipmentStatus =
-  | 'MOI_TAO'
-  | 'DA_TIEP_NHAN'
-  | 'DANG_VAN_CHUYEN'
-  | 'DA_GIAO'
-  | 'DA_HUY';
+  'MOI_TAO' | 'DA_TIEP_NHAN' | 'DANG_VAN_CHUYEN' | 'DA_GIAO' | 'DA_HUY';
 
 export type FreightPayer = 'NGUOI_GUI' | 'NGUOI_NHAN';
 
@@ -33,7 +29,11 @@ export interface ShipmentSummary {
   status: ShipmentStatus;
   sender: ShipmentContact;
   receiver: ShipmentContact;
-  trip: ShipmentTripSummary;
+  trip: ShipmentTripSummary | null;
+  route?: { routeId: number; origin: string; destination: string };
+  carrier?: { id: number; name: string };
+  dropoffDeadline?: string | null;
+  expectedSendDate?: string | null;
   originPoint: ShipmentPointSummary;
   destinationPoint: ShipmentPointSummary;
   totalFee: number;
@@ -50,6 +50,8 @@ export interface CargoItemDetail {
   name: string;
   typeName: string;
   weightKg: number;
+  declaredWeightKg?: number;
+  actualWeightKg?: number | null;
   quantity: number;
   dimensions: CargoItemDimensions | null;
   declaredValue: number | null;
@@ -77,6 +79,10 @@ export interface ShipmentHistoryItem {
 }
 
 export interface ShipmentFeeSummary {
+  estimatedFee?: number | null;
+  confirmedAt?: string | null;
+  paidAmount?: number;
+  outstandingAmount?: number;
   mainFee: number;
   serviceFee: number;
   discountAmount: number;
@@ -93,13 +99,25 @@ export interface ShipmentDetail {
   note: string | null;
   sender: ShipmentContact;
   receiver: ShipmentContact;
-  trip: ShipmentTripSummary;
+  trip: ShipmentTripSummary | null;
+  route?: { routeId: number; origin: string; destination: string };
+  carrier?: { id: number; name: string };
+  dropoffDeadline?: string | null;
+  expectedSendDate?: string | null;
   originPoint: ShipmentPointSummary;
   destinationPoint: ShipmentPointSummary;
   cargoItems: CargoItemDetail[];
   cargoFeeDetails: CargoFeeDetail[];
   feeSummary: ShipmentFeeSummary;
   history: ShipmentHistoryItem[];
+  assignmentHistory?: Array<{
+    id: number;
+    previousTripId: number | null;
+    tripId: number | null;
+    note: string | null;
+    time: string;
+    actor: ShipmentHistoryActor | null;
+  }>;
   totalFee: number;
 }
 

@@ -1,10 +1,5 @@
 // @vitest-environment jsdom
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-} from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { AnchorHTMLAttributes } from 'react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { ShipmentsManagement } from '@/features/shipments/components/shipments-management';
@@ -150,10 +145,14 @@ function response(body: unknown, ok = true, status = ok ? 200 : 500): Response {
 describe('ShipmentsManagement UI', () => {
   beforeAll(() => {
     vi.stubEnv('NEXT_PUBLIC_API_URL', 'http://localhost:4003');
-    HTMLDialogElement.prototype.showModal = function showModal(this: HTMLDialogElement) {
+    HTMLDialogElement.prototype.showModal = function showModal(
+      this: HTMLDialogElement,
+    ) {
       this.open = true;
     };
-    HTMLDialogElement.prototype.close = function close(this: HTMLDialogElement) {
+    HTMLDialogElement.prototype.close = function close(
+      this: HTMLDialogElement,
+    ) {
       this.open = false;
     };
   });
@@ -199,10 +198,17 @@ describe('ShipmentsManagement UI', () => {
     expect(screen.getAllByText('Bến xe Đà Lạt').length).toBeGreaterThan(0);
     expect(screen.queryByText('Lê Thị Nhận')).toBeNull();
     expect(screen.queryByText('150.000 đ')).toBeNull();
-    const table = screen.getByRole('table', { name: 'Danh sách phiếu gửi hàng' });
-    expect(Array.from(table.querySelectorAll('thead th')).map((cell) => cell.textContent?.trim())).toEqual([
+    const table = screen.getByRole('table', {
+      name: 'Danh sách phiếu gửi hàng',
+    });
+    expect(
+      Array.from(table.querySelectorAll('thead th')).map((cell) =>
+        cell.textContent?.trim(),
+      ),
+    ).toEqual([
       'Mã vận đơn',
       'Người gửi',
+      'Tuyến / chuyến',
       'Điểm gửi',
       'Điểm nhận',
       'Trạng thái',
@@ -319,9 +325,7 @@ describe('ShipmentsManagement UI', () => {
     })[0];
     fireEvent.click(detailButton);
 
-    expect(
-      await screen.findByText('Chưa có lịch sử trạng thái'),
-    ).toBeTruthy();
+    expect(await screen.findByText('Chưa có lịch sử trạng thái')).toBeTruthy();
   });
 
   it('renders empty filter state when no shipments match query', async () => {
@@ -345,7 +349,9 @@ describe('ShipmentsManagement UI', () => {
     render(<ShipmentsManagement />);
 
     expect(
-      await screen.findByText('Chưa có phiếu gửi hàng nào trong hệ thống nhà xe.'),
+      await screen.findByText(
+        'Chưa có phiếu gửi hàng nào trong hệ thống nhà xe.',
+      ),
     ).toBeTruthy();
   });
 });

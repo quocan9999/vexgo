@@ -1,6 +1,8 @@
 'use client';
 
-import { LoaderCircle } from 'lucide-react';
+import { ShipmentOperations } from './shipment-operations';
+import { canDispatchShipment } from '../services/shipment-operations';
+import { LoaderCircle, Receipt, Tag } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import {
   ResourceConfirmation,
@@ -35,7 +37,7 @@ import type {
 } from '../types/shipment';
 
 export const SHIPMENT_STATUS_LABELS: Record<ShipmentStatus, string> = {
-  MOI_TAO: 'Mới tạo',
+  MOI_TAO: 'Chờ mang hàng đến gửi',
   DA_TIEP_NHAN: 'Đã tiếp nhận',
   DANG_VAN_CHUYEN: 'Đang vận chuyển',
   DA_GIAO: 'Đã giao',
@@ -94,7 +96,8 @@ export function formatDateTime(isoString?: string | null): string {
   }
 }
 
-export function formatCurrency(amount: number): string {
+export function formatCurrency(amount?: number | null): string {
+  if (amount == null || Number.isNaN(amount)) return '0 đ';
   return `${amount.toLocaleString('vi-VN')} đ`;
 }
 
@@ -110,11 +113,12 @@ interface ShipmentDetailsProps {
 }
 
 export type StatusActionConfig = {
-  targetStatus: Exclude<ShipmentStatus, 'DA_HUY'>;
+  targetStatus: ShipmentStatus;
   title: string;
   description: string;
   actionLabel: string;
   confirmLabel: string;
+  variant?: 'default' | 'destructive' | 'outline';
 };
 
 export function getAvailableStatusActions(
@@ -236,6 +240,10 @@ export function ShipmentDetails({
 
   async function handleConfirmStatus() {
     if (!activeAction || submittingRef.current || actionLocked) return;
+    if (activeAction.targetStatus === 'DA_HUY' && !note.trim()) {
+      toast.error('Vui lòng nhập lý do từ chối / hủy phiếu gửi hàng.');
+      return;
+    }
     submittingRef.current = true;
     setSubmitting(true);
 
@@ -312,6 +320,41 @@ export function ShipmentDetails({
               </ResourceStatusBadge>
             </div>
 
+            {detail.shipment.status !== 'DA_HUY' && (
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    window.open(
+                      `/shipments/${detail.shipment.shipmentId}/print?type=label`,
+                      '_blank',
+                      'noopener,noreferrer',
+                    )
+                  }
+                  className="gap-1.5"
+                >
+                  <Tag className="size-3.5 text-muted-foreground" />
+                  In tem dán kiện
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    window.open(
+                      `/shipments/${detail.shipment.shipmentId}/print?type=receipt`,
+                      '_blank',
+                      'noopener,noreferrer',
+                    )
+                  }
+                  className="gap-1.5"
+                >
+                  <Receipt className="size-3.5 text-muted-foreground" />
+                  In biên nhận
+                </Button>
+              </div>
+            )}
+
             {detail.shipment.note && (
               <div className="rounded-lg border bg-muted/40 p-3 text-[13px] break-words">
                 <strong>Ghi chú:</strong> {detail.shipment.note}
@@ -322,18 +365,35 @@ export function ShipmentDetails({
               (() => {
                 const availableActions = getAvailableStatusActions(
                   detail.shipment.status,
-                );
-                if (availableActions.length === 0) return null;
+                ).filter((action) => action.targetStatus !== 'DA_TIEP_NHAN');
+                const canCancel =
+                  detail.shipment.status === 'MOI_TAO' ||
+                  detail.shipment.status === 'DA_TIEP_NHAN';
+                if (availableActions.length === 0 && !canCancel) return null;
+
                 const paymentConfirmed =
-                  detail.shipment.paymentStatus === 'DA_THANH_TOAN';
+                  detail.shipment.status === 'DA_TIEP_NHAN'
+                    ? canDispatchShipment(detail.shipment)
+                    : detail.shipment.paymentStatus === 'DA_THANH_TOAN';
+
+                const cancelAction: StatusActionConfig = {
+                  targetStatus: 'DA_HUY',
+                  title: 'Từ chối / Hủy đơn gửi hàng?',
+                  description:
+                    'Phiếu gửi sẽ chuyển sang trạng thái Đã hủy. Vui lòng nhập lý do bên dưới.',
+                  actionLabel: 'Từ chối / Hủy đơn',
+                  confirmLabel: 'Xác nhận hủy',
+                  variant: 'destructive',
+                };
+
                 return (
                   <div className="grid gap-3 rounded-lg border bg-muted/30 p-4">
                     <span className="text-[13px] font-semibold">
                       Thao tác trạng thái:
                     </span>
-                    {paymentConfirmed ? (
-                      <div className="flex flex-wrap gap-3">
-                        {availableActions.map((action) => (
+                    <div className="flex flex-wrap items-center gap-3">
+                      {paymentConfirmed ? (
+                        availableActions.map((action) => (
                           <Button
                             key={action.targetStatus}
                             disabled={submitting}
@@ -343,20 +403,41 @@ export function ShipmentDetails({
                           >
                             {action.actionLabel}
                           </Button>
-                        ))}
-                      </div>
-                    ) : (
-                      <p
-                        className="text-xs text-muted-foreground"
-                        role="status"
-                      >
-                        Chỉ có thể cập nhật trạng thái vận chuyển sau khi đơn đã
-                        thanh toán.
-                      </p>
-                    )}
+                        ))
+                      ) : (
+                        <p
+                          className="text-xs text-muted-foreground"
+                          role="status"
+                        >
+                          Cần phân chuyến và hoàn tất điều kiện thanh toán trước
+                          khi vận chuyển / giao hàng.
+                        </p>
+                      )}
+                      {canCancel && (
+                        <Button
+                          disabled={submitting}
+                          onClick={() => handleOpenAction(cancelAction)}
+                          type="button"
+                          variant="outline"
+                          className="border-destructive/30 text-destructive hover:bg-destructive/10"
+                        >
+                          {cancelAction.actionLabel}
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 );
               })()}
+
+            {canUpdate && (
+              <ShipmentOperations
+                shipment={detail.shipment}
+                onUpdated={() => {
+                  retry();
+                  onStatusUpdated?.();
+                }}
+              />
+            )}
 
             {/* Người gửi & Người nhận */}
             <Card
@@ -414,17 +495,29 @@ export function ShipmentDetails({
                 Chuyến xe & Lộ trình
               </h3>
               <dl className="grid gap-3 text-[13px]">
+                <div>
+                  <dt className="text-xs text-muted-foreground">Nhà xe</dt>
+                  <dd>{detail.shipment.carrier?.name ?? '—'}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted-foreground">Tuyến</dt>
+                  <dd>
+                    {detail.shipment.route
+                      ? `${detail.shipment.route.origin} → ${detail.shipment.route.destination}`
+                      : '—'}
+                  </dd>
+                </div>
                 <div className="grid min-w-0 gap-1 border-b pb-3 last:border-0 last:pb-0 sm:grid-cols-[minmax(110px,0.8fr)_minmax(0,1.2fr)] sm:gap-3 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:min-w-0 [&_dd]:break-words">
                   <dt>Mã chuyến xe</dt>
                   <dd className="admin-data-mono">
-                    {detail.shipment.trip.code}
+                    {detail.shipment.trip?.code ?? 'Chưa phân chuyến'}
                   </dd>
                 </div>
                 <div className="grid min-w-0 gap-1 border-b pb-3 last:border-0 last:pb-0 sm:grid-cols-[minmax(110px,0.8fr)_minmax(0,1.2fr)] sm:gap-3 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:min-w-0 [&_dd]:break-words">
                   <dt>Khởi hành</dt>
                   <dd>
-                    {detail.shipment.trip.departureTime} ·{' '}
-                    {detail.shipment.trip.departureDate.replace(
+                    {detail.shipment.trip?.departureTime ?? '—'} ·{' '}
+                    {detail.shipment.trip?.departureDate.replace(
                       /^(\d{4})-(\d{2})-(\d{2})$/,
                       '$3-$2-$1',
                     )}
@@ -483,8 +576,13 @@ export function ShipmentDetails({
                         <dd>{item.quantity}</dd>
                       </div>
                       <div className="min-w-0 space-y-1 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:break-words">
-                        <dt>Khối lượng</dt>
-                        <dd>{item.weightKg} kg</dd>
+                        <dt>Khai báo / thực tế</dt>
+                        <dd>
+                          {item.declaredWeightKg ?? item.weightKg} kg /{' '}
+                          {item.actualWeightKg == null
+                            ? 'Chưa cân'
+                            : `${item.actualWeightKg} kg`}
+                        </dd>
                       </div>
                       {item.dimensions && (
                         <div className="min-w-0 space-y-1 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:break-words">
@@ -607,6 +705,26 @@ export function ShipmentDetails({
               </div>
             </Card>
 
+            {(detail.shipment.assignmentHistory?.length ?? 0) > 0 && (
+              <Card className="gap-4 p-4">
+                <h3 className="text-base font-semibold">
+                  Lịch sử phân chuyến
+                </h3>
+                <ol className="grid gap-3 text-[13px]">
+                  {detail.shipment.assignmentHistory?.map((item) => (
+                    <li key={`trip-${item.id}`} className="border-t pt-3">
+                      {formatDateTime(item.time)} ·{' '}
+                      {item.actor?.fullName ?? 'Hệ thống'}
+                      <p>
+                        Chuyến {item.previousTripId ?? 'Chưa phân'} →{' '}
+                        {item.tripId ?? 'Chưa phân'}
+                      </p>
+                      <p>{item.note}</p>
+                    </li>
+                  ))}
+                </ol>
+              </Card>
+            )}
             {/* Timeline Lịch sử trạng thái */}
             <Card
               role="region"
@@ -683,14 +801,20 @@ export function ShipmentDetails({
         >
           <Field>
             <FieldLabel htmlFor="shipment-status-note">
-              Ghi chú trạng thái (tùy chọn)
+              {activeAction.targetStatus === 'DA_HUY'
+                ? 'Lý do từ chối / hủy (bắt buộc)'
+                : 'Ghi chú trạng thái (tùy chọn)'}
             </FieldLabel>
             <Textarea
               disabled={submitting || actionLocked}
               id="shipment-status-note"
               maxLength={500}
               onChange={(e) => setNote(e.target.value)}
-              placeholder="Nhập ghi chú hoặc lý do nếu có..."
+              placeholder={
+                activeAction.targetStatus === 'DA_HUY'
+                  ? 'Ví dụ: Hàng cấm gửi, khách hàng không mang hàng ra bến...'
+                  : 'Nhập ghi chú hoặc lý do nếu có...'
+              }
               rows={3}
               value={note}
               aria-describedby="shipment-status-note-count"
@@ -710,10 +834,18 @@ export function ShipmentDetails({
           )}
           {!actionLocked && (
             <Button
-              disabled={submitting}
+              disabled={
+                submitting ||
+                (activeAction.targetStatus === 'DA_HUY' && !note.trim())
+              }
               aria-busy={submitting}
               onClick={handleConfirmStatus}
               type="button"
+              variant={
+                activeAction.variant === 'destructive'
+                  ? 'destructive'
+                  : 'default'
+              }
             >
               {submitting && (
                 <LoaderCircle

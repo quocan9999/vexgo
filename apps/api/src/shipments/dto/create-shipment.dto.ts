@@ -1,21 +1,26 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   Allow,
   IsArray,
   IsBoolean,
   IsEmail,
+  IsIn,
+  IsDefined,
   IsInt,
   IsNotEmpty,
   IsNumber,
   IsOptional,
   IsString,
   Min,
+  Matches,
+  MaxLength,
   Validate,
   ValidationArguments,
   ValidatorConstraint,
   ValidatorConstraintInterface,
   ValidateNested,
+  ValidateIf,
 } from 'class-validator';
 import {
   CARGO_DIMENSIONS_INVALID_MESSAGE,
@@ -106,7 +111,7 @@ export class CargoItemInputDto {
     example: 'NORMAL',
   })
   @IsOptional()
-  @IsString()
+  @IsIn(['NORMAL', 'FRAGILE', 'VALUABLE'])
   serviceType?: 'NORMAL' | 'FRAGILE' | 'VALUABLE';
 
   @ApiPropertyOptional({
@@ -123,8 +128,12 @@ export class ShipmentSenderDto {
     description: 'Họ và tên người gửi hàng',
     example: 'Nguyễn Văn A',
   })
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
   @IsString()
   @IsNotEmpty({ message: 'Họ tên người gửi không được để trống.' })
+  @MaxLength(100)
   fullName!: string;
 
   @ApiProperty({
@@ -133,6 +142,9 @@ export class ShipmentSenderDto {
   })
   @IsString()
   @IsNotEmpty({ message: 'Số điện thoại người gửi không được để trống.' })
+  @Matches(/^(?:0\d{9,10}|\+?84\d{9,10})$/, {
+    message: 'Số điện thoại người gửi không hợp lệ.',
+  })
   phoneNumber!: string;
 
   @ApiPropertyOptional({
@@ -149,8 +161,12 @@ export class ShipmentReceiverDto {
     description: 'Họ và tên người nhận hàng',
     example: 'Trần Thị B',
   })
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
   @IsString()
   @IsNotEmpty({ message: 'Họ tên người nhận không được để trống.' })
+  @MaxLength(100)
   fullName!: string;
 
   @ApiProperty({
@@ -159,22 +175,74 @@ export class ShipmentReceiverDto {
   })
   @IsString()
   @IsNotEmpty({ message: 'Số điện thoại người nhận không được để trống.' })
+  @Matches(/^(?:0\d{9,10}|\+?84\d{9,10})$/, {
+    message: 'Số điện thoại người nhận không hợp lệ.',
+  })
   phoneNumber!: string;
+
+  @IsOptional()
+  @IsString()
+  @Matches(/^(?:\d{9}|\d{12})$/, {
+    message: 'CCCD/CMND phải có 9 hoặc 12 chữ số.',
+  })
+  cccd?: string;
+}
+
+@ValidatorConstraint({ name: 'standaloneDate', async: false })
+class StandaloneDateConstraint implements ValidatorConstraintInterface {
+  validate(value: unknown): boolean {
+    if (typeof value !== 'string') return false;
+    const match = /^(\d{2})-(\d{2})-(\d{4})$/.exec(value);
+    if (!match) return false;
+    const [, day, month, year] = match;
+    const date = new Date(
+      Date.UTC(Number(year), Number(month) - 1, Number(day)),
+    );
+    return (
+      date.getUTCFullYear() === Number(year) &&
+      date.getUTCMonth() + 1 === Number(month) &&
+      date.getUTCDate() === Number(day)
+    );
+  }
+  defaultMessage(): string {
+    return 'Ngày gửi phải là ngày lịch hợp lệ theo DD-MM-YYYY.';
+  }
 }
 
 export class CreateShipmentDto {
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: 'ID chuyến xe vận chuyển hàng hóa',
     example: 10,
     minimum: 1,
   })
+  @ValidateIf((_dto: CreateShipmentDto, value: unknown) => value !== undefined)
   @IsInt({ message: 'Mã chuyến xe không hợp lệ.' })
-  tripId!: number;
+  @Min(1, { message: 'Mã chuyến xe không hợp lệ.' })
+  tripId?: number;
+
+  @ApiPropertyOptional({
+    description: 'ID tuyến xe (cho vận đơn độc lập chưa gán chuyến)',
+    example: 1,
+    minimum: 1,
+  })
+  @ValidateIf((dto: CreateShipmentDto) => dto.tripId === undefined)
+  @IsInt()
+  @Min(1)
+  routeId?: number;
+
+  @ApiPropertyOptional({
+    description: 'Ngày dự kiến gửi (DD-MM-YYYY, cho vận đơn độc lập)',
+    example: '15-11-2026',
+  })
+  @IsOptional()
+  @Validate(StandaloneDateConstraint)
+  sendDate?: string;
 
   @ApiProperty({
     description: 'Thông tin người gửi hàng',
     type: ShipmentSenderDto,
   })
+  @IsDefined()
   @ValidateNested()
   @Type(() => ShipmentSenderDto)
   sender!: ShipmentSenderDto;
@@ -183,6 +251,7 @@ export class CreateShipmentDto {
     description: 'Thông tin người nhận hàng',
     type: ShipmentReceiverDto,
   })
+  @IsDefined()
   @ValidateNested()
   @Type(() => ShipmentReceiverDto)
   receiver!: ShipmentReceiverDto;
@@ -235,4 +304,32 @@ export class CreateShipmentDto {
   @IsOptional()
   @IsInt()
   receiverPointId?: number;
+
+  @IsOptional()
+  @IsIn(['NGUOI_GUI', 'NGUOI_NHAN'], {
+    message: 'Người trả cước phải là NGUOI_GUI hoặc NGUOI_NHAN.',
+  })
+  freightPayer?: 'NGUOI_GUI' | 'NGUOI_NHAN';
+
+  @IsOptional()
+  @IsIn(['TAI_BEN'], {
+    message: 'Hình thức thanh toán phải là TAI_BEN.',
+  })
+  paymentMethod?: 'TAI_BEN';
+
+  @ApiPropertyOptional({
+    description: 'Tiếp nhận và chốt cước thực tế tại quầy ngay khi tạo',
+    example: true,
+  })
+  @IsOptional()
+  @IsBoolean()
+  acceptAtCounter?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Xác nhận đã thu đủ tiền mặt tại quầy ngay khi tạo',
+    example: true,
+  })
+  @IsOptional()
+  @IsBoolean()
+  collectPaymentAtCounter?: boolean;
 }

@@ -232,7 +232,7 @@ async function main() {
 
       const customer = customers[(opIdx * 5 + txIndex) % customers.length];
       const customerSnapshot = {
-        tenKhachHang: customer.taiKhoan?.hoTen || `Khách hàng ${customer.khachHangId}`,
+        tenKhachHang: customer.hoTen || customer.taiKhoan?.hoTen || `Khách hàng ${customer.khachHangId}`,
         soDienThoaiKhachHang: customer.taiKhoan?.soDienThoai || `+849200000${txIndex}`,
         emailKhachHang: customer.taiKhoan?.email || `customer${customer.khachHangId}@vexgo.test`,
       };
@@ -482,24 +482,6 @@ async function main() {
           totalOctoberRefunds++;
         }
       }
-
-      // 6. Create HoaDon
-      const invoiceCode = deterministicUuid('HD', op.code, 'OCT', txIndex);
-      await prisma.hoaDon.upsert({
-        where: { maHoaDon: invoiceCode },
-        create: {
-          maHoaDon: invoiceCode,
-          ngayLap: transactionTime,
-          tongTien: String(totalAmount),
-          trangThai: 'DA_PHAT_HANH',
-          donGiaoDichId: transaction.donGiaoDichId,
-        },
-        update: {
-          ngayLap: transactionTime,
-          tongTien: String(totalAmount),
-          trangThai: 'DA_PHAT_HANH',
-        },
-      });
 
       totalOctoberTransactions++;
     }

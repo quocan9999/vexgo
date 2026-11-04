@@ -116,7 +116,6 @@ describe('Route write HTTP pipeline with real service and mocked Prisma', () => 
       const sql = parts.join('?');
       if (sql.includes('FROM NhaXe')) return values[0] === 3 ? [{ maNhaXe: 'FUTA' }] : [];
       if (sql.includes('FROM TuyenXe')) return [{ code: 'FUTA-TX-0099' }];
-      if (sql.includes('FROM BoDemMaNghiepVu')) return [{ soCuoi: issuedSequence }];
       throw new Error(`Unexpected business code SQL: ${sql}`);
     });
     prisma.$executeRaw.mockImplementation(async (_parts: TemplateStringsArray, _prefix: string, sequence: number) => {

@@ -35,10 +35,7 @@ function addCalendarDays(dateOnly: string, days: number): string {
 
 const ADMIN_ACCOUNT_SELECT = {
   taiKhoanId: true,
-  hoTen: true,
   soDienThoai: true,
-  ngaySinh: true,
-  cccd: true,
   email: true,
   daXacThucSoDienThoai: true,
   trangThai: true,
@@ -74,13 +71,12 @@ type AdminAccountRecord = Prisma.TaiKhoanGetPayload<{
 }>;
 
 const sortFieldMap = {
-  fullName: 'hoTen',
   phoneNumber: 'soDienThoai',
   status: 'trangThai',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt',
 } as const satisfies Record<
-  NonNullable<AdminAccountQueryDto['sortBy']>,
+  Exclude<NonNullable<AdminAccountQueryDto['sortBy']>, 'fullName'>,
   keyof Prisma.TaiKhoanOrderByWithRelationInput
 >;
 
@@ -203,10 +199,10 @@ function mapAdminAccount(account: AdminAccountRecord) {
 
   return {
     accountId: account.taiKhoanId,
-    fullName: employee.hoTen ?? account.hoTen ?? '',
+    fullName: employee.hoTen ?? '',
     phoneNumber: account.soDienThoai,
-    dateOfBirth: (employee.ngaySinh ?? account.ngaySinh)?.toISOString().slice(0, 10) ?? null,
-    citizenId: employee.cccd ?? account.cccd,
+    dateOfBirth: employee.ngaySinh?.toISOString().slice(0, 10) ?? null,
+    citizenId: employee.cccd,
     email: account.email,
     phoneVerified: account.daXacThucSoDienThoai,
     status: account.trangThai,
@@ -218,12 +214,14 @@ function mapAdminAccount(account: AdminAccountRecord) {
       position: employee.chucVu ?? null,
       joinedAt: employee.ngayVaoLam?.toISOString().slice(0, 10) ?? null,
     },
-    busCompany: {
-      busCompanyId: employee.nhaXe.nhaXeId,
-      code: employee.nhaXe.maNhaXe,
-      name: employee.nhaXe.tenNhaXe,
-      status: employee.nhaXe.trangThai,
-    },
+    busCompany: employee.nhaXe
+      ? {
+          busCompanyId: employee.nhaXe.nhaXeId,
+          code: employee.nhaXe.maNhaXe,
+          name: employee.nhaXe.tenNhaXe,
+          status: employee.nhaXe.trangThai,
+        }
+      : null,
     createdAt: account.createdAt.toISOString(),
     updatedAt: account.updatedAt.toISOString(),
   };
@@ -278,8 +276,7 @@ export class AdminAccountsService {
     if (search) {
       conditions.push({
         OR: [
-          { hoTen: { contains: search } },
-          { nhanVien: { is: { hoTen: { contains: search } } } },
+          { nhanVien:  { is: { hoTen: { contains: search } } } },
           { nhanVien: { is: { chucVu: { contains: search } } } },
           { soDienThoai: { contains: search } },
           { email: { contains: search } },
@@ -307,10 +304,9 @@ export class AdminAccountsService {
     const [accounts, totalItems] = await Promise.all([
       this.prisma.taiKhoan.findMany({
         where,
-        orderBy: [
-          { [sortFieldMap[query.sortBy]]: sortDirection },
-          { taiKhoanId: 'asc' },
-        ],
+        orderBy: (query.sortBy === 'fullName'
+          ? [{ nhanVien: { hoTen: sortDirection } }, { taiKhoanId: 'asc' }]
+          : [{ [sortFieldMap[query.sortBy as keyof typeof sortFieldMap] ?? 'createdAt']: sortDirection }, { taiKhoanId: 'asc' }]) as Prisma.TaiKhoanOrderByWithRelationInput[],
         skip: (query.page - 1) * query.pageSize,
         take: query.pageSize,
         select: ADMIN_ACCOUNT_SELECT,
@@ -372,12 +368,9 @@ export class AdminAccountsService {
       try {
         const account = await tx.taiKhoan.create({
           data: {
-            hoTen: input.fullName,
             soDienThoai: input.phoneNumber,
             matKhau: passwordHash,
-            ngaySinh: toDateOnly(input.dateOfBirth),
             email: normalizeEmail(input.email),
-            cccd: input.citizenId ?? null,
             daXacThucSoDienThoai: true,
             trangThai: 'HOAT_DONG',
           },
@@ -451,14 +444,9 @@ export class AdminAccountsService {
     if (!existing) throw accountNotFound();
 
     const accountData: Prisma.TaiKhoanUpdateManyMutationInput = {
-      ...(input.fullName !== undefined ? { hoTen: input.fullName } : {}),
-      ...(input.dateOfBirth !== undefined
-        ? { ngaySinh: toDateOnly(input.dateOfBirth) }
-        : {}),
       ...(input.email !== undefined
         ? { email: input.email ? normalizeEmail(input.email) : null }
         : {}),
-      ...(input.citizenId !== undefined ? { cccd: input.citizenId } : {}),
     };
 
     const employeeData: Prisma.NhanVienUpdateManyMutationInput = {

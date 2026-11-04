@@ -60,9 +60,9 @@ export function SearchableCombobox({
       ) ??
       options.find((option) => option.value === value) ??
       options.find((option) => option.label === value) ??
-      (value ? { id: 'existing', value, label: value } : null)
+      (allowCustom && value ? { id: 'existing', value, label: value } : null)
     );
-  }, [options, selectedId, value]);
+  }, [options, selectedId, value, allowCustom]);
 
   const query = searchQuery.trim();
   const normalizedQuery = normalize(query);

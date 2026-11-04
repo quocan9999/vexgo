@@ -548,7 +548,7 @@ describe('AdminAccountsService', () => {
     expect(prisma.$transaction).toHaveBeenCalledOnce();
     expect(tx.taiKhoan.updateMany).toHaveBeenCalledWith({
       where: expect.objectContaining({ taiKhoanId: 101 }),
-      data: { ngaySinh: null, cccd: null, email: null },
+      data: { email: null },
     });
     expect(tx.nhanVien.updateMany).toHaveBeenCalledWith({
       where: { taiKhoanId: 101 },
