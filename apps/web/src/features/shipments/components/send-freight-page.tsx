@@ -2792,8 +2792,8 @@ function SendFreightContent() {
 
         {/* Modal Hướng dẫn gửi hàng */}
         {showGuideModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-in fade-in duration-200">
-            <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl relative">
+          <div className="fixed inset-x-0 bottom-0 top-20 z-40 flex items-start justify-center overflow-y-auto bg-black/50 p-4 pt-4 sm:pt-6 pb-6 animate-in fade-in duration-200">
+            <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl relative max-h-[calc(100vh-6.5rem)] overflow-y-auto">
               <button
                 type="button"
                 onClick={() => setShowGuideModal(false)}
@@ -2870,8 +2870,8 @@ function SendFreightContent() {
 
         {/* Modal Thông Báo Thiếu Thông Tin */}
         {missingFieldsModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-in fade-in duration-200">
-            <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl relative">
+          <div className="fixed inset-x-0 bottom-0 top-20 z-40 flex items-start justify-center overflow-y-auto bg-black/50 p-4 pt-4 sm:pt-6 pb-6 animate-in fade-in duration-200">
+            <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl relative max-h-[calc(100vh-6.5rem)] overflow-y-auto">
               <button
                 type="button"
                 onClick={() => setMissingFieldsModal(false)}
@@ -2916,8 +2916,8 @@ function SendFreightContent() {
 
         {/* Modal Thành Công Tạo Vận Đơn Thu Cước Tại Bến */}
         {createdSuccessShipment && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 animate-in fade-in duration-200">
-            <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+          <div className="fixed inset-x-0 bottom-0 top-20 z-40 flex items-start justify-center overflow-y-auto bg-black/60 p-4 pt-3 sm:pt-4 pb-6 animate-in fade-in duration-200">
+            <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl relative max-h-[calc(100vh-6.5rem)] overflow-y-auto">
               <button
                 type="button"
                 onClick={() => setCreatedSuccessShipment(null)}
