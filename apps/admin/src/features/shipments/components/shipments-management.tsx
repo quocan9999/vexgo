@@ -75,12 +75,10 @@ export function ShipmentsManagement() {
       <div className="admin-page-content admin-ui space-y-6">
         <AdminPageHeader
           actions={
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 [&>button]:min-w-[120px]">
               <Button
                 variant="outline"
-                size="sm"
                 onClick={() => setScanDialogOpen(true)}
-                className="gap-1.5"
               >
                 <ScanLine className="size-4" />
                 Quét mã
