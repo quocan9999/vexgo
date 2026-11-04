@@ -1,0 +1,11 @@
+{
+  "node": "C:\\Program Files\\nodejs\\node.exe",
+  "source": "vexgo_web-mysql-1",
+  "out": "D:\\VexGoBackups\\database",
+  "key": "C:\\Users\\HP\\.vexgo-private\\backup.key",
+  "logDirectory": "D:\\VexGoBackups\\logs",
+  "keep": 7,
+  "cloudinaryEnvironment": null,
+  "cloudinaryEnvFile": null,
+  "mirror": "E:\\VexGoBackups\\database"
+}
