@@ -27,45 +27,6 @@ model NhaXe {
   diemDonTras              DiemDonTra[]
 }
 
-model TrangNoiDung {
-  trangNoiDungId Int                    @id @default(autoincrement()) @db.Int
-  slug           String                 @unique @db.VarChar(191)
-  loaiTrang      String                 @db.VarChar(50)
-  createdAt      DateTime               @default(now()) @db.DateTime(0)
-  updatedAt      DateTime               @default(now()) @updatedAt @db.DateTime(0)
-  phienBans      PhienBanTrangNoiDung[]
-}
-
-model PhienBanTrangNoiDung {
-  phienBanTrangNoiDungId Int          @id @default(autoincrement()) @db.Int
-  soPhienBan             Int          @db.Int
-  tieuDe                 String       @db.VarChar(255)
-  noiDung                String       @db.LongText
-  ngayHieuLucTu          DateTime     @db.Date
-  ngayHieuLucDen         DateTime?    @db.Date
-  trangThai              String       @db.VarChar(30)
-  trangNoiDungId         Int          @db.Int
-  createdAt              DateTime     @default(now()) @db.DateTime(0)
-  updatedAt              DateTime     @default(now()) @updatedAt @db.DateTime(0)
-  trangNoiDung           TrangNoiDung @relation(fields: [trangNoiDungId], references: [trangNoiDungId], onDelete: Restrict, onUpdate: Restrict)
-  tepDinhKems            TepDinhKem[]
-
-  @@unique([trangNoiDungId, soPhienBan], map: "PhienBanTrangNoiDung_trangNoiDungId_soPhienBan_key")
-}
-
-model TepDinhKem {
-  tepDinhKemId           Int                  @id @default(autoincrement()) @db.Int
-  tenTepGoc              String               @db.VarChar(255)
-  storageKey             String               @unique @db.VarChar(500)
-  mimeType               String               @db.VarChar(100)
-  kichThuoc              BigInt               @db.BigInt
-  phienBanTrangNoiDungId Int                  @db.Int
-  createdAt              DateTime             @default(now()) @db.DateTime(0)
-  phienBanTrangNoiDung   PhienBanTrangNoiDung @relation(fields: [phienBanTrangNoiDungId], references: [phienBanTrangNoiDungId], onDelete: Restrict, onUpdate: Restrict)
-
-  @@index([phienBanTrangNoiDungId], map: "TepDinhKem_phienBanTrangNoiDungId_idx")
-}
-
 model LoaiXe {
   loaiXeId                   Int       @id @default(autoincrement()) @db.Int
   nhaXeId                    Int       @db.Int
