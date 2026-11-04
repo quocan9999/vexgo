@@ -232,7 +232,7 @@ async function main() {
 
       const customer = customers[(opIdx * 5 + txIndex) % customers.length];
       const customerSnapshot = {
-        tenKhachHang: customer.taiKhoan?.hoTen || `Khách hàng ${customer.khachHangId}`,
+        tenKhachHang: customer.hoTen || customer.taiKhoan?.hoTen || `Khách hàng ${customer.khachHangId}`,
         soDienThoaiKhachHang: customer.taiKhoan?.soDienThoai || `+849200000${txIndex}`,
         emailKhachHang: customer.taiKhoan?.email || `customer${customer.khachHangId}@vexgo.test`,
       };

@@ -358,14 +358,9 @@ describe('Stage 1: Timed Pickup/Dropoff & Route Templates', () => {
           const sql = parts.join('?');
           if (sql.includes('FROM NhaXe')) return [{ maNhaXe: 'FUTA' }];
           if (sql.includes('FROM ChuyenXe')) return [{ code: 'FUTA-CX-20112026-0098' }];
-          if (sql.includes('FROM BoDemMaNghiepVu')) return [];
           return [{ xeId: 1 }];
         }),
         $executeRaw: vi.fn().mockResolvedValue(1),
-        boDemMaNghiepVu: {
-          findUnique: vi.fn().mockResolvedValue(null),
-          upsert: vi.fn().mockResolvedValue({ tienTo: 'CX-20261120-5-', soCuoi: 1 }),
-        },
         ghe: { findMany: vi.fn().mockResolvedValue([{ gheId: 1, tang: 1, toaDoX: 1, toaDoY: 1 }]) },
         chuyenXe: {
           findFirst: vi.fn().mockResolvedValue(null), // no conflict

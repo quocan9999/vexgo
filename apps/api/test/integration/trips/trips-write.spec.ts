@@ -147,7 +147,6 @@ describe('Trips write HTTP contract (05.2)', () => {
       const sql = parts.join('?');
       if (sql.includes('FROM NhaXe')) return values[0] === 5 ? [{ maNhaXe: 'FUTA' }] : [];
       if (sql.includes('FROM ChuyenXe')) return existingCodes.map((code) => ({ code }));
-      if (sql.includes('FROM BoDemMaNghiepVu')) return [{ soCuoi: issuedSequence }];
       if (sql.includes('FROM Xe')) return [{ xeId: 8 }];
       throw new Error(`Unexpected business code SQL: ${sql}`);
     });

@@ -48,6 +48,10 @@ async function main() {
   await checkTableField('Ve', 'maVe');
   await checkTableField('PhieuGuiHang', 'maVanDon');
   await checkTableField('HoaDon', 'maHoaDon');
+  await checkTableField('DiemDonTra', 'maDiem');
+  await checkTableField('DiemGiaoNhanHang', 'maDiem');
+  await checkTableField('CuocTroChuyen', 'maCuocTroChuyen');
+  await checkTableField('DanhMucDiaDiem', 'maDiaDiem');
 
   console.log('\n--- Thống kê Chuyến xe trải dài từ Tháng 9 đến Tháng 12 năm 2026 ---');
   const tripMonths = await prisma.$queryRawUnsafe(`

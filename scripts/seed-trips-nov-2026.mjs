@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import crypto from 'node:crypto';
 import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import { PrismaClient } from '../apps/api/dist/generated/prisma/client.js';
 
@@ -12,6 +13,11 @@ const config = {
   allowPublicKeyRetrieval: true,
 };
 const prisma = new PrismaClient({ adapter: new PrismaMariaDb(config) });
+
+function deterministicUuid(...parts) {
+  const hash = crypto.createHash('md5').update(parts.map(String).join(':')).digest('hex');
+  return `${hash.slice(0, 12)}4${hash.slice(13, 16)}a${hash.slice(17, 32)}`;
+}
 
 function calculateClockTime(baseTime, durationMinutes) {
   if (durationMinutes == null || !Number.isFinite(durationMinutes)) return null;
@@ -34,7 +40,7 @@ async function prepareRouteTemplates() {
 
   // 1.1 Kiểm tra/Tạo điểm trung chuyển cho Thành Bưởi (TB - nhaXeId 2)
   let tbTransferPoint = await prisma.diemDonTra.findFirst({
-    where: { maDiem: 'TB-TC-HO-XUAN-HUONG', nhaXeId: 2 },
+    where: { maDiem: deterministicUuid('DDT', 2, 'TB-TC-HO-XUAN-HUONG'), nhaXeId: 2 },
   });
 
   if (!tbTransferPoint) {
@@ -45,7 +51,7 @@ async function prepareRouteTemplates() {
 
     tbTransferPoint = await prisma.diemDonTra.create({
       data: {
-        maDiem: 'TB-TC-HO-XUAN-HUONG',
+        maDiem: deterministicUuid('DDT', 2, 'TB-TC-HO-XUAN-HUONG'),
         tenDiem: 'Điểm đón trung chuyển Hồ Xuân Hương - Đà Lạt',
         loaiDiem: 'TRUNG_CHUYEN',
         diaChi: 'Quảng trường Lâm Viên, Đường Trần Quốc Toản, Phường 10, TP. Đà Lạt, Lâm Đồng',
@@ -229,8 +235,7 @@ async function seedTrips() {
       const vehicle = vehiclesMap.get(def.vehicleId);
       if (!route || !vehicle) continue;
 
-      const timeWithoutColon = def.time.replace(':', '');
-      const maChuyenXe = `${def.codePrefix}-202611${dayStr}-${def.routeCode}-${timeWithoutColon}`;
+      const maChuyenXe = deterministicUuid('CX', def.nhaXeId, def.routeId, dateStr, def.time);
 
       // Kiểm tra xem chuyến xe đã tồn tại chưa (idempotent)
       const existingTrip = await prisma.chuyenXe.findUnique({

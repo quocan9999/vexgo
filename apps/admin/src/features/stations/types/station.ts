@@ -46,7 +46,7 @@ export interface Station {
 }
 
 export interface CreateStationInput {
-  maDiem: string;
+  maDiem?: string;
   tenDiem: string;
   loaiDiem: StationType;
   diaChi: string;

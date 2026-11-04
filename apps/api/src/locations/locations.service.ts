@@ -210,7 +210,7 @@ export class LocationsService {
           parentName,
           address: st.diaChi,
           isLegacy: false,
-          popular: Boolean(st.maDiem.startsWith('BX-')),
+          popular: Boolean(st.loaiDiem === 'BEN_XE' || st.maDiem.startsWith('BX-')),
           diemDonTraId: st.diemDonTraId,
         });
       }

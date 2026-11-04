@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { generateBusinessUuid } from '../common/business-uuid.js';
 import type { AuthPrincipal } from '../auth/tokens/auth-principal.js';
 import {
   CloseConversationDto,
@@ -194,7 +195,7 @@ export class SupportChatService {
       return await this.prisma.khachHang.create({
         data: {
           taiKhoanId,
-          maKhachHang: `KH${Date.now()}`,
+          maKhachHang: generateBusinessUuid(),
         },
       });
     } catch (err) {
@@ -496,7 +497,7 @@ export class SupportChatService {
         };
       }
 
-      const maCuocTroChuyen = `CHAT-${Date.now()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+      const maCuocTroChuyen = generateBusinessUuid();
 
       const conv = await tx.cuocTroChuyen.create({
         data: {

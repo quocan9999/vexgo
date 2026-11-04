@@ -674,7 +674,7 @@ async function seedBranchesRatesCargo(db, operators, routes) {
     const operator = operators[definition.code];
     points[definition.code] = [];
     for (let index = 0; index < 5; index += 1) {
-      const code = `${definition.code}-BC-${pad(index + 1, 3)}`;
+      const code = deterministicUuid('DGNH-BC', definition.code, index + 1);
       const { routeCity: _routeCity, ...location } = branchDefsByOperator[definition.code][index];
       const pointData = { maDiem: code, tenDiem: `${definition.name} ${index + 1}`, ...location, trangThai: index === 4 ? 'TAM_NGUNG' : 'HOAT_DONG', nhaXeId: operator.nhaXeId };
       const point = await findOrCreate(
@@ -1414,9 +1414,9 @@ async function seedSupportChat(db, operators, accounts) {
   const conv1 = await upsertBy(
     db,
     'CuocTroChuyen',
-    { maCuocTroChuyen: 'CC-FUTA-20261013-0001' },
+    { maCuocTroChuyen: deterministicUuid('CTC', 1) },
     {
-      maCuocTroChuyen: 'CC-FUTA-20261013-0001',
+      maCuocTroChuyen: deterministicUuid('CTC', 1),
       tieuDe: 'Hỏi về đón trả tận nơi tại Đà Lạt',
       trangThai: 'DANG_XU_LY',
       kenhHoTro: 'WEB',
@@ -1474,9 +1474,9 @@ async function seedSupportChat(db, operators, accounts) {
     const conv2 = await upsertBy(
       db,
       'CuocTroChuyen',
-      { maCuocTroChuyen: 'CC-TB-20261013-0002' },
+      { maCuocTroChuyen: deterministicUuid('CTC', 2) },
       {
-        maCuocTroChuyen: 'CC-TB-20261013-0002',
+        maCuocTroChuyen: deterministicUuid('CTC', 2),
         tieuDe: 'Hỏi về quy định mang thú cưng',
         trangThai: 'CHO_TIEP_NHAN',
         kenhHoTro: 'MOBILE',
@@ -1514,9 +1514,9 @@ async function seedSupportChat(db, operators, accounts) {
     await upsertBy(
       db,
       'CuocTroChuyen',
-      { maCuocTroChuyen: 'CC-FUTA-20261013-0003' },
+      { maCuocTroChuyen: deterministicUuid('CTC', 3) },
       {
-        maCuocTroChuyen: 'CC-FUTA-20261013-0003',
+        maCuocTroChuyen: deterministicUuid('CTC', 3),
         tieuDe: 'Hỏi về hoàn hủy vé',
         trangThai: 'DA_DONG',
         kenhHoTro: 'WEB',
