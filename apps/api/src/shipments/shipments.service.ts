@@ -42,6 +42,7 @@ import { ShipmentPersistenceService } from './shipment-persistence.service.js';
 import { LocationsService } from '../locations/locations.service.js';
 import { locationSearchTerms } from '../locations/location-search.js';
 import { generateStandaloneShipmentCodes } from './shipment-codes.js';
+import { generateBusinessUuid } from '../common/business-uuid.js';
 import {
   parseShipmentDate,
   type ShipmentOptionsQueryDto,
@@ -234,25 +235,45 @@ export class ShipmentsService {
     return route;
   }
 
-  async getShipmentOptions(query: ShipmentOptionsQueryDto) {
+  async getShipmentOptions(
+    query: ShipmentOptionsQueryDto,
+    principal?: AuthPrincipal,
+  ) {
     const date = this.validateSendDate(query.sendDate);
     const catalogue = this.locations ? (await this.locations.list()).data : [];
+    const isTenant = Boolean(principal && hasTenantRole(principal.roles));
+    const tenantId = isTenant ? requireTenantPrincipal(principal!) : null;
+
+    if (!isTenant && (!query.from?.trim() || !query.to?.trim())) {
+      throw new BadRequestException({
+        error: 'MISSING_QUERY_PARAMS',
+        message: 'Điểm gửi và điểm nhận không được để trống.',
+      });
+    }
+
+    const conditions: Prisma.TuyenXeWhereInput[] = [
+      { trangThai: 'HOAT_DONG' },
+    ];
+    if (tenantId) {
+      conditions.push({ nhaXeId: tenantId });
+    }
+    if (query.from?.trim()) {
+      conditions.push({
+        OR: locationSearchTerms(query.from, catalogue).map((term) => ({
+          diemDi: { contains: term },
+        })),
+      });
+    }
+    if (query.to?.trim()) {
+      conditions.push({
+        OR: locationSearchTerms(query.to, catalogue).map((term) => ({
+          diemDen: { contains: term },
+        })),
+      });
+    }
+
     const routes = await this.prisma.tuyenXe.findMany({
-      where: {
-        trangThai: 'HOAT_DONG',
-        AND: [
-          {
-            OR: locationSearchTerms(query.from, catalogue).map((term) => ({
-              diemDi: { contains: term },
-            })),
-          },
-          {
-            OR: locationSearchTerms(query.to, catalogue).map((term) => ({
-              diemDen: { contains: term },
-            })),
-          },
-        ],
-      },
+      where: { AND: conditions },
       include: {
         nhaXe: true,
       },
@@ -314,7 +335,7 @@ export class ShipmentsService {
     };
   }
 
-  async getRoutePointsByRoute(routeId: number) {
+  async getRoutePointsByRoute(routeId: number, principal?: AuthPrincipal) {
     const route = await this.prisma.tuyenXe.findUnique({
       where: { tuyenXeId: routeId },
     });
@@ -323,6 +344,15 @@ export class ShipmentsService {
         error: 'SHIPMENT_ROUTE_NOT_FOUND',
         message: 'Không tìm thấy tuyến nhận hàng.',
       });
+    if (principal && hasTenantRole(principal.roles)) {
+      const tenantId = requireTenantPrincipal(principal);
+      if (route.nhaXeId !== tenantId) {
+        throw new NotFoundException({
+          error: 'SHIPMENT_ROUTE_NOT_FOUND',
+          message: 'Không tìm thấy tuyến nhận hàng.',
+        });
+      }
+    }
     const points = await this.prisma.diemGiaoNhanTuyenXe.findMany({
       where: {
         tuyenXeId: routeId,
@@ -347,9 +377,18 @@ export class ShipmentsService {
     };
   }
 
-  async quoteShipment(dto: ShipmentQuoteDto) {
+  async quoteShipment(dto: ShipmentQuoteDto, principal?: AuthPrincipal) {
     const date = this.validateSendDate(dto.sendDate);
     const route = await this.requireAvailableRoute(dto.routeId, date);
+    if (principal && hasTenantRole(principal.roles)) {
+      const tenantId = requireTenantPrincipal(principal);
+      if (route.nhaXeId !== tenantId) {
+        throw new NotFoundException({
+          error: 'SHIPMENT_ROUTE_NOT_FOUND',
+          message: 'Không tìm thấy tuyến nhận hàng.',
+        });
+      }
+    }
     const quote = await this.cargoPricingService.calculate(
       this.prisma,
       {
@@ -883,9 +922,38 @@ export class ShipmentsService {
 
   async createShipment(
     dto: CreateShipmentDto,
-    taiKhoanId?: number,
+    principalOrAccountId?: AuthPrincipal | number,
     idempotencyKey?: string,
   ) {
+    const principal =
+      typeof principalOrAccountId === 'object' && principalOrAccountId !== null
+        ? principalOrAccountId
+        : undefined;
+    const taiKhoanId =
+      typeof principalOrAccountId === 'number'
+        ? principalOrAccountId
+        : principal?.taiKhoanId;
+    const isTenantStaff = principal ? hasTenantRole(principal.roles) : false;
+    const isCustomerPrincipal = principal
+      ? principal.roles.includes('KHACH_HANG')
+      : false;
+
+    if (dto.acceptAtCounter || dto.collectPaymentAtCounter) {
+      if (!isTenantStaff) {
+        throw new ForbiddenException({
+          error: 'FORBIDDEN_COUNTER_OPERATION',
+          message:
+            'Chỉ nhân viên nhà xe mới được tiếp nhận hoặc thu cước trực tiếp tại quầy.',
+        });
+      }
+      if (dto.collectPaymentAtCounter && !dto.acceptAtCounter) {
+        throw new BadRequestException({
+          error: 'SHIPMENT_ACCEPTANCE_REQUIRED',
+          message:
+            'Cần tiếp nhận và chốt cước tại quầy trước khi xác nhận thu tiền.',
+        });
+      }
+    }
     if (dto.tripId === undefined && !idempotencyKey?.trim())
       throw new BadRequestException({
         error: 'IDEMPOTENCY_KEY_REQUIRED',
@@ -961,6 +1029,21 @@ export class ShipmentsService {
         dto.routeId!,
         sendDate ?? this.validateSendDate(undefined, now),
       ));
+    if (isTenantStaff) {
+      const tenantId = requireTenantPrincipal(principal!);
+      if (route.nhaXeId !== tenantId) {
+        throw new NotFoundException({
+          error: 'SHIPMENT_ROUTE_NOT_FOUND',
+          message: 'Không tìm thấy tuyến nhận hàng.',
+        });
+      }
+      if (legacyTrip && legacyTrip.nhaXeId !== tenantId) {
+        throw new NotFoundException({
+          error: 'TRIP_NOT_FOUND',
+          message: 'Không tìm thấy chuyến xe tiếp nhận hàng.',
+        });
+      }
+    }
     const trip = legacyTrip ?? {
       chuyenXeId: null,
       tuyenXeId: route.tuyenXeId,
@@ -1072,7 +1155,7 @@ export class ShipmentsService {
         // Chỉ danh tính đăng nhập đã xác thực mới được gắn với hồ sơ Customer.
         // Guest contact phone là dữ liệu liên hệ, không chứng minh quyền sở hữu tài khoản.
         let customerId: number | null = null;
-        if (taiKhoanId) {
+        if (isCustomerPrincipal && taiKhoanId) {
           const cust = await tx.khachHang.findUnique({
             where: { taiKhoanId },
             select: { khachHangId: true },
@@ -1082,7 +1165,7 @@ export class ShipmentsService {
           } else {
             const newCust = await tx.khachHang.create({
               data: {
-                maKhachHang: `KH-${randomUUID().replaceAll('-', '').toUpperCase()}`,
+                maKhachHang: generateBusinessUuid(),
                 taiKhoanId,
               },
             });
@@ -1094,13 +1177,14 @@ export class ShipmentsService {
         const { orderCode: maDonGiaoDich, waybillCode: maVanDon } =
           generateStandaloneShipmentCodes(trip.tuyenXe.nhaXe.maNhaXe, now);
 
+        const isCounterPaid = Boolean(dto.collectPaymentAtCounter);
         // 3. Create DonGiaoDich
         const donGiaoDich = await tx.donGiaoDich.create({
           data: {
             maDonGiaoDich,
             ngayTao: now,
             tongTien: tongPhi,
-            trangThai: 'CHO_THANH_TOAN',
+            trangThai: isCounterPaid ? 'DA_THANH_TOAN' : 'CHO_THANH_TOAN',
             tenKhachHang: dto.sender.fullName.trim(),
             soDienThoaiKhachHang: senderPhone,
             emailKhachHang: dto.sender.email?.trim() || null,
@@ -1117,8 +1201,14 @@ export class ShipmentsService {
             phuongThuc: 'TAI_BEN',
             loaiGiaoDich: 'THANH_TOAN',
             thoiGian: now,
-            trangThai:
-              freightPayer === 'NGUOI_NHAN' ? 'CHO_THANH_TOAN' : 'DANG_XU_LY',
+            thoiDiemHoanTat: isCounterPaid ? now : null,
+            laQuyetToanHopLe: isCounterPaid ? true : undefined,
+            taiKhoanXacNhanId: isCounterPaid ? (taiKhoanId ?? null) : null,
+            trangThai: isCounterPaid
+              ? 'THANH_CONG'
+              : freightPayer === 'NGUOI_NHAN'
+                ? 'CHO_THANH_TOAN'
+                : 'DANG_XU_LY',
             donGiaoDichId: donGiaoDich.donGiaoDichId,
           },
           select: { thanhToanId: true, trangThai: true },
@@ -1156,7 +1246,10 @@ export class ShipmentsService {
             receiverPointId: diemNhanId,
             orderId: donGiaoDich.donGiaoDichId,
             actorAccountId: taiKhoanId ?? null,
-            historyNote: 'Tạo phiếu gửi hàng độc lập',
+            historyNote: dto.acceptAtCounter
+              ? 'Tạo và tiếp nhận trực tiếp tại quầy'
+              : 'Tạo phiếu gửi hàng độc lập',
+            acceptedAtCounter: Boolean(dto.acceptAtCounter),
             items: pricing.items.map((resolvedItem, index) => {
               const item = dto.items[index];
               return {
@@ -1178,6 +1271,18 @@ export class ShipmentsService {
               fee: rate.fee,
             })),
           });
+
+        if (isCounterPaid) {
+          await tx.lichSuTrangThaiPhieuGuiHang.create({
+            data: {
+              phieuGuiHangId: phieuGui.phieuGuiHangId,
+              trangThai: phieuGui.trangThai,
+              thoiGian: now,
+              taiKhoanId: taiKhoanId ?? null,
+              ghiChu: `Thu tại bến ${tongPhi.toString()} đồng.`,
+            },
+          });
+        }
 
         const result = {
           dropoffDeadline: legacyTrip

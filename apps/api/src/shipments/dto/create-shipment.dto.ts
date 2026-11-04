@@ -316,4 +316,20 @@ export class CreateShipmentDto {
     message: 'Hình thức thanh toán phải là TAI_BEN.',
   })
   paymentMethod?: 'TAI_BEN';
+
+  @ApiPropertyOptional({
+    description: 'Tiếp nhận và chốt cước thực tế tại quầy ngay khi tạo',
+    example: true,
+  })
+  @IsOptional()
+  @IsBoolean()
+  acceptAtCounter?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Xác nhận đã thu đủ tiền mặt tại quầy ngay khi tạo',
+    example: true,
+  })
+  @IsOptional()
+  @IsBoolean()
+  collectPaymentAtCounter?: boolean;
 }

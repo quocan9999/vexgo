@@ -54,8 +54,8 @@ export class ShipmentCalendarDateConstraint implements ValidatorConstraintInterf
 }
 
 export class ShipmentOptionsQueryDto extends PaginationQueryDto {
-  @IsString() @IsNotEmpty() from!: string;
-  @IsString() @IsNotEmpty() to!: string;
+  @IsOptional() @IsString() from?: string;
+  @IsOptional() @IsString() to?: string;
   @IsOptional() @Validate(ShipmentCalendarDateConstraint) sendDate?: string;
 }
 

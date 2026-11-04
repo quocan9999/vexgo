@@ -188,3 +188,235 @@ export async function updateShipmentStatus(
   };
   return json.data;
 }
+
+export interface AdminShipmentRouteOption {
+  routeId: number;
+  busCompany: { id: number; name: string };
+  route: { origin: string; destination: string };
+  minimumEstimatedFee: number | null;
+}
+
+export interface AdminCargoCategory {
+  categoryId: number;
+  name: string;
+  description: string;
+  capacityGroup: string;
+}
+
+export interface AdminRoutePointOption {
+  id: number;
+  name: string;
+  address: string;
+}
+
+export interface AdminRoutePointsResult {
+  senderPoints: AdminRoutePointOption[];
+  receiverPoints: AdminRoutePointOption[];
+  rates: unknown[];
+}
+
+export interface AdminShipmentQuoteItem {
+  name: string;
+  quantity: number;
+  weight: number;
+  length?: number;
+  width?: number;
+  height?: number;
+  serviceType?: 'NORMAL' | 'FRAGILE' | 'VALUABLE';
+  category?: string;
+  loaiHangHoaId?: number;
+}
+
+export interface AdminShipmentQuotePayload {
+  routeId: number;
+  sendDate?: string;
+  senderPointId: number;
+  receiverPointId: number;
+  items: AdminShipmentQuoteItem[];
+  isFragile?: boolean;
+  isValuable?: boolean;
+}
+
+export interface AdminShipmentQuoteResult {
+  baseFee: number;
+  serviceFee: number;
+  totalFee: number;
+  rates: Array<{
+    categoryId: number;
+    rateId: number;
+    billableWeight: number;
+    fee: number;
+  }>;
+}
+
+export interface CreateAdminShipmentPayload {
+  routeId: number;
+  sendDate?: string;
+  senderPointId: number;
+  receiverPointId: number;
+  sender: {
+    fullName: string;
+    phoneNumber: string;
+    email?: string;
+  };
+  receiver: {
+    fullName: string;
+    phoneNumber: string;
+    cccd?: string;
+  };
+  items: Array<{
+    name: string;
+    quantity: number;
+    weight: number;
+    length?: number;
+    width?: number;
+    height?: number;
+    serviceType?: 'NORMAL' | 'FRAGILE' | 'VALUABLE';
+    note?: string;
+    category?: string;
+    loaiHangHoaId?: number;
+  }>;
+  isFragile?: boolean;
+  isValuable?: boolean;
+  note?: string;
+  freightPayer: 'NGUOI_GUI' | 'NGUOI_NHAN';
+  paymentMethod: 'TAI_BEN';
+  acceptAtCounter?: boolean;
+  collectPaymentAtCounter?: boolean;
+}
+
+export interface CreateAdminShipmentResult {
+  shipmentId: number;
+  waybillCode: string;
+  orderCode: string;
+  orderId: number;
+  status: string;
+  paymentStatus: string;
+  pricing: {
+    baseFee: number;
+    serviceFee: number;
+    discount: number;
+    totalFee: number;
+  };
+}
+
+export async function getAdminShipmentRouteOptions(
+  signal?: AbortSignal,
+): Promise<AdminShipmentRouteOption[]> {
+  const response = await adminApiFetch(
+    `${getApiBaseUrl()}/api/v1/shipments/options?page=1&pageSize=100`,
+    {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+      signal,
+    },
+  );
+  if (!response.ok) {
+    throw new Error('Không thể tải danh sách tuyến nhận gửi hàng.');
+  }
+  const json = (await response.json()) as { data: AdminShipmentRouteOption[] };
+  return json.data ?? [];
+}
+
+export async function getAdminShipmentCategories(
+  signal?: AbortSignal,
+): Promise<AdminCargoCategory[]> {
+  const response = await adminApiFetch(
+    `${getApiBaseUrl()}/api/v1/shipments/categories`,
+    {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+      signal,
+    },
+  );
+  if (!response.ok) {
+    throw new Error('Không thể tải danh mục loại hàng hóa.');
+  }
+  const json = (await response.json()) as { data: AdminCargoCategory[] };
+  return json.data ?? [];
+}
+
+export async function getAdminRoutePointsByRoute(
+  routeId: number,
+  signal?: AbortSignal,
+): Promise<AdminRoutePointsResult> {
+  const response = await adminApiFetch(
+    `${getApiBaseUrl()}/api/v1/shipments/routes/${routeId}/route-points`,
+    {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+      signal,
+    },
+  );
+  if (!response.ok) {
+    throw new Error('Không thể tải danh sách điểm giao nhận theo tuyến.');
+  }
+  const json = (await response.json()) as { data: AdminRoutePointsResult };
+  return json.data ?? { senderPoints: [], receiverPoints: [], rates: [] };
+}
+
+export async function quoteAdminShipment(
+  payload: AdminShipmentQuotePayload,
+  signal?: AbortSignal,
+): Promise<AdminShipmentQuoteResult> {
+  const response = await adminApiFetch(
+    `${getApiBaseUrl()}/api/v1/shipments/quotes`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify(payload),
+      signal,
+    },
+  );
+  if (!response.ok) {
+    let msg = 'Không thể tính báo giá cước vận chuyển.';
+    try {
+      const err = await response.json();
+      if (err?.message) {
+        msg = Array.isArray(err.message) ? err.message.join(', ') : err.message;
+      }
+    } catch {
+      // Ignore json parse error
+    }
+    throw new Error(msg);
+  }
+  const json = (await response.json()) as { data: AdminShipmentQuoteResult };
+  return json.data;
+}
+
+export async function createAdminShipment(
+  payload: CreateAdminShipmentPayload,
+  idempotencyKey: string,
+  signal?: AbortSignal,
+): Promise<CreateAdminShipmentResult> {
+  const response = await adminApiFetch(
+    `${getApiBaseUrl()}/api/v1/shipments`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        'Idempotency-Key': idempotencyKey,
+      },
+      body: JSON.stringify(payload),
+      signal,
+    },
+  );
+  if (!response.ok) {
+    let msg = 'Không thể tạo đơn gửi hàng tại quầy.';
+    try {
+      const err = await response.json();
+      if (err?.message) {
+        msg = Array.isArray(err.message) ? err.message.join(', ') : err.message;
+      }
+    } catch {
+      // Ignore json parse error
+    }
+    throw new Error(msg);
+  }
+  const json = (await response.json()) as { data: CreateAdminShipmentResult };
+  return json.data;
+}

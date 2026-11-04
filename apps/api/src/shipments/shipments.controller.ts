@@ -54,6 +54,7 @@ export class ShipmentsController {
   constructor(private readonly shipmentsService: ShipmentsService) {}
 
   @Post()
+  @RequireTenantPermissionsIfAuthenticated('shipment:update')
   @OptionalAuth()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
@@ -77,29 +78,43 @@ export class ShipmentsController {
   ) {
     const data = await this.shipmentsService.createShipment(
       dto,
-      principal?.taiKhoanId,
+      principal,
       idempotencyKey,
     );
     return { data };
   }
 
   @Get('options')
+  @RequireTenantPermissionsIfAuthenticated('shipment:read')
   @OptionalAuth()
-  getShipmentOptions(@Query() query: ShipmentOptionsQueryDto) {
-    return this.shipmentsService.getShipmentOptions(query);
+  getShipmentOptions(
+    @Query() query: ShipmentOptionsQueryDto,
+    @CurrentPrincipal() principal?: AuthPrincipal,
+  ) {
+    return this.shipmentsService.getShipmentOptions(query, principal);
   }
 
   @Get('routes/:routeId/route-points')
+  @RequireTenantPermissionsIfAuthenticated('shipment:read')
   @OptionalAuth()
-  async getRoutePointsByRoute(@Param('routeId', ParseIntPipe) routeId: number) {
-    return { data: await this.shipmentsService.getRoutePointsByRoute(routeId) };
+  async getRoutePointsByRoute(
+    @Param('routeId', ParseIntPipe) routeId: number,
+    @CurrentPrincipal() principal?: AuthPrincipal,
+  ) {
+    return {
+      data: await this.shipmentsService.getRoutePointsByRoute(routeId, principal),
+    };
   }
 
   @Post('quotes')
+  @RequireTenantPermissionsIfAuthenticated('shipment:read')
   @OptionalAuth()
   @HttpCode(HttpStatus.OK)
-  async quoteShipment(@Body() dto: ShipmentQuoteDto) {
-    return { data: await this.shipmentsService.quoteShipment(dto) };
+  async quoteShipment(
+    @Body() dto: ShipmentQuoteDto,
+    @CurrentPrincipal() principal?: AuthPrincipal,
+  ) {
+    return { data: await this.shipmentsService.quoteShipment(dto, principal) };
   }
 
   @Post(':id/accept')

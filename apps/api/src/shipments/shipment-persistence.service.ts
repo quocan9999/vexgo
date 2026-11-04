@@ -43,6 +43,7 @@ export interface ShipmentPersistenceInput {
   orderId: number;
   actorAccountId: number | null;
   historyNote: string;
+  acceptedAtCounter?: boolean;
   items: ShipmentPersistenceItemInput[];
   rates: ShipmentPersistenceRateInput[];
 }
@@ -78,11 +79,13 @@ export class ShipmentPersistenceService {
         tongPhi: new Prisma.Decimal(input.totalFee),
         nguoiTraCuoc: input.payer ?? 'NGUOI_GUI',
         ghiChu: input.note ?? null,
-        trangThai: 'MOI_TAO',
+        trangThai: input.acceptedAtCounter ? 'DA_TIEP_NHAN' : 'MOI_TAO',
         chuyenXeId: input.tripId,
         tuyenXeId: input.routeId,
         ngayDuKienGui: input.expectedSendDate,
-        hanMangHangDen: input.dropoffDeadline,
+        hanMangHangDen: input.acceptedAtCounter ? null : input.dropoffDeadline,
+        thoiDiemXacNhanCuoc: input.acceptedAtCounter ? input.sentAt : null,
+        taiKhoanXacNhanCuocId: input.acceptedAtCounter ? input.actorAccountId : null,
         cuocDuTinh:
           input.tripId === null ? new Prisma.Decimal(input.totalFee) : null,
         diemGuiId: input.senderPointId,
@@ -112,6 +115,21 @@ export class ShipmentPersistenceService {
             item.declaredWeight === undefined
               ? null
               : new Prisma.Decimal(item.declaredWeight),
+          khoiLuongThucTe: input.acceptedAtCounter
+            ? new Prisma.Decimal(item.declaredWeight ?? item.unitWeight)
+            : null,
+          chieuDaiThucTe:
+            input.acceptedAtCounter && item.length != null
+              ? new Prisma.Decimal(item.length)
+              : null,
+          chieuRongThucTe:
+            input.acceptedAtCounter && item.width != null
+              ? new Prisma.Decimal(item.width)
+              : null,
+          chieuCaoThucTe:
+            input.acceptedAtCounter && item.height != null
+              ? new Prisma.Decimal(item.height)
+              : null,
           chieuDaiKhaiBao:
             item.length == null ? null : new Prisma.Decimal(item.length),
           chieuRongKhaiBao:
@@ -146,7 +164,7 @@ export class ShipmentPersistenceService {
 
     await tx.lichSuTrangThaiPhieuGuiHang.create({
       data: {
-        trangThai: 'MOI_TAO',
+        trangThai: input.acceptedAtCounter ? 'DA_TIEP_NHAN' : 'MOI_TAO',
         thoiGian: input.sentAt,
         ghiChu: input.historyNote,
         phieuGuiHangId: shipment.phieuGuiHangId,
