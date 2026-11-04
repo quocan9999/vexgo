@@ -1,3 +1,10 @@
+import { enqueuePaymentConfirmation } from '../../../src/notifications/payment-confirmation.js';
+import { TicketsService } from '../../../src/tickets/tickets.service.js';
+import { RefundProcessorService } from '../../../src/payments/refund-processor.service.js';
+import { DepartureRemindersService } from '../../../src/notifications/departure-reminders.service.js';
+import { ConfigService } from '@nestjs/config';
+import { enqueueRefundConfirmation } from '../../../src/notifications/customer-notice.js';
+import { TokenService } from '../../../src/auth/tokens/token.service.js';
 import { createHmac, randomUUID } from 'node:crypto';
 import { Test } from '@nestjs/testing';
 import {
@@ -33,6 +40,14 @@ describe('Payments Webhook & Status Security with MySQL (Integration)', () => {
   let customerAPrincipal: AuthPrincipal;
   let customerBPrincipal: AuthPrincipal;
   let currentPrincipal: AuthPrincipal | null = null;
+
+  async function cleanupNotificationFixtures() {
+    const bookings = await prisma.phieuDatVe.findMany({where:{donGiaoDich:{khachHangId:{in:[customerAId,customerBId]}}},select:{phieuDatVeId:true}});
+    const keys = bookings.map(b => `booking-paid:${b.phieuDatVeId}`);
+    await prisma.thongBaoNguoiNhan.deleteMany({where:{thongBao:{eventKey:{in:keys}}}});
+    await prisma.thongBao.deleteMany({where:{eventKey:{in:keys}}});
+    await prisma.emailThongBao.deleteMany({where:{eventKey:{in:keys}}});
+  }
 
   beforeAll(async () => {
     originalNodeEnv = process.env.NODE_ENV;
@@ -146,6 +161,7 @@ describe('Payments Webhook & Status Security with MySQL (Integration)', () => {
 
   afterAll(async () => {
     try {
+      await cleanupNotificationFixtures();
       await prisma.lichSuTrangThaiVe.deleteMany({
         where: { ve: { is: { phieuDatVe: { is: { donGiaoDich: { is: { khachHangId: { in: [customerAId, customerBId] } } } } } } } },
       });
@@ -197,6 +213,7 @@ describe('Payments Webhook & Status Security with MySQL (Integration)', () => {
   }, 30_000);
 
   beforeEach(async () => {
+    await cleanupNotificationFixtures();
     currentPrincipal = null;
     await prisma.lichSuTrangThaiVe.deleteMany({
       where: { ve: { is: { phieuDatVe: { is: { donGiaoDich: { is: { khachHangId: { in: [customerAId, customerBId] } } } } } } } },
@@ -426,6 +443,7 @@ describe('Payments Webhook & Status Security with MySQL (Integration)', () => {
       gheChuyenXeIds,
       totalAmount,
       cleanup: async () => {
+        await cleanupNotificationFixtures();
         await prisma.lichSuTrangThaiVe.deleteMany({ where: { veId: { in: veIds } } });
         await prisma.lichSuTrangThaiPhieuDatVe.deleteMany({ where: { phieuDatVeId: phieuDatVe.phieuDatVeId } });
         await prisma.thanhToan.deleteMany({
@@ -444,6 +462,133 @@ describe('Payments Webhook & Status Security with MySQL (Integration)', () => {
       },
     };
   }
+
+  it('payment notification: concurrent settlement creates one inbox/event and durable email snapshot', async () => {
+    const f = await createMultiTicketPayment(customerAId, 2);
+    await prisma.donGiaoDich.update({where:{donGiaoDichId:f.donGiaoDich.donGiaoDichId},data:{emailKhachHang:'owner@example.com'}});
+    const service = app.get(PaymentsService);
+    const params = {paymentId:f.thanhToan.thanhToanId,provider:'MOMO',amount:200000};
+    await Promise.all([service.confirmPaymentSuccess(params),service.confirmPaymentSuccess(params)]);
+    const eventKey = `booking-paid:${f.phieuDatVe.phieuDatVeId}`;
+    const notifications = await prisma.thongBao.findMany({where:{eventKey},include:{nguoiNhans:true}});
+    expect(notifications).toHaveLength(1);
+    expect(notifications[0].nguoiNhans.map(r=>r.khachHangId)).toEqual([customerAId]);
+    expect(notifications[0].ticketId).toBe(f.veIds[0]);
+    const emails = await prisma.emailThongBao.findMany({where:{eventKey}});
+    expect(emails).toHaveLength(1); expect(emails[0].trangThai).toBe('PENDING');
+    expect(emails[0].noiDung).toContain('200.000');
+    expect(await prisma.ve.count({where:{veId:{in:f.veIds},trangThai:'DA_THANH_TOAN'}})).toBe(2);
+    currentPrincipal = customerAPrincipal;
+    const inbox = await request(app.getHttpServer()).get('/api/v1/notifications').expect(200);
+    expect(inbox.body.data).toHaveLength(1);
+    expect(inbox.body.data[0]).toMatchObject({category:'TRIP',bookingId:f.phieuDatVe.phieuDatVeId,ticketId:f.veIds[0],isRead:false});
+    const recipientId = inbox.body.data[0].id;
+    await request(app.getHttpServer()).patch(`/api/v1/notifications/${recipientId}/read`).expect(200);
+    currentPrincipal = customerBPrincipal;
+    const otherInbox = await request(app.getHttpServer()).get('/api/v1/notifications').expect(200);
+    expect(otherInbox.body.data).toHaveLength(0);
+    await request(app.getHttpServer()).patch(`/api/v1/notifications/${recipientId}/read`).expect(404);
+
+    await cleanupNotificationFixtures(); await f.cleanup();
+  });
+
+  it('payment notification: DB rollback removes payment transition and both notification jobs', async () => {
+    const f = await createMultiTicketPayment(customerAId, 1);
+    await prisma.donGiaoDich.update({where:{donGiaoDichId:f.donGiaoDich.donGiaoDichId},data:{emailKhachHang:'owner@example.com'}});
+    await expect(prisma.$transaction(async tx => {
+      await tx.donGiaoDich.update({where:{donGiaoDichId:f.donGiaoDich.donGiaoDichId},data:{trangThai:'DA_THANH_TOAN'}});
+      await tx.phieuDatVe.update({where:{phieuDatVeId:f.phieuDatVe.phieuDatVeId},data:{trangThai:'DA_THANH_TOAN'}});
+      await tx.ve.updateMany({where:{veId:{in:f.veIds}},data:{trangThai:'DA_THANH_TOAN'}});
+      await enqueuePaymentConfirmation(tx,f.phieuDatVe.phieuDatVeId);
+      throw new Error('forced rollback');
+    })).rejects.toThrow('forced rollback');
+    const eventKey = `booking-paid:${f.phieuDatVe.phieuDatVeId}`;
+    expect(await prisma.thongBao.count({where:{eventKey}})).toBe(0);
+    expect(await prisma.emailThongBao.count({where:{eventKey}})).toBe(0);
+    expect((await prisma.phieuDatVe.findUniqueOrThrow({where:{phieuDatVeId:f.phieuDatVe.phieuDatVeId}})).trangThai).toBe('CHO_THANH_TOAN');
+    await f.cleanup();
+  });
+
+  it('lifecycle notices: reminder, cancellation and provider-confirmed refund persist once in MySQL', async () => {
+    const f = await createMultiTicketPayment(customerAId, 1);
+    const bookingId = f.phieuDatVe.phieuDatVeId;
+    const eventKeys = [`booking-paid:${bookingId}`, `ticket-cancelled:${f.veIds[0]}`, `departure-reminder:${f.veIds[0]}:${new Date('2026-12-01T01:00:00Z').getTime()}`];
+    const device = await prisma.thietBiThongBao.create({ data: { tokenHash: randomUUID().replaceAll('-','').padEnd(64,'0'), token: 'abcdefghijklmnopqrstuv', khachHangId: customerAId, taiKhoanId: customerAPrincipal.taiKhoanId, sessionId: customerAPrincipal.sessionId } });
+    const oldFetch = globalThis.fetch;
+    try {
+      await prisma.donGiaoDich.update({where:{donGiaoDichId:f.donGiaoDich.donGiaoDichId},data:{emailKhachHang:'qa@example.test'}});
+      await app.get(PaymentsService).confirmPaymentSuccess({paymentId:f.thanhToan.thanhToanId,provider:'MOMO',amount:100000});
+      const reminders = new DepartureRemindersService(prisma,new ConfigService({BUSINESS_TIME_ZONE:'Asia/Ho_Chi_Minh'}));
+      await reminders.tick(new Date('2026-12-01T00:00:00Z'));await reminders.tick(new Date('2026-12-01T00:01:00Z'));
+      expect(await prisma.thongBao.count({where:{eventKey:eventKeys[2]}})).toBe(1);
+      currentPrincipal = customerAPrincipal;
+      const ticket = await request(app.getHttpServer()).get(`/api/v1/tickets/${f.veIds[0]}`).expect(200);
+      const cancelled = await app.get(TicketsService).cancelTicket({ticketCode:ticket.body.data.ticketCode,phoneNumber:'+84950000002',expectedCancelFeeRate:ticket.body.data.cancellation.cancelFeeRate});
+      expect(cancelled.data.status).toBe('HUY');
+      expect(await prisma.thongBao.count({where:{eventKey:eventKeys[1]}})).toBe(1);
+      const refund = await prisma.thanhToan.findFirstOrThrow({where:{donGiaoDichId:f.donGiaoDich.donGiaoDichId,loaiGiaoDich:'HOAN_TIEN'}});
+      expect(refund.trangThai).toBe('DANG_XU_LY');
+      const refundKey = `refund-succeeded:${refund.thanhToanId}`;eventKeys.push(refundKey);
+      expect(await prisma.thongBao.count({where:{eventKey:refundKey}})).toBe(0);
+      await expect(prisma.$transaction(async tx => {
+        await tx.thanhToan.update({where:{thanhToanId:refund.thanhToanId},data:{trangThai:'THANH_CONG',thoiDiemHoanTat:new Date()}});
+        await enqueueRefundConfirmation(tx,refund.thanhToanId);
+        throw new Error('forced refund notice rollback');
+      })).rejects.toThrow('forced refund notice rollback');
+      expect((await prisma.thanhToan.findUniqueOrThrow({where:{thanhToanId:refund.thanhToanId}})).trangThai).toBe('DANG_XU_LY');
+      expect(await prisma.thongBao.count({where:{eventKey:refundKey}})).toBe(0);
+      globalThis.fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({status:'SUCCEEDED'}),{status:200}));
+      const processor = new RefundProcessorService(prisma,new ConfigService({REFUND_PROVIDER_URL:'https://fixture.example.test/refund'}));
+      await processor.processRefund(refund.thanhToanId);await processor.processRefund(refund.thanhToanId);
+      expect(await prisma.thongBao.count({where:{eventKey:refundKey}})).toBe(1);
+      expect(await prisma.emailThongBao.count({where:{eventKey:refundKey}})).toBe(1);
+      expect(await prisma.pushThongBao.count({where:{thietBiThongBaoId:device.thietBiThongBaoId}})).toBe(4);
+      expect((await prisma.thanhToan.findUniqueOrThrow({where:{thanhToanId:refund.thanhToanId}})).thoiDiemHoanTat).not.toBeNull();
+    } finally {
+      globalThis.fetch = oldFetch;
+      const notices = await prisma.thongBao.findMany({where:{eventKey:{in:eventKeys}},select:{thongBaoId:true}});
+      const ids = notices.map(n=>n.thongBaoId);
+      await prisma.pushThongBao.deleteMany({where:{thietBiThongBaoId:device.thietBiThongBaoId}});
+      await prisma.thietBiThongBao.delete({where:{thietBiThongBaoId:device.thietBiThongBaoId}});
+      await prisma.thongBaoNguoiNhan.deleteMany({where:{thongBaoId:{in:ids}}});
+      await prisma.thongBao.deleteMany({where:{thongBaoId:{in:ids}}});
+      await prisma.emailThongBao.deleteMany({where:{eventKey:{in:eventKeys}}});
+      await f.cleanup();
+    }
+  });
+
+  it('push registration uses a real signed JWT/session and another customer cannot revoke it', async () => {
+    // Separate app: deliberately DO NOT override AccessTokenGuard here.
+    const securedPrisma = new PrismaService(new ConfigService({DATABASE_URL:process.env.DATABASE_URL}));
+    const module = await Test.createTestingModule({imports:[AppModule]}).overrideProvider(PrismaService).useValue(securedPrisma).compile();
+    const securedApp = module.createNestApplication();configureApi(securedApp);await securedApp.init();
+    const roleBefore = await prisma.vaiTro.findUnique({where:{tenVaiTro:'CUSTOMER'}});
+    const role = await prisma.vaiTro.upsert({where:{tenVaiTro:'CUSTOMER'},create:{tenVaiTro:'CUSTOMER'},update:{}});
+    const accounts = [customerAPrincipal.taiKhoanId,customerBPrincipal.taiKhoanId];
+    const registration = 'abcdefghijklmnopqrstuv';
+    try {
+      await prisma.taiKhoanVaiTro.createMany({data:accounts.map(taiKhoanId=>({taiKhoanId,vaiTroId:role.vaiTroId})),skipDuplicates:true});
+      const tokens = securedApp.get(TokenService);
+      const a = await prisma.$transaction(tx=>tokens.createSession(tx,{accountId:accounts[0],customerId:customerAId,fullName:'QA A',phoneNumber:'+84950000002',roles:['CUSTOMER']}));
+      const b = await prisma.$transaction(tx=>tokens.createSession(tx,{accountId:accounts[1],customerId:customerBId,fullName:'QA B',phoneNumber:'+84950000003',roles:['CUSTOMER']}));
+      await request(securedApp.getHttpServer()).post('/api/v1/notifications/devices').send({token:registration}).expect(401);
+      await Promise.all(Array.from({length:4},()=>request(securedApp.getHttpServer()).post('/api/v1/notifications/devices').set('Authorization',`Bearer ${a.accessToken}`).send({token:registration}).expect(201)));
+      expect(await prisma.thietBiThongBao.count({where:{token:registration}})).toBe(1);
+      const device = await prisma.thietBiThongBao.findFirstOrThrow({where:{token:registration,taiKhoanId:accounts[0]}});
+      expect(device.khachHangId).toBe(customerAId);
+      await request(securedApp.getHttpServer()).delete('/api/v1/notifications/devices').set('Authorization',`Bearer ${b.accessToken}`).send({token:registration}).expect(200);
+      expect((await prisma.thietBiThongBao.findUniqueOrThrow({where:{thietBiThongBaoId:device.thietBiThongBaoId}})).hoatDong).toBe(true);
+      await request(securedApp.getHttpServer()).delete('/api/v1/notifications/devices').set('Authorization',`Bearer ${a.accessToken}`).send({token:registration}).expect(200);
+      expect((await prisma.thietBiThongBao.findUniqueOrThrow({where:{thietBiThongBaoId:device.thietBiThongBaoId}})).hoatDong).toBe(false);
+    } finally {
+      await securedApp.close();
+      await prisma.thietBiThongBao.deleteMany({where:{taiKhoanId:{in:accounts}}});
+      await prisma.phienDangNhap.updateMany({where:{taiKhoanId:{in:accounts}},data:{tokenThayTheId:null}});
+      await prisma.phienDangNhap.deleteMany({where:{taiKhoanId:{in:accounts}}});
+      await prisma.taiKhoanVaiTro.deleteMany({where:{taiKhoanId:{in:accounts},vaiTroId:role.vaiTroId}});
+      if(!roleBefore) await prisma.vaiTro.delete({where:{vaiTroId:role.vaiTroId}});
+    }
+  });
 
   async function createShipmentOnlyPayment(customerId: number, amount = 200000) {
     const suffix = randomUUID().replaceAll('-', '').slice(0, 10).toUpperCase();
@@ -586,6 +731,7 @@ describe('Payments Webhook & Status Security with MySQL (Integration)', () => {
       tripId: trip.chuyenXeId,
       senderPhone: '+84950000001',
       cleanup: async () => {
+        await cleanupNotificationFixtures();
         await prisma.thanhToan.deleteMany({
           where: { donGiaoDichId: order.donGiaoDichId },
         });

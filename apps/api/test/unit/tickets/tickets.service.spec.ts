@@ -81,6 +81,17 @@ describe('TicketsService', () => {
   };
 
   const prisma = {
+    thongBao: {
+      upsert: vi.fn().mockImplementation(
+        async ({ create }: { create: { thoiGian: Date } }) => ({
+          thongBaoId: 1,
+          thoiGian: create.thoiGian,
+        }),
+      ),
+    },
+    emailThongBao: { upsert: vi.fn() },
+    thietBiThongBao: { findMany: vi.fn().mockResolvedValue([]) },
+    pushThongBao: { upsert: vi.fn() },
     phanHoi: { findMany: vi.fn().mockResolvedValue([]) },
     khachHang: {
       findUnique: vi.fn(),
@@ -493,6 +504,7 @@ describe('TicketsService', () => {
     });
 
     it.each([
+      ['exactly 2.5 hours', '2026-09-24T22:30:00.000Z', 0.2],
       ['exactly 4 hours', '2026-09-24T21:00:00.000Z', 0.2],
       ['exactly 12 hours', '2026-09-24T13:00:00.000Z', 0.2],
       ['exactly 24 hours', '2026-09-24T01:00:00.000Z', 0.2],
@@ -544,7 +556,7 @@ describe('TicketsService', () => {
   describe('cancelTicket', () => {
     it.each([
       { now: '2026-09-23T00:00:00Z', phone: '0900000000', rate: 0.1, paid: true, error: 'TICKET_NOT_FOUND' },
-      { now: '2026-09-24T22:00:00Z', phone: '0901234567', rate: 0.2, paid: true, error: 'CANCELLATION_CUTOFF_PASSED' },
+      { now: '2026-09-24T22:45:00Z', phone: '0901234567', rate: 0.2, paid: true, error: 'CANCELLATION_CUTOFF_PASSED' },
       { now: '2026-09-24T07:00:00Z', phone: '0901234567', rate: 0.1, paid: true, error: 'CANCELLATION_QUOTE_EXPIRED' },
       { now: '2026-09-23T00:00:00Z', phone: '0901234567', rate: 0.1, paid: false, error: 'REFUND_SOURCE_NOT_FOUND' },
     ])('keeps $error protection when cargo is already cancelled', async ({ now, phone, rate, paid, error }) => {
@@ -620,9 +632,9 @@ describe('TicketsService', () => {
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('rejects cancellation less than 4 hours before departure', async () => {
+    it('rejects cancellation less than 2.5 hours before departure', async () => {
       vi.useFakeTimers();
-      vi.setSystemTime(new Date('2026-09-24T22:00:00.000Z'));
+      vi.setSystemTime(new Date('2026-09-24T22:45:00.000Z'));
       prisma.ve.findUnique.mockResolvedValue(sampleTicket);
 
       await expect(
@@ -638,7 +650,7 @@ describe('TicketsService', () => {
       });
     });
 
-    it('charges 20 percent from 4 through 24 hours before departure', async () => {
+    it('charges 20 percent from 2.5 through 24 hours before departure', async () => {
       vi.useFakeTimers();
       vi.setSystemTime(new Date('2026-09-24T07:00:00.000Z'));
       prisma.ve.findUnique.mockResolvedValue(sampleTicket);
@@ -782,7 +794,7 @@ describe('TicketsService', () => {
       expect(result.data.status).toBe('HUY');
     });
 
-    it('rejects with BadRequestException when departure is less than 4 hours away', async () => {
+    it('rejects with BadRequestException when departure is less than 2.5 hours away', async () => {
       const twoHoursFromNow = new Date(Date.now() + 2 * 60 * 60 * 1000);
       const ticket2h = {
         ...sampleTicket,

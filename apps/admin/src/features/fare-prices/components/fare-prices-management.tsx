@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react';
 import { toast } from 'sonner';
@@ -253,6 +254,26 @@ export function FarePricesManagement() {
   return (
     <SuperAdminLayout activeSection="fare-prices">
       <div className="admin-ui admin-page-content grid gap-[var(--admin-space-section-gap)]">
+        <nav
+          aria-label="Chuyển đổi loại bảng giá"
+          className="flex flex-wrap items-center gap-2 border-b border-border/70 pb-3"
+        >
+          <div className="inline-flex items-center gap-1 rounded-lg border border-border/80 bg-muted/50 p-1">
+            <Link
+              href="/fare-prices"
+              aria-current="page"
+              className="inline-flex items-center gap-2 rounded-md bg-background px-3 py-1.5 text-sm font-semibold text-foreground shadow-xs"
+            >
+              Bảng giá vé hành khách
+            </Link>
+            <Link
+              href="/shipments/rates"
+              className="inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+            >
+              Bảng giá cước gửi hàng
+            </Link>
+          </div>
+        </nav>
         <div>
           <AdminPageHeader
             eyebrow="QUẢN LÝ VẬN HÀNH"

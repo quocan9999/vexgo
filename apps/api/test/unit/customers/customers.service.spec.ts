@@ -11,11 +11,8 @@ import type { PrismaService } from '../../../src/prisma/prisma.service.js';
 
 const account = {
   taiKhoanId: 42,
-  hoTen: 'Nguyễn Văn An',
   soDienThoai: '+84901234567',
   matKhau: '$2b$10$hidden',
-  ngaySinh: new Date('2000-02-29T00:00:00.000Z'),
-  cccd: '079123456789',
   email: 'an@example.com',
   daXacThucSoDienThoai: true,
   trangThai: 'HOAT_DONG',
@@ -24,6 +21,9 @@ const account = {
   khachHang: {
     khachHangId: 12,
     maKhachHang: 'KH00000042',
+    hoTen: 'Nguyễn Văn An',
+    cccd: '079123456789',
+    ngaySinh: new Date('2000-02-29T00:00:00.000Z'),
     diemTichLuy: 25,
     taiKhoanId: 42,
     createdAt: new Date('2026-09-28T10:00:00.000Z'),
@@ -111,6 +111,7 @@ describe('CustomersService', () => {
         ...account.khachHang,
         hoTen: 'Nguyễn Văn Bình',
         ngaySinh: null,
+        cccd: null,
       },
     });
 
@@ -127,14 +128,12 @@ describe('CustomersService', () => {
       data: {
         hoTen: 'Nguyễn Văn Bình',
         ngaySinh: null,
+        cccd: null,
       },
     });
     expect(tx.taiKhoan.update).toHaveBeenCalledWith({
       where: { taiKhoanId: 42 },
       data: {
-        hoTen: 'Nguyễn Văn Bình',
-        ngaySinh: null,
-        cccd: null,
         email: null,
       },
       include: expect.any(Object),
@@ -213,6 +212,7 @@ describe('CustomersService - Admin operations', () => {
     ngaySinh: new Date('2000-02-29T00:00:00.000Z'),
     gioiTinh: 'NAM',
     diaChi: '123 Đường Lê Lợi, TP.HCM',
+    cccd: '079123456789',
     diemTichLuy: 25,
     taiKhoanId: 42,
     createdAt: new Date('2026-09-28T10:00:00.000Z'),

@@ -7,211 +7,211 @@
     "reasons": [],
     "stops": [
       {
-        "maDiem": "FUTA-RP-quang-trung-3DC936",
+        "maDiem": "74b47d3b04c042c6a6fe7a3b0cddb1c1",
         "loaiDiem": "DON",
         "phutLech": -105,
         "thuTu": 1
       },
       {
-        "maDiem": "FUTA-RP-benh-vien-ung-buou-8D3A44",
+        "maDiem": "fe6ea8b9341b493aa655c3a3c4e83a61",
         "loaiDiem": "DON",
         "phutLech": -90,
         "thuTu": 2
       },
       {
-        "maDiem": "FUTA-RP-le-van-luong-920621",
+        "maDiem": "3f5d84afbbc6495ba2b27fe5c9fee08d",
         "loaiDiem": "DON",
         "phutLech": -90,
         "thuTu": 3
       },
       {
-        "maDiem": "FUTA-RP-benh-vien-ung-buou-binh-th-6FB6F5",
+        "maDiem": "c03a2ea06b7e4cc2add7237a5ad74e14",
         "loaiDiem": "DON",
         "phutLech": -90,
         "thuTu": 4
       },
       {
-        "maDiem": "FUTA-RP-202-le-hong-phong-EF6F51",
+        "maDiem": "a5b80deea9a34583a3057e8ec7531a96",
         "loaiDiem": "DON",
         "phutLech": -60,
         "thuTu": 5
       },
       {
-        "maDiem": "FUTA-BEN-XE-AN-SUONG-54238",
+        "maDiem": "d460cf059b1841e7ae1c16c29d494837",
         "loaiDiem": "DON",
         "phutLech": -60,
         "thuTu": 6
       },
       {
-        "maDiem": "FUTA-RP-luy-ban-bich-8588DA",
+        "maDiem": "bb04c30fcde94324a57633be43163098",
         "loaiDiem": "DON",
         "phutLech": -60,
         "thuTu": 7
       },
       {
-        "maDiem": "FUTA-RP-ben-xe-quan-8-C28FB7",
+        "maDiem": "e9a41ae2db184abba287ae4b0074c0dc",
         "loaiDiem": "DON",
         "phutLech": -60,
         "thuTu": 8
       },
       {
-        "maDiem": "FUTA-RP-205-pham-ngu-lao-D7654A",
+        "maDiem": "1075991dbeb740c4a6264fab5827363f",
         "loaiDiem": "DON",
         "phutLech": -60,
         "thuTu": 9
       },
       {
-        "maDiem": "FUTA-RP-43-nguyen-cu-trinh-80D87E",
+        "maDiem": "5ca683c656f84c07a1c0372f9624be23",
         "loaiDiem": "DON",
         "phutLech": -60,
         "thuTu": 10
       },
       {
-        "maDiem": "FUTA-RP-vinh-loc-F9398B",
+        "maDiem": "3244d45e8bd142d2ab8426f394dfc066",
         "loaiDiem": "DON",
         "phutLech": -60,
         "thuTu": 11
       },
       {
-        "maDiem": "FUTA-RP-benh-vien-thong-nhat-E8BB61",
+        "maDiem": "af12209866d94cb3a381b755a7caacc7",
         "loaiDiem": "DON",
         "phutLech": -60,
         "thuTu": 12
       },
       {
-        "maDiem": "FUTA-RP-benh-vien-binh-dan-F9FD5C",
+        "maDiem": "4f6e30e638654d9ea459b6ab1134e8a4",
         "loaiDiem": "DON",
         "phutLech": -60,
         "thuTu": 13
       },
       {
-        "maDiem": "FUTA-RP-bach-khoa-6DEF69",
+        "maDiem": "622eea64cbfa4f5da81d387ed609a0f9",
         "loaiDiem": "DON",
         "phutLech": -60,
         "thuTu": 14
       },
       {
-        "maDiem": "FUTA-RP-le-van-quoi-231EC3",
+        "maDiem": "fb14a9a910e64158ab310c6e2c97c09f",
         "loaiDiem": "DON",
         "phutLech": -60,
         "thuTu": 15
       },
       {
-        "maDiem": "FUTA-RP-lac-long-quan-CC891C",
+        "maDiem": "083751191d9f49c7acbb406d0a81c9f7",
         "loaiDiem": "DON",
         "phutLech": -60,
         "thuTu": 16
       },
       {
-        "maDiem": "FUTA-RP-dong-den-CB1BDD",
+        "maDiem": "64c7cc69e6cb43f4a31737bc56f95301",
         "loaiDiem": "DON",
         "phutLech": -60,
         "thuTu": 17
       },
       {
-        "maDiem": "FUTA-RP-231-233-le-hong-phong-AD280F",
+        "maDiem": "13f4f07dabd7422dac813aa634c198af",
         "loaiDiem": "DON",
         "phutLech": -45,
         "thuTu": 18
       },
       {
-        "maDiem": "FUTA-RP-benh-vien-nhi-hcm-206798",
+        "maDiem": "abf87bf9b15b4c8eaa580b8cb88c78e7",
         "loaiDiem": "DON",
         "phutLech": -45,
         "thuTu": 19
       },
       {
-        "maDiem": "FUTA-RP-nguyen-cuu-phu-A906DB",
+        "maDiem": "5bcb02014f964625af3ab8d2bd4e128b",
         "loaiDiem": "DON",
         "phutLech": -45,
         "thuTu": 20
       },
       {
-        "maDiem": "FUTA-RP-thanh-thai-CF85D6",
+        "maDiem": "e3c402687b484042ab51fe6623ab7acd",
         "loaiDiem": "DON",
         "phutLech": -45,
         "thuTu": 21
       },
       {
-        "maDiem": "FUTA-RP-y-duoc-43D726",
+        "maDiem": "1f79ebb6ef684446aba97c1b0e9f67e1",
         "loaiDiem": "DON",
         "phutLech": -45,
         "thuTu": 22
       },
       {
-        "maDiem": "FUTA-RP-cho-ray-5E2F86",
+        "maDiem": "4a72ee20d89b4809a1f68efa0b9379b1",
         "loaiDiem": "DON",
         "phutLech": -45,
         "thuTu": 23
       },
       {
-        "maDiem": "BX-MT",
+        "maDiem": "f8d7551f5ef14673afce82e360ec067d",
         "loaiDiem": "DON",
         "phutLech": 0,
         "thuTu": 24
       },
       {
-        "maDiem": "FUTA-RP-than-cuu-nghia-9DD74F",
+        "maDiem": "69a4d423698d41c2a4fdbbd66aebc655",
         "loaiDiem": "DON",
         "phutLech": 60,
         "thuTu": 25
       },
       {
-        "maDiem": "FUTA-RP-bot-23-tien-giang-CAA89E",
+        "maDiem": "a7365ddec1564e71a6192ae5d41df5a6",
         "loaiDiem": "DON",
         "phutLech": 140,
         "thuTu": 26
       },
       {
-        "maDiem": "FUTA-RP-ben-xe-can-tho-C3942F",
+        "maDiem": "72765620624b4bdfa8635055d29ba387",
         "loaiDiem": "TRA",
         "phutLech": 150,
         "thuTu": 27
       },
       {
-        "maDiem": "FUTA-RP-phuc-loc-cai-be-E86745",
+        "maDiem": "c6e5187a37d64914ab1ff5c96be7f5b7",
         "loaiDiem": "DON",
         "phutLech": 150,
         "thuTu": 28
       },
       {
-        "maDiem": "FUTA-RP-an-huu-756660",
+        "maDiem": "91ba71aa4d344033ab9f58968c7a673d",
         "loaiDiem": "DON",
         "phutLech": 160,
         "thuTu": 29
       },
       {
-        "maDiem": "FUTA-RP-ben-xe-binh-minh-5C5A54",
+        "maDiem": "23e33848778341b5a49b9378880139ba",
         "loaiDiem": "DON",
         "phutLech": 180,
         "thuTu": 30
       },
       {
-        "maDiem": "FUTA-RP-phong-dien-27DD06",
+        "maDiem": "aaa0a5dd91e544d5a479997da4a3da0f",
         "loaiDiem": "TRA",
         "phutLech": 210,
         "thuTu": 31
       },
       {
-        "maDiem": "FUTA-RP-ba-se-E80366",
+        "maDiem": "7d04783db9aa47f7a66bf9d4c5eb9113",
         "loaiDiem": "TRA",
         "phutLech": 210,
         "thuTu": 32
       },
       {
-        "maDiem": "FUTA-RP-ba-lang-9004B2",
+        "maDiem": "03766e6b9fdb49d9a246f68c76b34c6d",
         "loaiDiem": "TRA",
         "phutLech": 210,
         "thuTu": 33
       },
       {
-        "maDiem": "FUTA-BEN-XE-O-MON-54233",
+        "maDiem": "c8fe6cb47ef64fa7a46d7b975d88abd0",
         "loaiDiem": "TRA",
         "phutLech": 240,
         "thuTu": 34
       },
       {
-        "maDiem": "FUTA-RP-co-do-AF5E15",
+        "maDiem": "f89dedff655a4611a3fae1ce6f7fe5fd",
         "loaiDiem": "TRA",
         "phutLech": 270,
         "thuTu": 35
@@ -226,55 +226,55 @@
     "reasons": [],
     "stops": [
       {
-        "maDiem": "FUTA-RP-nga-ba-lo-te-117CB2",
+        "maDiem": "c7e5a5c2e23e4ec1a0df8510dda269ce",
         "loaiDiem": "DON",
         "phutLech": 15,
         "thuTu": 1
       },
       {
-        "maDiem": "FUTA-RP-lap-vo-02E442",
+        "maDiem": "2c4ffdce9c3b487eac1b9c06df85fdeb",
         "loaiDiem": "DON",
         "phutLech": 30,
         "thuTu": 2
       },
       {
-        "maDiem": "FUTA-RP-lai-vung-5F5D5C",
+        "maDiem": "b321e37a23174320aa82a8faf6cc19a4",
         "loaiDiem": "DON",
         "phutLech": 50,
         "thuTu": 3
       },
       {
-        "maDiem": "FUTA-RP-ben-xe-sa-dec-25B07C",
+        "maDiem": "12f981bddfbf4d8ba8e7a71cc205e431",
         "loaiDiem": "DON",
         "phutLech": 75,
         "thuTu": 4
       },
       {
-        "maDiem": "FUTA-RP-cai-tau-ha-4C98CD",
+        "maDiem": "4c0ae9f34513472daa9b1c9a8d78d265",
         "loaiDiem": "DON",
         "phutLech": 85,
         "thuTu": 5
       },
       {
-        "maDiem": "FUTA-RP-cai-lay-1C70C0",
+        "maDiem": "90461023623c48d1a2fab006a5f0837c",
         "loaiDiem": "DON",
         "phutLech": 150,
         "thuTu": 6
       },
       {
-        "maDiem": "BX-MD-MOI",
+        "maDiem": "1fcaef6a46e44f94adda02f6399f6c92",
         "loaiDiem": "TRA",
         "phutLech": 300,
         "thuTu": 7
       },
       {
-        "maDiem": "FUTA-XA-LO-HA-NOI-11266",
+        "maDiem": "0df55ac98b3f4deeaf456bdc38277983",
         "loaiDiem": "TRA",
         "phutLech": 360,
         "thuTu": 8
       },
       {
-        "maDiem": "FUTA-RP-hang-xanh-671FFA",
+        "maDiem": "d85dd87873f74334ac8fb6ce9fde05dc",
         "loaiDiem": "TRA",
         "phutLech": 360,
         "thuTu": 9
@@ -289,25 +289,25 @@
     "reasons": [],
     "stops": [
       {
-        "maDiem": "FUTA-BEN-XE-MIEN-DONG-CU-11263",
+        "maDiem": "3b44be79fdb84d8fa48d0f436db6b6d2",
         "loaiDiem": "DON",
         "phutLech": -15,
         "thuTu": 1
       },
       {
-        "maDiem": "FUTA-RP-mai-chi-tho-don-tra-khach-41E92B",
+        "maDiem": "cc867f00aecb4b4daaaaa07202566cfd",
         "loaiDiem": "DON",
         "phutLech": 30,
         "thuTu": 2
       },
       {
-        "maDiem": "FUTA-BEN-XE-BA-RIA-11272",
+        "maDiem": "4f390eefa8c44216a8e90ff02c2078f7",
         "loaiDiem": "TRA",
         "phutLech": 210,
         "thuTu": 3
       },
       {
-        "maDiem": "FUTA-BEN-XE-VUNG-TAU-11270",
+        "maDiem": "d01772a3e6184b06a1de6fd3f31b19e1",
         "loaiDiem": "TRA",
         "phutLech": 240,
         "thuTu": 4
@@ -322,73 +322,73 @@
     "reasons": [],
     "stops": [
       {
-        "maDiem": "HM-RP-van-phong-mien-dong-E04669",
+        "maDiem": "7be4d97900314c1aae8d3c2d9e156811",
         "loaiDiem": "DON",
         "phutLech": 0,
         "thuTu": 1
       },
       {
-        "maDiem": "HM-RP-van-phong-quan-5-42130E",
+        "maDiem": "acee8a5278ca4271ad30a2a1a7b60dd5",
         "loaiDiem": "DON",
         "phutLech": 0,
         "thuTu": 2
       },
       {
-        "maDiem": "HM-RP-thi-tran-phu-my-doc-quoc-l-952B52",
+        "maDiem": "9c03370188214fcca6a5745ccd8710cf",
         "loaiDiem": "TRA",
         "phutLech": 45,
         "thuTu": 3
       },
       {
-        "maDiem": "HM-RP-cong-chao-ba-ria-2BA333",
+        "maDiem": "f169963eaff14e37a8731101e92ce8b4",
         "loaiDiem": "TRA",
         "phutLech": 75,
         "thuTu": 4
       },
       {
-        "maDiem": "HM-RP-nga-3-nui-dinh-ql51-DBEA4A",
+        "maDiem": "eff608a2f2c34de6afbfc136f7c5fed7",
         "loaiDiem": "TRA",
         "phutLech": 75,
         "thuTu": 5
       },
       {
-        "maDiem": "HM-RP-ben-xe-ba-ria-02A7BC",
+        "maDiem": "ce44b377782544fda54eb9c4bc126fb6",
         "loaiDiem": "TRA",
         "phutLech": 80,
         "thuTu": 6
       },
       {
-        "maDiem": "HM-RP-co-opmart-ba-ria-09DD5F",
+        "maDiem": "dd394516edb446b2a6d28dc0957b7fa1",
         "loaiDiem": "TRA",
         "phutLech": 82,
         "thuTu": 7
       },
       {
-        "maDiem": "HM-RP-eo-ong-tu-87B54B",
+        "maDiem": "f0df0f8a94d44e77a7a0c6158db33f6e",
         "loaiDiem": "TRA",
         "phutLech": 90,
         "thuTu": 8
       },
       {
-        "maDiem": "HM-RP-cang-cat-lo-9083F9",
+        "maDiem": "0275d814f29f49bba9c2107b05a97a7c",
         "loaiDiem": "TRA",
         "phutLech": 95,
         "thuTu": 9
       },
       {
-        "maDiem": "BX-VT",
+        "maDiem": "08d3ba8446c146f5a9a71b9dec3df18f",
         "loaiDiem": "TRA",
         "phutLech": 102,
         "thuTu": 10
       },
       {
-        "maDiem": "HM-RP-noi-thanh-vung-tau-6D1155",
+        "maDiem": "b41600e35c074ea3a439f0af2ebcfe89",
         "loaiDiem": "TRA",
         "phutLech": 107,
         "thuTu": 11
       },
       {
-        "maDiem": "HM-RP-van-phong-hoa-mai-vung-tau-AC5032",
+        "maDiem": "953237251dcb4c51aae565ca2d16487f",
         "loaiDiem": "TRA",
         "phutLech": 125,
         "thuTu": 12
@@ -405,85 +405,85 @@
     ],
     "stops": [
       {
-        "maDiem": "HM-RP-noi-thanh-vung-tau-6D1155",
+        "maDiem": "b41600e35c074ea3a439f0af2ebcfe89",
         "loaiDiem": "DON",
         "phutLech": -15,
         "thuTu": 1
       },
       {
-        "maDiem": "HM-RP-cao-toc-37DA22",
+        "maDiem": "07ddbc1c71524e11af496825d48418a3",
         "loaiDiem": "TRA",
         "phutLech": 0,
         "thuTu": 2
       },
       {
-        "maDiem": "HM-RP-n3-vung-tau-186A0E",
+        "maDiem": "9c75684ba01e4649aee349412960615c",
         "loaiDiem": "TRA",
         "phutLech": 0,
         "thuTu": 3
       },
       {
-        "maDiem": "HM-RP-nha-tho-phuoc-thanh-CAF135",
+        "maDiem": "75ed9318ab1645adacf2a2996724d9dd",
         "loaiDiem": "DON",
         "phutLech": 12,
         "thuTu": 4
       },
       {
-        "maDiem": "HM-RP-hai-doan-128-B914BC",
+        "maDiem": "892852d6f96d4600a63bd87955910c04",
         "loaiDiem": "DON",
         "phutLech": 16,
         "thuTu": 5
       },
       {
-        "maDiem": "HM-RP-nha-tho-giao-xu-nam-binh-471982",
+        "maDiem": "76822e249bd54419a914fffdd9899ac0",
         "loaiDiem": "DON",
         "phutLech": 18,
         "thuTu": 6
       },
       {
-        "maDiem": "HM-RP-cay-xang-petrolimex-so-4-3AAF37",
+        "maDiem": "83243343b87b4d6da2a4eacd2be1a93a",
         "loaiDiem": "DON",
         "phutLech": 22,
         "thuTu": 7
       },
       {
-        "maDiem": "HM-RP-co-opmart-ba-ria-09DD5F",
+        "maDiem": "dd394516edb446b2a6d28dc0957b7fa1",
         "loaiDiem": "DON",
         "phutLech": 25,
         "thuTu": 8
       },
       {
-        "maDiem": "HM-RP-trung-tam-thuong-mai-ba-ri-8B24FA",
+        "maDiem": "f735a7dd91224c85af714b3188406ec4",
         "loaiDiem": "DON",
         "phutLech": 27,
         "thuTu": 9
       },
       {
-        "maDiem": "HM-RP-ben-xe-ba-ria-02A7BC",
+        "maDiem": "ce44b377782544fda54eb9c4bc126fb6",
         "loaiDiem": "DON",
         "phutLech": 30,
         "thuTu": 10
       },
       {
-        "maDiem": "HM-RP-phuoc-9-ghe-43C77A",
+        "maDiem": "88bbb2371b87453fa59eb1be0295df1a",
         "loaiDiem": "DON",
         "phutLech": 31,
         "thuTu": 11
       },
       {
-        "maDiem": "HM-RP-banh-canh-long-huong-3A323E",
+        "maDiem": "9fc5d97e30884736a19c6761cf7514e1",
         "loaiDiem": "DON",
         "phutLech": 32,
         "thuTu": 12
       },
       {
-        "maDiem": "HM-RP-cho-kim-hai-D7285B",
+        "maDiem": "550e29f4e8c9401bab500df2e144772b",
         "loaiDiem": "DON",
         "phutLech": 33,
         "thuTu": 13
       },
       {
-        "maDiem": "HM-RP-nga-3-my-xuan-124530",
+        "maDiem": "db53586d11d54121a960ac4c45b597cb",
         "loaiDiem": "DON",
         "phutLech": 65,
         "thuTu": 14

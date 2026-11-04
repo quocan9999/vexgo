@@ -24,6 +24,19 @@ function flattenErrors(errors: ValidationError[], parent = ''): string[] {
 }
 
 describe('CreateShipmentDto cargo dimensions', () => {
+  it('rejects missing contacts and invalid phone numbers at the API boundary', async () => {
+    const missing = createDto();
+    Reflect.deleteProperty(missing, 'sender');
+    expect(flattenErrors(await validate(missing)).join(' ')).toContain(
+      'sender',
+    );
+    const invalid = createDto();
+    invalid.receiver.phoneNumber = 'abc';
+    expect(flattenErrors(await validate(invalid)).join(' ')).toContain(
+      'receiver.phoneNumber',
+    );
+  });
+
   it.each([
     ['negative', { length: -150, width: 50, height: 50 }],
     ['zero', { length: 150, width: 0, height: 50 }],
@@ -66,5 +79,78 @@ describe('CreateShipmentDto cargo dimensions', () => {
     );
 
     expect(errors).toEqual([]);
+  });
+});
+
+describe('standalone shipment route and calendar day', () => {
+  it('rejects a null trip instead of passing it to the legacy trip flow', async () => {
+    const dto = createDto();
+    Object.assign(dto, {
+      tripId: null,
+      routeId: 7,
+      sendDate: '03-11-2026',
+    });
+
+    expect(
+      flattenErrors(await validate(dto)).some((error) =>
+        error.startsWith('tripId:'),
+      ),
+    ).toBe(true);
+  });
+
+  it('accepts a route and DD-MM-YYYY without a trip', async () => {
+    const dto = createDto();
+    Object.assign(dto, {
+      tripId: undefined,
+      routeId: 7,
+      sendDate: '03-11-2026',
+    });
+    expect(await validate(dto)).toEqual([]);
+  });
+
+  it('accepts a route without trip and without sendDate (flexible hub-to-hub dropoff)', async () => {
+    const dto = createDto();
+    Object.assign(dto, {
+      tripId: undefined,
+      routeId: 7,
+      sendDate: undefined,
+    });
+    expect(await validate(dto)).toEqual([]);
+  });
+  it('rejects an impossible calendar day', async () => {
+    const dto = createDto();
+    Object.assign(dto, {
+      tripId: undefined,
+      routeId: 7,
+      sendDate: '31-02-2026',
+    });
+    expect(
+      flattenErrors(await validate(dto)).some((error) =>
+        error.startsWith('sendDate:'),
+      ),
+    ).toBe(true);
+  });
+});
+
+describe('CreateShipmentDto payment method', () => {
+  it('accepts TAI_BEN and rejects ONLINE payment method for shipments', async () => {
+    const valid = plainToInstance(CreateShipmentDto, {
+      tripId: 1,
+      sender: { fullName: 'Người gửi', phoneNumber: '0900000001' },
+      receiver: { fullName: 'Người nhận', phoneNumber: '0900000002' },
+      items: [{ name: 'Thùng hàng', quantity: 1, weight: 1 }],
+      paymentMethod: 'TAI_BEN',
+    });
+    expect(await validate(valid)).toHaveLength(0);
+
+    const invalid = plainToInstance(CreateShipmentDto, {
+      tripId: 1,
+      sender: { fullName: 'Người gửi', phoneNumber: '0900000001' },
+      receiver: { fullName: 'Người nhận', phoneNumber: '0900000002' },
+      items: [{ name: 'Thùng hàng', quantity: 1, weight: 1 }],
+      paymentMethod: 'ONLINE',
+    });
+    const errors = await validate(invalid);
+    expect(flattenErrors(errors).some((e) => e.includes('paymentMethod'))).toBe(true);
   });
 });

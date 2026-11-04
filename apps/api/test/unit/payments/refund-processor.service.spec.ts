@@ -22,12 +22,46 @@ const refund = {
 
 function createService(configValues: Record<string, string | undefined> = {}) {
   const prisma = {
+    thongBao: {
+      upsert: vi.fn().mockImplementation(
+        async ({ create }: { create: { thoiGian: Date } }) => ({
+          thongBaoId: 1,
+          thoiGian: create.thoiGian,
+        }),
+      ),
+    },
+    emailThongBao: { upsert: vi.fn() },
+    thietBiThongBao: { findMany: vi.fn().mockResolvedValue([]) },
+    pushThongBao: { upsert: vi.fn() },
     thanhToan: {
+      findUniqueOrThrow: vi
+        .fn()
+        .mockResolvedValue({
+          ...refund,
+          trangThai: 'THANH_CONG',
+          thoiDiemHoanTat: new Date(),
+          ve: {
+            veId: 1,
+            maVe: 'TICKET-1',
+            phieuDatVeId: 1,
+            phieuDatVe: {
+              donGiaoDich: {
+                khachHangId: 1,
+                emailKhachHang: 'owner@example.test',
+              },
+            },
+          },
+        }),
       findUnique: vi.fn().mockResolvedValue(refund),
       findMany: vi.fn().mockResolvedValue([]),
       updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
   };
+  Object.assign(prisma, {
+    $transaction: vi.fn(async (cb: (tx: typeof prisma) => unknown) =>
+      cb(prisma),
+    ),
+  });
   const config = {
     get: vi.fn((key: string) => configValues[key]),
   };

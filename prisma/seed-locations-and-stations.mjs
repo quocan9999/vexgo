@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import crypto from 'node:crypto';
 import fs from 'fs';
 import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import { PrismaClient } from '../apps/api/dist/generated/prisma/client.js';
@@ -19,6 +20,11 @@ function databaseConfig() {
 }
 
 const prisma = new PrismaClient({ adapter: new PrismaMariaDb(databaseConfig()) });
+
+function deterministicUuid(...parts) {
+  const hash = crypto.createHash('md5').update(parts.map(String).join(':')).digest('hex');
+  return `${hash.slice(0, 12)}4${hash.slice(13, 16)}a${hash.slice(17, 32)}`;
+}
 
 function removeVietnameseTones(str) {
   return str
@@ -65,7 +71,7 @@ async function main() {
         chuThichSapNhap,
       },
       create: {
-        maDiaDiem: `VN-P2-${p2.code}`,
+        maDiaDiem: deterministicUuid('DMDD', 'P2', p2.code),
         code: p2.code,
         tenDiaDiem: p2.name,
         tenKhongDau: removeVietnameseTones(p2.name),
@@ -96,7 +102,7 @@ async function main() {
         chuThichSapNhap: null,
       },
       create: {
-        maDiaDiem: `VN-P1-${p1.code}`,
+        maDiaDiem: deterministicUuid('DMDD', 'P1', p1.code),
         code: p1.code,
         tenDiaDiem: p1.name,
         tenKhongDau: removeVietnameseTones(p1.name),
@@ -178,7 +184,7 @@ async function main() {
         chuThichSapNhap: null,
       },
       create: {
-        maDiaDiem: `VN-D1-${foundDist.code}`,
+        maDiaDiem: deterministicUuid('DMDD', 'D1', foundDist.code),
         code: foundDist.code,
         tenDiaDiem: foundDist.name,
         tenKhongDau: removeVietnameseTones(foundDist.name),
@@ -365,7 +371,7 @@ async function main() {
         where: {
           nhaXeId_maDiem: {
             nhaXeId: station.nhaXeId,
-            maDiem: station.maDiem,
+            maDiem: deterministicUuid('DDT-SAMPLE', station.maDiem),
           },
         },
         update: {
@@ -379,7 +385,7 @@ async function main() {
           soDienThoai: station.soDienThoai,
         },
         create: {
-          maDiem: station.maDiem,
+          maDiem: deterministicUuid('DDT-SAMPLE', station.maDiem),
           tenDiem: station.tenDiem,
           loaiDiem: station.loaiDiem,
           diaChi: station.diaChi,

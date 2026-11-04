@@ -49,6 +49,17 @@ function setup({
   };
   let ticketId = 0;
   const tx = {
+    thongBao: {
+      upsert: vi.fn().mockImplementation(
+        async ({ create }: { create: { thoiGian: Date } }) => ({
+          thongBaoId: 1,
+          thoiGian: create.thoiGian,
+        }),
+      ),
+    },
+    emailThongBao: { upsert: vi.fn() },
+    thietBiThongBao: { findMany: vi.fn().mockResolvedValue([]) },
+    pushThongBao: { upsert: vi.fn() },
     donGiaoDich: {
       create: vi.fn(async ({ data }: Write) => ({
         ...data,
@@ -388,6 +399,16 @@ describe('G2 booking payment and promotion transaction boundary', () => {
   it('uses verified account identity instead of the contact override at quote and locked usage', async () => {
     const f = setup();
     await f.service.createBooking(f.dto, { taiKhoanId: 1 } as never);
+    expect(f.tx.thongBao.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { eventKey: 'booking-paid:301' },
+        create: expect.objectContaining({
+          ticketId: 1,
+          nguoiNhans: { create: { khachHangId: 10, daDoc: false } },
+          tieuDe: 'Đặt vé thành công',
+        }),
+      }),
+    );
     expect(f.prisma.suDungKhuyenMai.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {

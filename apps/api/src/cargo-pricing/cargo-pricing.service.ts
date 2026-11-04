@@ -1,11 +1,15 @@
-import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+} from '@nestjs/common';
 import { Prisma } from '../generated/prisma/client.js';
 import { assertValidCargoDimensions } from './cargo-dimensions.validation.js';
 
 type CapacityGroup = 'XE_MAY' | 'HANG_CONG_KENH' | 'HANG_NHE';
 
 export interface CargoPricingTrip {
-  chuyenXeId: number;
+  chuyenXeId?: number;
   tuyenXeId: number;
   nhaXeId: number;
   ngayKhoiHanh: Date;
@@ -254,7 +258,9 @@ export class CargoPricingService {
         normalizedPhysicalType.includes('BICYCLE');
       if (
         !isVehicle &&
-        dimensions.every((dimension) => dimension !== undefined && dimension > 0)
+        dimensions.every(
+          (dimension) => dimension !== undefined && dimension > 0,
+        )
       ) {
         volumetricWeight = new Prisma.Decimal(item.length!)
           .times(item.width!)
@@ -282,12 +288,12 @@ export class CargoPricingService {
         ) {
           throw new BadRequestException({
             error: 'CARGO_DIMENSIONS_EXCEEDED',
-            message:
-              `Kích thước món "${item.name}" vượt quá quy định hầm xe khách (Dài ≤ ${limits.length}cm, Rộng ≤ ${limits.width}cm, Cao ≤ ${limits.height}cm).`,
+            message: `Kích thước món "${item.name}" vượt quá quy định hầm xe khách (Dài ≤ ${limits.length}cm, Rộng ≤ ${limits.width}cm, Cao ≤ ${limits.height}cm).`,
           });
         }
       }
-      const maxPackageWeight = input.bookingLimits?.maxNonVehiclePackageWeightKg;
+      const maxPackageWeight =
+        input.bookingLimits?.maxNonVehiclePackageWeightKg;
       if (
         !isVehicle &&
         maxPackageWeight !== undefined &&
@@ -295,8 +301,7 @@ export class CargoPricingService {
       ) {
         throw new BadRequestException({
           error: 'CARGO_WEIGHT_EXCEEDED',
-          message:
-            `Kiện "${item.name}" có khối lượng hiệu dụng ${unitWeight.toString()}kg; mỗi kiện tối đa ${maxPackageWeight}kg khi đi kèm vé. Quý khách vui lòng tạo đơn gửi hàng riêng tại mục Gửi hàng bưu kiện.`,
+          message: `Kiện "${item.name}" có khối lượng hiệu dụng ${unitWeight.toString()}kg; mỗi kiện tối đa ${maxPackageWeight}kg khi đi kèm vé. Quý khách vui lòng tạo đơn gửi hàng riêng tại mục Gửi hàng bưu kiện.`,
         });
       }
 
@@ -306,9 +311,12 @@ export class CargoPricingService {
         (item.loaiHangHoaId === undefined && item.categoryName === undefined)
           ? inferredGroup
           : undefined;
-      let cargoType = item.loaiHangHoaId === undefined
-        ? undefined
-        : cargoTypes.find((type) => type.loaiHangHoaId === item.loaiHangHoaId);
+      let cargoType =
+        item.loaiHangHoaId === undefined
+          ? undefined
+          : cargoTypes.find(
+              (type) => type.loaiHangHoaId === item.loaiHangHoaId,
+            );
       if (item.loaiHangHoaId !== undefined && !cargoType) {
         return throwConflict(
           'CARGO_TYPE_INVALID',
@@ -386,9 +394,9 @@ export class CargoPricingService {
       });
       weightsByType.set(
         cargoType.loaiHangHoaId,
-        (weightsByType.get(cargoType.loaiHangHoaId) ?? new Prisma.Decimal(0)).plus(
-          totalWeight,
-        ),
+        (
+          weightsByType.get(cargoType.loaiHangHoaId) ?? new Prisma.Decimal(0)
+        ).plus(totalWeight),
       );
       hasFragile ||= item.serviceType === 'FRAGILE';
       hasValuable ||= item.serviceType === 'VALUABLE';
@@ -396,8 +404,7 @@ export class CargoPricingService {
 
     const activeRates = await tx.bangCuocGuiHang.findMany({
       where: {
-        diemGuiId: senderPointId,
-        diemNhanId: receiverPointId,
+        tuyenXeId: trip.tuyenXeId,
         trangThai: 'HOAT_DONG',
         tuNgay: { lte: trip.ngayKhoiHanh },
         OR: [{ denNgay: null }, { denNgay: { gte: trip.ngayKhoiHanh } }],
@@ -406,30 +413,59 @@ export class CargoPricingService {
 
     const rates: CargoPricingResult['rates'] = [];
     let baseFee = new Prisma.Decimal(0);
-    for (const [loaiHangHoaId, totalWeight] of [...weightsByType.entries()].sort(
-      ([a], [b]) => a - b,
-    )) {
+    for (const [loaiHangHoaId, totalWeight] of [
+      ...weightsByType.entries(),
+    ].sort(([a], [b]) => a - b)) {
       const matches = activeRates.filter((rate) => {
         const minimum = new Prisma.Decimal(rate.khoiLuongTu);
-        const maximum = rate.khoiLuongDen === null
-          ? null
-          : new Prisma.Decimal(rate.khoiLuongDen);
+        const maximum =
+          rate.khoiLuongDen === null
+            ? null
+            : new Prisma.Decimal(rate.khoiLuongDen);
         return (
           rate.loaiHangHoaId === loaiHangHoaId &&
-          minimum.lessThanOrEqualTo(totalWeight) &&
+          minimum.lessThan(totalWeight) &&
           (maximum === null || maximum.greaterThanOrEqualTo(totalWeight))
         );
       });
-      if (matches.length !== 1) {
+      let rate: (typeof activeRates)[number];
+      if (matches.length === 1) {
+        rate = matches[0];
+      } else if (matches.length > 1) {
+        const allSameFee = matches.every((m) =>
+          new Prisma.Decimal(m.mucCuoc).equals(matches[0].mucCuoc),
+        );
+        if (allSameFee) {
+          rate = [...matches].sort(
+            (a, b) => b.bangCuocGuiHangId - a.bangCuocGuiHangId,
+          )[0];
+        } else {
+          const sortedByDate = [...matches].sort((a, b) => {
+            const timeA = a.tuNgay ? new Date(a.tuNgay).getTime() : 0;
+            const timeB = b.tuNgay ? new Date(b.tuNgay).getTime() : 0;
+            return timeB - timeA;
+          });
+          const newestTime = sortedByDate[0].tuNgay
+            ? new Date(sortedByDate[0].tuNgay).getTime()
+            : 0;
+          const secondTime = sortedByDate[1].tuNgay
+            ? new Date(sortedByDate[1].tuNgay).getTime()
+            : 0;
+          if (newestTime > secondTime) {
+            rate = sortedByDate[0];
+          } else {
+            return throwConflict(
+              'CARGO_RATE_AMBIGUOUS',
+              'Có nhiều mức cước phù hợp cho loại hàng và tổng khối lượng này.',
+            );
+          }
+        }
+      } else {
         return throwConflict(
-          matches.length > 1 ? 'CARGO_RATE_AMBIGUOUS' : 'CARGO_RATE_NOT_FOUND',
-          matches.length > 1
-            ? 'Có nhiều mức cước phù hợp cho loại hàng và tổng khối lượng này.'
-            : 'Chưa có mức cước phù hợp cho loại hàng, điểm gửi/nhận và tổng khối lượng này.',
+          'CARGO_RATE_NOT_FOUND',
+          'Chưa có mức cước phù hợp cho loại hàng, tuyến xe và tổng khối lượng này.',
         );
       }
-
-      const rate = matches[0];
       const fee = new Prisma.Decimal(rate.mucCuoc);
       if (
         !fee.isFinite() ||
@@ -451,8 +487,9 @@ export class CargoPricingService {
       baseFee = baseFee.plus(fee);
     }
 
-    const serviceFee = (hasFragile ? SURCHARGE_FRAGILE : new Prisma.Decimal(0))
-      .plus(hasValuable ? SURCHARGE_VALUABLE : new Prisma.Decimal(0));
+    const serviceFee = (
+      hasFragile ? SURCHARGE_FRAGILE : new Prisma.Decimal(0)
+    ).plus(hasValuable ? SURCHARGE_VALUABLE : new Prisma.Decimal(0));
 
     return {
       senderPointId,

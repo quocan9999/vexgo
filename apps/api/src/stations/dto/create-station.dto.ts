@@ -8,11 +8,11 @@ import {
 } from '../station.constants.js';
 
 export class CreateStationDto {
-  @ApiProperty({ description: 'Mã bến xe hoặc điểm đón trả (duy nhất)', example: 'BX-MD' })
+  @ApiPropertyOptional({ description: 'Mã bến xe hoặc điểm đón trả (tự động cấp UUID v4 nếu bỏ trống)', example: 'BX-MD' })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
   @MaxLength(50)
-  maDiem!: string;
+  maDiem?: string;
 
   @ApiProperty({ description: 'Tên bến xe, văn phòng hoặc điểm đón trả', example: 'Bến xe Miền Đông Mới' })
   @IsString()

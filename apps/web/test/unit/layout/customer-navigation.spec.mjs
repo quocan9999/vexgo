@@ -17,6 +17,7 @@ test('customer account sidebar uses the canonical account routes', () => {
     [
       { id: 'profile', href: '/account/profile' },
       { id: 'history', href: '/account/tickets' },
+      { id: 'shipments', href: '/account/shipments' },
       { id: 'security', href: '/account/profile/password' },
     ],
   );

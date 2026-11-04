@@ -36,5 +36,7 @@ export function mapTripToBookingPost(trip: ApiTrip): Post {
     authorCode: trip.code,
     authorPhone: '',
     isVerified: true,
+    ...(trip.pickupPoints ? { pickupPoints: trip.pickupPoints } : {}),
+    ...(trip.dropoffPoints ? { dropoffPoints: trip.dropoffPoints } : {}),
   };
 }

@@ -107,15 +107,14 @@ test('deduplicateFixedPoints: keeps item with smallest id when name and address 
   assert.ok(diff);
 });
 
-test('generateRoutePointMaDiem: generates stable code <= 50 chars with slug and hash', () => {
+test('generateRoutePointMaDiem: generates stable UUID v4 32 hex code', () => {
   const code1 = generateRoutePointMaDiem('FUTA', 'Bệnh Viện Ung Bướu', 10.8078, 106.695);
   const code2 = generateRoutePointMaDiem('FUTA', 'Bệnh Viện Ung Bướu', 10.8078, 106.695);
   const code3 = generateRoutePointMaDiem('HM', 'Văn phòng Miền Đông', 10.8153495, 106.712779);
 
   assert.equal(code1, code2, 'Must be stable and idempotent for same inputs');
   assert.notEqual(code1, code3);
-  assert.ok(code1.startsWith('FUTA-RP-'));
-  assert.ok(code1.length <= 50, `Length must be <= 50, got ${code1.length}`);
+  assert.match(code1, /^[0-9a-f]{32}$/);
 });
 
 test('buildRouteTemplates: preserves negative and positive minutes, sorts ascending, scopes maDiem by operator', () => {

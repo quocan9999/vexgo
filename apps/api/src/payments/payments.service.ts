@@ -1,3 +1,4 @@
+import { enqueuePaymentConfirmation } from '../notifications/payment-confirmation.js';
 import {
   BadRequestException,
   ConflictException,
@@ -13,7 +14,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service.js';
-import type { Prisma } from '../generated/prisma/client.js';
+import { Prisma } from '../generated/prisma/client.js';
 import { generateUuidV1 } from '../common/uuid-v1.js';
 import {
   BOOKING_PAYMENT_TTL_MS,
@@ -46,14 +47,10 @@ const SEPAY_VIETNAM_UTC_OFFSET_MS = 7 * 60 * 60 * 1000;
 function parseSepayTransactionDate(value: unknown): Date | null {
   if (typeof value !== 'string') return null;
 
-  const match = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/.exec(
-    value,
-  );
+  const match = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/.exec(value);
   if (!match) return null;
 
-  const [year, month, day, hour, minute, second] = match
-    .slice(1)
-    .map(Number);
+  const [year, month, day, hour, minute, second] = match.slice(1).map(Number);
   const vietnamWallClock = new Date(
     Date.UTC(year, month - 1, day, hour, minute, second),
   );
@@ -152,32 +149,34 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly prisma: PrismaService,
     private readonly configService?: ConfigService,
-    private readonly settlementBoundary: PaymentSettlementService =
-      new PaymentSettlementService(prisma),
+    private readonly settlementBoundary: PaymentSettlementService = new PaymentSettlementService(
+      prisma,
+    ),
   ) {
     this.isDemoMode =
-      (this.configService?.get<string>('PAYMENT_DEMO_MODE') ?? '').toLowerCase() ===
-      'true';
+      (
+        this.configService?.get<string>('PAYMENT_DEMO_MODE') ?? ''
+      ).toLowerCase() === 'true';
     this.momoSecretKey =
       this.configService?.get<string>('MOMO_SECRET_KEY') ||
       (this.isDemoMode
-        ? (process.env.NODE_ENV === 'test'
-            ? 'vexgo_momo_demo_secret'
-            : randomBytes(32).toString('hex'))
+        ? process.env.NODE_ENV === 'test'
+          ? 'vexgo_momo_demo_secret'
+          : randomBytes(32).toString('hex')
         : '');
     this.vnpayHashSecret =
       this.configService?.get<string>('VNPAY_HASH_SECRET') ||
       (this.isDemoMode
-        ? (process.env.NODE_ENV === 'test'
-            ? 'vexgo_vnpay_demo_secret'
-            : randomBytes(32).toString('hex'))
+        ? process.env.NODE_ENV === 'test'
+          ? 'vexgo_vnpay_demo_secret'
+          : randomBytes(32).toString('hex')
         : '');
     this.zalopayKey2 =
       this.configService?.get<string>('ZALOPAY_KEY2') ||
       (this.isDemoMode
-        ? (process.env.NODE_ENV === 'test'
-            ? 'vexgo_zalopay_demo_key2'
-            : randomBytes(32).toString('hex'))
+        ? process.env.NODE_ENV === 'test'
+          ? 'vexgo_zalopay_demo_key2'
+          : randomBytes(32).toString('hex')
         : '');
 
     if (this.isDemoMode && process.env.NODE_ENV !== 'test') {
@@ -240,10 +239,34 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
     });
     const shipmentCandidates = await this.prisma.donGiaoDich.findMany({
       where: {
-        ngayTao: { lte: expiredBefore },
-        trangThai: BOOKING_ORDER_PENDING_STATUS,
         phieuDatVe: { is: null },
-        phieuGuiHang: { isNot: null },
+        phieuGuiHang: { is: { trangThai: 'MOI_TAO' } },
+        OR: [
+          {
+            ngayTao: { lte: expiredBefore },
+            trangThai: BOOKING_ORDER_PENDING_STATUS,
+            phieuGuiHang: { is: { hanMangHangDen: null } },
+            thanhToans: { some: { phuongThuc: { not: 'TAI_BEN' } } },
+          },
+          {
+            phieuGuiHang: { is: { hanMangHangDen: { lte: now } } },
+          },
+          {
+            trangThai: BOOKING_ORDER_PENDING_STATUS,
+            thanhToans: {
+              some: {
+                phuongThuc: { not: 'TAI_BEN' },
+                trangThai: { in: ['DANG_XU_LY', 'CHO_THANH_TOAN'] },
+                thoiGian: { lte: expiredBefore },
+              },
+            },
+          },
+          {
+            ngayTao: { lte: new Date(now.getTime() - 48 * 60 * 60 * 1000) },
+            trangThai: BOOKING_ORDER_PENDING_STATUS,
+            phieuGuiHang: { is: { hanMangHangDen: null } },
+          },
+        ],
       },
       select: { phieuGuiHang: { select: { phieuGuiHangId: true } } },
       orderBy: { ngayTao: 'asc' },
@@ -504,25 +527,88 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
 
     const shipment = await tx.phieuGuiHang.findUnique({
       where: { phieuGuiHangId: shipmentId },
-      include: { donGiaoDich: { include: { phieuDatVe: true } } },
+      include: {
+        donGiaoDich: {
+          include: {
+            phieuDatVe: true,
+            thanhToans: { select: { phuongThuc: true } },
+          },
+        },
+      },
     });
     const order = shipment?.donGiaoDich;
     if (
       !shipment ||
       !order ||
       order.phieuDatVe ||
-      order.trangThai !== BOOKING_ORDER_PENDING_STATUS ||
-      getBookingPaymentDeadline(order.ngayTao) > deadlineCheckTime
+      shipment.trangThai !== 'MOI_TAO'
     ) {
       return false;
     }
 
-    if (shipment.trangThai === 'DA_GIAO') {
-      throw new ConflictException({
-        error: 'SHIPMENT_EXPIRY_STATE_CONFLICT',
-        message:
-          'Đơn đang chờ thanh toán nhưng hàng đã giao; cần đối soát trước khi hết hạn.',
+    if (shipment.hanMangHangDen) {
+      if (shipment.hanMangHangDen > deadlineCheckTime) {
+        // A bank-transfer attempt can expire while the waybill remains usable.
+        await tx.thanhToan.updateMany({
+          where: {
+            donGiaoDichId: order.donGiaoDichId,
+            loaiGiaoDich: 'THANH_TOAN',
+            phuongThuc: { not: 'TAI_BEN' },
+            trangThai: { in: ['DANG_XU_LY', 'CHO_THANH_TOAN'] },
+            thoiGian: {
+              lte: new Date(
+                deadlineCheckTime.getTime() - BOOKING_PAYMENT_TTL_MS,
+              ),
+            },
+          },
+          data: { trangThai: 'THAT_BAI' },
+        });
+        return false;
+      }
+
+      const updated = await tx.phieuGuiHang.updateMany({
+        where: { phieuGuiHangId: shipmentId, trangThai: 'MOI_TAO' },
+        data: { trangThai: 'DA_HUY' },
       });
+      if (updated.count !== 1) return false;
+
+      await tx.donGiaoDich.updateMany({
+        where: { donGiaoDichId: order.donGiaoDichId },
+        data: { trangThai: 'DA_HUY' },
+      });
+      await tx.thanhToan.updateMany({
+        where: {
+          donGiaoDichId: order.donGiaoDichId,
+          loaiGiaoDich: 'THANH_TOAN',
+          trangThai: { in: ['DANG_XU_LY', 'CHO_THANH_TOAN'] },
+        },
+        data: { trangThai: 'THAT_BAI' },
+      });
+      await tx.lichSuTrangThaiPhieuGuiHang.create({
+        data: {
+          phieuGuiHangId: shipmentId,
+          trangThai: 'DA_HUY',
+          thoiGian: historyTimestamp,
+          ghiChu:
+            'Hết thời hạn mang hàng đến gửi (48 giờ). Khoản đã thu, nếu có, do nhà xe xử lý.',
+          taiKhoanId: null,
+        },
+      });
+      return true;
+    }
+
+    // Preserve the expiry contract for pre-migration, trip-bound waybills.
+    if (order.trangThai !== BOOKING_ORDER_PENDING_STATUS) return false;
+
+    const isCounterPayment =
+      shipment.nguoiTraCuoc === 'NGUOI_NHAN' ||
+      order.thanhToans?.some((p) => p.phuongThuc === 'TAI_BEN');
+    const deadline = isCounterPayment
+      ? new Date(order.ngayTao.getTime() + 48 * 60 * 60 * 1000)
+      : getBookingPaymentDeadline(order.ngayTao);
+
+    if (deadline > deadlineCheckTime) {
+      return false;
     }
 
     const successfulPayment = await tx.thanhToan.findFirst({
@@ -550,7 +636,7 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
     });
     if (orderUpdate.count !== 1) return false;
 
-    if (shipment.trangThai !== 'DA_HUY') {
+    {
       const shipmentUpdate = await tx.phieuGuiHang.updateMany({
         where: {
           phieuGuiHangId: shipment.phieuGuiHangId,
@@ -569,7 +655,9 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
           phieuGuiHangId: shipment.phieuGuiHangId,
           trangThai: 'DA_HUY',
           thoiGian: historyTimestamp,
-          ghiChu: 'Hết thời hạn thanh toán 10 phút.',
+          ghiChu: isCounterPayment
+            ? 'Hết thời hạn gửi hàng tại bến (48 giờ).'
+            : 'Hết thời hạn thanh toán 10 phút.',
           taiKhoanId: null,
         },
       });
@@ -660,7 +748,8 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
     ) {
       throw new ServiceUnavailableException({
         error: 'SEPAY_ACCOUNT_NOT_CONFIGURED',
-        message: 'Tài khoản nhận tiền SePay chưa được cấu hình hợp lệ ở máy chủ.',
+        message:
+          'Tài khoản nhận tiền SePay chưa được cấu hình hợp lệ ở máy chủ.',
       });
     }
 
@@ -742,23 +831,33 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
       const legacy = /^([A-Z0-9]{1,8})GD([A-F\d]{30})$/.exec(reference);
       if (legacy) references.add(`${legacy[1]}-GD-${legacy[2]}`);
     }
-    const matchingOrders = (await Promise.all(
-      [...references].map((reference) => this.prisma.donGiaoDich.findUnique({
-        where: { maDonGiaoDich: reference },
-        include: { phieuDatVe: true, phieuGuiHang: true },
-      })),
-    )).filter((candidate) => candidate !== null);
+    const matchingOrders = (
+      await Promise.all(
+        [...references].map((reference) =>
+          this.prisma.donGiaoDich.findUnique({
+            where: { maDonGiaoDich: reference },
+            include: { phieuDatVe: true, phieuGuiHang: true },
+          }),
+        ),
+      )
+    ).filter((candidate) => candidate !== null);
     const order = matchingOrders[0];
-    if (matchingOrders.some((candidate) => candidate.donGiaoDichId !== order?.donGiaoDichId)) {
+    if (
+      matchingOrders.some(
+        (candidate) => candidate.donGiaoDichId !== order?.donGiaoDichId,
+      )
+    ) {
       throw new BadRequestException({
         error: 'SEPAY_REFERENCE_MISMATCH',
-        message: 'Mã thanh toán và nội dung chuyển khoản trỏ tới các đơn khác nhau.',
+        message:
+          'Mã thanh toán và nội dung chuyển khoản trỏ tới các đơn khác nhau.',
       });
     }
     if (!order || (!order.phieuDatVe && !order.phieuGuiHang)) {
       throw new NotFoundException({
         error: 'SEPAY_ORDER_NOT_FOUND',
-        message: 'Không tìm thấy đơn giao dịch khớp chính xác với mã chuyển khoản.',
+        message:
+          'Không tìm thấy đơn giao dịch khớp chính xác với mã chuyển khoản.',
       });
     }
 
@@ -831,7 +930,8 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
     ) {
       throw new BadRequestException({
         error: 'PAYMENT_AMOUNT_MISMATCH',
-        message: 'Số tiền SePay nhận được không khớp chính xác với đơn hàng VND.',
+        message:
+          'Số tiền SePay nhận được không khớp chính xác với đơn hàng VND.',
       });
     }
 
@@ -913,7 +1013,8 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
     // 1. Kiểm tra trạng thái booking & transaction ban đầu (discussion_r4226248027)
     const isCancelledInitially =
       ['DA_HUY', 'HUY'].includes(booking.trangThai) ||
-      (booking.donGiaoDich && ['DA_HUY', 'HUY'].includes(booking.donGiaoDich.trangThai));
+      (booking.donGiaoDich &&
+        ['DA_HUY', 'HUY'].includes(booking.donGiaoDich.trangThai));
     if (isCancelledInitially) {
       throw new ConflictException({
         error: 'BOOKING_CANCELLED',
@@ -923,7 +1024,8 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
 
     const isAlreadyPaidInitially =
       booking.trangThai === 'DA_THANH_TOAN' ||
-      (booking.donGiaoDich && booking.donGiaoDich.trangThai === 'DA_THANH_TOAN');
+      (booking.donGiaoDich &&
+        booking.donGiaoDich.trangThai === 'DA_THANH_TOAN');
     if (isAlreadyPaidInitially) {
       throw new ConflictException({
         error: 'BOOKING_ALREADY_PAID',
@@ -937,7 +1039,8 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
     ) {
       throw new ConflictException({
         error: 'INVALID_BOOKING_STATUS',
-        message: 'Trạng thái đơn đặt vé không hợp lệ để tạo giao dịch thanh toán.',
+        message:
+          'Trạng thái đơn đặt vé không hợp lệ để tạo giao dịch thanh toán.',
       });
     }
 
@@ -974,7 +1077,8 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
       if (
         currentBooking.trangThai === BOOKING_ORDER_PENDING_STATUS &&
         currentBooking.donGiaoDich.trangThai === BOOKING_ORDER_PENDING_STATUS &&
-        getBookingPaymentDeadline(currentBooking.donGiaoDich.ngayTao) <= paymentCheckTime
+        getBookingPaymentDeadline(currentBooking.donGiaoDich.ngayTao) <=
+          paymentCheckTime
       ) {
         await this.expirePendingBookingInTransaction(
           tx,
@@ -1010,7 +1114,8 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
       ) {
         throw new ConflictException({
           error: 'INVALID_BOOKING_STATUS',
-          message: 'Trạng thái đơn đặt vé không hợp lệ để tạo giao dịch thanh toán.',
+          message:
+            'Trạng thái đơn đặt vé không hợp lệ để tạo giao dịch thanh toán.',
         });
       }
 
@@ -1159,7 +1264,9 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
     const booking = payment.donGiaoDich?.phieuDatVe;
     const shipment = payment.donGiaoDich?.phieuGuiHang;
     const paymentOrder = payment.donGiaoDich;
-    const paymentCreatedAt = paymentOrder?.ngayTao;
+    const paymentCreatedAt = shipment?.hanMangHangDen
+      ? payment.thoiGian
+      : paymentOrder?.ngayTao;
     const paymentExpiresAt = paymentCreatedAt
       ? getBookingPaymentDeadline(paymentCreatedAt)
       : null;
@@ -1169,6 +1276,9 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
       (!shipment || shipment.trangThai !== 'DA_HUY');
     const paymentHasExpired =
       bookingPaymentIsPending &&
+      !isSuccess &&
+      !isFailed &&
+      payment.trangThai !== 'CAN_DOI_SOAT' &&
       paymentExpiresAt !== null &&
       paymentExpiresAt <= new Date();
     const additionalSePayTransfer = paymentOrder
@@ -1190,7 +1300,9 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
         : isFailed
           ? 'FAILED'
           : 'PENDING';
-    const requiresReconciliation = Boolean(additionalSePayTransfer) ||
+    const requiresReconciliation =
+      payment.trangThai === 'CAN_DOI_SOAT' ||
+      Boolean(additionalSePayTransfer) ||
       (isSuccess &&
         (['DA_HUY', 'HUY'].includes(paymentOrder?.trangThai ?? '') ||
           ['DA_HUY', 'HUY'].includes(booking?.trangThai ?? '') ||
@@ -1209,9 +1321,8 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
       status,
       paymentStatus: payment.trangThai,
       requiresReconciliation,
-      bookingStatus: paymentHasExpired && booking
-        ? 'HET_HAN'
-        : (booking?.trangThai ?? null),
+      bookingStatus:
+        paymentHasExpired && booking ? 'HET_HAN' : (booking?.trangThai ?? null),
       paymentExpiresAt: paymentExpiresAt?.toISOString() ?? null,
       serverTime: new Date().toISOString(),
       paidAt: isSuccess ? payment.updatedAt.toISOString() : undefined,
@@ -1293,7 +1404,8 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
           if (payment.loaiGiaoDich === 'HOAN_TIEN') {
             throw new ConflictException({
               error: 'PAYMENT_SETTLEMENT_NOT_ALLOWED',
-              message: 'Không thể xác nhận khoản hoàn tiền như một khoản thanh toán.',
+              message:
+                'Không thể xác nhận khoản hoàn tiền như một khoản thanh toán.',
             });
           }
 
@@ -1307,6 +1419,35 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
             ['DA_HUY', 'HUY'].includes(order?.trangThai ?? '') ||
             ['DA_HUY', 'HUY'].includes(booking?.trangThai ?? '') ||
             shipment?.trangThai === 'DA_HUY';
+
+          if (
+            shipment?.hanMangHangDen &&
+            !booking &&
+            payment.trangThai !== 'THANH_CONG' &&
+            (financialTransactionTime >=
+              getBookingPaymentDeadline(payment.thoiGian) ||
+              isCancelled ||
+              order.trangThai === 'DA_THANH_TOAN')
+          ) {
+            // Incoming late money is real, but is not a settlement of this order.
+            await tx.thanhToan.updateMany({
+              where: {
+                thanhToanId: payment.thanhToanId,
+                trangThai: { not: 'THANH_CONG' },
+                thoiDiemHoanTat: null,
+              },
+              data: {
+                trangThai: 'CAN_DOI_SOAT',
+                thoiDiemHoanTat: financialTransactionTime,
+                laQuyetToanHopLe: false,
+                ...(params.providerTransactionId
+                  ? { maGiaoDichSePay: params.providerTransactionId }
+                  : {}),
+              },
+            });
+            
+            return 'late-shipment';
+          }
 
           if (payment.trangThai === 'THANH_CONG') {
             if (params.providerTransactionId) {
@@ -1389,13 +1530,15 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
               if (orderUpdate.count !== 1) {
                 throw new ConflictException({
                   error: 'PAYMENT_ORDER_STATE_CHANGED',
-                  message: 'Trạng thái đơn giao dịch không cho phép xác nhận thanh toán.',
+                  message:
+                    'Trạng thái đơn giao dịch không cho phép xác nhận thanh toán.',
                 });
               }
             } else if (order?.trangThai !== 'DA_THANH_TOAN') {
               throw new ConflictException({
                 error: 'PAYMENT_ORDER_STATE_CHANGED',
-                message: 'Trạng thái đơn giao dịch không cho phép xác nhận thanh toán.',
+                message:
+                  'Trạng thái đơn giao dịch không cho phép xác nhận thanh toán.',
               });
             }
 
@@ -1412,8 +1555,7 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
           if (
             payment.trangThai !== 'THANH_CONG' &&
             order.trangThai === BOOKING_ORDER_PENDING_STATUS &&
-            getBookingPaymentDeadline(order.ngayTao) <=
-              financialTransactionTime
+            getBookingPaymentDeadline(order.ngayTao) <= financialTransactionTime
           ) {
             if (booking) {
               await this.expirePendingBookingInTransaction(
@@ -1456,7 +1598,9 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
                 where: { thanhToanId: payment.thanhToanId },
                 select: { maGiaoDichSePay: true },
               });
-              if (currentPayment?.maGiaoDichSePay !== params.providerTransactionId) {
+              if (
+                currentPayment?.maGiaoDichSePay !== params.providerTransactionId
+              ) {
                 throw sepayTransactionConflict();
               }
             }
@@ -1495,7 +1639,8 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
             if (currentOrder?.trangThai !== BOOKING_ORDER_PENDING_STATUS) {
               throw new ConflictException({
                 error: 'PAYMENT_ORDER_STATE_CHANGED',
-                message: 'Trạng thái đơn giao dịch không cho phép xác nhận thanh toán.',
+                message:
+                  'Trạng thái đơn giao dịch không cho phép xác nhận thanh toán.',
               });
             }
 
@@ -1524,7 +1669,8 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
               }
               throw new ConflictException({
                 error: 'PAYMENT_ORDER_STATE_CHANGED',
-                message: 'Trạng thái đơn giao dịch không cho phép xác nhận thanh toán.',
+                message:
+                  'Trạng thái đơn giao dịch không cho phép xác nhận thanh toán.',
               });
             }
 
@@ -1608,13 +1754,17 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
               where: { thanhToanId: payment.thanhToanId },
               data: { laQuyetToanHopLe: true },
             });
+            if (activeTickets.length > 0) {
+              await enqueuePaymentConfirmation(tx, booking.phieuDatVeId);
+            }
             return 'settled';
           }
 
           if (!shipment) {
             throw new ConflictException({
               error: 'PAYMENT_ORDER_NOT_SETTLEABLE',
-              message: 'Đơn giao dịch không có booking hoặc phiếu gửi hàng hợp lệ.',
+              message:
+                'Đơn giao dịch không có booking hoặc phiếu gửi hàng hợp lệ.',
             });
           }
 
@@ -1634,8 +1784,45 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
           if (currentOrder?.trangThai !== BOOKING_ORDER_PENDING_STATUS) {
             throw new ConflictException({
               error: 'PAYMENT_ORDER_STATE_CHANGED',
-              message: 'Trạng thái đơn giao dịch không cho phép xác nhận thanh toán.',
+              message:
+                'Trạng thái đơn giao dịch không cho phép xác nhận thanh toán.',
             });
+          }
+
+          if (shipment.hanMangHangDen) {
+            const otherPayments = await tx.thanhToan.findMany({
+              where: {
+                donGiaoDichId: payment.donGiaoDichId,
+                thanhToanId: { not: payment.thanhToanId },
+                trangThai: { in: ['THANH_CONG', 'DA_THANH_TOAN'] },
+                laQuyetToanHopLe: true,
+              },
+            });
+            const totalPaid = otherPayments.reduce(
+              (sum, item) =>
+                item.loaiGiaoDich === 'HOAN_TIEN'
+                  ? sum.minus(item.soTien)
+                  : sum.plus(item.soTien),
+              payment.soTien,
+            );
+            const due = new Prisma.Decimal(currentOrder.tongTien);
+            await tx.donGiaoDich.updateMany({
+              where: {
+                donGiaoDichId: payment.donGiaoDichId,
+                trangThai: BOOKING_ORDER_PENDING_STATUS,
+              },
+              data: {
+                trangThai: totalPaid.greaterThanOrEqualTo(due)
+                  ? 'DA_THANH_TOAN'
+                  : BOOKING_ORDER_PENDING_STATUS,
+              },
+            });
+            await tx.thanhToan.update({
+              where: { thanhToanId: payment.thanhToanId },
+              data: { laQuyetToanHopLe: true },
+            });
+            
+            return 'settled';
           }
 
           const updateOrderResult = await tx.donGiaoDich.updateMany({
@@ -1661,7 +1848,8 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
             }
             throw new ConflictException({
               error: 'PAYMENT_ORDER_STATE_CHANGED',
-              message: 'Trạng thái đơn giao dịch không cho phép xác nhận thanh toán.',
+              message:
+                'Trạng thái đơn giao dịch không cho phép xác nhận thanh toán.',
             });
           }
           await tx.thanhToan.updateMany({

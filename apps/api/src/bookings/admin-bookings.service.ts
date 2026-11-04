@@ -124,7 +124,12 @@ const BOOKING_HISTORY_SELECT = {
   lyDo: true,
   laOverride: true,
   maThaoTac: true,
-  taiKhoan: { select: { hoTen: true } },
+  taiKhoan: {
+    select: {
+      nhanVien: { select: { hoTen: true } },
+      khachHang: { select: { hoTen: true } },
+    },
+  },
 } satisfies Prisma.LichSuTrangThaiPhieuDatVeSelect;
 
 function nextDateOnly(value: string): string {
@@ -445,12 +450,11 @@ export class AdminBookingsService {
     const shipment = booking.donGiaoDich.phieuGuiHang;
     const resolvedBookingTripId =
       tripIntegrity === 'CONSISTENT'
-        ? tickets[0]?.gheChuyenXe.chuyenXe.chuyenXeId ?? null
+        ? (tickets[0]?.gheChuyenXe.chuyenXe.chuyenXeId ?? null)
         : null;
     const shipmentSummary = shipment
       ? (() => {
-          const isShipmentTripInTenant =
-            shipment.chuyenXe.nhaXeId === nhaXeId;
+          const isShipmentTripInTenant = shipment.chuyenXe?.nhaXeId === nhaXeId;
           const hasKnownBookingTrip = resolvedBookingTripId !== null;
           const hasMatchingTrip =
             hasKnownBookingTrip &&
@@ -576,7 +580,7 @@ export class AdminBookingsService {
         reason: row.lyDo,
         isOverride: row.laOverride,
         operationId: row.maThaoTac,
-        actorName: row.taiKhoan?.hoTen ?? null,
+        actorName: row.taiKhoan?.nhanVien?.hoTen ?? row.taiKhoan?.khachHang?.hoTen ?? null,
       })),
       page,
       pageSize,

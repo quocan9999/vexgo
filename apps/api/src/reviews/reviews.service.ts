@@ -172,9 +172,7 @@ export class ReviewsService {
       },
       include: {
         khachHang: {
-          include: {
-            taiKhoan: { select: { hoTen: true } },
-          },
+          select: { hoTen: true },
         },
       },
       orderBy: { thoiGian: 'desc' },
@@ -197,7 +195,7 @@ export class ReviewsService {
         id: r.phanHoiId,
         rating: r.mucDanhGia,
         comment: r.noiDung,
-        customerName: r.khachHang?.taiKhoan?.hoTen || 'Khách hàng VexGo',
+        customerName: r.khachHang?.hoTen || 'Khách hàng VexGo',
         createdAt: r.thoiGian.toISOString(),
       })),
     };
@@ -220,9 +218,7 @@ export class ReviewsService {
       },
       include: {
         khachHang: {
-          include: {
-            taiKhoan: { select: { hoTen: true } },
-          },
+          select: { hoTen: true },
         },
       },
       orderBy: { thoiGian: 'desc' },
@@ -245,7 +241,7 @@ export class ReviewsService {
         id: r.phanHoiId,
         rating: r.mucDanhGia,
         comment: r.noiDung,
-        customerName: r.khachHang?.taiKhoan?.hoTen || 'Khách hàng VexGo',
+        customerName: r.khachHang?.hoTen || 'Khách hàng VexGo',
         createdAt: r.thoiGian.toISOString(),
       })),
     };

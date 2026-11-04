@@ -52,10 +52,38 @@ vi.mock(
   }),
 );
 
+let memoryStore: Record<string, string> = {};
+const mockStorage = {
+  getItem: (key: string) => memoryStore[key] ?? null,
+  setItem: (key: string, value: string) => {
+    memoryStore[key] = String(value);
+  },
+  removeItem: (key: string) => {
+    delete memoryStore[key];
+  },
+  clear: () => {
+    memoryStore = {};
+  },
+  get length() {
+    return Object.keys(memoryStore).length;
+  },
+  key: (index: number) => Object.keys(memoryStore)[index] ?? null,
+};
+Object.defineProperty(window, 'localStorage', {
+  value: mockStorage,
+  writable: true,
+  configurable: true,
+});
+Object.defineProperty(globalThis, 'localStorage', {
+  value: mockStorage,
+  writable: true,
+  configurable: true,
+});
+
 beforeEach(() => {
   replace.mockClear();
   route.pathname = '/promotions';
-  localStorage.clear();
+  mockStorage.clear();
 });
 afterEach(cleanup);
 

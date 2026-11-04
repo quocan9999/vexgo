@@ -117,12 +117,9 @@ describe('AuthService register', () => {
     });
     expect(tx.taiKhoan.create).toHaveBeenCalledWith({
       data: {
-        hoTen: dto.fullName,
         soDienThoai: dto.phoneNumber,
         matKhau: expect.not.stringMatching(/^VexGo@123$/),
-        ngaySinh: new Date('2000-02-29T00:00:00.000Z'),
         email: dto.email,
-        cccd: dto.citizenId,
         daXacThucSoDienThoai: true,
         trangThai: 'HOAT_DONG',
       },
@@ -131,6 +128,7 @@ describe('AuthService register', () => {
       data: {
         maKhachHang: expect.stringMatching(/^[0-9a-f]{32}$/),
         hoTen: dto.fullName,
+        cccd: dto.citizenId,
         ngaySinh: new Date('2000-02-29T00:00:00.000Z'),
         diemTichLuy: 0,
         taiKhoanId: 42,

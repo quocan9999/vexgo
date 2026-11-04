@@ -75,6 +75,8 @@ Các quy tắc này áp dụng cho toàn repository và bổ sung cho hướng d
 - Feature frontend SHOULD theo cấu trúc `features/<feature>/` với `components/`, `services/`, `types/` và `hooks/` khi cần. Nếu feature có service, MUST gọi API qua service thay vì rải `fetch` trong React component.
 - Component tập trung vào render, state UI, form, tương tác và các trạng thái loading/error/empty/success. MUST NOT nhúng business logic backend vào component.
 - Mock/fixture được phép khi dựng UI. Feature chỉ hoàn thành khi nguồn dữ liệu chính đi theo luồng UI → API thật → backend → Prisma → MySQL; MUST NOT coi giao diện chạy bằng fixture JSON là feature full-stack hoàn chỉnh.
+- Giao diện Admin và Customer MUST NOT hiển thị ID số nội bộ hoặc enum mã kỹ thuật thô (`NGUOI_GUI`, `CHO_XU_LY`, v.v.) trong các combobox, dropdown, badge hoặc bảng dữ liệu; luôn map sang nhãn tiếng Việt thân thiện với người dùng. Các danh sách chọn địa điểm, trạm bến có quy mô lớn MUST hỗ trợ tìm kiếm khi gõ (Searchable Combobox). Mọi phụ phí dịch vụ MUST ghi rõ số tiền cụ thể.
+
 
 ## 5. Business rules và dữ liệu
 

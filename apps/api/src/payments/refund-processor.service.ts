@@ -1,3 +1,4 @@
+import { enqueueRefundConfirmation } from '../notifications/customer-notice.js';
 import {
   Injectable,
   Logger,
@@ -135,16 +136,19 @@ export class RefundProcessorService
         throw new Error(`Refund provider returned HTTP ${response.status}.`);
       }
 
-      await this.prisma.thanhToan.updateMany({
-        where: {
-          thanhToanId: refundId,
-          trangThai: 'DANG_GUI',
-          thoiDiemHoanTat: null,
-        },
-        data: {
-          trangThai: 'THANH_CONG',
-          thoiDiemHoanTat: new Date(),
-        },
+      await this.prisma.$transaction(async (tx) => {
+        const settled = await tx.thanhToan.updateMany({
+          where: {
+            thanhToanId: refundId,
+            trangThai: 'DANG_GUI',
+            thoiDiemHoanTat: null,
+          },
+          data: {
+            trangThai: 'THANH_CONG',
+            thoiDiemHoanTat: new Date(),
+          },
+        });
+        if (settled.count === 1) await enqueueRefundConfirmation(tx, refundId);
       });
     } catch (error) {
       await this.prisma.thanhToan.updateMany({

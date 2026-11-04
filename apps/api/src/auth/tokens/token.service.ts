@@ -173,7 +173,6 @@ export class TokenService {
 
   private mapAccountToUser(account: {
     taiKhoanId: number;
-    hoTen: string | null;
     soDienThoai: string;
     khachHang: { khachHangId: number; hoTen?: string | null } | null;
     nhanVien?: { nhanVienId: number; hoTen?: string | null } | null;
@@ -182,7 +181,7 @@ export class TokenService {
     return {
       accountId: account.taiKhoanId,
       customerId: account.khachHang?.khachHangId ?? null,
-      fullName: account.nhanVien?.hoTen ?? account.khachHang?.hoTen ?? account.hoTen ?? '',
+      fullName: account.nhanVien?.hoTen ?? account.khachHang?.hoTen ?? '',
       phoneNumber: account.soDienThoai,
       roles: account.taiKhoanVaiTros.map(({ vaiTro }) => vaiTro.tenVaiTro),
     };
