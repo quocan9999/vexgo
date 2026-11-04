@@ -356,7 +356,7 @@ describe('ShipmentsService', () => {
       });
 
       expect(result).toBeDefined();
-      expect(result.waybillCode).toMatch(/^FUTA-VD-\d{12}-[A-F\d]{25}$/);
+      expect(result.waybillCode).toMatch(/^[0-9a-f]{32}$/);
       expect(result.pricing.totalFee).toBe(95000);
       expect(result.paymentId).toBe(500);
       expect(result.sender.phoneNumber).toBe('0901234567');
