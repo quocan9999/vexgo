@@ -4,6 +4,7 @@ import {
   requireTenantPrincipal,
   tenantIdForOptionalRead,
 } from '../../../src/auth/tenant-scope.js';
+import { assertPrincipalScope } from '../../../src/auth/principal-scope.js';
 import type { AuthPrincipal } from '../../../src/auth/tokens/auth-principal.js';
 
 function principal(overrides: Partial<AuthPrincipal> = {}): AuthPrincipal {
@@ -135,5 +136,75 @@ describe('tenant principal scope helpers', () => {
         }),
       ),
     ).toBeUndefined();
+  });
+
+  describe('assertPrincipalScope with loaiTaiKhoan', () => {
+    it('rejects KHACH_HANG loaiTaiKhoan having admin or employee roles', () => {
+      expectForbiddenCode(
+        () =>
+          assertPrincipalScope(
+            principal({
+              loaiTaiKhoan: 'KHACH_HANG',
+              roles: ['SUPER_ADMIN'],
+              nhanVienId: null,
+              nhaXeId: null,
+            }),
+          ),
+        'ROLE_SCOPE_CONFLICT',
+      );
+      expectForbiddenCode(
+        () =>
+          assertPrincipalScope(
+            principal({
+              loaiTaiKhoan: 'KHACH_HANG',
+              roles: ['NHA_XE_ADMIN'],
+              nhanVienId: 1,
+              nhaXeId: 2,
+            }),
+          ),
+        'ROLE_SCOPE_CONFLICT',
+      );
+    });
+
+    it('rejects QUAN_TRI loaiTaiKhoan having KHACH_HANG role', () => {
+      expectForbiddenCode(
+        () =>
+          assertPrincipalScope(
+            principal({
+              loaiTaiKhoan: 'QUAN_TRI',
+              roles: ['KHACH_HANG'],
+              nhanVienId: null,
+              nhaXeId: null,
+            }),
+          ),
+        'ROLE_SCOPE_CONFLICT',
+      );
+    });
+
+    it('accepts KHACH_HANG loaiTaiKhoan with KHACH_HANG role and no tenant identity', () => {
+      expect(() =>
+        assertPrincipalScope(
+          principal({
+            loaiTaiKhoan: 'KHACH_HANG',
+            roles: ['KHACH_HANG'],
+            nhanVienId: null,
+            nhaXeId: null,
+          }),
+        ),
+      ).not.toThrow();
+    });
+
+    it('accepts QUAN_TRI loaiTaiKhoan with valid tenant role and identity', () => {
+      expect(() =>
+        assertPrincipalScope(
+          principal({
+            loaiTaiKhoan: 'QUAN_TRI',
+            roles: ['NHA_XE_ADMIN'],
+            nhanVienId: 10,
+            nhaXeId: 7,
+          }),
+        ),
+      ).not.toThrow();
+    });
   });
 });

@@ -33,6 +33,29 @@ function hasValidTenantIdentity(principal: AuthPrincipal): boolean {
 export function assertPrincipalScope(principal: AuthPrincipal): void {
   const roles = new Set(principal.roles);
 
+  if (principal.loaiTaiKhoan === 'KHACH_HANG') {
+    if (
+      roles.has('SUPER_ADMIN') ||
+      [...roles].some((role) => tenantPrincipalRoleSet.has(role)) ||
+      principal.nhanVienId !== null ||
+      principal.nhaXeId !== null
+    ) {
+      throw new ForbiddenException({
+        error: 'ROLE_SCOPE_CONFLICT',
+        message: 'Tài khoản có phạm vi quản trị không hợp lệ.',
+      });
+    }
+  }
+
+  if (principal.loaiTaiKhoan === 'QUAN_TRI') {
+    if (roles.has('KHACH_HANG')) {
+      throw new ForbiddenException({
+        error: 'ROLE_SCOPE_CONFLICT',
+        message: 'Tài khoản có phạm vi quản trị không hợp lệ.',
+      });
+    }
+  }
+
   if (roles.has('SUPER_ADMIN')) {
     if (
       roles.size !== 1 ||

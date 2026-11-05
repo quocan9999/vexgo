@@ -90,6 +90,7 @@ export class AccessTokenGuard implements CanActivate {
         taiKhoan: {
           select: {
             taiKhoanId: true,
+            loaiTaiKhoan: true,
             trangThai: true,
             khoaDenNgay: true,
             lyDoKhoa: true,
@@ -146,6 +147,7 @@ export class AccessTokenGuard implements CanActivate {
       }),
       nhanVienId,
       nhaXeId,
+      loaiTaiKhoan: session.taiKhoan.loaiTaiKhoan,
     };
     return true;
   }

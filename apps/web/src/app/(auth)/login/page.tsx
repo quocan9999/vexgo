@@ -4,7 +4,17 @@ import { LoginForm } from '@/features/auth/components/login-form';
 import { Bus } from 'lucide-react';
 import Link from 'next/link';
 
-export default function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ next?: string; redirect?: string }>;
+}) {
+  const resolvedParams = searchParams ? await searchParams : {};
+  const nextTarget = resolvedParams.next || resolvedParams.redirect;
+  const registerHref = nextTarget
+    ? `/register?next=${encodeURIComponent(nextTarget)}`
+    : '/register';
+
   return (
     <AuthPageShell>
       <div className="mb-10 flex flex-col items-center">
@@ -26,7 +36,7 @@ export default function LoginPage() {
       </Suspense>
       <p className="mt-10 text-center text-sm text-slate-600">
         Chưa có tài khoản?{' '}
-        <Link href="/register" className="font-semibold text-[#E50012] hover:text-red-800 transition-colors underline underline-offset-4 decoration-2 decoration-red-200 hover:decoration-[#E50012]">
+        <Link href={registerHref} className="font-semibold text-[#E50012] hover:text-red-800 transition-colors underline underline-offset-4 decoration-2 decoration-red-200 hover:decoration-[#E50012]">
           Đăng ký ngay miễn phí
         </Link>
       </p>

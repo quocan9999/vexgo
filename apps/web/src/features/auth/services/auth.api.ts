@@ -29,7 +29,11 @@ export const authApi = {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ phoneNumber: formattedPhone, password }),
+      body: JSON.stringify({
+        phoneNumber: formattedPhone,
+        password,
+        accountType: 'KHACH_HANG',
+      }),
     });
 
     if (!response.ok) {
@@ -103,6 +107,76 @@ export const authApi = {
         response.status,
         errorData.error || 'UNKNOWN_ERROR',
         errorData.message || 'Đã có lỗi xảy ra khi đăng ký',
+      );
+    }
+
+    return response.json();
+  },
+
+  async requestForgotPasswordOtp(phone: string) {
+    const formattedPhone = formatPhone(phone);
+    const response = await fetch(
+      `${API_BASE_URL}/auth/forgot-password/request-otp`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phoneNumber: formattedPhone }),
+      },
+    );
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new ApiError(
+        response.status,
+        errorData.error || 'UNKNOWN_ERROR',
+        errorData.message || 'Đã có lỗi xảy ra khi yêu cầu mã khôi phục',
+      );
+    }
+
+    return response.json();
+  },
+
+  async verifyForgotPasswordOtp(phone: string, challengeId: string, otp: string) {
+    const formattedPhone = formatPhone(phone);
+    const response = await fetch(
+      `${API_BASE_URL}/auth/forgot-password/verify-otp`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phoneNumber: formattedPhone, challengeId, otp }),
+      },
+    );
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new ApiError(
+        response.status,
+        errorData.error || 'UNKNOWN_ERROR',
+        errorData.message || 'Mã OTP không hợp lệ',
+      );
+    }
+
+    return response.json();
+  },
+
+  async resetForgotPassword(data: {
+    phoneNumber: string;
+    otpProof: string;
+    newPassword: string;
+  }) {
+    const payload = { ...data, phoneNumber: formatPhone(data.phoneNumber) };
+    const response = await fetch(`${API_BASE_URL}/auth/forgot-password/reset`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new ApiError(
+        response.status,
+        errorData.error || 'UNKNOWN_ERROR',
+        errorData.message || 'Đã có lỗi xảy ra khi đặt lại mật khẩu',
       );
     }
 

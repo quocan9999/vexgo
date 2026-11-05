@@ -22,6 +22,11 @@ import { ConfigService } from '@nestjs/config';
 import type { Request, Response } from 'express';
 import { AuthService } from './auth.service.js';
 import { RegisterDto, LoginDto } from './dto/auth.dto.js';
+import {
+  RequestForgotPasswordOtpDto,
+  VerifyForgotPasswordOtpDto,
+  ResetForgotPasswordDto,
+} from './dto/forgot-password.dto.js';
 import { RequestRegisterOtpDto } from './dto/request-register-otp.dto.js';
 import { VerifyRegisterOtpDto } from './dto/verify-register-otp.dto.js';
 import { OtpService } from './otp/otp.service.js';
@@ -172,6 +177,81 @@ export class AuthController {
   })
   async register(@Body() dto: RegisterDto) {
     return await this.authService.register(dto);
+  }
+
+  @Post('forgot-password/request-otp')
+  @Public()
+  @ApiOperation({
+    summary: 'Yêu cầu mã OTP đặt lại mật khẩu',
+    description:
+      'Gửi mã OTP 6 chữ số qua SMS đến số điện thoại tài khoản khách hàng để bắt đầu quá trình đặt lại mật khẩu.\n\n- **Quyền truy cập**: Công khai (Public).',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Tạo mã OTP thành công. Trả về challengeId và thời gian đếm ngược gửi lại.',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Số điện thoại chưa được đăng ký tài khoản khách hàng.',
+    type: ApiErrorResponseDto,
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Tài khoản đang bị tạm khóa hoặc bị khóa.',
+    type: ApiErrorResponseDto,
+  })
+  requestForgotPasswordOtp(@Body() dto: RequestForgotPasswordOtpDto) {
+    return this.otpService.requestForgotPasswordOtp(dto.phoneNumber);
+  }
+
+  @Post('forgot-password/verify-otp')
+  @Public()
+  @ApiOperation({
+    summary: 'Xác thực mã OTP đặt lại mật khẩu',
+    description:
+      'Kiểm tra mã OTP 6 chữ số người dùng nhập cùng challengeId. Khi hợp lệ, hệ thống sẽ cấp mã bằng chứng otpProof để thực hiện đặt lại mật khẩu.\n\n- **Quyền truy cập**: Công khai (Public).',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Xác thực thành công. Trả về otpProof có thời hạn 10 phút.',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Mã OTP sai, hết hạn hoặc challengeId không tồn tại.',
+    type: ApiErrorResponseDto,
+  })
+  verifyForgotPasswordOtp(@Body() dto: VerifyForgotPasswordOtpDto) {
+    return this.otpService.verifyForgotPasswordOtp({
+      challengeId: dto.challengeId,
+      soDienThoai: dto.phoneNumber,
+      otp: dto.otp,
+    });
+  }
+
+  @Post('forgot-password/reset')
+  @Public()
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Đặt lại mật khẩu bằng bằng chứng OTP',
+    description:
+      'Cập nhật mật khẩu mới cho tài khoản khách hàng bằng otpProof, đồng thời thu hồi toàn bộ phiên đăng nhập đang hoạt động.\n\n- **Quyền truy cập**: Công khai (Public).',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Đặt lại mật khẩu thành công. Vui lòng đăng nhập lại.',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bằng chứng OTP không hợp lệ, đã hết hạn hoặc mật khẩu không hợp lệ.',
+    type: ApiErrorResponseDto,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Không tìm thấy tài khoản tương ứng với số điện thoại.',
+    type: ApiErrorResponseDto,
+  })
+  async resetForgotPassword(@Body() dto: ResetForgotPasswordDto) {
+    return await this.authService.resetForgotPassword(dto);
   }
 
   @Post('login')
@@ -346,6 +426,7 @@ export class AuthController {
       principal.taiKhoanId,
       dto.oldPassword,
       dto.newPassword,
+      principal.sessionId,
     );
   }
 }
