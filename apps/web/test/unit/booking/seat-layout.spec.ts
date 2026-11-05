@@ -141,4 +141,27 @@ describe('seat-layout', () => {
       true,
     );
   });
+
+  it('does not falsely detect collision on tightly spaced 5-seat back row (gaps 140-170 permille)', () => {
+    // Simulated back row of 45-seat bus from PR #65 (x: 180, 360, 500, 640, 820 with min gap 140)
+    const seats: ApiTripSeat[] = [
+      { tripSeatId: 41, seatNumber: 'A41', floor: 1, x: 180, y: 11000, position: 'Băng cuối', status: 'TRONG' },
+      { tripSeatId: 42, seatNumber: 'A42', floor: 1, x: 360, y: 11000, position: 'Băng cuối', status: 'TRONG' },
+      { tripSeatId: 43, seatNumber: 'A43', floor: 1, x: 500, y: 11000, position: 'Băng cuối', status: 'TRONG' },
+      { tripSeatId: 44, seatNumber: 'A44', floor: 1, x: 640, y: 11000, position: 'Băng cuối', status: 'TRONG' },
+      { tripSeatId: 45, seatNumber: 'A45', floor: 1, x: 820, y: 11000, position: 'Băng cuối', status: 'TRONG' },
+    ];
+
+    const layouts = getTripSeatFloorLayouts(seats);
+    const floor = layouts[0];
+    expect(floor.seats).toHaveLength(5);
+
+    // All 5 seats must stay on row y=11000 (topPx = 11000 * 0.064 = 704px) without being kicked up
+    floor.seats.forEach((s) => {
+      expect(s.topPx).toBe(704);
+    });
+
+    const a43 = floor.seats.find((s) => s.seat.seatNumber === 'A43');
+    expect(a43?.leftPercent).toBe(50);
+  });
 });

@@ -3,7 +3,9 @@ import type { ApiTripSeat } from '@/features/trips/services/trips.api';
 const COORDINATE_UNIT_PX = 64 / 1000;
 const FALLBACK_X_COORDINATES = [160, 360, 640, 840] as const;
 const FALLBACK_ROW_STEP = 1000;
-const FALLBACK_MIN_X_GAP = 180;
+// Khoảng cách tối thiểu giữa 2 ghế để chống đè chồng.
+// Đặt 100 để không bắt nhầm các hàng 5 ghế liền kề hợp lệ (khoảng cách 140 - 170 permille)
+const FALLBACK_MIN_X_GAP = 100;
 const FALLBACK_MIN_Y_GAP = 875;
 
 export type PositionedTripSeat = {
