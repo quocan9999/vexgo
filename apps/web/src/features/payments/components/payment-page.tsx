@@ -1206,14 +1206,9 @@ function PaymentContent() {
                 ? 'Tổng thanh toán vé khứ hồi'
                 : 'Tổng thanh toán'}
             </p>
-            <h1 className="text-5xl font-bold text-red-600 mb-2 tracking-tight">
+            <h1 className="text-5xl font-bold text-red-600 mb-6 tracking-tight">
               {totalFareText}
             </h1>
-            {isRoundTripBooking && (
-              <p className="text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200/60 px-3.5 py-1 rounded-full mb-6 text-center">
-                ✓ Quét 1 lần duy nhất để hoàn tất thanh toán cả 2 chặng
-              </p>
-            )}
 
             <div className="w-full max-w-[520px] bg-white rounded-3xl p-7 shadow-sm border border-slate-200 flex flex-col items-center">
               {paymentExpiresAt && !paymentTerminalStatus && (
